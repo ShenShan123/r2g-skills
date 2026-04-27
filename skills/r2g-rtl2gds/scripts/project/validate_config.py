@@ -169,10 +169,11 @@ def check_clock_port_match(verilog_files, sdc_path, design_name):
         port = m.group(1).strip()
         if port and not port.startswith('$') and not port.startswith('{'):
             clock_ports.add(port)
-    # Match: get_ports <name> (but not variable references)
-    for m in re.finditer(r'get_ports\s+([^\]\}\s\$]+)', sdc_text):
-        port = m.group(1).strip('{}[]')
-        if port and not port.startswith('$'):
+    # Match: get_ports <name> (but not variable references or option flags
+    # like `-quiet`/`-regexp`/`-of_objects`/`-filter`).
+    for m in re.finditer(r'get_ports\s+((?:-\w+\s+)*)([^\]\}\s\$]+)', sdc_text):
+        port = m.group(2).strip('{}[]')
+        if port and not port.startswith('$') and not port.startswith('-'):
             clock_ports.add(port)
 
     if not clock_ports:

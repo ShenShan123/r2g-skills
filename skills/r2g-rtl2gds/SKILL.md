@@ -446,12 +446,18 @@ per memory) instead of one giant 1M-gate ABC pass.
 **Validated:**
 - DMA-class designs (Faraday DMA, ff_ram flop array): pass behavioral.
 - AES / ibex / CRC / iscas89 (no SRAM macros, total memory ≤ ~10K bits): pass.
+- **Faraday RISC** (3 unique `tsyncram_*` sizes, 87K total memory bits,
+  79 RTL files, dual SYSCLK/BUSCLK): synth passes in 213 s under
+  `SYNTH_HIERARCHICAL=1` + `ABC_AREA=1`. Yosys peak 553 MB; ABC ran
+  per kept module (5 ABC invocations, 57 s combined). Confirms
+  hierarchical mode lifts the behavioral ceiling well past the 50K-bit
+  flat-mode limit when single memories stay <16K bits each.
 - BOOM SmallSEBoom (17 SRAM types, 168K total memory bits, ~360K-line top):
-  parses cleanly, OPT/MEMORY_MAP/TECHMAP all complete in ~42 min, but
-  ABC step 14 grinds beyond 4h. Documented in
-  `design_cases/boom_smallseboom/reports/synth-result.md`.
-- See `docs/faraday_viability.md` for why Faraday DSP/RISC don't fit
-  even with this approach (their UMC SRAMs are 256K-2M bits per macro).
+  flat-mode ABC fails (2h28m wall, 5.36 GB peak). Retry with
+  `SYNTH_HIERARCHICAL=1` is the recommended next step; if that still
+  fails, fall back to mapping the four `1rw0r` macros (61K bits total)
+  to `fakeram45` and keep the thirteen `1w1r` macros behavioral.
+- See `docs/faraday_viability.md` for the per-design SRAM scale audit.
 
 ## ORFS Backend Details
 

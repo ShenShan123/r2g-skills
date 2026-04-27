@@ -1,48 +1,93 @@
 # Faraday DSP / RISC viability assessment
 
-**Date:** 2026-04-26
-**Question:** Can the Faraday DSP and RISC designs be flowed through `r2g-rtl2gds` using fakeram45 macros as substitutes for the UMC SRAM stubs?
+**Date:** 2026-04-26 (initial), revised 2026-04-27 after batch2rtl import
+**Question:** Can the Faraday DSP and RISC designs in `batch2rtl/Faraday ASIC/` be flowed through `r2g-rtl2gds`?
 
-**Verdict:** No — not without a fakeram **tiler** that doesn't exist yet in the skill. Both designs need SRAM cuts that exceed fakeram45's depth/width range, and Faraday RISC additionally has multi-clock SDC requirements.
+**Updated verdict:** **Yes** — both fit behavioral SRAM stubs. The earlier
+"no" verdict was based on assumed SRAM sizes (CM4k/CM8k/EEPROM scale,
+~MB-class). The actual SRAM cuts in `batch2rtl/Faraday ASIC/{DSP,RISC}/`
+are much smaller and lie under the behavioral-stub ceiling.
 
-## Faraday DSP SRAM sizes
+## Faraday RISC SRAM sizes (actual, from batch2rtl import)
 
-| Stub module | Addr width | Data width | Rows × Bits | Total bits | Closest fakeram45 |
-|-------------|-----------|------------|-------------|-----------|-------------------|
-| CM4k | 14 | 24 | 16,384 × 24 | 393,216 | none — needs 8× `2048x32` |
-| CM8k | 14 | 24 | 16,384 × 24 | 393,216 | none — needs 8× `2048x32` |
-| DM8k | 14 | 16 | 16,384 × 16 | 262,144 | none — needs 8× `2048x16` |
-| ECM32kx24 | 15 | 24 | 32,768 × 24 | 786,432 | none — needs 16× `2048x32` |
-| EDM8k | 13 | 16 | 8,192 × 16 | 131,072 | none — needs 4× `2048x16` |
-| EEPROM | 18 | 8 | 262,144 × 8 | 2,097,152 | hopelessly large — 128× `2048x8` |
-| EIO2k | 11 | 16 | 2,048 × 16 | 32,768 | `2048x39` — fits exactly in depth |
-| EM4K | 12 | 16 | 4,096 × 16 | 65,536 | none — needs 2× `2048x16` |
-| EM8K | 13 | 16 | 8,192 × 16 | 131,072 | needs 4× `2048x16` |
-| PM4k | 14 | 16 | 16,384 × 16 | 262,144 | needs 8× `2048x16` |
+| Wrapper module     | Used as            | Rows × Bits | Total bits | Strategy |
+|--------------------|--------------------|-------------|-----------|---------|
+| `tsyncram_4x32`    | IRAM_VALID         | 4 × 32      | 128        | Behavioral |
+| `tsyncram_128x22`  | ICACHE_TAG, DCACHE_TAG | 128 × 22 | 2,816 (×2) | Behavioral |
+| `tsyncram_512x32`  | ICACHE_INST, DCACHE_DATA, DRAM_DATA, IRAM_DATA, ICACHE_INST0 | 512 × 32 | 16,384 (×5) | Behavioral |
 
-**Available fakeram45 sizes (depth × width):** 32×{32,64}, 64×{7,15,21,32,62,64,96,124}, 128×{32,116,256}, 256×{16,32,34,48,95,96}, 512×64, 1024×32, **2048×39 ← max depth**.
+- **Total memory bits across 8 instances:** 87,680 (~88K)
+- **Largest single memory:** 16K bits (well under 32K-bit
+  `SYNTH_MEMORY_MAX_BITS`)
+- **Synth result:** 213 s under `SYNTH_HIERARCHICAL=1`, 974MB peak
+  memory, no ABC explosion
 
-The Faraday DSP family expects depths up to 32K (and EEPROM at 256K), far beyond fakeram45's 2K. Functionally there are two paths:
+The original wrappers (`batch2rtl/Faraday ASIC/RISC/rtl/syn/run/sram_*.v`)
+instantiate Faraday's internal `SYHD130_*` macros (130nm tech). They are
+empty stubs — the wrappers wire up the macro pins but nothing implements
+the macro itself. We replace them with behavioral synchronous SRAM
+modules (`design_cases/faraday_risc/rtl/hdl/sram_behavioral.v`). The
+single-port semantics (CLK + WEN/REN + ADDR + DATA_IN/DATA_OUT) infer
+cleanly through Yosys `memory_collect` / `memory_map`.
 
-1. **Tile multiple fakeram45 macros per logical SRAM.** A 32K×24 SRAM becomes 16 instances of `2048x32` with an external address-decoder + read-mux. Doable mechanically but requires generating wrapper RTL plus matching `MACRO_PLACEMENT_TCL` for each new shape. None of this tooling exists in the skill today.
-2. **Inline behavioral flop-array.** Same approach used for BOOM. ECM32kx24 alone is 786K bits ≈ 786K flops. Yosys `SYNTH_MEMORY_MAX_BITS` would need to be raised to several million, and then place would have ~1M extra cells just for that one memory. Not realistic on nangate45 in any reasonable timeframe.
+### Multi-clock handling (was claimed blocker)
 
-## Behavioral inference scaling
+`RISC.cons` defines `SYSCLK` and `BUSCLK` both at 6 ns. We define both
+in the SDC at 10 ns (relaxed for nangate45) with
+`set_clock_groups -asynchronous` so ORFS analyzes them as independent
+domains. Set `set_false_path` from async resets / JTAG / config inputs
+matches the original's intent. ORFS handled the multi-clock SDC without
+issue at synth time — confirmed below.
 
-For reference, what behavioral inference looks like at scale:
+## Faraday DSP SRAM sizes (actual, from batch2rtl import)
 
-- BOOM SmallSEBoom: 168K bits total across 17 inferred memories, each ≤32K bits — **fits** under `SYNTH_MEMORY_MAX_BITS=65536`.
-- Faraday DSP single ECM32kx24: 786K bits in one memory — does not fit at any reasonable threshold without crashing place.
+| Wrapper module | Style       | Rows × Bits | Total bits | Strategy |
+|----------------|-------------|-------------|-----------|---------|
+| `SW10200C`     | 2-port (A/B) | 32 × 12     | 384       | Behavioral |
+| `SW10201A`     | 2-port (A/B) | 32 × 26     | 832       | Behavioral |
 
-## Faraday RISC additional blockers
+- **Total memory bits across all instances:** ~1.2K (negligible)
+- The DSP design itself is large (84 RTL files, ~6,500 lines for the
+  top, multi-process-node alternates `t_pin.013/.018/.035.v`, plus a
+  DFT wrapper). The complexity sits in **logic**, not memory.
 
-`RISC.cons` constraint shows two clocks (`SYSCLK`, `BUSCLK` both 6 ns) and `set_false_path` constraints to ten different SRAM `WEN`/`SRAM/A*` pin classes. Multi-clock CDC handling is out of MVP scope per `SKILL.md`:
+### DSP-specific blockers (real ones)
 
-> "Prefer single-clock MVP flows. Macro designs (fakeram45) are supported with proper config (see "Macro / Hard Memory Designs"). Escalate to the user before attempting CDC, multi-clock, or DFT."
+- **Multiple module-name collisions** across alternative tech-node
+  source files (`t_pin.013.v` / `.018.v` / `.035.v` all define
+  `module PINs`). Must select one.
+- **PLL black-box** in the `TOP` module — non-synthesizable; use
+  `DSP_CORE` as the synth top instead.
+- **DFT wrapper** in `wrapper.v` (`DSP_CORE_top` + `DSP_CORE_wrapper`)
+  adds scan-test infrastructure. Skip the wrapper file unless you
+  define `FD_DFT`.
+- **Multi-clock generation** inside `CLKC` module (`DSPCLK` derived from
+  `T_CLKI_PLL` / `T_CLKI_OSC` via `T_Sel_PLL` mux). Externally-driven
+  via `DSPCLK_insert_buf_i`. Treat as single clock for MVP.
+
+The DSP path is more involved than RISC because of these structural
+issues, not because of the SRAMs. Marked as a separate tracked task.
+
+## Why the original assessment was wrong
+
+The 2026-04-26 viability doc listed Faraday SRAM names like CM4k, CM8k,
+DM8k, ECM32kx24, EEPROM (32K-256K rows). Those names appear in older
+Faraday FS90A_B documentation but are **not** present in the actual RTL
+shipped in `batch2rtl/Faraday ASIC/`. The shipped DSP RTL uses small
+test SRAMs (32×12, 32×26) and the shipped RISC RTL uses cache-line cuts
+(4×32, 128×22, 512×32). Always inspect the actual RTL before assuming
+SRAM scale.
 
 ## Recommendation
 
-- **Faraday DSP**: skip. Add a future skill enhancement: `tools/gen_fakeram_tile.py` that tiles multiple `fakeram45_2048x{16,32,39}` macros to cover any depth × width and emits both wrapper RTL and `MACRO_PLACEMENT_TCL` rules. After that exists, Faraday DSP becomes tractable.
-- **Faraday RISC**: skip. Even with a tiler, the multi-clock constraints push it past MVP scope. Treat as user-escalation.
-- **BOOM 12 variants**: in progress. SmallSEBoom is synthesizing now using behavioral SRAM stubs (`tools/gen_openram_behavioral_stubs.py`). The other 11 BOOM variants share the same 17-stub structure — once SmallSEBoom passes, they're a parameter sweep, not new tooling.
-- **Gaisler leon2**: hard skip. VHDL only.
+- **Faraday RISC**: in progress. Synth passed (213 s); floorplan / place
+  / route / signoff to follow on the same nangate45 platform with
+  behavioral SRAM stubs and dual-clock SDC.
+- **Faraday DSP**: tractable but requires module-collision pruning and
+  picking the right synth top (`DSP_CORE`, not `TOP`). SRAMs are
+  trivial (1.2K total bits). Tracked separately.
+- **BOOM 12 variants**: in progress. SmallSEBoom is being retried with
+  `SYNTH_HIERARCHICAL=1` to escape the 4 h ABC bottleneck observed
+  with the flat-mode 168K behavioral memory bits.
+- **Gaisler leon2**: hard skip. VHDL only — local Yosys lacks both
+  GHDL plugin and Verific support.
