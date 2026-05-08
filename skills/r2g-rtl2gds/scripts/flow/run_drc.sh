@@ -137,12 +137,66 @@ if [[ -f "$DRC_DIR/6_drc_count.rpt" ]]; then
   echo "DRC completed: $COUNT violations found"
   if [[ "$COUNT" == "0" ]]; then
     echo "DRC CLEAN"
+    printf '{"status": "clean", "violations": 0}\n' > "$DRC_DIR/drc_result.json"
   else
     echo "DRC FAILED — review $DRC_DIR/6_drc.lyrdb for details"
+    printf '{"status": "violations", "violations": %s}\n' "${COUNT:-unknown}" > "$DRC_DIR/drc_result.json"
   fi
 else
   echo ""
-  echo "DRC completed but no count report found"
+  # No count report → either timed out, crashed, or stuck on a polygon-op rule.
+  # Detect the FreePDK45 stuck-on-`or` pattern documented in
+  # references/failure-patterns.md ("KLayout DRC Stuck on `or`"). When that
+  # happens KLayout pegs CPU on a single rule for hours without making
+  # progress; rather than retrying with a longer timeout (zombies have run
+  # 4+ days unproductively), record status=stuck so the dashboard surfaces
+  # a yellow badge and downstream tooling can skip retry.
+  STUCK_RULE=""
+  if [[ -f "$DRC_DIR/6_drc.log" ]]; then
+    # Grab the last `*.lydrc:NN` reference, if any
+    STUCK_RULE=$(grep -oE '[A-Za-z0-9_]+\.lydrc:[0-9]+' "$DRC_DIR/6_drc.log" 2>/dev/null | tail -1 || true)
+  fi
+  REASON="no_count_report"
+  STATUS="failed"
+  if [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
+    if [[ -n "$STUCK_RULE" ]]; then
+      STATUS="stuck"
+      REASON="klayout_polygon_op_no_progress"
+      echo "DRC STUCK on $STUCK_RULE after ${DRC_TIMEOUT}s — see references/failure-patterns.md"
+      # Best-effort cleanup of any orphaned klayout DRC procs from this run.
+      pkill -9 -f "klayout.*${FLOW_VARIANT}.*6_drc" 2>/dev/null || true
+    else
+      STATUS="timeout"
+      REASON="drc_timeout"
+      echo "DRC timed out after ${DRC_TIMEOUT}s with no log progress recorded"
+    fi
+  else
+    echo "DRC completed but no count report found (exit=$DRC_STATUS)"
+  fi
+  python3 - "$DRC_DIR/drc_result.json" "$STATUS" "$REASON" "$STUCK_RULE" "$DRC_TIMEOUT" "$DRC_STATUS" <<'PYEOF'
+import json, sys
+out, status, reason, rule, timeout, exit_code = sys.argv[1:7]
+result = {
+    "status": status,
+    "reason": reason,
+    "timeout_s": int(timeout),
+    "exit_code": int(exit_code),
+}
+if rule:
+    result["stuck_at_rule"] = rule
+with open(out, "w") as f:
+    json.dump(result, f, indent=2)
+    f.write("\n")
+PYEOF
+fi
+
+# Mirror drc_result.json into the latest backend run, if present
+if [[ -f "$DRC_DIR/drc_result.json" && -d "$BACKEND_DIR" ]]; then
+  LATEST_RUN=$(ls -d "$BACKEND_DIR"/RUN_* 2>/dev/null | sort | tail -1)
+  if [[ -n "$LATEST_RUN" ]]; then
+    mkdir -p "$LATEST_RUN/drc"
+    cp "$DRC_DIR/drc_result.json" "$LATEST_RUN/drc/" 2>/dev/null || true
+  fi
 fi
 
 echo "Results: $DRC_DIR"

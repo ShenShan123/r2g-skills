@@ -527,8 +527,13 @@ The `scripts/flow/run_orfs.sh` script:
 
 Resource control via environment variables:
 ```bash
-ORFS_TIMEOUT=7200    # Max runtime in seconds (default: 2 hours)
+ORFS_TIMEOUT=7200    # Per-stage max runtime in seconds (default: 2 hours)
 ORFS_MAX_CPUS=4      # Limit CPU cores via taskset (default: all)
+PLACE_FAST=1         # Disable GPL_TIMING_DRIVEN/ROUTABILITY_DRIVEN — use for
+                     # BOOM-class designs (>1M nets) where the timing-repair
+                     # loop in gpl spins for hours after Nesterov has already
+                     # converged. CTS/route still apply timing closure.
+FROM_STAGE=place     # Resume from a specific stage (synth|floorplan|place|cts|route|finish)
 ```
 
 ### Shell Script Safety Rules (Validated Against 70 Designs)

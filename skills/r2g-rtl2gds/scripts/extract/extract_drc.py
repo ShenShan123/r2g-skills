@@ -107,12 +107,37 @@ def main():
     if total_count < 0 and categories:
         total_count = sum(c['count'] for c in categories.values())
 
+    # Prefer the structured drc_result.json written by run_drc.sh — it carries
+    # explicit status="stuck"/"timeout" markers that are more informative than
+    # what we can infer from violation counts alone.
+    drc_result_path = drc_dir / 'drc_result.json'
+    drc_result = None
+    if drc_result_path.exists():
+        try:
+            drc_result = json.loads(drc_result_path.read_text(encoding='utf-8', errors='ignore'))
+        except (ValueError, OSError):
+            drc_result = None
+
+    if drc_result and drc_result.get('status') in ('stuck', 'timeout', 'failed', 'skipped'):
+        status = drc_result['status']
+    elif total_count == 0:
+        status = 'clean'
+    elif total_count > 0:
+        status = 'fail'
+    else:
+        status = 'unknown'
+
     result = {
-        'status': 'clean' if total_count == 0 else ('fail' if total_count > 0 else 'unknown'),
+        'status': status,
         'total_violations': total_count if total_count >= 0 else None,
         'categories': categories,
         'log_info': log_info,
     }
+    if drc_result:
+        # Carry through extra context (stuck_at_rule, reason, timeout_s, etc.)
+        for k in ('stuck_at_rule', 'reason', 'timeout_s', 'exit_code', 'note'):
+            if k in drc_result and k not in result:
+                result[k] = drc_result[k]
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')

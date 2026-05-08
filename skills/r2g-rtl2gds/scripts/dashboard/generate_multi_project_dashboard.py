@@ -244,6 +244,11 @@ def signoff_badge(status):
         'clean': '#4caf50', 'fail': '#f44336', 'complete': '#4caf50',
         'skipped': '#ff9800', 'unknown': '#9e9e9e', 'no_spef': '#9e9e9e',
         'empty': '#ff9800',
+        # `stuck` and `timeout` are tool-failure modes (the tool didn't
+        # converge but the design itself is not necessarily broken). Mark
+        # them yellow rather than red to distinguish from real violations.
+        'stuck': '#ffc107', 'timeout': '#ffc107', 'failed': '#f44336',
+        'violations': '#f44336',
     }
     color = colors.get(status, '#9e9e9e')
     return f'<span style="background:{color};color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold">{html.escape(status.upper())}</span>'

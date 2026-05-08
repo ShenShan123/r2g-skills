@@ -99,6 +99,17 @@ mkdir -p "$BACKEND_DIR"
 ORFS_TIMEOUT="${ORFS_TIMEOUT:-7200}"
 MAKE_CMD="make DESIGN_CONFIG=\"$ORFS_DESIGN_DIR/config.mk\" FLOW_VARIANT=\"$FLOW_VARIANT\""
 
+# PLACE_FAST escape hatch: disable timing-driven + routability-driven global
+# placement. Required for very-large netlists (>1M nets) where the timing
+# repair loop in `gpl` would otherwise spin for hours after the placement
+# overflow target is already met. Applies to BOOM-class CPUs and similar.
+# Set PLACE_FAST=1 in the env to enable, or set it inside config.mk via
+# the same env vars.
+if [[ "${PLACE_FAST:-0}" == "1" ]]; then
+  MAKE_CMD="$MAKE_CMD GPL_TIMING_DRIVEN=0 GPL_ROUTABILITY_DRIVEN=0"
+  echo "PLACE_FAST=1 → disabling GPL_TIMING_DRIVEN and GPL_ROUTABILITY_DRIVEN"
+fi
+
 # Apply CPU core limit if specified
 if [[ -n "${ORFS_MAX_CPUS:-}" ]]; then
   # Build a CPU list 0-(N-1)
@@ -200,6 +211,17 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
       echo "  2. Reduce PLACE_DENSITY in config.mk" | tee -a "$BACKEND_DIR/flow.log"
       echo "  3. Remove SYNTH_HIERARCHICAL=1 if set (reduces cell count)" | tee -a "$BACKEND_DIR/flow.log"
       echo "  4. Remove ABC_AREA=1 if set (changes cell mix)" | tee -a "$BACKEND_DIR/flow.log"
+    fi
+  elif [[ "$FAILED_STAGE" == "place" ]]; then
+    # Detect the "timing-driven iteration stuck on huge netlist" pattern.
+    # gpl prints `Timing-driven iteration N/2, virtual: false.` and then
+    # spins indefinitely on the resizer when there are millions of nets.
+    if grep -qE "Timing-driven iteration .*virtual.*false|Iteration\s+\|.*Resized" "$BACKEND_DIR/flow.log" 2>/dev/null; then
+      echo "" | tee -a "$BACKEND_DIR/flow.log"
+      echo "HINT: Place_gp timing-driven repair appears stuck on a very large netlist." | tee -a "$BACKEND_DIR/flow.log"
+      echo "  Validated workaround for BOOM-class designs:" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  1. PLACE_FAST=1 FROM_STAGE=place scripts/flow/run_orfs.sh $PROJECT_DIR $PLATFORM" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  2. Or add to config.mk: export GPL_TIMING_DRIVEN=0; export GPL_ROUTABILITY_DRIVEN=0" | tee -a "$BACKEND_DIR/flow.log"
     fi
   fi
 fi

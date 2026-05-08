@@ -98,6 +98,36 @@ CORE_UTILIZATION is too high for the design's routing complexity. Highly interco
 - Compare with successful configs of the same design for known-good density values
 - Also add `SKIP_LAST_GASP=1` to prevent post-placement optimization from stalling
 
+## Place_gp Stuck on Timing-Driven Iteration (>1M-net BOOM-class designs)
+
+**Symptoms:**
+- `place` stage timeout (exit 124) after the full `ORFS_TIMEOUT` budget
+- flow.log shows `[INFO GPL-0100] Timing-driven iteration 1/2, virtual: false.`
+  followed by an `Iteration | Area | Resized | Buffers | Nets repaired | Remaining` table that never finishes
+- `Remaining` net count is in the millions (e.g. 2.2M for BOOM SmallSEBoom)
+- CPU stays pinned but no log progress for hours
+- Earlier in the log, `[NesterovSolve]` overflow already converged below the target — the *initial* placement is fine; the *timing repair pass* is what's stuck
+
+**Root Cause:**
+For very large netlists (>1M nets after memory inference), gpl's timing-driven
+incremental repair iterates over every violating endpoint and runs the
+resizer pin-by-pin. With 17 OpenRAM-stub-derived flop arrays and a BOOM core,
+ChipTop has 1.5-2.5M nets and the repair loop never converges in a reasonable
+wall-clock budget.
+
+**Action:**
+- Re-run with `PLACE_FAST=1 FROM_STAGE=place scripts/flow/run_orfs.sh ...`
+  → `run_orfs.sh` injects `GPL_TIMING_DRIVEN=0 GPL_ROUTABILITY_DRIVEN=0`
+  on the make line. Place_gp completes the initial Nesterov solve and skips
+  the multi-hour repair loop. CTS / route still run with timing.
+- Equivalent: add `export GPL_TIMING_DRIVEN = 0` and
+  `export GPL_ROUTABILITY_DRIVEN = 0` to `constraints/config.mk` permanently.
+- Validated: BOOM SmallSEBoom — initial place_gp converges in <30 min with
+  PLACE_FAST=1 vs >8h timeout without.
+- This is orthogonal to `PLACE_DENSITY_LB_ADDON`; raising density does not
+  help because the issue is the timing-repair loop, not the placer's
+  legalization step.
+
 ## OpenROAD SIGSEGV in CTS / Repair Timing
 
 **Symptoms:**

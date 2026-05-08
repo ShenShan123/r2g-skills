@@ -6,7 +6,11 @@
     "RocketTile":    "tinyRocket",
     "vga_enh_top":   "vga_enh_top",
     "swerv_wrapper": "swerv",
-    "black_parrot":  "bp_multi_top"
+    "black_parrot":  "bp_multi_top",
+    "ChipTop":       "boom_chiptop",
+    "frisc":         "faraday_risc",
+    "DSP_CORE":      "faraday_dsp",
+    "dma_top":       "faraday_dma"
   },
   "patterns": [
     {"regex": "^aes",                       "family": "aes_xcrypt"},
@@ -15,6 +19,10 @@
     {"regex": "^rocket",                    "family": "tinyRocket"},
     {"regex": "^swerv",                     "family": "swerv"},
     {"regex": "^(bp_|black_parrot)",        "family": "bp_multi_top"},
-    {"regex": "^vga",                       "family": "vga_enh_top"}
+    {"regex": "^vga",                       "family": "vga_enh_top"},
+    {"regex": "^ChipTop",                   "family": "boom_chiptop"},
+    {"regex": "^DSP_CORE",                  "family": "faraday_dsp"},
+    {"regex": "^dma_top",                   "family": "faraday_dma"},
+    {"regex": "^frisc",                     "family": "faraday_risc"}
   ]
 }
