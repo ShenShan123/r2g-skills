@@ -238,7 +238,7 @@ A family/platform pair appears in `heuristics.json` only after at least
 - Do not silently invent missing interfaces, clocks, resets, or timing targets without documenting assumptions.
 - Prefer single-clock MVP flows. Macro designs (fakeram45) are supported with proper config (see "Macro / Hard Memory Designs"). Escalate to the user before attempting CDC, multi-clock, or DFT.
 - Use the scripts in `scripts/` for repeatable operations instead of re-inventing shell commands each time.
-- Always source `/opt/openroad_tools_env.sh` before running EDA tools.
+- Do not hand-source any system env file before running EDA tools — every flow script sources `scripts/flow/_env.sh`, which autodetects ORFS and tool paths (see "Environment Setup"). `/opt/openroad_tools_env.sh` is only one optional source in that chain and may be absent.
 - When a batch produces a mix of pass/fail, diagnose with `references/failure-patterns.md` (see "Batch-Campaign Failure Patterns") and apply `tools/fix_orfs_failures.py` before any code changes. That tool fixes the six dominant failure modes (memory inference, IO-pin perimeter overflow, place density >1, PDN straps, missing include dirs, stage timeouts) by rewriting `config.mk`. Do not hand-edit configs case-by-case — extend the fix tool so future batches self-heal.
 - Floorplan sizing policy (validated on 495-design batch):
   - Explicit DIE_AREA is only safe when pin count ≤ ~200 *and* RTL fits in the area. Prefer `CORE_UTILIZATION` when in doubt.
@@ -335,7 +335,7 @@ design_cases/<design-name>/
 
 ### Running a Full Flow
 
-1. Source the environment: `source /opt/openroad_tools_env.sh`
+1. No manual env setup needed — flow scripts autodetect ORFS/tools via `scripts/flow/_env.sh`. Run `scripts/flow/check_env.sh` to confirm what was found.
 2. Initialize a run directory with `scripts/project/init_project.py <design-name>`.
 3. Save user requirements to `input/raw-spec.md`.
 4. Normalize them into `input/normalized-spec.yaml` using `scripts/project/normalize_spec.py`.

@@ -293,6 +293,72 @@ def scan_unresolved_includes(rtl_files):
     return referenced - present
 
 
+_HEADER_INDEX = None
+
+
+def _build_header_index():
+    """Index every header-ish file under RTL_DESIGNS_DIR by basename.
+
+    The v2 packer drops shared `include headers from sub-module extractions,
+    but a sibling design bundle from the same source repo often still ships
+    them. This lets a missing header be harvested from a sibling.
+    """
+    idx = {}
+    for ext in ("*.v", "*.vh", "*.svh", "*.h", "*.inc"):
+        for p in RTL_DESIGNS_DIR.rglob(ext):
+            idx.setdefault(p.name, []).append(p)
+    return idx
+
+
+def _common_prefix_len(a, b):
+    n = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        n += 1
+    return n
+
+
+def find_header_in_siblings(basename, current_design, min_prefix=4):
+    """Harvest a missing `include header from a sibling design bundle.
+
+    Returns (path, confidence) or (None, None). confidence is "exact" when all
+    candidates share identical content (unambiguous), else "family" when the
+    chosen file comes from a same-repo-family bundle (shared name prefix).
+    A header with no same-family candidate is left unresolved (None) rather
+    than risking a wrong copy from an unrelated repo.
+    """
+    global _HEADER_INDEX
+    if _HEADER_INDEX is None:
+        _HEADER_INDEX = _build_header_index()
+    cands = _HEADER_INDEX.get(basename, [])
+    if not cands:
+        return None, None
+
+    def design_of(p):
+        try:
+            return p.relative_to(RTL_DESIGNS_DIR).parts[0]
+        except Exception:
+            return ""
+
+    # All copies identical -> unambiguous, safe to use regardless of family.
+    contents = set()
+    for p in cands:
+        try:
+            contents.add(p.read_bytes())
+        except Exception:
+            contents.add(None)
+    if len(contents) == 1:
+        return cands[0], "exact"
+
+    # Otherwise require a same-family bundle (shared design-name prefix).
+    best = min(cands, key=lambda p: (-_common_prefix_len(design_of(p), current_design),
+                                     len(str(p))))
+    if _common_prefix_len(design_of(best), current_design) >= min_prefix:
+        return best, "family"
+    return None, None
+
+
 def generate_config_mk(project_dir, design_name, platform, rtl_files, sdc_path,
                        place_density=0.20, top_module=None):
     """Generate config.mk for ORFS.
@@ -506,6 +572,7 @@ def setup_one_design(design_name, force=False):
             continue
         referenced |= set(re.findall(r'`include\s+"([^"]+)"', txt))
     missing_headers = []
+    harvested_headers = []
     for inc in sorted(referenced):
         base = os.path.basename(inc)
         if base in present or inc in present:
@@ -520,7 +587,15 @@ def setup_one_design(design_name, force=False):
                 encoding="utf-8")
             present.add(base)
         else:
-            missing_headers.append(inc)
+            # Content header: try to harvest it from a sibling design bundle
+            # before giving up (the v2 packer drops shared headers).
+            sib, conf = find_header_in_siblings(base, design_name)
+            if sib is not None:
+                shutil.copy2(sib, dst_rtl_dir / base)
+                present.add(base)
+                harvested_headers.append(f"{base} <- {sib.relative_to(RTL_DESIGNS_DIR).parts[0]} ({conf})")
+            else:
+                missing_headers.append(inc)
 
     # Validate top module for multi-module files (HLS, VTR benchmarks)
     validated_top, clock_hint = validate_top_module(rtl_files, top_module)
@@ -556,6 +631,8 @@ def setup_one_design(design_name, force=False):
         # list means synthesis WILL fail at yosys-canonicalize -- the design
         # is incomplete and should be skipped, not retried.
         "missing_headers": missing_headers,
+        # Headers recovered from a sibling design bundle ("<- <src> (exact|family)").
+        "harvested_headers": harvested_headers,
         "status": "incomplete_missing_headers" if missing_headers else "setup_complete",
         "source": str(src_dir)
     }

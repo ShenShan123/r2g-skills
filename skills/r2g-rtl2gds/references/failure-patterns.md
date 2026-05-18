@@ -541,6 +541,20 @@ designs hit this):** `setup_rtl_designs.py` now classifies missing `include targ
 - Header files (`.vh`/`.svh`/`.h`/`.inc`) shipped alongside the RTL are now copied
   into `rtl/` by setup (previously only `.v`/`.sv` were copied).
 
+**Sibling-bundle harvest:** before declaring a content header unstubbable,
+`setup_rtl_designs.py` searches every other design bundle under the RTL source
+dir for a file of the same basename. It copies it when **either** all copies are
+byte-identical (`exact`) **or** the match comes from a same-repo-family bundle
+(shared design-name prefix, `family`); harvested files are listed in
+`metadata.json.harvested_headers`. A missing header with no same-family
+candidate is left unresolved — do not hand-copy an unrelated repo's header.
+
+**Cascading missing headers:** synthesis aborts at the *first* unresolved
+`` `include ``, so a naive one-error-at-a-time retry only reveals one header per
+run. `setup_rtl_designs.py` instead scans **all** RTL files up front and resolves
+(or reports) every referenced header in one pass — diagnose the same way: grep
+all `` `include `` directives across every RTL file before re-running.
+
 ### PDN strap insufficient width (PDN-0179 + "Insufficient width to add straps")
 
 **Symptoms:**
