@@ -533,6 +533,18 @@ PLACE_FAST=1         # Disable GPL_TIMING_DRIVEN/ROUTABILITY_DRIVEN — use for
                      # BOOM-class designs (>1M nets) where the timing-repair
                      # loop in gpl spins for hours after Nesterov has already
                      # converged. CTS/route still apply timing closure.
+ROUTE_FAST=1         # Cap GRT iterations + skip optional GRT-stage repair
+                     # passes. Sets SKIP_INCREMENTAL_REPAIR=1,
+                     # SKIP_ANTENNA_REPAIR=1, DETAILED_ROUTE_END_ITERATION=10,
+                     # GLOBAL_ROUTE_ARGS='-congestion_iterations 5
+                     # -allow_congestion -verbose ...'. Use when GRT extra
+                     # iterations cycle 1→30 forever on >1M-net designs
+                     # (BOOM ChipTop). Result: GDS may have congestion/DRC
+                     # but produces final ODB.
+ROUTE_FAST_SKIP_DRT=1  # Combined with ROUTE_FAST: also SKIP_DETAILED_ROUTE=1.
+                       # Last-resort fallback — produces DEF + GRT solution
+                       # but no GDS. Use only when ROUTE_FAST still hangs in
+                       # detailed routing.
 FROM_STAGE=place     # Resume from a specific stage (synth|floorplan|place|cts|route|finish)
 ```
 

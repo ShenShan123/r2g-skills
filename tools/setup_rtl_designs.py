@@ -11,6 +11,14 @@ For each design in rtl_designs/:
 
 Usage:
   python3 tools/setup_rtl_designs.py [--designs design1,design2,...] [--force]
+  python3 tools/setup_rtl_designs.py --rtl-dir=rtl_designs_v2 --designs-file=list.txt
+
+Options:
+  --rtl-dir=<dir>        Source RTL directory (default: rtl_designs). Absolute
+                        path or name relative to the repo root.
+  --designs=a,b,c       Comma-separated design names to set up.
+  --designs-file=<f>    File with one design name per line (# comments allowed).
+  --force               Re-generate config even if the project already exists.
 """
 
 import json
@@ -439,8 +447,80 @@ def setup_one_design(design_name, force=False):
             shutil.copy2(vf, dst)
             rtl_files.append(dst.resolve())
 
+        # Copy header/include files. These are NOT added to VERILOG_FILES
+        # (they must not be compiled directly); they are resolved via
+        # VERILOG_INCLUDE_DIRS. Copying them keeps `include directives valid.
+        for ext in ("*.vh", "*.svh", "*.h", "*.inc"):
+            for hf in sorted(src_rtl_dir.glob(ext)):
+                shutil.copy2(hf, dst_rtl_dir / hf.name)
+
+        # Recursive fallback: some v2 bundles keep RTL in nested subdirs
+        # (rtl/_downloads/..., rtl/rtl/..., rtl/lib/...) instead of flat.
+        # Collect everything, then de-duplicate by module name so a
+        # _tmp_cfg "sanitized" copy wins over the original _downloads copy.
+        if not rtl_files:
+            nested = sorted(src_rtl_dir.rglob("*.v")) + sorted(src_rtl_dir.rglob("*.sv"))
+            module_re = re.compile(r'^\s*module\s+(\w+)', re.MULTILINE)
+            chosen = {}  # module_name -> source Path
+            extra = []   # files with no detectable module (headers, etc.)
+            for vf in nested:
+                try:
+                    txt = vf.read_text(errors='replace')
+                except Exception:
+                    continue
+                mods = module_re.findall(txt)
+                if not mods:
+                    extra.append(vf)
+                    continue
+                prefer = "_tmp_cfg" in str(vf)
+                for mod in mods:
+                    if mod not in chosen or (prefer and "_tmp_cfg" not in str(chosen[mod])):
+                        chosen[mod] = vf
+            picked = sorted(set(chosen.values()) | set(extra))
+            used_names = set()
+            for vf in picked:
+                # Flatten into dst rtl/, disambiguating basename collisions.
+                name = vf.name
+                if name in used_names:
+                    name = f"{vf.parent.name}__{vf.name}"
+                used_names.add(name)
+                dst = dst_rtl_dir / name
+                shutil.copy2(vf, dst)
+                rtl_files.append(dst.resolve())
+
     if not rtl_files:
         return {"design": design_name, "status": "error", "reason": "no RTL files found"}
+
+    # Header resolution: v2 bundles frequently omit `include-d headers.
+    # Generate a safe stub for timescale headers (a pure `timescale directive)
+    # and for *undefines* headers (a list of harmless `undef directives) so
+    # synthesis is not blocked at yosys-canonicalize. Genuine content headers
+    # (*_defines.v, *_header.vh, config.vh, ...) carry real `define / parameter
+    # values and CANNOT be stubbed -- those designs are recorded as incomplete.
+    present = {p.name for p in dst_rtl_dir.iterdir()}
+    referenced = set()
+    for rf in rtl_files:
+        try:
+            txt = Path(rf).read_text(errors='replace')
+        except Exception:
+            continue
+        referenced |= set(re.findall(r'`include\s+"([^"]+)"', txt))
+    missing_headers = []
+    for inc in sorted(referenced):
+        base = os.path.basename(inc)
+        if base in present or inc in present:
+            continue
+        low = base.lower()
+        if low.startswith("timescale"):
+            (dst_rtl_dir / base).write_text("`timescale 1ns / 1ps\n", encoding="utf-8")
+            present.add(base)
+        elif "undefine" in low:
+            (dst_rtl_dir / base).write_text(
+                "// auto-stub: original undefines header absent from bundle\n",
+                encoding="utf-8")
+            present.add(base)
+        else:
+            missing_headers.append(inc)
 
     # Validate top module for multi-module files (HLS, VTR benchmarks)
     validated_top, clock_hint = validate_top_module(rtl_files, top_module)
@@ -472,7 +552,11 @@ def setup_one_design(design_name, force=False):
         "rtl_file_count": len(rtl_files),
         "rtl_complexity": complexity,
         "size_category": size_cat,
-        "status": "setup_complete",
+        # Non-stubbable `include headers absent from the bundle. A non-empty
+        # list means synthesis WILL fail at yosys-canonicalize -- the design
+        # is incomplete and should be skipped, not retried.
+        "missing_headers": missing_headers,
+        "status": "incomplete_missing_headers" if missing_headers else "setup_complete",
         "source": str(src_dir)
     }
     (project_dir / "metadata.json").write_text(
@@ -491,16 +575,35 @@ def setup_one_design(design_name, force=False):
 
 
 def main():
+    global RTL_DESIGNS_DIR
     force = "--force" in sys.argv
     selected = None
+    designs_file = None
 
     for arg in sys.argv[1:]:
         if arg.startswith("--designs="):
             selected = arg.split("=", 1)[1].split(",")
+        elif arg.startswith("--designs-file="):
+            designs_file = arg.split("=", 1)[1]
+        elif arg.startswith("--rtl-dir="):
+            # Source RTL directory override (e.g. rtl_designs_v2). Accepts an
+            # absolute path or a name relative to the repo root.
+            rd = arg.split("=", 1)[1]
+            rd_path = Path(rd)
+            RTL_DESIGNS_DIR = rd_path if rd_path.is_absolute() else BASE_DIR / rd
         elif arg == "--force":
             pass
         elif not arg.startswith("--"):
             selected = arg.split(",")
+
+    # A designs-file is one design name per line (blank lines / # comments ok).
+    if designs_file:
+        names = []
+        for line in Path(designs_file).read_text().splitlines():
+            line = line.split("#", 1)[0].strip()
+            if line:
+                names.append(line)
+        selected = names
 
     DESIGN_CASES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -518,7 +621,10 @@ def main():
     results = {"ok": 0, "skip": 0, "error": 0}
     errors = []
     clock_stats = {"real": 0, "virtual": 0}
-    size_stats = {"tiny": 0, "small": 0, "medium": 0, "large": 0}
+    # size_cat can be tiny/small/medium/large or a dynamic "pin_heavy_<N>"
+    # label, so count into a defaultdict instead of a fixed-key dict.
+    from collections import defaultdict
+    size_stats = defaultdict(int)
 
     for i, name in enumerate(designs):
         r = setup_one_design(name, force=force)
@@ -527,7 +633,9 @@ def main():
         if r["status"] == "ok":
             clk_type = "virtual" if r["clock_port"] == "virtual" else "real"
             clock_stats[clk_type] += 1
-            size_stats[r["size_cat"]] += 1
+            # Collapse pin_heavy_<N> into a single bucket for the summary.
+            cat = r["size_cat"]
+            size_stats["pin_heavy" if cat.startswith("pin_heavy") else cat] += 1
             if (i + 1) % 50 == 0 or i == 0:
                 print(f"  [{i+1}/{len(designs)}] {name}: top={r['top']}, "
                       f"clock={r['clock_port']}, size={r['size_cat']}({r['complexity']})")

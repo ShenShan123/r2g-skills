@@ -110,6 +110,53 @@ if [[ "${PLACE_FAST:-0}" == "1" ]]; then
   echo "PLACE_FAST=1 → disabling GPL_TIMING_DRIVEN and GPL_ROUTABILITY_DRIVEN"
 fi
 
+# ROUTE_FAST escape hatch: cap GRT/DRT iterations and skip the optional
+# repair/antenna passes that dominate runtime on >M-net netlists. Required
+# for BOOM ChipTop class where each GRT extra-iteration phase has 30
+# iterations × 2 phases × ~2.4M nets and never converges in <24h.
+# Set ROUTE_FAST=1 in the env to enable.
+#
+# Knobs applied (read by ORFS Makefile from env):
+#   GLOBAL_ROUTE_ARGS=-congestion_iterations 5 -allow_congestion -verbose
+#     -congestion_report_iter_step 1
+#       — cap initial GRT extra-iteration phase at 5 (vs default 30) and
+#         accept the result even with congestion violations.
+#   SKIP_INCREMENTAL_REPAIR=1
+#       — skip repair_design_helper + incremental GRT + repair_timing_helper
+#         block inside global_route.tcl. Dominates GRT stage runtime.
+#   SKIP_ANTENNA_REPAIR=1
+#       — skip antenna repair iterations (each rebuilds affected nets).
+#   DETAILED_ROUTE_END_ITERATION=10  (default 64)
+#       — cap detailed-routing iterations.
+#
+# Optional further fallback: ROUTE_FAST_SKIP_DRT=1 also enables
+# SKIP_DETAILED_ROUTE=1 — produces DEF + global routes but no GDS.
+if [[ "${ROUTE_FAST:-0}" == "1" ]]; then
+  # GLOBAL_ROUTE_ARGS is passed as a quoted make cmdline arg so it survives
+  # ORFS's per-step variable scrub (see references/orfs-playbook.md).
+  GRT_FAST_ARGS='-congestion_iterations 5 -allow_congestion -verbose -congestion_report_iter_step 1'
+  # GRT_INCREMENTAL_ALLOW_CONGESTION enables a SKILL-LOCAL patch in
+  # OpenROAD-flow-scripts/flow/scripts/global_route.tcl that adds
+  # -allow_congestion to the post-recover_power -end_incremental GRT call.
+  # Without this patch, the initial GRT call may pass with congestion
+  # (allowed via GLOBAL_ROUTE_ARGS) but the recover_power_helper's
+  # incremental GRT then aborts with ERROR GRT-0116 on the same residual
+  # congestion. ChipTop-class designs cannot reach 0 overflow on this
+  # OpenROAD/nangate45, so this is required for any ROUTE_FAST run.
+  # DRT iteration cap: default 10. Override with ROUTE_FAST_DRT_ITERS for an
+  # even faster (dirtier) detailed-route pass — e.g. =1 produces a GDS quickly
+  # for congestion-bound designs that would never converge.
+  DRT_ITERS="${ROUTE_FAST_DRT_ITERS:-10}"
+  MAKE_CMD="$MAKE_CMD SKIP_INCREMENTAL_REPAIR=1 SKIP_ANTENNA_REPAIR=1 DETAILED_ROUTE_END_ITERATION=$DRT_ITERS GLOBAL_ROUTE_ARGS='$GRT_FAST_ARGS' GRT_INCREMENTAL_ALLOW_CONGESTION=1"
+  echo "ROUTE_FAST=1 → SKIP_INCREMENTAL_REPAIR + SKIP_ANTENNA_REPAIR + DRT_END_ITER=$DRT_ITERS"
+  echo "             → GLOBAL_ROUTE_ARGS='$GRT_FAST_ARGS'"
+  echo "             → GRT_INCREMENTAL_ALLOW_CONGESTION=1 (requires patched global_route.tcl)"
+  if [[ "${ROUTE_FAST_SKIP_DRT:-0}" == "1" ]]; then
+    MAKE_CMD="$MAKE_CMD SKIP_DETAILED_ROUTE=1"
+    echo "ROUTE_FAST_SKIP_DRT=1 → SKIP_DETAILED_ROUTE=1 (no GDS, DEF only)"
+  fi
+fi
+
 # Apply CPU core limit if specified
 if [[ -n "${ORFS_MAX_CPUS:-}" ]]; then
   # Build a CPU list 0-(N-1)

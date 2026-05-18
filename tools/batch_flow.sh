@@ -19,9 +19,12 @@ EXTRACT_SCRIPTS="$SKILL_DIR/scripts/extract"
 REPORT_SCRIPTS="$SKILL_DIR/scripts/reports"
 BATCH_DIR="$CASES_DIR/_batch"
 mkdir -p "$BATCH_DIR"
-RESULTS_FILE="$BATCH_DIR/full_flow_results.jsonl"
-SUMMARY_FILE="$BATCH_DIR/full_flow_summary.txt"
-LOG_DIR="$BATCH_DIR/logs"
+# BATCH_TAG namespaces the results/summary/log files so multiple batch_flow.sh
+# invocations (e.g. parallel worker agents) do not clobber each other's output.
+BATCH_TAG="${BATCH_TAG:-}"
+RESULTS_FILE="$BATCH_DIR/full_flow_results${BATCH_TAG:+_$BATCH_TAG}.jsonl"
+SUMMARY_FILE="$BATCH_DIR/full_flow_summary${BATCH_TAG:+_$BATCH_TAG}.txt"
+LOG_DIR="$BATCH_DIR/logs${BATCH_TAG:+_$BATCH_TAG}"
 mkdir -p "$LOG_DIR"
 SKIP_EXISTING="${SKIP_EXISTING:-0}"
 
@@ -33,8 +36,13 @@ elif [[ -f /opt/openroad_tools_env.sh ]]; then
   source /opt/openroad_tools_env.sh
 fi
 
-# Clear previous results
-> "$RESULTS_FILE"
+# Clear previous results, unless BATCH_APPEND=1 (used when resuming a stalled
+# run so prior result lines are preserved). SKIP_EXISTING avoids re-running
+# designs whose backend already completed.
+if [[ "${BATCH_APPEND:-0}" != "1" ]]; then
+  > "$RESULTS_FILE"
+fi
+touch "$RESULTS_FILE"
 
 run_one_design() {
   local case_dir="$1"

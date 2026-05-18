@@ -526,6 +526,21 @@ The `copy RTL files` step in `tools/setup_rtl_designs.py` only copies `.v` files
   - Drop the design from the batch and fetch the original header.
 - `tools/fix_orfs_failures.py` creates empty stub headers as a placeholder, but empty stubs only help if the includes are guards; designs that rely on `` `define MACRO `` macros inside the header will still fail synthesis.
 
+**Stubbable vs unstubbable headers (validated on the rtl_designs_v2 batch — 44/213
+designs hit this):** `setup_rtl_designs.py` now classifies missing `include targets:
+- **`timescale.v` / `timescale.vh`** — pure `` `timescale `` directive. Auto-stubbed
+  with `` `timescale 1ns / 1ps ``. Always safe.
+- **`*undefines*` headers** — a list of `` `undef `` directives. Auto-stubbed empty
+  (undef of an absent macro is harmless).
+- **Content headers** (`*_defines.v`, `*_header.vh`, `config.vh`, `core.vh`, register
+  maps) — carry real `` `define `` / `parameter` values. CANNOT be stubbed. The design
+  bundle is **incomplete**; `setup_rtl_designs.py` records
+  `status: incomplete_missing_headers` + a `missing_headers` list in `metadata.json`.
+  Classify these as **incomplete-bundle / skip**, not a flow failure — do not burn
+  retry attempts on them. They fail fast at `do-yosys-canonicalize` (~2-4 s).
+- Header files (`.vh`/`.svh`/`.h`/`.inc`) shipped alongside the RTL are now copied
+  into `rtl/` by setup (previously only `.v`/`.sv` were copied).
+
 ### PDN strap insufficient width (PDN-0179 + "Insufficient width to add straps")
 
 **Symptoms:**

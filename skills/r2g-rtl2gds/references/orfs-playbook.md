@@ -180,6 +180,43 @@ export SKIP_CTS_REPAIR_TIMING = 1   # Prevents SIGSEGV in CTS timing repair
 export SKIP_LAST_GASP = 1           # Prevents stalls in post-route optimization
 ```
 
+### Route Acceleration for ChipTop-Class Designs (>1M nets)
+
+For BOOM ChipTop and similar M-net designs, the GRT stage's *additional*
+passes (post-`repair_design`, post-`repair_timing`, post-`recover_power`
+incremental GRTs) dominate runtime — each one is a full-design GRT call.
+Use `ROUTE_FAST=1` (handled by `run_orfs.sh`) which sets:
+
+| Flag | Effect |
+|---|---|
+| `SKIP_INCREMENTAL_REPAIR=1` | Skip post-GRT repair_design + 2 incremental GRTs + repair_timing block. **Largest single speedup.** |
+| `SKIP_ANTENNA_REPAIR=1` | Skip antenna repair iterations |
+| `DETAILED_ROUTE_END_ITERATION=10` | Cap detail-route iterations (default 64) |
+| `GLOBAL_ROUTE_ARGS='-congestion_iterations 5 -allow_congestion -verbose ...'` | Cap initial GRT extra-iter at 5 (default 30); accept congestion |
+
+Last-resort fallback: also set `ROUTE_FAST_SKIP_DRT=1` to add `SKIP_DETAILED_ROUTE=1`
+(produces DEF + global routes only, no GDS).
+
+### Variable Propagation Through ORFS's Per-Step Scrub
+
+ORFS's per-step Make rule (`do-N_M_*`) iterates Make's `.VARIABLES` and
+`unset`s most of them before invoking `make` again. The list it builds
+(`UNSET_VARIABLES_NAMES` in `scripts/variables.mk`) filters by `$(origin V)`
+and **excludes** vars whose origin is `command line`, `environment`,
+`default`, or `automatic` — meaning shell-exported env vars and make
+cmdline args **do** survive the scrub. Only Makefile-internal `export`s
+get dropped.
+
+Verified-working ways to override a `variables.yaml`-defined variable:
+
+- ✅ Pass on the make cmdline (`make VAR='val'`) — survives via `MAKEOVERRIDES`
+- ✅ Set in `config.mk` with `export VAR = ...` — re-applied each invocation
+- ✅ `export VAR=...` in the parent shell — survives the scrub (origin: environment)
+
+If you don't see your override taking effect, look at the *new* `.tmp.log`
+(not the old `.log` left over from a previous run). The two coexist in the
+same logs directory and `tail -F` of `5_*.log` will read the stale one too.
+
 ## When Backend Fails
 
 Check issues in the following order:
