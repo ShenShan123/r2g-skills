@@ -83,14 +83,25 @@ IO_PIN_PPL_RE = re.compile(
 
 
 def required_perim_from_log(case: str) -> float | None:
-    log = Path('design_cases/_batch/logs') / f'{case}.log'
-    if not log.exists():
-        return None
-    txt = log.read_text(errors='ignore')
+    # Batch logs land under per-tag dirs (logs, logs_v2_b1, logs_v2_harvest, ...).
+    # Scan them newest-first and also fall back to the per-stage ORFS log so the
+    # IO-overflow perimeter target is recovered regardless of which batch ran it.
+    candidates = sorted(
+        Path('design_cases/_batch').glob(f'logs*/{case}.log'),
+        key=lambda p: p.stat().st_mtime if p.exists() else 0,
+        reverse=True,
+    )
+    runs = sorted(Path('design_cases', case, 'backend').glob('RUN_*/logs/*place_iop*.log'),
+                  reverse=True)
     m = None
-    for m in IO_PIN_PPL_RE.finditer(txt):
-        pass  # keep last match (most recent retry)
-    return float(m.group(4)) if m else None
+    for log in [*candidates, *runs]:
+        if not log.exists():
+            continue
+        for m in IO_PIN_PPL_RE.finditer(log.read_text(errors='ignore')):
+            pass  # keep last match (most recent retry)
+        if m:
+            return float(m.group(4))
+    return None
 
 
 def compute_die_side(required_perim: float) -> int:
@@ -159,6 +170,24 @@ def apply_pdn_fix(case: str) -> dict:
     cfg = switch_to_utilization(cfg, PDN_UTIL)
     write_cfg(cfg_path, cfg)
     return {'case': case, 'fix': 'pdn_strap', 'status': 'applied'}
+
+
+def apply_cts_crash_fix(case: str) -> dict:
+    """TritonCTS SIGSEGV (separateMacroRegSinks / initClockTree).
+
+    Seen on small designs with a derived/gated clock where CTS mis-handles a
+    2-sink clock net. Disabling the post-CTS timing-repair and last-gasp passes
+    avoids the crash path; if CTS still aborts the design is a tool limitation.
+    """
+    cfg_path = CASES / case / 'constraints' / 'config.mk'
+    cfg = read_cfg(cfg_path)
+    if not cfg:
+        return {'case': case, 'fix': 'cts_crash', 'status': 'no_config'}
+    cfg = ensure_line(cfg, 'SKIP_CTS_REPAIR_TIMING', '1')
+    cfg = ensure_line(cfg, 'SKIP_LAST_GASP', '1')
+    write_cfg(cfg_path, cfg)
+    return {'case': case, 'fix': 'cts_crash', 'status': 'applied',
+            'note': 'if CTS still SIGSEGVs, mark as OpenROAD tool limitation'}
 
 
 def _last_timed_out_stage(case: str) -> str | None:
@@ -948,11 +977,16 @@ def apply_other(entry) -> dict:
         if result.get('status') == 'applied':
             return result
         return apply_density_fix(case)
-    if 'PDN-0179' in detail:
+    if 'PDN-0179' in detail or 'PDN-0185' in detail:
+        # PDN-0179: grid exceeds die. PDN-0185: die strip too narrow for straps.
+        # Both are die-sizing problems -- try a wrong-top fix first (a tiny leaf
+        # module mis-picked as top), else drop utilization to widen the die.
         result = apply_wrong_top_fix(case)
         if result.get('status') == 'applied':
             return result
         return apply_pdn_fix(case)
+    if 'CTS' in detail and ('separateMacroRegSinks' in detail or 'cts_crash' in detail):
+        return apply_cts_crash_fix(case)
     if 'exit code 124' in detail:
         return apply_timeout_fix(case)
     if _looks_like_rtl_error(detail):

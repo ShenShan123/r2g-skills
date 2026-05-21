@@ -144,6 +144,16 @@ OpenROAD bug in timing repair, typically triggered by complex clock trees in lar
 - If the design must have CTS timing repair, try reducing the number of clock sinks by increasing die area
 - Re-running may work if the crash is non-deterministic
 
+**Variant — SIGSEGV in CTS *init* (`separateMacroRegSinks` / `initClockTree`):**
+the crash happens before timing repair, in `cts::TritonCTS::initClock` →
+`separateMacroRegSinks`, on small designs with a derived/gated clock where a
+clock net has very few sinks (e.g. 2). `SKIP_CTS_REPAIR_TIMING=1` +
+`SKIP_LAST_GASP=1` is still the first fix (`fix_orfs_failures.py` →
+`apply_cts_crash_fix`), but it bypasses a *later* pass than the crash, so it may
+not help. If CTS still SIGSEGVs in init, this is an upstream OpenROAD bug —
+classify as a **tool limitation / skip**, like the BOOM floorplan cases. Do not
+keep retrying.
+
 ## RTL Reserved Keywords as Identifiers
 
 **Symptoms:**
@@ -542,12 +552,30 @@ designs hit this):** `setup_rtl_designs.py` now classifies missing `include targ
   into `rtl/` by setup (previously only `.v`/`.sv` were copied).
 
 **Sibling-bundle harvest:** before declaring a content header unstubbable,
-`setup_rtl_designs.py` searches every other design bundle under the RTL source
-dir for a file of the same basename. It copies it when **either** all copies are
-byte-identical (`exact`) **or** the match comes from a same-repo-family bundle
-(shared design-name prefix, `family`); harvested files are listed in
-`metadata.json.harvested_headers`. A missing header with no same-family
-candidate is left unresolved — do not hand-copy an unrelated repo's header.
+`setup_rtl_designs.py` searches two pools for a file of the same basename:
+(1) every other design bundle under the RTL source dir, and (2) every
+already-set-up `design_cases/*/rtl/` directory. Pool 2 makes header recovery
+**compounding** — once one family member gets a header (harvested *or*
+hand-reconstructed and proven by a passing run), the rest of the family
+inherits it automatically on the next setup. It copies a candidate when
+**either** two-plus independent bundles ship a byte-identical copy (`exact`)
+**or** the match comes from a same-repo-family design (shared design-name
+prefix, `family`); harvested files are listed in
+`metadata.json.harvested_headers`. A lone candidate from an unrelated design
+is rejected — do not hand-copy an unrelated repo's header. Design-specific
+empty stubs (marked `minimal stub for ORFS`) are excluded from the index so a
+stub verified safe for one design is never propagated to a sibling that may
+actually depend on the real macros.
+
+**Reconstructed headers must cover the whole family, not one module:** when a
+header is hand-reconstructed to unblock one design (e.g. `rv32i_header.vh` for
+`rv32i_alu`), it tends to define only the macros *that module* uses. Propagated
+to a sibling that needs more (`rv32i_decoder` needs `` `OPCODE_RTYPE``,
+`` `FUNCT3_* `` etc.) it fails again with `undefined macro`. Before
+reconstructing, grep `` `BACKTICK_TOKEN `` usage across **all** RTL files of the
+family and define the full union. ISA-standard values (RISC-V opcode/funct3
+fields, CSR addresses) are fixed by the spec — reconstructing them is recovery,
+not invention; arbitrary design-internal encodings are not and stay `skip`.
 
 **Cascading missing headers:** synthesis aborts at the *first* unresolved
 `` `include ``, so a naive one-error-at-a-time retry only reveals one header per
@@ -559,9 +587,13 @@ all `` `include `` directives across every RTL file before re-running.
 
 **Symptoms:**
 - `[ERROR PDN-0179] Unable to repair all channels`
-- Or: `Insufficient width to add straps`
-- Fails in `floorplan` stage
+- Or: `[ERROR PDN-0185] Insufficient width (N um) to add straps on layer metal4`
+- Fails in `floorplan` stage (`2_4_floorplan_pdn`)
 - Seen on VTR/koios large-mac and CNN benchmarks with many IO pins on a 50×50 die
+
+Both codes are die-sizing problems: `fix_orfs_failures.py` → `apply_other`
+routes `PDN-0179` and `PDN-0185` through a wrong-top check, then `apply_pdn_fix`
+(switch to `CORE_UTILIZATION` so ORFS auto-sizes the die wide enough for straps).
 
 **Root Cause:**
 The PDN generator requires minimum widths between IO blockages to route metal straps. Tiny die + high IO count leaves no room.

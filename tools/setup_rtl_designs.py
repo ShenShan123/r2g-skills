@@ -295,18 +295,47 @@ def scan_unresolved_includes(rtl_files):
 
 _HEADER_INDEX = None
 
+# Marker left in agent-authored design-specific empty stubs. Such a stub is
+# verified safe for *one* design only ("can_btl uses no macros") and must NOT
+# be propagated to siblings -- they may genuinely depend on the real header.
+_STUB_MARKER = "minimal stub for ORFS"
+
+
+def _index_header_dir(idx, root, rglob_root):
+    """Add every header-ish file under rglob_root to idx, keyed by basename.
+
+    Each entry is (path, design_root) so the harvester can recover the owning
+    design name regardless of which pool the file came from.
+    """
+    for ext in ("*.v", "*.vh", "*.svh", "*.h", "*.inc"):
+        for p in rglob_root.rglob(ext):
+            try:
+                if _STUB_MARKER in p.read_text(errors="replace")[:400]:
+                    continue  # design-specific empty stub -- not family-shareable
+            except Exception:
+                pass
+            idx.setdefault(p.name, []).append((p, root))
+
 
 def _build_header_index():
-    """Index every header-ish file under RTL_DESIGNS_DIR by basename.
+    """Index every header-ish file by basename from two pools.
 
-    The v2 packer drops shared `include headers from sub-module extractions,
-    but a sibling design bundle from the same source repo often still ships
-    them. This lets a missing header be harvested from a sibling.
+    Pool 1 -- RTL_DESIGNS_DIR: the v2 packer drops shared `include headers from
+    sub-module extractions, but a sibling bundle from the same source repo
+    often still ships them.
+
+    Pool 2 -- design_cases/*/rtl: a header that was reconstructed or recovered
+    on one family member (and proved correct because that sibling ran) is the
+    best possible source for the rest of the family. This makes header recovery
+    compounding -- fix one RISC_V module, the other four inherit the header.
     """
     idx = {}
-    for ext in ("*.v", "*.vh", "*.svh", "*.h", "*.inc"):
-        for p in RTL_DESIGNS_DIR.rglob(ext):
-            idx.setdefault(p.name, []).append(p)
+    _index_header_dir(idx, RTL_DESIGNS_DIR, RTL_DESIGNS_DIR)
+    if DESIGN_CASES_DIR.is_dir():
+        for case in DESIGN_CASES_DIR.iterdir():
+            rtl = case / "rtl"
+            if rtl.is_dir():
+                _index_header_dir(idx, DESIGN_CASES_DIR, rtl)
     return idx
 
 
@@ -320,13 +349,13 @@ def _common_prefix_len(a, b):
 
 
 def find_header_in_siblings(basename, current_design, min_prefix=4):
-    """Harvest a missing `include header from a sibling design bundle.
+    """Harvest a missing `include header from a sibling design.
 
-    Returns (path, confidence) or (None, None). confidence is "exact" when all
-    candidates share identical content (unambiguous), else "family" when the
-    chosen file comes from a same-repo-family bundle (shared name prefix).
-    A header with no same-family candidate is left unresolved (None) rather
-    than risking a wrong copy from an unrelated repo.
+    Returns (path, confidence) or (None, None). confidence is "exact" when two
+    or more independent bundles ship a byte-identical copy (unambiguous), else
+    "family" when the chosen file comes from a same-repo-family design (shared
+    name prefix). A single candidate is only accepted when it is a genuine
+    family sibling -- a lone unrelated copy is rejected to avoid a wrong header.
     """
     global _HEADER_INDEX
     if _HEADER_INDEX is None:
@@ -335,27 +364,29 @@ def find_header_in_siblings(basename, current_design, min_prefix=4):
     if not cands:
         return None, None
 
-    def design_of(p):
+    def design_of(p, root):
         try:
-            return p.relative_to(RTL_DESIGNS_DIR).parts[0]
+            return p.relative_to(root).parts[0]
         except Exception:
             return ""
 
-    # All copies identical -> unambiguous, safe to use regardless of family.
+    # Two-plus independent bundles agreeing byte-for-byte -> unambiguous.
     contents = set()
-    for p in cands:
+    for p, _ in cands:
         try:
             contents.add(p.read_bytes())
         except Exception:
             contents.add(None)
-    if len(contents) == 1:
-        return cands[0], "exact"
+    if len(cands) >= 2 and len(contents) == 1:
+        return cands[0][0], "exact"
 
-    # Otherwise require a same-family bundle (shared design-name prefix).
-    best = min(cands, key=lambda p: (-_common_prefix_len(design_of(p), current_design),
-                                     len(str(p))))
-    if _common_prefix_len(design_of(best), current_design) >= min_prefix:
-        return best, "family"
+    # Otherwise require a same-family design (shared design-name prefix). This
+    # also gates the single-candidate case: a reconstructed RISC_V header only
+    # flows to RISC_V_* siblings, never to an unrelated design.
+    best = min(cands, key=lambda c: (-_common_prefix_len(design_of(*c), current_design),
+                                     len(str(c[0]))))
+    if _common_prefix_len(design_of(*best), current_design) >= min_prefix:
+        return best[0], "family"
     return None, None
 
 
@@ -593,7 +624,14 @@ def setup_one_design(design_name, force=False):
             if sib is not None:
                 shutil.copy2(sib, dst_rtl_dir / base)
                 present.add(base)
-                harvested_headers.append(f"{base} <- {sib.relative_to(RTL_DESIGNS_DIR).parts[0]} ({conf})")
+                src_name = base
+                for root in (RTL_DESIGNS_DIR, DESIGN_CASES_DIR):
+                    try:
+                        src_name = sib.relative_to(root).parts[0]
+                        break
+                    except Exception:
+                        continue
+                harvested_headers.append(f"{base} <- {src_name} ({conf})")
             else:
                 missing_headers.append(inc)
 
