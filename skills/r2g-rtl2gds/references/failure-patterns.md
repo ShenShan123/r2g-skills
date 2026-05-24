@@ -314,14 +314,22 @@ Yosys crash, typically caused by very large designs or specific RTL constructs t
 
 ### KLayout DRC Stuck on `or` (FreePDK45.lydrc, nangate45)
 
-- **Symptom:** `run_drc.sh` runs for hours with no progress. `6_drc.log` last line is `"or" in: FreePDK45.lydrc:121` (or another boolean-op line) and the file mtime stops advancing. CPU stays at 100% on a single klayout process; RSS plateaus around 500MB-3.5GB.
-- **Root cause:** KLayout DRC's combination of `poly.not(active).separation(active, ...)` followed by an `or` builds large intermediate polygon sets. On dense designs (>~1.5K cells / >~1MB GDS) the rule scales poorly. Validated on this environment: `iscas89_s27` (86 cells), `ansiportlist` (231), `binops` (231), `CRC33_D264` (1434) all complete; `faraday_dma` (14k cells, 14.8MB GDS) hung indefinitely on rule 121.
+- **Symptom:** `run_drc.sh` runs for hours with no progress. `6_drc.log` last line is `"or" in: FreePDK45.lydrc:121` (or another boolean-op line — also observed at lines 91, 131) and the file mtime stops advancing. CPU stays at 100% on a single klayout process; RSS plateaus around 500MB-3.5GB.
+- **Root cause:** KLayout DRC's combination of `poly.not(active).separation(active, ...)` followed by an `or` builds large intermediate polygon sets. On dense designs (>~1.5K cells / >~1MB GDS) the rule scales poorly. Validated on this environment: `iscas89_s27` (86 cells), `ansiportlist` (231), `binops` (231), `CRC33_D264` (1434) all complete; `faraday_dma` (14k cells, 14.8MB GDS) hung indefinitely on rule 121. Also observed on `APB_GPIO_register`, `AXI_Lite_DMA_axilite`, `DMA_Controller_DMA_registers` stuck on rule 131.
 - **Action:**
   - Don't extend `DRC_TIMEOUT` blindly — observed zombies ran 3-4 days at 100% CPU without finishing on the same rule.
   - Document in `<project>/drc/drc_result.json` with `"status": "stuck"` and the `stuck_at_rule` so the dashboard can show a yellow badge instead of red.
   - Use `setsid timeout` (already enforced in `run_drc.sh`) so terminating the parent kills the klayout child cleanly.
   - For the design itself, the rest of the flow (ORFS → RCX) is independent and can still produce GDS+SPEF.
 - **Pre-existing zombies:** If the system has klayout DRC processes running >1 hour at 100% CPU on the same `lydrc` line and no log progress, they're stuck in this pattern. Kill with `kill -9 <pid>`. Six such zombies were observed in this session, accumulating ~20k+ minutes of wasted CPU before cleanup.
+
+#### Sub-variant: externally-killed stuck (exit 2, not 137)
+
+When klayout DRC is stuck on a polygon op and gets SIGKILL'd by something **other** than `run_drc.sh`'s own timeout — cgroups OOM, session limit, monitor script, or manual `pkill` — `make` exits 2 (target failed), not 124/137. Older `run_drc.sh` versions classified this as a generic `failed`, hiding the stuck pattern from triage.
+
+- **Detection (since 2026-05-23):** `run_drc.sh` greps `drc_run.log` for `Killed $KLAYOUT_CMD`, `Killed klayout`, or `Error 137`. When that keyword is present AND a `*.lydrc:NN` reference exists in `6_drc.log`, classify as `status=stuck` with `killed_externally=true` in `drc_result.json` (regardless of make's wrapper exit code).
+- **Symptom example:** `drc_run.log` ends with `klayout.sh: line 9: <PID> Killed   $KLAYOUT_CMD "$@"` followed by `make: *** [...] Error 137`, while the run-script's PIPESTATUS captures `2`. Total elapsed is well under the timeout (3-8 minutes) but CPU utilization is low (~13%) indicating klayout was waiting (not crashing) when killed.
+- **Action:** Same as the timeout variant — treat as stuck, do not retry. The signoff outcome for the design is effectively "DRC unavailable, GDS+LVS+RCX still valid". The 3 v2 cases (APB_GPIO_register, AXI_Lite_DMA_axilite, DMA_Controller_DMA_registers) that previously logged as `drc=fail(2)` are now correctly tagged `stuck` after this fix.
 
 ### LVS Mismatch
 - **Symptom:** `ERROR : Netlists don't match` in LVS log; mismatches in `6_lvs.lvsdb`

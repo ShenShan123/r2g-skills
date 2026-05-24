@@ -152,23 +152,40 @@ else
   # 4+ days unproductively), record status=stuck so the dashboard surfaces
   # a yellow badge and downstream tooling can skip retry.
   STUCK_RULE=""
+  KILLED_KEYWORD=0
   if [[ -f "$DRC_DIR/6_drc.log" ]]; then
     # Grab the last `*.lydrc:NN` reference, if any
     STUCK_RULE=$(grep -oE '[A-Za-z0-9_]+\.lydrc:[0-9]+' "$DRC_DIR/6_drc.log" 2>/dev/null | tail -1 || true)
   fi
+  # The klayout.sh wrapper prints "Killed" when klayout receives SIGKILL from
+  # any external source (cgroups OOM, session limit, manual pkill). When that
+  # happens make exits 2 (target failed), not 124/137 — so we look for the
+  # keyword in the combined run log too. Without this check the stuck pattern
+  # gets misclassified as a generic "failed" and downstream tooling retries it.
+  if [[ -f "$DRC_DIR/drc_run.log" ]]; then
+    if grep -qE 'Killed[[:space:]]+\$KLAYOUT_CMD|Killed[[:space:]]+klayout|Error 137' "$DRC_DIR/drc_run.log" 2>/dev/null; then
+      KILLED_KEYWORD=1
+    fi
+  fi
   REASON="no_count_report"
   STATUS="failed"
-  if [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
+  if [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 || $KILLED_KEYWORD -eq 1 ]]; then
     if [[ -n "$STUCK_RULE" ]]; then
       STATUS="stuck"
       REASON="klayout_polygon_op_no_progress"
-      echo "DRC STUCK on $STUCK_RULE after ${DRC_TIMEOUT}s — see references/failure-patterns.md"
+      if [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
+        echo "DRC STUCK on $STUCK_RULE after ${DRC_TIMEOUT}s — see references/failure-patterns.md"
+      else
+        echo "DRC STUCK on $STUCK_RULE (klayout killed externally, exit=$DRC_STATUS) — see references/failure-patterns.md"
+      fi
       # Best-effort cleanup of any orphaned klayout DRC procs from this run.
       pkill -9 -f "klayout.*${FLOW_VARIANT}.*6_drc" 2>/dev/null || true
-    else
+    elif [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
       STATUS="timeout"
       REASON="drc_timeout"
       echo "DRC timed out after ${DRC_TIMEOUT}s with no log progress recorded"
+    else
+      echo "DRC killed externally (exit=$DRC_STATUS) but no lydrc rule recorded"
     fi
   else
     echo "DRC completed but no count report found (exit=$DRC_STATUS)"
