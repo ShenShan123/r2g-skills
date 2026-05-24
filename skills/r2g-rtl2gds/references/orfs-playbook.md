@@ -197,6 +197,27 @@ Use `ROUTE_FAST=1` (handled by `run_orfs.sh`) which sets:
 Last-resort fallback: also set `ROUTE_FAST_SKIP_DRT=1` to add `SKIP_DETAILED_ROUTE=1`
 (produces DEF + global routes only, no GDS).
 
+### Finishing a ChipTop After Route Completes
+
+ORFS runs `route` (5_1_grt → 5_2_route → 5_3_fillcell) and `finish` (6_1_fill → 6_report → GDS merge) as **separate stages**. If a long route stage is killed externally **after** `5_3_fillcell.odb` is written but before `finish` runs (e.g., session reaped, batch wrapper timed out, host reboot), you can resume with `finish` alone:
+
+```bash
+ORFS_TIMEOUT=21600 FROM_STAGE=finish ORFS_STAGES=finish \
+  skills/r2g-rtl2gds/scripts/flow/run_orfs.sh \
+  design_cases/<project> nangate45 <flow_variant>
+```
+
+`finish` reads `5_route.odb` (a copy of `5_3_fillcell.odb`) and produces:
+- `6_final.odb` (final database)
+- `6_final.def` (final DEF)
+- `6_final.v` (gate-level Verilog)
+- `6_final.spef` (parasitics — RCX runs inside `6_report` via `extract_parasitics` when `RCX_RULES` is set)
+- `6_final.gds` (after the klayout def2stream merge)
+
+ChipTop scale: each step in `finish` is single-threaded for the most part (RCX is the longest, ~30-60 min on a 6.5GB ODB). Budget 4-6 hours total; **don't** enable `ROUTE_FAST` env vars for the finish stage — those only apply to route. **Do** keep `SKIP_REPORT_METRICS=1` and `SKIP_CTS_REPAIR_TIMING=1` from the original config.mk (they don't affect `finish` but stay set as a no-op).
+
+Pitfall — `5_route.odb` must exist: ORFS's `finish` target depends on the route stage's final `cp 5_3_fillcell.odb 5_route.odb`. If the route stage was killed *during* `5_3_fillcell` (filler placement) it leaves `5_3_fillcell.odb` but no `5_route.odb`, and `finish` will fail to read its inputs. Diagnose with `ls -la results/<plat>/<design>/<variant>/5_*.odb`; if `5_3_fillcell.odb` exists but `5_route.odb` doesn't, `cp 5_3_fillcell.odb 5_route.odb` and `cp 5_1_grt.sdc 5_route.sdc` manually before launching `finish`.
+
 ### Variable Propagation Through ORFS's Per-Step Scrub
 
 ORFS's per-step Make rule (`do-N_M_*`) iterates Make's `.VARIABLES` and
