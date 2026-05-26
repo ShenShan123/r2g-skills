@@ -8,10 +8,6 @@ Install the `r2g-rtl2gds` skill, then ask Claude: *"synthesize this UART at 100 
 
 ## Prerequisites
 
-The skill autodetects all tool paths on first use; no `source` or export is required. Run `check_env.sh` (see [Install](#install)) to verify what was found.
-
-Tested on RHEL 8.10 with a pre-built toolchain. On other systems, set paths in `env.local.sh` (see [Environment setup](#environment-setup)).
-
 | Tool | Required | Purpose |
 |------|----------|---------|
 | Python 3.10+ | yes | skill scripts |
@@ -26,7 +22,7 @@ Tested on RHEL 8.10 with a pre-built toolchain. On other systems, set paths in `
 
 ---
 
-## Install
+## Install the skill
 
 ```bash
 git clone https://github.com/ShenShan123/agent-r2g.git
@@ -46,12 +42,6 @@ Restart Claude Code (or run `/reload`) after install.
 ./install.sh --uninstall       # remove
 ```
 
-**Verify tools were found:**
-
-```bash
-bash ~/.claude/skills/r2g-rtl2gds/scripts/flow/check_env.sh
-```
-
 **Installing from the skill directory alone** (no full repo clone needed):
 
 ```bash
@@ -61,43 +51,212 @@ cd r2g-rtl2gds
 
 ---
 
+## Configure the OpenROAD toolchain
+
+The skill autodetects every tool on first use. No `source` or `export` is required if your tools land in standard locations. Use `check_env.sh` to see exactly what was found (see [Verify](#verify-the-setup)).
+
+Choose the path that matches your situation.
+
+---
+
+### Path A — Shared EDA server with a pre-built toolchain (fastest)
+
+If `/opt/openroad_tools_env.sh` exists (e.g. a shared EDA workstation), the skill sources it automatically. Jump straight to [Verify](#verify-the-setup).
+
+---
+
+### Path B — Build ORFS from source (recommended for a clean Linux install)
+
+OpenROAD-flow-scripts builds its own `openroad` and `yosys`, so one clone gives you the whole flow.
+
+**1. System packages** (run once as root — Debian / Ubuntu):
+
+```bash
+sudo apt update
+sudo apt install build-essential cmake git python3 python3-pip \
+     iverilog klayout tcl-dev libboost-dev flex bison
+```
+
+For RHEL / Fedora / CentOS, replace `apt` with `dnf` / `yum` and adjust package names accordingly.
+
+**2. Clone and build ORFS** (~30 min on 8 cores):
+
+```bash
+git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts \
+    ~/OpenROAD-flow-scripts
+cd ~/OpenROAD-flow-scripts
+sudo ./etc/DependencyInstaller.sh   # installs remaining build deps
+./build_openroad.sh --local         # builds openroad + yosys under tools/install/
+```
+
+After the build, the skill autodetects both binaries from `$ORFS_ROOT/tools/install/` if you set `ORFS_ROOT`. Do that in `env.local.sh` (one line):
+
+```bash
+cp ~/.claude/skills/r2g-rtl2gds/references/env.local.sh.template \
+   ~/.claude/skills/r2g-rtl2gds/references/env.local.sh
+
+# Add this one line to env.local.sh:
+echo 'export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"' \
+  >> ~/.claude/skills/r2g-rtl2gds/references/env.local.sh
+```
+
+---
+
+### Path C — OSS-CAD-Suite + separate OpenROAD binary
+
+OSS-CAD-Suite provides pre-built Yosys, iverilog, and Verilator. Pair it with a pre-built OpenROAD binary (from the OpenROAD releases page or your distro).
+
+```bash
+# Download OSS-CAD-Suite (check https://github.com/YosysHQ/oss-cad-suite-build for latest tag)
+curl -LO https://github.com/YosysHQ/oss-cad-suite-build/releases/latest/download/oss-cad-suite-linux-x64.tgz
+tar -xf oss-cad-suite-linux-x64.tgz -C "$HOME"        # extracts to ~/oss-cad-suite
+
+# Install OpenROAD binary (Debian / Ubuntu)
+sudo apt install openroad
+
+# Clone ORFS for the flow Makefile (no build needed here)
+git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts \
+    ~/OpenROAD-flow-scripts
+```
+
+Then set all paths in `env.local.sh`:
+
+```bash
+export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"
+export YOSYS_EXE="$HOME/oss-cad-suite/bin/yosys"
+export IVERILOG_EXE="$HOME/oss-cad-suite/bin/iverilog"
+export VVP_EXE="$HOME/oss-cad-suite/bin/vvp"
+export VERILATOR_EXE="$HOME/oss-cad-suite/bin/verilator"
+export OPENROAD_EXE="/usr/bin/openroad"
+export KLAYOUT_CMD="/usr/bin/klayout"
+```
+
+---
+
+### `env.local.sh` — full reference
+
+The file lives at `~/.claude/skills/r2g-rtl2gds/references/env.local.sh`. Copy it from the template and edit:
+
+```bash
+cp ~/.claude/skills/r2g-rtl2gds/references/env.local.sh.template \
+   ~/.claude/skills/r2g-rtl2gds/references/env.local.sh
+```
+
+All keys are optional — uncomment only the lines that the autodetect gets wrong.
+
+```bash
+# ── ORFS checkout ─────────────────────────────────────────────────────────────
+# Required. Must contain flow/Makefile. Set this and everything else is found.
+export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"
+
+# ── Required tool binaries ────────────────────────────────────────────────────
+# Autodetected from $ORFS_ROOT/tools/install/, $PATH, and well-known paths.
+# Uncomment only if autodetect picks the wrong binary.
+# export OPENROAD_EXE="$ORFS_ROOT/tools/install/OpenROAD/bin/openroad"
+# export YOSYS_EXE="$ORFS_ROOT/tools/install/yosys/bin/yosys"
+# export IVERILOG_EXE="/usr/bin/iverilog"
+# export VVP_EXE="/usr/bin/vvp"
+
+# ── Optional tool binaries ────────────────────────────────────────────────────
+# export VERILATOR_EXE="/usr/local/bin/verilator"
+# export KLAYOUT_CMD="/usr/bin/klayout"
+# export MAGIC_EXE="/usr/bin/magic"
+# export NETGEN_EXE="/usr/bin/netgen-lvs"
+# export STA_EXE="/usr/local/bin/opensta"
+
+# ── PDK root (sky130 DRC/LVS with Magic / Netgen only) ────────────────────────
+# export PDK_ROOT="$HOME/pdks"     # must contain sky130A/
+```
+
+The file is sourced automatically by every flow script. Alternatively, point to a file anywhere on disk:
+
+```bash
+export R2G_ENV_FILE=/path/to/your-env.sh   # add to ~/.bashrc or ~/.zshrc
+```
+
+**Autodetected locations** (checked in order if the variable is not set):
+
+| Variable | Checked paths (first hit wins) |
+|----------|-------------------------------|
+| `ORFS_ROOT` | `$HOME/OpenROAD-flow-scripts`, `/opt/OpenROAD-flow-scripts`, `/opt/EDA4AI/OpenROAD-flow-scripts`, sibling of skill dir |
+| `OPENROAD_EXE` | `$ORFS_ROOT/tools/install/OpenROAD/bin/openroad`, `/usr/local/bin/openroad`, `/usr/bin/openroad` |
+| `YOSYS_EXE` | `$ORFS_ROOT/tools/install/yosys/bin/yosys`, `/opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys`, `/usr/local/bin/yosys`, `/usr/bin/yosys` |
+| `IVERILOG_EXE` | `/opt/pdk_klayout_openroad/oss-cad-suite/bin/iverilog`, `/usr/bin/iverilog` |
+| `VVP_EXE` | `/opt/pdk_klayout_openroad/oss-cad-suite/bin/vvp`, `/usr/bin/vvp` |
+| `KLAYOUT_CMD` | `/usr/local/bin/klayout`, `/usr/bin/klayout` |
+| `MAGIC_EXE` | `/usr/local/bin/magic`, `/usr/bin/magic` |
+| `NETGEN_EXE` | `netgen-lvs` or `netgen` on `$PATH`, `/usr/bin/netgen-lvs`, `/usr/local/bin/netgen` |
+| `STA_EXE` | `sta` or `opensta` on `$PATH`, `/usr/local/bin/opensta`, `/usr/bin/opensta` |
+| `PDK_ROOT` | `/opt/pdks`, `$HOME/pdks`, `/usr/local/share/pdks` |
+
+---
+
+### Verify the setup
+
+```bash
+bash ~/.claude/skills/r2g-rtl2gds/scripts/flow/check_env.sh
+```
+
+Expected output when all required tools are found:
+
+```
+[ORFS]
+ok   ORFS_ROOT      /home/you/OpenROAD-flow-scripts
+ok   FLOW_DIR       /home/you/OpenROAD-flow-scripts/flow
+skip PDK_ROOT       (optional, not found)
+skip SKY130A_DIR    (optional, not found)
+
+[required tools]
+ok   OPENROAD_EXE   /home/you/OpenROAD-flow-scripts/tools/install/OpenROAD/bin/openroad
+ok   YOSYS_EXE      /home/you/OpenROAD-flow-scripts/tools/install/yosys/bin/yosys
+ok   IVERILOG_EXE   /usr/bin/iverilog
+ok   VVP_EXE        /usr/bin/vvp
+ok   python3        /usr/bin/python3
+
+[optional tools]
+ok   KLAYOUT_CMD    /usr/bin/klayout
+skip VERILATOR_EXE  (optional, not found)
+skip MAGIC_EXE      (optional, not found)
+skip NETGEN_EXE     (optional, not found)
+skip STA_EXE        (optional, not found)
+skip gtkwave        (optional, not found)
+
+[platforms]
+ok    nangate45
+ok    sky130hd
+ok    sky130hs
+ok    asap7
+ok    gf180
+ok    ihp-sg13g2
+```
+
+**All required lines must show `ok` before running a flow.** Optional `skip` lines are fine — nangate45 (the default platform) only needs the required tools and KLayout.
+
+Common fixes:
+
+| Symptom | Fix |
+|---------|-----|
+| `MISS ORFS_ROOT` | Set `ORFS_ROOT` in `env.local.sh` pointing to your ORFS clone |
+| `MISS OPENROAD_EXE` | Add `OPENROAD_EXE` to `env.local.sh`, or run `build_openroad.sh --local` first |
+| `MISS YOSYS_EXE` | Same as OpenROAD — built together by `build_openroad.sh` |
+| `MISS IVERILOG_EXE` | `sudo apt install iverilog` (or set `IVERILOG_EXE` in `env.local.sh`) |
+| `MISS python3` | `sudo apt install python3` |
+| Platforms list empty | `ORFS_ROOT` set but `flow/platforms/` not present — check ORFS clone is complete |
+
+---
+
 ## First use
 
-Open any Claude Code session and ask something like:
+With tools verified, open any Claude Code session and ask something like:
 
 > *"Take this RTL through to GDS on nangate45"*
 > *"Synthesize this UART at 100 MHz"*
 > *"Run DRC and LVS on my design"*
 > *"Generate a simple arbiter and produce a GDS"*
 
-Claude matches these requests to the `r2g-rtl2gds` skill and drives every stage automatically — spec normalization, RTL generation, lint, simulation, synthesis, place-and-route, timing gate, and signoff.
+Claude matches these requests to the `r2g-rtl2gds` skill and drives every stage — spec normalization, RTL generation, lint, simulation, synthesis, place-and-route, timing gate, and signoff.
 
 The skill works from **existing RTL** (drop your file into `rtl/design.v`) or from a **natural-language spec** (Claude writes the RTL for you).
-
----
-
-## Environment setup
-
-No manual sourcing is required — every flow script runs autodetection on entry. To pin specific paths, copy the template:
-
-```bash
-cp ~/.claude/skills/r2g-rtl2gds/references/env.local.sh.template \
-   ~/.claude/skills/r2g-rtl2gds/references/env.local.sh
-# uncomment and set ORFS_ROOT, OPENROAD_EXE, etc.
-```
-
-Or point to an external file: `export R2G_ENV_FILE=/path/to/your-env.sh`.
-
-Resolution order (first hit wins per value):
-
-1. Caller env var (e.g. `ORFS_ROOT=/opt/ORFS ./run_orfs.sh ...`)
-2. `$R2G_ENV_FILE`
-3. `references/env.local.sh` (in the installed skill directory)
-4. `$ORFS_ROOT/env.sh`
-5. `/opt/openroad_tools_env.sh`
-6. `$PATH` + well-known install locations
-
-Supported overrides: `ORFS_ROOT`, `PDK_ROOT`, `OPENROAD_EXE`, `YOSYS_EXE`, `KLAYOUT_CMD`, `MAGIC_EXE`, `NETGEN_EXE`, `STA_EXE`, `IVERILOG_EXE`, `VVP_EXE`, `VERILATOR_EXE`, `R2G_ENV_FILE`.
 
 ---
 
