@@ -1,0 +1,10 @@
+{
+  "name": "r2g-rtl2gds",
+  "version": "0.1.0",
+  "description": "RTL-to-GDS skill: drives an open-source EDA flow (Yosys + OpenROAD-flow-scripts + KLayout + Magic + Netgen + OpenRCX) from a natural-language spec or RTL to GDSII with DRC, LVS, and RCX signoff.",
+  "license": "See LICENSE",
+  "homepage": "https://github.com/ShenShan123/agent-r2g",
+  "skills": [
+    "r2g-rtl2gds"
+  ]
+}
