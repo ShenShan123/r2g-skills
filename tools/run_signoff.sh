@@ -48,7 +48,7 @@ if [[ -f "$REPORTS/drc.json" ]]; then
   fi
 fi
 if [[ "$DRC_NEEDED" == "1" ]]; then
-  echo "[$NAME] $(now) DRC begin" | tee -a "$LOG"
+  echo "[$NAME] $(now) DRC begin" >> "$LOG"
   DRC_TIMEOUT="${DRC_TIMEOUT:-3600}" bash "$SKILL_DIR/scripts/flow/run_drc.sh" "$PROJECT_DIR" >>"$LOG" 2>&1
   DRC_EXIT=$?
   python3 "$SKILL_DIR/scripts/extract/extract_drc.py" "$PROJECT_DIR" "$REPORTS/drc.json" >>"$LOG" 2>&1 || true
@@ -58,7 +58,7 @@ if [[ "$DRC_NEEDED" == "1" ]]; then
   else
     RDRC="missing:$DRC_EXIT"
   fi
-  echo "[$NAME] $(now) DRC end status=$RDRC" | tee -a "$LOG"
+  echo "[$NAME] $(now) DRC end status=$RDRC" >> "$LOG"
 fi
 
 # --- LVS ---
@@ -71,7 +71,7 @@ if [[ -f "$REPORTS/lvs.json" ]]; then
   fi
 fi
 if [[ "$LVS_NEEDED" == "1" ]]; then
-  echo "[$NAME] $(now) LVS begin" | tee -a "$LOG"
+  echo "[$NAME] $(now) LVS begin" >> "$LOG"
   bash "$SKILL_DIR/scripts/flow/run_lvs.sh" "$PROJECT_DIR" >>"$LOG" 2>&1
   LVS_EXIT=$?
   python3 "$SKILL_DIR/scripts/extract/extract_lvs.py" "$PROJECT_DIR" "$REPORTS/lvs.json" >>"$LOG" 2>&1 || true
@@ -81,7 +81,7 @@ if [[ "$LVS_NEEDED" == "1" ]]; then
   else
     RLVS="missing:$LVS_EXIT"
   fi
-  echo "[$NAME] $(now) LVS end status=$RLVS" | tee -a "$LOG"
+  echo "[$NAME] $(now) LVS end status=$RLVS" >> "$LOG"
 fi
 
 # --- RCX ---
@@ -94,7 +94,7 @@ if [[ -f "$REPORTS/rcx.json" ]]; then
   fi
 fi
 if [[ "$RCX_NEEDED" == "1" ]]; then
-  echo "[$NAME] $(now) RCX begin" | tee -a "$LOG"
+  echo "[$NAME] $(now) RCX begin" >> "$LOG"
   RCX_TIMEOUT="${RCX_TIMEOUT:-3600}" bash "$SKILL_DIR/scripts/flow/run_rcx.sh" "$PROJECT_DIR" >>"$LOG" 2>&1
   RCX_EXIT=$?
   python3 "$SKILL_DIR/scripts/extract/extract_rcx.py" "$PROJECT_DIR" "$REPORTS/rcx.json" >>"$LOG" 2>&1 || true
@@ -104,7 +104,7 @@ if [[ "$RCX_NEEDED" == "1" ]]; then
   else
     RRCX="missing:$RCX_EXIT"
   fi
-  echo "[$NAME] $(now) RCX end status=$RRCX" | tee -a "$LOG"
+  echo "[$NAME] $(now) RCX end status=$RRCX" >> "$LOG"
 fi
 
 END="$(date +%s)"

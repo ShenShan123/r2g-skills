@@ -128,6 +128,39 @@ wall-clock budget.
   help because the issue is the timing-repair loop, not the placer's
   legalization step.
 
+### Sub-variant: 3_4_place_resized's `repair_design` hangs (NOT place_gp)
+
+**Symptoms:**
+- place_gp (3_3_place_gp) finishes cleanly in <1h with PLACE_FAST=1 — Nesterov
+  overflow converges to target, HPWL drops by orders of magnitude
+- 3_4_place_resized then runs `resize.tcl` → `repair_design -verbose`
+- `Iteration | Area | Resized | Buffers | Nets repaired | Remaining` table
+  starts advancing fast, then progress crawls to 0 around iter ~700K of ~1.3M
+- No further log output for hours; openroad CPU stays at 100-110%, RSS stable
+- ORFS_TIMEOUT eventually fires, run exits 124
+
+**Root Cause:**
+`repair_design` (the post-placement buffer-insertion + gate-resizing pass) hits
+a slow inner code path on certain combinations of net count + gate fanout +
+slack distribution. PLACE_FAST=1 does NOT help — it only disables gpl's
+timing-driven mode, not the standalone resize.tcl invocation. No ORFS env
+knob currently skips `repair_design` at place_resized.
+
+**Validated:** arm_core (Amber a25 ARM core, 8211-line monolithic Verilog with
+4 `single_port_ram_*` modules) hits this 2026-05-26. Two passes: pre-PLACE_FAST
+(57600s budget, killed at 3_3 gp), post-PLACE_FAST (28800s budget, gp finished
+in 2089s, killed at 3_4 place_resized iter 785K with progress stalled for 4h).
+
+**Action:**
+- Document as intractable at place_resized stage for this design on this
+  ORFS/nangate45.
+- For a fresh design hitting this, options ranked by promise:
+  1. Reduce design size: lower CORE_UTILIZATION, smaller core area, gut large
+     submodules, replace inferred RAMs with `fakeram45` macros so they don't
+     synthesize as flip-flop forests.
+  2. Use a newer OpenROAD that supports skipping `repair_design` at place.
+  3. Accept intractable.
+
 ## OpenROAD SIGSEGV in CTS / Repair Timing
 
 **Symptoms:**

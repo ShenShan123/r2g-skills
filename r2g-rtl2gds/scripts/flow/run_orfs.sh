@@ -291,15 +291,39 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
       echo "  4. Remove ABC_AREA=1 if set (changes cell mix)" | tee -a "$BACKEND_DIR/flow.log"
     fi
   elif [[ "$FAILED_STAGE" == "place" ]]; then
-    # Detect the "timing-driven iteration stuck on huge netlist" pattern.
-    # gpl prints `Timing-driven iteration N/2, virtual: false.` and then
-    # spins indefinitely on the resizer when there are millions of nets.
-    if grep -qE "Timing-driven iteration .*virtual.*false|Iteration\s+\|.*Resized" "$BACKEND_DIR/flow.log" 2>/dev/null; then
+    # Two distinct stalls live inside the place stage. Diagnose which:
+    # - 3_3_place_gp stuck in `Timing-driven iteration N/2` (gpl resizer pass)
+    #   → PLACE_FAST=1 fixes this (disables GPL_TIMING_DRIVEN/ROUTABILITY_DRIVEN).
+    # - 3_4_place_resized stuck in `repair_design -verbose` (resize.tcl) on a
+    #   multi-M-net design (Iteration|Area|Resized|Buffers|Nets repaired|Remaining).
+    #   PLACE_FAST does NOT help here — repair_design is a separate code path.
+    #   Observed on arm_core (2026-05-26, 8h budget exhausted at iter 785K/1.36M).
+    GP_STUCK=0
+    RESIZED_STUCK=0
+    if grep -qE "Timing-driven iteration .*virtual.*false" "$BACKEND_DIR/flow.log" 2>/dev/null; then
+      GP_STUCK=1
+    fi
+    if [[ -n "${FLOW_DIR:-}" ]]; then
+      LATEST_PLACE_TMP=$(ls -t "$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT/3_4_place_resized.tmp.log" 2>/dev/null | head -1)
+      if [[ -f "$LATEST_PLACE_TMP" ]] && tail -200 "$LATEST_PLACE_TMP" 2>/dev/null | grep -qE "Iteration\s+\|.*Resized.*Buffers.*Nets repaired"; then
+        RESIZED_STUCK=1
+      fi
+    fi
+    if [[ $GP_STUCK -eq 1 ]]; then
       echo "" | tee -a "$BACKEND_DIR/flow.log"
       echo "HINT: Place_gp timing-driven repair appears stuck on a very large netlist." | tee -a "$BACKEND_DIR/flow.log"
-      echo "  Validated workaround for BOOM-class designs:" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  Validated workaround for BOOM-class designs (place_gp only):" | tee -a "$BACKEND_DIR/flow.log"
       echo "  1. PLACE_FAST=1 FROM_STAGE=place scripts/flow/run_orfs.sh $PROJECT_DIR $PLATFORM" | tee -a "$BACKEND_DIR/flow.log"
       echo "  2. Or add to config.mk: export GPL_TIMING_DRIVEN=0; export GPL_ROUTABILITY_DRIVEN=0" | tee -a "$BACKEND_DIR/flow.log"
+    fi
+    if [[ $RESIZED_STUCK -eq 1 ]]; then
+      echo "" | tee -a "$BACKEND_DIR/flow.log"
+      echo "HINT: 3_4_place_resized's repair_design appears stuck on buffer insertion." | tee -a "$BACKEND_DIR/flow.log"
+      echo "  This is a DIFFERENT hang from place_gp — PLACE_FAST does not fix it." | tee -a "$BACKEND_DIR/flow.log"
+      echo "  No ORFS knob currently skips repair_design at place stage." | tee -a "$BACKEND_DIR/flow.log"
+      echo "  Reduce design size (smaller CORE_UTILIZATION, less aggressive synth)" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  or accept the design is intractable on this OpenROAD version." | tee -a "$BACKEND_DIR/flow.log"
+      echo "  Reference: arm_core (Amber a25 + 4 single_port_ram_*) hit this 2026-05-26." | tee -a "$BACKEND_DIR/flow.log"
     fi
   fi
 fi
