@@ -21,7 +21,7 @@ MAX_PARALLEL="${1:-6}"
 : "${PLACE_FAST:=1}"
 export ORFS_TIMEOUT ORFS_MAX_CPUS PLACE_FAST
 
-source "$ROOT/skills/r2g-rtl2gds/scripts/flow/_env.sh" >/dev/null 2>&1
+source "$ROOT/r2g-rtl2gds/scripts/flow/_env.sh" >/dev/null 2>&1
 
 # Discover BOOM variants and infer resume stage
 declare -a JOBS=()
@@ -67,7 +67,7 @@ run_one() {
   echo "[$(date '+%H:%M:%S')] START $name $from_arg" | tee -a "$log_dir/sweep_history.log"
   (
     if [[ -n "$stage" ]]; then export FROM_STAGE="$stage"; fi
-    bash "$ROOT/skills/r2g-rtl2gds/scripts/flow/run_orfs.sh" "$case_dir" nangate45
+    bash "$ROOT/r2g-rtl2gds/scripts/flow/run_orfs.sh" "$case_dir" nangate45
   ) > "$logf" 2>&1
   local rc=$?
   echo "[$(date '+%H:%M:%S')] DONE  $name rc=$rc" | tee -a "$log_dir/sweep_history.log"

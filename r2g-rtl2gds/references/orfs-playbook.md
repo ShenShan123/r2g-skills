@@ -203,7 +203,7 @@ ORFS runs `route` (5_1_grt → 5_2_route → 5_3_fillcell) and `finish` (6_1_fil
 
 ```bash
 ORFS_TIMEOUT=21600 FROM_STAGE=finish ORFS_STAGES=finish \
-  skills/r2g-rtl2gds/scripts/flow/run_orfs.sh \
+  r2g-rtl2gds/scripts/flow/run_orfs.sh \
   design_cases/<project> nangate45 <flow_variant>
 ```
 

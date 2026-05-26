@@ -13,7 +13,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$ROOT/skills/r2g-rtl2gds/scripts/flow/_env.sh" >/dev/null 2>&1
+source "$ROOT/r2g-rtl2gds/scripts/flow/_env.sh" >/dev/null 2>&1
 
 : "${ORFS_TIMEOUT:=43200}"
 : "${ORFS_MAX_CPUS:=8}"
@@ -69,7 +69,7 @@ run_one() {
     | tee -a "$log_dir/sweep_history.log"
   (
     if [[ -n "$stage" ]]; then export FROM_STAGE="$stage"; fi
-    bash "$ROOT/skills/r2g-rtl2gds/scripts/flow/run_orfs.sh" "$case_dir" nangate45
+    bash "$ROOT/r2g-rtl2gds/scripts/flow/run_orfs.sh" "$case_dir" nangate45
   ) > "$logf" 2>&1
   local rc=$?
   echo "[$(date '+%H:%M:%S')] PASS4 $v rc=$rc" | tee -a "$log_dir/sweep_history.log"

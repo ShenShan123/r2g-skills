@@ -206,18 +206,18 @@ Extract results into JSON for reporting and dashboard:
 After **every** flow — successful, failed, or partial — run:
 
 ```bash
-python3 skills/r2g-rtl2gds/knowledge/ingest_run.py design_cases/<project>
+python3 r2g-rtl2gds/knowledge/ingest_run.py design_cases/<project>
 ```
 
 This reads the structured JSON artifacts produced by the extraction scripts
-and appends one row to `skills/r2g-rtl2gds/knowledge/runs.sqlite`. It never
+and appends one row to `r2g-rtl2gds/knowledge/runs.sqlite`. It never
 parses raw ORFS logs.
 
 Then rebuild derived artifacts:
 
 ```bash
-python3 skills/r2g-rtl2gds/knowledge/learn_heuristics.py
-python3 skills/r2g-rtl2gds/knowledge/mine_rules.py
+python3 r2g-rtl2gds/knowledge/learn_heuristics.py
+python3 r2g-rtl2gds/knowledge/mine_rules.py
 ```
 
 - `knowledge/heuristics.json` is consumed automatically by
@@ -239,7 +239,7 @@ A family/platform pair appears in `heuristics.json` only after at least
 - Prefer single-clock MVP flows. Macro designs (fakeram45) are supported with proper config (see "Macro / Hard Memory Designs"). Escalate to the user before attempting CDC, multi-clock, or DFT.
 - Use the scripts in `scripts/` for repeatable operations instead of re-inventing shell commands each time.
 - Do not hand-source any system env file before running EDA tools — every flow script sources `scripts/flow/_env.sh`, which autodetects ORFS and tool paths (see "Environment Setup"). `/opt/openroad_tools_env.sh` is only one optional source in that chain and may be absent.
-- When a batch produces a mix of pass/fail, diagnose with `references/failure-patterns.md` (see "Batch-Campaign Failure Patterns") and apply `tools/fix_orfs_failures.py` before any code changes. That tool fixes the six dominant failure modes (memory inference, IO-pin perimeter overflow, place density >1, PDN straps, missing include dirs, stage timeouts) by rewriting `config.mk`. Do not hand-edit configs case-by-case — extend the fix tool so future batches self-heal.
+- When a batch produces a mix of pass/fail, diagnose with `references/failure-patterns.md` (see "Batch-Campaign Failure Patterns") and apply the repo-level batch fixer before any code changes. That fixer (`tools/fix_orfs_failures.py` in the agent-r2g repository — not shipped with the installed skill) handles the six dominant failure modes (memory inference, IO-pin perimeter overflow, place density >1, PDN straps, missing include dirs, stage timeouts) by rewriting `config.mk`. When running standalone, apply the same patterns by hand using `references/failure-patterns.md`. Do not hand-edit configs case-by-case in batch — extend the fix tool so future batches self-heal.
 - Floorplan sizing policy (validated on 495-design batch):
   - Explicit DIE_AREA is only safe when pin count ≤ ~200 *and* RTL fits in the area. Prefer `CORE_UTILIZATION` when in doubt.
   - When PPL-0024 reports a required perimeter, derive `DIE_AREA = 0 0 S S` with `S = ceil((required_perim / 4) * 1.3)` rounded up to 10um.
@@ -414,7 +414,7 @@ BOOM's `freepdk45_sram_*`, generic foundry stubs without LEF/LIB) AND the
 total memory bits are modest (<~256K bits), substitute **behavioral
 flop-array implementations** instead of mapping to fakeram45.
 
-Use `tools/gen_openram_behavioral_stubs.py <wrapper.v> <stubs.v>` to
+Use `tools/gen_openram_behavioral_stubs.py <wrapper.v> <stubs.v>` (a repo-level helper in the agent-r2g repository — not bundled with the installed skill) to
 auto-generate behavioral Verilog for every `freepdk45_sram_<ports>_<rows>x<cols>[_<gran>]`
 referenced. The generator handles both `1rw0r` (single-port) and `1w1r`
 (write-port + read-port, independent clocks) styles, with optional

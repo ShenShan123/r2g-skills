@@ -5,7 +5,7 @@ AI-driven open-source EDA skill that takes a natural-language hardware spec and 
 ## Project Layout
 
 ```
-skills/r2g-rtl2gds/      # The skill definition
+r2g-rtl2gds/      # The skill definition
   SKILL.md               # Skill metadata, workflow, hard rules
   scripts/               # 30 stateless Python/Shell CLIs, grouped by role:
     flow/                  #   stage runners (run_lint.sh, run_orfs.sh, run_drc.sh, …)
@@ -26,11 +26,11 @@ design_cases/            # Working directory for all design runs (gitignored)
 
 ### Knowledge Store (inside the skill)
 
-`skills/r2g-rtl2gds/knowledge/` is a self-contained subsystem that bundles
+`r2g-rtl2gds/knowledge/` is a self-contained subsystem that bundles
 seed data and the Python code that reads/writes it:
 
 ```
-skills/r2g-rtl2gds/knowledge/
+r2g-rtl2gds/knowledge/
   README.md                # What the store contains and how it is used
   schema.sql               # SQLite DDL (tracked)
   families.json            # design_name → design_family mapping + patterns (tracked)
@@ -90,7 +90,7 @@ Sky130 PDK for Magic/Netgen: `/opt/pdks/sky130A/` (tech file + netgen setup.tcl)
 
 ## Script Inventory
 
-All paths below are relative to `skills/r2g-rtl2gds/`. Everything under
+All paths below are relative to `r2g-rtl2gds/`. Everything under
 `scripts/` is stateless tooling; `knowledge/` is the knowledge-store subsystem
 (data + code) described in the previous section.
 
@@ -138,7 +138,7 @@ All paths below are relative to `skills/r2g-rtl2gds/`. Everything under
 | `reports/write_success_summary.py` | Markdown run summary | `<project-dir>` | `reports/summary.md` |
 
 ### `knowledge/` — Knowledge-Store Subsystem (not under `scripts/`)
-Lives alongside its seed data at `skills/r2g-rtl2gds/knowledge/` so code and schema stay in one place.
+Lives alongside its seed data at `r2g-rtl2gds/knowledge/` so code and schema stay in one place.
 
 | Script | Purpose | Inputs | Output |
 |--------|---------|--------|--------|
@@ -347,7 +347,7 @@ When running multiple configs sequentially per DESIGN_NAME (e.g., in a batch scr
 ## Development Guidelines
 
 - Prefer editing existing scripts over creating new ones
-- All scripts are in `skills/r2g-rtl2gds/scripts/` — use them instead of ad-hoc shell commands
+- All scripts are in `r2g-rtl2gds/scripts/` — use them instead of ad-hoc shell commands
 - The skill supports single-clock flows including macro designs (fakeram45). Escalate to user before attempting CDC, multi-clock, or DFT
 - Macro designs (riscv32i, tinyRocket, swerv, bp_multi_top) are validated through ORFS+LVS+RCX on nangate45
 - Dashboard is static HTML at `design_cases/_dashboard/index.html`, served via `scripts/dashboard/serve_multi_project_dashboard.py 8765`

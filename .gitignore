@@ -239,9 +239,9 @@ Thumbs.db
 *~
 
 # Generated knowledge-store artifacts (regenerated on demand)
-skills/r2g-rtl2gds/knowledge/runs.sqlite
-skills/r2g-rtl2gds/knowledge/heuristics.json
-skills/r2g-rtl2gds/knowledge/failure_candidates.json
+r2g-rtl2gds/knowledge/runs.sqlite
+r2g-rtl2gds/knowledge/heuristics.json
+r2g-rtl2gds/knowledge/failure_candidates.json
 
 # External RTL benchmark dataset (fetched separately)
 rtl_designs/

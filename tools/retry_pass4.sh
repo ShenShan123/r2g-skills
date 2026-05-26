@@ -11,7 +11,7 @@ set -euo pipefail
 #   E) koios_lenet — handled separately (needs 8h budget + macro inference)
 #   F) clog2_test — permanently skipped (zero-logic)
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../skills/r2g-rtl2gds/scripts/flow" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../r2g-rtl2gds/scripts/flow" && pwd)"
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESULTS_DIR="$BASE_DIR/design_cases/_batch"
 RESULTS_FILE="$RESULTS_DIR/retry_pass4.jsonl"

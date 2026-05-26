@@ -5,7 +5,7 @@ set -uo pipefail
 # using a doubled ORFS_TIMEOUT. Serial, 1 at a time, so we don't re-create
 # the concurrency pressure that caused the original timeout.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../skills/r2g-rtl2gds/scripts/flow" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../r2g-rtl2gds/scripts/flow" && pwd)"
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESULTS_FILE="$BASE_DIR/design_cases/_batch/retry_pass4.jsonl"
 LOG_DIR="$BASE_DIR/design_cases/_batch/logs"

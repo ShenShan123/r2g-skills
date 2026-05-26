@@ -14,7 +14,7 @@ set -uo pipefail
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CASES_DIR="$BASE_DIR/design_cases"
-FLOW="$BASE_DIR/skills/r2g-rtl2gds/scripts/flow"
+FLOW="$BASE_DIR/r2g-rtl2gds/scripts/flow"
 
 # Let the skill auto-discover tools via its own env machinery (see README:
 # "The skill autodetects every tool on first use"). Older batch_run.sh

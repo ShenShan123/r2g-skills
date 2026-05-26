@@ -40,7 +40,7 @@ done
 [[ -d "$TEMPLATE/rtl" ]] || { echo "template missing: $TEMPLATE" >&2; exit 1; }
 
 # Initialize layout (mirrors scripts/project/init_project.py output)
-python3 "$ROOT/skills/r2g-rtl2gds/scripts/project/init_project.py" "$NAME" >/dev/null
+python3 "$ROOT/r2g-rtl2gds/scripts/project/init_project.py" "$NAME" >/dev/null
 
 # Copy variant RTL
 cp "$TOP" "$DEST/rtl/$(basename "$TOP")"
@@ -144,4 +144,4 @@ echo "Set up: $DEST"
 echo "  Top:        $(basename "$TOP")"
 echo "  RTL files:  $(ls "$DEST/rtl/"*.v | wc -l)"
 echo "  Mem stubs:  $(grep -c '^module ' "$DEST/rtl/openram_stubs.v")"
-echo "Run with:    ORFS_TIMEOUT=21600 bash skills/r2g-rtl2gds/scripts/flow/run_orfs.sh $DEST"
+echo "Run with:    ORFS_TIMEOUT=21600 bash r2g-rtl2gds/scripts/flow/run_orfs.sh $DEST"
