@@ -40,16 +40,16 @@ fi
 
 DESIGN_NAME=$(grep 'DESIGN_NAME' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
 
-# Verify GDS exists from a prior ORFS run
-RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-if [[ ! -d "$RESULTS_DIR" ]]; then
-  RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME"
-fi
+# Re-stage project artifacts into ORFS workspace if missing. This makes the
+# script idempotent across re-runs even if the ORFS scratch dirs were cleaned.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_restage_for_signoff.sh"
+RESULTS_DIR="$ORFS_RESULTS_DIR"
 
-GDS_FILE=$(find "$RESULTS_DIR" -name "6_final.gds" 2>/dev/null | head -1)
-if [[ -z "$GDS_FILE" ]]; then
-  echo "ERROR: No 6_final.gds found in $RESULTS_DIR" >&2
-  echo "Run the ORFS backend first: run_orfs.sh <project-dir>" >&2
+GDS_FILE="$RESULTS_DIR/6_final.gds"
+if [[ ! -f "$GDS_FILE" ]]; then
+  echo "ERROR: No 6_final.gds found at $GDS_FILE after restage" >&2
+  echo "Re-run the ORFS backend first: run_orfs.sh <project-dir>" >&2
   exit 1
 fi
 
@@ -94,21 +94,10 @@ echo "Platform: $PLATFORM"
 echo "GDS: $GDS_FILE"
 echo "LVS rules: $KLAYOUT_LVS_RESOLVED"
 
-# Run LVS via ORFS Makefile.
-# Match run_orfs.sh: configs are placed at designs/<plat>/<design>/<variant>/config.mk
-# so that two FLOW_VARIANT runs of the same DESIGN_NAME don't collide.
-# Fall back to the legacy designs/<plat>/<design>/config.mk path for projects
-# whose backend was driven by hand or by an older run_orfs.sh.
-ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+# ORFS_DESIGN_DIR / ORFS_CONFIG were set up by _restage_for_signoff.sh above.
 ORFS_CONFIG="$ORFS_DESIGN_DIR/config.mk"
 if [[ ! -f "$ORFS_CONFIG" ]]; then
-  ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME"
-  ORFS_CONFIG="$ORFS_DESIGN_DIR/config.mk"
-fi
-
-if [[ ! -f "$ORFS_CONFIG" ]]; then
-  echo "ERROR: ORFS config not found at $ORFS_CONFIG" >&2
-  echo "Run the ORFS backend first: run_orfs.sh <project-dir>" >&2
+  echo "ERROR: failed to stage ORFS config at $ORFS_CONFIG" >&2
   exit 1
 fi
 

@@ -303,6 +303,20 @@ Yosys crash, typically caused by very large designs or specific RTL constructs t
 
 ## Signoff Check Failures
 
+### Re-running signoff after ORFS scratch dirs were cleaned
+
+- **Symptom:** `run_drc.sh` reports `ERROR: ORFS config not found at .../config.mk` or "Running DRC for design: top" with a GDS path that points to a *different* project (e.g., `iccad2015_unit02_in2`'s GDS gets picked up for `button_controller` because both have `DESIGN_NAME=top`). Make may also start re-running place/cts/route, taking 30+ minutes for a "DRC" invocation.
+- **Root cause:** Two distinct issues that surface together when a project's ORFS scratch dirs (`flow/designs/<plat>/<DESIGN_NAME>/<variant>/`, `flow/results/...`) have been cleaned but the project's `backend/RUN_*/` still holds the preserved artifacts:
+  1. The DRC/LVS scripts used to fall back to `flow/results/<plat>/<DESIGN_NAME>/` (no variant) and `find … -name 6_final.gds`, which silently picked up *another design's* GDS that shared the `DESIGN_NAME`. In our corpus, 59 projects use `DESIGN_NAME=top` and 28 use `DESIGN_NAME=test` — collision was guaranteed.
+  2. ORFS Makefile has dependency edges: `6_drc.lyrdb` → `6_final.gds` → `6_final.def` → `5_route.odb` → `4_cts.odb` → … If only `6_final.*` are present but the upstream `*.odb` intermediates are missing, make's timestamp check rebuilds everything from `5_1_grt` backward.
+- **Fix (since 2026-05-26):** `r2g-rtl2gds/scripts/flow/_restage_for_signoff.sh` is now sourced by both `run_drc.sh` and `run_lvs.sh`. It:
+  - Picks the project's `backend/RUN_*/` dir that actually contains `results/6_final.gds` (not just the newest mtime — empty crash dirs often have a newer ctime than the successful one).
+  - Copies `results/`, `logs/`, `reports_orfs/` back into the ORFS staging paths with `cp -n` so already-present files are kept.
+  - Falls back to `final/6_final.gds` for older r2g project layouts that only preserved the final/ subset.
+  - Touches all staged files so make sees them as up-to-date against `config.mk`.
+- **Validated:** Restage takes 10-30s for medium designs, 60-90s for ChipTop-scale (4GB+ ODB). `make drc` then runs only the klayout step (no upstream rebuilds). Tested on `button_controller` (50s) and `bgm` (which hit the stuck-on-`or` pattern correctly without re-running place).
+- **Skill-level:** When you see "DRC running on the wrong design" or "DRC is unexpectedly re-running place/cts", the restage helper is the load-bearing fix — do not regress the variant-aware lookup in `run_drc.sh` / `run_lvs.sh`.
+
 ### DRC Violations
 - **Symptom:** `X violations found` in DRC report; `6_drc_count.rpt` shows non-zero count
 - **Diagnosis:** Run `scripts/extract/extract_drc.py` to get per-category violation breakdown from `6_drc.lyrdb`
