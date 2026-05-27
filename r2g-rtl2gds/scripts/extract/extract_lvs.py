@@ -108,9 +108,12 @@ def main():
 
     lvs_dir = project_root / 'lvs'
 
-    # Check for skip marker
+    # Honor a fresh skip marker only if no actual LVS log exists. Stale
+    # `lvs_result.json` files from a previous run (when the platform had no
+    # rules) must NOT override a successful new LVS log/lvsdb.
     skip_file = lvs_dir / 'lvs_result.json'
-    if skip_file.exists():
+    log_present = (lvs_dir / '6_lvs.log').exists() or (lvs_dir / 'lvs_run.log').exists()
+    if skip_file.exists() and not log_present:
         try:
             skip_data = json.loads(skip_file.read_text(encoding='utf-8'))
             if skip_data.get('status') == 'skipped':

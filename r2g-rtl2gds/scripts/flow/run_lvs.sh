@@ -156,6 +156,9 @@ LVS_DIR="$PROJECT_DIR/lvs"
 mkdir -p "$LVS_DIR"
 cp /tmp/lvs_run_$$.log "$LVS_DIR/lvs_run.log" 2>/dev/null || true
 rm -f /tmp/lvs_run_$$.log
+# Drop any stale skip-marker from a prior `no rules available` run — once we
+# have a real lvs_run.log/6_lvs.log the skip marker is no longer authoritative.
+rm -f "$LVS_DIR/lvs_result.json"
 
 LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 if [[ ! -d "$LOGS_DIR" ]]; then

@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description/>
+ <version/>
+ <category>lvs</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <shortcut/>
+ <show-in-menu>true</show-in-menu>
+ <group-name>lvs_scripts</group-name>
+ <menu-path>tools_menu.lvs.end</menu-path>
+ <interpreter>dsl</interpreter>
+ <dsl-interpreter-name>lvs-dsl-xml</dsl-interpreter-name>
+ <text>#
+# LVS rule for FreePDK45 / NangateOpenCellLibrary, adapted from
+# laurentc2/FreePDK45_for_KLayout/lvs/lvs_freepdk45.lylvs for the ORFS
+# `make lvs` invocation which passes $in_gds, $cdl_file, $report_file
+# (matching sky130hd/lvs/sky130hd.lylvs's batch-mode convention).
+#
+# Adaptations vs the upstream laurentc2 rule:
+#   - $input -&gt; $in_gds, $report -&gt; $report_file, $schematic -&gt; $cdl_file
+#   - Removed the `cheat("cell_6t", "dff", "wordline_driver_0", ...)` block.
+#     Nangate standard cells are extracted globally; no SRAM macros are
+#     present in ORFS-driven designs on this platform.
+#   - Single LVT variant only (`lv_pgate = pgate`, `lv_ngate = ngate`) because
+#     NangateOpenCellLibrary uses only LVT cells; `vtg`/`vth`/`thkox` layers
+#     are unused in the GDS we ship.
+#   - `schematic.purge` after `align` to drop unused output pins (e.g. QN on
+#     DFFR_X1 when not routed) so they don't trip a netlist mismatch.
+#
+tstart = Time.now
+
+if $in_gds
+  source($in_gds)
+end
+
+if $report_file
+  report($report_file)
+else
+  report_lvs("lvs_report.lvsdb")
+end
+
+if $cdl_file
+  schematic($cdl_file)
+else
+  schematic(RBA::CellView::active.filename.sub(/\.(oas|gds|oas.gz|gds.gz)$/, ".sp"))
+end
+
+spice_with_net_names = true
+spice_with_comments = false
+
+if $target_netlist
+  target_netlist($target_netlist)
+else
+  target_netlist(File.join(File.dirname(RBA::CellView::active.filename), source.cell_name+"_extracted.cir"), write_spice(spice_with_net_names, spice_with_comments),  "Extracted by KLayout on : #{Time.now.strftime("%d/%m/%Y %H:%M")}")
+end
+
+# Hierarchical mode
+deep
+threads(4)
+verbose(true)
+
+
+# layers definitions (FreePDK45 stack)
+########################
+active     = input(1, 0)
+pwell      = input(2, 0)
+nwell      = input(3, 0)
+nplus      = input(4, 0)
+pplus      = input(5, 0)
+vtg        = input(6, 0)
+vth        = input(7, 0)
+thkox      = input(8, 0)
+poly       = input(9, 0)
+cont       = input(10, 0)
+metal1     = input(11, 0)
+metal1_lbl = input(11, 1)
+metal1_pin = input(11, 2)
+via1       = input(12, 0)
+metal2     = input(13, 0)
+metal2_lbl = input(13, 1)
+metal2_pin = input(13, 2)
+via2       = input(14, 0)
+metal3     = input(15, 0)
+metal3_lbl = input(15, 1)
+metal3_pin = input(15, 2)
+via3       = input(16, 0)
+metal4     = input(17, 0)
+metal4_lbl = input(17, 1)
+metal4_pin = input(17, 2)
+via4       = input(18, 0)
+metal5     = input(19, 0)
+metal5_lbl = input(19, 1)
+metal5_pin = input(19, 2)
+via5       = input(20, 0)
+metal6     = input(21, 0)
+metal6_lbl = input(21, 1)
+metal6_pin = input(21, 2)
+via6       = input(22, 0)
+metal7     = input(23, 0)
+metal7_lbl = input(23, 1)
+metal7_pin = input(23, 2)
+via7       = input(24, 0)
+metal8     = input(25, 0)
+metal8_lbl = input(25, 1)
+metal8_pin = input(25, 2)
+via8       = input(26, 0)
+metal9     = input(27, 0)
+metal9_lbl = input(27, 1)
+metal9_pin = input(27, 2)
+via9       = input(28, 0)
+metal10    = input(29, 0)
+metal10_lbl= input(29, 1)
+metal10_pin= input(29, 2)
+
+# Bulk layer for terminal provisioning
+bulk        = polygon_layer
+
+# Computed layers
+active_in_nwell = active &amp; nwell
+pactive    = active_in_nwell &amp; pplus
+ntie       = active_in_nwell &amp; nplus
+pgate      = pactive &amp; poly
+psd        = pactive - pgate
+# All Nangate standard cells are LVT — collapse VT variants to a single class.
+lv_pgate   = pgate
+
+active_in_pwell = active &amp; pwell
+nactive    = active_in_pwell &amp; nplus
+ptie       = active_in_pwell &amp; pplus
+ngate      = nactive &amp; poly
+nsd        = nactive - ngate
+lv_ngate   = ngate
+
+# PMOS transistor device extraction (matches NMOS_VTL / PMOS_VTL in the CDL)
+extract_devices(mos4("PMOS_VTL"), { "SD" =&gt; psd, "G" =&gt; lv_pgate, "tS" =&gt; psd, "tD" =&gt; psd, "tG" =&gt; poly, "W" =&gt; nwell })
+
+# NMOS transistor device extraction
+extract_devices(mos4("NMOS_VTL"), { "SD" =&gt; nsd, "G" =&gt; lv_ngate, "tS" =&gt; nsd, "tD" =&gt; nsd, "tG" =&gt; poly, "W" =&gt; pwell })
+
+
+# Define connectivity for netlist extraction
+
+# Inter-layer
+connect(nwell,  ntie)
+connect(pwell,  ptie)
+connect(cont,   ntie)
+connect(cont,   ptie)
+connect(psd,    cont)
+connect(nsd,    cont)
+connect(poly,   cont)
+connect(cont,   metal1)
+connect(metal1, via1)
+connect(via1,   metal2)
+connect(metal2, via2)
+connect(via2,   metal3)
+connect(metal3, via3)
+connect(via3,   metal4)
+connect(metal4, via4)
+connect(via4,   metal5)
+connect(metal5, via5)
+connect(via5,   metal6)
+connect(metal6, via6)
+connect(via6,   metal7)
+connect(metal7, via7)
+connect(via7,   metal8)
+connect(metal8, via8)
+connect(via8,   metal9)
+connect(metal9, via9)
+connect(via9,   metal10)
+# attach labels :
+connect(metal1, metal1_lbl)
+connect(metal1, metal1_pin)
+connect(metal2, metal2_lbl)
+connect(metal2, metal2_pin)
+connect(metal3, metal3_lbl)
+connect(metal3, metal3_pin)
+connect(metal4, metal4_lbl)
+connect(metal4, metal4_pin)
+connect(metal5, metal5_lbl)
+connect(metal5, metal5_pin)
+connect(metal6, metal6_lbl)
+connect(metal6, metal6_pin)
+connect(metal7, metal7_lbl)
+connect(metal7, metal7_pin)
+connect(metal8, metal8_lbl)
+connect(metal8, metal8_pin)
+connect(metal9, metal9_lbl)
+connect(metal9, metal9_pin)
+connect(metal10, metal10_lbl)
+connect(metal10, metal10_pin)
+
+
+# Global / power-rail connectivity
+schematic.simplify
+
+connect_global(pwell, "VSS")
+connect_global(nwell, "VDD")
+
+# NangateOpenCellLibrary standard cells: VDD/VSS bulk straps are not inside
+# the cell GDS, so the LVS rule must explicitly tie nwell/pwell to VDD/VSS
+# for each cell with `connect_implicit`.
+%w(
+  AND2_X1 AND2_X2 AND2_X4
+  AND3_X1 AND3_X2 AND3_X4
+  AND4_X1 AND4_X2 AND4_X4
+  ANTENNA_X1
+  AOI211_X1 AOI211_X2 AOI211_X4
+  AOI21_X1 AOI21_X2 AOI21_X4
+  AOI221_X1 AOI221_X2 AOI221_X4
+  AOI222_X1 AOI222_X2 AOI222_X4
+  AOI22_X1 AOI22_X2 AOI22_X4
+  BUF_X1 BUF_X2 BUF_X4 BUF_X8 BUF_X16 BUF_X32
+  CLKBUF_X1 CLKBUF_X2 CLKBUF_X3
+  CLKGATETST_X1 CLKGATETST_X2 CLKGATETST_X4 CLKGATETST_X8
+  CLKGATE_X1 CLKGATE_X2 CLKGATE_X4 CLKGATE_X8
+  DFFRS_X1 DFFRS_X2
+  DFFR_X1 DFFR_X2
+  DFFS_X1 DFFS_X2
+  DFF_X1 DFF_X2
+  DLH_X1 DLH_X2
+  DLL_X1 DLL_X2
+  FA_X1
+  FILLCELL_X1 FILLCELL_X2 FILLCELL_X4 FILLCELL_X8 FILLCELL_X16 FILLCELL_X32
+  HA_X1
+  INV_X1 INV_X2 INV_X4 INV_X8 INV_X16 INV_X32
+  LOGIC0_X1 LOGIC1_X1
+  MUX2_X1 MUX2_X2
+  NAND2_X1 NAND2_X2 NAND2_X4
+  NAND3_X1 NAND3_X2 NAND3_X4
+  NAND4_X1 NAND4_X2 NAND4_X4
+  NOR2_X1 NOR2_X2 NOR2_X4
+  NOR3_X1 NOR3_X2 NOR3_X4
+  NOR4_X1 NOR4_X2 NOR4_X4
+  OAI211_X1 OAI211_X2 OAI211_X4
+  OAI21_X1 OAI21_X2 OAI21_X4
+  OAI221_X1 OAI221_X2 OAI221_X4
+  OAI222_X1 OAI222_X2 OAI222_X4
+  OAI22_X1 OAI22_X2 OAI22_X4
+  OAI33_X1
+  OR2_X1 OR2_X2 OR2_X4
+  OR3_X1 OR3_X2 OR3_X4
+  OR4_X1 OR4_X2 OR4_X4
+  SDFFRS_X1 SDFFRS_X2
+  SDFFR_X1 SDFFR_X2
+  SDFFS_X1 SDFFS_X2
+  SDFF_X1 SDFF_X2
+  TBUF_X1 TBUF_X2 TBUF_X4 TBUF_X8 TBUF_X16
+  TINV_X1
+  TLAT_X1
+  XNOR2_X1 XNOR2_X2
+  XOR2_X1 XOR2_X2
+).each do |cell|
+  connect_implicit(cell, "VDD")
+  connect_implicit(cell, "VSS")
+end
+
+# Actually performs the extraction
+netlist
+
+# Flatten cells which are present in one netlist only
+align
+# Drop unused output pins (e.g. QN on DFFR_X1) so they don't trip a mismatch
+netlist.purge
+schematic.purge
+netlist.simplify
+schematic.simplify
+
+# Tolerances for the device W/L parameters extracted from the layout
+tolerance("PMOS_VTL", "W", :absolute =&gt; 1.nm, :relative =&gt; 0.001)
+tolerance("PMOS_VTL", "L", :absolute =&gt; 1.nm, :relative =&gt; 0.001)
+tolerance("NMOS_VTL", "W", :absolute =&gt; 1.nm, :relative =&gt; 0.001)
+tolerance("NMOS_VTL", "L", :absolute =&gt; 1.nm, :relative =&gt; 0.001)
+
+# Input pin equivalences for commutative gates
+equivalent_pins("AND2_X1", "A1", "A2")
+equivalent_pins("AND2_X2", "A1", "A2")
+equivalent_pins("AND2_X4", "A1", "A2")
+equivalent_pins("AND3_X1", "A1", "A2", "A3")
+equivalent_pins("AND3_X2", "A1", "A2", "A3")
+equivalent_pins("AND3_X4", "A1", "A2", "A3")
+equivalent_pins("AND4_X1", "A1", "A2", "A3", "A4")
+equivalent_pins("AND4_X2", "A1", "A2", "A3", "A4")
+equivalent_pins("AND4_X4", "A1", "A2", "A3", "A4")
+equivalent_pins("NAND2_X1", "A1", "A2")
+equivalent_pins("NAND2_X2", "A1", "A2")
+equivalent_pins("NAND2_X4", "A1", "A2")
+equivalent_pins("NAND3_X1", "A1", "A2", "A3")
+equivalent_pins("NAND3_X2", "A1", "A2", "A3")
+equivalent_pins("NAND3_X4", "A1", "A2", "A3")
+equivalent_pins("NAND4_X1", "A1", "A2", "A3", "A4")
+equivalent_pins("NAND4_X2", "A1", "A2", "A3", "A4")
+equivalent_pins("NAND4_X4", "A1", "A2", "A3", "A4")
+equivalent_pins("OR2_X1", "A1", "A2")
+equivalent_pins("OR2_X2", "A1", "A2")
+equivalent_pins("OR2_X4", "A1", "A2")
+equivalent_pins("OR3_X1", "A1", "A2", "A3")
+equivalent_pins("OR3_X2", "A1", "A2", "A3")
+equivalent_pins("OR3_X4", "A1", "A2", "A3")
+equivalent_pins("OR4_X1", "A1", "A2", "A3", "A4")
+equivalent_pins("OR4_X2", "A1", "A2", "A3", "A4")
+equivalent_pins("OR4_X4", "A1", "A2", "A3", "A4")
+equivalent_pins("NOR2_X1", "A1", "A2")
+equivalent_pins("NOR2_X2", "A1", "A2")
+equivalent_pins("NOR2_X4", "A1", "A2")
+equivalent_pins("NOR3_X1", "A1", "A2", "A3")
+equivalent_pins("NOR3_X2", "A1", "A2", "A3")
+equivalent_pins("NOR3_X4", "A1", "A2", "A3")
+equivalent_pins("NOR4_X1", "A1", "A2", "A3", "A4")
+equivalent_pins("NOR4_X2", "A1", "A2", "A3", "A4")
+equivalent_pins("NOR4_X4", "A1", "A2", "A3", "A4")
+equivalent_pins("XOR2_X1", "A", "B")
+equivalent_pins("XOR2_X2", "A", "B")
+equivalent_pins("XNOR2_X1", "A", "B")
+equivalent_pins("XNOR2_X2", "A", "B")
+
+equivalent_pins("AOI211_X1","A","B")
+equivalent_pins("AOI211_X1","C1","C2")
+equivalent_pins("AOI211_X2","A","B")
+equivalent_pins("AOI211_X2","C1","C2")
+equivalent_pins("AOI211_X4","A","B")
+equivalent_pins("AOI211_X4","C1","C2")
+equivalent_pins("AOI21_X1","B1","B2")
+equivalent_pins("AOI21_X2","B1","B2")
+equivalent_pins("AOI21_X4","B1","B2")
+equivalent_pins("AOI221_X1","B1","B2")
+equivalent_pins("AOI221_X1","C1","C2")
+equivalent_pins("AOI221_X2","B1","B2")
+equivalent_pins("AOI221_X2","C1","C2")
+equivalent_pins("AOI221_X4","B1","B2")
+equivalent_pins("AOI221_X4","C1","C2")
+equivalent_pins("AOI222_X1","A1","A2")
+equivalent_pins("AOI222_X1","B1","B2")
+equivalent_pins("AOI222_X1","C1","C2")
+equivalent_pins("AOI222_X2","A1","A2")
+equivalent_pins("AOI222_X2","B1","B2")
+equivalent_pins("AOI222_X2","C1","C2")
+equivalent_pins("AOI222_X4","A1","A2")
+equivalent_pins("AOI222_X4","B1","B2")
+equivalent_pins("AOI222_X4","C1","C2")
+equivalent_pins("AOI22_X1","A1","A2")
+equivalent_pins("AOI22_X1","B1","B2")
+equivalent_pins("AOI22_X2","A1","A2")
+equivalent_pins("AOI22_X2","B1","B2")
+equivalent_pins("AOI22_X4","A1","A2")
+equivalent_pins("AOI22_X4","B1","B2")
+
+equivalent_pins("OAI211_X1","A","B")
+equivalent_pins("OAI211_X1","C1","C2")
+equivalent_pins("OAI211_X2","A","B")
+equivalent_pins("OAI211_X2","C1","C2")
+equivalent_pins("OAI211_X4","A","B")
+equivalent_pins("OAI211_X4","C1","C2")
+equivalent_pins("OAI21_X1","B1","B2")
+equivalent_pins("OAI21_X2","B1","B2")
+equivalent_pins("OAI21_X4","B1","B2")
+equivalent_pins("OAI221_X1","B1","B2")
+equivalent_pins("OAI221_X1","C1","C2")
+equivalent_pins("OAI221_X2","B1","B2")
+equivalent_pins("OAI221_X2","C1","C2")
+equivalent_pins("OAI221_X4","B1","B2")
+equivalent_pins("OAI221_X4","C1","C2")
+equivalent_pins("OAI222_X1","A1","A2")
+equivalent_pins("OAI222_X1","B1","B2")
+equivalent_pins("OAI222_X1","C1","C2")
+equivalent_pins("OAI222_X2","A1","A2")
+equivalent_pins("OAI222_X2","B1","B2")
+equivalent_pins("OAI222_X2","C1","C2")
+equivalent_pins("OAI222_X4","A1","A2")
+equivalent_pins("OAI222_X4","B1","B2")
+equivalent_pins("OAI222_X4","C1","C2")
+equivalent_pins("OAI22_X1","A1","A2")
+equivalent_pins("OAI22_X1","B1","B2")
+equivalent_pins("OAI22_X2","A1","A2")
+equivalent_pins("OAI22_X2","B1","B2")
+equivalent_pins("OAI22_X4","A1","A2")
+equivalent_pins("OAI22_X4","B1","B2")
+equivalent_pins("OAI33_X1","A1","A2","A3")
+equivalent_pins("OAI33_X1","B1","B2","B3")
+
+equivalent_pins("HA_X1","A","B")
+
+max_branch_complexity(65536)
+max_depth(16)
+
+if ! compare
+  puts "ERROR : Netlists don't match"
+else
+  puts "CONGRATULATIONS! Netlists match."
+end
+
+time = Time.now
+hours = ((time - tstart)/3600).to_i
+minutes = ((time - tstart)/60 - hours * 60).to_i
+seconds = ((time - tstart) - (minutes * 60 + hours * 3600)).to_i
+$stdout.write "LVS finished at : #{time.hour}:#{time.min}:#{time.sec}  -  LVS duration =  #{hours} hrs. #{minutes} min. #{seconds} sec.\n"</text>
+</klayout-macro>
