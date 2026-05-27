@@ -158,24 +158,29 @@ else
   fi
   REASON="no_count_report"
   STATUS="failed"
-  if [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 || $KILLED_KEYWORD -eq 1 ]]; then
-    if [[ -n "$STUCK_RULE" ]]; then
-      STATUS="stuck"
-      REASON="klayout_polygon_op_no_progress"
-      if [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
-        echo "DRC STUCK on $STUCK_RULE after ${DRC_TIMEOUT}s — see references/failure-patterns.md"
-      else
-        echo "DRC STUCK on $STUCK_RULE (klayout killed externally, exit=$DRC_STATUS) — see references/failure-patterns.md"
-      fi
-      # Best-effort cleanup of any orphaned klayout DRC procs from this run.
-      pkill -9 -f "klayout.*${FLOW_VARIANT}.*6_drc" 2>/dev/null || true
-    elif [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
-      STATUS="timeout"
-      REASON="drc_timeout"
-      echo "DRC timed out after ${DRC_TIMEOUT}s with no log progress recorded"
+  # If we saw a `*.lydrc:NN` reference, treat as stuck regardless of how the
+  # process exited — observed exit codes for this pattern have included 124
+  # (timeout), 137 (SIGKILL), 2 (make-target failed), and others when klayout
+  # got SIGTERM'd or aborted mid-rule. The stuck_at_rule is the load-bearing
+  # signal; exit code is unreliable across kill mechanisms.
+  if [[ -n "$STUCK_RULE" ]]; then
+    STATUS="stuck"
+    REASON="klayout_polygon_op_no_progress"
+    if [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
+      echo "DRC STUCK on $STUCK_RULE after ${DRC_TIMEOUT}s — see references/failure-patterns.md"
+    elif [[ $KILLED_KEYWORD -eq 1 ]]; then
+      echo "DRC STUCK on $STUCK_RULE (klayout killed externally, exit=$DRC_STATUS) — see references/failure-patterns.md"
     else
-      echo "DRC killed externally (exit=$DRC_STATUS) but no lydrc rule recorded"
+      echo "DRC STUCK on $STUCK_RULE (no count report, exit=$DRC_STATUS) — see references/failure-patterns.md"
     fi
+    # Best-effort cleanup of any orphaned klayout DRC procs from this run.
+    pkill -9 -f "klayout.*${FLOW_VARIANT}.*6_drc" 2>/dev/null || true
+  elif [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
+    STATUS="timeout"
+    REASON="drc_timeout"
+    echo "DRC timed out after ${DRC_TIMEOUT}s with no log progress recorded"
+  elif [[ $KILLED_KEYWORD -eq 1 ]]; then
+    echo "DRC killed externally (exit=$DRC_STATUS) but no lydrc rule recorded"
   else
     echo "DRC completed but no count report found (exit=$DRC_STATUS)"
   fi
