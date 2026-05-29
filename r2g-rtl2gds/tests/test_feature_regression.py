@@ -1,12 +1,13 @@
 """Golden regression gate for the feature-extraction workers.
 
-Each refactored worker is run against the committed feature_test_v2/input/ac97_top
-fixture (5_route.def + 6_final.spef + constraint.sdc + config.mk) with the bundled
-Nangate liberty/tech-lef injected via env, and its output is asserted byte-for-byte
-equal to the committed feature_test_v2/output/ac97_top/*.csv golden. This guards the
-light refactor + parameterization against any behavior drift on nangate45.
+Each refactored worker is run against the feature_test_v2/input/ac97_top fixture
+(5_route.def + 6_final.spef + constraint.sdc + config.mk) with the bundled Nangate
+liberty/tech-lef injected via env, and its output is asserted byte-for-byte equal to the
+feature_test_v2/output/ac97_top/*.csv golden. This guards the light refactor +
+parameterization against any behavior drift on nangate45.
 
-Skipped when the (untracked) feature_test_v2 fixture is absent.
+feature_test_v2/ is an external (untracked) dev fixture, not part of the repo; this test
+is skipped when it is absent. Restore it under the repo root to re-run the golden check.
 """
 from __future__ import annotations
 
