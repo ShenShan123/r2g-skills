@@ -23,7 +23,18 @@ if {[info exists ::env(PROJECT_ROOT)]} {
     }
 }
 
-set lib_file [file join $project_root "NangateOpenCellLibrary_typical.lib"]
+# Resolved liberty list (space-separated absolute paths) from the orchestrator.
+# PDNSim needs cell power to compute current; without liberty IR drop is all-zero.
+set lib_files {}
+if {[info exists ::env(R2G_LIB_FILES)] && [string trim $::env(R2G_LIB_FILES)] != ""} {
+    foreach lib $::env(R2G_LIB_FILES) {
+        if {[file exists $lib]} { lappend lib_files $lib }
+    }
+}
+if {[llength $lib_files] == 0} {
+    set fallback_lib [file join $project_root "NangateOpenCellLibrary_typical.lib"]
+    if {[file exists $fallback_lib]} { lappend lib_files $fallback_lib }
+}
 set tech_lef [file join $project_root "NangateOpenCellLibrary.tech.lef"]
 set macro_lef [file join $project_root "NangateOpenCellLibrary.macro.lef"]
 set macro_mod_lef [file join $project_root "NangateOpenCellLibrary.macro.mod.lef"]
@@ -44,7 +55,9 @@ if {[info exists ::env(ODB_FILE)]} {
     set odb_file $::env(ODB_FILE)
 }
 
-# Determine DEF file path
+# Determine DEF file path (only required when no usable ODB — the read branch
+# below errors if neither an ODB nor a DEF is available).
+set def_file ""
 if {[info exists ::env(DEF_FILE)]} {
     set def_file $::env(DEF_FILE)
 } elseif {[llength $argv] > 0} {
@@ -53,9 +66,6 @@ if {[info exists ::env(DEF_FILE)]} {
     set default_def [file join $project_root "6_final.def"]
     if {[file exists $default_def]} {
         set def_file $default_def
-    } else {
-        puts "Error: No DEF file provided."
-        exit 1
     }
 }
 
@@ -71,13 +81,14 @@ if {[info exists ::env(OUTPUT_RPT)]} {
 if {$odb_file != "" && [file exists $odb_file]} {
     puts "Reading ODB file: $odb_file"
     read_db $odb_file
+    foreach lib $lib_files { read_liberty $lib }
 } else {
     puts "Reading DEF file: $def_file"
     if {![file exists $def_file]} {
         puts "Error: DEF file $def_file does not exist."
         exit 1
     }
-    read_liberty $lib_file
+    foreach lib $lib_files { read_liberty $lib }
     read_lef $tech_lef
     read_lef $macro_lef
     read_lef $macro_mod_lef
@@ -114,6 +125,15 @@ if {$target_net == ""} {
 }
 
 puts "Starting IR Drop Analysis on $target_net..."
+# PDNSim needs the rail voltage explicitly (else PSM-0079). Mirror ORFS
+# final_report.tcl: set power-net voltage, and ground (VSS/VGND) to 0.
+catch {set_pdnsim_net_voltage -net $target_net -voltage $supply_voltage}
+foreach gnd {VSS VGND vss vgnd} {
+    if {[get_nets -quiet $gnd] != ""} {
+        catch {set_pdnsim_net_voltage -net $gnd -voltage 0.0}
+        break
+    }
+}
 if {[catch {analyze_power_grid -net $target_net -voltage_file $out_file} error_msg]} {
     puts "Error during analyze_power_grid: $error_msg"
     exit 1

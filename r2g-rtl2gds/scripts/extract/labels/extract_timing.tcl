@@ -116,7 +116,7 @@ foreach inst [$block getInsts] {
 }
 
 set clk_ports {}
-if {[info exists ::env(CLOCK_PORT)]} {
+if {[info exists ::env(CLOCK_PORT)] && [string trim $::env(CLOCK_PORT)] ne ""} {
     set clk_ports [get_ports -quiet $::env(CLOCK_PORT)]
 } else {
     foreach p [get_ports -quiet *] {
