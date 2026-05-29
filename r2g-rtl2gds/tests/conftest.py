@@ -14,6 +14,11 @@ KNOWLEDGE_DIR = SKILL_ROOT / "knowledge"
 if str(KNOWLEDGE_DIR) not in sys.path:
     sys.path.insert(0, str(KNOWLEDGE_DIR))
 
+# Make scripts/extract/labels/ importable as plain modules for label-extractor tests.
+LABELS_DIR = SKILL_ROOT / "scripts" / "extract" / "labels"
+if str(LABELS_DIR) not in sys.path:
+    sys.path.insert(0, str(LABELS_DIR))
+
 
 @pytest.fixture
 def tmp_knowledge_dir(tmp_path: Path) -> Path:
