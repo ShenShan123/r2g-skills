@@ -78,6 +78,18 @@ if {[info exists ::env(OUTPUT_RPT)]} {
     set out_file "ir_drop.csv"
 }
 
+# Force canonical basename: keep the caller's directory but always write
+# ir_drop.csv (matches TEACHING_POLICY section 6 and status_enums.py). Note
+# out_file is reused below as the PDNSim voltage_file intermediate and then
+# overwritten with the final labeled CSV; forcing the name here is safe.
+set canonical_name "ir_drop.csv"
+set out_dir [file dirname $out_file]
+if {$out_dir eq ""} { set out_dir "." }
+if {[file tail $out_file] ne $canonical_name} {
+    puts "Note: forcing canonical output name (was [file tail $out_file]) -> $canonical_name"
+}
+set out_file [file join $out_dir $canonical_name]
+
 if {$odb_file != "" && [file exists $odb_file]} {
     puts "Reading ODB file: $odb_file"
     read_db $odb_file

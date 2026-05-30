@@ -17,6 +17,24 @@ import re
 import sys
 
 
+# Canonical output filename for this label (TEACHING_POLICY section 6 /
+# status_enums.py). Always written regardless of the name the caller passes.
+CANONICAL_OUTPUT_NAME = "cell_congestion.csv"
+
+
+def _force_canonical(requested_path):
+    import os as _os
+    if requested_path:
+        out_dir = _os.path.dirname(_os.path.abspath(requested_path))
+    else:
+        out_dir = _os.path.dirname(_os.path.abspath(__file__))
+    forced = _os.path.join(out_dir, CANONICAL_OUTPUT_NAME)
+    if requested_path and _os.path.basename(requested_path) != CANONICAL_OUTPUT_NAME:
+        print(f"Note: forcing canonical output name -> {forced} "
+              f"(requested basename was '{_os.path.basename(requested_path)}')")
+    return forced
+
+
 DEFAULT_LAYER_INFO = {
     "metal1": {"pitch": 0.14, "direction": "HORIZONTAL"},
     "metal2": {"pitch": 0.19, "direction": "VERTICAL"},
@@ -287,7 +305,8 @@ def main():
     else:
         def_file = sys.argv[1]
 
-    output_csv = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "cell_congestion.csv")
+    output_csv = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), CANONICAL_OUTPUT_NAME)
+    output_csv = _force_canonical(output_csv)
     design_name_override = sys.argv[3] if len(sys.argv) > 3 else None
     tech_lef = os.environ.get("TECH_LEF", os.path.join(os.path.dirname(__file__), "../NangateOpenCellLibrary.tech.lef"))
 
