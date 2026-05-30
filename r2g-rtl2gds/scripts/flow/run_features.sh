@@ -31,8 +31,12 @@ fi
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 CONFIG_MK="$PROJECT_DIR/constraints/config.mk"
 SDC_FILE="$PROJECT_DIR/constraints/constraint.sdc"
-FEATURES_DIR="$PROJECT_DIR/features"
-REPORTS_DIR="$PROJECT_DIR/reports"
+# Output dirs are overridable so a caller (e.g. the teaching stage runner) can point
+# the 8 CSVs + stats JSON straight at cases/<design>/stage4_features — no output/<case>
+# staging, no second copy. Defaults keep the original design_cases/<design>/features
+# layout that run_features_batch.sh and the dashboard rely on.
+FEATURES_DIR="${R2G_FEATURES_DIR:-$PROJECT_DIR/features}"
+REPORTS_DIR="${R2G_REPORTS_DIR:-$PROJECT_DIR/reports}"
 mkdir -p "$FEATURES_DIR" "$REPORTS_DIR"
 
 DESIGN_NAME="$(basename "$PROJECT_DIR")"
