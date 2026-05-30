@@ -21,17 +21,13 @@ if {[info exists ::env(PROJECT_ROOT)]} {
 
 puts "Project Root: $project_root"
 
-# Resolved liberty list (space-separated absolute paths) from the orchestrator.
-# Falls back to the nangate typical lib next to the script for standalone use.
+# Resolved liberty list (space-separated absolute paths) from the orchestrator
+# (run_labels.sh always sets R2G_LIB_FILES to the resolved per-platform libs).
 set lib_files {}
 if {[info exists ::env(R2G_LIB_FILES)] && [string trim $::env(R2G_LIB_FILES)] != ""} {
     foreach lib $::env(R2G_LIB_FILES) {
         if {[file exists $lib]} { lappend lib_files $lib }
     }
-}
-if {[llength $lib_files] == 0} {
-    set fallback_lib [file join $project_root "NangateOpenCellLibrary_typical.lib"]
-    if {[file exists $fallback_lib]} { lappend lib_files $fallback_lib }
 }
 set tech_lef [file join $project_root "NangateOpenCellLibrary.tech.lef"]
 set macro_lef [file join $project_root "NangateOpenCellLibrary.macro.lef"]

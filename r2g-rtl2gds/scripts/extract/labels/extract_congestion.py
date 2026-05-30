@@ -13,145 +13,79 @@ only a logged last-resort fallback. See references/label-extraction.md.
 import csv
 import math
 import os
-import re
 import sys
 
+# sys.path bootstrap: make `import techlib.*` resolve when run via run_labels.sh
+# (cwd is the project dir, not scripts/extract). Insert scripts/extract/ = the
+# parent of this file's directory (labels/). Dup-guarded.
+_EXTRACT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _EXTRACT_DIR not in sys.path:
+    sys.path.insert(0, _EXTRACT_DIR)
 
-DEFAULT_LAYER_INFO = {
-    "metal1": {"pitch": 0.14, "direction": "HORIZONTAL"},
-    "metal2": {"pitch": 0.19, "direction": "VERTICAL"},
-    "metal3": {"pitch": 0.14, "direction": "HORIZONTAL"},
-    "metal4": {"pitch": 0.28, "direction": "VERTICAL"},
-    "metal5": {"pitch": 0.28, "direction": "HORIZONTAL"},
-    "metal6": {"pitch": 0.28, "direction": "VERTICAL"},
-    "metal7": {"pitch": 0.8, "direction": "HORIZONTAL"},
-    "metal8": {"pitch": 0.8, "direction": "VERTICAL"},
-    "metal9": {"pitch": 1.6, "direction": "HORIZONTAL"},
-    "metal10": {"pitch": 1.6, "direction": "VERTICAL"},
-}
+from techlib.def_parse import (  # noqa: E402
+    route_segments,
+    parse_units,
+    parse_design_name,
+    parse_components,
+)
+from techlib.lef import routing_layer_info  # noqa: E402
+from techlib import lef as _techlib_lef  # noqa: E402
+from techlib.profile import get_profile  # noqa: E402
+
+
+# DEFAULT_LAYER_INFO is the single nangate45 fallback table — now sourced from
+# techlib (aliased from lef.DEFAULT_LAYER_INFO; same dict at import time). Retained as a
+# module attribute because tests/test_techlib_lef.py and tests/test_techlib_profile.py
+# assert equality against `extract_congestion.DEFAULT_LAYER_INFO`, and
+# tests/test_extract_congestion.py references it directly.
+DEFAULT_LAYER_INFO = _techlib_lef.DEFAULT_LAYER_INFO
 
 
 def parse_tech_lef(tech_lef):
     """Parse routing-layer pitch/direction from a tech LEF.
 
-    Recognizes any layer declared TYPE ROUTING (platform-agnostic — nangate
-    metal*, sky130 met*/li1, asap7 M*). Falls back to the nangate
-    DEFAULT_LAYER_INFO (with a warning) when the LEF is absent or declares no
-    routing layers.
+    Thin compat wrapper over ``techlib.lef.routing_layer_info`` (which was ported
+    verbatim from this function — Task 2 proved exact equality on all 6 platforms).
+    Retained so tests/test_extract_congestion.py + tests/test_techlib_lef.py, which
+    call ``extract_congestion.parse_tech_lef``, keep passing. The fallback table is
+    the nangate45 ``DEFAULT_LAYER_INFO``.
     """
-    if not tech_lef or not os.path.exists(tech_lef):
-        print(f"WARNING: tech LEF not found ({tech_lef}); using nangate45 DEFAULT_LAYER_INFO")
-        return DEFAULT_LAYER_INFO
-
-    layers = {}
-    current = None
-    block = {}
-
-    def _finalize():
-        if block.get("type") == "ROUTING" and block.get("pitch_vals") and block.get("direction"):
-            pv = block["pitch_vals"]
-            direction = block["direction"]
-            if len(pv) >= 2:
-                pitch = pv[1] if direction == "HORIZONTAL" else pv[0]
-            else:
-                pitch = pv[0]
-            if pitch > 0:
-                layers[current] = {"pitch": pitch, "direction": direction}
-
-    with open(tech_lef, "r") as f:
-        for raw_line in f:
-            parts = raw_line.replace(";", " ").split()
-            if not parts:
-                continue
-            if parts[0] == "LAYER" and len(parts) >= 2:
-                current = parts[1]
-                block = {"pitch_vals": [], "direction": None, "type": None}
-                continue
-            if current is None:
-                continue
-            if parts[0] == "END":
-                _finalize()
-                current = None
-                block = {}
-                continue
-            if parts[0] == "TYPE" and len(parts) >= 2:
-                block["type"] = parts[1].upper()
-            elif parts[0] == "PITCH":
-                for tok in parts[1:]:
-                    try:
-                        block["pitch_vals"].append(float(tok))
-                    except ValueError:
-                        pass
-            elif parts[0] == "DIRECTION" and len(parts) >= 2:
-                block["direction"] = parts[1].upper()
-
-    if not layers:
-        print("WARNING: no TYPE ROUTING layers parsed; using nangate45 DEFAULT_LAYER_INFO")
-        return DEFAULT_LAYER_INFO
-    return layers
+    return routing_layer_info(tech_lef, fallback=DEFAULT_LAYER_INFO)
 
 
 def parse_def_header_and_components(def_file):
-    db_units = 2000.0
+    # db_units / design_name / components are single-sourced from techlib (proven
+    # byte-equivalent: see tests/test_techlib_crossplatform.py). The GCELLGRID X/Y
+    # STEP scan stays LOCAL — it is congestion-specific and not part of def_parse.
+    db_units = float(parse_units(def_file))
+    design_name = parse_design_name(def_file)
+    # parse_components -> {inst: {master,status,orient,x,y}} in DEF declaration order;
+    # keep only placed comps (x is not None), matching congestion's old "needs ( x y )".
+    components = {
+        inst: (c["x"], c["y"], c["master"])
+        for inst, c in parse_components(def_file).items()
+        if c.get("x") is not None
+    }
+
     grid_step_x = 4200
     grid_step_y = 4200
-    components = {}
-    design_name = "unknown"
-
     with open(def_file, "r") as f:
-        lines = f.readlines()
-
-    for line in lines:
-        line = line.strip()
-        if line.startswith("DESIGN"):
-            parts = line.split()
-            if len(parts) >= 2:
-                design_name = parts[1]
-        elif line.startswith("UNITS DISTANCE MICRONS"):
-            parts = line.split()
-            if len(parts) >= 4:
+        for line in f:
+            line = line.strip()
+            if line.startswith("GCELLGRID X"):
+                parts = line.split()
                 try:
-                    db_units = float(parts[3])
-                except ValueError:
+                    grid_step_x = int(parts[parts.index("STEP") + 1])
+                except (ValueError, IndexError):
                     pass
-        elif line.startswith("GCELLGRID X"):
-            parts = line.split()
-            try:
-                grid_step_x = int(parts[parts.index("STEP") + 1])
-            except (ValueError, IndexError):
-                pass
-        elif line.startswith("GCELLGRID Y"):
-            parts = line.split()
-            try:
-                grid_step_y = int(parts[parts.index("STEP") + 1])
-            except (ValueError, IndexError):
-                pass
-        elif line.startswith("COMPONENTS"):
-            break
-
-    in_components = False
-    for line in lines:
-        line = line.strip()
-        if line.startswith("COMPONENTS"):
-            in_components = True
-            continue
-        if line.startswith("END COMPONENTS"):
-            break
-        if not in_components or not line.startswith("- "):
-            continue
-
-        parts = line.split()
-        if len(parts) < 3:
-            continue
-        name = parts[1]
-        cell_type = parts[2]
-        try:
-            open_paren_idx = parts.index("(")
-            x = int(parts[open_paren_idx + 1])
-            y = int(parts[open_paren_idx + 2])
-        except (ValueError, IndexError):
-            continue
-        components[name] = (x, y, cell_type)
+            elif line.startswith("GCELLGRID Y"):
+                parts = line.split()
+                try:
+                    grid_step_y = int(parts[parts.index("STEP") + 1])
+                except (ValueError, IndexError):
+                    pass
+            elif line.startswith("COMPONENTS"):
+                break
 
     return db_units, grid_step_x, grid_step_y, components, design_name
 
@@ -203,40 +137,11 @@ def extract_grid_demand(def_file, db_units, grid_step_x, grid_step_y):
         if "ROUTED" not in line and "NEW" not in line and not line.startswith("+"):
             continue
 
-        points = re.findall(r"\(\s*([^\s\)]+)\s+([^\s\)]+)(?:\s+[^\)]*)?\s*\)", line)
-        if len(points) < 2:
-            continue
-
-        curr_x = None
-        curr_y = None
-        for x_str, y_str in points:
-            if curr_x is None or curr_y is None:
-                if x_str == "*" or y_str == "*":
-                    continue
-                try:
-                    curr_x = int(x_str)
-                    curr_y = int(y_str)
-                except ValueError:
-                    curr_x = None
-                    curr_y = None
-                continue
-
-            next_x = curr_x
-            next_y = curr_y
-            if x_str != "*":
-                try:
-                    next_x = int(x_str)
-                except ValueError:
-                    continue
-            if y_str != "*":
-                try:
-                    next_y = int(y_str)
-                except ValueError:
-                    continue
-
-            add_route_segment(demand_h, demand_v, curr_x, curr_y, next_x, next_y, grid_step_x, grid_step_y, db_units)
-            curr_x = next_x
-            curr_y = next_y
+        # techlib.route_segments reproduces the prior inline point-regex + *-relative
+        # chain walk that fed add_route_segment (proven 0-mismatch on aes_core + cordic;
+        # see tests/test_techlib_def_parse.py).
+        for x1, y1, x2, y2 in route_segments(line):
+            add_route_segment(demand_h, demand_v, x1, y1, x2, y2, grid_step_x, grid_step_y, db_units)
 
     return demand_h, demand_v
 
@@ -296,7 +201,13 @@ def main():
         sys.exit(1)
 
     print(f"Processing {def_file}...")
-    layer_info = parse_tech_lef(tech_lef)
+    # Single-source the routing-layer parse + fallback through techlib. All platforms
+    # share the same nangate45 fallback table (Task 5), so the platform arg is
+    # non-critical here, but pass it to honor the single-source intent.
+    layer_info = routing_layer_info(
+        tech_lef,
+        fallback=get_profile(os.environ.get("R2G_PLATFORM", "nangate45")).fallback_routing_layers,
+    )
     db_units, grid_step_x, grid_step_y, components, design_name = parse_def_header_and_components(def_file)
     if design_name_override:
         design_name = design_name_override

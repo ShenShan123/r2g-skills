@@ -5,6 +5,15 @@ import os
 import csv
 import math
 
+# sys.path bootstrap: make `import techlib.*` resolve when run via run_labels.sh
+# (cwd is the project dir, not scripts/extract). Insert scripts/extract/ = the
+# parent of this file's directory (labels/). Dup-guarded.
+_EXTRACT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _EXTRACT_DIR not in sys.path:
+    sys.path.insert(0, _EXTRACT_DIR)
+
+from techlib.def_parse import route_segments  # noqa: E402
+
 def parse_def_wirelength(def_file):
     wirelengths = {}
     net_types = {}
@@ -67,61 +76,11 @@ def parse_def_wirelength(def_file):
                 continue
             
         if current_net and ('ROUTED' in line or 'NEW' in line):
-            tokens = line.split()
-            points = []
-            
-            i = 0
-            while i < len(tokens):
-                token = tokens[i]
-                if token == '(':
-                    # Start of a coordinate pair
-                    x_str = tokens[i+1]
-                    y_str = tokens[i+2]
-                    points.append((x_str, y_str))
-                    i += 3 
-                else:
-                    i += 1
-            
-            # Calculate length for this segment chain
-            if len(points) >= 2:
-                # Iterate pairs
-                # We need to maintain current X and Y because of '*'
-                curr_x = 0
-                curr_y = 0
-                
-                # Initialize with first point (must be explicit)
-                p0 = points[0]
-                try:
-                    curr_x = int(p0[0])
-                    curr_y = int(p0[1])
-                except ValueError:
-                    continue # Skip if first point is invalid
-                
-                for j in range(1, len(points)):
-                    p_next = points[j]
-                    next_x_str = p_next[0]
-                    next_y_str = p_next[1]
-                    
-                    next_x = curr_x
-                    next_y = curr_y
-                    
-                    if next_x_str != '*':
-                        try:
-                            next_x = int(next_x_str)
-                        except ValueError: pass
-                    
-                    if next_y_str != '*':
-                        try:
-                            next_y = int(next_y_str)
-                        except ValueError: pass
-                    
-                    # Manhattan Distance
-                    dist = abs(next_x - curr_x) + abs(next_y - curr_y)
-                    wirelengths[current_net] += dist
-                    
-                    # Update current
-                    curr_x = next_x
-                    curr_y = next_y
+            # techlib.route_segments reproduces the prior inline point-extraction +
+            # *-relative Manhattan chain walk byte-for-byte (proven 0-mismatch on
+            # aes_core + cordic; see tests/test_techlib_def_parse.py).
+            for x1, y1, x2, y2 in route_segments(line):
+                wirelengths[current_net] += abs(x2 - x1) + abs(y2 - y1)
 
     # Convert DB units to Microns
     for net in wirelengths:
