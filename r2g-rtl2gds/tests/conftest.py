@@ -24,6 +24,12 @@ FEATURES_DIR = SKILL_ROOT / "scripts" / "extract" / "features"
 if str(FEATURES_DIR) not in sys.path:
     sys.path.insert(0, str(FEATURES_DIR))
 
+# Make scripts/extract/ importable so `import techlib.def_parse` resolves (the
+# consolidated DEF/SDC parser package). Additive; Task 9 finalizes conftest.
+EXTRACT_DIR = SKILL_ROOT / "scripts" / "extract"
+if str(EXTRACT_DIR) not in sys.path:
+    sys.path.insert(0, str(EXTRACT_DIR))
+
 
 @pytest.fixture
 def tmp_knowledge_dir(tmp_path: Path) -> Path:
