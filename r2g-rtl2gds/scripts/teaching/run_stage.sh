@@ -12,6 +12,12 @@
 #   AGENT_BACKEND   e.g. "codex/gpt-5.5" (recorded into the ledger)
 #   DRY_RUN=1       print the flow commands instead of running EDA tools
 #                   (ledger writes still happen so you can inspect them)
+#   DEF_PATH / ODB_PATH / SPEF_PATH
+#                   stage4 only: real artifact paths. If unset, they are read
+#                   from CASE_STATE.md and placeholder-expanded (see stage4()).
+#                   Pass these to decouple "what the tools open" (real path) from
+#                   "what CASE_STATE records" (policy §3 placeholders).
+#   TECH_LEF        stage4 only: nangate tech LEF path (optional)
 #
 # What this script guarantees, regardless of tool outcome:
 #   * every flow step it runs gets ONE ledger record (via append_ledger.py)
@@ -23,6 +29,9 @@
 # repo's script names differ.
 
 set -uo pipefail
+
+log()  { printf '[run_stage] %s\n' "$*" >&2; }
+die()  { printf '[run_stage][ERROR] %s\n' "$*" >&2; exit 1; }
 
 # ─── resolve roots ───────────────────────────────────────────────────────────
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,14 +62,32 @@ STAGE="${1:?usage: run_stage.sh <stage> <design> [rtl_path]}"
 DESIGN="${2:?usage: run_stage.sh <stage> <design> [rtl_path]}"
 RTL_PATH="${3:-}"
 
+# ─── validate design name (single source of truth, NO path-based fallback) ───
+# The design name is whatever the caller passes as $2 — there is deliberately no
+# basename()/dirname() inference here. These checks reject the names that pollute
+# cases/<design>/ dirs (slashes, spaces, illegal chars) and warn on names that
+# look like a flattened RTL path (e.g. "..._rtl_omsp_sfr") rather than a top
+# module name. A flattened name (slashes already collapsed to '_' upstream) is a
+# legal identifier and cannot be detected for sure — hence a WARNING, not a hard
+# stop. The real fix is to pass the top-level design name in the stage prompt.
+case "$DESIGN" in
+  */*|*\\*)      die "design name 不能含路径分隔符: '$DESIGN'（应传顶层设计名，而不是 RTL 目录路径）" ;;
+  *[[:space:]]*) die "design name 不能含空白字符: '$DESIGN'" ;;
+  ""|.|..)       die "design name 非法: '$DESIGN'" ;;
+esac
+if printf '%s' "$DESIGN" | LC_ALL=C grep -q '[^A-Za-z0-9._-]'; then
+  die "design name 含非法字符（仅允许 A-Za-z0-9._-）: '$DESIGN'"
+fi
+if [ "${#DESIGN}" -gt 40 ] || printf '%s' "$DESIGN" | grep -qiE '_rtl_|_rtl$'; then
+  log "WARNING: design name 看着像从路径拍平来的（'$DESIGN'）。"
+  log "WARNING: 确认这是顶层设计名（如 omsp_sfr），而不是 RTL 目录名。可在 stage prompt 里显式给短名。"
+fi
+
 PROJECT_DIR="$SKILL_DIR/design_cases/$DESIGN"          # SKILL.md工程目录
 CASE_DIR="$TEACHING_ROOT/cases/$DESIGN"                # 教学产物目录
 mkdir -p "$CASE_DIR"
 
 DRY_RUN="${DRY_RUN:-0}"
-
-log()  { printf '[run_stage] %s\n' "$*" >&2; }
-die()  { printf '[run_stage][ERROR] %s\n' "$*" >&2; exit 1; }
 
 # ─── ledger helper: record one flow step ─────────────────────────────────────
 # usage: ledger_record <stage_str> <step> <cmd> <inputs_glob> <outputs_glob> <start> <end> <rc>
@@ -100,6 +127,23 @@ run_step() {
   end="$(now)"
   ledger_record "$stage_str" "$step" "$*" "$in_glob" "$out_glob" "$start" "$end" "$rc"
   return $rc
+}
+
+# Expand teaching placeholders + strip surrounding whitespace, so a policy-compliant
+# CASE_STATE (which should store <repo>/<case_root>/<teaching_root> placeholders, NOT
+# machine-absolute paths per §3) still yields a real path the EDA tools can open.
+# Also fixes the OpenMSP430-class bug where a trailing space on the SPEF path made
+# the file check fail and C_total collapsed to 0.
+expand_path() {
+  local p="$1"
+  # strip leading/trailing whitespace
+  p="${p#"${p%%[![:space:]]*}"}"
+  p="${p%"${p##*[![:space:]]}"}"
+  [ -z "$p" ] && { printf ''; return 0; }
+  p="${p//<repo>/$REPO_ROOT}"
+  p="${p//<case_root>/$CASE_DIR}"
+  p="${p//<teaching_root>/$TEACHING_ROOT}"
+  printf '%s' "$p"
 }
 
 # ─── stages ──────────────────────────────────────────────────────────────────
@@ -157,13 +201,39 @@ stage4() {
   FEATURE_ROOT="$SKILL_DIR/scripts/extract/features"
   LABELS_OUT="$CASE_DIR/stage4_labels"
 
-  # Resolve real artifact paths from CASE_STATE.md (def_path / odb_path / spef_path).
+  # Resolve real artifact paths. Priority: env override -> CASE_STATE.md value.
+  # Either way the value is run through expand_path() so:
+  #   * policy-compliant placeholders (<repo>/<case_root>/<teaching_root>) become
+  #     real paths the tools can open — decoupling "tool input" from "what §3
+  #     allows CASE_STATE to record";
+  #   * a stray trailing space (the OpenMSP430 SPEF / C_total=0 bug) is stripped.
   cs="$CASE_DIR/CASE_STATE.md"
   get_cs() { [ -f "$cs" ] && sed -n "s/^$1:[[:space:]]*//p" "$cs" | tail -1; }
-  DEF_PATH="${DEF_PATH:-$(get_cs def_path)}"
-  ODB_PATH="${ODB_PATH:-$(get_cs odb_path)}"
-  SPEF_PATH="${SPEF_PATH:-$(get_cs spef_path)}"
+  DEF_PATH="$(expand_path "${DEF_PATH:-$(get_cs def_path)}")"
+  ODB_PATH="$(expand_path "${ODB_PATH:-$(get_cs odb_path)}")"
+  SPEF_PATH="$(expand_path "${SPEF_PATH:-$(get_cs spef_path)}")"
   TECH_LEF="${TECH_LEF:-}"   # set if you have the nangate tech LEF path handy
+
+  # Guard the resolved paths before handing them to EDA tools. This converts the
+  # silent "fed a literal <repo>/... placeholder to openroad -> empty output"
+  # failure into a loud, actionable error. Skipped under DRY_RUN.
+  if [ "$DRY_RUN" != "1" ]; then
+    for pair in "DEF_PATH:$DEF_PATH" "ODB_PATH:$ODB_PATH"; do
+      name="${pair%%:*}"; val="${pair#*:}"
+      [ -n "$val" ] || die "stage4: $name 为空。请在 CASE_STATE.md 写明（占位符即可，如 <case_root>/...），或运行时用 env $name=/abs/path 传入。"
+      case "$val" in
+        *'<'*'>'*) die "stage4: $name 仍含未展开占位符: '$val'。已知占位符仅 <repo>/<case_root>/<teaching_root>；其余请用 env $name=/abs/path 传入真实路径。" ;;
+      esac
+      [ -e "$val" ] || die "stage4: $name 指向的文件不存在: '$val'。确认 stage2/3 产物在位，或用 env $name=/abs/path 覆盖。"
+    done
+    # SPEF is optional (RCX may be absent); never hard-fail, only warn.
+    if [ -n "$SPEF_PATH" ]; then
+      case "$SPEF_PATH" in
+        *'<'*'>'*) log "WARNING: SPEF_PATH 仍含未展开占位符: '$SPEF_PATH'（将原样传给 run_features.sh）" ;;
+      esac
+      [ -e "$SPEF_PATH" ] || log "WARNING: SPEF_PATH 不存在: '$SPEF_PATH'（feature 提取将在无 SPEF 下进行，C_total 可能为 0）"
+    fi
+  fi
 
   # The four label scripts FORCE the canonical basename, so even if these paths
   # were wrong-named the output still lands correctly. We pass canonical names
@@ -195,7 +265,7 @@ stage4() {
   # so there is NO output/<case> staging and NO second copy — the workers' out_csv
   # (case_paths.py) lands the CSVs in the canonical location directly.
   #
-  # DEF/SPEF are pinned to the same artifacts Part A used (from CASE_STATE.md) so
+  # DEF/SPEF are pinned to the same artifacts Part A used (resolved above) so
   # run_features.sh does not auto-discover a different backend RUN_*. Platform is
   # locked to nangate45 (TEACHING_POLICY red line 3).
   FEATURES_OUT="$CASE_DIR/stage4_features"
