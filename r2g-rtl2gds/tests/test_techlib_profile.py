@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from techlib import profile, lef, liberty, cell_types
+from techlib import profile, lef, liberty, cell_types, resolve
 
 # The label extractor (congestion) keeps its own copy of DEFAULT_LAYER_INFO — the oracle
 # the fallback table must still equal. Imported as a top-level module via LABELS_DIR.
@@ -85,60 +85,61 @@ def test_supply_voltage_str_unknown_is_one_dot_zero():
     assert float(prof.supply_voltage_str) == prof.supply_voltage == 1.0
 
 
-def _parse_shell_voltage_map(sh_text: str) -> dict:
-    """Parse the `case "$PLATFORM"` voltage block in resolve_platform_paths.sh.
-
-    Returns {platform: verbatim_token_str} for every concrete branch plus {"*": ...} for
-    the default — the VERBATIM RHS token (e.g. "0.70", "5.0"), NOT a float, so the
-    profile's supply_voltage_str can be string-compared against it (Task 6's byte-identity
-    contract). Handles the `sky130hd|sky130hs)` alternation form. We deliberately parse
-    only the inner platform-case that assigns SUPPLY_VOLTAGE (not the outer
-    SUPPLY_VOLTAGE-validity case).
-    """
-    # Isolate the inner `case "$PLATFORM" in ... esac` that sets SUPPLY_VOLTAGE.
-    m = re.search(r'case\s+"\$PLATFORM"\s+in(.*?)esac', sh_text, re.S)
-    assert m, "could not find the `case \"$PLATFORM\"` block in the shell script"
-    block = m.group(1)
-    out = {}
-    # Each branch looks like:  pat1|pat2)  SUPPLY_VOLTAGE=1.8 ;;
-    for line in block.splitlines():
-        bm = re.match(
-            r"\s*([^)]+?)\)\s*SUPPLY_VOLTAGE=([0-9.]+)\s*;;", line.strip()
-        )
-        if not bm:
-            continue
-        token = bm.group(2)  # verbatim string token, e.g. "0.70"
-        for pat in bm.group(1).split("|"):
-            out[pat.strip()] = token
-    return out
+# Verbatim per-platform voltage tokens — the SAME map the shell case-block used to carry
+# (nangate45 1.1 / sky130hd|sky130hs 1.8 / asap7 0.70 / gf180 5.0 / ihp-sg13g2 1.2 / *) 1.0).
+# Task 6 moved that map OUT of resolve_platform_paths.sh (now a thin shim) and into
+# techlib.resolve, which derives it from techlib.profile.supply_voltage_str. So the oracle
+# is no longer the shell text but techlib.resolve's own fallback path; we keep this literal
+# table as an independent hard-coded copy so a future profile/resolve edit that diverges
+# from the historical shell tokens still trips the cross-check.
+_SHELL_VOLTAGE_MAP = {
+    "nangate45": "1.1",
+    "sky130hd": "1.8",
+    "sky130hs": "1.8",
+    "asap7": "0.70",
+    "gf180": "5.0",
+    "ihp-sg13g2": "1.2",
+    "*": "1.0",
+}
 
 
 def test_supply_voltage_matches_shell_case_map():
-    """Cross-check every profile voltage against what the shell case-map assigns.
+    """Cross-check every profile voltage against the historical shell case-map tokens.
 
-    Compares BOTH the verbatim string token (Task 6 byte-identity) and the derived float.
-    Catches a future shell-map edit that diverges from the profile (until Task 7/8
-    collapse them into one source).
+    The map originally lived in the ``case "$PLATFORM"`` block of
+    ``resolve_platform_paths.sh``; Task 6 ported it into ``techlib.resolve`` (which reads
+    ``techlib.profile``) and turned the shell into a thin shim. We verify TWO things now:
+
+      1. The hard-coded historical tokens still equal each profile's supply_voltage_str
+         (string, the byte-identity contract) and supply_voltage (float).
+      2. ``techlib.resolve``'s voltage FALLBACK (empty/invalid PWR → per-platform default)
+         resolves to the SAME token — i.e. the live consumer path agrees with the profile.
+
+    The shim no longer carries the ``case "$PLATFORM"`` block, so we assert it was removed
+    (regression: the map must not silently reappear in two places).
     """
-    if not RESOLVE_SH.is_file():
-        pytest.skip(f"resolve_platform_paths.sh not found at {RESOLVE_SH}")
-    sh = _parse_shell_voltage_map(RESOLVE_SH.read_text())
-    # Sanity: the parser actually found the branches we expect.
-    for p in ORFS_PLATFORMS:
-        assert p in sh, f"shell case-map missing platform {p}; parser/script drift"
-    assert "*" in sh and sh["*"] == "1.0", "shell default branch should assign 1.0"
-
+    sh = _SHELL_VOLTAGE_MAP
     for p in ORFS_PLATFORMS:
         prof = profile.get_profile(p)
-        # Verbatim token equality (string) — this is what Task 6's shim must emit.
+        # Verbatim token equality (string) — this is what the resolve.py CLI emits.
         assert prof.supply_voltage_str == sh[p], (
             f"{p}: profile_str={prof.supply_voltage_str!r} shell={sh[p]!r}"
         )
-        # And the derived float still matches the shell token parsed as a float.
+        # And the derived float still matches the historical shell token as a float.
         assert prof.supply_voltage == float(sh[p]), p
-    # Unknown-platform default ties to the shell's `*)` branch.
+        # The live consumer path (resolve.py voltage fallback with empty PWR) agrees.
+        assert resolve._resolve_supply_voltage("", p) == sh[p], p
+    # Unknown-platform default ties to the historical `*)` branch (and resolve fallback).
     assert profile.get_profile("nope").supply_voltage_str == sh["*"]
     assert profile.get_profile("nope").supply_voltage == float(sh["*"])
+    assert resolve._resolve_supply_voltage("", "nope") == sh["*"]
+
+    # Task 6 regression: the voltage map must be GONE from the shim (single source now).
+    if RESOLVE_SH.is_file():
+        assert re.search(r'case\s+"\$PLATFORM"\s+in', RESOLVE_SH.read_text()) is None, (
+            "resolve_platform_paths.sh still carries a `case \"$PLATFORM\"` voltage block; "
+            "Task 6 moved that map into techlib.resolve — the shim must not duplicate it"
+        )
 
 
 # --------------------------------------------------------------------------- #
