@@ -1,18 +1,19 @@
-"""Tests for techlib.liberty — verbatim copy of features/lib_db.py (Task 3).
+"""Tests for techlib.liberty — the consolidated liberty/DB parser + classifiers.
 
-Proves that ``techlib.liberty`` is behaviorally identical to the untouched
-``lib_db`` oracle and that the documented behaviors hold:
+Behavioral equivalence to the original ``features/lib_db.py`` was proven during the
+migration (Task 3) by a full-dict ``==`` oracle comparison and the byte-for-byte CSV
+gate (tests/test_techlib_crossplatform.py). That oracle module was deleted in Task 9,
+so these tests now pin ``techlib.liberty`` against KNOWN values and real-PDK behavior:
 
-  * DB equivalence on nangate45 + sky130hd (full dict ==).
-  * Classifier/getter equivalence (get_cell_area, get_cell_power, get_pin_cap_fF,
-    get_pin_direction, classify_pin_type, direction_id, infer_net_type_id,
-    is_tap_master) with guards against vacuous passes.
-  * .lib.gz decompression works on asap7 + gf180 (non-empty cells dict, equals
-    lib_db).
-  * tap patterns: with R2G_PLATFORM=gf180, is_tap_master recognises gf180-style
-    names and matches lib_db.
-  * "no liberty" warning: load_liberty_db([]) emits the WARN to stderr and
-    returns a DB with empty sources['lib'] / cells — matching lib_db.
+  * Real std-cell libs (nangate45, sky130hd) parse to many cells, each with area>0.
+  * Getters return positive, finite area/power/cap on real cells; pin directions are
+    valid liberty tokens.
+  * Classifiers (direction_id, infer_net_type_id, is_tap_master) return hard-coded
+    expected ids on known inputs — the durable contract, no oracle needed.
+  * .lib.gz decompression works on asap7 + gf180 (non-empty cells dict).
+  * tap patterns: with R2G_PLATFORM=gf180, is_tap_master recognises gf180-style names.
+  * "no liberty" warning: load_liberty_db([]) emits the WARN to stderr and returns a
+    DB with empty sources['lib'] / cells.
 
 Tech lib paths are resolved from $ORFS_ROOT first, then the literal machine-local
 fallback below. Tests SKIP (never fail) when the file is absent, so the suite runs
@@ -26,10 +27,6 @@ import os
 import pytest
 
 from techlib import liberty
-
-# Untouched oracle — imported as a plain top-level module via the FEATURES_DIR
-# sys.path entry that conftest.py installs.
-import lib_db
 
 
 # --------------------------------------------------------------------------- #
@@ -108,17 +105,20 @@ def _gz_or_skip(platform: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# DB equivalence — full dict comparison.                                       #
+# DB parse — real std-cell libs yield a populated, well-formed DB.             #
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("platform", ["nangate45", "sky130hd"])
-def test_db_equivalence(platform):
-    """liberty.load_liberty_db([path]) == lib_db.load_liberty_db([path]) exactly."""
+def test_db_parse_real_lib(platform):
+    """load_liberty_db([path]) yields a populated DB: many cells + the source path."""
     path = _lib_or_skip(platform)
-    db_new = liberty.load_liberty_db([path])
-    db_old = lib_db.load_liberty_db([path])
-    assert db_new == db_old, f"{platform}: full DB dict differs between techlib.liberty and lib_db"
-    # Guard: a real std-cell lib must have many cells.
-    assert len(db_new["cells"]) > 10, f"{platform}: suspiciously few cells ({len(db_new['cells'])})"
+    db = liberty.load_liberty_db([path])
+    # A real std-cell lib must have many cells.
+    assert len(db["cells"]) > 10, f"{platform}: suspiciously few cells ({len(db['cells'])})"
+    # The parsed source path must be recorded.
+    assert path in db["sources"]["lib"], f"{platform}: lib path missing from sources"
+    # Every cell must carry a name + pins dict (DB shape contract).
+    for cell in list(db["cells"].values())[:20]:
+        assert "name" in cell and "pins" in cell, f"{platform}: malformed cell {cell!r}"
 
 
 # --------------------------------------------------------------------------- #
@@ -135,72 +135,80 @@ def _sample_cells_pins(db: dict, n_cells: int = 10) -> list[tuple[str, str]]:
 
 
 @pytest.mark.parametrize("platform", ["nangate45", "sky130hd"])
-def test_getters_equivalence(platform):
-    """get_cell_area/power and get_pin_cap_fF/direction match between modules."""
+def test_getters_real_lib(platform):
+    """get_cell_area/power and get_pin_cap_fF/direction return well-formed values.
+
+    On a real std-cell lib the getters must yield finite, non-negative numbers and
+    valid liberty direction tokens on the cells/pins they actually parsed.
+    """
     path = _lib_or_skip(platform)
-    db_new = liberty.load_liberty_db([path])
-    db_old = lib_db.load_liberty_db([path])
+    db = liberty.load_liberty_db([path])
 
-    samples = _sample_cells_pins(db_old)
-    assert len(samples) > 0, "No cells sampled from the oracle DB"
+    samples = _sample_cells_pins(db)
+    assert len(samples) > 0, "No cells sampled from the parsed DB"
 
+    # get_pin_direction returns an UPPER-cased liberty token ("" when unknown).
+    valid_dirs = {"INPUT", "OUTPUT", "INOUT", "INTERNAL", "TRISTATE", ""}
     for cname, pname in samples:
-        assert liberty.get_cell_area(cname, db_new) == lib_db.get_cell_area(cname, db_old), \
-            f"get_cell_area mismatch for {cname}"
-        assert liberty.get_cell_power(cname, db_new) == lib_db.get_cell_power(cname, db_old), \
-            f"get_cell_power mismatch for {cname}"
-        assert liberty.get_pin_cap_fF(cname, pname, db_new) == lib_db.get_pin_cap_fF(cname, pname, db_old), \
-            f"get_pin_cap_fF mismatch for {cname}/{pname}"
-        assert liberty.get_pin_direction(cname, pname, db_new) == lib_db.get_pin_direction(cname, pname, db_old), \
-            f"get_pin_direction mismatch for {cname}/{pname}"
-        assert liberty.classify_pin_type(cname, pname, db_new) == lib_db.classify_pin_type(cname, pname, db_old), \
-            f"classify_pin_type mismatch for {cname}/{pname}"
+        area = liberty.get_cell_area(cname, db)
+        assert isinstance(area, (int, float)) and area >= 0.0, f"bad area for {cname}: {area!r}"
+        power = liberty.get_cell_power(cname, db)
+        assert isinstance(power, (int, float)) and power >= 0.0, f"bad power for {cname}: {power!r}"
+        cap = liberty.get_pin_cap_fF(cname, pname, db)
+        assert isinstance(cap, float) and cap >= 0.0, f"bad cap for {cname}/{pname}: {cap!r}"
+        pdir = liberty.get_pin_direction(cname, pname, db)
+        assert pdir in valid_dirs, f"unexpected direction {pdir!r} for {cname}/{pname}"
+        # classify_pin_type returns an int id; just exercise it without crashing.
+        assert isinstance(liberty.classify_pin_type(cname, pname, db), int)
 
-    # Guard: real std-cell areas must be positive.
-    first_cell = list(db_old["cells"].values())[0]["name"]
-    area = liberty.get_cell_area(first_cell, db_new)
-    assert area > 0.0, f"First cell {first_cell!r} has zero area — lib parse likely failed"
+    # Guard: real std-cell areas must be positive (a zero-area first cell means the
+    # parser silently dropped the area attribute).
+    first_cell = list(db["cells"].values())[0]["name"]
+    assert liberty.get_cell_area(first_cell, db) > 0.0, \
+        f"First cell {first_cell!r} has zero area — lib parse likely failed"
 
 
-def test_classifiers_equivalence():
-    """direction_id, infer_net_type_id, is_tap_master match between modules.
+def test_classifiers_pinned_values():
+    """direction_id, infer_net_type_id, is_tap_master against KNOWN expected values.
 
     These are pure-logic classifiers (no liberty file needed), so this test runs
-    unconditionally — even on a bare checkout without ORFS platforms.
+    unconditionally — even on a bare checkout without ORFS platforms. The expected
+    ids are the durable contract (INPUT=0/OUTPUT=1/INOUT=2/FEEDTHRU=3/else -1; net
+    types POWER=1/GROUND=2/CLOCK=3/RESET=4/SCAN=5/SIGNAL=0).
     """
-    # direction_id — exhaustive on valid values
-    for s in ["INPUT", "OUTPUT", "INOUT", "FEEDTHRU", "input", "output", "", None, "UNKNOWN"]:
-        assert liberty.direction_id(s) == lib_db.direction_id(s), f"direction_id mismatch for {s!r}"
+    # direction_id — pinned ids (case-insensitive; unknown/empty/None -> -1).
+    assert liberty.direction_id("INPUT") == 0
+    assert liberty.direction_id("OUTPUT") == 1
+    assert liberty.direction_id("INOUT") == 2
+    assert liberty.direction_id("FEEDTHRU") == 3
+    assert liberty.direction_id("input") == 0
+    assert liberty.direction_id("output") == 1
+    assert liberty.direction_id("") == -1
+    assert liberty.direction_id(None) == -1
+    assert liberty.direction_id("UNKNOWN") == -1
 
-    # infer_net_type_id — representative samples
+    # infer_net_type_id — (net_name, net_use, is_clock) -> expected id.
     cases = [
-        ("VDD", "POWER", False),
-        ("VSS", "GROUND", False),
-        ("clk", "", False),
-        ("clk_core", "", True),
-        ("reset_n", "", False),
-        ("scan_en", "", False),
-        ("data_out", "", False),
-        ("", "", False),
+        (("VDD", "POWER", False), 1),
+        (("VSS", "GROUND", False), 2),
+        (("clk", "", False), 3),       # 'clk' token
+        (("clk_core", "", True), 3),   # is_clock flag
+        (("reset_n", "", False), 4),   # 'reset' in name
+        (("scan_en", "", False), 5),   # 'scan' token
+        (("data_out", "", False), 0),  # plain signal
+        (("", "", False), 0),
     ]
-    for net_name, net_use, is_clock in cases:
-        assert liberty.infer_net_type_id(net_name, net_use, is_clock) == \
-               lib_db.infer_net_type_id(net_name, net_use, is_clock), \
-               f"infer_net_type_id mismatch for ({net_name!r}, {net_use!r}, {is_clock})"
+    for (net_name, net_use, is_clock), expected in cases:
+        got = liberty.infer_net_type_id(net_name, net_use, is_clock)
+        assert got == expected, \
+            f"infer_net_type_id({net_name!r}, {net_use!r}, {is_clock}) = {got}, expected {expected}"
 
-    # is_tap_master — without platform env override (relies on "TAP" pattern)
-    tap_names = ["TAPCELL_X1", "sky130_fd_sc_hd__tapvpwrvgnd_1", "TAPCELL_ASAP7_75t_L"]
-    non_tap_names = ["INV_X1", "DFF_X1", "AND2_X1"]
-    for name in tap_names:
-        assert liberty.is_tap_master(name) == lib_db.is_tap_master(name), \
-               f"is_tap_master mismatch for tap cell {name!r}"
+    # is_tap_master — "TAP" substring matches nangate/sky130/asap7 tap masters; std
+    # cells must NOT match (guards against a too-broad pattern).
+    for name in ["TAPCELL_X1", "sky130_fd_sc_hd__tapvpwrvgnd_1", "TAPCELL_ASAP7_75t_L"]:
         assert liberty.is_tap_master(name) is True, \
                f"Expected {name!r} to be recognised as tap cell"
-    for name in non_tap_names:
-        assert liberty.is_tap_master(name) == lib_db.is_tap_master(name), \
-               f"is_tap_master mismatch for non-tap cell {name!r}"
-        # Symmetric negative: a non-tap master must be False in BOTH modules, so a
-        # both-True regression in the tap-pattern list can't slip through.
+    for name in ["INV_X1", "DFF_X1", "AND2_X1"]:
         assert liberty.is_tap_master(name) is False, \
                f"Expected {name!r} NOT to be recognised as tap cell"
 
@@ -210,11 +218,9 @@ def test_classifiers_equivalence():
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("platform", ["asap7", "gf180"])
 def test_gz_lib_parses(platform):
-    """.lib.gz loads to a non-empty cells dict and equals lib_db."""
+    """.lib.gz loads to a non-empty cells dict (gzip decompression path works)."""
     path = _gz_or_skip(platform)
     db_new = liberty.load_liberty_db([path])
-    db_old = lib_db.load_liberty_db([path])
-    assert db_new == db_old, f"{platform}: .lib.gz DB differs between modules"
     # asap7/gf180 are full std-cell libs; >10 catches a truncated/partial decompress.
     assert len(db_new["cells"]) > 10, \
         f"{platform}: .lib.gz parse returned only {len(db_new['cells'])} cells (truncated?)"
@@ -235,12 +241,11 @@ def test_tap_patterns_gf180(monkeypatch):
         "ENDCAP_EDGE",
     ]
     for name in gf180_tap_names:
-        result_new = liberty.is_tap_master(name)
-        result_old = lib_db.is_tap_master(name)
-        assert result_new == result_old, \
-               f"is_tap_master mismatch for gf180 name {name!r} (new={result_new}, old={result_old})"
-        assert result_new is True, \
+        assert liberty.is_tap_master(name) is True, \
                f"Expected gf180 name {name!r} to be recognised as tap master"
+    # Negative control under the same env: a plain std cell must NOT match, so the
+    # gf180 FILLTIE/ENDCAP extras can't accidentally over-match.
+    assert liberty.is_tap_master("gf180mcu_fd_sc_mcu7t5v0__inv_1") is False
 
 
 # --------------------------------------------------------------------------- #
@@ -255,10 +260,6 @@ def test_no_liberty_warning(capsys):
            f"sources['lib'] should be empty, got {db_new['sources']['lib']!r}"
     assert db_new["cells"] == {}, \
            f"cells should be empty, got {db_new['cells']!r}"
-
-    # Matches lib_db exactly.
-    db_old = lib_db.load_liberty_db([])
-    assert db_new == db_old, "load_liberty_db([]) result differs from lib_db"
 
 
 def test_no_liberty_warning_none_input(capsys, monkeypatch):

@@ -3,8 +3,14 @@ from __future__ import annotations
 
 import textwrap
 
-import cell_type_map
-import def_parse
+# Production source of truth: the consolidated techlib package (the feature workers
+# import these in Tasks 7/8). cell_type_map / def_parse are now aliases onto techlib —
+# the old features/{cell_type_map,def_parse}.py copies were deleted in Task 9.
+from techlib import cell_types as cell_type_map
+from techlib import def_parse
+# Routing-layer NAMES + regex are canonically homed in techlib.lef (nodes_net consumes
+# them from there); techlib.def_parse keeps verbatim copies, but match production.
+from techlib import lef
 
 
 # --- cell-type map ---------------------------------------------------------
@@ -82,16 +88,16 @@ SKY130_LEF = textwrap.dedent("""
 def test_routing_layers_exclude_cut_layers(tmp_path):
     p = tmp_path / "n.lef"
     p.write_text(NANGATE_LEF)
-    assert def_parse.parse_routing_layers(str(p)) == ["metal1", "metal10"]
+    assert lef.routing_layers(str(p)) == ["metal1", "metal10"]
     p2 = tmp_path / "s.lef"
     p2.write_text(SKY130_LEF)
-    assert def_parse.parse_routing_layers(str(p2)) == ["li1", "met1"]
+    assert lef.routing_layers(str(p2)) == ["li1", "met1"]
 
 
 def test_layer_regex_full_token_match(tmp_path):
     p = tmp_path / "n.lef"
     p.write_text(NANGATE_LEF)
-    rx, from_lef = def_parse.routing_layer_regex(str(p))
+    rx, from_lef = lef.routing_layer_regex(str(p))
     assert from_lef is True
     # metal1 must not match inside metal10 (word boundary + longest-first).
     assert rx.search("+ ROUTED metal10 ( 0 0 )").group(1) == "metal10"
@@ -100,7 +106,7 @@ def test_layer_regex_full_token_match(tmp_path):
 
 
 def test_layer_regex_fallback_when_no_lef():
-    rx, from_lef = def_parse.routing_layer_regex("")
+    rx, from_lef = lef.routing_layer_regex("")
     assert from_lef is False
     assert rx.search("ROUTED metal7 ( 0 0 )").group(1) == "metal7"
 
@@ -166,6 +172,6 @@ def test_parse_nets_does_not_drop_conn_lines_containing_substring_routed(tmp_pat
     assert ("u_ROUTED_pkt", "A") in nets["n1"]["conns"]
     assert nets["n1"]["conns"] == [("i1", "Z"), ("u_ROUTED_pkt", "A"), ("i3", "B")]
     # routing layers still captured for num_layer
-    rx, _ = def_parse.routing_layer_regex("")
+    rx, _ = lef.routing_layer_regex("")
     layers = {rx.search(r).group(1).lower() for r in nets["n1"]["routes"] if rx.search(r)}
     assert layers == {"metal1", "metal2"}

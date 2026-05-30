@@ -1,18 +1,20 @@
 """Tests for techlib.profile — the per-platform constant store (Task 5).
 
 ``techlib.profile`` GATHERS the per-platform constants that previously lived scattered
-across three places. This refactor is behavior-neutral: NOTHING is rewired yet (consumers
-get re-pointed in Tasks 7/8), so these tests prove the gathered values still EQUAL their
-scattered sources by importing the REAL sources (non-circular) and comparing:
+across three places. This refactor is behavior-neutral; these tests prove the gathered
+values still EQUAL their canonical techlib sources (the original scattered copies were
+deleted in Task 9) and known literals:
 
-  * ``supply_voltage``        vs. the voltage case-map in resolve_platform_paths.sh.
+  * ``supply_voltage``        vs. the historical voltage case-map tokens + techlib.resolve.
   * ``tap_patterns``          vs. liberty._PLATFORM_TAP_EXTRA + the base ["TAP"].
-  * ``fallback_routing_layers`` vs. lef.DEFAULT_LAYER_INFO == extract_congestion.DEFAULT_LAYER_INFO.
+  * ``fallback_routing_layers`` vs. lef.DEFAULT_LAYER_INFO (the nangate45 fallback table).
   * ``cell_type_strategy``    vs. cell_types.resolve_cell_type_map's nangate test.
 
 These tests need NO external/platform files, so none should skip. Modules are imported as
-plain top-level modules via the conftest sys.path entries (EXTRACT_DIR for ``techlib.*``,
-LABELS_DIR for ``extract_congestion``, FEATURES_DIR for ``lib_db``).
+plain top-level modules via the conftest sys.path entries (EXTRACT_DIR for ``techlib.*``).
+The original scattered sources (``features/lib_db.py``, ``features/def_parse.py``) were
+deleted in Task 9; the canonical homes are now ``techlib.liberty`` (tap extras) and
+``techlib.lef`` (the routing-layer fallback table), so the cross-checks point there.
 """
 from __future__ import annotations
 
@@ -23,14 +25,6 @@ from pathlib import Path
 import pytest
 
 from techlib import profile, lef, liberty, cell_types, resolve
-
-# The label extractor (congestion) keeps its own copy of DEFAULT_LAYER_INFO — the oracle
-# the fallback table must still equal. Imported as a top-level module via LABELS_DIR.
-import extract_congestion
-
-# lib_db is the original (untouched) home of _PLATFORM_TAP_EXTRA; techlib.liberty is the
-# verbatim copy. We cross-check the profile against BOTH.
-import lib_db
 
 ORFS_PLATFORMS = ("nangate45", "sky130hd", "sky130hs", "asap7", "gf180", "ihp-sg13g2")
 
@@ -146,9 +140,8 @@ def test_supply_voltage_matches_shell_case_map():
 # tap_patterns
 # --------------------------------------------------------------------------- #
 def test_tap_patterns_match_source_extras():
-    # techlib.liberty and the original lib_db must agree on the extras dict.
-    assert liberty._PLATFORM_TAP_EXTRA == lib_db._PLATFORM_TAP_EXTRA
-
+    # techlib.liberty is the canonical home of the per-platform tap extras; each
+    # profile's tap_patterns must be {"TAP"} | the liberty extras for that platform.
     for p in ORFS_PLATFORMS:
         expected = {"TAP"} | set(liberty._PLATFORM_TAP_EXTRA.get(p, []))
         assert set(profile.get_profile(p).tap_patterns) == expected, p
@@ -165,20 +158,19 @@ def test_tap_patterns_others_are_just_tap():
 
 
 def test_tap_patterns_unknown_is_just_tap():
-    # Unknown platform gets the base lib_db pattern only (no extras).
+    # Unknown platform gets only the base {"TAP"} pattern (no extras).
     assert set(profile.get_profile("mystery").tap_patterns) == {"TAP"}
 
 
 # --------------------------------------------------------------------------- #
 # fallback_routing_layers
 # --------------------------------------------------------------------------- #
-def test_fallback_routing_layers_equals_lef_and_congestion():
-    # The two scattered copies must agree (lef.py ported it verbatim from congestion).
-    assert lef.DEFAULT_LAYER_INFO == extract_congestion.DEFAULT_LAYER_INFO
+def test_fallback_routing_layers_equals_lef():
+    # techlib.lef is the canonical home of the nangate45 fallback table; every
+    # platform profile shares it (Task 5 made the fallback platform-agnostic).
     for p in ORFS_PLATFORMS:
         flayers = profile.get_profile(p).fallback_routing_layers
         assert flayers == lef.DEFAULT_LAYER_INFO
-        assert flayers == extract_congestion.DEFAULT_LAYER_INFO
 
 
 def test_fallback_routing_layers_unknown_also_nangate_table():

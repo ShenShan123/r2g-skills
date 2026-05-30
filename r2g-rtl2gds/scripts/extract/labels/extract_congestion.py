@@ -29,28 +29,14 @@ from techlib.def_parse import (  # noqa: E402
     parse_components,
 )
 from techlib.lef import routing_layer_info  # noqa: E402
-from techlib import lef as _techlib_lef  # noqa: E402
 from techlib.profile import get_profile  # noqa: E402
 
 
-# DEFAULT_LAYER_INFO is the single nangate45 fallback table — now sourced from
-# techlib (aliased from lef.DEFAULT_LAYER_INFO; same dict at import time). Retained as a
-# module attribute because tests/test_techlib_lef.py and tests/test_techlib_profile.py
-# assert equality against `extract_congestion.DEFAULT_LAYER_INFO`, and
-# tests/test_extract_congestion.py references it directly.
-DEFAULT_LAYER_INFO = _techlib_lef.DEFAULT_LAYER_INFO
-
-
-def parse_tech_lef(tech_lef):
-    """Parse routing-layer pitch/direction from a tech LEF.
-
-    Thin compat wrapper over ``techlib.lef.routing_layer_info`` (which was ported
-    verbatim from this function — Task 2 proved exact equality on all 6 platforms).
-    Retained so tests/test_extract_congestion.py + tests/test_techlib_lef.py, which
-    call ``extract_congestion.parse_tech_lef``, keep passing. The fallback table is
-    the nangate45 ``DEFAULT_LAYER_INFO``.
-    """
-    return routing_layer_info(tech_lef, fallback=DEFAULT_LAYER_INFO)
+# The routing-layer parse + nangate45 fallback table are single-sourced from
+# ``techlib.lef`` (``routing_layer_info`` / ``lef.DEFAULT_LAYER_INFO``); main() calls
+# routing_layer_info directly with the platform-aware profile fallback. The old
+# module-level ``parse_tech_lef`` / ``DEFAULT_LAYER_INFO`` compat shims were removed in
+# Task 9 once the equivalence tests stopped depending on them.
 
 
 def parse_def_header_and_components(def_file):

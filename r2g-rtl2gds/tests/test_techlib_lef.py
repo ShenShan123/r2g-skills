@@ -3,19 +3,17 @@
 ``techlib.lef`` consolidates the two tech-LEF parsers that previously lived apart:
 
   * NAMES view — ``routing_layers`` / ``routing_layer_regex`` ported from the feature
-    workers' ``def_parse.py`` (``parse_routing_layers`` / ``routing_layer_regex``).
+    workers' old ``def_parse.py`` (``parse_routing_layers`` / ``routing_layer_regex``).
   * PITCH/DIRECTION view — ``routing_layer_info`` ported from congestion's
     ``parse_tech_lef`` (with an injectable fallback).
 
-These tests prove EQUIVALENCE to the untouched originals on the REAL tech LEFs of all
-six ORFS platforms. The originals are imported as plain top-level modules via the
-sys.path entries conftest installs (FEATURES_DIR / LABELS_DIR / EXTRACT_DIR):
-
-  * ``from def_parse import parse_routing_layers, routing_layer_regex as orig_rlr``
-    resolves the FEATURES module (top-level ``def_parse``), exactly as Task 1's
-    test_techlib_def_parse.py relies on.
-  * ``import extract_congestion`` resolves the LABELS module.
-  * ``from techlib import lef`` resolves the new consolidated package module.
+Behavioral equivalence to those originals was proven during the migration (Task 2) and
+is held by the byte-for-byte CSV gate (tests/test_techlib_crossplatform.py). The original
+``features/def_parse.py`` was deleted in Task 9 and congestion's ``parse_tech_lef``
+collapsed into a direct ``routing_layer_info`` call, so these tests now pin
+``techlib.lef`` against KNOWN expectations on the REAL tech LEFs of all six ORFS
+platforms (layer-name families per platform; regex pattern shape + from_lef flag;
+no-LEF fallback == DEFAULT_LAYER_INFO).
 
 A platform is SKIPPED when its tech LEF is absent, so the suite runs on a bare
 checkout (ORFS platforms are machine-local).
@@ -29,12 +27,6 @@ import re
 import pytest
 
 from techlib import lef
-
-# Untouched originals — the equivalence oracles. Imported via conftest sys.path:
-#   FEATURES_DIR -> top-level `def_parse` (the FEATURE workers' module)
-#   LABELS_DIR   -> top-level `extract_congestion`
-from def_parse import parse_routing_layers, routing_layer_regex as orig_rlr
-import extract_congestion
 
 
 # --------------------------------------------------------------------------- #
@@ -102,42 +94,59 @@ def _lef_or_skip(platform):
 # Per-platform equivalence to the untouched originals.                        #
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("platform", ALL_PLATFORMS)
-def test_routing_layers_equiv(platform):
-    """techlib.lef.routing_layers == features def_parse.parse_routing_layers (exact)."""
-    path = _lef_or_skip(platform)
-    expected = parse_routing_layers(path)
-    actual = lef.routing_layers(path)
-    assert actual == expected, f"{platform}: layer-name list differs"
-    # Guard against a vacuous pass (every real routing tech LEF has >=1 routing layer).
-    assert len(actual) > 0, f"{platform}: no routing layers parsed (path/parse wrong?)"
+def test_routing_layers_real_lef(platform):
+    """techlib.lef.routing_layers yields a non-empty, well-formed layer-name list.
 
-
-@pytest.mark.parametrize("platform", ALL_PLATFORMS)
-def test_routing_layer_info_equiv(platform):
-    """techlib.lef.routing_layer_info == congestion.parse_tech_lef (exact dict)."""
-    path = _lef_or_skip(platform)
-    expected = extract_congestion.parse_tech_lef(path)
-    actual = lef.routing_layer_info(path)
-    assert actual == expected, f"{platform}: pitch/direction dict differs"
-    # Real LEF parses to actual layers, not the nangate fallback (except nangate itself,
-    # whose real parse may legitimately equal the fallback table).
-    assert len(actual) > 0, f"{platform}: empty layer-info dict"
-
-
-@pytest.mark.parametrize("platform", ALL_PLATFORMS)
-def test_routing_layer_regex_equiv(platform):
-    """techlib.lef.routing_layer_regex matches features def_parse.routing_layer_regex.
-
-    Compare the compiled pattern string and the from_lef bool (compiled regex objects
-    are not directly equality-comparable).
+    Every real routing tech LEF declares >=1 TYPE ROUTING layer; names are unique
+    non-empty strings in declaration order. (Per-platform naming families are pinned
+    in the test_family_* tests below.)
     """
     path = _lef_or_skip(platform)
-    exp_rx, exp_from_lef = orig_rlr(path)
+    actual = lef.routing_layers(path)
+    assert len(actual) > 0, f"{platform}: no routing layers parsed (path/parse wrong?)"
+    assert all(isinstance(n, str) and n for n in actual), f"{platform}: bad layer names {actual!r}"
+    assert len(set(actual)) == len(actual), f"{platform}: duplicate layer names {actual!r}"
+
+
+@pytest.mark.parametrize("platform", ALL_PLATFORMS)
+def test_routing_layer_info_real_lef(platform):
+    """techlib.lef.routing_layer_info yields a populated pitch/direction dict.
+
+    On a real LEF the parser must return layers with positive pitch and a valid
+    preferred direction — not the nangate fallback table (except nangate45 itself,
+    whose real parse may legitimately coincide with the fallback values).
+    """
+    path = _lef_or_skip(platform)
+    actual = lef.routing_layer_info(path)
+    assert len(actual) > 0, f"{platform}: empty layer-info dict"
+    for name, info in actual.items():
+        assert info["pitch"] > 0, f"{platform}/{name}: non-positive pitch {info['pitch']!r}"
+        assert info["direction"] in {"HORIZONTAL", "VERTICAL"}, \
+            f"{platform}/{name}: bad direction {info['direction']!r}"
+    # A real parse must NOT silently degrade to the fallback (which would mean the LEF
+    # path/parse broke). nangate45 is exempt: its real layers can equal the fallback.
+    if platform != "nangate45":
+        assert actual != lef.DEFAULT_LAYER_INFO, \
+            f"{platform}: layer-info collapsed to the nangate45 fallback (parse failed?)"
+
+
+@pytest.mark.parametrize("platform", ALL_PLATFORMS)
+def test_routing_layer_regex_real_lef(platform):
+    """techlib.lef.routing_layer_regex builds a from-LEF matcher over the real layers.
+
+    from_lef must be True (real LEF yields layers) and the compiled pattern must
+    full-token-match every parsed layer name while NOT matching a clearly-bogus token.
+    """
+    path = _lef_or_skip(platform)
     act_rx, act_from_lef = lef.routing_layer_regex(path)
-    assert act_rx.pattern == exp_rx.pattern, f"{platform}: regex pattern differs"
-    assert act_from_lef == exp_from_lef, f"{platform}: from_lef flag differs"
-    # Real LEFs yield layers -> from_lef must be True.
     assert act_from_lef is True, f"{platform}: expected layers from real LEF"
+    names = lef.routing_layers(path)
+    for n in names:
+        m = act_rx.search(f"+ ROUTED {n} ( 0 0 )")
+        assert m and m.group(1) == n, f"{platform}: regex failed to match layer {n!r}"
+    # The matcher is anchored to known layers, so a junk token must not match.
+    assert act_rx.search("+ ROUTED zzznotalayer ( 0 0 )") is None, \
+        f"{platform}: regex over-matched a non-layer token"
 
 
 # --------------------------------------------------------------------------- #
@@ -193,11 +202,7 @@ def test_family_ihp():
 # No-LEF / missing-LEF behavior (runs anywhere — no platform dependency).     #
 # --------------------------------------------------------------------------- #
 def test_no_lef_routing_layer_info_is_default():
-    """Missing LEF => the module-level DEFAULT_LAYER_INFO fallback.
-
-    (Equality of DEFAULT_LAYER_INFO to congestion's constant is covered by
-    test_default_layer_info_matches_congestion_constant.)
-    """
+    """Missing LEF => the module-level DEFAULT_LAYER_INFO fallback (nangate45 table)."""
     info = lef.routing_layer_info("/nonexistent/path/tech.lef")
     assert info == lef.DEFAULT_LAYER_INFO
 
@@ -211,16 +216,18 @@ def test_no_lef_routing_layers_empty():
 def test_no_lef_routing_layer_regex_falls_back():
     rx, from_lef = lef.routing_layer_regex("/nonexistent/path/tech.lef")
     assert from_lef is False
+    # The no-layer fallback is the platform-agnostic metal\d+ matcher.
     assert rx.pattern == re.compile(r"(metal\d+)", re.IGNORECASE).pattern
-    # Matches the original's fallback too.
-    orig_rx, orig_from = orig_rlr("/nonexistent/path/tech.lef")
-    assert rx.pattern == orig_rx.pattern
-    assert from_lef == orig_from
+    # The fallback matcher still recognizes a generic metal layer.
+    assert rx.search("ROUTED metal7 ( 0 0 )").group(1) == "metal7"
 
 
-def test_default_layer_info_matches_congestion_constant():
-    """The ported module-level constant is byte-equal to congestion's."""
-    assert lef.DEFAULT_LAYER_INFO == extract_congestion.DEFAULT_LAYER_INFO
+def test_default_layer_info_is_nangate45_table():
+    """The module-level DEFAULT_LAYER_INFO is the known nangate45 metal1..metal10 table."""
+    info = lef.DEFAULT_LAYER_INFO
+    assert set(info) == {f"metal{i}" for i in range(1, 11)}
+    assert info["metal1"] == {"pitch": 0.14, "direction": "HORIZONTAL"}
+    assert info["metal10"] == {"pitch": 1.6, "direction": "VERTICAL"}
 
 
 def test_injectable_fallback_used_when_no_layers():

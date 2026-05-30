@@ -1,13 +1,15 @@
-"""Tests for techlib.cell_types — verbatim copy of features/cell_type_map.py (Task 4).
+"""Tests for techlib.cell_types — the consolidated cell-type id mapping.
 
-Proves that ``techlib.cell_types`` is behaviorally identical to the untouched
-``cell_type_map`` oracle and pins the documented behaviors:
+Behavioral equivalence to the original ``features/cell_type_map.py`` was proven during
+the migration (Task 4) and is held by the byte-for-byte CSV gate
+(tests/test_techlib_crossplatform.py). That oracle module was deleted in Task 9, so
+these tests pin ``techlib.cell_types`` against KNOWN values:
 
-  * Curated map preserved — dict equality, UNKNOWN=95, FAKERAM45_* keys upper-cased.
-  * ``cell_type_id`` equivalence — curated hits, lowercase inputs, non-existent master.
-  * ``build_runtime_map`` determinism + equivalence — two calls equal, UNKNOWN=N.
-  * ``resolve_cell_type_map`` strategy — nangate45 returns curated; sky130hd returns runtime.
-  * cordic-style "all masters UNKNOWN" baseline — equivalence pinned; root-cause documented.
+  * Curated map preserved — UNKNOWN=95, INV_X1=0, DFF_X2=72, FAKERAM45_* keys upper-cased.
+  * ``cell_type_id`` — curated hits, lowercase inputs, non-existent master -> UNKNOWN.
+  * ``build_runtime_map`` determinism — two calls equal, UNKNOWN=N, macro/garbage->UNKNOWN.
+  * ``resolve_cell_type_map`` strategy — nangate45 returns the curated dict; sky130hd builds runtime.
+  * cordic-style "all masters UNKNOWN" baseline — observed value pinned; root-cause documented.
 
 The no-file tests run unconditionally. Liberty-backed tests SKIP (never fail) when the
 ORFS platforms directory is absent, so the suite runs cleanly on a bare checkout.
@@ -19,24 +21,19 @@ CONCERN (do not fix here — out of scope, tracked for Task 13):
   verbatim around the cell name and ``_norm_key`` just upper-cases without stripping quotes).
   Because a worker calls ``cell_type_id(master, mapping)`` with ``master.upper()`` =
   ``"SKY130_FD_SC_HD__A211OI_1"`` (no surrounding quotes), no key matches and every real
-  sky130 master resolves to UNKNOWN. The behavior is identical between ``techlib.cell_types``
-  and the oracle ``cell_type_map`` (this is a pre-existing bug, not a regression introduced
-  here), but it means the sky130hd feature dataset has ``cell_type_id == UNKNOWN`` for every
+  sky130 master resolves to UNKNOWN. This is a pre-existing bug (it existed in the original
+  ``cell_type_map`` too — it was NOT introduced by the techlib migration), and it means the
+  sky130hd feature dataset has ``cell_type_id == UNKNOWN`` for every
   standard cell. Task 13 correctness validation should address the quote-stripping in
   ``techlib.liberty._norm_key`` so that ``lib_db['cells']`` keys are quote-free.
 """
 from __future__ import annotations
 
 import os
-import sys
 
 import pytest
 
 from techlib import cell_types
-
-# Untouched oracle — imported as a plain top-level module via the FEATURES_DIR
-# sys.path entry installed by conftest.py.
-import cell_type_map
 
 
 # ---------------------------------------------------------------------------
@@ -75,15 +72,24 @@ def _sky130hd_lib_or_skip() -> str:
 # 1. Curated map preserved (no files needed)
 # ---------------------------------------------------------------------------
 
-def test_curated_map_equality():
-    """NANGATE45_CELL_TYPE_MAPPING is identical between modules."""
-    assert cell_types.NANGATE45_CELL_TYPE_MAPPING == cell_type_map.NANGATE45_CELL_TYPE_MAPPING
+def test_curated_map_pinned_anchors():
+    """The curated nangate45 map carries its known anchor ids.
+
+    These are the durable id contract the feature dataset depends on (a reshuffle
+    would silently relabel every nangate45 cell across the corpus).
+    """
+    m = cell_types.NANGATE45_CELL_TYPE_MAPPING
+    assert m["INV_X1"] == 0
+    assert m["DFF_X2"] == 72
+    assert m["FAKERAM45_512X64"] == 113
+    assert m["UNKNOWN"] == 95
+    # A real curated map is large (>90 std-cell entries + macros).
+    assert len(m) > 90, f"curated map shrank unexpectedly ({len(m)} entries)"
 
 
 def test_unknown_is_95():
-    """UNKNOWN = 95 in the curated map (both modules)."""
+    """UNKNOWN = 95 in the curated map."""
     assert cell_types.NANGATE45_CELL_TYPE_MAPPING["UNKNOWN"] == 95
-    assert cell_type_map.NANGATE45_CELL_TYPE_MAPPING["UNKNOWN"] == 95
 
 
 def test_fakeram45_keys_upper_cased():
@@ -101,8 +107,6 @@ def test_fakeram45_keys_upper_cased():
     for key in expected_keys:
         assert key in cell_types.NANGATE45_CELL_TYPE_MAPPING, \
             f"FAKERAM45 key {key!r} missing from techlib.cell_types curated map"
-        assert key in cell_type_map.NANGATE45_CELL_TYPE_MAPPING, \
-            f"FAKERAM45 key {key!r} missing from cell_type_map oracle"
         # Must be upper-cased (no lowercase variant present)
         assert key == key.upper(), f"Key {key!r} is not fully upper-cased"
 
@@ -110,8 +114,6 @@ def test_fakeram45_keys_upper_cased():
 def test_complete_cell_type_mapping_alias():
     """COMPLETE_CELL_TYPE_MAPPING is the same object as NANGATE45_CELL_TYPE_MAPPING."""
     assert cell_types.COMPLETE_CELL_TYPE_MAPPING is cell_types.NANGATE45_CELL_TYPE_MAPPING
-    assert cell_type_map.COMPLETE_CELL_TYPE_MAPPING is cell_type_map.NANGATE45_CELL_TYPE_MAPPING
-    assert cell_types.COMPLETE_CELL_TYPE_MAPPING == cell_type_map.COMPLETE_CELL_TYPE_MAPPING
 
 
 # ---------------------------------------------------------------------------
@@ -136,12 +138,9 @@ def test_complete_cell_type_mapping_alias():
     ("", 95),
     (None, 95),
 ])
-def test_cell_type_id_equivalence(master, expected):
-    """cell_type_id gives the same result in both modules, and equals expected."""
+def test_cell_type_id_pinned(master, expected):
+    """cell_type_id resolves to the KNOWN expected id (strip+upper normalization)."""
     m_new = cell_types.cell_type_id(master, cell_types.NANGATE45_CELL_TYPE_MAPPING)
-    m_old = cell_type_map.cell_type_id(master, cell_type_map.NANGATE45_CELL_TYPE_MAPPING)
-    assert m_new == m_old, \
-        f"cell_type_id({master!r}): techlib={m_new} vs oracle={m_old}"
     assert m_new == expected, \
         f"cell_type_id({master!r}): expected {expected}, got {m_new}"
 
@@ -150,19 +149,16 @@ def test_cell_type_id_equivalence(master, expected):
 # 3. build_runtime_map determinism + equivalence (needs sky130hd liberty)
 # ---------------------------------------------------------------------------
 
-def test_build_runtime_map_sc_none_equivalence():
-    """build_runtime_map(db, sc=None) is equal between modules and deterministic."""
+def test_build_runtime_map_sc_none_deterministic():
+    """build_runtime_map(db, sc=None) is deterministic; UNKNOWN == num cells."""
     lib = _sky130hd_lib_or_skip()
     from techlib import liberty
     db = liberty.load_liberty_db([lib])
 
     map_new_1 = cell_types.build_runtime_map(db, sc_lib_paths=None)
     map_new_2 = cell_types.build_runtime_map(db, sc_lib_paths=None)
-    map_old = cell_type_map.build_runtime_map(db, sc_lib_paths=None)
 
     assert map_new_1 == map_new_2, "build_runtime_map is non-deterministic (sc=None)"
-    assert map_new_1 == map_old, \
-        "build_runtime_map(sc=None) differs between techlib.cell_types and oracle"
 
     # UNKNOWN must equal len(all cell names)
     cells = db.get("cells", {})
@@ -174,19 +170,16 @@ def test_build_runtime_map_sc_none_equivalence():
     assert n > 10, f"Suspiciously few cells ({n}) in sky130hd liberty"
 
 
-def test_build_runtime_map_sc_set_equivalence():
-    """build_runtime_map(db, sc_lib_paths=[lib]) is equal between modules and deterministic."""
+def test_build_runtime_map_sc_set_deterministic():
+    """build_runtime_map(db, sc_lib_paths=[lib]) is deterministic; UNKNOWN == sc count."""
     lib = _sky130hd_lib_or_skip()
     from techlib import liberty
     db = liberty.load_liberty_db([lib])
 
     map_new_1 = cell_types.build_runtime_map(db, sc_lib_paths=[lib])
     map_new_2 = cell_types.build_runtime_map(db, sc_lib_paths=[lib])
-    map_old = cell_type_map.build_runtime_map(db, sc_lib_paths=[lib])
 
     assert map_new_1 == map_new_2, "build_runtime_map is non-deterministic (sc=[lib])"
-    assert map_new_1 == map_old, \
-        "build_runtime_map(sc=[lib]) differs between techlib.cell_types and oracle"
 
     # UNKNOWN must equal len(sc-filtered names)
     cells = db.get("cells", {})
@@ -206,38 +199,31 @@ def test_build_runtime_map_sc_set_equivalence():
 # ---------------------------------------------------------------------------
 
 def test_resolve_cell_type_map_nangate45_returns_curated():
-    """resolve_cell_type_map('nangate45', ...) returns the curated dict for both modules.
+    """resolve_cell_type_map('nangate45', ...) returns the curated dict.
 
     This runs unconditionally (no ORFS liberty needed): the nangate45 branch
     short-circuits to the curated map and ignores the ``lib_db`` argument, so an
     empty-dict placeholder exercises the same code path.
     """
     result_new = cell_types.resolve_cell_type_map("nangate45", {})
-    result_old = cell_type_map.resolve_cell_type_map("nangate45", {})
 
     assert result_new is cell_types.NANGATE45_CELL_TYPE_MAPPING, \
-        "resolve_cell_type_map('nangate45') should return the curated dict (techlib)"
-    assert result_old is cell_type_map.NANGATE45_CELL_TYPE_MAPPING, \
-        "resolve_cell_type_map('nangate45') should return the curated dict (oracle)"
-    assert result_new == result_old
+        "resolve_cell_type_map('nangate45') should return the curated dict"
 
 
 def test_resolve_cell_type_map_sky130hd_returns_runtime():
-    """resolve_cell_type_map('sky130hd', db, sc) returns runtime map and equals between modules."""
+    """resolve_cell_type_map('sky130hd', db, sc) returns a runtime map (not the curated dict)."""
     lib = _sky130hd_lib_or_skip()
     from techlib import liberty
     db = liberty.load_liberty_db([lib])
 
     result_new = cell_types.resolve_cell_type_map("sky130hd", db, sc_lib_paths=[lib])
-    result_old = cell_type_map.resolve_cell_type_map("sky130hd", db, sc_lib_paths=[lib])
 
     # Must NOT be the curated nangate45 dict
     assert result_new is not cell_types.NANGATE45_CELL_TYPE_MAPPING, \
         "resolve_cell_type_map('sky130hd') must return a runtime map, not the curated dict"
-    assert result_new == result_old, \
-        "resolve_cell_type_map('sky130hd') differs between techlib.cell_types and oracle"
 
-    # The runtime map must equal build_runtime_map directly
+    # The runtime map must equal build_runtime_map directly (runtime strategy).
     expected = cell_types.build_runtime_map(db, sc_lib_paths=[lib])
     assert result_new == expected
 
@@ -272,19 +258,11 @@ def test_cordic_masters_resolve_to_unknown_equivalence():
     db = liberty.load_liberty_db([lib])
 
     sc_map_new = cell_types.resolve_cell_type_map("sky130hd", db, sc_lib_paths=[lib])
-    sc_map_old = cell_type_map.resolve_cell_type_map("sky130hd", db, sc_lib_paths=[lib])
 
     expected_unknown = sc_map_new["UNKNOWN"]
 
     for master in _REAL_SKY130_MASTERS:
         result_new = cell_types.cell_type_id(master, sc_map_new)
-        result_old = cell_type_map.cell_type_id(master, sc_map_old)
-
-        # Equivalence: both modules must agree (behavior-neutral move)
-        assert result_new == result_old, (
-            f"cell_type_id({master!r}): techlib={result_new} vs oracle={result_old} — "
-            f"modules diverged (this is a regression)"
-        )
 
         # Pin the observed value: every real sky130 master is UNKNOWN
         # NOTE: this is the pre-existing bug documented in the CONCERN docstring.
@@ -314,7 +292,7 @@ def test_cordic_masters_unknown_root_cause_evidence():
     # the liberty parser was fixed upstream and the cordic-UNKNOWN bug may be resolved.
     quoted_keys = [k for k in sample_keys if k.startswith('"')]
     assert len(quoted_keys) > 0, (
-        "No quoted keys found in sky130hd lib_db['cells'] — liberty parser may have "
+        "No quoted keys found in sky130hd db['cells'] — liberty parser may have "
         "been fixed; re-evaluate the cordic-UNKNOWN root cause and update Task 13 plan."
     )
 
