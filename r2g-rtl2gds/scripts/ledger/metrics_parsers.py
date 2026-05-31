@@ -22,6 +22,7 @@ registering here, no changes elsewhere.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from pathlib import Path
@@ -30,7 +31,7 @@ from typing import Any, Callable, Mapping, Optional
 log = logging.getLogger(__name__)
 
 # Type alias: a parser receives {relative_path_str: absolute_Path}
-ParserFn = Callable[[Mapping[str, Path]], dict[str, Any]]
+ParserFn = Callable[[Mapping[str, Path]], "dict[str, Any]"]
 
 
 # ─── small helpers ───────────────────────────────────────────────────────────
@@ -285,6 +286,47 @@ def parse_label_timing(outputs: Mapping[str, Path]) -> dict[str, Any]:
 def parse_label_irdrop(outputs: Mapping[str, Path]) -> dict[str, Any]:
     return _parse_label_csv(outputs, "ir_drop.csv")
 
+def parse_feature_extract(outputs: Mapping[str, Path]) -> dict[str, Any]:
+    """Part B graph features. Prefer features_stats.json; fall back to counting
+    nodes_gate.csv rows. Same contract as the label parsers: missing file -> {},
+    unreadable -> a None-valued signal, real result (incl. 0) -> numbers.
+
+    Pulls out the signals that matter for diagnosing a bad run: how many of the
+    feature tables came back 'ok', and metadata.C_total (0 => SPEF was not
+    consumed, cross-checks spef_present)."""
+    stats = _find_by_suffix(outputs, "features_stats.json")
+    if stats is not None:
+        try:
+            with stats.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return {"stats_readable": None}
+        out: dict[str, Any] = {}
+        if isinstance(data, dict):
+            for k in ("design", "platform", "spef_present"):
+                if k in data:
+                    out[k] = data[k]
+            feats = data.get("features")
+            if isinstance(feats, dict):
+                out["table_count"] = len(feats)
+                out["tables_ok"] = sum(
+                    1 for v in feats.values()
+                    if isinstance(v, dict) and v.get("status") == "ok"
+                )
+                meta = feats.get("metadata")
+                if isinstance(meta, dict) and "C_total" in meta:
+                    out["c_total"] = meta["C_total"]
+        out.setdefault("stats_readable", True)
+        return out
+    nodes = _find_by_suffix(outputs, "nodes_gate.csv")
+    if nodes is None:
+        return {}
+    try:
+        with nodes.open("r", encoding="utf-8") as f:
+            line_count = sum(1 for _ in f)
+        return {"node_row_count": max(0, line_count - 1)}
+    except OSError:
+        return {"node_row_count": None}
 
 # ─── registry ────────────────────────────────────────────────────────────────
 
@@ -301,6 +343,7 @@ METRICS_PARSERS: dict[str, ParserFn] = {
     "label_congestion": parse_label_congestion,
     "label_timing":     parse_label_timing,
     "label_irdrop":     parse_label_irdrop,
+    "feature_extract":  parse_feature_extract,
 }
 
 

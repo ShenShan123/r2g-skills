@@ -27,13 +27,13 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
-from scripts_ledger.append_ledger import (
+from append_ledger import (
     FORBIDDEN_TRIGGER, LEDGER_FILENAME, append_record,
 )
-from scripts_ledger.canonical import (
+from canonical import (
     canonical_json_bytes, compute_record_hash, verify_record_hash,
 )
-from scripts_ledger.metrics_parsers import (
+from metrics_parsers import (
     METRICS_PARSERS, get_parser,
     parse_drc_klayout, parse_label_wirelength, parse_lint, parse_lvs_klayout,
     parse_orfs_backend, parse_simulation, parse_synthesis, parse_timing_check,
@@ -411,7 +411,7 @@ def run_all() -> Result:
 import sys
 sys.path.insert(0, {str(_HERE)!r})
 from pathlib import Path
-from scripts_ledger.append_ledger import append_record
+from append_ledger import append_record
 append_record(
     teaching_root=Path({str(ws['teaching'])!r}),
     repo_root=Path({str(ws['repo'])!r}),
@@ -448,7 +448,7 @@ append_record(
         """Smoke-test the CLI shape — flow scripts will invoke it this way."""
         with tempfile.TemporaryDirectory() as tmp:
             ws = make_workspace(Path(tmp))
-            script = _HERE / "scripts_ledger" / "append_ledger.py"
+            script = _HERE / "append_ledger.py"
             result = subprocess.run(
                 [sys.executable, str(script),
                  "--teaching-root", str(ws["teaching"]),
@@ -470,7 +470,7 @@ append_record(
     def t_cli_rejects_agent_direct():
         with tempfile.TemporaryDirectory() as tmp:
             ws = make_workspace(Path(tmp))
-            script = _HERE / "scripts_ledger" / "append_ledger.py"
+            script = _HERE / "append_ledger.py"
             result = subprocess.run(
                 [sys.executable, str(script),
                  "--teaching-root", str(ws["teaching"]),
