@@ -108,6 +108,7 @@ python3 r2g-rtl2gds/scripts/teaching/verify_submission.py --batch /path/to/all_s
 
 ## 7. run_stage.sh 的待接线处
 
+<<<<<<< Updated upstream
 `run_stage.sh` 的 Stage 1–3 已按 SKILL.md 文档化的脚本签名接好（`# >>> FLOW` 标记处）。
 **Stage 4 Part A（4 个 label）也已接好**：从 `CASE_STATE.md` 读 `def_path` / `odb_path`，
 调 `scripts/extract/labels/` 下的 `extract_wirelength.py` / `extract_congestion.py` /
@@ -121,6 +122,16 @@ python3 r2g-rtl2gds/scripts/teaching/verify_submission.py --batch /path/to/all_s
 
 可以先用 `DRY_RUN=1 bash run_stage.sh 4 <design>` 干跑，确认 Part A 的四条命令和账本写入
 正常（已验证），再接真工具与 Part B。
+=======
+`run_stage.sh` 的 Stage 1–3 已按 SKILL.md 文档化的脚本签名接好（`# >>> FLOW` 标记处）；
+若你们仓库的脚本名不同，改这些行即可。**Stage 4 的 label/feature 命令是 design 相关的**
+（依赖 DEF/ODB/lib 路径），脚本里给了 `run_step` 包装的模板注释，把它们接到你们的
+`<label_script_root>` / `<feature_script_root>` 即可——关键是每个脚本调用都要经过
+`run_step`，这样才会落进账本。
+
+可以先用 `DRY_RUN=1 bash run_stage.sh 1 <design>` 干跑，确认编排和账本写入正常，再接真
+工具。
+>>>>>>> Stashed changes
 
 ## 8. 验证状态
 

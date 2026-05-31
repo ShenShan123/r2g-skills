@@ -145,6 +145,46 @@ def sha256_file(p: Path, chunk: int = 1 << 20) -> Optional[str]:
         return None
 
 
+def _detect_repo_root(teaching_root: Path) -> Optional[Path]:
+    """Search upward from *teaching_root* for an ancestor directory that
+    contains ``r2g-rtl2gds/`` as an immediate subdirectory.  Returns the
+    ancestor (the *parent* of r2g-rtl2gds), or ``None``."""
+    d = teaching_root.resolve()
+    while True:
+        if (d / "r2g-rtl2gds").is_dir():
+            return d
+        parent = d.parent
+        if parent == d:          # reached filesystem root
+            return None
+        d = parent
+
+
+def _resolve_ledger_path(
+    teaching_root: Path,
+    repo_root: Optional[Path],
+    rel: str,
+) -> Optional[Path]:
+    """Resolve a ledger-normalised path key back to an absolute :class:`Path`.
+
+    Ledger ``inputs`` / ``outputs`` keys use two anchors:
+      ``<teaching_root>/...``  and  ``<repo>/...``
+    (see ``append_ledger.py``).  Returns ``None`` when an anchor cannot be
+    resolved — e.g. ``<repo>`` without a known *repo_root*.
+    """
+    rel = rel.strip()
+    if not rel:
+        return None
+    if rel.startswith("<teaching_root>/"):
+        return teaching_root / rel[len("<teaching_root>/"):]
+    if rel.startswith("<repo>/"):
+        if repo_root is None:
+            return None
+        return repo_root / rel[len("<repo>/"):]
+    # bare absolute path (fallback for legacy records)
+    p = Path(rel)
+    return p if p.is_absolute() else None
+
+
 def text_has_forbidden_path(text: str) -> list[str]:
     """Return the forbidden absolute-path substrings found in text."""
     hits = []
@@ -221,6 +261,113 @@ def verify_case(teaching_root: Path, design_dir: Path) -> list[StageVerdict]:
     return verdicts
 
 
+# Mapping from CASE_STATE key to teaching_root subdir for the
+# case_state_path_should_be_teaching_root soft check.
+_CASE_STATE_ARTIFACT_SUBDIR = {
+    "gds_path": "stage2_orfs",
+    "def_path": "stage2_orfs",
+    "odb_path": "stage2_orfs",
+    "spef_path": "stage3_drc_lvs_rcx",
+}
+
+
+def _check_case_state_paths(teaching_root: Path, design_dir: Path) -> list[str]:
+    """Soft-check: if CASE_STATE artifact paths still use ``<repo>/...`` but
+    the corresponding file already exists under *teaching_root*, emit a soft
+    note so the mismatch does not silently escape detection.
+
+    This does NOT block submission — the ``<repo>/...`` path may still be
+    valid.  The note is a hint that the path should be updated to
+    ``<teaching_root>/...`` so the artifact participates in re-hash and
+    cross-commit dedup.
+    """
+    cs = parse_case_state(design_dir / "CASE_STATE.md")
+    notes: list[str] = []
+    for key, subdir in _CASE_STATE_ARTIFACT_SUBDIR.items():
+        val = cs.get(key, "").strip()
+        if not val or not val.startswith("<repo>/"):
+            continue
+        basename = val.rsplit("/", 1)[-1]
+        if not basename:
+            continue
+        expected = design_dir / subdir / basename
+        if expected.is_file():
+            notes.append(f"case_state_path_should_be_teaching_root:{key}")
+    return notes
+
+
+def _ledger_output_paths(teaching_root: Path) -> set[str]:
+    """Return every normalized output path key recorded by the run ledger.
+
+    This intentionally checks membership only.  Hash verification remains in
+    ``verify_ledger``; this helper detects submitted artifacts that are present
+    on disk but have no ledger output record at all.
+    """
+    ledger = teaching_root / "run_ledger.jsonl"
+    if not ledger.is_file():
+        return set()
+    out: set[str] = set()
+    try:
+        for line in ledger.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            outputs = rec.get("outputs", {})
+            if not isinstance(outputs, dict):
+                continue
+            for relpath, claimed_hash in outputs.items():
+                if isinstance(relpath, str) and isinstance(claimed_hash, str):
+                    out.add(relpath)
+    except OSError:
+        return set()
+    return out
+
+
+def _check_artifacts_in_ledger(
+    teaching_root: Path,
+    design_dir: Path,
+    ledger_outputs: set[str],
+) -> list[str]:
+    """Soft-review check for artifacts present in the submission but absent
+    from ledger outputs.
+
+    These notes do not prove forgery: older legal flows may have copied
+    artifacts before ledger support existed.  They do mean the artifact is not
+    covered by ledger re-hash tamper detection and needs teacher review.
+    """
+    cs = parse_case_state(design_dir / "CASE_STATE.md")
+    candidates: list[str] = []
+
+    for key in _CASE_STATE_ARTIFACT_SUBDIR:
+        rel = cs.get(key, "").strip()
+        if rel.startswith("<teaching_root>/"):
+            candidates.append(rel)
+
+    design = design_dir.name
+    for csv_name in REQUIRED_LABEL_CSVS:
+        candidates.append(
+            f"<teaching_root>/cases/{design}/stage4_labels/{csv_name}")
+    for csv_name in REQUIRED_FEATURE_CSVS:
+        candidates.append(
+            f"<teaching_root>/cases/{design}/stage4_features/{csv_name}")
+
+    notes: list[str] = []
+    seen: set[str] = set()
+    for rel in candidates:
+        if rel in seen:
+            continue
+        seen.add(rel)
+        abs_path = _resolve_ledger_path(teaching_root, None, rel)
+        if abs_path is None or not abs_path.is_file():
+            continue
+        if rel not in ledger_outputs:
+            notes.append(f"artifact_not_in_ledger:{rel}")
+    return notes
+
+
 def _check_stage4_artifacts(teaching_root, design_dir, cs, v: StageVerdict):
     labels_dir = design_dir / "stage4_labels"
     feats_dir = design_dir / "stage4_features"
@@ -291,23 +438,54 @@ def _resolve(teaching_root: Path, rel: str) -> Optional[Path]:
     return p
 
 
-def verify_ledger(teaching_root: Path) -> list[str]:
-    """If a ledger exists, verify chain + per-record hash. Returns list of
-    failure strings (empty = ok or absent-but-tolerated). A present-but-broken
-    ledger is a hard flag; an absent ledger is reported as a soft note."""
+def verify_ledger(
+    teaching_root: Path,
+    repo_root: Optional[Path] = None,
+) -> tuple[list[str], list[str]]:
+    """Verify the ledger chain, record-level hashes, and output-artifact
+    integrity.
+
+    Returns ``(hard_fails, soft_notes)``:
+
+    *hard_fails* — record-chain breaks, record-hash mismatches,
+    agent-direct writes, and **output-artifact hash mismatches / missing
+    files** (after the path anchor was successfully resolved).
+
+    *soft_notes* — absent ledger, unresolvable repo_root, unresolvable
+    path anchors, and any input-artifact mismatches.
+    """
     ledger = teaching_root / "run_ledger.jsonl"
     if not ledger.is_file():
-        return ["ledger_absent"]  # soft: caller decides severity
+        return [], ["ledger_absent"]
     if not _HAVE_LEDGER:
-        return ["ledger_present_but_module_unavailable"]
+        return [], ["ledger_present_but_module_unavailable"]
     fails: list[str] = []
+    notes: list[str] = []
     prev = "GENESIS"
+    _repo_unresolved_noted = False
+
+    # -- first pass: find latest occurrence of each output artifact path -----
+    # When a fixed-location artifact (e.g. stage2_orfs/6_final.gds) is
+    # overwritten by a re-run, only the LAST record's hash should be hard-
+    # verified; older records' hashes for that path are soft-skipped.
+    _latest_for_output: dict[str, int] = {}
+    _all_lines = [l for l in ledger.read_text(encoding="utf-8").splitlines() if l.strip()]
+    for _i, _line in enumerate(_all_lines):
+        try:
+            _rec = json.loads(_line)
+        except (ValueError, TypeError):
+            continue
+        for _relpath, _h in _rec.get("outputs", {}).items():
+            if isinstance(_h, str) and len(_h) == 64:
+                _latest_for_output[_relpath] = _i
+
     try:
-        for i, line in enumerate(ledger.read_text(encoding="utf-8").splitlines()):
-            if not line.strip():
-                continue
+        for i, line in enumerate(_all_lines):
             rec = json.loads(line)
-            if rec.get("prev_hash") != prev:
+
+            # -- record-level integrity (unchanged) ------------------------
+            claimed_prev = rec.get("prev_hash")
+            if not isinstance(claimed_prev, str) or claimed_prev != prev:
                 fails.append(f"chain_break@{i}")
                 break
             if not verify_record_hash(rec):
@@ -316,18 +494,74 @@ def verify_ledger(teaching_root: Path) -> list[str]:
             if rec.get("triggered_by") == "agent_direct":
                 fails.append(f"agent_direct_write@{i}")
             prev = rec.get("record_hash", "")
+
+            # -- output-artifact re-hash (HARD) ----------------------------
+            for relpath, claimed_hash in rec.get("outputs", {}).items():
+                if not isinstance(claimed_hash, str) or len(claimed_hash) != 64:
+                    continue
+                # If a later record overwrote this artifact path, skip hard
+                # verification for this older record (soft note only).
+                if _latest_for_output.get(relpath, i) > i:
+                    notes.append(f"output_superseded@{i}:{relpath}")
+                    continue
+                abs_path = _resolve_ledger_path(teaching_root, repo_root, relpath)
+                if abs_path is None:
+                    if relpath.startswith("<repo>/") and repo_root is None:
+                        if not _repo_unresolved_noted:
+                            notes.append("repo_root_unresolved:skip_repo_outputs")
+                            _repo_unresolved_noted = True
+                    else:
+                        notes.append(f"unresolvable_output_path@{i}:{relpath}")
+                    continue
+                if not abs_path.is_file():
+                    fails.append(f"artifact_missing@{i}:{relpath}")
+                    continue
+                actual = sha256_file(abs_path)
+                if actual is None:
+                    fails.append(f"artifact_unreadable@{i}:{relpath}")
+                elif actual != claimed_hash:
+                    fails.append(f"artifact_hash_mismatch@{i}:{relpath}")
+
+            # -- input-artifact re-hash (SOFT only) ------------------------
+            for relpath, claimed_hash in rec.get("inputs", {}).items():
+                if not isinstance(claimed_hash, str) or len(claimed_hash) != 64:
+                    continue
+                abs_path = _resolve_ledger_path(teaching_root, repo_root, relpath)
+                if abs_path is None:
+                    continue
+                if not abs_path.is_file():
+                    notes.append(f"input_missing@{i}:{relpath}")
+                    continue
+                actual = sha256_file(abs_path)
+                if actual is None:
+                    notes.append(f"input_unreadable@{i}:{relpath}")
+                elif actual != claimed_hash:
+                    notes.append(f"input_hash_mismatch@{i}:{relpath}")
+
     except (ValueError, OSError) as e:
         fails.append(f"ledger_corrupt:{e}")
-    return fails
+    return fails, notes
 
 
-def verify_submission(teaching_root: Path) -> tuple[list[StageVerdict], list[str]]:
+def verify_submission(
+    teaching_root: Path,
+    repo_root: Optional[Path] = None,
+) -> tuple[list[StageVerdict], list[str]]:
+    """Verify one submission.  *repo_root* is passed through to
+    :func:`verify_ledger` for output-artifact re-hashing."""
     cases_dir = teaching_root / "cases"
     verdicts: list[StageVerdict] = []
+    cs_notes: list[str] = []
+    ledger_outputs = _ledger_output_paths(teaching_root)
     if cases_dir.is_dir():
         for design_dir in sorted(p for p in cases_dir.iterdir() if p.is_dir()):
             verdicts.extend(verify_case(teaching_root, design_dir))
-    ledger_notes = verify_ledger(teaching_root)
+            cs_notes.extend(_check_case_state_paths(teaching_root, design_dir))
+            cs_notes.extend(_check_artifacts_in_ledger(
+                teaching_root, design_dir, ledger_outputs))
+    hard_fails, soft_notes = verify_ledger(teaching_root, repo_root)
+    # Merge: hard_fails first so they appear prominently in the report.
+    ledger_notes = hard_fails + soft_notes + cs_notes
     return verdicts, ledger_notes
 
 
@@ -346,6 +580,9 @@ def write_outputs(teaching_root: Path, verdicts: list[StageVerdict],
     # SUBMISSION_REPORT.md
     n_ok = sum(1 for v in verdicts if v.ok)
     n_flag = len(verdicts) - n_ok
+    artifact_not_in_ledger = [
+        n for n in ledger_notes if n.startswith("artifact_not_in_ledger:")
+    ]
     lines = [
         "# 提交校验报告（SUBMISSION_REPORT）",
         "",
@@ -360,6 +597,20 @@ def write_outputs(teaching_root: Path, verdicts: list[StageVerdict],
         lines.append(
             f"| {v.design} | {v.stage} | {v.final_status} | "
             f"{'OK' if v.ok else '标红'} | {';'.join(v.checks_failed) or '—'} |")
+    if artifact_not_in_ledger:
+        lines += [
+            "",
+            "## 产物未纳入账本（需人工复核）",
+            "",
+            "以下产物存在于提交目录，但未在 run_ledger.jsonl 的 outputs 中找到记录；"
+            "这不自动判定为伪造，但说明账本重哈希防篡改未覆盖这些产物。",
+            "",
+            "| design | artifact |",
+            "|---|---|",
+        ]
+        for note in artifact_not_in_ledger:
+            rel = note.split(":", 1)[1]
+            lines.append(f"| {_design_from_teaching_path(rel)} | {rel} |")
     lines += [
         "",
         "> 标红项不等于一定作弊，但需人工复核；账本 chain_break / hash_mismatch /",
@@ -370,10 +621,18 @@ def write_outputs(teaching_root: Path, verdicts: list[StageVerdict],
         "\n".join(lines), encoding="utf-8")
 
 
+def _design_from_teaching_path(rel: str) -> str:
+    marker = "<teaching_root>/cases/"
+    if not rel.startswith(marker):
+        return "UNKNOWN"
+    rest = rel[len(marker):]
+    return rest.split("/", 1)[0] if "/" in rest else "UNKNOWN"
+
+
 # ─── batch / cross-submission ────────────────────────────────────────────────
 
 # Artifacts whose duplication across students signals copy/share.
-DUP_SUFFIXES = (".gds", ".def", "5_route.def") + tuple(REQUIRED_FEATURE_CSVS) \
+DUP_SUFFIXES = (".gds", ".def", ".odb", ".spef", "5_route.def") + tuple(REQUIRED_FEATURE_CSVS) \
     + tuple(REQUIRED_LABEL_CSVS)
 
 # Files smaller than this are too trivial to fingerprint meaningfully — an
@@ -425,10 +684,18 @@ def main(argv=None) -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--teaching-root", type=Path, help="one student's teaching_root")
     g.add_argument("--batch", type=Path, help="dir of many teaching_roots")
+    ap.add_argument("--repo-root", type=Path, default=None,
+                    help="agent-r2g repo root for resolving <repo> paths "
+                         "(default: auto-detect upward from teaching_root)")
     args = ap.parse_args(argv)
 
     if args.teaching_root:
-        verdicts, ledger_notes = verify_submission(args.teaching_root)
+        repo_root = args.repo_root
+        if repo_root is None:
+            repo_root = _detect_repo_root(args.teaching_root)
+        verdicts, ledger_notes = verify_submission(
+            args.teaching_root, repo_root=repo_root,
+        )
         write_outputs(args.teaching_root, verdicts, ledger_notes)
         n_flag = sum(1 for v in verdicts if not v.ok)
         print(f"verified {len(verdicts)} stage-entries, {n_flag} flagged; "
@@ -441,7 +708,12 @@ def main(argv=None) -> int:
     batch = args.batch
     all_rows = []
     for sub in sorted(p for p in batch.iterdir() if p.is_dir()):
-        verdicts, ledger_notes = verify_submission(sub)
+        repo_root = args.repo_root
+        if repo_root is None:
+            repo_root = _detect_repo_root(sub)
+        verdicts, ledger_notes = verify_submission(
+            sub, repo_root=repo_root,
+        )
         write_outputs(sub, verdicts, ledger_notes)
         for v in verdicts:
             r = v.row()

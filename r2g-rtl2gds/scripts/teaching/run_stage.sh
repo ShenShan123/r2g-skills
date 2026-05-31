@@ -171,7 +171,8 @@ stage2() {
   log "Stage 2: synth -> ORFS -> GDS/DEF/ODB ($DESIGN)"
   run_step stage2 orfs_backend \
     "$PROJECT_DIR/constraints/config.mk,$PROJECT_DIR/constraints/constraint.sdc" \
-    "$PROJECT_DIR/backend/RUN_*/final/*,$PROJECT_DIR/backend/RUN_*/results/*" -- \
+    "$CASE_DIR/stage2_orfs/6_final.*,$PROJECT_DIR/backend/RUN_*/results/*" -- \
+    env TEACHING_ROOT="$TEACHING_ROOT" TEACHING_CASE_NAME="$DESIGN" \
     bash "$SKILL_DIR/scripts/flow/run_orfs.sh" "$PROJECT_DIR"            # >>> FLOW
   run_step stage2 timing_check \
     "$PROJECT_DIR/reports/ppa.json" "$PROJECT_DIR/reports/timing_check.json" -- \
@@ -188,7 +189,8 @@ stage3() {
     "$PROJECT_DIR/backend/RUN_*/final/*.gds" "$PROJECT_DIR/lvs/*" -- \
     bash "$SKILL_DIR/scripts/flow/run_lvs.sh" "$PROJECT_DIR" nangate45  # >>> FLOW
   run_step stage3 rcx_openrcx \
-    "$PROJECT_DIR/backend/RUN_*/final/*.odb" "$PROJECT_DIR/rcx/6_final.spef" -- \
+    "$PROJECT_DIR/backend/RUN_*/final/*.odb" "$CASE_DIR/stage3_drc_lvs_rcx/6_final.spef" -- \
+    env TEACHING_ROOT="$TEACHING_ROOT" TEACHING_CASE_NAME="$DESIGN" \
     bash "$SKILL_DIR/scripts/flow/run_rcx.sh" "$PROJECT_DIR" nangate45  # >>> FLOW
   log "Stage 3 flow done. Write STAGE3 report with DRC/LVS/RCX sub-statuses."
 }
