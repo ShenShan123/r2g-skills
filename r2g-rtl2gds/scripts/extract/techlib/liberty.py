@@ -101,6 +101,8 @@ def _merge_liberty_file(lib_path, db):
     current_cell_depth = -1
     current_pin = None
     current_pin_depth = -1
+    in_leakage = False        # inside a cell-level `leakage_power () { ... }` block
+    leak_depth = -1
 
     for raw in text.splitlines():
         line = raw.strip()
@@ -153,18 +155,38 @@ def _merge_liberty_file(lib_path, db):
                 current_cell["is_sequential"] = True
 
             if current_pin is None:
-                m_area = re.match(r"area\s*:\s*([0-9eE+.\-]+)\s*;", line)
+                # area: trailing ';' optional — asap7 writes `area : 0.20412` without one.
+                m_area = re.match(r"area\s*:\s*([0-9eE+.\-]+)\s*;?", line)
                 if m_area:
                     try:
                         current_cell["area"] = float(m_area.group(1))
                     except Exception:
                         pass
-                m_power = re.match(r"cell_leakage_power\s*:\s*([0-9eE+.\-]+)\s*;", line)
+                # Scalar leakage (nangate/sky130/gf180/ihp). The scalar always wins over the
+                # block-form below (it overwrites a block value if it appears).
+                m_power = re.match(r"cell_leakage_power\s*:\s*([0-9eE+.\-]+)\s*;?", line)
                 if m_power:
                     try:
                         current_cell["power"] = float(m_power.group(1))
                     except Exception:
                         pass
+                # Block-form leakage: asap7 has `leakage_power () { ... value : X ; ... }`
+                # blocks and NO scalar cell_leakage_power. Enter the block; only if no scalar
+                # power was found do we adopt the FIRST block's `value` as the representative
+                # leakage. Additive — platforms that carry a scalar are unaffected.
+                if re.match(r"leakage_power\s*\(", line):
+                    in_leakage = True
+                    leak_depth = brace_depth + open_count
+                if in_leakage and current_cell.get("power") is None:
+                    # The value may be bare (asap7: `value : 549.659;`) or quoted
+                    # (gf180: `value : "0.00029065" ;`) — strip optional quotes, same
+                    # class as the sky130 quoted-cell-name bug (commit 363a8b2).
+                    m_lv = re.search(r'\bvalue\s*:\s*"?\s*([0-9eE+.\-]+)\s*"?', line)
+                    if m_lv:
+                        try:
+                            current_cell["power"] = float(m_lv.group(1))
+                        except Exception:
+                            pass
 
             m_pin = re.match(r"pin\s*\(\s*([^)]+?)\s*\)\s*\{", line)
             if m_pin:
@@ -205,6 +227,9 @@ def _merge_liberty_file(lib_path, db):
 
         brace_depth += open_count - close_count
 
+        if in_leakage and brace_depth < leak_depth:
+            in_leakage = False
+            leak_depth = -1
         if current_pin is not None and brace_depth < current_pin_depth:
             current_pin = None
             current_pin_depth = -1
@@ -213,6 +238,8 @@ def _merge_liberty_file(lib_path, db):
             current_cell_depth = -1
             current_pin = None
             current_pin_depth = -1
+            in_leakage = False
+            leak_depth = -1
 
 
 def get_cell_area(master_name, lib_db):

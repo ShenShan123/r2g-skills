@@ -277,6 +277,39 @@ def _t10_gz_or_skip(platform: str) -> str:
     return path
 
 
+def _assert_area_power_nondegenerate(db: dict, platform: str) -> None:
+    """Guard against degenerate (all-zero) cell area/power on a parsed liberty DB.
+
+    asap7 and gf180 carry leakage as block-form ``leakage_power () { value : X }``
+    with NO scalar ``cell_leakage_power``; gf180 additionally QUOTES the value
+    (``value : "0.00029065"``). A parser that only handled the scalar form (or the
+    bare-number block) silently collapsed every cell's power to 0 — the same
+    failure class as the sky130 quoted-cell-name bug (commit 363a8b2). Real
+    std-cell areas are likewise always positive. This guard asserts both columns
+    are non-degenerate so a regression in the block/quote handling is caught.
+    """
+    cells = db["cells"]
+    n = len(cells)
+    assert n > 0, f"{platform}: no cells parsed"
+    # Every real standard cell has positive area.
+    zero_area = [c["name"] for c in cells.values()
+                 if not (c.get("area") is not None and c["area"] > 0)]
+    assert not zero_area, (
+        f"{platform}: {len(zero_area)}/{n} cells have non-positive area "
+        f"(e.g. {zero_area[:3]}) — liberty area parse degenerate"
+    )
+    # Leakage power must not collapse to all-zero. The verified 2026-05-30 state is
+    # 100% positive on both asap7 (42/42) and gf180 (229/229); require a strong
+    # majority so a future ORFS lib that legitimately adds a zero-leakage cell is
+    # tolerated while the all-zero degeneracy bug is still caught decisively.
+    n_power_pos = sum(1 for c in cells.values()
+                      if c.get("power") is not None and c["power"] > 0)
+    assert n_power_pos >= 0.9 * n, (
+        f"{platform}: only {n_power_pos}/{n} cells have power>0 — block-form/quoted "
+        f"leakage parse degenerate (expected ~all positive; verified 100% on 2026-05-30)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # 1. Supply-voltage regression — both consumer paths, all six platforms
 # ---------------------------------------------------------------------------
@@ -438,6 +471,8 @@ def test_t10_gz_liberty_asap7():
         f"(expected >10; verified=42 on 2026-05-30)"
     )
     assert path in db["sources"]["lib"], f"asap7 .lib.gz: path missing from sources"
+    # asap7 leakage is block-form (bare value, no scalar cell_leakage_power).
+    _assert_area_power_nondegenerate(db, "asap7")
 
 
 def test_t10_gz_liberty_gf180():
@@ -454,3 +489,6 @@ def test_t10_gz_liberty_gf180():
         f"(expected >10; verified=229 on 2026-05-30)"
     )
     assert path in db["sources"]["lib"], f"gf180 .lib.gz: path missing from sources"
+    # gf180 leakage is block-form with QUOTED values (value : "0.000…") — the
+    # regression that motivated the quote-strip fix; power was 0/229 before it.
+    _assert_area_power_nondegenerate(db, "gf180")
