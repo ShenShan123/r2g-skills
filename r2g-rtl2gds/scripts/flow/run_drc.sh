@@ -94,16 +94,29 @@ if [[ "$DRC_BEOL_ONLY" == "1" ]]; then
   DRC_DIR_EARLY="$PROJECT_DIR/drc"
   mkdir -p "$DRC_DIR_EARLY"
   BEOL_DECK="$DRC_DIR_EARLY/$(basename "$_deck" .lydrc).beol.lydrc"
-  sed -E 's/^([[:space:]]*FEOL[[:space:]]*=[[:space:]]*)true/\1false/' "$_deck" > "$BEOL_DECK"
-  # Verify the transform actually changed something
+  # Disable BOTH FEOL and the ANTENNA group. The ANTENNA checks reference the
+  # `gate` layer (`gate = poly & active`), which is DERIVED INSIDE the
+  # `if FEOL ... end` block — so with FEOL=false the ANTENNA `connect` fails
+  # with "First argument must be a layer" and make exits 1. Leave OFFGRID true
+  # (it has no FEOL-derived dependency and completes fine).
+  sed -E -e 's/^([[:space:]]*FEOL[[:space:]]*=[[:space:]]*)true/\1false/' \
+         -e 's/^([[:space:]]*ANTENNA[[:space:]]*=[[:space:]]*)true/\1false/' "$_deck" > "$BEOL_DECK"
+  # Verify BOTH toggles flipped (abort if either FEOL or ANTENNA didn't change).
   if ! grep -qE '^[[:space:]]*FEOL[[:space:]]*=[[:space:]]*false' "$BEOL_DECK"; then
     echo "ERROR: BEOL deck transform failed — 'FEOL = false' not found in $BEOL_DECK" >&2
     echo "Check that $PLATFORM deck has a top-level 'FEOL    = true' line." >&2
     rm -f "$BEOL_DECK"
     exit 1
   fi
+  if ! grep -qE '^[[:space:]]*ANTENNA[[:space:]]*=[[:space:]]*false' "$BEOL_DECK"; then
+    echo "ERROR: BEOL deck transform failed — 'ANTENNA = false' not found in $BEOL_DECK" >&2
+    echo "ANTENNA must be disabled too: it depends on FEOL-derived layers." >&2
+    echo "Check that $PLATFORM deck has a top-level 'ANTENNA = true' line." >&2
+    rm -f "$BEOL_DECK"
+    exit 1
+  fi
   EXTRA_MAKE_ARGS="KLAYOUT_DRC_FILE=$BEOL_DECK"
-  echo "DRC BEOL-only mode: FEOL checks skipped (std-cell library is pre-verified); deck=$BEOL_DECK"
+  echo "DRC BEOL-only mode: FEOL and ANTENNA checks skipped (ANTENNA depends on FEOL-derived layers); metal/via routing geometry + off-grid checks run. NOT full DRC-clean, antenna NOT verified; deck=$BEOL_DECK"
 fi
 # ──────────────────────────────────────────────────────────────────────────────
 
