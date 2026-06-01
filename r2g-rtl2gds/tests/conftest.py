@@ -30,6 +30,11 @@ EXTRACT_DIR = SKILL_ROOT / "scripts" / "extract"
 if str(EXTRACT_DIR) not in sys.path:
     sys.path.insert(0, str(EXTRACT_DIR))
 
+# Make scripts/reports/ importable for signoff-fixer tests.
+REPORTS_DIR = SKILL_ROOT / "scripts" / "reports"
+if str(REPORTS_DIR) not in sys.path:
+    sys.path.insert(0, str(REPORTS_DIR))
+
 
 @pytest.fixture
 def tmp_knowledge_dir(tmp_path: Path) -> Path:
