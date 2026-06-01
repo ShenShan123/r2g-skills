@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -169,3 +170,64 @@ def test_apply_operator_only_strategy_errors(tmp_path):
     r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "lvs",
                         "--apply", "lvs_macro_cdl"], capture_output=True, text=True)
     assert r.returncode == 3 and "operator-only" in r.stderr
+
+
+DRIVER = Path(__file__).resolve().parents[1] / "scripts" / "flow" / "fix_signoff.sh"
+
+
+def _stub_dir(tmp_path, counts):
+    """Build stub run_orfs/run_drc + an extract that pops `counts` into drc.json."""
+    sd = tmp_path / "stubs"
+    sd.mkdir()
+    (sd / "counts.txt").write_text("\n".join(str(c) for c in counts) + "\n")
+    (sd / "run_orfs.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+    (sd / "run_drc.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+    extract = f"""#!/usr/bin/env bash
+proj="$1"; out="$2"
+cf="{sd}/counts.txt"
+n=$(head -1 "$cf"); tail -n +2 "$cf" > "$cf.tmp" && mv "$cf.tmp" "$cf"
+[ -z "$n" ] && n=0
+if [ "$n" = "0" ]; then
+  printf '{{"status":"clean","total_violations":0,"categories":{{}}}}' > "$out"
+else
+  printf '{{"status":"fail","total_violations":%s,"categories":{{"METAL7_ANTENNA":{{"count":%s}}}}}}' "$n" "$n" > "$out"
+fi
+"""
+    (sd / "extract_drc.py").write_text(extract)
+    for f in ("run_orfs.sh", "run_drc.sh", "extract_drc.py"):
+        os.chmod(sd / f, 0o755)
+    return sd
+
+
+def _run_driver(proj, sd, max_iters=3):
+    env = dict(os.environ,
+               R2G_RUN_ORFS=str(sd / "run_orfs.sh"),
+               R2G_RUN_DRC=str(sd / "run_drc.sh"),
+               R2G_EXTRACT_DRC=str(sd / "extract_drc.py"))
+    return subprocess.run(["bash", str(DRIVER), str(proj), "nangate45",
+                           "--check", "drc", "--max-iters", str(max_iters)],
+                          capture_output=True, text=True, env=env)
+
+
+def test_driver_stops_when_cleaned(tmp_path):
+    # seeded fail=7, first re-check returns 0 → cleaned in 1 applied iter
+    p = _mk_project(tmp_path, drc={"status": "fail", "total_violations": 7,
+                                   "categories": {"METAL7_ANTENNA": {"count": 7}}})
+    sd = _stub_dir(tmp_path, counts=[0])
+    r = _run_driver(p, sd)
+    assert r.returncode == 0, r.stderr
+    log = (p / "reports" / "fix_log.jsonl").read_text().strip().splitlines()
+    assert len(log) >= 1
+    assert (p / "reports" / "fix_summary.md").exists()
+    final = json.loads((p / "reports" / "drc.json").read_text())
+    assert final["status"] == "clean"
+
+
+def test_driver_early_exits_on_no_improvement(tmp_path):
+    # seeded fail=7, re-checks keep returning 7 → early-exit, not 3 full iters
+    p = _mk_project(tmp_path, drc={"status": "fail", "total_violations": 7,
+                                   "categories": {"METAL7_ANTENNA": {"count": 7}}})
+    sd = _stub_dir(tmp_path, counts=[7, 7, 7])
+    r = _run_driver(p, sd)
+    summary = (p / "reports" / "fix_summary.md").read_text()
+    assert "no_improvement" in summary
