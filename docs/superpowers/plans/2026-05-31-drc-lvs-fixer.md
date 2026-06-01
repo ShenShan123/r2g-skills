@@ -876,3 +876,35 @@ dated note with commit hash + any superseded invariants in the spec/plan).
   strategy ids (`antenna_diode_iters`/`antenna_route_effort`/`antenna_density_relief`,
   `lvs_resolve_unknown`/`lvs_macro_cdl`), and `--next` tab format are consistent across
   diagnoser, driver, and tests.
+
+---
+
+## Amendments (2026-06-01, during execution)
+
+Code-quality review surfaced bugs in the verbatim code blocks above; the shipped code
+differs from the listing in these (intentional) ways. The committed code is the source of
+truth:
+
+- **Diagnoser hardening — commit `26d133e`:**
+  - `_drc_plan` handles `status in ("fail","failed")` (extract_drc.py can emit `"failed"`).
+  - `dominant_category` is null-safe: `cats[k].get("count") or 0` (a `None` count no longer
+    raises `TypeError`).
+  - `_applied(cfg, edits)` returns `False` for empty `edits` (was vacuously `True`).
+  - DRC `"unknown"` status sets `residual_reason = "drc status unknown — no report yet"`.
+  - `--apply` falls back to the full antenna catalog so re-applying an already-applied
+    strategy is idempotent (exit 0), not a spurious exit 2. Implemented via the
+    `_antenna_catalog` (full) vs `_antenna_strategies` (filtered) split — `build_plan` still
+    returns the FILTERED list so `--next` advances and exhaustion → `residual`.
+- **Driver hardening — commit `d76daed`:**
+  - `fix_one` captures `run_orfs` exit code and aborts the check on failure
+    (`verdict=rerun_failed_rcN`) instead of silently re-reading a stale report and logging a
+    false `no_improvement`. (Root cause: `set -e` is suppressed inside a function invoked via
+    an `&&/|| true` chain — so the rc must be checked explicitly.)
+  - `_run_extract` always calls `python3 "$script" …` (the plan's `(A && B) || C` guard
+    double-invoked the extractor on failure). Test stubs rewritten as real Python.
+  - Empty `sid` from `--next` is guarded (aborts, no `--apply ""` no-op spin).
+  - Tab-delimited `--next` parsing maps `\t`→`\x1f` before `read` so an EMPTY middle field
+    (`lvs_resolve_unknown` has empty `rerun_from`) is preserved — whitespace-IFS `read` had
+    collapsed it, shifting `recheck` into `rerun` and triggering a spurious re-route.
+  - `--check` value validated; strategy blacklisted (`tried`) only after a successful apply;
+    `None` counts render as blank in `fix_summary.md`.
