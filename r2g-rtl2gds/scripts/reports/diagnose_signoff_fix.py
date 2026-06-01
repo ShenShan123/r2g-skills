@@ -20,6 +20,11 @@ BLOCK_START = "# >>> r2g signoff-fix (auto) >>>"
 BLOCK_END = "# <<< r2g signoff-fix (auto) <<<"
 KLAYOUT_CPP_CRASH = re.compile(r"sort_circuit|gen_log_entry|segmentation|sigsegv", re.I)
 
+# Platforms where OpenROAD repair_antennas is inert: no tech-LEF antenna rules
+# (check_antennas finds nothing) and/or a zero-ANTENNADIFFAREA diode cell, so diode
+# insertion cannot run. See docs/campaign_signoff_fixer_2026-06-01.md (Finding B).
+ANTENNA_REPAIR_INERT_PLATFORMS = {"nangate45"}
+
 
 def parse_config(text: str) -> dict:
     """Parse `export VAR = value` / `VAR := value` lines (last assignment wins)."""
@@ -43,28 +48,39 @@ def _applied(cfg: dict, edits: dict) -> bool:
 
 
 def _antenna_catalog(cfg: dict) -> list:
-    """Full antenna strategy catalog (real layout fixes; regardless of applied state)."""
+    """Full antenna strategy catalog (real layout fixes; regardless of applied state).
+
+    antenna_diode_iters is omitted for platforms where OpenROAD repair_antennas is
+    inert (no tech-LEF antenna rules / zero-ANTENNADIFFAREA diode cell) — it would
+    just waste a ~28-min re-route with no effect.
+    """
     try:
         cur_util = int(float(cfg.get("CORE_UTILIZATION", "")))
     except (TypeError, ValueError):
         cur_util = None
     new_util = max(5, cur_util - 5) if cur_util is not None else 20
-    return [
-        {"id": "antenna_diode_iters",
-         "rationale": "Raise repair_antennas iterations (GRT+DRT, default 5) so OpenROAD "
-                      "inserts more antenna diodes (auto-discovered ANTENNA_X1, which the "
-                      "nangate45 LEF declares CLASS CORE ANTENNACELL) and jumpers to break "
-                      "long metal.",
-         "config_edits": {"MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
-                          "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"},
-         "rerun_from": "route", "recheck": "drc", "auto_apply": True},
+    platform = cfg.get("PLATFORM")
+    catalog = []
+    if platform not in ANTENNA_REPAIR_INERT_PLATFORMS:
+        catalog.append(
+            {"id": "antenna_diode_iters",
+             "rationale": "Raise repair_antennas iterations (GRT+DRT, default 5) so OpenROAD "
+                          "inserts more antenna diodes (auto-discovered ANTENNA_X1, which the "
+                          "nangate45 LEF declares CLASS CORE ANTENNACELL) and jumpers to break "
+                          "long metal.",
+             "config_edits": {"MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
+                              "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"},
+             "rerun_from": "route", "recheck": "drc", "auto_apply": True}
+        )
+    catalog.append(
         {"id": "antenna_density_relief",
          "rationale": "Lower placement utilization so the router has room to place diodes and "
                       "spread routes across layers (breaks long single-layer runs). "
                       "PLACE_DENSITY_LB_ADDON is never touched (hard rule: never < 0.10).",
          "config_edits": {"CORE_UTILIZATION": str(new_util)},
-         "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True},
-    ]
+         "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True}
+    )
+    return catalog
 
 
 def _antenna_strategies(cfg: dict) -> list:

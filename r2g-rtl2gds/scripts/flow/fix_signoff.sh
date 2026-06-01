@@ -106,7 +106,7 @@ fix_one() {  # $1 = drc|lvs
     _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict"
     echo "[$check] iter $it: $before -> $after ($verdict)"
     if [[ "$after" == "0" ]]; then echo "[$check] CLEAN"; return 0; fi
-    if [[ "$verdict" == "no_improvement" ]]; then echo "[$check] no improvement; stopping"; return 0; fi
+    if [[ "$verdict" == "no_improvement" ]]; then echo "[$check] no improvement; trying next strategy"; fi
     before="$after"
   done
   echo "[$check] reached max-iters=$MAX_ITERS"

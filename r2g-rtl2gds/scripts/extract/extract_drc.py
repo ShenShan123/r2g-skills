@@ -99,13 +99,22 @@ def main():
 
     drc_dir = project_root / 'drc'
 
-    total_count = parse_drc_count(drc_dir)
+    raw = parse_drc_count(drc_dir)
     categories = parse_lyrdb(drc_dir)
     log_info = parse_drc_log(drc_dir)
 
-    # If total count was not from count file, sum categories
-    if total_count < 0 and categories:
-        total_count = sum(c['count'] for c in categories.values())
+    # Prefer the true item count (sum of parsed category counts from the lyrdb)
+    # over the inflated count.rpt value.  count.rpt is produced by
+    # `grep -c "<value>"` over the lyrdb, which counts polygon value-tags
+    # (~7 per violation), NOT actual violations.  The lyrdb item count is
+    # exact; fall back to count.rpt only when no lyrdb is present.
+    cat_sum = sum(c['count'] for c in categories.values()) if categories else None
+    if cat_sum is not None:
+        total_count = cat_sum
+    elif raw >= 0:
+        total_count = raw
+    else:
+        total_count = -1
 
     # Prefer the structured drc_result.json written by run_drc.sh — it carries
     # explicit status="stuck"/"timeout" markers that are more informative than
@@ -130,6 +139,7 @@ def main():
     result = {
         'status': status,
         'total_violations': total_count if total_count >= 0 else None,
+        'raw_marker_count': raw if raw >= 0 else None,
         'categories': categories,
         'log_info': log_info,
     }

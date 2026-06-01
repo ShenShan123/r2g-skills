@@ -26,8 +26,10 @@ def test_clean_drc_yields_no_strategies():
     assert plan["strategies"] == []
 
 
-def test_antenna_fail_yields_two_ordered_strategies():
-    plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, {"CORE_UTILIZATION": "10"}, check="drc")
+def test_antenna_fail_yields_two_ordered_strategies_sky130hd():
+    """Non-inert platform (sky130hd) gets both antenna strategies."""
+    cfg = {"CORE_UTILIZATION": "10", "PLATFORM": "sky130hd"}
+    plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, cfg, check="drc")
     ids = [s["id"] for s in plan["strategies"]]
     assert ids == ["antenna_diode_iters", "antenna_density_relief"]
     assert plan["dominant_category"] == "METAL7_ANTENNA"
@@ -36,9 +38,20 @@ def test_antenna_fail_yields_two_ordered_strategies():
     assert relief["CORE_UTILIZATION"] == "5"
 
 
+def test_antenna_fail_yields_density_only_nangate45():
+    """nangate45: repair_antennas is inert, so only antenna_density_relief is offered."""
+    cfg = {"CORE_UTILIZATION": "10", "PLATFORM": "nangate45"}
+    plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, cfg, check="drc")
+    ids = [s["id"] for s in plan["strategies"]]
+    assert ids == ["antenna_density_relief"]
+    assert "antenna_diode_iters" not in ids
+    assert plan["dominant_category"] == "METAL7_ANTENNA"
+
+
 def test_applied_strategy_is_filtered_out():
     cfg = {"MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
-           "MAX_REPAIR_ANTENNAS_ITER_DRT": "10", "CORE_UTILIZATION": "10"}
+           "MAX_REPAIR_ANTENNAS_ITER_DRT": "10", "CORE_UTILIZATION": "10",
+           "PLATFORM": "sky130hd"}
     plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, cfg, check="drc")
     ids = [s["id"] for s in plan["strategies"]]
     assert "antenna_diode_iters" not in ids
@@ -47,7 +60,8 @@ def test_applied_strategy_is_filtered_out():
 
 def test_exhausted_antenna_is_residual():
     cfg = {"MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
-           "MAX_REPAIR_ANTENNAS_ITER_DRT": "10", "CORE_UTILIZATION": "5"}
+           "MAX_REPAIR_ANTENNAS_ITER_DRT": "10", "CORE_UTILIZATION": "5",
+           "PLATFORM": "sky130hd"}
     plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, cfg, check="drc")
     assert plan["status"] == "residual"
     assert plan["strategies"] == []
@@ -224,13 +238,26 @@ def test_driver_stops_when_cleaned(tmp_path):
     assert final["status"] == "clean"
 
 
-def test_driver_early_exits_on_no_improvement(tmp_path):
-    # seeded fail=7, re-checks keep returning 7 → early-exit, not 3 full iters
-    p = _mk_project(tmp_path, drc={"status": "fail", "total_violations": 7,
-                                   "categories": {"METAL7_ANTENNA": {"count": 7}}})
+def test_driver_exhausts_strategies_after_no_improvement(tmp_path):
+    # nangate45 has only one antenna strategy (antenna_density_relief).
+    # With counts that never improve the driver must: apply → no_improvement → log +
+    # continue → next --next returns STOP (all strategies tried) → log stop row.
+    # Two log rows total: one attempted strategy + one stop row.
+    p = _mk_project(tmp_path,
+                    drc={"status": "fail", "total_violations": 7,
+                         "categories": {"METAL7_ANTENNA": {"count": 7}}},
+                    config="export DESIGN_NAME = t\nexport CORE_UTILIZATION = 10\nexport PLATFORM = nangate45\n")
     sd = _stub_dir(tmp_path, counts=[7, 7, 7])
     r = _run_driver(p, sd)
     summary = (p / "reports" / "fix_summary.md").read_text()
+    # The attempted strategy must appear in the log
     assert "no_improvement" in summary
-    # early-exit invariant: only 1 iteration was logged, not all 3
-    assert len((p / "reports" / "fix_log.jsonl").read_text().strip().splitlines()) == 1
+    lines = (p / "reports" / "fix_log.jsonl").read_text().strip().splitlines()
+    # Exactly 2 log rows: the applied strategy (no_improvement) + the stop row
+    assert len(lines) == 2, f"expected 2 log rows, got {len(lines)}: {lines}"
+    row0 = json.loads(lines[0])
+    row1 = json.loads(lines[1])
+    assert row0["strategy"] == "antenna_density_relief"
+    assert row0["verdict"] == "no_improvement"
+    assert row1["strategy"] == "none"
+    assert "stop" in row1["verdict"]
