@@ -170,8 +170,49 @@ fixer run releases the DRC machinery.
 5. **Document nangate45 antenna reality** in failure-patterns + signoff-fixing (Finding B).
    [pending docs]
 6. **BEOL-only DRC mode** (`FEOL=false`) — fallback for the 271 designs that hang on FEOL
-   boolean ops; completes routing-DRC signoff, labelled `drc_mode: beol_only`. [pending]
+   boolean ops; completes routing-DRC signoff, labelled `drc_mode: beol_only`. **DONE +
+   empirically validated** (see Phase 1 below): commits `b8d6` (mode), `56a1` (also disable
+   ANTENNA). Validated on real ORFS — DMA_Controller (hung ~4h at FEOL :131) now completes
+   in **7.7s**, ip_demux in **34s**, both `clean_beol`.
+7. **`clean_beol` qualified status** (commit `76c81b9`) — a 0-violation BEOL-only run was
+   being emitted as plain `clean` by `extract_drc.py`, which status-based aggregation /
+   dashboard would silently miscount as a *full* clean (inflating the clean-rate). BEOL-only
+   skips BOTH FEOL and ANTENNA, so it only proves metal/via/cut routing is clean. Now emit
+   the qualified status **`clean_beol`** (mirrors LVS `clean_algorithmic`);
+   `diagnose_signoff_fix.py` treats it as needing no fix. Test added; full suite 265 pass.
+   **Superseded invariant:** "BEOL-only 0-viol ⇒ status `clean`" → now `clean_beol`. [DONE]
 
-## Phase 1 (known-fail set) — pending
+## Phase 1 (stuck-DRC set via BEOL-only) — IN PROGRESS
+
+**Goal:** convert the 271 FEOL-hang `stuck` designs to an honest routing-DRC verdict via
+BEOL-only mode. Validation wave (size-ordered), real ORFS, honest 300:1 deck minus FEOL+ANTENNA:
+
+| design | inst | full-deck result | BEOL-only result | wall | verdict |
+|--------|------|------------------|------------------|------|---------|
+| DMA_Controller_DMA_registers | 700 | stuck ~4h @ FEOL :131 | **0 viol** | 7.7s | `clean_beol` ✔ |
+| verilog_ethernet_ip_demux | 2,979 | stuck @ :131 | **0 viol** | 33.6s | `clean_beol` ✔ |
+| verilog_ethernet_eth_mac_1g_fifo | 469,520 | stuck @ FEOL | **hung @ BEOL CONTACT** | killed @ ~15min | `stuck` (honest) |
+| koios_gemm_layer | 978,362 | stuck @ FEOL | **hung @ BEOL CONTACT** | killed @ ~14min | `stuck` (honest) |
+
+**Finding (large-design BEOL CONTACT hang — confirmed):** BEOL-only is near-instant for
+small/medium stuck designs (seconds), but for **≥~470K-instance** designs the hang simply
+**migrates from the FEOL booleans to the BEOL CONTACT-layer ops** (`CONTACT.1` `cont.width` /
+`CONTACT.2` `cont.space`, deck line ~143–144). Both large designs advanced only 1–2 deck lines
+into the BEOL section, then froze for 5–8 min at 100% CPU (RSS climbing to 7.3GB) — the same
+KLayout polygon-op-no-progress mode, now on the millions of contact polygons. Killed (per the
+campaign's anti-zombie rule); their `reports/drc.json` stays honest `stuck`.
+- **Root insight:** the `cont` (contact) layer, like FEOL, is **library-internal** geometry —
+  P&R adds only routing *vias* (VIA1+), never new poly/active→M1 contacts inside cells. So
+  `CONTACT.*` on a placed design re-checks pre-verified library cells, exactly like FEOL.
+- **Implication / candidate improvement #8:** a deeper fallback could also skip the `CONTACT.*`
+  rules (same library-pre-verified justification as FEOL), leaving VIA/METAL/OFFGRID. That is
+  rule-line surgery (CONTACT isn't a top-level deck toggle), so it's deferred pending evidence
+  it's worth it. For now: BEOL-only fully unblocks the small/medium stuck majority cheaply; the
+  large tail (incl. BOOM 5–9M-inst) remains `stuck` and needs the deeper fallback or a very
+  long timeout. A population batch must also bound parallelism by memory (~7GB/large design).
 
 ## Phase 2 (large_rtl_designs) — pending
+
+`large_rtl_designs/` = BOOM CPU (boom_mediumboom 9.1M, boom_mediumseboom 8.3M, boom_smallseboom
+5.5M — all in the stuck-DRC set), Faraday ASIC (faraday_risc 406K, also stuck), Gaisler. These
+map onto the Phase-1 large-design BEOL-cost finding above.

@@ -920,3 +920,31 @@ truth:
   - Final antenna catalog is **two** real-fix strategies: `antenna_diode_iters`
     (`MAX_REPAIR_ANTENNAS_ITER_GRT/_DRT=10`, default 5) then `antenna_density_relief`
     (lower `CORE_UTILIZATION`). Tests + `signoff-fixing.md` + `failure-patterns.md` updated.
+
+### Amendments (2026-06-01, Phase-0/1 execution)
+
+- **nangate45 antenna = immediate honest residual — commits `bd2b67b`, `4d15d76`.** Phase 0
+  proved both antenna strategies fail on nangate45 (S1 `repair_antennas` inert: no tech-LEF
+  antenna rules + zero-`ANTENNADIFFAREA` diode; S2 density-relief counterproductive,
+  fifo_basic 14→16). Diagnoser now returns empty strategies + documented `residual_reason`.
+  Also: true DRC item-count fix (`bd2b67b`), strategy escalation on `no_improvement`, LVS
+  crash/incomplete reclassification (`4d15d76`).
+- **BEOL-only DRC mode + `clean_beol` status — commits `b8d6`, `56a1`, `76c81b9`.**
+  Fallback for the 271 FEOL-hang `stuck` designs: a deck copy with `FEOL=false` AND
+  `ANTENNA=false` (ANTENNA's `connect` rules depend on the FEOL-derived `gate` layer, so it
+  must also be disabled or KLayout errors and the run mis-classifies as `stuck`). Because it
+  skips two rule groups, a 0-violation BEOL-only run is given the qualified status
+  **`clean_beol`** (commit `76c81b9`) — NOT plain `clean` — so aggregation cannot miscount a
+  partial check as a full clean. `diagnose_signoff_fix.py` treats `clean_beol` as no-fix.
+  - **Superseded invariant:** "0-violation DRC ⇒ `clean`" → BEOL-only ⇒ `clean_beol`.
+  - **Empirical validation (real ORFS):** DMA_Controller_DMA_registers (hung ~4h at FEOL
+    `:131`) → `clean_beol` in **7.7s**; ip_demux → **34s**; both 0 violations. Full pytest
+    suite 265 pass / 8 skip.
+  - **Large-design BEOL CONTACT hang (confirmed):** at ≥~470K instances the hang **migrates
+    from FEOL to the BEOL `CONTACT.1/2` ops** (`cont.width`/`cont.space`, deck line ~143–144)
+    over millions of contact polygons — eth_mac_1g_fifo + koios_gemm_layer advanced 1–2 deck
+    lines then froze 5–8 min at 100% CPU, RSS 7.3GB; killed (anti-zombie), left honest `stuck`.
+    `cont` is library-internal (P&R adds only vias, never intra-cell contacts), so a deeper
+    fallback could also skip `CONTACT.*` (same justification as FEOL) — rule-line surgery,
+    deferred pending evidence. → candidate improvement #8. A population batch must also bound
+    parallelism by memory (~7GB/large design).

@@ -260,3 +260,30 @@ The shipped antenna catalog is therefore **two** real-fix strategies:
 Diagnoser/driver hardening from code review (commits `26d133e`, `d76daed`) is detailed in
 the plan's Amendments section. Whether two strategies suffice (vs. the residual-7) is the
 open question Phase 0 resolves empirically.
+
+## 13. Amendments (2026-06-01, Phase-0/1 empirical findings)
+
+Phase 0 resolved the open question: on **nangate45 the antenna catalog has no working real
+fix** — `repair_antennas` (S1) is inert (no tech-LEF antenna rules + `ANTENNADIFFAREA 0.0`
+diode) and `antenna_density_relief` (S2) is empirically *counterproductive* (fifo_basic
+14→16). The diagnoser therefore returns the nangate45 antenna case as an **immediate honest
+residual** (empty strategy list, documented `residual_reason`). Commits `bd2b67b`, `4d15d76`.
+
+**New status `clean_beol` (commit `76c81b9`).** The BEOL-only DRC fallback disables BOTH the
+FEOL and ANTENNA rule groups, so a 0-violation BEOL-only run only proves metal/via/cut routing
+is clean. `extract_drc.py` now emits the qualified status **`clean_beol`** (not plain `clean`),
+mirroring LVS `clean_algorithmic`, so status-based aggregation cannot miscount a partial check
+as a full clean. `diagnose_signoff_fix.py` treats `clean_beol` as needing no fix.
+- **Superseded invariant:** "0-violation DRC ⇒ status `clean`" no longer holds for BEOL-only
+  runs — they are `clean_beol`.
+- **Status enum (updated):** `fail | residual | clean | clean_beol | skipped | stuck |
+  timeout | unknown`.
+
+**BEOL-only validated end-to-end on real ORFS:** small/medium FEOL-hang designs that hung
+for hours now complete in seconds (DMA_Controller 7.7s, ip_demux 34s → `clean_beol`). Large
+designs (≥~470K inst) instead **hang on the BEOL CONTACT op** — the polygon-op-no-progress
+mode migrates from the FEOL booleans to `CONTACT.1/2` (`cont.width`/`cont.space`) over millions
+of contact polygons (eth_mac_1g_fifo + koios_gemm_layer froze 5–8 min at 100% CPU, RSS 7.3GB,
+killed). `cont` is library-internal (P&R adds only vias), so a deeper fallback could also skip
+`CONTACT.*`; deferred. BEOL-only thus unblocks the small/medium stuck majority; the large tail
+stays `stuck`. See `docs/campaign_signoff_fixer_2026-06-01.md` Phase 1.
