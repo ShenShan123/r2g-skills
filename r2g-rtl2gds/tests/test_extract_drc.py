@@ -151,3 +151,51 @@ def test_clean_design_total_zero_status_clean(tmp_path):
     assert result["status"] == "clean"
     # No lyrdb → raw_marker_count is the count.rpt value
     assert result["raw_marker_count"] == 0
+
+
+def test_drc_mode_beol_only_carried_through(tmp_path):
+    """drc_result.json with drc_mode=beol_only is propagated into reports/drc.json."""
+    proj = _make_project(tmp_path, lyrdb_content=_LYRDB_3_ITEMS, count_rpt=_INFLATED_COUNT)
+    # Write a drc_result.json that mirrors what run_drc.sh emits in BEOL-only mode
+    drc_result = {
+        "status": "violations",
+        "violations": 3,
+        "drc_mode": "beol_only",
+    }
+    (proj / "drc" / "drc_result.json").write_text(
+        json.dumps(drc_result), encoding="utf-8"
+    )
+    out = tmp_path / "drc_beol.json"
+    r = _run(proj, out)
+    assert r.returncode == 0, r.stderr
+    result = json.loads(out.read_text())
+
+    # drc_mode must be carried through to the output
+    assert result.get("drc_mode") == "beol_only", (
+        f"expected drc_mode='beol_only', got {result.get('drc_mode')!r}"
+    )
+    # Status should reflect the lyrdb item count (3 violations)
+    assert result["status"] == "fail"
+    assert result["total_violations"] == 3
+
+
+def test_drc_mode_full_carried_through(tmp_path):
+    """drc_result.json with drc_mode=full is propagated into reports/drc.json."""
+    proj = _make_project(tmp_path, lyrdb_content=None, count_rpt=0)
+    drc_result = {
+        "status": "clean",
+        "violations": 0,
+        "drc_mode": "full",
+    }
+    (proj / "drc" / "drc_result.json").write_text(
+        json.dumps(drc_result), encoding="utf-8"
+    )
+    out = tmp_path / "drc_full.json"
+    r = _run(proj, out)
+    assert r.returncode == 0, r.stderr
+    result = json.loads(out.read_text())
+
+    assert result.get("drc_mode") == "full", (
+        f"expected drc_mode='full', got {result.get('drc_mode')!r}"
+    )
+    assert result["status"] == "clean"

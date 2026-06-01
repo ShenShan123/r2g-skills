@@ -16,6 +16,15 @@ elif [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR" ]]; then
 else
   FLOW_VARIANT="base"
 fi
+
+# DRC_BEOL_ONLY=1 → skip FEOL checks (std cells are pre-verified library; only
+# BEOL metal/via/antenna routing varies per design).  See
+# references/failure-patterns.md §"KLayout DRC Stuck on `or`".
+DRC_BEOL_ONLY="${DRC_BEOL_ONLY:-0}"
+DRC_MODE="full"
+if [[ "$DRC_BEOL_ONLY" == "1" ]]; then
+  DRC_MODE="beol_only"
+fi
 # Auto-detect ORFS + tools (honors ORFS_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
@@ -64,6 +73,40 @@ echo "Running DRC for design: $DESIGN_NAME (variant: $FLOW_VARIANT)"
 echo "Platform: $PLATFORM"
 echo "GDS: $GDS_FILE"
 
+# ── BEOL-only mode: resolve platform DRC deck and generate a FEOL=false copy ──
+EXTRA_MAKE_ARGS=""
+if [[ "$DRC_BEOL_ONLY" == "1" ]]; then
+  PLATFORM_DIR_DRC="$FLOW_DIR/platforms/$PLATFORM"
+  # Parse KLAYOUT_DRC_FILE from the platform config.mk (mirror run_lvs.sh style)
+  _deck=$(grep 'KLAYOUT_DRC_FILE' "$PLATFORM_DIR_DRC/config.mk" 2>/dev/null \
+          | head -1 | sed 's/.*=\s*//' \
+          | sed "s|\$(PLATFORM_DIR)|$PLATFORM_DIR_DRC|g" | tr -d ' ')
+  # Verify the parsed path exists
+  if [[ -z "$_deck" || ! -f "$_deck" ]]; then
+    # Fallback: first *.lydrc in the platform drc/ directory
+    _deck=$(ls "$PLATFORM_DIR_DRC/drc/"*.lydrc 2>/dev/null | head -1 || true)
+  fi
+  if [[ -z "$_deck" || ! -f "$_deck" ]]; then
+    echo "ERROR: DRC_BEOL_ONLY=1 but no .lydrc deck found for platform $PLATFORM" >&2
+    exit 1
+  fi
+  # Create project drc dir early (needed for the generated deck)
+  DRC_DIR_EARLY="$PROJECT_DIR/drc"
+  mkdir -p "$DRC_DIR_EARLY"
+  BEOL_DECK="$DRC_DIR_EARLY/$(basename "$_deck" .lydrc).beol.lydrc"
+  sed -E 's/^([[:space:]]*FEOL[[:space:]]*=[[:space:]]*)true/\1false/' "$_deck" > "$BEOL_DECK"
+  # Verify the transform actually changed something
+  if ! grep -qE '^[[:space:]]*FEOL[[:space:]]*=[[:space:]]*false' "$BEOL_DECK"; then
+    echo "ERROR: BEOL deck transform failed — 'FEOL = false' not found in $BEOL_DECK" >&2
+    echo "Check that $PLATFORM deck has a top-level 'FEOL    = true' line." >&2
+    rm -f "$BEOL_DECK"
+    exit 1
+  fi
+  EXTRA_MAKE_ARGS="KLAYOUT_DRC_FILE=$BEOL_DECK"
+  echo "DRC BEOL-only mode: FEOL checks skipped (std-cell library is pre-verified); deck=$BEOL_DECK"
+fi
+# ──────────────────────────────────────────────────────────────────────────────
+
 cd "$FLOW_DIR"
 
 # Prevent env collision: ORFS Makefile uses SCRIPTS_DIR internally
@@ -74,8 +117,9 @@ echo "Timeout: ${DRC_TIMEOUT}s"
 
 DRC_STATUS=0
 set +e +o pipefail
+# shellcheck disable=SC2086
 setsid timeout --signal=TERM --kill-after=60 "$DRC_TIMEOUT" \
-  make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" drc 2>&1 | tee /tmp/drc_run_$$.log
+  make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" $EXTRA_MAKE_ARGS drc 2>&1 | tee /tmp/drc_run_$$.log
 DRC_STATUS=${PIPESTATUS[0]}
 set -e -o pipefail
 if [[ $DRC_STATUS -eq 124 ]]; then
@@ -126,10 +170,10 @@ if [[ -f "$DRC_DIR/6_drc_count.rpt" ]]; then
   echo "DRC completed: $COUNT violations found"
   if [[ "$COUNT" == "0" ]]; then
     echo "DRC CLEAN"
-    printf '{"status": "clean", "violations": 0}\n' > "$DRC_DIR/drc_result.json"
+    printf '{"status": "clean", "violations": 0, "drc_mode": "%s"}\n' "$DRC_MODE" > "$DRC_DIR/drc_result.json"
   else
     echo "DRC FAILED — review $DRC_DIR/6_drc.lyrdb for details"
-    printf '{"status": "violations", "violations": %s}\n' "${COUNT:-unknown}" > "$DRC_DIR/drc_result.json"
+    printf '{"status": "violations", "violations": %s, "drc_mode": "%s"}\n' "${COUNT:-unknown}" "$DRC_MODE" > "$DRC_DIR/drc_result.json"
   fi
 else
   echo ""
@@ -173,6 +217,7 @@ else
     else
       echo "DRC STUCK on $STUCK_RULE (no count report, exit=$DRC_STATUS) — see references/failure-patterns.md"
     fi
+    echo "HINT: retry with DRC_BEOL_ONLY=1 to skip the FEOL checks (standard cells are library-verified) — see references/failure-patterns.md"
     # Best-effort cleanup of any orphaned klayout DRC procs from this run.
     pkill -9 -f "klayout.*${FLOW_VARIANT}.*6_drc" 2>/dev/null || true
   elif [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
@@ -184,14 +229,15 @@ else
   else
     echo "DRC completed but no count report found (exit=$DRC_STATUS)"
   fi
-  python3 - "$DRC_DIR/drc_result.json" "$STATUS" "$REASON" "$STUCK_RULE" "$DRC_TIMEOUT" "$DRC_STATUS" <<'PYEOF'
+  python3 - "$DRC_DIR/drc_result.json" "$STATUS" "$REASON" "$STUCK_RULE" "$DRC_TIMEOUT" "$DRC_STATUS" "$DRC_MODE" <<'PYEOF'
 import json, sys
-out, status, reason, rule, timeout, exit_code = sys.argv[1:7]
+out, status, reason, rule, timeout, exit_code, drc_mode = sys.argv[1:8]
 result = {
     "status": status,
     "reason": reason,
     "timeout_s": int(timeout),
     "exit_code": int(exit_code),
+    "drc_mode": drc_mode,
 }
 if rule:
     result["stuck_at_rule"] = rule

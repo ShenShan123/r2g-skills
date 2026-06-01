@@ -144,8 +144,8 @@ def main():
         'log_info': log_info,
     }
     if drc_result:
-        # Carry through extra context (stuck_at_rule, reason, timeout_s, etc.)
-        for k in ('stuck_at_rule', 'reason', 'timeout_s', 'exit_code', 'note'):
+        # Carry through extra context (stuck_at_rule, reason, timeout_s, drc_mode, etc.)
+        for k in ('stuck_at_rule', 'reason', 'timeout_s', 'exit_code', 'note', 'drc_mode'):
             if k in drc_result and k not in result:
                 result[k] = drc_result[k]
 

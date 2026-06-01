@@ -370,6 +370,10 @@ Yosys crash, typically caused by very large designs or specific RTL constructs t
   - For the design itself, the rest of the flow (ORFS → RCX) is independent and can still produce GDS+SPEF.
 - **Pre-existing zombies:** If the system has klayout DRC processes running >1 hour at 100% CPU on the same `lydrc` line and no log progress, they're stuck in this pattern. Kill with `kill -9 <pid>`. Six such zombies were observed in this session, accumulating ~20k+ minutes of wasted CPU before cleanup.
 
+#### BEOL-only fallback
+
+When the FEOL hang is confirmed, run with `DRC_BEOL_ONLY=1 bash scripts/flow/run_drc.sh <proj> <platform>`. The script generates a modified deck copy (`drc/*.beol.lydrc`) with `FEOL = false` and passes it to `make drc` via `KLAYOUT_DRC_FILE=`. This skips the front-end-of-line boolean ops (poly, diffusion, gate geometry) — the standard cell library is pre-characterized and DRC-clean; only the BEOL routing (metal spacing/width/via rules and antenna checks) varies per design. Results are tagged `"drc_mode": "beol_only"` in `drc_result.json` and `reports/drc.json`. Do **not** report a BEOL-only run as full DRC-clean — it only certifies the routing layer stack, not the full rule set.
+
 #### Sub-variant: externally-killed stuck (exit 2, not 137)
 
 When klayout DRC is stuck on a polygon op and gets SIGKILL'd by something **other** than `run_drc.sh`'s own timeout — cgroups OOM, session limit, monitor script, or manual `pkill` — `make` exits 2 (target failed), not 124/137. Older `run_drc.sh` versions classified this as a generic `failed`, hiding the stuck pattern from triage.
