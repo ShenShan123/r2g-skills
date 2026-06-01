@@ -151,9 +151,12 @@ fixer run releases the DRC machinery.
 
 ## Skill improvements identified (from runs)
 
-1. **extract_lvs.py crash classification** — mark signal-11/crash-log/no-verdict LVS as a
-   crash residual, not `unknown`, so the fixer skips a doomed re-run. (LVS-unknown = 6 hard
-   crashes + 46 extracted-but-no-verdict.) [pending]
+1. **extract_lvs.py crash classification** — DONE (commit `4d15d76`). Validated on real data;
+   corpus LVS reclassified: **crash=6, incomplete=43, unknown=3** (was 52 `unknown`), plus
+   fail=10/failed=1, clean=603, clean_algorithmic=7. The 49 crash/incomplete are KLayout-
+   instability residuals (no `6_lvs.lvsdb`, no verdict) — now correctly residual instead of
+   triggering doomed re-runs. The honest LVS-clean rate is 610/673 (≈91%); the ~7%
+   crash/incomplete need a KLayout ≥0.30.10 upgrade, not a flow fix.
 2. **extract_drc.py true count** — `total_violations` should be the KLayout `<item>` count
    (sum of category counts), not ORFS's inflated `grep -c "<value>"` count.rpt (~7× over). Keep
    the raw marker count as a separate field. Corpus-wide honesty fix. [applying]
