@@ -881,21 +881,29 @@ Empirical fix yield (from the 93-failure retry): memory/place-density/io-pin fix
 - Violation counts vary across configs of the same design (layout-dependent)
 
 **Root Cause:**
-Long unbroken metal routes accumulate charge during plasma etching, which can damage thin gate oxides at the route endpoint. FIFO designs with deep address buses are particularly susceptible because the router creates long metal paths from address logic to SRAM-like structures.
+Long unbroken metal routes accumulate charge during plasma etching, which can damage thin gate oxides. Normally OpenROAD's `repair_antennas` fixes this by inserting antenna diodes during global/detailed route.
 
-**Automated fix:** `scripts/flow/fix_signoff.sh` (see `references/signoff-fixing.md`). Note: the 400:1 antenna-ratio relaxation is RETIRED — real layout fixes only.
+**nangate45 caveat (verified 2026-06-01 — see `docs/campaign_signoff_fixer_2026-06-01.md` Finding B):**
+On nangate45, OpenROAD antenna repair is **INERT**, so raising repair iterations does nothing:
+- The nangate45 **tech LEF has no antenna rules** (`grep -ci ANTENNA NangateOpenCellLibrary.tech.lef` = 0), so `check_antennas` always reports **0 net / 0 pin violations** — OpenROAD detects nothing to repair.
+- The only diode, `ANTENNA_X1`, has **`ANTENNADIFFAREA 0.0`** (placeholder), so `repair_antennas` rejects it (`ERROR GRT-0244`, `WARNING GRT-0246 No diode … found`) and inserts zero diodes.
+- These METAL*_ANTENNA violations are therefore visible **only to KLayout** `FreePDK45.lydrc` (300:1); the OpenROAD flow cannot see or fix them. The 2026-05-30 400:1 relaxation merely dragged KLayout toward OpenROAD's "0 antennas" view (masking).
 
-**Action (real-layout path, in order):**
-1. Raise repair-antennas iterations so OpenROAD inserts more diodes/jumpers:
-   `export MAX_REPAIR_ANTENNAS_ITER_GRT = 10`, `export MAX_REPAIR_ANTENNAS_ITER_DRT = 10`
-   in config.mk (default 5); re-route. The `ANTENNA_X1` diode is auto-discovered from
-   the LEF (it declares `CLASS CORE ANTENNACELL`) — do NOT set `CORE_ANTENNACELL`, which
-   is not an env var ORFS reads (no-op).
-2. Lower `CORE_UTILIZATION` by 5 (floor 5) so the router has more room to place diodes
-   and spread routes across layers; re-run from floorplan. `PLACE_DENSITY_LB_ADDON` is
-   never touched (hard rule: never below 0.10).
-- Do NOT relax the DRC rule deck (e.g., raising the antenna ratio). The honest 300:1
-  deck is the reference; install via `tools/install_nangate45_drc.sh`.
+**Automated fix:** `scripts/flow/fix_signoff.sh` (see `references/signoff-fixing.md`). The 400:1 antenna-ratio relaxation is RETIRED — real layout fixes only.
+
+**Action (real-layout path):**
+- **nangate45:** the only tool-agnostic lever is **layout relief** — lower `CORE_UTILIZATION`
+  by 5 (floor 5) / grow `DIE_AREA` so the router can break long metal runs; re-run from
+  floorplan. `PLACE_DENSITY_LB_ADDON` is never touched (hard rule: never below 0.10). The
+  fixer skips the inert diode strategy on nangate45 and goes straight to density relief; if
+  relief cannot clear it, report an **honest residual** (do not relax the deck).
+- **Platforms with working antenna repair** (non-zero-diffarea diode + tech-LEF antenna
+  rules, e.g. sky130/asap7): raise repair-antennas iterations
+  (`MAX_REPAIR_ANTENNAS_ITER_GRT/_DRT = 10`, default 5); the diode is auto-discovered from
+  its `CLASS CORE ANTENNACELL` LEF declaration (do NOT set `CORE_ANTENNACELL` — not an ORFS
+  env var).
+- Do NOT relax the DRC rule deck. The honest 300:1 deck is the reference; install via
+  `tools/install_nangate45_drc.sh`.
 
 ### Hold Timing Violations Post-CTS
 

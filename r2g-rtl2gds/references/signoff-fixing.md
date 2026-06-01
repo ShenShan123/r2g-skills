@@ -103,13 +103,23 @@ Default: `platform=nangate45`, `--check both`, `--max-iters 3`.
 
 ### DRC — antenna violations only
 
-Both strategies are `auto_apply: true`. Applied in order; already-applied entries
-are skipped. When all are exhausted, `status` becomes `residual`.
+Strategies are `auto_apply: true`, applied in order; already-applied entries are skipped;
+when all are exhausted `status` becomes `residual`. **The catalog is platform-aware** —
+`antenna_diode_iters` is offered only on platforms with a working antenna-repair flow; on
+`nangate45` (in `ANTENNA_REPAIR_INERT_PLATFORMS`) only `antenna_density_relief` is offered.
 
-| id | config_edits | rerun_from | Effect |
-|----|-------------|------------|--------|
-| `antenna_diode_iters` | `MAX_REPAIR_ANTENNAS_ITER_GRT=10`, `MAX_REPAIR_ANTENNAS_ITER_DRT=10` | `route` | Raises OpenROAD's repair-antennas iteration counts (GRT+DRT, default 5) so more antenna diodes/jumpers are inserted. The diode cell is **auto-discovered**: nangate45's `ANTENNA_X1` LEF macro already declares `CLASS CORE ANTENNACELL`, so no `CORE_ANTENNACELL` setting is needed (it is not an env var ORFS reads). |
-| `antenna_density_relief` | `CORE_UTILIZATION` lowered by 5 (floor 5) | `floorplan` | Reduces placement density so the router has more room to place diodes and spread routes. `PLACE_DENSITY_LB_ADDON` is **never** touched (hard rule: never set below 0.10). |
+| id | platforms | config_edits | rerun_from | Effect |
+|----|-----------|-------------|------------|--------|
+| `antenna_diode_iters` | non-nangate45 (working diode) | `MAX_REPAIR_ANTENNAS_ITER_GRT=10`, `MAX_REPAIR_ANTENNAS_ITER_DRT=10` | `route` | Raises OpenROAD repair-antennas iterations (default 5) so more diodes are inserted. Diode auto-discovered from its `CLASS CORE ANTENNACELL` LEF declaration; do NOT set `CORE_ANTENNACELL` (not an ORFS env var). |
+| `antenna_density_relief` | all | `CORE_UTILIZATION` lowered by 5 (floor 5) | `floorplan` | Reduces placement density / grows area so the router can break long metal runs. `PLACE_DENSITY_LB_ADDON` is **never** touched (hard rule: never below 0.10). |
+
+**Why nangate45 skips diode insertion (verified 2026-06-01, campaign Finding B):** the
+nangate45 tech LEF has no antenna rules (OpenROAD `check_antennas` → 0 violations) and its
+only diode `ANTENNA_X1` has `ANTENNADIFFAREA 0.0` (so `repair_antennas` rejects it,
+`GRT-0244`/`GRT-0246`). OpenROAD therefore cannot see or repair the antennas that KLayout's
+`FreePDK45.lydrc` (300:1) flags. Density relief is the only tool-agnostic lever; if it cannot
+clear them, the honest outcome is `residual` (the deck is never relaxed). Note density relief
+enlarges the die, which **increases KLayout DRC runtime**.
 
 Non-antenna DRC categories are **not** handled in v1 — reported as residual.
 
