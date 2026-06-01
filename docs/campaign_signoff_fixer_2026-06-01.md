@@ -3,7 +3,8 @@
 Validating the new DRC/LVS violation-fixing ability (`fix_signoff.sh` +
 `diagnose_signoff_fix.py`) on the corpus, and improving the skill from what the runs reveal.
 Policy: **real layout fixes only** (no rule-deck relaxation). Spec/plan:
-`docs/superpowers/{specs,plans}/2026-05-31-drc-lvs-fixer*.md`.
+merged into `CHANGELOG.md` (see the "2026-05-31 — DRC/LVS violation-fixing
+ability" entry).
 
 ## Ability (shipped, branch `all_tech_feat_label_extract`)
 
