@@ -386,7 +386,48 @@ equivalent_pins("HA_X1","A","B")
 max_branch_complexity(65536)
 max_depth(16)
 
-if ! compare
+# --- VERBOSE-MISMATCH PATCH (wave_f2 diagnosis 2026-05-28) ---
+# Force lvsdb to be written even on mismatch by explicitly calling report_lvs
+# after compare(). Wrap in begin/rescue to keep going through KLayout exceptions.
+# Also dump top-level circuit summary into the log so we can categorize mismatches
+# even if lvsdb write fails (e.g. SIGSEGV during gen_log_entry).
+compare_result = false
+begin
+  compare_result = compare
+rescue =&gt; e
+  $stdout.write "VERBOSE-LVS: compare raised exception: #{e.class}: #{e.message}\n"
+  e.backtrace[0,10].each { |b| $stdout.write "  #{b}\n" } if e.backtrace
+end
+
+# Dump per-top-circuit pin/device/net counts so we can at least see structural deltas
+# even if lvsdb write later fails.
+begin
+  ln = netlist
+  ls = schematic
+  $stdout.write "VERBOSE-LVS: layout top circuits:\n"
+  ln.each_circuit_top_down do |c|
+    $stdout.write "  L  #{c.name}  pins=#{c.pin_count}  devs=#{c.device_count}  nets=#{c.net_count}  subs=#{c.child_circuit_count}\n"
+  end
+  $stdout.write "VERBOSE-LVS: schematic top circuits:\n"
+  ls.each_circuit_top_down do |c|
+    $stdout.write "  S  #{c.name}  pins=#{c.pin_count}  devs=#{c.device_count}  nets=#{c.net_count}  subs=#{c.child_circuit_count}\n"
+  end
+rescue =&gt; e
+  $stdout.write "VERBOSE-LVS: circuit dump raised: #{e.class}: #{e.message}\n"
+end
+
+# Force-write the LVS database even on mismatch (KLayout normally writes on
+# clean compare; explicit call ensures the file exists for both outcomes).
+if $report_file
+  begin
+    report_lvs($report_file, true)
+    $stdout.write "VERBOSE-LVS: wrote lvsdb to #{$report_file}\n"
+  rescue =&gt; e
+    $stdout.write "VERBOSE-LVS: report_lvs failed: #{e.class}: #{e.message}\n"
+  end
+end
+
+if ! compare_result
   puts "ERROR : Netlists don't match"
 else
   puts "CONGRATULATIONS! Netlists match."
