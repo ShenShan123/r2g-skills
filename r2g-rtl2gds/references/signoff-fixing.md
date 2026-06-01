@@ -83,7 +83,7 @@ Default: `platform=nangate45`, `--check both`, `--max-iters 3`.
     {
       "id": "antenna_diode_iters",
       "rationale": "...",
-      "config_edits": {"CORE_ANTENNACELL": "ANTENNA_X1", "MAX_REPAIR_ANTENNAS_ITER_GRT": "10", "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"},
+      "config_edits": {"MAX_REPAIR_ANTENNAS_ITER_GRT": "10", "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"},
       "rerun_from": "route",
       "recheck": "drc",
       "auto_apply": true,
@@ -103,14 +103,13 @@ Default: `platform=nangate45`, `--check both`, `--max-iters 3`.
 
 ### DRC — antenna violations only
 
-All three strategies are `auto_apply: true`. Applied in order; already-applied entries
+Both strategies are `auto_apply: true`. Applied in order; already-applied entries
 are skipped. When all are exhausted, `status` becomes `residual`.
 
 | id | config_edits | rerun_from | Effect |
 |----|-------------|------------|--------|
-| `antenna_diode_iters` | `CORE_ANTENNACELL=ANTENNA_X1`, `MAX_REPAIR_ANTENNAS_ITER_GRT=10`, `MAX_REPAIR_ANTENNAS_ITER_DRT=10` | `route` | Wires the nangate45 `ANTENNA_X1` macro as the diode cell and raises OpenROAD repair-antennas iteration counts so more diodes/jumpers are inserted. |
-| `antenna_route_effort` | `DETAILED_ROUTE_ARGS=-droute_end_iteration 10` | `route` | Gives the detailed router more end-iterations to reroute long single-layer metal onto additional routing layers. |
-| `antenna_density_relief` | `CORE_UTILIZATION` lowered by 5 (floor 5) | `floorplan` | Reduces placement density so the router has more room to spread routes. `PLACE_DENSITY_LB_ADDON` is **never** touched (hard rule: never set below 0.10). |
+| `antenna_diode_iters` | `MAX_REPAIR_ANTENNAS_ITER_GRT=10`, `MAX_REPAIR_ANTENNAS_ITER_DRT=10` | `route` | Raises OpenROAD's repair-antennas iteration counts (GRT+DRT, default 5) so more antenna diodes/jumpers are inserted. The diode cell is **auto-discovered**: nangate45's `ANTENNA_X1` LEF macro already declares `CLASS CORE ANTENNACELL`, so no `CORE_ANTENNACELL` setting is needed (it is not an env var ORFS reads). |
+| `antenna_density_relief` | `CORE_UTILIZATION` lowered by 5 (floor 5) | `floorplan` | Reduces placement density so the router has more room to place diodes and spread routes. `PLACE_DENSITY_LB_ADDON` is **never** touched (hard rule: never set below 0.10). |
 
 Non-antenna DRC categories are **not** handled in v1 — reported as residual.
 
@@ -142,8 +141,9 @@ These are reported honestly by `diagnose_signoff_fix.py` with a non-null `residu
 
 The fix loop applies only genuine layout changes:
 
-- Antenna diode insertion (ORFS `CORE_ANTENNACELL`, `MAX_REPAIR_ANTENNAS_ITER_*`)
-- Detailed router end-iteration count (`DETAILED_ROUTE_ARGS`)
+- More antenna diode insertion (raise ORFS `MAX_REPAIR_ANTENNAS_ITER_GRT`/`_DRT`,
+  default 5 → 10; the `ANTENNA_X1` diode is auto-discovered from the LEF, so
+  `CORE_ANTENNACELL` is **not** set — it is a no-op env var ORFS does not read)
 - Placement density/utilization reduction (`CORE_UTILIZATION`)
 - LVS macro CDL (operator-provided combined CDL)
 

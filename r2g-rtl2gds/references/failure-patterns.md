@@ -886,14 +886,14 @@ Long unbroken metal routes accumulate charge during plasma etching, which can da
 **Automated fix:** `scripts/flow/fix_signoff.sh` (see `references/signoff-fixing.md`). Note: the 400:1 antenna-ratio relaxation is RETIRED — real layout fixes only.
 
 **Action (real-layout path, in order):**
-1. Wire the nangate45 `ANTENNA_X1` diode macro and raise repair iterations:
-   `export CORE_ANTENNACELL = ANTENNA_X1`, `export MAX_REPAIR_ANTENNAS_ITER_GRT = 10`,
-   `export MAX_REPAIR_ANTENNAS_ITER_DRT = 10` in config.mk; re-route.
-2. Give the detailed router more end-iterations to reroute long metal:
-   `export DETAILED_ROUTE_ARGS = -droute_end_iteration 10`; re-route.
-3. Lower `CORE_UTILIZATION` by 5 (floor 5) so the router has more room to spread routes
-   across layers; re-run from floorplan. `PLACE_DENSITY_LB_ADDON` is never touched
-   (hard rule: never below 0.10).
+1. Raise repair-antennas iterations so OpenROAD inserts more diodes/jumpers:
+   `export MAX_REPAIR_ANTENNAS_ITER_GRT = 10`, `export MAX_REPAIR_ANTENNAS_ITER_DRT = 10`
+   in config.mk (default 5); re-route. The `ANTENNA_X1` diode is auto-discovered from
+   the LEF (it declares `CLASS CORE ANTENNACELL`) — do NOT set `CORE_ANTENNACELL`, which
+   is not an env var ORFS reads (no-op).
+2. Lower `CORE_UTILIZATION` by 5 (floor 5) so the router has more room to place diodes
+   and spread routes across layers; re-run from floorplan. `PLACE_DENSITY_LB_ADDON` is
+   never touched (hard rule: never below 0.10).
 - Do NOT relax the DRC rule deck (e.g., raising the antenna ratio). The honest 300:1
   deck is the reference; install via `tools/install_nangate45_drc.sh`.
 

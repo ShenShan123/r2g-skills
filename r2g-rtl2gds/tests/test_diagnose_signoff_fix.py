@@ -26,29 +26,28 @@ def test_clean_drc_yields_no_strategies():
     assert plan["strategies"] == []
 
 
-def test_antenna_fail_yields_three_ordered_strategies():
+def test_antenna_fail_yields_two_ordered_strategies():
     plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, {"CORE_UTILIZATION": "10"}, check="drc")
     ids = [s["id"] for s in plan["strategies"]]
-    assert ids == ["antenna_diode_iters", "antenna_route_effort", "antenna_density_relief"]
+    assert ids == ["antenna_diode_iters", "antenna_density_relief"]
     assert plan["dominant_category"] == "METAL7_ANTENNA"
     # density relief computes a concrete lowered utilization
-    relief = plan["strategies"][2]["config_edits"]
+    relief = plan["strategies"][1]["config_edits"]
     assert relief["CORE_UTILIZATION"] == "5"
 
 
 def test_applied_strategy_is_filtered_out():
-    cfg = {"CORE_ANTENNACELL": "ANTENNA_X1", "MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
+    cfg = {"MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
            "MAX_REPAIR_ANTENNAS_ITER_DRT": "10", "CORE_UTILIZATION": "10"}
     plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, cfg, check="drc")
     ids = [s["id"] for s in plan["strategies"]]
     assert "antenna_diode_iters" not in ids
-    assert ids[0] == "antenna_route_effort"
+    assert ids[0] == "antenna_density_relief"
 
 
 def test_exhausted_antenna_is_residual():
-    cfg = {"CORE_ANTENNACELL": "ANTENNA_X1", "MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
-           "MAX_REPAIR_ANTENNAS_ITER_DRT": "10", "DETAILED_ROUTE_ARGS": "-droute_end_iteration 10",
-           "CORE_UTILIZATION": "5"}
+    cfg = {"MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
+           "MAX_REPAIR_ANTENNAS_ITER_DRT": "10", "CORE_UTILIZATION": "5"}
     plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, cfg, check="drc")
     assert plan["status"] == "residual"
     assert plan["strategies"] == []
@@ -90,7 +89,7 @@ def test_lvs_macro_emits_operator_only_strategy():
 
 def test_apply_edits_round_trip():
     cfg = "export DESIGN_NAME = t\nexport CORE_UTILIZATION = 10\n"
-    edits = {"CORE_ANTENNACELL": "ANTENNA_X1", "MAX_REPAIR_ANTENNAS_ITER_GRT": "10"}
+    edits = {"MAX_REPAIR_ANTENNAS_ITER_DRT": "10", "MAX_REPAIR_ANTENNAS_ITER_GRT": "10"}
     once = d.apply_edits(cfg, edits)
     twice = d.apply_edits(once, edits)  # re-apply must not duplicate the block
     assert twice.count(d.BLOCK_START) == 1
@@ -100,7 +99,7 @@ def test_apply_edits_round_trip():
     assert twice.count("export CORE_UTILIZATION = 10") == 1
     # re-parsing the result yields the edited values
     parsed = d.parse_config(twice)
-    assert parsed["CORE_ANTENNACELL"] == "ANTENNA_X1"
+    assert parsed["MAX_REPAIR_ANTENNAS_ITER_DRT"] == "10"
     assert parsed["MAX_REPAIR_ANTENNAS_ITER_GRT"] == "10"
     assert parsed["DESIGN_NAME"] == "t"
 
@@ -144,7 +143,7 @@ def test_apply_writes_idempotent_block(tmp_path):
                         "--apply", "antenna_diode_iters"], check=True)
     text = cfg.read_text()
     assert text.count("# >>> r2g signoff-fix (auto) >>>") == 1
-    assert "export CORE_ANTENNACELL = ANTENNA_X1" in text
+    assert "export MAX_REPAIR_ANTENNAS_ITER_GRT = 10" in text
     assert text.count("export DESIGN_NAME = t") == 1  # original preserved once
 
 

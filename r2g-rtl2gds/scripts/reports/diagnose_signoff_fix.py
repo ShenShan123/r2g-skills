@@ -18,7 +18,6 @@ from pathlib import Path
 
 BLOCK_START = "# >>> r2g signoff-fix (auto) >>>"
 BLOCK_END = "# <<< r2g signoff-fix (auto) <<<"
-ANTENNA_DIODE_CELL = "ANTENNA_X1"  # nangate45 ships MACRO ANTENNA_X1
 KLAYOUT_CPP_CRASH = re.compile(r"sort_circuit|gen_log_entry|segmentation|sigsegv", re.I)
 
 
@@ -44,7 +43,7 @@ def _applied(cfg: dict, edits: dict) -> bool:
 
 
 def _antenna_catalog(cfg: dict) -> list:
-    """Return the full antenna strategy catalog (all entries, regardless of applied state)."""
+    """Full antenna strategy catalog (real layout fixes; regardless of applied state)."""
     try:
         cur_util = int(float(cfg.get("CORE_UTILIZATION", "")))
     except (TypeError, ValueError):
@@ -52,21 +51,17 @@ def _antenna_catalog(cfg: dict) -> list:
     new_util = max(5, cur_util - 5) if cur_util is not None else 20
     return [
         {"id": "antenna_diode_iters",
-         "rationale": "Wire ANTENNA_X1 as the antenna diode and raise repair_antennas "
-                      "iterations so OpenROAD inserts diodes / jumpers to break long metal.",
-         "config_edits": {"CORE_ANTENNACELL": ANTENNA_DIODE_CELL,
-                          "MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
+         "rationale": "Raise repair_antennas iterations (GRT+DRT, default 5) so OpenROAD "
+                      "inserts more antenna diodes (auto-discovered ANTENNA_X1, which the "
+                      "nangate45 LEF declares CLASS CORE ANTENNACELL) and jumpers to break "
+                      "long metal.",
+         "config_edits": {"MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
                           "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"},
          "rerun_from": "route", "recheck": "drc", "auto_apply": True},
-        {"id": "antenna_route_effort",
-         "rationale": "Give the detailed router more end iterations to reroute long metal "
-                      "onto additional layers.",
-         "config_edits": {"DETAILED_ROUTE_ARGS": "-droute_end_iteration 10"},
-         "rerun_from": "route", "recheck": "drc", "auto_apply": True},
         {"id": "antenna_density_relief",
-         "rationale": "Lower placement utilization so the router has room to spread routes "
-                      "across layers (reduces long single-layer runs). "
-                      "PLACE_DENSITY_LB_ADDON is left untouched (hard rule: never < 0.10).",
+         "rationale": "Lower placement utilization so the router has room to place diodes and "
+                      "spread routes across layers (breaks long single-layer runs). "
+                      "PLACE_DENSITY_LB_ADDON is never touched (hard rule: never < 0.10).",
          "config_edits": {"CORE_UTILIZATION": str(new_util)},
          "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True},
     ]
