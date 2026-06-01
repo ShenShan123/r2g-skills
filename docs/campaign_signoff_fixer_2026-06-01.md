@@ -42,7 +42,22 @@ riscv_alu4b(14→7), microcontroller_cpu(7→7), eth_arb_mux(161→133), eth_dem
 
 | design | check | baseline (300:1) | after fix | strategy path | verdict | notes |
 |--------|-------|------------------|-----------|---------------|---------|-------|
-| PicoRV32_…_fifo_basic | drc | _re-DRC running_ | | | | honest-baseline smoke test |
+| PicoRV32_…_fifo_basic | drc | 14 (raw 98) | 16 | density_relief→exhausted | **honest residual** | density relief COUNTERPRODUCTIVE (14→16); diode repair inert. Fixer correctly reported residual, exit 2. |
+
+### Density-relief verdict (2026-06-01) — nangate45 antennas have NO viable real fix
+
+Ran the fixed fixer on fifo_basic (honest baseline 14). `antenna_density_relief`
+(`CORE_UTILIZATION` 10→5) **increased** antennas to 16 (spreading cells lengthens metal); the
+fixer escalated (fix #3 works), found no more strategies, and reported honest residual (status
+fail, exit 2). Confirms: with OpenROAD repair inert (Finding B) AND density relief
+counterproductive, **no real-layout lever fixes nangate45 KLayout-300:1 antennas.** Decision:
+the fixer should classify nangate45 antenna fails as **residual immediately** (residual_reason
+documents the root cause), not burn a ~45-min counterproductive re-route. → improvement #4b.
+This is the honest answer the "real fixes only" mandate demands — the prior 400:1 masking is
+correctly rejected; these are genuine residuals.
+
+The fixer itself is now **validated end-to-end** on real ORFS: diagnose→apply→re-route→re-DRC→
+escalate→honest-residual, with honest item counts. ✔
 
 ## Phase 0 findings
 
