@@ -38,6 +38,8 @@ def _all_antenna(categories: dict) -> bool:
 
 
 def _applied(cfg: dict, edits: dict) -> bool:
+    if not edits:
+        return False
     return all(str(cfg.get(k)) == str(v) for k, v in edits.items())
 
 
@@ -77,7 +79,7 @@ def _antenna_strategies(cfg: dict) -> list:
 def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
     status = drc.get("status", "unknown")
     cats = drc.get("categories") or {}
-    dominant = max(cats, key=lambda k: cats[k].get("count", 0)) if cats else None
+    dominant = max(cats, key=lambda k: cats[k].get("count") or 0) if cats else None
     plan = {"check": "drc", "status": status, "violation_count": drc.get("total_violations"),
             "dominant_category": dominant, "strategies": [], "residual_reason": None}
     if status in ("clean", "skipped"):
@@ -85,7 +87,7 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
     if status in ("stuck", "timeout"):
         plan["residual_reason"] = f"drc_{status}_tooling_out_of_v1_scope"
         return plan
-    if status == "fail":
+    if status in ("fail", "failed"):
         if _all_antenna(cats):
             strategies = [s for s in _antenna_strategies(cfg) if s["id"] not in exclude]
             plan["strategies"] = strategies
@@ -95,6 +97,8 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
         else:
             non_antenna = sorted(k for k in cats if not k.upper().endswith("_ANTENNA"))
             plan["residual_reason"] = "non-antenna DRC class not handled in v1: " + ", ".join(non_antenna)
+        return plan
+    plan["residual_reason"] = "drc status unknown — no report yet"
     return plan
 
 

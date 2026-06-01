@@ -1,7 +1,14 @@
 """Tests for diagnose_signoff_fix.py: signoff (DRC/LVS) violation→fix-plan logic."""
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
+from pathlib import Path
+
 import diagnose_signoff_fix as d
+
+MOD = Path(__file__).resolve().parents[1] / "scripts" / "reports" / "diagnose_signoff_fix.py"
 
 
 def _drc(status, count=0, cats=None):
@@ -80,12 +87,39 @@ def test_lvs_macro_emits_operator_only_strategy():
     assert "operator_note" in s
 
 
-import json
-import subprocess
-import sys
-from pathlib import Path
+def test_apply_edits_round_trip():
+    cfg = "export DESIGN_NAME = t\nexport CORE_UTILIZATION = 10\n"
+    edits = {"CORE_ANTENNACELL": "ANTENNA_X1", "MAX_REPAIR_ANTENNAS_ITER_GRT": "10"}
+    once = d.apply_edits(cfg, edits)
+    twice = d.apply_edits(once, edits)  # re-apply must not duplicate the block
+    assert twice.count(d.BLOCK_START) == 1
+    assert twice.count(d.BLOCK_END) == 1
+    # original non-block lines are preserved (exactly once)
+    assert twice.count("export DESIGN_NAME = t") == 1
+    assert twice.count("export CORE_UTILIZATION = 10") == 1
+    # re-parsing the result yields the edited values
+    parsed = d.parse_config(twice)
+    assert parsed["CORE_ANTENNACELL"] == "ANTENNA_X1"
+    assert parsed["MAX_REPAIR_ANTENNAS_ITER_GRT"] == "10"
+    assert parsed["DESIGN_NAME"] == "t"
 
-MOD = Path(__file__).resolve().parents[1] / "scripts" / "reports" / "diagnose_signoff_fix.py"
+
+def test_parse_config_handles_assignment_forms():
+    text = (
+        "# a comment line\n"
+        "export A = 1\n"
+        "B := 2\n"
+        "C ?= 3\n"
+        "override export D = 4\n"
+        "export A = 9\n"  # later assignment of the same var wins
+    )
+    cfg = d.parse_config(text)
+    assert cfg["A"] == "9"
+    assert cfg["B"] == "2"
+    assert cfg["C"] == "3"
+    assert cfg["D"] == "4"
+    # comment line is not parsed as a variable
+    assert "#" not in "".join(cfg.keys())
 
 
 def _mk_project(tmp_path, drc=None, lvs=None, config="export DESIGN_NAME = t\nexport CORE_UTILIZATION = 10\n"):
