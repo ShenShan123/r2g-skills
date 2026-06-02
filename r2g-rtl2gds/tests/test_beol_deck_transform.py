@@ -103,51 +103,66 @@ def test_no_feol_or_antenna_line_leaves_deck_untouched():
     assert out == fake_deck, "Deck without FEOL/ANTENNA lines should be unchanged"
 
 
-# ── DRC_SKIP_CONTACT deeper-fallback transform (comments out CONTACT.* checks) ──
-# The sed expression exactly as it appears in run_drc.sh.
-_SED_SKIP_CONTACT = r's/^([[:space:]]*[^#].*\.output\("CONTACT\.)/# r2g-skip-contact: \1/'
+# ── DRC_BEOL_STRICT deeper fallback: comment EVERY `.output(` inside if FEOL…end#FEOL ──
+# The awk program exactly as it appears in run_drc.sh.
+_AWK_BEOL_STRICT = r'''
+/^[[:space:]]*if[[:space:]]+FEOL([^[:alnum:]_]|$)/ { infeol=1 }
+infeol && /^[[:space:]]*end[[:space:]]*#[[:space:]]*FEOL/ { infeol=0 }
+{ if (infeol && $0 ~ /\.output\(/ && $0 !~ /^[[:space:]]*#/) print "# r2g-beol-strict: " $0; else print }
+'''
 
 
-def _apply_skip_contact(src: str) -> str:
+def _apply_beol_strict(src: str) -> str:
     result = subprocess.run(
-        ["sed", "-E", _SED_SKIP_CONTACT],
+        ["awk", _AWK_BEOL_STRICT],
         input=src, capture_output=True, text=True, check=True,
     )
     return result.stdout
 
 
-# A realistic slice of the FreePDK45 deck around the CONTACT group.
-_CONTACT_SLICE = (
+# A realistic slice spanning the FEOL block (IMPLANT + CONTACT) and the BEOL block.
+_FEOL_BLOCK = (
+    'if FEOL\n'
+    'info("FEOL checks")\n'
+    'gate = poly & active\n'
+    'active.width(90.nm).output("ACTIVE.1", "ACTIVE.1 : width")\n'
+    'implant = nplus.or(pplus)\n'
+    'implant.width(45.nm, euclidian).output("IMPLANT.3", "IMPLANT.3 : width")\n'
+    'nplus.and(pplus).output("IMPLANT.5", "IMPLANT.5 : overlap")\n'
     'cont    = polygons(10, 0)\n'
     'cont.width(65.nm).output("CONTACT.1", "CONTACT.1 : width")\n'
     'cont.space(75.nm, euclidian).output("CONTACT.2", "CONTACT.2 : spacing")\n'
-    'cont.not(active.or(poly.or(metal1))).output("CONTACT.3", "CONTACT.3 : inside")\n'
-    'active.enclosing(cont, 5.nm, euclidian).output("CONTACT.4", "CONTACT.4 : enc")\n'
+    'end # FEOL\n'
+    'if BEOL\n'
     'metal1.width(65.nm, euclidian).output("METAL1.1", "METAL1.1 : width")\n'
-    'cont.interacting(error_corners.polygons(1.dbu)).output("METAL1.3", "METAL1.3 : enc")\n'
+    'end # BEOL\n'
 )
 
 
-def test_skip_contact_comments_all_contact_checks():
-    """Every CONTACT.* check line (incl. ones referencing FEOL layers) is commented."""
-    out = _apply_skip_contact(_CONTACT_SLICE)
-    for n in (1, 2, 3, 4):
-        assert not re.search(rf'^\s*[^#].*\.output\("CONTACT\.{n}', out, re.MULTILINE), (
-            f"CONTACT.{n} check should be commented out, got:\n{out}"
+def test_beol_strict_comments_every_feol_block_check():
+    """ALL checks inside if FEOL…end#FEOL (ACTIVE/IMPLANT/CONTACT) are commented."""
+    out = _apply_beol_strict(_FEOL_BLOCK)
+    for label in ("ACTIVE.1", "IMPLANT.3", "IMPLANT.5", "CONTACT.1", "CONTACT.2"):
+        assert not re.search(rf'^\s*[^#].*\.output\("{re.escape(label)}', out, re.MULTILINE), (
+            f"{label} (inside FEOL block) should be commented, got:\n{out}"
         )
-    # And the guard regex run_drc.sh uses must find no uncommented CONTACT lines.
-    assert not re.search(r'^\s*[^#].*\.output\("CONTACT\.', out, re.MULTILINE)
 
 
-def test_skip_contact_leaves_layer_def_and_metal_checks():
-    """The `cont` layer definition and METAL.* checks must NOT be commented."""
-    out = _apply_skip_contact(_CONTACT_SLICE)
-    assert re.search(r'^cont\s*=\s*polygons', out, re.MULTILINE), (
-        "the `cont` layer definition must remain (later metal rules reference it)"
-    )
+def test_beol_strict_leaves_layer_defs_and_beol_checks():
+    """Layer-derivation lines and the BEOL-block METAL check must remain active."""
+    out = _apply_beol_strict(_FEOL_BLOCK)
+    # Layer derivations (no .output) stay — later metal rules reference them.
+    assert re.search(r'^gate\s*=\s*poly', out, re.MULTILINE)
+    assert re.search(r'^implant\s*=\s*nplus', out, re.MULTILINE)
+    assert re.search(r'^cont\s*=\s*polygons', out, re.MULTILINE)
+    # The METAL1.1 check is OUTSIDE the FEOL block (in `if BEOL`) → must stay active.
     assert re.search(r'^\s*metal1\.width.*METAL1\.1', out, re.MULTILINE), (
-        "METAL1.1 (real P&R routing check) must remain active"
+        "METAL1.1 (real P&R routing check, in BEOL block) must remain active"
     )
-    assert re.search(r'^\s*cont\.interacting.*METAL1\.3', out, re.MULTILINE), (
-        "METAL1.3 is a METAL-labelled check; only CONTACT.* labels are stripped"
-    )
+
+
+def test_beol_strict_idempotent_on_already_commented():
+    """Re-running the strip on already-stripped content is a no-op (no double prefix)."""
+    once = _apply_beol_strict(_FEOL_BLOCK)
+    twice = _apply_beol_strict(once)
+    assert once == twice, "strict strip must be idempotent"

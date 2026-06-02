@@ -21,18 +21,22 @@ fi
 # BEOL metal/via/antenna routing varies per design).  See
 # references/failure-patterns.md §"KLayout DRC Stuck on `or`".
 #
-# DRC_SKIP_CONTACT=1 (deeper fallback, implies BEOL-only) → ALSO strip the CONTACT
-# rule group.  In BEOL-only the FEOL toggle skips Well/Poly/Active/Implant, but the
-# CONTACT.* checks (cont.width/cont.space over every contact) still run and HANG on
-# large designs (≥~465K inst — eth_mac_1g_fifo, koios).  Contacts are library-internal
-# (P&R adds vias, never intra-cell contacts), so skipping CONTACT.* is as defensible as
-# skipping FEOL.  Leaves METAL/VIA/OFFGRID (the real P&R-created geometry) checked.
+# DRC_BEOL_STRICT=1 (deeper fallback, implies BEOL-only) → physically comment out
+# EVERY check (`.output(`) inside the deck's `if FEOL … end # FEOL` block.  Empirically
+# the FEOL=false toggle gates the Well/Poly/Active booleans but NOT the IMPLANT and
+# CONTACT groups — those still execute in BEOL-only mode and HANG on large designs
+# (≥~465K inst — eth_mac_1g_fifo, koios — froze at implant.width/cont.space over millions
+# of MOL polygons).  All FEOL-block geometry is library-internal (P&R adds only
+# metal/vias), so stripping the whole block body is as defensible as the FEOL toggle and
+# guarantees none of it runs.  Leaves BEOL metal/via + OFFGRID (the real P&R geometry).
+# (DRC_SKIP_CONTACT is a back-compat alias — CONTACT alone is insufficient; both map to
+# the strict whole-FEOL-body strip.)
 DRC_BEOL_ONLY="${DRC_BEOL_ONLY:-0}"
-DRC_SKIP_CONTACT="${DRC_SKIP_CONTACT:-0}"
+DRC_BEOL_STRICT="${DRC_BEOL_STRICT:-${DRC_SKIP_CONTACT:-0}}"
 DRC_MODE="full"
-if [[ "$DRC_SKIP_CONTACT" == "1" ]]; then
-  DRC_BEOL_ONLY=1                     # skip-contact implies BEOL-only
-  DRC_MODE="beol_only_no_contact"
+if [[ "$DRC_BEOL_STRICT" == "1" ]]; then
+  DRC_BEOL_ONLY=1                     # strict implies BEOL-only
+  DRC_MODE="beol_only_strict"
 elif [[ "$DRC_BEOL_ONLY" == "1" ]]; then
   DRC_MODE="beol_only"
 fi
@@ -126,18 +130,29 @@ if [[ "$DRC_BEOL_ONLY" == "1" ]]; then
     rm -f "$BEOL_DECK"
     exit 1
   fi
-  # Deeper fallback: also comment out the CONTACT rule group.  The FEOL toggle does
-  # NOT gate these (they execute in BEOL-only and hang large designs); comment every
-  # check line whose .output() label starts with "CONTACT." — they only emit markers,
-  # no later rule consumes a CONTACT output, so commenting is safe.
-  if [[ "$DRC_SKIP_CONTACT" == "1" ]]; then
-    sed -i -E 's/^([[:space:]]*[^#].*\.output\("CONTACT\.)/# r2g-skip-contact: \1/' "$BEOL_DECK"
-    if grep -qE '^[[:space:]]*[^#].*\.output\("CONTACT\.' "$BEOL_DECK"; then
-      echo "ERROR: DRC_SKIP_CONTACT=1 but some CONTACT.* rule lines remain uncommented in $BEOL_DECK" >&2
-      rm -f "$BEOL_DECK"
-      exit 1
+  # Deeper fallback: physically comment EVERY check (`.output(`) between `if FEOL` and
+  # `end # FEOL`.  The FEOL=false toggle does NOT reliably gate this block (the IMPLANT
+  # and CONTACT groups execute in BEOL-only mode and hang large designs), so we strip the
+  # whole body.  Layer-derivation lines (well=, gate=, implant=) carry no `.output(` and
+  # are left intact (cheap, harmless); only the marker-emitting check statements — which
+  # nothing downstream consumes — are commented.  awk tracks the block by its delimiters.
+  if [[ "$DRC_BEOL_STRICT" == "1" ]]; then
+    awk '
+      /^[[:space:]]*if[[:space:]]+FEOL([^[:alnum:]_]|$)/ { infeol=1 }
+      infeol && /^[[:space:]]*end[[:space:]]*#[[:space:]]*FEOL/ { infeol=0 }
+      { if (infeol && $0 ~ /\.output\(/ && $0 !~ /^[[:space:]]*#/) print "# r2g-beol-strict: " $0; else print }
+    ' "$BEOL_DECK" > "$BEOL_DECK.tmp" && mv "$BEOL_DECK.tmp" "$BEOL_DECK"
+    # Guard: no uncommented `.output(` may remain inside the FEOL block.
+    if awk '
+        /^[[:space:]]*if[[:space:]]+FEOL([^[:alnum:]_]|$)/ { infeol=1 }
+        infeol && /^[[:space:]]*end[[:space:]]*#[[:space:]]*FEOL/ { infeol=0 }
+        infeol && /\.output\(/ && $0 !~ /^[[:space:]]*#/ { found=1 }
+        END { exit(found?0:1) }
+      ' "$BEOL_DECK"; then
+      echo "ERROR: DRC_BEOL_STRICT=1 but uncommented checks remain inside the FEOL block of $BEOL_DECK" >&2
+      rm -f "$BEOL_DECK"; exit 1
     fi
-    echo "DRC BEOL-only(+no-contact) mode: FEOL, ANTENNA, and CONTACT checks skipped (all library-internal); metal/via routing geometry + off-grid checks run. NOT full DRC-clean; deck=$BEOL_DECK"
+    echo "DRC BEOL-strict mode: entire FEOL block body (Well/Poly/Active/Implant/Contact) stripped + ANTENNA off (all library-internal); only BEOL metal/via + off-grid checks run. NOT full DRC-clean; deck=$BEOL_DECK"
   else
     echo "DRC BEOL-only mode: FEOL and ANTENNA checks skipped (ANTENNA depends on FEOL-derived layers); metal/via routing geometry + off-grid checks run. NOT full DRC-clean, antenna NOT verified; deck=$BEOL_DECK"
   fi
