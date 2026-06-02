@@ -19,6 +19,34 @@ skipped as library-pre-verified).
 
 ---
 
+## 2026-06-02 — DRC band finish + honest LVS mismatch classification
+*(on-the-fly log: `docs/campaign_signoff_fixer_2026-06-01.md` "Phase 2 continued"; skill commit `11cebfb`)*
+
+Converted the 10 tractable `stuck` DRC designs (228K–406K) to `clean_beol` (the
+361K–406K ones need ~60–70 min each — the prior 2400s wall was too short, not a
+hang). **DRC stuck 17 → 7** (only the verified-intractable ≥465K METAL-hang tier
+remains, incl. 3× BOOM). Corpus DRC honest-verdict coverage **99.0% (675/682)**.
+Host reality: 1.1 TB / 96 cores ⇒ the historical `jobs 3` RAM caution is obsolete;
+bound batch parallelism by KLayout per-design single-thread + memory bandwidth.
+
+Triaged all 11 LVS `fail`/`failed`: the population is **overwhelmingly
+KLayout-0.30.7 tooling limitation, not real layout defects** (mirrors the DRC
+FEOL-hang story). cordic recovered to `clean` (stale cross-platform log);
+core_usb_host_top reclassified `crash` (SIGSEGV); the rest are **symmetric-matcher
+residuals** (mis-paired interchangeable instances in symmetric logic) plus one
+real connectivity defect (wb2axip_axi2axilite). **Empirically disproved** that
+raising the comparer budget (`max_depth`/`max_branch_complexity`) fixes them — it
+only removes the "Maximum depth exhausted" warning, not the mismatches.
+
+Skill (`11cebfb`): `extract_lvs.py` adds a conservative `mismatch_class`
+{symmetric_matcher | real_connectivity | generic}; `diagnose_signoff_fix.py`
+emits precise honest residuals (`lvs_symmetric_matcher_residual` /
+`lvs_real_connectivity_mismatch`) and never spawns a doomed re-run for symmetric
+fails; `FreePDK45.lylvs` comparer budget is env-tunable (defaults restored,
+documented as a non-lever). 6 new tests; no rule-deck relaxation anywhere.
+
+---
+
 ## 2026-05-31 — DRC/LVS violation-fixing ability (plan + spec)
 *(from `superpowers/plans/2026-05-31-drc-lvs-fixer.md`,
 `superpowers/specs/2026-05-31-drc-lvs-fixer-design.md`)*

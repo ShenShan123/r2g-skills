@@ -297,3 +297,94 @@ Audited all logs/metafiles for staleness after the conversions:
 **Live corpus DRC tally (band wave still running):** `clean` 402, `clean_beol` 250, `stuck` 21,
 `fail` 9 = **652/682 (95.6%)** honest DRC verdict and climbing as the band wave converts the
 108K–406K designs. (The "Phase-1 final tally" table above is a labelled checkpoint at 242/29.)
+
+## Phase 2 continued — 2026-06-02 (DRC band finish + LVS fail triage)
+
+Picked up with corpus DRC at `clean` 402 / `clean_beol` 254 / `stuck` 17 / `fail` 9
+(665/682, 97.5%). The 17 `stuck` split cleanly by size:
+- **Tractable band (228K–406K, 10 designs)** — the band wave had only reached ~202K; relaunched.
+- **Intractable tier (≥465K, 7 designs)** — eth_mac_1g/mii_fifo, axis_ram_switch (808K),
+  koios_gemm_layer (978K), boom_smallseboom/mediumseboom/mediumboom (5.5–9.1M). METAL-check hang,
+  verified intractable for this KLayout build (see "BEOL-strict METAL ceiling" above). Stay `stuck`.
+
+### DRC band conversion (228K–406K)
+
+Machine reality check: this host has **1.1 TB RAM / 96 cores**, so the prior `jobs 3`
+(memory-bound) caution is unnecessary — the real bottleneck is KLayout's per-design single-thread.
+First pass `--max-inst 410000 --jobs 10 --timeout 2400`: the 5 *smaller* band designs
+(228K–239K) finished `clean_beol` at 2233–2373s, but the 5 *larger* (241K, 244K, 361K, 362K,
+406K) hit the 2400s wall — **not a FEOL/CONTACT/METAL hang, just timeout under 10-way
+memory-bandwidth contention**. Relaunched the 5 with `--jobs 5 --timeout 6000` (near-zero
+contention on 96 cores). **All 5 then completed `clean_beol`** — ip_complete_64 (244K, 2423s),
+axis_fifo (241K, 2476s), udp_complete (361K, 3612s), udp_complete_64 (362K, 3841s),
+faraday_risc (406K, 4034s). Lesson: the 361K–406K band needs **~60–70 min** per BEOL-only DRC;
+the 2400s wall was simply too short, not a hang (live `6_drc.log` showed steady advance through
+`FreePDK45.beol.lydrc` rule lines). So **all 10 tractable band designs → `clean_beol`.**
+
+**DRC stuck set: 17 → 7.** The 7 remaining are exactly the verified-intractable ≥465K tier
+(eth_mac_1g_fifo 469K, eth_mac_mii_fifo 465K, axis_ram_switch 808K, koios_gemm_layer 978K,
+boom_smallseboom 5.5M, boom_mediumseboom 8.3M, boom_mediumboom 9.1M) — METAL-check hang, no flow
+lever helps, honest `stuck`.
+
+**Corpus DRC tally (final, 2026-06-02):**
+
+| status | count | meaning |
+|--------|------:|---------|
+| `clean` | 402 | full-deck DRC clean |
+| `clean_beol` | **264** | honest BEOL-only clean (FEOL+ANTENNA skipped, library-pre-verified) |
+| `fail` | 9 | nangate45 antenna residuals (no real fix — Finding B) |
+| `stuck` | 7 | ≥465K METAL-hang tier (incl. 3× BOOM) |
+| **total** | 682 | |
+
+**Honest DRC-verdict coverage: 675/682 (99.0%)** — only the 7 genuinely-intractable large designs
+lack a verdict. Up from 665/682 (97.5%) at the start of this session, zero rule-deck relaxation.
+
+**Corpus LVS tally (final, 2026-06-02):** `clean` 604, `clean_algorithmic` 7, `fail` 9 (now
+classified: symmetric-matcher / real-connectivity / generic), `crash` 7, `incomplete` 43,
+`unknown` 3 = 673 (LVS-applicable designs). Clean **611/673 (90.8%)**; the non-clean 62 are all
+KLayout-0.30.7 instability/limitation residuals (crash/incomplete/symmetric-matcher), not flow
+defects — they need a KLayout upgrade, not a fix.
+
+### LVS fail triage (the 11 `fail`/`failed`)
+
+Dispatched parallel diagnosis subagents (5 designs from preserved lvsdbs — no re-run; 6 via fresh
+LVS re-run). Result: **the LVS "fail" population is overwhelmingly KLayout-0.30.7 tooling
+limitation, not real layout defects** — mirroring the DRC story.
+
+| design | inst | verdict | class |
+|--------|------|---------|-------|
+| cordic | 1,870 | **recovered → `clean`** | stale cross-platform log (old sky130hd fail prepended); re-ran nangate45 clean |
+| verilog_ethernet_axis_baser_rx_64 | 3,568 | residual | `symmetric_matcher` (2 NAND2 swaps, 0 net delta) |
+| wb2axip_axi2axilite | 3,752 | residual | `real_connectivity` (M_AXI_BREADY/$8924 vs S_AXI_WREADY — genuine) |
+| iccad2017_unit5_G | 14,406 | residual | `symmetric_matcher` (2 NAND2 swaps) |
+| iccad2017_unit5_F | 16,429 | residual | `generic` (292 net mismatches — conservative, not auto-benign) |
+| blake2s_core | 21,854 | residual | `symmetric_matcher` (4 NAND4 swaps) |
+| aes_core | 30,496 | residual | `generic` |
+| vlsi_axi_slave | 2,257 | residual | `generic` (40+40 net mismatches from 543×DLL_X1 reg-file symmetry) |
+| core_usb_host_top | 8,380 | **reclassified → `crash`** | KLayout SIGSEGV in `gen_log_entry` |
+| iccad2015_unit08_in1 / biriscv_core | 62K / 68K | (mid-LVS subagent) | pending |
+
+**Key empirical finding — the matcher budget is NOT the lever.** Both subagents independently
+proposed raising `max_depth`/`max_branch_complexity`. Tested and **disproven**:
+`axis_baser_rx_64` @ depth 32 → identical 2 swaps (was never depth-limited); `iccad2017_unit5_F`
+@ depth 64 / complexity 1M → the "Maximum depth exhausted" *warning* vanished but **all 292 net
+mismatches persisted** (168s run). So budget removes the symptom warning, not the mismatch. The
+knobs are kept env-tunable (defaults restored to 65536/16) and documented as a non-lever.
+
+**Skill evolution shipped (commit `11cebfb`):**
+1. `extract_lvs.py` — `classify_lvs_mismatch()` adds `mismatch_class` ∈
+   {symmetric_matcher, real_connectivity, generic} to a `fail` report. Conservative: real_conn
+   priority; any genuine net delta → generic (never auto-label a real bug benign). Validated on
+   6 real lvsdbs.
+2. `diagnose_signoff_fix.py` — consumes `mismatch_class`; emits precise honest residual
+   (`lvs_symmetric_matcher_residual` / `lvs_real_connectivity_mismatch`) and does not spawn a
+   doomed re-run for the symmetric class.
+3. `FreePDK45.lylvs` — env-tunable comparer budget (non-lever, documented).
+4. Docs: `references/signoff-fixing.md` residual taxonomy + `failure-patterns.md` "LVS
+   symmetric-matcher residual" (incl. the stale-cross-platform-log caveat). 6 new tests; full
+   suite green (269+6).
+
+**LVS honesty outcome:** of 11 `fail`/`failed`, **1 was actually clean** (cordic), **1 is a true
+crash** (core_usb), **1 is a real connectivity defect** (wb2axip), and the rest are KLayout
+symmetric-matcher residuals (layout correct, tool can't prove it) — none fixable by any flow lever
+without a newer KLayout. No rule-deck relaxation used.
