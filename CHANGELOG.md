@@ -19,6 +19,37 @@ skipped as library-pre-verified).
 
 ---
 
+## 2026-06-02 — nangate45 antenna DRC made genuinely fixable (tech-model + diode-forced repair)
+*(skill: `scripts/flow/antenna_lef_patch.py`, `tools/install_nangate45_antenna.sh`, `tools/batch_antenna_fix.sh`, `diagnose_signoff_fix.py`)*
+
+**Overturns the 2026-06-01 "Finding B: nangate45 antennas have no viable real fix" conclusion.**
+The inertness of OpenROAD `repair_antennas` on nangate45 had **three** root causes in the stock
+LEFs (prior attempts fixed at most one → concluded "unfixable"):
+1. tech LEF has zero antenna ratios (no threshold → `check_antennas` finds 0);
+2. the SC LEF ORFS uses (`*.macro.mod.lef`) has `ANTENNAGATEAREA` **stripped** from std-cell pins
+   (full model is in the sibling `*.macro.lef`) — without gate areas there is no ratio even at
+   ratio 1 (the non-obvious cause);
+3. the `ANTENNA_X1` diode has `ANTENNADIFFAREA 0.0`, which OpenROAD rejects (RepairAntennas.cpp).
+
+**Fix:** `tools/install_nangate45_antenna.sh` (reversible/idempotent; patcher `antenna_lef_patch.py`)
+adds `ANTENNAAREARATIO 300` per routing layer (**matches** the signoff deck — not a relaxation),
+merges per-pin gate areas from `.macro.lef`, and gives the diode a usable `ANTENNADIFFAREA`. With
+the model installed OpenROAD's per-net PAR equals KLayout's ratio to the decimal (stream_register
+488.80 vs 489.17).
+
+**Key principle — diodes, not jumpers.** OpenROAD's default repair uses jumpers (PAR drops, it
+reports clean) but the FreePDK45 deck sums the whole net's per-layer metal and credits only
+**diodes**, so it keeps flagging. The new `antenna_diode_repair` strategy (`diagnose_signoff_fix.py`,
+nangate45) forces diode insertion: `SKIP_ANTENNA_REPAIR=1` + `MAX_REPAIR_ANTENNAS_ITER_DRT=10`,
+rerun from route. `DIODE_FORCED_REPAIR_PLATFORMS` replaces the old `ANTENNA_REPAIR_INERT_PLATFORMS`.
+
+**Validated:** stream_register 489:1 → CLEAN (1 diode), riscv_alu4b 7→0 (2 diodes); LVS stays
+clean (the `.lylvs` rule flattens the physical-only `ANTENNA_X1`). Deck never relaxed. New: 12
+patcher tests + updated diagnoser tests; full suite 286 passed. `tools/batch_antenna_fix.sh`
+clears the pure-antenna nangate45 fails in bulk.
+
+---
+
 ## 2026-06-02 — DRC band finish + honest LVS mismatch classification
 *(on-the-fly log: `docs/campaign_signoff_fixer_2026-06-01.md` "Phase 2 continued"; skill commit `11cebfb`)*
 

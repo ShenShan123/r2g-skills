@@ -8,6 +8,15 @@ The honest 300:1 antenna-ratio rule deck for nangate45 is the reference. Install
 with `tools/install_nangate45_drc.sh`. The 400:1 ratio relaxation used in an earlier
 campaign is **retired**; that deck is no longer in use.
 
+**nangate45 antenna repair requires a one-time model install.** The stock nangate45 LEFs
+ship no antenna model (no tech-LEF ratios, gate areas stripped from the SC LEF, a
+zero-`ANTENNADIFFAREA` diode), so OpenROAD's `repair_antennas` is a no-op out of the box.
+Install the model once with `tools/install_nangate45_antenna.sh` (reversible; idempotent).
+It adds `ANTENNAAREARATIO 300` per routing layer (**matching**, not relaxing, the signoff
+deck), merges per-pin gate areas from `.macro.lef`, and gives the diode a usable
+`ANTENNADIFFAREA`. The KLayout signoff deck is never touched. See
+`failure-patterns.md` "Antenna DRC Violations" for the full root-cause.
+
 ---
 
 ## Scripts
@@ -105,21 +114,23 @@ Default: `platform=nangate45`, `--check both`, `--max-iters 3`.
 
 Strategies are `auto_apply: true`, applied in order; already-applied entries are skipped;
 when all are exhausted `status` becomes `residual`. **The catalog is platform-aware** —
-`antenna_diode_iters` is offered only on platforms with a working antenna-repair flow; on
-`nangate45` (in `ANTENNA_REPAIR_INERT_PLATFORMS`) only `antenna_density_relief` is offered.
+`nangate45` (in `DIODE_FORCED_REPAIR_PLATFORMS`) gets the single `antenna_diode_repair`
+strategy; every other platform gets the classic `antenna_diode_iters` → `antenna_density_relief`
+pair.
 
 | id | platforms | config_edits | rerun_from | Effect |
 |----|-----------|-------------|------------|--------|
+| `antenna_diode_repair` | nangate45 | `SKIP_ANTENNA_REPAIR=1`, `MAX_REPAIR_ANTENNAS_ITER_DRT=10` | `route` | **Forces physical diode insertion** (the only repair the FreePDK45 deck credits). `SKIP_ANTENNA_REPAIR=1` disables OpenROAD's global-route *jumper* repair — jumpers satisfy OpenROAD's PAR but the deck still flags (it sums the whole net's per-layer metal and credits only diodes). The DRT repair loop then inserts `ANTENNA_X1` diodes. **Requires `tools/install_nangate45_antenna.sh` (one-time).** |
 | `antenna_diode_iters` | non-nangate45 (working diode) | `MAX_REPAIR_ANTENNAS_ITER_GRT=10`, `MAX_REPAIR_ANTENNAS_ITER_DRT=10` | `route` | Raises OpenROAD repair-antennas iterations (default 5) so more diodes are inserted. Diode auto-discovered from its `CLASS CORE ANTENNACELL` LEF declaration; do NOT set `CORE_ANTENNACELL` (not an ORFS env var). |
-| `antenna_density_relief` | all | `CORE_UTILIZATION` lowered by 5 (floor 5) | `floorplan` | Reduces placement density / grows area so the router can break long metal runs. `PLACE_DENSITY_LB_ADDON` is **never** touched (hard rule: never below 0.10). |
+| `antenna_density_relief` | non-nangate45 | `CORE_UTILIZATION` lowered by 5 (floor 5) | `floorplan` | Reduces placement density / grows area so the router can break long metal runs. `PLACE_DENSITY_LB_ADDON` is **never** touched (hard rule: never below 0.10). **Not offered on nangate45** — empirically counterproductive there (enlarging the die lengthens nets → more antennas; fifo_basic 14→16 at util 10→5). |
 
-**Why nangate45 skips diode insertion (verified 2026-06-01, campaign Finding B):** the
-nangate45 tech LEF has no antenna rules (OpenROAD `check_antennas` → 0 violations) and its
-only diode `ANTENNA_X1` has `ANTENNADIFFAREA 0.0` (so `repair_antennas` rejects it,
-`GRT-0244`/`GRT-0246`). OpenROAD therefore cannot see or repair the antennas that KLayout's
-`FreePDK45.lydrc` (300:1) flags. Density relief is the only tool-agnostic lever; if it cannot
-clear them, the honest outcome is `residual` (the deck is never relaxed). Note density relief
-enlarges the die, which **increases KLayout DRC runtime**.
+**Why nangate45 needs `antenna_diode_repair` specifically (verified 2026-06-02, supersedes the
+2026-06-01 "inert/residual" Finding B):** with the antenna model installed, OpenROAD's per-net
+PAR matches KLayout exactly (stream_register 488.80 vs 489.17), but its *default* repair uses
+jumpers, which the FreePDK45 deck does not credit. Disabling jumper repair forces diode
+insertion, which both engines credit → clean. If the model is **not** installed, the re-route
+won't repair and the loop honestly reports no-improvement → residual (reason points at the
+installer). The deck is never relaxed.
 
 Non-antenna DRC categories are **not** handled in v1 — reported as residual.
 
@@ -162,10 +173,13 @@ this corpus.
 
 The fix loop applies only genuine layout changes:
 
-- More antenna diode insertion (raise ORFS `MAX_REPAIR_ANTENNAS_ITER_GRT`/`_DRT`,
-  default 5 → 10; the `ANTENNA_X1` diode is auto-discovered from the LEF, so
-  `CORE_ANTENNACELL` is **not** set — it is a no-op env var ORFS does not read)
-- Placement density/utilization reduction (`CORE_UTILIZATION`)
+- **nangate45 antenna:** force physical diode insertion (`SKIP_ANTENNA_REPAIR=1` +
+  `MAX_REPAIR_ANTENNAS_ITER_DRT=10`) after installing the antenna model
+  (`tools/install_nangate45_antenna.sh`). A real `ANTENNA_X1` diode is added to the layout.
+- More antenna diode insertion on other platforms (raise ORFS
+  `MAX_REPAIR_ANTENNAS_ITER_GRT`/`_DRT`, default 5 → 10; the diode is auto-discovered from the
+  LEF, so `CORE_ANTENNACELL` is **not** set — it is a no-op env var ORFS does not read)
+- Placement density/utilization reduction (`CORE_UTILIZATION`, non-nangate45 only)
 - LVS macro CDL (operator-provided combined CDL)
 
 It **never** relaxes the DRC rule deck. The 400:1 antenna-ratio variant of

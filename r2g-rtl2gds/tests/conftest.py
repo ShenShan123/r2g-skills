@@ -35,6 +35,11 @@ REPORTS_DIR = SKILL_ROOT / "scripts" / "reports"
 if str(REPORTS_DIR) not in sys.path:
     sys.path.insert(0, str(REPORTS_DIR))
 
+# Make scripts/flow/ importable for flow-helper tests (e.g. antenna_lef_patch).
+FLOW_DIR_SCRIPTS = SKILL_ROOT / "scripts" / "flow"
+if str(FLOW_DIR_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(FLOW_DIR_SCRIPTS))
+
 
 @pytest.fixture
 def tmp_knowledge_dir(tmp_path: Path) -> Path:

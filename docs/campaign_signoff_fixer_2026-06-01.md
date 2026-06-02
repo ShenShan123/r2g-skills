@@ -1,5 +1,22 @@
 # Signoff-Fixer Campaign — 2026-06-01 (on-the-fly log)
 
+> **⚠️ SUPERSEDED 2026-06-02 — "Finding B / nangate45 antennas have NO viable real fix" is WRONG.**
+> This doc's central nangate45-antenna conclusion (repair "inert", density relief
+> counterproductive, therefore "classify as residual immediately") has been overturned.
+> The inertness had **three** root causes in the stock LEFs, not one: no tech-LEF ratios,
+> `ANTENNAGATEAREA` stripped from the SC LEF (the non-obvious one — fixing only the tech LEF
+> does nothing), and a zero-`ANTENNADIFFAREA` diode. Installing the antenna model
+> (`tools/install_nangate45_antenna.sh`) makes OpenROAD's PAR match KLayout exactly, and a
+> **diode-forced** repair (`antenna_diode_repair`: `SKIP_ANTENNA_REPAIR=1` +
+> `MAX_REPAIR_ANTENNAS_ITER_DRT`) clears the violations the FreePDK45 deck flags (it credits
+> diodes, not jumpers). Validated: stream_register 489:1 → CLEAN (1 diode, still LVS-clean),
+> riscv_alu4b 7→0 (2 diodes). The density-relief observation below was *directionally* right
+> (enlarging the die lengthens nets → more antennas) but the conclusion ("no real fix") was
+> not. See `references/failure-patterns.md` "Antenna DRC Violations", `references/signoff-fixing.md`,
+> and `references/lessons-learned.md` "nangate45 Antenna DRC — From Inert/Unfixable to Real
+> Diode Repair (2026-06-02)". Superseded invariant: `DIODE_FORCED_REPAIR_PLATFORMS` replaces the
+> old `ANTENNA_REPAIR_INERT_PLATFORMS` in `diagnose_signoff_fix.py`.
+
 Validating the new DRC/LVS violation-fixing ability (`fix_signoff.sh` +
 `diagnose_signoff_fix.py`) on the corpus, and improving the skill from what the runs reveal.
 Policy: **real layout fixes only** (no rule-deck relaxation). Spec/plan:

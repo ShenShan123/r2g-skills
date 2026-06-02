@@ -38,14 +38,19 @@ def test_antenna_fail_yields_two_ordered_strategies_sky130hd():
     assert relief["CORE_UTILIZATION"] == "5"
 
 
-def test_antenna_fail_nangate45_is_immediate_residual():
-    """nangate45: both diode-iters and density-relief are suppressed (inert + counterproductive)
-    → immediate residual with a nangate45-specific reason, no strategies offered."""
+def test_antenna_fail_nangate45_offers_diode_repair():
+    """nangate45: now offers the diode-forced repair strategy (validated 2026-06-02).
+    The FreePDK45 deck credits diodes not jumpers, so the strategy disables jumper repair
+    and forces diode insertion via the DRT repair iterations."""
     cfg = {"CORE_UTILIZATION": "10", "PLATFORM": "nangate45"}
     plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, cfg, check="drc")
-    assert plan["status"] == "residual"
-    assert plan["strategies"] == []
-    assert "nangate45 antenna repair inert" in plan["residual_reason"]
+    ids = [s["id"] for s in plan["strategies"]]
+    assert ids == ["antenna_diode_repair"]
+    s = plan["strategies"][0]
+    assert s["config_edits"] == {"SKIP_ANTENNA_REPAIR": "1",
+                                 "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"}
+    assert s["auto_apply"] is True
+    assert s["rerun_from"] == "route"
     assert plan["dominant_category"] == "METAL7_ANTENNA"
 
 
@@ -157,13 +162,16 @@ def test_lvs_status_unknown_still_yields_resolve_strategy():
 
 # --- FIX #4b: nangate45 antenna immediately residual ---
 
-def test_antenna_fail_nangate45_residual_reason_is_specific():
-    """nangate45 antenna fail → residual_reason mentions 'nangate45 antenna repair inert'."""
-    cfg = {"CORE_UTILIZATION": "15", "PLATFORM": "nangate45"}
+def test_antenna_fail_nangate45_residual_only_after_strategy_applied():
+    """nangate45 antenna → residual ONLY once antenna_diode_repair is already applied
+    (config carries both edits). The residual reason then points at install/escalation."""
+    cfg = {"PLATFORM": "nangate45", "SKIP_ANTENNA_REPAIR": "1",
+           "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"}
     plan = d.build_plan(_drc("fail", 3, _antenna_cats()), {}, cfg, check="drc")
     assert plan["status"] == "residual"
     assert plan["strategies"] == []
-    assert "nangate45 antenna repair inert" in plan["residual_reason"]
+    assert "diode-forced repair" in plan["residual_reason"]
+    assert "install_nangate45_antenna.sh" in plan["residual_reason"]
     # Must NOT use the generic exhausted message
     assert "all real-fix strategies exhausted" not in plan["residual_reason"]
 
@@ -313,21 +321,39 @@ def test_driver_stops_when_cleaned(tmp_path):
     assert final["status"] == "clean"
 
 
-def test_driver_nangate45_antenna_stops_immediately(tmp_path):
-    # nangate45 has NO antenna strategies (both diode-iters and density-relief suppressed).
-    # The driver must: --next returns STOP immediately (iter=1) → 1 log row (stop row only).
+def test_driver_nangate45_antenna_applies_diode_repair_then_cleans(tmp_path):
+    # nangate45 now applies antenna_diode_repair (diode-forced) and, when the re-route
+    # clears the antenna, finishes CLEAN in one applied iteration.
+    p = _mk_project(tmp_path,
+                    drc={"status": "fail", "total_violations": 7,
+                         "categories": {"METAL7_ANTENNA": {"count": 7}}},
+                    config="export DESIGN_NAME = t\nexport CORE_UTILIZATION = 10\nexport PLATFORM = nangate45\n")
+    sd = _stub_dir(tmp_path, counts=[0])  # first re-check after diode repair → clean
+    r = _run_driver(p, sd)
+    assert r.returncode == 0, r.stderr
+    lines = (p / "reports" / "fix_log.jsonl").read_text().strip().splitlines()
+    row0 = json.loads(lines[0])
+    assert row0["strategy"] == "antenna_diode_repair"
+    # the strategy's edits were written to config.mk
+    cfg_text = (p / "constraints" / "config.mk").read_text()
+    assert "export SKIP_ANTENNA_REPAIR = 1" in cfg_text
+    assert "export MAX_REPAIR_ANTENNAS_ITER_DRT = 10" in cfg_text
+    final = json.loads((p / "reports" / "drc.json").read_text())
+    assert final["status"] == "clean"
+
+
+def test_driver_nangate45_antenna_residual_when_unfixed(tmp_path):
+    # If the diode repair does NOT clear it (model not installed / calibration gap), the
+    # driver applies once (no_improvement) then STOPs residual on the next --next.
     p = _mk_project(tmp_path,
                     drc={"status": "fail", "total_violations": 7,
                          "categories": {"METAL7_ANTENNA": {"count": 7}}},
                     config="export DESIGN_NAME = t\nexport CORE_UTILIZATION = 10\nexport PLATFORM = nangate45\n")
     sd = _stub_dir(tmp_path, counts=[7, 7, 7])
     r = _run_driver(p, sd)
-    summary = (p / "reports" / "fix_summary.md").read_text()
     lines = (p / "reports" / "fix_log.jsonl").read_text().strip().splitlines()
-    # Exactly 1 log row: the stop row (no strategy was ever applied)
-    assert len(lines) == 1, f"expected 1 log row, got {len(lines)}: {lines}"
-    row0 = json.loads(lines[0])
-    assert row0["strategy"] == "none"
-    assert "stop" in row0["verdict"]
+    # iter1 applies antenna_diode_repair (no_improvement); iter2 --next → STOP residual.
+    assert json.loads(lines[0])["strategy"] == "antenna_diode_repair"
+    assert any("stop" in json.loads(l)["verdict"] for l in lines)
     # summary table must exist
-    assert "| check |" in summary
+    assert "| check |" in (p / "reports" / "fix_summary.md").read_text()

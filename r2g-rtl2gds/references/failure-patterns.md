@@ -372,7 +372,7 @@ Yosys crash, typically caused by very large designs or specific RTL constructs t
 
 #### BEOL-only fallback
 
-When the FEOL hang is confirmed, run with `DRC_BEOL_ONLY=1 bash scripts/flow/run_drc.sh <proj> <platform>`. The script generates a modified deck copy (`drc/*.beol.lydrc`) with **both** `FEOL = false` **and** `ANTENNA = false`, and passes it to `make drc` via `KLAYOUT_DRC_FILE=`. **FEOL and ANTENNA checks skipped (ANTENNA depends on FEOL-derived layers); metal/via routing geometry + off-grid checks run.** The standard cell library is pre-characterized and DRC-clean, so skipping the front-end-of-line boolean ops (poly, diffusion, gate geometry) is safe. ANTENNA must also be disabled because its `connect` rules reference the `gate` layer (`gate = poly & active`), which is derived *inside* the deck's `if FEOL … end` block — leaving ANTENNA on with FEOL off makes KLayout error (`'connect': First argument must be a layer …`) and `make` exit 1, which the runner would then mis-classify as `stuck`. `OFFGRID` stays on (no FEOL dependency, completes fine). Results are tagged `"drc_mode": "beol_only"` in `drc_result.json` and `reports/drc.json`, and a 0-violation BEOL-only run is given the **qualified status `clean_beol`** (not plain `clean`) by `extract_drc.py` so status-based aggregation can never silently miscount it as a full clean (mirrors LVS `clean_algorithmic`; `diagnose_signoff_fix.py` treats `clean_beol` as needing no fix). Do **not** report a BEOL-only run as full DRC-clean, and **antenna is NOT verified** in this mode. (On nangate45 antenna is KLayout-only and not OpenROAD-fixable anyway — see the Antenna DRC Violations section / campaign Finding B — so BEOL-only loses no fixable coverage there.)
+When the FEOL hang is confirmed, run with `DRC_BEOL_ONLY=1 bash scripts/flow/run_drc.sh <proj> <platform>`. The script generates a modified deck copy (`drc/*.beol.lydrc`) with **both** `FEOL = false` **and** `ANTENNA = false`, and passes it to `make drc` via `KLAYOUT_DRC_FILE=`. **FEOL and ANTENNA checks skipped (ANTENNA depends on FEOL-derived layers); metal/via routing geometry + off-grid checks run.** The standard cell library is pre-characterized and DRC-clean, so skipping the front-end-of-line boolean ops (poly, diffusion, gate geometry) is safe. ANTENNA must also be disabled because its `connect` rules reference the `gate` layer (`gate = poly & active`), which is derived *inside* the deck's `if FEOL … end` block — leaving ANTENNA on with FEOL off makes KLayout error (`'connect': First argument must be a layer …`) and `make` exit 1, which the runner would then mis-classify as `stuck`. `OFFGRID` stays on (no FEOL dependency, completes fine). Results are tagged `"drc_mode": "beol_only"` in `drc_result.json` and `reports/drc.json`, and a 0-violation BEOL-only run is given the **qualified status `clean_beol`** (not plain `clean`) by `extract_drc.py` so status-based aggregation can never silently miscount it as a full clean (mirrors LVS `clean_algorithmic`; `diagnose_signoff_fix.py` treats `clean_beol` as needing no fix). Do **not** report a BEOL-only run as full DRC-clean, and **antenna is NOT verified** in this mode. (BEOL-only is a fallback for the FEOL *polygon-op hang* on huge designs — it is NOT an antenna workaround. nangate45 antennas ARE now OpenROAD-fixable once the antenna model is installed — see the Antenna DRC Violations section — so prefer a full DRC + `antenna_diode_repair` whenever the design is small enough to complete full DRC.)
 
 **Deeper fallback for large designs (`DRC_BEOL_STRICT=1`, implies BEOL-only; `DRC_SKIP_CONTACT` is a back-compat alias).** Surprising empirical finding: the `FEOL = false` toggle gates the Well/Poly/Active booleans (the `:91/:121/:131` hangs) but does **NOT** gate the **IMPLANT** and **CONTACT** groups — those still execute in BEOL-only mode and **hang on large designs** (≥~465K inst: eth_mac_1g_fifo, koios_gemm_layer froze 5–8 min at 100% CPU, RSS 7.3GB, at `implant.width`/`cont.space` over millions of MOL polygons). Designs ≤~144K run those groups fine; only the largest hang. All FEOL-block geometry (well/poly/active/implant/contact) is library-internal — P&R adds only metal and vias, never intra-cell MOL shapes — so stripping the whole block body is as defensible as the FEOL toggle. `DRC_BEOL_STRICT=1` uses awk to comment **every `.output(` check between `if FEOL` and `end # FEOL`** in the generated deck (aborts if any remains uncommented), leaving the layer-derivation lines intact and only BEOL metal/via + OFFGRID checks running — the actual P&R-created geometry. Tagged `"drc_mode": "beol_only_strict"`; a 0-violation result is still `clean_beol` (the `drc_mode` records the precise scope). Use this only when plain `DRC_BEOL_ONLY=1` hangs at an IMPLANT/CONTACT op. **Empirical ceiling (verified):** on `eth_mac_1g_fifo` (469K) BEOL-strict cleared the entire FEOL block (logged `BEOL checks`) but then **hung on the first BEOL `metal1.width` (METAL1.1) op** — the legitimate P&R metal-geometry check, which *cannot* be skipped without abandoning DRC entirely. So designs whose **METAL** ops don't converge (≥~465K inst here: eth_mac_1g/mii_fifo, axis_ram_switch, koios_gemm_layer, and the multi-million-inst BOOMs) are **genuinely intractable for this KLayout build** and stay honest `stuck` — no flow lever helps. `DRC_BEOL_STRICT` only rescues a design whose hang is in the FEOL-block MOL groups *while* its METAL ops are tractable; no design in the current corpus has been shown to fall in that narrow band (everything ≤~406K already completes with plain `DRC_BEOL_ONLY`), so strict mode is presently a defensive fallback rather than a demonstrated unblock.
 
@@ -927,27 +927,56 @@ Empirical fix yield (from the 93-failure retry): memory/place-density/io-pin fix
 **Root Cause:**
 Long unbroken metal routes accumulate charge during plasma etching, which can damage thin gate oxides. Normally OpenROAD's `repair_antennas` fixes this by inserting antenna diodes during global/detailed route.
 
-**nangate45 caveat (verified 2026-06-01 — see `docs/campaign_signoff_fixer_2026-06-01.md` Finding B):**
-On nangate45, OpenROAD antenna repair is **INERT**, so raising repair iterations does nothing:
-- The nangate45 **tech LEF has no antenna rules** (`grep -ci ANTENNA NangateOpenCellLibrary.tech.lef` = 0), so `check_antennas` always reports **0 net / 0 pin violations** — OpenROAD detects nothing to repair.
-- The only diode, `ANTENNA_X1`, has **`ANTENNADIFFAREA 0.0`** (placeholder), so `repair_antennas` rejects it (`ERROR GRT-0244`, `WARNING GRT-0246 No diode … found`) and inserts zero diodes.
-- These METAL*_ANTENNA violations are therefore visible **only to KLayout** `FreePDK45.lydrc` (300:1); the OpenROAD flow cannot see or fix them. The 2026-05-30 400:1 relaxation merely dragged KLayout toward OpenROAD's "0 antennas" view (masking).
+**nangate45 — was "inert", now FIXED (2026-06-02; supersedes the 2026-06-01 Finding B
+"unfixable residual" conclusion).** The stock nangate45 LEFs were missing the antenna
+model in **three** places, so OpenROAD `check_antennas` reported 0 and `repair_antennas`
+did nothing:
+1. tech LEF (`NangateOpenCellLibrary.tech.lef`) has **no per-layer antenna ratios** at all
+   (`grep -ci ANTENNA … .tech.lef` = 0) → no threshold to check against.
+2. the SC LEF ORFS actually uses (`NangateOpenCellLibrary.macro.mod.lef`) has
+   **`ANTENNAGATEAREA` stripped** from std-cell pins (`grep -c ANTENNAGATEAREA` = 0); the
+   full per-pin model still lives in the sibling `NangateOpenCellLibrary.macro.lef` (same
+   cell set) → without gate areas OpenROAD cannot form a ratio (0 even at ratio 1).
+3. the only diode `ANTENNA_X1` has **`ANTENNADIFFAREA 0.0`**; OpenROAD only accepts a
+   `CORE_ANTENNACELL` diode when `diffArea > 0` (RepairAntennas.cpp:559) → `GRT-0246
+   "No diode … found"`, zero diodes inserted.
 
-**Automated fix:** `scripts/flow/fix_signoff.sh` (see `references/signoff-fixing.md`). The 400:1 antenna-ratio relaxation is RETIRED — real layout fixes only.
+**Fix — install the antenna model (one-time, reversible):**
+```bash
+tools/install_nangate45_antenna.sh            # ratio 300 (matches signoff), diff-area 0.1
+tools/install_nangate45_antenna.sh --status   # verify: 10/10 ratios, 387 gate-area pins, diode>0
+tools/install_nangate45_antenna.sh --uninstall # restore stock LEFs from *.r2g-pre-antenna.orig
+```
+This adds `ANTENNAMODEL OXIDE1` + `ANTENNAAREARATIO 300` to every routing layer (300 **matches**
+the KLayout signoff deck — it does NOT relax it), merges the per-pin gate areas back from
+`.macro.lef`, and gives the diode a positive `ANTENNADIFFAREA`. The KLayout 300:1 deck is
+untouched. With the model installed, OpenROAD's per-net PAR matches KLayout's ratio exactly
+(stream_register: OpenROAD 488.80 vs KLayout 489.17).
 
-**Action (real-layout path):**
-- **nangate45:** the only tool-agnostic lever is **layout relief** — lower `CORE_UTILIZATION`
-  by 5 (floor 5) / grow `DIE_AREA` so the router can break long metal runs; re-run from
-  floorplan. `PLACE_DENSITY_LB_ADDON` is never touched (hard rule: never below 0.10). The
-  fixer skips the inert diode strategy on nangate45 and goes straight to density relief; if
-  relief cannot clear it, report an **honest residual** (do not relax the deck).
-- **Platforms with working antenna repair** (non-zero-diffarea diode + tech-LEF antenna
-  rules, e.g. sky130/asap7): raise repair-antennas iterations
-  (`MAX_REPAIR_ANTENNAS_ITER_GRT/_DRT = 10`, default 5); the diode is auto-discovered from
-  its `CLASS CORE ANTENNACELL` LEF declaration (do NOT set `CORE_ANTENNACELL` — not an ORFS
-  env var).
-- Do NOT relax the DRC rule deck. The honest 300:1 deck is the reference; install via
-  `tools/install_nangate45_drc.sh`.
+**The diodes-NOT-jumpers principle (the trap).** Once the model is installed, OpenROAD's
+*default* repair fixes antennas with **jumpers** (layer hops): its partial-area-ratio drops
+and it reports `Found 0 antenna violations`, but **KLayout still flags** — the FreePDK45
+`antenna_check(gate, metalN, 300, diode)` sums the *whole net's* metalN area connected to the
+gate (jumpers don't reduce that) and only credits a connected **diode** (`#adiodes`,
+`#diode_factors`). So the fix must force *diode* insertion, not jumpers.
+
+**Automated fix:** `scripts/flow/fix_signoff.sh <proj> nangate45 --check drc` auto-applies the
+`antenna_diode_repair` strategy (see `references/signoff-fixing.md`):
+`SKIP_ANTENNA_REPAIR=1` (disable global-route jumper repair) + `MAX_REPAIR_ANTENNAS_ITER_DRT=10`
+(force physical `ANTENNA_X1` diode insertion during detailed routing), then re-run from route.
+Validated 2026-06-02: stream_register 489:1 → CLEAN with 1 diode. The 400:1 deck relaxation is
+RETIRED — real layout fixes only; the deck is never relaxed (install honest 300:1 via
+`tools/install_nangate45_drc.sh`).
+
+**LVS is not broken by the inserted diodes.** The bundled `FreePDK45.lylvs` flattens the
+physical-only `ANTENNA_X1` cell (`Flatten layout cell (no schematic): ANTENNA_X1`), so the
+diodes are not counted as schematic-missing devices — stream_register stays `LVS CLEAN` with a
+diode inserted (verified 2026-06-02). Re-run LVS after a DRC antenna fix to refresh the report.
+
+**Other platforms** (sky130/asap7/gf180/ihp — ship a real antenna model + non-zero-diffarea
+diode): unchanged — raise repair iterations (`MAX_REPAIR_ANTENNAS_ITER_GRT/_DRT = 10`, default
+5); the diode is auto-discovered from its `CLASS CORE ANTENNACELL` LEF declaration (do NOT set
+`CORE_ANTENNACELL` — not an ORFS env var).
 
 ### Hold Timing Violations Post-CTS
 

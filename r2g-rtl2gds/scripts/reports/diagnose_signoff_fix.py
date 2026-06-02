@@ -20,12 +20,16 @@ BLOCK_START = "# >>> r2g signoff-fix (auto) >>>"
 BLOCK_END = "# <<< r2g signoff-fix (auto) <<<"
 KLAYOUT_CPP_CRASH = re.compile(r"sort_circuit|gen_log_entry|segmentation|sigsegv", re.I)
 
-# Platforms where OpenROAD repair_antennas is inert: no tech-LEF antenna rules
-# (check_antennas finds nothing) and/or a zero-ANTENNADIFFAREA diode cell, so diode
-# insertion cannot run. Density relief is also empirically COUNTERPRODUCTIVE on
-# nangate45 (fifo_basic went 14→16 antennas when CORE_UTILIZATION dropped 10→5).
-# See docs/campaign_signoff_fixer_2026-06-01.md (Finding B).
-ANTENNA_REPAIR_INERT_PLATFORMS = {"nangate45"}
+# Platforms that need the installed antenna model (tools/install_nangate45_antenna.sh)
+# plus a *diode-forced* repair config to clear antennas.  On nangate45 the stock tech LEF
+# ships no antenna ratios and the SC LEF has gate areas stripped, so OpenROAD sees nothing
+# to repair; once the model is installed, OpenROAD's default repair fixes antennas with
+# JUMPERS, which the FreePDK45 KLayout signoff deck does NOT credit (it credits diodes).
+# So the strategy disables jumper repair (SKIP_ANTENNA_REPAIR) and forces diode insertion
+# (MAX_REPAIR_ANTENNAS_ITER_DRT).  Validated 2026-06-02 on stream_register (489:1 → clean
+# with 1 diode).  See references/signoff-fixing.md "nangate45 antenna repair".  Density
+# relief stays OFF here (empirically counterproductive: fifo_basic 14→16 at util 10→5).
+DIODE_FORCED_REPAIR_PLATFORMS = {"nangate45"}
 
 
 def parse_config(text: str) -> dict:
@@ -52,16 +56,28 @@ def _applied(cfg: dict, edits: dict) -> bool:
 def _antenna_catalog(cfg: dict) -> list:
     """Full antenna strategy catalog (real layout fixes; regardless of applied state).
 
-    For platforms in ANTENNA_REPAIR_INERT_PLATFORMS (nangate45): returns [] — no
-    auto strategies at all.  Both antenna_diode_iters (OpenROAD repair_antennas is
-    inert with no tech-LEF antenna rules / zero-ANTENNADIFFAREA diode) and
-    antenna_density_relief (empirically counterproductive: fifo_basic 14→16 antennas
-    when CORE_UTILIZATION dropped 10→5) are suppressed.  The caller will mark these
-    as residual immediately.
+    For platforms in DIODE_FORCED_REPAIR_PLATFORMS (nangate45): a single
+    `antenna_diode_repair` strategy that forces physical antenna-diode insertion (the
+    only repair the FreePDK45 signoff deck credits).  Requires the antenna model to be
+    installed once via tools/install_nangate45_antenna.sh.  Density relief is NOT offered
+    here (counterproductive — enlarging the die lengthens nets and adds antennas).
+
+    All other platforms (sky130, gf180, ihp — which ship a real antenna model): the
+    classic [antenna_diode_iters, antenna_density_relief] pair.
     """
     platform = cfg.get("PLATFORM")
-    if platform in ANTENNA_REPAIR_INERT_PLATFORMS:
-        return []
+    if platform in DIODE_FORCED_REPAIR_PLATFORMS:
+        return [
+            {"id": "antenna_diode_repair",
+             "rationale": "Force antenna-diode insertion: the FreePDK45 KLayout deck credits "
+                          "diodes, NOT jumpers, so SKIP_ANTENNA_REPAIR=1 disables OpenROAD's "
+                          "global-route jumper repair (which satisfies its own PAR model but "
+                          "leaves the signoff deck flagging) and MAX_REPAIR_ANTENNAS_ITER_DRT "
+                          "drives physical ANTENNA_X1 diode insertion during detailed routing. "
+                          "Requires the antenna model: tools/install_nangate45_antenna.sh (one-time).",
+             "config_edits": {"SKIP_ANTENNA_REPAIR": "1", "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"},
+             "rerun_from": "route", "recheck": "drc", "auto_apply": True},
+        ]
 
     try:
         cur_util = int(float(cfg.get("CORE_UTILIZATION", "")))
@@ -111,12 +127,14 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
             if not strategies:
                 plan["status"] = "residual"
                 platform = cfg.get("PLATFORM")
-                if platform in ANTENNA_REPAIR_INERT_PLATFORMS:
+                if platform in DIODE_FORCED_REPAIR_PLATFORMS:
                     plan["residual_reason"] = (
-                        "nangate45 antenna repair inert (no tech-LEF antenna rules + "
-                        "zero-ANTENNADIFFAREA diode); density relief empirically "
-                        "counterproductive (fifo_basic 14->16). Honest residual — deck "
-                        "not relaxed. Consider DRC_BEOL_ONLY or accept residual."
+                        "nangate45 antenna: diode-forced repair (antenna_diode_repair) already "
+                        "applied but KLayout still flags. Most likely the antenna model is not "
+                        "installed (run tools/install_nangate45_antenna.sh) or OpenROAD's "
+                        "diode-credit underestimates this net vs the FreePDK45 deck — escalate "
+                        "with a tighter ratio (install_nangate45_antenna.sh --ratio 200) and "
+                        "re-run. Deck never relaxed."
                     )
                 else:
                     plan["residual_reason"] = "antenna: all real-fix strategies exhausted"

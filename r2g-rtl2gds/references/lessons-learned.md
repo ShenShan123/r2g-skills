@@ -183,3 +183,39 @@ The 682-design corpus state after the May 2026 sweeps. Establishes baseline expe
 - DRC stuck classification must trust `stuck_at_rule` regardless of exit code — observed 124 (timeout), 137 (SIGKILL), 2 (make-target failed) for the same polygon-op pattern depending on how klayout was killed.
 - `3_4_place_resized`'s `repair_design` is a DIFFERENT hang from `3_3_place_gp`'s timing-driven iteration. PLACE_FAST=1 only fixes the latter. No ORFS knob currently skips `repair_design` at place stage; arm_core hit this 2026-05-26 and is intractable here.
 - boom_mediumboom and boom_mediumseboom recovered to GDS via `FROM_STAGE=route ROUTE_FAST=1 ROUTE_FAST_DRT_ITERS=1` resuming from preserved 5_2_route.odb / 6_1_fill.odb. Always check preserved scratch before declaring a route-stuck ChipTop intractable.
+
+## nangate45 Antenna DRC — From "Inert/Unfixable" to Real Diode Repair (2026-06-02)
+
+The single largest fixable DRC class in the corpus is nangate45 METAL*_ANTENNA. Two earlier
+campaigns gave up on it: the 2026-05-30 sweep *relaxed* the deck 300→400 (masking, since
+retired), and 2026-06-01 Finding B declared it an honest "residual" because OpenROAD's
+`repair_antennas` was inert. Re-investigating, the inertness had **three** distinct causes in
+the stock nangate45 LEFs — fixing only one (as prior attempts implicitly assumed) does nothing:
+
+1. **tech LEF has no antenna ratios.** `NangateOpenCellLibrary.tech.lef` has zero `ANTENNA*`
+   keywords, so `check_antennas` has no threshold and reports 0 — nothing to repair.
+2. **SC LEF has gate areas stripped.** ORFS uses `NangateOpenCellLibrary.macro.mod.lef` as
+   `SC_LEF`; its std-cell pins have **no `ANTENNAGATEAREA`** (the full model survives in the
+   sibling `.macro.lef`). Without a gate area there is no metal/gate ratio — `check_antennas`
+   finds 0 even at ratio 1. This was the non-obvious one; the tech-LEF fix alone is useless.
+3. **Diode unusable.** `ANTENNA_X1` has `ANTENNADIFFAREA 0.0`; OpenROAD only uses a
+   `CORE_ANTENNACELL` when `diffArea > 0` (RepairAntennas.cpp:559) → `GRT-0246 No diode found`.
+
+Fix: `tools/install_nangate45_antenna.sh` (patcher `scripts/flow/antenna_lef_patch.py`) adds
+`ANTENNAAREARATIO 300` per routing layer (matches the signoff deck — not a relaxation), merges
+the per-pin gate areas from `.macro.lef`, and sets a positive diode `ANTENNADIFFAREA`. With the
+model in place OpenROAD's per-net PAR equals KLayout's ratio to the decimal (stream_register
+488.80 vs 489.17).
+
+**The decisive trap — jumpers vs diodes.** With the model installed, OpenROAD's *default*
+repair "fixes" the antenna with a **jumper** (layer hop): its PAR drops below 300 and it prints
+`Found 0 antenna violations`, but KLayout *still flags it* (stream_register only improved
+489→472). The FreePDK45 `antenna_check(gate, metalN, 300, diode)` sums the **whole net's** metalN
+area connected to the gate — a jumper doesn't reduce that — and credits **only a connected
+diode** (`#adiodes`/`#diode_factors`). So the working strategy disables jumper repair
+(`SKIP_ANTENNA_REPAIR=1`) and forces physical diode insertion (`MAX_REPAIR_ANTENNAS_ITER_DRT=10`).
+stream_register: 489:1 → **DRC CLEAN** with one inserted `ANTENNA_X1`. Codified as the
+`antenna_diode_repair` strategy in `diagnose_signoff_fix.py`; KLayout 300:1 signoff deck never
+touched. **General principle:** when an OpenROAD in-flow checker and the KLayout signoff deck
+disagree on whether a fix worked, the signoff deck wins — and you must use the repair *modality*
+the deck actually credits, not the one the flow finds cheapest.
