@@ -132,7 +132,9 @@ def main():
     # is clean — it does NOT cover FEOL geometry or antenna ratios.  Mark it with
     # the qualified status 'clean_beol' (cf. LVS 'clean_algorithmic') so that
     # status-based aggregation cannot silently miscount it as a full clean.
-    beol_only = bool(drc_result) and drc_result.get('drc_mode') == 'beol_only'
+    # Any BEOL-class mode (beol_only, beol_only_no_contact) skips ≥2 rule groups, so
+    # a 0-violation result is the qualified status clean_beol, never plain clean.
+    beol_only = bool(drc_result) and str(drc_result.get('drc_mode') or '').startswith('beol_only')
 
     if drc_result and drc_result.get('status') in ('stuck', 'timeout', 'failed', 'skipped'):
         status = drc_result['status']

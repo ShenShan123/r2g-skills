@@ -210,6 +210,23 @@ def test_drc_mode_beol_only_clean_is_qualified(tmp_path):
     )
 
 
+def test_drc_mode_beol_no_contact_clean_is_qualified(tmp_path):
+    """A 0-violation beol_only_no_contact run is also clean_beol (skips ≥3 groups)."""
+    proj = _make_project(tmp_path, lyrdb_content=None, count_rpt=0)
+    (proj / "drc" / "drc_result.json").write_text(
+        json.dumps({"status": "clean", "violations": 0,
+                    "drc_mode": "beol_only_no_contact"}), encoding="utf-8"
+    )
+    out = tmp_path / "drc_beol_nc.json"
+    r = _run(proj, out)
+    assert r.returncode == 0, r.stderr
+    result = json.loads(out.read_text())
+    assert result.get("drc_mode") == "beol_only_no_contact"
+    assert result["status"] == "clean_beol", (
+        f"beol_only_no_contact 0-viol must be 'clean_beol', got {result['status']!r}"
+    )
+
+
 def test_drc_mode_full_carried_through(tmp_path):
     """drc_result.json with drc_mode=full is propagated into reports/drc.json."""
     proj = _make_project(tmp_path, lyrdb_content=None, count_rpt=0)

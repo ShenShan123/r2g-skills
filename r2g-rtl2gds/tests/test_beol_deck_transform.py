@@ -101,3 +101,53 @@ def test_no_feol_or_antenna_line_leaves_deck_untouched():
     fake_deck = "# deck without FEOL/ANTENNA flags\nBEOL    = true\nOFFGRID = true\n"
     out = _apply_transform(fake_deck)
     assert out == fake_deck, "Deck without FEOL/ANTENNA lines should be unchanged"
+
+
+# ── DRC_SKIP_CONTACT deeper-fallback transform (comments out CONTACT.* checks) ──
+# The sed expression exactly as it appears in run_drc.sh.
+_SED_SKIP_CONTACT = r's/^([[:space:]]*[^#].*\.output\("CONTACT\.)/# r2g-skip-contact: \1/'
+
+
+def _apply_skip_contact(src: str) -> str:
+    result = subprocess.run(
+        ["sed", "-E", _SED_SKIP_CONTACT],
+        input=src, capture_output=True, text=True, check=True,
+    )
+    return result.stdout
+
+
+# A realistic slice of the FreePDK45 deck around the CONTACT group.
+_CONTACT_SLICE = (
+    'cont    = polygons(10, 0)\n'
+    'cont.width(65.nm).output("CONTACT.1", "CONTACT.1 : width")\n'
+    'cont.space(75.nm, euclidian).output("CONTACT.2", "CONTACT.2 : spacing")\n'
+    'cont.not(active.or(poly.or(metal1))).output("CONTACT.3", "CONTACT.3 : inside")\n'
+    'active.enclosing(cont, 5.nm, euclidian).output("CONTACT.4", "CONTACT.4 : enc")\n'
+    'metal1.width(65.nm, euclidian).output("METAL1.1", "METAL1.1 : width")\n'
+    'cont.interacting(error_corners.polygons(1.dbu)).output("METAL1.3", "METAL1.3 : enc")\n'
+)
+
+
+def test_skip_contact_comments_all_contact_checks():
+    """Every CONTACT.* check line (incl. ones referencing FEOL layers) is commented."""
+    out = _apply_skip_contact(_CONTACT_SLICE)
+    for n in (1, 2, 3, 4):
+        assert not re.search(rf'^\s*[^#].*\.output\("CONTACT\.{n}', out, re.MULTILINE), (
+            f"CONTACT.{n} check should be commented out, got:\n{out}"
+        )
+    # And the guard regex run_drc.sh uses must find no uncommented CONTACT lines.
+    assert not re.search(r'^\s*[^#].*\.output\("CONTACT\.', out, re.MULTILINE)
+
+
+def test_skip_contact_leaves_layer_def_and_metal_checks():
+    """The `cont` layer definition and METAL.* checks must NOT be commented."""
+    out = _apply_skip_contact(_CONTACT_SLICE)
+    assert re.search(r'^cont\s*=\s*polygons', out, re.MULTILINE), (
+        "the `cont` layer definition must remain (later metal rules reference it)"
+    )
+    assert re.search(r'^\s*metal1\.width.*METAL1\.1', out, re.MULTILINE), (
+        "METAL1.1 (real P&R routing check) must remain active"
+    )
+    assert re.search(r'^\s*cont\.interacting.*METAL1\.3', out, re.MULTILINE), (
+        "METAL1.3 is a METAL-labelled check; only CONTACT.* labels are stripped"
+    )
