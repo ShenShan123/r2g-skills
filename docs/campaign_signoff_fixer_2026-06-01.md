@@ -248,7 +248,30 @@ has GDS), **Gaisler** = `leon2` (no `design_cases/` dir — never taken through 
 flow, out of signoff scope here).
 
 Plan: (1) run BEOL-only on the untested **108K–406K stuck band** (22 designs incl. faraday_risc)
-with `jobs 3, timeout 2400` — pins the CONTACT-hang threshold (469K hangs; is 406K under it?)
-and converts whatever completes; (2) the **≥465K + BOOM** tier is the confirmed CONTACT-hang
-tail — bounded-timeout attempts only, else honest `stuck` pending the deeper CONTACT-skip
-fallback (#8).
+with `jobs 3, timeout 2400`; (2) characterise the **≥465K + BOOM** tier.
+
+### Findings (2026-06-01)
+
+**The FEOL toggle leaks IMPLANT+CONTACT (mechanism).** Empirically (DMA, eth_mac logs) the
+`FEOL = false` toggle gates the Well/Poly/Active booleans (the `:91/:121/:131` hangs) but
+does **not** gate the IMPLANT/CONTACT groups inside the same `if FEOL` block — they still run
+in plain BEOL-only mode. Designs ≤~406K run them fine; ≥~465K freeze on `implant.width`/
+`cont.space`. → built **`DRC_BEOL_STRICT`** (commit `53d7383`; `DRC_SKIP_CONTACT` alias):
+awk-comments every `.output(` between `if FEOL`/`end # FEOL`, leaving only BEOL metal/via +
+OFFGRID. drc_mode `beol_only_strict`; 0-viol → `clean_beol`. (Superseded the narrower
+CONTACT-only `1dddcc1`.) 15 transform/extract tests pass.
+
+**But the real large-design ceiling is the METAL check (verified).** Ran BEOL-strict on
+`eth_mac_1g_fifo` (469K): it cleared the whole (stripped) FEOL block — logged `BEOL checks` —
+then **hung on the first `metal1.width` (METAL1.1)** op over millions of metal1 polygons.
+METAL is the legitimate P&R routing-geometry check and *cannot* be skipped. So the ≥~465K tier
+(eth_mac_1g/mii_fifo, axis_ram_switch 808K, koios 978K, BOOM 5–9M) is **genuinely intractable
+for this KLayout build** → honest `stuck`, no flow lever helps. `DRC_BEOL_STRICT` thus only
+helps the narrow band "FEOL-MOL hangs while METAL is tractable", which **no current-corpus
+design occupies** (≤406K already completes with plain BEOL-only); it ships as a tested
+defensive fallback + documents the KLayout quirk, not a corpus unblock.
+
+**Band wave** (`--max-inst 410000`, jobs 3, timeout 2400): converting 108K–406K — so far
+6/22 `clean_beol` (up to 152K, ~17–22 min each); 16 remaining incl. faraday_risc (406K).
+
+**Gaisler/leon2** has no `design_cases/` run (RTL→GDS never executed) — out of signoff scope.
