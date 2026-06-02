@@ -362,7 +362,8 @@ limitation, not real layout defects** — mirroring the DRC story.
 | aes_core | 30,496 | residual | `generic` |
 | vlsi_axi_slave | 2,257 | residual | `generic` (40+40 net mismatches from 543×DLL_X1 reg-file symmetry) |
 | core_usb_host_top | 8,380 | **reclassified → `crash`** | KLayout SIGSEGV in `gen_log_entry` |
-| iccad2015_unit08_in1 / biriscv_core | 62K / 68K | (mid-LVS subagent) | pending |
+| aes_core | 30,496 | residual | `generic` (mid-LVS subagent) |
+| iccad2015_unit08_in1 / biriscv_core | 62K / 68K | residual (stay `fail`) | unclassified — the mid-LVS subagent died on a 1M-context credit error mid-compare (after classifying aes_core `generic`); both retain their established honest `fail`; the orphaned biriscv klayout was killed per the anti-zombie rule |
 
 **Key empirical finding — the matcher budget is NOT the lever.** Both subagents independently
 proposed raising `max_depth`/`max_branch_complexity`. Tested and **disproven**:
