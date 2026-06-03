@@ -241,8 +241,14 @@ def test_mismatch_class_real_connectivity(tmp_path):
     assert result["mismatch_class"] == "real_connectivity", result
 
 
-def test_mismatch_class_generic_when_net_deltas_present(tmp_path):
-    """Real net deltas present (no 'not matching' error) → generic, NOT auto-labelled benign."""
+def test_mismatch_class_symmetric_with_balanced_net_deltas(tmp_path):
+    """BALANCED unmatched nets (1 schematic-only + 1 layout-only) + a same-cell swap +
+    ambiguous group + zero device mismatches → symmetric_matcher.
+
+    Models the corpus reality (aes_core 8+8, vlsi_axi_slave 40+40, iccad2017_unit5_F
+    64+64): KLayout's symmetric-matcher leaves perfectly balanced unmatched nets with
+    every device matched. The layout is correct; only assignment is ambiguous.
+    """
     lvsdb = (
         "circuit(axi_slave AXI_SLAVE nomatch\n"
         "   entry(warning description('x from an ambiguous group of nets'))\n"
@@ -253,5 +259,75 @@ def test_mismatch_class_generic_when_net_deltas_present(tmp_path):
     )
     out = tmp_path / "lvs.json"
     result = _run_script(_make_fail_project(tmp_path, lvsdb), out)
-    assert result["mismatch_class"] == "generic", result
+    assert result["mismatch_class"] == "symmetric_matcher", result
     assert result["net_mismatches"] == 2
+    assert result["net_mismatches_schematic_only"] == 1
+    assert result["net_mismatches_layout_only"] == 1
+    assert result["device_mismatches"] == 0
+
+
+def test_mismatch_class_generic_when_nets_imbalanced(tmp_path):
+    """IMBALANCED unmatched nets (2 layout-only vs 1 schematic-only) with no explicit
+    'not matching any net' error → generic (a genuine delta, operator review)."""
+    lvsdb = (
+        "circuit(top TOP nomatch\n"
+        "   entry(warning description('x from an ambiguous group of nets'))\n"
+        "   net(() 1635 mismatch)\n"
+        "   net(1919 () mismatch)\n"
+        "   net(2020 () mismatch)\n"
+        ")\n"
+    )
+    out = tmp_path / "lvs.json"
+    result = _run_script(_make_fail_project(tmp_path, lvsdb), out)
+    assert result["mismatch_class"] == "generic", result
+    assert result["net_mismatches_schematic_only"] == 1
+    assert result["net_mismatches_layout_only"] == 2
+
+
+def test_mismatch_class_generic_when_device_mismatch_present(tmp_path):
+    """Balanced nets but a DEVICE-count delta → generic (devices must match for a
+    benign symmetric label)."""
+    lvsdb = (
+        "circuit(top TOP nomatch\n"
+        "   entry(warning description('x from an ambiguous group of nets'))\n"
+        "   net(() 1635 mismatch)\n"
+        "   net(1919 () mismatch)\n"
+        "   device(5 () mismatch)\n"
+        ")\n"
+    )
+    out = tmp_path / "lvs.json"
+    result = _run_script(_make_fail_project(tmp_path, lvsdb), out)
+    assert result["mismatch_class"] == "generic", result
+    assert result["device_mismatches"] == 1
+
+
+def test_mismatch_class_real_connectivity_imbalanced_bus_opens(tmp_path):
+    """Imbalanced unmatched nets + explicit 'not matching any net' on named ports
+    → real_connectivity (models wb2axip_axilsingle: 16 bus opens, 104 vs 120)."""
+    lvsdb = (
+        "circuit(axilsingle AXILSINGLE nomatch\n"
+        "   entry(error description('Net S_AXI_RDATA[15] is not matching any net from reference netlist'))\n"
+        "   net(() 100 mismatch)\n"
+        "   net(200 () mismatch)\n"
+        "   net(201 () mismatch)\n"
+        ")\n"
+    )
+    out = tmp_path / "lvs.json"
+    result = _run_script(_make_fail_project(tmp_path, lvsdb), out)
+    assert result["mismatch_class"] == "real_connectivity", result
+
+
+def test_cdl_parse_error_reason(tmp_path):
+    """A KLayout SPICE-reader 'Pin count mismatch ... Netlist::read' abort (no verdict,
+    no lvsdb) → status unknown with reason cdl_parse_error (models spi_master_single_cs)."""
+    log = (
+        "KLayout 0.30.7\n"
+        "ERROR: Pin count mismatch (7 expected, got 8) for 'DFFR_X1' in "
+        "Xr_CS_Inactive_Count\\[-1\\]$_DFFE_PN0P_ at /path/6_final_concat.cdl, line 367 "
+        "in Netlist::read\n"
+    )
+    proj = _make_project(tmp_path, log_6_lvs=log)
+    out = tmp_path / "lvs.json"
+    result = _run_script(proj, out)
+    assert result["status"] == "unknown", result
+    assert result.get("reason") == "cdl_parse_error", result

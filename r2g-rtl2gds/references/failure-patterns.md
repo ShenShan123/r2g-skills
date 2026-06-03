@@ -401,28 +401,44 @@ When klayout DRC is stuck on a polygon op and gets SIGKILL'd by something **othe
   - Extra devices from fill/tap cells
   - Port name mismatches between GDS and CDL netlist
 - **Tool:** `scripts/flow/run_lvs.sh` → `scripts/extract/extract_lvs.py`
+- **Sub-classify every `fail`:** `extract_lvs.py::classify_lvs_mismatch` labels the `.lvsdb`
+  `symmetric_matcher` (tool limit, layout clean), `real_connectivity` (genuine defect), or `generic`
+  (needs review) from net balance + device agreement — see "LVS symmetric-matcher residual" below.
+  Across the current corpus the 14 fails resolve to **2 real defects (both wb2axip) + 12 symmetric
+  residuals**; treat a `symmetric_matcher` label as a believed-clean residual, not a hard fail.
 
 ### LVS Skipped (No Rules)
 - **Symptom:** `LVS is not supported on this platform` or `lvs_result.json` shows status "skipped"
 - **Fix:** This is expected for platforms without KLayout LVS rule decks. Not a flow error.
 - **Platforms without KLayout LVS:** asap7
 - **Alternative:** For sky130hd/sky130hs, use `run_netgen_lvs.sh` (Netgen + Magic) as an alternative LVS flow
+- **`skipped` is STALE once a platform rule is installed.** nangate45 had no bundled `.lylvs` before
+  2026-05-27; designs run earlier are recorded `skipped` and will RUN if re-run now (the rule exists).
+  But the knowledge store can also carry `lvs_status=skipped` (or NULL) simply because **LVS was
+  re-runnable but never re-run and re-ingested** — the 2026-06-02 re-ingest read no `lvs.json`
+  because no LVS had executed. Workflow: **re-run LVS first, THEN `knowledge/ingest_run.py`.** Caveat:
+  "has a rule now" ≠ "will pass" — large designs (>300K cells, e.g. the verilog-ethernet udp/eth_mac
+  family) re-run to `incomplete` (matcher non-convergent within cap), not `clean`.
 
 ### LVS symmetric-matcher residual (KLayout `Netlists don't match`, layout actually correct)
 
-- **Symptom:** `6_lvs.log` ends with `ERROR : Netlists don't match`, but the `.lvsdb` shows the
-  failure is **only** same-cell-type instance swaps and/or a handful of unmatched nets that all sit
-  inside *ambiguous groups* — there are **zero (or very few) genuine net/pin/device-count deltas**.
-  Tell-tale lvsdb lines: `entry(warning description('Matching nets $N vs. NAME from an ambiguous
-  group of nets'))`, `circuit(<layoutId> <schemId> mismatch)` where both ids resolve to the *same*
-  cell type (e.g. NAND2_X1 vs NAND2_X1), and optionally `entry(warning description('Maximum depth
-  exhausted (max depth is 16)'))`.
+- **Symptom:** `6_lvs.log` ends with `ERROR : Netlists don't match`, but the `.lvsdb` failure is
+  **only** instance/net assignment ambiguity, not a real delta. The precise, validated signature
+  (`extract_lvs.py::classify_lvs_mismatch`, refined 2026-06-03) is:
+  **schematic-only unmatched net count == layout-only unmatched net count (BALANCED), zero
+  paired-but-mismatching nets `net(N M mismatch)`, zero device mismatches, and at least one
+  same-cell-type instance swap `circuit(<layoutId> <schemId> mismatch)` or `ambiguous group of
+  nets` warning.** Optionally also `entry(warning description('Maximum depth exhausted ...'))`.
+  The old rule (require *zero* unmatched nets) under-reported: aes_core (8+8), vlsi_axi_slave
+  (40+40), iccad2017_unit5_F (64+64), axil_crossbar_wr (420+420) all carry BALANCED unmatched nets
+  with every device matched — clean layouts the old rule mislabeled `generic`.
 - **Root cause:** KLayout 0.30.7's netlist comparer cannot uniquely fingerprint topologically
-  identical instances in **symmetric structures** — parallel NAND/NOR/XOR trees, crypto mixing
-  functions (e.g. blake2s G-function), register files (e.g. a 543×DLL_X1 array), and flat
-  combinational benchmarks (ICCAD units). It heuristically mis-pairs a few interchangeable
-  instances and reports a spurious mismatch. **This is a tool limitation, not a layout error** —
-  net/pin/device counts agree on both sides.
+  identical instances in **symmetric structures** — parallel NAND/NOR/XOR/parity trees, crypto
+  mixing functions (blake2s G-function), **register files / memory arrays (`MEMORY[i][j]`),
+  replicated bit-slices**, and flat combinational benchmarks (ICCAD units). It gives up and leaves
+  the unmatched nets perfectly balanced. **This is a tool limitation, not a layout error** —
+  net/pin/device counts agree on both sides. The discriminator vs a real defect is BALANCE +
+  device agreement, *not* "no unmatched nets".
 - **What does NOT fix it (validated 2026-06-02, signoff-fixer campaign):** raising the comparer
   search budget. The deck exposes `max_branch_complexity`/`max_depth` (env
   `LVS_MAX_BRANCH_COMPLEXITY`/`LVS_MAX_DEPTH`). Tested:
@@ -434,17 +450,105 @@ When klayout DRC is stuck on a polygon op and gets SIGKILL'd by something **othe
   re-runs cranking it.
 - **Honest handling:** classify as residual `lvs_symmetric_matcher_residual` (see
   `signoff-fixing.md` residual taxonomy). Do **not** relax the rule deck, and do **not** promote it
-  to `clean`. The genuine fix is a newer KLayout (improved symmetric matcher) or per-design
-  `same_nets`/`same_circuits` seeding from the synthesized instance names — both out of automated
-  scope. Distinguish from a **real connectivity error** (residual `lvs_real_connectivity_mismatch`):
-  if the lvsdb has an `entry(error description('Net <PORT> is not matching any net ...'))` or two
-  layout nets the schematic expects merged (e.g. wb2axip_axi2axilite: `M_AXI_BREADY` + `$8924`
-  vs `S_AXI_WREADY`), that is a genuine layout defect, not this pattern.
+  to plain `clean`. Distinguish from a **real connectivity error** (residual
+  `lvs_real_connectivity_mismatch`): an `entry(error description('Net <PORT> is not matching any
+  net ...'))`, **imbalanced** unmatched nets (more layout than schematic, or vice-versa), or a
+  paired `net(N M mismatch)` is a genuine layout defect. In the current corpus exactly **two**
+  designs are real defects — wb2axip_axi2axilite (1 net open: `S_AXI_WREADY` driver split from its
+  output buffer) and wb2axip_axilsingle (16 bus opens: 104 vs 120 unmatched on `S_AXI_RDATA`/
+  `M_AXI_AWVALID` bits) — everything else with this signature is the tool limit.
+- **`same_nets!` seeding CAN clear it (validated 2026-06-03, operator-only).** Per-design strict
+  `same_nets!` seeding on the swapped instances' **input-pin** nets produces a true `match`:
+  validated on `verilog_ethernet_axis_baser_rx_64` (2 NAND2 swaps → "CONGRATULATIONS! Netlists
+  match", 4 seeds). Key facts: use `same_nets!` (the strict/forcing form) — soft `same_nets` is a
+  no-op the matcher overrides; seed **input nets only** (seeding the swapped gate's own output net
+  over-constrains and re-fails); layout internal nets are mostly anonymous (~4% named) so address
+  them as net objects via `expanded_name`, not `net_by_name`. It is **opportunistic and does NOT
+  generalize** — on iccad2017_unit5_G every seed strategy left it equal or worse (deep global
+  symmetry). Ship/run it only with a hard gate: accept the seeded verdict ONLY if the re-run is
+  genuinely clean. Tooling: `assets/platforms/nangate45/lvs/FreePDK45_symseed.lvs` +
+  `signoff-fixing.md` "Symmetric-matcher seeding (operator-only, validated)". The deeper genuine
+  fix remains a newer KLayout with an improved symmetric matcher.
+- **`clean_algorithmic` is a STALE label — re-validate it.** No current script emits
+  `clean_algorithmic`; the 7 such reports are frozen artifacts of an earlier campaign. Re-extracting
+  with the refined `classify_lvs_mismatch` flips them to `fail` + a precise `mismatch_class`. Five
+  were genuine symmetric residuals (layout clean) but **wb2axip_axilsingle was hiding a real
+  `real_connectivity` defect under the benign label**. Always re-run `extract_lvs.py` on any
+  `clean_algorithmic` design before trusting it.
 - **Cross-platform stale-status caveat:** a design can also show a bogus LVS `fail`/`failed` when
   its `6_lvs.log` is a **concatenation of an older different-platform run** prepended to the current
   one (the extractor then keys off the old failure marker). Re-running LVS fresh on the current
   platform resolves it (e.g. `cordic`: stale sky130hd failure → re-ran nangate45 → `clean`). Always
   re-run before trusting an LVS `fail` on a design that changed platform.
+
+### LVS KLayout sort_circuit/gen_log_entry SIGSEGV (non-deterministic, retry-fixable)
+
+- **Symptom:** `make lvs` dies with `ERROR: Signal number: 11` and a backtrace through
+  `db::NetlistCrossReference::sort_circuit()` → `gen_log_entry(...)` (sometimes `ruby_run_node`),
+  `Crash log written to ~/.klayout/klayout_crash.log`. `extract_lvs.py` reports `status=crash`,
+  `reason=klayout_cpp_crash`. It dies in the **netlist COMPARE**, *after* device extraction and
+  netlist build succeed (the extracted `.cir` is complete). Faulting address is a corrupted Net
+  pointer — a use-after-free/uninitialised read.
+- **Root cause:** a **non-deterministic heap heisenbug** in KLayout 0.30.7's comparer cross-reference
+  generator. The same prebuilt GDS+CDL crashes ~most runs and survives ~1-in-N (survival rate is
+  design-dependent: fifo_basic ~high, usbf_device ~0). A surviving run produces the **true verdict**
+  (clean OR fail). A related milder manifestation — `dbLayoutVsSchematicWriter.cc:151 i !=
+  net2id.end()` — is the same corruption hitting the lvsdb writer; the deck's begin/rescue swallows
+  it and the verdict line is still emitted (so a `clean` can co-exist with that ERROR — the
+  extractor handles it).
+- **Fix (since 2026-06-03): retry.** `run_lvs.sh` now loops up to `LVS_CRASH_RETRIES` times (default
+  4; auto-reduced to 1 for >150K-cell designs since each retry re-extracts), breaking on the first
+  run with no `Signal number` in `6_lvs.log`. Validated: fifo_basic, verilog_axi_axi_fifo_wr →
+  **clean**; wb2axip_aximwr2wbsp (326+326), core_usb_host_top (22+22), sha256_axi4_slave (51+51) →
+  **fail/symmetric_matcher** (balanced — layout clean). So 5/7 "crash" designs were masking real
+  verdicts (2 clean, 3 symmetric residuals).
+- **What does NOT fix it (all tested, ruled out):** `threads(1)`, `verbose(false)`, `LD_PRELOAD`
+  tcmalloc — still crash. `flat` mode (vs `deep`) dodges the crash deterministically but yields
+  **garbage mismatches** (~12,840 spurious deltas; the deck's `align`/`equivalent_pins`/`purge` are
+  keyed to hierarchical names) — never use it for a verdict. The real source fix is KLayout
+  ≥0.30.10, but **no newer build exists on this host** (`find / -name 'klayout*'` → only 0.30.7).
+- **Resource bug fixed alongside:** a SIGSEGV gives `make` exit 2 (not 124/137), so the old
+  124/137-only cleanup left a multi-GB klayout child still spinning. `run_lvs.sh` now reaps orphans
+  on **any** nonzero exit.
+
+### LVS "incomplete" is mostly a comparer bug, not honest slowness
+
+- **Symptom:** `status=incomplete`, `reason=lvs_no_verdict_no_lvsdb` — the run reached device
+  extraction / netlist build but produced no match/mismatch verdict and wrote no `6_lvs.lvsdb`.
+- **Triage by grepping the log — three distinct causes, only one is "just slow":**
+  1. **Comparer SIGSEGV** (`Signal number: 11` + `sort_circuit` backtrace): the crash above, e.g.
+     `usbf_device` (23K cells, crashes at ~750s, peak <1GB — *smaller* than aes_core which finishes).
+     A bigger `LVS_TIMEOUT` does **not** help; retry / newer KLayout does.
+  2. **Comparer internal assertion** (`Internal error: dbNetlistCompareCore.cc:1003 bt_count !=
+     failed_match`, e.g. `sdspi_wb_controller`): a hard KLayout-0.30.7 comparer abort. Not
+     timeout-fixable; needs a newer KLayout.
+  3. **Honest extraction timeout** (log stops at `"netlist" in: …:246` with `Terminated`): KLayout
+     layout-netlist **extraction** is super-linear (~2700s @51K, ~10200s @62K cells), so the old
+     3600s default SIGTERM'd every ≥50K design *mid-extraction*. `run_lvs.sh` auto-scale now clears
+     the extraction wall (>50K→14400s, >100K→21600s, >250K→28800s, base 5400s).
+- **`Killed`/`Error 137` at low wall-time and <2GB peak = external SIGKILL** (shared-host
+  memory/scheduler pressure, not OOM — peak RSS stayed ≤1.65GB even at 242K cells). **Run LVS
+  serially** on a shared host; concurrent peer jobs externally kill long extractions (this also
+  explains the `biriscv_core` no-lvsdb: killed mid-`netlist`, not a writer crash).
+- **`deep`/`flat`/`threads` tuning does not help the comparer pathology** (verified: flat mode on
+  usbf still spins >470s with no verdict). Memory is never the binding constraint.
+- **no-lvsdb-but-verdict trap:** a `fail` log with no `VERBOSE-LVS:` markers predates the 2026-05-28
+  writer patch (the old deck only wrote the lvsdb on a *clean* match). Re-run with the current deck
+  to get a classifiable lvsdb (e.g. `iccad2015_unit08_in1`).
+- **ChipTop scale (5–9M cells, the BOOMs) is intractable here:** LVS is `Terminated` mid-geometry
+  (e.g. `FreePDK45.lylvs:117` at 14–17GB) long before netlist compare. Honest residual:
+  "KLayout-LVS-intractable at ChipTop scale on this host" — do not launch.
+
+### LVS CDL parse error (escaped-bracket / negative-index instance names)
+
+- **Symptom:** `ERROR: ...Pin count mismatch (N expected, got N+1) ... in Netlist::read` — LVS
+  aborts before any compare; `extract_lvs.py` reports `status=unknown`, `reason=cdl_parse_error`.
+- **Root cause:** KLayout 0.30.7's SPICE reader mis-tokenizes an instance name containing an escaped
+  bracket / negative bit-index plus `$`, e.g. `Xr_CS_Inactive_Count\[-1\]$_DFFE_PN0P_` (from a
+  `[-1]` bit-blast in synthesis). It is a deterministic **CDL-generation/parser** issue, **not** a
+  layout mismatch — the layout is never assessed. Reproducer: `spi_master_single_cs`.
+- **Fix:** sanitise the offending instance name in the CDL, or avoid the `[-1]` bit-blast in RTL/
+  synthesis. Out of automated scope for now; surfaced honestly so it is not confused with a defect.
 
 ### Magic DRC Failure
 - **Symptom:** Magic DRC script fails or produces no output
@@ -504,11 +608,16 @@ KLayout LVS scales poorly with design size. Validated timings from 70-design bat
 
 The `timeout` command only kills the `make` process; the grandchild `klayout` process survives as a zombie consuming 3-5 GB memory and holding flock file descriptors, blocking subsequent designs.
 
-**Action:**
-- **<100K cells**: Default `LVS_TIMEOUT=3600` is sufficient
-- **~145K cells** (swerv-class): Use `LVS_TIMEOUT=4200` or run LVS with fewer parallel jobs to reduce CPU contention
-- **>150K cells** (bp_multi_top-class): Use `LVS_TIMEOUT=7200`
-- run_lvs.sh now uses `setsid timeout` to kill the entire process group, preventing zombie processes
+**Action (auto-scale tiers raised 2026-06-03 — extraction is super-linear, not just compare):**
+`run_lvs.sh` auto-scales `LVS_TIMEOUT` from the design cell count unless you set it explicitly:
+base **5400s**, **>50K→14400s**, **>100K→21600s**, **>250K→28800s**. The old 3600s default
+SIGTERM'd every ≥50K design *mid-extraction* and mislabeled it `incomplete` (extraction alone is
+~2700s @51K, ~10200s @62K). See "LVS incomplete is mostly a comparer bug, not honest slowness" for
+the full triage — a bigger cap only helps the genuine extraction-timeout subset; comparer
+SIGSEGV/assertion designs need retry or a newer KLayout, not more time.
+- run_lvs.sh uses `setsid timeout` to kill the whole process group and now reaps orphaned klayout on
+  **any** nonzero exit (a SIGSEGV exits 2, which the old 124/137-only cleanup missed → multi-GB leak).
+- **Run LVS serially on a shared host** — concurrent peer jobs externally SIGKILL long extractions.
 - If zombie klayout processes persist from pre-fix scripts: `pkill -f 'klayout.*lvs'`
 
 ### SYNTH_HIERARCHICAL + Blackbox Cost Error

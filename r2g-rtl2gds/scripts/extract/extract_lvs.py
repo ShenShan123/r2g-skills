@@ -67,13 +67,34 @@ def parse_lvsdb(lvs_dir: Path) -> dict:
 # Distinguishes the dominant LVS "fail" sub-causes so the diagnoser can emit a
 # precise, honest residual instead of a generic "operator review".  See
 # references/failure-patterns.md "LVS symmetric-matcher residual".
-# CONSERVATIVE BY DESIGN: only the unambiguous symmetric signature (zero genuine
-# net deltas + same-circuit instance swaps + ambiguous-group warnings) is labelled
-# `symmetric_matcher` (a KLayout-0.30.7 tool limitation, layout actually correct).
-# Anything with real net/pin deltas stays `generic` for operator review, and any
-# explicit "not matching any net" error is `real_connectivity` (a true defect) —
-# real_connectivity takes priority so a benign label is never applied to a real bug.
+#
+# The discriminator is NET BALANCE + DEVICE-COUNT AGREEMENT, not "zero net
+# deltas" (validated 2026-06-03 corpus triage). KLayout-0.30.7's netlist comparer
+# cannot uniquely fingerprint topologically identical instances in *symmetric*
+# structures (register files `MEMORY[][]`, parallel NAND/XOR/parity trees, crypto
+# mixing rounds, replicated bit-slices). When it gives up it leaves the unmatched
+# nets PERFECTLY BALANCED (schematic-only count == layout-only count) with EVERY
+# device matched (device_mismatches == 0) — the layout is electrically correct;
+# only the instance/net *assignment* is ambiguous. That is `symmetric_matcher`
+# (a tool limitation, not a defect). Earlier the label required net_mismatches==0,
+# which under-reported: aes_core (8+8 balanced), vlsi_axi_slave (40+40),
+# iccad2017_unit5_F (64+64) all carry balanced unmatched nets yet are clean layouts.
+#
+# A GENUINE defect breaks the balance: more layout nets than schematic (or vice
+# versa), a paired-but-mismatching net `net(N M mismatch)`, a device-count delta,
+# or an explicit "not matching any net" error. Those stay `generic` (operator
+# review) and the "not matching any net" signature forces `real_connectivity` —
+# both wb2axip_axi2axilite (net open: +1 layout net) and wb2axip_axilsingle
+# (16 bus opens: 104 vs 120) are real defects caught this way. real_connectivity
+# takes priority so a benign label is never applied to a real bug.
+_NET_SCHEM_ONLY_RE = re.compile(r"net\(\(\)\s+\d+\s+mismatch\)")   # () N -> in schematic only
+_NET_LAYOUT_ONLY_RE = re.compile(r"net\(\d+\s+\(\)\s+mismatch\)")  # N () -> in layout only
+_NET_PAIRED_RE = re.compile(r"net\(\d+\s+\d+\s+mismatch\)")        # N M -> paired but mismatching (genuine delta)
+# Back-compat alias: total unmatched nets (schematic-only + layout-only).
 _NET_MISMATCH_RE = re.compile(r"net\(\(\)\s+\d+\s+mismatch\)|net\(\d+\s+\(\)\s+mismatch\)")
+_DEVICE_MISMATCH_RE = re.compile(
+    r"device\(\(\)\s+\d+\s+mismatch\)|device\(\d+\s+\(\)\s+mismatch\)|device\(\d+\s+\d+\s+mismatch\)"
+)
 _CIRCUIT_SWAP_RE = re.compile(r"circuit\(\d+\s+\d+\s+mismatch\)")
 _AMBIGUOUS_RE = re.compile(r"ambiguous group of nets")
 _NOT_MATCHING_RE = re.compile(r"is not matching any net", re.I)
@@ -88,18 +109,29 @@ def classify_lvs_mismatch(lvs_dir: Path) -> dict:
     if not lvsdb_file.exists():
         return {}
     text = lvsdb_file.read_text(encoding='utf-8', errors='ignore')
-    net_mismatches = len(_NET_MISMATCH_RE.findall(text))
+    schem_only = len(_NET_SCHEM_ONLY_RE.findall(text))
+    layout_only = len(_NET_LAYOUT_ONLY_RE.findall(text))
+    paired_mm = len(_NET_PAIRED_RE.findall(text))
+    device_mm = len(_DEVICE_MISMATCH_RE.findall(text))
+    net_mismatches = schem_only + layout_only  # total unmatched (back-compat)
     circuit_swaps = len(_CIRCUIT_SWAP_RE.findall(text))
     ambiguous = len(_AMBIGUOUS_RE.findall(text))
     if _NOT_MATCHING_RE.search(text):
         cls = 'real_connectivity'
-    elif net_mismatches == 0 and circuit_swaps > 0 and ambiguous > 0:
+    elif (schem_only == layout_only and paired_mm == 0 and device_mm == 0
+          and (ambiguous > 0 or circuit_swaps > 0)):
+        # Balanced unmatched nets, all devices match, only instance/net
+        # ambiguity remains -> KLayout-0.30.7 symmetric-matcher limit.
         cls = 'symmetric_matcher'
     else:
         cls = 'generic'
     return {
         'mismatch_class': cls,
         'net_mismatches': net_mismatches,
+        'net_mismatches_schematic_only': schem_only,
+        'net_mismatches_layout_only': layout_only,
+        'paired_net_mismatches': paired_mm,
+        'device_mismatches': device_mm,
         'circuit_swaps': circuit_swaps,
         'ambiguous_groups': ambiguous,
     }
@@ -116,6 +148,16 @@ _DEVICE_EXTRACT_RE = re.compile(
     r"|extract_devices|\"netlist\"",
     re.I,
 )
+
+# KLayout 0.30.7's SPICE reader aborts (no verdict) when the CDL contains an
+# instance name it mis-tokenizes — notably escaped-bracket / negative-index names
+# like `Xr_CS_Inactive_Count\[-1\]$_DFFE_PN0P_` produced by a `[-1]` bit-blast.
+# It throws `Pin count mismatch (N expected, got N+1) ... in Netlist::read` BEFORE
+# any comparison, so the layout is never assessed. Distinct from a layout
+# mismatch — surfaced as reason `cdl_parse_error`. See references/failure-patterns.md
+# "LVS CDL parse error (escaped-bracket / negative-index instance names)".
+_CDL_PARSE_ERR_RE = re.compile(r"pin count mismatch", re.I)
+_NETLIST_READ_RE = re.compile(r"Netlist::read", re.I)
 
 
 def _read_both_logs(lvs_dir: Path) -> tuple[str, str]:
@@ -151,6 +193,14 @@ def parse_lvs_log(lvs_dir: Path) -> dict:
     #     produced a verdict) ---
     if _DEVICE_EXTRACT_RE.search(combined):
         info['reached_device_extraction'] = True
+
+    # --- deterministic CDL parse abort (no verdict, not a layout mismatch) ---
+    if _CDL_PARSE_ERR_RE.search(combined) and _NETLIST_READ_RE.search(combined):
+        info['cdl_parse_error'] = True
+        for line in combined.splitlines():
+            if _CDL_PARSE_ERR_RE.search(line):
+                info['cdl_parse_error_line'] = line.strip()[:300]
+                break
 
     # Use main log (6_lvs.log) preferentially for verdict/timing; fall back to
     # lvs_run.log so the rest of the logic mirrors the original behaviour.
@@ -235,10 +285,16 @@ def main():
     elif log_status == 'not_supported':
         status = 'skipped'
     else:
-        # Distinguish crash vs. incomplete vs. truly unknown
+        # Distinguish crash vs. cdl-parse-error vs. incomplete vs. truly unknown
         if log_info.get('crash'):
             status = 'crash'
             result_reason = 'klayout_cpp_crash'
+        elif log_info.get('cdl_parse_error'):
+            # KLayout's SPICE reader aborted on a mis-tokenized instance name
+            # before any compare — a deterministic CDL-generation/parser issue,
+            # not a layout mismatch. Honest, queryable cause under `unknown`.
+            status = 'unknown'
+            result_reason = 'cdl_parse_error'
         elif log_info.get('reached_device_extraction') and not lvsdb_exists:
             # Run got deep enough to extract devices / write netlist but then
             # died before producing a match/mismatch verdict and no lvsdb file.

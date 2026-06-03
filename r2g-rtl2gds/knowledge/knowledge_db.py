@@ -30,7 +30,23 @@ def ensure_schema(conn: sqlite3.Connection,
                   schema_path: Path | str = DEFAULT_SCHEMA_PATH) -> None:
     ddl = Path(schema_path).read_text(encoding="utf-8")
     conn.executescript(ddl)
+    _migrate_add_columns(conn)
     conn.commit()
+
+
+# Lightweight forward migrations. schema.sql uses CREATE TABLE IF NOT EXISTS, so a
+# column added there never reaches an already-created runs.sqlite. Add such columns
+# here idempotently (ALTER TABLE ADD COLUMN is a no-op error if it already exists).
+_RUNS_ADDED_COLUMNS = {
+    "lvs_mismatch_class": "TEXT",
+}
+
+
+def _migrate_add_columns(conn: sqlite3.Connection) -> None:
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+    for col, decl in _RUNS_ADDED_COLUMNS.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE runs ADD COLUMN {col} {decl}")
 
 
 def load_families(families_path: Path | str = DEFAULT_FAMILIES_PATH) -> dict[str, Any]:

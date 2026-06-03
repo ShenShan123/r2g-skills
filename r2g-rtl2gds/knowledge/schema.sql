@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS runs (
     drc_status              TEXT,
     drc_violations          INTEGER,
     lvs_status              TEXT,
+    -- LVS fail sub-class from extract_lvs.py::classify_lvs_mismatch:
+    -- symmetric_matcher (tool limit, layout clean) | real_connectivity (defect) | generic
+    lvs_mismatch_class      TEXT,
     rcx_status              TEXT,
 
     -- timings

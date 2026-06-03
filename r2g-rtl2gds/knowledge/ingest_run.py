@@ -308,7 +308,8 @@ def ingest(project: Path,
         "power_mw":        power_mw,
         "drc_status":      drc.get("status"),          # clean | fail | unknown
         "drc_violations":  _to_int(drc.get("total_violations")),
-        "lvs_status":      lvs.get("status"),          # clean | fail | skipped | unknown
+        "lvs_status":      lvs.get("status"),          # clean | fail | skipped | crash | incomplete | unknown
+        "lvs_mismatch_class": lvs.get("mismatch_class"),  # symmetric_matcher | real_connectivity | generic (fail only)
         "rcx_status":      rcx.get("status"),          # complete | empty | no_spef | skipped
 
         "total_elapsed_s":  total_elapsed,

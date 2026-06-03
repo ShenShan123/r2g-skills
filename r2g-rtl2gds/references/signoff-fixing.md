@@ -153,9 +153,10 @@ These are reported honestly by `diagnose_signoff_fix.py` with a non-null `residu
 | DRC stuck or timeout | `drc_stuck_tooling_out_of_v1_scope` / `drc_timeout_tooling_out_of_v1_scope` | KLayout polygon-op hang, outside v1 scope. Accept GDS+LVS+RCX pass as evidence. |
 | Non-antenna DRC class | `non-antenna DRC class not handled in v1: ...` | Operator review of the specific category. |
 | All antenna strategies exhausted | `antenna: all real-fix strategies exhausted` | No further config lever available; consider manual routing intervention or structural RTL change. |
-| LVS KLayout C++ crash (`sort_circuit` / `gen_log_entry` SIGSEGV) | `klayout_cpp_crash_needs_upgrade (>=0.30.10)` | Upgrade KLayout. |
-| LVS symmetric-matcher residual (`Netlists don't match` with only same-cell-type instance swaps / unmatched nets in *ambiguous groups*, 0 or few genuine net/pin deltas) | `lvs_symmetric_matcher_residual` | **No flow fix.** KLayout-0.30.7 limitation on symmetric logic (parallel NAND/NOR trees, register files, flat combinational benchmarks). The layout is almost certainly correct; the matcher just can't prove it. Increasing the comparer budget does **not** help (validated — see below). Needs a newer KLayout or manual `same_nets`/`same_circuits` seeding. See `failure-patterns.md` "LVS symmetric-matcher residual". |
-| LVS real connectivity error (a port/signal net genuinely unmatched, "not matching any net", two layout nets that should be one) | `lvs_real_connectivity_mismatch` | A genuine layout defect — inspect the GDS/DEF at the named net. Not auto-fixable. |
+| LVS KLayout C++ crash (`sort_circuit` / `gen_log_entry` SIGSEGV) | `klayout_cpp_crash` | **RETRY — no longer a hard residual (2026-06-03).** A non-deterministic heap heisenbug in KLayout-0.30.7's comparer; a surviving run gives the true verdict (clean OR fail). `run_lvs.sh` retries automatically (`LVS_CRASH_RETRIES`, default 4; auto-1 for >150K cells). Validated: fifo_basic/verilog_axi_axi_fifo_wr→clean; aximwr2wbsp/core_usb_host_top/sha256_axi4_slave→fail/symmetric. `threads(1)`/`verbose(false)`/tcmalloc don't fix it; `flat` dodges the crash but yields garbage mismatches. Only a crash-free run (`grep -a "Signal number" 6_lvs.log` empty) is trustworthy; ≥0.30.10 fixes the source but no such build is on this host. See `failure-patterns.md` "LVS KLayout sort_circuit/gen_log_entry SIGSEGV". |
+| LVS symmetric-matcher residual (`Netlists don't match` with **balanced** schematic-only==layout-only unmatched nets, 0 paired-net deltas, 0 device deltas, plus instance swaps / *ambiguous group* warnings) | `lvs_symmetric_matcher_residual` | **No automated flow fix; layout is correct.** KLayout-0.30.7 limit on symmetric logic (parallel NAND/XOR trees, register files / memory arrays, replicated bit-slices, flat combinational benchmarks). Comparer budget does **not** help (validated). **Operator escape hatch (validated 2026-06-03):** strict `same_nets!` seeding on swapped-instance input nets — clears it on localized symmetry (rx_64), does NOT generalize (unit5_G). See "Symmetric-matcher seeding" below + `failure-patterns.md`. |
+| LVS real connectivity error (a port/signal net genuinely unmatched, "not matching any net", **imbalanced** unmatched-net counts, or a paired `net(N M mismatch)`) | `lvs_real_connectivity_mismatch` | A genuine layout defect — inspect the GDS/DEF at the named net. Not auto-fixable. Current corpus: wb2axip_axi2axilite (1 net open), wb2axip_axilsingle (16 bus opens — was mislabeled `clean_algorithmic`). |
+| LVS CDL parse error (`Pin count mismatch ... Netlist::read`, no verdict) | `cdl_parse_error` (status `unknown`) | KLayout's SPICE reader mis-tokenized an escaped-bracket/negative-index instance name (e.g. `\[-1\]$_DFFE_`). Sanitise the CDL name or avoid the `[-1]` bit-blast. Not a layout defect. Reproducer: spi_master_single_cs. |
 | LVS rule-deck mismatch (non-macro, none of the above) | `lvs mismatch with no auto-fix in v1; ...` | Operator review of the `.lylvs` rule deck. |
 
 **LVS comparer budget knobs (do NOT chase symmetric residuals with these).** `FreePDK45.lylvs`
@@ -166,6 +167,48 @@ does **not** resolve the actual mismatches — empirically validated 2026-06-02 
 (depth 64 / complexity 1M: 292 net mismatches unchanged). The knobs exist only so an operator can
 experiment on a genuinely depth-limited *future* design; they are not a lever for the residuals in
 this corpus.
+
+---
+
+## Symmetric-matcher seeding (operator-only, validated 2026-06-03)
+
+A KLayout-0.30.7 `symmetric_matcher` residual (layout correct, comparer can't prove it) can be
+forced to a true `match` by seeding strict `same_nets!` constraints on the swapped instances'
+**input-pin** nets. This is **operator-only and opportunistic** — it is NOT wired into the auto fix
+loop because it does not generalize and a bad seed can amplify the mismatch.
+
+**Validated:** `verilog_ethernet_axis_baser_rx_64` (2 NAND2 swaps) → "SYMSEED applied 4 same_nets!
+constraints" → "CONGRATULATIONS! Netlists match." It clears **localized** symmetry (isolated
+XOR/parity gate pairs); it does **not** clear deep/global symmetry (`iccad2017_unit5_G`: every seed
+strategy left it equal or worse).
+
+**Hard rules (learned empirically):**
+- Use `same_nets!` (strict) — soft `same_nets` is a no-op the matcher overrides.
+- Seed the swapped instances' **input** nets only — seeding the gate's own **output** net
+  over-constrains and re-fails.
+- Layout internal nets are mostly anonymous (~4% named); address them as net objects via
+  `expanded_name`, not `net_by_name`.
+- **Gate the result:** accept the seeded verdict ONLY if the re-run is genuinely clean; otherwise
+  keep the honest `lvs_symmetric_matcher_residual`.
+
+**Mechanism (two-pass):** pass-1 = a normal failing LVS producing `6_lvs.lvsdb`; pass-2 runs the
+seeding-enabled deck against it. The deck reads the swapped-instance ids + matched-net xref from the
+prior lvsdb and emits `same_nets!` automatically — no per-design hand-listing.
+
+```bash
+# Inputs: GDS + concat CDL (platform std-cell CDL + design 6_final.cdl) + a prior FAILING lvsdb.
+cat $PLATFORM_DIR/cdl/NangateOpenCellLibrary.cdl <proj>/lvs/6_final.cdl > /tmp/concat.cdl
+klayout -b \
+  -rd in_gds=<results>/6_final.gds \
+  -rd cdl_file=/tmp/concat.cdl \
+  -rd report_file=/tmp/seeded.lvsdb \
+  -rd lvs_prior_db=<proj>/lvs/6_lvs.lvsdb \
+  -r r2g-rtl2gds/assets/platforms/nangate45/lvs/FreePDK45_symseed.lvs
+# Accept ONLY if the log shows "CONGRATULATIONS! Netlists match."
+```
+
+`FreePDK45_symseed.lvs` is the plain-DSL form of `FreePDK45.lylvs` + the `SYMMETRIC-MATCHER SEEDING`
+block; its device-extraction body is identical to the bundled deck (re-sync if that changes).
 
 ---
 

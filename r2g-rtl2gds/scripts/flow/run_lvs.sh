@@ -106,50 +106,95 @@ cd "$FLOW_DIR"
 # Prevent env collision: ORFS Makefile uses SCRIPTS_DIR internally
 unset SCRIPTS_DIR 2>/dev/null || true
 
-# Auto-scale timeout based on design cell count, unless user explicitly set LVS_TIMEOUT
+# Detect design cell count from 6_report.json — drives BOTH timeout auto-scaling
+# and crash-retry gating, so compute it unconditionally (init to 0 for set -u safety).
+_LVS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+if [[ ! -d "$_LVS_LOGS_DIR" ]]; then
+  _LVS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME"
+fi
+_REPORT_JSON=$(find "$_LVS_LOGS_DIR" -name "6_report.json" 2>/dev/null | head -1)
+# Fallback: check the project backend directory
+if [[ -z "$_REPORT_JSON" ]]; then
+  _REPORT_JSON=$(find "$PROJECT_DIR/backend" -name "6_report.json" 2>/dev/null | sort | tail -1)
+fi
+_CELL_COUNT=0
+if [[ -n "$_REPORT_JSON" ]]; then
+  _CELL_COUNT=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(int(d.get('finish__design__instance__count',0)))" "$_REPORT_JSON" 2>/dev/null || echo 0)
+fi
+
+# Auto-scale timeout unless the user explicitly set LVS_TIMEOUT. KLayout's layout
+# netlist EXTRACTION (not just the compare) is super-linear: ~2700s @51K and
+# ~10200s @62K cells (verified 2026-06-03), so the old 3600s default SIGTERM'd every
+# >=50K design *mid-extraction* (mis-reported as "incomplete"). Tiers now clear the
+# extraction wall. See references/failure-patterns.md "LVS incomplete is mostly a
+# comparer bug, not honest slowness".
 if [[ -z "${LVS_TIMEOUT:-}" ]]; then
-  # Try to detect cell count from 6_report.json in ORFS logs
-  _LVS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-  if [[ ! -d "$_LVS_LOGS_DIR" ]]; then
-    _LVS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME"
+  if   [[ "$_CELL_COUNT" -gt 250000 ]] 2>/dev/null; then LVS_TIMEOUT=28800
+  elif [[ "$_CELL_COUNT" -gt 100000 ]] 2>/dev/null; then LVS_TIMEOUT=21600
+  elif [[ "$_CELL_COUNT" -gt  50000 ]] 2>/dev/null; then LVS_TIMEOUT=14400
+  else                                                   LVS_TIMEOUT=5400
   fi
-  _REPORT_JSON=$(find "$_LVS_LOGS_DIR" -name "6_report.json" 2>/dev/null | head -1)
-  # Fallback: check the project backend directory
-  if [[ -z "$_REPORT_JSON" ]]; then
-    _REPORT_JSON=$(find "$PROJECT_DIR/backend" -name "6_report.json" 2>/dev/null | sort | tail -1)
-  fi
-  _CELL_COUNT=0
-  if [[ -n "$_REPORT_JSON" ]]; then
-    _CELL_COUNT=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(int(d.get('finish__design__instance__count',0)))" "$_REPORT_JSON" 2>/dev/null || echo 0)
-  fi
-  if [[ "$_CELL_COUNT" -gt 250000 ]] 2>/dev/null; then
-    LVS_TIMEOUT=28800
-    echo "Auto-scaled LVS timeout to ${LVS_TIMEOUT}s (cell count: $_CELL_COUNT > 250K)"
-  elif [[ "$_CELL_COUNT" -gt 175000 ]] 2>/dev/null; then
-    LVS_TIMEOUT=14400
-    echo "Auto-scaled LVS timeout to ${LVS_TIMEOUT}s (cell count: $_CELL_COUNT > 175K)"
-  elif [[ "$_CELL_COUNT" -gt 100000 ]] 2>/dev/null; then
-    LVS_TIMEOUT=7200
-    echo "Auto-scaled LVS timeout to ${LVS_TIMEOUT}s (cell count: $_CELL_COUNT > 100K)"
-  else
-    LVS_TIMEOUT=3600
-  fi
+  echo "Auto-scaled LVS timeout to ${LVS_TIMEOUT}s (cell count: $_CELL_COUNT)"
 fi
 echo "Timeout: ${LVS_TIMEOUT}s"
 
+# Where ORFS writes 6_lvs.log — needed below for crash-retry detection AND for the
+# result-collection copy further down. Computed once, here, before the run loop.
+LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+if [[ ! -d "$LOGS_DIR" ]]; then
+  LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME"
+fi
+
+# KLayout 0.30.7's netlist comparer has a NON-DETERMINISTIC SIGSEGV heisenbug in
+# db::NetlistCrossReference::sort_circuit()/gen_log_entry() (it reads a corrupted Net
+# pointer while sorting the cross-reference, AFTER extraction succeeds). A surviving
+# run yields the TRUE verdict — clean OR fail — so retry past the crash. Validated
+# 2026-06-03: fifo_basic/verilog_axi_axi_fifo_wr -> clean; aximwr2wbsp/core_usb_host_top
+# -> (symmetric) fail. Single-thread, verbose(false), tcmalloc do NOT fix it; `flat`
+# mode dodges the crash but yields garbage mismatches. See references/failure-patterns.md
+# "LVS KLayout sort_circuit/gen_log_entry SIGSEGV (non-deterministic)".
+# Gated low for very large designs — each retry re-runs `make lvs`, which re-extracts.
+if [[ -z "${LVS_CRASH_RETRIES:-}" ]]; then
+  if [[ "$_CELL_COUNT" -gt 150000 ]] 2>/dev/null; then LVS_CRASH_RETRIES=1; else LVS_CRASH_RETRIES=4; fi
+fi
+
 # Use setsid so timeout can kill the entire process group (prevents zombie klayout)
 LVS_STATUS=0
-set +e +o pipefail
-setsid timeout --signal=TERM --kill-after=60 "$LVS_TIMEOUT" \
-  make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" lvs 2>&1 | tee /tmp/lvs_run_$$.log
-LVS_STATUS=${PIPESTATUS[0]}
-set -e -o pipefail
-if [[ $LVS_STATUS -eq 124 || $LVS_STATUS -eq 137 ]]; then
-  echo "ERROR: LVS timed out after ${LVS_TIMEOUT}s (exit code $LVS_STATUS)" >&2
-  # Kill any orphaned klayout processes from this LVS run to prevent memory leaks
-  pkill -9 -f "klayout.*${FLOW_VARIANT}.*lvs" 2>/dev/null || true
-  sleep 2
-fi
+for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
+  set +e +o pipefail
+  setsid timeout --signal=TERM --kill-after=60 "$LVS_TIMEOUT" \
+    make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" lvs 2>&1 | tee /tmp/lvs_run_$$.log
+  LVS_STATUS=${PIPESTATUS[0]}
+  set -e -o pipefail
+
+  # Reap orphaned klayout from THIS run on ANY nonzero exit. A SIGSEGV gives make
+  # "Error 11" (exit 2) — the old 124/137-only cleanup left a multi-GB klayout child
+  # still spinning (a real leak observed 2026-06-03). Always reap on failure.
+  if [[ $LVS_STATUS -ne 0 ]]; then
+    pkill -9 -f "klayout.*${FLOW_VARIANT}.*lvs" 2>/dev/null || true
+    pkill -9 -f "klayout.*${DESIGN_NAME}.*FreePDK45" 2>/dev/null || true
+    sleep 2
+  fi
+
+  # A timeout/external-kill will just recur — do not spend retries on it.
+  if [[ $LVS_STATUS -eq 124 || $LVS_STATUS -eq 137 ]]; then
+    echo "ERROR: LVS timed out after ${LVS_TIMEOUT}s (exit code $LVS_STATUS)" >&2
+    break
+  fi
+
+  # Crash signature in the ORFS 6_lvs.log or the tee'd run log -> retry for a survivor.
+  if grep -qa "Signal number" "$LOGS_DIR/6_lvs.log" /tmp/lvs_run_$$.log 2>/dev/null; then
+    if [[ $_attempt -lt $LVS_CRASH_RETRIES ]]; then
+      echo "LVS crashed (KLayout sort_circuit SIGSEGV heisenbug); retry $_attempt/$LVS_CRASH_RETRIES ..." >&2
+      continue
+    fi
+    echo "ERROR: LVS still crashing after $LVS_CRASH_RETRIES attempts (KLayout 0.30.7 comparer bug, no newer build on host)" >&2
+    break
+  fi
+
+  # No crash this attempt -> the verdict (clean or fail) is trustworthy. Stop.
+  break
+done
 
 # Collect results
 LVS_DIR="$PROJECT_DIR/lvs"
@@ -160,10 +205,7 @@ rm -f /tmp/lvs_run_$$.log
 # have a real lvs_run.log/6_lvs.log the skip marker is no longer authoritative.
 rm -f "$LVS_DIR/lvs_result.json"
 
-LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-if [[ ! -d "$LOGS_DIR" ]]; then
-  LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME"
-fi
+# LOGS_DIR was computed before the run loop (used for crash-retry detection).
 
 # Copy LVS artifacts
 if [[ -f "$RESULTS_DIR/6_lvs.lvsdb" ]]; then
