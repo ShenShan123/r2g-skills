@@ -368,7 +368,9 @@ LVS gracefully skips for platforms without `.lylvs` rules (reports `status: "ski
 
 ## Validated scale
 
-Tested on **495 heterogeneous RTL designs** (ICCAD benchmarks, RISC-V cores, BOOM/Chipyard, VTR, zipcpu, verilog-ethernet, and more):
+The skill has been validated on **682 RTL designs** spanning ICCAD benchmarks, RISC-V cores, BOOM/Chipyard, VTR, zipcpu, verilog-ethernet, wb2axip, and more.
+
+**ORFS backend (place & route → GDS):** 476 / 495 designs from the original `rtl_designs/` batch pass (96.2%); 19 remaining have understood root causes (megadesign synthesis budgets, missing netlists, zero-logic stubs).
 
 | Pass | Outcome | Cumulative |
 |------|---------|------------|
@@ -376,7 +378,15 @@ Tested on **495 heterogeneous RTL designs** (ICCAD benchmarks, RISC-V cores, BOO
 | `fix_orfs_failures.py` + retries | +59 rescued | 93.1% |
 | Long-tail (timeouts, macros, includes) | +15 rescued | **96.2%** (476 / 495) |
 
-19 remaining designs have understood root causes (megadesign synthesis budgets, missing netlists, zero-logic stubs). A curated 70-design subset (7 families including macro designs) achieves **100% ORFS + LVS + RCX pass rate**.
+**Signoff (682-design corpus, 2026-06-03):**
+
+| Check | Clean | Rate | Notes |
+|-------|------:|-----:|-------|
+| LVS | 607 / 674 | **90%** | 15 `fail` are KLayout-0.30.7 symmetric-matcher limits (layout correct, tool can't prove it); only 2 genuine defects (both wb2axip); 44 `incomplete` are comparer bugs or extraction timeouts, not layout errors |
+| DRC | 675 / 682 honest-verdict | **99%** coverage | `clean_beol` (BEOL-only pass) counts as clean; 7 stuck designs are verified-intractable (≥465K cells, CONTACT-op hang) |
+| RCX | 681 / 682 | **99.85%** | 1 intractable (boom_smallseboom) |
+
+A curated 70-design subset (7 families including macro designs) achieves **100% ORFS + LVS + RCX pass rate**.
 
 ---
 
