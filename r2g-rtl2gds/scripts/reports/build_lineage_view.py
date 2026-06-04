@@ -34,6 +34,7 @@ _KNOWLEDGE_DIR = Path(__file__).resolve().parents[2] / "knowledge"
 if str(_KNOWLEDGE_DIR) not in sys.path:
     sys.path.insert(0, str(_KNOWLEDGE_DIR))
 import knowledge_db  # noqa: E402
+import learn_heuristics  # noqa: E402  (authoritative MIN_SUCCESSFUL threshold)
 
 DEFAULT_HEURISTICS_PATH = _KNOWLEDGE_DIR / "heuristics.json"
 
@@ -100,7 +101,10 @@ def _build_health(rows: list[dict], heuristics: dict) -> dict:
             groups[key] = groups.get(key, 0) + 1
         else:
             groups.setdefault(key, 0)
-    learnable_pairs = sum(1 for c in groups.values() if c >= 3)
+    # Threshold sourced from the learner's own constant so the health strip and
+    # learn_heuristics can never disagree on what "learnable" means.
+    learnable_pairs = sum(1 for c in groups.values()
+                          if c >= learn_heuristics.MIN_SUCCESSFUL)
 
     families = heuristics.get("families") if isinstance(heuristics, dict) else None
     if not isinstance(families, dict):

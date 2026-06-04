@@ -243,7 +243,9 @@ now learnable). Commits `356d517` + `7d429ac` (branch `fix/dead-learning-loop`).
 - The CLAUDE.md `PLACE_DENSITY_LB_ADDON ≥ 0.10` floor was *named but not actually enforced* in
   `suggest_config` — added it as a hard post-filter (defense-in-depth; never fires on current data
   where learned medians are all 0.20, but protects future learned medians). Verified every learned
-  `place_density` median ≥ 0.10 and `core_utilization` median ∈ [20, 25].
+  `place_density` median ≥ 0.10 (all 0.20 on the current corpus) and learned
+  `core_utilization` medians span 10–25 (e.g. aes_xcrypt 15, riscv32i 17.5) — all safe,
+  since CU has no floor (a lower CU is the conservative, routable choice).
 - The `bus_heavy` CU→15 clamp already protects against family-median pollution: `axi_crossbar`
   inherits the `axi`-family learned median of 25 but is still clamped to 15 (verified before/after).
   Safety rails beat empirical medians — so `families.json` curation could stay conservative.
