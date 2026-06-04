@@ -143,6 +143,37 @@ def test_learned_median_float_rounded_to_int(tmp_path, tmp_knowledge_dir, monkey
     assert isinstance(cu, int)
 
 
+def test_learned_density_never_violates_010_floor(tmp_path, tmp_knowledge_dir,
+                                                   monkeypatch):
+    """A learned PLACE_DENSITY_LB_ADDON median below 0.10 must be clamped up.
+
+    CLAUDE.md hard rule: never recommend PLACE_DENSITY_LB_ADDON below 0.10 —
+    placer divergence is irrecoverable. This locks in the post-filter floor.
+    """
+    project = _make_fake_project(tmp_path)
+    heur_path = tmp_knowledge_dir / "heuristics.json"
+    heur_path.write_text(json.dumps({
+        "families": {
+            "aes_xcrypt": {
+                "platforms": {
+                    "nangate45": {
+                        "sample_size": 5, "success_count": 5, "success_rate": 1.0,
+                        "core_utilization": {"min_safe": 20, "max_safe": 24, "median": 22},
+                        "place_density_lb_addon": {"min_safe": 0.05,
+                                                   "max_safe": 0.08,
+                                                   "median": 0.05},
+                    },
+                },
+            },
+        },
+    }))
+    monkeypatch.setattr(suggest_config, "HEURISTICS_PATH", heur_path)
+    monkeypatch.setattr(suggest_config, "FAMILIES_PATH", tmp_knowledge_dir / "families.json")
+
+    result = suggest_config.recommend(project)
+    assert result["recommendations"]["PLACE_DENSITY_LB_ADDON"] >= 0.10
+
+
 def test_malformed_heuristics_falls_back_silently(tmp_path, tmp_knowledge_dir, monkeypatch):
     """Shape-broken heuristics.json must not crash recommend() — fall back instead."""
     project = _make_fake_project(tmp_path)

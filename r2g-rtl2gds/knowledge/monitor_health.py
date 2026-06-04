@@ -18,24 +18,15 @@ from pathlib import Path
 
 import knowledge_db
 
-_DRC_OK = {None, "clean", "skipped"}
-_LVS_OK = {None, "clean", "skipped"}
-_RCX_OK = {None, "complete", "skipped"}
-
-
-def _is_success(row: dict) -> bool:
-    return (
-        row.get("orfs_status") == "pass"
-        and row.get("drc_status") in _DRC_OK
-        and row.get("lvs_status") in _LVS_OK
-        and row.get("rcx_status") in _RCX_OK
-    )
+# Single source of truth for "a learnable success" lives in knowledge_db, so
+# the health monitor and the learner agree on what "success" means.
+_is_success = knowledge_db.is_success
 
 
 def _fetch_all(conn) -> list[dict]:
     cur = conn.execute(
         "SELECT design_family, platform, orfs_status, drc_status, "
-        "lvs_status, rcx_status, ingested_at "
+        "lvs_status, lvs_mismatch_class, rcx_status, ingested_at "
         "FROM runs ORDER BY ingested_at ASC"
     )
     cols = [c[0] for c in cur.description]

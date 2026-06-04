@@ -99,6 +99,118 @@ def test_learn_skips_families_with_too_few_samples(tmp_knowledge_dir):
     assert "foobar" not in data["families"]
 
 
+def _learn_to_dict(tmp_knowledge_dir, db_path):
+    out = tmp_knowledge_dir / "heuristics.json"
+    learn_heuristics.learn(db_path, out)
+    return json.loads(out.read_text())
+
+
+def test_learn_admits_signoff_positive_partial_runs(tmp_knowledge_dir):
+    """Relaxed predicate: partial runs with clean DRC/LVS/RCX are learnable."""
+    db_path = tmp_knowledge_dir / "runs.sqlite"
+    conn = knowledge_db.connect(db_path)
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    for i in range(3):
+        _insert(conn, run_id=f"i2c_partial_{i}", design_name="i2c_master",
+                design_family="i2c", platform="nangate45",
+                core_utilization=20.0 + i,
+                place_density_lb_addon=0.20 + i * 0.02,
+                cell_count=3000 + i * 100,
+                orfs_status="partial", orfs_fail_stage="route",
+                drc_status="clean", lvs_status="clean", rcx_status="complete",
+                total_elapsed_s=1000 + i * 10)
+    conn.commit()
+    conn.close()
+
+    data = _learn_to_dict(tmp_knowledge_dir, db_path)
+    fam = data["families"]["i2c"]["platforms"]["nangate45"]
+    assert fam["success_count"] == 3
+    assert fam["core_utilization"]["median"] == 21.0
+    assert abs(fam["place_density_lb_addon"]["median"] - 0.22) < 1e-9
+    assert fam["typical_cell_count"] == 3100
+
+
+def test_learn_excludes_partial_without_positive_signoff(tmp_knowledge_dir):
+    """Absence of all signoff data is NOT success — no fabrication guarantee."""
+    db_path = tmp_knowledge_dir / "runs.sqlite"
+    conn = knowledge_db.connect(db_path)
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    for i in range(3):
+        _insert(conn, run_id=f"i2c_bare_{i}", design_name="i2c_master",
+                design_family="i2c", platform="nangate45",
+                core_utilization=20.0 + i, place_density_lb_addon=0.20,
+                cell_count=3000,
+                orfs_status="partial", orfs_fail_stage="route",
+                drc_status=None, lvs_status=None, rcx_status=None,
+                total_elapsed_s=1000)
+    conn.commit()
+    conn.close()
+
+    data = _learn_to_dict(tmp_knowledge_dir, db_path)
+    assert "i2c" not in data["families"]
+
+
+def test_learn_excludes_partial_with_failed_signoff(tmp_knowledge_dir):
+    """A failed/incomplete signoff blocks success even with other positives."""
+    db_path = tmp_knowledge_dir / "runs.sqlite"
+    conn = knowledge_db.connect(db_path)
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    for i in range(3):
+        _insert(conn, run_id=f"i2c_lvsfail_{i}", design_name="i2c_master",
+                design_family="i2c", platform="nangate45",
+                core_utilization=20.0 + i, place_density_lb_addon=0.20,
+                cell_count=3000,
+                orfs_status="partial", orfs_fail_stage="route",
+                drc_status="clean", lvs_status="incomplete",
+                rcx_status="complete", total_elapsed_s=1000)
+    conn.commit()
+    conn.close()
+
+    data = _learn_to_dict(tmp_knowledge_dir, db_path)
+    assert "i2c" not in data["families"]
+
+
+def test_symmetric_matcher_lvs_counts_as_success(tmp_knowledge_dir):
+    """lvs_status='fail' + mismatch_class='symmetric_matcher' is a clean layout."""
+    db_path = tmp_knowledge_dir / "runs.sqlite"
+    conn = knowledge_db.connect(db_path)
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    for i in range(3):
+        _insert(conn, run_id=f"i2c_sym_{i}", design_name="i2c_master",
+                design_family="i2c", platform="nangate45",
+                core_utilization=22.0 + i, place_density_lb_addon=0.20,
+                cell_count=3000,
+                orfs_status="partial", orfs_fail_stage="route",
+                drc_status="clean", lvs_status="fail",
+                lvs_mismatch_class="symmetric_matcher",
+                rcx_status="complete", total_elapsed_s=1000)
+    conn.commit()
+    conn.close()
+
+    data = _learn_to_dict(tmp_knowledge_dir, db_path)
+    assert data["families"]["i2c"]["platforms"]["nangate45"]["success_count"] == 3
+
+
+def test_clean_beol_drc_counts_as_success(tmp_knowledge_dir):
+    """drc_status='clean_beol' is a positive clean signal."""
+    db_path = tmp_knowledge_dir / "runs.sqlite"
+    conn = knowledge_db.connect(db_path)
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    for i in range(3):
+        _insert(conn, run_id=f"i2c_beol_{i}", design_name="i2c_master",
+                design_family="i2c", platform="nangate45",
+                core_utilization=22.0 + i, place_density_lb_addon=0.20,
+                cell_count=3000,
+                orfs_status="partial", orfs_fail_stage="route",
+                drc_status="clean_beol", lvs_status="clean",
+                rcx_status="complete", total_elapsed_s=1000)
+    conn.commit()
+    conn.close()
+
+    data = _learn_to_dict(tmp_knowledge_dir, db_path)
+    assert data["families"]["i2c"]["platforms"]["nangate45"]["success_count"] == 3
+
+
 def test_learn_skips_family_with_no_successful_runs(tmp_knowledge_dir):
     db_path = tmp_knowledge_dir / "runs.sqlite"
     conn = knowledge_db.connect(db_path)

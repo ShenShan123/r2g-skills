@@ -10,6 +10,12 @@ successful runs exist. Every learned metric is derived from successful runs
 only; failed runs still count toward ``sample_size`` and ``success_rate``
 but contribute nothing to ``core_utilization``, ``place_density_lb_addon``,
 ``typical_cell_count`` or ``p90_elapsed_s``.
+
+"Successful" is defined by ``knowledge_db.is_success`` — the single shared
+predicate. It now ALSO admits signoff-positive ``partial`` runs (a run that
+reached a final signed-off layout with clean DRC/LVS/RCX but whose
+stage_log.jsonl was incomplete, so ingest left orfs_status != 'pass'). Absence
+of all signoff data is still NOT a success. See ``knowledge_db.is_success``.
 """
 from __future__ import annotations
 
@@ -25,21 +31,9 @@ import knowledge_db
 
 MIN_SUCCESSFUL = 3
 
-# Real status values written by the extract_{drc,lvs,rcx}.py scripts.
-# Do not accept "pass" here — no extractor ever emits it, and accepting
-# a phantom value would silently mask schema drift.
-_DRC_OK = {None, "clean", "skipped"}
-_LVS_OK = {None, "clean", "skipped"}
-_RCX_OK = {None, "complete", "skipped"}
-
-
-def _is_success(row: dict) -> bool:
-    return (
-        row.get("orfs_status") == "pass"
-        and row.get("drc_status") in _DRC_OK
-        and row.get("lvs_status") in _LVS_OK
-        and row.get("rcx_status") in _RCX_OK
-    )
+# Single source of truth for "a learnable success" lives in knowledge_db.
+# Thin alias for readability inside this module.
+_is_success = knowledge_db.is_success
 
 
 def _fetch_rows(conn) -> list[dict]:

@@ -1,4 +1,5 @@
 {
+  "_comment": "Conservative curation: explicit pins reproduce the existing split('_')[0].lower() grouping for the dominant IP families so they are intentional and drift-protected. We deliberately do NOT merge across behavior boundaries (e.g. networking vs bus vs crypto) — name-token similarity != design-behavior similarity. Bus-heavy designs (axi_crossbar etc.) are protected by suggest_config's bus_heavy CORE_UTILIZATION clamp, not by family taxonomy.",
   "mappings": {
     "aes128_core":   "aes_xcrypt",
     "ibex_core":     "ibex",
@@ -23,6 +24,18 @@
     {"regex": "^ChipTop",                   "family": "boom_chiptop"},
     {"regex": "^DSP_CORE",                  "family": "faraday_dsp"},
     {"regex": "^dma_top",                   "family": "faraday_dma"},
-    {"regex": "^frisc",                     "family": "faraday_risc"}
+    {"regex": "^frisc",                     "family": "faraday_risc"},
+
+    {"regex": "^axis_",                     "family": "axis"},
+    {"regex": "^axil",                      "family": "axil"},
+    {"regex": "^axi_",                      "family": "axi"},
+    {"regex": "^eth",                       "family": "eth"},
+    {"regex": "^udp",                       "family": "udp"},
+    {"regex": "^ip[_0-9]",                  "family": "ip"},
+    {"regex": "^i2c",                       "family": "i2c"},
+    {"regex": "^spi",                       "family": "spi"},
+    {"regex": "^uart",                      "family": "uart"},
+    {"regex": "^can_",                      "family": "can"},
+    {"regex": "^sha256",                    "family": "sha256"}
   ]
 }

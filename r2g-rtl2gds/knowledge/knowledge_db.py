@@ -49,6 +49,54 @@ def _migrate_add_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE runs ADD COLUMN {col} {decl}")
 
 
+# --- Learnable-success predicate (shared) ---------------------------------
+# The ONE definition of "a learnable success", imported by both learners
+# (learn_heuristics.py and monitor_health.py) so they never disagree.
+#
+# Signoff status values that do NOT indicate a failed/blocked signoff stage.
+# 'None' means the stage was not run for this row (absence is not failure).
+DRC_NOT_FAILED = {None, "clean", "clean_beol", "skipped"}
+LVS_NOT_FAILED = {None, "clean", "skipped"}
+RCX_NOT_FAILED = {None, "complete", "skipped"}
+
+
+def is_success(row: dict) -> bool:
+    """A run counts as a learnable success if EITHER the flow reported a full
+    6-stage ORFS pass (strict, legacy), OR it reached a final signed-off layout
+    with positive clean signoff and no failed signoff (relaxed).
+
+    The relaxed path exists because most historical runs have an incomplete
+    backend/stage_log.jsonl, so ingest leaves orfs_status='partial'/'unknown'
+    even though they produced a clean GDS — clean DRC/LVS/RCX cannot exist
+    without a completed finish stage. Absence of signoff data alone is NOT a
+    success: at least one POSITIVE clean signal is required.
+    """
+    drc = row.get("drc_status")
+    lvs = row.get("lvs_status")
+    rcx = row.get("rcx_status")
+    mclass = row.get("lvs_mismatch_class")
+
+    # symmetric_matcher is a KLayout tool limitation on a clean layout, not a
+    # real defect (see references LVS notes), so it counts as a not-failed LVS.
+    lvs_not_failed = (lvs in LVS_NOT_FAILED) or (mclass == "symmetric_matcher")
+    drc_not_failed = drc in DRC_NOT_FAILED
+    rcx_not_failed = rcx in RCX_NOT_FAILED
+
+    strict = (
+        row.get("orfs_status") == "pass"
+        and drc_not_failed and lvs_not_failed and rcx_not_failed
+    )
+
+    has_positive_signoff = (
+        lvs == "clean"
+        or mclass == "symmetric_matcher"
+        or drc in ("clean", "clean_beol")
+        or rcx == "complete"
+    )
+    relaxed = has_positive_signoff and drc_not_failed and lvs_not_failed and rcx_not_failed
+    return strict or relaxed
+
+
 def load_families(families_path: Path | str = DEFAULT_FAMILIES_PATH) -> dict[str, Any]:
     data = json.loads(Path(families_path).read_text(encoding="utf-8"))
     if "mappings" not in data:

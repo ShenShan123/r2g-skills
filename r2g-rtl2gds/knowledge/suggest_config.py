@@ -204,6 +204,14 @@ def recommend(project: Path) -> dict:
         # Remove CORE_UTILIZATION for tiny designs
         recommendations.pop('CORE_UTILIZATION', None)
 
+    # Hard safety floor (CLAUDE.md): never recommend PLACE_DENSITY_LB_ADDON
+    # below 0.10 — placer divergence is irrecoverable. Applied last so it
+    # clamps learned medians and design-type adjustments alike.
+    if "PLACE_DENSITY_LB_ADDON" in recommendations:
+        recommendations["PLACE_DENSITY_LB_ADDON"] = max(
+            float(recommendations["PLACE_DENSITY_LB_ADDON"]), 0.10
+        )
+
     # Always recommend these
     recommendations['ABC_AREA'] = 1
 
