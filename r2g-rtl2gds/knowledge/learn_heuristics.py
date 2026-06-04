@@ -50,6 +50,17 @@ def _p90(values: list[float]) -> float | None:
     return s[idx]
 
 
+_SENTINEL = 1e30
+
+
+def _quantile(values: list[float], q: float) -> float | None:
+    if not values:
+        return None
+    s = sorted(values)
+    idx = max(0, min(len(s) - 1, int(round(q * (len(s) - 1)))))
+    return s[idx]
+
+
 def _family_platform_entry(runs: list[dict]) -> dict | None:
     successes = [r for r in runs if _is_success(r)]
     if len(successes) < MIN_SUCCESSFUL:
@@ -63,6 +74,24 @@ def _family_platform_entry(runs: list[dict]) -> dict | None:
                  if r.get("cell_count") is not None]
     elapsed_vals = [r["total_elapsed_s"] for r in successes
                     if r.get("total_elapsed_s") is not None]
+
+    cp_vals: list[float] = []
+    d_fp_pl_ns, d_fp_pl_pct, d_pl_fin_ns, d_pl_fin_pct = [], [], [], []
+    for r in successes:
+        period = r.get("clock_period_ns")
+        fp = r.get("floorplan_setup_ws")
+        pl = r.get("place_setup_ws")
+        fin = r.get("finish_setup_ws")
+        if fin is None:
+            fin = r.get("wns_ns")
+        if period is not None and fin is not None and fin < _SENTINEL:
+            cp_vals.append(period - fin)
+        if (None not in (period, fp, pl, fin) and period > 0
+                and max(fp, pl, fin) < _SENTINEL):
+            d_fp_pl_ns.append(fp - pl)
+            d_fp_pl_pct.append((fp - pl) / period)
+            d_pl_fin_ns.append(pl - fin)
+            d_pl_fin_pct.append((pl - fin) / period)
 
     entry: dict = {
         "sample_size": len(runs),
@@ -85,6 +114,21 @@ def _family_platform_entry(runs: list[dict]) -> dict | None:
         entry["typical_cell_count"] = int(statistics.median(cell_vals))
     if elapsed_vals:
         entry["p90_elapsed_s"] = _p90(elapsed_vals)
+    if cp_vals:
+        entry["closing_period"] = {
+            "min": min(cp_vals),
+            "p10": _quantile(cp_vals, 0.10),
+            "median": statistics.median(cp_vals),
+            "n": len(cp_vals),
+        }
+    if d_fp_pl_ns:
+        entry["slack_deterioration"] = {
+            "d_fp_pl": {"ns_p90": _quantile(d_fp_pl_ns, 0.90),
+                        "pct_p90": _quantile(d_fp_pl_pct, 0.90)},
+            "d_pl_fin": {"ns_p90": _quantile(d_pl_fin_ns, 0.90),
+                         "pct_p90": _quantile(d_pl_fin_pct, 0.90)},
+            "n": len(d_fp_pl_ns),
+        }
     return entry
 
 
