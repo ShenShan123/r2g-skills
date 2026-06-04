@@ -126,3 +126,20 @@ def test_curated_families_map_dominant_ip_prefixes(tmp_knowledge_dir):
     # honest split('_')[0] singleton fallback instead of being force-merged.
     assert infer("spider") == "spider"          # NOT "spi"
     assert infer("axildouble") == "axildouble"  # NOT "axil"
+
+
+def test_staged_slack_columns_exist_after_ensure_schema(tmp_knowledge_dir):
+    """ensure_schema must add the three per-stage setup-slack columns even on a
+    DB created before they existed (live ALTER TABLE migration)."""
+    import knowledge_db
+    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    # Simulate a pre-existing DB by creating the table WITHOUT the new columns,
+    # then running ensure_schema (which must ALTER TABLE them in).
+    conn.executescript(
+        "CREATE TABLE runs (run_id TEXT PRIMARY KEY, project_path TEXT NOT NULL,"
+        " ingested_at TEXT NOT NULL);"
+    )
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+    assert {"floorplan_setup_ws", "place_setup_ws", "finish_setup_ws"} <= cols
+    conn.close()

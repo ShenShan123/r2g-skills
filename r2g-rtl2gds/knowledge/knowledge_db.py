@@ -29,8 +29,30 @@ def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
 def ensure_schema(conn: sqlite3.Connection,
                   schema_path: Path | str = DEFAULT_SCHEMA_PATH) -> None:
     ddl = Path(schema_path).read_text(encoding="utf-8")
-    conn.executescript(ddl)
+    # Run the CREATE TABLE/CREATE INDEX statements one at a time so a legacy
+    # runs.sqlite that predates an indexed column doesn't abort the whole
+    # bootstrap: CREATE INDEX on a not-yet-migrated column is deferred until
+    # after _migrate_add_columns brings the table up to date, then retried.
+    statements = [s.strip() for s in ddl.split(";") if s.strip()]
+    deferred: list[str] = []
+    for stmt in statements:
+        try:
+            conn.execute(stmt)
+        except sqlite3.OperationalError as exc:
+            if "no such column" in str(exc) and stmt.upper().startswith("CREATE INDEX"):
+                deferred.append(stmt)
+            else:
+                raise
     _migrate_add_columns(conn)
+    for stmt in deferred:
+        try:
+            conn.execute(stmt)
+        except sqlite3.OperationalError as exc:
+            # The index references a column this legacy table never had and that
+            # is not a forward-migrated column either. Skip it: the index will
+            # be created on the next bootstrap once the table is fully columned.
+            if "no such column" not in str(exc):
+                raise
     conn.commit()
 
 
@@ -43,6 +65,13 @@ _RUNS_ADDED_COLUMNS = {
     # this run ('naive' | 'learned' | NULL). Populated from config.mk EVAL_ARM
     # by ingest_run.py; absent for every non-eval run. Does not affect learning.
     "eval_arm": "TEXT",
+    # Per-stage setup worst-slack (ns) for the Fmax slack-deterioration model.
+    # floorplan_setup_ws = 2_1_floorplan.json floorplan__timing__setup__ws
+    # place_setup_ws     = 3_5_place_dp.json   detailedplace__timing__setup__ws
+    # finish_setup_ws    = 6_report.json       finish__timing__setup__ws (== wns_ns)
+    "floorplan_setup_ws": "REAL",
+    "place_setup_ws": "REAL",
+    "finish_setup_ws": "REAL",
 }
 
 
