@@ -110,7 +110,9 @@ def test_emit_arms_differ_only_in_learned_knob(tmp_path, tmp_knowledge_dir,
     d0 = plan["designs"][0]
     assert d0["naive_learned_source"] is None
     assert d0["learned_learned_source"] == "aes_xcrypt/nangate45"
-    assert d0["knob_diff"] == {"CORE_UTILIZATION": {"naive": 25, "learned": 15}}
+    # knob_diff values are normalized to strings in BOTH emit (eval_plan.json)
+    # and summarize (eval_results.jsonl) so an operator sees consistent types.
+    assert d0["knob_diff"] == {"CORE_UTILIZATION": {"naive": "25", "learned": "15"}}
 
 
 def test_emit_missing_project_marks_cell_count_unknown(tmp_path, tmp_knowledge_dir,
@@ -137,6 +139,30 @@ def test_emit_missing_project_marks_cell_count_unknown(tmp_path, tmp_knowledge_d
     # config.mk still written for both arms.
     assert (out_dir / "aes_core_naive" / "constraints" / "config.mk").exists()
     assert (out_dir / "aes_core_learned" / "constraints" / "config.mk").exists()
+
+
+def test_recommend_stub_temp_dir_cleaned_up(tmp_path, tmp_knowledge_dir,
+                                            monkeypatch):
+    """The synthesized stub project (no --projects-root) must be torn down in
+    finally — no leaked /tmp/evalstub_* dirs per emit invocation."""
+    heur_path = _write_aes_heuristics(tmp_knowledge_dir)
+    monkeypatch.setattr(suggest_config, "HEURISTICS_PATH", heur_path)
+    monkeypatch.setattr(suggest_config, "FAMILIES_PATH",
+                        tmp_knowledge_dir / "families.json")
+
+    # Redirect tempfile into a private dir so we can observe what's left behind.
+    tmproot = tmp_path / "tmproot"
+    tmproot.mkdir()
+    monkeypatch.setattr(eval_heuristics.tempfile, "tempdir", str(tmproot))
+
+    rec = eval_heuristics._recommend_for_pair(
+        {"design_name": "aes_core", "platform": "nangate45"},
+        use_learned=True, projects_root=None)
+    # The recommendation was still computed correctly...
+    assert rec["learned_source"] == "aes_xcrypt/nangate45"
+    # ...and no evalstub_* dir survived.
+    leaked = [p for p in tmproot.glob("evalstub_*")]
+    assert leaked == [], f"leaked stub dirs: {leaked}"
 
 
 # --------------------------------------------------------------------------- #

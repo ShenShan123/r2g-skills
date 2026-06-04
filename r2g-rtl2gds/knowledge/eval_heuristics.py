@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -78,8 +80,6 @@ def _recommend_for_pair(pair: dict[str, Any], use_learned: bool,
     design-type + family heuristics — cell_count is then 0/unknown and the
     size_class is 'unknown'. We never crash on a missing project.
     """
-    import tempfile
-
     design = pair["design_name"]
     platform = pair.get("platform", "nangate45")
 
@@ -93,20 +93,27 @@ def _recommend_for_pair(pair: dict[str, Any], use_learned: bool,
         return suggest_config.recommend(real_proj, use_learned=use_learned)
 
     # Synthesize a minimal stand-in so recommend() resolves family + design
-    # type from DESIGN_NAME alone. cell_count stays unknown.
+    # type from DESIGN_NAME alone. cell_count stays unknown. recommend() returns
+    # a plain dict with no lazy file handles, so it is safe to tear the stub
+    # down in finally once the recommendation has been computed — otherwise
+    # emitting the 6-design eval_set without --projects-root would leak 12
+    # /tmp/evalstub_* dirs per invocation.
     stub = Path(tempfile.mkdtemp(prefix=f"evalstub_{design}_"))
-    (stub / "constraints").mkdir(parents=True)
-    (stub / "rtl").mkdir()
-    (stub / "constraints" / "config.mk").write_text(
-        f"export DESIGN_NAME = {design}\nexport PLATFORM = {platform}\n",
-        encoding="utf-8",
-    )
-    # A tiny RTL stub lets detect_design_type see the design-name token
-    # (e.g. 'aes' -> crypto) consistently for both arms.
-    (stub / "rtl" / f"{design}.v").write_text(
-        f"module {design}(input clk); endmodule\n", encoding="utf-8",
-    )
-    return suggest_config.recommend(stub, use_learned=use_learned)
+    try:
+        (stub / "constraints").mkdir(parents=True)
+        (stub / "rtl").mkdir()
+        (stub / "constraints" / "config.mk").write_text(
+            f"export DESIGN_NAME = {design}\nexport PLATFORM = {platform}\n",
+            encoding="utf-8",
+        )
+        # A tiny RTL stub lets detect_design_type see the design-name token
+        # (e.g. 'aes' -> crypto) consistently for both arms.
+        (stub / "rtl" / f"{design}.v").write_text(
+            f"module {design}(input clk); endmodule\n", encoding="utf-8",
+        )
+        return suggest_config.recommend(stub, use_learned=use_learned)
+    finally:
+        shutil.rmtree(stub, ignore_errors=True)
 
 
 def _render_config_mk(pair: dict[str, Any], arm: str, rec: dict[str, Any]) -> str:
@@ -138,14 +145,16 @@ def _render_config_mk(pair: dict[str, Any], arm: str, rec: dict[str, Any]) -> st
 
 def _knob_diff(naive_rec: dict[str, Any], learned_rec: dict[str, Any]) -> dict[str, Any]:
     """Diff the two recommendation dicts, restricted to the tunable knobs the
-    learned override can touch. Returns {knob: {"naive": v, "learned": v}}."""
+    learned override can touch. Returns {knob: {"naive": v, "learned": v}} with
+    values normalized to strings so eval_plan.json (native rec types) and
+    eval_results.jsonl (config.mk-parsed strings) report knob_diff identically."""
     nr = naive_rec.get("recommendations", {})
     lr = learned_rec.get("recommendations", {})
     diff: dict[str, Any] = {}
     for k in _DIFF_KNOBS:
         nv, lv = nr.get(k), lr.get(k)
         if nv != lv:
-            diff[k] = {"naive": nv, "learned": lv}
+            diff[k] = {"naive": str(nv), "learned": str(lv)}
     return diff
 
 
@@ -376,13 +385,15 @@ def _config_knobs(arm_dir: Path) -> dict[str, str]:
 
 
 def _knob_diff_from_dirs(naive_dir: Path, learned_dir: Path) -> dict[str, Any]:
+    """Diff the emitted config.mk knobs. Values are already config-string typed;
+    wrap in str() so the shape matches emit's _knob_diff exactly (both string)."""
     nk = _config_knobs(naive_dir)
     lk = _config_knobs(learned_dir)
     diff: dict[str, Any] = {}
     for k in _DIFF_KNOBS:
         nv, lv = nk.get(k), lk.get(k)
         if nv != lv:
-            diff[k] = {"naive": nv, "learned": lv}
+            diff[k] = {"naive": str(nv), "learned": str(lv)}
     return diff
 
 
@@ -535,6 +546,10 @@ def _load_results_jsonl(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
         try:
             rec = json.loads(line)
         except json.JSONDecodeError:
+            # summarize rewrites the whole file, so a silently-dropped line is
+            # permanently erased — warn loudly instead of swallowing it.
+            print(f"warning: skipping malformed eval_results line: {line[:80]}",
+                  file=sys.stderr)
             continue
         out[_result_key(rec)] = rec
     return out
