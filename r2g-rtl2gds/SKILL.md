@@ -124,6 +124,23 @@ After ORFS completes, extract PPA and run the timing gate:
 5. The JSON includes `wns_tier` and `tns_tier` fields so the agent can explain which metric triggered the tier (e.g., "TNS escalated this from minor to moderate").
 6. Only proceed to signoff checks (step 6) after timing is resolved.
 
+### 5a. (Optional) Fmax search — find the fastest closing period
+
+Before committing to a clock period, you can characterize the design's Fmax:
+
+    python3 scripts/reports/fmax_search.py <project-dir> [platform] [--verify]
+
+Loose-first search using cheap **placement-stage** timing (each probe runs only
+`ORFS_STAGES="synth floorplan place"`). It reports a **predicted-signoff Fmax**
+(`reports/fmax_search.json`), corrected by a learned per-family slack-deterioration
+model. The number is a **proxy (UNVERIFIED)** — post-place timing is optimistic vs
+signoff. Pass `--verify` to confirm the winner with one full flow (and feed the
+result back to tighten the model). This does NOT replace the step-8 `check_timing`
+gate, which still runs on the final backend.
+
+Knobs: `--max-parallel`, `--probe-timeout`, `--place-fast` (whole-search
+conservative lower bound for hang-prone designs), `--keep-variants`.
+
 ### 6. Run Signoff Checks (DRC, LVS, RCX)
 
 After a successful backend run, run signoff checks in order:
