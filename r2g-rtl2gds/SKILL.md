@@ -397,6 +397,19 @@ design_cases/<design-name>/
 15. Get config suggestions: `knowledge/suggest_config.py <project-dir>` (optional, useful for tuning)
 16. Collect artifacts with `scripts/reports/collect_reports.py` and summarize with `scripts/reports/summarize_run.py`.
 17. Generate the dashboard with `scripts/dashboard/generate_multi_project_dashboard.py`.
+    The index page carries two read-only knowledge-store panels at the top (above the
+    project grid), computed by `scripts/reports/build_lineage_view.py`:
+    - **Knowledge Store Health** — total runs, ORFS status distribution, % partial/unknown,
+      learnable family/platform pairs (≥3 successes via `knowledge_db.is_success`), signoff
+      positives, and whether `heuristics.json` is populated (the EMPTY case renders red — the
+      screaming diagnostic that learning is inert).
+    - **Config Tuning Provenance** — the `config_lineage` diff chain per design/platform
+      (changed/added/removed config keys + orfs/drc/lvs outcome delta prev→cur).
+
+    INVARIANT: these panels are a strictly descriptive, READ-ONLY projection over
+    `runs.sqlite` / `config_lineage` / `heuristics.json` (opened `mode=ro`; the projection
+    writes only JSON). They are NEVER wired into `suggest_config` as an auto-tuner. The
+    config-variant lineage is a loose single-parent diff chain, not a true DAG.
 18. Serve it with `scripts/dashboard/serve_multi_project_dashboard.py 8765`.
 
 ## MVP Scope

@@ -10,6 +10,18 @@ import html
 import subprocess
 import sys
 
+# Make scripts/reports/ and knowledge/ importable so the dashboard can render the
+# read-only knowledge-store projection (build_lineage_view) and find the default
+# DB path. Mirrors the path setup used elsewhere in the skill.
+_REPORTS_DIR = Path(__file__).resolve().parents[1] / 'reports'
+if str(_REPORTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_REPORTS_DIR))
+_KNOWLEDGE_DIR = Path(__file__).resolve().parents[2] / 'knowledge'
+if str(_KNOWLEDGE_DIR) not in sys.path:
+    sys.path.insert(0, str(_KNOWLEDGE_DIR))
+import build_lineage_view  # noqa: E402
+import knowledge_db  # noqa: E402
+
 # Base directory for all EDA runs - configurable via argv or env
 BASE = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path('design_cases').resolve()
 OUT = BASE / '_dashboard'
@@ -490,7 +502,138 @@ pre {{ background: #0d0d1a; padding: 15px; border-radius: 8px; overflow-x: auto;
     return page
 
 
-def render_index(projects):
+# --- Knowledge-store observability panels (READ-ONLY projection) -----------
+# These render build_lineage_view.build_view() output. They are STRICTLY
+# DESCRIPTIVE — a read-only projection over runs.sqlite / config_lineage /
+# heuristics.json. They are NEVER wired into config recommendation.
+
+# Display caps (renderer-only; build_view returns everything — no silent caps).
+_PROVENANCE_MAX_DESIGNS = 25
+_PROVENANCE_MAX_EDGES = 8
+
+
+def _compact_diff(diff):
+    """Render changed/added/removed config keys compactly for one edge."""
+    parts = []
+    changed = diff.get('changed', {}) or {}
+    for k, v in sorted(changed.items()):
+        old = v.get('old') if isinstance(v, dict) else None
+        new = v.get('new') if isinstance(v, dict) else None
+        parts.append(f'<span style="color:#ffca28">{html.escape(str(k))}</span>: '
+                     f'{html.escape(str(old))}&rarr;{html.escape(str(new))}')
+    for k, v in sorted((diff.get('added', {}) or {}).items()):
+        parts.append(f'<span style="color:#66bb6a">+{html.escape(str(k))}</span>='
+                     f'{html.escape(str(v))}')
+    for k, v in sorted((diff.get('removed', {}) or {}).items()):
+        parts.append(f'<span style="color:#ef5350">-{html.escape(str(k))}</span>')
+    return '<br>'.join(parts) if parts else '<span style="color:#888">(none)</span>'
+
+
+def _outcome_delta_html(delta):
+    """Render orfs/drc/lvs outcome delta (prev->cur) compactly."""
+    rows = []
+    for field in ('orfs_status', 'drc_status', 'lvs_status'):
+        pair = delta.get(field) or [None, None]
+        prev, cur = (pair + [None, None])[:2]
+        label = field.replace('_status', '')
+        rows.append(f'{html.escape(label)}: {html.escape(str(prev))}&rarr;'
+                    f'{html.escape(str(cur))}')
+    return '<br>'.join(rows)
+
+
+def knowledge_health_strip(health):
+    """Read-only health strip over runs.sqlite + heuristics.json."""
+    if not health:
+        return ('<div class="card"><h2>Knowledge Store Health</h2>'
+                '<p style="color:#888">Knowledge store unavailable '
+                '(no runs.sqlite, or DB locked).</p></div>')
+
+    total = health.get('total_runs', 0)
+    pct = health.get('pct_partial_or_unknown', 0.0)
+    learnable = health.get('learnable_pairs', 0)
+    fam_count = health.get('heuristics_family_count', 0)
+    populated = health.get('heuristics_populated', False)
+
+    if populated:
+        heur_html = (f'<span style="color:#4caf50;font-weight:bold">'
+                     f'populated ({fam_count} families)</span>')
+    else:
+        heur_html = ('<span style="background:#f44336;color:#fff;padding:2px 8px;'
+                     'border-radius:4px;font-weight:bold">EMPTY</span>')
+
+    counts = health.get('orfs_status_counts', {})
+    counts_str = ', '.join(f'{html.escape(str(k))}: {v}'
+                           for k, v in sorted(counts.items())) or '-'
+
+    sp = health.get('signoff_positive', {})
+    sp_str = (f'lvs_clean: {sp.get("lvs_clean", 0)}, '
+              f'drc_clean: {sp.get("drc_clean", 0)}, '
+              f'drc_clean_beol: {sp.get("drc_clean_beol", 0)}, '
+              f'rcx_complete: {sp.get("rcx_complete", 0)}')
+
+    return f'''<div class="card">
+<h2>Knowledge Store Health <span style="font-size:13px;color:#888">(read-only projection)</span></h2>
+<table>
+<tr><th>Total runs</th><td>{total}</td></tr>
+<tr><th>ORFS status</th><td>{counts_str}</td></tr>
+<tr><th>% partial/unknown</th><td>{pct}%</td></tr>
+<tr><th>Learnable family/platform pairs (&ge;3 success)</th><td>{learnable}</td></tr>
+<tr><th>Signoff positives</th><td>{html.escape(sp_str)}</td></tr>
+<tr><th>Heuristics</th><td>{heur_html}</td></tr>
+</table>
+</div>'''
+
+
+def tuning_provenance_panel(provenance):
+    """Read-only config-lineage panel (loose single-parent diff chain)."""
+    if not provenance:
+        return ('<div class="card"><h2>Config Tuning Provenance</h2>'
+                '<p style="color:#888">No config-lineage edges recorded yet.</p></div>')
+
+    total_designs = len(provenance)
+    shown = provenance[:_PROVENANCE_MAX_DESIGNS]
+
+    rows = []
+    for entry in shown:
+        design = html.escape(str(entry.get('design_name', '')))
+        platform = html.escape(str(entry.get('platform', '')))
+        edges = entry.get('edges', [])
+        edge_count = entry.get('edge_count', len(edges))
+        shown_edges = edges[:_PROVENANCE_MAX_EDGES]
+        edge_rows = []
+        for e in shown_edges:
+            diff_html = _compact_diff(e.get('diff', {}))
+            delta_html = _outcome_delta_html(e.get('outcome_delta', {}))
+            edge_rows.append(f'<tr><td>{diff_html}</td><td>{delta_html}</td></tr>')
+        if edge_count > len(shown_edges):
+            edge_rows.append(
+                f'<tr><td colspan="2" style="color:#888">... showing '
+                f'{len(shown_edges)} of {edge_count} edges (truncated)</td></tr>')
+        edge_table = (f'<table style="margin:0"><tr><th>Config change</th>'
+                      f'<th>Outcome delta (prev&rarr;cur)</th></tr>'
+                      f'{"".join(edge_rows)}</table>')
+        rows.append(
+            f'<tr><td style="vertical-align:top;white-space:nowrap">'
+            f'<b>{design}</b><br><span style="color:#888">{platform}</span><br>'
+            f'<span style="color:#888">{edge_count} edge(s)</span></td>'
+            f'<td>{edge_table}</td></tr>')
+
+    note = ''
+    if total_designs > len(shown):
+        note = (f'<p style="color:#888">... showing {len(shown)} of '
+                f'{total_designs} designs (truncated)</p>')
+
+    return f'''<div class="card">
+<h2>Config Tuning Provenance <span style="font-size:13px;color:#888">(read-only; loose single-parent diff chain)</span></h2>
+<table>
+<tr><th>Design / Platform</th><th>Config-variant edges</th></tr>
+{"".join(rows)}
+</table>
+{note}
+</div>'''
+
+
+def render_index(projects, kview):
     cards = []
     for p in projects:
         name = html.escape(p['name'])
@@ -516,14 +659,20 @@ body {{ font-family: -apple-system, sans-serif; max-width: 1200px; margin: 40px 
 h1 {{ color: #fff; text-align: center; }}
 .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }}
 .card {{ background: #16213e; border-radius: 10px; padding: 20px; transition: transform 0.2s; }}
-.card:hover {{ transform: translateY(-3px); }}
+.grid .card:hover {{ transform: translateY(-3px); }}
 .card-link {{ text-decoration: none; color: inherit; }}
+h2 {{ color: #fff; }}
 h3 {{ color: #fff; margin-top: 0; }}
 .desc {{ color: #aaa; font-size: 14px; }}
 .metric {{ color: #64b5f6; font-weight: bold; }}
+table {{ border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }}
+th, td {{ border: 1px solid #333; padding: 8px; text-align: left; vertical-align: top; }}
+th {{ background: #2a2a4a; }}
 </style></head><body>
 <h1>EDA Spec-to-GDS Dashboard</h1>
 <p style="text-align:center;color:#888">OpenROAD-flow-scripts | Auto-refresh: 10s</p>
+{knowledge_health_strip(kview.get('health', {}))}
+{tuning_provenance_panel(kview.get('provenance', []))}
 <div class="grid">
 {"".join(cards)}
 </div>
@@ -540,8 +689,15 @@ def main():
         if d.is_dir() and d.name != '_dashboard' and (d / 'metadata.json').exists():
             projects.append(collect_project(d))
 
+    # Compute the read-only knowledge-store projection. Guarded so a missing or
+    # locked DB never breaks the dashboard — the panels degrade to empty state.
+    try:
+        kview = build_lineage_view.build_view(knowledge_db.DEFAULT_DB_PATH)
+    except Exception:
+        kview = {"health": {}, "provenance": []}
+
     # Generate index
-    (OUT / 'index.html').write_text(render_index(projects), encoding='utf-8')
+    (OUT / 'index.html').write_text(render_index(projects, kview), encoding='utf-8')
 
     # Generate per-project pages
     for p in projects:
