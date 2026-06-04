@@ -6,6 +6,7 @@ Usage: suggest_config.py <project-dir> [output.json]
 Analyzes synthesis results and design characteristics to recommend
 ORFS config.mk parameters (utilization, density, safety flags).
 """
+import argparse
 import json
 import os
 import re
@@ -17,6 +18,12 @@ import query_knowledge
 
 HEURISTICS_PATH = knowledge_db.DEFAULT_KNOWLEDGE_DIR / "heuristics.json"
 FAMILIES_PATH = knowledge_db.DEFAULT_FAMILIES_PATH
+
+
+class _SkipLearned(Exception):
+    """Internal sentinel: bypass the learned-heuristics override block
+    (the --no-learned / naive arm). Caught alongside the malformed-file
+    fall-through so the naive arm reuses the exact same baseline path."""
 
 
 def parse_synth_stats(synth_dir: Path) -> dict:
@@ -95,8 +102,17 @@ def detect_design_type(project: Path, config: dict) -> str:
     return 'logic'
 
 
-def recommend(project: Path) -> dict:
-    """Generate parameter recommendations."""
+def recommend(project: Path, use_learned: bool = True) -> dict:
+    """Generate parameter recommendations.
+
+    When ``use_learned`` is False the entire learned-heuristics override block
+    is skipped: ``learned_source`` stays None and the recommendation is the
+    pure ``params_by_size`` baseline plus the design-type clamps and the 0.10
+    floor. This is the *naive* arm of the payoff A/B harness — the ONLY thing
+    that differs from the learned arm is config provenance; the size
+    classification, design-type clamps, safety flags and floor are identical.
+    Default True keeps every existing ``recommend(project)`` caller unaffected.
+    """
     config_path = project / 'constraints' / 'config.mk'
     config = parse_config_mk(config_path)
     synth_stats = parse_synth_stats(project / 'synth')
@@ -137,6 +153,10 @@ def recommend(project: Path) -> dict:
     # intentional: safety rails beat empirical medians.
     learned_source = None
     try:
+        if not use_learned:
+            # Naive arm: skip the learned override entirely. learned_source
+            # stays None and only params_by_size + clamps + floor apply.
+            raise _SkipLearned
         families = knowledge_db.load_families(FAMILIES_PATH)
         family = knowledge_db.infer_family(config.get('DESIGN_NAME', ''), families)
         learned = query_knowledge.get_family_heuristics(
@@ -160,6 +180,10 @@ def recommend(project: Path) -> dict:
                 f"CORE_UTILIZATION={recommendations.get('CORE_UTILIZATION')}, "
                 f"PLACE_DENSITY_LB_ADDON={recommendations.get('PLACE_DENSITY_LB_ADDON')}"
             )
+    except _SkipLearned:
+        # --no-learned / naive arm: deliberately fall through to the
+        # hard-coded params_by_size baseline. Not an error.
+        learned_source = None
     except (OSError, json.JSONDecodeError, KeyError, TypeError, AttributeError):
         # Malformed knowledge files should never break a real run.
         # Fall through to the hard-coded params_by_size baseline.
@@ -234,14 +258,23 @@ def recommend(project: Path) -> dict:
 
 
 def main():
-    if len(sys.argv) < 2:
-        print('Usage: suggest_config.py <project-dir> [output.json]', file=sys.stderr)
-        sys.exit(1)
+    p = argparse.ArgumentParser(
+        description='Design-aware ORFS parameter recommender.',
+        usage='%(prog)s [--no-learned] <project-dir> [output.json]',
+    )
+    p.add_argument('project', type=Path, help='Path to the project directory')
+    p.add_argument('output_file', nargs='?', default=None,
+                   help='Optional output.json path (default: stdout)')
+    p.add_argument('--no-learned', dest='use_learned', action='store_false',
+                   help='Bypass learned heuristics; emit the naive '
+                        'params_by_size baseline (still clamped + floored). '
+                        'This is the naive arm of the payoff A/B harness.')
+    args = p.parse_args()
 
-    project = Path(sys.argv[1])
-    output_file = sys.argv[2] if len(sys.argv) > 2 else None
+    project = args.project
+    output_file = args.output_file
 
-    result = recommend(project)
+    result = recommend(project, use_learned=args.use_learned)
 
     if output_file:
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)

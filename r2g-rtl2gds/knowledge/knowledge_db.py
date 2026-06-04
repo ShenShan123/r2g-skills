@@ -39,6 +39,10 @@ def ensure_schema(conn: sqlite3.Connection,
 # here idempotently (ALTER TABLE ADD COLUMN is a no-op error if it already exists).
 _RUNS_ADDED_COLUMNS = {
     "lvs_mismatch_class": "TEXT",
+    # Nullable provenance tag for the payoff A/B harness: which arm produced
+    # this run ('naive' | 'learned' | NULL). Populated from config.mk EVAL_ARM
+    # by ingest_run.py; absent for every non-eval run. Does not affect learning.
+    "eval_arm": "TEXT",
 }
 
 
