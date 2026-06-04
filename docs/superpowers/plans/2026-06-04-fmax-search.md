@@ -1752,3 +1752,15 @@ git commit -m "docs(skill): document Fmax search + deterioration model"
 - **Hard rules enforced in code:** `assert_safe_knobs` (density ≥ 0.10), `variant_name` (unique FLOW_VARIANT per period), frozen knobs (only the SDC `clk_period` line is rewritten; `clone_variant` copies `config.mk` verbatim), inconclusive≠fail (`classify_probe`/`search_loop`).
 - **Heavy end-to-end** (real ORFS) is intentionally NOT a unit test — it is the Task 13 Step 3 live smoke test (gated behind the operator running it), mirroring the repo's golden-regression convention.
 ```
+
+---
+
+## Implementation Log (2026-06-04)
+
+Executed via a dependency-gated Workflow (14 subagents, strict TDD, no git inside agents; commits made from the driving session). **9 commits `cc5376d..42c233a`** on `feat/fmax-search`. Full suite **357 passed / 8 skipped / 0 failed**; 54 new fmax+knowledge tests. Live smoke test (Task 13 Step 3) backfilled **750 runs** (`clock_period_ns` 750/750, `place_setup_ws` 634/750) and re-learned **`slack_deterioration` for 47/48** family·platform entries — real-corpus numbers confirm the model premise (`d_fp_pl` p90 ≈ 0.38 ns dominant, `d_pl_fin` p90 ≈ −0.01 ns neutral). `runs.sqlite`/`heuristics.json` are gitignored, so Step 4 produced no commit (as its defensive `|| echo "nothing to commit"` anticipated).
+
+**Two fixes beyond the plan's verbatim edits (superseding invariants):**
+
+1. **`knowledge_db.ensure_schema` latent ordering bug** (folded into Task 1, commit `cc5376d`). The plan's Task 1 test seeds a stripped legacy `runs` table; the original `conn.executescript(ddl)` aborted the whole bootstrap when `CREATE INDEX … ON runs(design_family,…)` referenced a not-yet-migrated column — *before* `_migrate_add_columns` ran, so the slack columns were never added. `ensure_schema` now executes statements one-by-one, defers any `CREATE INDEX` raising "no such column" until after the ALTER-TABLE migration, then retries/skips. Production bootstrap (fresh/complete DB) is unchanged — every statement runs on the first pass. Verified on the real 750-row legacy DB (backfill migrated it without error).
+
+2. **`ingest_run.py --backfill` CLI ergonomics** (commit `42c233a`, supersedes Task 4's `main()` text). The required `project` positional made the documented standalone form (`ingest_run.py --backfill <dir>`, used by Task 13 Step 3) fail argparse. `project` is now `nargs="?"`, with a clear error only when neither `project` nor `--backfill` is given. New test `test_main_backfill_runs_without_a_project_arg`.
