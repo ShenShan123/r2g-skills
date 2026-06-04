@@ -178,3 +178,44 @@ heuristics/lineage data that is empty or dead until Win 1.
 - Ingest into the knowledge store and re-run `learn_heuristics.py`; record the fix in
   `references/failure-patterns.md` / `lessons-learned.md` and update memory
   `project_dead_learning_loop`.
+
+---
+
+## Implementation complete (2026-06-04)
+
+All three wins implemented, reviewed (implementer → spec review → code-quality review → empirical
+controller verification per win), and committed locally on three stacked branches off the
+lvs-residual branch (`main` lacks the `lvs_mismatch_class` column the DB/schema depend on). Not
+pushed.
+
+| Win | Branch | Commits | Result |
+|---|---|---|---|
+| 1 — Repair learning loop | `fix/dead-learning-loop` | `356d517`, `7d429ac` | `heuristics.json` 0 → **48 learned families**; all clamps + the new 0.10 floor hold |
+| 2 — Observability projection | `feat/knowledge-observability` | `a9cdf26`, `5c8833b` | read-only `build_lineage_view.py` + 2 dashboard panels; `learnable_pairs` matches the learner |
+| 3 — Payoff A/B harness | `feat/heuristics-payoff-eval` | `c49c52c`, `39b55f2`, `8984fed` | `emit`/`summarize` harness; honest wall-clock cost; win/regression/inconclusive |
+
+(Plan committed `1cab52b`; post-implementation docs in a follow-up commit on the Win 3 branch tip.)
+
+**Deviations from the plan as written (deliberate, verified):**
+- **Win 1 fix moved to the learner, not ingest.** The plan's primary option was to relax
+  `_derive_orfs_status`; we instead put a shared `knowledge_db.is_success` in the learner. This
+  needs **no re-ingest** of 750 project dirs (re-running `learn_heuristics.py` proves the unlock
+  immediately) and keeps `orfs_status` an honest record of the stage log — which directly satisfies
+  the plan's own "do not fabricate stage rows" guardrail. `_derive_orfs_status` was left unchanged
+  (clarifying comment only).
+- **The 0.10 density floor named in the guardrails did not actually exist** in `suggest_config` —
+  added it as a hard post-filter. (It never fires on current data; protects future learned medians.)
+- **`families.json` curation stayed minimal and anchored.** Investigation showed the existing
+  `split('_')[0].lower()` fallback already groups the dominant IP families coherently, and the
+  `bus_heavy` clamp already shields against family-median pollution, so curation pins underscore-
+  separated families with anchored `^prefix_` patterns (no silent over-capture) rather than risky
+  merges. The fuzzy/Jaccard fallback was rejected as the plan specified.
+- **Win 3 cost is wall-clock, not CPU-hours.** The flow's `stage_log.jsonl` records only wall-clock
+  `elapsed_s`; CPU-hours and peak-RAM are not captured anywhere in the current instrumentation. The
+  harness reports wall-clock, records `cost_metric`, never fabricates CPU-hours, and is forward-
+  compatible to `cpu_s`/`peak_rss_kb` if instrumentation is added later. Added an `inconclusive`
+  class so a cheaper-but-both-fail pair is never mis-reported as a `win`.
+- **`eval_arm` column: included** (nullable, additive migration). **Dashboard card for
+  `eval_summary.json`: deferred** — nothing to render until an operator runs a real multi-hour A/B.
+- **Scope note:** the Win 3 harness is built + unit-tested + fixture/CLI-verified; the actual
+  multi-hour A/B eval run on a quiesced host remains operator-driven.

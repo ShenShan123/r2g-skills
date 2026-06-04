@@ -132,6 +132,11 @@ fixed inside the skill.
   to the user before attempting CDC, multi-clock, DFT, or signoff-quality closure.
 - Dashboard is static HTML at `design_cases/_dashboard/index.html`, served via
   `scripts/dashboard/serve_multi_project_dashboard.py 8765`.
-- Knowledge store (`r2g-rtl2gds/knowledge/`) is Phase-2 only — no version DAG yet.
+- Knowledge store (`r2g-rtl2gds/knowledge/`): the learn→suggest loop is **live** (per-family
+  medians via the shared signoff-positive `knowledge_db.is_success`, applied by `suggest_config`
+  under hard safety clamps). A read-only observability projection
+  (`scripts/reports/build_lineage_view.py` → dashboard health + provenance panels) and a payoff
+  A/B harness (`knowledge/eval_heuristics.py`) round it out. Config lineage is a loose
+  single-parent diff chain, not a true version DAG. See `knowledge/README.md`.
 - Batch results live under `design_cases/_batch/`; per-design logs under
   `design_cases/_batch/logs_*/`.

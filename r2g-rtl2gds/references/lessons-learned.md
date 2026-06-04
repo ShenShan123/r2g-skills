@@ -219,3 +219,57 @@ stream_register: 489:1 → **DRC CLEAN** with one inserted `ANTENNA_X1`. Codifie
 touched. **General principle:** when an OpenROAD in-flow checker and the KLayout signoff deck
 disagree on whether a fix worked, the signoff deck wins — and you must use the repair *modality*
 the deck actually credits, not the one the flow finds cheapest.
+
+## Dead Learning Loop — Repaired (2026-06-04)
+
+The knowledge store's learn→suggest loop had been shipping **zero** learned config:
+`heuristics.json` was `"families": {}`. Root cause was a definition mismatch, not missing data.
+`learn_heuristics._is_success` required `orfs_status == 'pass'`, but **0 of 750** runs had it
+(747 `partial`, 3 `unknown`) because `ingest_run._derive_orfs_status` only marks `pass` when all
+six stage names appear in an often-incomplete `stage_log.jsonl`. Meanwhile the real signoff signal
+sat unused: **607 LVS-clean, 417 DRC-clean (+264 `clean_beol`), 699 RCX-complete**.
+
+**The fix went in the learner, not ingest.** The plan's primary suggestion was to relax
+`_derive_orfs_status`, but that would (a) require re-ingesting 750 project dirs and (b) make
+`orfs_status` lie about the stage log. Instead we added a shared `knowledge_db.is_success(row)`:
+strict 6-stage pass **OR** relaxed (≥1 *positive* clean signoff — LVS `clean` / `symmetric_matcher`,
+DRC `clean` / `clean_beol`, RCX `complete` — **and** no failed signoff; absence of all signoff data
+is *not* success). `learn_heuristics.py` and `monitor_health.py` both import it, so the learner and
+the health monitor can never drift. Re-running `learn_heuristics.py` against the existing DB —
+no re-ingest needed — took **heuristics.json from 0 → 48 learned family/platform pairs** (631 runs
+now learnable). Commits `356d517` + `7d429ac` (branch `fix/dead-learning-loop`).
+
+**Guardrails that mattered:**
+- The CLAUDE.md `PLACE_DENSITY_LB_ADDON ≥ 0.10` floor was *named but not actually enforced* in
+  `suggest_config` — added it as a hard post-filter (defense-in-depth; never fires on current data
+  where learned medians are all 0.20, but protects future learned medians). Verified every learned
+  `place_density` median ≥ 0.10 and `core_utilization` median ∈ [20, 25].
+- The `bus_heavy` CU→15 clamp already protects against family-median pollution: `axi_crossbar`
+  inherits the `axi`-family learned median of 25 but is still clamped to 15 (verified before/after).
+  Safety rails beat empirical medians — so `families.json` curation could stay conservative.
+- `families.json` curation used **anchored** `^prefix_` patterns so it doesn't silently swallow
+  future designs (`spider` → `spider`, not `spi`); ambiguous run-together names fall through to the
+  honest `split('_')[0]` singleton fallback. The fuzzy/Jaccard family fallback was **rejected**
+  (name-token similarity ≠ design behavior; poisons safety-critical medians).
+
+**Two follow-ons absorbed the same observability lens (read-only projections over our own
+structured outcomes):**
+- *Observability* (`feat/knowledge-observability`, `a9cdf26` + `5c8833b`):
+  `scripts/reports/build_lineage_view.py` is a `mode=ro`, deterministic projection over
+  `runs.sqlite` + `config_lineage` + `heuristics.json` → two dashboard index panels (a health strip
+  that would have screamed "747/750 partial, heuristics empty", and a tuning-provenance table). It
+  reuses `is_success` so the health numbers match the learner, and is **never** wired into
+  `suggest_config`.
+- *Payoff A/B harness* (`feat/heuristics-payoff-eval`, `c49c52c` + `39b55f2` + `8984fed`):
+  `knowledge/eval_heuristics.py` `emit`s paired naive/learned arms (via a new `suggest_config
+  --no-learned`) and `summarize`s them into a deterministic `eval_summary.json`. **Honest cost:**
+  the flow's `stage_log.jsonl` captures only wall-clock `elapsed_s` — CPU-hours/peak-RAM are *not*
+  recorded anywhere, so the harness reports wall-clock, records `cost_metric`, and never fabricates
+  CPU-hours (forward-compatible to `cpu_s`/`peak_rss_kb`). A `win` requires a *usable* signed-off
+  learned arm that is also cheaper; cheaper-but-both-fail is `inconclusive`. The frozen `eval_set`
+  excludes bus families on purpose — their `bus_heavy` clamp forces CU=15 in both arms, masking the
+  learned difference. The multi-hour A/B *run* is operator-driven; the harness is built + unit-tested
+  against fixtures.
+
+**General principle:** when a self-improvement loop ships nothing, suspect the *success definition*
+before the data — here the outcomes existed all along; the gate was reading the wrong column.
