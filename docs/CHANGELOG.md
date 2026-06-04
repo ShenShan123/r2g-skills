@@ -19,6 +19,42 @@ skipped as library-pre-verified).
 
 ---
 
+## 2026-06-04 — OpenSpace absorption: live learning loop + observability + payoff eval
+*(plan: `docs/plans/openspace-absorption-2026-06-03.md`; skill commits `356d517`→`5dd99ee`; PR [#3](https://github.com/ShenShan123/agent-r2g/pull/3))*
+
+Three wins from the OpenSpace study, implemented against `knowledge/`. The self-improvement loop was
+**dead** — `heuristics.json` was `"families": {}` because `_is_success` required `orfs_status=='pass'`,
+which **0 of 750** runs had (747 `partial`); meanwhile 607 LVS-clean / 681 DRC-clean(+beol) /
+699 RCX-complete sat unused.
+
+- **Win 1 — learning loop repaired (the unlock).** Added a shared `knowledge_db.is_success` (strict
+  6-stage pass OR signoff-positive: ≥1 positive clean signal, no failed signoff; `symmetric_matcher`
+  gated to a `fail` verdict; absence-of-data is *not* success), imported by `learn_heuristics.py` +
+  `monitor_health.py`. Re-running `learn_heuristics.py` against the existing DB — **no re-ingest** —
+  took `heuristics.json` from **0 → 48 learned family/platform pairs** (631 runs learnable). The fix
+  is in the learner, not `ingest`, so `orfs_status` stays a faithful record of the stage log. Added
+  the `PLACE_DENSITY_LB_ADDON ≥ 0.10` floor the hard rules named but `suggest_config` never enforced;
+  the `bus_heavy` CU→15 clamp still overrides learned medians. `families.json` curated conservatively
+  with anchored `^prefix_` patterns; the fuzzy/Jaccard fallback rejected.
+- **Win 2 — read-only observability.** `scripts/reports/build_lineage_view.py` is a deterministic
+  `mode=ro` projection over `runs.sqlite` + `config_lineage` + `heuristics.json` → two dashboard
+  panels (the diagnostic that would have screamed "747/750 partial, heuristics empty"). Reuses
+  `is_success` so the health strip and the learner can't disagree; never wired into `suggest_config`;
+  lineage is a loose single-parent diff chain, not a true DAG.
+- **Win 3 — payoff A/B harness.** `knowledge/eval_heuristics.py` (`emit` paired naive/learned arms via
+  a new `suggest_config --no-learned`; `summarize` → deterministic `eval_summary.json`) + frozen
+  `eval_set.json` (non-bus families only — `bus_heavy` clamp would mask the difference) + nullable
+  `eval_arm` column. Cost is **wall-clock** (`stage_log.jsonl` records only `elapsed_s`;
+  CPU-hours/peak-RAM are not instrumented) — recorded as `cost_metric`, never fabricated. A `win`
+  requires a *usable* signed-off learned arm; cheaper-but-both-fail is `inconclusive`. The multi-hour
+  A/B *run* is operator-driven.
+
+Tests: **331 passed, 8 skipped** (~30 new). Each win went implementer → spec review → code-quality
+review → empirical controller verification. Skill changes also recorded in
+`references/lessons-learned.md` ("Dead Learning Loop — Repaired 2026-06-04") and `knowledge/README.md`.
+
+---
+
 ## 2026-06-03 — LVS failure-cause analysis + residual campaign (corrected, re-ingested)
 *(doc: `docs/lvs-failure-analysis-2026-06-03.md`, merged; skill commit `7129d9b`)*
 
