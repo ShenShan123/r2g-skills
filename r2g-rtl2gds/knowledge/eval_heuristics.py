@@ -413,30 +413,40 @@ def _violations_held(naive_q: dict, learned_q: dict) -> bool:
 
 def _classify(cost_delta_pct: float | None,
               naive_q: dict, learned_q: dict) -> str:
-    """win | regression | no_change | worse.
+    """win | regression | inconclusive | no_change | worse.
 
-    win        cost dropped (delta>0) AND quality held-or-improved
-               (learned signoff_ok True when naive True; violations <= naive).
-    regression learned is cheaper BUT signoff regressed — flagged explicitly.
-    no_change  cost did not drop (<=0) and quality not worse.
-    worse      cost did not drop and quality regressed.
+    A "win" is an HONEST headline: the learned config must produce a usable,
+    signed-off result that is cheaper — never merely cheaper garbage. So a win
+    requires the learned arm to actually pass signoff (learned_usable), not just
+    to be "no worse than a failing naive arm".
+
+    learned_usable = learned signoff_ok AND known violation counts did not
+                     increase vs naive.
+
+    win          cheaper AND learned_usable.
+    inconclusive NEITHER arm produced a usable signoff — a cheaper-but-unusable
+                 learned arm is NOT a win and NOT a regression (there was no
+                 usable baseline to break). Tested BEFORE regression.
+    regression   cheaper AND naive_ok AND NOT learned_usable — the learned
+                 config broke a usable baseline (or added violations).
+    no_change    NOT cheaper AND learned_usable — usable but no cost gain.
+    worse        everything else (not cheaper, learned not usable while there
+                 was a usable baseline to preserve).
     """
-    if cost_delta_pct is None:
-        return "no_change"
-    cheaper = cost_delta_pct > 0
+    cheaper = cost_delta_pct is not None and cost_delta_pct > 0
     naive_ok = naive_q.get("signoff_ok", False)
     learned_ok = learned_q.get("signoff_ok", False)
-    # quality held: learned at least as good as naive on signoff_ok, and
-    # known violation counts did not increase.
-    signoff_held = (learned_ok or not naive_ok)
-    quality_held = signoff_held and _violations_held(naive_q, learned_q)
+    learned_usable = learned_ok and _violations_held(naive_q, learned_q)
 
-    if cheaper and quality_held:
+    # Order matters: win first, then both-fail (inconclusive) before regression,
+    # so a both-fail-cheaper case returns inconclusive, NOT win and NOT regression.
+    if cheaper and learned_usable:
         return "win"
-    if cheaper and not quality_held:
+    if (not naive_ok) and (not learned_ok):
+        return "inconclusive"
+    if cheaper and naive_ok and not learned_usable:
         return "regression"
-    # not cheaper
-    if quality_held:
+    if (not cheaper) and learned_usable:
         return "no_change"
     return "worse"
 
@@ -564,6 +574,9 @@ def reaggregate(results_path: Path) -> dict[str, Any]:
     n_designs = len(recs)
     n_wins = sum(1 for r in recs if r.get("classification") == "win")
     n_regressions = sum(1 for r in recs if r.get("classification") == "regression")
+    # inconclusive = neither arm produced a usable signoff; neither a win nor a
+    # regression (kept distinct so cheaper-but-unusable is never a headline win).
+    n_inconclusive = sum(1 for r in recs if r.get("classification") == "inconclusive")
 
     all_deltas = [r["cost_delta_pct"] for r in recs
                   if r.get("cost_delta_pct") is not None]
@@ -577,6 +590,7 @@ def reaggregate(results_path: Path) -> dict[str, Any]:
         "n_designs": n_designs,
         "n_wins": n_wins,
         "n_regressions": n_regressions,
+        "n_inconclusive": n_inconclusive,
         "median_cost_delta_pct_all": _median(all_deltas),
         "median_cost_delta_pct_wins": _median(win_deltas),
         "note": CPU_RAM_NOTE,

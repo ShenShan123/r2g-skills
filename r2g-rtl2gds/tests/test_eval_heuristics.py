@@ -253,6 +253,33 @@ def test_summarize_regression_when_cheaper_but_signoff_worse(tmp_path):
     assert d0["learned"]["signoff_ok"] is False
 
 
+def test_summarize_inconclusive_when_both_fail_and_cheaper(tmp_path):
+    """Honesty guard: both arms fail signoff and learned is cheaper -> the
+    learned config produced cheaper-but-UNUSABLE output. That is NOT a win and
+    NOT a regression (there was no usable baseline to break): inconclusive."""
+    arms = tmp_path / "arms"
+    arms.mkdir()
+    # naive fails LVS; learned ALSO fails LVS but is cheaper (800 vs 1000).
+    _make_arm(arms, "noway", "naive", cu="30",
+              stage_costs={"synth": 100, "place": 400, "route": 400, "finish": 100},
+              lvs_status="fail", lvs_mismatch_count=2)
+    _make_arm(arms, "noway", "learned", cu="15",
+              stage_costs={"synth": 100, "place": 300, "route": 300, "finish": 100},
+              lvs_status="fail", lvs_mismatch_count=5)
+
+    out = tmp_path / "out"
+    summary = _summarize(arms, out)
+    d0 = summary["designs"][0]
+    assert d0["naive"]["signoff_ok"] is False
+    assert d0["learned"]["signoff_ok"] is False
+    assert d0["cost_delta_pct"] > 0  # learned IS cheaper
+    assert d0["classification"] == "inconclusive"   # the new guard
+    # An inconclusive is neither a win nor a regression.
+    assert summary["n_wins"] == 0
+    assert summary["n_regressions"] == 0
+    assert summary["n_inconclusive"] == 1
+
+
 def test_summarize_no_change_when_not_cheaper(tmp_path):
     arms = tmp_path / "arms"
     arms.mkdir()
