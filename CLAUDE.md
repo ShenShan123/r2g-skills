@@ -101,6 +101,7 @@ The skill enforces this order. Don't skip a failed stage — diagnose first via
 | Validated config tuning per design family | `r2g-rtl2gds/references/lessons-learned.md` (corpus tables) |
 | Platform extras (nangate45 LVS rule, etc.) | `r2g-rtl2gds/assets/platforms/<plat>/` |
 | DRC/LVS violation fixing (antenna diode insertion, route/density, LVS triage) | `r2g-rtl2gds/references/signoff-fixing.md` |
+| Fmax search (loose-first fastest-closing-period; place-stage proxy + learnable deterioration model) | `r2g-rtl2gds/references/orfs-playbook.md` ("Fmax Search") + `SKILL.md` step 5a |
 
 ## When You Fix a Bug
 

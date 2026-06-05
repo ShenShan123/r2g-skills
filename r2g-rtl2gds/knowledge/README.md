@@ -67,6 +67,26 @@ failure_candidates.json ─┘
 | `build_lineage_view.py` | read-only (`mode=ro`) projection over `runs.sqlite` + `config_lineage` + `heuristics.json` | dashboard "Knowledge health" + "Tuning provenance" panels |
 | `eval_set.json` + `eval_heuristics.py` | frozen eval set; `emit` writes paired naive/learned arms via `suggest_config --no-learned`, `summarize` → `eval_results.jsonl` / `eval_summary.json` | operator (payoff A/B verdict) |
 
+## Fmax Search Extension (2026-06-04)
+
+The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports/fmax_search.py`
++ pure `fmax_model.py`; see `references/orfs-playbook.md`):
+
+- **Three per-stage setup-slack columns** — `floorplan_setup_ws`, `place_setup_ws`,
+  `finish_setup_ws` — populated by `ingest_run.py` from `summary.timing_staged` (and `--backfill`
+  reads them straight from preserved `backend/RUN_*/logs/` for historical runs, filtering the
+  `1e+39` unconstrained sentinel).
+- **`clock_period_ns` now comes from the SDC** (`set clk_period` in `constraints/constraint.sdc`),
+  not `config.mk` — it was NULL for all 750 runs before this.
+- **`learn_heuristics.py` emits two per-family/platform aggregates** over signoff-positive runs:
+  `closing_period` (`period − finish_ws`; seeds the search) and `slack_deterioration` — the p90
+  per-stage erosion `d_fp_pl` (floorplan→place, dominant) and `d_pl_fin` (place→finish, ≈ neutral),
+  in both ns and pct-of-period. `query_knowledge.get_closing_period` / `get_deterioration` expose
+  them; `fmax_model.select_model` gates on `n ≥ 8` (else cold-start defaults).
+- **Online self-correction:** `fmax_search.py --verify` appends a verified `(floorplan, place,
+  finish)` triple (tagged `eval_arm='fmax_verify'`, signoff-positive so it is learnable) so the
+  deterioration model tightens as verify data accrues.
+
 ## Invariants
 
 1. `ingest_run.py` only reads structured JSON artifacts; it never parses raw ORFS logs. If an artifact is missing, the corresponding column is NULL.
@@ -90,3 +110,12 @@ failure_candidates.json ─┘
     captured by the flow's `stage_log.jsonl`, and it never fabricates CPU-hours (forward-compatible
     to `cpu_s` / `peak_rss_kb`). A `win` requires the learned arm to be a *usable* signed-off result
     that is also cheaper; cheaper-but-both-fail is `inconclusive`, never a win.
+12. The Fmax `slack_deterioration` model is **advisory and tiered**: below `n = 8` learned samples
+    `fmax_model.select_model` falls back to corpus cold-start defaults, never an under-sampled
+    median. Estimator is p90 (conservative); learned terms are clamped `≥ 0` (never predict negative
+    erosion). The reported Fmax is a **proxy (UNVERIFIED)** unless `--verify` ran — post-place timing
+    is optimistic vs signoff, so the number is always labelled, never presented as a closed result.
+13. `ensure_schema` is **legacy-DB-safe**: it applies `schema.sql` statement-by-statement and defers
+    any `CREATE INDEX` that references a not-yet-migrated column until after the ALTER-TABLE
+    forward-migration, then retries (production/fresh DBs are unaffected — every statement runs on
+    the first pass).

@@ -324,6 +324,15 @@ change.
 
 ---
 
-*Implementation plan: `docs/superpowers/plans/` (writing-plans, next). Per project
+*Implementation plan: `docs/superpowers/plans/2026-06-04-fmax-search.md`. Per project
 convention, the skill scripts/references are the source of truth; this spec records the
 design rationale and the source-verified ORFS facts it depends on.*
+
+---
+
+**Implemented 2026-06-04** on `feat/fmax-search` (code commits `cc5376d`→`42c233a`; full detail
+in the plan's *Implementation Log*). All D1–D7 realized; **357 tests pass**. Live backfill of 750
+runs reproduced the corpus premise this spec assumed (`d_fp_pl` p90 ≈ 0.38 ns dominant; `d_pl_fin`
+p90 ≈ −0.01 ns ≈ neutral). Two fixes beyond the original design: (1) `knowledge_db.ensure_schema`
+made legacy-DB-safe (defers `CREATE INDEX` on not-yet-migrated columns past the ALTER migration);
+(2) `ingest_run.py --backfill` runs standalone without a `project` positional.*
