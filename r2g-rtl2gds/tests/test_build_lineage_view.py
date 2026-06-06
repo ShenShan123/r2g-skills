@@ -87,7 +87,7 @@ def test_build_view_is_deterministic(tmp_knowledge_dir):
     v1 = build_lineage_view.build_view(db_path)
     v2 = build_lineage_view.build_view(db_path)
     assert v1 == v2
-    assert set(v1.keys()) == {"health", "provenance"}
+    assert set(v1.keys()) == {"health", "provenance", "fix_effectiveness"}
     # Purity: no timestamp leaks into build_view output.
     assert "generated_at" not in v1
 

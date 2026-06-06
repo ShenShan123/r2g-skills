@@ -246,11 +246,73 @@ def _build_provenance(conn: sqlite3.Connection) -> list[dict]:
     return provenance
 
 
+def _fix_effectiveness(conn: sqlite3.Connection) -> list[dict]:
+    """Per-(family, platform, check, violation_class) fix-strategy effectiveness.
+
+    Rolls up ``fix_trajectories`` grouped by
+    (design_family, platform, check_type, violation_class, winning_strategy),
+    counting resolved vs abandoned episodes and the clearance rate
+    (resolved / (resolved + abandoned)) for each strategy.
+
+    READ-ONLY safety: ``mode=ro`` cannot CREATE tables, so if a (legacy) DB lacks
+    the ``fix_trajectories`` table this MUST NOT crash. We probe sqlite_master
+    first and return an empty projection when the table is absent.
+    """
+    has_table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fix_trajectories'"
+    ).fetchone()
+    if not has_table:
+        return []
+
+    # Group by the 5-tuple; count resolved vs abandoned per (group, strategy).
+    cur = conn.execute(
+        "SELECT design_family, platform, check_type, violation_class, "
+        "       winning_strategy, "
+        "       SUM(CASE WHEN outcome='resolved' THEN 1 ELSE 0 END) AS resolved, "
+        "       SUM(CASE WHEN outcome='abandoned' THEN 1 ELSE 0 END) AS abandoned "
+        "FROM fix_trajectories "
+        "GROUP BY design_family, platform, check_type, violation_class, "
+        "         winning_strategy "
+        "ORDER BY design_family, platform, check_type, violation_class, "
+        "         winning_strategy"
+    )
+
+    # Collapse strategy rows under their parent (family, platform, check, class)
+    # key, preserving deterministic ordering from the SQL ORDER BY.
+    groups: dict[tuple, dict] = {}
+    for row in cur.fetchall():
+        key = (row["design_family"], row["platform"], row["check_type"],
+               row["violation_class"])
+        group = groups.get(key)
+        if group is None:
+            group = {
+                "design_family": row["design_family"],
+                "platform": row["platform"],
+                "check_type": row["check_type"],
+                "violation_class": row["violation_class"],
+                "strategies": [],
+            }
+            groups[key] = group
+        resolved = int(row["resolved"] or 0)
+        abandoned = int(row["abandoned"] or 0)
+        attempts = resolved + abandoned
+        clearance_rate = round(resolved / attempts, 4) if attempts else 0.0
+        group["strategies"].append({
+            "strategy": row["winning_strategy"],
+            "resolved": resolved,
+            "abandoned": abandoned,
+            "attempts": attempts,
+            "clearance_rate": clearance_rate,
+        })
+    return list(groups.values())
+
+
 def build_view(db_path: Path | str, heuristics_path: Path | str | None = None) -> dict:
     """Pure, deterministic read-only projection over runs.sqlite + heuristics.json.
 
-    Returns exactly {"health": {...}, "provenance": [...]}. No timestamp — the
-    CLI stamps generated_at separately so this stays golden-testable.
+    Returns exactly {"health": {...}, "provenance": [...],
+    "fix_effectiveness": [...]}. No timestamp — the CLI stamps generated_at
+    separately so this stays golden-testable.
     """
     heuristics = _load_heuristics(heuristics_path)
     conn = _connect_ro(db_path)
@@ -260,9 +322,14 @@ def build_view(db_path: Path | str, heuristics_path: Path | str | None = None) -
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         health = _build_health(rows, heuristics)
         provenance = _build_provenance(conn)
+        fix_effectiveness = _fix_effectiveness(conn)
     finally:
         conn.close()
-    return {"health": health, "provenance": provenance}
+    return {
+        "health": health,
+        "provenance": provenance,
+        "fix_effectiveness": fix_effectiveness,
+    }
 
 
 def main() -> int:
