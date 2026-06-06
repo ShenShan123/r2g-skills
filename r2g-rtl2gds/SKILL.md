@@ -175,6 +175,30 @@ Extract results into JSON for reporting and dashboard:
   `scripts/flow/fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both]`
   (See `references/signoff-fixing.md`.)
 
+#### Fix-Learning Loop
+
+The skill learns from every fix attempt so candidate strategies are proposed in
+evidence-ranked order on the next similar violation.
+
+- **Record.** `fix_signoff.sh` and `check_timing.py --journal` append lossless,
+  session-keyed rows to `reports/fix_log.jsonl` (one per iteration: strategy, before/after
+  counts, pre-fix violation class, verdict). `fix_signoff.sh` uses an adaptive budget (base
+  3 iters, hard cap 8, early-stop after 2 non-improving iters past the base).
+- **Ingest.** Step-10 ingest (`knowledge/ingest_run.py`) reads `fix_log.jsonl` into the
+  Tier-1 `fix_events` table and writes a `run_violations` snapshot for **every** run — clean
+  or not (the full violation landscape). It then auto-runs `fix_log_manager.manage()`
+  (toggle `R2G_FIX_AUTOLEARN`, default on).
+- **Learn.** `learn_heuristics.py` derives Tier-2 `fix_trajectories` (per-episode path,
+  including *abandoned* episodes and failed strategies — negative learning) and folds them
+  into Tier-3 `fix_recipes` inside `heuristics.json`.
+- **Apply.** When a recipe exists for the design's family/platform/violation class,
+  `diagnose_signoff_fix.py` reorders the strategy list by empirical clearance — there is **no
+  hard gate**, all real-fix strategies are always proposed, priority-ordered.
+  `diagnose_signoff_fix.py <proj> --check drc --list` prints the evidence-ranked candidate
+  set as JSON. Hard safety clamps are unchanged.
+
+See `references/signoff-fixing.md` ("Fix-Learning Loop") and `knowledge/README.md`.
+
 #### Platform Support Matrix
 
 | Platform | KLayout DRC | KLayout LVS | Magic DRC | Netgen LVS | RCX |

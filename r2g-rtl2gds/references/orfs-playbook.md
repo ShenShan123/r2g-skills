@@ -259,6 +259,14 @@ Do not immediately rewrite RTL unless reports indicate an RTL-caused issue.
 2. **LVS mismatch:** Review `6_lvs.lvsdb` for specifics. Check port names and connections.
 3. **RCX failure:** Check `rcx.log` for OpenROAD errors. Verify ODB is valid and RCX rules exist.
 
+For automated, real-layout DRC/LVS fixing, drive `scripts/flow/fix_signoff.sh` (and
+`check_timing.py --journal` for timing). These feed a **fix-learning loop**: every fix
+iteration is recorded losslessly into the knowledge store's `fix_events`, distilled into
+per-episode `fix_trajectories` and per-family `fix_recipes`, and replayed so
+`diagnose_signoff_fix.py` proposes the same-violation strategies in evidence-ranked order
+on the next run. See `references/signoff-fixing.md` ("Fix-Learning Loop") and
+`knowledge/README.md`.
+
 ## Platform Selection Guide
 
 | Platform | Node | Speed | DRC | LVS | RCX | Use Case |
