@@ -26,6 +26,25 @@ def test_schema_creates_fix_tables(tmp_knowledge_dir):
     conn.close()
 
 
+def test_normalize_verdict_passes_through_canonical_strings():
+    # check_timing --journal (Task 7) emits canonical verdicts directly; the
+    # ingester must not mangle them. Regression: 'win'/'no_change' were falling
+    # through to 'inconclusive' because _VERDICT_MAP only held shell-legacy strings.
+    assert ingest_run._normalize_verdict("cleared", 5, 0) == "cleared"
+    # canonical 'win' survives; before/after still reclassify edge cases
+    assert ingest_run._normalize_verdict("win", 4.5, 1.5) == "win"
+    assert ingest_run._normalize_verdict("win", 1.5, 1.5) == "no_change"   # no actual gain
+    assert ingest_run._normalize_verdict("win", 1.5, 4.5) == "regression"  # got worse
+    assert ingest_run._normalize_verdict("no_change", 3, 3) == "no_change"
+    assert ingest_run._normalize_verdict("regression", 1, 5) == "regression"
+    # shell-legacy strings still map as before
+    assert ingest_run._normalize_verdict("applied", 5, 2) == "win"
+    assert ingest_run._normalize_verdict("no_improvement", 3, 3) == "no_change"
+    # genuinely unknown / stop_* stays inconclusive
+    assert ingest_run._normalize_verdict("stop_residual", 3, 3) == "inconclusive"
+    assert ingest_run._normalize_verdict("apply_failed", None, None) == "inconclusive"
+
+
 def test_fix_events_unique_constraint(tmp_knowledge_dir):
     import sqlite3
     conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")

@@ -76,8 +76,21 @@ def _read_stage_log(path: Path) -> list[dict[str, Any]]:
     return entries
 
 
-# Map the shell's legacy verdict strings to the canonical fix verdict vocabulary.
-_VERDICT_MAP = {"cleared": "cleared", "applied": "win", "no_improvement": "no_change"}
+# Maps every accepted verdict string to the canonical fix verdict vocabulary
+# (cleared|win|no_change|regression|inconclusive). Two origins feed the ingester:
+#   1. fix_signoff.sh legacy strings: applied / no_improvement (cleared is already canonical).
+#   2. check_timing.py --journal canonical strings: win / no_change / regression / cleared.
+# Canonical strings must pass through idempotently — before this they fell through to
+# 'inconclusive', silently dropping the learning signal from timing-journal episodes.
+_VERDICT_MAP = {
+    "cleared": "cleared",
+    "applied": "win",
+    "no_improvement": "no_change",
+    "win": "win",
+    "no_change": "no_change",
+    "regression": "regression",
+    "inconclusive": "inconclusive",
+}
 
 
 def _normalize_verdict(raw: str | None, before: Any, after: Any) -> str:

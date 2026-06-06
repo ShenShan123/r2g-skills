@@ -79,10 +79,13 @@ the base (`--max-iters N` overrides the cap).
 | `<project>/reports/fix_summary.md` | Markdown table of all iterations, written once at end. |
 
 **Verdict vocabulary.** The canonical per-iteration verdict is one of
-`cleared | win | no_change | regression | inconclusive`. The shell emits legacy strings
-(`applied`, `no_improvement`, `stop_*`, `apply_failed`, `rerun_failed_*`) and the **ingester**
-normalizes them to the canonical set — so downstream learning never sees the raw shell
-vocabulary.
+`cleared | win | no_change | regression | inconclusive`. Two producers feed the log:
+`fix_signoff.sh` emits legacy strings (`applied`, `no_improvement`, `stop_*`, `apply_failed`,
+`rerun_failed_*`); `check_timing.py --journal` emits the **canonical** strings directly
+(`cleared`/`win`/`no_change`). The **ingester** (`_normalize_verdict`) maps both: legacy strings
+to canonical, and canonical strings pass through **idempotently**. (Regression note 2026-06-06:
+canonical `win`/`no_change` were previously falling through to `inconclusive`, silently dropping
+the learning signal from timing-journal episodes; fixed so a timing `period_relax` win is kept.)
 
 **Exit codes:** 0 = final status clean; 2 = residual violations remain.
 
