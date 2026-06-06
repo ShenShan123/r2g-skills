@@ -14,7 +14,7 @@ set -euo pipefail
 # Command seams are overridable for testing:
 #   R2G_RUN_ORFS R2G_RUN_DRC R2G_RUN_LVS R2G_EXTRACT_DRC R2G_EXTRACT_LVS R2G_DIAGNOSE
 
-PROJECT_DIR=""; PLATFORM="nangate45"; CHECK="both"; MAX_ITERS=3; RESUME=0
+PROJECT_DIR=""; PLATFORM="nangate45"; CHECK="both"; MAX_ITERS=8; BASE_ITERS=3; RESUME=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check) CHECK="$2"; shift 2;;
@@ -42,6 +42,12 @@ REPORTS="$PROJECT_DIR/reports"
 mkdir -p "$REPORTS"
 LOG="$REPORTS/fix_log.jsonl"
 
+# Stable episode id for this fixing run (spec §5.1). All iterations of this
+# invocation share it; the ingester groups fix_events by it.
+FIX_SESSION_ID="$(python3 -c 'import hashlib,sys,time
+h=hashlib.sha1(); h.update(sys.argv[1].encode()); h.update(sys.argv[2].encode())
+h.update(str(time.time()).encode()); print(h.hexdigest()[:16])' "$PROJECT_DIR" "$CHECK")"
+
 _count() {  # read current violation count from a report json
   python3 -c 'import json,sys
 d=json.load(open(sys.argv[1]))
@@ -52,24 +58,74 @@ print("" if v is None else v)' "$1" 2>/dev/null || echo ""
 _run_extract() {  # $1 = drc|lvs
   local script
   if [[ "$1" == "drc" ]]; then script="$EXTRACT_DRC"; else script="$EXTRACT_LVS"; fi
-  python3 "$script" "$PROJECT_DIR" "$REPORTS/$1.json"
+  "$script" "$PROJECT_DIR" "$REPORTS/$1.json"
 }
 
-_log_iter() {  # check iter strategy before after verdict
-  python3 -c 'import json,sys
-o=dict(check=sys.argv[1],iter=int(sys.argv[2]),strategy=sys.argv[3],
-       before=(sys.argv[4] or None),after=(sys.argv[5] or None),
-       verdict=sys.argv[6],ts=sys.argv[7])
-open(sys.argv[8],"a").write(json.dumps(o)+"\n")' \
-    "$1" "$2" "$3" "$4" "$5" "$6" "$(date -u +%FT%TZ)" "$LOG"
+_snapshot() {  # $1 = drc|lvs : echo "<violation_class>\t<categories_json>" for the
+  # CURRENT (pre-fix) report. Captured before a fix is applied / extract overwrites
+  # the report, so _log_iter records the BEFORE-iteration violation snapshot rather
+  # than the post-fix (clean) report. See CRITICAL CORRECTION in the Task 3 plan.
+  python3 -c 'import json,sys,os
+check=sys.argv[1]; proj=sys.argv[2]
+rep=os.path.join(proj,"reports",check+".json")
+try: d=json.load(open(rep))
+except Exception: d=None
+if d is None:
+    print("\t"); sys.exit(0)
+if check=="drc":
+    cats=d.get("categories") or {}
+    dom=max(cats,key=lambda k:(cats[k].get("count") or 0)) if cats else ""
+    print((dom or "")+"\t"+json.dumps(cats))
+else:
+    print((d.get("mismatch_class") or "")+"\t"+json.dumps({"mismatch_count":d.get("mismatch_count")}))' \
+    "$1" "$PROJECT_DIR"
+}
+
+_log_iter() {  # check iter strategy before after verdict from_stage violation_class before_categories_json
+  python3 -c 'import json,sys,os
+check,it,strategy,before,after,verdict,from_stage=sys.argv[1:8]
+proj,sid,logp=sys.argv[8],sys.argv[9],sys.argv[10]
+vclass,before_cats_json,ts=sys.argv[11],sys.argv[12],sys.argv[13]
+# after_status reflects the CURRENT (post-fix) report — correct to read at log time.
+rep=os.path.join(proj,"reports",check+".json")
+try: status=json.load(open(rep)).get("status")
+except Exception: status=None
+# cumulative applied-fix block from config.mk marked region
+cum={}
+cfgp=os.path.join(proj,"constraints","config.mk")
+if os.path.exists(cfgp):
+    inblk=False
+    for ln in open(cfgp):
+        s=ln.strip()
+        if s=="# >>> r2g signoff-fix (auto) >>>": inblk=True; continue
+        if s=="# <<< r2g signoff-fix (auto) <<<": inblk=False; continue
+        if inblk and s.startswith("export "):
+            kv=s[len("export "):].split("=",1)
+            if len(kv)==2: cum[kv[0].strip()]=kv[1].strip()
+o=dict(check=check,iter=int(it),strategy=strategy,
+       before=(before or None),after=(after or None),verdict=verdict,
+       from_stage=(from_stage or None),fix_session_id=sid,
+       violation_class=(vclass or None),after_status=status,
+       before_categories=(before_cats_json if before_cats_json else None),
+       cumulative_config=json.dumps(cum,sort_keys=True),
+       ts=ts)
+open(logp,"a").write(json.dumps(o)+"\n")' \
+    "$1" "$2" "$3" "$4" "$5" "$6" "${7:-}" "$PROJECT_DIR" "$FIX_SESSION_ID" "$LOG" \
+    "${8:-}" "${9:-}" "$(date -u +%FT%TZ)"
 }
 
 fix_one() {  # $1 = drc|lvs
   local check="$1" report="$REPORTS/$1.json" tried="" before after it sid rerun recheck line verdict
+  local noimp=0 before_vclass before_cats snap
   [[ -f "$report" ]] || _run_extract "$check"
   before="$(_count "$report")"
   for ((it=1; it<=MAX_ITERS; it++)); do
-    line="$(python3 "$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$tried" --next)"
+    # Snapshot the PRE-fix dominant violation_class + full categories vector for
+    # this iteration NOW, before any fix/extract overwrites the report (the
+    # applied iteration's extract clobbers it with the post-fix result).
+    snap="$(_snapshot "$check")"
+    before_vclass="${snap%%$'\t'*}"; before_cats="${snap#*$'\t'}"
+    line="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$tried" --next)"
     # Split on tab WITHOUT collapsing empty middle fields. `read` with a
     # whitespace IFS (tab) would merge consecutive tabs, dropping an empty
     # rerun_from column and shifting recheck into rerun; map tabs to a
@@ -77,13 +133,13 @@ fix_one() {  # $1 = drc|lvs
     IFS=$'\x1f' read -r sid rerun recheck <<<"${line//$'\t'/$'\x1f'}"
     [[ -n "$sid" ]] || { echo "[$check] ERROR: diagnose returned empty output; aborting" >&2; return 1; }
     if [[ "$sid" == "STOP" ]]; then
-      _log_iter "$check" "$it" "none" "$before" "$before" "stop_${rerun}"
+      _log_iter "$check" "$it" "none" "$before" "$before" "stop_${rerun}" "" "$before_vclass" "$before_cats"
       echo "[$check] stop: $rerun ${recheck:-}"; return 0
     fi
     echo "[$check] iter $it: applying $sid (rerun_from=${rerun:-none})"
-    if ! python3 "$DIAGNOSE" "$PROJECT_DIR" --check "$check" --apply "$sid" >/dev/null; then
+    if ! "$DIAGNOSE" "$PROJECT_DIR" --check "$check" --apply "$sid" >/dev/null; then
       echo "[$check] apply '$sid' failed; aborting" >&2
-      _log_iter "$check" "$it" "$sid" "$before" "$before" "apply_failed"; return 1
+      _log_iter "$check" "$it" "$sid" "$before" "$before" "apply_failed" "$rerun" "$before_vclass" "$before_cats"; return 1
     fi
     tried="${tried:+$tried,}$sid"
     if [[ -n "$rerun" ]]; then
@@ -92,7 +148,7 @@ fix_one() {  # $1 = drc|lvs
       else "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?; fi
       if [[ $rc -ne 0 ]]; then
         echo "[$check] run_orfs failed (rc=$rc); aborting this check" >&2
-        _log_iter "$check" "$it" "$sid" "$before" "$before" "rerun_failed_rc$rc"
+        _log_iter "$check" "$it" "$sid" "$before" "$before" "rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats"
         return 1
       fi
     fi
@@ -101,12 +157,19 @@ fix_one() {  # $1 = drc|lvs
     after="$(_count "$report")"
     verdict="applied"
     if [[ -n "$before" && -n "$after" ]] && python3 -c "import sys;sys.exit(0 if float('$after')>=float('$before') else 1)" 2>/dev/null; then
-      verdict="no_improvement"
+      verdict="no_improvement"; noimp=$((noimp+1))
+    else
+      noimp=0
     fi
-    _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict"
+    [[ "$after" == "0" ]] && verdict="cleared"
+    _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats"
     echo "[$check] iter $it: $before -> $after ($verdict)"
     if [[ "$after" == "0" ]]; then echo "[$check] CLEAN"; return 0; fi
     if [[ "$verdict" == "no_improvement" ]]; then echo "[$check] no improvement; trying next strategy"; fi
+    # Adaptive budget (D12): past base, stop after 2 consecutive non-improving iters.
+    if (( it >= BASE_ITERS && noimp >= 2 )); then
+      echo "[$check] $noimp non-improving past base $BASE_ITERS; stopping"; return 0
+    fi
     before="$after"
   done
   echo "[$check] reached max-iters=$MAX_ITERS"
