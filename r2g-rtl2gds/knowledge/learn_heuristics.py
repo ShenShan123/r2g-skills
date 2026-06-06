@@ -89,6 +89,8 @@ def _family_platform_entry(runs: list[dict]) -> dict | None:
 
 def _build_trajectory(events: list[dict]) -> dict:
     """Collapse one episode's fix_events (sorted by iter) into a trajectory row."""
+    import fix_log_manager
+    events = fix_log_manager.dedup_events_by_action(events)
     events = sorted(events, key=lambda e: (e.get("iter") or 0))
     first = events[0]
     path = [{"iter": e.get("iter"), "strategy": e.get("strategy"),
@@ -136,40 +138,48 @@ def _rebuild_fix_trajectories(conn) -> list[dict]:
     return events
 
 
-def _fix_recipes_for_group(events: list[dict]) -> dict:
-    """Tier-3 aggregate for one (family, platform): nested by check_type ->
-    violation_class -> {strategies: {sid: {attempts,successes,failures,
-    median_reduction_pct}}, n_sessions}."""
-    out: dict = {}
-    # group events by (check, vclass)
-    buckets: dict[tuple, list[dict]] = {}
-    for e in events:
-        buckets.setdefault((e.get("check_type"), e.get("violation_class")), []).append(e)
-    for (check, vclass), evs in buckets.items():
+def _recipes_from_trajectories(trajectories: list[dict]) -> dict[tuple, dict]:
+    """Per (family, platform): check -> violation_class -> {strategies, n_sessions}.
+    Derived from trajectory path_json so archived raw never changes the counts."""
+    acc: dict[tuple, dict] = {}
+    for t in trajectories:
+        fam = t.get("design_family") or "unknown"
+        plat = t.get("platform") or "unknown"
+        check, vclass = t.get("check_type"), t.get("violation_class")
         if not check:
             continue
-        strategies: dict[str, dict] = {}
-        reductions: dict[str, list[float]] = {}
-        for e in evs:
-            sid = e.get("strategy")
+        node = (acc.setdefault((fam, plat), {}).setdefault(check, {})
+                .setdefault(vclass, {"strategies": {}, "_sessions": set()}))
+        node["_sessions"].add(t.get("fix_session_id"))
+        for step in json.loads(t.get("path_json") or "[]"):
+            sid = step.get("strategy")
             if not sid or sid == "none":
                 continue
-            s = strategies.setdefault(sid, {"attempts": 0, "successes": 0, "failures": 0})
+            s = node["strategies"].setdefault(sid, {"attempts": 0, "successes": 0,
+                                                    "failures": 0, "_red": []})
             s["attempts"] += 1
-            if e.get("verdict") == "cleared":
+            if step.get("verdict") == "cleared":
                 s["successes"] += 1
-            elif e.get("verdict") in ("no_change", "regression"):
+            elif step.get("verdict") in ("no_change", "regression"):
                 s["failures"] += 1
-            bc, ac = e.get("before_count"), e.get("after_count")
+            bc, ac = step.get("before"), step.get("after")
             if bc and ac is not None and bc > 0:
-                reductions.setdefault(sid, []).append((bc - ac) / bc)
-        for sid, red in reductions.items():
-            strategies[sid]["median_reduction_pct"] = statistics.median(red)
-        out.setdefault(check, {})[vclass] = {
-            "strategies": strategies,
-            "n_sessions": len({e.get("fix_session_id") for e in evs}),
-        }
-    return out
+                s["_red"].append((bc - ac) / bc)
+    final: dict[tuple, dict] = {}
+    for key, checks in acc.items():
+        final[key] = {}
+        for check, vmap in checks.items():
+            final[key][check] = {}
+            for vclass, node in vmap.items():
+                strategies = {}
+                for sid, s in node["strategies"].items():
+                    red = s.pop("_red")
+                    if red:
+                        s["median_reduction_pct"] = statistics.median(red)
+                    strategies[sid] = s
+                final[key][check][vclass] = {"strategies": strategies,
+                                             "n_sessions": len(node["_sessions"])}
+    return final
 
 
 def learn(db_path: Path | str,
@@ -183,19 +193,13 @@ def learn(db_path: Path | str,
         # SELECT / DELETE / INSERT on them, even on legacy DBs predating Task 1.
         knowledge_db.ensure_schema(conn)
         rows = _fetch_rows(conn)
-        fix_events = _rebuild_fix_trajectories(conn)   # Tier-2 (idempotent rebuild)
+        _rebuild_fix_trajectories(conn)   # Tier-2 (idempotent rebuild; materializes)
 
         groups: dict[tuple[str, str], list[dict]] = {}
         for r in rows:
             fam = r.get("design_family") or "unknown"
             plat = r.get("platform") or "unknown"
             groups.setdefault((fam, plat), []).append(r)
-
-        fix_groups: dict[tuple[str, str], list[dict]] = {}
-        for e in fix_events:
-            fam = e.get("design_family") or "unknown"
-            plat = e.get("platform") or "unknown"
-            fix_groups.setdefault((fam, plat), []).append(e)
 
         families: dict[str, dict] = {}
         for (fam, plat), group_rows in groups.items():
@@ -204,20 +208,23 @@ def learn(db_path: Path | str,
                 continue
             fam_obj = families.setdefault(fam, {"platforms": {}})
             fam_obj["platforms"][plat] = entry
-
-        # Fold Tier-3 fix_recipes into existing entries, and create entries for
-        # families that have fix history but no signoff-success run yet.
-        for (fam, plat), evs in fix_groups.items():
-            recipes = _fix_recipes_for_group(evs)
-            if not recipes:
-                continue
-            fam_obj = families.setdefault(fam, {"platforms": {}})
-            entry = fam_obj["platforms"].setdefault(plat, {"sample_size": 0,
-                                                           "success_count": 0,
-                                                           "success_rate": 0.0})
-            entry["fix_recipes"] = recipes
     finally:
         conn.close()
+
+    # Tier-3 fix_recipes derive from Tier-2 fix_trajectories (never archived), so
+    # archiving raw fix_events is lossless for learning. Re-read on a fresh
+    # connection now that trajectories are materialized + committed.
+    conn2 = knowledge_db.connect(db_path)
+    cur = conn2.execute("SELECT * FROM fix_trajectories")
+    tcols = [c[0] for c in cur.description]
+    trajectories = [dict(zip(tcols, r)) for r in cur.fetchall()]
+    conn2.close()
+    for (fam, plat), recipes in _recipes_from_trajectories(trajectories).items():
+        if not recipes:
+            continue
+        entry = (families.setdefault(fam, {"platforms": {}})["platforms"]
+                 .setdefault(plat, {"sample_size": 0, "success_count": 0, "success_rate": 0.0}))
+        entry["fix_recipes"] = recipes
 
     data = {
         "generated_at": _dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",

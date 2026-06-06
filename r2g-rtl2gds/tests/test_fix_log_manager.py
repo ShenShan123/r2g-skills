@@ -33,3 +33,32 @@ def test_dedup_collapses_repeats_keeps_last():
 def test_bound_rule_details_caps_samples():
     b = flm.bound_rule_details({"samples": list(range(100))}, top_n=20)
     assert b["total"] == 100 and len(b["samples"]) == 20 and b["truncated"] is True
+
+
+def test_manage_relearns_and_recipes_survive_archive(tmp_knowledge_dir, monkeypatch):
+    import json, knowledge_db, fix_log_manager as flm
+    db = tmp_knowledge_dir / "runs.sqlite"
+    conn = knowledge_db.connect(db)
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    cols = ("fix_session_id","design_family","platform","check_type","violation_class",
+            "iter","strategy","before_count","after_count","verdict")
+    for it,(strat,bc,ac,v) in enumerate(
+            [("antenna_density_relief",147,147,"no_change"),
+             ("antenna_diode_repair",147,0,"cleared")], start=1):
+        conn.execute(f"INSERT INTO fix_events ({','.join(cols)}) VALUES ({','.join('?'*len(cols))})",
+                     ("s1","ethernet","nangate45","drc","M2_ANTENNA",it,strat,bc,ac,v))
+    conn.commit(); conn.close()
+
+    out = tmp_knowledge_dir / "heuristics.json"
+    monkeypatch.setattr(flm, "FIX_EVENTS_MAX_ROWS", 1)   # force archival
+    rep = flm.manage(db, out_path=out)
+
+    data = json.loads(out.read_text())
+    strat = (data["families"]["ethernet"]["platforms"]["nangate45"]
+             ["fix_recipes"]["drc"]["M2_ANTENNA"]["strategies"])
+    assert strat["antenna_diode_repair"]["successes"] == 1   # survived archival
+    assert rep["archived"] >= 1
+    conn = knowledge_db.connect(db)
+    assert conn.execute("SELECT COUNT(*) FROM fix_events").fetchone()[0] == 0
+    conn.close()
+    assert (tmp_knowledge_dir / "fix_events_archive.sqlite").exists()

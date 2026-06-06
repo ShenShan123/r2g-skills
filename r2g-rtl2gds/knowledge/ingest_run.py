@@ -448,6 +448,15 @@ def main() -> int:
         )
     conn.close()
     print(f"Ingested run_id={run_id} from {args.project}")
+    # Autonomous post-ingest: re-derive Tier-2/Tier-3 and enforce the size policy
+    # (env-gated; a failure here must never break the flow ingest above).
+    import os
+    if os.environ.get("R2G_FIX_AUTOLEARN", "1") == "1":
+        try:
+            import fix_log_manager
+            fix_log_manager.manage(args.db)
+        except Exception as exc:
+            print(f"WARNING: fix_log_manager.manage skipped: {exc}", file=sys.stderr)
     return 0
 
 

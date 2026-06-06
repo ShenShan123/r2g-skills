@@ -62,3 +62,69 @@ def bound_rule_details(details, top_n: int = RULE_DETAIL_TOP_N):
     if items is None:
         return details
     return {"total": len(items), "samples": list(items)[:top_n], "truncated": len(items) > top_n}
+
+
+def db_size_mb(db_path) -> float:
+    import os
+    return os.path.getsize(db_path) / (1024 * 1024) if os.path.exists(db_path) else 0.0
+
+
+def _archive_db_path(db_path):
+    from pathlib import Path
+    return Path(db_path).with_name("fix_events_archive.sqlite")
+
+
+def archive_old_raw(db_path, *, max_rows=None, max_mb=None) -> int:
+    """Move raw fix_events of fully-merged episodes (those with a fix_trajectory),
+    oldest first, into the sidecar archive DB when the hot DB exceeds a threshold.
+    Trajectories are never moved, so recipes are unaffected. Returns rows archived."""
+    import knowledge_db
+    max_rows = FIX_EVENTS_MAX_ROWS if max_rows is None else max_rows
+    max_mb = DB_MAX_MB if max_mb is None else max_mb
+    conn = knowledge_db.connect(db_path)
+    try:
+        n = conn.execute("SELECT COUNT(*) FROM fix_events").fetchone()[0]
+        if n <= max_rows and db_size_mb(db_path) <= max_mb:
+            return 0
+        arch = _archive_db_path(db_path)
+        ac = knowledge_db.connect(arch); knowledge_db.ensure_schema(ac); ac.close()
+        conn.execute("ATTACH DATABASE ? AS arch", (str(arch),))
+        sessions = [r[0] for r in conn.execute(
+            "SELECT e.fix_session_id FROM fix_events e "
+            "JOIN fix_trajectories t USING(fix_session_id) "
+            "GROUP BY e.fix_session_id ORDER BY MIN(e.ts)")]
+        archived = 0
+        for sid in sessions:
+            if (conn.execute("SELECT COUNT(*) FROM fix_events").fetchone()[0] <= max_rows
+                    and db_size_mb(db_path) <= max_mb):
+                break
+            conn.execute("INSERT INTO arch.fix_events_archive "
+                         "SELECT * FROM fix_events WHERE fix_session_id = ?", (sid,))
+            archived += conn.execute(
+                "DELETE FROM fix_events WHERE fix_session_id = ?", (sid,)).rowcount
+        conn.commit()
+        conn.execute("DETACH DATABASE arch")
+    finally:
+        conn.close()
+    # VACUUM needs its own autocommit connection (cannot run inside a txn).
+    vac = knowledge_db.connect(db_path); vac.isolation_level = None
+    vac.execute("VACUUM"); vac.close()
+    return archived
+
+
+def manage(db_path, *, out_path=None, autolearn=True) -> dict:
+    """Autonomous post-ingest step: re-derive Tier-2/Tier-3 (learn) then enforce the
+    size policy. Returns {rows, archived, db_mb}."""
+    import knowledge_db
+    if out_path is None:
+        out_path = knowledge_db.DEFAULT_KNOWLEDGE_DIR / "heuristics.json"
+    if autolearn:
+        import learn_heuristics
+        learn_heuristics.learn(db_path, out_path)   # builds trajectories+recipes FIRST
+    archived = archive_old_raw(db_path)             # safe: trajectories already built
+    conn = knowledge_db.connect(db_path)
+    try:
+        rows = conn.execute("SELECT COUNT(*) FROM fix_events").fetchone()[0]
+    finally:
+        conn.close()
+    return {"rows": rows, "archived": archived, "db_mb": round(db_size_mb(db_path), 2)}
