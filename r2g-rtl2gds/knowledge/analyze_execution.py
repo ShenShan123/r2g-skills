@@ -20,8 +20,43 @@ from pathlib import Path
 import knowledge_db
 import search_failures
 
+# fix_model is the pure strategy-ranking model; it lives in scripts/reports/.
+# conftest puts scripts/reports/ on sys.path for tests; for a script run we add
+# it explicitly (mirrors the bootstrap in diagnose_signoff_fix.py, Task 6).
+try:
+    import fix_model
+except ImportError:                       # script run outside the test sys.path
+    _REPORTS_DIR = knowledge_db.DEFAULT_KNOWLEDGE_DIR.parent / "scripts" / "reports"
+    if str(_REPORTS_DIR) not in sys.path:
+        sys.path.insert(0, str(_REPORTS_DIR))
+    import fix_model
+
 _PATTERNS_PATH = knowledge_db.DEFAULT_KNOWLEDGE_DIR.parent / "references" / "failure-patterns.md"
 _CANDIDATES_PATH = knowledge_db.DEFAULT_KNOWLEDGE_DIR / "failure_candidates.json"
+
+
+def rank_proposals(proposal_ids: list[str], *, family: str, platform: str,
+                   stage: str, heuristics_path: Path) -> list[str]:
+    """Reorder backend-stage proposal ids by learned recipes.
+
+    Looks up the Tier-3 fix_recipes entry at
+    families[family]["platforms"][platform]["fix_recipes"]["orfs"][stage]
+    in heuristics.json and reorders `proposal_ids` via fix_model.rank_strategies.
+    Returns the reordered list of id strings. Cold start (no heuristics file or
+    no matching recipe) preserves the input order.
+    """
+    heuristics_path = Path(heuristics_path)
+    recipe_entry = None
+    if heuristics_path.exists():
+        try:
+            data = json.loads(heuristics_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        recipe_entry = (data.get("families", {}).get(family, {})
+                        .get("platforms", {}).get(platform, {})
+                        .get("fix_recipes", {}).get("orfs", {}).get(stage))
+    ranking = fix_model.rank_strategies(recipe_entry, list(proposal_ids))
+    return [r["strategy"] for r in ranking]
 
 
 def _read_json(path: Path) -> dict | None:
