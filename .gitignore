@@ -244,6 +244,7 @@ Thumbs.db
 r2g-rtl2gds/knowledge/failure_candidates.json
 r2g-rtl2gds/knowledge/*.sqlite-journal
 r2g-rtl2gds/knowledge/*.sqlite-wal
+r2g-rtl2gds/knowledge/*.bak
 
 # External RTL benchmark dataset (fetched separately)
 rtl_designs/
