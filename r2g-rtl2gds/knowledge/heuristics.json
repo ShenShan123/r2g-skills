@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-07T02:52:45Z",
+  "generated_at": "2026-06-07T03:15:19Z",
   "source_run_count": 772,
   "min_successful_runs_required": 3,
   "families": {
@@ -124,9 +124,9 @@
     "riscv32i": {
       "platforms": {
         "nangate45": {
-          "sample_size": 10,
+          "sample_size": 12,
           "success_count": 7,
-          "success_rate": 0.7,
+          "success_rate": 0.5833333333333334,
           "core_utilization": {
             "min_safe": 10.0,
             "max_safe": 25.0,
@@ -1651,8 +1651,8 @@
     "test": {
       "platforms": {
         "nangate45": {
-          "sample_size": 31,
-          "success_count": 31,
+          "sample_size": 28,
+          "success_count": 28,
           "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 20.0,
@@ -1664,8 +1664,29 @@
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 16877,
-          "p90_elapsed_s": 3275.0,
+          "typical_cell_count": 13894,
+          "p90_elapsed_s": 3275.0
+        }
+      }
+    },
+    "iccad2015": {
+      "platforms": {
+        "nangate45": {
+          "sample_size": 3,
+          "success_count": 3,
+          "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 20.0,
+            "max_safe": 20.0,
+            "median": 20.0
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 17991,
+          "p90_elapsed_s": 1580.0,
           "fix_recipes": {
             "timing": {
               "severe": {
@@ -1689,6 +1710,25 @@
                   }
                 },
                 "n_sessions": 1
+              }
+            }
+          }
+        },
+        "unknown": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "drc": {
+              "beol": {
+                "strategies": {
+                  "beol_only_drc": {
+                    "attempts": 44,
+                    "successes": 44,
+                    "failures": 0
+                  }
+                },
+                "n_sessions": 44
               }
             }
           }
@@ -1852,6 +1892,19 @@
                   }
                 },
                 "n_sessions": 25
+              }
+            }
+          }
+        },
+        "nangate45": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "lvs": {
+              "real_connectivity": {
+                "strategies": {},
+                "n_sessions": 2
               }
             }
           }
@@ -2059,29 +2112,6 @@
                   }
                 },
                 "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "iccad2015": {
-      "platforms": {
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "drc": {
-              "beol": {
-                "strategies": {
-                  "beol_only_drc": {
-                    "attempts": 44,
-                    "successes": 44,
-                    "failures": 0
-                  }
-                },
-                "n_sessions": 44
               }
             }
           }
@@ -3849,40 +3879,6 @@
                     "median_reduction_pct": 1.0
                   }
                 },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "axi2axilite": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "lvs": {
-              "real_connectivity": {
-                "strategies": {},
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "axilsingle": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "lvs": {
-              "real_connectivity": {
-                "strategies": {},
                 "n_sessions": 1
               }
             }
