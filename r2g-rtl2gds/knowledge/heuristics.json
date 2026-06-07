@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-07T03:16:52Z",
+  "generated_at": "2026-06-07T07:21:30Z",
   "source_run_count": 773,
   "min_successful_runs_required": 3,
   "families": {
@@ -64,6 +64,19 @@
           "typical_cell_count": 762,
           "p90_elapsed_s": 843.0,
           "fix_recipes": {
+            "drc": {
+              "beol": {
+                "strategies": {
+                  "beol_only_drc": {
+                    "attempts": 2,
+                    "successes": 2,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 2
+              }
+            },
             "orfs": {
               "full": {
                 "strategies": {
@@ -71,29 +84,11 @@
                     "attempts": 1,
                     "successes": 0,
                     "failures": 1,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
                   }
                 },
                 "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "drc": {
-              "beol": {
-                "strategies": {
-                  "beol_only_drc": {
-                    "attempts": 2,
-                    "successes": 2,
-                    "failures": 0
-                  }
-                },
-                "n_sessions": 2
               }
             }
           }
@@ -140,36 +135,31 @@
           "typical_cell_count": 2509,
           "p90_elapsed_s": 1062.0,
           "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
             "drc": {
               "beol": {
                 "strategies": {
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 2,
+                    "successes": 0,
+                    "failures": 2,
+                    "wins": 0,
+                    "median_reduction_pct": 0.0
+                  }
+                },
+                "n_sessions": 2
               }
             }
           }
@@ -216,28 +206,24 @@
           "typical_cell_count": 1778,
           "p90_elapsed_s": 775.0,
           "fix_recipes": {
+            "drc": {
+              "METAL5_ANTENNA": {
+                "strategies": {},
+                "n_sessions": 1
+              }
+            },
             "orfs": {
               "full": {
                 "strategies": {
                   "rerun_from_stage": {
-                    "attempts": 4,
-                    "successes": 1,
-                    "failures": 3,
+                    "attempts": 8,
+                    "successes": 3,
+                    "failures": 5,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
                   }
                 },
-                "n_sessions": 4
-              },
-              "14400": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
+                "n_sessions": 8
               },
               "place": {
                 "strategies": {
@@ -245,36 +231,11 @@
                     "attempts": 2,
                     "successes": 0,
                     "failures": 2,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
                   }
                 },
                 "n_sessions": 2
-              }
-            },
-            "drc": {
-              "METAL5_ANTENNA": {
-                "strategies": {},
-                "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 3,
-                    "successes": 1,
-                    "failures": 2,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 3
               }
             }
           }
@@ -304,44 +265,14 @@
               "full": {
                 "strategies": {
                   "rerun_from_stage": {
-                    "attempts": 5,
-                    "successes": 3,
+                    "attempts": 9,
+                    "successes": 7,
                     "failures": 2,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
-                "n_sessions": 5
-              },
-              "14400": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 2,
-                    "successes": 2,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 2
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 2,
-                    "successes": 2,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 2
+                "n_sessions": 9
               }
             }
           }
@@ -371,44 +302,14 @@
               "full": {
                 "strategies": {
                   "rerun_from_stage": {
-                    "attempts": 7,
-                    "successes": 5,
-                    "failures": 2,
+                    "attempts": 10,
+                    "successes": 6,
+                    "failures": 4,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
-                "n_sessions": 7
-              },
-              "14400": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 2,
-                    "successes": 2,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 2
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 2,
-                    "successes": 0,
-                    "failures": 2,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 2
+                "n_sessions": 10
               }
             }
           }
@@ -448,12 +349,7 @@
             "median": 0.2
           },
           "typical_cell_count": 8297,
-          "p90_elapsed_s": 1633.0
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
+          "p90_elapsed_s": 1633.0,
           "fix_recipes": {
             "drc": {
               "beol": {
@@ -461,7 +357,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -494,13 +391,14 @@
               "full": {
                 "strategies": {
                   "rerun_from_stage": {
-                    "attempts": 7,
-                    "successes": 0,
-                    "failures": 7,
+                    "attempts": 12,
+                    "successes": 3,
+                    "failures": 9,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
                   }
                 },
-                "n_sessions": 7
+                "n_sessions": 12
               },
               "route": {
                 "strategies": {
@@ -508,21 +406,11 @@
                     "attempts": 4,
                     "successes": 4,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
                 "n_sessions": 4
-              },
-              "14400": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 2,
-                    "successes": 2,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 2
               },
               "place": {
                 "strategies": {
@@ -530,30 +418,11 @@
                     "attempts": 1,
                     "successes": 0,
                     "failures": 1,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
                   }
                 },
                 "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 3,
-                    "successes": 1,
-                    "failures": 2,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 3
               }
             }
           }
@@ -577,12 +446,7 @@
             "median": 0.2
           },
           "typical_cell_count": 14957,
-          "p90_elapsed_s": 2363.0
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
+          "p90_elapsed_s": 2363.0,
           "fix_recipes": {
             "drc": {
               "beol": {
@@ -590,7 +454,8 @@
                   "beol_only_drc": {
                     "attempts": 4,
                     "successes": 4,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 4
@@ -619,6 +484,19 @@
           "typical_cell_count": 2205,
           "p90_elapsed_s": 1658.0,
           "fix_recipes": {
+            "drc": {
+              "beol": {
+                "strategies": {
+                  "beol_only_drc": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            },
             "orfs": {
               "full": {
                 "strategies": {
@@ -626,29 +504,11 @@
                     "attempts": 3,
                     "successes": 3,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
                 "n_sessions": 3
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "drc": {
-              "beol": {
-                "strategies": {
-                  "beol_only_drc": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0
-                  }
-                },
-                "n_sessions": 1
               }
             }
           }
@@ -688,22 +548,7 @@
             "median": 0.2
           },
           "typical_cell_count": 1536,
-          "p90_elapsed_s": 1769.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
+          "p90_elapsed_s": 1769.0
         }
       }
     },
@@ -724,12 +569,7 @@
             "median": 0.2
           },
           "typical_cell_count": 20925,
-          "p90_elapsed_s": 3011.0
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
+          "p90_elapsed_s": 3011.0,
           "fix_recipes": {
             "drc": {
               "beol": {
@@ -737,7 +577,8 @@
                   "beol_only_drc": {
                     "attempts": 4,
                     "successes": 4,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 4
@@ -773,6 +614,7 @@
                     "attempts": 1,
                     "successes": 1,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
@@ -837,12 +679,7 @@
             "median": 0.2
           },
           "typical_cell_count": 12396,
-          "p90_elapsed_s": 1907.0
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
+          "p90_elapsed_s": 1907.0,
           "fix_recipes": {
             "drc": {
               "beol": {
@@ -850,7 +687,8 @@
                   "beol_only_drc": {
                     "attempts": 3,
                     "successes": 3,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 3
@@ -898,12 +736,7 @@
             "median": 0.2
           },
           "typical_cell_count": 1132,
-          "p90_elapsed_s": 1326.0
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
+          "p90_elapsed_s": 1326.0,
           "fix_recipes": {
             "drc": {
               "beol": {
@@ -911,7 +744,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -1035,6 +869,19 @@
           "typical_cell_count": 8932,
           "p90_elapsed_s": 1677.0,
           "fix_recipes": {
+            "drc": {
+              "beol": {
+                "strategies": {
+                  "beol_only_drc": {
+                    "attempts": 2,
+                    "successes": 2,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 2
+              }
+            },
             "orfs": {
               "full": {
                 "strategies": {
@@ -1042,29 +889,11 @@
                     "attempts": 1,
                     "successes": 1,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
                 "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "drc": {
-              "beol": {
-                "strategies": {
-                  "beol_only_drc": {
-                    "attempts": 2,
-                    "successes": 2,
-                    "failures": 0
-                  }
-                },
-                "n_sessions": 2
               }
             }
           }
@@ -1088,22 +917,7 @@
             "median": 0.2
           },
           "typical_cell_count": 9158,
-          "p90_elapsed_s": 1250.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 2,
-                    "successes": 2,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 2
-              }
-            }
-          }
+          "p90_elapsed_s": 1250.0
         }
       }
     },
@@ -1145,22 +959,7 @@
             "median": 0.2
           },
           "typical_cell_count": 88,
-          "p90_elapsed_s": 528.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
+          "p90_elapsed_s": 528.0
         }
       }
     },
@@ -1181,12 +980,7 @@
             "median": 0.2
           },
           "typical_cell_count": 1927,
-          "p90_elapsed_s": 992.0
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
+          "p90_elapsed_s": 992.0,
           "fix_recipes": {
             "drc": {
               "beol": {
@@ -1194,7 +988,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -1279,42 +1074,7 @@
             "median": 0.2
           },
           "typical_cell_count": 516,
-          "p90_elapsed_s": 544.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
+          "p90_elapsed_s": 544.0
         }
       }
     },
@@ -1356,42 +1116,7 @@
             "median": 0.2
           },
           "typical_cell_count": 432,
-          "p90_elapsed_s": 547.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
+          "p90_elapsed_s": 547.0
         }
       }
     },
@@ -1412,42 +1137,7 @@
             "median": 0.2
           },
           "typical_cell_count": 416,
-          "p90_elapsed_s": 568.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
+          "p90_elapsed_s": 568.0
         }
       }
     },
@@ -1489,22 +1179,7 @@
             "median": 0.2
           },
           "typical_cell_count": 360,
-          "p90_elapsed_s": 1680.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
+          "p90_elapsed_s": 1680.0
         }
       }
     },
@@ -1609,42 +1284,7 @@
             "median": 0.2
           },
           "typical_cell_count": 482,
-          "p90_elapsed_s": 581.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
+          "p90_elapsed_s": 581.0
         }
       }
     },
@@ -1695,6 +1335,7 @@
                     "attempts": 3,
                     "successes": 2,
                     "failures": 0,
+                    "wins": 1,
                     "median_reduction_pct": 0.975156855174411
                   }
                 },
@@ -1706,29 +1347,82 @@
                     "attempts": 1,
                     "successes": 1,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 0.5933637786222975
                   }
                 },
                 "n_sessions": 1
               }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
+            },
             "drc": {
               "beol": {
                 "strategies": {
                   "beol_only_drc": {
                     "attempts": 44,
                     "successes": 44,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 44
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 14,
+                    "successes": 14,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 14
+              }
+            }
+          }
+        }
+      }
+    },
+    "wb2axip": {
+      "platforms": {
+        "nangate45": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "lvs": {
+              "real_connectivity": {
+                "strategies": {},
+                "n_sessions": 2
+              }
+            },
+            "drc": {
+              "beol": {
+                "strategies": {
+                  "beol_only_drc": {
+                    "attempts": 25,
+                    "successes": 25,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 25
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 6,
+                    "successes": 6,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 6
               }
             }
           }
@@ -1737,7 +1431,7 @@
     },
     "pyocdriscv32": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -1749,6 +1443,7 @@
                     "attempts": 1,
                     "successes": 1,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
@@ -1761,7 +1456,7 @@
     },
     "iccad2017": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -1773,6 +1468,7 @@
                     "attempts": 2,
                     "successes": 2,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
@@ -1783,10 +1479,25 @@
                   "beol_only_drc": {
                     "attempts": 11,
                     "successes": 11,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 11
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 8,
+                    "successes": 8,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 8
               }
             }
           }
@@ -1795,7 +1506,7 @@
     },
     "untitled": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -1807,6 +1518,7 @@
                     "attempts": 1,
                     "successes": 1,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
@@ -1819,7 +1531,7 @@
     },
     "verilog": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -1831,6 +1543,7 @@
                     "attempts": 2,
                     "successes": 1,
                     "failures": 0,
+                    "wins": 1,
                     "median_reduction_pct": 0.9897959183673469
                   }
                 },
@@ -1841,7 +1554,8 @@
                   "beol_only_drc": {
                     "attempts": 43,
                     "successes": 43,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 43
@@ -1851,13 +1565,14 @@
               "full": {
                 "strategies": {
                   "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
+                    "attempts": 5,
+                    "successes": 4,
+                    "failures": 1,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
-                "n_sessions": 1
+                "n_sessions": 5
               },
               "route": {
                 "strategies": {
@@ -1865,6 +1580,7 @@
                     "attempts": 5,
                     "successes": 5,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
@@ -1875,45 +1591,9 @@
         }
       }
     },
-    "wb2axip": {
-      "platforms": {
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "drc": {
-              "beol": {
-                "strategies": {
-                  "beol_only_drc": {
-                    "attempts": 25,
-                    "successes": 25,
-                    "failures": 0
-                  }
-                },
-                "n_sessions": 25
-              }
-            }
-          }
-        },
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "lvs": {
-              "real_connectivity": {
-                "strategies": {},
-                "n_sessions": 2
-              }
-            }
-          }
-        }
-      }
-    },
     "core": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -1924,7 +1604,8 @@
                   "beol_only_drc": {
                     "attempts": 4,
                     "successes": 4,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 4
@@ -1936,7 +1617,7 @@
     },
     "ulixxe": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -1947,7 +1628,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -1959,7 +1641,7 @@
     },
     "hdl": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -1970,10 +1652,25 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 1
               }
             }
           }
@@ -1982,7 +1679,7 @@
     },
     "e203": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -1993,7 +1690,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2005,7 +1703,7 @@
     },
     "iscas89": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2016,10 +1714,25 @@
                   "beol_only_drc": {
                     "attempts": 7,
                     "successes": 7,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 7
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 9,
+                    "successes": 5,
+                    "failures": 4,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 9
               }
             }
           }
@@ -2028,7 +1741,7 @@
     },
     "vtr": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2039,10 +1752,25 @@
                   "beol_only_drc": {
                     "attempts": 21,
                     "successes": 21,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 21
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 14,
+                    "successes": 11,
+                    "failures": 3,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 14
               }
             }
           }
@@ -2051,7 +1779,7 @@
     },
     "qspiflash": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2062,7 +1790,8 @@
                   "beol_only_drc": {
                     "attempts": 3,
                     "successes": 3,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 3
@@ -2074,7 +1803,7 @@
     },
     "paj": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2085,7 +1814,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2097,7 +1827,7 @@
     },
     "fpu": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2108,7 +1838,22 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
                   }
                 },
                 "n_sessions": 1
@@ -2120,7 +1865,7 @@
     },
     "secworks": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2131,7 +1876,8 @@
                   "beol_only_drc": {
                     "attempts": 9,
                     "successes": 9,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 9
@@ -2143,7 +1889,7 @@
     },
     "i2srv32": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2154,7 +1900,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2166,7 +1913,7 @@
     },
     "opdb": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2177,7 +1924,8 @@
                   "beol_only_drc": {
                     "attempts": 4,
                     "successes": 4,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 4
@@ -2189,7 +1937,7 @@
     },
     "des": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2200,7 +1948,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2212,7 +1961,7 @@
     },
     "uart16550": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2223,7 +1972,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2235,7 +1985,7 @@
     },
     "koios": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2246,19 +1996,33 @@
                   "beol_only_drc": {
                     "attempts": 3,
                     "successes": 3,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 3
               }
             },
             "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 6,
+                    "successes": 3,
+                    "failures": 3,
+                    "wins": 0,
+                    "median_reduction_pct": 0.5
+                  }
+                },
+                "n_sessions": 6
+              },
               "place": {
                 "strategies": {
                   "rerun_from_stage": {
                     "attempts": 1,
                     "successes": 1,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
@@ -2271,7 +2035,7 @@
     },
     "fir": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2282,7 +2046,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2294,7 +2059,7 @@
     },
     "wbuart32": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2305,7 +2070,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2317,7 +2083,7 @@
     },
     "wbuart": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2328,7 +2094,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2340,7 +2107,7 @@
     },
     "risc": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2351,7 +2118,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2363,7 +2131,7 @@
     },
     "iir": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2374,7 +2142,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2386,7 +2155,7 @@
     },
     "libellula": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2397,7 +2166,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2409,7 +2179,7 @@
     },
     "sha": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2420,7 +2190,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2432,7 +2203,7 @@
     },
     "riscy": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2443,7 +2214,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2455,7 +2227,7 @@
     },
     "diffeq1": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2466,7 +2238,22 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
                   }
                 },
                 "n_sessions": 1
@@ -2478,7 +2265,7 @@
     },
     "pygmy": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2489,7 +2276,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2501,7 +2289,7 @@
     },
     "oc54": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2512,7 +2300,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2524,7 +2313,7 @@
     },
     "diffeq2": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2535,7 +2324,22 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
                   }
                 },
                 "n_sessions": 1
@@ -2547,7 +2351,7 @@
     },
     "arm9": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2558,7 +2362,8 @@
                   "beol_only_drc": {
                     "attempts": 4,
                     "successes": 4,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 4
@@ -2570,7 +2375,7 @@
     },
     "dsp": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2581,7 +2386,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2593,7 +2399,7 @@
     },
     "faraday": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2604,7 +2410,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2616,7 +2423,7 @@
     },
     "prince": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2627,19 +2434,13 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
               }
-            }
-          }
-        },
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
+            },
             "orfs": {
               "full": {
                 "strategies": {
@@ -2647,6 +2448,7 @@
                     "attempts": 2,
                     "successes": 0,
                     "failures": 2,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
                   }
                 },
@@ -2659,7 +2461,7 @@
     },
     "opencores": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2670,7 +2472,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2682,7 +2485,7 @@
     },
     "kleine": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2693,7 +2496,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2705,7 +2509,7 @@
     },
     "wbi2c": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2716,7 +2520,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2728,7 +2533,7 @@
     },
     "chacha": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2739,7 +2544,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2751,7 +2557,7 @@
     },
     "blake2s": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2762,7 +2568,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2774,7 +2581,7 @@
     },
     "uriscv": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2785,7 +2592,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2797,7 +2605,7 @@
     },
     "ultraembedded": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2808,7 +2616,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2820,7 +2629,7 @@
     },
     "pipelined": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2831,7 +2640,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2843,7 +2653,7 @@
     },
     "cmac": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2854,7 +2664,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2866,7 +2677,7 @@
     },
     "fpga": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2877,7 +2688,8 @@
                   "beol_only_drc": {
                     "attempts": 3,
                     "successes": 3,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 3
@@ -2889,7 +2701,7 @@
     },
     "blob": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2900,7 +2712,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2912,7 +2725,7 @@
     },
     "poly1305": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2923,7 +2736,8 @@
                   "beol_only_drc": {
                     "attempts": 2,
                     "successes": 2,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 2
@@ -2935,7 +2749,7 @@
     },
     "sdspi": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2946,7 +2760,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2958,7 +2773,7 @@
     },
     "biriscv": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2969,7 +2784,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -2981,7 +2797,7 @@
     },
     "nanocore": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -2992,7 +2808,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -3004,7 +2821,7 @@
     },
     "zipcpu": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -3015,10 +2832,37 @@
                   "beol_only_drc": {
                     "attempts": 3,
                     "successes": 3,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 3
+              }
+            },
+            "orfs": {
+              "full": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 2,
+                    "successes": 1,
+                    "failures": 1,
+                    "wins": 0,
+                    "median_reduction_pct": 0.5
+                  }
+                },
+                "n_sessions": 2
+              },
+              "route": {
+                "strategies": {
+                  "rerun_from_stage": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 1
               }
             }
           }
@@ -3027,7 +2871,7 @@
     },
     "bgm": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -3038,7 +2882,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -3050,7 +2895,7 @@
     },
     "md5core": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -3061,7 +2906,8 @@
                   "beol_only_drc": {
                     "attempts": 1,
                     "successes": 1,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 1
@@ -3073,7 +2919,7 @@
     },
     "wbscope": {
       "platforms": {
-        "unknown": {
+        "nangate45": {
           "sample_size": 0,
           "success_count": 0,
           "success_rate": 0.0,
@@ -3084,65 +2930,37 @@
                   "beol_only_drc": {
                     "attempts": 3,
                     "successes": 3,
-                    "failures": 0
+                    "failures": 0,
+                    "wins": 0
                   }
                 },
                 "n_sessions": 3
               }
-            }
-          }
-        },
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
+            },
             "orfs": {
               "full": {
                 "strategies": {
                   "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
+                    "attempts": 3,
+                    "successes": 1,
+                    "failures": 2,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
                   }
                 },
-                "n_sessions": 1
+                "n_sessions": 3
               },
               "route": {
                 "strategies": {
                   "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
+                    "attempts": 2,
+                    "successes": 2,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "floatingmultiplication": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
+                "n_sessions": 2
               }
             }
           }
@@ -3160,51 +2978,22 @@
               "full": {
                 "strategies": {
                   "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
+                    "attempts": 3,
+                    "successes": 1,
+                    "failures": 2,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
                   }
                 },
-                "n_sessions": 1
+                "n_sessions": 3
               },
-              "14400": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
               "place": {
                 "strategies": {
                   "rerun_from_stage": {
                     "attempts": 1,
                     "successes": 0,
                     "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              },
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
                   }
                 },
@@ -3215,31 +3004,7 @@
         }
       }
     },
-    "cast": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "c2670": {
+    "iscas85": {
       "platforms": {
         "nangate45": {
           "sample_size": 0,
@@ -3253,6 +3018,7 @@
                     "attempts": 1,
                     "successes": 1,
                     "failures": 0,
+                    "wins": 0,
                     "median_reduction_pct": 1.0
                   }
                 },
@@ -3277,606 +3043,8 @@
                     "attempts": 1,
                     "successes": 0,
                     "failures": 1,
+                    "wins": 0,
                     "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "td": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "gemm": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              },
-              "14400": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "ex1bt16": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "r": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "fadder": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "arp": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              },
-              "14400": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        },
-        "unknown": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "simple": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              },
-              "7200": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "aximm2s": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "ex4ls16": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "axis2mm": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "axivcamera": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "axivdisplay": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "zipdma": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "wbdmac": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              },
-              "route": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "axilscope": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 0,
-                    "failures": 1,
-                    "median_reduction_pct": 0.0
-                  }
-                },
-                "n_sessions": 1
-              },
-              "route": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "axivfifo": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "axisgdma": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "avscope": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "full": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "myproject": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "7200": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "mac2": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "7200": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
-                  }
-                },
-                "n_sessions": 1
-              }
-            }
-          }
-        }
-      }
-    },
-    "mac1": {
-      "platforms": {
-        "nangate45": {
-          "sample_size": 0,
-          "success_count": 0,
-          "success_rate": 0.0,
-          "fix_recipes": {
-            "orfs": {
-              "7200": {
-                "strategies": {
-                  "rerun_from_stage": {
-                    "attempts": 1,
-                    "successes": 1,
-                    "failures": 0,
-                    "median_reduction_pct": 1.0
                   }
                 },
                 "n_sessions": 1
