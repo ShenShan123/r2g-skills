@@ -248,13 +248,36 @@ losing strategy; it is never blacklisted.
 
 **Correctness note.** `fix_recipes` derive from Tier-2 `fix_trajectories`, **not** from raw
 `fix_events`. That is precisely why archiving raw `fix_events` past the size threshold loses no
-learning signal — the distilled trajectory survives.
+learning signal — the distilled trajectory survives. The Tier-2 rebuild is **archive-aware**:
+it `ATTACH`es `fix_events_archive.sqlite` (when present) and rebuilds from the union of hot +
+archived rows, so an episode's trajectory is never destroyed after its raw rows are evicted.
+
+**Correctness invariants** (enforced after the 2026-06-07 review — see the Implementation Log in
+`docs/superpowers/plans/2026-06-05-fix-learning-loop.md`):
+
+- **One trajectory per `(fix_session_id, check_type)`.** A default `fix_signoff.sh <proj>` run
+  (`--check both`) shares one session id across its DRC and LVS passes; Tier-2 grouping keys on
+  `(session, check_type)` (and the `fix_trajectories` PK is composite) so LVS strategies are
+  never mis-filed under a DRC `violation_class` (and vice-versa).
+- **One family namespace for writers *and* readers.** `design_family` =
+  `_explicit_family(DESIGN_NAME)` else `infer_family(<project-dir basename>)`. Live ingest
+  (`ingest_run._project_family`), `backfill_fix_events`, and the recipe reader
+  (`diagnose_signoff_fix._load_recipes`) all use this identical rule, so backfilled and live
+  evidence aggregate together. Backfill also resolves each record's **platform** from the design
+  dir's `config.mk` (not a blanket default), so its recipes land in the live platform bucket.
+- **`win` earns partial credit.** A real partial improvement (`win`) is counted separately and
+  scored at half a success, so a strategy that reliably *improves* outranks an untried one
+  without being credited a full clearance (see the score formula below).
+- **Projections attribute per strategy.** `build_lineage_view.fix_effectiveness` and
+  `mine_rules.fix_candidates` tally resolved/abandoned **per strategy from `path_json`** (not by
+  the episode's single `winning_strategy`, which is null for abandoned episodes), so clearance
+  rates are honest and no phantom `strategy=null` bucket appears.
 
 ### Ranked-candidate fall-through
 
 When a Tier-3 recipe exists for the design's family/platform/violation_class,
 `diagnose_signoff_fix.py` reorders the strategy list via `scripts/reports/fix_model.py` — a
-**Beta(1,1)-smoothed clearance score** `(successes + 1) / (attempts + 2)`:
+**Beta(1,1)-smoothed clearance score** `(successes + 0.5·wins + 1) / (attempts + 2)`:
 
 - Untried strategies get the neutral `0.5` prior.
 - Proven winners rank high; proven losers are down-ranked but **never zeroed or blacklisted**.

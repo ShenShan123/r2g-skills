@@ -88,10 +88,15 @@ def _family_platform_entry(runs: list[dict]) -> dict | None:
 
 
 def _build_trajectory(events: list[dict]) -> dict:
-    """Collapse one episode's fix_events (sorted by iter) into a trajectory row."""
+    """Collapse one (session, check_type) episode's fix_events (sorted by iter)
+    into a trajectory row. All events MUST share one check_type — a '--check both'
+    run reuses one fix_session_id across DRC and LVS, so callers key by
+    (session, check_type) and we assert the invariant here (bug #2/#8)."""
     import fix_log_manager
     events = fix_log_manager.dedup_events_by_action(events)
     events = sorted(events, key=lambda e: (e.get("iter") or 0))
+    checks = {e.get("check_type") for e in events}
+    assert len(checks) == 1, f"mixed check_type in one trajectory: {checks}"
     first = events[0]
     path = [{"iter": e.get("iter"), "strategy": e.get("strategy"),
              "before": e.get("before_count"), "after": e.get("after_count"),
@@ -120,14 +125,38 @@ def _build_trajectory(events: list[dict]) -> dict:
     }
 
 
-def _rebuild_fix_trajectories(conn) -> list[dict]:
-    """Re-derive Tier-2 from Tier-1 (full rebuild — idempotent)."""
+def _fetch_all_fix_events(conn) -> list[dict]:
+    """Read raw fix_events from the HOT table UNION the cold sidecar archive, so a
+    full rebuild stays lossless after archive_old_raw evicts merged episodes
+    (bug #12). The archive lives next to the main DB as fix_events_archive.sqlite
+    with the same columns (no PK). Sidecar-absent is handled gracefully."""
+    import fix_log_manager
+    db_path = Path(conn.execute("PRAGMA database_list").fetchone()[2])
+    arch = fix_log_manager._archive_db_path(db_path)
     cur = conn.execute("SELECT * FROM fix_events")
     cols = [c[0] for c in cur.description]
     events = [dict(zip(cols, r)) for r in cur.fetchall()]
-    by_session: dict[str, list[dict]] = {}
+    if arch.exists():
+        # ATTACH and UNION ALL the archived rows (same column names; column order
+        # may differ, so select by explicit shared column list).
+        conn.execute("ATTACH DATABASE ? AS arch", (str(arch),))
+        try:
+            acur = conn.execute(
+                f"SELECT {', '.join(cols)} FROM arch.fix_events_archive")
+            events.extend(dict(zip(cols, r)) for r in acur.fetchall())
+        finally:
+            conn.execute("DETACH DATABASE arch")
+    return events
+
+
+def _rebuild_fix_trajectories(conn) -> list[dict]:
+    """Re-derive Tier-2 from Tier-1 (full rebuild — idempotent). Groups by
+    (fix_session_id, check_type) so a '--check both' session yields one trajectory
+    per check (bug #2/#8), and rebuilds from hot+archived events (bug #12)."""
+    events = _fetch_all_fix_events(conn)
+    by_session: dict[tuple, list[dict]] = {}
     for e in events:
-        by_session.setdefault(e["fix_session_id"], []).append(e)
+        by_session.setdefault((e["fix_session_id"], e.get("check_type")), []).append(e)
     trajectories = [_build_trajectory(evs) for evs in by_session.values()]
     conn.execute("DELETE FROM fix_trajectories")
     for t in trajectories:
@@ -156,11 +185,17 @@ def _recipes_from_trajectories(trajectories: list[dict]) -> dict[tuple, dict]:
             if not sid or sid == "none":
                 continue
             s = node["strategies"].setdefault(sid, {"attempts": 0, "successes": 0,
-                                                    "failures": 0, "_red": []})
+                                                    "failures": 0, "wins": 0, "_red": []})
             s["attempts"] += 1
-            if step.get("verdict") == "cleared":
+            verdict = step.get("verdict")
+            if verdict == "cleared":
                 s["successes"] += 1
-            elif step.get("verdict") in ("no_change", "regression"):
+            elif verdict == "win":
+                # Real partial improvement: half credit (bug #7/#11). Tracked
+                # separately so fix_model can score it above an untried strategy
+                # and well above a pure loser, without claiming a full clearance.
+                s["wins"] += 1
+            elif verdict in ("no_change", "regression"):
                 s["failures"] += 1
             bc, ac = step.get("before"), step.get("after")
             if bc and ac is not None and bc > 0:

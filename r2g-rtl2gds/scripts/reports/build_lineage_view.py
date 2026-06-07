@@ -249,10 +249,15 @@ def _build_provenance(conn: sqlite3.Connection) -> list[dict]:
 def _fix_effectiveness(conn: sqlite3.Connection) -> list[dict]:
     """Per-(family, platform, check, violation_class) fix-strategy effectiveness.
 
-    Rolls up ``fix_trajectories`` grouped by
-    (design_family, platform, check_type, violation_class, winning_strategy),
-    counting resolved vs abandoned episodes and the clearance rate
-    (resolved / (resolved + abandoned)) for each strategy.
+    Rolls up ``fix_trajectories`` per
+    (design_family, platform, check_type, violation_class, strategy). Resolved
+    (successes) and abandoned (failures) are attributed PER STRATEGY by parsing
+    each trajectory's path_json verdicts — exactly like
+    learn_heuristics._recipes_from_trajectories — NOT by the episode-level
+    ``winning_strategy`` column. That column is NULL for every abandoned episode,
+    so a GROUP BY winning_strategy would collapse all failures into a phantom
+    strategy=NULL bucket and make every named strategy report abandoned=0 /
+    clearance_rate=1.0. The clearance rate is successes / (successes + failures).
 
     READ-ONLY safety: ``mode=ro`` cannot CREATE tables, so if a (legacy) DB lacks
     the ``fix_trajectories`` table this MUST NOT crash. We probe sqlite_master
@@ -264,21 +269,15 @@ def _fix_effectiveness(conn: sqlite3.Connection) -> list[dict]:
     if not has_table:
         return []
 
-    # Group by the 5-tuple; count resolved vs abandoned per (group, strategy).
+    # ORDER BY keeps the projection deterministic regardless of insert order.
     cur = conn.execute(
-        "SELECT design_family, platform, check_type, violation_class, "
-        "       winning_strategy, "
-        "       SUM(CASE WHEN outcome='resolved' THEN 1 ELSE 0 END) AS resolved, "
-        "       SUM(CASE WHEN outcome='abandoned' THEN 1 ELSE 0 END) AS abandoned "
+        "SELECT design_family, platform, check_type, violation_class, path_json "
         "FROM fix_trajectories "
-        "GROUP BY design_family, platform, check_type, violation_class, "
-        "         winning_strategy "
         "ORDER BY design_family, platform, check_type, violation_class, "
-        "         winning_strategy"
+        "         fix_session_id"
     )
 
-    # Collapse strategy rows under their parent (family, platform, check, class)
-    # key, preserving deterministic ordering from the SQL ORDER BY.
+    # (family, platform, check, class) -> strategy -> {resolved, abandoned}.
     groups: dict[tuple, dict] = {}
     for row in cur.fetchall():
         key = (row["design_family"], row["platform"], row["check_type"],
@@ -290,21 +289,49 @@ def _fix_effectiveness(conn: sqlite3.Connection) -> list[dict]:
                 "platform": row["platform"],
                 "check_type": row["check_type"],
                 "violation_class": row["violation_class"],
-                "strategies": [],
+                "_strategies": {},   # strategy -> {resolved, abandoned}
             }
             groups[key] = group
-        resolved = int(row["resolved"] or 0)
-        abandoned = int(row["abandoned"] or 0)
-        attempts = resolved + abandoned
-        clearance_rate = round(resolved / attempts, 4) if attempts else 0.0
-        group["strategies"].append({
-            "strategy": row["winning_strategy"],
-            "resolved": resolved,
-            "abandoned": abandoned,
-            "attempts": attempts,
-            "clearance_rate": clearance_rate,
-        })
-    return list(groups.values())
+        try:
+            steps = json.loads(row["path_json"] or "[]")
+        except (TypeError, ValueError):
+            steps = []
+        for step in steps:
+            sid = step.get("strategy")
+            if not sid or sid == "none":
+                continue
+            verdict = step.get("verdict")
+            if verdict not in ("cleared", "win", "no_change", "regression"):
+                continue
+            tally = group["_strategies"].setdefault(
+                sid, {"resolved": 0, "abandoned": 0}
+            )
+            if verdict in ("cleared", "win"):
+                tally["resolved"] += 1
+            else:
+                tally["abandoned"] += 1
+
+    result: list[dict] = []
+    for group in groups.values():
+        strat_tallies = group.pop("_strategies")
+        strategies = []
+        # Deterministic strategy order (None never appears now, but sort safely).
+        for sid in sorted(strat_tallies, key=lambda s: ("" if s is None else s)):
+            tally = strat_tallies[sid]
+            resolved = tally["resolved"]
+            abandoned = tally["abandoned"]
+            attempts = resolved + abandoned
+            clearance_rate = round(resolved / attempts, 4) if attempts else 0.0
+            strategies.append({
+                "strategy": sid,
+                "resolved": resolved,
+                "abandoned": abandoned,
+                "attempts": attempts,
+                "clearance_rate": clearance_rate,
+            })
+        group["strategies"] = strategies
+        result.append(group)
+    return result
 
 
 def build_view(db_path: Path | str, heuristics_path: Path | str | None = None) -> dict:

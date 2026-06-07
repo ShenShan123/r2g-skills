@@ -47,6 +47,33 @@ def test_backfill_antenna_fix(tmp_path, tmp_knowledge_dir):
     conn.close()
 
 
+def test_backfill_resolves_platform_from_config_mk(tmp_path, tmp_knowledge_dir):
+    # A DRC record carries no platform; the design dir's config.mk does. The
+    # backfill must use the real platform (so recipes land in the live bucket,
+    # not 'unknown'), and fall back to the skill default when no config.mk exists.
+    batch = tmp_path / "_batch"
+    batch.mkdir()
+    (batch / "antenna_fix_plat.jsonl").write_text(
+        json.dumps({"design": "skywater_thing", "inst": 1, "status": "clean",
+                    "before": 5, "after": 0, "wall_s": 10}) + "\n"
+        + json.dumps({"design": "no_config_thing", "inst": 2, "status": "clean",
+                      "before": 3, "after": 0, "wall_s": 10}) + "\n")
+    # cases_root == batch.parent == tmp_path. Give the first design a config.mk.
+    cfg = tmp_path / "skywater_thing" / "constraints"
+    cfg.mkdir(parents=True)
+    (cfg / "config.mk").write_text(
+        "export DESIGN_NAME = skywater_thing\nexport PLATFORM = sky130hd\n")
+    conn = _setup_conn(tmp_knowledge_dir)
+    fams = knowledge_db.load_families(tmp_knowledge_dir / "families.json")
+    backfill_fix_events.backfill(batch, conn, fams)
+    plats = dict(conn.execute(
+        "SELECT design_name, platform FROM fix_events").fetchall())
+    assert plats["skywater_thing"] == "sky130hd"     # resolved from config.mk
+    assert plats["no_config_thing"] == "nangate45"   # skill-default fallback
+    assert None not in plats.values()                # never NULL
+    conn.close()
+
+
 def test_backfill_antenna_cleared(tmp_path, tmp_knowledge_dir):
     batch = tmp_path / "_batch"
     batch.mkdir()
@@ -75,13 +102,100 @@ def test_backfill_retry_pass_orfs(tmp_path, tmp_knowledge_dir):
     n = backfill_fix_events.backfill(batch, conn, fams)
     assert n == 1
     row = conn.execute(
-        "SELECT check_type, violation_class, from_stage, verdict, provenance "
+        "SELECT check_type, violation_class, from_stage, verdict, provenance, platform "
         "FROM fix_events").fetchone()
     assert row[0] == "orfs"
     assert row[1] == "full"          # violation_class from from_stage
     assert row[2] == "full"
     assert row[3] == "cleared"       # orfs == pass -> the run closed
     assert row[4].startswith("backfill:retry_pass")
+    assert row[5] == "nangate45"     # platform defaults to skill default when absent
+
+
+def test_backfill_orfs_no_session_collision_on_shared_design(tmp_path, tmp_knowledge_dir):
+    """Two orfs records with the same non-unique design='top' but distinct `case`
+    dir-basenames must yield two distinct fix_events (no session-id collision)."""
+    batch = tmp_path / "_batch"
+    batch.mkdir()
+    (batch / "orfs_retry5.jsonl").write_text(
+        json.dumps({"case": "iccad2015_unit12_in1", "design": "top",
+                    "platform": "nangate45", "orfs": "pass", "elapsed_s": 410}) + "\n" +
+        json.dumps({"case": "iccad2015_unit18_in1", "design": "top",
+                    "platform": "nangate45", "orfs": "pass", "elapsed_s": 530}) + "\n")
+    conn = _setup_conn(tmp_knowledge_dir)
+    fams = knowledge_db.load_families(tmp_knowledge_dir / "families.json")
+    n = backfill_fix_events.backfill(batch, conn, fams)
+    assert n == 2                    # both records survive UNIQUE(session,iter,strategy)
+    sids = [r[0] for r in conn.execute(
+        "SELECT fix_session_id FROM fix_events").fetchall()]
+    assert len(set(sids)) == 2       # distinct session ids keyed on `case`
+    conn.close()
+
+
+def test_backfill_orfs_timeout_from_stage_sanitized(tmp_path, tmp_knowledge_dir):
+    """A numeric/unknown from_stage (a leaked timeout) -> violation_class='full',
+    from_stage=None — not a junk recipe bucket like fix_recipes['orfs']['14400']."""
+    batch = tmp_path / "_batch"
+    batch.mkdir()
+    (batch / "retry_pass3.jsonl").write_text(
+        json.dumps({"case": "wb2axip_axilsafety", "design": "axilsafety",
+                    "platform": "nangate45", "orfs": "pass", "elapsed_s": 990,
+                    "timeout": 14400, "from_stage": "14400"}) + "\n")
+    conn = _setup_conn(tmp_knowledge_dir)
+    fams = knowledge_db.load_families(tmp_knowledge_dir / "families.json")
+    n = backfill_fix_events.backfill(batch, conn, fams)
+    assert n == 1
+    row = conn.execute(
+        "SELECT violation_class, from_stage FROM fix_events").fetchone()
+    assert row[0] == "full"          # bogus stage replaced
+    assert row[1] is None            # leaked timeout dropped
+    conn.close()
+
+
+def test_backfill_orfs_family_from_case(tmp_path, tmp_knowledge_dir):
+    """design_family follows the canonical rule _explicit_family(design) or
+    infer_family(case). For a koios record {case:koios_dla_like, design:myproject}
+    the short module has no explicit family, so the family must come from the unique
+    `case` dir-basename ('koios') — not the junk family 'myproject' the old code
+    produced from the short top-module name (#5/#1)."""
+    batch = tmp_path / "_batch"
+    batch.mkdir()
+    (batch / "orfs_retry9.jsonl").write_text(
+        json.dumps({"case": "koios_dla_like",
+                    "design": "myproject", "platform": "nangate45",
+                    "orfs": "pass", "elapsed_s": 300}) + "\n")
+    conn = _setup_conn(tmp_knowledge_dir)
+    fams = knowledge_db.load_families(tmp_knowledge_dir / "families.json")
+    # Guard the premise: short module has no explicit family and the two ids
+    # diverge, so this exercises the case-based inference path.
+    assert backfill_fix_events._explicit_family("myproject", fams) is None
+    assert (knowledge_db.infer_family("koios_dla_like", fams)
+            != knowledge_db.infer_family("myproject", fams))
+    n = backfill_fix_events.backfill(batch, conn, fams)
+    assert n == 1
+    fam = conn.execute("SELECT design_family FROM fix_events").fetchone()[0]
+    assert fam == knowledge_db.infer_family("koios_dla_like", fams)
+    assert fam == "koios"
+    conn.close()
+
+
+def test_backfill_orfs_explicit_design_family_wins(tmp_path, tmp_knowledge_dir):
+    """Canonical rule precedence: a curated DESIGN_NAME mapping/pattern still wins
+    over the dir-basename, mirroring the live loop (ingest_run._project_family).
+    Here `^udp_` -> 'udp' on the short module beats infer_family(case)='verilog'."""
+    batch = tmp_path / "_batch"
+    batch.mkdir()
+    (batch / "orfs_retry7.jsonl").write_text(
+        json.dumps({"case": "verilog_ethernet_udp_complete",
+                    "design": "udp_complete", "platform": "nangate45",
+                    "orfs": "pass", "elapsed_s": 300}) + "\n")
+    conn = _setup_conn(tmp_knowledge_dir)
+    fams = knowledge_db.load_families(tmp_knowledge_dir / "families.json")
+    assert backfill_fix_events._explicit_family("udp_complete", fams) == "udp"
+    n = backfill_fix_events.backfill(batch, conn, fams)
+    assert n == 1
+    fam = conn.execute("SELECT design_family FROM fix_events").fetchone()[0]
+    assert fam == "udp"          # explicit family on DESIGN_NAME wins (canonical)
     conn.close()
 
 

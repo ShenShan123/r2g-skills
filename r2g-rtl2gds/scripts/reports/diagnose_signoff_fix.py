@@ -38,6 +38,20 @@ KLAYOUT_CPP_CRASH = re.compile(r"sort_circuit|gen_log_entry|segmentation|sigsegv
 DIODE_FORCED_REPAIR_PLATFORMS = {"nangate45"}
 
 
+def _explicit_family(name: str, families: dict) -> str | None:
+    """Family from an EXPLICIT families.json mapping/pattern, or None if only the
+    generic split-on-underscore fallback would apply.  Mirrors ingest_run._explicit_family
+    so the recipe READER keys families the same way the WRITER does."""
+    if not name:
+        return None
+    if name in families.get("mappings", {}):
+        return families["mappings"][name]
+    for entry in families.get("patterns", []):
+        if re.search(entry["regex"], name, re.IGNORECASE):
+            return entry["family"]
+    return None
+
+
 def parse_config(text: str) -> dict:
     """Parse `export VAR = value` / `VAR := value` lines (last assignment wins)."""
     cfg = {}
@@ -276,24 +290,41 @@ def _load_recipes(proj: Path, *, check: str, drc: dict, lvs: dict,
         return None
     cfg = parse_config((proj / "constraints" / "config.mk").read_text(encoding="utf-8")
                        if (proj / "constraints" / "config.mk").exists() else "")
+    design_name = cfg.get("DESIGN_NAME", "")
+    # Key the family the SAME way the WRITER does (live ingest _project_family /
+    # backfill): an EXPLICIT DESIGN_NAME mapping/pattern wins, else infer from the
+    # project-DIR basename (which carries the source-repo prefix DESIGN_NAME drops).
+    # Mismatch otherwise hides learned recipes — see CANONICAL FAMILY RULE.
     try:
         import knowledge_db
         families = knowledge_db.load_families()
-        fam = knowledge_db.infer_family(cfg.get("DESIGN_NAME", ""), families)
+        fam = (_explicit_family(design_name, families)
+               or knowledge_db.infer_family(proj.name, families))
     except Exception:
-        fam = (cfg.get("DESIGN_NAME", "") or "").split("_", 1)[0].lower()
+        # knowledge_db unavailable: degrade to the writer's primary path (dir
+        # basename split), which is where most harvested designs land.
+        fam = (proj.name or design_name or "").split("_", 1)[0].lower()
     plat = cfg.get("PLATFORM", "nangate45")
     data = json.loads(hp.read_text(encoding="utf-8"))
     entry = (data.get("families", {}).get(fam, {})
              .get("platforms", {}).get(plat, {}).get("fix_recipes"))
     if not entry:
         return None
+    by_check = entry.get(check, {})
     if check == "drc":
         cats = drc.get("categories") or {}
         vclass = max(cats, key=lambda k: cats[k].get("count") or 0) if cats else None
-    else:
-        vclass = lvs.get("mismatch_class")
-    return entry.get(check, {}).get(vclass)
+        recipe = by_check.get(vclass)
+        if recipe is None and vclass:
+            # DRC coarse-bucket fallback: backfill stores historical DRC recipes
+            # under coarse buckets ('antenna'/'beol'), so an exact-category miss
+            # (e.g. METAL3_ANTENNA) would hide that evidence.  Only used when the
+            # exact-category recipe is absent.
+            coarse = "antenna" if vclass.upper().endswith("_ANTENNA") else "beol"
+            recipe = by_check.get(coarse)
+        return recipe
+    vclass = lvs.get("mismatch_class")
+    return by_check.get(vclass)
 
 
 def main(argv=None) -> int:

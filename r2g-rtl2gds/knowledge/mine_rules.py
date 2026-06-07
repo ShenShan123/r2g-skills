@@ -52,12 +52,19 @@ def _table_exists(conn, name: str) -> bool:
 
 
 def _mine_fix_candidates(conn, min_resolved: int = 3) -> list[dict]:
-    """Roll up resolved fix episodes into evidence-backed promotion candidates.
+    """Roll up fix episodes into evidence-backed, per-strategy promotion candidates.
 
     Reads fix_trajectories and groups per
-    (design_family, platform, check_type, violation_class, winning_strategy).
-    Keeps groups with at least ``min_resolved`` resolved episodes. The result is
-    a human-review queue for promotion into references/failure-patterns.md — it is
+    (design_family, platform, check_type, violation_class, strategy). Successes
+    (resolved) and failures (abandoned) are attributed PER STRATEGY by parsing
+    each trajectory's path_json steps — exactly like
+    learn_heuristics._recipes_from_trajectories — not by the episode-level
+    ``winning_strategy`` column. That column is NULL for every abandoned episode,
+    so grouping on it would collapse all failures into a phantom strategy=NULL
+    bucket and make every named strategy report abandoned=0 / clearance_rate=1.0.
+
+    Keeps strategies with at least ``min_resolved`` successes. The result is a
+    human-review queue for promotion into references/failure-patterns.md — it is
     NEVER auto-written there (that file stays human-curated, per spec D1/§12).
 
     Returns [] if the fix_trajectories table is absent so existing behavior is
@@ -68,38 +75,61 @@ def _mine_fix_candidates(conn, min_resolved: int = 3) -> list[dict]:
 
     cur = conn.execute(
         "SELECT design_family, platform, check_type, violation_class, "
-        "winning_strategy, outcome, fix_session_id "
+        "path_json, fix_session_id "
         "FROM fix_trajectories"
     )
     cols = [c[0] for c in cur.description]
     rows = [dict(zip(cols, row)) for row in cur.fetchall()]
 
-    by_key: dict[tuple, list[dict]] = defaultdict(list)
+    # (family, platform, check, violation_class, strategy) -> tallies. Successes
+    # and failures come from path_json verdicts; example_session is the first
+    # trajectory contributing a success for that strategy.
+    by_key: dict[tuple, dict] = defaultdict(
+        lambda: {"successes": 0, "failures": 0, "example_session": None}
+    )
     for r in rows:
-        key = (
-            r["design_family"], r["platform"], r["check_type"],
-            r["violation_class"], r["winning_strategy"],
-        )
-        by_key[key].append(r)
+        try:
+            steps = json.loads(r["path_json"] or "[]")
+        except (TypeError, ValueError):
+            steps = []
+        for step in steps:
+            sid = step.get("strategy")
+            if not sid or sid == "none":
+                continue
+            verdict = step.get("verdict")
+            if verdict not in ("cleared", "win", "no_change", "regression"):
+                continue
+            key = (r["design_family"], r["platform"], r["check_type"],
+                   r["violation_class"], sid)
+            acc = by_key[key]
+            if verdict in ("cleared", "win"):
+                acc["successes"] += 1
+                if acc["example_session"] is None:
+                    acc["example_session"] = r["fix_session_id"]
+            else:
+                acc["failures"] += 1
 
     candidates = []
-    for key, group in sorted(by_key.items(), key=lambda kv: tuple("" if x is None else str(x) for x in kv[0])):
-        family, platform, check, violation_class, winning_strategy = key
-        resolved = [r for r in group if r["outcome"] == "resolved"]
-        abandoned = [r for r in group if r["outcome"] == "abandoned"]
-        if len(resolved) < min_resolved:
+    for key, acc in sorted(
+        by_key.items(),
+        key=lambda kv: tuple("" if x is None else str(x) for x in kv[0]),
+    ):
+        family, platform, check, violation_class, strategy = key
+        successes = acc["successes"]
+        failures = acc["failures"]
+        if successes < min_resolved:
             continue
-        total = len(resolved) + len(abandoned)
+        total = successes + failures
         candidates.append({
             "family": family,
             "platform": platform,
             "check": check,
             "violation_class": violation_class,
-            "winning_strategy": winning_strategy,
-            "resolved": len(resolved),
-            "abandoned": len(abandoned),
-            "clearance_rate": (len(resolved) / total) if total else None,
-            "example_session": resolved[0]["fix_session_id"],
+            "winning_strategy": strategy,
+            "resolved": successes,
+            "abandoned": failures,
+            "clearance_rate": (successes / total) if total else None,
+            "example_session": acc["example_session"],
         })
     return candidates
 

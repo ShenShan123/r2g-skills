@@ -1896,3 +1896,62 @@ Prove capture→learn→improved-suggestion end-to-end on one design per case ty
 - **`unit19_in2` cleared**: `period_relax` 10→16ns, WNS −3.315→+0.082 (severe→clean). `iccad2015/nangate45 timing/severe` recipe is now **3 attempts / 2 successes, 97.5% median WNS reduction**.
 - **`i2c_master` CTS SIGSEGV**: confirmed against the existing `failure-patterns.md` "SIGSEGV in CTS init (`separateMacroRegSinks`)" variant (already documented; added the concrete instance).
 - **Final store:** fix_events 388 (**live 7**), run_violations 33, runs 773. Suite 374/8 green. Commits `7dc4b6e`, `7b5d77d`, `971c6ff`, `69a206c`, + store refreshes. **Phase F (Task 20) still deferred** pending a future go/no-go.
+
+---
+
+## Implementation Log — 2026-06-07 (pre-Phase-F correctness review + Task 20 go)
+
+**Status:** User authorized Task 20 (Phase F). Before the full-corpus enrichment, a two-stage
+multi-agent review hardened the loop: (1) an **adversarial bug-hunt workflow** (6 reviewers over
+the whole diff, every candidate independently refuted/confirmed) surfaced **15 verified bugs / 21
+refuted** (36 candidates); (2) a **parallel TDD fix workflow** (6 agents on disjoint file-groups,
+shared canonical specs) fixed them. Both seeds I expected — `run_violations.timing_tier` staleness
+and backfill `platform=None` — were *refuted as bugs in themselves* (the timing_tier nit is
+cosmetic and does not flow into recipes, per the plan; platform was handled as part of the family
+unification below). Full suite **375 → 394 passed / 8 skipped** (+19 tests, zero regressions).
+
+**15 bugs fixed** (each TDD, each with a concrete repro from the hunt):
+1. **Cross-check session pollution (#2/#8, high):** `fix_signoff.sh` defaults to `--check both` and
+   mints ONE `fix_session_id`, so DRC+LVS events shared a session and Tier-2 mis-filed LVS
+   strategies under a DRC `violation_class`. Fix: group trajectories by `(fix_session_id,
+   check_type)`; widened `fix_trajectories` PK to the composite (idempotent rebuild self-heals
+   already-ingested mixed sessions).
+2. **Family-namespace divergence (#1/#5, high):** backfill inferred family from the non-unique
+   short `design` (DESIGN_NAME) while live ingest used the dir basename → recipes fragmented
+   (`koios_lenet`→`myproject`, all iccad → `top`). Fix: backfill + the recipe reader
+   (`diagnose_signoff_fix._load_recipes`) now use the **canonical rule** (explicit-or-dir-basename),
+   matching `ingest_run._project_family`.
+3. **Backfill session-id collisions (#4, med):** 22 iccad benchmarks share `design="top"`, so
+   `sha1(design+file)` collided and `UNIQUE(session,iter,strategy)` dropped ~28 real records. Fix:
+   key identity on the unique `case` (dir basename) → **backfill 382 → 410 rows** (recovered the 28).
+4. **Timeout leak into `violation_class` (#6, med):** real `retry_pass3.jsonl` has
+   `from_stage="14400"/"7200"` (a timeout) → junk `fix_recipes['orfs']['14400']`. Fix: validate
+   `from_stage` against the ORFS stage vocabulary; non-stage → `violation_class='full'`.
+5. **Backfill platform (extension of #1):** records carried `platform=None` → recipes stranded in
+   the `'unknown'` bucket the reader never queries. Fix: resolve each record's real platform from
+   its `config.mk` (fallback nangate45) → **0 NULL platforms; 66 families' DRC antenna/beol recipes
+   now reachable at nangate45**; family/platform entries de-fragmented 131 → 107.
+6. **Timing-journal key mismatch (#3, high):** `check_timing.py --journal` read `wns_ns`/
+   `clock_period_ns` but the real `timing_check.json` uses `wns`/`clock_period` → WNS lost, wins
+   mislabeled (the pre-existing test passed only because its fixture used the wrong keys). Fix:
+   real-key-primary with legacy fallback; rewrote the test to the real schema.
+7. **`minor` mislabeled `cleared` (#9, med):** `minor` tier is still WNS<0. Fix: `cleared` only when
+   `after_tier=='clean'`; else `win`/`regression`/`no_change`.
+8. **`win` never credited (#7/#11, med):** a `win` added an attempt but no success, ranking a
+   reliable improver below an untried strategy. Fix: separate `wins` counter; score is now
+   `(successes + 0.5·wins + 1)/(attempts + 2)` (backward compatible — `wins` defaults 0).
+9. **Projection inflation (#10/#15, med):** `mine_rules` + `build_lineage_view` grouped by
+   `winning_strategy` (null for abandoned) → every strategy showed `clearance_rate=1.0` + a phantom
+   `null` bucket. Fix: attribute per strategy from `path_json`, matching Tier-3.
+10. **Archival not lossless (#12, low):** Tier-2 rebuild read hot `fix_events` only, so a post-archive
+    re-learn destroyed archived episodes' trajectories. Fix: archive-aware rebuild (ATTACH + UNION).
+11. **Empty after-count phantom win (#14, low):** an unparseable re-check left verdict `applied`→`win`.
+    Fix: emit `recheck_unparsed` (→ ingester normalizes to `inconclusive`).
+12. **DRC reader vocab fallback (#13, low):** reader keyed the specific dominant category but coarse
+    historical recipes are `antenna`/`beol`. Fix: coarse-bucket fallback when the exact lookup misses.
+
+**Store regenerated** (purge backfill rows → re-backfill → re-learn): **417 fix_events** (410
+backfill + 7 live), **0 NULL platforms**, no numeric `violation_class`, no junk families,
+composite-PK `fix_trajectories` correctly split by check (drc 269 / lvs 2 / orfs 142 / timing 4),
+recipes carry the `wins` counter. `runs.sqlite.pre-bugfix.bak` saved. Docs updated
+(`references/signoff-fixing.md` "Correctness invariants"; `schema.sql` comment retargeted).

@@ -108,13 +108,17 @@ CREATE INDEX IF NOT EXISTS idx_fix_events_fam
     ON fix_events(design_family, platform, check_type, violation_class);
 
 -- Tier-2: per-episode trajectory (re-derivable from fix_events; materialized).
+-- PK is composite (fix_session_id, check_type): a '--check both' fix run shares
+-- ONE fix_session_id across DRC and LVS events, and each check must yield its own
+-- trajectory so the LVS recipe is not mis-filed under the DRC violation_class
+-- (bug #2/#8). See references/signoff-fixing.md ("Correctness invariants").
 CREATE TABLE IF NOT EXISTS fix_trajectories (
-    fix_session_id          TEXT PRIMARY KEY,
+    fix_session_id          TEXT NOT NULL,
     project_path            TEXT,
     design_name             TEXT,
     design_family           TEXT,
     platform                TEXT,
-    check_type              TEXT,
+    check_type              TEXT NOT NULL,
     violation_class         TEXT,
     path_json               TEXT,                    -- ordered [{iter,strategy,before,after,verdict}]
     n_iters                 INTEGER,
@@ -124,7 +128,8 @@ CREATE TABLE IF NOT EXISTS fix_trajectories (
     failed_strategies_json  TEXT,
     initial_count           REAL,
     final_count             REAL,
-    total_elapsed_s         REAL
+    total_elapsed_s         REAL,
+    PRIMARY KEY (fix_session_id, check_type)
 );
 CREATE INDEX IF NOT EXISTS idx_fix_traj_fam
     ON fix_trajectories(design_family, platform, check_type, violation_class);

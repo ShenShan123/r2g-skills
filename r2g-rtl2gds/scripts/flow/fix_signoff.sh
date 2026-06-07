@@ -155,8 +155,20 @@ fix_one() {  # $1 = drc|lvs
     if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true; else "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
     _run_extract "$check"
     after="$(_count "$report")"
+    if [[ -z "$after" ]]; then
+      # #14 phantom-win guard: the re-check produced no parseable count (extract
+      # crashed / report unparseable). This is NOT evidence of a win — record a
+      # non-evidence verdict (ingester _VERDICT_MAP fall-through -> 'inconclusive')
+      # instead of leaving verdict='applied' (which maps to 'win'). See
+      # references/signoff-fixing.md. Skip the no_improvement/cleared logic.
+      verdict="recheck_unparsed"; noimp=0
+      _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats"
+      echo "[$check] iter $it: $before -> ? ($verdict)"
+      echo "[$check] re-check produced no parseable count; trying next strategy"
+      continue
+    fi
     verdict="applied"
-    if [[ -n "$before" && -n "$after" ]] && python3 -c "import sys;sys.exit(0 if float('$after')>=float('$before') else 1)" 2>/dev/null; then
+    if [[ -n "$before" ]] && python3 -c "import sys;sys.exit(0 if float('$after')>=float('$before') else 1)" 2>/dev/null; then
       verdict="no_improvement"; noimp=$((noimp+1))
     else
       noimp=0

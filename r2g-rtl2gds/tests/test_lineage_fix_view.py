@@ -29,7 +29,15 @@ def _open_db(tmp_knowledge_dir):
 def _insert_traj(conn, *, fix_session_id, design_family, platform, check_type,
                  violation_class, outcome, winning_strategy, n_iters=1,
                  design_name="dut", project_path=None, initial_count=10.0,
-                 final_count=0.0, total_elapsed_s=12.0):
+                 final_count=0.0, total_elapsed_s=12.0, path_json=None):
+    if path_json is None:
+        # A single verdict-bearing step that matches the outcome, so the
+        # per-strategy success/failure tally (parsed from path_json) is coherent
+        # with the episode outcome.
+        verdict = "cleared" if outcome == "resolved" else "no_change"
+        path_json = json.dumps([{"iter": 0, "strategy": winning_strategy or "none",
+                                 "before": 10, "after": 0 if outcome == "resolved"
+                                 else 8, "verdict": verdict}])
     conn.execute(
         "INSERT INTO fix_trajectories "
         "(fix_session_id, project_path, design_name, design_family, platform, "
@@ -39,7 +47,7 @@ def _insert_traj(conn, *, fix_session_id, design_family, platform, check_type,
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (fix_session_id, project_path or f"/tmp/{fix_session_id}", design_name,
          design_family, platform, check_type, violation_class,
-         json.dumps([{"iter": 0, "strategy": winning_strategy}]), n_iters,
+         path_json, n_iters,
          outcome, winning_strategy, "{}", "[]", initial_count, final_count,
          total_elapsed_s),
     )
@@ -68,10 +76,15 @@ def test_fix_effectiveness_per_strategy_counts_and_rate(tmp_knowledge_dir):
                      platform="nangate45", check_type="drc",
                      violation_class="M2_SPACING", outcome="resolved",
                      winning_strategy="antenna_diode_repair")
+    # Abandoned episodes mirror _build_trajectory: winning_strategy=None, but the
+    # path_json records the strategy that failed (verdict no_change/regression).
     _insert_traj(conn, fix_session_id="a_ab_0", design_family="aes_xcrypt",
                  platform="nangate45", check_type="drc",
                  violation_class="M2_SPACING", outcome="abandoned",
-                 winning_strategy="antenna_diode_repair")
+                 winning_strategy=None,
+                 path_json=json.dumps([
+                     {"iter": 0, "strategy": "antenna_diode_repair",
+                      "before": 10, "after": 10, "verdict": "no_change"}]))
     _insert_traj(conn, fix_session_id="r_res_0", design_family="aes_xcrypt",
                  platform="nangate45", check_type="drc",
                  violation_class="M2_SPACING", outcome="resolved",
@@ -79,7 +92,10 @@ def test_fix_effectiveness_per_strategy_counts_and_rate(tmp_knowledge_dir):
     _insert_traj(conn, fix_session_id="r_ab_0", design_family="aes_xcrypt",
                  platform="nangate45", check_type="drc",
                  violation_class="M2_SPACING", outcome="abandoned",
-                 winning_strategy="route_density_relax")
+                 winning_strategy=None,
+                 path_json=json.dumps([
+                     {"iter": 0, "strategy": "route_density_relax",
+                      "before": 10, "after": 12, "verdict": "regression"}]))
     # A distinct group (different family) to prove grouping isolation.
     _insert_traj(conn, fix_session_id="spi_res_0", design_family="spi",
                  platform="nangate45", check_type="lvs",
@@ -105,7 +121,11 @@ def test_fix_effectiveness_per_strategy_counts_and_rate(tmp_knowledge_dir):
     assert group["platform"] == "nangate45"
 
     strats = {s["strategy"]: s for s in group["strategies"]}
+    # No phantom strategy=None bucket: failures attribute to the named strategy
+    # that was tried (read from path_json), never to a null row.
     assert set(strats) == {"antenna_diode_repair", "route_density_relax"}
+    assert None not in strats
+    assert all(s["strategy"] is not None for s in group["strategies"])
 
     diode = strats["antenna_diode_repair"]
     assert diode["resolved"] == 3
