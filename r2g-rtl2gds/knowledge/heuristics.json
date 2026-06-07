@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-06-07T03:15:19Z",
-  "source_run_count": 772,
+  "generated_at": "2026-06-07T03:16:52Z",
+  "source_run_count": 773,
   "min_successful_runs_required": 3,
   "families": {
     "execute": {
@@ -1672,8 +1672,8 @@
     "iccad2015": {
       "platforms": {
         "nangate45": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 20.0,
@@ -1685,20 +1685,20 @@
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 17991,
+          "typical_cell_count": 25616,
           "p90_elapsed_s": 1580.0,
           "fix_recipes": {
             "timing": {
               "severe": {
                 "strategies": {
                   "period_relax": {
-                    "attempts": 2,
-                    "successes": 1,
+                    "attempts": 3,
+                    "successes": 2,
                     "failures": 0,
-                    "median_reduction_pct": 0.8198644816115581
+                    "median_reduction_pct": 0.975156855174411
                   }
                 },
-                "n_sessions": 2
+                "n_sessions": 3
               },
               "minor": {
                 "strategies": {
