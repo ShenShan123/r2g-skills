@@ -185,7 +185,11 @@ clock net has very few sinks (e.g. 2). `SKIP_CTS_REPAIR_TIMING=1` +
 `apply_cts_crash_fix`), but it bypasses a *later* pass than the crash, so it may
 not help. If CTS still SIGSEGVs in init, this is an upstream OpenROAD bug —
 classify as a **tool limitation / skip**, like the BOOM floorplan cases. Do not
-keep retrying.
+keep retrying. **Confirmed 2026-06-06** on `i2c_master_i2c_master` (a small
+std-cell design) at `4_1_cts` in `TritonCTS::separateMacroRegSinks` *with both
+`SKIP_CTS_REPAIR_TIMING=1` and `SKIP_LAST_GASP=1` already set* — OpenROAD
+26Q1-2966-g29d97c45b3; recorded as an honest `orfs_status=fail` (no fix_event),
+candidate to retry only on a newer OpenROAD build.
 
 ## RTL Reserved Keywords as Identifiers
 

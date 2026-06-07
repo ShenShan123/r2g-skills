@@ -45,6 +45,25 @@ def test_normalize_verdict_passes_through_canonical_strings():
     assert ingest_run._normalize_verdict("apply_failed", None, None) == "inconclusive"
 
 
+def test_project_family_matches_backfill_grouping(tmp_path):
+    # Live ingest must group designs the same way backfill_fix_events does (by the
+    # project-dir basename, which carries the source-repo prefix), so fix_recipes
+    # aggregate in one namespace. Regression: live used config.mk DESIGN_NAME, which
+    # drops the prefix (wb2axip_axi2axilite -> DESIGN_NAME 'axi2axilite' -> singleton).
+    families = {"mappings": {"ChipTop": "boom_chiptop"},
+                "patterns": [{"regex": "^aes", "family": "aes_xcrypt"}]}
+    p = tmp_path / "wb2axip_axi2axilite"; p.mkdir()
+    assert ingest_run._project_family(p, "axi2axilite", families) == "wb2axip"
+    p2 = tmp_path / "iccad2015_unit18_in1"; p2.mkdir()
+    assert ingest_run._project_family(p2, "test", families) == "iccad2015"
+    # curated DESIGN_NAME mapping still wins over the dir basename
+    p3 = tmp_path / "boom_mediumboom"; p3.mkdir()
+    assert ingest_run._project_family(p3, "ChipTop", families) == "boom_chiptop"
+    # DESIGN_NAME pattern still wins
+    p4 = tmp_path / "some_aes_thing"; p4.mkdir()
+    assert ingest_run._project_family(p4, "aes128_core", families) == "aes_xcrypt"
+
+
 def test_fix_events_unique_constraint(tmp_knowledge_dir):
     import sqlite3
     conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")

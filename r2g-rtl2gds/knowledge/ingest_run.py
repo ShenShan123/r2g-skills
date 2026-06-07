@@ -105,6 +105,33 @@ def _normalize_verdict(raw: str | None, before: Any, after: Any) -> str:
     return "inconclusive"   # stop_* / apply_failed / rerun_failed_* / unknown
 
 
+def _explicit_family(name: str, families: dict[str, Any]) -> str | None:
+    """Family from an EXPLICIT families.json mapping or pattern, or None if only
+    the generic split-on-underscore fallback would apply."""
+    if not name:
+        return None
+    if name in families.get("mappings", {}):
+        return families["mappings"][name]
+    for entry in families.get("patterns", []):
+        if re.search(entry["regex"], name, re.IGNORECASE):
+            return entry["family"]
+    return None
+
+
+def _project_family(project: Path, design_name: str, families: dict[str, Any]) -> str:
+    """Infer the design family consistently with backfill_fix_events.
+
+    A curated DESIGN_NAME mapping/pattern wins (e.g. ChipTop->boom_chiptop,
+    ^aes->aes_xcrypt). Otherwise infer from the PROJECT-DIR basename, which carries
+    the source-repo prefix that config.mk's DESIGN_NAME drops — so harvested designs
+    group the same way backfill grouped them (e.g. dir wb2axip_axi2axilite ->
+    'wb2axip' not DESIGN_NAME 'axi2axilite'->'axi2axilite'; iccad2015_unit18_in1 ->
+    'iccad2015' not DESIGN_NAME 'test'). Keeps live ingest and backfill in one
+    family namespace so fix_recipes aggregate correctly."""
+    return _explicit_family(design_name, families) or knowledge_db.infer_family(
+        project.name, families)
+
+
 def _read_fix_log(project: Path) -> list[dict[str, Any]]:
     return _read_stage_log(project / "reports" / "fix_log.jsonl")
 
@@ -306,7 +333,7 @@ def ingest(project: Path,
 
     cfg = _parse_config_mk(project / "constraints" / "config.mk")
     design_name = cfg.get("DESIGN_NAME", "unknown")
-    design_family = knowledge_db.infer_family(design_name, families)
+    design_family = _project_family(project, design_name, families)
     platform = cfg.get("PLATFORM", "nangate45")
 
     ppa = _read_json(project / "reports" / "ppa.json") or {}
