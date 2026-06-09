@@ -34,23 +34,40 @@ def ensure_schema(conn: sqlite3.Connection,
     conn.commit()
 
 
-# Lightweight forward migrations. schema.sql uses CREATE TABLE IF NOT EXISTS, so a
-# column added there never reaches an already-created runs.sqlite. Add such columns
-# here idempotently (ALTER TABLE ADD COLUMN is a no-op error if it already exists).
-_RUNS_ADDED_COLUMNS = {
-    "lvs_mismatch_class": "TEXT",
-    # Nullable provenance tag for the payoff A/B harness: which arm produced
-    # this run ('naive' | 'learned' | NULL). Populated from config.mk EVAL_ARM
-    # by ingest_run.py; absent for every non-eval run. Does not affect learning.
-    "eval_arm": "TEXT",
+# Idempotent ALTER TABLE ADD COLUMN migrations, keyed by table name. schema.sql
+# uses CREATE TABLE IF NOT EXISTS so it never re-creates existing tables; these
+# entries patch already-existing tables on legacy DBs. New tables (e.g. symptoms)
+# go straight into schema.sql.
+_ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "runs": {
+        "lvs_mismatch_class": "TEXT",
+        # Nullable provenance tag for the payoff A/B harness: which arm produced
+        # this run ('naive' | 'learned' | NULL). Populated from config.mk EVAL_ARM
+        # by ingest_run.py; absent for every non-eval run. Does not affect learning.
+        "eval_arm": "TEXT",
+    },
+    # Symptom-indexed memory (spec 2026-06-09): raw symptom tagging on the raw tiers.
+    "fix_events": {
+        "symptom_id": "TEXT",
+        "signature_json": "TEXT",
+    },
+    "fix_trajectories": {
+        "symptom_id": "TEXT",
+        "signature_json": "TEXT",
+    },
+    "run_violations": {
+        "symptom_id": "TEXT",
+        "signature_json": "TEXT",
+    },
 }
 
 
 def _migrate_add_columns(conn: sqlite3.Connection) -> None:
-    existing = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
-    for col, decl in _RUNS_ADDED_COLUMNS.items():
-        if col not in existing:
-            conn.execute(f"ALTER TABLE runs ADD COLUMN {col} {decl}")
+    for table, cols in _ADDED_COLUMNS.items():
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for col, decl in cols.items():
+            if col not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
 
 
 # --- Learnable-success predicate (shared) ---------------------------------

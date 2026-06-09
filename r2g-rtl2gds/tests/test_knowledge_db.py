@@ -126,3 +126,35 @@ def test_curated_families_map_dominant_ip_prefixes(tmp_knowledge_dir):
     # honest split('_')[0] singleton fallback instead of being force-merged.
     assert infer("spider") == "spider"          # NOT "spi"
     assert infer("axildouble") == "axildouble"  # NOT "axil"
+
+
+# --- Task 1: generalize column migration to multiple tables -----------------
+
+def test_migrate_adds_columns_to_multiple_tables(tmp_knowledge_dir):
+    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    fe_cols = {r[1] for r in conn.execute("PRAGMA table_info(fix_events)")}
+    rv_cols = {r[1] for r in conn.execute("PRAGMA table_info(run_violations)")}
+    ft_cols = {r[1] for r in conn.execute("PRAGMA table_info(fix_trajectories)")}
+    assert {"symptom_id", "signature_json"} <= fe_cols
+    assert {"symptom_id", "signature_json"} <= rv_cols
+    assert {"symptom_id", "signature_json"} <= ft_cols
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    conn.close()
+
+
+# --- Task 2: symptoms table + indexes ---------------------------------------
+
+def test_symptoms_table_and_indexes_exist(tmp_knowledge_dir):
+    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(symptoms)")}
+    assert {"symptom_id", "check_type", "class", "predicates_json",
+            "symptom_schema_version", "first_seen"} <= cols
+    idx = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index'")}
+    assert "idx_symptoms_check_class" in idx
+    assert "idx_fix_events_symptom" in idx
+    assert "idx_run_violations_symptom" in idx
+    assert "idx_fix_traj_symptom" in idx
+    conn.close()
