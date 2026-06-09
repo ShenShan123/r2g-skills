@@ -39,3 +39,14 @@ def test_sync_parses_frontmatter_and_backfills_evidence(tmp_path, tmp_knowledge_
     # idempotent: same content -> still one row, no error.
     assert sync_lessons.sync(conn, patterns_path=md) == 1
     conn.close()
+
+
+def test_parse_frontmatter_handles_dict_and_barelist():
+    # trigger dict + a bare-word strategy_ids list must both parse to real JSON.
+    fm = sync_lessons._parse_frontmatter(
+        "id: l1\nstatus: active\n"
+        'trigger: {check: lvs, class: symmetric_matcher, platform: "*"}\n'
+        "strategy_ids: [lvs_same_nets_seed, antenna_diode_repair]")
+    assert fm["trigger"] == {"check": "lvs", "class": "symmetric_matcher",
+                             "platform": "*"}
+    assert fm["strategy_ids"] == ["lvs_same_nets_seed", "antenna_diode_repair"]

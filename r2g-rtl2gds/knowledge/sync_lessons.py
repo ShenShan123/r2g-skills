@@ -43,10 +43,14 @@ def _parse_frontmatter(block: str) -> dict:
 
 
 def _jsonify(val: str) -> str:
-    # Turn {check: lvs, platform: "*"} and [a, b] into strict JSON.
+    # Turn {check: lvs, platform: "*"} and [lvs_same_nets_seed, b] into strict JSON.
     if val.startswith("{") or val.startswith("["):
         v = re.sub(r"([{\[,]\s*)([A-Za-z_][\w]*)(\s*):", r'\1"\2"\3:', val)  # quote keys
-        v = re.sub(r":(\s*)([A-Za-z_][\w/.*-]*)(\s*[,}\]])", r':\1"\2"\3', v)  # quote bare scalars
+        v = re.sub(r":(\s*)([A-Za-z_][\w/.*-]*)(\s*[,}\]])", r':\1"\2"\3', v)  # quote dict scalars
+        # quote bare-word LIST elements (preceded by [ or , ; followed by , or ]).
+        # lookbehind/lookahead don't consume the separators, so consecutive
+        # elements each match (e.g. [a, b] -> ["a", "b"]).
+        v = re.sub(r"(?<=[\[,])(\s*)([A-Za-z_][\w/.*-]*)(\s*)(?=[,\]])", r'\1"\2"\3', v)
         return v
     if val in ("true", "false", "null") or re.fullmatch(r"-?\d+(\.\d+)?", val):
         return val
