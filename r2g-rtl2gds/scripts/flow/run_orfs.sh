@@ -325,6 +325,32 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
       echo "  or accept the design is intractable on this OpenROAD version." | tee -a "$BACKEND_DIR/flow.log"
       echo "  Reference: arm_core (Amber a25 + 4 single_port_ram_*) hit this 2026-05-26." | tee -a "$BACKEND_DIR/flow.log"
     fi
+  elif [[ "$FAILED_STAGE" == "synth" ]]; then
+    # Synth-stage failures fall into three documented shapes, none fixable by a P&R
+    # knob (see references/failure-patterns.md). Emit a targeted HINT so the operator
+    # does not waste budget re-running with bigger timeouts / lower utilization.
+    if grep -qE "Executing AST frontend in derive mode" "$BACKEND_DIR/flow.log" 2>/dev/null \
+       && [[ $STAGE_STATUS -eq 124 || $STAGE_STATUS -eq 137 ]]; then
+      echo "" | tee -a "$BACKEND_DIR/flow.log"
+      echo "HINT: Synth timed out inside Yosys AST 'derive mode' — a const-function" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  elaboration blowup (classic parametric LFSR/CRC lfsr_mask), NOT scale." | tee -a "$BACKEND_DIR/flow.log"
+      echo "  A longer ORFS_TIMEOUT / lower utilization will NOT help (pre-floorplan)." | tee -a "$BACKEND_DIR/flow.log"
+      echo "  Intractable without RTL surgery. See failure-patterns.md:" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  'LFSR / CRC parametric function expansion in Yosys AST frontend'." | tee -a "$BACKEND_DIR/flow.log"
+    elif grep -qE "GTECH_[A-Z0-9_]+.* referenced .* not part of the design" "$BACKEND_DIR/flow.log" 2>/dev/null; then
+      echo "" | tee -a "$BACKEND_DIR/flow.log"
+      echo "HINT: Synth failed on a missing Synopsys GTECH/DesignWare primitive —" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  the RTL bundle is incomplete (vendor cell library absent). No config" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  knob supplies it; do NOT stub sequential/MUX cells (corrupts netlist)." | tee -a "$BACKEND_DIR/flow.log"
+      echo "  See failure-patterns.md: 'Missing proprietary primitive library'." | tee -a "$BACKEND_DIR/flow.log"
+    elif [[ $STAGE_STATUS -eq 124 || $STAGE_STATUS -eq 137 ]]; then
+      echo "" | tee -a "$BACKEND_DIR/flow.log"
+      echo "HINT: Synth timed out with no AST-derive or GTECH signature — likely a pure" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  SCALE timeout (huge multiplier/array design stuck in OPT/FLATTEN/ABC)." | tee -a "$BACKEND_DIR/flow.log"
+      echo "  Triage per failure-patterns.md 'Synth timeout triage: AST pathology vs" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  scale timeout'. If genuinely scale-bound (e.g. koios_lenet LeNet CNN), it" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  may be intractable on this host; a longer ORFS_TIMEOUT only sometimes helps." | tee -a "$BACKEND_DIR/flow.log"
+    fi
   fi
 fi
 

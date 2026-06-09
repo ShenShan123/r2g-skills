@@ -503,10 +503,41 @@ set_output_delay [expr $clk_period * $clk_io_pct] -clock $clk_name [all_outputs]
     return sdc_path
 
 
+def _is_vhdl_only(src_dir):
+    """True if the design ships VHDL with no synthesizable Verilog top.
+
+    This toolchain has no GHDL/VHDL Yosys frontend (Yosys reads Verilog/SV only),
+    so a VHDL source tree is *unsupported*, not merely unconfigured. Two signals:
+    (1) a legacy config.tcl declaring FILE_FORMAT "vhdl"; (2) the rtl/ dir is
+    dominated by .vhd files. Counting files (not just "any .v present") matters
+    because a VHDL SoC often ships a few Verilog leaf peripherals (e.g. an
+    OpenCores Ethernet MAC) that are NOT a Verilog version of the design.
+    See references/failure-patterns.md "VHDL-only design (no Verilog frontend)".
+    """
+    cfg = src_dir / "config.tcl"
+    if cfg.exists():
+        try:
+            txt = cfg.read_text(errors="ignore").lower()
+            if "file_format" in txt and "vhdl" in txt:
+                return True
+        except OSError:
+            pass
+    search = src_dir / "rtl" if (src_dir / "rtl").exists() else src_dir
+    vhd = len(list(search.rglob("*.vhd"))) + len(list(search.rglob("*.vhdl")))
+    ver = len(list(search.rglob("*.v"))) + len(list(search.rglob("*.sv")))
+    return vhd > 0 and vhd > ver
+
+
 def setup_one_design(design_name, force=False):
     """Set up a single design from rtl_designs/ into design_cases/."""
     src_dir = RTL_DESIGNS_DIR / design_name
     meta_path = src_dir / "design_meta.json"
+
+    # VHDL designs are unsynthesizable on this Verilog/SV-only toolchain. Report
+    # the real root cause instead of the generic "no design_meta.json" skip.
+    if _is_vhdl_only(src_dir):
+        return {"design": design_name, "status": "skip",
+                "reason": "VHDL design — unsupported (no GHDL/Verilog frontend)"}
 
     if not meta_path.exists():
         return {"design": design_name, "status": "skip", "reason": "no design_meta.json"}

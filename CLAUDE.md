@@ -34,6 +34,16 @@ design_cases/                   # All design runs (gitignored)
   _dashboard/                     # Auto-generated HTML dashboard
 ```
 
+## Skill Deployment (must be a symlink, not a copy)
+
+Claude Code loads the skill from `.claude/skills/r2g-rtl2gds/` (gitignored), **not** from
+the canonical `r2g-rtl2gds/` source tree. Deploy it with `bash r2g-rtl2gds/install.sh
+--project . --link` so the deployed path is a **symlink** to the canonical tree. A plain
+`cp` install silently goes stale — the harness then loads an old `SKILL.md` (wrong env
+paths, missing failure buckets) while the canonical skill keeps evolving. If a session's
+loaded skill disagrees with `r2g-rtl2gds/SKILL.md`, re-run the installer with `--link
+--force`. (Root-cause of the 2026-06-08 stale-skill defect.)
+
 ## Toolchain (autodetected by the skill)
 
 `scripts/flow/_env.sh` autodetects ORFS + tool paths. You don't need to source anything

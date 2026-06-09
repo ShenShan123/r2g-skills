@@ -798,6 +798,60 @@ run. `setup_rtl_designs.py` instead scans **all** RTL files up front and resolve
 (or reports) every referenced header in one pass — diagnose the same way: grep
 all `` `include `` directives across every RTL file before re-running.
 
+**Include-guard cross-file macro leak (the header IS present, but only the first
+module sees its body):** symptom is *not* "Can't open include file" — it is
+`do-yosys-canonicalize` aborting with
+`ERROR: Failed to resolve identifier \FOO for width detection!` (or
+`undefined macro`) for a token that **is** defined in a header that **is** in
+`rtl/` and **is** `` `include ``d by the failing module. Mechanism: yosys reads
+every RTL file in ONE preprocessing context, so `` `define `` macros persist
+across files. A header wrapped in `` `ifndef FOO_VH / `define FOO_VH / `endif ``
+that is `` `include ``d *inside* several modules emits its body only into the
+**first** including module; for every later module the guard is already true and
+the body is skipped, leaving its identifiers unresolved. This bites
+reconstructed/harvested content headers that carry **module-scoped `localparam`s**
+(FSM-state encodings, CSR address maps) which are legitimately included per
+module — PYGMY_V32I_rtl_core (`core.vh` + `control_status_registers.vh`, included
+in core/decode/csr/lsu) is the canonical case; first run failed at
+`decode.v:138: Failed to resolve identifier \CORE_STATE_EXEC`.
+- **Diagnose:** the token is defined and the header is present + included →
+  `grep -n "ifndef\|define\|endif" rtl/<header>.vh`. If the header is guarded
+  **and** included inside >1 module, this is the bug.
+- **Fix (design-safe):** remove the `` `ifndef/`define/`endif `` guard from the
+  header. Per-module `localparam`s do not collide across modules, so re-emitting
+  the body into each including module is correct — the guard was never needed for
+  a per-module-included localparam header (guards only matter for top-level
+  `` `define `` / global decls). Do **not** instead hoist the localparams into
+  one module or convert to `` `define `` macros — that changes RTL scoping.
+- After the fix the design synthesizes and routes normally (PYGMY_V32I_rtl_core:
+  clean timing WNS +6.4 ns, 11.6K insts, GDS produced on the first post-fix run).
+
+**Missing proprietary primitive library (Synopsys GTECH / DesignWare) — incomplete
+bundle, do NOT stub:** some legacy ASIC RTL (e.g. `faraday_dsp`) is *structural* — its
+clock-gating, register, and DFT-scan wrappers instantiate Synopsys GTECH
+technology-independent primitives (`GTECH_AND2/3`, `GTECH_AND_NOT`, `GTECH_MUX2/4/8`,
+`GTECH_NOR2/3`, `GTECH_NOT/BUF`, `GTECH_OA21`, and the sequential `GTECH_FJK3` JK
+flip-flop) directly by module name. These cells live in `$SYNOPSYS/.../gtech.v` /
+`dw_foundation.sldb`, ship only with Design Compiler, are **not redistributable**, and
+are absent from the open-source RTL bundle.
+- **Signature:** synthesis reaches `hierarchy -check -top` and aborts at
+  `do-yosys-canonicalize` with
+  `ERROR: Module '\GTECH_AND3' referenced in module '\CLKC' in cell '\uck6' is not part
+  of the design.` (the exact leaf cell varies). Earlier files elaborate fine as
+  pre-parsed AST; the failure is the first unresolved GTECH leaf, not a parse error.
+- **Diagnose:** `grep -rhoE "GTECH_[A-Z0-9_]+" rtl/ | sort | uniq -c` to enumerate the
+  used primitives, then `grep -rln "module[[:space:]]\+GTECH" .` (repo-wide) to confirm
+  none are defined anywhere (including sibling bundles and `assets/`).
+- **Action: classify as incomplete-bundle / skip — do not burn the retry.** No config.mk
+  knob supplies a missing cell library. The combinational GTECH cells *could* be stubbed,
+  but the sequential `GTECH_FJK3` and the exact MUX4/MUX8 select encodings and async
+  set/reset polarities are vendor-defined; reconstructing them is *invention*, not
+  recovery (same rule as arbitrary design-internal macro encodings above). A guessed stub
+  passes synthesis but yields a functionally-wrong netlist that fails LVS/sim silently —
+  never acceptable for a signoff-quality flow. Record
+  `status: incomplete_missing_primitive_lib` and stop. If the operator can supply the
+  genuine `gtech.v`, point `VERILOG_FILES` at it and re-run.
+
 ### PDN strap insufficient width (PDN-0179 + "Insufficient width to add straps")
 
 **Symptoms:**
@@ -838,6 +892,43 @@ Default per-stage `ORFS_TIMEOUT=3600s` isn't enough for:
 - Keep `PLACE_DENSITY_LB_ADDON = 0.25` to give the placer more slack and converge faster.
 - For small iscas89 designs that still time out, the issue is usually density oscillation — bump utilization to 20 and density to 0.25.
 - Per-stage elapsed in `backend/RUN_*/stage_log.jsonl` tells you which stage timed out; always read this before choosing a fix.
+
+#### Sub-variant: synth timeout is a Yosys AST-elaboration blowup (NOT memory→flop expansion) — raising the timeout does NOT help
+
+**Signature (distinguish from the memory-expansion case above):**
+- `1_1_yosys_canonicalize.log` ends mid-elaboration at
+  `N.M. Executing AST frontend in derive mode using pre-parsed AST for module '\<leaf>'`
+  with **no further progress** — it never reaches step 14 (ABC) or even `proc`/`opt`.
+  (The memory-expansion case gets *past* elaboration and stalls in ABC/opt with a huge gate count.)
+- The leaf module computes its structure from a **constant Verilog `function` called inside a
+  `generate` loop** (one call per output bit). The function does array-of-vector
+  shift/XOR work whose cost is super-linear in the bus widths.
+- Re-running with a larger `ORFS_TIMEOUT` reaches the *same* line and times out again
+  (e.g. 3600s → 14400s, both 124).
+
+**Root cause:** Yosys 0.63's AST `derive` constant-folds the function on every generate
+iteration. For a memory-array-shift function evaluated `(W_a + W_b)` times with per-call cost
+~`O(W_b · W_a²)`, the elaborator does not converge in hours. This is a **synthesis front-end**
+limit, independent of `STYLE`, `-DSYNTHESIS`/translate_off, `ORFS_TIMEOUT`, utilization, density,
+or any P&R lever — none of which touch elaboration.
+
+**How to confirm cheaply (do this BEFORE spending an ORFS budget):** run yosys standalone on
+just the VERILOG_FILES with a short cap — `timeout 180 $YOSYS -q -p 'read_verilog <files>;
+hierarchy -check -top <top>; stat'`. If it times out at 180s it will also time out at 4h.
+Trying `chparam -set STYLE "LOOP"` and/or `read_verilog -DSYNTHESIS` and re-capping at 300s
+isolates whether the hang is in the constant function (it is, if both still hang) vs. the
+mask *usage*.
+
+**Action:** No flow/config lever fixes this — report it honestly as `intractable` at the synth
+stage with `make_status=124`, do NOT keep raising the timeout. A real fix requires RTL surgery
+(precompute the masks offline and emit a flat XOR network, or pre-elaborate with a faster tool),
+which is out of automated scope — escalate to the user.
+
+**Validated case:** `verilog_lfsr_rtl_lfsr_descramble` (Alex Forencich parametrizable LFSR,
+`lfsr_descramble` → `lfsr` at LFSR_WIDTH=58 / DATA_WIDTH=64; `lfsr_mask` constant function
+shifts a 58×58-bit memory 64×, called 122×). Two backend runs hung at step 7.2
+`derive … module '\lfsr'` (3600s then 14400s, both exit 124). Standalone yosys read+hierarchy
+times out at 180s (default) and at 300s with `STYLE="LOOP" -DSYNTHESIS`. No GDS.
 
 ### Concurrent runs sharing DESIGN_NAME overwrite each other's config.mk
 
@@ -893,6 +984,42 @@ Default per-stage `ORFS_TIMEOUT=3600s` isn't enough for:
 - Do not downgrade `ABC_AREA` or `SYNTH_MEMORY_MAX_BITS` — they do not affect this front-end hotspot.
 
 **Known cases:** `verilog_ethernet_axis_baser_tx_64` (~8 lfsr widths × genvar loop).
+
+#### Sub-case: wide single-instance lfsr (DATA_WIDTH 64) is INTRACTABLE, not just slow (2026-06-08)
+
+Some standalone Forencich designs instantiate **one** `lfsr` with a large
+`DATA_WIDTH`/`LFSR_WIDTH` rather than a genvar sweep of small widths, and for
+those the "raise `ORFS_TIMEOUT` to 14400s" remedy above is **not enough** —
+they do not finish at 4h and never will on this Yosys/host.
+
+- **Confirmed intractable:** `verilog_lfsr_rtl_lfsr_scramble` and
+  `verilog_lfsr_rtl_lfsr_descramble` — the 64b66b Ethernet (de)scrambler:
+  top instantiates `lfsr` with `DATA_WIDTH=64, LFSR_WIDTH=58`. Two real runs
+  hung at the identical line `7.2. Executing AST frontend in derive mode …
+  for module '\lfsr'` and timed out (exit 124) at 3600s and 14400s.
+- **Confirmed tractable (for contrast):** every `DATA_WIDTH=8, LFSR_WIDTH≤32`
+  sibling completed to GDS — `verilog_lfsr_rtl_lfsr`, `..._crc`,
+  `..._prbs_gen`, `..._prbs_check`. The breaking variable is `DATA_WIDTH`.
+- **Why it's a cliff, not a slope:** the `lfsr_mask()` constant function costs
+  ≈ `O(DATA_WIDTH × LFSR_WIDTH²)` per call and is re-evaluated once per
+  generate bit (`LFSR_WIDTH + DATA_WIDTH` calls). DATA_WIDTH 8→64 and
+  LFSR_WIDTH 31→58 takes the work from ≈0.3M to ≈26M heavy multi-bit vector
+  iterations in Yosys's AST interpreter (~88×).
+- **Proof it's pure CPU, not a fixable OOM:** a bounded standalone derive of
+  the real `lfsr` instance ran 597s of CPU in a 600s wall window (100% busy),
+  made zero progress past the `lfsr` derive, and peaked at only **158 MB** RSS.
+  Memory knobs (`SYNTH_MEMORY_MAX_BITS`) and `ABC_AREA` are non-levers — the
+  hotspot is single-threaded front-end constant-folding.
+- **STYLE override does NOT help.** Forcing `STYLE="REDUCTION"` (via
+  `VERILOG_TOP_PARAMS = STYLE REDUCTION`, which `chparam`-propagates to the
+  child instance) only changes how the mask is *consumed*; the mask is still
+  *computed* by the same nested-loop constant function. Don't burn a run on it.
+- **Action:** classify as `ast_pathology` (intractable sub-bucket) and STOP —
+  do not launch another full ORFS run shorter than the 14400s that already
+  failed; that is guaranteed thrashing. A genuine fix would require rewriting
+  `lfsr.v`'s mask generation to a closed-form/iterative form Yosys can fold
+  cheaply, or escalating to a Yosys version with a faster const-eval — both
+  out of scope for a bounded single-design completion attempt.
 
 ### Synth timeout triage: AST pathology vs scale timeout (radar split)
 
@@ -1014,6 +1141,36 @@ The design synthesizes to zero or near-zero standard cells. There is nothing mea
 - If the design is intended to have logic, check if the correct top module was selected.
 
 **Known cases:** `clog2_test` (`simple_op` = `assign out = in`).
+
+### VHDL-only design (no Verilog frontend) — intractable, not a flow bug
+
+**Symptoms:**
+- `tools/setup_rtl_designs.py` skips with `no design_meta.json`, yet the source dir is
+  clearly a real, large design.
+- Source dir ships a legacy `config.tcl` with `FILE_FORMAT "vhdl"`; `rtl/` is dominated
+  by `.vhd` files.
+- If forced through synthesis: `read_verilog … leon.vhd: syntax error, unexpected
+  TOK_DECREMENT` (Yosys), or `expected member` (slang/SystemVerilog), on the first VHDL
+  `entity`/`port` line. `ghdl.so: cannot open shared object file` (no GHDL Yosys plugin),
+  and no `ghdl` binary on `PATH`.
+
+**Root Cause:**
+This flow is **Verilog/SystemVerilog-only**. Yosys here has no GHDL/VHDL frontend, so a
+VHDL RTL tree is unsynthesizable — it is an *unsupported language*, not a missing config or
+a flow bug. **Trap:** a VHDL SoC often ships a handful of Verilog *leaf peripherals* (e.g.
+the OpenCores Ethernet MAC `eth_top.v`/`ethermac.v` inside a LEON2 tree) — do NOT mistake
+those for a Verilog version of the CPU/SoC top.
+
+**Action:**
+- Mark **intractable (unsupported language)** in batch results. Do not retry, do not stub.
+- `setup_rtl_designs.py` now detects this (`_is_vhdl_only`: `config.tcl` FILE_FORMAT vhdl,
+  or `.vhd` files outnumber `.v`/`.sv`) and emits the explicit reason
+  `VHDL design — unsupported (no GHDL/Verilog frontend)`.
+- A real fix requires either installing a GHDL Yosys plugin (out of scope) or a
+  Verilog/SV reimplementation of the RTL (escalate to user).
+
+**Known cases:** `gaisler_leon2` (LEON2 SPARC V8 SoC, top entity `leon`, 79 `.vhd` files +
+3 unrelated Verilog Ethernet-MAC leaves), 2026-06-08.
 
 ## Batch-Campaign Fix Tool
 
