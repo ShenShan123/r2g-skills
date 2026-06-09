@@ -37,6 +37,8 @@ RUN_LVS="${R2G_RUN_LVS:-$SCRIPT_DIR/run_lvs.sh}"
 EXTRACT_DRC="${R2G_EXTRACT_DRC:-$EXTRACT_DIR/extract_drc.py}"
 EXTRACT_LVS="${R2G_EXTRACT_LVS:-$EXTRACT_DIR/extract_lvs.py}"
 DIAGNOSE="${R2G_DIAGNOSE:-$REPORTS_DIR_SCRIPTS/diagnose_signoff_fix.py}"
+KNOWLEDGE_DIR="$(cd "$SCRIPT_DIR/../../knowledge" && pwd)"
+export R2G_KNOWLEDGE_DIR="$KNOWLEDGE_DIR"
 
 REPORTS="$PROJECT_DIR/reports"
 mkdir -p "$REPORTS"
@@ -81,16 +83,25 @@ else:
     "$1" "$PROJECT_DIR"
 }
 
-_log_iter() {  # check iter strategy before after verdict from_stage violation_class before_categories_json
+_log_iter() {  # check iter strategy before after verdict from_stage vclass before_cats config_delta
   python3 -c 'import json,sys,os
 check,it,strategy,before,after,verdict,from_stage=sys.argv[1:8]
 proj,sid,logp=sys.argv[8],sys.argv[9],sys.argv[10]
 vclass,before_cats_json,ts=sys.argv[11],sys.argv[12],sys.argv[13]
-# after_status reflects the CURRENT (post-fix) report — correct to read at log time.
+config_delta=(sys.argv[14] if len(sys.argv)>14 else "") or "{}"
 rep=os.path.join(proj,"reports",check+".json")
-try: status=json.load(open(rep)).get("status")
-except Exception: status=None
-# cumulative applied-fix block from config.mk marked region
+try: report=json.load(open(rep))
+except Exception: report={}
+status=report.get("status")
+# symptom predicates from the current report (knowledge/ is on sys.path via R2G_KNOWLEDGE_DIR).
+preds={}
+try:
+    sys.path.insert(0, os.environ.get("R2G_KNOWLEDGE_DIR",""))
+    import symptom
+    preds=symptom.predicates_for(check, report)
+except Exception: preds={}
+env_keys=("PLACE_FAST","ROUTE_FAST","SKIP_ANTENNA_REPAIR","ROUTE_FAST_DRT_ITERS")
+env_flags={k:os.environ[k] for k in env_keys if k in os.environ}
 cum={}
 cfgp=os.path.join(proj,"constraints","config.mk")
 if os.path.exists(cfgp):
@@ -108,10 +119,11 @@ o=dict(check=check,iter=int(it),strategy=strategy,
        violation_class=(vclass or None),after_status=status,
        before_categories=(before_cats_json if before_cats_json else None),
        cumulative_config=json.dumps(cum,sort_keys=True),
-       ts=ts)
+       config_delta=config_delta, env_flags=json.dumps(env_flags,sort_keys=True),
+       predicates=preds, ts=ts)
 open(logp,"a").write(json.dumps(o)+"\n")' \
     "$1" "$2" "$3" "$4" "$5" "$6" "${7:-}" "$PROJECT_DIR" "$FIX_SESSION_ID" "$LOG" \
-    "${8:-}" "${9:-}" "$(date -u +%FT%TZ)"
+    "${8:-}" "${9:-}" "$(date -u +%FT%TZ)" "${10:-}"
 }
 
 fix_one() {  # $1 = drc|lvs
@@ -133,14 +145,18 @@ fix_one() {  # $1 = drc|lvs
     IFS=$'\x1f' read -r sid rerun recheck <<<"${line//$'\t'/$'\x1f'}"
     [[ -n "$sid" ]] || { echo "[$check] ERROR: diagnose returned empty output; aborting" >&2; return 1; }
     if [[ "$sid" == "STOP" ]]; then
-      _log_iter "$check" "$it" "none" "$before" "$before" "stop_${rerun}" "" "$before_vclass" "$before_cats"
+      _log_iter "$check" "$it" "none" "$before" "$before" "stop_${rerun}" "" "$before_vclass" "$before_cats" "{}"
       echo "[$check] stop: $rerun ${recheck:-}"; return 0
     fi
     echo "[$check] iter $it: applying $sid (rerun_from=${rerun:-none})"
-    if ! "$DIAGNOSE" "$PROJECT_DIR" --check "$check" --apply "$sid" >/dev/null; then
+    local apply_out cfg_delta="{}"
+    if ! apply_out="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --apply "$sid")"; then
       echo "[$check] apply '$sid' failed; aborting" >&2
-      _log_iter "$check" "$it" "$sid" "$before" "$before" "apply_failed" "$rerun" "$before_vclass" "$before_cats"; return 1
+      _log_iter "$check" "$it" "$sid" "$before" "$before" "apply_failed" "$rerun" "$before_vclass" "$before_cats" "{}"; return 1
     fi
+    cfg_delta="$(python3 -c 'import json,sys
+try: print(json.dumps(json.loads(sys.stdin.read()).get("config_edits") or {}))
+except Exception: print("{}")' <<<"$apply_out")"
     tried="${tried:+$tried,}$sid"
     if [[ -n "$rerun" ]]; then
       local rc=0
@@ -148,7 +164,7 @@ fix_one() {  # $1 = drc|lvs
       else "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?; fi
       if [[ $rc -ne 0 ]]; then
         echo "[$check] run_orfs failed (rc=$rc); aborting this check" >&2
-        _log_iter "$check" "$it" "$sid" "$before" "$before" "rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats"
+        _log_iter "$check" "$it" "$sid" "$before" "$before" "rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats" "{}"
         return 1
       fi
     fi
@@ -162,7 +178,7 @@ fix_one() {  # $1 = drc|lvs
       # instead of leaving verdict='applied' (which maps to 'win'). See
       # references/signoff-fixing.md. Skip the no_improvement/cleared logic.
       verdict="recheck_unparsed"; noimp=0
-      _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats"
+      _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "{}"
       echo "[$check] iter $it: $before -> ? ($verdict)"
       echo "[$check] re-check produced no parseable count; trying next strategy"
       continue
@@ -174,7 +190,7 @@ fix_one() {  # $1 = drc|lvs
       noimp=0
     fi
     [[ "$after" == "0" ]] && verdict="cleared"
-    _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats"
+    _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta"
     echo "[$check] iter $it: $before -> $after ($verdict)"
     if [[ "$after" == "0" ]]; then echo "[$check] CLEAN"; return 0; fi
     if [[ "$verdict" == "no_improvement" ]]; then echo "[$check] no improvement; trying next strategy"; fi
