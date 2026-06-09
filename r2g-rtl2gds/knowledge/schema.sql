@@ -165,7 +165,8 @@ CREATE TABLE IF NOT EXISTS fix_events_archive (
     before_categories_json TEXT, after_categories_json TEXT, rule_details_json TEXT,
     before_status TEXT, after_status TEXT, verdict TEXT, config_delta_json TEXT,
     cumulative_config_json TEXT, env_flags_json TEXT, tool_versions_json TEXT,
-    stage_metrics_json TEXT, stacked INTEGER, elapsed_s REAL, ts TEXT, provenance TEXT
+    stage_metrics_json TEXT, stacked INTEGER, elapsed_s REAL, ts TEXT, provenance TEXT,
+    symptom_id TEXT, signature_json TEXT          -- mirror fix_events (SELECT * archive copy)
 );
 
 -- ── Symptom-indexed memory (spec 2026-06-09) ─────────────────────────────

@@ -59,6 +59,12 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "symptom_id": "TEXT",
         "signature_json": "TEXT",
     },
+    # Cold archive mirrors fix_events for the SELECT * copy in archive_old_raw;
+    # patch legacy sidecar archive DBs so the column counts still match.
+    "fix_events_archive": {
+        "symptom_id": "TEXT",
+        "signature_json": "TEXT",
+    },
 }
 
 
