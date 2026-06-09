@@ -298,3 +298,36 @@ arms through the multi-hour ORFS flow, which is operator-driven and was **not** 
 credit-assignment on the config loop stays deprioritized** (the divergence is narrow and one-knob;
 the symptom-indexed *fix* loop — Phase 1 of this spec — is the higher-value surface and proceeds
 independently of this gate).
+
+## 2026-06-09 — Symptom-indexed memory shipped (Phase 0 + Phase 1); sky130hd real-flow pending
+
+Re-keyed the knowledge store from design-family-name to a **symptom signature**
+(`knowledge/symptom.py`: `{check, class, predicates}` → stable 16-hex `symptom_id`). Raw tiers
+(`fix_events`, `fix_trajectories`, `run_violations`) now carry `symptom_id`/`signature_json`;
+`learn_heuristics.py` emits a pooled `symptoms[symptom_id]` projection (with `by_platform` +
+`evidence_designs` provenance); `diagnose_signoff_fix.py` looks recipes up by symptom, seeds an
+informed cross-platform prior for untried strategies, and surfaces the matching active prose lesson
+(`r2g-lesson:` front-matter → `lessons` table via one-way `sync_lessons.py`).
+
+**Re-learn over the live store (780 runs / 417 fix_events):** 9 symptom buckets materialized
+(hash-keyed, design names only as `evidence_designs`, **no family name is ever a key**),
+`schema_version: 2`; 2 authored lessons synced. Legacy `run_violations` predate symptom tagging
+(`symptom_id` NULL), so lesson `evidence_runs` is 0 until new runs ingest — expected, not a bug.
+
+**Cross-platform transfer + gating: PROVEN deterministically** by
+`tests/test_sky130_transfer.py` — a symptom learned on nangate45 is retrieved for a sky130hd run
+via the pooled prior (`provenance` starts with `prior`), and a `platform_specific` fix is excluded
+from the cross-platform prior. **Real sky130hd end-to-end (Task 22) is PENDING an operator run**
+(multi-hour synth→ORFS→DRC→LVS→RCX on ~3 small sky130hd designs); the deterministic fixtures
+already prove the transfer/gating logic, so no result was fabricated. When run, also assert the
+extraction regression guard (non-zero `geometry.instance_count`/`die_area_um2` — guards the historic
+sky130 quote-bug fixed in `363a8b2`) and that the sky130 run's symptom joins the nangate45 bucket
+(`platforms_seen` gains `sky130hd`, `evidence_designs` gains the sky130 design).
+
+**Two legacy-DB / cross-table defects caught during implementation** (both invisible to the
+fresh-DB test fixtures, surfaced by real artifacts): (1) the `SELECT *` cold-archive copy needs the
+new symptom columns mirrored onto `fix_events_archive`; (2) `CREATE INDEX ON fix_events(symptom_id)`
+must run AFTER `_migrate_add_columns`, not inside `schema.sql`'s `executescript`, or a legacy DB
+re-learn dies with "no such column". **General principle:** schema changes that add columns to
+existing tables must be validated against a *legacy* DB (or the live store), never only a
+freshly-created one — `CREATE TABLE IF NOT EXISTS` silently skips the new columns on the old table.
