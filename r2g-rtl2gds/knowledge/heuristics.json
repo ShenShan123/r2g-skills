@@ -1,7 +1,8 @@
 {
-  "generated_at": "2026-06-07T09:39:06Z",
+  "generated_at": "2026-06-09T08:22:31Z",
   "source_run_count": 780,
   "min_successful_runs_required": 3,
+  "schema_version": 2,
   "families": {
     "rv32i": {
       "platforms": {
@@ -2841,6 +2842,580 @@
                 },
                 "n_sessions": 1
               }
+            }
+          }
+        }
+      }
+    }
+  },
+  "symptoms": {
+    "e5582b51cd0017b9": {
+      "check": "drc",
+      "class": "METAL5_ANTENNA",
+      "predicates": {},
+      "platforms_seen": [
+        "nangate45"
+      ],
+      "evidence_designs": [
+        "eth_demux"
+      ],
+      "n_sessions": 1,
+      "strategies": {}
+    },
+    "d2e84e2c519daf47": {
+      "check": "lvs",
+      "class": "real_connectivity",
+      "predicates": {},
+      "platforms_seen": [
+        "nangate45"
+      ],
+      "evidence_designs": [
+        "axi2axilite",
+        "axilsingle"
+      ],
+      "n_sessions": 2,
+      "strategies": {}
+    },
+    "c9aba8f0e1427a30": {
+      "check": "timing",
+      "class": "severe",
+      "predicates": {},
+      "platforms_seen": [
+        "nangate45"
+      ],
+      "evidence_designs": [
+        "test"
+      ],
+      "n_sessions": 3,
+      "strategies": {
+        "period_relax": {
+          "attempts": 3,
+          "successes": 2,
+          "failures": 0,
+          "wins": 1,
+          "by_platform": {
+            "nangate45": {
+              "attempts": 3,
+              "successes": 2,
+              "failures": 0,
+              "wins": 1
+            }
+          }
+        }
+      }
+    },
+    "913f3c15479aa474": {
+      "check": "timing",
+      "class": "minor",
+      "predicates": {},
+      "platforms_seen": [
+        "nangate45"
+      ],
+      "evidence_designs": [
+        "test"
+      ],
+      "n_sessions": 1,
+      "strategies": {
+        "period_relax": {
+          "attempts": 1,
+          "successes": 1,
+          "failures": 0,
+          "wins": 0,
+          "by_platform": {
+            "nangate45": {
+              "attempts": 1,
+              "successes": 1,
+              "failures": 0,
+              "wins": 0
+            }
+          }
+        }
+      }
+    },
+    "02d5eba137dfb507": {
+      "check": "drc",
+      "class": "antenna",
+      "predicates": {},
+      "platforms_seen": [
+        "nangate45"
+      ],
+      "evidence_designs": [
+        "iccad2017_unit18_F",
+        "iccad2017_unit2_G",
+        "pyocdriscv32_pulp_ips_common_cells_src_stream_register",
+        "untitled_verilog_microcontroller_cpu",
+        "verilog_ethernet_eth_arb_mux",
+        "verilog_ethernet_eth_demux"
+      ],
+      "n_sessions": 6,
+      "strategies": {
+        "antenna_diode_repair": {
+          "attempts": 6,
+          "successes": 5,
+          "failures": 0,
+          "wins": 1,
+          "by_platform": {
+            "nangate45": {
+              "attempts": 6,
+              "successes": 5,
+              "failures": 0,
+              "wins": 1
+            }
+          }
+        }
+      }
+    },
+    "5dceb431ccdc848b": {
+      "check": "drc",
+      "class": "beol",
+      "predicates": {},
+      "platforms_seen": [
+        "nangate45"
+      ],
+      "evidence_designs": [
+        "APB_Based_GPIO_Core_APB_GPIO_CORE_rtl_gpio_register",
+        "APB_Peripheral_Wrappers_Verilog_RTL_Design_apb_ram_src_apb_ram",
+        "ARM9_compatible_soft_CPU_core_RTL_arm9_compatiable_code",
+        "ARM9_compatible_soft_CPU_core_RTL_arm9_compitable_code_comment",
+        "ARM9_compatible_soft_CPU_core_RTL_variant_risclite_mx",
+        "ARM9_compatible_soft_CPU_core_RTL_variant_risclite_mx_mult",
+        "AXI_Lite_DMA_axilite",
+        "DSP_ACCELERATOR_CHIPLET_dma_controller",
+        "DSP_ACCELERATOR_CHIPLET_ifft_core",
+        "FPGA_UART_RETRY_RTL_uart2axi4_PLANB3",
+        "I2SRV32_S_v1_rtl_uart_regs",
+        "LIBELLULA_rtl_delay_lattice_rb",
+        "LIBELLULA_rtl_tracker_pool",
+        "Md5Core",
+        "NanoCore_src_peripherals_part_pkt_part_Pkt_TCP_CRC",
+        "PYGMY_V32I_rtl_decode",
+        "RISC_V_RV32I_Processor_Design_and_Verification_rtl_msrv32_csr_file",
+        "RISC_V_rtl_rv32i_core",
+        "Riscy_SoC_rtl_cpu_execute",
+        "aes_core",
+        "bgm",
+        "biriscv_core",
+        "blake2s_core",
+        "blake2s_wrapper",
+        "blob_merge",
+        "cf_cordic_v_18_18_18",
+        "cf_cordic_v_8_8_8",
+        "cf_fft_256_8",
+        "cf_fir_24_16_16",
+        "chacha_core",
+        "chacha_wrapper",
+        "cmac_core",
+        "cmac_wrapper",
+        "core_dbg_bridge",
+        "core_soc_top",
+        "core_usb_cdc_top",
+        "core_usb_host_top",
+        "des_area",
+        "des_perf",
+        "diffeq1",
+        "diffeq2",
+        "e203_hbirdv2_rtl_e203_perips_apb_spi_master_apb_spi_master",
+        "e203_hbirdv2_rtl_e203_perips_apb_uart_apb_uart",
+        "faraday_dma",
+        "faraday_risc",
+        "fir_scu_rtl_restructured_for_cmm_exp",
+        "fpga_fft_verilog_butterfly_top_module_16_point",
+        "fpga_fft_verilog_butterfly_top_module_8_point",
+        "fpu_floating_multiplication",
+        "hdl_benchmarks_min_iscas89_verilog_s13207a",
+        "hdl_benchmarks_min_iscas89_verilog_s15850a",
+        "i2c_master_axil",
+        "i2c_master_wbs_8",
+        "iccad2015_unit01_in1",
+        "iccad2015_unit01_in2",
+        "iccad2015_unit02_in1",
+        "iccad2015_unit02_in2",
+        "iccad2015_unit03_in1",
+        "iccad2015_unit03_in2",
+        "iccad2015_unit04_in1",
+        "iccad2015_unit04_in2",
+        "iccad2015_unit05_in1",
+        "iccad2015_unit05_in2",
+        "iccad2015_unit07_in1",
+        "iccad2015_unit07_in2",
+        "iccad2015_unit08_in1",
+        "iccad2015_unit08_in2",
+        "iccad2015_unit09_in1",
+        "iccad2015_unit09_in2",
+        "iccad2015_unit10_in1",
+        "iccad2015_unit10_in2",
+        "iccad2015_unit11_in1",
+        "iccad2015_unit11_in2",
+        "iccad2015_unit12_in1",
+        "iccad2015_unit12_in2",
+        "iccad2015_unit13_in1",
+        "iccad2015_unit13_in2",
+        "iccad2015_unit14_in1",
+        "iccad2015_unit14_in2",
+        "iccad2015_unit15_in1",
+        "iccad2015_unit15_in2",
+        "iccad2015_unit16_in1",
+        "iccad2015_unit16_in2",
+        "iccad2015_unit17_in1",
+        "iccad2015_unit17_in2",
+        "iccad2015_unit18_in1",
+        "iccad2015_unit18_in2",
+        "iccad2015_unit19_in1",
+        "iccad2015_unit19_in2",
+        "iccad2015_unit20_in1",
+        "iccad2015_unit20_in2",
+        "iccad2015_unit21_in1",
+        "iccad2015_unit21_in2",
+        "iccad2015_unit22_in1",
+        "iccad2015_unit22_in2",
+        "iccad2015_unit23_in1",
+        "iccad2015_unit23_in2",
+        "iccad2017_unit12_F",
+        "iccad2017_unit16_G",
+        "iccad2017_unit19_F",
+        "iccad2017_unit19_G",
+        "iccad2017_unit20_F",
+        "iccad2017_unit20_G",
+        "iccad2017_unit5_F",
+        "iccad2017_unit5_G",
+        "iccad2017_unit6_F",
+        "iccad2017_unit6_G",
+        "iccad2017_unit7_F",
+        "iir_no_combinational",
+        "iscas89_s13207",
+        "iscas89_s13207a",
+        "iscas89_s15850",
+        "iscas89_s15850a",
+        "iscas89_s35932",
+        "iscas89_s38417",
+        "iscas89_s38584",
+        "kleine_riscv_core",
+        "koios_bnn",
+        "koios_softmax",
+        "koios_test",
+        "oc54_cpu",
+        "opdb_dynamic_node_2dmesh_network_2dmesh",
+        "opdb_dynamic_node_xbar_network_xbar",
+        "opdb_ifu_esl",
+        "opdb_pico",
+        "opencores_pci_bridge32",
+        "paj_framebuftop_no_mem",
+        "picorv32_Xilinx_rtl_DMAC",
+        "picorv32_axi",
+        "picorv32_core",
+        "picorv32_wb",
+        "pipelined_fft_64",
+        "poly1305_core",
+        "poly1305_wrapper",
+        "prince_core",
+        "prince_wrapper",
+        "qspiflash_wb_controller",
+        "qspiflash_wbqspiflash",
+        "qspiflash_wbquad",
+        "riscv_soc_integration_rtl_riscv_regfile",
+        "sdspi_wb_controller",
+        "secworks_aes_src_rtl_aes_core",
+        "secworks_aes_src_rtl_aes_decipher_block",
+        "secworks_aes_src_rtl_aes_encipher_block",
+        "secworks_aes_src_rtl_aes_key_mem",
+        "secworks_sha256_src_interfaces_axi4_rtl_sha256_axi4",
+        "secworks_sha256_src_interfaces_axi4_rtl_sha256_axi4_slave",
+        "secworks_sha256_src_rtl_sha256_core",
+        "secworks_sha256_src_rtl_sha256_w_mem",
+        "secworks_sha512_src_rtl_sha512_w_mem",
+        "sha",
+        "sha1_core_repo",
+        "sha1_wrapper_repo",
+        "sha256_axi4",
+        "sha256_core",
+        "sha256_stream",
+        "uart16550_top",
+        "ulixxe_usb_cdc_sie",
+        "ulixxe_usb_cdc_top",
+        "ultraembedded_riscv_core",
+        "ultraembedded_usb_device",
+        "uriscv_core",
+        "usb_cdc_sie",
+        "usb_cdc_top",
+        "verilog_axi_axi_cdma",
+        "verilog_axi_axi_crossbar",
+        "verilog_axi_axi_crossbar_rd",
+        "verilog_axi_axi_crossbar_wr",
+        "verilog_axi_axi_dma",
+        "verilog_axi_axi_fifo",
+        "verilog_axi_axi_fifo_rd",
+        "verilog_axi_axi_fifo_wr",
+        "verilog_axi_axi_interconnect",
+        "verilog_axi_axil_crossbar",
+        "verilog_axi_axil_crossbar_rd",
+        "verilog_axi_axil_crossbar_wr",
+        "verilog_axi_axil_interconnect",
+        "verilog_axis_axis_async_fifo_adapter",
+        "verilog_axis_axis_fifo",
+        "verilog_axis_axis_fifo_adapter",
+        "verilog_axis_axis_frame_length_adjust_fifo",
+        "verilog_can_can_fifo",
+        "verilog_ethernet_arp",
+        "verilog_ethernet_axis_baser_tx_64",
+        "verilog_ethernet_eth_mac_10g",
+        "verilog_ethernet_ip64_core",
+        "verilog_ethernet_ip_64",
+        "verilog_ethernet_ip_arb_mux",
+        "verilog_ethernet_ip_complete",
+        "verilog_ethernet_ip_complete_64",
+        "verilog_ethernet_ip_core",
+        "verilog_ethernet_ip_eth_rx_64",
+        "verilog_ethernet_ip_eth_tx_64",
+        "verilog_ethernet_ip_mux",
+        "verilog_ethernet_ptp_clock_cdc",
+        "verilog_ethernet_ptp_td_leaf",
+        "verilog_ethernet_udp64_core",
+        "verilog_ethernet_udp_64",
+        "verilog_ethernet_udp_arb_mux",
+        "verilog_ethernet_udp_complete",
+        "verilog_ethernet_udp_complete_64",
+        "verilog_ethernet_udp_core",
+        "verilog_ethernet_udp_demux",
+        "verilog_ethernet_udp_ip_rx_64",
+        "verilog_ethernet_udp_ip_tx_64",
+        "verilog_ethernet_udp_mux",
+        "verilog_pcie_rtl_pcie_us_axi_dma",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex1BT16_fir_20",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex1EP16_fir_6",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex1LS16_fir_41",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex1PM16_fir_28",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex2BT16_fir_71",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex2EP16_fir_13",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex2PM16_fir_119",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex3PM16_fir_61",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex4EP16_fir_10",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex4LS16_fir",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_FIR_ex4PM16_fir_152",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_common_1r2w",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_common_2r1w",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_large_bgm",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_large_mac1",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_large_mac2",
+        "vtr_verilog_to_routing_min_odin_ii_regression_test_benchmark_verilog_large_paj_framebuftop_hierarchy_no_mem",
+        "vtr_verilog_to_routing_min_vtr_flow_benchmarks_verilog_blob_merge",
+        "vtr_verilog_to_routing_min_vtr_flow_benchmarks_verilog_diffeq1",
+        "vtr_verilog_to_routing_min_vtr_flow_benchmarks_verilog_diffeq2",
+        "vtr_verilog_to_routing_min_vtr_flow_benchmarks_verilog_sha",
+        "wb2axip_axi2axi3",
+        "wb2axip_axi2axilite",
+        "wb2axip_axi2axilsub",
+        "wb2axip_axidouble",
+        "wb2axip_axil2axis",
+        "wb2axip_axildouble",
+        "wb2axip_axilfetch",
+        "wb2axip_axilsafety",
+        "wb2axip_axilsingle",
+        "wb2axip_axilxbar",
+        "wb2axip_axim2wbsp",
+        "wb2axip_aximm2s",
+        "wb2axip_aximrd2wbsp",
+        "wb2axip_aximwr2wbsp",
+        "wb2axip_axiperf",
+        "wb2axip_axis2mm",
+        "wb2axip_axisbroadcast",
+        "wb2axip_axisgdma",
+        "wb2axip_axivcamera",
+        "wb2axip_axivdisplay",
+        "wb2axip_axivfifo",
+        "wb2axip_axixbar",
+        "wb2axip_axixclk",
+        "wb2axip_wbxbar",
+        "wb2axip_wbxclk",
+        "wbi2c_rtl_wbi2cslave",
+        "wbscope_avalon",
+        "wbscope_axil",
+        "wbscope_wishbone",
+        "wbuart32_axiluart",
+        "wbuart_top",
+        "zipcpu_wbdmac",
+        "zipcpu_zipdma",
+        "zipcpu_zipdma__speed0"
+      ],
+      "n_sessions": 262,
+      "strategies": {
+        "beol_only_drc": {
+          "attempts": 262,
+          "successes": 262,
+          "failures": 0,
+          "wins": 0,
+          "by_platform": {
+            "nangate45": {
+              "attempts": 262,
+              "successes": 262,
+              "failures": 0,
+              "wins": 0
+            }
+          }
+        }
+      }
+    },
+    "ecf6a29e5a339cd3": {
+      "check": "orfs",
+      "class": "full",
+      "predicates": {},
+      "platforms_seen": [
+        "nangate45"
+      ],
+      "evidence_designs": [
+        "Fadder_",
+        "FloatingMultiplication",
+        "R_twoW",
+        "arm_core",
+        "arp",
+        "avscope",
+        "axi_fifo_rd",
+        "axi_fifo_wr",
+        "axi_interconnect",
+        "axil_interconnect",
+        "axilscope",
+        "aximm2s",
+        "axis2mm",
+        "axis_async_fifo_adapter",
+        "axis_baser_rx_64",
+        "axis_baser_tx_64",
+        "axis_fifo",
+        "axis_fifo_adapter",
+        "axis_frame_length_adjust_fifo",
+        "axis_ram_switch",
+        "axisgdma",
+        "axivcamera",
+        "axivdisplay",
+        "axivfifo",
+        "c2670",
+        "cast_ap_fixed_ap_fixed_8_4_5_3_0_config9_110",
+        "diffeq_f_systemC",
+        "diffeq_paj_convert",
+        "eth_mac_10g",
+        "eth_mac_1g",
+        "eth_mac_1g_fifo",
+        "eth_mac_mii_fifo",
+        "ex1BT16_fir",
+        "ex4LS16_fir",
+        "gemm_layer",
+        "i2c_master_top",
+        "ip_arb_mux",
+        "ip_complete",
+        "ip_complete_64",
+        "ip_demux",
+        "ip_mux",
+        "mac1",
+        "mac2",
+        "myproject",
+        "prince",
+        "prince_core",
+        "r8051",
+        "riscv_core",
+        "s1196",
+        "s38584",
+        "s820",
+        "s832",
+        "s953",
+        "sha1_core",
+        "simple_op",
+        "td_fused_top_Block_entry_proc_proc392",
+        "top",
+        "twoR_twoW",
+        "udp",
+        "udp_64",
+        "udp_arb_mux",
+        "udp_complete",
+        "udp_complete_64",
+        "udp_demux",
+        "udp_mux",
+        "verilog_ethernet_axis_baser_tx_64",
+        "wbdmac",
+        "wbscope",
+        "zipdma"
+      ],
+      "n_sessions": 125,
+      "strategies": {
+        "rerun_from_stage": {
+          "attempts": 125,
+          "successes": 83,
+          "failures": 42,
+          "wins": 0,
+          "by_platform": {
+            "nangate45": {
+              "attempts": 125,
+              "successes": 83,
+              "failures": 42,
+              "wins": 0
+            }
+          }
+        }
+      }
+    },
+    "574278391cb1f951": {
+      "check": "orfs",
+      "class": "route",
+      "predicates": {},
+      "platforms_seen": [
+        "nangate45"
+      ],
+      "evidence_designs": [
+        "axilscope",
+        "axis_async_fifo_adapter",
+        "axis_fifo",
+        "axis_fifo_adapter",
+        "axis_frame_length_adjust_fifo",
+        "verilog_axis_axis_ram_switch",
+        "verilog_ethernet_eth_mac_1g_fifo",
+        "verilog_ethernet_eth_mac_mii_fifo",
+        "verilog_ethernet_udp_complete",
+        "verilog_ethernet_udp_complete_64",
+        "wbdmac",
+        "wbscope"
+      ],
+      "n_sessions": 12,
+      "strategies": {
+        "rerun_from_stage": {
+          "attempts": 12,
+          "successes": 12,
+          "failures": 0,
+          "wins": 0,
+          "by_platform": {
+            "nangate45": {
+              "attempts": 12,
+              "successes": 12,
+              "failures": 0,
+              "wins": 0
+            }
+          }
+        }
+      }
+    },
+    "26b0bbab454648e0": {
+      "check": "orfs",
+      "class": "place",
+      "predicates": {},
+      "platforms_seen": [
+        "nangate45"
+      ],
+      "evidence_designs": [
+        "arm_core",
+        "axis_ram_switch",
+        "eth_mac_1g_fifo",
+        "eth_mac_mii_fifo",
+        "koios_gemm_layer"
+      ],
+      "n_sessions": 5,
+      "strategies": {
+        "rerun_from_stage": {
+          "attempts": 5,
+          "successes": 1,
+          "failures": 4,
+          "wins": 0,
+          "by_platform": {
+            "nangate45": {
+              "attempts": 5,
+              "successes": 1,
+              "failures": 4,
+              "wins": 0
             }
           }
         }
