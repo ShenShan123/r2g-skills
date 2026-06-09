@@ -1,0 +1,3 @@
+# Per-arm config.mk dirs are regenerable via:
+#   python3 eval_heuristics.py emit --eval-set eval_set.json --out-dir arms --projects-root <design_cases>
+arms/

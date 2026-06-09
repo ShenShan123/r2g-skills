@@ -275,3 +275,26 @@ structured outcomes):**
 
 **General principle:** when a self-improvement loop ships nothing, suspect the *success definition*
 before the data — here the outcomes existed all along; the gate was reading the wrong column.
+
+## 2026-06-09 — Phase 0.1 payoff A/B harness: prepared, verdict gated on operator run
+
+Ran the dormant `knowledge/eval_heuristics.py emit` step against the live `heuristics.json` to
+build the never-existed eval set (`knowledge/eval/eval_set.json`, 8 nangate45 designs;
+`knowledge/eval/arms/eval_plan.json`). Honest quantified finding from a 60-design scan
+(`emit --projects-root design_cases`):
+
+- **~27 % (16/60) of small/medium nangate45 designs get a *non-no-op* learned config**; the other
+  ~73 % emit an identical naive vs. learned `config.mk` (the learned loop is inert for them).
+- **Every divergence is on a single knob — `CORE_UTILIZATION` — and always *downward*** (naive
+  size-baseline 25–30 → learned 15–25). No other tunable (density addon, ABC area, synth-hier,
+  clock) ever differed in the sample. So the entire measurable payoff surface of the learned config
+  loop today is "pack a little looser than the size baseline."
+
+**Gate decision (honest):** the win/loss verdict CANNOT be concluded without running the paired
+arms through the multi-hour ORFS flow, which is operator-driven and was **not** run in this session.
+`eval_summary.json` is therefore **deliberately absent — not fabricated.** The harness is now primed
+(eval_set + emitted arms committed); an operator runs both arms per `eval_plan.json` then
+`eval_heuristics.py summarize --arms-dir eval/arms --out-dir eval/arms`. Until that runs, **Phase 2
+credit-assignment on the config loop stays deprioritized** (the divergence is narrow and one-knob;
+the symptom-indexed *fix* loop — Phase 1 of this spec — is the higher-value surface and proceeds
+independently of this gate).

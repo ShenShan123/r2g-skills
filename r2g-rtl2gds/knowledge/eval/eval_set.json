@@ -1,0 +1,13 @@
+{
+  "description": "Phase 0.1 payoff A/B eval set (built 2026-06-09). Small/medium nangate45 designs where learned suggest_config diverges from the size baseline. All divergences are on CORE_UTILIZATION (learned recommends lower utilization). No-op-A/B designs were dropped via `emit` knob_diff inspection.",
+  "pairs": [
+    {"design_name": "aes_core", "platform": "nangate45"},
+    {"design_name": "AMBA_Protocol_Family_apb_protocol", "platform": "nangate45"},
+    {"design_name": "ARM9_compatible_soft_CPU_core_RTL_arm9_compatiable_code", "platform": "nangate45"},
+    {"design_name": "CAN_Bus_Controller_can_tx", "platform": "nangate45"},
+    {"design_name": "DMA_Controller_dma_controller", "platform": "nangate45"},
+    {"design_name": "DSP_ACCELERATOR_CHIPLET_dma_controller", "platform": "nangate45"},
+    {"design_name": "PicoRV32_Based_SoC_picorv32_mem_adapter", "platform": "nangate45"},
+    {"design_name": "Protocol_Bridge_FPGA_rtl_spi_master_tx", "platform": "nangate45"}
+  ]
+}
