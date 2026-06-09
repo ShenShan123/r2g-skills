@@ -253,3 +253,36 @@ def test_trajectories_carry_symptom(tmp_knowledge_dir):
     assert row[0] == "abc123def4560000"
     assert json.loads(row[1])["class"] == "symmetric_matcher"
     conn.close()
+
+
+def test_learn_emits_symptom_projection_pooled_across_families(tmp_knowledge_dir):
+    db = tmp_knowledge_dir / "runs.sqlite"
+    conn = knowledge_db.connect(db)
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    sig = '{"check": "drc", "class": "METAL1_ANTENNA", "predicates": {}}'
+    sid = __import__("symptom").symptom_id(json.loads(sig))
+    # Same symptom, TWO different families/platforms -> must pool into one bucket.
+    rows = [("e_aes", "aes", "nangate45", "demo_aes"),
+            ("e_fft", "fft", "nangate45", "demo_fft")]
+    for ep, fam, plat, dn in rows:
+        conn.execute(
+            "INSERT INTO fix_events (fix_session_id, design_name, design_family, "
+            " platform, check_type, violation_class, iter, strategy, verdict, "
+            " symptom_id, signature_json, ts) "
+            "VALUES (?,?,?,?,'drc','METAL1_ANTENNA',1,'antenna_diode_repair',"
+            " 'cleared',?,?,?)",
+            (ep, dn, fam, plat, sid, sig, "2026-06-09T00:00:00Z"))
+    conn.commit(); conn.close()
+    out = tmp_knowledge_dir / "heuristics.json"
+    learn_heuristics.learn(db, out)
+    data = json.loads(out.read_text())
+    bucket = data["symptoms"][sid]
+    assert bucket["check"] == "drc" and bucket["class"] == "METAL1_ANTENNA"
+    assert bucket["n_sessions"] == 2                      # pooled across aes + fft
+    assert set(bucket["platforms_seen"]) == {"nangate45"}
+    assert sorted(bucket["evidence_designs"]) == ["demo_aes", "demo_fft"]
+    strat = bucket["strategies"]["antenna_diode_repair"]
+    assert strat["successes"] == 2
+    assert strat["by_platform"]["nangate45"]["successes"] == 2
+    # family name must NOT be a key anywhere in the symptom projection
+    assert "aes" not in json.dumps(list(data["symptoms"].keys()))

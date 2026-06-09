@@ -229,6 +229,58 @@ def _recipes_from_trajectories(trajectories: list[dict]) -> dict[tuple, dict]:
     return final
 
 
+def _symptom_recipes_from_trajectories(trajectories: list[dict]) -> dict[str, dict]:
+    """Aggregate trajectories BY symptom_id (pooled across families/platforms).
+    Family-name is recorded only as evidence_designs provenance; platform is a
+    conditioning attribute kept in platforms_seen + per-strategy by_platform
+    (symptom-indexed memory, spec 2026-06-09)."""
+    acc: dict[str, dict] = {}
+    for t in trajectories:
+        sid = t.get("symptom_id")
+        if not sid:
+            continue
+        sig = json.loads(t.get("signature_json") or "{}")
+        plat = t.get("platform") or "unknown"
+        node = acc.setdefault(sid, {
+            "check": sig.get("check"), "class": sig.get("class"),
+            "predicates": sig.get("predicates") or {},
+            "platforms_seen": set(), "evidence_designs": set(),
+            "_sessions": set(), "strategies": {}})
+        node["platforms_seen"].add(plat)
+        if t.get("design_name"):
+            node["evidence_designs"].add(t["design_name"])
+        node["_sessions"].add(t.get("fix_session_id"))
+        for step in json.loads(t.get("path_json") or "[]"):
+            stratid = step.get("strategy")
+            if not stratid or stratid == "none":
+                continue
+            s = node["strategies"].setdefault(stratid, {
+                "attempts": 0, "successes": 0, "failures": 0, "wins": 0,
+                "by_platform": {}})
+            bp = s["by_platform"].setdefault(plat, {
+                "attempts": 0, "successes": 0, "failures": 0, "wins": 0})
+            verdict = step.get("verdict")
+            for tgt in (s, bp):
+                tgt["attempts"] += 1
+                if verdict == "cleared":
+                    tgt["successes"] += 1
+                elif verdict == "win":
+                    tgt["wins"] += 1
+                elif verdict in ("no_change", "regression"):
+                    tgt["failures"] += 1
+    final: dict[str, dict] = {}
+    for sid, node in acc.items():
+        final[sid] = {
+            "check": node["check"], "class": node["class"],
+            "predicates": node["predicates"],
+            "platforms_seen": sorted(node["platforms_seen"]),
+            "evidence_designs": sorted(node["evidence_designs"]),
+            "n_sessions": len(node["_sessions"]),
+            "strategies": node["strategies"],
+        }
+    return final
+
+
 def learn(db_path: Path | str,
           out_path: Path | str) -> dict:
     db_path = Path(db_path)
@@ -277,7 +329,9 @@ def learn(db_path: Path | str,
         "generated_at": _dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "source_run_count": len(rows),
         "min_successful_runs_required": MIN_SUCCESSFUL,
+        "schema_version": 2,                       # symptom projection added
         "families": families,
+        "symptoms": _symptom_recipes_from_trajectories(trajectories),
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
