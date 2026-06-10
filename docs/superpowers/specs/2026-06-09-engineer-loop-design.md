@@ -13,6 +13,14 @@ solutions join the recipe pool **only after proven efficacy** (A/B win); (b) new
 recipe pool / learning DB indexed by **issue category × design class × platform** (design
 class promoted from Phase-2 conditioning to a Phase-1 index dimension); (c) new decision 9 +
 §5.8 — dedicated **dead-code & script cleanup** task added to Phase-1 scope.
+**Revision 2026-06-10 (user review #2):** (a) decision 4 expanded + new decision 10 — the
+Tier-0 journal captures the **full PD-flow telemetry** (every command executed, deterministic
+summaries of every tool log/report stored in the DB, every EDA-tool bug); (b) new decision
+11 — **two-database architecture**: high-volume journal DB (`journal.sqlite`, gitignored)
+physically separate from the curated recipe/knowledge DB (`runs.sqlite` + `heuristics.json`,
+git-tracked), linked via `symptom_id`/`run_id`/`fix_session_id`; (c) new §5.9 — queryable
+end-to-end provenance: **which solution came from which actions, on which designs, with
+which bugs**.
 
 ---
 
@@ -43,10 +51,12 @@ evidence-only recipe promotion + auto-demotion).
 3. **Fully autonomous, no human gates.** Recipe promotion is decided by machine evidence
    (A/B verdicts), not review. Consequence: every gate that used to be a human becomes an
    explicit, tested mechanism (§7).
-4. **Action-level trajectory capture.** A new append-only **Tier-0 `actions` table** records
-   every discrete action (each config-knob delta, SDC edit, stage re-entry, tool invocation +
-   exit status, escalation, A/B launch, promote/demote), enabling credit assignment inside
-   stacked fixes.
+4. **Action-level trajectory capture — full flow telemetry.** A new append-only **Tier-0
+   journal** records every discrete action (each config-knob delta, SDC edit, stage
+   re-entry, tool invocation + exit status, escalation, A/B launch, promote/demote) AND the
+   complete PD-flow context: every command executed, a deterministic summary of every tool
+   log and report stored in the database, and every EDA-tool bug/error (decision 10) —
+   enabling credit assignment inside stacked fixes and post-hoc forensics.
 5. **Recipe-level inline A/B.** Each new/changed recipe from the learner is validated by an
    automatic matched-design A/B (new recipe ranked first vs. prior ranking). Win → promote;
    loss/inconclusive → stays shadow. The existing never-run global eval harness
@@ -78,6 +88,21 @@ evidence-only recipe promotion + auto-demotion).
 9. **Repo hygiene is in scope.** Phase 1 includes a dedicated **dead-code & script cleanup**
    task (§5.8): retire the accumulated one-off operator scripts, stale logs/scratch dirs, and
    ad-hoc campaign drivers that `engineer_loop.py` supersedes.
+10. **The Tier-0 journal captures the whole PD flow, not just fix iterations.** One row per
+    command executed (tool, argv, stage, exit code, duration, log path); one row per
+    log/report **summary** — a deterministic digest (error/warning lines + counts, key
+    metrics, last lines on failure) produced by a stdlib-only summarizer and stored in the
+    DB so raw log files can rotate without losing signal; one row per detected EDA-tool bug,
+    tagged with its `symptom_id`. Summaries are deterministic extracts, never LLM output —
+    the loop core stays reproducible.
+11. **Two linked databases.** The high-volume **journal DB** (`knowledge/journal.sqlite`,
+    gitignored, own size/rotation policy) is physically separate from the curated
+    **recipe/knowledge DB** (`runs.sqlite` + `heuristics.json`, git-tracked, ships
+    pre-trained). They link via shared keys — `symptom_id` (bug identity), `run_id`,
+    `fix_session_id` — and the chain MUST stay queryable end-to-end: which solution came
+    from which actions, on which designs, for which bugs (§5.9). The journal DB is
+    *evidence*; the knowledge DB is *conclusions* — archiving evidence never loses a
+    conclusion.
 
 ## 3. Background — what exists vs. what this adds
 
@@ -102,7 +127,9 @@ evidence-only recipe promotion + auto-demotion).
 
 ### 3.3 Missing (built by this design)
 - Autonomous orchestration (campaign ledger, state machine, A/B scheduling, escalation).
-- Tier-0 action journal + credit assignment data.
+- Tier-0 journal DB — full flow telemetry (commands, log/report summaries, tool bugs) +
+  credit assignment data, physically separate from the knowledge DB (decision 11).
+- Cross-DB provenance tracing (solution ← action ← design ← bug, §5.9).
 - Recipe lifecycle (`shadow → candidate → promoted`, auto-demotion).
 - Strength metrics report + dashboard panel.
 - Confidence floor on cross-platform ranking (untried strategy needs pooled n ≥ N to outrank
@@ -116,7 +143,10 @@ evidence-only recipe promotion + auto-demotion).
  (resumable          │    ▲                                   │
   ledger)            │    │                              ingest_run.py
                      │    │                                   │
-                     │    │              runs.sqlite (fix_events + NEW actions Tier-0)
+                     │    │      journal.sqlite (Tier-0: commands, log/report
+                     │    │        summaries, tool bugs — gitignored, evidence)
+                     │    │              runs.sqlite (knowledge: fix_events,
+                     │    │                trajectories — git-tracked, conclusions)
                      │    │                                   │
                      │    │                            learn_heuristics.py
                      │    │                                   │
@@ -152,23 +182,46 @@ execution path, no parallel infrastructure.
 - After each ingest, triggers the learn → recipe-diff → A/B-enqueue chain (§5.3, §5.4) and
   the strength-report rebuild (§5.6).
 
-### 5.2 Tier-0 action journal (`actions` table)
-- Append-only, one row per discrete action:
-  `action_id`, `ts`, `run_id`/`fix_session_id` (nullable), `design`, `platform`,
-  `actor` (`loop` | `agent` | `operator`), `action_type` (`config_knob_delta` | `sdc_edit` |
-  `stage_rerun` | `tool_invoke` | `escalate` | `ab_launch` | `promote` | `demote` | …),
-  `payload_json` (knob name + old/new value, stage, exit code, …), `parent_action_id`
-  (nullable, for grouping a stacked fix).
+### 5.2 Tier-0 journal DB (`knowledge/journal.sqlite` — full flow telemetry)
+A **separate, high-volume, gitignored** SQLite DB (decision 11) with three append-only
+tables; a new `knowledge/journal_db.py` mirrors the `knowledge_db.py` conventions
+(ensure_schema, idempotent column migrations, WAL).
+- **`actions`** — one row per discrete action:
+  `action_id`, `ts`, `project_path`, `run_id` (nullable — back-filled at ingest, since
+  `run_id` is minted from `ppa.json` mtime), `fix_session_id` (nullable), `design`,
+  `platform`, `actor` (`loop` | `agent` | `operator`), `action_type` (`config_knob_delta` |
+  `sdc_edit` | `stage_rerun` | `tool_invoke` | `escalate` | `ab_launch` | `promote` |
+  `demote` | …), `payload_json` (knob name + old/new value, stage, exit code, duration,
+  log path, …), `parent_action_id` (nullable, groups a stacked fix), `symptom_id`
+  (nullable — the bug being acted on).
+- **`log_summaries`** — one row per tool log or report produced during the flow:
+  `summary_id`, `project_path`, `run_id` (back-filled), `action_id` (the producing
+  command), `stage`, `tool`, `source_path`, `status`, `error_count`, `warning_count`,
+  `first_error`, `last_lines` (tail, only on failure), `metrics_json` (key numbers: WNS,
+  violation counts, …), `digest` (compact text). Produced by a new deterministic,
+  stdlib-only `knowledge/summarize_log.py`; report JSONs (ppa/drc/lvs/rcx) get a digest
+  row pointing at the artifact. Raw logs can rotate — the summary survives in the DB
+  (decision 10).
+- **`tool_bugs`** — one row per detected EDA-tool bug/error (crash, assertion, SIGSEGV,
+  stuck/hung stage, parse failure): `bug_id`, `project_path`, `run_id` (back-filled),
+  `action_id`, `stage`, `tool`, `signature` (normalized error line), `symptom_id` +
+  `signature_json` (via `symptom.canonical_signature`, `check='orfs_stage'|'synth'|…`),
+  `log_excerpt`, `ts`. This is the journal-side anchor of the cross-DB bug link
+  (decision 11).
 - Producers: `fix_signoff.sh` (each sub-step), `diagnose_signoff_fix.py` (each knob delta
-  **individually**, not just the marked block), `run_orfs.sh` (stage entry/exit/exit-code),
-  `engineer_loop.py` (its own decisions), and a new `knowledge/journal_action.py` CLI so the
-  agent tier journals identically.
+  **individually**, not just the marked block), `run_orfs.sh` (every stage make
+  invocation: command row + log summary + bug rows on failure),
+  `run_drc.sh`/`run_lvs.sh`/`run_rcx.sh` (command + summary rows), `engineer_loop.py`
+  (its own decisions), and a new `knowledge/journal_action.py` CLI so the agent tier
+  journals identically.
 - Credit assignment (Phase 1 scope): record everything + two consumers — (a)
   last-action-before-clear attribution in the learner, (b) the A/B mechanism itself, which
   can ablate a single ranked-first strategy. Full causal attribution is explicitly out of
   scope for Phase 1.
-- Size policy: `actions` joins the existing `fix_log_manager` archival policy (raw tier;
-  Tier-2 derivations survive archival, same invariant as `fix_events`).
+- Size policy: the journal DB has its **own** rotation/archival policy (it is NOT
+  git-tracked and never bloats the shipped store). Learning conclusions live only in the
+  knowledge DB, so journal archival loses no recipe signal — same spirit as the
+  `fix_events_archive` invariant.
 
 ### 5.3 `knowledge/recipe_lifecycle.py` — recipe states + generation counter
 - Recipes (both Tier-3 learned entries and static-catalog strategies added by the agent
@@ -263,11 +316,31 @@ execution path, no parallel infrastructure.
   references the file; anything of historical value gets a one-line summary in
   `lessons-learned.md` first. The exact inventory is finalized at plan time.
 
+### 5.9 Cross-DB provenance tracing (`knowledge/trace_provenance.py`)
+Read-only CLI + library answering both directions of decision 11's link:
+- **Solution → origin:** given a recipe/strategy key
+  (`symptom_id, design_class, platform, strategy`), walk `recipe_status` → its A/B
+  evidence (`ab_trials`) and contributing episodes (`fix_trajectories` → `fix_events`,
+  knowledge DB) → the journal DB `actions` rows of those `fix_session_id`s/`run_id`s
+  (every config edit and command) → `runs` (which designs) → `symptoms`/`tool_bugs`
+  (which bugs). Emits a JSON provenance tree: *this solution came from these actions on
+  these designs with these bugs.*
+- **Bug → solutions:** given a `symptom_id` (or a raw log error matched via
+  `tool_bugs.signature`), list every known solution with its lifecycle status
+  (`promoted`/`shadow`), evidence strength, and the designs it was proven on.
+- Cross-file joins use SQLite `ATTACH` (same pattern as
+  `learn_heuristics._fetch_all_fix_events`); strictly read-only on both DBs (same
+  discipline as `build_lineage_view.py`).
+
 ## 6. Data flow (one full loop turn)
 
-1. `engineer_loop` pulls the next ledger entry → runs the flow via existing scripts.
-2. Reports land → `ingest_run.py` ingests (now also: Tier-0 `actions`, strength stamps,
-   generation counter).
+1. `engineer_loop` pulls the next ledger entry → runs the flow via existing scripts. The
+   flow scripts journal **live** into the journal DB: one `actions` row per command, one
+   `log_summaries` row per tool log/report (deterministic digest), `tool_bugs` rows on any
+   EDA-tool error — keyed by `project_path` until the run has an id.
+2. Reports land → `ingest_run.py` ingests into the knowledge DB (strength stamps,
+   generation counter, `design_class`) and **back-fills `run_id`** onto this run's journal
+   rows, completing the cross-DB link.
 3. Violations → `fix_signoff.sh` iterates; `diagnose_signoff_fix.py` ranks **promoted**
    recipes with pooled symptom priors + confidence floor; every sub-action journaled;
    re-ingest.
@@ -292,8 +365,10 @@ execution path, no parallel infrastructure.
 - **Resumability:** ledger checkpoint per state transition; per-design wall-clock budget and
   stage timeouts; known workaround flags (`PLACE_FAST`, `ROUTE_FAST`, …) applied via the
   existing diagnosis path and journaled as actions.
-- **DB safety:** WAL + `busy_timeout`; single-writer discipline — workers write journals
-  into their project dirs; only the loop process ingests into `runs.sqlite`.
+- **DB safety:** the **journal DB** uses WAL + `busy_timeout` with append-only writes
+  (safe for concurrent flow workers); the **knowledge DB** keeps single-writer discipline —
+  only the loop process ingests into `runs.sqlite`. Journal unavailability degrades
+  gracefully (warn, never break the flow — same contract as `R2G_FIX_AUTOLEARN`).
 - **A/B honesty inherited:** wall-clock-only cost, no fabricated CPU-hours; crashed arms are
   `inconclusive`; cheaper-but-both-fail is never a win.
 - **Family/name never becomes a key again:** all new tables key on `symptom_id` +
@@ -301,22 +376,39 @@ execution path, no parallel infrastructure.
 
 ## 8. Schema changes (all migrations legacy-DB safe, like prior migrations)
 
+**Journal DB — NEW file `knowledge/journal.sqlite` (gitignored, evidence):**
+
 | Table | New/changed | Purpose |
 |---|---|---|
-| `actions` | NEW (Tier-0) | append-only action journal (§5.2) |
+| `actions` | NEW (Tier-0) | append-only action journal: every command + decision (§5.2) |
+| `log_summaries` | NEW (Tier-0) | deterministic digest of every tool log/report (§5.2) |
+| `tool_bugs` | NEW (Tier-0) | every detected EDA-tool bug, tagged `symptom_id` (§5.2) |
+
+**Knowledge DB — existing `runs.sqlite` + `heuristics.json` (git-tracked, conclusions):**
+
+| Table | New/changed | Purpose |
+|---|---|---|
 | `ab_trials` | NEW | one row per recipe A/B trial (§5.4) |
 | `escalations` | NEW | open problems for the agent tier (§5.5) |
 | `recipe_status` | NEW | recipe lifecycle state + provenance + generation, keyed `(symptom_id, design_class, platform, strategy)` (§5.3, decision 8) |
 | `runs` | +cols | `heuristics_generation`, `design_class` (`design_type` + `size_class`), `first_attempt_clean`, `fix_iters_to_clean`, `wall_s_to_clean` |
 | `heuristics.json` | +field | top-level `generation`; recipe projection re-keyed `recipes[symptom_id][design_class][platform]` with `"*"` pooled rollups; per-recipe `status` folded from `recipe_status` |
 
+**Cross-DB link keys (decision 11):** `symptom_id` (bug identity — `symptoms`/`tool_bugs`/
+`run_violations`/`fix_*`/`recipe_status` all carry it), `run_id` (journal rows back-filled
+at ingest), `fix_session_id` (fix episodes ↔ their actions). `trace_provenance.py` (§5.9)
+is the canonical consumer.
+
 ## 9. Testing
 
 - **Unit (extends the 417-test pytest suite):** ledger state-machine transitions; recipe
   diff/lifecycle (shadow never ranks in live/arm-A; agent-authored strategies excluded from
-  the pool until A/B win); A/B verdict honesty cases; `actions` idempotent ingest;
-  generation stamping; confidence-floor ranking; decision-8 index relaxation order
-  (exact → pooled class → pooled platform); `design_class` stamping; auto-demotion trigger.
+  the pool until A/B win); A/B verdict honesty cases; journal-DB schema/migrations +
+  idempotent appends + `run_id` back-fill; `summarize_log.py` digests (error/warning
+  extraction, failure tails, metrics); `tool_bugs` symptom tagging; provenance round-trip
+  (solution → actions → designs → bugs on synthetic two-DB data); generation stamping;
+  confidence-floor ranking; decision-8 index relaxation order (exact → pooled class →
+  pooled platform); `design_class` stamping; auto-demotion trigger.
 - **Integration:** dry-run mode with a mocked flow runner drives ~10 synthetic designs
   through the complete loop — including one forced escalation and one forced A/B
   promotion — deterministically in CI. No real EDA tools needed.
@@ -333,4 +425,6 @@ execution path, no parallel infrastructure.
   causal credit assignment over Tier-0.
 - **Out of scope entirely:** multi-clock/CDC/DFT designs (existing escalate-to-user rule
   stands); editing rule decks; auto-writing prose; replacing the existing global eval
-  harness (it remains available as a regression backstop an operator can run).
+  harness (it remains available as a regression backstop an operator can run); storing raw
+  log **full-text** in any DB (deterministic summaries + bounded excerpts only — raw files
+  stay on disk under their normal lifecycle).
