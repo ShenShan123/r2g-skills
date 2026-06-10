@@ -482,6 +482,8 @@ def main(argv=None) -> int:
     ap.add_argument("--list", action="store_true",
                     help="print the full priority-ranked candidate list as JSON")
     ap.add_argument("--exclude", default="", help="comma-separated strategy ids to skip")
+    ap.add_argument("--rank-first", default=None,
+                    help="force this strategy id to the head of the ranked plan (A/B arm B)")
     args = ap.parse_args(argv)
 
     proj = Path(args.project_dir)
@@ -535,6 +537,11 @@ def main(argv=None) -> int:
     _rank_plan_strategies(plan, recipes, pooled=pooled)
     attach_lessons(plan, check=args.check,
                    vclass=_current_vclass(args.check, drc, lvs), platform=plat)
+
+    if args.rank_first:
+        head = [s for s in plan["strategies"] if s["id"] == args.rank_first]
+        rest = [s for s in plan["strategies"] if s["id"] != args.rank_first]
+        plan["strategies"] = head + rest
 
     if args.apply:
         strat = next((s for s in plan["strategies"] if s["id"] == args.apply), None)

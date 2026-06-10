@@ -191,7 +191,9 @@ fix_one() {  # $1 = drc|lvs
     # reads them via R2G_LOG_PREDICATES so the symptom_id reflects the violation we
     # set out to fix, not the post-fix report it would otherwise re-read at log time.
     export R2G_LOG_PREDICATES="$(_predicates_snapshot "$check")"
-    line="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$tried" --next)"
+    local all_excl="${tried}${R2G_FIX_EXCLUDE:+${tried:+,}$R2G_FIX_EXCLUDE}"
+    line="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$all_excl" \
+            ${R2G_FIX_RANK_FIRST:+--rank-first "$R2G_FIX_RANK_FIRST"} --next)"
     # Split on tab WITHOUT collapsing empty middle fields. `read` with a
     # whitespace IFS (tab) would merge consecutive tabs, dropping an empty
     # rerun_from column and shifting recheck into rerun; map tabs to a
