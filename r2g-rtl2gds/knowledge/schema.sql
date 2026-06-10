@@ -229,3 +229,19 @@ CREATE TABLE IF NOT EXISTS recipe_status (
     updated_at    TEXT,
     PRIMARY KEY (symptom_id, design_class, platform, strategy)
 );
+
+-- Engineer-loop escalation queue (spec §5.5): problems the deterministic core
+-- cannot handle; drained by the agent tier. The loop NEVER blocks on these.
+CREATE TABLE IF NOT EXISTS escalations (
+    escalation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    design        TEXT,
+    project_path  TEXT,
+    run_id        TEXT,
+    symptom_id    TEXT,
+    reason        TEXT NOT NULL,   -- unknown_symptom|catalog_exhausted|unseen_crash|repeated_regression
+    status        TEXT NOT NULL DEFAULT 'open',   -- open | drained | wont_fix
+    notes         TEXT,
+    created_at    TEXT,
+    resolved_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_escalations_status ON escalations(status);
