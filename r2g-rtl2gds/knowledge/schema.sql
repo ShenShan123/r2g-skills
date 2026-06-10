@@ -213,3 +213,19 @@ CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Engineer-loop recipe lifecycle (spec §5.3, decisions 7+8). Status of one
+-- strategy under one decision-8 key. Absent row = 'promoted' (grandfathered:
+-- recipes learned before the lifecycle shipped keep working; everything NEW
+-- enters via diff_and_enqueue as 'candidate' and must win its A/B).
+CREATE TABLE IF NOT EXISTS recipe_status (
+    symptom_id    TEXT NOT NULL,
+    design_class  TEXT NOT NULL,
+    platform      TEXT NOT NULL,
+    strategy      TEXT NOT NULL,
+    status        TEXT NOT NULL,        -- shadow | candidate | promoted
+    provenance    TEXT,                 -- ab_trial:<id> | grandfathered:<date> | agent:<sid>
+    generation    INTEGER,              -- generation that produced/changed it
+    updated_at    TEXT,
+    PRIMARY KEY (symptom_id, design_class, platform, strategy)
+);
