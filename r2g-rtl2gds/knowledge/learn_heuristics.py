@@ -281,6 +281,61 @@ def _symptom_recipes_from_trajectories(trajectories: list[dict]) -> dict[str, di
     return final
 
 
+def _bump_generation(conn) -> int:
+    row = conn.execute("SELECT value FROM meta WHERE key='generation'").fetchone()
+    gen = (int(row[0]) if row else 0) + 1
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('generation', ?)",
+                 (str(gen),))
+    conn.commit()
+    return gen
+
+
+def _design_class_by_project(conn) -> dict[str, str]:
+    return {r[0]: (r[1] or "unknown/unknown") for r in conn.execute(
+        "SELECT project_path, design_class FROM runs WHERE project_path IS NOT NULL")}
+
+
+def _indexed_recipes(trajectories: list[dict],
+                     class_of: dict[str, str]) -> dict:
+    """Decision-8 projection: recipes[symptom_id][design_class][platform] with
+    '*' pooled rollups at each relaxation level. Strategy counts mirror
+    _recipes_from_trajectories semantics (cleared/win/no_change/regression)."""
+    def _node():
+        return {"strategies": {}, "_sessions": set()}
+
+    acc: dict = {}
+    for t in trajectories:
+        sid = t.get("symptom_id")
+        if not sid:
+            continue
+        dclass = class_of.get(t.get("project_path") or "", "unknown/unknown")
+        plat = t.get("platform") or "unknown"
+        bucket = acc.setdefault(sid, {})
+        targets = [bucket.setdefault(dc, {}).setdefault(p, _node())
+                   for dc in (dclass, "*") for p in (plat, "*")]
+        for step in json.loads(t.get("path_json") or "[]"):
+            strat = step.get("strategy")
+            if not strat or strat == "none":
+                continue
+            verdict = step.get("verdict")
+            for node in targets:
+                node["_sessions"].add(t.get("fix_session_id"))
+                s = node["strategies"].setdefault(
+                    strat, {"attempts": 0, "successes": 0, "failures": 0, "wins": 0})
+                s["attempts"] += 1
+                if verdict == "cleared":
+                    s["successes"] += 1
+                elif verdict == "win":
+                    s["wins"] += 1
+                elif verdict in ("no_change", "regression"):
+                    s["failures"] += 1
+    for sid, classes in acc.items():
+        for dc, plats in classes.items():
+            for p, node in plats.items():
+                node["n_sessions"] = len(node.pop("_sessions"))
+    return acc
+
+
 def learn(db_path: Path | str,
           out_path: Path | str) -> dict:
     db_path = Path(db_path)
@@ -317,6 +372,8 @@ def learn(db_path: Path | str,
     cur = conn2.execute("SELECT * FROM fix_trajectories")
     tcols = [c[0] for c in cur.description]
     trajectories = [dict(zip(tcols, r)) for r in cur.fetchall()]
+    class_of = _design_class_by_project(conn2)
+    gen = _bump_generation(conn2)
     conn2.close()
     for (fam, plat), recipes in _recipes_from_trajectories(trajectories).items():
         if not recipes:
@@ -329,9 +386,11 @@ def learn(db_path: Path | str,
         "generated_at": _dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "source_run_count": len(rows),
         "min_successful_runs_required": MIN_SUCCESSFUL,
-        "schema_version": 2,                       # symptom projection added
+        "schema_version": 3,                       # decision-8 recipes projection
+        "generation": gen,
         "families": families,
         "symptoms": _symptom_recipes_from_trajectories(trajectories),
+        "recipes": _indexed_recipes(trajectories, class_of),
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(data, indent=2), encoding="utf-8")

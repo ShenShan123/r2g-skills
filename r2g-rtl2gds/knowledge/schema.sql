@@ -205,3 +205,11 @@ CREATE TABLE IF NOT EXISTS lessons (
     content_hash          TEXT,
     synced_at             TEXT
 );
+
+-- Engineer-loop (spec 2026-06-09): single-row store metadata. 'generation' is a
+-- monotonic counter bumped by every learn_heuristics.learn() rebuild; stamped
+-- into heuristics.json and onto runs.heuristics_generation at ingest.
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
