@@ -20,6 +20,7 @@ _KNOWLEDGE_DIR = Path(__file__).resolve().parents[2] / 'knowledge'
 if str(_KNOWLEDGE_DIR) not in sys.path:
     sys.path.insert(0, str(_KNOWLEDGE_DIR))
 import build_lineage_view  # noqa: E402
+import build_strength_report  # noqa: E402
 import knowledge_db  # noqa: E402
 
 # Base directory for all EDA runs - configurable via argv or env
@@ -634,7 +635,46 @@ def tuning_provenance_panel(provenance):
 </div>'''
 
 
-def render_index(projects, kview):
+def strength_panel(strength):
+    """Read-only skill-strength panel (first-pass clean rate vs heuristics generation)."""
+    generations = strength.get("generations", [])
+    if not generations:
+        return ('<div class="card"><h2>Skill Strength</h2>'
+                '<p style="color:#888">No data yet — runs with heuristics_generation '
+                'recorded will appear here.</p></div>')
+
+    improving = strength.get("trend", {}).get("first_pass_improving")
+    if improving:
+        badge = ('<span style="background:#4caf50;color:#fff;padding:2px 8px;'
+                 'border-radius:4px;font-weight:bold">improving</span>')
+    else:
+        badge = ('<span style="background:#607d8b;color:#fff;padding:2px 8px;'
+                 'border-radius:4px;font-weight:bold">flat</span>')
+
+    rows = []
+    for g in generations:
+        gen = html.escape(str(g.get("generation", "")))
+        n = html.escape(str(g.get("n_runs", "")))
+        fpr = g.get("first_pass_clean_rate")
+        fpr_s = f'{fpr * 100:.1f}%' if fpr is not None else '&mdash;'
+        iters = g.get("median_fix_iters_to_clean")
+        iters_s = html.escape(str(iters)) if iters is not None else '&mdash;'
+        wall = g.get("median_wall_s_to_clean")
+        wall_s = f'{wall:.0f}' if wall is not None else '&mdash;'
+        rows.append(f'<tr><td>{gen}</td><td>{n}</td><td>{fpr_s}</td>'
+                    f'<td>{iters_s}</td><td>{wall_s}</td></tr>')
+
+    return f'''<div class="card">
+<h2>Skill Strength <span style="font-size:13px;color:#888">(read-only projection)</span></h2>
+<p>Trend: {badge}</p>
+<table>
+<tr><th>Generation</th><th>Runs</th><th>First-pass clean %</th><th>Median fix iters</th><th>Median wall_s</th></tr>
+{"".join(rows)}
+</table>
+</div>'''
+
+
+def render_index(projects, kview, strength=None):
     cards = []
     for p in projects:
         name = html.escape(p['name'])
@@ -674,6 +714,7 @@ th {{ background: #2a2a4a; }}
 <p style="text-align:center;color:#888">OpenROAD-flow-scripts | Auto-refresh: 10s</p>
 {knowledge_health_strip(kview.get('health', {}))}
 {tuning_provenance_panel(kview.get('provenance', []))}
+{strength_panel(strength or {})}
 <div class="grid">
 {"".join(cards)}
 </div>
@@ -697,8 +738,13 @@ def main():
     except Exception:
         kview = {"health": {}, "provenance": []}
 
+    try:
+        strength = build_strength_report.build(knowledge_db.DEFAULT_DB_PATH)
+    except Exception:
+        strength = {"generations": [], "trend": {}, "transfer_evidence": []}
+
     # Generate index
-    (OUT / 'index.html').write_text(render_index(projects, kview), encoding='utf-8')
+    (OUT / 'index.html').write_text(render_index(projects, kview, strength), encoding='utf-8')
 
     # Generate per-project pages
     for p in projects:
