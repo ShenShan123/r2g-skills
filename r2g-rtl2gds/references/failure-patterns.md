@@ -331,7 +331,14 @@ Yosys crash, typically caused by very large designs or specific RTL constructs t
 
 ### PDN Error on Small Designs
 - **Symptom:** `Insufficient width to add straps` during floorplan/PDN
-- **Fix:** Set explicit `DIE_AREA = 0 0 50 50` and `CORE_AREA = 2 2 48 48` in config.mk instead of `CORE_UTILIZATION`
+- **Fix (nangate45):** Set explicit `DIE_AREA = 0 0 50 50` and `CORE_AREA = 2 2 48 48` in config.mk instead of `CORE_UTILIZATION`
+
+#### Sub-variant: sky130 small-core PDN strap floor (PDN-0185)
+
+- **Symptom (sky130hd/sky130hs):** `[ERROR PDN-0185] Insufficient width (N um) to add straps on layer met4 in grid "grid" with total strap width 15.2 um and offset 13.6 um` → `do-2_4_floorplan_pdn` Error 1. Flow dies at floorplan **before** placement.
+- **Root cause:** sky130hd's default PDN grid lays met4/met5 power straps that need a core wider than ~30 um. A small design under `CORE_UTILIZATION` produces a microscopic core (a 65-cell design ⇒ ~7 um wide) that cannot fit even one strap — and **switching to `CORE_UTILIZATION` does NOT help** (the generic batch-fixer's PDN remedy), because the core is small *because the design is small*, not because the die was hand-set too tight. The nangate45 advice (`DIE_AREA 0 0 50 50`) is also far too small for sky130's grid.
+- **Fix:** Floor the die to a PDN-feasible size. `tools/mk_sky130_project.py` computes `core_side = sqrt(cell_count * 8um² / util)` and, when that falls below ~160 um, emits an explicit `DIE_AREA = 0 0 200 200` / `CORE_AREA = 10 10 190 190` (cordic-validated 200 um core clears met4 straps). Designs naturally larger than the floor keep `CORE_UTILIZATION` (auto-sized, avoids the IO-perimeter overflow an explicit die risks on high-pin designs).
+- **Validated:** `simple_i2c_slave` (65→436 cells) — was PDN-0185 at floorplan under CU=20; with the 200 um floor it ran clean through synth→floorplan→place→cts→route→finish, **timing clean, DRC 0, RCX complete** (~3.5 min).
 
 ### Platform Not Found
 - **Symptom:** Make error about missing platform
@@ -587,6 +594,38 @@ strategy_ids: [lvs_same_nets_seed]
   - Backend did not complete successfully
 - **Fix:** Verify platform has `rcx_patterns.rules`. Ensure `6_final.odb` exists. Re-run backend if needed.
 - **Tool:** `scripts/flow/run_rcx.sh` → `scripts/extract/extract_rcx.py`
+
+### sky130 LVS: ORFS KLayout rule unworkable; needs Netgen+Magic+sky130A PDK
+
+**Symptoms (sky130hd/sky130hs, KLayout `make lvs`):** a chain of failures in the
+ORFS-bundled `platforms/sky130hd/lvs/sky130hd.lylvs`:
+1. `... 6 expected, got 7` — KLayout's CDL reader counts the ` / ` node/model separator
+   in the platform CDL's `*_macro_sparecell` instance lines as an extra pin.
+2. `Can't find a value for a R, C or L device ... rI12 VGND LO short` — the tie/power
+   cells (`conb_1`, etc.) use 6 non-numeric `short` (zero-ohm) resistors the default
+   SPICE reader rejects, aborting `Netlist::read` (`sky130hd.lylvs:19`).
+3. After (1)+(2) are fixed, the run completes but reports `ERROR : Netlists don't match` —
+   the stock rule extracts **MOS only** and flattens the hierarchical schematic against a
+   flat-transistor layout extraction, leaving a residual net/device mismatch even with a
+   reader delegate that shorts the R=0 nets.
+
+**Root cause:** the ORFS-bundled sky130 KLayout LVS rule is not production-grade; the
+canonical sky130 LVS path is **Magic (SPICE extract) + Netgen (compare) + sky130A PDK**.
+**Important:** a DB `lvs_status=clean` on a sky130 design may be a STALE/cross-contaminated
+nangate45 artifact — verify the actual `lvs_sky130hd_*` console logs, not `reports/lvs.json`
+alone (cordic's "clean" was an old nangate45 `6_lvs.log`; its real sky130hd LVS failed).
+
+**Fixes shipped (parse-level, gated to sky130 in `run_lvs.sh`):** a slash-normalized +
+`short`→`0` CDL (`s| / | |g; s/... short$/... 0/`) so KLayout *runs to completion and
+yields a classifiable verdict instead of an unparseable crash*, plus a corrected rule
+`assets/platforms/sky130hd/lvs/sky130hd_r2g.lylvs` adding a SPICE-reader delegate that
+shorts the R=0 tie/power resistors. These make LVS *runnable*, not *clean*.
+
+**Genuine clean LVS requires tooling not present here** (`/opt/pdks/sky130A` absent, no
+`magic`/`netgen`). Install sky130A PDK + magic + netgen, then the driver
+(`tools/run_sky130_design.sh`) auto-routes sky130 LVS through `run_netgen_lvs.sh`
+(detects `PDK_ROOT/sky130A` + magic + netgen). Until then, sky130 LVS is honestly
+`env_blocked` — do NOT report it as clean.
 
 ### LVS CDL_FILE Override by Platform Config
 

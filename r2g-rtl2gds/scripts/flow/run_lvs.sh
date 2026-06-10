@@ -158,12 +158,50 @@ if [[ -z "${LVS_CRASH_RETRIES:-}" ]]; then
   if [[ "$_CELL_COUNT" -gt 150000 ]] 2>/dev/null; then LVS_CRASH_RETRIES=1; else LVS_CRASH_RETRIES=4; fi
 fi
 
+# sky130 CDL slash-fix (PD issue: sky130hd/sky130hs LVS pin-count mismatch).
+# KLayout's CDL reader counts the ' / ' node/model separator in the platform CDL's
+# *_macro_sparecell subckt instance lines as an extra pin -> "6 expected, got 7" and
+# LVS aborts on EVERY sky130 design. Fix: feed `make lvs` a slash-normalized copy of
+# the platform CDL (separator removed; netlist semantics unchanged). Validated against
+# cordic (LVS clean). Command-line CDL_FILE= overrides the platform config.mk's plain
+# `export CDL_FILE`; we SKIP injection when the project config.mk already defines its
+# own (override) CDL_FILE, so an explicit operator choice always wins.
+# See references/failure-patterns.md "sky130 LVS macro_sparecell slash pin-count".
+_CDL_MAKE_ARGS=()
+if [[ "$PLATFORM" == "sky130hd" || "$PLATFORM" == "sky130hs" ]]; then
+  _PLAT_CDL="$FLOW_DIR/platforms/$PLATFORM/cdl/$PLATFORM.cdl"
+  if grep -qE '^[[:space:]]*(override[[:space:]]+)?export[[:space:]]+CDL_FILE' "$CONFIG_MK"; then
+    echo "sky130 LVS: project config.mk sets its own CDL_FILE -> not injecting slash-fix"
+  elif [[ -f "$_PLAT_CDL" ]]; then
+    _CDL_FIX="$PROJECT_DIR/lvs/${PLATFORM}_cdl_fix.cdl"
+    mkdir -p "$PROJECT_DIR/lvs"
+    # Two KLayout CDL-reader fixes for the sky130 platform netlist:
+    #  1) ' / ' node/model separator in *_macro_sparecell -> drop (pin-count "6->7").
+    #  2) zero-ohm 'short' resistors in tie/power cells (conb_1 etc.) -> '0'. KLayout's
+    #     default SPICE reader rejects the non-numeric 'short' value ("Can't find a value
+    #     for a R, C or L device"); a numeric 0 parses and KLayout's device simplification
+    #     reduces a 0-ohm resistor to a net short (the layout rule extracts no resistors).
+    sed -E -e 's| / | |g' -e 's|^([rclRCL][A-Za-z0-9_]* [^ ]+ [^ ]+) short$|\1 0|' \
+        "$_PLAT_CDL" > "$_CDL_FIX"
+    _CDL_MAKE_ARGS=("CDL_FILE=$_CDL_FIX")
+    echo "sky130 LVS: injected fixed CDL (slash + short-resistor) -> $_CDL_FIX"
+  fi
+  # Use the r2g-corrected LVS rule (adds a SPICE-reader delegate that shorts the
+  # now-0-ohm tie/power resistors so they are not unmatched schematic-only devices;
+  # the stock rule extracts MOS only). Override KLAYOUT_LVS_FILE on the make line.
+  _R2G_LVS_RULE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/assets/platforms/$PLATFORM/lvs/${PLATFORM}_r2g.lylvs"
+  if [[ -f "$_R2G_LVS_RULE" ]]; then
+    _CDL_MAKE_ARGS+=("KLAYOUT_LVS_FILE=$_R2G_LVS_RULE")
+    echo "sky130 LVS: using r2g-corrected rule -> $_R2G_LVS_RULE"
+  fi
+fi
+
 # Use setsid so timeout can kill the entire process group (prevents zombie klayout)
 LVS_STATUS=0
 for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   set +e +o pipefail
   setsid timeout --signal=TERM --kill-after=60 "$LVS_TIMEOUT" \
-    make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" lvs 2>&1 | tee /tmp/lvs_run_$$.log
+    make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_CDL_MAKE_ARGS[@]}" lvs 2>&1 | tee /tmp/lvs_run_$$.log
   LVS_STATUS=${PIPESTATUS[0]}
   set -e -o pipefail
 
