@@ -258,13 +258,54 @@ def _rank_plan_strategies(plan: dict, recipes: dict | None,
     return plan
 
 
+def _timing_plan(tcheck: dict, cfg: dict, exclude: set) -> dict:
+    tier = tcheck.get("tier", "unknown")
+    wns = tcheck.get("wns_ns")
+    plan = {"check": "timing", "status": tier, "violation_count": None,
+            "dominant_category": tier, "strategies": [], "residual_reason": None}
+    if tier in ("clean", "unknown", None):
+        return plan
+    try:
+        cur_util = int(float(cfg.get("CORE_UTILIZATION", "")))
+    except (TypeError, ValueError):
+        cur_util = 30
+    strategies = []
+    if tier in ("moderate", "severe") and wns is not None:
+        period = tcheck.get("clock_period_ns")
+        if period:
+            # Absorb the negative slack then add 5% margin (proven iccad2015
+            # period_relax recipe: 3 att / 2 succ, 97.5% WNS reduction).
+            relaxed = round((float(period) - float(wns)) * 1.05, 3)
+            strategies.append(
+                {"id": "period_relax",
+                 "rationale": f"Relax clock period {period} -> {relaxed} ns to "
+                              "absorb WNS with 5% margin (validated recipe).",
+                 "config_edits": {}, "sdc_edits": {"CLOCK_PERIOD": str(relaxed)},
+                 "rerun_from": "synth", "recheck": "timing", "auto_apply": True})
+    strategies.append(
+        {"id": "utilization_reduce",
+         "rationale": "Lower CORE_UTILIZATION to give placement/CTS slack "
+                      "headroom (never touches PLACE_DENSITY_LB_ADDON).",
+         "config_edits": {"CORE_UTILIZATION": str(max(5, cur_util - 5))},
+         "sdc_edits": {}, "rerun_from": "floorplan", "recheck": "timing",
+         "auto_apply": True})
+    plan["strategies"] = [s for s in strategies if s["id"] not in exclude]
+    return plan
+
+
 def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
-               exclude=(), recipes: dict | None = None) -> dict:
+               exclude=(), recipes: dict | None = None,
+               tcheck: dict | None = None) -> dict:
     """Pure: (drc.json, lvs.json, parsed config.mk) -> ordered fix plan dict.
     When `recipes` (a Tier-3 fix_recipes entry for this check/violation_class)
     is given, strategies are re-ranked by empirical clearance (fix_model)."""
     excl = set(exclude or ())
-    plan = _drc_plan(drc or {}, cfg, excl) if check == "drc" else _lvs_plan(lvs or {}, cfg, excl)
+    if check == "timing":
+        plan = _timing_plan(tcheck or {}, cfg, excl)
+    elif check == "drc":
+        plan = _drc_plan(drc or {}, cfg, excl)
+    else:
+        plan = _lvs_plan(lvs or {}, cfg, excl)
     return _rank_plan_strategies(plan, recipes)
 
 
@@ -435,7 +476,7 @@ def attach_lessons(plan: dict, *, check: str, vclass: str | None, platform: str)
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Diagnose DRC/LVS violations → real-fix plan.")
     ap.add_argument("project_dir")
-    ap.add_argument("--check", choices=["drc", "lvs"], default="drc")
+    ap.add_argument("--check", choices=["drc", "lvs", "timing"], default="drc")
     ap.add_argument("--apply", metavar="STRATEGY_ID", help="write the strategy's edits into config.mk")
     ap.add_argument("--next", action="store_true", help="print one tab-separated action line for the driver")
     ap.add_argument("--list", action="store_true",
@@ -446,6 +487,7 @@ def main(argv=None) -> int:
     proj = Path(args.project_dir)
     drc = _load(proj / "reports" / "drc.json")
     lvs = _load(proj / "reports" / "lvs.json")
+    tcheck = _load(proj / "reports" / "timing_check.json")
     cfg_path = proj / "constraints" / "config.mk"
     cfg_text = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
     cfg = parse_config(cfg_text)
@@ -489,7 +531,7 @@ def main(argv=None) -> int:
         sym_recipe, pooled = load_symptom_recipe(check=args.check, platform=plat, drc=drc, lvs=lvs)
         recipes = sym_recipe if sym_recipe is not None else _load_recipes(
             proj, check=args.check, drc=drc, lvs=lvs)
-    plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes)
+    plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes, tcheck=tcheck)
     _rank_plan_strategies(plan, recipes, pooled=pooled)
     attach_lessons(plan, check=args.check,
                    vclass=_current_vclass(args.check, drc, lvs), platform=plat)
@@ -510,7 +552,34 @@ def main(argv=None) -> int:
             return 3
         if strat["config_edits"]:
             cfg_path.write_text(apply_edits(cfg_text, strat["config_edits"]), encoding="utf-8")
-        print(json.dumps({"applied": strat["id"], "config_edits": strat["config_edits"]}))
+        sdc_edits = strat.get("sdc_edits") or {}
+        if sdc_edits.get("CLOCK_PERIOD"):
+            sdc_path = proj / "constraints" / "constraint.sdc"
+            if sdc_path.exists():
+                new_p = str(sdc_edits["CLOCK_PERIOD"])
+                sdc_text = sdc_path.read_text(encoding="utf-8")
+                sdc_text = re.sub(r"(set\s+clk_period\s+)[\d.]+",
+                                  lambda m: m.group(1) + new_p, sdc_text)
+                sdc_path.write_text(sdc_text, encoding="utf-8")
+                try:                                   # journal — never breaks apply
+                    import os as _os
+                    import subprocess as _sp
+                    _kdir = Path(__file__).resolve().parents[2] / "knowledge"
+                    _ja = [sys.executable, str(_kdir / "journal_action.py"), "action",
+                           "--project", str(proj.resolve()), "--actor", "loop",
+                           "--type", "sdc_edit", "--payload",
+                           json.dumps({"knob": "CLOCK_PERIOD", "new": new_p,
+                                       "strategy": strat["id"]})]
+                    _jdb = _os.environ.get("R2G_JOURNAL_DB")
+                    if _jdb:
+                        _ja += ["--db", _jdb]
+                    _sp.run(_ja, check=False)
+                except Exception:
+                    pass
+        out = {"applied": strat["id"], "config_edits": strat["config_edits"]}
+        if sdc_edits:
+            out["sdc_edits"] = sdc_edits
+        print(json.dumps(out))
         return 0
 
     if args.list:
