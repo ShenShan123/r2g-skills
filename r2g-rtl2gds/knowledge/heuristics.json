@@ -1,8 +1,9 @@
 {
-  "generated_at": "2026-06-10T01:34:07Z",
+  "generated_at": "2026-06-10T12:50:47Z",
   "source_run_count": 782,
   "min_successful_runs_required": 3,
-  "schema_version": 2,
+  "schema_version": 3,
+  "generation": 1,
   "families": {
     "rv32i": {
       "platforms": {
@@ -3418,6 +3419,402 @@
               "wins": 0
             }
           }
+        }
+      }
+    }
+  },
+  "recipes": {
+    "e5582b51cd0017b9": {
+      "unknown/unknown": {
+        "nangate45": {
+          "strategies": {},
+          "n_sessions": 0
+        },
+        "*": {
+          "strategies": {},
+          "n_sessions": 0
+        }
+      },
+      "*": {
+        "nangate45": {
+          "strategies": {},
+          "n_sessions": 0
+        },
+        "*": {
+          "strategies": {},
+          "n_sessions": 0
+        }
+      }
+    },
+    "d2e84e2c519daf47": {
+      "unknown/unknown": {
+        "nangate45": {
+          "strategies": {},
+          "n_sessions": 0
+        },
+        "*": {
+          "strategies": {},
+          "n_sessions": 0
+        }
+      },
+      "*": {
+        "nangate45": {
+          "strategies": {},
+          "n_sessions": 0
+        },
+        "*": {
+          "strategies": {},
+          "n_sessions": 0
+        }
+      }
+    },
+    "c9aba8f0e1427a30": {
+      "unknown/unknown": {
+        "nangate45": {
+          "strategies": {
+            "period_relax": {
+              "attempts": 3,
+              "successes": 2,
+              "failures": 0,
+              "wins": 1
+            }
+          },
+          "n_sessions": 3
+        },
+        "*": {
+          "strategies": {
+            "period_relax": {
+              "attempts": 3,
+              "successes": 2,
+              "failures": 0,
+              "wins": 1
+            }
+          },
+          "n_sessions": 3
+        }
+      },
+      "*": {
+        "nangate45": {
+          "strategies": {
+            "period_relax": {
+              "attempts": 3,
+              "successes": 2,
+              "failures": 0,
+              "wins": 1
+            }
+          },
+          "n_sessions": 3
+        },
+        "*": {
+          "strategies": {
+            "period_relax": {
+              "attempts": 3,
+              "successes": 2,
+              "failures": 0,
+              "wins": 1
+            }
+          },
+          "n_sessions": 3
+        }
+      }
+    },
+    "913f3c15479aa474": {
+      "unknown/unknown": {
+        "nangate45": {
+          "strategies": {
+            "period_relax": {
+              "attempts": 1,
+              "successes": 1,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 1
+        },
+        "*": {
+          "strategies": {
+            "period_relax": {
+              "attempts": 1,
+              "successes": 1,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 1
+        }
+      },
+      "*": {
+        "nangate45": {
+          "strategies": {
+            "period_relax": {
+              "attempts": 1,
+              "successes": 1,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 1
+        },
+        "*": {
+          "strategies": {
+            "period_relax": {
+              "attempts": 1,
+              "successes": 1,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 1
+        }
+      }
+    },
+    "02d5eba137dfb507": {
+      "unknown/unknown": {
+        "nangate45": {
+          "strategies": {
+            "antenna_diode_repair": {
+              "attempts": 6,
+              "successes": 5,
+              "failures": 0,
+              "wins": 1
+            }
+          },
+          "n_sessions": 6
+        },
+        "*": {
+          "strategies": {
+            "antenna_diode_repair": {
+              "attempts": 6,
+              "successes": 5,
+              "failures": 0,
+              "wins": 1
+            }
+          },
+          "n_sessions": 6
+        }
+      },
+      "*": {
+        "nangate45": {
+          "strategies": {
+            "antenna_diode_repair": {
+              "attempts": 6,
+              "successes": 5,
+              "failures": 0,
+              "wins": 1
+            }
+          },
+          "n_sessions": 6
+        },
+        "*": {
+          "strategies": {
+            "antenna_diode_repair": {
+              "attempts": 6,
+              "successes": 5,
+              "failures": 0,
+              "wins": 1
+            }
+          },
+          "n_sessions": 6
+        }
+      }
+    },
+    "5dceb431ccdc848b": {
+      "unknown/unknown": {
+        "nangate45": {
+          "strategies": {
+            "beol_only_drc": {
+              "attempts": 262,
+              "successes": 262,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 262
+        },
+        "*": {
+          "strategies": {
+            "beol_only_drc": {
+              "attempts": 262,
+              "successes": 262,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 262
+        }
+      },
+      "*": {
+        "nangate45": {
+          "strategies": {
+            "beol_only_drc": {
+              "attempts": 262,
+              "successes": 262,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 262
+        },
+        "*": {
+          "strategies": {
+            "beol_only_drc": {
+              "attempts": 262,
+              "successes": 262,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 262
+        }
+      }
+    },
+    "ecf6a29e5a339cd3": {
+      "unknown/unknown": {
+        "nangate45": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 125,
+              "successes": 83,
+              "failures": 42,
+              "wins": 0
+            }
+          },
+          "n_sessions": 125
+        },
+        "*": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 125,
+              "successes": 83,
+              "failures": 42,
+              "wins": 0
+            }
+          },
+          "n_sessions": 125
+        }
+      },
+      "*": {
+        "nangate45": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 125,
+              "successes": 83,
+              "failures": 42,
+              "wins": 0
+            }
+          },
+          "n_sessions": 125
+        },
+        "*": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 125,
+              "successes": 83,
+              "failures": 42,
+              "wins": 0
+            }
+          },
+          "n_sessions": 125
+        }
+      }
+    },
+    "574278391cb1f951": {
+      "unknown/unknown": {
+        "nangate45": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 12,
+              "successes": 12,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 12
+        },
+        "*": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 12,
+              "successes": 12,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 12
+        }
+      },
+      "*": {
+        "nangate45": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 12,
+              "successes": 12,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 12
+        },
+        "*": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 12,
+              "successes": 12,
+              "failures": 0,
+              "wins": 0
+            }
+          },
+          "n_sessions": 12
+        }
+      }
+    },
+    "26b0bbab454648e0": {
+      "unknown/unknown": {
+        "nangate45": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 5,
+              "successes": 1,
+              "failures": 4,
+              "wins": 0
+            }
+          },
+          "n_sessions": 5
+        },
+        "*": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 5,
+              "successes": 1,
+              "failures": 4,
+              "wins": 0
+            }
+          },
+          "n_sessions": 5
+        }
+      },
+      "*": {
+        "nangate45": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 5,
+              "successes": 1,
+              "failures": 4,
+              "wins": 0
+            }
+          },
+          "n_sessions": 5
+        },
+        "*": {
+          "strategies": {
+            "rerun_from_stage": {
+              "attempts": 5,
+              "successes": 1,
+              "failures": 4,
+              "wins": 0
+            }
+          },
+          "n_sessions": 5
         }
       }
     }
