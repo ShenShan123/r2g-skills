@@ -24,7 +24,7 @@ def _insert(conn, **row):
 
 
 def _open_db(tmp_knowledge_dir):
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     return conn
 
@@ -47,7 +47,7 @@ def test_detects_degradation(tmp_knowledge_dir):
     conn.commit()
 
     alerts = monitor_health.check(
-        db_path=tmp_knowledge_dir / "runs.sqlite",
+        db_path=tmp_knowledge_dir / "knowledge.sqlite",
         window=3,
         threshold=0.5,
     )
@@ -73,7 +73,7 @@ def test_no_alert_when_healthy(tmp_knowledge_dir):
     conn.commit()
 
     alerts = monitor_health.check(
-        db_path=tmp_knowledge_dir / "runs.sqlite",
+        db_path=tmp_knowledge_dir / "knowledge.sqlite",
         window=3,
         threshold=0.5,
     )
@@ -92,7 +92,7 @@ def test_skips_families_with_too_few_runs(tmp_knowledge_dir):
     conn.commit()
 
     alerts = monitor_health.check(
-        db_path=tmp_knowledge_dir / "runs.sqlite",
+        db_path=tmp_knowledge_dir / "knowledge.sqlite",
         window=3,
         threshold=0.5,
     )

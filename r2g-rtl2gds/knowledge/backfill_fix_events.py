@@ -31,7 +31,7 @@ Mapping:
       (canonical rule, shared with the live loop's ingest_run._project_family).
 
 CLI:
-  python3 backfill_fix_events.py --batch-dir design_cases/_batch --db runs.sqlite
+  python3 backfill_fix_events.py --batch-dir design_cases/_batch --db knowledge.sqlite
 """
 from __future__ import annotations
 
@@ -289,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--batch-dir", default="design_cases/_batch",
                     help="directory of historical *.jsonl batch logs")
     ap.add_argument("--db", default=str(knowledge_db.DEFAULT_DB_PATH),
-                    help="path to runs.sqlite")
+                    help="path to knowledge.sqlite")
     args = ap.parse_args(argv)
 
     conn = knowledge_db.connect(args.db)

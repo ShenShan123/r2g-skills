@@ -9,12 +9,12 @@ the input to `suggest_config.py` and `failure-patterns.md` review.
 |---|---|---|
 | `schema.sql` | hand-edited | `knowledge/knowledge_db.py` at `ensure_schema` time |
 | `families.json` | hand-edited seed; append as new designs ship | `knowledge/knowledge_db.py::infer_family` |
-| `runs.sqlite` | `knowledge/ingest_run.py` (one row per ingested run) | `learn_heuristics.py`, `mine_rules.py`, `query_knowledge.py` |
+| `knowledge.sqlite` | `knowledge/ingest_run.py` (one row per ingested run) | `learn_heuristics.py`, `mine_rules.py`, `query_knowledge.py` |
 | `heuristics.json` | `knowledge/learn_heuristics.py` | `suggest_config.py`, agent, dashboard |
 | `failure_candidates.json` | `knowledge/mine_rules.py` | human reviewer → `references/failure-patterns.md` |
 | `fix_events_archive.sqlite` | `fix_log_manager.py` (cold archive of raw `fix_events`) | retained-only (learning never reads it; Tier-2 survives archival) |
 
-The store (`runs.sqlite` + `heuristics.json`, plus `fix_events_archive.sqlite` once created)
+The store (`knowledge.sqlite` + `heuristics.json`, plus `fix_events_archive.sqlite` once created)
 is **tracked in git**, so the skill ships pre-trained with its accumulated experience.
 
 ## Loop
@@ -27,7 +27,7 @@ is **tracked in git**, so the skill ships pre-trained with its accumulated exper
                    │
       ingest_run.py │
                    ▼
-              runs.sqlite ──► learn_heuristics.py ──► heuristics.json
+              knowledge.sqlite ──► learn_heuristics.py ──► heuristics.json
                        │                                     │
                        │                                     └──► suggest_config.py
                        │
@@ -52,7 +52,7 @@ Four modules extend the base pipeline with config evolution tracking,
 health monitoring, semantic failure search, and automated fix proposals:
 
 ```
-runs.sqlite ──► monitor_health.py ──► health alerts (degradation detection)
+knowledge.sqlite ──► monitor_health.py ──► health alerts (degradation detection)
      │
      └──► config_lineage table (populated by ingest_run.py on config changes)
               │
@@ -65,12 +65,12 @@ failure_candidates.json ─┘
 | File | Producer | Consumer |
 |---|---|---|
 | `config_lineage` table | `ingest_run.py` (on config diff between runs) | `analyze_execution.py`, agent |
-| `monitor_health.py` | reads `runs.sqlite` | agent (degradation alerts) |
+| `monitor_health.py` | reads `knowledge.sqlite` | agent (degradation alerts) |
 | `search_failures.py` | indexes `failure-patterns.md` + `failure_candidates.json`; `lessons_for_symptom()` parses `r2g-lesson` front-matter | `analyze_execution.py`; **`diagnose_signoff_fix.py` decision path** (surfaces the matching active prose lesson at fix time) |
 | `symptom.py` | pure `{check,class,predicates}` → `symptom_id` | `ingest_run.py`, `learn_heuristics.py`, `diagnose_signoff_fix.py` (the universal repair-experience index; family-name is never a key) |
 | `sync_lessons.py` | one-way prose → `lessons` table (front-matter + evidence backfill) | `fix_log_manager.manage()` post-ingest; dashboard/agent |
 | `analyze_execution.py` | reads project artifacts + search results | agent (fix proposal review queue) |
-| `build_lineage_view.py` | read-only (`mode=ro`) projection over `runs.sqlite` + `config_lineage` + `heuristics.json` | dashboard "Knowledge health" + "Tuning provenance" panels |
+| `build_lineage_view.py` | read-only (`mode=ro`) projection over `knowledge.sqlite` + `config_lineage` + `heuristics.json` | dashboard "Knowledge health" + "Tuning provenance" panels |
 | `eval_set.json` + `eval_heuristics.py` | frozen eval set; `emit` writes paired naive/learned arms via `suggest_config --no-learned`, `summarize` → `eval_results.jsonl` / `eval_summary.json` | operator (payoff A/B verdict) |
 
 ## Fix-Learning Loop (spec 2026-06-05)
@@ -120,10 +120,10 @@ untried → 0.5 prior, winners high, losers down-ranked but never zeroed/blackli
 
 ```bash
 # Mine historical batch logs into synthetic fix_events (provenance "backfill:<filestem>"; idempotent)
-python3 knowledge/backfill_fix_events.py --batch-dir design_cases/_batch --db knowledge/runs.sqlite
+python3 knowledge/backfill_fix_events.py --batch-dir design_cases/_batch --db knowledge/knowledge.sqlite
 
 # Reconcile orfs_status from per-project backend stage logs (backs up to <db>.bak first; idempotent)
-python3 knowledge/repair_run_status.py --db knowledge/runs.sqlite
+python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
 ```
 
 `backfill_fix_events.py` maps `antenna_fix_*`/`beol_drc_*` → `check=drc` and

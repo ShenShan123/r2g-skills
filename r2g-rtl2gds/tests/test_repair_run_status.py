@@ -36,7 +36,7 @@ def _make_project(root: Path, name: str) -> Path:
 
 
 def _new_db(tmp_knowledge_dir: Path) -> Path:
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     conn.close()

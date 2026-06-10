@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest one design_cases/<project> directory into knowledge/runs.sqlite.
+"""Ingest one design_cases/<project> directory into knowledge/knowledge.sqlite.
 
 Usage:
   ingest_run.py <project-dir>
@@ -530,7 +530,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("project", type=Path, help="Path to design_cases/<project> directory")
     p.add_argument("--db", type=Path, default=knowledge_db.DEFAULT_DB_PATH,
-                   help="SQLite database path (default: knowledge/runs.sqlite)")
+                   help="SQLite database path (default: knowledge/knowledge.sqlite)")
     p.add_argument("--schema", type=Path, default=knowledge_db.DEFAULT_SCHEMA_PATH,
                    help="Schema SQL path")
     p.add_argument("--families", type=Path, default=knowledge_db.DEFAULT_FAMILIES_PATH,

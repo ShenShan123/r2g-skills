@@ -39,7 +39,7 @@ def check(db_path: Path | str,
     """Check for degraded family/platform pairs.
 
     Args:
-        db_path: Path to runs.sqlite.
+        db_path: Path to knowledge.sqlite.
         window: Number of most recent runs to evaluate per family/platform.
         threshold: Minimum drop in success rate (recent vs historical) to alert.
 

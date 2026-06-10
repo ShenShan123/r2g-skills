@@ -37,7 +37,7 @@ def test_bound_rule_details_caps_samples():
 
 def test_manage_relearns_and_recipes_survive_archive(tmp_knowledge_dir, monkeypatch):
     import json, knowledge_db, fix_log_manager as flm
-    db = tmp_knowledge_dir / "runs.sqlite"
+    db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     cols = ("fix_session_id","design_family","platform","check_type","violation_class",
@@ -69,7 +69,7 @@ def test_recipes_survive_a_second_relearn_after_archive(tmp_knowledge_dir, monke
     NEXT learn must rebuild trajectories from hot UNION archived — else the
     archived episode's recipe silently vanishes (bug #12)."""
     import json, knowledge_db, fix_log_manager as flm
-    db = tmp_knowledge_dir / "runs.sqlite"
+    db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     cols = ("fix_session_id","design_family","platform","check_type","violation_class",
@@ -105,7 +105,7 @@ def test_recipes_survive_a_second_relearn_after_archive(tmp_knowledge_dir, monke
 
 def test_manage_runs_lesson_sync(tmp_path, tmp_knowledge_dir, monkeypatch):
     import knowledge_db
-    db = tmp_knowledge_dir / "runs.sqlite"
+    db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     conn.commit(); conn.close()

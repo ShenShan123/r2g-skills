@@ -874,7 +874,7 @@ def main() -> int:
                         help="A/B the fix loop's ranked vs static strategy "
                              "ordering on payoff (iters-to-resolve, elapsed)")
     pf.add_argument("--db", required=True,
-                    help="Path to runs.sqlite (reads fix_trajectories)")
+                    help="Path to knowledge.sqlite (reads fix_trajectories)")
     pf.add_argument("--out", default=None,
                     help="Output path for fix_eval_summary.json "
                          "(default: next to the DB)")

@@ -52,7 +52,7 @@ def _insert_lineage(conn, design_name, platform, current_run_id, previous_run_id
 
 
 def _open_db(tmp_knowledge_dir):
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     return conn, db_path

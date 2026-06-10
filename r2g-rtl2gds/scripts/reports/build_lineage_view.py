@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Read-only observability projection over the knowledge store.
 
-Surfaces the otherwise write-only ``config_lineage`` table, the ``runs.sqlite``
+Surfaces the otherwise write-only ``config_lineage`` table, the ``knowledge.sqlite``
 outcome distribution, and learned-heuristics health as a deterministic data
 dict, for rendering in the static dashboard.
 
@@ -335,7 +335,7 @@ def _fix_effectiveness(conn: sqlite3.Connection) -> list[dict]:
 
 
 def build_view(db_path: Path | str, heuristics_path: Path | str | None = None) -> dict:
-    """Pure, deterministic read-only projection over runs.sqlite + heuristics.json.
+    """Pure, deterministic read-only projection over knowledge.sqlite + heuristics.json.
 
     Returns exactly {"health": {...}, "provenance": [...],
     "fix_effectiveness": [...]}. No timestamp — the CLI stamps generated_at

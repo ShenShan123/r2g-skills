@@ -15,7 +15,7 @@ Properties:
     and prints a before/after orfs_status histogram.
 
 Usage:
-  repair_run_status.py --db knowledge/runs.sqlite [--cases-root design_cases]
+  repair_run_status.py --db knowledge/knowledge.sqlite [--cases-root design_cases]
 """
 from __future__ import annotations
 
@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Repair dead orfs_status='partial' runs rows from stage logs.")
     parser.add_argument("--db", required=True,
-                        help="Path to knowledge/runs.sqlite.")
+                        help="Path to knowledge/knowledge.sqlite.")
     parser.add_argument("--cases-root", default="design_cases",
                         help="Root holding the project dirs (relocation fallback).")
     args = parser.parse_args(argv)

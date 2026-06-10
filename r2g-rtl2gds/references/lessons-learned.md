@@ -258,7 +258,7 @@ now learnable). Commits `356d517` + `7d429ac` (branch `fix/dead-learning-loop`).
 structured outcomes):**
 - *Observability* (`feat/knowledge-observability`, `a9cdf26` + `5c8833b`):
   `scripts/reports/build_lineage_view.py` is a `mode=ro`, deterministic projection over
-  `runs.sqlite` + `config_lineage` + `heuristics.json` → two dashboard index panels (a health strip
+  `knowledge.sqlite` + `config_lineage` + `heuristics.json` → two dashboard index panels (a health strip
   that would have screamed "747/750 partial, heuristics empty", and a tuning-provenance table). It
   reuses `is_success` so the health numbers match the learner, and is **never** wired into
   `suggest_config`.

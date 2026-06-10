@@ -33,7 +33,7 @@ def _seed(conn):
 
 
 def test_learn_emits_trajectories_and_recipes(tmp_knowledge_dir):
-    db = tmp_knowledge_dir / "runs.sqlite"
+    db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     _seed(conn)
@@ -63,7 +63,7 @@ def test_learn_emits_trajectories_and_recipes(tmp_knowledge_dir):
 def test_learn_credits_win_verdict(tmp_knowledge_dir):
     """A 'win' (real partial improvement) must add a 'wins' credit, not just a
     bare attempt (bug #7/#11). Seed s2 is a single 'win' for antenna_diode_repair."""
-    db = tmp_knowledge_dir / "runs.sqlite"
+    db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     _seed(conn)
@@ -88,7 +88,7 @@ def test_learn_splits_mixed_check_session(tmp_knowledge_dir):
     """A single '--check both' session carries DRC and LVS events under ONE
     fix_session_id. They must be grouped per (session, check_type) so the LVS
     recipe is NOT mis-filed under the DRC violation_class (bug #2/#8)."""
-    db = tmp_knowledge_dir / "runs.sqlite"
+    db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     # Shared session "sB": first a DRC fix, then an LVS fix.
@@ -120,7 +120,7 @@ def test_learn_splits_mixed_check_session(tmp_knowledge_dir):
 
 
 def test_learn_fix_is_idempotent(tmp_knowledge_dir):
-    db = tmp_knowledge_dir / "runs.sqlite"
+    db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     _seed(conn)

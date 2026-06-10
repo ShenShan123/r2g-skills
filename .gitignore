@@ -239,7 +239,7 @@ Thumbs.db
 *~
 
 # Generated knowledge-store artifacts (regenerated on demand)
-# r2g-rtl2gds/knowledge/runs.sqlite      <- tracked: the skill ships pre-trained (spec D14)
+# r2g-rtl2gds/knowledge/knowledge.sqlite      <- tracked: the skill ships pre-trained (spec D14)
 # r2g-rtl2gds/knowledge/heuristics.json  <- tracked
 r2g-rtl2gds/knowledge/failure_candidates.json
 r2g-rtl2gds/knowledge/*.sqlite-journal

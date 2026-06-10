@@ -17,7 +17,7 @@ def test_sync_parses_frontmatter_and_backfills_evidence(tmp_path, tmp_knowledge_
         "strategy_ids: [lvs_same_nets_seed]\n"
         "-->\n"
         "Balanced unmatched nets + zero device mismatches => tool artifact; stop re-running.\n")
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     import symptom
     sig = symptom.canonical_signature("lvs", "symmetric_matcher", None)

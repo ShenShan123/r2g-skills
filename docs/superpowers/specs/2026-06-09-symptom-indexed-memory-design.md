@@ -13,6 +13,9 @@ adversarial-pragmatist lens `aa4ee5dc0db0a6be6`. Synthesized and source-verified
 
 ---
 
+> **Note (2026-06-10, engineer-loop spec):** the knowledge store DB file `knowledge/runs.sqlite` was RENAMED to `knowledge/knowledge.sqlite` (decision-11 evidence/conclusions split: journal.sqlite = evidence, knowledge.sqlite = conclusions). References below to `runs.sqlite` are historical; the `runs` TABLE name is unchanged.
+
+
 ## 1. Goal & one-paragraph summary
 
 Make the skill **accumulate transferable experience the way a senior physical-design (PD)

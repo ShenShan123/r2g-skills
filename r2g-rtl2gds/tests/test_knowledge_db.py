@@ -5,7 +5,7 @@ import knowledge_db
 
 
 def test_ensure_schema_creates_tables(tmp_knowledge_dir):
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     rows = conn.execute(
@@ -17,7 +17,7 @@ def test_ensure_schema_creates_tables(tmp_knowledge_dir):
 
 
 def test_ensure_schema_is_idempotent(tmp_knowledge_dir):
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
@@ -131,7 +131,7 @@ def test_curated_families_map_dominant_ip_prefixes(tmp_knowledge_dir):
 # --- Task 1: generalize column migration to multiple tables -----------------
 
 def test_migrate_adds_columns_to_multiple_tables(tmp_knowledge_dir):
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     fe_cols = {r[1] for r in conn.execute("PRAGMA table_info(fix_events)")}
     rv_cols = {r[1] for r in conn.execute("PRAGMA table_info(run_violations)")}
@@ -146,7 +146,7 @@ def test_migrate_adds_columns_to_multiple_tables(tmp_knowledge_dir):
 # --- Task 2: symptoms table + indexes ---------------------------------------
 
 def test_symptoms_table_and_indexes_exist(tmp_knowledge_dir):
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     cols = {r[1] for r in conn.execute("PRAGMA table_info(symptoms)")}
     assert {"symptom_id", "check_type", "class", "predicates_json",

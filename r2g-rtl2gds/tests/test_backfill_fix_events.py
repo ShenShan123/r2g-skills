@@ -18,7 +18,7 @@ import backfill_fix_events
 
 
 def _setup_conn(tmp_knowledge_dir):
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     return conn
 

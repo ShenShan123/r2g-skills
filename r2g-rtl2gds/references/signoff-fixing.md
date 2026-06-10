@@ -231,8 +231,8 @@ strategy catalog on the next similar violation. The data flows through **three t
 
 | Tier | Store | Granularity | Archival |
 |------|-------|-------------|----------|
-| **1 — `fix_events`** | `runs.sqlite` (append-only) | raw, one row per iteration (the lossless system of record) | archivable past a size threshold into the sidecar `knowledge/fix_events_archive.sqlite` |
-| **2 — `fix_trajectories`** | `runs.sqlite` (materialized, idempotent rebuild) | per-episode path: `resolved`/`abandoned`, `winning_strategy`, `failed_strategies` | **never archived** — derived from Tier-1, so raw archival loses no learning signal |
+| **1 — `fix_events`** | `knowledge.sqlite` (append-only) | raw, one row per iteration (the lossless system of record) | archivable past a size threshold into the sidecar `knowledge/fix_events_archive.sqlite` |
+| **2 — `fix_trajectories`** | `knowledge.sqlite` (materialized, idempotent rebuild) | per-episode path: `resolved`/`abandoned`, `winning_strategy`, `failed_strategies` | **never archived** — derived from Tier-1, so raw archival loses no learning signal |
 | **3 — `fix_recipes`** | `heuristics.json` sub-key | per-(family, platform) aggregate per check/violation_class: strategy attempts/successes/failures (+ `median_reduction_pct`), `n_sessions` | folded by `learn_heuristics.py` |
 
 **Recording** is done by `fix_signoff.sh` and `check_timing.py --journal` → `reports/fix_log.jsonl`
@@ -322,7 +322,7 @@ exactly as for the existing `failure_candidates` review queue.
   largely a no-op — stage logs store integer exit codes and `is_success` already credits
   signoff-positive partials.
 
-The knowledge store (`runs.sqlite` + `heuristics.json`, plus `fix_events_archive.sqlite` once
+The knowledge store (`knowledge.sqlite` + `heuristics.json`, plus `fix_events_archive.sqlite` once
 created) is tracked in git, so the skill ships **pre-trained** with this experience.
 
 ## Real-fixes-only policy

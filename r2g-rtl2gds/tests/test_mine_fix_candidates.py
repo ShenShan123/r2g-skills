@@ -35,7 +35,7 @@ def _insert_trajectory(conn, *, fix_session_id, design_name, design_family,
 
 
 def test_mine_emits_fix_candidates(tmp_knowledge_dir):
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
 
@@ -112,7 +112,7 @@ def test_mine_emits_fix_candidates(tmp_knowledge_dir):
 
 def test_mine_fix_candidates_absent_table(tmp_knowledge_dir):
     """No fix_trajectories table -> empty list, existing behavior intact."""
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     # Create ONLY the runs/failure_events tables, not fix_trajectories.
     conn.executescript(

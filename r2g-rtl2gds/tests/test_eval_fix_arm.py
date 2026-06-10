@@ -36,7 +36,7 @@ def _seed_trajectory(conn, *, session_id, family, check, eval_arm,
 
 def test_summarize_fix_arms_ranked_wins_on_fewer_iters(tmp_path,
                                                        tmp_knowledge_dir):
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
 
     # Same family/check; ranked resolves in fewer iterations than static.
@@ -49,7 +49,7 @@ def test_summarize_fix_arms_ranked_wins_on_fewer_iters(tmp_path,
 
     out_path = tmp_path / "fix_eval_summary.json"
     summary = eval_heuristics.summarize_fix_arms(
-        tmp_knowledge_dir / "runs.sqlite", out_path=out_path)
+        tmp_knowledge_dir / "knowledge.sqlite", out_path=out_path)
 
     # File emitted next to (here: at) the requested path.
     assert out_path.exists()
@@ -73,7 +73,7 @@ def test_summarize_fix_arms_ranked_wins_on_fewer_iters(tmp_path,
 def test_summarize_fix_arms_no_winner_when_arm_missing(tmp_path,
                                                        tmp_knowledge_dir):
     """A pair with only one arm present cannot be scored a win for either side."""
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
 
     _seed_trajectory(conn, session_id="rk1", family="iccad", check="drc",
@@ -82,7 +82,7 @@ def test_summarize_fix_arms_no_winner_when_arm_missing(tmp_path,
 
     out_path = tmp_path / "fix_eval_summary.json"
     summary = eval_heuristics.summarize_fix_arms(
-        tmp_knowledge_dir / "runs.sqlite", out_path=out_path)
+        tmp_knowledge_dir / "knowledge.sqlite", out_path=out_path)
 
     pairs = {(p["design_family"], p["check_type"]): p for p in summary["pairs"]}
     pair = pairs[("iccad", "drc")]

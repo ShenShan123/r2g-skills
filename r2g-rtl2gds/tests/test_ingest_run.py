@@ -18,7 +18,7 @@ def _stage(fixtures_dir: Path, name: str, tmp_path: Path) -> Path:
 
 
 def _open_db(tmp_knowledge_dir: Path) -> sqlite3.Connection:
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     return conn
 
@@ -121,7 +121,7 @@ def _mk_lineage_project(tmp_path, name, cu="20", drc="clean", subdir=None):
 
 
 def test_lineage_outcome_is_structured(tmp_path, tmp_knowledge_dir):
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     fam = tmp_knowledge_dir / "families.json"
     p1 = _mk_lineage_project(tmp_path, "d1", cu="20", drc="clean")
@@ -151,7 +151,7 @@ def test_run_violations_get_symptom(tmp_path, tmp_knowledge_dir):
         "device_mismatches": 0}))
     (proj / "reports" / "drc.json").write_text(json.dumps(
         {"status": "clean", "total_violations": 0, "categories": {}}))
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     ingest_run.ingest(proj, conn, families_path=tmp_knowledge_dir / "families.json")
     sid, sig = conn.execute(

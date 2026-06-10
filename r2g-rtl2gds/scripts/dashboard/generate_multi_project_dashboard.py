@@ -504,7 +504,7 @@ pre {{ background: #0d0d1a; padding: 15px; border-radius: 8px; overflow-x: auto;
 
 # --- Knowledge-store observability panels (READ-ONLY projection) -----------
 # These render build_lineage_view.build_view() output. They are STRICTLY
-# DESCRIPTIVE — a read-only projection over runs.sqlite / config_lineage /
+# DESCRIPTIVE — a read-only projection over knowledge.sqlite / config_lineage /
 # heuristics.json. They are NEVER wired into config recommendation.
 
 # Display caps (renderer-only; build_view returns everything — no silent caps).
@@ -542,11 +542,11 @@ def _outcome_delta_html(delta):
 
 
 def knowledge_health_strip(health):
-    """Read-only health strip over runs.sqlite + heuristics.json."""
+    """Read-only health strip over knowledge.sqlite + heuristics.json."""
     if not health:
         return ('<div class="card"><h2>Knowledge Store Health</h2>'
                 '<p style="color:#888">Knowledge store unavailable '
-                '(no runs.sqlite, or DB locked).</p></div>')
+                '(no knowledge.sqlite, or DB locked).</p></div>')
 
     total = health.get('total_runs', 0)
     pct = health.get('pct_partial_or_unknown', 0.0)

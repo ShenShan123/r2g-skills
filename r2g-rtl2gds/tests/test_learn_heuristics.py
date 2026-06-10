@@ -46,7 +46,7 @@ def _seed_aes_family(conn, good: int, bad: int):
 
 
 def test_learn_produces_family_heuristics(tmp_knowledge_dir):
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     _seed_aes_family(conn, good=5, bad=2)
@@ -79,7 +79,7 @@ def test_learn_produces_family_heuristics(tmp_knowledge_dir):
 
 
 def test_learn_skips_families_with_too_few_samples(tmp_knowledge_dir):
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     # Seed 2 successful runs — one short of MIN_SUCCESSFUL=3 — so this test
@@ -107,7 +107,7 @@ def _learn_to_dict(tmp_knowledge_dir, db_path):
 
 def test_learn_admits_signoff_positive_partial_runs(tmp_knowledge_dir):
     """Relaxed predicate: partial runs with clean DRC/LVS/RCX are learnable."""
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     for i in range(3):
@@ -132,7 +132,7 @@ def test_learn_admits_signoff_positive_partial_runs(tmp_knowledge_dir):
 
 def test_learn_excludes_partial_without_positive_signoff(tmp_knowledge_dir):
     """Absence of all signoff data is NOT success — no fabrication guarantee."""
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     for i in range(3):
@@ -152,7 +152,7 @@ def test_learn_excludes_partial_without_positive_signoff(tmp_knowledge_dir):
 
 def test_learn_excludes_partial_with_failed_signoff(tmp_knowledge_dir):
     """A failed/incomplete signoff blocks success even with other positives."""
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     for i in range(3):
@@ -172,7 +172,7 @@ def test_learn_excludes_partial_with_failed_signoff(tmp_knowledge_dir):
 
 def test_symmetric_matcher_lvs_counts_as_success(tmp_knowledge_dir):
     """lvs_status='fail' + mismatch_class='symmetric_matcher' is a clean layout."""
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     for i in range(3):
@@ -193,7 +193,7 @@ def test_symmetric_matcher_lvs_counts_as_success(tmp_knowledge_dir):
 
 def test_clean_beol_drc_counts_as_success(tmp_knowledge_dir):
     """drc_status='clean_beol' is a positive clean signal."""
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     for i in range(3):
@@ -212,7 +212,7 @@ def test_clean_beol_drc_counts_as_success(tmp_knowledge_dir):
 
 
 def test_learn_skips_family_with_no_successful_runs(tmp_knowledge_dir):
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     # Three rows, all failed — locks in the "zero successes → absent from
@@ -234,7 +234,7 @@ def test_learn_skips_family_with_no_successful_runs(tmp_knowledge_dir):
 
 
 def test_trajectories_carry_symptom(tmp_knowledge_dir):
-    db = tmp_knowledge_dir / "runs.sqlite"
+    db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     # Insert two raw fix_events for one episode, both tagged with a symptom.
@@ -256,7 +256,7 @@ def test_trajectories_carry_symptom(tmp_knowledge_dir):
 
 
 def test_learn_emits_symptom_projection_pooled_across_families(tmp_knowledge_dir):
-    db = tmp_knowledge_dir / "runs.sqlite"
+    db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     sig = '{"check": "drc", "class": "METAL1_ANTENNA", "predicates": {}}'

@@ -14,7 +14,7 @@ def _tables(conn):
 
 
 def test_schema_creates_fix_tables(tmp_knowledge_dir):
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     tables = _tables(conn)
     assert {"fix_events", "fix_trajectories", "run_violations", "fix_events_archive"} <= tables
@@ -67,7 +67,7 @@ def test_project_family_matches_backfill_grouping(tmp_path):
 
 def test_fix_events_unique_constraint(tmp_knowledge_dir):
     import sqlite3
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     ins = ("INSERT OR IGNORE INTO fix_events "
            "(fix_session_id, iter, strategy) VALUES (?,?,?)")
@@ -113,7 +113,7 @@ def test_ingest_reads_fix_log_into_fix_events(tmp_path, tmp_knowledge_dir):
          "ts": "2026-06-05T00:01:00Z"},
     ]
     proj = _mk_project(tmp_path, fix_log=fix_log)
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     ingest_run.ingest(proj, conn,
                       families_path=tmp_knowledge_dir / "families.json")
@@ -136,7 +136,7 @@ def test_ingest_reads_fix_log_into_fix_events(tmp_path, tmp_knowledge_dir):
 
 def test_ingest_writes_run_violations_snapshot(tmp_path, tmp_knowledge_dir):
     proj = _mk_project(tmp_path, drc_status="clean")
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     run_id = ingest_run.ingest(proj, conn,
                                families_path=tmp_knowledge_dir / "families.json")
@@ -156,7 +156,7 @@ def test_fix_events_get_symptom_id_and_symptoms_table(tmp_path, tmp_knowledge_di
          "env_flags": '{"ROUTE_FAST":"1"}', "ts": "2026-06-09T00:00:00Z"},
     ]
     proj = _mk_project(tmp_path, fix_log=fix_log)
-    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     ingest_run.ingest(proj, conn, families_path=tmp_knowledge_dir / "families.json")
 

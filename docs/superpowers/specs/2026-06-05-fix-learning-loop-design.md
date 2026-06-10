@@ -18,6 +18,9 @@ lead.
 
 ---
 
+> **Note (2026-06-10, engineer-loop spec):** the knowledge store DB file `knowledge/runs.sqlite` was RENAMED to `knowledge/knowledge.sqlite` (decision-11 evidence/conclusions split: journal.sqlite = evidence, knowledge.sqlite = conclusions). References below to `runs.sqlite` are historical; the `runs` TABLE name is unchanged.
+
+
 ## 1. Goal & one-paragraph summary
 
 Make the skill **learn from every violation-fixing iteration**. Today the flow *executes*

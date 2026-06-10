@@ -247,7 +247,7 @@ python3 r2g-rtl2gds/knowledge/ingest_run.py design_cases/<project>
 ```
 
 This reads the structured JSON artifacts produced by the extraction scripts
-and appends one row to `r2g-rtl2gds/knowledge/runs.sqlite`. It never
+and appends one row to `r2g-rtl2gds/knowledge/knowledge.sqlite`. It never
 parses raw ORFS logs.
 
 Then rebuild derived artifacts:
@@ -441,7 +441,7 @@ design_cases/<design-name>/
       (changed/added/removed config keys + orfs/drc/lvs outcome delta prev→cur).
 
     INVARIANT: these panels are a strictly descriptive, READ-ONLY projection over
-    `runs.sqlite` / `config_lineage` / `heuristics.json` (opened `mode=ro`; the projection
+    `knowledge.sqlite` / `config_lineage` / `heuristics.json` (opened `mode=ro`; the projection
     writes only JSON). They are NEVER wired into `suggest_config` as an auto-tuner. The
     config-variant lineage is a loose single-parent diff chain, not a true DAG.
 18. Serve it with `scripts/dashboard/serve_multi_project_dashboard.py 8765`.

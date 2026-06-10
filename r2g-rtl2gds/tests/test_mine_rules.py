@@ -26,7 +26,7 @@ def _insert_run(conn, **row):
 
 
 def test_mine_surfaces_repeated_signature(tmp_knowledge_dir):
-    db_path = tmp_knowledge_dir / "runs.sqlite"
+    db_path = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
     knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
     # Three PDN-0179 failures across two distinct designs

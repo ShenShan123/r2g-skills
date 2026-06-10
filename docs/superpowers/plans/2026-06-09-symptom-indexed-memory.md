@@ -12,6 +12,9 @@
 
 ---
 
+> **Note (2026-06-10, engineer-loop spec):** the knowledge store DB file `knowledge/runs.sqlite` was RENAMED to `knowledge/knowledge.sqlite` (decision-11 evidence/conclusions split: journal.sqlite = evidence, knowledge.sqlite = conclusions). References below to `runs.sqlite` are historical; the `runs` TABLE name is unchanged.
+
+
 ## Conventions (read once)
 
 - **Repo root:** `/proj/workarea/user5/agent-r2g`. All commands run from there.

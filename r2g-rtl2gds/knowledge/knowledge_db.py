@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_KNOWLEDGE_DIR = Path(__file__).resolve().parent
-DEFAULT_DB_PATH = DEFAULT_KNOWLEDGE_DIR / "runs.sqlite"
+DEFAULT_DB_PATH = DEFAULT_KNOWLEDGE_DIR / "knowledge.sqlite"
 DEFAULT_SCHEMA_PATH = DEFAULT_KNOWLEDGE_DIR / "schema.sql"
 DEFAULT_FAMILIES_PATH = DEFAULT_KNOWLEDGE_DIR / "families.json"
 

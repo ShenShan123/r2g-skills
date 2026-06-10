@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Derive empirical per-family heuristics from runs.sqlite.
+"""Derive empirical per-family heuristics from knowledge.sqlite.
 
 Usage:
   learn_heuristics.py [--db <path>] [--out <path>]
