@@ -58,6 +58,14 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # this run ('naive' | 'learned' | NULL). Populated from config.mk EVAL_ARM
         # by ingest_run.py; absent for every non-eval run. Does not affect learning.
         "eval_arm": "TEXT",
+        # Engineer-loop (spec 2026-06-09 decisions 6+8): structural class stamp
+        # ("<design_type>/<size_class>", never the name) + strength metrics +
+        # the heuristics generation in force when this run executed.
+        "design_class": "TEXT",
+        "heuristics_generation": "INTEGER",
+        "first_attempt_clean": "INTEGER",
+        "fix_iters_to_clean": "INTEGER",
+        "wall_s_to_clean": "REAL",
     },
     # Symptom-indexed memory (spec 2026-06-09): raw symptom tagging on the raw tiers.
     "fix_events": {
