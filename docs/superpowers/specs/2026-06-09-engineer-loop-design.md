@@ -438,3 +438,12 @@ is the canonical consumer.
   harness (it remains available as a regression backstop an operator can run); storing raw
   log **full-text** in any DB (deterministic summaries + bounded excerpts only — raw files
   stay on disk under their normal lifecycle).
+
+---
+
+**Implemented 2026-06-10** on branch `feat/engineer-loop` (all of Phase 1). See the
+implementation plan's "Implementation complete" note for the commit set and the three
+plan corrections found during execution. Full pytest suite 417 → 482 passed (8 skips);
+store at `generation=1`, `schema_version=3`, recipes re-keyed
+`recipes[symptom_id][design_class][platform]`. Phase 2 (optimization learning) remains a
+future spec.

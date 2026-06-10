@@ -3598,3 +3598,36 @@ Per project convention (memory: feedback_update_plan_spec_docs): add a dated com
 ## Execution
 
 Recommended order is task order (each builds on the previous). Tasks 1-3, 10, 14, 15 are independent enough to parallelize across subagents if desired; Tasks 4-9, 11-13 are sequential.
+
+---
+
+## Implementation complete (2026-06-10)
+
+All 19 tasks implemented TDD via superpowers:subagent-driven-development on branch
+**`feat/engineer-loop`** (off 109f398). Full suite **417 → 482 passed, 8 skipped** (+65
+new tests, 0 regressions), confirmed both before AND after the store regen (the populated
+`recipes` key exercises the decision-8 indexed lookup; grandfathered-promoted default keeps
+it behavior-compatible). Store regenerated: `generation=1`, `schema_version=3`, **9 symptom
+recipe-buckets** keyed `recipes[symptom_id][design_class][platform]` with `*` rollups;
+distinct learned strategies (antenna_diode_repair, beol_only_drc, period_relax,
+rerun_from_stage) match the existing `symptoms` projection exactly.
+
+**Corrections made to this plan during execution (plan was wrong; code is right):**
+- **T4** — the `R2G_SOURCE_ONLY` test-seam guard must be placed BEFORE each script's
+  argument-parse / usage-`exit` / ORFS-detect block (run_orfs before the `_env.sh` source;
+  fix_signoff before its arg loop). The plan's two hinted placements (line ~42 / "after
+  fix_one") both sit *after* an early `exit 1` on missing args, so a no-arg `source` would
+  exit non-zero and the seam test would fail.
+- **T9** — the SDC clock period is rewritten via `set clk_period <X>` (the actual ORFS
+  constraint.sdc convention, matching check_timing.py), NOT `create_clock -period <X>` as
+  the plan text assumed. The `--apply` output adds `sdc_edits` only when non-empty, to keep
+  the 27 existing diagnose-apply assertions byte-stable.
+- **T17** — the integration fake fix script needs a THIRD branch: on the normal-design path
+  (neither `R2G_FIX_RANK_FIRST` nor `R2G_FIX_EXCLUDE` set) it must append a `cleared` antenna
+  episode to `reports/fix_log.jsonl` and leave drc.json failing, so (a) a recipe is learnable
+  and (b) run_violations keeps the antenna symptom for A/B matching. The plan's 2-branch fake
+  would have produced zero candidates → zero arms → assertion failure.
+
+**Deferred (operator):** the real-flow loop smoke (T19 step 3) — a live ORFS `run --max 1` on
+a real design; Task 17's mocked-flow integration test already proves the full
+flow→journal→ingest→learn→candidate→A/B→judge→promote→strength chain deterministically.
