@@ -331,3 +331,16 @@ must run AFTER `_migrate_add_columns`, not inside `schema.sql`'s `executescript`
 re-learn dies with "no such column". **General principle:** schema changes that add columns to
 existing tables must be validated against a *legacy* DB (or the live store), never only a
 freshly-created one — `CREATE TABLE IF NOT EXISTS` silently skips the new columns on the old table.
+
+## Operator-script cleanup (engineer-loop §5.8, 2026-06-10)
+
+The engineer-loop campaign orchestrator (`scripts/loop/engineer_loop.py`, resumable JSONL
+ledger) supersedes the ad-hoc one-off campaign drivers accumulated during the 2026-03→05
+sweeps. Retired this date (their campaigns are documented in the corpus sections above):
+`retry_pass4.sh` / `pass4_recover_timeouts.sh` / `pass4_status.sh` (the pass-4 batch
+recovery loop), `retry_boom_pass3.sh` / `retry_boom_pass4.sh` / `retry_boom_timeouts.sh`
+(the BOOM ChipTop route/finish retries — see the BOOM sections), and `pending_recovers.txt`
+(its scratch worklist), plus assorted untracked scratch (`tools/_*.sh`, `_boom_finish_logs/`,
+`_drc_band_*.log`, `_lvs_test_*.log`, `last_graph/`) and the stray root `install.sh` (the
+canonical installer is `r2g-rtl2gds/install.sh`). Resumable multi-design campaigns now run
+through `engineer_loop.py` (see `references/engineer-loop.md`).

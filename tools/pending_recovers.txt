@@ -1,4 +1,0 @@
-verilog_ethernet_eth_mac_1g_fifo|route|28800
-verilog_ethernet_eth_mac_mii_fifo|route|28800
-verilog_axis_axis_ram_switch|route|28800
-koios_gemm_layer|place|28800
