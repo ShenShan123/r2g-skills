@@ -124,6 +124,33 @@ if [[ -z "$VERILOG_NETLIST" ]]; then
   exit 1
 fi
 
+# Prefer a POWER-AWARE netlist for LVS. ORFS's 6_final.v is logical-only (no
+# VPWR/VGND connections), which makes Netgen invent per-instance implicit power
+# pins that never merge into the global supplies -> spurious net-count mismatch
+# (729 layout vs 3219 netlist) even though devices match. The 6_final.odb carries
+# the PDN/power connectivity, so regenerate a powered netlist via OpenROAD
+# `write_verilog -include_pwr_gnd` and compare against that. Validated 2026-06-11
+# (RV32I memory_controller: 729 vs 729 nets, "Circuits match uniquely"). See
+# references/failure-patterns.md "sky130 LVS".
+LVS_DIR="$PROJECT_DIR/lvs"
+mkdir -p "$LVS_DIR"
+ODB_FILE=$(find "$RESULTS_DIR" -name "6_final.odb" 2>/dev/null | head -1)
+if [[ -n "$ODB_FILE" && -n "${OPENROAD_EXE:-}" ]]; then
+  POWERED_NETLIST="$LVS_DIR/powered.v"
+  cat > "$LVS_DIR/write_powered_verilog.tcl" << ORTCL
+read_db "$ODB_FILE"
+write_verilog -include_pwr_gnd "$POWERED_NETLIST"
+exit
+ORTCL
+  if "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" > "$LVS_DIR/write_powered_verilog.log" 2>&1 \
+     && [[ -s "$POWERED_NETLIST" ]] && grep -q 'VPWR' "$POWERED_NETLIST"; then
+    echo "Using power-aware netlist from ODB: $POWERED_NETLIST"
+    VERILOG_NETLIST="$POWERED_NETLIST"
+  else
+    echo "WARNING: powered-netlist generation failed; falling back to $VERILOG_NETLIST (LVS may show implicit-power-pin mismatch)" >&2
+  fi
+fi
+
 echo "Running Netgen LVS for design: $DESIGN_NAME"
 echo "Platform: $PLATFORM"
 echo "GDS: $GDS_FILE"
