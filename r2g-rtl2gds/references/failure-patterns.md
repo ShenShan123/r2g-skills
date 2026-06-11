@@ -647,19 +647,31 @@ first end-to-end Netgen runs surfaced three defects that had made the path inert
    Magic lives in a non-PATH conda env (`~/miniconda3/envs/eda`), so extraction died with
    `magic: No such file or directory`. **Fix:** both call sites now use `"$MAGIC_EXE"`.
 
-3. **Std-cell SPICE not loaded on the schematic side → net-count mismatch (OPEN).** With
-   (1)+(2) fixed, Netgen runs and **device counts match exactly** (e.g. RV32I memory_controller:
-   623 devices == 623 devices) — strong evidence the layout is sound — but nets mismatch
-   (729 layout vs 3219 netlist). Cause: Netgen reads `6_final.v` but is never given the
-   standard-cell SPICE library, so every cell logs `Circuit sky130_fd_sc_hd__<cell> contains
-   no devices` (hollow black boxes) and the layout-extracted SPICE calls `sky130_fd_pr__pfet/nfet`
-   as `undefined subcircuit`. The production fix (OpenLane-style) is to feed Netgen the cell
-   library `sky130A/libs.ref/sky130_fd_sc_hd/spice/sky130_fd_sc_hd.spice` (+ device models)
-   on the schematic side via a netgen TCL, so both sides expand to transistors. Until then,
-   sky130 Netgen LVS reports an honest `lvs_mismatch` residual (devices-match, nets-differ),
-   NOT clean. Also: Magic writes its per-cell `.ext` files into the *current* working dir —
-   the driver's `cd $REPO` dumps ~50 stray `.ext` per design into the repo root; the netgen
-   script should `cd` into a scratch dir before extraction.
+3. **Magic-extraction hygiene fixes (SHIPPED 2026-06-11).** `run_netgen_lvs.sh` now:
+   - extracts **hierarchically** (dropped the non-standard `flatten`) so each std cell stays
+     a subckt that matches the cell-library definition;
+   - runs Magic inside a `lvs/magic_ext/` scratch dir so its ~50 per-cell `*.ext` files no
+     longer pollute the caller's CWD (the repo root, via the driver's `cd $REPO`);
+   - loads the std-cell SPICE library
+     (`sky130A/libs.ref/sky130_fd_sc_hd/spice/sky130_fd_sc_hd.spice`) into the **schematic**
+     circuit via a netgen TCL (`readnet spice <lib>` into circuit2 *before* `readnet verilog`
+     into the same handle), the OpenLane pattern, so the schematic cells are no longer hollow.
+
+4. **Real remaining blocker: ORFS `6_final.v` is NOT power-aware → implicit-power-pin net
+   explosion (OPEN).** Even with (3), LVS still mismatches with an IDENTICAL signature:
+   `Circuit 1 contains 623 devices, Circuit 2 contains 623 devices` (devices match — layout
+   is sound) but `729 nets (layout) vs 3219 nets (netlist)`. Root cause: ORFS writes
+   `6_final.v` with **zero** `VPWR/VGND/VPB/VNB` connections (`grep -c VPWR 6_final.v` → 0).
+   Netgen therefore logs `Note: Implicit pin VGND/VNB/VPB/VPWR in instance _NNN_ of <cell>`
+   for every cell and creates per-instance power nets that never merge into the four global
+   supplies — inflating circuit2 to ~623×4 extra nets (3219) vs the layout's merged 729.
+   This is the classic sky130 "non-powered netlist" Netgen problem, **independent of the
+   cell-SPICE fix**. Candidate fixes (not yet validated): (a) have ORFS emit a power-aware
+   LVS netlist (`WRITE_VERILOG`/`def2v` with power pins), or (b) add netgen global-net
+   handling so VPWR/VGND/VPB/VNB merge across implicit pins, or (c) flatten both sides to
+   transistors before compare. Until one lands, sky130 Netgen LVS reports an honest,
+   well-characterized `lvs_mismatch` residual (devices-match, power-net-modeling-differs) —
+   NOT clean, and NOT a layout defect.
 
 ### LVS CDL_FILE Override by Platform Config
 

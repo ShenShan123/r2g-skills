@@ -134,15 +134,34 @@ echo "Netgen setup: $NETGEN_SETUP"
 LVS_DIR="$PROJECT_DIR/lvs"
 mkdir -p "$LVS_DIR"
 
-# Step 1: Extract SPICE netlist from GDS using Magic
+# Resolve the standard-cell SPICE library for the schematic side of LVS.
+# Without this, Netgen reads 6_final.v with the std cells as hollow black boxes
+# ("Circuit sky130_fd_sc_hd__<cell> contains no devices") and nets explode, giving a
+# spurious mismatch even when device counts match. See references/failure-patterns.md
+# "sky130 LVS" (2026-06-11). Production fix: load the cell library into the schematic
+# circuit so both sides expand to transistors.
+case "$PLATFORM" in
+  sky130hd) SC_LIB_NAME="sky130_fd_sc_hd" ;;
+  sky130hs) SC_LIB_NAME="sky130_fd_sc_hs" ;;
+esac
+SC_SPICE="$PDK_ROOT/sky130A/libs.ref/$SC_LIB_NAME/spice/$SC_LIB_NAME.spice"
+if [[ ! -f "$SC_SPICE" ]]; then
+  echo "WARNING: std-cell SPICE not found at $SC_SPICE — schematic cells will be hollow" >&2
+  SC_SPICE=""
+fi
+
+# Step 1: Extract SPICE netlist from GDS using Magic (hierarchical — no flatten, so
+# each std cell stays a subckt that matches the cell-library definition on the
+# schematic side). Run Magic inside a scratch dir so its per-cell *.ext files land
+# there instead of polluting the caller's CWD (repo root) — ~50 stray files/design.
 EXTRACTED_SPICE="$LVS_DIR/extracted.spice"
 EXTRACT_TCL="$LVS_DIR/run_magic_extract.tcl"
 EXTRACT_LOG="$LVS_DIR/magic_extract.log"
+EXT_SCRATCH="$LVS_DIR/magic_ext"
+rm -rf "$EXT_SCRATCH"; mkdir -p "$EXT_SCRATCH"
 
 cat > "$EXTRACT_TCL" << MAGIC_EOF
 gds read "$GDS_FILE"
-load "$DESIGN_NAME"
-flatten "$DESIGN_NAME"
 load "$DESIGN_NAME"
 select top cell
 extract all
@@ -154,7 +173,8 @@ MAGIC_EOF
 NETGEN_TIMEOUT="${NETGEN_TIMEOUT:-3600}"
 echo "Timeout: ${NETGEN_TIMEOUT}s per step"
 echo "Step 1: Extracting SPICE netlist from GDS with Magic..."
-timeout --signal=TERM --kill-after=30 "$NETGEN_TIMEOUT" "$MAGIC_EXE" -dnull -noconsole -T "$MAGIC_TECH" "$EXTRACT_TCL" 2>&1 | tee "$EXTRACT_LOG"
+( cd "$EXT_SCRATCH" && timeout --signal=TERM --kill-after=30 "$NETGEN_TIMEOUT" \
+    "$MAGIC_EXE" -dnull -noconsole -T "$MAGIC_TECH" "$EXTRACT_TCL" ) 2>&1 | tee "$EXTRACT_LOG"
 
 if [[ ! -f "$EXTRACTED_SPICE" ]]; then
   echo "ERROR: Magic SPICE extraction failed — $EXTRACTED_SPICE not created" >&2
@@ -168,13 +188,34 @@ NETGEN_LOG="$LVS_DIR/netgen_lvs.log"
 NETGEN_REPORT="$LVS_DIR/netgen_lvs.rpt"
 
 echo "Step 2: Running Netgen LVS comparison..."
+# Drive Netgen from a TCL script (not -batch lvs) so we can load the std-cell SPICE
+# library into the *schematic* circuit (circuit2 = the Verilog netlist). This is the
+# OpenLane-style sky130 LVS pattern: readnet the cell library into circuit2 so its
+# black-box cells expand to transistors, matching the layout-extracted circuit1.
+NETGEN_TCL="$LVS_DIR/run_netgen_lvs.tcl"
+if [[ -n "$SC_SPICE" ]]; then
+  # Load the std-cell SPICE library FIRST so circuit2 already holds the transistor-level
+  # cell definitions; then read the Verilog netlist INTO THE SAME circuit handle so its
+  # cell instances bind to those definitions. (Reading the Verilog first makes netgen
+  # create empty placeholder cells that shadow a later library read — the cause of the
+  # "Circuit sky130_fd_sc_hd__<cell> contains no devices" mismatch.)
+  cat > "$NETGEN_TCL" << NETGEN_EOF
+set circuit1 [readnet spice "$EXTRACTED_SPICE"]
+set circuit2 [readnet spice "$SC_SPICE"]
+readnet verilog "$VERILOG_NETLIST" \$circuit2
+lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" "$NETGEN_SETUP" "$NETGEN_REPORT"
+NETGEN_EOF
+else
+  cat > "$NETGEN_TCL" << NETGEN_EOF
+set circuit1 [readnet spice "$EXTRACTED_SPICE"]
+set circuit2 [readnet verilog "$VERILOG_NETLIST"]
+lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" "$NETGEN_SETUP" "$NETGEN_REPORT"
+NETGEN_EOF
+fi
+
 LVS_STATUS=0
 set +e +o pipefail
-timeout --signal=TERM --kill-after=60 "$NETGEN_TIMEOUT" $NETGEN_CMD -batch lvs \
-  "$EXTRACTED_SPICE $DESIGN_NAME" \
-  "$VERILOG_NETLIST $DESIGN_NAME" \
-  "$NETGEN_SETUP" \
-  "$NETGEN_REPORT" 2>&1 | tee "$NETGEN_LOG"
+timeout --signal=TERM --kill-after=60 "$NETGEN_TIMEOUT" $NETGEN_CMD -batch source "$NETGEN_TCL" 2>&1 | tee "$NETGEN_LOG"
 LVS_STATUS=${PIPESTATUS[0]}
 set -e -o pipefail
 
