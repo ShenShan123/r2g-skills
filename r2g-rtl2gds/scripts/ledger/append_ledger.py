@@ -214,21 +214,29 @@ def _iso_diff_seconds(start_ts: str, end_ts: str) -> float:
 def _read_last_record(ledger_path: Path) -> Optional[dict]:
     """Return the last record in the ledger, or None if file is empty/missing.
 
-    Uses a small backwards read to avoid scanning the whole file when it gets
-    large. We expect each line to be < 64 KiB in practice.
+    Reads from the end of the file, growing the window until it contains the
+    whole final line (i.e. an internal newline delimiting the last record, or
+    the entire file). A single record can legitimately exceed 64 KiB when its
+    inputs/outputs hash many files, so a fixed tail window must NOT be assumed.
     """
     if not ledger_path.exists() or ledger_path.stat().st_size == 0:
         return None
     with ledger_path.open("rb") as f:
         f.seek(0, os.SEEK_END)
         size = f.tell()
-        block = min(size, 65536)
-        f.seek(size - block, os.SEEK_SET)
-        tail = f.read(block)
-    # Strip optional trailing newline, take the last line.
-    if tail.endswith(b"\n"):
-        tail = tail[:-1]
-    last_line = tail.rsplit(b"\n", 1)[-1]
+        block = 65536
+        while True:
+            block = min(block, size)
+            f.seek(size - block, os.SEEK_SET)
+            tail = f.read(block)
+            stripped = tail[:-1] if tail.endswith(b"\n") else tail
+            # We have the full last line if either an internal newline is
+            # present (so the last line is fully inside `tail`) or we've read
+            # the entire file (the last line is the whole content).
+            if b"\n" in stripped or block >= size:
+                last_line = stripped.rsplit(b"\n", 1)[-1]
+                break
+            block *= 4  # last line longer than window — grow and retry
     try:
         return json.loads(last_line.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as e:
