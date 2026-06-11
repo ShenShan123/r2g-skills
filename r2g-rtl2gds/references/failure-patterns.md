@@ -673,6 +673,27 @@ first end-to-end Netgen runs surfaced three defects that had made the path inert
    well-characterized `lvs_mismatch` residual (devices-match, power-net-modeling-differs) —
    NOT clean, and NOT a layout defect.
 
+5. **Two residual LVS-mismatch causes found in the first 50-design sky130 wave (2026-06-11,
+   OPEN).** With the power-aware-netlist fix, 30/42 designs reached clean DRC+LVS+RCX. All 12
+   mismatches share the SAME netgen verdict — `Top level cell failed pin matching` — with every
+   subcircuit and net count matching (i.e. NOT a topology/connectivity defect). Two sub-causes:
+   - **Antenna diodes (8/12).** Designs that needed antenna-diode insertion during routing carry
+     `sky130_fd_sc_hd__diode_2` (primitive `sky130_fd_pr__diode_pw2nd_05v5`). Netgen does not
+     recognize that primitive as a device (`contains no devices` / `No property value/mult/perim
+     found`), so it flattens the diode cell and the flattening exposes a top-level pin mismatch.
+     Correlation is 100%: every diode-bearing design mismatched, zero diode-free designs did for
+     this reason. Candidate fix: declare `sky130_fd_pr__diode_pw2nd_05v5` as a 2-terminal device
+     in the netgen setup (or filter ORFS antenna diodes from the LVS comparison), so the diode
+     cell matches instead of flattening.
+   - **Top-level power-port reconciliation (4/12).** Diode-free bridge/interface designs
+     (axis_ll_bridge, wb2axip_axilite2axi, APB GPIO slave) also fail `Top level cell failed pin
+     matching` — the powered netlist's top-level supply ports (VDD/VSS) don't reconcile with the
+     layout-extracted top ports for these port-heavy tops. Candidate fix: normalize global
+     supply port names between `write_verilog -include_pwr_gnd` output and the Magic extraction.
+   Both are LVS-setup residuals, not layout defects, and are independent of the (now-fixed)
+   power-aware-netlist issue. The PD flow itself was flawless across the wave: 0 DRC fails,
+   0 crashes, 0 timeouts.
+
 ### LVS CDL_FILE Override by Platform Config
 
 **Symptoms:**
