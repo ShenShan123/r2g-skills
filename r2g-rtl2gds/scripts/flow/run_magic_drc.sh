@@ -134,7 +134,7 @@ echo "Timeout: ${MAGIC_TIMEOUT}s"
 DRC_STATUS=0
 set +e +o pipefail
 timeout --signal=TERM --kill-after=60 "$MAGIC_TIMEOUT" \
-  magic -dnull -noconsole -T "$MAGIC_TECH" "$DRC_TCL" 2>&1 | tee "$DRC_LOG"
+  "$MAGIC_EXE" -dnull -noconsole -T "$MAGIC_TECH" "$DRC_TCL" 2>&1 | tee "$DRC_LOG"
 DRC_STATUS=${PIPESTATUS[0]}
 set -e -o pipefail
 if [[ $DRC_STATUS -eq 124 ]]; then

@@ -571,7 +571,8 @@ strategy_ids: [lvs_same_nets_seed]
 ### Magic DRC Failure
 - **Symptom:** Magic DRC script fails or produces no output
 - **Common causes:**
-  - sky130A tech file missing at `/opt/pdks/sky130A/libs.tech/magic/sky130A.tech`
+  - sky130A tech file missing at `$PDK_ROOT/sky130A/libs.tech/magic/sky130A.tech`
+    (set `PDK_ROOT` in `references/env.local.sh`; `/opt/pdks` is only the fallback default)
   - Platform not supported (Magic DRC only works for sky130hd/sky130hs)
   - GDS file corrupted or from incomplete backend run
 - **Tool:** `scripts/flow/run_magic_drc.sh`
@@ -621,11 +622,44 @@ yields a classifiable verdict instead of an unparseable crash*, plus a corrected
 `assets/platforms/sky130hd/lvs/sky130hd_r2g.lylvs` adding a SPICE-reader delegate that
 shorts the R=0 tie/power resistors. These make LVS *runnable*, not *clean*.
 
-**Genuine clean LVS requires tooling not present here** (`/opt/pdks/sky130A` absent, no
-`magic`/`netgen`). Install sky130A PDK + magic + netgen, then the driver
-(`tools/run_sky130_design.sh`) auto-routes sky130 LVS through `run_netgen_lvs.sh`
-(detects `PDK_ROOT/sky130A` + magic + netgen). Until then, sky130 LVS is honestly
-`env_blocked` — do NOT report it as clean.
+**Genuine clean LVS requires Magic + Netgen + the sky130A PDK. As of 2026-06-10 these are
+INSTALLED** (user-level Miniconda `eda` env from the litex-hub channel; `open_pdks.sky130a`
+PDK staged at `/proj/workarea/user5/sky130_pdk/share/pdk/sky130A` — on `/proj`, not `/home`,
+which is full). They are wired into the skill via `references/env.local.sh`
+(`MAGIC_EXE`/`NETGEN_EXE`/`PDK_ROOT`); confirm with `scripts/flow/check_env.sh`. The driver
+(`tools/run_sky130_design.sh`) auto-routes sky130 LVS through `run_netgen_lvs.sh` (detects
+`PDK_ROOT/sky130A` + magic + netgen), so KLayout LVS is no longer the sky130 path. If
+`PDK_ROOT` is ever unset/missing the prior `env_blocked` honesty rule still applies — do NOT
+report sky130 LVS as clean without a real Netgen verdict.
+
+**First real-run findings (2026-06-11, sky130 campaign smoke + validation).** The
+first end-to-end Netgen runs surfaced three defects that had made the path inert:
+
+1. **Driver never sourced the skill env → KLayout fallback.** `tools/run_sky130_design.sh`
+   gates LVS-tool selection on `$PDK_ROOT`/`$MAGIC_EXE`/`$NETGEN_EXE`, but those live in
+   `references/env.local.sh` (sourced *inside* each flow script's `_env.sh`), not in the
+   driver's own shell. So the gate saw them unset, logged `LVS via KLayout (Netgen/PDK
+   absent)`, and produced a bogus `lvs_fail` on every design. **Fix:** the driver now
+   `source`s `scripts/flow/_env.sh` near the top (it restores caller shell flags on exit).
+
+2. **Bare `magic` invocation → exit 127.** `run_netgen_lvs.sh` and `run_magic_drc.sh`
+   resolved `MAGIC_EXE` but then called `magic` *by bare name* at the actual call site.
+   Magic lives in a non-PATH conda env (`~/miniconda3/envs/eda`), so extraction died with
+   `magic: No such file or directory`. **Fix:** both call sites now use `"$MAGIC_EXE"`.
+
+3. **Std-cell SPICE not loaded on the schematic side → net-count mismatch (OPEN).** With
+   (1)+(2) fixed, Netgen runs and **device counts match exactly** (e.g. RV32I memory_controller:
+   623 devices == 623 devices) — strong evidence the layout is sound — but nets mismatch
+   (729 layout vs 3219 netlist). Cause: Netgen reads `6_final.v` but is never given the
+   standard-cell SPICE library, so every cell logs `Circuit sky130_fd_sc_hd__<cell> contains
+   no devices` (hollow black boxes) and the layout-extracted SPICE calls `sky130_fd_pr__pfet/nfet`
+   as `undefined subcircuit`. The production fix (OpenLane-style) is to feed Netgen the cell
+   library `sky130A/libs.ref/sky130_fd_sc_hd/spice/sky130_fd_sc_hd.spice` (+ device models)
+   on the schematic side via a netgen TCL, so both sides expand to transistors. Until then,
+   sky130 Netgen LVS reports an honest `lvs_mismatch` residual (devices-match, nets-differ),
+   NOT clean. Also: Magic writes its per-cell `.ext` files into the *current* working dir —
+   the driver's `cd $REPO` dumps ~50 stray `.ext` per design into the repo root; the netgen
+   script should `cd` into a scratch dir before extraction.
 
 ### LVS CDL_FILE Override by Platform Config
 

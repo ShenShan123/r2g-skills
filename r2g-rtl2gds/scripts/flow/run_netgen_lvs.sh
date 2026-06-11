@@ -154,7 +154,7 @@ MAGIC_EOF
 NETGEN_TIMEOUT="${NETGEN_TIMEOUT:-3600}"
 echo "Timeout: ${NETGEN_TIMEOUT}s per step"
 echo "Step 1: Extracting SPICE netlist from GDS with Magic..."
-timeout --signal=TERM --kill-after=30 "$NETGEN_TIMEOUT" magic -dnull -noconsole -T "$MAGIC_TECH" "$EXTRACT_TCL" 2>&1 | tee "$EXTRACT_LOG"
+timeout --signal=TERM --kill-after=30 "$NETGEN_TIMEOUT" "$MAGIC_EXE" -dnull -noconsole -T "$MAGIC_TECH" "$EXTRACT_TCL" 2>&1 | tee "$EXTRACT_LOG"
 
 if [[ ! -f "$EXTRACTED_SPICE" ]]; then
   echo "ERROR: Magic SPICE extraction failed — $EXTRACTED_SPICE not created" >&2
