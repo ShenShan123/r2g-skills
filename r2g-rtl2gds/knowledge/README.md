@@ -156,6 +156,19 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
 > `journal_db.connect`): the campaign runs a pool of `ingest_run` subprocesses against one DB and
 > the driver swallows ingest errors, so an unguarded `database is locked` would silently drop a run.
 
+> **2026-06-13 multi-run safety.** `repair()` re-derives each row's status from the project's
+> *latest* `stage_log.jsonl`. That was fine when every project had one run, but once designs are
+> **re-run after a fix** a project holds several runs (old fail + clean re-run) sharing one
+> `project_path`, and only the newest stage_log survives on disk. Applying it to *every* row of the
+> project clobbered the older runs — flipping a recorded failure to look like a pass and deleting its
+> `failure_event` (caught when a backfill turned 7 honest sky130 fail rows into pass/partial). Fix:
+> status re-derivation is now restricted to the **latest-ingested row per project**
+> (`_latest_run_id_per_project`); older runs keep exactly what the live ingest recorded. Their
+> `failure_events` are still completed **additively** (`_backfill_missing_orfs_event`): a bare
+> `orfs-fail-<stage>` is added only when the row has none, so a detailed event written live (e.g.
+> `orfs-fail-route-GRT-0116`) is never downgraded. Net effect on the production store: every one of
+> the 24 backend-fail rows now carries an orfs-fail event (was 8) with zero history rewritten.
+
 ## Invariants
 
 1. `ingest_run.py` only reads structured JSON artifacts; it never parses raw ORFS logs. If an artifact is missing, the corresponding column is NULL.

@@ -124,24 +124,86 @@ def _reconcile_orfs_failure_event(
             conn.execute("DELETE FROM failure_events WHERE id = ?", (ev["id"],))
 
 
+def _backfill_missing_orfs_event(
+    conn: sqlite3.Connection, run_id: str, status: str | None, fail_stage: str | None
+) -> None:
+    """Add a bare `orfs-fail-<stage>` event for a fail row that has none — ADDITIVE
+    ONLY, never deletes or replaces.
+
+    Used for the *non-latest* rows of a multi-run project: their status is trusted
+    as-stored (we cannot re-derive it — only the latest run's stage_log survives),
+    but `failure_events` is just a projection of the (orfs_status, orfs_fail_stage)
+    columns and should still reflect a recorded failure. The additive-only contract
+    is what keeps it safe: a non-latest row that already carries a *detailed* event
+    (e.g. `orfs-fail-route-GRT-0116` written live at its own ingest) is left exactly
+    as-is — we never downgrade it to the code-less form (we have no flow.log here).
+    """
+    if status != "fail" or not fail_stage:
+        return
+    has = conn.execute(
+        "SELECT 1 FROM failure_events WHERE run_id = ? AND signature LIKE 'orfs-fail-%' "
+        "LIMIT 1", (run_id,),
+    ).fetchone()
+    if has:
+        return
+    conn.execute(
+        "INSERT INTO failure_events (run_id, stage, signature, detail) "
+        "VALUES (?, ?, ?, ?)",
+        (run_id, fail_stage, f"orfs-fail-{fail_stage}", None),
+    )
+
+
+def _latest_run_id_per_project(rows: list[sqlite3.Row]) -> set[str]:
+    """The run_id with the newest ingested_at for each project_path.
+
+    A project can hold MULTIPLE runs (an aborted run, then a clean re-run after a
+    fix). Only one stage_log survives on disk — the latest run's — so only that
+    run's row can be faithfully re-derived from it. Re-deriving an *older* run's
+    row from the latest stage_log would overwrite its real historical outcome
+    with a newer run's (clobbering a recorded failure to look like a pass). So
+    reconciliation is restricted to the latest-ingested row per project; older
+    run rows are left exactly as the live ingest recorded them.
+    """
+    latest: dict[str, sqlite3.Row] = {}
+    for r in rows:
+        pp = r["project_path"]
+        if not pp:
+            continue
+        cur = latest.get(pp)
+        if cur is None or (r["ingested_at"] or "") > (cur["ingested_at"] or ""):
+            latest[pp] = r
+    return {r["run_id"] for r in latest.values()}
+
+
 def repair(cases_root: Path | str, conn: sqlite3.Connection) -> int:
-    """Re-derive orfs_status for every runs row from its latest stage log and
-    keep the `failure_events` projection consistent with it.
+    """Re-derive orfs_status from the on-disk stage log for the latest-ingested
+    row of each project, and keep its `failure_events` projection consistent.
 
     Returns the number of rows whose orfs_status (or orfs_fail_stage) changed.
-    The failure_events reconciliation runs for *every* row regardless of whether
-    the status changed this pass, so rows flipped to 'fail' by an earlier repair
-    (before failure_events were maintained here) get their event backfilled.
+    Only the latest-ingested row per project is touched (see
+    `_latest_run_id_per_project`) so multi-run history is never clobbered; the
+    failure_events reconciliation runs for that row regardless of whether the
+    status changed, so a row flipped to 'fail' by an earlier repair (before
+    failure_events were maintained here) still gets its event backfilled.
     """
     cases_root = Path(cases_root)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT run_id, project_path, orfs_status, orfs_fail_stage FROM runs"
+        "SELECT run_id, project_path, orfs_status, orfs_fail_stage, ingested_at "
+        "FROM runs"
     ).fetchall()
+    latest_ids = _latest_run_id_per_project(rows)
 
     changed = 0
     for row in rows:
         run_id = row["run_id"]
+        if run_id not in latest_ids:
+            # Older run of a multi-run project: never re-derive its status (its own
+            # stage_log is gone), but still ensure a recorded failure is visible in
+            # failure_events — additive only, so an existing detailed event survives.
+            _backfill_missing_orfs_event(
+                conn, run_id, row["orfs_status"], row["orfs_fail_stage"])
+            continue
         status = row["orfs_status"]
         fail_stage = row["orfs_fail_stage"]
         run_dir: Path | None = None

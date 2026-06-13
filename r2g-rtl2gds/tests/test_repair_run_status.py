@@ -263,6 +263,85 @@ def test_repair_clears_stale_failure_event_on_downgrade(tmp_knowledge_dir, tmp_p
     conn.close()
 
 
+def test_repair_does_not_clobber_older_run_of_multirun_project(tmp_knowledge_dir, tmp_path):
+    """A project re-run after a fix has TWO rows (old fail + new clean) sharing one
+    project_path; only the latest run's stage_log survives on disk. Repair must
+    reconcile ONLY the latest-ingested row and leave the older fail row — and its
+    failure_event — exactly as the live ingest recorded them. (Regression: the
+    tool used to re-derive every row from the latest stage_log, flipping the
+    historical failure to 'pass' and deleting its event.)"""
+    db_path = _new_db(tmp_knowledge_dir)
+    proj = _make_project(tmp_path / "cases", "rerun_design")  # on-disk log = all-pass
+
+    conn = knowledge_db.connect(db_path)
+    # Older run: failed at route, ingested earlier, with its orfs-fail event.
+    conn.execute(
+        "INSERT INTO runs (run_id, project_path, design_name, ingested_at, "
+        "orfs_status, orfs_fail_stage) VALUES (?,?,?,?,?,?)",
+        ("run_old", str(proj.resolve()), "rerun_design",
+         "2026-06-13T01:00:00Z", "fail", "route"),
+    )
+    conn.execute(
+        "INSERT INTO failure_events (run_id, stage, signature, detail) VALUES (?,?,?,?)",
+        ("run_old", "route", "orfs-fail-route-GRT-0116", "[ERROR GRT-0116] congestion"))
+    # Newer run: the clean re-run, ingested later (matches the on-disk stage_log).
+    conn.execute(
+        "INSERT INTO runs (run_id, project_path, design_name, ingested_at, "
+        "orfs_status, orfs_fail_stage) VALUES (?,?,?,?,?,?)",
+        ("run_new", str(proj.resolve()), "rerun_design",
+         "2026-06-13T05:00:00Z", "partial", None),
+    )
+    conn.commit()
+
+    repair_run_status.repair(tmp_path / "cases", conn)
+
+    old = conn.execute(
+        "SELECT orfs_status, orfs_fail_stage FROM runs WHERE run_id='run_old'").fetchone()
+    new = conn.execute(
+        "SELECT orfs_status FROM runs WHERE run_id='run_new'").fetchone()
+    # Older fail row + its event untouched; newer row reconciled to pass.
+    assert old[0] == "fail" and old[1] == "route"
+    assert len(_orfs_fail_events(conn, "run_old")) == 1
+    assert _orfs_fail_events(conn, "run_old")[0]["signature"] == "orfs-fail-route-GRT-0116"
+    assert new[0] == "pass"
+    conn.close()
+
+
+def test_repair_backfills_older_run_event_additively(tmp_knowledge_dir, tmp_path):
+    """An OLDER run of a multi-run project that failed but carries NO event gets a
+    bare orfs-fail-<stage> from its stored columns (additive), while its status is
+    left untouched. The latest run is reconciled from the on-disk log as usual."""
+    db_path = _new_db(tmp_knowledge_dir)
+    proj = _make_project(tmp_path / "cases", "multirun2")  # on-disk log = all-pass
+
+    conn = knowledge_db.connect(db_path)
+    conn.execute(
+        "INSERT INTO runs (run_id, project_path, design_name, ingested_at, "
+        "orfs_status, orfs_fail_stage) VALUES (?,?,?,?,?,?)",
+        ("old_cts", str(proj.resolve()), "multirun2",
+         "2026-05-21T00:00:00Z", "fail", "cts"),
+    )  # older fail, no event
+    conn.execute(
+        "INSERT INTO runs (run_id, project_path, design_name, ingested_at, "
+        "orfs_status, orfs_fail_stage) VALUES (?,?,?,?,?,?)",
+        ("new_ok", str(proj.resolve()), "multirun2",
+         "2026-06-13T00:00:00Z", "partial", None),
+    )
+    conn.commit()
+
+    repair_run_status.repair(tmp_path / "cases", conn)
+
+    old = conn.execute(
+        "SELECT orfs_status FROM runs WHERE run_id='old_cts'").fetchone()[0]
+    assert old == "fail"  # status untouched
+    ev = _orfs_fail_events(conn, "old_cts")
+    assert len(ev) == 1 and ev[0]["signature"] == "orfs-fail-cts"
+    assert ev[0]["detail"] is None  # no flow.log for an older run -> bare event
+    assert conn.execute(
+        "SELECT orfs_status FROM runs WHERE run_id='new_ok'").fetchone()[0] == "pass"
+    conn.close()
+
+
 def test_repair_preserves_non_orfs_failure_events(tmp_knowledge_dir, tmp_path):
     """Diagnosis-derived events (synthesis_errors, unconstrained_timing, ...) for
     the same run must survive — reconciliation only owns 'orfs-fail-%' signatures."""
