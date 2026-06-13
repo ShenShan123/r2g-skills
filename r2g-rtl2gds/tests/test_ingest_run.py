@@ -160,3 +160,72 @@ def test_run_violations_get_symptom(tmp_path, tmp_knowledge_dir):
     assert json.loads(sig)["class"] == "symmetric_matcher"
     assert json.loads(sig)["predicates"]["nets_balanced"] is True
     conn.close()
+
+
+# --- regression: stage_log.jsonl `status` is the int exit code in production ---
+# run_orfs.sh writes {"status": 0} (shell exit code), NOT {"status": "pass"}.
+# Before the _norm_stage_status fix, _derive_orfs_status compared the int to the
+# strings "pass"/"fail", so 0 == "pass" was always False and EVERY run (clean or
+# aborted) collapsed to ('partial', None) — which also suppressed the
+# orfs-fail-<stage> failure_event. These tests pin the real on-disk format.
+_SIX = ["synth", "floorplan", "place", "cts", "route", "finish"]
+
+
+def test_derive_orfs_status_int_exitcodes_all_pass():
+    stages = [{"stage": s, "status": 0, "elapsed_s": 1} for s in _SIX]
+    assert ingest_run._derive_orfs_status(stages) == ("pass", None)
+
+
+def test_derive_orfs_status_int_exitcode_failure_attributes_stage():
+    stages = [{"stage": "synth", "status": 0},
+              {"stage": "floorplan", "status": 0},
+              {"stage": "place", "status": 2}]  # PPL-0024 aborts place with exit 2
+    assert ingest_run._derive_orfs_status(stages) == ("fail", "place")
+
+
+def test_derive_orfs_status_string_form_still_supported():
+    stages = [{"stage": s, "status": "pass"} for s in _SIX]
+    assert ingest_run._derive_orfs_status(stages) == ("pass", None)
+
+
+def test_norm_stage_status_accepts_both_forms():
+    n = ingest_run._norm_stage_status
+    assert n(0) == "pass" and n(2) == "fail" and n(137) == "fail"
+    assert n("pass") == "pass" and n("fail") == "fail"
+    assert n(True) == "pass" and n(False) == "fail"
+    assert n("weird") is None and n(None) is None
+
+
+def test_ingest_orfs_abort_records_failure_event_with_errcode(tmp_knowledge_dir, tmp_path):
+    """An ORFS stage abort must land in failure_events with the tool's own error
+    code as the signature (regression for the orfs_status int/str bug that made
+    orfs_status never 'fail', silently suppressing every backend-failure event)."""
+    proj = tmp_path / "demux_fail"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = demux\nexport PLATFORM = sky130hd\n")
+    run = proj / "backend" / "RUN_2026-06-12_00-00-00"
+    run.mkdir(parents=True)
+    # production stage_log: int exit codes, place aborts with exit 2
+    (run / "stage_log.jsonl").write_text(
+        '{"stage": "synth", "status": 0, "elapsed_s": 5}\n'
+        '{"stage": "floorplan", "status": 0, "elapsed_s": 5}\n'
+        '{"stage": "place", "status": 2, "elapsed_s": 10}\n')
+    (run / "flow.log").write_text(
+        "[INFO] placing\n"
+        "[ERROR PPL-0024] Number of IO pins (1521) exceeds maximum number of "
+        "available positions (718).\n"
+        "ERROR: Stage 'place' failed (exit code 2)\n")
+
+    conn = _open_db(tmp_knowledge_dir)
+    run_id = ingest_run.ingest(proj, conn,
+                               families_path=tmp_knowledge_dir / "families.json")
+    status, fail_stage = conn.execute(
+        "SELECT orfs_status, orfs_fail_stage FROM runs WHERE run_id=?", (run_id,)
+    ).fetchone()
+    assert (status, fail_stage) == ("fail", "place")
+    sig, detail = conn.execute(
+        "SELECT signature, detail FROM failure_events WHERE run_id=? "
+        "AND signature LIKE 'orfs-fail-%'", (run_id,)).fetchone()
+    assert sig == "orfs-fail-place-PPL-0024"
+    assert "PPL-0024" in detail

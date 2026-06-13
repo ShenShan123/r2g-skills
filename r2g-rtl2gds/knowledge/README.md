@@ -128,9 +128,19 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
 
 `backfill_fix_events.py` maps `antenna_fix_*`/`beol_drc_*` → `check=drc` and
 `retry_pass*`/`recover_pass*`/`orfs_retry` → `check=orfs` (`violation_class` from the stage).
-`repair_run_status.py` prints a before/after `orfs_status` histogram; on the current corpus it is
-largely a no-op (stage logs store integer exit codes and `is_success` already credits
-signoff-positive partials).
+`repair_run_status.py` prints a before/after `orfs_status` histogram and reconciles the corpus.
+
+> **2026-06-12 fix.** `repair_run_status.py` *used* to be "largely a no-op" — but that was the
+> symptom of a bug, not correct behaviour. `run_orfs.sh` writes the **integer shell exit code**
+> to `stage_log.jsonl` (`{"status": 0}`), while `ingest_run._derive_orfs_status` compared it to
+> the strings `"pass"`/`"fail"`. `0 == "pass"` is always False, so every stage was skipped and
+> **all 929 runs were classified `partial`** (0 `pass`, 0 `fail`) — which in turn suppressed the
+> `orfs-fail-<stage>` `failure_events` (gated on `orfs_status=='fail'`), so backend aborts
+> (PPL-0024, PDN-0185, placer SIGSEGV) left no learnable trace. The tests passed because their
+> fixtures used the *string* form the writer never emits. Fix: `_norm_stage_status` accepts both
+> int exit codes and strings; the repair then correctly reconciled the corpus to **872 pass / 40
+> partial / 17 fail**. ORFS aborts now also record a `failure_events` row whose signature carries
+> the tool's own error code (e.g. `orfs-fail-place-PPL-0024`) with the error line as `detail`.
 
 ## Invariants
 

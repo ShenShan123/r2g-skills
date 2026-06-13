@@ -311,18 +311,76 @@ def _write_run_violations(conn: sqlite3.Connection, run_id: str,
 # layout" learning is handled separately by knowledge_db.is_success in the
 # learner — keep this function a pure stage-log mirror; do not change it to
 # read drc/lvs/rcx.
+def _norm_stage_status(v: Any) -> str | None:
+    """Normalize a stage_log.jsonl `status` field to 'pass'/'fail'/None.
+
+    The production writer (`scripts/flow/run_orfs.sh`) records the **shell exit
+    code** as an int (`"status": 0` on success); the test fixtures and a few
+    legacy writers use the string `"pass"`/`"fail"`. Both must map the same way
+    — before this normalization the consumer compared the int against the
+    strings, so `0 == "pass"` was always False, every stage was skipped, and
+    EVERY run (clean or aborted) was classified 'partial' with no fail_stage,
+    which in turn suppressed the `orfs-fail-<stage>` failure_event (gated on
+    orfs_status=='fail'). bool is handled before int (it is an int subclass).
+    """
+    if isinstance(v, bool):
+        return "pass" if v else "fail"
+    if isinstance(v, (int, float)):
+        return "pass" if int(v) == 0 else "fail"
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if s in ("pass", "ok", "done", "success", "passed", "0"):
+            return "pass"
+        if s in ("fail", "failed", "error"):
+            return "fail"
+    return None
+
+
+_ORFS_ERRCODE_RE = re.compile(r"\[ERROR\s+([A-Z]{2,5}-\d{3,4})\]")
+
+
+def _orfs_fail_detail(run_dir: Path | None) -> tuple[str | None, str | None]:
+    """Best-effort (error_code, error_line) for an aborted ORFS stage.
+
+    Scans the run's flow.log tail for the tool's own `[ERROR XXX-0000]` marker
+    (e.g. PPL-0024 pin overflow, PDN-0185 strap width) so the failure_event can
+    carry WHY a stage died instead of a bare orfs-fail-<stage>. The error code
+    becomes a precise, learnable signature key; the full line is the detail.
+    Returns (None, None) when there is no flow.log or no ERROR line.
+    """
+    if run_dir is None:
+        return (None, None)
+    log = run_dir / "flow.log"
+    if not log.is_file():
+        return (None, None)
+    try:
+        tail = log.read_text(errors="ignore").splitlines()[-500:]
+    except Exception:
+        return (None, None)
+    fallback = None
+    for ln in tail:
+        m = _ORFS_ERRCODE_RE.search(ln)
+        if m:
+            return (m.group(1), ln.strip()[:300])
+        if fallback is None and "ERROR" in ln:
+            fallback = ln.strip()[:300]
+    return (None, fallback)
+
+
 def _derive_orfs_status(stages: list[dict[str, Any]]) -> tuple[str, str | None]:
     if not stages:
         return ("unknown", None)
     saw_fail = False
     fail_stage = None
     last_stage_name = None
-    stage_names_done = {s.get("stage") for s in stages if s.get("status") == "pass"}
+    stage_names_done = {s.get("stage") for s in stages
+                        if _norm_stage_status(s.get("status")) == "pass"}
     for s in stages:
-        if s.get("status") not in ("pass", "fail"):
+        st = _norm_stage_status(s.get("status"))
+        if st not in ("pass", "fail"):
             continue
         last_stage_name = s.get("stage")
-        if s.get("status") == "fail" and not saw_fail:
+        if st == "fail" and not saw_fail:
             saw_fail = True
             fail_stage = s.get("stage")
     if saw_fail:
@@ -602,10 +660,12 @@ def ingest(project: Path,
             (run_id, issue.get("stage"), sig, issue.get("summary")),
         )
     if orfs_status == "fail" and fail_stage:
+        err_code, err_line = _orfs_fail_detail(run_dirs[0] if run_dirs else None)
+        sig = f"orfs-fail-{fail_stage}" + (f"-{err_code}" if err_code else "")
         conn.execute(
             "INSERT INTO failure_events (run_id, stage, signature, detail) "
             "VALUES (?, ?, ?, ?)",
-            (run_id, fail_stage, f"orfs-fail-{fail_stage}", None),
+            (run_id, fail_stage, sig, err_line),
         )
     _ingest_fix_events(conn, project, design_name, design_family, platform)
     _write_run_violations(conn, run_id, design_family, platform, drc, lvs, tcheck,

@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-06-12T20:11:41Z",
+  "generated_at": "2026-06-13T01:42:43Z",
   "source_run_count": 929,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 160,
+  "generation": 161,
   "families": {
     "rv32i": {
       "platforms": {
@@ -42,8 +42,8 @@
       "platforms": {
         "nangate45": {
           "sample_size": 22,
-          "success_count": 19,
-          "success_rate": 0.8636363636363636,
+          "success_count": 20,
+          "success_rate": 0.9090909090909091,
           "core_utilization": {
             "min_safe": 25.0,
             "max_safe": 25.0,
@@ -88,8 +88,13 @@
         },
         "sky130hd": {
           "sample_size": 7,
-          "success_count": 4,
-          "success_rate": 0.5714285714285714,
+          "success_count": 5,
+          "success_rate": 0.7142857142857143,
+          "core_utilization": {
+            "min_safe": 20.0,
+            "max_safe": 20.0,
+            "median": 20.0
+          },
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
@@ -112,8 +117,8 @@
       "platforms": {
         "nangate45": {
           "sample_size": 15,
-          "success_count": 13,
-          "success_rate": 0.8666666666666667,
+          "success_count": 14,
+          "success_rate": 0.9333333333333333,
           "core_utilization": {
             "min_safe": 20.0,
             "max_safe": 25.0,
@@ -145,8 +150,8 @@
       "platforms": {
         "nangate45": {
           "sample_size": 14,
-          "success_count": 9,
-          "success_rate": 0.6428571428571429,
+          "success_count": 12,
+          "success_rate": 0.8571428571428571,
           "core_utilization": {
             "min_safe": 10.0,
             "max_safe": 25.0,
@@ -207,8 +212,8 @@
       "platforms": {
         "nangate45": {
           "sample_size": 12,
-          "success_count": 11,
-          "success_rate": 0.9166666666666666,
+          "success_count": 12,
+          "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 20.0,
             "max_safe": 20.0,
@@ -240,8 +245,8 @@
       "platforms": {
         "nangate45": {
           "sample_size": 7,
-          "success_count": 6,
-          "success_rate": 0.8571428571428571,
+          "success_count": 7,
+          "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 25.0,
             "max_safe": 25.0,
@@ -276,8 +281,8 @@
       "platforms": {
         "nangate45": {
           "sample_size": 5,
-          "success_count": 4,
-          "success_rate": 0.8,
+          "success_count": 5,
+          "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 25.0,
             "max_safe": 25.0,
@@ -308,14 +313,34 @@
         }
       }
     },
+    "omsp": {
+      "platforms": {
+        "nangate45": {
+          "sample_size": 6,
+          "success_count": 6,
+          "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 20.0,
+            "max_safe": 25.0,
+            "median": 22.5
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "p90_elapsed_s": 7.0
+        }
+      }
+    },
     "eth": {
       "platforms": {
         "nangate45": {
           "sample_size": 19,
-          "success_count": 9,
-          "success_rate": 0.47368421052631576,
+          "success_count": 13,
+          "success_rate": 0.6842105263157895,
           "core_utilization": {
-            "min_safe": 25.0,
+            "min_safe": 20.0,
             "max_safe": 25.0,
             "median": 25.0
           },
@@ -324,8 +349,8 @@
             "max_safe": 0.25,
             "median": 0.2
           },
-          "typical_cell_count": 1778,
-          "p90_elapsed_s": 775.0,
+          "typical_cell_count": 1903,
+          "p90_elapsed_s": 1254.0,
           "fix_recipes": {
             "drc": {
               "METAL5_ANTENNA": {
@@ -470,12 +495,96 @@
         }
       }
     },
+    "soc": {
+      "platforms": {
+        "nangate45": {
+          "sample_size": 9,
+          "success_count": 9,
+          "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 15.0,
+            "max_safe": 20.0,
+            "median": 20.0
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 558,
+          "p90_elapsed_s": 1144.0
+        }
+      }
+    },
+    "openmsp430": {
+      "platforms": {
+        "nangate45": {
+          "sample_size": 5,
+          "success_count": 5,
+          "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 20.0,
+            "max_safe": 25.0,
+            "median": 25.0
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 5024,
+          "p90_elapsed_s": 1688.0
+        }
+      }
+    },
+    "rv6": {
+      "platforms": {
+        "nangate45": {
+          "sample_size": 6,
+          "success_count": 6,
+          "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 15.0,
+            "max_safe": 20.0,
+            "median": 15.0
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 614,
+          "p90_elapsed_s": 2267.0
+        }
+      }
+    },
+    "ms": {
+      "platforms": {
+        "nangate45": {
+          "sample_size": 3,
+          "success_count": 3,
+          "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 20.0,
+            "max_safe": 20.0,
+            "median": 20.0
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 2546,
+          "p90_elapsed_s": 517.0
+        }
+      }
+    },
     "risc": {
       "platforms": {
         "nangate45": {
           "sample_size": 14,
-          "success_count": 13,
-          "success_rate": 0.9285714285714286,
+          "success_count": 14,
+          "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 20.0,
             "max_safe": 25.0,
@@ -887,19 +996,19 @@
       "platforms": {
         "nangate45": {
           "sample_size": 4,
-          "success_count": 3,
-          "success_rate": 0.75,
+          "success_count": 4,
+          "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 15.0,
-            "max_safe": 20.0,
-            "median": 15.0
+            "max_safe": 25.0,
+            "median": 17.5
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 3781,
+          "typical_cell_count": 2655,
           "p90_elapsed_s": 875.0,
           "fix_recipes": {
             "drc": {
@@ -1958,8 +2067,8 @@
       "platforms": {
         "nangate45": {
           "sample_size": 65,
-          "success_count": 61,
-          "success_rate": 0.9384615384615385,
+          "success_count": 62,
+          "success_rate": 0.9538461538461539,
           "core_utilization": {
             "min_safe": 10.0,
             "max_safe": 25.0,
@@ -1970,7 +2079,7 @@
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 93,
+          "typical_cell_count": 90,
           "p90_elapsed_s": 1901.0,
           "fix_recipes": {
             "drc": {
