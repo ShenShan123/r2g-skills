@@ -116,6 +116,65 @@ def test_small_design_still_floored(tmp_path):
     assert "DIE_AREA  = 0 0 200 200" in cfg
 
 
+def _make_source_with_pins(tmp_path, *, logic: int, pins: int, cu: int = 20) -> Path:
+    """A source project whose DEF carries both a PINS header and COMPONENTS."""
+    src = tmp_path / "design"
+    (src / "constraints").mkdir(parents=True)
+    (src / "reports").mkdir(parents=True)
+    rtl = src / "rtl" / "in.v"
+    rtl.parent.mkdir(parents=True)
+    rtl.write_text("module test(); endmodule\n")
+    (src / "constraints" / "config.mk").write_text(
+        f"export DESIGN_NAME = test\nexport PLATFORM = nangate45\n"
+        f"export VERILOG_FILES = {rtl}\nexport CORE_UTILIZATION = {cu}\n")
+    (src / "constraints" / "constraint.sdc").write_text(
+        "create_clock -period 10 [get_ports clk]\n")
+    run = src / "backend" / "RUN_1" / "results"
+    run.mkdir(parents=True)
+    lines = [f"PINS {pins} ;", f"COMPONENTS {logic} ;"]
+    lines += [f"- u_logic{i} AND2_X1 + PLACED ( 0 0 ) N ;" for i in range(logic)]
+    lines.append("END COMPONENTS")
+    (run / "6_final.def").write_text("\n".join(lines) + "\n")
+    import json
+    (src / "reports" / "ppa.json").write_text(
+        json.dumps({"geometry": {"instance_count": logic}}))
+    return src
+
+
+def _die_side(cfg: str) -> int:
+    for ln in cfg.splitlines():
+        if ln.strip().startswith("export DIE_AREA"):
+            return int(ln.split()[-1])
+    return 0
+
+
+def test_pin_heavy_and_cell_dense_die_sized_for_cells(tmp_path):
+    """A design that is BOTH pad-heavy (>718) AND cell-dense must get a die sized
+    for its CELLS, not the pad perimeter alone -- else place aborts FLW-0024
+    (place density > 1.0). Regression for sha256_stream (777 pads, 12083 cells:
+    a 290um pin-only die over-packed to 108%)."""
+    src = _make_source_with_pins(tmp_path, logic=12083, pins=800, cu=25)
+    dest = tmp_path / "dest__sky130hd"
+    assert mk_main(src, dest) == 0
+    cfg = (dest / "constraints" / "config.mk").read_text()
+    assert "DIE_AREA" in cfg
+    # pin_side for 800 pads ~= 290um; cell_side at cu=25 ~= 650um. Must pick cells.
+    assert _die_side(cfg) >= 600, cfg
+    assert "FLW-0024" in cfg  # the cell-dense rationale fired
+
+
+def test_pin_heavy_but_cell_tiny_die_stays_pin_driven(tmp_path):
+    """A pad-heavy but cell-TINY design keeps the pad-perimeter die (PPL-0024) --
+    cell_side must not inflate it. Regression guard for verilog_ethernet_ip_demux."""
+    src = _make_source_with_pins(tmp_path, logic=80, pins=1500, cu=20)
+    dest = tmp_path / "dest__sky130hd"
+    assert mk_main(src, dest) == 0
+    cfg = (dest / "constraints" / "config.mk").read_text()
+    # pin_side for 1500 pads ~= 550um, dwarfs the ~90um cell side -> pin-driven.
+    assert _die_side(cfg) >= 500, cfg
+    assert "PPL-0024" in cfg
+
+
 def mk_main(src: Path, dest: Path) -> int:
     """Invoke mk_sky130_project.main with argv set to (src, dest)."""
     argv = sys.argv

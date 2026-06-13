@@ -249,6 +249,19 @@ def main() -> int:
     pin_side = (math.ceil(pins * 1.45 / 4 / 10) * 10
                 if pins > FLOOR_PIN_CAPACITY else 0)
 
+    # Cell-area die side: when we are forced onto the explicit-DIE path (small core
+    # or pin overflow), the die must ALSO be large enough to seat the design's cells
+    # at cu_val utilization, else place aborts `[ERROR FLW-0024] Place density
+    # exceeds 1.0`. The pin-aware path (PPL-0024 fix) previously sized the die for
+    # pads ALONE (max(floor, pin_side)); a design that is BOTH pad-heavy AND
+    # cell-dense then over-packs (sha256_stream: 777 pads -> pin_side 290um, but
+    # 12083 sky130 cells need a ~700um core -> 290um die = 108% util -> place fail).
+    # sky130 std cells are ~4.5x nangate45 area, so a design that fit on nangate45
+    # can overflow here. cell_side = core side (sqrt of cell area at cu_val) + the
+    # 2x10um CORE_AREA margin, rounded up to 10um; 0 when cell_count is unknown.
+    # See references/failure-patterns.md "sky130 die under-sized for cells (FLW-0024)".
+    cell_side = (math.ceil((core_side + 20) / 10) * 10) if cell_count > 0 else 0
+
     lines = [
         f"export DESIGN_NAME = {design}",
         "export PLATFORM    = sky130hd",
@@ -258,12 +271,22 @@ def main() -> int:
         "",
     ]
     if use_floor or pin_side:
-        # Explicit DIE: the PDN-feasible floor (PDN-0185) raised, when needed, to
-        # seat the IO pads (PPL-0024). pin_side is 0 unless pads overflow the
-        # floor, so small designs keep the plain 200um die.
-        side = max(PDN_DIE_FLOOR, pin_side)
-        why = ("Small/PDN-floored die" if not pin_side
-               else f"Pin-heavy ({pins} pads): die enlarged for IO perimeter (PPL-0024)")
+        # Explicit DIE: the PDN-feasible floor (PDN-0185), raised when needed to
+        # seat the IO pads (PPL-0024) AND to hold the cells at cu_val (FLW-0024).
+        # max() of all three so a pad-heavy + cell-dense design fits both. (We only
+        # reach this path for small cores or pin overflow; a large non-pin design
+        # still takes the CORE_UTILIZATION branch below -- cell_side just guards the
+        # pin-heavy sub-case where the cell demand exceeds the pad-perimeter demand.)
+        side = max(PDN_DIE_FLOOR, pin_side, cell_side)
+        if pin_side and cell_side > pin_side:
+            why = (f"Pin-heavy ({pins} pads) AND cell-dense: die sized for cells "
+                   f"(FLW-0024) since cell area exceeds the pad perimeter need")
+        elif pin_side:
+            why = f"Pin-heavy ({pins} pads): die enlarged for IO perimeter (PPL-0024)"
+        elif cell_side > PDN_DIE_FLOOR:
+            why = "Cell-dense small core: die sized to hold cells at util (FLW-0024)"
+        else:
+            why = "Small/PDN-floored die"
         lines += [
             f"# {why}.",
             f"export DIE_AREA  = 0 0 {side} {side}",
