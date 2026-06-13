@@ -2,7 +2,10 @@
 
 AI-driven open-source EDA flow: natural-language spec → GDSII via OpenROAD-flow-scripts
 (ORFS), with full signoff (DRC, LVS, RCX). Implemented as the `r2g-rtl2gds` Claude Code
-skill. This skill manages an as-human-engineering learning loop with memory databases and keeps self-evolving.
+skill. The skill runs an as-human-engineering **closed learning loop** that records every run
+into two memory databases (`knowledge.sqlite` = what resulted, `journal.sqlite` = what was
+done), learns repair recipes from them, and applies the learning on the next similar issue —
+so it keeps self-evolving. See "The Closed Learning Loop & Memory Databases" below.
 
 This file orients you to the repo. The skill itself documents *how* to run the flow,
 debug failures, and tune for known design families. **Do not duplicate skill content
@@ -131,11 +134,73 @@ The skill enforces this order. Don't skip a failed stage — diagnose first via
 - **For >100K-cell designs, never run multiple LVS jobs concurrently.** Each KLayout LVS
   process uses 3-5GB RAM; 2-3 in parallel cause 2-3× wall-time inflation.
 
+## The Closed Learning Loop & Memory Databases
+
+The skill *learns from every run*. Two SQLite databases under `r2g-rtl2gds/knowledge/` are
+its memory; they are committed to the repo so the learning compounds across sessions and
+machines. **Detail (schema, CLI, invariants list) lives in `knowledge/README.md` — this is
+the orientation.**
+
+### The two databases (distinct roles — do not conflate)
+
+- **`knowledge.sqlite` — what *resulted*.** One `runs` row per flow (clean, failed, or
+  partial). Derived projections: `failure_events` (one per backend abort / diagnosis issue,
+  signature-keyed e.g. `orfs-fail-place-DPL-0024`), `run_violations` (the full DRC/LVS/timing
+  landscape of *every* run), `fix_events` + `fix_trajectories` (every fix attempt — including
+  *abandoned* episodes and *failed* strategies, i.e. negative learning), `symptoms` + `lessons`
+  (repair experience keyed by a **symptom signature**, not a family name, so a fix learned on
+  nangate45 transfers to sky130hd), and `config_lineage` (per-design config diff chain).
+  `learn_heuristics.py` + `mine_rules.py` roll these into `heuristics.json` (Tier-3 recipes).
+- **`journal.sqlite` — what was *done*, and why.** `actions` (every `loop|agent|operator`
+  action: `config_knob_delta`, `sdc_edit`, `stage_rerun`, `tool_invoke`, `escalate`,
+  `ab_launch`, `promote`/`demote`, with payload + `parent_action_id` for stacked fixes),
+  `log_summaries` (per-run tool-log digests), `tool_bugs` (normalized EDA tool-crash
+  signatures, `symptom_id`-keyed so they join the knowledge store). It is the decision ledger;
+  `ingest_run.py` back-fills each action/bug with its `run_id` at ingest time.
+
+### One turn of the wheel
+
+1. Run the flow → extraction scripts emit structured JSON (`reports/*.json`).
+2. **Ingest** (`knowledge/ingest_run.py`, SKILL.md step 10) writes the `runs` row +
+   `failure_events` + `run_violations` + `fix_events`, and stamps `run_id` onto the journal.
+3. **Learn** (`learn_heuristics.py`, `mine_rules.py`) derives `fix_trajectories` → symptom-indexed
+   `fix_recipes` in `heuristics.json`; genuinely new signatures land in `failure_candidates.json`
+   (a human review queue — never auto-merged into `failure-patterns.md`).
+4. **Apply** on the next similar issue: `suggest_config.py` (per-family medians, hard-clamped) and
+   `diagnose_signoff_fix.py` (symptom-keyed, evidence-ranked strategy order + cross-platform prior).
+5. **Campaign** (`scripts/loop/engineer_loop.py`) drives this unattended with A/B-gated recipe
+   promotion (`shadow → candidate → promoted`) and escalation; see `references/engineer-loop.md`.
+
+### Honesty invariants (violate one and the loop silently lies)
+
+- **Ingest after EVERY flow** — clean, failed, or partial. A skipped ingest is invisible work;
+  a failed run that is never ingested teaches nothing.
+- **`failure_events` is a derived projection of `runs.orfs_status`/`orfs_fail_stage`.** *Every*
+  writer that sets those columns must also maintain the event — the live ingest does, and
+  `repair_run_status.py` must too. If `runs` shows failures but `failure_events` is empty, the
+  learner is blind to the entire backend-failure class even though the corpus *looks* populated.
+  (Root cause of two 2026-06-12/13 defects.)
+- **Concurrent campaign ingests share one file.** `knowledge_db.connect` / `journal_db.connect`
+  arm a `busy_timeout` so a lock waits instead of erroring; a pool driver that swallows ingest
+  errors would otherwise drop runs silently. Never trust a swallowed ingest — confirm the row landed.
+- **A design can have many runs** (re-run after a fix). Reconciliation/repair tools touch only the
+  **latest-ingested row per project**; older rows are immutable history — an old `fail` and a new
+  `pass` must coexist. Re-deriving every row from the latest stage log clobbers that history.
+- **`heuristics.json` is advisory and safety-clamped**; the lineage / observability panels
+  (`build_lineage_view.py`) are READ-ONLY projections, never auto-tuners.
+
+A fast end-to-end honesty check: the count of `runs` with `orfs_status='fail'` should equal the
+count of those carrying an `orfs-fail-%` `failure_event`; the dashboard's **Knowledge Store Health**
+panel renders red when `heuristics.json` is empty (learning is inert) — that red is the alarm.
+
 ## Where to Find X
 
 | Question                                                                                | File                                                                 |
 | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | How does the skill run a flow?                                                          | `r2g-rtl2gds/SKILL.md`                                             |
+| Closed learning loop, DB schema, store invariants                                       | `r2g-rtl2gds/knowledge/README.md`                                 |
+| Autonomous campaign + escalation drain + provenance                                     | `r2g-rtl2gds/references/engineer-loop.md`                          |
+| Fix-learning loop (record → learn → apply, symptom index)                               | `r2g-rtl2gds/references/signoff-fixing.md`                         |
 | Phase-by-phase workflow                                                                 | `r2g-rtl2gds/references/workflow.md`                               |
 | ORFS backend setup, env knobs, macro designs                                            | `r2g-rtl2gds/references/orfs-playbook.md`                          |
 | A specific failure / pitfall (DRC stuck, place_gp hang, CDL override, …)               | `r2g-rtl2gds/references/failure-patterns.md`                       |
@@ -165,7 +230,14 @@ Skill scripts and references are the source of truth — not this file. The work
    is implied.
 4. **Commit with a clear "feat(skill):" or "fix(skill):" prefix.** The commit log is the
    long-term record.
-5. When you have done a iteration of signoff flow, check if there are any updates in both database `journal.sqlite` and `knowledge.sqlite`. Make the skill keep evolving with each action on the issue-fixing trajectory.
+5. **Re-ingest and verify both databases reflect reality** (see "The Closed Learning Loop &
+   Memory Databases"). After re-validating, confirm in `knowledge.sqlite`: the run ingested
+   (`runs`), the failure recorded (`failure_events` mirrors `orfs_status` — every fail row has
+   an `orfs-fail-%` event), the fix attempt captured (`fix_events`/`fix_trajectories`, including
+   if it was abandoned), heuristics re-derived (`learn_heuristics.py`); and in `journal.sqlite`:
+   the actions logged (`actions`) and any tool crash captured (`tool_bugs`). A mismatch (e.g. a
+   `fail` run with no `failure_event`) is itself a bug in the loop — fix it, don't paper over it.
+   The skill must keep evolving with each action on the issue-fixing trajectory.
 
 ## Project Conventions
 
@@ -177,11 +249,12 @@ Skill scripts and references are the source of truth — not this file. The work
   to the user before attempting CDC, multi-clock, DFT, or signoff-quality closure.
 - Dashboard is static HTML at `design_cases/_dashboard/index.html`, served via
   `scripts/dashboard/serve_multi_project_dashboard.py 8765`.
-- Knowledge store (`r2g-rtl2gds/knowledge/`): the learn→suggest loop is **live** (per-family
-  medians via the shared signoff-positive `knowledge_db.is_success`, applied by `suggest_config`
-  under hard safety clamps). A read-only observability projection
-  (`scripts/reports/build_lineage_view.py` → dashboard health + provenance panels) and a payoff
-  A/B harness (`knowledge/eval_heuristics.py`) round it out. Config lineage is a loose
-  single-parent diff chain, not a true version DAG. See `knowledge/README.md`.
+- Knowledge store (`r2g-rtl2gds/knowledge/`): the learn→suggest loop is **live** — see "The
+  Closed Learning Loop & Memory Databases" for the model and the honesty invariants. Implementation
+  notes: per-family medians via the shared signoff-positive `knowledge_db.is_success`, applied by
+  `suggest_config` under hard safety clamps; a read-only observability projection
+  (`scripts/reports/build_lineage_view.py` → dashboard health + provenance panels); a payoff A/B
+  harness (`knowledge/eval_heuristics.py`); config lineage is a loose single-parent diff chain, not
+  a true version DAG. Full schema + CLI in `knowledge/README.md`.
 - Batch results live under `design_cases/_batch/`; per-design logs under
   `design_cases/_batch/logs_*/`.
