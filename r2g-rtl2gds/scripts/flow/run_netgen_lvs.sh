@@ -187,10 +187,26 @@ EXTRACT_LOG="$LVS_DIR/magic_extract.log"
 EXT_SCRATCH="$LVS_DIR/magic_ext"
 rm -rf "$EXT_SCRATCH"; mkdir -p "$EXT_SCRATCH"
 
+# Connectivity-only extraction. LVS compares topology (devices + nets), never
+# parasitics, so capacitance/coupling/resistance extraction is pure waste here --
+# and internodal *coupling* capacitance is O(n^2) over nearby geometry, which on a
+# routing-dense top cell (e.g. apb_spi_master / sha1_core: ~75k via+cell instances)
+# makes `extract all` run 8+ min and hang past NETGEN_TIMEOUT, getting SIGTERM'd
+# ("Created database crash recovery file") -> no SPICE -> a bogus lvs_none. Turning
+# the parasitic passes off yields the IDENTICAL LVS netlist in ~40-90s (validated
+# 2026-06-13: apb_spi_master 8min-hang -> 87s complete, "Circuits match uniquely").
+# Option names are exact: capacitance/coupling/resistance/adjust/length ("adjustment"
+# is a syntax error). `extract all` extracts all cells using these do/no settings.
+# See references/failure-patterns.md "sky130 Netgen LVS Magic top-cell extraction hang".
 cat > "$EXTRACT_TCL" << MAGIC_EOF
 gds read "$GDS_FILE"
 load "$DESIGN_NAME"
 select top cell
+extract no capacitance
+extract no coupling
+extract no resistance
+extract no adjust
+extract no length
 extract all
 ext2spice lvs
 ext2spice -o "$EXTRACTED_SPICE"

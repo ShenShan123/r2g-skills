@@ -783,6 +783,34 @@ strategy_ids: [netgen_diode_normalize, buffer_port_feedthroughs]
    `test_netgen_fail_is_honored`, `test_klayout_takes_precedence_over_netgen`. The driver needs
    no change — its post-fix-loop `extract_lvs.py` call is now correct for the Netgen path.
 
+#### sky130 Netgen LVS Magic top-cell extraction hang (routing-dense designs) → bogus lvs_none
+
+7. **Magic `extract all` did full-parasitic extraction → O(n²) coupling-cap hang on
+   routing-dense top cells (2026-06-13, FIXED).** Symptom: a sky130 design with **clean DRC**
+   reports residual `lvs_none` (empty `reports/lvs.json`), and `lvs/magic_extract.log` ends at
+   `Extracting <top> into <top>.ext:` followed by `Created database crash recovery file` — with
+   `netgen_lvs.log`/`netgen_lvs.rpt`/`netgen_lvs_result.json` all absent. Looks like a Magic
+   SIGSEGV but is actually a **timeout-kill of a pathologically slow extraction**: the std cells
+   extract in seconds, then the **top cell hangs for 8 min – 1 hr+** and `run_netgen_lvs.sh`'s
+   `timeout --signal=TERM ... $NETGEN_TIMEOUT` (default 3600 s) SIGTERMs Magic, whose signal
+   handler prints the crash-recovery line. **Root cause:** the extract TCL ran `extract all`,
+   which computes substrate + **internodal coupling** capacitance; coupling extraction is O(n²)
+   over nearby geometry and explodes on a routing-dense top cell (apb_spi_master / sha1_core /
+   LIBELLULA / diffeq2: ~75 k via+cell instances). **LVS never uses parasitics** — it compares
+   topology (devices + nets) only — so this work was pure waste. Observed live: 4 designs in one
+   45-design wave hung this way; LIBELLULA's Magic reached **54 min CPU** before being killed.
+   **Fix (in `run_netgen_lvs.sh`):** disable the parasitic passes before `extract all`:
+   `extract no capacitance` / `coupling` / `resistance` / `adjust` / `length` (option names are
+   exact — `adjustment` is a syntax error; `extract all` then extracts all cells using those
+   do/no settings). Yields the **identical** LVS netlist far faster. Validated 2026-06-13:
+   apb_spi_master went from an 8-min hang (killed, `lvs_none`) to **87 s** extract → Netgen
+   "Circuits match uniquely" → `lvs_status=clean`. Connectivity is unaffected by R/C settings, so
+   the 174 previously-clean designs stay clean (only their parasitic annotations, which LVS
+   ignores, change). If a top cell is *still* slow after this, raise `NETGEN_TIMEOUT` rather than
+   re-enabling parasitics. NOTE: when Magic still produces no SPICE, `run_netgen_lvs.sh` writes
+   `{"status":"error",...}` and the driver should record an honest `lvs_incomplete`/`lvs_error`
+   residual — never the ambiguous `lvs_none`.
+
 ### LVS CDL_FILE Override by Platform Config
 
 **Symptoms:**
