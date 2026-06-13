@@ -151,21 +151,93 @@ _ORFS_STAGES = [
 ]
 
 
+_STAGE_ORDER = [s for s, _ in _ORFS_STAGES]  # synth..finish
+
+
+def _norm_stage_status(v):
+    """0/'pass' -> 'pass'; nonzero/'fail' -> 'fail'; else None.
+
+    The canonical twin is `ingest_run._norm_stage_status` — keep them in sync.
+    `run_orfs.sh` records the integer shell exit code (`{"status": 0}`); a few
+    legacy writers use the string form. bool is handled before int (subclass).
+    """
+    if isinstance(v, bool):
+        return 'pass' if v else 'fail'
+    if isinstance(v, (int, float)):
+        return 'pass' if int(v) == 0 else 'fail'
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if s in ('pass', 'ok', 'done', 'success', 'passed', '0'):
+            return 'pass'
+        if s in ('fail', 'failed', 'error'):
+            return 'fail'
+    return None
+
+
+def _progress_from_stage_log(run_dir: Path):
+    """Authoritative stage outcome from the run's stage_log.jsonl, or None.
+
+    Preferred over disk ODB-probing: a stage that aborts writes a `*-failed.odb`
+    (or nothing is collected back on failure), so probing finds no ODB for the
+    failed stage and mis-attributes the abort — e.g. a `place` failure with no
+    collected ODBs probes as `orfs_fail_stage='synth'`. The stage_log records
+    each stage's real exit code, the same source `ingest_run._derive_orfs_status`
+    (and thus the knowledge store) uses, so this keeps the residual honest.
+    """
+    log = run_dir / 'stage_log.jsonl'
+    if not log.is_file():
+        return None
+    passed: list = []
+    fail_stage = None
+    for line in log.read_text(errors='ignore').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        st = _norm_stage_status(rec.get('status'))
+        if st == 'pass':
+            passed.append(rec.get('stage'))
+        elif st == 'fail' and fail_stage is None:
+            fail_stage = rec.get('stage')
+    if fail_stage is None and not passed:
+        return None  # empty/unparseable -> let the ODB probe try
+    if fail_stage is not None:
+        return {'orfs_status': 'fail',
+                'orfs_last_stage': passed[-1] if passed else None,
+                'orfs_fail_stage': fail_stage}
+    passed_set = set(passed)
+    if all(s in passed_set for s in _STAGE_ORDER):
+        return {'orfs_status': 'complete', 'orfs_last_stage': 'finish',
+                'orfs_fail_stage': None}
+    nxt = next((s for s in _STAGE_ORDER if s not in passed_set), None)
+    return {'orfs_status': 'partial',
+            'orfs_last_stage': passed[-1] if passed else None,
+            'orfs_fail_stage': nxt}
+
+
 def detect_orfs_progress(run_dir: Path) -> dict:
-    """Classify how far the ORFS backend got from the stage result ODBs.
+    """Classify how far the ORFS backend got.
+
+    Prefers the authoritative `stage_log.jsonl` (real per-stage exit codes);
+    falls back to probing stage result ODBs only when no stage_log exists.
 
     Returns {orfs_status, orfs_last_stage, orfs_fail_stage}:
-      - complete : 6_final.odb present (full flow)
+      - complete : full flow (finish stage passed / 6_final.odb present)
       - partial  : some stages done, the next one is missing -> orfs_fail_stage
-      - fail     : not even synth produced an ODB
+      - fail     : a stage aborted (stage_log) or not even synth produced an ODB
 
     The collected backend flattens results under <run>/results/, but ORFS's
     native layout nests them under results/<platform>/<design>/<variant>/, so we
     match by basename anywhere beneath the run dir. Consumed by the campaign
     driver (run_sky130_design.sh) to label residuals as orfs_<stage> instead of
-    the catch-all orfs_incomplete (the prior producer/consumer gap: the driver
-    read orfs_fail_stage but extract_ppa never wrote it).
+    the catch-all orfs_incomplete.
     """
+    from_log = _progress_from_stage_log(run_dir)
+    if from_log is not None:
+        return from_log
     present = set()
     rdir = run_dir / 'results'
     search_root = rdir if rdir.is_dir() else run_dir

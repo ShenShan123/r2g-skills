@@ -77,6 +77,53 @@ def source_def_pins(src: Path) -> int:
     return 0
 
 
+_PHYS_ONLY_RE = re.compile(
+    r"(?:^|_)(?:fill|fillcell|tap|tapcell|decap|antenna|endcap)", re.I)
+
+
+def source_def_components(src: Path) -> int:
+    """Logic-cell instance count from the source design's ORFS DEF.
+
+    Fallback cell-count for die sizing when the source `ppa.json` lacks
+    `cell_count` (older runs predate that field — e.g. April-2026 corpus). The
+    DEF `COMPONENTS N` header counts *all* placed instances **including
+    fillers/taps**, which on a low-utilization nangate45 run is the majority
+    (iccad2015_unit14_in1: 9986 components, 6880 of them fill/tap). Counting raw
+    components would massively over-estimate area; under-counting by trusting a
+    missing cell_count (=> 0) instead floors a large design into the tiny PDN die
+    and detailed placement aborts at ~100% utilization (DPL-0036). So walk the
+    COMPONENTS section and count only the logic cells (exclude fill/tap/decap/
+    antenna/endcap). Returns 0 when no DEF is present.
+    """
+    backend = src / "backend"
+    if not backend.is_dir():
+        return 0
+    defs = sorted(backend.rglob("6_final.def")) or sorted(backend.rglob("*.def"))
+    for d in reversed(defs):
+        try:
+            n = 0
+            in_components = False
+            with open(d, errors="ignore") as fh:
+                for line in fh:
+                    s = line.strip()
+                    if not in_components:
+                        if s.startswith("COMPONENTS "):
+                            in_components = True
+                        continue
+                    if s.startswith("END COMPONENTS"):
+                        break
+                    # Each instance entry: "- <inst_name> <MACRO> + ... ;"
+                    if s.startswith("-"):
+                        parts = s.split()
+                        if len(parts) >= 3 and not _PHYS_ONLY_RE.search(parts[2]):
+                            n += 1
+            if n > 0 or in_components:
+                return n
+        except Exception:
+            continue
+    return 0
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("usage: mk_sky130_project.py <source_project_dir> <dest_project_dir>", file=sys.stderr)
@@ -162,9 +209,23 @@ def main() -> int:
     if src_ppa.is_file():
         try:
             import json as _json
-            cell_count = int(_json.loads(src_ppa.read_text()).get("cell_count") or 0)
+            _p = _json.loads(src_ppa.read_text())
+            # extract_ppa writes the instance count under geometry.instance_count,
+            # NOT a top-level cell_count key — reading the wrong key made cell_count
+            # silently 0 for *every* design, so use_floor was always true and a
+            # large design over-packed the 200um PDN floor (DPL-0036). Prefer the
+            # geometry field; keep the top-level read in case it is ever populated.
+            cell_count = int(_p.get("cell_count")
+                             or (_p.get("geometry") or {}).get("instance_count")
+                             or 0)
         except Exception:
             cell_count = 0
+    # Final fallback for sources with no ppa.json geometry: count logic cells
+    # straight from the source DEF. Without an accurate count a large design is
+    # treated as ~0 cells, floored into the 200um PDN die, and aborts detailed
+    # placement at ~100% utilization (DPL-0036).
+    if cell_count <= 0:
+        cell_count = source_def_components(src)
     SKY130_CELL_UM2 = 8.0          # std-cell footprint estimate
     PDN_DIE_FLOOR = 200            # um; cordic-validated minimum for met4 straps
     est_core = max(cell_count, 1) * SKY130_CELL_UM2 / (cu_val / 100.0)
