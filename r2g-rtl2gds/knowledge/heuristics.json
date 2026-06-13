@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-06-13T01:42:43Z",
-  "source_run_count": 929,
+  "generated_at": "2026-06-13T07:05:09Z",
+  "source_run_count": 975,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 161,
+  "generation": 208,
   "families": {
     "rv32i": {
       "platforms": {
@@ -25,15 +25,15 @@
           "p90_elapsed_s": 565.0
         },
         "sky130hd": {
-          "sample_size": 4,
-          "success_count": 4,
+          "sample_size": 5,
+          "success_count": 5,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 879,
+          "typical_cell_count": 934,
           "p90_elapsed_s": 1005.0
         }
       }
@@ -87,9 +87,9 @@
           }
         },
         "sky130hd": {
-          "sample_size": 7,
-          "success_count": 5,
-          "success_rate": 0.7142857142857143,
+          "sample_size": 8,
+          "success_count": 6,
+          "success_rate": 0.75,
           "core_utilization": {
             "min_safe": 20.0,
             "max_safe": 20.0,
@@ -100,8 +100,8 @@
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 541,
-          "p90_elapsed_s": 1004.0,
+          "typical_cell_count": 564,
+          "p90_elapsed_s": 762.0,
           "fix_recipes": {
             "drc": {
               "null": {
@@ -133,15 +133,15 @@
           "p90_elapsed_s": 735.0
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 573,
+          "typical_cell_count": 601,
           "p90_elapsed_s": 1035.0
         }
       }
@@ -195,15 +195,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 486,
+          "typical_cell_count": 556,
           "p90_elapsed_s": 789.0
         }
       }
@@ -228,15 +228,15 @@
           "p90_elapsed_s": 948.0
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 546,
+          "typical_cell_count": 666,
           "p90_elapsed_s": 1054.0
         }
       }
@@ -387,15 +387,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 967,
+          "typical_cell_count": 1082,
           "p90_elapsed_s": 822.0
         }
       }
@@ -434,6 +434,18 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 3,
+          "success_count": 3,
+          "success_rate": 1.0,
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 6527,
+          "p90_elapsed_s": 2256.0
         }
       }
     },
@@ -471,6 +483,18 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 3,
+          "success_count": 3,
+          "success_rate": 1.0,
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 3038,
+          "p90_elapsed_s": 2625.0
         }
       }
     },
@@ -614,15 +638,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 532,
+          "typical_cell_count": 535,
           "p90_elapsed_s": 1054.0
         }
       }
@@ -662,15 +686,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 4,
-          "success_count": 3,
-          "success_rate": 0.75,
+          "sample_size": 5,
+          "success_count": 4,
+          "success_rate": 0.8,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 737,
+          "typical_cell_count": 762,
           "p90_elapsed_s": 1076.0
         }
       }
@@ -760,16 +784,16 @@
           }
         },
         "sky130hd": {
-          "sample_size": 4,
-          "success_count": 3,
-          "success_rate": 0.75,
+          "sample_size": 5,
+          "success_count": 4,
+          "success_rate": 0.8,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 1022,
-          "p90_elapsed_s": 699.0
+          "typical_cell_count": 1025,
+          "p90_elapsed_s": 740.0
         }
       }
     },
@@ -793,15 +817,15 @@
           "p90_elapsed_s": 867.0
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 765,
+          "typical_cell_count": 773,
           "p90_elapsed_s": 863.0
         }
       }
@@ -895,15 +919,15 @@
           "p90_elapsed_s": 779.0
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 588,
+          "typical_cell_count": 592,
           "p90_elapsed_s": 1042.0
         }
       }
@@ -941,6 +965,18 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 3,
+          "success_count": 3,
+          "success_rate": 1.0,
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 1538,
+          "p90_elapsed_s": 3948.0
         }
       }
     },
@@ -979,16 +1015,21 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 10.0,
+            "max_safe": 10.0,
+            "median": 10.0
+          },
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 765,
-          "p90_elapsed_s": 1049.0
+          "typical_cell_count": 771,
+          "p90_elapsed_s": 1906.0
         }
       }
     },
@@ -1101,16 +1142,16 @@
           }
         },
         "sky130hd": {
-          "sample_size": 5,
-          "success_count": 3,
-          "success_rate": 0.6,
+          "sample_size": 6,
+          "success_count": 4,
+          "success_rate": 0.6666666666666666,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 562,
-          "p90_elapsed_s": 3576.0
+          "typical_cell_count": 583,
+          "p90_elapsed_s": 4881.0
         }
       }
     },
@@ -1324,8 +1365,8 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -1511,15 +1552,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 633,
+          "typical_cell_count": 720,
           "p90_elapsed_s": 846.0
         }
       }
@@ -1573,15 +1614,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
-            "max_safe": 0.2,
+            "max_safe": 0.25,
             "median": 0.2
           },
-          "typical_cell_count": 560,
+          "typical_cell_count": 567,
           "p90_elapsed_s": 758.0
         }
       }
@@ -1711,15 +1752,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 577,
+          "typical_cell_count": 553,
           "p90_elapsed_s": 990.0
         }
       }
@@ -1784,15 +1825,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 5,
-          "success_count": 4,
-          "success_rate": 0.8,
+          "sample_size": 6,
+          "success_count": 5,
+          "success_rate": 0.8333333333333334,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 508,
+          "typical_cell_count": 551,
           "p90_elapsed_s": 1084.0
         }
       }
@@ -1862,6 +1903,18 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 3,
+          "success_count": 3,
+          "success_rate": 1.0,
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 1378,
+          "p90_elapsed_s": 878.0
         }
       }
     },
@@ -2050,15 +2103,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 697,
+          "typical_cell_count": 695,
           "p90_elapsed_s": 782.0
         }
       }
@@ -2112,15 +2165,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 4,
-          "success_count": 4,
+          "sample_size": 5,
+          "success_count": 5,
           "success_rate": 1.0,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 442,
+          "typical_cell_count": 443,
           "p90_elapsed_s": 723.0
         }
       }
@@ -2180,15 +2233,15 @@
           }
         },
         "sky130hd": {
-          "sample_size": 5,
-          "success_count": 3,
-          "success_rate": 0.6,
+          "sample_size": 6,
+          "success_count": 4,
+          "success_rate": 0.6666666666666666,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 619,
+          "typical_cell_count": 618,
           "p90_elapsed_s": 795.0
         }
       }

@@ -75,7 +75,23 @@ reading the source DEF `PINS` count and enlarging the PDN-floor die only when pa
 ~718 capacity (PPL-0024 on pin-huge/cell-tiny designs like `verilog_ethernet_ip_demux`, 1523
 pads → 560 µm die; a no-op for ≤718-pad designs, so the 134 other waves are byte-identical).
 `extract_ppa.py` now emits `orfs_fail_stage` (the campaign driver already consumed it). See
-`references/failure-patterns.md` "sky130 high-pin-count floorplan (PPL-0024)". 314 candidates
+`references/failure-patterns.md` "sky130 high-pin-count floorplan (PPL-0024)". Extended again
+2026-06-13 (wave 5, +40 diverse → **176/450 done, 174 clean / 2 genuine route-congestion**):
+every wave-5 failure was ONE bug — `mk_sky130_project.py` read top-level `ppa["cell_count"]`
+(always null) instead of `geometry.instance_count`, so the die was *always* the 200 µm PDN
+floor; cell-dense designs (~3100-3600 cells) over-packed it to ~100 % util and aborted at place
+(DPL-0036) or route (GRT-0116/timeout). Fixed the read (+ `source_def_components()` DEF fallback);
+small designs stay below the floor threshold (byte-identical), large ones now size by
+`CORE_UTILIZATION` and close. Three more skill fixes in the same session, all with the knowledge
+store's honesty as the throughline: `extract_ppa.detect_orfs_progress` now reads `stage_log.jsonl`
+(was mis-attributing the fail stage from disk-ODB probing); `repair_run_status.py` now maintains
+`failure_events` in lock-step with reconciled status **and** only touches the latest-ingested row
+per project (a multi-run-clobber bug it briefly caused, then fixed — restored from its own `.bak`);
+`knowledge_db.connect` arms `busy_timeout` (parity with `journal_db`) so pooled campaign ingests
+can't silently drop a run. The 2 residuals (AES `aes_encipher_block`, DES `des_area`) are genuine
+route congestion — crypto SPN logic on sky130hd's 5 routing layers; lowering `CORE_UTILIZATION`
+≤ 8 is the lever but some may not close. See `references/failure-patterns.md` "sky130hd large-core
+over-packs the PDN floor (DPL-0036)" and "sky130hd route-dense designs (crypto SPN)". 274 candidates
 pending for future waves.
 
 ORFS platforms shipped with this checkout: `nangate45` (default), `sky130hd`, `sky130hs`,

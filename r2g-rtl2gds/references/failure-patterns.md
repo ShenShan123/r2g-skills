@@ -80,6 +80,28 @@ CORE_UTILIZATION is too high for the design's routing complexity. Highly interco
 - As a rule of thumb, bus-heavy designs (wb_conmax, crossbars) need utilization ≤ 15%
 - If the design uses `SYNTH_HIERARCHICAL=1`, the gate count may be larger than expected
 
+### Sub-variant: sky130hd route-dense designs (crypto SPN), 5-layer stack
+
+- **Symptom (sky130hd/sky130hs):** `place` passes at a healthy 15-25% utilization but `route`
+  fails — either `[ERROR GRT-0116] Global routing finished with congestion` or, more often, a
+  `route` **timeout (exit 124)** after the global router spins all 30 extra iterations without
+  clearing overflow (`Routability final weighted congestion ≈ 0.97`).
+- **Root cause:** sky130hd exposes only **5 routing layers** (met1–met5) vs nangate45's ~10, so a
+  design that routes cleanly on nangate45 at the *same* `CORE_UTILIZATION` can be hopelessly
+  congested here. Substitution-permutation crypto cores (AES `aes_encipher_block`, DES `des_area`)
+  are the worst case: dense XOR / S-box / GF-multiply fan-out creates very high *local* routing
+  demand that area alone does not relieve. These are **not** the die-sizing floor bug (that aborts
+  at `place`/DPL-0036) — placement succeeds; the wires simply do not fit.
+- **Learned signal:** the knowledge store's `failure_candidates.json` auto-clusters these as
+  `orfs-fail-route` (config median `CORE_UTILIZATION = 25`) once the `failure_events` are populated
+  — i.e. high-util designs dominate the route-fail population. Lowering utilization is the lever the
+  data points to.
+- **Action:** drop `CORE_UTILIZATION` aggressively (≤ 8-10) to open routing channels and give the
+  route stage a larger `ORFS_TIMEOUT`. Re-run **from a clean backend** (a `FROM_STAGE=floorplan`
+  resume silently reuses the cached dense placement — verify `place` actually re-runs, not 3 s of
+  cache). Some crypto cores may still not reach a DRC-clean route on sky130hd's 5-layer stack within
+  reasonable effort; record those as an honest `orfs_route` residual rather than relaxing signoff.
+
 ## Placement Divergence (NesterovSolve Non-Convergence)
 
 **Symptoms:**
