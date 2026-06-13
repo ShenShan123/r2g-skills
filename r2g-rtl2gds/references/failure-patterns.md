@@ -99,8 +99,15 @@ CORE_UTILIZATION is too high for the design's routing complexity. Highly interco
 - **Action:** drop `CORE_UTILIZATION` aggressively (≤ 8-10) to open routing channels and give the
   route stage a larger `ORFS_TIMEOUT`. Re-run **from a clean backend** (a `FROM_STAGE=floorplan`
   resume silently reuses the cached dense placement — verify `place` actually re-runs, not 3 s of
-  cache). Some crypto cores may still not reach a DRC-clean route on sky130hd's 5-layer stack within
-  reasonable effort; record those as an honest `orfs_route` residual rather than relaxing signoff.
+  cache).
+- **Validated honest-final (2026-06-13):** `aes_encipher_block` does NOT close on sky130hd even at
+  `CORE_UTILIZATION = 8` from a clean backend — global placement never converges (overflow
+  oscillates ~0.51) because `[INFO GPL-0047] Routability iteration weighted routing congestion`
+  stays **> 1.0 (1.01)**: the design demands more routing than 5 metal layers can supply, at *any*
+  utilization. `des_area` behaves identically. These are genuine `orfs_route` residuals, not a
+  fixable config — recorded honestly (the knowledge store carries them as `orfs-fail-route`); do not
+  relax signoff to force a dirty GDS. Revisit only if more routing layers (e.g. an HD variant with
+  met6+) or a hierarchical/partitioned floorplan becomes available.
 
 ## Placement Divergence (NesterovSolve Non-Convergence)
 
