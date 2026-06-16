@@ -85,6 +85,13 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # failure_events write path (a bench fail still gets its orfs-fail-% event
         # and stays in the honesty count). NULL/0 == not a bench run.
         "is_bench": "INTEGER",
+        # Pre-route feature vector (Win 5, presynth.py) as JSON — instance count,
+        # primary I/O, est logic depth, target util, clock period, routing layers.
+        # PREDICTIVE inputs available at SUGGESTION time (vs the post-route
+        # metadata.csv outcomes), so suggest_config can do feature-vector KNN
+        # retrieval. Populated at ingest when reports/presynth_features.json exists;
+        # NULL otherwise (retrieval falls back to family medians).
+        "presynth_features_json": "TEXT",
     },
     # Symptom-indexed memory (spec 2026-06-09): raw symptom tagging on the raw tiers.
     "fix_events": {

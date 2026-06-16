@@ -681,6 +681,11 @@ def ingest(project: Path,
     # still written for bench runs (honesty invariant H3).
     bench = _load_bench_designs()
     is_bench = 1 if (design_name in bench or project.name in bench) else 0
+    # Win 5: store the pre-route feature vector if presynth.py emitted one, so
+    # suggest_config can KNN-retrieve on topology. Absent -> NULL (retrieval falls
+    # back to family medians).
+    presynth = _read_json(project / "reports" / "presynth_features.json")
+    presynth_features_json = json.dumps(presynth, sort_keys=True) if presynth else None
     prior = conn.execute(
         "SELECT COUNT(*) FROM runs WHERE design_name=? AND platform=? AND run_id!=?",
         (design_name, platform, run_id)).fetchone()[0]
@@ -741,6 +746,7 @@ def ingest(project: Path,
         "wall_s_to_clean":       total_elapsed if is_clean else None,
         "outcome_score":         outcome_score,    # Win 1: additive, advisory
         "is_bench":              is_bench,          # Win 3: held-out, learning-read filter only
+        "presynth_features_json": presynth_features_json,   # Win 5: pre-route KNN key
 
         "total_elapsed_s":  total_elapsed,
         "stage_times_json": json.dumps(stage_log, sort_keys=True),

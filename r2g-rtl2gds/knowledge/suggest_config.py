@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import re
+import statistics
 import sys
 from pathlib import Path
 
@@ -18,6 +19,121 @@ import query_knowledge
 
 HEURISTICS_PATH = knowledge_db.DEFAULT_KNOWLEDGE_DIR / "heuristics.json"
 FAMILIES_PATH = knowledge_db.DEFAULT_FAMILIES_PATH
+
+# Win 5: numeric pre-route features used for KNN retrieval (presynth.py order).
+FEATURE_KEYS = ("instance_count", "primary_io", "est_logic_depth",
+                "target_utilization", "clock_period_ns", "routing_layers")
+KNN_K = 5
+
+
+def _num(v):
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _zscore_stats(vecs: list[list]) -> tuple[list[float], list[float]]:
+    """Per-column mean + std over non-None values; std 0 -> 1.0 (no scaling).
+    Mixed-scale columns (instance count in thousands vs utilization in [0,50])
+    MUST be normalized or instance_count dominates the Euclidean distance."""
+    ncol = len(FEATURE_KEYS)
+    means: list[float] = []
+    stds: list[float] = []
+    for j in range(ncol):
+        col = [v[j] for v in vecs if v[j] is not None]
+        if col:
+            m = sum(col) / len(col)
+            sd = (sum((x - m) ** 2 for x in col) / len(col)) ** 0.5 or 1.0
+        else:
+            m, sd = 0.0, 1.0
+        means.append(m)
+        stds.append(sd)
+    return means, stds
+
+
+def _normalize(vec: list, means: list[float], stds: list[float]) -> list[float]:
+    # Impute a missing feature to the column mean -> contributes 0 to the distance.
+    return [((means[j] if vec[j] is None else vec[j]) - means[j]) / stds[j]
+            for j in range(len(FEATURE_KEYS))]
+
+
+def _euclidean(a: list[float], b: list[float]) -> float:
+    return sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5
+
+
+def _target_feature_vector(project: Path) -> dict | None:
+    """The target's pre-route feature vector, read from reports/presynth_features.json
+    (emitted by presynth.py). None when absent -> retrieval is skipped (fall back to
+    family medians). Decoupled from the extractor by design — no cross-dir import."""
+    data = None
+    p = project / "reports" / "presynth_features.json"
+    if p.exists():
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+    if not data or all(data.get(k) is None for k in FEATURE_KEYS):
+        return None
+    return data
+
+
+def _load_feature_corpus(db_path: Path | str, platform: str) -> list[dict]:
+    """Prior CLEAN, non-bench runs on this platform that carry a pre-route feature
+    vector, with the config they used. Held-out bench runs are excluded (Win 3)."""
+    conn = knowledge_db.connect(db_path)
+    knowledge_db.ensure_schema(conn)
+    cols = ("design_name", "core_utilization", "place_density_lb_addon",
+            "outcome_score", "drc_status", "lvs_status", "rcx_status",
+            "orfs_status", "lvs_mismatch_class", "presynth_features_json")
+    rows = conn.execute(
+        f"SELECT {', '.join(cols)} FROM runs WHERE platform=? AND "
+        "presynth_features_json IS NOT NULL AND COALESCE(is_bench,0)=0",
+        (platform,)).fetchall()
+    conn.close()
+    corpus: list[dict] = []
+    for r in rows:
+        d = dict(zip(cols, r))
+        if not knowledge_db.is_success(d):       # CLEAN exemplars only
+            continue
+        try:
+            vec = json.loads(d["presynth_features_json"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        corpus.append({"vector": vec, "cu": d["core_utilization"],
+                       "pd": d["place_density_lb_addon"],
+                       "score": d["outcome_score"], "design_name": d["design_name"]})
+    return corpus
+
+
+def _retrieve_by_features(target_vec: dict, corpus: list[dict],
+                          k: int = KNN_K) -> dict | None:
+    """KNN over z-score-normalized pre-route features: among clean runs with
+    outcome_score >= the corpus median, return the median config of the k nearest.
+    None when the corpus is too small. Replaces the infer_family prefix lookup."""
+    if len(corpus) < 2:
+        return None
+    scores = [c["score"] for c in corpus if c["score"] is not None]
+    pool = corpus
+    if scores:
+        med = statistics.median(scores)
+        best = [c for c in corpus if c["score"] is None or c["score"] >= med]
+        if len(best) >= 2:
+            pool = best
+    vecs = [[_num(c["vector"].get(key)) for key in FEATURE_KEYS] for c in pool]
+    tvec = [_num(target_vec.get(key)) for key in FEATURE_KEYS]
+    means, stds = _zscore_stats(vecs + [tvec])
+    tn = _normalize(tvec, means, stds)
+    ranked = sorted(zip((_euclidean(tn, _normalize(v, means, stds)) for v in vecs),
+                        pool), key=lambda x: x[0])
+    nearest = [c for _, c in ranked[:k]]
+    cus = [c["cu"] for c in nearest if c["cu"] is not None]
+    pds = [c["pd"] for c in nearest if c["pd"] is not None]
+    if not cus:
+        return None
+    return {"CORE_UTILIZATION": int(round(statistics.median(cus))),
+            "PLACE_DENSITY_LB_ADDON": float(statistics.median(pds)) if pds else None,
+            "k": len(nearest), "neighbors": [c["design_name"] for c in nearest]}
 
 
 class _SkipLearned(Exception):
@@ -102,7 +218,8 @@ def detect_design_type(project: Path, config: dict) -> str:
     return 'logic'
 
 
-def recommend(project: Path, use_learned: bool = True) -> dict:
+def recommend(project: Path, use_learned: bool = True,
+              db_path: Path | str | None = None) -> dict:
     """Generate parameter recommendations.
 
     When ``use_learned`` is False the entire learned-heuristics override block
@@ -157,9 +274,33 @@ def recommend(project: Path, use_learned: bool = True) -> dict:
             # Naive arm: skip the learned override entirely. learned_source
             # stays None and only params_by_size + clamps + floor apply.
             raise _SkipLearned
+        # --- Win 5: feature-vector KNN retrieval (replaces infer_family) --------
+        # When a pre-route feature vector exists, retrieve the k nearest CLEAN runs
+        # by topology and seed from their median config. This fixes the infer_family
+        # fragmentation (245/303 singleton families). Falls back to family medians
+        # below when no feature vector / too-small corpus. The design-type clamps +
+        # 0.10 floor still apply afterward (safety rails beat retrieval).
+        retrieved = False
+        tvec = _target_feature_vector(project)
+        if tvec is not None:
+            corpus = _load_feature_corpus(
+                db_path or knowledge_db.DEFAULT_DB_PATH, platform)
+            retr = _retrieve_by_features(tvec, corpus)
+            if retr:
+                recommendations['CORE_UTILIZATION'] = retr['CORE_UTILIZATION']
+                if retr.get('PLACE_DENSITY_LB_ADDON') is not None:
+                    recommendations['PLACE_DENSITY_LB_ADDON'] = retr['PLACE_DENSITY_LB_ADDON']
+                learned_source = f"features:knn(k={retr['k']})"
+                explanations.append(
+                    f"Feature-KNN over {retr['k']} nearest clean runs "
+                    f"({', '.join(retr['neighbors'][:5])}): "
+                    f"CORE_UTILIZATION={retr['CORE_UTILIZATION']}, "
+                    f"PLACE_DENSITY_LB_ADDON={recommendations.get('PLACE_DENSITY_LB_ADDON')}")
+                retrieved = True
+        # -----------------------------------------------------------------------
         families = knowledge_db.load_families(FAMILIES_PATH)
         family = knowledge_db.infer_family(config.get('DESIGN_NAME', ''), families)
-        learned = query_knowledge.get_family_heuristics(
+        learned = None if retrieved else query_knowledge.get_family_heuristics(
             family, platform, heuristics_path=HEURISTICS_PATH,
         )
         if learned:

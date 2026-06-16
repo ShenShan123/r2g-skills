@@ -241,6 +241,17 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
     `orfs-fail-%` event and stays in the `fail`-rows == `orfs-fail`-events honesty count
     (invariant H3). `eval_heuristics.bench_score` reports per-checkpoint SR + mean/LCB
     `outcome_score` + stage-reach over `is_bench=1` runs — a NON-BLOCKING scoreboard, never a gate.
+22. **Feature-keyed retrieval (Win 5) is predictive and fall-back-safe.** `presynth.py` emits a
+    PRE-ROUTE feature vector (instance count, primary I/O, est logic depth, target util, clock
+    period, routing layers) — available at SUGGESTION time, unlike the post-route `metadata.csv`
+    outcomes. Stored as `runs.presynth_features_json` at ingest (NULL when absent). `suggest_config`
+    z-score-normalizes the features (so instance-count magnitude doesn't dominate) and retrieves the
+    k=5 nearest CLEAN, non-bench runs with `outcome_score ≥ median`, seeding the config from their
+    median — REPLACING the `infer_family` prefix lookup (245/303 singletons). When no feature vector
+    exists or the corpus is too small it FALLS BACK to family medians, and the design-type clamps +
+    `PLACE_DENSITY_LB_ADDON ≥ 0.10` floor still apply afterward (safety rails beat retrieval). The
+    corpus index is empty until the 5b backfill (`presynth.py` over historical synth dirs +
+    re-ingest) runs — so the existing store's suggestions are unchanged until then.
 
 ## Engineer Loop (spec 2026-06-09)
 
