@@ -92,6 +92,49 @@ real validation campaign. The orchestration is unit-proven end-to-end in
 `ab_trials` row + recipe transition). The *real* EDA campaign (a non-mocked `ab-drain`
 on the live corpus) needs hours of flow time — that is Gate B.
 
+### Tier −1 Gate B — seed the dense-reward gradient (operator, compute-bound)
+
+`outcome_score` (Win 1) is near-dataless on the existing corpus: only ~12/1267 runs
+carry `drc_violations > 0` and ~2 have a usable before→after fix pair. Gate B seeds
+the gradient with a deliberately partial-progress campaign, and exercises Gate A's
+A/B loop at scale. This needs **hours of real EDA flow time** — it is an operator
+procedure, not unit-testable:
+
+1. **Target the difficulty bands that REACH signoff and MISS** — cell-dense and
+   congested designs that hit DRC/LVS violations (not the ones that abort at place).
+   Add them to a campaign ledger and run them; the signoff-fixing loop records
+   before/after counts per iteration into `reports/fix_log.jsonl`.
+   ```bash
+   python3 scripts/loop/engineer_loop.py add --ledger design_cases/_loop/gateB.jsonl \
+       --project design_cases/<congested_design> --platform sky130hd
+   python3 scripts/loop/engineer_loop.py run --ledger design_cases/_loop/gateB.jsonl
+   ```
+2. **Exit criterion:** the corpus carries ≥30–50 runs with `drc_violations > 0`
+   **and** a populated `fix_log.jsonl` before/after pair, spanning ≥3 bands — enough
+   for `outcome_score`'s VRR term to be non-degenerate and for r2g-bench (Win 3) to
+   have signal. Ingest **honestly** (every run, per the invariants).
+3. **Fire Gate A's real trial on the live corpus** (the existing recipes are
+   grandfathered, so enqueue one explicitly, then drain):
+   ```bash
+   python3 scripts/loop/engineer_loop.py ab-enqueue \
+       --symptom <sid> --design-class <type/size> --platform sky130hd --strategy <recipe>
+   python3 scripts/loop/engineer_loop.py ab-drain --ledger design_cases/_loop/ab.jsonl
+   # confirm: ab_trials gains a row; the recipe transitions candidate -> promoted/shadow.
+   ```
+4. **Win 5 (5b) feature backfill** — emit pre-route vectors where synth survives,
+   then re-ingest (designs without a preserved `synth/synth.log` need a re-synth):
+   ```bash
+   python3 tools/backfill_presynth_features.py design_cases --ingest \
+       --db r2g-rtl2gds/knowledge/knowledge.sqlite
+   ```
+5. **Score r2g-bench** after ingesting the held-out designs:
+   ```bash
+   python3 knowledge/eval_heuristics.py bench --db knowledge/knowledge.sqlite
+   ```
+6. **Re-validate both DBs** (the "When You Fix a Bug" honesty checklist): the
+   `fail`-rows == `orfs-fail`-events count must still hold, and no clean run's
+   `is_success` may have flipped after re-ingesting `outcome_score`.
+
 ### Ledger Format and Resumability
 
 The ledger is a JSONL file: one line per state transition, last-state-wins. This means:
