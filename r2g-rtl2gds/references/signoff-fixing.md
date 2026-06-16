@@ -181,6 +181,58 @@ this corpus.
 
 ---
 
+## Vision-assisted DRC escalation (Win 4, OFF by default — `R2G_VISION_DRC=1`)
+
+When the text DRC-fix path under-determines a fix — `diagnose_signoff_fix.build_plan`
+returns a DRC residual (`status == "residual"`, a non-null `residual_reason`, or a `fail`
+with an exhausted strategy catalog) — and the operator opts in with `R2G_VISION_DRC=1`,
+the escalation payload is enriched with **rendered violation-neighborhood images** so a
+vision-capable escalation model can inspect the actual geometry (the cascaded
+multi-violation case where the category counts alone don't pin down the fix).
+
+**Module:** `scripts/dashboard/render_drc_violation.py` (sibling of `render_gds_preview.py`,
+reuses its headless-KLayout driver pattern). **Hook:** `attach_vision_artifacts(plan,
+project_dir)` — call it on the escalation path *after* `build_plan`; it mutates `plan`,
+adding a `plan["vision"]` manifest, and returns it.
+
+**Strictly additive / off by default.** With `R2G_VISION_DRC` unset the hook is a no-op
+and returns `plan` unchanged — the text fix path is byte-for-byte identical. It only fires
+on a DRC residual (never on a clean plan, a plan that still has an auto-applicable
+strategy, or an LVS/timing plan). KLayout is a **soft dependency**: if `KLAYOUT_CMD`/
+`klayout` is absent the manifest records `skipped: "klayout_not_installed"` and renders
+nothing. Any internal error degrades to a no-op (`plan["vision"]["error"]`) — vision must
+never break diagnosis.
+
+**What it renders.** `reports/drc.json` (from `extract_drc.py`) carries only per-*category*
+counts — it has **no per-violation coordinates**. The coordinates live in the KLayout
+report DB `drc/6_drc.lyrdb`, inside each `<item>`'s `<value>` geometry tag (e.g.
+`edge-pair: (191.596,92.645;192.15,92.645)|...` or `polygon: (x,y;...)`, in microns). The
+module parses the lyrdb (`parse_lyrdb_violations`), groups violations per DRC category and
+clusters them spatially (single-linkage on margin-expanded bboxes; default margin **2µm**),
+and renders one PNG per cluster into `reports/drc_vision/<cluster>.png` via headless
+KLayout (`zoom_box` to bbox+margin over the latest backend `6_final.gds`). The pure core
+(`crop_regions`) is unit-tested without the tool.
+
+**Honest degradation when no coordinates exist.** Antenna lyrdb items carry only
+`float`/`text` annotations (gate area, PAR ratio, diode count) — no layout geometry — so a
+bbox crop is impossible. In that case (and when there is no lyrdb at all) the manifest
+records the reason and falls back to a full-GDS preview reference (`fallback_full_gds`)
+rather than a misleading crop. `coordinate_status(lyrdb)` reports this up front.
+
+**Empirical caveat (be honest).** PostEDA-Bench's vision channel
+(`vision_query_with_pts`) showed "never harmful; largest lift where the text-only baseline
+is weak (e.g. Qwen +13.5 SR on DRC-Essential)" — but measured on **ASAP7 only**, which the
+paper flags as a single-PDK limitation. So for sky130 this is a **hypothesis to validate on
+r2g-bench (Win 3), NOT a proven transfer**. Validation plan: on congested designs, compare
+escalation fix-rate with `R2G_VISION_DRC` off vs on; keep only if non-harmful and
+net-positive on sky130. Cost stays bounded — rendering happens only on escalation.
+
+CLI: `python3 scripts/dashboard/render_drc_violation.py <project-dir> [--margin-um 2.0]
+[--regions-only]` (`--regions-only` prints the computed crop regions without invoking
+KLayout — useful for inspecting clustering on a coordinate-bearing lyrdb).
+
+---
+
 ## Symmetric-matcher seeding (operator-only, validated 2026-06-03)
 
 A KLayout-0.30.7 `symmetric_matcher` residual (layout correct, comparer can't prove it) can be
