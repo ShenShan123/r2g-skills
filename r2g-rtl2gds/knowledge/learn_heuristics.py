@@ -41,6 +41,26 @@ def _fetch_rows(conn) -> list[dict]:
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def _fetch_learnable_rows(conn) -> list[dict]:
+    """Runs eligible for LEARNING — excludes held-out r2g-bench runs (Win 3). The
+    filter lives ONLY here (the learning read); ingest still writes failure_events
+    / run_violations for bench runs. COALESCE so legacy rows (is_bench NULL) and
+    DBs predating the column are treated as not-bench (included)."""
+    cur = conn.execute("SELECT * FROM runs WHERE COALESCE(is_bench, 0) = 0")
+    cols = [c[0] for c in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def _bench_project_paths(conn) -> set[str]:
+    """project_paths of held-out bench runs, to exclude their fix trajectories from
+    recipe learning. Tolerant of a DB predating the is_bench column."""
+    try:
+        return {r[0] for r in conn.execute(
+            "SELECT project_path FROM runs WHERE is_bench = 1") if r[0]}
+    except Exception:
+        return set()
+
+
 def _p90(values: list[float]) -> float | None:
     if not values:
         return None
@@ -376,7 +396,8 @@ def learn(db_path: Path | str,
         # Idempotent: guarantees fix_events / fix_trajectories exist before we
         # SELECT / DELETE / INSERT on them, even on legacy DBs predating Task 1.
         knowledge_db.ensure_schema(conn)
-        rows = _fetch_rows(conn)
+        rows = _fetch_learnable_rows(conn)   # Win 3: held-out bench runs excluded
+        bench_paths = _bench_project_paths(conn)
         _rebuild_fix_trajectories(conn)   # Tier-2 (idempotent rebuild; materializes)
 
         groups: dict[tuple[str, str], list[dict]] = {}
@@ -402,12 +423,19 @@ def learn(db_path: Path | str,
     cur = conn2.execute("SELECT * FROM fix_trajectories")
     tcols = [c[0] for c in cur.description]
     trajectories = [dict(zip(tcols, r)) for r in cur.fetchall()]
+    # Win 3: drop held-out bench episodes from recipe learning (the trajectories
+    # are still materialized in the table — only the LEARNING aggregation excludes).
+    if bench_paths:
+        trajectories = [t for t in trajectories
+                        if t.get("project_path") not in bench_paths]
     class_of = _design_class_by_project(conn2)
     # Win 1: per-run dense reward, joined into recipes as a ranking tiebreaker.
-    # NULL-filtered so legacy/unscored runs simply don't contribute (neutral).
+    # NULL-filtered so legacy/unscored runs simply don't contribute (neutral); bench
+    # runs excluded (Win 3).
     score_of = {r[0]: r[1] for r in conn2.execute(
         "SELECT project_path, outcome_score FROM runs "
-        "WHERE project_path IS NOT NULL AND outcome_score IS NOT NULL")}
+        "WHERE project_path IS NOT NULL AND outcome_score IS NOT NULL "
+        "AND COALESCE(is_bench, 0) = 0")}
     gen = _bump_generation(conn2)
     conn2.close()
     for (fam, plat), recipes in _recipes_from_trajectories(trajectories).items():

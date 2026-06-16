@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "_comment": "Win 3 r2g-bench: a HELD-OUT design set scored per-checkpoint with partial credit (reuses Win 1 outcome_score: SR + mean/LCB outcome_score + per-stage reach). Runs whose design_name OR project-dir basename matches an entry here are flagged runs.is_bench=1 at ingest and EXCLUDED from the learning/suggest read (family medians, recipes, score tiebreaker) — so the bench measures whether later wins move the needle on UNSEEN designs. The is_bench flag is filtered ONLY at the learning read; a bench fail run still gets its orfs-fail-% failure_event and stays in the honesty count (data-integrity H3). NON-BLOCKING scoreboard: wins ship without a full bench run. The operator MATERIALIZES + ingests these (full multi-stage flows are hours each; k repeats per design for variance, reusing Win 2). Bands span the difficulty CLAUDE.md names: small / cell-dense / pin-heavy / crypto-SPN-congested.",
+  "designs": [
+    {"design_name": "uart_tx",                 "platform": "sky130hd", "band": "small"},
+    {"design_name": "spi_master_tx",           "platform": "sky130hd", "band": "small"},
+    {"design_name": "i2c_master_byte_ctrl",    "platform": "sky130hd", "band": "small"},
+    {"design_name": "riscv_regfile",           "platform": "sky130hd", "band": "cell_dense"},
+    {"design_name": "fpu",                      "platform": "sky130hd", "band": "cell_dense"},
+    {"design_name": "iccad2015_superblue",     "platform": "sky130hd", "band": "cell_dense"},
+    {"design_name": "verilog_ethernet_eth_demux", "platform": "sky130hd", "band": "pin_heavy"},
+    {"design_name": "udp_ip_rx_64",            "platform": "sky130hd", "band": "pin_heavy"},
+    {"design_name": "aes_encipher_block",      "platform": "sky130hd", "band": "crypto_spn_congested"},
+    {"design_name": "des_area",                "platform": "sky130hd", "band": "crypto_spn_congested"},
+    {"design_name": "sha256_core",             "platform": "sky130hd", "band": "crypto_spn_congested"},
+    {"design_name": "chacha20",                "platform": "sky130hd", "band": "crypto_spn_congested"}
+  ]
+}

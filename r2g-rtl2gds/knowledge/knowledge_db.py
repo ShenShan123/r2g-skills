@@ -79,6 +79,12 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # the run's OWN artifacts (its stage_log + its own fix_log), so re-ingest is
         # idempotent; never cross-row derived (that was the 2026-06-13 clobber bug).
         "outcome_score": "REAL",
+        # Held-out benchmark flag (Win 3, r2g-bench): 1 when this run's design is in
+        # knowledge/eval/bench_set.json. Set at ingest. Filtered ONLY at the
+        # LEARNING/suggest read (learn_heuristics WHERE is_bench=0) — NEVER the
+        # failure_events write path (a bench fail still gets its orfs-fail-% event
+        # and stays in the honesty count). NULL/0 == not a bench run.
+        "is_bench": "INTEGER",
     },
     # Symptom-indexed memory (spec 2026-06-09): raw symptom tagging on the raw tiers.
     "fix_events": {

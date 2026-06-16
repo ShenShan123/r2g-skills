@@ -137,6 +137,21 @@ def _read_fix_log(project: Path) -> list[dict[str, Any]]:
     return _read_stage_log(project / "reports" / "fix_log.jsonl")
 
 
+def _bench_set_path() -> Path:
+    import os
+    return Path(os.environ.get(
+        "R2G_BENCH_SET", knowledge_db.DEFAULT_KNOWLEDGE_DIR / "eval" / "bench_set.json"))
+
+
+def _load_bench_designs(path: Path | None = None) -> set[str]:
+    """Design names in the held-out r2g-bench set (Win 3). Missing file -> empty
+    set (bench is optional). Never raises."""
+    p = path or _bench_set_path()
+    data = _read_json(p) or {}
+    return {d.get("design_name") for d in (data.get("designs") or [])
+            if d.get("design_name")}
+
+
 # Size bands match suggest_config.recommend (tiny<100, small<5000, medium<50000).
 def _size_class(cell_count: int | None) -> str:
     if not cell_count:
@@ -661,6 +676,11 @@ def ingest(project: Path,
     run_id = _compute_run_id(project, ppa_path)
 
     design_class = f"{_design_type(project, cfg)}/{_size_class(cell_count)}"
+    # Win 3 r2g-bench: flag held-out designs (by DESIGN_NAME or project basename).
+    # Filtered ONLY at the learning read — failure_events/run_violations below are
+    # still written for bench runs (honesty invariant H3).
+    bench = _load_bench_designs()
+    is_bench = 1 if (design_name in bench or project.name in bench) else 0
     prior = conn.execute(
         "SELECT COUNT(*) FROM runs WHERE design_name=? AND platform=? AND run_id!=?",
         (design_name, platform, run_id)).fetchone()[0]
@@ -720,6 +740,7 @@ def ingest(project: Path,
         "fix_iters_to_clean":    fix_iters_to_clean,
         "wall_s_to_clean":       total_elapsed if is_clean else None,
         "outcome_score":         outcome_score,    # Win 1: additive, advisory
+        "is_bench":              is_bench,          # Win 3: held-out, learning-read filter only
 
         "total_elapsed_s":  total_elapsed,
         "stage_times_json": json.dumps(stage_log, sort_keys=True),

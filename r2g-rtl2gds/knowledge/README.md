@@ -233,6 +233,14 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
     `engineer_loop.run`), so a batch-driven campaign populates `recipe_status`; `engineer_loop.py
     ab-drain` then plans/runs/judges the arms. `diff_and_enqueue` is idempotent, so the loop's own
     enqueue composes safely. Grandfathered recipes are re-validated explicitly via `ab-enqueue`.
+21. **r2g-bench (Win 3) is held out from learning, not from honesty.** Runs whose design is in
+    `knowledge/eval/bench_set.json` are flagged `runs.is_bench=1` at ingest and EXCLUDED from the
+    *learning read* only — `learn_heuristics._fetch_learnable_rows` (family medians + score
+    tiebreaker) and the recipe-trajectory aggregation drop them. Their `failure_events`,
+    `run_violations`, and `outcome_score` are STILL written: a bench `fail` run keeps its
+    `orfs-fail-%` event and stays in the `fail`-rows == `orfs-fail`-events honesty count
+    (invariant H3). `eval_heuristics.bench_score` reports per-checkpoint SR + mean/LCB
+    `outcome_score` + stage-reach over `is_bench=1` runs — a NON-BLOCKING scoreboard, never a gate.
 
 ## Engineer Loop (spec 2026-06-09)
 
