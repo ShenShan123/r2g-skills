@@ -215,6 +215,24 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
     `solution` traces a recipe back through A/B trials, fix episodes, journal actions, and
     designs; `bug` lists every known solution for a symptom with lifecycle status and
     evidence strength.
+19. **`outcome_score` (Win 1) is additive, advisory, and a PURE function of one run's OWN
+    artifacts.** It is a continuous `[0,1]` dense reward (`w_stage·stage_progress + w_vrr·VRR`,
+    `0.7/0.3`; NULL when the furthest stage is unknown; renormalized to stage-only when the run
+    attempted no fix). **Gate vs. score:** `is_success` stays the *sole* authority for run
+    classification (clean/fail) **and** for recipe promotion — `outcome_score` MAY order
+    suggestions and break non-clean ties for *which fix to try next*, but it NEVER reclassifies a
+    run and NEVER produces a `win` verdict / promotion on a non-clean run (a non-clean A/B arm
+    stays `inconclusive`). It is computed only from the run's own `stage_log.jsonl` + its own
+    `fix_log.jsonl` — **never** a SELECT against sibling rows (that shape was the 2026-06-13
+    multi-run-clobber bug) — so re-ingest is idempotent. `repair_run_status.py` never touches it.
+    The learner aggregates it into recipes as `mean_outcome_score`, a tiebreaker layered *under*
+    the `fix_model` Beta prior (`rank_key = (success_rate_beta, mean_outcome_score)`); absent it
+    ranks byte-identically. PPA-product term is DEFERRED (degenerate under singleton families).
+20. **The A/B loop fires on the production path (Tier −1 Gate A).** `learn_heuristics.learn()`
+    enqueues new/changed recipes as `candidate` on every rebuild (not only inside
+    `engineer_loop.run`), so a batch-driven campaign populates `recipe_status`; `engineer_loop.py
+    ab-drain` then plans/runs/judges the arms. `diff_and_enqueue` is idempotent, so the loop's own
+    enqueue composes safely. Grandfathered recipes are re-validated explicitly via `ab-enqueue`.
 
 ## Engineer Loop (spec 2026-06-09)
 

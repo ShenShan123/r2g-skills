@@ -77,6 +77,25 @@ def test_judge_crash_arm_is_inconclusive(tmp_path):
                                   "fix_iters": 0}) == "inconclusive"
 
 
+def test_outcome_score_never_promotes_a_non_clean_arm(tmp_path):
+    """Win 1 invariant H4: outcome_score is an ordering HINT only. Two non-clean
+    arms — even with a clearly better outcome_score on B — must stay 'inconclusive'
+    and never promote (promotion still requires a clean arm). is_success is the
+    sole authority for a 'win'."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
+    arm_a = {"is_success": False, "wall_s": 900.0, "fix_iters": None,
+             "outcome_score": 0.30}
+    arm_b = {"is_success": False, "wall_s": 100.0, "fix_iters": None,
+             "outcome_score": 0.95}        # much "better" but still non-clean
+    verdict = ab_runner.judge(arm_a, arm_b)
+    assert verdict == "inconclusive"
+    ab_runner.record_trial(conn, key=KEY, verdict=verdict, arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={"a": arm_a, "b": arm_b})
+    # inconclusive -> reverts to shadow, NEVER promoted.
+    assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"
+
+
 def test_loss_reverts_candidate_to_shadow(tmp_path):
     conn = _conn(tmp_path)
     recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)

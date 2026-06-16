@@ -59,7 +59,38 @@ python3 scripts/loop/engineer_loop.py run \
 # Inspect current state of each design in the ledger
 python3 scripts/loop/engineer_loop.py status \
     --ledger design_cases/_batch/campaign.jsonl
+
+# Fire A/B trials for already-enqueued candidate recipes WITHOUT re-running the
+# normal designs (the production "drain the A/B queue" button — see Gate A below).
+python3 scripts/loop/engineer_loop.py ab-drain \
+    --ledger design_cases/_batch/ab.jsonl [--n-designs 2]
+
+# Force a grandfathered recipe into 'candidate' for explicit A/B re-validation.
+python3 scripts/loop/engineer_loop.py ab-enqueue \
+    --symptom <sid> --design-class crypto/small \
+    --platform sky130hd --strategy antenna_diode_repair
 ```
+
+### Tier −1 Gate A — making the A/B loop fire on the production path
+
+**The gap (diagnosed 2026-06-16).** The `shadow → candidate → promoted` pipeline
+lived *only* inside `engineer_loop.run`, which never drove a production campaign (no
+`design_cases/_loop` ledger ever existed). The batch driver ingests + calls
+`learn_heuristics.learn()` directly — and `learn()` never enqueued candidates. So
+across 1267 runs `recipe_status` stayed empty and `ab_trials` = 0: the substrate every
+signal-dependent win builds on had **never produced a verdict**.
+
+**The fix.** `learn_heuristics.learn()` now calls `recipe_lifecycle.diff_and_enqueue`
+after writing `heuristics.json` (diffing against the prior on-disk copy), so **every**
+learner rebuild — batch or loop — enqueues new/changed recipes as candidates. A
+standalone `ab-drain` then plans, runs, and judges the arms for those candidates
+without re-running the normal designs. Because the existing corpus's recipes are all
+*grandfathered* (absent `recipe_status` row == promoted), nothing auto-enqueues on a
+steady-state corpus; use `ab-enqueue` to force a chosen recipe into `candidate` for a
+real validation campaign. The orchestration is unit-proven end-to-end in
+`tests/test_gate_a_ab_loop.py` (production-path `learn()` → candidate → `ab-drain` →
+`ab_trials` row + recipe transition). The *real* EDA campaign (a non-mocked `ab-drain`
+on the live corpus) needs hours of flow time — that is Gate B.
 
 ### Ledger Format and Resumability
 

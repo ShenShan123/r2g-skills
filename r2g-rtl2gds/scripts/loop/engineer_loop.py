@@ -173,14 +173,14 @@ def process_one(led: Ledger, entry: dict, conn) -> None:
                 notes=json.dumps(status, sort_keys=True))
 
 
-def learn_cycle(led: Ledger, conn, *, prev_heur: dict | None,
-                n_ab_designs: int = 2) -> dict:
-    """learn -> diff -> enqueue candidates -> plan A/B trials -> append arm
-    entries to the ledger (the SAME loop executes them)."""
+def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2) -> int:
+    """For every pending candidate recipe, plan an A/B trial and append its arm
+    entries to the ledger (the SAME loop — or ab_drain — executes them). Returns
+    the number of arm entries appended. Idempotent on the arm dirs (skips a dst
+    that already exists)."""
     import ab_runner
     import recipe_lifecycle
-    heur = _learn()
-    cands = recipe_lifecycle.diff_and_enqueue(conn, heur, prev=prev_heur)
+    appended = 0
     for key in recipe_lifecycle.pending_candidates(conn):
         trial = ab_runner.plan_trial(conn, **key, n_designs=n_ab_designs)
         if trial is None:
@@ -197,6 +197,20 @@ def learn_cycle(led: Ledger, conn, *, prev_heur: dict | None,
                          "platform": key["platform"], "kind": "ab_arm",
                          "arm": arm, "strategy": key["strategy"],
                          "ab_key": key, "match_level": trial["match_level"]})
+                appended += 1
+    return appended
+
+
+def learn_cycle(led: Ledger, conn, *, prev_heur: dict | None,
+                n_ab_designs: int = 2) -> dict:
+    """learn -> diff -> enqueue candidates -> plan A/B trials -> append arm
+    entries to the ledger (the SAME loop executes them)."""
+    import recipe_lifecycle
+    heur = _learn()
+    # diff_and_enqueue here is idempotent with learn()'s own enqueue (Gate A):
+    # whichever ran first inserts the candidate rows; the second is a no-op.
+    recipe_lifecycle.diff_and_enqueue(conn, heur, prev=prev_heur)
+    plan_arms_for_candidates(led, conn, n_ab_designs=n_ab_designs)
     return heur
 
 
@@ -218,7 +232,8 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         for arm, e in pair.items():
             row = conn.execute(
                 "SELECT total_elapsed_s, fix_iters_to_clean, drc_status, "
-                "lvs_status, rcx_status, lvs_mismatch_class, orfs_status "
+                "lvs_status, rcx_status, lvs_mismatch_class, orfs_status, "
+                "outcome_score "
                 "FROM runs WHERE project_path=? ORDER BY ingested_at DESC "
                 "LIMIT 1", (e["project_path"],)).fetchone()
             if row is None:
@@ -226,11 +241,15 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                 continue
             cols = ("total_elapsed_s", "fix_iters_to_clean", "drc_status",
                     "lvs_status", "rcx_status", "lvs_mismatch_class",
-                    "orfs_status")
+                    "orfs_status", "outcome_score")
             r = dict(zip(cols, row))
+            # outcome_score is captured as an ORDERING HINT for suggestion ranking
+            # (persisted into ab_trials.metrics_json); judge ignores it for the
+            # verdict — a non-clean arm never wins (Win 1 invariant H4).
             metrics[arm] = {"is_success": knowledge_db.is_success(r),
                             "wall_s": r["total_elapsed_s"],
-                            "fix_iters": r["fix_iters_to_clean"]}
+                            "fix_iters": r["fix_iters_to_clean"],
+                            "outcome_score": r["outcome_score"]}
         verdict = ab_runner.judge(metrics.get("A"), metrics.get("B"))
         ab_runner.record_trial(
             conn, key=pair["B"]["ab_key"], verdict=verdict,
@@ -238,6 +257,29 @@ def judge_finished_trials(led: Ledger, conn) -> None:
             metrics=metrics, match_level=pair["B"].get("match_level"))
         for e in pair.values():
             led.set_state(e["design"], e["state"], judged=True)
+
+
+def ab_drain(ledger_path: Path, *, n_ab_designs: int = 2,
+             db_path: Path | str | None = None) -> int:
+    """Fire A/B trials for already-enqueued candidate recipes WITHOUT re-running
+    the normal designs. This is the production "drain the A/B queue" button: the
+    batch driver ingests + learns (which now enqueues candidates, Gate A), then a
+    periodic ab_drain plans the arms, runs only those arm flows, and judges.
+
+    Returns the number of trials judged this pass.
+    """
+    import knowledge_db
+    led = Ledger(ledger_path)
+    conn = knowledge_db.connect(db_path) if db_path else knowledge_db.connect()
+    knowledge_db.ensure_schema(conn)
+    plan_arms_for_candidates(led, conn, n_ab_designs=n_ab_designs)
+    for entry in [e for e in led.pending() if e.get("kind") == "ab_arm"]:
+        process_one(led, entry, conn)
+    before = conn.execute("SELECT COUNT(*) FROM ab_trials").fetchone()[0]
+    judge_finished_trials(led, conn)
+    after = conn.execute("SELECT COUNT(*) FROM ab_trials").fetchone()[0]
+    conn.close()
+    return after - before
 
 
 def run(ledger_path: Path, *, max_designs: int | None = None) -> None:
@@ -275,6 +317,15 @@ def main(argv=None) -> int:
     pa.add_argument("--platform", default="nangate45")
     ps = sub.add_parser("status")
     ps.add_argument("--ledger", required=True, type=Path)
+    pd = sub.add_parser("ab-drain", help="fire A/B trials for pending candidates")
+    pd.add_argument("--ledger", required=True, type=Path)
+    pd.add_argument("--n-designs", type=int, default=2)
+    pe = sub.add_parser("ab-enqueue",
+                        help="force a (grandfathered) recipe into A/B candidate")
+    pe.add_argument("--symptom", required=True)
+    pe.add_argument("--design-class", required=True)
+    pe.add_argument("--platform", required=True)
+    pe.add_argument("--strategy", required=True)
     args = ap.parse_args(argv)
     if args.cmd == "run":
         run(args.ledger, max_designs=args.max)
@@ -283,6 +334,19 @@ def main(argv=None) -> int:
         led.add({"design": Path(args.project).name,
                  "project_path": str(Path(args.project).resolve()),
                  "platform": args.platform})
+    elif args.cmd == "ab-drain":
+        n = ab_drain(args.ledger, n_ab_designs=args.n_designs)
+        print(f"ab_drain judged {n} trial(s)")
+    elif args.cmd == "ab-enqueue":
+        import knowledge_db
+        import recipe_lifecycle
+        conn = knowledge_db.connect()
+        knowledge_db.ensure_schema(conn)
+        created = recipe_lifecycle.enqueue_candidate(
+            conn, symptom_id=args.symptom, design_class=args.design_class,
+            platform=args.platform, strategy=args.strategy)
+        conn.close()
+        print("enqueued" if created else "already in lifecycle (no-op)")
     else:
         led = Ledger(args.ledger)
         from collections import Counter

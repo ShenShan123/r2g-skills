@@ -391,6 +391,83 @@ def _derive_orfs_status(stages: list[dict[str, Any]]) -> tuple[str, str | None]:
     return ("partial", last_stage_name)
 
 
+# ── Win 1: dense signoff reward (outcome_score) ──────────────────────────────
+# A continuous [0,1] reward that captures HOW FAR the flow reached and HOW MUCH a
+# fix reduced violations — so the loop learns from a route-abort (gradient AES/DES
+# DO have) and from violation reduction, not only clean/not-clean. It is ADDITIVE
+# and ADVISORY: knowledge_db.is_success stays the sole authority for clean/fail
+# and for recipe promotion. PPA-product term is DEFERRED (degenerate under 245
+# singleton family baselines). Every input is the run's OWN artifact — never a
+# SELECT against sibling rows (that shape was the 2026-06-13 multi-run-clobber bug).
+
+# The plan's 6-rung signoff-flow ladder.
+_LADDER_RANK = {"synth": 1, "place": 2, "route": 3, "drc": 4, "lvs": 5, "rcx": 6}
+_RCX_RANK = _LADDER_RANK["rcx"]   # = 6 (denominator)
+# ORFS backend stage name -> ladder rung. floorplan collapses into synth-level
+# (pre-place), cts into place-level (pre-route), finish into route-level (GDS done).
+_ORFS_STAGE_TO_LADDER = {
+    "synth": 1, "floorplan": 1, "place": 2, "cts": 2, "route": 3, "finish": 3,
+}
+
+
+def _furthest_stage_rank(stage_log: list[dict[str, Any]], orfs_status: str | None,
+                         fail_stage: str | None, drc_status: str | None,
+                         lvs_status: str | None, rcx_status: str | None) -> int | None:
+    """Rank (1..6) of the furthest stage the flow REACHED on the plan ladder, or
+    None when unknown (not measured != scored 0). "Reached" includes an abort AT a
+    stage: a route abort reached 'route' (rank 3 -> 0.50)."""
+    rank = 0
+    backend_stage = None
+    if orfs_status == "fail" and fail_stage:
+        backend_stage = fail_stage                 # the stage it died at == furthest reached
+    elif stage_log:
+        backend_stage = stage_log[-1].get("stage")  # last attempted (pass -> finish)
+    if backend_stage:
+        rank = max(rank, _ORFS_STAGE_TO_LADDER.get(backend_stage, 0))
+    # A signoff stage counts as reached only with a REAL result ('skipped'/'unknown'/
+    # absent did not reach it). clean_beol is a real DRC result; 'complete' a real RCX.
+    if drc_status not in (None, "unknown", "skipped"):
+        rank = max(rank, _LADDER_RANK["drc"])
+    if lvs_status not in (None, "unknown", "skipped"):
+        rank = max(rank, _LADDER_RANK["lvs"])
+    if rcx_status == "complete":
+        rank = max(rank, _LADDER_RANK["rcx"])
+    return rank or None
+
+
+def _vrr_from_fix_log(fix_rows: list[dict[str, Any]]) -> float | None:
+    """Violation Reduction Ratio from the run's OWN fix_log.jsonl: before = the
+    earliest iteration's before-count, after = the latest iteration's after-count.
+    Zero-floored (a regression -> 0). NULL when the run attempted no fix, or when
+    there were no violations to reduce (before == 0)."""
+    pairs = []
+    for r in fix_rows:
+        b, a = _to_float(r.get("before")), _to_float(r.get("after"))
+        if b is None or a is None:
+            continue
+        it = _to_int(r.get("iter"))
+        pairs.append((it if it is not None else 0, b, a))
+    if not pairs:
+        return None
+    pairs.sort(key=lambda t: t[0])
+    before, after = pairs[0][1], pairs[-1][2]
+    if before <= 0:
+        return None
+    return max(0.0, 1.0 - after / before)
+
+
+def _outcome_score(stage_rank: int | None, vrr: float | None,
+                   w_stage: float = 0.7, w_vrr: float = 0.3) -> float | None:
+    """clamp01(w_stage·stage_progress + w_vrr·VRR). NULL when stage_rank is unknown.
+    When VRR is NULL (no fix), renormalize to w_stage = 1.0 (score == stage_progress)."""
+    if stage_rank is None:
+        return None
+    stage_progress = stage_rank / _RCX_RANK
+    if vrr is None:
+        return min(1.0, max(0.0, stage_progress))
+    return min(1.0, max(0.0, w_stage * stage_progress + w_vrr * vrr))
+
+
 def _compute_run_id(project: Path, ppa_path: Path) -> str:
     marker = str(ppa_path.stat().st_mtime_ns) if ppa_path.exists() else ""
     h = hashlib.sha1()
@@ -594,6 +671,12 @@ def ingest(project: Path,
     fix_iters_to_clean = max((_to_int(r.get("iter")) or 0 for r in cleared),
                              default=None) if cleared else None
 
+    # Win 1 dense reward — computed PURELY from this run's own artifacts.
+    stage_rank = _furthest_stage_rank(
+        stage_log, orfs_status, fail_stage,
+        drc.get("status"), lvs.get("status"), rcx.get("status"))
+    outcome_score = _outcome_score(stage_rank, _vrr_from_fix_log(fix_rows))
+
     row = {
         "run_id":            run_id,
         "project_path":      str(project.resolve()),
@@ -636,6 +719,7 @@ def ingest(project: Path,
         "first_attempt_clean":   (1 if is_clean else 0) if prior == 0 else 0,
         "fix_iters_to_clean":    fix_iters_to_clean,
         "wall_s_to_clean":       total_elapsed if is_clean else None,
+        "outcome_score":         outcome_score,    # Win 1: additive, advisory
 
         "total_elapsed_s":  total_elapsed,
         "stage_times_json": json.dumps(stage_log, sort_keys=True),

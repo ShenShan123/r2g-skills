@@ -72,6 +72,13 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "first_attempt_clean": "INTEGER",
         "fix_iters_to_clean": "INTEGER",
         "wall_s_to_clean": "REAL",
+        # Dense signoff reward (Win 1, paper-absorption 2026-06-16): continuous
+        # [0,1] score = w_stage·stage_progress + w_vrr·VRR, or NULL when the
+        # furthest stage is unknown. ADDITIVE and ADVISORY — is_success stays the
+        # SOLE authority for clean/fail and for recipe promotion. A PURE function of
+        # the run's OWN artifacts (its stage_log + its own fix_log), so re-ingest is
+        # idempotent; never cross-row derived (that was the 2026-06-13 clobber bug).
+        "outcome_score": "REAL",
     },
     # Symptom-indexed memory (spec 2026-06-09): raw symptom tagging on the raw tiers.
     "fix_events": {

@@ -86,6 +86,50 @@ def test_never_drops_a_static_strategy():
     assert set(r["strategy"] for r in ranked) == set(STATIC)
 
 
+def test_outcome_score_breaks_ties_within_equal_clearance():
+    """Win 1 tiebreaker: rank_key = (success_rate_beta, mean_outcome_score). At
+    EQUAL Beta clearance, the strategy with the higher mean_outcome_score ranks
+    first — even though it is later in the static catalog."""
+    STATIC = ["lowprog", "highprog"]
+    entry = {"strategies": {
+        "lowprog":  {"attempts": 2, "successes": 1, "failures": 1,
+                     "mean_outcome_score": 0.40},
+        "highprog": {"attempts": 2, "successes": 1, "failures": 1,
+                     "mean_outcome_score": 0.90},
+    }, "n_sessions": 4}
+    ranked = fxm.rank_strategies(entry, STATIC)
+    # equal Beta score (both (1+1)/(2+2)=0.5); outcome_score breaks the tie.
+    assert ranked[0]["score"] == ranked[1]["score"]
+    assert ranked[0]["strategy"] == "highprog"
+
+
+def test_outcome_score_never_overrides_clearance():
+    """Clean-rate dominates: a high mean_outcome_score must NOT lift a worse-
+    clearing strategy above a better-clearing one."""
+    STATIC = ["weakclear_highprog", "strongclear_lowprog"]
+    entry = {"strategies": {
+        "weakclear_highprog":  {"attempts": 4, "successes": 1, "failures": 3,
+                                "mean_outcome_score": 0.99},
+        "strongclear_lowprog": {"attempts": 4, "successes": 3, "failures": 1,
+                                "mean_outcome_score": 0.10},
+    }, "n_sessions": 8}
+    ranked = fxm.rank_strategies(entry, STATIC)
+    assert ranked[0]["strategy"] == "strongclear_lowprog"   # 0.667 > 0.333
+
+
+def test_ranking_byte_identical_when_no_outcome_score():
+    """Legacy recipes without mean_outcome_score rank exactly as before (the
+    secondary key is a constant 0.0, so catalog position decides ties)."""
+    entry = {"strategies": {
+        "antenna_diode_repair":   {"attempts": 2, "successes": 1, "failures": 1},
+        "antenna_density_relief": {"attempts": 2, "successes": 1, "failures": 1},
+    }, "n_sessions": 4}
+    ranked = fxm.rank_strategies(entry, STATIC)
+    # tie on score; catalog order preserved (diode before density in STATIC).
+    assert [r["strategy"] for r in ranked[:2]] == \
+        ["antenna_diode_repair", "antenna_density_relief"]
+
+
 def test_informed_prior_lifts_untried_strategy_toward_pooled_rate():
     # Local recipe has NO data for diode_repair; pooled symptom evidence says it
     # clears ~90%. Informed prior must rank it above the flat-0.5 untried prior.

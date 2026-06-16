@@ -75,14 +75,23 @@ def rank_strategies(recipe_entry: dict | None, static_order: list[str],
             attempts = successes = failures = wins = 0
             score = _score(0, 0)  # 0.5 neutral prior
             prov = "cold-start"
+        # Win 1 tiebreaker: mean dense outcome_score over runs that used this
+        # strategy (populated by the learner). Defaults to 0.0 when absent, so a
+        # legacy recipe without the field ranks byte-identically (the secondary key
+        # is then a constant). Clean-rate (`score`) always dominates; outcome_score
+        # only orders WITHIN equal clean-rate.
+        mean_os = (s or {}).get("mean_outcome_score")
         item = {
             "strategy": sid, "score": score, "static_pos": pos,
             "attempts": attempts, "successes": successes, "failures": failures,
             "wins": wins, "provenance": prov,
+            "mean_outcome_score": mean_os,
         }
         if s and s.get("median_reduction_pct") is not None:
             item["median_reduction_pct"] = s["median_reduction_pct"]
         ranked.append(item)
-    # Primary: score desc. Secondary: catalog position asc (stable, deterministic).
-    ranked.sort(key=lambda r: (-r["score"], r["static_pos"]))
+    # rank_key = (success_rate_beta, mean_outcome_score) lexicographically, then
+    # catalog position asc (stable, deterministic).
+    ranked.sort(key=lambda r: (-r["score"], -(r["mean_outcome_score"] or 0.0),
+                               r["static_pos"]))
     return ranked
