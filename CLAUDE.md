@@ -171,6 +171,17 @@ the orientation.**
 5. **Campaign** (`scripts/loop/engineer_loop.py`) drives this unattended with A/B-gated recipe
    promotion (`shadow → candidate → promoted`) and escalation; see `references/engineer-loop.md`.
 
+> **2026-06-16 (paper-absorption, branch `feat/paper-absorption`).** The A/B promotion machinery
+> was correct but had **never fired in production**: it lived only inside `engineer_loop.run`
+> (never the production driver), so `learn()` never enqueued candidates → `recipe_status` empty,
+> `ab_trials=0` across 1267 runs (Tier −1 Gate A). Fixed: `learn()` now enqueues candidates on
+> **every** rebuild and `engineer_loop ab-drain`/`ab-enqueue` drain the queue (0 → 7 candidates on
+> the live corpus, honesty 69/69). Step 4 now also ranks on a dense, additive `runs.outcome_score`
+> (stage-progress + VRR, Win 1) and can KNN-retrieve configs by a pre-route feature vector
+> (`presynth.py`, Win 5) instead of family-name prefix. A held-out `is_bench` set (Win 3) is
+> excluded from the learning read but NOT from the honesty count. New invariants 19–22 in
+> `knowledge/README.md`; the A/B verdict is now a variance-aware LCB over k repeats (Win 2).
+
 ### Honesty invariants (violate one and the loop silently lies)
 
 - **Ingest after EVERY flow** — clean, failed, or partial. A skipped ingest is invisible work;
