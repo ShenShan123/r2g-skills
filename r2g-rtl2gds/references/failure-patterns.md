@@ -109,6 +109,39 @@ CORE_UTILIZATION is too high for the design's routing complexity. Highly interco
   relax signoff to force a dirty GDS. Revisit only if more routing layers (e.g. an HD variant with
   met6+) or a hierarchical/partitioned floorplan becomes available.
 
+### Sub-variant: route TIMEOUT (exit 124) ≠ congestion — the `route_relief` learnable recipe (2026-06-17)
+
+- **The mislabel:** a route-stage abort is reported by the driver as "Routing congestion detected",
+  but the **common** cause is the wall-clock `timeout` (exit **124/137**) killing **detailed
+  routing** mid-grind, *not* a global-route `GRT-0116` abort. On a 33-design sky130hd cluster
+  (2026-06-17) **all 33 cleared global route (GRT)** and died in DRT — several (`diffeq1`,
+  `secworks_aes_key_mem`, `opdb_2dmesh`) had already reached **0 DRT violations** when the wall-clock
+  killed them. `run_orfs.sh` now distinguishes the two modes in its HINT (timeout vs GRT-0116).
+- **`route_relief` (the fix, now A/B-validated):** lower `CORE_UTILIZATION` one density step
+  (−8, floor 8) so DRT has room to converge inside the budget; rerun from floorplan. SAME lever as
+  `density_relief` but keyed to a **route-stage abort** (symptom `check=orfs_stage, class=route`),
+  which never reaches signoff DRC — so before this the closed-loop A/B machinery was structurally
+  blind to it. Drive it with:
+
+  ```
+  scripts/flow/fix_signoff.sh <project> sky130hd --check route
+  ```
+
+  It diagnoses `route_relief`, applies the util drop, re-routes, and logs a `fix_log.jsonl` row
+  (`check=orfs_stage/route`) so the learner derives the recipe and the A/B loop can validate it.
+- **Validated 2026-06-17:** `wb2axip_wbsafety` (1183 cells) timed out at route at `CORE_UTILIZATION
+  = 25` (5400 s, 28 DRT residual); at util 12 the **route completed clean in 37 s** — a
+  timeout→clean flip from one knob. The route_relief recipe rode the closed loop end-to-end:
+  fix_log → learner enqueued a `route_relief` candidate → `engineer_loop ab-drain` recorded an
+  `ab_trials` **win** (arm B route_relief routes; arm A control times out). DIE_AREA-sized designs
+  (no `CORE_UTILIZATION` knob, e.g. `secworks_sha512_w_mem`) are an honest residual here — the v2
+  lever is to enlarge `DIE_AREA`.
+- **Still honest residual:** a design that demands more routing than 5 metal layers can supply at
+  *any* utilization (confirmed `aes_encipher_block`: GPL routability stays > 1.0) does NOT clear
+  with route_relief — `route_relief` steps to the util floor and stops (no deck relaxation). Tell
+  the two apart by whether GPL routability converges < 1.0 at a lower util: timeout-victim (clears)
+  vs layer-limited (honest residual).
+
 ## Placement Divergence (NesterovSolve Non-Convergence)
 
 **Symptoms:**

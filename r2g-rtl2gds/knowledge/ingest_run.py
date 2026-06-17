@@ -292,15 +292,24 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
 def _write_run_violations(conn: sqlite3.Connection, run_id: str,
                           design_family: str, platform: str,
                           drc: dict[str, Any], lvs: dict[str, Any],
-                          tcheck: dict[str, Any], wns: Any) -> None:
+                          tcheck: dict[str, Any], wns: Any,
+                          orfs_status: str | None = None,
+                          fail_stage: str | None = None) -> None:
     # Per-run symptom: prefer the failing check (LVS fail -> mismatch_class symptom,
-    # else DRC -> dominant category, else timing tier). Family is NOT part of it.
+    # else DRC -> dominant category). A BACKEND ABORT (orfs_status='fail' at a
+    # backend stage, before signoff ever runs) is keyed under check='orfs_stage'
+    # with the STAGE as the class — this is what makes a route-congestion symptom
+    # visible to ab_runner.plan_trial Tier 1 (without it a route abort fell through
+    # to a bogus 'timing' symptom). Family is NOT part of the symptom. Falls back
+    # to timing tier for a signoff-reached run. (2026-06-17 route-relief wiring.)
     if lvs.get("status") == "fail":
         check, vclass, report = "lvs", lvs.get("mismatch_class"), lvs
     elif drc.get("status") == "fail":
         cats = drc.get("categories") or {}
         vclass = max(cats, key=lambda k: cats[k].get("count") or 0) if cats else None
         check, report = "drc", drc
+    elif orfs_status == "fail" and fail_stage:
+        check, vclass, report = "orfs_stage", fail_stage, {}
     else:
         check, vclass, report = "timing", tcheck.get("tier"), {}
     sig = symptom.canonical_signature(check, vclass, symptom.predicates_for(check, report))
@@ -780,7 +789,8 @@ def ingest(project: Path,
         )
     _ingest_fix_events(conn, project, design_name, design_family, platform)
     _write_run_violations(conn, run_id, design_family, platform, drc, lvs, tcheck,
-                          _to_float(timing.get("setup_wns")))
+                          _to_float(timing.get("setup_wns")),
+                          orfs_status=orfs_status, fail_stage=fail_stage)
     _record_lineage(conn, run_id, design_name, platform, cfg, orfs_status,
                     outcome_fields={
                         "drc_status": drc.get("status"),

@@ -48,8 +48,8 @@ while [[ $# -gt 0 ]]; do
     *) if [[ -z "$PROJECT_DIR" ]]; then PROJECT_DIR="$1"; else PLATFORM="$1"; fi; shift;;
   esac
 done
-[[ -z "$PROJECT_DIR" ]] && { echo "usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both] [--max-iters N] [--resume]" >&2; exit 1; }
-[[ "$CHECK" =~ ^(drc|lvs|both)$ ]] || { echo "ERROR: --check must be drc|lvs|both" >&2; exit 1; }
+[[ -z "$PROJECT_DIR" ]] && { echo "usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route] [--max-iters N] [--resume]" >&2; exit 1; }
+[[ "$CHECK" =~ ^(drc|lvs|both|route)$ ]] || { echo "ERROR: --check must be drc|lvs|both|route" >&2; exit 1; }
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -60,6 +60,7 @@ RUN_DRC="${R2G_RUN_DRC:-$SCRIPT_DIR/run_drc.sh}"
 RUN_LVS="${R2G_RUN_LVS:-$SCRIPT_DIR/run_lvs.sh}"
 EXTRACT_DRC="${R2G_EXTRACT_DRC:-$EXTRACT_DIR/extract_drc.py}"
 EXTRACT_LVS="${R2G_EXTRACT_LVS:-$EXTRACT_DIR/extract_lvs.py}"
+EXTRACT_ROUTE="${R2G_EXTRACT_ROUTE:-$EXTRACT_DIR/extract_route.py}"
 DIAGNOSE="${R2G_DIAGNOSE:-$REPORTS_DIR_SCRIPTS/diagnose_signoff_fix.py}"
 KNOWLEDGE_DIR="$(cd "$SCRIPT_DIR/../../knowledge" && pwd)"
 export R2G_KNOWLEDGE_DIR="$KNOWLEDGE_DIR"
@@ -81,9 +82,13 @@ v=d.get("total_violations"); v=d.get("mismatch_count") if v is None else v
 print("" if v is None else v)' "$1" 2>/dev/null || echo ""
 }
 
-_run_extract() {  # $1 = drc|lvs
+_run_extract() {  # $1 = drc|lvs|route
   local script
-  if [[ "$1" == "drc" ]]; then script="$EXTRACT_DRC"; else script="$EXTRACT_LVS"; fi
+  case "$1" in
+    drc)   script="$EXTRACT_DRC";;
+    route) script="$EXTRACT_ROUTE";;
+    *)     script="$EXTRACT_LVS";;
+  esac
   "$script" "$PROJECT_DIR" "$REPORTS/$1.json"
 }
 
@@ -102,6 +107,9 @@ if check=="drc":
     cats=d.get("categories") or {}
     dom=max(cats,key=lambda k:(cats[k].get("count") or 0)) if cats else ""
     print((dom or "")+"\t"+json.dumps(cats))
+elif check=="route":
+    # Backend-abort: the violation_class is the stage ("route"); no per-category vector.
+    print("route\t"+json.dumps({"total_violations":d.get("total_violations")}))
 else:
     print((d.get("mismatch_class") or "")+"\t"+json.dumps({"mismatch_count":d.get("mismatch_count")}))' \
     "$1" "$PROJECT_DIR"
@@ -152,6 +160,12 @@ else:
     except Exception: preds={}
 env_keys=("PLACE_FAST","ROUTE_FAST","SKIP_ANTENNA_REPAIR","ROUTE_FAST_DRT_ITERS")
 env_flags={k:os.environ[k] for k in env_keys if k in os.environ}
+# A route abort is the backend-stage analogue of a DRC/LVS violation. The symptom
+# index (symptom.py) keys ALL backend-stage aborts under check=orfs_stage with the
+# STAGE as the class, so the fix_event/run_violations symptom_ids agree. Map the
+# fix-loop check name ("route") to that canonical symptom check for the log row.
+if check=="route":
+    check="orfs_stage"; vclass=vclass or "route"
 cum={}
 cfgp=os.path.join(proj,"constraints","config.mk")
 if os.path.exists(cfgp):
@@ -225,7 +239,10 @@ except Exception: print("{}")' <<<"$apply_out")"
         return 1
       fi
     fi
-    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true; else "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
+    # route: the rerun (run_orfs from floorplan) IS the check — extract_route reads
+    # the backend route stage directly; no separate signoff tool to invoke.
+    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true
+    elif [[ "$check" == "lvs" ]]; then "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
     _run_extract "$check"
     after="$(_count "$report")"
     if [[ -z "$after" ]]; then
@@ -261,6 +278,9 @@ except Exception: print("{}")' <<<"$apply_out")"
 }
 
 : > "$LOG"
+# route is the backend-abort check: fix BEFORE signoff (a route abort never reaches
+# drc/lvs). It is its own --check value (not part of "both").
+[[ "$CHECK" == "route" ]] && fix_one route || true
 [[ "$CHECK" == "drc" || "$CHECK" == "both" ]] && fix_one drc || true
 [[ "$CHECK" == "lvs" || "$CHECK" == "both" ]] && fix_one lvs || true
 
@@ -277,12 +297,16 @@ for r in rows:
 open(out,"w").write("\n".join(lines)+"\n")' "$LOG" "$REPORTS/fix_summary.md"
 echo "Summary: $REPORTS/fix_summary.md"
 
-# exit 0 if final state clean, else 2 if residual remains
+# exit 0 if final state clean, else 2 if residual remains. For --check route we
+# judge ONLY route.json (a route fix never produces drc/lvs; a stale route.json
+# from a prior flow must not poison a drc/lvs fix, and vice-versa).
 python3 -c 'import json,sys,os
-proj=sys.argv[1]; rc=0
-for c in ("drc","lvs"):
+proj,check=sys.argv[1],sys.argv[2]; rc=0
+checks=("route",) if check=="route" else ("drc","lvs")
+fail_states={"fail","failed","residual","timeout"}
+for c in checks:
     p=os.path.join(proj,"reports",c+".json")
     if os.path.exists(p):
         d=json.load(open(p))
-        if d.get("status") in ("fail","failed","residual"): rc=2
-sys.exit(rc)' "$PROJECT_DIR" || exit 2
+        if d.get("status") in fail_states: rc=2
+sys.exit(rc)' "$PROJECT_DIR" "$CHECK" || exit 2

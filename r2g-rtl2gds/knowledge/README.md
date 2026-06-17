@@ -260,6 +260,21 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
     `PLACE_DENSITY_LB_ADDON ≥ 0.10` floor still apply afterward (safety rails beat retrieval). The
     corpus index is empty until the 5b backfill (`presynth.py` over historical synth dirs +
     re-ingest) runs — so the existing store's suggestions are unchanged until then.
+23. **Backend aborts are first-class symptoms, not just `failure_events` (2026-06-17 route-relief).**
+    A route-stage abort (`orfs_status='fail'` at `route`) is keyed under the symptom
+    `check='orfs_stage', class=<fail_stage>` in `run_violations` (`ingest_run._write_run_violations`),
+    NOT a bogus `timing` symptom and NOT only the `orfs-fail-route` `failure_events` signature. This
+    `symptom_id` is identical to the one a route `fix_log.jsonl` row produces (`check=orfs_stage,
+    violation_class=route` via `fix_signoff.sh --check route`), so the failing run and its
+    `route_relief` recipe pool under one key and `ab_runner.plan_trial` can match them. The route A/B
+    arms run through `engineer_loop._process_backend_ab_arm` (apply-then-flow: arm B applies
+    `route_relief` then runs the flow ONCE; arm A is the control) because — unlike a signoff arm — the
+    flow itself *fails*, so the `flow→signoff→fix` model does not apply. The symptom infrastructure
+    reserved `orfs_stage` from the start (`symptom._PREDICATE_KEYS`); this invariant is what finally
+    populates it. Same blind-spot class as Gate A/B: the machinery existed but a whole failure class
+    (backend aborts) could never reach `recipe_status`/`ab_trials` until the symptom was assigned and
+    the fix loop could log it. First route verdict: `route_relief` `candidate → promoted` on a
+    `wb2axip_wbsafety` win (arm B routes at lower util; control times out).
 
 ## Engineer Loop (spec 2026-06-09)
 

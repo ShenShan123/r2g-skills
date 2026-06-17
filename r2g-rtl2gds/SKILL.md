@@ -188,6 +188,11 @@ Extract results into JSON for reporting and dashboard:
 - If DRC/LVS is `fail`, attempt automated real-layout fixes:
   `scripts/flow/fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both]`
   (See `references/signoff-fixing.md`.)
+- If the **backend aborted at `route`** (congestion / DRT timeout, exit 124 — `orfs_status=fail`,
+  `orfs_fail_stage=route`), relieve it BEFORE signoff:
+  `scripts/flow/fix_signoff.sh <project-dir> sky130hd --check route` (lowers `CORE_UTILIZATION` so
+  DRT converges; learnable + A/B-validated `route_relief`). See `references/failure-patterns.md`
+  "Routing Congestion".
 
 #### Fix-Learning Loop
 

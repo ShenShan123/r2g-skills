@@ -24,7 +24,7 @@ deck), merges per-pin gate areas from `.macro.lef`, and gives the diode a usable
 ### `scripts/reports/diagnose_signoff_fix.py` — pure diagnoser
 
 ```
-diagnose_signoff_fix.py <project-dir> --check drc|lvs [--apply <strategy-id>]
+diagnose_signoff_fix.py <project-dir> --check drc|lvs|timing|route [--apply <strategy-id>]
                         [--next] [--exclude id1,id2]
 ```
 
@@ -45,7 +45,7 @@ diagnose_signoff_fix.py <project-dir> --check drc|lvs [--apply <strategy-id>]
 ### `scripts/flow/fix_signoff.sh` — iterative driver
 
 ```
-fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both] [--max-iters N] [--resume]
+fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route] [--max-iters N] [--resume]
 ```
 
 Default: `platform=nangate45`, `--check both`. The iteration budget is **adaptive**: base
@@ -149,6 +149,26 @@ installer). The deck is never relaxed.
 Non-antenna routing-geometry DRC (metal/via spacing, off-grid) is handled by `density_relief`
 where a `CORE_UTILIZATION` knob exists; other non-antenna classes, or designs at the util floor /
 sized by `DIE_AREA`, remain honest residuals.
+
+### route — backend-abort relief (`--check route`, 2026-06-17)
+
+A **route-stage abort** (`orfs_status=fail` at `route`) is the backend analogue of a signoff DRC
+violation: the design reached detailed routing but did not finish clean — congestion, a DRT
+residual, or (the common case) a wall-clock **timeout (exit 124/137)** killing DRT mid-grind.
+It never reaches signoff, so it flows through `--check route` (which reads `reports/route.json` from
+`extract_route.py`, not a KLayout report) and is keyed under the symptom `check=orfs_stage,
+class=route`. This is what makes a route-congestion symptom **visible to the closed loop** — the run
+gets a route symptom in `run_violations`, the fix logs a `fix_log.jsonl` row the learner turns into
+a recipe, and `ab_runner`/`engineer_loop ab-drain` A/B it like any other recipe.
+
+| id | platforms | config_edits | rerun_from | Effect |
+|----|-----------|-------------|------------|--------|
+| `route_relief` | any (needs `CORE_UTILIZATION`) | `CORE_UTILIZATION` lowered by 8 (floor 8) | `floorplan` | **Route-stage congestion / DRT-residual / timeout.** Lower utilization → bigger die → DRT has room to converge inside the wall-clock budget. Same lever as `density_relief` but for an abort *before* signoff; iterates (−8/step) until clean or floor. Deck never relaxed; `PLACE_DENSITY_LB_ADDON` untouched. **Validated 2026-06-17:** `wb2axip_wbsafety` timed out at route at util 25 (5400 s, 28 DRT residual) → **clean route in 37 s at util 12**; recipe drove the A/B loop end-to-end to an `ab_trials` win. No-op when only `DIE_AREA` is set (enlarge `DIE_AREA` manually — a v2 lever) or util at floor → honest residual. A design that demands more routing than the 5-layer stack supplies at *any* util (e.g. `aes_encipher_block`, GPL routability > 1.0) is an honest residual, not a route_relief case. |
+
+The A/B arms for a route symptom run through the dedicated apply-then-flow runner
+(`engineer_loop._process_backend_ab_arm`): arm B applies `route_relief` up-front then runs the flow
+once (route completes → success); arm A is the control at default util (route times out → fail);
+`judge` → win. (Signoff arms instead run flow→signoff→fix, because their flow *succeeds*.)
 
 ### LVS
 

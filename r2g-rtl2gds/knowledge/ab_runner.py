@@ -15,11 +15,22 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import re
 import statistics
 
 import recipe_lifecycle
 
 HEUR_PATH = os.path.join(os.path.dirname(__file__), "heuristics.json")
+
+# An A/B trial copies each subject to <name>_ab{A,B}_<strat8>_<r>. Those copies get
+# ingested (they carry the recipe's symptom), so without this guard plan_trial would
+# re-select an arm dir as a SUBJECT — copying it again into <...>_abA_..._abA_... and
+# polluting run_violations with ever-deeper nests. A/B subjects must be REAL designs.
+_ARM_DIR_RE = re.compile(r"_ab[AB]_")
+
+
+def _is_arm_dir(project_path: str | None) -> bool:
+    return bool(project_path) and bool(_ARM_DIR_RE.search(os.path.basename(project_path)))
 
 N_DESIGNS_DEFAULT = 2     # min matched designs per trial (spec §5.4)
 AB_REPEATS_DEFAULT = 2    # Win 2: k repeats per arm for variance-aware promotion
@@ -122,6 +133,8 @@ def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None) -> l
         if rn != 1 or not project_path or project_path in seen:
             continue
         base = os.path.basename(project_path.rstrip("/"))
+        if _is_arm_dir(base):
+            continue                       # never A/B an A/B arm copy
         stem = base.split("__", 1)[0]
         if base not in names and stem not in names:
             continue
@@ -147,7 +160,7 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
             "GROUP BY r.design_name ORDER BY MIN(r.cell_count)",
             (symptom_id, *params))
         return [dict(zip(("design_name", "project_path", "cell_count"), x))
-                for x in cur.fetchall()]
+                for x in cur.fetchall() if not _is_arm_dir(x[1])]
 
     def _trial(designs, level):
         return {

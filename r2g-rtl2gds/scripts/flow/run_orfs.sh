@@ -283,9 +283,25 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
   FAILED_STAGE=$(tail -1 "$BACKEND_DIR/stage_log.jsonl" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('stage','unknown'))" 2>/dev/null || echo "unknown")
   if [[ "$FAILED_STAGE" == "grt" || "$FAILED_STAGE" == "route" ]]; then
     echo "" | tee -a "$BACKEND_DIR/flow.log"
-    echo "HINT: Routing congestion detected. Try re-running with:" | tee -a "$BACKEND_DIR/flow.log"
-    echo "  1. Add to config.mk: export ROUTING_LAYER_ADJUSTMENT = 0.10" | tee -a "$BACKEND_DIR/flow.log"
-    echo "  2. Resume: FROM_STAGE=route scripts/flow/run_orfs.sh $PROJECT_DIR $PLATFORM" | tee -a "$BACKEND_DIR/flow.log"
+    # Distinguish the two route-stage failure modes — the old HINT called every
+    # route abort "congestion", but the common case is a wall-clock TIMEOUT killing
+    # detailed routing mid-grind (exit 124/137), NOT a global-route GRT-0116 abort.
+    # The learnable, A/B-validated fix for BOTH is route_relief (lower CORE_UTILIZATION
+    # so DRT has room to converge within budget); see references/failure-patterns.md
+    # "Routing Congestion" and the route-relief note.
+    if [[ $MAKE_STATUS -eq 124 || $MAKE_STATUS -eq 137 ]] \
+       && ! grep -q "GRT-0116" "$BACKEND_DIR/flow.log" 2>/dev/null; then
+      echo "HINT: Detailed routing was KILLED by the ${ORFS_TIMEOUT}s wall-clock (exit $MAKE_STATUS)," | tee -a "$BACKEND_DIR/flow.log"
+      echo "      not a global-route congestion abort. Two levers:" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  1. route_relief (PREFERRED, learnable): lower CORE_UTILIZATION so DRT converges" | tee -a "$BACKEND_DIR/flow.log"
+      echo "       fix_signoff.sh $PROJECT_DIR $PLATFORM --check route" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  2. Or just give it more time: ORFS_TIMEOUT=14400 FROM_STAGE=route scripts/flow/run_orfs.sh $PROJECT_DIR $PLATFORM" | tee -a "$BACKEND_DIR/flow.log"
+    else
+      echo "HINT: Routing congestion detected. Try re-running with:" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  1. route_relief (learnable): fix_signoff.sh $PROJECT_DIR $PLATFORM --check route" | tee -a "$BACKEND_DIR/flow.log"
+      echo "     (lowers CORE_UTILIZATION to open routing channels; deck never relaxed)" | tee -a "$BACKEND_DIR/flow.log"
+      echo "  2. Or: add export ROUTING_LAYER_ADJUSTMENT = 0.10 and resume FROM_STAGE=route" | tee -a "$BACKEND_DIR/flow.log"
+    fi
     # Auto-suggest ROUTE_FAST when failure is on a ChipTop/BOOM-scale design
     # (large 4_cts.odb is the cheapest signal; no need to walk the netlist).
     CTS_ODB="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT/4_cts.odb"

@@ -168,6 +168,72 @@ def _routing_drc_strategies(cfg: dict, exclude: set) -> list:
     return [strat]
 
 
+# Detailed-route congestion / DRT-residual / wall-clock-timeout relief (validated
+# 2026-06-17; see references/failure-patterns.md "Routing Congestion" and the
+# route-relief note). SAME CORE_UTILIZATION lever as density_relief, but keyed to a
+# ROUTE-STAGE abort (orfs-fail-route, symptom check=orfs_stage/class=route) which
+# never reaches signoff DRC — so the A/B loop was structurally blind to it until
+# this strategy + fix_signoff.sh --check route wired backend aborts into the loop.
+def _route_strategies(cfg: dict, exclude: set) -> list:
+    """Route-stage abort relief: lower CORE_UTILIZATION so detailed routing has
+    room to converge — congested / timeout routes (substitution-permutation crypto,
+    dense interconnect) leave DRT grinding stubborn tiles until the wall-clock kills
+    it. A REAL layout change (bigger die, sparser routes); the router/signoff deck
+    is NEVER relaxed; PLACE_DENSITY_LB_ADDON untouched (hard rule: never < 0.10).
+    Reruns from floorplan so the enlarged die re-places + re-routes. Only when a
+    CORE_UTILIZATION knob exists above the floor; no-op for DIE_AREA-sized designs
+    (honest residual -> operator enlarges DIE_AREA, a v2 lever)."""
+    try:
+        cur_util = int(float(cfg.get("CORE_UTILIZATION", "")))
+    except (TypeError, ValueError):
+        return []
+    new_util = max(_UTIL_FLOOR, cur_util - _UTIL_STEP)
+    if new_util >= cur_util:
+        return []
+    strat = {
+        "id": "route_relief",
+        "rationale": ("Lower CORE_UTILIZATION so detailed routing has room to "
+                      "converge and finish within the wall-clock budget on a "
+                      "congested die. Real layout change (bigger die); the "
+                      "router/signoff deck is never relaxed."),
+        "config_edits": {"CORE_UTILIZATION": str(new_util)},
+        "rerun_from": "floorplan", "recheck": "route", "auto_apply": True}
+    if strat["id"] in exclude or _applied(cfg, strat["config_edits"]):
+        return []
+    return [strat]
+
+
+def _route_plan(route: dict, cfg: dict, exclude: set) -> dict:
+    """Backend-abort plan for a route-stage failure (orfs-fail-route). Sibling of
+    _drc_plan but for a stage that aborts BEFORE signoff. 'unknown' here means the
+    route.json carries no route-stage outcome (the abort was earlier) -> no fix."""
+    status = route.get("status", "unknown")
+    plan = {"check": "route", "status": status,
+            "violation_count": route.get("total_violations"),
+            "dominant_category": "route", "strategies": [], "residual_reason": None}
+    if status in ("clean", "skipped"):
+        return plan
+    if status == "unknown":
+        plan["residual_reason"] = "no route-stage outcome to fix (abort earlier than route)"
+        return plan
+    if status in ("fail", "timeout", "residual"):
+        strategies = _route_strategies(cfg, exclude)
+        plan["strategies"] = strategies
+        if not strategies:
+            plan["status"] = "residual"
+            if "CORE_UTILIZATION" not in cfg:
+                plan["residual_reason"] = (
+                    "route congestion but no CORE_UTILIZATION knob to relieve "
+                    "(DIE_AREA-sized); enlarge DIE_AREA manually (v2 lever).")
+            else:
+                plan["residual_reason"] = (
+                    f"route congestion: density relief exhausted (CORE_UTILIZATION "
+                    f"at floor {_UTIL_FLOOR}); honest residual.")
+        return plan
+    plan["residual_reason"] = f"route status '{status}' not actionable in v1"
+    return plan
+
+
 def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
     status = drc.get("status", "unknown")
     cats = drc.get("categories") or {}
@@ -365,7 +431,7 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
 
 def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
                exclude=(), recipes: dict | None = None,
-               tcheck: dict | None = None) -> dict:
+               tcheck: dict | None = None, route: dict | None = None) -> dict:
     """Pure: (drc.json, lvs.json, parsed config.mk) -> ordered fix plan dict.
     When `recipes` (a Tier-3 fix_recipes entry for this check/violation_class)
     is given, strategies are re-ranked by empirical clearance (fix_model)."""
@@ -375,6 +441,8 @@ def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
         plan = _timing_plan(tcheck or {}, cfg, excl, routing_clean=routing_clean)
     elif check == "drc":
         plan = _drc_plan(drc or {}, cfg, excl)
+    elif check == "route":
+        plan = _route_plan(route or {}, cfg, excl)
     else:
         plan = _lvs_plan(lvs or {}, cfg, excl)
     return _rank_plan_strategies(plan, recipes)
@@ -568,7 +636,7 @@ def attach_lessons(plan: dict, *, check: str, vclass: str | None, platform: str)
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Diagnose DRC/LVS violations → real-fix plan.")
     ap.add_argument("project_dir")
-    ap.add_argument("--check", choices=["drc", "lvs", "timing"], default="drc")
+    ap.add_argument("--check", choices=["drc", "lvs", "timing", "route"], default="drc")
     ap.add_argument("--apply", metavar="STRATEGY_ID", help="write the strategy's edits into config.mk")
     ap.add_argument("--next", action="store_true", help="print one tab-separated action line for the driver")
     ap.add_argument("--list", action="store_true",
@@ -582,6 +650,7 @@ def main(argv=None) -> int:
     drc = _load(proj / "reports" / "drc.json")
     lvs = _load(proj / "reports" / "lvs.json")
     tcheck = _load(proj / "reports" / "timing_check.json")
+    route = _load(proj / "reports" / "route.json")
     cfg_path = proj / "constraints" / "config.mk"
     cfg_text = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
     cfg = parse_config(cfg_text)
@@ -602,9 +671,18 @@ def main(argv=None) -> int:
         design_class = f"{_sc.detect_design_type(proj, cfg)}/{_size}"
     except Exception:
         design_class = "unknown/unknown"
-    idx_recipe, idx_pooled, idx_level = load_indexed_recipe(
-        check=args.check, platform=plat, design_class=design_class, drc=drc, lvs=lvs)
-    if idx_recipe is not None:
+    # Route (backend-abort) symptoms index under check=orfs_stage/class=route, not
+    # the drc/lvs report shape the indexed/symptom recipe readers assume. The static
+    # route_relief strategy already carries the cold-start fix; learned ranking for
+    # the route symptom rides through the learner -> heuristics, not this reader.
+    if args.check == "route":
+        recipes, pooled = None, {}
+        idx_recipe = None
+    else:
+        recipes = pooled = None
+        idx_recipe, idx_pooled, idx_level = load_indexed_recipe(
+            check=args.check, platform=plat, design_class=design_class, drc=drc, lvs=lvs)
+    if args.check != "route" and idx_recipe is not None:
         recipes, pooled = idx_recipe, idx_pooled
         try:
             import knowledge_db
@@ -621,11 +699,12 @@ def main(argv=None) -> int:
             _kc.close()
         except Exception:
             pass    # lifecycle filter must never break diagnosis
-    else:
+    elif args.check != "route":
         sym_recipe, pooled = load_symptom_recipe(check=args.check, platform=plat, drc=drc, lvs=lvs)
         recipes = sym_recipe if sym_recipe is not None else _load_recipes(
             proj, check=args.check, drc=drc, lvs=lvs)
-    plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes, tcheck=tcheck)
+    plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
+                      tcheck=tcheck, route=route)
     _rank_plan_strategies(plan, recipes, pooled=pooled)
     attach_lessons(plan, check=args.check,
                    vclass=_current_vclass(args.check, drc, lvs), platform=plat)

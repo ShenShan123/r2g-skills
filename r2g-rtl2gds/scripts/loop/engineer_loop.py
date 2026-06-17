@@ -23,6 +23,8 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +47,10 @@ class Ledger:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._entries: dict[str, dict] = {}
+        # Guards _entries + the JSONL append so parallel A/B arm workers
+        # (R2G_AB_WORKERS > 1) can update the ledger concurrently without
+        # interleaving lines or racing the dict (2026-06-17 parallel ab_drain).
+        self._lock = threading.Lock()
         if self.path.exists():
             for ln in self.path.read_text(encoding="utf-8").splitlines():
                 if not ln.strip():
@@ -62,15 +68,17 @@ class Ledger:
         e.setdefault("kind", "normal")
         e.setdefault("state", "pending")
         e["ts"] = _now()
-        self._entries[e["design"]] = dict(self._entries.get(e["design"], {}), **e)
-        self._append(e)
+        with self._lock:
+            self._entries[e["design"]] = dict(self._entries.get(e["design"], {}), **e)
+            self._append(e)
 
     def set_state(self, design: str, state: str, **extra) -> None:
         if state not in STATES:
             raise ValueError(f"illegal state: {state}")
         e = {"design": design, "state": state, "ts": _now(), **extra}
-        self._entries[design].update(e)
-        self._append(e)
+        with self._lock:
+            self._entries[design].update(e)
+            self._append(e)
 
     def state(self, design: str) -> str:
         return self._entries[design]["state"]
@@ -95,6 +103,20 @@ def _run_flow(entry: dict) -> int:
          entry["project_path"], entry["platform"]]).returncode
 
 
+def _symptom_check(conn, symptom_id: str | None) -> str:
+    """Map a symptom_id to the fix_signoff.sh --check value. A backend-stage abort
+    (check=orfs_stage) is fixed BEFORE signoff via --check <stage> (only 'route'
+    has a v1 fixer); everything else is a post-route signoff fix (--check both)."""
+    if not symptom_id:
+        return "both"
+    row = conn.execute(
+        "SELECT check_type, class FROM symptoms WHERE symptom_id=?",
+        (symptom_id,)).fetchone() if conn is not None else None
+    if row and row[0] == "orfs_stage" and row[1] == "route":
+        return "route"
+    return "both"
+
+
 def _run_fix(entry: dict) -> int:
     env = dict(os.environ)
     if entry.get("kind") == "ab_arm":
@@ -104,8 +126,45 @@ def _run_fix(entry: dict) -> int:
             env["R2G_FIX_RANK_FIRST"] = entry["strategy"]
     return subprocess.run(
         ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
-         entry["project_path"], entry["platform"], "--check", "both"],
+         entry["project_path"], entry["platform"], "--check",
+         entry.get("check", "both")],
         env=env).returncode
+
+
+def _apply_recipe_strategy(entry: dict) -> None:
+    """Apply the recipe's backend strategy (e.g. route_relief) into the arm's
+    config.mk BEFORE its single flow run. Seeds a fail route.json so diagnose can
+    resolve the route strategy (no backend exists yet to extract from)."""
+    proj = Path(entry["project_path"])
+    reports = proj / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    (reports / "route.json").write_text(
+        json.dumps({"status": "fail", "total_violations": None}), encoding="utf-8")
+    diagnose = _script("R2G_LOOP_DIAGNOSE",
+                       SKILL_ROOT / "scripts" / "reports" / "diagnose_signoff_fix.py")
+    subprocess.run([sys.executable, diagnose, entry["project_path"],
+                    "--check", "route", "--apply", entry["strategy"]], check=False)
+
+
+def _process_backend_ab_arm(led: "Ledger", entry: dict, conn) -> None:
+    """A/B arm for a BACKEND-ABORT symptom (orfs_stage/route). Unlike a signoff
+    arm (flow succeeds -> signoff fails -> fix), a route arm's 'fix' IS a config
+    retune + re-route. So we apply the strategy up-front on arm B and run the flow
+    EXACTLY ONCE per arm: arm A is the control (default util -> route times out ->
+    is_success False); arm B is route_relief (lower util -> route completes ->
+    is_success True). judge -> win. One flow per arm (no wasted control-config
+    route on arm B)."""
+    design = entry["design"]
+    if entry.get("arm") == "B":
+        led.set_state(design, "fixing")
+        _apply_recipe_strategy(entry)
+    led.set_state(design, "flow")
+    rc = _run_flow(entry)
+    _ingest(entry)
+    # The judge reads the ingested run's is_success; rc only drives the ledger
+    # terminal state (clean vs escalated) so judge_finished_trials picks it up.
+    led.set_state(design, "clean" if rc == 0 else "escalated",
+                  **({} if rc == 0 else {"reason": "route_arm_failed"}))
 
 
 def _ingest(entry: dict) -> str | None:
@@ -140,6 +199,12 @@ def _learn() -> dict:
 
 def process_one(led: Ledger, entry: dict, conn) -> None:
     design = entry["design"]
+    # Backend-abort A/B arm (route congestion): the flow itself fails at the
+    # backend stage, so the signoff "flow -> fix" model does not apply — route it
+    # through the dedicated apply-then-flow arm runner. (2026-06-17 route-relief.)
+    if entry.get("kind") == "ab_arm" and entry.get("check") == "route":
+        _process_backend_ab_arm(led, entry, conn)
+        return
     led.set_state(design, "flow")
     rc = _run_flow(entry)
     if rc != 0:
@@ -193,6 +258,9 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
         if trial is None:
             continue
         strat8 = key["strategy"][:8]
+        # Resolve the fix-loop check from the symptom ONCE per trial so a route
+        # (backend-abort) arm is driven by the dedicated apply-then-flow runner.
+        check = _symptom_check(conn, key.get("symptom_id"))
         for d in trial["designs"]:
             for arm in ("A", "B"):
                 for r in range(k):
@@ -204,6 +272,7 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                     led.add({"design": dst.name, "project_path": str(dst),
                              "platform": key["platform"], "kind": "ab_arm",
                              "arm": arm, "strategy": key["strategy"], "repeat": r,
+                             "check": check,
                              "ab_key": key, "match_level": trial["match_level"]})
                     appended += 1
     return appended
@@ -270,22 +339,53 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                 led.set_state(e["design"], e["state"], judged=True)
 
 
+def ab_workers() -> int:
+    """How many A/B arm flows to run CONCURRENTLY (R2G_AB_WORKERS, default 1).
+    Each arm is a full ORFS flow; the 96-core host comfortably runs several at
+    once, so the drain wall-clock drops from sum-of-arms to slowest-arm-batch."""
+    try:
+        return max(1, int(os.environ.get("R2G_AB_WORKERS", "1")))
+    except ValueError:
+        return 1
+
+
+def _drain_arm(led: "Ledger", entry: dict, db_path: Path | str | None) -> None:
+    """Run ONE arm in its OWN db connection — sqlite3 connections are not
+    thread-shareable, and the heavy work (flow/fix/ingest) is subprocess-based, so
+    each worker thread just needs a private conn for the occasional escalation
+    write. The Ledger is lock-guarded (thread-safe)."""
+    import knowledge_db
+    conn = knowledge_db.connect(db_path) if db_path else knowledge_db.connect()
+    try:
+        process_one(led, entry, conn)
+    finally:
+        conn.close()
+
+
 def ab_drain(ledger_path: Path, *, n_ab_designs: int = 2,
-             db_path: Path | str | None = None) -> int:
+             db_path: Path | str | None = None, max_workers: int | None = None) -> int:
     """Fire A/B trials for already-enqueued candidate recipes WITHOUT re-running
     the normal designs. This is the production "drain the A/B queue" button: the
     batch driver ingests + learns (which now enqueues candidates, Gate A), then a
     periodic ab_drain plans the arms, runs only those arm flows, and judges.
 
-    Returns the number of trials judged this pass.
+    Arm flows run CONCURRENTLY when R2G_AB_WORKERS > 1 (or max_workers is passed):
+    arms are independent ORFS flows, so parallelism turns sum-of-arms wall-clock
+    into slowest-batch wall-clock on the multi-core host. Returns trials judged.
     """
     import knowledge_db
     led = Ledger(ledger_path)
     conn = knowledge_db.connect(db_path) if db_path else knowledge_db.connect()
     knowledge_db.ensure_schema(conn)
     plan_arms_for_candidates(led, conn, n_ab_designs=n_ab_designs)
-    for entry in [e for e in led.pending() if e.get("kind") == "ab_arm"]:
-        process_one(led, entry, conn)
+    pending = [e for e in led.pending() if e.get("kind") == "ab_arm"]
+    workers = max_workers if max_workers is not None else ab_workers()
+    if workers > 1 and len(pending) > 1:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            list(ex.map(lambda e: _drain_arm(led, e, db_path), pending))
+    else:
+        for entry in pending:
+            process_one(led, entry, conn)
     before = conn.execute("SELECT COUNT(*) FROM ab_trials").fetchone()[0]
     judge_finished_trials(led, conn)
     after = conn.execute("SELECT COUNT(*) FROM ab_trials").fetchone()[0]
@@ -331,6 +431,8 @@ def main(argv=None) -> int:
     pd = sub.add_parser("ab-drain", help="fire A/B trials for pending candidates")
     pd.add_argument("--ledger", required=True, type=Path)
     pd.add_argument("--n-designs", type=int, default=2)
+    pd.add_argument("--workers", type=int, default=None,
+                    help="run this many arm flows concurrently (default R2G_AB_WORKERS or 1)")
     pe = sub.add_parser("ab-enqueue",
                         help="force a (grandfathered) recipe into A/B candidate")
     pe.add_argument("--symptom", required=True)
@@ -346,7 +448,8 @@ def main(argv=None) -> int:
                  "project_path": str(Path(args.project).resolve()),
                  "platform": args.platform})
     elif args.cmd == "ab-drain":
-        n = ab_drain(args.ledger, n_ab_designs=args.n_designs)
+        n = ab_drain(args.ledger, n_ab_designs=args.n_designs,
+                     max_workers=args.workers)
         print(f"ab_drain judged {n} trial(s)")
     elif args.cmd == "ab-enqueue":
         import knowledge_db
