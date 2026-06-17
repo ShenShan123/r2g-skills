@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-06-16T15:50:55Z",
-  "source_run_count": 1271,
+  "generated_at": "2026-06-17T10:58:52Z",
+  "source_run_count": 1273,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 520,
+  "generation": 592,
   "families": {
     "rv32i": {
       "platforms": {
@@ -26,8 +26,8 @@
         },
         "sky130hd": {
           "sample_size": 9,
-          "success_count": 7,
-          "success_rate": 0.7777777777777778,
+          "success_count": 8,
+          "success_rate": 0.8888888888888888,
           "core_utilization": {
             "min_safe": 12.0,
             "max_safe": 12.0,
@@ -160,9 +160,9 @@
           "p90_elapsed_s": 735.0
         },
         "sky130hd": {
-          "sample_size": 14,
+          "sample_size": 15,
           "success_count": 13,
-          "success_rate": 0.9285714285714286,
+          "success_rate": 0.8666666666666667,
           "core_utilization": {
             "min_safe": 12.0,
             "max_safe": 25.0,
@@ -187,7 +187,7 @@
                     "median_reduction_pct": 1.0
                   }
                 },
-                "n_sessions": 4
+                "n_sessions": 5
               }
             },
             "lvs": {
@@ -250,11 +250,11 @@
         },
         "sky130hd": {
           "sample_size": 8,
-          "success_count": 7,
-          "success_rate": 0.875,
+          "success_count": 8,
+          "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 10.0,
-            "max_safe": 10.0,
+            "max_safe": 17.0,
             "median": 10.0
           },
           "place_density_lb_addon": {
@@ -263,7 +263,23 @@
             "median": 0.2
           },
           "typical_cell_count": 657,
-          "p90_elapsed_s": 965.0
+          "p90_elapsed_s": 1452.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -882,6 +898,27 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 3,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 0.0
+                  }
+                },
+                "n_sessions": 3
+              }
+            }
+          }
         }
       }
     },
@@ -935,8 +972,8 @@
         },
         "sky130hd": {
           "sample_size": 24,
-          "success_count": 22,
-          "success_rate": 0.9166666666666666,
+          "success_count": 23,
+          "success_rate": 0.9583333333333334,
           "core_utilization": {
             "min_safe": 10.0,
             "max_safe": 25.0,
@@ -948,7 +985,23 @@
             "median": 0.2
           },
           "typical_cell_count": 1787,
-          "p90_elapsed_s": 3705.0
+          "p90_elapsed_s": 3705.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -1186,12 +1239,12 @@
         },
         "sky130hd": {
           "sample_size": 9,
-          "success_count": 7,
-          "success_rate": 0.7777777777777778,
+          "success_count": 8,
+          "success_rate": 0.8888888888888888,
           "core_utilization": {
             "min_safe": 10.0,
             "max_safe": 25.0,
-            "median": 22.5
+            "median": 20.0
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -1199,7 +1252,23 @@
             "median": 0.2
           },
           "typical_cell_count": 5061,
-          "p90_elapsed_s": 4569.0
+          "p90_elapsed_s": 4569.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -1382,12 +1451,12 @@
         },
         "sky130hd": {
           "sample_size": 6,
-          "success_count": 3,
-          "success_rate": 0.5,
+          "success_count": 4,
+          "success_rate": 0.6666666666666666,
           "core_utilization": {
-            "min_safe": 15.0,
+            "min_safe": 12.0,
             "max_safe": 20.0,
-            "median": 20.0
+            "median": 17.5
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -1395,7 +1464,22 @@
             "median": 0.2
           },
           "typical_cell_count": 5001,
-          "p90_elapsed_s": 4427.0
+          "p90_elapsed_s": 4427.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -1504,7 +1588,23 @@
             "median": 0.2
           },
           "typical_cell_count": 13126,
-          "p90_elapsed_s": 5276.0
+          "p90_elapsed_s": 5276.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 0,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 0.0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -1926,6 +2026,27 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 0,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 0.0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -1993,10 +2114,10 @@
         },
         "sky130hd": {
           "sample_size": 10,
-          "success_count": 9,
-          "success_rate": 0.9,
+          "success_count": 10,
+          "success_rate": 1.0,
           "core_utilization": {
-            "min_safe": 25.0,
+            "min_safe": 17.0,
             "max_safe": 25.0,
             "median": 25.0
           },
@@ -2006,7 +2127,22 @@
             "median": 0.2
           },
           "typical_cell_count": 577,
-          "p90_elapsed_s": 1381.0
+          "p90_elapsed_s": 1381.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -2225,12 +2361,12 @@
         },
         "sky130hd": {
           "sample_size": 6,
-          "success_count": 4,
-          "success_rate": 0.6666666666666666,
+          "success_count": 5,
+          "success_rate": 0.8333333333333334,
           "core_utilization": {
             "min_safe": 15.0,
-            "max_safe": 15.0,
-            "median": 15.0
+            "max_safe": 17.0,
+            "median": 16.0
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -2238,7 +2374,22 @@
             "median": 0.2
           },
           "typical_cell_count": 11908,
-          "p90_elapsed_s": 6207.0
+          "p90_elapsed_s": 6207.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -2474,11 +2625,11 @@
           }
         },
         "sky130hd": {
-          "sample_size": 48,
-          "success_count": 44,
-          "success_rate": 0.9166666666666666,
+          "sample_size": 50,
+          "success_count": 48,
+          "success_rate": 0.96,
           "core_utilization": {
-            "min_safe": 10.0,
+            "min_safe": 8.0,
             "max_safe": 25.0,
             "median": 20.0
           },
@@ -2488,7 +2639,7 @@
             "median": 0.2
           },
           "typical_cell_count": 454,
-          "p90_elapsed_s": 1834.0,
+          "p90_elapsed_s": 1840.0,
           "fix_recipes": {
             "drc": {
               "'m3.2'": {
@@ -2502,6 +2653,19 @@
                   }
                 },
                 "n_sessions": 2
+              }
+            },
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 3,
+                    "successes": 2,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 3
               }
             }
           }
@@ -2564,8 +2728,8 @@
         },
         "sky130hd": {
           "sample_size": 38,
-          "success_count": 34,
-          "success_rate": 0.8947368421052632,
+          "success_count": 35,
+          "success_rate": 0.9210526315789473,
           "core_utilization": {
             "min_safe": 17.0,
             "max_safe": 25.0,
@@ -2591,6 +2755,20 @@
                   }
                 },
                 "n_sessions": 2
+              }
+            },
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 1
               }
             }
           }
@@ -2870,6 +3048,27 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -3090,6 +3289,26 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -3238,6 +3457,26 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 2,
+                    "successes": 2,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 2
+              }
+            }
+          }
         }
       }
     },
@@ -3310,6 +3549,27 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 0,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 0.0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -3331,6 +3591,27 @@
                   }
                 },
                 "n_sessions": 2
+              }
+            }
+          }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 0,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 0.0
+                  }
+                },
+                "n_sessions": 1
               }
             }
           }
@@ -3406,6 +3687,27 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 2,
+                    "successes": 2,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 2
+              }
+            }
+          }
         }
       }
     },
@@ -3448,6 +3750,27 @@
                     "successes": 2,
                     "failures": 0,
                     "wins": 0
+                  }
+                },
+                "n_sessions": 2
+              }
+            }
+          }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 2,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 0.5
                   }
                 },
                 "n_sessions": 2
@@ -4332,7 +4655,7 @@
         "memory_controller",
         "spi_controller"
       ],
-      "n_sessions": 15,
+      "n_sessions": 16,
       "strategies": {}
     },
     "f670d8e567be3158": {
@@ -4364,6 +4687,58 @@
             "sky130hd": {
               "attempts": 11,
               "successes": 11,
+              "failures": 0,
+              "wins": 0
+            }
+          }
+        }
+      }
+    },
+    "11f02dbb19046bb6": {
+      "check": "orfs_stage",
+      "class": "route",
+      "predicates": {},
+      "platforms_seen": [
+        "sky130hd"
+      ],
+      "evidence_designs": [
+        "aes_key_mem",
+        "arm9_compatiable_code",
+        "arm9_compitable_code",
+        "axi_dma",
+        "blake2s",
+        "cf_fir_24_16_16",
+        "chacha",
+        "cmac",
+        "cmac_core",
+        "des_perf",
+        "diffeq_paj_convert",
+        "dynamic_node_top_wrap",
+        "ex2PM16_fir",
+        "ex3PM16_fir",
+        "mac2",
+        "picorv32_axi",
+        "poly1305",
+        "poly1305_core",
+        "prince",
+        "prince_core",
+        "risclite_mx",
+        "riscv_core",
+        "sha256_axi4",
+        "softmax",
+        "wbsafety"
+      ],
+      "n_sessions": 25,
+      "strategies": {
+        "route_relief": {
+          "attempts": 25,
+          "successes": 17,
+          "failures": 0,
+          "wins": 0,
+          "by_platform": {
+            "sky130hd": {
+              "attempts": 25,
+              "successes": 17,
               "failures": 0,
               "wins": 0
             }
@@ -4876,6 +5251,60 @@
             }
           },
           "n_sessions": 9
+        }
+      }
+    },
+    "11f02dbb19046bb6": {
+      "logic/unknown": {
+        "sky130hd": {
+          "strategies": {
+            "route_relief": {
+              "attempts": 25,
+              "successes": 17,
+              "failures": 0,
+              "wins": 0,
+              "mean_outcome_score": 0.512
+            }
+          },
+          "n_sessions": 25
+        },
+        "*": {
+          "strategies": {
+            "route_relief": {
+              "attempts": 25,
+              "successes": 17,
+              "failures": 0,
+              "wins": 0,
+              "mean_outcome_score": 0.512
+            }
+          },
+          "n_sessions": 25
+        }
+      },
+      "*": {
+        "sky130hd": {
+          "strategies": {
+            "route_relief": {
+              "attempts": 25,
+              "successes": 17,
+              "failures": 0,
+              "wins": 0,
+              "mean_outcome_score": 0.512
+            }
+          },
+          "n_sessions": 25
+        },
+        "*": {
+          "strategies": {
+            "route_relief": {
+              "attempts": 25,
+              "successes": 17,
+              "failures": 0,
+              "wins": 0,
+              "mean_outcome_score": 0.512
+            }
+          },
+          "n_sessions": 25
         }
       }
     }
