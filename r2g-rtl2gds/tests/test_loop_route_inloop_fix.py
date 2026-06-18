@@ -53,6 +53,10 @@ def test_route_abort_escalates_if_fix_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(engineer_loop, "_run_fix", lambda e: 1)      # route fix fails
     engineer_loop.process_one(led, led.pending()[0], conn=None)
     assert led.state("crypto_y") == "escalated"
+    # A route abort whose route_relief fixer is exhausted/inapplicable is a KNOWN
+    # backend residual, NOT an "unseen crash" — label it honestly (2026-06-17).
+    entry = next(e for e in led.entries() if e["design"] == "crypto_y")
+    assert entry.get("reason") == "route_congestion_residual", entry
 
 
 def test_nonroute_crash_escalates_without_route_fixer(tmp_path, monkeypatch):
@@ -66,3 +70,6 @@ def test_nonroute_crash_escalates_without_route_fixer(tmp_path, monkeypatch):
     engineer_loop.process_one(led, led.pending()[0], conn=None)
     assert called["fix"] is False               # route fixer NOT invoked
     assert led.state("crypto_z") == "escalated"
+    # A genuine non-route (place) crash stays labeled unseen_crash.
+    entry = next(e for e in led.entries() if e["design"] == "crypto_z")
+    assert entry.get("reason") == "unseen_crash", entry

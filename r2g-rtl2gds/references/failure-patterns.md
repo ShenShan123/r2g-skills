@@ -622,6 +622,34 @@ strategy_ids: [lvs_same_nets_seed]
   platform resolves it (e.g. `cordic`: stale sky130hd failure → re-ran nangate45 → `clean`). Always
   re-run before trusting an LVS `fail` on a design that changed platform.
 
+#### Sub-variant: the autonomous loop used the WRONG LVS tool on sky130 (2026-06-17, systematic)
+
+- **Symptom:** Across the 94-design sky130 campaign, a large fraction of designs escalated with
+  `{"drc":"clean","lvs":"fail"}` — `6_lvs.log` ends `ERROR : Netlists don't match`, yet the layout
+  is correct. Validated examples: `wb2axip_wbsafety`, `vtr…blob_merge` — both **KLayout-fail →
+  Netgen-clean** ("Circuits match uniquely", 0 device/net deltas).
+- **Root cause (a dispatch bug, not a layout/tool-limit issue):** the autonomous loop ran **KLayout
+  LVS** (`run_lvs.sh`, deck `sky130hd_r2g.lylvs`) on **every** platform. On sky130 the production
+  LVS path is **Netgen** (Magic GDS extraction + Netgen compare) — KLayout 0.30.7's symmetric
+  matcher mis-pairs std-cell-dense sky130 layouts (the residual documented above), so it false-fails
+  designs Netgen finds clean. Two plumbing defects compounded it: (1) `fix_signoff.sh` hard-coded
+  `RUN_LVS=run_lvs.sh`; (2) `extract_lvs.py` preferred the Netgen verdict **only when KLayout left no
+  artifacts**, but the loop's own KLayout run always left `6_lvs.lvsdb`/`6_lvs.log`, so the stale
+  false-fail clobbered any later Netgen-clean.
+- **Fix (shipped 2026-06-17):**
+  1. `fix_signoff.sh` selects the LVS tool by platform — `sky130*` → `run_netgen_lvs.sh`, everything
+     else → `run_lvs.sh` (KLayout). An explicit `R2G_RUN_LVS` override still wins.
+  2. `extract_lvs.py` now uses a **most-recently-run-tool-wins** rule (mtime of
+     `netgen_lvs_result.json` vs the freshest KLayout artifact) instead of "only if KLayout left
+     nothing", so a fresh Netgen verdict supersedes lingering stale KLayout artifacts. nangate45
+     (KLayout-only) is byte-identical.
+- **Recovery for already-run designs:** just run `run_netgen_lvs.sh <proj> sky130hd` then
+  `extract_lvs.py <proj> reports/lvs.json` — no re-flow needed (the GDS is already built); then
+  re-ingest. This flips the false `lvs:fail` to `lvs:clean`.
+- **Distinguish from nangate45:** on nangate45 KLayout is the *only* LVS tool, so the symmetric
+  residual there is genuinely unresolved without `same_nets!` seeding (above). Netgen is the sky130
+  escape hatch, not a nangate45 one.
+
 ### LVS KLayout sort_circuit/gen_log_entry SIGSEGV (non-deterministic, retry-fixable)
 
 - **Symptom:** `make lvs` dies with `ERROR: Signal number: 11` and a backtrace through

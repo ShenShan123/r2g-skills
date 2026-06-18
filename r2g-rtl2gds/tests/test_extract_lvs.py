@@ -14,6 +14,7 @@ Models the two real failure modes observed in the nangate45 corpus:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -374,13 +375,34 @@ def test_netgen_fail_is_honored(tmp_path):
     assert result["mismatch_class"] == "property_mismatch", result
 
 
-def test_klayout_takes_precedence_over_netgen(tmp_path):
-    """If KLayout artifacts ARE present, defer to the KLayout parsers (nangate45
-    byte-identical behavior) rather than the netgen shortcut."""
+def test_klayout_takes_precedence_when_fresher(tmp_path):
+    """Tool-precedence rule: the MOST-RECENTLY-RUN LVS tool is authoritative.
+    When the KLayout artifacts are NEWER than the netgen result (KLayout was the
+    last tool to run — e.g. nangate45, or a manual KLayout re-run), defer to the
+    KLayout parsers. KLayout log says mismatch → fail; netgen shortcut must NOT fire."""
     ng = {"tool": "netgen", "status": "clean", "match": "match"}
     proj = _make_netgen_project(tmp_path, ng, also_klayout="netlists don't match\n")
+    lvs_dir = proj / "lvs"
+    os.utime(lvs_dir / "netgen_lvs_result.json", (1_000_000, 1_000_000))
+    os.utime(lvs_dir / "6_lvs.log", (2_000_000, 2_000_000))  # KLayout newer
     out = tmp_path / "lvs.json"
     result = _run_script(proj, out)
-    # KLayout log says mismatch → fail; netgen shortcut must NOT have fired.
     assert result["status"] == "fail", result
     assert result.get("tool") != "netgen", result
+
+
+def test_netgen_takes_precedence_when_fresher(tmp_path):
+    """Tool-precedence rule (the sky130 loop case): when the netgen result is at
+    least as fresh as the lingering KLayout artifacts (the fix loop now runs Netgen
+    on sky130 but stale KLayout 6_lvs.log/lvsdb from an earlier run remain), the
+    Netgen verdict wins — the stale KLayout false-fail must NOT clobber it. This is
+    the 2026-06-17 sky130-LVS wrong-tool regression guard."""
+    ng = {"tool": "netgen", "status": "clean", "match": "match"}
+    proj = _make_netgen_project(tmp_path, ng, also_klayout="netlists don't match\n")
+    lvs_dir = proj / "lvs"
+    os.utime(lvs_dir / "6_lvs.log", (1_000_000, 1_000_000))  # stale KLayout
+    os.utime(lvs_dir / "netgen_lvs_result.json", (2_000_000, 2_000_000))  # netgen newer
+    out = tmp_path / "lvs.json"
+    result = _run_script(proj, out)
+    assert result["status"] == "clean", result
+    assert result.get("tool") == "netgen", result

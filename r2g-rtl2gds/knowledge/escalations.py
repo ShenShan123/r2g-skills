@@ -9,7 +9,11 @@ import datetime as _dt
 import os as _os
 
 REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
-           "repeated_regression")
+           "repeated_regression",
+           # A backend route abort whose route_relief fixer is exhausted (util at
+           # floor) or inapplicable (DIE_AREA-sized, no CORE_UTILIZATION knob).
+           # A KNOWN, recipe-backed residual — NOT an unseen crash (2026-06-17).
+           "route_congestion_residual")
 
 
 def _now() -> str:
@@ -72,3 +76,21 @@ def resolve(conn, escalation_id: int, *, status: str, notes: str | None = None) 
         "UPDATE escalations SET status=?, notes=COALESCE(?, notes), resolved_at=? "
         "WHERE escalation_id=?", (status, notes, _now(), escalation_id))
     conn.commit()
+
+
+def resolve_for_design(conn, design: str, *, notes: str | None = None) -> int:
+    """Auto-close every OPEN escalation for `design` as 'drained'. Called when the
+    loop drives a design to `clean` (a later successful flow/fix supersedes an
+    earlier abort), so the escalation queue stays an honest view of what is still
+    stuck — not a graveyard of stale aborts a subsequent run already cleared
+    (2026-06-17). Returns the number of escalations closed. No-op if none open."""
+    rows = conn.execute(
+        "SELECT escalation_id FROM escalations WHERE design=? AND status='open'",
+        (design,)).fetchall()
+    for (eid,) in rows:
+        conn.execute(
+            "UPDATE escalations SET status='drained', "
+            "notes=COALESCE(?, notes), resolved_at=? WHERE escalation_id=?",
+            (notes, _now(), eid))
+    conn.commit()
+    return len(rows)

@@ -246,6 +246,22 @@ def _learn() -> dict:
 
 # ---- the loop ---------------------------------------------------------------
 
+def _mark_clean(led: Ledger, conn, design: str, note: str) -> None:
+    """Transition a design to `clean` AND auto-close any open escalations for it.
+    A later successful flow/fix supersedes an earlier abort, so its escalation must
+    not linger in the queue as a stale "still stuck" entry (2026-06-17)."""
+    led.set_state(design, "clean")
+    if conn is not None:
+        try:
+            import escalations
+            n = escalations.resolve_for_design(conn, design, notes=note)
+            if n:
+                log_msg = f"[loop] {design}: clean -> auto-drained {n} stale escalation(s)"
+                print(log_msg)
+        except Exception:                       # reconciliation must never break the loop
+            pass
+
+
 def process_one(led: Ledger, entry: dict, conn) -> None:
     design = entry["design"]
     if entry.get("kind") == "ab_arm":
@@ -267,32 +283,41 @@ def process_one(led: Ledger, entry: dict, conn) -> None:
         # rather than hand-fixing (2026-06-17). Only genuinely unhandled aborts
         # (synth/place/cts crashes, or a route fix that still fails) escalate.
         _ingest(entry)                      # partial runs still teach
+        reason, notes = "unseen_crash", f"run_orfs rc={rc}"
         if entry.get("kind") != "ab_arm" and _fail_stage(entry) == "route":
             led.set_state(design, "fixing")
             fix_rc = _run_fix({**entry, "check": "route"})
             _ingest(entry)
             if fix_rc == 0:
-                led.set_state(design, "clean")
+                _mark_clean(led, conn, design, "route_relief cleared the abort in-loop")
                 return
-        led.set_state(design, "escalated", reason="unseen_crash")
+            # route_relief ran but did NOT clear the abort — a KNOWN, recipe-backed
+            # backend residual (congestion past the CORE_UTILIZATION floor, or a
+            # DIE_AREA-sized design with no util knob to relieve), NOT an "unseen
+            # crash". Mislabeling it unseen_crash pollutes the escalation queue and
+            # the learning signal (it reads as a novel symptom). Label it honestly so
+            # the operator runbook can route it to the v2 DIE_AREA lever.
+            reason = "route_congestion_residual"
+            notes = (f"route abort (rc={rc}); route_relief exhausted or inapplicable "
+                     f"(util at floor, or DIE_AREA-sized — no CORE_UTILIZATION knob)")
+        led.set_state(design, "escalated", reason=reason)
         if conn is not None:
             import escalations
             escalations.open_escalation(
                 conn, design=design, project_path=entry["project_path"],
-                run_id=None, reason="unseen_crash",
-                notes=f"run_orfs rc={rc}")
+                run_id=None, reason=reason, notes=notes)
         return
     led.set_state(design, "signoff")
     status = _signoff_status(entry)
     if all(v in ("clean", "clean_beol", "skipped") for v in status.values()):
         _ingest(entry)
-        led.set_state(design, "clean")
+        _mark_clean(led, conn, design, "signoff clean on first pass")
         return
     led.set_state(design, "fixing")
     fix_rc = _run_fix(entry)
     _ingest(entry)
     if fix_rc == 0:
-        led.set_state(design, "clean")
+        _mark_clean(led, conn, design, "signoff fix cleared residual")
     else:
         led.set_state(design, "escalated", reason="catalog_exhausted")
         if conn is not None:

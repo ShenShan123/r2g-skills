@@ -103,7 +103,22 @@ EXTRACT_DIR="$(cd "$SCRIPT_DIR/../extract" && pwd)"
 REPORTS_DIR_SCRIPTS="$(cd "$SCRIPT_DIR/../reports" && pwd)"
 RUN_ORFS="${R2G_RUN_ORFS:-$SCRIPT_DIR/run_orfs.sh}"
 RUN_DRC="${R2G_RUN_DRC:-$SCRIPT_DIR/run_drc.sh}"
-RUN_LVS="${R2G_RUN_LVS:-$SCRIPT_DIR/run_lvs.sh}"
+# LVS tool selection is PLATFORM-AWARE. On sky130 the production LVS path is
+# Netgen (Magic GDS extraction + Netgen compare): the ORFS KLayout sky130 rule
+# deck (`sky130hd_r2g.lylvs`) is NOT production-grade — it flattens std-cell
+# subcircuits and reports false "Netlists don't match" on designs Netgen finds
+# clean (validated 2026-06-17: wbsafety + blob_merge KLayout-fail -> Netgen-clean).
+# Routing the autonomous loop through KLayout LVS on sky130 was escalating
+# already-clean designs as lvs:fail. KLayout LVS stays the default everywhere
+# else (nangate45/gf180/ihp). An explicit R2G_RUN_LVS override always wins.
+# See references/failure-patterns.md "sky130 LVS".
+if [[ -n "${R2G_RUN_LVS:-}" ]]; then
+  RUN_LVS="$R2G_RUN_LVS"
+elif [[ "$PLATFORM" == sky130* ]]; then
+  RUN_LVS="$SCRIPT_DIR/run_netgen_lvs.sh"
+else
+  RUN_LVS="$SCRIPT_DIR/run_lvs.sh"
+fi
 EXTRACT_DRC="${R2G_EXTRACT_DRC:-$EXTRACT_DIR/extract_drc.py}"
 EXTRACT_LVS="${R2G_EXTRACT_LVS:-$EXTRACT_DIR/extract_lvs.py}"
 EXTRACT_ROUTE="${R2G_EXTRACT_ROUTE:-$EXTRACT_DIR/extract_route.py}"
@@ -242,13 +257,23 @@ _ensure_baseline() {  # $1 = drc|lvs : RUN the signoff tool once if there is no 
   # check is SILENTLY SKIPPED (never run). Establish a real baseline by invoking the
   # signoff tool when the report is missing or its status is empty/unknown. Route is
   # exempt: its baseline is the flow's own route stage, not a separate tool.
-  local check="$1" report="$REPORTS/$1.json" st=""
+  #
+  # STALENESS (2026-06-18): also (re)run the baseline when a backend GDS is NEWER
+  # than the stored report — the design was re-flowed since the last signoff, so the
+  # stored verdict (even a definite clean/fail) describes a layout that no longer
+  # exists. Without this, an A/B arm dir (copied from the base project WITH its old
+  # KLayout lvs.json='fail') or any route_relief reflow keeps the stale verdict and
+  # the real signoff tool (e.g. Netgen on sky130) never runs on the new layout —
+  # producing a false escalation. A fresh GDS needs fresh signoff.
+  local check="$1" report="$REPORTS/$1.json" st="" stale=0 newest_gds
   [[ "$check" == "route" ]] && return 0
   [[ -f "$report" ]] && st="$(python3 -c 'import json,sys
 try: print(json.load(open(sys.argv[1])).get("status") or "")
 except Exception: print("")' "$report" 2>/dev/null)"
-  if [[ -z "$st" || "$st" == "unknown" ]]; then
-    echo "[$check] no baseline signoff (status='${st:-missing}') — running $check once to establish it"
+  newest_gds="$(ls -t "$PROJECT_DIR"/backend/RUN_*/final/*.gds 2>/dev/null | head -1)"
+  [[ -n "$newest_gds" && ( ! -f "$report" || "$newest_gds" -nt "$report" ) ]] && stale=1
+  if [[ -z "$st" || "$st" == "unknown" || "$stale" == "1" ]]; then
+    echo "[$check] (re)establish baseline signoff (status='${st:-missing}', stale_vs_gds=$stale) — running $check"
     if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true
     else "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
     _run_extract "$check" || true
