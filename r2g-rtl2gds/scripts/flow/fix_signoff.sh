@@ -18,20 +18,66 @@ set -euo pipefail
 KNOWLEDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../knowledge" && pwd)"
 export R2G_KNOWLEDGE_DIR="$KNOWLEDGE_DIR"
 
-_journal_knob_deltas() {  # config_edits_json strategy_id — one action per knob
-  python3 - "$1" "$2" "$PROJECT_DIR" "$FIX_SESSION_ID" <<'PYEOF' 2>/dev/null || true
-import json, os, subprocess, sys
-edits, strat, proj, sess = json.loads(sys.argv[1] or "{}"), sys.argv[2], sys.argv[3], sys.argv[4]
-cli = os.path.join(os.environ.get("R2G_KNOWLEDGE_DIR", ""), "journal_action.py")
-for knob, new in edits.items():
-    args = [sys.executable, cli, "action", "--project", proj, "--actor", "loop",
-            "--type", "config_knob_delta", "--session", sess,
-            "--payload", json.dumps({"knob": knob, "new": str(new), "strategy": strat})]
-    db = os.environ.get("R2G_JOURNAL_DB")
-    if db:
-        args += ["--db", db]
-    subprocess.run(args, check=False)
+_journal_knob_deltas() {  # config_edits_json strategy_id [symptom_id] [parent_action_id]
+  # One config_knob_delta action per knob, linked to symptom_id (Gap 3) and — for
+  # iteration 2+ — parent_action_id (Gap 4, stacked-fix chain). PRINTS the FIRST
+  # action_id to stdout so the caller can pass it as the parent of the next
+  # iteration. Best-effort: honors R2G_JOURNAL=0 and never breaks the flow.
+  python3 - "$1" "$2" "$PROJECT_DIR" "$FIX_SESSION_ID" "${3:-}" "${4:-}" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+if os.environ.get("R2G_JOURNAL", "1") == "0":
+    sys.exit(0)
+edits = json.loads(sys.argv[1] or "{}")
+strat, proj, sess = sys.argv[2], sys.argv[3], sys.argv[4]
+symptom_id = sys.argv[5] or None
+parent = int(sys.argv[6]) if (len(sys.argv) > 6 and sys.argv[6]) else None
+sys.path.insert(0, os.environ.get("R2G_KNOWLEDGE_DIR", ""))
+try:
+    import journal_db
+    conn = journal_db.connect(os.environ.get("R2G_JOURNAL_DB") or journal_db.DEFAULT_JOURNAL_PATH)
+    journal_db.ensure_schema(conn)
+    first = None
+    for knob, new in edits.items():
+        aid = journal_db.append_action(
+            conn, project_path=proj, actor="loop", action_type="config_knob_delta",
+            payload={"knob": knob, "new": str(new), "strategy": strat},
+            fix_session_id=sess, symptom_id=symptom_id, parent_action_id=parent)
+        if first is None:
+            first = aid
+    conn.close()
+    if first is not None:
+        print(first)
+except Exception as exc:                      # never break the flow
+    print(f"WARNING: journal knob deltas skipped: {exc}", file=sys.stderr)
 PYEOF
+}
+
+_compute_symptom_id() {  # check vclass [predicates_json] -> 16-hex symptom_id (or empty)
+  # Mirror the ingester's symptom_id recipe EXACTLY (symptom.canonical_signature ->
+  # symptom_id incl. the route->orfs_stage remap) so the journal symptom_id and the
+  # knowledge symptom_id agree. Empty output on any error (best-effort linkage).
+  python3 - "$1" "$2" "${3:-}" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+sys.path.insert(0, os.environ.get("R2G_KNOWLEDGE_DIR", ""))
+try:
+    import symptom
+    check, vclass = sys.argv[1], sys.argv[2]
+    preds = json.loads(sys.argv[3] or "{}")
+    if check == "route":                      # backend abort: keyed under orfs_stage
+        check, vclass = "orfs_stage", (vclass or "route")
+    sig = symptom.canonical_signature(check, vclass or None, preds)
+    print(symptom.symptom_id(sig))
+except Exception:
+    pass
+PYEOF
+}
+
+_journal_action() {  # action_type payload_json [symptom_id] — generic best-effort action
+  local args=(action --project "$PROJECT_DIR" --actor loop --type "$1"
+              --session "$FIX_SESSION_ID" --payload "$2")
+  [[ -n "${3:-}" ]] && args+=(--symptom "$3")
+  [[ -n "${R2G_JOURNAL_DB:-}" ]] && args+=(--db "$R2G_JOURNAL_DB")
+  python3 "$R2G_KNOWLEDGE_DIR/journal_action.py" "${args[@]}" >/dev/null 2>&1 || true
 }
 
 # Test seam: allow sourcing helpers without executing the flow/arg-parse/exit.
@@ -190,9 +236,29 @@ open(logp,"a").write(json.dumps(o)+"\n")' \
     "${8:-}" "${9:-}" "$(date -u +%FT%TZ)" "${10:-}"
 }
 
+_ensure_baseline() {  # $1 = drc|lvs : RUN the signoff tool once if there is no real
+  # baseline. A design freshly produced by run_orfs has NO Magic-DRC / Netgen-LVS
+  # report yet, so _run_extract yields status "unknown"; diagnose then STOPs and the
+  # check is SILENTLY SKIPPED (never run). Establish a real baseline by invoking the
+  # signoff tool when the report is missing or its status is empty/unknown. Route is
+  # exempt: its baseline is the flow's own route stage, not a separate tool.
+  local check="$1" report="$REPORTS/$1.json" st=""
+  [[ "$check" == "route" ]] && return 0
+  [[ -f "$report" ]] && st="$(python3 -c 'import json,sys
+try: print(json.load(open(sys.argv[1])).get("status") or "")
+except Exception: print("")' "$report" 2>/dev/null)"
+  if [[ -z "$st" || "$st" == "unknown" ]]; then
+    echo "[$check] no baseline signoff (status='${st:-missing}') — running $check once to establish it"
+    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true
+    else "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
+    _run_extract "$check" || true
+  fi
+}
+
 fix_one() {  # $1 = drc|lvs
   local check="$1" report="$REPORTS/$1.json" tried="" before after it sid rerun recheck line verdict
-  local noimp=0 before_vclass before_cats snap
+  local noimp=0 before_vclass before_cats snap sym root_aid="" first_aid
+  _ensure_baseline "$check"
   [[ -f "$report" ]] || _run_extract "$check"
   before="$(_count "$report")"
   for ((it=1; it<=MAX_ITERS; it++)); do
@@ -205,6 +271,9 @@ fix_one() {  # $1 = drc|lvs
     # reads them via R2G_LOG_PREDICATES so the symptom_id reflects the violation we
     # set out to fix, not the post-fix report it would otherwise re-read at log time.
     export R2G_LOG_PREDICATES="$(_predicates_snapshot "$check")"
+    # Gap 3: the symptom_id this iteration is fixing (same recipe the ingester
+    # uses), so config_knob_delta / stage_rerun journal rows link to the symptom.
+    sym="$(_compute_symptom_id "$check" "$before_vclass" "$R2G_LOG_PREDICATES")"
     local all_excl="${tried}${R2G_FIX_EXCLUDE:+${tried:+,}$R2G_FIX_EXCLUDE}"
     line="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$all_excl" \
             ${R2G_FIX_RANK_FIRST:+--rank-first "$R2G_FIX_RANK_FIRST"} --next)"
@@ -227,9 +296,14 @@ fix_one() {  # $1 = drc|lvs
     cfg_delta="$(python3 -c 'import json,sys
 try: print(json.dumps(json.loads(sys.stdin.read()).get("config_edits") or {}))
 except Exception: print("{}")' <<<"$apply_out")"
-    _journal_knob_deltas "$cfg_delta" "$sid"
+    # Gap 3+4: stamp symptom_id on each knob row; chain iteration 2+ to the first
+    # iteration's action via parent_action_id (the first call prints its action_id).
+    first_aid="$(_journal_knob_deltas "$cfg_delta" "$sid" "$sym" "$root_aid")"
+    [[ -z "$root_aid" && -n "$first_aid" ]] && root_aid="$first_aid"
     tried="${tried:+$tried,}$sid"
     if [[ -n "$rerun" ]]; then
+      # Tier B4: a stage re-run is a loop decision — journal it (symptom-linked).
+      _journal_action stage_rerun "$(python3 -c 'import json,sys;print(json.dumps({"from_stage":sys.argv[1],"strategy":sys.argv[2]}))' "$rerun" "$sid")" "$sym"
       local rc=0
       if [[ "$RESUME" == "1" ]]; then FROM_STAGE="$rerun" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
       else "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?; fi

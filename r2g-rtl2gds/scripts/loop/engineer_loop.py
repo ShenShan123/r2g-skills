@@ -167,6 +167,32 @@ def _process_backend_ab_arm(led: "Ledger", entry: dict, conn) -> None:
                   **({} if rc == 0 else {"reason": "route_arm_failed"}))
 
 
+def _journal_ab_launch(entry: dict) -> None:
+    """Best-effort Tier-B1 journal of an A/B arm launch. Per-arm — may run in a
+    worker thread (R2G_AB_WORKERS) — so it opens its OWN WAL journal conn (the
+    journal is WAL + busy_timeout; never a knowledge-side write from a thread).
+    ADVISORY only; honors R2G_JOURNAL. The arm's symptom_id comes from its ab_key."""
+    if os.environ.get("R2G_JOURNAL", "1") == "0":
+        return
+    try:
+        import journal_db
+        key = entry.get("ab_key") or {}
+        conn = journal_db.connect(
+            os.environ.get("R2G_JOURNAL_DB") or journal_db.DEFAULT_JOURNAL_PATH)
+        journal_db.ensure_schema(conn)
+        journal_db.append_action(
+            conn, project_path=entry.get("project_path", ""), actor="loop",
+            action_type="ab_launch", design=entry.get("design"),
+            platform=entry.get("platform"), symptom_id=key.get("symptom_id"),
+            payload={"arm": entry.get("arm"), "strategy": entry.get("strategy"),
+                     "symptom_id": key.get("symptom_id"),
+                     "repeat": entry.get("repeat"), "check": entry.get("check"),
+                     "match_level": entry.get("match_level")})
+        conn.close()
+    except Exception:                          # telemetry must never break the arm
+        pass
+
+
 def _ingest(entry: dict) -> str | None:
     r = subprocess.run(
         [sys.executable, _script("R2G_LOOP_INGEST", KNOWLEDGE / "ingest_run.py"),
@@ -174,6 +200,29 @@ def _ingest(entry: dict) -> str | None:
     for tok in (r.stdout or "").split():
         if tok.startswith("run_id="):
             return tok.split("=", 1)[1]
+    return None
+
+
+def _fail_stage(entry: dict) -> str | None:
+    """The backend stage that aborted in the newest run's stage_log (its LAST
+    line — run_orfs.sh stops at the first failing stage), or None. Lets the loop
+    distinguish a KNOWN, recipe-backed backend-abort (route congestion / DRT
+    timeout) from a genuinely unhandled crash, so it can fix the former in-loop
+    instead of escalating it."""
+    proj = Path(entry["project_path"])
+    logs = sorted(proj.glob("backend/RUN_*/stage_log.jsonl"))
+    if not logs:
+        return None
+    try:
+        rows = [json.loads(ln) for ln in logs[-1].read_text().splitlines() if ln.strip()]
+    except Exception:
+        return None
+    if not rows:
+        return None
+    last = rows[-1]
+    status = last.get("status")
+    if status not in (0, "0", "pass"):
+        return last.get("stage")
     return None
 
 
@@ -199,6 +248,8 @@ def _learn() -> dict:
 
 def process_one(led: Ledger, entry: dict, conn) -> None:
     design = entry["design"]
+    if entry.get("kind") == "ab_arm":
+        _journal_ab_launch(entry)           # Tier B1 — advisory decision telemetry
     # Backend-abort A/B arm (route congestion): the flow itself fails at the
     # backend stage, so the signoff "flow -> fix" model does not apply — route it
     # through the dedicated apply-then-flow arm runner. (2026-06-17 route-relief.)
@@ -208,6 +259,21 @@ def process_one(led: Ledger, entry: dict, conn) -> None:
     led.set_state(design, "flow")
     rc = _run_flow(entry)
     if rc != 0:
+        # Backend abort. Ingest first (partial runs still teach + record the fail
+        # stage), then — if this is a KNOWN, recipe-backed backend-abort (route
+        # congestion / DRT timeout) — let the loop FIX it in-loop (apply the
+        # learned route_relief + reflow) instead of escalating it as an unseen
+        # crash. The user directive: always run the loop's fixer on a failure case
+        # rather than hand-fixing (2026-06-17). Only genuinely unhandled aborts
+        # (synth/place/cts crashes, or a route fix that still fails) escalate.
+        _ingest(entry)                      # partial runs still teach
+        if entry.get("kind") != "ab_arm" and _fail_stage(entry) == "route":
+            led.set_state(design, "fixing")
+            fix_rc = _run_fix({**entry, "check": "route"})
+            _ingest(entry)
+            if fix_rc == 0:
+                led.set_state(design, "clean")
+                return
         led.set_state(design, "escalated", reason="unseen_crash")
         if conn is not None:
             import escalations
@@ -215,7 +281,6 @@ def process_one(led: Ledger, entry: dict, conn) -> None:
                 conn, design=design, project_path=entry["project_path"],
                 run_id=None, reason="unseen_crash",
                 notes=f"run_orfs rc={rc}")
-        _ingest(entry)                      # partial runs still teach
         return
     led.set_state(design, "signoff")
     status = _signoff_status(entry)
@@ -393,7 +458,57 @@ def ab_drain(ledger_path: Path, *, n_ab_designs: int = 2,
     return after - before
 
 
-def run(ledger_path: Path, *, max_designs: int | None = None) -> None:
+def _safe_process(led: Ledger, entry: dict) -> None:
+    """Run one design in a worker thread; a crash in ONE design must never abort
+    the whole parallel batch, so escalate-and-continue on any unexpected error."""
+    try:
+        _drain_arm(led, entry, None)        # private conn per thread + lock-guarded ledger
+    except Exception as exc:                # noqa: BLE001 — last-resort batch guard
+        try:
+            led.set_state(entry["design"], "escalated",
+                          reason=f"worker_exc:{type(exc).__name__}")
+        except Exception:
+            pass
+
+
+def _run_parallel(led: Ledger, conn, prev_heur: dict | None, *,
+                  max_designs: int | None, max_workers: int) -> None:
+    """Parallel campaign mode (engineer_loop run --workers N). Run pending NORMAL
+    design flows CONCURRENTLY — each is an isolated ORFS subprocess with a private
+    DB connection; the Ledger is lock-guarded, so this reuses ab_drain's proven
+    thread model. THEN learn once over the batch, enqueue candidate recipes
+    (Gate A), plan the A/B arms and drain them in parallel, and judge — so the
+    full closed-loop A/B semantics of the serial run are preserved, but the
+    wall-clock collapses from sum-of-flows to slowest-batch.
+
+    SAFETY: cap per-flow openroad threads with the NUM_CORES env var so that
+    `NUM_CORES * max_workers <= host cores` (no oversubscription). Distinct project
+    dirs give distinct FLOW_VARIANTs, so concurrent flows never collide on the
+    DESIGN_NAME+FLOW_VARIANT hard rule. Keep workers low when >100K-cell LVS jobs
+    may run concurrently (skill hard rule)."""
+    import recipe_lifecycle
+    pending = [e for e in led.pending() if e.get("kind", "normal") == "normal"]
+    if max_designs:
+        pending = pending[:max_designs]
+    if pending:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            list(ex.map(lambda e: _safe_process(led, e), pending))
+    # Learn once over the batch results, then enqueue candidate recipes. This is
+    # the Gate A step (learn() also enqueues; diff_and_enqueue is idempotent).
+    heur = _learn()
+    recipe_lifecycle.diff_and_enqueue(conn, heur, prev=prev_heur)
+    # Plan A/B arms for the freshly-enqueued candidates, drain them concurrently,
+    # then judge -> records the ab_trials verdict + promotes/demotes the recipe.
+    plan_arms_for_candidates(led, conn)
+    arms = [e for e in led.pending() if e.get("kind") == "ab_arm"]
+    if arms:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            list(ex.map(lambda e: _safe_process(led, e), arms))
+    judge_finished_trials(led, conn)
+
+
+def run(ledger_path: Path, *, max_designs: int | None = None,
+        max_workers: int = 1) -> None:
     import knowledge_db
     led = Ledger(ledger_path)
     conn = knowledge_db.connect()
@@ -402,6 +517,11 @@ def run(ledger_path: Path, *, max_designs: int | None = None) -> None:
     hp = KNOWLEDGE / "heuristics.json"
     if hp.exists():
         prev_heur = json.loads(hp.read_text())
+    if max_workers and max_workers > 1:
+        _run_parallel(led, conn, prev_heur, max_designs=max_designs,
+                      max_workers=max_workers)
+        conn.close()
+        return
     done = 0
     while True:
         pending = led.pending()
@@ -422,6 +542,9 @@ def main(argv=None) -> int:
     pr = sub.add_parser("run")
     pr.add_argument("--ledger", required=True, type=Path)
     pr.add_argument("--max", type=int, default=None)
+    pr.add_argument("--workers", type=int, default=1,
+                    help="run this many design flows concurrently (cap NUM_CORES so "
+                         "workers*NUM_CORES <= host cores; see SKILL hard rules)")
     pa = sub.add_parser("add")
     pa.add_argument("--ledger", required=True, type=Path)
     pa.add_argument("--project", required=True)
@@ -441,7 +564,7 @@ def main(argv=None) -> int:
     pe.add_argument("--strategy", required=True)
     args = ap.parse_args(argv)
     if args.cmd == "run":
-        run(args.ledger, max_designs=args.max)
+        run(args.ledger, max_designs=args.max, max_workers=args.workers)
     elif args.cmd == "add":
         led = Ledger(args.ledger)
         led.add({"design": Path(args.project).name,

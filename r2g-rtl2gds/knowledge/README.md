@@ -322,15 +322,28 @@ Agent-authored strategies enter via `recipe_lifecycle.stage_shadow(...,
 provenance='agent:<escalation_id>', ...)` and must win their A/B before promoting — no
 special trust (decision 7 of the design spec).
 
-### Journaling (agent tier)
+### Journaling (loop + agent tier)
 
-The agent journals every discrete action via the CLI:
+Discrete actions are journaled via the CLI (or `journal_db.append_action` directly):
 
 ```bash
 python3 knowledge/journal_action.py action \
-    --project <dir> --actor agent \
+    --project <dir> --actor <loop|agent|operator> \
     --type <config_knob_delta|sdc_edit|stage_rerun|tool_invoke|escalate|ab_launch|promote|demote> \
-    [--payload JSON] [--symptom <sid>] [--session <fix_session_id>]
+    [--payload JSON] [--symptom <sid>] [--session <fix_session_id>] [--parent <action_id>]
 ```
 
 Never breaks the caller (warns + exits 0). `R2G_JOURNAL=0` disables all journal writes.
+
+**Decision-journaling is wired into the production loop (2026-06-17, Tiers A/B):** `fix_signoff.sh`
+journals `config_knob_delta` (symptom-linked, parent-chained) + `stage_rerun`; `engineer_loop`
+journals `ab_launch` (per arm); `ab_runner.record_trial` journals `promote`/`demote` (carrying
+`trial_id`); `escalations.open_escalation` journals `escalate`. All best-effort, journal-only,
+read by **no** learner — `knowledge.sqlite` stays the sole learner input and honesty-gate source.
+
+**Advisory cross-DB check (NOT an honesty gate):** every `ab_trials` row with `verdict='win'`
+*should* have a `promote` action carrying its `trial_id`. This is **forward-only** — trials
+judged before the journaling was wired have no `promote` action and are reported
+*journal-incomplete*, never as a loop-honesty failure (journal writes are best-effort/silenceable,
+so a missing row can never fail a gate). The promotion honesty **gate** stays knowledge-side:
+`recipe_status` rows with `ab_trial:%` provenance are consistent with `ab_trials` wins.

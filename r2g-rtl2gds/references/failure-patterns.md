@@ -324,7 +324,21 @@ Large designs (swerv, bp_multi_top, tinyRocket) can take hours for PnR. The proc
 - Increase die area to reduce placement density (lower utilization = faster convergence)
 - Monitor with `tail -f flow.log` to track progress
 
-## ABC Mapping Stalls on Behavioral Memory Explosion
+### Sub-variant: `STAGE_STATUS: unbound variable` after a synth-stage timeout (2026-06-17)
+
+**Symptom:** a stage times out (exit 124/137) and instead of a clean
+`ERROR: Stage 'synth' failed (exit code 124)` + a synth-timeout HINT, `run_orfs.sh`
+crashes with `run_orfs.sh: line NNN: STAGE_STATUS: unbound variable`, exiting BEFORE
+results / `ppa.json` / final status are recorded.
+
+**Root cause:** `STAGE_STATUS` is `local` to `run_stage()`. The post-loop synth-failure
+HINT block (module scope) referenced `$STAGE_STATUS`, which is out of scope there; with
+`set -euo pipefail` the unbound reference aborts the script. The route-failure HINT block
+correctly used the module-scope `MAKE_STATUS` (the propagated exit code); the synth block
+did not. Surfaced by a campaign run with a deliberately low `ORFS_TIMEOUT` (synth itself
+timed out). **Fix (2026-06-17):** module-scope HINTs use `$MAKE_STATUS`, never the
+function-local `$STAGE_STATUS`. Guarded by `test_flow_journaling.py::
+test_stage_status_not_referenced_outside_run_stage` (static scope check).
 
 **Symptoms:**
 - Yosys reaches step 14 (`Executing ABC pass (technology mapping using ABC)`)
@@ -431,6 +445,30 @@ Yosys crash, typically caused by very large designs or specific RTL constructs t
 - Available: nangate45, sky130hd, sky130hs, asap7, gf180, ihp-sg13g2
 
 ## Signoff Check Failures
+
+### Signoff baseline never established — fresh flow → DRC silently skipped (2026-06-17)
+
+- **Symptom:** the `engineer_loop` flows a design clean, then "fixes" signoff, and the
+  design escalates as `catalog_exhausted` with `reports/drc.json` left at
+  `status: "unknown"` — **Magic/KLayout DRC was never actually run** (the project's
+  `drc/` dir is empty). The fix loop's `fix_log.jsonl` shows `drc iter 1 strat none
+  verdict stop_unknown`.
+- **Root cause:** `fix_signoff.sh`'s `fix_one` only ran the signoff tool
+  (`run_drc.sh` / `run_lvs.sh`) *after* `diagnose` returned a strategy to apply. A
+  design freshly produced by `run_orfs` has no signoff report yet, so `_run_extract`
+  yielded `status: "unknown"`; `diagnose` then STOPped (nothing to fix) and the check
+  was **silently skipped** — never run. LVS happened to run only when a *stale*
+  `lvs.json: "fail"` from a prior attempt was present. Surfaced by the wbsafety canary
+  (2026-06-17): flow clean, DRC `unknown`, design escalated without DRC ever executing.
+- **Fix (2026-06-17):** `fix_one` calls `_ensure_baseline <check>` first — if the
+  report is missing or its status is empty/`unknown`, it RUNS the signoff tool once
+  (via the `$RUN_DRC`/`$RUN_LVS` seams) to establish a real baseline, then extracts.
+  Route is exempt (its baseline is the flow's own route stage). Confirmed live:
+  wbsafety then ran KLayout DRC → **DRC CLEAN, 0 violations**. Guarded by
+  `test_fix_signoff_logging.py::test_baseline_signoff_runs_when_no_report`.
+- **Skill-level:** the loop now always checks DRC/LVS at least once on a fresh flow;
+  a `stop_unknown` DRC verdict in a `fix_log` is the alarm that the baseline run was
+  skipped.
 
 ### Re-running signoff after ORFS scratch dirs were cleaned
 

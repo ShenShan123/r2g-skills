@@ -215,6 +215,32 @@ def judge(arm_a: dict | None, arm_b: dict | None) -> str:
     return "inconclusive"
 
 
+def _journal_verdict(key: dict, verdict: str, tid: int) -> None:
+    """Best-effort Tier-B2 journal of the A/B promote/demote DECISION. ADVISORY only
+    — knowledge.sqlite (ab_trials + recipe_status) stays the sole source of truth, so
+    a silenced or failed journal write must never affect the verdict. Carries
+    trial_id so each winning trial maps to exactly one promote action (acceptance
+    #4). Runs in record_trial's SERIAL post-join section (engineer-loop spec)."""
+    if os.environ.get("R2G_JOURNAL", "1") == "0":
+        return
+    try:
+        import journal_db
+        conn = journal_db.connect(
+            os.environ.get("R2G_JOURNAL_DB") or journal_db.DEFAULT_JOURNAL_PATH)
+        journal_db.ensure_schema(conn)
+        atype = "promote" if verdict == "win" else "demote"
+        journal_db.append_action(
+            conn, project_path="", actor="loop", action_type=atype,
+            design=f"recipe:{key['strategy']}", platform=key.get("platform"),
+            payload={"strategy": key["strategy"], "symptom_id": key["symptom_id"],
+                     "design_class": key.get("design_class"),
+                     "trial_id": tid, "verdict": verdict},
+            symptom_id=key["symptom_id"])
+        conn.close()
+    except Exception:                          # telemetry must never break the verdict
+        pass
+
+
 def record_trial(conn, *, key: dict, verdict: str, arm_a_run_id: str | None,
                  arm_b_run_id: str | None, metrics: dict,
                  match_level: str | None = None) -> int:
@@ -231,6 +257,7 @@ def record_trial(conn, *, key: dict, verdict: str, arm_a_run_id: str | None,
         recipe_lifecycle.promote(conn, evidence=f"ab_trial:{tid}", **key)
     else:
         recipe_lifecycle.demote(conn, reason=f"ab_{verdict}:{tid}", **key)
+    _journal_verdict(key, verdict, tid)        # advisory journal (Tier B2)
     return tid
 
 

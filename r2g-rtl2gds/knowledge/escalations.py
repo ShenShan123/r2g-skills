@@ -6,6 +6,7 @@ tier drains (see references/engineer-loop.md). Dedup: one OPEN escalation per
 from __future__ import annotations
 
 import datetime as _dt
+import os as _os
 
 REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            "repeated_regression")
@@ -13,6 +14,27 @@ REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
 
 def _now() -> str:
     return _dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
+
+def _journal_escalate(*, design: str, project_path: str, reason: str,
+                      symptom_id: str | None, notes: str | None) -> None:
+    """Best-effort Tier-B3 journal of an escalation DECISION. ADVISORY only — the
+    knowledge.sqlite escalations row is the source of truth; honors R2G_JOURNAL and
+    never raises (a telemetry failure must not block opening the escalation)."""
+    if _os.environ.get("R2G_JOURNAL", "1") == "0":
+        return
+    try:
+        import journal_db
+        conn = journal_db.connect(
+            _os.environ.get("R2G_JOURNAL_DB") or journal_db.DEFAULT_JOURNAL_PATH)
+        journal_db.ensure_schema(conn)
+        journal_db.append_action(
+            conn, project_path=project_path or "", actor="loop",
+            action_type="escalate", design=design, symptom_id=symptom_id,
+            payload={"reason": reason, "symptom_id": symptom_id, "notes": notes})
+        conn.close()
+    except Exception:
+        pass
 
 
 def open_escalation(conn, *, design: str, project_path: str, run_id: str | None,
@@ -30,6 +52,8 @@ def open_escalation(conn, *, design: str, project_path: str, run_id: str | None,
         "reason, status, notes, created_at) VALUES (?,?,?,?,?,'open',?,?)",
         (design, project_path, run_id, symptom_id, reason, notes, _now()))
     conn.commit()
+    _journal_escalate(design=design, project_path=project_path, reason=reason,
+                      symptom_id=symptom_id, notes=notes)   # advisory (Tier B3)
     return cur.lastrowid
 
 

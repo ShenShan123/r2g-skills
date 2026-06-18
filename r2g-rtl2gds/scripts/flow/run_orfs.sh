@@ -366,7 +366,7 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
     # knob (see references/failure-patterns.md). Emit a targeted HINT so the operator
     # does not waste budget re-running with bigger timeouts / lower utilization.
     if grep -qE "Executing AST frontend in derive mode" "$BACKEND_DIR/flow.log" 2>/dev/null \
-       && [[ $STAGE_STATUS -eq 124 || $STAGE_STATUS -eq 137 ]]; then
+       && [[ $MAKE_STATUS -eq 124 || $MAKE_STATUS -eq 137 ]]; then
       echo "" | tee -a "$BACKEND_DIR/flow.log"
       echo "HINT: Synth timed out inside Yosys AST 'derive mode' — a const-function" | tee -a "$BACKEND_DIR/flow.log"
       echo "  elaboration blowup (classic parametric LFSR/CRC lfsr_mask), NOT scale." | tee -a "$BACKEND_DIR/flow.log"
@@ -379,7 +379,7 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
       echo "  the RTL bundle is incomplete (vendor cell library absent). No config" | tee -a "$BACKEND_DIR/flow.log"
       echo "  knob supplies it; do NOT stub sequential/MUX cells (corrupts netlist)." | tee -a "$BACKEND_DIR/flow.log"
       echo "  See failure-patterns.md: 'Missing proprietary primitive library'." | tee -a "$BACKEND_DIR/flow.log"
-    elif [[ $STAGE_STATUS -eq 124 || $STAGE_STATUS -eq 137 ]]; then
+    elif [[ $MAKE_STATUS -eq 124 || $MAKE_STATUS -eq 137 ]]; then
       echo "" | tee -a "$BACKEND_DIR/flow.log"
       echo "HINT: Synth timed out with no AST-derive or GTECH signature — likely a pure" | tee -a "$BACKEND_DIR/flow.log"
       echo "  SCALE timeout (huge multiplier/array design stuck in OPT/FLATTEN/ABC)." | tee -a "$BACKEND_DIR/flow.log"

@@ -60,3 +60,42 @@ EOF
     assert json.loads(log["env_flags"]).get("ROUTE_FAST") == "1", f"env_flags wrong: {log}"
     assert log["predicates"]["nets_balanced"] is True, f"predicates.nets_balanced wrong: {log}"
     assert log["predicates"]["same_cell_swap_present"] is True, f"predicates.same_cell_swap_present wrong: {log}"
+
+
+def test_baseline_signoff_runs_when_no_report(tmp_path):
+    """Bug (canary 2026-06-17): a freshly-flowed design has NO Magic-DRC report, so
+    fix_one extracted status='unknown', diagnose STOPped, and DRC was SILENTLY
+    SKIPPED (never run). _ensure_baseline must RUN the signoff tool once to establish
+    a real baseline. Here RUN_DRC drops a marker + clean report; without the fix it
+    is never invoked."""
+    proj = tmp_path / "demo"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "reports").mkdir()
+    (proj / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = demo\nexport PLATFORM = sky130hd\n")
+    bindir = tmp_path / "bin"; bindir.mkdir()
+    marker = proj / "reports" / ".drc_ran"
+    # RUN_DRC stub: prove it was invoked (marker) + write a CLEAN drc.json baseline.
+    _stub(bindir / "run_drc.sh", f''': > "{marker}"
+cat > '{proj}/reports/drc.json' <<'EOF'
+{{"status": "clean", "total_violations": 0, "categories": {{}}}}
+EOF
+''')
+    # diagnose --next: clean baseline -> STOP (nothing to fix).
+    _stub(bindir / "diagnose.sh", 'printf "STOP\\tclean\\tno_violations\\n"')
+    _stub(bindir / "noop.sh", "exit 0\n")
+    env = dict(os.environ)
+    env.update({
+        "R2G_DIAGNOSE": str(bindir / "diagnose.sh"),
+        "R2G_RUN_DRC": str(bindir / "run_drc.sh"),
+        "R2G_RUN_LVS": str(bindir / "noop.sh"),
+        "R2G_RUN_ORFS": str(bindir / "noop.sh"),
+        "R2G_EXTRACT_DRC": str(bindir / "noop.sh"),
+        "R2G_EXTRACT_LVS": str(bindir / "noop.sh"),
+    })
+    res = subprocess.run(
+        ["bash", str(FIX_SIGNOFF), str(proj), "sky130hd", "--check", "drc", "--max-iters", "2"],
+        env=env, capture_output=True, text=True)
+    assert res.returncode == 0, f"stdout={res.stdout}\nstderr={res.stderr}"
+    assert marker.exists(), ("RUN_DRC was never invoked — baseline signoff skipped "
+                             f"(the bug). stdout={res.stdout}")

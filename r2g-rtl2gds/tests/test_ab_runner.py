@@ -148,6 +148,47 @@ def test_judge_repeated_k1_matches_binary_judge(tmp_path):
                                     [{"is_success": True}]) == "win"
 
 
+def test_verdict_journaled(tmp_path, monkeypatch):
+    """Tier B2: record_trial journals a promote (win) / demote (loss) action into
+    the journal DB, carrying symptom_id + trial_id. Best-effort + advisory: the
+    knowledge-side recipe_status stays the source of truth for the verdict."""
+    import journal_db
+    jdb = tmp_path / "journal.sqlite"
+    monkeypatch.setenv("R2G_JOURNAL_DB", str(jdb))
+    conn = _conn(tmp_path)
+    recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
+    tid = ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
+                                 arm_b_run_id="rb", metrics={"lcb": 0.8})
+    jc = journal_db.connect(jdb)
+    row = jc.execute("SELECT action_type, symptom_id, "
+                     "json_extract(payload_json,'$.trial_id'), "
+                     "json_extract(payload_json,'$.strategy') FROM actions").fetchone()
+    assert row[0] == "promote"
+    assert row[1] == KEY["symptom_id"]
+    assert row[2] == tid
+    assert row[3] == KEY["strategy"]
+    # A loss journals a demote.
+    ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={})
+    types = [r[0] for r in jc.execute(
+        "SELECT action_type FROM actions ORDER BY action_id").fetchall()]
+    assert types == ["promote", "demote"]
+
+
+def test_verdict_journal_disabled_is_silent(tmp_path, monkeypatch):
+    """R2G_JOURNAL=0 silences the new promote/demote write without breaking the
+    knowledge-side promotion (acceptance #5)."""
+    monkeypatch.setenv("R2G_JOURNAL", "0")
+    jdb = tmp_path / "journal.sqlite"
+    monkeypatch.setenv("R2G_JOURNAL_DB", str(jdb))
+    conn = _conn(tmp_path)
+    recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
+    ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={})
+    assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"   # knowledge unaffected
+    assert not jdb.exists()                                          # nothing journaled
+
+
 def test_repeats_default_is_two():
     import os
     os.environ.pop("R2G_AB_REPEATS", None)

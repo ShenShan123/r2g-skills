@@ -52,9 +52,19 @@ Default: `platform=nangate45`, `--check both`. The iteration budget is **adaptiv
 3 iterations, hard cap 8, with early-stop after 2 consecutive non-improving iterations past
 the base (`--max-iters N` overrides the cap).
 
+**Baseline (per check, before the loop):** `_ensure_baseline` runs the signoff tool
+(`run_drc.sh` / `run_lvs.sh`) **once** if `reports/{drc,lvs}.json` is missing or its status
+is empty/`unknown`. A design freshly produced by `run_orfs` has no Magic-DRC / Netgen-LVS
+report yet, so without this the extract returns `unknown`, `diagnose` STOPs, and the check is
+**silently skipped (never run)** — the design then escalates as `catalog_exhausted` having
+never been checked. Route is exempt (its baseline is the flow's own route stage). Journal
+symptom-linkage: each `config_knob_delta` / `stage_rerun` is stamped with the iteration's
+`symptom_id` (via `_compute_symptom_id`, identical recipe to the ingester), and iteration 2+
+chain to iteration 1 via `parent_action_id`.
+
 **Loop per check (drc / lvs):**
 
-1. Read current violation count from `reports/{drc,lvs}.json` (re-extracts if missing).
+1. Read current violation count from `reports/{drc,lvs}.json` (baseline run above ensures it exists).
 2. Call `diagnose_signoff_fix.py --next` to get the next auto strategy.
 3. Call `--apply <id>` to write `config_edits` into the marked block in `config.mk`.
 4. Re-run the flow:

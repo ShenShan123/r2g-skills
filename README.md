@@ -315,7 +315,7 @@ flowchart TD
     RouteOK -- "pass" --> S["run_drc.sh  run_lvs.sh  run_rcx.sh"]
     S --> R["reports/\ndrc.json  lvs.json  rcx.json  ppa.json"]
     R --> OK{"Signoff\nclean?"}
-    OK -- "violations" --> F["fix_signoff.sh\ndiagnose → apply strategy → re-run (≤3 iter)"]
+    OK -- "violations" --> F["fix_signoff.sh\nbaseline DRC/LVS if no report (never skip a check)\n→ diagnose → apply strategy → re-run (≤3 iter)"]
     F --> S
     OK -- "clean" --> G["GDSII ✓  full signoff"]
 ```
@@ -346,7 +346,9 @@ drives the full cycle unattended.
 | Database | Role | Tracked in git |
 |----------|------|---------------|
 | `knowledge/knowledge.sqlite` | What *resulted* — `runs`, `failure_events`, `run_violations`, `fix_events`, `fix_trajectories`, `symptoms`, `lessons`, `config_lineage`, `ab_trials`, `recipe_status` | **yes** (ships pre-trained) |
-| `knowledge/journal.sqlite` | What was *done* and why — `actions`, `log_summaries`, `tool_bugs` | no (local evidence) |
+| `knowledge/journal.sqlite` | What was *done* and why — the comprehensive decision + telemetry ledger: `actions` (`tool_invoke`, `config_knob_delta`, `stage_rerun`, `ab_launch`, `promote`/`demote`, `escalate` — symptom- and trial-linked), `log_summaries`, `tool_bugs` | no (local evidence) |
+
+> The journal is **operator forensics only** — best-effort writes, gitignored, and read by **no** learner. `knowledge.sqlite` stays the sole learner input and the only honesty-gate source (the firewall). Decision-journaling (A/B launches, promotions/demotions, escalations, stage reruns, with `symptom_id`/`parent_action_id` linkage) lets `trace_provenance.py` answer "what was tried for symptom X, and how did it resolve?" forward of the change.
 
 ### Autonomous campaign driver
 
@@ -359,10 +361,10 @@ flowchart TD
     L --> EL["engineer_loop.py run"]
 
     EL --> FL["run_orfs.sh + run_drc.sh\n+ run_lvs.sh + run_rcx.sh"]
-    FL --> FX["fix_signoff.sh\n(diagnose → apply → re-run, ≤3 iter)"]
+    FL --> FX["fix_signoff.sh\nbaseline DRC/LVS if no report (never skip)\ndiagnose → apply → re-run, ≤3 iter"]
     FX --> IN["ingest_run.py"]
-    IN --> KDB[("knowledge.sqlite\nruns · failure_events\nfix_events · ab_trials")]
-    IN --> JDB[("journal.sqlite\nactions · log_summaries\ntool_bugs")]
+    IN --> KDB[("knowledge.sqlite\nruns · failure_events\nfix_events · ab_trials\n— sole learner input + honesty gate")]
+    IN --> JDB[("journal.sqlite — operator forensics\nactions: tool_invoke · config_knob_delta\nab_launch · promote/demote · escalate · stage_rerun\nlog_summaries · tool_bugs (best-effort, no learner reads it)")]
 
     KDB --> LH["learn_heuristics.py\n→ heuristics.json"]
     LH --> RL["recipe_lifecycle.diff_and_enqueue\n(new/changed recipe → candidate)"]
@@ -370,15 +372,21 @@ flowchart TD
     RL --> ABD["ab-drain\narm A (control)  vs  arm B (ranked strategy)\nk=2 repeats — LCB verdict  (Win 2)"]
     ABD --> V{"Verdict"}
     V -- "win" --> PR["recipe: candidate → promoted\n(live ranking via suggest_config.py)"]
-    V -- "loss" --> SH["recipe: → shadow (inert)"]
+    V -- "loss / inconclusive" --> SH["recipe: → shadow (inert)"]
 
     PR --> SC["suggest_config.py\n(Win 5: presynth KNN + promoted recipes)"]
     SC --> EL
 
     EL --> ESC{"Unknown symptom /\ncatalog exhausted?"}
     ESC -- yes --> EQ["escalations queue"]
-    EQ --> AT["agent tier\nauthor shadow strategy + predicates\njournal actions"]
+    EQ --> AT["agent tier\nauthor shadow strategy + predicates"]
     AT --> RL
+
+    %% decision-journaling (Tiers A/B, 2026-06-17) — best-effort side-writes, symptom/trial linked
+    FX -. "config_knob_delta · stage_rerun\n(symptom_id, parent chain)" .-> JDB
+    ABD -. "ab_launch (per arm)" .-> JDB
+    V -. "promote / demote (trial_id)" .-> JDB
+    EQ -. "escalate (symptom_id)" .-> JDB
 ```
 
 ### Recipe lifecycle states
