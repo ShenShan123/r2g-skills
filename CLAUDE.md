@@ -174,6 +174,7 @@ empty — that red is the alarm.
 | Fix-learning loop (record → learn → apply, symptom index)           | `r2g-rtl2gds/references/signoff-fixing.md`        |
 | Phase-by-phase workflow                                             | `r2g-rtl2gds/references/workflow.md`              |
 | ORFS backend setup, env knobs, macro designs                        | `r2g-rtl2gds/references/orfs-playbook.md`         |
+| Fmax search (loose-first fastest period; place-proxy + deterioration model) | `r2g-rtl2gds/references/orfs-playbook.md` ("Fmax Search") + `SKILL.md` step 5a |
 | A specific failure/pitfall (DRC stuck, route congestion, CDL, …)    | `r2g-rtl2gds/references/failure-patterns.md`      |
 | Historical debug narratives + corpus results                        | `r2g-rtl2gds/references/lessons-learned.md`       |
 | How to read PPA / signoff JSON                                      | `r2g-rtl2gds/references/ppa-report-guide.md`      |

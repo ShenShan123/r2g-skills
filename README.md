@@ -514,6 +514,10 @@ bash    $SKILL/scripts/flow/run_orfs.sh  $PROJ  nangate45
 python3 $SKILL/scripts/extract/extract_ppa.py   $PROJ  $PROJ/reports/ppa.json
 python3 $SKILL/scripts/reports/check_timing.py  $PROJ
 
+# (optional) Fmax search — fastest closing period via cheap place-stage probes
+# Reports a predicted-signoff proxy in $PROJ/reports/fmax_search.json (--verify confirms with one full flow)
+python3 $SKILL/scripts/reports/fmax_search.py   $PROJ  nangate45
+
 # Signoff
 bash    $SKILL/scripts/flow/run_drc.sh  $PROJ  nangate45
 bash    $SKILL/scripts/flow/run_lvs.sh  $PROJ  nangate45

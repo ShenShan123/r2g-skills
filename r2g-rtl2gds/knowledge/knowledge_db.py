@@ -92,6 +92,15 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # retrieval. Populated at ingest when reports/presynth_features.json exists;
         # NULL otherwise (retrieval falls back to family medians).
         "presynth_features_json": "TEXT",
+        # Per-stage setup worst-slack (ns) for the Fmax slack-deterioration model
+        # (feat/fmax-search 2026-06-04). Fresh DBs get these from schema.sql's runs
+        # CREATE TABLE; these entries forward-migrate a legacy runs.sqlite.
+        # floorplan_setup_ws = 2_1_floorplan.json floorplan__timing__setup__ws
+        # place_setup_ws     = 3_5_place_dp.json   detailedplace__timing__setup__ws
+        # finish_setup_ws    = 6_report.json       finish__timing__setup__ws (== wns_ns)
+        "floorplan_setup_ws": "REAL",
+        "place_setup_ws": "REAL",
+        "finish_setup_ws": "REAL",
     },
     # Symptom-indexed memory (spec 2026-06-09): raw symptom tagging on the raw tiers.
     "fix_events": {

@@ -37,6 +37,14 @@ import symptom
 
 _CONFIG_LINE_RE = re.compile(r"(?:export\s+)?(\w+)\s*=\s*(.*)")
 
+_SENTINEL = 1e30
+# Raw per-stage slack files, in priority order (3_5 before its 3_4 fallback).
+_STAGE_SLACK_FILES = [
+    ("floorplan_setup_ws", "2_1_floorplan.json", "floorplan__timing__setup__ws"),
+    ("place_setup_ws", "3_5_place_dp.json", "detailedplace__timing__setup__ws"),
+    ("place_setup_ws", "3_4_place_resized.json", "placeopt__timing__setup__ws"),
+]
+
 
 def _parse_config_mk(path: Path) -> dict[str, str]:
     if not path.exists():
@@ -51,6 +59,81 @@ def _parse_config_mk(path: Path) -> dict[str, str]:
         if m:
             fields[m.group(1)] = m.group(2).strip()
     return fields
+
+
+# clock period lives in constraints/constraint.sdc as `set clk_period X`, NOT in
+# config.mk. Mirrors check_timing.read_clock_period (kept local to avoid a
+# scripts/reports import from the knowledge package).
+def _read_sdc_clk_period(project: Path) -> float | None:
+    sdc = project / "constraints" / "constraint.sdc"
+    if not sdc.exists():
+        return None
+    m = re.search(r"set\s+clk_period\s+([\d.]+)",
+                  sdc.read_text(encoding="utf-8", errors="ignore"))
+    return float(m.group(1)) if m else None
+
+
+def _latest_run_dir(project: Path) -> Path | None:
+    backend = project / "backend"
+    if not backend.is_dir():
+        return None
+    runs = sorted((d for d in backend.iterdir()
+                   if d.is_dir() and d.name.startswith("RUN_")),
+                  key=lambda d: d.stat().st_mtime, reverse=True)
+    return runs[0] if runs else None
+
+
+def _read_staged_slacks(logs_dir: Path) -> dict:
+    """Read {floorplan_setup_ws, place_setup_ws} directly from the per-stage
+    metric JSONs (for --backfill of historical runs whose ppa.json predates
+    timing_staged). Filters the 1e+39 unconstrained sentinel."""
+    out: dict[str, float] = {}
+    for col, fname, key in _STAGE_SLACK_FILES:
+        if col in out:
+            continue
+        p = logs_dir / fname
+        if not p.exists():
+            continue
+        try:
+            d = json.loads(p.read_text(encoding="utf-8", errors="ignore"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        v = _to_float(d.get(key))
+        if v is not None and v < _SENTINEL:
+            out[col] = v
+    return out
+
+
+def backfill(cases_root: Path, conn: sqlite3.Connection) -> int:
+    """Populate staged-slack + clock_period_ns columns for already-ingested runs
+    by re-scanning each project's latest backend/RUN_*/logs/. Matches rows by
+    project_path. Returns the number of rows updated."""
+    cases_root = Path(cases_root)
+    updated = 0
+    for proj in sorted(p for p in cases_root.iterdir() if p.is_dir()):
+        rd = _latest_run_dir(proj)
+        if rd is None:
+            continue
+        slacks = _read_staged_slacks(rd / "logs")
+        clk = _read_sdc_clk_period(proj)
+        sets, vals = [], []
+        for col in ("floorplan_setup_ws", "place_setup_ws"):
+            if col in slacks:
+                sets.append(f"{col} = ?")
+                vals.append(slacks[col])
+        if clk is not None:
+            sets.append("clock_period_ns = ?")
+            vals.append(clk)
+        # finish slack = the already-stored finish wns_ns where we don't have a fresh one
+        sets.append("finish_setup_ws = COALESCE(finish_setup_ws, wns_ns)")
+        if len(sets) == 1 and clk is None:
+            continue  # nothing but the COALESCE — skip projects with no usable data
+        vals.append(str(proj.resolve()))
+        cur = conn.execute(
+            f"UPDATE runs SET {', '.join(sets)} WHERE project_path = ?", vals)
+        updated += cur.rowcount
+    conn.commit()
+    return updated
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -637,6 +720,7 @@ def ingest(project: Path,
     ppa = _read_json(project / "reports" / "ppa.json") or {}
     summary = ppa.get("summary", {}) if isinstance(ppa, dict) else {}
     timing = summary.get("timing", {}) if isinstance(summary, dict) else {}
+    timing_staged = summary.get("timing_staged", {}) if isinstance(summary, dict) else {}
     power = summary.get("power", {}) if isinstance(summary, dict) else {}
     area = summary.get("area", {}) if isinstance(summary, dict) else {}
     geometry = ppa.get("geometry", {}) if isinstance(ppa, dict) else {}
@@ -724,7 +808,9 @@ def ingest(project: Path,
         "synth_hierarchical":     _coerce_bool_int(cfg.get("SYNTH_HIERARCHICAL")),
         "abc_area":               _coerce_bool_int(cfg.get("ABC_AREA")),
         "die_area":               cfg.get("DIE_AREA"),
-        "clock_period_ns":        _to_float(cfg.get("CLOCK_PERIOD")),
+        "clock_period_ns":        (_read_sdc_clk_period(project)
+                                   if _read_sdc_clk_period(project) is not None
+                                   else _to_float(cfg.get("CLOCK_PERIOD"))),
         "extra_config_json":      json.dumps({
             k: v for k, v in cfg.items()
             if k not in {
@@ -738,6 +824,11 @@ def ingest(project: Path,
         "orfs_fail_stage": fail_stage,
         "wns_ns":          _to_float(timing.get("setup_wns")),
         "tns_ns":          _to_float(timing.get("setup_tns")),
+        "floorplan_setup_ws": _to_float(timing_staged.get("floorplan_setup_ws")),
+        "place_setup_ws":     _to_float(timing_staged.get("place_setup_ws")),
+        "finish_setup_ws":    (_to_float(timing_staged.get("finish_setup_ws"))
+                               if timing_staged.get("finish_setup_ws") is not None
+                               else _to_float(timing.get("setup_wns"))),
         "timing_tier":     tcheck.get("tier"),
         "cell_count":      cell_count,
         "area_um2":        area_um2,
@@ -819,17 +910,28 @@ def ingest(project: Path,
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("project", type=Path, help="Path to design_cases/<project> directory")
+    p.add_argument("project", type=Path, nargs="?", default=None,
+                   help="Path to design_cases/<project> directory (omit when using --backfill)")
     p.add_argument("--db", type=Path, default=knowledge_db.DEFAULT_DB_PATH,
                    help="SQLite database path (default: knowledge/knowledge.sqlite)")
     p.add_argument("--schema", type=Path, default=knowledge_db.DEFAULT_SCHEMA_PATH,
                    help="Schema SQL path")
     p.add_argument("--families", type=Path, default=knowledge_db.DEFAULT_FAMILIES_PATH,
                    help="families.json path")
+    p.add_argument("--backfill", type=Path, default=None, metavar="DESIGN_CASES_DIR",
+                   help="Backfill staged-slack + clock_period_ns columns for all "
+                        "already-ingested projects under this dir, then exit.")
     args = p.parse_args()
 
     conn = knowledge_db.connect(args.db)
     knowledge_db.ensure_schema(conn, schema_path=args.schema)
+    if args.backfill is not None:
+        n = backfill(args.backfill, conn)
+        conn.close()
+        print(f"Backfilled staged slacks for {n} run(s) under {args.backfill}")
+        return 0
+    if args.project is None:
+        p.error("project is required unless --backfill is given")
     run_id = ingest(args.project, conn, families_path=args.families)
     # Warn loudly if the run is about to be classified 'unknown' because
     # stage_log.jsonl is missing — this silently excludes runs from learning.

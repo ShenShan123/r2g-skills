@@ -286,3 +286,35 @@ def test_learn_emits_symptom_projection_pooled_across_families(tmp_knowledge_dir
     assert strat["by_platform"]["nangate45"]["successes"] == 2
     # family name must NOT be a key anywhere in the symptom projection
     assert "aes" not in json.dumps(list(data["symptoms"].keys()))
+
+
+def test_learn_emits_closing_period_and_deterioration(tmp_knowledge_dir):
+    import knowledge_db, learn_heuristics
+    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    # 4 signoff-positive runs for (alu, nangate45): period, fp, place, finish.
+    rows = [(10.0, 1.0, 0.8, 0.6),
+            (10.0, 1.2, 0.9, 0.7),
+            (8.0, 0.9, 0.7, 0.5),
+            (8.0, 1.1, 0.8, 0.6)]
+    for i, (period, fp, pl, fin) in enumerate(rows):
+        conn.execute(
+            "INSERT INTO runs (run_id, project_path, design_name, design_family, "
+            "platform, ingested_at, clock_period_ns, floorplan_setup_ws, "
+            "place_setup_ws, finish_setup_ws, wns_ns, drc_status, lvs_status) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f"r{i}", f"/tmp/r{i}", "alu", "alu", "nangate45", "2026-01-01T00:00:00Z",
+             period, fp, pl, fin, fin, "clean", "clean"))
+    conn.commit()
+    out = tmp_knowledge_dir / "heuristics.json"
+    data = learn_heuristics.learn(tmp_knowledge_dir / "runs.sqlite", out)
+    entry = data["families"]["alu"]["platforms"]["nangate45"]
+    # closing_period = period - finish_ws ; min over rows = min(9.4,9.3,7.5,7.4)=7.4
+    assert entry["closing_period"]["min"] == 7.4
+    sd = entry["slack_deterioration"]
+    assert sd["n"] == 4
+    # d_fp_pl per row = fp-place = [0.2,0.3,0.2,0.3]; p90 (idx round(0.9*3)=3) = 0.3
+    assert abs(sd["d_fp_pl"]["ns_p90"] - 0.3) < 1e-9
+    # d_pl_fin per row = place-finish = [0.2,0.2,0.2,0.2]; p90 = 0.2
+    assert abs(sd["d_pl_fin"]["ns_p90"] - 0.2) < 1e-9
+    conn.close()

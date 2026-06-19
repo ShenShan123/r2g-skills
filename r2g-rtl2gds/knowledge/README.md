@@ -169,6 +169,26 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
 > `orfs-fail-route-GRT-0116`) is never downgraded. Net effect on the production store: every one of
 > the 24 backend-fail rows now carries an orfs-fail event (was 8) with zero history rewritten.
 
+## Fmax Search Extension (2026-06-04)
+
+The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports/fmax_search.py`
++ pure `fmax_model.py`; see `references/orfs-playbook.md`):
+
+- **Three per-stage setup-slack columns** — `floorplan_setup_ws`, `place_setup_ws`,
+  `finish_setup_ws` — populated by `ingest_run.py` from `summary.timing_staged` (and `--backfill`
+  reads them straight from preserved `backend/RUN_*/logs/` for historical runs, filtering the
+  `1e+39` unconstrained sentinel).
+- **`clock_period_ns` now comes from the SDC** (`set clk_period` in `constraints/constraint.sdc`),
+  not `config.mk` — it was NULL for all 750 runs before this.
+- **`learn_heuristics.py` emits two per-family/platform aggregates** over signoff-positive runs:
+  `closing_period` (`period − finish_ws`; seeds the search) and `slack_deterioration` — the p90
+  per-stage erosion `d_fp_pl` (floorplan→place, dominant) and `d_pl_fin` (place→finish, ≈ neutral),
+  in both ns and pct-of-period. `query_knowledge.get_closing_period` / `get_deterioration` expose
+  them; `fmax_model.select_model` gates on `n ≥ 8` (else cold-start defaults).
+- **Online self-correction:** `fmax_search.py --verify` appends a verified `(floorplan, place,
+  finish)` triple (tagged `eval_arm='fmax_verify'`, signoff-positive so it is learnable) so the
+  deterioration model tightens as verify data accrues.
+
 ## Invariants
 
 1. `ingest_run.py` only reads structured JSON artifacts; it never parses raw ORFS logs. If an artifact is missing, the corresponding column is NULL.
@@ -275,6 +295,22 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
     (backend aborts) could never reach `recipe_status`/`ab_trials` until the symptom was assigned and
     the fix loop could log it. First route verdict: `route_relief` `candidate → promoted` on a
     `wb2axip_wbsafety` win (arm B routes at lower util; control times out).
+24. The Fmax `slack_deterioration` model is **advisory and tiered**: below `n = 8` learned samples
+    `fmax_model.select_model` falls back to corpus cold-start defaults, never an under-sampled
+    median. Estimator is p90 (conservative); learned terms are clamped `≥ 0` (never predict negative
+    erosion). The reported Fmax is a **proxy (UNVERIFIED)** unless `--verify` ran — post-place timing
+    is optimistic vs signoff, so the number is always labelled, never presented as a closed result.
+    (Fmax search: `scripts/reports/fmax_search.py` + pure `fmax_model.py`; the three per-stage
+    `*_setup_ws` columns + `clock_period_ns` are written by `ingest_run.py` and the per-family
+    `closing_period`/`slack_deterioration` aggregates by `learn_heuristics.py` — see the
+    "Fmax Search Extension" section above and `references/orfs-playbook.md`.)
+25. `ensure_schema` applies `schema.sql` then runs the column forward-migration
+    (`_migrate_add_columns`) and the post-migration index loop (`_POST_MIGRATION_INDEXES`,
+    which indexes only `fix_events`/`run_violations`/`fix_trajectories(symptom_id)` — never the
+    `runs` table). The three Fmax slack columns (`floorplan_setup_ws`, `place_setup_ws`,
+    `finish_setup_ws`, all `REAL`) live both in `schema.sql`'s `runs` CREATE TABLE and in
+    `_ADDED_COLUMNS["runs"]`, so a fresh DB gets them from the DDL and a legacy DB gets them
+    via the ALTER-TABLE migration.
 
 ## Engineer Loop (spec 2026-06-09)
 

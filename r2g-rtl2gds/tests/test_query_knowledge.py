@@ -49,3 +49,17 @@ def test_get_family_heuristics_no_file(tmp_knowledge_dir):
         heuristics_path=tmp_knowledge_dir / "heuristics.json",
     )
     assert result is None
+
+
+def test_get_deterioration_and_closing_period(tmp_path):
+    import query_knowledge, json as _json
+    h = tmp_path / "heuristics.json"
+    h.write_text(_json.dumps({"families": {"alu": {"platforms": {"nangate45": {
+        "closing_period": {"min": 7.4, "median": 8.5, "n": 4},
+        "slack_deterioration": {"d_fp_pl": {"ns_p90": 0.3, "pct_p90": 0.03},
+                                "d_pl_fin": {"ns_p90": 0.2, "pct_p90": 0.02},
+                                "n": 4},
+    }}}}}), encoding="utf-8")
+    assert query_knowledge.get_closing_period("alu", "nangate45", heuristics_path=h)["min"] == 7.4
+    assert query_knowledge.get_deterioration("alu", "nangate45", heuristics_path=h)["n"] == 4
+    assert query_knowledge.get_deterioration("nope", "nangate45", heuristics_path=h) is None
