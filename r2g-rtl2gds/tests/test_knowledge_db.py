@@ -171,3 +171,30 @@ def test_symptoms_table_and_indexes_exist(tmp_knowledge_dir):
     assert "idx_run_violations_symptom" in idx
     assert "idx_fix_traj_symptom" in idx
     conn.close()
+
+
+# --- Fmax (feat/fmax-search merge 2026-06-19): the per-stage setup-slack columns
+# migrate onto a legacy DB. The legacy fixture is the FULL base schema with ONLY
+# those 3 columns stripped — a realistic pre-slack-column store (base columns like
+# design_family/design_name/platform, which schema.sql indexes, are present). A
+# 3-column toy table would instead trip HEAD's executescript on the runs indexes;
+# HEAD's ensure_schema treats base columns as always-present and only ALTER-adds
+# genuinely-new columns via _ADDED_COLUMNS["runs"]. ------------------------------
+
+def test_staged_slack_columns_exist_after_ensure_schema(tmp_knowledge_dir):
+    """ensure_schema must ALTER the three per-stage setup-slack columns into a
+    runs.sqlite created before they existed (live forward migration)."""
+    import re
+    schema = (tmp_knowledge_dir / "schema.sql").read_text(encoding="utf-8")
+    legacy_ddl = re.sub(
+        r"^\s*(?:floorplan_setup_ws|place_setup_ws|finish_setup_ws)\b.*\n",
+        "", schema, flags=re.M)
+    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    conn.executescript(legacy_ddl)
+    pre = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+    assert not ({"floorplan_setup_ws", "place_setup_ws", "finish_setup_ws"} & pre), \
+        "legacy fixture must NOT already carry the slack columns"
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+    assert {"floorplan_setup_ws", "place_setup_ws", "finish_setup_ws"} <= cols
+    conn.close()

@@ -41,11 +41,42 @@ def _fetch_rows(conn) -> list[dict]:
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def _fetch_learnable_rows(conn) -> list[dict]:
+    """Runs eligible for LEARNING — excludes held-out r2g-bench runs (Win 3). The
+    filter lives ONLY here (the learning read); ingest still writes failure_events
+    / run_violations for bench runs. COALESCE so legacy rows (is_bench NULL) and
+    DBs predating the column are treated as not-bench (included)."""
+    cur = conn.execute("SELECT * FROM runs WHERE COALESCE(is_bench, 0) = 0")
+    cols = [c[0] for c in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def _bench_project_paths(conn) -> set[str]:
+    """project_paths of held-out bench runs, to exclude their fix trajectories from
+    recipe learning. Tolerant of a DB predating the is_bench column."""
+    try:
+        return {r[0] for r in conn.execute(
+            "SELECT project_path FROM runs WHERE is_bench = 1") if r[0]}
+    except Exception:
+        return set()
+
+
 def _p90(values: list[float]) -> float | None:
     if not values:
         return None
     s = sorted(values)
     idx = max(0, int(round(0.9 * (len(s) - 1))))
+    return s[idx]
+
+
+_SENTINEL = 1e30
+
+
+def _quantile(values: list[float], q: float) -> float | None:
+    if not values:
+        return None
+    s = sorted(values)
+    idx = max(0, min(len(s) - 1, int(round(q * (len(s) - 1)))))
     return s[idx]
 
 
@@ -62,6 +93,24 @@ def _family_platform_entry(runs: list[dict]) -> dict | None:
                  if r.get("cell_count") is not None]
     elapsed_vals = [r["total_elapsed_s"] for r in successes
                     if r.get("total_elapsed_s") is not None]
+
+    cp_vals: list[float] = []
+    d_fp_pl_ns, d_fp_pl_pct, d_pl_fin_ns, d_pl_fin_pct = [], [], [], []
+    for r in successes:
+        period = r.get("clock_period_ns")
+        fp = r.get("floorplan_setup_ws")
+        pl = r.get("place_setup_ws")
+        fin = r.get("finish_setup_ws")
+        if fin is None:
+            fin = r.get("wns_ns")
+        if period is not None and fin is not None and fin < _SENTINEL:
+            cp_vals.append(period - fin)
+        if (None not in (period, fp, pl, fin) and period > 0
+                and max(fp, pl, fin) < _SENTINEL):
+            d_fp_pl_ns.append(fp - pl)
+            d_fp_pl_pct.append((fp - pl) / period)
+            d_pl_fin_ns.append(pl - fin)
+            d_pl_fin_pct.append((pl - fin) / period)
 
     entry: dict = {
         "sample_size": len(runs),
@@ -84,6 +133,21 @@ def _family_platform_entry(runs: list[dict]) -> dict | None:
         entry["typical_cell_count"] = int(statistics.median(cell_vals))
     if elapsed_vals:
         entry["p90_elapsed_s"] = _p90(elapsed_vals)
+    if cp_vals:
+        entry["closing_period"] = {
+            "min": min(cp_vals),
+            "p10": _quantile(cp_vals, 0.10),
+            "median": statistics.median(cp_vals),
+            "n": len(cp_vals),
+        }
+    if d_fp_pl_ns:
+        entry["slack_deterioration"] = {
+            "d_fp_pl": {"ns_p90": _quantile(d_fp_pl_ns, 0.90),
+                        "pct_p90": _quantile(d_fp_pl_pct, 0.90)},
+            "d_pl_fin": {"ns_p90": _quantile(d_pl_fin_ns, 0.90),
+                         "pct_p90": _quantile(d_pl_fin_pct, 0.90)},
+            "n": len(d_fp_pl_ns),
+        }
     return entry
 
 
@@ -296,10 +360,18 @@ def _design_class_by_project(conn) -> dict[str, str]:
 
 
 def _indexed_recipes(trajectories: list[dict],
-                     class_of: dict[str, str]) -> dict:
+                     class_of: dict[str, str],
+                     score_of: dict[str, float] | None = None) -> dict:
     """Decision-8 projection: recipes[symptom_id][design_class][platform] with
     '*' pooled rollups at each relaxation level. Strategy counts mirror
-    _recipes_from_trajectories semantics (cleared/win/no_change/regression)."""
+    _recipes_from_trajectories semantics (cleared/win/no_change/regression).
+
+    score_of maps project_path -> the run's dense outcome_score (Win 1). Each
+    strategy accrues a `mean_outcome_score` over the runs whose fix episodes used
+    it — the tiebreaker fix_model ranks on WITHIN equal clean-rate. Absent
+    (legacy DB / no scored runs) -> the field is omitted and ranking is unchanged."""
+    score_of = score_of or {}
+
     def _node():
         return {"strategies": {}, "_sessions": set()}
 
@@ -310,6 +382,7 @@ def _indexed_recipes(trajectories: list[dict],
             continue
         dclass = class_of.get(t.get("project_path") or "", "unknown/unknown")
         plat = t.get("platform") or "unknown"
+        run_score = score_of.get(t.get("project_path") or "")
         bucket = acc.setdefault(sid, {})
         targets = [bucket.setdefault(dc, {}).setdefault(p, _node())
                    for dc in (dclass, "*") for p in (plat, "*")]
@@ -321,7 +394,8 @@ def _indexed_recipes(trajectories: list[dict],
             for node in targets:
                 node["_sessions"].add(t.get("fix_session_id"))
                 s = node["strategies"].setdefault(
-                    strat, {"attempts": 0, "successes": 0, "failures": 0, "wins": 0})
+                    strat, {"attempts": 0, "successes": 0, "failures": 0,
+                            "wins": 0, "_scores": []})
                 s["attempts"] += 1
                 if verdict == "cleared":
                     s["successes"] += 1
@@ -329,24 +403,45 @@ def _indexed_recipes(trajectories: list[dict],
                     s["wins"] += 1
                 elif verdict in ("no_change", "regression"):
                     s["failures"] += 1
+                if run_score is not None:
+                    s["_scores"].append(run_score)
     for sid, classes in acc.items():
         for dc, plats in classes.items():
             for p, node in plats.items():
                 node["n_sessions"] = len(node.pop("_sessions"))
+                for s in node["strategies"].values():
+                    scores = s.pop("_scores", [])
+                    if scores:
+                        s["mean_outcome_score"] = statistics.mean(scores)
     return acc
 
 
 def learn(db_path: Path | str,
-          out_path: Path | str) -> dict:
+          out_path: Path | str,
+          enqueue_candidates: bool = True) -> dict:
     db_path = Path(db_path)
     out_path = Path(out_path)
+
+    # Read the PRIOR heuristics off disk BEFORE we overwrite it, so the recipe
+    # lifecycle can diff new/changed recipes against it. This is the production
+    # path's candidate-enqueue hook — without it, recipe_status stayed empty and
+    # the A/B loop never fired (Tier −1 Gate A diagnosis, 2026-06-16). engineer_loop
+    # also enqueues in learn_cycle; diff_and_enqueue is idempotent so the two
+    # compose safely.
+    prev_heur = None
+    if enqueue_candidates and out_path.exists():
+        try:
+            prev_heur = json.loads(out_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            prev_heur = None
 
     conn = knowledge_db.connect(db_path)
     try:
         # Idempotent: guarantees fix_events / fix_trajectories exist before we
         # SELECT / DELETE / INSERT on them, even on legacy DBs predating Task 1.
         knowledge_db.ensure_schema(conn)
-        rows = _fetch_rows(conn)
+        rows = _fetch_learnable_rows(conn)   # Win 3: held-out bench runs excluded
+        bench_paths = _bench_project_paths(conn)
         _rebuild_fix_trajectories(conn)   # Tier-2 (idempotent rebuild; materializes)
 
         groups: dict[tuple[str, str], list[dict]] = {}
@@ -372,7 +467,19 @@ def learn(db_path: Path | str,
     cur = conn2.execute("SELECT * FROM fix_trajectories")
     tcols = [c[0] for c in cur.description]
     trajectories = [dict(zip(tcols, r)) for r in cur.fetchall()]
+    # Win 3: drop held-out bench episodes from recipe learning (the trajectories
+    # are still materialized in the table — only the LEARNING aggregation excludes).
+    if bench_paths:
+        trajectories = [t for t in trajectories
+                        if t.get("project_path") not in bench_paths]
     class_of = _design_class_by_project(conn2)
+    # Win 1: per-run dense reward, joined into recipes as a ranking tiebreaker.
+    # NULL-filtered so legacy/unscored runs simply don't contribute (neutral); bench
+    # runs excluded (Win 3).
+    score_of = {r[0]: r[1] for r in conn2.execute(
+        "SELECT project_path, outcome_score FROM runs "
+        "WHERE project_path IS NOT NULL AND outcome_score IS NOT NULL "
+        "AND COALESCE(is_bench, 0) = 0")}
     gen = _bump_generation(conn2)
     conn2.close()
     for (fam, plat), recipes in _recipes_from_trajectories(trajectories).items():
@@ -390,10 +497,25 @@ def learn(db_path: Path | str,
         "generation": gen,
         "families": families,
         "symptoms": _symptom_recipes_from_trajectories(trajectories),
-        "recipes": _indexed_recipes(trajectories, class_of),
+        "recipes": _indexed_recipes(trajectories, class_of, score_of),
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    # Tier −1 Gate A: enqueue new/changed recipes as A/B candidates so the
+    # shadow→candidate→promoted lifecycle fires on EVERY learner rebuild, not only
+    # inside engineer_loop.run (which never drove a production campaign). A failure
+    # here must never break learning — the heuristics are already written.
+    if enqueue_candidates:
+        try:
+            import recipe_lifecycle
+            lc = knowledge_db.connect(db_path)
+            try:
+                recipe_lifecycle.diff_and_enqueue(lc, data, prev=prev_heur)
+            finally:
+                lc.close()
+        except Exception as exc:                       # pragma: no cover - guard
+            print(f"WARNING: A/B candidate enqueue skipped: {exc}", file=sys.stderr)
     return data
 
 

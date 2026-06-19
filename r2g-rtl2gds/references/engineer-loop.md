@@ -59,7 +59,118 @@ python3 scripts/loop/engineer_loop.py run \
 # Inspect current state of each design in the ledger
 python3 scripts/loop/engineer_loop.py status \
     --ledger design_cases/_batch/campaign.jsonl
+
+# Fire A/B trials for already-enqueued candidate recipes WITHOUT re-running the
+# normal designs (the production "drain the A/B queue" button — see Gate A below).
+python3 scripts/loop/engineer_loop.py ab-drain \
+    --ledger design_cases/_batch/ab.jsonl [--n-designs 2]
+
+# Force a grandfathered recipe into 'candidate' for explicit A/B re-validation.
+python3 scripts/loop/engineer_loop.py ab-enqueue \
+    --symptom <sid> --design-class crypto/small \
+    --platform sky130hd --strategy antenna_diode_repair
 ```
+
+### Tier −1 Gate A — making the A/B loop fire on the production path
+
+**The gap (diagnosed 2026-06-16).** The `shadow → candidate → promoted` pipeline
+lived *only* inside `engineer_loop.run`, which never drove a production campaign (no
+`design_cases/_loop` ledger ever existed). The batch driver ingests + calls
+`learn_heuristics.learn()` directly — and `learn()` never enqueued candidates. So
+across 1267 runs `recipe_status` stayed empty and `ab_trials` = 0: the substrate every
+signal-dependent win builds on had **never produced a verdict**.
+
+**The fix.** `learn_heuristics.learn()` now calls `recipe_lifecycle.diff_and_enqueue`
+after writing `heuristics.json` (diffing against the prior on-disk copy), so **every**
+learner rebuild — batch or loop — enqueues new/changed recipes as candidates. A
+standalone `ab-drain` then plans, runs, and judges the arms for those candidates
+without re-running the normal designs. Because the existing corpus's recipes are all
+*grandfathered* (absent `recipe_status` row == promoted), nothing auto-enqueues on a
+steady-state corpus; use `ab-enqueue` to force a chosen recipe into `candidate` for a
+real validation campaign. The orchestration is unit-proven end-to-end in
+`tests/test_gate_a_ab_loop.py` (production-path `learn()` → candidate → `ab-drain` →
+`ab_trials` row + recipe transition). The *real* EDA campaign (a non-mocked `ab-drain`
+on the live corpus) needs hours of flow time — that is Gate B.
+
+### Tier −1 Gate B — seed the dense-reward gradient (operator, compute-bound)
+
+`outcome_score` (Win 1) is near-dataless on the existing corpus: only ~12/1267 runs
+carry `drc_violations > 0` and ~2 have a usable before→after fix pair. Gate B seeds
+the gradient with a deliberately partial-progress campaign, and exercises Gate A's
+A/B loop at scale. This needs **hours of real EDA flow time** — it is an operator
+procedure, not unit-testable:
+
+1. **Target the difficulty bands that REACH signoff and MISS** — cell-dense and
+   congested designs that hit DRC/LVS violations (not the ones that abort at place).
+   Add them to a campaign ledger and run them; the signoff-fixing loop records
+   before/after counts per iteration into `reports/fix_log.jsonl`.
+   ```bash
+   python3 scripts/loop/engineer_loop.py add --ledger design_cases/_loop/gateB.jsonl \
+       --project design_cases/<congested_design> --platform sky130hd
+   python3 scripts/loop/engineer_loop.py run --ledger design_cases/_loop/gateB.jsonl
+   ```
+2. **Exit criterion:** the corpus carries ≥30–50 runs with `drc_violations > 0`
+   **and** a populated `fix_log.jsonl` before/after pair, spanning ≥3 bands — enough
+   for `outcome_score`'s VRR term to be non-degenerate and for r2g-bench (Win 3) to
+   have signal. Ingest **honestly** (every run, per the invariants).
+3. **Fire Gate A's real trial on the live corpus** (the existing recipes are
+   grandfathered, so enqueue one explicitly, then drain):
+   ```bash
+   python3 scripts/loop/engineer_loop.py ab-enqueue \
+       --symptom <sid> --design-class <type/size> --platform sky130hd --strategy <recipe>
+   python3 scripts/loop/engineer_loop.py ab-drain --ledger design_cases/_loop/ab.jsonl
+   # confirm: ab_trials gains a row; the recipe transitions candidate -> promoted/shadow.
+   ```
+4. **Win 5 (5b) feature backfill** — emit pre-route vectors where synth survives,
+   then re-ingest (designs without a preserved `synth/synth.log` need a re-synth):
+   ```bash
+   python3 tools/backfill_presynth_features.py design_cases --ingest \
+       --db r2g-rtl2gds/knowledge/knowledge.sqlite
+   ```
+5. **Score r2g-bench** after ingesting the held-out designs:
+   ```bash
+   python3 knowledge/eval_heuristics.py bench --db knowledge/knowledge.sqlite
+   ```
+6. **Re-validate both DBs** (the "When You Fix a Bug" honesty checklist): the
+   `fail`-rows == `orfs-fail`-events count must still hold, and no clean run's
+   `is_success` may have flipped after re-ingesting `outcome_score`.
+
+### Tier −1 Gate B — FIRED on the live corpus (2026-06-16)
+
+Running Gate B for real surfaced a **second blocker on top of Gate A**, and then closed
+both end-to-end:
+
+- **Blocker 2 — A/B subject-space mismatch (`ab_runner.plan_trial`).** `plan_trial` picked
+  A/B subjects only from `run_violations`, which is the run's **post-fix** snapshot. A
+  symptom that gets **successfully fixed** (e.g. antenna) therefore has **no rows** there —
+  so the recipes that actually *win* could never be A/B'd, even after Gate A enqueued them
+  (`plan_trial(antenna 02d5eba1) → None`, verified). This is the same fixture-vs-production
+  trap as Gate A: the Gate A integration test had to hand-insert a `run_violations` antenna
+  row to make `plan_trial` work, masking the gap. **Fix:** `plan_trial` now falls back to the
+  recipe's `evidence_designs` (the **pre-fix** exhibitors the learner records in
+  `heuristics.symptoms[sid]`), resolved to on-disk project dirs via `runs.project_path`
+  (Tier-2 match levels `evidence_platform` / `evidence_pooled`). Test:
+  `test_plan_trial_falls_back_to_recipe_evidence_designs`.
+- **A real catalog strategy for the pending sky130 designs — `density_relief`.** The 9
+  pending sky130hd DRC-fail designs all carried genuine metal/via **spacing** residuals
+  (`m3.2`, `via.4*`, `via_OFFGRID`; symptom `f670d8e567`) that v1 deliberately left
+  unhandled. A pilot showed lowering `CORE_UTILIZATION` clears them (eeprom_top 4→0 at
+  20→12), so `diagnose_signoff_fix._routing_drc_strategies` now offers `density_relief`
+  (real layout change, deck never relaxed; see signoff-fixing.md). Driving 5 of the 9 through
+  `fix_signoff.sh` cleared **all 5** (34→0, 20→0, 10→0, 6→0, 4→0) → 5 newly fully-signed-off
+  sky130 designs + 5 `before→after` fix episodes seeding the dense-reward gradient.
+- **Gate A fired live.** `learn_heuristics.learn()` derived the `density_relief` recipe for
+  the m3.2 symptom (previously empty) and `diff_and_enqueue` enqueued it as a `candidate`
+  (`recipe_status` 0→2, provenance `learner_diff`) — the first time the production learner
+  enqueued on this store.
+- **Gate B fired live.** `engineer_loop ab-drain` planned arms on baseline m3.2 designs
+  (`spi_controller`, `RV32I_Memorycontroller`), ran arm A (`--exclude density_relief`, stays
+  dirty) vs arm B (`--rank-first density_relief`, clears), and `judge_repeated` recorded a
+  verdict into `ab_trials`. **Result: `ab_trials` 0→2, both `win`** — arm A (control) stayed dirty
+  (`escalated`) while arm B cleared on both `spi_controller` (4→0) and `RV32I_Memorycontroller`
+  (84→0); the `logic/small density_relief` recipe transitioned **`candidate → promoted`**
+  (provenance `ab_trial:2`). The Gate A signature (`ab_trials=0` alongside fail/partial rows) is now
+  cleared on the live corpus — the first end-to-end A/B verdict ever recorded on this store.
 
 ### Ledger Format and Resumability
 
@@ -82,6 +193,7 @@ The ledger is a JSONL file: one line per state transition, last-state-wins. This
 | `R2G_LOOP_INGEST=<script>` | Override the ingest subprocess script (testing) |
 | `R2G_FIX_EXCLUDE=<strategy>` | Exclude a strategy from the fix ranking (A/B arm knob) |
 | `R2G_FIX_RANK_FIRST=<strategy>` | Force a strategy to rank first (A/B arm B knob) |
+| `R2G_AB_REPEATS=<k>` | Win 2: repeats per A/B arm side (default **k=2**). The verdict is the lower-confidence bound (mean − z·stderr) over the k repeats, so one lucky run cannot promote a recipe (the LVS-crash heisenbug). k=3 is opt-in for high-stakes promotions; each k is a k× wall-clock multiplier on the already-slow A/B path |
 
 `R2G_FIX_EXCLUDE` and `R2G_FIX_RANK_FIRST` are consumed by `fix_signoff.sh`, which passes
 `--exclude` / `--rank-first` to `diagnose_signoff_fix.py` to implement A/B arm separation.

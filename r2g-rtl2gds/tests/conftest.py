@@ -46,6 +46,17 @@ if str(LOOP_DIR_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(LOOP_DIR_SCRIPTS))
 
 
+@pytest.fixture(autouse=True)
+def _isolate_journal(tmp_path: Path, monkeypatch) -> None:
+    """Redirect ALL best-effort journal writes to a per-test temp DB so unit tests
+    never touch the real knowledge/journal.sqlite. The journal-decision writers
+    (ab_runner.record_trial, escalations.open_escalation, engineer_loop ab_launch,
+    fix_signoff.sh) honor R2G_JOURNAL_DB; tests that set their own R2G_JOURNAL_DB
+    (the subprocess journaling tests) override this via env_extra. Journaling stays
+    best-effort, so a write here that fails still never breaks the test."""
+    monkeypatch.setenv("R2G_JOURNAL_DB", str(tmp_path / "_isolated_journal.sqlite"))
+
+
 @pytest.fixture
 def tmp_knowledge_dir(tmp_path: Path) -> Path:
     """A throw-away knowledge/ directory with the real schema + families seed."""

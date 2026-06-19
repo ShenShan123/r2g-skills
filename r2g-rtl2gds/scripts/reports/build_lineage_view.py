@@ -36,6 +36,12 @@ if str(_KNOWLEDGE_DIR) not in sys.path:
 import knowledge_db  # noqa: E402
 import learn_heuristics  # noqa: E402  (authoritative MIN_SUCCESSFUL threshold)
 
+# detect_contradictions lives alongside this module in scripts/reports/.
+_REPORTS_DIR = Path(__file__).resolve().parent
+if str(_REPORTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_REPORTS_DIR))
+import detect_contradictions  # noqa: E402
+
 DEFAULT_HEURISTICS_PATH = _KNOWLEDGE_DIR / "heuristics.json"
 
 # Outcome fields surfaced per run in a lineage edge's outcome_delta.
@@ -350,12 +356,20 @@ def build_view(db_path: Path | str, heuristics_path: Path | str | None = None) -
         health = _build_health(rows, heuristics)
         provenance = _build_provenance(conn)
         fix_effectiveness = _fix_effectiveness(conn)
+        # Defensive: a malformed/legacy store must never break the dashboard. The
+        # probe is read-only (the ro conn is reused) and reads ONLY knowledge.sqlite.
+        try:
+            contradictions = detect_contradictions.find_contradictions(
+                conn, heuristics)
+        except Exception:
+            contradictions = []
     finally:
         conn.close()
     return {
         "health": health,
         "provenance": provenance,
         "fix_effectiveness": fix_effectiveness,
+        "contradictions": contradictions,
     }
 
 

@@ -18,20 +18,66 @@ set -euo pipefail
 KNOWLEDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../knowledge" && pwd)"
 export R2G_KNOWLEDGE_DIR="$KNOWLEDGE_DIR"
 
-_journal_knob_deltas() {  # config_edits_json strategy_id — one action per knob
-  python3 - "$1" "$2" "$PROJECT_DIR" "$FIX_SESSION_ID" <<'PYEOF' 2>/dev/null || true
-import json, os, subprocess, sys
-edits, strat, proj, sess = json.loads(sys.argv[1] or "{}"), sys.argv[2], sys.argv[3], sys.argv[4]
-cli = os.path.join(os.environ.get("R2G_KNOWLEDGE_DIR", ""), "journal_action.py")
-for knob, new in edits.items():
-    args = [sys.executable, cli, "action", "--project", proj, "--actor", "loop",
-            "--type", "config_knob_delta", "--session", sess,
-            "--payload", json.dumps({"knob": knob, "new": str(new), "strategy": strat})]
-    db = os.environ.get("R2G_JOURNAL_DB")
-    if db:
-        args += ["--db", db]
-    subprocess.run(args, check=False)
+_journal_knob_deltas() {  # config_edits_json strategy_id [symptom_id] [parent_action_id]
+  # One config_knob_delta action per knob, linked to symptom_id (Gap 3) and — for
+  # iteration 2+ — parent_action_id (Gap 4, stacked-fix chain). PRINTS the FIRST
+  # action_id to stdout so the caller can pass it as the parent of the next
+  # iteration. Best-effort: honors R2G_JOURNAL=0 and never breaks the flow.
+  python3 - "$1" "$2" "$PROJECT_DIR" "$FIX_SESSION_ID" "${3:-}" "${4:-}" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+if os.environ.get("R2G_JOURNAL", "1") == "0":
+    sys.exit(0)
+edits = json.loads(sys.argv[1] or "{}")
+strat, proj, sess = sys.argv[2], sys.argv[3], sys.argv[4]
+symptom_id = sys.argv[5] or None
+parent = int(sys.argv[6]) if (len(sys.argv) > 6 and sys.argv[6]) else None
+sys.path.insert(0, os.environ.get("R2G_KNOWLEDGE_DIR", ""))
+try:
+    import journal_db
+    conn = journal_db.connect(os.environ.get("R2G_JOURNAL_DB") or journal_db.DEFAULT_JOURNAL_PATH)
+    journal_db.ensure_schema(conn)
+    first = None
+    for knob, new in edits.items():
+        aid = journal_db.append_action(
+            conn, project_path=proj, actor="loop", action_type="config_knob_delta",
+            payload={"knob": knob, "new": str(new), "strategy": strat},
+            fix_session_id=sess, symptom_id=symptom_id, parent_action_id=parent)
+        if first is None:
+            first = aid
+    conn.close()
+    if first is not None:
+        print(first)
+except Exception as exc:                      # never break the flow
+    print(f"WARNING: journal knob deltas skipped: {exc}", file=sys.stderr)
 PYEOF
+}
+
+_compute_symptom_id() {  # check vclass [predicates_json] -> 16-hex symptom_id (or empty)
+  # Mirror the ingester's symptom_id recipe EXACTLY (symptom.canonical_signature ->
+  # symptom_id incl. the route->orfs_stage remap) so the journal symptom_id and the
+  # knowledge symptom_id agree. Empty output on any error (best-effort linkage).
+  python3 - "$1" "$2" "${3:-}" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+sys.path.insert(0, os.environ.get("R2G_KNOWLEDGE_DIR", ""))
+try:
+    import symptom
+    check, vclass = sys.argv[1], sys.argv[2]
+    preds = json.loads(sys.argv[3] or "{}")
+    if check == "route":                      # backend abort: keyed under orfs_stage
+        check, vclass = "orfs_stage", (vclass or "route")
+    sig = symptom.canonical_signature(check, vclass or None, preds)
+    print(symptom.symptom_id(sig))
+except Exception:
+    pass
+PYEOF
+}
+
+_journal_action() {  # action_type payload_json [symptom_id] — generic best-effort action
+  local args=(action --project "$PROJECT_DIR" --actor loop --type "$1"
+              --session "$FIX_SESSION_ID" --payload "$2")
+  [[ -n "${3:-}" ]] && args+=(--symptom "$3")
+  [[ -n "${R2G_JOURNAL_DB:-}" ]] && args+=(--db "$R2G_JOURNAL_DB")
+  python3 "$R2G_KNOWLEDGE_DIR/journal_action.py" "${args[@]}" >/dev/null 2>&1 || true
 }
 
 # Test seam: allow sourcing helpers without executing the flow/arg-parse/exit.
@@ -48,8 +94,8 @@ while [[ $# -gt 0 ]]; do
     *) if [[ -z "$PROJECT_DIR" ]]; then PROJECT_DIR="$1"; else PLATFORM="$1"; fi; shift;;
   esac
 done
-[[ -z "$PROJECT_DIR" ]] && { echo "usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both] [--max-iters N] [--resume]" >&2; exit 1; }
-[[ "$CHECK" =~ ^(drc|lvs|both)$ ]] || { echo "ERROR: --check must be drc|lvs|both" >&2; exit 1; }
+[[ -z "$PROJECT_DIR" ]] && { echo "usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route] [--max-iters N] [--resume]" >&2; exit 1; }
+[[ "$CHECK" =~ ^(drc|lvs|both|route)$ ]] || { echo "ERROR: --check must be drc|lvs|both|route" >&2; exit 1; }
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,9 +103,25 @@ EXTRACT_DIR="$(cd "$SCRIPT_DIR/../extract" && pwd)"
 REPORTS_DIR_SCRIPTS="$(cd "$SCRIPT_DIR/../reports" && pwd)"
 RUN_ORFS="${R2G_RUN_ORFS:-$SCRIPT_DIR/run_orfs.sh}"
 RUN_DRC="${R2G_RUN_DRC:-$SCRIPT_DIR/run_drc.sh}"
-RUN_LVS="${R2G_RUN_LVS:-$SCRIPT_DIR/run_lvs.sh}"
+# LVS tool selection is PLATFORM-AWARE. On sky130 the production LVS path is
+# Netgen (Magic GDS extraction + Netgen compare): the ORFS KLayout sky130 rule
+# deck (`sky130hd_r2g.lylvs`) is NOT production-grade — it flattens std-cell
+# subcircuits and reports false "Netlists don't match" on designs Netgen finds
+# clean (validated 2026-06-17: wbsafety + blob_merge KLayout-fail -> Netgen-clean).
+# Routing the autonomous loop through KLayout LVS on sky130 was escalating
+# already-clean designs as lvs:fail. KLayout LVS stays the default everywhere
+# else (nangate45/gf180/ihp). An explicit R2G_RUN_LVS override always wins.
+# See references/failure-patterns.md "sky130 LVS".
+if [[ -n "${R2G_RUN_LVS:-}" ]]; then
+  RUN_LVS="$R2G_RUN_LVS"
+elif [[ "$PLATFORM" == sky130* ]]; then
+  RUN_LVS="$SCRIPT_DIR/run_netgen_lvs.sh"
+else
+  RUN_LVS="$SCRIPT_DIR/run_lvs.sh"
+fi
 EXTRACT_DRC="${R2G_EXTRACT_DRC:-$EXTRACT_DIR/extract_drc.py}"
 EXTRACT_LVS="${R2G_EXTRACT_LVS:-$EXTRACT_DIR/extract_lvs.py}"
+EXTRACT_ROUTE="${R2G_EXTRACT_ROUTE:-$EXTRACT_DIR/extract_route.py}"
 DIAGNOSE="${R2G_DIAGNOSE:-$REPORTS_DIR_SCRIPTS/diagnose_signoff_fix.py}"
 KNOWLEDGE_DIR="$(cd "$SCRIPT_DIR/../../knowledge" && pwd)"
 export R2G_KNOWLEDGE_DIR="$KNOWLEDGE_DIR"
@@ -81,9 +143,13 @@ v=d.get("total_violations"); v=d.get("mismatch_count") if v is None else v
 print("" if v is None else v)' "$1" 2>/dev/null || echo ""
 }
 
-_run_extract() {  # $1 = drc|lvs
+_run_extract() {  # $1 = drc|lvs|route
   local script
-  if [[ "$1" == "drc" ]]; then script="$EXTRACT_DRC"; else script="$EXTRACT_LVS"; fi
+  case "$1" in
+    drc)   script="$EXTRACT_DRC";;
+    route) script="$EXTRACT_ROUTE";;
+    *)     script="$EXTRACT_LVS";;
+  esac
   "$script" "$PROJECT_DIR" "$REPORTS/$1.json"
 }
 
@@ -102,6 +168,9 @@ if check=="drc":
     cats=d.get("categories") or {}
     dom=max(cats,key=lambda k:(cats[k].get("count") or 0)) if cats else ""
     print((dom or "")+"\t"+json.dumps(cats))
+elif check=="route":
+    # Backend-abort: the violation_class is the stage ("route"); no per-category vector.
+    print("route\t"+json.dumps({"total_violations":d.get("total_violations")}))
 else:
     print((d.get("mismatch_class") or "")+"\t"+json.dumps({"mismatch_count":d.get("mismatch_count")}))' \
     "$1" "$PROJECT_DIR"
@@ -152,6 +221,12 @@ else:
     except Exception: preds={}
 env_keys=("PLACE_FAST","ROUTE_FAST","SKIP_ANTENNA_REPAIR","ROUTE_FAST_DRT_ITERS")
 env_flags={k:os.environ[k] for k in env_keys if k in os.environ}
+# A route abort is the backend-stage analogue of a DRC/LVS violation. The symptom
+# index (symptom.py) keys ALL backend-stage aborts under check=orfs_stage with the
+# STAGE as the class, so the fix_event/run_violations symptom_ids agree. Map the
+# fix-loop check name ("route") to that canonical symptom check for the log row.
+if check=="route":
+    check="orfs_stage"; vclass=vclass or "route"
 cum={}
 cfgp=os.path.join(proj,"constraints","config.mk")
 if os.path.exists(cfgp):
@@ -176,9 +251,39 @@ open(logp,"a").write(json.dumps(o)+"\n")' \
     "${8:-}" "${9:-}" "$(date -u +%FT%TZ)" "${10:-}"
 }
 
+_ensure_baseline() {  # $1 = drc|lvs : RUN the signoff tool once if there is no real
+  # baseline. A design freshly produced by run_orfs has NO Magic-DRC / Netgen-LVS
+  # report yet, so _run_extract yields status "unknown"; diagnose then STOPs and the
+  # check is SILENTLY SKIPPED (never run). Establish a real baseline by invoking the
+  # signoff tool when the report is missing or its status is empty/unknown. Route is
+  # exempt: its baseline is the flow's own route stage, not a separate tool.
+  #
+  # STALENESS (2026-06-18): also (re)run the baseline when a backend GDS is NEWER
+  # than the stored report — the design was re-flowed since the last signoff, so the
+  # stored verdict (even a definite clean/fail) describes a layout that no longer
+  # exists. Without this, an A/B arm dir (copied from the base project WITH its old
+  # KLayout lvs.json='fail') or any route_relief reflow keeps the stale verdict and
+  # the real signoff tool (e.g. Netgen on sky130) never runs on the new layout —
+  # producing a false escalation. A fresh GDS needs fresh signoff.
+  local check="$1" report="$REPORTS/$1.json" st="" stale=0 newest_gds
+  [[ "$check" == "route" ]] && return 0
+  [[ -f "$report" ]] && st="$(python3 -c 'import json,sys
+try: print(json.load(open(sys.argv[1])).get("status") or "")
+except Exception: print("")' "$report" 2>/dev/null)"
+  newest_gds="$(ls -t "$PROJECT_DIR"/backend/RUN_*/final/*.gds 2>/dev/null | head -1)"
+  [[ -n "$newest_gds" && ( ! -f "$report" || "$newest_gds" -nt "$report" ) ]] && stale=1
+  if [[ -z "$st" || "$st" == "unknown" || "$stale" == "1" ]]; then
+    echo "[$check] (re)establish baseline signoff (status='${st:-missing}', stale_vs_gds=$stale) — running $check"
+    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true
+    else "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
+    _run_extract "$check" || true
+  fi
+}
+
 fix_one() {  # $1 = drc|lvs
   local check="$1" report="$REPORTS/$1.json" tried="" before after it sid rerun recheck line verdict
-  local noimp=0 before_vclass before_cats snap
+  local noimp=0 before_vclass before_cats snap sym root_aid="" first_aid
+  _ensure_baseline "$check"
   [[ -f "$report" ]] || _run_extract "$check"
   before="$(_count "$report")"
   for ((it=1; it<=MAX_ITERS; it++)); do
@@ -191,6 +296,9 @@ fix_one() {  # $1 = drc|lvs
     # reads them via R2G_LOG_PREDICATES so the symptom_id reflects the violation we
     # set out to fix, not the post-fix report it would otherwise re-read at log time.
     export R2G_LOG_PREDICATES="$(_predicates_snapshot "$check")"
+    # Gap 3: the symptom_id this iteration is fixing (same recipe the ingester
+    # uses), so config_knob_delta / stage_rerun journal rows link to the symptom.
+    sym="$(_compute_symptom_id "$check" "$before_vclass" "$R2G_LOG_PREDICATES")"
     local all_excl="${tried}${R2G_FIX_EXCLUDE:+${tried:+,}$R2G_FIX_EXCLUDE}"
     line="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$all_excl" \
             ${R2G_FIX_RANK_FIRST:+--rank-first "$R2G_FIX_RANK_FIRST"} --next)"
@@ -213,9 +321,14 @@ fix_one() {  # $1 = drc|lvs
     cfg_delta="$(python3 -c 'import json,sys
 try: print(json.dumps(json.loads(sys.stdin.read()).get("config_edits") or {}))
 except Exception: print("{}")' <<<"$apply_out")"
-    _journal_knob_deltas "$cfg_delta" "$sid"
+    # Gap 3+4: stamp symptom_id on each knob row; chain iteration 2+ to the first
+    # iteration's action via parent_action_id (the first call prints its action_id).
+    first_aid="$(_journal_knob_deltas "$cfg_delta" "$sid" "$sym" "$root_aid")"
+    [[ -z "$root_aid" && -n "$first_aid" ]] && root_aid="$first_aid"
     tried="${tried:+$tried,}$sid"
     if [[ -n "$rerun" ]]; then
+      # Tier B4: a stage re-run is a loop decision — journal it (symptom-linked).
+      _journal_action stage_rerun "$(python3 -c 'import json,sys;print(json.dumps({"from_stage":sys.argv[1],"strategy":sys.argv[2]}))' "$rerun" "$sid")" "$sym"
       local rc=0
       if [[ "$RESUME" == "1" ]]; then FROM_STAGE="$rerun" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
       else "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?; fi
@@ -225,7 +338,10 @@ except Exception: print("{}")' <<<"$apply_out")"
         return 1
       fi
     fi
-    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true; else "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
+    # route: the rerun (run_orfs from floorplan) IS the check — extract_route reads
+    # the backend route stage directly; no separate signoff tool to invoke.
+    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true
+    elif [[ "$check" == "lvs" ]]; then "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
     _run_extract "$check"
     after="$(_count "$report")"
     if [[ -z "$after" ]]; then
@@ -261,6 +377,9 @@ except Exception: print("{}")' <<<"$apply_out")"
 }
 
 : > "$LOG"
+# route is the backend-abort check: fix BEFORE signoff (a route abort never reaches
+# drc/lvs). It is its own --check value (not part of "both").
+[[ "$CHECK" == "route" ]] && fix_one route || true
 [[ "$CHECK" == "drc" || "$CHECK" == "both" ]] && fix_one drc || true
 [[ "$CHECK" == "lvs" || "$CHECK" == "both" ]] && fix_one lvs || true
 
@@ -277,12 +396,16 @@ for r in rows:
 open(out,"w").write("\n".join(lines)+"\n")' "$LOG" "$REPORTS/fix_summary.md"
 echo "Summary: $REPORTS/fix_summary.md"
 
-# exit 0 if final state clean, else 2 if residual remains
+# exit 0 if final state clean, else 2 if residual remains. For --check route we
+# judge ONLY route.json (a route fix never produces drc/lvs; a stale route.json
+# from a prior flow must not poison a drc/lvs fix, and vice-versa).
 python3 -c 'import json,sys,os
-proj=sys.argv[1]; rc=0
-for c in ("drc","lvs"):
+proj,check=sys.argv[1],sys.argv[2]; rc=0
+checks=("route",) if check=="route" else ("drc","lvs")
+fail_states={"fail","failed","residual","timeout"}
+for c in checks:
     p=os.path.join(proj,"reports",c+".json")
     if os.path.exists(p):
         d=json.load(open(p))
-        if d.get("status") in ("fail","failed","residual"): rc=2
-sys.exit(rc)' "$PROJECT_DIR" || exit 2
+        if d.get("status") in fail_states: rc=2
+sys.exit(rc)' "$PROJECT_DIR" "$CHECK" || exit 2

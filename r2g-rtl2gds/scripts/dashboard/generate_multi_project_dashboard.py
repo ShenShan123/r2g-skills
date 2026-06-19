@@ -635,6 +635,53 @@ def tuning_provenance_panel(provenance):
 </div>'''
 
 
+def contradiction_panel(contradictions):
+    """Read-only recipe-contradiction alarm (detect_contradictions.py).
+
+    Renders RED when two strategies moved the SAME knob in OPPOSITE directions for
+    one symptom and both succeeded — the learner is carrying mutually-incompatible
+    fixes. Neutral 'none' state otherwise. Each row carries the paste-ready demote
+    command the operator runs to silence the weaker arm (never auto-applied)."""
+    if not contradictions:
+        return ('<div class="card"><h2>Recipe Contradictions '
+                '<span style="font-size:13px;color:#888">(read-only probe)</span>'
+                '</h2><p style="color:#4caf50">No structural recipe contradictions '
+                'detected.</p></div>')
+
+    rows = []
+    for c in contradictions:
+        sid = html.escape(str(c.get('symptom_id', '')))
+        knob = html.escape(str(c.get('knob', '')))
+        sev = str(c.get('severity', 'medium'))
+        sev_color = '#f44336' if sev == 'high' else '#ff9800'
+        sev_badge = (f'<span style="background:{sev_color};color:#fff;'
+                     f'padding:2px 8px;border-radius:4px;font-weight:bold">'
+                     f'{html.escape(sev.upper())}</span>')
+        sa = html.escape(str(c.get('strategy_a', '')))
+        da = html.escape(str(c.get('dir_a', '')))
+        sb = html.escape(str(c.get('strategy_b', '')))
+        db_ = html.escape(str(c.get('dir_b', '')))
+        ev_a = c.get('evidence_a', {})
+        ev_b = c.get('evidence_b', {})
+        ev_str = (f'{sa}: {ev_a.get("successes", 0)}/{ev_a.get("attempts", 0)}, '
+                  f'{sb}: {ev_b.get("successes", 0)}/{ev_b.get("attempts", 0)}')
+        cmd = html.escape(str(c.get('demote_command', '')))
+        rows.append(
+            f'<tr><td>{sid}</td><td>{knob}</td>'
+            f'<td>{sa} (<b>{da}</b>) vs {sb} (<b>{db_}</b>)</td>'
+            f'<td>{html.escape(ev_str)}</td><td>{sev_badge}</td>'
+            f'<td><code style="font-size:11px">{cmd}</code></td></tr>')
+
+    return f'''<div class="card" style="border:2px solid #f44336">
+<h2 style="color:#f44336">&#9888; Recipe Contradictions <span style="font-size:13px;color:#888">(read-only probe &mdash; operator-gated)</span></h2>
+<p style="color:#f44336;font-weight:bold">{len(contradictions)} symptom(s) carry mutually-incompatible recipes. Paste the demote command to silence the weaker arm.</p>
+<table>
+<tr><th>Symptom</th><th>Knob</th><th>Strategies (opposite directions)</th><th>Evidence (succ/att)</th><th>Severity</th><th>Demote command (paste-ready)</th></tr>
+{"".join(rows)}
+</table>
+</div>'''
+
+
 def strength_panel(strength):
     """Read-only skill-strength panel (first-pass clean rate vs heuristics generation)."""
     generations = strength.get("generations", [])
@@ -714,6 +761,7 @@ th {{ background: #2a2a4a; }}
 <p style="text-align:center;color:#888">OpenROAD-flow-scripts | Auto-refresh: 10s</p>
 {knowledge_health_strip(kview.get('health', {}))}
 {tuning_provenance_panel(kview.get('provenance', []))}
+{contradiction_panel(kview.get('contradictions', []))}
 {strength_panel(strength or {})}
 <div class="grid">
 {"".join(cards)}

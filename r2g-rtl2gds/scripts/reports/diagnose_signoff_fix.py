@@ -133,6 +133,120 @@ def _antenna_strategies(cfg: dict) -> list:
     return [s for s in _antenna_catalog(cfg) if not _applied(cfg, s["config_edits"])]
 
 
+# Routing-geometry DRC density relief (validated 2026-06-16). Step/floor on
+# CORE_UTILIZATION; 20->12 cleared eeprom_top sky130hd (4 m3.2 -> 0).
+_UTIL_STEP = 8
+_UTIL_FLOOR = 8
+
+
+def _routing_drc_strategies(cfg: dict, exclude: set) -> list:
+    """Non-antenna routing-geometry DRC (metal/via spacing, off-grid, via
+    enclosure): lower CORE_UTILIZATION so the router gets more room. A REAL
+    layout change (larger die, sparser routes) — the signoff deck is NEVER
+    relaxed. Mirrors antenna_density_relief's lever. Validated 2026-06-16 on
+    eeprom_top sky130hd (4 m3.2 -> 0 at util 20->12). Only when a CORE_UTILIZATION
+    knob exists and sits above the floor; no-op for DIE_AREA-sized or
+    already-sparse designs (honest residual)."""
+    try:
+        cur_util = int(float(cfg.get("CORE_UTILIZATION", "")))
+    except (TypeError, ValueError):
+        return []
+    new_util = max(_UTIL_FLOOR, cur_util - _UTIL_STEP)
+    if new_util >= cur_util:
+        return []
+    strat = {
+        "id": "density_relief",
+        "rationale": ("Lower CORE_UTILIZATION so the router has room to satisfy "
+                      "metal/via spacing and off-grid rules on a congested small "
+                      "die. Real layout change (bigger die); the routing/signoff "
+                      "deck is never relaxed. PLACE_DENSITY_LB_ADDON untouched "
+                      "(hard rule: never < 0.10)."),
+        "config_edits": {"CORE_UTILIZATION": str(new_util)},
+        "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True}
+    if strat["id"] in exclude or _applied(cfg, strat["config_edits"]):
+        return []
+    return [strat]
+
+
+# Detailed-route congestion / DRT-residual / wall-clock-timeout relief (validated
+# 2026-06-17; see references/failure-patterns.md "Routing Congestion" and the
+# route-relief note). SAME CORE_UTILIZATION lever as density_relief, but keyed to a
+# ROUTE-STAGE abort (orfs-fail-route, symptom check=orfs_stage/class=route) which
+# never reaches signoff DRC — so the A/B loop was structurally blind to it until
+# this strategy + fix_signoff.sh --check route wired backend aborts into the loop.
+def _route_strategies(cfg: dict, exclude: set, *, to_floor: bool = False) -> list:
+    """Route-stage abort relief: lower CORE_UTILIZATION so detailed routing has
+    room to converge — congested / timeout routes (substitution-permutation crypto,
+    dense interconnect) leave DRT grinding stubborn tiles until the wall-clock kills
+    it. A REAL layout change (bigger die, sparser routes); the router/signoff deck
+    is NEVER relaxed; PLACE_DENSITY_LB_ADDON untouched (hard rule: never < 0.10).
+    Reruns from floorplan so the enlarged die re-places + re-routes. Only when a
+    CORE_UTILIZATION knob exists above the floor; no-op for DIE_AREA-sized designs
+    (honest residual -> operator enlarges DIE_AREA, a v2 lever).
+
+    to_floor (2026-06-18): for a route TIMEOUT, drop straight to the floor in ONE
+    reflow instead of shaving a single _UTIL_STEP. A timeout means detailed routing
+    cannot converge at this density within the wall-clock budget; each incremental
+    step burns another full timeout, and fix_one ABORTS after the first rerun that
+    times out (rc=124) — so a single step was the design's only shot, escalating it
+    prematurely (wbscope_avalon, verilog_ethernet_arp: timed out at util 12/17 after
+    one step, never reaching the floor). Max room in one reflow is the right lever.
+    A route that COMPLETED with violations keeps the gentle one-step relief (area is
+    preserved and the violation count guides further iteration)."""
+    try:
+        cur_util = int(float(cfg.get("CORE_UTILIZATION", "")))
+    except (TypeError, ValueError):
+        return []
+    new_util = _UTIL_FLOOR if to_floor else max(_UTIL_FLOOR, cur_util - _UTIL_STEP)
+    if new_util >= cur_util:
+        return []
+    strat = {
+        "id": "route_relief",
+        "rationale": ("Lower CORE_UTILIZATION so detailed routing has room to "
+                      "converge and finish within the wall-clock budget on a "
+                      "congested die. Real layout change (bigger die); the "
+                      "router/signoff deck is never relaxed."),
+        "config_edits": {"CORE_UTILIZATION": str(new_util)},
+        "rerun_from": "floorplan", "recheck": "route", "auto_apply": True}
+    if strat["id"] in exclude or _applied(cfg, strat["config_edits"]):
+        return []
+    return [strat]
+
+
+def _route_plan(route: dict, cfg: dict, exclude: set) -> dict:
+    """Backend-abort plan for a route-stage failure (orfs-fail-route). Sibling of
+    _drc_plan but for a stage that aborts BEFORE signoff. 'unknown' here means the
+    route.json carries no route-stage outcome (the abort was earlier) -> no fix."""
+    status = route.get("status", "unknown")
+    plan = {"check": "route", "status": status,
+            "violation_count": route.get("total_violations"),
+            "dominant_category": "route", "strategies": [], "residual_reason": None}
+    if status in ("clean", "skipped"):
+        return plan
+    if status == "unknown":
+        plan["residual_reason"] = "no route-stage outcome to fix (abort earlier than route)"
+        return plan
+    if status in ("fail", "timeout", "residual"):
+        # A pure timeout (route never completed) -> jump CORE_UTILIZATION to the
+        # floor in one reflow; a route that completed WITH violations keeps the
+        # gentle one-step relief. See _route_strategies (2026-06-18).
+        strategies = _route_strategies(cfg, exclude, to_floor=(status == "timeout"))
+        plan["strategies"] = strategies
+        if not strategies:
+            plan["status"] = "residual"
+            if "CORE_UTILIZATION" not in cfg:
+                plan["residual_reason"] = (
+                    "route congestion but no CORE_UTILIZATION knob to relieve "
+                    "(DIE_AREA-sized); enlarge DIE_AREA manually (v2 lever).")
+            else:
+                plan["residual_reason"] = (
+                    f"route congestion: density relief exhausted (CORE_UTILIZATION "
+                    f"at floor {_UTIL_FLOOR}); honest residual.")
+        return plan
+    plan["residual_reason"] = f"route status '{status}' not actionable in v1"
+    return plan
+
+
 def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
     status = drc.get("status", "unknown")
     cats = drc.get("categories") or {}
@@ -168,7 +282,19 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
                     plan["residual_reason"] = "antenna: all real-fix strategies exhausted"
         else:
             non_antenna = sorted(k for k in cats if not k.upper().endswith("_ANTENNA"))
-            plan["residual_reason"] = "non-antenna DRC class not handled in v1: " + ", ".join(non_antenna)
+            strategies = _routing_drc_strategies(cfg, exclude)
+            plan["strategies"] = strategies
+            if not strategies:
+                plan["status"] = "residual"
+                if "CORE_UTILIZATION" not in cfg:
+                    plan["residual_reason"] = (
+                        "non-antenna DRC class (" + ", ".join(non_antenna) +
+                        "): no CORE_UTILIZATION knob to relieve density (DIE_AREA-sized).")
+                else:
+                    plan["residual_reason"] = (
+                        "routing-geometry DRC (" + ", ".join(non_antenna) +
+                        "): density relief exhausted (CORE_UTILIZATION at floor "
+                        f"{_UTIL_FLOOR}); honest residual.")
         return plan
     plan["residual_reason"] = "drc status unknown — no report yet"
     return plan
@@ -258,7 +384,35 @@ def _rank_plan_strategies(plan: dict, recipes: dict | None,
     return plan
 
 
-def _timing_plan(tcheck: dict, cfg: dict, exclude: set) -> dict:
+def explain_ranking(plan: dict) -> list[str]:
+    """Human rationale for WHY each recipe ranked (--explain, spec 2026-06-18).
+    One line per ranked strategy: id, evidence (successes/attempts + wins),
+    cross-platform corroboration (N platforms), A/B provenance, and which boost
+    fired. Serves the 'transfer' mission — the engineer sees a fix is trusted
+    because it carried across platforms, not one fluke. Read-only; no DB."""
+    lines: list[str] = []
+    for pos, r in enumerate(plan.get("ranking") or [], start=1):
+        succ, att = r.get("successes", 0), r.get("attempts", 0)
+        wins, pc = r.get("wins", 0), int(r.get("platform_count", 0) or 0)
+        win_str = f", {wins} partial-win(s)" if wins else ""
+        if pc >= 2:
+            corro = (f"corroborated across {pc} platforms -> tiebreak lift")
+        elif pc == 1:
+            corro = "1 platform (single-platform evidence)"
+        else:
+            corro = "0 platforms (untried / single-design fluke)"
+        line = (f"#{pos} {r['strategy']}: score={r['score']:.3f}  "
+                f"evidence={succ}/{att}{win_str}  {corro}  "
+                f"provenance={r.get('provenance', 'cold-start')}")
+        mos = r.get("mean_outcome_score")
+        if mos is not None:
+            line += f"  outcome_score={mos:.3f}"
+        lines.append(line)
+    return lines
+
+
+def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
+                 routing_clean: bool = False) -> dict:
     tier = tcheck.get("tier", "unknown")
     wns = tcheck.get("wns_ns")
     plan = {"check": "timing", "status": tier, "violation_count": None,
@@ -289,24 +443,70 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set) -> dict:
          "config_edits": {"CORE_UTILIZATION": str(max(5, cur_util - 5))},
          "sdc_edits": {}, "rerun_from": "floorplan", "recheck": "timing",
          "auto_apply": True})
+    # Win 6 (backend-aware synthesis retune): a POST-ROUTE timing miss WITH clean
+    # routing means the synth-time estimate was wrong, not the floorplan. Re-pick
+    # the ABC mapping strategy (ABC_AREA off -> timing-driven) and flatten
+    # (SYNTH_HIERARCHICAL off) so ABC optimizes across the full netlist, then
+    # re-synthesize via the already-paved rerun_from:"synth" path; the re-run feeds
+    # real routed WNS back as outcome_score (Win 1). Enters as SHADOW
+    # (requires_ab_promotion): never auto-applied in a blind live run — only the
+    # A/B arm (--rank-first) exercises it until it wins an LCB-gated trial (Win 2),
+    # then the learned-recipe ranking surfaces it. Not auto-merged into
+    # failure-patterns.md (human-review-queue invariant). See orfs-playbook.md.
+    if routing_clean and tier in ("moderate", "severe"):
+        strategies.append(
+            {"id": "backend_aware_synth_retune",
+             "rationale": "Post-route timing miss with clean routing: re-pick the "
+                          "ABC map strategy (ABC_AREA=0 -> timing-driven) and "
+                          "flatten (SYNTH_HIERARCHICAL=0) for cross-boundary "
+                          "optimization, then re-synthesize. Closes the loop on "
+                          "real routed WNS, not the synth-time estimate "
+                          "(MCP4EDA / PostEDA-Bench). A/B-gated before live use.",
+             "config_edits": {"ABC_AREA": "0", "SYNTH_HIERARCHICAL": "0"},
+             "sdc_edits": {}, "rerun_from": "synth", "recheck": "timing",
+             "auto_apply": True, "requires_ab_promotion": True})
     plan["strategies"] = [s for s in strategies if s["id"] not in exclude]
     return plan
 
 
 def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
                exclude=(), recipes: dict | None = None,
-               tcheck: dict | None = None) -> dict:
+               tcheck: dict | None = None, route: dict | None = None) -> dict:
     """Pure: (drc.json, lvs.json, parsed config.mk) -> ordered fix plan dict.
     When `recipes` (a Tier-3 fix_recipes entry for this check/violation_class)
     is given, strategies are re-ranked by empirical clearance (fix_model)."""
     excl = set(exclude or ())
     if check == "timing":
-        plan = _timing_plan(tcheck or {}, cfg, excl)
+        routing_clean = (drc or {}).get("status") in ("clean", "clean_beol")
+        plan = _timing_plan(tcheck or {}, cfg, excl, routing_clean=routing_clean)
     elif check == "drc":
         plan = _drc_plan(drc or {}, cfg, excl)
+    elif check == "route":
+        plan = _route_plan(route or {}, cfg, excl)
     else:
         plan = _lvs_plan(lvs or {}, cfg, excl)
     return _rank_plan_strategies(plan, recipes)
+
+
+def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | None:
+    """The strategy a LIVE run should auto-apply: the first auto_apply strategy,
+    SKIPPING any `requires_ab_promotion` (shadow) recipe unless the caller forced
+    it via --rank-first (the A/B arm-B path). This is the Win 6 gate that keeps a
+    backend-aware retune out of blind live runs until it wins its A/B trial."""
+    strategies = plan.get("strategies", [])
+    # A/B arm B explicitly forces a strategy: honor it (it may be a shadow recipe).
+    if rank_first:
+        forced = next((s for s in strategies
+                       if s["id"] == rank_first and s.get("auto_apply")), None)
+        if forced is not None:
+            return forced
+    for s in strategies:
+        if not s.get("auto_apply"):
+            continue
+        if s.get("requires_ab_promotion"):
+            continue        # shadow recipe: never auto-applied in a blind live run
+        return s
+    return None
 
 
 def apply_edits(config_text: str, edits: dict) -> str:
@@ -378,6 +578,18 @@ def _load_recipes(proj: Path, *, check: str, drc: dict, lvs: dict,
     return by_check.get(vclass)
 
 
+def _platform_count(strat: dict) -> int:
+    """Distinct platforms this strategy is CORROBORATED on = number of
+    by_platform entries with successes>0 (spec 2026-06-18, the 'transfer'
+    mission). Falls back to len(platforms_seen) when by_platform is absent (the
+    Decision-8 indexed buckets carry only the symptom-level list). 0 when
+    unknown — a single-design fluke never earns the corroboration tiebreak."""
+    bp = strat.get("by_platform")
+    if bp:
+        return sum(1 for v in bp.values() if int(v.get("successes", 0) or 0) > 0)
+    return len(strat.get("platforms_seen") or [])
+
+
 def load_symptom_recipe(*, check: str, platform: str, drc: dict, lvs: dict,
                         heuristics: Path | None = None):
     """Return (recipe_entry, pooled_prior) for the current symptom, indexed by
@@ -409,9 +621,14 @@ def load_symptom_recipe(*, check: str, platform: str, drc: dict, lvs: dict,
     for stratid, s in strategies.items():
         bp = (s.get("by_platform") or {}).get(platform)
         if bp:
-            recipe["strategies"][stratid] = bp
+            # Annotate with the distinct-platform corroboration count so the
+            # ranker's cross-platform tiebreaker (spec 2026-06-18, 'transfer')
+            # can favour a fix proven across N platforms over a one-design fluke.
+            recipe["strategies"][stratid] = {
+                **bp, "platform_count": _platform_count(s)}
     # Pooled prior: cross-platform totals, minus platform_specific strategies.
-    pooled = {stratid: {k: s.get(k, 0) for k in ("attempts", "successes", "wins", "failures")}
+    pooled = {stratid: {**{k: s.get(k, 0) for k in ("attempts", "successes", "wins", "failures")},
+                        "platform_count": _platform_count(s)}
               for stratid, s in strategies.items() if not s.get("platform_specific")}
     return (recipe if recipe["strategies"] else None), pooled
 
@@ -437,15 +654,33 @@ def load_indexed_recipe(*, check: str, platform: str, design_class: str,
     sig = symptom.canonical_signature(check, vclass,
                                       symptom.predicates_for(check, report))
     bucket = recipes.get(symptom.symptom_id(sig)) or {}
+    # Cross-platform corroboration (spec 2026-06-18, 'transfer'): count the
+    # DISTINCT concrete platforms (the '*' wildcard is the rollup, not a real
+    # platform) on which each strategy cleared at least once, across all design
+    # classes. The ranker uses this only as a tiebreaker.
+    plat_count: dict[str, set] = {}
+    for dclass, by_plat in bucket.items():
+        for plat, node in (by_plat or {}).items():
+            if plat == "*":
+                continue
+            for sid, v in (node.get("strategies") or {}).items():
+                if int(v.get("successes", 0) or 0) > 0:
+                    plat_count.setdefault(sid, set()).add(plat)
     glob = (bucket.get("*") or {}).get("*") or {}
-    pooled = {s: {k: v.get(k, 0) for k in ("attempts", "successes",
-                                           "wins", "failures")}
+    pooled = {s: {**{k: v.get(k, 0) for k in ("attempts", "successes",
+                                              "wins", "failures")},
+                  "platform_count": len(plat_count.get(s) or ())}
               for s, v in (glob.get("strategies") or {}).items()}
     for dclass, plat, level in ((design_class, platform, "exact"),
                                 ("*", platform, "pooled_class"),
                                 ("*", "*", "pooled_platform")):
         node = (bucket.get(dclass) or {}).get(plat)
         if node and node.get("strategies"):
+            # Annotate the matched node's strategies with the corroboration count
+            # so rank_strategies' local path also sees the cross-platform signal.
+            strat_pc = {sid: {**v, "platform_count": len(plat_count.get(sid) or ())}
+                        for sid, v in node["strategies"].items()}
+            node = {**node, "strategies": strat_pc}
             return node, pooled, level
     return None, pooled, "none"
 
@@ -476,11 +711,14 @@ def attach_lessons(plan: dict, *, check: str, vclass: str | None, platform: str)
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Diagnose DRC/LVS violations → real-fix plan.")
     ap.add_argument("project_dir")
-    ap.add_argument("--check", choices=["drc", "lvs", "timing"], default="drc")
+    ap.add_argument("--check", choices=["drc", "lvs", "timing", "route"], default="drc")
     ap.add_argument("--apply", metavar="STRATEGY_ID", help="write the strategy's edits into config.mk")
     ap.add_argument("--next", action="store_true", help="print one tab-separated action line for the driver")
     ap.add_argument("--list", action="store_true",
                     help="print the full priority-ranked candidate list as JSON")
+    ap.add_argument("--explain", action="store_true",
+                    help="print a human rationale for WHY each recipe ranked "
+                         "(evidence, cross-platform corroboration, provenance)")
     ap.add_argument("--exclude", default="", help="comma-separated strategy ids to skip")
     ap.add_argument("--rank-first", default=None,
                     help="force this strategy id to the head of the ranked plan (A/B arm B)")
@@ -490,6 +728,7 @@ def main(argv=None) -> int:
     drc = _load(proj / "reports" / "drc.json")
     lvs = _load(proj / "reports" / "lvs.json")
     tcheck = _load(proj / "reports" / "timing_check.json")
+    route = _load(proj / "reports" / "route.json")
     cfg_path = proj / "constraints" / "config.mk"
     cfg_text = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
     cfg = parse_config(cfg_text)
@@ -510,9 +749,18 @@ def main(argv=None) -> int:
         design_class = f"{_sc.detect_design_type(proj, cfg)}/{_size}"
     except Exception:
         design_class = "unknown/unknown"
-    idx_recipe, idx_pooled, idx_level = load_indexed_recipe(
-        check=args.check, platform=plat, design_class=design_class, drc=drc, lvs=lvs)
-    if idx_recipe is not None:
+    # Route (backend-abort) symptoms index under check=orfs_stage/class=route, not
+    # the drc/lvs report shape the indexed/symptom recipe readers assume. The static
+    # route_relief strategy already carries the cold-start fix; learned ranking for
+    # the route symptom rides through the learner -> heuristics, not this reader.
+    if args.check == "route":
+        recipes, pooled = None, {}
+        idx_recipe = None
+    else:
+        recipes = pooled = None
+        idx_recipe, idx_pooled, idx_level = load_indexed_recipe(
+            check=args.check, platform=plat, design_class=design_class, drc=drc, lvs=lvs)
+    if args.check != "route" and idx_recipe is not None:
         recipes, pooled = idx_recipe, idx_pooled
         try:
             import knowledge_db
@@ -529,11 +777,12 @@ def main(argv=None) -> int:
             _kc.close()
         except Exception:
             pass    # lifecycle filter must never break diagnosis
-    else:
+    elif args.check != "route":
         sym_recipe, pooled = load_symptom_recipe(check=args.check, platform=plat, drc=drc, lvs=lvs)
         recipes = sym_recipe if sym_recipe is not None else _load_recipes(
             proj, check=args.check, drc=drc, lvs=lvs)
-    plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes, tcheck=tcheck)
+    plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
+                      tcheck=tcheck, route=route)
     _rank_plan_strategies(plan, recipes, pooled=pooled)
     attach_lessons(plan, check=args.check,
                    vclass=_current_vclass(args.check, drc, lvs), platform=plat)
@@ -589,6 +838,19 @@ def main(argv=None) -> int:
         print(json.dumps(out))
         return 0
 
+    if args.explain:
+        # Human rationale for the ranking: WHY each recipe ranked, with the
+        # cross-platform corroboration boost called out (spec 2026-06-18).
+        rationale = explain_ranking(plan)
+        plan["explain"] = rationale
+        if rationale:
+            for ln in rationale:
+                print(ln)
+        else:
+            print(f"NO RANKED STRATEGIES\t{plan.get('status')}\t"
+                  f"{plan.get('residual_reason') or 'n/a'}")
+        return 0
+
     if args.list:
         # Print the FULL plan (ranking + attached lessons + strategies), so
         # consumers get the priority-ranked candidates AND the matching prose
@@ -597,7 +859,7 @@ def main(argv=None) -> int:
         return 0
 
     if args.next:
-        auto = next((s for s in plan["strategies"] if s.get("auto_apply")), None)
+        auto = _live_auto_strategy(plan, rank_first=args.rank_first)
         if auto is None:
             reason = plan.get("residual_reason") or "no_auto_strategy"
             print(f"STOP\t{plan['status']}\t{reason}")

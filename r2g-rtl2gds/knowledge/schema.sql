@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS runs (
     wns_ns                  REAL,
     tns_ns                  REAL,
     timing_tier             TEXT,
+    -- per-stage setup worst-slack (ns), for the Fmax deterioration model
+    floorplan_setup_ws      REAL,
+    place_setup_ws          REAL,
+    finish_setup_ws         REAL,
     cell_count              INTEGER,
     area_um2                REAL,
     power_mw                REAL,

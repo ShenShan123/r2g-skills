@@ -100,6 +100,58 @@ def parse_drc_report(text: str) -> dict:
     return drc
 
 
+# --- Staged setup-slack readers (for the Fmax search & deterioration model) ---
+# Per-stage ORFS metrics JSONs live in <run_dir>/logs/. Keys verified against a
+# real nangate45 run. 3_4_place_resized is the fallback when 3_5 is absent.
+_STAGE_METRIC_FILES = {
+    "floorplan": [("2_1_floorplan.json",
+                   "floorplan__timing__setup__ws", "floorplan__timing__setup__tns")],
+    "place": [("3_5_place_dp.json",
+               "detailedplace__timing__setup__ws", "detailedplace__timing__setup__tns"),
+              ("3_4_place_resized.json",
+               "placeopt__timing__setup__ws", "placeopt__timing__setup__tns")],
+}
+
+
+def _read_stage_json(path: Path, ws_key: str, tns_key: str) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        d = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    out = {}
+    if ws_key in d:
+        out["setup_wns"] = d[ws_key]
+    if tns_key in d:
+        out["setup_tns"] = d[tns_key]
+    return out
+
+
+def parse_stage_metrics(run_dir, stage: str) -> dict:
+    """Return {'setup_wns':.., 'setup_tns':..} for 'floorplan' or 'place' from the
+    per-stage metrics JSON under <run_dir>/logs/. Tries fallbacks in order; returns
+    {} if nothing readable."""
+    logs = Path(run_dir) / "logs"
+    for fname, ws_key, tns_key in _STAGE_METRIC_FILES[stage]:
+        out = _read_stage_json(logs / fname, ws_key, tns_key)
+        if out:
+            return out
+    return {}
+
+
+def collect_timing_staged(run_dir) -> dict:
+    """{floorplan_setup_ws, place_setup_ws} from whichever stage JSONs exist."""
+    staged = {}
+    fp = parse_stage_metrics(run_dir, "floorplan")
+    pl = parse_stage_metrics(run_dir, "place")
+    if "setup_wns" in fp:
+        staged["floorplan_setup_ws"] = fp["setup_wns"]
+    if "setup_wns" in pl:
+        staged["place_setup_ws"] = pl["setup_wns"]
+    return staged
+
+
 def find_reports(project_root: Path) -> dict:
     """Find report files in ORFS backend directory."""
     reports = {}
@@ -263,12 +315,18 @@ def detect_orfs_progress(run_dir: Path) -> dict:
 
 
 def main():
-    if len(sys.argv) < 3:
-        print('usage: extract_ppa.py <project-root> <output.json>', file=sys.stderr)
+    argv = sys.argv[1:]
+    stage_arg = None
+    if "--stage" in argv:
+        i = argv.index("--stage")
+        stage_arg = argv[i + 1]
+        del argv[i:i + 2]
+    if len(argv) < 2:
+        print('usage: extract_ppa.py <project-root> <output.json> [--stage floorplan|place]',
+              file=sys.stderr)
         sys.exit(1)
-
-    project_root = Path(sys.argv[1])
-    out_path = Path(sys.argv[2])
+    project_root = Path(argv[0])
+    out_path = Path(argv[1])
 
     reports = find_reports(project_root)
 
@@ -377,6 +435,20 @@ def main():
                     report_power[out_key] = rj[json_key]
             if report_power:
                 ppa['summary']['power'] = report_power
+
+    # Staged setup slacks (for the deterioration model) + optional per-stage override.
+    if reports.get('run_dir'):
+        staged = collect_timing_staged(reports['run_dir'])
+        if 'setup_wns' in ppa['summary']['timing']:
+            staged['finish_setup_ws'] = ppa['summary']['timing']['setup_wns']
+        if staged:
+            ppa['summary']['timing_staged'] = staged
+        if stage_arg in ('floorplan', 'place'):
+            sm = parse_stage_metrics(reports['run_dir'], stage_arg)
+            if sm:
+                # For a place-only Fmax probe there is no finish/6_report; surface
+                # the requested stage's slack in the standard summary.timing shape.
+                ppa['summary']['timing'] = sm
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(ppa, indent=2, ensure_ascii=False), encoding='utf-8')

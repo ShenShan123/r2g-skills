@@ -54,6 +54,52 @@ def test_antenna_fail_nangate45_offers_diode_repair():
     assert plan["dominant_category"] == "METAL7_ANTENNA"
 
 
+def _routing_cats():
+    return {"'m3.2'": {"count": 4, "description": ""},
+            "via_OFFGRID": {"count": 1, "description": ""}}
+
+
+def test_routing_drc_fail_offers_density_relief():
+    """Non-antenna metal/via routing-geometry DRC: lower CORE_UTILIZATION (real
+    layout change, deck never relaxed). Validated 2026-06-16 (eeprom_top sky130hd
+    4 m3.2 -> 0 at util 20->12)."""
+    cfg = {"CORE_UTILIZATION": "20", "PLATFORM": "sky130hd"}
+    plan = d.build_plan(_drc("fail", 5, _routing_cats()), {}, cfg, check="drc")
+    ids = [s["id"] for s in plan["strategies"]]
+    assert ids == ["density_relief"]
+    s = plan["strategies"][0]
+    assert s["config_edits"] == {"CORE_UTILIZATION": "12"}   # 20 - step(8)
+    assert s["rerun_from"] == "floorplan"
+    assert s["auto_apply"] is True
+
+
+def test_density_relief_excluded_yields_no_strategy():
+    """Arm A of the A/B trial excludes density_relief -> no strategy (the control
+    that should stay dirty)."""
+    cfg = {"CORE_UTILIZATION": "20", "PLATFORM": "sky130hd"}
+    plan = d.build_plan(_drc("fail", 5, _routing_cats()), {}, cfg,
+                        check="drc", exclude={"density_relief"})
+    assert plan["strategies"] == []
+    assert plan["status"] == "residual"
+
+
+def test_routing_drc_at_util_floor_is_honest_residual():
+    cfg = {"CORE_UTILIZATION": "8", "PLATFORM": "sky130hd"}
+    plan = d.build_plan(_drc("fail", 5, _routing_cats()), {}, cfg, check="drc")
+    assert plan["strategies"] == []
+    assert plan["status"] == "residual"
+    assert "floor" in plan["residual_reason"]
+
+
+def test_routing_drc_without_util_knob_is_honest_residual():
+    """DIE_AREA-sized design has no CORE_UTILIZATION lever to relieve density."""
+    cfg = {"DIE_AREA": "0 0 120 120", "PLATFORM": "sky130hd"}
+    plan = d.build_plan(_drc("fail", 5, _routing_cats()), {}, cfg, check="drc")
+    assert plan["strategies"] == []
+    assert plan["status"] == "residual"
+    assert "no CORE_UTILIZATION knob" in plan["residual_reason"]
+
+
 def test_applied_strategy_is_filtered_out():
     cfg = {"MAX_REPAIR_ANTENNAS_ITER_GRT": "10",
            "MAX_REPAIR_ANTENNAS_ITER_DRT": "10", "CORE_UTILIZATION": "10",

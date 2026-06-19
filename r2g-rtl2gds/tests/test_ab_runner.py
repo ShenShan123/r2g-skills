@@ -77,9 +77,124 @@ def test_judge_crash_arm_is_inconclusive(tmp_path):
                                   "fix_iters": 0}) == "inconclusive"
 
 
+def test_outcome_score_never_promotes_a_non_clean_arm(tmp_path):
+    """Win 1 invariant H4: outcome_score is an ordering HINT only. Two non-clean
+    arms — even with a clearly better outcome_score on B — must stay 'inconclusive'
+    and never promote (promotion still requires a clean arm). is_success is the
+    sole authority for a 'win'."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
+    arm_a = {"is_success": False, "wall_s": 900.0, "fix_iters": None,
+             "outcome_score": 0.30}
+    arm_b = {"is_success": False, "wall_s": 100.0, "fix_iters": None,
+             "outcome_score": 0.95}        # much "better" but still non-clean
+    verdict = ab_runner.judge(arm_a, arm_b)
+    assert verdict == "inconclusive"
+    ab_runner.record_trial(conn, key=KEY, verdict=verdict, arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={"a": arm_a, "b": arm_b})
+    # inconclusive -> reverts to shadow, NEVER promoted.
+    assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"
+
+
 def test_loss_reverts_candidate_to_shadow(tmp_path):
     conn = _conn(tmp_path)
     recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
     ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id="ra",
                            arm_b_run_id="rb", metrics={})
     assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"
+
+
+# ── Win 2: variance-aware (LCB) promotion ────────────────────────────────────
+
+def test_lcb_penalizes_variance():
+    """The lower-confidence bound (mean − z·stderr) discounts a high-variance
+    sample: a lower-mean/zero-variance arm beats a higher-mean/high-variance one."""
+    high_var = ab_runner.lcb([1.0, 1.0, 0.0, 0.0], z=1.0)   # mean .5, big spread
+    steady = ab_runner.lcb([0.4, 0.4, 0.4, 0.4], z=1.0)     # mean .4, zero spread
+    assert steady > high_var
+
+
+def test_lcb_single_sample_is_mean():
+    assert ab_runner.lcb([0.7], z=1.0) == 0.7
+    assert ab_runner.lcb([], z=1.0) == 0.0
+
+
+def test_judge_repeated_prefers_reliable_arm_over_flaky(tmp_path):
+    a = [{"is_success": True, "wall_s": 100.0},
+         {"is_success": False, "wall_s": 100.0}]    # flaky 0.5
+    b = [{"is_success": True, "wall_s": 100.0},
+         {"is_success": True, "wall_s": 100.0}]      # reliable 1.0
+    assert ab_runner.judge_repeated(a, b) == "win"
+
+
+def test_judge_repeated_high_variance_b_loses_to_steady_a():
+    """The documented LVS-crash heisenbug: one lucky win is not evidence. A flaky
+    arm B must LOSE to a steady arm A under the LCB even with the same max."""
+    a = [{"is_success": True} for _ in range(4)]              # steady clean
+    b = [{"is_success": True}, {"is_success": True},
+         {"is_success": False}, {"is_success": False}]        # flaky 0.5
+    assert ab_runner.judge_repeated(a, b) == "loss"
+
+
+def test_judge_repeated_never_promotes_non_clean_b():
+    a = [{"is_success": False}, {"is_success": False}]
+    b = [{"is_success": False}, {"is_success": False}]
+    assert ab_runner.judge_repeated(a, b) == "inconclusive"
+
+
+def test_judge_repeated_k1_matches_binary_judge(tmp_path):
+    # k=1 degrades to the single-run binary verdict: B clean where A is not -> win.
+    assert ab_runner.judge_repeated([{"is_success": False}],
+                                    [{"is_success": True}]) == "win"
+
+
+def test_verdict_journaled(tmp_path, monkeypatch):
+    """Tier B2: record_trial journals a promote (win) / demote (loss) action into
+    the journal DB, carrying symptom_id + trial_id. Best-effort + advisory: the
+    knowledge-side recipe_status stays the source of truth for the verdict."""
+    import journal_db
+    jdb = tmp_path / "journal.sqlite"
+    monkeypatch.setenv("R2G_JOURNAL_DB", str(jdb))
+    conn = _conn(tmp_path)
+    recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
+    tid = ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
+                                 arm_b_run_id="rb", metrics={"lcb": 0.8})
+    jc = journal_db.connect(jdb)
+    row = jc.execute("SELECT action_type, symptom_id, "
+                     "json_extract(payload_json,'$.trial_id'), "
+                     "json_extract(payload_json,'$.strategy') FROM actions").fetchone()
+    assert row[0] == "promote"
+    assert row[1] == KEY["symptom_id"]
+    assert row[2] == tid
+    assert row[3] == KEY["strategy"]
+    # A loss journals a demote.
+    ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={})
+    types = [r[0] for r in jc.execute(
+        "SELECT action_type FROM actions ORDER BY action_id").fetchall()]
+    assert types == ["promote", "demote"]
+
+
+def test_verdict_journal_disabled_is_silent(tmp_path, monkeypatch):
+    """R2G_JOURNAL=0 silences the new promote/demote write without breaking the
+    knowledge-side promotion (acceptance #5)."""
+    monkeypatch.setenv("R2G_JOURNAL", "0")
+    jdb = tmp_path / "journal.sqlite"
+    monkeypatch.setenv("R2G_JOURNAL_DB", str(jdb))
+    conn = _conn(tmp_path)
+    recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
+    ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={})
+    assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"   # knowledge unaffected
+    assert not jdb.exists()                                          # nothing journaled
+
+
+def test_repeats_default_is_two():
+    import os
+    os.environ.pop("R2G_AB_REPEATS", None)
+    assert ab_runner.ab_repeats() == 2
+    os.environ["R2G_AB_REPEATS"] = "3"
+    try:
+        assert ab_runner.ab_repeats() == 3
+    finally:
+        os.environ.pop("R2G_AB_REPEATS", None)

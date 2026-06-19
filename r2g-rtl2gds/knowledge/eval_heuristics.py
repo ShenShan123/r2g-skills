@@ -842,9 +842,101 @@ def cmd_summarize_fix(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 # main
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# bench (Win 3: r2g-bench held-out checkpoint self-evaluation)
+# --------------------------------------------------------------------------- #
+# Ladder rung -> name (mirrors ingest_run._LADDER_RANK).
+_BENCH_LADDER = {1: "synth", 2: "place", 3: "route", 4: "drc", 5: "lvs", 6: "rcx"}
+
+
+def bench_score(db_path: Path | str, bench_set_path: Path | str | None = None) -> dict:
+    """Score the held-out r2g-bench designs per-checkpoint with partial credit.
+
+    A NON-BLOCKING scoreboard (Win 3): reads ingested runs with is_bench=1, groups
+    by design, and reports — reusing Win 1's dense outcome_score and Win 2's
+    repeat-variance LCB — per design: n_runs, success_rate (SR), mean + LCB
+    outcome_score over the repeats, mean residual DRC violations, and how far down
+    the flow ladder the repeats reached (stage_reach). `uncovered_designs` lists
+    bench designs with no ingested run yet (an honest coverage gap, not a 0)."""
+    import ingest_run
+    import ab_runner
+    conn = knowledge_db.connect(db_path)
+    knowledge_db.ensure_schema(conn)
+    bench_names = ingest_run._load_bench_designs(
+        Path(bench_set_path) if bench_set_path else None)
+    cur = conn.execute("SELECT * FROM runs WHERE is_bench = 1")
+    cols = [c[0] for c in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    conn.close()
+
+    by_design: dict[str, list[dict]] = {}
+    for r in rows:
+        by_design.setdefault(r.get("design_name") or "unknown", []).append(r)
+
+    designs: dict[str, dict] = {}
+    for name, runs in by_design.items():
+        scores = [r["outcome_score"] for r in runs if r.get("outcome_score") is not None]
+        succ = [1.0 if knowledge_db.is_success(r) else 0.0 for r in runs]
+        drcs = [r["drc_violations"] for r in runs if r.get("drc_violations") is not None]
+        reach: dict[str, int] = {}
+        for r in runs:
+            try:
+                sl = json.loads(r.get("stage_times_json") or "[]")
+            except (TypeError, json.JSONDecodeError):
+                sl = []
+            rank = ingest_run._furthest_stage_rank(
+                sl, r.get("orfs_status"), r.get("orfs_fail_stage"),
+                r.get("drc_status"), r.get("lvs_status"), r.get("rcx_status"))
+            if rank:
+                for k in range(1, rank + 1):
+                    reach[_BENCH_LADDER[k]] = reach.get(_BENCH_LADDER[k], 0) + 1
+        designs[name] = {
+            "n_runs": len(runs),
+            "success_rate": (sum(succ) / len(succ)) if succ else None,
+            "mean_outcome_score": (sum(scores) / len(scores)) if scores else None,
+            "outcome_lcb": ab_runner.lcb(scores) if scores else None,
+            "mean_drc_violations": (sum(drcs) / len(drcs)) if drcs else None,
+            "stage_reach": reach,
+        }
+
+    srs = [d["success_rate"] for d in designs.values() if d["success_rate"] is not None]
+    moss = [d["mean_outcome_score"] for d in designs.values()
+            if d["mean_outcome_score"] is not None]
+    overall = {
+        "n_designs": len(designs),
+        "n_runs": sum(d["n_runs"] for d in designs.values()),
+        "mean_success_rate": (sum(srs) / len(srs)) if srs else None,
+        "mean_outcome_score": (sum(moss) / len(moss)) if moss else None,
+    }
+    return {"designs": designs, "overall": overall,
+            "uncovered_designs": sorted(bench_names - set(by_design)),
+            "note": "NON-BLOCKING scoreboard; SR/outcome over is_bench=1 runs. "
+                    "Full bench runs are hours each — score after ingesting them."}
+
+
+def cmd_bench(args: argparse.Namespace) -> int:
+    card = bench_score(args.db, args.bench_set)
+    out = Path(args.out) if args.out else Path(args.db).parent / "bench_score.json"
+    out.write_text(json.dumps(card, indent=2, sort_keys=True), encoding="utf-8")
+    o = card["overall"]
+    print(f"r2g-bench: {o['n_designs']} designs / {o['n_runs']} runs; "
+          f"mean SR={o['mean_success_rate']}, mean outcome={o['mean_outcome_score']}; "
+          f"uncovered={len(card['uncovered_designs'])}. Wrote {out}")
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    pb = sub.add_parser("bench",
+                        help="Score the held-out r2g-bench designs (Win 3)")
+    pb.add_argument("--db", required=True, help="Path to knowledge.sqlite")
+    pb.add_argument("--bench-set", default=None,
+                    help="Path to bench_set.json (default: knowledge/eval/bench_set.json)")
+    pb.add_argument("--out", default=None,
+                    help="Output path for bench_score.json (default: next to the DB)")
+    pb.set_defaults(func=cmd_bench)
 
     pe = sub.add_parser("emit", help="Generate paired naive/learned config.mk")
     pe.add_argument("--eval-set", required=True,

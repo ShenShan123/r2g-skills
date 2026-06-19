@@ -82,8 +82,9 @@ def test_full_turn_runs_arms_and_promotes_winner(tmp_path, monkeypatch):
     engineer_loop.learn_cycle(led, conn, prev_heur=prev, n_ab_designs=1)
 
     # The fix episodes produced a learned recipe -> candidate -> arm entries.
+    # Win 2: 2 arms × R2G_AB_REPEATS (default k=2) = 4 entries for one design.
     arms = [e for e in led.entries() if e["kind"] == "ab_arm"]
-    assert len(arms) == 2 and {a["arm"] for a in arms} == {"A", "B"}
+    assert len(arms) == 4 and {a["arm"] for a in arms} == {"A", "B"}
 
     # Execute the arms (resume semantics: they are just pending entries).
     for entry in list(led.pending()):

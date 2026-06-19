@@ -157,4 +157,7 @@ def test_fix_effectiveness_is_deterministic(tmp_knowledge_dir):
     v1 = build_lineage_view.build_view(db_path)
     v2 = build_lineage_view.build_view(db_path)
     assert v1 == v2
-    assert set(v1.keys()) == {"health", "provenance", "fix_effectiveness"}
+    # "contradictions" added 2026-06-18 (gbrain-absorption Workstream C): the
+    # structural recipe-contradiction probe is surfaced as a read-only panel.
+    assert set(v1.keys()) == {
+        "health", "provenance", "fix_effectiveness", "contradictions"}

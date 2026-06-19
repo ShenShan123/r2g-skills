@@ -173,6 +173,26 @@ scripts/flow/run_rcx.sh <project-dir> [platform]
 
 **Never set PLACE_DENSITY_LB_ADDON below 0.05** — this reliably causes placement divergence on any non-trivial design.
 
+### Backend-aware synthesis retune (post-route timing miss, clean routing)
+
+When a design **routes clean** but **misses timing after route** (the synth-time WNS
+estimate was optimistic), re-pick the ABC mapping strategy and re-synthesize instead of
+relaxing the clock or the floorplan. `diagnose_signoff_fix.py --check timing` offers the
+`backend_aware_synth_retune` recipe in this case (Win 6):
+
+| Knob | Delta | Effect |
+|------|-------|--------|
+| `ABC_AREA` | → `0` | Timing-driven ABC mapping (area mode off) |
+| `SYNTH_HIERARCHICAL` | → `0` | Flatten so ABC optimizes across module boundaries |
+
+It reruns from `synth` (the already-paved `rerun_from:"synth"` path) and rechecks timing,
+feeding the **real routed WNS** back as `outcome_score`. The recipe **enters as shadow**
+(`requires_ab_promotion`): a blind live run never auto-applies it — only the A/B arm
+(`--rank-first backend_aware_synth_retune`) exercises it until it wins an LCB-gated A/B
+trial (`R2G_AB_REPEATS`, Win 2), after which the learned-recipe ranking surfaces it. It is
+**never** hand-promoted and **never** auto-merged into `failure-patterns.md`. Fires only on
+`moderate`/`severe` timing tiers with clean DRC.
+
 ### Safety Flags for Large Designs
 For designs with > 50K instances or macros (swerv, black_parrot, ibex):
 ```makefile
@@ -237,6 +257,117 @@ Verified-working ways to override a `variables.yaml`-defined variable:
 If you don't see your override taking effect, look at the *new* `.tmp.log`
 (not the old `.log` left over from a previous run). The two coexist in the
 same logs directory and `tail -F` of `5_*.log` will read the stale one too.
+
+## Fmax Search (loose-first)
+
+`scripts/reports/fmax_search.py` characterizes a design's Fmax (the fastest
+clock period that still closes) **before** you commit to a clock target. It is a
+**loose-first** search: it starts from a known-loose period and tightens, using
+cheap **placement-stage** timing as a proxy for signoff timing instead of a full
+flow per probe.
+
+### The placement-stage proxy
+
+Each probe runs only the front of the flow:
+
+    ORFS_STAGES="synth floorplan place"
+
+and reads the resulting **post-place** worst setup slack. The proxy keys, in
+preference order, are:
+
+- `detailedplace__timing__setup__ws` — post-detailed-placement worst setup slack
+  (the primary proxy; this is what the search roots on)
+- `floorplan__timing__setup__ws` — post-floorplan worst setup slack, used as a
+  fallback when the detailed-placement value is missing (e.g. a probe that
+  floorplanned but didn't reach detailed placement)
+
+Stopping at place is what makes the search affordable: a probe costs roughly a
+synth+floorplan+place run rather than a full place-route-finish-signoff run.
+
+### Variant cloning recipe
+
+Each probe is a real ORFS run at a distinct clock period, so it gets its own
+project variant cloned from the base project:
+
+- Variant directory name: `<base>_fmax_p<NNNN>`, where `<NNNN>` encodes the
+  probe's clock period (so the directory is human-readable and collision-free
+  across probe periods).
+- Each variant gets a **unique `FLOW_VARIANT`** (`run_orfs.sh` derives
+  `FLOW_VARIANT` from the project-dir basename), so concurrent probes never share
+  an ORFS results/scratch directory. This is what lets `--max-parallel > 1` run
+  multiple probes at once without violating the
+  "never two configs with the same DESIGN_NAME and FLOW_VARIANT concurrently"
+  hard rule.
+
+By default variants are cleaned up after the search; pass `--keep-variants` to
+retain them for inspection.
+
+### Root-find algorithm
+
+The search treats "does this period close at place?" as a monotone predicate and
+roots on the proxy slack:
+
+1. Start from a loose period (large clock period, comfortably positive proxy
+   slack) and confirm it passes.
+2. Tighten (shrink the period) — expanding outward / bisecting — to bracket the
+   crossover where the post-place proxy slack goes from positive to negative.
+3. Bisect within the bracket until the period interval is within tolerance,
+   yielding the tightest period whose proxy slack is still `>= 0`.
+
+This is a 1-D root find on a noisy-but-monotone signal; the loose-first start
+keeps early probes cheap and avoids wasting full-flow runs on periods that were
+never going to close.
+
+### Deterioration model + `--verify` self-correction
+
+Post-place timing is **optimistic** relative to signoff: routing, CTS skew, and
+final optimization eat into the slack that looked fine at place. The search
+corrects for this with a learned **per-family slack-deterioration model** (how
+much worse signoff slack tends to be than the post-place proxy for designs of
+this family/platform). The reported number is the **predicted-signoff Fmax**, not
+the raw proxy Fmax.
+
+Because the prediction is a model, the reported Fmax is a **proxy (UNVERIFIED)**.
+Pass `--verify` to run **one** full flow at the chosen winning period; the
+verified signoff slack is then fed back to tighten the deterioration model
+(self-correction). `--verify` does **not** replace the step-8 `check_timing`
+gate — that still runs on the real final backend.
+
+The model is **nangate45-backfilled** (seeded from the existing nangate45
+corpus); other platforms are **forward-learned** (the model accumulates as
+verified runs land for those platforms), so early Fmax predictions on non-nangate
+platforms lean more heavily on conservative defaults.
+
+### Honest-label taxonomy
+
+The result (`reports/fmax_search.json`) labels its Fmax with how trustworthy it
+is, so downstream consumers never mistake a proxy for a signed-off number:
+
+- **verified** — confirmed by a full flow (`--verify`) at the winning period; the
+  signoff timing gate actually passed.
+- **predicted** — proxy Fmax corrected by the deterioration model, but **not**
+  run through full signoff. UNVERIFIED.
+- **proxy-only / raw** — the post-place crossover period with no deterioration
+  correction applied (e.g. no model available for the family yet); the least
+  trustworthy and most optimistic.
+
+### Where the proxy lies (least-reliable archetypes)
+
+The place-stage proxy is least reliable on designs whose slack collapses *after*
+placement. Cross-reference `failure-patterns.md`:
+
+- **Congestion / route-limited** designs (see "Routing Congestion (GRT-0116)"):
+  post-place timing looks healthy but routing detours and added buffers erase the
+  slack the proxy reported.
+- **Macro / CTS-skew-dominated** designs (see the macro placement and CTS
+  sections): clock-tree skew and macro-pin access aren't modeled at place, so the
+  proxy is optimistic.
+- **Hold-cliff** designs: hold violations are essentially invisible at the place
+  stage and only appear after CTS/route, so a period the proxy "closes" may fail
+  signoff on hold.
+
+For these archetypes prefer `--verify`, and treat a `predicted`/`proxy-only`
+label as a loose upper bound on real Fmax rather than a commitment.
 
 ## When Backend Fails
 

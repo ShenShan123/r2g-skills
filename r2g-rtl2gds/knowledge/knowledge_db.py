@@ -72,6 +72,35 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "first_attempt_clean": "INTEGER",
         "fix_iters_to_clean": "INTEGER",
         "wall_s_to_clean": "REAL",
+        # Dense signoff reward (Win 1, paper-absorption 2026-06-16): continuous
+        # [0,1] score = w_stage·stage_progress + w_vrr·VRR, or NULL when the
+        # furthest stage is unknown. ADDITIVE and ADVISORY — is_success stays the
+        # SOLE authority for clean/fail and for recipe promotion. A PURE function of
+        # the run's OWN artifacts (its stage_log + its own fix_log), so re-ingest is
+        # idempotent; never cross-row derived (that was the 2026-06-13 clobber bug).
+        "outcome_score": "REAL",
+        # Held-out benchmark flag (Win 3, r2g-bench): 1 when this run's design is in
+        # knowledge/eval/bench_set.json. Set at ingest. Filtered ONLY at the
+        # LEARNING/suggest read (learn_heuristics WHERE is_bench=0) — NEVER the
+        # failure_events write path (a bench fail still gets its orfs-fail-% event
+        # and stays in the honesty count). NULL/0 == not a bench run.
+        "is_bench": "INTEGER",
+        # Pre-route feature vector (Win 5, presynth.py) as JSON — instance count,
+        # primary I/O, est logic depth, target util, clock period, routing layers.
+        # PREDICTIVE inputs available at SUGGESTION time (vs the post-route
+        # metadata.csv outcomes), so suggest_config can do feature-vector KNN
+        # retrieval. Populated at ingest when reports/presynth_features.json exists;
+        # NULL otherwise (retrieval falls back to family medians).
+        "presynth_features_json": "TEXT",
+        # Per-stage setup worst-slack (ns) for the Fmax slack-deterioration model
+        # (feat/fmax-search 2026-06-04). Fresh DBs get these from schema.sql's runs
+        # CREATE TABLE; these entries forward-migrate a legacy runs.sqlite.
+        # floorplan_setup_ws = 2_1_floorplan.json floorplan__timing__setup__ws
+        # place_setup_ws     = 3_5_place_dp.json   detailedplace__timing__setup__ws
+        # finish_setup_ws    = 6_report.json       finish__timing__setup__ws (== wns_ns)
+        "floorplan_setup_ws": "REAL",
+        "place_setup_ws": "REAL",
+        "finish_setup_ws": "REAL",
     },
     # Symptom-indexed memory (spec 2026-06-09): raw symptom tagging on the raw tiers.
     "fix_events": {

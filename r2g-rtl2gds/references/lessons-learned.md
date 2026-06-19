@@ -344,3 +344,45 @@ recovery loop), `retry_boom_pass3.sh` / `retry_boom_pass4.sh` / `retry_boom_time
 `_drc_band_*.log`, `_lvs_test_*.log`, `last_graph/`) and the stray root `install.sh` (the
 canonical installer is `r2g-rtl2gds/install.sh`). Resumable multi-design campaigns now run
 through `engineer_loop.py` (see `references/engineer-loop.md`).
+
+## Fmax Search — Post-Place Timing Is Optimistic vs Signoff (2026-06-04)
+
+`scripts/reports/fmax_search.py` roots on **placement-stage** worst setup slack
+(`detailedplace__timing__setup__ws`, falling back to `floorplan__timing__setup__ws`) as a cheap
+proxy for signoff Fmax — each probe runs only `ORFS_STAGES="synth floorplan place"` instead of a
+full place-route-finish-signoff flow. The whole approach hinges on one corpus fact: **post-place
+timing is systematically optimistic relative to signoff**, so the raw proxy Fmax would over-promise
+unless corrected.
+
+**Where the gap actually lives — placement, not routing.** Decomposing the slack drop across stages
+(`d_fp_pl` = floorplan→place delta, `d_pl_fin` = place→final delta) on the corpus shows:
+
+- **Placement is the dominant gap:** `d_fp_pl` p90 ≈ **0.41 ns** — most of the optimism is baked in
+  between floorplan and the end of placement (buffering, legalization, detailed-placement timing
+  repair changing the picture vs the floorplan estimate).
+- **Routing is ≈ neutral:** `d_pl_fin` median is **negative** — going from post-place to final
+  signoff does *not*, on the median design, eat further slack; routing/CTS/final-opt roughly break
+  even. The big, predictable correction is the place-stage one, which is exactly the stage the proxy
+  reads, so a per-family deterioration offset learned at place is a sound predictor for the median
+  design.
+
+This is why the search corrects the proxy with a learned **per-family slack-deterioration model** and
+labels its output **predicted (UNVERIFIED)** rather than signed-off, and why `--verify` runs exactly
+one full flow at the winning period to confirm and feed the model back.
+
+**Archetypes where the proxy lies (median ≠ tail).** The "routing is neutral" result is a *median*
+statement; specific archetypes blow the tail and make the place-stage proxy optimistic:
+
+- **Congestion / route-limited** designs — routing detours + added buffers erase slack the proxy
+  reported (see `failure-patterns.md` → "Routing Congestion (GRT-0116)").
+- **Macro / CTS-skew-dominated** designs — clock-tree skew and macro-pin access aren't modeled at
+  place; the proxy can't see them (see the macro placement / CTS sections).
+- **Hold cliffs** — hold violations are essentially invisible at the place stage and only surface
+  after CTS/route, so a period the proxy "closes" can still fail signoff on hold.
+
+For these, treat a `predicted`/`proxy-only` label as a loose upper bound and prefer `--verify`.
+
+**Model provenance:** the deterioration model is **nangate45-backfilled** (seeded from the existing
+nangate45 corpus, which has the most signed-off runs); **other platforms are forward-learned** — the
+per-family offset accumulates only as verified runs land for those platforms, so early non-nangate
+predictions lean on conservative defaults until the model fills in.

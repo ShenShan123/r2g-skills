@@ -19,6 +19,74 @@ skipped as library-pre-verified).
 
 ---
 
+## 2026-06-16 — Gate B FIRED on the live store: A/B loop's first end-to-end verdict + density_relief
+
+Ran the deferred compute-bound **Tier −1 Gate B** for real on the live `knowledge.sqlite`
+(branch `feat/paper-absorption`). The corpus showed the exact Gate A signature — 69 `fail` +
+41 `partial` runs but `recipe_status` empty and `ab_trials=0` — i.e. the A/B loop had never
+fired in production.
+
+- **Second blocker found + fixed.** `ab_runner.plan_trial` selected A/B subjects only from
+  `run_violations` (the POST-fix snapshot), so a *successfully-fixed* symptom (antenna) had no
+  rows there and its winning recipe could never be A/B'd (`plan_trial→None`, verified — same
+  fixture-vs-production trap as Gate A itself). Fixed with a Tier-2 fallback to the recipe's
+  `heuristics.symptoms[sid].evidence_designs` (pre-fix exhibitors), resolved to on-disk dirs.
+- **New sky130 DRC strategy `density_relief`.** The 9 pending sky130hd DRC-fail designs were
+  genuine metal/via **spacing** residuals (`m3.2`/`via.4*`/`via_OFFGRID`) that v1 left as
+  "non-antenna DRC not handled." `diagnose_signoff_fix._routing_drc_strategies` now lowers
+  `CORE_UTILIZATION` (by 8, floor 8, rerun_from floorplan) — a real layout change; the deck is
+  never relaxed. Cleared **all 9** (34/20/10/6/4/84 → 0) → 9 newly fully-signed-off sky130
+  designs.
+- **Loop fired end-to-end.** Learner derived the recipe → Gate A enqueued (`recipe_status` 0→2,
+  `learner_diff`) → `engineer_loop ab-drain` ran arm A (`--exclude`, stays dirty) vs arm B
+  (`--rank-first`, clears) → **`ab_trials` 0→2, both `win`** → `logic/small density_relief`
+  recipe `candidate → promoted` (`ab_trial:2`). Honesty re-validated: `fail`-rows ==
+  `orfs-fail`-events 69/69; no `is_success` flip.
+- Tests 592 → **597** (1 plan_trial fallback + 4 density_relief). Source: this session;
+  details in `references/engineer-loop.md` "Tier −1 Gate B — FIRED", `knowledge/README.md`
+  invariant 20, `references/signoff-fixing.md` catalog.
+
+---
+
+## 2026-06-04 — Fmax search (loose-first): place-stage proxy + learnable deterioration model
+*(spec `ca422ee`, plan `9048cf4` + impl log `f3c3b99`; code commits `cc5376d`→`42c233a` on `feat/fmax-search`)*
+
+Automated **loose-first Fmax characterization** for the skill — finds the minimum clock period a
+design closes at, using cheap **placement-stage** timing as the search signal instead of running a
+full flow per candidate period.
+
+- **The proxy + search.** Each probe runs only `ORFS_STAGES="synth floorplan place"` and reads
+  post-place setup slack (`detailedplace__timing__setup__ws`, `3_5_place_dp.json`). The search is a
+  floorplan early-look prune → fixed-point root-find → confirm grid (~3–5 probes vs ~20 blind), over
+  cloned `<base>_fmax_p<NNNN>` variants (unique `FLOW_VARIANT`; only the SDC `clk_period` line is
+  rewritten, density frozen ≥ 0.10). New pure module `scripts/reports/fmax_model.py` (no-I/O,
+  fully unit-tested with injected probes) + orchestrator `scripts/reports/fmax_search.py`.
+- **Honest reporting.** Output (`reports/fmax_search.json`) is a **predicted-signoff proxy
+  (UNVERIFIED)** — post-place timing is optimistic vs signoff — corrected by a learned per-family
+  slack-deterioration model and tagged `+CTS-skew-unmodeled`. `--verify` runs one full signoff flow
+  at the winner and records the verified `(floorplan, place, finish)` triple back so the model
+  self-corrects online. Does **not** replace the step-8 `check_timing` gate.
+- **Knowledge-store changes.** Three per-stage setup-slack columns (`floorplan/place/finish_setup_ws`);
+  `ingest_run.py` now reads the clock period from the **SDC** (`set clk_period`) not `config.mk`
+  (it was NULL for all 750 runs) and persists staged slacks, with a `--backfill` path for historical
+  runs from preserved `backend/RUN_*/logs/`; `learn_heuristics.py` emits per-family `closing_period`
+  + `slack_deterioration` (p90); `query_knowledge.py` accessors feed the seed + model selection.
+- **Two fixes beyond the plan.** (1) `knowledge_db.ensure_schema` latent ordering bug — a
+  `CREATE INDEX` on a not-yet-migrated column aborted bootstrap on a legacy DB; now runs statements
+  one-by-one and defers/retries such indexes after the ALTER migration (production path unchanged).
+  (2) `ingest_run.py --backfill` works standalone (`project` made optional).
+- **Live validation.** Backfilled **750 runs** (`clock_period_ns` 750/750, `place_setup_ws` 634/750)
+  and re-learned `slack_deterioration` for **47/48** family·platform entries; real corpus confirms
+  the premise — **placement is the dominant gap** (`d_fp_pl` p90 ≈ 0.38 ns) while **routing is ≈
+  neutral** (`d_pl_fin` p90 ≈ −0.01 ns). `runs.sqlite`/`heuristics.json` are gitignored (local-only).
+
+Tests: **357 passed, 8 skipped** (54 new fmax + knowledge tests). Implemented via a dependency-gated
+multi-agent workflow (14 subagents, strict TDD). Skill changes also recorded in `SKILL.md` (step 5a),
+`references/orfs-playbook.md` ("Fmax Search (loose-first)"), `references/lessons-learned.md`, and
+`knowledge/README.md`.
+
+---
+
 ## 2026-06-04 — OpenSpace absorption: live learning loop + observability + payoff eval
 *(plan: `docs/plans/openspace-absorption-2026-06-03.md`; skill commits `356d517`→`5dd99ee`; PR [#3](https://github.com/ShenShan123/agent-r2g/pull/3))*
 

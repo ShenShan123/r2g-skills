@@ -109,6 +109,39 @@ CORE_UTILIZATION is too high for the design's routing complexity. Highly interco
   relax signoff to force a dirty GDS. Revisit only if more routing layers (e.g. an HD variant with
   met6+) or a hierarchical/partitioned floorplan becomes available.
 
+### Sub-variant: route TIMEOUT (exit 124) ≠ congestion — the `route_relief` learnable recipe (2026-06-17)
+
+- **The mislabel:** a route-stage abort is reported by the driver as "Routing congestion detected",
+  but the **common** cause is the wall-clock `timeout` (exit **124/137**) killing **detailed
+  routing** mid-grind, *not* a global-route `GRT-0116` abort. On a 33-design sky130hd cluster
+  (2026-06-17) **all 33 cleared global route (GRT)** and died in DRT — several (`diffeq1`,
+  `secworks_aes_key_mem`, `opdb_2dmesh`) had already reached **0 DRT violations** when the wall-clock
+  killed them. `run_orfs.sh` now distinguishes the two modes in its HINT (timeout vs GRT-0116).
+- **`route_relief` (the fix, now A/B-validated):** lower `CORE_UTILIZATION` one density step
+  (−8, floor 8) so DRT has room to converge inside the budget; rerun from floorplan. SAME lever as
+  `density_relief` but keyed to a **route-stage abort** (symptom `check=orfs_stage, class=route`),
+  which never reaches signoff DRC — so before this the closed-loop A/B machinery was structurally
+  blind to it. Drive it with:
+
+  ```
+  scripts/flow/fix_signoff.sh <project> sky130hd --check route
+  ```
+
+  It diagnoses `route_relief`, applies the util drop, re-routes, and logs a `fix_log.jsonl` row
+  (`check=orfs_stage/route`) so the learner derives the recipe and the A/B loop can validate it.
+- **Validated 2026-06-17:** `wb2axip_wbsafety` (1183 cells) timed out at route at `CORE_UTILIZATION
+  = 25` (5400 s, 28 DRT residual); at util 12 the **route completed clean in 37 s** — a
+  timeout→clean flip from one knob. The route_relief recipe rode the closed loop end-to-end:
+  fix_log → learner enqueued a `route_relief` candidate → `engineer_loop ab-drain` recorded an
+  `ab_trials` **win** (arm B route_relief routes; arm A control times out). DIE_AREA-sized designs
+  (no `CORE_UTILIZATION` knob, e.g. `secworks_sha512_w_mem`) are an honest residual here — the v2
+  lever is to enlarge `DIE_AREA`.
+- **Still honest residual:** a design that demands more routing than 5 metal layers can supply at
+  *any* utilization (confirmed `aes_encipher_block`: GPL routability stays > 1.0) does NOT clear
+  with route_relief — `route_relief` steps to the util floor and stops (no deck relaxation). Tell
+  the two apart by whether GPL routability converges < 1.0 at a lower util: timeout-victim (clears)
+  vs layer-limited (honest residual).
+
 ## Placement Divergence (NesterovSolve Non-Convergence)
 
 **Symptoms:**
@@ -291,7 +324,21 @@ Large designs (swerv, bp_multi_top, tinyRocket) can take hours for PnR. The proc
 - Increase die area to reduce placement density (lower utilization = faster convergence)
 - Monitor with `tail -f flow.log` to track progress
 
-## ABC Mapping Stalls on Behavioral Memory Explosion
+### Sub-variant: `STAGE_STATUS: unbound variable` after a synth-stage timeout (2026-06-17)
+
+**Symptom:** a stage times out (exit 124/137) and instead of a clean
+`ERROR: Stage 'synth' failed (exit code 124)` + a synth-timeout HINT, `run_orfs.sh`
+crashes with `run_orfs.sh: line NNN: STAGE_STATUS: unbound variable`, exiting BEFORE
+results / `ppa.json` / final status are recorded.
+
+**Root cause:** `STAGE_STATUS` is `local` to `run_stage()`. The post-loop synth-failure
+HINT block (module scope) referenced `$STAGE_STATUS`, which is out of scope there; with
+`set -euo pipefail` the unbound reference aborts the script. The route-failure HINT block
+correctly used the module-scope `MAKE_STATUS` (the propagated exit code); the synth block
+did not. Surfaced by a campaign run with a deliberately low `ORFS_TIMEOUT` (synth itself
+timed out). **Fix (2026-06-17):** module-scope HINTs use `$MAKE_STATUS`, never the
+function-local `$STAGE_STATUS`. Guarded by `test_flow_journaling.py::
+test_stage_status_not_referenced_outside_run_stage` (static scope check).
 
 **Symptoms:**
 - Yosys reaches step 14 (`Executing ABC pass (technology mapping using ABC)`)
@@ -398,6 +445,30 @@ Yosys crash, typically caused by very large designs or specific RTL constructs t
 - Available: nangate45, sky130hd, sky130hs, asap7, gf180, ihp-sg13g2
 
 ## Signoff Check Failures
+
+### Signoff baseline never established — fresh flow → DRC silently skipped (2026-06-17)
+
+- **Symptom:** the `engineer_loop` flows a design clean, then "fixes" signoff, and the
+  design escalates as `catalog_exhausted` with `reports/drc.json` left at
+  `status: "unknown"` — **Magic/KLayout DRC was never actually run** (the project's
+  `drc/` dir is empty). The fix loop's `fix_log.jsonl` shows `drc iter 1 strat none
+  verdict stop_unknown`.
+- **Root cause:** `fix_signoff.sh`'s `fix_one` only ran the signoff tool
+  (`run_drc.sh` / `run_lvs.sh`) *after* `diagnose` returned a strategy to apply. A
+  design freshly produced by `run_orfs` has no signoff report yet, so `_run_extract`
+  yielded `status: "unknown"`; `diagnose` then STOPped (nothing to fix) and the check
+  was **silently skipped** — never run. LVS happened to run only when a *stale*
+  `lvs.json: "fail"` from a prior attempt was present. Surfaced by the wbsafety canary
+  (2026-06-17): flow clean, DRC `unknown`, design escalated without DRC ever executing.
+- **Fix (2026-06-17):** `fix_one` calls `_ensure_baseline <check>` first — if the
+  report is missing or its status is empty/`unknown`, it RUNS the signoff tool once
+  (via the `$RUN_DRC`/`$RUN_LVS` seams) to establish a real baseline, then extracts.
+  Route is exempt (its baseline is the flow's own route stage). Confirmed live:
+  wbsafety then ran KLayout DRC → **DRC CLEAN, 0 violations**. Guarded by
+  `test_fix_signoff_logging.py::test_baseline_signoff_runs_when_no_report`.
+- **Skill-level:** the loop now always checks DRC/LVS at least once on a fresh flow;
+  a `stop_unknown` DRC verdict in a `fix_log` is the alarm that the baseline run was
+  skipped.
 
 ### Re-running signoff after ORFS scratch dirs were cleaned
 
@@ -550,6 +621,34 @@ strategy_ids: [lvs_same_nets_seed]
   one (the extractor then keys off the old failure marker). Re-running LVS fresh on the current
   platform resolves it (e.g. `cordic`: stale sky130hd failure → re-ran nangate45 → `clean`). Always
   re-run before trusting an LVS `fail` on a design that changed platform.
+
+#### Sub-variant: the autonomous loop used the WRONG LVS tool on sky130 (2026-06-17, systematic)
+
+- **Symptom:** Across the 94-design sky130 campaign, a large fraction of designs escalated with
+  `{"drc":"clean","lvs":"fail"}` — `6_lvs.log` ends `ERROR : Netlists don't match`, yet the layout
+  is correct. Validated examples: `wb2axip_wbsafety`, `vtr…blob_merge` — both **KLayout-fail →
+  Netgen-clean** ("Circuits match uniquely", 0 device/net deltas).
+- **Root cause (a dispatch bug, not a layout/tool-limit issue):** the autonomous loop ran **KLayout
+  LVS** (`run_lvs.sh`, deck `sky130hd_r2g.lylvs`) on **every** platform. On sky130 the production
+  LVS path is **Netgen** (Magic GDS extraction + Netgen compare) — KLayout 0.30.7's symmetric
+  matcher mis-pairs std-cell-dense sky130 layouts (the residual documented above), so it false-fails
+  designs Netgen finds clean. Two plumbing defects compounded it: (1) `fix_signoff.sh` hard-coded
+  `RUN_LVS=run_lvs.sh`; (2) `extract_lvs.py` preferred the Netgen verdict **only when KLayout left no
+  artifacts**, but the loop's own KLayout run always left `6_lvs.lvsdb`/`6_lvs.log`, so the stale
+  false-fail clobbered any later Netgen-clean.
+- **Fix (shipped 2026-06-17):**
+  1. `fix_signoff.sh` selects the LVS tool by platform — `sky130*` → `run_netgen_lvs.sh`, everything
+     else → `run_lvs.sh` (KLayout). An explicit `R2G_RUN_LVS` override still wins.
+  2. `extract_lvs.py` now uses a **most-recently-run-tool-wins** rule (mtime of
+     `netgen_lvs_result.json` vs the freshest KLayout artifact) instead of "only if KLayout left
+     nothing", so a fresh Netgen verdict supersedes lingering stale KLayout artifacts. nangate45
+     (KLayout-only) is byte-identical.
+- **Recovery for already-run designs:** just run `run_netgen_lvs.sh <proj> sky130hd` then
+  `extract_lvs.py <proj> reports/lvs.json` — no re-flow needed (the GDS is already built); then
+  re-ingest. This flips the false `lvs:fail` to `lvs:clean`.
+- **Distinguish from nangate45:** on nangate45 KLayout is the *only* LVS tool, so the symmetric
+  residual there is genuinely unresolved without `same_nets!` seeding (above). Netgen is the sky130
+  escape hatch, not a nangate45 one.
 
 ### LVS KLayout sort_circuit/gen_log_entry SIGSEGV (non-deterministic, retry-fixable)
 

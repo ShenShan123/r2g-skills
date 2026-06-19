@@ -54,6 +54,7 @@ def rank_strategies(recipe_entry: dict | None, static_order: list[str],
             wins = int(s.get("wins", 0))   # default 0 -> backward compatible
             failures = int(s.get("failures", max(0, attempts - successes)))
             score = _score(successes, attempts, wins)
+            plat_n = int(s.get("platform_count", 0) or 0)
             prov = f"learned(n={n_sessions},tried={attempts})"
         elif sid in pooled:
             ps = pooled[sid]
@@ -62,6 +63,7 @@ def rank_strategies(recipe_entry: dict | None, static_order: list[str],
             wins = int(ps.get("wins", 0))
             failures = int(ps.get("failures", max(0, attempts - successes)))
             score = _score(successes, attempts, wins)
+            plat_n = int(ps.get("platform_count", 0) or 0)
             # Confidence floor (engineer-loop §5.7.2): a pooled-only strategy
             # below the attempt floor must not outrank a locally PROVEN one.
             local_proven = [
@@ -73,16 +75,36 @@ def rank_strategies(recipe_entry: dict | None, static_order: list[str],
             prov = f"prior(pooled,tried={attempts})"
         else:
             attempts = successes = failures = wins = 0
+            plat_n = 0
             score = _score(0, 0)  # 0.5 neutral prior
             prov = "cold-start"
+        # Win 1 tiebreaker: mean dense outcome_score over runs that used this
+        # strategy (populated by the learner). Defaults to 0.0 when absent, so a
+        # legacy recipe without the field ranks byte-identically (the secondary key
+        # is then a constant). Clean-rate (`score`) always dominates; outcome_score
+        # only orders WITHIN equal clean-rate.
+        mean_os = (s or {}).get("mean_outcome_score")
         item = {
             "strategy": sid, "score": score, "static_pos": pos,
             "attempts": attempts, "successes": successes, "failures": failures,
             "wins": wins, "provenance": prov,
+            "mean_outcome_score": mean_os,
+            # Cross-platform corroboration: count of distinct platforms this
+            # strategy succeeded on (spec 2026-06-18, the 'transfer' mission). A
+            # fix proven across N platforms is trusted ahead of a one-design
+            # fluke. Pure SORT TIEBREAKER (below score + outcome_score, above
+            # catalog position) — never a score override, so a clearly stronger
+            # clearer always wins. Defaults 0 -> legacy recipes rank unchanged.
+            "platform_count": plat_n,
         }
         if s and s.get("median_reduction_pct") is not None:
             item["median_reduction_pct"] = s["median_reduction_pct"]
         ranked.append(item)
-    # Primary: score desc. Secondary: catalog position asc (stable, deterministic).
-    ranked.sort(key=lambda r: (-r["score"], r["static_pos"]))
+    # rank_key = (success_rate_beta, mean_outcome_score, platform_count) lexico-
+    # graphically, then catalog position asc (stable, deterministic). The
+    # platform_count tiebreaker only orders WITHIN equal (score, outcome_score)
+    # so corroborated-across-platforms beats a single-platform fluke, but it can
+    # never lift a worse-clearing strategy above a better one.
+    ranked.sort(key=lambda r: (-r["score"], -(r["mean_outcome_score"] or 0.0),
+                               -r["platform_count"], r["static_pos"]))
     return ranked

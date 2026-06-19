@@ -169,6 +169,26 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
 > `orfs-fail-route-GRT-0116`) is never downgraded. Net effect on the production store: every one of
 > the 24 backend-fail rows now carries an orfs-fail event (was 8) with zero history rewritten.
 
+## Fmax Search Extension (2026-06-04)
+
+The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports/fmax_search.py`
++ pure `fmax_model.py`; see `references/orfs-playbook.md`):
+
+- **Three per-stage setup-slack columns** — `floorplan_setup_ws`, `place_setup_ws`,
+  `finish_setup_ws` — populated by `ingest_run.py` from `summary.timing_staged` (and `--backfill`
+  reads them straight from preserved `backend/RUN_*/logs/` for historical runs, filtering the
+  `1e+39` unconstrained sentinel).
+- **`clock_period_ns` now comes from the SDC** (`set clk_period` in `constraints/constraint.sdc`),
+  not `config.mk` — it was NULL for all 750 runs before this.
+- **`learn_heuristics.py` emits two per-family/platform aggregates** over signoff-positive runs:
+  `closing_period` (`period − finish_ws`; seeds the search) and `slack_deterioration` — the p90
+  per-stage erosion `d_fp_pl` (floorplan→place, dominant) and `d_pl_fin` (place→finish, ≈ neutral),
+  in both ns and pct-of-period. `query_knowledge.get_closing_period` / `get_deterioration` expose
+  them; `fmax_model.select_model` gates on `n ≥ 8` (else cold-start defaults).
+- **Online self-correction:** `fmax_search.py --verify` appends a verified `(floorplan, place,
+  finish)` triple (tagged `eval_arm='fmax_verify'`, signoff-positive so it is learnable) so the
+  deterioration model tightens as verify data accrues.
+
 ## Invariants
 
 1. `ingest_run.py` only reads structured JSON artifacts; it never parses raw ORFS logs. If an artifact is missing, the corresponding column is NULL.
@@ -215,6 +235,82 @@ python3 knowledge/repair_run_status.py --db knowledge/knowledge.sqlite
     `solution` traces a recipe back through A/B trials, fix episodes, journal actions, and
     designs; `bug` lists every known solution for a symptom with lifecycle status and
     evidence strength.
+19. **`outcome_score` (Win 1) is additive, advisory, and a PURE function of one run's OWN
+    artifacts.** It is a continuous `[0,1]` dense reward (`w_stage·stage_progress + w_vrr·VRR`,
+    `0.7/0.3`; NULL when the furthest stage is unknown; renormalized to stage-only when the run
+    attempted no fix). **Gate vs. score:** `is_success` stays the *sole* authority for run
+    classification (clean/fail) **and** for recipe promotion — `outcome_score` MAY order
+    suggestions and break non-clean ties for *which fix to try next*, but it NEVER reclassifies a
+    run and NEVER produces a `win` verdict / promotion on a non-clean run (a non-clean A/B arm
+    stays `inconclusive`). It is computed only from the run's own `stage_log.jsonl` + its own
+    `fix_log.jsonl` — **never** a SELECT against sibling rows (that shape was the 2026-06-13
+    multi-run-clobber bug) — so re-ingest is idempotent. `repair_run_status.py` never touches it.
+    The learner aggregates it into recipes as `mean_outcome_score`, a tiebreaker layered *under*
+    the `fix_model` Beta prior (`rank_key = (success_rate_beta, mean_outcome_score)`); absent it
+    ranks byte-identically. PPA-product term is DEFERRED (degenerate under singleton families).
+20. **The A/B loop fires on the production path (Tier −1 Gate A + Gate B).** `learn_heuristics.learn()`
+    enqueues new/changed recipes as `candidate` on every rebuild (not only inside
+    `engineer_loop.run`), so a batch-driven campaign populates `recipe_status`; `engineer_loop.py
+    ab-drain` then plans/runs/judges the arms. `diff_and_enqueue` is idempotent, so the loop's own
+    enqueue composes safely. Grandfathered recipes are re-validated explicitly via `ab-enqueue`.
+    **Subject selection must reach winning recipes (2026-06-16 Gate B):** `ab_runner.plan_trial`
+    selects A/B subjects from `run_violations` (the POST-fix snapshot) FIRST, then falls back to the
+    recipe's `heuristics.symptoms[sid].evidence_designs` (the PRE-fix exhibitors, resolved to on-disk
+    project dirs). Without the fallback a *successfully-fixed* symptom (e.g. antenna) has no
+    `run_violations` rows, so the very recipes that win could never be A/B'd — `plan_trial→None`.
+    First live verdict: `density_relief` (sky130 metal/via spacing) `candidate → promoted` on a 2-win
+    `ab_trials` drain. The Gate A signature is **`ab_trials=0` while `fail`/`partial` rows exist** —
+    once the corpus has such rows, an empty `ab_trials` means the loop is inert and silently lying.
+21. **r2g-bench (Win 3) is held out from learning, not from honesty.** Runs whose design is in
+    `knowledge/eval/bench_set.json` are flagged `runs.is_bench=1` at ingest and EXCLUDED from the
+    *learning read* only — `learn_heuristics._fetch_learnable_rows` (family medians + score
+    tiebreaker) and the recipe-trajectory aggregation drop them. Their `failure_events`,
+    `run_violations`, and `outcome_score` are STILL written: a bench `fail` run keeps its
+    `orfs-fail-%` event and stays in the `fail`-rows == `orfs-fail`-events honesty count
+    (invariant H3). `eval_heuristics.bench_score` reports per-checkpoint SR + mean/LCB
+    `outcome_score` + stage-reach over `is_bench=1` runs — a NON-BLOCKING scoreboard, never a gate.
+22. **Feature-keyed retrieval (Win 5) is predictive and fall-back-safe.** `presynth.py` emits a
+    PRE-ROUTE feature vector (instance count, primary I/O, est logic depth, target util, clock
+    period, routing layers) — available at SUGGESTION time, unlike the post-route `metadata.csv`
+    outcomes. Stored as `runs.presynth_features_json` at ingest (NULL when absent). `suggest_config`
+    z-score-normalizes the features (so instance-count magnitude doesn't dominate) and retrieves the
+    k=5 nearest CLEAN, non-bench runs with `outcome_score ≥ median`, seeding the config from their
+    median — REPLACING the `infer_family` prefix lookup (245/303 singletons). When no feature vector
+    exists or the corpus is too small it FALLS BACK to family medians, and the design-type clamps +
+    `PLACE_DENSITY_LB_ADDON ≥ 0.10` floor still apply afterward (safety rails beat retrieval). The
+    corpus index is empty until the 5b backfill (`presynth.py` over historical synth dirs +
+    re-ingest) runs — so the existing store's suggestions are unchanged until then.
+23. **Backend aborts are first-class symptoms, not just `failure_events` (2026-06-17 route-relief).**
+    A route-stage abort (`orfs_status='fail'` at `route`) is keyed under the symptom
+    `check='orfs_stage', class=<fail_stage>` in `run_violations` (`ingest_run._write_run_violations`),
+    NOT a bogus `timing` symptom and NOT only the `orfs-fail-route` `failure_events` signature. This
+    `symptom_id` is identical to the one a route `fix_log.jsonl` row produces (`check=orfs_stage,
+    violation_class=route` via `fix_signoff.sh --check route`), so the failing run and its
+    `route_relief` recipe pool under one key and `ab_runner.plan_trial` can match them. The route A/B
+    arms run through `engineer_loop._process_backend_ab_arm` (apply-then-flow: arm B applies
+    `route_relief` then runs the flow ONCE; arm A is the control) because — unlike a signoff arm — the
+    flow itself *fails*, so the `flow→signoff→fix` model does not apply. The symptom infrastructure
+    reserved `orfs_stage` from the start (`symptom._PREDICATE_KEYS`); this invariant is what finally
+    populates it. Same blind-spot class as Gate A/B: the machinery existed but a whole failure class
+    (backend aborts) could never reach `recipe_status`/`ab_trials` until the symptom was assigned and
+    the fix loop could log it. First route verdict: `route_relief` `candidate → promoted` on a
+    `wb2axip_wbsafety` win (arm B routes at lower util; control times out).
+24. The Fmax `slack_deterioration` model is **advisory and tiered**: below `n = 8` learned samples
+    `fmax_model.select_model` falls back to corpus cold-start defaults, never an under-sampled
+    median. Estimator is p90 (conservative); learned terms are clamped `≥ 0` (never predict negative
+    erosion). The reported Fmax is a **proxy (UNVERIFIED)** unless `--verify` ran — post-place timing
+    is optimistic vs signoff, so the number is always labelled, never presented as a closed result.
+    (Fmax search: `scripts/reports/fmax_search.py` + pure `fmax_model.py`; the three per-stage
+    `*_setup_ws` columns + `clock_period_ns` are written by `ingest_run.py` and the per-family
+    `closing_period`/`slack_deterioration` aggregates by `learn_heuristics.py` — see the
+    "Fmax Search Extension" section above and `references/orfs-playbook.md`.)
+25. `ensure_schema` applies `schema.sql` then runs the column forward-migration
+    (`_migrate_add_columns`) and the post-migration index loop (`_POST_MIGRATION_INDEXES`,
+    which indexes only `fix_events`/`run_violations`/`fix_trajectories(symptom_id)` — never the
+    `runs` table). The three Fmax slack columns (`floorplan_setup_ws`, `place_setup_ws`,
+    `finish_setup_ws`, all `REAL`) live both in `schema.sql`'s `runs` CREATE TABLE and in
+    `_ADDED_COLUMNS["runs"]`, so a fresh DB gets them from the DDL and a legacy DB gets them
+    via the ALTER-TABLE migration.
 
 ## Engineer Loop (spec 2026-06-09)
 
@@ -262,15 +358,28 @@ Agent-authored strategies enter via `recipe_lifecycle.stage_shadow(...,
 provenance='agent:<escalation_id>', ...)` and must win their A/B before promoting — no
 special trust (decision 7 of the design spec).
 
-### Journaling (agent tier)
+### Journaling (loop + agent tier)
 
-The agent journals every discrete action via the CLI:
+Discrete actions are journaled via the CLI (or `journal_db.append_action` directly):
 
 ```bash
 python3 knowledge/journal_action.py action \
-    --project <dir> --actor agent \
+    --project <dir> --actor <loop|agent|operator> \
     --type <config_knob_delta|sdc_edit|stage_rerun|tool_invoke|escalate|ab_launch|promote|demote> \
-    [--payload JSON] [--symptom <sid>] [--session <fix_session_id>]
+    [--payload JSON] [--symptom <sid>] [--session <fix_session_id>] [--parent <action_id>]
 ```
 
 Never breaks the caller (warns + exits 0). `R2G_JOURNAL=0` disables all journal writes.
+
+**Decision-journaling is wired into the production loop (2026-06-17, Tiers A/B):** `fix_signoff.sh`
+journals `config_knob_delta` (symptom-linked, parent-chained) + `stage_rerun`; `engineer_loop`
+journals `ab_launch` (per arm); `ab_runner.record_trial` journals `promote`/`demote` (carrying
+`trial_id`); `escalations.open_escalation` journals `escalate`. All best-effort, journal-only,
+read by **no** learner — `knowledge.sqlite` stays the sole learner input and honesty-gate source.
+
+**Advisory cross-DB check (NOT an honesty gate):** every `ab_trials` row with `verdict='win'`
+*should* have a `promote` action carrying its `trial_id`. This is **forward-only** — trials
+judged before the journaling was wired have no `promote` action and are reported
+*journal-incomplete*, never as a loop-honesty failure (journal writes are best-effort/silenceable,
+so a missing row can never fail a gate). The promotion honesty **gate** stays knowledge-side:
+`recipe_status` rows with `ab_trial:%` provenance are consistent with `ab_trials` wins.

@@ -55,6 +55,33 @@ def diff_and_enqueue(conn, heur: dict, *, prev: dict | None) -> list[tuple]:
     return enqueued
 
 
+def enqueue_candidate(conn, *, provenance: str = "manual_revalidate",
+                      **key) -> bool:
+    """Force a (possibly grandfathered) recipe into 'candidate' for an A/B
+    re-validation. Unlike diff_and_enqueue, this does NOT require the recipe to be
+    new/changed vs a prior heuristics — it is the operator's explicit "validate
+    THIS recipe" button, needed because the existing corpus's recipes are all
+    grandfathered (absent row == promoted) so nothing would auto-enqueue.
+
+    Returns True iff a new candidate row was created; a no-op (returns False) when
+    the recipe is already in the lifecycle — never clobbers an existing verdict.
+    """
+    row = conn.execute(
+        "SELECT status FROM recipe_status WHERE symptom_id=? AND design_class=? "
+        "AND platform=? AND strategy=?",
+        (key["symptom_id"], key["design_class"], key["platform"],
+         key["strategy"])).fetchone()
+    if row is not None:
+        return False
+    conn.execute(
+        "INSERT INTO recipe_status (symptom_id, design_class, platform, strategy, "
+        "status, provenance, updated_at) VALUES (?,?,?,?,?,?,?)",
+        (key["symptom_id"], key["design_class"], key["platform"],
+         key["strategy"], "candidate", provenance, _now()))
+    conn.commit()
+    return True
+
+
 def get_status(conn, *, symptom_id, design_class, platform, strategy) -> str:
     row = conn.execute(
         "SELECT status FROM recipe_status WHERE symptom_id=? AND design_class=?"

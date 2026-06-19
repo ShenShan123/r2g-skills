@@ -6,13 +6,39 @@ tier drains (see references/engineer-loop.md). Dedup: one OPEN escalation per
 from __future__ import annotations
 
 import datetime as _dt
+import os as _os
 
 REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
-           "repeated_regression")
+           "repeated_regression",
+           # A backend route abort whose route_relief fixer is exhausted (util at
+           # floor) or inapplicable (DIE_AREA-sized, no CORE_UTILIZATION knob).
+           # A KNOWN, recipe-backed residual — NOT an unseen crash (2026-06-17).
+           "route_congestion_residual")
 
 
 def _now() -> str:
     return _dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
+
+def _journal_escalate(*, design: str, project_path: str, reason: str,
+                      symptom_id: str | None, notes: str | None) -> None:
+    """Best-effort Tier-B3 journal of an escalation DECISION. ADVISORY only — the
+    knowledge.sqlite escalations row is the source of truth; honors R2G_JOURNAL and
+    never raises (a telemetry failure must not block opening the escalation)."""
+    if _os.environ.get("R2G_JOURNAL", "1") == "0":
+        return
+    try:
+        import journal_db
+        conn = journal_db.connect(
+            _os.environ.get("R2G_JOURNAL_DB") or journal_db.DEFAULT_JOURNAL_PATH)
+        journal_db.ensure_schema(conn)
+        journal_db.append_action(
+            conn, project_path=project_path or "", actor="loop",
+            action_type="escalate", design=design, symptom_id=symptom_id,
+            payload={"reason": reason, "symptom_id": symptom_id, "notes": notes})
+        conn.close()
+    except Exception:
+        pass
 
 
 def open_escalation(conn, *, design: str, project_path: str, run_id: str | None,
@@ -30,6 +56,8 @@ def open_escalation(conn, *, design: str, project_path: str, run_id: str | None,
         "reason, status, notes, created_at) VALUES (?,?,?,?,?,'open',?,?)",
         (design, project_path, run_id, symptom_id, reason, notes, _now()))
     conn.commit()
+    _journal_escalate(design=design, project_path=project_path, reason=reason,
+                      symptom_id=symptom_id, notes=notes)   # advisory (Tier B3)
     return cur.lastrowid
 
 
@@ -48,3 +76,21 @@ def resolve(conn, escalation_id: int, *, status: str, notes: str | None = None) 
         "UPDATE escalations SET status=?, notes=COALESCE(?, notes), resolved_at=? "
         "WHERE escalation_id=?", (status, notes, _now(), escalation_id))
     conn.commit()
+
+
+def resolve_for_design(conn, design: str, *, notes: str | None = None) -> int:
+    """Auto-close every OPEN escalation for `design` as 'drained'. Called when the
+    loop drives a design to `clean` (a later successful flow/fix supersedes an
+    earlier abort), so the escalation queue stays an honest view of what is still
+    stuck — not a graveyard of stale aborts a subsequent run already cleared
+    (2026-06-17). Returns the number of escalations closed. No-op if none open."""
+    rows = conn.execute(
+        "SELECT escalation_id FROM escalations WHERE design=? AND status='open'",
+        (design,)).fetchall()
+    for (eid,) in rows:
+        conn.execute(
+            "UPDATE escalations SET status='drained', "
+            "notes=COALESCE(?, notes), resolved_at=? WHERE escalation_id=?",
+            (notes, _now(), eid))
+    conn.commit()
+    return len(rows)

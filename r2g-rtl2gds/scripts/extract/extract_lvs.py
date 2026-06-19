@@ -274,9 +274,22 @@ def main():
     # poisons run_violations / residual classification). Honor the Netgen result
     # whenever it exists and KLayout produced nothing. Defers to KLayout if its
     # artifacts are present, so nangate45 (KLayout LVS) is byte-identical.
+    # Tool-precedence rule: the MOST-RECENTLY-RUN LVS tool is authoritative.
+    # The old gate ("netgen wins only if KLayout left NO artifacts") is backwards
+    # for the normal sky130 loop, where the fix loop now runs Netgen but stale
+    # KLayout artifacts (6_lvs.lvsdb / 6_lvs.log / lvs_run.log) from an earlier
+    # run still linger -> extract would defer to the stale (false) KLayout fail.
+    # Compare mtimes instead: Netgen wins when its result is at least as fresh as
+    # the freshest KLayout artifact. nangate45 (KLayout-only; no netgen_lvs_result.json)
+    # is unaffected -> byte-identical. See references/failure-patterns.md "sky130 LVS".
     netgen_file = lvs_dir / 'netgen_lvs_result.json'
-    klayout_present = (lvs_dir / '6_lvs.lvsdb').exists() or log_present
-    if netgen_file.exists() and not klayout_present:
+    _klayout_arts = [lvs_dir / '6_lvs.lvsdb', lvs_dir / '6_lvs.log',
+                     lvs_dir / 'lvs_run.log']
+    _klayout_mtime = max((p.stat().st_mtime for p in _klayout_arts if p.exists()),
+                         default=0.0)
+    netgen_authoritative = (netgen_file.exists()
+                            and netgen_file.stat().st_mtime >= _klayout_mtime)
+    if netgen_authoritative:
         try:
             ng = json.loads(netgen_file.read_text(encoding='utf-8'))
             ng_status = ng.get('status', 'unknown')

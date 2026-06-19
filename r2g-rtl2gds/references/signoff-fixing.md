@@ -24,7 +24,7 @@ deck), merges per-pin gate areas from `.macro.lef`, and gives the diode a usable
 ### `scripts/reports/diagnose_signoff_fix.py` — pure diagnoser
 
 ```
-diagnose_signoff_fix.py <project-dir> --check drc|lvs [--apply <strategy-id>]
+diagnose_signoff_fix.py <project-dir> --check drc|lvs|timing|route [--apply <strategy-id>]
                         [--next] [--exclude id1,id2]
 ```
 
@@ -45,16 +45,26 @@ diagnose_signoff_fix.py <project-dir> --check drc|lvs [--apply <strategy-id>]
 ### `scripts/flow/fix_signoff.sh` — iterative driver
 
 ```
-fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both] [--max-iters N] [--resume]
+fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route] [--max-iters N] [--resume]
 ```
 
 Default: `platform=nangate45`, `--check both`. The iteration budget is **adaptive**: base
 3 iterations, hard cap 8, with early-stop after 2 consecutive non-improving iterations past
 the base (`--max-iters N` overrides the cap).
 
+**Baseline (per check, before the loop):** `_ensure_baseline` runs the signoff tool
+(`run_drc.sh` / `run_lvs.sh`) **once** if `reports/{drc,lvs}.json` is missing or its status
+is empty/`unknown`. A design freshly produced by `run_orfs` has no Magic-DRC / Netgen-LVS
+report yet, so without this the extract returns `unknown`, `diagnose` STOPs, and the check is
+**silently skipped (never run)** — the design then escalates as `catalog_exhausted` having
+never been checked. Route is exempt (its baseline is the flow's own route stage). Journal
+symptom-linkage: each `config_knob_delta` / `stage_rerun` is stamped with the iteration's
+`symptom_id` (via `_compute_symptom_id`, identical recipe to the ingester), and iteration 2+
+chain to iteration 1 via `parent_action_id`.
+
 **Loop per check (drc / lvs):**
 
-1. Read current violation count from `reports/{drc,lvs}.json` (re-extracts if missing).
+1. Read current violation count from `reports/{drc,lvs}.json` (baseline run above ensures it exists).
 2. Call `diagnose_signoff_fix.py --next` to get the next auto strategy.
 3. Call `--apply <id>` to write `config_edits` into the marked block in `config.mk`.
 4. Re-run the flow:
@@ -121,19 +131,22 @@ the learning signal from timing-journal episodes; fixed so a timing `period_rela
 
 ## Strategy catalog (v1)
 
-### DRC — antenna violations only
+### DRC — antenna + routing-geometry spacing
 
 Strategies are `auto_apply: true`, applied in order; already-applied entries are skipped;
 when all are exhausted `status` becomes `residual`. **The catalog is platform-aware** —
 `nangate45` (in `DIODE_FORCED_REPAIR_PLATFORMS`) gets the single `antenna_diode_repair`
 strategy; every other platform gets the classic `antenna_diode_iters` → `antenna_density_relief`
-pair.
+pair. **Non-antenna routing-geometry DRC** (metal/via spacing, off-grid, via enclosure —
+e.g. `m3.2`, `via.4*`, `via_OFFGRID`) gets `density_relief` (any platform with a
+`CORE_UTILIZATION` knob).
 
 | id | platforms | config_edits | rerun_from | Effect |
 |----|-----------|-------------|------------|--------|
 | `antenna_diode_repair` | nangate45 | `SKIP_ANTENNA_REPAIR=1`, `MAX_REPAIR_ANTENNAS_ITER_DRT=10` | `route` | **Forces physical diode insertion** (the only repair the FreePDK45 deck credits). `SKIP_ANTENNA_REPAIR=1` disables OpenROAD's global-route *jumper* repair — jumpers satisfy OpenROAD's PAR but the deck still flags (it sums the whole net's per-layer metal and credits only diodes). The DRT repair loop then inserts `ANTENNA_X1` diodes. **Requires `tools/install_nangate45_antenna.sh` (one-time).** |
 | `antenna_diode_iters` | non-nangate45 (working diode) | `MAX_REPAIR_ANTENNAS_ITER_GRT=10`, `MAX_REPAIR_ANTENNAS_ITER_DRT=10` | `route` | Raises OpenROAD repair-antennas iterations (default 5) so more diodes are inserted. Diode auto-discovered from its `CLASS CORE ANTENNACELL` LEF declaration; do NOT set `CORE_ANTENNACELL` (not an ORFS env var). |
 | `antenna_density_relief` | non-nangate45 | `CORE_UTILIZATION` lowered by 5 (floor 5) | `floorplan` | Reduces placement density / grows area so the router can break long metal runs. `PLACE_DENSITY_LB_ADDON` is **never** touched (hard rule: never below 0.10). **Not offered on nangate45** — empirically counterproductive there (enlarging the die lengthens nets → more antennas; fifo_basic 14→16 at util 10→5). |
+| `density_relief` | any (needs `CORE_UTILIZATION`) | `CORE_UTILIZATION` lowered by 8 (floor 8) | `floorplan` | **Non-antenna routing-geometry DRC** (metal/via spacing, off-grid, via enclosure). Gives the router more room → metal/via *spacing* and off-grid rules resolve. Real layout change (bigger die, sparser routes); the routing/signoff deck is **never** relaxed; `PLACE_DENSITY_LB_ADDON` untouched. **Validated 2026-06-16** on sky130hd: `eeprom_top` 4→0, `axil_reg_if` 34→0, `can_fifo` 20→0, `aximrd2wbsp` 10→0, `eth_mac_mii` 6→0 (all `m3.2`/via, all cleared in 1 iter at util 20→12 / 25→17). No-op when only `DIE_AREA` is set (no util lever) or util already at floor → honest residual. |
 
 **Why nangate45 needs `antenna_diode_repair` specifically (verified 2026-06-02, supersedes the
 2026-06-01 "inert/residual" Finding B):** with the antenna model installed, OpenROAD's per-net
@@ -143,7 +156,29 @@ insertion, which both engines credit → clean. If the model is **not** installe
 won't repair and the loop honestly reports no-improvement → residual (reason points at the
 installer). The deck is never relaxed.
 
-Non-antenna DRC categories are **not** handled in v1 — reported as residual.
+Non-antenna routing-geometry DRC (metal/via spacing, off-grid) is handled by `density_relief`
+where a `CORE_UTILIZATION` knob exists; other non-antenna classes, or designs at the util floor /
+sized by `DIE_AREA`, remain honest residuals.
+
+### route — backend-abort relief (`--check route`, 2026-06-17)
+
+A **route-stage abort** (`orfs_status=fail` at `route`) is the backend analogue of a signoff DRC
+violation: the design reached detailed routing but did not finish clean — congestion, a DRT
+residual, or (the common case) a wall-clock **timeout (exit 124/137)** killing DRT mid-grind.
+It never reaches signoff, so it flows through `--check route` (which reads `reports/route.json` from
+`extract_route.py`, not a KLayout report) and is keyed under the symptom `check=orfs_stage,
+class=route`. This is what makes a route-congestion symptom **visible to the closed loop** — the run
+gets a route symptom in `run_violations`, the fix logs a `fix_log.jsonl` row the learner turns into
+a recipe, and `ab_runner`/`engineer_loop ab-drain` A/B it like any other recipe.
+
+| id | platforms | config_edits | rerun_from | Effect |
+|----|-----------|-------------|------------|--------|
+| `route_relief` | any (needs `CORE_UTILIZATION`) | `CORE_UTILIZATION` lowered by 8 (floor 8) | `floorplan` | **Route-stage congestion / DRT-residual / timeout.** Lower utilization → bigger die → DRT has room to converge inside the wall-clock budget. Same lever as `density_relief` but for an abort *before* signoff; iterates (−8/step) until clean or floor. Deck never relaxed; `PLACE_DENSITY_LB_ADDON` untouched. **Validated 2026-06-17:** `wb2axip_wbsafety` timed out at route at util 25 (5400 s, 28 DRT residual) → **clean route in 37 s at util 12**; recipe drove the A/B loop end-to-end to an `ab_trials` win. No-op when only `DIE_AREA` is set (enlarge `DIE_AREA` manually — a v2 lever) or util at floor → honest residual. A design that demands more routing than the 5-layer stack supplies at *any* util (e.g. `aes_encipher_block`, GPL routability > 1.0) is an honest residual, not a route_relief case. |
+
+The A/B arms for a route symptom run through the dedicated apply-then-flow runner
+(`engineer_loop._process_backend_ab_arm`): arm B applies `route_relief` up-front then runs the flow
+once (route completes → success); arm A is the control at default util (route times out → fail);
+`judge` → win. (Signoff arms instead run flow→signoff→fix, because their flow *succeeds*.)
 
 ### LVS
 
@@ -162,7 +197,8 @@ These are reported honestly by `diagnose_signoff_fix.py` with a non-null `residu
 | Condition | `residual_reason` | What to do |
 |-----------|-------------------|-----------|
 | DRC stuck or timeout | `drc_stuck_tooling_out_of_v1_scope` / `drc_timeout_tooling_out_of_v1_scope` | KLayout polygon-op hang, outside v1 scope. Accept GDS+LVS+RCX pass as evidence. |
-| Non-antenna DRC class | `non-antenna DRC class not handled in v1: ...` | Operator review of the specific category. |
+| Non-antenna DRC, no util lever | `non-antenna DRC class (...): no CORE_UTILIZATION knob to relieve density (DIE_AREA-sized).` | Re-size with `CORE_UTILIZATION` instead of `DIE_AREA`, or operator review of the category. |
+| Routing-geometry DRC at util floor | `routing-geometry DRC (...): density relief exhausted (CORE_UTILIZATION at floor 8); honest residual.` | `density_relief` already pushed util to the floor without clearing. Not yet observed in the sky130hd corpus — even RV32I_Memorycontroller's 84 `m3.2` cleared in **one** step (util 20→12), so the floor case is presently a defensive backstop. Operator review if hit. |
 | All antenna strategies exhausted | `antenna: all real-fix strategies exhausted` | No further config lever available; consider manual routing intervention or structural RTL change. |
 | LVS KLayout C++ crash (`sort_circuit` / `gen_log_entry` SIGSEGV) | `klayout_cpp_crash` | **RETRY — no longer a hard residual (2026-06-03).** A non-deterministic heap heisenbug in KLayout-0.30.7's comparer; a surviving run gives the true verdict (clean OR fail). `run_lvs.sh` retries automatically (`LVS_CRASH_RETRIES`, default 4; auto-1 for >150K cells). Validated: fifo_basic/verilog_axi_axi_fifo_wr→clean; aximwr2wbsp/core_usb_host_top/sha256_axi4_slave→fail/symmetric. `threads(1)`/`verbose(false)`/tcmalloc don't fix it; `flat` dodges the crash but yields garbage mismatches. Only a crash-free run (`grep -a "Signal number" 6_lvs.log` empty) is trustworthy; ≥0.30.10 fixes the source but no such build is on this host. See `failure-patterns.md` "LVS KLayout sort_circuit/gen_log_entry SIGSEGV". |
 | LVS symmetric-matcher residual (`Netlists don't match` with **balanced** schematic-only==layout-only unmatched nets, 0 paired-net deltas, 0 device deltas, plus instance swaps / *ambiguous group* warnings) | `lvs_symmetric_matcher_residual` | **No automated flow fix; layout is correct.** KLayout-0.30.7 limit on symmetric logic (parallel NAND/XOR trees, register files / memory arrays, replicated bit-slices, flat combinational benchmarks). Comparer budget does **not** help (validated). **Operator escape hatch (validated 2026-06-03):** strict `same_nets!` seeding on swapped-instance input nets — clears it on localized symmetry (rx_64), does NOT generalize (unit5_G). See "Symmetric-matcher seeding" below + `failure-patterns.md`. |
@@ -178,6 +214,58 @@ does **not** resolve the actual mismatches — empirically validated 2026-06-02 
 (depth 64 / complexity 1M: 292 net mismatches unchanged). The knobs exist only so an operator can
 experiment on a genuinely depth-limited *future* design; they are not a lever for the residuals in
 this corpus.
+
+---
+
+## Vision-assisted DRC escalation (Win 4, OFF by default — `R2G_VISION_DRC=1`)
+
+When the text DRC-fix path under-determines a fix — `diagnose_signoff_fix.build_plan`
+returns a DRC residual (`status == "residual"`, a non-null `residual_reason`, or a `fail`
+with an exhausted strategy catalog) — and the operator opts in with `R2G_VISION_DRC=1`,
+the escalation payload is enriched with **rendered violation-neighborhood images** so a
+vision-capable escalation model can inspect the actual geometry (the cascaded
+multi-violation case where the category counts alone don't pin down the fix).
+
+**Module:** `scripts/dashboard/render_drc_violation.py` (sibling of `render_gds_preview.py`,
+reuses its headless-KLayout driver pattern). **Hook:** `attach_vision_artifacts(plan,
+project_dir)` — call it on the escalation path *after* `build_plan`; it mutates `plan`,
+adding a `plan["vision"]` manifest, and returns it.
+
+**Strictly additive / off by default.** With `R2G_VISION_DRC` unset the hook is a no-op
+and returns `plan` unchanged — the text fix path is byte-for-byte identical. It only fires
+on a DRC residual (never on a clean plan, a plan that still has an auto-applicable
+strategy, or an LVS/timing plan). KLayout is a **soft dependency**: if `KLAYOUT_CMD`/
+`klayout` is absent the manifest records `skipped: "klayout_not_installed"` and renders
+nothing. Any internal error degrades to a no-op (`plan["vision"]["error"]`) — vision must
+never break diagnosis.
+
+**What it renders.** `reports/drc.json` (from `extract_drc.py`) carries only per-*category*
+counts — it has **no per-violation coordinates**. The coordinates live in the KLayout
+report DB `drc/6_drc.lyrdb`, inside each `<item>`'s `<value>` geometry tag (e.g.
+`edge-pair: (191.596,92.645;192.15,92.645)|...` or `polygon: (x,y;...)`, in microns). The
+module parses the lyrdb (`parse_lyrdb_violations`), groups violations per DRC category and
+clusters them spatially (single-linkage on margin-expanded bboxes; default margin **2µm**),
+and renders one PNG per cluster into `reports/drc_vision/<cluster>.png` via headless
+KLayout (`zoom_box` to bbox+margin over the latest backend `6_final.gds`). The pure core
+(`crop_regions`) is unit-tested without the tool.
+
+**Honest degradation when no coordinates exist.** Antenna lyrdb items carry only
+`float`/`text` annotations (gate area, PAR ratio, diode count) — no layout geometry — so a
+bbox crop is impossible. In that case (and when there is no lyrdb at all) the manifest
+records the reason and falls back to a full-GDS preview reference (`fallback_full_gds`)
+rather than a misleading crop. `coordinate_status(lyrdb)` reports this up front.
+
+**Empirical caveat (be honest).** PostEDA-Bench's vision channel
+(`vision_query_with_pts`) showed "never harmful; largest lift where the text-only baseline
+is weak (e.g. Qwen +13.5 SR on DRC-Essential)" — but measured on **ASAP7 only**, which the
+paper flags as a single-PDK limitation. So for sky130 this is a **hypothesis to validate on
+r2g-bench (Win 3), NOT a proven transfer**. Validation plan: on congested designs, compare
+escalation fix-rate with `R2G_VISION_DRC` off vs on; keep only if non-harmful and
+net-positive on sky130. Cost stays bounded — rendering happens only on escalation.
+
+CLI: `python3 scripts/dashboard/render_drc_violation.py <project-dir> [--margin-um 2.0]
+[--regions-only]` (`--regions-only` prints the computed crop regions without invoking
+KLayout — useful for inspecting clustering on a coordinate-bearing lyrdb).
 
 ---
 

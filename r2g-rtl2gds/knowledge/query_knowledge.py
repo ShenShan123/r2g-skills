@@ -42,6 +42,20 @@ def get_family_heuristics(family: str,
     return (fam.get("platforms") or {}).get(platform)
 
 
+def get_closing_period(family: str, platform: str,
+                       heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
+                       ) -> dict[str, Any] | None:
+    entry = get_family_heuristics(family, platform, heuristics_path=heuristics_path)
+    return (entry or {}).get("closing_period")
+
+
+def get_deterioration(family: str, platform: str,
+                      heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
+                      ) -> dict[str, Any] | None:
+    entry = get_family_heuristics(family, platform, heuristics_path=heuristics_path)
+    return (entry or {}).get("slack_deterioration")
+
+
 def list_families(heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
                   ) -> list[tuple[str, str]]:
     data = _load(heuristics_path)
