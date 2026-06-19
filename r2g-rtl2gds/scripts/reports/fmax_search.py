@@ -69,10 +69,23 @@ def clone_variant(base: Path, period: float) -> Path:
     if variant.exists():
         shutil.rmtree(variant)
     (variant / "constraints").mkdir(parents=True)
-    shutil.copy(base / "constraints" / "config.mk", variant / "constraints" / "config.mk")
+    # Write the variant's rewritten SDC (tightened clk_period).
+    variant_sdc = (variant / "constraints" / "constraint.sdc").resolve()
     sdc_text = (base / "constraints" / "constraint.sdc").read_text(encoding="utf-8")
-    (variant / "constraints" / "constraint.sdc").write_text(
-        fm.rewrite_clk_period(sdc_text, period), encoding="utf-8")
+    variant_sdc.write_text(fm.rewrite_clk_period(sdc_text, period), encoding="utf-8")
+    # Copy config.mk but REPOINT SDC_FILE at THIS variant's rewritten SDC. The source
+    # config.mk pins SDC_FILE to an ABSOLUTE path in the ORIGINAL design dir, so a
+    # verbatim copy makes every probe silently reuse the ORIGINAL clock period — the
+    # variant SDC is ignored, place-stage slack stays constant across periods, and the
+    # search floors at the tightest period (bug surfaced 2026-06-19 by the Fmax pilot:
+    # 15/20 designs reported an unphysical ~20 GHz). VERILOG_FILES etc. stay absolute
+    # (RTL is period-invariant); only the clock constraint must follow the variant.
+    cfg_text = (base / "constraints" / "config.mk").read_text(encoding="utf-8")
+    cfg_text, n = re.subn(r"(?m)^(\s*(?:export\s+)?SDC_FILE\s*=).*$",
+                          rf"\g<1> {variant_sdc}", cfg_text)
+    if n == 0:   # no explicit SDC_FILE -> pin one so ORFS uses the variant's SDC
+        cfg_text = cfg_text.rstrip("\n") + f"\nexport SDC_FILE = {variant_sdc}\n"
+    (variant / "constraints" / "config.mk").write_text(cfg_text, encoding="utf-8")
     # Symlink rtl/ (read-only, large); fall back to copy if symlink unsupported.
     src_rtl = base / "rtl"
     if src_rtl.exists():
