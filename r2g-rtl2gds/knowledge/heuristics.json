@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-06-18T07:58:06Z",
-  "source_run_count": 1309,
+  "generated_at": "2026-06-19T03:53:44Z",
+  "source_run_count": 1365,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 669,
+  "generation": 741,
   "families": {
     "rv32i": {
       "platforms": {
@@ -253,13 +253,13 @@
           }
         },
         "sky130hd": {
-          "sample_size": 8,
-          "success_count": 8,
+          "sample_size": 10,
+          "success_count": 10,
           "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 10.0,
-            "max_safe": 17.0,
-            "median": 10.0
+            "max_safe": 25.0,
+            "median": 17.0
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -281,6 +281,12 @@
                   }
                 },
                 "n_sessions": 1
+              }
+            },
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 2
               }
             }
           }
@@ -376,8 +382,8 @@
           }
         },
         "sky130hd": {
-          "sample_size": 5,
-          "success_count": 5,
+          "sample_size": 6,
+          "success_count": 6,
           "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 25.0,
@@ -390,7 +396,15 @@
             "median": 0.2
           },
           "typical_cell_count": 3084,
-          "p90_elapsed_s": 2800.0
+          "p90_elapsed_s": 2347.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -521,13 +535,13 @@
           }
         },
         "sky130hd": {
-          "sample_size": 9,
-          "success_count": 9,
+          "sample_size": 12,
+          "success_count": 12,
           "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 17.0,
-            "max_safe": 17.0,
-            "median": 17.0
+            "max_safe": 20.0,
+            "median": 20.0
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -549,6 +563,10 @@
                   }
                 },
                 "n_sessions": 2
+              },
+              "null": {
+                "strategies": {},
+                "n_sessions": 3
               }
             }
           }
@@ -591,9 +609,9 @@
           }
         },
         "sky130hd": {
-          "sample_size": 7,
+          "sample_size": 9,
           "success_count": 7,
-          "success_rate": 1.0,
+          "success_rate": 0.7777777777777778,
           "core_utilization": {
             "min_safe": 25.0,
             "max_safe": 25.0,
@@ -645,16 +663,24 @@
           }
         },
         "sky130hd": {
-          "sample_size": 6,
+          "sample_size": 7,
           "success_count": 6,
-          "success_rate": 1.0,
+          "success_rate": 0.8571428571428571,
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
           "typical_cell_count": 8151,
-          "p90_elapsed_s": 1858.0
+          "p90_elapsed_s": 1858.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {},
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -697,6 +723,30 @@
           },
           "typical_cell_count": 558,
           "p90_elapsed_s": 1144.0
+        },
+        "sky130hd": {
+          "sample_size": 6,
+          "success_count": 6,
+          "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 20.0,
+            "max_safe": 20.0,
+            "median": 20.0
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "p90_elapsed_s": 583.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 6
+              }
+            }
+          }
         }
       }
     },
@@ -718,6 +768,30 @@
           },
           "typical_cell_count": 5024,
           "p90_elapsed_s": 1688.0
+        },
+        "sky130hd": {
+          "sample_size": 4,
+          "success_count": 4,
+          "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 20.0,
+            "max_safe": 25.0,
+            "median": 22.5
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "p90_elapsed_s": 2966.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 4
+              }
+            }
+          }
         }
       }
     },
@@ -739,6 +813,31 @@
           },
           "typical_cell_count": 614,
           "p90_elapsed_s": 2267.0
+        },
+        "sky130hd": {
+          "sample_size": 3,
+          "success_count": 3,
+          "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 20.0,
+            "max_safe": 20.0,
+            "median": 20.0
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 910,
+          "p90_elapsed_s": 975.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 2
+              }
+            }
+          }
         }
       }
     },
@@ -986,9 +1085,9 @@
           }
         },
         "sky130hd": {
-          "sample_size": 29,
-          "success_count": 27,
-          "success_rate": 0.9310344827586207,
+          "sample_size": 30,
+          "success_count": 28,
+          "success_rate": 0.9333333333333333,
           "core_utilization": {
             "min_safe": 10.0,
             "max_safe": 25.0,
@@ -1019,7 +1118,7 @@
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 1
+                "n_sessions": 2
               }
             },
             "lvs": {
@@ -1145,21 +1244,26 @@
           }
         },
         "sky130hd": {
-          "sample_size": 5,
-          "success_count": 3,
-          "success_rate": 0.6,
+          "sample_size": 7,
+          "success_count": 4,
+          "success_rate": 0.5714285714285714,
+          "core_utilization": {
+            "min_safe": 25.0,
+            "max_safe": 25.0,
+            "median": 25.0
+          },
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
           "typical_cell_count": 2921,
-          "p90_elapsed_s": 1870.0,
+          "p90_elapsed_s": 2608.0,
           "fix_recipes": {
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 1
+                "n_sessions": 2
               }
             },
             "lvs": {
@@ -1172,6 +1276,12 @@
                     "wins": 0
                   }
                 },
+                "n_sessions": 1
+              }
+            },
+            "orfs_stage": {
+              "route": {
+                "strategies": {},
                 "n_sessions": 1
               }
             }
@@ -1448,9 +1558,9 @@
           }
         },
         "sky130hd": {
-          "sample_size": 16,
+          "sample_size": 18,
           "success_count": 13,
-          "success_rate": 0.8125,
+          "success_rate": 0.7222222222222222,
           "core_utilization": {
             "min_safe": 12.0,
             "max_safe": 25.0,
@@ -1473,6 +1583,20 @@
                     "failures": 0,
                     "wins": 0,
                     "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 2
+              }
+            },
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 0,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 0.0
                   }
                 },
                 "n_sessions": 2
@@ -1517,13 +1641,13 @@
           }
         },
         "sky130hd": {
-          "sample_size": 10,
-          "success_count": 4,
-          "success_rate": 0.4,
+          "sample_size": 11,
+          "success_count": 5,
+          "success_rate": 0.45454545454545453,
           "core_utilization": {
             "min_safe": 12.0,
-            "max_safe": 20.0,
-            "median": 17.5
+            "max_safe": 25.0,
+            "median": 20.0
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -1549,7 +1673,7 @@
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 5
+                "n_sessions": 6
               }
             },
             "lvs": {
@@ -1968,8 +2092,8 @@
           }
         },
         "sky130hd": {
-          "sample_size": 9,
-          "success_count": 9,
+          "sample_size": 11,
+          "success_count": 11,
           "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 20.0,
@@ -1982,7 +2106,15 @@
             "median": 0.2
           },
           "typical_cell_count": 985,
-          "p90_elapsed_s": 1323.0
+          "p90_elapsed_s": 1323.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 2
+              }
+            }
+          }
         }
       }
     },
@@ -2298,9 +2430,9 @@
           }
         },
         "sky130hd": {
-          "sample_size": 21,
-          "success_count": 20,
-          "success_rate": 0.9523809523809523,
+          "sample_size": 23,
+          "success_count": 22,
+          "success_rate": 0.9565217391304348,
           "core_utilization": {
             "min_safe": 17.0,
             "max_safe": 25.0,
@@ -2308,11 +2440,11 @@
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
-            "max_safe": 0.2,
+            "max_safe": 0.25,
             "median": 0.2
           },
           "typical_cell_count": 762,
-          "p90_elapsed_s": 862.0,
+          "p90_elapsed_s": 966.0,
           "fix_recipes": {
             "drc": {
               "'m3.2'": {
@@ -2325,6 +2457,10 @@
                     "median_reduction_pct": 1.0
                   }
                 },
+                "n_sessions": 2
+              },
+              "null": {
+                "strategies": {},
                 "n_sessions": 2
               }
             }
@@ -2452,13 +2588,13 @@
           }
         },
         "sky130hd": {
-          "sample_size": 6,
-          "success_count": 5,
-          "success_rate": 0.8333333333333334,
+          "sample_size": 7,
+          "success_count": 6,
+          "success_rate": 0.8571428571428571,
           "core_utilization": {
             "min_safe": 15.0,
-            "max_safe": 17.0,
-            "median": 16.0
+            "max_safe": 25.0,
+            "median": 17.0
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -2466,7 +2602,7 @@
             "median": 0.2
           },
           "typical_cell_count": 11908,
-          "p90_elapsed_s": 6207.0,
+          "p90_elapsed_s": 3678.0,
           "fix_recipes": {
             "orfs_stage": {
               "route": {
@@ -2478,6 +2614,12 @@
                     "wins": 0
                   }
                 },
+                "n_sessions": 1
+              }
+            },
+            "drc": {
+              "null": {
+                "strategies": {},
                 "n_sessions": 1
               }
             }
@@ -2515,16 +2657,29 @@
           }
         },
         "sky130hd": {
-          "sample_size": 3,
-          "success_count": 3,
+          "sample_size": 4,
+          "success_count": 4,
           "success_rate": 1.0,
+          "core_utilization": {
+            "min_safe": 25.0,
+            "max_safe": 25.0,
+            "median": 25.0
+          },
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
           "typical_cell_count": 802,
-          "p90_elapsed_s": 1012.0
+          "p90_elapsed_s": 1012.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -2634,13 +2789,13 @@
           }
         },
         "sky130hd": {
-          "sample_size": 15,
-          "success_count": 15,
+          "sample_size": 16,
+          "success_count": 16,
           "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 12.0,
             "max_safe": 25.0,
-            "median": 20.0
+            "median": 22.5
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -2662,6 +2817,10 @@
                   }
                 },
                 "n_sessions": 2
+              },
+              "null": {
+                "strategies": {},
+                "n_sessions": 1
               }
             }
           }
@@ -2717,13 +2876,13 @@
           }
         },
         "sky130hd": {
-          "sample_size": 56,
-          "success_count": 49,
-          "success_rate": 0.875,
+          "sample_size": 60,
+          "success_count": 50,
+          "success_rate": 0.8333333333333334,
           "core_utilization": {
             "min_safe": 8.0,
             "max_safe": 25.0,
-            "median": 18.5
+            "median": 20.0
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
@@ -2748,20 +2907,21 @@
               },
               "null": {
                 "strategies": {},
-                "n_sessions": 5
+                "n_sessions": 6
               }
             },
             "orfs_stage": {
               "route": {
                 "strategies": {
                   "route_relief": {
-                    "attempts": 4,
+                    "attempts": 5,
                     "successes": 3,
                     "failures": 0,
-                    "wins": 0
+                    "wins": 0,
+                    "median_reduction_pct": 0.0
                   }
                 },
-                "n_sessions": 4
+                "n_sessions": 5
               }
             },
             "lvs": {
@@ -2829,9 +2989,9 @@
           }
         },
         "sky130hd": {
-          "sample_size": 40,
-          "success_count": 36,
-          "success_rate": 0.9,
+          "sample_size": 50,
+          "success_count": 42,
+          "success_rate": 0.84,
           "core_utilization": {
             "min_safe": 17.0,
             "max_safe": 25.0,
@@ -2843,7 +3003,7 @@
             "median": 0.2
           },
           "typical_cell_count": 2334,
-          "p90_elapsed_s": 2861.0,
+          "p90_elapsed_s": 2530.0,
           "fix_recipes": {
             "drc": {
               "'m3.2'": {
@@ -2860,21 +3020,21 @@
               },
               "null": {
                 "strategies": {},
-                "n_sessions": 3
+                "n_sessions": 10
               }
             },
             "orfs_stage": {
               "route": {
                 "strategies": {
                   "route_relief": {
-                    "attempts": 1,
+                    "attempts": 4,
                     "successes": 1,
                     "failures": 0,
                     "wins": 0,
-                    "median_reduction_pct": 1.0
+                    "median_reduction_pct": 0.5
                   }
                 },
-                "n_sessions": 1
+                "n_sessions": 4
               }
             },
             "lvs": {
@@ -3755,7 +3915,7 @@
                     "median_reduction_pct": 0.0
                   }
                 },
-                "n_sessions": 2
+                "n_sessions": 3
               }
             }
           }
@@ -3964,6 +4124,19 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -4082,6 +4255,19 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {},
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -4100,6 +4286,27 @@
                     "successes": 1,
                     "failures": 0,
                     "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 0,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 0.0
                   }
                 },
                 "n_sessions": 1
@@ -4180,6 +4387,26 @@
               }
             }
           }
+        },
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 1,
+                    "successes": 0,
+                    "failures": 0,
+                    "wins": 0
+                  }
+                },
+                "n_sessions": 1
+              }
+            }
+          }
         }
       }
     },
@@ -4246,6 +4473,40 @@
       }
     },
     "riscymcu": {
+      "platforms": {
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "darkriscv": {
+      "platforms": {
+        "sky130hd": {
+          "sample_size": 0,
+          "success_count": 0,
+          "success_rate": 0.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "ibex": {
       "platforms": {
         "sky130hd": {
           "sample_size": 0,
@@ -4848,29 +5109,67 @@
         "MCU_Toplevel",
         "RLE_BlobMerging",
         "SPI_Master_With_Single_CS",
+        "aes_core",
         "aes_key_mem",
         "axi_dma",
+        "axi_slave",
+        "axil_crossbar_wr",
         "axil_reg_if",
+        "axilsingle",
+        "aximm2s",
         "aximrd2wbsp",
+        "aximwr2wbsp",
+        "axis_baser_rx_64",
+        "axis_baser_tx_64",
         "axis_switch",
+        "axivcamera",
+        "axivdisplay",
         "axixbar",
+        "axixclk",
+        "block_ram",
         "butterfly_top_module_8_point",
+        "c1355",
+        "c499",
         "can_fifo",
         "cmac",
         "cmac_core",
+        "cu",
+        "darkriscv",
         "des_perf",
         "diffeq_paj_convert",
         "dynamic_node_top_wrap",
+        "e203_subsys_mems",
         "eeprom_top",
+        "eth_demux",
+        "eth_fifo",
         "eth_mac_mii",
+        "eth_registers",
         "ex3PM16_fir",
         "ex4EP16_fir",
         "i2c_slave_controller",
         "memory_controller",
+        "ogfx_backend",
+        "ogfx_reg",
+        "omsp_clock_module",
+        "omsp_dbg",
+        "omsp_dbg_i2c",
+        "omsp_dbg_uart",
+        "omsp_multiplier",
+        "omsp_sfr",
+        "omsp_watchdog",
+        "openGFX430",
+        "pd",
+        "prim_reg_cdc",
+        "pseudo_rand",
+        "sdspi",
+        "sha256_axi4_slave",
         "spi_controller",
+        "uart2axi4",
+        "usbf_device",
+        "usbh_host",
         "wbsafety"
       ],
-      "n_sessions": 39,
+      "n_sessions": 77,
       "strategies": {
         "lvs_resolve_unknown": {
           "attempts": 6,
@@ -4938,8 +5237,16 @@
         "aes_key_mem",
         "arm9_compatiable_code",
         "arm9_compitable_code",
+        "arp",
+        "avscope",
         "axi_dma",
+        "axis2mm",
+        "axisgdma",
+        "axivfifo",
+        "bgm",
         "blake2s",
+        "blake2s_core",
+        "butterfly_top_module_16_point",
         "cf_fir_24_16_16",
         "chacha",
         "chacha_core",
@@ -4950,6 +5257,7 @@
         "dynamic_node_top_wrap",
         "ex2PM16_fir",
         "ex3PM16_fir",
+        "ex4PM16_fir",
         "mac2",
         "picorv32_axi",
         "poly1305",
@@ -4960,18 +5268,21 @@
         "riscv_core",
         "sha256_axi4",
         "softmax",
-        "wbsafety"
+        "udp",
+        "udp_64",
+        "wbsafety",
+        "zipdma"
       ],
-      "n_sessions": 33,
+      "n_sessions": 45,
       "strategies": {
         "route_relief": {
-          "attempts": 32,
+          "attempts": 39,
           "successes": 18,
           "failures": 0,
           "wins": 0,
           "by_platform": {
             "sky130hd": {
-              "attempts": 32,
+              "attempts": 39,
               "successes": 18,
               "failures": 0,
               "wins": 0
@@ -4996,6 +5307,19 @@
         "wbsafety"
       ],
       "n_sessions": 7,
+      "strategies": {}
+    },
+    "ad4b3608d8f604d0": {
+      "check": "lvs",
+      "class": "netgen_topology",
+      "predicates": {},
+      "platforms_seen": [
+        "sky130hd"
+      ],
+      "evidence_designs": [
+        "axi2axilite"
+      ],
+      "n_sessions": 1,
       "strategies": {}
     }
   },
@@ -5631,26 +5955,26 @@
         "sky130hd": {
           "strategies": {
             "route_relief": {
-              "attempts": 32,
+              "attempts": 39,
               "successes": 18,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.5682291666666667
+              "mean_outcome_score": 0.5346153846153846
             }
           },
-          "n_sessions": 32
+          "n_sessions": 39
         },
         "*": {
           "strategies": {
             "route_relief": {
-              "attempts": 32,
+              "attempts": 39,
               "successes": 18,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.5682291666666667
+              "mean_outcome_score": 0.5346153846153846
             }
           },
-          "n_sessions": 32
+          "n_sessions": 39
         }
       },
       "logic/medium": {
@@ -5683,26 +6007,26 @@
         "sky130hd": {
           "strategies": {
             "route_relief": {
-              "attempts": 22,
+              "attempts": 29,
               "successes": 8,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.44545454545454544
+              "mean_outcome_score": 0.4298850574712643
             }
           },
-          "n_sessions": 22
+          "n_sessions": 29
         },
         "*": {
           "strategies": {
             "route_relief": {
-              "attempts": 22,
+              "attempts": 29,
               "successes": 8,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.44545454545454544
+              "mean_outcome_score": 0.4298850574712643
             }
           },
-          "n_sessions": 22
+          "n_sessions": 29
         }
       },
       "logic/large": {
@@ -5754,6 +6078,28 @@
         }
       },
       "logic/small": {
+        "sky130hd": {
+          "strategies": {},
+          "n_sessions": 0
+        },
+        "*": {
+          "strategies": {},
+          "n_sessions": 0
+        }
+      }
+    },
+    "ad4b3608d8f604d0": {
+      "logic/unknown": {
+        "sky130hd": {
+          "strategies": {},
+          "n_sessions": 0
+        },
+        "*": {
+          "strategies": {},
+          "n_sessions": 0
+        }
+      },
+      "*": {
         "sky130hd": {
           "strategies": {},
           "n_sessions": 0
