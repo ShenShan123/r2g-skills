@@ -4,21 +4,28 @@ Use ORFS only after RTL syntax checks, testbench simulation, and Yosys synthesis
 
 ## Environment Setup
 
-```bash
-source /opt/openroad_tools_env.sh
-```
+Nothing to source manually. Every flow script sources `scripts/flow/_env.sh`, which autodetects the
+ORFS checkout (`ORFS_ROOT`/`FLOW_DIR`) and the tool binaries (`OPENROAD_EXE`, `YOSYS_EXE`,
+`KLAYOUT_CMD`, `MAGIC_EXE`, `NETGEN_EXE`, `STA_EXE`, `IVERILOG_EXE`/`VVP_EXE`/`VERILATOR_EXE`,
+`PDK_ROOT`/`SKY130A_DIR`) from the PATH and well-known install locations. Verify what was discovered
+with `scripts/flow/check_env.sh`.
 
-This sets up:
-- `OPENROAD_EXE=/usr/bin/openroad`
-- `YOSYS_EXE=/opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys`
-- `STA_EXE=/usr/bin/sta`
-- `KLAYOUT_CMD=/usr/bin/klayout`
-- OSS CAD Suite in PATH
+Override autodetection only when needed — via `$R2G_ENV_FILE`, `references/env.local.sh`, or by
+exporting the variable before the script runs. Optional override example:
+
+```bash
+export ORFS_ROOT=/opt/EDA4AI/OpenROAD-flow-scripts
+export OPENROAD_EXE=/usr/bin/openroad
+export YOSYS_EXE=/opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys
+export KLAYOUT_CMD=/usr/bin/klayout
+```
 
 ## ORFS Root
 
+The autodetected checkout (`$ORFS_ROOT`; a typical layout shown below):
+
 ```
-/opt/EDA4AI/OpenROAD-flow-scripts/
+$ORFS_ROOT/   # e.g. /opt/EDA4AI/OpenROAD-flow-scripts or ~/OpenROAD-flow-scripts
 ├── flow/
 │   ├── Makefile          # Main flow driver
 │   ├── platforms/        # PDK configurations

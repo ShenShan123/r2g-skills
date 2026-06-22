@@ -2,11 +2,15 @@
 
 ## Phase 0: Environment Check
 
-1. Source the environment: `source /opt/openroad_tools_env.sh`
-2. Run `scripts/flow/check_env.sh`.
+1. Nothing to source manually — the env (ORFS checkout + tool paths) is autodetected by
+   `scripts/flow/_env.sh`, which every flow script sources on its own.
+2. Run `scripts/flow/check_env.sh` to verify the autodetected setup.
 3. Verify at minimum that `python3`, `yosys`, `iverilog`/`verilator`, `vvp`, and `openroad` are available.
-4. Verify ORFS exists at `/opt/EDA4AI/OpenROAD-flow-scripts/flow/`.
+4. Verify ORFS was discovered (an `OpenROAD-flow-scripts/` checkout containing `flow/Makefile`).
 5. If any tools are missing, stop early and report exactly which ones are absent.
+6. Override autodetection only when needed — via `$R2G_ENV_FILE`, `references/env.local.sh`, or by
+   exporting `ORFS_ROOT`/`OPENROAD_EXE`/`YOSYS_EXE`/etc. (optional override example:
+   `export ORFS_ROOT=/opt/EDA4AI/OpenROAD-flow-scripts`).
 
 ## Phase 1: Intake
 

@@ -32,7 +32,7 @@ verification_targets:
   - corner cases
 signoff_targets:
   - drc
-  - lvs       # only on platforms with LVS rules (sky130hd, ihp-sg13g2)
+  - lvs       # nangate45 (bundled KLayout rule) + sky130hd/sky130hs (Netgen); KLayout-LVS elsewhere if a rule exists, else skipped
   - rcx        # parasitic extraction (SPEF)
 assumptions:
   - single clock domain
@@ -66,6 +66,10 @@ If any of the following are missing, ask the user or document assumptions clearl
 When normalizing the spec, note signoff requirements:
 
 - **DRC**: Always run after backend. Available on nangate45, sky130hd, asap7, ihp-sg13g2.
-- **LVS**: Only available on sky130hd and ihp-sg13g2. Gracefully skipped on other platforms.
+- **LVS**: Tool is platform-aware (`fix_signoff.sh`). `sky130*` runs **Netgen** (Magic GDS
+  extraction + Netgen compare — the production sky130 path). Everywhere else runs **KLayout LVS**,
+  which needs a `.lylvs` rule deck for the platform: nangate45 ships one (install once with
+  `tools/install_nangate45_lvs.sh`); platforms with no rule deck are **gracefully skipped**
+  (`status: skipped`).
 - **RCX**: Available on all platforms with `rcx_patterns.rules`. Produces SPEF for post-route timing analysis.
 - If the user requires parasitic-aware timing (e.g., for tapeout), specify `rcx` in signoff_targets and use SPEF for STA.
