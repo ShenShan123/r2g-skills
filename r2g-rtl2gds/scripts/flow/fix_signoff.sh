@@ -396,16 +396,25 @@ for r in rows:
 open(out,"w").write("\n".join(lines)+"\n")' "$LOG" "$REPORTS/fix_summary.md"
 echo "Summary: $REPORTS/fix_summary.md"
 
-# exit 0 if final state clean, else 2 if residual remains. For --check route we
+# exit 0 if final state clean, else 2 if a residual remains. For --check route we
 # judge ONLY route.json (a route fix never produces drc/lvs; a stale route.json
 # from a prior flow must not poison a drc/lvs fix, and vice-versa).
+#
+# FAIL-CLOSED (2026-06-20 honesty fix): a check counts as signed off ONLY for the
+# clean statuses below — mirroring engineer_loop._process_one's first-pass gate
+# (status in {clean,clean_beol,skipped}). The prior fail-OPEN allowlist
+# {fail,failed,residual,timeout} let every OTHER status pass as clean, so a DRC
+# that timed out `stuck` (FEOL-hang) or an LVS that died `incomplete`/`crash`
+# (no match verdict, no lvsdb) returned exit 0 -> the loop marked the design clean
+# though signoff never verified. Any status outside clean_states is an unresolved
+# residual. See references/failure-patterns.md + test_fix_signoff_clean_gate.py.
 python3 -c 'import json,sys,os
 proj,check=sys.argv[1],sys.argv[2]; rc=0
 checks=("route",) if check=="route" else ("drc","lvs")
-fail_states={"fail","failed","residual","timeout"}
+clean_states={"clean","clean_beol","skipped"}
 for c in checks:
     p=os.path.join(proj,"reports",c+".json")
     if os.path.exists(p):
         d=json.load(open(p))
-        if d.get("status") in fail_states: rc=2
+        if d.get("status") not in clean_states: rc=2
 sys.exit(rc)' "$PROJECT_DIR" "$CHECK" || exit 2
