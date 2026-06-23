@@ -142,6 +142,38 @@ CORE_UTILIZATION is too high for the design's routing complexity. Highly interco
   the two apart by whether GPL routability converges < 1.0 at a lower util: timeout-victim (clears)
   vs layer-limited (honest residual).
 
+### Sub-variant: a SUCCESSFUL recipe is unreachable by the A/B planner (2026-06-22, loop-closure bug)
+
+The route_relief story above worked because a route-congestion abort leaves a **residual** —
+a `run_violations` row the A/B planner's Tier 1 (`ab_runner.plan_trial`) keys on. The opposite
+class of recipe — one that **fully clears** its symptom — silently broke the loop:
+
+- **Symptom (campaign-level, not a single design):** all `ab_trials` were sky130hd; every
+  nangate45 candidate (3× `antenna_diode_repair` DRC, 1× `period_relax` timing) sat in
+  `recipe_status='candidate'` indefinitely. `ab_trials` froze across waves while `candidate`
+  count grew — the Gate-A "candidates that never drain" alarm, scoped to one platform.
+- **Root cause:** `plan_trial` Tier 1 reads `run_violations`, the **post-fix** residual snapshot.
+  `antenna_diode_repair` drives DRC to **0**, so it leaves *no* residual row — Tier 1 is
+  structurally empty for exactly the recipes worth promoting. The only fallback was Tier 2, a
+  `heuristics.symptoms[sid].evidence_designs` **name-list keyed on the bare DESIGN_NAME** (`can_tx`).
+  The campaign names project dirs `<SourceRepo>_<design>` (`CAN_Bus_Controller_can_tx`), and
+  `_resolve_evidence` matched the evidence name only against the project-dir *basename* — so it
+  resolved **0** designs (and generic module names `test`/`top` would over-match dozens of
+  unrelated designs). With both tiers empty, `plan_trial` returned `None` → no arms → the recipe
+  could never be A/B-validated or promoted, even though it demonstrably worked.
+- **Why sky130hd escaped it:** its live candidates were `route_relief`/`density_relief`, which
+  *reduce* (not zero) violations and so leave Tier-1 residuals. Single-platform A/B is the tell —
+  a `fail`/`partial` corpus can have non-empty `ab_trials` and still be lying *per platform*.
+- **Fix (`ab_runner.py`, new Tier 2 `_symptom_designs`):** resolve A/B subjects from
+  `fix_trajectories`/`fix_events`, which record the **exact `project_path` that hit each
+  `symptom_id`** (resolved *or* abandoned) — symptom-confirmed and on-disk-precise, regardless of
+  dir-naming. Tier order is now run_violations → fix-history → evidence-name-list (last resort).
+  A symptom only **one** design ever exhibited honestly stays unmatched at `n_designs=2` (it
+  becomes A/B-able when a second exhibitor appears) rather than fabricating a subject. TDD:
+  `tests/test_ab_fixhist_subjects.py`. **Lesson:** "`ab_trials` non-empty" is too weak a tripwire —
+  it must hold *per platform that has a successful-recipe candidate*; a planner that keys only on
+  residuals is blind to every recipe that actually fixes the problem.
+
 ## Placement Divergence (NesterovSolve Non-Convergence)
 
 **Symptoms:**
@@ -517,6 +549,34 @@ When klayout DRC is stuck on a polygon op and gets SIGKILL'd by something **othe
 - **Detection (since 2026-05-23):** `run_drc.sh` greps `drc_run.log` for `Killed $KLAYOUT_CMD`, `Killed klayout`, or `Error 137`. When that keyword is present AND a `*.lydrc:NN` reference exists in `6_drc.log`, classify as `status=stuck` with `killed_externally=true` in `drc_result.json` (regardless of make's wrapper exit code).
 - **Symptom example:** `drc_run.log` ends with `klayout.sh: line 9: <PID> Killed   $KLAYOUT_CMD "$@"` followed by `make: *** [...] Error 137`, while the run-script's PIPESTATUS captures `2`. Total elapsed is well under the timeout (3-8 minutes) but CPU utilization is low (~13%) indicating klayout was waiting (not crashing) when killed.
 - **Action:** Same as the timeout variant — treat as stuck, do not retry. The signoff outcome for the design is effectively "DRC unavailable, GDS+LVS+RCX still valid". The 3 v2 cases (APB_GPIO_register, AXI_Lite_DMA_axilite, DMA_Controller_DMA_registers) that previously logged as `drc=fail(2)` are now correctly tagged `stuck` after this fix.
+
+#### Sub-variant: stuck/incomplete mislabeled `clean` by the fix-loop exit gate (2026-06-20, **honesty bug**)
+
+`diagnose_signoff_fix.py:260` correctly scopes `status in ("stuck","timeout")` as
+`drc_{status}_tooling_out_of_v1_scope` — a *residual* with no automated fix, so `fix_one`
+gets a `STOP` and returns 0 (meaning "fix loop finished", **not** "clean"). The authority on
+clean-vs-residual is the python **exit gate** at the tail of `fix_signoff.sh`. That gate was
+**fail-OPEN**: it flagged a residual only if `status ∈ {fail,failed,residual,timeout}`, so every
+*other* status — DRC `stuck` (FEOL polygon-op hang) and LVS `incomplete`/`crash`/`unknown`
+(`extract_lvs.py:351` = reached device extraction but died with no match verdict, no lvsdb) —
+fell through as **exit 0**. `engineer_loop._process_one:319` then called `_mark_clean()` on a
+design whose signoff never verified, recording it **`clean`** in the campaign ledger *and*
+auto-draining its escalations (`_mark_clean` → `escalations.resolve_for_design`).
+
+- **Honesty scope:** the knowledge `runs` row stayed honest (it stores the real
+  `drc_status='stuck'` / `lvs_status='incomplete'`), so the *learner* never saw a lie — but the
+  **loop-control / ledger layer** over-reported clean. Surfaced live 2026-06-20: `cf_fir_24_16_16`
+  burned ~6h (2h full-DRC timeout `stuck` + 4h LVS `incomplete`) then was marked `clean`. A corpus
+  scan found **11/101 nangate45 ledger-`clean` designs mislabeled** (8× `stuck`/`clean`, 3×
+  `stuck`/`incomplete`).
+- **Fix (`fix_signoff.sh` exit gate):** make it **fail-CLOSED**, mirroring `_process_one`'s
+  first-pass predicate — a check is signed off ONLY for `status ∈ {clean, clean_beol, skipped}`;
+  every other status is an unresolved residual → exit 2 → the loop escalates (`catalog_exhausted`).
+  Regression: `tests/test_fix_signoff_clean_gate.py`.
+- **Lesson:** a signoff/clean gate must be an **allowlist of clean states**, never a denylist of
+  fail states — the status vocabulary (`stuck`, `incomplete`, `crash`, `unknown`) grows over time
+  and a denylist silently fails open on every new value. Two gates encoding the same policy
+  (`diagnose` residual-scoping vs the exit gate) MUST use the same predicate.
 
 ### LVS Mismatch
 

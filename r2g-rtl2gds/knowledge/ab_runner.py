@@ -16,6 +16,7 @@ import datetime as _dt
 import json
 import os
 import re
+import sqlite3
 import statistics
 
 import recipe_lifecycle
@@ -149,6 +150,59 @@ def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None) -> l
     return out
 
 
+def _symptom_designs(conn, symptom_id: str, want_platform: str | None) -> list[dict]:
+    """Designs that DEMONSTRABLY exhibited this symptom, taken from the fix history.
+
+    A successfully-fixed symptom (e.g. ``antenna_diode_repair`` clearing DRC to 0)
+    leaves NO row in run_violations — that table is the POST-fix residual snapshot,
+    so plan_trial's Tier 1 is structurally blind to exactly the recipes that work.
+    But fix_trajectories/fix_events recorded the precise ``project_path`` that hit
+    the symptom (resolved OR abandoned), keyed by ``symptom_id``. Resolving from
+    there is symptom-confirmed AND on-disk-exact — strictly better than the
+    heuristics ``evidence_designs`` name-list (Tier 3 below), which stores the bare
+    DESIGN_NAME (``can_tx``) and so (a) misses the campaign's repo-prefixed project
+    dirs (``CAN_Bus_Controller_can_tx``) and (b) collides with generic module names
+    (``test``/``top``) shared by dozens of unrelated designs.
+
+    (2026-06-22: this was the third reason the live A/B loop never fired — after
+    Gate A and the run_violations-only gap — and the one that kept every *successful*
+    nangate45 recipe, antenna chief among them, permanently stuck as ``candidate``.)
+    """
+    paths: set[str] = set()
+    for tbl in ("fix_trajectories", "fix_events"):
+        try:
+            for (pp,) in conn.execute(
+                    f"SELECT DISTINCT project_path FROM {tbl} WHERE symptom_id=?",
+                    (symptom_id,)):
+                if pp:
+                    paths.add(pp)
+        except sqlite3.OperationalError:
+            pass                              # table/column absent on a legacy DB
+    if not paths:
+        return []
+    # Join through runs for cell_count/platform and latest-row-per-project, mirroring
+    # _resolve_evidence (cheapest-first, real dirs only, never an A/B arm copy).
+    rows = conn.execute(
+        "SELECT design_name, project_path, cell_count, platform, "
+        "ROW_NUMBER() OVER (PARTITION BY project_path ORDER BY ingested_at DESC, run_id DESC) rn "
+        "FROM runs").fetchall()
+    out, seen = [], set()
+    for design_name, project_path, cell_count, plat, rn in rows:
+        if rn != 1 or project_path not in paths or project_path in seen:
+            continue
+        if _is_arm_dir(project_path):
+            continue
+        if want_platform and plat != want_platform:
+            continue
+        if not os.path.isdir(project_path):
+            continue
+        seen.add(project_path)
+        out.append({"design_name": design_name, "project_path": project_path,
+                    "cell_count": cell_count or 0})
+    out.sort(key=lambda d: d["cell_count"])
+    return out
+
+
 def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
                strategy: str, n_designs: int = N_DESIGNS_DEFAULT) -> dict | None:
     """Returns {designs, arm_a, arm_b, match_level} or None if no match."""
@@ -182,12 +236,22 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
         if len(designs) >= n_designs:
             return _trial(designs, level)
 
-    # Tier 2 — recipe evidence designs (PRE-fix exhibitors). run_violations is a
-    # post-fix snapshot, so a SUCCESSFULLY-FIXED symptom (e.g. antenna) leaves no
-    # rows there — yet that is exactly the recipe we most need to A/B. The learner
-    # already records who exhibited the symptom in heuristics.symptoms[sid].
-    # evidence_designs; resolve those to on-disk dirs. (2026-06-16: this gap, on
-    # top of Gate A, was the second reason the live A/B loop had never fired.)
+    # Tier 2 — fix-history exhibitors (symptom-confirmed, on-disk-precise). A recipe
+    # that SUCCEEDS clears the symptom, so Tier 1 (run_violations residuals) is empty
+    # for exactly the recipes worth promoting. fix_trajectories/fix_events recorded
+    # the precise project that hit this symptom_id; resolve straight from there.
+    # (2026-06-22: without this, every successful nangate45 recipe — antenna chief
+    # among them — was unreachable and stuck forever as a candidate.)
+    for want_plat, level in ((platform, "fixhist_platform"), (None, "fixhist_pooled")):
+        designs = _symptom_designs(conn, symptom_id, want_plat)
+        if len(designs) >= n_designs:
+            return _trial(designs, level)
+
+    # Tier 3 — recipe evidence designs (PRE-fix exhibitors). Last resort: the learner
+    # records who exhibited the symptom in heuristics.symptoms[sid].evidence_designs,
+    # but as bare DESIGN_NAMEs, so this resolves only legacy same-name project dirs.
+    # (2026-06-16: this gap, on top of Gate A, was the second reason the A/B loop had
+    # never fired; Tier 2 above now covers the repo-prefixed campaign dirs it misses.)
     for want_plat, level in ((platform, "evidence_platform"), (None, "evidence_pooled")):
         designs = _resolve_evidence(conn, _evidence_designs(symptom_id), want_plat)
         if len(designs) >= n_designs:
