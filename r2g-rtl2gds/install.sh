@@ -55,6 +55,30 @@ if [[ ! -f "$src_dir/SKILL.md" ]]; then
   exit 2
 fi
 
+# Materialize the knowledge store on a fresh clone. The binary knowledge.sqlite is a
+# REBUILDABLE artifact (no longer git-tracked, 2026-06-23 bundle-as-source-of-truth
+# migration); the committed source of truth is the git-friendly TEXT bundle
+# knowledge/store/. Rebuild the binary from it ONLY when absent (never clobber a live
+# local store, e.g. mid-campaign). Best-effort: a failure here NEVER aborts the install
+# — the skill simply falls back to its hardcoded config tables until you run the import.
+_k_db="$src_dir/knowledge/knowledge.sqlite"
+_k_bundle="$src_dir/knowledge/store"
+if [[ ! -f "$_k_db" && -f "$_k_bundle/manifest.json" ]]; then
+  if command -v python3 >/dev/null 2>&1; then
+    echo "knowledge.sqlite absent — rebuilding from committed bundle ($_k_bundle) ..."
+    if python3 "$src_dir/knowledge/knowledge_sync.py" import \
+         --bundle "$_k_bundle" --db "$_k_db"; then
+      echo "rebuilt: $_k_db"
+    else
+      echo "WARNING: knowledge.sqlite rebuild failed; the skill will use hardcoded" >&2
+      echo "         config tables until you run:" >&2
+      echo "         python3 knowledge/knowledge_sync.py import --bundle knowledge/store --db knowledge/knowledge.sqlite" >&2
+    fi
+  else
+    echo "WARNING: python3 not found; cannot rebuild knowledge.sqlite from the bundle." >&2
+  fi
+fi
+
 # Resolve scope interactively if not set.
 if [[ -z "$scope" ]]; then
   if [[ ! -t 0 ]]; then

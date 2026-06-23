@@ -342,11 +342,13 @@ A family/platform pair appears in `heuristics.json` only after at least
 
 ### 10b. Share / Transfer the Knowledge Store Across Users (git-friendly)
 
-`knowledge.sqlite` ships pre-trained so a fresh clone inherits the accumulated
-experience. But a binary SQLite blob cannot be combined across operators (git can
-only 3-way-merge text; two operators' campaigns would conflict and one would clobber
-the other). `knowledge/knowledge_sync.py` makes the store a deterministic, mergeable
-**text bundle** (`knowledge/store/`, one NDJSON file per table) and provides a real
+The knowledge store ships pre-trained as the git-friendly **text bundle**
+`knowledge/store/` (NDJSON, one file per table — the **committed source of truth**).
+The binary `knowledge.sqlite` is a rebuildable, gitignored artifact: `install.sh`
+rebuilds it from the bundle on a fresh clone (or run `knowledge_sync.py import`). A
+binary SQLite blob cannot be combined across operators (git only 3-way-merges text;
+two operators' campaigns would conflict and one would clobber the other), so
+`knowledge/knowledge_sync.py` makes the store mergeable and provides a real
 cross-operator union:
 
 ```bash
@@ -366,11 +368,12 @@ python3 knowledge/knowledge_sync.py import --bundle knowledge/store --db knowled
 python3 knowledge/knowledge_sync.py status
 ```
 
-**Always re-run `export` after `learn()`** so the committed bundle does not drift from
-the DB — the drift gate (`status`, `test_knowledge_sync.py`) goes red otherwise, and a
-stale shared bundle would transfer WRONG experience. After any `merge`, run `learn()`
-+ `engineer_loop ab-drain` so imported recipes re-validate locally. See
-`knowledge/README.md` ("Sharing the store across users").
+**Commit workflow:** after ingest/learn, run `knowledge_sync.py export` and commit the
+changed `knowledge/store/*.ndjson` — **NOT** `knowledge.sqlite` (now gitignored/rebuildable).
+Skipping the export drifts the committed bundle from the DB (the `status` /
+`test_knowledge_sync.py` drift gate reds, and a stale shared bundle would transfer WRONG
+experience). After any `merge`, run `learn()` + `engineer_loop ab-drain` so imported recipes
+re-validate locally. See `knowledge/README.md` ("Sharing the store across users").
 
 ## Hard Rules
 

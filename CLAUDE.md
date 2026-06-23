@@ -79,12 +79,15 @@ The skill *learns from every run*. **Detail — schema, CLI, the full numbered i
 
 ### The two memory databases (distinct roles + distinct git status — never conflate)
 
-**Git status is part of the contract:** `knowledge.sqlite` is **tracked/committed** (the durable
-knowledge+experience the skill ships pre-trained with); `journal.sqlite` is **gitignored**
-(`.gitignore:249-250` — high-volume, machine-local, rotatable detail). To *transfer* that
-experience between users, the tracked `knowledge/store/` NDJSON bundle (`knowledge_sync.py export`)
-is the git-friendly, 3-way-mergeable mirror of `knowledge.sqlite`; cross-operator `merge` unions
-two stores additively under an honesty-gate (see the honesty invariants below).
+**Git status is part of the contract (2026-06-23 bundle-as-source-of-truth migration):** the durable
+knowledge+experience the skill ships pre-trained with is now the **tracked TEXT bundle**
+`knowledge/store/` (NDJSON, one file per table; git-friendly, 3-way-mergeable, clean diffs). The
+binary `knowledge.sqlite` is a **gitignored, REBUILDABLE artifact** (`.gitignore` — `install.sh`
+rebuilds it from the bundle on a fresh clone, or `knowledge_sync.py import`); `heuristics.json` stays
+tracked. `journal.sqlite` is **gitignored** (high-volume, machine-local, rotatable detail). Commit
+workflow: after ingest/learn, `knowledge_sync.py export` then commit `knowledge/store/` (not the
+binary); cross-operator `knowledge_sync.py merge` unions two stores additively under an honesty-gate;
+`knowledge_sync.py status` is the pre-commit drift + honesty gate (see the honesty invariants below).
 
 **Corollary — how the journal feeds learning WITHOUT breaching the firewall (ingest-time promotion):**
 the journal is mined ONLY at **ingest time** (on the operator machine, where the journal is local),
@@ -100,7 +103,7 @@ full-rewritten from knowledge each `learn()`/`mine()` and would clobber it); new
 so a fresh clone behaves identically off committed knowledge. The journal contributes *hypotheses*;
 knowledge contributes *evidence* and stays the sole source of truth and only honesty-gate source.
 
-- **`knowledge.sqlite` — what *resulted*; the knowledge + experience (tracked).** One `runs` row per flow (clean/failed/partial). Derived
+- **`knowledge.sqlite` — what *resulted*; the knowledge + experience (committed as the `knowledge/store/` text bundle; the binary is gitignored/rebuildable).** One `runs` row per flow (clean/failed/partial). Derived
   projections: `failure_events` (one per backend abort/diagnosis issue, signature-keyed e.g.
   `orfs-fail-place-DPL-0024`), `run_violations` (the DRC/LVS/timing **and backend-abort** landscape
   of *every* run), `fix_events`+`fix_trajectories` (every fix attempt — including *abandoned* and

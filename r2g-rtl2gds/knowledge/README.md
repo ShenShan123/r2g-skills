@@ -353,11 +353,19 @@ python3 knowledge/knowledge_sync.py status                 # bundle<->DB drift +
 Workflow contract: **re-run `export` after every `learn()`** (else the committed bundle drifts
 from the DB and the drift gate reds); after any `merge`, run `learn()` + `engineer_loop ab-drain`
 so imported recipes re-validate locally (the merge brings raw evidence — runs, fix_events,
-fix_trajectories, ab_trials, symptoms — not a blessed lifecycle). The committed bundle and the
-binary both ship today (the binary stays the zero-friction clone path; the bundle is the
-mergeable/reviewable artifact, kept in sync by the drift gate). A future migration may gitignore
-the binary and rebuild it via `import` on clone — bootstrap is safe (no module-level DB read; all
-consumers fall back to hardcoded tables when the DB is absent).
+fix_trajectories, ab_trials, symptoms — not a blessed lifecycle).
+
+**The text bundle `knowledge/store/` IS the committed source of truth (2026-06-23 migration).**
+The binary `knowledge.sqlite` is a **rebuildable, gitignored artifact**: `install.sh` rebuilds it
+from the bundle on a fresh clone (or run `knowledge_sync.py import` manually), so a clone is still
+pre-trained without the multi-MB blob re-churning git history every commit. `heuristics.json` stays
+tracked (small JSON, consumed directly by `suggest_config`). The committed bundle reproduces the
+EXACT store on rebuild (verified: `import` then re-`export` yields the identical `manifest.digest`).
+Bootstrap is safe even before the rebuild runs — no module reads the DB at import time, and every
+consumer (`suggest_config`, `diagnose_signoff_fix`, the dashboard) falls back to its hardcoded
+tables when the DB is absent. **New commit workflow:** after ingest/learn, run
+`knowledge_sync.py export` and commit the changed `knowledge/store/*.ndjson` (NOT the binary,
+which is now ignored); `knowledge_sync.py status` is the pre-commit drift + honesty gate.
 
 ## Engineer Loop (spec 2026-06-09)
 
