@@ -44,6 +44,41 @@ sees real signatures (mirrors the earlier `route_congestion_residual` re-label).
   loop recovery (escalated 143 → 135; pending → 392). The PPL-0024 designs were correctly left
   escalated.
 
+## Campaign schedule — HALTED after wave 3 (2026-06-23)
+
+The campaign was **stopped after wave 3** by request. Wave 3 (40 designs + its end-of-wave A/B
+drain of the `period_relax` timing recipe on subjects `iccad2015_unit16_in1` / `unit18_in1`,
+k=2 arms) was **allowed to finish**; **wave 4 was prevented** from starting by killing only the
+driver loop process (`tools/nangate45_resume_waves.sh`, PID 4108133) while leaving the wave-3
+flows running (they reparented to init). No ORFS tree was orphaned/killed.
+
+State at halt:
+
+| ledger state | count |
+| --- | --- |
+| pending (deferred to next run) | **392** |
+| clean | 221 |
+| escalated | 135 |
+| in-flight (wave 3, finishing) | 8 |
+
+- The **8 re-queued FLW-0024 designs** (`dma_controller`, `ifft_core`, `delay_lattice_rb`,
+  `tracker_pool`, `fifo_basic`, `adder_tree`, `diffeq2`, `fpu_floating_multiplication`) sit in the
+  392 `pending` — they were NOT reached before the halt and will be recovered by the FLW-0024
+  loop fix on the **first wave of the next run** (fresh process imports the fixed `engineer_loop`).
+- The `period_relax` A/B verdict from wave 3's drain lands in `ab_trials` when its arms finish
+  (both subjects are `stuck`-DRC designs, so an honest `inconclusive` is the likely outcome).
+
+**Resume schedule (next run):** re-launch the wave driver — it picks up the 392 `pending` from the
+same ledger and reads `pool.env` for sizing:
+
+```
+# size to free cores; pool.env (workers/NUM_CORES/WAVE_MAX) is re-read each wave
+setsid nohup bash tools/nangate45_resume_waves.sh > tools/_nangate45_resume_logs/driver.out 2>&1 &
+```
+
+Before resuming, **checkpoint the learned store** (`git commit` the live `knowledge.sqlite` /
+`heuristics.json` as a `data(knowledge):` commit) — safe to do now that the loop is idle.
+
 ## Open / next targets (characterized, not yet fixed)
 1. **PPL-0024 (~30):** pin-perimeter under-sizing at `3_2_place_iop` — needs a die-enlarge-by-pins
    lever (the sky130 `mk_*_project` fix exists; wire the equivalent into nangate45 setup).
