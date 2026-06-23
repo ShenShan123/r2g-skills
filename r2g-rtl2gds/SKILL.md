@@ -342,14 +342,13 @@ A family/platform pair appears in `heuristics.json` only after at least
 
 ### 10b. Share / Transfer the Knowledge Store Across Users (git-friendly)
 
-The knowledge store ships pre-trained as the git-friendly **text bundle**
-`knowledge/store/` (NDJSON, one file per table — the **committed source of truth**).
-The binary `knowledge.sqlite` is a rebuildable, gitignored artifact: `install.sh`
-rebuilds it from the bundle on a fresh clone (or run `knowledge_sync.py import`). A
-binary SQLite blob cannot be combined across operators (git only 3-way-merges text;
-two operators' campaigns would conflict and one would clobber the other), so
-`knowledge/knowledge_sync.py` makes the store mergeable and provides a real
-cross-operator union:
+`knowledge.sqlite` is the **tracked, committed store** — a fresh clone is pre-trained
+immediately. A binary SQLite blob cannot be combined across operators (git only
+3-way-merges text; two operators' campaigns would conflict and one would clobber the
+other), so when you need to **share or merge** experience across operators,
+`knowledge/knowledge_sync.py` is an **on-demand** tool: it exports a deterministic,
+git-friendly text bundle (`knowledge/store/`, one NDJSON file per table — regenerable,
+not committed by default) and performs a real honesty-gated cross-operator union:
 
 ```bash
 # After learning, re-export the committed text bundle (keeps it in sync with the DB):
@@ -368,12 +367,12 @@ python3 knowledge/knowledge_sync.py import --bundle knowledge/store --db knowled
 python3 knowledge/knowledge_sync.py status
 ```
 
-**Commit workflow:** after ingest/learn, run `knowledge_sync.py export` and commit the
-changed `knowledge/store/*.ndjson` — **NOT** `knowledge.sqlite` (now gitignored/rebuildable).
-Skipping the export drifts the committed bundle from the DB (the `status` /
-`test_knowledge_sync.py` drift gate reds, and a stale shared bundle would transfer WRONG
-experience). After any `merge`, run `learn()` + `engineer_loop ab-drain` so imported recipes
-re-validate locally. See `knowledge/README.md` ("Sharing the store across users").
+**Commit workflow:** `knowledge.sqlite` is the committed store — commit it (and
+`heuristics.json`) after ingest/learn, as before. The `knowledge/store/` bundle is gitignored
+and only produced on demand (`export`) when you want to hand experience to another operator or
+review a diff; `status` confirms an exported bundle matches the DB. After any `merge`, run
+`learn()` + `engineer_loop ab-drain` so imported recipes re-validate locally. See
+`knowledge/README.md` ("Sharing the store across users").
 
 ## Hard Rules
 

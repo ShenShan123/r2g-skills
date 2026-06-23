@@ -350,22 +350,24 @@ python3 knowledge/knowledge_sync.py merge   --from-db OTHER/knowledge.sqlite
 python3 knowledge/knowledge_sync.py status                 # bundle<->DB drift + honesty gates
 ```
 
-Workflow contract: **re-run `export` after every `learn()`** (else the committed bundle drifts
-from the DB and the drift gate reds); after any `merge`, run `learn()` + `engineer_loop ab-drain`
-so imported recipes re-validate locally (the merge brings raw evidence — runs, fix_events,
-fix_trajectories, ab_trials, symptoms — not a blessed lifecycle).
+Workflow contract: the committed store is the binary `knowledge.sqlite` (commit it after
+ingest/learn). When you produce a bundle to share, **re-run `export` after the latest `learn()`**
+so it reflects the current DB (`status` confirms it matches). After any `merge`, run `learn()` +
+`engineer_loop ab-drain` so imported recipes re-validate locally (the merge brings raw evidence —
+runs, fix_events, fix_trajectories, ab_trials, symptoms — not a blessed lifecycle).
 
-**The text bundle `knowledge/store/` IS the committed source of truth (2026-06-23 migration).**
-The binary `knowledge.sqlite` is a **rebuildable, gitignored artifact**: `install.sh` rebuilds it
-from the bundle on a fresh clone (or run `knowledge_sync.py import` manually), so a clone is still
-pre-trained without the multi-MB blob re-churning git history every commit. `heuristics.json` stays
-tracked (small JSON, consumed directly by `suggest_config`). The committed bundle reproduces the
-EXACT store on rebuild (verified: `import` then re-`export` yields the identical `manifest.digest`).
-Bootstrap is safe even before the rebuild runs — no module reads the DB at import time, and every
-consumer (`suggest_config`, `diagnose_signoff_fix`, the dashboard) falls back to its hardcoded
-tables when the DB is absent. **New commit workflow:** after ingest/learn, run
-`knowledge_sync.py export` and commit the changed `knowledge/store/*.ndjson` (NOT the binary,
-which is now ignored); `knowledge_sync.py status` is the pre-commit drift + honesty gate.
+**The binary `knowledge.sqlite` is the tracked, committed store** (the skill ships pre-trained; a
+fresh clone is immediately usable). `heuristics.json` stays tracked too. The `knowledge/store/`
+NDJSON bundle is **gitignored and produced on demand** — it is the git-friendly interchange for
+*sharing/merging* experience across operators (`export` to hand off a reviewable diff, `merge` to
+fold another operator's store in under the honesty gate), NOT the committed format. `export` is a
+faithful, lossless mirror (verified: `import` then re-`export` yields the identical `manifest.digest`),
+so when you do share one, `status` confirms it matches the DB and `import` reproduces the EXACT store.
+Commit workflow is unchanged: commit `knowledge.sqlite` after ingest/learn; the bundle is optional.
+
+> NOTE (2026-06-23): a bundle-as-source-of-truth migration (gitignore the binary, rebuild via
+> `import` on clone) was implemented then REVERTED per operator preference — the binary stays the
+> committed store. The export/import/merge/status tooling and the honesty gates remain available.
 
 ## Engineer Loop (spec 2026-06-09)
 

@@ -239,19 +239,17 @@ Thumbs.db
 *~
 
 # Generated knowledge-store artifacts (regenerated on demand)
-# 2026-06-23 bundle-as-source-of-truth migration: the knowledge STORE now ships as the
-# git-friendly TEXT bundle r2g-rtl2gds/knowledge/store/ (NDJSON, committed, 3-way-mergeable,
-# clean diffs). The BINARY knowledge.sqlite is a REBUILDABLE artifact — install.sh rebuilds
-# it from the bundle on a fresh clone (or run: knowledge_sync.py import) — so it is NO LONGER
-# tracked (was the multi-MB blob that re-churned git history every commit). Re-export the
-# bundle after learn() before committing; knowledge_sync.py status is the drift gate.
-r2g-rtl2gds/knowledge/knowledge.sqlite
-r2g-rtl2gds/knowledge/knowledge.sqlite-*
-# heuristics.json stays tracked (small JSON, consumed directly by suggest_config).
-# r2g-rtl2gds/knowledge/heuristics.json  <- tracked
+# r2g-rtl2gds/knowledge/knowledge.sqlite      <- TRACKED: the skill ships pre-trained (spec D14)
+# r2g-rtl2gds/knowledge/heuristics.json       <- TRACKED
+# The knowledge_sync.py TEXT bundle (knowledge/store/) is an ON-DEMAND export/merge artifact for
+# sharing experience across operators (knowledge_sync.py export / merge / status) — regenerable,
+# NOT committed by default, so it is ignored here. (2026-06-23: kept the binary as the tracked
+# committed store; reverted the bundle-as-source-of-truth migration per operator preference.)
+r2g-rtl2gds/knowledge/store/
 r2g-rtl2gds/knowledge/failure_candidates.json
 r2g-rtl2gds/knowledge/*.sqlite-journal
 r2g-rtl2gds/knowledge/*.sqlite-wal
+r2g-rtl2gds/knowledge/*.sqlite-shm
 r2g-rtl2gds/knowledge/*.bak
 # Tier-0 journal DB: high-volume EVIDENCE, never shipped (engineer-loop decision 11)
 r2g-rtl2gds/knowledge/journal.sqlite

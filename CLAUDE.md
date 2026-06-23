@@ -79,15 +79,15 @@ The skill *learns from every run*. **Detail — schema, CLI, the full numbered i
 
 ### The two memory databases (distinct roles + distinct git status — never conflate)
 
-**Git status is part of the contract (2026-06-23 bundle-as-source-of-truth migration):** the durable
-knowledge+experience the skill ships pre-trained with is now the **tracked TEXT bundle**
-`knowledge/store/` (NDJSON, one file per table; git-friendly, 3-way-mergeable, clean diffs). The
-binary `knowledge.sqlite` is a **gitignored, REBUILDABLE artifact** (`.gitignore` — `install.sh`
-rebuilds it from the bundle on a fresh clone, or `knowledge_sync.py import`); `heuristics.json` stays
-tracked. `journal.sqlite` is **gitignored** (high-volume, machine-local, rotatable detail). Commit
-workflow: after ingest/learn, `knowledge_sync.py export` then commit `knowledge/store/` (not the
-binary); cross-operator `knowledge_sync.py merge` unions two stores additively under an honesty-gate;
-`knowledge_sync.py status` is the pre-commit drift + honesty gate (see the honesty invariants below).
+**Git status is part of the contract:** `knowledge.sqlite` is **tracked/committed** (the durable
+knowledge+experience the skill ships pre-trained with — the binary is the committed store); so is
+`heuristics.json`. `journal.sqlite` is **gitignored** (high-volume, machine-local, rotatable detail).
+To *share/transfer* that experience across operators, `knowledge_sync.py` is an **on-demand** tool:
+`export` writes a git-friendly NDJSON bundle, `merge` unions another operator's store additively
+under an honesty-gate, `status` runs the honesty gates. That bundle (`knowledge/store/`) is
+regenerable and **gitignored** (NOT committed by default — the tracked binary is the shipped store).
+(The 2026-06-23 bundle-as-source-of-truth migration was reverted per operator preference; the sync
+tooling stays available for ad-hoc cross-user sharing/merge.)
 
 **Corollary — how the journal feeds learning WITHOUT breaching the firewall (ingest-time promotion):**
 the journal is mined ONLY at **ingest time** (on the operator machine, where the journal is local),
@@ -103,7 +103,7 @@ full-rewritten from knowledge each `learn()`/`mine()` and would clobber it); new
 so a fresh clone behaves identically off committed knowledge. The journal contributes *hypotheses*;
 knowledge contributes *evidence* and stays the sole source of truth and only honesty-gate source.
 
-- **`knowledge.sqlite` — what *resulted*; the knowledge + experience (committed as the `knowledge/store/` text bundle; the binary is gitignored/rebuildable).** One `runs` row per flow (clean/failed/partial). Derived
+- **`knowledge.sqlite` — what *resulted*; the knowledge + experience (tracked — the committed binary store; `knowledge_sync.py` exports/merges it on demand for cross-user sharing).** One `runs` row per flow (clean/failed/partial). Derived
   projections: `failure_events` (one per backend abort/diagnosis issue, signature-keyed e.g.
   `orfs-fail-place-DPL-0024`), `run_violations` (the DRC/LVS/timing **and backend-abort** landscape
   of *every* run), `fix_events`+`fix_trajectories` (every fix attempt — including *abandoned* and
@@ -173,9 +173,10 @@ gated by a variance-aware LCB over *k* repeats. Production buttons:
   re-assigned, never a merge key) and runs in ONE transaction ROLLED BACK if `honesty.run_all` fails
   post-merge (or the bundle has dangling FKs) — a dishonest merge is refused, not applied. The
   honesty gates now live in importable `knowledge/honesty.py` (run them over the **real** committed
-  store in CI: `python3 knowledge/honesty.py --db knowledge/knowledge.sqlite`), and the committed
-  bundle must stay in sync with the DB (`knowledge_sync.py status` drift gate — re-`export` after
-  every `learn()`). Detail: `knowledge/README.md` ("Sharing the store across users", invariants 26-27).
+  store in CI: `python3 knowledge/honesty.py --db knowledge/knowledge.sqlite`). The NDJSON bundle is
+  an on-demand export (`knowledge/store/`, gitignored); when you DO export one to share, its
+  `knowledge_sync.py status` drift check confirms it matches the DB so a stale bundle can't transfer
+  wrong experience. Detail: `knowledge/README.md` ("Sharing the store across users", invariants 26-27).
 
 **Fast honesty check:** `count(runs where orfs_status='fail')` must equal the count carrying an
 `orfs-fail-%` `failure_event`; once the corpus has `fail`/`partial` rows, `ab_trials` must be
