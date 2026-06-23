@@ -1,0 +1,59 @@
+{
+  "bundle_format_version": 1,
+  "digest": "24af77d0e90094b70d75833835803663ef4e5826ff7c9805149bdac116fb291f",
+  "generation": 1153,
+  "tables": {
+    "ab_trials": {
+      "rows": 24,
+      "sha256": "a6b1eab5c7c6bf2caa8a6312dd5e308b0d9ad94bf44fc72c95706be96f3efa23"
+    },
+    "config_lineage": {
+      "rows": 330,
+      "sha256": "a8bc5a32e675bb15b316df83e6429e1b5a5f1ff4f9e4f131b938d8166acbe2f6"
+    },
+    "escalations": {
+      "rows": 200,
+      "sha256": "cca8ee2daa110bef4dd28ce7e940b4ed467d4374d8aad6685e6d7a8e6f905950"
+    },
+    "failure_events": {
+      "rows": 139,
+      "sha256": "265eb89624f94f02e7d75b6e4afeadceb079c82948e4f5dcf07f223ebc15e152"
+    },
+    "fix_events": {
+      "rows": 878,
+      "sha256": "2508d735dc7c253ac5a8ee56359939eafbf6a6ec9cbd72c399d9baafcc5f0592"
+    },
+    "fix_events_archive": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fix_trajectories": {
+      "rows": 870,
+      "sha256": "f28d00c8820c91642a2fa8087d26d7d9fb5fcd8f33876b1a4978fdf97bf65b92"
+    },
+    "lessons": {
+      "rows": 3,
+      "sha256": "c9beed0c48ab0dade2005dcfcfd8e106d176b8a8d4c2162e7dbef1d14de13b08"
+    },
+    "meta": {
+      "rows": 1,
+      "sha256": "17de264810c1a19374825635aa97ad3b696eb791536f09c6bc997f578e275e36"
+    },
+    "recipe_status": {
+      "rows": 18,
+      "sha256": "3eab68fd57534a4978aa8c777015900c431c216e1c93ea7624291e65ff58d25b"
+    },
+    "run_violations": {
+      "rows": 1670,
+      "sha256": "707824b95465d9e7669bdfbdbec234585961568df00a589a94eaf092869c3f28"
+    },
+    "runs": {
+      "rows": 1715,
+      "sha256": "ae0aaef3c8a3c4614b27357bace5a58bf3b7b260a1d8ebb7bca0eb89e00c6ab7"
+    },
+    "symptoms": {
+      "rows": 21,
+      "sha256": "ff72d8fa7cc9385599b75bfdaf6c50f8d57d3ca91ecef590d118369b3a1327f8"
+    }
+  }
+}

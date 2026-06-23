@@ -311,6 +311,53 @@ The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports
     `finish_setup_ws`, all `REAL`) live both in `schema.sql`'s `runs` CREATE TABLE and in
     `_ADDED_COLUMNS["runs"]`, so a fresh DB gets them from the DDL and a legacy DB gets them
     via the ALTER-TABLE migration.
+26. **The store is shareable as a deterministic text bundle (`knowledge_sync.py`).** `export`
+    serializes `knowledge.sqlite` to `knowledge/store/` (one NDJSON file per table) as a PURE
+    function of DB content: rows sorted by natural key, JSON object keys sorted, machine-local
+    AUTOINCREMENT surrogate ids DROPPED, NO wall-clock stamp in the manifest. So the same DB
+    always yields a BYTE-IDENTICAL bundle (a no-op re-export is a 0-line git diff), and
+    `export → import → re-export` reproduces the identical `manifest.digest` (lossless). The
+    `digest` (sha256 over the per-table digests) is the store fingerprint the drift gate compares.
+27. **Cross-operator `merge` is ADDITIVE and HONESTY-GATED.** A row is inserted only when its dedup
+    key is absent locally. `symptom_id` is the genuinely machine-portable content key (so symptoms/
+    recipe experience pool across operators); `run_id` embeds the absolute path + ppa mtime so it
+    dedups only on an identical filesystem (cross-operator `runs` are normally ADDITIVE — safe under
+    the gate); the three surrogate-id evidence tables (`failure_events`, `ab_trials`, `escalations`)
+    dedup on FULL-ROW content (`DEDUP_FULL_ROW`) so a shared NULL never collapses two distinct rows
+    and a surrogate `trial_id=1` never FUSES unrelated rows. A local row is NEVER overwritten (runs
+    are immutable history; a `recipe_status` lifecycle disagreement is REPORTED, not flipped — and a
+    recipe whose key is ABSENT locally is imported as inert `shadow` so an imported promote/demote
+    re-validates via A's own A/B rather than silently taking effect; cross-machine `generation` is
+    not comparable, so `meta.generation` merges as `max`). The whole merge runs in ONE transaction
+    ROLLED BACK if the post-merge store fails any `honesty.run_all` gate (the FIVE gates: H3 parity,
+    H3-coverage, **H3-inverse — no `orfs-fail-%` event on a non-`fail` run**, Gate-A, derivability)
+    OR has a dangling foreign key — a merge that would make the store LIE is refused, not applied
+    (same firewall philosophy as the loop's other honesty gates). `honesty.py` is the single home of
+    those gates (imported by the merge, the CI runner `python3 knowledge/honesty.py --db …`, and
+    `tests/test_honesty_invariants.py` — they cannot drift).
+
+## Sharing the store across users
+
+`knowledge.sqlite` (git-tracked) ships the skill pre-trained, but a binary blob does not
+3-way-merge, bloats history (a full rewrite per commit), and is unreviewable. `knowledge_sync.py`
+adds a git-friendly, mergeable interchange so experience transfers between operators:
+
+```bash
+python3 knowledge/knowledge_sync.py export                 # DB  -> knowledge/store/ (commit this)
+python3 knowledge/knowledge_sync.py import  --bundle knowledge/store --db NEW.sqlite   # rebuild
+python3 knowledge/knowledge_sync.py merge   --bundle OTHER/store      # union another operator in
+python3 knowledge/knowledge_sync.py merge   --from-db OTHER/knowledge.sqlite
+python3 knowledge/knowledge_sync.py status                 # bundle<->DB drift + honesty gates
+```
+
+Workflow contract: **re-run `export` after every `learn()`** (else the committed bundle drifts
+from the DB and the drift gate reds); after any `merge`, run `learn()` + `engineer_loop ab-drain`
+so imported recipes re-validate locally (the merge brings raw evidence — runs, fix_events,
+fix_trajectories, ab_trials, symptoms — not a blessed lifecycle). The committed bundle and the
+binary both ship today (the binary stays the zero-friction clone path; the bundle is the
+mergeable/reviewable artifact, kept in sync by the drift gate). A future migration may gitignore
+the binary and rebuild it via `import` on clone — bootstrap is safe (no module-level DB read; all
+consumers fall back to hardcoded tables when the DB is absent).
 
 ## Engineer Loop (spec 2026-06-09)
 

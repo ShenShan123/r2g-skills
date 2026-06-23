@@ -340,6 +340,38 @@ python3 r2g-rtl2gds/knowledge/mine_rules.py
 A family/platform pair appears in `heuristics.json` only after at least
 **3 successful runs** under that configuration.
 
+### 10b. Share / Transfer the Knowledge Store Across Users (git-friendly)
+
+`knowledge.sqlite` ships pre-trained so a fresh clone inherits the accumulated
+experience. But a binary SQLite blob cannot be combined across operators (git can
+only 3-way-merge text; two operators' campaigns would conflict and one would clobber
+the other). `knowledge/knowledge_sync.py` makes the store a deterministic, mergeable
+**text bundle** (`knowledge/store/`, one NDJSON file per table) and provides a real
+cross-operator union:
+
+```bash
+# After learning, re-export the committed text bundle (keeps it in sync with the DB):
+python3 knowledge/knowledge_sync.py export
+
+# A NEW user folds another operator's experience into their local store. The merge is
+# ADDITIVE (dedups by natural content key — run_id/symptom_id are portable; surrogate
+# ids are re-assigned) and is REFUSED+rolled back if it would break an honesty gate:
+python3 knowledge/knowledge_sync.py merge --bundle path/to/their/store
+python3 knowledge/knowledge_sync.py merge --from-db path/to/their/knowledge.sqlite
+
+# Bootstrap a fresh store from a bundle only (rebuilds knowledge.sqlite):
+python3 knowledge/knowledge_sync.py import --bundle knowledge/store --db knowledge/knowledge.sqlite
+
+# Drift + honesty status (CI gate): is the committed bundle == the DB, and is it honest?
+python3 knowledge/knowledge_sync.py status
+```
+
+**Always re-run `export` after `learn()`** so the committed bundle does not drift from
+the DB — the drift gate (`status`, `test_knowledge_sync.py`) goes red otherwise, and a
+stale shared bundle would transfer WRONG experience. After any `merge`, run `learn()`
++ `engineer_loop ab-drain` so imported recipes re-validate locally. See
+`knowledge/README.md` ("Sharing the store across users").
+
 ## Hard Rules
 
 - Do not start backend if simulation is failing.

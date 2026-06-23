@@ -19,6 +19,37 @@ the fixture≠production gap.** Fix the *class*, not just the instances.
 
 ---
 
+## Update 2026-06-23 (committed on `main`, see git log) — shareable knowledge DB + honesty CI gate
+
+Landed on `main` (full suite 687→709 green, real store passes all **5** honesty gates after an
+adversarial review added the inverse-H3 gate; committed bundle in sync):
+
+- **New capability: a git-shareable, MERGEABLE knowledge store** (`knowledge/knowledge_sync.py` +
+  the tracked `knowledge/store/` NDJSON bundle). Binary `knowledge.sqlite` cannot 3-way-merge, so
+  experience could not transfer between operators. `export` writes a deterministic text bundle
+  (sorted rows/keys, surrogate ids dropped, no wall-clock stamp → byte-identical re-export);
+  `import` rebuilds a DB; `merge` UNIONS another operator's store **additively by natural content
+  key** (content-addressed `run_id`/`symptom_id` dedup across machines; surrogate `trial_id`/`id`
+  re-assigned so unrelated rows never fuse). Verified with real failure designs (FLW-0024 place
+  abort, GRT-0116 route congestion, PDN-0185) + a full round-trip over the committed corpus.
+- **§1.3 DONE: honesty invariants now run over the REAL store in CI.** The four gates were extracted
+  from `tests/test_honesty_invariants.py` into importable `knowledge/honesty.py`; CI runs
+  `honesty.run_all` over the committed `knowledge.sqlite`, and the same gates fire **post-merge**
+  inside one transaction that is ROLLED BACK if a merge would break H3/Gate-A/derivability (a
+  dishonest merge is refused, not applied — §1.2 allowlist philosophy applied to data flow).
+- **§2.3 (partial): a bundle↔DB drift gate** (`knowledge_sync.py status`,
+  `test_committed_bundle_in_sync_with_db`) reds when the committed bundle diverges from the DB, so
+  the shared text mirror can never silently go stale and transfer wrong experience.
+- **§1.2 audit DONE (no action needed): every control-flow honesty gate is already an allowlist.**
+  `fix_signoff.sh` exit gate, `engineer_loop` first-pass gate, `is_success`, `_norm_stage_status`,
+  `_derive_orfs_status`, and the extractors all enumerate GOOD states and reject the rest. No
+  remaining denylist found.
+
+Still open from this plan: §2.1 nangate45 Gate-B live wave (operator EDA job), §2.2 Win-5 presynth
+wiring, §3 refactor, §4 capability work.
+
+---
+
 ## 1. The recurring meta-bug: fixture ≠ production (P0 — systemic)
 
 The same failure shape has bitten the loop repeatedly. Tests passed on mocked/string fixtures

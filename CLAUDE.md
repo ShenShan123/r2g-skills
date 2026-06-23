@@ -81,7 +81,10 @@ The skill *learns from every run*. **Detail — schema, CLI, the full numbered i
 
 **Git status is part of the contract:** `knowledge.sqlite` is **tracked/committed** (the durable
 knowledge+experience the skill ships pre-trained with); `journal.sqlite` is **gitignored**
-(`.gitignore:249-250` — high-volume, machine-local, rotatable detail).
+(`.gitignore:249-250` — high-volume, machine-local, rotatable detail). To *transfer* that
+experience between users, the tracked `knowledge/store/` NDJSON bundle (`knowledge_sync.py export`)
+is the git-friendly, 3-way-mergeable mirror of `knowledge.sqlite`; cross-operator `merge` unions
+two stores additively under an honesty-gate (see the honesty invariants below).
 
 **Corollary — how the journal feeds learning WITHOUT breaching the firewall (ingest-time promotion):**
 the journal is mined ONLY at **ingest time** (on the operator machine, where the journal is local),
@@ -158,6 +161,18 @@ gated by a variance-aware LCB over *k* repeats. Production buttons:
   `project_path:ppa.json-mtime`, so regenerate `ppa.json` before re-ingesting a fixed design).
 - **`heuristics.json` is advisory + safety-clamped**; the lineage/observability panels
   (`build_lineage_view.py`) are READ-ONLY projections, never auto-tuners.
+- **A cross-operator `merge` is honesty-gated, never trusted.** Sharing the store across users
+  (`knowledge_sync.py`, the git-friendly NDJSON bundle in `knowledge/store/`) is the newest surface
+  where the loop could silently lie — importing someone's `runs` without their `failure_events`
+  would make *your* store fail H3 — incl. the *inverse* H3 a merge can introduce (an `orfs-fail-%`
+  event landing on a `partial` run via a run_id collision; a 5th gate now catches it). So `merge` is
+  ADDITIVE (dedups by the portable `symptom_id` + per-table content keys; surrogate ids are
+  re-assigned, never a merge key) and runs in ONE transaction ROLLED BACK if `honesty.run_all` fails
+  post-merge (or the bundle has dangling FKs) — a dishonest merge is refused, not applied. The
+  honesty gates now live in importable `knowledge/honesty.py` (run them over the **real** committed
+  store in CI: `python3 knowledge/honesty.py --db knowledge/knowledge.sqlite`), and the committed
+  bundle must stay in sync with the DB (`knowledge_sync.py status` drift gate — re-`export` after
+  every `learn()`). Detail: `knowledge/README.md` ("Sharing the store across users", invariants 26-27).
 
 **Fast honesty check:** `count(runs where orfs_status='fail')` must equal the count carrying an
 `orfs-fail-%` `failure_event`; once the corpus has `fail`/`partial` rows, `ab_trials` must be

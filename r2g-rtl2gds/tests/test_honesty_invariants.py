@@ -54,87 +54,19 @@ import detect_contradictions  # noqa: E402
 _FAMILIES_PATH = Path(__file__).resolve().parents[1] / "knowledge" / "families.json"
 
 
-# ── honesty checks (reusable; dependency-light — raw sqlite, no learner code) ──
-def check_fail_event_parity(conn: sqlite3.Connection) -> tuple[bool, str]:
-    """H3: count(runs orfs_status='fail') == count(distinct fail runs carrying an
-    'orfs-fail-%' failure_event). A fail run with no event = the learner is blind to
-    the whole backend-failure class."""
-    n_fail = conn.execute(
-        "SELECT COUNT(*) FROM runs WHERE orfs_status = 'fail'").fetchone()[0]
-    n_with_event = conn.execute(
-        "SELECT COUNT(DISTINCT r.run_id) FROM runs r "
-        "JOIN failure_events f ON f.run_id = r.run_id "
-        "WHERE r.orfs_status = 'fail' AND f.signature LIKE 'orfs-fail-%'"
-    ).fetchone()[0]
-    ok = n_fail == n_with_event
-    return ok, f"fail_runs={n_fail} fail_runs_with_event={n_with_event}"
-
-
-def check_every_fail_has_event(conn: sqlite3.Connection) -> tuple[bool, str]:
-    """Per-run complement to H3: every 'fail' run must carry >=1 failure_event, and the
-    offender is NAMED so a red CI run points at the exact lying row (parity only gives a
-    count, which a coincidental over-count on another run could mask).
-
-    SCOPE = orfs_status='fail' ONLY — this mirrors the ingest projection contract:
-    failure_events are written iff orfs_status=='fail' AND fail_stage (ingest_run.py
-    :782). A 'partial' run is the HONEST incomplete state: _derive_orfs_status returns
-    'partial' precisely when NO stage reported 'fail' yet the six required stages did
-    not all finish (ingest_run.py:410-415), so its orfs_fail_stage is the furthest
-    stage REACHED, not a stage that aborted. There is no failure signature to record;
-    requiring an event there would FABRICATE a backend failure that never happened —
-    the opposite of honesty. So partial runs legitimately carry no failure_event and
-    are out of scope (verified 2026-06-18: the 8 event-less partials in the shipped
-    corpus are all this honest class, not a reconciliation gap)."""
-    rows = conn.execute(
-        "SELECT r.run_id FROM runs r "
-        "WHERE r.orfs_status = 'fail' "
-        "AND NOT EXISTS (SELECT 1 FROM failure_events f WHERE f.run_id = r.run_id)"
-    ).fetchall()
-    missing = [r[0] for r in rows]
-    return (not missing), f"fail_without_event={missing}"
-
-
-def check_ab_trials_nonempty_when_failures(conn: sqlite3.Connection) -> tuple[bool, str]:
-    """Gate-A (README inv 20): once the corpus has any fail/partial run, ab_trials
-    must be non-empty — an empty ab_trials alongside fail/partial rows means the A/B
-    loop is inert and lying. No fail/partial rows -> vacuously OK."""
-    n_failpartial = conn.execute(
-        "SELECT COUNT(*) FROM runs WHERE orfs_status IN ('fail', 'partial')"
-    ).fetchone()[0]
-    n_trials = conn.execute("SELECT COUNT(*) FROM ab_trials").fetchone()[0]
-    ok = (n_failpartial == 0) or (n_trials > 0)
-    return ok, f"failpartial_runs={n_failpartial} ab_trials={n_trials}"
-
-
-def _signature_stage(signature: str) -> str | None:
-    """Stage named by an 'orfs-fail-<stage>[-<code>]' signature. The corpus uses BOTH
-    the bare form ('orfs-fail-route') and the coded form ('orfs-fail-place-DPL-0036'),
-    so the stage is the first token after the 'orfs-fail-' prefix, up to the next '-'
-    (or the whole remainder when there is none)."""
-    if not signature.startswith("orfs-fail-"):
-        return None
-    rest = signature[len("orfs-fail-"):]
-    return rest.split("-", 1)[0] if rest else None
-
-
-def check_failure_events_derivable(conn: sqlite3.Connection) -> tuple[bool, str]:
-    """Derivability: failure_events are a derived projection of orfs_fail_stage, so an
-    'orfs-fail-<stage>[-<code>]' signature must name the stage its run aborted on. A
-    signature whose <stage> disagrees with runs.orfs_fail_stage is a desync (a repair
-    tool that wrote one column but not the projected event). Handles BOTH the bare
-    ('orfs-fail-route') and coded ('orfs-fail-place-DPL-0036') signature forms the
-    corpus carries."""
-    rows = conn.execute(
-        "SELECT f.run_id, f.signature, r.orfs_fail_stage "
-        "FROM failure_events f JOIN runs r ON r.run_id = f.run_id "
-        "WHERE f.signature LIKE 'orfs-fail-%'"
-    ).fetchall()
-    bad = []
-    for run_id, signature, fail_stage in rows:
-        sig_stage = _signature_stage(signature)
-        if sig_stage is None or fail_stage is None or sig_stage != fail_stage:
-            bad.append((run_id, signature, fail_stage))
-    return (not bad), f"stage_mismatch={bad}"
+# ── honesty checks: imported from the PRODUCTION module so the gate this test
+# asserts and the gate knowledge_sync.merge / the CI runner execute are literally the
+# SAME function objects (README inv 6: one predicate, many callers — they cannot
+# drift). honesty.py was extracted from this file; the negative tests below still
+# prove each gate fails LOUDLY on a seeded breach.
+import honesty  # noqa: E402
+from honesty import (  # noqa: E402
+    check_ab_trials_nonempty_when_failures,
+    check_every_fail_has_event,
+    check_fail_event_parity,
+    check_failure_events_derivable,
+    check_no_event_on_nonfail_run,
+)
 
 
 # ── privacy gate (scoped to NEW seed data only) ──────────────────────────────
@@ -233,11 +165,12 @@ def test_consistent_store_passes_all_checks(tmp_knowledge_dir):
     names = _seed_consistent_store(conn)
     conn.commit()
     assert_synthetic_names(names)
-    for check in (check_fail_event_parity, check_every_fail_has_event,
-                  check_ab_trials_nonempty_when_failures,
-                  check_failure_events_derivable):
+    # Iterate honesty.HARD_CHECKS (the production gate list) so any gate added later —
+    # like the 2026-06-23 no_event_on_nonfail_run — is automatically covered here, no
+    # drift between what the merge enforces and what this test asserts.
+    for name, check in honesty.HARD_CHECKS:
         ok, detail = check(conn)
-        assert ok is True, f"{check.__name__} unexpectedly failed: {detail}"
+        assert ok is True, f"{name} unexpectedly failed: {detail}"
     conn.close()
 
 
@@ -246,9 +179,7 @@ def test_empty_store_is_vacuously_honest(tmp_knowledge_dir):
     particular Gate-A must NOT fire when there are no fail/partial rows)."""
     conn, _ = _open_db(tmp_knowledge_dir)
     conn.commit()
-    for check in (check_fail_event_parity, check_every_fail_has_event,
-                  check_ab_trials_nonempty_when_failures,
-                  check_failure_events_derivable):
+    for name, check in honesty.HARD_CHECKS:
         ok, _detail = check(conn)
         assert ok is True
     conn.close()
@@ -322,6 +253,33 @@ def test_signature_stage_desync_is_flagged(tmp_knowledge_dir):
     ok, detail = check_failure_events_derivable(conn)
     assert ok is False, detail
     assert "r_desync" in detail
+    conn.close()
+
+
+def test_orfs_fail_event_on_partial_run_is_flagged(tmp_knowledge_dir):
+    """The inverse of H3 (the merge-introduced hole): an 'orfs-fail-%' event sitting on
+    a 'partial' run is the fail/partial conflation — check_no_event_on_nonfail_run must
+    fire. (A diagnosis event like 'synthesis_errors' on a partial run is NOT flagged —
+    only the backend-abort 'orfs-fail-%' projection.)"""
+    conn, _ = _open_db(tmp_knowledge_dir)
+    # honest partial run carrying a non-abort diagnosis event -> NOT flagged.
+    _insert_run(conn, run_id="r_partial_ok", design_name="test_io_tiny",
+                orfs_status="partial", orfs_fail_stage="synth")
+    conn.execute("INSERT INTO failure_events (run_id, stage, signature, detail) "
+                 "VALUES ('r_partial_ok','synth','synthesis_errors','warn')")
+    _insert_ab_trial(conn)
+    conn.commit()
+    assert check_no_event_on_nonfail_run(conn)[0] is True
+
+    # BREACH: an orfs-fail-place event on a 'partial' run.
+    _insert_run(conn, run_id="r_partial_bad", design_name="test_logic_small",
+                orfs_status="partial", orfs_fail_stage="place")
+    conn.execute("INSERT INTO failure_events (run_id, stage, signature, detail) "
+                 "VALUES ('r_partial_bad','place','orfs-fail-place-FLW-0024','x')")
+    conn.commit()
+    ok, detail = check_no_event_on_nonfail_run(conn)
+    assert ok is False
+    assert "r_partial_bad" in detail
     conn.close()
 
 
