@@ -192,6 +192,39 @@ class of recipe — one that **fully clears** its symptom — silently broke the
 - Compare with successful configs of the same design for known-good density values
 - Also add `SKIP_LAST_GASP=1` to prevent post-placement optimization from stalling
 
+### Sub-variant: FLW-0024 place-density overflow = die too small (2026-06-23, setup-sizing bug + loop recovery)
+
+**Distinct from NesterovSolve divergence above** — do NOT touch `PLACE_DENSITY_LB_ADDON`.
+
+- **Symptom:** `3_1_place_gp_skip_io.log` aborts immediately (~5 s) with
+  `[ERROR FLW-0024] Place density exceeds 1.0 (current PLACE_DENSITY_LB_ADDON = 0.2)`.
+  The synthesized cells do not FIT the die at all (density > 100%), so global placement
+  can't even start. `stage_log.jsonl` shows `{"stage":"place","status":2}`.
+- **Root cause (setup):** `tools/setup_rtl_designs.py:generate_config_mk` sized tiny/small
+  designs with a **fixed `DIE_AREA`** (50×50 / 120×120) chosen from **RTL line count**.
+  Line count is a terrible proxy for gate count — a <100-line design (wide multiplier, FFT
+  butterfly, DMA datapath) synthesizes to thousands of cells that overflow a hardcoded
+  50×50 µm die. Validated: `dma_controller`'s 50×50 (=2500 µm²) die was handed **6442 µm²**
+  of cells (2.6× too big) → FLW-0024. Same class as the sky130 `mk_*_project` sizing bug.
+- **This was the dominant `unseen_crash` bucket** (~38 of 81 open escalations): the loop
+  escalated FLW-0024 place aborts as generic `unseen_crash`, so the learner saw novel
+  symptoms instead of one characterizable, **recoverable** class.
+- **Fix — two parts:**
+  1. *Setup (prevent recurrence):* every size bucket now uses `CORE_UTILIZATION` (auto-size)
+     so ORFS sizes a die that fits the synthesized cells; no bucket hardcodes a `DIE_AREA`.
+     (`test_setup_sizing.py`.)
+  2. *Loop recovery (drain the existing 708-project backlog):* `engineer_loop.process_one`
+     detects FLW-0024 (`_is_flw0024`, reads the run's `flow.log`) on a `place` abort,
+     rewrites `constraints/config.mk` `DIE_AREA`/`CORE_AREA` → `CORE_UTILIZATION=30`
+     (`_resize_to_core_util` — **never** touches `PLACE_DENSITY_LB_ADDON`), and retries the
+     flow ONCE. If it still overflows (cells exceed even the auto-sized routable die), it
+     escalates honestly as `place_density_residual`, not `unseen_crash`. (`test_flw0024_recovery.py`.)
+     Validated live: `dma_controller` at `CORE_UTILIZATION=30` auto-sized to 31 % util → placed.
+- **Lesson:** distinguish FLW-0024 (die too small → enlarge die / auto-size) from NesterovSolve
+  divergence (density floor too low → raise `PLACE_DENSITY_LB_ADDON`). They share the `place`
+  stage but have opposite fixes; conflating both into `unseen_crash` blinds the learner to a
+  recoverable class. (Mirrors the `route_congestion_residual` re-label.)
+
 ## Place_gp Stuck on Timing-Driven Iteration (>1M-net BOOM-class designs)
 
 **Symptoms:**

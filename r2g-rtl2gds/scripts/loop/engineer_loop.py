@@ -226,6 +226,56 @@ def _fail_stage(entry: dict) -> str | None:
     return None
 
 
+def _is_flw0024(entry: dict) -> bool:
+    """True if the newest backend run aborted with FLW-0024 (place density > 1.0):
+    the die is too small to hold the synthesized cells -- a RECOVERABLE over-pack
+    (the project's fixed DIE_AREA was sized from an RTL line-count proxy, not gate
+    count, so a compact-but-dense design over-packs), NOT the irrecoverable
+    NesterovSolve placement divergence. Read from the run's flow.log. (2026-06-23)"""
+    proj = Path(entry["project_path"])
+    logs = sorted(proj.glob("backend/RUN_*/flow.log"))
+    if not logs:
+        return False
+    try:
+        return "FLW-0024" in logs[-1].read_text(errors="ignore")
+    except OSError:
+        return False
+
+
+def _config_knob(line: str) -> str:
+    """'export DIE_AREA  = 0 0 50 50' -> 'DIE_AREA' (no regex dependency)."""
+    parts = line.split()
+    if len(parts) >= 2 and parts[0] == "export":
+        return parts[1].split("=")[0].strip()
+    return ""
+
+
+def _resize_to_core_util(entry: dict, util: int = 30) -> bool:
+    """FLW-0024 recovery: rewrite constraints/config.mk from a fixed DIE_AREA/
+    CORE_AREA to CORE_UTILIZATION so ORFS auto-sizes a die that FITS the cells.
+    Never touches PLACE_DENSITY_LB_ADDON (the hard-rule floor). Returns True iff it
+    changed the file; a no-op (False) when there is no config.mk, no DIE_AREA to
+    convert, or CORE_UTILIZATION is already set (already auto-sized -> nothing to
+    relax, so a retry would be pointless)."""
+    cfg = Path(entry["project_path"]) / "constraints" / "config.mk"
+    if not cfg.is_file():
+        return False
+    lines = cfg.read_text().splitlines()
+    if any(_config_knob(ln) == "CORE_UTILIZATION" for ln in lines):
+        return False
+    kept, had_area = [], False
+    for ln in lines:
+        if _config_knob(ln) in ("DIE_AREA", "CORE_AREA"):
+            had_area = True
+            continue
+        kept.append(ln)
+    if not had_area:
+        return False
+    kept.append(f"export CORE_UTILIZATION = {util}")
+    cfg.write_text("\n".join(kept) + "\n")
+    return True
+
+
 def _signoff_status(entry: dict) -> dict:
     out = {}
     for check in ("drc", "lvs"):
@@ -262,7 +312,7 @@ def _mark_clean(led: Ledger, conn, design: str, note: str) -> None:
             pass
 
 
-def process_one(led: Ledger, entry: dict, conn) -> None:
+def process_one(led: Ledger, entry: dict, conn, *, _resized: bool = False) -> None:
     design = entry["design"]
     if entry.get("kind") == "ab_arm":
         _journal_ab_launch(entry)           # Tier B1 — advisory decision telemetry
@@ -283,6 +333,16 @@ def process_one(led: Ledger, entry: dict, conn) -> None:
         # rather than hand-fixing (2026-06-17). Only genuinely unhandled aborts
         # (synth/place/cts crashes, or a route fix that still fails) escalate.
         _ingest(entry)                      # partial runs still teach
+        # FLW-0024 (place density > 1.0): the die is too small for the synthesized
+        # cells -- a RECOVERABLE over-pack (the fixed DIE_AREA was sized from an RTL
+        # line-count proxy, not gate count), NOT the irrecoverable NesterovSolve
+        # divergence. Auto-size the die (DIE_AREA -> CORE_UTILIZATION) and retry the
+        # flow ONCE; never touches PLACE_DENSITY_LB_ADDON. (2026-06-23)
+        if (not _resized and entry.get("kind") != "ab_arm"
+                and _fail_stage(entry) == "place" and _is_flw0024(entry)
+                and _resize_to_core_util(entry)):
+            led.set_state(design, "fixing")
+            return process_one(led, entry, conn, _resized=True)
         reason, notes = "unseen_crash", f"run_orfs rc={rc}"
         if entry.get("kind") != "ab_arm" and _fail_stage(entry) == "route":
             led.set_state(design, "fixing")
@@ -300,6 +360,13 @@ def process_one(led: Ledger, entry: dict, conn) -> None:
             reason = "route_congestion_residual"
             notes = (f"route abort (rc={rc}); route_relief exhausted or inapplicable "
                      f"(util at floor, or DIE_AREA-sized — no CORE_UTILIZATION knob)")
+        elif (entry.get("kind") != "ab_arm" and _fail_stage(entry) == "place"
+              and _is_flw0024(entry)):
+            # FLW-0024 that survived the auto-resize retry (cells exceed even the
+            # auto-sized routable die): an honest residual, NOT an unseen crash.
+            reason = "place_density_residual"
+            notes = (f"FLW-0024 place-density overflow (rc={rc}); auto-resize to "
+                     f"CORE_UTILIZATION did not clear")
         led.set_state(design, "escalated", reason=reason)
         if conn is not None:
             import escalations

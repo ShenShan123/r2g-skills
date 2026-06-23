@@ -394,12 +394,14 @@ def generate_config_mk(project_dir, design_name, platform, rtl_files, sdc_path,
                        place_density=0.20, top_module=None):
     """Generate config.mk for ORFS.
 
-    Sizing policy (validated against a 495-design batch):
-    - Tiny (< 100 lines) with <=100 IO pins: explicit DIE_AREA 50x50
-    - Tiny with many IO pins or wide buses: CORE_UTILIZATION=15 (auto-sizes die)
-    - Small (100-500 lines): explicit DIE_AREA 120x120 unless pin count forces up
+    Sizing policy (CORE_UTILIZATION everywhere so ORFS auto-sizes a die that FITS
+    the synthesized cells -- line count is only a coarse util tier, never a fixed
+    die; see the FLW-0024 note at the bucket below):
+    - Tiny (< 100 lines): CORE_UTILIZATION=20
+    - Small (100-500 lines): CORE_UTILIZATION=25
     - Medium (500-5000 lines): CORE_UTILIZATION=25
     - Large (> 5000 lines): CORE_UTILIZATION=20
+    - Many IO pins / wide buses: CORE_UTILIZATION=15-20 (pin_forces_util)
 
     Also injects SYNTH_MEMORY_MAX_BITS when RTL infers memories >4 Kbit so
     Yosys doesn't reject with "Synthesized memory size exceeds ...".
@@ -416,11 +418,21 @@ def generate_config_mk(project_dir, design_name, platform, rtl_files, sdc_path,
     # design with significantly more pins up to CORE_UTILIZATION.
     pin_forces_util = pin_count > 180
 
+    # 2026-06-23: do NOT pin a fixed DIE_AREA for tiny/small designs. RTL line count
+    # is a terrible proxy for gate count -- a <100-line design (wide multiplier, FFT
+    # butterfly, DMA datapath) can synthesize to thousands of cells that do not fit a
+    # hardcoded 50x50/120x120 die -> [ERROR FLW-0024] place density > 1.0 at global
+    # placement. Use CORE_UTILIZATION (like medium/large already do) so ORFS
+    # auto-sizes a die that FITS the synthesized cells. The pin-perimeter case is
+    # still handled by pin_forces_util above; a looser util on the smallest designs
+    # keeps the die generous enough for boundary pins. (Same class as the sky130
+    # mk_*_project sizing bug; validated on dma_controller: 50x50 die held 6442um^2
+    # of cells -> FLW-0024; CORE_UTILIZATION=30 auto-sized to 31% util -> placed.)
     if complexity < 100 and not pin_forces_util:
-        sizing = "export DIE_AREA  = 0 0 50 50\nexport CORE_AREA = 2 2 48 48"
+        sizing = "export CORE_UTILIZATION = 20"
         size_cat = "tiny"
     elif complexity < 500 and not pin_forces_util:
-        sizing = "export DIE_AREA  = 0 0 120 120\nexport CORE_AREA = 5 5 115 115"
+        sizing = "export CORE_UTILIZATION = 25"
         size_cat = "small"
     elif complexity < 5000:
         sizing = "export CORE_UTILIZATION = 25"
