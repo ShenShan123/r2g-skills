@@ -41,6 +41,19 @@ def test_plan_trial_selects_cheapest_matched_designs(tmp_path):
     assert trial["arm_b"]["rank_first_strategy"] == KEY["strategy"]
 
 
+def test_plan_trial_never_crosses_platforms(tmp_path):
+    """2026-06-25: an A/B arm flows at the RECIPE's platform, so a nangate45 recipe must
+    NEVER get sky130hd subjects. The old pooled_platform/None tiers dropped the platform
+    filter, so a nangate45 core_util_relief trial pulled sky130hd designs -> a
+    wrong-platform arm flow -> guaranteed-meaningless verdict."""
+    conn = _conn(tmp_path)
+    _seed_history(conn, n=3, design_class="logic/medium", platform="sky130hd")
+    trial = ab_runner.plan_trial(
+        conn, symptom_id=KEY["symptom_id"], design_class="logic/medium",
+        platform="nangate45", strategy="core_util_relief", n_designs=2)
+    assert trial is None            # sky130hd subjects must NOT satisfy a nangate45 trial
+
+
 def test_plan_trial_relaxes_class_when_exact_too_few(tmp_path):
     conn = _conn(tmp_path)
     _seed_history(conn, n=1, design_class="crypto/small")

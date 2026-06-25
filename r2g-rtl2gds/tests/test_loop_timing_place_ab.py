@@ -118,6 +118,27 @@ def test_arm_metric_timing_uses_timing_tier(tmp_path):
     assert ab_runner.judge_repeated([miss, miss], [met, met]) == "win"
 
 
+def test_arm_metric_timing_ondisk_fallback(tmp_path):
+    """2026-06-25: when a --check timing reflow leaves the runs row's wns_ns/timing_tier
+    NULL, _arm_metric(timing=True) falls back to the arm's ON-DISK timing verdict
+    (timing_check.json tier / ppa.json setup_wns) so a genuinely-closed arm is not judged
+    a failure (the bug that kept every live timing trial inconclusive)."""
+    conn = _conn(tmp_path)
+    met, miss = tmp_path / "met", tmp_path / "miss"
+    (met / "reports").mkdir(parents=True)
+    (met / "reports" / "timing_check.json").write_text(json.dumps({"tier": "clean"}))
+    (miss / "reports").mkdir(parents=True)
+    (miss / "reports" / "ppa.json").write_text(
+        json.dumps({"summary": {"timing": {"setup_wns": -2.1}}}))
+    for pp in (met, miss):
+        conn.execute("INSERT INTO runs (run_id, project_path, ingested_at, orfs_status, "
+                     "timing_tier, wns_ns) VALUES (?,?,?,?,NULL,NULL)",
+                     (str(pp), str(pp), "2026-06-25T00:00:00Z", "pass"))
+    conn.commit()
+    assert engineer_loop._arm_metric(conn, str(met), timing=True)["is_success"] is True
+    assert engineer_loop._arm_metric(conn, str(miss), timing=True)["is_success"] is False
+
+
 # ── coverage guard: skip arms that cannot diverge, NEVER demote ──────────────
 
 def test_coverage_gap_nondivergent_strategy(tmp_path):

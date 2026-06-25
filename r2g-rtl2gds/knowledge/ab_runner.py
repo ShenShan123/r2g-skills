@@ -255,12 +255,16 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
                     "platform": platform, "strategy": strategy},
         }
 
-    # Tier 1 — run_violations (POST-fix residual exhibitors of the symptom).
+    # Tier 1 — run_violations (POST-fix residual exhibitors of the symptom). NEVER pool
+    # across platforms (2026-06-25): an A/B arm flows at the recipe's `platform`, so a
+    # sky130hd subject under a nangate45 recipe runs the WRONG platform and the verdict is
+    # meaningless. Pool across design_CLASS only (same platform). A recipe with no
+    # same-platform subject is honestly unvalidatable (plan_arms escalates it), not
+    # validated on a foreign platform.
     for extra, params, level in (
             ("AND r.design_class=? AND r.platform=?", (design_class, platform),
              "exact"),
-            ("AND r.platform=?", (platform,), "pooled_class"),
-            ("", (), "pooled_platform")):
+            ("AND r.platform=?", (platform,), "pooled_class")):
         designs = _q(extra, params)
         if len(designs) >= n_designs:
             return _trial(designs, level)
@@ -271,7 +275,7 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
     # the precise project that hit this symptom_id; resolve straight from there.
     # (2026-06-22: without this, every successful nangate45 recipe — antenna chief
     # among them — was unreachable and stuck forever as a candidate.)
-    for want_plat, level in ((platform, "fixhist_platform"), (None, "fixhist_pooled")):
+    for want_plat, level in ((platform, "fixhist_platform"),):   # same-platform only
         designs = _symptom_designs(conn, symptom_id, want_plat)
         if len(designs) >= n_designs:
             return _trial(designs, level)
@@ -281,7 +285,7 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
     # but as bare DESIGN_NAMEs, so this resolves only legacy same-name project dirs.
     # (2026-06-16: this gap, on top of Gate A, was the second reason the A/B loop had
     # never fired; Tier 2 above now covers the repo-prefixed campaign dirs it misses.)
-    for want_plat, level in ((platform, "evidence_platform"), (None, "evidence_pooled")):
+    for want_plat, level in ((platform, "evidence_platform"),):   # same-platform only
         designs = _resolve_evidence(conn, _evidence_designs(symptom_id), want_plat)
         if len(designs) >= n_designs:
             return _trial(designs, level)

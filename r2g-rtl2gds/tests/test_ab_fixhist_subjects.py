@@ -136,17 +136,27 @@ def test_fix_history_excludes_arm_dirs(tmp_path):
     assert not ab_runner._is_arm_dir(one["designs"][0]["project_path"])
 
 
-def test_fix_history_platform_filter_then_pooled_fallback(tmp_path):
-    """The platform tier is tried first; only when it can't supply n_designs does
-    plan_trial pool across platforms (match_level distinguishes the two)."""
+def test_fix_history_never_pools_across_platforms(tmp_path):
+    """2026-06-25: plan_trial must NEVER cross platforms — an A/B arm flows at the
+    recipe's `platform`, so a sky130hd subject under a nangate45 recipe runs the wrong
+    platform and the verdict is meaningless. A nangate45 recipe with only ONE
+    same-platform exhibitor returns None (honestly unvalidatable), never reaches for the
+    sky130hd design."""
     conn, sid = _conn(tmp_path)
     _add_run(conn, path=tmp_path / "Repo_nan_design", design_name="design",
              sid_for_fixhist=sid, cells=600)
     _add_run(conn, path=tmp_path / "Repo_sky_design", design_name="skyd",
              sid_for_fixhist=sid, platform="sky130hd", cells=650)
     conn.commit()
-    # nangate45 alone has 1 exhibitor (<2); pooling reaches the sky130hd one -> 2.
+    # nangate45 alone has 1 exhibitor (<2); the sky130hd one MUST NOT be pooled in.
+    assert ab_runner.plan_trial(conn, symptom_id=sid, design_class="logic/unknown",
+                                platform="nangate45",
+                                strategy="antenna_diode_repair") is None
+    # ...but a same-platform 2nd exhibitor DOES yield a (same-platform) trial.
+    _add_run(conn, path=tmp_path / "Repo_nan_design2", design_name="design2",
+             sid_for_fixhist=sid, cells=700)
+    conn.commit()
     trial = ab_runner.plan_trial(conn, symptom_id=sid, design_class="logic/unknown",
                                  platform="nangate45", strategy="antenna_diode_repair")
-    assert trial is not None and trial["match_level"] == "fixhist_pooled"
+    assert trial is not None and trial["match_level"] == "fixhist_platform"
     assert len(trial["designs"]) == 2

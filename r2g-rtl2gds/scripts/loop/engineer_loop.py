@@ -670,6 +670,27 @@ def learn_cycle(led: Ledger, conn, *, prev_heur: dict | None,
     return heur
 
 
+def _ondisk_timing(project_path: str) -> tuple[str | None, float | None]:
+    """The arm's ON-DISK timing verdict — (timing_check.json tier, ppa.json setup_wns) —
+    a fallback for _arm_metric when the runs row missed the timing signal (a --check
+    timing reflow can ingest a ppa.json without finish timing). Best-effort; any read
+    failure yields None for that component."""
+    proj = Path(project_path)
+    tier = wns = None
+    try:
+        tier = json.loads(
+            (proj / "reports" / "timing_check.json").read_text()).get("tier")
+    except Exception:
+        pass
+    try:
+        ppa = json.loads((proj / "reports" / "ppa.json").read_text())
+        wns = ((ppa.get("summary") or {}).get("timing") or {}).get("setup_wns")
+        wns = float(wns) if wns is not None else None
+    except Exception:
+        pass
+    return tier, wns
+
+
 def _arm_metric(conn, project_path: str, *, timing: bool = False) -> dict | None:
     """Latest run row for an arm dir -> the metric dict judge_repeated consumes
     (or None if the arm produced no judgeable run). outcome_score is captured as
@@ -694,9 +715,14 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False) -> dict | None
             "wns_ns", "timing_tier")
     r = dict(zip(cols, row))
     if timing:
-        wns = r.get("wns_ns")
-        success = (r.get("timing_tier") in ("clean", "minor")
-                   or (wns is not None and wns >= 0))
+        tier, wns = r.get("timing_tier"), r.get("wns_ns")
+        if tier is None and wns is None:
+            # A --check timing reflow can leave the latest runs row's wns_ns/timing_tier
+            # null (ingest read a ppa.json without finish timing); fall back to the arm's
+            # ON-DISK timing verdict so a genuinely-closed arm isn't judged a failure
+            # (2026-06-25). The verdict is the timing_check.json tier / ppa setup_wns.
+            tier, wns = _ondisk_timing(project_path)
+        success = (tier in ("clean", "minor")) or (wns is not None and wns >= 0)
     else:
         success = knowledge_db.is_success(r)
     return {"is_success": bool(success),
