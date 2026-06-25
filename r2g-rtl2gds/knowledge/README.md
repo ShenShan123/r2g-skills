@@ -413,16 +413,15 @@ never loses a conclusion — conclusions live only in the knowledge DB.
 ### Recipe lifecycle
 
 ```
-shadow  (inert, outside live pool)
-  │  A/B win
+candidate  (authored here by Gate-A learner_diff / enqueue_candidate; enqueued for A/B)
+  │  recipe_status = f(FULL ab_trials corpus)  —  ab_runner.judge_recipe (2026-06-24)
+  │    net wins>losses → promoted ;  net losses>wins → shadow ;  inconclusive → unchanged
   ▼
-candidate  (enqueued for A/B trial)
-  │  win → promote
-  │  loss / inconclusive → demote back to shadow
-  ▼
-promoted  (affects live ranking in diagnose_signoff_fix.py)
-  │  2 consecutive regressions → auto-demote
-  └──────────────────────────────────────────────►  shadow
+promoted  (affects live ranking in diagnose_signoff_fix.py)   ⇄   shadow  (demoted; a later
+                                                                     net-positive win can revive it)
+# stage_shadow() is the agent-authoring entrypoint (decision 7); the demotion sink is `shadow`.
+# An `inconclusive` NEVER demotes (it carries no information). auto_demote_on_regression() is a
+# provided-but-not-auto-wired helper (the ingester emits no 'regression' verdict today).
 ```
 
 Absent `recipe_status` row = grandfathered `promoted` (recipes validated before the loop

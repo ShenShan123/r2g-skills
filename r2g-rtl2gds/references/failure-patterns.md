@@ -1939,3 +1939,40 @@ makes prior A/B verdicts *known-contaminated* (e.g. Pattern 1), do NOT rewrite t
 current-state edit) so a fresh, valid trial runs. Then EXECUTE+VERIFY: confirm `ab_trials`
 gains rows with arm A `is_success` ≠ arm B and the recipe transitions `candidate → promoted`.
 "The A/B machinery existing" is never proof the loop learns — only a recorded promotion is.
+
+### Sub-variant: whole CLASSES inert + judge defeated by noise/last-trial (2026-06-24 closure)
+
+**Pattern 7 — a whole strategy CLASS routes to an A/B check that can't exercise it.**
+`_symptom_check` mapped every non-route symptom to `--check both` (DRC/LVS), so a **timing**
+(`period_relax`) or **place** (`core_util_relief`) recipe's `R2G_FIX_EXCLUDE/RANK_FIRST` were
+no-ops → arms byte-identical → permanent `inconclusive`, while each timing arm burned a full
+multi-hour signoff (the campaign stall). FIX: `_symptom_check(conn, symptom_id, strategy)` routes
+by **strategy** — place→`place` (apply-then-flow backend arm; arm B `_resize_to_core_util`),
+timing→`timing` (`fix_signoff --check timing`). Because a timing miss never aborts the flow,
+`is_success` ties both arms — `_arm_metric(timing=True)` judges on `wns_ns`/`timing_tier` instead.
+`_ab_coverage_gap` then *refuses to plan* an arm that still can't diverge (`lvs_resolve_unknown`, or
+≥`AB_INCONCLUSIVE_MAX` inconclusive trials with 0 decisive) — escalates `ab_coverage_gap`, never
+demotes. (A latent trap: `check_timing.py` wrote `wns`/`clock_period` but `diagnose`'s timing plan
+reads `wns_ns`/`clock_period_ns` → `period_relax` emitted no SDC edit; aliases added.)
+
+**Pattern 8 — `inconclusive` demoted to a TERMINAL `shadow`.** `record_trial` demoted on every
+non-win; `shadow` is never re-planned (re-enqueue no-ops on an existing row) → one inert/noisy trial
+permanently buried a recipe. FIX: `inconclusive` carries no information and NEVER demotes.
+
+**Pattern 9 — the LAST trial overwrote the status (UPSERT), defeating the per-trial LCB.** A
+trailing noisy loss demoted a net-winning recipe. FIX: `ab_runner.judge_recipe` makes `recipe_status`
+a function of the FULL `ab_trials` corpus (net wins>losses → promote; net losses>wins → shadow; else
+unchanged), so a later win can revive a shadow and a single late loss can't bury a net winner.
+
+**Pattern 10 — the success-tie tiebreak flipped on flow-time jitter.** The cost tiebreak floored
+the |Δwall| bound at 1% of the mean, so ~3% scheduler noise promoted a deterministic-same-outcome
+recipe. FIX: require |Δwall| ≥ `COST_FLOOR=8%` AND sign-consistency (`max(cheaper)<min(dearer)`);
+`se==0` is MAXIMAL confidence so a real large deterministic cost win still promotes.
+
+**Fixture≠production corollary (the recurring trap).** `engineer_loop.fmax_drain`'s SDC stamp was
+silently inert off-test: `_fmax_one` did `import fmax_model`, but the module only put `knowledge/` on
+`sys.path` — `conftest.py` injected `scripts/reports/` so the unit test passed while production
+returned `characterized 0 design(s)` and never stamped (the same class as the 22f3e67 fmax pilot
+bug). Guard: a feature invoked as a real CLI needs a **subprocess** regression test that does NOT
+inherit conftest's path help, and a no-op must be **uncountable** (stamp-then-verify), never swallowed
+in a bare `except` that returns a truthy-looking status.

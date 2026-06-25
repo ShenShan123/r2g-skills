@@ -8,7 +8,11 @@ predicted-signoff Fmax proxy; --verify runs one full signoff flow at the winner.
 
 Usage:
   fmax_search.py <project-dir> [platform] [--verify] [--keep-variants]
-                 [--max-parallel N] [--place-fast]
+                 [--place-fast] [--probe-timeout N]
+
+The search is sequential (one ORFS probe at a time). Cross-design parallelism
+is achieved by running multiple fmax_search.py invocations concurrently
+(future: fmax-drain --workers).
 """
 from __future__ import annotations
 import argparse
@@ -342,9 +346,24 @@ def main() -> int:
     fp_probe, pl_probe = _make_real_probes(
         base, args.platform, timeout_s=args.probe_timeout,
         place_fast=args.place_fast, created=created)
-    res = search(base, args.platform, seed_period=seed,
-                 floorplan_probe=fp_probe, place_probe=pl_probe,
-                 model=model, model_provenance=provenance, place_fast=args.place_fast)
+    try:
+        res = search(base, args.platform, seed_period=seed,
+                     floorplan_probe=fp_probe, place_probe=pl_probe,
+                     model=model, model_provenance=provenance, place_fast=args.place_fast)
+    except ValueError as exc:
+        if "no 'set clk_period' line found" in str(exc):
+            import json
+            out = base / "reports" / "fmax_search.json"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps({
+                "design": base.name,
+                "platform": args.platform,
+                "status": "no_clock_constraint",
+                "labels": ["status: no_clock_constraint"],
+            }, indent=2), encoding="utf-8")
+            print("Fmax search status: no_clock_constraint — SDC has no 'set clk_period' line.")
+            return 0
+        raise
 
     if res["status"] == "ok":
         edge = confirm_grid(res["t_star"], pl_probe, model=model)

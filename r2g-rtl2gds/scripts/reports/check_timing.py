@@ -368,11 +368,17 @@ def main():
     result = {
         'wns': wns,
         'tns': tns_raw,
+        # diagnose_signoff_fix._timing_plan keys on `wns_ns`/`clock_period_ns`
+        # (its tcheck schema), so the on-disk timing_check.json the fix loop hands
+        # it MUST carry those aliases or period_relax produces no SDC edit. Emit
+        # them alongside the canonical `wns`/`clock_period` keys (single source).
+        'wns_ns': wns,
         'wns_tier': wns_tier,
         'tns_tier': tns_tier,
         'tier': combined_tier,
         'violation_count': violation_count,
         'clock_period': clock_period,
+        'clock_period_ns': clock_period,
         'utilization': utilization,
         'hold_wns': hold_wns,
         'hold_tns': hold_tns,

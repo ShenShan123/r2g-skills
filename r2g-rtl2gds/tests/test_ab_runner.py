@@ -167,7 +167,13 @@ def test_verdict_journaled(tmp_path, monkeypatch):
     assert row[1] == KEY["symptom_id"]
     assert row[2] == tid
     assert row[3] == KEY["strategy"]
-    # A loss journals a demote.
+    # Journaling follows the corpus TRANSITION (2026-06-24 L1-02): after the win (1w0l
+    # -> promoted) a single loss is 1w1l (tie) -> status UNCHANGED -> no demote journal;
+    # a SECOND loss is 1w2l (net-negative) -> shadow -> demote journaled.
+    ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={})
+    assert [r[0] for r in jc.execute(
+        "SELECT action_type FROM actions ORDER BY action_id").fetchall()] == ["promote"]
     ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id="ra",
                            arm_b_run_id="rb", metrics={})
     types = [r[0] for r in jc.execute(
@@ -198,3 +204,77 @@ def test_repeats_default_is_two():
         assert ab_runner.ab_repeats() == 3
     finally:
         os.environ.pop("R2G_AB_REPEATS", None)
+
+
+# ── 2026-06-24 loop-closure: inconclusive is non-terminal + corpus aggregation ──
+
+def test_inconclusive_does_not_demote_candidate(tmp_path):
+    """Bug #2 (2026-06-24): an `inconclusive` verdict carries NO information and must
+    NOT demote a candidate to terminal `shadow` — the recipe stays 'candidate' so the
+    next drain re-plans it. (Before: record_trial demoted on every non-win, burying a
+    recipe on a single noisy/inert trial with no re-enqueue path.)"""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
+    ab_runner.record_trial(conn, key=KEY, verdict="inconclusive",
+                           arm_a_run_id="ra", arm_b_run_id="rb", metrics={})
+    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
+
+
+def test_late_loss_does_not_bury_net_winner(tmp_path):
+    """Bug #5 (2026-06-24): recipe_status reflects the FULL trial corpus, not the LAST
+    trial. Two wins then a single loss stays `promoted` (net +1 decisive) — the old
+    last-trial UPSERT would have demoted it to shadow on the trailing loss."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    for v in ("win", "win", "loss"):
+        ab_runner.record_trial(conn, key=KEY, verdict=v, arm_a_run_id="ra",
+                               arm_b_run_id="rb", metrics={})
+    assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"
+
+
+def test_corpus_net_loss_demotes(tmp_path):
+    """Net-negative decisive evidence demotes to shadow (a genuinely-losing recipe
+    rests); a tie leaves the prior status."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    for v in ("loss", "win", "loss"):          # net -1
+        ab_runner.record_trial(conn, key=KEY, verdict=v, arm_a_run_id="ra",
+                               arm_b_run_id="rb", metrics={})
+    assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"
+
+
+def test_later_win_revives_shadow(tmp_path):
+    """Bug #2/#5: a demoted recipe is NOT terminal — a later win that makes the corpus
+    net-positive flips shadow back to promoted (one bad trial cannot bury it forever)."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={})
+    assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"
+    ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={})        # 1w1l tie
+    assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"
+    ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
+                           arm_b_run_id="rb", metrics={})        # 2w1l net +1
+    assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"
+
+
+def test_jitter_cost_tie_is_inconclusive():
+    """Bug #4 (2026-06-24): two all-success arms differing only by ~3% wall-clock
+    JITTER is noise, not a win — the lone nangate45 antenna promotion (trial 26) rested
+    on exactly this 101/102 vs 98/101 s 'win'. Must return inconclusive."""
+    a = [{"is_success": True, "wall_s": 101.0}, {"is_success": True, "wall_s": 102.0}]
+    b = [{"is_success": True, "wall_s": 98.0}, {"is_success": True, "wall_s": 101.0}]
+    assert ab_runner.judge_repeated(a, b) == "inconclusive"
+
+
+def test_deterministic_large_cost_win_preserved():
+    """Bug #4 must NOT regress a REAL large-delta cost win, nor the documented
+    se==0-is-maximal-confidence invariant (route_relief 37s vs 5400s)."""
+    a = [{"is_success": True, "wall_s": 5400.0}, {"is_success": True, "wall_s": 5410.0}]
+    b = [{"is_success": True, "wall_s": 37.0}, {"is_success": True, "wall_s": 38.0}]
+    assert ab_runner.judge_repeated(a, b) == "win"
+    a2 = [{"is_success": True, "wall_s": 100.0}, {"is_success": True, "wall_s": 100.0}]
+    b2 = [{"is_success": True, "wall_s": 50.0}, {"is_success": True, "wall_s": 50.0}]
+    assert ab_runner.judge_repeated(a2, b2) == "win"          # se==0 deterministic delta

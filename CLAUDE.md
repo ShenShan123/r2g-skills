@@ -164,11 +164,18 @@ gated by a variance-aware LCB over *k* repeats. Production buttons:
   Invariants: the arm copytree MUST exclude `reports/`; a signoff `ab_arm` MUST always reach
   `_run_fix`; the success-tie cost tiebreak MUST be variance-aware (a flat ±2% flips on jitter, and
   `se==0` is MAXIMAL confidence, not none). VERIFY a trial's `metrics_json` shows the arms genuinely
-  diverging — not identical `is_success`+`outcome_score`+`fix_iters`. KNOWN GAP: the inline A/B arm
-  router (`_symptom_check`) exercises only **DRC/LVS + route** recipes; **timing/place** recipes route
-  to `--check both` and are inert in A/B (documented follow-up). Detail:
+  diverging — not identical `is_success`+`outcome_score`+`fix_iters`. (CLOSED 2026-06-24) The former
+  KNOWN GAP — `_symptom_check` exercised only **DRC/LVS + route** while **timing/place** routed to inert
+  `--check both` — is now fixed: `_symptom_check` routes by **strategy** (`core_util_relief`→`place`
+  apply-then-flow arm; `period_relax`/`utilization_reduce`/`backend_aware_synth_retune`→`timing`, fixed
+  via `fix_signoff --check timing`), `_arm_metric(timing=True)` judges on `wns_ns`/`timing_tier` (a
+  timing miss never aborts the flow, so `is_success` ties both arms), and `_ab_coverage_gap` skips
+  genuinely non-divergent candidates (`lvs_resolve_unknown`, or ≥3 inconclusive trials) WITHOUT
+  demoting. Two judge-integrity fixes landed with it: an `inconclusive` verdict NEVER demotes (it was
+  reverting candidates to terminal `shadow`), and `recipe_status` is now a function of the FULL
+  `ab_trials` corpus (`ab_runner.judge_recipe`, net wins>losses) instead of the LAST trial. Detail:
   `references/failure-patterns.md` ("Learning-Loop Closure Failures") +
-  `docs/superpowers/plans/r2g-loop-closure-audit-2026-06-23.md`.
+  `docs/superpowers/plans/r2g-loop-closure-audit-2026-06-24.md`.
 - **Concurrent ingests share one file.** `knowledge_db`/`journal_db.connect` arm a `busy_timeout` so a
   lock waits instead of erroring — never trust a swallowed ingest; confirm the row landed.
 - **A design can have many runs.** Reconciliation/repair tools touch only the **latest-ingested row

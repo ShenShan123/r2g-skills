@@ -301,10 +301,10 @@ project variant cloned from the base project:
   across probe periods).
 - Each variant gets a **unique `FLOW_VARIANT`** (`run_orfs.sh` derives
   `FLOW_VARIANT` from the project-dir basename), so concurrent probes never share
-  an ORFS results/scratch directory. This is what lets `--max-parallel > 1` run
-  multiple probes at once without violating the
+  an ORFS results/scratch directory. Unique variant names ensure that concurrent
+  invocations of `fmax_search.py` on different designs never violate the
   "never two configs with the same DESIGN_NAME and FLOW_VARIANT concurrently"
-  hard rule.
+  hard rule. (The search itself is sequential; there is no `--max-parallel` flag.)
 
 By default variants are cleaned up after the search; pass `--keep-variants` to
 retain them for inspection.

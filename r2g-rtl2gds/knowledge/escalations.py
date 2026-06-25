@@ -25,7 +25,13 @@ REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            # genuinely-good recipe stuck as 'candidate' is visible (2026-06-23
            # audit, bug #8). Left 'candidate' so a later drain auto-retries when
            # the corpus regrows — never demoted (demotion is terminal).
-           "unvalidatable_insufficient_subjects")
+           "unvalidatable_insufficient_subjects",
+           # An A/B candidate whose arms CANNOT diverge: a no-op strategy
+           # (lvs_resolve_unknown), or a candidate that has accrued AB_INCONCLUSIVE_MAX
+           # inconclusive trials with zero decisive verdicts. Planning it only burns a
+           # full signoff per repeat for a guaranteed-inconclusive verdict. Skipped +
+           # surfaced, left 'candidate' (inconclusive is non-terminal) (2026-06-24).
+           "ab_coverage_gap")
 
 
 def _now() -> str:

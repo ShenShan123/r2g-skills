@@ -91,3 +91,87 @@ def test_record_verify_triple_appends_to_db(tmp_path, tmp_knowledge_dir, monkeyp
     assert r[:4] == (5.1, 0.4, 0.2, 0.05)
     assert r[4] == "fmax_verify"  # tagged so it is identifiable but still learnable
     conn.close()
+
+
+# BUG #8 — argparse round-trip: --max-parallel was never registered; confirm it
+# raises SystemExit (argparse unrecognized-argument error), while the real flags parse.
+def test_main_argparse_rejects_max_parallel(tmp_path, monkeypatch):
+    """--max-parallel must not be a known flag (the search is sequential)."""
+    import pytest, sys
+    monkeypatch.setattr(sys, "argv", ["fmax_search.py", str(tmp_path), "--max-parallel", "4"])
+    with pytest.raises(SystemExit):
+        fs.main()
+
+
+def test_main_argparse_accepts_real_flags(tmp_path, monkeypatch):
+    """The documented flags (--verify, --keep-variants, --place-fast, --probe-timeout)
+    must parse without error.  We intercept assert_safe_knobs to avoid needing a
+    real config.mk, then let main() hit an expected early exit via knowledge_db."""
+    import sys
+    (tmp_path / "constraints").mkdir()
+    (tmp_path / "constraints" / "config.mk").write_text("export DESIGN_NAME = alu\n")
+    (tmp_path / "constraints" / "constraint.sdc").write_text("set clk_period 10.0\n")
+    monkeypatch.setattr(sys, "argv",
+                        ["fmax_search.py", str(tmp_path), "nangate45",
+                         "--place-fast", "--probe-timeout", "120", "--keep-variants"])
+    monkeypatch.setattr(fs, "assert_safe_knobs", lambda _: None)
+    # Stub out the knowledge + search machinery so we don't actually launch ORFS.
+    import fmax_model as fm
+    monkeypatch.setattr("fmax_search.seed_period", lambda *a, **kw: 10.0)
+    def _fake_search(*a, **kw):
+        return {"status": "inconclusive", "t_star": None, "log": []}
+    monkeypatch.setattr(fs, "search", _fake_search)
+    # knowledge_db / query_knowledge imports inside main() — stub them.
+    import types, sys as _sys
+    fake_kdb = types.ModuleType("knowledge_db")
+    fake_kdb.infer_family = lambda *a, **kw: "alu"
+    fake_kdb.load_families = lambda: {}
+    fake_qk = types.ModuleType("query_knowledge")
+    fake_qk.get_family_heuristics = lambda *a, **kw: None
+    monkeypatch.setitem(_sys.modules, "knowledge_db", fake_kdb)
+    monkeypatch.setitem(_sys.modules, "query_knowledge", fake_qk)
+    import fmax_model as fm_mod
+    monkeypatch.setattr(fm_mod, "select_model", lambda *a, **kw: (None, "default-static"))
+    rc = fs.main()
+    assert rc == 1   # inconclusive → non-zero exit (normal)
+
+
+# BUG #9 — no 'set clk_period' SDC must not crash the search; writes
+# fmax_search.json with status=="no_clock_constraint" and returns 0.
+def test_main_no_clock_constraint_exits_cleanly(tmp_path, monkeypatch):
+    import json, sys, types
+    # Set up a minimal project with a clockless SDC.
+    (tmp_path / "constraints").mkdir()
+    (tmp_path / "constraints" / "config.mk").write_text("export DESIGN_NAME = combo\n")
+    (tmp_path / "constraints" / "constraint.sdc").write_text(
+        "# purely combinational — no create_clock, no set clk_period\n")
+    monkeypatch.setattr(sys, "argv", ["fmax_search.py", str(tmp_path), "nangate45"])
+    monkeypatch.setattr(fs, "assert_safe_knobs", lambda _: None)
+    monkeypatch.setattr("fmax_search.seed_period", lambda *a, **kw: 10.0)
+
+    # _make_real_probes returns probes that call clone_variant, which calls
+    # fm.rewrite_clk_period. Patch clone_variant to raise the expected ValueError.
+    def _raising_clone(base, period):
+        raise ValueError("no 'set clk_period' line found in SDC")
+    monkeypatch.setattr(fs, "clone_variant", _raising_clone)
+
+    fake_kdb = types.ModuleType("knowledge_db")
+    fake_kdb.infer_family = lambda *a, **kw: "combo"
+    fake_kdb.load_families = lambda: {}
+    fake_qk = types.ModuleType("query_knowledge")
+    fake_qk.get_family_heuristics = lambda *a, **kw: None
+    monkeypatch.setitem(sys.modules, "knowledge_db", fake_kdb)
+    monkeypatch.setitem(sys.modules, "query_knowledge", fake_qk)
+    import fmax_model as fm_mod
+    monkeypatch.setattr(fm_mod, "select_model", lambda *a, **kw: (None, "default-static"))
+
+    # Must not raise; must return 0.
+    rc = fs.main()
+    assert rc == 0, "main() must exit 0 for no_clock_constraint"
+
+    rpt_path = tmp_path / "reports" / "fmax_search.json"
+    assert rpt_path.exists(), "fmax_search.json must be written"
+    rpt = json.loads(rpt_path.read_text())
+    assert rpt["status"] == "no_clock_constraint", (
+        f"expected status='no_clock_constraint', got {rpt['status']!r}"
+    )

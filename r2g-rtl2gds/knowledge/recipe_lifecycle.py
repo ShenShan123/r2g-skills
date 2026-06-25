@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Recipe lifecycle: shadow -> candidate -> promoted (engineer-loop §5.3).
+"""Recipe lifecycle: candidate <-> promoted/shadow (engineer-loop §5.3).
 
 Only PROMOTED recipes affect live ranking. New/changed recipes from a learn
-rebuild become 'candidate' and are enqueued for inline A/B (ab_runner). An A/B
-win promotes; loss/inconclusive reverts to shadow. Agent-authored strategies
-enter as shadow — NO special trust (decision 7). Absent row = promoted
-(grandfathering bootstrap for pre-lifecycle learned recipes).
+rebuild are authored directly as 'candidate' (Gate-A diff_and_enqueue /
+enqueue_candidate) and queued for inline A/B (ab_runner). Status is then a
+function of the recipe's FULL ab_trials corpus (ab_runner.judge_recipe,
+2026-06-24): net-positive DECISIVE (win/loss) evidence promotes, net-negative
+demotes to 'shadow', and an `inconclusive` carries no information — it never
+demotes (a candidate stays candidate and is re-planned; a later win can revive a
+shadow). Agent-authored strategies may enter as shadow via stage_shadow — NO
+special trust (decision 7). Absent row = promoted (grandfathering bootstrap for
+pre-lifecycle learned recipes).
 """
 from __future__ import annotations
 

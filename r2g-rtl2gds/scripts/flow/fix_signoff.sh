@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both] [--max-iters N] [--resume]
+# usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route|timing] [--max-iters N] [--resume]
 #
 # Iteratively applies REAL layout fixes for DRC/LVS violations: diagnose →
 # apply (config.mk marked block) → re-run flow → re-check → compare, up to
@@ -94,8 +94,8 @@ while [[ $# -gt 0 ]]; do
     *) if [[ -z "$PROJECT_DIR" ]]; then PROJECT_DIR="$1"; else PLATFORM="$1"; fi; shift;;
   esac
 done
-[[ -z "$PROJECT_DIR" ]] && { echo "usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route] [--max-iters N] [--resume]" >&2; exit 1; }
-[[ "$CHECK" =~ ^(drc|lvs|both|route)$ ]] || { echo "ERROR: --check must be drc|lvs|both|route" >&2; exit 1; }
+[[ -z "$PROJECT_DIR" ]] && { echo "usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route|timing] [--max-iters N] [--resume]" >&2; exit 1; }
+[[ "$CHECK" =~ ^(drc|lvs|both|route|timing)$ ]] || { echo "ERROR: --check must be drc|lvs|both|route|timing" >&2; exit 1; }
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -123,6 +123,10 @@ EXTRACT_DRC="${R2G_EXTRACT_DRC:-$EXTRACT_DIR/extract_drc.py}"
 EXTRACT_LVS="${R2G_EXTRACT_LVS:-$EXTRACT_DIR/extract_lvs.py}"
 EXTRACT_ROUTE="${R2G_EXTRACT_ROUTE:-$EXTRACT_DIR/extract_route.py}"
 DIAGNOSE="${R2G_DIAGNOSE:-$REPORTS_DIR_SCRIPTS/diagnose_signoff_fix.py}"
+# timing has no separate signoff tool: the run_orfs reflow IS the check, and
+# check_timing.py re-measures it from the reflowed reports/ppa.json (analogous to
+# how route's extract_route reads the route stage). Overridable for testing.
+CHECK_TIMING="${R2G_CHECK_TIMING:-$REPORTS_DIR_SCRIPTS/check_timing.py}"
 KNOWLEDGE_DIR="$(cd "$SCRIPT_DIR/../../knowledge" && pwd)"
 export R2G_KNOWLEDGE_DIR="$KNOWLEDGE_DIR"
 
@@ -140,10 +144,21 @@ _count() {  # read current violation count from a report json
   python3 -c 'import json,sys
 d=json.load(open(sys.argv[1]))
 v=d.get("total_violations"); v=d.get("mismatch_count") if v is None else v
+# timing: timing_check.json has no violation count — emit a NON-NEGATIVE badness
+# that is 0 iff timing is MET (wns>=0) and grows with worse slack, so fix_one`s
+# before/after improvement logic (after==0 => CLEAN) works unchanged.
+if v is None and ("tier" in d or "wns" in d or "wns_ns" in d):
+    w=d.get("wns", d.get("wns_ns"))
+    if isinstance(w,(int,float)): v=round(max(0.0,-float(w))*1000)
 print("" if v is None else v)' "$1" 2>/dev/null || echo ""
 }
 
-_run_extract() {  # $1 = drc|lvs|route
+_run_extract() {  # $1 = drc|lvs|route|timing
+  # timing: no extract — check_timing.py re-measures the reflowed reports/ppa.json
+  # into reports/timing_check.json (the rerun IS the check). It exits 1 when timing
+  # is not met (moderate/severe/unconstrained) and 2 on missing data; neither is a
+  # script error during fixing, so swallow the rc and let _count read the tier.
+  if [[ "$1" == "timing" ]]; then "$CHECK_TIMING" "$PROJECT_DIR" >/dev/null 2>&1 || true; return 0; fi
   local script
   case "$1" in
     drc)   script="$EXTRACT_DRC";;
@@ -159,6 +174,10 @@ _snapshot() {  # $1 = drc|lvs : echo "<violation_class>\t<categories_json>" for 
   # than the post-fix (clean) report. See CRITICAL CORRECTION in the Task 3 plan.
   python3 -c 'import json,sys,os
 check=sys.argv[1]; proj=sys.argv[2]
+if check=="timing":
+    # Timing has no per-category vector and no <check>.json report (the report is
+    # reports/timing_check.json): violation_class is "timing"; categories {}.
+    print("timing\t"+json.dumps({})); sys.exit(0)
 rep=os.path.join(proj,"reports",check+".json")
 try: d=json.load(open(rep))
 except Exception: d=None
@@ -181,6 +200,10 @@ _predicates_snapshot() {  # $1 = drc|lvs : symptom predicates JSON from the CURR
   # logged symptom describes the violation being fixed (not the post-fix state).
   python3 -c 'import json,sys,os
 check=sys.argv[1]; proj=sys.argv[2]
+if check=="timing":
+    # Timing carries no curated boolean predicates in symptom v1 (the tier is the
+    # violation_class). Mirror the route case: empty predicates.
+    print(json.dumps({})); sys.exit(0)
 rep=os.path.join(proj,"reports",check+".json")
 try: report=json.load(open(rep))
 except Exception: report={}
@@ -267,6 +290,10 @@ _ensure_baseline() {  # $1 = drc|lvs : RUN the signoff tool once if there is no 
   # producing a false escalation. A fresh GDS needs fresh signoff.
   local check="$1" report="$REPORTS/$1.json" st="" stale=0 newest_gds
   [[ "$check" == "route" ]] && return 0
+  # timing: no separate signoff tool. The baseline is check_timing.py reading the
+  # already-present reports/ppa.json into reports/timing_check.json (the rerun IS
+  # the check). Establish it via _run_extract, which swallows the decision-needed rc.
+  [[ "$check" == "timing" ]] && { _run_extract timing; return 0; }
   [[ -f "$report" ]] && st="$(python3 -c 'import json,sys
 try: print(json.load(open(sys.argv[1])).get("status") or "")
 except Exception: print("")' "$report" 2>/dev/null)"
@@ -280,9 +307,12 @@ except Exception: print("")' "$report" 2>/dev/null)"
   fi
 }
 
-fix_one() {  # $1 = drc|lvs
+fix_one() {  # $1 = drc|lvs|route|timing
   local check="$1" report="$REPORTS/$1.json" tried="" before after it sid rerun recheck line verdict
   local noimp=0 before_vclass before_cats snap sym root_aid="" first_aid
+  # timing's report is reports/timing_check.json (check_timing.py's output), not
+  # reports/timing.json — point _count/_run_extract at the real file.
+  [[ "$check" == "timing" ]] && report="$REPORTS/timing_check.json"
   _ensure_baseline "$check"
   [[ -f "$report" ]] || _run_extract "$check"
   before="$(_count "$report")"
@@ -338,8 +368,9 @@ except Exception: print("{}")' <<<"$apply_out")"
         return 1
       fi
     fi
-    # route: the rerun (run_orfs from floorplan) IS the check — extract_route reads
-    # the backend route stage directly; no separate signoff tool to invoke.
+    # route/timing: the rerun (run_orfs from floorplan/synth) IS the check — there
+    # is no separate signoff tool. extract_route reads the backend route stage;
+    # _run_extract timing re-measures the reflowed ppa.json via check_timing.py.
     if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true
     elif [[ "$check" == "lvs" ]]; then "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
     _run_extract "$check"
@@ -380,6 +411,9 @@ except Exception: print("{}")' <<<"$apply_out")"
 # route is the backend-abort check: fix BEFORE signoff (a route abort never reaches
 # drc/lvs). It is its own --check value (not part of "both").
 [[ "$CHECK" == "route" ]] && fix_one route || true
+# timing is its own check (NOT part of "both"): the rerun (run_orfs from synth)
+# IS the check; check_timing.py re-measures the reflowed ppa.json.
+[[ "$CHECK" == "timing" ]] && fix_one timing || true
 [[ "$CHECK" == "drc" || "$CHECK" == "both" ]] && fix_one drc || true
 [[ "$CHECK" == "lvs" || "$CHECK" == "both" ]] && fix_one lvs || true
 
@@ -417,6 +451,17 @@ echo "Summary: $REPORTS/fix_summary.md"
 # could mark a design clean though LVS never verified (2026-06-23 audit, bug #4/#5).
 python3 -c 'import json,sys,os
 proj,check=sys.argv[1],sys.argv[2]; rc=0
+# timing is its own check: it has no <check>.json with a `status` field — it judges
+# reports/timing_check.json by `tier`. Timing is MET (exit 0) iff tier in {clean,
+# minor} (minor = WNS<0 but auto-closeable; the loop already drove the relax). Any
+# other tier (moderate/severe/unconstrained/unknown) or a missing/unreadable report
+# is an unresolved residual (exit 2) — fail-closed, mirroring the drc/lvs gate.
+if check=="timing":
+    p=os.path.join(proj,"reports","timing_check.json"); tier=None
+    if os.path.exists(p):
+        try: tier=json.load(open(p)).get("tier")
+        except Exception: tier=None
+    sys.exit(0 if tier in {"clean","minor"} else 2)
 # Judge ONLY the report(s) for the REQUESTED check — a stale report from a different
 # check must not poison this one (and --check drc must not require an absent lvs.json).
 checks={"route":("route",),"drc":("drc",),"lvs":("lvs",)}.get(check,("drc","lvs"))

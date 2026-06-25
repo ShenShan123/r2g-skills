@@ -36,6 +36,9 @@ def _is_arm_dir(project_path: str | None) -> bool:
 N_DESIGNS_DEFAULT = 2     # min matched designs per trial (spec §5.4)
 AB_REPEATS_DEFAULT = 2    # Win 2: k repeats per arm for variance-aware promotion
 AB_LCB_Z = 1.0            # z for the lower-confidence bound (mean − z·stderr)
+COST_FLOOR = 0.08         # success-tie cost tiebreak: min |Δwall| as a fraction of the
+                          # combined mean before it can flip win/loss (2026-06-24 bug #4:
+                          # was 1% — promoted on ~3% scheduler jitter)
 
 
 def ab_repeats() -> int:
@@ -104,16 +107,24 @@ def judge_repeated(arm_a_samples: list[dict | None],
         ma, mb = statistics.mean(wa), statistics.mean(wb)
         se = ((statistics.stdev(wa) ** 2) / len(wa)
               + (statistics.stdev(wb) ** 2) / len(wb)) ** 0.5
-        # ZERO variance is MAXIMAL confidence (a deterministic delta), not "no
-        # confidence" — the bound is floored at 1% of the combined mean so a
-        # deterministic but substantial cost difference still decides, while a
-        # trivial delta stays inconclusive (2026-06-23 review BLOCKER #2: se==0 must
-        # not invert a real cost win to inconclusive -> terminal shadow).
-        bound = z * max(se, 0.01 * (ma + mb) / 2.0)
-        if (ma - mb) > bound:
-            return "win"                       # B robustly cheaper than A
-        if (mb - ma) > bound:
-            return "loss"                      # B robustly more expensive than A
+        # A success-tie means both arms reliably sign off, so the recipe did NOT change
+        # correctness — only a LARGE, DETERMINISTIC wall-clock difference is real signal.
+        # Two guards keep flow-time JITTER from flipping the verdict (2026-06-24 audit
+        # bug #4: the lone nangate45 antenna promotion rested on a ~3s/3% noise 'win',
+        # A=[101,102] vs B=[98,101]):
+        #   (a) the delta must clear a variance-aware bound floored at COST_FLOOR=8% of
+        #       the combined mean (was 1% — far too small; 3% jitter promoted), AND
+        #   (b) it must be SIGN-CONSISTENT across repeats: every cheaper-arm repeat below
+        #       every dearer-arm repeat (max(cheaper) < min(dearer)) so k=2 noise with
+        #       overlapping distributions can't decide.
+        # ZERO variance is still MAXIMAL confidence: a real large cost win (route_relief
+        # 37s vs 5400s) clears the 8% floor + strict separation and promotes, preserving
+        # the 2026-06-23 se==0 invariant (a deterministic delta must still decide).
+        bound = z * max(se, COST_FLOOR * (ma + mb) / 2.0)
+        if (ma - mb) > bound and max(wb) < min(wa):
+            return "win"                       # B robustly + consistently cheaper than A
+        if (mb - ma) > bound and max(wa) < min(wb):
+            return "loss"                      # B robustly + consistently dearer than A
     return "inconclusive"
 
 
@@ -335,12 +346,51 @@ def record_trial(conn, *, key: dict, verdict: str, arm_a_run_id: str | None,
          json.dumps(metrics, sort_keys=True), match_level, _now()))
     conn.commit()
     tid = cur.lastrowid
-    if verdict == "win":
-        recipe_lifecycle.promote(conn, evidence=f"ab_trial:{tid}", **key)
-    else:
-        recipe_lifecycle.demote(conn, reason=f"ab_{verdict}:{tid}", **key)
-    _journal_verdict(key, verdict, tid)        # advisory journal (Tier B2)
+    # 2026-06-24 loop-closure (bugs #2 + #5): derive recipe_status from the recipe's
+    # FULL ab_trials corpus, NOT this single verdict. The old `win -> promote / else ->
+    # demote` rule (a) demoted a candidate to TERMINAL shadow on a single `inconclusive`
+    # (no information) trial with no re-enqueue path, burying recipes the inline harness
+    # simply could not differentiate, and (b) let the LAST trial overwrite the status,
+    # defeating the per-trial variance-aware LCB (a trailing noisy loss demoted a
+    # net-winning recipe). judge_recipe aggregates win/loss over the whole corpus so an
+    # inconclusive never demotes and a later win can revive a shadow.
+    transition = judge_recipe(conn, **key)
+    # Journal the ACTUAL lifecycle transition (Tier B2, advisory), not the raw per-trial
+    # verdict: with corpus aggregation a single loss on a net-winning recipe leaves the
+    # status unchanged, so journaling 'demote' there would mislead operator forensics
+    # (2026-06-24 review L1-02). None -> no transition -> no journal action.
+    if transition == "promoted":
+        _journal_verdict(key, "win", tid)
+    elif transition == "shadow":
+        _journal_verdict(key, "loss", tid)
     return tid
+
+
+def judge_recipe(conn, *, symptom_id: str, design_class: str, platform: str,
+                 strategy: str) -> str | None:
+    """Set recipe_status from the recipe's FULL ab_trials corpus (2026-06-24 bug #5),
+    not the last trial. Only DECISIVE verdicts (win/loss) count — an `inconclusive`
+    carries no information (bug #2: never demotes, never buries). Net-positive decisive
+    evidence promotes; net-negative demotes to shadow; no/tied decisive evidence leaves
+    the status unchanged (a candidate stays candidate and is re-planned next drain; a
+    later win can flip a shadow back to promoted). Each trial's verdict is itself already
+    k-repeat LCB-gated (Win 2), so the trials ARE the samples — don't double-count repeats.
+    Returns the new status, or None when left unchanged."""
+    key = dict(symptom_id=symptom_id, design_class=design_class,
+               platform=platform, strategy=strategy)
+    rows = conn.execute(
+        "SELECT verdict FROM ab_trials WHERE symptom_id=? AND design_class=? AND "
+        "platform=? AND strategy=?",
+        (symptom_id, design_class, platform, strategy)).fetchall()
+    wins = sum(1 for (v,) in rows if v == "win")
+    losses = sum(1 for (v,) in rows if v == "loss")
+    if wins > losses:
+        recipe_lifecycle.promote(conn, evidence=f"ab_corpus:{wins}w{losses}l", **key)
+        return "promoted"
+    if losses > wins:
+        recipe_lifecycle.demote(conn, reason=f"ab_corpus:{wins}w{losses}l", **key)
+        return "shadow"
+    return None                                # no decisive evidence or a tie
 
 
 def auto_demote_on_regression(conn, *, key: dict, window: int = 2) -> bool:

@@ -22,6 +22,7 @@ import hashlib
 import json
 import os
 import shutil
+import re
 import subprocess
 import sys
 import threading
@@ -31,7 +32,13 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parents[2]
 KNOWLEDGE = SKILL_ROOT / "knowledge"
 FLOW = SKILL_ROOT / "scripts" / "flow"
+REPORTS = SKILL_ROOT / "scripts" / "reports"
 sys.path.insert(0, str(KNOWLEDGE))
+# scripts/reports/ is needed in PRODUCTION for `import fmax_model` in the Fmax pre-pass.
+# conftest.py injects this under pytest, which previously MASKED its absence here — the
+# fmax-drain SDC stamp was silently inert off-test (2026-06-24 review L4-01, the same
+# fixture!=production class as the 22f3e67 fmax pilot bug). Set it at module load.
+sys.path.insert(0, str(REPORTS))
 
 STATES = ("pending", "flow", "signoff", "fixing", "clean", "escalated",
           "abandoned")
@@ -104,17 +111,47 @@ def _run_flow(entry: dict) -> int:
          entry["project_path"], entry["platform"]]).returncode
 
 
-def _symptom_check(conn, symptom_id: str | None) -> str:
-    """Map a symptom_id to the fix_signoff.sh --check value. A backend-stage abort
-    (check=orfs_stage) is fixed BEFORE signoff via --check <stage> (only 'route'
-    has a v1 fixer); everything else is a post-route signoff fix (--check both)."""
+# Recipe strategy classes the inline A/B harness drives through a DEDICATED divergent
+# arm runner instead of the DRC/LVS signoff path. Keyed by STRATEGY (not symptom)
+# because the timing symptom_ids are not always present in the symptoms table
+# (period_relax's 913f3c.../c9aba8... are absent), so a symptom-only lookup mis-routes
+# them to 'both' -> identical inert arms that can never promote and burn a full
+# multi-hour signoff per repeat (2026-06-24 audit, bugs #1/#3).
+_PLACE_STRATEGIES = frozenset({"core_util_relief"})
+_TIMING_STRATEGIES = frozenset({"period_relax", "utilization_reduce",
+                                "backend_aware_synth_retune"})
+# Strategies whose A/B arms CANNOT diverge (no real edit applied) — never plan a trial
+# for them (it can only ever be inconclusive). lvs_resolve_unknown re-inspects with
+# config_edits={} (a no-op), so arm A and arm B do byte-identical work.
+_NONDIVERGENT_STRATEGIES = frozenset({"lvs_resolve_unknown"})
+# A candidate that accrues this many inconclusive trials with ZERO decisive verdicts is
+# not learnable from the available subjects/harness — stop re-planning it (bug #1)
+# WITHOUT demoting it (bug #2: inconclusive is non-terminal); surface it once instead.
+AB_INCONCLUSIVE_MAX = 3
+
+
+def _symptom_check(conn, symptom_id: str | None, strategy: str | None = None) -> str:
+    """Map a candidate recipe to the fix-loop --check value that makes its A/B arms do
+    DIFFERENT work. Route by STRATEGY first (robust to a missing symptoms row): a place
+    recipe -> 'place' (apply-then-flow; FLW-0024 die-resize is a backend abort like
+    route), a timing recipe -> 'timing' (fix_signoff --check timing reflow). Then fall
+    back to the symptom table: a route/place backend abort (check=orfs_stage) -> that
+    stage; everything else (DRC/LVS/antenna/density) -> 'both' (the DRC/LVS signoff
+    fixer, where R2G_FIX_EXCLUDE/RANK_FIRST already diverge the arms)."""
+    if strategy in _PLACE_STRATEGIES:
+        return "place"
+    if strategy in _TIMING_STRATEGIES:
+        return "timing"
     if not symptom_id:
         return "both"
     row = conn.execute(
         "SELECT check_type, class FROM symptoms WHERE symptom_id=?",
         (symptom_id,)).fetchone() if conn is not None else None
-    if row and row[0] == "orfs_stage" and row[1] == "route":
-        return "route"
+    if row and row[0] == "orfs_stage":
+        if row[1] == "route":
+            return "route"
+        if row[1] == "place":
+            return "place"
     return "both"
 
 
@@ -133,9 +170,19 @@ def _run_fix(entry: dict) -> int:
 
 
 def _apply_recipe_strategy(entry: dict) -> None:
-    """Apply the recipe's backend strategy (e.g. route_relief) into the arm's
-    config.mk BEFORE its single flow run. Seeds a fail route.json so diagnose can
-    resolve the route strategy (no backend exists yet to extract from)."""
+    """Apply the recipe's backend strategy into the arm's config.mk BEFORE its single
+    flow run (arm B of an apply-then-flow backend-abort trial).
+
+    - PLACE (core_util_relief): rewrite the fixed DIE_AREA -> CORE_UTILIZATION so ORFS
+      auto-sizes a die that FITS the cells (the FLW-0024 recovery), making arm B's place
+      stage complete where arm A's (control) place aborts. Direct edit — core_util_relief
+      is NOT a diagnose strategy (2026-06-24 audit, bug #3-place).
+    - ROUTE (route_relief / route strategies): seed a fail route.json so diagnose can
+      resolve the route strategy (no backend exists yet to extract from), then apply it.
+    """
+    if entry.get("strategy") in _PLACE_STRATEGIES:
+        _resize_to_core_util(entry)
+        return
     proj = Path(entry["project_path"])
     reports = proj / "reports"
     reports.mkdir(parents=True, exist_ok=True)
@@ -148,14 +195,17 @@ def _apply_recipe_strategy(entry: dict) -> None:
 
 
 def _process_backend_ab_arm(led: "Ledger", entry: dict, conn) -> None:
-    """A/B arm for a BACKEND-ABORT symptom (orfs_stage/route). Unlike a signoff
-    arm (flow succeeds -> signoff fails -> fix), a route arm's 'fix' IS a config
-    retune + re-route. So we apply the strategy up-front on arm B and run the flow
-    EXACTLY ONCE per arm: arm A is the control (default util -> route times out ->
-    is_success False); arm B is route_relief (lower util -> route completes ->
-    is_success True). judge -> win. One flow per arm (no wasted control-config
-    route on arm B)."""
+    """A/B arm for a BACKEND-ABORT symptom (orfs_stage/route OR orfs_stage/place).
+    Unlike a signoff arm (flow succeeds -> signoff fails -> fix), a backend-abort arm's
+    'fix' IS a config retune that lets a previously-aborting stage complete. So we apply
+    the strategy up-front on arm B and run the flow EXACTLY ONCE per arm:
+      - ROUTE: arm A control (default util -> route times out -> is_success False);
+        arm B route_relief (lower util -> route completes -> True).
+      - PLACE: arm A control (FLW-0024 die too small -> place aborts -> False);
+        arm B core_util_relief (DIE_AREA->CORE_UTILIZATION -> place completes -> True).
+    judge -> win. One flow per arm (no wasted control-config run on arm B)."""
     design = entry["design"]
+    check = entry.get("check", "route")
     if entry.get("arm") == "B":
         led.set_state(design, "fixing")
         _apply_recipe_strategy(entry)
@@ -166,13 +216,13 @@ def _process_backend_ab_arm(led: "Ledger", entry: dict, conn) -> None:
         # stage ran): do NOT ingest a junk orfs_status='unknown' row; escalate so
         # the dropped arm is visible and judge_finished_trials records no false
         # verdict for the trial (2026-06-23 audit, bug #3).
-        led.set_state(design, "escalated", reason="route_arm_incomplete")
+        led.set_state(design, "escalated", reason=f"{check}_arm_incomplete")
         return
     _ingest(entry)
     # The judge reads the ingested run's is_success; rc only drives the ledger
     # terminal state (clean vs escalated) so judge_finished_trials picks it up.
     led.set_state(design, "clean" if rc == 0 else "escalated",
-                  **({} if rc == 0 else {"reason": "route_arm_failed"}))
+                  **({} if rc == 0 else {"reason": f"{check}_arm_failed"}))
 
 
 def _journal_ab_launch(entry: dict) -> None:
@@ -388,10 +438,13 @@ def process_one(led: Ledger, entry: dict, conn, *,
     design = entry["design"]
     if entry.get("kind") == "ab_arm":
         _journal_ab_launch(entry)           # Tier B1 — advisory decision telemetry
-    # Backend-abort A/B arm (route congestion): the flow itself fails at the
-    # backend stage, so the signoff "flow -> fix" model does not apply — route it
-    # through the dedicated apply-then-flow arm runner. (2026-06-17 route-relief.)
-    if entry.get("kind") == "ab_arm" and entry.get("check") == "route":
+    # Backend-abort A/B arm (route congestion OR place FLW-0024 die-too-small): the
+    # flow itself fails at the backend stage, so the signoff "flow -> fix" model does
+    # not apply — route it through the dedicated apply-then-flow arm runner. A TIMING
+    # arm (check='timing') instead reaches a completed flow whose timing MISSES, so it
+    # falls through to the normal signoff path below and is fixed via fix_signoff
+    # --check timing (2026-06-17 route-relief; 2026-06-24 place + timing close).
+    if entry.get("kind") == "ab_arm" and entry.get("check") in ("route", "place"):
         _process_backend_ab_arm(led, entry, conn)
         return None
     led.set_state(design, "flow")
@@ -482,6 +535,31 @@ def process_one(led: Ledger, entry: dict, conn, *,
     return "escalated"
 
 
+def _ab_coverage_gap(conn, key: dict) -> bool:
+    """True if an A/B trial for this candidate cannot produce a decisive verdict and so
+    must NOT be planned (2026-06-24 audit, bugs #1/#2). Two cases: (1) the strategy
+    applies no real edit (_NONDIVERGENT_STRATEGIES) so its arms are byte-identical;
+    (2) the candidate has already accrued >= AB_INCONCLUSIVE_MAX inconclusive trials
+    with ZERO decisive (win/loss) verdicts — the harness cannot differentiate it on the
+    available subjects, so re-planning only burns compute. Neither case demotes the
+    recipe (inconclusive is non-terminal); the caller surfaces an escalation instead."""
+    if key.get("strategy") in _NONDIVERGENT_STRATEGIES:
+        return True
+    if conn is None:
+        return False
+    try:
+        rows = conn.execute(
+            "SELECT verdict FROM ab_trials WHERE symptom_id=? AND design_class=? AND "
+            "platform=? AND strategy=?",
+            (key["symptom_id"], key["design_class"], key["platform"],
+             key["strategy"])).fetchall()
+    except Exception:
+        return False
+    incon = sum(1 for (v,) in rows if v == "inconclusive")
+    decisive = sum(1 for (v,) in rows if v in ("win", "loss"))
+    return decisive == 0 and incon >= AB_INCONCLUSIVE_MAX
+
+
 def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                              repeats: int | None = None) -> int:
     """For every pending candidate recipe, plan an A/B trial and append its arm
@@ -498,6 +576,27 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
     k = repeats if repeats is not None else ab_runner.ab_repeats()
     appended = 0
     for key in recipe_lifecycle.pending_candidates(conn):
+        # Coverage guard (2026-06-24 audit, bugs #1/#2): never plan a trial whose arms
+        # CANNOT diverge — a no-op strategy (lvs_resolve_unknown), or a candidate that has
+        # already accrued AB_INCONCLUSIVE_MAX inconclusive trials with ZERO decisive
+        # verdicts (the harness/subjects cannot differentiate it). Planning it only burns
+        # a full multi-hour signoff per repeat for a guaranteed-inconclusive verdict (the
+        # period_relax stall). Skip + surface an idempotent escalation; NEVER demote
+        # (inconclusive is non-terminal — a later corpus change can make it learnable).
+        if _ab_coverage_gap(conn, key):
+            print(f"[loop] A/B candidate skipped (coverage gap): {key['strategy']} "
+                  f"symptom={key['symptom_id']} {key['design_class']}/{key['platform']}")
+            if conn is not None:
+                try:
+                    import escalations
+                    escalations.open_escalation(
+                        conn, design=f"recipe:{key['strategy']}:{key['symptom_id']}",
+                        project_path="", run_id=None, reason="ab_coverage_gap",
+                        symptom_id=key["symptom_id"],
+                        notes=json.dumps(key, sort_keys=True))
+                except Exception:               # surfacing must never break the drain
+                    pass
+            continue
         trial = ab_runner.plan_trial(conn, **key, n_designs=n_ab_designs)
         if trial is None:
             # Gate B is unreachable for this candidate: fewer than n_ab_designs
@@ -525,9 +624,10 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                     pass
             continue
         strat8 = key["strategy"][:8]
-        # Resolve the fix-loop check from the symptom ONCE per trial so a route
-        # (backend-abort) arm is driven by the dedicated apply-then-flow runner.
-        check = _symptom_check(conn, key.get("symptom_id"))
+        # Resolve the fix-loop check from the strategy + symptom ONCE per trial so a
+        # route/place backend-abort arm is driven by the dedicated apply-then-flow
+        # runner and a timing arm by fix_signoff --check timing (2026-06-24).
+        check = _symptom_check(conn, key.get("symptom_id"), key.get("strategy"))
         for d in trial["designs"]:
             for arm in ("A", "B"):
                 for r in range(k):
@@ -570,22 +670,36 @@ def learn_cycle(led: Ledger, conn, *, prev_heur: dict | None,
     return heur
 
 
-def _arm_metric(conn, project_path: str) -> dict | None:
+def _arm_metric(conn, project_path: str, *, timing: bool = False) -> dict | None:
     """Latest run row for an arm dir -> the metric dict judge_repeated consumes
     (or None if the arm produced no judgeable run). outcome_score is captured as
-    an ORDERING HINT only — the verdict never depends on it (invariant H4)."""
+    an ORDERING HINT only — the verdict never depends on it (invariant H4).
+
+    For a TIMING arm, success is whether the design CLOSED timing (timing_tier in
+    {clean,minor} or WNS>=0), NOT the generic is_success: a timing miss does NOT abort
+    the flow, so both arms reach a GDS and knowledge_db.is_success reads true for both
+    -> every timing trial would be a tie -> inconclusive forever (2026-06-24 audit,
+    bug #3-timing). The timing signal is the ingested wns_ns/timing_tier."""
     import knowledge_db
     row = conn.execute(
         "SELECT total_elapsed_s, fix_iters_to_clean, drc_status, lvs_status, "
-        "rcx_status, lvs_mismatch_class, orfs_status, outcome_score "
+        "rcx_status, lvs_mismatch_class, orfs_status, outcome_score, "
+        "wns_ns, timing_tier "
         "FROM runs WHERE project_path=? ORDER BY ingested_at DESC LIMIT 1",
         (project_path,)).fetchone()
     if row is None:
         return None
     cols = ("total_elapsed_s", "fix_iters_to_clean", "drc_status", "lvs_status",
-            "rcx_status", "lvs_mismatch_class", "orfs_status", "outcome_score")
+            "rcx_status", "lvs_mismatch_class", "orfs_status", "outcome_score",
+            "wns_ns", "timing_tier")
     r = dict(zip(cols, row))
-    return {"is_success": knowledge_db.is_success(r),
+    if timing:
+        wns = r.get("wns_ns")
+        success = (r.get("timing_tier") in ("clean", "minor")
+                   or (wns is not None and wns >= 0))
+    else:
+        success = knowledge_db.is_success(r)
+    return {"is_success": bool(success),
             "wall_s": r["total_elapsed_s"], "fix_iters": r["fix_iters_to_clean"],
             "outcome_score": r["outcome_score"]}
 
@@ -604,7 +718,11 @@ def judge_finished_trials(led: Ledger, conn) -> None:
     for (base, strat), pair in by_pair.items():
         if set(pair) != {"A", "B"}:
             continue
-        samples = {arm: [_arm_metric(conn, e["project_path"]) for e in entries]
+        # A timing recipe's arms both reach a GDS (a timing miss never aborts the flow),
+        # so judge on the ingested timing verdict (wns_ns/timing_tier), not is_success.
+        timing = strat in _TIMING_STRATEGIES
+        samples = {arm: [_arm_metric(conn, e["project_path"], timing=timing)
+                         for e in entries]
                    for arm, entries in pair.items()}
         # If an arm produced NO judgeable run at all (incomplete clone/flow — see
         # _process_backend_ab_arm, bug #3), record NO verdict: a trial that never
@@ -732,6 +850,107 @@ def _run_parallel(led: Ledger, conn, prev_heur: dict | None, *,
     judge_finished_trials(led, conn)
 
 
+# ---- Fmax pre-pass (search the best closing period for each design) ----------
+
+def _sdc_clk_period(sdc_text: str) -> float | None:
+    """The current `set clk_period <N>` value in an SDC, or None (mirrors fmax_model's
+    _CLK_RE). Used to make the Fmax stamp IDEMPOTENT on the SDC content itself."""
+    m = re.search(r"set\s+clk_period\s+([0-9.]+)", sdc_text)
+    return float(m.group(1)) if m else None
+
+
+def _fmax_one(entry: dict, *, place_fast: bool = True) -> float | str | None:
+    """Characterize ONE design's best closing period (the proxy Fmax search) and STAMP
+    its constraints/constraint.sdc with the winner so the campaign flow signs off at the
+    fastest clock that still closes. Shells out to the tested fmax_search.py CLI (which
+    writes reports/fmax_search.json — the user-facing Fmax deliverable). Returns the
+    winner period (float) ONLY when the SDC was actually stamped to it, the search status
+    string on a non-ok/clockless result, or None when nothing usable was produced.
+
+    Idempotency keys on the SDC STAMP, not report existence (2026-06-24 review L4-02):
+    fmax_search.py always writes the report even when the canonical SDC was never stamped
+    (it only rewrites ephemeral variant SDCs), so re-running compares the SDC's current
+    clk_period to the winner and re-stamps on drift — never short-circuits on the report
+    alone. The stamp is then VERIFIED (re-read) so a silent no-op returns None and is not
+    counted (defends against the L4-01 import-mask). `import fmax_model` resolves because
+    scripts/reports/ is on sys.path at module load (not swallowed in a bare except)."""
+    import fmax_model                            # scripts/reports on sys.path (module load)
+    proj = Path(entry["project_path"])
+    rep = proj / "reports" / "fmax_search.json"
+    sdc = proj / "constraints" / "constraint.sdc"
+
+    def _report_period():
+        try:
+            data = json.loads(rep.read_text())
+        except Exception:
+            return None, None
+        if data.get("status") != "ok" or "winner" not in data:
+            return None, data.get("status")
+        return (data.get("winner") or {}).get("period"), "ok"
+
+    period, status = _report_period()
+    # Already stamped to this winner? -> truly idempotent (no re-run, no rewrite).
+    if isinstance(period, (int, float)) and sdc.exists():
+        cur = _sdc_clk_period(sdc.read_text())
+        if cur is not None and abs(cur - period) < 1e-9:
+            return period
+    # No usable winner on disk yet -> run the proxy search (bounded cost; no --verify).
+    if not isinstance(period, (int, float)):
+        fmax = _script("R2G_LOOP_FMAX", REPORTS / "fmax_search.py")
+        cmd = [sys.executable, fmax, str(proj), entry.get("platform", "nangate45")]
+        if place_fast:
+            cmd.append("--place-fast")
+        subprocess.run(cmd)
+        period, status = _report_period()
+        if not isinstance(period, (int, float)):
+            return status                       # no_clock_constraint / inconclusive / None
+    # Stamp the canonical SDC. A one-time PRE-flow config change (not a re-derivation of
+    # history): the subsequent flow regenerates ppa.json -> a fresh run_id, so multi-run
+    # history holds. config.mk already pins SDC_FILE at this constraint.sdc.
+    if not sdc.exists():
+        return status
+    try:
+        new = fmax_model.rewrite_clk_period(sdc.read_text(), period)
+    except ValueError:                          # clockless SDC: leave as-is, honest
+        return status
+    sdc.write_text(new, encoding="utf-8")
+    # VERIFY the stamp landed — a no-op must be uncountable (review L4-01/L4-02).
+    cur = _sdc_clk_period(sdc.read_text())
+    return period if (cur is not None and abs(cur - period) < 1e-9) else None
+
+
+def fmax_drain(ledger_path: Path, *, platform: str | None = None,
+               max_workers: int = 1, place_fast: bool = True,
+               max_designs: int | None = None) -> int:
+    """Run the proxy Fmax search for the pending NORMAL designs in the ledger and stamp
+    each one's SDC with its best closing period (so the subsequent `run` flows + signs
+    off at Fmax). Cross-design parallelism via max_workers (the per-design search is
+    sequential ~7-8 place probes; cap max_workers*NUM_CORES <= host cores per the
+    parallel-ORFS hard rule). `max_designs` bounds the batch to the first N pending — the
+    SAME prefix `run --max N` picks — so a driver can interleave Fmax + signoff per wave
+    (fast feedback) rather than Fmax-ing all pending up front. Returns the count of
+    designs that got a real period."""
+    led = Ledger(ledger_path)
+    pending = [e for e in led.pending() if e.get("kind", "normal") == "normal"]
+    if platform:
+        pending = [e for e in pending if e.get("platform") == platform]
+    if max_designs:
+        pending = pending[:max_designs]
+
+    def _one(e: dict):
+        try:
+            return _fmax_one(e, place_fast=place_fast)
+        except Exception:                       # one degenerate design must not abort all
+            return None
+
+    if max_workers > 1 and len(pending) > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            results = list(ex.map(_one, pending))
+    else:
+        results = [_one(e) for e in pending]
+    return sum(1 for r in results if isinstance(r, (int, float)))
+
+
 def run(ledger_path: Path, *, max_designs: int | None = None,
         max_workers: int = 1) -> None:
     import knowledge_db
@@ -781,6 +1000,20 @@ def main(argv=None) -> int:
     pd.add_argument("--n-designs", type=int, default=2)
     pd.add_argument("--workers", type=int, default=None,
                     help="run this many arm flows concurrently (default R2G_AB_WORKERS or 1)")
+    pf = sub.add_parser("fmax-drain",
+                        help="proxy-search the best closing period for each pending "
+                             "design + stamp its SDC (run BEFORE `run`)")
+    pf.add_argument("--ledger", required=True, type=Path)
+    pf.add_argument("--platform", default=None,
+                    help="only Fmax-search designs on this platform")
+    pf.add_argument("--max", type=int, default=None,
+                    help="bound to the first N pending (the same prefix `run --max N` "
+                         "picks) so Fmax + signoff can interleave per wave")
+    pf.add_argument("--workers", type=int, default=1,
+                    help="characterize this many designs concurrently (each search is "
+                         "sequential; cap workers*NUM_CORES <= host cores)")
+    pf.add_argument("--no-place-fast", action="store_true",
+                    help="disable PLACE_FAST in the place probes (slower, more accurate)")
     pe = sub.add_parser("ab-enqueue",
                         help="force a (grandfathered) recipe into A/B candidate")
     pe.add_argument("--symptom", required=True)
@@ -807,6 +1040,11 @@ def main(argv=None) -> int:
         n = ab_drain(args.ledger, n_ab_designs=args.n_designs,
                      max_workers=args.workers)
         print(f"ab_drain judged {n} trial(s)")
+    elif args.cmd == "fmax-drain":
+        n = fmax_drain(args.ledger, platform=args.platform,
+                       max_workers=args.workers, max_designs=args.max,
+                       place_fast=not args.no_place_fast)
+        print(f"fmax_drain characterized {n} design(s)")
     elif args.cmd == "ab-enqueue":
         import knowledge_db
         import recipe_lifecycle

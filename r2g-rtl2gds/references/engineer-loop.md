@@ -351,9 +351,14 @@ Returns a list of all known strategies for this symptom, each with its `recipe_s
   Shadow and candidate recipes are logged but inert in arm-A and live runs. An absent
   `recipe_status` row means the recipe is grandfathered as promoted (pre-loop recipes that
   were already validated by live use).
-- Promotion is evidence-only: an A/B win on the configured minimum matched-design count is
-  required. No human gate, no agent shortcut.
-- Auto-demotion fires on 2 consecutive regression verdicts; the recipe returns to shadow.
+- Promotion is evidence-only: `recipe_status` is a function of the recipe's FULL `ab_trials`
+  corpus (`ab_runner.judge_recipe`, net wins>losses), not the last trial. No human gate, no agent
+  shortcut. An `inconclusive` verdict carries no information — it never demotes (2026-06-24).
+- Demotion to `shadow` is corpus-driven (net losses>wins). `ab_runner.auto_demote_on_regression`
+  (a live-regression self-heal keyed on `fix_events` verdict='regression') is a PROVIDED HELPER but
+  is NOT auto-wired into the drain, and the ingester does not currently emit a 'regression' verdict —
+  so the live demotion path is `judge_recipe`'s A/B-corpus aggregation, not regression counting
+  (2026-06-24 audit, #6).
 - Agent-authored strategies stage as `shadow` and must win their A/B before promoting.
   They receive **no special trust** — same lifecycle as machine-learned re-rankings (decision 7).
 - `failure-patterns.md` is authored prose, never auto-merged — the agent tier writes it

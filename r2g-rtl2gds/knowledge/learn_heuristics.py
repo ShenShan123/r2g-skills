@@ -35,12 +35,6 @@ MIN_SUCCESSFUL = 3
 _is_success = knowledge_db.is_success
 
 
-def _fetch_rows(conn) -> list[dict]:
-    cur = conn.execute("SELECT * FROM runs")
-    cols = [c[0] for c in cur.description]
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
-
-
 def _fetch_learnable_rows(conn) -> list[dict]:
     """Runs eligible for LEARNING — excludes held-out r2g-bench runs (Win 3). The
     filter lives ONLY here (the learning read); ingest still writes failure_events

@@ -90,7 +90,6 @@ def test_learn_excludes_bench_from_family_medians(tmp_path, monkeypatch):
                               drc={"status": "clean"}, lvs={"status": "clean"},
                               family_dir=f"normal_{i}"), conn)
     conn.close()
-    rows = learn_heuristics._fetch_rows(knowledge_db.connect(tmp_path / "k.sqlite"))
     # add a bench run that, if counted, would skew the corpus — must be excluded.
     conn = knowledge_db.connect(tmp_path / "k.sqlite")
     ingest_run.ingest(_mk(tmp_path, "benchy", stage_log=_CLEAN_LOG,

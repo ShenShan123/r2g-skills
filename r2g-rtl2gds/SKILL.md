@@ -138,8 +138,9 @@ signoff. Pass `--verify` to confirm the winner with one full flow (and feed the
 result back to tighten the model). This does NOT replace the step-8 `check_timing`
 gate, which still runs on the final backend.
 
-Knobs: `--max-parallel`, `--probe-timeout`, `--place-fast` (whole-search
-conservative lower bound for hang-prone designs), `--keep-variants`.
+Knobs: `--probe-timeout`, `--place-fast` (whole-search conservative lower bound
+for hang-prone designs), `--keep-variants`. The search is sequential; cross-design
+parallelism is achieved by running multiple invocations concurrently.
 
 ### 6. Run Signoff Checks (DRC, LVS, RCX)
 
