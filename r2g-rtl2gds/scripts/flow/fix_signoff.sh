@@ -122,6 +122,11 @@ fi
 EXTRACT_DRC="${R2G_EXTRACT_DRC:-$EXTRACT_DIR/extract_drc.py}"
 EXTRACT_LVS="${R2G_EXTRACT_LVS:-$EXTRACT_DIR/extract_lvs.py}"
 EXTRACT_ROUTE="${R2G_EXTRACT_ROUTE:-$EXTRACT_DIR/extract_route.py}"
+# timing baseline needs reports/ppa.json, which NO flow step emits (run_orfs writes only
+# the backend; extract_ppa.py must be invoked explicitly). Without this, check_timing
+# finds no ppa.json -> tier 'unknown' -> diagnose picks NO strategy -> period_relax never
+# applies and the timing arm can't diverge (2026-06-25 live-verify root cause).
+EXTRACT_PPA="${R2G_EXTRACT_PPA:-$EXTRACT_DIR/extract_ppa.py}"
 DIAGNOSE="${R2G_DIAGNOSE:-$REPORTS_DIR_SCRIPTS/diagnose_signoff_fix.py}"
 # timing has no separate signoff tool: the run_orfs reflow IS the check, and
 # check_timing.py re-measures it from the reflowed reports/ppa.json (analogous to
@@ -158,7 +163,13 @@ _run_extract() {  # $1 = drc|lvs|route|timing
   # into reports/timing_check.json (the rerun IS the check). It exits 1 when timing
   # is not met (moderate/severe/unconstrained) and 2 on missing data; neither is a
   # script error during fixing, so swallow the rc and let _count read the tier.
-  if [[ "$1" == "timing" ]]; then "$CHECK_TIMING" "$PROJECT_DIR" >/dev/null 2>&1 || true; return 0; fi
+  if [[ "$1" == "timing" ]]; then
+    # Regenerate reports/ppa.json from the (reflowed) backend FIRST — check_timing reads
+    # it and no other step emits it. Then re-measure timing into timing_check.json.
+    "$EXTRACT_PPA" "$PROJECT_DIR" "$REPORTS/ppa.json" >/dev/null 2>&1 || true
+    "$CHECK_TIMING" "$PROJECT_DIR" >/dev/null 2>&1 || true
+    return 0
+  fi
   local script
   case "$1" in
     drc)   script="$EXTRACT_DRC";;

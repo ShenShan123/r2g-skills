@@ -130,6 +130,35 @@ def test_timing_check_accepted_and_armB_drives_severe_to_clean(tmp_path):
     assert "--rank-first period_relax" in args, args
 
 
+def test_timing_baseline_regenerates_ppa_via_extract(tmp_path):
+    """2026-06-25 ROOT CAUSE: no flow step emits reports/ppa.json (run_orfs writes only
+    the backend), so the timing baseline MUST invoke extract_ppa to regenerate it before
+    check_timing — else check_timing sees no data, tier='unknown', diagnose picks NO
+    strategy, and period_relax never applies (the live timing arm couldn't diverge). The
+    seeded-ppa tests above masked this. Lock that extract_ppa is invoked to (re)create
+    reports/ppa.json under the timing check."""
+    proj = _seed_project(tmp_path, name="proj_noppa")
+    (proj / "reports" / "ppa.json").unlink()          # production state: ppa.json ABSENT
+    argfile = tmp_path / "diag_args_x.txt"
+    bindir = _common_stubs(tmp_path, argfile=argfile)
+    callfile = tmp_path / "extract_ppa_calls.txt"
+    # extract_ppa stub: record the call + regenerate reports/ppa.json from the "backend".
+    _stub(bindir / "extract_ppa.py",
+          f'echo "$@" >> "{callfile}"\n'
+          'python3 -c "import json,sys; open(sys.argv[2],\'w\').write('
+          'json.dumps({\'summary\':{\'timing\':{\'setup_wns\':-1.2}}}))" "$@"')
+    r = subprocess.run(
+        ["bash", str(FIX_SIGNOFF), str(proj), "nangate45", "--check", "timing",
+         "--max-iters", "2"],
+        env=_env(bindir, tmp_path, R2G_FIX_RANK_FIRST="period_relax",
+                 R2G_EXTRACT_PPA=str(bindir / "extract_ppa.py")), check=False,
+        capture_output=True, text=True)
+    assert callfile.exists(), (r.stdout, r.stderr)    # extract_ppa WAS invoked
+    assert str(proj / "reports" / "ppa.json") in callfile.read_text()   # -> reports/ppa.json
+    assert (proj / "reports" / "ppa.json").exists()   # regenerated
+    assert r.returncode == 0, (r.stdout, r.stderr)
+
+
 def test_timing_gate_exit2_when_tier_stays_severe(tmp_path):
     """When the reflow does NOT close timing (tier stays severe), the clean-gate is
     fail-closed: exit 2 (residual)."""
