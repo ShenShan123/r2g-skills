@@ -328,6 +328,23 @@ def _is_flw0024(entry: dict) -> bool:
         return False
 
 
+def _is_ppl0024(entry: dict) -> bool:
+    """True if the newest backend run aborted with PPL-0024 (IO pins exceed the die's
+    available perimeter pin positions): the die PERIMETER is too small for the design's
+    pin count -- recoverable by ENLARGING the die (a bigger core has a longer perimeter
+    with more pin slots), DISTINCT from FLW-0024 (place density / die too small for the
+    CELLS). Read from the run's flow.log. (2026-06-26 audit: ~35 PPL-0024 place aborts
+    were mislabeled 'unseen_crash' because the loop had no pin-aware die handler.)"""
+    proj = Path(entry["project_path"])
+    logs = sorted(proj.glob("backend/RUN_*/flow.log"))
+    if not logs:
+        return False
+    try:
+        return "PPL-0024" in logs[-1].read_text(errors="ignore")
+    except OSError:
+        return False
+
+
 def _config_knob(line: str) -> str:
     """'export DIE_AREA  = 0 0 50 50' -> 'DIE_AREA' (no regex dependency)."""
     parts = line.split()
@@ -398,6 +415,21 @@ def _lower_core_util(entry: dict, *, factor: float = _CORE_UTIL_RELIEF_FACTOR,
     if changed:
         cfg.write_text("\n".join(out) + "\n")
     return changed
+
+
+_PIN_RELIEF_UTIL = 15   # PPL-0024 recovery: convert a fixed die to this (low) util -> big die
+
+
+def _relieve_pin_overflow(entry: dict) -> bool:
+    """PPL-0024 recovery: ENLARGE the die so its perimeter exposes more IO-pin positions.
+    A subject that already auto-sizes -> LOWER its CORE_UTILIZATION (bigger core, longer
+    perimeter); a FIXED-DIE_AREA subject -> convert to a low CORE_UTILIZATION so ORFS
+    auto-sizes a larger die. Same core_util_relief lever as the place class, applied for
+    the pin-perimeter cause (proven 2026-06-26: iscas85_c2670 PPL-0024 placed at util 15
+    where the control aborted at 25). Returns True iff it changed the config."""
+    if _lower_core_util(entry):
+        return True
+    return _resize_to_core_util(entry, util=_PIN_RELIEF_UTIL)
 
 
 def _record_resize_fix(entry: dict, *, cleared: bool) -> None:
@@ -523,6 +555,19 @@ def process_one(led: Ledger, entry: dict, conn, *,
             _record_resize_fix(entry, cleared=(result == "clean"))
             _ingest(entry)
             return result
+        # PPL-0024 (IO pins exceed die perimeter): the die is too small in PERIMETER for
+        # the design's pin count -- recover by ENLARGING the die (lower CORE_UTILIZATION ->
+        # bigger core -> more perimeter pin slots), the same core_util_relief lever applied
+        # for the pin cause. This was the DOMINANT mislabeled-'unseen_crash' class (2026-06-26
+        # audit: ~35 designs). Retry the flow ONCE; the resize is recorded as a learnable fix.
+        if (not _resized and entry.get("kind") != "ab_arm"
+                and _fail_stage(entry) == "place" and _is_ppl0024(entry)
+                and _relieve_pin_overflow(entry)):
+            led.set_state(design, "fixing")
+            result = process_one(led, entry, conn, _resized=True)
+            _record_resize_fix(entry, cleared=(result == "clean"))
+            _ingest(entry)
+            return result
         reason, notes = "unseen_crash", f"run_orfs rc={rc}"
         if entry.get("kind") != "ab_arm" and _fail_stage(entry) == "route":
             led.set_state(design, "fixing")
@@ -547,6 +592,15 @@ def process_one(led: Ledger, entry: dict, conn, *,
             reason = "place_density_residual"
             notes = (f"FLW-0024 place-density overflow (rc={rc}); auto-resize to "
                      f"CORE_UTILIZATION did not clear")
+        elif (entry.get("kind") != "ab_arm" and _fail_stage(entry) == "place"
+              and _is_ppl0024(entry)):
+            # PPL-0024 that survived die enlargement (pin count exceeds even the enlarged
+            # perimeter -- a genuinely pin-dense design): an honest residual, NOT an unseen
+            # crash. A proper pin-aware floorplan (CORE_ASPECT_RATIO / explicit pad ring) is
+            # the next lever; labeled honestly so the operator runbook can route it.
+            reason = "pin_overflow_residual"
+            notes = (f"PPL-0024 IO pins exceed die perimeter (rc={rc}); die enlargement "
+                     f"(lower CORE_UTILIZATION) did not create enough pin positions")
         led.set_state(design, "escalated", reason=reason)
         if conn is not None:
             import escalations

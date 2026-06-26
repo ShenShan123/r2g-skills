@@ -114,3 +114,19 @@ each wave, so it picks up Fixes 1+3 on its next `run`/`fmax-drain` phase with no
 place-failing designs in the 152 pending (many PPL-0024) will now produce **divergent place
 trials → honest nangate45 promotions** organically. The reconciled antenna/core_util
 candidates that are genuinely non-divergent stay coverage-gapped (honest, not re-promoted).
+
+## Update (same session) — PPL-0024 pin-aware recovery + escalation reconcile
+
+Implemented the top escalation follow-up. The dominant mislabeled-`unseen_crash` class is
+**PPL-0024 (IO pins exceed die perimeter)** — `process_one` had no handler (only FLW-0024).
+Added `_is_ppl0024()` + `_relieve_pin_overflow()` (enlarge the die: lower `CORE_UTILIZATION`
+for an auto-sized subject, or convert a fixed `DIE_AREA` to util=15) wired into `process_one`
+parallel to the FLW-0024 recovery, with an honest `pin_overflow_residual` label when the pin
+gap survives enlargement. TDD (3 tests) **also caught a latent crash**: `place_density_residual`
+(emitted since 2026-06-23) was never in `escalations.REASONS`, so the rare FLW-0024 residual
+would have raised `ValueError`; both residual reasons are now registered. Identified **40**
+open `unseen_crash` escalations that are really PPL-0024 and re-enqueued them via
+`tools/reenqueue_ppl0024.py` (drained their stale rows) so the campaign re-attempts them with
+the new handler. Mechanism proven in the Fix-1 c2670 trial (util 25→15 → place→GDS). Remaining
+escalation follow-ups (synth `#include`, `SYNTH_MEMORY_MAX_BITS`, 33 dir-gone orphans) + the
+ingest `is_success` relaxed path stay open.

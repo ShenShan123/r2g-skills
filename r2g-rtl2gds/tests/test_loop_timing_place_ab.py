@@ -132,6 +132,69 @@ def test_lower_core_util_floor_is_honest_noop(tmp_path):
     assert engineer_loop._lower_core_util({"project_path": str(proj)}) is False
 
 
+# ── PPL-0024 pin-overflow recovery (2026-06-26: the dominant mislabeled 'unseen_crash') ──
+
+def test_is_ppl0024_reads_flow_log(tmp_path):
+    proj = tmp_path / "p"
+    run = proj / "backend" / "RUN_X"
+    run.mkdir(parents=True)
+    (run / "flow.log").write_text("[ERROR PPL-0024] Number of IO pins (373) exceeds ...\n")
+    assert engineer_loop._is_ppl0024({"project_path": str(proj)}) is True
+    (run / "flow.log").write_text("[ERROR GRT-0001] something else\n")
+    assert engineer_loop._is_ppl0024({"project_path": str(proj)}) is False
+
+
+def test_relieve_pin_overflow_enlarges_die(tmp_path):
+    """Auto-sized subject -> lower util (bigger core -> more perimeter); fixed-die subject
+    -> convert to a low CORE_UTILIZATION so ORFS auto-sizes a larger die."""
+    auto = tmp_path / "auto"
+    (auto / "constraints").mkdir(parents=True)
+    (auto / "constraints" / "config.mk").write_text("export CORE_UTILIZATION = 25\n")
+    assert engineer_loop._relieve_pin_overflow({"project_path": str(auto)}) is True
+    import re
+    m = re.search(r"CORE_UTILIZATION\s*=\s*(\d+)",
+                  (auto / "constraints" / "config.mk").read_text())
+    assert m and int(m.group(1)) < 25                       # die enlarged
+
+    fixed = tmp_path / "fixed"
+    (fixed / "constraints").mkdir(parents=True)
+    (fixed / "constraints" / "config.mk").write_text(
+        "export DIE_AREA = 0 0 50 50\nexport CORE_AREA = 5 5 45 45\n")
+    assert engineer_loop._relieve_pin_overflow({"project_path": str(fixed)}) is True
+    cfg = (fixed / "constraints" / "config.mk").read_text()
+    assert "CORE_UTILIZATION" in cfg and "DIE_AREA" not in cfg
+
+
+def test_process_one_recovers_ppl0024_then_honest_residual(tmp_path, monkeypatch):
+    """A PPL-0024 place abort routes through pin-overflow recovery: util is lowered (bigger
+    die) and the flow retried. If it STILL aborts, it escalates as the honest
+    'pin_overflow_residual' -- NEVER 'unseen_crash' (the mislabel the 2026-06-26 audit found)."""
+    import knowledge_db
+    conn = knowledge_db.connect(tmp_path / "k.sqlite")
+    knowledge_db.ensure_schema(conn)
+    proj = tmp_path / "pinheavy"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = d\nexport CORE_UTILIZATION = 25\n", encoding="utf-8")
+    led = engineer_loop.Ledger(tmp_path / "l.jsonl")
+    led.add({"design": "pinheavy", "project_path": str(proj), "platform": "nangate45"})
+    monkeypatch.setattr(engineer_loop, "_run_flow", lambda e: 1)         # always aborts
+    monkeypatch.setattr(engineer_loop, "_ingest", lambda e: None)
+    monkeypatch.setattr(engineer_loop, "_fail_stage", lambda e: "place")
+    monkeypatch.setattr(engineer_loop, "_is_flw0024", lambda e: False)
+    monkeypatch.setattr(engineer_loop, "_is_ppl0024", lambda e: True)
+    monkeypatch.setattr(engineer_loop, "_record_resize_fix", lambda e, *, cleared: None)
+    out = engineer_loop.process_one(led, led.pending()[0], conn=conn)
+    assert out == "escalated"
+    import re
+    m = re.search(r"CORE_UTILIZATION\s*=\s*(\d+)",
+                  (proj / "constraints" / "config.mk").read_text())
+    assert m and int(m.group(1)) < 25                       # relief WAS applied
+    reason = conn.execute(
+        "SELECT reason FROM escalations WHERE design='pinheavy'").fetchone()
+    assert reason and reason[0] == "pin_overflow_residual"   # honest label, not unseen_crash
+
+
 # ── timing arm: drives fix_signoff --check timing ────────────────────────────
 
 def test_timing_arm_drives_check_timing(tmp_path, monkeypatch):

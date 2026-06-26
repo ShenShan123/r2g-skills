@@ -31,7 +31,14 @@ REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            # inconclusive trials with zero decisive verdicts. Planning it only burns a
            # full signoff per repeat for a guaranteed-inconclusive verdict. Skipped +
            # surfaced, left 'candidate' (inconclusive is non-terminal) (2026-06-24).
-           "ab_coverage_gap")
+           "ab_coverage_gap",
+           # A place backend abort that survived the auto die-resize retry: FLW-0024
+           # (cells exceed even the auto-sized die) or PPL-0024 (IO pins exceed even the
+           # enlarged perimeter). KNOWN, recipe-backed residuals — NOT unseen crashes; the
+           # die lever (CORE_UTILIZATION) is exhausted (place_density_residual was emitted
+           # by process_one since 2026-06-23 but never registered here — a latent crash on
+           # the rare FLW-0024 residual; pin_overflow_residual added 2026-06-26).
+           "place_density_residual", "pin_overflow_residual")
 
 
 def _now() -> str:
