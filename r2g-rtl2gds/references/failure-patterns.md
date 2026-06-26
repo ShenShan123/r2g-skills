@@ -1976,3 +1976,45 @@ returned `characterized 0 design(s)` and never stamped (the same class as the 22
 bug). Guard: a feature invoked as a real CLI needs a **subprocess** regression test that does NOT
 inherit conftest's path help, and a no-op must be **uncountable** (stamp-then-verify), never swallowed
 in a bare `except` that returns a truthy-looking status.
+
+### Sub-variant: arms RUN but don't APPLY different work; a stale verdict freezes a fake promotion (2026-06-26)
+
+The 2026-06-24 fixes made the arms RUN and routed classes correctly, but a resumed nangate45 campaign
+STILL showed the alarm — `ab_trials` grows, `promoted(nangate45)` **flat at 1 for 8 waves**. Two
+deeper causes (both fixed + the first PROVEN end-to-end):
+
+**Pattern 11 — the PLACE apply-then-flow arm was a no-op on already-auto-sized subjects.**
+`_apply_recipe_strategy`(place)→`_resize_to_core_util` only converts a FIXED `DIE_AREA`→
+`CORE_UTILIZATION=30` (the FLW-0024 recovery) and **returns False (no edit) when `CORE_UTILIZATION` is
+already set** — the COMMON case on a resumed corpus. So arm B (relief) kept the subject's util,
+byte-identical to arm A (control) → every `core_util_relief` trial `inconclusive` forever → the place
+class never promoted. Verify on disk: `abA_core_uti/config.mk` and `abB_core_uti/config.mk` BOTH
+`CORE_UTILIZATION = 20`, and the two arms' `runs` rows share `orfs_status`+`outcome_score`. FIX:
+`_lower_core_util()` — when the subject already auto-sizes, arm B LOWERS the existing util (`*0.6`,
+floor 10) so a bigger die diverges from the control; the fixed-die case still converts. PROVEN on
+`iscas85_c2670` (PPL-0024 place fail at util=25): arm A aborts at place, arm B (util=15) signs off to a
+full GDS → judge `WIN`. NB: the dominant nangate45 "place fail" is **PPL-0024 (IO pins exceed die
+perimeter)**; lowering util enlarges the perimeter, so `core_util_relief` empirically recovers
+small-pin-gap PPL-0024 (a proper pin-aware die handler is the cleaner fix — open follow-up).
+
+**Pattern 12 — `judge_recipe` counts FROZEN verdict strings, so a since-fixed judge change is not
+retroactive.** A trial's `verdict` is written once; when `judge_repeated` was hardened (Pattern 10),
+the OLD noise win/loss verdicts stayed in the corpus and `judge_recipe` kept aggregating them → a
+nangate45 antenna recipe sat `promoted` on `ab_corpus:3w1l` that the current judge scores `0w0l` (all
+four trials re-judge to `inconclusive`: identical `is_success`+`outcome_score`, differ only on
+`wall_s`). `judge_recipe` ALSO can't self-heal — a net-zero corpus returns None (status unchanged), so
+the fake promotion never reverts. FIX: `knowledge/reconcile_ab_verdicts.py` re-derives each verdict
+from its stored `metrics_json` via the CURRENT `judge_repeated` (only for trials with full A/B samples
+— never invents from missing data), re-runs `judge_recipe`, and EXPLICITLY reverts a now-evidence-less
+`ab_corpus` promotion/demotion to `candidate`. Run it after ANY `judge_repeated` change. On the real
+store: 9 noise verdicts→inconclusive, 6 recipes→candidate; real wins (`density_relief` sky130hd
+`2w0l`) and real negative evidence (route_relief shadows) preserved; honesty 5/5 green. **Alarm
+refinement:** a `promoted` row whose backing `ab_trials.metrics_json` shows IDENTICAL
+`is_success`+`outcome_score` across arms is a FAKE promotion even though `ab_trials` and `promoted`
+both look populated — re-judge from metrics, never trust the frozen `verdict` column.
+
+**Fmax honesty corollary (2026-06-26).** `_fmax_one` stamped `{period:g}` (6 sig-figs) but verified
+the stamp with `abs(cur-period) < 1e-9` against the FULL-precision winner → a correct stamp like
+`0.69180034→'0.6918'` failed by 3.5e-7 and returned None (uncounted; ~28% of stamps). FIX:
+`_period_stamped()` compares the read-back against the `%g`-formatted value (same "a no-op must be
+uncountable, but a real op must COUNT" coin as the fixture≠production trap above).

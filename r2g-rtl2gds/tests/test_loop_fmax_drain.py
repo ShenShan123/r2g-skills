@@ -44,6 +44,30 @@ def test_fmax_drain_stamps_winner_period(tmp_path, monkeypatch):
     assert json.loads((p / "reports" / "fmax_search.json").read_text())["status"] == "ok"
 
 
+def test_period_stamped_is_g_format_aware():
+    """fmax bug #1 (2026-06-26): rewrite_clk_period writes {period:g} (6 sig-figs), so the
+    read-back equals the %g value, not the full-precision winner. _period_stamped compares
+    against the formatted value -> a correct stamp counts; a wrong/absent one does not."""
+    assert engineer_loop._period_stamped(0.6918, 0.69180034521) is True
+    assert engineer_loop._period_stamped(2.5, 2.5) is True
+    assert engineer_loop._period_stamped(2.5, 0.69180034521) is False
+    assert engineer_loop._period_stamped(None, 1.0) is False
+
+
+def test_fmax_drain_counts_high_precision_stamp(tmp_path, monkeypatch):
+    """The end-to-end regression: a high-precision winner (0.69180034521 -> '0.6918') was
+    falsely rejected by the old full-precision `abs(cur-period)<1e-9` verify, so the drain
+    returned None and UNDER-COUNTED ~28% of correct stamps. It must now count + stamp it."""
+    p = _mk_design(tmp_path, "hp", clk=10.0)
+    monkeypatch.setenv("R2G_LOOP_FMAX", str(_stub_fmax(tmp_path, "ok", 0.69180034521)))
+    led = engineer_loop.Ledger(tmp_path / "l.jsonl")
+    led.add({"design": "hp", "project_path": str(p), "platform": "nangate45"})
+    n = engineer_loop.fmax_drain(tmp_path / "l.jsonl")
+    assert n == 1                                            # counted, not a false no-op
+    sdc = (p / "constraints" / "constraint.sdc").read_text()
+    assert "set clk_period 0.6918" in sdc and "set clk_period 10" not in sdc
+
+
 def test_fmax_drain_degenerate_design_does_not_abort(tmp_path, monkeypatch):
     """A no_clock_constraint (degenerate) design is skipped honestly and does NOT count
     nor crash the drain (fmax bug #9)."""

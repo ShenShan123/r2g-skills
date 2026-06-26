@@ -173,15 +173,23 @@ def _apply_recipe_strategy(entry: dict) -> None:
     """Apply the recipe's backend strategy into the arm's config.mk BEFORE its single
     flow run (arm B of an apply-then-flow backend-abort trial).
 
-    - PLACE (core_util_relief): rewrite the fixed DIE_AREA -> CORE_UTILIZATION so ORFS
-      auto-sizes a die that FITS the cells (the FLW-0024 recovery), making arm B's place
-      stage complete where arm A's (control) place aborts. Direct edit — core_util_relief
-      is NOT a diagnose strategy (2026-06-24 audit, bug #3-place).
+    - PLACE (core_util_relief): two sub-cases. A FIXED-die subject (DIE_AREA, no
+      CORE_UTILIZATION) is converted DIE_AREA -> CORE_UTILIZATION=30 so ORFS auto-sizes a
+      die that FITS the cells (the FLW-0024 recovery). A subject that ALREADY auto-sizes
+      (CORE_UTILIZATION=N) gets its util LOWERED (more whitespace -> easier place/route).
+      Either way arm B's place stage diverges from arm A's (control) untouched config.
+      Direct edit — core_util_relief is NOT a diagnose strategy (2026-06-24 audit, bug
+      #3-place; the already-auto-sized lowering was the no-op fixed 2026-06-26).
     - ROUTE (route_relief / route strategies): seed a fail route.json so diagnose can
       resolve the route strategy (no backend exists yet to extract from), then apply it.
     """
     if entry.get("strategy") in _PLACE_STRATEGIES:
-        _resize_to_core_util(entry)
+        # Fixed-die subject -> convert to CORE_UTILIZATION=30 (FLW-0024). A subject that
+        # already auto-sizes makes _resize_to_core_util a no-op; there relief = LOWER the
+        # existing util so arm B diverges from the arm-A control (the no-op that stalled
+        # the place class -- every trial inconclusive, both arms util=20; 2026-06-26).
+        if not _resize_to_core_util(entry):
+            _lower_core_util(entry)
         return
     proj = Path(entry["project_path"])
     reports = proj / "reports"
@@ -352,6 +360,44 @@ def _resize_to_core_util(entry: dict, util: int = 30) -> bool:
     kept.append(f"export CORE_UTILIZATION = {util}")
     cfg.write_text("\n".join(kept) + "\n")
     return True
+
+
+# core_util_relief on a subject that ALREADY auto-sizes: how far arm B lowers util.
+_CORE_UTIL_RELIEF_FACTOR = 0.6   # lower an existing CORE_UTILIZATION=N to ~60% of N
+_CORE_UTIL_FLOOR = 10            # never below 10% (the die is already huge; lower is moot)
+
+
+def _lower_core_util(entry: dict, *, factor: float = _CORE_UTIL_RELIEF_FACTOR,
+                     floor: int = _CORE_UTIL_FLOOR) -> bool:
+    """core_util_relief on a subject that ALREADY auto-sizes (config has CORE_UTILIZATION
+    =N): LOWER N (more whitespace -> easier place/route) so arm B genuinely diverges from
+    the arm-A control. _resize_to_core_util only converts a FIXED DIE_AREA and no-ops when
+    CORE_UTILIZATION is already present -- which left every core_util_relief A/B arm
+    byte-identical to its control (both util=20) -> inconclusive forever -> the place class
+    never promoted and the loop stalled (2026-06-26 audit; the place A/B arm was deferred
+    at the 2026-06-24 review, see _record_resize_fix scope note). Returns True iff it
+    lowered the value; False when there is no CORE_UTILIZATION line or it is already at/
+    below the floor (genuinely no relief left -> an honest non-divergent inconclusive)."""
+    cfg = Path(entry["project_path"]) / "constraints" / "config.mk"
+    if not cfg.is_file():
+        return False
+    out, changed = [], False
+    for ln in cfg.read_text().splitlines():
+        if _config_knob(ln) == "CORE_UTILIZATION":
+            try:
+                cur = float(ln.split("=", 1)[1].strip())
+            except (IndexError, ValueError):
+                out.append(ln)
+                continue
+            new = max(floor, int(round(cur * factor)))
+            if new < cur:
+                out.append(f"export CORE_UTILIZATION = {new}")
+                changed = True
+                continue
+        out.append(ln)
+    if changed:
+        cfg.write_text("\n".join(out) + "\n")
+    return changed
 
 
 def _record_resize_fix(entry: dict, *, cleared: bool) -> None:
@@ -907,6 +953,18 @@ def _sdc_clk_period(sdc_text: str) -> float | None:
     return float(m.group(1)) if m else None
 
 
+def _period_stamped(cur: float | None, period: float) -> bool:
+    """True iff the SDC's clk_period equals `period` AS STAMPED. rewrite_clk_period writes
+    `{period:g}` (6 sig-figs), so the old full-precision compare with a 1e-9 tolerance
+    falsely rejected ~28% of CORRECT stamps (2026-06-26 audit, fmax bug #1): a winner of
+    0.69180034 is written as '0.6918', read back as 0.6918, and |0.6918-0.69180034|=3.5e-7
+    > 1e-9 -> the stamp returned None and was counted as a no-op (under-reporting the
+    characterized count + defeating the anti-no-op honesty defense). Compare against the
+    %g-formatted value so a real stamp counts; a genuine no-op (clockless / wrong value)
+    still returns False."""
+    return cur is not None and cur == float(f"{period:g}")
+
+
 def _fmax_one(entry: dict, *, place_fast: bool = True) -> float | str | None:
     """Characterize ONE design's best closing period (the proxy Fmax search) and STAMP
     its constraints/constraint.sdc with the winner so the campaign flow signs off at the
@@ -940,7 +998,7 @@ def _fmax_one(entry: dict, *, place_fast: bool = True) -> float | str | None:
     # Already stamped to this winner? -> truly idempotent (no re-run, no rewrite).
     if isinstance(period, (int, float)) and sdc.exists():
         cur = _sdc_clk_period(sdc.read_text())
-        if cur is not None and abs(cur - period) < 1e-9:
+        if _period_stamped(cur, period):
             return period
     # No usable winner on disk yet -> run the proxy search (bounded cost; no --verify).
     if not isinstance(period, (int, float)):
@@ -962,9 +1020,11 @@ def _fmax_one(entry: dict, *, place_fast: bool = True) -> float | str | None:
     except ValueError:                          # clockless SDC: leave as-is, honest
         return status
     sdc.write_text(new, encoding="utf-8")
-    # VERIFY the stamp landed — a no-op must be uncountable (review L4-01/L4-02).
+    # VERIFY the stamp landed — a no-op must be uncountable (review L4-01/L4-02). Compare
+    # against the %g-formatted value (rewrite_clk_period's format), not full precision, so
+    # a correct stamp is not falsely rejected by float rounding (2026-06-26 audit).
     cur = _sdc_clk_period(sdc.read_text())
-    return period if (cur is not None and abs(cur - period) < 1e-9) else None
+    return period if _period_stamped(cur, period) else None
 
 
 def fmax_drain(ledger_path: Path, *, platform: str | None = None,

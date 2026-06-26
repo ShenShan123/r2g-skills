@@ -104,6 +104,34 @@ def test_apply_recipe_strategy_place_resizes(tmp_path):
     assert "CORE_UTILIZATION" in cfg and "DIE_AREA" not in cfg
 
 
+def test_apply_recipe_strategy_place_lowers_existing_util(tmp_path):
+    """2026-06-26: when the subject ALREADY auto-sizes (CORE_UTILIZATION set), the
+    core_util_relief place arm must LOWER it so arm B diverges from the arm-A control.
+    Before this, _resize_to_core_util no-opped (CORE_UTILIZATION already present), so both
+    arms ran util=20 -> identical outcome -> inconclusive forever -> the place class never
+    promoted and the loop stalled (promo_ng flat for 8 waves)."""
+    import re
+    proj = tmp_path / "d_abB"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = d\nexport CORE_UTILIZATION = 20\n", encoding="utf-8")
+    engineer_loop._apply_recipe_strategy(
+        {"project_path": str(proj), "strategy": "core_util_relief"})
+    cfg = (proj / "constraints" / "config.mk").read_text()
+    m = re.search(r"CORE_UTILIZATION\s*=\s*(\d+)", cfg)
+    assert m and int(m.group(1)) < 20      # arm B lowered util -> diverges from control
+
+
+def test_lower_core_util_floor_is_honest_noop(tmp_path):
+    """At/below the floor there is no relief left: _lower_core_util returns False (an
+    honest non-divergent arm) instead of dropping util into the basement."""
+    proj = tmp_path / "d_abB"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text(
+        f"export CORE_UTILIZATION = {engineer_loop._CORE_UTIL_FLOOR}\n", encoding="utf-8")
+    assert engineer_loop._lower_core_util({"project_path": str(proj)}) is False
+
+
 # ── timing arm: drives fix_signoff --check timing ────────────────────────────
 
 def test_timing_arm_drives_check_timing(tmp_path, monkeypatch):
