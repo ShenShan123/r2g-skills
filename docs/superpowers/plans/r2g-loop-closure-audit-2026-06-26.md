@@ -21,6 +21,29 @@ causes, both now fixed + proven:
 A 6-finder × 2-skeptic adversarial audit (56 agents) independently confirmed both and found
 10 more confirmed bugs; the cheap honesty one (Fmax `%g` stamp-verify) is also fixed.
 
+## Commits + final verified state (2026-06-27)
+
+Two commits on `main`:
+- **`931932a`** `fix(skill): close the place A/B class + reconcile stale-noise promotions`
+  — Fixes 1+2+3 below (`_lower_core_util`, `knowledge/reconcile_ab_verdicts.py`, `_period_stamped`).
+- **`44b0b64`** `fix(skill): pin-aware PPL-0024 place recovery (+ register residual escalation reasons)`
+  — the PPL-0024 handler (`_is_ppl0024`/`_relieve_pin_overflow`), the missing
+  `place_density_residual`/`pin_overflow_residual` REASONS fix, and `tools/reenqueue_ppl0024.py`.
+
+Verified after both commits + the reconcile + the re-enqueue:
+- **honesty.py 5/5 GREEN.** `promoted`: nangate45 **0** (HONEST — was a fake 1), sky130hd **1**
+  (real `density_relief` `2w0l`) + 2 shadow (real) + candidates.
+- **pytest 787 passed**, 13 skipped, 2 errors — the 2 are the pre-existing `techlib`
+  regen-baseline failures only (unrelated; the live campaign contends for the ORFS toolchain
+  the regen subprocess needs).
+- **Re-enqueue APPLIED:** 40 PPL-0024 `unseen_crash` escalations → `drained`; campaign ledger
+  normal-pending 152 → **172**; the campaign (PID 2425382, wave 9, fixed code live) re-attempts
+  them with the pin-aware handler (the re-enqueued rows sit early in the ledger, so the small
+  pin-gap ones — e.g. `iscas85_c2670`, gap 5 — recover within the next wave or two).
+- `knowledge.sqlite` + `heuristics.json` LEFT uncommitted by design — live campaign state;
+  committing a SQLite file mid-write risks a torn page, so it is committed at a campaign
+  checkpoint, not here.
+
 ## Diagnosis (the data)
 
 `waves.log` (8 waves, 2026-06-24→26): `promo_ng=1` flat; `ab_trials` 39→41; `cand` 13→21
