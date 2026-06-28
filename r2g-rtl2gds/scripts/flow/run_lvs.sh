@@ -222,9 +222,14 @@ for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   fi
 
   # Crash signature in the ORFS 6_lvs.log or the tee'd run log -> retry for a survivor.
-  if grep -qa "Signal number" "$LOGS_DIR/6_lvs.log" /tmp/lvs_run_$$.log 2>/dev/null; then
+  # Besides the sort_circuit SIGSEGV heisenbug ("Signal number"), also retry the KLayout
+  # INTERNAL lvsdb-writer crash that fires AFTER a successful compare ('net2id.end ()' /
+  # 'Internal error ... Executable::cleanup'); it emits a spurious "Netlists don't match"
+  # and was misread as a hard lvs=fail on an actually-matching design (2026-06-28 PicoRV32).
+  if grep -qaE "Signal number|net2id\.end|dbLayoutVsSchematicWriter|Internal error.*Executable::cleanup" \
+        "$LOGS_DIR/6_lvs.log" /tmp/lvs_run_$$.log 2>/dev/null; then
     if [[ $_attempt -lt $LVS_CRASH_RETRIES ]]; then
-      echo "LVS crashed (KLayout sort_circuit SIGSEGV heisenbug); retry $_attempt/$LVS_CRASH_RETRIES ..." >&2
+      echo "LVS crashed (KLayout comparer/lvsdb-writer heisenbug); retry $_attempt/$LVS_CRASH_RETRIES ..." >&2
       continue
     fi
     echo "ERROR: LVS still crashing after $LVS_CRASH_RETRIES attempts (KLayout 0.30.7 comparer bug, no newer build on host)" >&2

@@ -139,7 +139,12 @@ def classify_lvs_mismatch(lvs_dir: Path) -> dict:
 
 _CRASH_RE = re.compile(
     r"signal number:\s*\d+|segmentation|sigsegv|sort_circuit|gen_log_entry"
-    r"|ruby_run_node|klayout_crash\.log",
+    r"|ruby_run_node|klayout_crash\.log"
+    # KLayout INTERNAL error in a POST-compare step (writing the LVS database) — a
+    # retry-fixable tool crash, NOT a layout mismatch: the lvsdb-writer net2id assert
+    # ('dbLayoutVsSchematicWriter.cc ... i != net2id.end ()') / 'Internal error ... in
+    # Executable::cleanup'. Misread as lvs=fail before (2026-06-28 PicoRV32_..._fifo_basic).
+    r"|dblayoutvsschematicwriter|net2id\.end|internal error.*executable::cleanup",
     re.I,
 )
 
@@ -327,7 +332,18 @@ def main():
 
     result_reason: str | None = None
 
-    if log_status == 'mismatch':
+    # The COMPARE matched (lvsdb text_match_found, 0 mismatches) but KLayout crashed in a
+    # POST-compare step (lvsdb writer net2id assert / 'Internal error ... cleanup'), which
+    # emits a spurious "Netlists don't match" -> log_status 'mismatch'. That is a
+    # retry-fixable TOOL crash, NOT a real mismatch: classify it 'crash' (the run_lvs.sh
+    # LVS_CRASH_RETRIES path produces a clean survivor), never a false 'fail' (2026-06-28
+    # PicoRV32_Based_SoC_fifo_basic was a false lvs=fail exactly this way).
+    lvsdb_matched = (lvsdb_result.get('raw_status') == 'text_match_found'
+                     and mismatch_count == 0)
+    if log_status == 'mismatch' and lvsdb_matched and log_info.get('crash'):
+        status = 'crash'
+        result_reason = 'lvs_writer_crash_after_match'
+    elif log_status == 'mismatch':
         status = 'fail'
     elif log_status == 'match' and mismatch_count <= 0:
         status = 'clean'

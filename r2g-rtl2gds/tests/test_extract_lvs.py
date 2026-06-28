@@ -406,3 +406,37 @@ def test_netgen_takes_precedence_when_fresher(tmp_path):
     result = _run_script(proj, out)
     assert result["status"] == "clean", result
     assert result.get("tool") == "netgen", result
+
+
+# ---------------------------------------------------------------------------
+# match-then-writer-crash: a false lvs=fail (2026-06-28 PicoRV32_Based_SoC_fifo_basic)
+# ---------------------------------------------------------------------------
+_MATCH_THEN_WRITER_CRASH_6LVS = """\
+KLayout 0.30.7
+"extract_devices" in: FreePDK45.lylvs:123
+VERBOSE-LVS: circuit dump raised: NoMethodError: undefined method `device_count' for #<RBA::Circuit:0x0>
+ERROR: src/db/db/dbLayoutVsSchematicWriter.cc,151,i != net2id.end ()
+ERROR: RuntimeError: Internal error: dbLayoutVsSchematicWriter.cc:151 i != net2id.end () was not true in LayoutVsSchematic::write in Executable::cleanup
+ERROR : Netlists don't match
+"""
+
+
+def test_match_then_writer_crash_is_crash_not_false_fail(tmp_path):
+    """lvsdb says match (text_match_found, 0 mismatches) but KLayout crashes in the POST-compare
+    lvsdb WRITER (net2id assert), emitting a spurious 'Netlists don't match'. Must classify
+    'crash' (retry-fixable), NOT a false 'fail' (PicoRV32_Based_SoC_fifo_basic, 2026-06-28)."""
+    proj = _make_project(tmp_path, log_6_lvs=_MATCH_THEN_WRITER_CRASH_6LVS, lvsdb=True)
+    res = _run_script(proj, tmp_path / "lvs.json")
+    assert res["status"] == "crash", res
+    assert res["reason"] == "lvs_writer_crash_after_match", res
+    assert res["log_info"].get("crash") is True, res
+
+
+def test_real_mismatch_still_fails(tmp_path):
+    """Regression: a genuine mismatch (lvsdb mismatch + 'don't match', NO internal crash) must
+    still be 'fail' -- the writer-crash guard must not swallow real LVS failures."""
+    proj = _make_project(tmp_path, log_6_lvs="ERROR : Netlists don't match\n")
+    (proj / "lvs" / "6_lvs.lvsdb").write_text(
+        "#%lvsdb-klayout\nmismatch found\n", encoding="utf-8")
+    res = _run_script(proj, tmp_path / "lvs.json")
+    assert res["status"] == "fail", res
