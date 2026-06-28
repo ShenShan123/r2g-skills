@@ -185,3 +185,38 @@ non-divergent antenna inconclusives left gapped); all 4 place keys now re-planna
 54→41, honesty 5/5. `recipe_status` was NOT hand-edited — the next drain decides the promotion.
 Also retuned `pool.env` (24/4/20 → 32/3/32) for CPU utilization. **VERIFY next iteration:**
 `promoted(nangate45)` > 0 after the campaign's next A/B drain. NOT committed (working tree).
+
+---
+
+## 2026-06-28 follow-up — synth-abort misclassification (commit `329c450`)
+
+**Verified the loop is closed + promoting** (waves.log): `promo_ng` climbs 1→2→7 across waves
+11–13, `ab_trials` 46→86, honesty 5/5 every wave — the 2026-06-26/27 fixes landed and the loop
+learns from real divergent arms. The wave-13 jump is the incremental-judge + perimeter-die +
+stale-judged fixes on real data.
+
+**New bug found (escalation honesty):** `engineer_loop.process_one` collapsed EVERY early synth
+abort into `reason='unseen_crash'`. Auditing the 79 nangate45 `unseen_crash` escalations by their
+real synth-log signature: **48** missing-`include header (incomplete upstream RTL), **15** inferred
+RAM > Yosys 4096-bit `SYNTH_MEMORY_MAX_BITS` (a MECHANICAL, documented fix), **10** yosys synth
+timeout, **~6** genuine downstream crashes. So ~73/79 were deterministic, log-diagnosable synth
+conditions misfiled as mysteries — blinding the learner and skipping a documented recovery.
+
+**FIX (`engineer_loop.py`, commit `329c450`):** mirror the FLW-0024/PPL-0024 recover-then-retry
+pattern — `_is_synth_memory_cap` + `_raise_synth_memory_cap` (cap→65536 in config.mk) re-flows
+ONCE and records a learnable `fix_log` row (`strategy='synth_memory_relax'`, check `orfs_stage`,
+class `synth`) → ingest projects it into a Tier-3 recipe. The rest escalate under honest reasons
+`synth_memory_residual` / `incomplete_missing_header` / `synth_timeout`, never `unseen_crash`.
+**PROVEN** on `verilog_axis_axis_fifo`: default-cap synth aborts in 3 s (status 2); cap=65536 →
+synth passes (status 0, 211 s, `1_2_yosys.v` produced). Suite **814 passed** (2 pre-existing
+techlib golden errors from the `design_cases` wipe). Docs: `failure-patterns.md` (both synth
+buckets). **Superseded invariant:** "an early synth abort escalates `unseen_crash`" is now
+"the synth log is parsed → memory-cap recovers in-loop, the rest get honest reasons."
+
+**Resume action:** re-queued a 4-design pilot (smallest memcap FIFOs) to the live ledger
+(`state=pending`) so the next wave recovers them with the fixed loop + learns the recipe.
+Also retuned `pool.env` 32/3/32 → 24/2/24 (finesim co-tenant returned, ~42 procs; good-neighbour
+per the hard rule, NUM_CORES halved not WORKERS). **VERIFY next iteration:** the 4 re-queued
+designs reach `clean`/honest-residual, a `synth_memory_relax` fix_event/recipe appears in
+knowledge, and `promoted(nangate45)` keeps growing. Tail-blocking (barrier waves vs a slow
+large-design tail) remains the open structural follow-up.
