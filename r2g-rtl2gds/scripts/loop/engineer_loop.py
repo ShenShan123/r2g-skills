@@ -184,10 +184,18 @@ def _apply_recipe_strategy(entry: dict) -> None:
       resolve the route strategy (no backend exists yet to extract from), then apply it.
     """
     if entry.get("strategy") in _PLACE_STRATEGIES:
-        # Fixed-die subject -> convert to CORE_UTILIZATION=30 (FLW-0024). A subject that
-        # already auto-sizes makes _resize_to_core_util a no-op; there relief = LOWER the
-        # existing util so arm B diverges from the arm-A control (the no-op that stalled
-        # the place class -- every trial inconclusive, both arms util=20; 2026-06-26).
+        # A PPL-0024 (pin-overflow) subject needs a PERIMETER-targeted die, not the cell-area
+        # util lever -- a fixed 0.6x util step undershoots cell-tiny/pin-huge designs so arm B
+        # PPL-0024-aborts just like arm A and the trial ties inconclusive forever (2026-06-27).
+        # The arm copy excludes the subject's backend, so the required perimeter is passed in
+        # from the SUBJECT at plan time (pin_perimeter_target); when present, hit it directly.
+        tgt = entry.get("pin_perimeter_target")
+        if tgt and _relieve_pin_overflow(entry, perimeter_target=tgt):
+            return
+        # FLW-0024 / generic place relief: a fixed-die subject -> CORE_UTILIZATION=30 (the
+        # FLW-0024 recovery). A subject that already auto-sizes makes _resize_to_core_util a
+        # no-op; there relief = LOWER the existing util so arm B diverges from the arm-A
+        # control (the no-op that stalled the place class -- both arms util=20; 2026-06-26).
         if not _resize_to_core_util(entry):
             _lower_core_util(entry)
         return
@@ -417,16 +425,67 @@ def _lower_core_util(entry: dict, *, factor: float = _CORE_UTIL_RELIEF_FACTOR,
     return changed
 
 
-_PIN_RELIEF_UTIL = 15   # PPL-0024 recovery: convert a fixed die to this (low) util -> big die
+_PIN_RELIEF_UTIL = 15   # PPL-0024 FALLBACK: convert a fixed die to this (low) util -> big die
+_PIN_PERIMETER_MARGIN = 1.15   # size the CORE ~15% past the placer's stated requirement
+_PIN_CORE_INSET_UM = 10        # core-to-die margin (um) for the IO ring
 
 
-def _relieve_pin_overflow(entry: dict) -> bool:
+def _ppl0024_required_perimeter(project_path: str) -> float | None:
+    """The die perimeter (um) the IO placer DEMANDS, parsed from the newest backend run's
+    PPL-0024 message ('... Increase the die perimeter from <A>um to <B>um.'). Returns <B>
+    (the REQUIRED perimeter) or None when there is no PPL-0024 / it is unparseable.
+
+    This is the placer's OWN stated target -- the only lever that actually closes a
+    pin-overflow abort, because CORE_UTILIZATION sizes the die from CELL AREA, not pin
+    perimeter: a fixed fractional util step undershoots a cell-tiny/pin-huge design (a
+    0.6x step grew ip_demux's perimeter 490->631um where the placer demanded 851.76um),
+    so BOTH A/B arms PPL-0024-abort identically -> the trial ties inconclusive forever and
+    no nangate45 recipe ever promotes (2026-06-27 audit)."""
+    proj = Path(project_path)
+    logs = sorted(proj.glob("backend/RUN_*/flow.log"))
+    if not logs:
+        return None
+    try:
+        txt = logs[-1].read_text(errors="ignore")
+    except OSError:
+        return None
+    m = re.search(r"die perimeter from [\d.]+\s*um to ([\d.]+)\s*um", txt)
+    return float(m.group(1)) if m else None
+
+
+def _set_explicit_die(project_path: str, perimeter_um: float | None) -> bool:
+    """Rewrite constraints/config.mk to a SQUARE DIE_AREA/CORE_AREA whose CORE perimeter
+    MEETS `perimeter_um` (x _PIN_PERIMETER_MARGIN), dropping any CORE_UTILIZATION/DIE_AREA/
+    CORE_AREA so the IO placer gets exactly the perimeter it demanded. The perimeter-targeted
+    inverse of _resize_to_core_util (which targets cell area). Never touches
+    PLACE_DENSITY_LB_ADDON (the hard-rule floor). Returns True iff it changed the file; a
+    no-op (False) when there is no config.mk or no positive perimeter to hit."""
+    cfg = Path(project_path) / "constraints" / "config.mk"
+    if not cfg.is_file() or not (perimeter_um and perimeter_um > 0):
+        return False
+    inset = _PIN_CORE_INSET_UM
+    core_side = int(perimeter_um / 4.0 * _PIN_PERIMETER_MARGIN) + 1   # ceil -> core meets target
+    die_side = core_side + 2 * inset
+    keep = [ln for ln in cfg.read_text().splitlines()
+            if _config_knob(ln) not in ("CORE_UTILIZATION", "DIE_AREA", "CORE_AREA")]
+    keep.append(f"export DIE_AREA = 0 0 {die_side} {die_side}")
+    keep.append(f"export CORE_AREA = {inset} {inset} {inset + core_side} {inset + core_side}")
+    cfg.write_text("\n".join(keep) + "\n")
+    return True
+
+
+def _relieve_pin_overflow(entry: dict, *, perimeter_target: float | None = None) -> bool:
     """PPL-0024 recovery: ENLARGE the die so its perimeter exposes more IO-pin positions.
-    A subject that already auto-sizes -> LOWER its CORE_UTILIZATION (bigger core, longer
-    perimeter); a FIXED-DIE_AREA subject -> convert to a low CORE_UTILIZATION so ORFS
-    auto-sizes a larger die. Same core_util_relief lever as the place class, applied for
-    the pin-perimeter cause (proven 2026-06-26: iscas85_c2670 PPL-0024 placed at util 15
-    where the control aborted at 25). Returns True iff it changed the config."""
+    PREFERRED lever: size an explicit DIE_AREA/CORE_AREA to MEET the perimeter the placer
+    demanded -- parsed from this run's own PPL-0024 message (process_one, where the subject
+    aborted in place), or passed as `perimeter_target` from the A/B-arm SUBJECT (whose backend
+    carried the message; the arm copy excludes it). The cell-area CORE_UTILIZATION lever is
+    only a FALLBACK for a subject with no parseable perimeter (e.g. an FLW-0024 over-pack):
+    it undershoots cell-tiny/pin-huge designs, the exact tie that stalled nangate45 promotion
+    (2026-06-27 audit). Returns True iff it changed the config."""
+    target = perimeter_target or _ppl0024_required_perimeter(entry["project_path"])
+    if _set_explicit_die(entry["project_path"], target):
+        return True
     if _lower_core_util(entry):
         return True
     return _resize_to_core_util(entry, util=_PIN_RELIEF_UTIL)
@@ -747,6 +806,13 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
         # runner and a timing arm by fix_signoff --check timing (2026-06-24).
         check = _symptom_check(conn, key.get("symptom_id"), key.get("strategy"))
         for d in trial["designs"]:
+            # For a PLACE arm, carry the SUBJECT's PPL-0024 required die perimeter: the arm
+            # copy excludes the subject's backend, so arm B cannot re-read the placer message
+            # itself. None for FLW-0024/other place aborts -> arm B falls back to the util
+            # lever. This is what lets arm B size a perimeter-meeting die where the arm-A
+            # control aborts -> a DECISIVE place verdict instead of a both-abort tie (2026-06-27).
+            d_pin_target = (_ppl0024_required_perimeter(d["project_path"])
+                            if check == "place" else None)
             for arm in ("A", "B"):
                 for r in range(k):
                     src = Path(d["project_path"])
@@ -770,11 +836,14 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                         # period_relax's SDC edit) actually take effect, not the subject's
                         # failing-period SDC (2026-06-25 SDC-pinning fix).
                         _localize_arm_sdc(dst)
-                    led.add({"design": dst.name, "project_path": str(dst),
-                             "platform": key["platform"], "kind": "ab_arm",
-                             "arm": arm, "strategy": key["strategy"], "repeat": r,
-                             "check": check,
-                             "ab_key": key, "match_level": trial["match_level"]})
+                    arm_entry = {"design": dst.name, "project_path": str(dst),
+                                 "platform": key["platform"], "kind": "ab_arm",
+                                 "arm": arm, "strategy": key["strategy"], "repeat": r,
+                                 "check": check,
+                                 "ab_key": key, "match_level": trial["match_level"]}
+                    if d_pin_target:
+                        arm_entry["pin_perimeter_target"] = d_pin_target
+                    led.add(arm_entry)
                     appended += 1
     return appended
 
