@@ -851,13 +851,20 @@ def process_one(led: Ledger, entry: dict, conn, *,
     if fix_rc == 0:
         _mark_clean(led, conn, design, "signoff fix cleared residual")
         return "clean"
+    # Record the POST-fix residual, NOT the pre-fix `status` snapshot. On a first signoff
+    # pass `status` (line ~838) is read before any DRC/LVS ran, so it is usually
+    # {drc:unknown,lvs:unknown}; recording it made 184 catalog_exhausted escalations all
+    # read 'unknown,unknown' in the queue, hiding their genuinely diverse residuals
+    # (80 drc=stuck / 67 lvs=fail / 29 both — 2026-06-28 audit). _run_fix has now run the
+    # checks, so re-reading reflects WHAT the fixer could not clear: the honest residual.
+    residual = _signoff_status(entry)
     led.set_state(design, "escalated", reason="catalog_exhausted")
     if conn is not None:
         import escalations
         escalations.open_escalation(
             conn, design=design, project_path=entry["project_path"],
             run_id=None, reason="catalog_exhausted",
-            notes=json.dumps(status, sort_keys=True))
+            notes=json.dumps(residual, sort_keys=True))
     return "escalated"
 
 
