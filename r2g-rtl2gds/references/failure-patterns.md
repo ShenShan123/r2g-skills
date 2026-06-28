@@ -2018,3 +2018,84 @@ the stamp with `abs(cur-period) < 1e-9` against the FULL-precision winner → a 
 `0.69180034→'0.6918'` failed by 3.5e-7 and returned None (uncounted; ~28% of stamps). FIX:
 `_period_stamped()` compares the read-back against the `%g`-formatted value (same "a no-op must be
 uncountable, but a real op must COUNT" coin as the fixture≠production trap above).
+
+### Sub-variant: the relief LEVER can't change the outcome — wrong-lever divergence (2026-06-27)
+
+The 2026-06-26 fixes made the PLACE arms APPLY different work (Pattern 11) and reconciled the fake
+promotion (Pattern 12), but a resumed nangate45 campaign STILL showed the alarm: `ab_trials` grew to
+54, yet **every one of the 39 nangate45 trials was `inconclusive` and `promoted(nangate45)=0`** (the
+fake one was correctly reverted at wave 9). The honest truth: *no legitimate nangate45 promotion had
+ever happened* — the loop was honest but **stuck**.
+
+**Pattern 13 — `core_util_relief` applies the WRONG LEVER for PPL-0024 (cell-area util vs. pin
+perimeter).** The dominant nangate45 place candidate is PPL-0024 on **cell-tiny / pin-huge** designs
+(`verilog_ethernet_ip_demux` 1521 IO pins, `DSP_..._dma_controller` 3089). `CORE_UTILIZATION` sizes
+the die from **cell area**, but PPL-0024 is a **die-perimeter** constraint — the placer error literally
+states the target: `Increase the die perimeter from 631.18um to 851.76um`. Pattern 11's `_lower_core_util`
+(one `*0.6` step, floor 10) only nudged the perimeter (ip_demux util 12 → 631um) and **undershot the
+demanded 851.76um**, so arm B PPL-0024-aborted *identically* to arm A (control). For `dma_controller`,
+reaching 1729.84um would need util ≈ 3.5 — far below the floor. Tell-tale: `ab_trials.metrics_json`
+shows BOTH arms `is_success=false, outcome_score=0.333` (place abort) differing only on `wall_s`; the
+subjects' `backend/RUN_*/flow.log` carry PPL-0024 with a perimeter `to` value the util step can't reach.
+This is *genuine non-divergence of OUTCOME despite divergent CONFIG* — distinct from Pattern 11 (config
+was a no-op) — and it was the exact "open follow-up" Pattern 11 flagged.
+
+**FIX (`engineer_loop.py`, 2026-06-27):** size the die to the perimeter the placer DEMANDS, not the
+cell area. `_ppl0024_required_perimeter(path)` parses the `to <B>um` target from the run's PPL-0024
+message; `_set_explicit_die(path, B)` rewrites `config.mk` to a SQUARE `DIE_AREA`/`CORE_AREA` whose CORE
+perimeter ≥ `B × 1.15` (drops `CORE_UTILIZATION`/`DIE_AREA`/`CORE_AREA`; never touches
+`PLACE_DENSITY_LB_ADDON`). `_relieve_pin_overflow(entry, perimeter_target=…)` prefers this lever and
+falls back to the util step only when no perimeter is parseable (e.g. an FLW-0024 over-pack — preserves
+the FLW-0024 behavior). The A/B **arm copy excludes the subject backend**, so arm B can't re-read its own
+PPL-0024 message → `plan_arms_for_candidates` stamps the SUBJECT's required perimeter onto each place
+arm as `pin_perimeter_target`, and `_apply_recipe_strategy`(place) hits it directly. PROVEN end-to-end
+on `verilog_ethernet_ip_demux` (util 12, demands 851.76um): arm A aborts at place (`PPL-0024`), arm B
+(`DIE_AREA 0 0 265 265`, core perimeter 980um) runs synth→floorplan→place→cts→route→finish to a final
+`6_final.gds` (RC=0) → a DECISIVE `WIN`. Suite 787→797 (new `tests/test_ppl0024_perimeter_die.py`);
+honesty 5/5 green. Beyond the A/B win, this also recovers the ~30 production designs escalating as
+`pin_overflow_residual`.
+
+**Coverage-gap reset (honesty corollary applied).** With the lever fixed, the 13 pre-fix
+`core_util_relief` `inconclusive` trials were *known-contaminated* (arms forced to tie by the broken
+lever). Three of four place candidate keys had ≥`AB_INCONCLUSIVE_MAX` inconclusive → `_ab_coverage_gap`
+would PERMANENTLY skip re-planning them, leaving the fix dormant. So those 13 trials were deleted (only
+`core_util_relief`/`inconclusive`/nangate45; 0 decisive verdicts to lose; the GENUINELY non-divergent
+antenna inconclusives were LEFT so they stay correctly gapped). After: all 4 place keys re-plannable,
+`ab_trials` 54→41, honesty 5/5 green. The next drain re-validates them with the working lever → the
+first legitimate nangate45 promotion. (Per the honesty corollary, `recipe_status` was NOT hand-edited;
+the candidates stay `candidate` and the drain decides.)
+
+**Pattern 14 — end-of-drain judging hid finished promotions for ~12h (latency, not correctness).**
+Both drain paths (`ab_drain`, `_run_parallel`) ran ALL arm flows via `ex.map(...)` (a barrier) and called
+`judge_finished_trials` ONCE afterwards. A drain bundles fast place arms with slow `period_relax` timing
+arms (a 2h38m full-signoff reflow) and large-design `rerun_from_stage` arms, so the FIRST legitimate
+nangate45 promotion (`core_util_relief/logic/small`, whose place arms finished in minutes) did not surface
+until the whole wave-11 drain finished ~12h later — `ab_trials`/`promoted` looked flat for hours while the
+loop had already learned the win. **FIX (2026-06-27):** judge INCREMENTALLY — `ex.submit` the arms and call
+`judge_finished_trials` as each completes (`as_completed`), plus a final sweep. Safe because
+`judge_finished_trials` acts only on pairs whose arms are BOTH terminal (a still-running arm's pair is
+skipped) and is idempotent (marks `judged`), and the Ledger is in-memory + lock-guarded so the per-completion
+rescans are cheap; worker threads keep private DB conns while the main thread judges (busy_timeout serializes).
+Same final state, surfaced the instant each pair completes. Test: `tests/test_incremental_judge.py` (judges
+only both-terminal pairs, idempotent, picks up a pair once its last arm finishes). Suite 797→798. NOTE: this
+improves promotion *latency/observability within a wave*, NOT wave wall-clock — a wave is still bounded by its
+slowest arm; bounding the per-wave arm count (or running the A/B drain concurrently with design processing) is
+the open follow-up for wave throughput.
+
+**Pattern 15 — a re-planned A/B arm kept a STALE `judged` flag, so its re-run was never re-judged (the
+large-pin class could not promote).** `plan_arms_for_candidates` re-adds an arm entry every drain;
+`Ledger.add` does `e.setdefault("state","pending")` so the entry resets to `pending` and the arm RE-RUNS —
+but the merge `dict(existing, **e)` KEPT the prior wave's `judged=True` (the re-plan entry has no `judged`
+key). `judge_finished_trials` filters `not e.get("judged")`, so a candidate whose arm DIRS survive a prior
+wave re-ran every wave but its new verdict was NEVER recorded → it could never promote, AND `_ab_coverage_gap`
+(which counts `ab_trials`) was starved so the candidate re-ran forever. This is why the nangate45 large-pin
+place class (`logic/medium`, `bus_heavy/medium`) stayed `inconclusive` for many waves even after the perimeter
+fix: `ip_demux`'s arm re-ran with the correct perimeter die and SUCCEEDED, but the win was discarded. (A
+FRESH-dir candidate like `logic/small` had no prior `judged`, so it judged + promoted normally — which masked
+the bug.) **FIX (2026-06-27):** a `pending` event is fresh work → drop any stale `judged`. Applied in BOTH
+`Ledger.add` and `__init__`'s JSONL reload (each wave is a fresh process that replays the ledger, so the
+invariant must survive the restart). Tests: `tests/test_ledger_replan_judged.py` (re-plan clears `judged`
+in-memory AND after reload; a terminal judge-mark still sticks). Suite 798→801. Confirmed empirically: after
+a prior-wave `judged=True`, a re-plan left `state=pending judged=True` and the judge's candidate list was
+empty — the re-run was invisible. The fix self-heals on the next fresh wave: its reload + re-plan clears
+`judged`, the large-pin arm re-runs the perimeter die, and the win is finally recorded → promotion.

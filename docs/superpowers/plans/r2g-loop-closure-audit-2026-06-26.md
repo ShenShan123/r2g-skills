@@ -153,3 +153,35 @@ open `unseen_crash` escalations that are really PPL-0024 and re-enqueued them vi
 the new handler. Mechanism proven in the Fix-1 c2670 trial (util 25→15 → place→GDS). Remaining
 escalation follow-ups (synth `#include`, `SYNTH_MEMORY_MAX_BITS`, 33 dir-gone orphans) + the
 ingest `is_success` relaxed path stay open.
+
+## Update 2026-06-27 — PPL-0024 perimeter-targeted die (closes the util-lever undershoot)
+
+The 2026-06-26 PPL-0024 handler (above) used the cell-area `CORE_UTILIZATION` lever, proven only
+on the SMALL-pin-gap c2670 case. A fresh-session audit of the live store found it still STALLED
+on the corpus: **39/39 nangate45 A/B trials inconclusive, `promoted(nangate45)=0`** (the wave-9
+reconcile correctly reverted the lone fake nangate45 promotion — so no LEGITIMATE one had ever
+happened). Root cause = **wrong lever** (failure-patterns.md "Pattern 13"): the dominant place
+subjects are cell-tiny/pin-huge PPL-0024 (ip_demux 1521 pins, dma_controller 3089); util scales
+the die by CELL AREA, but PPL-0024 is a PERIMETER constraint. A 0.6× util step grew ip_demux's
+perimeter 490→631um where the placer demanded **851.76um**, so BOTH arms PPL-0024-aborted
+identically → permanent tie (`metrics_json`: both arms `is_success=false, outcome_score=0.333`).
+
+**FIX (`engineer_loop.py`, applied to main):** parse the placer's stated target
+(`_ppl0024_required_perimeter`: `... die perimeter from <A>um to <B>um`) and size an explicit
+square `DIE_AREA`/`CORE_AREA` whose CORE perimeter ≥ `B×1.15` (`_set_explicit_die`), preferred
+over the util lever (which stays the FLW-0024 fallback). The A/B arm copy excludes the subject
+backend, so `plan_arms_for_candidates` stamps the SUBJECT's `pin_perimeter_target` onto each
+place arm and `_apply_recipe_strategy`(place) hits it.
+
+**PROVEN end-to-end** on `verilog_ethernet_ip_demux` (util 12, demands 851.76um): arm A aborts at
+place (`PPL-0024`); arm B (`DIE_AREA 0 0 265 265`) runs synth→…→finish to a final `6_final.gds`
+(RC=0) → a DECISIVE WIN — the first legitimate nangate45 divergence. Suite 787→797 (new
+`tests/test_ppl0024_perimeter_die.py`), honesty 5/5.
+
+**Loop re-opened:** the 13 pre-fix `core_util_relief` inconclusive trials were known-contaminated
+(broken lever forced the ties) and had pushed 3/4 place candidate keys past `AB_INCONCLUSIVE_MAX`
+→ `_ab_coverage_gap` would skip them forever. Deleted ONLY those 13 (0 decisive to lose; genuine
+non-divergent antenna inconclusives left gapped); all 4 place keys now re-plannable, `ab_trials`
+54→41, honesty 5/5. `recipe_status` was NOT hand-edited — the next drain decides the promotion.
+Also retuned `pool.env` (24/4/20 → 32/3/32) for CPU utilization. **VERIFY next iteration:**
+`promoted(nangate45)` > 0 after the campaign's next A/B drain. NOT committed (working tree).
