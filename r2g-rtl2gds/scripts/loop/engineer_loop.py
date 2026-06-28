@@ -556,6 +556,9 @@ _SYNTH_MEM_BITS_RETRY = 65536   # the skill's documented per-memory cap (SKILL.m
                                 # 16x the ORFS default 4096, enough for register files /
                                 # FIFOs that just overflow it, bounded so a huge memory
                                 # cannot explode into millions of flops.
+_SYNTH_MEM_CORE_UTIL = 20       # FF-expanded memory bloats the design ~16x, so a fixed
+                                # DIE_AREA over-packs at place; pair the cap raise with an
+                                # auto-sized low-util die (failure-patterns.md:1163).
 
 
 def _newest_flow_log(entry: dict) -> str:
@@ -760,6 +763,14 @@ def process_one(led: Ledger, entry: dict, conn, *,
         if (not _resized and entry.get("kind") != "ab_arm"
                 and _fail_stage(entry) == "synth" and _is_synth_memory_cap(entry)
                 and _raise_synth_memory_cap(entry)):
+            # Pair the cap raise with an auto-sized low-util die: the FF-expanded memory
+            # bloats the design (a 4096->65536-bit RAM is ~16x the cells), so a fixed
+            # DIE_AREA reliably over-packs at place after the cap raise (axis_fifo: 3072%
+            # util -> FLW-0024). Converting a fixed DIE_AREA -> CORE_UTILIZATION=20 lets ORFS
+            # size a die that FITS, so the SAME re-flow reaches signoff instead of clearing
+            # synth only to abort at place (failure-patterns.md:1163; no-op if already
+            # auto-sized -- the FF memory then just grows the existing die; 2026-06-28 pilot).
+            _resize_to_core_util(entry, util=_SYNTH_MEM_CORE_UTIL)
             led.set_state(design, "fixing")
             result = process_one(led, entry, conn, _resized=True)
             # The synth fix's verdict is whether the SYNTH abort cleared (the re-flow got

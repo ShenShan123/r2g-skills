@@ -155,6 +155,30 @@ def test_process_one_raises_cap_and_recovers(tmp_path, monkeypatch):
     assert relax[0]["verdict"] == "cleared"
 
 
+def test_memcap_recovery_pairs_cap_raise_with_die_autosize(tmp_path, monkeypatch):
+    """A memcap design with a FIXED DIE_AREA: the recovery must raise the cap AND convert the
+    fixed die to CORE_UTILIZATION so the FF-expanded memory does not over-pack at place
+    (axis_fifo went to 3072% util -> FLW-0024 with the cap raise alone; 2026-06-28 pilot)."""
+    p = tmp_path / "proj"
+    (p / "constraints").mkdir(parents=True)
+    (p / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = demo\nexport PLATFORM = nangate45\n"
+        "export DIE_AREA  = 0 0 120 120\nexport CORE_AREA = 2 2 118 118\n")
+    _seed_synth_fail(p, kind="memcap")
+    flow = {"n": 0}
+    monkeypatch.setattr(el, "_run_flow", lambda e: (flow.__setitem__("n", flow["n"] + 1)
+                                                    or (2 if flow["n"] == 1 else 0)))
+    monkeypatch.setattr(el, "_ingest", lambda e: None)
+    monkeypatch.setattr(el, "_fail_stage", lambda e: "synth" if flow["n"] <= 1 else None)
+    monkeypatch.setattr(el, "_signoff_status", lambda e: {"drc": "clean", "lvs": "clean"})
+    monkeypatch.setattr(el, "_mark_clean", lambda led, conn, d, note: None)
+    el.process_one(_Led(), {"design": "demo", "project_path": str(p), "platform": "nangate45"}, None)
+    cfg = (p / "constraints" / "config.mk").read_text()
+    assert "SYNTH_MEMORY_MAX_BITS = 65536" in cfg          # cap raised
+    assert "CORE_UTILIZATION = 20" in cfg                  # die auto-sized for FF memory
+    assert "DIE_AREA" not in cfg                           # fixed die dropped
+
+
 def test_memcap_clears_synth_but_fails_place_records_cleared(tmp_path, monkeypatch):
     """A memcap design whose cap-raise CLEARS synth but then over-packs at place (the
     FF-expanded RAM is big): the synth_memory_relax fix must be recorded `cleared` (the
