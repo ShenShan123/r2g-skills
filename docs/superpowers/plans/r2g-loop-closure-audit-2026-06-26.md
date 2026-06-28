@@ -259,3 +259,35 @@ skips it, never demotes — bounded + honest, but not promoted). The wiring mirr
 `_apply_recipe_strategy`(synth → raise cap + die-pair), `_arm_metric`(synth → is_success = synth
 cleared). Deferred deliberately — A/B-arm wiring is where subtle loop bugs hide; it deserves
 dedicated TDD, not a rushed end-of-iteration addition.
+
+### 2026-06-28 iteration 3 — synth A/B arm wired (`synth_memory_relax` now PROMOTABLE) + campaign live
+
+**Campaign caught up:** wave 14 (old code, 7h — tail-blocked on two legit-slow iccad2015_unit18
+period_relax timing arms, NOT frozen, so left to finish per the "legit large-design slowness"
+rule) completed at 18:36Z; **wave 15 started with the 24/2/24 pool.env** → a fresh process that
+loaded ALL iter-1/2/3 commits + the 4 re-queued memcap designs. The fixes are now live in the
+campaign. honesty 5/5; ab_trials 86→101; promo_ng 7.
+
+**Synth A/B arm wired (commit `1a90928`).** `synth_memory_relax` is now a first-class backend-abort
+A/B arm (mirrors place/route apply-then-flow + the timing metric): `_SYNTH_STRATEGIES`,
+`_symptom_check`→'synth', `process_one` routes check='synth' → `_process_backend_ab_arm`,
+`_apply_recipe_strategy`(synth)=raise cap + die-pair, and — the key judgment — `_arm_metric(synth=True)`
+judges on **'synth cleared'** (`_synth_cleared_ondisk` reads the arm's stage_log), NOT generic
+is_success. Arm A control memcap-aborts at synth → not cleared; arm B clears it → decisive WIN.
+TDD `tests/test_synth_ab_arm.py` incl. a flows-free end-to-end pair → records 'win' (is_success
+stubbed True for both, proving the synth metric breaks the tie). Suite 818→**823**.
+
+**Why the synth-cleared metric (not is_success) is the right call — validated live.** The
+die-pairing full-flow validation (`verilog_axis_axis_fifo` copy, fresh default cap) confirmed the
+recovery carries the design *past place and through global route* (it FLW-0024'd at place BEFORE
+0773f95), but the FF-expanded ~64K-flop array then grinds detail_route with ~145 DRC violations —
+i.e. it clears synth yet may NOT reach clean signoff. Judging on is_success would tie both arms;
+the synth-cleared metric correctly credits the recipe for the symptom it fixes. (Honest caveat: for
+large memories a fakeram macro — the `synth_memory_residual` escalation — is the real answer; the
+65536-bit cap bounds the FF blow-up.)
+
+**Open follow-up (iter-4):** confirm wave 15 recovers the 4 re-queued memcap designs + the
+synth_memory_relax candidate now reaches a decisive verdict (win) on a real drain → `promoted`;
+THEN scale the re-queue to the remaining 11 memcap. Tail-blocking (legit-slow large-design arms
+holding a wave barrier) remains the structural CPU-utilization follow-up; the 24-design waves
+shorten the tail but don't eliminate it.
