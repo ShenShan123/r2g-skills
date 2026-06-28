@@ -773,6 +773,24 @@ strategy_ids: [lvs_same_nets_seed]
   124/137-only cleanup left a multi-GB klayout child still spinning. `run_lvs.sh` now reaps orphans
   on **any** nonzero exit.
 
+#### Sub-variant: writer crash emits a SPURIOUS "don't match" → false `lvs=fail` (2026-06-28)
+
+The claim above ("the deck swallows the `net2id.end()` writer error and the verdict line is still
+emitted, so a `clean` can co-exist") is only HALF true. When the writer corruption ALSO makes the
+deck emit `ERROR : Netlists don't match`, the **lvsdb itself still says `text_match_found` with 0
+mismatches** (the COMPARE matched — only the post-compare lvsdb WRITE crashed), but `extract_lvs`
+read `log_status='mismatch'` *before* its crash case → a **false `lvs=fail`** on an actually-matching
+design. Found: `PicoRV32_Based_SoC_fifo_basic` (mismatch=0/net=0/dev=0, lvsdb `text_match_found`, log
+errors = `dbLayoutVsSchematicWriter.cc:151 i != net2id.end ()` + `RuntimeError: Internal error ... in
+Executable::cleanup` + the `device_count` `NoMethodError` dump). **Fix:** `_CRASH_RE` now recognizes
+the writer-crash signature (`net2id.end` / `dbLayoutVsSchematicWriter` / `Internal error ...
+Executable::cleanup`), and the status decision classifies *lvsdb-matched + 0-mismatch + crash* as
+`status=crash` (`reason=lvs_writer_crash_after_match`), never `fail`; `run_lvs.sh` retries on that
+signature for a clean survivor. A genuine mismatch (lvsdb mismatch, no crash) still → `fail`. The
+deterministic-vs-heisenbug split applies as above: a surviving retry → `clean`; an always-crashing
+writer stays an honest `crash` (the compare matched, so the design is LVS-clean — the tool just can't
+serialize the db). Tests: `tests/test_extract_lvs.py`.
+
 ### LVS "incomplete" is mostly a comparer bug, not honest slowness
 
 - **Symptom:** `status=incomplete`, `reason=lvs_no_verdict_no_lvsdb` — the run reached device

@@ -291,3 +291,33 @@ synth_memory_relax candidate now reaches a decisive verdict (win) on a real drai
 THEN scale the re-queue to the remaining 11 memcap. Tail-blocking (legit-slow large-design arms
 holding a wave barrier) remains the structural CPU-utilization follow-up; the 24-design waves
 shorten the tail but don't eliminate it.
+
+### 2026-06-28 iteration 4 — re-queues recovering live + LVS writer-crash false-fail fixed
+
+**Campaign live-confirms the synth recovery:** wave 15 (new code) picked up the 4 re-queued memcap
+designs — `verilog_axis_axis_fifo` + `_fifo_adapter` both reached **CTS (status 0)** with
+`SYNTH_MEMORY_MAX_BITS=65536` + a CORE_UTILIZATION die in config (cleared synth AND got past place,
+no FLW-0024 = the recovery + die-pairing working on real campaign designs). They're slow (FF-expanded
+route, like the validation), so the `synth_memory_relax` A/B drain (and promotion) is pending their
+ingest — inevitable, just behind the slow tail. honesty 5/5; promo_ng 7.
+
+**New bug found + fixed (commit `6f29bf3`): LVS match-then-writer-crash false `fail`.**
+`PicoRV32_Based_SoC_fifo_basic` was `lvs=fail` with **0 mismatches** and lvsdb `text_match_found` —
+the COMPARE matched, but KLayout crashed in the post-compare lvsdb WRITER (`net2id.end()` assert /
+`Internal error ... Executable::cleanup`), emitting a spurious "Netlists don't match". `extract_lvs`
+checked `log_status='mismatch'` before its crash case → false fail. Fix: `_CRASH_RE` recognizes the
+writer-crash signature; the status decision classifies *lvsdb-matched + 0-mismatch + crash* as
+`crash` (retry-fixable), never `fail`; `run_lvs.sh` retries on it for a clean survivor. Validated on
+the real artifacts (re-extract → `crash`, was `fail`); regenerated PicoRV32's live report. TDD
+test_extract_lvs.py (+2); suite 823→**825**. The earlier doc claim that "the extractor handles the
+net2id writer error" was only half true (it covered a clean verdict co-existing with the error, not a
+spurious mismatch verdict) — now closed.
+
+**Bug-hunt context (no false-fail epidemic):** scanned all `catalog_exhausted` `lvs=fail` designs —
+63 `real_connectivity` (genuine net/device mismatches, mostly iccad2017 contest designs — flow-hard,
+not false), 6 `symmetric_matcher` (known KLayout noise), 1 `generic`, and the 1 PicoRV32 false-fail
+(now fixed). So unlike the sky130 wrong-tool epidemic, nangate45's LVS-fail bucket is mostly genuine.
+
+**Open (iter-5):** confirm wave 15's re-queued designs reach a terminal verdict + the
+`synth_memory_relax` A/B trial records a WIN → `promoted(nangate45) > 7`; scale the re-queue to the
+remaining 11 memcap. Tail-blocking (FF-expanded flows are slow) still bounds throughput.
