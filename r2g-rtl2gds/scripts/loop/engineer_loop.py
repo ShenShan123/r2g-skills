@@ -976,7 +976,20 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                 except Exception:               # surfacing must never break the drain
                     pass
             continue
-        trial = ab_runner.plan_trial(conn, **key, n_designs=n_ab_designs)
+        try:
+            trial = ab_runner.plan_trial(conn, **key, n_designs=n_ab_designs)
+        except Exception as exc:
+            # plan_trial can raise TRANSIENTLY (a read racing the campaign's concurrent
+            # heuristics.json/ingest writes — observed as an intermittent KeyError). ISOLATE
+            # it: a single crashing candidate must NOT abort the whole planning loop and
+            # strand every candidate AFTER it. `synth_memory_relax` (last of 33 pending
+            # candidates) sat at 0 trials for hours this way — any transient crash earlier in
+            # the list blocked it every drain (2026-06-28 audit). Skip + log; the candidate
+            # stays 'candidate' and re-plans on the next drain. NEVER demote (non-terminal).
+            print(f"[loop] A/B candidate plan_trial errored (skipped, retries next drain): "
+                  f"{key['strategy']} symptom={key['symptom_id']} "
+                  f"{key['design_class']}/{key['platform']}: {type(exc).__name__}: {exc}")
+            continue
         if trial is None:
             # Gate B is unreachable for this candidate: fewer than n_ab_designs
             # resolvable on-disk subjects, so plan_trial returns None on EVERY drain
