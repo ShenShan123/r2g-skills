@@ -420,3 +420,26 @@ stale-escalation-predating-a-fix pattern as the synth re-queue. Re-queued a pilo
 wave 16 (fresh process, all fixes loaded) recovers them via the perimeter die. **VERIFY iter-9:** the
 8 reach clean/honest-residual; scale to the 12 iccad2015 + 10 others if clean. Wave 15's tail is
 down to 1 design (wb2axip_axivdisplay LVS hit its 4h timeout); wave 16 imminent.
+
+### 2026-06-29 iteration 9 — loop promoting BROADLY; scaled pin_overflow re-queue; synth_timeout triaged
+
+**Loop robustness confirmed:** `promoted(nangate45)` grew 8→**9** during wave 15's long drain —
+`core_util_relief` is now promoted across **8 design classes** (logic tiny/small/medium/large,
+bus_heavy small/medium, crypto small/large) + `synth_memory_relax`×1. The loop generalizes recovery
+recipes across the whole corpus, not one case. Wave 15 (~20h) is NOT stuck — it's a heavy productive
+A/B drain (12+ arms: core_util_relief on DSP ifft, route_relief on wb2axip) at **load 54** — CPUs
+well-used, recipes promoting. honesty 5/5.
+
+**Scaled the pin_overflow re-queue:** the remaining 22 stale `pin_overflow_residual` designs all have
+SANE die demands (≤1466um: iccad2017_unit20 5028um→1466um die, iccad2015 3786um→1109um, down to
+1749um→523um), so all are recoverable by the perimeter fix. Re-queued all 22 (after the iter-8 pilot of
+8) → 30 total pending for wave 16 to recover via `_set_explicit_die`.
+
+**synth_timeout bucket triaged (15) — no recoverable batch:** 11 time out at the yosys `HIERARCHY`
+pass = AST-elaboration pathology (verilog_ethernet MACs, lfsr), genuinely unfixable (raising the
+timeout does not help). 4 time out at `DEMUXMAP` = the re-queued memcap designs (cap=65536)
+FF-expanding their 40960-bit memories -- so FF-expansion of a LARGE memory is slow enough to time out
+IN SYNTH, strongly validating the iter-7 memory-size gate (a fresh such design now escalates fakeram
+instead). Honest characterization; no fix (AST-pathology is unrecoverable; the FF-expansion case is
+prevented going forward by the iter-7 gate). **VERIFY iter-10:** wave 16 starts + recovers the 30
+pin_overflow re-queues via the perimeter fix; the memory-size gate routes fresh large memcap to fakeram.
