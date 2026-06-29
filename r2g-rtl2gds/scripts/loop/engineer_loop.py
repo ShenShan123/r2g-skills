@@ -26,6 +26,7 @@ import re
 import subprocess
 import sys
 import threading
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -1325,13 +1326,25 @@ def ab_drain(ledger_path: Path, *, n_ab_designs: int = 2,
 
 def _safe_process(led: Ledger, entry: dict) -> None:
     """Run one design in a worker thread; a crash in ONE design must never abort
-    the whole parallel batch, so escalate-and-continue on any unexpected error."""
+    the whole parallel batch, so escalate-and-continue on any unexpected error.
+
+    Capture the exception MESSAGE + full traceback, not just its type: a bare
+    `worker_exc:ValueError` reason is undiagnosable (2026-06-29 wbscope crash — 4
+    designs escalated worker_exc:ValueError with the traceback swallowed, so the root
+    cause could not be found post-hoc once the on-disk state moved on). The traceback
+    goes to the wave log (stderr) and the one-line message is stamped on the ledger
+    `note` so the escalation is triage-able; the `reason` key stays `worker_exc:<Type>`
+    for stable triage/honesty. See references/failure-patterns.md
+    ("worker_exc — undiagnosable worker crash")."""
     try:
         _drain_arm(led, entry, None)        # private conn per thread + lock-guarded ledger
     except Exception as exc:                # noqa: BLE001 — last-resort batch guard
+        msg = f"{type(exc).__name__}: {exc}".strip()
+        print(f"[loop] worker crashed on {entry.get('design')}: {msg}\n"
+              f"{traceback.format_exc()}", file=sys.stderr)
         try:
             led.set_state(entry["design"], "escalated",
-                          reason=f"worker_exc:{type(exc).__name__}")
+                          reason=f"worker_exc:{type(exc).__name__}", note=msg)
         except Exception:
             pass
 

@@ -2176,3 +2176,22 @@ for the memcap recipe `synth_memory_relax`, whose cap-raise can't help a timeout
 signature-gated (`_is_synth_memory_cap`), so this is an A/B-efficiency bug, not a correctness one. The
 fix is a memcap-specific symptom predicate (or a recipe-applicability subject filter) — careful
 symptom-keying work, deferred to do deliberately.
+
+### Sub-variant: `worker_exc:<Type>` — an undiagnosable worker crash (2026-06-29)
+
+The parallel worker guard `_safe_process` catches *any* exception from a design's `_drain_arm`
+so one crash never aborts the batch (the right behavior) — but it recorded **only the exception
+TYPE** as the escalation reason (`reason=worker_exc:ValueError`), swallowing the message and
+traceback. Caught in the wild: four designs (`wbscope_wishbone`/`_avalon`/`_axil`,
+`zipcpu_wbdmac`) escalated `worker_exc:ValueError` during wave 17. By the time the crash was
+investigated, their on-disk state had moved on (a synth abort whose `flow.log` was mid-write at the
+instant of the crash briefly looked FF-expandable → entered the memcap recovery+recursion path →
+threw there), so the root-cause line was **unfindable** — the loop can't learn from a failure it
+can't see, and the operator can't triage a bare type name. This is the diagnosability twin of the
+`plan_trial` crash above. **Fix:** `_safe_process` now prints the full traceback to the wave log
+(stderr) and stamps the one-line `Type: message` onto the ledger `note`; the `reason` key stays
+`worker_exc:<Type>` for stable triage/honesty bucketing. The next occurrence carries its own
+root-cause line. Test: `tests/test_safe_process_records_traceback.py`. (NOTE: these `worker_exc`
+escalations are *ledger-only* — `_safe_process` has no knowledge-DB conn — so they don't fabricate a
+`failure_event`; honesty parity is unaffected. A genuinely synth-aborted design like these re-queues
+to its honest `synth_memory_residual` reason once its log is fully written.)
