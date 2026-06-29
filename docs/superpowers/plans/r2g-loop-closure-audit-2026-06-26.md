@@ -348,3 +348,34 @@ Also cleaned up the orphaned iter-2 pilot `*_synth_me_*` arm dirs (8 dirs, no ba
 pilot's separate ledger). **Open (iter-6):** with the planning isolation fixed, the campaign's next
 drain (wave 16+) plans + judges `synth_memory_relax` → expect a WIN (arm A memcap-abort loses to arm
 B) → `promoted(nangate45) > 7`; do the coarseness fix first to avoid the arp-timeout waste.
+
+### 2026-06-28 iteration 6 — synth_memory_relax PROMOTED (promo_ng 7→8) — the arc closes
+
+**The "new solutions promoted" proof finally LANDED.** A recipe that did not exist at the start of
+this session is now `promoted` in the LIVE store via a genuine A/B trial. Two changes this iteration:
+
+1. **`fffc157` synth A/B arm runs SYNTH-ONLY.** A synth backend-abort arm is judged on 'synth
+   cleared' (`_arm_metric synth=True`), so it does NOT need place/route. `_run_flow` sets
+   `ORFS_STAGES=synth` + a bounded `ORFS_TIMEOUT` for a `kind=ab_arm/check=synth` entry. arm B clears
+   synth in ~3.5 min instead of the HOURS the FF-expanded memory takes to place/route — which it
+   route-fails anyway (this iteration confirmed the re-queued memcap designs escalate
+   `route_congestion_residual` AFTER a clean synth: the recipe clears synth, the FF array doesn't
+   route — exactly why the metric is synth-cleared, not full-signoff). The bounded timeout also caps
+   the symptom-coarseness arp subject at minutes. TDD; suite 827→828.
+
+2. **Proactive drain → PROMOTION.** With planning unblocked (iter-5) and the arm fast (synth-only),
+   drove a real A/B trial for `synth_memory_relax` on a memcap subject (`verilog_axis_axis_async_fifo_adapter`,
+   default cap, avoiding the arp timeout subject): both arm-A controls memcap-aborted in **4 s** (synth
+   NOT cleared), both arm-B copies cleared synth in **207–208 s** (recipe: raise cap + die-pair) → a
+   decisive **WIN** → `judge_recipe` → **`recipe_status` = promoted**. `promoted(nangate45)` **7 → 8**,
+   `ab_trials` 101 → 102 (verdict=win, `A_samples is_success=false` confirms the real divergence),
+   **honesty 5/5 green** after. A second `synth_memory_relax|bus_heavy/large` candidate also exists now
+   (the re-queued designs' fix_events generalized the recipe across design classes).
+
+**The full arc (iters 1–6):** found the synth-abort misclassification → auto-recovered the memcap case
+→ proved the loop learns it live → paired the die so it reaches place → wired it as an A/B arm → fixed
+the verdict metric → fixed the catalog_exhausted + LVS false-fails → unblocked the planning loop
+(crash-isolation) → made the arm synth-only → **PROMOTED**. 14 commits; suite 828; honesty 5/5
+throughout. **Remaining follow-up (iter-7):** the symptom-coarseness (memcap predicate) so the
+campaign's natural drain doesn't resolve the arp timeout subject; scale the re-queue to the remaining
+11 memcap; the campaign (wave 16+) will now promote `synth_memory_relax` itself off the live evidence.
