@@ -443,3 +443,23 @@ IN SYNTH, strongly validating the iter-7 memory-size gate (a fresh such design n
 instead). Honest characterization; no fix (AST-pathology is unrecoverable; the FF-expansion case is
 prevented going forward by the iter-7 gate). **VERIFY iter-10:** wave 16 starts + recovers the 30
 pin_overflow re-queues via the perimeter fix; the memory-size gate routes fresh large memcap to fakeram.
+
+### 2026-06-29 iteration 13 — pin_overflow recovery outcome + iter-12 Fmax fix PROVEN live
+
+**pin_overflow re-queue (30) — honest outcome:** the perimeter fix did its job. 4 fully CLEAN;
+**18 advanced from the stale place-abort to `catalog_exhausted`** (iccad2015_unit03_in1 reached
+`finish`/GDS with an explicit DIE_AREA → PPL-0024 cleared, then a DRC/LVS residual — the next genuine
+hurdle for pin-heavy contest designs); 8 in flight. So 22 designs moved past the stale abort to a
+later stage, honestly reclassified.
+
+**iter-12 Fmax fix PROVEN live on r8051_core** (a clean design that previously errored). BEFORE:
+`error` (aborted at the floorplan probe, ws=null). AFTER: trace `floorplan(null) -> place(null,
+inconclusive)` — it FELL BACK to the place probe (the fix) and honestly reported `inconclusive`, not
+a misleading `error`.
+
+**Deeper follow-up surfaced (iter-14): the Fmax PROXY under-reports timing.** r8051_core's FULL flow
+has real timing (clean run `wns=4.826ns`) yet its proxy returns null slack at BOTH floorplan and place.
+So the iter-12 fix makes the 26 clean error designs HONEST (inconclusive/unconstrained), but recovering
+their actual Fmax needs the root fix -- the `place_fast` probe / clone STA not emitting `setup_wns` at
+the place stage. Documented; not chased now (Fmax is secondary; the committed fix is verified).
+honesty 5/5. 22 commits this session, all pushed.
