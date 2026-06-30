@@ -2316,6 +2316,34 @@ escalations are *ledger-only* — `_safe_process` has no knowledge-DB conn — s
 `failure_event`; honesty parity is unaffected. A genuinely synth-aborted design like these re-queues
 to its honest `synth_memory_residual` reason once its log is fully written.)
 
+### Sub-variant: A/B re-plan resets clean arms before judge → candidate never promotes (2026-06-30)
+
+- **Symptom:** a fresh-platform round (asap7) LEARNS candidates (`recipe_status` candidate>0) and the
+  arms RUN (arm runs ingested), but `ab_trials` for that platform stays **0** and `promoted` never grows
+  — `ab_trials grows but promoted flat` is the older alarm; this is subtler: **`ab_trials` never even
+  appears.** A single arm's ledger history shows it cycling `pending → clean → re-plan pending → clean`
+  within one drain, `judged=None`, never judged.
+- **Root cause:** `plan_arms_for_candidates` called `led.add(arm_entry)` UNCONDITIONALLY for every arm of
+  every pending candidate. `arm_entry` carries no `state`, so `Ledger.add` defaults it to `pending` and
+  drops `judged`. Each plan cycle (run's `_run_parallel` AND `ab_drain`, per wave) therefore RESET arms
+  that had already reached a terminal state but were still awaiting their pair's verdict.
+  `judge_finished_trials` only records a verdict when BOTH arms of a `(base, strategy)` pair are terminal
+  (`clean`/`escalated`/`abandoned`) + unjudged at the SAME judge moment — so resetting one arm per cycle
+  means a complete A+B pair is never simultaneously terminal → the trial never judges → the candidate
+  loops forever (re-plan → run → clean → re-plan), burning arm flows, never promoting. nangate45 happened
+  to judge within a single drain window (arms fast/co-located), so it promoted; asap7's slower/cross-phase
+  arms got reset first — a latent bug the asap7 round exposed.
+- **Fix (2026-06-30):** `_arm_awaiting_judge(led, design)` returns True for an existing arm that is
+  terminal but NOT judged; `plan_arms_for_candidates` SKIPS the `led.add` for such an arm (leaves it for
+  the judge). A *judged* terminal arm is still re-planned normally (a fresh trial — the 2026-06-27
+  Pattern-15 re-judge path is unchanged). Added `Ledger.get`. Also extended the arm copytree to exclude
+  `lvs/drc/rcx` stage dirs (not just `reports/`) so a DRC-only arm fix can't inherit the subject's stale
+  `lvs/6_lvs.lvsdb` and record `lvs=clean` for asap7 (the arm lvs-residual). Tests:
+  `tests/test_ab_replan_preserves_terminal.py`. Suite 860→865.
+- **Skill-level alarm:** for a platform with `candidate>0` + arm runs ingested but `ab_trials=0` that
+  PERSISTS across waves, check whether arm ledger entries cycle through `clean` back to `pending` — a
+  re-plan is resetting them before the judge fires.
+
 ### Detecting the gap directly: `tools/check_db_integrity.py` (both-DBs cross-check, 2026-06-30)
 
 Every closure failure above is ultimately *the two memory DBs disagreeing about what happened* —

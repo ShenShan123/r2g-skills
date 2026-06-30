@@ -106,6 +106,10 @@ class Ledger:
     def state(self, design: str) -> str:
         return self._entries[design]["state"]
 
+    def get(self, design: str) -> dict | None:
+        """The merged entry for `design`, or None if absent (read-only convenience)."""
+        return self._entries.get(design)
+
     def entries(self) -> list[dict]:
         return list(self._entries.values())
 
@@ -1012,6 +1016,24 @@ def _ab_coverage_gap(conn, key: dict) -> bool:
     return decisive == 0 and incon >= AB_INCONCLUSIVE_MAX
 
 
+def _arm_awaiting_judge(led: Ledger, design: str) -> bool:
+    """True iff an arm entry already exists in a TERMINAL state (clean/escalated/abandoned)
+    but is NOT yet judged -- it ran and is waiting for its pair's verdict.
+
+    plan_arms_for_candidates must NOT re-add (reset to 'pending') such an arm: led.add
+    defaults state='pending' and drops `judged`, so a re-plan would knock the arm back to
+    un-run BEFORE judge_finished_trials records the trial. Since the judge only fires when
+    BOTH arms of a pair are terminal+unjudged at the SAME moment, resetting one arm each plan
+    cycle means a complete A+B pair is never simultaneously terminal -> the candidate never
+    promotes (the 2026-06-30 asap7 closure loop: ab_trials_asap7=0, arms cycling
+    plan->clean->re-plan->clean). A *judged* terminal arm is NOT awaiting judging, so it is
+    re-planned normally (a NEW trial; the 2026-06-27 Pattern-15 re-judge path is unchanged).
+    See references/failure-patterns.md "A/B re-plan resets clean arms before judge"."""
+    e = led.get(design)
+    return bool(e and e.get("state") in ("clean", "escalated", "abandoned")
+                and not e.get("judged"))
+
+
 def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                              repeats: int | None = None) -> int:
     """For every pending candidate recipe, plan an A/B trial and append its arm
@@ -1117,13 +1139,29 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                         # nangate45 signoff recipe could ever earn a real win. A fresh
                         # arm must start with no inherited verdict and recompute its own
                         # signoff (the route arm reseeds reports/route.json itself).
+                        # Also exclude the signoff STAGE dirs (lvs/drc/rcx), not just
+                        # reports/: a fresh arm must not inherit the SUBJECT's stale
+                        # lvs/6_lvs.lvsdb / drc artifacts. A DRC-only fix (e.g. antenna) never
+                        # re-runs run_lvs, so without this extract_lvs reads the copied stale
+                        # lvsdb and records lvs=clean for asap7 instead of the honest skipped
+                        # (the 2026-06-30 arm lvs residual). The arm re-runs its own signoff.
                         shutil.copytree(src, dst,
                                         ignore=shutil.ignore_patterns(
-                                            "backend", "*.gds", "reports"))
+                                            "backend", "*.gds", "reports",
+                                            "lvs", "drc", "rcx"))
                         # Repoint SDC_FILE at the arm's OWN constraint.sdc so its flow (and
                         # period_relax's SDC edit) actually take effect, not the subject's
                         # failing-period SDC (2026-06-25 SDC-pinning fix).
                         _localize_arm_sdc(dst)
+                    # Do NOT re-add an arm that already ran and is terminal+UNJUDGED: it is
+                    # awaiting its pair's verdict, and led.add would reset it to 'pending'
+                    # (dropping judged), knocking it back to un-run BEFORE judge_finished_trials
+                    # records the trial -> a complete A+B pair is never both-terminal at one
+                    # judge moment -> the candidate never promotes (the 2026-06-30 asap7 closure
+                    # loop). Leave it for the judge. (A judged terminal arm is re-planned
+                    # normally -- a fresh trial; Pattern 15.)
+                    if _arm_awaiting_judge(led, dst.name):
+                        continue
                     arm_entry = {"design": dst.name, "project_path": str(dst),
                                  "platform": key["platform"], "kind": "ab_arm",
                                  "arm": arm, "strategy": key["strategy"], "repeat": r,
