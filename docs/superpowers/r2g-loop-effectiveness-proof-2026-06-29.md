@@ -61,3 +61,40 @@ The skill demonstrably **learns from both failure and success**, **records every
 and **promotes genuinely-validated new solutions** — proven by a recipe (`synth_memory_relax`) taken
 from non-existent → found → recovered → learned → A/B-validated → promoted across 2 classes within the
 session, alongside `core_util_relief` promoted across 8. Honesty gates green throughout.
+
+---
+
+## Addendum (2026-06-30): campaign COMPLETED + the `/r2g-debug` 10-tick audit
+
+The closed-loop campaign (PGID 2425382, ~5.5 days) reached its **natural terminus**: the driver printed
+`ALL_DONE pending=0` at 2026-06-30 04:52Z after wave 17, and exited cleanly. This run was driven and audited
+by a new operator command, **`/r2g-debug`** (committed `bd6ee0c`, pushed), invoked on a 2-hour `/loop` cron —
+each tick resumes/monitors the campaign, hunts a fresh bug class, and re-proves loop closure.
+
+**Terminal corpus result (708 base nangate45 designs):** 393 clean / 315 escalated; **925 designs genuinely
+both-DRC+LVS-clean** in the DB with **0 ledger-vs-DB mislabels** (the 2026-06-20 fail-closed clean gate holds).
+**A/B:** 150 trials = **20 win / 4 loss / 126 inconclusive**; **11 promotions, every one a net-winner (0 losses)**;
+the 4 losses are all `route_relief`/sky130hd-logic, correctly held in `shadow` (demotion-side integrity).
+**Learning:** **2251 fix_events** across 10 strategies; **fix_trajectories 1564 abandoned + 471 resolved**
+(77% negative learning). **Honesty 5/5** on every tick.
+
+**Bug #13 found+fixed this session (`1dcbd0b`, pushed):** the parallel worker guard `_safe_process` recorded
+crashes as a bare `worker_exc:<Type>`, swallowing the message+traceback → undiagnosable (4 wbscope synth-abort
+designs escalated `worker_exc:ValueError` with the root cause unfindable post-hoc). Fix captures the traceback
+to the wave log + stamps the message on the ledger note; ledger-only, so no `failure_event` is fabricated and
+honesty parity is unaffected. TDD `test_safe_process_records_traceback.py`.
+
+**Robustness via adversarial audit (the headline result):** across 10 ticks I chased every alarm the command
+flags — `ab_trials`-grows-but-promoted-flat, identical-arm `metrics_json` (wall_s=195.0), a 3h ledger gap, an
+apparent LVS "hang", clean 481→461, escalated +12 — and **every one resolved to honest/designed behavior except
+the single real defect above**. The hardest call was a *near-miss*: I almost killed two legitimately-running
+1-hour KLayout LVS jobs after checking the wrong engine name (`openroad`, while nangate45 LVS is KLayout in a
+`setsid`-detached pgid); the "verify the engine's 99% CPU before killing" discipline caught it. That 1-real-bug-
+to-many-benign-alarms ratio **is** the robustness evidence: a mature loop whose scary signals are explainable.
+
+**Confirmed efficiency opportunity (deferred, operator decision):** `antenna_diode_repair` is inherently
+non-divergent in the A/B harness — **30+ trials across 18 (symptom,class) keys, 0 decisive** — because the
+baseline `fix_signoff` also inserts antenna diodes, so the control arm never fails on antenna alone. The loop
+re-discovers this per key (≤6 trials × 4 slow-LVS arm-flows each). Classifying baseline-covered DRC recipes for
+faster gapping would save compute; deferred deliberately (over-aggressive gapping could suppress a recipe that
+diverges on an unseen design — same discipline as the deferred symptom-coarseness fix).
