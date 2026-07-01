@@ -1,5 +1,5 @@
 ---
-description: Drive an RTL→GDS sign-off campaign on an ORFS platform (ASAP7 by default; nangate45/sky130hd/gf180/ihp also supported) in parallel waves, hunt r2g-rtl2gds skill bugs, and prove the engineer-learning-loop is closed (DRC clean + best Fmax + promoted recipes; LVS where the platform supports it).
+description: Drive an RTL→GDS sign-off campaign on an ORFS platform (ASAP7 by default; nangate45/sky130hd/gf180/ihp also supported) in parallel waves, hunt r2g-rtl2gds skill bugs, and prove the engineer-learning-loop is closed (DRC clean where the deck allows — asap7 KLayout DRC is not clean-able, Calibre is the authoritative path — + best Fmax + promoted recipes; LVS where the platform supports it).
 argument-hint: "[overrides, e.g. PLATFORM=asap7 WAVE_MAX=24 WORKERS=3 NUM_CORES=4]"
 ---
 
@@ -21,9 +21,10 @@ completed historical round), sky130hd, gf180, and ihp-sg13g2 also work.
    *newest* version of the skill (the canonical `r2g-rtl2gds/` tree, freshly symlink-deployed).
 2. **Batch the RTL designs into waves** and run them **in parallel to fully use the CPUs**
    (respecting the shared-host hard rule below — do not oversubscribe).
-3. For every design: drive sign-off to the platform's **honest "clean" state** (see the
-   contract below — for ASAP7 that is **DRC clean + RCX, LVS skipped**), and **search for the
-   best Fmax**.
+3. For every design: drive sign-off to the platform's **honest terminal state** (see the
+   contract below — for ASAP7 under the KLayout deck that is **DRC run with its honest residual
+   floor + RCX, LVS skipped**; asap7 KLayout DRC is NOT clean-able, so "DRC clean" is the wrong
+   goal there — genuine DRC-clean needs the Calibre deck), and **search for the best Fmax**.
 4. **Find bugs in the skill.** A campaign that runs without surfacing/fixing a real defect is
    suspicious — the loop is only as honest as its weakest writer. Treat every `fail` row, every
    misclassification, and every honesty-gate miss as a lead.
@@ -62,18 +63,36 @@ JDB=r2g-rtl2gds/knowledge/journal.sqlite
 clean design and teach the loop a lie. The clean-gate is fail-closed on `{clean, clean_beol,
 skipped}`, so a *legitimately skipped* check IS clean.
 
-| Platform     | KLayout DRC | LVS            | RCX | "Clean" means …                                   |
+| Platform     | KLayout DRC | LVS            | RCX | Honest terminal state means …                     |
 |--------------|-------------|----------------|-----|---------------------------------------------------|
-| **asap7**    | Yes         | **No (skipped)** | Yes | GDS + **DRC clean** + RCX; **`lvs=skipped` is honest-clean** |
+| **asap7**    | Yes¹        | **No (skipped)** | Yes | GDS + **DRC run w/ honest residual floor (NOT clean-able)** + RCX; **`lvs=skipped` is honest-clean** |
 | nangate45    | Yes         | Yes (KLayout)  | Yes | GDS + DRC clean + LVS clean + RCX                 |
 | sky130hd     | Yes         | Yes (Netgen)   | Yes | GDS + DRC clean + LVS clean + RCX                 |
 | gf180/ihp    | Yes         | Yes (KLayout)  | Yes | GDS + DRC clean + LVS clean + RCX                 |
+
+¹ **asap7 KLayout DRC is NOT clean-able.** The community `asap7.lydrc` deck is a DRM
+reverse-engineering with an *irreducible false-violation floor* (min ~8; e.g. traffic_control=25,
+master_dma=119 — `V*.M*.AUX`, `LIG*`, `V0`, `M4.S.5` tech-LEF-vs-deck artifacts present even on
+ORFS's own `gcd`). No flow lever clears it. So on asap7 the honest terminal DRC state is
+**`fail` with a documented residual floor**, and **"no asap7 DRC-clean" / "no asap7 DRC promotion"
+is HONEST platform truth, not a bug to chase.** Chasing asap7 to "DRC clean" is exactly what
+spawned the 2026-06-30/07-01 fabricated-clean bug. See `references/failure-patterns.md`
+"ASAP7 residual-DRC-by-design".
 
 **ASAP7 specifics (the new platform this command adds):**
 - ORFS ships an `asap7.lydrc` KLayout DRC deck and `rcx_patterns.rules`, but **no `.lylvs`
   deck**. So `run_lvs.sh` *gracefully skips* and records `lvs.status='skipped'` — that is the
   expected, honest result, **NOT** a failure to hunt. Do **not** chase ASAP7 designs to
-  "LVS clean"; success = **DRC clean + best Fmax (+ RCX)**.
+  "LVS clean" **or** "DRC clean"; success = **DRC ran + honest residual recorded + best Fmax (+ RCX)**.
+- **Authoritative asap7 signoff = Calibre, not KLayout.** The official (encrypted) ASAP7 Calibre
+  deck is the only genuinely clean-able asap7 DRC/LVS. This machine has Calibre 2025.1 + a license
+  but NOT the deck (only placeholder READMEs; the deck is a gated academic download from
+  https://asap.asu.edu/download/). A **guarded scaffold** is in place — `scripts/flow/run_calibre_drc.sh`
+  + `scripts/extract/extract_calibre_drc.py` (skip cleanly until the deck is installed; emit
+  `engine:calibre` verdicts in the `extract_drc` schema). When the deck is installed AND
+  `R2G_CALIBRE_SMOKE=1` confirms it loads on this Calibre (deck targets 2017.4 — a real version risk),
+  asap7 DRC-clean becomes achievable and the "no asap7 promotion is honest" premise must be revisited.
+  Runbook + integration steps: `references/calibre-signoff.md`.
 - ASAP7 is 7nm/dense; sizing is `CORE_UTILIZATION`-based (ORFS auto-sizes the die), so the same
   per-design configs port across platforms — but absolute areas/periods differ from nangate45.
 - Required tools for ASAP7: `yosys`/`openroad`/ORFS + **KLayout** (for DRC). magic/netgen are
@@ -262,6 +281,20 @@ several map to documented patterns — chase them down rather than papering over
     `skipped` (the honest-clean state), not `fail`. An ASAP7 design marked `incomplete`/`fail` *only*
     because LVS didn't "pass" is a misclassification bug — fix the gate, don't chase a non-existent
     LVS clean. (The match-then-writer-crash LVS-filed-as-`fail` lead applies to nangate45/sky130, not ASAP7.)
+- **Fabricated `clean` from STALE artifacts** (the 2026-06-30/07-01 bug — the single worst failure mode).
+  Any **asap7 `drc_status='clean'` or `lvs_status='clean'`** is an ALARM by construction: asap7 KLayout
+  DRC is not clean-able (footnote ¹) and asap7 has no LVS deck. The mechanism: an extractor read a LOCAL
+  `drc/6_drc_count.rpt` / `lvs/6_lvs.lvsdb` that was OLDER than its own `drc_run.log` / `lvs_run.log`
+  (a pre-copytree-fix A/B arm dir inherited a stale count, or the fresh result-copy was skipped), so a
+  25-violation run recorded `clean/0`. **`honesty.py` does NOT catch this** — its five gates check
+  `fail↔event` parity, not whether a *clean* verdict is real. Now guarded: `extract_drc.py` /
+  `extract_lvs.py` / `extract_calibre_drc.py` carry an mtime freshness guard → they emit `stale`
+  (fail-closed, outside the `{clean,clean_beol,skipped}` whitelist) rather than a fabricated clean, and
+  `run_drc.sh` purges stale local artifacts before `make drc`. Still WATCH the invariant directly:
+  `sqlite3 "$KDB" "SELECT COUNT(*) FROM runs WHERE platform='asap7' AND (drc_status='clean' OR
+  lvs_status='clean')"` MUST be 0. A non-zero count means a stale-read slipped a fabrication in — reconcile
+  it and check the arm-clone / copy path. The open belt: a 6th honesty gate (no-LVS-deck platform ⇒
+  `lvs∈{skipped,NULL}`). See `references/failure-patterns.md` "Stale prior-platform signoff report".
 - **`ab_trials` grows but `promoted` is flat for `$PLATFORM`** → the 2026-06-24 "arms are identical"
   alarm (subtler than empty `ab_trials`). Verify a trial's `metrics_json` shows the two arms genuinely
   diverging (different `is_success`/`outcome_score`/`fix_iters`), not wall-clock noise.
@@ -298,9 +331,13 @@ The loop is "closed" only when ALL of these hold — show the SQL/output for eac
   arms genuinely diverged (arm A control loses / arm B forced-recipe wins).
 - **Cross-design transfer:** a recipe learned on one design/class applies to another (symptom-keyed,
   not family-named) — evidence in `lessons`/`symptoms` or a promotion spanning classes.
-- **Signoff + Fmax (per the platform's contract above):** the platform's clean-count grew this
-  campaign — for **ASAP7 that is DRC-clean + RCX with `lvs=skipped`** (do NOT require LVS clean); for
-  nangate45/sky130 it is DRC-clean + LVS-clean. And Fmax is recorded (realistic GHz or an honest
+- **Signoff + Fmax (per the platform's contract above):** the platform's honest terminal-state count
+  grew this campaign. For **nangate45/sky130** that is DRC-clean + LVS-clean (+ RCX). For **ASAP7 under
+  KLayout** it is **GDS reached + DRC ran and recorded its residual floor as `fail` (NEVER a fabricated
+  `clean` — verify the fabrication invariant above is 0) + RCX + `lvs=skipped`** — do NOT require (or
+  expect) asap7 DRC-clean or an asap7 DRC promotion; that is honest platform truth, not a gap. (Genuine
+  asap7 DRC-clean requires the Calibre deck — if it is installed, run `run_calibre_drc.sh` and prove the
+  clean via `engine:calibre`.) And Fmax is recorded (realistic GHz or an honest
   `unconstrained`/`inconclusive`, never a silent `error`).
 
 If any of these fail, that failure **is** the next bug to fix — loop back to Step 3. Do not declare
