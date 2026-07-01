@@ -31,10 +31,10 @@
 set -u
 cd /proj/workarea/user5/agent-r2g
 
-PLATFORM=${PLATFORM:-asap7}
+PLATFORM=${PLATFORM:-sky130hd}
 # Per-platform ledger so each round's history stays immutable. The original
 # nangate45 round historically lives in campaign.jsonl — override LEDGER=... to
-# resume it; new rounds use <platform>_campaign.jsonl.
+# resume it (asap7 in asap7_campaign.jsonl); new rounds use <platform>_campaign.jsonl.
 LEDGER=${LEDGER:-design_cases/_batch/${PLATFORM}_campaign.jsonl}
 EL=r2g-rtl2gds/scripts/loop/engineer_loop.py
 KDB=r2g-rtl2gds/knowledge/knowledge.sqlite

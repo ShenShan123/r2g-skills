@@ -1,6 +1,6 @@
 ---
-description: Drive an RTL→GDS sign-off campaign on an ORFS platform (ASAP7 by default; nangate45/sky130hd/gf180/ihp also supported) in parallel waves, hunt r2g-rtl2gds skill bugs, and prove the engineer-learning-loop is closed (DRC clean where the deck allows — asap7 KLayout DRC is not clean-able, Calibre is the authoritative path — + best Fmax + promoted recipes; LVS where the platform supports it).
-argument-hint: "[overrides, e.g. PLATFORM=asap7 WAVE_MAX=24 WORKERS=3 NUM_CORES=4]"
+description: Drive an RTL→GDS sign-off campaign on an ORFS platform (sky130hd by default — full, genuinely clean-able DRC (Magic) + LVS (Netgen) + RCX signoff; nangate45/asap7/gf180/ihp also supported) in parallel waves, hunt r2g-rtl2gds skill bugs, and prove the engineer-learning-loop is closed (DRC clean where the deck allows — sky130hd cleans via Magic DRC + Netgen LVS; asap7 KLayout DRC is NOT clean-able and needs the un-installed Calibre deck — + best Fmax + promoted recipes).
+argument-hint: "[overrides, e.g. PLATFORM=sky130hd WAVE_MAX=24 WORKERS=3 NUM_CORES=4]"
 ---
 
 # /r2g-debug — Drive, debug, and PROVE the r2g-rtl2gds learning loop (any ORFS platform)
@@ -10,11 +10,15 @@ RTL→GDS sign-off campaign** over the RTL designs in this project on a chosen *
 platform**, and using that campaign as the test harness that surfaces skill bugs and proves
 the closed learning loop works.
 
-**Platform is the central knob — pick it from `$ARGUMENTS`, default `asap7`.** The whole
+**Platform is the central knob — pick it from `$ARGUMENTS`, default `sky130hd`.** The whole
 command is platform-parameterized; only the *signoff success contract* and a few bug-hunt
-leads change per platform (see "Per-platform signoff contract" below). ASAP7 (a 7nm
-predictive PDK shipped with ORFS) is the primary target of this command; nangate45 (the
-completed historical round), sky130hd, gf180, and ihp-sg13g2 also work.
+leads change per platform (see "Per-platform signoff contract" below). sky130hd (SkyWater
+130nm, with real Magic DRC + Netgen LVS decks — so DRC/LVS are genuinely clean-able and a
+DRC/LVS-clean win can actually **promote** a recipe) is the primary target of this command;
+nangate45 (the completed historical round), asap7, gf180, and ihp-sg13g2 also work. **asap7 is
+deliberately NOT the default: its community KLayout DRC deck has an irreducible false-violation
+floor and the authoritative Calibre deck is not installed on this machine, so asap7 DRC is not
+clean-able — see the "asap7 arm specifics" note below.**
 
 **Mission (do all of these — they are one connected goal, not a menu):**
 1. Run the RTL designs in this project through the **`$PLATFORM` sign-off flow** using the
@@ -22,9 +26,10 @@ completed historical round), sky130hd, gf180, and ihp-sg13g2 also work.
 2. **Batch the RTL designs into waves** and run them **in parallel to fully use the CPUs**
    (respecting the shared-host hard rule below — do not oversubscribe).
 3. For every design: drive sign-off to the platform's **honest terminal state** (see the
-   contract below — for ASAP7 under the KLayout deck that is **DRC run with its honest residual
-   floor + RCX, LVS skipped**; asap7 KLayout DRC is NOT clean-able, so "DRC clean" is the wrong
-   goal there — genuine DRC-clean needs the Calibre deck), and **search for the best Fmax**.
+   contract below — for the default **sky130hd** that is genuinely **DRC clean (Magic) + LVS
+   clean (Netgen) + RCX**; for the non-default asap7 arm under the KLayout deck it is instead
+   **DRC run with its honest residual floor + RCX, LVS skipped**, because asap7 KLayout DRC is
+   NOT clean-able), and **search for the best Fmax**.
 4. **Find bugs in the skill.** A campaign that runs without surfacing/fixing a real defect is
    suspicious — the loop is only as honest as its weakest writer. Treat every `fail` row, every
    misclassification, and every honesty-gate miss as a lead.
@@ -44,11 +49,11 @@ reuse them in every step:
 
 ```bash
 cd /proj/workarea/user5/agent-r2g
-PLATFORM=${PLATFORM:-asap7}                                   # $ARGUMENTS may override
+PLATFORM=${PLATFORM:-sky130hd}                               # $ARGUMENTS may override
 LEDGER=${LEDGER:-design_cases/_batch/${PLATFORM}_campaign.jsonl}
 # NOTE: the original nangate45 round historically lives in design_cases/_batch/campaign.jsonl
 # (892 designs, all terminal). To RESUME it, pass LEDGER=design_cases/_batch/campaign.jsonl.
-# New rounds (incl. asap7) use <platform>_campaign.jsonl so each round's history stays immutable.
+# New rounds (incl. sky130hd, asap7) use <platform>_campaign.jsonl so each round's history stays immutable.
 EL=r2g-rtl2gds/scripts/loop/engineer_loop.py
 KDB=r2g-rtl2gds/knowledge/knowledge.sqlite
 JDB=r2g-rtl2gds/knowledge/journal.sqlite
@@ -63,12 +68,13 @@ JDB=r2g-rtl2gds/knowledge/journal.sqlite
 clean design and teach the loop a lie. The clean-gate is fail-closed on `{clean, clean_beol,
 skipped}`, so a *legitimately skipped* check IS clean.
 
-| Platform     | KLayout DRC | LVS            | RCX | Honest terminal state means …                     |
-|--------------|-------------|----------------|-----|---------------------------------------------------|
-| **asap7**    | Yes¹        | **No (skipped)** | Yes | GDS + **DRC run w/ honest residual floor (NOT clean-able)** + RCX; **`lvs=skipped` is honest-clean** |
-| nangate45    | Yes         | Yes (KLayout)  | Yes | GDS + DRC clean + LVS clean + RCX                 |
-| sky130hd     | Yes         | Yes (Netgen)   | Yes | GDS + DRC clean + LVS clean + RCX                 |
-| gf180/ihp    | Yes         | Yes (KLayout)  | Yes | GDS + DRC clean + LVS clean + RCX                 |
+| Platform       | DRC            | LVS              | RCX | Honest terminal state means …                     |
+|----------------|----------------|------------------|-----|---------------------------------------------------|
+| **sky130hd** ★ | **Yes (Magic)**| **Yes (Netgen)** | Yes | **GDS + DRC clean + LVS clean + RCX** — the default; genuinely clean-able, so a clean win can promote |
+| nangate45      | Yes (KLayout)  | Yes (KLayout)    | Yes | GDS + DRC clean + LVS clean + RCX                 |
+| sky130hs       | Yes (Magic)    | Yes (Netgen)     | Yes | GDS + DRC clean + LVS clean + RCX                 |
+| gf180/ihp      | Yes (KLayout)  | Yes (KLayout)    | Yes | GDS + DRC clean + LVS clean + RCX                 |
+| asap7          | Yes¹ (KLayout) | **No (skipped)** | Yes | GDS + **DRC run w/ honest residual floor (NOT clean-able)** + RCX; **`lvs=skipped` is honest-clean** |
 
 ¹ **asap7 KLayout DRC is NOT clean-able.** The community `asap7.lydrc` deck is a DRM
 reverse-engineering with an *irreducible false-violation floor* (min ~8; e.g. traffic_control=25,
@@ -79,7 +85,24 @@ is HONEST platform truth, not a bug to chase.** Chasing asap7 to "DRC clean" is 
 spawned the 2026-06-30/07-01 fabricated-clean bug. See `references/failure-patterns.md`
 "ASAP7 residual-DRC-by-design".
 
-**ASAP7 specifics (the new platform this command adds):**
+**sky130hd specifics (the default platform):**
+- sky130hd uses **Magic** for DRC (`run_drc.sh` routes to `run_magic_drc.sh`) and **Netgen** for
+  LVS (`run_netgen_lvs.sh`) — both have real, clean-able decks, so the honest terminal state is a
+  *genuine* DRC-clean + LVS-clean, not a residual floor. A recipe that clears a real DRC/LVS
+  violation can therefore actually **promote** — the whole reason sky130hd is the default.
+- Required tools for sky130hd: `yosys`/`openroad`/ORFS + **magic** (DRC) + **netgen-lvs** (LVS) +
+  the **sky130A PDK**. On this machine magic/netgen live in `~/miniconda3/envs/eda` and sky130A is
+  staged at `/proj/workarea/user5/sky130_pdk/share/pdk/sky130A`, both pinned in
+  `references/env.local.sh` and green in `check_env.sh`. A red magic/netgen/PDK row **does** block
+  sky130 signoff — fix the env first, or DRC/LVS will falsely *skip* and teach the loop a lie.
+- **Wrong-LVS-tool guard (historical sky130 bug, 2026-06-17):** on sky130 LVS is **Netgen, NOT
+  KLayout**. The dominant early blocker was the loop running KLayout LVS on sky130 → 12/12
+  false-`fail`. `fix_signoff.sh` is now platform-aware and `extract_lvs` is most-recent-tool-wins;
+  before believing any sky130 `lvs=fail`, confirm the *right tool* ran.
+- sky130hd is 130nm; sizing is `CORE_UTILIZATION`-based (ORFS auto-sizes the die), so per-design
+  configs port across platforms — absolute areas/periods differ from asap7/nangate45.
+
+**asap7 arm specifics (non-default — kept for when the Calibre deck lands):**
 - ORFS ships an `asap7.lydrc` KLayout DRC deck and `rcx_patterns.rules`, but **no `.lylvs`
   deck**. So `run_lvs.sh` *gracefully skips* and records `lvs.status='skipped'` — that is the
   expected, honest result, **NOT** a failure to hunt. Do **not** chase ASAP7 designs to
@@ -123,7 +146,7 @@ git status -s | head
 # Free cores: this host is SHARED (user4 finesim often pins ~80/96). Size to what's free.
 nproc; uptime
 # Campaign ledger + pending count + honesty snapshot (the alarm panel). If $LEDGER does not
-# exist yet (a fresh platform round, e.g. asap7), Step 1b builds it — skip the status line.
+# exist yet (a fresh platform round, e.g. sky130hd), Step 1b builds it — skip the status line.
 [ -f "$LEDGER" ] && python3 "$EL" status --ledger "$LEDGER" 2>/dev/null | tail -20 \
   || echo "no ledger at $LEDGER yet — Step 1b will build the $PLATFORM round"
 
@@ -173,11 +196,13 @@ readlink .claude/skills/r2g-rtl2gds   # MUST resolve to the canonical r2g-rtl2gd
 bash r2g-rtl2gds/scripts/flow/check_env.sh   # the tools $PLATFORM needs must be green
 ```
 
-`check_env.sh` lists every ORFS platform it found and the tool paths. For **ASAP7** you need
-`yosys`/`openroad`/ORFS green **and `KLAYOUT_CMD` green** (KLayout drives ASAP7 DRC); magic/netgen
-being absent is fine (sky130-only). For nangate45/sky130 you additionally need the LVS tool of
-that platform (`references/env.local.sh` pins magic/netgen for sky130). A flow that aborts on a
-missing tool teaches the loop a lie — fix the environment *before* running flows.
+`check_env.sh` lists every ORFS platform it found and the tool paths. For the default **sky130hd**
+you need `yosys`/`openroad`/ORFS green **plus `magic` (DRC), `netgen-lvs` (LVS), and the sky130A
+PDK** green (`references/env.local.sh` pins all three on this machine). For nangate45 you need its
+KLayout LVS rule; for the non-default asap7 arm you instead need `KLAYOUT_CMD` green (KLayout drives
+asap7 DRC) and magic/netgen being absent is fine (sky130-only). A flow that aborts on a missing
+tool — **or silently *skips* DRC/LVS because its tool/PDK is unset** — teaches the loop a lie, so fix
+the environment *before* running flows.
 
 ## Step 1b — Bootstrap the per-platform ledger (run all RTL designs on `$PLATFORM`)
 
@@ -185,8 +210,8 @@ The campaign runs over **all set-up RTL designs configured for `$PLATFORM`**. Th
 of truth for "which designs are on platform P" is each project's own `constraints/config.mk`
 (`run_orfs.sh` builds against config.mk's `PLATFORM`, never the ledger field) — so a new platform
 round **re-points config.mk for the whole corpus, then enumerates it into a fresh ledger**.
-Bootstrap **only when `$LEDGER` is absent** (a fresh round — e.g. there is no `asap7` ledger yet;
-the prior round was nangate45). If `$LEDGER` already exists, treat it as immutable history:
+Bootstrap **only when `$LEDGER` is absent** (a fresh round — e.g. there is no `sky130hd` ledger yet;
+the prior rounds were nangate45 and asap7). If `$LEDGER` already exists, treat it as immutable history:
 resume its `pending` rows, and if it has 0 pending the round is COMPLETE — report that and stop
 (to deliberately start a new round, `rm` the ledger or pass a new `LEDGER=`):
 
@@ -277,24 +302,31 @@ several map to documented patterns — chase them down rather than papering over
 - **Misclassified aborts** — diagnose the *true* reason from the stage log via
   `references/failure-patterns.md` before believing the status. Common: early synth abort filed as
   `unseen_crash`; FLW-0024 die-too-small filed as place divergence.
-  - **ASAP7-specific lead:** `lvs` filed as `fail` when ASAP7 has **no LVS deck** → it must be
-    `skipped` (the honest-clean state), not `fail`. An ASAP7 design marked `incomplete`/`fail` *only*
-    because LVS didn't "pass" is a misclassification bug — fix the gate, don't chase a non-existent
-    LVS clean. (The match-then-writer-crash LVS-filed-as-`fail` lead applies to nangate45/sky130, not ASAP7.)
+  - **sky130-specific lead (default):** on sky130 LVS is **Netgen**, not KLayout. An sky130 `lvs=fail`
+    is a lead to check the *tool* first (wrong-tool KLayout-on-sky130 = 100% false-fail, 2026-06-17) and
+    the *match-then-writer-crash* class (LVS matched with 0 mismatches, then the net2id writer crashed →
+    should be `crash`/retry, not `fail`). Only a real connectivity mismatch is a genuine sky130 LVS fail.
+  - **asap7-arm lead (non-default):** `lvs` filed as `fail` when asap7 has **no LVS deck** → it must be
+    `skipped` (the honest-clean state), not `fail`. An asap7 design marked `incomplete`/`fail` *only*
+    because LVS didn't "pass" is a misclassification bug — fix the gate, don't chase a non-existent LVS clean.
 - **Fabricated `clean` from STALE artifacts** (the 2026-06-30/07-01 bug — the single worst failure mode).
-  Any **asap7 `drc_status='clean'` or `lvs_status='clean'`** is an ALARM by construction: asap7 KLayout
-  DRC is not clean-able (footnote ¹) and asap7 has no LVS deck. The mechanism: an extractor read a LOCAL
-  `drc/6_drc_count.rpt` / `lvs/6_lvs.lvsdb` that was OLDER than its own `drc_run.log` / `lvs_run.log`
-  (a pre-copytree-fix A/B arm dir inherited a stale count, or the fresh result-copy was skipped), so a
-  25-violation run recorded `clean/0`. **`honesty.py` does NOT catch this** — its five gates check
-  `fail↔event` parity, not whether a *clean* verdict is real. Now guarded: `extract_drc.py` /
-  `extract_lvs.py` / `extract_calibre_drc.py` carry an mtime freshness guard → they emit `stale`
-  (fail-closed, outside the `{clean,clean_beol,skipped}` whitelist) rather than a fabricated clean, and
-  `run_drc.sh` purges stale local artifacts before `make drc`. Still WATCH the invariant directly:
-  `sqlite3 "$KDB" "SELECT COUNT(*) FROM runs WHERE platform='asap7' AND (drc_status='clean' OR
-  lvs_status='clean')"` MUST be 0. A non-zero count means a stale-read slipped a fabrication in — reconcile
-  it and check the arm-clone / copy path. The open belt: a 6th honesty gate (no-LVS-deck platform ⇒
-  `lvs∈{skipped,NULL}`). See `references/failure-patterns.md` "Stale prior-platform signoff report".
+  The mechanism: an extractor read a LOCAL `drc/6_drc_count.rpt` / `lvs/6_lvs.lvsdb` that was OLDER than
+  its own `drc_run.log` / `lvs_run.log` (a pre-copytree-fix A/B arm dir inherited a stale count, or the
+  fresh result-copy was skipped), so a 25-violation run recorded `clean/0`. **`honesty.py` does NOT catch
+  this** — its five gates check `fail↔event` parity, not whether a *clean* verdict is real. Now guarded:
+  `extract_drc.py` / `extract_lvs.py` / `extract_calibre_drc.py` carry an mtime freshness guard → they
+  emit `stale` (fail-closed, outside the `{clean,clean_beol,skipped}` whitelist) rather than a fabricated
+  clean, and `run_drc.sh` purges stale local artifacts before `make drc`.
+  - **On the default sky130hd a `clean` is EXPECTED and legitimate — it IS the goal — but it MUST be
+    FRESH.** So the invariant here is not "clean ⇒ alarm" (that is the asap7 rule) but **`stale` must be
+    0** and a fresh result-copy must back every clean: `sqlite3 "$KDB" "SELECT COUNT(*) FROM runs WHERE
+    drc_status='stale' OR lvs_status='stale'"` MUST be 0, and spot-check that a `clean` design's
+    `6_drc_count.rpt`/`6_lvs.lvsdb` is NEWER than its `drc_run.log`/`lvs_run.log`.
+  - **On the non-default asap7 arm, ANY `drc_status='clean'` or `lvs_status='clean'` is an ALARM by
+    construction** (asap7 DRC is not clean-able — footnote ¹ — and asap7 has no LVS deck): `sqlite3
+    "$KDB" "SELECT COUNT(*) FROM runs WHERE platform='asap7' AND (drc_status='clean' OR
+    lvs_status='clean')"` MUST be 0. A non-zero count means a stale-read slipped a fabrication in.
+  See `references/failure-patterns.md` "Stale prior-platform signoff report".
 - **`ab_trials` grows but `promoted` is flat for `$PLATFORM`** → the 2026-06-24 "arms are identical"
   alarm (subtler than empty `ab_trials`). Verify a trial's `metrics_json` shows the two arms genuinely
   diverging (different `is_success`/`outcome_score`/`fix_iters`), not wall-clock noise.
@@ -332,13 +364,14 @@ The loop is "closed" only when ALL of these hold — show the SQL/output for eac
 - **Cross-design transfer:** a recipe learned on one design/class applies to another (symptom-keyed,
   not family-named) — evidence in `lessons`/`symptoms` or a promotion spanning classes.
 - **Signoff + Fmax (per the platform's contract above):** the platform's honest terminal-state count
-  grew this campaign. For **nangate45/sky130** that is DRC-clean + LVS-clean (+ RCX). For **ASAP7 under
-  KLayout** it is **GDS reached + DRC ran and recorded its residual floor as `fail` (NEVER a fabricated
-  `clean` — verify the fabrication invariant above is 0) + RCX + `lvs=skipped`** — do NOT require (or
-  expect) asap7 DRC-clean or an asap7 DRC promotion; that is honest platform truth, not a gap. (Genuine
-  asap7 DRC-clean requires the Calibre deck — if it is installed, run `run_calibre_drc.sh` and prove the
-  clean via `engine:calibre`.) And Fmax is recorded (realistic GHz or an honest
-  `unconstrained`/`inconclusive`, never a silent `error`).
+  grew this campaign. For the default **sky130hd** (and nangate45/sky130hs/gf180/ihp) that is a genuine
+  **DRC-clean + LVS-clean (+ RCX)** — the count of designs reaching that state MUST grow, and a promoted
+  recipe should be backed by a real DRC/LVS-clean win (not a residual-floor tie). For the non-default
+  **asap7** arm it is instead **GDS reached + DRC ran and recorded its residual floor as `fail` (NEVER a
+  fabricated `clean` — verify the asap7 fabrication invariant is 0) + RCX + `lvs=skipped`**; do NOT
+  require asap7 DRC-clean (needs the Calibre deck — if installed, run `run_calibre_drc.sh` and prove via
+  `engine:calibre`). And Fmax is recorded (realistic GHz or an honest `unconstrained`/`inconclusive`,
+  never a silent `error`).
 
 If any of these fail, that failure **is** the next bug to fix — loop back to Step 3. Do not declare
 victory on the strength of machinery existing; the A/B arms must have *executed, diverged, and
@@ -355,11 +388,12 @@ promoted*.
 
 ## Looping this command
 
-This command is **idempotent and resumable**, so it is safe under `/loop` (e.g.
-`/loop /r2g-debug PLATFORM=asap7`): each tick re-deploys the skill, picks up the same per-platform
-`$LEDGER` where it left off (Step 1b is a no-op once the ledger has designs), runs the next waves,
-and re-verifies the honesty invariants. Use a per-platform `pool.env` to retune the pool between
-ticks without restart. Keep `WORKERS × NUM_CORES ≤ free cores` on every tick.
+This command is **idempotent and resumable**, so it is safe under `/loop` (e.g. `/loop /r2g-debug`,
+which defaults to `PLATFORM=sky130hd`; pass `PLATFORM=…` to drive a different arm): each tick
+re-deploys the skill, picks up the same per-platform `$LEDGER` where it left off (Step 1b is a no-op
+once the ledger has designs), runs the next waves, and re-verifies the honesty invariants. Use a
+per-platform `pool.env` to retune the pool between ticks without restart. Keep
+`WORKERS × NUM_CORES ≤ free cores` on every tick.
 
 ## Guardrails (hard rules — violating one corrupts the campaign or the host)
 
@@ -367,7 +401,8 @@ ticks without restart. Keep `WORKERS × NUM_CORES ≤ free cores` on every tick.
   `FLOW_VARIANT` from the project-dir basename — keep names unique).
 - Never set `PLACE_DENSITY_LB_ADDON` below `0.10` (placer divergence is irrecoverable).
 - For >100K-cell designs, never run multiple LVS jobs concurrently (3–5 GB RAM each → 2–3× wall time).
-  (N/A on ASAP7 — LVS is skipped — but DRC/extraction on large designs still wants headroom.)
+  (This BITES on the default sky130hd — Netgen LVS is real; on the asap7 arm LVS is skipped, but
+  DRC/extraction on large designs still wants headroom either way.)
 - `WORKERS × NUM_CORES ≤ free cores` — the default grabs `nproc` (96) per flow; N flows oversubscribe N×.
 - **One platform per round.** Don't mix platforms in one ledger or re-point config.mk for designs that
   are mid-flow on another platform — `run_orfs.sh` builds against config.mk's PLATFORM. Re-target only
