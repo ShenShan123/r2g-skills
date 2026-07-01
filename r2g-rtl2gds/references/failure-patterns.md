@@ -1125,9 +1125,18 @@ strategy_ids: [netgen_diode_normalize, buffer_port_feedthroughs]
    follow-up:** this round's already-generated 671 pending configs were written PRE-fix, so they
    still lack the hook — a re-pointed round needs EITHER a between-waves targeted config.mk re-point
    for pending (not in-flow) designs, OR loop-side recovery (detect `top_pin_mismatch` → add hook →
-   re-flow, mirroring the FLW-0024/PPL-0024/PDN-0185 loop self-heal pattern). End-to-end validation:
-   re-flowed `picorv32_mem_adapter` with the hook added to its config.mk (in-progress at writing;
-   verify LVS `top_pin_mismatch → clean`).
+   re-flow, mirroring the FLW-0024/PPL-0024/PDN-0185 loop self-heal pattern). **End-to-end validation
+   CONFIRMED + committed `664f9c3`:** re-flowing `picorv32_mem_adapter` with the hook inserted **42
+   `sky130_fd_sc_hd__buf_4` buffers on port-feedthrough nets** (flow.log), flipping Netgen from "Top
+   level cell failed pin matching" → **"Circuits match uniquely"** (`top_pin_mismatch → clean`, DRC
+   still clean). **Cross-design transfer CONFIRMED:** the same hook cleared `top_pin_mismatch → clean`
+   on BOTH `picorv32_mem_adapter` AND `sirv_gnrl_icb_arbt` (drc=clean+lvs=clean+orfs=pass ingested for
+   both; their `catalog_exhausted` escalations auto-drained on clean). The two designs are the exact
+   `evidence_designs` of heuristics symptom `a0d6b4c6` (top_pin_mismatch), which had `strategies:{}`
+   — this fix restarts that learning. NOTE for future recovery: drive an isolated design through a
+   DIRECT flow+signoff (run_orfs.sh + run_drc.sh + run_netgen_lvs.sh), NOT `engineer_loop run` — the
+   latter fires the GLOBAL (platform-unscoped) A/B planner and balloons a 2-design temp ledger into
+   dozens of cross-platform arm entries (the tick-1 "A/B planner not platform-scoped" finding).
 
 6. **`extract_lvs.py` clobbered a clean Netgen verdict on DRC-fail designs (2026-06-13,
    FIXED).** `extract_lvs.py` is a *KLayout* lvsdb/log parser. A Netgen run leaves NO KLayout
