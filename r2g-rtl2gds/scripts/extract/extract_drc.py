@@ -89,6 +89,34 @@ def parse_drc_log(drc_dir: Path) -> dict:
     return info
 
 
+def artifacts_stale(drc_dir: Path, tol: float = 2.0) -> bool:
+    """True when a fresh drc_run.log post-dates the local DRC count/lyrdb.
+
+    run_drc.sh writes drc_run.log FIRST, then copies the fresh 6_drc.lyrdb /
+    6_drc_count.rpt over it — so in a healthy run the artifacts are at least as
+    new as the log. If that copy is skipped (a pre-copytree-fix A/B arm dir whose
+    stale drc/ was inherited, or an interrupted run), the LOCAL artifacts stay
+    OLDER than the log while the real violations were written only to the
+    ORFS-side reports/ dir. Reading the stale local artifacts then certifies a
+    false 'clean' — the 2026-06-30 asap7 arm fabricated-clean bug (6 arms recorded
+    drc=clean while the real asap7.lydrc run found 25 violations). This mirrors
+    extract_lvs.py's mtime-precedence guard (commit b710905).
+
+    Returns False when no drc_run.log exists (offline/unit fixtures that never
+    invoked run_drc.sh) so those callers are unaffected.
+    """
+    runlog = drc_dir / 'drc_run.log'
+    if not runlog.exists():
+        return False
+    run_m = runlog.stat().st_mtime
+    arts = [drc_dir / '6_drc_count.rpt', drc_dir / '6_drc.lyrdb']
+    present = [p.stat().st_mtime for p in arts if p.exists()]
+    if not present:
+        # A run happened but left no local count/lyrdb -> not a fresh clean.
+        return True
+    return max(present) < run_m - tol
+
+
 def main():
     if len(sys.argv) < 3:
         print('usage: extract_drc.py <project-root> <output.json>', file=sys.stderr)
@@ -136,6 +164,8 @@ def main():
     # a 0-violation result is the qualified status clean_beol, never plain clean.
     beol_only = bool(drc_result) and str(drc_result.get('drc_mode') or '').startswith('beol_only')
 
+    stale = artifacts_stale(drc_dir)
+
     if drc_result and drc_result.get('status') in ('stuck', 'timeout', 'failed', 'skipped'):
         status = drc_result['status']
     elif total_count == 0:
@@ -145,6 +175,16 @@ def main():
     else:
         status = 'unknown'
 
+    # HONESTY GUARD: never certify clean from DRC artifacts that are older than
+    # the run that just executed. A fresh drc_run.log over a stale local
+    # count/lyrdb means the fresh count was not copied in (run_drc.sh copy step
+    # skipped) — the real result lives only in the ORFS-side reports/ dir. Emit
+    # 'stale' rather than a fabricated 'clean' so ingest never records a lie.
+    # (2026-06-30 asap7 arm fabricated-clean regression; see failure-patterns.md.)
+    if stale and status in ('clean', 'clean_beol'):
+        status = 'stale'
+        total_count = -1  # -> total_violations serialized as None
+
     result = {
         'status': status,
         'total_violations': total_count if total_count >= 0 else None,
@@ -152,6 +192,9 @@ def main():
         'categories': categories,
         'log_info': log_info,
     }
+    if stale:
+        result['note'] = ('stale local DRC artifacts (older than drc_run.log); '
+                          'fresh 6_drc_count.rpt/6_drc.lyrdb not copied in')
     if drc_result:
         # Carry through extra context (stuck_at_rule, reason, timeout_s, drc_mode, etc.)
         for k in ('stuck_at_rule', 'reason', 'timeout_s', 'exit_code', 'note', 'drc_mode'):

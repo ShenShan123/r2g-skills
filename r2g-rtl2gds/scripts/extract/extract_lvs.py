@@ -331,6 +331,25 @@ def main():
         except Exception:
             pass  # malformed netgen JSON -> fall through to KLayout parsing
 
+    # HONESTY GUARD (mirrors extract_drc.artifacts_stale): only the raw-KLayout
+    # path reaches here (skip + netgen verdicts already returned above). A fresh
+    # lvs_run.log that post-dates the KLayout verdict artifacts (6_lvs.lvsdb /
+    # 6_lvs.log) means a `make lvs` re-ran but wrote no fresh lvsdb here — the
+    # local ones are STALE (an inherited pre-copytree-fix A/B arm dir, or an
+    # aborted run). A stale 'match' certifies a false 'clean' from a PRIOR run's
+    # netlist: the LVS leg of the 2026-06-30 asap7 arm fabricated-clean bug (a
+    # June-19 6_lvs.lvsdb read as clean on an asap7 arm that has no LVS deck and
+    # whose CDL step failed with no skip marker written). Only downgrade a
+    # would-be 'clean' (below) — a run that crashed/incompleted with NO fresh
+    # lvsdb is legitimately 'crash'/'incomplete', not stale. nangate45 healthy
+    # KLayout LVS writes lvsdb+log in the SAME run as lvs_run.log -> not stale ->
+    # byte-identical. See references/failure-patterns.md.
+    _runlog = lvs_dir / 'lvs_run.log'
+    _verdict_arts = [lvs_dir / '6_lvs.lvsdb', lvs_dir / '6_lvs.log']
+    _present_m = [p.stat().st_mtime for p in _verdict_arts if p.exists()]
+    lvs_stale = bool(_runlog.exists() and _present_m
+                     and max(_present_m) < _runlog.stat().st_mtime - 2.0)
+
     lvsdb_result = parse_lvsdb(lvs_dir)
     log_info = parse_lvs_log(lvs_dir)
 
@@ -381,6 +400,14 @@ def main():
             result_reason = 'lvs_no_verdict_no_lvsdb'
         else:
             status = 'unknown'
+
+    # Freshness override: a would-be 'clean' derived from KLayout artifacts that
+    # are older than a fresh lvs_run.log is a STALE prior-run verdict, not this
+    # run's result — emit 'stale' so ingest never records a fabricated clean.
+    if lvs_stale and status == 'clean':
+        status = 'stale'
+        mismatch_count = -1  # -> mismatch_count serialized as None
+        result_reason = 'stale_klayout_artifacts_older_than_lvs_run_log'
 
     result = {
         'status': status,

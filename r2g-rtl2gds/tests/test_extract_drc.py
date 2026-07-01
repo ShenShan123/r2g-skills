@@ -247,3 +247,73 @@ def test_drc_mode_full_carried_through(tmp_path):
         f"expected drc_mode='full', got {result.get('drc_mode')!r}"
     )
     assert result["status"] == "clean"
+
+
+# ── Freshness guard (2026-06-30 asap7 arm fabricated-clean regression) ──────────
+# A DRC re-run writes a fresh drc_run.log, then run_drc.sh copies the fresh
+# 6_drc.lyrdb / 6_drc_count.rpt over it. If that copy is skipped (stale pre-fix
+# arm dirs whose ORFS reports/ path never matched, or an interrupted run), the
+# LOCAL count.rpt/lyrdb stay OLD. The extractor must NOT read those stale
+# artifacts and certify 'clean' — that is the exact mechanism that recorded six
+# asap7 arms as drc=clean while the real ORFS run found 25 violations.
+# Mirrors extract_lvs.py's mtime-precedence guard (commit b710905).
+import os
+
+
+def _age(path: Path, seconds_old: float) -> None:
+    """Backdate a file's mtime by `seconds_old` relative to the newest sibling."""
+    st = path.stat()
+    os.utime(path, (st.st_atime, st.st_mtime - seconds_old))
+
+
+def test_stale_artifacts_after_rerun_not_reported_clean(tmp_path):
+    """Stale local lyrdb/count (older than drc_run.log) must NOT read as clean.
+
+    Simulates the fabricated-clean arm: an OLD count.rpt=0 + empty lyrdb from a
+    prior copy, then a fresh drc_run.log from a re-run whose real violations were
+    written only to the ORFS-side reports/ dir. The extractor sees stale local
+    artifacts and must refuse to certify clean.
+    """
+    proj = _make_project(tmp_path, lyrdb_content=None, count_rpt=0)
+    drc_dir = proj / "drc"
+    # A fresh run log (this is what run_drc.sh writes at line ~186 of the re-run).
+    (drc_dir / "drc_run.log").write_text("elapsed: 28.07\n", encoding="utf-8")
+    # Backdate the count.rpt to be much OLDER than drc_run.log (stale copy).
+    _age(drc_dir / "6_drc_count.rpt", 900_000.0)  # ~10 days older
+
+    out = tmp_path / "drc_stale.json"
+    r = _run(proj, out)
+    assert r.returncode == 0, r.stderr
+    result = json.loads(out.read_text())
+
+    assert result["status"] != "clean", (
+        f"stale artifacts must not certify clean, got {result['status']!r}"
+    )
+    assert result["status"] == "stale", (
+        f"expected status='stale', got {result['status']!r}"
+    )
+    # Must not assert a violation count from stale data.
+    assert result["total_violations"] is None
+
+
+def test_fresh_artifacts_after_rerun_still_clean(tmp_path):
+    """A genuinely-fresh 0-violation run (artifacts newer than log) stays clean.
+
+    Guards against the freshness check over-firing: in a healthy run, run_drc.sh
+    writes drc_run.log then copies the fresh count.rpt AFTER it, so the count is
+    newer. That must remain a plain 'clean'.
+    """
+    proj = _make_project(tmp_path, lyrdb_content=None, count_rpt=0)
+    drc_dir = proj / "drc"
+    (drc_dir / "drc_run.log").write_text("elapsed: 28.07\n", encoding="utf-8")
+    # count.rpt copied AFTER the log -> make it strictly newer.
+    _age(drc_dir / "drc_run.log", 5.0)
+
+    out = tmp_path / "drc_fresh.json"
+    r = _run(proj, out)
+    assert r.returncode == 0, r.stderr
+    result = json.loads(out.read_text())
+    assert result["status"] == "clean", (
+        f"fresh 0-viol run must stay clean, got {result['status']!r}"
+    )
+    assert result["total_violations"] == 0

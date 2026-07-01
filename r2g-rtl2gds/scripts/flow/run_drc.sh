@@ -7,7 +7,7 @@ set -euo pipefail
 # Results are collected into <project-dir>/drc/
 
 PROJECT_DIR="${1:-}"
-PLATFORM="${2:-nangate45}"
+PLATFORM="${2:-asap7}"
 # Derive FLOW_VARIANT from project directory basename (matching run_orfs.sh logic)
 if [[ -n "${3:-}" ]]; then
   FLOW_VARIANT="$3"
@@ -165,6 +165,18 @@ cd "$FLOW_DIR"
 
 # Prevent env collision: ORFS Makefile uses SCRIPTS_DIR internally
 unset SCRIPTS_DIR 2>/dev/null || true
+
+# HONESTY: purge any STALE local DRC artifacts before the run. If the fresh
+# result-copy below (~line 200) is skipped — e.g. a pre-copytree-fix A/B arm dir
+# that inherited a June-19 6_drc_count.rpt=0, or an interrupted run — an OLD
+# count/lyrdb left in place would be misread by run_drc.sh's count logic AND by
+# extract_drc.py as a fresh 0-violation clean, fabricating a clean signoff over a
+# run that actually found violations. Clearing them first means a failed copy
+# falls through to the "no count report" path -> honest stuck/error, never a
+# stale-0 clean. (2026-06-30 asap7 arm fabricated-clean regression; the six
+# asap7 arms recorded drc=clean while the real asap7.lydrc run found 25 viols.)
+rm -f "$PROJECT_DIR/drc/6_drc.lyrdb" "$PROJECT_DIR/drc/6_drc_count.rpt" \
+      "$PROJECT_DIR/drc/6_drc.log" 2>/dev/null || true
 
 DRC_TIMEOUT="${DRC_TIMEOUT:-7200}"
 echo "Timeout: ${DRC_TIMEOUT}s"

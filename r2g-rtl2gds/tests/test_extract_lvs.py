@@ -496,3 +496,37 @@ def test_real_mismatch_still_fails(tmp_path):
         "#%lvsdb-klayout\nmismatch found\n", encoding="utf-8")
     res = _run_script(proj, tmp_path / "lvs.json")
     assert res["status"] == "fail", res
+
+
+def test_stale_klayout_artifacts_after_rerun_not_reported_clean(tmp_path):
+    """A matching 6_lvs.lvsdb that is OLDER than a fresh lvs_run.log must NOT read as clean.
+
+    Models the LVS leg of the 2026-06-30 asap7 arm fabricated-clean bug: an
+    inherited June-19 6_lvs.lvsdb/6_lvs.log (text match) with a June-30 lvs_run.log
+    from a `make lvs` re-run that wrote no fresh lvsdb and no skip marker. Reading
+    the stale artifacts certified a false 'clean' on an asap7 arm that has no LVS
+    deck. The freshness guard must emit 'stale', not 'clean'.
+    """
+    proj = _make_project(tmp_path, log_6_lvs="circuits match\n", lvsdb=True)
+    lvs_dir = proj / "lvs"
+    (lvs_dir / "lvs_run.log").write_text("make lvs\n", encoding="utf-8")
+    # Backdate the KLayout verdict artifacts to be much older than lvs_run.log.
+    for name in ("6_lvs.lvsdb", "6_lvs.log"):
+        p = lvs_dir / name
+        st = p.stat()
+        os.utime(p, (st.st_atime, st.st_mtime - 900_000.0))
+    res = _run_script(proj, tmp_path / "lvs_stale.json")
+    assert res["status"] == "stale", res
+    assert res["mismatch_count"] is None, res
+
+
+def test_fresh_klayout_artifacts_still_clean(tmp_path):
+    """Guard must not over-fire: a match written in the same run as lvs_run.log stays clean."""
+    proj = _make_project(tmp_path, log_6_lvs="circuits match\n", lvsdb=True)
+    lvs_dir = proj / "lvs"
+    (lvs_dir / "lvs_run.log").write_text("make lvs\n", encoding="utf-8")
+    # Backdate lvs_run.log so the verdict artifacts are newer (healthy ordering).
+    st = (lvs_dir / "lvs_run.log").stat()
+    os.utime(lvs_dir / "lvs_run.log", (st.st_atime, st.st_mtime - 5.0))
+    res = _run_script(proj, tmp_path / "lvs_fresh.json")
+    assert res["status"] == "clean", res
