@@ -1174,6 +1174,30 @@ def _arm_awaiting_judge(led: Ledger, design: str) -> bool:
                 and not e.get("judged"))
 
 
+def _ledger_round_platform(led: "Ledger") -> str | None:
+    """The dominant platform of the ledger's NON-arm (base design) entries -- i.e. THIS
+    round's platform. A campaign is scoped to ONE platform (hard rule: "one platform per
+    round"), so ab-drain should only validate candidates FOR that platform. Validating a
+    cross-platform candidate (an asap7 candidate during a sky130 round) plans A/B arms that
+    run the WRONG platform's signoff -- slow asap7.lydrc DRC that can NEVER promote (asap7 is
+    not DRC-clean-able) -- and stalls the wave for HOURS (2026-07-01 FINDING #3: wave 1 wedged
+    6h+ on asap7 arms). Returns None when the round platform is indeterminate (mixed / empty
+    ledger) so scoping is SKIPPED -- fail-open, never wrongly starve a legitimate candidate."""
+    from collections import Counter
+    plats: Counter = Counter()
+    for e in led.entries():
+        if e.get("kind") == "ab_arm":          # arm entries may carry other platforms
+            continue
+        p = e.get("platform")
+        if p:
+            plats[p] += 1
+    if not plats:
+        return None
+    top, n = plats.most_common(1)[0]
+    # Require a clear majority so a genuinely mixed ledger is NOT mis-scoped (fail-open).
+    return top if n >= 0.6 * sum(plats.values()) else None
+
+
 def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                              repeats: int | None = None) -> int:
     """For every pending candidate recipe, plan an A/B trial and append its arm
@@ -1189,7 +1213,20 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
     import recipe_lifecycle
     k = repeats if repeats is not None else ab_runner.ab_repeats()
     appended = 0
+    # Platform-scope the drain to THIS round's platform (2026-07-01 FINDING #3). Deriving it
+    # from the ledger (not a flag) covers every caller -- run / ab_drain / ab_enqueue -- with
+    # one change and no arg-threading. None -> indeterminate -> scope disabled (fail-open).
+    from collections import Counter as _Counter
+    round_platform = _ledger_round_platform(led)
+    _skipped_offplatform: _Counter = _Counter()
     for key in recipe_lifecycle.pending_candidates(conn):
+        # Off-platform skip: a candidate for a DIFFERENT platform than this round plans arms
+        # that run the wrong platform's signoff (asap7 arms on a sky130 round: slow asap7.lydrc
+        # DRC that can NEVER promote) and wedges the wave. Leave it 'candidate' (validated when
+        # a round on ITS platform runs); do NOT escalate/demote -- it is healthy, just not now.
+        if round_platform and key.get("platform") and key["platform"] != round_platform:
+            _skipped_offplatform[key["platform"]] += 1
+            continue
         # Coverage guard (2026-06-24 audit, bugs #1/#2): never plan a trial whose arms
         # CANNOT diverge — a no-op strategy (lvs_resolve_unknown), or a candidate that has
         # already accrued AB_INCONCLUSIVE_MAX inconclusive trials with ZERO decisive
@@ -1318,6 +1355,10 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                         arm_entry["pin_perimeter_target"] = d_pin_target
                     led.add(arm_entry)
                     appended += 1
+    if _skipped_offplatform:                    # no silent caps: report the scope
+        print(f"[loop] A/B platform-scope (round={round_platform}): skipped "
+              f"{sum(_skipped_offplatform.values())} off-platform candidate(s) "
+              f"{dict(_skipped_offplatform)} -- validated in their own platform's round")
     return appended
 
 

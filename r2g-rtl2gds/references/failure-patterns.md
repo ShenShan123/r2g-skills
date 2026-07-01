@@ -2562,3 +2562,25 @@ Known-benign WARNs on the live store at first wiring: one `sky130hd density_reli
 **predates** the 2026-06-17 promote/ab_launch journaling (L1/L2), and two nangate45 journal `run_id`s
 whose projects were wiped in the 2026-06-19 `design_cases` purge (J4). Test:
 `tests/test_check_db_integrity.py`.
+
+### Sub-variant: ab-drain not platform-scoped stalls a focused round (2026-07-01, FINDING #3, FIXED)
+
+`engineer_loop run` scopes the FLOW phase per-ledger-entry (`entry["platform"]`), but the A/B
+phase (`plan_arms_for_candidates`) iterated **every** pending candidate in the shared
+`recipe_status` regardless of platform. On a **sky130 round** the per-wave `ab-drain` therefore
+planned **asap7** candidate arms (and nangate45 ones). asap7 arms run `asap7.lydrc` KLayout DRC —
+**slow** *and* structurally unable to promote (asap7 is not DRC-clean-able, footnote ¹ of the
+signoff contract) — so they wedged wave 1 for **6h+** (host idle, the next wave's larger pool never
+applied, only benign arm escalations accrued). Symptom: `pgrep` shows the driver running
+`asap7/<design>` `asap7.lydrc` arms while the sky130 `run` phase is long done; `waves.log` shows no
+new `WAVE_START`; pending flat while escalated climbs with only arm/`unvalidatable`/`route` reasons.
+This is the campaign-throughput analogue of the tick-1 temp-ledger blow-up (a global A/B planner is
+too broad for a single-platform round). **Fix:** `_ledger_round_platform(led)` derives the round's
+platform from the ledger's base (non-`ab_arm`) entries (dominant, ≥60% majority else `None` =
+fail-open), and `plan_arms_for_candidates` **skips off-platform candidates** — leaving them
+`candidate` (validated when a round on THEIR platform runs), never demoting/escalating them. One
+change covers all callers (`run`/`ab_drain`/`ab_enqueue`) because each already receives `led`; a
+one-line `[loop] A/B platform-scope … skipped N off-platform candidate(s)` summary keeps it honest
+(no silent cap). Tests: `tests/test_ab_platform_scope.py` (5). Aligns ab-drain with the "one
+platform per round" hard rule. (Belt-and-suspenders on restart: `DRC_TIMEOUT` bounds any residual
+slow arm.)
