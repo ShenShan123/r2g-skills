@@ -2007,6 +2007,41 @@ The FreePDK45.lydrc DRC rule deck involves expensive polygon boolean operations 
 - If DRC is not needed, skip it and rely on LVS+RCX for signoff
 - **nangate45 LVS rule file (`FreePDK45.lylvs`) is NOT shipped with this ORFS checkout.** `run_lvs.sh` gracefully emits `lvs_result.json` with `status=skipped` in this case. If you need LVS on nangate45, obtain the adapted FreePDK45.lylvs from the reference library manually.
 
+## ASAP7 residual-DRC-by-design — `asap7.lydrc` is NOT flow-achievable-clean (deck-vs-flow truth, 2026-06-30)
+
+**Finding (decisive, workflow-verified):** asap7 designs SYSTEMATICALLY carry residual `asap7.lydrc`
+KLayout-signoff DRC that **no ORFS flow lever (density/route/util relief) can clear** — this is a
+predictive-PDK deck-vs-flow TRUTH, not a fixable loop/flow bug and not a stale-log artifact.
+- **Proof:** running the shipped deck on ORFS's OWN canonical `gcd` reference —
+  `klayout -zz -r platforms/asap7/drc/asap7.lydrc` on `results/asap7/gcd/base/6_final.gds` — yields **20
+  violations** (V1.S.4, V*.M*.AUX.2, M4.S.5, M1.S.6, LIG.S.4-5, …), the exact rule classes that dominate
+  every campaign design. Yet ORFS ships gcd as *router-DRC-clean*. **ORFS deliberately gates asap7 only on
+  `detailedroute__route__drc_errors=0`** (TritonRoute's LEF-based DRC; `designs/asap7/gcd/rules-base.json`);
+  the community `asap7.lydrc` deck (reverse-engineered from the ASAP7 DRM) is a **non-default, non-gated**
+  `make drc` target. So router-clean ≠ `asap7.lydrc`-clean *by design*.
+- **The irreducible floor in EVERY design** (min 8 violations, none 0): ~⅓ FEOL/MOL **cell/library-internal**
+  on layers the detailed router never emits (`GATE`=TYPE MASTERSLICE poly; `LIG/LISD/SDT/V0`=MOL —
+  `run_drc.sh:156` already labels this block "all library-internal"); ~⅙ **tech-LEF via-width AUX**
+  mismatches (`asap7.lydrc:361/423/431`) present in ALL designs incl. the 8-cell `Control_logic`
+  (density-independent); the rest **router-model-vs-KLayout-deck** BEOL disagreements (M4.S.5, V1.S.4,
+  M1.S.2/.6) that appear uniformly even on tiny designs (NOT congestion hotspots). `clean_beol` is also
+  empirically unreachable (BEOL layers carry their own universal router-vs-deck violations).
+- **The 5 "stuck"** are GENUINE fresh `asap7.lydrc` KLayout timeouts (2h) on costly ops
+  (`:186 ACTIVE.W.2`, `:193 ACTIVE.WELL.EN.1`, `:318 M3.S.2` over ~2M edges) — NOT stale nangate45 reads,
+  NOT a wrong-deck re-queue class. (A leftover pre-retarget `6_drc.lyrdb` naming FreePDK45 is a red herring
+  the `stuck` classification does not read; `run_drc.sh:245` keys off the FRESH `6_drc.log`.)
+
+**Consequence for the learning loop (HONEST, not a bug):** on asap7, **A/B arms BOTH DRC-failing is CORRECT**
+— no recipe can make a design `asap7.lydrc`-clean, so trials are honestly `inconclusive` and **no
+DRC-based promotion is achievable**. The loop refusing to promote here is the honesty contract working.
+Do NOT chase a "first asap7 DRC-clean design" as a loop fix. To get first-promotion evidence: either judge
+asap7 on the router-internal DRC ORFS itself signs off on (`detailedroute__route__drc_errors=0`,
+attainable → arms can diverge), or run first-promotion on a platform with a genuinely honored signoff deck
+(nangate45 router-DRC / sky130hd Magic DRC), where the store's genuine promotions already live. The 12
+asap7 `drc=clean` rows that existed were fabrications (arm copytree inherited the nangate45 subject's clean
+`drc/`+`reports/` before the 2026-06-30 copytree-exclude-stage-dirs fix) — reconciled out; genuine asap7
+`drc=clean` count = 0.
+
 ## Missing Hard-Memory Wrapper Stubs (BSG Macro Designs)
 
 **Symptoms:**
