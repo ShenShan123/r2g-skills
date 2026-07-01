@@ -587,6 +587,21 @@ Yosys crash, typically caused by very large designs or specific RTL constructs t
   false `complete`); other read-only reporting tools (`tools/run_signoff.sh`,
   `aggregate_signoff_results.py`, the dashboard) share the unguarded-read class but are off the
   learning path.
+- **RECURRENCE 2026-06-30 (this alarm FIRED on A/B antenna arms — and the honesty gates did NOT catch it).**
+  A stop-and-report status check found **8 asap7 rows with `lvs_status='clean'`** (impossible on asap7 —
+  no LVS deck). All 8 were **A/B antenna arm dirs** (`..._abA_antenna__0` …), config.mk re-pointed to
+  asap7 but carrying a stale nangate45 `reports/lvs.json` (`raw_status:text_match_found`) written today
+  — i.e. the arm's signoff was read from stale prior-platform reports rather than freshly run/skipped for
+  asap7. The bug-#4 `_run_flow` stale-report deletion did **not** cover this arm path. **Critically,
+  `honesty.py` stayed 5/5 GREEN throughout** — its five gates check `fail`↔`failure_event` parity, NOT
+  "is a *clean* row genuine," so fabricated cleans are invisible to them (the same blind spot that made
+  bug #4 dangerous). Reconciled: deleted the 8 fabricated rows + their 16 stale report files; asap7 then
+  read honest `lvs_clean=0 / lvs_skipped=47 / drc_clean=0`. **RECOMMENDED FIX (open, high-value):** add a
+  sixth honesty gate — *a run on a platform with no LVS deck (asap7) MUST have `lvs_status ∈ {skipped,
+  NULL}`; `clean`/`fail` is a contamination ALARM.* That single gate would have auto-caught this the
+  moment it was ingested, converting a silent lie into a hard stop. Also harden the A/B arm
+  create/ingest path to clear `reports/` before signoff (mirror the `_run_flow` fix) so arms cannot
+  inherit a subject's cross-platform reports.
 
 ### Re-running signoff after ORFS scratch dirs were cleaned
 
