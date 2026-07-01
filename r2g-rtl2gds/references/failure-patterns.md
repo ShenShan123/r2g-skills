@@ -2103,6 +2103,15 @@ asap7 `drc=clean` rows that existed were fabrications (arm copytree inherited th
 `drc/`+`reports/` before the 2026-06-30 copytree-exclude-stage-dirs fix) — reconciled out; genuine asap7
 `drc=clean` count = 0.
 
+**The authoritative resolution is Calibre, not a better KLayout deck** (2026-07-01). The community
+`asap7.lydrc` floor is a *deck* limitation; the official **encrypted ASAP7 Calibre deck** (from
+asap.asu.edu) is the only genuinely clean-able asap7 DRC/LVS. This machine has Calibre + a license but
+NOT the deck (only placeholder READMEs). A guarded scaffold is in place — `scripts/flow/run_calibre_drc.sh`
++ `scripts/extract/extract_calibre_drc.py` (skip cleanly until the deck is installed; emit `engine:calibre`
+verdicts in the `extract_drc` schema). When the deck lands and smoke-passes on this Calibre (2025.1 vs the
+deck's 2017.4 target — a real version risk), asap7 DRC-clean becomes achievable and this "no asap7
+promotion is honest" premise must be revisited. Full runbook + integration steps: `references/calibre-signoff.md`.
+
 ## Missing Hard-Memory Wrapper Stubs (BSG Macro Designs)
 
 **Symptoms:**
