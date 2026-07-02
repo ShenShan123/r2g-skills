@@ -443,6 +443,52 @@ def test_stale_skip_marker_loses_to_fresh_klayout_log(tmp_path):
     assert result["status"] != "skipped", result    # KLayout verdict parsed instead
 
 
+def test_stale_skip_marker_loses_to_fresh_netgen_result(tmp_path):
+    """The 2026-07-02 stale-asap7-skip-masks-netgen bug. A design ran on sky130hd (netgen
+    wrote netgen_lvs_result.json), was briefly re-targeted to asap7 (run_lvs.sh wrote a fresh
+    lvs_result.json=skipped -- no .lylvs deck), then re-targeted BACK to sky130hd where netgen
+    RE-RAN and produced the freshest verdict. The skip freshness gate must include
+    netgen_lvs_result.json so the FRESH netgen verdict wins -- else a real top_pin_mismatch (or a
+    genuine clean) is MASKED as 'skipped', a clean-verdict fabrication honesty.py cannot see.
+    Before the fix the gate compared the skip only against KLayout artifacts, so the stale asap7
+    skip (newer than the absent/old KLayout log) was wrongly honored on 33 sky130hd designs."""
+    ng = {"tool": "netgen", "platform": "sky130hd", "status": "mismatch",
+          "match": "mismatch", "mismatch_class": "top_pin_mismatch"}
+    proj = _make_netgen_project(tmp_path, ng)
+    lvs_dir = proj / "lvs"
+    (lvs_dir / "lvs_result.json").write_text(
+        json.dumps({"status": "skipped",
+                    "reason": "No LVS rules available for platform asap7"}),
+        encoding="utf-8")
+    os.utime(lvs_dir / "lvs_result.json", (1_000_000, 1_000_000))          # stale asap7 skip
+    os.utime(lvs_dir / "netgen_lvs_result.json", (2_000_000, 2_000_000))   # fresh netgen (re-run)
+    out = tmp_path / "lvs.json"
+    result = _run_script(proj, out)
+    assert result["status"] == "mismatch", result        # netgen verdict, NOT the stale skip
+    assert result.get("tool") == "netgen", result
+    assert result.get("mismatch_class") == "top_pin_mismatch", result
+
+
+def test_fresh_skip_marker_beats_stale_netgen_result(tmp_path):
+    """Converse guard (protect the correct re-target direction): when the skip marker is
+    genuinely the MOST-RECENT LVS action -- a design re-targeted sky130hd -> asap7 where netgen
+    ran earlier and the fresh asap7 run then wrote the skip with no netgen re-run -- the skip
+    must STILL win (status='skipped'). Including netgen in the skip freshness comparison must
+    not invert this: mtime-precedence still holds, netgen just now counts as an LVS action."""
+    ng = {"tool": "netgen", "platform": "sky130hd", "status": "clean", "match": "match"}
+    proj = _make_netgen_project(tmp_path, ng)
+    lvs_dir = proj / "lvs"
+    (lvs_dir / "lvs_result.json").write_text(
+        json.dumps({"status": "skipped",
+                    "reason": "No LVS rules available for platform asap7"}),
+        encoding="utf-8")
+    os.utime(lvs_dir / "netgen_lvs_result.json", (1_000_000, 1_000_000))  # stale netgen
+    os.utime(lvs_dir / "lvs_result.json", (2_000_000, 2_000_000))         # fresh asap7 skip
+    out = tmp_path / "lvs.json"
+    result = _run_script(proj, out)
+    assert result["status"] == "skipped", result
+
+
 def test_run_lvs_klayout_lvs_file_resolution_tolerates_no_match(tmp_path):
     """run_lvs.sh resolves KLAYOUT_LVS_FILE via a grep pipeline under `set -euo pipefail`.
     A no-LVS-deck platform (asap7) has NO KLAYOUT_LVS_FILE in its platform config.mk, so grep

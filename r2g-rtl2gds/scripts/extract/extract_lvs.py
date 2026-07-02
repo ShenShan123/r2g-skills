@@ -262,12 +262,24 @@ def main():
     # nangate45 (KLayout LVS) never writes lvs_result.json, so skip_file is absent and this
     # branch never fires -> byte-identical. See failure-patterns.md "Stale prior-platform
     # signoff report read as first-pass clean".
+    # The skip marker is authoritative ONLY when it is the MOST-RECENT LVS action of ANY
+    # tool -- so netgen_lvs_result.json MUST be in this freshness comparison. The original
+    # gate compared the skip only against KLayout artifacts (6_lvs.*/lvs_run.log), so a stale
+    # asap7 skip (written when a design was briefly re-targeted to asap7, which has no .lylvs
+    # deck) beat a FRESHER netgen verdict once the design moved BACK to sky130hd: this round's
+    # netgen run was invisible to the test, so extract honored the asap7 skip and MASKED the
+    # real sky130 netgen result (2026-07-02: 31 true 'clean' + 2 real 'top_pin_mismatch' across
+    # 33 designs all recorded 'skipped') -- a clean-verdict fabrication honesty.py cannot see
+    # (its gates check fail<->event parity, not whether a clean/skip verdict is real). Genuine
+    # asap7 has no netgen_lvs_result.json (mtime 0) -> skip still honored, byte-identical.
+    # See references/failure-patterns.md "Stale prior-platform signoff report".
     skip_file = lvs_dir / 'lvs_result.json'
-    _skip_klayout_mtime = max(
+    _skip_supersede_mtime = max(
         (p.stat().st_mtime for p in (lvs_dir / '6_lvs.lvsdb', lvs_dir / '6_lvs.log',
-                                     lvs_dir / 'lvs_run.log') if p.exists()),
+                                     lvs_dir / 'lvs_run.log',
+                                     lvs_dir / 'netgen_lvs_result.json') if p.exists()),
         default=0.0)
-    if skip_file.exists() and skip_file.stat().st_mtime >= _skip_klayout_mtime:
+    if skip_file.exists() and skip_file.stat().st_mtime >= _skip_supersede_mtime:
         try:
             skip_data = json.loads(skip_file.read_text(encoding='utf-8'))
             if skip_data.get('status') == 'skipped':

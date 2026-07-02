@@ -657,6 +657,34 @@ The setup-time floor above only protects projects materialized by `mk_sky130_pro
     residual-DRC-by-design"). Both are now caught at the extractor boundary before ingest. The proposed
     sixth honesty gate (no-LVS-deck platform ⇒ `lvs∈{skipped,NULL}`) remains the belt to the extractor's
     suspenders and is still worth adding.
+- **RECURRENCE 2026-07-02 (sky130hd round — the INVERSE direction: a stale asap7 skip masked a FRESH
+  netgen verdict).** The 2026-06-30 fix #3 gave the `extract_lvs` skip gate mtime-precedence but made it
+  **platform-blind AND netgen-omitting**: `_skip_klayout_mtime` compared the skip marker only against
+  KLayout artifacts (`6_lvs.lvsdb`/`6_lvs.log`/`lvs_run.log`), NEVER against `netgen_lvs_result.json`. On
+  the sky130hd round that inverted the bug: **33 designs** had run sky130hd (netgen wrote
+  `netgen_lvs_result.json`), were briefly re-pointed to asap7 (a fresh `lvs/lvs_result.json=skipped` marker
+  written), then re-pointed BACK to sky130hd where netgen RE-RAN. The asap7 skip (newer than the old
+  KLayout log) won the freshness test — but this round's FRESHER netgen verdict was invisible to it — so
+  extract honored the asap7 skip and recorded `lvs=skipped` over the real netgen result: **31 genuine
+  `clean` (under-counted LVS-clean wins) + 2 real `top_pin_mismatch` (a HIDDEN LVS failure)**. As always
+  `honesty.py` stayed 5/5 (it checks `fail`↔`event` parity, not whether a `clean`/`skip` verdict is real);
+  the tell was **`clean|skipped` sky130hd rows whose `lvs_run.log` shows netgen ran** ("CONGRATULATIONS!
+  Netlists match" — or a fresh `netgen_lvs_result.json` post-dating the skip).
+- **Fix (2026-07-02, branch r2g-debug/sky130-round):** `extract_lvs.py` — add `netgen_lvs_result.json` to
+  the skip freshness comparison (renamed `_skip_klayout_mtime`→`_skip_supersede_mtime`). The skip is
+  authoritative ONLY when it is the most-recent LVS action of ANY tool, so a fresh netgen verdict now
+  supersedes a stale skip → extract falls through to the netgen path and records the TRUE state. Genuine
+  asap7 has no `netgen_lvs_result.json` (mtime 0) → skip still honored, byte-identical. Tests:
+  `test_extract_lvs.py::test_stale_skip_marker_loses_to_fresh_netgen_result` (fails before, passes after)
+  `+ test_fresh_skip_marker_beats_stale_netgen_result` (converse guard against over-correction). Suite
+  898 pass. Reconciled the 33 latest rows via `reconcile_sky130_campaign.py` (regenerates ppa→drc→lvs→
+  re-ingest; orfs stays `pass`, old `skipped` row preserved as history): 31→`clean`, 2→`mismatch`
+  (`top_pin_mismatch` now surfaced for the loop's feedthrough fix); honesty 5/5, integrity WARN (0 alarm).
+- **Skill-level alarm:** an sky130hd/sky130hs (netgen-LVS platform) `lvs=skipped` row is itself suspect —
+  those platforms HAVE a Netgen deck, so LVS should not skip. If `netgen_lvs_result.json` exists and
+  post-dates the skip marker, the skip is stale prior-platform contamination. (The proposed sixth honesty
+  gate's mirror image — *a run on a platform WITH an LVS deck should not silently record `skipped` when a
+  fresh netgen result exists* — would auto-catch this at ingest.)
 
 ### Re-running signoff after ORFS scratch dirs were cleaned
 
