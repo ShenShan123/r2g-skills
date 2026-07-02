@@ -99,29 +99,37 @@ DRC_LOG="$DRC_DIR/magic_drc.log"
 
 cat > "$DRC_TCL" << MAGIC_EOF
 # Magic DRC script — auto-generated
+# NOTE: run on a flattened ORFS P&R GDS, Magic re-checks foundry std-cell internal
+# geometry + cell-abutment mcon/li spacing, so counts are typically MUCH higher than
+# the ORFS KLayout sky130hd.lydrc deck (which is what the loop actually signs off on).
+# See references/failure-patterns.md "Magic DRC Failure".
 gds read "$GDS_FILE"
 load "$DESIGN_NAME"
 select top cell
 drc catchup
-drc count
-set drc_count [drc count total]
-puts "magic_drc_total_violations: \$drc_count"
+# 'drc count total' PRINTS "Total DRC errors found: N" to stdout — parsed by the shell
+# below (version-robust). It does NOT return a usable Tcl value, so never assign from it.
+drc count total
 
-# Write DRC report
+# Per-rule breakdown. 'drc listall why' returns {rule {box box ...} rule {box ...} ...}:
+# the 2nd item of each pair is a LIST OF BOXES, not a number. The pre-fix script did
+# 'expr {\$total + \$count}' on that list and crashed ("non-numeric string as operand of +").
+# Count the list length instead of adding the list as an integer.
 set fout [open "$DRC_REPORT" w]
 puts \$fout "Design: $DESIGN_NAME"
 puts \$fout "Platform: $PLATFORM"
 puts \$fout "GDS: $GDS_FILE"
-puts \$fout "Tool: Magic [version]"
+puts \$fout "Tool: Magic"
 puts \$fout "---"
-set why_list [drc listall why]
+if {[catch {drc listall why} why_list]} { set why_list {} }
 set total 0
-foreach {rule count} \$why_list {
-    puts \$fout "VIOLATION: \$rule (\$count)"
-    set total [expr {\$total + \$count}]
+foreach {rule boxes} \$why_list {
+    set n [llength \$boxes]
+    puts \$fout "VIOLATION: \$rule (count=\$n)"
+    set total [expr {\$total + \$n}]
 }
 puts \$fout "---"
-puts \$fout "Total violations: \$total"
+puts \$fout "Total violations (per-rule box sum): \$total"
 close \$fout
 
 quit -noprompt
@@ -141,17 +149,24 @@ if [[ $DRC_STATUS -eq 124 ]]; then
   echo "ERROR: Magic DRC timed out after ${MAGIC_TIMEOUT}s" >&2
 fi
 
-# Parse results
+# Parse results — Magic prints "Total DRC errors found: N" (its authoritative error-tile
+# count). Guard that the parsed value is numeric so we NEVER emit invalid JSON: the pre-fix
+# script leaked the literal "magic_drc_total_violations:" (an empty Tcl var) into the JSON
+# total_violations field, producing unparseable output.
 VIOLATION_COUNT=0
 if [[ -f "$DRC_LOG" ]]; then
-  # Extract count from magic output
-  COUNT_LINE=$(grep "magic_drc_total_violations:" "$DRC_LOG" 2>/dev/null | tail -1)
+  COUNT_LINE=$(grep -i "Total DRC errors found:" "$DRC_LOG" 2>/dev/null | tail -1)
   if [[ -n "$COUNT_LINE" ]]; then
     VIOLATION_COUNT=$(echo "$COUNT_LINE" | awk '{print $NF}')
   fi
 fi
+# Fail-closed to a numeric value (invalid/empty parse -> 0, with a loud warning).
+if ! [[ "$VIOLATION_COUNT" =~ ^[0-9]+$ ]]; then
+  echo "WARNING: could not parse a numeric Magic DRC count from $DRC_LOG; recording 0" >&2
+  VIOLATION_COUNT=0
+fi
 
-# Write count report (compatible with extract_drc.py)
+# Write count report (compatible with extract_drc.py numeric parser)
 echo "$VIOLATION_COUNT" > "$DRC_DIR/magic_drc_count.rpt"
 
 # Write JSON result

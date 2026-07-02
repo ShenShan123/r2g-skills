@@ -982,13 +982,46 @@ serialize the db). Tests: `tests/test_extract_lvs.py`.
   synthesis. Out of automated scope for now; surfaced honestly so it is not confused with a defect.
 
 ### Magic DRC Failure
-- **Symptom:** Magic DRC script fails or produces no output
+
+**`run_magic_drc.sh` is an OPTIONAL alternative, NOT the loop's signoff DRC.** The autonomous
+loop signs off sky130 DRC with the ORFS **KLayout** deck (`platforms/sky130hd/drc/sky130hd.lydrc`,
+via `run_drc.sh`); `extract_drc.py` reads ONLY the KLayout artifacts (`6_drc_count.rpt`/
+`6_drc.lyrdb`). `run_magic_drc.sh` writes SEPARATE `magic_drc*` files that no extractor consumes,
+so its verdict never reaches the DB. (Older notes calling "sky130hd Magic DRC" the honored signoff
+deck were ASPIRATIONAL — the naive Magic path over-reports std-cell geometry, see below.)
+
+- **Symptom:** Magic DRC script fails or produces no output / invalid JSON.
 - **Common causes:**
   - sky130A tech file missing at `$PDK_ROOT/sky130A/libs.tech/magic/sky130A.tech`
     (set `PDK_ROOT` in `references/env.local.sh`; `/opt/pdks` is only the fallback default)
   - Platform not supported (Magic DRC only works for sky130hd/sky130hs)
   - GDS file corrupted or from incomplete backend run
 - **Tool:** `scripts/flow/run_magic_drc.sh`
+
+**Bug fixed 2026-07-02: Tcl crash + invalid JSON (found by the /r2g-debug sky130 tech cross-check).**
+The generated `run_magic_drc.tcl` iterated `foreach {rule count} [drc listall why] { … expr {$total
++ $count} }`, but `drc listall why` returns `{rule {box box …} …}` — the 2nd item is a LIST OF BOXES,
+not a number — so `expr` aborted with `can't use non-numeric string as operand of "+"`, and
+`set drc_count [drc count total]` (Magic *prints* the total but does not RETURN it) left the count
+empty, leaking the literal `magic_drc_total_violations:` into `magic_drc_result.json` → **invalid
+JSON**. Fix: count `[llength $boxes]` per rule (never add the box list as an int); parse the
+authoritative "Total DRC errors found: N" line Magic prints; guard the shell parse to numeric
+(fail-closed to 0). Validated on `CAN_Bus_Controller_can_tx`: no crash, valid JSON,
+`total_violations=4777`.
+
+**mcon/li over-reporting caveat — why naive Magic ≠ a signoff gate.** On a flattened ORFS P&R GDS,
+`gds read` + `drc catchup` makes Magic re-check foundry std-cell INTERNAL geometry and cell
+ABUTMENT, so it reports thousands of base-layer violations. On `can_tx` (KLayout `sky130hd.lydrc`
+**CLEAN / 0**) the fixed Magic run reports `li.3` (local-interconnect spacing) = 8238, `li.1`
+(li width) = 355, `mcon.2` (mcon spacing) = 86. These `li`/`mcon` rules are dominated by
+std-cell-internal / abutment artifacts (sky130 foundry cells are DRC-clean by construction; a naive
+flatten re-checks them out of context) — a design with 8238 real li spacing errors could not route.
+A trustworthy Magic signoff needs **OpenLane-style cell abstraction** (`drc style`, gds flatten
+excludes). Until that exists, **do NOT wire naive Magic DRC as the sky130 signoff gate** — it would
+false-fail every design. The ORFS KLayout `sky130hd.lydrc` deck remains the practical sky130 signoff
+the loop uses; whether any *top-level* (non-cell) geometry has real violations is an open question
+requiring the proper Magic setup — escalate, do not auto-chase (cf. the asap7 "residual-by-design"
+lesson: run the deck on ORFS's own reference before believing a floor is real).
 
 ### Netgen LVS Failure
 - **Symptom:** Magic SPICE extraction fails or Netgen comparison fails
@@ -2170,7 +2203,9 @@ DRC-based promotion is achievable**. The loop refusing to promote here is the ho
 Do NOT chase a "first asap7 DRC-clean design" as a loop fix. To get first-promotion evidence: either judge
 asap7 on the router-internal DRC ORFS itself signs off on (`detailedroute__route__drc_errors=0`,
 attainable → arms can diverge), or run first-promotion on a platform with a genuinely honored signoff deck
-(nangate45 router-DRC / sky130hd Magic DRC), where the store's genuine promotions already live. The 12
+(nangate45 router-DRC / sky130hd **KLayout `sky130hd.lydrc`** deck — NOT the naive Magic path, which
+over-reports std-cell li/mcon and is unwired from `extract_drc`; see "Magic DRC Failure"), where the
+store's genuine promotions already live. The 12
 asap7 `drc=clean` rows that existed were fabrications (arm copytree inherited the nangate45 subject's clean
 `drc/`+`reports/` before the 2026-06-30 copytree-exclude-stage-dirs fix) — reconciled out; genuine asap7
 `drc=clean` count = 0.
