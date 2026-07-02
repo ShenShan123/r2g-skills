@@ -43,7 +43,6 @@
 2. Use `assets/config-template.mk` and `assets/constraint-template.sdc` as starting points.
 3. Run `scripts/flow/run_orfs.sh <project-dir> [platform]`.
 4. Default platform is `nangate45`.
-5. Collect results with `scripts/reports/collect_orfs_results.py`.
 
 ## Phase 5b: Timing Gate (Tiered WNS + TNS)
 

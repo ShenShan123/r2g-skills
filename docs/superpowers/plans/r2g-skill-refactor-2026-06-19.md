@@ -256,6 +256,22 @@ From CLAUDE.md + `tests/test_honesty_invariants.py` (these are *already executab
 
 ## 7. Execution plan (phased; each phase = a commit, suite green between)
 
+> **EXECUTION LOG 2026-07-01 (house-cleaning pass; staged, UNCOMMITTED — add hash on commit).**
+> **Phase 1 DONE (deletion portion):** removed all 7 dead report builders — `build_run_compare.py`,
+> `build_run_history.py`, `collect_orfs_results.py`, `collect_reports.py`, `list_artifacts.py`,
+> `write_success_summary.py`, `summarize_run.py` (386 LOC). No `.bak` files existed. Fixed their live
+> doc refs: dropped `SKILL.md` step 16 (renumbered 17→16, 18→17) and `workflow.md` step 5. Re-verified
+> dead 4 ways (this plan + reference-graph + HEAD re-grep + an adversarial refute sweep). Suite still
+> collects 911, 0 errors. **NOT YET DONE in Phase 1:** SKILL.md project-layout/Resource-Map trims.
+> **CORRECTION — `extract_progress.py` is NOT droppable (do not delete it in a future pass):** it was
+> briefly deleted in this pass, then RESTORED. It is the *sole producer* of `reports/progress.json`,
+> which `generate_multi_project_dashboard.py:141` consumes and renders as the per-design Stage/Status
+> table (`:366-375`). It lives in the live-extractor family (`scripts/extract/`, beside
+> extract_drc/lvs/rcx/route), not the dead-prototype family (`scripts/reports/`). "Producer with no
+> invoker" is an UNSAFE deletion signal alone — check the *consumer* side. Phase 3's
+> `auto_demote_on_regression` deletion was DEFERRED here: it is genuinely dead (zero callers incl.
+> tests) but sits in hot-path `ab_runner.py`, unsafe to edit while the sky130hd campaign is live.
+
 1. **Phase 1 — DROP dead leaves** (§2A, rev-2). Delete only the dead report builders + `.bak` files. (ML-dataset machinery is KEPT — no carve, no delete.) Update SKILL.md project-layout + Resource-Map + §16. ~390 LOC out. Lowest risk.
 2. **Phase 2 — DEMOTE operator CLIs to `tools/`** (§2B). Move `eval_heuristics` + 4 forensics CLIs; fix imports/pointers. ~1,700 LOC relocated.
 3. **Phase 3 — Vestigial cleanup** (§4). Delete `auto_demote_on_regression` + `_fetch_rows`; correct the `shadow`-lifecycle docs. Small, isolated.
