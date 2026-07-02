@@ -324,6 +324,28 @@ fi
 
 echo "Results: $DRC_DIR"
 
+# --- Optional advisory Magic DRC cross-check (sky130 only; NON-authoritative) -------------
+# When R2G_MAGIC_ADVISORY=1, run Magic DRC ALONGSIDE the KLayout signoff for visibility.
+# KLayout remains the authoritative gate: extract_drc.py records Magic's count under
+# `magic_advisory` and NEVER lets it change drc status/pass-fail/promotion (naive Magic
+# over-reports std-cell li/mcon geometry — see failure-patterns.md "Magic DRC Failure").
+# Best-effort: a Magic crash/timeout must not fail the flow (|| true). mtime-guarded so
+# fix_signoff's DRC re-runs don't re-run Magic on an unchanged layout. Default OFF so the
+# running campaign is unaffected unless the knob is explicitly exported.
+if [[ "${R2G_MAGIC_ADVISORY:-0}" == "1" && "$PLATFORM" == sky130* ]]; then
+  _magic_json="$DRC_DIR/magic_drc_result.json"
+  if [[ -f "$_magic_json" && -f "$DRC_DIR/drc_run.log" && "$_magic_json" -nt "$DRC_DIR/drc_run.log" ]]; then
+    echo "[advisory] Magic DRC cross-check already fresh for this layout — skipping"
+  else
+    _adv_to="${R2G_MAGIC_ADVISORY_TIMEOUT:-300}"
+    echo "[advisory] running Magic DRC cross-check (non-authoritative, ${_adv_to}s cap)…"
+    MAGIC_TIMEOUT="$_adv_to" timeout "$_adv_to" \
+      bash "$(dirname "${BASH_SOURCE[0]}")/run_magic_drc.sh" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" \
+      >"$DRC_DIR/magic_drc_advisory.log" 2>&1 \
+      || echo "[advisory] Magic DRC cross-check did not complete (non-fatal) — see magic_drc_advisory.log"
+  fi
+fi
+
 # Tier-0 journal: digest this check's tool log + extracted report (never breaks the flow).
 [[ -f "$DRC_DIR/drc_run.log" ]] && python3 "$KNOWLEDGE_DIR_J/journal_action.py" summarize \
   --project "$PROJECT_DIR" --stage drc --tool klayout --log "$DRC_DIR/drc_run.log" \

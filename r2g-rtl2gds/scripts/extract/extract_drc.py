@@ -201,6 +201,34 @@ def main():
             if k in drc_result and k not in result:
                 result[k] = drc_result[k]
 
+    # Advisory Magic DRC cross-check (sky130 only; NON-authoritative). When run with
+    # R2G_MAGIC_ADVISORY=1, run_drc.sh runs Magic alongside the KLayout signoff and
+    # run_magic_drc.sh writes magic_drc_result.json. Surface its count here for VISIBILITY
+    # ONLY — it NEVER changes `status`. KLayout stays the authoritative gate: naive Magic
+    # on a flattened P&R GDS over-reports std-cell li/mcon geometry (see failure-patterns.md
+    # "Magic DRC Failure"), so it must not gate pass/fail or promotion.
+    magic_path = drc_dir / 'magic_drc_result.json'
+    if magic_path.exists():
+        try:
+            m = json.loads(magic_path.read_text(encoding='utf-8', errors='ignore'))
+        except (ValueError, OSError):
+            m = None
+        if isinstance(m, dict) and m.get('tool') == 'magic':
+            adv = {
+                'engine': 'magic',
+                'status': m.get('status'),
+                'total_violations': m.get('total_violations'),
+                'authoritative': False,
+            }
+            # Flag if the Magic verdict predates this DRC run (advisory may be stale).
+            try:
+                runlog = drc_dir / 'drc_run.log'
+                if runlog.exists() and magic_path.stat().st_mtime < runlog.stat().st_mtime:
+                    adv['stale'] = True
+            except OSError:
+                pass
+            result['magic_advisory'] = adv
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
     print(out_path)

@@ -317,3 +317,40 @@ def test_fresh_artifacts_after_rerun_still_clean(tmp_path):
         f"fresh 0-viol run must stay clean, got {result['status']!r}"
     )
     assert result["total_violations"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Advisory Magic DRC cross-check (2026-07-02): recorded for VISIBILITY, must NEVER
+# change the KLayout-authoritative status/pass-fail. See failure-patterns.md.
+# ---------------------------------------------------------------------------
+def test_magic_advisory_attached_never_changes_status(tmp_path):
+    """KLayout clean (0) + a Magic 'violations' verdict → status stays 'clean',
+    Magic count surfaced under magic_advisory as advisory-only."""
+    proj = _make_project(tmp_path, lyrdb_content=None, count_rpt=0)
+    (proj / "drc" / "magic_drc_result.json").write_text(json.dumps({
+        "tool": "magic", "design": "d", "platform": "sky130hd",
+        "status": "violations", "total_violations": 4777,
+    }), encoding="utf-8")
+    out = tmp_path / "drc_adv.json"
+    _run(proj, out)
+    result = json.loads(out.read_text())
+    # Authoritative gate untouched.
+    assert result["status"] == "clean", f"advisory Magic must NOT flip status, got {result['status']!r}"
+    assert result["total_violations"] == 0
+    # Advisory surfaced, clearly non-authoritative.
+    adv = result.get("magic_advisory")
+    assert adv is not None, "magic_advisory missing"
+    assert adv["engine"] == "magic"
+    assert adv["status"] == "violations"
+    assert adv["total_violations"] == 4777
+    assert adv["authoritative"] is False
+
+
+def test_no_magic_advisory_when_absent(tmp_path):
+    """No magic_drc_result.json → no magic_advisory key (default path unchanged)."""
+    proj = _make_project(tmp_path, lyrdb_content=None, count_rpt=0)
+    out = tmp_path / "drc_noadv.json"
+    _run(proj, out)
+    result = json.loads(out.read_text())
+    assert result["status"] == "clean"
+    assert "magic_advisory" not in result
