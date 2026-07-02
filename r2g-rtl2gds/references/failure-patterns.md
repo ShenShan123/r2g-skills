@@ -2541,6 +2541,22 @@ to its honest `synth_memory_residual` reason once its log is fully written.)
   escalates them honestly). **Lesson:** any new escalation reason the loop emits MUST be added to
   `escalations.REASONS` in the SAME change, or it is a latent worker crash that fires only when that
   residual occurs.
+- **RECURRENCE (2026-07-02 sky130 round) — the SAME class, 2 more unregistered reasons, now guarded
+  systemically.** During waves 3-4, **24 real designs** (PYGMY_V32I/RISC_V/RISCV_Tang_E203/I2SRV32/
+  MS_DMAC) escalated `worker_exc:ValueError` with note `ValueError: unknown escalation reason:
+  incomplete_missing_header`. `process_one` emits `reason="incomplete_missing_header"`
+  (engineer_loop.py:1036, `_is_synth_missing_header`) AND `reason="synth_timeout"` (engineer_loop.py:1043,
+  `_is_synth_timeout`) — **both missing from `escalations.REASONS`** (the 5th and 6th time this class
+  recurred: place_density → pin_overflow → synth_memory → pdn_strap → these two). The `ValueError` at
+  `escalations.py` fires at the whitelist check *before* the dedup check, so it crashed even for designs
+  that ALREADY had an open `incomplete_missing_header` escalation (reconcile confirmed: the 24 were
+  dedup no-ops, 52→52 — so knowledge was NOT blind; the harm was crashed workers wasting wave slots +
+  cosmetic ledger `worker_exc` mislabel). **Fix:** register both reasons in `escalations.REASONS`.
+  **Systemic guard (stops the 7th recurrence):** `tests/test_escalations.py::
+  test_all_loop_emitted_reasons_are_registered` parses `engineer_loop.py` for every `reason = "<literal>"`
+  and asserts each is in `escalations.REASONS` — so a new reason can never ship unregistered again.
+  Plus per-reason tests `test_incomplete_missing_header_is_valid_reason` / `test_synth_timeout_is_valid_reason`.
+  Honesty stayed 5/5 throughout (the crash is operational, not a fabricated verdict).
 
 ### Sub-variant: A/B re-plan resets clean arms before judge → candidate never promotes (2026-06-30)
 

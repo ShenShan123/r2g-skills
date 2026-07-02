@@ -55,7 +55,22 @@ REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            # lay straps. KNOWN, recipe-backed — NOT an unseen crash. MUST be registered here or
            # open_escalation raises ValueError and crashes the worker (the exact latent-crash
            # class the synth_memory_residual note above documents).
-           "pdn_strap_residual")
+           "pdn_strap_residual",
+           # A synth abort from an unresolved `include -- the harvested RTL is INCOMPLETE (a
+           # header was never shipped upstream), NOT a crash and NOT a novel symptom. Emitted
+           # by process_one (_is_synth_missing_header, engineer_loop.py) but never registered
+           # here -> open_escalation raised ValueError -> the worker CRASHED and 24 real designs
+           # (PYGMY_V32I/RISC_V/RISCV_Tang_E203/I2SRV32/MS_DMAC) were mislabeled
+           # `worker_exc:ValueError` in the 2026-07-02 sky130 round, burying the honest reason
+           # (the EXACT latent-crash class documented for synth_memory_residual / pdn_strap_residual
+           # above -- the fifth repeat of this bug; see the systemic test guard added with this fix).
+           "incomplete_missing_header",
+           # A yosys synth abort that hit the run_orfs.sh wrapper wall-clock timeout -- a large
+           # design, not a crash. Honest reason (routes to the ORFS_TIMEOUT / simplification
+           # runbook). ALSO emitted by process_one but unregistered -> the same latent worker
+           # crash waiting to fire on the next synth-timeout design (fixed alongside
+           # incomplete_missing_header, 2026-07-02).
+           "synth_timeout")
 
 
 def _now() -> str:

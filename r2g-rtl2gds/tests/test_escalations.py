@@ -86,3 +86,47 @@ def test_resolve_for_design_closes_all_open(tmp_path):
     open_designs = {r["design"] for r in escalations.list_open(conn)}
     assert open_designs == {"d2"}            # d1 closed, d2 untouched
     assert escalations.resolve_for_design(conn, "d1") == 0   # idempotent no-op
+
+
+def test_incomplete_missing_header_is_valid_reason(tmp_path):
+    """process_one escalates unresolved-`include synth aborts as
+    'incomplete_missing_header'. Registering it here is REQUIRED: an unregistered
+    reason makes open_escalation raise ValueError, which crashes the loop worker and
+    mislabels the design 'worker_exc:ValueError' (24 designs, 2026-07-02 sky130 round)."""
+    conn = _conn(tmp_path)
+    eid = escalations.open_escalation(
+        conn, design="riscv_x", project_path="/p/riscv_x", run_id="r1",
+        reason="incomplete_missing_header", notes="unresolved `include")
+    assert escalations.list_open(conn)[0]["escalation_id"] == eid
+
+
+def test_synth_timeout_is_valid_reason(tmp_path):
+    """process_one escalates yosys wall-clock synth timeouts as 'synth_timeout'
+    (a large design, not a crash). Must be registered or open_escalation crashes the worker."""
+    conn = _conn(tmp_path)
+    eid = escalations.open_escalation(
+        conn, design="lenet_x", project_path="/p/lenet_x", run_id="r1",
+        reason="synth_timeout", notes="yosys hit ORFS_TIMEOUT")
+    assert escalations.list_open(conn)[0]["escalation_id"] == eid
+
+
+def test_all_loop_emitted_reasons_are_registered():
+    """SYSTEMIC GUARD (prevents the 6th recurrence of the worker_exc:ValueError bug class).
+
+    Every `reason = "<literal>"` the engineer_loop emits before calling
+    escalations.open_escalation MUST be in escalations.REASONS, or the worker crashes at
+    runtime with 'unknown escalation reason'. This has silently regressed FIVE times
+    (place_density_residual, pin_overflow_residual, synth_memory_residual, pdn_strap_residual,
+    then incomplete_missing_header + synth_timeout). Parse the loop source and assert the
+    whitelist covers every reason it can produce, so a new reason can never ship unregistered.
+    """
+    import re
+    from pathlib import Path
+    loop_src = (Path(__file__).resolve().parents[1] / "scripts" / "loop"
+                / "engineer_loop.py").read_text()
+    emitted = set(re.findall(r'reason\s*=\s*"([a-z_]+)"', loop_src))
+    assert emitted, "parser found no reason literals -- did engineer_loop.py move?"
+    missing = sorted(emitted - set(escalations.REASONS))
+    assert not missing, (
+        f"engineer_loop emits escalation reason(s) not registered in escalations.REASONS: "
+        f"{missing} -- open_escalation will raise ValueError and crash the worker on these.")
