@@ -686,6 +686,44 @@ The setup-time floor above only protects projects materialized by `mk_sky130_pro
   gate's mirror image — *a run on a platform WITH an LVS deck should not silently record `skipped` when a
   fresh netgen result exists* — would auto-catch this at ingest.)
 
+### Fabricated clean via cleared route abort — signoff path bypassed entirely (2026-07-02)
+
+- **Symptom:** a design goes ledger-`clean` with **NO `reports/drc.json` / `lvs.json` on disk at
+  all** (not stale ones — absent). Its latest `runs` row reads `orfs_status='pass'` with **empty**
+  `drc_status`/`lvs_status` (outcome_score 0.5), so knowledge and the ledger tell different
+  stories. Found on the sky130hd round: `DSP_ACCELERATOR_CHIPLET_ifft_core` + `bgm` (2/131
+  ledger-clean designs), both route-TIMEOUT designs whose `route_relief` fix genuinely cleared
+  the abort (`CORE_UTILIZATION=8` → route completed → fresh GDS).
+- **Root cause:** `engineer_loop.process_one`'s route-abort branch (`_fail_stage=='route'` →
+  `_run_fix(check='route')`) called `_mark_clean` directly when the route fixer returned 0.
+  "Route abort cleared" = *the flow completes* — a strictly WEAKER contract than the platform's
+  clean state (sky130hd: Magic DRC + Netgen LVS on that fresh GDS). The branch bypassed the
+  first-pass signoff gate at the bottom of `process_one` entirely, so the `_run_flow` stale-report
+  deletion (bug above) never got its fresh-signoff follow-through: reports stayed absent and the
+  design was declared clean on GDS-existence alone. The contract dated from 2026-06-17 nangate45
+  route_relief work, where the test suite itself asserted `route fix rc==0 → clean`
+  (`test_loop_route_inloop_fix.py` encoded the bug).
+- **Why the alarms stayed green:** `honesty.py` checks `fail`↔`failure_event` parity — the row is
+  `pass`, so no gate fires; `check_db_integrity` audits knowledge↔journal, and BOTH books honestly
+  recorded what ran (a flow, no signoff). The lie lived only in the **ledger** `clean` state — no
+  current gate cross-checks ledger-clean against the platform signoff contract. (Same blind-spot
+  family as the asap7 fabricated cleans: "clean" is never re-derived, only asserted.)
+- **Fix (2026-07-02, branch r2g-debug/sky130-round):** on `fix_rc==0` the route branch now sets a
+  flag and **falls THROUGH to the signoff path** (`led.set_state('signoff')` → `_signoff_status`
+  → first-pass gate / `_run_fix` → `fix_signoff._ensure_baseline` runs fresh platform-correct
+  DRC+LVS). `clean` only ever comes from fresh signoff verdicts; a route-cleared design whose
+  signoff then finds a residual escalates `catalog_exhausted` with the honest post-fix residual.
+  Tests: `test_loop_route_inloop_fix.py::test_route_abort_fixed_in_loop` (route fixer then signoff
+  fixer must BOTH run) + `::test_route_abort_clear_still_requires_signoff` (route clears, signoff
+  residual → escalated, never clean). Both mislabeled designs reconciled by running real
+  `fix_signoff --check both` + `extract_ppa` + re-ingest (latest-row-only; the 16:42Z empty-status
+  rows stay as immutable history).
+- **Skill-level alarm:** any ledger-`clean` design whose latest `runs` row does not carry
+  `drc_status`/`lvs_status ∈ {clean, clean_beol, skipped}` is a fabricated clean — cross-check with:
+  `SELECT ... FROM runs r WHERE <latest per project> AND (drc_status NOT IN (...) OR lvs_status NOT
+  IN (...))` against the ledger's clean set. Also: `reports/fix_log.jsonl` showing a vacuous
+  `before=0 after=0 verdict=cleared` route entry as the ONLY signoff evidence for a clean design.
+
 ### Re-running signoff after ORFS scratch dirs were cleaned
 
 - **Symptom:** `run_drc.sh` reports `ERROR: ORFS config not found at .../config.mk` or "Running DRC for design: top" with a GDS path that points to a *different* project (e.g., `iccad2015_unit02_in2`'s GDS gets picked up for `button_controller` because both have `DESIGN_NAME=top`). Make may also start re-running place/cts/route, taking 30+ minutes for a "DRC" invocation.

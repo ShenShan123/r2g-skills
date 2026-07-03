@@ -4,9 +4,11 @@ directive: always run the loop's fixer on a failure case).
 
 A route-stage abort is a known, promoted-recipe symptom (route_relief), so
 process_one should: ingest -> detect fail_stage == 'route' -> run the route fixer
-(fix_signoff --check route) -> clean on success, escalate only if the fix fails.
-A non-route crash (synth/place/cts) is genuinely unhandled and still escalates,
-WITHOUT invoking the route fixer.
+(fix_signoff --check route) -> on success fall THROUGH to the signoff path (the
+re-flow built a fresh GDS, so DRC/LVS must still run before clean -- 2026-07-02:
+short-circuiting to clean fabricated 2 sky130hd cleans with NO drc.json/lvs.json
+on disk), escalate only if the route fix fails. A non-route crash (synth/place/
+cts) is genuinely unhandled and still escalates, WITHOUT invoking the route fixer.
 """
 import json
 from pathlib import Path
@@ -37,12 +39,36 @@ def test_route_abort_fixed_in_loop(tmp_path, monkeypatch):
     led = _led(tmp_path, "crypto_x", p)
     monkeypatch.setattr(engineer_loop, "_run_flow", lambda e: 124)   # route abort
     monkeypatch.setattr(engineer_loop, "_ingest", lambda e: None)
-    seen = {}
+    calls = []
     monkeypatch.setattr(engineer_loop, "_run_fix",
-                        lambda e: (seen.update(check=e.get("check")) or 0))
+                        lambda e: (calls.append(e.get("check")) or 0))
     engineer_loop.process_one(led, led.pending()[0], conn=None)
-    assert seen["check"] == "route"             # loop drove the route fixer
-    assert led.state("crypto_x") == "clean"     # fixed in-loop, NOT escalated
+    # Route fixer first, then the SIGNOFF fixer on the fresh GDS -- a cleared
+    # route abort is "the flow completes", NOT the platform's clean state.
+    assert calls[0] == "route"                  # loop drove the route fixer
+    assert len(calls) == 2                      # ... then real signoff ran
+    assert led.state("crypto_x") == "clean"     # clean only AFTER signoff cleared
+
+
+def test_route_abort_clear_still_requires_signoff(tmp_path, monkeypatch):
+    """Route fix clears the abort but signoff finds a residual: the design must
+    NOT be marked clean (the 2026-07-02 fabricated-clean: ifft_core + bgm went
+    ledger-clean with no drc.json/lvs.json on disk because a cleared route abort
+    short-circuited past DRC/LVS entirely)."""
+    p = _mk_proj(tmp_path, "crypto_s", "route", 124)
+    led = _led(tmp_path, "crypto_s", p)
+    monkeypatch.setattr(engineer_loop, "_run_flow", lambda e: 124)
+    monkeypatch.setattr(engineer_loop, "_ingest", lambda e: None)
+    calls = []
+    def fake_fix(e):
+        calls.append(e.get("check"))
+        return 0 if e.get("check") == "route" else 1   # route clears; signoff can't
+    monkeypatch.setattr(engineer_loop, "_run_fix", fake_fix)
+    engineer_loop.process_one(led, led.pending()[0], conn=None)
+    assert calls == ["route", None]                    # signoff fixer DID run
+    assert led.state("crypto_s") == "escalated"        # honest residual, not clean
+    entry = next(e for e in led.entries() if e["design"] == "crypto_s")
+    assert entry.get("reason") == "catalog_exhausted", entry
 
 
 def test_route_abort_escalates_if_fix_fails(tmp_path, monkeypatch):

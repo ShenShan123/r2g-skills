@@ -980,22 +980,30 @@ def process_one(led: Ledger, entry: dict, conn, *,
             _ingest(entry)
             return result
         reason, notes = "unseen_crash", f"run_orfs rc={rc}"
+        _route_abort_cleared = False
         if entry.get("kind") != "ab_arm" and _fail_stage(entry) == "route":
             led.set_state(design, "fixing")
             fix_rc = _run_fix({**entry, "check": "route"})
             _ingest(entry)
             if fix_rc == 0:
-                _mark_clean(led, conn, design, "route_relief cleared the abort in-loop")
-                return "clean"
-            # route_relief ran but did NOT clear the abort — a KNOWN, recipe-backed
-            # backend residual (congestion past the CORE_UTILIZATION floor, or a
-            # DIE_AREA-sized design with no util knob to relieve), NOT an "unseen
-            # crash". Mislabeling it unseen_crash pollutes the escalation queue and
-            # the learning signal (it reads as a novel symptom). Label it honestly so
-            # the operator runbook can route it to the v2 DIE_AREA lever.
-            reason = "route_congestion_residual"
-            notes = (f"route abort (rc={rc}); route_relief exhausted or inapplicable "
-                     f"(util at floor, or DIE_AREA-sized — no CORE_UTILIZATION knob)")
+                # Route abort cleared -> the fix's re-flow built a FRESH GDS, but "the
+                # flow completes" is a strictly WEAKER contract than the platform's
+                # clean state (sky130hd: Magic DRC + Netgen LVS on that GDS). Marking
+                # clean here fabricated 2 sky130hd cleans whose reports/ held NO
+                # drc.json/lvs.json at all (ifft_core + bgm, 2026-07-02) -- fall
+                # THROUGH to the signoff path below so `clean` only ever comes from
+                # fresh DRC/LVS verdicts (failure-patterns.md "Fabricated clean").
+                _route_abort_cleared = True
+            else:
+                # route_relief ran but did NOT clear the abort — a KNOWN, recipe-backed
+                # backend residual (congestion past the CORE_UTILIZATION floor, or a
+                # DIE_AREA-sized design with no util knob to relieve), NOT an "unseen
+                # crash". Mislabeling it unseen_crash pollutes the escalation queue and
+                # the learning signal (it reads as a novel symptom). Label it honestly so
+                # the operator runbook can route it to the v2 DIE_AREA lever.
+                reason = "route_congestion_residual"
+                notes = (f"route abort (rc={rc}); route_relief exhausted or inapplicable "
+                         f"(util at floor, or DIE_AREA-sized — no CORE_UTILIZATION knob)")
         elif (entry.get("kind") != "ab_arm" and _fail_stage(entry) == "place"
               and _is_flw0024(entry)):
             # FLW-0024 that survived the auto-resize retry (cells exceed even the
@@ -1052,13 +1060,14 @@ def process_one(led: Ledger, entry: dict, conn, *,
             reason = "pdn_strap_residual"
             notes = (f"PDN-0185 insufficient width for met4/met5 straps (rc={rc}); flooring "
                      f"the die to {_PDN_DIE_FLOOR_UM}um did not clear")
-        led.set_state(design, "escalated", reason=reason)
-        if conn is not None:
-            import escalations
-            escalations.open_escalation(
-                conn, design=design, project_path=entry["project_path"],
-                run_id=None, reason=reason, notes=notes)
-        return "escalated"
+        if not _route_abort_cleared:
+            led.set_state(design, "escalated", reason=reason)
+            if conn is not None:
+                import escalations
+                escalations.open_escalation(
+                    conn, design=design, project_path=entry["project_path"],
+                    run_id=None, reason=reason, notes=notes)
+            return "escalated"
     led.set_state(design, "signoff")
     status = _signoff_status(entry)
     # A signoff A/B arm MUST always reach _run_fix so arm A's R2G_FIX_EXCLUDE and
