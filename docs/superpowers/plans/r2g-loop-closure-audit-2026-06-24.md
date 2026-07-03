@@ -115,3 +115,13 @@ STATUS by class: DRC+route = closed & live-promoting (real win/loss). TIMING = P
 PLACE (core_util_relief) = honest DEAD-END (d29abae killed DIE_AREA → FLW-0024 absent from corpus →
 resize no-op → unvalidatable, escalated never promoted). Commits 526a7d7/4c9ea4b/88939bd/d60ac0d (+ docs),
 branch fix/loop-closure-timing-place-fmax, NOT pushed.
+
+---
+
+**2026-07-03 addendum (branch r2g-debug/sky130-round):** a further plan_trial subject-resolution
+hole surfaced on the sky130 clean-slate round: **Tier 1 (`run_violations`) lacked the on-disk
+`isdir` filter** Tiers 2/3 carry, so wiped-round exhibitor rows (immutable history) became GHOST
+A/B arms (`place_arm_incomplete` every drain; candidate starved). Fixed: Tier-1 isdir filter +
+plan_arms skips arms whose subject dir AND arm dir are both absent. See failure-patterns.md
+"Ghost A/B arms" sub-variant. This supersedes the implicit assumption here that Tier-1 subjects
+are always physically present.

@@ -2701,3 +2701,38 @@ one-line `[loop] A/B platform-scope … skipped N off-platform candidate(s)` sum
 (no silent cap). Tests: `tests/test_ab_platform_scope.py` (5). Aligns ab-drain with the "one
 platform per round" hard rule. (Belt-and-suspenders on restart: `DRC_TIMEOUT` bounds any residual
 slow arm.)
+
+### Sub-variant: GHOST A/B arms — Tier-1 subjects from wiped rounds starve the candidate (2026-07-03)
+
+- **Symptom:** `place_arm_incomplete` (or `route_arm_incomplete`) escalations pile up for arm
+  designs whose dirs **do not exist under `design_cases/`** — names like
+  `<design>__sky130hd_abA_core_uti_0` (note the `__<platform>` infix inherited from a PRIOR
+  round's clone-dir naming). `ab_trials` stays flat across the wave while those arms re-escalate,
+  and the candidate (`core_util_relief` logic/medium + logic/small on the 2026-07 sky130 round)
+  never validates. Found wave 7: 6 ghost arms (FIR_ex4LS16 ×4, wb2axip_axisgdma ×2), subjects =
+  June-17-era `<design>__sky130hd` clone dirs wiped by the 2026-07-02 clean-slate reset.
+- **Root cause (two compounding holes):**
+  1. `ab_runner.plan_trial` **Tier 1** (`run_violations` exhibitors) was the ONLY subject tier
+     without the on-disk `os.path.isdir` filter (`_symptom_designs`/Tier 2 and
+     `_resolve_evidence`/Tier 3 both have it). `runs`/`run_violations` are immutable history —
+     correct per the honesty invariants — so a wiped round leaves exhibitor rows whose
+     `project_path` is gone, and **cheapest-first ordering ranks the tiny wiped clones AHEAD of
+     real dirs**, crowding genuine subjects out of the trial.
+  2. `plan_arms_for_candidates`' copytree guard (`if src.is_dir() and not dst.exists()`) silently
+     no-ops for a missing subject **but the arm entry was still appended to the ledger** — a
+     ghost arm that flows against a nonexistent project, produces no backend, and escalates
+     `*_arm_incomplete` on every drain, forever (the judge can never see a terminal pair).
+- **Fix (2026-07-03, branch r2g-debug/sky130-round):** (1) Tier 1's `_q` now applies the same
+  `isdir` filter as Tiers 2/3 — all ghosts filtered ⇒ the tier honestly falls through (or
+  plan_trial returns None ⇒ the documented `unvalidatable_insufficient_subjects` escalation);
+  (2) defense-in-depth: `plan_arms_for_candidates` skips (with a `[loop] A/B subject dir missing
+  on disk` log, no silent cap) any arm whose subject dir AND arm dir are both absent. Tests:
+  `test_ab_fixhist_subjects.py::test_tier1_skips_wiped_subject_dirs` +
+  `::test_tier1_all_ghosts_is_honestly_unmatched`,
+  `test_plan_arms_isolation.py::test_plan_arms_skips_missing_subject_dir`. Existing fixtures that
+  seeded `/p/d<i>` fake paths were updated to real tmp dirs (the filter is now part of the
+  plan_trial contract).
+- **Skill-level alarm:** any `*_arm_incomplete` escalation whose design dir is absent from
+  `design_cases/` is a ghost arm — check `ls design_cases/ | grep _ab` against the ledger's
+  `ab_arm` entries. Historical ghost-arm ledger rows are terminal escalated artifacts (benign
+  history); the candidate re-plans with real subjects on the next drain after the fix.

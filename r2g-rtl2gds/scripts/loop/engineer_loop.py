@@ -1313,6 +1313,17 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                 for r in range(k):
                     src = Path(d["project_path"])
                     dst = src.parent / f"{src.name}_ab{arm}_{strat8}_{r}"
+                    if not src.is_dir() and not dst.is_dir():
+                        # A subject with no dir on disk (wiped round) and no
+                        # already-materialized arm copy must NOT become a ledger
+                        # arm: the copytree below would silently no-op and the
+                        # ghost arm then flows against a nonexistent project every
+                        # drain -> place_arm_incomplete forever, candidate starved
+                        # (2026-07-03). plan_trial Tier 1 now isdir-filters
+                        # subjects; this is defense-in-depth for stale plans.
+                        print(f"[loop] A/B subject dir missing on disk, "
+                              f"arm skipped: {dst.name}")
+                        continue
                     if src.is_dir() and not dst.exists():
                         # CRITICAL (2026-06-23 audit, bug #1): exclude reports/ too,
                         # not just backend/+*.gds. A signoff arm's SUBJECT is a

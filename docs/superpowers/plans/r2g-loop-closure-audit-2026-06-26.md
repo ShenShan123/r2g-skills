@@ -486,3 +486,12 @@ the iter-12 fix:
 So the iter-12 commit (f5ee684) is COMPLETE: error -> unconstrained/inconclusive/ok, all honest. No code
 change this iteration -- a thorough investigation that correctly concluded there was no further bug
 (the honest outcome). honesty 5/5; kept variant cleaned up; 23 commits this session, all pushed.
+
+---
+
+**2026-07-03 addendum (branch r2g-debug/sky130-round):** the place-class A/B path gained a
+subject-existence guard: plan_trial Tier 1 now isdir-filters exhibitors (wiped-round ghost dirs
+no longer become `core_uti` arms), and plan_arms_for_candidates refuses to ledger an arm with no
+subject dir on disk. A candidate whose exhibitors are ALL ghosts now escalates
+`unvalidatable_insufficient_subjects` honestly instead of spawning `place_arm_incomplete` ghosts
+every drain. See failure-patterns.md "Ghost A/B arms" (2026-07-03).

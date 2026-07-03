@@ -242,8 +242,16 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
             f"WHERE v.symptom_id=? {extra_sql} "
             "GROUP BY r.design_name ORDER BY MIN(r.cell_count)",
             (symptom_id, *params))
+        # Same on-disk filter as _symptom_designs/_resolve_evidence: runs/
+        # run_violations are IMMUTABLE history, so a wiped round (clean-slate
+        # reset) leaves exhibitor rows whose project dir is gone. Without this,
+        # Tier 1 selected ghost subjects (cheapest-first even ranked the tiny
+        # wiped `<design>__sky130hd` clones ahead of real dirs) and plan_arms
+        # ledger'd arms that could never flow -> place_arm_incomplete every
+        # drain, candidate starved (2026-07-03).
         return [dict(zip(("design_name", "project_path", "cell_count"), x))
-                for x in cur.fetchall() if not _is_arm_dir(x[1])]
+                for x in cur.fetchall()
+                if not _is_arm_dir(x[1]) and x[1] and os.path.isdir(x[1])]
 
     def _trial(designs, level):
         return {

@@ -160,3 +160,57 @@ def test_fix_history_never_pools_across_platforms(tmp_path):
                                  platform="nangate45", strategy="antenna_diode_repair")
     assert trial is not None and trial["match_level"] == "fixhist_platform"
     assert len(trial["designs"]) == 2
+
+
+# ---- Tier 1 on-disk filter (2026-07-03 ghost-subject regression) ----------------
+
+def _add_viol_run(conn, sid, *, path, design_name, cells, mkdir):
+    """A run that EXHIBITS the symptom via run_violations (Tier 1's source)."""
+    if mkdir:
+        path.mkdir(exist_ok=True)
+    rid = f"r_{path.name}"
+    conn.execute(
+        "INSERT INTO runs (run_id, project_path, design_name, platform, "
+        "design_class, cell_count, orfs_status, ingested_at) VALUES (?,?,?,?,?,?,?,?)",
+        (rid, str(path), design_name, "sky130hd", "logic/medium", cells, "pass",
+         "2026-07-03T00:00:00Z"))
+    conn.execute(
+        "INSERT INTO run_violations (run_id, platform, symptom_id) VALUES (?,?,?)",
+        (rid, "sky130hd", sid))
+
+
+def test_tier1_skips_wiped_subject_dirs(tmp_path):
+    """2026-07-03: Tier 1 (run_violations) was the ONLY subject tier without the
+    on-disk `os.path.isdir` filter (Tiers 2/3 have it). After the sky130 clean-slate
+    reset wiped the June-17-era `<design>__sky130hd` clone dirs, their immutable
+    runs/run_violations history made Tier 1 select GHOST subjects — cheapest-first
+    even ranked the tiny wiped clones ahead of real dirs — and plan_arms ledger'd
+    arms that could never flow (place_arm_incomplete every drain), starving the
+    core_util_relief candidates."""
+    conn, sid = _conn(tmp_path)
+    ghost = tmp_path / "wiped__sky130hd"                 # NOT created on disk
+    _add_viol_run(conn, sid, path=ghost, design_name="wiped", cells=10, mkdir=False)
+    _add_viol_run(conn, sid, path=tmp_path / "real_a", design_name="real_a",
+                  cells=100, mkdir=True)
+    _add_viol_run(conn, sid, path=tmp_path / "real_b", design_name="real_b",
+                  cells=200, mkdir=True)
+    trial = ab_runner.plan_trial(conn, symptom_id=sid, design_class="logic/medium",
+                                 platform="sky130hd", strategy="core_util_relief",
+                                 n_designs=2)
+    assert trial is not None
+    paths = [d["project_path"] for d in trial["designs"]]
+    assert str(ghost) not in paths, "Tier 1 returned a wiped (non-existent) subject"
+    assert len(paths) == 2
+
+
+def test_tier1_all_ghosts_is_honestly_unmatched(tmp_path):
+    """All Tier-1 exhibitors wiped -> plan_trial must fall through / return None,
+    never fabricate a trial on ghost dirs."""
+    conn, sid = _conn(tmp_path)
+    _add_viol_run(conn, sid, path=tmp_path / "g1__sky130hd", design_name="g1",
+                  cells=10, mkdir=False)
+    _add_viol_run(conn, sid, path=tmp_path / "g2__sky130hd", design_name="g2",
+                  cells=20, mkdir=False)
+    assert ab_runner.plan_trial(conn, symptom_id=sid, design_class="logic/medium",
+                                platform="sky130hd", strategy="core_util_relief",
+                                n_designs=2) is None

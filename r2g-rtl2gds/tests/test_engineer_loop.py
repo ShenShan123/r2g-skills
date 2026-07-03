@@ -146,9 +146,14 @@ def test_learn_cycle_enqueues_candidates_and_ab_arms(tmp_path, monkeypatch):
     import knowledge_db
     conn = knowledge_db.connect(tmp_path / "knowledge.sqlite")
     knowledge_db.ensure_schema(conn)
+    # Subject dir must exist on disk: plan_trial Tier 1 isdir-filters subjects
+    # since 2026-07-03 (wiped-round ghost dirs must never become arms).
+    subj = tmp_path / "d0"
+    subj.mkdir()
     conn.execute("INSERT OR REPLACE INTO runs (run_id, project_path, design_name,"
                  " platform, ingested_at, cell_count, design_class) "
-                 "VALUES ('r0','/p/d0','d0','nangate45','t',900,'crypto/small')")
+                 "VALUES ('r0',?,'d0','nangate45','t',900,'crypto/small')",
+                 (str(subj),))
     conn.execute("INSERT OR REPLACE INTO run_violations (run_id, platform,"
                  " drc_status, symptom_id, snapshot_ts) "
                  "VALUES ('r0','nangate45','fail','deadbeef00000001','t')")

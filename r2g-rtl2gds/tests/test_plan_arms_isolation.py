@@ -85,3 +85,31 @@ def test_plan_arms_sets_arm_platform_from_ab_key(tmp_path, monkeypatch):
         m = re.search(r"(?m)^\s*(?:export\s+)?PLATFORM\s*=\s*(\S+)", cfg)
         assert m and m.group(1) == "nangate45", \
             f"arm {a['design']} inherited stale PLATFORM instead of ab_key: {cfg!r}"
+
+
+def test_plan_arms_skips_missing_subject_dir(tmp_path, monkeypatch):
+    """2026-07-03: a subject whose dir no longer exists (wiped round / clean-slate
+    reset) must NOT become a ledger arm. The copytree guard `src.is_dir()` silently
+    no-ops for a ghost subject but the arm entry was STILL appended -> the ghost arm
+    flowed against a nonexistent project every drain, escalated place_arm_incomplete
+    forever, and the candidate never validated. Defense-in-depth alongside the
+    plan_trial Tier-1 isdir filter."""
+    import ab_runner
+    import recipe_lifecycle
+
+    subj = tmp_path / "wiped_subject"                    # never created
+    cand = {"symptom_id": "sym", "design_class": "logic/medium",
+            "platform": "sky130hd", "strategy": "core_util_relief"}
+    monkeypatch.setattr(recipe_lifecycle, "pending_candidates", lambda conn: [cand])
+    monkeypatch.setattr(el, "_ab_coverage_gap", lambda conn, key: False)
+    monkeypatch.setattr(el, "_symptom_check", lambda conn, sid, strat=None: "place")
+    monkeypatch.setattr(ab_runner, "plan_trial", lambda conn, **k: {
+        "designs": [{"design_name": "w", "project_path": str(subj), "cell_count": 1}],
+        "match_level": "pooled_class"})
+
+    led = el.Ledger(tmp_path / "l.jsonl")
+    appended = el.plan_arms_for_candidates(led, conn=None, repeats=1)
+
+    assert appended == 0
+    assert not [e for e in led.entries() if e.get("kind") == "ab_arm"], \
+        "ghost arm was ledger'd for a wiped subject"
