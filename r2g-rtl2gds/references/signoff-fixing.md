@@ -370,9 +370,24 @@ When a Tier-3 recipe exists for the design's family/platform/violation_class,
 - Untried strategies get the neutral `0.5` prior.
 - Proven winners rank high; proven losers are down-ranked but **never zeroed or blacklisted**.
 
-There is **no hard gate** — *all* real-fix strategies are always proposed, priority-ordered, so
-the loop falls through to the next-best candidate if the top one fails. Inspect the full
-evidence-ranked candidate set with:
+There is **no hard gate on PROPOSAL** — *all* real-fix strategies are always proposed,
+priority-ordered, so the loop falls through to the next-best candidate if the top one fails.
+**AUTO-APPLY, however, is gated (2026-07-04, negative-evidence consumption):**
+`_live_auto_strategy` skips, in blind live runs only,
+
+- **`dead_here`** strategies — ≥ `R2G_FIX_DEAD_AFTER` (default 2) terminal failures
+  (`no_change`/`regression`) with ZERO clears **on this same design + check** in `fix_events`
+  (`_annotate_live_gates`). Cross-run memory: before this, the same dead fix was re-applied on the
+  same design up to 112 sessions in a row. `R2G_FIX_RETRY_DEAD=1` restores the old always-retry.
+- **`lifecycle_status='shadow'`** strategies — A/B-demoted recipes, gated on EVERY ranking path
+  (previously demotion only stripped the indexed-recipe boost, and the catalog/pooled/fallback
+  paths could still auto-apply a demoted recipe). `parked` (unvalidatable-by-A/B) stays applicable.
+
+`--rank-first` (the A/B arm-B path) bypasses ALL gates by design — the harness must be able to
+force exactly the strategy under test. Both gates degrade OPEN with a stderr WARNING when the
+knowledge DB is unreachable (the pre-gate behavior), while an unreadable recipe LIFECYCLE fails
+CLOSED to cold-start ranking (an error must never grant unvalidated recipes more trust).
+Inspect the full evidence-ranked candidate set with:
 
 ```bash
 python3 r2g-rtl2gds/scripts/reports/diagnose_signoff_fix.py design_cases/my_design \

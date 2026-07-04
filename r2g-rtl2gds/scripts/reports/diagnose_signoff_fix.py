@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -492,7 +493,21 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
     """The strategy a LIVE run should auto-apply: the first auto_apply strategy,
     SKIPPING any `requires_ab_promotion` (shadow) recipe unless the caller forced
     it via --rank-first (the A/B arm-B path). This is the Win 6 gate that keeps a
-    backend-aware retune out of blind live runs until it wins its A/B trial."""
+    backend-aware retune out of blind live runs until it wins its A/B trial.
+
+    Two further gates (2026-07-04, negative-evidence consumption):
+    - lifecycle_status == 'shadow' (A/B-demoted): the demotion previously only
+      stripped the strategy's learned boost from the INDEXED recipe path — via the
+      static catalog / pooled prior / fallback paths it could still sort first and
+      be auto-applied, making the demote verdict toothless. Gated HERE it holds on
+      every path. ('parked' = merely unvalidatable — stays applicable.)
+    - dead_here (>= R2G_FIX_DEAD_AFTER terminal failures of THIS strategy on THIS
+      design+check with zero clears, annotated by _annotate_live_gates): a human
+      engineer does not re-try the exact fix that failed twice on the same design;
+      the loop re-abandoned one (design, symptom, strategy) triple 112 times.
+      R2G_FIX_RETRY_DEAD=1 restores the old always-retry behavior.
+    --rank-first bypasses ALL gates by design: an A/B arm B must be able to force
+    exactly the strategy under test."""
     strategies = plan.get("strategies", [])
     # A/B arm B explicitly forces a strategy: honor it (it may be a shadow recipe).
     if rank_first:
@@ -500,11 +515,16 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
                        if s["id"] == rank_first and s.get("auto_apply")), None)
         if forced is not None:
             return forced
+    retry_dead = os.environ.get("R2G_FIX_RETRY_DEAD", "0") == "1"
     for s in strategies:
         if not s.get("auto_apply"):
             continue
         if s.get("requires_ab_promotion"):
             continue        # shadow recipe: never auto-applied in a blind live run
+        if s.get("lifecycle_status") == "shadow":
+            continue        # A/B-demoted: not in blind live runs (any lookup path)
+        if s.get("dead_here") and not retry_dead:
+            continue        # repeatedly failed on THIS design+check, never cleared
         return s
     return None
 
@@ -529,7 +549,30 @@ def apply_edits(config_text: str, edits: dict) -> str:
 
 
 def _load(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    """Parse a reports/*.json — a corrupt file (crash mid-write, disk full) must
+    degrade to {} with a WARNING, not kill the diagnosis (2026-07-04)."""
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        print(f"WARNING: unreadable report {path}: {exc}; treating as empty",
+              file=sys.stderr)
+        return {}
+
+
+def _load_heuristics(hp: Path):
+    """Parse heuristics.json, degrading to None (cold start) on a corrupt or
+    unreadable file instead of crashing the whole diagnosis — the fixer then
+    ranks by static catalog order, exactly like a fresh clone (2026-07-04; the
+    config-seeding path in suggest_config already degraded this way, the fix
+    path did not)."""
+    try:
+        return json.loads(hp.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        print(f"WARNING: unreadable heuristics {hp}: {exc}; cold-start ranking",
+              file=sys.stderr)
+        return None
 
 
 def _load_recipes(proj: Path, *, check: str, drc: dict, lvs: dict,
@@ -556,7 +599,9 @@ def _load_recipes(proj: Path, *, check: str, drc: dict, lvs: dict,
         # basename split), which is where most harvested designs land.
         fam = (proj.name or design_name or "").split("_", 1)[0].lower()
     plat = cfg.get("PLATFORM", "asap7")
-    data = json.loads(hp.read_text(encoding="utf-8"))
+    data = _load_heuristics(hp)
+    if data is None:
+        return None
     entry = (data.get("families", {}).get(fam, {})
              .get("platforms", {}).get(plat, {}).get("fix_recipes"))
     if not entry:
@@ -601,7 +646,9 @@ def load_symptom_recipe(*, check: str, platform: str, drc: dict, lvs: dict,
     hp = heuristics or (Path(__file__).resolve().parents[2] / "knowledge" / "heuristics.json")
     if not hp.exists():
         return None, {}
-    data = json.loads(hp.read_text(encoding="utf-8"))
+    data = _load_heuristics(hp)
+    if data is None:
+        return None, {}
     symptoms = data.get("symptoms") or {}
     if check == "drc":
         cats = drc.get("categories") or {}
@@ -643,7 +690,9 @@ def load_indexed_recipe(*, check: str, platform: str, design_class: str,
                         / "knowledge" / "heuristics.json")
     if not hp.exists():
         return None, {}, "none"
-    data = json.loads(hp.read_text(encoding="utf-8"))
+    data = _load_heuristics(hp)
+    if data is None:
+        return None, {}, "none"
     recipes = data.get("recipes") or {}
     if check == "drc":
         cats = drc.get("categories") or {}
@@ -694,6 +743,70 @@ def _current_vclass(check: str, drc: dict, lvs: dict) -> str | None:
     if check == "lvs":
         return lvs.get("mismatch_class")
     return None
+
+
+def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
+                         sid: str | None = None, design_class: str = "",
+                         platform: str = "", db_path=None) -> dict:
+    """Annotate plan strategies with the two negative-evidence gates
+    _live_auto_strategy consumes (2026-07-04):
+
+    - dead_here: count of terminal failures (no_change/regression) of this
+      strategy on THIS design+check with ZERO clears, from fix_events — the
+      cross-run memory the fixer lacked (the same dead fix was re-tried up to
+      112 times across sessions). Threshold R2G_FIX_DEAD_AFTER (default 2).
+    - lifecycle_status: the recipe_status verdict for this symptom key, so an
+      A/B-demoted ('shadow') strategy is gated on EVERY lookup path, not only
+      the indexed-recipe one filter_promoted covers.
+
+    Best-effort by design: any DB problem (locked mid-campaign, missing tables)
+    leaves the plan un-annotated with a WARNING — the gates then simply do not
+    fire, which is the pre-2026-07-04 behavior, never a broken diagnosis."""
+    try:
+        import knowledge_db
+        conn = (knowledge_db.connect(db_path) if db_path
+                else knowledge_db.connect())
+        knowledge_db.ensure_schema(conn)
+    except Exception as exc:
+        print(f"WARNING: negative-evidence gates unavailable "
+              f"({type(exc).__name__}: {exc})", file=sys.stderr)
+        return plan
+    try:
+        try:
+            dead_after = max(1, int(os.environ.get("R2G_FIX_DEAD_AFTER", "2")))
+        except ValueError:
+            dead_after = 2
+        # fix_events stores the project_path as the fixer received it; match both
+        # the raw and resolved spellings.
+        paths = sorted({str(proj), str(proj.resolve())})
+        ph = ",".join("?" * len(paths))
+        rows = conn.execute(
+            f"SELECT strategy, "
+            f"SUM(CASE WHEN verdict IN ('no_change','regression') THEN 1 ELSE 0 END), "
+            f"SUM(CASE WHEN verdict IN ('cleared','win') THEN 1 ELSE 0 END) "
+            f"FROM fix_events WHERE project_path IN ({ph}) AND check_type=? "
+            f"GROUP BY strategy", (*paths, check)).fetchall()
+        dead = {s: int(nf or 0) for s, nf, ns in rows
+                if s and s != "none" and int(ns or 0) == 0
+                and int(nf or 0) >= dead_after}
+        statuses = {}
+        if sid:
+            import recipe_lifecycle
+            for s in plan.get("strategies", []):
+                statuses[s["id"]] = recipe_lifecycle.get_status(
+                    conn, symptom_id=sid, design_class=design_class,
+                    platform=platform, strategy=s["id"])
+        for s in plan.get("strategies", []):
+            if s["id"] in dead:
+                s["dead_here"] = dead[s["id"]]
+            if statuses.get(s["id"]) and statuses[s["id"]] != "promoted":
+                s["lifecycle_status"] = statuses[s["id"]]
+    except Exception as exc:
+        print(f"WARNING: negative-evidence gates unavailable "
+              f"({type(exc).__name__}: {exc})", file=sys.stderr)
+    finally:
+        conn.close()
+    return plan
 
 
 def attach_lessons(plan: dict, *, check: str, vclass: str | None, platform: str) -> dict:
@@ -760,23 +873,34 @@ def main(argv=None) -> int:
         recipes = pooled = None
         idx_recipe, idx_pooled, idx_level = load_indexed_recipe(
             check=args.check, platform=plat, design_class=design_class, drc=drc, lvs=lvs)
+    # The symptom key for this diagnosis (drc/lvs only): shared by the lifecycle
+    # filter below and the negative-evidence gates (_annotate_live_gates).
+    _sid = None
+    if args.check in ("drc", "lvs"):
+        _vc = _current_vclass(args.check, drc, lvs)
+        _report = drc if args.check == "drc" else lvs
+        _sid = symptom.symptom_id(symptom.canonical_signature(
+            args.check, _vc, symptom.predicates_for(args.check, _report)))
     if args.check != "route" and idx_recipe is not None:
         recipes, pooled = idx_recipe, idx_pooled
         try:
             import knowledge_db
             import recipe_lifecycle
-            _vc = _current_vclass(args.check, drc, lvs)
-            _report = drc if args.check == "drc" else lvs
-            _sid = symptom.symptom_id(symptom.canonical_signature(
-                args.check, _vc, symptom.predicates_for(args.check, _report)))
             _kc = knowledge_db.connect()
             knowledge_db.ensure_schema(_kc)
             recipes = recipe_lifecycle.filter_promoted(
                 _kc, recipes, symptom_id=_sid, design_class=design_class,
                 platform=plat)
             _kc.close()
-        except Exception:
-            pass    # lifecycle filter must never break diagnosis
+        except Exception as exc:
+            # Fail CLOSED, visibly (2026-07-04): an unreadable lifecycle (DB locked
+            # mid-campaign) must not hand unvalidated/demoted recipes a promoted-
+            # equivalent ranking — the old silent `pass` degraded toward MORE trust.
+            # Cold-start (static catalog order) is the safe floor; the fix proceeds.
+            print(f"WARNING: recipe-lifecycle filter unavailable "
+                  f"({type(exc).__name__}: {exc}); using cold-start ranking",
+                  file=sys.stderr)
+            recipes, pooled = None, {}
     elif args.check != "route":
         sym_recipe, pooled = load_symptom_recipe(check=args.check, platform=plat, drc=drc, lvs=lvs)
         recipes = sym_recipe if sym_recipe is not None else _load_recipes(
@@ -786,6 +910,8 @@ def main(argv=None) -> int:
     _rank_plan_strategies(plan, recipes, pooled=pooled)
     attach_lessons(plan, check=args.check,
                    vclass=_current_vclass(args.check, drc, lvs), platform=plat)
+    _annotate_live_gates(plan, proj, check=args.check, sid=_sid,
+                         design_class=design_class, platform=plat)
 
     if args.rank_first:
         head = [s for s in plan["strategies"] if s["id"] == args.rank_first]

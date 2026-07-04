@@ -82,6 +82,13 @@ CORE_UTILIZATION is too high for the design's routing complexity. Highly interco
 
 ### Sub-variant: sky130hd route-dense designs (crypto SPN), 5-layer stack
 
+<!-- r2g-lesson:
+id: lesson-sky130-route-dense
+status: active
+trigger: {check: route, platform: sky130hd}
+strategy_ids: [route_relief]
+-->
+
 - **Symptom (sky130hd/sky130hs):** `place` passes at a healthy 15-25% utilization but `route`
   fails — either `[ERROR GRT-0116] Global routing finished with congestion` or, more often, a
   `route` **timeout (exit 124)** after the global router spins all 30 extra iterations without
@@ -110,6 +117,13 @@ CORE_UTILIZATION is too high for the design's routing complexity. Highly interco
   met6+) or a hierarchical/partitioned floorplan becomes available.
 
 ### Sub-variant: route TIMEOUT (exit 124) ≠ congestion — the `route_relief` learnable recipe (2026-06-17)
+
+<!-- r2g-lesson:
+id: lesson-route-timeout-relief
+status: active
+trigger: {check: route, platform: "*"}
+strategy_ids: [route_relief]
+-->
 
 - **The mislabel:** a route-stage abort is reported by the driver as "Routing congestion detected",
   but the **common** cause is the wall-clock `timeout` (exit **124/137**) killing **detailed
@@ -748,6 +762,13 @@ The setup-time floor above only protects projects materialized by `mk_sky130_pro
 - **Tool:** `scripts/flow/run_drc.sh` → `scripts/extract/extract_drc.py` for detailed category breakdown
 
 ### KLayout DRC Stuck on `or` (FreePDK45.lydrc, nangate45)
+
+<!-- r2g-lesson:
+id: lesson-klayout-drc-stuck-nangate45
+status: active
+trigger: {check: drc, platform: nangate45}
+strategy_ids: [beol_only_drc]
+-->
 
 - **Symptom:** `run_drc.sh` runs for hours with no progress. `6_drc.log` last line is `"or" in: FreePDK45.lydrc:121` (or another boolean-op line — also observed at lines 91, 131) and the file mtime stops advancing. CPU stays at 100% on a single klayout process; RSS plateaus around 500MB-3.5GB.
 - **Root cause:** KLayout DRC's combination of `poly.not(active).separation(active, ...)` followed by an `or` builds large intermediate polygon sets. On dense designs (>~1.5K cells / >~1MB GDS) the rule scales poorly. Validated on this environment: `iscas89_s27` (86 cells), `ansiportlist` (231), `binops` (231), `CRC33_D264` (1434) all complete; `faraday_dma` (14k cells, 14.8MB GDS) hung indefinitely on rule 121. Also observed on `APB_GPIO_register`, `AXI_Lite_DMA_axilite`, `DMA_Controller_DMA_registers` stuck on rule 131.
@@ -1994,7 +2015,7 @@ Empirical fix yield (from the 93-failure retry): memory/place-density/io-pin fix
 <!-- r2g-lesson:
 id: lesson-nangate45-antenna-diode
 status: active
-trigger: {check: drc, class: METAL1_ANTENNA, platform: nangate45}
+trigger: {check: drc, class: "*_ANTENNA", platform: nangate45}
 strategy_ids: [antenna_diode_repair]
 -->
 
@@ -2088,6 +2109,13 @@ diode): unchanged — raise repair iterations (`MAX_REPAIR_ANTENNAS_ITER_GRT/_DR
 
 ### Hold Timing Violations Post-CTS
 
+<!-- r2g-lesson:
+id: lesson-hold-post-cts
+status: active
+trigger: {check: timing, platform: "*"}
+strategy_ids: []
+-->
+
 **Symptoms:**
 - `6_report.json` shows `finish__timing__hold__tns < 0` and `finish__timing__hold__ws < 0`
 - Hold violation count > 0 in final timing report
@@ -2123,6 +2151,13 @@ The SDC `clk_port_name` doesn't match the actual RTL clock port. OpenROAD silent
 - Prevention: add a pre-flight check in `run_orfs.sh` that warns if SDC clock port is not found in RTL
 
 ### Setup Timing Violations (Tiered WNS + TNS Response)
+
+<!-- r2g-lesson:
+id: lesson-setup-timing-tiers
+status: active
+trigger: {check: timing, platform: "*"}
+strategy_ids: [period_relax, utilization_reduce, backend_aware_synth_retune]
+-->
 
 `check_timing.py` classifies timing into tiers based on the **worse of** the WNS tier and the TNS tier. A design with small WNS but large TNS (many slightly-violating paths) is treated as severely as one with large WNS.
 
@@ -2212,6 +2247,13 @@ The FreePDK45.lydrc DRC rule deck involves expensive polygon boolean operations 
 - **nangate45 LVS rule file (`FreePDK45.lylvs`) is NOT shipped with this ORFS checkout.** `run_lvs.sh` gracefully emits `lvs_result.json` with `status=skipped` in this case. If you need LVS on nangate45, obtain the adapted FreePDK45.lylvs from the reference library manually.
 
 ## ASAP7 residual-DRC-by-design — `asap7.lydrc` is NOT flow-achievable-clean (deck-vs-flow truth, 2026-06-30)
+
+<!-- r2g-lesson:
+id: lesson-asap7-drc-deck-floor
+status: active
+trigger: {check: drc, platform: asap7}
+strategy_ids: []
+-->
 
 **Finding (decisive, workflow-verified):** asap7 designs SYSTEMATICALLY carry residual `asap7.lydrc`
 KLayout-signoff DRC that **no ORFS flow lever (density/route/util relief) can clear** — this is a
@@ -2736,3 +2778,69 @@ slow arm.)
   `design_cases/` is a ghost arm — check `ls design_cases/ | grep _ab` against the ledger's
   `ab_arm` entries. Historical ghost-arm ledger rows are terminal escalated artifacts (benign
   history); the candidate re-plans with real subjects on the next drain after the fix.
+
+### Sub-variant: judge blind to the target symptom — 85% inconclusive, no reason recorded (2026-07-04, judge v2)
+
+- **Symptom:** `ab_trials` grows but is dominated by `verdict='inconclusive'` (live store: 193 of
+  228 = 85%), whole strategy classes are 0-decisive forever (`antenna_diode_repair` 0-in-93,
+  `pdn_die_floor` 0-in-12, `rerun_from_stage` 0-in-14, `beol_only_drc` 0-in-5), 38 candidates sit
+  capped dead by `AB_INCONCLUSIVE_MAX` with zero decisive verdicts, and `metrics_json` holds only
+  tied samples — nothing says WHY a trial concluded nothing. Every capped trial burned a full
+  flow+fix ×2×k before teaching zero bits.
+- **Root cause (metric granularity — the timing/synth lesson, never generalized):** DRC/LVS signoff
+  arms were judged on the whole-run `knowledge_db.is_success`. A signoff subject usually carries
+  MORE THAN ONE residual, so arm B clears its target class (e.g. `METAL5_ANTENNA` → 0) while an
+  UNRELATED residual (density, LVS) keeps `is_success` false in BOTH arms → `judge_repeated` sees a
+  0-0 success tie → inconclusive, structurally, forever. Timing arms hit the identical wall in
+  2026-06-24 (both arms reach GDS) and were fixed by judging on `wns_ns`; synth arms in 2026-06-28
+  (stage clearance); DRC/LVS — the majority class — never got the fix.
+- **Fix (2026-07-04, judge v2):** (1) `judge_finished_trials` resolves the candidate's symptom to a
+  target (`_symptom_target`) and `_arm_metric(target=...)` judges a DRC arm on the TARGET class
+  count reaching 0 on a definitively-run DRC (`_drc_symptom_cleared`, quoted-class-normalized;
+  stuck/unknown never demonstrates a clear), an LVS arm on `lvs_status='clean'`. Verified against
+  the live store: 44 of 384 real (arm × antenna-symptom) samples flip success under the v2 metric —
+  exactly the separations the old judge could not see. (2) `ab_runner.judge_repeated_ex` returns a
+  (verdict, **reason**) pair — `both_arms_never_succeed`, `success_tie_cost_within_noise`,
+  `success_tie_insufficient_repeats`, `arm_no_samples`, `cost_tiebreak`, `success_lcb_delta` — and
+  `record_trial` metrics carry `judge_version: 2` + `reason` + `target`, so the inconclusive corpus
+  is queryable. (3) `_ab_coverage_gap` counts ONLY judge-v2 inconclusives toward the re-plan cap:
+  pre-v2 verdicts were blind to the symptom under test, so they no longer permanently bar the 38
+  capped candidates (decisive verdicts count from any era — a win still unblocks). (4) Non-divergent
+  strategies (`lvs_resolve_unknown`) are refused at ENQUEUE (`recipe_lifecycle.diff_and_enqueue`/
+  `enqueue_candidate`) and legacy rows are healed to the non-terminal `parked` status
+  (`park_nondivergent`, top of every drain) instead of being re-skipped+re-escalated forever.
+  Tests: `test_judge_v2_symptom_target.py`.
+- **Skill-level alarm:** `SELECT strategy, COUNT(*) FROM ab_trials WHERE verdict='inconclusive'
+  GROUP BY 1` showing a strategy with high counts and ZERO decisive rows = the judge cannot see that
+  strategy's effect — check what `metrics_json.reason` says before burning more arms on it.
+
+### Sub-variant: negative evidence written but never consumed — the same dead fix re-tried 112× (2026-07-04)
+
+- **Symptom:** `fix_trajectories` accumulates the same (design, symptom, strategy) abandonment over
+  and over (live store: `('test','timing','utilization_reduce')` abandoned 112×, 186 triples
+  re-abandoned ≥3×; 2376 'abandoned' rows total of which 1957 tried NOTHING — path all
+  `strategy:'none'`). Fix sessions on a design repeat the exact strategies that already failed there
+  in prior sessions; violation classes appear as raw quoted KLayout text (`"'m3.2'"`, a 100-char
+  LISD rule sentence, `"'  '"`), each spawning a single-use symptom bucket that can never pool.
+- **Root cause (three holes):** (1) the ranker's Beta down-rank is the ONLY negative-evidence
+  consumer, and it is cross-run-memoryless per design — nothing excluded a strategy that terminally
+  failed on THIS design before, so the fixer's catalog walk re-applied it every session; (2) A/B
+  demotion (`shadow`) only stripped the strategy's learned boost from the INDEXED recipe path
+  (`filter_promoted`) — via the static catalog / pooled prior / fallback paths a demoted recipe
+  could still sort first and auto-apply; (3) write-side noise: give-up-before-trying episodes were
+  recorded as `abandoned` (bogus negative evidence), and `extract_drc` stored KLayout `<category>`
+  text verbatim (quotes and all), fragmenting the symptom index.
+- **Fix (2026-07-04):** apply-side — `_annotate_live_gates` marks strategies with
+  ≥ `R2G_FIX_DEAD_AFTER` (default 2) terminal failures and zero clears on this design+check as
+  `dead_here`, and `_live_auto_strategy` skips `dead_here` + `lifecycle_status='shadow'` strategies
+  in blind live runs (`R2G_FIX_RETRY_DEAD=1` opt-out; `--rank-first`/A/B arm B bypasses all gates by
+  design — the harness must be able to force the strategy under test). Write-side —
+  `symptom.normalize_class` at every entry point (extract_drc parse, `canonical_signature`),
+  `_build_trajectory` re-keys legacy quoted-class signatures on rebuild (history heals into the
+  pooled buckets), and a none-only episode is now outcome `not_attempted`, freeing `abandoned` to
+  mean "tried real strategies, none worked". Tests: `test_negative_evidence_gates.py`.
+- **Why not blacklist globally?** A strategy that fails on one design can win on another (the whole
+  premise of symptom-pooled learning) — so the hard gate is DESIGN-LOCAL and the global signal stays
+  a soft Beta down-rank + the A/B lifecycle. The fix philosophy "down-ranked, never zeroed" survives;
+  what changed is that a HUMAN-obvious stop rule ("don't re-run the exact fix that failed here
+  twice") now exists at the only place it can act — auto-apply time.

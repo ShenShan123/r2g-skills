@@ -24,15 +24,36 @@ _PREDICATE_KEYS: dict[str, tuple[str, ...]] = {
 }
 
 
+def normalize_class(vclass: str | None) -> str | None:
+    """Normalize a violation-class token before it enters a signature.
+
+    KLayout XML <category> names arrive wrapped in LITERAL quotes ("'m3.2'",
+    "'M4.S.5'") and sometimes as full rule prose ("'RULE : description : 15nm'");
+    stored verbatim they fragment the symptom index into single-use buckets that
+    can never pool repair experience (2026-07-04 audit: 7+ quoted classes, one a
+    100-char LISD spacing sentence, plus a quoted-whitespace class). Strip
+    wrapping quotes/whitespace, keep only the leading rule token of a
+    ' : '-separated description, and collapse empty to None."""
+    if vclass is None:
+        return None
+    c = str(vclass).strip()
+    while len(c) >= 2 and c[0] == c[-1] and c[0] in ("'", '"'):
+        c = c[1:-1].strip()
+    if " : " in c:
+        c = c.split(" : ", 1)[0].strip()
+    return c or None
+
+
 def canonical_signature(check: str | None, vclass: str | None,
                         predicates: dict | None = None) -> dict:
-    """Canonical {check, class, predicates} with predicates filtered to the
-    curated, TRUE-valued decision keys for this check (sparse, true-only)."""
+    """Canonical {check, class, predicates} with the class normalized
+    (normalize_class) and predicates filtered to the curated, TRUE-valued
+    decision keys for this check (sparse, true-only)."""
     preds: dict[str, bool] = {}
     for k in _PREDICATE_KEYS.get(check or "", ()):
         if (predicates or {}).get(k):
             preds[k] = True
-    return {"check": check, "class": vclass, "predicates": preds}
+    return {"check": check, "class": normalize_class(vclass), "predicates": preds}
 
 
 def symptom_id(signature: dict) -> str:

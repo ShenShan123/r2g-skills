@@ -7,6 +7,7 @@ exists. Model/ranking logic stays in fix_model.py.
 from __future__ import annotations
 import json
 import math
+import os
 
 CONFIG_TOL = 0.15            # ±15% numeric tolerance for "same action"
 RULE_DETAIL_TOP_N = 20       # cap verbose per-violation detail (D13)
@@ -129,6 +130,19 @@ def manage(db_path, *, out_path=None, autolearn=True) -> dict:
         except Exception as e:                      # sync must never break ingest
             import sys
             print(f"[fix_log_manager] lesson sync skipped: {e}", file=sys.stderr)
+        # Keep the new-failure-signature review queue fresh: mine_rules previously
+        # had NO automatic caller, so failure_candidates.json (the human-review
+        # gate for genuinely new signatures — "one turn of the wheel" step 3) went
+        # silently stale between manual runs (2026-07-04 audit). Best-effort like
+        # the lesson sync; R2G_MINE_AUTORUN=0 opts out.
+        if os.environ.get("R2G_MINE_AUTORUN", "1") != "0":
+            try:
+                import mine_rules
+                mine_rules.mine(db_path, knowledge_db.DEFAULT_KNOWLEDGE_DIR
+                                / "failure_candidates.json")
+            except Exception as e:                  # mining must never break ingest
+                import sys
+                print(f"[fix_log_manager] rule mining skipped: {e}", file=sys.stderr)
     archived = archive_old_raw(db_path)             # safe: trajectories already built
     conn = knowledge_db.connect(db_path)
     try:

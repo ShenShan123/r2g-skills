@@ -9,8 +9,9 @@ designs. Its core cycle is: pull the next design from a JSONL ledger → run the
 knowledge store (`ingest_run.py`) → auto-learn (`learn_heuristics.py`) → diff the new recipe
 generation against the prior one (`recipe_lifecycle.diff_and_enqueue`) → enqueue new or
 changed recipes as A/B candidates → the same loop executes matched-design A/B arms
-(`ab_runner.record_trial`) → a win promotes the recipe to live ranking; a loss or
-inconclusive verdict demotes it back to shadow. The loop never blocks: when the deterministic
+(`ab_runner.record_trial`) → net decisive wins promote the recipe to live ranking; net losses
+demote it to shadow (an `inconclusive` carries no information and never demotes — status is a
+function of the FULL trial corpus, 2026-06-24). The loop never blocks: when the deterministic
 core cannot handle a design (unknown symptom, exhausted catalog, unseen crash, or repeated
 regression), it opens an escalation record and moves on. The agent tier drains escalations by
 diagnosing the root cause and authoring new shadow strategies, which then re-enter the same
@@ -194,6 +195,9 @@ The ledger is a JSONL file: one line per state transition, last-state-wins. This
 | `R2G_FIX_EXCLUDE=<strategy>` | Exclude a strategy from the fix ranking (A/B arm knob) |
 | `R2G_FIX_RANK_FIRST=<strategy>` | Force a strategy to rank first (A/B arm B knob) |
 | `R2G_AB_REPEATS=<k>` | Win 2: repeats per A/B arm side (default **k=2**). The verdict is the lower-confidence bound (mean − z·stderr) over the k repeats, so one lucky run cannot promote a recipe (the LVS-crash heisenbug). k=3 is opt-in for high-stakes promotions; each k is a k× wall-clock multiplier on the already-slow A/B path |
+| `R2G_FIX_DEAD_AFTER=<n>` | Dead-fix gate threshold (default 2): a strategy with ≥n terminal failures and zero clears on THIS design+check is skipped by auto-apply (2026-07-04) |
+| `R2G_FIX_RETRY_DEAD=1` | Disable the dead-fix gate (restore pre-2026-07-04 always-retry) |
+| `R2G_MINE_AUTORUN=0` | Skip the automatic `mine_rules.mine` refresh of `failure_candidates.json` at ingest/learn time (default: runs) |
 
 `R2G_FIX_EXCLUDE` and `R2G_FIX_RANK_FIRST` are consumed by `fix_signoff.sh`, which passes
 `--exclude` / `--rank-first` to `diagnose_signoff_fix.py` to implement A/B arm separation.
@@ -372,8 +376,18 @@ Returns a list of all known strategies for this symptom, each with its `recipe_s
   sky130hd while `ab_trials` grew). The success-tie cost tiebreak is variance-aware (`se==0` = maximal
   confidence). An arm with no backend ESCALATES (`route_arm_incomplete`), never ingests a junk
   `unknown` row. **Alarm: `ab_trials` grows but `promoted` is flat for a whole platform.**
-- **A/B coverage gap (follow-up):** `_symptom_check` routes only `orfs_stage/route` symptoms to the
-  backend apply-then-flow arm runner; TIMING (`period_relax`) and PLACE (`core_util_relief`, the
-  FLW-0024 resize) recipes run a `--check both` DRC/LVS arm where the EXCLUDE/RANK_FIRST is a no-op, so
-  they land `inconclusive` regardless of merit. Extending the router to timing/place is tracked in
-  `docs/superpowers/plans/r2g-loop-closure-audit-2026-06-23.md`.
+- **A/B coverage routing (CLOSED in stages):** `_symptom_check` routes by STRATEGY — place recipes
+  to the apply-then-flow backend runner, timing to `fix_signoff --check timing` judged on
+  `wns_ns`/`timing_tier`, synth to a synth-only arm judged on stage clearance (2026-06-24/28).
+- **Judge v2 — signoff arms judged on THEIR OWN symptom, with reason codes (2026-07-04).** The
+  whole-run `is_success` metric tied both arms whenever an UNRELATED residual kept the run non-clean
+  (85% of all trials inconclusive; antenna 0-decisive-in-93). `judge_finished_trials` now resolves
+  the candidate's symptom to a target: a DRC arm succeeds iff the TARGET class count reached 0 on a
+  definitively-run DRC, an LVS arm iff lvs is clean. Every trial's `metrics_json` records
+  `judge_version: 2`, a `reason` code from `ab_runner.judge_repeated_ex`
+  (`both_arms_never_succeed`, `success_tie_cost_within_noise`, …) and the `target`.
+  `_ab_coverage_gap`'s re-plan cap counts only v2 inconclusives (pre-v2 verdicts were blind to the
+  symptom under test; decisive verdicts count from any era). Non-divergent strategies are refused at
+  enqueue and healed to the non-terminal `parked` status (`recipe_lifecycle.park_nondivergent`,
+  called at the top of every drain). Detail: `references/failure-patterns.md` ("judge blind to the
+  target symptom") + `knowledge/README.md` invariant 29.

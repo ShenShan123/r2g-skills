@@ -125,3 +125,27 @@ A/B arms (`place_arm_incomplete` every drain; candidate starved). Fixed: Tier-1 
 plan_arms skips arms whose subject dir AND arm dir are both absent. See failure-patterns.md
 "Ghost A/B arms" sub-variant. This supersedes the implicit assumption here that Tier-1 subjects
 are always physically present.
+
+---
+
+## 2026-07-04 addendum — judge v2 supersedes the whole-run signoff metric
+
+The 2026-06-24 fixes made the arms DO different work; a further audit (2026-07-04, "improve
+stability + close the loop" session) found the JUDGE still could not SEE that work for DRC/LVS
+signoff arms: it scored the whole-run `knowledge_db.is_success`, which ties whenever an unrelated
+residual keeps both arms non-clean — 193/228 live trials inconclusive, `antenna_diode_repair`
+0-decisive-in-93, 38 candidates capped dead by `AB_INCONCLUSIVE_MAX`. Superseded invariants:
+
+- "the success-tie cost tiebreak decides a signoff trial" → still true, but signoff arms are now
+  FIRST judged on their own symptom clearing (`_arm_metric(target=…)` / `_drc_symptom_cleared`),
+  so genuinely divergent arms rarely reach the cost tie.
+- `_ab_coverage_gap`'s inconclusive cap now counts ONLY `judge_version >= 2` trials — the pre-v2
+  inconclusive corpus recorded under this plan's judge is treated as non-evidence for capping
+  (decisive verdicts still count from any era).
+- `record_trial` metrics now include `judge_version`, `reason` (from `judge_repeated_ex`) and
+  `target`; non-divergent strategies are refused at enqueue and parked (`parked` status).
+
+Detail: `references/failure-patterns.md` ("judge blind to the target symptom", 2026-07-04) +
+`knowledge/README.md` invariants 29–31. Verified live: 44/384 real (arm × antenna-symptom)
+samples flip success under the v2 metric. Code: judge v2 + negative-evidence gates commits of
+2026-07-04 on branch r2g-debug/sky130-round.

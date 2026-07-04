@@ -27,7 +27,9 @@ def test_judges_only_both_terminal_pairs_and_is_idempotent(tmp_path, monkeypatch
     led.add(_arm("d2_abB", "B", "flow", key))
 
     # arm metric: any *_abB succeeds, any *_abA fails (a decisive divergence -> win).
-    monkeypatch.setattr(el, "_arm_metric", lambda conn, pp, timing=False, synth=False: {
+    # (target= is the judge-v2 symptom-target kwarg, 2026-07-04.)
+    monkeypatch.setattr(el, "_arm_metric",
+                        lambda conn, pp, timing=False, synth=False, target=None: {
         "is_success": pp.endswith("abB"), "wall_s": 10.0, "fix_iters": None,
         "outcome_score": 0.5 if pp.endswith("abB") else 0.333})
     recorded = []

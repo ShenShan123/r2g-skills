@@ -68,29 +68,45 @@ def lcb(samples: list[float], z: float = AB_LCB_Z) -> float:
 def judge_repeated(arm_a_samples: list[dict | None],
                    arm_b_samples: list[dict | None], *,
                    z: float = AB_LCB_Z) -> str:
-    """Variance-aware verdict over k repeats per arm (Win 2). Each sample is an
-    arm-result dict {is_success, wall_s?, fix_iters?, outcome_score?} or None
+    """Backward-compatible wrapper: verdict only. See judge_repeated_ex."""
+    return judge_repeated_ex(arm_a_samples, arm_b_samples, z=z)[0]
+
+
+def judge_repeated_ex(arm_a_samples: list[dict | None],
+                      arm_b_samples: list[dict | None], *,
+                      z: float = AB_LCB_Z) -> tuple[str, str]:
+    """Variance-aware (verdict, reason) over k repeats per arm (Win 2). Each sample
+    is an arm-result dict {is_success, wall_s?, fix_iters?, outcome_score?} or None
     (crash). Promotion (`win`) requires arm B to sign off at least once AND a
     higher LCB over the binary success-rate than arm A — never a single lucky run.
     On a success tie the cost (wall-clock) tiebreaker decides ONLY if the delta
     clears a variance-aware bound; with <2 repeats per arm (no variance estimate) a
     cost-only difference is 'inconclusive'.
 
+    The reason code makes an inconclusive corpus QUERYABLE (2026-07-04 audit: 193
+    of 228 trials were inconclusive with no recorded cause — the dominant failure
+    mode, both-arms-never-succeed, was invisible in aggregate and the planner kept
+    re-burning flow compute on it). Reasons: arm_no_samples, both_arms_never_succeed,
+    b_never_succeeds, success_lcb_delta, cost_tiebreak, success_tie_insufficient_
+    repeats, success_tie_cost_within_noise.
+
     is_success stays the sole authority for a win: a never-clean arm B can never
     win (invariant H4); outcome_score is NOT used to flip the verdict."""
     a = [s for s in arm_a_samples if s is not None]
     b = [s for s in arm_b_samples if s is not None]
     if not a or not b:
-        return "inconclusive"                 # an arm produced no judgeable result
+        return "inconclusive", "arm_no_samples"   # an arm produced no judgeable result
     a_succ = [1.0 if s.get("is_success") else 0.0 for s in a]
     b_succ = [1.0 if s.get("is_success") else 0.0 for s in b]
     if sum(b_succ) == 0:                       # B never signed off -> never a win
-        return "inconclusive" if sum(a_succ) == 0 else "loss"
+        if sum(a_succ) == 0:
+            return "inconclusive", "both_arms_never_succeed"
+        return "loss", "b_never_succeeds"
     lcb_a, lcb_b = lcb(a_succ, z), lcb(b_succ, z)
     if lcb_b > lcb_a:
-        return "win"
+        return "win", "success_lcb_delta"
     if lcb_b < lcb_a:
-        return "loss"
+        return "loss", "success_lcb_delta"
     # Tie on success LCB (e.g. both arms reliably sign off): fall back to a
     # wall-clock cost tiebreaker, BUT only flip the verdict when the cost delta
     # clears the COMBINED sampling noise (a variance-aware bound), not a flat ±2%
@@ -122,10 +138,11 @@ def judge_repeated(arm_a_samples: list[dict | None],
         # the 2026-06-23 se==0 invariant (a deterministic delta must still decide).
         bound = z * max(se, COST_FLOOR * (ma + mb) / 2.0)
         if (ma - mb) > bound and max(wb) < min(wa):
-            return "win"                       # B robustly + consistently cheaper than A
+            return "win", "cost_tiebreak"      # B robustly + consistently cheaper than A
         if (mb - ma) > bound and max(wa) < min(wb):
-            return "loss"                      # B robustly + consistently dearer than A
-    return "inconclusive"
+            return "loss", "cost_tiebreak"     # B robustly + consistently dearer than A
+        return "inconclusive", "success_tie_cost_within_noise"
+    return "inconclusive", "success_tie_insufficient_repeats"
 
 
 def _now() -> str:

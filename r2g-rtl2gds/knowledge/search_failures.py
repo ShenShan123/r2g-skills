@@ -13,6 +13,7 @@ Returns ranked results as JSON. No external dependencies.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import math
 import re
@@ -164,7 +165,11 @@ def lessons_for_symptom(*, check: str, vclass: str | None, platform: str,
         trig = meta.get("trigger") or {}
         if trig.get("check") and trig["check"] != check:
             continue
-        if trig.get("class") and vclass is not None and trig["class"] != vclass:
+        # Class matches by GLOB (fnmatch), not equality: a trigger like
+        # "*_ANTENNA" covers METAL1..METAL5_ANTENNA — exact-match made the
+        # antenna lesson fire ONLY on the METAL1 dominant class (2026-07-04).
+        if (trig.get("class") and vclass is not None
+                and not fnmatch.fnmatchcase(str(vclass), str(trig["class"]))):
             continue
         tp = trig.get("platform", "*")
         if tp not in ("*", None) and tp != platform:

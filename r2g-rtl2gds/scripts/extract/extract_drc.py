@@ -9,6 +9,17 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
+# Category names must be normalized the same way the symptom index normalizes
+# violation classes (knowledge/symptom.py): KLayout <category> names arrive
+# wrapped in literal quotes ("'m3.2'") or as full rule prose, which fragments
+# the learned-repair index into single-use buckets (2026-07-04).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "knowledge"))
+import symptom as _symptom
+
+# Atomic report writes: a kill -9/OOM mid-write must never leave a torn
+# reports/*.json for ingest to misread (2026-07-04 robustness audit M1).
+import report_io
+
 
 def parse_drc_count(drc_dir: Path) -> int:
     """Parse 6_drc_count.rpt for total violation count."""
@@ -39,7 +50,7 @@ def parse_lyrdb(drc_dir: Path) -> dict:
             name_el = cat.find('name')
             desc_el = cat.find('description')
             if name_el is not None and name_el.text:
-                cat_name = name_el.text.strip()
+                cat_name = _symptom.normalize_class(name_el.text) or 'unknown'
                 cat_desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ''
                 cat_map[cat_name] = cat_desc
 
@@ -47,7 +58,7 @@ def parse_lyrdb(drc_dir: Path) -> dict:
         for item in root.iter('item'):
             cat_el = item.find('category')
             if cat_el is not None and cat_el.text:
-                cat_name = cat_el.text.strip()
+                cat_name = _symptom.normalize_class(cat_el.text) or 'unknown'
                 if cat_name not in categories:
                     categories[cat_name] = {
                         'count': 0,
@@ -230,7 +241,7 @@ def main():
             result['magic_advisory'] = adv
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
+    report_io.write_json_atomic(out_path, result)
     print(out_path)
 
 

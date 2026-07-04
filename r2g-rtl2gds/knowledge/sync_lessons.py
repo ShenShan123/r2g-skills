@@ -9,6 +9,7 @@ run_violations.symptom_id / signature_json. Prose is never modified. Idempotent.
 from __future__ import annotations
 
 import hashlib
+import fnmatch
 import json
 import re
 from pathlib import Path
@@ -86,7 +87,10 @@ def _evidence_for(conn, trigger: dict) -> list[str]:
             continue
         if trigger.get("check") and sig.get("check") != trigger["check"]:
             continue
-        if trigger.get("class") and sig.get("class") != trigger["class"]:
+        # Glob class match, mirroring search_failures.lessons_for_symptom
+        # ("*_ANTENNA" must collect evidence across METAL1..5_ANTENNA).
+        if trigger.get("class") and not fnmatch.fnmatchcase(
+                str(sig.get("class")), str(trigger["class"])):
             continue
         if want_platform not in ("*", None) and plat != want_platform:
             continue

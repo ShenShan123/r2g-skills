@@ -1983,3 +1983,17 @@ so this is a serial loop, not a subagent fan-out — `tools/reingest_corpus.py`)
   (synth timeout 4h), `PYGMY_V32I_rtl_core` (synth error). None are v1-recoverable.
 - Suite stays **395 passed / 8 skipped** (no code change since the fix commit — Phase F is data).
   Store committed (`runs.sqlite` + `heuristics.json`); ships pre-trained (D14).
+
+---
+
+## 2026-07-04 addendum — negative evidence is now consumed, and cleaned at the source
+
+This plan's "down-ranked, never zeroed" proposal policy is unchanged, but AUTO-APPLY gained two
+gates (see `references/signoff-fixing.md` "no hard gate on PROPOSAL" section): a `dead_here`
+design-local stop rule (≥ `R2G_FIX_DEAD_AFTER`=2 terminal failures with zero clears on the same
+design+check ⇒ skipped in blind live runs; `R2G_FIX_RETRY_DEAD=1` opts out) and a
+`lifecycle_status='shadow'` gate that makes A/B demotion hold on every ranking path, not only the
+indexed one. Corpus hygiene: none-only episodes are now outcome `not_attempted` (1957 of 2376
+'abandoned' rows were give-up-before-trying noise), and `symptom.normalize_class` heals the
+quoted-KLayout-class fragmentation on rebuild. Detail: `knowledge/README.md` invariant 30;
+`references/failure-patterns.md` ("negative evidence written but never consumed", 2026-07-04).

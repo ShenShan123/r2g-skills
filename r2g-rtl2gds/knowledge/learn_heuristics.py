@@ -173,6 +173,31 @@ def _build_trajectory(events: list[dict]) -> dict:
         sig = _symptom.canonical_signature(first.get("check_type"),
                                            first.get("violation_class"), None)
         sid, sigj = _symptom.symptom_id(sig), json.dumps(sig, sort_keys=True)
+    else:
+        # Heal legacy unnormalized classes on rebuild: events written before
+        # normalize_class stored raw KLayout category text ("'m3.2'", rule prose)
+        # in the signature, fragmenting the symptom index. Re-keying HERE (the
+        # full Tier-2 rebuild) merges that history into the normalized buckets
+        # without touching the immutable Tier-1 fix_events rows (2026-07-04).
+        try:
+            stored = json.loads(sigj) if sigj else None
+        except ValueError:
+            stored = None
+        if stored and stored.get("class") != _symptom.normalize_class(
+                stored.get("class")):
+            sig = _symptom.canonical_signature(
+                stored.get("check"), stored.get("class"),
+                stored.get("predicates"))
+            sid, sigj = _symptom.symptom_id(sig), json.dumps(sig, sort_keys=True)
+    # An episode where NO real strategy ran (every step 'none' — a diagnose STOP,
+    # a recheck crash, a give-up-before-trying) is NOT fix experience: recording
+    # it as 'abandoned' polluted the negative-evidence corpus (2026-07-04 audit:
+    # 1957 of 2376 'abandoned' rows were none-only) and made 'abandoned' useless
+    # as a "this strategy failed here" signal. 'not_attempted' keeps the episode
+    # (it still proves the symptom EXISTED — A/B subject discovery uses that)
+    # while freeing 'abandoned' to mean "tried real strategies, none worked".
+    attempted = any(e.get("strategy") and e.get("strategy") != "none"
+                    for e in events)
     return {
         "fix_session_id": first.get("fix_session_id"),
         "project_path": first.get("project_path"),
@@ -180,10 +205,11 @@ def _build_trajectory(events: list[dict]) -> dict:
         "design_family": first.get("design_family"),
         "platform": first.get("platform"),
         "check_type": first.get("check_type"),
-        "violation_class": first.get("violation_class"),
+        "violation_class": _symptom.normalize_class(first.get("violation_class")),
         "path_json": json.dumps(path),
         "n_iters": len(events),
-        "outcome": "resolved" if win else "abandoned",
+        "outcome": ("resolved" if win
+                    else "abandoned" if attempted else "not_attempted"),
         "winning_strategy": win.get("strategy") if win else None,
         "winning_config_json": win.get("cumulative_config_json") if win else None,
         "failed_strategies_json": json.dumps(failed),

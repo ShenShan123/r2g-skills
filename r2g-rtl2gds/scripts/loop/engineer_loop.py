@@ -64,7 +64,15 @@ class Ledger:
             for ln in self.path.read_text(encoding="utf-8").splitlines():
                 if not ln.strip():
                     continue
-                e = json.loads(ln)
+                try:
+                    e = json.loads(ln)
+                except ValueError:
+                    # A torn/truncated line (kill -9 mid-append) must not brick the
+                    # ENTIRE ledger resume — skip it loudly; the design's next event
+                    # re-establishes its state (2026-07-04 audit M6).
+                    print(f"[ledger] WARNING: skipping corrupt line in "
+                          f"{self.path}: {ln[:120]!r}", file=sys.stderr)
+                    continue
                 cur = self._entries.setdefault(e["design"], {})
                 cur.update(e)
                 # A 'pending' event is fresh work (e.g. a re-planned A/B arm): drop any
@@ -180,9 +188,11 @@ _TIMING_STRATEGIES = frozenset({"period_relax", "utilization_reduce",
 # place/route backend-abort arms, and is judged on 'synth cleared' (2026-06-28).
 _SYNTH_STRATEGIES = frozenset({"synth_memory_relax"})
 # Strategies whose A/B arms CANNOT diverge (no real edit applied) — never plan a trial
-# for them (it can only ever be inconclusive). lvs_resolve_unknown re-inspects with
-# config_edits={} (a no-op), so arm A and arm B do byte-identical work.
-_NONDIVERGENT_STRATEGIES = frozenset({"lvs_resolve_unknown"})
+# for them (it can only ever be inconclusive). Canonical set lives in
+# recipe_lifecycle.NONDIVERGENT_STRATEGIES (the lifecycle refuses them at enqueue
+# time too, 2026-07-04); this alias keeps the plan-time coverage guard in sync.
+import recipe_lifecycle as _recipe_lifecycle_mod
+_NONDIVERGENT_STRATEGIES = _recipe_lifecycle_mod.NONDIVERGENT_STRATEGIES
 # A candidate that accrues this many inconclusive trials with ZERO decisive verdicts is
 # not learnable from the available subjects/harness — stop re-planning it (bug #1)
 # WITHOUT demoting it (bug #2: inconclusive is non-terminal); surface it once instead.
@@ -365,6 +375,13 @@ def _ingest(entry: dict) -> str | None:
     for tok in (r.stdout or "").split():
         if tok.startswith("run_id="):
             return tok.split("=", 1)[1]
+    # Every caller tolerates None, so a failed ingest was fully SILENT — a run
+    # missing from the store with no trace (the exact "swallowed ingest" the
+    # honesty invariants warn about). Surface it loudly; do not change the
+    # return contract (2026-07-04 audit M5).
+    print(f"[loop] WARNING: ingest produced no run_id for "
+          f"{entry.get('design') or entry['project_path']} (rc={r.returncode}): "
+          f"{(r.stderr or r.stdout or '').strip()[-300:]}", file=sys.stderr)
     return None
 
 
@@ -850,8 +867,19 @@ def _signoff_status(entry: dict) -> dict:
 def _learn() -> dict:
     import learn_heuristics
     import knowledge_db
-    return learn_heuristics.learn(knowledge_db.DEFAULT_DB_PATH,
-                                  KNOWLEDGE / "heuristics.json")
+    try:
+        return learn_heuristics.learn(knowledge_db.DEFAULT_DB_PATH,
+                                      KNOWLEDGE / "heuristics.json")
+    except Exception as exc:
+        # learn() can raise on malformed session data (e.g. the mixed-check_type
+        # trajectory assert). Ingest-time callers are wrapped; THIS one was not,
+        # so one bad episode crashed the whole campaign's learn cycle
+        # (2026-07-04 audit). Skip the cycle loudly; the next learn retries.
+        print(f"[loop] WARNING: learn cycle failed "
+              f"({type(exc).__name__}: {exc}); continuing without a rebuild",
+              file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return {}
 
 
 # ---- the loop ---------------------------------------------------------------
@@ -1147,22 +1175,38 @@ def _ab_coverage_gap(conn, key: dict) -> bool:
     (2) the candidate has already accrued >= AB_INCONCLUSIVE_MAX inconclusive trials
     with ZERO decisive (win/loss) verdicts — the harness cannot differentiate it on the
     available subjects, so re-planning only burns compute. Neither case demotes the
-    recipe (inconclusive is non-terminal); the caller surfaces an escalation instead."""
+    recipe (inconclusive is non-terminal); the caller surfaces an escalation instead.
+
+    Only JUDGE-V2 inconclusives count toward the cap (2026-07-04): pre-v2 trials
+    judged DRC/LVS signoff arms on the whole-run is_success, which ties whenever an
+    UNRELATED residual keeps both arms non-clean — 193/228 trials inconclusive,
+    38 candidates capped dead with the judge blind to the very symptom under test.
+    Those verdicts prove nothing about the candidate under the v2 symptom-target
+    judge, so they must not permanently bar it; decisive verdicts count from any era."""
     if key.get("strategy") in _NONDIVERGENT_STRATEGIES:
         return True
     if conn is None:
         return False
     try:
         rows = conn.execute(
-            "SELECT verdict FROM ab_trials WHERE symptom_id=? AND design_class=? AND "
-            "platform=? AND strategy=?",
+            "SELECT verdict, metrics_json FROM ab_trials WHERE symptom_id=? AND "
+            "design_class=? AND platform=? AND strategy=?",
             (key["symptom_id"], key["design_class"], key["platform"],
              key["strategy"])).fetchall()
     except Exception:
         return False
-    incon = sum(1 for (v,) in rows if v == "inconclusive")
-    decisive = sum(1 for (v,) in rows if v in ("win", "loss"))
-    return decisive == 0 and incon >= AB_INCONCLUSIVE_MAX
+    incon_v2 = decisive = 0
+    for v, mj in rows:
+        if v in ("win", "loss"):
+            decisive += 1
+        elif v == "inconclusive":
+            try:
+                jv = int((json.loads(mj) or {}).get("judge_version") or 1)
+            except (TypeError, ValueError):
+                jv = 1
+            if jv >= 2:
+                incon_v2 += 1
+    return decisive == 0 and incon_v2 >= AB_INCONCLUSIVE_MAX
 
 
 def _arm_awaiting_judge(led: Ledger, design: str) -> bool:
@@ -1228,6 +1272,17 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
     from collections import Counter as _Counter
     round_platform = _ledger_round_platform(led)
     _skipped_offplatform: _Counter = _Counter()
+    # Self-heal: park pre-filter NONDIVERGENT candidate rows (guaranteed-inconclusive
+    # arms) out of the work queue so they stop being re-skipped every drain — the
+    # enqueue filter refuses new ones, this converges stores that predate it.
+    if conn is not None:
+        try:
+            parked = recipe_lifecycle.park_nondivergent(conn)
+            if parked:
+                print(f"[loop] A/B parked {parked} non-divergent candidate(s) "
+                      f"(no real edit -> arms cannot diverge)")
+        except Exception:                       # healing must never break the drain
+            pass
     for key in recipe_lifecycle.pending_candidates(conn):
         # Off-platform skip: a candidate for a DIFFERENT platform than this round plans arms
         # that run the wrong platform's signoff (asap7 arms on a sky130 round: slow asap7.lydrc
@@ -1436,8 +1491,57 @@ def _synth_cleared_ondisk(project_path: str) -> bool:
     return False
 
 
+def _symptom_target(conn, symptom_id: str | None) -> tuple[str, str | None] | None:
+    """(check_type, class) a signoff arm should be judged on, from the symptoms
+    table. Only DRC/LVS symptoms yield a target — backend-abort (orfs_stage)
+    symptoms are judged by their dedicated runners, and a missing symptoms row
+    falls back to the legacy whole-signoff is_success. Best-effort: any DB error
+    -> None (legacy judgment), never a crash in the judge."""
+    if not symptom_id or conn is None:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT check_type, class FROM symptoms WHERE symptom_id=?",
+            (symptom_id,)).fetchone()
+    except Exception:
+        return None
+    if row and row[0] in ("drc", "lvs"):
+        return (row[0], row[1])
+    return None
+
+
+def _drc_symptom_cleared(conn, run_id: str | None, drc_status: str | None,
+                         vclass: str | None) -> bool:
+    """Did THIS arm run clear the target DRC class? clean/clean_beol -> yes.
+    A definitive 'fail' still counts as cleared when the TARGET class has no
+    remaining count (an antenna fix that leaves an unrelated density residual DID
+    clear the antenna symptom — the whole point of the v2 symptom-target judge).
+    None/stuck/unknown DRC never demonstrates clearing -> False (honest)."""
+    if drc_status in ("clean", "clean_beol"):
+        return True
+    if drc_status != "fail" or not vclass or not run_id:
+        return False
+    try:
+        import symptom as _symptom
+        row = conn.execute(
+            "SELECT drc_categories_json FROM run_violations WHERE run_id=?",
+            (run_id,)).fetchone()
+        if row is None:
+            return False
+        cats = json.loads(row[0] or "{}")
+        want = _symptom.normalize_class(vclass)
+        for cat, node in cats.items():
+            if _symptom.normalize_class(cat) == want and (
+                    (node or {}).get("count") or 0) > 0:
+                return False
+        return True
+    except Exception:
+        return False       # unreadable residual snapshot: never claim a clear
+
+
 def _arm_metric(conn, project_path: str, *, timing: bool = False,
-                synth: bool = False) -> dict | None:
+                synth: bool = False,
+                target: tuple[str, str | None] | None = None) -> dict | None:
     """Latest run row for an arm dir -> the metric dict judge_repeated consumes
     (or None if the arm produced no judgeable run). outcome_score is captured as
     an ORDERING HINT only — the verdict never depends on it (invariant H4).
@@ -1446,21 +1550,31 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
     {clean,minor} or WNS>=0), NOT the generic is_success: a timing miss does NOT abort
     the flow, so both arms reach a GDS and knowledge_db.is_success reads true for both
     -> every timing trial would be a tie -> inconclusive forever (2026-06-24 audit,
-    bug #3-timing). The timing signal is the ingested wns_ns/timing_tier."""
+    bug #3-timing). The timing signal is the ingested wns_ns/timing_tier.
+
+    For a SIGNOFF arm with a DRC/LVS `target` (the recipe's symptom), success is
+    whether the TARGET symptom cleared — drc: the target class count reached 0 on a
+    definitively-run DRC; lvs: lvs_status clean — NOT the whole-run is_success.
+    The generic is_success ties both arms whenever an UNRELATED residual keeps the
+    run non-clean, which made antenna_diode_repair 0-decisive-in-93-trials while
+    the fix demonstrably cleared its class (2026-07-04; the same metric-granularity
+    lesson as the timing/synth arms, finally generalized to DRC/LVS)."""
     import knowledge_db
     row = conn.execute(
-        "SELECT total_elapsed_s, fix_iters_to_clean, drc_status, lvs_status, "
-        "rcx_status, lvs_mismatch_class, orfs_status, outcome_score, "
+        "SELECT run_id, total_elapsed_s, fix_iters_to_clean, drc_status, "
+        "lvs_status, rcx_status, lvs_mismatch_class, orfs_status, outcome_score, "
         "wns_ns, timing_tier "
         "FROM runs WHERE project_path=? ORDER BY ingested_at DESC LIMIT 1",
         (project_path,)).fetchone()
     if row is None:
         return None
-    cols = ("total_elapsed_s", "fix_iters_to_clean", "drc_status", "lvs_status",
-            "rcx_status", "lvs_mismatch_class", "orfs_status", "outcome_score",
-            "wns_ns", "timing_tier")
+    cols = ("run_id", "total_elapsed_s", "fix_iters_to_clean", "drc_status",
+            "lvs_status", "rcx_status", "lvs_mismatch_class", "orfs_status",
+            "outcome_score", "wns_ns", "timing_tier")
     r = dict(zip(cols, row))
+    judged_on = "signoff"
     if timing:
+        judged_on = "timing"
         tier, wns = r.get("timing_tier"), r.get("wns_ns")
         if tier is None and wns is None:
             # A --check timing reflow can leave the latest runs row's wns_ns/timing_tier
@@ -1473,10 +1587,20 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
         # synth_memory_relax fixes the SYNTH memcap abort: judge on whether the flow got
         # PAST synth, not full signoff (an FF-expanded design may carry downstream DRC/LVS
         # residuals that would tie both arms on is_success — the timing-arm lesson).
+        judged_on = "synth"
         success = _synth_cleared_ondisk(project_path)
+    elif target is not None and target[0] == "drc":
+        judged_on = f"symptom:drc:{target[1]}"
+        success = _drc_symptom_cleared(conn, r.get("run_id"), r.get("drc_status"),
+                                       target[1])
+    elif target is not None and target[0] == "lvs":
+        # LVS carries a single mismatch_class per run, so 'this class cleared' and
+        # 'lvs clean' coincide; anything short of clean never demonstrates a clear.
+        judged_on = f"symptom:lvs:{target[1]}"
+        success = r.get("lvs_status") == "clean"
     else:
         success = knowledge_db.is_success(r)
-    return {"is_success": bool(success),
+    return {"is_success": bool(success), "judged_on": judged_on,
             "wall_s": r["total_elapsed_s"], "fix_iters": r["fix_iters_to_clean"],
             "outcome_score": r["outcome_score"]}
 
@@ -1499,7 +1623,15 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         # so judge on the ingested timing verdict (wns_ns/timing_tier), not is_success.
         timing = strat in _TIMING_STRATEGIES
         synth = strat in _SYNTH_STRATEGIES
-        samples = {arm: [_arm_metric(conn, e["project_path"], timing=timing, synth=synth)
+        # A DRC/LVS signoff arm is judged on ITS OWN symptom clearing, not the
+        # whole-run is_success (judge v2, 2026-07-04): an unrelated residual must
+        # not tie the arms when the strategy demonstrably cleared its class.
+        target = None
+        if not timing and not synth:
+            ab_key = next(iter(pair.values()))[0].get("ab_key") or {}
+            target = _symptom_target(conn, ab_key.get("symptom_id"))
+        samples = {arm: [_arm_metric(conn, e["project_path"], timing=timing,
+                                     synth=synth, target=target)
                          for e in entries]
                    for arm, entries in pair.items()}
         # If an arm produced NO judgeable run at all (incomplete clone/flow — see
@@ -1513,12 +1645,19 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                 for e in entries:
                     led.set_state(e["design"], e["state"], judged=True)
             continue
-        verdict = ab_runner.judge_repeated(samples["A"], samples["B"])
+        verdict, reason = ab_runner.judge_repeated_ex(samples["A"], samples["B"])
+        # judge_version 2 = symptom-target metric for DRC/LVS signoff arms + reason
+        # codes. _ab_coverage_gap counts ONLY v2 inconclusives toward the re-plan
+        # cap: pre-v2 verdicts were blind to the target symptom and must not
+        # permanently bar a candidate the v2 judge could differentiate.
         ab_runner.record_trial(
             conn, key=pair["B"][0]["ab_key"], verdict=verdict,
             arm_a_run_id=None, arm_b_run_id=None,
             metrics={"A_samples": samples["A"], "B_samples": samples["B"],
-                     "repeats": {"A": len(samples["A"]), "B": len(samples["B"])}},
+                     "repeats": {"A": len(samples["A"]), "B": len(samples["B"])},
+                     "judge_version": 2, "reason": reason,
+                     "target": ({"check": target[0], "class": target[1]}
+                                if target else None)},
             match_level=pair["B"][0].get("match_level"))
         for entries in pair.values():
             for e in entries:

@@ -347,10 +347,52 @@ The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports
     `orfs_status='unknown'` run row (which would clobber a prior real arm via `_arm_metric`'s
     latest-row query and fake a `loss`). **Honesty check beyond "`ab_trials` non-empty": `promoted`
     must eventually grow PER-PLATFORM**, and a trial's `metrics_json` arms must not be identical.
-    KNOWN GAP: `_symptom_check` routes only `orfs_stage/route` to the backend arm runner, so TIMING
-    (`period_relax`) and PLACE (`core_util_relief`) recipes run a DRC/LVS arm where they are inert —
-    they cannot earn a real A/B verdict until the router is extended (follow-up). Detail:
-    `references/failure-patterns.md` ("Learning-Loop Closure Failures").
+    (The former KNOWN GAP here — timing/place recipes routed to an inert DRC/LVS arm — was CLOSED
+    2026-06-24: `_symptom_check` routes by STRATEGY; see CLAUDE.md and invariant 29's follow-through
+    for DRC/LVS.) Detail: `references/failure-patterns.md` ("Learning-Loop Closure Failures").
+
+29. **A signoff A/B arm is judged on ITS OWN symptom, with a recorded reason (judge v2, 2026-07-04).**
+    The whole-run `is_success` metric ties both arms whenever an UNRELATED residual keeps the run
+    non-clean — 193/228 live trials were inconclusive (antenna_diode_repair 0-decisive-in-93) with no
+    recorded cause, and 38 candidates sat capped dead. `judge_finished_trials` now resolves the
+    recipe's symptom to a target (`_symptom_target`): a DRC arm succeeds iff the TARGET violation
+    class count reached 0 on a definitively-run DRC (`_drc_symptom_cleared`; clean/clean_beol always
+    clears, stuck/unknown never does), an LVS arm iff `lvs_status='clean'` — the same
+    metric-granularity rule the timing (`wns_ns`) and synth (stage-clearance) arms already used.
+    Every trial's `metrics_json` carries `judge_version: 2`, a `reason` code
+    (`ab_runner.judge_repeated_ex`: both_arms_never_succeed, success_tie_cost_within_noise, …) and the
+    `target`, so an inconclusive corpus is QUERYABLE. `_ab_coverage_gap` counts ONLY v2 inconclusives
+    toward the re-plan cap — pre-v2 verdicts were blind to the symptom under test and must not
+    permanently bar a candidate (decisive verdicts count from any era). Non-divergent strategies
+    (`recipe_lifecycle.NONDIVERGENT_STRATEGIES`) are refused at enqueue and legacy rows are healed to
+    the NON-terminal bookkeeping status **`parked`** (`park_nondivergent`, called each drain) — parked
+    ≠ demoted: it only means "the A/B harness cannot differentiate the arms".
+
+30. **Negative experience is CONSUMED at apply time, and kept clean at write time (2026-07-04).**
+    Storage without consumption re-tried the same dead fix on the same design up to 112 times.
+    `diagnose_signoff_fix._annotate_live_gates` reads this project's `fix_events`: a strategy with
+    ≥ `R2G_FIX_DEAD_AFTER` (default 2) terminal failures (`no_change`/`regression`) and ZERO clears on
+    THIS design+check is `dead_here` and `_live_auto_strategy` skips it in blind live runs
+    (`R2G_FIX_RETRY_DEAD=1` restores retry; `--rank-first` — the A/B arm-B path — bypasses ALL gates
+    by design). The same gate skips `lifecycle_status='shadow'` (A/B-demoted) strategies, closing the
+    leak where demotion only stripped the INDEXED path while catalog/pooled/fallback rankings could
+    still auto-apply a demoted recipe. Write-side hygiene: an episode whose path never ran a real
+    strategy is **`not_attempted`**, never `abandoned` (1957/2376 'abandoned' rows were none-only —
+    not fix experience); `symptom.normalize_class` strips quoted/prose KLayout category text at every
+    entry point (extract_drc, canonical_signature) and `_build_trajectory` re-keys legacy quoted-class
+    signatures on rebuild, so the symptom index pools instead of fragmenting.
+
+31. **The wheel's step-3 mining is automatic, and the store's plumbing cannot silently lie
+    (2026-07-04 robustness).** `fix_log_manager.manage()` now runs `mine_rules.mine` after every
+    learn (best-effort; `R2G_MINE_AUTORUN=0` opts out), so `failure_candidates.json` — the
+    human-review queue — no longer goes stale for lack of a caller. Extract scripts write
+    `reports/*.json` ATOMICALLY (`report_io.write_json_atomic`; a kill -9 mid-write can no longer
+    leave a torn report that ingest misreads as a blank run). `knowledge_db.connect` arms WAL
+    (parity with the journal) so an ingest burst cannot exceed the busy_timeout and get silently
+    swallowed — and `engineer_loop._ingest` now WARNS loudly when an ingest returns no run_id.
+    A corrupt `heuristics.json` degrades diagnosis to cold-start ranking (never a crash), and an
+    unreadable recipe lifecycle fails CLOSED (cold-start) instead of granting unvalidated recipes
+    promoted-equivalent trust.
 
 ## Sharing the store across users
 

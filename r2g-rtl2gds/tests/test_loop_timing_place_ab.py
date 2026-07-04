@@ -303,9 +303,15 @@ def test_coverage_gap_inconclusive_backoff(tmp_path):
     conn = _conn(tmp_path)
     key = {"symptom_id": "sx", "design_class": "logic/small",
            "platform": "nangate45", "strategy": "antenna_diode_repair"}
+    # 2026-07-04 judge v2: only trials judged with the symptom-target metric
+    # (judge_version >= 2 in metrics_json) count toward the re-plan cap — pre-v2
+    # verdicts were blind to the target symptom (whole-run is_success ties) and
+    # must not permanently bar a candidate. Live trials now always record it.
     for _ in range(engineer_loop.AB_INCONCLUSIVE_MAX):
         ab_runner.record_trial(conn, key=key, verdict="inconclusive",
-                               arm_a_run_id=None, arm_b_run_id=None, metrics={})
+                               arm_a_run_id=None, arm_b_run_id=None,
+                               metrics={"judge_version": 2,
+                                        "reason": "both_arms_never_succeed"})
     assert engineer_loop._ab_coverage_gap(conn, key) is True
     # a single decisive verdict clears the backoff (the recipe IS learnable)
     ab_runner.record_trial(conn, key=key, verdict="win",
@@ -313,20 +319,28 @@ def test_coverage_gap_inconclusive_backoff(tmp_path):
     assert engineer_loop._ab_coverage_gap(conn, key) is False
 
 
-def test_plan_arms_skips_coverage_gap_without_demote(tmp_path, monkeypatch):
-    """plan_arms_for_candidates skips a non-divergent candidate (0 arms) + opens an
-    ab_coverage_gap escalation, and leaves it 'candidate' (never shadow)."""
+def test_plan_arms_parks_nondivergent_without_demote(tmp_path, monkeypatch):
+    """2026-07-04: a non-divergent candidate is refused at enqueue time and a
+    LEGACY row (pre-filter store) is PARKED at the top of the drain — it leaves
+    the work queue permanently instead of being re-skipped + re-escalated every
+    drain, and is never demoted to shadow. plan_trial must not be reached."""
     conn = _conn(tmp_path)
     key = dict(symptom_id="sl", design_class="logic/small",
                platform="sky130hd", strategy="lvs_resolve_unknown")
-    recipe_lifecycle.enqueue_candidate(conn, **key)
+    # enqueue_candidate now refuses non-divergent strategies at the source...
+    assert recipe_lifecycle.enqueue_candidate(conn, **key) is False
+    # ...so simulate a legacy store whose row predates the filter.
+    conn.execute(
+        "INSERT INTO recipe_status (symptom_id, design_class, platform, strategy,"
+        " status, provenance, updated_at) VALUES (?,?,?,?,?,?,?)",
+        (key["symptom_id"], key["design_class"], key["platform"],
+         key["strategy"], "candidate", "learner_diff", "t"))
+    conn.commit()
     led = engineer_loop.Ledger(tmp_path / "l.jsonl")
-    # plan_trial must NOT be reached for a guarded candidate.
+    # plan_trial must NOT be reached for a non-divergent candidate.
     monkeypatch.setattr(ab_runner, "plan_trial",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("planned")))
     appended = engineer_loop.plan_arms_for_candidates(led, conn)
     assert appended == 0
-    assert recipe_lifecycle.get_status(conn, **key) == "candidate"   # NOT demoted
-    n = conn.execute("SELECT COUNT(*) FROM escalations WHERE reason='ab_coverage_gap'"
-                     ).fetchone()[0]
-    assert n == 1
+    assert recipe_lifecycle.get_status(conn, **key) == "parked"   # NOT shadow
+    assert recipe_lifecycle.pending_candidates(conn) == []        # out of the queue

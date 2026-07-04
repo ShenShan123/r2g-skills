@@ -19,6 +19,18 @@ import json
 
 GRANDFATHERED = "promoted"   # absent-row default
 
+# Strategies whose A/B arms CANNOT diverge (no real edit applied): arm A and arm B
+# do byte-identical work, so every trial is guaranteed-inconclusive and burns a full
+# signoff per repeat for zero information. Canonical home is HERE (the lifecycle owns
+# what may enter the candidate queue); engineer_loop aliases it for its plan-time
+# coverage guard. lvs_resolve_unknown re-inspects with config_edits={} (a no-op).
+# Enqueue refuses these at the source (2026-07-04: 4 such rows sat as eternal
+# 'candidate', re-skipped every drain); park_nondivergent() heals rows that predate
+# the filter. 'parked' is NON-terminal bookkeeping, not a demotion — it only means
+# "not validatable by the A/B harness"; pending_candidates/filter_promoted ignore it
+# exactly like 'shadow'.
+NONDIVERGENT_STRATEGIES = frozenset({"lvs_resolve_unknown"})
+
 
 def _now() -> str:
     return _dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -45,6 +57,8 @@ def diff_and_enqueue(conn, heur: dict, *, prev: dict | None) -> list[tuple]:
     for key, stats in _iter_keys(heur):
         if prev_stats.get(key) == stats:
             continue
+        if key[3] in NONDIVERGENT_STRATEGIES:
+            continue           # guaranteed-inconclusive: never enters the A/B queue
         row = conn.execute(
             "SELECT status FROM recipe_status WHERE symptom_id=? AND "
             "design_class=? AND platform=? AND strategy=?", key).fetchone()
@@ -71,6 +85,8 @@ def enqueue_candidate(conn, *, provenance: str = "manual_revalidate",
     Returns True iff a new candidate row was created; a no-op (returns False) when
     the recipe is already in the lifecycle — never clobbers an existing verdict.
     """
+    if key["strategy"] in NONDIVERGENT_STRATEGIES:
+        return False           # guaranteed-inconclusive: never enters the A/B queue
     row = conn.execute(
         "SELECT status FROM recipe_status WHERE symptom_id=? AND design_class=? "
         "AND platform=? AND strategy=?",
@@ -132,6 +148,25 @@ def filter_promoted(conn, recipe_entry: dict | None, *, symptom_id: str,
     out = dict(recipe_entry)
     out["strategies"] = kept
     return out
+
+
+def park_nondivergent(conn) -> int:
+    """One-shot heal: move pre-filter NONDIVERGENT candidate rows out of the work
+    queue to 'parked' (self-healing on any operator's DB — plan_arms calls this at
+    the top of every drain, so a store that predates the enqueue filter converges
+    without a manual migration). NOT a demotion: 'parked' records only that the
+    A/B harness cannot differentiate the strategy's arms; the strategy itself stays
+    in the static catalog. Returns the number of rows parked."""
+    if not NONDIVERGENT_STRATEGIES:
+        return 0
+    ph = ",".join("?" for _ in NONDIVERGENT_STRATEGIES)
+    cur = conn.execute(
+        f"UPDATE recipe_status SET status='parked', "
+        f"provenance='nondivergent_no_real_edit', updated_at=? "
+        f"WHERE status='candidate' AND strategy IN ({ph})",
+        (_now(), *sorted(NONDIVERGENT_STRATEGIES)))
+    conn.commit()
+    return cur.rowcount
 
 
 def pending_candidates(conn) -> list[dict]:
