@@ -175,7 +175,14 @@ sqlite3 "$KDB" "
      ||' ab_trials='||(SELECT COUNT(*) FROM ab_trials)
      ||' fix_ev='||(SELECT COUNT(*) FROM fix_events)
      ||' cand='||(SELECT COUNT(*) FROM recipe_status WHERE status='candidate')
+     ||' parked='||(SELECT COUNT(*) FROM recipe_status WHERE status='parked')
      ||' promo='||(SELECT COUNT(*) FROM recipe_status WHERE status='promoted');"
+# Judge-v2 (2026-07-04) inconclusive REASONS — an inconclusive corpus is queryable now.
+# Dominant 'both_arms_never_succeed' on a strategy = its subjects never sign off at all
+# (subject-quality lead); 'success_tie_cost_within_noise' = genuinely cost-neutral recipe.
+sqlite3 "$KDB" "SELECT strategy, json_extract(metrics_json,'\$.reason') reason, COUNT(*)
+  FROM ab_trials WHERE verdict='inconclusive'
+  AND json_extract(metrics_json,'\$.judge_version')>=2 GROUP BY 1,2 ORDER BY 3 DESC LIMIT 12;"
 # Per-platform promotions (the 2026-06-24 'arms identical' alarm hides HERE, not in ab_trials):
 sqlite3 "$KDB" "SELECT platform, status, COUNT(*) FROM recipe_status GROUP BY platform, status ORDER BY platform, status;"
 # Journal = what was DONE. Confirm the decision ledger is alive and run_id-linked:
@@ -266,6 +273,9 @@ not block:
 ```bash
 # SINGLE-INSTANCE GUARD (hard rule): NEVER launch a second driver — two drivers on one ledger
 # race set_state appends and can run the same design concurrently (FLOW_VARIANT collision).
+# Since 2026-07-04 the driver ALSO self-guards (per-ledger flock + pgrep net inside
+# campaign_resume_waves.sh; SKIP_INSTANCE_GUARD=1 for debug) — but a PRE-lock legacy driver
+# holds no flock, so keep this operator-side check as the belt to its braces.
 # The pgrep is END-ANCHORED on the script name (an un-anchored -f false-matches YOUR OWN shell,
 # whose cmdline contains the pattern). If a driver is alive: monitor it, retune via pool.env,
 # and skip the launch — under /loop this makes every later tick a pure supervisor check-in.
@@ -381,8 +391,26 @@ several map to documented patterns — chase them down rather than papering over
   (documented ingest keying), flipping its own fail row to pass; the trajectory survives in
   `fix_events`/`fix_trajectories`. The ALARM is only a parity BREAK (`fail != fe`), never the drift.
 - **`ab_trials` grows but `promoted` is flat for `$PLATFORM`** → the 2026-06-24 "arms are identical"
-  alarm (subtler than empty `ab_trials`). Verify a trial's `metrics_json` shows the two arms genuinely
-  diverging (different `is_success`/`outcome_score`/`fix_iters`), not wall-clock noise.
+  alarm (subtler than empty `ab_trials`). Since judge v2 (2026-07-04) read the trial's
+  `metrics_json.reason` FIRST — it names the cause (`both_arms_never_succeed` = subjects never sign
+  off; `success_tie_cost_within_noise` = cost-neutral recipe; `arm_no_samples` = arms crashed) —
+  then verify the arms genuinely diverged (`judged_on`/`is_success` per sample). A DRC/LVS signoff
+  arm is judged on ITS OWN symptom clearing (`judged_on: "symptom:drc:<class>"`), NOT whole-run
+  success; a trial without `judge_version: 2` predates that and its inconclusive proves nothing.
+- **Capped candidates suddenly re-planning after the judge-v2 upgrade is EXPECTED, not a runaway**
+  (2026-07-04): `_ab_coverage_gap` counts only v2 inconclusives, so candidates capped dead under the
+  symptom-blind judge get exactly one fresh round of v2 trials. Similarly, `cand=` may DROP at the
+  start of a drain — `park_nondivergent` heals guaranteed-inconclusive rows (e.g.
+  `lvs_resolve_unknown`) to `parked`; that is the healer working, not lost work.
+- **The same strategy re-applied on the same design across sessions** → the dead-fix gate is off or
+  bypassed. `diagnose_signoff_fix` skips auto-applying a strategy with ≥`R2G_FIX_DEAD_AFTER` (=2)
+  terminal failures and zero clears on that design+check (`dead_here`); check `R2G_FIX_RETRY_DEAD`
+  is not exported and the plan's `--list` shows the `dead_here` annotation. A/B arms bypass the gate
+  by design (`--rank-first`).
+- **`fix_trajectories` outcome counts shift once after the first post-2026-07-04 `learn()`** —
+  benign, do not chase: none-only episodes reclassify `abandoned → not_attempted` and legacy
+  quoted-class signatures (`"'m3.2'"`) re-key into their normalized symptom buckets
+  (`symptom.normalize_class` healing). A parity BREAK is still the only alarm.
 - **`fail`/`partial` rows exist but `ab_trials` is empty** → the loop is inert and lying; treat it
   exactly like an empty `heuristics.json`.
 - **Fmax `status='error'`** vs honest `unconstrained`/`inconclusive` — an error that should have been
@@ -440,7 +468,17 @@ The loop is "closed" only when ALL of these hold — show the SQL/output for eac
   when they are honest losses.
 - **Success learning + promotion:** at least one recipe transitioned `candidate → promoted`
   **on `$PLATFORM` (per-platform `promo` for `$PLATFORM` grew)**, backed by an `ab_trials` row whose
-  arms genuinely diverged (arm A control loses / arm B forced-recipe wins).
+  arms genuinely diverged (arm A control loses / arm B forced-recipe wins). Under judge v2 show the
+  divergence directly — the winning trial's `metrics_json` must carry `judge_version: 2`, a decisive
+  `reason` (`success_lcb_delta`/`cost_tiebreak`), and per-sample `judged_on` naming the recipe's own
+  symptom (`symptom:drc:<class>` for a DRC recipe), e.g.:
+
+  ```bash
+  sqlite3 "$KDB" "SELECT strategy, verdict, json_extract(metrics_json,'\$.reason'),
+    json_extract(metrics_json,'\$.target.class') FROM ab_trials
+    WHERE json_extract(metrics_json,'\$.judge_version')>=2 AND verdict IN ('win','loss')
+    ORDER BY ts DESC LIMIT 10;"
+  ```
 - **Cross-design transfer:** a recipe learned on one design/class applies to another (symptom-keyed,
   not family-named) — evidence in `lessons`/`symptoms` or a promotion spanning classes.
 - **Signoff + Fmax (per the platform's contract above):** the platform's honest terminal-state count
