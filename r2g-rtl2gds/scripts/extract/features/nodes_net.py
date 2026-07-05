@@ -16,7 +16,13 @@ from techlib.def_parse import (
     parse_units,
 )
 from techlib.lef import routing_layer_regex
-from techlib.liberty import get_pin_direction, infer_net_type_id, load_liberty_db
+from techlib.liberty import (
+    get_pin_direction,
+    infer_net_type_id,
+    load_liberty_db,
+    macro_cell_keys,
+    norm_cell_key,
+)
 
 
 def parse_iopins(def_path):
@@ -98,6 +104,10 @@ def main():
     dbu = parse_units(def_path)
     clock_ports = parse_sdc_clock_port_names(ctx["sdc_path"]) if os.path.isfile(ctx["sdc_path"]) else set()
     lib_db = load_liberty_db(ctx["lib_files"])
+    # Masters that only exist in the per-design macro libs (lib_files minus
+    # sc_lib_files), e.g. fakeram45_* — used for connects_macro_flag. Empty for
+    # pure std-cell designs, where 0 is the correct flag.
+    macro_keys = macro_cell_keys(ctx["lib_files"], ctx["sc_lib_files"])
     layer_re, _from_lef = routing_layer_regex(ctx["tech_lef"])
     comp_info = parse_components(def_path)
     iopin_pos = parse_iopins(def_path)
@@ -134,10 +144,23 @@ def main():
             connects_macro_flag = 0
             for inst, pin in info.get("conns", []):
                 if inst == "PIN":
+                    # DEF PIN DIRECTION is the port's direction from the CHIP's
+                    # perspective: an INPUT port drives the net internally, an
+                    # OUTPUT port sinks it (2026-07-05 fix — the unswapped
+                    # mapping counted every output-port net as 2-driver/0-sink).
                     direction = pin_dirs.get(pin, "")
-                else:
-                    master = comp_info.get(inst, {}).get("master", "")
-                    direction = get_pin_direction(master, pin, lib_db)
+                    if direction == "INPUT":
+                        num_drivers += 1
+                    elif direction == "OUTPUT":
+                        num_sinks += 1
+                    elif direction in {"INOUT", "FEEDTHRU"}:
+                        num_drivers += 1
+                        num_sinks += 1
+                    continue
+                master = comp_info.get(inst, {}).get("master", "")
+                if macro_keys and norm_cell_key(master) in macro_keys:
+                    connects_macro_flag = 1
+                direction = get_pin_direction(master, pin, lib_db)
                 if direction == "OUTPUT":
                     num_drivers += 1
                 elif direction == "INPUT":

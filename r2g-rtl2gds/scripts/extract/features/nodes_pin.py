@@ -14,7 +14,7 @@ from techlib.liberty import (
     build_net_pin_stats,
     classify_pin_type,
     get_pin_abs_pos_um,
-    get_pin_cap_fF,
+    get_pin_load_cap_fF,
     load_liberty_db,
 )
 
@@ -161,7 +161,9 @@ def main():
             inst_y_um = (comp.get("y") or 0) / dbu
             px, py = get_pin_abs_pos_um(inst_x_um, inst_y_um, comp.get("orient", "N"), comp.get("master", ""), pin)
             pin_points.append((px, py))
-            pin_caps.append(get_pin_cap_fF(comp.get("master", ""), pin, lib_db))
+            # Load caps only — an output pin's max_capacitance is a drive limit,
+            # not a load, and used to dominate sum_pin_cap_fF (2026-07-05 fix).
+            pin_caps.append(get_pin_load_cap_fF(comp.get("master", ""), pin, lib_db))
         stats = build_net_pin_stats(pin_points, pin_caps)
         stats["sum_cap_fF"] += io_cap_by_net.get(net_name, 0.0)
         net_stats[net_name] = stats

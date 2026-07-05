@@ -2865,3 +2865,72 @@ slow arm.)
   `::test_zombie_judged_nonterminal_entry_does_not_block_cohort`.
 - **Skill-level alarm:** any v2 trial whose `metrics_json.repeats` differs between arms, or
   differs from `R2G_AB_REPEATS`, is a fragmentation lead.
+
+## Dataset-Extraction Silent-Value Defects (features/labels; found by the 2026-07-05 RTL2Graph audit)
+
+A new failure class: the flow completes green, the CSVs materialize, and the VALUES are
+wrong — nothing crashes, so only ground-truth cross-checks catch it. All four instances
+below were found by verifying the external RTL2Graph pipeline against OpenDB/OpenROAD
+ground truth (cordic nangate45 + aes_core sky130hd) and traced back into the skill's own
+extractors (shared feature_test_v2/v3 ancestry). Verification recipe (reusable): dump
+truth via `openroad -python` (odb counts, ITerm directions, placements), compare per-net
+wirelength against `report_wire_length -net ... -detailed_route`, and diff per-cell slack
+against `report_checks`.
+
+### 1. Timing labels lost on EVERY register (STA-vs-ODB name-escaping join miss)
+
+- **Symptom:** `timing_features.csv` has `INF,0.0,in_sta_path=false` for all bus-named
+  cells — which is every register (`...\[16\]$_SDFF_PP0_`); `report_checks` shows those
+  same cells as the worst endpoints. Measured: 0/56 registers labeled on cordic
+  nangate45; 5/2476 on aes_core sky130hd. Downstream GNN datasets got timing label 0.0
+  (not NaN!) on exactly the timing-critical nodes.
+- **Root cause:** `extract_timing.tcl` keyed pin slacks by STA `get_full_name` (names
+  UNESCAPED: `U.x_1[16]$_SDFF_PP0_/D`) but looked them up by odb `$inst getName` (names
+  DEF-ESCAPED: `U.x_1\[16\]$_SDFF_PP0_`). Cells without escaped chars (yosys `_1503_`)
+  matched, so the CSV looked plausible.
+- **Fix (2026-07-05):** join on the backslash-stripped canonical form on both sides
+  (`r2g_canon_name`); CSV rows keep the odb escaped name so feature-CSV joins still work.
+  After fix: 56/56 cordic registers labeled; worst-cell slack matches `report_checks`.
+
+### 2. sky130 RECT patch groups parsed as routing points (wirelength/congestion inflation)
+
+- **Symptom:** on sky130hd, RECT-bearing nets (1283/30k nets on aes_core) report
+  wirelengths 100-400x too long (`_00005_`: 1168 um vs OpenROAD's 3.29 um) and
+  congestion "utilization" reaches a nonphysical 11x. nangate45 is untouched (its DEFs
+  carry no RECT inside NETS) — which is why the original correspondence tests passed.
+- **Root cause:** DEF 5.8 `RECT ( dx1 dy1 dx2 dy2 )` patch-metal groups (min-area/
+  enclosure patches ORFS emits pervasively on sky130) carry RELATIVE offsets; the blind
+  point regex in `techlib.def_parse.route_segments` read the first two as an absolute
+  next point, adding a phantom segment to e.g. `(-70, -85)`.
+- **Fix (2026-07-05):** strip well-formed 4-integer `RECT ( ... )` groups before point
+  extraction (`_ROUTE_RECT_RE`). Note the fixed lengths are CENTERLINE lengths — OpenROAD
+  counts patch metal too, so RECT nets read ~0.2 um below `report_wire_length`; that
+  residual is patch metal, by-design excluded.
+
+### 3. DEF PIN direction inverted in net driver/sink counts
+
+- **Symptom:** every net touching a chip OUTPUT port counted 2 drivers / 0 sinks
+  (`theta_o[10]` on cordic); INPUT-port nets leaned on the "no driver found" fallback.
+- **Root cause:** DEF `PINS ... DIRECTION` is the port's direction from the CHIP's
+  perspective — an INPUT port DRIVES the net internally, an OUTPUT port SINKS it.
+  `nodes_net.py` used the raw direction as if it were a cell pin's.
+- **Fix (2026-07-05):** invert the mapping for `PIN` connections. Also implemented the
+  until-then hardwired-0 `connects_macro_flag` via `techlib.liberty.macro_cell_keys`
+  (masters only present in R2G_LIB_FILES minus R2G_SC_LIB_FILES = per-design macro libs).
+
+### 4. Driver max_capacitance summed into net "load" caps
+
+- **Symptom:** `nodes_pin.csv` `sum_pin_cap_fF` dominated by a constant ~59 fF per net on
+  nangate45 (NAND2_X1/ZN max_capacitance) — measured 62.54 fF where the true load is
+  3.19 fF (cordic `_0062_`).
+- **Root cause:** `get_pin_cap_fF` falls back to an OUTPUT pin's `max_capacitance` (a
+  drive LIMIT) when it has no `capacitance` attribute; the per-net summing treated it as
+  a load.
+- **Fix (2026-07-05):** `get_pin_load_cap_fF` (input loads only) used for the per-net
+  sums; `get_pin_cap_fF` kept for callers that want the legacy semantics.
+
+**Tests:** `tests/test_feature_semantics_fixes.py` (synthetic DEF/liberty),
+`tests/test_techlib_def_parse.py` (RECT cases). **Baseline note:** the machine-local
+byte-for-byte extractor baseline (`tools/regen_extract_baseline.sh`) must be REGENERATED
+after these fixes — nodes_net/nodes_pin/wirelength/congestion/timing outputs
+intentionally diverge from the pre-2026-07-05 baseline.

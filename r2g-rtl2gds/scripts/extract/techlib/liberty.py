@@ -42,6 +42,38 @@ def _norm_key(s):
     return _strip_name_token(s).upper()
 
 
+def norm_cell_key(s):
+    """Public master-name canonicalizer (upper-cased, quote/backslash-stripped).
+
+    The same normalization the cells dict is keyed on — use this when comparing a
+    DEF master name against key sets returned by ``macro_cell_keys``.
+    """
+    return _norm_key(s)
+
+
+def macro_cell_keys(lib_files, sc_lib_files):
+    """Normalized cell keys that come from macro/extra liberty files ONLY.
+
+    ``lib_files`` is the full resolved liberty list; ``sc_lib_files`` the std-cell
+    subset (run_features.sh exports both as R2G_LIB_FILES / R2G_SC_LIB_FILES).
+    The difference is the per-design macro libs (e.g. fakeram45_*), whose cells
+    are the design's macros — the source for ``connects_macro_flag``. Returns an
+    empty set for pure std-cell designs (no extra libs), where flag 0 is correct.
+    """
+    def _as_list(paths):
+        if paths is None:
+            return []
+        if isinstance(paths, str):
+            return [t for t in paths.replace(":", " ").split() if t]
+        return [p for p in paths if p]
+
+    sc = {os.path.abspath(p) for p in _as_list(sc_lib_files)}
+    extra = [p for p in _as_list(lib_files) if os.path.abspath(p) not in sc]
+    if not extra:
+        return set()
+    return set(load_liberty_db(extra).get("cells", {}).keys())
+
+
 def _sample_std(vals):
     if len(vals) < 2:
         return 0.0
@@ -276,6 +308,20 @@ def get_pin_cap_fF(master_name, pin_name, lib_db):
     if max_cap is not None and get_pin_direction(master_name, pin_name, lib_db) == "OUTPUT":
         return float(max_cap)
     return 0.0
+
+
+def get_pin_load_cap_fF(master_name, pin_name, lib_db):
+    """Pin *load* capacitance only — 0.0 for pins without a liberty ``capacitance``.
+
+    Unlike ``get_pin_cap_fF`` this NEVER falls back to an output pin's
+    ``max_capacitance`` (a drive *limit*, not a load). Summed per net for
+    ``sum_pin_cap_fF``, the fallback dominated the feature: measured on cordic
+    nangate45 net _0062_, the true load is 3.19 fF but the summed value came out
+    62.54 fF because NAND2_X1/ZN's max_capacitance (59.36 fF) was added in
+    (2026-07-05 fix).
+    """
+    cap = get_pin_info(master_name, pin_name, lib_db).get("capacitance")
+    return float(cap) if cap is not None else 0.0
 
 
 # Physical-only / well-tap cell detection. The "TAP" substring matches Nangate
