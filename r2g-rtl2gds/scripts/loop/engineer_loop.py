@@ -1607,11 +1607,30 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
 
 def judge_finished_trials(led: Ledger, conn) -> None:
     """Group finished A/B arm REPEATS by (base design, strategy) and record a
-    variance-aware (LCB) verdict per trial (Win 2)."""
+    variance-aware (LCB) verdict per trial (Win 2).
+
+    Cohort-wait (2026-07-04): a pair is judged only when EVERY repeat of both
+    arms is terminal. Judging whatever subset happened to be terminal at each
+    pass FRAGMENTED a k=2 trial into a 2-vs-1 (repeats {A:2,B:1} — the cost
+    tiebreak needs >=2 per side, so success-ties landed
+    success_tie_insufficient_repeats) or two 1-vs-1 fragment trials, and the
+    straggler repeat could then strand unjudged forever (its siblings judged
+    -> a one-sided pair the {A,B} check skips every drain; observed live:
+    koios_tdarknet route_relief arm-B r1). Zombie entries stuck non-terminal
+    but already judged (historical fragments) do not block the cohort."""
     import ab_runner
+    _TERMINAL = ("clean", "escalated", "abandoned")
     arms = [e for e in led.entries() if e["kind"] == "ab_arm"
-            and e["state"] in ("clean", "escalated", "abandoned")
+            and e["state"] in _TERMINAL
             and not e.get("judged")]
+    # Full cohort per (base, strategy) — ALL arm entries regardless of state or
+    # judged flag — so a still-running repeat defers the whole trial's verdict.
+    cohort: dict[tuple, list] = {}
+    for e in led.entries():
+        if e.get("kind") != "ab_arm":
+            continue
+        base = e["design"].rsplit("_ab", 1)[0]
+        cohort.setdefault((base, e["strategy"]), []).append(e)
     by_pair: dict[tuple, dict[str, list]] = {}
     for e in arms:
         base = e["design"].rsplit("_ab", 1)[0]
@@ -1619,6 +1638,9 @@ def judge_finished_trials(led: Ledger, conn) -> None:
     for (base, strat), pair in by_pair.items():
         if set(pair) != {"A", "B"}:
             continue
+        if any(c.get("state") not in _TERMINAL and not c.get("judged")
+               for c in cohort.get((base, strat), ())):
+            continue        # a repeat is still running: judge the FULL cohort later
         # A timing recipe's arms both reach a GDS (a timing miss never aborts the flow),
         # so judge on the ingested timing verdict (wns_ns/timing_tier), not is_success.
         timing = strat in _TIMING_STRATEGIES

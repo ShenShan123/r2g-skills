@@ -2844,3 +2844,24 @@ slow arm.)
   a soft Beta down-rank + the A/B lifecycle. The fix philosophy "down-ranked, never zeroed" survives;
   what changed is that a HUMAN-obvious stop rule ("don't re-run the exact fix that failed here
   twice") now exists at the only place it can act — auto-apply time.
+
+#### Nested finding: incremental judging FRAGMENTS k-repeat trials (2026-07-04, found via reason codes)
+
+- **Symptom:** v2 trials record `repeats: {A:2, B:1}` or `{A:1, B:1}` with
+  `reason=success_tie_insufficient_repeats`, while the LEDGER shows the full k=2 arm entries
+  planned per side — and a straggler repeat can sit terminal+unjudged forever (live:
+  `koios_tdarknet` route_relief arm-B r1). This was invisible before reason codes existed —
+  the first bug the judge-v2 forensics surfaced, minutes after going live.
+- **Root cause:** `judge_finished_trials` judged whatever repeat subset was terminal at each
+  pass (the 2026-06-27 incremental-judge design waited for both ARMS, not all REPEATS). A k=2
+  trial fragments into a 2-vs-1 (cost tiebreak needs >=2 per side → success-ties land
+  inconclusive) or two 1-vs-1 fragments (LCB over one sample = no variance protection), and
+  once the early fragment marks its entries judged, the late repeat is a one-sided pair the
+  `{A,B}` completeness check skips every drain — stranded compute.
+- **Fix:** cohort-wait — a pair is judged only when EVERY repeat of both arms is terminal;
+  zombie non-terminal-but-judged entries (historical fragments) don't block. Pre-existing
+  stranded orphans stay benign history (the candidate re-plans fresh arms, Pattern 15).
+  Tests: `test_incremental_judge.py::test_waits_for_full_repeat_cohort_before_judging` +
+  `::test_zombie_judged_nonterminal_entry_does_not_block_cohort`.
+- **Skill-level alarm:** any v2 trial whose `metrics_json.repeats` differs between arms, or
+  differs from `R2G_AB_REPEATS`, is a fragmentation lead.
