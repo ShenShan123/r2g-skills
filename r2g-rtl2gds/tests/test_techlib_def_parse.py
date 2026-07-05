@@ -117,6 +117,33 @@ def test_iter_route_segments_flattens():
     ]
 
 
+# RECT patch groups (2026-07-05 fix): `RECT ( dx1 dy1 dx2 dy2 )` offsets are
+# patch metal, not routing points. Before the fix the first two offsets were
+# read as an absolute point, adding a phantom segment (measured 1168 um vs
+# OpenROAD's 3.29 um on a real aes_core sky130hd net).
+def test_rect_patch_group_is_not_a_point():
+    # Real shape from ORFS sky130hd write_def: point, then a RECT patch.
+    line = "NEW li1 ( 154690 172550 ) RECT ( -70 -85 70 415 )"
+    assert list(def_parse.route_segments(line)) == []
+
+
+def test_rect_between_points_does_not_break_the_chain():
+    line = "+ ROUTED met1 ( 100 200 ) RECT ( -70 -85 70 85 ) ( 300 200 ) ( * 600 )"
+    assert list(def_parse.route_segments(line)) == [
+        (100, 200, 300, 200),
+        (300, 200, 300, 600),
+    ]
+
+
+def test_rect_only_strips_four_integer_groups():
+    # A net literally named RECT followed by a normal 2-int point must survive.
+    line = "+ ROUTED met1 ( 0 0 ) RECT ( 10 20 ) ( 40 0 )"
+    assert list(def_parse.route_segments(line)) == [
+        (0, 0, 10, 20),
+        (10, 20, 40, 0),
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # Correspondence helpers — recompute the two consumers from route_segments    #
 # and (for congestion) from an inline copy of its regex+walk.                 #

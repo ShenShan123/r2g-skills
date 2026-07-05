@@ -156,12 +156,22 @@ set count 0
 set valid_count 0
 array set cell_slack {}
 
+# Name canonicalization for the pin-slack -> component join (2026-07-05 fix):
+# STA's get_full_name returns UNESCAPED names (U.x_1[16]$_SDFF_PP0_/D) while
+# odb's inst getName keeps the DEF escaping (U.x_1\[16\]$_SDFF_PP0_). Keying
+# the slack array on the raw STA name made the lookup miss every bus-named
+# cell — i.e. EVERY register (56/56 on cordic nangate45, 2471/2476 on aes_core
+# sky130hd got slack=INF while report_checks showed them as the worst
+# endpoints). Join on the backslash-stripped form; CSV rows still carry the
+# odb (DEF-escaped) name so they keep matching the feature CSVs.
+proc r2g_canon_name {n} { return [string map {\\ {}} $n] }
+
 foreach pin $pins {
     set name [get_full_name $pin]
-    
+
     # Initialize variables
     set slack "N/A"
-    
+
     # 1. Slack (Setup/Max)
     if {![catch {get_property $pin slack_max} val]} {
         if {$val > -1e29 && $val < 1e29} { set slack $val }
@@ -169,13 +179,14 @@ foreach pin $pins {
 
     if {$slack != "N/A"} {
         if {[regexp {^(.+)/[^/]+$} $name -> cell_name]} {
-            if {![info exists cell_slack($cell_name)] || $slack < $cell_slack($cell_name)} {
-                set cell_slack($cell_name) $slack
+            set cell_key [r2g_canon_name $cell_name]
+            if {![info exists cell_slack($cell_key)] || $slack < $cell_slack($cell_key)} {
+                set cell_slack($cell_key) $slack
             }
         }
         incr valid_count
     }
-    
+
     incr count
     if {$count % 5000 == 0} {
         puts "Processed $count pins..."
@@ -185,8 +196,9 @@ foreach pin $pins {
 set written_count 0
 set in_path_count 0
 foreach cell_name $component_names {
-    if {[info exists cell_slack($cell_name)]} {
-        set slack $cell_slack($cell_name)
+    set cell_key [r2g_canon_name $cell_name]
+    if {[info exists cell_slack($cell_key)]} {
+        set slack $cell_slack($cell_key)
         set path_delay [expr {$clock_period - $slack}]
         if {$path_delay < 0.0} {
             set path_delay 0.0

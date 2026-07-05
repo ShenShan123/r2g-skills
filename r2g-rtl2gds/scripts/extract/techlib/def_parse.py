@@ -236,6 +236,17 @@ def parse_sdc_clock_port_names(sdc_path):
 # token-walk ("2 tokens after each `(`") yields the identical point sequence.
 _ROUTE_POINT_RE = re.compile(r"\(\s*([^\s\)]+)\s+([^\s\)]+)(?:\s+[^\)]*)?\s*\)")
 
+# DEF 5.8 routed-net RECT patch: `RECT ( dx1 dy1 dx2 dy2 )` — four *relative*
+# offsets around the last routing point (min-area/enclosure patch metal, emitted
+# pervasively by ORFS on sky130hd: 1283 of aes_core's 30k nets carry one). The
+# blind point regex used to read the first two offsets as an *absolute* next
+# point, adding a phantom segment from the current point to e.g. (-70, -85) —
+# ~300 um of fake wire per RECT (measured 2026-07-05: 1168 um vs OpenROAD's
+# 3.29 um on aes_core sky130hd net _00005_), inflating wirelength labels and
+# pushing congestion "utilization" past 11x. RECT groups carry no centerline
+# wire, so they are stripped before point extraction.
+_ROUTE_RECT_RE = re.compile(r"\bRECT\s*\(\s*-?\d+\s+-?\d+\s+-?\d+\s+-?\d+\s*\)")
+
 
 def route_segments(route_line):
     """Yield consecutive integer ``(x1, y1, x2, y2)`` segments for one DEF route line.
@@ -271,9 +282,20 @@ def route_segments(route_line):
     bare ``*`` — the divergent (non-integer non-``*``) path never occurs. So
     re-pointing congestion onto this iterator in a later task is output-neutral.
 
+    CORRECTION (2026-07-05): the "output-neutral on real ORFS write_def output"
+    claim above held only for nangate45. sky130hd routed DEFs carry ``RECT``
+    patch groups inside NETS (see ``_ROUTE_RECT_RE``); both originals — and this
+    iterator, before this fix — misread the RECT offsets as an absolute point,
+    inflating RECT-bearing nets' wirelength ~100-400x and congestion utilization
+    past 11x. RECT groups are now stripped before point extraction; the
+    correspondence tests still hold on nangate45 (RECT-free) and the sky130hd
+    behavior intentionally *diverges* from the originals (they were wrong).
+
     Behavior contract:
-      * Points = first two tokens inside each ``( ... )`` (``_ROUTE_POINT_RE``);
-        any trailing via/layer token is ignored.
+      * ``RECT ( dx1 dy1 dx2 dy2 )`` patch groups are stripped first — they are
+        relative patch-metal offsets, not routing points.
+      * Points = first two tokens inside each remaining ``( ... )``
+        (``_ROUTE_POINT_RE``); any trailing via/layer token is ignored.
       * Fewer than 2 points  -> yields nothing (single-point or point-less line).
       * First point non-integer (``*`` chain start, or garbage) -> yields nothing
         for the whole line.
@@ -286,6 +308,8 @@ def route_segments(route_line):
 
     Coordinates are returned as ``int`` (DBU); callers apply the dbu division.
     """
+    if "RECT" in route_line:
+        route_line = _ROUTE_RECT_RE.sub(" ", route_line)
     points = _ROUTE_POINT_RE.findall(route_line)
     if len(points) < 2:
         return
