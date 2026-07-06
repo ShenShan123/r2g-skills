@@ -92,6 +92,21 @@ Loop `run_graphs.sh` over completed projects (same pattern as
 `tools/run_labels_batch.sh`); the stage is idempotent and staleness-aware, so
 re-running after a new backend RUN refreshes everything the DEF invalidated.
 
+## Verifying a dataset (ground-truth harness)
+
+`tools/verify_graph_dataset.py <case_dir>` (run with `$R2G_GRAPH_PYTHON`)
+independently re-derives every structural + label expectation from the CSVs
+(separate pandas code, not graph_lib) and diffs the shipped tensors: node
+counts, b/c edge counts by row accounting, **d/e/f edge counts by the clique
+formula** Σ C(k,2), c/f edge_attr == the folded entity's features, EXACT
+expected-NaN counts + sampled values for every y slot, node_name order,
+global_feat, netlist-graph counts vs an independent regex, manifest
+consistency, and physical-range sanity. Exit 0 = clean; run it after
+regenerating any corpus. Baseline: 54/54 on 9 sky130hd designs, 159..190K
+cells (2026-07-06). It verifies CSV→tensor fidelity — pair with sampled
+`report_wire_length -net ... -detailed_route` diffs (recipe in the tool
+header) when extractor-level truth is also in question.
+
 ## Provenance + audit (2026-07-05)
 
 Ported from the operator-provided `RTL2Graph/` pipeline (odb2def, base_garph,

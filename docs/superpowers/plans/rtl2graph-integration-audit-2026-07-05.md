@@ -164,3 +164,33 @@ closed (all parser-read attributes swept). Residual triage:
   run before trusting the flag in training data.
 - fill/tap/decap area-0/UNKNOWN on sky130: stays a documented modeling choice;
   optional future enhancement = backfill physical-cell area from LEF SIZE.
+
+## 2026-07-06 breadth round: 9-design verification campaign — ALL PASS; verifier promoted to tools/
+
+Extended the single-design (aes_core) verification to a diverse 8-design batch
+(read-only copies from the live design_cases into
+`rtl2graph_verify/batch_verify/`): DMA_fsm (159 cells), Uart_RX (832),
+axil_register (2,331), RISCyMCU CPU (6,342), aes_sbox (12,671, PURELY
+COMBINATIONAL), usb_cdc_top (15,608), axi_cdma (41,875, escaped AXI bus
+names), sha256_core (76,822). Full pipeline (features→labels→graphs) ran clean
+on all 8; the new generalized verifier (`tools/verify_graph_dataset.py`)
+passed **54/54 checks on all 9 designs** (incl. aes_core). New ground covered
+vs. the earlier audits:
+
+- **d/e/f clique-variant edge construction verified for the first time**
+  (formula-based expected counts Σ C(k,2) over per-net/per-gate unique
+  endpoints) — on all 9 designs.
+- f-variant edge_attr == connecting-net features (sampled, unambiguous pairs).
+- EXACT expected-NaN label-join accounting for every y slot × variant (not
+  just floors), plus sampled value equality.
+- Combinational honesty: aes_sbox correctly yields in_path=0/12671 timing rows
+  and all-NaN y3 with label_health ok.
+- Extractor-level wirelength truth re-confirmed on 3 more designs vs
+  `report_wire_length -detailed_route`: 18/18 sampled nets within tolerance
+  (most exact to 0.01um), incl. an escaped bus-name net.
+- labels_stats across all 8: all four label sets ok; has_irdrop and in_path
+  fractions scale plausibly with design size.
+
+No new defects found — first all-clean round after the wave-1/wave-2 fixes.
+Per-design JSON + logs: session scratchpad `vr_*.json` / `vlog_*.txt`;
+datasets kept at `rtl2graph_verify/batch_verify/` (machine-local).
