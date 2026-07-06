@@ -1123,14 +1123,30 @@ def process_one(led: Ledger, entry: dict, conn, *,
     # (80 drc=stuck / 67 lvs=fail / 29 both — 2026-06-28 audit). _run_fix has now run the
     # checks, so re-reading reflects WHAT the fixer could not clear: the honest residual.
     residual = _signoff_status(entry)
-    led.set_state(design, "escalated", reason="catalog_exhausted")
+    reason = _signoff_escalation_reason(residual)
+    led.set_state(design, "escalated", reason=reason)
     if conn is not None:
         import escalations
         escalations.open_escalation(
             conn, design=design, project_path=entry["project_path"],
-            run_id=None, reason="catalog_exhausted",
+            run_id=None, reason=reason,
             notes=json.dumps(residual, sort_keys=True))
     return "escalated"
+
+
+def _signoff_escalation_reason(residual: dict) -> str:
+    """Route a post-fix signoff residual to its honest escalation reason.
+
+    A STUCK scan is NOT an exhausted catalog (2026-07-05 audit): 13 of 37
+    catalog_exhausted escalations in the sky130 round were DRC scans that never
+    finished (the documented big-die / KLayout-stuck pattern) where diagnose
+    STOPs before ANY strategy runs — labeling them 'catalog exhausted' routed
+    them to the tried-everything runbook and buried the real lead (die size vs
+    deck scan bound; see failure-patterns.md "route_relief cleared route but
+    DRC comes back stuck")."""
+    if any(v == "stuck" for v in (residual or {}).values()):
+        return "signoff_stuck_scan"
+    return "catalog_exhausted"
 
 
 def _localize_arm_sdc(dst: Path) -> None:

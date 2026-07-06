@@ -137,7 +137,11 @@ def search_loop(seed_period, floorplan_probe, place_probe, model=None, *,
         log.append({"stage": "place", "period": t_ref,
                     "ws": r.get("place_ws"), "status": r.get("status")})
         if r.get("status") == "inconclusive":
-            return {"status": "inconclusive", "period": t_ref, "log": log}
+            # Carry a reason like every other non-ok exit (2026-07-05: 144 of 144
+            # inconclusive fmax reports had NO queryable cause — the same
+            # observability gap the judge-v2 reason codes fixed for A/B trials).
+            return {"status": "inconclusive", "reason": "place_probe_inconclusive",
+                    "period": t_ref, "log": log}
         place_ws = r.get("place_ws")
         if place_ws is None:
             # place yielded no slack but did not classify inconclusive -> cannot root-find; honest

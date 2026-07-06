@@ -70,7 +70,14 @@ REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            # runbook). ALSO emitted by process_one but unregistered -> the same latent worker
            # crash waiting to fire on the next synth-timeout design (fixed alongside
            # incomplete_missing_header, 2026-07-02).
-           "synth_timeout")
+           "synth_timeout",
+           # A post-fix signoff residual whose DRC/LVS scan never FINISHED (status='stuck' --
+           # the documented big-die / KLayout-stuck pattern): diagnose STOPs before any
+           # strategy runs, so this is NOT an exhausted catalog. Routed separately
+           # (_signoff_escalation_reason, 2026-07-05) so the queue's triage reads "scan
+           # bound / die size", not "tried everything". 13 of 37 catalog_exhausted
+           # escalations in the sky130 round were actually this class.
+           "signoff_stuck_scan")
 
 
 def _now() -> str:

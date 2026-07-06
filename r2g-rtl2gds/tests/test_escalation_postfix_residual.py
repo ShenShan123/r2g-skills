@@ -48,7 +48,9 @@ def test_escalation_notes_carry_postfix_residual(tmp_path, monkeypatch):
     assert result == "escalated"
     notes = json.loads(captured["notes"])
     assert notes == {"drc": "stuck", "lvs": "fail"}            # POST-fix residual, not unknown
-    assert captured["reason"] == "catalog_exhausted"
+    # 2026-07-05: a stuck residual routes to its OWN reason (scan-bound runbook),
+    # no longer the generic catalog_exhausted (see _signoff_escalation_reason).
+    assert captured["reason"] == "signoff_stuck_scan"
 
 
 def test_clean_first_pass_never_escalates(tmp_path, monkeypatch):

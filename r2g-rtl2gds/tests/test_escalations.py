@@ -135,3 +135,21 @@ def test_all_loop_emitted_reasons_are_registered():
     assert not missing, (
         f"escalation reason(s) emitted but not registered in escalations.REASONS: "
         f"{missing} -- open_escalation will raise ValueError and crash the worker on these.")
+
+
+def test_signoff_stuck_scan_routes_separately_from_catalog_exhausted():
+    """2026-07-05: a stuck DRC/LVS scan (diagnose STOPs before any strategy runs) is
+    NOT an exhausted catalog — 13/37 of the sky130 round's catalog_exhausted
+    escalations were this class, routed to the wrong runbook."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "loop"))
+    import engineer_loop as el
+    assert el._signoff_escalation_reason({"drc": "stuck", "lvs": "clean"}) == \
+        "signoff_stuck_scan"
+    assert el._signoff_escalation_reason({"drc": "fail", "lvs": "stuck"}) == \
+        "signoff_stuck_scan"
+    assert el._signoff_escalation_reason({"drc": "fail", "lvs": "fail"}) == \
+        "catalog_exhausted"
+    assert el._signoff_escalation_reason({}) == "catalog_exhausted"
+    assert "signoff_stuck_scan" in escalations.REASONS   # worker must not crash on it
