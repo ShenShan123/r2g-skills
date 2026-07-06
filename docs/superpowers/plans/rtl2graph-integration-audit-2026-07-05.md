@@ -241,3 +241,44 @@ Store: all 12 flows ingested (2 honest PDN-0185 `fail` rows with
 `orfs-fail-floorplan-PDN-0185` events + 10 pass), honesty gates 5/5 GREEN, heuristics
 re-derived (118 families). Projects live in the WORKTREE's `design_cases/` (gitignored,
 machine-local).
+
+## 2026-07-06 nangate45 verification round 2: 4 more fixes + wide-coverage corner-case infra (commit 031a12f)
+
+Re-verified the pipeline on nangate45 and built the corner-case infrastructure the
+prior rounds lacked. Baseline honest: `verify_graph_dataset --batch` green 85/85 (84–87)
+on all 10 designs; wirelength INDEPENDENTLY cross-checked (subagent) vs OpenROAD
+`net.getWire().getLength()` over **32,005 aes_core nets → 0 real mismatches** (only a
+benign 0.07µm/IO-net end-extension delta), NetType/mask/label all correct, PG excluded.
+
+**4 defects (all in paths real nangate45 files never reach → invisible to the raw-file
+verifier; behavior-neutral on nangate45):** failure-patterns.md #15–#18.
+- #15 liberty `ff_bank`/`latch_bank` multibit-sequential undetected (`is_sequential`
+  false; asap7 has 27 such libs). INERT today — `is_sequential` is consumed by no
+  feature (dead field) — fixed defensively.
+- #16 `compute_feature_stats` had NO honesty gate (the X-side of the #6 irdrop lesson):
+  a raw/truncated feature CSV summarized "ok". Added `REQUIRED_COLS` gate (missing
+  column / truncated row ⇒ "invalid" + stderr warn), mirroring `compute_label_stats`.
+- #17 `netlist_graph` tie-off constant in a concat (`{1'b0, sig}`) leaked a phantom net
+  `b0`; sized-const literals stripped before tokenizing (latent — ORFS ties via LOGIC0/1).
+- #18 (latent parity) `run_labels.sh` now exports `R2G_PLATFORM` to congestion;
+  `edges_iopin_net` rstrips a continuation-line DIRECTION.
+
+**New corner-case verification infra (the round's main deliverable):**
+- `tests/fixtures/corner_synth.py` — a hand-computable synthetic nangate45-style design
+  (std cells + a bus-pin SRAM macro; clock/reset/multi-layer/RECT-patch/2-driver nets)
+  driven through the REAL feature workers → label extractors → PyG builder.
+- `tests/test_corner_case_pipeline.py` (34 tests) — asserts every stage vs hand-derived
+  ground truth across **all five graph views b–f**: node/edge counts, folded-entity
+  `edge_attr` features + `edge_y` labels, clock-tree/FILL/TAP exclusion, undirected
+  symmetry, name-joined wirelength labels.
+- `tests/test_corner_case_units.py` (15 tests) — ff_bank/latch/statetable,
+  INOUT/PG/multi-digit-bus-index classification, pf→fF caps, CUT-vs-ROUTING LEF + VIA
+  re-declaration, congestion demand-key `(x_gcell,y_gcell)` convention under an
+  ASYMMETRIC grid (regression guard for the #7 transpose), netlist constants, the #16
+  gate.
+
+Complementarity lesson: the raw-file cross-check proves the extractors match the tools on
+inputs you HAVE; the corner-case fixture proves they handle inputs you might GET. Fixture
+gotcha: liberty MUST be one-attribute-per-line (parser uses anchored `re.match`) — a
+crammed pin silently drops direction/clock/cap. Suite: full extract/graph/techlib surface
+298 passed, 14 skipped. Pushed to `feat/rtl2graph-integration` (still UNMERGED).
