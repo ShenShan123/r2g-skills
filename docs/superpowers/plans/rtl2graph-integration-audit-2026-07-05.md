@@ -81,3 +81,33 @@ inconsistency) — replaced by the techlib vocabulary in the port.
   sample outputs; not committed by design).
 - Corpus-level batching (a `tools/run_graphs_batch.sh` + dataset aggregation
   across designs with real per-design `graph_id`s) is the natural next step.
+
+## 2026-07-05 (second pass): sky130-focused verification round — 2 more silent-value defect chains (commits 0574308, f1302ee)
+
+A same-day independent verification round (fresh audit of topology conversion,
+techlib/LEF parsing, feature + label extraction on sky130) confirmed the
+port's topology is exact (b-variant node/edge counts + spot connectivity +
+netlist-graph counts re-derived independently; c-variant edge_attr alignment
+4000/4000) and found two defects the first pass missed:
+
+1. **sky130 quoted liberty pin attributes** (`0574308`): `direction : "input";`
+   and `clock : "true";` never matched the unquoted-only regexes — every sky130
+   std-cell pin lost direction (pin_type_id 95% collapsed to 14; num_drivers
+   always the assume-1 fallback; 390 nets + 1,065 pin-cap sums provably wrong
+   on aes_core). Supersedes the "equivalence-proven" caveat: the port faithfully
+   reproduced features that were themselves degenerate on sky130.
+2. **Interrupted-irdrop raw-CSV chain** (`f1302ee`): the 09:03 validation run's
+   labels stage had been killed mid-irdrop; the RAW PDNSim dump sat at
+   labels/ir_drop.csv and the shipped aes_core dataset carried y2 100% NaN
+   under manifest status "ok". Four honesty gaps fixed: atomic publish
+   (extract_irdrop.tcl), stats "invalid" status, manifest `label_health` +
+   `ok_with_label_gaps`, completion-marker freshness in run_graphs.sh. Plus
+   loud duplicate-key guards on every graph-side label/feature join.
+
+**Supersedes above:** "Suite: 964 passed" → 983 (torch venv) / 968 (stdlib);
+the "Regenerate pre-2026-07-05 CSVs" action now extends to the 2026-07-05
+morning aes_core dataset itself (all-NaN y2 + collapsed pin_type_id) — the
+corrected reference dataset lives at
+`/proj/workarea/user5/rtl2graph_verify/aes_core_fixcheck/` until the corpus
+regeneration runs. Detail: failure-patterns.md "Dataset-Extraction
+Silent-Value Defects" #5/#6.
