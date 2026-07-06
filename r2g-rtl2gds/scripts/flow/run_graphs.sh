@@ -76,19 +76,25 @@ fi
 [[ -z "$DEF" || ! -f "$DEF" ]] && skip "no 6_final.def found — backend not completed/collected"
 
 # --- Ensure fresh features/ + labels/ (run their stages when missing/stale) -
+# Freshness is judged by the stage-completion marker (the stats JSON, written
+# LAST by run_features.sh/run_labels.sh), not just an early CSV: a stage killed
+# mid-way leaves fresh-looking CSVs but no marker, and building graphs on such
+# a half-finished dir silently loses labels (2026-07-05 irdrop incident).
 FEATURES_DIR="$PROJECT_DIR/features"
 LABELS_DIR="$PROJECT_DIR/labels"
-needs_stage() {  # dir probe_csv
+needs_stage() {  # dir probe_csv completion_marker_json
   [[ ! -f "$1/$2" ]] && return 0
   [[ "$1/$2" -ot "$DEF" ]] && return 0
+  [[ ! -f "$3" ]] && return 0
+  [[ "$3" -ot "$DEF" ]] && return 0
   return 1
 }
-if needs_stage "$FEATURES_DIR" "nodes_gate.csv"; then
-  echo "--- features stale/missing: running run_features.sh ---"
+if needs_stage "$FEATURES_DIR" "nodes_gate.csv" "$REPORTS_DIR/features_stats.json"; then
+  echo "--- features stale/missing/incomplete: running run_features.sh ---"
   bash "$(dirname "${BASH_SOURCE[0]}")/run_features.sh" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT_ARG"
 fi
-if needs_stage "$LABELS_DIR" "wirelength.csv"; then
-  echo "--- labels stale/missing: running run_labels.sh ---"
+if needs_stage "$LABELS_DIR" "wirelength.csv" "$REPORTS_DIR/labels_stats.json"; then
+  echo "--- labels stale/missing/incomplete: running run_labels.sh ---"
   bash "$(dirname "${BASH_SOURCE[0]}")/run_labels.sh" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT_ARG"
 fi
 [[ -f "$FEATURES_DIR/nodes_gate.csv" ]] || skip "features stage produced no nodes_gate.csv"

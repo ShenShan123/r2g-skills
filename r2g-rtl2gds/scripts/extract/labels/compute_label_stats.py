@@ -69,14 +69,28 @@ def summarize(labels_dir, name, spec):
     if not os.path.exists(path):
         return {"status": "skipped", "reason": "csv missing"}
     with open(path, newline="") as f:
-        rows = list(csv.DictReader(f))
+        reader = csv.DictReader(f)
+        header = reader.fieldnames or []
+        rows = list(reader)
     if not rows:
         return {"status": "skipped", "reason": "csv empty"}
+
+    # Honesty gate: rows exist but the label column is absent or never numeric
+    # -> the CSV is NOT a usable label set (e.g. an interrupted extractor left
+    # a raw tool dump at the canonical path — the 2026-07-05 irdrop incident).
+    # Report "invalid" so ingest/dashboards see the truth instead of "ok".
+    label_vals = _col_floats(rows, spec["label"])
+    if not label_vals:
+        reason = (f"label column '{spec['label']}' missing from header "
+                  f"(raw/unprocessed csv? header: {header[:6]})"
+                  if spec["label"] not in header
+                  else f"label column '{spec['label']}' has no numeric values")
+        return {"status": "invalid", "reason": reason, "rows": len(rows)}
 
     res = {
         "status": "ok",
         "rows": len(rows),
-        "label": numeric_summary(_col_floats(rows, spec["label"])),
+        "label": numeric_summary(label_vals),
         spec["metric"]: numeric_summary(_col_floats(rows, spec["metric"])),
     }
     if name == "wirelength":
@@ -115,6 +129,10 @@ def main():
     report = build_report(labels_dir, out_path, design, platform)
     ok = sum(1 for v in report["labels"].values() if v["status"] == "ok")
     print(f"Wrote {out_path}: {ok}/{len(report['labels'])} label sets present")
+    for name, v in report["labels"].items():
+        if v["status"] != "ok":
+            print(f"WARNING: label '{name}' {v['status']}: {v.get('reason', '')}",
+                  file=sys.stderr)
 
 
 if __name__ == "__main__":

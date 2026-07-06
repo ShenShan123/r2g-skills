@@ -19,7 +19,15 @@ Outputs in `<project-dir>/dataset/`:
 | --- | --- |
 | `b_graph.pt` .. `f_graph.pt` | five graph topologies (below) |
 | `netlist_graph.pt` | synthesis-netlist bipartite cell/net graph (pre-layout) |
-| `graph_manifest.json` | per-variant node/edge counts + label-NaN fractions (mirrored to `reports/graph_dataset.json`) |
+| `graph_manifest.json` | per-variant node/edge counts + label-NaN fractions + per-label-file `label_health` (mirrored to `reports/graph_dataset.json`) |
+
+**Check `status` + `label_health` before training on a manifest.** `status:
+"ok_with_label_gaps"` means ≥1 label file couldn't join (missing/raw/mismatched
+— its y slot is all-NaN); the per-file reason is in `label_health`. The stage
+also refuses stale/half-finished inputs: features/labels freshness is judged by
+their stage-completion markers (`reports/{features,labels}_stats.json`, written
+last), not just an early CSV (2026-07-05 irdrop incident — see
+failure-patterns.md "Dataset-Extraction Silent-Value Defects" #6).
 
 Dependencies: torch + torch_geometric + pandas — the only stage needing them.
 `run_graphs.sh` probes `R2G_GRAPH_PYTHON` (default `python3`) and SKIPs cleanly
@@ -111,6 +119,14 @@ ground truth (cordic nangate45 + aes_core sky130hd) found:
 5. RTL2Graph's `base_graph` input to `last_graph` was dead in single-case mode
    (loaded into config, never used) — the graphs are DEF-derived; the netlist
    graph is provided separately here.
+
+A second audit pass (2026-07-05, sky130-focused) found two more silent-value
+defects — sky130 quoted liberty pin attributes (95% of `pin_type_id` collapsed)
+and the interrupted-irdrop raw-CSV chain (y2 100% NaN with manifest "ok") —
+see failure-patterns.md "Dataset-Extraction Silent-Value Defects" #5/#6.
+**Datasets built before BOTH fix waves must be regenerated** (features AND
+labels AND graphs; the pre-fix aes_core dataset shipped y2 all-NaN and
+collapsed pin types).
 
 Tests: `tests/test_graph_stage.py` (synthetic fixtures; tensor tier skips
 without torch). Verification workspace with the ground-truth scripts:

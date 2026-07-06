@@ -284,3 +284,94 @@ def test_netlist_graph_parser_and_vocab(tmp_path):
     assert all((a < ncell) != (b < ncell) for a, b in ei)
     assert float(data.x[data.cell_names.index("g1"), 0]) == 15.0
     assert float(data.x[ncell, 0]) == -1.0
+
+
+# --------------------------------------------------------------------------- #
+# Label-health guard + duplicate-key guards (2026-07-05 irdrop incident).      #
+# --------------------------------------------------------------------------- #
+
+def test_label_health_flags_raw_and_mismatched_files():
+    raw = pd.DataFrame({"Instance": ["i1"], "Terminal": ["VPWR"], "Voltage": [1.8]})
+    good_cell = pd.DataFrame({"Design": ["d"], "Cell": ["g1"], "label": [0.1]})
+    other_design = pd.DataFrame({"Design": ["other"], "Net": ["n1"], "label": [0.1]})
+    dfs = {"cell_congestion.csv": good_cell, "ir_drop.csv": raw,
+           "timing_features.csv": good_cell, "wirelength.csv": other_design}
+    h = gl.label_health(dfs, "d")
+    assert h["cell_congestion.csv"]["status"] == "ok"
+    assert h["timing_features.csv"]["status"] == "ok"
+    assert h["ir_drop.csv"]["status"] == "unusable"
+    assert "Design" in h["ir_drop.csv"]["reason"]
+    assert h["wirelength.csv"]["status"] == "no_rows_for_design"
+
+
+def test_label_health_missing_label_column():
+    df = pd.DataFrame({"Design": ["d"], "Cell": ["g1"], "Voltage": [1.8]})
+    good = pd.DataFrame({"Design": ["d"], "Cell": ["g1"], "Net": ["n1"], "label": [0.1]})
+    dfs = {"cell_congestion.csv": df, "ir_drop.csv": good,
+           "timing_features.csv": good, "wirelength.csv": good}
+    h = gl.label_health(dfs, "d")
+    assert h["cell_congestion.csv"]["status"] == "unusable"
+    assert "label" in h["cell_congestion.csv"]["reason"]
+
+
+@pytestmark_tensor
+def test_duplicate_label_keys_raise_loudly():
+    base = pd.DataFrame({"inst_name": ["g1", "g2"]})
+    dup_cong = pd.DataFrame({"Design": ["d", "d"], "Cell": ["g1", "g1"],
+                             "label": [0.1, 0.9]})
+    ok_ir = pd.DataFrame({"Design": ["d"], "Cell": ["g1"], "label": [0.2]})
+    dfs = {"cell_congestion.csv": dup_cong, "ir_drop.csv": ok_ir}
+    with pytest.raises(ValueError, match="duplicate 'Cell'.*cell_congestion"):
+        gl.build_gate_label_values(base, dfs, "d")
+
+
+@pytestmark_tensor
+def test_duplicate_pin_label_keys_raise_loudly():
+    base = pd.DataFrame({"inst_name": ["g1"], "pin_name": ["A"]})
+    tf = pd.DataFrame({"Design": ["d", "d"], "Pin": ["g1/A", "g1/A"],
+                       "label": [1.0, 2.0]})
+    with pytest.raises(ValueError, match="duplicate 'Pin'"):
+        gl.build_pin_label_values(base, {"timing_features.csv": tf}, "d")
+
+
+@pytestmark_tensor
+def test_ir_drop_per_pdn_node_dups_still_grouped_not_raised():
+    # ir_drop.csv legitimately has one row per PDN node; groupby-max must keep
+    # absorbing them (no false-positive from the new duplicate-key guard).
+    base = pd.DataFrame({"inst_name": ["g1"]})
+    cong = pd.DataFrame({"Design": ["d"], "Cell": ["g1"], "label": [0.3]})
+    ir = pd.DataFrame({"Design": ["d", "d"], "Cell": ["g1", "g1"],
+                       "label": [0.7, 0.9]})
+    vals = gl.build_gate_label_values(base, {"cell_congestion.csv": cong,
+                                             "ir_drop.csv": ir}, "d")
+    assert float(vals[1][0]) == pytest.approx(0.9)
+
+
+@pytestmark_tensor
+def test_manifest_flags_label_gap_and_y_goes_nan(mini_csvs, tmp_path, monkeypatch, capsys):
+    import json
+    import sys as _sys
+
+    import build_graphs as bg
+
+    feat, lab = mini_csvs
+    # Simulate the 2026-07-05 incident: a killed irdrop stage left the RAW
+    # PDNSim dump at the canonical path.
+    with open(os.path.join(lab, "ir_drop.csv"), "w") as f:
+        f.write("Instance,Terminal,Layer,X location,Y location,Voltage\n"
+                "g1,VPWR,li1,1.0,2.0,1.79\n")
+    out = tmp_path / "gap_ds"
+    monkeypatch.setattr(_sys, "argv", [
+        "build_graphs.py", "--features", feat, "--labels", lab,
+        "--design", "mini", "--out-dir", str(out), "--variants", "b"])
+    bg.main()
+    err = capsys.readouterr().err
+    assert "ir_drop.csv unusable" in err
+    man = json.load(open(out / "graph_manifest.json"))
+    assert man["status"] == "ok_with_label_gaps"
+    assert man["label_health"]["ir_drop.csv"]["status"] == "unusable"
+    assert man["label_health"]["wirelength.csv"]["status"] == "ok"
+    data = torch.load(out / "b_graph.pt", weights_only=False)
+    gate_mask = data.x[:, 0] == 0
+    assert bool(torch.isnan(data.y[gate_mask, 2]).all())      # irdrop slot NaN
+    assert not bool(torch.isnan(data.y[gate_mask, 1]).all())  # congestion intact

@@ -51,3 +51,28 @@ def test_build_report_writes_json(tmp_path):
     assert data["labels"]["irdrop"]["status"] == "ok"
     assert data["labels"]["irdrop"]["has_irdrop"] is True
     assert data["labels"]["congestion"]["status"] == "skipped"
+
+
+def test_summarize_raw_unprocessed_csv_is_invalid(tmp_path):
+    # A killed extractor can leave the raw tool dump at the canonical path
+    # (2026-07-05 irdrop incident: PDNSim's voltage file, no Design/Cell/label
+    # columns). That must NOT read as an ok label set.
+    (tmp_path / "ir_drop.csv").write_text(
+        "Instance,Terminal,Layer,X location,Y location,Voltage\n"
+        "FILLER_1,VPWR,li1,1.0,2.0,1.8\n"
+        "_123_,VPWR,li1,3.0,4.0,1.79\n"
+    )
+    res = cls.summarize(str(tmp_path), "irdrop", cls.SPECS["irdrop"])
+    assert res["status"] == "invalid"
+    assert "label" in res["reason"] and "missing" in res["reason"]
+    assert res["rows"] == 2
+
+
+def test_summarize_nonnumeric_label_is_invalid(tmp_path):
+    (tmp_path / "wirelength.csv").write_text(
+        "Design,Net,NetType,WireLength_um,label,mask_wl\n"
+        "d,n1,SIGNAL,3.0,oops,true\n"
+    )
+    res = cls.summarize(str(tmp_path), "wirelength", cls.SPECS["wirelength"])
+    assert res["status"] == "invalid"
+    assert "no numeric values" in res["reason"]

@@ -140,7 +140,12 @@ def _edge_block(edge_df, feat_df, key_cols, cols, edge_type_id, label_builder, l
                 torch.zeros((0,), dtype=torch.long),
                 torch.zeros((0, 5), dtype=torch.float32))
     if feat_df is not None:
-        edge_df = edge_df.merge(feat_df[key_cols + cols], on=key_cols, how="left")
+        merged = edge_df.merge(feat_df[key_cols + cols], on=key_cols, how="left")
+        if len(merged) != n:
+            raise ValueError(
+                f"edge feature merge on {key_cols} exploded {n} -> {len(merged)} rows "
+                f"(duplicate keys in the feature table) — would silently misalign edge_attr")
+        edge_df = merged
         attr = to_float32_matrix(edge_df, cols, n)
     else:
         attr = torch.zeros((n, 8), dtype=torch.float32)
@@ -473,13 +478,15 @@ def main():
 
     views7 = build_feature_views(args.features, args.design)
     label_dfs = load_label_cache(args.labels)
-    # Loud guard: an empty post-filter label frame means the Design key doesn't
-    # match — every y would be silently NaN (the classic design_key foot-gun).
-    for fname, df in label_dfs.items():
-        if "Design" in df.columns and df[df["Design"] == args.design].empty:
-            print(f"WARNING: {fname} has no rows for Design={args.design!r} — "
-                  f"its labels will be all-NaN (keys present: "
-                  f"{sorted(df['Design'].astype(str).unique()[:3])}...)", file=sys.stderr)
+    # Loud guard: any label file the builders can't join (missing Design/key/
+    # label columns — e.g. an interrupted extractor left a raw tool dump — or
+    # a design_key mismatch) means its y slot is silently all-NaN. Warn AND
+    # record it in the manifest so downstream sees the degradation.
+    health = gl.label_health(label_dfs, args.design)
+    for fname, h in health.items():
+        if h["status"] != "ok":
+            print(f"WARNING: {fname} {h['status']}: {h['reason']} — "
+                  f"its labels will be all-NaN", file=sys.stderr)
 
     os.makedirs(args.out_dir, exist_ok=True)
     manifest = {
@@ -489,8 +496,10 @@ def main():
         "labels_dir": os.path.abspath(args.labels),
         "x_schema_per_type": {"gate": GATE_COLS, "net": NET_COLS, "iopin": IOPIN_COLS, "pin": PIN_COLS},
         "y_schema": Y_SCHEMA_BASE,
+        "label_health": health,
         "variants": {},
-        "status": "ok",
+        "status": ("ok" if all(h["status"] == "ok" for h in health.values())
+                   else "ok_with_label_gaps"),
     }
     for v in variants:
         data = BUILDERS[v](views7, label_dfs, args.design, args.design, args.graph_id, args.features)

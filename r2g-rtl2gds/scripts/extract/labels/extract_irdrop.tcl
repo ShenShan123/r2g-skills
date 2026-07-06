@@ -83,6 +83,17 @@ if {[file tail $out_file] ne $canonical_name} {
 }
 set out_file [file join $out_dir $canonical_name]
 
+# The canonical CSV must only ever hold the PROCESSED format
+# (Design,Cell,...,label). PDNSim's raw voltage file goes to a side path and
+# the processed rows are published by atomic rename — so a crash/kill anywhere
+# in between leaves NO ir_drop.csv (honestly missing) instead of a raw-format
+# file that downstream consumers half-accept (the 2026-07-05 aes_core sky130hd
+# incident: a mid-stage kill left the raw file at the canonical path, and the
+# graph stage silently emitted all-NaN irdrop labels — see
+# references/failure-patterns.md "Label/feature extraction pitfalls").
+set raw_file "$out_file.raw"
+file delete -force $out_file $raw_file
+
 if {$odb_file != "" && [file exists $odb_file]} {
     puts "Reading ODB file: $odb_file"
     read_db $odb_file
@@ -139,11 +150,11 @@ foreach gnd {VSS VGND vss vgnd} {
         break
     }
 }
-if {[catch {analyze_power_grid -net $target_net -voltage_file $out_file} error_msg]} {
+if {[catch {analyze_power_grid -net $target_net -voltage_file $raw_file} error_msg]} {
     puts "Error during analyze_power_grid: $error_msg"
     exit 1
 } else {
-    set in_f [open $out_file r]
+    set in_f [open $raw_file r]
     set rows {}
     set drop_values {}
     set line_no 0
@@ -201,7 +212,8 @@ if {[catch {analyze_power_grid -net $target_net -voltage_file $out_file} error_m
         set has_irdrop_str "false"
     }
 
-    set out_f [open $out_file w]
+    set tmp_file "$out_file.tmp"
+    set out_f [open $tmp_file w]
     puts $out_f "Design,Cell,X,Y,Voltage_V,IR_Drop_mV,P95_mV,label,has_irdrop"
     foreach row $rows {
         lassign $row inst x y voltage_val ir_drop_mv
@@ -213,6 +225,8 @@ if {[catch {analyze_power_grid -net $target_net -voltage_file $out_file} error_m
         puts $out_f "$design_name,$inst,$x,$y,[format %.6f $voltage_val],[format %.6f $ir_drop_mv],[format %.6f $p95_mv],[format %.9f $label],$has_irdrop_str"
     }
     close $out_f
+    file rename -force $tmp_file $out_file
+    file delete -force $raw_file
 
     puts "IR Drop analysis complete. Results written to: $out_file"
     puts "Wrote $row_count filtered cell rows. P95 IR drop: [format %.6f $p95_mv] mV. has_irdrop: $has_irdrop_str"

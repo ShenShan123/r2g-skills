@@ -2934,3 +2934,53 @@ against `report_checks`.
 byte-for-byte extractor baseline (`tools/regen_extract_baseline.sh`) must be REGENERATED
 after these fixes — nodes_net/nodes_pin/wirelength/congestion/timing outputs
 intentionally diverge from the pre-2026-07-05 baseline.
+
+### 5. sky130 quoted liberty attribute values — pin direction (and DFF clock flag) lost on EVERY std-cell pin
+
+- **Symptom (aes_core sky130hd):** `nodes_pin.csv` `pin_type_id` collapsed to the
+  catch-all id 14 for 93,390/98,343 pins (95%); `nodes_net.csv` `num_drivers` was 1 for
+  every net (the "no driver found → assume 1" fallback firing universally — plausible
+  values, which is what hid it); 390 nets carried wrong driver/sink counts and 1,065 pins
+  a wrong `sum_pin_cap_fF` (load classification needs direction). nangate45 unaffected.
+- **Root cause:** sky130hd/hs liberty writes QUOTED simple-attribute values —
+  `direction : "input";`, `clock : "true";` (ihp macro libs: `clock : "true" ;`) — and
+  `liberty.py`'s unquoted-only regexes (`direction\s*:\s*([A-Za-z_]+)\s*;`) never
+  matched, so every sky130 std-cell pin parsed with `direction == ""` and `clock ==
+  False`. Same class as the sky130 quoted-cell-name bug (commit 363a8b2) — that fix
+  covered cell names/area/power/leakage `value` but missed the four pin attributes.
+  Clock pins survived only via the `_looks_like_clock` NAME heuristic.
+- **Fix (2026-07-05):** optional-quote tolerance on `direction` / `capacitance` /
+  `max_capacitance` / `clock` in `techlib/liberty.py`. Verified on the real sky130hd tt
+  lib: 1,771/1,771 pins now carry a direction (was 0), 69 clock pins flagged (was 0).
+- **Lesson:** when a value-quoting bug is found for ONE liberty attribute, sweep ALL
+  simple-attribute regexes in the parser — the format allows quotes on any of them.
+
+### 6. Interrupted irdrop stage leaves the RAW PDNSim dump at the canonical ir_drop.csv path (silent all-NaN y2)
+
+- **Symptom (aes_core sky130hd, 2026-07-05):** `labels/ir_drop.csv` contained PDNSim's
+  raw `Instance,Terminal,Layer,X location,Y location,Voltage` format (no Design/Cell/
+  label columns); the graph stage built all five variants with **y2 (irdrop) 100% NaN**
+  and manifest `status: "ok"`; `reports/labels_stats.json` was missing entirely.
+- **Root cause (chain of four):** (1) `extract_irdrop.tcl` had `analyze_power_grid`
+  write its raw voltage file AT the canonical path and post-processed it IN PLACE — an
+  external kill (here: a 120s harness-timeout kill of the whole `run_labels.sh` process
+  group, landing between the raw write and the rewrite) leaves a valid-looking wrong
+  file; (2) `compute_label_stats.py` reported `status: "ok"` for a CSV with zero
+  parseable `label` values; (3) `graph_lib.build_*_label_values` silently `continue` on
+  missing Design/Cell/label columns → all-NaN y with no warning; (4) `run_graphs.sh`
+  judged label freshness by `wirelength.csv` alone, so the half-finished labels dir
+  passed as fresh on the next graph build.
+- **Fix (2026-07-05):** (1) PDNSim writes to `ir_drop.csv.raw`; the processed CSV is
+  published by atomic `file rename`; any pre-existing canonical file is deleted at stage
+  start (an interrupted run now leaves an honestly-missing CSV); (2) stats report
+  `status: "invalid"` + reason when rows exist but no label parses; (3) new
+  `graph_lib.label_health()` — build_graphs warns per unusable file and records
+  `label_health` + `status: "ok_with_label_gaps"` in the manifest; (4) `needs_stage`
+  requires the stage-completion marker (`features_stats.json`/`labels_stats.json`,
+  written LAST) to be present and DEF-fresh.
+- **Lesson:** every fail-soft fallback needs a loud, machine-readable trace. All four
+  links produced *plausible* outputs; only a ground-truth NaN-fraction check caught it.
+
+**Tests (5+6):** `tests/test_techlib_liberty.py` (quoted attributes, real-lib direction
+coverage), `tests/test_compute_label_stats.py` (raw/non-numeric → invalid),
+`tests/test_graph_stage.py` (label_health, manifest gap flag, duplicate-key guards).

@@ -206,7 +206,59 @@ def load_label_cache(label_root: str) -> dict[str, pd.DataFrame]:
     return cache
 
 
-def _merged_label_values(base_df, m, key_col, base_col, col):
+# Join-key columns each label builder requires (first match wins for pins).
+_LABEL_KEY_COLS = {
+    NODE_TYPE_GATE: ("Cell",),
+    NODE_TYPE_NET: ("Net",),
+    NODE_TYPE_PIN: ("Pin", "Cell"),
+}
+
+
+def label_health(label_dfs: dict[str, pd.DataFrame], design_key: str) -> dict[str, dict]:
+    """Per-label-file usability check, mirroring what build_*_label_values
+    silently require before joining. The builders deliberately stay fail-soft
+    (a broken label file yields NaN y, never a crashed graph build) — this
+    projection makes that degradation LOUD and machine-readable instead of
+    invisible (the 2026-07-05 irdrop incident: a raw-format ir_drop.csv made
+    y2 100% NaN across all variants with manifest status 'ok')."""
+    health: dict[str, dict] = {}
+    for spec in LABEL_SPECS:
+        df = label_dfs[spec["file"]]
+        if "Design" not in df.columns:
+            status, reason = "unusable", (
+                f"no 'Design' column — raw/unprocessed csv? (columns: {list(df.columns)[:6]})")
+        elif spec["column"] not in df.columns:
+            status, reason = "unusable", f"label column '{spec['column']}' missing"
+        elif not any(k in df.columns for k in _LABEL_KEY_COLS[spec["node_type"]]):
+            status, reason = "unusable", (
+                f"join-key column missing (need one of {_LABEL_KEY_COLS[spec['node_type']]})")
+        elif df[df["Design"] == design_key].empty:
+            status, reason = "no_rows_for_design", (
+                f"no rows for Design={design_key!r} (keys present: "
+                f"{sorted(df['Design'].astype(str).unique()[:3])}...)")
+        else:
+            status, reason = "ok", ""
+        health[spec["file"]] = {"status": status, "reason": reason}
+    return health
+
+
+def _assert_unique_keys(m: pd.DataFrame, key_col: str, context: str) -> None:
+    """A left-join against duplicated keys EXPLODES the row count, and the
+    downstream pad_or_truncate_1d/to_float32_matrix would then silently
+    truncate — misaligning every value after the first duplicate. Fail loud
+    instead: duplicates here mean an extractor bug (all label/feature writers
+    emit unique keys; ir_drop's legitimate per-PDN-node dups are groupby-maxed
+    before this point)."""
+    dup_mask = m[key_col].duplicated()
+    if dup_mask.any():
+        example = m.loc[dup_mask, key_col].iloc[0]
+        raise ValueError(
+            f"duplicate '{key_col}' rows in {context} (e.g. {example!r}) — "
+            f"joining would silently misalign values; dedup upstream")
+
+
+def _merged_label_values(base_df, m, key_col, base_col, col, context=""):
+    _assert_unique_keys(m, key_col, context or "label data")
     torch = _torch()
     merged = base_df[[base_col]].merge(m, left_on=base_col, right_on=key_col, how="left")
     return torch.tensor(merged[col].fillna(float("nan")).to_numpy(), dtype=torch.float32)
@@ -230,7 +282,8 @@ def build_gate_label_values(base_df, label_dfs, design_key):
             # PDNSim can emit several rows per instance (one per PDN node) —
             # keep the worst-case drop.
             m = m.groupby("Cell", as_index=False)[col].max()
-        out[spec["order"]] = _merged_label_values(base_df, m, "Cell", "inst_name", col)
+        out[spec["order"]] = _merged_label_values(base_df, m, "Cell", "inst_name", col,
+                                                  context=spec["file"])
     return out
 
 
@@ -248,7 +301,8 @@ def build_net_label_values(base_df, label_dfs, design_key):
             continue
         m = df[["Net", col]].copy()
         m[col] = pd.to_numeric(m[col], errors="coerce")
-        out[spec["order"]] = _merged_label_values(base_df, m, "Net", "net_name", col)
+        out[spec["order"]] = _merged_label_values(base_df, m, "Net", "net_name", col,
+                                                  context=spec["file"])
     return out
 
 
@@ -270,6 +324,7 @@ def build_pin_label_values(base_df, label_dfs, design_key):
         if "Pin" in df.columns:
             m = df[["Pin", col]].copy()
             m[col] = pd.to_numeric(m[col], errors="coerce")
+            _assert_unique_keys(m, "Pin", spec["file"])
             keys = base_df[["inst_name", "pin_name"]].copy()
             keys["Pin"] = keys["inst_name"].astype(str) + "/" + keys["pin_name"].astype(str)
             merged = keys[["Pin"]].merge(m, on="Pin", how="left")
@@ -278,7 +333,8 @@ def build_pin_label_values(base_df, label_dfs, design_key):
         elif "Cell" in df.columns:
             m = df[["Cell", col]].copy()
             m[col] = pd.to_numeric(m[col], errors="coerce")
-            out[spec["order"]] = _merged_label_values(base_df, m, "Cell", "inst_name", col)
+            out[spec["order"]] = _merged_label_values(base_df, m, "Cell", "inst_name", col,
+                                                      context=spec["file"])
     return out
 
 
