@@ -122,11 +122,16 @@ def test_all_loop_emitted_reasons_are_registered():
     """
     import re
     from pathlib import Path
-    loop_src = (Path(__file__).resolve().parents[1] / "scripts" / "loop"
-                / "engineer_loop.py").read_text()
-    emitted = set(re.findall(r'reason\s*=\s*"([a-z_]+)"', loop_src))
-    assert emitted, "parser found no reason literals -- did engineer_loop.py move?"
+    root = Path(__file__).resolve().parents[1]
+    # Every open_escalation EMITTER, not only the loop (2026-07-05: ab_runner's
+    # repeated_regression was outside the sweep — a 7th-recurrence hole).
+    sources = [root / "scripts" / "loop" / "engineer_loop.py",
+               root / "knowledge" / "ab_runner.py"]
+    emitted = set()
+    for src in sources:
+        emitted |= set(re.findall(r'reason\s*=\s*"([a-z_]+)"', src.read_text()))
+    assert emitted, "parser found no reason literals -- did the sources move?"
     missing = sorted(emitted - set(escalations.REASONS))
     assert not missing, (
-        f"engineer_loop emits escalation reason(s) not registered in escalations.REASONS: "
+        f"escalation reason(s) emitted but not registered in escalations.REASONS: "
         f"{missing} -- open_escalation will raise ValueError and crash the worker on these.")
