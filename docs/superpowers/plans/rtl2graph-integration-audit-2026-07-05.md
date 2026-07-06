@@ -144,3 +144,23 @@ changed for 25,196/29,712 graph gates; pin-cap x-features ×1000; y2 populated;
 manifest label_health all-ok). The live-tree `design_cases/aes_core`
 labels/dataset and ALL pre-wave-2 sky130 CSVs remain stale — regenerate before
 training (congestion #7 affects every platform).
+
+## 2026-07-06 final triage (features-audit report closed)
+
+The features agent independently confirmed all three wave-2 fixes complete
+(direction: sink mismatches 390→0, pin_type_id full distribution; cap unit:
+zero magnitude mismatches over 29,825 nets vs an independent raw-pf×1000
+parse, incl. the SPEF-io component on iopin nets; USE: 0 clock/reset
+misclassifications vs ODB sigtype) and declared the quoted-attribute bug class
+closed (all parser-read attributes swept). Residual triage:
+
+- VDD/VSS dangling iopin→net CSV rows: verified harmless graph-side — the rows
+  carry power/ground net_type_id, the signal-only filter drops them, and the
+  built b-graph contains zero net nodes outside nodes_net.csv (no phantoms).
+  CSV-level caveat stays documented in failure-patterns.
+- **OPEN verification gap:** `connects_macro_flag` is synthetic-tested only —
+  aes_core has no macros, and the current design_cases corpus is sky130-only.
+  Exercise it on a real fakeram45 (nangate45 macro) design when one is next
+  run before trusting the flag in training data.
+- fill/tap/decap area-0/UNKNOWN on sky130: stays a documented modeling choice;
+  optional future enhancement = backfill physical-cell area from LEF SIZE.
