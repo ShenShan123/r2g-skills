@@ -194,3 +194,50 @@ vs. the earlier audits:
 No new defects found — first all-clean round after the wave-1/wave-2 fixes.
 Per-design JSON + logs: session scratchpad `vr_*.json` / `vlog_*.txt`;
 datasets kept at `rtl2graph_verify/batch_verify/` (machine-local).
+
+## 2026-07-06 nangate45 round: 5 NEW defect chains (#10–#14) + wide-coverage verifier (commits 5b5414e, e5854fe)
+
+Third verification round, this time on **nangate45** (the sky130 rounds above never
+exercised macro libs, the curated map, or a second dbu). Method: 2 parallel audit
+agents (techlib-vs-real-nangate45-files; extractors/runners) + 10 fresh nangate45
+flows in the rtl2graph-integration worktree — the 9 sky130-verified designs as
+cross-platform twins (CORE_UTILIZATION=35, tiny designs on a 60×60 die floor after
+PDN-0185) + **mem_soc_fakeram**, a purpose-built 2-SRAM fakeram45 macro design that
+finally exercises CLASS BLOCK / bus() / ADDITIONAL_LIBS paths.
+
+**Defects found and fixed (5b5414e; failure-patterns.md #10–#14):**
+- #10 `connects_macro_flag` ≡ 0 on every macro design, ALL platforms — ORFS's resolved
+  `LIB_FILES` already contains `ADDITIONAL_LIBS`, so `R2G_SC_LIB_FILES` ⊇ macro libs and
+  `macro_cell_keys()`'s subtraction was ∅. Live-verified post-fix: 237/1,248 mem_soc nets
+  flag=1 == DEF∩LEF-BLOCK truth.
+- #11 liberty `bus()`/`bundle()` groups unparsed → every macro bus pin type-14/cap-0
+  (scalar pins of the SAME macro were fine — plausible-looking corruption).
+- #12 **nangate45 curated cell-type map RETIRED** — 22 live masters missing (all
+  SDFF*/CLKGATE*/TLAT/AOI222_X1/…→UNKNOWN=95), 4 stale keys, 8/23 fakeram sizes;
+  nangate45 now uses the runtime liberty map like every other platform; macro cells get
+  a dedicated shared MACRO id (=UNKNOWN+1). SUPERSEDES the audit-note above that called
+  the curated map a "platform asymmetry" feature, and the 2026-07-05 "IDs 0–128
+  preserved byte-for-byte" contract in feature-extraction.md — nangate45 datasets built
+  on curated ids must be REGENERATED (they were already invalidated by #7).
+- #13 metadata `tracks_per_layer` pipe-string → `global_feat[12]` 0.0 on EVERY platform
+  (now numeric mean + `tracks_detail` column).
+- #14 FA/HA sum output `S` classified "select" (now direction-guarded); `statetable()`
+  ICGs now sequential.
+
+**Verifier promoted to complete verification infra (e5854fe):** extended_checks()
+re-parses raw liberty/LEF/DEF with INDEPENDENT local parsers and closes the
+CSV↔tool-truth gap the 54-check version left open (it verified CSV→tensor only — which
+is exactly why #10/#11/#13 sailed through the 2026-07-06 sky130 ALL-PASS above):
+X-value truth (area/leakage/placement/orientation/type-id injectivity+MACRO id/pin
+caps/net counts+dirs+hpwl+macro-flag/iopin/metadata), Y-value truth (FULL independent
+congestion recompute; wirelength DEF walk + log1p; timing sequential coverage; irdrop
+header/range/log1p(IR/P95)), structural gates (edge symmetry, self-loops, per-block
+name uniqueness), platform-generic netlist count (old regex was sky130-hardcoded →
+"regex 0" on nangate45) + sampled port connectivity, and `--batch` corpus sweeps.
+Result: **ALL-PASS on all 10 nangate45 designs (84–87 checks each)** after the fixes;
+helper parsers pytest-pinned (`test_verify_graph_dataset_helpers.py`; suite 974+20).
+
+Store: all 12 flows ingested (2 honest PDN-0185 `fail` rows with
+`orfs-fail-floorplan-PDN-0185` events + 10 pass), honesty gates 5/5 GREEN, heuristics
+re-derived (118 families). Projects live in the WORKTREE's `design_cases/` (gitignored,
+machine-local).
