@@ -1,5 +1,5 @@
 ---
-description: Drive an RTL→GDS sign-off campaign on an ORFS platform (sky130hd by default — full, genuinely clean-able DRC (KLayout gate + optional Magic advisory) + LVS (Netgen) + RCX signoff; nangate45/asap7/gf180/ihp also supported) in parallel waves, hunt r2g-rtl2gds skill bugs, and prove the engineer-learning-loop is closed (DRC clean where the deck allows — sky130hd cleans via KLayout DRC + Netgen LVS; asap7 KLayout DRC is NOT clean-able and needs the un-installed Calibre deck — + best Fmax + promoted recipes).
+description: Drive an RTL→GDS sign-off campaign on an ORFS platform (sky130hd by default — full, genuinely clean-able DRC (KLayout gate + optional Magic advisory) + LVS (Netgen) + RCX signoff; nangate45/asap7/gf180/ihp also supported) in parallel waves, hunt r2g-rtl2gds skill bugs, and prove the engineer-learning-loop is closed (DRC clean where the deck allows — sky130hd cleans via KLayout DRC + Netgen LVS; asap7 KLayout DRC is NOT clean-able and needs the un-installed Calibre deck — + best Fmax + promoted recipes). Also independently VERIFIES the RTL→Graph dataset conversion (5 PyG graph views b–f, techlib/LEF parser, feature + label extraction incl. the new congestion labels) against raw DEF/LEF/liberty + OpenDB ground truth on both sky130hd and nangate45.
 argument-hint: "[overrides, e.g. PLATFORM=sky130hd WAVE_MAX=24 WORKERS=3 NUM_CORES=4]"
 ---
 
@@ -41,6 +41,13 @@ clean-able — see the "asap7 arm specifics" note below.**
    correctly and tell the SAME story** — verify with `tools/check_db_integrity.py` (Step 0/2/4).
 6. **New/successful solutions get promoted** (recipe `shadow → candidate → promoted`).
 7. Prove the **effectiveness and robustness** of the skill end-to-end with evidence, not claims.
+8. **Verify the RTL→Graph dataset conversion is correct** (Step 5) — the skill's `run_graphs.sh`
+   stage turns each completed backend run into training-ready PyG graphs (5 views b–f) by joining
+   the feature (X) and label (Y) stages. This is a **second, orthogonal bug-hunt axis** to the
+   sign-off loop: verify the topology conversion, the techlib/LEF parser, and the feature + label
+   extraction (**especially the new congestion labels**) against **raw DEF/LEF/liberty + OpenDB
+   ground truth** on **both sky130 and nangate45**. A conversion that reproduces its own CSVs is not
+   verified — cross-check against the *tool truth*, not another pipeline artifact.
 
 User-supplied overrides for this run (may be empty): **$ARGUMENTS**
 Apply any `KEY=value` pairs above as environment overrides (`PLATFORM`, `LEDGER`, `WAVE_MAX`,
@@ -143,6 +150,18 @@ REQUIRED on sky130 — Netgen LVS uses Magic to extract SPICE from the GDS.)
 - `r2g-rtl2gds/references/engineer-loop.md` — the autonomous driver, escalation, A/B lifecycle.
 - `r2g-rtl2gds/references/failure-patterns.md` → **"Learning-Loop Closure Failures"** (the known
   ways the loop silently lies) and **"Platforms without KLayout LVS: asap7"**.
+- `r2g-rtl2gds/references/graph-dataset.md` — the RTL→Graph dataset stage (Step 5): the five
+  topologies b–f, the shared tensor schema (`x[N,10]`/`y[N,5]`/`edge_attr`/`edge_y`), the
+  feature/label join, and the ground-truth verification harness. Provenance + the 2026-07-05/06/07
+  audit chain (every dataset-extraction defect found + fixed) is documented here and in
+  `references/failure-patterns.md` → **"Dataset-Extraction Silent-Value Defects"**.
+- `tools/verify_graph_dataset.py` — the RTL→Graph **ground-truth harness** (Step 5): independently
+  re-derives every structural + label expectation from the CSVs (separate pandas code, not
+  `graph_lib`) AND re-parses the raw liberty/LEF/DEF (never `techlib`) and diffs the shipped
+  tensors. `--batch <root>` sweeps a corpus (exit non-zero on any failure). Its pure helpers are
+  pinned by `tests/test_verify_graph_dataset_helpers.py`; the synthetic end-to-end guardrail is
+  `tests/test_corner_case_pipeline.py` + `tests/test_corner_case_units.py` (fixture
+  `tests/fixtures/corner_synth.py`).
 - `tools/check_db_integrity.py` — the one-command **both-DBs** verifier (`--platform $PLATFORM`):
   knowledge honesty (delegated to `honesty.py`) + journal liveness + cross-DB `run_id` linkage +
   per-move correspondence (`ab_launch`/`promote`/`escalate` recorded in both books). ALARM = the
@@ -495,7 +514,122 @@ If any of these fail, that failure **is** the next bug to fix — loop back to S
 victory on the strength of machinery existing; the A/B arms must have *executed, diverged, and
 promoted*.
 
-## Step 5 — Record durable learnings (don't let the session evaporate)
+## Step 5 — Verify the RTL→Graph dataset conversion (topology · techlib · features · labels · congestion)
+
+The skill's `run_graphs.sh` stage (`SKILL.md` step 13d) turns each **completed backend run** into
+training-ready **PyG graphs** by joining the feature stage (X, `run_features.sh`) with the label
+stage (Y, `run_labels.sh`). This step **verifies that conversion is correct** — a bug-hunt axis
+**orthogonal** to the sign-off loop above, and a required part of the mission (item 8). The contract
+and the five topologies live in `references/graph-dataset.md`; **read it first**. Verify on **BOTH
+sky130 and nangate45** — the pipeline is platform-sensitive (quoted liberty, `PITCH` direction,
+layer names, tap patterns, MACRO ids), so a bug can hide on one platform while the other stays green.
+
+**Prereq — the graph venv (non-negotiable, or you verify NOTHING).** The stage needs
+`torch + torch_geometric + pandas`. `run_graphs.sh` and `verify_graph_dataset.py` **SKIP cleanly**
+without them — a skip is honest but means **zero** graph verification, so a silent skip here is the
+Step-5 analogue of a silently-skipped DRC. Point `R2G_GRAPH_PYTHON` at the venv and confirm it imports:
+
+```bash
+export R2G_GRAPH_PYTHON=/proj/workarea/user5/pyenvs/rtl2graph/bin/python   # this machine
+"$R2G_GRAPH_PYTHON" -c "import torch, torch_geometric, pandas; print('graph venv OK')" \
+  || echo "!! graph venv missing — Step 5 would SKIP and verify nothing (install per graph-dataset.md)"
+```
+
+### 5a — Build + run the ground-truth harness (the primary evidence)
+
+`tools/verify_graph_dataset.py` is the oracle: it independently re-derives **every** structural +
+label expectation from the CSVs (separate pandas code, **not** `graph_lib`) — node counts, b/c edge
+counts by row accounting, **d/e/f edge counts by the clique formula Σ C(k,2)**, `edge_attr` == the
+folded entity's features, exact expected-NaN counts per y slot, `node_name` order, global_feat — AND
+re-parses the **raw liberty/LEF/DEF** (never `techlib`) to check gate area/leakage/x/y/orientation,
+`cell_type_id` injectivity + the shared MACRO id, `sum_pin_cap_fF` vs Σ liberty load caps, net
+driver/sink/`connects_macro_flag`, wirelength vs an independent DEF route walk, timing coverage of
+every sequential instance, and a **full independent congestion demand/capacity/gaussian recompute**.
+
+```bash
+# Build the dataset for a completed $PLATFORM design (runs 13b/13c first if stale).
+bash r2g-rtl2gds/scripts/flow/run_graphs.sh design_cases/<design> "$PLATFORM"
+# Ground-truth verify a single case:
+"$R2G_GRAPH_PYTHON" tools/verify_graph_dataset.py design_cases/<design>
+# Sweep a whole corpus root — exits NON-ZERO on ANY design's failure (run after any regen):
+"$R2G_GRAPH_PYTHON" tools/verify_graph_dataset.py --batch design_cases
+```
+
+A green `--batch` over N designs is the primary evidence the conversion is correct. **A verifier that
+passes is only as trustworthy as its own checks** — before believing green, confirm `--batch` actually
+exits non-zero on a real mismatch (no vacuous "skip when a column is absent" paths) and that its
+independent re-parsers don't re-implement the same bug (Step-5's version of "the loop is only as honest
+as its weakest writer").
+
+### 5b — Both platforms (the user requirement)
+
+`design_cases/` is currently **100% sky130hd**. For **nangate45** coverage either (a) run a nangate45
+fixture through ORFS to produce a real `6_final.def`, or (b) drive the extractors directly against the
+routed reference DEF `/proj/workarea/user5/rtl2graph_verify/cordic_ng45_5_route.def` with the nangate45
+libs exported (`TECH_LEF`/`SC_LEF`/`R2G_LIB_FILES`/`R2G_SC_LIB_FILES`/`R2G_PLATFORM=nangate45`; truth in
+`rtl2graph_verify/truth_cordic_ng45_route.json`). The **synthetic corner-case suite** (5c) is a
+nangate45-style design and is **always** available even with no backend run.
+
+### 5c — The synthetic guardrail (always runnable; a merge that changes an extractor MUST re-run it)
+
+```bash
+"$R2G_GRAPH_PYTHON" -m pytest -q \
+  r2g-rtl2gds/tests/test_corner_case_pipeline.py r2g-rtl2gds/tests/test_corner_case_units.py \
+  r2g-rtl2gds/tests/test_graph_stage.py r2g-rtl2gds/tests/test_extract_congestion.py
+```
+
+These drive the **real** feature workers → label extractors → PyG builder over a hand-computable
+fixture (`fixtures/corner_synth.py`) and assert every stage against hand-derived truth **across all
+five views b–f**. A **red corner suite = either the conversion regressed OR a guardrail rotted** —
+both are bugs. **Lesson (2026-07-07):** the congestion-method merge (`c9b9e3a`) changed the label
+kernel but did **not** re-run this suite, leaving `test_corner_case_pipeline` **RED on main** (it baked
+in the *retired* radius-1 3×3 kernel's "a fill cell far from wires reads exactly 0" locality; the new
+scipy-matched **radius-4** Gaussian correctly spreads congestion up to 4 GCells). Fixed by asserting on
+`label_raw` (raw → exactly 0 for an empty GCell) vs `cell_congestion` (smoothed → small-but-nonzero).
+See `references/failure-patterns.md` → **"Congestion 2-vector method (radius-4 Gaussian)"**.
+
+### 5d — What must be TRUE per dimension (each lead maps to a real historical defect — chase, don't paper over)
+
+- **Topology (5 views b–f)** — node/edge counts match the clique formulas; `edge_attr` carries the
+  **folded** entity's features (c=pin, d/f=net, e=gate **and** net) **aligned** with `edge_index`
+  (interleaved fwd/rev — audit #5); clock/reset nets + FILL/TAP cells excluded (**`net_type_id==0`
+  only** — the clock tree is NOT in the graph); undirected symmetry; `node_name` uniqueness.
+- **Techlib LEF/liberty parser** — sky130 **QUOTED** liberty attributes (`direction`/`clock`, cap unit
+  `"pf"`→fF — #5) parse; `bus()`/`bundle()` macro pins resolve to per-bit connects (#11);
+  `is_sequential` covers `ff_bank`/`latch_bank`/`statetable`; `PITCH` direction correct (sky130 `li1`
+  has two-value `PITCH 0.46 0.34`, VERTICAL → pick the x-pitch); the **nangate45 curated cell map is
+  RETIRED** — a runtime liberty-derived map + a shared `MACRO` id, and `UNKNOWN` never silently
+  swallows a live master (#12).
+- **Feature (X)** — `cell_type_id`/area/power/x/y/orient/status; net `num_drivers`/`num_sinks`
+  (chip-perspective: an INPUT port *drives*), `connects_macro_flag`, `num_layer` (the per-platform
+  routing-layer regex), `hpwl_um`; `sum_pin_cap_fF` **excludes** an output pin's `max_capacitance`
+  (drive limit ≠ load); `tracks_per_layer` is **numeric**, not a string.
+- **Label (Y)** — wirelength **strips `RECT` patches** (sky130 — #10) and `label == log1p(um)` vs
+  OpenROAD `getLength`; timing covers **every** sequential instance (the register-losing-join class);
+  irdrop `y2` not silently all-NaN under a manifest `"ok"` (#6).
+- **Congestion (the NEW script `extract_congestion.py` — the user's headline)** — a faithful port of
+  `RTL2Graph/label_test/py/Congestion_Parse.py`: `label = mean(sqrt(gaussian_util))` (== ref
+  `node_label[1]`), `label_raw = mean(sqrt(util))` (== `node_label[0]`), `cell_congestion =
+  mean(gaussian_util)`, each averaged over the cell's **orientation-aware bbox** GCells (origin-GCell
+  fallback when no cell SIZE); **VERTICAL demand keys `(x_gcell,y_gcell)`, NOT the mirror** (#7
+  transpose); the pure-python `gaussian_filter_2d` **bit-matches** scipy's radius-4 (`sigma=1.0`,
+  `truncate=4.0`) reflect convolution; capacity uses the **per-direction** pitch. Cross-check vs the
+  reference (needs scipy) **< 1e-6**, or — if no scipy env — vs the **pre-gaussian `util` grid** (needs
+  no scipy) plus a hand-check of the gaussian on a tiny asymmetric grid. `graph_lib` gate `y1` reads
+  the **`label`** column (the smoothed sqrt); confirm no consumer swaps `label`/`label_raw`.
+- **Verifier correctness** — `verify_graph_dataset.py` is the oracle, so audit **it**: does its
+  congestion recompute match the **current** (bbox-averaged, radius-4) method and column set
+  (`label`/`label_raw`/`cell_congestion`)? A stale verifier = false green.
+
+### 5e — Staleness (the .pt is only as fresh as the DEF that made it)
+
+The dataset `.pt` is keyed to the DEF's mtime; **regenerate features AND labels AND graphs after any
+extractor fix.** The `design_cases/aes_core` dataset shipped on disk **predates** the 2026-07-06
+congestion method and the `label_health` field (its manifest shows `label_health: null`), so its `y1`
+is **stale** — rebuild before trusting it. Ingest is unaffected (the graph dataset is a training
+artifact, not a sign-off verdict, so it does not enter the two memory DBs or the honesty gates).
+
+## Step 6 — Record durable learnings (don't let the session evaporate)
 
 - Update `r2g-rtl2gds/references/` (failure-patterns / lessons-learned) and any
   `docs/superpowers/{plans,specs}` touched, with a **dated note (commit hash + superseded
@@ -509,7 +643,9 @@ promoted*.
 This command is **idempotent and resumable**, so it is safe under `/loop` (e.g. `/loop /r2g-debug`,
 which defaults to `PLATFORM=sky130hd`; pass `PLATFORM=…` to drive a different arm): each tick
 re-deploys the skill, picks up the same per-platform `$LEDGER` where it left off (Step 1b is a no-op
-once the ledger has designs), runs the next waves, and re-verifies the honesty invariants. Use a
+once the ledger has designs), runs the next waves, re-verifies the honesty invariants, and
+re-runs the **Step 5 RTL→Graph verification** (`verify_graph_dataset.py --batch` + the corner suite
+are idempotent and staleness-aware, so they refresh whatever a new backend RUN invalidated). Use a
 per-platform `pool.env` to retune the pool between ticks without restart. Keep
 `WORKERS × NUM_CORES ≤ free cores` on every tick.
 
@@ -528,3 +664,7 @@ per-platform `pool.env` to retune the pool between ticks without restart. Keep
 - **Ingest after EVERY flow** — clean, failed, or partial. A failed run never ingested teaches nothing.
 - **Escalate to the user before** attempting CDC, multi-clock, DFT, or signoff-quality closure —
   the loop NEVER blocks on unknowns; they go to the `escalations` queue.
+- **Step 5 (RTL→Graph) needs the graph venv** (`R2G_GRAPH_PYTHON` → torch+torch_geometric+pandas) or
+  it verifies nothing. Building datasets is memory/CPU-heavy (the `.pt` for a large design can be
+  hundreds of MB and re-derivation is super-linear), so it counts against `WORKERS × NUM_CORES ≤ free
+  cores` too — don't build many large datasets concurrently. Never trust a `SKIP` line as a pass.
