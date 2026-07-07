@@ -19,6 +19,37 @@ skipped as library-pre-verified).
 
 ---
 
+## 2026-07-06 — nangate45 RTL→Graph verification round 2; 4 more extraction fixes + wide-coverage corner-case infra
+
+Re-verified the graph-dataset pipeline on **nangate45** and built the corner-case verification
+infrastructure the earlier rounds lacked. Branch `feat/rtl2graph-integration`, commit `031a12f`
+(+ docs `17dca99`); full record in
+`docs/superpowers/plans/rtl2graph-integration-audit-2026-07-05.md` (2026-07-06 round-2 addendum).
+
+- **Baseline honest:** `verify_graph_dataset --batch` green 85/85 (84–87) × 10 nangate45 designs;
+  wirelength INDEPENDENTLY cross-checked vs OpenROAD `net.getWire().getLength()` over **32,005
+  aes_core nets → 0 real mismatches** (only a benign 0.07 µm/IO-net end-extension delta);
+  NetType/mask/log1p-label all correct, power/ground excluded. The pipeline is genuinely correct
+  on nangate45.
+- **Four defects fixed** (all in paths real nangate45 files never reach → invisible to the raw-file
+  verifier; behavior-neutral on nangate45; failure-patterns.md #15–#18): (15) liberty
+  `ff_bank`/`latch_bank` multibit-sequential undetected (`is_sequential` false; asap7 ships 27 such
+  libs) — currently *inert* (field unconsumed), fixed defensively; (16) `compute_feature_stats` had
+  NO honesty gate (X-side of the #6 irdrop lesson) — a raw/truncated feature CSV summarized "ok",
+  now flagged "invalid"; (17) `netlist_graph` tie-off constant in a concat (`{1'b0, sig}`) leaked a
+  phantom net `b0`; (18) latent parity: `run_labels.sh` exports `R2G_PLATFORM`, `edges_iopin_net`
+  rstrips a continuation DIRECTION.
+- **New corner-case infra:** `tests/fixtures/corner_synth.py` (a hand-computable synthetic
+  nangate45-style design) driven through the REAL workers → labels → PyG builder by
+  `tests/test_corner_case_pipeline.py` (asserts vs hand-derived truth across **all five graph views
+  b–f**) + `tests/test_corner_case_units.py` (focused corners incl. the congestion demand-key
+  transpose guard under an asymmetric grid). Complementarity: the raw-file cross-check proves the
+  extractors match the tools on inputs you HAVE; the fixture proves they handle inputs you might GET.
+- Full extract/graph/techlib test surface: 298 passed. Datasets built after the 2026-07-06 round-1
+  regeneration remain valid (these fixes don't change nangate45 output).
+
+---
+
 ## 2026-07-05 — RTL2Graph integrated as the PyG graph-dataset stage; 5 extraction defects found + fixed
 
 Audited the operator-provided `RTL2Graph/` pipeline against OpenDB/OpenROAD ground truth

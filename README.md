@@ -493,7 +493,7 @@ agent-r2g/
 │   │   └── escalations.py             #     Open escalation records for the agent tier
 │   ├── references/                    #   Failure patterns, engineer-loop runbook, PPA guide, …
 │   ├── assets/                        #   config.mk / constraint.sdc templates + examples
-│   └── tests/                         #   pytest suite (980 tests)
+│   └── tests/                         #   pytest suite (1,058 tests)
 ├── install.sh                         # ★ One-command installer
 ├── .claude-plugin/plugin.json         #   Claude Code plugin manifest
 ├── tools/                             #   Batch orchestration helpers (not part of skill install)
@@ -610,7 +610,7 @@ config.mk — see `r2g-rtl2gds/SKILL.md` ("Netgen LVS") and
 
 ## Validated scale
 
-The skill has been validated on **682 RTL designs** spanning ICCAD benchmarks, RISC-V cores, BOOM/Chipyard, VTR, zipcpu, verilog-ethernet, wb2axip, and more. The test suite covers **980 tests** (pytest, as of 2026-07-05).
+The skill has been validated on **682 RTL designs** spanning ICCAD benchmarks, RISC-V cores, BOOM/Chipyard, VTR, zipcpu, verilog-ethernet, wb2axip, and more. The test suite covers **1,058 tests** (pytest, as of 2026-07-06), including an end-to-end synthetic corner-case suite that drives the real feature/label/graph extractors and asserts all five PyG graph views (b–f) against hand-derived ground truth.
 
 **ORFS backend (place & route → GDS):** 476 / 495 designs from the original `rtl_designs/` batch pass (96.2%); 19 remaining have understood root causes (megadesign synthesis budgets, missing netlists, zero-logic stubs).
 

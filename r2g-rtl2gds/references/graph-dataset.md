@@ -121,6 +121,27 @@ regeneration. Baselines: 54/54 × 9 sky130hd designs (pre-extension,
 incl. a fakeram45 macro design (post-extension, same day). Helper parsers are pytest-pinned in
 `tests/test_verify_graph_dataset_helpers.py`.
 
+**Complement — the synthetic corner-case suite (2026-07-06 nangate45 round 2).**
+`verify_graph_dataset.py` cross-checks a REAL built dataset against the raw
+liberty/LEF/DEF, so it only sees inputs the real designs *have* — it stays green
+while a bug hides in a code path those designs never exercise (e.g. `ff_bank`,
+tie-off constants, a truncated CSV). Two suites close that gap by driving the
+REAL workers over inputs the extractors control:
+`tests/fixtures/corner_synth.py` builds a hand-computable synthetic
+nangate45-style design (std cells + a bus-pin SRAM macro; a
+clock/reset/multi-layer/RECT-patch/2-driver net mix), and
+`tests/test_corner_case_pipeline.py` runs it through feature workers → label
+extractors → the PyG builder, asserting every stage against hand-derived ground
+truth **across all five views b–f** (node/edge counts, folded-entity `edge_attr`
+features + `edge_y` labels, clock-tree/FILL/TAP exclusion, undirected symmetry).
+`tests/test_corner_case_units.py` pins focused corners (ff_bank/latch/statetable
+sequential detection, INOUT/PG/multi-digit-bus-index classification, pf→fF caps,
+CUT-vs-ROUTING LEF + VIA re-declaration, the congestion demand-key
+`(x_gcell, y_gcell)` convention under an ASYMMETRIC grid, netlist constant
+handling, and the `compute_feature_stats` honesty gate). Rule: a fixture liberty
+MUST be one-attribute-per-line (the parser uses anchored `re.match`) — a crammed
+pin silently drops direction/clock/cap and the test passes vacuously.
+
 ## Provenance + audit (2026-07-05)
 
 Ported from the operator-provided `RTL2Graph/` pipeline (odb2def, base_garph,
@@ -157,6 +178,18 @@ see failure-patterns.md "Dataset-Extraction Silent-Value Defects" #5/#6.
 labels AND graphs; the pre-fix aes_core dataset shipped y2 all-NaN and
 collapsed pin types).
 
-Tests: `tests/test_graph_stage.py` (synthetic fixtures; tensor tier skips
+A third pass (2026-07-06, nangate45 round 2, commit 031a12f) re-verified the
+pipeline on nangate45 — `verify_graph_dataset --batch` green 85/85 × 10 designs,
+and wirelength independently cross-checked vs OpenROAD `getLength` over 32,005
+aes_core nets (0 real mismatches) — then built the corner-case suites above,
+which surfaced four more defects (all behavior-neutral on nangate45; see
+failure-patterns.md #15–#18): `ff_bank`/`latch_bank` multibit-sequential
+undetected (inert, asap7), `compute_feature_stats` missing its honesty gate,
+netlist tie-off-constant phantom nets, and two latent parity fixes. These do NOT
+change nangate45 CSV/graph output, so datasets built after the 2026-07-06 round-1
+regeneration remain valid.
+
+Tests: `tests/test_graph_stage.py` + `tests/test_corner_case_pipeline.py` +
+`tests/test_corner_case_units.py` (synthetic fixtures; tensor tier skips
 without torch). Verification workspace with the ground-truth scripts:
 `/proj/workarea/user5/rtl2graph_verify/` (machine-local).
