@@ -11,7 +11,7 @@ Written to `design_cases/<design>/labels/` and `design_cases/<design>/reports/`:
 
 | File | Rows | Columns | Label transform |
 |------|------|---------|-----------------|
-| `labels/cell_congestion.csv` | per placed instance | `Design,Cell,cell_type,cell_congestion,label` | `label = sqrt(cell_congestion)` |
+| `labels/cell_congestion.csv` | per placed instance | `Design,Cell,cell_type,cell_congestion,label,label_raw` | `label = mean_bbox(sqrt(gaussian_util))`; `label_raw = mean_bbox(sqrt(util))`; `cell_congestion = mean_bbox(gaussian_util)` (see "Congestion label method") |
 | `labels/wirelength.csv` | per net | `Design,Net,NetType,WireLength_um,label,mask_wl` | `label = log1p(WireLength_um)`; `mask_wl = NetType==SIGNAL` |
 | `labels/timing_features.csv` | per placed instance | `Design,Cell,Cell_Slack_ns,Path_Delay_ns,label,in_sta_path` | `label = log(1+Path_Delay_ns)`; `Path_Delay_ns = clk_period - worst_slack` (floored at 0) |
 | `labels/ir_drop.csv` | per instance (fillers/tap/endcap filtered) | `Design,Cell,X,Y,Voltage_V,IR_Drop_mV,P95_mV,label,has_irdrop` | `label = log(1 + IR_Drop_mV/P95_mV)` |
@@ -41,6 +41,42 @@ by design.
   (`set clk_period`, `set clk_port_name`); defaults to 10.0 / clock-name auto-detect.
   A wrong clock period biases `Path_Delay_ns` — keep the SDC accurate.
 
+## Congestion label method
+
+`extract_congestion.py` is a faithful port of `RTL2Graph/label_test/py/Congestion_Parse.py`'s
+label calculation (the 2026-07-06 method update). Per GCell it computes routed-wire
+demand vs. track capacity, `util = max(demand_h/cap_h, demand_v/cap_v)`, smooths the
+dense utilization grid with a Gaussian, then maps each cell over its footprint:
+
+1. **Capacity** (`calculate_grid_capacities`): from tech-LEF routing layers
+   (`techlib.lef.routing_layer_info`) — `cap_h += grid_w·grid_h/pitch` per HORIZONTAL
+   layer, symmetrically for VERTICAL. Unit-invariant (demand and capacity both scale
+   with dbu, so `util` is dimensionless and matches the reference exactly).
+2. **Demand** (`extract_grid_demand`): routed segments split at GCell boundaries into
+   `demand_h`/`demand_v`, keyed `(x_gcell, y_gcell)` for **both** directions (the
+   2026-07-05 transpose fix; the reference agrees). Uses `techlib.route_segments`
+   (RECT-patch + chain aware) — a strict superset of the reference's 2-point handling.
+3. **Gaussian** (`gaussian_filter_2d`): a **pure-Python reproduction of
+   `scipy.ndimage.gaussian_filter(util, sigma=1.0)`** with scipy's defaults
+   (`order=0, mode='reflect', truncate=4.0` ⇒ a separable 9-tap reflect-boundary
+   correlation). Bit-matched to scipy to `<1e-12` (test
+   `test_gaussian_filter_2d_matches_scipy_golden`), so the label stage keeps **no
+   numpy/scipy runtime dependency**. The old manual 3×3 (radius-1) kernel is retired.
+4. **Cell → GCell mapping** (`cell_bbox_dbu` + `cell_congestion_over_bbox`): each
+   placed instance is averaged over **every GCell its orientation-aware bounding box
+   overlaps** (needs cell `SIZE` from `SC_LEF`; N/S keep `(w,h)`, E/W rotate 90° ⇒
+   swap), not just the origin GCell. With no cell LEF every cell falls back to its
+   origin GCell (logged) so the stage still runs.
+
+The reference returns a 2-vector `[sqrt(util), sqrt(gaussian_util)]`; the CSV carries
+the smoothed component as the canonical `label` (unchanged for `graph_lib` y1 /
+`compute_label_stats` / the RTL2Graph augmenters) and the raw component as `label_raw`.
+
+**Verified** (2026-07-06) against the reference on sky130hd `DMA_top` (1680 non-filler
+cells, 30×30 GCells): identical `util` ⇒ label diff `<1e-15`; full pipeline (skill
+float64 CLI vs. reference float32) label diff `<1e-8`. The residual is the reference's
+float32 storage vs. the skill's float64 — the skill is strictly more precise.
+
 ## Why timing & IR drop read liberty
 
 Both the timing STA and PDNSim IR-drop analysis need cell timing/power models.
@@ -55,7 +91,8 @@ the ground net = 0), else it raises `PSM-0079`.
 | Var | Effect |
 |-----|--------|
 | `R2G_LIB_FILES` | space-separated liberty paths for timing/IR drop (overrides resolver) |
-| `TECH_LEF` | tech LEF for congestion layer pitches |
+| `TECH_LEF` | tech LEF for congestion layer pitches (capacity) |
+| `SC_LEF` / `ADDITIONAL_LEFS` / `CELL_LEFS` | cell/macro LEF(s) with per-`MACRO SIZE` — congestion cell→GCell bounding-box mapping; absent ⇒ origin-GCell fallback (logged) |
 | `SUPPLY_VOLTAGE` | nominal VDD for the IR-drop delta + PDNSim rail voltage |
 | `CLOCK_PERIOD` / `CLOCK_PORT` | timing clock (overrides SDC; empty `CLOCK_PORT` = auto-detect) |
 | `ODB_FILE` / `DEF_FILE` | explicit input design |

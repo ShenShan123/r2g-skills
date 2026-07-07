@@ -87,6 +87,62 @@ def routing_layer_regex(tech_lef):
     return re.compile(r"\b(" + alt + r")\b", re.IGNORECASE), True
 
 
+def macro_sizes(lef_path):
+    """Per-MACRO physical footprint ``SIZE`` from a cell/macro LEF.
+
+    Returns ``{macro_name: (width_um, height_um)}`` for every
+    ``MACRO <name> ... SIZE <w> BY <h> ; ... END <name>`` block (widths/heights in
+    microns, exactly as the LEF declares them). Empty dict if the LEF is
+    missing/unparseable; a MACRO without a parseable SIZE is simply omitted.
+
+    The congestion label extractor uses these to build each placed instance's
+    orientation-aware bounding box, so it can average the routing-congestion of
+    **every GCell the cell footprint overlaps** (the new bbox mapping) rather than
+    only the GCell under the placement origin. Pass the standard-cell LEF (ORFS
+    ``SC_LEF``) plus any macro LEFs; call once per file and merge (later files win).
+
+    Pure stdlib.
+    """
+    sizes = {}
+    if not lef_path or not os.path.isfile(lef_path):
+        return sizes
+    current = None
+    with open(lef_path, "r") as f:
+        for raw in f:
+            parts = raw.replace(";", " ").split()
+            if not parts:
+                continue
+            if parts[0] == "MACRO" and len(parts) >= 2:
+                current = parts[1]
+                continue
+            if current is None:
+                continue
+            if parts[0] == "SIZE":
+                # "SIZE <w> BY <h>" — tolerate stray tokens by keying off BY.
+                try:
+                    by = parts.index("BY")
+                    sizes[current] = (float(parts[by - 1]), float(parts[by + 1]))
+                except (ValueError, IndexError):
+                    pass
+            elif parts[0] == "END" and len(parts) >= 2 and parts[1] == current:
+                current = None
+    return sizes
+
+
+def merge_macro_sizes(lef_paths):
+    """``macro_sizes`` unioned over several LEFs (SC_LEF + macro LEFs).
+
+    Later paths override earlier ones on a name clash. Non-existent / empty
+    entries are skipped silently. Returns ``{macro: (w_um, h_um)}``.
+    """
+    merged = {}
+    for p in lef_paths:
+        if not p:
+            continue
+        merged.update(macro_sizes(p))
+    return merged
+
+
 def routing_layer_info(tech_lef, fallback=None):
     """Parse routing-layer pitch/direction from a tech LEF.
 

@@ -83,6 +83,8 @@ echo "DEF: ${DEF:-<none>}"
 RESOLVED="$(bash "$(dirname "${BASH_SOURCE[0]}")/resolve_platform_paths.sh" "$CONFIG_MK" "$PLATFORM" 2>/dev/null || true)"
 LIB_FILES=$(echo "$RESOLVED" | sed -n 's/^LIB_FILES=//p')
 TECH_LEF=$(echo "$RESOLVED" | sed -n 's/^TECH_LEF=//p')
+SC_LEF=$(echo "$RESOLVED" | sed -n 's/^SC_LEF=//p')
+ADDITIONAL_LEFS=$(echo "$RESOLVED" | sed -n 's/^ADDITIONAL_LEFS=//p')
 ADDITIONAL_LIBS=$(echo "$RESOLVED" | sed -n 's/^ADDITIONAL_LIBS=//p')
 SUPPLY_VOLTAGE=$(echo "$RESOLVED" | sed -n 's/^SUPPLY_VOLTAGE=//p')
 SUPPLY_VOLTAGE="${SUPPLY_VOLTAGE:-1.1}"
@@ -118,7 +120,12 @@ run_soft() {  # name + command...; never aborts the orchestrator
 # but a latent cross-platform hazard the moment the fallback becomes
 # platform-specific (2026-07-06 nangate45 audit).
 if [[ -n "$DEF" ]]; then
-  R2G_PLATFORM="$PLATFORM" TECH_LEF="$TECH_LEF" run_soft congestion \
+  # SC_LEF (standard-cell LEF) + ADDITIONAL_LEFS (macro LEFs) carry per-MACRO SIZE,
+  # which extract_congestion.py needs to build each cell's bounding box and average
+  # congestion over the GCells its footprint overlaps (the Congestion_Parse method).
+  # Absent/unparseable -> the extractor falls back to origin-GCell mapping and warns.
+  R2G_PLATFORM="$PLATFORM" TECH_LEF="$TECH_LEF" SC_LEF="$SC_LEF" ADDITIONAL_LEFS="$ADDITIONAL_LEFS" \
+    run_soft congestion \
     python3 "$LABELS_SRC/extract_congestion.py" "$DEF" "$LABELS_DIR/cell_congestion.csv" "$DESIGN_NAME"
 fi
 
