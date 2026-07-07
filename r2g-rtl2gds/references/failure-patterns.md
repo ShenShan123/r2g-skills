@@ -3293,6 +3293,33 @@ turning a rotted assertion into a guardrail that actively documents the 2-vector
   values" → `invalid`, and the report stays strict JSON. Regression:
   `test_compute_label_stats.py::test_summarize_all_nan_label_is_invalid_not_ok`.
 
+### 20. Verifier irdrop label check ignored the `has_irdrop` noise floor — false-red on low-IR designs (2026-07-07)
+
+- **Symptom:** `verify_graph_dataset.py`'s `ext.irdrop label == log1p(IR/P95)` FAILs (`--batch` exit 1)
+  on small/low-IR designs though extraction is correct. `iir`: 85/86 (the one fail is irdrop, max diff
+  0.7484); `DMA_Controller_DMA_fsm`: 86/86. Same cries-wolf class as #19 — a verifier that false-reds
+  correct output erodes the honesty gate and, via `--batch`, *masks* real regressions in the same corpus.
+- **Root cause — the VERIFIER, not the extractor.** `extract_irdrop.tcl:208` gates the label on a
+  PDN-noise floor: `has_irdrop = (P95_mV >= 0.05)`, forcing `label = 0` below it (:220-224) — sub-0.05mV IR
+  is numerical noise, not signal. `iir` P95 = 0.044mV → `has_irdrop=false` on all 95 rows → all labels
+  legitimately 0. The verifier (v_gd:789-794) asserted `label == log1p(IR/P95)` for EVERY row, never
+  reading the `has_irdrop` column, so it expected `log1p(0.049/0.044)=0.748` where the extractor correctly
+  wrote 0. `DMA_fsm` P95 = 0.065mV (≥ floor) → passed, which is why it hid. The extractor, the graph
+  builder, AND `graph_manifest` label_health (`ir_drop.csv status:"ok"`, y2 zeros not NaN) all AGREE; only
+  the verifier disagreed → unambiguously a verifier bug. (Found by the Step-5 RTL→Graph verification pass.)
+- **Fix (2026-07-07):** extracted a pure helper `irdrop_label_ok(ir)` mirroring the extractor gate —
+  `label == log1p(IR/P95)` only where `has_irdrop` (or, for legacy CSVs lacking the column, `P95>=0.05`)
+  AND `P95>0`; `label == 0` below the floor. Now `iir` 86/86, `--batch` green. Helpers pinned by
+  `test_verify_graph_dataset_helpers.py` (below-floor-all-zero, above-floor-log1p, mixed, corrupted-active,
+  nonzero-below-floor, legacy-no-column). **Lesson:** a Y-label verifier MUST mirror the extractor's own
+  gating contract, not just its happy-path transform — else it false-reds exactly the designs where the
+  gate fires, and small/low-power designs (where it fires) are common.
+- **Doc gap noted (not a code bug):** the /r2g-debug "nangate45 direct-verify recipe" (export
+  `TECH_LEF`/`SC_LEF`/`R2G_LIB_FILES`/`R2G_PLATFORM` then run the verifier) is NOT implemented — the CLI
+  takes only `case_dir`/`--batch` and `resolve_platform_files` reads `case_dir/constraints/config.mk`,
+  ignoring those env vars. Real nangate45 dataset verification needs an ORFS-built dataset; today nangate45
+  coverage rests on the synthetic corner suite (`corner_synth.py:311` sets `R2G_PLATFORM=nangate45`).
+
 ### Corner-case verification infrastructure (2026-07-06)
 
 The bugs above (and the 2026-07-05 batch) live in code paths the REAL nangate45 designs

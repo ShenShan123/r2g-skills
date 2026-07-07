@@ -178,3 +178,63 @@ def test_lef_macro_sizes_parses_size_by(tmp_path):
     assert sizes["INV_X1"] == pytest.approx((0.5, 2.72))
     assert sizes["SRAM_8x4"] == pytest.approx((40.0, 60.5))
     assert vgd._lef_macro_sizes(["/nonexistent.lef"]) == {}
+
+
+# ---------------------------------------------------------------------------
+# irdrop_label_ok — mirror extract_irdrop.tcl's has_irdrop noise-floor gate.
+# Regression for the 2026-07-07 verifier false-fail: the check asserted
+# label==log1p(IR/P95) for EVERY row, red-flagging every low-IR design (iir
+# P95=0.044mV -> all labels legitimately 0). See failure-patterns.md.
+# ---------------------------------------------------------------------------
+import math  # noqa: E402
+
+
+def _ir_df(rows, with_flag=True):
+    import pandas as pd
+    cols = ["IR_Drop_mV", "P95_mV", "label"] + (["has_irdrop"] if with_flag else [])
+    return pd.DataFrame([r[: len(cols)] for r in rows], columns=cols)
+
+
+def test_irdrop_below_floor_all_zero_labels_pass():
+    # iir case: P95 < 0.05 -> has_irdrop false -> label 0 is CORRECT, must not fail.
+    df = _ir_df([[0.024, 0.044, 0.0, "false"], [0.049, 0.044, 0.0, "false"]])
+    ok, detail = vgd.irdrop_label_ok(df)
+    assert ok, detail
+    assert "active=0" in detail
+
+
+def test_irdrop_above_floor_log1p_labels_pass():
+    p95 = 0.065
+    df = _ir_df([[0.10, p95, math.log1p(0.10 / p95), "true"],
+                 [p95, p95, math.log1p(1.0), "true"]])
+    ok, detail = vgd.irdrop_label_ok(df)
+    assert ok, detail
+    assert "active=2" in detail
+
+
+def test_irdrop_mixed_active_and_floored_pass():
+    df = _ir_df([[0.10, 0.065, math.log1p(0.10 / 0.065), "true"],
+                 [0.02, 0.044, 0.0, "false"]])
+    ok, detail = vgd.irdrop_label_ok(df)
+    assert ok, detail
+
+
+def test_irdrop_corrupted_active_label_fails():
+    df = _ir_df([[0.10, 0.065, 0.999, "true"]])  # wrong log1p value
+    ok, _ = vgd.irdrop_label_ok(df)
+    assert not ok
+
+
+def test_irdrop_nonzero_label_below_floor_fails():
+    # has_irdrop false but label != 0 -> extractor contract violated -> must fail.
+    df = _ir_df([[0.02, 0.044, 0.5, "false"]])
+    ok, _ = vgd.irdrop_label_ok(df)
+    assert not ok
+
+
+def test_irdrop_legacy_csv_without_has_irdrop_derives_floor():
+    # No has_irdrop column: floor derived from P95>=0.05.
+    below = _ir_df([[0.02, 0.044, 0.0]], with_flag=False)
+    assert vgd.irdrop_label_ok(below)[0]
+    above_bad = _ir_df([[0.10, 0.10, 0.123]], with_flag=False)  # >=0.05 but wrong label
+    assert not vgd.irdrop_label_ok(above_bad)[0]

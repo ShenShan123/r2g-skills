@@ -434,6 +434,33 @@ def dense_gaussian_r4(util, gxn, gyn, sigma=1.0, truncate=4.0):
     return out
 
 
+def irdrop_label_ok(ir):
+    """Mirror extract_irdrop.tcl's noise-floor gate when verifying the irdrop label.
+
+    The extractor sets label = log1p(IR_Drop_mV / P95_mV) ONLY where `has_irdrop` (i.e.
+    P95_mV >= 0.05, the PDN-noise floor) AND P95 > 0; BELOW the floor it forces label = 0
+    (extract_irdrop.tcl:208-224). A verifier that asserts log1p on EVERY row therefore
+    false-fails every low-IR design (e.g. iir P95=0.044mV -> all 95 labels legitimately 0
+    yet log1p(IR/P95) != 0). Gate the check on the same `has_irdrop` column (deriving the
+    floor from P95 for legacy CSVs that lack it). Returns (ok: bool, detail: str).
+    """
+    mv = pd.to_numeric(ir["IR_Drop_mV"], errors="coerce")
+    p95 = pd.to_numeric(ir["P95_mV"], errors="coerce")
+    lab = pd.to_numeric(ir["label"], errors="coerce")
+    if "has_irdrop" in ir.columns:
+        has_ir = ir["has_irdrop"].astype(str).str.strip().str.lower().eq("true")
+    else:                                     # legacy CSV: re-derive the noise floor
+        has_ir = p95 >= 0.05
+    active = has_ir & (p95 > 0)               # rows carrying a real log1p label
+    # active rows: label == log1p(IR/P95) (columns are %.6f-rounded vs unrounded compute)
+    d_active = (float((lab - (mv / p95).apply(math.log1p)).abs()[active].max())
+                if bool(active.any()) else 0.0)
+    # floored rows (below noise floor): label must be exactly 0
+    d_floor = float(lab[~active].abs().max()) if bool((~active).any()) else 0.0
+    ok = (d_active <= 1e-3) and (d_floor <= 1e-9)
+    return ok, f"active={int(active.sum())} active_maxdiff={d_active} floored_maxlabel={d_floor}"
+
+
 def extended_checks(case, design, feat, labs, views, b):
     """Wide-coverage X/Y/structure checks vs independently re-parsed raw files."""
     gate, net, iopin, pin, egp, epn, ein = views
@@ -772,8 +799,10 @@ def extended_checks(case, design, feat, labs, views, b):
               covered == seq_insts,
               f"{len(covered)}/{len(seq_insts)} registers in timing CSV")
 
-    # ---- Y irdrop: canonical header + physical mV range + label transform
-    # (label = log1p(IR_Drop_mV / P95_mV), unclamped — extract_irdrop.tcl) ----
+    # ---- Y irdrop: canonical header + physical mV range + label transform.
+    # label = log1p(IR_Drop_mV / P95_mV) ONLY above the has_irdrop noise floor
+    # (P95_mV >= 0.05); below it the extractor forces label = 0 — see irdrop_label_ok()
+    # and extract_irdrop.tcl:208-224. ----
     irp = os.path.join(labs, "ir_drop.csv")
     if os.path.isfile(irp):
         ir = pd.read_csv(irp)
@@ -786,12 +815,9 @@ def extended_checks(case, design, feat, labs, views, b):
             check("ext.irdrop IR_Drop_mV physical (0..20% of supply)",
                   mv.notna().any() and float(mv.min()) >= 0 and float(mv.max()) < cap_mv,
                   f"min={mv.min()} max={mv.max()} cap={cap_mv}")
-            p95 = pd.to_numeric(ir["P95_mV"], errors="coerce")
-            if float(p95.max()) > 0:
-                d_ir = (pd.to_numeric(ir["label"], errors="coerce")
-                        - (mv / p95).apply(math.log1p)).abs().max()
-                # columns are %.6f-rounded while label was computed unrounded
-                check("ext.irdrop label == log1p(IR/P95)", d_ir <= 1e-3, d_ir)
+            ok_ir, det_ir = irdrop_label_ok(ir)
+            check("ext.irdrop label == log1p(IR/P95) above noise floor, else 0",
+                  ok_ir, det_ir)
 
     # ---- structural: symmetry / self-loops / name uniqueness ----
     ei = b.edge_index
