@@ -733,10 +733,50 @@ The setup-time floor above only protects projects materialized by `mk_sky130_pro
   `fix_signoff --check both` + `extract_ppa` + re-ingest (latest-row-only; the 16:42Z empty-status
   rows stay as immutable history).
 - **Skill-level alarm:** any ledger-`clean` design whose latest `runs` row does not carry
-  `drc_status`/`lvs_status ∈ {clean, clean_beol, skipped}` is a fabricated clean — cross-check with:
-  `SELECT ... FROM runs r WHERE <latest per project> AND (drc_status NOT IN (...) OR lvs_status NOT
-  IN (...))` against the ledger's clean set. Also: `reports/fix_log.jsonl` showing a vacuous
-  `before=0 after=0 verdict=cleared` route entry as the ONLY signoff evidence for a clean design.
+  `drc_status`/`lvs_status ∈ {clean, clean_beol, skipped}` is a fabricated clean — but do **not**
+  hand-roll that cross-check (see next sub-section); run `tools/check_ledger_signoff_backed.py`.
+  Also: `reports/fix_log.jsonl` showing a vacuous `before=0 after=0 verdict=cleared` route entry as
+  the ONLY signoff evidence for a clean design.
+
+### Sub-variant: the bug-#7 DETECTOR itself lied — ledger-signoff gate mis-join (2026-07-07)
+
+- **Symptom:** the Step-4 "every ledger-clean is signoff-backed" cross-check screamed **197/593
+  `FABRICATED-CLEAN`** on the sky130hd round while `honesty.py`/`check_db_integrity` stayed green
+  (5/5). Nearly all 197 were **false positives** — e.g. `DMA_Controller_DMA_fsm` reported fabricated
+  though its sky130hd run is `clean/clean`.
+- **Root cause — the DETECTOR, not the loop.** The gate lived only as an inline heredoc in the
+  `/r2g-debug` command and had rotted untested. It joined
+  `SELECT drc_status,lvs_status FROM runs WHERE project_path LIKE '%'||<basename> ORDER BY
+  ingested_at DESC LIMIT 1` with **no `platform=` scope**. Three flaws stacked, all newly exposed by
+  the **2026-07-07 store union** (commit ad81aec) that made the ledger (campaign) and knowledge
+  (unioned main) two different stores:
+  1. design names are FULL of `_`, and in SQL `LIKE` an underscore is a **single-char wildcard** →
+     `%foo_bar` also matches `fooXbar`, so "latest" could be a DIFFERENT design;
+  2. no platform scope + `ORDER BY ingested_at DESC` → after the union a newer **OTHER-PLATFORM** row
+     wins (DMA_Controller grabbed its nangate45 `(None,None)` row instead of its sky130hd `clean`);
+  3. latest-ingested across a unioned store crosses rounds. Pre-union (ledger and knowledge one
+     store) none of this bit — the union is what surfaced it.
+- **It also MASKED the real gap.** The same fragility counted a stale prior-round
+  `<design>__sky130hd` **June** run (dir long wiped, still in knowledge) as "backed", hiding **~549
+  sky130 cleans** that signed off on disk (`reports/{drc,lvs}.json` clean, 07-02) but were **never
+  (re)ingested** into main — `ppa.json` purged so ingest's `run_id` key (`project_path:ppa.json-mtime`)
+  is gone, compounded by the db-union carrying only +136 runs. The detector was simultaneously
+  crying wolf AND blind to the true issue.
+- **Fix (2026-07-07):** extracted the gate into a **tested** tool
+  `tools/check_ledger_signoff_backed.py` — joins on the **EXACT `project_path` + `platform`** (never
+  `LIKE`, no `__platform` fallback since that is a prior round's physical run), and **on-disk tool
+  truth WINS** the honesty call. Three buckets: `backed` (fresh knowledge signoff); `not_ingested`
+  (WARN — on-disk `reports/{drc,lvs}.json` clean but knowledge stale/absent → run
+  `reconcile_sky130_campaign.py --apply`; tagged `stale_knowledge` when an intermediate non-clean run
+  was ingested then superseded on disk without a re-ingest, e.g. APB_Based_GPIO/Canakari); and
+  `fabricated` (ALARM, exit≠0 — NO clean evidence anywhere). Guarded by
+  `r2g-rtl2gds/tests/test_check_ledger_signoff_backed.py` (9 tests pin underscore-not-a-wildcard,
+  platform scope, stale-knowledge-vs-on-disk, and no-evidence fabrication). `/r2g-debug` Step 3+4 now
+  call the tool. **Honest verdict on this store: backed=42, not_ingested=551, fabricated=0** — the
+  entire 197 was detector error; the real work is draining the un-ingested-cleans completeness gap.
+- **Skill-level:** NEVER hand-roll the ledger↔knowledge join with `LIKE`/latest-ingested. A large
+  `not_ingested` count is a completeness gap to DRAIN (reconcile + re-ingest), **not** a lie — only
+  `fabricated` (non-zero exit) means the loop is lying.
 
 ### Re-running signoff after ORFS scratch dirs were cleaned
 

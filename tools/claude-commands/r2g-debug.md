@@ -384,12 +384,18 @@ several map to documented patterns — chase them down rather than papering over
   contract (route_relief: "flow completes") marked designs ledger-`clean` with **no `drc.json`/`lvs.json`
   on disk**; knowledge honestly recorded empty statuses, so `honesty.py` AND `check_db_integrity` stayed
   green — no current gate cross-checks the LEDGER's clean against the signoff contract. **Run this
-  cross-check every tick** (must return 0): for each ledger-clean non-`ab_arm` design, its latest
-  knowledge row must have `drc_status`/`lvs_status ∈ {clean, clean_beol, skipped}`. Tell-tale in
-  `reports/fix_log.jsonl`: a vacuous `before=0 after=0 verdict=cleared` route entry as the only signoff
-  evidence. Fixed: a cleared route abort now falls THROUGH to real signoff — a route-fixed design's
-  fix_log must show the route session AND fresh DRC/LVS sessions after it. See failure-patterns.md
-  "Fabricated clean via cleared route abort".
+  cross-check every tick** (`tools/check_ledger_signoff_backed.py --platform "$PLATFORM"`; exits
+  non-zero on any FABRICATED clean): for each ledger-clean non-`ab_arm` design it joins knowledge on
+  the EXACT `project_path` + `platform` and buckets it `backed` / `fabricated` (knowledge has a
+  <platform> run that is NOT clean, or NO on-disk evidence — ALARM) / `not_ingested` (no <platform>
+  run but the on-disk `reports/{drc,lvs}.json` ARE clean — honest-but-incomplete WARN; run
+  `reconcile_sky130_campaign.py --apply`). Tell-tale of a real fabrication in `reports/fix_log.jsonl`:
+  a vacuous `before=0 after=0 verdict=cleared` route entry as the only signoff evidence. Fixed: a
+  cleared route abort now falls THROUGH to real signoff — a route-fixed design's fix_log must show the
+  route session AND fresh DRC/LVS sessions after it. **Do NOT hand-roll the join** — the old inline
+  `LIKE '%basename'` version cried wolf on ~197/593 designs after the store union (underscore-as-wildcard
+  + no platform scope + latest-ingested crossing platforms) while masking ~500 real not-ingested cleans;
+  see failure-patterns.md "Fabricated clean via cleared route abort" + "Ledger-signoff gate mis-join".
 - **GHOST A/B arms — `*_arm_incomplete` escalations for arm dirs that don't exist** (2026-07-03, bug #8).
   `plan_trial` Tier 1 (`run_violations` exhibitors) selected subjects whose project dirs a prior wipe
   removed (immutable `runs` history is correct; picking non-existent dirs as PHYSICAL subjects is not) —
@@ -456,29 +462,25 @@ The loop is "closed" only when ALL of these hold — show the SQL/output for eac
   exits 0 — knowledge honesty 5/5 *and* the journal kept step (every A/B launch / promote / escalate
   move recorded in both books, `run_id` back-fill intact, no dangling cross-DB references). Explain any
   residual `WARN` — acceptable only once you've named why it is not a live writer bug.
-- **Every ledger-clean is signoff-backed (the bug-#7 gate the DBs can't see):** this cross-check
-  must report 0 — it catches a `clean` the LEDGER claims that knowledge can't back, which
-  `honesty.py`/`check_db_integrity` structurally miss (they audit the two DBs, not the ledger):
+- **Every ledger-clean is signoff-backed (the bug-#7 gate the DBs can't see):** `honesty.py` /
+  `check_db_integrity` audit the two DBs, never the campaign ledger, so a `clean` the LEDGER claims
+  that no signoff can back slips past both. This gate closes that blind spot — run it every tick and
+  it must have **`fabricated == 0`** (exits non-zero otherwise):
 
   ```bash
-  python3 - <<'EOF'
-  import json, sqlite3
-  last = {}
-  for line in open('design_cases/_batch/sky130hd_campaign.jsonl'):   # $LEDGER
-      d = json.loads(line)
-      if d.get('design'): last.setdefault(d['design'], {}).update(d)
-  con = sqlite3.connect('r2g-rtl2gds/knowledge/knowledge.sqlite')
-  ok = lambda s: (s or '') in ('clean', 'clean_beol', 'skipped')
-  bad = 0
-  for name, row in last.items():
-      if row.get('state') != 'clean' or row.get('kind') == 'ab_arm': continue
-      pp = row.get('project_path') or f"design_cases/{name}"
-      r = con.execute("SELECT drc_status, lvs_status FROM runs WHERE project_path LIKE ? "
-                      "ORDER BY ingested_at DESC LIMIT 1", (f"%{pp.split('/')[-1]}",)).fetchone()
-      if r and not (ok(r[0]) and ok(r[1])): bad += 1; print("FABRICATED-CLEAN:", name, r)
-  print("not-signoff-backed cleans:", bad)   # MUST be 0
-  EOF
+  python3 tools/check_ledger_signoff_backed.py --platform "$PLATFORM"   # --verbose to list not_ingested
   ```
+
+  It joins knowledge on the EXACT `project_path` + `platform` (NOT `LIKE '%basename'` — underscores
+  are SQL wildcards and latest-ingested crosses platforms after a store union; the old inline join
+  cried wolf on ~197/593 designs while masking ~500 real gaps — see failure-patterns.md
+  "Ledger-signoff gate mis-join"). It reports three buckets: **`backed`** (fresh knowledge signoff);
+  **`fabricated`** (knowledge has a non-clean <platform> run, or NO on-disk evidence — the loop is
+  lying → ALARM, fix before trusting the round); **`not_ingested`** (no <platform> run but the on-disk
+  `reports/{drc,lvs}.json` ARE clean → honest-but-incomplete: the run signed off but was never
+  (re)ingested, e.g. `ppa.json` purged so ingest's `run_id` key is gone, or an incomplete store union.
+  WARN — remediate with `tools/reconcile_sky130_campaign.py --apply <design>`, which regenerates
+  ppa/drc/lvs and re-ingests). A large `not_ingested` count is a completeness gap to drain, not a lie.
 - **Failure learning:** `fix_events`/`fix_trajectories` captured fix attempts — including
   `abandoned`/`failed` ones (negative learning), not just successes.
   A **loss** verdict is closure evidence too: a recipe arm doing WORSE than control (e.g.
