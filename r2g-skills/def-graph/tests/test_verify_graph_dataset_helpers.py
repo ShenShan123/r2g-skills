@@ -191,7 +191,10 @@ END DESIGN
 """)
     t = vgd.read_def_truth(str(d))
     assert t["dbu"] == 2000.0
-    assert t["comps"]["u1"] == {"master": "INV_X1", "x": 2000, "y": 4000, "orient": "N"}
+    # comps now also carry placement `status` (PLACED/FIXED) for the Group B
+    # placement_status_id re-derivation in verify_graph_dataset.feature_stat_checks.
+    assert t["comps"]["u1"] == {"master": "INV_X1", "status": "PLACED",
+                                "x": 2000, "y": 4000, "orient": "N"}
     assert t["pins"]["clk"]["dir"] == "INPUT" and t["pins"]["clk"]["x"] == 100
     assert t["nets"]["n1"] == [("u1", "ZN"), ("u2", "addr[0]")]
     # 8000 dbu vertical wire = 4 um

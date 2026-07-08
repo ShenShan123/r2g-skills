@@ -147,7 +147,7 @@ The shared per-platform tech layer every stage consumes:
 | `references/label-extraction.md` | Building the Y side (per-cell/per-net labels + stats). |
 | `references/feature-extraction.md` | Building the X side (per-node/per-edge/metadata CSVs + stats). |
 | `scripts/extract/techlib/` | Per-platform tech/LEF/liberty/DEF parsing internals. |
-| `tools/verify_graph_dataset.py` (repo-level) | Independently verifying a built dataset against raw DEF/LEF/liberty + OpenDB ground truth (`--batch` over many designs). Run it after any corpus regeneration. |
+| `tools/verify_graph_dataset.py` (repo-level) | Independently verifying a built dataset against raw DEF/LEF/liberty/SPEF + OpenDB ground truth (`--batch` over many designs). Three named check groups — `topology_checks` (all 5 views b–f), `feature_stat_checks` (column re-derivation + stats-gate honesty + vocab), `signoff_report_checks` (DRC/LVS gate, ppa geometry, timing↔SDC, C_total/equiv_res vs SPEF; opt-in `--signoff-recheck` re-runs PDNSim for the IR-drop label). Run it after any corpus regeneration; see `references/graph-dataset.md` "Comprehensive verification". |
 
 ## Project Layout (the dataset dirs this skill writes)
 

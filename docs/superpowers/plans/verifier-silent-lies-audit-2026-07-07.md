@@ -286,3 +286,62 @@ tracked here, not yet implemented.
   mismatched` + `y1 non-NaN count` FAILs (97/102); truncating `nodes_gate.csv` 292→242 → truncation-guard
   FAIL (86/106); simulated de-escape regression → RC floor 0% → FAIL, 100% → PASS.
 - Full def-graph suite: **312 passed, 14 skipped, 0 failed**.
+
+---
+
+## 2026-07-08 addendum — comprehensive three-dimension verification
+
+Extends this audit's "a check that cannot fail is a silent lie" philosophy from
+patching individual blind spots to **organizing the whole harness into three named
+check groups** (`topology_checks` / `feature_stat_checks` / `signoff_report_checks`
+in `verify_graph_dataset.py`, +750 LOC), closing the gaps where the historical
+checks covered only variant **b** or never cross-checked a sign-off artifact.
+
+**Topology (`top.*`) — all five views b–f, not just b:** symmetry, self-loop ban,
+per-block `node_name` uniqueness on c/d/e/f; **block-positional node order** (the
+guard that labels align by position, pin block included); the **`[fwd0,rev0,…]`
+interleaving invariant** on c/d/e/f directed edges AND `rc_edge_*` for every view
+(audit bug #5); **d/e edge_attr content** (completing c/f). A stale pre-RC dataset
+(`edge_y` width 5, no `rc_edge_*`) now FAILs loudly instead of IndexErroring — the
+guarded `edge_y width==6` / `rc_edge_* present` checks.
+
+**Feature statistics (`feat.*`):** re-derives `placement_status_id` (DEF) and
+`fanout` exactly; bounds `num_layer` / `nearest_tap_distance_um` (quirky worker
+semantics pinned exactly on the synthetic fixture instead, to avoid a false-fail);
+categorical vocab/enum coverage on the tensors; and a **stats-gate honesty** check
+that independently recomputes every `features_stats.json` / `labels_stats.json`
+distribution from the CURRENT CSVs (same `_percentile` as the gate) — catching a
+stale or hand-edited stats JSON, a lie no prior check saw.
+
+**Labels ↔ sign-off reports (`signoff.*`):** DRC/LVS clean-provenance gate; `ppa.json`
+geometry (`io_count` exact, `macro_count`==DEF BLOCK instances, `sequential_count`
+==liberty-`is_seq` — the fill-inflated `instance_count` deliberately NOT asserted, a
+false-fail trap avoided by grounding every check in real counts first); the timing
+label↔`6_final.sdc` clock-period transform (`Path_Delay==max(0,period−slack)`,
+`label==log1p`); `C_total`∈[Σg+Σc, Σg+2Σc] and `equiv_res`≤ΣR vs an independent SPEF
+re-parse. Opt-in **`--signoff-recheck`** re-runs OpenROAD PDNSim on `6_final.odb` to
+re-derive the IR-drop label (the one label whose tool report is deleted on success);
+honest SKIP (never a vacuous pass) when `OPENROAD_EXE` is absent — the new module-level
+`skip()` records skips separately from passed/failed.
+
+**Deferred BUG-6** (netlist reverse-edge / phantom-edge check) remains open.
+
+**Regression tests (fail on pre-fix code):** `tests/test_verify_comprehensive.py`
+— 19 tests, every group-level check exercised CLEAN and CORRUPTED (each proven to
+FAIL on a deliberate corruption), driving the REAL graph builder + REAL verifier on
+a synthetic RC-complete mini-design. Hermetic (stubs `resolve_platform_files`, no CWD
+pollution). `read_def_truth` now also captures placement `status`;
+`test_verify_graph_dataset_helpers.py` updated for the new key.
+
+**Validation evidence:**
+- `iir` (sky130, RC): **167/167** (168/168 with `--signoff-recheck` — the PDNSim
+  re-run's re-derived IR drop matched the CSV within 5%). `DMA_Controller_DMA_fsm`:
+  **164/164** after regeneration (was a stale pre-RC dataset the new topology guards
+  flagged — regenerated labels→features→graphs to the width-6 + RC schema).
+- E2E injections (negative controls) on real `iir` tensors/reports: swapped node
+  order → `top.d node_name block-positional order` FAIL; shuffled edge_attr → `top.c
+  interleaved` FAIL; injected self-loop → `top.f` symmetry+self-loop+interleave FAIL;
+  tampered `features_stats.json` mean / stale row count → stats-honesty FAIL; DRC
+  status `violations` → provenance FAIL; SDC period drift → timing-transform FAIL;
+  `equiv_res`×1000 (ohm↔kΩ unit bug) → SPEF-bound FAIL.
+- Full def-graph suite: **331 passed, 14 skipped, 0 failed**.

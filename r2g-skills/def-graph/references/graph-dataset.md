@@ -164,6 +164,54 @@ regeneration. Baselines: 54/54 × 9 sky130hd designs (pre-extension,
 incl. a fakeram45 macro design (post-extension, same day). Helper parsers are pytest-pinned in
 `tests/test_verify_graph_dataset_helpers.py`.
 
+### Comprehensive verification — three dimensions (2026-07-08)
+
+The 2026-07-08 extension organises the harness into three named check groups
+(`topology_checks` / `feature_stat_checks` / `signoff_report_checks` in
+`verify_graph_dataset.py`), closing the gaps where the historical checks covered
+only variant **b** or never cross-checked a sign-off artifact. Pytest-pinned with
+clean-pass **and** negative-control tests in `tests/test_verify_comprehensive.py`
+(each check is proven to FAIL on a deliberate corruption — a check that cannot
+fail is the silent lie the harness exists to prevent). Baselines: **iir 167/167,
+DMA_Controller_DMA_fsm 164/164** (sky130hd, RC-complete).
+
+- **`top.*` — TOPOLOGY of ALL five views b–f** (was b-only): symmetry +
+  self-loop ban + per-block `node_name` uniqueness on c/d/e/f too; the
+  **block-positional node order** (concat of the per-block mergesorted name
+  lists in the view's block order, **pin block included**) — the single guard
+  that labels align by position; the **`[fwd0,rev0,…]` interleaving invariant**
+  (cols 2k/2k+1 are index-reverses and share attr/type/y rows) on the directed
+  edges of c/d/e/f **and** on `rc_edge_*` for every view (audit bug #5 guard);
+  and **d/e edge_attr content** (d net-clique→NET feats, d gate_pin→zeros, e
+  gate-clique→GATE feats, e net→NET feats), completing the c/f coverage. A stale
+  pre-RC dataset (`edge_y` width 5, no `rc_edge_*`) FAILs loudly here — never an
+  IndexError (the 2026-07-08 DMA stale-dataset incident).
+- **`feat.*` — FEATURE STATISTICS**: re-derives columns nothing checked before —
+  `placement_status_id` (== DEF PLACED/FIXED) and `fanout` (== max(0,pin_count−1))
+  exactly, `num_layer` and `nearest_tap_distance_um` **bounded** (their quirky
+  worker semantics are pinned exactly on the synthetic fixture instead, to avoid
+  a false-fail); categorical **vocab/enum coverage** on the tensors (net nodes
+  all `net_type_id==0`; orientation∈[0,7], placement∈{0,1}, pin_dir∈[0,3],
+  pin_type∈[0,14], `cell_type_id≥0`); and a **stats-gate honesty** check that
+  independently recomputes every `features_stats.json` / `labels_stats.json`
+  distribution (same `_percentile` as the gate) from the CURRENT CSVs and diffs
+  — catching a stale or hand-edited stats JSON, a lie no prior check saw.
+- **`signoff.*` — LABELS ↔ SIGN-OFF REPORTS**: a **DRC/LVS clean-provenance
+  gate** (`reports/{drc,lvs}.json` status ∈ {clean, clean_beol} — a dataset built
+  on a dirty run is invalid); **geometry vs `ppa.json`** (`io_count` exact,
+  `macro_count` == DEF BLOCK-class instances, `sequential_count` == liberty-`is_seq`
+  instances — the fill-inflated `instance_count` is deliberately NOT asserted);
+  the **timing label ↔ SDC clock-period transform** (`Path_Delay ==
+  max(0, period − Cell_Slack)` from `6_final.sdc`, `label == log1p(Path_Delay)`,
+  off-path all-zero) tying the target to the sign-off constraint file; and
+  **`C_total` ∈ [Σg+Σc, Σg+2Σc]** + **`equiv_res` ≤ ΣR / scale-sane** vs an
+  independent SPEF re-parse (the equiv_res bound catches the classic ohm↔kΩ
+  unit bug). Timing `report_checks` goes to `/dev/null` and PDNSim's raw dump is
+  deleted on success, so those two labels leave no report to diff — the opt-in
+  **`--signoff-recheck`** re-runs OpenROAD `analyze_power_grid` on `6_final.odb`
+  to re-derive the IR-drop label per cell (needs `OPENROAD_EXE`; honestly SKIPs,
+  never passes vacuously, when absent).
+
 **Complement — the synthetic corner-case suite (2026-07-06 nangate45 round 2).**
 `verify_graph_dataset.py` cross-checks a REAL built dataset against the raw
 liberty/LEF/DEF, so it only sees inputs the real designs *have* — it stays green

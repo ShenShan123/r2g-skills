@@ -278,11 +278,16 @@ scaling — so a worker-local patch fixes one consumer and silently leaves the o
   `$R2G_GRAPH_PYTHON`; `--batch <root>` exits non-zero on any failure). It re-derives every structural +
   label expectation from the CSVs with separate pandas code (not `graph_lib`), independently re-parses the
   SPEF + raw liberty/LEF/DEF, and recomputes congestion with an independent radius-4 gaussian. **Silent-value
-  defects are invisible in the manifest's row counts** and have shipped repeatedly. Its blind spot — code
-  paths the real designs never exercise — is covered by the synthetic corner-case suites
-  (`tests/fixtures/corner_synth.py` + `test_corner_case_{pipeline,units}.py`) that drive the real workers
-  across all five views. (Fixture gotcha: a fixture liberty MUST be one-attribute-per-line — the parser uses
-  anchored `re.match`, so a crammed pin drops direction/clock/cap and the test passes vacuously.)
+  defects are invisible in the manifest's row counts** and have shipped repeatedly. Its checks span three
+  dimensions — **topology** (all five views b–f), **feature statistics** (column re-derivation + stats-gate
+  honesty + vocab coverage), and **labels ↔ sign-off reports** (DRC/LVS gate, `ppa.json` geometry,
+  timing↔SDC, RC/`C_total` vs SPEF; opt-in `--signoff-recheck` re-runs PDNSim for the IR-drop label);
+  detail + the group functions are in `def-graph/references/graph-dataset.md` ("Comprehensive verification").
+  Its blind spot — code paths the real designs never exercise — is covered by the synthetic corner-case
+  suites (`tests/fixtures/corner_synth.py` + `test_corner_case_{pipeline,units}.py`) plus the group-level
+  clean+negative controls in `test_verify_comprehensive.py` (every new check proven to FAIL on a deliberate
+  corruption). (Fixture gotcha: a fixture liberty MUST be one-attribute-per-line — the parser uses anchored
+  `re.match`, so a crammed pin drops direction/clock/cap and the test passes vacuously.)
 - **Regenerate stale corpora after any extractor fix** — features AND labels AND graphs. The graph stage's
   staleness marker protects a single design, not a whole corpus you edited the code under (RC labels in
   particular need a forced label rebuild to backfill).

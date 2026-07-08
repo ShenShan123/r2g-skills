@@ -20,6 +20,47 @@ skipped as library-pre-verified).
 
 ---
 
+## 2026-07-08 — Comprehensive graph-dataset verification (topology · feature-stats · sign-off reports)
+*(session 2026-07-08; `tools/verify_graph_dataset.py` +750 LOC, new
+`r2g-skills/def-graph/tests/test_verify_comprehensive.py`; addendum in
+`docs/superpowers/plans/verifier-silent-lies-audit-2026-07-07.md`)*
+
+Reorganized the def-graph ground-truth harness into **three named check groups** spanning the whole
+dataset, closing the gaps where the historical checks covered only variant **b** or never cross-checked a
+sign-off artifact. Every new check is pytest-pinned with clean-pass AND negative-control tests (each proven
+to FAIL on a deliberate corruption — a check that cannot fail is the silent lie the harness exists to
+prevent). Baselines: **iir 167/167, DMA_Controller_DMA_fsm 164/164** (sky130hd, RC-complete); full
+def-graph suite **331 passed / 14 skipped**.
+
+- **`topology_checks` — all five views b–f (was b-only).** Symmetry / self-loop ban / per-block
+  `node_name` uniqueness on c/d/e/f; **block-positional node order** (the guard that labels align by
+  position, pin block included); the **`[fwd0,rev0,…]` interleaving invariant** on c/d/e/f directed edges
+  AND `rc_edge_*` for every view (audit bug #5); **d/e `edge_attr` content** (completing the c/f coverage).
+  A stale pre-RC dataset (`edge_y` width 5, no `rc_edge_*`) now FAILs loudly instead of IndexErroring.
+- **`feature_stat_checks`.** Re-derives `placement_status_id` / `fanout` exactly; bounds `num_layer` /
+  `nearest_tap_distance_um` (their quirky worker semantics pinned exactly on the synthetic fixture instead,
+  to avoid a false-fail); categorical vocab/enum coverage on the tensors; and a **stats-gate honesty** check
+  that independently recomputes every `features_stats.json` / `labels_stats.json` distribution (same
+  `_percentile` as the gate) from the CURRENT CSVs — catching a stale or hand-edited stats JSON, a lie no
+  prior check saw.
+- **`signoff_report_checks` — labels ↔ surviving sign-off reports.** DRC/LVS clean-provenance gate;
+  `ppa.json` geometry (`io_count` exact, `macro_count`==DEF BLOCK instances, `sequential_count`==liberty-
+  `is_seq`; the fill-inflated `instance_count` deliberately NOT asserted — a false-fail trap avoided by
+  grounding every check in real counts first); the timing label↔`6_final.sdc` clock-period transform
+  (`Path_Delay==max(0,period−slack)`, `label==log1p`); `C_total`∈[Σg+Σc, Σg+2Σc] and `equiv_res`≤ΣR vs an
+  independent SPEF re-parse (the equiv_res bound catches the classic ohm↔kΩ unit bug). Timing `report_checks`
+  goes to `/dev/null` and PDNSim's raw dump is deleted on success, so those two labels leave no report to
+  diff — the opt-in **`--signoff-recheck`** re-runs OpenROAD `analyze_power_grid` on `6_final.odb` to
+  re-derive the IR-drop label per cell (needs `OPENROAD_EXE`; honestly SKIPs via a new module-level `skip()`,
+  never a vacuous pass, when absent).
+- **Regression finding:** `DMA_Controller_DMA_fsm` was a **stale pre-RC dataset** (`y`/`edge_y` width 5, no
+  `rc_edge_*`) the new topology guards flagged — regenerated labels→features→graphs to the width-6 + RC
+  schema. `read_def_truth` now also captures placement `status` (helper test updated).
+- **Operator action:** run `verify_graph_dataset.py --batch design_cases` after any corpus regeneration; add
+  `--signoff-recheck` (with `OPENROAD_EXE`) for the independent IR-drop re-derivation. A `SKIP` is never a pass.
+
+---
+
 ## 2026-07-07 — Skill split into `r2g-skills` (`signoff-loop` + `def-graph`) + RC parasitic labels merged
 *(branch `feat/skill-split-r2g-skills`; commits `48e1e55` split, `f8582bd` prune, `ed519e7` condense,
 `46e9283` merge of `feat/rc-annotation` `5f1ca53`; plan

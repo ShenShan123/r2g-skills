@@ -74,6 +74,8 @@ METADATA_SCHEMA = ["num_cells", "num_nets", "num_ios", "avg_fanout", "die_width"
                    "V_nom", "freq_Hz"]
 
 RESULTS = []
+SKIPPED = []
+SIGNOFF_RECHECK = False   # set by --signoff-recheck: enable OpenROAD PDNSim re-run
 
 
 def check(name, ok, detail=""):
@@ -81,6 +83,14 @@ def check(name, ok, detail=""):
     tag = "PASS" if ok else "FAIL"
     print(f"  [{tag}] {name}" + (f" — {detail}" if (detail and not ok) else ""))
     return ok
+
+
+def skip(name, reason=""):
+    """Record an honestly-skipped check (an unavailable dependency), NOT a pass.
+    Never counted toward passed/failed — a skip that masqueraded as a pass would
+    be the very silent lie this verifier exists to prevent."""
+    SKIPPED.append({"check": name, "reason": str(reason)[:300]})
+    print(f"  [SKIP] {name}" + (f" — {reason}" if reason else ""))
 
 
 def c2(k):
@@ -313,11 +323,12 @@ def read_def_truth(def_path):
             elif section == "comps" and s.startswith("-"):
                 t = s.split()
                 if len(t) >= 3:
-                    m = re.search(r"\+\s+(?:PLACED|FIXED)\s+\(\s*(-?\d+)\s+(-?\d+)\s*\)\s+(\w+)", s)
+                    m = re.search(r"\+\s+(PLACED|FIXED)\s+\(\s*(-?\d+)\s+(-?\d+)\s*\)\s+(\w+)", s)
                     comps[t[1]] = {"master": t[2],
-                                   "x": int(m.group(1)) if m else None,
-                                   "y": int(m.group(2)) if m else None,
-                                   "orient": m.group(3) if m else None}
+                                   "status": m.group(1) if m else None,
+                                   "x": int(m.group(2)) if m else None,
+                                   "y": int(m.group(3)) if m else None,
+                                   "orient": m.group(4) if m else None}
             elif section == "pins":
                 if s.startswith("-"):
                     t = s.split()
@@ -1120,8 +1131,723 @@ def verify_y(vname, data, blocks, labels, sample_n=10):
                       f"{bad}/{len(idx)} mismatched")
 
 
+# ===========================================================================
+# COMPREHENSIVE VERIFICATION — GROUP A: TOPOLOGY (all five views b-f)
+# ---------------------------------------------------------------------------
+# The historical verifier ran symmetry / self-loop / name-uniqueness / block
+# ordering on variant b ONLY; c/d/e/f got node+edge counts (folding) but no
+# structural verification. Node layout is "block-positional" (a fixed type-block
+# order per view, mergesort within each block); every y-slice + name lookup
+# assumes that exact order, so a wrong sort key silently misaligns labels with
+# NO error. build_directed_edges / build_parasitic_edges lay directed edges out
+# INTERLEAVED [fwd0,rev0,fwd1,rev1,...] with repeat_interleave'd attrs — audit
+# bug #5 concatenated [all-fwd|all-rev] while still pairwise-repeating attrs,
+# misaligning attr/type/y with edge_index for every edge past the first. These
+# checks make that guard cover every view. See failure-patterns.md #19 and
+# references/graph-dataset.md ("block-positional", "interleaved").
+# ===========================================================================
+
+# Per-view block order (node-type id per block, in positional order). Must match
+# build_graphs.py: b gate/net/iopin/pin; c gate/net/iopin; d gate/iopin/pin;
+# e iopin/pin; f gate/iopin. Type ids: 0 gate, 1 net, 2 iopin, 3 pin.
+_VIEW_BLOCK_ORDER = {
+    "b": [("gate", 0), ("net", 1), ("iopin", 2), ("pin", 3)],
+    "c": [("gate", 0), ("net", 1), ("iopin", 2)],
+    "d": [("gate", 0), ("iopin", 2), ("pin", 3)],
+    "e": [("iopin", 2), ("pin", 3)],
+    "f": [("gate", 0), ("iopin", 2)],
+}
+
+
+def _edge_symmetry_stats(edge_index):
+    """(num directed pairs whose reverse count differs, num self-loops)."""
+    pairs = {}
+    ei = edge_index
+    for k in range(ei.shape[1]):
+        u, v = int(ei[0, k]), int(ei[1, k])
+        pairs[(u, v)] = pairs.get((u, v), 0) + 1
+    asym = sum(1 for (u, v), n in pairs.items() if pairs.get((v, u), 0) != n)
+    loops = sum(n for (u, v), n in pairs.items() if u == v)
+    return asym, loops
+
+
+def _reverse_pairs_bad(ei):
+    """Count base edges k where cols 2k,2k+1 are NOT (s,t),(t,s) reverses."""
+    bad = 0
+    for k in range(0, ei.shape[1] - 1, 2):
+        s0, t0 = int(ei[0, k]), int(ei[1, k])
+        s1, t1 = int(ei[0, k + 1]), int(ei[1, k + 1])
+        if not (s0 == t1 and t0 == s1):
+            bad += 1
+    return bad
+
+
+def _paired_rows_bad(t):
+    """Count base rows k where rows 2k,2k+1 differ (NaN==NaN treated equal)."""
+    a = t if t.dim() > 1 else t.reshape(-1, 1)
+    bad = 0
+    for k in range(0, a.shape[0] - 1, 2):
+        r0, r1 = a[k].float(), a[k + 1].float()
+        eq = torch.logical_or(r0 == r1,
+                              torch.logical_and(torch.isnan(r0), torch.isnan(r1)))
+        if not bool(eq.all()):
+            bad += 1
+    return bad
+
+
+def _sample_edge_attr(data, edge_type_id, entity_of, feat_index, width, cap=400):
+    """For sampled edges of `edge_type_id` whose two endpoints resolve (via
+    `entity_of`: node_name -> entity key) to the SAME entity, compare the first
+    `width` edge_attr columns to that entity's feature row (`feat_index.loc`).
+    Returns (checked, bad)."""
+    names = list(data.node_name)
+    et = data.edge_type
+    ei = data.edge_index
+    E = ei.shape[1]
+    step = max(1, E // (cap * 4)) if E else 1
+    checked = bad = 0
+    for k in range(0, E, step):
+        if checked >= cap:
+            break
+        if int(et[k]) != edge_type_id:
+            continue
+        u, v = int(ei[0, k]), int(ei[1, k])
+        eu, ev = entity_of.get(names[u]), entity_of.get(names[v])
+        if eu is None or eu != ev or eu not in feat_index.index:
+            continue
+        exp = feat_index.loc[eu].to_numpy(dtype=float)
+        got = data.edge_attr[k, :width].numpy()
+        checked += 1
+        if any(abs(a - b) > max(1e-3, 1e-3 * abs(a)) for a, b in zip(exp, got)):
+            bad += 1
+    return checked, bad
+
+
+def topology_checks(views, tensors):
+    """GROUP A — structural correctness of all five views b-f."""
+    gate, net, iopin, pin, egp, epn, ein = views
+    name_lists = {
+        "gate": gate["inst_name"].tolist(),
+        "net": net["net_name"].tolist(),
+        "iopin": iopin["iopin_name"].tolist(),
+        "pin": [f"{i}/{p}" for i, p in zip(pin["inst_name"], pin["pin_name"])],
+    }
+
+    # --- symmetry, self-loops, block-positional ordering, uniqueness (all views)
+    for v, data in tensors.items():
+        asym, loops = _edge_symmetry_stats(data.edge_index)
+        check(f"top.{v} edges symmetric (undirected both ways)", asym == 0, f"{asym} asym")
+        check(f"top.{v} no self-loops", loops == 0, f"{loops} loops")
+
+        got_names = list(data.node_name)
+        exp_names = []
+        for tname, _ in _VIEW_BLOCK_ORDER[v]:
+            exp_names.extend(name_lists[tname])
+        # The single strongest guard that labels align by position: the emitted
+        # node_name vector must equal the concatenation of the per-block sorted
+        # name lists in the view's block order (pin block included).
+        first_diff = next((j for j in range(min(len(got_names), len(exp_names)))
+                           if got_names[j] != exp_names[j]), None)
+        check(f"top.{v} node_name block-positional order",
+              got_names == exp_names,
+              f"len got {len(got_names)} exp {len(exp_names)} first_diff@{first_diff}")
+
+        nt = data.x[:, 0].long()
+        dup = []
+        for tname, tid in _VIEW_BLOCK_ORDER[v]:
+            blk = [got_names[i] for i in range(len(got_names)) if int(nt[i]) == tid]
+            if len(set(blk)) != len(blk):
+                dup.append(tname)
+        check(f"top.{v} node_name unique within each type block", not dup, f"dups {dup}")
+
+    # --- fwd/rev interleaving invariant (c/d/e/f directed-edge builders) -------
+    for v in ("c", "d", "e", "f"):
+        data = tensors[v]
+        ei = data.edge_index
+        E = ei.shape[1]
+        even = (E % 2 == 0)
+        rev_bad = _reverse_pairs_bad(ei) if even else -1
+        attr_bad = 0
+        for t in (data.edge_attr, data.edge_type, data.edge_y):
+            attr_bad += _paired_rows_bad(t) if even else 1
+        check(f"top.{v} edges interleaved [fwd0,rev0,...] (index+attr+type+y aligned)",
+              even and rev_bad == 0 and attr_bad == 0,
+              f"even={even} rev_bad={rev_bad} paired_bad={attr_bad}")
+        check(f"top.{v} edge_y0 == edge_type",
+              bool((data.edge_y[:, 0] == data.edge_type.float()).all()))
+        # Current schema is edge_y[E,6] with y5 (ground cap) never an edge label.
+        # A stale pre-RC dataset (edge_y width 5, no rc tensors) FAILS here loudly
+        # instead of IndexError-ing; the `and` short-circuits the [:,5] access.
+        check(f"top.{v} edge_y width==6 & edge_y5 all-NaN (ground cap never an edge label)",
+              data.edge_y.shape[1] == 6 and bool(torch.isnan(data.edge_y[:, 5]).all()),
+              f"edge_y width={data.edge_y.shape[1]} (want 6 — stale dataset if 5)")
+
+    # --- rc_edge_* interleaving (build_parasitic_edges, all views) -------------
+    for v, data in tensors.items():
+        if not hasattr(data, "rc_edge_index"):
+            check(f"top.{v} rc_edge_* present (current schema)", False,
+                  "missing rc_edge_* tensors — stale pre-RC dataset, regenerate")
+            continue
+        ei = data.rc_edge_index
+        E = ei.shape[1]
+        even = (E % 2 == 0)
+        rev_bad = _reverse_pairs_bad(ei) if even else -1
+        pair_bad = 0
+        for t in (data.rc_edge_type, data.rc_edge_y):
+            pair_bad += _paired_rows_bad(t) if even else 1
+        check(f"top.{v} rc_edges interleaved [fwd0,rev0,...]",
+              even and rev_bad == 0 and pair_bad == 0,
+              f"even={even} rev_bad={rev_bad} paired_bad={pair_bad}")
+
+    # --- edge_attr content for d and e (c and f already covered above) --------
+    # Resolvers: pin node "inst/pin" and iopin node -> their (single) signal net;
+    # pin node -> its owning gate instance.
+    node_net = {}
+    for i, p, n in epn[["inst_name", "pin_name", "net_name"]].drop_duplicates().itertuples(index=False):
+        node_net[f"{i}/{p}"] = n
+    for io, n in ein[["iopin_name", "net_name"]].drop_duplicates().itertuples(index=False):
+        node_net[io] = n
+    pin_node_gate = {f"{i}/{p}": i for i, p in zip(pin["inst_name"], pin["pin_name"])}
+    net_feat = net.set_index("net_name")[NET_SCHEMA]
+    gate_feat = gate.set_index("inst_name")[GATE_SCHEMA]
+
+    # d: type 1 = net-clique edges carry NET features; type 0 = gate_pin = zeros.
+    d = tensors["d"]
+    chk, bad = _sample_edge_attr(d, 1, node_net, net_feat, len(NET_SCHEMA))
+    check("top.d net-edge edge_attr == connecting net features", bad == 0 and chk > 0,
+          f"{bad}/{chk} mismatched")
+    z_chk = z_bad = 0
+    for k in range(0, d.edge_index.shape[1], max(1, d.edge_index.shape[1] // 400 or 1)):
+        if int(d.edge_type[k]) != 0:
+            continue
+        z_chk += 1
+        if float(d.edge_attr[k].abs().max()) > 1e-9:
+            z_bad += 1
+    check("top.d gate_pin-edge edge_attr == zeros", z_bad == 0 and z_chk > 0,
+          f"{z_bad}/{z_chk} nonzero")
+
+    # e: type 0 = gate-clique edges carry GATE features; type 1 = net = NET feats.
+    e = tensors["e"]
+    chk, bad = _sample_edge_attr(e, 0, pin_node_gate, gate_feat, len(GATE_SCHEMA))
+    check("top.e gate-edge edge_attr == owning gate features", bad == 0 and chk > 0,
+          f"{bad}/{chk} mismatched")
+    chk, bad = _sample_edge_attr(e, 1, node_net, net_feat, len(NET_SCHEMA))
+    check("top.e net-edge edge_attr == connecting net features", bad == 0 and chk > 0,
+          f"{bad}/{chk} mismatched")
+
+
+# ===========================================================================
+# COMPREHENSIVE VERIFICATION — GROUP B: FEATURE STATISTICS
+# ---------------------------------------------------------------------------
+# (1) Re-derive feature columns the historical verifier never checked
+#     (placement_status_id, fanout exactly; num_layer + nearest_tap bounded —
+#     their exact values, whose worker semantics are quirky, are pinned on the
+#     synthetic corner-case fixture instead of risking a false-fail here).
+# (2) Independently recompute every per-column distribution summary and confirm
+#     features_stats.json / labels_stats.json actually reflect the CURRENT CSVs.
+#     Those JSONs are shipped artifacts consumers trust; a stale or hand-edited
+#     one is a silent lie that no existing check catches.
+# (3) Categorical *_type_id vocabulary coverage + enum-range on the tensors:
+#     net nodes are signal-only, no leaked -1 / out-of-vocab ids.
+# ===========================================================================
+
+_FEATURE_SUMMARY_COLS = {   # mirrors compute_feature_stats.SUMMARY_COLS
+    "nodes_gate": ["cell_area", "cell_power"],
+    "nodes_net": ["fanout", "pin_count", "num_layer", "hpwl_um"],
+    "nodes_iopin": ["nearest_tap_distance_um"],
+    "nodes_pin": ["sum_pin_cap_fF"],
+}
+_LABEL_SUMMARY = {   # csv -> (label_col, raw_metric_col == raw block key, stats key)
+    "cell_congestion.csv": ("label", "cell_congestion", "congestion"),
+    "wirelength.csv": ("label", "WireLength_um", "wirelength"),
+    "timing_features.csv": ("label", "Path_Delay_ns", "timing"),
+    "ir_drop.csv": ("label", "IR_Drop_mV", "irdrop"),
+    "net_ground_cap.csv": ("label", "ground_cap_fF", "ground_cap"),
+    "coupling_cap.csv": ("label", "coupling_cap_fF", "coupling_cap"),
+    "equiv_res.csv": ("label", "equiv_res_ohm", "equiv_res"),
+}
+
+
+def _find_final_def(case):
+    runs = sorted((r for r in os.listdir(case + "/backend") if r.startswith("RUN_")),
+                  reverse=True) if os.path.isdir(case + "/backend") else []
+    for r in runs:
+        for sub in ("final", "results"):
+            p = f"{case}/backend/{r}/{sub}/6_final.def"
+            if os.path.isfile(p):
+                return p
+    return None
+
+
+def _pctile(sorted_vals, q):
+    """Replicates compute_{label,feature}_stats._percentile (numpy 'linear')."""
+    n = len(sorted_vals)
+    if n == 0:
+        return None
+    if n == 1:
+        return sorted_vals[0]
+    idx = q * (n - 1)
+    lo, hi = math.floor(idx), math.ceil(idx)
+    if lo == hi:
+        return sorted_vals[lo]
+    return sorted_vals[lo] * (hi - idx) + sorted_vals[hi] * (idx - lo)
+
+
+def _numsummary(values):
+    import statistics
+    vals = sorted(v for v in values if v is not None and v == v)
+    if not vals:
+        return None
+    return {"min": vals[0], "max": vals[-1], "mean": statistics.fmean(vals),
+            "p50": _pctile(vals, .50), "p90": _pctile(vals, .90),
+            "p95": _pctile(vals, .95), "p99": _pctile(vals, .99)}
+
+
+def _summ_close(got, exp, rel=1e-6, absol=1e-9):
+    if got is None and exp is None:
+        return True
+    if got is None or exp is None:
+        return False
+    for k in ("min", "max", "mean", "p50", "p90", "p95", "p99"):
+        a, b = got.get(k), exp.get(k)
+        if a is None and b is None:
+            continue
+        if a is None or b is None or abs(a - b) > max(absol, rel * abs(b)):
+            return False
+    return True
+
+
+def _read_design_csv(dirpath, fname, design):
+    p = os.path.join(dirpath, fname)
+    if not os.path.isfile(p):
+        return None
+    df = pd.read_csv(p)
+    for col in ("graph_id", "Design"):
+        if col in df.columns:
+            df = df[df[col].astype(str) == str(design)]
+    return df.reset_index(drop=True)
+
+
+def feature_stat_checks(case, design, feat, labs, tensors):
+    """GROUP B — feature column re-derivation, distribution honesty, vocab."""
+    x = tensors["b"].x
+    nt = x[:, 0].long()
+
+    def col(type_id, xcol):
+        return x[nt == type_id, xcol]
+
+    # --- categorical enum-range + vocab coverage (variant b carries all types) -
+    net_tt = col(1, 2)
+    check("feat.net nodes all signal (net_type_id==0)",
+          (net_tt.numel() == 0) or bool((net_tt == 0).all()),
+          f"nonzero={int((net_tt != 0).sum())}")
+    orient = col(0, 7)
+    check("feat.gate orientation_id in [0,7]",
+          (orient.numel() == 0) or bool(((orient >= 0) & (orient <= 7)).all()),
+          f"oob={int(((orient < 0) | (orient > 7)).sum())}")
+    status = col(0, 8)
+    check("feat.gate placement_status_id in {0,1} (final DEF placed/fixed)",
+          (status.numel() == 0) or bool(((status == 0) | (status == 1)).all()),
+          f"other={int(((status != 0) & (status != 1)).sum())}")
+    ctid = col(0, 2)
+    check("feat.gate cell_type_id >= 0 (no unmapped -1)",
+          (ctid.numel() == 0) or bool((ctid >= 0).all()),
+          f"neg={int((ctid < 0).sum())}")
+    iod = col(2, 5)
+    check("feat.iopin pin_direction_id in [0,3]",
+          (iod.numel() == 0) or bool(((iod >= 0) & (iod <= 3)).all()),
+          f"oob={int(((iod < 0) | (iod > 3)).sum())}")
+    ptid = col(3, 2)
+    check("feat.pin pin_type_id in [0,14]",
+          (ptid.numel() == 0) or bool(((ptid >= 0) & (ptid <= 14)).all()),
+          f"oob={int(((ptid < 0) | (ptid > 14)).sum())}")
+
+    def_path = _find_final_def(case)
+    dt = read_def_truth(def_path) if def_path else None
+
+    # --- placement_status_id exactly vs DEF ------------------------------------
+    if dt:
+        gdf = _read_design_csv(feat, "nodes_gate.csv", design)
+        smap = {"PLACED": 0, "FIXED": 1}
+        bad = chk = 0
+        for _, r in gdf.iterrows():
+            c = dt["comps"].get(r["inst_name"])
+            exp = smap.get(c["status"]) if c else None
+            if exp is None:
+                continue
+            chk += 1
+            if int(r["placement_status_id"]) != exp:
+                bad += 1
+        check("feat.gate placement_status_id == DEF PLACED/FIXED",
+              bad == 0 and chk > 0, f"{bad}/{chk}")
+
+    # --- fanout == max(0, pin_count-1) exactly ---------------------------------
+    ndf = _read_design_csv(feat, "nodes_net.csv", design)
+    if ndf is not None and len(ndf):
+        fbad = int((ndf["fanout"] != (ndf["pin_count"] - 1).clip(lower=0)).sum())
+        check("feat.net fanout == max(0, pin_count-1)", fbad == 0, f"{fbad} rows differ")
+
+    # --- num_layer bounded by routing-layer count ------------------------------
+    plat = resolve_platform_files(case)
+    layers, _ = read_lef_truth(plat.get("TECH_LEF", ""),
+                               plat.get("ADDITIONAL_LEFS", "").split())
+    if ndf is not None and len(ndf) and layers:
+        nl = ndf["num_layer"]
+        oob = int(((nl < 0) | (nl > len(layers))).sum())
+        routed0 = int((ndf[ndf["hpwl_um"] > 0]["num_layer"] < 1).sum())
+        check("feat.net num_layer in [0,|routing layers|]; routed nets >= 1",
+              oob == 0 and routed0 == 0, f"oob={oob} routed0={routed0} L={len(layers)}")
+
+    # --- nearest_tap_distance bounded (>=0, <=die diag, >= nearest cell) --------
+    if dt:
+        idf = _read_design_csv(feat, "nodes_iopin.csv", design)
+        dbu, da = dt["dbu"], dt["diearea"]
+        diag = (((da[2] - da[0]) ** 2 + (da[3] - da[1]) ** 2) ** 0.5) / dbu if da else 1e12
+        comp_xy = [((c["x"] or 0) / dbu, (c["y"] or 0) / dbu)
+                   for c in dt["comps"].values() if c["x"] is not None]
+        bad = 0
+        for _, r in (idf.iterrows() if idf is not None else []):
+            ntd = float(r["nearest_tap_distance_um"])
+            if ntd < -1e-9 or ntd > diag + 1e-6:
+                bad += 1
+                continue
+            if comp_xy and ntd > 0:   # a tap is one of the comps -> can't be closer
+                px, py = float(r["pin_x_um"]), float(r["pin_y_um"])
+                nany = min(((px - cx) ** 2 + (py - cy) ** 2) ** 0.5 for cx, cy in comp_xy)
+                if ntd < nany - 1e-3:
+                    bad += 1
+        check("feat.iopin nearest_tap_distance bounded (>= nearest cell, <= die diag)",
+              bad == 0, f"{bad} out of bound")
+
+    # --- stats-gate honesty: JSON summaries reflect the CURRENT CSVs -----------
+    fj = os.path.join(case, "reports", "features_stats.json")
+    if os.path.isfile(fj):
+        rep = json.load(open(fj)).get("features", {})
+        mism = []
+        for csvname, cols in _FEATURE_SUMMARY_COLS.items():
+            df = _read_design_csv(feat, csvname + ".csv", design)
+            if df is None:
+                continue
+            entry = rep.get(csvname, {})
+            if entry.get("rows") not in (None, len(df)):
+                mism.append(f"{csvname}.rows:{entry.get('rows')}!={len(df)}")
+            for c in cols:
+                got = _numsummary(pd.to_numeric(df[c], errors="coerce").tolist()) if c in df else None
+                if not _summ_close(got, entry.get(c)):
+                    mism.append(f"{csvname}.{c}")
+        check("feat.features_stats.json matches recomputed CSV distributions",
+              not mism, f"mismatch {mism[:6]}")
+    lj = os.path.join(case, "reports", "labels_stats.json")
+    if os.path.isfile(lj):
+        rep = json.load(open(lj)).get("labels", {})
+        mism = []
+        for csvname, (lcol, rcol, key) in _LABEL_SUMMARY.items():
+            entry = rep.get(key, {})
+            if entry.get("status") != "ok":
+                continue
+            df = _read_design_csv(labs, csvname, design)
+            if df is None:
+                mism.append(f"{key}:csv-missing")
+                continue
+            for c, sub in ((lcol, "label"), (rcol, rcol)):
+                got = _numsummary(pd.to_numeric(df[c], errors="coerce").tolist()) if c in df else None
+                if not _summ_close(got, entry.get(sub)):
+                    mism.append(f"{key}.{sub}")
+        check("feat.labels_stats.json matches recomputed CSV distributions",
+              not mism, f"mismatch {mism[:6]}")
+
+
+# ===========================================================================
+# COMPREHENSIVE VERIFICATION — GROUP C: LABELS <-> SIGN-OFF REPORTS
+# ---------------------------------------------------------------------------
+# The label extractors leave almost no report behind (timing report_checks ->
+# /dev/null; PDNSim raw voltage dump deleted on success), so "label matches
+# sign-off report" is verified against the artifacts that DO survive:
+#   * reports/drc.json + reports/lvs.json  -> the dataset must be built from a
+#     signed-off (clean) design; a dataset over a DRC/LVS-dirty run is invalid.
+#   * reports/ppa.json geometry            -> io_count / macro_count /
+#     sequential_count re-derived from DEF+liberty (the EXACT ones; the fill-
+#     inflated instance_count is deliberately NOT asserted as an identity).
+#   * 6_final.sdc clock period             -> the timing LABEL is exactly
+#     max(0, period - worst_cell_slack); label == log1p(path_delay). This ties
+#     the timing target to the sign-off timing CONSTRAINT file.
+#   * 6_final.spef                         -> C_total feature and equiv_res
+#     labels bounded by an independent SPEF re-parse.
+# An OPT-IN --signoff-recheck additionally re-runs OpenROAD PDNSim to re-derive
+# the IR-drop label (the one label whose tool report is deleted), diffing the
+# CSV; it SKIPs (never FAILs) when OpenROAD is absent.
+# ===========================================================================
+
+
+def _find_backend_file(case, *relnames):
+    runs = sorted((r for r in os.listdir(case + "/backend") if r.startswith("RUN_")),
+                  reverse=True) if os.path.isdir(case + "/backend") else []
+    for r in runs:
+        for rel in relnames:
+            p = f"{case}/backend/{r}/{rel}"
+            if os.path.isfile(p):
+                return p
+    return None
+
+
+def _sdc_clock_period(case):
+    sdc = _find_backend_file(case, "results/6_final.sdc", "results/updated_clks.sdc")
+    if not sdc:
+        return None
+    periods = []
+    for line in open(sdc, errors="ignore"):
+        m = re.search(r"create_clock.*-period\s+([0-9.eE+-]+)", line)
+        if m:
+            try:
+                periods.append(float(m.group(1)))
+            except ValueError:
+                pass
+    return min(periods) if periods else None   # single-clock scope; tightest if >1
+
+
+def _spef_resistances(case):
+    """Independent flat list of all *RES values (ohms, R_UNIT-scaled)."""
+    cands = sorted(glob.glob(case + "/backend/RUN_*/rcx/6_final.spef")
+                   + glob.glob(case + "/backend/RUN_*/results/6_final.spef"))
+    if os.path.isfile(case + "/rcx/6_final.spef"):
+        cands.append(case + "/rcx/6_final.spef")
+    if not cands:
+        return None
+    rscale = 1.0
+    vals = []
+    insec = False
+    for raw in open(cands[-1], errors="ignore"):
+        s = raw.strip()
+        if s.startswith("*R_UNIT"):
+            p = s.split()
+            if len(p) >= 3:
+                v, u = float(p[1]), p[2].upper()
+                rscale = (v * 1e3 if u.startswith("KOHM") else v * 1e6 if u.startswith("MOHM") else v)
+            continue
+        if s.startswith("*RES"):
+            insec = True
+            continue
+        if s.startswith(("*CAP", "*END", "*CONN", "*D_NET", "*R_NET", "*DRIVER", "*LOAD", "*C ")):
+            insec = False
+        if insec and s and s[0].isdigit():
+            t = s.split()
+            if len(t) >= 4:
+                try:
+                    vals.append(float(t[3]) * rscale)
+                except ValueError:
+                    pass
+    return vals or None
+
+
+def signoff_report_checks(case, design, feat, labs, tensors):
+    """GROUP C — cross-check labels/dataset against surviving sign-off reports."""
+    reports = os.path.join(case, "reports")
+
+    # --- DRC / LVS clean provenance gate --------------------------------------
+    for tool, fn in (("drc", "drc.json"), ("lvs", "lvs.json")):
+        p = os.path.join(reports, fn)
+        if os.path.isfile(p):
+            st = json.load(open(p)).get("status", "")
+            check(f"signoff.{tool} clean (dataset built on a signed-off design)",
+                  st in {"clean", "clean_beol"}, f"status={st!r}")
+
+    def_path = _find_final_def(case)
+    dt = read_def_truth(def_path) if def_path else None
+    plat = resolve_platform_files(case)
+
+    # --- geometry vs ppa.json (the exact identities only) ---------------------
+    ppaf = os.path.join(reports, "ppa.json")
+    if os.path.isfile(ppaf) and dt:
+        geo = json.load(open(ppaf)).get("geometry", {})
+        idf = _read_design_csv(feat, "nodes_iopin.csv", design)
+        if idf is not None and geo.get("io_count") is not None:
+            check("signoff.geometry io_count == nodes_iopin rows",
+                  int(geo["io_count"]) == len(idf), f"ppa={geo['io_count']} csv={len(idf)}")
+        _, blocks = read_lef_truth(plat.get("TECH_LEF", ""),
+                                   plat.get("ADDITIONAL_LEFS", "").split())
+        block_up = {b.upper() for b in blocks}
+        macros = sum(1 for c in dt["comps"].values()
+                     if str(c["master"]).upper() in block_up)
+        if geo.get("macro_count") is not None:
+            check("signoff.geometry macro_count == DEF BLOCK-class instances",
+                  int(geo["macro_count"]) == macros, f"ppa={geo['macro_count']} def={macros}")
+        lib = read_liberty_truth((plat.get("LIB_FILES", "") + " "
+                                  + plat.get("ADDITIONAL_LIBS", "")).split())
+        seq = sum(1 for c in dt["comps"].values()
+                  if (lib.get(str(c["master"]).upper()) or {}).get("is_seq"))
+        if geo.get("sequential_count") is not None:
+            check("signoff.geometry sequential_count == liberty-sequential instances",
+                  int(geo["sequential_count"]) == seq, f"ppa={geo['sequential_count']} lib={seq}")
+
+    # --- timing LABEL <-> SDC clock-period constraint (exact transform) --------
+    period = _sdc_clock_period(case)
+    tdf = _read_design_csv(labs, "timing_features.csv", design)
+    if period and tdf is not None and len(tdf):
+        bad = off_bad = chk = 0
+        for _, r in tdf.iterrows():
+            pd_ = float(r["Path_Delay_ns"])
+            lab = float(r["label"])
+            if abs(lab - math.log1p(pd_)) > 1e-3:      # label == log1p(path_delay), always
+                bad += 1
+                continue
+            if str(r.get("in_sta_path", "")).lower() == "true":
+                try:
+                    slack = float(r["Cell_Slack_ns"])
+                except (ValueError, TypeError):
+                    continue
+                chk += 1
+                if abs(pd_ - max(0.0, period - slack)) > 1e-3:
+                    bad += 1
+            elif abs(pd_) > 1e-9 or abs(lab) > 1e-9:
+                off_bad += 1
+        check("signoff.timing Path_Delay==clk_period-slack (6_final.sdc) & label==log1p",
+              bad == 0 and off_bad == 0 and chk > 0,
+              f"bad={bad} off_bad={off_bad} inpath={chk} period={period}")
+
+    # --- C_total feature bounded by RC labels (SPEF ground/coupling) ----------
+    mdf = _read_design_csv(feat, "metadata.csv", design)
+    gdf = _read_design_csv(labs, "net_ground_cap.csv", design)
+    cdf = _read_design_csv(labs, "coupling_cap.csv", design)
+    if mdf is not None and len(mdf) and gdf is not None and cdf is not None:
+        ct = float(mdf.iloc[0]["C_total"])
+        g = float(pd.to_numeric(gdf["ground_cap_fF"], errors="coerce").sum()) if len(gdf) else 0.0
+        cpl = float(pd.to_numeric(cdf["coupling_cap_fF"], errors="coerce").sum()) if len(cdf) else 0.0
+        if ct > 0:   # C_total>0 => SPEF present
+            # coupling may be written once (asymmetric SPEF) or twice (symmetric);
+            # C_total counts every *CAP -> Σg+Σc <= C_total <= Σg+2Σc.
+            lo, hi = g + cpl, g + 2 * cpl
+            tol = max(1e-2, 0.02 * hi)
+            check("signoff.metadata C_total within [Σground+Σcoupling, Σground+2Σcoupling]",
+                  lo - tol <= ct <= hi + tol,
+                  f"C_total={ct:.3f} lo={lo:.3f} hi={hi:.3f}")
+
+    # --- equiv_res LABEL magnitude bounded by independent SPEF *RES ------------
+    rvals = _spef_resistances(case)
+    edf = _read_design_csv(labs, "equiv_res.csv", design)
+    if rvals and edf is not None and len(edf):
+        total, mn = sum(rvals), min(rvals)
+        er = pd.to_numeric(edf["equiv_res_ohm"], errors="coerce").dropna()
+        if len(er):
+            oob = int(((er <= 0) | (er > total * 1.01)).sum())
+            # scale sanity: a reduced pin-pair R is on the SPEF's ohm scale, not
+            # 1000x off (unit bug) -> its max sits between one resistor and ΣR.
+            scale_ok = (float(er.max()) >= mn * 0.5) and (float(er.max()) <= total * 1.01)
+            check("signoff.equiv_res label bounded by SPEF *RES (0<r<=ΣR, scale sane)",
+                  oob == 0 and scale_ok,
+                  f"oob={oob} er_max={float(er.max()):.3f} ΣR={total:.3f} minR={mn:.3f}")
+
+    # --- OPT-IN: re-run PDNSim to re-derive the IR-drop LABEL independently -----
+    if SIGNOFF_RECHECK:
+        _signoff_recheck_irdrop(case, design, feat, labs)
+
+
+def _signoff_recheck_irdrop(case, design, feat, labs):
+    """OPT-IN (--signoff-recheck): re-run OpenROAD PDNSim on 6_final.odb to
+    re-derive the IR-drop label. IR drop is the ONE label whose tool artifact
+    is deleted on success (extract_irdrop.tcl renames the processed CSV in and
+    `file delete`s the raw PDNSim dump), so it is the only label with no
+    surviving report to diff — a re-run is the sole independent value check.
+    Parsing mirrors extract_irdrop.tcl:161-190 exactly (6 comma-fields, skip
+    header, field[0]=inst, field[5]=voltage, same instance filter). SKIPs
+    (never FAILs) on any missing dependency or tool error."""
+    import shutil
+    import shlex
+    import subprocess
+    import tempfile
+    name = "signoff.irdrop label == re-run PDNSim analyze_power_grid (per-cell)"
+    orx = os.environ.get("OPENROAD_EXE") or shutil.which("openroad")
+    if not orx or not os.path.isfile(orx):
+        skip(name, "openroad not found (set OPENROAD_EXE)")
+        return
+    odb = _find_backend_file(case, "final/6_final.odb", "results/6_final.odb")
+    irdf = _read_design_csv(labs, "ir_drop.csv", design)
+    if not odb:
+        skip(name, "no 6_final.odb")
+        return
+    if irdf is None or not len(irdf) or "IR_Drop_mV" not in irdf.columns:
+        skip(name, "no ir_drop.csv")
+        return
+    plat = resolve_platform_files(case)
+    libs = [l for l in (plat.get("LIB_FILES", "") + " "
+                        + plat.get("ADDITIONAL_LIBS", "")).split() if l]
+    mdf = _read_design_csv(feat, "metadata.csv", design)
+    try:
+        supply = float(mdf.iloc[0]["V_nom"]) if mdf is not None and len(mdf) else 0.0
+    except (ValueError, TypeError, KeyError):
+        supply = 0.0
+    if supply <= 0:
+        skip(name, "no supply voltage (metadata V_nom)")
+        return
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = os.path.join(tmp, "ir.raw")
+            tcl = os.path.join(tmp, "ir.tcl")
+            lib_lines = "\n".join(f"read_liberty {shlex.quote(l)}" for l in libs)
+            script = f"""read_db {shlex.quote(odb)}
+{lib_lines}
+set target ""
+foreach n {{VDD VPWR vdd vpwr}} {{ if {{[get_nets -quiet $n] != ""}} {{ set target $n; break }} }}
+if {{$target eq ""}} {{ puts "R2G_NO_NET"; exit 0 }}
+catch {{set_pdnsim_net_voltage -net $target -voltage {supply}}}
+foreach g {{VSS VGND vss vgnd}} {{ if {{[get_nets -quiet $g] != ""}} {{ catch {{set_pdnsim_net_voltage -net $g -voltage 0.0}}; break }} }}
+if {{[catch {{analyze_power_grid -net $target -voltage_file {shlex.quote(raw)}}} e]}} {{ puts "R2G_PDN_ERR $e"; exit 0 }}
+puts "R2G_OK"
+exit 0
+"""
+            with open(tcl, "w") as fh:
+                fh.write(script)
+            r = subprocess.run([orx, "-exit", tcl], capture_output=True,
+                               text=True, timeout=900)
+            if not os.path.isfile(raw):
+                tail = (r.stdout or "").strip().splitlines()[-1:] or [""]
+                skip(name, f"PDNSim produced no voltage file ({tail[0][:80]})")
+                return
+            # Independent parse (mirrors extract_irdrop.tcl exactly).
+            volt = {}
+            with open(raw, errors="ignore") as fh:
+                for i, line in enumerate(fh):
+                    if i == 0:
+                        continue
+                    fields = line.split(",")
+                    if len(fields) != 6:
+                        continue
+                    inst = fields[0].strip()
+                    if re.match(r"(?i)^(wire|FILLER_|PHY_EDGE|TAPCELL|ENDCAP)", inst):
+                        continue
+                    try:
+                        v = float(fields[5].strip())
+                    except ValueError:
+                        continue
+                    ir = max(0.0, (supply - v) * 1000.0)
+                    if inst not in volt or ir > volt[inst]:   # worst per instance
+                        volt[inst] = ir
+            if not volt:
+                skip(name, "no parseable PDNSim rows")
+                return
+            csvmap = {}
+            for _, row in irdf.iterrows():
+                k = str(row["Cell"])
+                try:
+                    ir = float(row["IR_Drop_mV"])
+                except (ValueError, TypeError):
+                    continue
+                csvmap[k] = max(csvmap.get(k, 0.0), ir)   # groupby-Cell max (graph stage)
+            common = [k for k in csvmap if k in volt]
+            if len(common) < 0.5 * max(1, len(csvmap)):
+                skip(name, f"join too small ({len(common)}/{len(csvmap)})")
+                return
+            bad = sum(1 for k in common
+                      if abs(csvmap[k] - volt[k]) > max(0.05, 0.05 * volt[k]))
+            check(name, bad == 0, f"{bad}/{len(common)} cells differ >5% (or 0.05mV)")
+    except subprocess.TimeoutExpired:
+        skip(name, "openroad timed out (900s)")
+    except Exception as e:   # a re-run harness error must never masquerade as FAIL
+        skip(name, f"re-run error: {e!r}"[:120])
+
+
 def verify_case(case, design=None, json_out=None):
     case = case.rstrip("/")
+    SKIPPED.clear()   # per-case; RESULTS is cleared by the batch loop / fresh proc
     feat, labs, ds = case + "/features", case + "/labels", case + "/dataset"
     man = json.load(open(ds + "/graph_manifest.json"))
     design = design or man["design"]
@@ -1276,10 +2002,20 @@ def verify_case(case, design=None, json_out=None):
     verify_y("f", f, [("gate", gate, 0, ng)], labels)
 
     # ---- manifest stats vs tensors ----
-    for vname, data in (("b", b), ("c", c), ("d", d), ("e", e), ("f", f)):
+    tensors = {"b": b, "c": c, "d": d, "e": e, "f": f}
+    for vname, data in tensors.items():
         st = man["variants"][vname]
         check(f"manifest[{vname}] nodes/edges match tensors",
               st["nodes"] == data.x.shape[0] and st["edges"] == data.edge_index.shape[1])
+
+    # ---- GROUP A: full topology of all five views (not just b) ----
+    topology_checks(views, tensors)
+
+    # ---- GROUP B: feature column re-derivation + distribution honesty ----
+    feature_stat_checks(case, design, feat, labs, tensors)
+
+    # ---- GROUP C: labels <-> surviving sign-off reports ----
+    signoff_report_checks(case, design, feat, labs, tensors)
 
     # ---- RC parasitic labels (independent SPEF re-derivation) ----
     rc = read_spef_truth(case)
@@ -1469,10 +2205,11 @@ def verify_case(case, design=None, json_out=None):
     extended_checks(case, design, feat, labs, views, b)
 
     n_fail = sum(1 for r in RESULTS if not r["ok"])
-    print(f"== {design}: {len(RESULTS) - n_fail}/{len(RESULTS)} checks passed ==")
+    skip_note = f" ({len(SKIPPED)} skipped)" if SKIPPED else ""
+    print(f"== {design}: {len(RESULTS) - n_fail}/{len(RESULTS)} checks passed{skip_note} ==")
     if json_out:
         with open(json_out, "w") as fh:
-            json.dump({"design": design, "results": RESULTS,
+            json.dump({"design": design, "results": RESULTS, "skipped": SKIPPED,
                        "passed": len(RESULTS) - n_fail, "failed": n_fail}, fh, indent=1)
     return n_fail
 
@@ -1484,7 +2221,13 @@ def main():
     ap.add_argument("--json", default=None)
     ap.add_argument("--batch", default=None, metavar="ROOT",
                     help="verify every ROOT subdir containing dataset/graph_manifest.json")
+    ap.add_argument("--signoff-recheck", action="store_true",
+                    help="opt-in: re-run OpenROAD PDNSim to independently re-derive "
+                         "the IR-drop label (needs OPENROAD_EXE; SKIPs if absent)")
     args = ap.parse_args()
+
+    global SIGNOFF_RECHECK
+    SIGNOFF_RECHECK = args.signoff_recheck
 
     if args.batch:
         root = args.batch.rstrip("/")
