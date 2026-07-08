@@ -3374,3 +3374,40 @@ first proves the extractors match the tools on the inputs you HAVE, the second p
 handle the inputs you might GET. A liberty fixture MUST be one-attribute-per-line (the
 parser uses anchored `re.match`); a crammed pin silently drops direction/clock/cap and
 tests nothing.
+
+### 22. Verification-infra blind spots — the verifier/gates themselves lied (2026-07-07 audit; FIXED 2026-07-08)
+
+The extractor defects #5–#21 are only caught if the *verification infrastructure* actually
+fails on wrong data. A silent-lie audit of `tools/verify_graph_dataset.py` + the stats gates
++ `graph_lib.label_health` found the last line of defense had holes of its own (full report:
+`docs/superpowers/plans/verifier-silent-lies-audit-2026-07-07.md`). Root cause is structural:
+the chain validates *tensor == CSV* and *CSV == its own header*, but **"the label VALUES are
+real numbers"** was checked only in `labels_stats.json` (which the verifier never reads;
+`run_graphs.sh` uses it for mtime only), and every re-check rested on IEEE `NaN` semantics
+(`abs(NaN − x) > tol` is always `False`, and `checked > 0` guards count `NaN` rows).
+
+- **#22a (HIGH):** an all-NaN / NaN-producing **congestion or timing** label shipped fully
+  green (`label_health` checked only column/row presence; `verify_y` + extended congestion
+  were NaN-vacuous). Fix: `label_health` → `all_nan` status (degrades manifest); `verify_y`
+  and extended congestion are now NaN-safe; wirelength/RC-ground/irdrop already had non-NaN
+  backstops.
+- **#22b (parked techs):** `ext.gate power` passed vacuously on asap7/gf180 — the verifier's
+  liberty parser matched only scalar `cell_leakage_power`, but those techs write block-form
+  `leakage_power(){value:X}`, so `lc["power"]=None` → zero comparisons. Fix: parse block-form
+  leakage + require `power_checked>0`/`area_checked>0`. (asap7/gf180 parked, so low live risk.)
+- **#22c (MED):** no CSV-row-count-vs-DEF check → a cleanly-truncated node CSV read `ok`. Fix:
+  `ext.nodes_{gate,net,iopin} rows == DEF {COMPONENTS,NETS,PINS}`.
+- **#22d (MED):** the SPEF de-escape oracle is byte-identical to the extractor's and
+  `continue`d past dropped nets, so a two-sided escaping regression (the #21 class) was
+  invisible. Fix: a ≥0.8 join-rate floor over escape-sensitive nets (`.`/`$`/`\[`), skipped
+  on flat designs.
+- **L1:** the congestion value-vs-DEF block silently skipped (no `check()`) when
+  GCELLGRID/layers/DIEAREA didn't resolve → now an explicit FAIL.
+
+Validated: pristine `iir` 106/106 (no false-FAIL); injections (NaN'd congestion, truncated
+`nodes_gate`, simulated de-escape regression) flip PASS→FAIL as intended; full def-graph suite
+312 passed. Regression tests: `test_label_health_flags_all_nan_label`,
+`test_read_liberty_truth_block_form_leakage` (+ non-false-fire guards). **Lesson:** a verifier
+check that can't fail is worse than no check — it manufactures false confidence. Any
+`abs(a-b) > tol` value check must treat `NaN` as a mismatch, and any `checked>0` guard must
+count only rows where a real comparison happened.

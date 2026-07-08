@@ -247,6 +247,22 @@ def label_health(label_dfs: dict[str, pd.DataFrame], design_key: str) -> dict[st
             status, reason = "no_rows_for_design", (
                 f"no rows for Design={design_key!r} (keys present: "
                 f"{sorted(df['Design'].astype(str).unique()[:3])}...)")
+        elif not pd.to_numeric(
+                df.loc[df["Design"] == design_key, spec["column"]],
+                errors="coerce").notna().any():
+            # Column + rows present but EVERY value is NaN/non-numeric for this
+            # design -> the y slot would be 100% NaN. This gate previously checked
+            # only column/row PRESENCE, so an all-NaN join (a name-escaping or
+            # extraction regression, or a partial dump) still reported 'ok' and
+            # shipped fully green through the manifest AND verify_graph_dataset.py
+            # (whose value checks are NaN-vacuous). A legitimately degenerate label
+            # is all-ZERO (e.g. combinational timing, low-IR irdrop), which is
+            # non-NaN and still reads 'ok'. See docs/superpowers/plans/
+            # verifier-silent-lies-audit-2026-07-07.md BUG-1.
+            status, reason = "all_nan", (
+                f"label column '{spec['column']}' is entirely NaN/non-numeric for "
+                f"Design={design_key!r} — its y slot would be all-NaN (raw dump / "
+                f"broken join?)")
         else:
             status, reason = "ok", ""
         health[spec["file"]] = {"status": status, "reason": reason}

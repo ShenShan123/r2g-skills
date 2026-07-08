@@ -126,6 +126,7 @@ def read_liberty_truth(paths):
         cell_depth = -1
         pin = None
         pin_depth = -1
+        leak_depth = -1   # inside a block-form leakage_power(){...} group
         for line in text.splitlines():
             s = line.strip()
             if not s:
@@ -146,6 +147,16 @@ def read_liberty_truth(paths):
                     m = re.match(r"cell_leakage_power\s*:\s*([\d.eE+-]+)", s)
                     if m:
                         cell["power"] = float(m.group(1))
+                    # Block-form leakage: asap7/gf180 write leakage_power(){value:X}
+                    # with NO scalar cell_leakage_power. Matching only the scalar left
+                    # power=None on those platforms, so ext.gate power passed vacuously
+                    # (BUG-2). Capture the first `value` inside a leakage_power group.
+                    if re.match(r"leakage_power\s*\(", s):
+                        leak_depth = depth + opens
+                    if leak_depth >= 0 and cell["power"] is None:
+                        m = re.match(r'value\s*:\s*"?([\d.eE+-]+)"?\s*;', s)
+                        if m:
+                            cell["power"] = float(m.group(1))
                 if re.match(r"(ff|latch|statetable)\s*\(", s):
                     cell["is_seq"] = True
                 m = re.match(r'(?:pin|bus|bundle)\s*\(\s*"?([^")]+?)"?\s*\)\s*\{', s)
@@ -160,6 +171,8 @@ def read_liberty_truth(paths):
                     if m:
                         pin[1] = float(m.group(1)) * cap_scale
             depth += opens - closes
+            if leak_depth >= 0 and depth < leak_depth:
+                leak_depth = -1
             if pin is not None and depth < pin_depth:
                 pin = None
             if cell is not None and depth < cell_depth:
@@ -611,26 +624,43 @@ def extended_checks(case, design, feat, labs, views, b):
     full_gate = pd.read_csv(os.path.join(feat, "nodes_gate.csv"))
     if "graph_id" in full_gate.columns:
         full_gate = full_gate[full_gate["graph_id"].astype(str) == design]
+    # Truncation guard: a cleanly-truncated CSV (fewer COMPLETE rows) passes the
+    # stats gate ('ok') and every count check re-derives from the same short CSV.
+    # Nothing else compares the node-CSV row count to the DEF — so do it here.
+    # (BUG-3, verifier-silent-lies-audit-2026-07-07.md.)
+    check("ext.nodes_gate rows == DEF COMPONENTS (truncation guard)",
+          len(full_gate) == len(dt["comps"]),
+          f"csv={len(full_gate)} def={len(dt['comps'])}")
     sample = full_gate.groupby("master", sort=False).head(2)
     bad_area = bad_pos = bad_orient = bad_power = checked = 0
+    area_checked = power_checked = 0   # rows where liberty actually supplied a value
     for _, row in sample.iterrows():
         c = dt["comps"].get(row["inst_name"])
         lc = lib.get(str(row["master"]).upper())
         if not c or c["x"] is None:
             continue
         checked += 1
-        if lc and lc.get("area") is not None and abs(row["cell_area"] - lc["area"]) > 1e-3:
-            bad_area += 1
-        if lc and lc.get("power") is not None and abs(row["cell_power"] - lc["power"]) > max(1e-3, 1e-4 * abs(lc["power"])):
-            bad_power += 1
+        if lc and lc.get("area") is not None:
+            area_checked += 1
+            if abs(row["cell_area"] - lc["area"]) > 1e-3:
+                bad_area += 1
+        if lc and lc.get("power") is not None:
+            power_checked += 1
+            if abs(row["cell_power"] - lc["power"]) > max(1e-3, 1e-4 * abs(lc["power"])):
+                bad_power += 1
         if abs(row["x_um"] - c["x"] / dt["dbu"]) > 1e-3 or abs(row["y_um"] - c["y"] / dt["dbu"]) > 1e-3:
             bad_pos += 1
         if str(row["orientation"]) != str(c["orient"]):
             bad_orient += 1
-    check("ext.gate area == liberty area", checked > 0 and bad_area == 0,
-          f"{bad_area}/{checked} mismatched")
-    check("ext.gate power == liberty leakage", checked > 0 and bad_power == 0,
-          f"{bad_power}/{checked} mismatched")
+    # Require a liberty value to have actually been compared — else the check "passes"
+    # having validated NOTHING. area_checked/power_checked == 0 means no sampled gate's
+    # master resolved a liberty area/leakage (liberty unresolved, or a leakage form the
+    # parser misses, e.g. block-form on asap7/gf180) — that is a FAIL, not a silent pass.
+    # (BUG-2, verifier-silent-lies-audit-2026-07-07.md.)
+    check("ext.gate area == liberty area", area_checked > 0 and bad_area == 0,
+          f"{bad_area}/{area_checked} mismatched (of {checked} sampled)")
+    check("ext.gate power == liberty leakage", power_checked > 0 and bad_power == 0,
+          f"{bad_power}/{power_checked} mismatched (of {checked} sampled)")
     check("ext.gate x/y == DEF PLACED / dbu", checked > 0 and bad_pos == 0,
           f"{bad_pos}/{checked} mismatched (dbu={dt['dbu']})")
     check("ext.gate orientation == DEF", checked > 0 and bad_orient == 0,
@@ -700,6 +730,9 @@ def extended_checks(case, design, feat, labs, views, b):
     full_net = pd.read_csv(os.path.join(feat, "nodes_net.csv"))
     if "graph_id" in full_net.columns:
         full_net = full_net[full_net["graph_id"].astype(str) == design]
+    check("ext.nodes_net rows == DEF NETS (truncation guard)",
+          len(full_net) == len(dt["nets"]),
+          f"csv={len(full_net)} def={len(dt['nets'])}")
     bad = {"pin_count": 0, "drivers": 0, "sinks": 0, "hpwl": 0, "macro": 0}
     checked_net = 0
     net_rows = full_net.set_index("net_name")
@@ -759,6 +792,9 @@ def extended_checks(case, design, feat, labs, views, b):
     full_io = pd.read_csv(os.path.join(feat, "nodes_iopin.csv"))
     if "graph_id" in full_io.columns:
         full_io = full_io[full_io["graph_id"].astype(str) == design]
+    check("ext.nodes_iopin rows == DEF PINS (truncation guard)",
+          len(full_io) == len(dt["pins"]),
+          f"csv={len(full_io)} def={len(dt['pins'])}")
     dir_map = {"INPUT": 0, "OUTPUT": 1, "INOUT": 2, "FEEDTHRU": 3}
     bad_io = checked_io = 0
     for _, row in full_io.head(50).iterrows():
@@ -874,12 +910,19 @@ def extended_checks(case, design, feat, labs, views, b):
                 continue
             checked_c += 1
             tol = lambda e: max(1e-6, 0.003 * e)
-            if abs(sg / cnt - float(row["cell_congestion"])) > tol(sg / cnt):
+            # NaN-safe: the recompute always yields a real number, so a NaN in the
+            # shipped column is a defect. abs(recompute - NaN) > tol is ALWAYS False,
+            # which let an all-NaN/partial-NaN congestion label pass this recompute
+            # vacuously. (BUG-1, verifier-silent-lies-audit-2026-07-07.md.)
+            cc, lb = float(row["cell_congestion"]), float(row["label"])
+            if math.isnan(cc) or abs(sg / cnt - cc) > tol(sg / cnt):
                 bad_c += 1
-            if abs(ssg / cnt - float(row["label"])) > tol(ssg / cnt):
+            if math.isnan(lb) or abs(ssg / cnt - lb) > tol(ssg / cnt):
                 bad_l += 1
-            if has_raw and abs(ssu / cnt - float(row["label_raw"])) > tol(ssu / cnt):
-                bad_r += 1
+            if has_raw:
+                lr = float(row["label_raw"])
+                if math.isnan(lr) or abs(ssu / cnt - lr) > tol(ssu / cnt):
+                    bad_r += 1
         check("ext.congestion cell_congestion == independent radius-4 bbox recompute",
               checked_c > 0 and bad_c == 0, f"{bad_c}/{checked_c} mismatched")
         check("ext.congestion label == mean sqrt(gaussian_util) over bbox",
@@ -887,6 +930,15 @@ def extended_checks(case, design, feat, labs, views, b):
         if has_raw:
             check("ext.congestion label_raw == mean sqrt(util) over bbox",
                   checked_c > 0 and bad_r == 0, f"{bad_r}/{checked_c} mismatched")
+    else:
+        # No silent skip: a design missing GCELLGRID / routing layers / DIEAREA means
+        # congestion values are NEVER validated against the DEF, yet the run would still
+        # report all-green. Flag it loudly instead. (L1, verifier-silent-lies-audit-
+        # 2026-07-07.md.)
+        check("ext.congestion inputs resolved (GCELLGRID + routing layers + DIEAREA)",
+              False,
+              f"gstep={dt['gstep']} routing_layers={len(layers)} "
+              f"diearea={'yes' if die else 'no'} — congestion value-vs-DEF NOT checked")
 
     # ---- Y wirelength: sampled nets vs independent DEF route walk.
     # Raw um lives in WireLength_um; label is the log1p transform of it. ----
@@ -1056,8 +1108,13 @@ def verify_y(vname, data, blocks, labels, sample_n=10):
             check(f"{vname}.y{1+order}[{tname}] non-NaN count",
                   exp_nn == got_nn, f"expected {exp_nn} got {got_nn}")
             idx = exp.dropna().index[:sample_n]
+            # NaN-safe: a tensor slot that is NaN where the CSV has a value is a
+            # dropped label (join loss at the graph stage). abs(NaN - x) > tol is
+            # ALWAYS False, so the old check silently passed it — flag isnan
+            # explicitly. (BUG-1, verifier-silent-lies-audit-2026-07-07.md.)
             bad = sum(1 for i in idx
-                      if abs(float(got[int(i)]) - float(exp[i])) > 1e-4)
+                      if math.isnan(float(got[int(i)]))
+                      or abs(float(got[int(i)]) - float(exp[i])) > 1e-4)
             if len(idx):
                 check(f"{vname}.y{1+order}[{tname}] sampled values", bad == 0,
                       f"{bad}/{len(idx)} mismatched")
@@ -1251,6 +1308,20 @@ def verify_case(case, design=None, json_out=None):
     else:
         gt, ct = rc["ground"], rc["coupling"]
         bnames, ntb2 = b.node_name, b.x[:, 0].long()
+        # (A0) SPEF<->DEF de-escape join floor. The oracle's `gt` is keyed by the SAME
+        # de-escape the extractor uses, so a two-sided escaping-join regression (bug #20
+        # dropped "every hierarchical net and double-bus register") would key both sides
+        # wrong and check (A) would simply `continue` past every dropped net. Escape-
+        # SENSITIVE DEF nets (names carrying '.', '$', or escaped brackets) are exactly
+        # the subset that regression drops to ~0% join while flat nets stay fine — assert
+        # a high join rate for that subset. Skips (no false-fail) on flattened designs
+        # with too few such nets. (BUG-4, verifier-silent-lies-audit-2026-07-07.md.)
+        esc = [nm for nm in net["net_name"].tolist()
+               if "." in nm or "$" in nm or "\\[" in nm or "\\]" in nm]
+        if len(esc) >= 20:
+            em = sum(1 for nm in esc if nm in gt)
+            check("rc: SPEF de-escape join rate on escape-sensitive nets >= 0.8",
+                  em / len(esc) >= 0.8, f"{em}/{len(esc)} joined ({em / len(esc):.1%})")
         # (A) ground cap on b net nodes: y5 == log1p(SPEF ground)
         bad = chk = 0
         for i, nm in enumerate(net["net_name"].tolist()):

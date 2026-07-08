@@ -78,6 +78,59 @@ library (p) {
     assert vgd.lib_pin_truth(cells, "INV_1", "A")[1] == pytest.approx(2.1)
 
 
+def test_read_liberty_truth_block_form_leakage(tmp_path):
+    """BUG-2 (verifier-silent-lies-audit-2026-07-07): asap7/gf180 write leakage as
+    block-form ``leakage_power(){value:X}`` (gf180 quotes it) with NO scalar
+    ``cell_leakage_power``. Matching only the scalar left power=None on those
+    platforms, so the verifier's ``ext.gate power`` check passed vacuously. The parser
+    must capture the block-form value. (Fails on pre-fix code: power is None.)"""
+    lib = tmp_path / "blk.lib"
+    lib.write_text("""
+library (blk) {
+  cell (AND2_x1) {
+    area : 1.5;
+    leakage_power () {
+      when : "!A" ;
+      value : 0.00051 ;
+    }
+    leakage_power () {
+      value : 0.00029065 ;
+    }
+    pin(A) { direction : input; capacitance : 1.0; }
+  }
+  cell (OR2_x1) {
+    area : 2.0;
+    leakage_power () {
+      value : "0.00081234" ;
+    }
+    pin(A) { direction : input; capacitance : 1.0; }
+  }
+}
+""")
+    cells = vgd.read_liberty_truth([str(lib)])
+    # first `value` inside the leakage_power group is captured (non-vacuous power check)
+    assert cells["AND2_X1"]["power"] == pytest.approx(0.00051)
+    # gf180-style QUOTED value must parse too
+    assert cells["OR2_X1"]["power"] == pytest.approx(0.00081234)
+
+
+def test_scalar_leakage_still_parsed(tmp_path):
+    """Guard against regressing the active-tech (sky130/nangate45) scalar path while
+    adding block-form support for the parked techs."""
+    lib = tmp_path / "sc.lib"
+    lib.write_text("""
+library (sc) {
+  cell (INVx1) {
+    area : 0.5;
+    cell_leakage_power : 0.0123 ;
+    pin(A) { direction : input; capacitance : 1.0; }
+  }
+}
+""")
+    cells = vgd.read_liberty_truth([str(lib)])
+    assert cells["INVX1"]["power"] == pytest.approx(0.0123)
+
+
 def test_read_lef_truth_layers_and_blocks(tmp_path):
     tech = tmp_path / "t.lef"
     tech.write_text("""

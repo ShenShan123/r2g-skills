@@ -314,6 +314,35 @@ def test_label_health_missing_label_column():
     assert "label" in h["cell_congestion.csv"]["reason"]
 
 
+def test_label_health_flags_all_nan_label():
+    """BUG-1 (verifier-silent-lies-audit-2026-07-07): a label file with the right
+    columns + rows for the design but EVERY value NaN (a broken join or a partial
+    dump) would make the y slot 100% NaN. label_health used to check only column/row
+    PRESENCE, so it reported 'ok' and the dataset shipped green through the manifest
+    AND the (NaN-vacuous) verifier. It must now report 'all_nan'. (Fails on pre-fix
+    code: status was 'ok'.)"""
+    nan_lbl = pd.DataFrame({"Design": ["d", "d"], "Cell": ["g1", "g2"],
+                            "label": [float("nan"), float("nan")]})
+    good = pd.DataFrame({"Design": ["d"], "Cell": ["g1"], "Net": ["n1"], "label": [0.1]})
+    dfs = {"cell_congestion.csv": nan_lbl, "ir_drop.csv": good,
+           "timing_features.csv": good, "wirelength.csv": good}
+    h = gl.label_health(dfs, "d")
+    assert h["cell_congestion.csv"]["status"] == "all_nan"
+    assert h["cell_congestion.csv"]["status"] != "ok"
+
+
+def test_label_health_all_zero_label_is_ok():
+    """Complement to the all-NaN gate: a legitimately DEGENERATE label is all-ZERO
+    (e.g. combinational timing, low-IR irdrop) — non-NaN — and must stay 'ok', so the
+    all_nan gate never false-flags a valid design."""
+    gate_zeros = pd.DataFrame({"Design": ["d", "d"], "Cell": ["g1", "g2"], "label": [0.0, 0.0]})
+    net_zeros = pd.DataFrame({"Design": ["d", "d"], "Net": ["n1", "n2"], "label": [0.0, 0.0]})
+    dfs = {"cell_congestion.csv": gate_zeros, "ir_drop.csv": gate_zeros,
+           "timing_features.csv": gate_zeros, "wirelength.csv": net_zeros}
+    h = gl.label_health(dfs, "d")
+    assert all(v["status"] == "ok" for v in h.values()), h
+
+
 @pytestmark_tensor
 def test_duplicate_label_keys_raise_loudly():
     base = pd.DataFrame({"inst_name": ["g1", "g2"]})
