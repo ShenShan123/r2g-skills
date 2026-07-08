@@ -345,7 +345,7 @@ def resolve_platform_files(case_dir):
     import subprocess
     cfg = os.path.join(case_dir, "constraints", "config.mk")
     resolver = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                            "r2g-rtl2gds", "scripts", "flow", "resolve_platform_paths.sh")
+                            "r2g-skills/def-graph", "scripts", "flow", "resolve_platform_paths.sh")
     platform = ""
     if os.path.isfile(cfg):
         m = re.search(r"^\s*(?:export\s+)?PLATFORM\s*=\s*(\S+)", open(cfg).read(), re.M)

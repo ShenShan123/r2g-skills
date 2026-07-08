@@ -11,7 +11,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SKILL="$ROOT/r2g-rtl2gds"
+SKILL="$ROOT/r2g-skills/signoff-loop"
 KNOWLEDGE="$SKILL/knowledge"
 
 if [[ $# -eq 0 ]]; then

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Platform-generic wave driver for the r2g-rtl2gds sign-off campaign.
+# Platform-generic wave driver for the r2g-skills/signoff-loop sign-off campaign.
 #
 # Generalizes tools/nangate45_resume_waves.sh to ANY ORFS platform (asap7,
 # nangate45, sky130hd, gf180, ihp-sg13g2, ...) and, unlike that driver, runs
@@ -54,8 +54,8 @@ if [[ "${SKIP_INSTANCE_GUARD:-0}" != "1" ]]; then
     exit 1
   fi
 fi
-EL=r2g-rtl2gds/scripts/loop/engineer_loop.py
-KDB=r2g-rtl2gds/knowledge/knowledge.sqlite
+EL=r2g-skills/signoff-loop/scripts/loop/engineer_loop.py
+KDB=r2g-skills/signoff-loop/knowledge/knowledge.sqlite
 INTEG=tools/check_db_integrity.py
 WAVE_MAX=${WAVE_MAX:-24}
 export NUM_CORES=${NUM_CORES:-4}

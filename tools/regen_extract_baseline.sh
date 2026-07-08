@@ -33,7 +33,7 @@ set -euo pipefail
 
 OUT_DIR="${1:-/tmp/techlib_baseline}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SKILL="$REPO_ROOT/r2g-rtl2gds"
+SKILL="$REPO_ROOT/r2g-skills/def-graph"
 RUN_FEATURES="$SKILL/scripts/flow/run_features.sh"
 RUN_LABELS="$SKILL/scripts/flow/run_labels.sh"
 DESIGN_CASES="$REPO_ROOT/design_cases"

@@ -36,7 +36,7 @@ done
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 # shellcheck source=/dev/null
-source "$REPO/r2g-rtl2gds/scripts/flow/_env.sh" >/dev/null 2>&1 || true
+source "$REPO/r2g-skills/signoff-loop/scripts/flow/_env.sh" >/dev/null 2>&1 || true
 : "${FLOW_DIR:?ORFS FLOW_DIR not found; set ORFS_ROOT}"
 
 PLAT="$FLOW_DIR/platforms/nangate45"
@@ -45,7 +45,7 @@ SC="$PLAT/lef/NangateOpenCellLibrary.macro.mod.lef"
 # Reference LEF carrying the full per-pin antenna model (same cell set as SC_LEF,
 # but ORFS's .mod SC_LEF has it stripped — we merge it back).
 REF="$PLAT/lef/NangateOpenCellLibrary.macro.lef"
-PATCHER="$REPO/r2g-rtl2gds/scripts/flow/antenna_lef_patch.py"
+PATCHER="$REPO/r2g-skills/signoff-loop/scripts/flow/antenna_lef_patch.py"
 SUFFIX=".r2g-pre-antenna.orig"
 
 for f in "$TECH" "$SC" "$REF"; do

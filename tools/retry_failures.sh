@@ -8,7 +8,7 @@ set -euo pipefail
 #   C) 3 place-stage resume cases — FROM_STAGE=place
 #   D) 10 synthesis timeout cases — full re-run with ORFS_TIMEOUT=14400
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../r2g-rtl2gds/scripts/flow" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../r2g-skills/signoff-loop/scripts/flow" && pwd)"
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESULTS_DIR="$BASE_DIR/design_cases/_batch"
 RESULTS_FILE="$RESULTS_DIR/retry_pass3.jsonl"

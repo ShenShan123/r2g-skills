@@ -23,8 +23,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-SKILL = Path(__file__).resolve().parents[1] / "r2g-rtl2gds"
-PRESYNTH = SKILL / "scripts" / "extract" / "features" / "presynth.py"
+SKILL = Path(__file__).resolve().parents[1] / "r2g-skills/signoff-loop"
+PRESYNTH = SKILL / "scripts" / "extract" / "presynth.py"
 INGEST = SKILL / "knowledge" / "ingest_run.py"
 
 

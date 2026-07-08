@@ -9,7 +9,7 @@ MAX_JOBS="${1:-4}"
 ORFS_TIMEOUT="${2:-3600}"  # 1 hour per design
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CASES_DIR="$BASE_DIR/design_cases"
-SKILL_SCRIPTS_DIR="$BASE_DIR/r2g-rtl2gds/scripts/flow"
+SKILL_SCRIPTS_DIR="$BASE_DIR/r2g-skills/signoff-loop/scripts/flow"
 BATCH_DIR="$CASES_DIR/_batch"
 mkdir -p "$BATCH_DIR"
 RESULTS_FILE="$BATCH_DIR/batch_results.jsonl"

@@ -313,7 +313,7 @@ def main() -> int:
     # diode-free ones were ALL this). The hook is a no-op for designs without
     # feedthroughs. See r2g skill references/failure-patterns.md "sky130 LVS".
     fdbuf_hook = (Path(__file__).resolve().parent.parent
-                  / "r2g-rtl2gds" / "scripts" / "flow" / "orfs_hooks"
+                  / "r2g-skills/signoff-loop" / "scripts" / "flow" / "orfs_hooks"
                   / "buffer_port_feedthroughs.tcl")
     lines += [
         "",

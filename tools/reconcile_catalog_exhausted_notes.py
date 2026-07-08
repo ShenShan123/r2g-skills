@@ -21,7 +21,7 @@ import sqlite3
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_DB = os.path.join(REPO, "r2g-rtl2gds", "knowledge", "knowledge.sqlite")
+DEFAULT_DB = os.path.join(REPO, "r2g-skills/signoff-loop", "knowledge", "knowledge.sqlite")
 STALE = '{"drc": "unknown", "lvs": "unknown"}'
 
 

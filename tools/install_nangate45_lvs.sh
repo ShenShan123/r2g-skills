@@ -4,7 +4,7 @@
 # does NOT ship an LVS rule for nangate45; ORFS's `make lvs` silently
 # emits "skipped" without one. This script materializes the rule.
 set -euo pipefail
-SRC="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../r2g-rtl2gds/assets/platforms/nangate45/lvs/FreePDK45.lylvs"
+SRC="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../r2g-skills/signoff-loop/assets/platforms/nangate45/lvs/FreePDK45.lylvs"
 ORFS_ROOT="${ORFS_ROOT:-${1:-}}"
 if [[ -z "$ORFS_ROOT" ]]; then
   if [[ -d "$HOME/OpenROAD-flow-scripts" ]]; then ORFS_ROOT="$HOME/OpenROAD-flow-scripts"

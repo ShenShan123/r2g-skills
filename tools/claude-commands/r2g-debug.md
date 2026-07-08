@@ -1,11 +1,11 @@
 ---
-description: Drive an RTL→GDS sign-off campaign on an ORFS platform (sky130hd by default — full, genuinely clean-able DRC (KLayout gate + optional Magic advisory) + LVS (Netgen) + RCX signoff; nangate45/asap7/gf180/ihp also supported) in parallel waves, hunt r2g-rtl2gds skill bugs, and prove the engineer-learning-loop is closed (DRC clean where the deck allows — sky130hd cleans via KLayout DRC + Netgen LVS; asap7 KLayout DRC is NOT clean-able and needs the un-installed Calibre deck — + best Fmax + promoted recipes). Also independently VERIFIES the RTL→Graph dataset conversion (5 PyG graph views b–f, techlib/LEF parser, feature + label extraction incl. the new congestion labels) against raw DEF/LEF/liberty + OpenDB ground truth on both sky130hd and nangate45.
+description: Drive an RTL→GDS sign-off campaign on an ORFS platform (sky130hd by default — full, genuinely clean-able DRC (KLayout gate + optional Magic advisory) + LVS (Netgen) + RCX signoff; nangate45/asap7/gf180/ihp also supported) in parallel waves, hunt r2g-skills skill bugs, and prove the engineer-learning-loop is closed (DRC clean where the deck allows — sky130hd cleans via KLayout DRC + Netgen LVS; asap7 KLayout DRC is NOT clean-able and needs the un-installed Calibre deck — + best Fmax + promoted recipes). Also independently VERIFIES the RTL→Graph dataset conversion (5 PyG graph views b–f, techlib/LEF parser, feature + label extraction incl. the new congestion labels) against raw DEF/LEF/liberty + OpenDB ground truth on both sky130hd and nangate45.
 argument-hint: "[overrides, e.g. PLATFORM=sky130hd WAVE_MAX=24 WORKERS=3 NUM_CORES=4]"
 ---
 
-# /r2g-debug — Drive, debug, and PROVE the r2g-rtl2gds learning loop (any ORFS platform)
+# /r2g-debug — Drive, debug, and PROVE the r2g-skills learning loop (any ORFS platform)
 
-You are debugging the `r2g-rtl2gds` skill by running a **real, parallel, wave-batched
+You are debugging the `r2g-skills` skill by running a **real, parallel, wave-batched
 RTL→GDS sign-off campaign** over the RTL designs in this project on a chosen **ORFS
 platform**, and using that campaign as the test harness that surfaces skill bugs and proves
 the closed learning loop works.
@@ -22,7 +22,7 @@ clean-able — see the "asap7 arm specifics" note below.**
 
 **Mission (do all of these — they are one connected goal, not a menu):**
 1. Run the RTL designs in this project through the **`$PLATFORM` sign-off flow** using the
-   *newest* version of the skill (the canonical `r2g-rtl2gds/` tree, freshly symlink-deployed).
+   *newest* version of the skill (the canonical `r2g-skills/signoff-loop/` tree, freshly symlink-deployed).
 2. **Batch the RTL designs into waves** and run them **in parallel to fully use the CPUs**
    (respecting the shared-host hard rule below — do not oversubscribe).
 3. For every design: drive sign-off to the platform's **honest terminal state** (see the
@@ -61,16 +61,16 @@ LEDGER=${LEDGER:-design_cases/_batch/${PLATFORM}_campaign.jsonl}
 # NOTE: the original nangate45 round historically lives in design_cases/_batch/campaign.jsonl
 # (892 designs, all terminal). To RESUME it, pass LEDGER=design_cases/_batch/campaign.jsonl.
 # New rounds (incl. sky130hd, asap7) use <platform>_campaign.jsonl so each round's history stays immutable.
-EL=r2g-rtl2gds/scripts/loop/engineer_loop.py
-KDB=r2g-rtl2gds/knowledge/knowledge.sqlite
-JDB=r2g-rtl2gds/knowledge/journal.sqlite
+EL=r2g-skills/signoff-loop/scripts/loop/engineer_loop.py
+KDB=r2g-skills/signoff-loop/knowledge/knowledge.sqlite
+JDB=r2g-skills/signoff-loop/knowledge/journal.sqlite
 ```
 
 ---
 
 ## Per-platform signoff contract (read this before believing any `fail`/`incomplete`)
 
-`r2g-rtl2gds/SKILL.md` "Platform Support Matrix" is ground truth. The honest "clean" state is
+`r2g-skills/signoff-loop/SKILL.md` "Platform Support Matrix" is ground truth. The honest "clean" state is
 **platform-dependent** — demanding LVS on a platform with no LVS deck would mislabel every
 clean design and teach the loop a lie. The clean-gate is fail-closed on `{clean, clean_beol,
 skipped}`, so a *legitimately skipped* check IS clean.
@@ -144,13 +144,13 @@ REQUIRED on sky130 — Netgen LVS uses Magic to extract SPICE from the GDS.)
 - `CLAUDE.md` → **"The Closed Learning Loop"** and **"Honesty invariants"** — the contract you
   are verifying. Re-read the honesty invariants; they are the pass/fail criteria for "the loop
   is closed." They are **platform-agnostic** (only the signoff contract above is per-platform).
-- `r2g-rtl2gds/SKILL.md` — workflow, **Platform Support Matrix**, hard rules, env knobs
+- `r2g-skills/signoff-loop/SKILL.md` — workflow, **Platform Support Matrix**, hard rules, env knobs
   (`PLACE_FAST`, `ROUTE_FAST`, Fmax step 5a).
-- `r2g-rtl2gds/knowledge/README.md` — DB schema, CLI, the full numbered invariants.
-- `r2g-rtl2gds/references/engineer-loop.md` — the autonomous driver, escalation, A/B lifecycle.
-- `r2g-rtl2gds/references/failure-patterns.md` → **"Learning-Loop Closure Failures"** (the known
+- `r2g-skills/signoff-loop/knowledge/README.md` — DB schema, CLI, the full numbered invariants.
+- `r2g-skills/signoff-loop/references/engineer-loop.md` — the autonomous driver, escalation, A/B lifecycle.
+- `r2g-skills/signoff-loop/references/failure-patterns.md` → **"Learning-Loop Closure Failures"** (the known
   ways the loop silently lies) and **"Platforms without KLayout LVS: asap7"**.
-- `r2g-rtl2gds/references/graph-dataset.md` — the RTL→Graph dataset stage (Step 5): the five
+- `r2g-skills/def-graph/references/graph-dataset.md` — the RTL→Graph dataset stage (Step 5): the five
   topologies b–f, the shared tensor schema (`x[N,10]`/`y[N,5]`/`edge_attr`/`edge_y`), the
   feature/label join, and the ground-truth verification harness. Provenance + the 2026-07-05/06/07
   audit chain (every dataset-extraction defect found + fixed) is documented here and in
@@ -224,13 +224,13 @@ platforms — the historical nangate45 round's `runs`/`promoted` rows live here 
 ## Step 1 — Deploy the NEWEST skill as a symlink (non-negotiable)
 
 A stale deployed skill is the single most expensive failure mode in this repo (the 2026-06-08
-defect): the harness loads `.claude/skills/r2g-rtl2gds/`, **not** the canonical tree. A `cp`
+defect): the harness loads `.claude/skills/signoff-loop/`, **not** the canonical tree. A `cp`
 goes silently stale while you edit the canonical skill. Force a symlink deploy:
 
 ```bash
-bash r2g-rtl2gds/install.sh --project . --link --force
-readlink .claude/skills/r2g-rtl2gds   # MUST resolve to the canonical r2g-rtl2gds/ tree
-bash r2g-rtl2gds/scripts/flow/check_env.sh   # the tools $PLATFORM needs must be green
+bash r2g-skills/install.sh --project . --link --force
+readlink .claude/skills/signoff-loop   # MUST resolve to the canonical r2g-skills/signoff-loop/ tree
+bash r2g-skills/signoff-loop/scripts/flow/check_env.sh   # the tools $PLATFORM needs must be green
 ```
 
 `check_env.sh` lists every ORFS platform it found and the tool paths. For the default **sky130hd**
@@ -456,7 +456,7 @@ several map to documented patterns — chase them down rather than papering over
 
 The loop is "closed" only when ALL of these hold — show the SQL/output for each:
 
-- **Honesty 5/5:** `python3 r2g-rtl2gds/knowledge/honesty.py --db r2g-rtl2gds/knowledge/knowledge.sqlite`
+- **Honesty 5/5:** `python3 r2g-skills/signoff-loop/knowledge/honesty.py --db r2g-skills/signoff-loop/knowledge/knowledge.sqlite`
   passes over the **real committed store** (honesty is global, never platform-scoped).
 - **Both DBs agree (no ALARM):** `python3 tools/check_db_integrity.py --platform "$PLATFORM"`
   exits 0 — knowledge honesty 5/5 *and* the journal kept step (every A/B launch / promote / escalate
@@ -550,7 +550,7 @@ every sequential instance, and a **full independent congestion demand/capacity/g
 
 ```bash
 # Build the dataset for a completed $PLATFORM design (runs 13b/13c first if stale).
-bash r2g-rtl2gds/scripts/flow/run_graphs.sh design_cases/<design> "$PLATFORM"
+bash r2g-skills/def-graph/scripts/flow/run_graphs.sh design_cases/<design> "$PLATFORM"
 # Ground-truth verify a single case:
 "$R2G_GRAPH_PYTHON" tools/verify_graph_dataset.py design_cases/<design>
 # Sweep a whole corpus root — exits NON-ZERO on ANY design's failure (run after any regen):
@@ -576,8 +576,8 @@ nangate45-style design and is **always** available even with no backend run.
 
 ```bash
 "$R2G_GRAPH_PYTHON" -m pytest -q \
-  r2g-rtl2gds/tests/test_corner_case_pipeline.py r2g-rtl2gds/tests/test_corner_case_units.py \
-  r2g-rtl2gds/tests/test_graph_stage.py r2g-rtl2gds/tests/test_extract_congestion.py
+  r2g-skills/def-graph/tests/test_corner_case_pipeline.py r2g-skills/def-graph/tests/test_corner_case_units.py \
+  r2g-skills/def-graph/tests/test_graph_stage.py r2g-skills/def-graph/tests/test_extract_congestion.py
 ```
 
 These drive the **real** feature workers → label extractors → PyG builder over a hand-computable
@@ -633,7 +633,7 @@ artifact, not a sign-off verdict, so it does not enter the two memory DBs or the
 
 ## Step 6 — Record durable learnings (don't let the session evaporate)
 
-- Update `r2g-rtl2gds/references/` (failure-patterns / lessons-learned) and any
+- Update `r2g-skills/signoff-loop/references/` (failure-patterns / lessons-learned) and any
   `docs/superpowers/{plans,specs}` touched, with a **dated note (commit hash + superseded
   invariants)** — not just code+tests. Keep `CLAUDE.md`'s "no per-run results here" rule.
 - Update the operator memory index for this campaign's outcome (platform, promotions gained, bugs

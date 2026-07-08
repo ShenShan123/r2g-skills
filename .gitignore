@@ -206,7 +206,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# --- Project-specific: r2g-rtl2gds / OpenROAD ---
+# --- Project-specific: r2g-skills / OpenROAD ---
 
 # EDA run data (huge — never commit)
 design_cases/
@@ -239,21 +239,22 @@ Thumbs.db
 *~
 
 # Generated knowledge-store artifacts (regenerated on demand)
-# r2g-rtl2gds/knowledge/knowledge.sqlite      <- TRACKED: the skill ships pre-trained (spec D14)
-# r2g-rtl2gds/knowledge/heuristics.json       <- TRACKED
+# The knowledge store lives in the signoff-loop sub-skill after the 2026-07-07 r2g-skills split.
+# r2g-skills/signoff-loop/knowledge/knowledge.sqlite  <- TRACKED: the skill ships pre-trained (spec D14)
+# r2g-skills/signoff-loop/knowledge/heuristics.json   <- TRACKED
 # The knowledge_sync.py TEXT bundle (knowledge/store/) is an ON-DEMAND export/merge artifact for
 # sharing experience across operators (knowledge_sync.py export / merge / status) — regenerable,
 # NOT committed by default, so it is ignored here. (2026-06-23: kept the binary as the tracked
 # committed store; reverted the bundle-as-source-of-truth migration per operator preference.)
-r2g-rtl2gds/knowledge/store/
-r2g-rtl2gds/knowledge/failure_candidates.json
-r2g-rtl2gds/knowledge/*.sqlite-journal
-r2g-rtl2gds/knowledge/*.sqlite-wal
-r2g-rtl2gds/knowledge/*.sqlite-shm
-r2g-rtl2gds/knowledge/*.bak
+r2g-skills/signoff-loop/knowledge/store/
+r2g-skills/signoff-loop/knowledge/failure_candidates.json
+r2g-skills/signoff-loop/knowledge/*.sqlite-journal
+r2g-skills/signoff-loop/knowledge/*.sqlite-wal
+r2g-skills/signoff-loop/knowledge/*.sqlite-shm
+r2g-skills/signoff-loop/knowledge/*.bak
 # Tier-0 journal DB: high-volume EVIDENCE, never shipped (engineer-loop decision 11)
-r2g-rtl2gds/knowledge/journal.sqlite
-r2g-rtl2gds/knowledge/journal.sqlite-*
+r2g-skills/signoff-loop/knowledge/journal.sqlite
+r2g-skills/signoff-loop/knowledge/journal.sqlite-*
 
 # External RTL benchmark dataset (fetched separately)
 rtl_designs/

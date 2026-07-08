@@ -474,7 +474,7 @@ def generate_config_mk(project_dir, design_name, platform, rtl_files, sdc_path,
     fdbuf_line = ""
     if platform in ("sky130hd", "sky130hs"):
         _fdbuf_hook = (Path(__file__).resolve().parent.parent
-                       / "r2g-rtl2gds" / "scripts" / "flow" / "orfs_hooks"
+                       / "r2g-skills/signoff-loop" / "scripts" / "flow" / "orfs_hooks"
                        / "buffer_port_feedthroughs.tcl")
         fdbuf_line = f"\nexport POST_GLOBAL_PLACE_TCL = {_fdbuf_hook}"
 

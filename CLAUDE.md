@@ -1,54 +1,71 @@
 # Agent-with-OpenROAD — Project Guide
 
 AI-driven open-source EDA flow: natural-language spec → GDSII via OpenROAD-flow-scripts
-(ORFS), with full signoff (DRC, LVS, RCX). Implemented as the `r2g-rtl2gds` Claude Code skill.
+(ORFS), with full signoff (DRC, LVS, RCX). Implemented as the `r2g-skills` Claude Code skill
+collection — **two sub-skills** (2026-07-07 split; see `docs/superpowers/plans/r2g-skills-split-2026-07-07.md`):
+- **`signoff-loop`** — drives the flow RTL→GDS with full signoff *and* the self-improvement loop
+  (the two memory DBs + `engineer_loop`) that eliminates DRC/LVS violations and closes timing at Fmax.
+- **`def-graph`** — converts the clean, signed-off physical design (DEF/LEF/SPEF) into PyG graph
+  datasets: five graph views (b–f), the tech-lib/LEF parser, and feature/label extraction.
 
-**Two things make this project what it is** (everything else is plumbing):
+**Two things make `signoff-loop` what it is** (everything else is plumbing):
 1. **Two memory databases** (`knowledge.sqlite` = what *resulted*, `journal.sqlite` = what was
    *done*) record every run and learn repair recipes that transfer across designs/platforms.
 2. **`engineer_loop`** — the autonomous driver that closes the loop unattended (flow → fix →
    learn → A/B-promote) and keeps the skill self-evolving.
 
 See "The Closed Learning Loop" below — it is the heart of the repo. This file is *orientation*;
-the skill documents *how* to run/debug/tune. **Don't duplicate skill content or per-run results
-here** — when you fix a bug, update `r2g-rtl2gds/` (the skill), not this file. Prefer editing
+the skills document *how* to run/debug/tune. **Don't duplicate skill content or per-run results
+here** — when you fix a bug, update the relevant sub-skill under `r2g-skills/` (`signoff-loop/` for
+flow/signoff/learning, `def-graph/` for dataset construction), not this file. Prefer editing
 existing `scripts/` over adding new ones; use the documented steps, not ad-hoc shell, in production.
 
 ## Project Layout
 
 ```
-r2g-rtl2gds/                  # The skill (everything to run a flow lives here)
-  SKILL.md                      # Workflow, hard rules, env knobs (PLACE_FAST, ROUTE_FAST, …)
-  scripts/flow/                 # Stage runners: run_orfs.sh, run_drc/lvs/rcx.sh, fix_signoff.sh
-    orfs_hooks/                   # ORFS stage-hook Tcl (POST_GLOBAL_PLACE_TCL, …)
-  scripts/extract/              # Tool output → JSON: extract_ppa/drc/lvs/rcx/route; techlib/, labels/, features/, graph/
-  scripts/project/              # init_project, normalize_spec, validate_config
-  scripts/reports/              # check_timing, diagnose_signoff_fix, suggest_config, build_*
-  scripts/loop/                 # engineer_loop.py — the autonomous campaign driver
-  scripts/dashboard/            # render_gds_preview, generate/serve dashboard
-  knowledge/                    # The two memory DBs + learn/ingest/A-B Python (self-contained)
-  references/                   # Detailed docs (see "Where to find X")
-  assets/  tests/               # Templates + bundled platform extras; pytest suite
+r2g-skills/                     # The skill collection — installs TWO Claude Code skills
+  install.sh                      # Installs both sub-skills (symlinks each into .claude/skills/)
+  signoff-loop/                 # SKILL 1 — RTL→GDS flow + signoff + the self-improvement loop
+    SKILL.md                      # Workflow, hard rules, env knobs (PLACE_FAST, ROUTE_FAST, …)
+    scripts/flow/                 # Stage runners: run_orfs.sh, run_drc/lvs/rcx.sh, fix_signoff.sh, _env.sh
+      orfs_hooks/                   # ORFS stage-hook Tcl (POST_GLOBAL_PLACE_TCL, …)
+    scripts/extract/              # Tool output → JSON: extract_ppa/drc/lvs/rcx/route + report_io, presynth
+    scripts/project/              # init_project, normalize_spec, validate_config
+    scripts/reports/              # check_timing, diagnose_signoff_fix, fmax_search, build_*
+    scripts/loop/                 # engineer_loop.py — the autonomous campaign driver
+    scripts/dashboard/            # render_gds_preview, generate/serve dashboard
+    knowledge/                    # The two memory DBs + learn/ingest/A-B Python (self-contained)
+    references/                   # Signoff detailed docs (see "Where to find X")
+    assets/  tests/               # Templates + bundled platform rule decks; pytest suite
+  def-graph/                    # SKILL 2 — graph dataset construction from signed-off DEF/LEF/SPEF
+    SKILL.md                      # Labels → features → PyG graphs (b–f); torch-venv stage
+    scripts/flow/                 # run_labels.sh, run_features.sh, run_graphs.sh, resolve_platform_paths.sh, _env.sh
+    scripts/extract/techlib/      # Per-platform tech/LEF/liberty/DEF parser (shared by both stages)
+    scripts/extract/{labels,features,graph}/  # Y labels, X features, the five graph topologies
+    references/  tests/           # graph-dataset/feature/label docs; def-graph pytest suite
 tools/                          # Repo-level operator tooling + installers
 design_cases/                   # All design runs (gitignored); _batch/, _dashboard/
 ```
 
 ## Skill Deployment (must be a symlink, not a copy)
 
-Claude Code loads the skill from `.claude/skills/r2g-rtl2gds/` (gitignored), **not** the canonical
-`r2g-rtl2gds/` tree. Deploy with `bash r2g-rtl2gds/install.sh --project . --link` so the path is a
-**symlink**. A plain `cp` install silently goes stale — the harness then loads an old `SKILL.md`
-while the canonical skill evolves. If a session's loaded skill disagrees with `r2g-rtl2gds/SKILL.md`,
-re-run with `--link --force`. (Root cause of the 2026-06-08 stale-skill defect.)
+Claude Code loads each sub-skill from `.claude/skills/signoff-loop/` and `.claude/skills/def-graph/`
+(gitignored), **not** the canonical `r2g-skills/` tree. Deploy both with
+`bash r2g-skills/install.sh --project . --link` so each path is a **symlink**. A plain `cp` install
+silently goes stale — the harness then loads an old `SKILL.md` while the canonical skill evolves. If
+a session's loaded skill disagrees with `r2g-skills/<skill>/SKILL.md`, re-run with `--link --force`.
+(Root cause of the 2026-06-08 stale-skill defect.)
 
 ## Toolchain (autodetected by the skill)
 
-`scripts/flow/_env.sh` autodetects ORFS + tool paths — nothing to source manually. Override via
-`$R2G_ENV_FILE`, `references/env.local.sh`, or by exporting `ORFS_ROOT`/`OPENROAD_EXE`/`YOSYS_EXE`/
+`<skill>/scripts/flow/_env.sh` autodetects ORFS + tool paths — nothing to source manually (each
+sub-skill ships its own copy; they are byte-identical). Override via `$R2G_ENV_FILE`,
+`<skill>/references/env.local.sh`, or by exporting `ORFS_ROOT`/`OPENROAD_EXE`/`YOSYS_EXE`/
 `KLAYOUT_CMD`/… **Required:** python3 (3.10+), yosys, openroad, ORFS checkout. **Optional:**
 iverilog/vvp, verilator, klayout, magic, netgen-lvs, opensta, sky130A PDK; a
-torch+torch_geometric+pandas venv for the PyG graph-dataset stage only (`R2G_GRAPH_PYTHON`;
-`run_graphs.sh` skips cleanly without it). Verify with `scripts/flow/check_env.sh`.
+torch+torch_geometric+pandas venv for the `def-graph` PyG graph-dataset stage only
+(`R2G_GRAPH_PYTHON`; `run_graphs.sh` skips cleanly without it). Verify with
+`signoff-loop/scripts/flow/check_env.sh`.
 
 **This machine:** signoff tools (iverilog/vvp, magic, netgen) live in `~/miniconda3/envs/eda`; the
 sky130A PDK is staged at `/proj/workarea/user5/sky130_pdk/share/pdk/sky130A`; all pinned in
@@ -213,21 +230,22 @@ inert for nangate45). The dashboard's **Knowledge Store Health** panel renders r
 
 | Question                                                            | File                                              |
 | ------------------------------------------------------------------- | ------------------------------------------------- |
-| How does the skill run a flow?                                      | `r2g-rtl2gds/SKILL.md`                             |
-| Memory DBs: schema, CLI, full invariants list                       | `r2g-rtl2gds/knowledge/README.md`                 |
-| `engineer_loop`: autonomous campaign + escalation + provenance      | `r2g-rtl2gds/references/engineer-loop.md`         |
-| Fix-learning loop (record → learn → apply, symptom index)           | `r2g-rtl2gds/references/signoff-fixing.md`        |
-| Phase-by-phase workflow                                             | `r2g-rtl2gds/references/workflow.md`              |
-| ORFS backend setup, env knobs, macro designs                        | `r2g-rtl2gds/references/orfs-playbook.md`         |
-| Fmax search (loose-first fastest period; place-proxy + deterioration model) | `r2g-rtl2gds/references/orfs-playbook.md` ("Fmax Search") + `SKILL.md` step 5a |
-| A specific failure/pitfall (DRC stuck, route congestion, CDL, …)    | `r2g-rtl2gds/references/failure-patterns.md`      |
-| Historical debug narratives + corpus results                        | `r2g-rtl2gds/references/lessons-learned.md`       |
-| How to read PPA / signoff JSON                                      | `r2g-rtl2gds/references/ppa-report-guide.md`      |
-| Dataset label/feature extraction (Y/X)                              | `references/{label,feature}-extraction.md`        |
-| PyG graph datasets (b–f variants, netlist graph, torch venv)        | `r2g-rtl2gds/references/graph-dataset.md`         |
-| Per-platform tech handling (voltage, tap cells, layers, liberty)    | `r2g-rtl2gds/scripts/extract/techlib/`            |
-| Spec / config / SDC templates                                       | `references/spec-template.md`, `assets/`          |
-| DRC/LVS/route fixing (antenna diode, density/route relief, LVS)     | `r2g-rtl2gds/references/signoff-fixing.md`        |
+| How does the flow run RTL→GDS?                                      | `r2g-skills/signoff-loop/SKILL.md`                |
+| Memory DBs: schema, CLI, full invariants list                       | `r2g-skills/signoff-loop/knowledge/README.md`     |
+| `engineer_loop`: autonomous campaign + escalation + provenance      | `r2g-skills/signoff-loop/references/engineer-loop.md`  |
+| Fix-learning loop (record → learn → apply, symptom index)           | `r2g-skills/signoff-loop/references/signoff-fixing.md` |
+| Phase-by-phase workflow                                             | `r2g-skills/signoff-loop/references/workflow.md`  |
+| ORFS backend setup, env knobs, macro designs                        | `r2g-skills/signoff-loop/references/orfs-playbook.md`  |
+| Fmax search (loose-first fastest period; place-proxy + deterioration model) | `r2g-skills/signoff-loop/references/orfs-playbook.md` ("Fmax Search") + `SKILL.md` step 5a |
+| A specific failure/pitfall (DRC stuck, route congestion, CDL, …)    | `r2g-skills/signoff-loop/references/failure-patterns.md`  |
+| Historical debug narratives + corpus results                        | `r2g-skills/signoff-loop/references/lessons-learned.md`   |
+| How to read PPA / signoff JSON                                      | `r2g-skills/signoff-loop/references/ppa-report-guide.md`  |
+| How does def-graph build the dataset?                               | `r2g-skills/def-graph/SKILL.md`                   |
+| Dataset label/feature extraction (Y/X)                              | `r2g-skills/def-graph/references/{label,feature}-extraction.md`  |
+| PyG graph datasets (b–f variants, netlist graph, torch venv)        | `r2g-skills/def-graph/references/graph-dataset.md`  |
+| Per-platform tech handling (voltage, tap cells, layers, liberty)    | `r2g-skills/def-graph/scripts/extract/techlib/`   |
+| Spec / config / SDC templates                                       | `r2g-skills/signoff-loop/references/spec-template.md`, `r2g-skills/signoff-loop/assets/`  |
+| DRC/LVS/route fixing (antenna diode, density/route relief, LVS)     | `r2g-skills/signoff-loop/references/signoff-fixing.md`  |
 
 ## When You Fix a Bug
 

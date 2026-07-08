@@ -30,7 +30,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SKILL = ROOT / "r2g-rtl2gds"
+SKILL = ROOT / "r2g-skills/signoff-loop"
 for p in (SKILL / "knowledge", SKILL / "scripts" / "reports"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))

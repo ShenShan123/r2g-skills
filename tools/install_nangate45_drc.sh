@@ -6,9 +6,9 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 # shellcheck source=/dev/null
-source "$REPO/r2g-rtl2gds/scripts/flow/_env.sh" >/dev/null 2>&1 || true
+source "$REPO/r2g-skills/signoff-loop/scripts/flow/_env.sh" >/dev/null 2>&1 || true
 : "${FLOW_DIR:?ORFS FLOW_DIR not found; set ORFS_ROOT}"
-SRC="$REPO/r2g-rtl2gds/assets/platforms/nangate45/drc/FreePDK45.lydrc"
+SRC="$REPO/r2g-skills/signoff-loop/assets/platforms/nangate45/drc/FreePDK45.lydrc"
 DST_DIR="$FLOW_DIR/platforms/nangate45/drc"
 DST="$DST_DIR/FreePDK45.lydrc"
 mkdir -p "$DST_DIR"

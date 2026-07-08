@@ -51,8 +51,8 @@ Trend signals (WARN only -- a best-effort ledger out of step with the truth):
 
 Usage:
   python3 tools/check_db_integrity.py [--platform nangate45] \
-      [--kdb r2g-rtl2gds/knowledge/knowledge.sqlite] \
-      [--jdb r2g-rtl2gds/knowledge/journal.sqlite]
+      [--kdb r2g-skills/signoff-loop/knowledge/knowledge.sqlite] \
+      [--jdb r2g-skills/signoff-loop/knowledge/journal.sqlite]
 
 Exit: 0 if no ALARM (WARNs allowed), 1 if any ALARM, 2 if the knowledge DB is missing.
 """
@@ -62,9 +62,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEF_KDB = ROOT / "r2g-rtl2gds/knowledge/knowledge.sqlite"
-DEF_JDB = ROOT / "r2g-rtl2gds/knowledge/journal.sqlite"
-KNOWLEDGE_DIR = ROOT / "r2g-rtl2gds/knowledge"
+DEF_KDB = ROOT / "r2g-skills/signoff-loop/knowledge/knowledge.sqlite"
+DEF_JDB = ROOT / "r2g-skills/signoff-loop/knowledge/journal.sqlite"
+KNOWLEDGE_DIR = ROOT / "r2g-skills/signoff-loop/knowledge"
 
 # Import the canonical knowledge-side honesty gates so this tool's knowledge verdict
 # can NEVER drift from the committed-store CI gate / the test that asserts it.

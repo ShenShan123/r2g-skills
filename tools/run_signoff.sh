@@ -7,7 +7,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-SKILL_DIR="$REPO_ROOT/r2g-rtl2gds"
+SKILL_DIR="$REPO_ROOT/r2g-skills/signoff-loop"
 
 PROJECT_DIR="${1:-}"
 if [[ -z "$PROJECT_DIR" ]]; then

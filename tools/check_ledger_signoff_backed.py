@@ -59,7 +59,7 @@ See references/failure-patterns.md -> "Ledger-signoff gate mis-join (LIKE/platfo
 Usage:
   python3 tools/check_ledger_signoff_backed.py [--platform sky130hd] \
       [--ledger design_cases/_batch/sky130hd_campaign.jsonl] \
-      [--db r2g-rtl2gds/knowledge/knowledge.sqlite] [--verbose]
+      [--db r2g-skills/signoff-loop/knowledge/knowledge.sqlite] [--verbose]
 Exit status: 0 if no fabrication (WARN-only is still 0); non-zero if any fabrication.
 """
 from __future__ import annotations
@@ -71,7 +71,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEF_DB = ROOT / "r2g-rtl2gds/knowledge/knowledge.sqlite"
+DEF_DB = ROOT / "r2g-skills/signoff-loop/knowledge/knowledge.sqlite"
 
 # A legitimately skipped check IS clean (fail-closed whitelist mirrors the loop's
 # _mark_clean gate). clean_beol = FEOL-hang BEOL-only DRC pass; lvs never has it.

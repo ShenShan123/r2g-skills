@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SKILL = ROOT / "r2g-rtl2gds"
+SKILL = ROOT / "r2g-skills/signoff-loop"
 EXTRACT = SKILL / "scripts" / "extract"
 KNOW = SKILL / "knowledge"
 sys.path.insert(0, str(KNOW))

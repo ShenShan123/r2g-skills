@@ -16,7 +16,7 @@ import os
 import sqlite3
 import sys
 
-DB = "r2g-rtl2gds/knowledge/knowledge.sqlite"
+DB = "r2g-skills/signoff-loop/knowledge/knowledge.sqlite"
 LEDGER = "design_cases/_batch/campaign.jsonl"
 
 

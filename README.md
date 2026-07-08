@@ -2,7 +2,7 @@
 
 A Claude Code skill that drives an open-source RTL-to-GDS flow — from natural-language spec (or existing RTL) through synthesis, place-and-route, and full signoff (DRC, LVS, RCX) — using Yosys, OpenROAD-flow-scripts, KLayout, and OpenRCX.
 
-Install the `r2g-rtl2gds` skill, then ask Claude: *"synthesize this UART at 100 MHz on nangate45"* — it handles everything from RTL generation to GDSII.
+Install the `r2g-skills` skills (`signoff-loop` for RTL→GDS + signoff, `def-graph` for graph datasets), then ask Claude: *"synthesize this UART at 100 MHz on nangate45"* — it handles everything from RTL generation to GDSII.
 
 ---
 
@@ -28,7 +28,7 @@ Install the `r2g-rtl2gds` skill, then ask Claude: *"synthesize this UART at 100 
 ```bash
 git clone https://github.com/ShenShan123/agent-r2g.git
 cd agent-r2g
-./install.sh --user          # copy to ~/.claude/skills/r2g-rtl2gds
+bash r2g-skills/install.sh --user   # installs signoff-loop + def-graph into ~/.claude/skills/
 ```
 
 Restart Claude Code (or run `/reload`) after install.
@@ -36,17 +36,17 @@ Restart Claude Code (or run `/reload`) after install.
 **Other options:**
 
 ```bash
-./install.sh --user            # global — available in every Claude Code session (default)
-./install.sh --project .       # local  — scoped to the current project directory
-./install.sh --link --user     # symlink — edits are picked up without reinstalling
-./install.sh --force --user    # overwrite an existing install
-./install.sh --uninstall       # remove
+bash r2g-skills/install.sh --user            # global — available in every Claude Code session (default)
+bash r2g-skills/install.sh --project .       # local  — scoped to the current project directory
+bash r2g-skills/install.sh --link --user     # symlink — edits are picked up without reinstalling
+bash r2g-skills/install.sh --force --user    # overwrite an existing install
+bash r2g-skills/install.sh --uninstall       # remove both sub-skills
 ```
 
-**Installing from the skill directory alone** (no full repo clone needed):
+**Installing from the skill collection directory alone** (no full repo clone needed):
 
 ```bash
-cd r2g-rtl2gds
+cd r2g-skills
 ./install.sh --user
 ```
 
@@ -93,12 +93,12 @@ sudo ./etc/DependencyInstaller.sh   # installs remaining build deps
 After the build, the skill autodetects both binaries from `$ORFS_ROOT/tools/install/` if you set `ORFS_ROOT`. Do that in `env.local.sh` (one line):
 
 ```bash
-cp ~/.claude/skills/r2g-rtl2gds/references/env.local.sh.template \
-   ~/.claude/skills/r2g-rtl2gds/references/env.local.sh
+cp ~/.claude/skills/signoff-loop/references/env.local.sh.template \
+   ~/.claude/skills/signoff-loop/references/env.local.sh
 
 # Add this one line to env.local.sh:
 echo 'export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"' \
-  >> ~/.claude/skills/r2g-rtl2gds/references/env.local.sh
+  >> ~/.claude/skills/signoff-loop/references/env.local.sh
 ```
 
 ---
@@ -136,11 +136,11 @@ export KLAYOUT_CMD="/usr/bin/klayout"
 
 ### `env.local.sh` — full reference
 
-The file lives at `~/.claude/skills/r2g-rtl2gds/references/env.local.sh`. Copy it from the template and edit:
+The file lives at `~/.claude/skills/signoff-loop/references/env.local.sh`. Copy it from the template and edit:
 
 ```bash
-cp ~/.claude/skills/r2g-rtl2gds/references/env.local.sh.template \
-   ~/.claude/skills/r2g-rtl2gds/references/env.local.sh
+cp ~/.claude/skills/signoff-loop/references/env.local.sh.template \
+   ~/.claude/skills/signoff-loop/references/env.local.sh
 ```
 
 All keys are optional — uncomment only the lines that the autodetect gets wrong.
@@ -234,7 +234,7 @@ package and the GitHub release API rate-limits unauthenticated listing — the c
 ### Verify the setup
 
 ```bash
-bash ~/.claude/skills/r2g-rtl2gds/scripts/flow/check_env.sh
+bash ~/.claude/skills/signoff-loop/scripts/flow/check_env.sh
 ```
 
 Expected output when all required tools are found:
@@ -294,7 +294,7 @@ With tools verified, open any Claude Code session and ask something like:
 > *"Run DRC and LVS on my design"*
 > *"Generate a simple arbiter and produce a GDS"*
 
-Claude matches these requests to the `r2g-rtl2gds` skill and drives every stage — spec normalization, RTL generation, lint, simulation, synthesis, place-and-route, timing gate, and signoff — plus optional ML dataset extraction (label/feature CSVs and training-ready PyG graphs).
+Claude matches these requests to the `signoff-loop` skill and drives every stage — spec normalization, RTL generation, lint, simulation, synthesis, place-and-route, timing gate, and signoff. Optional ML dataset extraction (label/feature CSVs and training-ready PyG graphs) from the signed-off result is handled by the companion `def-graph` skill.
 
 The skill works from **existing RTL** (drop your file into `rtl/design.v`) or from a **natural-language spec** (Claude writes the RTL for you).
 
@@ -464,50 +464,49 @@ python3 scripts/loop/engineer_loop.py ab-enqueue \
 
 ```
 agent-r2g/
-├── r2g-rtl2gds/                       # ★ The skill — copy/symlink into ~/.claude/skills/
-│   ├── SKILL.md                       #   Claude Code entry point (metadata + workflow)
-│   ├── install.sh                     #   Standalone installer
-│   ├── scripts/
-│   │   ├── flow/                      #   Stage runners: lint, sim, synth, orfs, drc, lvs, rcx
-│   │   │   ├── fix_signoff.sh         #     Diagnose → apply strategy → re-run loop (≤3 iter)
-│   │   │   └── orfs_hooks/            #     Tcl sourced into ORFS stages (PRE/POST_<STAGE>_TCL)
-│   │   ├── extract/                   #   Parse tool output → JSON
-│   │   │   ├── extract_route.py       #     Route-stage abort extractor → reports/route.json ★NEW
-│   │   │   ├── features/
-│   │   │   │   └── presynth.py        #     Pre-synthesis KNN feature extractor (Win 5) ★NEW
-│   │   │   └── graph/                 #     PyG graph datasets: b–f variants + netlist graph (run_graphs.sh) ★NEW
-│   │   ├── project/                   #   init / normalize / validate
-│   │   ├── reports/                   #   Timing gate, diagnosis (diagnose_signoff_fix.py), history
-│   │   └── dashboard/                 #   GDS preview + multi-project HTML dashboard
-│   │       └── render_drc_violation.py#     DRC violation screenshot renderer (Win 4) ★NEW
-│   ├── knowledge/                     #   Cross-run memory (ships pre-trained, tracked in git)
-│   │   ├── knowledge.sqlite           #     runs · failure_events · fix_events · ab_trials · …
-│   │   ├── journal.sqlite             #     actions · log_summaries · tool_bugs (gitignored)
-│   │   ├── heuristics.json            #     Learned per-symptom repair recipes (Tier-3)
-│   │   ├── ingest_run.py              #     One row per flow run → knowledge.sqlite
-│   │   ├── learn_heuristics.py        #     Derives heuristics.json + enqueues A/B candidates
-│   │   ├── recipe_lifecycle.py        #     shadow → candidate → promoted / → shadow
-│   │   ├── ab_runner.py               #     Plan / run / judge A/B arms (LCB verdict, Win 2)
-│   │   ├── suggest_config.py          #     Per-family config suggestions (KNN retrieval, Win 5)
-│   │   ├── eval_heuristics.py         #     r2g-bench held-out self-evaluation (Win 3) ★NEW
-│   │   └── escalations.py             #     Open escalation records for the agent tier
-│   ├── references/                    #   Failure patterns, engineer-loop runbook, PPA guide, …
-│   ├── assets/                        #   config.mk / constraint.sdc templates + examples
-│   └── tests/                         #   pytest suite (1,058 tests)
-├── install.sh                         # ★ One-command installer
-├── .claude-plugin/plugin.json         #   Claude Code plugin manifest
+├── r2g-skills/                        # ★ The skill collection — install into ~/.claude/skills/
+│   ├── install.sh                     #   Installs BOTH sub-skills (symlink/copy)
+│   ├── signoff-loop/                  # SKILL 1 — RTL→GDS flow + signoff + self-improvement loop
+│   │   ├── SKILL.md                   #   Claude Code entry point (metadata + workflow)
+│   │   ├── scripts/
+│   │   │   ├── flow/                  #   Stage runners: lint/sim/synth/orfs/drc/lvs/rcx + _env.sh
+│   │   │   │   ├── fix_signoff.sh     #     Diagnose → apply strategy → re-run loop (≤3 iter)
+│   │   │   │   └── orfs_hooks/        #     Tcl sourced into ORFS stages (PRE/POST_<STAGE>_TCL)
+│   │   │   ├── extract/               #   Parse tool output → JSON (extract_ppa/drc/lvs/rcx/route)
+│   │   │   │   ├── report_io.py       #     Shared JSON writer for the signoff extractors
+│   │   │   │   └── presynth.py        #     Pre-synthesis KNN feature extractor (Win 5)
+│   │   │   ├── project/               #   init / normalize / validate
+│   │   │   ├── reports/               #   Timing gate, diagnosis, Fmax search, history
+│   │   │   └── dashboard/             #   GDS preview + multi-project HTML dashboard
+│   │   ├── knowledge/                 #   Cross-run memory (ships pre-trained, tracked in git)
+│   │   │   ├── knowledge.sqlite       #     runs · failure_events · fix_events · ab_trials · …
+│   │   │   ├── heuristics.json        #     Learned per-symptom repair recipes (Tier-3)
+│   │   │   ├── ingest_run.py · learn_heuristics.py · ab_runner.py · suggest_config.py
+│   │   │   └── escalations.py         #     Open escalation records for the agent tier
+│   │   ├── references/                #   Failure patterns, engineer-loop runbook, PPA guide, …
+│   │   ├── assets/                    #   config.mk / constraint.sdc templates + platform rule decks
+│   │   └── tests/                     #   pytest suite (signoff-loop)
+│   └── def-graph/                     # SKILL 2 — graph datasets from signed-off DEF/LEF/SPEF
+│       ├── SKILL.md                   #   Labels → features → PyG graphs (b–f)
+│       ├── scripts/
+│       │   ├── flow/                  #   run_labels/run_features/run_graphs + resolve_platform_paths + _env.sh
+│       │   └── extract/
+│       │       ├── techlib/           #     Per-platform tech/LEF/liberty/DEF parser
+│       │       ├── labels/            #     Y: congestion · wirelength · timing · irdrop
+│       │       ├── features/          #     X: nodes_* · edges_* · metadata
+│       │       └── graph/             #     PyG b–f variants + netlist graph (run_graphs.sh)
+│       ├── references/                #   graph-dataset · feature-extraction · label-extraction
+│       └── tests/                     #   pytest suite (def-graph)
+├── .claude-plugin/plugin.json         #   Claude Code plugin manifest (name: r2g-skills)
 ├── tools/                             #   Batch orchestration helpers (not part of skill install)
 │   ├── setup_rtl_designs.py           #     Scaffold design_cases/ from an RTL catalog
-│   ├── batch_orfs_only.sh             #     Parallel ORFS runner with per-case flock
-│   ├── batch_flow.sh                  #     Full flow (ORFS + signoff)
-│   ├── fix_orfs_failures.py           #     Log-driven config.mk rewriter
-│   ├── sky130_campaign.py             #     sky130hd sweep ledger (init / wave / status)
+│   ├── batch_orfs_only.sh · batch_flow.sh · fix_orfs_failures.py
 │   ├── mk_sky130_project.py           #     Source project → sky130hd materializer
-│   └── run_sky130_design.sh           #     Per-design sky130 driver (flow → signoff → ingest)
+│   └── verify_graph_dataset.py        #     Independent dataset verifier (def-graph)
 └── CLAUDE.md                          #   Project instructions for this repo
 ```
 
-Everything under `r2g-rtl2gds/` is what gets installed. Everything outside it (`tools/`, `rtl_designs*/`, `design_cases/`) is workspace used to validate the skill at scale.
+Everything under `r2g-skills/` is what gets installed (as two skills, `signoff-loop` + `def-graph`). Everything outside it (`tools/`, `rtl_designs*/`, `design_cases/`) is workspace used to validate the skills at scale.
 
 ---
 
@@ -516,7 +515,7 @@ Everything under `r2g-rtl2gds/` is what gets installed. Everything outside it (`
 The scripts work directly without Claude Code. Example for an existing counter RTL:
 
 ```bash
-SKILL=~/.claude/skills/r2g-rtl2gds
+SKILL=~/.claude/skills/signoff-loop
 PROJ=design_cases/my_counter
 
 # Scaffold
@@ -559,7 +558,7 @@ bash    $SKILL/scripts/flow/run_graphs.sh  $PROJ  nangate45
 # -> $PROJ/dataset/{b..f}_graph.pt, netlist_graph.pt, graph_manifest.json
 ```
 
-A worked example: `r2g-rtl2gds/assets/examples/simple-arbiter/`.
+A worked example: `r2g-skills/signoff-loop/assets/examples/simple-arbiter/`.
 
 ---
 
@@ -581,7 +580,7 @@ python3 tools/fix_orfs_failures.py
 DESIGNS_LIST=failed.txt bash tools/batch_orfs_only.sh 8 7200
 ```
 
-`fix_orfs_failures.py` handles six failure patterns: wrong top module, `SYNTH_MEMORY_MAX_BITS` overflow, IO pin overflow, place density overflow, PDN strap width, and stage timeout. Full catalog: `r2g-rtl2gds/references/failure-patterns.md`.
+`fix_orfs_failures.py` handles six failure patterns: wrong top module, `SYNTH_MEMORY_MAX_BITS` overflow, IO pin overflow, place density overflow, PDN strap width, and stage timeout. Full catalog: `r2g-skills/signoff-loop/references/failure-patterns.md`.
 
 ---
 
@@ -603,7 +602,7 @@ reconcile flat-transistor extraction). `run_netgen_lvs.sh` handles antenna-diode
 automatically (Magic's diode X-subcircuit → D-device normalization) and classifies any
 mismatch (`top_pin_mismatch` / `netgen_topology` / `generic`). Designs with port-to-port
 `assign` feedthroughs additionally need the `buffer_port_feedthroughs.tcl` stage hook in
-config.mk — see `r2g-rtl2gds/SKILL.md` ("Netgen LVS") and
+config.mk — see `r2g-skills/signoff-loop/SKILL.md` ("Netgen LVS") and
 `references/failure-patterns.md` ("sky130 LVS").
 
 ---

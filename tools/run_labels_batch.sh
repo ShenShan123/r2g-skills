@@ -7,11 +7,11 @@ set -uo pipefail
 #   design...          explicit project names under design_cases/; if omitted,
 #                      auto-discovers designs with a collected 6_final.odb.
 # Per-design logs + labels_backfill.jsonl under design_cases/_batch/logs_labels_<tag>/.
-# See r2g-rtl2gds/references/label-extraction.md.
+# See r2g-skills/def-graph/references/label-extraction.md.
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CASES_DIR="$BASE_DIR/design_cases"
-SKILL_DIR="$BASE_DIR/r2g-rtl2gds"
+SKILL_DIR="$BASE_DIR/r2g-skills/def-graph"
 RUN_LABELS="$SKILL_DIR/scripts/flow/run_labels.sh"
 
 MAX_JOBS=4

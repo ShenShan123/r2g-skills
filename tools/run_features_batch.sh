@@ -7,11 +7,11 @@ set -uo pipefail
 #   design...          explicit project names under design_cases/; if omitted,
 #                      auto-discovers designs with a collected 6_final.def.
 # Per-design logs + features_backfill.jsonl under design_cases/_batch/logs_features_<tag>/.
-# See r2g-rtl2gds/references/feature-extraction.md.
+# See r2g-skills/def-graph/references/feature-extraction.md.
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CASES_DIR="$BASE_DIR/design_cases"
-SKILL_DIR="$BASE_DIR/r2g-rtl2gds"
+SKILL_DIR="$BASE_DIR/r2g-skills/def-graph"
 RUN_FEATURES="$SKILL_DIR/scripts/flow/run_features.sh"
 
 # Scrub stray per-design overrides from the parent shell so they cannot leak to every

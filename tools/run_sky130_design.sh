@@ -11,7 +11,7 @@
 set -uo pipefail
 
 REPO="/proj/workarea/user5/agent-r2g"
-SKILL="$REPO/r2g-rtl2gds"
+SKILL="$REPO/r2g-skills/signoff-loop"
 SRC="${1:-}"
 [[ -z "$SRC" ]] && { echo 'RESULT_JSON: {"error":"no source dir"}'; exit 1; }
 SRC="$(cd "$SRC" && pwd)"
