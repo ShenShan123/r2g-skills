@@ -282,12 +282,35 @@ bash r2g-skills/def-graph/scripts/flow/run_graphs.sh design_cases/<design> "$PLA
 
 A green `--batch` is the primary evidence (baselines: iir 167/167, DMA_Controller_DMA_fsm 164/164 sky130hd;
 168/168 with `--signoff-recheck`). But **a verifier is only as good as its checks** — confirm it exits
-non-zero on a real mismatch and its re-parsers don't re-implement the extractor's bug. The per-dimension
-**silent-value defect checklist** (quoted-liberty units, RECT-patch wirelength, driver `max_capacitance`,
-congestion vertical-demand transpose, SPEF↔DEF name escaping, MACRO id, `tracks_per_layer` numeric — each a
-shipped bug) lives in `failure-patterns.md` "Dataset-Extraction Silent-Value Defects" + graph-dataset.md.
+non-zero on a real mismatch and its re-parsers don't re-implement the extractor's bug. Per-label correctness
+is 5b below; the feature-side **silent-value defect checklist** (quoted-liberty units, driver
+`max_capacitance`, MACRO id, `tracks_per_layer` numeric — each a shipped bug) lives in `failure-patterns.md`
+"Dataset-Extraction Silent-Value Defects" + graph-dataset.md.
 
-### 5b — Coverage: nangate45 + the synthetic guardrail (re-run on ANY extractor change)
+### 5b — Label (Y) correctness: the independent oracle per label
+
+Each label is cross-checked against an **independent** re-derivation (never the extractor's code) — all in
+`verify_graph_dataset.py`, each guarding a shipped silent-value defect:
+
+- **Congestion** (`y1`) — radius-4 REFLECT gaussian recompute over each cell's orientation-aware bbox (all 3
+  columns) from an independent DEF demand walk + LEF pitch; loud-FAIL if grid/layers/die missing. Guards the
+  vertical-demand **transpose** (~79.7 % wrong) + retired radius-1 kernel.
+- **Wirelength** (`y4`) — DEF route re-walk, **RECT patches stripped** → `label==log1p(µm)`; cross-checked vs
+  OpenROAD `getLength`. Guards RECT-as-route-points (~100–400× inflation).
+- **Timing slack** (`y3`) — exact SDC transform `Path_Delay==max(0, clk_period−Cell_Slack)`, `label==log1p`,
+  off-path zero; every sequential instance covered. Guards the escaped-name join that dropped timing on
+  bus-named registers.
+- **IR drop** (`y2`) — canonical (not raw) CSV, `IR_Drop_mV`≤20 % supply, `label==log1p(IR/P95)` else 0;
+  opt-in `--signoff-recheck` **re-runs PDNSim** to diff per-cell (the only value check — the raw dump is
+  deleted; honest SKIP without `OPENROAD_EXE`). Guards all-NaN IR under a manifest `"ok"`.
+- **RC** (`y5` + `rc_edge_*`) — vs an independent SPEF re-parse: ground/coupling `log1p` match + cross-net
+  pair count, resistance intra-net, type↔column separation; bounds `equiv_res≤ΣR` (ohm↔kΩ unit bug) +
+  `C_total∈[Σg+Σc, Σg+2Σc]`. Guards the SPEF↔DEF de-escaping join (79–92 % RC-label loss; ≥0.8 floor).
+
+`verify_y` also matches each label's tensor slot to its CSV (NaN-safe); `label_health` + `labels_stats.json`
+must flag a raw/all-NaN CSV `invalid`, never `ok`.
+
+### 5c — Coverage: nangate45 + the synthetic guardrail (re-run on ANY extractor change)
 
 `design_cases/` is currently sky130hd (built datasets `iir`, `DMA_Controller_DMA_fsm`). For **nangate45**,
 drive the extractors against the reference DEF `/proj/workarea/user5/rtl2graph_verify/cordic_ng45_5_route.def`
@@ -305,7 +328,7 @@ A red suite = the conversion regressed OR a guardrail rotted. **Lesson (2026-07-
 changed the kernel without re-running this suite, leaving `test_corner_case_pipeline` RED on main (retired
 radius-1 vs the scipy-matched radius-4 Gaussian).
 
-### 5c — Staleness (regenerate after any extractor fix)
+### 5d — Staleness (regenerate after any extractor fix)
 
 The `.pt` is keyed to the DEF mtime; **regenerate features AND labels AND graphs** — RC labels in
 particular need a forced label rebuild (`rm reports/labels_stats.json`). A pre-RC dataset (`y`/`edge_y`
