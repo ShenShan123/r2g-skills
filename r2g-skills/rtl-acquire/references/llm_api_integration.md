@@ -122,7 +122,7 @@ export OPENAI_MODEL=gpt-5.2
 Then:
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/repair/call_openai_llm_patch_api.py \
+python3 <skill-dir>/scripts/repair/call_openai_llm_patch_api.py \
   --requests-jsonl $HOME/work/data/nangate45_graph_expansion_workspace/failures/llm_patch_requests.jsonl \
   --results-jsonl $HOME/work/data/nangate45_graph_expansion_workspace/failures/llm_patch_results.jsonl \
   --max-requests 10
@@ -131,7 +131,7 @@ Then:
 Then validate:
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/repair/evaluate_llm_patch_results.py
+python3 <skill-dir>/scripts/repair/evaluate_llm_patch_results.py
 ```
 
 ## Local Agent Path
@@ -141,7 +141,7 @@ The preferred path for this skill is often the local agent rather than a remote 
 Example:
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/repair/run_local_llm_patch_agent.py \
+python3 <skill-dir>/scripts/repair/run_local_llm_patch_agent.py \
   --requests-jsonl $HOME/work/data/nangate45_graph_expansion_workspace/failures/llm_patch_requests.jsonl \
   --results-jsonl $HOME/work/data/nangate45_graph_expansion_workspace/failures/llm_patch_results.jsonl \
   --max-requests 5

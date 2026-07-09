@@ -107,10 +107,8 @@ This is the canonical implementation group for repair logic.
 - `check_mapped_netlist_duplicates.py`
 - `audit_near_duplicates.py`
 - `validate_publish_readiness.py`
-- `mapping_change_sanity_check.py`
-- `repair_external_graph_mapping_drift.py`
 
-These validate structure, drift, and publication readiness.
+These validate structure, duplication, and publication readiness.
 
 These are the canonical implementation files for the validate group.
 

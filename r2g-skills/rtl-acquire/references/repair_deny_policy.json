@@ -34,7 +34,6 @@
   },
   "deny_rules": {
     "max_stub_modules_for_publish": 2,
-    "max_fix_ratio_for_publish": 1.0,
-    "forbid_publish_on_mapping_drift": true
+    "max_fix_ratio_for_publish": 1.0
   }
 }

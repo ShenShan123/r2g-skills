@@ -38,10 +38,6 @@ Purpose:
   - graph conversion produced no usable nodes
   - default action: reject unless synthesis/netlist export is clearly repairable
 
-- `mapping_drift`
-  - gate types or labels drift outside the current mapping space
-  - first action: repair mapping and re-convert graph
-
 - `top_mismatch`
   - expected top is wrong or parameterization invalid
   - first action: repair top metadata or parameter set

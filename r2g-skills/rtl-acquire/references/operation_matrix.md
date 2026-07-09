@@ -48,7 +48,7 @@ Use these as starting points. Adjust paths and policy flags for the current roun
 ### Run One Full Round
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/run_expansion_round.py \
+python3 <skill-dir>/scripts/run_expansion_round.py \
   --discover \
   --discovered-out $HOME/work/data/nangate45_graph_expansion_workspace/candidates/downloads_discovered_candidates.csv \
   --run-retry
@@ -57,7 +57,7 @@ Use these as starting points. Adjust paths and policy flags for the current roun
 ### Discover Candidates From `_downloads`
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/acquire/discover_download_candidates.py \
+python3 <skill-dir>/scripts/acquire/discover_download_candidates.py \
   --downloads-root $HOME/work/_downloads \
   --out-csv $HOME/work/data/nangate45_graph_expansion_workspace/candidates/downloads_discovered_candidates.csv \
   --scan-state-json $HOME/work/data/nangate45_graph_expansion_workspace/scan_state/downloads_scan_state.json
@@ -66,7 +66,7 @@ Use these as starting points. Adjust paths and policy flags for the current roun
 ### Discover From A Repo Manifest
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/acquire/discover_download_candidates.py \
+python3 <skill-dir>/scripts/acquire/discover_download_candidates.py \
   --downloads-root $HOME/work/_downloads \
   --repo-manifest-csv /path/to/repo_manifest.csv \
   --out-csv $HOME/work/data/nangate45_graph_expansion_workspace/candidates/repo_manifest_discovered_candidates.csv
@@ -75,7 +75,7 @@ Use these as starting points. Adjust paths and policy flags for the current roun
 ### Clone Missing Repos
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/acquire/clone_repo_manifest.py \
+python3 <skill-dir>/scripts/acquire/clone_repo_manifest.py \
   --repo-manifest-csv /path/to/repo_manifest.csv \
   --downloads-root $HOME/work/_downloads
 ```
@@ -83,28 +83,28 @@ Use these as starting points. Adjust paths and policy flags for the current roun
 ### Build Synth Variants
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/acquire/build_external_synth_variant_candidates.py \
-  --variant-policy-json $CODEX_HOME/skills/nangate45-graph-expander/references/synth_variant_policy.json
+python3 <skill-dir>/scripts/acquire/build_external_synth_variant_candidates.py \
+  --variant-policy-json <skill-dir>/references/synth_variant_policy.json
 ```
 
 ### Validate Publish Readiness
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/validate/validate_publish_readiness.py \
-  --publish-policy-json $CODEX_HOME/skills/nangate45-graph-expander/references/publish_policy.json
+python3 <skill-dir>/scripts/validate/validate_publish_readiness.py \
+  --publish-policy-json <skill-dir>/references/publish_policy.json
 ```
 
 ### Build Publish-Eligible Set
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/publish/build_publish_candidates.py \
-  --publish-policy-json $CODEX_HOME/skills/nangate45-graph-expander/references/publish_policy.json
+python3 <skill-dir>/scripts/publish/build_publish_candidates.py \
+  --publish-policy-json <skill-dir>/references/publish_policy.json
 ```
 
 ### Refresh The Merged Manifest
 
 ```bash
-/path/to/python $CODEX_HOME/skills/nangate45-graph-expander/scripts/publish/refresh_expanded_raw_manifest.py \
+python3 <skill-dir>/scripts/publish/refresh_expanded_raw_manifest.py \
   --use-publish-eligible \
   --publish-eligible-csv $HOME/work/data/nangate45_graph_expansion_workspace/manifests/publish_eligible_designs.csv
 ```
