@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "strategies": [
+    {
+      "name": "speed0",
+      "synth_variant": "yosys_abc_area0",
+      "design_suffix": "__speed0",
+      "notes_tag": "abc_speed",
+      "frontend": "",
+      "enabled": true
+    },
+    {
+      "name": "area1",
+      "synth_variant": "yosys_abc_area1",
+      "design_suffix": "__area1",
+      "notes_tag": "abc_area",
+      "frontend": "",
+      "enabled": true
+    },
+    {
+      "name": "speed0_slang_sv",
+      "synth_variant": "yosys_abc_area0",
+      "design_suffix": "__speed0_slang",
+      "notes_tag": "abc_speed+slang",
+      "frontend": "slang",
+      "enabled": false,
+      "require_suffix_any": [
+        ".sv"
+      ]
+    },
+    {
+      "name": "area1_slang_sv",
+      "synth_variant": "yosys_abc_area1",
+      "design_suffix": "__area1_slang",
+      "notes_tag": "abc_area+slang",
+      "frontend": "slang",
+      "enabled": false,
+      "require_suffix_any": [
+        ".sv"
+      ]
+    },
+    {
+      "name": "speed0_sv2v_sv",
+      "synth_variant": "yosys_abc_area0",
+      "design_suffix": "__speed0_sv2v",
+      "notes_tag": "abc_speed+sv2v",
+      "frontend": "sv2v",
+      "enabled": false,
+      "require_suffix_any": [
+        ".sv"
+      ]
+    },
+    {
+      "name": "area1_sv2v_sv",
+      "synth_variant": "yosys_abc_area1",
+      "design_suffix": "__area1_sv2v",
+      "notes_tag": "abc_area+sv2v",
+      "frontend": "sv2v",
+      "enabled": false,
+      "require_suffix_any": [
+        ".sv"
+      ]
+    }
+  ]
+}

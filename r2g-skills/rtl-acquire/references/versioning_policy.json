@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "record_dataset_snapshot": true,
+  "enable_dvc_if_available": false,
+  "tracked_artifacts": [
+    "merged_manifest",
+    "publish_eligible_designs",
+    "publish_validation"
+  ]
+}

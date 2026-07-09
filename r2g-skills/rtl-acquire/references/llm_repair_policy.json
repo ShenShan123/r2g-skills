@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "enable_llm_case_queue": true,
+  "max_cases_per_run": 100,
+  "max_tokens_per_design": 12000,
+  "approx_chars_per_token": 4,
+  "skip_if_estimated_tokens_exceed_budget": true,
+  "allowed_failure_classes": [
+    "parse_error",
+    "missing_include",
+    "missing_module"
+  ],
+  "require_min_design_quality_score": 0.0,
+  "require_frontend_or_parse_signal": true,
+  "forbid_if_auto_fix_action_present": [
+    "stub_module",
+    "resolve_include",
+    "set_mem_limit"
+  ],
+  "context_lines_per_file": 80,
+  "max_logic_change_ratio": 0.2,
+  "reject_large_patch_failure_classes": [
+    "missing_include"
+  ],
+  "warn_large_patch_failure_classes": [
+    "parse_error",
+    "missing_module"
+  ]
+}

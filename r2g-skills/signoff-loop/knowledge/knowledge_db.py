@@ -113,6 +113,14 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "floorplan_setup_ws": "REAL",
         "place_setup_ws": "REAL",
         "finish_setup_ws": "REAL",
+        # Declared flow scope (rtl-acquire ingestion 2026-07-09): 'full' (default,
+        # NULL == full) or 'synth_only' for corpus-expansion runs that INTEND to
+        # stop after synthesis (config.mk `export R2G_FLOW_SCOPE = synth_only`).
+        # orfs_status is derived against the DECLARED scope, so a synth-only pass
+        # ingests as 'pass' (not a misleading 'partial' that would flood the A/B
+        # planner with runs that were never signoff subjects). Mirrors the is_bench
+        # pattern: readers may filter on it; the failure_events write path NEVER does.
+        "flow_scope": "TEXT",
     },
     # Symptom-indexed memory (spec 2026-06-09): raw symptom tagging on the raw tiers.
     "fix_events": {

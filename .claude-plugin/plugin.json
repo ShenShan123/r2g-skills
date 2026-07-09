@@ -1,12 +1,13 @@
 {
   "name": "r2g-skills",
   "version": "0.2.0",
-  "description": "RTL-to-GDS-to-Graph skill collection. eda-install detects the machine and installs + verifies the open-source EDA toolchain (with a no-sudo conda path). signoff-loop drives an open-source EDA flow (Yosys + OpenROAD-flow-scripts + KLayout + Magic + Netgen + OpenRCX) from a spec or RTL to signed-off GDSII (DRC, LVS, RCX) with a self-improving fix/learn loop. def-graph converts the clean, signed-off physical design (DEF/LEF/SPEF) into PyTorch-Geometric graph datasets — five graph views (b–f), tech-lib/LEF parsing, and feature/label extraction.",
+  "description": "RTL-to-GDS-to-Graph skill collection. eda-install detects the machine and installs + verifies the open-source EDA toolchain (with a no-sudo conda path). signoff-loop drives an open-source EDA flow (Yosys + OpenROAD-flow-scripts + KLayout + Magic + Netgen + OpenRCX) from a spec or RTL to signed-off GDSII (DRC, LVS, RCX) with a self-improving fix/learn loop. def-graph converts the clean, signed-off physical design (DEF/LEF/SPEF) into PyTorch-Geometric graph datasets — five graph views (b–f), tech-lib/LEF parsing, and feature/label extraction. rtl-acquire discovers/screens RTL at corpus scale and expands it (synth-only) into pre-layout netlist graphs with dedup, quality scoring, and publish gating.",
   "license": "See LICENSE",
   "homepage": "https://github.com/ShenShan123/agent-r2g",
   "skills": [
     "r2g-skills/eda-install",
     "r2g-skills/signoff-loop",
-    "r2g-skills/def-graph"
+    "r2g-skills/def-graph",
+    "r2g-skills/rtl-acquire"
   ]
 }

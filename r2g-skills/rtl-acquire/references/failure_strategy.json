@@ -1,0 +1,373 @@
+{
+  "memory_limit": {
+    "pattern": "synth_memory_max_bits|synthesized memory size",
+    "actions": [
+      "set_mem_limit:131072"
+    ],
+    "action_stats": [
+      {
+        "action": "set_mem_limit:131072",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 28,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "missing_include": {
+    "pattern": "can't open include file|cannot open include file",
+    "actions": [
+      "resolve_include"
+    ],
+    "action_stats": [
+      {
+        "action": "resolve_include",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 35,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "missing_module": {
+    "pattern": "module `[^`]+` (not part of the design|not found)",
+    "actions": [
+      "stub_module"
+    ],
+    "action_stats": [
+      {
+        "action": "stub_module",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 79,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "invalid_macro_definition": {
+    "pattern": "Invalid name for macro definition",
+    "actions": [
+      "template_materialization",
+      "sanitize_macro_definition"
+    ]
+  },
+  "template_placeholder": {
+    "pattern": ">>%<<|%%[A-Z0-9_]+%%",
+    "actions": [
+      "template_materialization"
+    ]
+  },
+  "undefined_macro": {
+    "pattern": "unimplemented compiler directive or undefined macro",
+    "actions": [
+      "exclude"
+    ],
+    "action_stats": [
+      {
+        "action": "exclude",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 81,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "helper_collision": {
+    "pattern": "re-definition of module `\\$abstract\\\\dff'",
+    "actions": [
+      "exclude"
+    ],
+    "action_stats": [
+      {
+        "action": "exclude",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 81,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "graph_empty": {
+    "pattern": "no graph nodes were created from mapped netlist",
+    "actions": [
+      "exclude"
+    ],
+    "action_stats": [
+      {
+        "action": "exclude",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 81,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "vhdl_frontend": {
+    "pattern": "vhdl|entity|architecture|library ieee",
+    "actions": [
+      "vhd2vl"
+    ]
+  },
+  "sv_frontend": {
+    "pattern": "systemverilog|syntax error|parse error|front-end|frontend",
+    "actions": [
+      "sv2v"
+    ],
+    "action_stats": [
+      {
+        "action": "sv2v",
+        "attempts": 31,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 34,
+        "diagnosis_followed": 2,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "sv_frontend_slang": {
+    "pattern": "interface|package|typedef",
+    "actions": [
+      "set_frontend:slang"
+    ],
+    "action_stats": [
+      {
+        "action": "set_frontend:slang",
+        "attempts": 1,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 0,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "vtr_invalid_regression_parse": {
+    "pattern": "vtr-verilog-to-routing-min/odin_ii/regression_test/benchmark/verilog/(keywords|preprocessor|syntax)",
+    "actions": [
+      "exclude"
+    ],
+    "action_stats": [
+      {
+        "action": "exclude",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 81,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "simulation_system_task_format": {
+    "pattern": "unrecognized format character|system task [`']?\\$display|Can't resolve task name `\\$",
+    "actions": [
+      "sanitize_simulation_system_tasks"
+    ],
+    "action_stats": [
+      {
+        "action": "sanitize_simulation_system_tasks",
+        "attempts": 2,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 0,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "nonconstant_procedural_loop": {
+    "pattern": "procedural for-loop is not constant|2nd expression of procedural for-loop is not constant",
+    "actions": [
+      "rewrite_nonconstant_procedural_loop"
+    ],
+    "action_stats": [
+      {
+        "action": "rewrite_nonconstant_procedural_loop",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 1,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "sv2v_abstract_redefinition": {
+    "pattern": "re-definition of module `\\$abstract\\\\",
+    "actions": [
+      "recover_original_bundle_and_sanitize_simtasks"
+    ],
+    "action_stats": [
+      {
+        "action": "recover_original_bundle_and_sanitize_simtasks",
+        "attempts": 29,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 23,
+        "diagnosis_followed": 23,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "multi_edge_sensitive_events": {
+    "pattern": "Multiple edge sensitive events found for this signal",
+    "actions": [
+      "exclude"
+    ],
+    "action_stats": [
+      {
+        "action": "exclude",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 81,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "invalid_named_port_instantiation": {
+    "pattern": "does not have a port named",
+    "actions": [
+      "exclude"
+    ],
+    "action_stats": [
+      {
+        "action": "exclude",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 81,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "invalid_output_constant_connection": {
+    "pattern": "is connected to constants",
+    "actions": [
+      "exclude"
+    ],
+    "action_stats": [
+      {
+        "action": "exclude",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 81,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  },
+  "conflicting_driver_check_assert": {
+    "pattern": "multiple conflicting drivers|Found 1 problems in 'check -assert'",
+    "actions": [
+      "exclude"
+    ],
+    "action_stats": [
+      {
+        "action": "exclude",
+        "attempts": 0,
+        "success": 0,
+        "success_rate": 0.0,
+        "avg_reward": 0.0,
+        "success_good": 0,
+        "success_degraded": 0,
+        "success_low_value": 0,
+        "diagnosis_recommended": 81,
+        "diagnosis_followed": 0,
+        "diagnosis_success_after_recommendation": 0,
+        "reward_formula": "publish_gain + design_quality_score - fidelity_penalty - low_value_penalty - repair_cost"
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "allow_failure_kb_refresh": true,
+  "allow_failure_strategy_score_update": true,
+  "allow_signature_action_apply": true,
+  "allow_cleanup_rejected": true,
+  "allow_delete_rejected": false,
+  "track_mapping_file": true,
+  "track_scan_state": true,
+  "enable_mapping_change_sanity_check": true,
+  "mapping_change_sanity_max_designs": 12,
+  "block_on_mapping_sanity_failure": false,
+  "auto_repair_mapping_drift_on_mapping_change": true,
+  "record_dataset_snapshot": true
+}

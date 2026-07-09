@@ -71,6 +71,22 @@ elif [[ -n "${R2G_GRAPH_PYTHON:-}" ]]; then
 fi
 
 echo
+echo "[corpus expansion (rtl-acquire)]"
+# rtl-acquire borrows the sibling sub-skills (scoped-reuse contract): synth via
+# signoff-loop run_orfs.sh, graphs via def-graph netlist_graph.py, learning via
+# the knowledge DB. Optional: absence only disables the rtl-acquire skill.
+_skills_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)"
+print_row "run_orfs.sh (signoff-loop)" \
+  "$([[ -f "$_skills_root/signoff-loop/scripts/flow/run_orfs.sh" ]] && echo "$_skills_root/signoff-loop/scripts/flow/run_orfs.sh")" optional
+print_row "netlist_graph.py (def-graph)" \
+  "$([[ -f "$_skills_root/def-graph/scripts/extract/graph/netlist_graph.py" ]] && echo "$_skills_root/def-graph/scripts/extract/graph/netlist_graph.py")" optional
+print_row "ingest_run.py (knowledge)" \
+  "$([[ -f "$_skills_root/signoff-loop/knowledge/ingest_run.py" ]] && echo "$_skills_root/signoff-loop/knowledge/ingest_run.py")" optional
+if [[ -z "$_gp_found" ]]; then
+  echo "     (graph conversion will SKIP: designs record graph_skipped until R2G_GRAPH_PYTHON is provisioned)"
+fi
+
+echo
 echo "[platforms]"
 if [[ -n "${FLOW_DIR:-}" && -d "$FLOW_DIR/platforms" ]]; then
   for p in "$FLOW_DIR"/platforms/*/; do

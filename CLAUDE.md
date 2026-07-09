@@ -2,13 +2,20 @@
 
 AI-driven open-source EDA flow: natural-language spec → GDSII via OpenROAD-flow-scripts
 (ORFS), with full signoff (DRC, LVS, RCX), then a **training-ready graph dataset** for GNN
-predictors. Implemented as the `r2g-skills` Claude Code skill collection — **three sub-skills**
+predictors. Implemented as the `r2g-skills` Claude Code skill collection — **four sub-skills**
 (`signoff-loop` + `def-graph` from the 2026-07-07 split, see
 `docs/superpowers/plans/r2g-skills-split-2026-07-07.md`; `eda-install` added 2026-07-08, see
-`docs/superpowers/plans/r2g-skills-bootstrap-2026-07-08.md`):
-- **`eda-install`** — detects the machine and installs + verifies the toolchain the other two run
+`docs/superpowers/plans/r2g-skills-bootstrap-2026-07-08.md`; `rtl-acquire` ingested 2026-07-09, see
+`docs/superpowers/plans/rtl-acquire-ingestion-2026-07-09.md`):
+- **`eda-install`** — detects the machine and installs + verifies the toolchain the others run
   (ORFS + openroad/yosys, iverilog, klayout, magic/netgen, sky130A PDK, torch venv). One command,
   `bootstrap.sh` (detect → plan → install → pin `env.local.sh` → verify); no-sudo conda path by default.
+- **`rtl-acquire`** — the RTL corpus supplier, UPSTREAM of the others: discovers/screens/acquires RTL
+  at corpus scale (local trees, repo manifests, keyword search) and expands it **synth-only** into
+  pre-layout `netlist_graph.pt` graphs with dedup, quality scoring, and publish gating. Owns
+  acquire + corpus publish; BORROWS env (`_env.sh`), synth (`run_orfs.sh`, `ORFS_STAGES=synth`),
+  the graph format (def-graph `netlist_graph.py`), and failure learning (`knowledge.sqlite`,
+  runs stamped `flow_scope='synth_only'`; frontend classes land as `synth-frontend-*` events).
 - **`signoff-loop`** — drives the flow RTL→GDS with full signoff *and* the self-improvement loop
   (the two memory DBs + `engineer_loop`) that eliminates DRC/LVS violations and closes timing at Fmax.
 - **`def-graph`** — converts the clean, signed-off physical design (the ORFS `6_final.odb`/`.def`/
@@ -60,14 +67,21 @@ r2g-skills/                     # The skill collection — installs THREE Claude
     scripts/extract/techlib/      # Per-platform tech/LEF/liberty/DEF/SPEF parser (shared by both stages)
     scripts/extract/{labels,features,graph}/  # Y labels, X features, the five graph topologies (+ odb_to_def)
     references/  tests/           # graph-dataset/feature/label docs; def-graph pytest + corner-case suites
+  rtl-acquire/                  # SKILL 3 — corpus-scale RTL acquisition → synth-only netlist graphs
+    SKILL.md                      # acquire → expand → repair → validate → publish; scoped-reuse contract
+    scripts/{acquire,execute,repair,validate,publish,report,hygiene,knowledge}/  # stage-grouped
+    scripts/execute/expand_candidates.py  # per-candidate: run_orfs synth + netlist_graph.pt + ingest
+    scripts/knowledge/project_frontend_diagnosis.py  # journal→knowledge projection + honesty --check
+    scripts/skill_env.py  scripts/flow/_env.sh  # thin env delegate over the shared _env.sh
+    references/  tests/           # policy JSONs, operation matrix, failure KB; pytest suite
 tools/                          # Repo-level operator tooling + installers (incl. verify_graph_dataset.py)
 design_cases/                   # All design runs + built datasets (gitignored); _batch/, _dashboard/
 ```
 
 ## Skill Deployment (must be a symlink, not a copy)
 
-Claude Code loads each sub-skill from `.claude/skills/{eda-install,signoff-loop,def-graph}/`
-(gitignored), **not** the canonical `r2g-skills/` tree. Deploy all three with
+Claude Code loads each sub-skill from `.claude/skills/{eda-install,signoff-loop,def-graph,rtl-acquire}/`
+(gitignored), **not** the canonical `r2g-skills/` tree. Deploy all four with
 `bash r2g-skills/install.sh --project . --link` so each path is a **symlink**. A plain `cp` install
 silently goes stale — the harness then loads an old `SKILL.md` while the canonical skill evolves. If
 a session's loaded skill disagrees with `r2g-skills/<skill>/SKILL.md`, re-run with `--link --force`.
@@ -76,7 +90,7 @@ a session's loaded skill disagrees with `r2g-skills/<skill>/SKILL.md`, re-run wi
 ## Toolchain (autodetected by the skill)
 
 `<skill>/scripts/flow/_env.sh` autodetects ORFS + tool paths — nothing to source manually. All
-**three** sub-skills ship a copy that is **byte-identical** (md5 `a5ac873e…`); keep them in sync when
+**four** sub-skills ship a copy that is **byte-identical** (md5 `a5ac873e…`); keep them in sync when
 editing any. Override via `$R2G_ENV_FILE`, `<skill>/references/env.local.sh`, or by exporting
 `ORFS_ROOT`/`OPENROAD_EXE`/`YOSYS_EXE`/`KLAYOUT_CMD`/… **Required:** python3 (3.10+), yosys, openroad,
 ORFS checkout. **Optional:** iverilog/vvp, verilator, klayout, magic, netgen-lvs, opensta, sky130A PDK;
@@ -343,6 +357,8 @@ This skill's failure mode is a plausible-looking CSV with **wrong values**. Full
 | ------------------------------------------------------------------- | ------------------------------------------------- |
 | How do I install/verify the EDA toolchain (detect → install → pin)? | `r2g-skills/eda-install/SKILL.md` + `references/setup.md` |
 | How does the flow run RTL→GDS?                                      | `r2g-skills/signoff-loop/SKILL.md`                |
+| How do I grow the RTL corpus / expand netlist graphs at scale?      | `r2g-skills/rtl-acquire/SKILL.md`                 |
+| rtl-acquire task → script lookup, candidate CSV schema, failure KB  | `r2g-skills/rtl-acquire/references/{operation_matrix,candidate_csv_schema,failure_knowledge_base}.md` |
 | Memory DBs: schema, CLI, full invariants list                       | `r2g-skills/signoff-loop/knowledge/README.md`     |
 | `engineer_loop`: autonomous campaign + escalation + provenance      | `r2g-skills/signoff-loop/references/engineer-loop.md`  |
 | Fix-learning loop (record → learn → apply, symptom index)           | `r2g-skills/signoff-loop/references/signoff-fixing.md` |

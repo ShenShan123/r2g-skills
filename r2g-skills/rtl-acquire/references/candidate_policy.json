@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "discover_defaults": {
+    "reject_if_all_small": true,
+    "prefer_bundle_aware_candidates": true,
+    "skip_repo_scan_if_unchanged": true,
+    "sync_upstream_by_default": true
+  },
+  "candidate_screening": {
+    "skip_ram_macro_heavy": true,
+    "skip_testbench_paths": true,
+    "prefer_generated_rtl_when_build_markers_exist": true,
+    "prefer_medium_large_designs": true
+  }
+}

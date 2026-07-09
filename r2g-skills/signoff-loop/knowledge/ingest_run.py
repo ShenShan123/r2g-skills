@@ -474,7 +474,16 @@ def _orfs_fail_detail(run_dir: Path | None) -> tuple[str | None, str | None]:
     return (None, fallback)
 
 
-def _derive_orfs_status(stages: list[dict[str, Any]]) -> tuple[str, str | None]:
+def _derive_orfs_status(stages: list[dict[str, Any]],
+                        flow_scope: str = "full") -> tuple[str, str | None]:
+    """Status against the run's DECLARED scope (rtl-acquire 2026-07-09).
+
+    flow_scope='synth_only' (config.mk `export R2G_FLOW_SCOPE = synth_only`,
+    written by rtl-acquire's corpus expansion) requires only the synth stage —
+    a synth-only pass is a pass within its scope, never a misleading 'partial'
+    that would enqueue signoff A/B work for a run that was never a signoff
+    subject. Any other/absent value keeps the full six-stage requirement.
+    """
     if not stages:
         return ("unknown", None)
     saw_fail = False
@@ -492,7 +501,10 @@ def _derive_orfs_status(stages: list[dict[str, Any]]) -> tuple[str, str | None]:
             fail_stage = s.get("stage")
     if saw_fail:
         return ("fail", fail_stage)
-    required = ["synth", "floorplan", "place", "cts", "route", "finish"]
+    if flow_scope == "synth_only":
+        required = ["synth"]
+    else:
+        required = ["synth", "floorplan", "place", "cts", "route", "finish"]
     if all(name in stage_names_done for name in required):
         return ("pass", None)
     return ("partial", last_stage_name)
@@ -746,7 +758,10 @@ def ingest(project: Path,
             break
     stage_log = _read_stage_log(stage_log_path)
 
-    orfs_status, fail_stage = _derive_orfs_status(stage_log)
+    flow_scope = (cfg.get("R2G_FLOW_SCOPE") or "").strip().lower()
+    if flow_scope != "synth_only":
+        flow_scope = "full"
+    orfs_status, fail_stage = _derive_orfs_status(stage_log, flow_scope)
     total_elapsed = sum(_to_float(s.get("elapsed_s")) or 0.0 for s in stage_log) or None
 
     # Cell count: prefer geometry.instance_count (authoritative, from 6_report.json),
@@ -838,6 +853,7 @@ def ingest(project: Path,
 
         "orfs_status":     orfs_status,
         "orfs_fail_stage": fail_stage,
+        "flow_scope":      flow_scope,   # 'full' | 'synth_only' (rtl-acquire corpus runs)
         "wns_ns":          _to_float(timing.get("setup_wns")),
         "tns_ns":          _to_float(timing.get("setup_tns")),
         "floorplan_setup_ws": _to_float(timing_staged.get("floorplan_setup_ws")),

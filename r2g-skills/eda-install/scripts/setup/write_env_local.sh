@@ -43,9 +43,14 @@ export R2G_GRAPH_PYTHON="$graph_python"
 # shellcheck source=/dev/null
 source "$FLOW_DIR_SH/_env.sh" 1>&2
 
-# Default targets: both skills' references/ dirs.
+# Default targets: every consumer skill's references/ dir (rtl-acquire delegates
+# to the same shared _env.sh + pins, incl. R2G_GRAPH_PYTHON for netlist graphs).
 if [[ "${#TARGETS[@]}" -eq 0 ]]; then
-  TARGETS=("$SKILLS_ROOT/signoff-loop/references" "$SKILLS_ROOT/def-graph/references")
+  TARGETS=(
+    "$SKILLS_ROOT/signoff-loop/references"
+    "$SKILLS_ROOT/def-graph/references"
+    "$SKILLS_ROOT/rtl-acquire/references"
+  )
 fi
 
 _orfs_install_prefix="${ORFS_ROOT:-}/tools/install/"

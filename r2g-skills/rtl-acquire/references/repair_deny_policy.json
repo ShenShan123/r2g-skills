@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "deny_classes": {
+    "undefined_macro": {
+      "repair_status": "repair_not_worth_it",
+      "publish_status": "not_publishable",
+      "reason": "preprocessor-heavy or macro-defined designs are not trustworthy after aggressive fallback"
+    },
+    "helper_collision": {
+      "repair_status": "repair_not_worth_it",
+      "publish_status": "not_publishable",
+      "reason": "helper collisions usually indicate low-value front-end artifacts"
+    },
+    "graph_empty": {
+      "repair_status": "repair_not_worth_it",
+      "publish_status": "not_publishable",
+      "reason": "graph conversion produced no usable structure"
+    },
+    "template_placeholder": {
+      "repair_status": "repair_forbidden",
+      "publish_status": "not_publishable",
+      "reason": "template placeholders imply incomplete source material"
+    },
+    "ram_or_macro_dependency": {
+      "repair_status": "repair_only_for_diagnosis",
+      "publish_status": "not_publishable",
+      "reason": "RAM/macro-heavy designs need specialized macro semantics outside the current graph pipeline"
+    },
+    "semantic_reset_issue": {
+      "repair_status": "repair_forbidden",
+      "publish_status": "not_publishable",
+      "reason": "reset semantics cannot be safely rewritten in the generic auto-fix loop"
+    }
+  },
+  "deny_rules": {
+    "max_stub_modules_for_publish": 2,
+    "max_fix_ratio_for_publish": 1.0,
+    "forbid_publish_on_mapping_drift": true
+  }
+}

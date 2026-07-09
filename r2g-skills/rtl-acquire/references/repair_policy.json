@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "enable_auto_fix": true,
+  "enable_failure_classification": true,
+  "enable_failure_kb_candidate_refresh": true,
+  "enable_failure_kb_refresh": true,
+  "enable_retry_wave": true,
+  "retry_scope_for_curated_wave": "scoped",
+  "max_repair_attempts_per_design": 2,
+  "allow_missing_module_stub": true,
+  "allow_include_resolution": true,
+  "allow_sv2v_fallback": true,
+  "allow_vhd2vl_fallback": true,
+  "allow_memory_limit_fallback": true,
+  "enable_llm_long_tail_queue": true,
+  "llm_queue_policy_json": "llm_repair_policy.json"
+}

@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Install the r2g-skills Claude Code skills (signoff-loop + def-graph).
+# Install the r2g-skills Claude Code skills (eda-install + signoff-loop + def-graph + rtl-acquire).
 #
 # Standalone — depends only on bash, ln, cp, mkdir, rm.
 # Run it from inside the r2g-skills/ directory (or pass --src DIR).
 #
-# The two sub-skills install as SEPARATE Claude Code skills:
+# The sub-skills install as SEPARATE Claude Code skills:
 #   <scope>/.claude/skills/signoff-loop -> r2g-skills/signoff-loop
 #   <scope>/.claude/skills/def-graph    -> r2g-skills/def-graph
+#   <scope>/.claude/skills/eda-install  -> r2g-skills/eda-install
+#   <scope>/.claude/skills/rtl-acquire  -> r2g-skills/rtl-acquire
 # so the harness triggers each on its own description. Use --link while developing
 # (a plain copy silently goes stale as the canonical tree evolves).
 set -euo pipefail
 
 PLUGIN_NAME="r2g-skills"
-SKILLS=(signoff-loop def-graph eda-install)
+SKILLS=(signoff-loop def-graph eda-install rtl-acquire)
 SRC_DEFAULT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SKILLS_CSV="$(IFS=,; echo "${SKILLS[*]}")"
 
@@ -57,7 +59,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Sanity: source must contain both sub-skills.
+# Sanity: source must contain every sub-skill.
 for s in "${SKILLS[@]}"; do
   if [[ ! -f "$src_dir/$s/SKILL.md" ]]; then
     echo "error: --src '$src_dir' is missing $s/SKILL.md" >&2
@@ -136,6 +138,7 @@ Next steps:
      or just verify what is already discoverable:
        bash "$dest_root/eda-install/scripts/flow/check_env.sh"
   3. In a Claude Code session, ask e.g. "set up the EDA tools" (eda-install),
-     "take this RTL through to GDS on nangate45" (signoff-loop), or
-     "build the graph dataset for this design" (def-graph).
+     "take this RTL through to GDS on nangate45" (signoff-loop),
+     "build the graph dataset for this design" (def-graph), or
+     "expand the netlist-graph corpus from these RTL repos" (rtl-acquire).
 EOF

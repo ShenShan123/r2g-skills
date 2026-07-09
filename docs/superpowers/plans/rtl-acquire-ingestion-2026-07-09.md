@@ -168,3 +168,49 @@ graphs*.
   empty `failure_events` = loop bug).
 - The 30pt `.pt` output loads and the merged manifest refresh runs under publish gating.
 - CLAUDE.md + this plan reflect reality (per `feedback_update_plan_spec_docs`).
+
+---
+
+## IMPLEMENTED (2026-07-09, same day) — all phases landed in one pass
+
+Status: **DONE** (commit: see `feat(skill): rtl-acquire` in git log). All six phases executed;
+the E2E smoke (discover → run_orfs synth → netlist_graph.pt → knowledge ingest → classify →
+frontend-diagnosis projection → dedup → quality → publish gate PASS → merged manifest) is green
+on a 2-candidate corpus (1 clean, 1 deliberately broken).
+
+Reality-check corrections to this plan discovered during implementation:
+
+- **BLOCKER-0's premise was stale**: `expand_external_benchmark_dataset.py`,
+  `verilog_to_30pt_graph.py`, and `inspect_30pt_schema.py` were NOT missing — the source skill
+  bundles fallback copies under `resources/orfs_util/` (`skill_env._default_or_bundled_script`).
+  Moot either way: the 30pt amendment stands; the bundled copies were never vendored.
+- **Vendor exclusions**: `optional_tools/build/` (1215 files), the 13MB tarball, `__pycache__`,
+  the author's `references/env.local.sh`, the byte-identical `scripts/execute/*.py` +
+  `scripts/common/skill_env.py` duplicates (the common/ copy had a broken SKILL_DIR assumption).
+- **ORFS netlist name drift**: current ORFS emits the mapped netlist as `1_2_yosys.v`
+  (`1_1_yosys.v` exists only as `..._canonicalize.rtlil`); `expand_candidates.synthesize()`
+  probes both names.
+- **First-round chicken-and-egg**: `check_mapped_netlist_duplicates.py` and
+  `summarize_dataset_scale.py` read the merged manifest, which is refreshed LATER in the round —
+  both now fall back / SKIP cleanly when it doesn't exist yet.
+- **`flow_scope` (new, beyond plan)**: a synth-only pass would have ingested as `partial`,
+  flooding the A/B planner with runs that were never signoff subjects. Added `runs.flow_scope`
+  ('full' default | 'synth_only'), derived from config.mk `export R2G_FLOW_SCOPE = synth_only`;
+  `_derive_orfs_status` requires only synth for that scope (mirrors the `is_bench` pattern —
+  learning-read filterable, failure_events always written). Migration is idempotent; committed
+  store migrated (schema-only), honesty gates 5/5 green, signoff-loop suite 790/790.
+- **Frontend classes ride the EXISTING ingest hook**: `reports/diagnosis.json` `issues[].kind`
+  → failure_events, so `scripts/knowledge/project_frontend_diagnosis.py` projects the
+  classifier's reason (`synth-frontend-<class>`) + the exclude decision (fix_events,
+  `acquire_exclude`/`no_change` = negative learning) and re-ingests idempotently.
+  Fast honesty check: `project_frontend_diagnosis.py --check <db>`.
+- **Known footgun (future work)**: `repair/refresh_failure_knowledge_base.py` full-rewrites the
+  curated corpus section of `references/failure_knowledge_base.md` from the LOCAL workspace —
+  a small fresh corpus wipes the shipped corpus knowledge (restored from source after the smoke).
+  Consider a merge-not-clobber refresh or moving the generated section out of the curated file.
+- Phase 2 extras: eda-install `write_env_local.sh` now targets rtl-acquire too;
+  `check_env.sh` gained a `[corpus expansion (rtl-acquire)]` section; repo `.gitignore` now
+  excludes `r2g-skills/*/references/env.local.sh*` (machine pins).
+- Tests: rtl-acquire 21 passed (incl. new `test_flow_scope_ingest.py` proving the Phase-4
+  contract against the REAL ingest — no mocks); signoff-loop 790 passed; LLM path hard-gated
+  behind `R2G_ACQUIRE_ENABLE_LLM=1` (default OFF).

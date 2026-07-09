@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "enable_design_quality_scoring": true,
+  "enable_repo_quality_scoring": true,
+  "enable_duplicate_audit": true,
+  "enable_dataset_scale_report": true,
+  "enable_external_summary": true,
+  "degraded_quality_threshold": 1,
+  "low_fidelity_fix_ratio_threshold": 0.3
+}
