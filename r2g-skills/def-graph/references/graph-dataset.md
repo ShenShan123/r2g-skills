@@ -181,6 +181,17 @@ clean-pass **and** negative-control tests in `tests/test_verify_comprehensive.py
 fail is the silent lie the harness exists to prevent). Baselines: **iir 167/167,
 DMA_Controller_DMA_fsm 164/164** (sky130hd, RC-complete).
 
+**Runtime (operator note, 2026-07-08):** the oracle re-derives everything in
+independent pure-Python (scipy-free radius-4 gaussian, full SPEF re-parse), so
+cost scales with the **largest design's gcell-grid area + RC-edge count**, not the
+corpus size — a big design is *minutes*, not seconds (e.g. aes_core ~190K cells /
+~600K RC-edge checks ≈ 15 min CPU, all 168/168). That is inherent independence, not
+a hang; do **not** vectorise `dense_gaussian_r4` (its scipy-free independence from
+`extract_congestion` is the whole point of the oracle, and equality is pinned to
+<1e-8). `main()` now line-buffers stdout so `--batch` shows live per-check progress
+instead of block-buffering a large design into what looks like a stall; run heavy
+`--batch` sweeps in the background regardless.
+
 - **`top.*` — TOPOLOGY of ALL five views b–f** (was b-only): symmetry +
   self-loop ban + per-block `node_name` uniqueness on c/d/e/f too; the
   **block-positional node order** (concat of the per-block mergesorted name

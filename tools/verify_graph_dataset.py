@@ -2247,6 +2247,14 @@ def verify_case(case, design=None, json_out=None):
 
 
 def main():
+    # Line-buffer stdout so `--batch` shows live per-check progress instead of
+    # block-buffering the whole run. On a large design (e.g. aes_core ~190K cells /
+    # ~600K RC-edge checks → 15+ min) block buffering makes a healthy verify look
+    # identical to a hang, which has repeatedly wasted operator/loop-tick time.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("case_dir", nargs="?", default=None)
     ap.add_argument("--design", default=None)
