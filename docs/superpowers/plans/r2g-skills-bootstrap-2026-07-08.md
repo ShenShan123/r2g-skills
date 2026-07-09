@@ -1,9 +1,11 @@
 # One-command toolchain bootstrap: detect → install → pin → verify
 
-**Date:** 2026-07-08  ·  **Branch:** `feat/r2g-bootstrap`  ·  **Status:** 🚧 **IN PROGRESS — slice 1
-landed** (detection + plan/`--dry-run` + `env.local.sh` pin generator + verify-layer graph coverage).
-The per-tier install scripts (core/frontend/sky130/pdk/graph) are the next slice; `bootstrap.sh`
-already dispatches to them the moment they exist. Not committed (harness commits only when asked).
+**Date:** 2026-07-08  ·  **Branch:** `feat/r2g-bootstrap`  ·  **Status:** 🟢 **FEATURE COMPLETE (slices
+1–2).** Slice 1 (detection + plan/`--dry-run` + `env.local.sh` pin + verify-layer graph coverage) is
+committed as `c4006ad`; slice 2 (the per-tier `install_<tier>.sh` scripts + shared `_setup_lib.sh` +
+their tests) landed on the same branch. The whole detect → plan → install → pin → verify wheel now
+runs end-to-end; remaining work is real-machine validation of the network install paths (this machine
+is already fully provisioned, so every tier reads `OK` and installs nothing).
 
 > **Rev 1 (2026-07-08):** expanded the **no-sudo path** into a first-class, auto-selected default
 > (new §"No-sudo path"), because it is the reference machine's actual situation (no root, `$HOME`
@@ -238,11 +240,18 @@ paths updated accordingly. On *this* machine (`HAVE_SUDO=0`, `$HOME` full, tools
 | `def-graph/scripts/flow/check_env.sh` | ✅ built | Self-contained def-graph-side checker (ORFS + torch venv + platforms) for a def-graph-only install. |
 | `install.sh` · `.claude-plugin/plugin.json` | ✅ edited | Deploy/register all **three** sub-skills (`eda-install` first). |
 | `eda-install/tests/test_bootstrap.py` | ✅ built | 9 tests: detect contract, planner over 3 synthetic machines (provisioned/bare-nosudo/bare-sudo), graph-flip, `--tiers`, pin generator, `_env.sh` md5-identity across **3** copies. |
-| `eda-install/scripts/setup/install_{orfs,frontend,signoff_conda,pdk,graph_venv,platform_rules}.sh` | ⏳ next slice | The actual installers; `bootstrap.sh` already wired to call them. |
+| `eda-install/scripts/setup/_setup_lib.sh` | ✅ built (slice 2) | Shared conda helpers: `ensure_conda` (bootstraps Miniconda on the big volume), `conda_env_install` (litex-hub + ToS override), `pick_big_volume`, `run`/`DRY`, `setup_parse`. |
+| `eda-install/scripts/setup/install_{core,frontend,sky130,klayout,pdk,graph}.sh` | ✅ built (slice 2) | Per-tier installers — **named by tier** so `bootstrap.sh`'s `install_<tier>.sh` dispatch resolves. Idempotent (skip when present), `--dry-run`-previewable. No-sudo conda by default; `install_core.sh --build` for a source build. |
+| `eda-install/scripts/setup/install_platform_rules.sh` | ✅ built (slice 2) | Best-effort dispatcher to the repo's nangate45 LVS/DRC/antenna rule installers. |
+| `eda-install/tests/test_install_tiers.py` | ✅ built (slice 2) | 13 tests: bootstrap↔file wiring, per-tier command construction (channel/pkgs/paths, no-build), idempotent-when-present — **all under `--dry-run`** (zero network, zero real installs). |
 
-**Verification:** `test_bootstrap.py` 9/9; signoff-loop suite **799 passed / 1 skipped** (no regressions
-after the moves); def-graph suite **337 passed / 14 skipped**. `bash -n` clean on all scripts. `--dry-run`
-via the shim reads all tiers **OK** on this machine.
+> **Naming reconciliation:** the tier files are `install_<tier>.sh` (`core`/`frontend`/`sky130`/`klayout`/
+> `pdk`/`graph`), not the earlier `install_{orfs,signoff_conda,graph_venv}.sh` sketch — the names must
+> equal the tier keys `bootstrap.sh` dispatches on.
+
+**Verification:** eda-install suite **22 passed** (9 bootstrap + 13 tier); signoff-loop **790 / 1**,
+def-graph **337 / 14** — no regressions. `bash -n` clean on all scripts. `--dry-run` via the shim reads
+all tiers **OK** on this machine; a real-mode installer run on a present tool is a verified no-op.
 
 ## File change list (proposal)
 

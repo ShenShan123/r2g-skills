@@ -43,9 +43,16 @@ tools"* triggers it.
   def-graph-side `check_env.sh` was added; `eda-install` ships a comprehensive verifier.
 - **Packaging:** `install.sh` + `plugin.json` deploy/register all three skills; `_env.sh` md5-identity
   invariant (`ad4406d0…`) now spans three copies (test-guarded).
-- **Verification:** new `eda-install/tests/test_bootstrap.py` 9/9; signoff-loop **799/1**, def-graph
-  **337/14**, no regressions; `--dry-run` reads all tiers **OK** on this machine. (Per-tier install
-  scripts are the next slice; `bootstrap.sh` already dispatches to them when present.)
+- **Per-tier installers (same branch).** `install_{core,frontend,sky130,klayout,pdk,graph}.sh` +
+  a shared `_setup_lib.sh` (centralized `ensure_conda`/`conda_env_install`/Miniconda-bootstrap, all
+  `--override-channels -c litex-hub -c conda-forge`). Each is idempotent (skips when the tool is
+  present) and `--dry-run`-previewable; `bootstrap.sh` dispatches to them by tier name. `install_core.sh`
+  clones ORFS without building and takes openroad/yosys from conda (`--build` opts into a source build);
+  `install_platform_rules.sh` dispatches to the repo's nangate45 rule-deck installers.
+- **Verification:** `eda-install` suite **22 passed** (9 bootstrap + 13 tier — all tier tests run under
+  `--dry-run`, zero network/real installs); signoff-loop **790/1**, def-graph **337/14**, no regressions;
+  `--dry-run` reads all tiers **OK** on this machine, and a real-mode installer run on a present tool is
+  a verified no-op.
 
 ## 2026-07-08 — Comprehensive graph-dataset verification (topology · feature-stats · sign-off reports)
 *(session 2026-07-08; `tools/verify_graph_dataset.py` +750 LOC, new
