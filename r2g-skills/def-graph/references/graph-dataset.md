@@ -19,15 +19,29 @@ Outputs in `<project-dir>/dataset/`:
 | --- | --- |
 | `b_graph.pt` .. `f_graph.pt` | five graph topologies (below) |
 | `netlist_graph.pt` | synthesis-netlist bipartite cell/net graph (pre-layout) |
-| `graph_manifest.json` | per-variant node/edge counts + label-NaN fractions + per-label-file `label_health` + RC coverage (`rc_health` + per-variant `rc_edges`/`rc_coupling_edges`/`rc_resistance_edges`) (mirrored to `reports/graph_dataset.json`) |
+| `graph_manifest.json` | per-variant node/edge counts + label-NaN fractions + per-label-file `label_health` + RC coverage (`rc_health` + per-variant `rc_edges`/`rc_coupling_edges`/`rc_resistance_edges`) + the signoff gate verdict (`signoff_health`) (mirrored to `reports/graph_dataset.json`) |
 
-**Check `status` + `label_health` before training on a manifest.** `status:
-"ok_with_label_gaps"` means ≥1 label file couldn't join (missing/raw/mismatched
-— its y slot is all-NaN); the per-file reason is in `label_health`. The stage
-also refuses stale/half-finished inputs: features/labels freshness is judged by
-their stage-completion markers (`reports/{features,labels}_stats.json`, written
-last), not just an early CSV (2026-07-05 irdrop incident — see
-failure-patterns.md "Dataset-Extraction Silent-Value Defects" #6).
+**Check `status` + `label_health` + `signoff_health` before training on a
+manifest.** `status: "ok_with_label_gaps"` means ≥1 label file couldn't join
+(missing/raw/mismatched — its y slot is all-NaN); the per-file reason is in
+`label_health`. The stage also refuses stale/half-finished inputs:
+features/labels freshness is judged by their stage-completion markers
+(`reports/{features,labels}_stats.json`, written last), not just an early CSV
+(2026-07-05 irdrop incident — see failure-patterns.md "Dataset-Extraction
+Silent-Value Defects" #6).
+
+**Signoff gate (#34).** `run_graphs.sh` refuses (SKIPs) a design that is not
+signed off: the shared `scripts/flow/signoff_gate.py` checks
+`reports/{drc,lvs,route}.json` + the DEF-run's `stage_log.jsonl` — required,
+fail-closed (a MISSING report blocks): drc ∈ {clean, clean_beol}, lvs ∈
+{clean, skipped}, ORFS complete, route/antenna residuals 0 when provable;
+advisory, recorded only: timing (negative slack is a valid training label).
+`R2G_SIGNOFF_GATE=warn` builds anyway with the reasons recorded; `off`
+disables; the labels/features extractors default to warn; an `R2G_DEF`
+override downgrades to warn. The verdict is written to
+`reports/signoff_gate.json` and embedded verbatim as the manifest's
+`signoff_health` (`status` ∈ {pass, pass_with_caveats, dirty, gate_off,
+unrecorded} + per-check detail + `blockers`/`caveats`).
 
 Dependencies: torch + torch_geometric + pandas — the only stage needing them.
 `run_graphs.sh` probes `R2G_GRAPH_PYTHON` (default `python3`) and SKIPs cleanly
@@ -214,8 +228,13 @@ instead of block-buffering a large design into what looks like a stall; run heav
   distribution (same `_percentile` as the gate) from the CURRENT CSVs and diffs
   — catching a stale or hand-edited stats JSON, a lie no prior check saw.
 - **`signoff.*` — LABELS ↔ SIGN-OFF REPORTS**: a **DRC/LVS clean-provenance
-  gate** (`reports/{drc,lvs}.json` status ∈ {clean, clean_beol} — a dataset built
-  on a dirty run is invalid); **geometry vs `ppa.json`** (`io_count` exact,
+  gate** (`reports/drc.json` status ∈ {clean, clean_beol}, `lvs.json` ∈
+  {clean, skipped} — a dataset built on a dirty run is invalid), now
+  **fail-closed** (#34): a dataset with NEITHER report files NOR a
+  `signoff_health` gate verdict in its manifest fails `signoff.provenance
+  recorded` (the pre-#34 behavior passed vacuously when reports were missing),
+  and a recorded gate verdict outside {pass, pass_with_caveats} fails
+  `signoff.gate verdict pass`; **geometry vs `ppa.json`** (`io_count` exact,
   `macro_count` == DEF BLOCK-class instances, `sequential_count` == liberty-`is_seq`
   instances — the fill-inflated `instance_count` is deliberately NOT asserted);
   the **timing label ↔ SDC clock-period transform** (`Path_Delay ==

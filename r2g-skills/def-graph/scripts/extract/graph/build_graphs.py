@@ -499,6 +499,11 @@ def main():
                     help="build-time platform provenance, stamped into the manifest "
                          "(cell_type_id and every *_type_id are per-platform — "
                          "failure-patterns.md #30)")
+    ap.add_argument("--signoff-health", default="",
+                    help="reports/signoff_gate.json written by the flow's signoff gate; "
+                         "embedded verbatim as the manifest's signoff_health so a dataset "
+                         "built on a dirty/unsigned design is self-describing "
+                         "(failure-patterns.md #34)")
     args = ap.parse_args()
 
     torch = _torch()
@@ -536,6 +541,22 @@ def main():
         print("NOTE: no RC labels for this design (no SPEF / RCX not run) — "
               "ground-cap y5 and parasitic edges will be empty", file=sys.stderr)
 
+    # Signoff provenance (failure-patterns.md #34): the gate verdict rides in the
+    # manifest so a dataset built on a dirty or never-signed-off design is
+    # self-describing. "unrecorded" = the build bypassed the flow runner (direct
+    # build_graphs.py invocation) — the verifier treats that fail-closed.
+    signoff_health = {"status": "unrecorded"}
+    if args.signoff_health and os.path.isfile(args.signoff_health):
+        try:
+            with open(args.signoff_health, encoding="utf-8") as f:
+                signoff_health = json.load(f)
+        except Exception as e:  # noqa: BLE001 — an unreadable verdict must not abort the build
+            signoff_health = {"status": "unreadable", "error": str(e)}
+    if signoff_health.get("status") not in ("pass", "pass_with_caveats"):
+        print(f"WARNING: signoff_health={signoff_health.get('status')!r} — this dataset "
+              "is not backed by a clean sign-off (see manifest signoff_health)",
+              file=sys.stderr)
+
     os.makedirs(args.out_dir, exist_ok=True)
     manifest = {
         "design": args.design,
@@ -550,6 +571,7 @@ def main():
         "y_schema": Y_SCHEMA_BASE,
         "label_health": health,
         "rc_health": rc_health,
+        "signoff_health": signoff_health,
         "variants": {},
         "status": ("ok" if all(h["status"] == "ok" for h in health.values())
                    else "ok_with_label_gaps"),

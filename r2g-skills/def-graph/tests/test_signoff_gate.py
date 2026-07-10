@@ -1,0 +1,335 @@
+"""Signoff gate before dataset construction (failure-patterns.md #34).
+
+A 6_final.def alone is NOT sign-off: DRC/LVS run in a separate post-finish
+step, route/antenna residuals survive a "completed" flow, and an aborted ORFS
+can leave a plausible DEF behind. The gate (scripts/flow/signoff_gate.py):
+
+  - required, fail-closed: drc.json in {clean,clean_beol}; lvs.json in
+    {clean,skipped}; ORFS complete (stage_log.jsonl 'finish' status 0, or
+    run-meta.json make_status==0); route residuals == 0 when provable.
+    A MISSING drc/lvs report blocks in enforce mode — the old vacuous pass
+    (no report -> no check) is the exact trap this replaces.
+  - advisory, recorded only: timing (negative slack is a valid training label).
+  - modes: enforce (run_graphs.sh default) / warn (run_labels.sh +
+    run_features.sh default) / off; R2G_DEF override downgrades to warn.
+  - verdict always written to reports/signoff_gate.json; build_graphs.py embeds
+    it as the manifest's signoff_health; the verifier fails a dataset whose
+    provenance is unrecorded or whose gate verdict is dirty.
+"""
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+
+import pytest
+
+_FLOW = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "scripts", "flow")
+_GATE = os.path.join(_FLOW, "signoff_gate.py")
+_TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))), "tools")
+
+_spec = importlib.util.spec_from_file_location("signoff_gate", _GATE)
+sg = importlib.util.module_from_spec(_spec)
+sys.modules["signoff_gate"] = sg
+_spec.loader.exec_module(sg)
+
+_vspec = importlib.util.spec_from_file_location(
+    "verify_graph_dataset", os.path.join(_TOOLS, "verify_graph_dataset.py"))
+vgd = importlib.util.module_from_spec(_vspec)
+sys.modules["verify_graph_dataset"] = vgd
+_vspec.loader.exec_module(vgd)
+
+CLEAN_STAGES = [{"stage": s, "status": 0, "elapsed_s": 1}
+                for s in ("synth", "floorplan", "place", "cts", "route", "finish")]
+
+
+def _proj(tmp_path, *, drc="clean", lvs="clean", route=0, stage_log=CLEAN_STAGES,
+          run_meta=None, ppa=None, timing_check=None, route_rpt=None):
+    """Minimal project fixture. Pass None for an artifact to omit it; `route`
+    is total_violations for reports/route.json (None omits the file)."""
+    proj = tmp_path / "proj"
+    rep = proj / "reports"
+    rep.mkdir(parents=True, exist_ok=True)
+    run = proj / "backend" / "RUN_2026-07-01_00-00-00"
+    run.mkdir(parents=True, exist_ok=True)
+    if drc is not None:
+        json.dump({"status": drc, "total_violations": 0 if drc.startswith("clean") else 7},
+                  open(rep / "drc.json", "w"))
+    if lvs is not None:
+        json.dump({"status": lvs, "mismatch_count": 0 if lvs in ("clean", "skipped") else 3},
+                  open(rep / "lvs.json", "w"))
+    if route is not None:
+        json.dump({"status": "clean" if route == 0 else "fail",
+                   "total_violations": route}, open(rep / "route.json", "w"))
+    if stage_log is not None:
+        with open(run / "stage_log.jsonl", "w") as f:
+            for rec in stage_log:
+                f.write(json.dumps(rec) + "\n")
+    if run_meta is not None:
+        json.dump(run_meta, open(run / "run-meta.json", "w"))
+    if ppa is not None:
+        json.dump(ppa, open(rep / "ppa.json", "w"))
+    if timing_check is not None:
+        json.dump(timing_check, open(rep / "timing_check.json", "w"))
+    if route_rpt is not None:
+        rdir = run / "reports_orfs"
+        rdir.mkdir(exist_ok=True)
+        (rdir / "5_route_drc.rpt").write_text(route_rpt, encoding="utf-8")
+    return str(proj), str(run)
+
+
+def _cli(proj, run, mode="enforce", extra=()):
+    r = subprocess.run([sys.executable, _GATE, proj, "--run-dir", run,
+                        "--mode", mode, *extra],
+                       capture_output=True, text=True, timeout=60)
+    verdict = json.load(open(os.path.join(proj, "reports", "signoff_gate.json")))
+    return r.returncode, verdict, r.stderr
+
+
+# ---- the gate's verdict logic ------------------------------------------------
+
+def test_all_clean_pass(tmp_path):
+    proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": 0.05}}})
+    v = sg.evaluate(proj, run)
+    assert v["status"] == "pass" and not v["blockers"] and not v["caveats"], v
+
+
+def test_no_timing_report_is_caveat_only(tmp_path):
+    proj, run = _proj(tmp_path)   # everything clean, timing unrecorded
+    v = sg.evaluate(proj, run)
+    assert v["status"] == "pass_with_caveats" and "timing=unknown" in v["caveats"]
+
+
+def test_dirty_drc_blocks_enforce(tmp_path):
+    proj, run = _proj(tmp_path, drc="fail")
+    rc, verdict, err = _cli(proj, run)
+    assert rc == 3
+    assert verdict["status"] == "dirty" and "drc" in verdict["blockers"]
+    assert "NOT SIGNED OFF" in err
+
+
+def test_missing_drc_fail_closed(tmp_path):
+    """The old vacuous-pass trap: DRC never ran -> no report -> must BLOCK,
+    not sail through."""
+    proj, run = _proj(tmp_path, drc=None)
+    rc, verdict, _ = _cli(proj, run)
+    assert rc == 3
+    assert verdict["checks"]["drc"]["status"] == "missing"
+    assert "drc" in verdict["blockers"]
+
+
+def test_missing_lvs_fail_closed(tmp_path):
+    proj, run = _proj(tmp_path, lvs=None)
+    rc, verdict, _ = _cli(proj, run)
+    assert rc == 3 and "lvs" in verdict["blockers"]
+
+
+def test_warn_mode_records_and_proceeds(tmp_path):
+    proj, run = _proj(tmp_path, drc="fail")
+    rc, verdict, err = _cli(proj, run, mode="warn")
+    assert rc == 0
+    assert verdict["status"] == "dirty" and verdict["mode"] == "warn"
+    assert "proceeding anyway" in err
+
+
+def test_def_override_downgrades_enforce(tmp_path):
+    """An explicit R2G_DEF override is a deliberate operator decision (e.g. the
+    no-backend verifier flows) — enforce degrades to warn, recorded."""
+    proj, run = _proj(tmp_path, drc="fail")
+    rc, verdict, _ = _cli(proj, run, mode="enforce", extra=("--def-overridden",))
+    assert rc == 0
+    assert verdict["mode"] == "warn" and verdict["def_overridden"] is True
+
+
+def test_lvs_skipped_is_caveat_not_blocker(tmp_path):
+    """`skipped` is an EXPLICIT decision recorded by the signoff step (portless
+    design / no platform deck) — unlike a missing report."""
+    proj, run = _proj(tmp_path, lvs="skipped")
+    v = sg.evaluate(proj, run)
+    assert v["status"] == "pass_with_caveats" and "lvs=skipped" in v["caveats"]
+
+
+def test_drc_clean_beol_is_caveat(tmp_path):
+    proj, run = _proj(tmp_path, drc="clean_beol")
+    v = sg.evaluate(proj, run)
+    assert v["status"] == "pass_with_caveats" and "drc=clean_beol" in v["caveats"]
+
+
+def test_orfs_stage_failure_blocks(tmp_path):
+    proj, run = _proj(tmp_path, stage_log=[{"stage": "synth", "status": 0},
+                                           {"stage": "floorplan", "status": 2}])
+    v = sg.evaluate(proj, run)
+    assert "orfs" in v["blockers"] and v["checks"]["orfs"]["status"] == "fail"
+
+
+def test_orfs_missing_finish_blocks(tmp_path):
+    """A run that stopped mid-flow (crash/kill) leaves a clean-so-far stage_log
+    with no 'finish' entry — that is incomplete, not complete."""
+    proj, run = _proj(tmp_path, stage_log=CLEAN_STAGES[:-1])
+    v = sg.evaluate(proj, run)
+    assert "orfs" in v["blockers"] and v["checks"]["orfs"]["status"] == "incomplete"
+
+
+def test_orfs_runmeta_fallback(tmp_path):
+    proj, run = _proj(tmp_path, stage_log=None, run_meta={"make_status": 0})
+    assert sg.evaluate(proj, run)["checks"]["orfs"]["status"] == "complete"
+    proj2, run2 = _proj(tmp_path / "b", stage_log=None, run_meta={"make_status": 2})
+    v = sg.evaluate(proj2, run2)
+    assert "orfs" in v["blockers"] and v["checks"]["orfs"]["status"] == "fail"
+
+
+def test_orfs_unverifiable_blocks(tmp_path):
+    """No stage_log.jsonl AND no run-meta make_status: completion is
+    unverifiable -> fail-closed in enforce mode."""
+    proj, run = _proj(tmp_path, stage_log=None)
+    v = sg.evaluate(proj, run)
+    assert "orfs" in v["blockers"] and v["checks"]["orfs"]["status"] == "unknown"
+
+
+def test_route_json_violations_block(tmp_path):
+    proj, run = _proj(tmp_path, route=4)
+    v = sg.evaluate(proj, run)
+    assert "route" in v["blockers"] and v["checks"]["route"]["violations"] == 4
+
+
+def test_route_rpt_fallback(tmp_path):
+    proj, run = _proj(tmp_path, route=None,
+                      route_rpt="  violation type: Short\n  violation type: AntennaRatio\n")
+    v = sg.evaluate(proj, run)
+    assert "route" in v["blockers"] and v["checks"]["route"]["violations"] == 2
+    proj2, run2 = _proj(tmp_path / "b", route=None, route_rpt="")
+    v2 = sg.evaluate(proj2, run2)
+    assert v2["checks"]["route"]["status"] == "clean"
+
+
+def test_route_unknown_is_caveat(tmp_path):
+    """Neither route.json nor a 5_route_drc.rpt: recorded, not a block — a
+    clean full DRC deck already covers routed geometry."""
+    proj, run = _proj(tmp_path, route=None)
+    v = sg.evaluate(proj, run)
+    assert "route" not in v["blockers"] and "route=unknown" in v["caveats"]
+
+
+def test_timing_violated_never_blocks(tmp_path):
+    """Negative slack is a legitimate training label — recorded, never a block."""
+    proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": -0.42}}})
+    v = sg.evaluate(proj, run)
+    assert v["status"] == "pass_with_caveats"
+    assert "timing=violated" in v["caveats"] and "timing" not in v["blockers"]
+    assert v["checks"]["timing"]["setup_wns"] == -0.42
+
+
+def test_timing_from_timing_check_tier(tmp_path):
+    proj, run = _proj(tmp_path, timing_check={"tier": "minor"})
+    v = sg.evaluate(proj, run)
+    assert v["checks"]["timing"]["status"] == "met"
+
+
+def test_gate_off_records(tmp_path):
+    proj, run = _proj(tmp_path, drc="fail")
+    rc, verdict, _ = _cli(proj, run, mode="off")
+    assert rc == 0 and verdict["status"] == "gate_off"
+
+
+# ---- wiring: one shared copy in all three stage runners ------------------------
+
+def test_gate_wired_once_into_all_three_runners():
+    """Same rule as the #30 provenance guard: the gate must be the SHARED
+    helper in every stage script, never a worker-local inline copy; and the
+    dataset builder (run_graphs.sh) enforces while the standalone extractors
+    default to warn."""
+    defaults = {"run_graphs.sh": "enforce", "run_labels.sh": "warn",
+                "run_features.sh": "warn"}
+    for script, dflt in defaults.items():
+        src = open(os.path.join(_FLOW, script), encoding="utf-8").read()
+        assert "signoff_gate.py" in src, f"{script} lost the #34 gate"
+        assert f'R2G_SIGNOFF_GATE:-{dflt}' in src, \
+            f"{script} default gate mode drifted from {dflt}"
+        assert "stage_log.jsonl" not in src, f"{script} re-inlined the gate"
+
+
+def test_run_graphs_passes_verdict_to_manifest():
+    src = open(os.path.join(_FLOW, "run_graphs.sh"), encoding="utf-8").read()
+    assert "--signoff-health" in src and "signoff_gate.json" in src
+
+
+# ---- the verifier side: fail-closed provenance ---------------------------------
+
+def _run_group(fn, *a):
+    vgd.RESULTS.clear()
+    vgd.SKIPPED.clear()
+    fn(*a)
+    return [r["check"] for r in vgd.RESULTS if not r["ok"]]
+
+
+@pytest.fixture()
+def _empty_dirs(tmp_path):
+    feat = tmp_path / "features"
+    labs = tmp_path / "labels"
+    feat.mkdir()
+    labs.mkdir()
+    return str(feat), str(labs)
+
+
+def test_verifier_provenance_fail_closed(tmp_path, monkeypatch, _empty_dirs):
+    """No drc/lvs reports AND no gate verdict in the manifest -> the dataset's
+    sign-off provenance is unknown and the verifier must FAIL, not vacuously
+    pass (the pre-#34 trap)."""
+    feat, labs = _empty_dirs
+    case = tmp_path / "case"
+    case.mkdir()
+    monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
+    fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
+    assert "signoff.provenance recorded (drc/lvs reports or manifest signoff_health)" in fails
+
+
+def test_verifier_provenance_via_reports(tmp_path, monkeypatch, _empty_dirs):
+    feat, labs = _empty_dirs
+    case = tmp_path / "case"
+    (case / "reports").mkdir(parents=True)
+    json.dump({"status": "clean"}, open(case / "reports" / "drc.json", "w"))
+    json.dump({"status": "clean"}, open(case / "reports" / "lvs.json", "w"))
+    monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
+    fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
+    assert "signoff.provenance recorded (drc/lvs reports or manifest signoff_health)" not in fails
+
+
+def test_verifier_lvs_skipped_accepted(tmp_path, monkeypatch, _empty_dirs):
+    feat, labs = _empty_dirs
+    case = tmp_path / "case"
+    (case / "reports").mkdir(parents=True)
+    json.dump({"status": "clean"}, open(case / "reports" / "drc.json", "w"))
+    json.dump({"status": "skipped"}, open(case / "reports" / "lvs.json", "w"))
+    monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
+    fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
+    assert "signoff.lvs clean (dataset built on a signed-off design)" not in fails
+
+
+def test_verifier_gate_verdict_dirty_fails(tmp_path, monkeypatch, _empty_dirs):
+    """A warn-mode build on a dirty design records signoff_health=dirty in the
+    manifest — the verifier must fail that dataset."""
+    feat, labs = _empty_dirs
+    case = tmp_path / "case"
+    (case / "dataset").mkdir(parents=True)
+    json.dump({"signoff_health": {"status": "dirty", "blockers": ["drc"],
+                                  "checks": {"drc": {"status": "fail"}}}},
+              open(case / "dataset" / "graph_manifest.json", "w"))
+    monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
+    fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
+    assert "signoff.gate verdict pass (manifest signoff_health)" in fails
+    # provenance IS recorded (the gate ran) — only the verdict is dirty
+    assert "signoff.provenance recorded (drc/lvs reports or manifest signoff_health)" not in fails
+
+
+def test_verifier_gate_verdict_pass_ok(tmp_path, monkeypatch, _empty_dirs):
+    feat, labs = _empty_dirs
+    case = tmp_path / "case"
+    (case / "dataset").mkdir(parents=True)
+    json.dump({"signoff_health": {"status": "pass_with_caveats", "blockers": [],
+                                  "checks": {"drc": {"status": "clean"}}}},
+              open(case / "dataset" / "graph_manifest.json", "w"))
+    monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
+    fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
+    assert not [f for f in fails if f.startswith("signoff.gate") or f.startswith("signoff.provenance")]

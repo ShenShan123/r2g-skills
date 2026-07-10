@@ -83,6 +83,23 @@ if [[ -z "${2:-}" && -n "$RUN_DIR" ]]; then
 fi
 [[ -z "$DEF" || ! -f "$DEF" ]] && skip "no 6_final.def found — backend not completed/collected"
 
+# --- Signoff gate (failure-patterns.md #34) ---------------------------------
+# A 6_final.def alone is NOT sign-off: DRC/LVS run in a separate post-finish
+# step, route/antenna residuals survive a "completed" flow, and an aborted ORFS
+# can leave a plausible DEF. Fail-closed here (the dataset builder): dirty OR
+# missing/unverifiable signoff blocks the build. R2G_SIGNOFF_GATE=warn builds
+# anyway with the reasons recorded; the verdict always lands in
+# reports/signoff_gate.json and the manifest's signoff_health. An explicit
+# R2G_DEF override downgrades to warn (deliberate, recorded operator decision).
+# Shared logic: signoff_gate.py (one copy — same rule as _provenance.sh).
+GATE_MODE="${R2G_SIGNOFF_GATE:-enforce}"
+GATE_FLAGS=()
+[[ -n "${R2G_DEF:-}" ]] && GATE_FLAGS+=(--def-overridden)
+if ! python3 "$(dirname "${BASH_SOURCE[0]}")/signoff_gate.py" "$PROJECT_DIR" \
+       --run-dir "$RUN_DIR" --mode "$GATE_MODE" "${GATE_FLAGS[@]}"; then
+  skip "signoff gate: not signed off (see reports/signoff_gate.json; R2G_SIGNOFF_GATE=warn builds anyway with recorded reasons)"
+fi
+
 # --- Ensure fresh features/ + labels/ (run their stages when missing/stale) -
 # Freshness is judged by the stage-completion marker (the stats JSON, written
 # LAST by run_features.sh/run_labels.sh), not just an early CSV: a stage killed
@@ -143,7 +160,8 @@ timeout --signal=TERM --kill-after=30 "$GRAPH_TIMEOUT" \
   "$GRAPH_PYTHON" "$GRAPH_SRC/build_graphs.py" \
     --features "$FEATURES_DIR" --labels "$LABELS_DIR" \
     --design "$DESIGN_NAME" --out-dir "$DATASET_DIR" --variants "$VARIANTS" \
-    --platform "$PLATFORM"
+    --platform "$PLATFORM" \
+    --signoff-health "$REPORTS_DIR/signoff_gate.json"
 
 # --- Synthesis-netlist graph (optional — needs the yosys netlist) ----------
 YOSYS_V=""

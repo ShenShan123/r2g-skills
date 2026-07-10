@@ -66,6 +66,18 @@ re-point (`setup_rtl_designs.py --platform X --force`) rewrites config.mk for th
 platform is a silent-value defect. `build_graphs.py` stamps the resolved platform into
 `graph_manifest.json`; `tools/verify_graph_dataset.py` trusts manifest > `run-meta.json` > config.mk.
 
+**Signoff gate (failure-patterns.md #34):** a `6_final.def` alone is NOT sign-off. Before
+building, every stage runs the shared `scripts/flow/signoff_gate.py` against
+`reports/{drc,lvs,route}.json` + the DEF-run's `stage_log.jsonl`: required checks (fail-closed —
+a MISSING report blocks) are drc ∈ {clean, clean_beol}, lvs ∈ {clean, skipped}, ORFS complete,
+route/antenna residuals 0 when provable; timing is recorded but never blocks (negative slack is a
+legitimate training label). `run_graphs.sh` — the dataset builder — **enforces** by default and
+SKIPs a not-signed-off design; `run_labels.sh`/`run_features.sh` default to **warn** (record +
+proceed). Override with `R2G_SIGNOFF_GATE=enforce|warn|off`; an explicit `R2G_DEF` override
+downgrades to warn (a deliberate, recorded operator decision). The verdict always lands in
+`reports/signoff_gate.json` and rides the manifest as `signoff_health` — the verifier fails a
+dataset whose provenance is unrecorded or whose gate verdict is dirty.
+
 ### 1. Labels (Y) — `scripts/flow/run_labels.sh <project-dir> [platform]`
 
 Per-cell / per-net regression targets into `<project-dir>/labels/`, plus a per-design
@@ -114,9 +126,11 @@ Needs torch + torch_geometric + pandas; machines without them SKIP cleanly with 
 (so X and Y stay joined on the same DEF), enabling a backend-less reference-DEF build.
 See `references/graph-dataset.md`.
 
-**Check `status` + `label_health` in the manifest before training.** `status:
+**Check `status` + `label_health` + `signoff_health` in the manifest before training.** `status:
 "ok_with_label_gaps"` means ≥1 label file couldn't join (its y slot is all-NaN); the per-file
-reason is in `label_health`.
+reason is in `label_health`. `signoff_health.status` outside {pass, pass_with_caveats} means the
+dataset was built past the signoff gate (warn/off mode) on a design that is not signed off — the
+blockers list says why.
 
 ## The five topologies (b–f)
 

@@ -1714,13 +1714,38 @@ def signoff_report_checks(case, design, feat, labs, tensors):
     """GROUP C — cross-check labels/dataset against surviving sign-off reports."""
     reports = os.path.join(case, "reports")
 
-    # --- DRC / LVS clean provenance gate --------------------------------------
-    for tool, fn in (("drc", "drc.json"), ("lvs", "lvs.json")):
+    # --- DRC / LVS clean provenance gate (fail-closed) -------------------------
+    # Old trap: a design that never ran DRC/LVS passed VACUOUSLY (no report ->
+    # no check -> "clean"). Now the absence of provenance is itself a failure:
+    # either the report files exist, or the manifest carries the flow gate's
+    # signoff_health verdict (signoff_gate.py, failure-patterns.md #34).
+    # LVS `skipped` is acceptable — an EXPLICIT skip recorded by the signoff
+    # step (portless design / no platform deck), unlike a missing report.
+    man_p = os.path.join(case, "dataset", "graph_manifest.json")
+    sh = {}
+    if os.path.isfile(man_p):
+        try:
+            sh = json.load(open(man_p)).get("signoff_health") or {}
+        except Exception:
+            sh = {}
+    seen = 0
+    for tool, fn, ok_states in (("drc", "drc.json", {"clean", "clean_beol"}),
+                                ("lvs", "lvs.json", {"clean", "skipped"})):
         p = os.path.join(reports, fn)
         if os.path.isfile(p):
+            seen += 1
             st = json.load(open(p)).get("status", "")
             check(f"signoff.{tool} clean (dataset built on a signed-off design)",
-                  st in {"clean", "clean_beol"}, f"status={st!r}")
+                  st in ok_states, f"status={st!r}")
+    gate_recorded = bool(sh.get("checks"))
+    check("signoff.provenance recorded (drc/lvs reports or manifest signoff_health)",
+          seen > 0 or gate_recorded,
+          "no reports/{drc,lvs}.json and no signoff gate verdict in the manifest — "
+          "sign-off provenance unknown (fail-closed, failure-patterns.md #34)")
+    if gate_recorded:
+        check("signoff.gate verdict pass (manifest signoff_health)",
+              sh.get("status") in {"pass", "pass_with_caveats"},
+              f"signoff_health.status={sh.get('status')!r} blockers={sh.get('blockers')}")
 
     def_path = _find_final_def(case)
     dt = read_def_truth(def_path) if def_path else None

@@ -84,6 +84,23 @@ if [[ -z "$DEF" || ! -f "$DEF" ]]; then
   exit 0
 fi
 
+# --- Signoff gate (failure-patterns.md #34) ---------------------------------
+# Default warn for the standalone extractor (records the verdict in
+# reports/signoff_gate.json, proceeds); run_graphs.sh — the dataset builder —
+# enforces. R2G_SIGNOFF_GATE=enforce makes this stage block too. An explicit
+# R2G_DEF override downgrades to warn (deliberate operator decision).
+# Shared logic: signoff_gate.py (one copy — same rule as _provenance.sh).
+GATE_MODE="${R2G_SIGNOFF_GATE:-warn}"
+GATE_FLAGS=()
+[[ -n "${R2G_DEF:-}" ]] && GATE_FLAGS+=(--def-overridden)
+if ! python3 "$(dirname "${BASH_SOURCE[0]}")/signoff_gate.py" "$PROJECT_DIR" \
+       --run-dir "$RUN_DIR" --mode "$GATE_MODE" "${GATE_FLAGS[@]}"; then
+  echo "SKIP: signoff gate blocked (R2G_SIGNOFF_GATE=enforce) — see $REPORTS_DIR/signoff_gate.json" >&2
+  printf '{"design":"%s","platform":"%s","features":{},"status":"skipped","reason":"signoff gate: not signed off"}\n' \
+    "$DESIGN_NAME" "$PLATFORM" > "$REPORTS_DIR/features_stats.json"
+  exit 0
+fi
+
 # --- Locate the SPEF (optional — features degrade gracefully if absent) ----
 # Prefer the SAME run the DEF came from so a fresh DEF is never paired with a stale SPEF
 # from a different run; only scan across runs as a fallback, with a loud warning.
