@@ -386,6 +386,9 @@ def test_b_graph_topology_excludes_clocktree_and_physical(built):
 
 def test_manifest_flags_label_gaps_but_status_ok_ish(built):
     man = built["manifest"]
+    # Build-time platform provenance stamp (failure-patterns.md #30): the
+    # verifier trusts THIS over the mutable, round-re-pointed config.mk.
+    assert man["platform"] == "nangate45"
     # ir_drop + timing stubs have no rows for this design -> flagged, and the
     # manifest downgrades to ok_with_label_gaps (never a silent 'ok').
     assert man["status"] == "ok_with_label_gaps"

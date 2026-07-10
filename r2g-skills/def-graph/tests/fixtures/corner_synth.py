@@ -370,7 +370,8 @@ def build(workdir, with_graph=True, variants="bcdef"):
         dsdir = os.path.join(workdir, "dataset"); os.makedirs(dsdir, exist_ok=True)
         _run(os.path.join(_GRAPH, "build_graphs.py"),
              ["--features", featdir, "--labels", labdir, "--design", DESIGN,
-              "--out-dir", dsdir, "--variants", variants])
+              "--out-dir", dsdir, "--variants", variants,
+              "--platform", "nangate45"])   # manifest provenance stamp (#30)
         out["dataset"] = dsdir
         with open(os.path.join(dsdir, "graph_manifest.json")) as f:
             out["manifest"] = json.load(f)

@@ -58,6 +58,14 @@ python3 -m venv /proj/<you>/pyenvs/r2g-graph
 The three stages compose. Each takes a `<project-dir>` that already holds a signed-off backend
 run (a `6_final.def` reachable via ORFS results or `$R2G_DEF`) and `[platform]`.
 
+**Platform authority (failure-patterns.md #30):** *explicit `[platform]` arg > build provenance >
+config.mk*. When the arg is omitted, each stage consults the discovered backend's `run-meta.json`
+(via the shared `scripts/flow/_provenance.sh`) before trusting `constraints/config.mk` — a campaign
+re-point (`setup_rtl_designs.py --platform X --force`) rewrites config.mk for the whole corpus, and
+`cell_type_id`/`*_type_id` vocabularies are per-platform, so keying an existing DEF to the re-pointed
+platform is a silent-value defect. `build_graphs.py` stamps the resolved platform into
+`graph_manifest.json`; `tools/verify_graph_dataset.py` trusts manifest > `run-meta.json` > config.mk.
+
 ### 1. Labels (Y) — `scripts/flow/run_labels.sh <project-dir> [platform]`
 
 Per-cell / per-net regression targets into `<project-dir>/labels/`, plus a per-design

@@ -365,17 +365,58 @@ def read_def_truth(def_path):
             "demand_h": demand_h, "demand_v": demand_v}
 
 
+def _platform_provenance(case_dir):
+    """The platform this case's DATASET was actually built on (failure-patterns.md #30).
+
+    constraints/config.mk is MUTABLE round state: a campaign re-point
+    (setup_rtl_designs.py --platform X --force) rewrites it for the WHOLE corpus,
+    including designs whose backend/dataset were built on the PRIOR platform.
+    cell_type_id and every *_type_id vocabulary are per-platform, so resolving
+    libs from the re-pointed config.mk would verify a dataset against another
+    platform's ground truth — wrong either way it lands (false FAIL, or a subtler
+    vacuous pass). Authority order:
+      1. dataset/graph_manifest.json "platform"  (stamped at build by build_graphs.py)
+      2. newest backend/RUN_*/run-meta.json "platform"  (the DEF's build record)
+      3. config.mk PLATFORM  (fresh case / explicit-override reference builds)
+    """
+    man_p = os.path.join(case_dir, "dataset", "graph_manifest.json")
+    if os.path.isfile(man_p):
+        try:
+            p = json.load(open(man_p)).get("platform")
+            if p:
+                return p
+        except Exception:
+            pass
+    bdir = os.path.join(case_dir, "backend")
+    runs = sorted((r for r in os.listdir(bdir) if r.startswith("RUN_")),
+                  reverse=True) if os.path.isdir(bdir) else []
+    for r in runs:
+        mp = os.path.join(bdir, r, "run-meta.json")
+        if os.path.isfile(mp):
+            try:
+                p = json.load(open(mp)).get("platform")
+                if p:
+                    return p
+            except Exception:
+                pass
+    cfg = os.path.join(case_dir, "constraints", "config.mk")
+    if os.path.isfile(cfg):
+        m = re.search(r"^\s*(?:export\s+)?PLATFORM\s*=\s*(\S+)", open(cfg).read(), re.M)
+        if m:
+            return m.group(1)
+    return ""
+
+
 def resolve_platform_files(case_dir):
-    """Platform file PATHS via the production resolver (values re-derived here)."""
+    """Platform file PATHS via the production resolver (values re-derived here).
+    The platform itself comes from build provenance, NOT the mutable config.mk
+    (_platform_provenance, failure-patterns.md #30); the resolver receives it as
+    a make command-line var, which overrides config.mk's export inside ORFS."""
     import subprocess
     cfg = os.path.join(case_dir, "constraints", "config.mk")
     resolver = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                             "r2g-skills/def-graph", "scripts", "flow", "resolve_platform_paths.sh")
-    platform = ""
-    if os.path.isfile(cfg):
-        m = re.search(r"^\s*(?:export\s+)?PLATFORM\s*=\s*(\S+)", open(cfg).read(), re.M)
-        if m:
-            platform = m.group(1)
+    platform = _platform_provenance(case_dir)
     out = {}
     if os.path.isfile(resolver):
         try:

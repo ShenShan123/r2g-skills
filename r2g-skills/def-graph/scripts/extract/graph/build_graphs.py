@@ -495,6 +495,10 @@ def main():
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--variants", default="bcdef")
     ap.add_argument("--graph-id", type=int, default=0, help="x1 value (corpus-level id; default 0)")
+    ap.add_argument("--platform", default="",
+                    help="build-time platform provenance, stamped into the manifest "
+                         "(cell_type_id and every *_type_id are per-platform — "
+                         "failure-patterns.md #30)")
     args = ap.parse_args()
 
     torch = _torch()
@@ -536,6 +540,10 @@ def main():
     manifest = {
         "design": args.design,
         "graph_id": args.graph_id,
+        # Build-time provenance: which platform's libs keyed this dataset. The
+        # verifier (and any corpus merge) must trust THIS over the project's
+        # mutable config.mk, which later rounds re-point (failure-patterns #30).
+        "platform": args.platform or None,
         "features_dir": os.path.abspath(args.features),
         "labels_dir": os.path.abspath(args.labels),
         "x_schema_per_type": {"gate": GATE_COLS, "net": NET_COLS, "iopin": IOPIN_COLS, "pin": PIN_COLS},

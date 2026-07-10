@@ -71,6 +71,13 @@ if [[ ( -z "$ODB" || -z "$DEF" ) && -d "$BACKEND_DIR" ]]; then
     [[ -n "$ODB" || -n "$DEF" ]] && break
   done
 fi
+# Provenance guard (failure-patterns.md #30): the discovered artifacts are keyed
+# to the platform they were BUILT on (backend run-meta.json); config.mk is
+# mutable round state a campaign re-point rewrites. An explicit platform arg
+# always wins (guard skipped). Shared logic: _provenance.sh (one copy).
+if [[ -z "${2:-}" && -n "$RUN_DIR" ]]; then
+  PLATFORM=$(bash "$(dirname "${BASH_SOURCE[0]}")/_provenance.sh" "$RUN_DIR" "$PLATFORM")
+fi
 # Fallback: live ORFS results dir
 if [[ -z "$ODB" || -z "$DEF" ]]; then
   VARIANT="${FLOW_VARIANT_ARG:-$(basename "$PROJECT_DIR")}"

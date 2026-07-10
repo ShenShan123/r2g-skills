@@ -73,6 +73,14 @@ if [[ -z "$DEF" && -d "$BACKEND_DIR" ]]; then
     [[ -n "$DEF" ]] && break
   done
 fi
+
+# Provenance guard (failure-patterns.md #30): the discovered artifacts are keyed
+# to the platform they were BUILT on (backend run-meta.json); config.mk is
+# mutable round state a campaign re-point rewrites. An explicit platform arg
+# always wins (guard skipped). Shared logic: _provenance.sh (one copy).
+if [[ -z "${2:-}" && -n "$RUN_DIR" ]]; then
+  PLATFORM=$(bash "$(dirname "${BASH_SOURCE[0]}")/_provenance.sh" "$RUN_DIR" "$PLATFORM")
+fi
 [[ -z "$DEF" || ! -f "$DEF" ]] && skip "no 6_final.def found — backend not completed/collected"
 
 # --- Ensure fresh features/ + labels/ (run their stages when missing/stale) -
@@ -134,7 +142,8 @@ echo "DEF: $DEF"
 timeout --signal=TERM --kill-after=30 "$GRAPH_TIMEOUT" \
   "$GRAPH_PYTHON" "$GRAPH_SRC/build_graphs.py" \
     --features "$FEATURES_DIR" --labels "$LABELS_DIR" \
-    --design "$DESIGN_NAME" --out-dir "$DATASET_DIR" --variants "$VARIANTS"
+    --design "$DESIGN_NAME" --out-dir "$DATASET_DIR" --variants "$VARIANTS" \
+    --platform "$PLATFORM"
 
 # --- Synthesis-netlist graph (optional — needs the yosys netlist) ----------
 YOSYS_V=""

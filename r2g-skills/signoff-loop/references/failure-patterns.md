@@ -3641,3 +3641,30 @@ one more wave (which reclaims) instead of a false ALL_DONE. Tests:
 append-only state machine drained by state-equality needs a crash-recovery sweep for
 every worker-owned intermediate state; "resumable ledger" only held for the states a
 command actually selects.
+
+### 30. Campaign platform re-point could key an EXISTING dataset to the wrong platform's libs — build + verify trusted the mutable config.mk (2026-07-09)
+
+Surfaced by the sky130hs round bootstrap: Step 1b (`setup_rtl_designs.py --platform
+sky130hs --force`) rewrites `constraints/config.mk` for the WHOLE corpus — including
+designs like `iir` whose backend (`run-meta.json: platform=sky130hd`) and built dataset
+are sky130hd. Both the def-graph stage scripts (`run_labels/run_features/run_graphs`
+derive `$PLATFORM` from config.mk) and `tools/verify_graph_dataset.py`
+(`resolve_platform_files` read config.mk) would then resolve the OTHER platform's
+liberty/LEF for an existing DEF. `cell_type_id` and every `*_type_id` vocabulary are
+per-platform, so this is the skill's signature silent-value mode: a rebuild produces
+plausible CSVs with wrong categorical ids; verification either false-FAILs a good
+dataset or — subtler — vacuously passes checks against the wrong ground truth.
+
+**Fix**: authority order is *explicit arg > build provenance > config.mk* everywhere.
+(a) Stage scripts consult the discovered backend's `run-meta.json` via the SHARED
+`scripts/flow/_provenance.sh` (one copy — a worker-local inline guard is the techlib
+drift mode; an explicit platform arg skips it, preserving reference-DEF overrides);
+(b) `build_graphs.py --platform` stamps the platform into `graph_manifest.json` at
+build time; (c) the verifier's `_platform_provenance` prefers manifest > newest
+`run-meta.json` > config.mk, and passes the result to the resolver as a make
+command-line var (which overrides config.mk's export inside ORFS). Tests:
+`test_platform_provenance.py` (shell guard + verifier + wired-once drift guard);
+corner fixture now stamps + asserts `manifest.platform`. **Lesson:** any artifact
+keyed to per-platform vocabularies must carry its own build-time provenance; a
+campaign that re-points shared mutable config for the NEXT round silently re-keys
+every artifact of the PRIOR round that resolves through it.
