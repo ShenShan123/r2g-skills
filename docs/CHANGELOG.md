@@ -20,6 +20,41 @@ skipped as library-pre-verified).
 
 ---
 
+## 2026-07-09 — House-cleaning sweep + /r2g-debug full-coverage revision
+*(branch `chore/housecleaning-2026-07-09`)*
+
+Whole-collection dead-code audit (4 parallel scans over 312 scripts): signoff-loop, def-graph
+scripts, and eda-install came back fully wired — the dead set was rtl-acquire ingestion residue
+and repo-level leftovers.
+
+- **Deleted (rtl-acquire residue)**: the legacy local-Codex patch executor
+  `repair/run_local_llm_patch_agent.py` (finishes the 7dce0ed Codex sweep; the OpenAI API
+  executor is the only shipped LLM path) and three index-only pre-ingestion one-offs
+  (`hygiene/deduplicate_external_index.py`, `hygiene/deduplicate_external_by_canonical_source.py`,
+  `publish/build_synth_variant_dataset_manifest.py` — the last keyed to the retired
+  `*_1_1_yosys.pt` naming). Doc rows dropped from `script_index.md`/`operation_matrix.md`/READMEs;
+  stale `"workflow"/User-Agent: nangate45-graph-expander` self-identifiers renamed `rtl-acquire`.
+- **Deleted (repo level)**: one-off campaign tools `tools/{sweep_status.sh,
+  fix_synopsys_port_widths.py, finalize_runs.sh, reingest_corpus.py, batch_antenna_fix.sh}`
+  (all CHANGELOG/plan-doc-only refs; functionality lives in `fix_signoff.sh`/`engineer_loop`),
+  the pre-split `.claude/commands/r2g-rtl2gds.md` + untracked `r2g-rtl2gds/` leftover (24 MB),
+  and the absorbed RC-labels prototype `01_label_csv_extract/`.
+- **Deleted (dead symbol)**: def-graph `NANGATE45_CELL_TYPE_MAPPING` import-compat shim +
+  `COMPLETE_CELL_TYPE_MAPPING` alias (retired 2026-07-06, zero production readers); its tests now
+  assert the symbol is GONE and pin `cell_type_id` semantics via a synthetic map.
+- **Fixed in place**: `tools/batch_run.sh` unguarded legacy `/opt` env source (now the guarded
+  ORFS-first fallback); eda-install SKILL.md documents the on-demand `--tiers platform_rules`
+  helper.
+- **/r2g-debug revised to full coverage**: Step 1 verifies all FOUR skill symlinks + routes red
+  env rows to `eda-install/bootstrap.sh`; Step 0/3/4 gained the synth-only surfaces
+  (`flow_scope` population, `synth-frontend-*` parity via `project_frontend_diagnosis.py --check`
+  — neither `honesty.py` nor `check_db_integrity.py` is flow_scope-aware); new Step 6 audits the
+  rtl-acquire corpus supply line (`validate_publish_readiness.py`, `graph_skipped` ≠ success);
+  knowledge README gained **invariant 33** documenting `runs.flow_scope`.
+- Suites after the sweep: signoff-loop 792+1s, def-graph 337+14s, eda-install 24, rtl-acquire 21.
+
+---
+
 ## 2026-07-09 — eda-install: relocate conda toolchain to /proj + klayout tier audit
 *(branch `main`; commit `9a98013` relocation note; follow-on `install_klayout.sh` audit fix)*
 

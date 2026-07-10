@@ -406,6 +406,22 @@ The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports
     both regimes and orders by REAL time. New readers must do the same. Tests:
     `tests/test_local_timestamps.py`.
 
+33. **`runs.flow_scope` scopes the success contract; a synth-only pass is `pass`, never `partial`
+    (2026-07-09, rtl-acquire ingestion, 43b8a12).** `ingest_run.py` reads
+    `export R2G_FLOW_SCOPE = synth_only` from the project's `config.mk` and stamps
+    `flow_scope ∈ {'full','synth_only'}`. For `synth_only` the required-stage list collapses to
+    `["synth"]`, so a clean synth ingests as `orfs_status='pass'` — NOT the `partial` that would
+    flood the A/B planner with subjects that were never signoff candidates; a synth fail stays
+    `orfs_status='fail'` + `orfs_fail_stage='synth'` and carries the generic `orfs-fail-synth`
+    `failure_event` (invariant H2 parity holds unmodified). A `full`-scope run that only reached
+    synth stays `partial`. On top of the generic event, rtl-acquire's
+    `scripts/knowledge/project_frontend_diagnosis.py` projects the frontend *class*
+    (`synth-frontend-<class>` events from the classifier + `diagnosis.json`), and its `--check
+    <db>` mode is the synth-only honesty gate: every `flow_scope='synth_only'` fail must carry a
+    `synth-frontend-%` event. **Neither `honesty.py` nor `tools/check_db_integrity.py` is
+    flow_scope-aware — run `--check` alongside them** whenever synth_only rows exist. Tests:
+    `rtl-acquire/tests/test_flow_scope_ingest.py` (real ingest, no mocks).
+
 ## Sharing the store across users
 
 `knowledge.sqlite` (git-tracked) ships the skill pre-trained, but a binary blob does not

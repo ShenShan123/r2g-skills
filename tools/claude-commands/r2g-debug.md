@@ -1,5 +1,5 @@
 ---
-description: Drive an RTL→GDS sign-off campaign on an ORFS platform (default sky130hd — genuinely clean-able KLayout DRC + Netgen LVS + RCX; nangate45/asap7/gf180/ihp also work) in parallel waves, hunt r2g-skills bugs, and prove the engineer-learning-loop is closed (DRC/LVS clean where the deck allows + best Fmax + promoted recipes). Also independently VERIFIES the RTL→Graph dataset conversion across three dimensions — topology (5 PyG views b–f), feature statistics, and labels↔sign-off reports — against raw DEF/LEF/liberty/SPEF + OpenDB ground truth (opt-in PDNSim IR-drop re-run).
+description: Drive an RTL→GDS sign-off campaign on an ORFS platform (default sky130hd — genuinely clean-able KLayout DRC + Netgen LVS + RCX; nangate45/asap7/gf180/ihp also work) in parallel waves, hunt r2g-skills bugs, and prove the engineer-learning-loop is closed (DRC/LVS clean where the deck allows + best Fmax + promoted recipes). Also independently VERIFIES the RTL→Graph dataset conversion across three dimensions — topology (5 PyG views b–f), feature statistics, and labels↔sign-off reports — against raw DEF/LEF/liberty/SPEF + OpenDB ground truth (opt-in PDNSim IR-drop re-run) — and AUDITS the rtl-acquire synth-only corpus supply line (flow_scope='synth_only' honesty, synth-frontend-* event parity, publish gating).
 argument-hint: "[overrides, e.g. PLATFORM=sky130hd WAVE_MAX=24 WORKERS=3 NUM_CORES=4]"
 ---
 
@@ -18,7 +18,8 @@ a campaign that surfaces none is suspicious; (5) prove the loop **learns from bo
 trajectories** and **both DBs tell the same story** (`check_db_integrity.py`); (6) new/successful recipes
 **promote** (`shadow→candidate→promoted`); (7) prove effectiveness with evidence, not claims; (8) verify
 the **RTL→Graph dataset conversion** (Step 5) against raw DEF/LEF/liberty + OpenDB truth — an orthogonal
-bug-hunt axis.
+bug-hunt axis; (9) audit the **rtl-acquire synth-only corpus** (Step 6) — every `flow_scope='synth_only'`
+fail carries a `synth-frontend-*` event, `graph_skipped` never counts as success, publish gating holds.
 
 Apply any `KEY=value` from **$ARGUMENTS** as env overrides. Set the working vars once and reuse:
 
@@ -74,6 +75,8 @@ everywhere, so per-design configs port across platforms (absolute areas/periods 
 - `r2g-skills/signoff-loop/references/engineer-loop.md` — driver, escalation, A/B lifecycle.
 - `r2g-skills/signoff-loop/references/failure-patterns.md` → **"Learning-Loop Closure Failures"** + per-defect buckets cited below.
 - `r2g-skills/def-graph/references/graph-dataset.md` — Step-5 stage: the 5 views, tensor schema, feature/label join, the 2026-07 audit chain.
+- `r2g-skills/rtl-acquire/SKILL.md` — Step-6 stage: acquire → expand(synth-only) → repair → validate → publish; the scoped-reuse contract (BORROWS `run_orfs.sh`/`netlist_graph.py`/`ingest_run.py`, never reimplements) + the 5-rung definition-of-success ladder.
+- `r2g-skills/eda-install/SKILL.md` — the env remedy: one-command detect → plan → install → pin `env.local.sh` → verify (no-sudo conda default).
 - `tools/verify_graph_dataset.py` — the RTL→Graph **ground-truth oracle** (independent CSV re-derive + raw liberty/LEF/DEF re-parse; `--batch` sweeps, non-zero on any fail).
 - `tools/check_db_integrity.py` — one-command **both-DBs** verifier (`--platform`): knowledge honesty (via `honesty.py`) + journal liveness + cross-DB `run_id` linkage + per-move correspondence. ALARM = loop lying/blind; WARN = ledger drift to explain.
 
@@ -109,10 +112,19 @@ sqlite3 "$JDB" "
      ||' ab_launch='||(SELECT COUNT(*) FROM actions WHERE action_type='ab_launch')
      ||' promote='||(SELECT COUNT(*) FROM actions WHERE action_type='promote')
      ||' escalate='||(SELECT COUNT(*) FROM actions WHERE action_type='escalate');"
+# Synth-only corpus population (rtl-acquire ingests with flow_scope='synth_only'; a synth-only PASS is
+# 'pass' — NEVER 'partial', which would flood the A/B planner with never-signoff subjects):
+sqlite3 "$KDB" "SELECT flow_scope, orfs_status, COUNT(*) FROM runs GROUP BY 1,2;"
+sqlite3 "$KDB" "SELECT signature, COUNT(*) FROM failure_events
+  WHERE signature LIKE 'synth-frontend-%' GROUP BY 1 ORDER BY 2 DESC LIMIT 10;"
+# Synth-only honesty parity — NEITHER honesty.py NOR check_db_integrity.py is flow_scope-aware;
+# this is the ONLY gate that catches a synth_only fail missing its frontend event:
+python3 r2g-skills/rtl-acquire/scripts/knowledge/project_frontend_diagnosis.py --check "$KDB"
 ```
 
 Report in plain language: pending count **for `$PLATFORM`**, the `check_db_integrity` verdict + why, is
-honesty internally consistent, is `promoted` growing **per-platform** or flat, does the journal keep step.
+honesty internally consistent, is `promoted` growing **per-platform** or flat, does the journal keep step,
+and — when synth_only rows exist — did the `--check` parity gate pass.
 Knowledge is a **shared** store — scope "did THIS campaign improve things" to `platform='$PLATFORM'`.
 
 ## Step 1 — Deploy the NEWEST skill as a symlink (non-negotiable)
@@ -122,12 +134,23 @@ A stale deployed skill is the most expensive failure mode here (2026-06-08): the
 
 ```bash
 bash r2g-skills/install.sh --project . --link --force
-readlink .claude/skills/signoff-loop   # MUST resolve to canonical r2g-skills/signoff-loop/
+for s in signoff-loop def-graph rtl-acquire eda-install; do readlink ".claude/skills/$s"; done
+# ALL FOUR must resolve into the canonical r2g-skills/ tree
 bash r2g-skills/signoff-loop/scripts/flow/check_env.sh   # the tools $PLATFORM needs MUST be green
 ```
 
 A flow that aborts on a missing tool — **or silently *skips* DRC/LVS because its tool/PDK is unset** —
-teaches the loop a lie. Fix the environment first (see the per-platform env note above).
+teaches the loop a lie. Fix the environment first (see the per-platform env note above). **The remedy
+for red rows is the `eda-install` skill**, not ad-hoc installs:
+
+```bash
+bash r2g-skills/eda-install/bootstrap.sh --dry-run   # detect + per-tier plan, installs NOTHING
+bash r2g-skills/eda-install/bootstrap.sh --yes       # install missing tiers → pin env.local.sh → verify
+```
+
+`eda-install/scripts/flow/check_env.sh` additionally prints a `[corpus expansion (rtl-acquire)]` section
+probing the borrowed `run_orfs.sh` / `netlist_graph.py` / `ingest_run.py` trio — verify it (and that
+`R2G_GRAPH_PYTHON` is set, else designs record `graph_skipped`) before any Step-6 corpus work.
 
 ## Step 1b — Bootstrap the per-platform ledger (only when `$LEDGER` is absent)
 
@@ -208,6 +231,14 @@ linkage, `L1/L2/L3` per-move, `K3` per-platform stall). Each below is a *lead* �
 - **Same strategy re-applied on the same design across sessions** — dead-fix gate off/bypassed (`dead_here` after ≥`R2G_FIX_DEAD_AFTER`=2 terminal fails + 0 clears; A/B arms bypass by design).
 - **`fail`/`partial` exist but `ab_trials` empty** — loop inert and lying; treat like an empty `heuristics.json`.
 - **Fmax `status='error'`** where a fallback was possible (null floorplan slack → post-place) — a bug, not honest `unconstrained`/`inconclusive`.
+- **synth_only `fail` without a `synth-frontend-*` event** — `project_frontend_diagnosis.py --check "$KDB"`
+  non-zero ⇒ the frontend learner is blind. honesty.py only sees the generic `orfs-fail-synth`; run the
+  `--check` gate after every rtl-acquire classification/retry wave (it re-ingests touched projects).
+- **A full-scope run that only reached synth flipped to `pass`** — must stay `partial` (`flow_scope='full'`
+  keeps the full required-stage list; only `flow_scope='synth_only'` earns `pass` on synth alone). Either
+  direction of this lie corrupts the A/B planner's subject pool.
+- **`graph_skipped` rows counted as expansion success** — with `R2G_GRAPH_PYTHON` unset the graph stage
+  SKIPs with a HINT; a corpus round claiming success over `graph_skipped` designs produced no graphs.
 
 **When you find a real bug, fix it the project way** (`CLAUDE.md` → "When You Fix a Bug"): (1) append a
 sub-section to failure-patterns.md/lessons-learned.md; (2) fix the offending `scripts/` file to
@@ -220,6 +251,7 @@ project (old `fail` + new `pass` coexist); (6) **commit** `feat(skill):`/`fix(sk
 Closed only when ALL hold — show the SQL/output for each:
 
 - **Honesty 5/5** (global, never platform-scoped): `python3 r2g-skills/signoff-loop/knowledge/honesty.py --db r2g-skills/signoff-loop/knowledge/knowledge.sqlite`.
+- **Synth-only parity** (only when `flow_scope='synth_only'` rows exist): `python3 r2g-skills/rtl-acquire/scripts/knowledge/project_frontend_diagnosis.py --check "$KDB"` exits 0.
 - **Both DBs agree:** `python3 tools/check_db_integrity.py --platform "$PLATFORM"` exits 0. Explain any residual WARN (why it's not a live writer bug).
 - **Every ledger-clean is signoff-backed** (the blind spot the DBs can't see): `python3 tools/check_ledger_signoff_backed.py --platform "$PLATFORM"` with **`fabricated == 0`**.
 - **Failure learning:** `fix_events`/`fix_trajectories` captured attempts incl. `abandoned`/`failed`. A **loss** verdict is closure evidence too (the judge got real signal and withheld promotion).
@@ -335,7 +367,44 @@ particular need a forced label rebuild (`rm reports/labels_stats.json`). A pre-R
 width 5, no `rc_edge_*`; e.g. DMA before its 2026-07-08 regen) is now caught by `topology_checks`, but
 regenerate rather than trust it. Ingest is unaffected (a training artifact, never entering the memory DBs).
 
-## Step 6 — Record durable learnings
+## Step 6 — Audit the rtl-acquire synth-only corpus supply line (when the corpus grew)
+
+rtl-acquire is **UPSTREAM** of signoff: it acquires RTL at corpus scale and expands each candidate
+**synth-only** (borrowed `run_orfs.sh` with `ORFS_STAGES=synth`, unique `FLOW_VARIANT` per candidate)
+into a pre-layout `netlist_graph.pt` — **nangate45-scoped in v1** (`R2G_ACQUIRE_PLATFORM`). It never
+runs PnR/signoff; promote a design into the Step-2 campaign for that. Skip this step when no acquisition
+round ran and Step 0's `flow_scope='synth_only'` counts are unchanged.
+
+- **Round driver** (idempotent; cwd = `r2g-skills/rtl-acquire`):
+  `python3 scripts/run_expansion_round.py --discover --run-retry` (loops: `scripts/run_until_empty.py`,
+  `scripts/search_and_expand_until_target.py`). A round is successful only when publish gating + the
+  merged-manifest refresh completed — read `workspace/runs/run_manifest_latest.json` +
+  `quality/publish_validation.json`, never the exit banner.
+- **Keep the definition-of-success ladder separate** (SKILL.md): execution / repair / validation /
+  publish / **learning** — the learning rung is the round's runs landing in knowledge.sqlite with
+  `flow_scope='synth_only'` and every synth-fail carrying a `synth-frontend-<class>` event.
+- **Verify a published corpus** — the synth-only analog of Step 5. `tools/verify_graph_dataset.py` does
+  NOT apply (netlist graphs are pre-layout: no DEF/SPEF/labels); the gates are:
+
+  ```bash
+  cd r2g-skills/rtl-acquire
+  python3 scripts/validate/validate_publish_readiness.py   # → quality/publish_validation.json pass:true
+      # per-design netlist_graph.pt + mapped_netlist.v exist, cell_stats.json cells>0 (the check that
+      # REPLACED the retired 30pt mapping-coverage gate), graph_stat_drift + duplicate-leakage bounds
+  python3 scripts/knowledge/project_frontend_diagnosis.py --check \
+      ../signoff-loop/knowledge/knowledge.sqlite            # synth-only honesty parity, non-zero on lie
+  ```
+- **Frontend-repair honesty chain** (after a wave with synth fails): `repair/classify_failed_candidates.py`
+  → `repair/auto_fix_failures.py` → `knowledge/project_frontend_diagnosis.py` (writes `diagnosis.json` +
+  `fix_log.jsonl`: an `acquire_exclude` is deliberate abandonment = negative learning; a cleared `retry`
+  is a win) → re-ingest → `--check`. A skipped rung here is the synth-side "never ingested" lie.
+- **`graph_skipped` ≠ success** — without `R2G_GRAPH_PYTHON` every design records `graph_skipped`
+  (honest HINT, by design). Provision the venv (eda-install `graph` tier) before judging a round.
+- **Same cores rule:** `R2G_ACQUIRE_NUM_CORES` × concurrent synths ≤ free cores; per-candidate synth
+  timeout `R2G_ACQUIRE_SYNTH_TIMEOUT` (default 3600s). The LLM patch path is OFF by default
+  (`R2G_ACQUIRE_ENABLE_LLM=1` opt-in; OpenAI fallback additionally needs `OPENAI_API_KEY`).
+
+## Step 7 — Record durable learnings
 
 - Update `r2g-skills/signoff-loop/references/` (failure-patterns/lessons-learned) + any touched
   `docs/superpowers/{plans,specs}` with a **dated note (commit hash + superseded invariants)**. Keep
@@ -347,8 +416,9 @@ regenerate rather than trust it. Ingest is unaffected (a training artifact, neve
 
 Idempotent + resumable ⇒ safe under `/loop` (defaults `PLATFORM=sky130hd`): each tick re-deploys the
 skill, resumes the same `$LEDGER` (Step 1b is a no-op once built), runs the next waves, re-verifies
-honesty, and re-runs Step 5 (`--batch` + corner suite are idempotent + staleness-aware). Retune via
-`pool.env`; keep `WORKERS × NUM_CORES ≤ free cores` every tick.
+honesty, and re-runs Step 5 (`--batch` + corner suite are idempotent + staleness-aware) and Step 6
+(skippable when `flow_scope='synth_only'` counts are unchanged; the round driver + `--check` gate are
+idempotent). Retune via `pool.env`; keep `WORKERS × NUM_CORES ≤ free cores` every tick.
 
 ## Guardrails (hard rules — violating one corrupts the campaign or the host)
 
@@ -360,3 +430,4 @@ honesty, and re-runs Step 5 (`--batch` + corner suite are idempotent + staleness
 - **Ingest after EVERY flow** — clean, failed, or partial.
 - **Escalate to the user before** CDC, multi-clock, DFT, or signoff-quality closure (the loop never blocks on unknowns — they go to `escalations`).
 - **Step 5 needs the graph venv** or it verifies nothing; building datasets is memory/CPU-heavy (counts against `WORKERS × NUM_CORES`). Never trust a `SKIP` as a pass.
+- **rtl-acquire rounds share the same core budget** (`R2G_ACQUIRE_NUM_CORES` × concurrent synths counts against the host total) — never run a corpus round and campaign waves oversubscribed. v1 is nangate45-scoped: don't re-point `R2G_ACQUIRE_PLATFORM` mid-corpus.

@@ -214,3 +214,14 @@ Reality-check corrections to this plan discovered during implementation:
 - Tests: rtl-acquire 21 passed (incl. new `test_flow_scope_ingest.py` proving the Phase-4
   contract against the REAL ingest — no mocks); signoff-loop 790 passed; LLM path hard-gated
   behind `R2G_ACQUIRE_ENABLE_LLM=1` (default OFF).
+
+> **Post-ingestion residue sweep (2026-07-09, branch `chore/housecleaning-2026-07-09`):** a
+> whole-repo dead-code audit deleted the last pre-ingestion carry-overs that 7dce0ed's
+> policies+docs sweep missed — `repair/run_local_llm_patch_agent.py` (the local Codex-CLI
+> executor incl. all CODEX_HOME machinery; the OpenAI API executor is now the only shipped LLM
+> path), `hygiene/deduplicate_external_index.py` + `hygiene/deduplicate_external_by_canonical_source.py`
+> (2026-04-07 quarantine one-offs, superseded by `check_mapped_netlist_duplicates.py`), and
+> `publish/build_synth_variant_dataset_manifest.py` (keyed to the retired `*_1_1_yosys.pt`
+> naming). Stale `nangate45-graph-expander` self-identifiers (run manifests' `workflow` field,
+> discovery User-Agent, README/`common/__init__` headers) renamed to `rtl-acquire`. Suite still
+> 21 passed.
