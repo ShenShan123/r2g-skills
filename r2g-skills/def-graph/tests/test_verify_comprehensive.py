@@ -274,9 +274,13 @@ def test_feature_stats_json_honesty(mini, monkeypatch):
     monkeypatch.setattr(vgd, "resolve_platform_files", lambda case: {})
     reports = os.path.join(mini["tmp"], "reports")
     os.makedirs(reports, exist_ok=True)
-    # generate matching stats JSONs via the REAL gates
-    fj = cfs.build_report(mini["feat"], DZ, "sky130hd")
-    lj = cls.build_report(mini["lab"], DZ, "sky130hd")
+    # generate matching stats JSONs via the REAL gates. NB build_report's 2nd
+    # positional is OUT_PATH — omitting it once leaked a stats dump named "tiny"
+    # into pytest's CWD and stamped design="sky130hd"/platform="unknown".
+    fj = cfs.build_report(mini["feat"], os.path.join(reports, "features_stats.json"),
+                          DZ, "sky130hd")
+    lj = cls.build_report(mini["lab"], os.path.join(reports, "labels_stats.json"),
+                          DZ, "sky130hd")
     json.dump(fj, open(os.path.join(reports, "features_stats.json"), "w"))
     json.dump(lj, open(os.path.join(reports, "labels_stats.json"), "w"))
     fails = _run(vgd.feature_stat_checks, mini["tmp"], DZ, mini["feat"], mini["lab"],

@@ -3541,3 +3541,16 @@ NOT success") instead of silence. TDD (both proven RED first):
 cannot re-derive a value must RECALL it from what it is about to overwrite, and an intentionally
 absent value must be loud, because the downstream stage's honest per-design SKIP aggregates into
 a silent machine-wide no-op.
+
+### 27. Test fixture positional-arg drift — stats dump leaked into pytest's CWD (2026-07-09)
+
+`test_verify_comprehensive.test_feature_stats_json_honesty` called
+`build_report(dir, DZ, "sky130hd")` against the signature `build_report(dir, OUT_PATH, design,
+platform)` — the forgotten `out_path` made `"tiny"` a CWD-relative output file (a stats dump
+named `tiny` appeared in the repo root on every suite run) and shifted the fixture's identity
+fields to `design="sky130hd"/platform="unknown"`. The test still passed (the stats-honesty check
+compares distributions, not identity fields), so the drift was invisible until the stray file
+was noticed. Fixed: out_path now targets the fixture's `reports/` dir and design/platform sit in
+their right slots. **Lesson:** a worker API whose 2nd positional is an OUTPUT PATH is easy to
+misuse from fixtures — when a repo-root artifact appears after a test run, diff its content
+against worker output formats to identify the caller.
