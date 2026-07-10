@@ -67,9 +67,16 @@ chain to iteration 1 via `parent_action_id`.
 1. Read current violation count from `reports/{drc,lvs}.json` (baseline run above ensures it exists).
 2. Call `diagnose_signoff_fix.py --next` to get the next auto strategy.
 3. Call `--apply <id>` to write `config_edits` into the marked block in `config.mk`.
-4. Re-run the flow:
-   - Without `--resume`: `run_orfs.sh <project-dir> <platform>` (full run from scratch).
-   - With `--resume`: `FROM_STAGE=<rerun_from> run_orfs.sh <project-dir> <platform>`.
+4. Re-run the flow — **stage-scoped resume by default** (2026-07-10,
+   failure-patterns.md #35): `FROM_STAGE=<rerun_from> run_orfs.sh …`, where
+   `run_orfs.sh` first runs `make clean_<rerun_from>` so the just-applied
+   config edit is guaranteed to take effect (config.mk is NOT a make
+   prerequisite — a plain resume silently NO-OPed the edit) while every
+   earlier stage's artifacts are reused. `R2G_FIX_FULL_REFLOW=1` restores the
+   old full rebuild (use when an edit affects a stage earlier than the
+   strategy's declared `rerun_from`); `--resume` is now a no-op alias;
+   `R2G_RESUME_NO_CLEAN=1` on run_orfs gives the pure crash-resume (unchanged
+   config).
 5. Re-run `run_drc.sh` or `run_lvs.sh` and re-extract results.
 6. Compare before/after violation count.
 
@@ -77,6 +84,13 @@ chain to iteration 1 via `parent_action_id`.
 
 - Violation count reaches 0 (verdict flips to `cleared`).
 - 2 consecutive non-improving iterations past the base budget (adaptive early-stop).
+- **Antenna non-convergence** (failure-patterns.md #36): 2 non-improving
+  *antenna* iterations (strategy `antenna*` or dominant class ~antenna) end the
+  check with the terminal verdict `antenna_nonconverged` (ingested as
+  `no_change` — negative evidence) and persist
+  `reports/antenna_nonconverged.json`; later sessions auto-exclude the
+  proven-futile strategies until the check reaches CLEAN (marker self-clears)
+  or `R2G_FIX_RETRY_NONCONVERGED=1` retries deliberately.
 - `diagnose_signoff_fix.py --next` returns `STOP` (residual — no auto strategy left).
 - `run_orfs.sh` fails (rc ≠ 0) — aborts that check, does NOT re-read a stale report.
 - The hard cap (8, or `--max-iters`) is reached.

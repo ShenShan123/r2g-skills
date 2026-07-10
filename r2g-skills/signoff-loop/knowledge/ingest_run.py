@@ -170,6 +170,10 @@ _VERDICT_MAP = {
     "cleared": "cleared",
     "applied": "win",
     "no_improvement": "no_change",
+    # Terminal antenna verdict (fix_signoff.sh, failure-patterns.md #36): the
+    # strategy ran and did not improve — negative evidence, same bucket as
+    # no_improvement, NOT inconclusive fall-through.
+    "antenna_nonconverged": "no_change",
     "win": "win",
     "no_change": "no_change",
     "regression": "regression",

@@ -89,7 +89,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --check) CHECK="$2"; shift 2;;
     --max-iters) MAX_ITERS="$2"; shift 2;;
-    --resume) RESUME=1; shift;;
+    --resume) RESUME=1; shift;;  # legacy no-op: stage-scoped resume is the default (see #35)
     -*) echo "unknown flag: $1" >&2; exit 1;;
     *) if [[ -z "$PROJECT_DIR" ]]; then PROJECT_DIR="$1"; else PLATFORM="$1"; fi; shift;;
   esac
@@ -321,12 +321,30 @@ except Exception: print("")' "$report" 2>/dev/null)"
 fix_one() {  # $1 = drc|lvs|route|timing
   local check="$1" report="$REPORTS/$1.json" tried="" before after it sid rerun recheck line verdict
   local noimp=0 before_vclass before_cats snap sym root_aid="" first_aid
+  local antenna_noimp=0 antenna_marker="$REPORTS/antenna_nonconverged.json"
   # timing's report is reports/timing_check.json (check_timing.py's output), not
   # reports/timing.json — point _count/_run_extract at the real file.
   [[ "$check" == "timing" ]] && report="$REPORTS/timing_check.json"
   _ensure_baseline "$check"
   [[ -f "$report" ]] || _run_extract "$check"
   before="$(_count "$report")"
+  # Antenna non-convergence memory (failure-patterns.md #36): a prior session
+  # already proved the antenna strategies don't move this design's residual —
+  # exclude them up front instead of silently burning the same diode+reroute
+  # reflows on every later visit (SHA-1/SHA-256 loop). Retry deliberately with
+  # R2G_FIX_RETRY_NONCONVERGED=1 (e.g. after an ORFS/OpenROAD update), or the
+  # marker clears itself the moment the check reaches CLEAN.
+  if [[ "$check" == "drc" && -f "$antenna_marker" && "${R2G_FIX_RETRY_NONCONVERGED:-0}" != "1" ]]; then
+    local marker_excl
+    marker_excl="$(python3 -c 'import json,sys
+try: print(",".join(json.load(open(sys.argv[1])).get("strategies_tried") or []))
+except Exception: print("")' "$antenna_marker")"
+    if [[ -n "$marker_excl" ]]; then
+      tried="${tried:+$tried,}$marker_excl"
+      echo "[$check] antenna repair previously NON-CONVERGED — excluding: $marker_excl" \
+           "(R2G_FIX_RETRY_NONCONVERGED=1 to retry; marker: reports/antenna_nonconverged.json)"
+    fi
+  fi
   for ((it=1; it<=MAX_ITERS; it++)); do
     # Snapshot the PRE-fix dominant violation_class + full categories vector for
     # this iteration NOW, before any fix/extract overwrites the report (the
@@ -371,8 +389,20 @@ except Exception: print("{}")' <<<"$apply_out")"
       # Tier B4: a stage re-run is a loop decision — journal it (symptom-linked).
       _journal_action stage_rerun "$(python3 -c 'import json,sys;print(json.dumps({"from_stage":sys.argv[1],"strategy":sys.argv[2]}))' "$rerun" "$sid")" "$sym"
       local rc=0
-      if [[ "$RESUME" == "1" ]]; then FROM_STAGE="$rerun" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
-      else "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?; fi
+      # Stage-scoped resume is the DEFAULT now (failure-patterns.md #35):
+      # run_orfs invalidates the resumed stage (make clean_<stage>) so the
+      # just-applied config edit is GUARANTEED to take effect while every
+      # earlier stage's artifacts are reused. The old default rebuilt
+      # synth->finish (clean_all) on every fix iteration — necessary back then
+      # because a plain resume silently NO-OPed the edit (config.mk is not a
+      # make prerequisite). R2G_FIX_FULL_REFLOW=1 restores the full rebuild
+      # (use when an edit affects a stage EARLIER than the strategy's declared
+      # rerun_from). --resume is kept as a no-op alias of the default.
+      if [[ "${R2G_FIX_FULL_REFLOW:-0}" == "1" ]]; then
+        "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
+      else
+        FROM_STAGE="$rerun" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
+      fi
       if [[ $rc -ne 0 ]]; then
         echo "[$check] run_orfs failed (rc=$rc); aborting this check" >&2
         _log_iter "$check" "$it" "$sid" "$before" "$before" "rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats" "{}"
@@ -405,9 +435,38 @@ except Exception: print("{}")' <<<"$apply_out")"
       noimp=0
     fi
     [[ "$after" == "0" ]] && verdict="cleared"
+    # Antenna non-convergence auto-exit (failure-patterns.md #36): each antenna
+    # strategy already drives up to MAX_REPAIR_ANTENNAS_ITER_DRT diode+reroute
+    # rounds INSIDE ORFS with no improvement check of its own, and OpenROAD's
+    # antenna model can disagree with the signoff deck — so the same 1-2
+    # residual violations can survive every round (the SHA-1/SHA-256 loop).
+    # Two non-improving antenna strategies = NON-CONVERGED: terminal verdict,
+    # persistent marker, stop burning reflows.
+    if [[ "$verdict" == "no_improvement" && ( "$sid" == antenna* || "$before_vclass" == *[Aa]ntenna* ) ]]; then
+      antenna_noimp=$((antenna_noimp+1))
+      (( antenna_noimp >= 2 )) && verdict="antenna_nonconverged"
+    fi
     _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta"
     echo "[$check] iter $it: $before -> $after ($verdict)"
-    if [[ "$after" == "0" ]]; then echo "[$check] CLEAN"; return 0; fi
+    if [[ "$after" == "0" ]]; then
+      # A clean check invalidates any recorded antenna non-convergence.
+      [[ "$check" == "drc" ]] && rm -f "$antenna_marker"
+      echo "[$check] CLEAN"; return 0
+    fi
+    if [[ "$verdict" == "antenna_nonconverged" ]]; then
+      python3 -c 'import json,sys
+out, residual, iters, tried = sys.argv[1:5]
+json.dump({"class": "antenna", "residual_count": float(residual) if residual else None,
+           "fix_iters": int(iters), "strategies_tried": [s for s in tried.split(",") if s],
+           "hint": "OpenROAD antenna repair cannot close this residual (model disagrees "
+                   "with the signoff deck or an irreducible multi-gate net). Retry "
+                   "deliberately with R2G_FIX_RETRY_NONCONVERGED=1 after a toolchain "
+                   "change, or accept/escalate the residual."},
+          open(out, "w"), indent=1)' "$antenna_marker" "$after" "$it" "$tried"
+      echo "[$check] ANTENNA REPAIR NON-CONVERGED: $after residual violation(s) unchanged" \
+           "after $antenna_noimp antenna strategies — stopping (marker: reports/antenna_nonconverged.json)"
+      return 0
+    fi
     if [[ "$verdict" == "no_improvement" ]]; then echo "[$check] no improvement; trying next strategy"; fi
     # Adaptive budget (D12): past base, stop after 2 consecutive non-improving iters.
     if (( it >= BASE_ITERS && noimp >= 2 )); then

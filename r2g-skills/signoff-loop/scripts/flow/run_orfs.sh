@@ -226,6 +226,21 @@ if [[ -n "$FROM_STAGE" ]]; then
   fi
 fi
 
+# Stage-scoped invalidation on resume (failure-patterns.md #35): config.mk is
+# NOT a make prerequisite in ORFS, so resuming FROM_STAGE over intact artifacts
+# makes `make <stage>` a NO-OP — a just-applied config edit silently never takes
+# effect. Cleaning exactly the resumed stage forces it (and, via the odb
+# dependency chain, everything downstream) to rebuild while every stage BEFORE
+# it is REUSED — this is what makes FROM_STAGE both correct for config edits
+# and cheaper than the clean_all full rebuild. Opt out with
+# R2G_RESUME_NO_CLEAN=1 (pure crash-resume of an interrupted flow, unchanged
+# config — e.g. the finish-stage GDS resume).
+if [[ -n "$FROM_STAGE" && "${R2G_RESUME_NO_CLEAN:-0}" != "1" ]]; then
+  echo "Invalidating resumed stage: make clean_$FROM_STAGE (earlier stages reused)"
+  make DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "clean_$FROM_STAGE" 2>&1 | tail -3 \
+    || echo "WARNING: clean_$FROM_STAGE returned non-zero (stage may have no artifacts yet)" >&2
+fi
+
 run_stage() {
   local stage="$1"
   echo ""

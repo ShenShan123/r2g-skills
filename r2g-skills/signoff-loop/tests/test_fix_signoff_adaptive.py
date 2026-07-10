@@ -73,7 +73,13 @@ def test_improving_run_exceeds_base_and_clears(tmp_path):
 
 
 def test_stuck_run_stops_at_exactly_three(tmp_path):
+    # NB deliberately a NON-antenna category: a stuck antenna run now exits
+    # earlier via the antenna_nonconverged terminal verdict (#36, covered in
+    # test_antenna_nonconverged.py); this test is about the GENERIC D12 budget.
     proj, bindir = _common(tmp_path, 50)
+    (proj / "reports" / "drc.json").write_text(json.dumps(
+        {"status": "fail", "total_violations": 50,
+         "categories": {"METAL_SHORT": {"count": 50}}}))
     # diagnose always offers a strategy (never STOP); --apply succeeds.
     _stub(bindir / "diagnose.py",
           'if [[ "$*" == *"--next"* ]]; then echo -e "diode\\troute\\tdrc";\n'
@@ -83,7 +89,7 @@ def test_stuck_run_stops_at_exactly_three(tmp_path):
           'python3 - "$@" <<\'PY\'\nimport json,sys\n'
           'open(sys.argv[2],"w").write(json.dumps(\n'
           '  {"status":"fail","total_violations":50,\n'
-          '   "categories":{"M2_ANTENNA":{"count":50}}}))\nPY')
+          '   "categories":{"METAL_SHORT":{"count":50}}}))\nPY')
 
     env = dict(os.environ,
                R2G_DIAGNOSE=str(bindir / "diagnose.py"),
