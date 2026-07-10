@@ -3614,3 +3614,30 @@ four skills (rtl-acquire's copy was unchecked). **Lesson:** when a "recall what 
 about to overwrite" self-heal is added for one variable, the defect class is *the loop
 that didn't recall* — patch the loop, not the variable; and every pinned path must also
 be autodetectable, or the pin file is a single point of silent environmental collapse.
+
+### 31. Crash-orphaned transient ledger states stranded designs FOREVER — round could end "ALL_DONE" with non-terminal designs (2026-07-09)
+
+Found by the sky130hs /r2g-debug tick's Step-0 gate after a host reboot: the ledger held
+8 designs in `state='flow'` with no driver alive. Every drain entrypoint
+(`run`/`fmax-drain`/`ab-drain`) selects ONLY `state='pending'`, and
+`campaign_resume_waves.sh`'s ALL_DONE gate counted ONLY `pending` — so a driver killed
+mid-wave (reboot, `kill -9` without the group, OOM) left its in-flight designs in a
+transient state (`flow`/`signoff`/`fixing`) that nothing ever re-drained. Worst case is
+the LAST wave: pending hits 0 while N designs sit transient → the driver prints
+`ALL_DONE platform=… pending=0` and the round is reported complete over designs that
+never reached a terminal state (a campaign-completion lie the DB honesty gates cannot
+see — those designs may have ingested nothing at all).
+
+**Fix** (TDD RED→GREEN): `Ledger.reclaim_orphans()` resets every transient entry to
+`pending` (appending an `orphan_reclaim:<state>` event, dropping stale `judged` per the
+add()/reload invariant so a re-run A/B arm is RE-judged), called at the start of
+`run()`, `fmax_drain()` and `ab_drain()` — safe exactly there because the per-ledger
+single-instance guard (flock + pgrep, 2026-07-04) proves no live worker can own a
+transient state at command start. `campaign_resume_waves.sh`'s `pending_count()` now
+counts OPEN work (`pending|flow|signoff|fixing`), so a crash on the final wave triggers
+one more wave (which reclaims) instead of a false ALL_DONE. Tests:
+`test_reclaim_orphans_resets_transient_states`,
+`test_run_drains_crash_orphaned_designs` (test_engineer_loop.py). **Lesson:** an
+append-only state machine drained by state-equality needs a crash-recovery sweep for
+every worker-owned intermediate state; "resumable ledger" only held for the states a
+command actually selects.

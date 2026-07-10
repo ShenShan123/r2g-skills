@@ -77,6 +77,11 @@ if [ ! -f "$LEDGER" ]; then
 fi
 
 pending_count() {
+  # Counts OPEN work: pending PLUS crash-orphaned transient states (flow/signoff/
+  # fixing). A driver killed mid-wave (host reboot) leaves designs transient; the
+  # next wave's run/fmax-drain reclaims them to pending (engineer_loop
+  # reclaim_orphans, failure-patterns.md #31) — counting only 'pending' here
+  # would print ALL_DONE over stranded, never-terminal designs.
   python3 - "$LEDGER" <<'PY'
 import json,sys
 e={}
@@ -84,7 +89,8 @@ for ln in open(sys.argv[1]):
     ln=ln.strip()
     if not ln: continue
     r=json.loads(ln); e.setdefault(r["design"],{}).update(r)
-print(sum(1 for v in e.values() if v["state"]=="pending"))
+print(sum(1 for v in e.values()
+          if v["state"] in ("pending","flow","signoff","fixing")))
 PY
 }
 

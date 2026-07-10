@@ -43,6 +43,11 @@ sys.path.insert(0, str(REPORTS))
 
 STATES = ("pending", "flow", "signoff", "fixing", "clean", "escalated",
           "abandoned")
+# Non-terminal, worker-owned states. An entry found in one of these at COMMAND
+# START is a crash orphan (host reboot / kill -9 mid-wave): the per-ledger
+# single-instance guard (flock + pgrep, 2026-07-04) means no live worker can own
+# it then. See Ledger.reclaim_orphans (failure-patterns.md #31).
+TRANSIENT_STATES = ("flow", "signoff", "fixing")
 
 
 def _now() -> str:
@@ -126,6 +131,32 @@ class Ledger:
 
     def pending(self) -> list[dict]:
         return [e for e in self._entries.values() if e["state"] == "pending"]
+
+    def reclaim_orphans(self) -> list[str]:
+        """Reset designs stranded in a TRANSIENT state (flow/signoff/fixing) back to
+        'pending', returning the reclaimed design names. Only called at drain-command
+        start, where the single-instance guard proves no live worker owns them — a
+        transient entry there is an orphan from a crashed driver, and without this it
+        is stranded FOREVER: run()/fmax_drain()/ab_drain() drain only 'pending', and
+        the waves driver's ALL_DONE gate would end the round with non-terminal
+        designs (failure-patterns.md #31, the 2026-07-09 sky130hs reboot)."""
+        reclaimed = []
+        with self._lock:
+            for design, cur in self._entries.items():
+                if cur.get("state") in TRANSIENT_STATES:
+                    e = {"design": design, "state": "pending", "ts": _now(),
+                         "reason": f"orphan_reclaim:{cur['state']}"}
+                    cur.update(e)
+                    # mirror the add()/reload pending invariant: a re-queued A/B
+                    # arm must be RE-judged, not skipped as already-judged
+                    cur.pop("judged", None)
+                    self._append(e)
+                    reclaimed.append(design)
+        if reclaimed:
+            print(f"[ledger] reclaimed {len(reclaimed)} crash-orphaned design(s) "
+                  f"-> pending: {', '.join(sorted(reclaimed)[:8])}"
+                  f"{' ...' if len(reclaimed) > 8 else ''}", file=sys.stderr)
+        return reclaimed
 
 
 # ---- subprocess seams (monkeypatched in tests; env-overridable like
@@ -1741,6 +1772,7 @@ def ab_drain(ledger_path: Path, *, n_ab_designs: int = 2,
     """
     import knowledge_db
     led = Ledger(ledger_path)
+    led.reclaim_orphans()          # crash-orphaned A/B arms re-run + re-judge (#31)
     conn = knowledge_db.connect(db_path) if db_path else knowledge_db.connect()
     knowledge_db.ensure_schema(conn)
     plan_arms_for_candidates(led, conn, n_ab_designs=n_ab_designs)
@@ -1934,6 +1966,7 @@ def fmax_drain(ledger_path: Path, *, platform: str | None = None,
     (fast feedback) rather than Fmax-ing all pending up front. Returns the count of
     designs that got a real period."""
     led = Ledger(ledger_path)
+    led.reclaim_orphans()          # keep the fmax prefix == run's drain prefix (#31)
     pending = [e for e in led.pending() if e.get("kind", "normal") == "normal"]
     if platform:
         pending = [e for e in pending if e.get("platform") == platform]
@@ -1958,6 +1991,7 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
         max_workers: int = 1) -> None:
     import knowledge_db
     led = Ledger(ledger_path)
+    led.reclaim_orphans()          # crash-orphaned transients rejoin the drain (#31)
     conn = knowledge_db.connect()
     knowledge_db.ensure_schema(conn)
     prev_heur = None

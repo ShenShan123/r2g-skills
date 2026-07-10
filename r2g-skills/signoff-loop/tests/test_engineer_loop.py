@@ -173,3 +173,66 @@ def test_learn_cycle_enqueues_candidates_and_ab_arms(tmp_path, monkeypatch):
     assert len(arms) == 4
     assert {a["arm"] for a in arms} == {"A", "B"}
     assert {a["repeat"] for a in arms} == {0, 1}
+
+
+def test_reclaim_orphans_resets_transient_states(tmp_path):
+    """A crashed/killed driver (host reboot mid-wave) strands designs in a TRANSIENT
+    state (flow/signoff/fixing). run() drains only 'pending' and the waves driver's
+    ALL_DONE gate counted only 'pending', so orphans were stranded FOREVER and the
+    round could terminate with non-terminal designs (failure-patterns.md #31 —
+    2026-07-09 sky130hs reboot left 8 'flow' orphans). reclaim_orphans is safe at
+    command start because the per-ledger single-instance guard (flock + pgrep,
+    2026-07-04) means no live worker can own a transient state then."""
+    led = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
+    for name, state in (("d_flow", "flow"), ("d_signoff", "signoff"),
+                        ("d_fixing", "fixing"), ("d_clean", "clean"),
+                        ("d_esc", "escalated")):
+        led.add(_entry(name))
+        led.set_state(name, state)
+    led.add(_entry("d_pending"))
+    led.add(_entry("d_arm", kind="ab_arm"))
+    led.set_state("d_arm", "flow", judged=True)
+
+    reclaimed = led.reclaim_orphans()
+
+    assert sorted(reclaimed) == ["d_arm", "d_fixing", "d_flow", "d_signoff"]
+    for d in ("d_flow", "d_signoff", "d_fixing", "d_arm"):
+        assert led.state(d) == "pending"
+    # terminal + already-pending entries untouched
+    assert led.state("d_clean") == "clean"
+    assert led.state("d_esc") == "escalated"
+    assert led.state("d_pending") == "pending"
+    # mirrors the add()/reload pending invariant: stale 'judged' drops so a
+    # re-run arm is RE-judged, not skipped
+    assert "judged" not in led.get("d_arm")
+    # persisted through the JSONL: a re-opened ledger agrees
+    led2 = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
+    assert led2.state("d_flow") == "pending"
+    assert "judged" not in led2.get("d_arm")
+    # idempotent: second call is a no-op
+    assert led.reclaim_orphans() == []
+
+
+def test_run_drains_crash_orphaned_designs(tmp_path, monkeypatch):
+    """run() must reclaim crash-orphaned transient designs into the drain, not
+    silently skip them (failure-patterns.md #31)."""
+    import knowledge_db
+    import recipe_lifecycle
+    monkeypatch.setattr(knowledge_db, "DEFAULT_DB_PATH",
+                        tmp_path / "knowledge.sqlite")
+    processed = []
+    monkeypatch.setattr(engineer_loop, "_safe_process",
+                        lambda led, e: processed.append(e["design"]))
+    monkeypatch.setattr(engineer_loop, "_learn", lambda: {})
+    monkeypatch.setattr(recipe_lifecycle, "diff_and_enqueue",
+                        lambda *a, **k: None)
+    monkeypatch.setattr(engineer_loop, "plan_arms_for_candidates",
+                        lambda *a, **k: None)
+    monkeypatch.setattr(engineer_loop, "judge_finished_trials",
+                        lambda *a, **k: None)
+    led = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
+    led.add(_entry("d_orphan"))
+    led.set_state("d_orphan", "flow")          # crash left it here
+    led.add(_entry("d_normal"))
+    engineer_loop.run(tmp_path / "ledger.jsonl", max_workers=2)
+    assert sorted(processed) == ["d_normal", "d_orphan"]
