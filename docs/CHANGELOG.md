@@ -52,6 +52,17 @@ and repo-level leftovers.
   rtl-acquire corpus supply line (`validate_publish_readiness.py`, `graph_skipped` ≠ success);
   knowledge README gained **invariant 33** documenting `runs.flow_scope`.
 - Suites after the sweep: signoff-loop 792+1s, def-graph 337+14s, eda-install 24, rtl-acquire 21.
+- **First /r2g-debug tick on the revised command found 4 real bugs** (each TDD red→green,
+  failure-patterns #26–#28): (1) `write_env_local.sh` pin regeneration silently DROPPED
+  `R2G_GRAPH_PYTHON` (no recall from targets, no HINT) → machine-wide `graph_skipped`
+  (b6a63a1); (2) legacy NULL `flow_scope` backfilled to `'full'` in `ensure_schema`
+  (invariant-33 contract; 5177bbf); (3) `test_verify_comprehensive` fixture leaked a stats
+  dump named `tiny` into pytest's CWD via a forgotten `out_path` positional (7cb66d2);
+  (4) **legacy quoted symptom ids stranded the promoted sky130hd `density_relief` recipe** —
+  `normalize_class` (2026-07-04) fixed writes but never the index; `ensure_schema` now
+  re-keys legacy rows, merges recipe_status by judged-state precedence, and re-points the
+  journal (3276b1b). Store migrated: honesty 5/5, integrity J4-only WARN, fabricated=0,
+  27 m3.2 trials pooled under one canonical symptom.
 
 ---
 
