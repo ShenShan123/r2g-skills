@@ -80,8 +80,8 @@ consolidated `techlib.*` modules instead of maintaining per-extractor copies.
   onto `UNKNOWN`. nangate45's former curated map
   (`techlib.cell_types.NANGATE45_CELL_TYPE_MAPPING`) was retired 2026-07-06 after it
   drifted 22 masters behind the deployed liberty (every SDFF*/CLKGATE*/TLAT →
-  UNKNOWN=95; failure-patterns.md #12) — the dict remains only as an import shim, and
-  nangate45 datasets built against it must be regenerated.
+  UNKNOWN=95; failure-patterns.md #12) and the leftover import shim was deleted
+  2026-07-09 — nangate45 datasets built against the curated map must be regenerated.
 - **num_layer** — distinct routing layers a net traverses, derived from the tech LEF's
   `TYPE ROUTING` layer names via `techlib.lef.routing_layers` / `routing_layer_regex`
   (nangate `metal1..10`, sky130 `li1`/`met1..5`, asap7 `M1..9`); falls back to `metal\d+`

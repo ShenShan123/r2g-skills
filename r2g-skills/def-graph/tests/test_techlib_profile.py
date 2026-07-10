@@ -222,7 +222,6 @@ def test_cell_type_strategy_ties_to_resolve_cell_type_map():
     fake_db = {"cells": {"FOO": {"source_lib": "x"}, "BAR": {"source_lib": "x"}}}
     for p in ("nangate45", "sky130hd"):
         runtime_map = cell_types.resolve_cell_type_map(p, fake_db)
-        assert runtime_map is not cell_types.NANGATE45_CELL_TYPE_MAPPING
         assert runtime_map == {"BAR": 0, "FOO": 1, "UNKNOWN": 2, "MACRO": 3}
         assert profile.get_profile(p).cell_type_strategy == "runtime"
 

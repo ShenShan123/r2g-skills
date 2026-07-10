@@ -294,8 +294,8 @@ path resolution — same `KEY=VALUE` contract as `resolve_platform_paths.sh`, by
 (the single DEF/SDC parser; COMPONENTS order == `nodes_gate` row order), `lef.py` (routing-layer
 names/pitch/direction + the RECT-patch-aware `route_segments`), `liberty.py` (cell/pin/net classifiers,
 quote-tolerant), `cell_types.py` (`cell_type_id` map — runtime-built from **standard-cell** liberty per
-platform, `UNKNOWN=N`, dedicated `MACRO=N+1`; the curated `NANGATE45_CELL_TYPE_MAPPING` is a retired dead
-shim). `R2G_LIB_FILES` (full) and `R2G_SC_LIB_FILES` (std-cell-only = `LIB_FILES` minus `ADDITIONAL_LIBS`)
+platform, `UNKNOWN=N`, dedicated `MACRO=N+1`; the curated nangate45 map was retired 2026-07-06 and its
+import shim deleted 2026-07-09). `R2G_LIB_FILES` (full) and `R2G_SC_LIB_FILES` (std-cell-only = `LIB_FILES` minus `ADDITIONAL_LIBS`)
 must both be exported and stay consistent across the feature and netlist-graph stages, or macros collapse to
 `UNKNOWN` / `connects_macro_flag` sticks at 0. **Fix a parse bug ONCE here, never inline in a worker copy** —
 congestion + wirelength share `route_segments`; metadata + `nodes_pin` + `extract_rc` share the SPEF unit

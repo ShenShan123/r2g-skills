@@ -67,18 +67,22 @@ def _sky130hd_lib_or_skip() -> str:
 
 
 # ---------------------------------------------------------------------------
-# 1. Curated map preserved (no files needed)
+# 1. Curated map fully deleted (2026-07-09 house-cleaning)
 # ---------------------------------------------------------------------------
 
-def test_retired_curated_map_still_importable_shim():
-    """The curated map is retired (2026-07-06) but kept as an import-compat shim.
+def test_retired_curated_map_is_gone():
+    """The curated nangate45 map (retired 2026-07-06, shimmed briefly) is deleted.
 
-    Nothing may RESOLVE through it (see test_resolve_cell_type_map_nangate45_is_runtime)
-    — but old imports must not break, and the alias identity is preserved.
+    Nothing may resolve through — or even import — the old curated dict; every
+    platform builds its map at runtime from liberty.
     """
-    m = cell_types.NANGATE45_CELL_TYPE_MAPPING
-    assert m["UNKNOWN"] == 95  # shim contents frozen as documentation of the old space
-    assert cell_types.COMPLETE_CELL_TYPE_MAPPING is m
+    assert not hasattr(cell_types, "NANGATE45_CELL_TYPE_MAPPING")
+    assert not hasattr(cell_types, "COMPLETE_CELL_TYPE_MAPPING")
+
+
+# A small frozen map exercising cell_type_id's lookup semantics (ids echo the
+# retired curated space purely for continuity of the pinned expectations below).
+_PINNED_MAP = {"INV_X1": 0, "DFF_X2": 72, "FAKERAM45_512X64": 113, "UNKNOWN": 95}
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +109,7 @@ def test_retired_curated_map_still_importable_shim():
 ])
 def test_cell_type_id_pinned(master, expected):
     """cell_type_id resolves to the KNOWN expected id (strip+upper normalization)."""
-    m_new = cell_types.cell_type_id(master, cell_types.NANGATE45_CELL_TYPE_MAPPING)
+    m_new = cell_types.cell_type_id(master, _PINNED_MAP)
     assert m_new == expected, \
         f"cell_type_id({master!r}): expected {expected}, got {m_new}"
 
@@ -172,7 +176,6 @@ def test_resolve_cell_type_map_nangate45_is_runtime():
     """
     fake_db = {"cells": {"INV_X1": {"source_lib": "x"}, "SDFF_X1": {"source_lib": "x"}}}
     result = cell_types.resolve_cell_type_map("nangate45", fake_db)
-    assert result is not cell_types.NANGATE45_CELL_TYPE_MAPPING
     assert result == cell_types.build_runtime_map(fake_db)
     # The drifted master that the curated map silently aliased onto UNKNOWN now
     # resolves to a real id.
@@ -221,10 +224,6 @@ def test_resolve_cell_type_map_sky130hd_returns_runtime():
     db = liberty.load_liberty_db([lib])
 
     result_new = cell_types.resolve_cell_type_map("sky130hd", db, sc_lib_paths=[lib])
-
-    # Must NOT be the curated nangate45 dict
-    assert result_new is not cell_types.NANGATE45_CELL_TYPE_MAPPING, \
-        "resolve_cell_type_map('sky130hd') must return a runtime map, not the curated dict"
 
     # The runtime map must equal build_runtime_map directly (runtime strategy).
     expected = cell_types.build_runtime_map(db, sc_lib_paths=[lib])
