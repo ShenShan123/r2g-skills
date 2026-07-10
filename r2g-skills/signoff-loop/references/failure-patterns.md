@@ -3513,3 +3513,31 @@ fix); full def-graph suite green. **NB** — axivfifo is an *escalated* (`drc=st
 on non-signed-off designs — that dataset was removed). **Lesson:** a "find the artifact" helper
 whose relnames are *priority-ordered* must honor that priority ACROSS the whole search space, not
 let proximity (newest run) override rank.
+
+### 26. eda-install pin regeneration silently DROPPED `R2G_GRAPH_PYTHON` — machine-wide graph-stage SKIP (2026-07-09)
+
+Surfaced by the first /r2g-debug tick after the rtl-acquire ingestion: `check_env.sh` showed
+`skip R2G_GRAPH_PYTHON` on a machine whose torch venv exists and was previously pinned. Root
+cause chain in `eda-install/scripts/setup/write_env_local.sh`: (1) the graph pin comes ONLY from
+the caller's `R2G_GRAPH_PYTHON` env or `--graph-python` — the shared `_env.sh` has **no venv
+autodetection**; (2) the writer sources its OWN skill's `env.local.sh`, never the TARGETS', so an
+existing pin in a target file does not survive regeneration; (3) `emit_export` silently omits
+empty values. Net: any bootstrap-wide pin regeneration from a shell without the variable strips
+the pin from every target (observed 2026-07-09 07:19 — signoff-loop + def-graph lost the pin
+while a later `--target rtl-acquire` run kept its own). Consequence is the `graph_skipped` lie:
+`run_graphs.sh` and rtl-acquire's expansion SKIP the PyG stage "cleanly" on a fully provisioned
+machine. Same regeneration-clobbers-state family as the sandbox-autolearn `heuristics.json`
+clobber (904fa52) and the rtl-acquire KB refresh gotcha.
+
+**Fix** (`write_env_local.sh`): self-heal — when the caller supplies no pin, recall
+`R2G_GRAPH_PYTHON` from the targets' existing `env.local.sh` (first match validated with `-x`;
+an explicit `--graph-python` always wins and is never filtered), and when no pin can be resolved
+emit a **loud HINT block** in the generated file ("graph stage will SKIP … `graph_skipped` is
+NOT success") instead of silence. TDD (both proven RED first):
+`test_write_env_local_preserves_existing_graph_pin`,
+`test_write_env_local_hints_when_graph_pin_absent`; eda-install suite 26/26. Machine re-pinned
+(`--graph-python /proj/workarea/user5/pyenvs/rtl2graph/bin/python` → all three targets,
+`check_env.sh` `ok`). **Lesson:** a generated pin file is curated state — a regenerator that
+cannot re-derive a value must RECALL it from what it is about to overwrite, and an intentionally
+absent value must be loud, because the downstream stage's honest per-design SKIP aggregates into
+a silent machine-wide no-op.

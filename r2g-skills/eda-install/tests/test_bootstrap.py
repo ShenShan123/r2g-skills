@@ -173,6 +173,54 @@ def test_write_env_local_dry_run(tmp_path):
             assert "/tools/install/" not in line
 
 
+def _run_write_env_no_graph(*args):
+    """Run write_env_local.sh with R2G_GRAPH_PYTHON guaranteed absent from the env."""
+    import os
+    env = {k: v for k, v in os.environ.items() if k != "R2G_GRAPH_PYTHON"}
+    return subprocess.run(
+        ["bash", str(WRITE_ENV), *args],
+        capture_output=True, text=True, check=True, env=env,
+    )
+
+
+def test_write_env_local_preserves_existing_graph_pin(tmp_path):
+    """Regenerating pins must NOT drop an existing R2G_GRAPH_PYTHON (failure-patterns #26).
+
+    2026-07-09: a bootstrap-wide pin regeneration run from a shell without
+    R2G_GRAPH_PYTHON silently stripped the graph-venv pin from signoff-loop +
+    def-graph on a provisioned machine — run_graphs.sh then SKIPs the PyG stage
+    (graph_skipped) while looking like success. The writer must recall the pin
+    from the target's existing env.local.sh.
+    """
+    fake_py = tmp_path / "venv" / "bin" / "python"
+    fake_py.parent.mkdir(parents=True)
+    fake_py.write_text("#!/bin/sh\nexit 0\n")
+    fake_py.chmod(0o755)
+    refs = tmp_path / "references"
+    refs.mkdir()
+    (refs / "env.local.sh").write_text(
+        f'export R2G_GRAPH_PYTHON="{fake_py}"\n')
+
+    _run_write_env_no_graph("--target", str(refs))
+
+    body = (refs / "env.local.sh").read_text()
+    assert f'export R2G_GRAPH_PYTHON="{fake_py}"' in body, \
+        "regeneration dropped the existing graph-venv pin"
+
+
+def test_write_env_local_hints_when_graph_pin_absent(tmp_path):
+    """With no pin anywhere, the generated file must carry a loud HINT, not silence."""
+    refs = tmp_path / "references"
+    refs.mkdir()
+
+    _run_write_env_no_graph("--target", str(refs))
+
+    body = (refs / "env.local.sh").read_text()
+    assert "export R2G_GRAPH_PYTHON=" not in body
+    assert "HINT" in body and "R2G_GRAPH_PYTHON" in body and "SKIP" in body, \
+        "missing graph pin must be loudly HINTed in the generated file"
+
+
 # --- byte-identical _env.sh invariant (CLAUDE.md) -----------------------------
 
 def test_env_sh_copies_identical():

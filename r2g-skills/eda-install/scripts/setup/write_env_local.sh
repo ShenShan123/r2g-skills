@@ -53,6 +53,23 @@ if [[ "${#TARGETS[@]}" -eq 0 ]]; then
   )
 fi
 
+# Self-heal (2026-07-09, failure-patterns.md "Dataset-Extraction" #26): a pin
+# regeneration from a shell WITHOUT R2G_GRAPH_PYTHON used to silently DROP the
+# graph-venv pin from every target — run_graphs.sh then SKIPs the PyG stage
+# (graph_skipped) on a fully provisioned machine. _env.sh has no venv autodetect,
+# so recall the pin from the targets' existing env.local.sh (validated with -x)
+# before writing; an explicit --graph-python always wins and is never filtered.
+if [[ -z "$graph_python" ]]; then
+  for _t in "${TARGETS[@]}"; do
+    _prev="$(sed -n 's/^export R2G_GRAPH_PYTHON="\(.*\)"$/\1/p' "$_t/env.local.sh" 2>/dev/null | head -1)"
+    if [[ -n "$_prev" && -x "$_prev" ]]; then
+      graph_python="$_prev"
+      echo "[write_env_local] recalled R2G_GRAPH_PYTHON=$_prev from $_t/env.local.sh" >&2
+      break
+    fi
+  done
+fi
+
 _orfs_install_prefix="${ORFS_ROOT:-}/tools/install/"
 
 # emit_export VAR VALUE [skip_if_under_prefix]
@@ -97,7 +114,14 @@ HDR
   fi
   echo
   echo "# --- Graph-dataset stage (def-graph run_graphs.sh) -----------------------"
-  emit_export R2G_GRAPH_PYTHON "${graph_python:-}"
+  if [[ -n "${graph_python:-}" ]]; then
+    emit_export R2G_GRAPH_PYTHON "$graph_python"
+  else
+    echo '# HINT: R2G_GRAPH_PYTHON is NOT pinned — the def-graph / rtl-acquire graph'
+    echo '#       stage will SKIP (designs record graph_skipped, which is NOT success).'
+    echo '#       Provision: bootstrap.sh --tiers graph, or re-run'
+    echo '#       write_env_local.sh --graph-python /path/to/venv/bin/python'
+  fi
 }
 
 CONTENT="$(build_content)"
