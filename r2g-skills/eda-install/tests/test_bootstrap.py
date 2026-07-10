@@ -24,11 +24,12 @@ SKILLS_ROOT = EDA_ROOT.parent                           # …/r2g-skills
 DETECT = EDA_ROOT / "scripts" / "setup" / "detect_env.sh"
 BOOTSTRAP = EDA_ROOT / "bootstrap.sh"
 WRITE_ENV = EDA_ROOT / "scripts" / "setup" / "write_env_local.sh"
-# The shared resolver ships byte-identical in ALL THREE skills (CLAUDE.md md5 a5ac873e… invariant).
+# The shared resolver ships byte-identical in ALL FOUR skills (CLAUDE.md md5 invariant).
 ENV_COPIES = [
     EDA_ROOT / "scripts" / "flow" / "_env.sh",
     SKILLS_ROOT / "signoff-loop" / "scripts" / "flow" / "_env.sh",
     SKILLS_ROOT / "def-graph" / "scripts" / "flow" / "_env.sh",
+    SKILLS_ROOT / "rtl-acquire" / "scripts" / "flow" / "_env.sh",
 ]
 
 DETECT_KEYS = {
@@ -252,3 +253,94 @@ def test_env_sh_detects_conda_staged_pdk(tmp_path):
     out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=minimal).stdout
     assert f"PDK_ROOT={base}" in out
     assert f"SKY={base}/sky130A" in out
+
+
+# --- relocated conda root + hand-staged PDK autodetect (failure-patterns #29) ---
+
+def test_env_sh_detects_relocated_conda_tools_and_staged_pdk(tmp_path):
+    """A conda `eda` env on a big volume (not $HOME) and a hand-staged PDK must be
+    autodetected by _env.sh WITHOUT pins (failure-patterns #29: the 2026-07-09
+    conda relocation to /proj/workarea/$USER/miniconda3 + sky130_pdk staging were
+    findable only via env.local.sh pins — one pin regeneration lost them and
+    sky130 DRC/LVS would have silently skipped). Exercised via the $HOME-based
+    probes; the /proj/workarea/$USER probes share the same loop."""
+    conda_bin = tmp_path / "miniconda3" / "envs" / "eda" / "bin"
+    conda_bin.mkdir(parents=True)
+    for tool in ("iverilog", "vvp", "magic", "netgen"):
+        exe = conda_bin / tool
+        exe.write_text("#!/bin/sh\nexit 0\n")
+        exe.chmod(0o755)
+    staged_pdk = tmp_path / "sky130_pdk" / "share" / "pdk"
+    (staged_pdk / "sky130A").mkdir(parents=True)
+
+    envsh = ENV_COPIES[0]  # eda-install copy: no references/env.local.sh to preset anything
+    minimal = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(tmp_path),
+        "R2G_CONDA_ENV": "eda",
+    }
+    script = (f'source "{envsh}" >/dev/null 2>&1; '
+              f'for v in IVERILOG_EXE VVP_EXE MAGIC_EXE NETGEN_EXE PDK_ROOT; do '
+              f'eval "echo $v=\\${{$v:-}}"; done')
+    out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=minimal).stdout
+    for tool, var in (("iverilog", "IVERILOG_EXE"), ("vvp", "VVP_EXE"),
+                      ("magic", "MAGIC_EXE"), ("netgen", "NETGEN_EXE")):
+        assert f"{var}={conda_bin / tool}" in out, f"{var} not autodetected from conda env bin:\n{out}"
+    assert f"PDK_ROOT={staged_pdk}" in out, f"staged sky130_pdk not autodetected:\n{out}"
+
+
+def test_write_env_local_preserves_all_pins(tmp_path):
+    """Regenerating pins must NOT drop ANY existing pin-only value (failure-patterns #29,
+    generalizing #26): write_env_local.sh resolves through the eda-install copy of
+    _env.sh, whose skill dir has no references/env.local.sh — values that existed
+    only as pins in the TARGET's env.local.sh (conda signoff tools, a staged
+    PDK_ROOT) were silently dropped on every regeneration (bit 2026-07-09 19:12:
+    sky130 signoff tools + PDK unpinned on a provisioned machine)."""
+    fake_bin = tmp_path / "eda" / "bin"
+    fake_bin.mkdir(parents=True)
+    pins = {}
+    for tool, var in (("iverilog", "IVERILOG_EXE"), ("vvp", "VVP_EXE"),
+                      ("magic", "MAGIC_EXE"), ("netgen", "NETGEN_EXE")):
+        exe = fake_bin / tool
+        exe.write_text("#!/bin/sh\nexit 0\n")
+        exe.chmod(0o755)
+        pins[var] = str(exe)
+    pdk = tmp_path / "pdk"
+    (pdk / "sky130A").mkdir(parents=True)
+
+    refs = tmp_path / "references"
+    refs.mkdir()
+    (refs / "env.local.sh").write_text(
+        "".join(f'export {var}="{path}"\n' for var, path in pins.items())
+        + f'export PDK_ROOT="{pdk}"\n')
+
+    env = {k: v for k, v in __import__("os").environ.items()
+           if k not in pins and k not in ("PDK_ROOT", "SKY130A_DIR", "R2G_GRAPH_PYTHON")}
+    subprocess.run(["bash", str(WRITE_ENV), "--target", str(refs)],
+                   capture_output=True, text=True, check=True, env=env)
+
+    body = (refs / "env.local.sh").read_text()
+    for var, path in pins.items():
+        assert f'export {var}="{path}"' in body, \
+            f"regeneration dropped the existing {var} pin:\n{body}"
+    assert f'export PDK_ROOT="{pdk}"' in body, \
+        f"regeneration dropped the existing PDK_ROOT pin:\n{body}"
+
+
+def test_write_env_local_drops_stale_tool_pin(tmp_path):
+    """The recall is validated, not blind: a pin to a deleted binary must NOT be
+    carried forward (that would freeze a dead path into every future regen)."""
+    refs = tmp_path / "references"
+    refs.mkdir()
+    (refs / "env.local.sh").write_text(
+        f'export IVERILOG_EXE="{tmp_path}/gone/iverilog"\n'
+        f'export PDK_ROOT="{tmp_path}/gone-pdk"\n')
+
+    env = {k: v for k, v in __import__("os").environ.items()
+           if k not in ("IVERILOG_EXE", "PDK_ROOT", "SKY130A_DIR")}
+    subprocess.run(["bash", str(WRITE_ENV), "--target", str(refs)],
+                   capture_output=True, text=True, check=True, env=env)
+
+    body = (refs / "env.local.sh").read_text()
+    assert f'{tmp_path}/gone/iverilog' not in body, "stale tool pin was carried forward"
+    assert f'{tmp_path}/gone-pdk' not in body, "stale PDK_ROOT pin was carried forward"

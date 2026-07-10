@@ -90,7 +90,7 @@ a session's loaded skill disagrees with `r2g-skills/<skill>/SKILL.md`, re-run wi
 ## Toolchain (autodetected by the skill)
 
 `<skill>/scripts/flow/_env.sh` autodetects ORFS + tool paths — nothing to source manually. All
-**four** sub-skills ship a copy that is **byte-identical** (md5 `a5ac873e…`); keep them in sync when
+**four** sub-skills ship a copy that is **byte-identical** (md5 `9fa599b7…`); keep them in sync when
 editing any. Override via `$R2G_ENV_FILE`, `<skill>/references/env.local.sh`, or by exporting
 `ORFS_ROOT`/`OPENROAD_EXE`/`YOSYS_EXE`/`KLAYOUT_CMD`/… **Required:** python3 (3.10+), yosys, openroad,
 ORFS checkout. **Optional:** iverilog/vvp, verilator, klayout, magic, netgen-lvs, opensta, sky130A PDK;

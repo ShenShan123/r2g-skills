@@ -120,6 +120,24 @@ _r2g_detect() {
   return 1
 }
 
+# conda-env signoff tools (eda-install no-sudo tier): `conda create -n eda …` puts
+# iverilog/vvp/magic/netgen in <conda-base>/envs/$R2G_CONDA_ENV/bin, which PATH-based
+# detection misses in a fresh shell — and the base may live on a big volume, NOT under
+# $HOME (the 2026-07-09 relocation to /proj/workarea/$USER/miniconda3; a pin
+# regeneration then lost the only pointers — failure-patterns.md #29). Probe the
+# well-known bases once; the tool candidates and the PDK probe below share the list.
+_r2g_conda_bases=("${CONDA_PREFIX:-}" "$HOME/miniconda3" "$HOME/miniforge3"
+                  "/proj/$USER/miniconda3" "/proj/workarea/$USER/miniconda3")
+_r2g_env="${R2G_CONDA_ENV:-eda}"
+_r2g_conda_bin=""
+for _base in "${_r2g_conda_bases[@]}"; do
+  [[ -z "$_base" ]] && continue
+  if [[ -d "$_base/envs/$_r2g_env/bin" ]]; then
+    _r2g_conda_bin="$_base/envs/$_r2g_env/bin"
+    break
+  fi
+done
+
 # ORFS ships its own openroad/yosys under tools/install/; prefer those when found
 _r2g_orfs_openroad=""
 _r2g_orfs_yosys=""
@@ -136,19 +154,19 @@ _r2g_detect YOSYS_EXE     yosys      \
   /usr/local/bin/yosys /usr/bin/yosys
 
 _r2g_detect IVERILOG_EXE  iverilog   \
-  /opt/pdk_klayout_openroad/oss-cad-suite/bin/iverilog /usr/bin/iverilog
+  "$_r2g_conda_bin/iverilog" /opt/pdk_klayout_openroad/oss-cad-suite/bin/iverilog /usr/bin/iverilog
 
 _r2g_detect VVP_EXE       vvp        \
-  /opt/pdk_klayout_openroad/oss-cad-suite/bin/vvp /usr/bin/vvp
+  "$_r2g_conda_bin/vvp" /opt/pdk_klayout_openroad/oss-cad-suite/bin/vvp /usr/bin/vvp
 
 _r2g_detect VERILATOR_EXE verilator  \
-  /opt/pdk_klayout_openroad/oss-cad-suite/bin/verilator /usr/bin/verilator
+  "$_r2g_conda_bin/verilator" /opt/pdk_klayout_openroad/oss-cad-suite/bin/verilator /usr/bin/verilator
 
 _r2g_detect KLAYOUT_CMD   klayout    \
-  /usr/local/bin/klayout /usr/bin/klayout
+  /usr/local/bin/klayout /usr/bin/klayout "$_r2g_conda_bin/klayout"
 
 _r2g_detect MAGIC_EXE     magic      \
-  /usr/local/bin/magic /usr/bin/magic
+  "$_r2g_conda_bin/magic" /usr/local/bin/magic /usr/bin/magic
 
 # Netgen ships under several names; try each in turn
 if [[ -z "${NETGEN_EXE:-}" ]]; then
@@ -159,6 +177,8 @@ if [[ -z "${NETGEN_EXE:-}" ]]; then
   done
 fi
 : "${NETGEN_EXE:=}"
+[[ -z "$NETGEN_EXE" && -n "$_r2g_conda_bin" && -x "$_r2g_conda_bin/netgen-lvs" ]] && export NETGEN_EXE="$_r2g_conda_bin/netgen-lvs"
+[[ -z "$NETGEN_EXE" && -n "$_r2g_conda_bin" && -x "$_r2g_conda_bin/netgen" ]] && export NETGEN_EXE="$_r2g_conda_bin/netgen"
 [[ -z "$NETGEN_EXE" && -x /usr/bin/netgen-lvs ]] && export NETGEN_EXE=/usr/bin/netgen-lvs
 [[ -z "$NETGEN_EXE" && -x /usr/local/bin/netgen ]] && export NETGEN_EXE=/usr/local/bin/netgen
 
@@ -181,8 +201,7 @@ fi
 # conda PDK is discovered without ever shadowing an explicit/well-known PDK_ROOT that
 # already has it.
 if [[ -z "${PDK_ROOT:-}" || ! -d "${PDK_ROOT}/sky130A" ]]; then
-  _r2g_env="${R2G_CONDA_ENV:-eda}"
-  for _base in "${CONDA_PREFIX:-}" "$HOME/miniconda3" "$HOME/miniforge3" "/proj/$USER/miniconda3"; do
+  for _base in "${_r2g_conda_bases[@]}"; do
     [[ -z "$_base" ]] && continue
     for _cand in "$_base/envs/$_r2g_env/share/pdk" "$_base/share/pdk"; do
       if [[ -d "$_cand/sky130A" ]]; then export PDK_ROOT="$_cand"; break 2; fi
@@ -190,11 +209,22 @@ if [[ -z "${PDK_ROOT:-}" || ! -d "${PDK_ROOT}/sky130A" ]]; then
   done
 fi
 
+# hand-staged PDK on a big volume (a tree rsync'd out of a retired conda env — the
+# 2026-07-09 layout: /proj/workarea/$USER/sky130_pdk/share/pdk/sky130A). Same
+# contains-sky130A gate as above (failure-patterns.md #29).
+if [[ -z "${PDK_ROOT:-}" || ! -d "${PDK_ROOT}/sky130A" ]]; then
+  for _p in "/proj/workarea/$USER/sky130_pdk/share/pdk" "/proj/$USER/sky130_pdk/share/pdk" \
+            "$HOME/sky130_pdk/share/pdk"; do
+    if [[ -d "$_p/sky130A" ]]; then export PDK_ROOT="$_p"; break; fi
+  done
+fi
+
 if [[ -n "${PDK_ROOT:-}" && -d "$PDK_ROOT/sky130A" ]]; then
   export SKY130A_DIR="$PDK_ROOT/sky130A"
 fi
 
-unset _r2g_orfs_openroad _r2g_orfs_yosys _cand _hit _p _detected _base _r2g_env
+unset _r2g_orfs_openroad _r2g_orfs_yosys _cand _hit _p _detected _base _r2g_env \
+      _r2g_conda_bases _r2g_conda_bin
 # Restore caller's options
 case "$_r2g_saved_opts" in
   *e*) set -e ;;

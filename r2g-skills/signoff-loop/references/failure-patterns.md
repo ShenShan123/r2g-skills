@@ -3582,3 +3582,35 @@ classes remain, both promoted rows on canonical `m3.2`, 27 trials pooled; honest
 integrity L1/L2/L3 ok. **Lesson:** normalizing a WRITE path without migrating the existing
 index splits the memory at the normalization boundary — the promoted half goes dark precisely
 because lookups moved to the new key. A key-derivation fix must ship with an index re-key.
+
+### 29. Pin regeneration dropped ALL pin-only values (conda signoff tools + staged PDK) — sky130 signoff would silently skip (2026-07-09)
+
+The #26 fix was symptom-level; the class bit again the same day. The 19:12 regeneration
+(epoch 1783649567 backups) stripped `IVERILOG_EXE`/`VVP_EXE`/`MAGIC_EXE`/`NETGEN_EXE`
+(conda `eda` env, relocated that morning to `/proj/workarea/$USER/miniconda3`) **and**
+`PDK_ROOT` (`/proj/workarea/$USER/sky130_pdk/share/pdk`) from every target — only
+`R2G_GRAPH_PYTHON` survived, via #26's variable-specific recall. Found by the sky130hs
+/r2g-debug tick's Step-1 gate: `check_env.sh` red (`MISS IVERILOG/VVP`, PDK/magic/netgen
+skip) on a fully provisioned machine. Had the campaign launched anyway, sky130 DRC/LVS
+would have silently *skipped* and taught the loop a lie (the exact failure mode the Step-1
+gate exists for). Two-layer root cause: (1) `write_env_local.sh` resolves through the
+**eda-install** copy of `_env.sh`, and eda-install has no `references/env.local.sh` of its
+own (it is not a pin target) — so values that exist ONLY as pins in the TARGETS' files
+never enter resolution and are dropped on rewrite; (2) `_env.sh` autodetect had no probe
+for either relocated path (`/proj/workarea/$USER/miniconda3`, `…/sky130_pdk/share/pdk`),
+so the pins were load-bearing with no fallback.
+
+**Fix** (both layers, TDD RED→GREEN): (a) `write_env_local.sh` pre-sources the first
+existing TARGET `env.local.sh` before `_env.sh`, generalizing #26's recall to EVERY pin —
+values enter at resolution order #1, `_r2g_detect`'s `-x` / the contains-`sky130A` gate
+still drop stale pins fail-closed, and a `-d` guard stops a deleted `PDK_ROOT` from being
+re-pinned forever; (b) `_env.sh` (byte-identical ×4, new md5 `9fa599b7…`) gains a shared
+conda-base probe list (`+ /proj/workarea/$USER/miniconda3`) feeding tool candidates
+(`<base>/envs/$R2G_CONDA_ENV/bin/{iverilog,vvp,verilator,magic,netgen}`) and a hand-staged
+PDK probe (`/proj/workarea/$USER/sky130_pdk/share/pdk` et al). Tests:
+`test_write_env_local_preserves_all_pins`, `test_write_env_local_drops_stale_tool_pin`,
+`test_env_sh_detects_relocated_conda_tools_and_staged_pdk`; `ENV_COPIES` extended to all
+four skills (rtl-acquire's copy was unchecked). **Lesson:** when a "recall what you're
+about to overwrite" self-heal is added for one variable, the defect class is *the loop
+that didn't recall* — patch the loop, not the variable; and every pinned path must also
+be autodetectable, or the pin file is a single point of silent environmental collapse.

@@ -37,12 +37,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Resolve the toolchain (this also sources any existing env.local.sh — regenerating
-# from resolved values is idempotent). Chatter to stderr; keep our stdout clean.
-export R2G_GRAPH_PYTHON="$graph_python"
-# shellcheck source=/dev/null
-source "$FLOW_DIR_SH/_env.sh" 1>&2
-
 # Default targets: every consumer skill's references/ dir (rtl-acquire delegates
 # to the same shared _env.sh + pins, incl. R2G_GRAPH_PYTHON for netlist graphs).
 if [[ "${#TARGETS[@]}" -eq 0 ]]; then
@@ -52,6 +46,31 @@ if [[ "${#TARGETS[@]}" -eq 0 ]]; then
     "$SKILLS_ROOT/rtl-acquire/references"
   )
 fi
+
+# Self-heal (2026-07-09, failure-patterns.md #29, generalizing #26): we resolve
+# through the eda-install copy of _env.sh, and eda-install has NO
+# references/env.local.sh of its own (it is not a pin target) — so a value that
+# exists ONLY as a pin in the TARGETS' env.local.sh (conda signoff tools, a
+# staged PDK_ROOT) used to be silently DROPPED on every regeneration. Pre-source
+# the first existing target pin file so previously pinned values enter _env.sh
+# at resolution order #1; its -x / contains-sky130A validation still discards
+# stale pins (fail-closed), and autodetect refills them where possible.
+for _t in "${TARGETS[@]}"; do
+  if [[ -f "$_t/env.local.sh" ]]; then
+    set +u   # pin files are user snippets; _env.sh sources them under +u too
+    # shellcheck disable=SC1090,SC1091
+    source "$_t/env.local.sh" 1>&2
+    set -u
+    echo "[write_env_local] recalled existing pins from $_t/env.local.sh" >&2
+    break
+  fi
+done
+
+# Resolve the toolchain (regenerating from resolved values is idempotent).
+# Chatter to stderr; keep our stdout clean.
+export R2G_GRAPH_PYTHON="$graph_python"
+# shellcheck source=/dev/null
+source "$FLOW_DIR_SH/_env.sh" 1>&2
 
 # Self-heal (2026-07-09, failure-patterns.md "Dataset-Extraction" #26): a pin
 # regeneration from a shell WITHOUT R2G_GRAPH_PYTHON used to silently DROP the
@@ -108,7 +127,8 @@ HDR
   emit_export NETGEN_EXE    "${NETGEN_EXE:-}"
   echo
   echo "# --- PDK root (sky130 DRC/LVS with Magic / Netgen) -----------------------"
-  if [[ -n "${PDK_ROOT:-}" ]]; then
+  # -d guard: never pin a deleted tree (a stale pin would be recalled forever)
+  if [[ -n "${PDK_ROOT:-}" && -d "${PDK_ROOT}" ]]; then
     printf 'export PDK_ROOT="%s"\n' "$PDK_ROOT"
     printf '[ -d "$PDK_ROOT/sky130A" ] && export SKY130A_DIR="$PDK_ROOT/sky130A"\n'
   fi

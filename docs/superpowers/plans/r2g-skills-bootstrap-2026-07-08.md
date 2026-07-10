@@ -259,6 +259,19 @@ conda-installed PDK stayed invisible until hand-pinned. It adopts a conda candid
 actually contains sky130A, so it never shadows an explicit/well-known `PDK_ROOT`. New functional test
 proves it; md5 invariant moved `ad4406d0… → a5ac873e…` (still identical ×3).
 
+**2026-07-09 (sky130hs tick): pin-loss class fix — failure-patterns #29.** A same-day regeneration
+dropped the conda signoff-tool pins + `PDK_ROOT` from every target (only `R2G_GRAPH_PYTHON` survived,
+via #26's variable-specific recall): the pin step resolves through the **eda-install** `_env.sh`, and
+eda-install has no `references/env.local.sh` of its own, so pin-only values never re-entered
+resolution. Superseded invariants: (1) "regenerating from resolved values is idempotent" was FALSE
+until `write_env_local.sh` learned to pre-source the first existing TARGET pin file (recall-all,
+stale pins still dropped fail-closed, `-d` guard on `PDK_ROOT`); (2) `_env.sh` autodetect now covers
+the relocated conda base `/proj/workarea/$USER/miniconda3` (tool binaries under
+`envs/$R2G_CONDA_ENV/bin`) and the hand-staged `/proj/workarea/$USER/sky130_pdk/share/pdk`, so pins
+are a cache, not a single point of collapse; (3) md5 invariant moved `a5ac873e… → 9fa599b7…`, now
+asserted across **four** copies (rtl-acquire's was previously unchecked). Tests: eda-install 29
+(3 new, RED→GREEN).
+
 ## File change list (proposal)
 
 **New**
