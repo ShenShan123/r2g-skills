@@ -45,8 +45,16 @@ PLATFORM="${PLATFORM:-asap7}"
 
 skip() {  # reason
   echo "SKIP: $1" >&2
-  printf '{"design":"%s","platform":"%s","variants":{},"status":"skipped","reason":"%s"}\n' \
-    "$DESIGN_NAME" "$PLATFORM" "$1" > "$REPORTS_DIR/graph_dataset.json"
+  # Thread the SPECIFIC upstream backend-failure reason into the manifest, not a
+  # bare "no 6_final.def" (failure-patterns.md #38 / codex #6). graph_skip_manifest.py
+  # is fail-soft; fall back to the minimal inline JSON if it errors so a skip is
+  # NEVER left without a manifest.
+  if ! python3 "$(dirname "${BASH_SOURCE[0]}")/graph_skip_manifest.py" \
+        "$DESIGN_NAME" "$PLATFORM" "$1" "$PROJECT_DIR" "${RUN_DIR:-}" \
+        > "$REPORTS_DIR/graph_dataset.json" 2>/dev/null; then
+    printf '{"design":"%s","platform":"%s","variants":{},"status":"skipped","reason":"%s"}\n' \
+      "$DESIGN_NAME" "$PLATFORM" "$1" > "$REPORTS_DIR/graph_dataset.json"
+  fi
   exit 0
 }
 

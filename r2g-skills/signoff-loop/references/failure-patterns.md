@@ -3838,3 +3838,85 @@ genuine rival). **Lesson:** a `pgrep -f` liveness guard must match on the proces
 *exec identity* (anchored path), not on any command line that happens to *name* it — or
 the very launch command that mentions the tool becomes indistinguishable from a second
 copy of it, and the guard blocks the thing it was meant to protect.
+
+### 38. Codex robustness-suggestion audit — 5 latent bugs + per-metric/observability hardening (2026-07-12)
+
+An audit of 7 Codex robustness suggestions against the *actual* code (full grading in
+`docs/superpowers/plans/2026-7-12-codex-suggestion.md`) confirmed the 2026-07-10 sweep had
+already shipped the big items (risk-flag screening #1-partial, one-click promote #2,
+antenna auto-exit #36/#4, signoff gate #34/#6, stage-scoped reflow #35/#3) but surfaced
+**five latent bugs** and four **partial** gaps. All closed here with tests. Each is a
+distinct sub-mode; they share the trait that the surface behavior looked fine.
+
+**(a) `fix_signoff.sh` antenna_noimp was CUMULATIVE, not consecutive.** The
+`antenna_nonconverged` auto-exit (#36) counts non-improving antenna strategies, but the
+counter was only ever incremented — never reset on an *improving* antenna iteration
+(unlike the generic `noimp` beside it). A design converging via interleaved wins and
+no-ops (10→5 win, 5→5 no-op, 5→3 win, 3→3 no-op) hit `antenna_noimp==2` at the 2nd
+*cumulative* no-op and was falsely declared non-converged despite clear 10→3 progress —
+a premature over-abort that escalates a design another iteration might have cleared. Fix:
+reset `antenna_noimp=0` on every improving antenna iteration (consecutive semantics).
+Test: `test_antenna_nonconverged.py::test_converging_antenna_not_declared_nonconverged`
+drives the interleaved sequence and asserts it reaches CLEAN, not a marker.
+
+**(b) `build_diagnosis.py` synth-error scan was un-scoped → false-positive diagnosis.**
+`parse_synth_errors` flagged any `ERROR`/`Error:` line, but `main()` fed it the FULL
+concatenated log text (flow.log + drc/lvs/rcx/route logs), so a `[ERROR GRT-…]` routing
+line or an LVS-mismatch line was mislabeled a *synthesis* error — a wrong-lever diagnosis
+in a big failed run. Fix: scope it to the `synth.log` section only (a new `section_text`
+helper), exactly as the DRC (#8) and make-error (#9) checks already scope; genuine synth
+failures still fire via their dedicated signatures (empty_synthesis, make_error, …).
+Test: `test_build_diagnosis.py` (route/LVS ERROR lines produce NO synthesis_errors;
+a real synth.log error still does).
+
+**(c) `signoff_gate.py` `_check_route` trusted the status string over the count.**
+`if st == "clean" or tv == 0` short-circuited: a foreign `route.json` with
+`status="clean"` but `total_violations>0` read clean, and a genuine `status="unknown"`
+(route stage never reached) was mislabeled `dirty` (a spurious blocker). Fix: gate on the
+COUNT (`tv==0` → clean, `tv>0` → dirty regardless of status), map `unknown`→unknown
+(caveat). Tests in `test_signoff_gate.py`.
+
+**(d) `promote_candidates.py` wrote the manifest BEFORE the `--run` flow outcome.**
+`reports/promote.json`/`metadata.json` were dumped at step 6, then the optional `--run`
+block (step 7) flipped `result["status"]` to `promoted_flow_failed` only in memory — the
+on-disk manifest kept `status="promoted"`, so a later reader trusted a manifest that
+missed the flow failure. Fix: re-dump both after the `--run` block.
+Test: `test_promote_candidates.py::test_run_flow_failure_updates_on_disk_manifest`.
+
+**(e) `run_expansion_round.py` high-mem round guard scanned ALL rows pre-filter.** The
+`resource_tier=high` guard blocked the entire round if *any* CSV row was high-mem, even a
+row the `--priorities` filter would drop (e.g. `priority=low` while running `--priorities
+high`) — so a high-mem candidate that was never going to run stalled the round with
+`blocked_high_mem`. Fix: `runnable_high_mem_designs(rows, priorities)` mirrors the
+expander's `--priorities` filter and only counts rows that would actually run.
+Test: `test_candidate_deferral.py::ResourceGuardScopeTests`.
+
+**Feature-securing (partial gaps closed, all additive):**
+- **Antenna is now its OWN gate dimension** (codex #5). `signoff_gate._check_antenna`
+  reads `antenna_nonconverged.json` + antenna-named `drc.json` categories and records
+  antenna as clean/fail/nonconverged/not_covered/unknown — decoupled from routing-DRC, so
+  a routing-clean-but-antenna-dirty design is visible in `signoff_health`. A caveat, never
+  a new blocker (a full-deck antenna fail already blocks via `drc`).
+- **Graph SKIP manifests carry the SPECIFIC upstream reason** (codex #6).
+  `def-graph/scripts/flow/graph_skip_manifest.py` threads the antenna-nonconvergence
+  marker / ORFS `orfs_fail_stage` / signoff blockers / newest `stage_log.jsonl` failing
+  stage into `graph_dataset.json`'s `upstream` object instead of a bare "no 6_final.def".
+- **ORFS resume provenance** (codex #3). `run_orfs.sh` stamps per-stage `ts_start`/`ts_end`
+  + output `artifact` into `stage_log.jsonl` (additive — the `{stage,status,elapsed_s}`
+  contract is preserved for every reader), tees the reuse/rerun decision to `flow.log` with
+  its concrete `R2G_RERUN_REASON` (supplied by `fix_signoff.sh`), and writes
+  `resume_meta.json` (reused stages + reason).
+- **Consolidated run summary** (codex #7). `build_diagnosis.py` now emits a `run_summary`
+  unifying stage durations (`stage_log.jsonl`) + repair repetitions (`fix_log.jsonl`) +
+  DRC/LVS/route/timing status — the single structured summary the suggestion asked for.
+- **Low-priority deferral queue** (codex #1). `expand_candidates.py` stable-sorts
+  risk-flagged / `resource_tier=high` candidates to the tail of the round (a `risk_deferred`
+  stage marker makes it observable), so a memory-heavy design runs AFTER the clean ones
+  instead of blocking them; `--no-defer-risky` opts out. (The deeper static analysers —
+  inferred-memory-bit estimate, module-dependency-completeness tagging — remain a documented
+  follow-up: they need an HDL array-size parser.)
+
+**Lesson:** a shipped robustness feature can still lie at the edges — a counter that never
+resets (a), a parser fed the wrong scope (b), a status string trusted over its own count
+(c), a manifest written before the outcome it claims (d), a guard applied before the filter
+that bounds it (e). Audit the *edges* of "already done" features, not just their happy path.

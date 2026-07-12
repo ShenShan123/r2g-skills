@@ -35,6 +35,12 @@ sg = importlib.util.module_from_spec(_spec)
 sys.modules["signoff_gate"] = sg
 _spec.loader.exec_module(sg)
 
+_gsm_spec = importlib.util.spec_from_file_location(
+    "graph_skip_manifest", os.path.join(_FLOW, "graph_skip_manifest.py"))
+gsm = importlib.util.module_from_spec(_gsm_spec)
+sys.modules["graph_skip_manifest"] = gsm
+_gsm_spec.loader.exec_module(gsm)
+
 _vspec = importlib.util.spec_from_file_location(
     "verify_graph_dataset", os.path.join(_TOOLS, "verify_graph_dataset.py"))
 vgd = importlib.util.module_from_spec(_vspec)
@@ -46,21 +52,32 @@ CLEAN_STAGES = [{"stage": s, "status": 0, "elapsed_s": 1}
 
 
 def _proj(tmp_path, *, drc="clean", lvs="clean", route=0, stage_log=CLEAN_STAGES,
-          run_meta=None, ppa=None, timing_check=None, route_rpt=None):
+          run_meta=None, ppa=None, timing_check=None, route_rpt=None,
+          drc_categories=None, antenna_marker=None, route_json=None):
     """Minimal project fixture. Pass None for an artifact to omit it; `route`
-    is total_violations for reports/route.json (None omits the file)."""
+    is total_violations for reports/route.json (None omits the file).
+    `drc_categories` injects a KLayout-style {class:{count}} breakdown into
+    drc.json; `antenna_marker` writes reports/antenna_nonconverged.json;
+    `route_json` overrides the whole route.json dict (for the status-vs-count
+    honesty tests)."""
     proj = tmp_path / "proj"
     rep = proj / "reports"
     rep.mkdir(parents=True, exist_ok=True)
     run = proj / "backend" / "RUN_2026-07-01_00-00-00"
     run.mkdir(parents=True, exist_ok=True)
     if drc is not None:
-        json.dump({"status": drc, "total_violations": 0 if drc.startswith("clean") else 7},
-                  open(rep / "drc.json", "w"))
+        _drc = {"status": drc, "total_violations": 0 if drc.startswith("clean") else 7}
+        if drc_categories is not None:
+            _drc["categories"] = drc_categories
+        json.dump(_drc, open(rep / "drc.json", "w"))
+    if antenna_marker is not None:
+        json.dump(antenna_marker, open(rep / "antenna_nonconverged.json", "w"))
     if lvs is not None:
         json.dump({"status": lvs, "mismatch_count": 0 if lvs in ("clean", "skipped") else 3},
                   open(rep / "lvs.json", "w"))
-    if route is not None:
+    if route_json is not None:
+        json.dump(route_json, open(rep / "route.json", "w"))
+    elif route is not None:
         json.dump({"status": "clean" if route == 0 else "fail",
                    "total_violations": route}, open(rep / "route.json", "w"))
     if stage_log is not None:
@@ -212,6 +229,83 @@ def test_route_unknown_is_caveat(tmp_path):
     assert "route" not in v["blockers"] and "route=unknown" in v["caveats"]
 
 
+# ---- route.json status-vs-count honesty (failure-patterns.md #38) --------------
+
+def test_route_status_clean_but_count_positive_is_dirty(tmp_path):
+    """A foreign route.json claiming status='clean' with total_violations>0 must
+    NOT read clean via short-circuit — gate on the COUNT."""
+    proj, run = _proj(tmp_path, route=None,
+                      route_json={"status": "clean", "total_violations": 5})
+    v = sg.evaluate(proj, run)
+    assert v["checks"]["route"]["status"] == "dirty" and "route" in v["blockers"]
+    assert v["checks"]["route"]["violations"] == 5
+
+
+def test_route_status_unknown_is_caveat_not_dirty(tmp_path):
+    """route.json status='unknown' (route stage never reached) is 'unknown' (a
+    caveat), not a spurious 'dirty' blocker."""
+    proj, run = _proj(tmp_path, route=None,
+                      route_json={"status": "unknown", "total_violations": None})
+    v = sg.evaluate(proj, run)
+    assert v["checks"]["route"]["status"] == "unknown"
+    assert "route" not in v["blockers"] and "route=unknown" in v["caveats"]
+
+
+# ---- antenna as its OWN decoupled dimension (codex #5, failure-patterns #38) ----
+
+def test_antenna_clean_when_full_drc_clean(tmp_path):
+    proj, run = _proj(tmp_path)  # drc=clean, no categories
+    v = sg.evaluate(proj, run)
+    assert v["checks"]["antenna"]["status"] == "clean"
+    assert not any(c.startswith("antenna=") for c in v["caveats"])
+
+
+def test_antenna_fail_from_drc_categories(tmp_path):
+    """Routing-DRC clean but an antenna-class DRC violation present: antenna is
+    its own 'fail' dimension, recorded as a caveat (drc already blocks)."""
+    proj, run = _proj(tmp_path, drc="fail",
+                      drc_categories={"Antenna_ratio": {"count": 3},
+                                      "met1.spacing": {"count": 4}})
+    v = sg.evaluate(proj, run)
+    assert v["checks"]["antenna"]["status"] == "fail"
+    assert v["checks"]["antenna"]["violations"] == 3
+    assert "antenna=fail" in v["caveats"]
+
+
+def test_antenna_clean_when_drc_fails_on_non_antenna(tmp_path):
+    """The decoupling: a shorts-only DRC failure leaves the antenna metric clean."""
+    proj, run = _proj(tmp_path, drc="fail",
+                      drc_categories={"met1.spacing": {"count": 9}})
+    v = sg.evaluate(proj, run)
+    assert v["checks"]["antenna"]["status"] == "clean"
+
+
+def test_antenna_nonconverged_marker(tmp_path):
+    """The suggestion's exact stall example rides the gate as its own dimension."""
+    proj, run = _proj(tmp_path, drc="clean_beol",
+                      antenna_marker={"class": "antenna", "residual_count": 2,
+                                      "fix_iters": 6, "strategies_tried": ["antenna_a", "antenna_b"]})
+    v = sg.evaluate(proj, run)
+    assert v["checks"]["antenna"]["status"] == "nonconverged"
+    assert v["checks"]["antenna"]["residual_count"] == 2
+    assert "antenna=nonconverged" in v["caveats"]
+
+
+def test_antenna_not_covered_under_clean_beol(tmp_path):
+    """clean_beol disables the ANTENNA rule group — antenna is genuinely NOT
+    verified, must read not_covered (not a false clean)."""
+    proj, run = _proj(tmp_path, drc="clean_beol")
+    v = sg.evaluate(proj, run)
+    assert v["checks"]["antenna"]["status"] == "not_covered"
+    assert "antenna=not_covered" in v["caveats"]
+
+
+def test_antenna_unknown_when_no_drc(tmp_path):
+    proj, run = _proj(tmp_path, drc=None)
+    v = sg.evaluate(proj, run)
+    assert v["checks"]["antenna"]["status"] == "unknown"
+
+
 def test_timing_violated_never_blocks(tmp_path):
     """Negative slack is a legitimate training label — recorded, never a block."""
     proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": -0.42}}})
@@ -333,3 +427,78 @@ def test_verifier_gate_verdict_pass_ok(tmp_path, monkeypatch, _empty_dirs):
     monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
     fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
     assert not [f for f in fails if f.startswith("signoff.gate") or f.startswith("signoff.provenance")]
+
+
+# ---- graph_skip_manifest.py: specific upstream reasons (codex #6, #38) ----------
+
+def _skip_upstream(tmp_path, *, gate=None, antenna=None, ppa=None, stage_log=None,
+                   run_dir_arg=""):
+    """Build a project with the given upstream markers and return the manifest's
+    upstream object (or {} if omitted)."""
+    proj = tmp_path / "p"
+    rep = proj / "reports"
+    rep.mkdir(parents=True)
+    if gate is not None:
+        json.dump(gate, open(rep / "signoff_gate.json", "w"))
+    if antenna is not None:
+        json.dump(antenna, open(rep / "antenna_nonconverged.json", "w"))
+    if ppa is not None:
+        json.dump(ppa, open(rep / "ppa.json", "w"))
+    if stage_log is not None:
+        run = proj / "backend" / "RUN_2026-07-01_00-00-00"
+        run.mkdir(parents=True)
+        with open(run / "stage_log.jsonl", "w") as f:
+            for rec in stage_log:
+                f.write(json.dumps(rec) + "\n")
+    up = gsm.collect_upstream(str(proj), run_dir_arg)
+    return up
+
+
+def test_skip_manifest_no_backend_is_empty(tmp_path):
+    """A plain no-backend skip carries no upstream — the manifest is unchanged."""
+    assert _skip_upstream(tmp_path) == {}
+
+
+def test_skip_manifest_threads_antenna_nonconverged(tmp_path):
+    """The suggestion's exact example: a DEF-missing/blocked skip records WHY."""
+    up = _skip_upstream(tmp_path, antenna={"class": "antenna", "residual_count": 2,
+                                           "strategies_tried": ["antenna_a"]})
+    assert up["antenna_nonconverged"]["residual_count"] == 2
+
+
+def test_skip_manifest_threads_signoff_blockers(tmp_path):
+    up = _skip_upstream(tmp_path, gate={"status": "dirty", "blockers": ["drc", "lvs"],
+                                        "checks": {"drc": {"status": "fail", "detail": "7 shorts"},
+                                                   "lvs": {"status": "mismatch"}}})
+    assert up["signoff_blockers"] == ["drc", "lvs"]
+    assert up["signoff_detail"]["drc"] == "7 shorts"
+
+
+def test_skip_manifest_threads_orfs_fail_stage(tmp_path):
+    up = _skip_upstream(tmp_path, ppa={"orfs_status": "fail", "orfs_fail_stage": "route"})
+    assert up["orfs_status"] == "fail" and up["orfs_fail_stage"] == "route"
+
+
+def test_skip_manifest_scans_stage_log_when_rundir_empty(tmp_path):
+    """DEF-missing path: run_dir is empty, so the newest backend RUN_* is scanned
+    for the first failing stage."""
+    up = _skip_upstream(tmp_path, run_dir_arg="",
+                        stage_log=[{"stage": "synth", "status": 0},
+                                   {"stage": "floorplan", "status": 0},
+                                   {"stage": "place", "status": 2}])
+    assert up["stage_log_fail_stage"] == "place"
+
+
+def test_skip_manifest_cli_emits_manifest(tmp_path):
+    """End-to-end: the CLI prints a skip manifest with status + reason + upstream."""
+    proj = tmp_path / "p"
+    (proj / "reports").mkdir(parents=True)
+    json.dump({"class": "antenna", "residual_count": 1}, open(proj / "reports" / "antenna_nonconverged.json", "w"))
+    r = subprocess.run([sys.executable, os.path.join(_FLOW, "graph_skip_manifest.py"),
+                        "mydesign", "sky130hs", "no 6_final.def found", str(proj), ""],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0
+    m = json.loads(r.stdout)
+    assert m["status"] == "skipped" and m["design"] == "mydesign"
+    assert m["reason"] == "no 6_final.def found"
+    assert m["upstream"]["antenna_nonconverged"]["residual_count"] == 1

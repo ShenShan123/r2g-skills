@@ -235,10 +235,38 @@ fi
 # and cheaper than the clean_all full rebuild. Opt out with
 # R2G_RESUME_NO_CLEAN=1 (pure crash-resume of an interrupted flow, unchanged
 # config — e.g. the finish-stage GDS resume).
-if [[ -n "$FROM_STAGE" && "${R2G_RESUME_NO_CLEAN:-0}" != "1" ]]; then
-  echo "Invalidating resumed stage: make clean_$FROM_STAGE (earlier stages reused)"
-  make DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "clean_$FROM_STAGE" 2>&1 | tail -3 \
-    || echo "WARNING: clean_$FROM_STAGE returned non-zero (stage may have no artifacts yet)" >&2
+# Resume provenance (failure-patterns.md #38 / codex #3): make the rerun decision
+# auditable. The reused/rerun choice used to be a bare stdout echo (invisible in
+# the persisted backend/RUN_*/flow.log). Now the decision is tee'd to flow.log
+# with its concrete REASON (R2G_RERUN_REASON, supplied by fix_signoff.sh), and a
+# structured resume_meta.json records which stages were REUSED and why.
+_write_resume_meta() {  # reason no_clean
+  local reason="$1" no_clean="$2" reused="" s
+  for s in $ORFS_STAGES_LIST; do
+    [[ "$s" == "$FROM_STAGE" ]] && break
+    reused="${reused:+$reused }$s"
+  done
+  python3 - "$BACKEND_DIR/resume_meta.json" "$FROM_STAGE" "$reason" "$no_clean" "$reused" <<'PY' 2>/dev/null || true
+import json, sys, time
+path, from_stage, reason, no_clean, reused = sys.argv[1:6]
+json.dump({"from_stage": from_stage, "reason": reason, "no_clean": no_clean == "1",
+           "reused_stages": reused.split() if reused else [], "ts": int(time.time())},
+          open(path, "w"), indent=1)
+PY
+}
+if [[ -n "$FROM_STAGE" ]]; then
+  RERUN_REASON="${R2G_RERUN_REASON:-stage-scoped resume: config edit forces clean_$FROM_STAGE; earlier stages reused}"
+  if [[ "${R2G_RESUME_NO_CLEAN:-0}" != "1" ]]; then
+    echo "Invalidating resumed stage: make clean_$FROM_STAGE — reason: $RERUN_REASON (earlier stages reused)" \
+      | tee -a "$BACKEND_DIR/flow.log"
+    make DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "clean_$FROM_STAGE" 2>&1 | tail -3 \
+      || echo "WARNING: clean_$FROM_STAGE returned non-zero (stage may have no artifacts yet)" >&2
+    _write_resume_meta "$RERUN_REASON" 0
+  else
+    echo "Resuming FROM_STAGE=$FROM_STAGE (R2G_RESUME_NO_CLEAN=1: pure crash-resume, no clean) — reason: $RERUN_REASON" \
+      | tee -a "$BACKEND_DIR/flow.log"
+    _write_resume_meta "$RERUN_REASON" 1
+  fi
 fi
 
 run_stage() {
@@ -259,7 +287,24 @@ run_stage() {
   local stage_end
   stage_end=$(date +%s)
   local stage_elapsed=$((stage_end - stage_start))
-  echo "{\"stage\": \"$stage\", \"status\": $STAGE_STATUS, \"elapsed_s\": $stage_elapsed}" >> "$BACKEND_DIR/stage_log.jsonl"
+  # Per-stage provenance (failure-patterns.md #38 / codex #3): absolute timestamps
+  # + the newest output ODB the stage produced, so a later resume's reuse of an
+  # earlier stage is auditable (WHAT it produced, WHEN). Best-effort, fail-soft.
+  # The {stage,status,elapsed_s} contract is PRESERVED (many readers key on
+  # status per row) — the new keys are purely additive.
+  local _rdir="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+  [[ -d "$_rdir" ]] || _rdir="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME"
+  local _extra="\"ts_start\": $stage_start, \"ts_end\": $stage_end"
+  if [[ $STAGE_STATUS -eq 0 && -d "$_rdir" ]]; then
+    local _art _artmt
+    _art=$(ls -t "$_rdir"/*.odb 2>/dev/null | head -1 || true)
+    if [[ -n "$_art" ]]; then
+      _artmt=$(date -r "$_art" +%s 2>/dev/null || echo "")
+      _extra="$_extra, \"artifact\": \"$(basename "$_art")\""
+      [[ -n "$_artmt" ]] && _extra="$_extra, \"artifact_mtime\": $_artmt"
+    fi
+  fi
+  echo "{\"stage\": \"$stage\", \"status\": $STAGE_STATUS, \"elapsed_s\": $stage_elapsed, $_extra}" >> "$BACKEND_DIR/stage_log.jsonl"
   _journal_stage "$stage" "$([[ "$STAGE_STATUS" -eq 0 ]] && echo pass || echo fail)" "$stage_elapsed" "$BACKEND_DIR/flow.log"
 
   if [[ $STAGE_STATUS -ne 0 ]]; then
@@ -285,7 +330,9 @@ for stage in $ORFS_STAGES_LIST; do
     if [[ "$stage" == "$FROM_STAGE" ]]; then
       SKIP_STAGES=false
     else
-      echo "Skipping stage: $stage (resuming from $FROM_STAGE)"
+      # Persist the reuse decision (codex #3): tee to flow.log, not stdout-only.
+      echo "Reusing stage: $stage (artifacts from a prior run; resuming from $FROM_STAGE)" \
+        | tee -a "$BACKEND_DIR/flow.log"
       continue
     fi
   fi

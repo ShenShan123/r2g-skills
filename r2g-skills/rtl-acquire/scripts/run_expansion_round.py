@@ -304,6 +304,19 @@ def select_retry_candidates(
     return source if has_rows(source) else None
 
 
+def runnable_high_mem_designs(rows: list[dict], priorities) -> list[str]:
+    """The resource_tier=high designs that WOULD actually run this round, i.e.
+    those that pass the same --priorities filter the batch expander applies.
+    Only these can legitimately trigger the high-mem round guard: a high-mem row
+    filtered out by priority (e.g. priority=low while running --priorities high)
+    was never going to run, so it must NOT hard-block the round
+    (failure-patterns.md #38). Mirrors expand_candidates.main()'s filter."""
+    allowed = set(priorities or [])
+    runnable = [r for r in rows if r.get("priority") in allowed] if allowed else rows
+    return [r.get("design") for r in runnable
+            if (r.get("resource_tier") or "").strip().lower() == "high"]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="One-shot orchestration for nangate45 raw graph expansion.")
     parser.add_argument("--candidate-csv", type=Path, default=None)
@@ -470,7 +483,7 @@ def main() -> None:
                     rows = list(csv.DictReader(candidate_csv.open(newline="", encoding="utf-8")))
                 except Exception:
                     rows = []
-                if any((row.get("resource_tier") or "").strip().lower() == "high" for row in rows):
+                if runnable_high_mem_designs(rows, args.priorities):
                     payload["state"] = "blocked_high_mem"
                     payload["phase"] = "resource_guard"
                     payload["last_output_line"] = "resource_tier=high candidates detected; rerun with --allow-high-mem on a high-memory node"

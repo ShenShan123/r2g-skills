@@ -162,6 +162,27 @@ class PromoteTests(PromoteFixture):
         self.assertEqual(res["status"], "would_promote")
         self.assertFalse((self.base / "dry").exists())
 
+    def test_run_flow_failure_updates_on_disk_manifest(self) -> None:
+        """--run flow failure must re-dump promote.json/metadata.json so the
+        ON-DISK status reflects promoted_flow_failed, not a stale 'promoted'
+        (failure-patterns.md #38 / codex #2)."""
+        from unittest import mock
+        import promote.promote_candidates as pc
+        self._mk_candidate("runfail", RTL_CLK, top="toy_top")
+        # Real subprocess, trivial stub that fails — only run_orfs is redirected
+        # (mocking subprocess.run globally would break init_project's skeleton).
+        stub = self.root / "fake_run_orfs.sh"
+        stub.write_text("#!/usr/bin/env bash\nexit 1\n")
+        stub.chmod(0o755)
+        with mock.patch.object(pc, "run_orfs_script", return_value=stub):
+            res = self._promote("runfail", run=True)
+        self.assertEqual(res["status"], "promoted_flow_failed")
+        prov = json.loads((self.base / "runfail" / "metadata.json").read_text())
+        self.assertEqual(prov["status"], "promoted_flow_failed")
+        pj = json.loads((self.base / "runfail" / "reports" / "promote.json").read_text())
+        self.assertEqual(pj["status"], "promoted_flow_failed")
+        self.assertEqual(pj["orfs_rc"], 1)
+
 
 class ClockDetectTests(unittest.TestCase):
     def _one(self, text: str, top: str) -> str:

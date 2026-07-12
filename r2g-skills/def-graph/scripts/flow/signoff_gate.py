@@ -13,9 +13,16 @@ signoff artifacts and decides whether a dataset may be built from this run:
     <run_dir>/stage_log.jsonl       'finish' stage recorded with status 0
                                     (fallback: run-meta.json make_status == 0)
     reports/route.json | <run_dir>/**/5_route_drc.rpt
-                                    residual route/antenna violations == 0
+                                    residual route violations == 0
                                     (unknown = caveat, not a block: a clean full
                                     DRC deck already covers routed geometry)
+  recorded per-metric, never a new blocker (additive visibility — codex #5):
+    antenna                         its OWN clean/fail/nonconverged/not_covered/
+                                    unknown dimension, decoupled from routing-DRC:
+                                    reports/antenna_nonconverged.json (the fix
+                                    loop gave up) or antenna-named drc.json
+                                    categories. A routing-clean-but-antenna-dirty
+                                    design is thus visible in the manifest.
   advisory (recorded, never blocks — negative slack is a valid training label):
     reports/ppa.json summary.timing.setup_wns | reports/timing_check.json tier
 
@@ -129,8 +136,27 @@ def _check_route(reports_dir, run_dir):
     if j is not None:
         tv = j.get("total_violations")
         st = str(j.get("status", "unknown"))
-        if st == "clean" or tv == 0:
+        # Gate on the COUNT, not the status string: a route.json carrying
+        # status='clean' but total_violations>0 (foreign writer) must NOT read
+        # clean via short-circuit (failure-patterns.md #38). And a genuine
+        # status='unknown' (route stage never reached) is 'unknown' (caveat),
+        # not 'dirty' (a spurious blocker).
+        try:
+            tv_num = None if tv is None else int(tv)
+        except (TypeError, ValueError):
+            tv_num = None
+        if tv_num == 0:
             return {"status": "clean", "violations": 0}
+        if tv_num is not None and tv_num > 0:
+            return {"status": "dirty", "violations": tv_num,
+                    "detail": f"route.json status={st!r} total_violations={tv_num}"}
+        # tv unknown/non-numeric: trust an explicit 'clean' only, map 'unknown'
+        # to unknown, never silently promote another status to clean.
+        if st == "clean":
+            return {"status": "clean", "violations": 0}
+        if st == "unknown":
+            return {"status": "unknown",
+                    "detail": "route.json status=unknown (route stage not reached / not parsed)"}
         return {"status": "dirty", "violations": tv,
                 "detail": f"route.json status={st!r} total_violations={tv}"}
     if run_dir:
@@ -148,6 +174,53 @@ def _check_route(reports_dir, run_dir):
                     "detail": f"{n} residual marker(s) in {rpts[-1]}", "source": rpts[-1]}
     return {"status": "unknown",
             "detail": "no reports/route.json and no 5_route_drc.rpt in the run dir"}
+
+
+def _check_antenna(reports_dir):
+    """Antenna tracked as its OWN pass/fail/unknown dimension, decoupled from
+    routing-DRC and full-deck DRC (failure-patterns.md #38 / codex #5). Routing
+    DRC (shorts/spacing) and antenna are separate manufacturing metrics — a
+    layout can be routing-clean while antenna-dirty — so a dataset consumer must
+    be able to filter on antenna alone. Sources, in order:
+
+      reports/antenna_nonconverged.json  -> 'nonconverged' (the fix loop gave up
+                                            on residual antenna, #36 — the
+                                            suggestion's exact stall example)
+      reports/drc.json categories        -> sum counts of antenna-named classes
+
+    Status: nonconverged | fail | clean | not_covered (clean_beol disables the
+    ANTENNA rule group) | unknown (drc.json missing/stale, or a fail with no
+    per-category breakdown so antenna is not separable). NEVER a hard blocker
+    here — a full-deck antenna failure already blocks via `drc`; this dimension
+    is additive visibility so it can ride the manifest as a recorded risk."""
+    marker = _load_json(os.path.join(reports_dir, "antenna_nonconverged.json"))
+    if isinstance(marker, dict):
+        return {"status": "nonconverged",
+                "residual_count": marker.get("residual_count"),
+                "strategies_tried": marker.get("strategies_tried"),
+                "detail": "antenna repair non-converged (reports/antenna_nonconverged.json)"}
+    j = _load_json(os.path.join(reports_dir, "drc.json"))
+    if j is None:
+        return {"status": "unknown", "detail": "no reports/drc.json — antenna not separately verified"}
+    st = str(j.get("status", "unknown"))
+    if st == "clean_beol":
+        return {"status": "not_covered",
+                "detail": "BEOL-only DRC: ANTENNA rule group disabled — antenna NOT verified"}
+    cats = j.get("categories") or {}
+    ant = sum((c or {}).get("count", 0) or 0
+              for k, c in cats.items() if "antenna" in str(k).lower())
+    if ant > 0:
+        return {"status": "fail", "violations": ant,
+                "detail": f"{ant} antenna-class DRC violation(s)"}
+    if st in DRC_OK:
+        return {"status": "clean", "violations": 0}
+    if st == "fail" and cats:
+        # Full deck ran & categorized; the failure is non-antenna classes -> the
+        # antenna metric itself is clean (this IS the decoupling the fix targets).
+        return {"status": "clean", "violations": 0,
+                "detail": "DRC failed on non-antenna classes; antenna clean"}
+    return {"status": "unknown",
+            "detail": f"drc status={st!r} with no per-category breakdown — antenna not separable"}
 
 
 def _check_timing(reports_dir):
@@ -178,6 +251,7 @@ def evaluate(project_dir, run_dir):
         "lvs": _check_lvs(reports_dir),
         "orfs": _check_orfs(run_dir),
         "route": _check_route(reports_dir, run_dir),
+        "antenna": _check_antenna(reports_dir),
         "timing": _check_timing(reports_dir),
     }
     blockers = []
@@ -197,6 +271,11 @@ def evaluate(project_dir, run_dir):
         caveats.append("lvs=skipped")
     if checks["route"]["status"] == "unknown":
         caveats.append("route=unknown")
+    # Antenna as its own recorded risk (never a new blocker — a full-deck antenna
+    # failure already blocks via `drc`). Anything but a proven-clean antenna is a
+    # recorded caveat so a routing-clean-but-antenna-dirty design is visible.
+    if checks["antenna"]["status"] != "clean":
+        caveats.append(f"antenna={checks['antenna']['status']}")
     if checks["timing"]["status"] != "met":
         caveats.append(f"timing={checks['timing']['status']}")
 

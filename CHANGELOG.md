@@ -4,6 +4,52 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-12 — Codex robustness-suggestion audit: 5 latent bugs + per-metric/observability hardening (#38)
+
+Audited 7 Codex robustness suggestions against the actual code (grading in
+`docs/superpowers/plans/2026-7-12-codex-suggestion.md`). The 2026-07-10 sweep had
+already shipped the big items; this pass closes **5 latent bugs** and 4 **partial**
+gaps, each with tests + failure-patterns #38. Full suites green:
+signoff-loop 818, def-graph 386, rtl-acquire 60.
+
+### signoff-loop
+- **Antenna non-convergence counter was cumulative, not consecutive** (`fix_signoff.sh`;
+  #38a). `antenna_noimp` incremented but never reset on an improving antenna iteration, so
+  a design converging via interleaved wins/no-ops (10→5→5→3→3) was falsely aborted at the
+  2nd cumulative no-op. Now resets on each improving antenna iteration.
+- **Diagnosis mislabeled route/LVS `ERROR` lines as synthesis errors** (`build_diagnosis.py`;
+  #38b). `parse_synth_errors` got the full concatenated log; now scoped to the `synth.log`
+  section (new `section_text`). Also **consolidated `run_summary`** (codex #7): stage
+  durations + repair repetitions + DRC/LVS/route/timing status in `diagnosis.json`.
+- **ORFS resume provenance** (codex #3). `run_orfs.sh` stamps per-stage `ts_start`/`ts_end`
+  + output `artifact` into `stage_log.jsonl` (additive; contract preserved), tees the
+  reuse/rerun decision to `flow.log` with its concrete `R2G_RERUN_REASON` (from
+  `fix_signoff.sh`), and writes `resume_meta.json`.
+
+### def-graph
+- **Antenna is now its own gate dimension** (`signoff_gate.py` `_check_antenna`; codex #5) —
+  clean/fail/nonconverged/not_covered/unknown, decoupled from routing-DRC so a
+  routing-clean-but-antenna-dirty design is visible in `signoff_health` (a caveat, never a
+  new blocker).
+- **`_check_route` gates on the count, not the status string** (#38c): a foreign
+  `status="clean"`+`violations>0` no longer reads clean; a genuine `unknown` no longer
+  mislabels `dirty`.
+- **Graph SKIP manifests carry the specific upstream reason** (`graph_skip_manifest.py`;
+  codex #6) — antenna-nonconvergence marker / ORFS `orfs_fail_stage` / signoff blockers /
+  newest `stage_log.jsonl` failing stage threaded into `graph_dataset.json`, not a bare
+  "no 6_final.def".
+
+### rtl-acquire
+- **Promote manifest re-dumped after `--run`** (`promote_candidates.py`; #38d) — a failed
+  immediate flow now records `promoted_flow_failed` on disk, not a stale `promoted`.
+- **High-mem round guard scoped to runnable candidates** (`run_expansion_round.py`
+  `runnable_high_mem_designs`; #38e) — a `resource_tier=high` row filtered out by
+  `--priorities` no longer hard-blocks a round it was never in.
+- **Low-priority deferral queue** (`expand_candidates.py`; codex #1) — risk-flagged /
+  `resource_tier=high` candidates stable-sorted to the tail of the round (observable via a
+  `risk_deferred` stage marker); `--no-defer-risky` opts out. Deeper static analysers
+  (memory-bit estimate, dependency-completeness) remain a documented follow-up.
+
 ## 2026-07-11 — campaign driver single-instance guard end-anchors pgrep (#37)
 
 ### signoff-loop

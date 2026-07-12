@@ -20,6 +20,26 @@ skipped as library-pre-verified).
 
 ---
 
+## 2026-07-12 — Codex robustness-suggestion audit: 5 latent bugs + per-metric/observability hardening (#38)
+
+Audited 7 Codex robustness suggestions vs the actual code (grading in
+`docs/superpowers/plans/2026-7-12-codex-suggestion.md`). The 2026-07-10 sweep had already
+shipped the big items (risk screening, one-click promote, antenna auto-exit, signoff gate,
+stage-scoped reflow); this pass closed **5 latent edge bugs** and 4 partial gaps, each with
+tests + failure-patterns #38. Full suites green (signoff-loop 818, def-graph 386, rtl-acquire 60).
+
+- **Bugs:** (a) `fix_signoff.sh` antenna_noimp counted cumulative not consecutive → premature
+  over-abort of a converging design; (b) `build_diagnosis.py` synth-error scan un-scoped →
+  route/LVS ERROR lines mislabeled synthesis errors; (c) `signoff_gate.py._check_route`
+  trusted the status string over the violation count; (d) `promote_candidates.py` wrote the
+  manifest before the `--run` outcome → stale `promoted` on a failed flow;
+  (e) `run_expansion_round.py` high-mem guard scanned all rows before the `--priorities` filter.
+- **Hardening (additive):** antenna as its own `signoff_gate` dimension (codex #5); graph SKIP
+  manifests carry the specific upstream backend-failure reason (`graph_skip_manifest.py`, #6);
+  ORFS resume provenance — per-stage timestamps/artifact + `resume_meta.json` + reason tee'd to
+  flow.log (#3); consolidated `run_summary` in `diagnosis.json` (#7); low-priority deferral
+  queue for risk-flagged candidates (#1). Deeper #1 static analysers left as documented follow-up.
+
 ## 2026-07-11 — Campaign driver single-instance guard fix (#37)
 *(branch `fix/campaign-driver-guard-anchor`)*
 

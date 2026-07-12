@@ -398,10 +398,14 @@ except Exception: print("{}")' <<<"$apply_out")"
       # make prerequisite). R2G_FIX_FULL_REFLOW=1 restores the full rebuild
       # (use when an edit affects a stage EARLIER than the strategy's declared
       # rerun_from). --resume is kept as a no-op alias of the default.
+      # Thread the concrete rerun reason into the run's own stage_log/flow.log
+      # (failure-patterns.md #38 / codex #3) — the strategy is already journaled
+      # to journal.sqlite above, but a reviewer reading backend/RUN_*/ sees why.
+      local rerun_reason="signoff fix: strategy=$sid rerun_from=${rerun:-full} (config edit)"
       if [[ "${R2G_FIX_FULL_REFLOW:-0}" == "1" ]]; then
-        "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
+        R2G_RERUN_REASON="$rerun_reason (full reflow)" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
       else
-        FROM_STAGE="$rerun" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
+        FROM_STAGE="$rerun" R2G_RERUN_REASON="$rerun_reason" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
       fi
       if [[ $rc -ne 0 ]]; then
         echo "[$check] run_orfs failed (rc=$rc); aborting this check" >&2
@@ -429,10 +433,20 @@ except Exception: print("{}")' <<<"$apply_out")"
       continue
     fi
     verdict="applied"
+    # Is THIS iteration antenna-scoped? Drives the CONSECUTIVE antenna-noimp
+    # counter below (failure-patterns.md #38).
+    local is_antenna_iter=0
+    [[ "$sid" == antenna* || "$before_vclass" == *[Aa]ntenna* ]] && is_antenna_iter=1
     if [[ -n "$before" ]] && python3 -c "import sys;sys.exit(0 if float('$after')>=float('$before') else 1)" 2>/dev/null; then
       verdict="no_improvement"; noimp=$((noimp+1))
+      (( is_antenna_iter )) && antenna_noimp=$((antenna_noimp+1))
     else
       noimp=0
+      # An IMPROVING antenna strategy RESETS the consecutive counter: a design
+      # converging via interleaved wins and no-ops (10->5 win, 5->5 no-op,
+      # 5->3 win, 3->3 no-op) must NOT be falsely declared non-converged
+      # (the cumulative-vs-consecutive over-abort, failure-patterns.md #38).
+      (( is_antenna_iter )) && antenna_noimp=0
     fi
     [[ "$after" == "0" ]] && verdict="cleared"
     # Antenna non-convergence auto-exit (failure-patterns.md #36): each antenna
@@ -440,10 +454,9 @@ except Exception: print("{}")' <<<"$apply_out")"
     # rounds INSIDE ORFS with no improvement check of its own, and OpenROAD's
     # antenna model can disagree with the signoff deck — so the same 1-2
     # residual violations can survive every round (the SHA-1/SHA-256 loop).
-    # Two non-improving antenna strategies = NON-CONVERGED: terminal verdict,
-    # persistent marker, stop burning reflows.
-    if [[ "$verdict" == "no_improvement" && ( "$sid" == antenna* || "$before_vclass" == *[Aa]ntenna* ) ]]; then
-      antenna_noimp=$((antenna_noimp+1))
+    # Two CONSECUTIVE non-improving antenna strategies = NON-CONVERGED: terminal
+    # verdict, persistent marker, stop burning reflows.
+    if [[ "$verdict" == "no_improvement" ]] && (( is_antenna_iter )); then
       (( antenna_noimp >= 2 )) && verdict="antenna_nonconverged"
     fi
     _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta"

@@ -38,6 +38,19 @@ def parse_synth_errors(text: str) -> list:
     return errors
 
 
+def section_text(text: str, name: str) -> str:
+    """Return the body of the named log section ('=== name === ... ') or ''.
+    main() joins each log as '=== <name> ===\\n<content>'. Scoping a parser to
+    its OWN section stops cross-contamination — a route/DRC/LVS 'ERROR' line in
+    flow.log must NOT be mislabeled a synthesis error (failure-patterns.md #38).
+    Mirrors how the DRC (#8) and make-error (#9) checks already scope."""
+    for section in text.split('=== '):
+        if section.startswith(name):
+            parts = section.split('===', 1)
+            return parts[1].lstrip('\n') if len(parts) > 1 else ''
+    return ''
+
+
 def detect_issues(text: str, project: Path) -> list:
     issues = []
 
@@ -183,8 +196,12 @@ def detect_issues(text: str, project: Path) -> list:
             'suggestion': 'Check flow.log for the specific failing stage and error details.'
         })
 
-    # 10. Synthesis errors
-    synth_errors = parse_synth_errors(text)
+    # 10. Synthesis errors — scoped to the synth.log section ONLY (#38). Feeding
+    # the full concatenated text mislabeled a route '[ERROR GRT-…]' or an LVS
+    # mismatch line as a synthesis error (a false-positive diagnosis that sends a
+    # fixer down the wrong lever). Genuine synth failures also have dedicated
+    # signatures above (empty_synthesis #5, make_error #9, clock_port_missing #4).
+    synth_errors = parse_synth_errors(section_text(text, 'synth.log'))
     if synth_errors:
         issues.append({
             'kind': 'synthesis_errors',
@@ -258,6 +275,106 @@ def detect_issues(text: str, project: Path) -> list:
     return issues
 
 
+def _load_json(path: Path):
+    try:
+        return json.loads(path.read_text(encoding='utf-8', errors='ignore'))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return None
+
+
+def _latest_run(project: Path):
+    backend = project / 'backend'
+    if not backend.exists():
+        return None
+    runs = sorted([d for d in backend.iterdir()
+                   if d.is_dir() and d.name.startswith('RUN_')])
+    return runs[-1] if runs else None
+
+
+def read_stage_summary(project: Path):
+    """Per-stage durations from the latest backend RUN_*/stage_log.jsonl — the
+    dimension the raw diagnosis lacked (codex #7). Returns (stages, total_s)."""
+    run = _latest_run(project)
+    if run is None:
+        return [], 0
+    slog = run / 'stage_log.jsonl'
+    if not slog.exists():
+        return [], 0
+    stages, total = [], 0
+    for line in slog.read_text(encoding='utf-8', errors='ignore').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if 'stage' not in rec or 'status' not in rec:  # skip any non-stage rows
+            continue
+        el = rec.get('elapsed_s') or 0
+        entry = {'stage': rec.get('stage'), 'status': rec.get('status'), 'elapsed_s': el}
+        if rec.get('artifact'):
+            entry['artifact'] = rec['artifact']
+        stages.append(entry)
+        try:
+            total += int(el)
+        except (TypeError, ValueError):
+            pass
+    return stages, total
+
+
+def read_fix_summary(project: Path):
+    """Repair repetition counts from reports/fix_log.jsonl (codex #7)."""
+    flog = project / 'reports' / 'fix_log.jsonl'
+    if not flog.exists():
+        return {'fix_iterations': 0, 'fix_iters_to_clean': None}
+    cleared, iters = [], 0
+    for line in flog.read_text(encoding='utf-8', errors='ignore').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if not rec.get('iter'):
+            continue
+        iters += 1
+        if rec.get('verdict') == 'cleared':
+            try:
+                cleared.append(int(rec['iter']))
+            except (TypeError, ValueError):
+                pass
+    return {'fix_iterations': iters,
+            'fix_iters_to_clean': max(cleared) if cleared else None}
+
+
+def build_run_summary(project: Path):
+    """Consolidate the five dimensions the raw logs scatter (codex #7): stage
+    durations, repair repetitions, and DRC/LVS/route/timing status — so
+    diagnosis.json is a single structured run summary, not just a failure list."""
+    stages, total = read_stage_summary(project)
+    summary = {'stages': stages, 'total_elapsed_s': total}
+    summary.update(read_fix_summary(project))
+    signoff = {}
+    rep = project / 'reports'
+    for name in ('drc', 'lvs', 'route'):
+        d = _load_json(rep / f'{name}.json')
+        if isinstance(d, dict):
+            signoff[name] = d.get('status')
+    tc = _load_json(rep / 'timing_check.json')
+    if isinstance(tc, dict) and tc.get('tier'):
+        signoff['timing'] = tc.get('tier')
+    ppa = _load_json(rep / 'ppa.json')
+    if isinstance(ppa, dict) and ppa.get('orfs_status'):
+        signoff['orfs_status'] = ppa.get('orfs_status')
+        if ppa.get('orfs_fail_stage'):
+            signoff['orfs_fail_stage'] = ppa.get('orfs_fail_stage')
+    if signoff:
+        summary['signoff'] = signoff
+    return summary
+
+
 def main():
     if len(sys.argv) < 3:
         print('usage: build_diagnosis.py <project-root> <output.json>', file=sys.stderr)
@@ -306,6 +423,11 @@ def main():
             'suggestion': 'Inspect flow.log manually for details.',
             'issues': []
         }
+
+    # Consolidated run summary (codex #7): stage durations + repair repetitions +
+    # signoff status, so diagnosis.json is the single structured run summary the
+    # suggestion asks for — not just a failure list to hand-stitch with the DB.
+    diagnosis['run_summary'] = build_run_summary(project)
 
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(diagnosis, indent=2, ensure_ascii=False), encoding='utf-8')

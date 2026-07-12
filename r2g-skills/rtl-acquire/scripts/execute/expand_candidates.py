@@ -163,6 +163,18 @@ def append_design_stage(out_root: Path, design: str, *, stage: str, state: str,
         fh.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
+# A non-'none' risk_flags marker in `notes` (written by discover_download_candidates
+# via common/rtl_risk) OR an explicit resource_tier=high flags a candidate for
+# low-priority DEFERRAL to the tail of the round (codex #1). Never a rejection.
+_RISK_FLAGS_RE = re.compile(r"risk_flags=(?!none\b)([^\s;,|]+)")
+
+
+def _candidate_is_risky(row: dict) -> bool:
+    if _RISK_FLAGS_RE.search(row.get("notes") or ""):
+        return True
+    return (row.get("resource_tier") or "").strip().lower() == "high"
+
+
 def write_index(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
@@ -789,6 +801,11 @@ def main() -> int:
                              "records status==success (regeneration after an "
                              "extractor/synth fix); failed candidates always retry "
                              "by default and need no flag")
+    parser.add_argument("--no-defer-risky", action="store_true",
+                        help="disable the default low-priority deferral (codex #1) "
+                             "that pushes risk-flagged / resource_tier=high "
+                             "candidates to the tail of the round; run in CSV "
+                             "order instead. Ignored when --candidate-names is given.")
     args = parser.parse_args()
 
     out_root = args.out_root or default_out_root()
@@ -804,6 +821,19 @@ def main() -> int:
         order = {name: idx for idx, name in enumerate(args.candidate_names)}
         candidates = [row for row in candidates if row.get("design") in order]
         candidates.sort(key=lambda row: order[row["design"]])
+    elif not args.no_defer_risky:
+        # Low-priority queue for risk-flagged candidates (codex #1): a STABLE
+        # deferral sort pushes risk-flagged / high-resource candidates to the
+        # TAIL of the round so a memory-heavy design that will likely burn its
+        # full synth timeout runs AFTER the clean ones instead of blocking them
+        # in CSV order. Risk is only DEFERRED, never dropped — the synth attempt
+        # is still the arbiter. Stable => CSV order is preserved within each
+        # group. Explicit --candidate-names ordering is honored as-is above.
+        deferred = [row["design"] for row in candidates if _candidate_is_risky(row)]
+        if deferred:
+            candidates.sort(key=lambda row: 1 if _candidate_is_risky(row) else 0)
+            print(f"[rtl-acquire] deferred {len(deferred)} risk-flagged candidate(s) "
+                  f"to end of round: {', '.join(deferred)}", flush=True)
 
     index_path = out_root / "index.csv"
     rows_by_design = restore_rows_from_output_root(out_root)
@@ -825,6 +855,13 @@ def main() -> int:
                             details={"graph_format": GRAPH_FORMAT})
         append_design_stage(out_root, design, stage="queued", state="start",
                             details={"source_path": candidate.get("source_path", "")})
+        # Record the low-priority deferral so it is visible in the per-design
+        # stage log, not silent (codex #1). The sort above already ran it last.
+        if not args.candidate_names and not args.no_defer_risky and _candidate_is_risky(candidate):
+            flags = _RISK_FLAGS_RE.search(candidate.get("notes") or "")
+            append_design_stage(out_root, design, stage="risk_deferred", state="info",
+                                details={"risk_flags": flags.group(1) if flags else "",
+                                         "resource_tier": candidate.get("resource_tier", "")})
         synth_variant = (candidate.get("synth_variant") or "yosys_abc_area0").strip()
         synth_memory_max_bits = (candidate.get("synth_memory_max_bits") or "").strip() or None
         synth_frontend = (candidate.get("synth_frontend") or "").strip() or None

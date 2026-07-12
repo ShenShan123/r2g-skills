@@ -296,15 +296,18 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     )
 
     # 6. provenance stamps
-    meta_out = {"design_name": design, "status": result["status"],
-                "promoted_from": str(out_root / design),
-                "promoted_at": result["promoted_at"],
-                "synth_variant": variant, "top": top, "platform": platform}
-    (project / "metadata.json").write_text(json.dumps(meta_out, indent=2),
-                                           encoding="utf-8")
-    (project / "reports").mkdir(exist_ok=True)
-    (project / "reports" / "promote.json").write_text(
-        json.dumps(result, indent=2), encoding="utf-8")
+    def _dump_manifests() -> None:
+        meta_out = {"design_name": design, "status": result["status"],
+                    "promoted_from": str(out_root / design),
+                    "promoted_at": result["promoted_at"],
+                    "synth_variant": variant, "top": top, "platform": platform}
+        (project / "metadata.json").write_text(json.dumps(meta_out, indent=2),
+                                               encoding="utf-8")
+        (project / "reports").mkdir(exist_ok=True)
+        (project / "reports" / "promote.json").write_text(
+            json.dumps(result, indent=2), encoding="utf-8")
+
+    _dump_manifests()
 
     # 7. optional immediate full flow
     if args.run and result["status"] == "promoted":
@@ -313,6 +316,11 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
         result["orfs_rc"] = rc
         if rc != 0:
             result["status"] = "promoted_flow_failed"
+        # Re-dump so the ON-DISK manifest reflects the flow outcome, not a stale
+        # status='promoted' (failure-patterns.md #38 / codex #2). A later reader
+        # of promote.json/metadata.json must not trust a manifest that missed the
+        # flow failure.
+        _dump_manifests()
     return result
 
 
