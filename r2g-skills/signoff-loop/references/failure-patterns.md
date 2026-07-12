@@ -3920,3 +3920,53 @@ Test: `test_candidate_deferral.py::ResourceGuardScopeTests`.
 resets (a), a parser fed the wrong scope (b), a status string trusted over its own count
 (c), a manifest written before the outcome it claims (d), a guard applied before the filter
 that bounds it (e). Audit the *edges* of "already done" features, not just their happy path.
+
+### 39. Skill-relocation left stale absolute `POST_GLOBAL_PLACE_TCL` hook paths in 84 A/B-arm config.mks — place aborted "couldn't read file", mislabeled `unseen_crash` (2026-07-12)
+
+Found by the sky130hs /r2g-debug tick: 8 escalations under reason `unseen_crash`, all on
+`8_bit_Microcontroller_*_pdn_die` A/B **arm** dirs. Their backend `flow.log` showed the
+real cause — global place aborted because ORFS `source`d a stage hook that no longer
+exists:
+
+```
+source .../r2g-rtl2gds/scripts/flow/orfs_hooks/buffer_port_feedthroughs.tcl
+Error: global_place.tcl couldn't read file ".../r2g-rtl2gds/.../buffer_port_feedthroughs.tcl": no such file or directory
+make: *** [do-3_3_place_gp] Error 1 ; ERROR: Stage 'place' failed (exit code 2)
+```
+
+The 2026-07-07 skill split moved the tree `r2g-rtl2gds/` → `r2g-skills/signoff-loop/`, so
+the **absolute** `export POST_GLOBAL_PLACE_TCL = .../r2g-rtl2gds/.../buffer_port_feedthroughs.tcl`
+baked into config.mk was orphaned. Primary designs were regenerated with the new path
+(`setup_rtl_designs.py` re-writes primary config.mk each round), but **84 pre-split A/B-arm
+config.mk copies were not** — an arm's config.mk is cloned from the primary at ab-launch and
+then re-used verbatim across rounds. When ab-drain re-ran those arms, place aborted on the
+dead hook; the crash classifier had no pattern for a missing-hook `source` failure, so it
+fell through to the terminal `unseen_crash` bucket. Compounding harm: **an arm that dies on a
+dead hook path never diverges**, so the `pdn_die` recipe's A/B evidence on those subjects was
+silently starved — the loop burned 8 escalations learning nothing. All DB honesty gates stayed
+green (the crash *was* honestly recorded; it was just under-classified and self-inflicted).
+
+**Fix** (`run_orfs.sh`, TDD RED→GREEN + one-time data migration):
+- **Self-heal at the choke point.** Before copying config.mk into the ORFS design dir,
+  `_heal_hook_paths` scans for any `export *_TCL = <path>` whose file is MISSING and repoints
+  it to the same-basename file under the script's canonical `orfs_hooks/` sibling
+  (`$(dirname BASH_SOURCE)/orfs_hooks`). It is **conservative** — a path that resolves is left
+  untouched (even outside `orfs_hooks/`), and a dead path with no same-basename match is left
+  in place with a loud WARNING (never blanked). Atomic in-place (`mktemp`+`mv`) so a
+  concurrently-spawned reader never sees a truncated config.mk. This fixes all 84 arms lazily
+  as they re-run AND any future skill relocation, for primaries and arms alike, at the single
+  point every flow passes through.
+- **One-time migration** of the 84 on-disk arm config.mks via the same tested code path
+  (`R2G_SELFTEST_HEAL_HOOKS` hook) so inspection/provenance is clean immediately.
+- Tests: `test_run_orfs_hook_heal.py` — dead→canonical repoint, valid-path-untouched,
+  no-canonical-match-warns-not-blanks, non-`_TCL`-lines-untouched, idempotency, and
+  `test_default_hooks_dir_resolves_real_canonical` (proves the default `BASH_SOURCE`-based
+  `HOOKS_DIR` resolves to the REAL hook in a clean driver-spawned bash — an interactive
+  shell's `cd`-that-lists hook, which pollutes `$(cd…&&pwd)`, is absent in production).
+
+**Lesson:** an absolute path baked into generated config is a time bomb across any repo/skill
+relocation — the generator gets fixed, but every *copy* made before the move keeps pointing at
+the grave. Resolve tool-relative resources from the running script's own location, and make the
+runner **self-heal a moved-but-still-present resource** rather than trusting a stored absolute
+path. And when a crash class is a catch-all (`unseen_crash`), a *cluster* of it on one strategy
+is a lead, not noise: the true cause was one grep of the arm's `flow.log` away.

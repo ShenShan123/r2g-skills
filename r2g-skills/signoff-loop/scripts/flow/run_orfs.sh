@@ -23,6 +23,46 @@ else
 fi
 FROM_STAGE="${FROM_STAGE:-}"
 
+# --- Self-heal stale ORFS stage-hook paths (failure-patterns.md #39) ---
+# The skill tree moved r2g-rtl2gds/ -> r2g-skills/signoff-loop/ (2026-07-07 split),
+# orphaning absolute POST_*_TCL hook paths baked into config.mk — especially old
+# A/B-arm copies generated PRE-split and never regenerated (primaries were). A dead
+# hook path makes ORFS `source` abort the stage (global_place.tcl: "couldn't read
+# file ... no such file or directory"), which the loop then mislabels 'unseen_crash'
+# — an arm that dies on a dead hook never diverges, starving the A/B evidence.
+# Repoint any *_TCL hook whose file is MISSING to the same-basename file under THIS
+# script's canonical orfs_hooks/ sibling. Conservative: only ever rewrites a BROKEN
+# path; a valid path (even outside orfs_hooks/) is left untouched. Atomic in-place so
+# a concurrently-spawned reader never sees a truncated config.mk.
+HOOKS_DIR="${R2G_ORFS_HOOKS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/orfs_hooks" 2>/dev/null && pwd || true)}"
+_heal_hook_paths() {  # $1 = config.mk to heal in place
+  local cfg="$1" changed=0 tmp line prefix path base cand
+  [[ -f "$cfg" ]] || return 0
+  tmp="$(mktemp "${cfg}.heal.XXXXXX" 2>/dev/null)" || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^([[:space:]]*export[[:space:]]+[A-Z0-9_]*_TCL[[:space:]]*=[[:space:]]*)(.+\.tcl)[[:space:]]*$ ]]; then
+      prefix="${BASH_REMATCH[1]}"; path="${BASH_REMATCH[2]}"
+      if [[ ! -f "$path" ]]; then
+        base="$(basename "$path")"; cand="$HOOKS_DIR/$base"
+        if [[ -n "$HOOKS_DIR" && -f "$cand" ]]; then
+          line="${prefix}${cand}"; changed=1
+          echo "run_orfs: healed stale hook path -> $cand (was: $path)" >&2
+        else
+          echo "run_orfs: WARNING stale hook path '$path' and no '$base' in '$HOOKS_DIR' — stage may abort" >&2
+        fi
+      fi
+    fi
+    printf '%s\n' "$line" >>"$tmp"
+  done <"$cfg"
+  if [[ "$changed" == 1 ]]; then mv -f "$tmp" "$cfg"; else rm -f "$tmp"; fi
+}
+# Self-test hook: heal a given config.mk and exit (lets the pytest suite exercise the
+# migration without a full ORFS project). Mirrors campaign_resume_waves.sh's
+# R2G_GUARD_SELFTEST (#37).
+if [[ -n "${R2G_SELFTEST_HEAL_HOOKS:-}" ]]; then
+  _heal_hook_paths "$R2G_SELFTEST_HEAL_HOOKS"; exit 0
+fi
+
 # --- Tier-0 journal hooks (engineer-loop spec §5.2) — never break the flow ---
 KNOWLEDGE_DIR_J="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../knowledge" && pwd)"
 JOURNAL="${R2G_JOURNAL_CLI:-$KNOWLEDGE_DIR_J/journal_action.py}"
@@ -77,6 +117,10 @@ fi
 DESIGN_NAME=$(grep 'DESIGN_NAME' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
 ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 mkdir -p "$ORFS_DESIGN_DIR"
+
+# Repoint any dead stage-hook path (skill-relocation staleness; #39) before copy so
+# the durable source AND this run's working copy are both corrected.
+_heal_hook_paths "$CONFIG_MK"
 
 # Copy config.mk and constraint.sdc
 cp "$CONFIG_MK" "$ORFS_DESIGN_DIR/config.mk"
