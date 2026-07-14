@@ -17,6 +17,7 @@ import re
 import sys
 from pathlib import Path
 
+import ingest_run
 import knowledge_db
 import search_failures
 
@@ -35,26 +36,44 @@ _PATTERNS_PATH = knowledge_db.DEFAULT_KNOWLEDGE_DIR.parent / "references" / "fai
 _CANDIDATES_PATH = knowledge_db.DEFAULT_KNOWLEDGE_DIR / "failure_candidates.json"
 
 
+def _load_stage_recipe(family: str, platform: str, stage: str,
+                       heuristics_path: Path) -> dict | None:
+    """Look up the learned per-(family, platform) backend-stage recipe entry.
+
+    The canonical family for a backend-stage abort recipe is `orfs_stage`
+    (ingest_run keys `check='orfs_stage'` with the STAGE as the class, and
+    learn_heuristics writes it under fix_recipes["orfs_stage"][<stage>]). The
+    legacy `orfs` family (keyed by the literal "full", not a stage) is checked
+    only as a fallback. Reading the wrong family here was the 2026-07-13
+    key-contract-drift bug (failure-patterns #43): every stage recipe was
+    unreachable, so the ranker silently cold-started and NONE of the 91
+    orfs_stage recipes ever influenced the proposal order.
+    """
+    heuristics_path = Path(heuristics_path)
+    if not heuristics_path.exists():
+        return None
+    try:
+        data = json.loads(heuristics_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    plat = (data.get("families", {}).get(family, {})
+            .get("platforms", {}).get(platform, {})
+            .get("fix_recipes", {}))
+    return plat.get("orfs_stage", {}).get(stage) or plat.get("orfs", {}).get(stage)
+
+
 def rank_proposals(proposal_ids: list[str], *, family: str, platform: str,
                    stage: str, heuristics_path: Path) -> list[str]:
     """Reorder backend-stage proposal ids by learned recipes.
 
     Looks up the Tier-3 fix_recipes entry at
-    families[family]["platforms"][platform]["fix_recipes"]["orfs"][stage]
-    in heuristics.json and reorders `proposal_ids` via fix_model.rank_strategies.
-    Returns the reordered list of id strings. Cold start (no heuristics file or
-    no matching recipe) preserves the input order.
+    families[family]["platforms"][platform]["fix_recipes"]["orfs_stage"][stage]
+    (canonical; legacy "orfs" family is a fallback) in heuristics.json and
+    reorders `proposal_ids` via fix_model.rank_strategies. Returns the reordered
+    list of id strings. Cold start (no heuristics file or no matching recipe)
+    preserves the input order.
     """
-    heuristics_path = Path(heuristics_path)
-    recipe_entry = None
-    if heuristics_path.exists():
-        try:
-            data = json.loads(heuristics_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            data = {}
-        recipe_entry = (data.get("families", {}).get(family, {})
-                        .get("platforms", {}).get(platform, {})
-                        .get("fix_recipes", {}).get("orfs", {}).get(stage))
+    recipe_entry = _load_stage_recipe(family, platform, stage, heuristics_path)
     ranking = fix_model.rank_strategies(recipe_entry, list(proposal_ids))
     return [r["strategy"] for r in ranking]
 
@@ -98,20 +117,20 @@ def _read_stage_log(path: Path) -> list[dict]:
     return entries
 
 
-def _derive_status(stages: list[dict]) -> tuple[str, str | None]:
-    if not stages:
-        return ("unknown", None)
-    fail_stage = None
-    stage_names_done = {s["stage"] for s in stages if s.get("status") == "pass"}
-    for s in stages:
-        if s.get("status") == "fail" and fail_stage is None:
-            fail_stage = s.get("stage")
-    if fail_stage:
-        return ("fail", fail_stage)
-    required = ["synth", "floorplan", "place", "cts", "route", "finish"]
-    if all(name in stage_names_done for name in required):
-        return ("pass", None)
-    return ("partial", stages[-1].get("stage") if stages else None)
+def _derive_status(stages: list[dict],
+                   flow_scope: str = "full") -> tuple[str, str | None]:
+    """Derive (status, fail_stage) from a stage log — the CANONICAL contract.
+
+    Delegates to ingest_run._derive_orfs_status so the backend analyzer and the
+    canonical ingest normalizer can never drift (2026-07-13, failure-patterns
+    #43). The old local copy compared stage `status` against the strings
+    'pass'/'fail' only, so an integer exit code (the production run_orfs.sh writes
+    `"status": 0`) matched neither and EVERY run collapsed to 'partial' — the same
+    class of silent misclassification ingest fixed in _norm_stage_status. It was
+    also blind to flow_scope, so a synth-only rtl-acquire run read 'partial' here
+    even though it passed within its declared scope.
+    """
+    return ingest_run._derive_orfs_status(stages, flow_scope)
 
 
 def _propose_utilization_fix(config, issues, ppa, tcheck):
@@ -285,7 +304,13 @@ def analyze(project: Path,
                 stage_log_path = candidate
                 break
     stages = _read_stage_log(stage_log_path)
-    status, fail_stage = _derive_status(stages)
+    # Honor the run's DECLARED scope (config.mk `export R2G_FLOW_SCOPE = synth_only`,
+    # written by rtl-acquire's corpus expansion) exactly as canonical ingest does —
+    # a synth-only pass is a pass within its scope, not a misleading 'partial'.
+    flow_scope = (config.get("R2G_FLOW_SCOPE") or "").strip().lower()
+    if flow_scope != "synth_only":
+        flow_scope = "full"
+    status, fail_stage = _derive_status(stages, flow_scope)
 
     issues = diag.get("issues") or []
 
@@ -312,6 +337,13 @@ def analyze(project: Path,
             seen_params.add(proposal["parameter"])
             proposals.append(proposal)
 
+    # Surface the learned per-stage recipe for the failing backend stage so the
+    # operator review queue actually CONSUMES the orfs_stage heuristics (before
+    # the 2026-07-13 key fix this evidence had no reader — failure-patterns #43).
+    # Advisory only; NEVER auto-applied. Degrades to [] on any lookup failure.
+    learned_stage_ranking = _learned_stage_ranking(
+        project, config, status, fail_stage)
+
     return {
         "project": str(project),
         "status": status,
@@ -319,7 +351,38 @@ def analyze(project: Path,
         "diagnosis_issues": issues,
         "similar_failures": similar,
         "proposals": proposals,
+        "learned_stage_ranking": learned_stage_ranking,
     }
+
+
+def _learned_stage_ranking(project: Path, config: dict, status: str,
+                           fail_stage: str | None) -> list[dict]:
+    """Ranked backend-stage strategies from the learned orfs_stage recipe.
+
+    Returns [{strategy, attempts, successes, ...}] ordered by fix_model, or []
+    when the run did not abort a backend stage or no recipe/family/platform can
+    be resolved. Wrapped fail-safe: triage must never crash on a heuristics miss.
+    """
+    if status != "fail" or not fail_stage:
+        return []
+    try:
+        platform = config.get("PLATFORM")
+        design_name = config.get("DESIGN_NAME") or Path(project).name
+        if not platform:
+            return []
+        families_path = knowledge_db.DEFAULT_KNOWLEDGE_DIR / "families.json"
+        families = _read_json(families_path) or {}
+        family = ingest_run._project_family(Path(project), design_name, families)
+        entry = _load_stage_recipe(family, platform, fail_stage,
+                                   _CANDIDATES_PATH.parent / "heuristics.json")
+        if not entry:
+            return []
+        strat_ids = list((entry.get("strategies") or {}).keys())
+        if not strat_ids:
+            return []
+        return fix_model.rank_strategies(entry, strat_ids)
+    except Exception:
+        return []
 
 
 def main() -> int:

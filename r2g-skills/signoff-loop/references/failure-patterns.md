@@ -4106,3 +4106,113 @@ gap; the other 4 were phantom causes or already-shipped features whose "fixes" w
 that lies. The `kind:none`-over-a-known-fail-stage gap is the general trap: when two code paths in the same
 file compute the same fact (text rules vs the stage ledger), reconcile them so the human-facing summary
 can't disagree with the structured one.
+
+### 43. `analyze_execution` spoke a stale MemoryStore dialect — string-only status + wrong `orfs` recipe key (2026-07-13 memorystore audit #1/#2)
+
+Found by the 2026-07-13 MemoryStore/A-B evidence-chain audit
+(`docs/superpowers/plans/2026-07-13-memorystore-audit.md`). Two components that MUST agree drifted apart:
+the *canonical* ingest path evolved, the *backend analyzer* did not.
+
+- **Integer/bool status blindness.** `analyze_execution._derive_status()` compared each stage's `status`
+  against the strings `"pass"`/`"fail"` only. The production writer `run_orfs.sh` records the shell **exit
+  code** as an int (`"status": 0`), so `0 == "pass"` was always False, every stage was skipped, and EVERY
+  run — clean, aborted, or synth-only — collapsed to `partial` with no `fail_stage`. This is the identical
+  class `ingest_run._norm_stage_status` already fixed on the canonical side; the analyzer just never got the
+  memo. 10 of 13 sampled historical stage logs classified differently between the two. It was also blind to
+  `flow_scope`, so a synth-only rtl-acquire run read `partial` even though it passed within its declared scope.
+- **`orfs` vs `orfs_stage` key drift.** A backend-stage abort recipe is keyed by canonical ingest under
+  `check='orfs_stage'` (the STAGE as the class), and the learner writes it under
+  `fix_recipes["orfs_stage"][<stage>]` — 91 such records in the shipped store. But `rank_proposals()` read
+  `fix_recipes["orfs"][<stage>]` (the legacy `orfs` family is keyed by the literal `"full"`, not a stage), so
+  the lookup could NEVER hit: every stage recipe was unreachable and the ranker silently cold-started. Worse,
+  `analyze()` never CALLED `rank_proposals()` at all, so the 91 `orfs_stage` recipes had no live reader.
+
+**Fix** (`analyze_execution.py`, TDD). `_derive_status` now DELEGATES to `ingest_run._derive_orfs_status`
+(single normalizer; honors `flow_scope` read from the parsed `config.mk`), so the two paths can't drift again.
+`rank_proposals` + a shared `_load_stage_recipe` read the canonical `orfs_stage` family with a legacy `orfs`
+fallback, and `analyze()` now attaches `learned_stage_ranking` (the ranked `orfs_stage` recipe for the failing
+stage) to its output — the operator triage tool finally CONSUMES the recipes. Advisory only; never auto-applied.
+Tests: `test_analyze_execution.py` (integer-fail ⇒ `fail`; all-zero ⇒ `pass`; synth-only scope ⇒ `pass`),
+`test_analyze_ranking.py` (canonical `orfs_stage` key consumed; `analyze()` surfaces the ranking). The live
+DRC/LVS ranking (`diagnose_signoff_fix.py`) already consumes symptom-indexed memory — this fix is scoped to the
+backend-stage triage reader, not generalized to the whole agent.
+
+**Lesson:** when two components must agree on a decision (here: "did this stage pass?" and "where do stage
+recipes live?"), give them ONE source — a shared normalizer + a shared key schema — never a copied
+re-implementation. A copy that drifts doesn't crash; it silently misclassifies down the whole evidence chain.
+
+### 44. Trajectory rollup lost partial wins and cross-symptom credit (2026-07-13 memorystore audit #8)
+
+Same audit, `learn_heuristics._build_trajectory`. The per-episode Tier-2 rollup had two attribution bugs:
+
+- **Partial wins recorded `abandoned`.** The episode outcome enum was `resolved | abandoned | not_attempted`
+  and `win` (the trajectory-level "did it clear?") only matched `verdict == "cleared"`. A real partial
+  improvement (`verdict == "win"` — a genuine violation reduction, already half-credited at the STEP level by
+  `_recipes_from_trajectories`) had nowhere to go and fell into `abandoned` with `winning_strategy=NULL`,
+  erasing the improving strategy from trajectory-level evidence. 46 episodes in the shipped store were affected.
+- **Cross-symptom merge.** Trajectories grouped by `(fix_session_id, check_type)` and attributed the WHOLE
+  path to the FIRST event's symptom. A session that shifts symptom mid-episode (m1 spacing cleared, then m3
+  spacing surfaces) credited the clearing strategy to the wrong symptom — polluting the cross-platform
+  symptom-indexed memory. 250 sessions in the store genuinely span >1 symptom.
+
+**Fix** (`learn_heuristics.py` + `schema.sql` + `knowledge_db.py`, TDD). Added an `improved` outcome: no full
+`cleared` but ≥1 `win` ⇒ `outcome='improved'` with the winning strategy preserved (kept strictly BELOW
+`resolved` so the strict-`resolved` consumers — `eval_heuristics`, `trace_provenance`, `build_strength_report`
+— never mistake a partial win for a full clear). Grouping + the `fix_trajectories` PK now include `symptom_id`
+`(fix_session_id, check_type, symptom_id)`, so each symptom yields its own trajectory. `fix_trajectories` is a
+PURE re-derivable projection (`learn()` DELETEs + rebuilds it), so `_migrate_drop_stale_fix_trajectories` drops
+a legacy-PK copy (zero data loss) for recreation — idempotent once the new PK is in place. A shared
+`_resolve_event_symptom` keeps grouping + per-episode symptom resolution consistent. Tests:
+`test_learn_heuristics.py` (partial win ⇒ `improved`+winner; multi-symptom session splits per symptom),
+`test_learn_fix.py` (s2 partial-win assertion corrected from `abandoned` to `improved`). Rebuilt store:
+`improved:46` (all with a winner), 250 sessions split; honesty 5/5.
+
+**Lesson:** an outcome enum too coarse to name a real state (partial improvement) doesn't drop the state —
+it mislabels it as its nearest neighbor (`abandoned`), which then lies to every downstream reader. And a
+grouping key coarser than the thing being learned (symptom) silently cross-contaminates the learned index.
+
+### 45. A/B trials + fix_events shipped with NULL provenance — no run_ids, no tool versions (2026-07-13 memorystore audit #7/#10)
+
+Same audit. Promotions could not be traced to the evidence or the toolchain that produced them:
+
+- **`arm_a_run_id`/`arm_b_run_id` hardcoded `None`.** `engineer_loop.judge_finished_trials` called
+  `record_trial(..., arm_a_run_id=None, arm_b_run_id=None)` literally, so all 376 `ab_trials` stored NULL run
+  ids — a decisive `win`/`loss` could not be pinned to two distinct arm runs, defeating experiment-level dedup
+  and replay. The run ids were RIGHT THERE: each arm entry carries a `project_path`, and `_arm_metric` already
+  SELECTs the arm's `run_id` — it just wasn't returned or passed through.
+- **`tool_versions_json` had no writer.** The `fix_events` column existed since the symptom-index migration
+  but NOTHING ever populated it — 100% of historical events had a null toolchain fingerprint.
+
+**Fix** (`engineer_loop.py`, `ab_runner.py`, `ingest_run.py`, new `knowledge/tool_versions.py`, TDD).
+`_arm_metric` now returns `run_id`; `judge_finished_trials` resolves each arm's first judgeable `run_id`,
+passes them, stamps the full per-repeat lists + `provenance_complete` + `tool_versions` into `metrics_json`.
+`record_trial` stamps `provenance_complete` when absent and WARNS loudly on a DECISIVE verdict lacking distinct
+run ids (the case that would otherwise promote a recipe on unverifiable evidence — it does not refuse the write,
+since a real inconclusive/one-armed trial still carries information). `tool_versions.collect()` is a cached,
+fail-safe collector (missing/hanging tool ⇒ null, never raises; `R2G_TOOL_VERSIONS_JSON` overrides for
+reproducible re-ingest/tests) fingerprinting openroad/yosys/klayout + ORFS/agent git HEADs; `ingest_run` stamps
+it onto every fix_event (`COALESCE` on re-ingest so a first fingerprint is never clobbered). Tests:
+`test_ab_runner.py` (provenance_complete true/false; decisive-without-run-ids warns), `test_ingest_fix_events.py`
+(tool_versions stamped). Old trials keep their NULL run ids — mark them `provenance_incomplete` on audit rather
+than trusting them as current evidence.
+
+**Lesson:** an evidence table without a back-reference to the runs that produced it is unfalsifiable — it can
+neither be reproduced nor refuted. Provenance (run ids + tool fingerprint) is not metadata polish; it is what
+makes a promotion an experiment instead of a claim.
+
+### 46. rtl-acquire dual-memory honesty check read an empty projection as convergence (2026-07-13 memorystore audit #10)
+
+Same audit, `project_frontend_diagnosis.check_honesty`. The fast honesty check asserted `count(synth-fail
+runs) == count(with a frontend failure_event)`. For an EMPTY projection (no `synth_only` runs at all) this is
+`0 == 0` — a vacuous pass that read as "dual memory converged / healthy", masking a missing source or an
+unpopulated shared projection. An empty set proves nothing; it is not a pass.
+
+**Fix** (`project_frontend_diagnosis.py`, TDD). `check_honesty` now also reports COVERAGE (total `synth_only`
+runs) and treats the empty set as UNPROVEN: it prints a `COVERAGE EMPTY … convergence is UNPROVEN (an empty
+set is NOT a pass)` caveat, and a new `--check --require-nonempty` makes the empty set a hard failure (exit 2,
+distinct from 0=consistent and 1=real violation). Default stays exit 0 for backward compatibility (a
+signoff-only checkout with no rtl-acquire activity must not spuriously fail), but the message no longer claims
+convergence. Test: `test_flow_scope_ingest.py` (empty projection ⇒ default 0 + `COVERAGE EMPTY`; strict ⇒ 2).
+
+**Lesson:** an equality honesty gate (`A == B`) is trivially satisfied by the empty set. Any convergence check
+must also assert non-empty COVERAGE, or "nothing measured" is indistinguishable from "everything agrees".

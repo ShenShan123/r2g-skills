@@ -55,8 +55,28 @@ _POST_MIGRATION_INDEXES = (
 )
 
 
+def _migrate_drop_stale_fix_trajectories(conn: sqlite3.Connection) -> None:
+    """Drop a legacy-PK fix_trajectories so schema.sql recreates it with the new
+    (fix_session_id, check_type, symptom_id) PK (failure-patterns #44).
+
+    fix_trajectories is a PURE re-derivable Tier-2 projection (learn_heuristics
+    DELETEs + rebuilds it every run), so dropping a stale-PK copy loses nothing —
+    the next learn() repopulates it, now split per symptom instead of collapsing a
+    multi-symptom session onto its first symptom. Runs BEFORE executescript so the
+    CREATE TABLE IF NOT EXISTS actually takes effect. Idempotent: once the table
+    carries symptom_id in its PK this is a no-op (never re-drops).
+    """
+    info = conn.execute("PRAGMA table_info(fix_trajectories)").fetchall()
+    if not info:
+        return  # absent → schema.sql creates it fresh with the new PK
+    pk_cols = {row[1] for row in info if row[5]}   # row[5] = pk position (>0 in PK)
+    if "symptom_id" not in pk_cols:
+        conn.execute("DROP TABLE fix_trajectories")
+
+
 def ensure_schema(conn: sqlite3.Connection,
                   schema_path: Path | str = DEFAULT_SCHEMA_PATH) -> None:
+    _migrate_drop_stale_fix_trajectories(conn)
     ddl = Path(schema_path).read_text(encoding="utf-8")
     conn.executescript(ddl)
     _migrate_add_columns(conn)

@@ -145,50 +145,70 @@ def _family_platform_entry(runs: list[dict]) -> dict | None:
     return entry
 
 
+def _resolve_event_symptom(e: dict) -> tuple[str, str]:
+    """(symptom_id, signature_json) for one fix_event, with the SAME normalization
+    the trajectory rebuild applies: a stored symptom wins (healing legacy
+    unnormalized KLayout category text so it merges into the normalized bucket),
+    else a coarse backfill from (check_type, violation_class). Trajectories group
+    by this so a session that shifts symptom mid-episode (e.g. m1 spacing cleared,
+    then m3 spacing surfaces) no longer collapses EVERY step onto the FIRST symptom
+    — which mis-credited the clearing strategy to the wrong symptom (2026-07-13,
+    failure-patterns #44)."""
+    import symptom as _symptom
+    sid = e.get("symptom_id")
+    sigj = e.get("signature_json")
+    if not sid:
+        sig = _symptom.canonical_signature(e.get("check_type"),
+                                           e.get("violation_class"), None)
+        return _symptom.symptom_id(sig), json.dumps(sig, sort_keys=True)
+    try:
+        stored = json.loads(sigj) if sigj else None
+    except ValueError:
+        stored = None
+    if stored and stored.get("class") != _symptom.normalize_class(
+            stored.get("class")):
+        sig = _symptom.canonical_signature(
+            stored.get("check"), stored.get("class"), stored.get("predicates"))
+        return _symptom.symptom_id(sig), json.dumps(sig, sort_keys=True)
+    return sid, sigj
+
+
 def _build_trajectory(events: list[dict]) -> dict:
-    """Collapse one (session, check_type) episode's fix_events (sorted by iter)
-    into a trajectory row. All events MUST share one check_type — a '--check both'
-    run reuses one fix_session_id across DRC and LVS, so callers key by
-    (session, check_type) and we assert the invariant here (bug #2/#8)."""
+    """Collapse one (session, check_type, symptom_id) episode's fix_events (sorted
+    by iter) into a trajectory row. All events MUST share one check_type AND one
+    resolved symptom — a '--check both' run reuses one fix_session_id across DRC and
+    LVS, and one session can shift symptom mid-episode, so callers key by
+    (session, check_type, symptom) and we assert both invariants here (bug #2/#8,
+    failure-patterns #44)."""
     import fix_log_manager
     events = fix_log_manager.dedup_events_by_action(events)
     events = sorted(events, key=lambda e: (e.get("iter") or 0))
     checks = {e.get("check_type") for e in events}
     assert len(checks) == 1, f"mixed check_type in one trajectory: {checks}"
+    assert len({_resolve_event_symptom(e)[0] for e in events}) == 1, \
+        "mixed symptom in one trajectory"
     first = events[0]
     path = [{"iter": e.get("iter"), "strategy": e.get("strategy"),
              "before": e.get("before_count"), "after": e.get("after_count"),
              "verdict": e.get("verdict")} for e in events]
     win = next((e for e in events if e.get("verdict") == "cleared"), None)
+    # A partial improvement (verdict 'win' = a REAL violation reduction that never
+    # reached a full 'cleared', half credit) is an IMPROVED episode, not abandoned.
+    # Recording it 'abandoned' with winning_strategy=NULL erased the improving
+    # strategy from trajectory-level evidence — 29 real wins were lost this way
+    # (2026-07-13, failure-patterns #44). Prefer a full clear; else the first win.
+    improved = None if win else next(
+        (e for e in events if e.get("verdict") == "win"), None)
+    best = win or improved
     failed = sorted({e.get("strategy") for e in events
                      if e.get("verdict") in ("no_change", "regression")
                      and e.get("strategy")})
-    # Symptom of the episode: first event's stored symptom, else coarse backfill
-    # from (check_type, violation_class) so legacy/backfilled events still index by
-    # symptom (symptom-indexed memory, spec 2026-06-09).
+    # Symptom of the episode: all events share one resolved symptom (grouping
+    # invariant asserted above), so the first event's resolved symptom is the
+    # episode's — see _resolve_event_symptom (symptom-indexed memory, spec
+    # 2026-06-09; per-symptom split failure-patterns #44).
     import symptom as _symptom
-    sid = first.get("symptom_id")
-    sigj = first.get("signature_json")
-    if not sid:
-        sig = _symptom.canonical_signature(first.get("check_type"),
-                                           first.get("violation_class"), None)
-        sid, sigj = _symptom.symptom_id(sig), json.dumps(sig, sort_keys=True)
-    else:
-        # Heal legacy unnormalized classes on rebuild: events written before
-        # normalize_class stored raw KLayout category text ("'m3.2'", rule prose)
-        # in the signature, fragmenting the symptom index. Re-keying HERE (the
-        # full Tier-2 rebuild) merges that history into the normalized buckets
-        # without touching the immutable Tier-1 fix_events rows (2026-07-04).
-        try:
-            stored = json.loads(sigj) if sigj else None
-        except ValueError:
-            stored = None
-        if stored and stored.get("class") != _symptom.normalize_class(
-                stored.get("class")):
-            sig = _symptom.canonical_signature(
-                stored.get("check"), stored.get("class"),
-                stored.get("predicates"))
-            sid, sigj = _symptom.symptom_id(sig), json.dumps(sig, sort_keys=True)
+    sid, sigj = _resolve_event_symptom(first)
     # An episode where NO real strategy ran (every step 'none' — a diagnose STOP,
     # a recheck crash, a give-up-before-trying) is NOT fix experience: recording
     # it as 'abandoned' polluted the negative-evidence corpus (2026-07-04 audit:
@@ -208,10 +228,10 @@ def _build_trajectory(events: list[dict]) -> dict:
         "violation_class": _symptom.normalize_class(first.get("violation_class")),
         "path_json": json.dumps(path),
         "n_iters": len(events),
-        "outcome": ("resolved" if win
+        "outcome": ("resolved" if win else "improved" if improved
                     else "abandoned" if attempted else "not_attempted"),
-        "winning_strategy": win.get("strategy") if win else None,
-        "winning_config_json": win.get("cumulative_config_json") if win else None,
+        "winning_strategy": best.get("strategy") if best else None,
+        "winning_config_json": best.get("cumulative_config_json") if best else None,
         "failed_strategies_json": json.dumps(failed),
         "initial_count": first.get("before_count"),
         "final_count": events[-1].get("after_count"),
@@ -247,12 +267,16 @@ def _fetch_all_fix_events(conn) -> list[dict]:
 
 def _rebuild_fix_trajectories(conn) -> list[dict]:
     """Re-derive Tier-2 from Tier-1 (full rebuild — idempotent). Groups by
-    (fix_session_id, check_type) so a '--check both' session yields one trajectory
-    per check (bug #2/#8), and rebuilds from hot+archived events (bug #12)."""
+    (fix_session_id, check_type, symptom_id) so a '--check both' session yields one
+    trajectory per check (bug #2/#8) AND a session that shifts symptom mid-episode
+    yields one trajectory per symptom instead of collapsing onto the first
+    (failure-patterns #44). Rebuilds from hot+archived events (bug #12)."""
     events = _fetch_all_fix_events(conn)
     by_session: dict[tuple, list[dict]] = {}
     for e in events:
-        by_session.setdefault((e["fix_session_id"], e.get("check_type")), []).append(e)
+        key = (e["fix_session_id"], e.get("check_type"),
+               _resolve_event_symptom(e)[0])
+        by_session.setdefault(key, []).append(e)
     trajectories = [_build_trajectory(evs) for evs in by_session.values()]
     conn.execute("DELETE FROM fix_trajectories")
     for t in trajectories:

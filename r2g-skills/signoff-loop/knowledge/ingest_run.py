@@ -33,6 +33,7 @@ from typing import Any
 
 import knowledge_db
 import symptom
+import tool_versions
 
 
 _CONFIG_LINE_RE = re.compile(r"(?:export\s+)?(\w+)\s*=\s*(.*)")
@@ -342,6 +343,11 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
     """
     rows = _read_fix_log(project)
     n = 0
+    # Provenance fingerprint of the toolchain that produced these fixes — stamped
+    # once per ingest (cached, fail-safe). Prefer a per-row fingerprint the flow
+    # wrote; else the ambient toolchain. Populates the long-empty tool_versions_json
+    # column so a promotion is traceable to its tools (failure-patterns #45).
+    ambient_versions = tool_versions.collect_json() if rows else None
     for r in rows:
         sid = r.get("fix_session_id")
         if not sid:
@@ -350,17 +356,23 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
         after = _to_float(r.get("after"))
         sig, symptom_id_ = symptom.from_fix_log_row(r)
         _upsert_symptom(conn, sig, symptom_id_)
+        row_versions = r.get("tool_versions")
+        tv_json = (json.dumps(row_versions, sort_keys=True)
+                   if isinstance(row_versions, dict) else ambient_versions)
         conn.execute(
             "INSERT INTO fix_events "
             "(fix_session_id, project_path, design_name, design_family, platform, "
             " check_type, violation_class, iter, strategy, from_stage, "
             " before_count, after_count, before_categories_json, after_categories_json, "
             " before_status, after_status, verdict, cumulative_config_json, "
-            " config_delta_json, env_flags_json, symptom_id, signature_json, ts, provenance) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            " config_delta_json, env_flags_json, tool_versions_json, "
+            " symptom_id, signature_json, ts, provenance) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(fix_session_id, iter, strategy) DO UPDATE SET "
             "  config_delta_json=excluded.config_delta_json, "
             "  env_flags_json=excluded.env_flags_json, "
+            "  tool_versions_json=COALESCE(fix_events.tool_versions_json, "
+            "                              excluded.tool_versions_json), "
             "  symptom_id=excluded.symptom_id, "
             "  signature_json=excluded.signature_json",
             (sid, str(project.resolve()), design_name, design_family, platform,
@@ -370,7 +382,7 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
              r.get("before_status"), r.get("after_status"),
              _normalize_verdict(r.get("verdict"), before, after),
              r.get("cumulative_config"), r.get("config_delta"), r.get("env_flags"),
-             symptom_id_, json.dumps(sig, sort_keys=True),
+             tv_json, symptom_id_, json.dumps(sig, sort_keys=True),
              r.get("ts"), "live"))
         n += 1
     return n

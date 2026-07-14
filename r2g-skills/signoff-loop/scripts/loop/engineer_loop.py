@@ -1598,6 +1598,16 @@ def _drc_symptom_cleared(conn, run_id: str | None, drc_status: str | None,
         return False       # unreadable residual snapshot: never claim a clear
 
 
+def _tool_versions_map() -> dict:
+    """Toolchain fingerprint for A/B trial provenance (failure-patterns #45).
+    Fail-safe: any import/collection error yields {} rather than aborting a drain."""
+    try:
+        import tool_versions
+        return tool_versions.collect()
+    except Exception:
+        return {}
+
+
 def _arm_metric(conn, project_path: str, *, timing: bool = False,
                 synth: bool = False,
                 target: tuple[str, str | None] | None = None) -> dict | None:
@@ -1661,7 +1671,10 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
         success = knowledge_db.is_success(r)
     return {"is_success": bool(success), "judged_on": judged_on,
             "wall_s": r["total_elapsed_s"], "fix_iters": r["fix_iters_to_clean"],
-            "outcome_score": r["outcome_score"]}
+            "outcome_score": r["outcome_score"],
+            # Back-reference to the ingested run that produced this arm sample, so
+            # an A/B trial is traceable to its two arms' runs (failure-patterns #45).
+            "run_id": r["run_id"]}
 
 
 def judge_finished_trials(led: Ledger, conn) -> None:
@@ -1727,15 +1740,30 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                     led.set_state(e["design"], e["state"], judged=True)
             continue
         verdict, reason = ab_runner.judge_repeated_ex(samples["A"], samples["B"])
+        # Back-reference each arm to the ingested run(s) it produced so a trial is
+        # verifiable — before this, EVERY ab_trial stored NULL run_ids and no
+        # promotion could be traced to its evidence (failure-patterns #45). The
+        # single columns take the first judgeable repeat; the full per-repeat run_id
+        # lists ride metrics_json. provenance_complete gates honest replay.
+        def _run_ids(samps):
+            return [s.get("run_id") for s in samps if s and s.get("run_id")]
+        a_run_ids, b_run_ids = _run_ids(samples["A"]), _run_ids(samples["B"])
+        arm_a_run_id = a_run_ids[0] if a_run_ids else None
+        arm_b_run_id = b_run_ids[0] if b_run_ids else None
+        provenance_complete = bool(
+            arm_a_run_id and arm_b_run_id and arm_a_run_id != arm_b_run_id)
         # judge_version 2 = symptom-target metric for DRC/LVS signoff arms + reason
         # codes. _ab_coverage_gap counts ONLY v2 inconclusives toward the re-plan
         # cap: pre-v2 verdicts were blind to the target symptom and must not
         # permanently bar a candidate the v2 judge could differentiate.
         ab_runner.record_trial(
             conn, key=pair["B"][0]["ab_key"], verdict=verdict,
-            arm_a_run_id=None, arm_b_run_id=None,
+            arm_a_run_id=arm_a_run_id, arm_b_run_id=arm_b_run_id,
             metrics={"A_samples": samples["A"], "B_samples": samples["B"],
                      "repeats": {"A": len(samples["A"]), "B": len(samples["B"])},
+                     "arm_a_run_ids": a_run_ids, "arm_b_run_ids": b_run_ids,
+                     "provenance_complete": provenance_complete,
+                     "tool_versions": _tool_versions_map(),
                      "judge_version": 2, "reason": reason,
                      "target": ({"check": target[0], "class": target[1]}
                                 if target else None)},

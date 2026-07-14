@@ -134,6 +134,34 @@ def test_ingest_reads_fix_log_into_fix_events(tmp_path, tmp_knowledge_dir):
     conn.close()
 
 
+def test_ingest_stamps_tool_versions(tmp_path, tmp_knowledge_dir, monkeypatch):
+    """fix_events.tool_versions_json is populated at ingest (failure-patterns #45)
+    — the column shipped with no writer, so 100% of historical events were null."""
+    import tool_versions
+    monkeypatch.setenv("R2G_TOOL_VERSIONS_JSON",
+                       json.dumps({"openroad": "v2.0-test", "yosys": "0.99"}))
+    tool_versions.collect.cache_clear()
+    try:
+        fix_log = [
+            {"check": "drc", "iter": 1, "strategy": "antenna_diode_repair",
+             "before": "5", "after": "0", "verdict": "cleared",
+             "from_stage": "route", "fix_session_id": "sV",
+             "violation_class": "M2_ANTENNA", "ts": "2026-07-13T00:00:00Z"},
+        ]
+        proj = _mk_project(tmp_path, fix_log=fix_log)
+        conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
+        knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+        ingest_run.ingest(proj, conn,
+                          families_path=tmp_knowledge_dir / "families.json")
+        tv = conn.execute(
+            "SELECT tool_versions_json FROM fix_events").fetchone()[0]
+        assert tv is not None
+        assert json.loads(tv)["openroad"] == "v2.0-test"
+        conn.close()
+    finally:
+        tool_versions.collect.cache_clear()
+
+
 def test_ingest_writes_run_violations_snapshot(tmp_path, tmp_knowledge_dir):
     proj = _mk_project(tmp_path, drc_status="clean")
     conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")

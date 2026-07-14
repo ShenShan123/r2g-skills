@@ -138,10 +138,22 @@ def ingest(project: Path) -> bool:
     return True
 
 
-def check_honesty(db_path: str) -> int:
-    """count(acquire synth-fail runs) must equal count carrying a frontend event."""
+def check_honesty(db_path: str, require_nonempty: bool = False) -> int:
+    """count(acquire synth-fail runs) must equal count carrying a frontend event.
+
+    An EMPTY projection (no synth_only runs at all) is NOT convergence — the old
+    `fails == with_frontend` test passed trivially as 0 == 0 and read as "healthy",
+    hiding a missing source / unpopulated shared projection (2026-07-13,
+    failure-patterns #46). The check now also reports COVERAGE (total synth_only
+    runs) and treats the empty set as UNPROVEN, not a pass. `--require-nonempty`
+    makes the empty set a hard failure for callers that expect a live corpus;
+    the default stays exit 0 (backward compatible) but the message no longer
+    claims convergence.
+    """
     import sqlite3  # noqa: PLC0415
     conn = sqlite3.connect(db_path)
+    total = conn.execute(
+        "SELECT COUNT(*) FROM runs r WHERE r.flow_scope='synth_only'").fetchone()[0]
     fails = conn.execute(
         "SELECT COUNT(*) FROM runs r WHERE r.flow_scope='synth_only' "
         "AND r.orfs_status='fail'").fetchone()[0]
@@ -150,12 +162,19 @@ def check_honesty(db_path: str) -> int:
         "JOIN failure_events fe ON fe.run_id = r.run_id "
         "WHERE r.flow_scope='synth_only' AND r.orfs_status='fail' "
         "AND fe.signature LIKE 'synth-frontend-%'").fetchone()[0]
-    print(f"synth_only fail runs: {fails}; with frontend failure_event: {with_frontend}")
+    conn.close()
+    print(f"synth_only runs: {total}; synth_only fail runs: {fails}; "
+          f"with frontend failure_event: {with_frontend}")
     if fails != with_frontend:
         print("HONESTY VIOLATION: synth-fail acquire runs without a frontend "
               "failure_event — run project_frontend_diagnosis after classification.",
               file=sys.stderr)
         return 1
+    if total == 0:
+        print("COVERAGE EMPTY: no synth_only runs in this projection — dual-memory "
+              "convergence is UNPROVEN (an empty set is NOT a pass). Populate the "
+              "shared projection before trusting the honesty gate.", file=sys.stderr)
+        return 2 if require_nonempty else 0
     return 0
 
 
@@ -166,10 +185,13 @@ def main() -> int:
     ap.add_argument("--skip-ingest", action="store_true")
     ap.add_argument("--check", metavar="DB",
                     help="Run the fast honesty check against a knowledge db and exit")
+    ap.add_argument("--require-nonempty", action="store_true",
+                    help="With --check: an empty synth_only projection is a hard "
+                         "failure (exit 2), not a vacuous pass")
     args = ap.parse_args()
 
     if args.check:
-        return check_honesty(args.check)
+        return check_honesty(args.check, require_nonempty=args.require_nonempty)
 
     index_csv = args.index_csv or (default_out_root() / "index.csv")
     projects_root = args.projects_root or (default_workspace_root() / "synth_projects")

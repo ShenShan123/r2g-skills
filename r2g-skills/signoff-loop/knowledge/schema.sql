@@ -114,10 +114,15 @@ CREATE INDEX IF NOT EXISTS idx_fix_events_fam
     ON fix_events(design_family, platform, check_type, violation_class);
 
 -- Tier-2: per-episode trajectory (re-derivable from fix_events; materialized).
--- PK is composite (fix_session_id, check_type): a '--check both' fix run shares
--- ONE fix_session_id across DRC and LVS events, and each check must yield its own
--- trajectory so the LVS recipe is not mis-filed under the DRC violation_class
--- (bug #2/#8). See references/signoff-fixing.md ("Correctness invariants").
+-- PK is composite (fix_session_id, check_type, symptom_id): a '--check both' fix
+-- run shares ONE fix_session_id across DRC and LVS events (each check must yield
+-- its own trajectory so the LVS recipe is not mis-filed under the DRC
+-- violation_class — bug #2/#8), and one session can shift symptom mid-episode, so
+-- each symptom must yield its own trajectory too, or the clearing strategy is
+-- credited to the FIRST symptom instead of the one it cleared (failure-patterns
+-- #44). See references/signoff-fixing.md ("Correctness invariants"). This table is
+-- a pure re-derivable projection, so knowledge_db._migrate_drop_stale_fix_trajectories
+-- safely drops a legacy-PK copy for recreation here.
 CREATE TABLE IF NOT EXISTS fix_trajectories (
     fix_session_id          TEXT NOT NULL,
     project_path            TEXT,
@@ -128,16 +133,16 @@ CREATE TABLE IF NOT EXISTS fix_trajectories (
     violation_class         TEXT,
     path_json               TEXT,                    -- ordered [{iter,strategy,before,after,verdict}]
     n_iters                 INTEGER,
-    outcome                 TEXT,                    -- resolved | abandoned
+    outcome                 TEXT,                    -- resolved | improved | abandoned | not_attempted
     winning_strategy        TEXT,
     winning_config_json     TEXT,
     failed_strategies_json  TEXT,
     initial_count           REAL,
     final_count             REAL,
     total_elapsed_s         REAL,
-    symptom_id              TEXT,
+    symptom_id              TEXT NOT NULL DEFAULT '',
     signature_json          TEXT,
-    PRIMARY KEY (fix_session_id, check_type)
+    PRIMARY KEY (fix_session_id, check_type, symptom_id)
 );
 CREATE INDEX IF NOT EXISTS idx_fix_traj_fam
     ON fix_trajectories(design_family, platform, check_type, violation_class);

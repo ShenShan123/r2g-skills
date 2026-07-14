@@ -20,6 +20,21 @@ skipped as library-pre-verified).
 
 ---
 
+## 2026-07-13 — MemoryStore & A/B evidence-chain audit: contract-drift + provenance (#43–#46)
+
+Acted on a 10-step read-only MemoryStore/A-B audit (report `docs/superpowers/plans/07-13-report.html`;
+fix map `docs/superpowers/plans/2026-07-13-memorystore-audit.md`). 4 real code bugs fixed TDD: **#43**
+`analyze_execution` spoke a stale dialect (string-only stage status ⇒ every int-exit-code run `partial`;
+read the wrong `orfs` recipe key so 91 `orfs_stage` recipes were unreachable) — now delegates to the
+canonical normalizer + canonical key, and `analyze()` surfaces `learned_stage_ranking`; **#44** trajectory
+rollup lost partial wins (new `improved` outcome, winner preserved) and cross-symptom credit (PK grows
+`symptom_id`, per-symptom split); **#45** `ab_trials` had all-NULL arm run-ids and `tool_versions_json` had no
+writer — now stamped with distinct run-ids + `provenance_complete` + a cached fail-safe tool-version
+fingerprint; **#46** rtl-acquire `--check` read an empty `synth_only` projection as convergence (`0==0`) — now
+reports COVERAGE + `--require-nonempty`. State/operational findings (re-run pre-2026-07-10 A/B, inconclusive
+governance, `journal.sqlite` fixture) noted as follow-ups. signoff-loop **843 passed / 2 skipped**,
+rtl-acquire **61 passed**, honesty **5/5**; store reprojected (gen 6036, `improved:46`, 250 split sessions).
+
 ## 2026-07-13 — Codex debug-findings audit: `build_diagnosis` `kind:none` gap + git-pollution hygiene (#42)
 
 Audited 5 instance-testing findings + 6 architectural learnings from an external reviewer

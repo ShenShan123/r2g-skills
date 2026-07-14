@@ -25,7 +25,8 @@ def _seed(conn):
         check_type="drc", violation_class="M2_ANTENNA", iter=2,
         strategy="antenna_diode_repair", before_count=147, after_count=0,
         verdict="cleared", cumulative_config_json='{"SKIP_ANTENNA_REPAIR": "1"}')
-    # Episode 2 (abandoned): diode_repair tried, never cleared.
+    # Episode 2 (improved): diode_repair cut 9->3 violations (a real partial 'win')
+    # but never fully cleared -> outcome 'improved', winner set (failure-patterns #44).
     _ev(conn, fix_session_id="s2", design_family="ethernet", platform="nangate45",
         check_type="drc", violation_class="M2_ANTENNA", iter=1,
         strategy="antenna_diode_repair", before_count=9, after_count=3,
@@ -56,7 +57,8 @@ def test_learn_emits_trajectories_and_recipes(tmp_knowledge_dir):
     traj = {r[0]: r for r in conn.execute(
         "SELECT fix_session_id, outcome, winning_strategy FROM fix_trajectories")}
     assert traj["s1"][1] == "resolved" and traj["s1"][2] == "antenna_diode_repair"
-    assert traj["s2"][1] == "abandoned" and traj["s2"][2] is None
+    # s2 is a partial win: 'improved' (not 'abandoned'), winner preserved (#44).
+    assert traj["s2"][1] == "improved" and traj["s2"][2] == "antenna_diode_repair"
     conn.close()
 
 

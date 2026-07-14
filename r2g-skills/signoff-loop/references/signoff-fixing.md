@@ -414,7 +414,9 @@ strategies, and no strategy ever edits `PLACE_DENSITY_LB_ADDON`.
 ### Other consumers
 
 - `knowledge/analyze_execution.py::rank_proposals(ids, family=, platform=, stage=, heuristics_path=)`
-  ranks backend-stage proposals by `fix_recipes["orfs"][stage]`.
+  ranks backend-stage proposals by the CANONICAL `fix_recipes["orfs_stage"][stage]` (legacy `orfs`
+  family is a fallback; reading the wrong `orfs` key was failure-patterns #43). `analyze()` surfaces
+  this as `learned_stage_ranking` for the failing stage so the triage queue consumes the recipes.
 - `build_lineage_view.py` adds a read-only **fix_effectiveness** projection (per
   family/platform/check/violation_class strategy resolved/abandoned + clearance_rate) to the
   dashboard.

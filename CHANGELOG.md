@@ -4,6 +4,33 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-13 — MemoryStore & A/B evidence-chain audit: contract-drift + provenance fixes (#43–#46)
+
+Acted on a 10-step read-only MemoryStore/A-B audit (report `docs/superpowers/plans/07-13-report.html`;
+verdicts + fix map in `docs/superpowers/plans/2026-07-13-memorystore-audit.md`). Every claim re-verified
+against the current tree (the report's `r2g-skills/shared/**`, `r2g-rtl2gds/**` paths are stale). 4 real code
+bugs fixed (TDD); the state/operational findings (re-run pre-2026-07-10 A/B, inconclusive governance,
+`journal.sqlite` fixture) are noted as follow-ups. Suites: signoff-loop **843 passed / 2 skipped**,
+rtl-acquire **61 passed**, honesty **5/5**; store reprojected (heuristics gen 6036, `improved:46`, 250
+symptom-split sessions).
+
+### signoff-loop
+- **MemoryStore contract unified (#43)** — `analyze_execution._derive_status` now delegates to the canonical
+  `ingest_run._derive_orfs_status` (int/bool exit codes + `flow_scope`; the string-only copy classified every
+  int-status run `partial`). `rank_proposals` reads the canonical `fix_recipes["orfs_stage"][stage]` (legacy
+  `orfs` fallback) and `analyze()` surfaces `learned_stage_ranking` — the 91 stage recipes finally have a reader.
+- **Trajectory honesty (#44)** — new `improved` outcome for a partial `win` (winner preserved, strictly below
+  `resolved`); `fix_trajectories` PK grows `symptom_id` so a symptom-shifting session splits per symptom
+  (`knowledge_db._migrate_drop_stale_fix_trajectories` drops the legacy-PK projection for recreation).
+- **A/B + fix_event provenance (#45)** — `ab_trials` back-reference both arms' run-ids + stamp
+  `provenance_complete`/`tool_versions`; `record_trial` warns on a decisive verdict without distinct run-ids.
+  New `knowledge/tool_versions.py` (cached, fail-safe) finally writes the long-empty `tool_versions_json`.
+
+### rtl-acquire
+- **Dual-memory honesty (#46)** — `project_frontend_diagnosis --check` no longer reads an empty `synth_only`
+  projection as convergence (`0==0`); reports COVERAGE, prints `COVERAGE EMPTY … UNPROVEN`, and adds
+  `--require-nonempty` (empty ⇒ exit 2).
+
 ## 2026-07-13 — Codex debug-findings audit: `build_diagnosis` `kind:none` gap + git-pollution hygiene (#42)
 
 Audited 5 instance-testing findings + 6 architectural learnings from an external reviewer

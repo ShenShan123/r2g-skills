@@ -18,6 +18,7 @@ import os
 import re
 import sqlite3
 import statistics
+import sys
 
 import recipe_lifecycle
 
@@ -369,6 +370,22 @@ def _journal_verdict(key: dict, verdict: str, tid: int) -> None:
 def record_trial(conn, *, key: dict, verdict: str, arm_a_run_id: str | None,
                  arm_b_run_id: str | None, metrics: dict,
                  match_level: str | None = None) -> int:
+    # Provenance honesty (failure-patterns #45): a decisive trial with missing or
+    # identical arm run_ids cannot be traced back to two DISTINCT arm runs, so its
+    # promotion evidence is unverifiable. Don't refuse the write (a real
+    # inconclusive/one-armed trial still carries information), but stamp the gap
+    # into metrics so replay/audit can exclude it, and warn loudly on a DECISIVE
+    # verdict lacking distinct run_ids — that is the case that must not silently
+    # promote a recipe on unverifiable evidence.
+    if "provenance_complete" not in metrics:
+        metrics = dict(metrics)
+        metrics["provenance_complete"] = bool(
+            arm_a_run_id and arm_b_run_id and arm_a_run_id != arm_b_run_id)
+    if verdict in ("win", "loss") and not metrics["provenance_complete"]:
+        print(f"WARNING: decisive A/B trial for {key.get('strategy')} "
+              f"({key.get('symptom_id')}) lacks distinct arm run_ids "
+              f"(a={arm_a_run_id}, b={arm_b_run_id}); evidence is unverifiable",
+              file=sys.stderr)
     cur = conn.execute(
         "INSERT INTO ab_trials (symptom_id, design_class, platform, strategy, "
         "arm_a_run_id, arm_b_run_id, verdict, metrics_json, match_level, ts) "

@@ -87,6 +87,26 @@ class FlowScopeIngestTests(unittest.TestCase):
         self.assertEqual(row["orfs_status"], "pass",
                          "synth-only pass must ingest as pass within its scope")
 
+    def test_check_empty_projection_is_unproven_not_pass(self) -> None:
+        """An empty synth_only projection must NOT read as convergence
+        (failure-patterns #46): default prints UNPROVEN + exits 0; strict mode
+        (--require-nonempty) makes the empty set a hard failure (exit 2)."""
+        sys.path.insert(0, str(knowledge_dir()))
+        import knowledge_db  # noqa: PLC0415
+        conn = knowledge_db.connect(self.db)
+        knowledge_db.ensure_schema(conn)
+        conn.close()
+        default = subprocess.run(
+            [sys.executable, str(PROJECT_DIAG), "--check", str(self.db)],
+            capture_output=True, text=True, check=False)
+        self.assertEqual(default.returncode, 0, default.stderr)
+        self.assertIn("COVERAGE EMPTY", default.stderr)
+        strict = subprocess.run(
+            [sys.executable, str(PROJECT_DIAG), "--check", str(self.db),
+             "--require-nonempty"],
+            capture_output=True, text=True, check=False)
+        self.assertEqual(strict.returncode, 2, strict.stdout + strict.stderr)
+
     def test_synth_only_fail_carries_failure_event(self) -> None:
         project = make_project(self.root, "baddesign", synth_pass=False)
         ingest(project, self.db)

@@ -154,3 +154,58 @@ def test_includes_similar_failures_in_output(tmp_path):
     )
     assert len(result["similar_failures"]) >= 1
     assert result["similar_failures"][0]["id"] == "PDN Grid Error"
+
+
+# ── Integer/bool stage-status contract (failure-patterns #43) ────────────────
+# The production writer (run_orfs.sh) records the shell EXIT CODE as an int
+# ("status": 0 = pass, nonzero = fail). analyze_execution must classify these
+# the SAME as canonical ingest — before the fix its string-only compare made
+# 0 != "pass", so every run collapsed to 'partial' with no fail_stage.
+
+def _project_with_stage_log(tmp_path, stages, name="int_run", scope=None):
+    project = tmp_path / name
+    (project / "constraints").mkdir(parents=True)
+    (project / "reports").mkdir(parents=True)
+    (project / "backend").mkdir(parents=True)
+    cfg = ("export DESIGN_NAME = test_design\n"
+           "export PLATFORM = nangate45\n"
+           "export CORE_UTILIZATION = 45\n")
+    if scope:
+        cfg += f"export R2G_FLOW_SCOPE = {scope}\n"
+    (project / "constraints" / "config.mk").write_text(cfg)
+    (project / "reports" / "diagnosis.json").write_text(json.dumps({"issues": []}))
+    (project / "reports" / "timing_check.json").write_text(json.dumps({"tier": "clean"}))
+    (project / "backend" / "stage_log.jsonl").write_text(
+        "\n".join(json.dumps(s) for s in stages) + "\n")
+    return project
+
+
+def test_integer_status_fail_not_misclassified_partial(tmp_path):
+    """A stage with integer exit code 2 (fail) must read 'fail', not 'partial'."""
+    project = _project_with_stage_log(tmp_path, [
+        {"stage": "synth", "status": 0},
+        {"stage": "floorplan", "status": 0},
+        {"stage": "place", "status": 2},   # nonzero exit == fail
+    ])
+    result = analyze_execution.analyze(project)
+    assert result["status"] == "fail"
+    assert result["fail_stage"] == "place"
+
+
+def test_all_zero_integer_status_is_pass(tmp_path):
+    """Six stages all at integer exit code 0 == a clean pass (not 'partial')."""
+    project = _project_with_stage_log(tmp_path, [
+        {"stage": s, "status": 0}
+        for s in ("synth", "floorplan", "place", "cts", "route", "finish")
+    ])
+    result = analyze_execution.analyze(project)
+    assert result["status"] == "pass"
+    assert result["fail_stage"] is None
+
+
+def test_synth_only_scope_pass_not_partial(tmp_path):
+    """A synth-only rtl-acquire run that passes synth is 'pass' within its scope."""
+    project = _project_with_stage_log(
+        tmp_path, [{"stage": "synth", "status": 0}], scope="synth_only")
+    result = analyze_execution.analyze(project)
+    assert result["status"] == "pass"

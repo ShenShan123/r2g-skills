@@ -255,6 +255,56 @@ def test_trajectories_carry_symptom(tmp_knowledge_dir):
     conn.close()
 
 
+def test_partial_win_recorded_improved_not_abandoned(tmp_knowledge_dir):
+    """A partial improvement (verdict 'win', no full 'cleared') is an 'improved'
+    episode with winning_strategy set — not 'abandoned' with a NULL winner
+    (failure-patterns #44). Before the fix, 29 real wins were lost this way."""
+    db = tmp_knowledge_dir / "knowledge.sqlite"
+    conn = knowledge_db.connect(db)
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    for it, strat, verdict, bc, ac in ((1, "route_relief", "win", 100, 40),
+                                        (2, "density_relief", "no_change", 40, 40)):
+        conn.execute(
+            "INSERT INTO fix_events (fix_session_id, check_type, violation_class, "
+            " iter, strategy, verdict, before_count, after_count, ts) "
+            "VALUES ('ep1','drc','min_spacing',?,?,?,?,?,?)",
+            (it, strat, verdict, bc, ac, f"2026-07-13T00:0{it}:00Z"))
+    conn.commit()
+    learn_heuristics._rebuild_fix_trajectories(conn)
+    row = conn.execute(
+        "SELECT outcome, winning_strategy FROM fix_trajectories").fetchone()
+    assert row[0] == "improved"
+    assert row[1] == "route_relief"
+    conn.close()
+
+
+def test_multi_symptom_session_splits_per_symptom(tmp_knowledge_dir):
+    """One session that shifts symptom mid-episode yields one trajectory PER
+    symptom, so the clearing strategy is credited to the symptom it CLEARED, not
+    the first one attempted (failure-patterns #44)."""
+    db = tmp_knowledge_dir / "knowledge.sqlite"
+    conn = knowledge_db.connect(db)
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    # Same session + check_type, two distinct violation classes -> two symptoms.
+    # iter1: min_spacing never clears; iter2: short clears.
+    for it, vclass, strat, verdict in ((1, "min_spacing", "s_first", "no_change"),
+                                       (2, "short", "s_win", "cleared")):
+        conn.execute(
+            "INSERT INTO fix_events (fix_session_id, check_type, violation_class, "
+            " iter, strategy, verdict, ts) VALUES ('ep2','drc',?,?,?,?,?)",
+            (vclass, it, strat, verdict, f"2026-07-13T00:0{it}:00Z"))
+    conn.commit()
+    learn_heuristics._rebuild_fix_trajectories(conn)
+    trajs = conn.execute(
+        "SELECT outcome, winning_strategy FROM fix_trajectories").fetchall()
+    assert len(trajs) == 2
+    resolved = [t for t in trajs if t[0] == "resolved"]
+    abandoned = [t for t in trajs if t[0] == "abandoned"]
+    assert len(resolved) == 1 and resolved[0][1] == "s_win"
+    assert len(abandoned) == 1 and abandoned[0][1] is None
+    conn.close()
+
+
 def test_learn_emits_symptom_projection_pooled_across_families(tmp_knowledge_dir):
     db = tmp_knowledge_dir / "knowledge.sqlite"
     conn = knowledge_db.connect(db)

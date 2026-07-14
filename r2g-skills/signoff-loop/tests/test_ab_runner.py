@@ -83,6 +83,38 @@ def test_judge_win_promotes(tmp_path):
     assert row[0] == "win"
 
 
+def test_record_trial_stamps_provenance_complete(tmp_path):
+    """A trial with distinct arm run_ids is provenance_complete=True; a trial with
+    missing/identical run_ids is False, so audit/replay can exclude unverifiable
+    evidence (failure-patterns #45)."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
+    tid = ab_runner.record_trial(conn, key=KEY, verdict="win",
+                                 arm_a_run_id="ra", arm_b_run_id="rb",
+                                 metrics={"judge_version": 2})
+    m = json.loads(conn.execute("SELECT metrics_json FROM ab_trials WHERE trial_id=?",
+                                (tid,)).fetchone()[0])
+    assert m["provenance_complete"] is True
+
+    tid2 = ab_runner.record_trial(conn, key=KEY, verdict="inconclusive",
+                                  arm_a_run_id=None, arm_b_run_id=None,
+                                  metrics={"judge_version": 2})
+    m2 = json.loads(conn.execute("SELECT metrics_json FROM ab_trials WHERE trial_id=?",
+                                 (tid2,)).fetchone()[0])
+    assert m2["provenance_complete"] is False
+
+
+def test_record_trial_warns_on_decisive_without_run_ids(tmp_path, capsys):
+    """A DECISIVE verdict lacking distinct run_ids warns — that is the case that
+    would otherwise promote a recipe on unverifiable evidence (failure-patterns #45)."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
+    ab_runner.record_trial(conn, key=KEY, verdict="win",
+                           arm_a_run_id=None, arm_b_run_id=None,
+                           metrics={"judge_version": 2})
+    assert "unverifiable" in capsys.readouterr().err
+
+
 def test_judge_both_fail_is_inconclusive_never_win(tmp_path):
     arm_a = {"is_success": False, "wall_s": 900.0, "fix_iters": None}
     arm_b = {"is_success": False, "wall_s": 100.0, "fix_iters": None}

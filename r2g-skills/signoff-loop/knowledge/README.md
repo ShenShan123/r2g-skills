@@ -92,7 +92,7 @@ reports/fix_log.jsonl ─ ingest_run.py ─► fix_events (Tier-1, append-only r
 | Table | Tier | Grain | Notes |
 |---|---|---|---|
 | `fix_events` | 1 | one row per fix iteration | append-only system of record; keyed `(fix_session_id, iter, strategy)`; carries before/after counts + category vectors, verdict, config delta + cumulative snapshot, env/tool versions, `provenance` (`live`/`backfill:<source>`) |
-| `fix_trajectories` | 2 | one row per episode | `outcome` ∈ `resolved`/`abandoned`, `winning_strategy`, `failed_strategies_json`, ordered `path_json`. **Materialized** (idempotent rebuild) — **never archived**, so learning survives raw archival |
+| `fix_trajectories` | 2 | one row per (session, check, **symptom**) episode | `outcome` ∈ `resolved`/`improved`/`abandoned`/`not_attempted` (`improved` = a partial `win`, no full clear — winner preserved, kept strictly below `resolved`), `winning_strategy`, `failed_strategies_json`, ordered `path_json`. PK `(fix_session_id, check_type, symptom_id)` so a symptom-shifting session splits per symptom (failure-patterns #44). **Materialized** (idempotent rebuild; a legacy-PK copy is dropped for recreation) — **never archived**, so learning survives raw archival |
 | `run_violations` | — | one row per run (incl. clean) | the full violation landscape: drc/lvs status + category/mismatch vectors, timing tier, WNS |
 | `fix_events_archive` | 1 (cold) | same columns as `fix_events` | raw rows evicted past a size threshold by `fix_log_manager.archive_old_raw`/`manage`; written to the sidecar `fix_events_archive.sqlite` |
 
@@ -479,7 +479,7 @@ never loses a conclusion — conclusions live only in the knowledge DB.
 | Table | Key columns | Purpose |
 |---|---|---|
 | `recipe_status` | `symptom_id`, `design_class`, `platform`, `strategy` | Lifecycle state: `shadow` → `candidate` → `promoted` (or `demoted`) |
-| `ab_trials` | `trial_id`, `recipe_key`, `arm_a_run_id`, `arm_b_run_id` | A/B verdict: `win` / `loss` / `inconclusive` with metrics |
+| `ab_trials` | `trial_id`, `recipe_key`, `arm_a_run_id`, `arm_b_run_id` | A/B verdict: `win` / `loss` / `inconclusive` with metrics. `arm_a_run_id`/`arm_b_run_id` back-reference the two arms' ingested runs (populated by `engineer_loop` from each arm's `project_path`); `metrics_json` carries `provenance_complete` (both distinct) + `tool_versions` + per-repeat run-id lists so a promotion is traceable (failure-patterns #45). A decisive verdict without distinct run-ids WARNs — evidence unverifiable |
 | `escalations` | `escalation_id`, `design`, `run_id`, `reason`, `status` | Open items for the agent tier; `reason` ∈ `{unknown_symptom, catalog_exhausted, unseen_crash, repeated_regression}` |
 | `meta` | `key`, `value` | Heuristics generation counter and loop bookkeeping |
 
