@@ -144,10 +144,12 @@ blockers list says why.
 
 Shared tensor schema: `x[N,10]` (node_type, graph_id, 8 per-type feature slots), `y[N,6]`
 (node_type, congestion, IR drop, timing, wirelength, **RC ground cap**; NaN where a label doesn't
-apply). Folded entities carry their features/labels on `edge_attr[E,8]` / `edge_y[E,5]`,
+apply). Folded entities carry their features/labels on `edge_attr[E,8]` / `edge_y[E,6]`,
 interleaved `[fwd0,rev0,fwd1,rev1,...]`. RC **coupling-cap + resistance** labels ride a *separate
 parasitic edge set* (`rc_edge_index` / `rc_edge_type` / `rc_edge_y[E,3]`), distinct from the
-physical-topology edges (present-but-empty where RC doesn't apply, so the schema is uniform). Full
+physical-topology edges (present-but-empty where RC doesn't apply, so the schema is uniform). Every
+label tensor has a **RAW twin** (`y_raw` / `edge_y_raw` / `rc_edge_y_raw`) carrying the raw physical
+value (EDA-Schema convention) beside the normalized target, so a trainer picks either. Full
 schema + per-variant node/edge counts: `references/graph-dataset.md`.
 
 ## The tech-lib / LEF / DEF parser (`scripts/extract/techlib/`)

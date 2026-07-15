@@ -30,6 +30,12 @@ and `congestion` are keyed on the full instance set while `irdrop` excludes
 fillers/tapcells/endcaps (PDNSim instance filtering) — different label granularities
 by design.
 
+Each table carries BOTH the normalized `label` and its **raw metric** (`cell_congestion`,
+`WireLength_um`, `Cell_Slack_ns`, `IR_Drop_mV`, `ground_cap_fF`, `coupling_cap_fF`, `equiv_res_ohm`).
+The graph stage surfaces both into the `.pt`: `label` → `data.y`/`edge_y`/`rc_edge_y`, and the raw
+metric → the parallel `data.y_raw`/`edge_y_raw`/`rc_edge_y_raw` twins (EDA-Schema convention). See
+`graph-dataset.md`.
+
 ## Inputs & resolution
 
 - **Design geometry:** the collected `backend/RUN_*/{final,results}/6_final.odb`

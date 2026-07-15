@@ -86,11 +86,23 @@ Shared tensor schema (all variants):
   log1p um), `y5` RC ground cap (net; log1p fF — on the **net node** in b/c,
   **broadcast to the net's pin nodes** in d/e, dropped in f). NaN where a label
   doesn't apply or didn't join.
+- `y_raw[N,6]` — a **RAW twin** of `y`, same layout + NaN placement, carrying the
+  raw physical value instead of the normalized target (EDA-Schema / CircuitNet
+  convention): `y1` demand/capacity ratio (`cell_congestion`), `y2` IR drop mV
+  (`IR_Drop_mV`), `y3` path delay ns (`Path_Delay_ns` = `clk_period − worst_slack`,
+  floored 0 — the finite pre-log1p value; the literal `Cell_Slack_ns` is `"INF"` for
+  off-path cells so it stays a CSV-only column), `y4` routed length um
+  (`WireLength_um`), `y5` ground cap fF (`ground_cap_fF`). So the graph carries both
+  conventions; a trainer picks either without a regen (2026-07-14). The raw columns
+  already live in the label CSVs; `y_raw` just surfaces them. Clean identity where the
+  transform is pure: `y[:,3] == log1p(y_raw[:,3])` (timing), `y[:,4] == log1p(y_raw[:,4])`
+  (wirelength), `y[:,5] == log1p(y_raw[:,5])` (ground cap); congestion/IR differ in base.
 - Variants with folded entities carry that entity's features/labels on
   `edge_attr[E,8]` / `edge_y[E,6]`, with `edge_type` distinguishing families.
   Edge columns are INTERLEAVED `[fwd0, rev0, fwd1, rev1, ...]` so the
   pairwise-repeated attr rows align (see audit note 5). (`edge_y[:,5]` is always
-  NaN — ground cap is a node label, never folded onto an edge.)
+  NaN — ground cap is a node label, never folded onto an edge.) `edge_y_raw[E,6]`
+  is the folded-label RAW twin (same interleave + NaN parity as `edge_y`).
 
 ### RC parasitic edges (labels, separate from the physical topology)
 
@@ -98,7 +110,9 @@ Coupling capacitance and equivalent resistance are **edge labels over a parasiti
 graph that is distinct from the physical-topology `edge_index`** — every `Data`
 object carries its own `rc_edge_index[2,E_rc]` + `rc_edge_type[E_rc]` (0=coupling,
 1=resistance) + `rc_edge_y[E_rc,3]` (`[type, coupling_cap_label, equiv_res_label]`,
-off-type column NaN; labels are log1p). Attachment (`graph_lib.attach_rc_labels`,
+off-type column NaN; labels are log1p) + `rc_edge_y_raw[E_rc,3]` (the RAW twin:
+`[type, coupling_cap_fF, equiv_res_ohm]`, same edge set, `rc_edge_y[:,k] ==
+log1p(rc_edge_y_raw[:,k])`). Attachment (`graph_lib.attach_rc_labels`,
 per the endpoint-resolution rule — a net endpoint resolves to a net node if present,
 else the net's driver pin, else dropped):
 

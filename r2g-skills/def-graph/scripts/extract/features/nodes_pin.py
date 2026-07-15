@@ -10,6 +10,7 @@ import re
 
 from case_paths import resolve_case_paths
 from techlib.def_parse import parse_components, parse_nets, parse_units
+from techlib.lef import cell_lef_paths, macro_pin_geometry
 from techlib.liberty import (
     build_net_pin_stats,
     classify_pin_type,
@@ -136,6 +137,10 @@ def main():
     comps = parse_components(def_path)
     nets = parse_nets(def_path)
     lib_db = load_liberty_db(ctx["lib_files"])
+    # Per-cell LEF pin geometry (SC_LEF + macro LEFs) -> real intra-cell pin
+    # positions for pin_x/y_std_um. Empty {} when no cell LEF is resolvable ->
+    # get_pin_abs_pos_um falls back to the instance origin (documented approx).
+    pin_geom = macro_pin_geometry(cell_lef_paths())
     spef_path = ctx["spef_path"] if os.path.isfile(ctx["spef_path"]) else ""
     iopin_names = {p.get("name", "") for p in iopins if p.get("name", "")}
     io_cap_by_net = parse_spef_io_cap_by_net(spef_path, iopin_names)
@@ -159,7 +164,8 @@ def main():
                 continue
             inst_x_um = (comp.get("x") or 0) / dbu
             inst_y_um = (comp.get("y") or 0) / dbu
-            px, py = get_pin_abs_pos_um(inst_x_um, inst_y_um, comp.get("orient", "N"), comp.get("master", ""), pin)
+            px, py = get_pin_abs_pos_um(inst_x_um, inst_y_um, comp.get("orient", "N"),
+                                        comp.get("master", ""), pin, geom=pin_geom)
             pin_points.append((px, py))
             # Load caps only — an output pin's max_capacitance is a drive limit,
             # not a load, and used to dominate sum_pin_cap_fF (2026-07-05 fix).

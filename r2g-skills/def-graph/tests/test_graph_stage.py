@@ -148,13 +148,31 @@ def _build(variant, mini_csvs):
 @pytestmark_tensor
 def test_directed_edges_interleave_alignment():
     attr = torch.tensor([[1.0], [2.0], [3.0]])
-    y = torch.zeros((3, 5))
+    y = torch.zeros((3, gl.Y_WIDTH))
     t = torch.tensor([0, 0, 1])
-    ei, ea, et, ey = gl.build_directed_edges([0, 1, 2], [5, 6, 7], attr, y, t)
+    ei, ea, et, ey, ey_raw = gl.build_directed_edges([0, 1, 2], [5, 6, 7], attr, y, t)
     assert ei.tolist() == [[0, 5, 1, 6, 2, 7], [5, 0, 6, 1, 7, 2]]
     # every fwd/rev pair shares its base attr + type
     assert ea.view(-1).tolist() == [1.0, 1.0, 2.0, 2.0, 3.0, 3.0]
     assert et.tolist() == [0, 0, 0, 0, 1, 1]
+    # no base_y_raw supplied -> edge_y_raw is all-NaN, same shape as edge_y
+    assert ey_raw.shape == ey.shape
+    assert bool(torch.isnan(ey_raw).all())
+
+
+@pytestmark_tensor
+def test_directed_edges_raw_interleaves_like_labels():
+    attr = torch.tensor([[1.0], [2.0]])
+    y = torch.tensor([[0.0, 1.0], [0.0, 2.0]])           # normalized (2 cols for brevity)
+    y = torch.cat([y, torch.zeros((2, gl.Y_WIDTH - 2))], dim=1)
+    y_raw = torch.tensor([[0.0, 10.0], [0.0, 20.0]])
+    y_raw = torch.cat([y_raw, torch.zeros((2, gl.Y_WIDTH - 2))], dim=1)
+    t = torch.tensor([0, 1])
+    _ei, _ea, _et, ey, ey_raw = gl.build_directed_edges(
+        [0, 1], [2, 3], attr, y, t, base_y_raw=y_raw)
+    # both interleave fwd/rev pairwise, in lockstep with edge_index
+    assert ey[:, 1].tolist() == [1.0, 1.0, 2.0, 2.0]
+    assert ey_raw[:, 1].tolist() == [10.0, 10.0, 20.0, 20.0]
 
 
 @pytestmark_tensor
@@ -179,6 +197,26 @@ def test_b_graph_nodes_features_and_label_joins(mini_csvs):
     assert all((b, a) in pairs for a, b in pairs)
     tp = {(int(nt[a]), int(nt[b])) for a, b in pairs}
     assert tp <= {(0, 3), (3, 0), (3, 1), (1, 3), (2, 1), (1, 2)}
+
+
+@pytestmark_tensor
+def test_b_graph_y_raw_carries_raw_physical_values(mini_csvs):
+    """data.y_raw mirrors data.y slot-for-slot but with the RAW physical value
+    (EDA-Schema convention) from the extractor's raw column, not the log/sqrt."""
+    data = _build("b", mini_csvs)
+    assert hasattr(data, "y_raw") and data.y_raw.shape == data.y.shape
+    # g1 (row 0): congestion raw = cell_congestion 0.04; irdrop raw = max(10,20)=20
+    assert float(data.y_raw[0, 1]) == pytest.approx(0.04)
+    assert float(data.y_raw[0, 2]) == pytest.approx(20.0)
+    # g2 (row 1): congestion missing -> raw NaN too
+    assert torch.isnan(data.y_raw[1, 1])
+    # net n1 (row 2): wirelength raw = WireLength_um 12.5 (y label was log1p 2.6)
+    assert float(data.y_raw[2, 4]) == pytest.approx(12.5)
+    # pin g1/A (row 4): timing raw = cell worst slack Cell_Slack_ns 5.0
+    assert data.node_name[4] == "g1/A"
+    assert float(data.y_raw[4, 3]) == pytest.approx(5.0)
+    # y (normalized) unchanged
+    assert float(data.y[2, 4]) == pytest.approx(2.6)
 
 
 @pytestmark_tensor

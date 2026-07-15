@@ -132,6 +132,11 @@ RESOLVED="$(bash "$(dirname "${BASH_SOURCE[0]}")/resolve_platform_paths.sh" "$CO
 LIB_FILES=$(echo "$RESOLVED" | sed -n 's/^LIB_FILES=//p')
 TECH_LEF=$(echo "$RESOLVED" | sed -n 's/^TECH_LEF=//p')
 ADDITIONAL_LIBS=$(echo "$RESOLVED" | sed -n 's/^ADDITIONAL_LIBS=//p')
+# Cell/macro LEFs (per-MACRO SIZE + PIN geometry) — feed techlib.lef.cell_lef_paths
+# so nodes_pin/nodes_net place pins at their true intra-cell LEF positions
+# (pin_x/y_std_um, hpwl_um) instead of the instance origin.
+SC_LEF=$(echo "$RESOLVED" | sed -n 's/^SC_LEF=//p')
+ADDITIONAL_LEFS=$(echo "$RESOLVED" | sed -n 's/^ADDITIONAL_LEFS=//p')
 echo "libs=$(echo "$LIB_FILES $ADDITIONAL_LIBS" | wc -w) tech_lef=$([[ -f "$TECH_LEF" ]] && echo yes || echo no)"
 
 # --- Environment shared by every worker (positional args carry DEF/out/id) -
@@ -156,6 +161,8 @@ for _lf in $LIB_FILES; do
 done
 export R2G_SC_LIB_FILES="$SC_LIB_FILES"
 export R2G_TECH_LEF="$TECH_LEF"
+export SC_LEF="$SC_LEF"
+export ADDITIONAL_LEFS="$ADDITIONAL_LEFS"
 export R2G_PLATFORM="$PLATFORM"
 
 FEATURE_TIMEOUT="${FEATURE_TIMEOUT:-2400}"

@@ -15,8 +15,9 @@ from techlib.def_parse import (
     parse_sdc_clock_port_names,
     parse_units,
 )
-from techlib.lef import routing_layer_regex
+from techlib.lef import cell_lef_paths, macro_pin_geometry, routing_layer_regex
 from techlib.liberty import (
+    get_pin_abs_pos_um,
     get_pin_direction,
     infer_net_type_id,
     load_liberty_db,
@@ -108,6 +109,9 @@ def main():
     # sc_lib_files), e.g. fakeram45_* — used for connects_macro_flag. Empty for
     # pure std-cell designs, where 0 is the correct flag.
     macro_keys = macro_cell_keys(ctx["lib_files"], ctx["sc_lib_files"])
+    # Per-cell LEF pin geometry (SC_LEF + macro LEFs) so hpwl_um uses true
+    # intra-cell pin positions; empty {} -> instance-origin fallback.
+    pin_geom = macro_pin_geometry(cell_lef_paths())
     layer_re, _from_lef = routing_layer_regex(ctx["tech_lef"])
     comp_info = parse_components(def_path)
     iopin_pos = parse_iopins(def_path)
@@ -168,9 +172,15 @@ def main():
                 elif direction in {"INOUT", "FEEDTHRU"}:
                     num_drivers += 1
                     num_sinks += 1
-            if num_drivers == 0 and pin_count > 0:
-                num_drivers = 1
-                num_sinks = max(0, pin_count - 1)
+            # No force-fill: when direction parsing resolves no driver, keep the
+            # TRUE statistic (num_drivers may be 0). The old fabrication
+            # (num_drivers=1, num_sinks=pin_count-1) masked a liberty parse-miss
+            # AND overwrote the real sink count — a silent-value defect exactly
+            # like the ones this skill guards against. Matches the upstream
+            # RTL2Graph fix ("不再强制补值") and the verifier's own independent
+            # driver/sink recompute (which never filled). A genuinely undriven /
+            # unresolved net now surfaces honestly as num_drivers=0.
+            # (failure-patterns.md "Dataset-Extraction Silent-Value Defects")
             layers = set()
             hpwl_points = []
             for inst, pin in info.get("conns", []):
@@ -181,7 +191,10 @@ def main():
                 else:
                     c = comp_info.get(inst)
                     if c:
-                        hpwl_points.append(((c.get("x") or 0) / dbu, (c.get("y") or 0) / dbu))
+                        px, py = get_pin_abs_pos_um(
+                            (c.get("x") or 0) / dbu, (c.get("y") or 0) / dbu,
+                            c.get("orient", "N"), c.get("master", ""), pin, geom=pin_geom)
+                        hpwl_points.append((px, py))
             for r in info.get("routes", []):
                 m = layer_re.search(r)
                 if m:

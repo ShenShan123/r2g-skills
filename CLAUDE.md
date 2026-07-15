@@ -269,6 +269,14 @@ runs or fixes PnR** — produce those inputs with `signoff-loop` first. **Full d
   doesn't apply). Folded entities carry features/labels on `edge_attr[E,8]`/`edge_y[E,6]`, INTERLEAVED
   `[fwd0,rev0,fwd1,rev1,…]` so pairwise-repeated attr rows align (do not "simplify" back to
   `[all-fwd|all-rev]` — audit bug #5). `edge_y[:,5]` stays all-NaN (ground cap is never an edge label).
+- **Every label tensor has a RAW twin** (2026-07-14 RTL2Graph alignment): `y_raw`/`edge_y_raw`/
+  `rc_edge_y_raw` mirror `y`/`edge_y`/`rc_edge_y` slot-for-slot but hold the raw physical value
+  (EDA-Schema/CircuitNet convention: demand/cap ratio, mV, **path-delay ns** (`Path_Delay_ns`, NOT raw
+  slack — `Cell_Slack_ns` is `"INF"` off-path → CSV-only), um, fF, Ohm) instead of the normalized log/sqrt
+  target — the graph carries both so a trainer picks either without a regen. The raw columns already lived
+  in the label CSVs; the twins just surface them. Invariants the verifier enforces: same shape, NaN-parity
+  with the normalized twin per slot, and `y[:,3/4/5]==log1p(y_raw)` (timing/wirelength/ground cap),
+  `rc_edge_y[:,k]==log1p(rc_edge_y_raw)` (congestion/IR use a different base, so no such identity).
 - **RC parasitics are LABELS (Y), never features.** Ground cap is the `y5` node label; **coupling cap +
   equivalent resistance ride a SEPARATE parasitic edge set** (`rc_edge_index`/`rc_edge_type`/`rc_edge_y[E,3]`,
   0=coupling net-pair, 1=resistance intra-net pin-pair), present-but-empty where RC doesn't apply so the
@@ -356,6 +364,16 @@ This skill's failure mode is a plausible-looking CSV with **wrong values**. Full
   macro flag stuck 0 (SC-libs ⊇ ADDITIONAL_LIBS), pin-cap inflated ~20× by a driver's `max_capacitance`,
   port direction read from the instance instead of the chip, and a pipe-joined string coercing
   `global_feat[12]` to 0 — all corrected 2026-07; pre-fix CSVs are wrong.
+- **`num_drivers` force-fill fabricated a driver** (`num_drivers=0 → 1`, also overwriting `num_sinks` to
+  `pin_count-1`) whenever liberty direction parsing missed a driver — masking a parse-miss AND corrupting the
+  true sink count. Removed 2026-07-14 (matches upstream RTL2Graph + the verifier's own no-fill recompute); a
+  genuinely undriven/unresolved net now honestly reads `num_drivers=0`. The verifier's `>= 1 on ALL nets`
+  assert (which depended on the fill) was relaxed to `>= 1 on SOME net` (all-zero-column guard).
+- **`hpwl_um` / `pin_x/y_std_um` collapsed every pin onto the instance origin** (a documented approximation);
+  2026-07-14 added the LEF per-MACRO PIN-geometry parser (`techlib.lef.macro_pin_geometry` + `apply_orient`),
+  so pins sit at their true orientation-aware in-cell centers (matters for macros). Needs `SC_LEF`/
+  `ADDITIONAL_LEFS` in the env — `run_features.sh` now exports them; empty ⇒ instance-origin fallback. The
+  verifier reproduces pin-center HPWL with an independent geometry parse.
 - **RECT patch metal misread as route points** inflating wirelength ~100–400×; guard: `route_segments`
   strips RECT patch groups → centerline length.
 - **nangate45 curated cell map drifted 22 masters** onto `UNKNOWN`; guard: retired for the runtime std-cell

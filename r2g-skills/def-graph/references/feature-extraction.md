@@ -33,6 +33,13 @@ Written to `design_cases/<design>/features/` and `design_cases/<design>/reports/
 stable + distinct within a platform but are **not comparable across platforms** (the
 per-platform vocabulary differs — see below). Filter datasets by `platform`.
 
+`num_drivers`/`num_sinks` are the **true** direction-parsed counts — no force-fill (2026-07-14):
+a net whose driver liberty direction can't be resolved honestly reads `num_drivers=0` rather than a
+fabricated `1` (which also used to corrupt `num_sinks`). `hpwl_um` and `pin_x/y_std_um` use each
+pin's **true orientation-aware in-cell LEF position** (`techlib.lef.macro_pin_geometry` +
+`apply_orient`) when a cell LEF resolves (`SC_LEF`/`ADDITIONAL_LEFS`, exported by `run_features.sh`);
+absent a cell LEF they fall back to the instance origin.
+
 ## Inputs & resolution
 
 - **Design geometry:** the collected `backend/RUN_*/{final,results}/6_final.def` (newest

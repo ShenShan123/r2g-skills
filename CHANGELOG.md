@@ -4,6 +4,43 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-14 — RTL2Graph_v3 reference alignment: raw-label twins + num_drivers no-fill + LEF pin geometry (def-graph)
+
+Compared a fresh `RTL2Graph_v3` reference drop subsystem-by-subsystem against `def-graph`. The reference
+("updated after debugging") is **behind** ours on correctness — it never absorbed our 2026-07 silent-value
+fixes — so its four bugs (congestion vertical-demand transpose, wirelength/congestion RECT-patch not stripped,
+timing STA↔ODB name not de-escaped, and the c/d/e/f `[all-fwd|all-rev]` edge-attr misalignment = our "bug #5")
+were **reported, not ported** (`failure-patterns.md` #47). Three deliberate reference improvements were adopted
+(user-approved: keep both raw + normalized labels). Validated end-to-end on cordic sky130hs: verifier
+**212/212**, def-graph pytest **395 passed / 14 skipped**, OpenDB orientation oracle **5105/5105**.
+
+### def-graph
+- **Raw-label twins** — every label tensor gains a parallel raw twin (`y_raw` / `edge_y_raw` / `rc_edge_y_raw`)
+  carrying the raw physical value (EDA-Schema/CircuitNet convention: demand/cap ratio, mV, path-delay ns, um,
+  fF, Ohm) beside the normalized log/sqrt target, so a downstream trainer picks either convention without a
+  regen. The raw columns already lived in the label CSVs; `graph_lib`/`build_graphs`/`attach_rc_labels` surface
+  them, with a `y_raw_schema` on the tensor + manifest.
+- **`num_drivers` no-fill** — `nodes_net.py` no longer fabricates `num_drivers=1` on a driver parse-miss (which
+  also corrupted `num_sinks`); a genuinely undriven / unresolved net honestly reads 0. Verifier `>=1 on ALL
+  nets` assert relaxed accordingly.
+- **LEF pin-center geometry** — new `techlib.lef.macro_pin_geometry` + `apply_orient` place pins at their true
+  orientation-aware in-cell centers, so `hpwl_um` / `pin_x/y_std_um` are real geometry (matters for macros);
+  `run_features.sh` now exports `SC_LEF`/`ADDITIONAL_LEFS`; empty cell LEF ⇒ instance-origin fallback.
+
+### Post code-review (xhigh) fixes
+- **`apply_orient` FN/FS swap** — the initial port carried the reference's transposed FN/FS (FN returned MX,
+  FS returned MY). FS is the alternating-row flip = **~half of all std cells** (cordic 2488/5105), so
+  `hpwl_um`/`pin_x/y_std_um` were wrong for every net touching a flipped cell — and the verifier's
+  `_v_apply_orient` + the unit test replicated the same swap, so the build verified green anyway. Fixed (swap
+  FN↔FS) and **validated against OpenDB placed pin locations** (cordic FS=MX matched 2488/2488).
+- **Timing raw `+inf`** — the raw twin read `Cell_Slack_ns`, which is the string `"INF"` off-path (→ `+inf`);
+  switched to `Path_Delay_ns` (finite, clean `y[:,3]==log1p(y_raw[:,3])` identity). `Cell_Slack_ns` stays a
+  CSV-only column.
+- Verifier hardening: raw-tensor value checks (timing/wirelength/ground-cap `log1p` identities + SPEF-oracle
+  raw ground/coupling), the raw edge twins added to the interleave (bug-#5) oracle, a `num_drivers==0` no-fill
+  honesty check (covers 0-driver nets past the 200-net sample cap), `SC_LEF` whitespace-split + `CELL_LEFS`
+  parity with the extractor, POLYGON `MASK` tolerance, and a `hasattr` guard against pre-raw-twin corpora.
+
 ## 2026-07-13 — MemoryStore & A/B evidence-chain audit: contract-drift + provenance fixes (#43–#46)
 
 Acted on a 10-step read-only MemoryStore/A-B audit (report `docs/superpowers/plans/07-13-report.html`;

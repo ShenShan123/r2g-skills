@@ -51,12 +51,20 @@ METADATA_SCHEMA = [
 ]
 
 # --- Label specs: y slot 1+order per node type, from the labels stage's ------
-# canonical CSVs. All four use the extractor's log-domain ``label`` column.
+# canonical CSVs. Each label carries BOTH a normalized ``column`` (log/sqrt-domain
+# training target, in ``data.y``) AND the ``raw_column`` physical value (EDA-Schema /
+# CircuitNet convention, in the parallel ``data.y_raw``) — so a downstream trainer
+# can pick either convention without a regen. The raw columns are exactly the
+# reference RTL2Graph "EDA-Schema style" labels (2026-07-14 alignment).
 LABEL_SPECS = [
-    {"node_type": NODE_TYPE_GATE, "order": 0, "file": "cell_congestion.csv", "column": "label"},
-    {"node_type": NODE_TYPE_GATE, "order": 1, "file": "ir_drop.csv", "column": "label"},
-    {"node_type": NODE_TYPE_PIN, "order": 2, "file": "timing_features.csv", "column": "label"},
-    {"node_type": NODE_TYPE_NET, "order": 3, "file": "wirelength.csv", "column": "label"},
+    {"node_type": NODE_TYPE_GATE, "order": 0, "file": "cell_congestion.csv", "column": "label", "raw_column": "cell_congestion"},
+    {"node_type": NODE_TYPE_GATE, "order": 1, "file": "ir_drop.csv", "column": "label", "raw_column": "IR_Drop_mV"},
+    # Timing raw twin uses Path_Delay_ns (= clk_period - worst_slack, floored at 0),
+    # the finite pre-log1p value: y3 == log1p(y_raw3) exactly. Cell_Slack_ns is the
+    # literal slack but is the string "INF" for cells off every STA path (parsed to
+    # +inf, poisoning the tensor) — kept in the CSV for raw-slack consumers, not here.
+    {"node_type": NODE_TYPE_PIN, "order": 2, "file": "timing_features.csv", "column": "label", "raw_column": "Path_Delay_ns"},
+    {"node_type": NODE_TYPE_NET, "order": 3, "file": "wirelength.csv", "column": "label", "raw_column": "WireLength_um"},
 ]
 
 # y tensor width = 1 (node_type) + 5 label orders. Orders 0-3 are the tool labels
@@ -76,6 +84,19 @@ Y_SCHEMA_BASE = {
     "y3": "timing_label (pin; per-cell min pin slack -> log1p path delay)",
     "y4": "wirelength_label (net; log1p um)",
     "y5": "ground_cap_label (net; log1p fF — on net node b/c, broadcast to pin nodes d/e, dropped f)",
+}
+
+# ``data.y_raw`` mirrors ``data.y`` slot-for-slot but carries the RAW physical
+# value (EDA-Schema convention) instead of the normalized target. Same layout,
+# same NaN-where-inapplicable rule; y_raw[:,0] copies node_type for symmetry.
+# edge_y_raw / rc_edge_y_raw are the folded-edge / parasitic-edge analogues.
+Y_RAW_SCHEMA_BASE = {
+    "y0": "node_type",
+    "y1": "congestion_raw (gate; demand/capacity ratio)",
+    "y2": "irdrop_raw (gate; IR drop mV)",
+    "y3": "timing_raw (pin; per-cell path delay ns = clk_period - worst_slack, floored 0)",
+    "y4": "wirelength_raw (net; routed length um)",
+    "y5": "ground_cap_raw (net; SPEF ground cap fF — same placement as y5 label)",
 }
 
 
@@ -291,16 +312,21 @@ def _merged_label_values(base_df, m, key_col, base_col, col, context=""):
     return torch.tensor(merged[col].fillna(float("nan")).to_numpy(), dtype=torch.float32)
 
 
-def build_gate_label_values(base_df, label_dfs, design_key):
+def build_gate_label_values(base_df, label_dfs, design_key, value_col_key="column"):
+    """Gate node labels {order: tensor}. ``value_col_key`` selects the source
+    column per spec: "column" (normalized -> data.y) or "raw_column" (raw
+    physical -> data.y_raw). A spec without that column is skipped (slot NaN)."""
     out = {}
     for spec in LABEL_SPECS:
         if spec["node_type"] != NODE_TYPE_GATE:
+            continue
+        col = spec.get(value_col_key)
+        if not col:
             continue
         df = label_dfs[spec["file"]]
         if "Design" not in df.columns:
             continue
         df = df[df["Design"] == design_key].copy()
-        col = spec["column"]
         if col not in df.columns or "Cell" not in df.columns:
             continue
         m = df[["Cell", col]].copy()
@@ -314,16 +340,18 @@ def build_gate_label_values(base_df, label_dfs, design_key):
     return out
 
 
-def build_net_label_values(base_df, label_dfs, design_key):
+def build_net_label_values(base_df, label_dfs, design_key, value_col_key="column"):
     out = {}
     for spec in LABEL_SPECS:
         if spec["node_type"] != NODE_TYPE_NET:
+            continue
+        col = spec.get(value_col_key)
+        if not col:
             continue
         df = label_dfs[spec["file"]]
         if "Design" not in df.columns:
             continue
         df = df[df["Design"] == design_key].copy()
-        col = spec["column"]
         if col not in df.columns or "Net" not in df.columns:
             continue
         m = df[["Net", col]].copy()
@@ -333,19 +361,22 @@ def build_net_label_values(base_df, label_dfs, design_key):
     return out
 
 
-def build_pin_label_values(base_df, label_dfs, design_key):
+def build_pin_label_values(base_df, label_dfs, design_key, value_col_key="column"):
     """Pin labels join by inst/pin when the CSV has a ``Pin`` column, else by Cell
-    (timing_features.csv is per-cell: every pin of a cell inherits its label)."""
+    (timing_features.csv is per-cell: every pin of a cell inherits its label).
+    ``value_col_key`` selects normalized ("column") vs raw ("raw_column")."""
     torch = _torch()
     out = {}
     for spec in LABEL_SPECS:
         if spec["node_type"] != NODE_TYPE_PIN:
             continue
+        col = spec.get(value_col_key)
+        if not col:
+            continue
         df = label_dfs[spec["file"]]
         if "Design" not in df.columns:
             continue
         df = df[df["Design"] == design_key].copy()
-        col = spec["column"]
         if col not in df.columns:
             continue
         if "Pin" in df.columns:
@@ -399,15 +430,19 @@ def pad_or_truncate_1d(values, length: int):
     return torch.cat([v, pad], dim=0)
 
 
-def build_directed_edges(base_src, base_dst, base_attr, base_y, base_type):
+def build_directed_edges(base_src, base_dst, base_attr, base_y, base_type, base_y_raw=None):
     """Duplicate every undirected base edge into both directions, repeating
-    edge_attr / edge_type / edge_y rows pairwise.
+    edge_attr / edge_type / edge_y / edge_y_raw rows pairwise.
 
     Edge columns are INTERLEAVED — [fwd0, rev0, fwd1, rev1, ...] — so the
     pairwise-repeated attr/type/y rows align with their edges. (The RTL2Graph
     originals concatenated [all forwards | all reverses] while still repeating
     attrs pairwise, misaligning edge_attr/edge_type/edge_y with edge_index for
     every edge past the first — bug #5 of the 2026-07-05 audit, fixed here.)
+
+    Returns (edge_index, edge_attr, edge_type, edge_y, edge_y_raw). ``edge_y_raw``
+    (raw physical folded labels) mirrors ``edge_y``; all-NaN when base_y_raw is
+    None (the caller supplies no raw labels for that edge family).
     """
     torch = _torch()
     if not base_src:
@@ -416,6 +451,7 @@ def build_directed_edges(base_src, base_dst, base_attr, base_y, base_type):
             torch.empty((2, 0), dtype=torch.long),
             torch.zeros((0, width), dtype=torch.float32),
             torch.empty((0,), dtype=torch.long),
+            torch.zeros((0, Y_WIDTH), dtype=torch.float32),
             torch.zeros((0, Y_WIDTH), dtype=torch.float32),
         )
     src = torch.tensor(base_src, dtype=torch.long)
@@ -426,7 +462,11 @@ def build_directed_edges(base_src, base_dst, base_attr, base_y, base_type):
     edge_attr = torch.repeat_interleave(base_attr, 2, dim=0)
     edge_type = torch.repeat_interleave(base_type, 2)
     edge_y = torch.repeat_interleave(base_y, 2, dim=0)
-    return edge_index, edge_attr, edge_type, edge_y
+    if base_y_raw is None:
+        edge_y_raw = torch.full_like(edge_y, float("nan"))
+    else:
+        edge_y_raw = torch.repeat_interleave(base_y_raw, 2, dim=0)
+    return edge_index, edge_attr, edge_type, edge_y, edge_y_raw
 
 
 def load_global_feat(feature_root: str, graph_key: str):
@@ -516,14 +556,26 @@ def _rc_rows(rc, fname, design_key):
     return sub if not sub.empty else None
 
 
-def rc_ground_cap_by_net(rc, design_key) -> dict[str, float]:
+def _num_or_nan(sub, col):
+    """Coerce a column to numeric, or an all-NaN series if the column is absent
+    (legacy CSV without the raw metric) — so raw values stay row-aligned."""
+    if col in sub.columns:
+        return pd.to_numeric(sub[col], errors="coerce")
+    return pd.Series([float("nan")] * len(sub), index=sub.index)
+
+
+def rc_ground_cap_by_net(rc, design_key) -> dict:
+    """{net: (label, raw_fF)} — normalized ground-cap label + raw SPEF ground cap
+    (raw NaN on a legacy CSV lacking ``ground_cap_fF``)."""
     sub = _rc_rows(rc, RC_GROUND_CAP_FILE, design_key)
-    out: dict[str, float] = {}
+    out = {}
     if sub is None or not {"Net", "label"} <= set(sub.columns):
         return out
-    for net, lab in zip(sub["Net"], pd.to_numeric(sub["label"], errors="coerce")):
+    labs = pd.to_numeric(sub["label"], errors="coerce")
+    raws = _num_or_nan(sub, "ground_cap_fF")
+    for net, lab, raw in zip(sub["Net"], labs, raws):
         if lab == lab:  # not NaN
-            out[str(net)] = float(lab)
+            out[str(net)] = (float(lab), float(raw))
     return out
 
 
@@ -539,54 +591,64 @@ def rc_net_driver(rc, design_key) -> dict[str, tuple[str, str]]:
 
 
 def rc_coupling_rows(rc, design_key):
-    """[(net1, net2, label)] cross-net coupling-cap edges."""
+    """[(net1, net2, label, raw_fF)] cross-net coupling-cap edges (raw NaN on a
+    legacy CSV lacking ``coupling_cap_fF``)."""
     sub = _rc_rows(rc, RC_COUPLING_FILE, design_key)
     rows = []
     if sub is None or not {"Net1", "Net2", "label"} <= set(sub.columns):
         return rows
-    for n1, n2, lab in zip(sub["Net1"], sub["Net2"], pd.to_numeric(sub["label"], errors="coerce")):
+    labs = pd.to_numeric(sub["label"], errors="coerce")
+    raws = _num_or_nan(sub, "coupling_cap_fF")
+    for n1, n2, lab, raw in zip(sub["Net1"], sub["Net2"], labs, raws):
         if lab == lab:
-            rows.append((str(n1), str(n2), float(lab)))
+            rows.append((str(n1), str(n2), float(lab), float(raw)))
     return rows
 
 
 def rc_resistance_rows(rc, design_key):
-    """[((inst1,pin1),(inst2,pin2), label)] same-net pin-pair equiv-resistance edges."""
+    """[((inst1,pin1),(inst2,pin2), label, raw_ohm)] same-net pin-pair
+    equiv-resistance edges (raw NaN on a legacy CSV lacking ``equiv_res_ohm``)."""
     sub = _rc_rows(rc, RC_EQUIV_RES_FILE, design_key)
     rows = []
     if sub is None or not {"Inst1", "Pin1", "Inst2", "Pin2", "label"} <= set(sub.columns):
         return rows
     labs = pd.to_numeric(sub["label"], errors="coerce")
-    for i1, p1, i2, p2, lab in zip(sub["Inst1"], sub["Pin1"], sub["Inst2"], sub["Pin2"], labs):
+    raws = _num_or_nan(sub, "equiv_res_ohm")
+    for i1, p1, i2, p2, lab, raw in zip(sub["Inst1"], sub["Pin1"], sub["Inst2"], sub["Pin2"], labs, raws):
         if lab == lab:
-            rows.append(((str(i1), str(p1)), (str(i2), str(p2)), float(lab)))
+            rows.append(((str(i1), str(p1)), (str(i2), str(p2)), float(lab), float(raw)))
     return rows
 
 
 def build_parasitic_edges(coupling, resistance):
     """Assemble the parasitic edge tensors from resolved node-index edge lists.
 
-    coupling/resistance: lists of (src_idx, dst_idx, label). Returns symmetrized
-    (rc_edge_index[2,E], rc_edge_type[E], rc_edge_y[E,3]) with rc_edge_y columns
-    [type, coupling_cap_label, equiv_res_label] (off-type column = NaN). Edges are
-    interleaved fwd/rev so the pairwise-repeated type/y rows align with edge_index
-    (same convention as build_directed_edges)."""
+    coupling/resistance: lists of (src_idx, dst_idx, label, raw). Returns
+    symmetrized (rc_edge_index[2,E], rc_edge_type[E], rc_edge_y[E,3],
+    rc_edge_y_raw[E,3]) with y columns [type, coupling, equiv_res] (off-type
+    column = NaN); rc_edge_y is the normalized (log1p) label, rc_edge_y_raw the
+    raw physical value (fF / Ohm). Edges are interleaved fwd/rev so the
+    pairwise-repeated type/y rows align with edge_index (same convention as
+    build_directed_edges)."""
     torch = _torch()
-    src, dst, etype, yrows = [], [], [], []
+    src, dst, etype, yrows, yraw = [], [], [], [], []
     nan = float("nan")
-    for s, t, lab in coupling:
+    for s, t, lab, raw in coupling:
         if s is None or t is None or s == t:
             continue
         src.append(int(s)); dst.append(int(t)); etype.append(RC_EDGE_TYPE_COUPLING)
         yrows.append((float(RC_EDGE_TYPE_COUPLING), lab, nan))
-    for s, t, lab in resistance:
+        yraw.append((float(RC_EDGE_TYPE_COUPLING), raw, nan))
+    for s, t, lab, raw in resistance:
         if s is None or t is None or s == t:
             continue
         src.append(int(s)); dst.append(int(t)); etype.append(RC_EDGE_TYPE_RESISTANCE)
         yrows.append((float(RC_EDGE_TYPE_RESISTANCE), nan, lab))
+        yraw.append((float(RC_EDGE_TYPE_RESISTANCE), nan, raw))
     if not src:
         return (torch.empty((2, 0), dtype=torch.long),
                 torch.empty((0,), dtype=torch.long),
+                torch.zeros((0, 3), dtype=torch.float32),
                 torch.zeros((0, 3), dtype=torch.float32))
     s_t = torch.tensor(src, dtype=torch.long)
     d_t = torch.tensor(dst, dtype=torch.long)
@@ -595,7 +657,8 @@ def build_parasitic_edges(coupling, resistance):
     edge_index = torch.stack([fwd, rev], dim=2).reshape(2, -1)
     edge_type = torch.repeat_interleave(torch.tensor(etype, dtype=torch.long), 2)
     edge_y = torch.repeat_interleave(torch.tensor(yrows, dtype=torch.float32), 2, dim=0)
-    return edge_index, edge_type, edge_y
+    edge_y_raw = torch.repeat_interleave(torch.tensor(yraw, dtype=torch.float32), 2, dim=0)
+    return edge_index, edge_type, edge_y, edge_y_raw
 
 
 def attach_rc_labels(data, rc, design_key, *, net_idx=None, pin_idx=None,
@@ -609,23 +672,29 @@ def attach_rc_labels(data, rc, design_key, *, net_idx=None, pin_idx=None,
     pin<->driver pin -> dropped. Resistance (pin-pair, same net): only where pin
     nodes exist. Always attaches rc_edge_* (possibly empty) so the schema is
     uniform across designs/views."""
-    ground = rc_ground_cap_by_net(rc, design_key)
+    ground = rc_ground_cap_by_net(rc, design_key)   # {net: (label, raw)}
     driver = rc_net_driver(rc, design_key)
     y = data.y
+    y_raw = getattr(data, "y_raw", None)   # parallel raw-label tensor (if present)
 
-    # --- ground cap -> y[:, GROUND_CAP_Y] ---
+    def _set_gcap(row_idx, lab, raw):
+        y[row_idx, GROUND_CAP_Y] = lab
+        if y_raw is not None:
+            y_raw[row_idx, GROUND_CAP_Y] = raw
+
+    # --- ground cap -> y[:, GROUND_CAP_Y] (+ y_raw) ---
     if net_idx is not None:
-        for net, lab in ground.items():
+        for net, (lab, raw) in ground.items():
             idx = net_idx.get(net)
             if idx is not None:
-                y[idx, GROUND_CAP_Y] = lab
+                _set_gcap(idx, lab, raw)
     elif pin_idx is not None and pin_net_map is not None:
         for key, pidx in pin_idx.items():
             net = pin_net_map.get(key)
             if net is not None:
-                lab = ground.get(net)
-                if lab is not None:
-                    y[pidx, GROUND_CAP_Y] = lab
+                pair = ground.get(net)
+                if pair is not None:
+                    _set_gcap(pidx, pair[0], pair[1])
     # else (f: no net & no pin nodes): ground cap dropped -> y5 stays NaN
 
     def net_to_node(net):
@@ -649,28 +718,31 @@ def attach_rc_labels(data, rc, design_key, *, net_idx=None, pin_idx=None,
 
     coupling_edges = []
     if net_idx is not None or pin_idx is not None:
-        for n1, n2, lab in rc_coupling_rows(rc, design_key):
+        for n1, n2, lab, raw in rc_coupling_rows(rc, design_key):
             s, t = net_to_node(n1), net_to_node(n2)
             if s is not None and t is not None and s != t:
-                coupling_edges.append((s, t, lab))
+                coupling_edges.append((s, t, lab, raw))
 
     resistance_edges = []
     if pin_idx is not None:
-        for k1, k2, lab in rc_resistance_rows(rc, design_key):
+        for k1, k2, lab, raw in rc_resistance_rows(rc, design_key):
             s, t = pin_to_node(k1), pin_to_node(k2)
             if s is not None and t is not None and s != t:
-                resistance_edges.append((s, t, lab))
+                resistance_edges.append((s, t, lab, raw))
 
-    rc_ei, rc_et, rc_ey = build_parasitic_edges(coupling_edges, resistance_edges)
+    rc_ei, rc_et, rc_ey, rc_ey_raw = build_parasitic_edges(coupling_edges, resistance_edges)
     data.rc_edge_index = rc_ei
     data.rc_edge_type = rc_et
     data.rc_edge_y = rc_ey
+    data.rc_edge_y_raw = rc_ey_raw
     data.rc_edge_schema = {
         "rc_edge_type": {RC_EDGE_TYPE_COUPLING: "coupling_cap (net-pair)",
                          RC_EDGE_TYPE_RESISTANCE: "equiv_res (pin-pair, same net)"},
         "rc_edge_y0": "rc_edge_type",
         "rc_edge_y1": "coupling_cap_label (log1p fF; net M-N)",
         "rc_edge_y2": "equiv_res_label (log1p Ohm; two pins on one net)",
+        "rc_edge_y_raw1": "coupling_cap_raw (fF; net M-N)",
+        "rc_edge_y_raw2": "equiv_res_raw (Ohm; two pins on one net)",
         "design_key": design_key,
     }
     return data

@@ -459,6 +459,95 @@ def _lef_macro_sizes(lef_paths):
     return sizes
 
 
+def _v_apply_orient(px, py, orient, w, h):
+    """Independent (non-techlib) re-implementation of the DEF-orientation pin
+    transform, so the HPWL recompute reproduces the extractor's pin-center HPWL
+    without sharing its code."""
+    o = (orient or "N").upper()
+    # FN=MY (reflect X), FS=MX (reflect Y) — validated against OpenDB placed pins.
+    # Independent of techlib.lef.apply_orient (the firewall) but the SAME map.
+    return {
+        "N": (px, py), "S": (w - px, h - py), "W": (h - py, px), "E": (py, w - px),
+        "FN": (w - px, py), "FS": (px, h - py), "FW": (py, px), "FE": (h - py, w - px),
+    }.get(o, (px, py))
+
+
+def _lef_pin_geometry(lef_paths):
+    """``{MASTER_UPPER: {"w","h","pins":{PIN_UPPER:(cx,cy)}}}`` — an INDEPENDENT
+    parse of MACRO SIZE + per-PIN RECT/POLYGON bbox centers (um), used to
+    reproduce the extractor's pin-center HPWL. Separate code from techlib.lef so
+    a shared parse bug can't hide (the verifier's firewall principle)."""
+    geom = {}
+    for lef in lef_paths:
+        if not lef or not os.path.isfile(lef):
+            continue
+        cur = pin = None
+        xs, ys = [], []
+
+        def flush():
+            if cur is not None and pin is not None and xs:
+                geom[cur]["pins"][pin] = ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+
+        for line in open(lef, errors="ignore"):
+            s = line.strip()
+            tok = s.replace(";", " ").split()
+            if not tok:
+                continue
+            if tok[0] == "MACRO" and len(tok) >= 2:
+                flush(); cur = tok[1].lstrip("\\").upper()
+                geom[cur] = {"w": 0.0, "h": 0.0, "pins": {}}
+                pin, xs, ys = None, [], []
+            elif cur is None:
+                continue
+            elif tok[0] == "SIZE":
+                try:
+                    by = tok.index("BY")
+                    geom[cur]["w"], geom[cur]["h"] = float(tok[by - 1]), float(tok[by + 1])
+                except (ValueError, IndexError):
+                    pass
+            elif tok[0] == "PIN" and len(tok) >= 2:
+                flush(); pin = tok[1].lstrip("\\").upper(); xs, ys = [], []
+            elif pin is not None and tok[0] == "RECT":
+                nums = [float(x) for x in tok[1:] if _isfloat(x)]
+                if len(nums) >= 4:
+                    x1, y1, x2, y2 = nums[-4:]
+                    xs += [x1, x2]; ys += [y1, y2]
+            elif pin is not None and tok[0] == "POLYGON":
+                nums = [float(x) for x in tok[1:] if _isfloat(x)]
+                if len(nums) % 2:      # odd -> leading MASK id
+                    nums = nums[1:]
+                for k in range(0, len(nums) - 1, 2):
+                    xs.append(nums[k]); ys.append(nums[k + 1])
+            elif tok[0] == "END" and len(tok) >= 2:
+                key = tok[1].lstrip("\\").upper()
+                if pin is not None and key == pin:
+                    flush(); pin, xs, ys = None, [], []
+                elif key == cur:
+                    flush(); cur, pin, xs, ys = None, None, [], []
+    return geom
+
+
+def _isfloat(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
+def _v_pin_abs(geom, x_um, y_um, orient, master, pin):
+    """Absolute pin position (um): instance origin + oriented in-cell offset;
+    falls back to the instance origin when geometry is absent/unknown."""
+    if geom:
+        mac = geom.get((master or "").lstrip("\\").upper())
+        if mac:
+            c = mac["pins"].get((pin or "").lstrip("\\").upper())
+            if c:
+                px, py = _v_apply_orient(c[0], c[1], orient, mac["w"], mac["h"])
+                return (x_um + px, y_um + py)
+    return (x_um, y_um)
+
+
 def _reflect(p, n):
     """scipy 'reflect' boundary index: (d c b a | a b c d | d c b a)."""
     if n == 1:
@@ -669,6 +758,13 @@ def extended_checks(case, design, feat, labs, views, b):
     lib = read_liberty_truth(lib_paths)
     layers, blocks = read_lef_truth(plat.get("TECH_LEF", ""),
                                     plat.get("ADDITIONAL_LEFS", "").split())
+    # Independent LEF pin geometry -> reproduce the extractor's pin-center HPWL.
+    # Resolve the SAME cell LEFs as techlib.lef.cell_lef_paths (whitespace-split
+    # each var, honor CELL_LEFS) so a multi-path SC_LEF can't false-fail the HPWL
+    # check. Empty -> both extractor and verifier fall back to the instance origin.
+    pin_geom = _lef_pin_geometry(plat.get("SC_LEF", "").split()
+                                 + plat.get("CELL_LEFS", "").split()
+                                 + plat.get("ADDITIONAL_LEFS", "").split())
     backend_dir = case + "/backend"
     runs = sorted((r for r in os.listdir(backend_dir) if r.startswith("RUN_")),
                   reverse=True) if os.path.isdir(backend_dir) else []
@@ -841,7 +937,8 @@ def extended_checks(case, design, feat, labs, views, b):
             drv += d == "OUTPUT"
             snk += d == "INPUT"
             if comp["x"] is not None:
-                pts.append((comp["x"] / dt["dbu"], comp["y"] / dt["dbu"]))
+                pts.append(_v_pin_abs(pin_geom, comp["x"] / dt["dbu"], comp["y"] / dt["dbu"],
+                                      comp.get("orient"), master, p))
         if int(row["num_drivers"]) != drv:
             bad["drivers"] += 1
         if int(row["num_sinks"]) != snk:
@@ -856,10 +953,34 @@ def extended_checks(case, design, feat, labs, views, b):
     for k, label in (("pin_count", "pin_count == DEF conns"),
                      ("drivers", "num_drivers vs liberty/DEF dirs"),
                      ("sinks", "num_sinks vs liberty/DEF dirs"),
-                     ("hpwl", "hpwl == recomputed cell-origin HPWL"),
+                     ("hpwl", "hpwl == recomputed pin-center HPWL (LEF geometry; cell-origin fallback)"),
                      ("macro", "connects_macro_flag == DEF∩LEF-BLOCK truth")):
         check(f"ext.net {label}", checked_net > 0 and bad[k] == 0,
               f"{bad[k]}/{checked_net} mismatched")
+
+    # No-fill honesty (2026-07-14): the extractor no longer fabricates a driver, so
+    # EVERY net the CSV marks num_drivers==0 must independently recompute to 0 (a
+    # genuinely undriven / parse-miss net) — not a net whose real driver we failed to
+    # count. This targets the 0-driver nets specifically, covering those beyond the
+    # 200-net sample cap above.
+    bad_zero = chk_zero = 0
+    for net_name in full_net[full_net["num_drivers"].astype(int) == 0]["net_name"].tolist()[:400]:
+        conns = dt["nets"].get(net_name)
+        if conns is None:
+            continue
+        drv = 0
+        for i, p in conns:
+            if i == "PIN":
+                drv += dt["pins"].get(p, {}).get("dir", "") == "INPUT"
+            else:
+                comp = dt["comps"].get(i)
+                if comp:
+                    drv += lib_pin_truth(lib, comp["master"], p)[0] == "OUTPUT"
+        chk_zero += 1
+        if drv != 0:
+            bad_zero += 1
+    check("ext.net num_drivers==0 nets genuinely have no driver (no-fill honesty)",
+          bad_zero == 0, f"{bad_zero}/{chk_zero} CSV-zero nets actually have a driver")
 
     # ---- X iopins vs DEF PINS ----
     full_io = pd.read_csv(os.path.join(feat, "nodes_iopin.csv"))
@@ -1330,9 +1451,10 @@ def topology_checks(views, tensors):
         even = (E % 2 == 0)
         rev_bad = _reverse_pairs_bad(ei) if even else -1
         attr_bad = 0
-        for t in (data.edge_attr, data.edge_type, data.edge_y):
+        raw_tw = (data.edge_y_raw,) if hasattr(data, "edge_y_raw") else ()
+        for t in (data.edge_attr, data.edge_type, data.edge_y) + raw_tw:
             attr_bad += _paired_rows_bad(t) if even else 1
-        check(f"top.{v} edges interleaved [fwd0,rev0,...] (index+attr+type+y aligned)",
+        check(f"top.{v} edges interleaved [fwd0,rev0,...] (index+attr+type+y+y_raw aligned)",
               even and rev_bad == 0 and attr_bad == 0,
               f"even={even} rev_bad={rev_bad} paired_bad={attr_bad}")
         check(f"top.{v} edge_y0 == edge_type",
@@ -1355,7 +1477,8 @@ def topology_checks(views, tensors):
         even = (E % 2 == 0)
         rev_bad = _reverse_pairs_bad(ei) if even else -1
         pair_bad = 0
-        for t in (data.rc_edge_type, data.rc_edge_y):
+        raw_tw = (data.rc_edge_y_raw,) if hasattr(data, "rc_edge_y_raw") else ()
+        for t in (data.rc_edge_type, data.rc_edge_y) + raw_tw:
             pair_bad += _paired_rows_bad(t) if even else 1
         check(f"top.{v} rc_edges interleaved [fwd0,rev0,...]",
               even and rev_bad == 0 and pair_bad == 0,
@@ -2125,6 +2248,43 @@ def verify_case(case, design=None, json_out=None):
         check(f"{vname} rc_edge_* present + consistent shapes", ok)
         check(f"{vname} manifest rc_edges == tensor",
               man["variants"][vname].get("rc_edges") == int(data.rc_edge_index.shape[1]))
+
+    # ---- RAW label twins (data.y_raw / edge_y_raw / rc_edge_y_raw) ----
+    # Each carries the raw physical value; must be present, same shape, NaN-parity
+    # with the normalized twin per slot (so a raw slot can't silently go all-NaN),
+    # and where the transform is a clean log1p (wirelength y4, ground cap y5, and
+    # the coupling/resistance edge columns) satisfy y == log1p(y_raw).
+    def _nan_parity(a, bb):
+        return all(bool((torch.isnan(a[:, s]) == torch.isnan(bb[:, s])).all())
+                   for s in range(1, a.shape[1])) if a.shape == bb.shape else False
+
+    def _log1p_identity(vname, tag, yt, yr, cols):
+        for s in cols:
+            m = ~torch.isnan(yt[:, s]) & ~torch.isnan(yr[:, s])
+            if int(m.sum()) == 0:
+                continue
+            d_id = float((yt[m, s] - torch.log1p(yr[m, s].clamp(min=0))).abs().max())
+            check(f"{vname} {tag}[:,{s}] == log1p({tag}_raw)", d_id <= 1e-4, d_id)
+
+    for vname, data in tensors.items():
+        okr = hasattr(data, "y_raw") and data.y_raw.shape == data.y.shape
+        check(f"{vname} y_raw present + shape==y", okr)
+        if okr:
+            check(f"{vname} y_raw NaN-parity with y (all slots)", _nan_parity(data.y, data.y_raw))
+            # timing (y3, raw=Path_Delay_ns), wirelength (y4), ground cap (y5) are
+            # clean log1p identities; congestion(y1)/irdrop(y2) use a different base.
+            _log1p_identity(vname, "y", data.y, data.y_raw, (3, 4, 5))
+        if hasattr(data, "edge_y"):
+            oke = hasattr(data, "edge_y_raw") and data.edge_y_raw.shape == data.edge_y.shape
+            check(f"{vname} edge_y_raw present + shape==edge_y", oke)
+            if oke:
+                check(f"{vname} edge_y_raw NaN-parity with edge_y", _nan_parity(data.edge_y, data.edge_y_raw))
+                _log1p_identity(vname, "edge_y", data.edge_y, data.edge_y_raw, (3, 4))  # folded timing/wirelength
+        if hasattr(data, "rc_edge_y"):
+            okc = hasattr(data, "rc_edge_y_raw") and data.rc_edge_y_raw.shape == data.rc_edge_y.shape
+            check(f"{vname} rc_edge_y_raw present + shape==rc_edge_y", okc)
+            if okc and data.rc_edge_y.shape[0]:
+                _log1p_identity(vname, "rc_edge_y", data.rc_edge_y, data.rc_edge_y_raw, (1, 2))
     net_name_set = set(net["net_name"].tolist())
     # name -> set(nets) for pin/iopin membership (resistance intra-net + d broadcast)
     memnet = {}
@@ -2220,6 +2380,31 @@ def verify_case(case, design=None, json_out=None):
                 bad += 1
         check("d ground cap y5 broadcast to pins == net ground cap", bad == 0 and chk > 0,
               f"{bad}/{chk}")
+        # (G) RAW twins carry the raw SPEF physical value (fF), not the log1p label.
+        # Guarded: a stale post-RC/pre-raw-twin dataset (has rc_edge_* but no y_raw)
+        # must fail the earlier '{v} y_raw present' check cleanly, not crash here.
+        if hasattr(b, "y_raw") and hasattr(b, "rc_edge_y_raw"):
+            badg = chkg = 0
+            for i, nm in enumerate(net["net_name"].tolist()):
+                if nm not in gt:
+                    continue
+                gr = float(b.y_raw[ng + i, 5])
+                chkg += 1
+                if math.isnan(gr) or abs(gr - gt[nm]) > max(1e-4, 1e-3 * gt[nm]):
+                    badg += 1
+                if chkg >= 400:
+                    break
+            check("b ground cap y_raw == raw SPEF ground fF", badg == 0 and chkg > 0, f"{badg}/{chkg}")
+            badc = chkc = 0
+            for k in ci[::max(1, len(ci) // 200)]:
+                u, v = int(b.rc_edge_index[0, k]), int(b.rc_edge_index[1, k])
+                a, bb = bnames[u], bnames[v]
+                key = (a, bb) if a < bb else (bb, a)
+                if key in ct:
+                    chkc += 1
+                    if abs(float(b.rc_edge_y_raw[k, 1]) - ct[key]) > max(1e-4, 1e-3 * ct[key]):
+                        badc += 1
+            check("b coupling rc_edge_y_raw == raw SPEF coupling fF", badc == 0 and chkc > 0, f"{badc}/{chkc}")
 
     # ---- global_feat vs metadata ----
     md = pd.read_csv(feat + "/metadata.csv")
@@ -2295,8 +2480,14 @@ def verify_case(case, design=None, json_out=None):
     check("sum_pin_cap_fF p50 in physical range (0.3..100 fF)",
           npn == 0 or 0.3 <= p50 <= 100, f"p50={p50:.3f} fF")
     check("hpwl_um >= 0", bool((net["hpwl_um"].astype(float) >= 0).all()))
-    check("num_drivers >= 1 on all signal nets",
-          bool((net["num_drivers"].astype(int) >= 1).all()))
+    # The extractor no longer fabricates a driver (2026-07-14), so an individual
+    # signal net may legitimately read num_drivers==0 (undriven / a liberty
+    # parse-miss surfaced honestly). Each net's value is already validated against
+    # the independent DEF+liberty recompute ("ext.net num_drivers vs liberty/DEF
+    # dirs"); here just guard against a wholly-broken (all-zero) column. Dropped
+    # the old `>= 1 on ALL nets` assert, which relied on the removed force-fill.
+    check("num_drivers column not all-zero (>=1 on some signal net)",
+          bool((net["num_drivers"].astype(int) >= 1).any()))
 
     # ---- wide-coverage extension: X/Y values vs independently re-parsed
     # liberty/LEF/DEF truth, structural gates, regression probes ----

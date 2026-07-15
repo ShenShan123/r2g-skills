@@ -470,9 +470,19 @@ def classify_pin_type(master_name, pin_name, lib_db, is_io=False):
     return 14
 
 
-def get_pin_abs_pos_um(inst_x_um, inst_y_um, _orient, _master_name, _pin_name):
-    # Pin-level geometry is not parsed from the LEF; pins inherit the instance origin.
-    # HPWL / pin x/y-std are therefore cell-origin approximations (documented).
+def get_pin_abs_pos_um(inst_x_um, inst_y_um, orient, master_name, pin_name, geom=None):
+    """Absolute pin position (um).
+
+    With ``geom`` (from ``techlib.lef.macro_pin_geometry`` over the cell/macro
+    LEFs) the pin is placed at the instance origin plus its orientation-aware
+    in-cell offset — true intra-cell pin geometry (matters for macros and for a
+    net's pin-position spread ``pin_x/y_std_um``). Without ``geom`` (no cell LEF
+    resolvable) it falls back to the instance origin, the historical cell-origin
+    approximation. See techlib.lef.pin_abs_pos_um.
+    """
+    if geom:
+        from techlib import lef  # local import avoids any techlib import-order coupling
+        return lef.pin_abs_pos_um(geom, inst_x_um, inst_y_um, orient, master_name, pin_name)
     return inst_x_um, inst_y_um
 
 

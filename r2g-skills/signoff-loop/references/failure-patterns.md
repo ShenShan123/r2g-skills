@@ -4216,3 +4216,50 @@ convergence. Test: `test_flow_scope_ingest.py` (empty projection ⇒ default 0 +
 
 **Lesson:** an equality honesty gate (`A == B`) is trivially satisfied by the empty set. Any convergence check
 must also assert non-empty COVERAGE, or "nothing measured" is indistinguishable from "everything agrees".
+
+### 47. RTL2Graph_v3 reference alignment — raw-label twins + num_drivers no-fill + LEF pin geometry; 4 reference bugs NOT ported (2026-07-14)
+
+A fresh `RTL2Graph_v3` reference drop ("updated after debugging") was compared subsystem-by-subsystem against
+`def-graph`. Result: on correctness the reference is **behind** ours (it never absorbed our 2026-07 silent-value
+fixes), while it made three deliberate changes worth adopting. Three were adopted; four reference bugs were
+reported and deliberately NOT aligned backward.
+
+**Adopted from the reference (TDD, regenerated cordic sky130hs → verifier 204/204):**
+- **Raw-label twins.** The reference switched its label extractors to the raw "EDA-Schema / CircuitNet" value.
+  Rather than replace our normalized targets, we now emit BOTH: `data.y_raw` / `edge_y_raw` / `rc_edge_y_raw`
+  mirror the normalized tensors slot-for-slot with the raw physical value (sourced from the label CSVs' raw
+  columns, which already existed). A trainer picks either convention with no regen. Verifier gates: shape==,
+  NaN-parity per slot, and the clean `log1p` identities (wirelength y4, ground cap y5, coupling/resistance edges).
+- **`num_drivers` force-fill removed** — see #47-adjacent note in this section / CLAUDE.md. The extractor no
+  longer fabricates `num_drivers=1` (which also corrupted `num_sinks`); a parse-miss now honestly reads 0. The
+  verifier's `>= 1 on ALL nets` assert (depended on the fill) was relaxed to `>= 1 on SOME net`.
+- **LEF pin-center geometry** — `techlib.lef.macro_pin_geometry` + `apply_orient` place each pin at its true
+  orientation-aware in-cell center, so `hpwl_um` / `pin_x/y_std_um` are real geometry (matters for macros).
+  `run_features.sh` now exports `SC_LEF`/`ADDITIONAL_LEFS`; the verifier reproduces pin-center HPWL with an
+  independent geometry parse. Empty cell LEF ⇒ instance-origin fallback (old behavior).
+  - **`apply_orient` FN/FS swap (code-review catch).** The initial port carried the RTL2Graph original's
+    transposed FN/FS: FN returned MX `(x,H-y)` and FS returned MY `(W-x,y)` — the reverse of DEF/OpenDB
+    (FN=MY reflect-X, FS=MX reflect-Y). FS is the alternating-row vertical flip = **~half of all std cells**
+    (cordic: 2488/5105; aes_core ~49%), so `hpwl_um`/`pin_x/y_std_um` were wrong for every net touching a
+    flipped cell. Worse, the verifier's `_v_apply_orient` AND the unit test replicated the *same* swap, so
+    the firewall was illusory and the build verified 204/204 green. Fixed by swapping FN↔FS, then **validated
+    against OpenDB placed pin locations** (cordic: FS=MX matched 2488/2488) — the only true oracle for
+    orientation math. **Lesson:** an "independent" re-derivation copied from the same source is NOT
+    independent; validate geometry/transform math against the tool's own output, and encode the oracle's
+    values (not a hand-derivation) in the test.
+
+**Reference bugs found (present in `RTL2Graph_v3`, already fixed in ours — DO NOT "align" ours toward the
+reference here, it would REGRESS us):**
+1. **Congestion vertical-demand transpose** — the reference keys vertical demand `(y,x)`; ours forces `(x,y)`
+   (the 2026-07-05 ~79.7%-wrong defect). The reference's new standard-RUDY congestion is *also* transposed.
+2. **Wirelength/congestion don't strip RECT patch metal** — inflates length ~100–400× on RECT-bearing DEFs
+   (sky130); ours uses `techlib.def_parse.route_segments`.
+3. **Timing TCL joins STA name to ODB name without de-escaping** — drops every bus-named register
+   (`slack=INF`); ours joins on a backslash-stripped canonical name.
+4. **c/d/e/f `build_directed_edges` misalignment (our "bug #5")** — the reference concatenates `edge_index` as
+   `[all-fwd | all-rev]` but `repeat_interleave`s the attrs pairwise, misaligning `edge_attr`/`edge_y` for every
+   folded edge past the first; ours interleaves `[fwd,rev]`. (The reference kept this even after its debugging.)
+
+**Lesson:** an upstream "debugged" reference is a *hypothesis*, not ground truth. Diff it subsystem-by-subsystem,
+separate genuine improvements (adopt) from its own bugs (report, never port). Where the fork already fixed a
+class of defect, aligning naively re-introduces it.
