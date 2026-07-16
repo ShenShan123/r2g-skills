@@ -32,9 +32,19 @@ distinct from the physical-topology edge_index: coupling cap on net<->net edges
 (driver-pin<->driver-pin where nets are folded), equivalent resistance on
 same-net pin<->pin edges. See graph_lib.attach_rc_labels + label-extraction.md.
 
+Output is HETEROGENEOUS by default (2026-07-16): each <variant>_graph.pt is a
+torch_geometric HeteroData with per-type node stores (gate/net/iopin/pin) and
+(src_type, relation, dst_type) edge stores — the relation is the folded entity
+(b physical edges -> "connects"; c/d/e/f -> the edge_schema entity; RC parasitics
+-> "rc_coupling"/"rc_resistance"). The verified homogeneous Data above is still
+built first as the source of truth; graph_lib.homo_to_hetero re-views it WITHOUT
+changing a value, and graph_lib.hetero_to_homo is the exact inverse. --kind homo
+restores the legacy homogeneous format; --kind both writes both. See
+references/graph-dataset.md ("Heterogeneous graphs").
+
 Usage:
   build_graphs.py --features <dir> --labels <dir> --design <name> \
-      --out-dir <dir> [--variants bcdef] [--graph-id N]
+      --out-dir <dir> [--variants bcdef] [--kind hetero|homo|both] [--graph-id N]
 
 Writes <out-dir>/<variant>_graph.pt + <out-dir>/graph_manifest.json.
 Requires torch + torch_geometric (run_graphs.sh probes and skips cleanly).
@@ -501,6 +511,16 @@ def _nan_frac(t):
     return float(torch.isnan(t).float().mean()) if t.numel() else 0.0
 
 
+def _hetero_stats(hetero):
+    """Per-type node counts + per-relation edge counts of a HeteroData view (the
+    default graph_kind). The homo totals in _variant_stats still hold — this is
+    the by-store breakdown of the SAME graph, keyed for the manifest."""
+    node_types = {nt: int(hetero[nt].x.shape[0]) for nt in hetero.node_types}
+    edge_types = {"__".join(et): int(hetero[et].edge_index.shape[1])
+                  for et in hetero.edge_types}
+    return {"node_types": node_types, "edge_types": edge_types}
+
+
 def _variant_stats(variant, data):
     torch = _torch()
     nt = data.x[:, 0].long()
@@ -531,6 +551,14 @@ def main():
     ap.add_argument("--design", required=True, help="DESIGN_NAME == graph_id == labels' Design key")
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--variants", default="bcdef")
+    ap.add_argument("--kind", default="hetero", choices=["hetero", "homo", "both"],
+                    help="output graph_kind (default hetero): 'hetero' writes each "
+                         "{v}_graph.pt as a torch_geometric HeteroData (per-type node "
+                         "stores + (src,relation,dst) edge stores); 'homo' writes the "
+                         "legacy homogeneous Data; 'both' writes hetero {v}_graph.pt "
+                         "AND homo {v}_graph_homo.pt. The verified homogeneous Data is "
+                         "always the internal source of truth (graph_lib.homo_to_hetero "
+                         "is a value-preserving re-view). See graph-dataset.md.")
     ap.add_argument("--graph-id", type=int, default=0, help="x1 value (corpus-level id; default 0)")
     ap.add_argument("--platform", default="",
                     help="build-time platform provenance, stamped into the manifest "
@@ -598,6 +626,11 @@ def main():
     manifest = {
         "design": args.design,
         "graph_id": args.graph_id,
+        # The dataset default is heterogeneous (2026-07-16): {v}_graph.pt is a
+        # torch_geometric HeteroData re-view of the verified homogeneous Data.
+        # 'homo' restores the legacy format; 'both' ships both. verify_graph_dataset.py
+        # converts hetero->homo at load, so the full homo check surface certifies it.
+        "graph_kind": args.kind,
         # Build-time provenance: which platform's libs keyed this dataset. The
         # verifier (and any corpus merge) must trust THIS over the project's
         # mutable config.mk, which later rounds re-point (failure-patterns #30).
@@ -615,11 +648,30 @@ def main():
                    else "ok_with_label_gaps"),
     }
     for v in variants:
+        # The homogeneous Data is ALWAYS built first — it is the verified source of
+        # truth (every filter/sort/label-join happens here). The hetero output is a
+        # pure value-preserving re-view (graph_lib.homo_to_hetero).
         data = BUILDERS[v](views7, label_dfs, args.design, args.design, args.graph_id, args.features, rc=rc)
-        out_pt = os.path.join(args.out_dir, f"{v}_graph.pt")
-        torch.save(data, out_pt)
-        manifest["variants"][v] = dict(_variant_stats(v, data), path=os.path.abspath(out_pt))
-        print(f"{v}_graph: nodes={data.x.shape[0]} edges={data.edge_index.shape[1]} -> {out_pt}")
+        stats = dict(_variant_stats(v, data))
+        paths = {}
+        if args.kind in ("hetero", "both"):
+            hetero = gl.homo_to_hetero(data)
+            het_pt = os.path.join(args.out_dir, f"{v}_graph.pt")
+            torch.save(hetero, het_pt)
+            paths["hetero"] = os.path.abspath(het_pt)
+            stats["hetero"] = _hetero_stats(hetero)
+        if args.kind in ("homo", "both"):
+            # In 'both' mode the canonical {v}_graph.pt is the hetero default; the
+            # homo lands beside it as {v}_graph_homo.pt.
+            homo_pt = os.path.join(args.out_dir,
+                                   f"{v}_graph.pt" if args.kind == "homo" else f"{v}_graph_homo.pt")
+            torch.save(data, homo_pt)
+            paths["homo"] = os.path.abspath(homo_pt)
+        stats["path"] = paths.get("hetero", paths.get("homo"))
+        stats["paths"] = paths
+        manifest["variants"][v] = stats
+        print(f"{v}_graph[{args.kind}]: nodes={data.x.shape[0]} edges={data.edge_index.shape[1]} "
+              f"-> {stats['path']}")
 
     man_path = os.path.join(args.out_dir, "graph_manifest.json")
     tmp = man_path + ".tmp"

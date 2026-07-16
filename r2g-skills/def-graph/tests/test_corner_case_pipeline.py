@@ -217,8 +217,33 @@ def test_congestion_two_vector_raw_and_smoothed(built):
 # graph topology (variant node/edge counts + clock/fill exclusion + symmetry)    #
 # ---------------------------------------------------------------------------- #
 def _load(built, variant):
+    """Load a built {v}_graph.pt as a homogeneous Data. The default graph_kind is
+    HETERO (2026-07-16), so reconstruct homo via graph_lib.hetero_to_homo — which
+    also transitively exercises reconstruction fidelity, since the detailed
+    homo-structure assertions below run on the reconstructed graph."""
     import torch
-    return torch.load(os.path.join(built["dataset"], f"{variant}_graph.pt"), weights_only=False)
+    from torch_geometric.data import HeteroData
+    import graph_lib as gl
+    obj = torch.load(os.path.join(built["dataset"], f"{variant}_graph.pt"), weights_only=False)
+    return gl.hetero_to_homo(obj) if isinstance(obj, HeteroData) else obj
+
+
+def test_default_graph_kind_is_hetero(built):
+    """The corner fixture builds with the production default (no --kind), so the
+    manifest + every {v}_graph.pt must be heterogeneous, with the per-view node
+    types laid out as HeteroData stores."""
+    import torch
+    from torch_geometric.data import HeteroData
+    assert built["manifest"]["graph_kind"] == "hetero"
+    exp_types = {"b": {"gate", "net", "iopin", "pin"}, "c": {"gate", "net", "iopin"},
+                 "d": {"gate", "iopin", "pin"}, "e": {"iopin", "pin"}, "f": {"gate", "iopin"}}
+    for v in "bcdef":
+        h = torch.load(os.path.join(built["dataset"], f"{v}_graph.pt"), weights_only=False)
+        assert isinstance(h, HeteroData), f"{v}_graph.pt must be HeteroData"
+        assert set(h.node_types) == exp_types[v], f"{v}: node types {list(h.node_types)}"
+        # every edge relation connects only present node types
+        for s, _rel, d in h.edge_types:
+            assert s in exp_types[v] and d in exp_types[v]
 
 
 # Hand-derived from the fixture (see the module docstring for the full working):

@@ -162,18 +162,28 @@ export R2G_SC_LIB_FILES="$SC_LIB_FILES"
 mkdir -p "$DATASET_DIR"
 GRAPH_TIMEOUT="${GRAPH_TIMEOUT:-2400}"
 VARIANTS="${R2G_GRAPH_VARIANTS:-bcdef}"
+# Output graph_kind (default hetero, 2026-07-16): each {b..f}_graph.pt is a
+# torch_geometric HeteroData re-view of the verified homogeneous Data. Set
+# R2G_GRAPH_KIND=homo for the legacy homogeneous format, or =both to ship both
+# ({v}_graph.pt hetero + {v}_graph_homo.pt homo). See references/graph-dataset.md.
+GRAPH_KIND="${R2G_GRAPH_KIND:-hetero}"
 
-echo "Design: $DESIGN_NAME  Platform: $PLATFORM  Variants: $VARIANTS"
+echo "Design: $DESIGN_NAME  Platform: $PLATFORM  Variants: $VARIANTS  Kind: $GRAPH_KIND"
 echo "DEF: $DEF"
 
 timeout --signal=TERM --kill-after=30 "$GRAPH_TIMEOUT" \
   "$GRAPH_PYTHON" "$GRAPH_SRC/build_graphs.py" \
     --features "$FEATURES_DIR" --labels "$LABELS_DIR" \
     --design "$DESIGN_NAME" --out-dir "$DATASET_DIR" --variants "$VARIANTS" \
+    --kind "$GRAPH_KIND" \
     --platform "$PLATFORM" \
     --signoff-health "$REPORTS_DIR/signoff_gate.json"
 
 # --- Synthesis-netlist graph (optional — needs the yosys netlist) ----------
+# NOTE: netlist_graph.pt stays HOMOGENEOUS regardless of R2G_GRAPH_KIND — it is a
+# pre-layout artifact shared with the rtl-acquire corpus supply line (graph_stats.py,
+# dedup, publish gating) whose contract is homogeneous. Only the post-layout dataset
+# views b..f follow the hetero default.
 YOSYS_V=""
 if [[ -n "$RUN_DIR" ]]; then
   for cand in 1_2_yosys.v 1_1_yosys.v; do

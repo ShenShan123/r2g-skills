@@ -109,9 +109,10 @@ SPEF absence degrades cap/RC columns to 0. Batch backfill: `tools/run_features_b
 
 ### 3. Graph datasets (b–f) — `scripts/flow/run_graphs.sh <project-dir> [platform]`
 
-Assembles the five topologies into `<project-dir>/dataset/{b..f}_graph.pt`, plus the
-synthesis-netlist bipartite graph (`netlist_graph.pt`) and a manifest
-(`dataset/graph_manifest.json`, mirrored to `reports/graph_dataset.json`). Runs stages 1–2
+Assembles the five topologies into `<project-dir>/dataset/{b..f}_graph.pt` — **heterogeneous
+`HeteroData` by default** (`R2G_GRAPH_KIND=homo` for the legacy homogeneous format, `both` for
+both) — plus the synthesis-netlist bipartite graph (`netlist_graph.pt`, always homogeneous) and a
+manifest (`dataset/graph_manifest.json`, mirrored to `reports/graph_dataset.json`). Runs stages 1–2
 automatically when their CSVs are missing or older than the DEF (freshness judged by the
 `reports/{features,labels}_stats.json` stage-completion markers, not an early CSV).
 
@@ -121,7 +122,8 @@ R2G_GRAPH_PYTHON=/proj/<you>/pyenvs/r2g-graph/bin/python \
 ```
 
 Needs torch + torch_geometric + pandas; machines without them SKIP cleanly with a HINT.
-`R2G_GRAPH_VARIANTS` selects variants (default `bcdef`); `GRAPH_TIMEOUT` (default 2400s);
+`R2G_GRAPH_VARIANTS` selects variants (default `bcdef`); `R2G_GRAPH_KIND` picks the output
+(`hetero` default / `homo` / `both`); `GRAPH_TIMEOUT` (default 2400s);
 `R2G_DEF`/`R2G_ODB`/`R2G_SPEF` pin the DEF/ODB/SPEF for **both** the feature and label stages
 (so X and Y stay joined on the same DEF), enabling a backend-less reference-DEF build.
 See `references/graph-dataset.md`.
@@ -142,11 +144,17 @@ blockers list says why.
 | **e** | iopin, pin | gates AND nets → pin-clique edges |
 | **f** | gate, iopin | nets → gate-clique edges |
 
-Shared tensor schema: `x[N,10]` (node_type, graph_id, 8 per-type feature slots), `y[N,6]`
-(node_type, congestion, IR drop, timing, wirelength, **RC ground cap**; NaN where a label doesn't
-apply). Folded entities carry their features/labels on `edge_attr[E,8]` / `edge_y[E,6]`,
-interleaved `[fwd0,rev0,fwd1,rev1,...]`. RC **coupling-cap + resistance** labels ride a *separate
-parasitic edge set* (`rc_edge_index` / `rc_edge_type` / `rc_edge_y[E,3]`), distinct from the
+**Default output is heterogeneous** (`HeteroData`): per-type node stores (`gate`/`net`/`iopin`/`pin`)
++ `(src_type, relation, dst_type)` edge stores (relation = the folded entity — b `connects`; c/d/e/f
+from `edge_schema`; RC → `rc_coupling`/`rc_resistance`). It is a value-preserving re-view of the
+homogeneous source of truth below (`graph_lib.homo_to_hetero`, exact inverse `hetero_to_homo`).
+
+Homogeneous tensor schema (the source of truth; hetero stores re-view it — see
+`references/graph-dataset.md` § Heterogeneous graphs): `x[N,10]` (node_type, graph_id, 8 per-type
+feature slots), `y[N,6]` (node_type, congestion, IR drop, timing, wirelength, **RC ground cap**; NaN
+where a label doesn't apply). Folded entities carry their features/labels on `edge_attr[E,8]` /
+`edge_y[E,6]`, interleaved `[fwd0,rev0,fwd1,rev1,...]`. RC **coupling-cap + resistance** labels ride a
+*separate parasitic edge set* (`rc_edge_index` / `rc_edge_type` / `rc_edge_y[E,3]`), distinct from the
 physical-topology edges (present-but-empty where RC doesn't apply, so the schema is uniform). Every
 label tensor has a **RAW twin** (`y_raw` / `edge_y_raw` / `rc_edge_y_raw`) carrying the raw physical
 value (EDA-Schema convention) beside the normalized target, so a trainer picks either. Full

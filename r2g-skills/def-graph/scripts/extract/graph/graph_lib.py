@@ -746,3 +746,350 @@ def attach_rc_labels(data, rc, design_key, *, net_idx=None, pin_idx=None,
         "design_key": design_key,
     }
     return data
+
+
+# --- Heterogeneous re-view (homo Data <-> HeteroData) --------------------------
+# The dataset DEFAULT is a torch_geometric HeteroData (2026-07-16, generalizing
+# the external RTL2Graph ``generate_hetero_bgraph.py`` from the b-graph to all
+# five views b..f). The verified block-positional homogeneous ``Data`` is still
+# the internal source of truth (every filter/sort/label-join is done there, then
+# re-viewed) — homo_to_hetero() is a pure re-view that changes NO value, and
+# hetero_to_homo() is its exact inverse (used by the round-trip test AND, via an
+# INDEPENDENT reimplementation, by tools/verify_graph_dataset.py so the full
+# homo verification surface transitively certifies the hetero graphs).
+#
+# Node stores drop the redundant node_type column (x0/y0 — the store key IS the
+# type) and keep [graph_id, 8 feats] (x) / the 5 label slots (y, y_raw). Edges
+# are grouped into relations (src_type, relation, dst_type): the relation is the
+# folded entity from the view's edge_schema (b-view physical edges -> "connects";
+# c pin-fold -> "pin"/"iopin_connection"; d/e/f -> "gate_pin"/"net"/"gate").
+# Because view e folds BOTH gates and nets onto pin<->pin edges, (src,dst) alone
+# is ambiguous — the folded entity in the relation triple disambiguates. RC
+# parasitic edges become their own relations ("rc_coupling"/"rc_resistance") with
+# a 2-wide [coupling_label, equiv_res_label] edge_y (+ raw twin). See
+# references/graph-dataset.md ("Heterogeneous graphs").
+
+HETERO_NODE_TYPES = {
+    NODE_TYPE_GATE: "gate",
+    NODE_TYPE_NET: "net",
+    NODE_TYPE_IO_PIN: "iopin",
+    NODE_TYPE_PIN: "pin",
+}
+HETERO_NODE_TYPE_IDS = {v: k for k, v in HETERO_NODE_TYPES.items()}
+# b-view physical edges carry no folded entity / edge_type -> a single relation.
+B_EDGE_RELATION = "connects"
+RC_EDGE_RELATIONS = {
+    RC_EDGE_TYPE_COUPLING: "rc_coupling",
+    RC_EDGE_TYPE_RESISTANCE: "rc_resistance",
+}
+RC_EDGE_RELATION_IDS = {v: k for k, v in RC_EDGE_RELATIONS.items()}
+
+
+def _edge_relation_name(edge_schema, etype_id):
+    """Relation label for a physical/folded edge. b-view edges (no edge_type)
+    use ``connects``; folded views name the relation after the folded entity in
+    their ``edge_schema['edge_type']`` map (first token, e.g. "pin", "net",
+    "gate_pin")."""
+    if etype_id is None:
+        return B_EDGE_RELATION
+    if edge_schema:
+        m = edge_schema.get("edge_type") or {}
+        name = m.get(etype_id, m.get(str(etype_id)))
+        if name:
+            return str(name).strip().split()[0]
+    return f"etype{int(etype_id)}"
+
+
+def _hetero_present_types(node_type):
+    torch = _torch()
+    return [t for t in sorted(HETERO_NODE_TYPES)
+            if int((node_type == t).sum()) > 0]
+
+
+def _hetero_local_maps(node_type, present, n_total):
+    """Per present node type: (global-index tensor, global->local remap table)."""
+    torch = _torch()
+    masks, local_of = {}, {}
+    for t in present:
+        m = (node_type == t).nonzero(as_tuple=False).view(-1)
+        masks[t] = m
+        tbl = torch.full((n_total,), -1, dtype=torch.long)
+        tbl[m] = torch.arange(m.numel(), dtype=torch.long)
+        local_of[t] = tbl
+    return masks, local_of
+
+
+def _split_edges_to_hetero(h, data, node_type, local_of, present):
+    """Group data.edge_index columns into (src, relation, dst) edge stores,
+    slicing edge_attr/edge_type/edge_y/edge_y_raw per group. edge_y/edge_y_raw
+    drop the redundant edge_type column 0 (-> 5-wide)."""
+    torch = _torch()
+    ei = getattr(data, "edge_index", None)
+    if ei is None or ei.shape[1] == 0:
+        return
+    edge_attr = getattr(data, "edge_attr", None)
+    edge_type = getattr(data, "edge_type", None)
+    edge_y = getattr(data, "edge_y", None)
+    edge_y_raw = getattr(data, "edge_y_raw", None)
+    edge_schema = getattr(data, "edge_schema", None)
+    src_t = node_type[ei[0]]
+    dst_t = node_type[ei[1]]
+    for st in present:
+        for dt in present:
+            base = (src_t == st) & (dst_t == dt)
+            if not bool(base.any()):
+                continue
+            if edge_type is None:
+                groups = [(None, base)]
+            else:
+                groups = [(int(eid), base & (edge_type == int(eid)))
+                          for eid in edge_type[base].unique().tolist()]
+            for eid, mask in groups:
+                cols = mask.nonzero(as_tuple=False).view(-1)
+                if cols.numel() == 0:
+                    continue
+                rel = _edge_relation_name(edge_schema, eid)
+                store = h[HETERO_NODE_TYPES[st], rel, HETERO_NODE_TYPES[dt]]
+                store.edge_index = torch.stack(
+                    [local_of[st][ei[0][cols]], local_of[dt][ei[1][cols]]], dim=0
+                ).contiguous()
+                if edge_attr is not None:
+                    store.edge_attr = edge_attr[cols].contiguous()
+                if edge_type is not None:
+                    store.edge_type = edge_type[cols].contiguous()
+                if edge_y is not None:
+                    store.edge_y = edge_y[cols][:, 1:].contiguous()
+                if edge_y_raw is not None:
+                    store.edge_y_raw = edge_y_raw[cols][:, 1:].contiguous()
+
+
+def _split_rc_edges_to_hetero(h, data, node_type, local_of, present):
+    """Group rc_edge_index into rc_coupling / rc_resistance relation stores. The
+    2-wide [coupling_label, equiv_res_label] slice rides as rc_edge_y (+ raw);
+    the schema is always recorded so a consumer can discover it even when empty."""
+    torch = _torch()
+    sch = getattr(data, "rc_edge_schema", None)
+    if sch is not None:
+        h.rc_edge_schema = sch
+    rc_ei = getattr(data, "rc_edge_index", None)
+    rc_type = getattr(data, "rc_edge_type", None)
+    if rc_ei is None or rc_ei.shape[1] == 0 or rc_type is None:
+        return
+    rc_y = getattr(data, "rc_edge_y", None)
+    rc_y_raw = getattr(data, "rc_edge_y_raw", None)
+    src_t = node_type[rc_ei[0]]
+    dst_t = node_type[rc_ei[1]]
+    for st in present:
+        for dt in present:
+            base = (src_t == st) & (dst_t == dt)
+            if not bool(base.any()):
+                continue
+            for rid in rc_type[base].unique().tolist():
+                rid = int(rid)
+                cols = (base & (rc_type == rid)).nonzero(as_tuple=False).view(-1)
+                if cols.numel() == 0:
+                    continue
+                rel = RC_EDGE_RELATIONS.get(rid, f"rc_type{rid}")
+                store = h[HETERO_NODE_TYPES[st], rel, HETERO_NODE_TYPES[dt]]
+                store.edge_index = torch.stack(
+                    [local_of[st][rc_ei[0][cols]], local_of[dt][rc_ei[1][cols]]], dim=0
+                ).contiguous()
+                store.rc_edge_type = rc_type[cols].contiguous()
+                if rc_y is not None:
+                    store.rc_edge_y = rc_y[cols][:, 1:].contiguous()
+                if rc_y_raw is not None:
+                    store.rc_edge_y_raw = rc_y_raw[cols][:, 1:].contiguous()
+
+
+def homo_to_hetero(data):
+    """Re-view a homogeneous b..f ``Data`` as a torch_geometric ``HeteroData``,
+    changing NO value. See the module note above and hetero_to_homo() (inverse)."""
+    torch = _torch()
+    from torch_geometric.data import HeteroData
+
+    h = HeteroData()
+    x = data.x
+    node_type = x[:, 0].long()
+    n_total = int(node_type.numel())
+    present = _hetero_present_types(node_type)
+    masks, local_of = _hetero_local_maps(node_type, present, n_total)
+
+    y = getattr(data, "y", None)
+    y_raw = getattr(data, "y_raw", None)
+    node_name = getattr(data, "node_name", None)
+    x_schema = getattr(data, "x_schema", None) or {}
+    x_schema_per_type = {}
+    for t in present:
+        name = HETERO_NODE_TYPES[t]
+        m = masks[t]
+        h[name].x = x[m][:, 1:].contiguous()          # drop node_type col0
+        if y is not None:
+            h[name].y = y[m][:, 1:].contiguous()      # drop node_type col0
+        if y_raw is not None:
+            h[name].y_raw = y_raw[m][:, 1:].contiguous()
+        if node_name is not None:
+            h[name].node_name = [node_name[int(i)] for i in m.tolist()]
+        feat_cols = x_schema.get(f"{name}_x2_9")
+        if feat_cols:
+            x_schema_per_type[name] = ["graph_id", *feat_cols]
+
+    _split_edges_to_hetero(h, data, node_type, local_of, present)
+    _split_rc_edges_to_hetero(h, data, node_type, local_of, present)
+
+    # graph-level provenance / schema (kept verbatim so hetero_to_homo restores it)
+    h.graph_kind = "hetero"
+    h.graph_id = float(x[0, 1].item()) if n_total else 0.0
+    h.feature_graph_key = getattr(data, "feature_graph_key", "")
+    gf = getattr(data, "global_feat", None)
+    if gf is not None:
+        h.global_feat = gf
+    for attr in ("x_schema", "y_schema", "y_raw_schema", "edge_schema"):
+        v = getattr(data, attr, None)
+        if v is not None:
+            setattr(h, attr, v)
+    if x_schema_per_type:
+        h.x_schema_per_type = x_schema_per_type
+    return h
+
+
+def hetero_to_homo(h):
+    """Exact inverse of homo_to_hetero: reassemble the block-positional
+    homogeneous ``Data``.
+
+    Node stores are concatenated in canonical type-id order (gate, net, iopin,
+    pin), which reproduces the homo node order because every view lays its blocks
+    out in ascending type id. Edge order is regrouped-by-relation (NOT preserved),
+    but each edge keeps its own attr/type/y row, and the downstream verifier keys
+    on node position + per-edge endpoints, never on edge order."""
+    torch = _torch()
+    from torch_geometric.data import Data
+
+    node_type_names = set(h.node_types)
+    order = [t for t in sorted(HETERO_NODE_TYPES)
+             if HETERO_NODE_TYPES[t] in node_type_names]
+
+    base_off, off = {}, 0
+    xs, ys, yraws, names = [], [], [], []
+    has_y, has_yraw = True, True
+    for t in order:
+        store = h[HETERO_NODE_TYPES[t]]
+        xt = store.x
+        n = int(xt.shape[0])
+        base_off[t] = off
+        off += n
+        col0 = torch.full((n, 1), float(t), dtype=torch.float32)
+        xs.append(torch.cat([col0, xt.float()], dim=1))
+        sy = getattr(store, "y", None)
+        if sy is not None:
+            ys.append(torch.cat([col0, sy.float()], dim=1))
+        else:
+            has_y = False
+        syr = getattr(store, "y_raw", None)
+        if syr is not None:
+            yraws.append(torch.cat([col0, syr.float()], dim=1))
+        else:
+            has_yraw = False
+        sn = getattr(store, "node_name", None)
+        if sn is not None:
+            names.extend(list(sn))
+
+    x = torch.cat(xs, dim=0) if xs else torch.zeros((0, 10), dtype=torch.float32)
+    data = Data(x=x)
+    if has_y and ys:
+        data.y = torch.cat(ys, dim=0)
+    if has_yraw and yraws:
+        data.y_raw = torch.cat(yraws, dim=0)
+    if names:
+        data.node_name = names
+
+    rc_rels = set(RC_EDGE_RELATIONS.values())
+    e_src, e_dst, e_attr, e_type, e_y, e_yraw = [], [], [], [], [], []
+    have_attr = have_type = have_y = have_yraw = False
+    rc_src, rc_dst, rc_type, rc_y, rc_yraw = [], [], [], [], []
+    have_rc_y = have_rc_yraw = False
+    for (sname, rel, dname) in h.edge_types:
+        store = h[sname, rel, dname]
+        ei = getattr(store, "edge_index", None)
+        if ei is None or ei.shape[1] == 0:
+            continue
+        st, dt = HETERO_NODE_TYPE_IDS[sname], HETERO_NODE_TYPE_IDS[dname]
+        n = int(ei.shape[1])
+        g_src = ei[0] + base_off[st]
+        g_dst = ei[1] + base_off[dt]
+        if rel in rc_rels:
+            rct = getattr(store, "rc_edge_type", None)
+            if rct is None:
+                rct = torch.full((n,), RC_EDGE_RELATION_IDS.get(rel, 0), dtype=torch.long)
+            rc_src.append(g_src)
+            rc_dst.append(g_dst)
+            rc_type.append(rct)
+            col0 = rct.view(-1, 1).float()
+            ry = getattr(store, "rc_edge_y", None)
+            if ry is not None:
+                have_rc_y = True
+                rc_y.append(torch.cat([col0, ry.float()], dim=1))
+            ryr = getattr(store, "rc_edge_y_raw", None)
+            if ryr is not None:
+                have_rc_yraw = True
+                rc_yraw.append(torch.cat([col0, ryr.float()], dim=1))
+        else:
+            e_src.append(g_src)
+            e_dst.append(g_dst)
+            ety = getattr(store, "edge_type", None)
+            col0 = (ety.view(-1, 1).float() if ety is not None
+                    else torch.zeros((n, 1), dtype=torch.float32))
+            at = getattr(store, "edge_attr", None)
+            if at is not None:
+                have_attr = True
+                e_attr.append(at.float())
+            else:
+                e_attr.append(torch.zeros((n, 8), dtype=torch.float32))
+            if ety is not None:
+                have_type = True
+                e_type.append(ety)
+            else:
+                e_type.append(torch.zeros((n,), dtype=torch.long))
+            ey = getattr(store, "edge_y", None)
+            if ey is not None:
+                have_y = True
+                e_y.append(torch.cat([col0, ey.float()], dim=1))
+            eyr = getattr(store, "edge_y_raw", None)
+            if eyr is not None:
+                have_yraw = True
+                e_yraw.append(torch.cat([col0, eyr.float()], dim=1))
+
+    if e_src:
+        data.edge_index = torch.stack([torch.cat(e_src), torch.cat(e_dst)], dim=0)
+        if have_attr:
+            data.edge_attr = torch.cat(e_attr, dim=0)
+        if have_type:
+            data.edge_type = torch.cat(e_type, dim=0)
+        if have_y:
+            data.edge_y = torch.cat(e_y, dim=0)
+        if have_yraw:
+            data.edge_y_raw = torch.cat(e_yraw, dim=0)
+    else:
+        data.edge_index = torch.empty((2, 0), dtype=torch.long)
+
+    if rc_src:
+        data.rc_edge_index = torch.stack([torch.cat(rc_src), torch.cat(rc_dst)], dim=0)
+        data.rc_edge_type = torch.cat(rc_type)
+        if have_rc_y:
+            data.rc_edge_y = torch.cat(rc_y, dim=0)
+        if have_rc_yraw:
+            data.rc_edge_y_raw = torch.cat(rc_yraw, dim=0)
+    else:
+        data.rc_edge_index = torch.empty((2, 0), dtype=torch.long)
+        data.rc_edge_type = torch.empty((0,), dtype=torch.long)
+        data.rc_edge_y = torch.zeros((0, 3), dtype=torch.float32)
+        data.rc_edge_y_raw = torch.zeros((0, 3), dtype=torch.float32)
+
+    data.feature_graph_key = getattr(h, "feature_graph_key", "")
+    gf = getattr(h, "global_feat", None)
+    if gf is not None:
+        data.global_feat = gf
+    for attr in ("x_schema", "y_schema", "y_raw_schema", "edge_schema", "rc_edge_schema"):
+        v = getattr(h, attr, None)
+        if v is not None:
+            setattr(data, attr, v)
+    return data

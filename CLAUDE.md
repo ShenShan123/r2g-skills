@@ -254,9 +254,10 @@ runs or fixes PnR** — produce those inputs with `signoff-loop` first. **Full d
    (`nodes_{gate,net,iopin,pin}`), per-edge (`edges_{gate_pin,pin_net,iopin_net}`), and graph-level
    (`metadata.csv`) tables.
 3. **Graphs** — `run_graphs.sh` → `dataset/{b..f}_graph.pt` + `netlist_graph.pt` + `graph_manifest.json`.
-   Joins X+Y into the five PyG topologies. The **only** stage needing the torch venv; SKIPs cleanly with a
-   HINT when absent (so a missing venv looks like success — verify the manifest `status`). Auto-runs stages
-   1–2 when their CSVs are stale — freshness judged by the `reports/{features,labels}_stats.json`
+   Joins X+Y into the five PyG topologies, emitted as **`HeteroData` by default** (2026-07-16;
+   `R2G_GRAPH_KIND=homo`/`both` overrides — see below). The **only** stage needing the torch venv; SKIPs
+   cleanly with a HINT when absent (so a missing venv looks like success — verify the manifest `status`).
+   Auto-runs stages 1–2 when their CSVs are stale — freshness judged by the `reports/{features,labels}_stats.json`
    stage-completion markers (written LAST), **not** an early CSV (the 2026-07-05 irdrop half-finish incident).
 
 ### The data contract (never break this)
@@ -264,11 +265,21 @@ runs or fixes PnR** — produce those inputs with `signoff-loop` first. **Full d
 - X and Y read the SAME `6_final.def`, so rows **join on `graph_id`(=`DESIGN_NAME`) + `inst_name`/`net_name`**.
   Overriding the DEF is via the namespaced `R2G_DEF` ONLY — the bare ORFS `DEF_FILE` is intentionally NOT
   honored (an operator export would silently pin every batch design to one DEF).
-- Tensor schema (uniform across views): `x[N,10]` (node_type, graph_id, 8 per-type feature slots),
-  `y[N,6]` (node_type, congestion, IR drop, timing, wirelength, **RC ground cap `y5`**; NaN where a label
-  doesn't apply). Folded entities carry features/labels on `edge_attr[E,8]`/`edge_y[E,6]`, INTERLEAVED
-  `[fwd0,rev0,fwd1,rev1,…]` so pairwise-repeated attr rows align (do not "simplify" back to
-  `[all-fwd|all-rev]` — audit bug #5). `edge_y[:,5]` stays all-NaN (ground cap is never an edge label).
+- **Default `graph_kind` is heterogeneous** (`HeteroData`): per-type node stores + `(src_type, relation,
+  dst_type)` edge stores (relation = folded entity — b `connects`; c/d/e/f from `edge_schema`; RC →
+  `rc_coupling`/`rc_resistance`; view **e**'s pin↔pin gate-vs-net cliques *need* the relation in the key).
+  The homogeneous `Data` below is still built first as the **verified source of truth** —
+  `graph_lib.homo_to_hetero` is a value-preserving re-view, `hetero_to_homo` the exact inverse, and
+  `verify_graph_dataset.py` reconstructs homo (independently) at load so the full homo check surface certifies
+  it. `netlist_graph.pt` stays homogeneous (shared rtl-acquire artifact). Never make a builder emit hetero
+  natively — the homo path is where every filter/sort/label-join is verified.
+- Tensor schema (uniform across views; the homo source of truth): `x[N,10]` (node_type, graph_id, 8 per-type
+  feature slots), `y[N,6]` (node_type, congestion, IR drop, timing, wirelength, **RC ground cap `y5`**; NaN
+  where a label doesn't apply). Folded entities carry features/labels on `edge_attr[E,8]`/`edge_y[E,6]`,
+  INTERLEAVED `[fwd0,rev0,fwd1,rev1,…]` so pairwise-repeated attr rows align (do not "simplify" back to
+  `[all-fwd|all-rev]` — audit bug #5). `edge_y[:,5]` stays all-NaN (ground cap is never an edge label). (In
+  the hetero re-view the redundant `node_type`/`edge_type` col0 is dropped: hetero `x` is width 9, `y`/`edge_y`
+  width 5; `hetero_to_homo` re-inserts it.)
 - **Every label tensor has a RAW twin** (2026-07-14 RTL2Graph alignment): `y_raw`/`edge_y_raw`/
   `rc_edge_y_raw` mirror `y`/`edge_y`/`rc_edge_y` slot-for-slot but hold the raw physical value
   (EDA-Schema/CircuitNet convention: demand/cap ratio, mV, **path-delay ns** (`Path_Delay_ns`, NOT raw

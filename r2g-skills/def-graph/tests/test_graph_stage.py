@@ -145,6 +145,14 @@ def _build(variant, mini_csvs):
     return bg.BUILDERS[variant](views7, label_dfs, "mini", "mini", 0, feat)
 
 
+def _load_pt(path):
+    """Load a built {v}_graph.pt as a homogeneous Data (the default output is
+    HeteroData, so convert via graph_lib.hetero_to_homo)."""
+    from torch_geometric.data import HeteroData
+    obj = torch.load(path, weights_only=False)
+    return gl.hetero_to_homo(obj) if isinstance(obj, HeteroData) else obj
+
+
 @pytestmark_tensor
 def test_directed_edges_interleave_alignment():
     attr = torch.tensor([[1.0], [2.0], [3.0]])
@@ -267,10 +275,17 @@ def test_manifest_written_with_stats(mini_csvs, tmp_path, monkeypatch, capsys):
         "--design", "mini", "--out-dir", str(out), "--variants", "bf"])
     bg.main()
     import json
+    from torch_geometric.data import HeteroData
     man = json.load(open(out / "graph_manifest.json"))
     assert man["status"] == "ok" and set(man["variants"]) == {"b", "f"}
-    assert man["variants"]["b"]["nodes"] == 7
+    assert man["graph_kind"] == "hetero"                       # default is hetero
+    assert man["variants"]["b"]["nodes"] == 7                  # homo total preserved
     assert os.path.isfile(out / "b_graph.pt") and os.path.isfile(out / "f_graph.pt")
+    # {v}_graph.pt is a HeteroData; the manifest's per-view hetero breakdown matches
+    b = torch.load(out / "b_graph.pt", weights_only=False)
+    assert isinstance(b, HeteroData)
+    assert man["variants"]["b"]["hetero"]["node_types"] == {
+        nt: int(b[nt].x.shape[0]) for nt in b.node_types}
 
 
 @pytestmark_tensor
@@ -438,7 +453,101 @@ def test_manifest_flags_label_gap_and_y_goes_nan(mini_csvs, tmp_path, monkeypatc
     assert man["status"] == "ok_with_label_gaps"
     assert man["label_health"]["ir_drop.csv"]["status"] == "unusable"
     assert man["label_health"]["wirelength.csv"]["status"] == "ok"
-    data = torch.load(out / "b_graph.pt", weights_only=False)
+    data = _load_pt(out / "b_graph.pt")   # hetero default -> reconstruct homo
     gate_mask = data.x[:, 0] == 0
     assert bool(torch.isnan(data.y[gate_mask, 2]).all())      # irdrop slot NaN
     assert not bool(torch.isnan(data.y[gate_mask, 1]).all())  # congestion intact
+
+
+# --------------------------------------------------------------------------- #
+# Heterogeneous graphs (the 2026-07-16 default graph_kind).                    #
+# --------------------------------------------------------------------------- #
+
+def _edge_multiset(data):
+    """Order-free signature of a homo graph's directed edges + their attr/type/y
+    (for round-trip comparison, since hetero regroups edge order by relation)."""
+    ei = data.edge_index
+    et = getattr(data, "edge_type", None)
+    ea = getattr(data, "edge_attr", None)
+    ey = getattr(data, "edge_y", None)
+    rows = []
+    for k in range(ei.shape[1]):
+        key = [int(ei[0, k]), int(ei[1, k])]
+        if et is not None:
+            key.append(int(et[k]))
+        if ea is not None:
+            key.append(tuple(round(float(v), 5) for v in ea[k].tolist()))
+        if ey is not None:
+            key.append(tuple(("nan" if v != v else round(float(v), 5)) for v in ey[k].tolist()))
+        rows.append(tuple(key))
+    return sorted(rows)
+
+
+def _tensor_eq(a, b):
+    if a is None and b is None:
+        return True
+    if a is None or b is None or a.shape != b.shape:
+        return False
+    return bool(torch.equal(torch.nan_to_num(a, nan=-1e30), torch.nan_to_num(b, nan=-1e30)))
+
+
+@pytestmark_tensor
+@pytest.mark.parametrize("variant", ["b", "c", "d", "e", "f"])
+def test_homo_to_hetero_round_trip_exact(variant, mini_csvs):
+    """homo -> hetero -> homo preserves every value: x, y, y_raw, node_name,
+    the edge set (+ attr/type/y) and the RC parasitic edge set."""
+    homo = _build(variant, mini_csvs)
+    het = gl.homo_to_hetero(homo)
+    back = gl.hetero_to_homo(het)
+    assert _tensor_eq(homo.x, back.x)
+    assert _tensor_eq(getattr(homo, "y", None), getattr(back, "y", None))
+    assert _tensor_eq(getattr(homo, "y_raw", None), getattr(back, "y_raw", None))
+    assert list(getattr(homo, "node_name", [])) == list(getattr(back, "node_name", []))
+    assert homo.edge_index.shape[1] == back.edge_index.shape[1]
+    assert _edge_multiset(homo) == _edge_multiset(back)
+    assert homo.rc_edge_index.shape[1] == back.rc_edge_index.shape[1]
+
+
+@pytestmark_tensor
+def test_hetero_node_and_edge_stores(mini_csvs):
+    """The b-view HeteroData splits nodes by type (node_type col dropped -> x is
+    graph_id+8 feats, y is 5 label slots) and edges into (src, relation, dst)
+    stores; folded view e disambiguates gate vs net cliques on pin<->pin."""
+    from torch_geometric.data import HeteroData
+    b = gl.homo_to_hetero(_build("b", mini_csvs))
+    assert isinstance(b, HeteroData)
+    assert set(b.node_types) == {"gate", "net", "iopin", "pin"}
+    assert b["gate"].x.shape[1] == 9 and b["gate"].y.shape[1] == 5
+    # b physical edges use the "connects" relation, symmetric both ways
+    rels = {tuple(et) for et in b.edge_types}
+    assert ("gate", "connects", "pin") in rels and ("pin", "connects", "gate") in rels
+    assert b.graph_kind == "hetero"
+    # view e folds BOTH gates and nets onto pin<->pin edges -> two distinct relations
+    e = gl.homo_to_hetero(_build("e", mini_csvs))
+    e_rels = {tuple(et) for et in e.edge_types}
+    assert ("pin", "gate", "pin") in e_rels and ("pin", "net", "pin") in e_rels
+
+
+@pytestmark_tensor
+def test_main_kind_homo_and_both(mini_csvs, tmp_path, monkeypatch):
+    """--kind homo writes a homogeneous {v}_graph.pt; --kind both writes hetero
+    {v}_graph.pt + homo {v}_graph_homo.pt."""
+    import sys as _sys
+    from torch_geometric.data import Data, HeteroData
+    import build_graphs as bg
+
+    feat, lab = mini_csvs
+    homo_out = tmp_path / "homo_ds"
+    monkeypatch.setattr(_sys, "argv", [
+        "build_graphs.py", "--features", feat, "--labels", lab, "--design", "mini",
+        "--out-dir", str(homo_out), "--variants", "b", "--kind", "homo"])
+    bg.main()
+    assert isinstance(torch.load(homo_out / "b_graph.pt", weights_only=False), Data)
+
+    both_out = tmp_path / "both_ds"
+    monkeypatch.setattr(_sys, "argv", [
+        "build_graphs.py", "--features", feat, "--labels", lab, "--design", "mini",
+        "--out-dir", str(both_out), "--variants", "b", "--kind", "both"])
+    bg.main()
+    assert isinstance(torch.load(both_out / "b_graph.pt", weights_only=False), HeteroData)
+    assert isinstance(torch.load(both_out / "b_graph_homo.pt", weights_only=False), Data)

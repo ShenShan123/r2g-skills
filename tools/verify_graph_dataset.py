@@ -62,6 +62,17 @@ import sys
 import pandas as pd
 import torch
 
+try:  # torch_geometric is needed to torch.load the .pt anyway; guard defensively
+    from torch_geometric.data import Data as _PygData, HeteroData as _PygHetero
+except Exception:  # noqa: BLE001
+    _PygData = _PygHetero = None
+
+# Hetero vocab — INTENTIONALLY re-declared here (independent of graph_lib) so that
+# a bug in graph_lib.homo_to_hetero surfaces when this verifier's own hetero->homo
+# reconstruction feeds the full homogeneous check surface (2026-07-16 hetero default).
+_HNAME2ID = {"gate": 0, "net": 1, "iopin": 2, "pin": 3}
+_RC_RELS = {"rc_coupling": 0, "rc_resistance": 1}
+
 GATE_SCHEMA = ["cell_type_id", "cell_area", "cell_power", "x_um", "y_um",
                "orientation_id", "placement_status_id"]
 NET_SCHEMA = ["net_type_id", "fanout", "pin_count", "num_drivers", "num_sinks",
@@ -1406,7 +1417,218 @@ def _sample_edge_attr(data, edge_type_id, entity_of, feat_index, width, cap=400)
     return checked, bad
 
 
-def topology_checks(views, tensors):
+# ===========================================================================
+# HETERO SUPPORT (2026-07-16) — the dataset default graph_kind is HeteroData.
+# A HeteroData {v}_graph.pt is reconstructed to the homogeneous Data the historical
+# verifier expects (INDEPENDENTLY of graph_lib.hetero_to_homo — a second
+# implementation, so a conversion bug fails a homo check), then the raw HeteroData
+# is additionally checked structurally. hetero_to_homo does NOT preserve the homo
+# [fwd0,rev0,...] edge ORDER (edges are regrouped by relation), so topology_checks
+# swaps the homo-layout interleaving guard for a hetero-native alignment+symmetry
+# guard; every other homo check keys on node position + per-edge endpoints and is
+# order-independent. See references/graph-dataset.md ("Heterogeneous graphs").
+# ===========================================================================
+
+
+def _hetero_to_homo(h):
+    """Independently reassemble the block-positional homogeneous Data from a
+    HeteroData: node stores concatenated in canonical type order gate,net,iopin,
+    pin (== the homo block order); node_type re-inserted as x0/y0; edge_type as
+    edge_y col0. Edge order is regrouped-by-relation (not preserved)."""
+    order = [n for n in ("gate", "net", "iopin", "pin") if n in h.node_types]
+    base, off = {}, 0
+    xs, ys, yrs, names = [], [], [], []
+    have_y = have_yr = True
+    for name in order:
+        st = h[name]
+        n = int(st.x.shape[0])
+        base[name] = off
+        off += n
+        c0 = torch.full((n, 1), float(_HNAME2ID[name]))
+        xs.append(torch.cat([c0, st.x.float()], 1))
+        if getattr(st, "y", None) is not None:
+            ys.append(torch.cat([c0, st.y.float()], 1))
+        else:
+            have_y = False
+        if getattr(st, "y_raw", None) is not None:
+            yrs.append(torch.cat([c0, st.y_raw.float()], 1))
+        else:
+            have_yr = False
+        if getattr(st, "node_name", None) is not None:
+            names += list(st.node_name)
+    d = _PygData(x=torch.cat(xs, 0))
+    if have_y:
+        d.y = torch.cat(ys, 0)
+    if have_yr:
+        d.y_raw = torch.cat(yrs, 0)
+    if names:
+        d.node_name = names
+
+    es, ed, ea, et, ey, eyr = [], [], [], [], [], []
+    ha = ht = hy = hyr = False
+    rs, rd, rt, ry, ryr = [], [], [], [], []
+    hry = hryr = False
+    for (s, rel, dd) in h.edge_types:
+        st = h[s, rel, dd]
+        ei = getattr(st, "edge_index", None)
+        if ei is None or ei.shape[1] == 0:
+            continue
+        n = int(ei.shape[1])
+        gs = ei[0] + base[s]
+        gd = ei[1] + base[dd]
+        if rel in _RC_RELS:
+            rct = getattr(st, "rc_edge_type", None)
+            if rct is None:
+                rct = torch.full((n,), _RC_RELS[rel], dtype=torch.long)
+            c0 = rct.view(-1, 1).float()
+            rs.append(gs)
+            rd.append(gd)
+            rt.append(rct)
+            r_y = getattr(st, "rc_edge_y", None)
+            if r_y is not None:
+                hry = True
+                ry.append(torch.cat([c0, r_y.float()], 1))
+            r_yr = getattr(st, "rc_edge_y_raw", None)
+            if r_yr is not None:
+                hryr = True
+                ryr.append(torch.cat([c0, r_yr.float()], 1))
+        else:
+            e_t = getattr(st, "edge_type", None)
+            c0 = e_t.view(-1, 1).float() if e_t is not None else torch.zeros((n, 1))
+            es.append(gs)
+            ed.append(gd)
+            a = getattr(st, "edge_attr", None)
+            if a is not None:
+                ha = True
+                ea.append(a.float())
+            else:
+                ea.append(torch.zeros((n, 8)))
+            if e_t is not None:
+                ht = True
+                et.append(e_t)
+            else:
+                et.append(torch.zeros((n,), dtype=torch.long))
+            e_y = getattr(st, "edge_y", None)
+            if e_y is not None:
+                hy = True
+                ey.append(torch.cat([c0, e_y.float()], 1))
+            e_yr = getattr(st, "edge_y_raw", None)
+            if e_yr is not None:
+                hyr = True
+                eyr.append(torch.cat([c0, e_yr.float()], 1))
+    if es:
+        d.edge_index = torch.stack([torch.cat(es), torch.cat(ed)], 0)
+        if ha:
+            d.edge_attr = torch.cat(ea, 0)
+        if ht:
+            d.edge_type = torch.cat(et, 0)
+        if hy:
+            d.edge_y = torch.cat(ey, 0)
+        if hyr:
+            d.edge_y_raw = torch.cat(eyr, 0)
+    else:
+        d.edge_index = torch.empty((2, 0), dtype=torch.long)
+    if rs:
+        d.rc_edge_index = torch.stack([torch.cat(rs), torch.cat(rd)], 0)
+        d.rc_edge_type = torch.cat(rt)
+        if hry:
+            d.rc_edge_y = torch.cat(ry, 0)
+        if hryr:
+            d.rc_edge_y_raw = torch.cat(ryr, 0)
+    else:
+        d.rc_edge_index = torch.empty((2, 0), dtype=torch.long)
+        d.rc_edge_type = torch.empty((0,), dtype=torch.long)
+        d.rc_edge_y = torch.zeros((0, 3))
+        d.rc_edge_y_raw = torch.zeros((0, 3))
+    for a in ("global_feat", "x_schema", "y_schema", "y_raw_schema",
+              "edge_schema", "rc_edge_schema"):
+        v = getattr(h, a, None)
+        if v is not None:
+            setattr(d, a, v)
+    return d
+
+
+def _load_graph(path):
+    """Load a {v}_graph.pt -> (homo_Data, hetero_or_None). The hetero default is
+    reconstructed to the homogeneous Data the homo verifier consumes; the raw
+    HeteroData is returned too for hetero_checks + the hetero-native topology guard."""
+    obj = torch.load(path, weights_only=False)
+    if _PygHetero is not None and isinstance(obj, _PygHetero):
+        return _hetero_to_homo(obj), obj
+    return obj, None
+
+
+def _hetero_store_align_bad(h, rc=False):
+    """Count edge stores whose edge_index / edge_attr / edge_type / edge_y row
+    counts disagree — the hetero analogue of the homo [fwd,rev] alignment guard
+    (homo_to_hetero slices index + attrs with ONE column tensor, so a mismatch is
+    a conversion bug)."""
+    bad = 0
+    for et in h.edge_types:
+        is_rc = et[1] in _RC_RELS
+        if rc != is_rc:
+            continue
+        st = h[et]
+        n = st.edge_index.shape[1]
+        attrs = (("rc_edge_type", "rc_edge_y", "rc_edge_y_raw") if rc
+                 else ("edge_attr", "edge_type", "edge_y", "edge_y_raw"))
+        for a in attrs:
+            t = getattr(st, a, None)
+            if t is not None and t.shape[0] != n:
+                bad += 1
+                break
+    return bad
+
+
+def _hetero_symmetry_bad(h, rc=False):
+    """Undirected layout: every relation (a, rel, b) must have its reverse
+    (b, rel, a) with an equal edge count."""
+    counts = {tuple(et): h[et].edge_index.shape[1] for et in h.edge_types}
+    bad = 0
+    for (s, rel, d), n in counts.items():
+        if rc != (rel in _RC_RELS):
+            continue
+        if counts.get((d, rel, s)) != n:
+            bad += 1
+    return bad
+
+
+def hetero_checks(hetero, views, man):
+    """GROUP D — the shipped HeteroData structure (the default graph_kind):
+    per-view node types + counts, per-type tensor widths, edge relations over
+    present node types only, and manifest graph_kind / hetero breakdown parity."""
+    gate, net, iopin, pin, egp, epn, ein = views
+    exp_counts = {"gate": len(gate), "net": len(net), "iopin": len(iopin), "pin": len(pin)}
+    check("hetero manifest graph_kind == hetero", man.get("graph_kind") == "hetero",
+          man.get("graph_kind"))
+    for v in ("b", "c", "d", "e", "f"):
+        h = hetero[v]
+        exp_types = [n for n, _ in _VIEW_BLOCK_ORDER[v]]
+        got_types = list(h.node_types)
+        check(f"hetero.{v} node types == view blocks",
+              sorted(got_types) == sorted(exp_types), f"got {got_types} want {exp_types}")
+        for nt in got_types:
+            st = h[nt]
+            check(f"hetero.{v} {nt} node count", st.x.shape[0] == exp_counts[nt],
+                  f"got {st.x.shape[0]} want {exp_counts[nt]}")
+            check(f"hetero.{v} {nt} x width==9 (graph_id+8 feats)", st.x.shape[1] == 9,
+                  str(tuple(st.x.shape)))
+            if hasattr(st, "y"):
+                check(f"hetero.{v} {nt} y width==5", st.y.shape[1] == 5, str(tuple(st.y.shape)))
+            if hasattr(st, "y_raw"):
+                check(f"hetero.{v} {nt} y_raw width==5", st.y_raw.shape[1] == 5)
+        bad = [tuple(et) for et in h.edge_types
+               if et[0] not in got_types or et[2] not in got_types]
+        check(f"hetero.{v} edge relations reference present node types", not bad, str(bad[:3]))
+        het_stats = man["variants"][v].get("hetero", {})
+        check(f"hetero.{v} manifest node_types match tensor",
+              het_stats.get("node_types", {}) == {n: int(h[n].x.shape[0]) for n in got_types})
+        check(f"hetero.{v} manifest edge_types match tensor",
+              het_stats.get("edge_types", {})
+              == {"__".join(et): int(h[et].edge_index.shape[1]) for et in h.edge_types})
+
+
+def topology_checks(views, tensors, hetero=None):
     """GROUP A — structural correctness of all five views b-f."""
     gate, net, iopin, pin, egp, epn, ein = views
     name_lists = {
@@ -1443,46 +1665,77 @@ def topology_checks(views, tensors):
                 dup.append(tname)
         check(f"top.{v} node_name unique within each type block", not dup, f"dups {dup}")
 
-    # --- fwd/rev interleaving invariant (c/d/e/f directed-edge builders) -------
-    for v in ("c", "d", "e", "f"):
-        data = tensors[v]
-        ei = data.edge_index
-        E = ei.shape[1]
-        even = (E % 2 == 0)
-        rev_bad = _reverse_pairs_bad(ei) if even else -1
-        attr_bad = 0
-        raw_tw = (data.edge_y_raw,) if hasattr(data, "edge_y_raw") else ()
-        for t in (data.edge_attr, data.edge_type, data.edge_y) + raw_tw:
-            attr_bad += _paired_rows_bad(t) if even else 1
-        check(f"top.{v} edges interleaved [fwd0,rev0,...] (index+attr+type+y+y_raw aligned)",
-              even and rev_bad == 0 and attr_bad == 0,
-              f"even={even} rev_bad={rev_bad} paired_bad={attr_bad}")
-        check(f"top.{v} edge_y0 == edge_type",
-              bool((data.edge_y[:, 0] == data.edge_type.float()).all()))
-        # Current schema is edge_y[E,6] with y5 (ground cap) never an edge label.
-        # A stale pre-RC dataset (edge_y width 5, no rc tensors) FAILS here loudly
-        # instead of IndexError-ing; the `and` short-circuits the [:,5] access.
-        check(f"top.{v} edge_y width==6 & edge_y5 all-NaN (ground cap never an edge label)",
-              data.edge_y.shape[1] == 6 and bool(torch.isnan(data.edge_y[:, 5]).all()),
-              f"edge_y width={data.edge_y.shape[1]} (want 6 — stale dataset if 5)")
+    if hetero is None:
+        # --- HOMO layout: fwd/rev interleaving invariant (c/d/e/f) -------------
+        for v in ("c", "d", "e", "f"):
+            data = tensors[v]
+            ei = data.edge_index
+            E = ei.shape[1]
+            even = (E % 2 == 0)
+            rev_bad = _reverse_pairs_bad(ei) if even else -1
+            attr_bad = 0
+            raw_tw = (data.edge_y_raw,) if hasattr(data, "edge_y_raw") else ()
+            for t in (data.edge_attr, data.edge_type, data.edge_y) + raw_tw:
+                attr_bad += _paired_rows_bad(t) if even else 1
+            check(f"top.{v} edges interleaved [fwd0,rev0,...] (index+attr+type+y+y_raw aligned)",
+                  even and rev_bad == 0 and attr_bad == 0,
+                  f"even={even} rev_bad={rev_bad} paired_bad={attr_bad}")
+            check(f"top.{v} edge_y0 == edge_type",
+                  bool((data.edge_y[:, 0] == data.edge_type.float()).all()))
+            # Current schema is edge_y[E,6] with y5 (ground cap) never an edge label.
+            # A stale pre-RC dataset (edge_y width 5, no rc tensors) FAILS here loudly
+            # instead of IndexError-ing; the `and` short-circuits the [:,5] access.
+            check(f"top.{v} edge_y width==6 & edge_y5 all-NaN (ground cap never an edge label)",
+                  data.edge_y.shape[1] == 6 and bool(torch.isnan(data.edge_y[:, 5]).all()),
+                  f"edge_y width={data.edge_y.shape[1]} (want 6 — stale dataset if 5)")
 
-    # --- rc_edge_* interleaving (build_parasitic_edges, all views) -------------
-    for v, data in tensors.items():
-        if not hasattr(data, "rc_edge_index"):
-            check(f"top.{v} rc_edge_* present (current schema)", False,
-                  "missing rc_edge_* tensors — stale pre-RC dataset, regenerate")
-            continue
-        ei = data.rc_edge_index
-        E = ei.shape[1]
-        even = (E % 2 == 0)
-        rev_bad = _reverse_pairs_bad(ei) if even else -1
-        pair_bad = 0
-        raw_tw = (data.rc_edge_y_raw,) if hasattr(data, "rc_edge_y_raw") else ()
-        for t in (data.rc_edge_type, data.rc_edge_y) + raw_tw:
-            pair_bad += _paired_rows_bad(t) if even else 1
-        check(f"top.{v} rc_edges interleaved [fwd0,rev0,...]",
-              even and rev_bad == 0 and pair_bad == 0,
-              f"even={even} rev_bad={rev_bad} paired_bad={pair_bad}")
+        # --- rc_edge_* interleaving (build_parasitic_edges, all views) --------
+        for v, data in tensors.items():
+            if not hasattr(data, "rc_edge_index"):
+                check(f"top.{v} rc_edge_* present (current schema)", False,
+                      "missing rc_edge_* tensors — stale pre-RC dataset, regenerate")
+                continue
+            ei = data.rc_edge_index
+            E = ei.shape[1]
+            even = (E % 2 == 0)
+            rev_bad = _reverse_pairs_bad(ei) if even else -1
+            pair_bad = 0
+            raw_tw = (data.rc_edge_y_raw,) if hasattr(data, "rc_edge_y_raw") else ()
+            for t in (data.rc_edge_type, data.rc_edge_y) + raw_tw:
+                pair_bad += _paired_rows_bad(t) if even else 1
+            check(f"top.{v} rc_edges interleaved [fwd0,rev0,...]",
+                  even and rev_bad == 0 and pair_bad == 0,
+                  f"even={even} rev_bad={rev_bad} paired_bad={pair_bad}")
+    else:
+        # --- HETERO layout: the [fwd,rev] interleaving is replaced by relation
+        # stores; the equivalent guard is per-store tensor-row alignment (index +
+        # attr + type + y sliced by ONE column tensor in homo_to_hetero) and
+        # reverse-relation symmetry. Deep undirected symmetry + edge_attr==folded-
+        # features are still checked on the reconstructed homo above/below.
+        for v in ("c", "d", "e", "f"):
+            h = hetero[v]
+            check(f"top.{v} hetero edge stores aligned (index/attr/type/y/y_raw rows equal)",
+                  _hetero_store_align_bad(h, rc=False) == 0)
+            check(f"top.{v} hetero relations symmetric ((a,rel,b)==(b,rel,a) count)",
+                  _hetero_symmetry_bad(h, rc=False) == 0)
+            wbad = gbad = 0
+            for et in h.edge_types:
+                if et[1] in _RC_RELS:
+                    continue
+                ey = getattr(h[et], "edge_y", None)
+                if ey is None:
+                    continue
+                if ey.shape[1] != 5:
+                    wbad += 1
+                elif not bool(torch.isnan(ey[:, 4]).all()):
+                    gbad += 1
+            check(f"top.{v} hetero edge_y width==5 & ground-cap col all-NaN",
+                  wbad == 0 and gbad == 0, f"width_bad={wbad} gcap_bad={gbad}")
+        for v in ("b", "c", "d", "e", "f"):
+            h = hetero[v]
+            check(f"top.{v} hetero rc stores aligned + symmetric",
+                  _hetero_store_align_bad(h, rc=True) == 0
+                  and _hetero_symmetry_bad(h, rc=True) == 0)
 
     # --- edge_attr content for d and e (c and f already covered above) --------
     # Resolvers: pin node "inst/pin" and iopin node -> their (single) signal net;
@@ -2109,7 +2362,9 @@ def verify_case(case, design=None, json_out=None):
         return tot
 
     # ---- variant b ----
-    b = torch.load(ds + "/b_graph.pt", weights_only=False)
+    # _load_graph reconstructs the homogeneous Data the checks below expect from a
+    # HeteroData (the default graph_kind); hb is the raw HeteroData (None if homo).
+    b, hb = _load_graph(ds + "/b_graph.pt")
     ntb = b.x[:, 0].long()
     check("b node counts",
           [int((ntb == t).sum()) for t in (0, 1, 2, 3)] == [ng, nn, ni, npn],
@@ -2129,7 +2384,7 @@ def verify_case(case, design=None, json_out=None):
                       ("pin", pin, ng + nn + ni, ng + nn + ni + npn)], labels)
 
     # ---- variant c ----
-    c = torch.load(ds + "/c_graph.pt", weights_only=False)
+    c, hc = _load_graph(ds + "/c_graph.pt")
     ntc = c.x[:, 0].long()
     check("c node counts",
           [int((ntc == t).sum()) for t in (0, 1, 2)] == [ng, nn, ni])
@@ -2162,7 +2417,7 @@ def verify_case(case, design=None, json_out=None):
     verify_y("c", c, [("gate", gate, 0, ng), ("net", net, ng, ng + nn)], labels)
 
     # ---- variant d ----
-    d = torch.load(ds + "/d_graph.pt", weights_only=False)
+    d, hd = _load_graph(ds + "/d_graph.pt")
     ntd = d.x[:, 0].long()
     check("d node counts",
           [int((ntd == t).sum()) for t in (0, 2, 3)] == [ng, ni, npn])
@@ -2174,7 +2429,7 @@ def verify_case(case, design=None, json_out=None):
                       ("pin", pin, ng + ni, ng + ni + npn)], labels)
 
     # ---- variant e ----
-    e = torch.load(ds + "/e_graph.pt", weights_only=False)
+    e, he = _load_graph(ds + "/e_graph.pt")
     nte = e.x[:, 0].long()
     check("e node counts",
           [int((nte == t).sum()) for t in (2, 3)] == [ni, npn])
@@ -2187,7 +2442,7 @@ def verify_case(case, design=None, json_out=None):
     verify_y("e", e, [("pin", pin, ni, ni + npn)], labels)
 
     # ---- variant f ----
-    f = torch.load(ds + "/f_graph.pt", weights_only=False)
+    f, hf = _load_graph(ds + "/f_graph.pt")
     ntf = f.x[:, 0].long()
     check("f node counts",
           [int((ntf == t).sum()) for t in (0, 2)] == [ng, ni])
@@ -2222,13 +2477,26 @@ def verify_case(case, design=None, json_out=None):
 
     # ---- manifest stats vs tensors ----
     tensors = {"b": b, "c": c, "d": d, "e": e, "f": f}
+    # Raw HeteroData per view (None when the dataset is homogeneous). manifest
+    # 'nodes'/'edges' stay the homo totals (== reconstructed), so the parity check
+    # below is valid for both kinds; the per-type/per-relation breakdown lands in
+    # the manifest's per-variant 'hetero' block and is checked by hetero_checks.
+    hetero_tensors = {"b": hb, "c": hc, "d": hd, "e": he, "f": hf}
+    is_hetero = all(v is not None for v in hetero_tensors.values())
+    check("graph_kind consistent across views (all hetero or all homo)",
+          is_hetero or all(v is None for v in hetero_tensors.values()),
+          f"hetero-per-view={ {k: v is not None for k, v in hetero_tensors.items()} }")
     for vname, data in tensors.items():
         st = man["variants"][vname]
         check(f"manifest[{vname}] nodes/edges match tensors",
               st["nodes"] == data.x.shape[0] and st["edges"] == data.edge_index.shape[1])
 
     # ---- GROUP A: full topology of all five views (not just b) ----
-    topology_checks(views, tensors)
+    topology_checks(views, tensors, hetero=hetero_tensors if is_hetero else None)
+
+    # ---- GROUP D: HeteroData structure (default graph_kind) ----
+    if is_hetero:
+        hetero_checks(hetero_tensors, views, man)
 
     # ---- GROUP B: feature column re-derivation + distribution honesty ----
     feature_stat_checks(case, design, feat, labs, tensors)

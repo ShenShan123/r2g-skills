@@ -17,9 +17,9 @@ Outputs in `<project-dir>/dataset/`:
 
 | File | Content |
 | --- | --- |
-| `b_graph.pt` .. `f_graph.pt` | five graph topologies (below) |
-| `netlist_graph.pt` | synthesis-netlist bipartite cell/net graph (pre-layout) |
-| `graph_manifest.json` | per-variant node/edge counts + label-NaN fractions + per-label-file `label_health` + RC coverage (`rc_health` + per-variant `rc_edges`/`rc_coupling_edges`/`rc_resistance_edges`) + the signoff gate verdict (`signoff_health`) (mirrored to `reports/graph_dataset.json`) |
+| `b_graph.pt` .. `f_graph.pt` | five graph topologies (below), as **`HeteroData` by default** (§ Heterogeneous graphs) |
+| `netlist_graph.pt` | synthesis-netlist bipartite cell/net graph (pre-layout) — always **homogeneous** (shared rtl-acquire artifact) |
+| `graph_manifest.json` | `graph_kind` (`hetero`/`homo`/`both`) + per-variant node/edge counts + per-type/per-relation `hetero` breakdown + label-NaN fractions + per-label-file `label_health` + RC coverage (`rc_health` + per-variant `rc_edges`/`rc_coupling_edges`/`rc_resistance_edges`) + the signoff gate verdict (`signoff_health`) (mirrored to `reports/graph_dataset.json`) |
 
 **Check `status` + `label_health` + `signoff_health` before training on a
 manifest.** `status: "ok_with_label_gaps"` means ≥1 label file couldn't join
@@ -53,7 +53,8 @@ python3 -m venv /proj/<you>/pyenvs/r2g-graph
 /proj/<you>/pyenvs/r2g-graph/bin/pip install torch_geometric pandas
 ```
 
-Knobs: `R2G_GRAPH_VARIANTS` (default `bcdef`), `GRAPH_TIMEOUT` (s, default 2400),
+Knobs: `R2G_GRAPH_VARIANTS` (default `bcdef`), `R2G_GRAPH_KIND` (`hetero` default /
+`homo` / `both` — see § Heterogeneous graphs), `GRAPH_TIMEOUT` (s, default 2400),
 `R2G_DEF` (pin a specific DEF), `R2G_ODB` (pin the ODB for the IR-drop label),
 `R2G_SPEF` (pin the SPEF for RC labels). **Both** the feature and label stages honor
 `R2G_DEF`/`R2G_SPEF` (the labels stage honors `R2G_DEF` as of 2026-07-08 — failure-patterns
@@ -72,7 +73,9 @@ also supports via the same overrides (#24).
 | e | iopin, pin | gates AND nets → pin-clique edges | 4.8k / 95k |
 | f | gate, iopin | nets → gate-clique edges | 1.6k / 30k |
 
-Shared tensor schema (all variants):
+Shared tensor schema (all variants) — this describes the homogeneous source of
+truth; the default `HeteroData` output re-views it per node/edge type without
+changing a value (§ Heterogeneous graphs maps every field to its hetero store):
 
 - `x[N,10]`: `x0` node_type (0 gate / 1 net / 2 iopin / 3 pin), `x1` graph_id
   (0 unless `--graph-id` given), `x2..x9` per-type feature slots (zero-padded):
@@ -147,6 +150,52 @@ Semantics to know before training:
   `nodes_gate.csv` across a platform corpus. Its names are Verilog-unescaped —
   strip backslashes on both sides to join against DEF-side names.
 
+## Heterogeneous graphs (default `graph_kind`, 2026-07-16)
+
+Each `{b..f}_graph.pt` is a torch_geometric **`HeteroData`** by default (generalizing
+the external RTL2Graph `generate_hetero_bgraph.py` from the b-graph to all five
+views). The verified block-positional **homogeneous `Data` is still built first as
+the source of truth** (every filter/sort/label-join happens there); the hetero graph
+is a **value-preserving re-view** — `graph_lib.homo_to_hetero()` changes no number,
+and `graph_lib.hetero_to_homo()` is its exact inverse.
+
+The homo↔hetero mapping:
+
+- **Node stores** — one per node type present in the view (`gate`/`net`/`iopin`/`pin`).
+  `h[type].x` is `[graph_id, 8 per-type feats]` (the redundant `node_type` column 0
+  is dropped — the store key *is* the type; so hetero x is width **9**, homo cols
+  `x1..x9`). `h[type].y` / `h[type].y_raw` are the **5 label slots** (homo `y1..y5`,
+  `node_type` col 0 dropped). `h[type].node_name` holds that type's names.
+- **Edge stores** — keyed by the triple `(src_type, relation, dst_type)`. The
+  **relation** is the folded entity from the view's `edge_schema`: b physical edges →
+  `connects`; c → `pin` / `iopin_connection`; d → `gate_pin` / `net`; e → `gate` /
+  `net`; f → `net`. (The folded entity is required in the key, not just `(src,dst)` —
+  view **e** folds *both* gates and nets onto pin↔pin edges, so `(pin,gate,pin)` and
+  `(pin,net,pin)` are distinct relations.) Each store carries its `edge_attr[E,8]` +
+  `edge_type[E]` + `edge_y[E,5]` + `edge_y_raw[E,5]` slice (homo `edge_y` col 0
+  `edge_type` dropped). The undirected graph is laid out as forward + reverse
+  relations (`(a,rel,b)` and `(b,rel,a)`).
+- **RC parasitic edges** — their own relations `(src, rc_coupling|rc_resistance, dst)`
+  with a 2-wide `rc_edge_y[E,2] = [coupling_label, equiv_res_label]` (+ `rc_edge_y_raw`).
+- **Graph-level attrs** ride the `HeteroData`: `graph_kind="hetero"`, `graph_id`,
+  `global_feat`, `feature_graph_key`, and the homo `x_schema`/`y_schema`/`edge_schema`/
+  `rc_edge_schema` (verbatim, so `hetero_to_homo` restores them) + `x_schema_per_type`.
+
+`R2G_GRAPH_KIND` (= `build_graphs.py --kind`) selects the output: `hetero` (default),
+`homo` (the legacy homogeneous `Data` — restores the exact pre-2026-07-16 format), or
+`both` (hetero `{v}_graph.pt` **plus** homo `{v}_graph_homo.pt`). The manifest records
+`graph_kind` and, per variant, a `hetero` block of per-type node counts + per-relation
+edge counts. `netlist_graph.pt` is **unaffected** — it stays homogeneous (a pre-layout
+artifact shared with the rtl-acquire corpus supply line).
+
+`tools/verify_graph_dataset.py` is hetero-aware: it **independently** reconstructs the
+homogeneous `Data` from a `HeteroData` (a second implementation of `hetero_to_homo`, so
+a conversion bug fails a homo check) and runs the full topology/feature/label/RC/signoff
+surface on it, then adds a `hetero.*` group (node types, per-type tensor widths, edge
+relations over present node types, manifest-breakdown parity) and swaps the homo
+`[fwd,rev]` interleaving guard for a hetero-native per-store alignment + reverse-relation
+symmetry guard. A negative control on a corrupted hetero label / `edge_attr` fails loudly.
+
 ## Batch
 
 Loop `run_graphs.sh` over completed projects (same pattern as
@@ -203,7 +252,9 @@ incl. a fakeram45 macro design (post-extension, same day). Helper parsers are py
 The 2026-07-08 extension organises the harness into three named check groups
 (`topology_checks` / `feature_stat_checks` / `signoff_report_checks` in
 `verify_graph_dataset.py`), closing the gaps where the historical checks covered
-only variant **b** or never cross-checked a sign-off artifact. Pytest-pinned with
+only variant **b** or never cross-checked a sign-off artifact. (A fourth group,
+`hetero_checks`, runs only when the dataset is heterogeneous — the 2026-07-16
+default; see § Heterogeneous graphs.) Pytest-pinned with
 clean-pass **and** negative-control tests in `tests/test_verify_comprehensive.py`
 (each check is proven to FAIL on a deliberate corruption — a check that cannot
 fail is the silent lie the harness exists to prevent). Baselines: **iir 167/167,
