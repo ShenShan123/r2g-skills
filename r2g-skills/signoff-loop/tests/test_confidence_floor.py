@@ -27,6 +27,19 @@ def test_default_pooled_min_attempts_is_5():
     assert fix_model.POOLED_MIN_ATTEMPTS == 5
 
 
+def test_pooled_cannot_displace_exact_winner_it_does_not_beat_on_rate():
+    """P1-19 (2026-07-15): an EXACT local recipe (2/2, rate 1.0) must not be displaced
+    by a large-but-weaker pooled history (90/100, rate 0.9), even far above the attempt
+    floor — match level constrains ranking. The exact winner keeps the top slot; the
+    pooled prior is capped just below it (a prior/tiebreaker, not an implicit displacer)."""
+    local = {"strategies": {"exact_recipe": {"attempts": 2, "successes": 2}},
+             "n_sessions": 2}
+    pooled = {"pooled_recipe": {"attempts": 100, "successes": 90}}   # n=100 >> floor
+    ranked = fix_model.rank_strategies(local, ["exact_recipe", "pooled_recipe"],
+                                       pooled=pooled, pooled_min_attempts=5)
+    assert ranked[0]["strategy"] == "exact_recipe"
+
+
 def _heur(tmp_path):
     sid = dsf.symptom.symptom_id(
         dsf.symptom.canonical_signature("drc", "antenna", None))

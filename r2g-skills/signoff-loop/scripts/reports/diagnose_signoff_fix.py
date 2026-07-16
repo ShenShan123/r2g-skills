@@ -11,11 +11,36 @@ relax the DRC rule deck. See references/signoff-fixing.md.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import sys
 from pathlib import Path
+
+# Lifecycle statuses that BLOCK blind live auto-apply (P1-10, 2026-07-15). 'candidate'
+# is awaiting A/B validation and 'shadow' is A/B-demoted — neither may be executed in a
+# blind live run; only an A/B arm with --rank-first may force them. 'parked' is NOT here:
+# it means the recipe's A/B arms can't diverge (a no-op edit), so the underlying static
+# strategy stays a legitimate, harmless catalog action.
+_LIVE_BLOCKED_LIFECYCLE = frozenset({"candidate", "shadow"})
+
+
+def _effect_fp(strat: dict) -> str | None:
+    """Canonical digest of a strategy's MUTATING effect (config/env/sdc edits + the
+    rerun/recheck stages). Two strategy IDs with byte-identical effects share this
+    fingerprint, so negative evidence against one can suppress its aliases (P1-14,
+    2026-07-15). Returns None for a strategy with no declared effect (e.g. a bare test
+    stub) so an 'empty effect' never collides distinct no-op strategies."""
+    edits = strat.get("config_edits") or {}
+    env = strat.get("env") or strat.get("env_flags") or {}
+    sdc = strat.get("sdc") or strat.get("sdc_edits") or {}
+    if not edits and not env and not sdc:
+        return None
+    payload = json.dumps({"config": edits, "env": env, "sdc": sdc,
+                          "rerun_from": strat.get("rerun_from"),
+                          "recheck": strat.get("recheck")}, sort_keys=True)
+    return hashlib.sha1(payload.encode()).hexdigest()[:16]
 
 try:
     import fix_model
@@ -515,14 +540,24 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
                        if s["id"] == rank_first and s.get("auto_apply")), None)
         if forced is not None:
             return forced
+    # P0-15 (2026-07-15): if the lifecycle store was UNREADABLE at annotation time we
+    # cannot prove any static/cold-start strategy is safe to auto-apply — fail CLOSED
+    # (no blind auto-apply) rather than silently falling back to un-gated selection.
+    # Absent key (a caller that never annotated) keeps the prior behavior.
+    if plan.get("lifecycle_gate_ok") is False:
+        return None
     retry_dead = os.environ.get("R2G_FIX_RETRY_DEAD", "0") == "1"
     for s in strategies:
         if not s.get("auto_apply"):
             continue
         if s.get("requires_ab_promotion"):
             continue        # shadow recipe: never auto-applied in a blind live run
-        if s.get("lifecycle_status") == "shadow":
-            continue        # A/B-demoted: not in blind live runs (any lookup path)
+        # A/B-unvalidated ('candidate') or A/B-demoted ('shadow') recipe: never
+        # auto-applied in a blind live run, on ANY lookup path (P1-10 + 2026-07-04).
+        # A candidate that re-enters via the static catalog with a neutral cold-start
+        # score must NOT execute before it wins its A/B trial ('parked' stays applicable).
+        if s.get("lifecycle_status") in _LIVE_BLOCKED_LIFECYCLE:
+            continue
         if s.get("dead_here") and not retry_dead:
             continue        # repeatedly failed on THIS design+check, never cleared
         return s
@@ -770,6 +805,10 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
     except Exception as exc:
         print(f"WARNING: negative-evidence gates unavailable "
               f"({type(exc).__name__}: {exc})", file=sys.stderr)
+        # P0-15: the store was UNREADABLE — mark the gate unavailable so the live
+        # selector fails CLOSED rather than silently proceeding with un-gated static
+        # selection (which could execute a candidate/demoted strategy).
+        plan["lifecycle_gate_ok"] = False
         return plan
     try:
         try:
@@ -780,30 +819,48 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
         # the raw and resolved spellings.
         paths = sorted({str(proj), str(proj.resolve())})
         ph = ",".join("?" * len(paths))
+        # P1-12 (2026-07-15): key dead-evidence by SYMPTOM when known — a strategy that
+        # failed on DRC symptom A must NOT be blacklisted for a DIFFERENT DRC symptom B
+        # on the same project (the old (project, check, strategy) key over-generalized).
+        sym_sql = " AND symptom_id=?" if sid else ""
+        sym_params = (sid,) if sid else ()
         rows = conn.execute(
             f"SELECT strategy, "
             f"SUM(CASE WHEN verdict IN ('no_change','regression') THEN 1 ELSE 0 END), "
             f"SUM(CASE WHEN verdict IN ('cleared','win') THEN 1 ELSE 0 END) "
-            f"FROM fix_events WHERE project_path IN ({ph}) AND check_type=? "
-            f"GROUP BY strategy", (*paths, check)).fetchall()
+            f"FROM fix_events WHERE project_path IN ({ph}) AND check_type=?{sym_sql} "
+            f"GROUP BY strategy", (*paths, check, *sym_params)).fetchall()
         dead = {s: int(nf or 0) for s, nf, ns in rows
                 if s and s != "none" and int(ns or 0) == 0
                 and int(nf or 0) >= dead_after}
+        # P1-14 (2026-07-15): dead evidence is by EFFECT, not just strategy name — an
+        # alias strategy with byte-identical config/env/sdc edits inherits the dead flag,
+        # so the loop can't retry the same ineffective action under a new id. Effects are
+        # taken from the plan (both aliases are catalog entries), so the digests match.
+        plan_strats = plan.get("strategies", [])
+        fp_of = {s["id"]: _effect_fp(s) for s in plan_strats}
+        dead_effects = {fp_of[s] for s in dead if fp_of.get(s)}
         statuses = {}
         if sid:
             import recipe_lifecycle
-            for s in plan.get("strategies", []):
+            for s in plan_strats:
                 statuses[s["id"]] = recipe_lifecycle.get_status(
                     conn, symptom_id=sid, design_class=design_class,
                     platform=platform, strategy=s["id"])
-        for s in plan.get("strategies", []):
+        for s in plan_strats:
+            fp = fp_of.get(s["id"])
             if s["id"] in dead:
                 s["dead_here"] = dead[s["id"]]
+            elif fp and fp in dead_effects:
+                s["dead_here"] = dead_after      # alias of a dead-by-effect strategy
+                s["dead_by_effect"] = True
             if statuses.get(s["id"]) and statuses[s["id"]] != "promoted":
                 s["lifecycle_status"] = statuses[s["id"]]
+        plan["lifecycle_gate_ok"] = True          # store read OK: gates are authoritative
     except Exception as exc:
         print(f"WARNING: negative-evidence gates unavailable "
               f"({type(exc).__name__}: {exc})", file=sys.stderr)
+        plan["lifecycle_gate_ok"] = False         # partial/failed read -> fail closed
     finally:
         conn.close()
     return plan

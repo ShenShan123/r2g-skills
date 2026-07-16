@@ -103,8 +103,10 @@ fi
 GATE_MODE="${R2G_SIGNOFF_GATE:-enforce}"
 GATE_FLAGS=()
 [[ -n "${R2G_DEF:-}" ]] && GATE_FLAGS+=(--def-overridden)
+# Pass the SELECTED DEF so the gate binds it to the reports' run dir (P0-17): a clean
+# report bundle from another run must not certify this layout.
 if ! python3 "$(dirname "${BASH_SOURCE[0]}")/signoff_gate.py" "$PROJECT_DIR" \
-       --run-dir "$RUN_DIR" --mode "$GATE_MODE" "${GATE_FLAGS[@]}"; then
+       --run-dir "$RUN_DIR" --def "$DEF" --mode "$GATE_MODE" "${GATE_FLAGS[@]}"; then
   skip "signoff gate: not signed off (see reports/signoff_gate.json; R2G_SIGNOFF_GATE=warn builds anyway with recorded reasons)"
 fi
 

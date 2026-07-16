@@ -347,7 +347,12 @@ def _run_driver(proj, sd, max_iters=3):
     env = dict(os.environ,
                R2G_RUN_ORFS=str(sd / "run_orfs.sh"),
                R2G_RUN_DRC=str(sd / "run_drc.sh"),
-               R2G_EXTRACT_DRC=str(sd / "extract_drc.py"))
+               R2G_EXTRACT_DRC=str(sd / "extract_drc.py"),
+               # Isolate the negative-evidence/lifecycle gates from the SHIPPED store:
+               # this is a functional strategy-application test, not a lifecycle test, so
+               # it must not depend on the committed recipe_status (which happens to hold
+               # antenna_diode_repair as 'candidate' — P1-10 now blocks that live).
+               R2G_KNOWLEDGE_DB=str(Path(proj).parent / "isolated_knowledge.sqlite"))
     return subprocess.run(["bash", str(DRIVER), str(proj), "nangate45",
                            "--check", "drc", "--max-iters", str(max_iters)],
                           capture_output=True, text=True, env=env)

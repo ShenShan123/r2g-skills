@@ -12,6 +12,19 @@ KEY = dict(symptom_id="deadbeef00000001", design_class="crypto/small",
 def _conn(tmp_path):
     c = knowledge_db.connect(tmp_path / "knowledge.sqlite")
     knowledge_db.ensure_schema(c)
+    # Seed the synthetic arm run_ids the record_trial tests reuse so they are REAL
+    # rows in `runs` (P0-10, 2026-07-15: a decisive trial's run_ids must resolve to
+    # actually-ingested runs). ra/rb are the two arms of ONE base subject 'subjX'
+    # (P1-11 subject key strips the _ab[AB]_ suffix), so repeated ra/rb trials
+    # correctly aggregate as one independent subject.
+    for rid, base in (("ra", "subjX_abA_deadbeef_0"), ("rb", "subjX_abB_deadbeef_0"),
+                      ("rx", "subjY_abA_deadbeef_0")):
+        c.execute(
+            "INSERT OR REPLACE INTO runs (run_id, project_path, design_name, "
+            "platform, ingested_at, cell_count) VALUES (?,?,?,?,?,?)",
+            (rid, str(tmp_path / base), "subjX", KEY["platform"],
+             "2026-06-10T00:00:00Z", 1000))
+    c.commit()
     return c
 
 
@@ -149,6 +162,114 @@ def test_incomplete_provenance_loss_does_not_demote(tmp_path):
     ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id=None,
                            arm_b_run_id=None, metrics={})           # unverifiable loss
     assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"   # unchanged
+
+
+def _seed_run(conn, rid, base, platform="nangate45"):
+    conn.execute("INSERT OR REPLACE INTO runs (run_id, project_path, design_name, "
+                 "platform, ingested_at, cell_count) VALUES (?,?,?,?,?,?)",
+                 (rid, str(base), "d", platform, "2026-06-10T00:00:00Z", 1000))
+    conn.commit()
+
+
+def test_fabricated_run_ids_never_promote(tmp_path):
+    """P0-10 (2026-07-15): a decisive `win` citing run_ids that DON'T exist in `runs`
+    is unverifiable — record_trial stamps provenance_complete=False and judge_recipe
+    excludes it, so the recipe stays candidate. A trial cannot self-certify its own
+    provenance through arbitrary strings."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    ab_runner.record_trial(conn, key=KEY, verdict="win",
+                           arm_a_run_id="fake-A", arm_b_run_id="fake-B", metrics={})
+    m = json.loads(conn.execute(
+        "SELECT metrics_json FROM ab_trials ORDER BY trial_id DESC LIMIT 1").fetchone()[0])
+    assert m["provenance_complete"] is False
+    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"   # NOT promoted
+
+
+def _win_trials_on_subject(conn, base, n):
+    """Record n winning trials that reuse ONE base design (distinct real run_ids)."""
+    for i in range(n):
+        a, b = f"{base}a{i}", f"{base}b{i}"
+        _seed_run(conn, a, conn_dir(conn) / f"{base}_abA_deadbeef_{i}")
+        _seed_run(conn, b, conn_dir(conn) / f"{base}_abB_deadbeef_{i}")
+        ab_runner.record_trial(conn, key=KEY, verdict="win",
+                               arm_a_run_id=a, arm_b_run_id=b, metrics={})
+
+
+def conn_dir(conn):
+    import pathlib
+    return pathlib.Path(conn.execute("PRAGMA database_list").fetchone()[2]).parent
+
+
+def test_pseudo_replication_cannot_overturn_a_genuine_loss(tmp_path):
+    """P1-11 (2026-07-15): five wins on ONE reused subject are ONE independent vote,
+    not five. A genuine loss on a DIFFERENT subject demotes to shadow; five
+    pseudo-replicated wins on a single subject then read 1w1l (tie) and CANNOT revive
+    it. Under the old raw-row count they read 5w1l -> promoted — the reused subject
+    masqueraded as five-fold corroboration."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    _seed_run(conn, "s2a", tmp_path / "s2_abA_deadbeef_0")
+    _seed_run(conn, "s2b", tmp_path / "s2_abB_deadbeef_0")
+    ab_runner.record_trial(conn, key=KEY, verdict="loss",
+                           arm_a_run_id="s2a", arm_b_run_id="s2b", metrics={})
+    assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"
+    _win_trials_on_subject(conn, "s1", 5)                     # 5 wins, ONE subject
+    assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"   # 1w1l tie, NOT promoted
+
+
+def test_pseudo_replicated_wins_count_once_in_evidence(tmp_path):
+    """P1-11: five wins on one subject promote HONESTLY as 1w0l — the evidence string
+    reflects one independent subject, not five (no fabricated corroboration)."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    _win_trials_on_subject(conn, "s1", 5)
+    prov = conn.execute(
+        "SELECT provenance FROM recipe_status WHERE symptom_id=? AND design_class=? "
+        "AND platform=? AND strategy=?",
+        (KEY["symptom_id"], KEY["design_class"], KEY["platform"],
+         KEY["strategy"])).fetchone()[0]
+    assert prov == "ab_corpus:1w0l"                          # one subject, not "5w0l"
+
+
+def test_trial_uuid_makes_record_idempotent(tmp_path):
+    """P0-16 (2026-07-15): a crash/retry that re-records the SAME planned trial (same
+    trial_uuid) must not create a second row inflating the evidence corpus."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    uuid = "trial-abc-0"
+    for _ in range(3):     # retried three times
+        ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
+                               arm_b_run_id="rb", metrics={}, trial_uuid=uuid)
+    n = conn.execute("SELECT COUNT(*) FROM ab_trials WHERE trial_uuid=?",
+                     (uuid,)).fetchone()[0]
+    assert n == 1                                            # exactly one row, not three
+
+
+def test_negative_wall_never_wins_cost_tiebreak():
+    """P1-16 (2026-07-15): a negative/NaN wall time is a corrupt sample and must not
+    manufacture a cost_tiebreak win. Two clean arms where B reports a negative wall
+    time -> the value drops out and the verdict is inconclusive (not a win)."""
+    a = [{"is_success": True, "wall_s": 100.0}, {"is_success": True, "wall_s": 100.0}]
+    b = [{"is_success": True, "wall_s": -5.0}, {"is_success": True, "wall_s": float("nan")}]
+    verdict, reason = ab_runner.judge_repeated_ex(a, b)
+    assert verdict == "inconclusive"
+    assert reason != "cost_tiebreak"
+
+
+def test_nan_metrics_serialize_without_crash(tmp_path):
+    """P1-16: a NaN inside the metrics dict is sanitized to null before storage
+    (allow_nan=False would otherwise crash, or NaN would round-trip as a decisive
+    corrupt sample)."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    ab_runner.record_trial(conn, key=KEY, verdict="inconclusive", arm_a_run_id="ra",
+                           arm_b_run_id="rb",
+                           metrics={"A_samples": [{"wall_s": float("nan")}]})
+    mj = conn.execute("SELECT metrics_json FROM ab_trials ORDER BY trial_id DESC "
+                      "LIMIT 1").fetchone()[0]
+    assert "NaN" not in mj                        # not the bare non-standard token
+    json.loads(mj)                                # parses as strict JSON
 
 
 def test_judge_both_fail_is_inconclusive_never_win(tmp_path):

@@ -85,7 +85,12 @@ REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            # registered here or open_escalation raises ValueError and crashes the worker (the
            # exact latent-crash class the residual notes above document -- see the systemic
            # test_all_loop_emitted_reasons_are_registered guard).
-           "cts_crash")
+           "cts_crash",
+           # A cross-check repair CYCLE: the design revisited a prior global signoff state
+           # (a DRC<->timing ping-pong across check phases that check-local dead evidence
+           # cannot see — P1-18, 2026-07-15). Surfaced by process_one so the operator stops
+           # spending full-flow compute alternating between locally-successful repairs.
+           "repair_cycle_nonconverged")
 
 
 def _now() -> str:

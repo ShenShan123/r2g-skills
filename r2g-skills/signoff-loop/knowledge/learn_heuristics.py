@@ -22,11 +22,23 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
+import re
 import statistics
 import sys
 from pathlib import Path
 
 import knowledge_db
+
+# A/B evaluation-arm project dirs (recipe-lifecycle clones <base>_ab{A,B}_<strat8>_<r>).
+# Mirrors ab_runner._ARM_DIR_RE. The learner must firewall these out (P0-14): an arm's
+# runs/fix_events are experiment scaffolding, not independent field evidence.
+_ARM_DIR_RE = re.compile(r"_ab[AB]_")
+
+
+def _is_arm_project(project_path) -> bool:
+    return bool(project_path) and bool(
+        _ARM_DIR_RE.search(os.path.basename(str(project_path).rstrip("/"))))
 
 MIN_SUCCESSFUL = 3
 
@@ -36,13 +48,19 @@ _is_success = knowledge_db.is_success
 
 
 def _fetch_learnable_rows(conn) -> list[dict]:
-    """Runs eligible for LEARNING — excludes held-out r2g-bench runs (Win 3). The
-    filter lives ONLY here (the learning read); ingest still writes failure_events
-    / run_violations for bench runs. COALESCE so legacy rows (is_bench NULL) and
-    DBs predating the column are treated as not-bench (included)."""
-    cur = conn.execute("SELECT * FROM runs WHERE COALESCE(is_bench, 0) = 0")
+    """Runs eligible for LEARNING — excludes held-out r2g-bench runs (Win 3) AND A/B
+    evaluation-arm runs (P0-14, 2026-07-15): a payoff eval_arm run (eval_arm set) or a
+    recipe-lifecycle arm clone (_ab[AB]_ project dir) is experiment scaffolding, not
+    field evidence, so it must not feed ordinary family/recipe learning — otherwise the
+    SAME experiment drives both the ab_trials lifecycle and ordinary ranking (circular
+    corroboration). The filter lives ONLY here (the learning read); ingest still writes
+    failure_events / run_violations for these runs. COALESCE so legacy rows (is_bench /
+    eval_arm NULL) are treated as not-bench / not-arm (included)."""
+    cur = conn.execute("SELECT * FROM runs WHERE COALESCE(is_bench, 0) = 0 "
+                       "AND COALESCE(eval_arm, '') = ''")
     cols = [c[0] for c in cur.description]
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    return [r for r in rows if not _is_arm_project(r.get("project_path"))]
 
 
 def _bench_project_paths(conn) -> set[str]:
@@ -53,6 +71,22 @@ def _bench_project_paths(conn) -> set[str]:
             "SELECT project_path FROM runs WHERE is_bench = 1") if r[0]}
     except Exception:
         return set()
+
+
+def _ab_arm_project_paths(conn) -> set[str]:
+    """project_paths of A/B evaluation arms — eval_arm set (payoff harness) OR an
+    _ab[AB]_ clone dir (recipe-lifecycle) — to exclude their fix trajectories from
+    recipe learning (P0-14, 2026-07-15). Mirrors _bench_project_paths; tolerant of a
+    DB predating the eval_arm column."""
+    paths: set[str] = set()
+    try:
+        for pp, ea in conn.execute(
+                "SELECT project_path, eval_arm FROM runs WHERE project_path IS NOT NULL"):
+            if pp and ((ea or "") != "" or _is_arm_project(pp)):
+                paths.add(pp)
+    except Exception:
+        pass
+    return paths
 
 
 def _p90(values: list[float]) -> float | None:
@@ -238,7 +272,23 @@ def _build_trajectory(events: list[dict]) -> dict:
         "total_elapsed_s": sum(e.get("elapsed_s") or 0.0 for e in events) or None,
         "symptom_id": sid,
         "signature_json": sigj,
+        # Evidence provenance carried up from the winning event (P1-17, 2026-07-15):
+        # 'live' | 'backfill:<source>'. Preserved so recipe aggregation can keep live
+        # and reconstructed/synthetic evidence distinguishable instead of silently
+        # merging lower-trust backfill into live-equivalent confidence. Prefer the
+        # winning event's provenance; fall back to the first event's; 'mixed' when the
+        # episode's steps disagree.
+        "provenance": _episode_provenance(events, best),
     }
+
+
+def _episode_provenance(events: list[dict], best: dict | None) -> str | None:
+    provs = {e.get("provenance") for e in events if e.get("provenance")}
+    if not provs:
+        return None
+    if best and best.get("provenance"):
+        return best["provenance"]
+    return next(iter(provs)) if len(provs) == 1 else "mixed"
 
 
 def _fetch_all_fix_events(conn) -> list[dict]:
@@ -459,7 +509,7 @@ def _indexed_recipes(trajectories: list[dict],
                 node["_sessions"].add(t.get("fix_session_id"))
                 s = node["strategies"].setdefault(
                     strat, {"attempts": 0, "successes": 0, "failures": 0,
-                            "wins": 0, "_scores": []})
+                            "wins": 0, "_scores": [], "_provs": set()})
                 s["attempts"] += 1
                 if verdict == "cleared":
                     s["successes"] += 1
@@ -469,6 +519,7 @@ def _indexed_recipes(trajectories: list[dict],
                     s["failures"] += 1
                 if run_score is not None:
                     s["_scores"].append(run_score)
+                s["_provs"].add(t.get("provenance") or "live")
     for sid, classes in acc.items():
         for dc, plats in classes.items():
             for p, node in plats.items():
@@ -477,6 +528,12 @@ def _indexed_recipes(trajectories: list[dict],
                     scores = s.pop("_scores", [])
                     if scores:
                         s["mean_outcome_score"] = statistics.mean(scores)
+                    # P1-17 (2026-07-15): the distinct evidence sources behind this
+                    # strategy's stats, so live and backfilled/synthetic evidence stay
+                    # distinguishable in the learned recipe (never merged into
+                    # live-equivalent confidence). Default 'live' for legacy events.
+                    provs = s.pop("_provs", set())
+                    s["provenance_sources"] = sorted(provs) if provs else ["live"]
     return acc
 
 
@@ -504,8 +561,9 @@ def learn(db_path: Path | str,
         # Idempotent: guarantees fix_events / fix_trajectories exist before we
         # SELECT / DELETE / INSERT on them, even on legacy DBs predating Task 1.
         knowledge_db.ensure_schema(conn)
-        rows = _fetch_learnable_rows(conn)   # Win 3: held-out bench runs excluded
+        rows = _fetch_learnable_rows(conn)   # Win 3 + P0-14: bench + A/B-arm runs excluded
         bench_paths = _bench_project_paths(conn)
+        arm_paths = _ab_arm_project_paths(conn)   # P0-14: A/B evaluation-arm projects
         _rebuild_fix_trajectories(conn)   # Tier-2 (idempotent rebuild; materializes)
 
         groups: dict[tuple[str, str], list[dict]] = {}
@@ -531,11 +589,14 @@ def learn(db_path: Path | str,
     cur = conn2.execute("SELECT * FROM fix_trajectories")
     tcols = [c[0] for c in cur.description]
     trajectories = [dict(zip(tcols, r)) for r in cur.fetchall()]
-    # Win 3: drop held-out bench episodes from recipe learning (the trajectories
-    # are still materialized in the table — only the LEARNING aggregation excludes).
-    if bench_paths:
+    # Win 3 + P0-14: drop held-out bench episodes AND A/B evaluation-arm episodes from
+    # recipe learning (the trajectories are still materialized in the table — only the
+    # LEARNING aggregation excludes). Excluding arm episodes is the firewall that stops
+    # an A/B experiment from feeding BOTH the ab_trials lifecycle and ordinary ranking.
+    excluded_paths = bench_paths | arm_paths
+    if excluded_paths:
         trajectories = [t for t in trajectories
-                        if t.get("project_path") not in bench_paths]
+                        if t.get("project_path") not in excluded_paths]
     class_of = _design_class_by_project(conn2)
     # Win 1: per-run dense reward, joined into recipes as a ranking tiebreaker.
     # NULL-filtered so legacy/unscored runs simply don't contribute (neutral); bench
@@ -600,6 +661,24 @@ def learn(db_path: Path | str,
                 # would otherwise be silently dropped from live ranking — ensure_rostered
                 # rosters it as an (unvalidated) candidate instead. Idempotent.
                 recipe_lifecycle.ensure_rostered(lc, data)
+                # P1-13 (2026-07-15): the deterministic production boundary for
+                # regression auto-demotion. Before this, ab_runner.auto_demote_on_regression
+                # had NO normal caller, so a PROMOTED recipe stayed live-promoted after
+                # repeated live regressions. Sweep every promoted recipe here (every
+                # learn rebuild); a recipe with `window` consecutive live regressions on
+                # its symptom is demoted to shadow + escalated. Best-effort: a failure
+                # must never break the already-written heuristics.
+                try:
+                    import ab_runner
+                    for prow in lc.execute(
+                            "SELECT symptom_id, design_class, platform, strategy "
+                            "FROM recipe_status WHERE status='promoted'").fetchall():
+                        ab_runner.auto_demote_on_regression(
+                            lc, key=dict(zip(("symptom_id", "design_class",
+                                              "platform", "strategy"), prow)))
+                except Exception as exc:               # pragma: no cover - guard
+                    print(f"WARNING: regression auto-demote sweep skipped: {exc}",
+                          file=sys.stderr)
             finally:
                 lc.close()
         except Exception as exc:                       # pragma: no cover - guard

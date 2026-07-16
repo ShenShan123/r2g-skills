@@ -232,6 +232,55 @@ _NONDIVERGENT_STRATEGIES = _recipe_lifecycle_mod.NONDIVERGENT_STRATEGIES
 # WITHOUT demoting it (bug #2: inconclusive is non-terminal); surface it once instead.
 AB_INCONCLUSIVE_MAX = 3
 
+# Every strategy the apply layers can actually EXECUTE: the diagnose signoff catalog +
+# the engineer-loop backend-abort/DRC strategies. A candidate whose strategy is neither
+# here NOR present in the fix_events history (never really applied anywhere) can produce
+# NO real edit — its A/B arms are byte-identical and every trial a guaranteed-inconclusive
+# no-op (P0-6, 2026-07-15). Parked, never planned. The fix_events fallback (see
+# _known_apply_strategy) guarantees a genuinely-learned strategy is never mis-parked just
+# because this static list is stale — only a fabricated/unapplyable strategy is caught.
+_KNOWN_APPLY_STRATEGIES = frozenset({
+    "antenna_diode_repair", "antenna_diode_iters", "antenna_density_relief",
+    "density_relief", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
+    "beol_only_drc", "rerun_from_stage", "pdn_die_floor",
+}) | _PLACE_STRATEGIES | _TIMING_STRATEGIES | _SYNTH_STRATEGIES
+
+
+def _recipe_generation(conn, key: dict):
+    """The heuristics generation the recipe_status row for `key` carries (P1-15). None
+    when there is no row or the read fails. Stamped on each planned arm; a change between
+    planning and judging means the recipe was re-learned -> the arm is stale."""
+    if conn is None:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT generation FROM recipe_status WHERE symptom_id=? AND design_class=? "
+            "AND platform=? AND strategy=?",
+            (key["symptom_id"], key["design_class"], key["platform"],
+             key["strategy"])).fetchone()
+        return row[0] if row else None
+    except Exception:
+        return None
+
+
+def _known_apply_strategy(conn, strategy: str | None) -> bool:
+    """True if `strategy` has a real application path — it is a catalog/backend strategy,
+    OR it has ever produced a real fix_event (proof it can be applied). Only a strategy
+    failing BOTH is a guaranteed no-op worth parking (P0-6). Fails SAFE (returns True) on
+    any DB error so a transient read never mis-parks a real recipe."""
+    if not strategy:
+        return True
+    if strategy in _KNOWN_APPLY_STRATEGIES:
+        return True
+    if conn is None:
+        return True
+    try:
+        return conn.execute(
+            "SELECT 1 FROM fix_events WHERE strategy=? AND COALESCE(verdict,'') "
+            "NOT IN ('', 'none') LIMIT 1", (strategy,)).fetchone() is not None
+    except Exception:
+        return True
+
 
 def _symptom_check(conn, symptom_id: str | None, strategy: str | None = None) -> str:
     """Map a candidate recipe to the fix-loop --check value that makes its A/B arms do
@@ -1171,6 +1220,16 @@ def process_one(led: Ledger, entry: dict, conn, *,
             conn, design=design, project_path=entry["project_path"],
             run_id=None, reason=reason,
             notes=json.dumps(residual, sort_keys=True))
+        # P1-18 (2026-07-15): if this design has REVISITED a prior global signoff state
+        # (a DRC<->timing ping-pong across check phases that check-local dead evidence
+        # cannot see), surface a repair_cycle_nonconverged escalation so the operator
+        # stops spending full-flow compute alternating between locally-successful repairs
+        # that make no global progress.
+        cycle_fp = _detect_repair_cycle(conn, entry["project_path"])
+        if cycle_fp:
+            escalations.open_escalation(
+                conn, design=design, project_path=entry["project_path"],
+                run_id=None, reason="repair_cycle_nonconverged", notes=cycle_fp)
     return "escalated"
 
 
@@ -1402,6 +1461,21 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
         if round_platform and key.get("platform") and key["platform"] != round_platform:
             _skipped_offplatform[key["platform"]] += 1
             continue
+        # No-op guard (P0-6, 2026-07-15): a candidate whose strategy has NO application
+        # path (not a catalog/backend strategy AND never produced a real fix_event) can
+        # only make byte-identical arms — every trial a guaranteed-inconclusive no-op.
+        # PARK it (non-terminal) so it leaves the work queue instead of burning a full
+        # signoff per drain forever; never plan or escalate it as a coverage gap.
+        if not _known_apply_strategy(conn, key.get("strategy")):
+            print(f"[loop] A/B candidate PARKED (no application path): "
+                  f"{key['strategy']} symptom={key['symptom_id']} "
+                  f"{key['design_class']}/{key['platform']}")
+            _park_provenance = "nondivergent_unknown_strategy"   # park bookkeeping, not an escalation
+            try:
+                recipe_lifecycle.park(conn, reason=_park_provenance, **key)
+            except Exception:                       # parking must never break the drain
+                pass
+            continue
         # Coverage guard (2026-06-24 audit, bugs #1/#2): never plan a trial whose arms
         # CANNOT diverge — a no-op strategy (lvs_resolve_unknown), or a candidate that has
         # already accrued AB_INCONCLUSIVE_MAX inconclusive trials with ZERO decisive
@@ -1550,6 +1624,13 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                     _cfg_sha = _config_sha(dst)
                     if _cfg_sha:
                         arm_entry["baseline_config_sha"] = _cfg_sha
+                    # P1-15 (2026-07-15): stamp the recipe generation the arm was planned
+                    # under, so a trial whose recipe was RE-LEARNED (changed) between
+                    # planning and judging can be detected as stale and cancelled rather
+                    # than judged against a moved target.
+                    _rgen = _recipe_generation(conn, key)
+                    if _rgen is not None:
+                        arm_entry["recipe_generation"] = _rgen
                     if d_pin_target:
                         arm_entry["pin_perimeter_target"] = d_pin_target
                     led.add(arm_entry)
@@ -1671,6 +1752,145 @@ def _tool_versions_map() -> dict:
         return tool_versions.collect()
     except Exception:
         return {}
+
+
+# ── A/B causal-isolation + regression guards (P0-11/P0-12/P0-13, 2026-07-15) ──
+_SPEC_KNOBS = ("CLOCK_PERIOD", "DIE_AREA", "CORE_AREA")
+
+
+def _read_mk_value(cfg: Path, key: str) -> str | None:
+    """Value of an `export KEY = ...` (or bare `KEY=...`) line in a config.mk, or None."""
+    try:
+        text = cfg.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(rf"(?m)^\s*(?:export\s+)?{re.escape(key)}\s*=\s*(.*?)\s*$", text)
+    return m.group(1).strip() if m else None
+
+
+def _sdc_clock_period(dst: Path) -> str | None:
+    try:
+        text = (dst / "constraints" / "constraint.sdc").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r"create_clock[^\n]*-period\s+([0-9.]+)", text)
+    return m.group(1) if m else None
+
+
+def _arm_spec(dst: Path) -> dict:
+    cfg = dst / "constraints" / "config.mk"
+    spec = {k: _read_mk_value(cfg, k) for k in _SPEC_KNOBS}
+    spec["SDC_PERIOD"] = _sdc_clock_period(dst)
+    return spec
+
+
+def _arm_spec_mismatch(a_path: str, b_path: str, check: str) -> str | None:
+    """Spec-equality / causal-isolation guard (P0-11/P0-12, 2026-07-15). A SIGNOFF A/B
+    trial (drc/lvs/route/both) must change ONLY the tested recipe knob — the design SPEC
+    (clock period, die/core area) must be IDENTICAL in both arms. Otherwise arm B can win
+    by making the design task EASIER (relaxing the clock / enlarging the die = reward
+    hacking) or by carrying an unrelated edit A lacks. Timing/place/synth recipes
+    legitimately move a spec knob, so they are EXEMPT. Returns a mismatch reason (the
+    trial is invalid), or None when the specs agree."""
+    if check not in ("drc", "lvs", "route", "both"):
+        return None
+    sa, sb = _arm_spec(Path(a_path)), _arm_spec(Path(b_path))
+    diffs = sorted(k for k in sa if sa[k] != sb[k])
+    return "spec_mismatch:" + ",".join(diffs) if diffs else None
+
+
+def _ab_new_drc_regression(conn, a_run_id: str | None,
+                           b_run_id: str | None) -> str | None:
+    """Regression guard (P0-13, 2026-07-15): a recipe that clears its target symptom but
+    opens a MATERIALLY WORSE new DRC class is NOT a win. Compares arm B's residual DRC
+    classes to arm A's: a class present in B but not A is 'newly introduced'. But arms A
+    and B can reach different flow stages (A stuck on the target, B progressed), so a
+    benign UNRELATED residual that merely became visible in B must NOT veto a genuine
+    clear — the veto fires only when the newly-introduced violation COUNT EXCEEDS arm A's
+    total residual count (B is materially worse overall, e.g. 8 new shorts vs A's 1
+    residual). Returns the new class(es), or None. Fails SAFE (None) on any unreadable
+    snapshot — never fabricates a regression."""
+    if not a_run_id or not b_run_id:
+        return None
+    def _cats(rid):
+        try:
+            row = conn.execute(
+                "SELECT drc_categories_json FROM run_violations WHERE run_id=?",
+                (rid,)).fetchone()
+            return json.loads(row[0] or "{}") if row and row[0] else {}
+        except Exception:
+            return {}
+    try:
+        import symptom as _symptom
+        a_counts = {}
+        for k, v in _cats(a_run_id).items():
+            c = (v or {}).get("count") or 0
+            if c > 0:
+                a_counts[_symptom.normalize_class(k)] = a_counts.get(
+                    _symptom.normalize_class(k), 0) + c
+        b_new = {}
+        for k, v in _cats(b_run_id).items():
+            c = (v or {}).get("count") or 0
+            nk = _symptom.normalize_class(k)
+            if c > 0 and nk not in a_counts:
+                b_new[nk] = b_new.get(nk, 0) + c
+    except Exception:
+        return None
+    if b_new and sum(b_new.values()) > sum(a_counts.values()):
+        return "new_drc_class:" + ",".join(sorted(b_new))
+    return None
+
+
+# ── Cross-check repair-cycle detection (P1-18, 2026-07-15) ────────────────────
+def _global_repair_state(conn, run_id: str | None) -> str | None:
+    """A fingerprint of the WHOLE signoff state a run reached: the DRC violation-class
+    set + DRC/LVS status + LVS mismatch class + timing tier. Two runs with the same
+    fingerprint are in the SAME global signoff state — a repair that returns a design to
+    a prior state made no global progress. None when unreadable."""
+    if not run_id:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT drc_status, drc_categories_json, lvs_status, lvs_mismatch_class, "
+            "timing_tier FROM run_violations WHERE run_id=?", (run_id,)).fetchone()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    try:
+        import symptom as _symptom
+        cats = json.loads(row[1] or "{}")
+        drc = sorted({_symptom.normalize_class(k) for k, v in cats.items()
+                      if ((v or {}).get("count") or 0) > 0})
+    except Exception:
+        drc = []
+    return json.dumps({"drc": drc, "drc_status": row[0], "lvs": row[2],
+                       "lvs_class": row[3], "timing": row[4]}, sort_keys=True)
+
+
+def _detect_repair_cycle(conn, project_path: str) -> str | None:
+    """A cross-check repair cycle: the design REVISITS a prior global signoff state (the
+    same fingerprint recurs across its run history) — e.g. a fix that clears DRC while
+    breaking timing alternating with one that clears timing while restoring the DRC
+    problem. Each individual repair 'succeeds' on its own check, so check-local negative
+    evidence never marks either dead; only a state fingerprint spanning DRC/LVS/timing
+    catches the ping-pong (which the per-invocation 8-iter cap in fix_signoff.sh cannot
+    see — it spans check phases / sessions). Returns the repeated fingerprint, or None."""
+    try:
+        rows = conn.execute(
+            "SELECT run_id FROM runs WHERE project_path=? "
+            "ORDER BY julianday(ingested_at), run_id", (project_path,)).fetchall()
+    except Exception:
+        return None
+    seen: set[str] = set()
+    for (rid,) in rows:
+        fp = _global_repair_state(conn, rid)
+        if fp is None:
+            continue
+        if fp in seen:
+            return fp                    # a global state revisited -> cycling
+        seen.add(fp)
+    return None
 
 
 def _arm_metric(conn, project_path: str, *, timing: bool = False,
@@ -1804,6 +2024,20 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                 for e in entries:
                     led.set_state(e["design"], e["state"], judged=True)
             continue
+        # Freshness guard (P1-15, 2026-07-15): if the recipe was RE-LEARNED (its
+        # generation advanced) between planning these arms and judging them, the trial
+        # tests a stale version — cancel it (mark judged, no verdict recorded) so a fresh
+        # trial is planned next drain, rather than judging against a moved target.
+        _planned_gen = pair["B"][0].get("recipe_generation")
+        if _planned_gen is not None:
+            _cur_gen = _recipe_generation(conn, pair["B"][0]["ab_key"])
+            if _cur_gen is not None and _cur_gen != _planned_gen:
+                print(f"[loop] A/B trial CANCELLED (stale recipe: generation "
+                      f"{_planned_gen}->{_cur_gen}): {strat}")
+                for entries in pair.values():
+                    for e in entries:
+                        led.set_state(e["design"], e["state"], judged=True)
+                continue
         verdict, reason = ab_runner.judge_repeated_ex(samples["A"], samples["B"])
         # Back-reference each arm to the ingested run(s) it produced so a trial is
         # verifiable — before this, EVERY ab_trial stored NULL run_ids and no
@@ -1817,6 +2051,28 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         arm_b_run_id = b_run_ids[0] if b_run_ids else None
         provenance_complete = bool(
             arm_a_run_id and arm_b_run_id and arm_a_run_id != arm_b_run_id)
+        # Causal-isolation + regression vetoes (P0-11/P0-12/P0-13, 2026-07-15): an A/B
+        # win must reflect the tested recipe ALONE. Force a non-promoting 'inconclusive'
+        # when the arms' SPEC diverged (relaxed clock / enlarged die / an unrelated edit
+        # arm A lacked) or arm B introduced a NEW DRC class arm A did not have. Neither
+        # confound may promote OR demote — the trial is invalid, not decisive.
+        arm_check = pair["B"][0].get("check")
+        veto = None
+        if verdict in ("win", "loss"):
+            veto = _arm_spec_mismatch(pair["A"][0]["project_path"],
+                                      pair["B"][0]["project_path"], arm_check)
+        if verdict == "win" and not veto:
+            veto = _ab_new_drc_regression(conn, arm_a_run_id, arm_b_run_id)
+        if veto:
+            verdict = "inconclusive"     # invalid trial: neither promotes nor demotes
+            reason = veto
+        # Deterministic trial identity (P0-16): a crash/retry that re-judges the SAME
+        # planned trial (same arm runs) reuses this uuid -> record_trial is idempotent.
+        _rid_parts = (sorted(str(x) for x in a_run_ids)
+                      + sorted(str(x) for x in b_run_ids))
+        _uuid_src = "|".join([str(base), str(strat), *_rid_parts])
+        trial_uuid = (hashlib.sha1(_uuid_src.encode("utf-8")).hexdigest()[:16]
+                      if a_run_ids and b_run_ids else None)
         # judge_version 2 = symptom-target metric for DRC/LVS signoff arms + reason
         # codes. _ab_coverage_gap counts ONLY v2 inconclusives toward the re-plan
         # cap: pre-v2 verdicts were blind to the target symptom and must not
@@ -1830,9 +2086,11 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                      "provenance_complete": provenance_complete,
                      "tool_versions": _tool_versions_map(),
                      "judge_version": 2, "reason": reason,
+                     "veto": veto,
                      "target": ({"check": target[0], "class": target[1]}
                                 if target else None)},
-            match_level=pair["B"][0].get("match_level"))
+            match_level=pair["B"][0].get("match_level"),
+            trial_uuid=trial_uuid)
         for entries in pair.values():
             for e in entries:
                 led.set_state(e["design"], e["state"], judged=True)

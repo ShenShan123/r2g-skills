@@ -113,6 +113,42 @@ def test_all_clean_pass(tmp_path):
     assert v["status"] == "pass" and not v["blockers"] and not v["caveats"], v
 
 
+def test_def_bound_to_run_passes(tmp_path):
+    """P0-17 (2026-07-15): a DEF that lives UNDER the reports' run dir is bound to it
+    -> clean pass, and the verdict records a def_fingerprint for provenance."""
+    proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": 0.05}}})
+    def_path = os.path.join(run, "results", "6_final.def")
+    os.makedirs(os.path.dirname(def_path), exist_ok=True)
+    open(def_path, "w").write("VERSION 5.8 ;\n")
+    v = sg.evaluate(proj, run, def_path)
+    assert v["status"] == "pass" and not v["blockers"], v
+    assert v["checks"]["binding"]["status"] == "bound"
+    assert v["checks"]["binding"]["def_fingerprint"]["path"].endswith("6_final.def")
+
+
+def test_def_from_other_run_is_blocked(tmp_path):
+    """P0-17: a clean report bundle from one run must NOT certify a DEF from ANOTHER run
+    (design/platform names unchanged). The DEF is UNBOUND -> a hard block, even though
+    every report reads clean."""
+    proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": 0.05}}})
+    other = tmp_path / "other_run" / "results"
+    other.mkdir(parents=True)
+    def_path = other / "6_final.def"
+    def_path.write_text("VERSION 5.8 ;\n")
+    v = sg.evaluate(proj, run, str(def_path))
+    assert v["status"] == "dirty" and "binding" in v["blockers"], v
+    assert v["checks"]["binding"]["status"] == "unbound"
+
+
+def test_no_def_supplied_makes_no_binding_claim(tmp_path):
+    """A legacy 2-arg evaluate (no DEF) makes no binding claim -> stays a clean pass
+    (binding is 'unknown' but not a caveat), preserving backward compatibility."""
+    proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": 0.05}}})
+    v = sg.evaluate(proj, run)
+    assert v["status"] == "pass" and not v["caveats"], v
+    assert v["checks"]["binding"]["status"] == "unknown"
+
+
 def test_no_timing_report_is_caveat_only(tmp_path):
     proj, run = _proj(tmp_path)   # everything clean, timing unrecorded
     v = sg.evaluate(proj, run)

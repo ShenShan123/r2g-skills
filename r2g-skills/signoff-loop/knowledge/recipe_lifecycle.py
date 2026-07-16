@@ -150,6 +150,15 @@ def stage_shadow(conn, *, provenance: str, **key) -> None:
     _set(conn, "shadow", provenance, **key)
 
 
+def park(conn, *, reason: str = "nondivergent_no_real_edit", **key) -> None:
+    """Move a candidate to 'parked' — NON-terminal bookkeeping meaning the A/B harness
+    cannot differentiate its arms (no real edit divergence), so it should not be planned.
+    Used for a candidate whose strategy has NO application path (P0-6, 2026-07-15): its
+    arms would be byte-identical and every trial a guaranteed-inconclusive no-op.
+    pending_candidates/filter_promoted ignore 'parked' exactly like 'shadow'."""
+    _set(conn, "parked", reason, **key)
+
+
 def filter_promoted(conn, recipe_entry: dict | None, *, symptom_id: str,
                     design_class: str, platform: str) -> dict | None:
     """Strip non-promoted strategies from a LEARNED (indexed) recipe entry before live

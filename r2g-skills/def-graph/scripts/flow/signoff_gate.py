@@ -244,7 +244,47 @@ def _check_timing(reports_dir):
     return {"status": "unknown", "detail": "no reports/ppa.json timing or timing_check.json"}
 
 
-def evaluate(project_dir, run_dir):
+def _def_fingerprint(def_path):
+    """Cheap, recomputable identity for the DEF being graphed (path + size + mtime).
+    A full SHA-256 of a multi-hundred-MB DEF on every gate call is wasteful; size+mtime
+    is enough for the manifest to record WHICH artifact was certified and for the
+    verifier to re-check. None when the DEF path is absent/unreadable."""
+    if not def_path:
+        return None
+    try:
+        st = os.stat(def_path)
+        return {"path": os.path.realpath(def_path), "size": st.st_size,
+                "mtime": int(st.st_mtime)}
+    except OSError:
+        return None
+
+
+def _check_binding(def_path, run_dir):
+    """Bind the DEF being graphed to the RUN whose signoff reports are being gated
+    (P0-17, 2026-07-15). A clean report bundle from one run must not certify a layout
+    artifact from ANOTHER run: the gate checks report contents independently, so
+    without this a mixed bundle (run-2 DEF + run-1 reports) passes. In the normal flow
+    the DEF is discovered UNDER the run dir (<run>/{final,results}/6_final.def), so the
+    binding invariant is 'the DEF lives under this run dir'. A DEF outside it is UNBOUND
+    (blocks in enforce). No DEF/run info -> 'unknown' caveat (e.g. an R2G_DEF override,
+    which already downgrades enforce->warn, or an externally-collected DEF)."""
+    if not def_path:
+        return {"status": "unknown", "detail": "no DEF path supplied to the gate"}
+    if not os.path.isfile(def_path):
+        return {"status": "unknown", "detail": f"DEF not found: {def_path}"}
+    if not run_dir or not os.path.isdir(run_dir):
+        return {"status": "unknown",
+                "detail": "no backend run dir (DEF overridden / externally collected)"}
+    def_real = os.path.realpath(def_path)
+    run_real = os.path.realpath(run_dir)
+    if def_real == run_real or def_real.startswith(run_real + os.sep):
+        return {"status": "bound", "def_run_dir": run_real}
+    return {"status": "unbound",
+            "detail": f"DEF {def_real} is NOT under the reports' run dir {run_real} — "
+                      "the report bundle belongs to a DIFFERENT run than this layout"}
+
+
+def evaluate(project_dir, run_dir, def_path=None):
     reports_dir = os.path.join(project_dir, "reports")
     checks = {
         "drc": _check_drc(reports_dir),
@@ -253,6 +293,7 @@ def evaluate(project_dir, run_dir):
         "route": _check_route(reports_dir, run_dir),
         "antenna": _check_antenna(reports_dir),
         "timing": _check_timing(reports_dir),
+        "binding": _check_binding(def_path, run_dir),
     }
     blockers = []
     if checks["drc"]["status"] not in DRC_OK:
@@ -263,8 +304,20 @@ def evaluate(project_dir, run_dir):
         blockers.append("orfs")
     if checks["route"]["status"] == "dirty":
         blockers.append("route")
+    # A DEF that does not belong to the gated run is a HARD block: a clean report bundle
+    # from another run must never certify this layout (P0-17). 'unknown' (no DEF supplied
+    # / override) is a caveat, not a block.
+    if checks["binding"]["status"] == "unbound":
+        blockers.append("binding")
 
     caveats = []
+    # Only a SUPPLIED-but-unverifiable DEF is a recorded caveat; a caller that passes no
+    # DEF (legacy 2-arg evaluate) makes no binding claim, so it stays a clean pass.
+    if def_path and checks["binding"]["status"] == "unknown":
+        caveats.append("binding=unknown")
+    fp = _def_fingerprint(def_path)
+    if fp:
+        checks["binding"]["def_fingerprint"] = fp
     if checks["drc"]["status"] == "clean_beol":
         caveats.append("drc=clean_beol")
     if checks["lvs"]["status"] == "skipped":
@@ -287,6 +340,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("project_dir")
     ap.add_argument("--run-dir", default="", help="backend RUN_* dir the DEF came from")
+    ap.add_argument("--def", dest="def_path", default="",
+                    help="the selected 6_final.def being graphed — bound to --run-dir (P0-17)")
     ap.add_argument("--mode", default="enforce", choices=("enforce", "warn", "off"))
     ap.add_argument("--def-overridden", action="store_true",
                     help="R2G_DEF/R2G_ODB set: downgrade enforce to warn (deliberate operator override)")
@@ -299,7 +354,7 @@ def main():
     if mode == "off":
         verdict = {"status": "gate_off", "mode": "off"}
     else:
-        verdict = evaluate(args.project_dir, args.run_dir)
+        verdict = evaluate(args.project_dir, args.run_dir, args.def_path or None)
         verdict["mode"] = mode
         if args.def_overridden:
             verdict["def_overridden"] = True

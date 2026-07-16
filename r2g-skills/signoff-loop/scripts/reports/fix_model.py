@@ -64,14 +64,31 @@ def rank_strategies(recipe_entry: dict | None, static_order: list[str],
             failures = int(ps.get("failures", max(0, attempts - successes)))
             score = _score(successes, attempts, wins)
             plat_n = int(ps.get("platform_count", 0) or 0)
-            # Confidence floor (engineer-loop §5.7.2): a pooled-only strategy
-            # below the attempt floor must not outrank a locally PROVEN one.
+            pooled_rate = successes / attempts if attempts else 0.0
+            # Match level must CONSTRAIN ranking, not just be reported (P1-19,
+            # 2026-07-15). Two guards keep a large-but-weakly-matched pooled
+            # (cross-platform) history from silently DISPLACING current-platform/
+            # current-class evidence for platform-sensitive layout recipes
+            # (antenna/DRC/routing don't transfer for free):
+            #   (a) confidence floor (§5.7.2): pooled below the attempt floor never
+            #       outranks a locally PROVEN strategy; and
+            #   (b) rate dominance: a pooled prior may lift an untried/weak local
+            #       strategy, but must not outrank a local winner whose OWN observed
+            #       clearance rate is at least as good (the 2/2-exact vs 90/100-pooled
+            #       case). A genuinely better pooled still wins when the local is weak.
+            # Either way the pooled score is capped just below that local winner, so
+            # pooled stays a prior/tiebreaker, not an implicit displacer. Promoting a
+            # pooled strategy above an exact one is left to explicit A/B validation.
             local_proven = [
-                _score(int(v.get("successes", 0)), int(v.get("attempts", 0)),
-                       int(v.get("wins", 0)))
+                (_score(int(v.get("successes", 0)), int(v.get("attempts", 0)),
+                        int(v.get("wins", 0))),
+                 (int(v.get("successes", 0)) / int(v["attempts"]))
+                 if int(v.get("attempts", 0)) else 0.0)
                 for v in stats.values() if int(v.get("successes", 0)) >= 1]
-            if attempts < pooled_min_attempts and local_proven:
-                score = min(score, max(local_proven) - 1e-6)
+            dominant = [sc for sc, rate in local_proven
+                        if attempts < pooled_min_attempts or rate >= pooled_rate]
+            if dominant:
+                score = min(score, max(dominant) - 1e-6)
             prov = f"prior(pooled,tried={attempts})"
         else:
             attempts = successes = failures = wins = 0

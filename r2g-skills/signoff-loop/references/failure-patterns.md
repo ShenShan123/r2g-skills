@@ -2922,6 +2922,84 @@ writes `heuristics.json`/`failure_candidates.json` NEXT TO itself. Guard:
 sandbox-db manage()). If you find a gutted heuristics.json, restore with
 `git checkout -- knowledge/heuristics.json` and re-run `learn_heuristics.py` off the committed db.
 
+### 2026-07-15 agent-logic issue-report audit (failure-patterns #49 — 16 issues)
+
+An external adversarial audit (`docs/superpowers/plans/2026-07-15-issue-report.md`) probed A/B
+causality, lifecycle transitions, learning isolation, evidence validity, negative-memory scope, repair
+termination, and dataset provenance. Two of the reported issues (P0-4 identical-run-id promote, P1-6
+pooled-as-promoted) were ALREADY closed by #48; the other 14 were confirmed against the live tree and
+fixed TDD. The committed store gained two nullable columns (`ab_trials.trial_uuid`,
+`fix_trajectories.provenance`) but **0 verdicts moved** (the subject-dedup judge was verified to give an
+identical promote/shadow decision on every one of the 114 committed decisive keys).
+
+- **P0-10 / P1-11 — A/B evidence not bound to real, independent runs.** `record_trial` stamped
+  `provenance_complete` from string distinctness alone, so a decisive win citing FABRICATED run_ids (not in
+  `runs`) promoted; and `judge_recipe` counted raw rows, so N pseudo-replicated trials on ONE subject read
+  as N-fold corroboration. **Fix:** `provenance_complete` is now computed authoritatively against `runs`
+  (both run_ids must EXIST); `judge_recipe` collapses decisive trials to INDEPENDENT SUBJECTS
+  (`_trial_subject` strips the `_ab[AB]_` suffix; legacy NULL-run_id rows fall back to a per-row key so
+  committed verdicts are unchanged). Guards: `test_ab_runner.py::test_{fabricated_run_ids_never_promote,
+  pseudo_replication_cannot_overturn_a_genuine_loss,pseudo_replicated_wins_count_once_in_evidence}`.
+- **P0-11 / P0-12 — no causal isolation / spec equality.** The judge read only success + wall-clock, so
+  arm B could win by carrying an unrelated CLOCK_PERIOD edit or by relaxing the clock / enlarging the die
+  (reward hacking). **Fix:** `_arm_spec_mismatch` — a SIGNOFF trial (drc/lvs/route/both) must keep the
+  design SPEC (CLOCK_PERIOD/DIE_AREA/CORE_AREA + SDC period) IDENTICAL across arms; timing/place/synth
+  recipes are exempt. A mismatch forces the trial to non-promoting `inconclusive`.
+- **P0-13 — target-clear hides a new regression.** `_drc_symptom_cleared` tested only the target class, so
+  arm B could clear M1_SPACING while opening 8 NEW_FATAL_SHORT and still win. **Fix:**
+  `_ab_new_drc_regression` vetoes a win when arm B's newly-introduced DRC-class count EXCEEDS arm A's total
+  residual (materially worse) — a benign unrelated residual that merely became visible in B (arms reach
+  different flow stages) does NOT veto. Guards: `test_ab_causal_guards.py`.
+- **P0-14 — A/B arms fed the ordinary learner.** `learn_heuristics` excluded only `is_bench`, so a fix
+  episode run INSIDE an A/B arm (`_ab[AB]_` dir, or `eval_arm` set) drove both the ab_trials lifecycle AND
+  recipe ranking (circular evidence). **Fix:** `_fetch_learnable_rows` + `_ab_arm_project_paths` firewall
+  arm runs/trajectories out of learning. Guard: `test_learn_recipes_indexed.py::test_ab_arm_episodes_
+  excluded_from_recipe_learning`.
+- **P0-15 — lifecycle safety fail-open.** When the lifecycle store was UNREADABLE, `_annotate_live_gates`
+  returned an unannotated plan and `_live_auto_strategy` proceeded with un-gated static selection. **Fix:**
+  the annotator stamps `plan['lifecycle_gate_ok']`; the selector fails CLOSED (no blind auto-apply) when it
+  is False. A missing path auto-creates an empty store (a clean read), so cold-start still works.
+- **P0-16 — non-atomic trial insert.** A crash/retry re-recorded the same trial (2 rows, inflated
+  evidence). **Fix:** a deterministic `trial_uuid` (engineer_loop derives it from the arm run_ids) makes
+  `record_trial` idempotent. Guard: `test_ab_runner.py::test_trial_uuid_makes_record_idempotent`.
+- **P0-17 — dataset gate did not bind the DEF to its reports.** `signoff_gate.evaluate` checked report
+  contents independently, so a clean R1 report bundle certified an R2 `6_final.def`. **Fix:** the gate now
+  takes the selected DEF and requires it to live UNDER the reports' run dir (`_check_binding`); an unbound
+  DEF is a hard block, and a `def_fingerprint` rides the manifest. Guards: `def-graph/tests/test_signoff_
+  gate.py::test_def_{bound_to_run_passes,from_other_run_is_blocked}`.
+- **P0-6 — arbitrary no-op candidate could enter A/B.** Only the static `NONDIVERGENT_STRATEGIES` denylist
+  was checked. **Fix:** `_known_apply_strategy` PARKS a candidate whose strategy is neither a catalog/backend
+  strategy NOR present in `fix_events` (a genuinely-learned strategy always has a fix_event, so it is never
+  mis-parked — only a fabricated/unapplyable one).
+- **P1-10 — candidate leaked into live auto-apply.** `_live_auto_strategy` skipped only `shadow`. **Fix:**
+  it now blocks `candidate` too (`_LIVE_BLOCKED_LIFECYCLE`); `parked` (a harmless no-op recipe) stays
+  applicable. Guard: `test_negative_evidence_gates.py::test_live_auto_strategy_skips_candidate`.
+- **P1-12 / P1-14 — negative evidence too broad by symptom, too narrow by strategy id.** The dead-evidence
+  query keyed `(project, check, strategy)`. **Fix:** it now keys by `symptom_id` when known (a strategy dead
+  on symptom A is not dead on symptom B) AND propagates the dead flag across strategy aliases that share an
+  `_effect_fp` (byte-identical config/env/sdc edits).
+- **P1-13 — regression auto-demotion had no caller.** `ab_runner.auto_demote_on_regression` existed but
+  nothing invoked it. **Fix:** `learn()` sweeps every promoted recipe on each rebuild (the deterministic
+  production boundary). Guard: `test_ab_causal_guards.py::test_learn_auto_demotes_regressed_promoted_recipe`.
+- **P1-15 — stale planned arms.** Arms carried no recipe generation. **Fix:** each arm stamps
+  `recipe_generation`; a trial whose recipe was re-learned between planning and judging is CANCELLED, not
+  judged against a moved target.
+- **P1-16 / P1-17 — evidence validation + provenance.** The judge did arithmetic on negative/NaN samples and
+  `json.dumps` stored bare `NaN`; and trajectories dropped `fix_events.provenance`. **Fix:** `_finite_nonneg`
+  / `_is_true` sanitize samples, metrics serialize with `allow_nan=False` (non-finite → null), and
+  `_build_trajectory` carries provenance into a per-strategy `provenance_sources` so live and backfilled
+  evidence stay distinguishable. Guards: `test_ab_runner.py::test_{negative_wall_never_wins_cost_tiebreak,
+  nan_metrics_serialize_without_crash}`, `test_learn_recipes_indexed.py::test_provenance_preserved_live_vs_backfill`.
+- **P1-18 — cross-check repair cycles unrecognized.** Two individually-successful repairs (DRC-clears-
+  timing-breaks ↔ timing-clears-DRC-breaks) never became dead_here. **Fix:** `_global_repair_state` /
+  `_detect_repair_cycle` fingerprint the whole (DRC-vector, LVS, timing) signoff state; a revisited state
+  raises a `repair_cycle_nonconverged` escalation.
+- **P1-19 — match level descriptive but not constraining.** A large-but-weakly-matched pooled recipe
+  (90/100) outranked an exact local winner (2/2). **Fix:** `fix_model.rank_strategies` caps a pooled-only
+  strategy below any local winner whose OWN observed clearance rate is at least as good (a pooled prior
+  still wins when the local is weak). Guard: `test_confidence_floor.py::test_pooled_cannot_displace_exact_
+  winner_it_does_not_beat_on_rate`.
+
 ### 2026-07-14 recipe-lifecycle audit (failure-patterns #48 — Patterns 17-21)
 
 An external audit (`docs/superpowers/plans/2026-07-14-recipe-lifecycle-audit.md`) probed the

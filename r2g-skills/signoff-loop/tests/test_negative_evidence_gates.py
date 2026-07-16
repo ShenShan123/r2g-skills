@@ -133,6 +133,29 @@ def test_rank_first_bypasses_all_gates(monkeypatch):
     assert dsf._live_auto_strategy(plan, rank_first="a")["id"] == "a"
 
 
+def test_live_auto_strategy_skips_candidate(monkeypatch):
+    """P1-10 (2026-07-15): a 'candidate' recipe (awaiting A/B validation) must NOT
+    auto-apply in a blind live run, even when it ranks first via the static catalog
+    with a neutral cold-start score. Only an A/B arm --rank-first may force it."""
+    monkeypatch.delenv("R2G_FIX_RETRY_DEAD", raising=False)
+    plan = _plan("a", "b", extra={"a": {"lifecycle_status": "candidate"}})
+    assert dsf._live_auto_strategy(plan)["id"] == "b"          # candidate skipped
+    assert dsf._live_auto_strategy(plan, rank_first="a")["id"] == "a"   # arm B forces it
+
+
+def test_live_auto_strategy_fails_closed_when_lifecycle_unavailable(monkeypatch):
+    """P0-15 (2026-07-15): when the lifecycle store was UNREADABLE at annotation time
+    (lifecycle_gate_ok False) the selector fails CLOSED — no blind auto-apply — instead
+    of silently falling back to un-gated static selection of a candidate/demoted strategy."""
+    monkeypatch.delenv("R2G_FIX_RETRY_DEAD", raising=False)
+    blocked = _plan("a", "b")
+    blocked["lifecycle_gate_ok"] = False
+    assert dsf._live_auto_strategy(blocked) is None
+    assert dsf._live_auto_strategy(blocked, rank_first="a")["id"] == "a"   # arm B still forces
+    # a caller that never annotated (key absent) keeps the prior behavior
+    assert dsf._live_auto_strategy(_plan("a", "b"))["id"] == "a"
+
+
 def test_annotate_live_gates_counts_terminal_failures(tmp_path):
     db = tmp_path / "knowledge.sqlite"
     conn = knowledge_db.connect(db)
@@ -189,6 +212,74 @@ def test_annotate_live_gates_survives_missing_db(tmp_path, capsys):
     out = dsf._annotate_live_gates(plan, tmp_path / "nope", check="drc",
                                    db_path=tmp_path / "no" / "such.sqlite")
     assert out["strategies"][0]["id"] == "a"     # un-annotated, not crashed
+    # A fresh path is auto-created as an empty store (a clean read, not a failure), so
+    # the gate is available and the cold-start strategy stays applicable.
+    assert out.get("lifecycle_gate_ok") is True
+
+
+def test_annotate_live_gates_unreadable_store_fails_closed(tmp_path):
+    """P0-15 (2026-07-15): a genuinely UNREADABLE lifecycle store (here a path that is a
+    directory, which sqlite cannot open) marks lifecycle_gate_ok False, and the live
+    selector then fails CLOSED — no blind auto-apply."""
+    a_dir = tmp_path / "not_a_db"
+    a_dir.mkdir()
+    plan = _plan("a")
+    out = dsf._annotate_live_gates(plan, tmp_path / "design", check="drc",
+                                   db_path=a_dir)
+    assert out["lifecycle_gate_ok"] is False
+    assert dsf._live_auto_strategy(out) is None
+
+
+def test_dead_evidence_keyed_by_symptom(tmp_path):
+    """P1-12 (2026-07-15): a strategy that failed on DRC symptom A is NOT dead for a
+    DIFFERENT DRC symptom B on the same project (the old key over-generalized by
+    dropping symptom_id)."""
+    db = tmp_path / "knowledge.sqlite"
+    conn = knowledge_db.connect(db)
+    knowledge_db.ensure_schema(conn)
+    proj = tmp_path / "design"
+    proj.mkdir()
+    for i in range(2):        # 2 terminal failures of density_relief on symptom A
+        conn.execute(
+            "INSERT INTO fix_events (fix_session_id, project_path, check_type, iter, "
+            "strategy, verdict, symptom_id) VALUES (?,?,?,?,?,?,?)",
+            (f"s{i}", str(proj), "drc", 1, "density_relief", "no_change", "symA"))
+    conn.commit()
+    conn.close()
+    plan_b = _plan("density_relief")
+    dsf._annotate_live_gates(plan_b, proj, check="drc", sid="symB", db_path=db)
+    assert "dead_here" not in plan_b["strategies"][0]     # NOT dead for symptom B
+    plan_a = _plan("density_relief")
+    dsf._annotate_live_gates(plan_a, proj, check="drc", sid="symA", db_path=db)
+    assert plan_a["strategies"][0]["dead_here"] == 2      # dead for symptom A
+
+
+def test_dead_evidence_propagates_to_effect_alias(tmp_path):
+    """P1-14 (2026-07-15): an alias strategy with byte-identical config/env/sdc edits
+    inherits the dead flag, so the loop can't retry the same ineffective action under a
+    fresh id."""
+    db = tmp_path / "knowledge.sqlite"
+    conn = knowledge_db.connect(db)
+    knowledge_db.ensure_schema(conn)
+    proj = tmp_path / "design"
+    proj.mkdir()
+    for i in range(2):        # 2 terminal failures of 'orig' on symptom A
+        conn.execute(
+            "INSERT INTO fix_events (fix_session_id, project_path, check_type, iter, "
+            "strategy, verdict, symptom_id) VALUES (?,?,?,?,?,?,?)",
+            (f"s{i}", str(proj), "drc", 1, "orig", "no_change", "symA"))
+    conn.commit()
+    conn.close()
+    eff = {"config_edits": {"CORE_UTILIZATION": "12"}, "rerun_from": "floorplan",
+           "recheck": "drc"}
+    plan = {"strategies": [
+        {"id": "orig", "auto_apply": True, **eff},
+        {"id": "alias", "auto_apply": True, **eff}]}      # same effect, different id
+    dsf._annotate_live_gates(plan, proj, check="drc", sid="symA", db_path=db)
+    by_id = {s["id"]: s for s in plan["strategies"]}
+    assert by_id["orig"]["dead_here"] == 2
+    assert by_id["alias"].get("dead_here")               # alias inherited the dead flag
+    assert by_id["alias"].get("dead_by_effect") is True
 
 
 # ── corrupt heuristics.json degrades to cold start ───────────────────────────

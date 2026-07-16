@@ -7,6 +7,7 @@ and mine_rules.py. No CLI.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 from pathlib import Path
@@ -18,7 +19,14 @@ DEFAULT_SCHEMA_PATH = DEFAULT_KNOWLEDGE_DIR / "schema.sql"
 DEFAULT_FAMILIES_PATH = DEFAULT_KNOWLEDGE_DIR / "families.json"
 
 
-def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
+def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
+    # A no-arg connect() honors R2G_KNOWLEDGE_DB before the shipped default — symmetric
+    # with journal_db's R2G_JOURNAL_DB. Lets a unit test / sandbox point every default
+    # store access at an isolated DB so it never reads or writes the committed
+    # knowledge.sqlite (a functional test must not depend on the shipped lifecycle
+    # state). An explicit db_path always wins.
+    if db_path is None:
+        db_path = os.environ.get("R2G_KNOWLEDGE_DB") or DEFAULT_DB_PATH
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     # timeout + busy_timeout make a concurrent writer wait-and-retry rather than
@@ -52,6 +60,9 @@ _POST_MIGRATION_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_fix_events_symptom     ON fix_events(symptom_id)",
     "CREATE INDEX IF NOT EXISTS idx_run_violations_symptom ON run_violations(symptom_id)",
     "CREATE INDEX IF NOT EXISTS idx_fix_traj_symptom       ON fix_trajectories(symptom_id)",
+    # Idempotency guard for A/B trial retries (P0-16): unique per deterministic
+    # trial_uuid; NULLs (legacy/ad-hoc rows) are exempt via the partial predicate.
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_ab_trials_uuid  ON ab_trials(trial_uuid) WHERE trial_uuid IS NOT NULL",
 )
 
 
@@ -153,6 +164,18 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "fix_trajectories": {
         "symptom_id": "TEXT",
         "signature_json": "TEXT",
+        # Evidence provenance carried up from the winning fix_event (P1-17,
+        # 2026-07-15): 'live' | 'backfill:<source>'. Lets recipe aggregation keep
+        # live and reconstructed/synthetic evidence distinguishable (the learner
+        # tags each recipe with its evidence sources) instead of silently merging
+        # lower-trust backfill into live-equivalent confidence.
+        "provenance": "TEXT",
+    },
+    # Engineer-loop inline A/B trials (spec §5.4). trial_uuid makes record_trial
+    # idempotent across a crash/retry (P0-16, 2026-07-15) — same planned trial ->
+    # same uuid -> no duplicate row inflating promotion evidence.
+    "ab_trials": {
+        "trial_uuid": "TEXT",
     },
     "run_violations": {
         "symptom_id": "TEXT",

@@ -142,6 +142,8 @@ CREATE TABLE IF NOT EXISTS fix_trajectories (
     total_elapsed_s         REAL,
     symptom_id              TEXT NOT NULL DEFAULT '',
     signature_json          TEXT,
+    provenance              TEXT,                    -- 'live' | 'backfill:<source>' carried
+                                                     -- from the winning fix_event (P1-17)
     PRIMARY KEY (fix_session_id, check_type, symptom_id)
 );
 CREATE INDEX IF NOT EXISTS idx_fix_traj_fam
@@ -269,7 +271,15 @@ CREATE TABLE IF NOT EXISTS ab_trials (
     verdict       TEXT,             -- win | loss | inconclusive
     metrics_json  TEXT,
     match_level   TEXT,             -- exact | pooled_class | pooled_platform
-    ts            TEXT
+    ts            TEXT,
+    trial_uuid    TEXT              -- deterministic per-planned-trial id (P0-16):
+                                    -- a crash/retry re-records the SAME uuid, so
+                                    -- record_trial is idempotent and cannot double-
+                                    -- count a trial. NULL for legacy/ad-hoc rows.
 );
 CREATE INDEX IF NOT EXISTS idx_ab_trials_key
     ON ab_trials(symptom_id, design_class, platform, strategy);
+-- NOTE: the UNIQUE index on trial_uuid is created in knowledge_db._POST_MIGRATION_INDEXES,
+-- NOT here: on a legacy DB whose ab_trials predates trial_uuid, CREATE TABLE IF NOT EXISTS
+-- is a no-op and this executescript runs BEFORE the ALTER-ADD migration, so an index
+-- referencing the not-yet-added column would fail with "no such column".

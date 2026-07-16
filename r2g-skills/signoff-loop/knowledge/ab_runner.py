@@ -13,7 +13,9 @@ arm -> inconclusive, NEVER a win (inherits eval_heuristics invariant 11).
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
+import math
 import os
 import re
 import sqlite3
@@ -33,6 +35,77 @@ _ARM_DIR_RE = re.compile(r"_ab[AB]_")
 
 def _is_arm_dir(project_path: str | None) -> bool:
     return bool(project_path) and bool(_ARM_DIR_RE.search(os.path.basename(project_path)))
+
+
+# ── Evidence-validity guards (P1-16 / P0-10 / P1-11, 2026-07-15) ─────────────
+def _is_true(v) -> bool:
+    """Strict success coercion: only a real True/1 counts. Guards is_success against
+    a NaN (which is truthy in Python — `bool(float('nan'))` is True) leaking a corrupt
+    sample in as a 'success' (P1-16)."""
+    return v is True or v == 1
+
+
+def _finite_nonneg(x) -> bool:
+    """A usable non-negative finite measurement. A negative wall time or a NaN/Inf
+    duration is a corrupt A/B sample that would otherwise drive a bogus cost_tiebreak
+    win (P1-16); such values simply drop out of the cost comparison."""
+    try:
+        xf = float(x)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(xf) and xf >= 0.0
+
+
+def _json_safe(obj):
+    """Recursively replace non-finite floats (NaN/Inf) with None so metrics serialize
+    with allow_nan=False — a NaN emitted by json.dumps' lax default round-trips as a
+    decisive-but-corrupt sample on replay (P1-16)."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
+def _runs_exist(conn, *run_ids) -> bool:
+    """True iff every run_id is a REAL row in `runs`. A/B evidence must trace to two
+    runs that were actually ingested (P0-10, 2026-07-15): a decisive trial citing
+    fabricated/foreign run_ids cannot establish a causal experiment, so it must not
+    count toward promotion. Any None or unresolved id -> False."""
+    for rid in run_ids:
+        if not rid:
+            return False
+        try:
+            if conn.execute("SELECT 1 FROM runs WHERE run_id=?",
+                            (rid,)).fetchone() is None:
+                return False
+        except sqlite3.Error:
+            return False
+    return True
+
+
+def _trial_subject(conn, arm_a_run_id, arm_b_run_id, fallback) -> str:
+    """The INDEPENDENT SUBJECT a trial exercised = the base design both arms cloned
+    from. Resolve an arm run_id -> runs.project_path, strip the `_ab[AB]_<strat8>_<r>`
+    arm suffix to the base, and key on it. Two decisive trials on the SAME base subject
+    are pseudo-replicates, not independent corroboration (P1-11, 2026-07-15). A run_id
+    that does not resolve (legacy NULL / pre-existence-check row) falls back to a
+    per-row key, so LEGACY verdicts are unchanged — each legacy row stays its own
+    'subject', exactly as the old raw-row count treated it."""
+    for rid in (arm_b_run_id, arm_a_run_id):
+        if not rid:
+            continue
+        try:
+            row = conn.execute("SELECT project_path FROM runs WHERE run_id=?",
+                               (rid,)).fetchone()
+        except sqlite3.Error:
+            row = None
+        if row and row[0]:
+            base = _ARM_DIR_RE.split(os.path.basename(str(row[0]).rstrip("/")))[0]
+            return f"subj:{base}" if base else f"run:{rid}"
+    return f"legacy:{fallback}"
 
 N_DESIGNS_DEFAULT = 2     # min matched designs per trial (spec §5.4)
 AB_REPEATS_DEFAULT = 2    # Win 2: k repeats per arm for variance-aware promotion
@@ -97,8 +170,10 @@ def judge_repeated_ex(arm_a_samples: list[dict | None],
     b = [s for s in arm_b_samples if s is not None]
     if not a or not b:
         return "inconclusive", "arm_no_samples"   # an arm produced no judgeable result
-    a_succ = [1.0 if s.get("is_success") else 0.0 for s in a]
-    b_succ = [1.0 if s.get("is_success") else 0.0 for s in b]
+    # is_success strictly coerced (P1-16): a NaN is_success is truthy in Python and
+    # would otherwise count as a clean arm — the sole authority for a 'win'.
+    a_succ = [1.0 if _is_true(s.get("is_success")) else 0.0 for s in a]
+    b_succ = [1.0 if _is_true(s.get("is_success")) else 0.0 for s in b]
     if sum(b_succ) == 0:                       # B never signed off -> never a win
         if sum(a_succ) == 0:
             return "inconclusive", "both_arms_never_succeed"
@@ -118,8 +193,10 @@ def judge_repeated_ex(arm_a_samples: list[dict | None],
     # per arm there is NO variance estimate, so a cost-only tie is 'inconclusive':
     # a cost-neutral correct recipe stays shadow HONESTLY rather than being
     # promoted/demoted on noise.
-    wa = [s["wall_s"] for s in a if s.get("wall_s") is not None]
-    wb = [s["wall_s"] for s in b if s.get("wall_s") is not None]
+    # Only finite, non-negative wall times participate (P1-16): a negative or NaN
+    # duration must never manufacture a cost_tiebreak win.
+    wa = [float(s["wall_s"]) for s in a if _finite_nonneg(s.get("wall_s"))]
+    wb = [float(s["wall_s"]) for s in b if _finite_nonneg(s.get("wall_s"))]
     if len(wa) >= 2 and len(wb) >= 2:
         ma, mb = statistics.mean(wa), statistics.mean(wb)
         se = ((statistics.stdev(wa) ** 2) / len(wa)
@@ -326,14 +403,18 @@ def judge(arm_a: dict | None, arm_b: dict | None) -> str:
     None = the arm crashed / produced no judgeable result."""
     if arm_a is None or arm_b is None:
         return "inconclusive"
-    if not arm_b.get("is_success"):
-        return "inconclusive" if not arm_a.get("is_success") else "loss"
-    if not arm_a.get("is_success"):
+    # Strict success + finite-measurement guards (P1-16): a NaN is_success or a
+    # negative/NaN wall time / iteration count must not decide a verdict.
+    if not _is_true(arm_b.get("is_success")):
+        return "inconclusive" if not _is_true(arm_a.get("is_success")) else "loss"
+    if not _is_true(arm_a.get("is_success")):
         return "win"                      # B usable where A was not
-    wa, wb = arm_a.get("wall_s"), arm_b.get("wall_s")
+    wa = float(arm_a["wall_s"]) if _finite_nonneg(arm_a.get("wall_s")) else None
+    wb = float(arm_b["wall_s"]) if _finite_nonneg(arm_b.get("wall_s")) else None
     if wa is not None and wb is not None and wb < wa * 0.98:
         return "win"
-    ia, ib = arm_a.get("fix_iters"), arm_b.get("fix_iters")
+    ia = arm_a.get("fix_iters") if _finite_nonneg(arm_a.get("fix_iters")) else None
+    ib = arm_b.get("fix_iters") if _finite_nonneg(arm_b.get("fix_iters")) else None
     if ia is not None and ib is not None and ib < ia:
         return "win"
     if wa is not None and wb is not None and wb > wa * 1.02:
@@ -369,32 +450,46 @@ def _journal_verdict(key: dict, verdict: str, tid: int) -> None:
 
 def record_trial(conn, *, key: dict, verdict: str, arm_a_run_id: str | None,
                  arm_b_run_id: str | None, metrics: dict,
-                 match_level: str | None = None) -> int:
-    # Provenance honesty (failure-patterns #45): a decisive trial with missing or
-    # identical arm run_ids cannot be traced back to two DISTINCT arm runs, so its
-    # promotion evidence is unverifiable. Don't refuse the write (a real
-    # inconclusive/one-armed trial still carries information), but stamp the gap
-    # into metrics so replay/audit can exclude it, and warn loudly on a DECISIVE
-    # verdict lacking distinct run_ids — that is the case that must not silently
-    # promote a recipe on unverifiable evidence.
-    if "provenance_complete" not in metrics:
-        metrics = dict(metrics)
-        metrics["provenance_complete"] = bool(
-            arm_a_run_id and arm_b_run_id and arm_a_run_id != arm_b_run_id)
-    if verdict in ("win", "loss") and not metrics["provenance_complete"]:
+                 match_level: str | None = None,
+                 trial_uuid: str | None = None) -> int:
+    # Provenance honesty (failure-patterns #45 + P0-10, 2026-07-15): a decisive trial
+    # is VERIFIABLE only if it traces to two DISTINCT, REAL arm runs. The write is not
+    # refused (a real inconclusive/one-armed trial still carries information), but
+    # `provenance_complete` is stamped AUTHORITATIVELY here — distinct non-empty run_ids
+    # that BOTH exist in `runs` — so a caller cannot self-certify a fabricated pair via
+    # metrics. judge_recipe filters the unverifiable rows at the consumer (the "record
+    # the truth, filter at the consumer" firewall). A decisive verdict lacking it warns.
+    distinct = bool(arm_a_run_id and arm_b_run_id and arm_a_run_id != arm_b_run_id)
+    prov_complete = bool(distinct and _runs_exist(conn, arm_a_run_id, arm_b_run_id))
+    metrics = _json_safe(dict(metrics))
+    metrics["provenance_complete"] = prov_complete
+    if verdict in ("win", "loss") and not prov_complete:
         print(f"WARNING: decisive A/B trial for {key.get('strategy')} "
-              f"({key.get('symptom_id')}) lacks distinct arm run_ids "
+              f"({key.get('symptom_id')}) lacks two distinct REAL arm run_ids "
               f"(a={arm_a_run_id}, b={arm_b_run_id}); evidence is unverifiable",
               file=sys.stderr)
-    cur = conn.execute(
-        "INSERT INTO ab_trials (symptom_id, design_class, platform, strategy, "
-        "arm_a_run_id, arm_b_run_id, verdict, metrics_json, match_level, ts) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (key["symptom_id"], key["design_class"], key["platform"],
-         key["strategy"], arm_a_run_id, arm_b_run_id, verdict,
-         json.dumps(metrics, sort_keys=True), match_level, _now()))
-    conn.commit()
-    tid = cur.lastrowid
+    # Idempotent retry guard (P0-16, 2026-07-15): a crash between the trial insert and
+    # the arms being marked 'judged' must not double-count the SAME planned trial on
+    # restart. A deterministic trial_uuid (engineer_loop derives it from the arm run_ids)
+    # makes the insert idempotent — a retry reuses the existing row and only re-judges
+    # (judge_recipe is a pure function of the corpus, so re-judging is safe).
+    tid = None
+    if trial_uuid:
+        row = conn.execute("SELECT trial_id FROM ab_trials WHERE trial_uuid=?",
+                           (trial_uuid,)).fetchone()
+        if row:
+            tid = row[0]
+    if tid is None:
+        cur = conn.execute(
+            "INSERT INTO ab_trials (symptom_id, design_class, platform, strategy, "
+            "arm_a_run_id, arm_b_run_id, verdict, metrics_json, match_level, ts, "
+            "trial_uuid) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (key["symptom_id"], key["design_class"], key["platform"],
+             key["strategy"], arm_a_run_id, arm_b_run_id, verdict,
+             json.dumps(metrics, sort_keys=True, allow_nan=False), match_level,
+             _now(), trial_uuid))
+        conn.commit()
+        tid = cur.lastrowid
     # 2026-06-24 loop-closure (bugs #2 + #5): derive recipe_status from the recipe's
     # FULL ab_trials corpus, NOT this single verdict. The old `win -> promote / else ->
     # demote` rule (a) demoted a candidate to TERMINAL shadow on a single `inconclusive`
@@ -428,12 +523,13 @@ def judge_recipe(conn, *, symptom_id: str, design_class: str, platform: str,
     key = dict(symptom_id=symptom_id, design_class=design_class,
                platform=platform, strategy=strategy)
     rows = conn.execute(
-        "SELECT verdict, metrics_json FROM ab_trials WHERE symptom_id=? AND "
+        "SELECT verdict, metrics_json, arm_a_run_id, arm_b_run_id, trial_id "
+        "FROM ab_trials WHERE symptom_id=? AND "
         "design_class=? AND platform=? AND strategy=?",
         (symptom_id, design_class, platform, strategy)).fetchall()
     # P0-1 (failure-patterns #48, 2026-07-14): a DECISIVE trial whose metrics stamp
-    # provenance_complete EXPLICITLY False cannot be traced back to two DISTINCT arm
-    # runs (missing/identical run_ids — failure-patterns #45), so its win/loss is
+    # provenance_complete EXPLICITLY False cannot be traced back to two DISTINCT REAL
+    # arm runs (missing/identical/fabricated run_ids — #45 + P0-10), so its win/loss is
     # UNVERIFIABLE and must NOT drive a lifecycle transition. record_trial still WRITES
     # the row (honest history + the loud warning) — the firewall is "record the truth,
     # filter at the consumer" — but the judge excludes it HERE. An ABSENT
@@ -445,8 +541,21 @@ def judge_recipe(conn, *, symptom_id: str, design_class: str, platform: str,
         except (TypeError, ValueError):
             return True
         return m.get("provenance_complete") is not False
-    wins = sum(1 for v, mj in rows if v == "win" and _verifiable(mj))
-    losses = sum(1 for v, mj in rows if v == "loss" and _verifiable(mj))
+    # Collapse the decisive corpus to INDEPENDENT SUBJECTS before counting (P1-11,
+    # 2026-07-15): N pseudo-replicated trials on ONE base design are ONE vote, not N,
+    # so a reused subject cannot masquerade as N-fold corroboration. Each subject nets
+    # its own win/loss balance; a net-positive subject counts as one win, net-negative
+    # one loss, a tie no vote. Legacy NULL-run_id rows fall back to a per-row subject
+    # key (_trial_subject), so every committed verdict is byte-for-byte unchanged
+    # (each such row already counted once).
+    net: dict[str, int] = {}
+    for v, mj, a_rid, b_rid, tid in rows:
+        if v not in ("win", "loss") or not _verifiable(mj):
+            continue
+        subj = _trial_subject(conn, a_rid, b_rid, tid)
+        net[subj] = net.get(subj, 0) + (1 if v == "win" else -1)
+    wins = sum(1 for bal in net.values() if bal > 0)
+    losses = sum(1 for bal in net.values() if bal < 0)
     if wins > losses:
         recipe_lifecycle.promote(conn, evidence=f"ab_corpus:{wins}w{losses}l", **key)
         return "promoted"

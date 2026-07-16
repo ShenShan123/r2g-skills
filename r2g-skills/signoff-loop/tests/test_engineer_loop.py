@@ -158,8 +158,11 @@ def test_learn_cycle_enqueues_candidates_and_ab_arms(tmp_path, monkeypatch):
                  " drc_status, symptom_id, snapshot_ts) "
                  "VALUES ('r0','nangate45','fail','deadbeef00000001','t')")
     conn.commit()
+    # Use a REAL catalog strategy: a genuine learned candidate always derives from a
+    # fix_event of an applyable strategy, so it is never parked by the P0-6 no-op guard
+    # (a synthetic never-applied id like "s_new" WOULD be parked, correctly).
     heur_new = {"generation": 2, "recipes": {"deadbeef00000001": {
-        "crypto/small": {"nangate45": {"strategies": {"s_new": {
+        "crypto/small": {"nangate45": {"strategies": {"density_relief": {
             "attempts": 1, "successes": 1, "failures": 0, "wins": 0}},
             "n_sessions": 1}}}}}
     monkeypatch.setattr(engineer_loop, "_learn", lambda: heur_new)

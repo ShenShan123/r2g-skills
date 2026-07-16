@@ -733,20 +733,43 @@ def graph_convert(netlist: Path, out_pt: Path, design: str, config_mk: Path,
             "Provision with eda-install (bootstrap.sh) or point R2G_GRAPH_PYTHON at a "
             "python with torch+torch_geometric. The design is recorded as graph_skipped."
         )
+    # A SET-but-bogus R2G_GRAPH_PYTHON (missing / non-executable path) is a TOOLCHAIN
+    # gap, not an RTL/design failure (P0-9, 2026-07-15). Without this guard the exec of
+    # a non-existent interpreter raised an unstructured FileNotFoundError that escaped
+    # graph_convert and was misclassified upstream as synth_failed — polluting the
+    # RTL-failure learning signal with a phantom synth failure. Treat it exactly like
+    # the unset case: a clean structured 'skipped' (-> graph_skipped), same as the
+    # def-graph shell path, so it never routes into RTL/design repair learning.
+    if shutil.which(gpython) is None:
+        return "skipped", (
+            f"HINT: R2G_GRAPH_PYTHON={gpython!r} is not a usable executable "
+            "(toolchain_graph_python_missing) — provision the torch venv with eda-install "
+            "or fix the path. The design is recorded as graph_skipped, NOT a design failure."
+        )
     lib_env = _resolve_lib_env(config_mk)
-    result = run(
-        [gpython, str(netlist_graph_script()), str(netlist), str(out_pt), design],
-        capture=True,
-        extra_env=lib_env,
-    )
-    if result.returncode != 0 or not out_pt.exists():
-        return "failed", (result.stdout + "\n" + result.stderr).strip()[-2000:]
-    stats_result = run(
-        [gpython, str(SCRIPT_DIR / "graph_stats.py"), "--pt", str(out_pt),
-         "--netlist", str(netlist), "--out", str(cell_stats_json)],
-        capture=True,
-        extra_env=lib_env,
-    )
+    # Belt-and-suspenders: even past the which() check, an exec can still fail (race,
+    # permissions, corrupt interpreter). Catch OSError so it becomes a structured
+    # toolchain skip rather than an unstructured exception mislabeled as synth_failed.
+    try:
+        result = run(
+            [gpython, str(netlist_graph_script()), str(netlist), str(out_pt), design],
+            capture=True,
+            extra_env=lib_env,
+        )
+        if result.returncode != 0 or not out_pt.exists():
+            return "failed", (result.stdout + "\n" + result.stderr).strip()[-2000:]
+        stats_result = run(
+            [gpython, str(SCRIPT_DIR / "graph_stats.py"), "--pt", str(out_pt),
+             "--netlist", str(netlist), "--out", str(cell_stats_json)],
+            capture=True,
+            extra_env=lib_env,
+        )
+    except OSError as exc:
+        return "skipped", (
+            f"HINT: graph python {gpython!r} failed to execute "
+            f"(toolchain_graph_python_missing: {type(exc).__name__}: {exc}). "
+            "The design is recorded as graph_skipped, NOT a design failure."
+        )
     if stats_result.returncode != 0 or not cell_stats_json.exists():
         return "failed", ("graph_stats failed: "
                           + (stats_result.stdout + "\n" + stats_result.stderr).strip()[-1500:])

@@ -40,11 +40,17 @@ def test_reconcile_flips_noise_verdicts_and_reverts_promotion(tmp_path):
         ("loss", [_samp(123)],             [_samp(134)]),
     ]
     for i, (verdict, A, B) in enumerate(trials):
-        # Distinct run_ids -> provenance_complete=True, so these DECISIVE verdicts count
-        # in judge_recipe. (Post-P0-1 (failure-patterns #48) a noise-promotion needing
-        # reconcile is a provenance-COMPLETE trial carrying an old-judge noise verdict;
-        # a None-run_id trial is provenance-incomplete and never promotes in the first
-        # place, so there would be nothing for reconcile to revert.)
+        # Distinct REAL run_ids on distinct subjects -> provenance_complete=True, so these
+        # DECISIVE verdicts count in judge_recipe. (Post-P0-1 (failure-patterns #48) a
+        # noise-promotion needing reconcile is a provenance-COMPLETE trial carrying an
+        # old-judge noise verdict; a None/fabricated-run_id trial is provenance-incomplete
+        # (P0-10) and never promotes, so there would be nothing for reconcile to revert.)
+        for arm, rid in (("A", f"ra{i}"), ("B", f"rb{i}")):
+            conn.execute(
+                "INSERT OR REPLACE INTO runs (run_id, project_path, design_name, "
+                "platform, ingested_at, cell_count) VALUES (?,?,?,?,?,?)",
+                (rid, str(tmp_path / f"d{i}_ab{arm}_diode_0"), f"d{i}",
+                 key["platform"], "2026-06-10T00:00:00Z", 1000))
         ab_runner.record_trial(conn, key=key, verdict=verdict, arm_a_run_id=f"ra{i}",
                                arm_b_run_id=f"rb{i}",
                                metrics={"A_samples": A, "B_samples": B})
