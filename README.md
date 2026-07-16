@@ -349,7 +349,7 @@ Key scripts involved:
 | Signoff fix | `scripts/flow/fix_signoff.sh` | `reports/fix_log.jsonl` |
 | Dataset labels (Y) | `scripts/flow/run_labels.sh` | `labels/*.csv` (congestion · wirelength · timing · irdrop · RC parasitics from SPEF) + `reports/labels_stats.json` |
 | Dataset features (X) | `scripts/flow/run_features.sh` | `features/*.csv` + `reports/features_stats.json` |
-| PyG graph datasets | `scripts/flow/run_graphs.sh` | `dataset/{b..f}_graph.pt`, `netlist_graph.pt`, `graph_manifest.json` |
+| PyG graph datasets | `scripts/flow/run_graphs.sh` | `dataset/{b..f}_graph.pt` (`HeteroData` by default; `R2G_GRAPH_KIND=homo` for the flat format), `netlist_graph.pt`, `graph_manifest.json` |
 
 ---
 
@@ -505,7 +505,7 @@ agent-r2g/
 │   │   ├── assets/                    #   config.mk / constraint.sdc templates + platform rule decks
 │   │   └── tests/                     #   pytest suite (signoff-loop)
 │   └── def-graph/                     # SKILL 2 — graph datasets from signed-off DEF/LEF/SPEF
-│       ├── SKILL.md                   #   Labels → features → PyG graphs (b–f)
+│       ├── SKILL.md                   #   Labels → features → PyG graphs (b–f, HeteroData default)
 │       ├── scripts/
 │       │   ├── flow/                  #   run_labels/run_features/run_graphs + resolve_platform_paths + _env.sh
 │       │   └── extract/
@@ -573,7 +573,8 @@ bash    $SKILL/scripts/flow/run_rcx.sh  $PROJ  nangate45
 #   .../pip install torch_geometric pandas
 R2G_GRAPH_PYTHON=/proj/<you>/pyenvs/r2g-graph/bin/python \
 bash    $SKILL/scripts/flow/run_graphs.sh  $PROJ  nangate45
-# -> $PROJ/dataset/{b..f}_graph.pt, netlist_graph.pt, graph_manifest.json
+# -> $PROJ/dataset/{b..f}_graph.pt (HeteroData by default; R2G_GRAPH_KIND=homo|both),
+#    netlist_graph.pt, graph_manifest.json
 ```
 
 A worked example: `r2g-skills/signoff-loop/assets/examples/simple-arbiter/`.
@@ -627,7 +628,7 @@ config.mk — see `r2g-skills/signoff-loop/SKILL.md` ("Netgen LVS") and
 
 ## Validated scale
 
-The skills have been validated on **682 RTL designs** spanning ICCAD benchmarks, RISC-V cores, BOOM/Chipyard, VTR, zipcpu, verilog-ethernet, wb2axip, and more. The test suite covers **1,121 tests** (pytest, as of 2026-07-08; run per-skill — `signoff-loop` 790, `def-graph` 331), including an end-to-end synthetic corner-case suite that drives the real feature/label/graph extractors and asserts all five PyG graph views (b–f) against hand-derived ground truth. The graph datasets carry a dedicated ground-truth harness (`tools/verify_graph_dataset.py --batch`) that verifies correctness across three dimensions — **topology** (all five views: node/edge counts, folding, block-positional order, fwd/rev edge interleaving), **feature statistics** (independent column re-derivation + stats-gate honesty + categorical vocab coverage), and **labels ↔ sign-off reports** (DRC/LVS clean-provenance gate, `ppa.json` geometry, the timing↔SDC clock-period transform, and RC/`C_total` vs an independent SPEF re-parse; an opt-in `--signoff-recheck` re-runs OpenROAD PDNSim to independently re-derive the IR-drop label). Every check is negative-control-tested — proven to fail on a deliberate corruption.
+The skills have been validated on **682 RTL designs** spanning ICCAD benchmarks, RISC-V cores, BOOM/Chipyard, VTR, zipcpu, verilog-ethernet, wb2axip, and more. The test suite covers **1,121 tests** (pytest, as of 2026-07-08; run per-skill — `signoff-loop` 790, `def-graph` 331), including an end-to-end synthetic corner-case suite that drives the real feature/label/graph extractors and asserts all five PyG graph views (b–f) against hand-derived ground truth. The five views are emitted as `HeteroData` by default (per-type node stores + `(src,relation,dst)` edge stores; `R2G_GRAPH_KIND=homo` for the legacy flat tensors); the verified homogeneous form remains the internal source of truth and the verifier reconstructs it independently to certify the conversion. The graph datasets carry a dedicated ground-truth harness (`tools/verify_graph_dataset.py --batch`) that verifies correctness across three dimensions — **topology** (all five views: node/edge counts, folding, block-positional order, fwd/rev edge interleaving — or hetero per-store alignment + reverse-relation symmetry), **feature statistics** (independent column re-derivation + stats-gate honesty + categorical vocab coverage), and **labels ↔ sign-off reports** (DRC/LVS clean-provenance gate, `ppa.json` geometry, the timing↔SDC clock-period transform, and RC/`C_total` vs an independent SPEF re-parse; an opt-in `--signoff-recheck` re-runs OpenROAD PDNSim to independently re-derive the IR-drop label). Every check is negative-control-tested — proven to fail on a deliberate corruption.
 
 **ORFS backend (place & route → GDS):** 476 / 495 designs from the original `rtl_designs/` batch pass (96.2%); 19 remaining have understood root causes (megadesign synthesis budgets, missing netlists, zero-logic stubs).
 

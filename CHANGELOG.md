@@ -4,6 +4,36 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-16 — def-graph emits HeteroData by default (def-graph)
+
+The five post-layout dataset views `{b..f}_graph.pt` are now torch_geometric **`HeteroData`** by
+default, generalizing the external RTL2Graph `generate_hetero_bgraph.py` (b-graph only) to all five
+views — including the folded `edge_attr`/`edge_y` families and the RC parasitic edge set. The verified
+block-positional **homogeneous `Data` is still built first as the source of truth** (every
+filter/sort/label-join happens there); the hetero graph is a **value-preserving re-view**
+(`graph_lib.homo_to_hetero`, exact inverse `hetero_to_homo`).
+
+### def-graph
+- **Heterogeneous default** — per-type node stores (`gate`/`net`/`iopin`/`pin`; the redundant
+  `node_type` col0 dropped, so `x` is width 9 and `y`/`y_raw` width 5) + `(src_type, relation, dst_type)`
+  edge stores. The **relation is the folded entity** from the view's `edge_schema` (b physical edges →
+  `connects`; c/d/e/f → `pin`/`net`/`gate`/…; RC → `rc_coupling`/`rc_resistance`). View **e** folds
+  *both* gates and nets onto pin↔pin edges, so the folded entity is REQUIRED in the relation key
+  (`(pin,gate,pin)` vs `(pin,net,pin)`).
+- **`R2G_GRAPH_KIND`** (= `build_graphs.py --kind`) — `hetero` (default) / `homo` (legacy flat
+  `x[N,10]`/`y[N,6]`) / `both` (hetero `{v}_graph.pt` + homo `{v}_graph_homo.pt`). The manifest records
+  `graph_kind` + a per-variant per-type/per-relation `hetero` breakdown.
+- **`netlist_graph.pt` stays homogeneous** — it is a pre-layout artifact shared with the `rtl-acquire`
+  corpus supply line, whose contract is homogeneous.
+- **Verifier is hetero-aware** — `tools/verify_graph_dataset.py` reconstructs the homogeneous `Data`
+  **independently** (a second implementation of `hetero_to_homo`, so a conversion bug fails a homo check)
+  and runs the full topology/feature/label/RC/signoff surface on it, then adds a `hetero.*` group (node
+  types, per-type tensor widths, relations over present types, manifest-breakdown parity) and swaps the
+  homo `[fwd,rev]` interleaving guard for a hetero-native per-store alignment + reverse-relation symmetry
+  guard. Negative controls on a corrupted hetero label / `edge_attr` fail loudly.
+- Validated on adder_tree sky130hs: verifier **294/294**, exact homo→hetero→homo round-trip on all five
+  views, def-graph pytest **406 passed / 14 skipped**.
+
 ## 2026-07-14 — RTL2Graph_v3 reference alignment: raw-label twins + num_drivers no-fill + LEF pin geometry (def-graph)
 
 Compared a fresh `RTL2Graph_v3` reference drop subsystem-by-subsystem against `def-graph`. The reference

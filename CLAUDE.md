@@ -21,7 +21,8 @@ predictors. Implemented as the `r2g-skills` Claude Code skill collection — **f
 - **`signoff-loop`** — drives the flow RTL→GDS with full signoff *and* the self-improvement loop
   (the two memory DBs + `engineer_loop`) that eliminates DRC/LVS violations and closes timing at Fmax.
 - **`def-graph`** — converts the clean, signed-off physical design (the ORFS `6_final.odb`/`.def`/
-  `.spef` + platform liberty/LEF) into PyTorch-Geometric graph datasets: five graph views (b–f), the
+  `.spef` + platform liberty/LEF) into PyTorch-Geometric graph datasets: five graph views (b–f), emitted
+  as `HeteroData` by default (2026-07-16; `R2G_GRAPH_KIND=homo` for the legacy flat tensors), the
   shared tech-lib/LEF/DEF parser, and feature (X) / label (Y) extraction — labels are congestion,
   wirelength, per-path timing slack, IR drop, and SPEF-derived RC parasitics (the last a `y[N,6]` node
   label + a separate `rc_edge_*` parasitic edge set, merged 2026-07-07).
