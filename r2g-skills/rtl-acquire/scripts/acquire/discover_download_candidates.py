@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+import os
 import sys
 
 _SKILL_SCRIPTS_DIR = Path(__file__).resolve().parents[1]
@@ -543,7 +544,13 @@ def bundle_closure(
     module_to_path: dict[str, Path],
     *,
     max_files: int = 16,
-) -> list[Path]:
+) -> tuple[list[Path], list[str]]:
+    """(ordered_bundle, unresolved_modules). unresolved is NON-EMPTY when the
+    max_files cap truncated the closure (2026-07-16 full-pipeline issue 10: the
+    cap used to return silently, sending a predictably-incomplete bundle to
+    synthesis where the missing SAME-REPO module failed as 'low_value_failure' —
+    corpus recall biased against exactly the larger designs). The emitter records
+    a bundle_incomplete marker so expand/classify can see it."""
     ordered: list[Path] = []
     queue = [start_path]
     seen: set[Path] = set()
@@ -558,7 +565,11 @@ def bundle_closure(
             dep_path = module_to_path.get(ref)
             if dep_path and dep_path not in seen and dep_path not in queue:
                 queue.append(dep_path)
-    return ordered
+    unresolved: list[str] = []
+    if queue:                       # cap hit with work remaining: name what was cut
+        cut = {p for p in queue if p not in seen}
+        unresolved = sorted({m for m, p in module_to_path.items() if p in cut})
+    return ordered, unresolved
 
 
 def helper_like_file(info: dict, refcount: Counter[str]) -> bool:
@@ -646,6 +657,7 @@ def main() -> None:
         + list(args.downloads_root.rglob("*.vhd"))
         + list(args.downloads_root.rglob("*.vhdl"))
     )
+    containment_skipped = 0
     for path in all_paths:
         rel = path.relative_to(args.downloads_root)
         if repo_scope and (not rel.parts or rel.parts[0] not in repo_scope):
@@ -653,8 +665,27 @@ def main() -> None:
         if not rel.parts:
             continue
         repo_name = rel.parts[0]
+        # Filesystem containment (2026-07-16 full-pipeline issue 8): a symlink
+        # inside a cloned repo can point at ANY host file; following it would
+        # make the pipeline read/synthesize/vendor bytes outside the repo (a
+        # host-safety and provenance violation). Every candidate path must
+        # RESOLVE inside its own repo root; escapes are counted, never silent.
+        try:
+            resolved = path.resolve()
+            repo_root = (args.downloads_root / repo_name).resolve()
+        except OSError:
+            containment_skipped += 1
+            continue
+        if resolved != repo_root and not str(resolved).startswith(str(repo_root) + os.sep):
+            containment_skipped += 1
+            print(f"WARNING: skipping candidate escaping its repo root "
+                  f"(symlink?): {path} -> {resolved}", file=sys.stderr)
+            continue
         if path_is_likely_rtl_source(args.downloads_root, path):
             repo_to_paths.setdefault(repo_name, []).append(path)
+    if containment_skipped:
+        print(f"NOTE: containment check skipped {containment_skipped} path(s) "
+              f"resolving outside their repo root", file=sys.stderr)
 
     for repo_name in sorted(repo_to_paths):
         repo_dir = args.downloads_root / repo_name
@@ -765,10 +796,11 @@ def main() -> None:
                 continue
             if standalone_leaf_low_value(info, refcount):
                 continue
-            bundle_paths = bundle_closure(path, file_infos, module_to_path)
+            bundle_paths, unresolved_mods = bundle_closure(path, file_infos, module_to_path)
             if len(bundle_paths) == 1 and info["non_empty_line_count"] < 40:
                 continue
             info["bundle_paths"] = bundle_paths
+            info["bundle_unresolved"] = unresolved_mods
             candidates.append(info)
 
         candidates.sort(key=rank_candidate)
@@ -813,6 +845,12 @@ def main() -> None:
                         f"build_markers={'+'.join(build_markers) if build_markers else 'none'}; "
                         f"generated_rtl={'yes' if generated_hit else 'no'}; "
                         f"risk_flags={'+'.join(bundle_risk) if bundle_risk else 'none'}"
+                        # bundle_incomplete marker (issue 10): the classifier turns a
+                        # missing-module failure on a truncated bundle into a RETRY
+                        # (missing_local_module), never a low_value exclusion.
+                        + (f"; bundle_incomplete={len(info.get('bundle_unresolved') or [])}; "
+                           f"unresolved={'+'.join((info.get('bundle_unresolved') or [])[:8])}"
+                           if info.get("bundle_unresolved") else "")
                     ),
                 }
             )

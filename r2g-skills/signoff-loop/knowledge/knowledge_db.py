@@ -181,6 +181,13 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "symptom_id": "TEXT",
         "signature_json": "TEXT",
     },
+    # Monotonic lifecycle version, +1 on every recipe_lifecycle._set transition
+    # (2026-07-16 issue 6): promote/demote never bumped `generation`, so the A/B
+    # judge's generation-only staleness guard was blind to a demotion landing
+    # between plan and judge — a stale decisive trial then re-promoted the recipe.
+    "recipe_status": {
+        "status_version": "INTEGER",
+    },
     # Cold archive mirrors fix_events for the SELECT * copy in archive_old_raw;
     # patch legacy sidecar archive DBs so the column counts still match.
     "fix_events_archive": {

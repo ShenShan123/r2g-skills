@@ -69,7 +69,7 @@ def test_sh_meta_overrides_repointed_config(tmp_path):
         {"design_name": "iir", "platform": "sky130hd"}), encoding="utf-8")
     out, err = _sh(str(rd), "sky130hs")
     assert out == "sky130hd"
-    assert "NOTE" in err and "sky130hd" in err
+    assert "WARNING" in err and "sky130hd" in err
 
 
 def test_sh_agreement_is_silent(tmp_path):
@@ -107,6 +107,26 @@ def test_guard_wired_once_into_all_three_stage_scripts():
         assert "_provenance.sh" in src, f"{script} lost the #30 guard"
         assert 'run-meta.json"' not in src.replace(
             "_provenance.sh", ""), f"{script} re-inlined the guard"
+
+
+def test_guard_runs_even_for_explicit_platform_arg():
+    """2026-07-16 hardening: the guard used to be SKIPPED when the caller passed an
+    explicit platform arg ('arg always wins') — an explicit-but-WRONG arg then
+    silently stamped a wrong-platform manifest (sky130hd libs resolved against an
+    hs DEF; every liberty-derived value wrong, caught only by the verifier). The
+    runners must now consult the guard regardless of $2, with R2G_PLATFORM_FORCE
+    as the only (deliberate) escape hatch."""
+    for script in ("run_labels.sh", "run_features.sh", "run_graphs.sh"):
+        src = open(os.path.join(_FLOW, script), encoding="utf-8").read()
+        guard = [ln for ln in src.splitlines()
+                 if "_provenance.sh" in ln or
+                 ("RUN_DIR" in ln and "R2G_PLATFORM_FORCE" in ln)]
+        cond = "\n".join(ln for ln in src.splitlines()
+                         if "R2G_PLATFORM_FORCE" in ln and "if" in ln)
+        assert cond, f"{script}: guard condition lost the R2G_PLATFORM_FORCE gate"
+        assert '-z "${2:-}"' not in cond, \
+            f"{script}: guard still skipped for an explicit platform arg"
+        assert guard, f"{script}: provenance guard missing"
 
 
 # ---- the verifier (_platform_provenance) ------------------------------------

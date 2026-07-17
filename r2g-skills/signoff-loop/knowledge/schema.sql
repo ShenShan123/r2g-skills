@@ -237,6 +237,10 @@ CREATE TABLE IF NOT EXISTS recipe_status (
     status        TEXT NOT NULL,        -- shadow | candidate | promoted
     provenance    TEXT,                 -- ab_trial:<id> | grandfathered:<date> | agent:<sid>
     generation    INTEGER,              -- generation that produced/changed it
+    -- Monotonic per-row version, +1 on EVERY status transition (2026-07-16 issue 6:
+    -- generation never moves on promote/demote, so a demotion between A/B plan and
+    -- judge was invisible to the staleness guard and a stale trial re-promoted).
+    status_version INTEGER,
     updated_at    TEXT,
     PRIMARY KEY (symptom_id, design_class, platform, strategy)
 );

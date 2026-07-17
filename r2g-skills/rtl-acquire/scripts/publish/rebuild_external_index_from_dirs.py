@@ -59,12 +59,27 @@ def main() -> None:
         if not pt_path.exists():  # legacy 30pt-era per-design name
             pt_path = ddir / f"{design}_1_1_yosys.pt"
         mapped_path = ddir / "mapped_netlist.v"
-        if pt_path.exists() and mapped_path.exists():
-            status = "success"
+        # design_meta.json is AUTHORITATIVE (2026-07-16 full-pipeline issue 3): a
+        # rerun that FAILED records synth_failed in meta while stale prior-run
+        # artifacts can survive on disk — inferring success from file existence
+        # alone rebuilt a failed design as success. Artifacts now only CONFIRM a
+        # meta success (both must exist), never overrule a recorded failure.
+        meta_status = str(meta.get("status") or "")
+        if meta_status == "success":
+            if pt_path.exists() and mapped_path.exists():
+                status = "success"
+            elif mapped_path.exists():
+                status = "graph_failed"     # meta says success but the graph is gone
+            else:
+                status = "synth_failed"     # meta stale vs missing artifacts: fail-closed
+        elif meta_status:
+            status = meta_status
+        elif pt_path.exists() and mapped_path.exists():
+            status = "success"              # legacy dir with NO meta at all: old inference
         elif mapped_path.exists():
             status = "graph_failed"
         else:
-            status = meta.get("status") or "synth_failed"
+            status = "synth_failed"
         rtl_files = meta.get("rtl_files", [])
         source_path = ";".join(str(p) for p in rtl_files) if isinstance(rtl_files, list) else ""
         rows.append(

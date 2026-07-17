@@ -39,6 +39,28 @@ def parse_bool(value: object) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y"}
 
 
+# Reserved terminal actions can NEVER be configured as publishable. `reject` is the
+# quality scorer's strongest negative verdict; if a policy lists it under
+# allowed_design_actions the publish gate silently loses its ability to distinguish
+# rejection from approval (2026-07-16 full-pipeline issue #4). Fail loudly at load.
+RESERVED_TERMINAL_ACTIONS = {"reject"}
+
+
+def load_allowed_actions(publish_policy: dict, policy_path: Path) -> set[str]:
+    allowed_actions = {
+        str(action).strip().lower()
+        for action in publish_policy.get("allowed_design_actions", ["keep", "conditional"])
+    }
+    illegal = allowed_actions & RESERVED_TERMINAL_ACTIONS
+    if illegal:
+        raise SystemExit(
+            f"invalid publish policy {policy_path}: allowed_design_actions must not contain "
+            f"reserved terminal action(s) {sorted(illegal)}; a rejected design can never be "
+            "publish eligible"
+        )
+    return allowed_actions
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build publish-eligible design set from success index + design quality scores.")
     parser.add_argument("--external-index", type=Path, default=DEFAULT_EXTERNAL_INDEX)
@@ -50,13 +72,20 @@ def main() -> None:
     args = parser.parse_args()
 
     publish_policy = load_json(args.publish_policy_json)
-    allowed_actions = {
-        str(action).strip().lower()
-        for action in publish_policy.get("allowed_design_actions", ["keep", "conditional"])
-    }
+    allowed_actions = load_allowed_actions(publish_policy, args.publish_policy_json)
     exclude_low_fidelity = bool(publish_policy.get("exclude_low_fidelity_designs", True))
     max_dominant = float(publish_policy.get("max_dominant_gate_share", 0.98) or 0.98)
     min_complexity = float(publish_policy.get("min_nontrivial_complexity_score", 0.02) or 0.02)
+    # License/revision contract (2026-07-16 full-pipeline issue 2): publication was
+    # decided from synthesis/quality fields ONLY — unknown redistribution terms and
+    # unresolvable upstream revisions sailed through. FAIL-CLOSED: only license
+    # statuses the policy explicitly allows publish (default: just 'allow'); a
+    # cloned-repo candidate must carry its resolved commit. Legacy metas without
+    # the fields read license 'unknown' -> blocked with an explicit reason (widen
+    # allowed_license_status deliberately to restore the old behavior).
+    allowed_license = {str(s).strip().lower()
+                       for s in publish_policy.get("allowed_license_status", ["allow"])}
+    require_commit = bool(publish_policy.get("require_source_commit", True))
 
     index_rows = load_rows(args.external_index)
     score_rows = load_rows(args.design_scores)
@@ -72,6 +101,8 @@ def main() -> None:
         "graph_complexity_score",
         "dominant_cell_share",
         "low_fidelity",
+        "license_status",
+        "source_commit",
     ]
     out_rows: list[dict[str, str]] = []
     eligible_count = 0
@@ -108,6 +139,17 @@ def main() -> None:
             if dominant > max_dominant:
                 reasons.append(f"dominant_cell_share>{max_dominant}")
 
+        # License/revision gate (issue 2): per-design provenance rides
+        # design_meta.json (stamped at expansion); absence reads 'unknown'.
+        meta = load_json(args.external_index.parent / design / "design_meta.json") or {}
+        license_status = str(meta.get("license_status") or "unknown").strip().lower()
+        source_commit = str(meta.get("source_commit") or "")
+        source_kind = str(meta.get("source_kind") or "")
+        if license_status not in allowed_license:
+            reasons.append(f"license_status={license_status}")
+        if require_commit and source_kind == "cloned_repo" and not source_commit:
+            reasons.append("missing_source_commit")
+
         eligible = not reasons
         if eligible:
             eligible_count += 1
@@ -125,6 +167,8 @@ def main() -> None:
                 "graph_complexity_score": score.get("graph_complexity_score", "") if score else "",
                 "dominant_cell_share": score.get("dominant_cell_share", "") if score else "",
                 "low_fidelity": score.get("low_fidelity", "") if score else "",
+                "license_status": license_status,
+                "source_commit": source_commit,
             }
         )
 

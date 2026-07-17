@@ -25,7 +25,7 @@ fail carries a `synth-frontend-*` event, `graph_skipped` never counts as success
 Apply any `KEY=value` from **$ARGUMENTS** as env overrides. Set the working vars once and reuse:
 
 ```bash
-cd /proj/workarea/user5/agent-r2g
+cd /proj/workarea/user5/r2g-skills   # (renamed from agent-r2g)
 PLATFORM=${PLATFORM:-sky130hd}                               # $ARGUMENTS may override
 LEDGER=${LEDGER:-design_cases/_batch/${PLATFORM}_campaign.jsonl}
 # The historical nangate45 round lives in design_cases/_batch/campaign.jsonl (892 designs, terminal);
@@ -335,7 +335,11 @@ advisory. `run_graphs.sh` **enforces** by default, labels/features warn; `R2G_SI
 overrides (an explicit `R2G_DEF` override downgrades to warn, deliberately, recorded). The verdict is
 written to `reports/signoff_gate.json` + the manifest's `signoff_health` — a dataset with unrecorded or
 dirty provenance must FAIL the verifier. A gate-blocked build on a fail/partial design is CORRECT
-behavior, not a Step-5 bug; produce the sign-off with Step 2 first.
+behavior, not a Step-5 bug; produce the sign-off with Step 2 first. Since 2026-07-16 a gate-blocked
+`run_graphs.sh` exits **7** (distinct, expected — treat it as "blocked, go sign off", not a crash) and
+atomically stamps any prior green `dataset/graph_manifest.json` to `status="blocked_unsigned"` so a
+stale dataset can never read as current; benign skips (no torch venv / no DEF) stay exit 0 and leave
+an existing manifest alone.
 
 **Prereq — the graph venv** (`torch + torch_geometric + pandas`; `run_graphs.sh` and the verifier both
 **SKIP cleanly** without it, and a silent skip verifies NOTHING):

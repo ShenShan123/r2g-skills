@@ -80,23 +80,62 @@ _journal_action() {  # action_type payload_json [symptom_id] — generic best-ef
   python3 "$R2G_KNOWLEDGE_DIR/journal_action.py" "${args[@]}" >/dev/null 2>&1 || true
 }
 
+_recover_flow_variant() {  # project_dir -> echoes flow_variant from the newest backend
+  # RUN's run-meta.json (or empty). Sign off the SAME ORFS workspace the backend was
+  # built in (full-pipeline Issue 9): a backend built under an explicit FLOW_VARIANT
+  # must not be re-staged under the project-basename variant. Empty when no backend or
+  # no run-meta records a flow_variant — the callers then reproduce today's exact
+  # basename behavior (run_drc/run_lvs/run_orfs treat an empty 3rd arg as "derive").
+  python3 - "$1" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+bk = os.path.join(sys.argv[1], "backend")
+try:
+    runs = [d for d in os.listdir(bk)
+            if d.startswith("RUN_") and os.path.isdir(os.path.join(bk, d))]
+except OSError:
+    sys.exit(0)
+runs.sort(key=lambda d: os.path.getmtime(os.path.join(bk, d)), reverse=True)
+for d in runs:                              # newest first: the backend that built the GDS
+    mp = os.path.join(bk, d, "run-meta.json")
+    if not os.path.exists(mp):
+        continue
+    try:
+        fv = (json.load(open(mp)).get("flow_variant") or "").strip()
+    except Exception:
+        fv = ""
+    if fv:
+        print(fv); break
+PYEOF
+}
+
 # Test seam: allow sourcing helpers without executing the flow/arg-parse/exit.
 [[ "${R2G_SOURCE_ONLY:-0}" == "1" ]] && return 0 2>/dev/null
 # --- end Tier-0 journal hooks ---
 
-PROJECT_DIR=""; PLATFORM="asap7"; CHECK="both"; MAX_ITERS=8; BASE_ITERS=3; RESUME=0
+PROJECT_DIR=""; PLATFORM="asap7"; CHECK="both"; MAX_ITERS=8; BASE_ITERS=3; RESUME=0; FLOW_VARIANT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check) CHECK="$2"; shift 2;;
     --max-iters) MAX_ITERS="$2"; shift 2;;
+    --variant) FLOW_VARIANT="$2"; shift 2;;  # full-pipeline Issue 9: sign off the backend's own ORFS workspace
     --resume) RESUME=1; shift;;  # legacy no-op: stage-scoped resume is the default (see #35)
     -*) echo "unknown flag: $1" >&2; exit 1;;
     *) if [[ -z "$PROJECT_DIR" ]]; then PROJECT_DIR="$1"; else PLATFORM="$1"; fi; shift;;
   esac
 done
-[[ -z "$PROJECT_DIR" ]] && { echo "usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route|timing] [--max-iters N] [--resume]" >&2; exit 1; }
+[[ -z "$PROJECT_DIR" ]] && { echo "usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route|timing] [--max-iters N] [--variant V] [--resume]" >&2; exit 1; }
 [[ "$CHECK" =~ ^(drc|lvs|both|route|timing)$ ]] || { echo "ERROR: --check must be drc|lvs|both|route|timing" >&2; exit 1; }
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+
+# Learn the flow_variant so run_drc/run_lvs/run_orfs re-stage + reflow the SAME ORFS
+# workspace the GDS was built in (full-pipeline Issue 9). Priority: explicit --variant >
+# newest backend RUN's run-meta.json flow_variant (single source of truth) > empty. An
+# empty value is forwarded as an empty 3rd positional arg, which every runner treats as
+# "derive from basename" — so engineer_loop's variant-less callers keep today's behavior.
+if [[ -z "$FLOW_VARIANT" ]]; then
+  FLOW_VARIANT="$(_recover_flow_variant "$PROJECT_DIR")"
+fi
+[[ -n "$FLOW_VARIANT" ]] && echo "fix_signoff: using flow_variant='$FLOW_VARIANT' for signoff re-stage/reflow"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTRACT_DIR="$(cd "$SCRIPT_DIR/../extract" && pwd)"
@@ -312,8 +351,8 @@ except Exception: print("")' "$report" 2>/dev/null)"
   [[ -n "$newest_gds" && ( ! -f "$report" || "$newest_gds" -nt "$report" ) ]] && stale=1
   if [[ -z "$st" || "$st" == "unknown" || "$stale" == "1" ]]; then
     echo "[$check] (re)establish baseline signoff (status='${st:-missing}', stale_vs_gds=$stale) — running $check"
-    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true
-    else "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
+    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || true
+    else "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || true; fi
     _run_extract "$check" || true
   fi
 }
@@ -373,7 +412,11 @@ except Exception: print("")' "$antenna_marker")"
     fi
     echo "[$check] iter $it: applying $sid (rerun_from=${rerun:-none})"
     local apply_out cfg_delta="{}"
-    if ! apply_out="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --apply "$sid")"; then
+    # R2G_FIX_RANK_FIRST rides through to --apply too: the apply-time lifecycle
+    # gate (2026-07-16 issue 6) blocks candidate/shadow recipes, and arm B of an
+    # A/B trial must be able to force exactly the candidate under test.
+    if ! apply_out="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" \
+          ${R2G_FIX_RANK_FIRST:+--rank-first "$R2G_FIX_RANK_FIRST"} --apply "$sid")"; then
       echo "[$check] apply '$sid' failed; aborting" >&2
       _log_iter "$check" "$it" "$sid" "$before" "$before" "apply_failed" "$rerun" "$before_vclass" "$before_cats" "{}"; return 1
     fi
@@ -403,9 +446,9 @@ except Exception: print("{}")' <<<"$apply_out")"
       # to journal.sqlite above, but a reviewer reading backend/RUN_*/ sees why.
       local rerun_reason="signoff fix: strategy=$sid rerun_from=${rerun:-full} (config edit)"
       if [[ "${R2G_FIX_FULL_REFLOW:-0}" == "1" ]]; then
-        R2G_RERUN_REASON="$rerun_reason (full reflow)" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
+        R2G_RERUN_REASON="$rerun_reason (full reflow)" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || rc=$?
       else
-        FROM_STAGE="$rerun" R2G_RERUN_REASON="$rerun_reason" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" || rc=$?
+        FROM_STAGE="$rerun" R2G_RERUN_REASON="$rerun_reason" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || rc=$?
       fi
       if [[ $rc -ne 0 ]]; then
         echo "[$check] run_orfs failed (rc=$rc); aborting this check" >&2
@@ -416,8 +459,8 @@ except Exception: print("{}")' <<<"$apply_out")"
     # route/timing: the rerun (run_orfs from floorplan/synth) IS the check — there
     # is no separate signoff tool. extract_route reads the backend route stage;
     # _run_extract timing re-measures the reflowed ppa.json via check_timing.py.
-    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" || true
-    elif [[ "$check" == "lvs" ]]; then "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" || true; fi
+    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || true
+    elif [[ "$check" == "lvs" ]]; then "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || true; fi
     _run_extract "$check"
     after="$(_count "$report")"
     if [[ -z "$after" ]]; then

@@ -478,8 +478,8 @@ never loses a conclusion — conclusions live only in the knowledge DB.
 
 | Table | Key columns | Purpose |
 |---|---|---|
-| `recipe_status` | `symptom_id`, `design_class`, `platform`, `strategy` | Lifecycle state: `shadow` → `candidate` → `promoted` (or `demoted`) |
-| `ab_trials` | `trial_id`, `recipe_key`, `arm_a_run_id`, `arm_b_run_id` | A/B verdict: `win` / `loss` / `inconclusive` with metrics. `arm_a_run_id`/`arm_b_run_id` back-reference the two arms' ingested runs (populated by `engineer_loop` from each arm's `project_path`); `metrics_json` carries `provenance_complete` (both distinct) + `tool_versions` + per-repeat run-id lists so a promotion is traceable (failure-patterns #45). A decisive verdict without distinct run-ids WARNs — evidence unverifiable |
+| `recipe_status` | `symptom_id`, `design_class`, `platform`, `strategy` | Lifecycle state: `shadow` → `candidate` → `promoted` (or `demoted`). `status_version` (2026-07-16 issue 6) is a monotonic per-row counter bumped by EVERY `_set` transition — `generation` never moves on promote/demote, so this is what lets the A/B judge detect a demotion that landed between plan and judge and cancel the stale trial |
+| `ab_trials` | `trial_id`, `recipe_key`, `arm_a_run_id`, `arm_b_run_id` | A/B verdict: `win` / `loss` / `inconclusive` with metrics. `arm_a_run_id`/`arm_b_run_id` back-reference the two arms' ingested runs (populated by `engineer_loop` from each arm's `project_path`); `metrics_json` carries `provenance_complete` + `tool_versions` + per-repeat run-id lists so a promotion is traceable (failure-patterns #45). `provenance_complete` requires distinct run_ids that EXIST in `runs` **and are OWNED by this trial's arms** (2026-07-16 issue 1, `_arms_owned`: correct `_ab[AB]_` role per column, same base subject + tail, this strategy's strat8, the key's platform — two real-but-foreign runs can no longer certify a win); `judge_recipe` re-derives a stamped-True flag locally before counting. A decisive verdict without owned run-ids WARNs — evidence unverifiable |
 | `escalations` | `escalation_id`, `design`, `run_id`, `reason`, `status` | Open items for the agent tier; `reason` ∈ `{unknown_symptom, catalog_exhausted, unseen_crash, repeated_regression}` |
 | `meta` | `key`, `value` | Heuristics generation counter and loop bookkeeping |
 
@@ -488,13 +488,17 @@ never loses a conclusion — conclusions live only in the knowledge DB.
 ```
 candidate  (authored here by Gate-A learner_diff / enqueue_candidate; enqueued for A/B)
   │  recipe_status = f(FULL ab_trials corpus)  —  ab_runner.judge_recipe (2026-06-24)
-  │    net wins>losses → promoted ;  net losses>wins → shadow ;  inconclusive → unchanged
+  │    net wins>losses → promoted ;  net losses>wins → shadow ;  inconclusive → unchanged ;
+  │    TIED decisive (wins==losses>0) → back to candidate (2026-07-16 issue 2: deterministic,
+  │    order-independent — a tie must never inherit whichever transient state came first)
   ▼
 promoted  (affects live ranking in diagnose_signoff_fix.py)   ⇄   shadow  (demoted; a later
                                                                      net-positive win can revive it)
 # stage_shadow() is the agent-authoring entrypoint (decision 7); the demotion sink is `shadow`.
-# An `inconclusive` NEVER demotes (it carries no information). auto_demote_on_regression() is a
-# provided-but-not-auto-wired helper (the ingester emits no 'regression' verdict today).
+# An `inconclusive` NEVER demotes (it carries no information). auto_demote_on_regression() is
+# swept by learn() over every promoted recipe (P1-13); its evidence is EXACT-DOMAIN scoped
+# (2026-07-16 issue 8): live-provenance fix_events on the key's OWN platform + design_class
+# only — cross-platform/cross-class failures are transfer signal, never demotion grounds.
 ```
 
 Absent `recipe_status` row = grandfathered `promoted` (recipes validated before the loop

@@ -10,8 +10,10 @@ set -euo pipefail
 # (setup_rtl_designs.py --platform X --force) rewrites for the WHOLE corpus.
 # Resolving libs from config.mk would key an old platform's dataset to another
 # platform's liberty/LEF (per-platform cell_type_id vocabularies make that a
-# silent-value defect, not an error). run-meta.json wins when the two disagree;
-# an EXPLICIT platform arg to the caller always wins (callers skip this guard).
+# silent-value defect, not an error). run-meta.json wins when the two disagree —
+# INCLUDING over an explicit platform arg (2026-07-16: an explicit-but-wrong arg
+# silently stamped a wrong-platform manifest; the DEF is what it is). Callers
+# honor R2G_PLATFORM_FORCE=1 to restore arg-wins for deliberate reference builds.
 #
 # Shared by run_labels.sh / run_features.sh / run_graphs.sh — one copy, per the
 # techlib lesson: a worker-local patch fixes one consumer and silently leaves
@@ -24,9 +26,9 @@ if [[ -n "$RUN_DIR" && -f "$RUN_DIR/run-meta.json" ]]; then
   _meta_pl=$(sed -n 's/.*"platform"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
              "$RUN_DIR/run-meta.json" | head -1)
   if [[ -n "$_meta_pl" && "$_meta_pl" != "$PLATFORM" ]]; then
-    echo "NOTE: backend run-meta.json platform=$_meta_pl != config.mk platform=$PLATFORM" \
-         "— using $_meta_pl (the DEF's build provenance; config.mk likely re-pointed" \
-         "for a new round; failure-patterns.md #30)" >&2
+    echo "WARNING: requested/config platform=$PLATFORM contradicts the DEF's build" \
+         "provenance ($_meta_pl in $(basename "$RUN_DIR")/run-meta.json) — using $_meta_pl" \
+         "(build provenance wins; failure-patterns.md #30; R2G_PLATFORM_FORCE=1 to override)" >&2
     PLATFORM="$_meta_pl"
   fi
 fi

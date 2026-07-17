@@ -107,6 +107,12 @@ def main() -> int:
     stats["seq_cells"] = seq_cells
     stats["comb_cells"] = max(0, total_insts - seq_cells)
     stats["seq_split_source"] = seq_source
+    # Producer/consumer contract (2026-07-16 full-pipeline issue 11): the quality
+    # scorer's entropy/unique-types/rare-share/redundancy metrics all read
+    # cell_histogram — which was computed here (inst_counts) but never EMITTED,
+    # so every design silently scored zero entropy/redundancy and redundant
+    # designs mis-scored as keep. Emit the per-master histogram.
+    stats["cell_histogram"] = {str(k): int(v) for k, v in sorted(inst_counts.items())}
 
     # Degree/label-entropy quality metrics (ported from the source skill's
     # compute_graph_quality_metrics; consumed by report/score_design_quality.py).

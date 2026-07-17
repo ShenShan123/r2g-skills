@@ -160,3 +160,37 @@ def test_plan_arms_skips_missing_subject_dir(tmp_path, monkeypatch):
     assert appended == 0
     assert not [e for e in led.entries() if e.get("kind") == "ab_arm"], \
         "ghost arm was ledger'd for a wiped subject"
+
+
+def test_two_symptoms_same_subject_strategy_get_distinct_arms(tmp_path, monkeypatch):
+    """2026-07-16 issue 7: two candidates sharing subject+platform+strategy but
+    differing in symptom_id used to materialize IDENTICAL arm dir names — the
+    second led.add merged onto the first pair, overwriting ab_key (evidence
+    attributed to the wrong symptom, first candidate's experiment silently lost).
+    Each trial's arm dirs now carry a per-trial hash; both experiments survive."""
+    import ab_runner
+    import recipe_lifecycle
+
+    subj = tmp_path / "shared_subject"
+    (subj / "constraints").mkdir(parents=True)
+    (subj / "constraints" / "config.mk").write_text("export DESIGN_NAME = s\n")
+
+    c1 = {"symptom_id": "symptom-one", "design_class": "crypto/small",
+          "platform": "nangate45", "strategy": "density_relief"}
+    c2 = {"symptom_id": "symptom-two", "design_class": "crypto/small",
+          "platform": "nangate45", "strategy": "density_relief"}
+    monkeypatch.setattr(recipe_lifecycle, "pending_candidates", lambda conn: [c1, c2])
+    monkeypatch.setattr(el, "_ab_coverage_gap", lambda conn, key: False)
+    monkeypatch.setattr(el, "_symptom_check", lambda conn, sid, strat=None: "both")
+    monkeypatch.setattr(ab_runner, "plan_trial", lambda conn, **k: {
+        "designs": [{"design_name": "s", "project_path": str(subj), "cell_count": 1}],
+        "match_level": "exact"})
+
+    led = el.Ledger(tmp_path / "l.jsonl")
+    appended = el.plan_arms_for_candidates(led, conn=None, repeats=1)
+    arms = [e for e in led.entries() if e.get("kind") == "ab_arm"]
+    assert appended == 4                       # 2 candidates x arms A+B (k=1)
+    assert len(arms) == 4                      # ...and ALL FOUR survive in the ledger
+    assert len({e["design"] for e in arms}) == 4
+    assert ({e["ab_key"]["symptom_id"] for e in arms}
+            == {"symptom-one", "symptom-two"})

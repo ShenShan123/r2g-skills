@@ -314,6 +314,104 @@ def test_apply_operator_only_strategy_errors(tmp_path):
     assert r.returncode == 3 and "operator-only" in r.stderr
 
 
+# ── verified-effect apply (2026-07-16 agent-logic issue 9) ───────────────────
+
+def _mk_timing_project(tmp_path, *, sdc: str | None):
+    p = tmp_path / "proj"
+    (p / "reports").mkdir(parents=True)
+    (p / "constraints").mkdir(parents=True)
+    (p / "reports" / "timing_check.json").write_text(json.dumps(
+        {"tier": "severe", "wns_ns": -1.2, "clock_period_ns": 4.0}))
+    (p / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = t\nexport PLATFORM = nangate45\n"
+        "export CORE_UTILIZATION = 30\n")
+    if sdc is not None:
+        (p / "constraints" / "constraint.sdc").write_text(sdc)
+    return p
+
+
+def test_apply_period_relax_missing_sdc_precondition_failed(tmp_path):
+    """rc=0 with ZERO project effect reran a full backend stage and charged the
+    unchanged failure against a never-applied recipe (issue 9). A missing
+    constraint.sdc must now be a NON-ZERO precondition failure with no writes."""
+    p = _mk_timing_project(tmp_path, sdc=None)
+    cfg_before = (p / "constraints" / "config.mk").read_text()
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
+                        "--apply", "period_relax"], capture_output=True, text=True)
+    assert r.returncode == 4
+    out = json.loads(r.stdout)
+    assert out["status"] == "precondition_failed" and out["applied"] is None
+    assert not (p / "constraints" / "constraint.sdc").exists()
+    assert (p / "constraints" / "config.mk").read_text() == cfg_before
+
+
+def test_apply_period_relax_unmatchable_sdc_precondition_failed(tmp_path):
+    """An SDC with neither `set clk_period N` nor a literal `-period N` (e.g. the
+    var-indirect `-period $clk_period` with the set-line stripped) is a silent
+    regex no-op — must fail precondition, file untouched."""
+    sdc = "create_clock -name clk -period $clk_period [get_ports clk]\n"
+    p = _mk_timing_project(tmp_path, sdc=sdc)
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
+                        "--apply", "period_relax"], capture_output=True, text=True)
+    assert r.returncode == 4
+    assert json.loads(r.stdout)["status"] == "precondition_failed"
+    assert (p / "constraints" / "constraint.sdc").read_text() == sdc
+
+
+def test_apply_period_relax_templated_sdc_verified(tmp_path):
+    """Templated SDC (`set clk_period N`): apply must land AND verify the edit."""
+    p = _mk_timing_project(
+        tmp_path, sdc="set clk_period 4.0\n"
+                      "create_clock -name clk -period $clk_period [get_ports clk]\n")
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
+                        "--apply", "period_relax"], capture_output=True, text=True)
+    assert r.returncode == 0
+    out = json.loads(r.stdout)
+    assert out["status"] == "applied" and out["applied"] == "period_relax"
+    new_p = out["sdc_edits"]["CLOCK_PERIOD"]
+    assert f"set clk_period {new_p}" in (p / "constraints" / "constraint.sdc").read_text()
+
+
+def test_apply_period_relax_literal_period_rewritten(tmp_path):
+    """Harvested/promoted RTL brings its own SDC style: a literal
+    `create_clock -period N` (no set-var) must now be rewritable, not a no-op."""
+    p = _mk_timing_project(
+        tmp_path, sdc="create_clock -name clk -period 4.0 [get_ports clk]\n")
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
+                        "--apply", "period_relax"], capture_output=True, text=True)
+    assert r.returncode == 0
+    out = json.loads(r.stdout)
+    assert out["status"] == "applied"
+    text = (p / "constraints" / "constraint.sdc").read_text()
+    assert f"-period {out['sdc_edits']['CLOCK_PERIOD']}" in text
+    assert "-period 4.0" not in text
+
+
+def test_apply_config_strategy_reports_applied_status(tmp_path):
+    """A config-edit apply now self-verifies and stamps status=applied."""
+    p = _mk_project(tmp_path, drc={"status": "fail", "total_violations": 7,
+                                   "categories": {"METAL7_ANTENNA": {"count": 7}}})
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "drc",
+                        "--apply", "antenna_diode_iters"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0
+    out = json.loads(r.stdout)
+    assert out["status"] == "applied" and out["applied"] == "antenna_diode_iters"
+
+
+def test_apply_no_edit_strategy_is_explicit_no_op(tmp_path):
+    """lvs_resolve_unknown declares NO edits by design (recheck-only): rc stays 0
+    for the live path but the status says so — never a masqueraded intervention."""
+    p = _mk_project(tmp_path, lvs={"status": "unknown"},
+                    config="export DESIGN_NAME = t\nexport PLATFORM = nangate45\n")
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "lvs",
+                        "--apply", "lvs_resolve_unknown"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0
+    out = json.loads(r.stdout)
+    assert out["status"] == "applied_no_op" and out["applied"] == "lvs_resolve_unknown"
+
+
 DRIVER = Path(__file__).resolve().parents[1] / "scripts" / "flow" / "fix_signoff.sh"
 
 
@@ -408,3 +506,57 @@ def test_driver_nangate45_antenna_residual_when_unfixed(tmp_path):
     assert any("stop" in json.loads(l)["verdict"] for l in lines)
     # summary table must exist
     assert "| check |" in (p / "reports" / "fix_summary.md").read_text()
+
+
+# ── apply-time lifecycle re-validation (2026-07-16 agent-logic issue 6) ──────
+
+def _fake_annotate(status=None, gate_ok=True):
+    def fake(plan, proj, **kw):
+        for s in plan.get("strategies", []):
+            if status is not None:
+                s["lifecycle_status"] = status
+        plan["lifecycle_gate_ok"] = gate_ok
+        return plan
+    return fake
+
+
+def _antenna_project(tmp_path):
+    return _mk_project(tmp_path, drc={"status": "fail", "total_violations": 7,
+                                      "categories": {"METAL7_ANTENNA": {"count": 7}}})
+
+
+def test_apply_refuses_lifecycle_blocked_strategy(tmp_path, monkeypatch, capsys):
+    """A recipe demoted between --next (selection) and --apply still applied —
+    the explicit-apply branch never re-read the lifecycle (2026-07-16 issue 6).
+    The gate now re-validates INSIDE --apply."""
+    p = _antenna_project(tmp_path)
+    monkeypatch.setattr(d, "_annotate_live_gates", _fake_annotate(status="shadow"))
+    rc = d.main([str(p), "--check", "drc", "--apply", "antenna_diode_iters"])
+    assert rc == 5
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out["status"] == "lifecycle_blocked" and out["applied"] is None
+    assert "r2g signoff-fix" not in (p / "constraints" / "config.mk").read_text()
+
+
+def test_apply_rank_first_bypasses_lifecycle_gate(tmp_path, monkeypatch, capsys):
+    """Arm B of an A/B trial MUST be able to force the candidate under test."""
+    p = _antenna_project(tmp_path)
+    monkeypatch.setattr(d, "_annotate_live_gates", _fake_annotate(status="candidate"))
+    rc = d.main([str(p), "--check", "drc", "--apply", "antenna_diode_iters",
+                 "--rank-first", "antenna_diode_iters"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out["status"] == "applied"
+    assert "MAX_REPAIR_ANTENNAS_ITER_GRT" in (p / "constraints" / "config.mk").read_text()
+
+
+def test_apply_fails_closed_when_lifecycle_unreadable(tmp_path, monkeypatch, capsys):
+    """P0-15 direction: an unreadable lifecycle store cannot prove the strategy is
+    safe to auto-apply — block (an operator can still force via --rank-first)."""
+    p = _antenna_project(tmp_path)
+    monkeypatch.setattr(d, "_annotate_live_gates", _fake_annotate(gate_ok=False))
+    rc = d.main([str(p), "--check", "drc", "--apply", "antenna_diode_iters"])
+    assert rc == 5
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out["status"] == "lifecycle_blocked"
+    assert out["lifecycle_gate_ok"] is False

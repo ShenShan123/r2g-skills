@@ -83,11 +83,43 @@ def detect_issues(text: str, project: Path) -> list:
             'details': lint_errors[:5]
         })
 
-    # 2. Utilization overflow — require specific error patterns, not independent keywords
+    # 1b. IO-pin capacity overflow (PPL-0024) — the die PERIMETER is too short to
+    # seat the design's IO pins. Detected BEFORE the utilization rule so a
+    # pin-overflow abort surfaces as its OWN first-class kind (whose lever is
+    # ENLARGING the die perimeter), never as placement_utilization_overflow
+    # (whose lever is lowering density) — the two aborts have DISTINCT repairs, so
+    # a consumer learning the wrong family fixes the wrong knob (2026-07-16
+    # full-pipeline #12). engineer_loop._is_ppl0024 / _ppl0024_required_perimeter
+    # are the runtime detectors; this mirrors their signal + perimeter regex.
+    if 'ppl-0024' in lower or ('io pins' in lower and 'available positions' in lower):
+        pin_issue = {
+            'kind': 'io_pin_capacity_overflow',
+            'summary': "IO pins exceed the die perimeter's available pin positions (PPL-0024).",
+            'suggestion': 'Enlarge the die perimeter (larger DIE_AREA/CORE_AREA) or '
+                          'reduce the number of top-level IO pins. This is a perimeter '
+                          'shortfall, not a placement-density problem — lowering '
+                          'CORE_UTILIZATION alone will not fix it.'
+        }
+        # Same regex engineer_loop._ppl0024_required_perimeter uses, extended to
+        # also capture the current perimeter so both ride the issue payload.
+        m = re.search(r'die perimeter from ([\d.]+)\s*um to ([\d.]+)\s*um', text)
+        if m:
+            pin_issue['current_perimeter_um'] = float(m.group(1))
+            pin_issue['required_perimeter_um'] = float(m.group(2))
+        issues.append(pin_issue)
+
+    # 2. Utilization overflow — require a real placement-overflow error CODE or an
+    # explicit '[error … utilization]' / 'utilization … exceeds' line. The bare
+    # '100%' trigger was dropped: Yosys prints a healthy INFO line 'Design area NNN
+    # um^2 ~100% utilization', which false-positived here, while the genuine
+    # overflow aborts carry codes (DPL-0036/FLW-0024/GPL-0053) that do NOT contain
+    # the word 'utilization' at all and were missed by the code-less branch
+    # (2026-07-16 full-pipeline #12).
     utilization_error = False
     for line in text.splitlines():
         ll = line.lower()
-        if ('utilization' in ll and ('exceeds' in ll or '100%' in ll)) or \
+        if ('dpl-0036' in ll or 'flw-0024' in ll or 'gpl-0053' in ll) or \
+           ('utilization' in ll and 'exceeds' in ll) or \
            ('[error' in ll and 'utilization' in ll):
             utilization_error = True
             break
@@ -135,9 +167,14 @@ def detect_issues(text: str, project: Path) -> list:
     # authoritative. The PPA-based checks (below) use 6_report.json which
     # reflects the final state after all repairs.
     if not ppa_data:
-        if 'no setup violations found' in lower and 'no hold violations found' in lower:
-            pass  # Timing is clean
-        elif 'setup violation' in lower or 'hold violation' in lower or 'slack (violated)' in lower:
+        # Neutralize the clean-timing negations BEFORE the substring scan: the
+        # phrase 'no setup violations found' CONTAINS the alarm substring 'setup
+        # violation' (violations = violation + s), so a clean STA report
+        # false-positived as a timing_violation whenever the paired hold-clean
+        # line was absent (2026-07-16 full-pipeline #12). Scrub, then match.
+        scrubbed = re.sub(r'no (setup|hold) violations found', '', lower)
+        if 'setup violation' in scrubbed or 'hold violation' in scrubbed \
+                or 'slack (violated)' in scrubbed:
             issues.append({
                 'kind': 'timing_violation',
                 'summary': 'Timing violations detected.',

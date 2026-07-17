@@ -71,11 +71,15 @@ if [[ ( -z "$ODB" || -z "$DEF" ) && -d "$BACKEND_DIR" ]]; then
     [[ -n "$ODB" || -n "$DEF" ]] && break
   done
 fi
-# Provenance guard (failure-patterns.md #30): the discovered artifacts are keyed
-# to the platform they were BUILT on (backend run-meta.json); config.mk is
-# mutable round state a campaign re-point rewrites. An explicit platform arg
-# always wins (guard skipped). Shared logic: _provenance.sh (one copy).
-if [[ -z "${2:-}" && -n "$RUN_DIR" ]]; then
+# Provenance guard (failure-patterns.md #30; hardened 2026-07-16): the discovered
+# artifacts are keyed to the platform they were BUILT on (backend run-meta.json);
+# config.mk is mutable round state a campaign re-point rewrites. The guard now runs
+# even for an EXPLICIT platform arg — an arg contradicting the DEF's build record
+# used to win silently and stamp a wrong-platform manifest (sky130hd libs resolved
+# against an hs DEF: every liberty-derived value wrong, caught only by the
+# verifier). R2G_PLATFORM_FORCE=1 restores arg-wins for deliberate cross-platform
+# reference builds. Shared logic: _provenance.sh (one copy).
+if [[ -n "$RUN_DIR" && "${R2G_PLATFORM_FORCE:-0}" != "1" ]]; then
   PLATFORM=$(bash "$(dirname "${BASH_SOURCE[0]}")/_provenance.sh" "$RUN_DIR" "$PLATFORM")
 fi
 # Fallback: live ORFS results dir
@@ -103,6 +107,11 @@ fi
 GATE_MODE="${R2G_SIGNOFF_GATE:-warn}"
 GATE_FLAGS=()
 [[ -n "${R2G_DEF:-}${R2G_ODB:-}" ]] && GATE_FLAGS+=(--def-overridden)
+# Bind the DEF (P0-17) when present so this stage keeps binding=bound + a fingerprint
+# and doesn't overwrite run_graphs.sh's bound verdict with 'unknown' by re-gating
+# without --def (agent-logic #5, 2026-07-16). ODB-only labels (DEF empty) omit --def,
+# as before — no DEF was selected to bind.
+[[ -n "$DEF" ]] && GATE_FLAGS+=(--def "$DEF")
 if ! python3 "$(dirname "${BASH_SOURCE[0]}")/signoff_gate.py" "$PROJECT_DIR" \
        --run-dir "$RUN_DIR" --mode "$GATE_MODE" "${GATE_FLAGS[@]}"; then
   echo "SKIP: signoff gate blocked (R2G_SIGNOFF_GATE=enforce) — see $REPORTS_DIR/signoff_gate.json" >&2

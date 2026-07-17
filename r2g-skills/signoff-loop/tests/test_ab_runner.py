@@ -17,8 +17,8 @@ def _conn(tmp_path):
     # actually-ingested runs). ra/rb are the two arms of ONE base subject 'subjX'
     # (P1-11 subject key strips the _ab[AB]_ suffix), so repeated ra/rb trials
     # correctly aggregate as one independent subject.
-    for rid, base in (("ra", "subjX_abA_deadbeef_0"), ("rb", "subjX_abB_deadbeef_0"),
-                      ("rx", "subjY_abA_deadbeef_0")):
+    for rid, base in (("ra", "subjX_abA_antenna__0"), ("rb", "subjX_abB_antenna__0"),
+                      ("rx", "subjY_abA_antenna__0")):
         c.execute(
             "INSERT OR REPLACE INTO runs (run_id, project_path, design_name, "
             "platform, ingested_at, cell_count) VALUES (?,?,?,?,?,?)",
@@ -190,8 +190,8 @@ def _win_trials_on_subject(conn, base, n):
     """Record n winning trials that reuse ONE base design (distinct real run_ids)."""
     for i in range(n):
         a, b = f"{base}a{i}", f"{base}b{i}"
-        _seed_run(conn, a, conn_dir(conn) / f"{base}_abA_deadbeef_{i}")
-        _seed_run(conn, b, conn_dir(conn) / f"{base}_abB_deadbeef_{i}")
+        _seed_run(conn, a, conn_dir(conn) / f"{base}_abA_antenna__{i}")
+        _seed_run(conn, b, conn_dir(conn) / f"{base}_abB_antenna__{i}")
         ab_runner.record_trial(conn, key=KEY, verdict="win",
                                arm_a_run_id=a, arm_b_run_id=b, metrics={})
 
@@ -204,18 +204,22 @@ def conn_dir(conn):
 def test_pseudo_replication_cannot_overturn_a_genuine_loss(tmp_path):
     """P1-11 (2026-07-15): five wins on ONE reused subject are ONE independent vote,
     not five. A genuine loss on a DIFFERENT subject demotes to shadow; five
-    pseudo-replicated wins on a single subject then read 1w1l (tie) and CANNOT revive
-    it. Under the old raw-row count they read 5w1l -> promoted — the reused subject
-    masqueraded as five-fold corroboration."""
+    pseudo-replicated wins on a single subject then read 1w1l (tie) and CANNOT
+    revive it to PROMOTED. Under the old raw-row count they read 5w1l -> promoted —
+    the reused subject masqueraded as five-fold corroboration.
+    (2026-07-16 issue 2: a tied corpus now lands DETERMINISTICALLY in 'candidate'
+    — re-validation, still never a promotion. The old 'stays shadow' expectation
+    was itself order-dependent: win-first would have read 'promoted'.)"""
     conn = _conn(tmp_path)
     recipe_lifecycle.enqueue_candidate(conn, **KEY)
-    _seed_run(conn, "s2a", tmp_path / "s2_abA_deadbeef_0")
-    _seed_run(conn, "s2b", tmp_path / "s2_abB_deadbeef_0")
+    _seed_run(conn, "s2a", tmp_path / "s2_abA_antenna__0")
+    _seed_run(conn, "s2b", tmp_path / "s2_abB_antenna__0")
     ab_runner.record_trial(conn, key=KEY, verdict="loss",
                            arm_a_run_id="s2a", arm_b_run_id="s2b", metrics={})
     assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"
     _win_trials_on_subject(conn, "s1", 5)                     # 5 wins, ONE subject
-    assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"   # 1w1l tie, NOT promoted
+    # 1w1l independent-subject tie: re-queued for validation, NEVER promoted
+    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
 
 
 def test_pseudo_replicated_wins_count_once_in_evidence(tmp_path):
@@ -484,3 +488,73 @@ def test_deterministic_large_cost_win_preserved():
     a2 = [{"is_success": True, "wall_s": 100.0}, {"is_success": True, "wall_s": 100.0}]
     b2 = [{"is_success": True, "wall_s": 50.0}, {"is_success": True, "wall_s": 50.0}]
     assert ab_runner.judge_repeated(a2, b2) == "win"          # se==0 deterministic delta
+
+
+# ── 2026-07-16 issue 1: run-to-arm OWNERSHIP, not mere existence ─────────────
+
+def test_foreign_real_runs_cannot_certify_a_win(tmp_path):
+    """Two runs that EXIST but belong to unrelated projects/platforms must stamp
+    provenance_complete=False and never promote (2026-07-16 issue 1 probe)."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    _seed_run(conn, "f1", tmp_path / "unrelated_project_one", platform="sky130hd")
+    _seed_run(conn, "f2", tmp_path / "other_design_two", platform="asap7")
+    tid = ab_runner.record_trial(conn, key=KEY, verdict="win",
+                                 arm_a_run_id="f1", arm_b_run_id="f2", metrics={})
+    m = json.loads(conn.execute("SELECT metrics_json FROM ab_trials WHERE trial_id=?",
+                                (tid,)).fetchone()[0])
+    assert m["provenance_complete"] is False
+    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"   # NOT promoted
+
+
+def test_swapped_arm_roles_are_not_owned(tmp_path):
+    """The A column must hold the _abA_ run and B the _abB_ run — a swapped pair
+    is not the planned experiment."""
+    conn = _conn(tmp_path)
+    assert ab_runner._arms_owned(conn, KEY, "ra", "rb") is True
+    assert ab_runner._arms_owned(conn, KEY, "rb", "ra") is False
+
+
+def test_cross_subject_and_cross_strategy_pairs_are_not_owned(tmp_path):
+    """Arms of two DIFFERENT subjects (or another strategy's arms) are a mix of
+    experiments, not one trial."""
+    conn = _conn(tmp_path)
+    # rx is subjY's A arm: pairing it with subjX's B arm crosses subjects
+    assert ab_runner._arms_owned(conn, KEY, "rx", "rb") is False
+    # a density_relief arm pair cannot certify this antenna trial
+    for rid, base in (("da", "s_abA_density__0"), ("db", "s_abB_density__0")):
+        _seed_run(conn, rid, tmp_path / base)
+    assert ab_runner._arms_owned(conn, KEY, "da", "db") is False
+
+
+def test_cross_platform_arm_runs_are_not_owned(tmp_path):
+    """Arm runs whose ingested platform differs from the trial key's are foreign."""
+    conn = _conn(tmp_path)
+    for rid, base in (("pa", "s_abA_antenna__0"), ("pb", "s_abB_antenna__0")):
+        _seed_run(conn, rid, tmp_path / base, platform="sky130hd")   # key: nangate45
+    assert ab_runner._arms_owned(conn, KEY, "pa", "pb") is False
+
+
+def test_stamped_true_provenance_is_reverified_at_judge(tmp_path):
+    """Defense-in-depth: a row whose metrics CLAIM provenance_complete=True but
+    whose run_ids don't resolve locally as this trial's own arms (merged bundle,
+    rerouted caller) must not drive a transition; absent-key legacy rows stay
+    countable (grandfathered)."""
+    conn = _conn(tmp_path)
+    recipe_lifecycle.enqueue_candidate(conn, **KEY)
+    conn.execute(
+        "INSERT INTO ab_trials (symptom_id, design_class, platform, strategy, "
+        "arm_a_run_id, arm_b_run_id, verdict, metrics_json, ts) VALUES (?,?,?,?,?,?,?,?,?)",
+        (KEY["symptom_id"], KEY["design_class"], KEY["platform"], KEY["strategy"],
+         "ghost-a", "ghost-b", "win", json.dumps({"provenance_complete": True}), "t"))
+    conn.commit()
+    assert ab_runner.judge_recipe(conn, **KEY) is None               # excluded
+    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
+    # legacy row with NO provenance key still counts (committed-store grandfather)
+    conn.execute(
+        "INSERT INTO ab_trials (symptom_id, design_class, platform, strategy, "
+        "verdict, metrics_json, ts) VALUES (?,?,?,?,?,?,?)",
+        (KEY["symptom_id"], KEY["design_class"], KEY["platform"], KEY["strategy"],
+         "win", json.dumps({}), "t"))
+    conn.commit()
+    assert ab_runner.judge_recipe(conn, **KEY) == "promoted"

@@ -97,6 +97,33 @@ classifier excludes only when the tokens appear in the FAILURE evidence.
   - million-node scale
   - high retry cost
 
+## Provenance fields (2026-07-16 full-pipeline issue-report fixes)
+
+These ride **`design_meta.json`** (stamped at expansion) and the **clone summary
+CSV**, not the candidate CSV itself:
+
+- `source_manifest` (design_meta) — `[{path,size,sha256}]` of the RTL **bytes**
+  that earned the synth success (issue 1). `promote_candidates` re-digests every
+  file against it and refuses `rtl_bytes_changed_since_synth` on mismatch;
+  `source_digest` is the rollup sha256. `rtl_signature` keeps its old PATH-based
+  semantics (it is a dedup key — do not repurpose it).
+- `source_kind` / `source_commit` / `license_status` / `license_evidence`
+  (design_meta; issue 2) — origin classification (`cloned_repo`/`local_tree`),
+  `git rev-parse HEAD` of the clone, and the conservative license verdict
+  (`allow|review|deny|unknown`). The publish gate is FAIL-CLOSED: only
+  `allowed_license_status` (default `["allow"]`) publishes, and a `cloned_repo`
+  candidate needs a non-empty commit (`require_source_commit`).
+- Clone summary CSV gains `resolved_commit`, `license_status`,
+  `license_evidence` columns (clone_repo_manifest).
+- `notes` may carry `bundle_incomplete=<n>; unresolved=<mods>` (issue 10) when
+  the dependency-closure cap truncated the bundle — the repair classifier turns
+  a missing-module failure on such a candidate into `retry,missing_local_module`,
+  never a permanent `low_value_failure` exclusion.
+- The quality CSV gains `quality_notes` (issue 11):
+  `stats_schema_missing:cell_histogram` marks a design whose quality assessment
+  was BLOCKED (action forced `conditional`) because its stats predate the
+  `cell_histogram` emission — never scored from fabricated zeros.
+
 ## Anti-Patterns
 
 - duplicate `design` names pointing to different source bundles

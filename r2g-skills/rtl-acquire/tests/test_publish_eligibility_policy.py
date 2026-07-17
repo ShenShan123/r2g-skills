@@ -77,6 +77,19 @@ class PublishEligibilityPolicyTests(unittest.TestCase):
                     ]
                 )
 
+            # License/revision contract (2026-07-16 issue 2): the gate is
+            # fail-closed on license, so the GOOD designs carry an 'allow'
+            # provenance stamp in design_meta.json (as expansion now writes).
+            import json as _json
+            for d in ("good_keep", "good_conditional", "bad_reject",
+                      "bad_low_fidelity"):
+                ddir = external_index.parent / d
+                ddir.mkdir(parents=True, exist_ok=True)
+                (ddir / "design_meta.json").write_text(_json.dumps(
+                    {"design": d, "source_kind": "local_tree",
+                     "license_status": "allow",
+                     "license_evidence": "LICENSE:MIT LICENSE"}), encoding="utf-8")
+
             policy = {
                 "allowed_design_actions": ["keep", "conditional"],
                 "exclude_low_fidelity_designs": True,

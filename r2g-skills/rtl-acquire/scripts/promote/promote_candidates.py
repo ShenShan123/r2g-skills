@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import re
@@ -62,6 +63,7 @@ from skill_env import (  # noqa: E402
     run_orfs_script,
     signoff_loop_dir,
 )
+from common.clock_infer import infer_clock_ports  # noqa: E402
 
 # Same probe list the synth stage's make_minimal_sdc uses (expand_candidates.py)
 # — a promoted design's clock detection must agree with what already synthesized.
@@ -154,6 +156,14 @@ def detect_clock_port(top: str, rtl_files: list[Path]) -> str:
     for cand in CLOCK_PORT_CANDIDATES:
         if cand in ports:
             return cand
+    # Event-control inference (2026-07-16 issue 5): the fixed name list missed
+    # every non-standard clock (ethmac's `Clk`). A SINGLE top-body edge-driven
+    # input is adopted; an ambiguous (>1) result stays "" — promotion then
+    # requires an explicit --clock-port (multi-clock is out of scope anyway).
+    inferred = infer_clock_ports(top, [p.read_text(encoding="utf-8", errors="ignore")
+                                       for p in rtl_files if p.is_file()])
+    if len(inferred) == 1:
+        return inferred[0]
     return ""
 
 
@@ -220,7 +230,57 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     if not rtl_files or missing:
         result["reason"] = f"rtl_files missing on disk: {missing or 'none listed'}"
         return result
+    # Byte provenance (2026-07-16 full-pipeline issue 1): the promoted project must
+    # vendor the EXACT bytes that earned the synth-only success. rtl_signature is
+    # path-based (a dedup key), so nothing else binds them — re-digest each file
+    # against the synth-time source_manifest and refuse a candidate whose RTL
+    # changed since it was proven. Legacy candidates (pre-manifest expansions)
+    # carry no manifest: grandfathered with an explicit unverified stamp.
+    manifest = {str(e.get("path")): e.get("sha256")
+                for e in (meta.get("source_manifest") or []) if e.get("sha256")}
+    if manifest:
+        changed = []
+        for p in rtl_files:
+            want = manifest.get(str(p))
+            if want:
+                try:
+                    got = hashlib.sha256(p.read_bytes()).hexdigest()
+                except OSError:
+                    got = None
+                if got != want:
+                    changed.append(str(p))
+        if changed:
+            result["status"] = "rtl_bytes_changed_since_synth"
+            result["reason"] = (f"rtl_bytes_changed_since_synth: {len(changed)} file(s) "
+                                f"differ from the synth-time source_manifest "
+                                f"(e.g. {changed[:2]}); re-expand before promoting")
+            return result
+        result["source_bytes_verified"] = True
+    else:
+        result["source_bytes_verified"] = False   # legacy candidate: honest stamp
     synth_cfg = parse_synth_config(Path(str(meta.get("design_config") or "")))
+    # Unconstrained-clock gate (2026-07-16 full-pipeline issue 5): a SEQUENTIAL
+    # design falling back to a virtual clock has meaningless setup/hold labels
+    # downstream (ethmac: 119 unclocked registers, STA-0450, silently promoted).
+    # Combinational designs (seq_cells==0) keep the virtual-clock path.
+    clock_port = args.clock_port or detect_clock_port(top, rtl_files)
+    try:
+        seq_cells = int((index_row or {}).get("seq_cells")
+                        or (meta.get("seq_cells") if isinstance(meta.get("seq_cells"),
+                                                                (int, str)) else 0) or 0)
+    except (TypeError, ValueError):
+        seq_cells = 0
+    if not clock_port and seq_cells > 0 and not args.allow_virtual_clock:
+        inferred = infer_clock_ports(
+            top, [p.read_text(encoding="utf-8", errors="ignore")
+                  for p in rtl_files if p.is_file()])
+        result["status"] = "rejected_unconstrained_clock"
+        result["reason"] = (
+            f"rejected_unconstrained_clock: {seq_cells} sequential cells but no clock "
+            f"port resolved (event-control candidates: {inferred or 'none'}); pass "
+            f"--clock-port <name> or --allow-virtual-clock for a deliberately "
+            f"self-timed design")
+        return result
 
     platform = args.platform or str(meta.get("platform") or
                                     synth_cfg.get("PLATFORM") or "nangate45")
@@ -270,8 +330,9 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
         abc_area=abc_area, extra=extra)
     (project / "constraints" / "config.mk").write_text(config_text, encoding="utf-8")
 
-    # 4. constraint.sdc: detected clock port, or a virtual clock
-    clock_port = args.clock_port or detect_clock_port(top, vendored)
+    # 4. constraint.sdc: the clock port resolved (and gate-checked) up front —
+    # detection ran on rtl_files, whose bytes the source_manifest just verified
+    # identical to what vendor_rtl copied.
     if clock_port:
         sdc_text = ((assets / "constraint-template.sdc").read_text(encoding="utf-8")
                     .replace("{{DESIGN_NAME}}", top)
@@ -338,6 +399,10 @@ def main() -> int:
     ap.add_argument("--platform", default="",
                     help="target ORFS platform (default: the candidate's synth platform)")
     ap.add_argument("--clock-port", default="", help="override clock-port detection")
+    ap.add_argument("--allow-virtual-clock", action="store_true",
+                    help="promote a SEQUENTIAL design under a virtual clock anyway "
+                         "(deliberately self-timed; setup/hold labels will not be "
+                         "meaningful — 2026-07-16 issue 5 gate override)")
     ap.add_argument("--clock-period", type=float,
                     default=float(resolve_str_env("R2G_PROMOTE_CLOCK_PERIOD", "10.0")),
                     help="SDC clock period in ns (default 10.0)")

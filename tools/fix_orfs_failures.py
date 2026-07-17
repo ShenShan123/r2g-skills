@@ -469,10 +469,11 @@ def _find_log(case_dir: Path) -> Path | None:
     """Locate the most informative log file for the case.
 
     Preference order (first existing + non-empty hit wins):
-      1. case_dir/batch_logs/orfs.log — per-case log from batch_run.sh /
-         run_two_designs.sh wrappers.
+      1. case_dir/batch_logs/orfs.log — per-case log from the RETIRED
+         batch_run.sh/run_two_designs.sh wrappers (scripts removed 2026-07-16;
+         their historical logs still exist and still parse).
       2. design_cases/_batch/logs/<case>.log — *authoritative sweep log* from
-         batch_orfs_only.sh / run_full_sweep.sh. This is preferred over any
+         batch_orfs_only.sh. This is preferred over any
          RUN_*/flow.log because an ORFS RUN directory may have been overwritten
          by a later successful retry (orphan or otherwise), which would make
          the flow.log look like a pass and mask the real failure the sweep
@@ -506,8 +507,9 @@ def _find_log(case_dir: Path) -> Path | None:
     return None
 
 
-# Run-separator markers emitted by batch_orfs_only.sh / batch_run.sh /
-# run_two_designs.sh at the top of every ORFS invocation. If the sweep log
+# Run-separator markers emitted by batch_orfs_only.sh (and the retired
+# batch_run.sh/run_two_designs.sh wrappers, whose historical sweep logs remain
+# in design_cases) at the top of every ORFS invocation. If the sweep log
 # spans several days of retries, we only want to diagnose the most recent
 # block — historical errors would otherwise dominate the first-match window.
 _RUN_SEPARATOR_RE = re.compile(

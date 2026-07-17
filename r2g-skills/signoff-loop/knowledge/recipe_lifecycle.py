@@ -74,8 +74,8 @@ def diff_and_enqueue(conn, heur: dict, *, prev: dict | None) -> list[tuple]:
             continue               # already in lifecycle — A/B verdict owns it
         conn.execute(
             "INSERT INTO recipe_status (symptom_id, design_class, platform, "
-            "strategy, status, provenance, generation, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "strategy, status, provenance, generation, status_version, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,1,?)",
             (*key, "candidate", "learner_diff", heur.get("generation"), _now()))
         enqueued.append(key)
     conn.commit()
@@ -104,7 +104,7 @@ def enqueue_candidate(conn, *, provenance: str = "manual_revalidate",
         return False
     conn.execute(
         "INSERT INTO recipe_status (symptom_id, design_class, platform, strategy, "
-        "status, provenance, updated_at) VALUES (?,?,?,?,?,?,?)",
+        "status, provenance, status_version, updated_at) VALUES (?,?,?,?,?,?,1,?)",
         (key["symptom_id"], key["design_class"], key["platform"],
          key["strategy"], "candidate", provenance, _now()))
     conn.commit()
@@ -126,14 +126,31 @@ def get_status(conn, *, symptom_id, design_class, platform, strategy,
 
 def _set(conn, status, provenance, *, symptom_id, design_class, platform,
          strategy) -> None:
+    # status_version bumps on EVERY transition (2026-07-16 issue 6): `generation`
+    # never moved on promote/demote, so a demotion between an A/B trial's plan and
+    # its judge was invisible to the staleness guard (engineer_loop stamps the
+    # planned version on each arm and cancels the trial when it moved). COALESCE
+    # keeps the bump correct on legacy NULL-version rows.
     conn.execute(
         "INSERT INTO recipe_status (symptom_id, design_class, platform, strategy,"
-        " status, provenance, updated_at) VALUES (?,?,?,?,?,?,?) "
+        " status, provenance, status_version, updated_at) VALUES (?,?,?,?,?,?,1,?) "
         "ON CONFLICT(symptom_id, design_class, platform, strategy) DO UPDATE SET"
         " status=excluded.status, provenance=excluded.provenance,"
+        " status_version=COALESCE(recipe_status.status_version,0)+1,"
         " updated_at=excluded.updated_at",
         (symptom_id, design_class, platform, strategy, status, provenance, _now()))
     conn.commit()
+
+
+def get_status_version(conn, *, symptom_id, design_class, platform,
+                       strategy) -> int | None:
+    """Current status_version for a recipe key; None when the row is absent or a
+    legacy row predates versioning. The A/B plan/judge staleness handshake."""
+    row = conn.execute(
+        "SELECT status_version FROM recipe_status WHERE symptom_id=? AND "
+        "design_class=? AND platform=? AND strategy=?",
+        (symptom_id, design_class, platform, strategy)).fetchone()
+    return row[0] if row else None
 
 
 def promote(conn, *, evidence: str, **key) -> None:
@@ -148,6 +165,19 @@ def stage_shadow(conn, *, provenance: str, **key) -> None:
     """Agent-authored strategy entry point (decision 7): outside the live pool
     until its A/B win."""
     _set(conn, "shadow", provenance, **key)
+
+
+def revalidate(conn, *, reason: str, **key) -> None:
+    """Force a recipe back to 'candidate' — the DETERMINISTIC state for TIED
+    decisive A/B evidence (2026-07-16 agent-logic issue 2). judge_recipe used to
+    return None on a tie, leaving whatever transient promote/demote the FIRST
+    decisive row had set — the lifecycle was a function of trial ORDER, not of
+    the corpus (win-then-loss stayed promoted; loss-then-win stayed shadow).
+    Tied evidence is UNRESOLVED: the recipe re-enters the A/B queue and is
+    re-planned next drain; it must never inherit an order-dependent state.
+    Unlike enqueue_candidate this intentionally OVERWRITES an existing row —
+    the corpus-aggregate judge is the caller and owns the transition."""
+    _set(conn, "candidate", reason, **key)
 
 
 def park(conn, *, reason: str = "nondivergent_no_real_edit", **key) -> None:
@@ -204,8 +234,8 @@ def ensure_rostered(conn, heur: dict) -> list[tuple]:
     for key in rostered:
         conn.execute(
             "INSERT OR IGNORE INTO recipe_status (symptom_id, design_class, platform, "
-            "strategy, status, provenance, generation, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "strategy, status, provenance, generation, status_version, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,1,?)",
             (*key, "candidate", "learner_coverage", heur.get("generation"), _now()))
     conn.commit()
     return rostered

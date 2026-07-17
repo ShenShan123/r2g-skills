@@ -263,6 +263,25 @@ def _recipe_generation(conn, key: dict):
         return None
 
 
+def _recipe_status_version(conn, key: dict):
+    """The recipe_status row's monotonic status_version (2026-07-16 issue 6). None
+    when there is no row, the column predates versioning, or the read fails.
+    Stamped on each planned arm; ANY lifecycle transition between planning and
+    judging (promote/demote/park — none of which move `generation`) bumps it, so
+    the judge can cancel a trial planned under a withdrawn lifecycle state."""
+    if conn is None:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT status_version FROM recipe_status WHERE symptom_id=? AND "
+            "design_class=? AND platform=? AND strategy=?",
+            (key["symptom_id"], key["design_class"], key["platform"],
+             key["strategy"])).fetchone()
+        return row[0] if row else None
+    except Exception:
+        return None
+
+
 def _known_apply_strategy(conn, strategy: str | None) -> bool:
     """True if `strategy` has a real application path — it is a catalog/backend strategy,
     OR it has ever produced a real fix_event (proof it can be applied). Only a strategy
@@ -370,8 +389,11 @@ def _apply_recipe_strategy(entry: dict) -> None:
         json.dumps({"status": "fail", "total_violations": None}), encoding="utf-8")
     diagnose = _script("R2G_LOOP_DIAGNOSE",
                        SKILL_ROOT / "scripts" / "reports" / "diagnose_signoff_fix.py")
+    # --rank-first: arm B FORCES the candidate under test — the apply-time
+    # lifecycle gate (2026-07-16 issue 6) must not block the A/B harness itself.
     subprocess.run([sys.executable, diagnose, entry["project_path"],
-                    "--check", "route", "--apply", entry["strategy"]], check=False)
+                    "--check", "route", "--apply", entry["strategy"],
+                    "--rank-first", entry["strategy"]], check=False)
 
 
 def _process_backend_ab_arm(led: "Ledger", entry: dict, conn) -> None:
@@ -1537,6 +1559,17 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                     pass
             continue
         strat8 = key["strategy"][:8]
+        # Per-trial discriminator (2026-07-16 issue 7): subject+arm+strat8+repeat
+        # alone COLLIDED across candidates sharing a subject and strategy but
+        # differing in symptom (or class/platform) — the second plan's led.add
+        # merged onto the first's arm entries, overwriting ab_key and silently
+        # dropping the first candidate's experiment. A short hash of the FULL
+        # recipe key makes each trial's arm dirs unique. UPPERCASE hex on purpose:
+        # a lowercase digest could embed "_ab" after a strat8 ending in "_a",
+        # corrupting every `_ab`-suffix parse (subject stripping, judge grouping).
+        trial_h6 = hashlib.sha1(
+            "|".join([key["symptom_id"], key["design_class"], key["platform"],
+                      key["strategy"]]).encode("utf-8")).hexdigest()[:6].upper()
         # Resolve the fix-loop check from the strategy + symptom ONCE per trial so a
         # route/place backend-abort arm is driven by the dedicated apply-then-flow
         # runner and a timing arm by fix_signoff --check timing (2026-06-24).
@@ -1552,7 +1585,7 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
             for arm in ("A", "B"):
                 for r in range(k):
                     src = Path(d["project_path"])
-                    dst = src.parent / f"{src.name}_ab{arm}_{strat8}_{r}"
+                    dst = src.parent / f"{src.name}_ab{arm}_{strat8}{trial_h6}_{r}"
                     if not src.is_dir() and not dst.is_dir():
                         # A subject with no dir on disk (wiped round) and no
                         # already-materialized arm copy must NOT become a ledger
@@ -1631,6 +1664,13 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                     _rgen = _recipe_generation(conn, key)
                     if _rgen is not None:
                         arm_entry["recipe_generation"] = _rgen
+                    # 2026-07-16 issue 6: the lifecycle status_version at plan time.
+                    # generation never moves on promote/demote, so this is the stamp
+                    # that lets the judge see a demotion land mid-trial and cancel
+                    # rather than let stale evidence re-promote a withdrawn recipe.
+                    _rsv = _recipe_status_version(conn, key)
+                    if _rsv is not None:
+                        arm_entry["recipe_status_version"] = _rsv
                     if d_pin_target:
                         arm_entry["pin_perimeter_target"] = d_pin_target
                     led.add(arm_entry)
@@ -1841,6 +1881,109 @@ def _ab_new_drc_regression(conn, a_run_id: str | None,
     return None
 
 
+def _parse_mk_knobs(text: str) -> dict:
+    """All `export K = V` / `K = V` knob assignments in a config.mk, auto-block
+    EXCLUDED (the marked r2g signoff-fix block is where each arm legitimately
+    diverges — arm A control edits vs arm B forced recipe). Later assignment wins,
+    mirroring make semantics."""
+    import diagnose_signoff_fix as _dsf     # scripts/reports on sys.path (module load)
+    knobs, skip = {}, False
+    for ln in text.splitlines():
+        s = ln.strip()
+        if s == _dsf.BLOCK_START:
+            skip = True
+            continue
+        if s == _dsf.BLOCK_END:
+            skip = False
+            continue
+        if skip or not s or s.startswith("#"):
+            continue
+        m = re.match(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*[:+?]?=\s*(.*)$", s)
+        if m:
+            knobs[m.group(1)] = m.group(2).strip()
+    return knobs
+
+
+def _arm_baseline_divergence(a_path: str, b_path: str, check: str) -> str | None:
+    """Full-config causal-isolation guard (2026-07-16 agent-logic issue 3). The
+    P0-11 spec guard compares only CLOCK_PERIOD/DIE_AREA/CORE_AREA + SDC period, so
+    an UNRELATED knob smuggled into one arm's config (PLACE_DENSITY_LB_ADDON,
+    ABC_AREA, a disabled check...) was credited to the tested recipe. Invariant: the
+    HUMAN-AUTHORED baseline region (config.mk minus the marked auto-block) must be
+    knob-identical across arms — both arms are reset to the same baseline at plan
+    time (_reset_arm_config_baseline) and every legitimate fix edit lands INSIDE the
+    block, so any baseline-region delta is contamination, not recipe effect.
+    Scoped to signoff checks like the spec guard: place/synth backend-abort relief
+    writes BARE exports outside the block by design (_apply_recipe_strategy), and
+    timing arms are judged on the SDC they legitimately edit. Arm-local values
+    (each arm's own dir name in SDC_FILE etc.) are normalized before comparing.
+    Returns 'baseline_divergence:<keys>' or None; fails SAFE (None) on unreadable
+    configs — never fabricates a confound."""
+    if check not in ("drc", "lvs", "route", "both"):
+        return None
+    try:
+        pa, pb = Path(a_path), Path(b_path)
+        ta = (pa / "constraints" / "config.mk").read_text(encoding="utf-8")
+        tb = (pb / "constraints" / "config.mk").read_text(encoding="utf-8")
+        ka, kb = _parse_mk_knobs(ta), _parse_mk_knobs(tb)
+        def _norm(knobs: dict, arm_dir: Path) -> dict:
+            return {k: v.replace(arm_dir.name, "<ARM>") for k, v in knobs.items()}
+        ka, kb = _norm(ka, pa), _norm(kb, pb)
+    except OSError:
+        return None
+    diffs = sorted(k for k in (set(ka) | set(kb)) if ka.get(k) != kb.get(k))
+    return "baseline_divergence:" + ",".join(diffs) if diffs else None
+
+
+# Cross-check severity vocabularies for the global-regression veto (2026-07-16
+# agent-logic issue 4). Values are the ingested ones observed in runs/run_violations;
+# anything outside good/bad (skipped/unknown/''/None) carries NO signal and never
+# drives a veto — the guard only fires on a POSITIVE good->bad flip.
+_LVS_GOOD, _LVS_BAD = {"clean"}, {"fail", "crash", "mismatch", "incomplete", "stale"}
+_DRC_GOOD, _DRC_BAD = {"clean", "clean_beol"}, {"fail", "failed", "stuck"}
+_TIER_RANK = {"clean": 0, "minor": 1, "moderate": 2, "severe": 3, "unconstrained": 3}
+
+
+def _ab_global_regression(conn, a_run_id: str | None,
+                          b_run_id: str | None) -> str | None:
+    """Global-acceptability veto (2026-07-16 agent-logic issue 4): a recipe judged a
+    'win' for clearing its TARGET symptom must not have made the design unusable on
+    ANOTHER signoff check. _ab_new_drc_regression covers new DRC classes only; this
+    compares the rest of the outcome vector — LVS, timing tier, ORFS completion, DRC
+    status — between the arms' ingested runs and vetoes when arm B flipped a check
+    arm A had POSITIVELY good to bad (or lost a check A definitively ran: a
+    disappeared check is a disabled check, not a pass). Severity is a per-check
+    partial order, NEVER folded into the scalar outcome_score (invariant H4).
+    'unconstrained' timing ranks as severe: losing the clock constraint disables the
+    check. Fails SAFE (None) on unreadable rows."""
+    if not a_run_id or not b_run_id:
+        return None
+    try:
+        def _row(rid):
+            r = conn.execute(
+                "SELECT orfs_status, drc_status, lvs_status, timing_tier "
+                "FROM runs WHERE run_id=?", (rid,)).fetchone()
+            return dict(zip(("orfs", "drc", "lvs", "tier"), r)) if r else None
+        a, b = _row(a_run_id), _row(b_run_id)
+    except Exception:
+        return None
+    if not a or not b:
+        return None
+    vetoes = []
+    if a["orfs"] == "pass" and b["orfs"] == "fail":
+        vetoes.append("orfs_regression:pass->fail")
+    if a["lvs"] in _LVS_GOOD and b["lvs"] in _LVS_BAD:
+        vetoes.append(f"lvs_regression:{a['lvs']}->{b['lvs']}")
+    elif a["lvs"] in _LVS_GOOD and not b["lvs"]:
+        vetoes.append("check_missing:lvs")
+    if a["drc"] in _DRC_GOOD and b["drc"] in _DRC_BAD:
+        vetoes.append(f"drc_regression:{a['drc']}->{b['drc']}")
+    ra, rb = _TIER_RANK.get(a["tier"] or ""), _TIER_RANK.get(b["tier"] or "")
+    if ra is not None and rb is not None and ra <= 1 and rb >= 2:
+        vetoes.append(f"timing_regression:{a['tier']}->{b['tier']}")
+    return ",".join(vetoes) if vetoes else None
+
+
 # ── Cross-check repair-cycle detection (P1-18, 2026-07-15) ────────────────────
 def _global_repair_state(conn, run_id: str | None) -> str | None:
     """A fingerprint of the WHOLE signoff state a run reached: the DRC violation-class
@@ -1977,26 +2120,38 @@ def judge_finished_trials(led: Ledger, conn) -> None:
     but already judged (historical fragments) do not block the cohort."""
     import ab_runner
     _TERMINAL = ("clean", "escalated", "abandoned")
+
+    def _trial_key(e) -> tuple:
+        # Full trial identity (2026-07-16 issue 7): grouping by parsed
+        # (base, strategy) merged two DIFFERENT candidates sharing a subject and
+        # strategy (different symptom/class) into one pair — evidence attributed
+        # across symptoms. The ab_key IS the planned trial's identity; the parsed
+        # base still separates subjects. Legacy entries lacking ab_key fall back
+        # to the old strategy key (identical behavior for old ledgers).
+        base = e["design"].rsplit("_ab", 1)[0]
+        ak = e.get("ab_key")
+        return (base, tuple(sorted(ak.items())) if isinstance(ak, dict)
+                else e.get("strategy"))
+
     arms = [e for e in led.entries() if e["kind"] == "ab_arm"
             and e["state"] in _TERMINAL
             and not e.get("judged")]
-    # Full cohort per (base, strategy) — ALL arm entries regardless of state or
+    # Full cohort per trial key — ALL arm entries regardless of state or
     # judged flag — so a still-running repeat defers the whole trial's verdict.
     cohort: dict[tuple, list] = {}
     for e in led.entries():
         if e.get("kind") != "ab_arm":
             continue
-        base = e["design"].rsplit("_ab", 1)[0]
-        cohort.setdefault((base, e["strategy"]), []).append(e)
+        cohort.setdefault(_trial_key(e), []).append(e)
     by_pair: dict[tuple, dict[str, list]] = {}
     for e in arms:
-        base = e["design"].rsplit("_ab", 1)[0]
-        by_pair.setdefault((base, e["strategy"]), {}).setdefault(e["arm"], []).append(e)
-    for (base, strat), pair in by_pair.items():
+        by_pair.setdefault(_trial_key(e), {}).setdefault(e["arm"], []).append(e)
+    for tkey, pair in by_pair.items():
+        strat = next(iter(pair.values()))[0].get("strategy")
         if set(pair) != {"A", "B"}:
             continue
         if any(c.get("state") not in _TERMINAL and not c.get("judged")
-               for c in cohort.get((base, strat), ())):
+               for c in cohort.get(tkey, ())):
             continue        # a repeat is still running: judge the FULL cohort later
         # A timing recipe's arms both reach a GDS (a timing miss never aborts the flow),
         # so judge on the ingested timing verdict (wns_ns/timing_tier), not is_success.
@@ -2038,6 +2193,23 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                     for e in entries:
                         led.set_state(e["design"], e["state"], judged=True)
                 continue
+        # Lifecycle staleness (2026-07-16 issue 6): generation is blind to
+        # promote/demote (recipe_lifecycle._set never bumps it), so ALSO compare
+        # the monotonic status_version stamped at plan time. A demotion landing
+        # between plan and judge cancels the trial — its evidence was planned
+        # under a lifecycle state the safety system has since withdrawn, and must
+        # not re-promote over that withdrawal. (Absent stamp = legacy plan or
+        # pre-versioning row: grandfathered, no cancellation.)
+        _planned_sv = pair["B"][0].get("recipe_status_version")
+        if _planned_sv is not None:
+            _cur_sv = _recipe_status_version(conn, pair["B"][0]["ab_key"])
+            if _cur_sv is not None and _cur_sv != _planned_sv:
+                print(f"[loop] A/B trial CANCELLED (lifecycle moved: "
+                      f"status_version {_planned_sv}->{_cur_sv}): {strat}")
+                for entries in pair.values():
+                    for e in entries:
+                        led.set_state(e["design"], e["state"], judged=True)
+                continue
         verdict, reason = ab_runner.judge_repeated_ex(samples["A"], samples["B"])
         # Back-reference each arm to the ingested run(s) it produced so a trial is
         # verifiable — before this, EVERY ab_trial stored NULL run_ids and no
@@ -2061,8 +2233,20 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         if verdict in ("win", "loss"):
             veto = _arm_spec_mismatch(pair["A"][0]["project_path"],
                                       pair["B"][0]["project_path"], arm_check)
+            # Full-config causal isolation (2026-07-16 issue 3): any knob delta in
+            # the arms' HUMAN-AUTHORED baseline region (outside the fix auto-block)
+            # is contamination no matter which arm carries it — a decisive verdict
+            # either way is confounded, so both directions are vetoed.
+            if not veto:
+                veto = _arm_baseline_divergence(pair["A"][0]["project_path"],
+                                                pair["B"][0]["project_path"],
+                                                arm_check)
         if verdict == "win" and not veto:
             veto = _ab_new_drc_regression(conn, arm_a_run_id, arm_b_run_id)
+        if verdict == "win" and not veto:
+            # Global-acceptability veto (2026-07-16 issue 4): clearing the target
+            # symptom while breaking LVS/timing/ORFS elsewhere is not a win.
+            veto = _ab_global_regression(conn, arm_a_run_id, arm_b_run_id)
         if veto:
             verdict = "inconclusive"     # invalid trial: neither promotes nor demotes
             reason = veto
@@ -2070,7 +2254,10 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         # planned trial (same arm runs) reuses this uuid -> record_trial is idempotent.
         _rid_parts = (sorted(str(x) for x in a_run_ids)
                       + sorted(str(x) for x in b_run_ids))
-        _uuid_src = "|".join([str(base), str(strat), *_rid_parts])
+        # tkey embeds subject base + the FULL recipe key (issue 7), so two
+        # same-subject same-strategy trials on different symptoms get distinct
+        # idempotency uuids as well as distinct arm dirs.
+        _uuid_src = "|".join([repr(tkey), *_rid_parts])
         trial_uuid = (hashlib.sha1(_uuid_src.encode("utf-8")).hexdigest()[:16]
                       if a_run_ids and b_run_ids else None)
         # judge_version 2 = symptom-target metric for DRC/LVS signoff arms + reason
@@ -2087,6 +2274,11 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                      "tool_versions": _tool_versions_map(),
                      "judge_version": 2, "reason": reason,
                      "veto": veto,
+                     # Before/after global signoff vectors (2026-07-16 issue 4):
+                     # the cross-check state each arm ended in, for replay/review
+                     # of exactly what the global-regression veto compared.
+                     "global_state": {"A": _global_repair_state(conn, arm_a_run_id),
+                                      "B": _global_repair_state(conn, arm_b_run_id)},
                      "target": ({"check": target[0], "class": target[1]}
                                 if target else None)},
             match_level=pair["B"][0].get("match_level"),

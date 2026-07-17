@@ -26,6 +26,10 @@ pd = pytest.importorskip("pandas")
 
 import graph_lib as gl  # noqa: E402
 
+_FLOW = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "scripts", "flow")
+_RUN_GRAPHS = os.path.join(_FLOW, "run_graphs.sh")
+
 
 # --------------------------------------------------------------------------- #
 # Synthetic mini-design CSV fixture (features + labels).                       #
@@ -551,3 +555,110 @@ def test_main_kind_homo_and_both(mini_csvs, tmp_path, monkeypatch):
     bg.main()
     assert isinstance(torch.load(both_out / "b_graph.pt", weights_only=False), HeteroData)
     assert isinstance(torch.load(both_out / "b_graph_homo.pt", weights_only=False), Data)
+
+
+# --------------------------------------------------------------------------- #
+# Atomic/invalidating regeneration (full-pipeline #6, 2026-07-16).             #
+# --------------------------------------------------------------------------- #
+
+def _build_variants(feat, lab, out, variants, monkeypatch, kind=None):
+    import sys as _sys
+    import build_graphs as bg
+    argv = ["build_graphs.py", "--features", feat, "--labels", lab, "--design", "mini",
+            "--out-dir", str(out), "--variants", variants]
+    if kind:
+        argv += ["--kind", kind]
+    monkeypatch.setattr(_sys, "argv", argv)
+    bg.main()
+
+
+@pytestmark_tensor
+def test_rebuild_shrink_removes_stale_variant_pt(mini_csvs, tmp_path, monkeypatch):
+    """A rebuild with FEWER variants deletes the dropped variants' {v}_graph.pt so the
+    manifest commit-point describes exactly what is on disk (no orphaned c..f graphs)."""
+    import json
+    feat, lab = mini_csvs
+    out = tmp_path / "shrink_ds"
+    _build_variants(feat, lab, out, "bcf", monkeypatch)
+    assert (out / "b_graph.pt").exists() and (out / "c_graph.pt").exists() \
+        and (out / "f_graph.pt").exists()
+    _build_variants(feat, lab, out, "b", monkeypatch)   # rebuild only b
+    assert (out / "b_graph.pt").exists()
+    assert not (out / "c_graph.pt").exists()
+    assert not (out / "f_graph.pt").exists()
+    man = json.load(open(out / "graph_manifest.json"))
+    assert set(man["variants"]) == {"b"}
+
+
+@pytestmark_tensor
+def test_rebuild_kind_shrink_removes_homo_pt(mini_csvs, tmp_path, monkeypatch):
+    """A hetero-only rebuild after --kind both removes the stale {v}_graph_homo.pt."""
+    feat, lab = mini_csvs
+    out = tmp_path / "kind_ds"
+    _build_variants(feat, lab, out, "b", monkeypatch, kind="both")
+    assert (out / "b_graph.pt").exists() and (out / "b_graph_homo.pt").exists()
+    _build_variants(feat, lab, out, "b", monkeypatch, kind="hetero")
+    assert (out / "b_graph.pt").exists()
+    assert not (out / "b_graph_homo.pt").exists()
+
+
+@pytestmark_tensor
+def test_netlist_graph_pt_not_touched_by_cleanup(mini_csvs, tmp_path, monkeypatch):
+    """Only the [b-f]_graph*.pt family is cleaned — netlist_graph.pt (a different
+    stage's artifact) must survive a variant rebuild."""
+    feat, lab = mini_csvs
+    out = tmp_path / "keep_netlist"
+    _build_variants(feat, lab, out, "bc", monkeypatch)
+    (out / "netlist_graph.pt").write_bytes(b"stub")   # owned by the netlist stage
+    _build_variants(feat, lab, out, "b", monkeypatch)
+    assert not (out / "c_graph.pt").exists()
+    assert (out / "netlist_graph.pt").exists()
+
+
+def test_run_graphs_benign_skip_leaves_manifest(tmp_path):
+    """A BENIGN skip (missing torch venv) keeps the documented exit-0 "SKIPs cleanly"
+    contract and leaves any existing dataset/graph_manifest.json untouched."""
+    import json
+    import subprocess
+    proj = tmp_path / "proj"
+    ds = proj / "dataset"
+    ds.mkdir(parents=True)
+    green = {"design": "mini", "status": "ok", "graph_kind": "hetero",
+             "variants": {"b": {}}, "platform": "nangate45"}
+    json.dump(green, open(ds / "graph_manifest.json", "w"))
+    env = dict(os.environ, R2G_GRAPH_PYTHON="/nonexistent/python_no_torch")
+    r = subprocess.run(["bash", _RUN_GRAPHS, str(proj), "nangate45"],
+                       capture_output=True, text=True, env=env, timeout=120)
+    assert r.returncode == 0, (r.returncode, r.stderr)
+    man = json.load(open(ds / "graph_manifest.json"))
+    assert man["status"] == "ok"                        # untouched
+
+
+@pytestmark_tensor
+def test_run_graphs_gate_block_invalidates_manifest(tmp_path):
+    """An INVALIDATING skip (signoff-gate BLOCK — dirty DRC) supersedes a stale-green
+    dataset/graph_manifest.json with status=blocked_unsigned and exits non-zero (7)."""
+    import json
+    import subprocess
+    import sys
+    proj = tmp_path / "proj"
+    run = proj / "backend" / "RUN_2026-07-01_00-00-00" / "results"
+    run.mkdir(parents=True)
+    (run / "6_final.def").write_text("VERSION 5.8 ;\n")
+    rep = proj / "reports"
+    rep.mkdir(parents=True)
+    json.dump({"status": "fail", "total_violations": 5}, open(rep / "drc.json", "w"))
+    json.dump({"status": "clean", "mismatch_count": 0}, open(rep / "lvs.json", "w"))
+    ds = proj / "dataset"
+    ds.mkdir(parents=True)
+    json.dump({"design": "mini", "status": "ok", "graph_kind": "hetero",
+               "variants": {"b": {}}, "platform": "nangate45"},
+              open(ds / "graph_manifest.json", "w"))
+    env = dict(os.environ, R2G_GRAPH_PYTHON=sys.executable)   # torch present -> reaches gate
+    r = subprocess.run(["bash", _RUN_GRAPHS, str(proj), "nangate45"],
+                       capture_output=True, text=True, env=env, timeout=120)
+    assert r.returncode == 7, (r.returncode, r.stderr)
+    man = json.load(open(ds / "graph_manifest.json"))
+    assert man["status"] == "blocked_unsigned"
+    assert man["superseded"]["status"] == "ok"
+    assert man.get("reason")

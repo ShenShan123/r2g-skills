@@ -37,6 +37,16 @@ def is_high_value_retry(source_path: str, notes: str) -> bool:
 
 def classify(source_path: str, notes: str) -> tuple[str, str]:
     text = (notes or "").lower()
+    # Truncated-closure retry (2026-07-16 full-pipeline issue 10): a candidate
+    # whose discovery notes carry the bundle_incomplete marker failed synthesis
+    # on a module that EXISTS in its own repo but was cut by the closure cap —
+    # a pipeline artifact, not a low-value design. Retry (the emitter records
+    # the unresolved list; re-discovery/expansion can rebuild the closure),
+    # never a permanent low_value_failure exclusion.
+    if "bundle_incomplete=" in text and (
+            "not found" in text or "not part of the design" in text
+            or "module `" in text):
+        return "retry", "missing_local_module"
     # Tokenized match on the FAILURE evidence (shared with discovery's risk
     # flagging — common/rtl_risk.py): the raw-substring version of this test
     # was the same false-positive bug that hard-rejected picorv32 upstream.

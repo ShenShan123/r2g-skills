@@ -2922,6 +2922,173 @@ writes `heuristics.json`/`failure_candidates.json` NEXT TO itself. Guard:
 sandbox-db manage()). If you find a gutted heuristics.json, restore with
 `git checkout -- knowledge/heuristics.json` and re-run `learn_heuristics.py` off the committed db.
 
+### 2026-07-16 agent-logic issue-report audit (failure-patterns #50 — 9 issues)
+
+The second external adversarial audit (`docs/superpowers/plans/2026-07-16-agent-logic-issue-report.md`,
+probed at cb50537) targeted the seams the #49 fixes left: evidence OWNERSHIP (not just existence),
+aggregate determinism, guard completeness, and apply/judge revalidation. All 9 issues were confirmed
+live and fixed TDD. The committed store gained one nullable column (`recipe_status.status_version`)
+with **0 verdicts moved** (old-vs-new evidence counting verified identical on all 114 committed trial
+keys; the one tied corpus — `af17c0ba… sky130hd bus_heavy/medium core_util_relief`, 1w1l — only
+re-queues as `candidate` if/when a future trial fires for that key).
+
+- **Issue 1 — real-but-FOREIGN runs certified a win.** #49's `_runs_exist` checked only that the two
+  run_ids resolve to rows, so any two ingested runs (other projects, other platforms) passed as A/B
+  evidence. **Fix:** `ab_runner._arms_owned` — a database-derived OWNERSHIP predicate: each run's
+  project basename must parse `_ab[AB]_` with the CORRECT role in the correct column, both arms share
+  one base subject + trial tail, the tail carries THIS trial's strat8, platforms match the key.
+  `judge_recipe` re-derives a stamped-True `provenance_complete` locally before counting (merged
+  bundles can't self-certify); absent-key legacy rows stay grandfathered. Guards:
+  `test_ab_runner.py::test_{foreign_real_runs_cannot_certify_a_win,swapped_arm_roles_are_not_owned,
+  cross_subject_and_cross_strategy_pairs_are_not_owned,cross_platform_arm_runs_are_not_owned,
+  stamped_true_provenance_is_reverified_at_judge}`.
+- **Issue 2 — tied corpus was ORDER-dependent.** `judge_recipe` returned None on a tie, so the FIRST
+  decisive row's transition survived: win-then-loss stayed `promoted`, loss-then-win stayed `shadow` —
+  opposite lifecycle states from the same net corpus. **Fix:** tied decisive evidence (wins==losses>0)
+  deterministically re-queues as `candidate` (`recipe_lifecycle.revalidate`); wins==losses==0 stays a
+  no-op (inconclusives still carry no information). Forward-only — no retroactive re-judge of the
+  committed store (24 `merge:*` rows are intentionally inert exporter evidence). Guards:
+  `test_ab_causal_guards.py::test_{tied_corpus_is_order_independent,tie_neutralizes_transient_promotion}`.
+- **Issue 3 — causal isolation checked only a 4-knob whitelist.** `_arm_spec_mismatch` compared
+  CLOCK_PERIOD/DIE_AREA/CORE_AREA + SDC period, so an unrelated knob smuggled into one arm
+  (PLACE_DENSITY_LB_ADDON, ABC_AREA…) was credited to the recipe. **Fix:** `_arm_baseline_divergence`
+  — the arms' HUMAN-AUTHORED baseline region (config.mk minus the fix auto-block) must be
+  knob-identical (arm-local values like each arm's own SDC_FILE path are normalized); every
+  legitimate edit lands INSIDE the block, so any baseline delta is contamination → decisive verdict
+  vetoed to `inconclusive` in both directions. Same signoff-check scoping as the spec guard
+  (place/synth write bare exports by design; timing arms edit the SDC).
+- **Issue 4 — target-symptom win hid cross-check regressions.** The only regression veto compared DRC
+  classes, so a recipe clearing its DRC target while flipping LVS clean→fail or timing clean→severe
+  still promoted. **Fix:** `_ab_global_regression` — a per-check severity partial order over the arms'
+  ingested outcome vector (LVS clean→{fail,crash,mismatch,incomplete,stale}, timing
+  {clean,minor}→{moderate,severe,unconstrained — losing the constraint IS a disabled check},
+  orfs pass→fail, DRC {clean,clean_beol}→{fail,failed,stuck}, and a check A definitively ran going
+  MISSING in B). Win-only veto; no materiality escape hatch outside DRC; both arms'
+  `_global_repair_state` vectors ride `metrics_json.global_state`. Never folded into outcome_score
+  (invariant H4). Guards: `test_ab_causal_guards.py::test_global_regression_*`.
+- **Issue 6 — lifecycle never revalidated at apply/judge (TOCTOU).** `--next` gated on lifecycle but
+  the separate `--apply` invocation looked the strategy up by id and wrote directly — a recipe demoted
+  between the two processes still applied; and the A/B freshness guard compared only `generation`,
+  which `recipe_lifecycle._set` never bumps, so a demotion landing mid-trial was invisible and a stale
+  decisive trial re-promoted over the withdrawal. **Fix:** (a) `--apply` re-reads the CURRENT lifecycle
+  in-process (rc=5 `lifecycle_blocked`; fail-closed when the store is unreadable; `--rank-first
+  <same-id>` bypasses — the A/B arm-B path, now passed by fix_signoff.sh and the route-arm apply);
+  (b) `recipe_status.status_version` bumps on EVERY `_set` transition, is stamped on each arm at plan
+  time, and the judge CANCELS a trial whose version moved (also closes the NULL-generation hole of
+  `enqueue_candidate` rows). Guards: `test_diagnose_signoff_fix.py::test_apply_{refuses_lifecycle_
+  blocked_strategy,rank_first_bypasses_lifecycle_gate,fails_closed_when_lifecycle_unreadable}`.
+- **Issue 7 — arm identity collided across symptoms.** Arm dirs/ledger keys were
+  `subject+arm+strat8+repeat`, so two candidates sharing subject+strategy but differing in symptom
+  produced IDENTICAL arm names — the second plan merged onto the first's ledger entries, overwriting
+  `ab_key` (evidence attributed to the wrong symptom; the first experiment silently lost); the judge's
+  `(base, strategy)` grouping was a second collision surface. **Fix:** arm dirs carry a per-trial
+  UPPERCASE-hex hash of the FULL recipe key (`_ab{arm}_{strat8}{H6}_{r}`; uppercase so a digest can
+  never embed a spurious `_ab` parse token), and the judge groups cohorts/pairs by `(base, full
+  ab_key)` with a legacy fallback. Guard: `test_plan_arms_isolation.py::test_two_symptoms_same_
+  subject_strategy_get_distinct_arms`.
+- **Issue 8 — regression auto-demotion crossed domains.** The #49 sweep called
+  `auto_demote_on_regression`, which filtered `fix_events` by symptom+strategy only — two asap7/cpu
+  failures demoted the nangate45/crypto recipe they never touched. **Fix:** evidence is EXACT-DOMAIN
+  scoped: provenance `'live'` only (a backfilled import is not a live regression), the key's OWN
+  platform, and the key's OWN design_class (joined via the event project's latest ingested run).
+  Cross-domain failures are transfer signal, never demotion grounds. Guards:
+  `test_ab_causal_guards.py::test_auto_demote_ignores_{cross_platform,backfilled}_regressions`.
+- **Issue 9 — apply reported success with ZERO effect.** `--apply` returned rc=0 after merely
+  identifying a strategy: a missing `constraint.sdc` (or an SDC whose period the regex couldn't
+  rewrite) silently skipped the edit, fix_signoff reran a full backend stage on a no-op, and the
+  unchanged failure was recorded AGAINST a recipe that was never applied. **Fix:** verified-effect
+  apply — preconditions checked BEFORE any write (missing/unrewritable SDC → rc=4
+  `precondition_failed`, nothing written), every declared edit re-read and verified after writing
+  (`no_effect` → rc=4), literal `create_clock -period N` SDCs (harvested RTL) now rewritable, and a
+  by-design no-edit strategy (`lvs_resolve_unknown`) reports an explicit `applied_no_op`. fix_signoff
+  aborts the iteration on rc≠0 — no more zero-effect reflows. Guards:
+  `test_diagnose_signoff_fix.py::test_apply_period_relax_*` + `test_apply_no_edit_strategy_is_explicit_no_op`.
+
+(Issue 5 of this report — DEF/signoff-gate provenance loss in def-graph — is documented with the
+2026-07-16 full-pipeline entry below.)
+
+### 2026-07-16 full-pipeline issue-report audit (failure-patterns #51 — 12 issues + 1 found in verification)
+
+The companion audit (`docs/superpowers/plans/2026-07-16-full-pipeline-issue-report.md`) probed the
+COMPLETE path — discovery → clone → closure → synth-only proof → publish → promote → ORFS → signoff →
+graph build — with real repos (ethmac/wbi2c/axi-interconnect) plus isolated probes. All 12 confirmed
+live and fixed TDD; the /r2g-debug verification pass then surfaced a 13th (the platform-arg provenance
+hole below) and proved it red→green on its own reproduction.
+
+- **#1 — promotion not bound to the synth-proven RTL bytes.** `rtl_signature` hashes top + sorted PATH
+  strings (a dedup key), and promote vendored whatever bytes the paths held NOW. **Fix:** expansion
+  stamps a per-file `source_manifest` `[{path,size,sha256}]` (+ rollup `source_digest`) into
+  design_meta; `promote_one` re-digests every file and refuses `rtl_bytes_changed_since_synth`;
+  legacy metas promote with an explicit `source_bytes_verified:false` stamp. `rtl_signature` keeps its
+  dedup semantics untouched.
+- **#2 — unknown license / unresolved revision passed publish.** No stage recorded either. **Fix:**
+  `clone_repo_manifest` records `resolved_commit` (`git rev-parse HEAD`, works under --depth 1) + a
+  conservative license classification (`allow|review|deny|unknown`; AGPL/GPL deny, LGPL/MPL review,
+  permissive allow, unclear unknown) in the clone summary; expansion stamps `source_kind`/
+  `source_commit`/`license_status` into every design_meta; the publish gate FAILS CLOSED —
+  `allowed_license_status` (default `["allow"]`) + `require_source_commit` for cloned repos; legacy
+  metas read `unknown` → blocked with an explicit reason.
+- **#3 — failed synth reconstructed as success from stale files.** `synthesize()`'s rc was captured
+  but never read (success == "a netlist path exists", satisfiable by a PRIOR run's file), and
+  `rebuild_external_index_from_dirs` inferred success from surviving artifacts over a `synth_failed`
+  meta. **Fix:** success needs rc==0 AND a netlist FRESHER than the invocation; a failed rerun
+  quarantines the prior generation's mapped_netlist/netlist_graph/cell_stats; the index rebuilder
+  treats design_meta status as authoritative (artifacts can only CONFIRM, never overrule).
+- **#4 — `design_action=reject` was publish-eligible.** The SHIPPED `publish_policy.json` listed
+  `reject` in `allowed_design_actions` (the code honored the policy; the policy was the defect — and
+  the test masked it by passing its OWN policy). **Fix:** `reject` dropped from the policy; the loader
+  refuses any policy carrying a reserved terminal action; a test now loads the ACTUAL shipped policy.
+- **#5 — sequential designs silently promoted under a virtual clock.** `detect_clock_port` knew only a
+  fixed name list (missed ethmac's `Clk`: 119 unclocked registers, STA-0450, meaningless timing labels
+  downstream). **Fix:** shared `common/clock_infer.py` ranks the top module's edge-driven INPUT ports
+  (reset-like excluded); a single candidate auto-adopts, ambiguity stays unresolved; `promote_one`
+  REFUSES `rejected_unconstrained_clock` when seq_cells>0 falls back to virtual (overrides:
+  `--clock-port`, `--allow-virtual-clock`); expand's `make_minimal_sdc` prepends the inferred names.
+- **#6 — graph regeneration not atomic/invalidating** (def-graph). `run_graphs.sh::skip()` exited 0
+  leaving a prior green `dataset/graph_manifest.json` + stale `.pt` mix. **Fix:** a signoff-gate BLOCK
+  now exits **7** and atomically stamps the manifest `blocked_unsigned` (benign venv/DEF skips stay
+  exit 0, manifest untouched — the old dataset still matches its manifest); `build_graphs.py` deletes
+  stale `[b-f]_graph*.pt` not in the new manifest before the atomic manifest commit; the verifier
+  fails a `blocked_unsigned` manifest with a clear check.
+- **#7 — signoff restaging pinned to the FIRST staged run.** `.r2g_restaged` was an empty boolean +
+  `cp -n`, so a newer backend run never restaged. **Fix:** the marker is identity-bearing (records the
+  picked RUN basename); a differing/legacy identity clobber-restages and restamps; same identity stays
+  the fast-path no-op. The older-layout `final/` fallback is identity-aware too.
+- **#8 — no filesystem containment on acquisition.** `tarfile.extractall` unvalidated (recreates
+  `../`, absolute paths, symlinks) and discovery followed symlinks out of the repo. **Fix:** safe
+  extraction (`filter="data"` + manual validator fallback; zip symlink members rejected); discovery
+  requires every candidate path to RESOLVE inside its own repo root (counted + warned, never silent).
+- **#9 — ORFS run/workspace identity collisions.** 1-second `RUN_TAG` + `mkdir -p` merged same-second
+  runs into one backend dir; default `FLOW_VARIANT` from project basename collided across parents;
+  fix_signoff.sh never forwarded a variant to run_drc/run_lvs/run_orfs. **Fix:** `RUN_<ts>_<pid>_<rand>`
+  minted with create-must-succeed (+8 retries); run-meta.json records `flow_variant`; a non-blocking
+  per-workspace `flock` fails FAST with the hard-rule message before clean_all; fix_signoff gains
+  `--variant` + recovery from the newest run-meta and forwards it at all six call sites.
+- **#10 — dependency closure silently truncated at 16 files.** The cap returned silently; the missing
+  SAME-REPO module then failed synth as `low_value_failure` (recall biased against big designs —
+  ethmac's `eth_random.v`). **Fix:** `bundle_closure` returns the unresolved-module list; the notes
+  carry `bundle_incomplete=<n>; unresolved=<mods>`; the classifier turns a missing-module failure on a
+  marked candidate into `retry,missing_local_module`.
+- **#11 — quality scorer read a never-emitted `cell_histogram`.** Entropy/unique/rare/redundancy
+  silently zeroed (redundancy=0 dropped the −0.5 penalty → redundant designs kept). **Fix:**
+  `graph_stats` emits the histogram it already computed; the scorer BLOCKS assessment
+  (action `conditional` + `quality_notes=stats_schema_missing:cell_histogram`) when it is absent —
+  never scores from fabricated zeros.
+- **#12 — generic diagnosis misclassified PPL-0024 + clean timing text.** `'utilization'+'100%'`
+  matched Yosys's healthy info line (while the REAL codes DPL-0036/FLW-0024/GPL-0053 don't say
+  "utilization"); `'setup violation'` substring-matched "No setup violations found". **Fix:**
+  code-anchored utilization rule; clean phrases scrubbed before the timing scan; first-class
+  `io_pin_capacity_overflow` kind for PPL-0024 (leading, with current/required perimeter parsed by the
+  same regex engineer_loop's recovery uses) — diagnosis.json now agrees with the repair path.
+- **#13 (found by the /r2g-debug verification of these fixes) — an EXPLICIT platform arg overrode the
+  DEF's build provenance.** The #30 guard was deliberately skipped when the caller passed a platform
+  arg, so `run_graphs.sh design_cases/iir sky130hd` on an sky130hs-built DEF silently stamped a
+  wrong-platform manifest — sky130hd liberty resolved against hs masters, every lib-derived verifier
+  check failing (283/293) while the build itself looked clean. **Fix:** the `_provenance.sh` guard now
+  runs for explicit args too (run-meta wins with a loud WARNING; `R2G_PLATFORM_FORCE=1` is the
+  deliberate escape hatch); proven red→green on the exact reproduction (294/294 restored). Guard:
+  `def-graph/tests/test_platform_provenance.py::test_guard_runs_even_for_explicit_platform_arg`.
+
 ### 2026-07-15 agent-logic issue-report audit (failure-patterns #49 — 16 issues)
 
 An external adversarial audit (`docs/superpowers/plans/2026-07-15-issue-report.md`) probed A/B

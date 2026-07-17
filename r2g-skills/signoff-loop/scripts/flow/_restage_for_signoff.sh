@@ -86,16 +86,28 @@ if [[ -z "$R2G_BACKEND_RUN" ]]; then
   echo "WARNING: no backend RUN dir contains a final GDS for $DESIGN_NAME ($PROJECT_DIR)" >&2
 fi
 
-# Full restage of results/, logs/, reports/, objects/ (if missing).
+# Full restage of results/, logs/, reports/, objects/ (identity-aware).
+#
+# The .r2g_restaged marker is IDENTITY-BEARING (full-pipeline Issue 7): it records the
+# basename of the backend RUN it staged FROM. The old empty boolean marker skipped ALL
+# copying once present, so a NEWER backend run (correctly picked by _restage_pick_run_dir)
+# was never staged — signoff kept verifying a stale older layout. Now a differing (or
+# empty/legacy) recorded identity re-stages the newer run with clobber; a same-identity
+# marker stays the fast-path no-op.
 _restage_dir() {
   local subdir="$1"; local dst="$2"
   local src="$R2G_BACKEND_RUN/$subdir"
-  if [[ -d "$src" && ! -f "$dst/.r2g_restaged" ]]; then
-    mkdir -p "$dst"
-    # Use cp -n to avoid clobbering anything already present.
-    cp -rn "$src"/. "$dst"/ 2>/dev/null || true
-    : > "$dst/.r2g_restaged"
-  fi
+  local marker="$dst/.r2g_restaged"
+  local pick_id staged_id=""
+  [[ -d "$src" ]] || return 0
+  pick_id="$(basename "$R2G_BACKEND_RUN")"
+  [[ -f "$marker" ]] && staged_id="$(head -1 "$marker" 2>/dev/null || true)"
+  [[ "$staged_id" == "$pick_id" ]] && return 0    # already staged from this exact run
+  mkdir -p "$dst"
+  # Clobber-copy: a differing/legacy marker means the newer pick's artifacts (6_final.*)
+  # must overwrite the stale staged set (src carries no marker, so it survives + is restamped).
+  cp -r "$src"/. "$dst"/ 2>/dev/null || true
+  printf '%s\n' "$pick_id" > "$marker"
 }
 
 if [[ -n "$R2G_BACKEND_RUN" ]]; then
@@ -105,10 +117,18 @@ if [[ -n "$R2G_BACKEND_RUN" ]]; then
   _restage_dir reports        "$FLOW_DIR/reports/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 
   # Older r2g runs only kept the final/ subset; fall back to those if results/
-  # wasn't preserved.
-  if [[ ! -f "$ORFS_RESULTS_DIR/6_final.gds" && -f "$R2G_BACKEND_RUN/final/6_final.gds" ]]; then
-    mkdir -p "$ORFS_RESULTS_DIR"
-    cp -n "$R2G_BACKEND_RUN/final"/* "$ORFS_RESULTS_DIR"/ 2>/dev/null || true
+  # wasn't preserved. Identity-aware (full-pipeline Issue 7): a newer pick re-stages
+  # even when a stale 6_final.gds from an older run is already present (the old cp -n +
+  # gds-present guard would otherwise pin the workspace to the older layout forever).
+  if [[ -f "$R2G_BACKEND_RUN/final/6_final.gds" ]]; then
+    _fb_marker="$ORFS_RESULTS_DIR/.r2g_restaged"
+    _fb_pick="$(basename "$R2G_BACKEND_RUN")"
+    _fb_staged=""; [[ -f "$_fb_marker" ]] && _fb_staged="$(head -1 "$_fb_marker" 2>/dev/null || true)"
+    if [[ "$_fb_staged" != "$_fb_pick" || ! -f "$ORFS_RESULTS_DIR/6_final.gds" ]]; then
+      mkdir -p "$ORFS_RESULTS_DIR"
+      cp -r "$R2G_BACKEND_RUN/final"/. "$ORFS_RESULTS_DIR"/ 2>/dev/null || true
+      printf '%s\n' "$_fb_pick" > "$_fb_marker"
+    fi
   fi
 fi
 
@@ -122,4 +142,4 @@ if [[ -d "$ORFS_LOGS_DIR" ]]; then
   find "$ORFS_LOGS_DIR" -type f -exec touch {} + 2>/dev/null || true
 fi
 
-unset _restage_dir _restage_pick_run_dir
+unset _restage_dir _restage_pick_run_dir _fb_marker _fb_pick _fb_staged 2>/dev/null || true

@@ -62,8 +62,38 @@ from skill_env import (  # noqa: E402
     resolve_str_env,
     run_orfs_script,
 )
+from skill_env import default_downloads_root  # noqa: E402
 
 GRAPH_FORMAT = "netlist_graph_v1"
+
+
+def source_provenance(source_path: Path) -> dict[str, str]:
+    """Source origin stamps for a candidate (2026-07-16 full-pipeline issue 2):
+    resolved upstream commit + license classification, read from the CLONED REPO
+    the candidate came from (an ancestor directly under the downloads root), or
+    best-effort from the local tree itself. The publish gate fails closed on
+    anything but license 'allow' (+ a resolved commit for cloned repos)."""
+    try:
+        from acquire.clone_repo_manifest import classify_license, resolved_commit
+    except Exception:
+        return {"source_kind": "unknown", "source_commit": "",
+                "license_status": "unknown", "license_evidence": "classifier_unavailable"}
+    try:
+        droot = default_downloads_root().resolve()
+        p = Path(source_path).resolve()
+    except OSError:
+        return {"source_kind": "unknown", "source_commit": "",
+                "license_status": "unknown", "license_evidence": "unresolvable_path"}
+    repo_root = next((anc for anc in [p, *p.parents] if anc.parent == droot), None)
+    if repo_root is not None:
+        st, ev = classify_license(repo_root)
+        return {"source_kind": "cloned_repo",
+                "source_commit": resolved_commit(repo_root),
+                "license_status": st, "license_evidence": ev}
+    base = p if p.is_dir() else p.parent
+    st, ev = classify_license(base)
+    return {"source_kind": "local_tree", "source_commit": "",
+            "license_status": st, "license_evidence": ev}
 INDEX_FIELDS = [
     "design",
     "top",
@@ -224,13 +254,25 @@ def restore_rows_from_output_root(out_root: Path) -> dict[str, dict]:
 
 # --- RTL front-end (ported intact from the source skill) --------------------
 
-def make_minimal_sdc(out_path: Path) -> None:
-    text = """set candidates [get_ports -quiet {clk clock i_clk i_clock clock_i clk_i wb_clk_i wb_clk clock_in core_clk CK}]
-if {[llength $candidates] > 0} {
+def make_minimal_sdc(out_path: Path, extra_candidates: list[str] | None = None) -> None:
+    """Synth-only SDC: probe the standard clock-port names at synth time, with any
+    RTL-inferred event-control candidates PREPENDED (2026-07-16 issue 5 — the fixed
+    list missed non-standard clocks like ethmac's `Clk`; common/clock_infer scans
+    the top body's posedge/negedge inputs). Virtual clock remains the last resort
+    (synth-only is pre-layout; the promotion gate, not this SDC, decides whether a
+    sequential design may keep it)."""
+    names = []
+    for n in (extra_candidates or []):
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", n or "") and n not in names:
+            names.append(n)
+    names += [n for n in ("clk clock i_clk i_clock clock_i clk_i wb_clk_i wb_clk "
+                          "clock_in core_clk CK").split() if n not in names]
+    text = f"""set candidates [get_ports -quiet {{{' '.join(names)}}}]
+if {{[llength $candidates] > 0}} {{
   create_clock -name core_clk -period 10 [lindex $candidates 0]
-} else {
+}} else {{
   create_clock -name virtual_clk -period 10
-}
+}}
 """
     out_path.write_text(text, encoding="utf-8")
 
@@ -571,7 +613,14 @@ def write_project(
     constraints.mkdir(parents=True, exist_ok=True)
     (project / "reports").mkdir(parents=True, exist_ok=True)
     sdc_path = constraints / "constraint.sdc"
-    make_minimal_sdc(sdc_path)
+    try:
+        from common.clock_infer import infer_clock_ports
+        _inferred = infer_clock_ports(
+            top, [p.read_text(encoding="utf-8", errors="ignore")
+                  for p in source_files if p.is_file()])
+    except Exception:
+        _inferred = []
+    make_minimal_sdc(sdc_path, extra_candidates=_inferred)
 
     variant = (synth_variant or "yosys_abc_area0").strip()
     abc_area = 1 if variant in {"area", "abc_area1", "yosys_abc_area1"} else 0
@@ -620,7 +669,15 @@ def synthesize(project: Path, design: str, top: str) -> tuple[int, Path | None, 
     """Run synth-only ORFS via signoff-loop run_orfs.sh.
 
     Returns (rc, netlist_path_or_None, backend_run_dir_or_None).
+
+    Success requires rc==0 AND a FRESH netlist (2026-07-16 full-pipeline issue 3):
+    the shared ORFS results dir can still hold a stale 1_2_yosys.v from a PRIOR
+    run, so "a netlist path exists" used to reconstruct success out of a failed
+    rerun — the caller decided purely on `netlist is None` and never read rc.
+    A netlist older than this invocation, or any netlist under a nonzero rc,
+    returns None (honest failure).
     """
+    import time
     platform = acquire_platform()
     extra_env = {
         "ORFS_STAGES": "synth",
@@ -629,6 +686,7 @@ def synthesize(project: Path, design: str, top: str) -> tuple[int, Path | None, 
     num_cores = resolve_str_env("R2G_ACQUIRE_NUM_CORES", "")
     if num_cores:
         extra_env["NUM_CORES"] = num_cores
+    started = time.time() - 2.0          # 2s slack for coarse FS timestamps
     result = run(
         ["bash", str(run_orfs_script()), str(project), platform, design],
         capture=True,
@@ -645,7 +703,9 @@ def synthesize(project: Path, design: str, top: str) -> tuple[int, Path | None, 
 
     # Current ORFS emits the canonicalized mapped netlist as 1_2_yosys.v; older
     # checkouts used 1_1_yosys.v. Prefer the flow results dir, fall back to the
-    # copy run_orfs.sh collected into backend/RUN_*/results/.
+    # copy run_orfs.sh collected into backend/RUN_*/results/. Only a netlist
+    # WRITTEN BY THIS RUN counts (run_orfs clean_all rebuilds synth every time,
+    # so a legitimate netlist is always fresh; a stale one is a prior run's).
     results_dir = default_flow_dir() / "results" / platform / top / design
     search_dirs = [results_dir] + ([run_dir / "results"] if run_dir is not None else [])
     netlist: Path | None = None
@@ -653,11 +713,55 @@ def synthesize(project: Path, design: str, top: str) -> tuple[int, Path | None, 
         for name in ("1_2_yosys.v", "1_1_yosys.v"):
             candidate = d / name
             if candidate.exists():
+                if candidate.stat().st_mtime < started:
+                    print(f"[rtl-acquire] design={design} ignoring STALE netlist "
+                          f"{candidate} (predates this synth invocation)", flush=True)
+                    continue
                 netlist = candidate
                 break
         if netlist is not None:
             break
+    if result.returncode != 0 and netlist is not None:
+        # rc!=0 with a fresh-looking netlist: the flow aborted after emitting it
+        # (e.g. a later synth sub-step failed). Never call that success.
+        print(f"[rtl-acquire] design={design} synth rc={result.returncode} — "
+              f"discarding netlist candidate {netlist}", flush=True)
+        netlist = None
     return result.returncode, netlist, run_dir
+
+
+def _quarantine_stale_success_artifacts(design_out_files: list[Path]) -> list[str]:
+    """Delete a design's prior-generation success artifacts after a FAILED rerun
+    (2026-07-16 full-pipeline issue 3): surviving mapped_netlist.v/netlist_graph.pt
+    let rebuild_external_index_from_dirs reconstruct 'success' out of a rerun that
+    design_meta.json records as failed. Returns the deleted names (for the log)."""
+    removed = []
+    for p in design_out_files:
+        try:
+            if p.exists():
+                p.unlink()
+                removed.append(p.name)
+        except OSError:
+            pass
+    return removed
+
+
+def _source_manifest(paths: list[Path]) -> list[dict]:
+    """Per-file CONTENT provenance for the RTL that actually synthesized
+    (2026-07-16 full-pipeline issue 1): rtl_signature hashes only the top +
+    sorted path STRINGS (a dedup key, kept unchanged), so nothing bound the
+    promoted bytes to the synth-proven bytes. promote_candidates re-digests
+    each file against this manifest before vendoring."""
+    out = []
+    for p in paths:
+        try:
+            data = Path(p).read_bytes()
+        except OSError:
+            out.append({"path": str(p), "size": None, "sha256": None})
+            continue
+        out.append({"path": str(p), "size": len(data),
+                    "sha256": hashlib.sha256(data).hexdigest()})
+    return out
 
 
 def synth_log_from(run_dir: Path | None, dest: Path) -> None:
@@ -954,6 +1058,9 @@ def main() -> int:
             "synth_memory_max_bits": synth_memory_max_bits,
             "synth_frontend": synth_frontend, "top_parameters": top_parameters,
             "platform": acquire_platform(), "graph_schema_version": GRAPH_FORMAT,
+            # Origin provenance (issue 2): commit + license ride every meta from
+            # birth; the publish gate reads them fail-closed.
+            **source_provenance(source_path),
         }
         flow_ran = False
         project: Path | None = None
@@ -1059,6 +1166,15 @@ def main() -> int:
                 if netlist is None:
                     row["status"] = "synth_failed"
                     row["notes"] = failure_note
+                    # A FAILED rerun must invalidate the prior generation's success
+                    # artifacts (issue 3): stale mapped_netlist.v/netlist_graph.pt
+                    # would let the index rebuilder reconstruct 'success'.
+                    _removed = _quarantine_stale_success_artifacts(
+                        [mapped_netlist, out_pt, cell_stats_json])
+                    if _removed:
+                        print(f"[rtl-acquire] design={design} quarantined stale "
+                              f"success artifacts after failed rerun: {_removed}",
+                              flush=True)
                     print(f"[rtl-acquire] design={design} stage=synthesize status=synth_failed",
                           flush=True)
                     write_design_status(out_root, design, stage="synthesize", state="failed",
@@ -1156,9 +1272,15 @@ def main() -> int:
             for key in ("cells", "comb_cells", "seq_cells", "nets"):
                 row[key] = str(stats.get(key, ""))
             row["status"] = "success"
+            _src_manifest = _source_manifest(source_files)
             meta.update({
                 "status": "success", "duplicate_reason": "", "notes": notes,
                 "rtl_files": rtl_files,
+                # Content provenance (issue 1): the EXACT bytes that earned this
+                # synth success; promote verifies against it before vendoring.
+                "source_manifest": _src_manifest,
+                "source_digest": sha256_text(
+                    "\n".join(str(e["sha256"]) for e in _src_manifest)),
                 "sv2v_fallback_used": fallback_used == "sv2v",
                 "vhd2vl_fallback_used": fallback_used == "vhd2vl",
                 "lec_lite_status": lec_status,

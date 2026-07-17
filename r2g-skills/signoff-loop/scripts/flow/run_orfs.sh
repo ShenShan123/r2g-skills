@@ -78,6 +78,48 @@ _journal_stage() {  # stage status elapsed_s log_file — never breaks the flow
     ${R2G_JOURNAL_DB:+--db "$R2G_JOURNAL_DB"} 2>/dev/null || true
 }
 
+# --- Collision-resistant run identity + per-workspace lock (full-pipeline Issue 9) ---
+# Two same-second invocations used to share one backend/RUN_<ts> dir (1s timestamp, no
+# PID) and interleave stage_log.jsonl rows; and nothing serialized the shared ORFS
+# workspace, so same-variant runs raced clean_all-vs-build. Defined before the
+# source-only return so the pytest suite can exercise them in isolation.
+_r2g_new_backend_dir() {  # base -> echoes "<dir>\t<RUN_TAG>" for a freshly-CREATED unique dir
+  # Keep the sortable RUN_<ts> prefix (consumers glob RUN_* and sort lexically/by-mtime;
+  # none parse the timestamp back out) and append PID + randomness. mkdir (no -p on the
+  # leaf) fails on an existing dir, so a collision regenerates the suffix (bounded).
+  local base="$1" tag dir i
+  mkdir -p "$base" || return 1
+  for i in 1 2 3 4 5 6 7 8; do
+    tag="RUN_$(date +%Y-%m-%d_%H-%M-%S)_$$_$(printf '%04x' "$RANDOM")"
+    dir="$base/$tag"
+    if mkdir "$dir" 2>/dev/null; then
+      printf '%s\t%s' "$dir" "$tag"
+      return 0
+    fi
+  done
+  return 1
+}
+_r2g_workspace_lockfile() {  # platform design variant -> echoes the lockfile path
+  # Keyed on the SHARED ORFS workspace identity ($FLOW_DIR/.../<platform>/<design>/<variant>).
+  local key h
+  key="$1/$2/$3"
+  h="$(printf '%s' "$key" | md5sum 2>/dev/null | awk '{print $1}')"
+  [[ -z "$h" ]] && h="$(printf '%s' "$key" | tr -c 'A-Za-z0-9' '_')"
+  printf '%s/r2g_ws_%s.lock' "${R2G_LOCK_DIR:-/tmp}" "$h"
+}
+_r2g_acquire_workspace_lock() {  # platform design variant -> holds an fd-scoped lock; 1 on contention
+  command -v flock >/dev/null 2>&1 || { echo "run_orfs: flock unavailable — skipping workspace lock" >&2; return 0; }
+  local lf; lf="$(_r2g_workspace_lockfile "$1" "$2" "$3")"
+  exec {R2G_WS_LOCK_FD}>"$lf" || { echo "run_orfs: ERROR cannot open workspace lockfile $lf" >&2; return 1; }
+  if ! flock -n "$R2G_WS_LOCK_FD"; then
+    echo "run_orfs: ERROR another run holds the ORFS workspace (platform=$1 design=$2 variant=$3)." >&2
+    echo "  Never run two configs with the same DESIGN_NAME+FLOW_VARIANT concurrently" >&2
+    echo "  (CLAUDE.md Hard Rules) — they race clean_all vs build. Lockfile: $lf" >&2
+    return 1
+  fi
+  return 0
+}
+
 # Test seam: allow sourcing helpers without executing the flow.
 [[ "${R2G_SOURCE_ONLY:-0}" == "1" ]] && return 0 2>/dev/null
 # --- end Tier-0 journal hooks ---
@@ -115,6 +157,15 @@ fi
 # DESIGN_NAME (e.g. all ICCAD benchmarks use DESIGN_NAME=top) do not overwrite
 # each other's config.mk at the shared $FLOW_DIR/designs/<platform>/<name>/ path.
 DESIGN_NAME=$(grep 'DESIGN_NAME' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+
+# Serialize the shared ORFS workspace BEFORE any write/EDA (config copy, clean_all,
+# stage builds). Contention = the DESIGN_NAME+FLOW_VARIANT hard-rule violation: fail
+# fast with a clear message rather than corrupt both runs (full-pipeline Issue 9).
+# The lock is fd-scoped — released automatically when this script exits.
+if [[ "${R2G_SKIP_WORKSPACE_LOCK:-0}" != "1" ]]; then
+  _r2g_acquire_workspace_lock "$PLATFORM" "$DESIGN_NAME" "$FLOW_VARIANT" || exit 1
+fi
+
 ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 mkdir -p "$ORFS_DESIGN_DIR"
 
@@ -134,8 +185,12 @@ else
   echo "WARNING: config.mk missing VERILOG_FILES" >&2
 fi
 
-# Create a timestamp for this run
-RUN_TAG="RUN_$(date +%Y-%m-%d_%H-%M-%S)"
+# Create this run's unique backend dir + collision-resistant RUN_TAG (full-pipeline
+# Issue 9). The helper mkdir's a fresh dir, regenerating the PID/random suffix on the
+# (vanishingly rare) collision, so two same-second runs never share one dir.
+_bd_pair="$(_r2g_new_backend_dir "$PROJECT_DIR/backend")" \
+  || { echo "ERROR: could not create a unique backend RUN dir under $PROJECT_DIR/backend" >&2; exit 1; }
+BACKEND_DIR="${_bd_pair%%$'\t'*}"; RUN_TAG="${_bd_pair#*$'\t'}"; unset _bd_pair
 echo "Starting ORFS run: $RUN_TAG"
 echo "Design: $DESIGN_NAME"
 echo "Platform: $PLATFORM"
@@ -155,8 +210,7 @@ else
   echo "Skipping clean_all (resuming from stage: $FROM_STAGE)"
 fi
 
-BACKEND_DIR="$PROJECT_DIR/backend/$RUN_TAG"
-mkdir -p "$BACKEND_DIR"
+# BACKEND_DIR was created up-front with the unique RUN_TAG (see _r2g_new_backend_dir).
 
 # Timeout and CPU limit support
 ORFS_TIMEOUT="${ORFS_TIMEOUT:-7200}"
@@ -566,6 +620,7 @@ cat > "$BACKEND_DIR/run-meta.json" <<METAEOF
   "run_tag": "$RUN_TAG",
   "design_name": "$DESIGN_NAME",
   "platform": "$PLATFORM",
+  "flow_variant": "$FLOW_VARIANT",
   "config_mk": "$CONFIG_MK",
   "sdc_file": "$SDC_FILE",
   "make_status": $MAKE_STATUS,

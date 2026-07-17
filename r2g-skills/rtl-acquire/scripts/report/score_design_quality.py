@@ -205,6 +205,16 @@ def main() -> None:
             )
         )
         action = decide_design_action(score, bucket, low_fidelity, fix_ratio)
+        # Schema honesty (2026-07-16 full-pipeline issue 11): a stats file with NO
+        # cell_histogram cannot be quality-assessed — entropy/unique/rare/redundancy
+        # would all silently read as valid zeros (redundancy=0 drops the -0.5
+        # penalty, so redundant designs mis-scored keep). Absent required schema =
+        # blocked assessment ('conditional' + explicit marker), never a keep/reject
+        # computed from fabricated zeros.
+        quality_notes = ""
+        if not hist and cells > 0:
+            action = "conditional"
+            quality_notes = "stats_schema_missing:cell_histogram"
         action_counts[action] += 1
         out_rows.append(
             {
@@ -223,6 +233,7 @@ def main() -> None:
                 "fix_actions": str(fix_actions),
                 "fix_ratio": f"{fix_ratio:.4f}",
                 "low_fidelity": str(low_fidelity),
+                "quality_notes": quality_notes,
             }
         )
 
@@ -243,6 +254,7 @@ def main() -> None:
         "fix_actions",
         "fix_ratio",
         "low_fidelity",
+        "quality_notes",
     ]
     args.out_csv.parent.mkdir(parents=True, exist_ok=True)
     with args.out_csv.open("w", newline="", encoding="utf-8") as fh:

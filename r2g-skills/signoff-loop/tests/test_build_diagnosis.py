@@ -69,6 +69,83 @@ def test_section_text_extracts_named_section():
     assert bd.section_text(text, "nope.log") == ""
 
 
+# ---- generic-diagnosis misclassification fixes (2026-07-16 full-pipeline #12) --
+
+def test_yosys_100pct_utilization_info_not_overflow(tmp_path):
+    """Yosys prints a healthy INFO line 'Design area NNN um^2 ~100% utilization'.
+    The bare '100%' trigger false-positived it as placement_utilization_overflow;
+    it must now yield NO such issue."""
+    text = ("=== synth.log ===\n"
+            "[INFO] Design area 5678 um^2 100% utilization\n")
+    kinds = {i["kind"] for i in bd.detect_issues(text, tmp_path)}
+    assert "placement_utilization_overflow" not in kinds, kinds
+
+
+def test_real_gpl0053_overflow_still_detected(tmp_path):
+    """A genuine placement-overflow error code (GPL-0053) — which does NOT contain
+    the word 'utilization' — must still raise placement_utilization_overflow."""
+    text = ("=== flow.log ===\n"
+            "[ERROR GPL-0053] Utilization exceeds max: place cannot converge\n")
+    kinds = {i["kind"] for i in bd.detect_issues(text, tmp_path)}
+    assert "placement_utilization_overflow" in kinds, kinds
+
+
+def test_real_flw0024_overflow_still_detected(tmp_path):
+    """FLW-0024 (die too small for the cells) also lacks the word 'utilization'
+    but is a real overflow abort — still detected by the error-code branch."""
+    text = ("=== flow.log ===\n"
+            "[ERROR FLW-0024] Placement failed: not enough room for cells\n")
+    kinds = {i["kind"] for i in bd.detect_issues(text, tmp_path)}
+    assert "placement_utilization_overflow" in kinds, kinds
+
+
+def test_clean_setup_report_not_timing_violation(tmp_path):
+    """'No setup violations found' CONTAINS the substring 'setup violation'; a
+    clean STA report (no paired hold-clean line) must NOT yield timing_violation."""
+    text = "=== flow.log ===\nNo setup violations found\n"
+    kinds = {i["kind"] for i in bd.detect_issues(text, tmp_path)}
+    assert "timing_violation" not in kinds, kinds
+
+
+def test_real_setup_violation_still_detected(tmp_path):
+    """A genuine setup violation must still be flagged after the negation scrub."""
+    text = "=== flow.log ===\nPath has setup violation of 0.42ns\n"
+    kinds = {i["kind"] for i in bd.detect_issues(text, tmp_path)}
+    assert "timing_violation" in kinds, kinds
+
+
+def test_ppl0024_is_io_pin_capacity_overflow_leading(tmp_path):
+    """A PPL-0024 pin-overflow abort must yield a LEADING io_pin_capacity_overflow
+    kind (not placement_utilization_overflow or timing_violation), and parse the
+    current/required die perimeter into the issue payload."""
+    text = ("=== flow.log ===\n"
+            "[ERROR PPL-0024] Number of IO pins (1521) exceeds maximum number of "
+            "available positions (718). Increase the die perimeter from 800.00um "
+            "to 2068.56um.\n"
+            "[ERROR PPL-0024] Cannot place IO pins.\n"
+            "make: *** [place] Error 2\n")
+    issues = bd.detect_issues(text, tmp_path)
+    kinds = [i["kind"] for i in issues]
+    assert kinds[0] == "io_pin_capacity_overflow", kinds
+    assert "placement_utilization_overflow" not in kinds, kinds
+    assert "timing_violation" not in kinds, kinds
+    pin = issues[0]
+    assert pin["current_perimeter_um"] == 800.00
+    assert pin["required_perimeter_um"] == 2068.56
+    assert "perimeter" in pin["suggestion"].lower()
+
+
+def test_ppl0024_without_perimeter_numbers_still_detected(tmp_path):
+    """The 'die/core perimeter.' variant carries no from/to numbers; the kind must
+    still fire, just without the optional perimeter payload."""
+    text = ("=== flow.log ===\n"
+            "[ERROR PPL-0024] Number of IO pins (342) exceeds maximum number of "
+            "available positions (248). Increase the die/core perimeter.\n")
+    issues = bd.detect_issues(text, tmp_path)
+    assert issues[0]["kind"] == "io_pin_capacity_overflow"
+    assert "current_perimeter_um" not in issues[0]
+
+
 # ---- the consolidated run_summary (codex #7) ----------------------------------
 
 def _project(tmp_path):

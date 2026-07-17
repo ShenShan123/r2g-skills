@@ -86,6 +86,44 @@ def _runs_exist(conn, *run_ids) -> bool:
     return True
 
 
+_ARM_OWN_RE = re.compile(r"^(?P<base>.+)_ab(?P<arm>[AB])_(?P<rest>.+)$")
+
+
+def _arms_owned(conn, key: dict, arm_a_run_id, arm_b_run_id) -> bool:
+    """Ownership predicate (2026-07-16 agent-logic issue 1): the two run_ids must
+    BE this trial's arms, not merely EXIST in `runs` — two real-but-foreign runs
+    (other projects, other platforms) could otherwise certify a decisive win.
+    Derived entirely from the database: each run's project_path basename must
+    parse as `<base>_ab<ROLE>_<strat8>_<r>` with the CORRECT role (A run in the A
+    column, B in B — swapped roles are not an experiment), both arms must share
+    the SAME base subject and same `<strat8>_<r>` tail (one planned trial, not a
+    mix of two), the tail's strat8 must be THIS trial's strategy prefix (a
+    density_relief arm pair cannot certify an antenna trial), and each run's
+    platform must match the trial key's (a NULL/empty run platform carries no
+    signal and is not held against legacy rows)."""
+    strat8 = (key.get("strategy") or "")[:8]
+    parsed = {}
+    for role, rid in (("A", arm_a_run_id), ("B", arm_b_run_id)):
+        try:
+            row = conn.execute("SELECT project_path, platform FROM runs "
+                               "WHERE run_id=?", (rid,)).fetchone()
+        except sqlite3.Error:
+            return False
+        if not row or not row[0]:
+            return False
+        m = _ARM_OWN_RE.match(os.path.basename(str(row[0]).rstrip("/")))
+        if not m or m.group("arm") != role:
+            return False
+        if row[1] and key.get("platform") and row[1] != key["platform"]:
+            return False
+        parsed[role] = (m.group("base"), m.group("rest"))
+    if parsed["A"] != parsed["B"]:
+        return False              # different subjects or different trial tails
+    if strat8 and not parsed["A"][1].startswith(strat8):
+        return False              # an arm pair planned for ANOTHER strategy
+    return True
+
+
 def _trial_subject(conn, arm_a_run_id, arm_b_run_id, fallback) -> str:
     """The INDEPENDENT SUBJECT a trial exercised = the base design both arms cloned
     from. Resolve an arm run_id -> runs.project_path, strip the `_ab[AB]_<strat8>_<r>`
@@ -452,22 +490,27 @@ def record_trial(conn, *, key: dict, verdict: str, arm_a_run_id: str | None,
                  arm_b_run_id: str | None, metrics: dict,
                  match_level: str | None = None,
                  trial_uuid: str | None = None) -> int:
-    # Provenance honesty (failure-patterns #45 + P0-10, 2026-07-15): a decisive trial
-    # is VERIFIABLE only if it traces to two DISTINCT, REAL arm runs. The write is not
-    # refused (a real inconclusive/one-armed trial still carries information), but
-    # `provenance_complete` is stamped AUTHORITATIVELY here — distinct non-empty run_ids
-    # that BOTH exist in `runs` — so a caller cannot self-certify a fabricated pair via
-    # metrics. judge_recipe filters the unverifiable rows at the consumer (the "record
-    # the truth, filter at the consumer" firewall). A decisive verdict lacking it warns.
+    # Provenance honesty (failure-patterns #45 + P0-10, 2026-07-15; OWNERSHIP added
+    # 2026-07-16 issue 1): a decisive trial is VERIFIABLE only if it traces to two
+    # DISTINCT, REAL runs that ARE this trial's own arms (_arms_owned: correct
+    # `_ab[AB]_` role per column, same base subject + trial tail, this strategy's
+    # strat8, the key's platform). Existence alone let any two real-but-foreign
+    # runs certify a decisive win. The write is not refused (a real inconclusive/
+    # one-armed trial still carries information), but `provenance_complete` is
+    # stamped AUTHORITATIVELY here so a caller cannot self-certify a fabricated
+    # pair via metrics. judge_recipe filters the unverifiable rows at the consumer
+    # (the "record the truth, filter at the consumer" firewall). A decisive verdict
+    # lacking it warns.
     distinct = bool(arm_a_run_id and arm_b_run_id and arm_a_run_id != arm_b_run_id)
-    prov_complete = bool(distinct and _runs_exist(conn, arm_a_run_id, arm_b_run_id))
+    prov_complete = bool(distinct and _runs_exist(conn, arm_a_run_id, arm_b_run_id)
+                         and _arms_owned(conn, key, arm_a_run_id, arm_b_run_id))
     metrics = _json_safe(dict(metrics))
     metrics["provenance_complete"] = prov_complete
     if verdict in ("win", "loss") and not prov_complete:
         print(f"WARNING: decisive A/B trial for {key.get('strategy')} "
-              f"({key.get('symptom_id')}) lacks two distinct REAL arm run_ids "
-              f"(a={arm_a_run_id}, b={arm_b_run_id}); evidence is unverifiable",
-              file=sys.stderr)
+              f"({key.get('symptom_id')}) lacks two distinct REAL runs OWNED by "
+              f"this trial's arms (a={arm_a_run_id}, b={arm_b_run_id}); "
+              f"evidence is unverifiable", file=sys.stderr)
     # Idempotent retry guard (P0-16, 2026-07-15): a crash between the trial insert and
     # the arms being marked 'judged' must not double-count the SAME planned trial on
     # restart. A deterministic trial_uuid (engineer_loop derives it from the arm run_ids)
@@ -535,12 +578,23 @@ def judge_recipe(conn, *, symptom_id: str, design_class: str, platform: str,
     # filter at the consumer" — but the judge excludes it HERE. An ABSENT
     # provenance_complete key is a legacy pre-#45 trial, grandfathered as countable so
     # the committed corpus's verdicts stay stable (0 rows are explicitly False today).
-    def _verifiable(mj) -> bool:
+    def _verifiable(mj, a_rid, b_rid) -> bool:
         try:
             m = json.loads(mj) if mj else {}
         except (TypeError, ValueError):
             return True
-        return m.get("provenance_complete") is not False
+        pc = m.get("provenance_complete")
+        if pc is False:
+            return False
+        if pc is True:
+            # Defense-in-depth (2026-07-16 issue 1): a stamped-True flag is
+            # RE-DERIVED against the LOCAL store at judge time — a merged bundle's
+            # (or rerouted caller's) self-certified stamp whose runs don't resolve
+            # locally as this trial's own arms must not drive a transition here.
+            # ABSENT-key legacy rows below stay grandfathered exactly as before.
+            return (_runs_exist(conn, a_rid, b_rid)
+                    and _arms_owned(conn, dict(key), a_rid, b_rid))
+        return True                            # legacy pre-#45 row: grandfathered
     # Collapse the decisive corpus to INDEPENDENT SUBJECTS before counting (P1-11,
     # 2026-07-15): N pseudo-replicated trials on ONE base design are ONE vote, not N,
     # so a reused subject cannot masquerade as N-fold corroboration. Each subject nets
@@ -550,7 +604,7 @@ def judge_recipe(conn, *, symptom_id: str, design_class: str, platform: str,
     # (each such row already counted once).
     net: dict[str, int] = {}
     for v, mj, a_rid, b_rid, tid in rows:
-        if v not in ("win", "loss") or not _verifiable(mj):
+        if v not in ("win", "loss") or not _verifiable(mj, a_rid, b_rid):
             continue
         subj = _trial_subject(conn, a_rid, b_rid, tid)
         net[subj] = net.get(subj, 0) + (1 if v == "win" else -1)
@@ -562,17 +616,44 @@ def judge_recipe(conn, *, symptom_id: str, design_class: str, platform: str,
     if losses > wins:
         recipe_lifecycle.demote(conn, reason=f"ab_corpus:{wins}w{losses}l", **key)
         return "shadow"
-    return None                                # no decisive evidence or a tie
+    if wins:
+        # TIED decisive evidence (2026-07-16 agent-logic issue 2): the state must be
+        # a pure function of the corpus, not of insertion order. Returning None here
+        # let the FIRST decisive row's transition survive the tie (win-then-loss
+        # stayed promoted, loss-then-win stayed shadow — opposite lifecycle states
+        # from the SAME net corpus). A tie is unresolved evidence: back to
+        # 'candidate' for re-validation, never an inherited transient promotion.
+        recipe_lifecycle.revalidate(
+            conn, reason=f"ab_corpus_tie:{wins}w{losses}l", **key)
+        return "candidate"
+    return None                                # no decisive evidence: unchanged
 
 
 def auto_demote_on_regression(conn, *, key: dict, window: int = 2) -> bool:
     """Spec §7: a PROMOTED recipe with `window` consecutive live regressions on
-    its symptom is auto-demoted + escalated. Counts recent fix_events for this
-    strategy+symptom; returns True if demoted."""
+    its symptom IN ITS OWN VALIDATED DOMAIN is auto-demoted + escalated.
+
+    Scoped (2026-07-16 agent-logic issue 8 — was symptom+strategy only, so two
+    asap7/cpu failures demoted the nangate45/crypto recipe they never touched):
+    evidence counts ONLY when it is (a) provenance 'live' — a backfilled
+    historical import is not a live regression; (b) the lifecycle key's OWN
+    platform; and (c) the key's OWN design_class, resolved through the event
+    project's latest ingested run (an event whose project has no ingested run
+    carries no class evidence and is excluded — exact-domain demotion only).
+    Cross-platform/cross-class failures are TRANSFER signal for the learner's
+    ranking, never grounds to disable a recipe in the exact domain that
+    validated it. Returns True if demoted."""
     rows = conn.execute(
-        "SELECT verdict FROM fix_events WHERE symptom_id=? AND strategy=? "
-        "ORDER BY fix_event_id DESC LIMIT ?",
-        (key["symptom_id"], key["strategy"], window)).fetchall()
+        "SELECT fe.verdict FROM fix_events fe "
+        "LEFT JOIN (SELECT project_path, design_class, "
+        "   ROW_NUMBER() OVER (PARTITION BY project_path "
+        "     ORDER BY julianday(ingested_at) DESC, run_id DESC) rn FROM runs) r "
+        "  ON r.project_path = fe.project_path AND r.rn = 1 "
+        "WHERE fe.symptom_id=? AND fe.strategy=? AND fe.platform=? "
+        "  AND fe.provenance='live' AND r.design_class=? "
+        "ORDER BY fe.fix_event_id DESC LIMIT ?",
+        (key["symptom_id"], key["strategy"], key["platform"],
+         key["design_class"], window)).fetchall()
     if len(rows) == window and all(r[0] == "regression" for r in rows):
         recipe_lifecycle.demote(conn, reason="repeated_regression", **key)
         import escalations

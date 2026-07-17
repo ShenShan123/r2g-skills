@@ -4,6 +4,74 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-16 — close both 2026-07-16 external audits: 21 issues + 1 found in verification (all four skills)
+
+Two external adversarial reports (`docs/superpowers/plans/2026-07-16-{agent-logic,full-pipeline}-issue-report.md`,
+probed at cb50537) were audited against live code — **all 21 findings confirmed** — and fixed TDD.
+Detail: failure-patterns **#50** (agent-logic, 9 issues) + **#51** (full-pipeline, 12 issues + the
+verification-found #13). Committed `knowledge.sqlite`: one nullable column added
+(`recipe_status.status_version`), **0 rows moved, 0 verdicts flipped** (verified old-vs-new evidence
+counting identical across all 114 trial keys; honesty gates green before/after).
+
+### signoff-loop
+- **A/B evidence OWNERSHIP** (`_arms_owned`): decisive trials must cite THEIR OWN arms (role, subject,
+  strategy tail, platform), not just existing runs; stamped-True provenance is re-derived at judge time.
+- **Deterministic tie**: a tied decisive corpus re-queues as `candidate` (order-independent), never
+  inheriting a transient promote/demote.
+- **Causal isolation**: baseline-region (outside the fix auto-block) knob equality across arms; a
+  divergence vetoes decisive verdicts both ways.
+- **Global regression veto**: a target-symptom win that flips LVS/timing/ORFS/DRC good→bad (or loses a
+  check A definitively ran) is vetoed; both arms' global vectors ride `metrics_json`.
+- **Apply/judge lifecycle revalidation**: `--apply` re-reads the CURRENT lifecycle (rc=5; `--rank-first`
+  = the arm-B bypass); `recipe_status.status_version` bumps on every transition and cancels trials whose
+  recipe was withdrawn mid-flight.
+- **Trial identity**: arm dirs carry a per-trial hash; the judge groups by full `ab_key` — two symptoms
+  sharing a subject+strategy can no longer merge/overwrite each other's experiments.
+- **Exact-domain demotion**: regression auto-demote counts only live-provenance events on the key's own
+  platform + design_class.
+- **Verified-effect apply**: rc=0 only when every declared edit LANDED (rc=4 `precondition_failed`/
+  `no_effect`; literal `create_clock -period N` SDCs now rewritable; `applied_no_op` for recheck-only
+  strategies).
+- **Flow identity**: collision-proof `RUN_<ts>_<pid>_<rand>` backend dirs, per-workspace flock with the
+  hard-rule message, `flow_variant` in run-meta.json, fix_signoff `--variant` + run-meta recovery
+  forwarded to all six runner call sites; identity-bearing `.r2g_restaged` (a newer backend run now
+  re-stages; the empty-marker forever-pin is gone).
+- **Diagnosis**: PPL-0024 gets a first-class `io_pin_capacity_overflow` kind; utilization overflow is
+  error-code-anchored (Yosys "100% utilization" info no longer matches); "No setup violations found" no
+  longer reads as a timing violation.
+
+### def-graph
+- **DEF binding preserved end-to-end**: extractor re-gates pass `--def`, the gate fingerprint gains a
+  content sha256, and the verifier fails an unbound embedded verdict (binding rode the manifest before
+  but was overwritten to unknown on every first build).
+- **Atomic regeneration**: gate-blocked `run_graphs.sh` exits 7 + stamps `blocked_unsigned` over a stale
+  green manifest; stale variant/kind `.pt` files are deleted before the manifest commit.
+- **Provenance beats an explicit platform arg** (#13, found verifying these fixes): `_provenance.sh` now
+  corrects a contradicting CLI platform to the DEF's run-meta platform (`R2G_PLATFORM_FORCE=1` opt-out).
+
+### rtl-acquire
+- **Byte provenance**: `source_manifest` sha256s at expansion; promote refuses
+  `rtl_bytes_changed_since_synth`.
+- **License/revision fail-closed publish**: resolved commit + conservative license classification ride
+  clone summary → design_meta → publish gate (`allowed_license_status`, `require_source_commit`).
+- **rc + freshness**: a failed rerun can no longer be reconstructed as success from stale artifacts
+  (synthesize checks rc + mtime; failed reruns quarantine prior artifacts; the index rebuilder trusts
+  design_meta).
+- **`reject` removed from the shipped publish policy** + loader validation of terminal actions.
+- **Clock inference + gate**: `common/clock_infer.py` (top-body posedge/negedge inputs); sequential
+  designs falling back to a virtual clock are `rejected_unconstrained_clock` unless overridden.
+- **Containment**: safe tar/zip extraction; discovery skips paths resolving outside their repo root.
+- **Closure honesty**: `bundle_incomplete` markers + `retry,missing_local_module` classification.
+- **Quality schema honesty**: `cell_histogram` emitted; absent schema blocks assessment instead of
+  scoring zeros.
+
+### tools / housecleaning
+- Removed dead one-off wrappers `run_two_designs.sh`, `run_full_sweep.sh`, `batch_run.sh` (superseded by
+  batch_flow.sh/batch_orfs_only.sh; ghost comment references reworded).
+- Suites after all fixes: signoff-loop **925 passed/1 skipped**, def-graph **421 passed/14 skipped**,
+  rtl-acquire **80 passed**; `verify_graph_dataset --batch` green over all 7 built datasets (iir proven
+  294/294 after the #13 red→green).
+
 ## 2026-07-16 — def-graph emits HeteroData by default (def-graph)
 
 The five post-layout dataset views `{b..f}_graph.pt` are now torch_geometric **`HeteroData`** by

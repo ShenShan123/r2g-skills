@@ -4,9 +4,16 @@
   "require_validation_pass_for_manifest_refresh": true,
   "publish_only_if_quality_artifacts_exist": true,
   "publish_only_if_index_is_consistent": true,
-  "allowed_design_actions": ["keep", "conditional", "reject"],
+  "allowed_design_actions": [
+    "keep",
+    "conditional"
+  ],
   "exclude_low_fidelity_designs": true,
   "max_duplicate_design_count": 25,
   "max_dominant_gate_share": 0.995,
-  "min_nontrivial_complexity_score": 0.0
+  "min_nontrivial_complexity_score": 0.0,
+  "allowed_license_status": [
+    "allow"
+  ],
+  "require_source_commit": true
 }

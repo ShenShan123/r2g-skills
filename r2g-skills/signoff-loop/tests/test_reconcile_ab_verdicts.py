@@ -49,7 +49,7 @@ def test_reconcile_flips_noise_verdicts_and_reverts_promotion(tmp_path):
             conn.execute(
                 "INSERT OR REPLACE INTO runs (run_id, project_path, design_name, "
                 "platform, ingested_at, cell_count) VALUES (?,?,?,?,?,?)",
-                (rid, str(tmp_path / f"d{i}_ab{arm}_diode_0"), f"d{i}",
+                (rid, str(tmp_path / f"d{i}_ab{arm}_antenna__0"), f"d{i}",
                  key["platform"], "2026-06-10T00:00:00Z", 1000))
         ab_runner.record_trial(conn, key=key, verdict=verdict, arm_a_run_id=f"ra{i}",
                                arm_b_run_id=f"rb{i}",

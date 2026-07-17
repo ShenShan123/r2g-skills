@@ -43,17 +43,66 @@ if [[ -f "$CONFIG_MK" ]]; then
 fi
 PLATFORM="${PLATFORM:-asap7}"
 
-skip() {  # reason
-  echo "SKIP: $1" >&2
-  # Thread the SPECIFIC upstream backend-failure reason into the manifest, not a
+# Distinct exit code for an INVALIDATING skip (signoff-gate BLOCK) so a caller can
+# tell "not signed off" from a benign 0-exit "SKIPs cleanly" (full-pipeline #6).
+GATE_BLOCK_EXIT=7
+
+# Supersede a stale-green dataset/graph_manifest.json when the design is no longer
+# signed off for the current DEF (full-pipeline #6, 2026-07-16). The old .pt files
+# stay on disk but no consumer may read the manifest as current: rewrite it atomically
+# to status=blocked_unsigned, keeping a compact summary of the superseded manifest for
+# provenance. Fail-soft: any error leaves the manifest as-is (never worse than today).
+_invalidate_manifest() {  # reason
+  local man="$DATASET_DIR/graph_manifest.json"
+  [[ -f "$man" ]] || return 0
+  MAN_PATH="$man" BLOCK_REASON="$1" python3 - <<'PY' 2>/dev/null || true
+import json, os, time
+man = os.environ["MAN_PATH"]
+try:
+    with open(man, encoding="utf-8") as f:
+        prev = json.load(f)
+except Exception:
+    prev = None
+prev = prev if isinstance(prev, dict) else {}
+# Compact summary of the superseded (previously green) manifest — provenance without
+# copying the whole thing (variants collapse to their names).
+superseded = {k: prev[k] for k in
+              ("status", "graph_kind", "platform", "signoff_health") if k in prev}
+if isinstance(prev.get("variants"), dict):
+    superseded["variants"] = sorted(prev["variants"])
+out = {"design": prev.get("design"), "platform": prev.get("platform"),
+       "status": "blocked_unsigned", "reason": os.environ["BLOCK_REASON"],
+       "blocked_at": int(time.time()), "superseded": superseded}
+tmp = man + ".tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(out, f, indent=1)
+os.replace(tmp, man)
+PY
+}
+
+# skip <reason> [invalidating]
+# BENIGN skips (missing torch venv, no backend DEF, empty extractor output) record a
+# reports/graph_dataset.json skip manifest and exit 0 — the documented "SKIPs cleanly"
+# contract — leaving any existing dataset/graph_manifest.json untouched (it still
+# matches its .pt files). An INVALIDATING skip (signoff-gate BLOCK: the design is NOT
+# signed off for the current DEF) ALSO supersedes a stale-green dataset/graph_manifest.json
+# and exits GATE_BLOCK_EXIT so no consumer reads the stale manifest as current.
+skip() {  # reason [invalidating]
+  local reason="$1" invalidating="${2:-}"
+  echo "SKIP: $reason" >&2
+  # Thread the SPECIFIC upstream backend-failure reason into the skip manifest, not a
   # bare "no 6_final.def" (failure-patterns.md #38 / codex #6). graph_skip_manifest.py
   # is fail-soft; fall back to the minimal inline JSON if it errors so a skip is
   # NEVER left without a manifest.
   if ! python3 "$(dirname "${BASH_SOURCE[0]}")/graph_skip_manifest.py" \
-        "$DESIGN_NAME" "$PLATFORM" "$1" "$PROJECT_DIR" "${RUN_DIR:-}" \
+        "$DESIGN_NAME" "$PLATFORM" "$reason" "$PROJECT_DIR" "${RUN_DIR:-}" \
         > "$REPORTS_DIR/graph_dataset.json" 2>/dev/null; then
     printf '{"design":"%s","platform":"%s","variants":{},"status":"skipped","reason":"%s"}\n' \
-      "$DESIGN_NAME" "$PLATFORM" "$1" > "$REPORTS_DIR/graph_dataset.json"
+      "$DESIGN_NAME" "$PLATFORM" "$reason" > "$REPORTS_DIR/graph_dataset.json"
+  fi
+  if [[ -n "$invalidating" ]]; then
+    _invalidate_manifest "$reason"
+    exit "$GATE_BLOCK_EXIT"
   fi
   exit 0
 }
@@ -82,11 +131,15 @@ if [[ -z "$DEF" && -d "$BACKEND_DIR" ]]; then
   done
 fi
 
-# Provenance guard (failure-patterns.md #30): the discovered artifacts are keyed
-# to the platform they were BUILT on (backend run-meta.json); config.mk is
-# mutable round state a campaign re-point rewrites. An explicit platform arg
-# always wins (guard skipped). Shared logic: _provenance.sh (one copy).
-if [[ -z "${2:-}" && -n "$RUN_DIR" ]]; then
+# Provenance guard (failure-patterns.md #30; hardened 2026-07-16): the discovered
+# artifacts are keyed to the platform they were BUILT on (backend run-meta.json);
+# config.mk is mutable round state a campaign re-point rewrites. The guard now runs
+# even for an EXPLICIT platform arg — an arg contradicting the DEF's build record
+# used to win silently and stamp a wrong-platform manifest (sky130hd libs resolved
+# against an hs DEF: every liberty-derived value wrong, caught only by the
+# verifier). R2G_PLATFORM_FORCE=1 restores arg-wins for deliberate cross-platform
+# reference builds. Shared logic: _provenance.sh (one copy).
+if [[ -n "$RUN_DIR" && "${R2G_PLATFORM_FORCE:-0}" != "1" ]]; then
   PLATFORM=$(bash "$(dirname "${BASH_SOURCE[0]}")/_provenance.sh" "$RUN_DIR" "$PLATFORM")
 fi
 [[ -z "$DEF" || ! -f "$DEF" ]] && skip "no 6_final.def found — backend not completed/collected"
@@ -107,7 +160,9 @@ GATE_FLAGS=()
 # report bundle from another run must not certify this layout.
 if ! python3 "$(dirname "${BASH_SOURCE[0]}")/signoff_gate.py" "$PROJECT_DIR" \
        --run-dir "$RUN_DIR" --def "$DEF" --mode "$GATE_MODE" "${GATE_FLAGS[@]}"; then
-  skip "signoff gate: not signed off (see reports/signoff_gate.json; R2G_SIGNOFF_GATE=warn builds anyway with recorded reasons)"
+  # INVALIDATING: the design is not signed off for THIS DEF — supersede any stale-green
+  # dataset/graph_manifest.json and exit non-zero (full-pipeline #6, 2026-07-16).
+  skip "signoff gate: not signed off (see reports/signoff_gate.json; R2G_SIGNOFF_GATE=warn builds anyway with recorded reasons)" invalidating
 fi
 
 # --- Ensure fresh features/ + labels/ (run their stages when missing/stale) -

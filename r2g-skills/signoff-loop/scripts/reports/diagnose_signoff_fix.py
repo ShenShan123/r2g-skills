@@ -1010,33 +1010,115 @@ def main(argv=None) -> int:
         if not strat.get("auto_apply", False):
             print(f"ERROR: '{args.apply}' is operator-only: {strat.get('operator_note','')}", file=sys.stderr)
             return 3
+        # Lifecycle re-validation AT APPLY TIME (2026-07-16 agent-logic issue 6):
+        # selection (--next) and apply are separate PROCESS invocations, so a recipe
+        # demoted between them still applied — the safety system's withdrawal had no
+        # effect on this branch (it looked the strategy up by id and wrote directly).
+        # The gate re-reads the CURRENT lifecycle in THIS process, closing the race
+        # to microseconds. --rank-first naming this exact strategy bypasses by
+        # design (the A/B arm-B path MUST force the candidate under test). A
+        # fallback-catalog strat (already-applied idempotent re-apply) was never
+        # annotated at :991 — annotate it here through the same fail-closed path.
+        if args.rank_first != strat["id"]:
+            gate_plan = plan
+            if "lifecycle_status" not in strat and strat not in plan.get("strategies", []):
+                gate_plan = _annotate_live_gates(
+                    {"strategies": [strat]}, proj, check=args.check, sid=_sid,
+                    design_class=design_class, platform=plat)
+            if (strat.get("lifecycle_status") in _LIVE_BLOCKED_LIFECYCLE
+                    or gate_plan.get("lifecycle_gate_ok") is False):
+                print(json.dumps({
+                    "status": "lifecycle_blocked", "applied": None,
+                    "strategy": strat["id"],
+                    "lifecycle_status": strat.get("lifecycle_status"),
+                    "lifecycle_gate_ok": gate_plan.get("lifecycle_gate_ok", True)}))
+                print(f"ERROR: '{strat['id']}' is lifecycle-blocked "
+                      f"(status={strat.get('lifecycle_status')}, "
+                      f"gate_ok={gate_plan.get('lifecycle_gate_ok', True)}); an A/B "
+                      f"arm may force it with --rank-first", file=sys.stderr)
+                return 5
+        # Verified-effect apply (2026-07-16 agent-logic issue 9): rc=0 used to mean
+        # only "a strategy was identified" — a missing constraint.sdc (or an SDC with
+        # no matchable period) silently skipped the edit, fix_signoff then reran a
+        # full backend stage on a ZERO-EFFECT intervention and recorded the unchanged
+        # failure as negative evidence AGAINST a recipe that was never applied.
+        # Contract now: rc=0 ONLY when every DECLARED edit verifiably landed;
+        # rc=4 ("precondition_failed" / "no_effect") otherwise, with nothing written
+        # on a failed precondition (fix_signoff.sh aborts the iteration on rc!=0).
+        sdc_edits = strat.get("sdc_edits") or {}
+        sdc_path = proj / "constraints" / "constraint.sdc"
+        sdc_new_p = str(sdc_edits["CLOCK_PERIOD"]) if sdc_edits.get("CLOCK_PERIOD") else None
+        _SDC_VAR_RE = re.compile(r"(set\s+clk_period\s+)([\d.]+)")
+        _SDC_LIT_RE = re.compile(r"((?:create_clock|set)\b[^\n]*-period\s+)([\d.]+)")
+        if sdc_new_p is not None:
+            # Precondition: the target file AND a rewritable period must exist BEFORE
+            # any write, so a failed apply never leaves a half-applied strategy.
+            if not sdc_path.exists():
+                print(json.dumps({"status": "precondition_failed", "applied": None,
+                                  "strategy": strat["id"],
+                                  "unmet": [f"sdc_missing:{sdc_path}"]}))
+                return 4
+            sdc_text0 = sdc_path.read_text(encoding="utf-8")
+            if not _SDC_VAR_RE.search(sdc_text0) and not _SDC_LIT_RE.search(sdc_text0):
+                # Neither the templated `set clk_period N` var nor a literal
+                # `-period N` (harvested/promoted RTL brings its own SDC style).
+                print(json.dumps({"status": "precondition_failed", "applied": None,
+                                  "strategy": strat["id"],
+                                  "unmet": ["sdc_no_rewritable_period"]}))
+                return 4
         if strat["config_edits"]:
             cfg_path.write_text(apply_edits(cfg_text, strat["config_edits"]), encoding="utf-8")
-        sdc_edits = strat.get("sdc_edits") or {}
-        if sdc_edits.get("CLOCK_PERIOD"):
-            sdc_path = proj / "constraints" / "constraint.sdc"
-            if sdc_path.exists():
-                new_p = str(sdc_edits["CLOCK_PERIOD"])
-                sdc_text = sdc_path.read_text(encoding="utf-8")
-                sdc_text = re.sub(r"(set\s+clk_period\s+)[\d.]+",
-                                  lambda m: m.group(1) + new_p, sdc_text)
-                sdc_path.write_text(sdc_text, encoding="utf-8")
-                try:                                   # journal — never breaks apply
-                    import os as _os
-                    import subprocess as _sp
-                    _kdir = Path(__file__).resolve().parents[2] / "knowledge"
-                    _ja = [sys.executable, str(_kdir / "journal_action.py"), "action",
-                           "--project", str(proj.resolve()), "--actor", "loop",
-                           "--type", "sdc_edit", "--payload",
-                           json.dumps({"knob": "CLOCK_PERIOD", "new": new_p,
-                                       "strategy": strat["id"]})]
-                    _jdb = _os.environ.get("R2G_JOURNAL_DB")
-                    if _jdb:
-                        _ja += ["--db", _jdb]
-                    _sp.run(_ja, check=False)
-                except Exception:
-                    pass
-        out = {"applied": strat["id"], "config_edits": strat["config_edits"]}
+        if sdc_new_p is not None:
+            sdc_text = sdc_path.read_text(encoding="utf-8")
+            if _SDC_VAR_RE.search(sdc_text):
+                sdc_text = _SDC_VAR_RE.sub(lambda m: m.group(1) + sdc_new_p, sdc_text)
+            else:
+                sdc_text = _SDC_LIT_RE.sub(lambda m: m.group(1) + sdc_new_p, sdc_text)
+            sdc_path.write_text(sdc_text, encoding="utf-8")
+            try:                                   # journal — never breaks apply
+                import os as _os
+                import subprocess as _sp
+                _kdir = Path(__file__).resolve().parents[2] / "knowledge"
+                _ja = [sys.executable, str(_kdir / "journal_action.py"), "action",
+                       "--project", str(proj.resolve()), "--actor", "loop",
+                       "--type", "sdc_edit", "--payload",
+                       json.dumps({"knob": "CLOCK_PERIOD", "new": sdc_new_p,
+                                   "strategy": strat["id"]})]
+                _jdb = _os.environ.get("R2G_JOURNAL_DB")
+                if _jdb:
+                    _ja += ["--db", _jdb]
+                _sp.run(_ja, check=False)
+            except Exception:
+                pass
+        # Post-apply effect verification: re-read every touched file and confirm each
+        # declared edit is REALLY there. A declared-but-unlanded edit (write raced,
+        # regex drifted, block clobbered) must not report rc=0.
+        unmet = []
+        if strat["config_edits"]:
+            cfg_after = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
+            for k, v in strat["config_edits"].items():
+                if not re.search(rf"(?m)^\s*export\s+{re.escape(str(k))}\s*=\s*"
+                                 rf"{re.escape(str(v))}\s*$", cfg_after):
+                    unmet.append(f"config_edit_not_landed:{k}")
+        if sdc_new_p is not None:
+            sdc_after = sdc_path.read_text(encoding="utf-8") if sdc_path.exists() else ""
+            m = _SDC_VAR_RE.search(sdc_after) or _SDC_LIT_RE.search(sdc_after)
+            if not m or m.group(2) != sdc_new_p:
+                unmet.append("sdc_edit_not_landed:CLOCK_PERIOD")
+        if unmet:
+            print(json.dumps({"status": "no_effect", "applied": None,
+                              "strategy": strat["id"], "unmet": unmet}))
+            return 4
+        if not strat["config_edits"] and sdc_new_p is None:
+            # A strategy that DECLARES no config/sdc edits (lvs_resolve_unknown:
+            # recheck-only by design, NONDIVERGENT for A/B) is not a failed apply —
+            # but the caller must be able to tell it wrote nothing, so it can never
+            # masquerade as a material intervention in the journal/fix evidence.
+            print(json.dumps({"status": "applied_no_op", "applied": strat["id"],
+                              "config_edits": {}}))
+            return 0
+        out = {"status": "applied", "applied": strat["id"],
+               "config_edits": strat["config_edits"]}
         if sdc_edits:
             out["sdc_edits"] = sdc_edits
         print(json.dumps(out))

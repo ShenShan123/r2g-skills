@@ -52,6 +52,7 @@ Requires torch + torch_geometric (run_graphs.sh probes and skips cleanly).
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import math
 import os
@@ -623,6 +624,9 @@ def main():
               file=sys.stderr)
 
     os.makedirs(args.out_dir, exist_ok=True)
+    # Absolute paths of every {v}_graph*.pt this build writes — the set stale-file
+    # cleanup keeps (full-pipeline #6, 2026-07-16).
+    written_pt = set()
     manifest = {
         "design": args.design,
         "graph_id": args.graph_id,
@@ -659,6 +663,7 @@ def main():
             het_pt = os.path.join(args.out_dir, f"{v}_graph.pt")
             torch.save(hetero, het_pt)
             paths["hetero"] = os.path.abspath(het_pt)
+            written_pt.add(os.path.abspath(het_pt))
             stats["hetero"] = _hetero_stats(hetero)
         if args.kind in ("homo", "both"):
             # In 'both' mode the canonical {v}_graph.pt is the hetero default; the
@@ -667,11 +672,23 @@ def main():
                                    f"{v}_graph.pt" if args.kind == "homo" else f"{v}_graph_homo.pt")
             torch.save(data, homo_pt)
             paths["homo"] = os.path.abspath(homo_pt)
+            written_pt.add(os.path.abspath(homo_pt))
         stats["path"] = paths.get("hetero", paths.get("homo"))
         stats["paths"] = paths
         manifest["variants"][v] = stats
         print(f"{v}_graph[{args.kind}]: nodes={data.x.shape[0]} edges={data.edge_index.shape[1]} "
               f"-> {stats['path']}")
+
+    # Remove stale graph files so the manifest commit-point describes EXACTLY what is
+    # on disk (full-pipeline #6, 2026-07-16): a rebuild with fewer variants/kinds must
+    # not leave prior {v}_graph*.pt behind (rebuild -v b over bcdef; a hetero-only build
+    # after --kind both left the {v}_graph_homo.pt siblings). ONLY the [b-f]_graph*.pt
+    # family is ours — netlist_graph.pt is owned by the netlist stage. Order: write the
+    # new .pt (above) -> delete stale (here) -> atomic manifest (below).
+    for stale in sorted(glob.glob(os.path.join(args.out_dir, "[b-f]_graph*.pt"))):
+        if os.path.abspath(stale) not in written_pt:
+            os.remove(stale)
+            print(f"removed stale graph file: {stale}")
 
     man_path = os.path.join(args.out_dir, "graph_manifest.json")
     tmp = man_path + ".tmp"

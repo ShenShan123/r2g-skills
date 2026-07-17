@@ -2122,6 +2122,22 @@ def signoff_report_checks(case, design, feat, labs, tensors):
         check("signoff.gate verdict pass (manifest signoff_health)",
               sh.get("status") in {"pass", "pass_with_caveats"},
               f"signoff_health.status={sh.get('status')!r} blockers={sh.get('blockers')}")
+        # The DEF binding must survive into the manifest (agent-logic #5, 2026-07-16):
+        # the extractor sub-stages once re-gated WITHOUT --def, overwriting
+        # run_graphs.sh's binding=bound verdict (with a def_fingerprint) down to
+        # 'unknown' and dropping the fingerprint. A DEF-aware gate must read 'bound';
+        # a deliberate R2G_DEF/R2G_ODB override (def_overridden) legitimately records
+        # 'unknown'. Older manifests with NO binding key are grandfathered (pre-P0-17).
+        binding = (sh.get("checks") or {}).get("binding")
+        if binding is not None:
+            bstatus = binding.get("status")
+            overridden = bool(sh.get("def_overridden"))
+            benign = {"bound", "unknown"} if overridden else {"bound"}
+            check("signoff.binding bound (DEF binding not lost by the extractor)",
+                  bstatus in benign,
+                  f"binding status={bstatus!r} def_overridden={overridden} — "
+                  "unknown/unbound means the DEF binding + fingerprint were dropped "
+                  "(extractor re-gated without --def?)")
 
     def_path = _find_final_def(case)
     dt = read_def_truth(def_path) if def_path else None
@@ -2322,8 +2338,24 @@ def verify_case(case, design=None, json_out=None):
     SKIPPED.clear()   # per-case; RESULTS is cleared by the batch loop / fresh proc
     feat, labs, ds = case + "/features", case + "/labels", case + "/dataset"
     man = json.load(open(ds + "/graph_manifest.json"))
-    design = design or man["design"]
+    design = design or man.get("design") or os.path.basename(case)
     print(f"== {design} ({case}) ==")
+
+    # A signoff-gate BLOCK superseded a previously-green dataset (full-pipeline #6,
+    # 2026-07-16): the .pt files on disk are stale and must NOT be certified. Fail
+    # fast and cleanly instead of re-deriving checks against orphaned tensors.
+    if man.get("status") == "blocked_unsigned":
+        check("manifest.status not blocked_unsigned (design signed off for this DEF)",
+              False, f"dataset superseded: reason={man.get('reason')!r} — rebuild from "
+                     "a signed-off run (the .pt files on disk are stale)")
+        n_fail = sum(1 for r in RESULTS if not r["ok"])
+        print(f"== {design}: {len(RESULTS) - n_fail}/{len(RESULTS)} checks passed "
+              f"(blocked_unsigned) ==")
+        if json_out:
+            with open(json_out, "w") as fh:
+                json.dump({"design": design, "results": RESULTS, "skipped": SKIPPED,
+                           "passed": len(RESULTS) - n_fail, "failed": n_fail}, fh, indent=1)
+        return n_fail
 
     views = build_views(feat, design)
     gate, net, iopin, pin, egp, epn, ein = views

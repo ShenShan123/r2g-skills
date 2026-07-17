@@ -39,6 +39,7 @@ override is a deliberate, recorded decision, e.g. the no-backend verifier flows.
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
 import sys
@@ -245,18 +246,29 @@ def _check_timing(reports_dir):
 
 
 def _def_fingerprint(def_path):
-    """Cheap, recomputable identity for the DEF being graphed (path + size + mtime).
-    A full SHA-256 of a multi-hundred-MB DEF on every gate call is wasteful; size+mtime
-    is enough for the manifest to record WHICH artifact was certified and for the
-    verifier to re-check. None when the DEF path is absent/unreadable."""
+    """Recomputable identity for the DEF being graphed: path + size + mtime + a full
+    sha256 content digest. The digest binds the manifest to the EXACT bytes certified —
+    size+mtime alone can't detect an in-place rewrite that preserves both (agent-logic
+    #5, 2026-07-16) — and a single streamed hash of a tens-of-MB DEF once per stage is
+    cheap. None when the DEF path is absent/unreadable; sha256=None if it stats but the
+    content can't be read (keys path/size/mtime stay for the verifier)."""
     if not def_path:
         return None
     try:
         st = os.stat(def_path)
-        return {"path": os.path.realpath(def_path), "size": st.st_size,
-                "mtime": int(st.st_mtime)}
     except OSError:
         return None
+    digest = None
+    try:
+        h = hashlib.sha256()
+        with open(def_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        digest = h.hexdigest()
+    except OSError:
+        pass
+    return {"path": os.path.realpath(def_path), "size": st.st_size,
+            "mtime": int(st.st_mtime), "sha256": digest}
 
 
 def _check_binding(def_path, run_dir):

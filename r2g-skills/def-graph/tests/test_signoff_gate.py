@@ -380,9 +380,69 @@ def test_gate_wired_once_into_all_three_runners():
         assert "stage_log.jsonl" not in src, f"{script} re-inlined the gate"
 
 
+def test_all_three_runners_bind_the_def():
+    """FIX A (agent-logic #5, 2026-07-16): EVERY stage that gates must pass --def, or
+    a sub-stage re-gating without it overwrites run_graphs.sh's binding=bound verdict
+    with 'unknown' and drops the fingerprint before build_graphs.py embeds it."""
+    for script in ("run_graphs.sh", "run_features.sh", "run_labels.sh"):
+        src = open(os.path.join(_FLOW, script), encoding="utf-8").read()
+        assert '--def "$DEF"' in src, f"{script} does not bind the DEF to the gate (#5)"
+
+
 def test_run_graphs_passes_verdict_to_manifest():
     src = open(os.path.join(_FLOW, "run_graphs.sh"), encoding="utf-8").read()
     assert "--signoff-health" in src and "signoff_gate.json" in src
+
+
+# ---- FIX A: DEF binding survives the extractor re-gate (agent-logic #5) ---------
+
+def test_def_fingerprint_includes_sha256(tmp_path):
+    """The def_fingerprint now carries a full sha256 content digest (binds the
+    manifest to the EXACT bytes certified), keeping path/size/mtime."""
+    proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": 0.05}}})
+    def_path = os.path.join(run, "results", "6_final.def")
+    os.makedirs(os.path.dirname(def_path), exist_ok=True)
+    content = b"VERSION 5.8 ;\nCOMPONENTS 0 ;\nEND COMPONENTS\n"
+    with open(def_path, "wb") as f:
+        f.write(content)
+    v = sg.evaluate(proj, run, def_path)
+    fp = v["checks"]["binding"]["def_fingerprint"]
+    import hashlib
+    assert fp["sha256"] == hashlib.sha256(content).hexdigest()
+    assert fp["size"] == len(content)
+    assert fp["path"].endswith("6_final.def")
+
+
+def test_extractor_regate_retains_binding(tmp_path):
+    """The overwrite sequence: run_graphs.sh gates WITH --def (binding=bound +
+    fingerprint), then an extractor sub-stage re-gates and OVERWRITES
+    reports/signoff_gate.json. With the FIX A --def wiring the rewritten verdict must
+    STILL read binding=bound with a fingerprint, not degrade to 'unknown'."""
+    proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": 0.05}}})
+    def_path = os.path.join(run, "results", "6_final.def")
+    os.makedirs(os.path.dirname(def_path), exist_ok=True)
+    open(def_path, "w").write("VERSION 5.8 ;\n")
+    # run_graphs.sh: enforce + --def
+    rc1, v1, _ = _cli(proj, run, mode="enforce", extra=("--def", def_path))
+    assert rc1 == 0 and v1["checks"]["binding"]["status"] == "bound"
+    # extractor (run_features/run_labels): warn + --def (the FIX A wiring) overwrites
+    rc2, v2, _ = _cli(proj, run, mode="warn", extra=("--def", def_path))
+    assert rc2 == 0
+    assert v2["checks"]["binding"]["status"] == "bound"
+    assert v2["checks"]["binding"]["def_fingerprint"]["sha256"]
+
+
+def test_extractor_regate_without_def_would_degrade(tmp_path):
+    """Documents the pre-fix defect the wiring closes: re-gating WITHOUT --def loses
+    the binding (this is exactly what the extractor used to do)."""
+    proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": 0.05}}})
+    def_path = os.path.join(run, "results", "6_final.def")
+    os.makedirs(os.path.dirname(def_path), exist_ok=True)
+    open(def_path, "w").write("VERSION 5.8 ;\n")
+    _cli(proj, run, mode="enforce", extra=("--def", def_path))
+    rc2, v2, _ = _cli(proj, run, mode="warn")   # no --def -> the old behavior
+    assert v2["checks"]["binding"]["status"] == "unknown"
+    assert "def_fingerprint" not in v2["checks"]["binding"]
 
 
 # ---- the verifier side: fail-closed provenance ---------------------------------
@@ -463,6 +523,79 @@ def test_verifier_gate_verdict_pass_ok(tmp_path, monkeypatch, _empty_dirs):
     monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
     fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
     assert not [f for f in fails if f.startswith("signoff.gate") or f.startswith("signoff.provenance")]
+
+
+# ---- FIX A verifier side: a lost DEF binding is a verification failure ----------
+
+def _manifest_with_binding(case, binding_status, *, overridden=False):
+    (case / "dataset").mkdir(parents=True)
+    sh = {"status": "pass_with_caveats", "blockers": [],
+          "checks": {"drc": {"status": "clean"},
+                     "binding": {"status": binding_status}}}
+    if overridden:
+        sh["def_overridden"] = True
+    json.dump({"signoff_health": sh}, open(case / "dataset" / "graph_manifest.json", "w"))
+
+
+def test_verifier_binding_unknown_fails_when_not_overridden(tmp_path, monkeypatch, _empty_dirs):
+    """A DEF-aware gate whose binding degraded to 'unknown' (extractor overwrote the
+    verdict without --def) must FAIL — the DEF binding was lost."""
+    feat, labs = _empty_dirs
+    case = tmp_path / "case"
+    _manifest_with_binding(case, "unknown")
+    monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
+    fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
+    assert any(f.startswith("signoff.binding") for f in fails)
+
+
+def test_verifier_binding_unknown_ok_when_overridden(tmp_path, monkeypatch, _empty_dirs):
+    """A deliberate R2G_DEF override legitimately records binding=unknown -> no fail."""
+    feat, labs = _empty_dirs
+    case = tmp_path / "case"
+    _manifest_with_binding(case, "unknown", overridden=True)
+    monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
+    fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
+    assert not any(f.startswith("signoff.binding") for f in fails)
+
+
+def test_verifier_binding_bound_passes(tmp_path, monkeypatch, _empty_dirs):
+    feat, labs = _empty_dirs
+    case = tmp_path / "case"
+    _manifest_with_binding(case, "bound")
+    monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
+    fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
+    assert not any(f.startswith("signoff.binding") for f in fails)
+
+
+def test_verifier_no_binding_key_grandfathered(tmp_path, monkeypatch, _empty_dirs):
+    """Older manifests with NO binding key must still pass (pre-P0-17)."""
+    feat, labs = _empty_dirs
+    case = tmp_path / "case"
+    (case / "dataset").mkdir(parents=True)
+    json.dump({"signoff_health": {"status": "pass", "blockers": [],
+                                  "checks": {"drc": {"status": "clean"}}}},
+              open(case / "dataset" / "graph_manifest.json", "w"))
+    monkeypatch.setattr(vgd, "resolve_platform_files", lambda c: {})
+    fails = _run_group(vgd.signoff_report_checks, str(case), "dz", feat, labs, {})
+    assert not any(f.startswith("signoff.binding") for f in fails)
+
+
+# ---- FIX B: the verifier fails a superseded (blocked_unsigned) manifest --------
+
+def test_verifier_fails_blocked_unsigned_manifest(tmp_path):
+    """A signoff-gate BLOCK supersedes a stale-green dataset/graph_manifest.json with
+    status=blocked_unsigned (full-pipeline #6): the verifier must FAIL it fast, before
+    re-deriving checks against the orphaned .pt files."""
+    case = tmp_path / "case"
+    (case / "dataset").mkdir(parents=True)
+    json.dump({"design": "mini", "status": "blocked_unsigned",
+               "reason": "signoff gate: not signed off"},
+              open(case / "dataset" / "graph_manifest.json", "w"))
+    vgd.RESULTS.clear()
+    n_fail = vgd.verify_case(str(case))
+    assert n_fail >= 1
+    fails = [r["check"] for r in vgd.RESULTS if not r["ok"]]
+    assert any("blocked_unsigned" in f for f in fails)
 
 
 # ---- graph_skip_manifest.py: specific upstream reasons (codex #6, #38) ----------

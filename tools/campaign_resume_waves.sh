@@ -40,7 +40,7 @@ LEDGER=${LEDGER:-design_cases/_batch/${PLATFORM}_campaign.jsonl}
 # Single-instance guard (2026-07-04 audit H1): two drivers on one ledger race
 # set_state and flow the same designs into the same FLOW_VARIANT paths (violates
 # the "never two same DESIGN_NAME+FLOW_VARIANT" hard rule). flock is per-ledger,
-# matching batch_run.sh/batch_flow.sh; the pgrep net also catches a pre-lock
+# matching batch_flow.sh (and logs from the retired batch_run.sh); the pgrep net also catches a pre-lock
 # legacy driver that holds no flock. SKIP_INSTANCE_GUARD=1 overrides (debug only).
 # The pgrep pattern is END-ANCHORED (`\.sh$`) so it matches only a process EXEC'd on
 # the script (cmdline ends in the script name), NEVER a launching shell whose -c
