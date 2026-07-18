@@ -242,7 +242,7 @@ For each escalation, gather context from three sources:
 
 ```bash
 # Provenance: what is known about this bug?
-python3 r2g-skills/signoff-loop/knowledge/trace_provenance.py bug --symptom <symptom_id>
+python3 r2g-skills/signoff-loop/knowledge/observe.py trace bug --symptom <symptom_id>
 
 # Evidence-ranked strategy list for the design's violation
 python3 r2g-skills/signoff-loop/scripts/reports/diagnose_signoff_fix.py <project_path> \
@@ -281,7 +281,7 @@ ranking until an A/B win promotes it.
 Every discrete action taken during diagnosis and authoring must be journaled:
 
 ```bash
-python3 r2g-skills/signoff-loop/knowledge/journal_action.py action \
+python3 r2g-skills/signoff-loop/knowledge/journal_db.py action \
     --project <project_path> \
     --actor agent \
     --type <config_knob_delta|sdc_edit|stage_rerun|tool_invoke|escalate|ab_launch|promote|demote> \
@@ -317,14 +317,14 @@ If the escalation reveals a new failure class, add a section to
 
 ## 4. Provenance Queries
 
-`knowledge/trace_provenance.py` is a read-only CLI that joins both DBs via shared keys
+`knowledge/observe.py trace` is a read-only CLI that joins both DBs via shared keys
 (`symptom_id`, `run_id`, `fix_session_id`).
 
 **Solution → origin:** given a recipe key, trace back through A/B trials, fix episodes,
 journal actions, and designs to answer "where did this fix come from?"
 
 ```bash
-python3 r2g-skills/signoff-loop/knowledge/trace_provenance.py solution \
+python3 r2g-skills/signoff-loop/knowledge/observe.py trace solution \
     --symptom <symptom_id> \
     --class <design_class> \
     --platform <platform> \
@@ -339,7 +339,7 @@ were observed.
 evidence strength.
 
 ```bash
-python3 r2g-skills/signoff-loop/knowledge/trace_provenance.py bug --symptom <symptom_id>
+python3 r2g-skills/signoff-loop/knowledge/observe.py trace bug --symptom <symptom_id>
 ```
 
 Returns a list of all known strategies for this symptom, each with its `recipe_status` state

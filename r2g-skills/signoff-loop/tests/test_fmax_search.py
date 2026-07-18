@@ -194,15 +194,15 @@ def test_main_argparse_accepts_real_flags(tmp_path, monkeypatch):
     def _fake_search(*a, **kw):
         return {"status": "inconclusive", "t_star": None, "log": []}
     monkeypatch.setattr(fs, "search", _fake_search)
-    # knowledge_db / query_knowledge imports inside main() — stub them.
+    # knowledge_db import inside main() — stub it (the heuristics read API
+    # lives in knowledge_db since the 2026-07-18 query_knowledge fold-in).
     import types, sys as _sys
     fake_kdb = types.ModuleType("knowledge_db")
     fake_kdb.infer_family = lambda *a, **kw: "alu"
     fake_kdb.load_families = lambda: {}
-    fake_qk = types.ModuleType("query_knowledge")
-    fake_qk.get_family_heuristics = lambda *a, **kw: None
+    fake_kdb.get_family_heuristics = lambda *a, **kw: None
+    fake_kdb.get_closing_period = lambda *a, **kw: None
     monkeypatch.setitem(_sys.modules, "knowledge_db", fake_kdb)
-    monkeypatch.setitem(_sys.modules, "query_knowledge", fake_qk)
     import fmax_model as fm_mod
     monkeypatch.setattr(fm_mod, "select_model", lambda *a, **kw: (None, "default-static"))
     rc = fs.main()
@@ -231,10 +231,9 @@ def test_main_no_clock_constraint_exits_cleanly(tmp_path, monkeypatch):
     fake_kdb = types.ModuleType("knowledge_db")
     fake_kdb.infer_family = lambda *a, **kw: "combo"
     fake_kdb.load_families = lambda: {}
-    fake_qk = types.ModuleType("query_knowledge")
-    fake_qk.get_family_heuristics = lambda *a, **kw: None
+    fake_kdb.get_family_heuristics = lambda *a, **kw: None
+    fake_kdb.get_closing_period = lambda *a, **kw: None
     monkeypatch.setitem(sys.modules, "knowledge_db", fake_kdb)
-    monkeypatch.setitem(sys.modules, "query_knowledge", fake_qk)
     import fmax_model as fm_mod
     monkeypatch.setattr(fm_mod, "select_model", lambda *a, **kw: (None, "default-static"))
 

@@ -22,7 +22,6 @@ completed run produces the same run_id.
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import hashlib
 import json
 import re
@@ -292,7 +291,6 @@ def _journal_report_digests(project: Path) -> None:
     try:
         import os
         import journal_db
-        import summarize_log
         jpath = os.environ.get("R2G_JOURNAL_DB", journal_db.DEFAULT_JOURNAL_PATH)
         conn = journal_db.connect(jpath)
         journal_db.ensure_schema(conn)
@@ -312,7 +310,7 @@ def _journal_report_digests(project: Path) -> None:
             rep = _read_json(f)
             if rep is None:
                 continue
-            s = summarize_log.summarize_report(rep, kind=f.stem)
+            s = journal_db.summarize_report(rep, kind=f.stem)
             journal_db.append_log_summary(
                 conn, project_path=proj_str, stage=f.stem, tool="report",
                 source_path=str(f), status=s["status"], metrics=s["metrics"],
@@ -330,7 +328,7 @@ def _upsert_symptom(conn: sqlite3.Connection, sig: dict, sid: str) -> None:
         (sid, sig.get("check"), sig.get("class"),
          json.dumps(sig.get("predicates") or {}, sort_keys=True),
          symptom.SYMPTOM_SCHEMA_VERSION,
-         _dt.datetime.now().astimezone().isoformat(timespec="seconds")))
+         knowledge_db.now_local()))
 
 
 def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
@@ -424,7 +422,7 @@ def _write_run_violations(conn: sqlite3.Connection, run_id: str,
          json.dumps(drc.get("categories") or {}, sort_keys=True),
          lvs.get("status"), lvs.get("mismatch_class"), tcheck.get("tier"), wns,
          sid, json.dumps(sig, sort_keys=True),
-         _dt.datetime.now().astimezone().isoformat(timespec="seconds")))
+         knowledge_db.now_local()))
 
 
 # orfs_status is intentionally a FAITHFUL record of backend/stage_log.jsonl:
@@ -726,7 +724,7 @@ def _record_lineage(conn: sqlite3.Connection, run_id: str,
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (design_name, platform, run_id, prev_run_id,
          json.dumps(diff, sort_keys=True), current_outcome,
-         _dt.datetime.now().astimezone().isoformat(timespec="seconds")),
+         knowledge_db.now_local()),
     )
 
 
@@ -848,7 +846,7 @@ def ingest(project: Path,
         "design_name":       design_name,
         "design_family":     design_family,
         "platform":          platform,
-        "ingested_at":       _dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "ingested_at":       knowledge_db.now_local(),
 
         "core_utilization":       _to_float(cfg.get("CORE_UTILIZATION")),
         "place_density_lb_addon": _to_float(cfg.get("PLACE_DENSITY_LB_ADDON")),

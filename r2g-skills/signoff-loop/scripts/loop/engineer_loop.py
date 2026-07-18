@@ -17,7 +17,6 @@ diagnose/suggest and are never touched here.
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import hashlib
 import json
 import os
@@ -40,6 +39,7 @@ sys.path.insert(0, str(KNOWLEDGE))
 # fmax-drain SDC stamp was silently inert off-test (2026-06-24 review L4-01, the same
 # fixture!=production class as the 22f3e67 fmax pilot bug). Set it at module load.
 sys.path.insert(0, str(REPORTS))
+from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 
 STATES = ("pending", "flow", "signoff", "fixing", "clean", "escalated",
           "abandoned")
@@ -48,13 +48,6 @@ STATES = ("pending", "flow", "signoff", "fixing", "clean", "escalated",
 # single-instance guard (flock + pgrep, 2026-07-04) means no live worker can own
 # it then. See Ledger.reclaim_orphans (failure-patterns.md #31).
 TRANSIENT_STATES = ("flow", "signoff", "fixing")
-
-
-def _now() -> str:
-        # SYSTEM-LOCAL time with numeric offset (2026-07-04, operator request) —
-    # replaces utcnow()+"Z". Readers must compare timestamps via julianday()
-    # (parses both regimes), never lexicographically.
-    return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 class Ledger:

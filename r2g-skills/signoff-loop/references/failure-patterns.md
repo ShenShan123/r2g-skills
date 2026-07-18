@@ -2505,7 +2505,7 @@ the OLD noise win/loss verdicts stayed in the corpus and `judge_recipe` kept agg
 nangate45 antenna recipe sat `promoted` on `ab_corpus:3w1l` that the current judge scores `0w0l` (all
 four trials re-judge to `inconclusive`: identical `is_success`+`outcome_score`, differ only on
 `wall_s`). `judge_recipe` ALSO can't self-heal — a net-zero corpus returns None (status unchanged), so
-the fake promotion never reverts. FIX: `knowledge/reconcile_ab_verdicts.py` re-derives each verdict
+the fake promotion never reverts. FIX: `knowledge/reconcile_ab_verdicts.py` (now `ab_runner.py reconcile-verdicts`) re-derives each verdict
 from its stored `metrics_json` via the CURRENT `judge_repeated` (only for trials with full A/B samples
 — never invents from missing data), re-runs `judge_recipe`, and EXPLICITLY reverts a now-evidence-less
 `ab_corpus` promotion/demotion to `candidate`. Run it after ANY `judge_repeated` change. On the real
@@ -4474,7 +4474,7 @@ Same audit, `learn_heuristics._build_trajectory`. The per-episode Tier-2 rollup 
 
 **Fix** (`learn_heuristics.py` + `schema.sql` + `knowledge_db.py`, TDD). Added an `improved` outcome: no full
 `cleared` but ≥1 `win` ⇒ `outcome='improved'` with the winning strategy preserved (kept strictly BELOW
-`resolved` so the strict-`resolved` consumers — `eval_heuristics`, `trace_provenance`, `build_strength_report`
+`resolved` so the strict-`resolved` consumers — `eval_heuristics`, `observe` (trace), `build_strength_report`
 — never mistake a partial win for a full clear). Grouping + the `fix_trajectories` PK now include `symptom_id`
 `(fix_session_id, check_type, symptom_id)`, so each symptom yields its own trajectory. `fix_trajectories` is a
 PURE re-derivable projection (`learn()` DELETEs + rebuilds it), so `_migrate_drop_stale_fix_trajectories` drops

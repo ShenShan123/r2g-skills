@@ -5,8 +5,8 @@ tier drains (see references/engineer-loop.md). Dedup: one OPEN escalation per
 """
 from __future__ import annotations
 
-import datetime as _dt
 import os as _os
+from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 
 REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            "repeated_regression",
@@ -91,13 +91,6 @@ REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            # cannot see — P1-18, 2026-07-15). Surfaced by process_one so the operator stops
            # spending full-flow compute alternating between locally-successful repairs.
            "repair_cycle_nonconverged")
-
-
-def _now() -> str:
-        # SYSTEM-LOCAL time with numeric offset (2026-07-04, operator request) —
-    # replaces utcnow()+"Z". Readers must compare timestamps via julianday()
-    # (parses both regimes), never lexicographically.
-    return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def _journal_escalate(*, design: str, project_path: str, reason: str,

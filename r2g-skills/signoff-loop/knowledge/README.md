@@ -9,13 +9,35 @@ the input to `suggest_config.py` and `failure-patterns.md` review.
 |---|---|---|
 | `schema.sql` | hand-edited | `knowledge/knowledge_db.py` at `ensure_schema` time |
 | `families.json` | hand-edited seed; append as new designs ship | `knowledge/knowledge_db.py::infer_family` |
-| `knowledge.sqlite` | `knowledge/ingest_run.py` (one row per ingested run) | `learn_heuristics.py`, `mine_rules.py`, `query_knowledge.py` |
+| `knowledge.sqlite` | `knowledge/ingest_run.py` (one row per ingested run) | `learn_heuristics.py`, `mine_rules.py`, `knowledge_db.py` (read API) |
 | `heuristics.json` | `knowledge/learn_heuristics.py` | `suggest_config.py`, agent, dashboard |
 | `failure_candidates.json` | `knowledge/mine_rules.py` | human reviewer → `references/failure-patterns.md` |
 | `fix_events_archive.sqlite` | `fix_log_manager.py` (cold archive of raw `fix_events`) | retained-only (learning never reads it; Tier-2 survives archival) |
 
 The store (`knowledge.sqlite` + `heuristics.json`, plus `fix_events_archive.sqlite` once created)
 is **tracked in git**, so the skill ships pre-trained with its accumulated experience.
+
+### Module map (2026-07-18 consolidation)
+
+Each memory system is ONE core module; small single-purpose files were folded into their
+subsystem homes (callers, tests, and docs updated in the same change — the old names survive
+only in dated narratives):
+
+- **`knowledge_db.py`** — the knowledge store: connect/schema/migrations, `is_success`,
+  `now_local()` (the ONE invariant-32 timestamp stamp — never re-implement it), family
+  inference, and the read-only `heuristics.json` API (formerly `query_knowledge.py`).
+- **`journal_db.py`** — the ENTIRE journal system: DB helpers + the deterministic
+  log/report summarizer (formerly `summarize_log.py`) + the producer CLI
+  `journal_db.py action|summarize|report` (formerly `journal_action.py`).
+- **`ab_runner.py`** — A/B plan/judge/record + verdict maintenance:
+  `ab_runner.py reconcile-verdicts` (formerly `reconcile_ab_verdicts.py`).
+- **`observe.py`** — read-only forensics: `health` degradation alerts (formerly
+  `monitor_health.py`) + `trace` cross-DB provenance (formerly `trace_provenance.py`).
+- Unchanged single-purpose homes: `ingest_run.py`, `learn_heuristics.py`, `mine_rules.py`,
+  `suggest_config.py`, `symptom.py`, `escalations.py`, `recipe_lifecycle.py`,
+  `fix_log_manager.py`, `sync_lessons.py`, `search_failures.py`, `analyze_execution.py`,
+  `honesty.py` (CI-invoked path — never move it), `knowledge_sync.py`, `eval_heuristics.py`,
+  `tool_versions.py`, `repair_run_status.py`, `backfill_fix_events.py`.
 
 ## Loop
 
@@ -43,7 +65,7 @@ DRC `clean` / `clean_beol`, or RCX `complete`) and no *failed* signoff. This adm
 population of runs whose `stage_log.jsonl` is incomplete (so `orfs_status` stayed `partial`) but
 which produced a clean GDS — without that, `heuristics.json` was empty (0/750 runs were `pass`).
 The fix lives in the **learner**, not ingest, so `orfs_status` stays a faithful record of the
-stage log. `learn_heuristics.py`, `monitor_health.py`, the dashboard health strip, and the payoff
+stage log. `learn_heuristics.py`, `observe.py` (health), the dashboard health strip, and the payoff
 harness all import this one predicate, so they can never disagree.
 
 ## Extended Pipeline (OpenSpace-Inspired)
@@ -52,7 +74,7 @@ Four modules extend the base pipeline with config evolution tracking,
 health monitoring, semantic failure search, and automated fix proposals:
 
 ```
-knowledge.sqlite ──► monitor_health.py ──► health alerts (degradation detection)
+knowledge.sqlite ──► observe.py health ──► health alerts (degradation detection)
      │
      └──► config_lineage table (populated by ingest_run.py on config changes)
               │
@@ -65,7 +87,7 @@ failure_candidates.json ─┘
 | File | Producer | Consumer |
 |---|---|---|
 | `config_lineage` table | `ingest_run.py` (on config diff between runs) | `analyze_execution.py`, agent |
-| `monitor_health.py` | reads `knowledge.sqlite` | agent (degradation alerts) |
+| `observe.py` | reads `knowledge.sqlite` (+ journal, read-only) | agent (`health` degradation alerts; `trace` provenance) |
 | `search_failures.py` | indexes `failure-patterns.md` + `failure_candidates.json`; `lessons_for_symptom()` parses `r2g-lesson` front-matter | `analyze_execution.py`; **`diagnose_signoff_fix.py` decision path** (surfaces the matching active prose lesson at fix time) |
 | `symptom.py` | pure `{check,class,predicates}` → `symptom_id` | `ingest_run.py`, `learn_heuristics.py`, `diagnose_signoff_fix.py` (the universal repair-experience index; family-name is never a key) |
 | `sync_lessons.py` | one-way prose → `lessons` table (front-matter + evidence backfill) | `fix_log_manager.manage()` post-ingest; dashboard/agent |
@@ -183,7 +205,7 @@ The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports
 - **`learn_heuristics.py` emits two per-family/platform aggregates** over signoff-positive runs:
   `closing_period` (`period − finish_ws`; seeds the search) and `slack_deterioration` — the p90
   per-stage erosion `d_fp_pl` (floorplan→place, dominant) and `d_pl_fin` (place→finish, ≈ neutral),
-  in both ns and pct-of-period. `query_knowledge.get_closing_period` / `get_deterioration` expose
+  in both ns and pct-of-period. `knowledge_db.get_closing_period` / `get_deterioration` expose
   them; `fmax_model.select_model` gates on `n ≥ 8` (else cold-start defaults).
 - **Online self-correction:** `fmax_search.py --verify` appends a verified `(floorplan, place,
   finish)` triple (tagged `eval_arm='fmax_verify'`, signoff-positive so it is learnable) so the
@@ -197,7 +219,7 @@ The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports
 4. The SQLite DB is append-only semantically: `run_id = sha1(project_path + ":" + ppa_json_mtime)`, so re-ingesting the same completed run is a no-op, while a new run iteration produces a new row.
 5. `analyze_execution.py` NEVER auto-applies fixes — output is a review queue only.
 6. All success judgements share ONE predicate, `knowledge_db.is_success` — `learn_heuristics.py`,
-   `monitor_health.py`, the dashboard health strip, and `eval_heuristics.py` import it, so they
+   `observe.py` (health), the dashboard health strip, and `eval_heuristics.py` import it, so they
    cannot drift. "Success" = strict 6-stage pass OR signoff-positive (≥1 positive clean signal, no
    failed signoff); absence of all signoff data is NOT a success.
 7. `search_failures.py` has zero external dependencies (BM25 is stdlib-only).
@@ -231,7 +253,7 @@ The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports
     high-volume evidence) is physically separate from `knowledge.sqlite` /
     `heuristics.json` (git-tracked conclusions). Archiving or rotating the journal DB
     never removes a recipe or trajectory from the knowledge DB.
-18. **The provenance chain is queryable end-to-end** via `knowledge/trace_provenance.py`:
+18. **The provenance chain is queryable end-to-end** via `knowledge/observe.py trace`:
     `solution` traces a recipe back through A/B trials, fix episodes, journal actions, and
     designs; `bug` lists every known solution for a symptom with lifecycle status and
     evidence strength.
@@ -512,7 +534,7 @@ special trust (decision 7 of the design spec).
 Discrete actions are journaled via the CLI (or `journal_db.append_action` directly):
 
 ```bash
-python3 knowledge/journal_action.py action \
+python3 knowledge/journal_db.py action \
     --project <dir> --actor <loop|agent|operator> \
     --type <config_knob_delta|sdc_edit|stage_rerun|tool_invoke|escalate|ab_launch|promote|demote> \
     [--payload JSON] [--symptom <sid>] [--session <fix_session_id>] [--parent <action_id>]

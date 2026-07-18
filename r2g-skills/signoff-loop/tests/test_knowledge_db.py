@@ -288,3 +288,74 @@ def test_staged_slack_columns_exist_after_ensure_schema(tmp_knowledge_dir):
     cols = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
     assert {"floorplan_setup_ws", "place_setup_ws", "finish_setup_ws"} <= cols
     conn.close()
+
+
+# --- heuristics.json read API (folded in from query_knowledge.py, 2026-07-18) ---
+
+def _write_heur(tmp_knowledge_dir, payload: dict):
+    import json
+    (tmp_knowledge_dir / "heuristics.json").write_text(json.dumps(payload))
+
+
+def test_get_family_heuristics_hit(tmp_knowledge_dir):
+    _write_heur(tmp_knowledge_dir, {
+        "families": {
+            "aes_xcrypt": {
+                "platforms": {
+                    "nangate45": {
+                        "sample_size": 10, "success_count": 10,
+                        "success_rate": 1.0,
+                        "core_utilization": {"min_safe": 20, "max_safe": 30, "median": 25},
+                        "place_density_lb_addon": {"min_safe": 0.15, "median": 0.20},
+                    },
+                },
+            },
+        },
+    })
+    result = knowledge_db.get_family_heuristics(
+        "aes_xcrypt", "nangate45",
+        heuristics_path=tmp_knowledge_dir / "heuristics.json",
+    )
+    assert result is not None
+    assert result["core_utilization"]["median"] == 25
+    assert result["sample_size"] == 10
+
+
+def test_get_family_heuristics_miss(tmp_knowledge_dir):
+    _write_heur(tmp_knowledge_dir, {"families": {}})
+    result = knowledge_db.get_family_heuristics(
+        "nonexistent", "nangate45",
+        heuristics_path=tmp_knowledge_dir / "heuristics.json",
+    )
+    assert result is None
+
+
+def test_get_family_heuristics_no_file(tmp_knowledge_dir):
+    result = knowledge_db.get_family_heuristics(
+        "aes_xcrypt", "nangate45",
+        heuristics_path=tmp_knowledge_dir / "heuristics.json",
+    )
+    assert result is None
+
+
+def test_get_deterioration_and_closing_period(tmp_path):
+    import json as _json
+    h = tmp_path / "heuristics.json"
+    h.write_text(_json.dumps({"families": {"alu": {"platforms": {"nangate45": {
+        "closing_period": {"min": 7.4, "median": 8.5, "n": 4},
+        "slack_deterioration": {"d_fp_pl": {"ns_p90": 0.3, "pct_p90": 0.03},
+                                "d_pl_fin": {"ns_p90": 0.2, "pct_p90": 0.02},
+                                "n": 4},
+    }}}}}), encoding="utf-8")
+    assert knowledge_db.get_closing_period("alu", "nangate45", heuristics_path=h)["min"] == 7.4
+    assert knowledge_db.get_deterioration("alu", "nangate45", heuristics_path=h)["n"] == 4
+    assert knowledge_db.get_deterioration("nope", "nangate45", heuristics_path=h) is None
+
+
+def test_now_local_stamps_offset():
+    """Invariant 32: the ONE canonical stamp is system-local with numeric offset."""
+    import datetime as _dt
+    ts = knowledge_db.now_local()
+    assert not ts.endswith("Z")
+    parsed = _dt.datetime.fromisoformat(ts)
+    assert parsed.utcoffset() is not None

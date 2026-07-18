@@ -14,8 +14,8 @@ pre-lifecycle learned recipes).
 """
 from __future__ import annotations
 
-import datetime as _dt
 import json
+from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 
 GRANDFATHERED = "promoted"   # absent-row default for the STATIC cold-start path
 # Fail-closed marker for the LEARNED (indexed-recipe) path: a strategy present in
@@ -35,13 +35,6 @@ UNROSTERED = "unrostered"
 # "not validatable by the A/B harness"; pending_candidates/filter_promoted ignore it
 # exactly like 'shadow'.
 NONDIVERGENT_STRATEGIES = frozenset({"lvs_resolve_unknown"})
-
-
-def _now() -> str:
-        # SYSTEM-LOCAL time with numeric offset (2026-07-04, operator request) —
-    # replaces utcnow()+"Z". Readers must compare timestamps via julianday()
-    # (parses both regimes), never lexicographically.
-    return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def _iter_keys(heur: dict):

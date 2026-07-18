@@ -369,10 +369,10 @@ if [[ "${R2G_MAGIC_ADVISORY:-0}" == "1" && "$PLATFORM" == sky130* ]]; then
 fi
 
 # Tier-0 journal: digest this check's tool log + extracted report (never breaks the flow).
-[[ -f "$DRC_DIR/drc_run.log" ]] && python3 "$KNOWLEDGE_DIR_J/journal_action.py" summarize \
+[[ -f "$DRC_DIR/drc_run.log" ]] && python3 "$KNOWLEDGE_DIR_J/journal_db.py" summarize \
   --project "$PROJECT_DIR" --stage drc --tool klayout --log "$DRC_DIR/drc_run.log" \
   ${R2G_JOURNAL_DB:+--db "$R2G_JOURNAL_DB"} 2>/dev/null || true
-[[ -f "$PROJECT_DIR/reports/drc.json" ]] && python3 "$KNOWLEDGE_DIR_J/journal_action.py" report \
+[[ -f "$PROJECT_DIR/reports/drc.json" ]] && python3 "$KNOWLEDGE_DIR_J/journal_db.py" report \
   --project "$PROJECT_DIR" --kind drc --file "$PROJECT_DIR/reports/drc.json" \
   ${R2G_JOURNAL_DB:+--db "$R2G_JOURNAL_DB"} 2>/dev/null || true
 

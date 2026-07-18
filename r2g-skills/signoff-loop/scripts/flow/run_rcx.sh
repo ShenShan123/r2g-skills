@@ -162,10 +162,10 @@ fi
 echo "Results: $RCX_DIR"
 
 # Tier-0 journal: digest this check's tool log + extracted report (never breaks the flow).
-[[ -f "$RCX_DIR/rcx.log" ]] && python3 "$KNOWLEDGE_DIR_J/journal_action.py" summarize \
+[[ -f "$RCX_DIR/rcx.log" ]] && python3 "$KNOWLEDGE_DIR_J/journal_db.py" summarize \
   --project "$PROJECT_DIR" --stage rcx --tool openrcx --log "$RCX_DIR/rcx.log" \
   ${R2G_JOURNAL_DB:+--db "$R2G_JOURNAL_DB"} 2>/dev/null || true
-[[ -f "$PROJECT_DIR/reports/rcx.json" ]] && python3 "$KNOWLEDGE_DIR_J/journal_action.py" report \
+[[ -f "$PROJECT_DIR/reports/rcx.json" ]] && python3 "$KNOWLEDGE_DIR_J/journal_db.py" report \
   --project "$PROJECT_DIR" --kind rcx --file "$PROJECT_DIR/reports/rcx.json" \
   ${R2G_JOURNAL_DB:+--db "$R2G_JOURNAL_DB"} 2>/dev/null || true
 

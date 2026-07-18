@@ -77,7 +77,7 @@ _journal_action() {  # action_type payload_json [symptom_id] — generic best-ef
               --session "$FIX_SESSION_ID" --payload "$2")
   [[ -n "${3:-}" ]] && args+=(--symptom "$3")
   [[ -n "${R2G_JOURNAL_DB:-}" ]] && args+=(--db "$R2G_JOURNAL_DB")
-  python3 "$R2G_KNOWLEDGE_DIR/journal_action.py" "${args[@]}" >/dev/null 2>&1 || true
+  python3 "$R2G_KNOWLEDGE_DIR/journal_db.py" "${args[@]}" >/dev/null 2>&1 || true
 }
 
 _recover_flow_variant() {  # project_dir -> echoes flow_variant from the newest backend

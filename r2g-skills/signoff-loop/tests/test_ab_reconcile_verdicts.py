@@ -4,25 +4,21 @@ The 2026-06-25 success-tie tiebreak (COST_FLOOR + strict separation) made
 judge_repeated stop deciding equally-correct arms on wall-clock jitter -- but
 verdicts recorded under the OLD rule stayed frozen in ab_trials, and judge_recipe
 counts those strings, so a recipe sat `promoted` on noise (`ab_corpus:3w1l`) with
-no re-judge path. reconcile_ab_verdicts re-derives each verdict from the stored
+no re-judge path. ab_runner.reconcile_verdicts re-derives each verdict from the stored
 metrics and reverts the now-evidence-less promotion. These tests lock that.
 """
 import ab_runner
 import knowledge_db
 import recipe_lifecycle
-import reconcile_ab_verdicts
-
 
 def _conn(tmp_path):
     c = knowledge_db.connect(tmp_path / "k.sqlite")
     knowledge_db.ensure_schema(c)
     return c
 
-
 def _samp(wall, *, success=True, score=0.8833, iters=1):
     return {"is_success": success, "outcome_score": score, "wall_s": wall,
             "fix_iters": iters}
-
 
 def test_reconcile_flips_noise_verdicts_and_reverts_promotion(tmp_path):
     """The exact nangate45 antenna case: identical-outcome arms whose win/loss came from
@@ -57,7 +53,7 @@ def test_reconcile_flips_noise_verdicts_and_reverts_promotion(tmp_path):
     # judge_recipe promoted it on the frozen 3w1l corpus (the bug).
     assert recipe_lifecycle.get_status(conn, **key) == "promoted"
 
-    out = reconcile_ab_verdicts.reconcile(conn)
+    out = ab_runner.reconcile_verdicts(conn)
     assert len(out["verdicts_flipped"]) == 4
     assert all(f["to"] == "inconclusive" for f in out["verdicts_flipped"])
     # promotion was fabricated -> reverted to candidate for honest re-validation.
@@ -68,7 +64,6 @@ def test_reconcile_flips_noise_verdicts_and_reverts_promotion(tmp_path):
     wl = conn.execute("SELECT SUM(verdict IN ('win','loss')) FROM ab_trials").fetchone()[0]
     assert (wl or 0) == 0
 
-
 def test_reconcile_is_idempotent(tmp_path):
     conn = _conn(tmp_path)
     key = dict(symptom_id="s", design_class="logic/small",
@@ -76,10 +71,9 @@ def test_reconcile_is_idempotent(tmp_path):
     ab_runner.record_trial(conn, key=key, verdict="win", arm_a_run_id=None,
                            arm_b_run_id=None,
                            metrics={"A_samples": [_samp(100)], "B_samples": [_samp(99)]})
-    reconcile_ab_verdicts.reconcile(conn)
-    second = reconcile_ab_verdicts.reconcile(conn)
+    ab_runner.reconcile_verdicts(conn)
+    second = ab_runner.reconcile_verdicts(conn)
     assert second["verdicts_flipped"] == []      # nothing left to flip
-
 
 def test_reconcile_preserves_real_divergent_win(tmp_path):
     """A genuinely divergent trial (arm A fails to sign off, arm B succeeds) is a REAL win
@@ -92,10 +86,9 @@ def test_reconcile_preserves_real_divergent_win(tmp_path):
     ab_runner.record_trial(conn, key=key, verdict="win", arm_a_run_id="ra",
                            arm_b_run_id="rb", metrics={"A_samples": A, "B_samples": B})
     assert recipe_lifecycle.get_status(conn, **key) == "promoted"
-    out = reconcile_ab_verdicts.reconcile(conn)
+    out = ab_runner.reconcile_verdicts(conn)
     assert out["verdicts_flipped"] == []
     assert recipe_lifecycle.get_status(conn, **key) == "promoted"
-
 
 def test_reconcile_keeps_sparse_metric_verdict(tmp_path):
     """A trial with no A/B samples in metrics_json keeps its stored verdict -- reconcile
@@ -105,5 +98,5 @@ def test_reconcile_keeps_sparse_metric_verdict(tmp_path):
                platform="nangate45", strategy="antenna_diode_repair")
     ab_runner.record_trial(conn, key=key, verdict="win", arm_a_run_id=None,
                            arm_b_run_id=None, metrics={})
-    out = reconcile_ab_verdicts.reconcile(conn)
+    out = ab_runner.reconcile_verdicts(conn)
     assert out["verdicts_flipped"] == []

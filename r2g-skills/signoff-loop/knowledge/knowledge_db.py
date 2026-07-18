@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Shared SQLite + family-inference helpers for the knowledge store.
+"""Shared SQLite + family-inference helpers for the knowledge store, plus the
+read-only heuristics.json API (folded in from query_knowledge.py, 2026-07-18).
 
-Imported by ingest_run.py, learn_heuristics.py, query_knowledge.py,
-and mine_rules.py. No CLI.
+Imported by ingest_run.py, learn_heuristics.py, mine_rules.py, suggest_config.py,
+fmax_search.py and every other knowledge-side module. No CLI.
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 import re
@@ -17,6 +19,17 @@ DEFAULT_KNOWLEDGE_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = DEFAULT_KNOWLEDGE_DIR / "knowledge.sqlite"
 DEFAULT_SCHEMA_PATH = DEFAULT_KNOWLEDGE_DIR / "schema.sql"
 DEFAULT_FAMILIES_PATH = DEFAULT_KNOWLEDGE_DIR / "families.json"
+DEFAULT_HEURISTICS_PATH = DEFAULT_KNOWLEDGE_DIR / "heuristics.json"
+
+
+def now_local() -> str:
+    """The ONE canonical timestamp stamp (README invariant 32, 2026-07-04
+    operator request): SYSTEM-LOCAL time with numeric offset, replacing
+    utcnow()+"Z". Every writer (both DBs, heuristics generated_at, fix-log ts)
+    must use this; readers must compare timestamps via julianday() (parses both
+    regimes), never lexicographically. Centralized 2026-07-18 — it was
+    duplicated in 14 places, a silent-drift risk for the invariant."""
+    return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
@@ -316,8 +329,9 @@ def _repoint_journal_symptom_ids(conn: sqlite3.Connection,
 
 
 # --- Learnable-success predicate (shared) ---------------------------------
-# The ONE definition of "a learnable success", imported by both learners
-# (learn_heuristics.py and monitor_health.py) so they never disagree.
+# The ONE definition of "a learnable success", imported by the learner
+# (learn_heuristics.py) and the health monitor (observe.py) so they never
+# disagree.
 #
 # Signoff status values that do NOT indicate a failed/blocked signoff stage.
 # 'None' means the stage was not run for this row (absence is not failure).
@@ -405,3 +419,53 @@ def diff_config_rows(old: dict[str, str], new: dict[str, str]) -> dict[str, Any]
     added = {k: new[k] for k in new_keys - old_keys}
     removed = {k: old[k] for k in old_keys - new_keys}
     return {"changed": changed, "added": added, "removed": removed}
+
+
+# --- Read-only heuristics.json API (formerly query_knowledge.py) -----------
+# suggest_config.py and fmax_search.py import these; a missing/corrupt
+# heuristics.json degrades to {} (cold-start), never a crash (invariant 31).
+
+def _load_heuristics(heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
+                     ) -> dict[str, Any]:
+    p = Path(heuristics_path)
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def get_family_heuristics(family: str,
+                          platform: str,
+                          heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
+                          ) -> dict[str, Any] | None:
+    data = _load_heuristics(heuristics_path)
+    fam = (data.get("families") or {}).get(family)
+    if not fam:
+        return None
+    return (fam.get("platforms") or {}).get(platform)
+
+
+def get_closing_period(family: str, platform: str,
+                       heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
+                       ) -> dict[str, Any] | None:
+    entry = get_family_heuristics(family, platform, heuristics_path=heuristics_path)
+    return (entry or {}).get("closing_period")
+
+
+def get_deterioration(family: str, platform: str,
+                      heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
+                      ) -> dict[str, Any] | None:
+    entry = get_family_heuristics(family, platform, heuristics_path=heuristics_path)
+    return (entry or {}).get("slack_deterioration")
+
+
+def list_families(heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
+                  ) -> list[tuple[str, str]]:
+    data = _load_heuristics(heuristics_path)
+    out: list[tuple[str, str]] = []
+    for fam_name, fam in (data.get("families") or {}).items():
+        for plat in (fam.get("platforms") or {}):
+            out.append((fam_name, plat))
+    return sorted(out)

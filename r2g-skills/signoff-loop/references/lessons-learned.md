@@ -234,7 +234,7 @@ sat unused: **607 LVS-clean, 417 DRC-clean (+264 `clean_beol`), 699 RCX-complete
 `orfs_status` lie about the stage log. Instead we added a shared `knowledge_db.is_success(row)`:
 strict 6-stage pass **OR** relaxed (≥1 *positive* clean signoff — LVS `clean` / `symmetric_matcher`,
 DRC `clean` / `clean_beol`, RCX `complete` — **and** no failed signoff; absence of all signoff data
-is *not* success). `learn_heuristics.py` and `monitor_health.py` both import it, so the learner and
+is *not* success). `learn_heuristics.py` and `monitor_health.py` (now `observe.py`) both import it, so the learner and
 the health monitor can never drift. Re-running `learn_heuristics.py` against the existing DB —
 no re-ingest needed — took **heuristics.json from 0 → 48 learned family/platform pairs** (631 runs
 now learnable). Commits `356d517` + `7d429ac` (branch `fix/dead-learning-loop`).

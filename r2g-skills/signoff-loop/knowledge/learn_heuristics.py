@@ -20,7 +20,6 @@ of all signoff data is still NOT a success. See ``knowledge_db.is_success``.
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import json
 import os
 import re
@@ -627,7 +626,7 @@ def learn(db_path: Path | str,
         entry["fix_recipes"] = recipes
 
     data = {
-        "generated_at": _dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "generated_at": knowledge_db.now_local(),
         "source_run_count": len(rows),
         "min_successful_runs_required": MIN_SUCCESSFUL,
         "schema_version": 3,                       # decision-8 recipes projection

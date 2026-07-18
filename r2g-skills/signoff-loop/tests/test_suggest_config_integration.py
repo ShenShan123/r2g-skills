@@ -54,7 +54,7 @@ def test_suggest_config_uses_learned_heuristics(tmp_path, tmp_knowledge_dir,
 
     # Only the explicit `heuristics_path=HEURISTICS_PATH` argument matters
     # because suggest_config.recommend passes it explicitly; no need to
-    # monkeypatch query_knowledge.DEFAULT_HEURISTICS_PATH.
+    # monkeypatch knowledge_db.DEFAULT_HEURISTICS_PATH.
     monkeypatch.setattr(suggest_config, "HEURISTICS_PATH", heur_path)
     monkeypatch.setattr(suggest_config, "FAMILIES_PATH", tmp_knowledge_dir / "families.json")
 

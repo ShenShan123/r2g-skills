@@ -36,7 +36,6 @@ CLI:
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import hashlib
 import json
 import re
@@ -45,6 +44,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import knowledge_db
+from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 
 # Filename-stem prefixes we know how to parse, longest-first so e.g.
 # "recover_pass" is matched before a hypothetical "recover".
@@ -61,13 +61,6 @@ _ORFS_STAGES = frozenset(
 # Skill default platform (matches scripts/flow/_env.sh and live ingest), used as
 # the last-resort bucket for records whose design dir has no resolvable PLATFORM.
 _DEFAULT_PLATFORM = "asap7"
-
-
-def _now() -> str:
-        # SYSTEM-LOCAL time with numeric offset (2026-07-04, operator request) —
-    # replaces utcnow()+"Z". Readers must compare timestamps via julianday()
-    # (parses both regimes), never lexicographically.
-    return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def _resolve_platform(cases_root: Path, dir_basename: str,

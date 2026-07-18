@@ -65,7 +65,7 @@ fi
 
 # --- Tier-0 journal hooks (engineer-loop spec §5.2) — never break the flow ---
 KNOWLEDGE_DIR_J="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../knowledge" && pwd)"
-JOURNAL="${R2G_JOURNAL_CLI:-$KNOWLEDGE_DIR_J/journal_action.py}"
+JOURNAL="${R2G_JOURNAL_CLI:-$KNOWLEDGE_DIR_J/journal_db.py}"
 
 _journal_stage() {  # stage status elapsed_s log_file — never breaks the flow
   local stage="$1" status="$2" elapsed="$3" log="$4"

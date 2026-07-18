@@ -8,7 +8,6 @@ run_violations.symptom_id / signature_json. Prose is never modified. Idempotent.
 """
 from __future__ import annotations
 
-import datetime as _dt
 import hashlib
 import fnmatch
 import json
@@ -132,7 +131,7 @@ def sync(conn, patterns_path: Path | None = None) -> int:
                  json.dumps(trigger, sort_keys=True),
                  json.dumps(meta.get("strategy_ids") or []), prose,
                  json.dumps(evidence), content_hash,
-                 _dt.datetime.now().astimezone().isoformat(timespec="seconds")))
+                 knowledge_db.now_local()))
             n += 1
     conn.commit()
     return n

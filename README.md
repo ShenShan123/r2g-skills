@@ -365,7 +365,7 @@ drives the full cycle unattended.
 | `knowledge/knowledge.sqlite` | What *resulted* — `runs`, `failure_events`, `run_violations`, `fix_events`, `fix_trajectories`, `symptoms`, `lessons`, `config_lineage`, `ab_trials`, `recipe_status` | **yes** (ships pre-trained) |
 | `knowledge/journal.sqlite` | What was *done* and why — the comprehensive decision + telemetry ledger: `actions` (`tool_invoke`, `config_knob_delta`, `stage_rerun`, `ab_launch`, `promote`/`demote`, `escalate` — symptom- and trial-linked), `log_summaries`, `tool_bugs` | no (local evidence) |
 
-> The journal is **operator forensics only** — best-effort writes, gitignored, and read by **no** learner. `knowledge.sqlite` stays the sole learner input and the only honesty-gate source (the firewall). Decision-journaling (A/B launches, promotions/demotions, escalations, stage reruns, with `symptom_id`/`parent_action_id` linkage) lets `trace_provenance.py` answer "what was tried for symptom X, and how did it resolve?" forward of the change.
+> The journal is **operator forensics only** — best-effort writes, gitignored, and read by **no** learner. `knowledge.sqlite` stays the sole learner input and the only honesty-gate source (the firewall). Decision-journaling (A/B launches, promotions/demotions, escalations, stage reruns, with `symptom_id`/`parent_action_id` linkage) lets `observe.py trace` answer "what was tried for symptom X, and how did it resolve?" forward of the change.
 
 ### Autonomous campaign driver
 

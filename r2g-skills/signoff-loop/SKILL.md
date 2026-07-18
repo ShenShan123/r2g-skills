@@ -245,7 +245,7 @@ evidence-ranked order on the next similar violation.
   `evidence_designs` provenance); `diagnose_signoff_fix.py` looks recipes up by symptom and
   seeds an informed cross-platform prior for untried strategies (so a fix learned on
   nangate45 transfers to e.g. sky130hd). It also surfaces the matching active prose lesson
-  (via `search_failures.lessons_for_symptom`) at the fix-decision point. `monitor_health.py`
+  (via `search_failures.lessons_for_symptom`) at the fix-decision point. `observe.py health`
   (degradation alerts) and `analyze_execution.py` (fix-proposal triage) are operator-invoked
   CLIs over the same store.
 
@@ -287,7 +287,7 @@ left off. States: `pending → flow → signoff → fixing → clean | escalated
 When the loop opens an escalation (unknown symptom, exhausted catalog, unseen crash, or
 repeated regression), drain it following the agent runbook in
 `references/engineer-loop.md` ("Escalation Drain"). That document also covers provenance
-queries (`trace_provenance.py`) and the full safety-invariant list.
+queries (`observe.py trace`) and the full safety-invariant list.
 
 #### Platform Support Matrix
 

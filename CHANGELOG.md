@@ -4,6 +4,33 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-18 — learning-loop module consolidation (signoff-loop knowledge/)
+
+Merged the small single-purpose modules into their subsystem homes so each memory system is
+ONE core module (knowledge/README.md "Module map" is the new orientation; every caller, test,
+and living doc updated in the same change — old names survive only in dated narratives).
+**No schema, no DB rows, and no behavior changed**: 927 signoff-loop + 80 rtl-acquire tests
+green, honesty gates 5/5 green over the committed store, `check_db_integrity` verdict
+unchanged (pre-existing J4 WARN only), `ab_runner.py reconcile-verdicts --dry-run` flips 0 of
+397 stored trials.
+
+- **journal system → `journal_db.py`**: absorbed `journal_action.py` (producer CLI — flow
+  scripts now call `journal_db.py action|summarize|report`) and `summarize_log.py`
+  (deterministic summarizer). The CLI now also honors `R2G_JOURNAL_DB` without an explicit
+  `--db` (parity with every library caller).
+- **knowledge read API → `knowledge_db.py`**: absorbed `query_knowledge.py`
+  (`get_family_heuristics`/`get_closing_period`/`get_deterioration`/`list_families`).
+- **A/B maintenance → `ab_runner.py`**: absorbed `reconcile_ab_verdicts.py` as
+  `reconcile_verdicts()` + the `ab_runner.py reconcile-verdicts [--dry-run]` CLI.
+- **read-only forensics → `observe.py`** (new): `health` (formerly `monitor_health.py`) +
+  `trace` (formerly `trace_provenance.py`); firewall-test allowlist updated to match.
+- **invariant-32 timestamp**: ONE canonical `knowledge_db.now_local()` replaces 14 duplicated
+  local-offset stamp copies across both DBs' writers (drift risk eliminated); the firewall and
+  local-timestamp gates still pass through each module's `_now` alias.
+- Housecleaning sweep found **no dead scripts**: every `tools/` + `scripts/` entry is
+  referenced by a living runbook, the four `_env.sh` copies stay byte-identical (md5
+  `9fa599b7…`), and `auto_demote_on_regression` has its production caller in `learn()`.
+
 ## 2026-07-16 — close both 2026-07-16 external audits: 21 issues + 1 found in verification (all four skills)
 
 Two external adversarial reports (`docs/superpowers/plans/2026-07-16-{agent-logic,full-pipeline}-issue-report.md`,

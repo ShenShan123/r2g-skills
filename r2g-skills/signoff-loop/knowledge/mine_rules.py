@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import datetime as _dt
 import json
 import statistics
 import sys
@@ -176,7 +175,7 @@ def mine(db_path: Path | str,
         })
 
     data = {
-        "generated_at": _dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "generated_at": knowledge_db.now_local(),
         "min_occurrences": min_occurrences,
         "min_distinct_designs": min_distinct_designs,
         "candidates": candidates,

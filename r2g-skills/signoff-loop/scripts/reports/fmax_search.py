@@ -151,12 +151,12 @@ def seed_period(project: Path, platform: str, family: str | None = None) -> floa
     available, else the design's nominal SDC period."""
     try:
         _add_paths()
-        import knowledge_db, query_knowledge
+        import knowledge_db
         if family is None:
             cfg_name = _config_value(project / "constraints" / "config.mk", "DESIGN_NAME") or ""
             fams = knowledge_db.load_families()
             family = knowledge_db.infer_family(cfg_name, fams)
-        cp = query_knowledge.get_closing_period(family, platform)
+        cp = knowledge_db.get_closing_period(family, platform)
         if cp and cp.get("min"):
             return float(cp["min"])
     except Exception:
@@ -366,11 +366,11 @@ def main() -> int:
     base = args.project.resolve()
     assert_safe_knobs(base)
 
-    import knowledge_db, query_knowledge
+    import knowledge_db
     fam = knowledge_db.infer_family(
         _config_value(base / "constraints" / "config.mk", "DESIGN_NAME") or "",
         knowledge_db.load_families())
-    model, provenance = fm.select_model(query_knowledge.get_family_heuristics(fam, args.platform))
+    model, provenance = fm.select_model(knowledge_db.get_family_heuristics(fam, args.platform))
     seed = seed_period(base, args.platform, family=fam)
 
     created: list[Path] = []

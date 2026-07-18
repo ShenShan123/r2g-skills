@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 
 import knowledge_db
-import query_knowledge
 
 HEURISTICS_PATH = knowledge_db.DEFAULT_KNOWLEDGE_DIR / "heuristics.json"
 FAMILIES_PATH = knowledge_db.DEFAULT_FAMILIES_PATH
@@ -300,7 +299,7 @@ def recommend(project: Path, use_learned: bool = True,
         # -----------------------------------------------------------------------
         families = knowledge_db.load_families(FAMILIES_PATH)
         family = knowledge_db.infer_family(config.get('DESIGN_NAME', ''), families)
-        learned = None if retrieved else query_knowledge.get_family_heuristics(
+        learned = None if retrieved else knowledge_db.get_family_heuristics(
             family, platform, heuristics_path=HEURISTICS_PATH,
         )
         if learned:

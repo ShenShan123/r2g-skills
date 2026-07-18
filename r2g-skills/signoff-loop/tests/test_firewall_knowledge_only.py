@@ -6,12 +6,13 @@ but gitignores journal.sqlite) behaves identically. This gate fails CI if any of
 four learner/inference files grows a journal dependency.
 
 SCOPING IS LOAD-BEARING: an unscoped "no file imports journal_db" assert would
-FALSE-FAIL — there are LEGITIMATE both-DB readers (knowledge_db.py, trace_provenance.py,
-engineer_loop.py, ingest_run.py, ab_runner.py, escalations.py, journal_action.py): the
-loop driver, the ingest path, and the provenance/forensics tools rightly touch both DBs
-(README inv 18 — both arm a busy_timeout so concurrent ingests wait, not error). So this
-gate is scoped EXACTLY to the LEARNER_FILES set; the ALLOWLIST documents the legit set we
-deliberately do NOT police here.
+FALSE-FAIL — there are LEGITIMATE both-DB readers (knowledge_db.py, observe.py,
+engineer_loop.py, ingest_run.py, ab_runner.py, escalations.py, and journal_db.py
+itself, which since the 2026-07-18 merge carries the producer CLI + summarizer):
+the loop driver, the ingest path, and the provenance/forensics tools rightly touch
+both DBs (README inv 18 — both arm a busy_timeout so concurrent ingests wait, not
+error). So this gate is scoped EXACTLY to the LEARNER_FILES set; the ALLOWLIST
+documents the legit set we deliberately do NOT police here.
 """
 from __future__ import annotations
 
@@ -37,12 +38,12 @@ LEARNER_FILES = [
 # driver + ingest + forensics tools legitimately read/write both DBs.
 ALLOWLIST = {
     "knowledge_db.py",        # the shared DB helper (defines connect/busy_timeout)
-    "trace_provenance.py",    # operator forensics: joins knowledge + journal
+    "observe.py",             # operator forensics: joins knowledge + journal
     "engineer_loop.py",       # the autonomous driver: journals every action
     "ingest_run.py",          # back-fills run_id onto journal rows at ingest
     "ab_runner.py",           # records A/B trials + journals ab_launch
     "escalations.py",         # opens escalations + journals
-    "journal_action.py",      # the journal writer itself
+    "journal_db.py",          # the journal module itself (lib + summarizer + CLI)
 }
 
 

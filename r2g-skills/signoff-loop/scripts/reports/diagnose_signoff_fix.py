@@ -1079,7 +1079,7 @@ def main(argv=None) -> int:
                 import os as _os
                 import subprocess as _sp
                 _kdir = Path(__file__).resolve().parents[2] / "knowledge"
-                _ja = [sys.executable, str(_kdir / "journal_action.py"), "action",
+                _ja = [sys.executable, str(_kdir / "journal_db.py"), "action",
                        "--project", str(proj.resolve()), "--actor", "loop",
                        "--type", "sdc_edit", "--payload",
                        json.dumps({"knob": "CLOCK_PERIOD", "new": sdc_new_p,
