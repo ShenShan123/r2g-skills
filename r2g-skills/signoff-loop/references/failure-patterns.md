@@ -3239,6 +3239,37 @@ self-announcing guard that WARNS loudly the moment the route catalog emits >1 st
 indexed ranking + lifecycle filtering must be wired here like drc/lvs). Guard:
 `test_route_ab_loop.py::test_route_live_path_is_single_strategy_and_guards_growth`.
 
+**Pattern 22 — an undecidable WARN is an ignored WARN: J4 dangling run_ids (2026-07-18 /r2g-debug).**
+`check_db_integrity.py`'s J4 reported a bare count and told the operator to interpret it themselves —
+*"benign re-ingest residue if small/flat, a writer bug if growing"*. But the tool keeps **no history**,
+so "growing vs flat" is undecidable from a single scalar: the WARN reads identically at 8 dangles and
+at 800. On this store it had been yellow since the repo rename, and clearing it required hand-running
+forensics (dump journal run_ids → anti-join `knowledge.runs` → eyeball timestamps → stat each
+`project_path`). That is the same alarm-fatigue failure the DRC/LVS gates are designed to avoid: a
+signal that can never go green is a signal that stops being read.
+
+**Mechanism.** The evidence needed was already *in-band* — `j.actions` carries both `project_path` and
+`ts`. Exactly two mechanisms benignly explain a dangle, and both are falsifiable:
+- **wiped/renamed project** — the dir is gone, so nothing can ever re-mint that run (frozen history).
+  Six of this store's eight dangles were `/proj/.../agent-r2g/...`, i.e. the *pre-rename* repo path.
+- **re-ingest residue** — `run_id` keys on `ppa.json` mtime, so a re-ingest re-mints it and orphans the
+  old row; the proof the writer recovered is a **newer action on that project that DOES resolve**.
+  Compare with `>=`, not `>`: journal `ts` is second-resolution, so the re-ingest routinely *ties* the
+  orphaned row's timestamp, and a contemporaneous resolving action is still proof of recovery.
+
+What survives both — a **live** project whose newest `run_id`-bearing action resolves to no run — is
+precisely the writer bug the WARN was written for, and is now counted apart, named, and printed as a
+`chase:` lead. **Severity deliberately stays WARN, never ALARM**: the journal is a best-effort,
+gitignored ledger (`J*` are trend signals by contract), so gating a wave driver or CI on it would trade
+this alarm-fatigue failure for a worse one — a hard-failing campaign over scratchpad residue.
+
+**Resolution.** J4 classifies in-band and self-diagnoses; on a fully-explained store it now says
+`0 UNEXPLAINED -- flat residue, not a live writer bug` instead of an unclearable count. Guards:
+`test_check_db_integrity.py::test_J4_classifies_dangling_by_mechanism` (all three buckets distinguished
+in one run) and `::test_J4_all_benign_dangles_read_as_flat` (the explicitly-clearable case).
+*Generalizable rule: a check whose own message says "you figure out which" is unfinished — either it can
+name the lead from data it already holds, or it should not be a check.*
+
 ## Dataset-Extraction Silent-Value Defects (features/labels; found by the 2026-07-05 RTL2Graph audit)
 
 A new failure class: the flow completes green, the CSVs materialize, and the VALUES are

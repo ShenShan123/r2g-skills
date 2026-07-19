@@ -144,6 +144,57 @@ def test_dangling_journal_run_id_warns_J4(tmp_path, capsys):
     assert "[ALARM]" not in out
 
 
+def test_J4_classifies_dangling_by_mechanism(tmp_path, capsys):
+    """J4's WARN text promises 'benign residue if flat, a writer bug if growing' but
+    the tool keeps no history, so a bare count leaves the operator to hand-run the
+    forensics (2026-07-18 /r2g-debug finding). The dangle must be classified IN-BAND
+    by the two benign mechanisms:
+
+      * wiped/renamed project -> its rows are frozen history, nothing can re-mint them
+      * re-ingest residue     -> run_id keys on ppa.json mtime, so a re-ingest re-mints
+                                 it; the project carries a NEWER action that DOES resolve
+
+    Anything else -- a LIVE project whose newest run_id-bearing action resolves to no
+    run -- is the writer bug the WARN exists to surface, and must be counted apart."""
+    live = tmp_path / "live_proj"
+    live.mkdir()
+    reing = tmp_path / "reingested_proj"
+    reing.mkdir()
+    kdb = _kdb(tmp_path, runs=[("R1", "/p/x", "pass", None, "nangate45"),
+                               ("RNEW", str(reing), "pass", None, "nangate45")])
+    jdb = _jdb(tmp_path, actions=[
+        ("/p/x", "tool_invoke", "R1", None),          # keeps J2 clean
+        ("/p/wiped", "tool_invoke", "GONE", None),     # project dir absent -> frozen history
+        (str(reing), "tool_invoke", "OLD", None),      # orphaned by the re-ingest below...
+        (str(reing), "tool_invoke", "RNEW", None),     # ...which minted RNEW (newer, resolves)
+        (str(live), "tool_invoke", "NOPE", None),      # live project, newest action dangles
+    ])
+    rc = _run(kdb, jdb)
+    out = capsys.readouterr().out
+    j4 = [ln for ln in out.splitlines() if "J4" in ln][0]
+    assert rc == 0                      # severity contract unchanged: journal gaps stay WARN
+    assert "[warn] J4" in j4
+    assert "3 dangling" in j4           # GONE + OLD + NOPE
+    assert "1 wiped/renamed" in j4      # GONE
+    assert "1 re-ingest residue" in j4  # OLD, superseded by RNEW
+    assert "1 UNEXPLAINED" in j4        # NOPE -- the real lead
+    assert "[ALARM]" not in out
+
+
+def test_J4_all_benign_dangles_read_as_flat(tmp_path, capsys):
+    """With every dangle explained, J4 must say so explicitly -- a permanently-yellow
+    check the operator cannot clear is one they stop reading."""
+    kdb = _kdb(tmp_path, runs=[("R1", "/p/x", "pass", None, "nangate45")])
+    jdb = _jdb(tmp_path, actions=[
+        ("/p/x", "tool_invoke", "R1", None),
+        ("/p/wiped", "tool_invoke", "GONE", None),
+    ])
+    assert _run(kdb, jdb) == 0
+    j4 = [ln for ln in capsys.readouterr().out.splitlines() if "J4" in ln][0]
+    assert "0 UNEXPLAINED" in j4
+    assert "flat residue" in j4
+
+
 def test_platform_scope_isolates_correspondence(tmp_path, capsys):
     """--platform must scope L1/L2: a sky130hd-only ledger gap is invisible when the
     run under test is nangate45 (the campaign /r2g-debug drives)."""

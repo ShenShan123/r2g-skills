@@ -40,9 +40,13 @@ Trend signals (WARN only -- a best-effort ledger out of step with the truth):
   J3   fix-bearing journal actions (config_knob_delta/sdc_edit/stage_rerun) should
        mostly carry a symptom_id (provenance for the journal->knowledge promoter).
   J4   no journal action's (non-NULL) run_id dangles -- i.e. points at a run that is
-       absent from knowledge.runs. Small counts are benign re-ingest residue (run_id
-       keys on ppa.json mtime, so a re-ingest re-mints it and orphans old rows); a
-       growing count means a writer is stamping run_ids the store can't explain.
+       absent from knowledge.runs. Each dangle is CLASSIFIED in-band by the two
+       mechanisms that benignly explain one -- a wiped/renamed project (frozen
+       history) and re-ingest residue (run_id keys on ppa.json mtime, so a re-ingest
+       re-mints it and orphans the old row, leaving a newer action that resolves).
+       What survives both -- a live project whose newest run_id-bearing action
+       resolves to nothing -- is reported as UNEXPLAINED and named, so the operator
+       gets the lead instead of hand-running the forensics over a bare count.
   L1   every ab_trials symptom_id has an `ab_launch` action -- the loop journaled
        launching the arms it then judged.
   L2   every `promoted` recipe's symptom_id has a `promote` action -- the promotion
@@ -162,16 +166,58 @@ def _check_journal_and_crossdb(con, results, platform):
         results.append(("PASS", "J3", "no fix-bearing journal actions yet"))
 
     # J4 -- cross-DB referential integrity: no non-NULL journal run_id may dangle.
-    dangling = _scalar(con, """
-        SELECT COUNT(DISTINCT a.run_id) FROM j.actions a
-        LEFT JOIN runs r ON r.run_id = a.run_id
-        WHERE a.run_id IS NOT NULL AND r.run_id IS NULL""") or 0
-    if dangling == 0:
+    # A bare COUNT cannot answer the question the operator actually has ("benign
+    # residue, or a writer bug?"): the tool keeps no history, so "growing vs flat"
+    # is undecidable from one number and the WARN reads the same at 8 dangles as at
+    # 800 -- a permanently-yellow check nobody re-reads (2026-07-18 /r2g-debug).
+    # The journal already carries the evidence, so classify each dangle in-band by
+    # the two mechanisms that BENIGNLY explain one:
+    #   * wiped/renamed project -- frozen history; nothing can ever re-mint the run
+    #   * re-ingest residue     -- run_id keys on ppa.json mtime, so a re-ingest
+    #     re-mints it and orphans the old row; the project carries a NEWER action
+    #     that DOES resolve, which is the proof the writer recovered
+    # What survives both is the real lead: a LIVE project whose most recent
+    # run_id-bearing action resolves to no run at all.
+    # Severity stays WARN (never ALARM): the journal is a best-effort, gitignored
+    # ledger, so gating a wave driver / CI on it would trade this alarm-fatigue
+    # failure for a worse one.
+    dangling_rows = con.execute("""
+        SELECT a.run_id, a.project_path, MAX(a.ts) AS last_ts
+          FROM j.actions a
+          LEFT JOIN runs r ON r.run_id = a.run_id
+         WHERE a.run_id IS NOT NULL AND r.run_id IS NULL
+         GROUP BY a.run_id, a.project_path""").fetchall()
+    if not dangling_rows:
         results.append(("PASS", "J4", "no journal run_id dangles -- every linked action resolves to a run"))
     else:
-        results.append(("WARN", "J4",
-                        f"{dangling} distinct journal run_id(s) point at a run absent from "
-                        "knowledge.runs -- benign re-ingest residue if small/flat, a writer bug if growing"))
+        # Newest RESOLVING action per project -- the re-ingest recovery signal.
+        resolved_ts = {p: t for p, t in con.execute("""
+            SELECT a.project_path, MAX(a.ts) FROM j.actions a
+              JOIN runs r ON r.run_id = a.run_id
+             GROUP BY a.project_path""").fetchall()}
+        gone = reingest = unexplained = 0
+        leads = []
+        for _run_id, proj, last_ts in dangling_rows:
+            if not Path(proj).is_dir():
+                gone += 1                      # project wiped/renamed -> frozen history
+            elif (resolved_ts.get(proj) or "") >= (last_ts or ""):
+                # >= not >: journal ts is second-resolution, so the re-ingest that
+                # re-minted the run commonly ties the orphaned row's timestamp. A
+                # resolving action CONTEMPORANEOUS with the dangle is still proof
+                # the writer recovered on this project.
+                reingest += 1
+            else:
+                unexplained += 1
+                leads.append(proj)
+        newest = max((r[2] or "") for r in dangling_rows)
+        verdict = (f"{unexplained} UNEXPLAINED on live projects"
+                   if unexplained else "0 UNEXPLAINED -- flat residue, not a live writer bug")
+        msg = (f"{len(dangling_rows)} dangling journal run_id(s): "
+               f"{gone} wiped/renamed, {reingest} re-ingest residue, {verdict}"
+               f" (newest dangling action {newest[:19] or 'n/a'})")
+        if unexplained:
+            msg += f" -- chase: {', '.join(leads[:3])}"
+        results.append(("WARN", "J4", msg))
 
     # ---- L1/L2/L3: every knowledge-side MOVE left a journal action -------------
     # Directional (knowledge => journal): the ledger may hold MORE (re-launches,
