@@ -121,6 +121,35 @@ def _arms_owned(conn, key: dict, arm_a_run_id, arm_b_run_id) -> bool:
         return False              # different subjects or different trial tails
     if strat8 and not parsed["A"][1].startswith(strat8):
         return False              # an arm pair planned for ANOTHER strategy
+    # FULL-KEY binding (2026-07-19 audit P0-R2, failure-patterns #52). Everything
+    # above constrains subject, role, tail, strategy PREFIX and platform -- but
+    # never symptom_id or design_class, so one physical experiment could certify
+    # every recipe key that happened to share a subject, strategy and platform.
+    # That is not hypothetical: in the committed store arm pair 80696de2/ce5b719f
+    # is the SOLE decisive evidence promoting THREE density_relief keys
+    # (logic/unknown + bus_heavy/medium + crypto/small, trials 395/397/401), and
+    # 8949e7f8/937964ec shadows two core_util_relief keys (400/403).
+    #
+    # The planner already solved this and the verifier just never read it back:
+    # engineer_loop stamps trial_h6 = sha1(symptom|class|platform|strategy)[:6]
+    # UPPERCASE into the arm dir (`..._ab<ROLE>_<strat8><TRIAL_H6>_<r>`). So
+    # re-derive it and require the tail to carry THIS key's hash.
+    #
+    # GRANDFATHERED where the tail has no hash: those dirs predate the trial_h6
+    # scheme (all 6 decisive committed trials look like `density__0`). Rejecting
+    # them would not flip a verdict today -- judge_recipe would simply see no
+    # decisive evidence and leave the row unchanged -- but it would make 6 live
+    # keys un-re-derivable from evidence nobody can regenerate. Same principle as
+    # the absent-provenance_complete carve-out: bind what was recorded, do not
+    # retroactively invalidate what predates the recording.
+    tail = parsed["A"][1][len(strat8):]
+    if re.match(r"^[0-9A-F]{6}", tail):
+        want = hashlib.sha1("|".join([
+            str(key.get("symptom_id") or ""), str(key.get("design_class") or ""),
+            str(key.get("platform") or ""), str(key.get("strategy") or ""),
+        ]).encode("utf-8")).hexdigest()[:6].upper()
+        if not tail.startswith(want):
+            return False          # arms planned for a DIFFERENT recipe key
     return True
 
 

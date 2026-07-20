@@ -535,6 +535,54 @@ def test_cross_platform_arm_runs_are_not_owned(tmp_path):
     assert ab_runner._arms_owned(conn, KEY, "pa", "pb") is False
 
 
+def _h6(key):
+    """The planner's trial_h6 — a short hash of the FULL recipe key."""
+    import hashlib
+    return hashlib.sha1("|".join([
+        key["symptom_id"], key["design_class"], key["platform"],
+        key["strategy"]]).encode("utf-8")).hexdigest()[:6].upper()
+
+
+def test_same_strategy_other_recipe_key_is_not_owned(tmp_path):
+    """P0-R2 (2026-07-19 audit, failure-patterns #52). Subject, role, tail,
+    strategy prefix and platform all matching still does NOT make an arm pair
+    this key's evidence — symptom_id and design_class were never bound. In the
+    committed store ONE arm pair was the sole decisive evidence promoting THREE
+    distinct density_relief design classes."""
+    conn = _conn(tmp_path)
+    strat8 = KEY["strategy"][:8]
+    foreign = dict(KEY, design_class="bus_heavy/large")     # same strategy+platform
+    for rid, arm in (("ha", "A"), ("hb", "B")):
+        _seed_run(conn, rid, tmp_path / f"subj_ab{arm}_{strat8}{_h6(foreign)}_0")
+    # The arms were planned for `foreign`, so they own THAT key and not KEY.
+    assert ab_runner._arms_owned(conn, foreign, "ha", "hb") is True
+    assert ab_runner._arms_owned(conn, KEY, "ha", "hb") is False
+
+
+def test_same_strategy_other_symptom_is_not_owned(tmp_path):
+    """Same shape, differing only in symptom_id."""
+    conn = _conn(tmp_path)
+    strat8 = KEY["strategy"][:8]
+    foreign = dict(KEY, symptom_id="feedface00000002")
+    for rid, arm in (("sa", "A"), ("sb", "B")):
+        _seed_run(conn, rid, tmp_path / f"subj_ab{arm}_{strat8}{_h6(foreign)}_0")
+    assert ab_runner._arms_owned(conn, foreign, "sa", "sb") is True
+    assert ab_runner._arms_owned(conn, KEY, "sa", "sb") is False
+
+
+def test_hashless_legacy_arm_dirs_stay_grandfathered(tmp_path):
+    """All 6 decisive committed trials have hash-less tails (`density__0`) that
+    predate the trial_h6 scheme. Rejecting them would flip no verdict today, but
+    would make live keys un-re-derivable from evidence nobody can regenerate —
+    so bind what was recorded, never retroactively invalidate what predates the
+    recording (same principle as the absent-provenance_complete carve-out)."""
+    conn = _conn(tmp_path)
+    strat8 = KEY["strategy"][:8]
+    for rid, arm in (("la", "A"), ("lb", "B")):
+        _seed_run(conn, rid, tmp_path / f"subj_ab{arm}_{strat8}_0")
+    assert ab_runner._arms_owned(conn, KEY, "la", "lb") is True
+
+
 def test_stamped_true_provenance_is_reverified_at_judge(tmp_path):
     """Defense-in-depth: a row whose metrics CLAIM provenance_complete=True but
     whose run_ids don't resolve locally as this trial's own arms (merged bundle,

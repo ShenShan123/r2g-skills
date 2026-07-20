@@ -393,10 +393,20 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
 
     # 6. provenance stamps
     def _dump_manifests() -> None:
+        # source_bytes_verified must ride the PROJECT manifest, not just
+        # reports/promote.json (2026-07-19 audit P0-R6, failure-patterns #52):
+        # metadata.json is what downstream readers open, so omitting the stamp
+        # left them with no contract at all — an unverified project was
+        # indistinguishable from a verified one. Carry the override too, so a
+        # deliberately-unverified promotion is self-describing.
         meta_out = {"design_name": design, "status": result["status"],
                     "promoted_from": str(out_root / design),
                     "promoted_at": result["promoted_at"],
-                    "synth_variant": variant, "top": top, "platform": platform}
+                    "synth_variant": variant, "top": top, "platform": platform,
+                    "source_bytes_verified": bool(result.get("source_bytes_verified"))}
+        if result.get("source_verification_override"):
+            meta_out["source_verification_override"] = \
+                result["source_verification_override"]
         (project / "metadata.json").write_text(json.dumps(meta_out, indent=2),
                                                encoding="utf-8")
         (project / "reports").mkdir(exist_ok=True)

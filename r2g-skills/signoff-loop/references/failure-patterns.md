@@ -3085,6 +3085,21 @@ Nine confirmed defects, all fixed TDD (each test proven red pre-fix, green post-
   class, i.e. defeating the very distinction 9d5125f added J4 to draw. Now ordered by
   `julianday()`; the original ts is kept for display, and an UNPARSEABLE ts is never silently benign.
   Verdict on the real store is unchanged (8 dangles, 2 UNEXPLAINED).
+- **P0-R2 — A/B ownership never bound the FULL recipe key (the round's most serious find).** The report
+  worded this as "only an eight-character strategy prefix", which UNDERSTATES the existing checks:
+  `_arms_owned` already verifies role-per-column, same base subject, identical trial tail, strat8 AND
+  platform, and there are zero 8-char strategy-prefix collisions today. The real hole is that it never
+  sees `symptom_id` or `design_class`, so one physical experiment certifies every key sharing a subject +
+  strategy + platform. **Live in the committed store:** arm pair `80696de2/ce5b719f` is the SOLE decisive
+  evidence promoting THREE density_relief keys (`logic/unknown` + `bus_heavy/medium` + `crypto/small`,
+  trials 395/397/401); `8949e7f8/937964ec` shadows two core_util_relief keys (400/403). All 6 stamped
+  `provenance_complete=1`. The planner had already solved it and the verifier just never read it back —
+  `engineer_loop` stamps `trial_h6 = sha1(symptom|class|platform|strategy)[:6]` UPPERCASE into the arm dir.
+  `_arms_owned` now re-derives it and requires the tail to carry THIS key's hash — but only when the tail
+  actually holds a 6-uppercase-hex segment. All 6 committed decisive trials predate the scheme
+  (`density__0`, no hash) and are GRANDFATHERED: rejecting them flips nothing today (the judge would just
+  see no decisive evidence) but would make 6 live keys un-re-derivable from evidence nobody can
+  regenerate. Verified 0 verdicts moved by re-judging all 114 trial keys under old vs new code.
 - **P1-R2 — repair-cycle detection discarded violation counts.** `_global_repair_state` kept only the SET
   of nonzero DRC classes, so the real `wbuart32` pair (same `M1_SPACING`, counts 100 and 10) fingerprinted
   identically and a 90% reduction escalated as `repair_cycle_nonconverged`, stopping a converging
@@ -3093,9 +3108,21 @@ Nine confirmed defects, all fixed TDD (each test proven red pre-fix, green post-
   the opposite error (100 vs 99 = "new" state ⇒ no ping-pong ever caught); bucketing also errs toward
   letting a campaign continue, which is the cheaper failure direction.
 
+**Two measurements that must be re-taken, not assumed, before the next round acts:**
+- **100% of the corpus is manifest-less.** 708/708 `design_meta.json` under `rtl_designs/` have NO
+  `source_manifest` (and 708/708 DO have a local vendored `rtl/`). The report examined 9 and inferred a
+  minority. So the P0-R6 default-block halts promotion for the WHOLE existing corpus until each candidate
+  is re-expanded or promoted with `--allow-unverified-source`. Kept default-block per operator decision
+  (2026-07-19), matching the already-fail-closed license gate — but budget a re-expansion wave.
+- **The 2026-07-16 issue-6 staleness handshake is INERT on the committed store.**
+  `status_version IS NOT NULL` = **0 of 140** `recipe_status` rows, so `engineer_loop`'s
+  `if _rsv is not None` never stamps an arm and the judge's mid-trial cancel can never fire. It
+  self-arms as rows transition (every `_set` does `COALESCE(status_version,0)+1`, and P0-N1 above added
+  parking to that set) — but until then the guard is decorative. Do NOT read "the guard exists" as "the
+  guard is live"; check the column. Backfilling it is a tracked-DB mutation ⇒ operator action.
+
 **Audited but NOT fixed — architectural or operator-decision, listed so the next round does not re-derive
-them:** P0-R2 (A/B ownership infers from an `strategy[:8]` arm-dir name rather than a durable
-`ab_trial_plan`), P0-R3 (above), P0-R5 (include headers not vendored/frozen), P0-R7 (project-level signoff
+them:** P0-R3 (above), P0-R5 (include headers not vendored/frozen), P0-R7 (project-level signoff
 reports not bound to the selected DEF's digest), P0-R8 (feature/label freshness is mtime- not
 content-based), P0-R9 (graph publication is not an atomic generation swap), P0-N2 (synth `config.mk` is
 re-parsed at promote time, so top params/defines are not frozen), P0-N7 (no graph schema-version contract),

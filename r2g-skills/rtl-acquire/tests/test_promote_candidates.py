@@ -274,8 +274,35 @@ class SourceProofGateTests(PromoteFixture):
         self.assertEqual(res["source_verification_override"],
                          "operator:--allow-unverified-source")
         prov = json.loads((self.base / "legacy2" / "metadata.json").read_text())
-        self.assertFalse(prov.get("source_bytes_verified", False),
+        # Assert PRESENCE before value: `.get(..., False)` passed vacuously while
+        # metadata.json omitted the key entirely (audit P0-R6 follow-up).
+        self.assertIn("source_bytes_verified", prov,
+                      "metadata.json must carry the verification contract")
+        self.assertFalse(prov["source_bytes_verified"],
                          "override must not launder the unverified stamp")
+        self.assertEqual(prov["source_verification_override"],
+                         "operator:--allow-unverified-source")
+
+    def test_verified_promotion_stamps_metadata_true(self) -> None:
+        self._multi_file_candidate("stamped", covered=5)
+        self._promote("stamped")
+        prov = json.loads((self.base / "stamped" / "metadata.json").read_text())
+        self.assertTrue(prov["source_bytes_verified"])
+        self.assertNotIn("source_verification_override", prov)
+
+    def test_null_digest_entry_cannot_launder_a_pass(self) -> None:
+        """_source_manifest writes {"sha256": None} for a file unreadable at synth
+        time, and the manifest lookup filters those out. Before the coverage
+        check that turned a KNOWN-unknown into a silent pass; it must now read as
+        uncovered, exactly like an absent entry."""
+        self._mk_candidate("nulldig", RTL_CLK, top="toy_top")
+        meta_path = self.out_root / "nulldig" / "design_meta.json"
+        meta = json.loads(meta_path.read_text())
+        meta["source_manifest"] = [{"path": meta["rtl_files"][0], "sha256": None}]
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        res = self._promote("nulldig")
+        self.assertEqual(res["status"], "source_manifest_missing", res)
+        self.assertFalse((self.base / "nulldig").exists())
 
     def test_changed_bytes_still_blocked(self) -> None:
         """The pre-existing byte-drift gate must survive the coverage check."""
