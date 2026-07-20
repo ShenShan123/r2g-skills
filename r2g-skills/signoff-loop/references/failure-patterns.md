@@ -3114,12 +3114,21 @@ Nine confirmed defects, all fixed TDD (each test proven red pre-fix, green post-
   minority. So the P0-R6 default-block halts promotion for the WHOLE existing corpus until each candidate
   is re-expanded or promoted with `--allow-unverified-source`. Kept default-block per operator decision
   (2026-07-19), matching the already-fail-closed license gate — but budget a re-expansion wave.
-- **The 2026-07-16 issue-6 staleness handshake is INERT on the committed store.**
-  `status_version IS NOT NULL` = **0 of 140** `recipe_status` rows, so `engineer_loop`'s
-  `if _rsv is not None` never stamps an arm and the judge's mid-trial cancel can never fire. It
-  self-arms as rows transition (every `_set` does `COALESCE(status_version,0)+1`, and P0-N1 above added
-  parking to that set) — but until then the guard is decorative. Do NOT read "the guard exists" as "the
-  guard is live"; check the column. Backfilling it is a tracked-DB mutation ⇒ operator action.
+- **The 2026-07-16 issue-6 staleness handshake WAS inert, and is now ARMED.** `status_version` shipped
+  nullable and stayed NULL on every pre-existing row, so `engineer_loop`'s `if _rsv is not None` never
+  stamped an arm and the judge's mid-trial cancel could never fire — the committed store sat at **0 of 140**
+  versioned. The guard was shipped, tested, and decorative. **Do NOT read "the guard exists" as "the guard
+  is live" — check the column.** Armed 2026-07-19 per operator decision by
+  `knowledge_db._migrate_arm_status_version`, an idempotent `ensure_schema` migration (NULL → 1) so ANY
+  operator's clone self-arms on first connect rather than waiting for an unrelated transition, exactly like
+  `park_nondivergent`. Backfilling to 1 is the identity of "first recorded generation": it matches the
+  literal 1 every `recipe_lifecycle` INSERT writes for a NEW row, and `COALESCE(status_version,0)+1`
+  continues to 2 either way, so no future arithmetic changes — only whether the FIRST plan after it gets a
+  stamp. Verified on the real store: 140/140 armed, **0 lifecycle statuses changed**, all table counts
+  identical, honesty gates green, and re-judging all 114 trial keys gives byte-identical outcomes armed vs
+  unarmed. Safe against in-flight work BY CONSTRUCTION — the judge cancels only when the ARM carries a
+  stamp (`if _planned_sv is not None`) and no already-planned arm can retroactively gain one; at migration
+  time there were **1454 unjudged arm entries, none stamped**, so every one stays grandfathered.
 
 **Audited but NOT fixed — architectural or operator-decision, listed so the next round does not re-derive
 them:** P0-R3 (above), P0-R5 (include headers not vendored/frozen), P0-R7 (project-level signoff

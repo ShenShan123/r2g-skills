@@ -98,12 +98,49 @@ def _migrate_drop_stale_fix_trajectories(conn: sqlite3.Connection) -> None:
         conn.execute("DROP TABLE fix_trajectories")
 
 
+def _migrate_arm_status_version(conn: sqlite3.Connection) -> int:
+    """ARM the plan/judge staleness handshake by giving every pre-versioning
+    recipe_status row a concrete version (failure-patterns #52; 2026-07-19).
+
+    `status_version` was added nullable in 2026-07-16 issue 6 and left NULL on
+    every existing row, which made the guard it exists for DECORATIVE: the
+    planner stamps an arm only `if _rsv is not None`, so with an all-NULL column
+    nothing was ever stamped and the judge's mid-trial cancel could never fire.
+    The committed store sat at 0 of 140 rows versioned — the guard was shipped,
+    tested, and inert. (Do not read "the guard exists" as "the guard is live";
+    check the column.)
+
+    Backfilling to 1 is the identity of "this row is at its first recorded
+    generation": it matches the literal 1 that every INSERT in recipe_lifecycle
+    writes for a NEW row, and the next transition's
+    COALESCE(status_version,0)+1 continues to 2 either way — so this changes no
+    future arithmetic, only whether the FIRST plan after it gets a stamp.
+
+    Safe against in-flight work by construction: the judge cancels only when the
+    ARM carries a stamp (`if _planned_sv is not None`), and no already-planned
+    arm can retroactively gain one. At migration time this store had 1454
+    unjudged arm entries, none stamped — every one stays grandfathered.
+
+    Idempotent (WHERE status_version IS NULL), and self-healing on any operator's
+    DB, like park_nondivergent — a fresh clone arms itself on first connect
+    rather than waiting for an unrelated lifecycle transition to happen by.
+    Returns the number of rows armed.
+    """
+    try:
+        cur = conn.execute("UPDATE recipe_status SET status_version = 1 "
+                           "WHERE status_version IS NULL")
+    except sqlite3.Error:
+        return 0                        # table absent on a bare/legacy DB
+    return cur.rowcount
+
+
 def ensure_schema(conn: sqlite3.Connection,
                   schema_path: Path | str = DEFAULT_SCHEMA_PATH) -> None:
     _migrate_drop_stale_fix_trajectories(conn)
     ddl = Path(schema_path).read_text(encoding="utf-8")
     conn.executescript(ddl)
     _migrate_add_columns(conn)
+    _migrate_arm_status_version(conn)   # AFTER _migrate_add_columns creates it
     remapped = _migrate_legacy_symptom_ids(conn)
     for stmt in _POST_MIGRATION_INDEXES:
         conn.execute(stmt)
