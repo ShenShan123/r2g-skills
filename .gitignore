@@ -274,3 +274,6 @@ r2g-skills/*/references/env.local.sh.bak-*
 RTL2Graph_v3.zip
 RTL2Graph_v3/
 heter-homo_py.zip
+
+# V1 validation registry outputs (machine-local run evidence — never commit)
+docs/superpowers/plans/validation-reports/

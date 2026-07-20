@@ -1,0 +1,427 @@
+{
+  "schema_version": "1.1",
+  "registry_id": "r2g-v1-validation-registry",
+  "protocol": {
+    "source": "docs/superpowers/plans/V1_ASSURANCE_SPECIFICATION_AND_VALIDATION_PROTOCOL.md",
+    "version": "0.6",
+    "status": "Proposed",
+    "sha256": "0e37b532725e232ff613006b7712a9d4016f051ac4c2784b5f1c1bc04ed53cf2"
+  },
+  "format_note": "This is JSON-compatible YAML 1.2 and is parsed with Python's standard json module.",
+  "formal_execution_policy": {
+    "fail_closed": true,
+    "require_frozen_protocol": true,
+    "require_bound_fixtures": true,
+    "require_ready_evaluator": true,
+    "mandatory_case_count": 45,
+    "execution_statuses": ["completed", "blocked_by_prerequisite", "harness_error", "not_scheduled"],
+    "verdicts": ["pass", "fail", "inconclusive", "not_applicable"]
+  },
+  "target_platforms": ["nangate45", "sky130hd", "sky130hs"],
+  "platform_profile_default_state": "candidate",
+  "gates": {
+    "ENV-GATE": {"owner": "eda-install", "requirements": ["ENV-*"]},
+    "ACQ-GATE": {"owner": "rtl-acquire", "requirements": ["ACQ-001", "ACQ-002", "ACQ-003"]},
+    "SYNTH-GATE": {"owner": "rtl-acquire", "requirements": ["ACQ-004", "ACQ-005", "ACQ-006"]},
+    "RTL2FLOW-GATE": {"owner": "cross-subskill", "requirements": ["ACQ-007", "FLOW-001"]},
+    "CONSTRAINT-GATE": {"owner": "signoff-loop", "requirements": ["FLOW-007", "FLOW-008", "FLOW-009"]},
+    "SIGNOFF-GATE": {"owner": "signoff-loop", "requirements": ["FLOW-002", "FLOW-003", "FLOW-004", "FLOW-006"]},
+    "LEARNING-GATE": {"owner": "signoff-loop", "requirements": ["AGENT-*"]},
+    "FLOW2GRAPH-GATE": {"owner": "cross-subskill", "requirements": ["FLOW-005"]},
+    "GRAPH-GATE": {"owner": "def-graph", "requirements": ["DATA-001", "DATA-002", "DATA-003", "DATA-004", "DATA-005", "DATA-006"]},
+    "PUBLISH-GATE": {"owner": "def-graph", "requirements": ["DATA-007", "DATA-008"]},
+    "OPS-GATE": {"owner": "cross-cutting", "requirements": ["OPS-*"]}
+  },
+  "phase_order": [
+    "environment",
+    "acquisition",
+    "constraint_and_flow",
+    "graph_and_publication",
+    "agent_learning",
+    "operations"
+  ],
+  "fixtures": {
+    "FX-ENV-READY": {"parameterized_by_platform": true, "binding_status": "unbound"},
+    "FX-RTL-SIMPLE": {"parameterized_by_platform": false, "binding_status": "unbound"},
+    "FX-RTL-COMB": {"parameterized_by_platform": false, "binding_status": "unbound"},
+    "FX-RTL-CLOCK-COMPLEX": {"parameterized_by_platform": false, "binding_status": "unbound"},
+    "FX-RTL-MULTI": {"parameterized_by_platform": false, "binding_status": "unbound"},
+    "FX-RTL-MEDIUM": {"parameterized_by_platform": false, "binding_status": "unbound"},
+    "FX-RTL-LARGE": {"parameterized_by_platform": false, "binding_status": "unbound"},
+    "FX-RTL-RISK": {"parameterized_by_platform": false, "binding_status": "unbound"},
+    "FX-RTL-REJECT": {"parameterized_by_platform": false, "binding_status": "unbound"},
+    "FX-RUN-CLEAN": {"parameterized_by_platform": true, "binding_status": "unbound"},
+    "FX-GRAPH-CLEAN": {"parameterized_by_platform": true, "binding_status": "unbound"},
+    "FX-AGENT-CASES": {"parameterized_by_platform": false, "binding_status": "unbound"},
+    "FX-HOLDOUT": {"parameterized_by_platform": false, "binding_status": "unbound"}
+  },
+  "diagnostic_suites": [
+    {
+      "id": "DIAG-EDA-INSTALL",
+      "official_val_verdict": false,
+      "timeout_s": 600,
+      "command": ["{python}", "-m", "pytest", "-q", "r2g-skills/eda-install/tests"]
+    },
+    {
+      "id": "DIAG-RTL-ACQUIRE",
+      "official_val_verdict": false,
+      "timeout_s": 1800,
+      "command": ["{python}", "-m", "pytest", "-q", "r2g-skills/rtl-acquire/tests"]
+    },
+    {
+      "id": "DIAG-SIGNOFF-LOOP",
+      "official_val_verdict": false,
+      "timeout_s": 3600,
+      "command": ["{python}", "-m", "pytest", "-q", "r2g-skills/signoff-loop/tests"]
+    },
+    {
+      "id": "DIAG-DEF-GRAPH",
+      "official_val_verdict": false,
+      "timeout_s": 3600,
+      "command": ["{python}", "-m", "pytest", "-q", "r2g-skills/def-graph/tests"]
+    },
+    {
+      "id": "DIAG-KNOWLEDGE-HONESTY",
+      "official_val_verdict": false,
+      "timeout_s": 300,
+      "note": "Executable honesty gates over the committed knowledge store (CLAUDE.md CI command).",
+      "command": ["{python}", "r2g-skills/signoff-loop/knowledge/honesty.py", "--db", "r2g-skills/signoff-loop/knowledge/knowledge.sqlite"]
+    },
+    {
+      "id": "DIAG-SYNTH-PROJECTION",
+      "official_val_verdict": false,
+      "timeout_s": 300,
+      "note": "synth_only scope/event parity; vacuously empty on a fresh clone (corpus machines add --require-nonempty).",
+      "command": ["{python}", "r2g-skills/rtl-acquire/scripts/knowledge/project_frontend_diagnosis.py", "--check", "r2g-skills/signoff-loop/knowledge/knowledge.sqlite"]
+    },
+    {
+      "id": "DIAG-DB-INTEGRITY",
+      "official_val_verdict": false,
+      "timeout_s": 600,
+      "note": "Dual-DB (knowledge+journal) write honesty; requires the machine-local journal.sqlite.",
+      "command": ["{python}", "tools/check_db_integrity.py"]
+    }
+  ],
+  "cases": [
+    {
+      "id": "VAL-ENV-001", "requirement": "ENV-001", "title": "Provisioning readiness and honest failure",
+      "gate": "ENV-GATE", "phase": "environment", "methods": ["demonstration", "test"],
+      "fixtures": ["FX-ENV-READY"], "depends_on": [],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "missing_executable", "missing_pdk_or_library", "missing_rule_deck", "missing_graph_python"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.env:val_env_001"}
+    },
+    {
+      "id": "VAL-ENV-002", "requirement": "ENV-002", "title": "Toolchain snapshot completeness and sensitivity",
+      "gate": "ENV-GATE", "phase": "environment", "methods": ["inspection", "analysis"],
+      "fixtures": ["FX-ENV-READY"], "depends_on": ["VAL-ENV-001"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["stable_repeat", "tool_changed", "pdk_changed", "rule_deck_changed"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.env:val_env_002"}
+    },
+    {
+      "id": "VAL-ENV-003", "requirement": "ENV-003", "title": "Shared resolution and conflict handling",
+      "gate": "ENV-GATE", "phase": "environment", "methods": ["test"],
+      "fixtures": ["FX-ENV-READY"], "depends_on": ["VAL-ENV-002"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["consistent_resolution", "conflicting_platform_root", "conflicting_pdk", "conflicting_executable"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.env:val_env_003"}
+    },
+    {
+      "id": "VAL-ENV-004", "requirement": "ENV-004", "title": "Domain isolation",
+      "gate": "ENV-GATE", "phase": "environment", "methods": ["test"],
+      "fixtures": ["FX-ENV-READY", "FX-AGENT-CASES"], "depends_on": ["VAL-ENV-003"],
+      "matrix": {"scenario": ["wrong_platform_profile", "suspended_profile", "wrong_toolchain", "wrong_constraint_policy", "wrong_graph_schema"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.env:val_env_004"}
+    },
+
+    {
+      "id": "VAL-ACQ-001", "requirement": "ACQ-001", "title": "Traceable discovery",
+      "gate": "ACQ-GATE", "phase": "acquisition", "methods": ["demonstration", "test"],
+      "fixtures": ["FX-RTL-SIMPLE", "FX-RTL-REJECT"], "depends_on": ["VAL-ENV-003"],
+      "matrix": {"scenario": ["valid_source", "missing_immutable_revision", "missing_license_decision", "unsupported_source"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.acquisition:val_acq_001"}
+    },
+    {
+      "id": "VAL-ACQ-002", "requirement": "ACQ-002", "title": "Compilation closure completeness",
+      "gate": "ACQ-GATE", "phase": "acquisition", "methods": ["analysis", "test"],
+      "fixtures": ["FX-RTL-MULTI"], "depends_on": ["VAL-ACQ-001"],
+      "matrix": {"scenario": ["baseline", "header_removed", "generated_file_changed", "define_changed", "top_parameter_changed"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.acquisition:val_acq_002"}
+    },
+    {
+      "id": "VAL-ACQ-003", "requirement": "ACQ-003", "title": "Reproducible semantic screening",
+      "gate": "ACQ-GATE", "phase": "acquisition", "methods": ["test", "metamorphic"],
+      "fixtures": ["FX-RTL-SIMPLE", "FX-RTL-RISK"], "depends_on": ["VAL-ACQ-001"],
+      "matrix": {"scenario": ["repeat_policy", "irrelevant_risk_text", "real_risk_indicator"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.acquisition:val_acq_003"}
+    },
+    {
+      "id": "VAL-ACQ-004", "requirement": "ACQ-004", "title": "Honest synth-only qualification",
+      "gate": "SYNTH-GATE", "phase": "acquisition", "methods": ["demonstration", "test"],
+      "fixtures": ["FX-RTL-SIMPLE"], "depends_on": ["VAL-ACQ-002", "VAL-ENV-003"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "empty_mapped_design", "platform_mismatch", "graph_conversion_unavailable", "nonzero_synth_with_stale_netlist", "flow_scope_mislabeled", "frontend_event_missing"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.acquisition:val_acq_004"}
+    },
+    {
+      "id": "VAL-ACQ-005", "requirement": "ACQ-005", "title": "Duplicate and near-duplicate handling",
+      "gate": "SYNTH-GATE", "phase": "acquisition", "methods": ["test", "analysis"],
+      "fixtures": ["FX-RTL-SIMPLE"], "depends_on": ["VAL-ACQ-004"],
+      "matrix": {"scenario": ["byte_identical", "mapped_equivalent", "near_duplicate", "one_source_three_platforms"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.acquisition:val_acq_005"}
+    },
+    {
+      "id": "VAL-ACQ-006", "requirement": "ACQ-006", "title": "Retryable and idempotent failures",
+      "gate": "SYNTH-GATE", "phase": "acquisition", "methods": ["test", "recovery"],
+      "fixtures": ["FX-RTL-SIMPLE"], "depends_on": ["VAL-ACQ-004"],
+      "matrix": {"scenario": ["temporary_environment_failure", "temporary_frontend_failure", "first_retry", "duplicate_retry"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.acquisition:val_acq_006"}
+    },
+    {
+      "id": "VAL-ACQ-007", "requirement": "ACQ-007", "title": "Promotion source integrity",
+      "gate": "RTL2FLOW-GATE", "phase": "acquisition", "methods": ["test", "off_nominal"],
+      "fixtures": ["FX-RTL-MULTI"], "depends_on": ["VAL-ACQ-002", "VAL-ACQ-004"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "source_changed", "manifest_missing", "header_not_vendored", "profile_mismatch", "unqualified_profile"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.acquisition:val_acq_007"}
+    },
+
+    {
+      "id": "VAL-FLOW-001", "requirement": "FLOW-001", "title": "Promotion configuration preservation",
+      "gate": "RTL2FLOW-GATE", "phase": "constraint_and_flow", "methods": ["analysis", "test"],
+      "fixtures": ["FX-RTL-SIMPLE"], "depends_on": ["VAL-ACQ-007"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "source_mismatch", "top_mismatch", "parameter_mismatch", "frontend_mismatch", "platform_mismatch", "clock_intent_mismatch"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.flow:val_flow_001"}
+    },
+    {
+      "id": "VAL-FLOW-002", "requirement": "FLOW-002", "title": "Stage dependency integrity",
+      "gate": "SIGNOFF-GATE", "phase": "constraint_and_flow", "methods": ["test", "off_nominal"],
+      "fixtures": ["FX-RUN-CLEAN"], "depends_on": ["VAL-FLOW-001"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "upstream_missing", "upstream_stale", "upstream_cross_run", "contradictory_success_marker"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.flow:val_flow_002"}
+    },
+    {
+      "id": "VAL-FLOW-003", "requirement": "FLOW-003", "title": "Full-flow completion",
+      "gate": "SIGNOFF-GATE", "phase": "constraint_and_flow", "methods": ["demonstration", "test"],
+      "fixtures": ["FX-RTL-SIMPLE", "FX-RTL-MEDIUM", "FX-RTL-LARGE"], "depends_on": ["VAL-FLOW-001", "VAL-FLOW-008"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["complete", "synth_missing", "floorplan_missing", "place_missing", "cts_missing", "route_missing", "finish_missing", "finish_only_ledger"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.flow:val_flow_003"}
+    },
+    {
+      "id": "VAL-FLOW-004", "requirement": "FLOW-004", "title": "Strict V1 clean signoff",
+      "gate": "SIGNOFF-GATE", "phase": "constraint_and_flow", "methods": ["test", "parameterized"],
+      "fixtures": ["FX-RUN-CLEAN"], "depends_on": ["VAL-FLOW-003", "VAL-FLOW-009"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "routing_violation", "antenna_residual", "antenna_nonconverged", "drc_violation", "drc_beol_only", "lvs_mismatch", "lvs_skipped", "timing_failed", "rcx_missing", "spef_malformed"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.flow:val_flow_004"}
+    },
+    {
+      "id": "VAL-FLOW-005", "requirement": "FLOW-005", "title": "Same-run provenance",
+      "gate": "FLOW2GRAPH-GATE", "phase": "constraint_and_flow", "methods": ["test", "off_nominal"],
+      "fixtures": ["FX-RUN-CLEAN"], "depends_on": ["VAL-FLOW-004"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "foreign_def", "foreign_reports", "foreign_constraints", "foreign_netlist", "foreign_spef", "cross_platform_bundle"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.flow:val_flow_005"}
+    },
+    {
+      "id": "VAL-FLOW-006", "requirement": "FLOW-006", "title": "Bounded execution and recovery",
+      "gate": "SIGNOFF-GATE", "phase": "constraint_and_flow", "methods": ["test", "fault_injection", "recovery"],
+      "fixtures": ["FX-RTL-MEDIUM"], "depends_on": ["VAL-FLOW-001"],
+      "matrix": {"scenario": ["stage_timeout", "between_stage_interrupt", "no_improvement", "repeated_state", "valid_resume"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.flow:val_flow_006"}
+    },
+    {
+      "id": "VAL-FLOW-007", "requirement": "FLOW-007", "title": "Constraint integrity",
+      "gate": "CONSTRAINT-GATE", "phase": "constraint_and_flow", "methods": ["test", "controlled_comparison"],
+      "fixtures": ["FX-RTL-SIMPLE"], "depends_on": ["VAL-FLOW-001"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["objective_preserved", "clock_relaxed", "area_enlarged", "guardband_changed", "check_disabled", "rule_deck_changed"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.flow:val_flow_007"}
+    },
+    {
+      "id": "VAL-FLOW-008", "requirement": "FLOW-008", "title": "Clock and provisional-constraint qualification",
+      "gate": "CONSTRAINT-GATE", "phase": "constraint_and_flow", "methods": ["test", "classification", "fault_injection"],
+      "fixtures": ["FX-RTL-COMB", "FX-RTL-SIMPLE", "FX-RTL-CLOCK-COMPLEX"], "depends_on": ["VAL-FLOW-001"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["combinational", "valid_single_clock", "clock_omitted", "clock_port_mutated", "ambiguous_clock", "multi_clock", "generated_clock", "unsupported_cdc", "approved_external_constraints"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.flow:val_flow_008"}
+    },
+    {
+      "id": "VAL-FLOW-009", "requirement": "FLOW-009", "title": "Fmax-derived objective qualification",
+      "gate": "CONSTRAINT-GATE", "phase": "constraint_and_flow", "methods": ["test", "metamorphic", "fault_injection"],
+      "fixtures": ["FX-RTL-SIMPLE", "FX-RTL-MEDIUM"], "depends_on": ["VAL-FLOW-008"],
+      "matrix": {"platform": "@target_platforms", "design_class": ["simple", "medium"], "scenario": ["baseline", "proxy_mutated", "model_identity_mismatch", "cross_platform_report", "guardband_changed", "final_sdc_changed", "confirming_run_changed", "proxy_only", "final_timing_failed"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.flow:val_flow_009"}
+    },
+
+    {
+      "id": "VAL-DATA-001", "requirement": "DATA-001", "title": "Qualified graph input",
+      "gate": "GRAPH-GATE", "phase": "graph_and_publication", "methods": ["demonstration", "test", "off_nominal"],
+      "fixtures": ["FX-RUN-CLEAN"], "depends_on": ["VAL-FLOW-004", "VAL-FLOW-005", "VAL-FLOW-009"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "candidate_profile", "suspended_profile", "dirty_run", "incomplete_run", "operator_override"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.data:val_data_001"}
+    },
+    {
+      "id": "VAL-DATA-002", "requirement": "DATA-002", "title": "Feature and label completeness",
+      "gate": "GRAPH-GATE", "phase": "graph_and_publication", "methods": ["test", "fault_injection"],
+      "fixtures": ["FX-GRAPH-CLEAN"], "depends_on": ["VAL-DATA-001"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "feature_missing", "label_missing", "stale_output", "empty_output", "zero_filled", "all_nan", "join_invalid", "raw_twin_parity_broken"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.data:val_data_002"}
+    },
+    {
+      "id": "VAL-DATA-003", "requirement": "DATA-003", "title": "Five-view completeness",
+      "gate": "GRAPH-GATE", "phase": "graph_and_publication", "methods": ["test"],
+      "fixtures": ["FX-GRAPH-CLEAN"], "depends_on": ["VAL-DATA-001"],
+      "matrix": {"platform": "@target_platforms", "view": ["b", "c", "d", "e", "f"], "scenario": ["baseline", "view_missing", "view_corrupt", "partial_write", "hetero_homo_roundtrip_lossy"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.data:val_data_003"}
+    },
+    {
+      "id": "VAL-DATA-004", "requirement": "DATA-004", "title": "Cross-view identity",
+      "gate": "GRAPH-GATE", "phase": "graph_and_publication", "methods": ["test", "off_nominal"],
+      "fixtures": ["FX-GRAPH-CLEAN"], "depends_on": ["VAL-DATA-003"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "design_id_mismatch", "graph_id_mismatch", "platform_mismatch", "constraint_policy_mismatch", "flow_variant_mismatch", "entity_id_mismatch", "generation_mismatch", "generation_chain_broken", "one_source_three_platforms"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.data:val_data_004"}
+    },
+    {
+      "id": "VAL-DATA-005", "requirement": "DATA-005", "title": "Independent semantic verification",
+      "gate": "GRAPH-GATE", "phase": "graph_and_publication", "methods": ["analysis", "mutation_test"],
+      "fixtures": ["FX-GRAPH-CLEAN"], "depends_on": ["VAL-DATA-003"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "topology_corrupt", "feature_corrupt", "vocabulary_corrupt", "label_join_corrupt", "physical_unit_corrupt", "raw_twin_identity_corrupt", "rc_edge_set_corrupt"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.data:val_data_005"}
+    },
+    {
+      "id": "VAL-DATA-006", "requirement": "DATA-006", "title": "Manifest completeness and truthfulness",
+      "gate": "GRAPH-GATE", "phase": "graph_and_publication", "methods": ["inspection", "test"],
+      "fixtures": ["FX-GRAPH-CLEAN"], "depends_on": ["VAL-DATA-004", "VAL-DATA-005"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "field_class_missing", "platform_qualification_missing", "fmax_provenance_missing", "constraint_provenance_missing", "artifact_digest_changed", "verdict_digest_changed"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.data:val_data_006"}
+    },
+    {
+      "id": "VAL-DATA-007", "requirement": "DATA-007", "title": "Transactional publication",
+      "gate": "PUBLISH-GATE", "phase": "graph_and_publication", "methods": ["test", "interruption"],
+      "fixtures": ["FX-GRAPH-CLEAN"], "depends_on": ["VAL-DATA-006"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["baseline", "interrupt_extraction", "interrupt_assembly", "interrupt_verification", "interrupt_pointer_switch", "interrupt_index_update", "idempotent_recovery"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.data:val_data_007"}
+    },
+    {
+      "id": "VAL-DATA-008", "requirement": "DATA-008", "title": "Consumer usability and documentation",
+      "gate": "PUBLISH-GATE", "phase": "graph_and_publication", "methods": ["demonstration", "inspection"],
+      "fixtures": ["FX-GRAPH-CLEAN"], "depends_on": ["VAL-DATA-007"],
+      "matrix": {"platform": "@target_platforms", "scenario": ["load_all_views", "schema_check", "data_loader_smoke", "training_smoke", "documentation_match"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.data:val_data_008"}
+    },
+
+    {
+      "id": "VAL-AGENT-001", "requirement": "AGENT-001", "title": "Structured evidence precedence",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "controlled_contradiction"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-ENV-004"],
+      "matrix": {"scenario": ["text_success_structured_failure", "text_warning_structured_success"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_001"}
+    },
+    {
+      "id": "VAL-AGENT-002", "requirement": "AGENT-002", "title": "Bounded action authority",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "policy"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-AGENT-001"],
+      "matrix": {"scenario": ["allowed_schedule", "allowed_fmax", "allowed_retry", "allowed_repair", "allowed_stop", "platform_bypass", "constraint_bypass", "signoff_bypass", "publication_bypass"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_002"}
+    },
+    {
+      "id": "VAL-AGENT-003", "requirement": "AGENT-003", "title": "Failure-domain separation",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "classification"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-AGENT-001"],
+      "matrix": {"failure_domain": ["environment", "source", "constraint_fmax", "physical_flow", "signoff", "extraction", "data_integrity", "agent_control"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_003"}
+    },
+    {
+      "id": "VAL-AGENT-004", "requirement": "AGENT-004", "title": "Recipe lifecycle enforcement",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "state_machine"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-AGENT-001"],
+      "matrix": {"recipe_state": ["candidate", "parked", "shadow", "demoted", "stale", "unreadable", "provenance_incomplete", "promoted_wrong_domain", "promoted_applicable"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_004"}
+    },
+    {
+      "id": "VAL-AGENT-005", "requirement": "AGENT-005", "title": "Evidence scope and effect identity",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "controlled_ranking"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-AGENT-004"],
+      "matrix": {"scenario": ["exact_domain", "large_pooled_wrong_domain", "cross_platform", "effect_alias_with_negative_evidence"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_005"}
+    },
+    {
+      "id": "VAL-AGENT-006", "requirement": "AGENT-006", "title": "Controlled A/B provenance",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "ab_integrity"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-AGENT-004"],
+      "matrix": {"scenario": ["valid_pair", "extra_config_change", "relaxed_objective", "wrong_run_id", "different_subject", "different_platform", "different_constraint_policy", "stale_recipe_version", "plan_judge_version_skew", "ownership_partial_key_collision", "no_op_arms"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_006"}
+    },
+    {
+      "id": "VAL-AGENT-007", "requirement": "AGENT-007", "title": "Global outcome judgment",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "judgment"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-AGENT-006"],
+      "matrix": {"scenario": ["global_improvement", "higher_score_not_clean", "target_cleared_new_regression", "clock_relaxed", "fmax_guardband_relaxed", "area_relaxed", "check_disabled"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_007"}
+    },
+    {
+      "id": "VAL-AGENT-008", "requirement": "AGENT-008", "title": "Promotion evidence sufficiency",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "lifecycle"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-AGENT-006", "VAL-AGENT-007"],
+      "matrix": {"scenario": ["two_independent_subjects", "one_subject_duplicates", "cross_platform_pooled", "imported_backfill", "benchmark_rows", "self_scored_rows", "incomplete_provenance"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_008"}
+    },
+    {
+      "id": "VAL-AGENT-009", "requirement": "AGENT-009", "title": "Idempotent learning and transaction recovery",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "stateful_fault"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-AGENT-008"],
+      "matrix": {"scenario": ["duplicate_ingest", "duplicate_fix_session", "interrupt_after_trial_write", "reconcile_repeatedly", "ab_results_enter_ordinary_learner", "run_id_collision"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_009"}
+    },
+    {
+      "id": "VAL-AGENT-010", "requirement": "AGENT-010", "title": "Non-convergence termination",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "state_machine"],
+      "fixtures": ["FX-AGENT-CASES"], "depends_on": ["VAL-AGENT-002"],
+      "matrix": {"scenario": ["no_improvement", "repeated_state", "strategy_cycle", "count_progress_without_cycle"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_010"}
+    },
+    {
+      "id": "VAL-AGENT-011", "requirement": "AGENT-011", "title": "Safety monotonicity under learning",
+      "gate": "LEARNING-GATE", "phase": "agent_learning", "methods": ["test", "matched_comparison"],
+      "fixtures": ["FX-AGENT-CASES", "FX-HOLDOUT"], "depends_on": ["VAL-AGENT-005", "VAL-AGENT-008", "VAL-AGENT-010"],
+      "matrix": {"mode": ["frozen_no_memory", "learned_ranking"], "scenario": ["platform_gate", "source_gate", "constraint_fmax_gate", "signoff_gate", "provenance_gate", "graph_gate", "publication_gate"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.agent:val_agent_011"}
+    },
+
+    {
+      "id": "VAL-OPS-001", "requirement": "OPS-001", "title": "Complete terminal ledger",
+      "gate": "OPS-GATE", "phase": "operations", "methods": ["test", "campaign"],
+      "fixtures": ["FX-RTL-SIMPLE", "FX-RTL-REJECT", "FX-AGENT-CASES"], "depends_on": ["VAL-DATA-008", "VAL-AGENT-011"],
+      "matrix": {"platform": "@target_platforms", "outcome": ["published", "rejected", "failed", "needs_human"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.operations:val_ops_001"}
+    },
+    {
+      "id": "VAL-OPS-002", "requirement": "OPS-002", "title": "Evaluation-state isolation",
+      "gate": "OPS-GATE", "phase": "operations", "methods": ["test", "contamination"],
+      "fixtures": ["FX-AGENT-CASES", "FX-HOLDOUT"], "depends_on": ["VAL-ENV-002"],
+      "matrix": {"store": ["production", "development", "regression", "held_out"], "scenario": ["read_marker", "write_marker", "pre_score_leak"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.operations:val_ops_002"}
+    },
+    {
+      "id": "VAL-OPS-003", "requirement": "OPS-003", "title": "Evidence-package completeness",
+      "gate": "OPS-GATE", "phase": "operations", "methods": ["inspection", "test"],
+      "fixtures": ["FX-RUN-CLEAN", "FX-GRAPH-CLEAN", "FX-AGENT-CASES"], "depends_on": ["VAL-OPS-001", "VAL-OPS-002"],
+      "matrix": {"scenario": ["complete", "source_missing", "platform_qualification_missing", "constraint_fmax_missing", "signoff_missing", "graph_missing", "agent_trajectory_missing", "resource_record_missing"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.operations:val_ops_003"}
+    },
+    {
+      "id": "VAL-OPS-004", "requirement": "OPS-004", "title": "Declared reproducibility",
+      "gate": "OPS-GATE", "phase": "operations", "methods": ["test", "repetition"],
+      "fixtures": ["FX-RTL-SIMPLE", "FX-RTL-MEDIUM"], "depends_on": ["VAL-OPS-003"],
+      "matrix": {"campaign_repeat": ["first", "second"], "comparison": ["byte_stable", "semantic", "numerical_tolerance"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.operations:val_ops_004"}
+    },
+    {
+      "id": "VAL-OPS-005", "requirement": "OPS-005", "title": "Resource accountability",
+      "gate": "OPS-GATE", "phase": "operations", "methods": ["inspection", "boundary_test"],
+      "fixtures": ["FX-RTL-SIMPLE", "FX-RTL-MEDIUM", "FX-RTL-LARGE"], "depends_on": ["VAL-ENV-002"],
+      "matrix": {"platform": "@target_platforms", "size": ["small", "medium", "large"], "scenario": ["normal", "flow_limit_exhausted", "fmax_limit_exhausted"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.operations:val_ops_005"}
+    },
+    {
+      "id": "VAL-OPS-006", "requirement": "OPS-006", "title": "Campaign continuity and resume",
+      "gate": "OPS-GATE", "phase": "operations", "methods": ["test", "multi_candidate_fault"],
+      "fixtures": ["FX-RTL-SIMPLE", "FX-RTL-MEDIUM", "FX-RTL-LARGE"], "depends_on": ["VAL-OPS-001", "VAL-FLOW-006"],
+      "matrix": {"scenario": ["one_fails", "one_hangs", "others_complete", "campaign_interrupt", "campaign_resume", "budget_exhaustion"]},
+      "evaluator": {"status": "pending", "handler": "r2g_validation.operations:val_ops_006"}
+    }
+  ]
+}
