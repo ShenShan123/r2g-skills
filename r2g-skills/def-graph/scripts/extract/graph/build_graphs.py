@@ -706,6 +706,14 @@ def main():
         "label_health": health,
         "rc_health": rc_health,
         "signoff_health": signoff_health,
+        # Data tier (pilot P0-1, 2026-07-21): ONLY a build backed by the exact
+        # signoff verdict 'pass' (no blockers AND no caveats) is the strict
+        # clean tier. Everything else — pass_with_caveats (e.g. LVS skipped,
+        # timing unknown), warn-mode builds over a dirty gate, gate_off,
+        # unrecorded — is an explicitly RESEARCH-tier artifact that must never
+        # enter a clean dataset index. Consumers filter on this field.
+        "dataset_tier": ("strict_clean" if signoff_health.get("status") == "pass"
+                         else "research"),
         "variants": {},
         "status": ("ok" if all(h["status"] == "ok" for h in health.values())
                    else "ok_with_label_gaps"),

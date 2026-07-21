@@ -208,6 +208,22 @@ Extract results into JSON for reporting and dashboard:
 - `scripts/extract/extract_drc.py <project-root> reports/drc.json`
 - `scripts/extract/extract_lvs.py <project-root> reports/lvs.json`
 - `scripts/extract/extract_rcx.py <project-root> reports/rcx.json`
+
+**The complete strict evidence bundle is mandatory** (round-2 pilot P0-2,
+failure-patterns #53): every signoff pass must also leave `reports/route.json`
+(`extract_route.py`), `reports/ppa.json` (`extract_ppa.py`),
+`reports/timing_check.json` (`check_timing.py` — the FINAL timing confirmation
+that upgrades an Fmax winner from proxy to qualified), and the binding
+`reports/signoff_manifest.json` (`scripts/reports/build_signoff_manifest.py`:
+per-report sha256s, SDC digest + stamped period vs Fmax winner, confirming run +
+DEF/GDS digests, `strict_clean` verdict with an ENUMERATED `strict_missing`).
+`fix_signoff.sh` and `tools/run_signoff.sh` emit all of this automatically at
+the end of every run; strict callers use `build_signoff_manifest.py --strict`,
+`R2G_SIGNOFF_STRICT_EXIT=1` (run_signoff), or `R2G_BATCH_STRICT_EXIT=1`
+(batch_flow) to turn a non-clean aggregate into a nonzero exit. Before a strict
+campaign, verify the platform can even satisfy it:
+`scripts/flow/platform_capability.py --platform <p> --strict` (also printed by
+`check_env.sh`; `R2G_STRICT_PLATFORMS` makes it required there).
 - If DRC/LVS is `fail`, attempt automated real-layout fixes:
   `scripts/flow/fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both]`
   (See `references/signoff-fixing.md`.)

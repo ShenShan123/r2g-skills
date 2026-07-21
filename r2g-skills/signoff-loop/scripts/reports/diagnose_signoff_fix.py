@@ -70,6 +70,32 @@ KLAYOUT_CPP_CRASH = re.compile(r"sort_circuit|gen_log_entry|segmentation|sigsegv
 DIODE_FORCED_REPAIR_PLATFORMS = {"nangate45"}
 
 
+def _antenna_precondition(platform: str):
+    """Pilot P1-1: check the diode-repair PREREQUISITE before ranking it.
+
+    The 2026-07-21 pilot selected antenna_diode_repair while OpenROAD repeatedly
+    reported GRT-0246 (no usable CORE ANTENNACELL diode: ANTENNADIFFAREA 0.0) —
+    the reroute produced a byte-identical 6_final.def and a ~5,200s full DRC was
+    burned re-grading the unchanged layout. Probe the platform's antenna model
+    (tech-LEF ratio rules + a positive-diff-area diode) via
+    flow/platform_capability.py before offering any diode-inserting strategy.
+
+    Returns (usable, reason): False only on POSITIVE evidence the model is
+    unusable; None (fail-open) when the environment cannot be inspected —
+    blocking on missing introspection would regress working setups.
+    R2G_ANTENNA_PRECHECK=0 disables the probe entirely."""
+    if os.environ.get("R2G_ANTENNA_PRECHECK", "1") == "0":
+        return None, "precheck disabled (R2G_ANTENNA_PRECHECK=0)"
+    try:
+        flow_dir = str(Path(__file__).resolve().parents[1] / "flow")
+        if flow_dir not in sys.path:
+            sys.path.insert(0, flow_dir)
+        import platform_capability
+        return platform_capability.antenna_repair_usable(platform)
+    except Exception as exc:  # noqa: BLE001 — introspection failure must fail open
+        return None, f"precheck unavailable: {exc}"
+
+
 def _explicit_family(name: str, families: dict) -> str | None:
     """Family from an EXPLICIT families.json mapping/pattern, or None if only the
     generic split-on-underscore fallback would apply.  Mirrors ingest_run._explicit_family
@@ -289,11 +315,26 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
     if status in ("fail", "failed"):
         if _all_antenna(cats):
             strategies = [s for s in _antenna_strategies(cfg) if s["id"] not in exclude]
+            # Pilot P1-1 precondition: drop diode-inserting strategies when the
+            # platform's antenna model is PROVABLY unusable (GRT-0246 class) —
+            # they cannot change the layout, so ranking them burns a reroute
+            # plus a full signoff DRC per attempt. Density relief (a genuine
+            # layout change) survives; unknown probe results fail OPEN.
+            usable, precheck_why = _antenna_precondition(cfg.get("PLATFORM") or "")
+            if usable is False:
+                strategies = [s for s in strategies
+                              if not s["id"].startswith("antenna_diode")]
+                plan["antenna_model_unusable"] = precheck_why
             plan["strategies"] = strategies
             if not strategies:
                 plan["status"] = "residual"
                 platform = cfg.get("PLATFORM")
-                if platform in DIODE_FORCED_REPAIR_PLATFORMS:
+                if usable is False:
+                    plan["residual_reason"] = (
+                        f"antenna_model_unusable: {precheck_why} — diode-forced repair "
+                        "would be a no-op (pilot P1-1: unchanged layout + wasted full "
+                        "DRC); install/repair the platform antenna model, then retry")
+                elif platform in DIODE_FORCED_REPAIR_PLATFORMS:
                     plan["residual_reason"] = (
                         "nangate45 antenna: diode-forced repair (antenna_diode_repair) applied; "
                         "the bulk cleared but a few nets remain. Two causes: (1) the antenna model "

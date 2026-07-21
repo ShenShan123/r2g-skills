@@ -157,11 +157,26 @@ eval_tier() {
       else
         TIER_STATUS="OPT"; TIER_ACTION="venv+pip torch(cpu)+torch_geometric+pandas -> $_graph_venv"
       fi ;;
+    platform_rules)
+      # Strict-signoff capability for the default full-flow platform (round-2
+      # pilot P0-3): a stock nangate45 ORFS checkout ships NO LVS deck and an
+      # unusable zero-diff-area antenna diode, so a green tool table coexists
+      # with an impossible strict signoff — discovered only after multi-hour
+      # flows. Probe via the sibling skill's platform_capability.py; the
+      # installer materializes the repo's bundled DRC/LVS/antenna decks.
+      local _cap="$COLLECTION_DIR/signoff-loop/scripts/flow/platform_capability.py"
+      if [[ -z "$(d ORFS_ROOT)" || ! -f "$_cap" ]]; then
+        TIER_STATUS="OPT"; TIER_ACTION="bundled nangate45 DRC/LVS/antenna decks -> ORFS (install ORFS core first)"
+      elif python3 "$_cap" --flow-dir "$(d ORFS_ROOT)/flow" --platform nangate45 --strict >/dev/null 2>&1; then
+        TIER_STATUS="OK"; TIER_ACTION="nangate45 strict-signoff capable (DRC/LVS decks + usable antenna model)"
+      else
+        TIER_STATUS="OPT"; TIER_ACTION="install bundled nangate45 DRC/LVS/antenna decks (install_platform_rules.sh) — strict signoff impossible until then"
+      fi ;;
     *) TIER_STATUS="?"; TIER_ACTION="unknown tier" ;;
   esac
 }
 
-ALL_TIERS=(core frontend sky130 klayout pdk graph)
+ALL_TIERS=(core frontend sky130 klayout pdk platform_rules graph)
 tier_need() { case "$1" in core|frontend) echo req ;; *) echo opt ;; esac; }
 
 # Restrict to --tiers if given.

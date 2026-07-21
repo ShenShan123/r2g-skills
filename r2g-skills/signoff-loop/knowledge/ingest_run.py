@@ -174,6 +174,10 @@ _VERDICT_MAP = {
     # strategy ran and did not improve — negative evidence, same bucket as
     # no_improvement, NOT inconclusive fall-through.
     "antenna_nonconverged": "no_change",
+    # Pilot P1-1 (2026-07-21): the reflow produced a byte-identical layout, so
+    # the strategy provably had NO physical effect and the signoff re-run was
+    # skipped. Negative evidence, same bucket as no_improvement.
+    "recipe_no_effect": "no_change",
     "win": "win",
     "no_change": "no_change",
     "regression": "regression",

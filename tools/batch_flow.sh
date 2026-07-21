@@ -145,10 +145,25 @@ run_one_design() {
   end_time=$(date +%s)
   local elapsed=$((end_time - start_time))
 
+  # Pilot P1-3: classify signoff pass/fail from the EXTRACTED report status, not
+  # the tool exit code — `make drc` exits 0 when it successfully FINDS violations,
+  # so the old exit test recorded DRC-dirty designs as "pass". Clean-state sets
+  # mirror fix_signoff.sh's fail-closed clean gate; the concrete status + exit
+  # ride in parentheses for the failure lists.
+  _sig_class() {  # report_json tool_exit clean_state...
+    local rep="$1" ec="$2" st c; shift 2
+    st="$(python3 -c 'import json,sys
+try: print(json.load(open(sys.argv[1])).get("status") or "missing")
+except Exception: print("missing")' "$rep" 2>/dev/null || echo missing)"
+    for c in "$@"; do
+      [[ "$st" == "$c" ]] && { echo "pass"; return; }
+    done
+    echo "fail($st:$ec)"
+  }
   local orfs_s="pass" drc_s lvs_s rcx_s
-  [[ "$drc_exit" -eq 0 ]] && drc_s="pass" || drc_s="fail($drc_exit)"
-  [[ "$lvs_exit" -eq 0 ]] && lvs_s="pass" || lvs_s="fail($lvs_exit)"
-  [[ "$rcx_exit" -eq 0 ]] && rcx_s="pass" || rcx_s="fail($rcx_exit)"
+  drc_s="$(_sig_class "$case_dir/reports/drc.json" "$drc_exit" clean clean_beol)"
+  lvs_s="$(_sig_class "$case_dir/reports/lvs.json" "$lvs_exit" clean skipped)"
+  rcx_s="$(_sig_class "$case_dir/reports/rcx.json" "$rcx_exit" complete)"
 
   result_json="$result_json, \"orfs\": \"$orfs_s\", \"drc\": \"$drc_s\", \"lvs\": \"$lvs_s\", \"rcx\": \"$rcx_s\", \"elapsed_s\": $elapsed}"
   echo "$result_json" >> "$RESULTS_FILE"
@@ -215,6 +230,16 @@ LVS_FAIL=$(grep -c '"lvs": "fail' "$RESULTS_FILE" || true)
 RCX_PASS=$(grep -c '"rcx": "pass"' "$RESULTS_FILE" || true)
 RCX_FAIL=$(grep -c '"rcx": "fail' "$RESULTS_FILE" || true)
 SKIPPED=$(grep -c '"status": "skip"' "$RESULTS_FILE" || true)
+ALL_PASS=$(grep '"orfs": "pass"' "$RESULTS_FILE" | grep '"drc": "pass"' | grep '"lvs": "pass"' | grep -c '"rcx": "pass"' || true)
+# Aggregate terminal state (pilot P1-3): 'clean' only when every executed design
+# passed all four subjects. The script's exit code stays 0 = execution-completed
+# (resumable campaign control); R2G_BATCH_STRICT_EXIT=1 turns a non-clean
+# aggregate into exit 4 so strict callers cannot misread completion as success.
+if [[ $((TOTAL_RESULTS - SKIPPED)) -eq "$ALL_PASS" && "$TOTAL_RESULTS" -gt 0 ]]; then
+  AGGREGATE="clean"
+else
+  AGGREGATE="not-clean"
+fi
 
 # Average time for completed designs
 AVG_TIME=$(grep '"elapsed_s"' "$RESULTS_FILE" | python3 -c "
@@ -242,7 +267,8 @@ DRC:           Pass=$DRC_PASS  Fail=$DRC_FAIL
 LVS:           Pass=$LVS_PASS  Fail=$LVS_FAIL
 RCX:           Pass=$RCX_PASS  Fail=$RCX_FAIL
 
-All-pass (ORFS+DRC+LVS+RCX): $(grep '"orfs": "pass"' "$RESULTS_FILE" | grep '"drc": "pass"' | grep '"lvs": "pass"' | grep -c '"rcx": "pass"' || true)
+All-pass (ORFS+DRC+LVS+RCX): $ALL_PASS
+Aggregate: $AGGREGATE
 
 ORFS Failures:
 $(grep '"orfs": "fail' "$RESULTS_FILE" | python3 -c "
@@ -286,3 +312,8 @@ for l in sys.stdin:
 EOF
 
 cat "$SUMMARY_FILE"
+
+echo "Aggregate: $AGGREGATE (exit 0 = execution-completed; R2G_BATCH_STRICT_EXIT=1 for a strict exit)"
+if [[ "${R2G_BATCH_STRICT_EXIT:-0}" == "1" && "$AGGREGATE" != "clean" ]]; then
+  exit 4
+fi

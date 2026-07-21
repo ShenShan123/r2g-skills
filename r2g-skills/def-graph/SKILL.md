@@ -73,10 +73,21 @@ a MISSING report blocks) are drc ∈ {clean, clean_beol}, lvs ∈ {clean, skippe
 route/antenna residuals 0 when provable; timing is recorded but never blocks (negative slack is a
 legitimate training label). `run_graphs.sh` — the dataset builder — **enforces** by default and
 SKIPs a not-signed-off design; `run_labels.sh`/`run_features.sh` default to **warn** (record +
-proceed). Override with `R2G_SIGNOFF_GATE=enforce|warn|off`; an explicit `R2G_DEF` override
+proceed). Override with `R2G_SIGNOFF_GATE=strict|enforce|warn|off`; an explicit `R2G_DEF` override
 downgrades to warn (a deliberate, recorded operator decision). The verdict always lands in
 `reports/signoff_gate.json` and rides the manifest as `signoff_health` — the verifier fails a
 dataset whose provenance is unrecorded or whose gate verdict is dirty.
+ORFS completion requires a reconstructable SIX-STAGE lineage, not merely a clean `finish` row —
+a repair/resume generation is attributed via `resume_meta.json`'s recorded `parent_lineage` or
+sibling ledgers (the latter as the `orfs_lineage=reconstructed` caveat); an orphan repair-only
+run blocks (round-2 pilot P0-4). **Strict tier** (`R2G_SIGNOFF_GATE=strict`, pilot P0-1): only
+the exact verdict `pass` builds; `pass_with_caveats` blocks. Every manifest carries
+`dataset_tier` — `strict_clean` iff the gate verdict was exactly `pass`, else `research` — and a
+clean dataset index must filter on it. Each build also stamps a stable corpus-level `graph_id`
+(sha1(platform:design) in [1, 2^24), `R2G_GRAPH_ID` overrides; pilot P0-5) into the manifest and
+every x1 slot; `verify_graph_dataset.py --batch` enforces corpus-wide uniqueness and reports
+`BLOCKED / not_applicable` (exit 3 single-case) for intentionally denied designs instead of
+crashing (pilot H2).
 
 ### 1. Labels (Y) — `scripts/flow/run_labels.sh <project-dir> [platform]`
 

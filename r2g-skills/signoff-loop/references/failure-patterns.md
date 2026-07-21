@@ -4910,3 +4910,91 @@ an explicit operator decision, not a drive-by fix.
 *Generalizable rule: a test input that lives under campaign output must be RESOLVED at run time, and a skip
 that can fire silently is a guard you no longer have. Prefer a loud, self-announcing skip that names its
 remedy — and re-check that the remedy still works.*
+
+## Strict-Gate Pilot Failures (round-2 pilot 2026-07-21 — failure-patterns #53)
+
+The second fixed-protocol pilot (`docs/superpowers/plans/pilot_report.md` + `pilot_analysis.md`,
+agent commit 3117f0e, nangate45) executed 49/49 gate cells and yielded **0/4 strict end-to-end** —
+not because the flow broke, but because the strict evidence layer had holes. Confirmed findings
+P0-1..P0-5, P1-1..P1-3 + harness H1..H3, each now guarded:
+
+### P0-1 — `pass_with_caveats` was publishable
+`signoff_gate.py` PROCEEDed on `pass_with_caveats`, so datasets built over skipped LVS/unknown
+timing. **Guard:** gate mode `strict` (`R2G_SIGNOFF_GATE=strict`) blocks anything but the exact
+verdict `pass` (exit 3); every manifest now carries `dataset_tier` (`strict_clean` only under an
+exact `pass`; else `research`) so a pass_with_caveats build can never enter a clean index.
+Tests: `def-graph/tests/test_signoff_gate_lineage.py`, `test_graph_stage.py`.
+
+### P0-2 — the signoff path never emitted the strict evidence bundle
+All four pilot projects lacked canonical `reports/route.json`, `reports/rcx.json`,
+`reports/timing_check.json`; Fmax winners stayed `[proxy, UNVERIFIED]`; every CONSTRAINT/SIGNOFF
+gate failed even where route/SPEF/full-DRC artifacts existed. **Guard:** `fix_signoff.sh` (end of
+every run) and `tools/run_signoff.sh` always emit route/ppa/timing_check/rcx extraction plus
+`scripts/reports/build_signoff_manifest.py` → `reports/signoff_manifest.json`, binding per-report
+sha256s, the SDC digest + stamped period, the Fmax winner, the confirming run + DEF/GDS digests,
+and a `strict_clean` verdict whose `strict_missing`/`constraint.missing` ENUMERATE what blocks
+(H3: the absent final-timing confirmation is named, never just the matching proxy/SDC periods).
+Test: `test_build_signoff_manifest.py`.
+
+### P0-3 — green ENV with strict signoff impossible
+`check_env.sh` passed while nangate45 had no LVS deck and `ANTENNA_X1` carried
+`ANTENNADIFFAREA 0.0` (GRT-0246). **Guard:** `scripts/flow/platform_capability.py` probes, per
+platform: full DRC deck, LVS path (KLayout deck / Magic+Netgen+PDK), usable antenna model
+(ANTENNA*AREARATIO family + a positive-diff-area `CLASS CORE ANTENNACELL` diode), RCX rules,
+timing libs → `strict_signoff_ready`. Wired into both check_env.sh variants
+(`R2G_STRICT_PLATFORMS` makes it REQUIRED), the eda-install default plan (`platform_rules` tier),
+and the V1 registry as executable `GC-ENV-07`. Test: `test_platform_capability.py`.
+
+### P0-4 — a repair-only generation read as a complete ORFS run
+A route+finish rerun's RUN dir ledger satisfied `signoff_gate.py` ("clean finish row"), though
+synth..cts were consumed from an unproven earlier run. **Guard:** completion now requires a
+reconstructable SIX-STAGE lineage — `run_orfs.sh` records `parent_lineage` (consumed-artifact
+sha256 + parent run per reused stage) in `resume_meta.json` at resume time; the gate accepts a
+full own-ledger, a recorded chain, or sibling-ledger reconstruction (the last as the
+`orfs_lineage=reconstructed` caveat) and otherwise blocks. Test: `test_signoff_gate_lineage.py`.
+
+### P0-5 — corpus graph ids collided at 0
+`run_graphs.sh` never passed `--graph-id`; every manifest/x1 slot carried 0. **Guard:**
+a stable id derived from sha1(platform:design) in [1, 2^24) (float32-exact; `R2G_GRAPH_ID`
+overrides), stamped through manifest + every node store; the verifier checks tensor↔manifest id
+equality per design and corpus-wide uniqueness in `--batch` (an all-zero legacy corpus now FAILS
+batch until regenerated). Tests: `test_graph_stage.py`, spec GC-GRA-02.
+
+### P1-1 — antenna repair without prerequisite or effect check
+`antenna_diode_repair` was ranked despite GRT-0246; the reroute produced a byte-identical
+`6_final.def` and a ~5,200s full DRC re-graded the unchanged layout. **Guards:** (a)
+`diagnose_signoff_fix.py` consults `platform_capability.antenna_repair_usable` and refuses
+diode-inserting strategies on a PROVABLY unusable model (fail-open on unknown; residual reason
+`antenna_model_unusable`); (b) `fix_signoff.sh` fingerprints the newest DEF around every rerun —
+identical bytes ⇒ verdict `recipe_no_effect` (ingested as `no_change`), counts toward the
+consecutive-antenna non-convergence exit, and SKIPS the signoff tool re-run entirely.
+Tests: `test_diagnose_signoff_fix.py` (precondition), `test_fix_signoff_no_effect.py`.
+
+### P1-2 — a DRC-only request rebuilt the physical flow
+`make drc` sometimes reran synth→finish before KLayout: the restage bulk-`touch` stamped files in
+filesystem order (an earlier-stage artifact could land NEWER than 6_final.gds) and `objects/` was
+never restaged. **Guards:** run_orfs.sh preserves `objects/`; `_restage_for_signoff.sh` restages
+it and stamps mtimes in DEPENDENCY order (design inputs oldest → objects/logs → results by stage
+prefix 1_..6_ strictly increasing); `run_drc.sh` digests the GDS before/after make and forces
+`failed/implicit_rebuild_foreign_layout` when make rebuilt it — a DRC verdict must never grade a
+foreign layout.
+
+### P1-3 — batch exit 0 over dirty/stuck designs
+`run_signoff.sh` always exited 0; `batch_flow.sh` classified DRC "pass" from the make exit code
+(which is 0 when violations are FOUND); `aggregate_signoff_results.py` treated
+`violations`/`stuck` as acceptable. **Guards:** per-design `aggregate` (clean|partial|failed) in
+the JSONL; report-status-based classification in batch_flow; strict exits
+(`R2G_SIGNOFF_STRICT_EXIT=1` → 4, `R2G_BATCH_STRICT_EXIT=1` → 4, `aggregate --strict` → 1) while
+default exit stays "execution-completed" for resumable campaigns.
+
+### H1/H2/H3 — validation-harness hardening (kept separate from Agent findings)
+H1: the registry ENV oracle gained executable `GC-ENV-07` (strict platform capability). H2:
+`tools/verify_graph_dataset.py` reports `BLOCKED / not_applicable` (single-case exit 3, batch
+`[BLOCKED]`, never `FileNotFoundError`) when generation was intentionally denied. H3: spec
+GC-CON-02 + the signoff manifest require failing CONSTRAINT verdicts to enumerate the missing
+final-timing confirmation. Spec v0.9 + registry sha256 repinned.
+
+*Generalizable rule: a gate that is never fed its evidence fails honestly but uselessly — emit
+the full evidence bundle from the SAME path that runs the tools, bind it by digest to one run,
+and make "cannot possibly pass" (missing deck, unusable diode, proxy-only timing) detectable
+BEFORE the multi-hour work, not after.*

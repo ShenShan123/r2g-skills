@@ -344,11 +344,74 @@ _write_resume_meta() {  # reason no_clean
     [[ "$s" == "$FROM_STAGE" ]] && break
     reused="${reused:+$reused }$s"
   done
-  python3 - "$BACKEND_DIR/resume_meta.json" "$FROM_STAGE" "$reason" "$no_clean" "$reused" <<'PY' 2>/dev/null || true
-import json, sys, time
-path, from_stage, reason, no_clean, reused = sys.argv[1:6]
+  # Content-addressed parent chain for the REUSED stages (pilot P0-4, 2026-07-21):
+  # a resumed run's own stage_log.jsonl only records the stages it reran, so its
+  # RUN dir looked like a complete flow to signoff_gate.py while synth..cts were
+  # actually consumed from an EARLIER run. Record, per reused stage, the sha256 of
+  # the canonical artifact being consumed from the ORFS results dir RIGHT NOW plus
+  # the newest sibling RUN whose ledger shows a clean row for that stage — so
+  # completion can later be judged as a reconstructable six-stage lineage instead
+  # of merely a successful finish row.
+  local rdir="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+  [[ -d "$rdir" ]] || rdir="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME"
+  python3 - "$BACKEND_DIR/resume_meta.json" "$FROM_STAGE" "$reason" "$no_clean" "$reused" \
+            "$rdir" "$PROJECT_DIR/backend" "$(basename "$BACKEND_DIR")" <<'PY' 2>/dev/null || true
+import hashlib, json, os, sys, time
+path, from_stage, reason, no_clean, reused, rdir, backend, self_run = sys.argv[1:9]
+STAGE_ARTIFACT = {"synth": "1_synth.v", "floorplan": "2_floorplan.odb",
+                  "place": "3_place.odb", "cts": "4_cts.odb",
+                  "route": "5_route.odb", "finish": "6_final.odb"}
+
+def _sha256(p):
+    try:
+        h = hashlib.sha256()
+        with open(p, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+def _clean_stage_runs(stage):
+    """Sibling RUN dirs (newest first, excluding this run) whose stage_log has a
+    clean row for `stage`."""
+    try:
+        runs = sorted((d for d in os.listdir(backend)
+                       if d.startswith("RUN_") and d != self_run),
+                      key=lambda d: os.path.getmtime(os.path.join(backend, d)),
+                      reverse=True)
+    except OSError:
+        return []
+    out = []
+    for d in runs:
+        slog = os.path.join(backend, d, "stage_log.jsonl")
+        try:
+            with open(slog, encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        rec = json.loads(line)
+                    except ValueError:
+                        continue
+                    if rec.get("stage") == stage and rec.get("status") in (0, "0"):
+                        out.append(d)
+                        break
+        except OSError:
+            continue
+    return out
+
+lineage = {}
+for stage in (reused.split() if reused else []):
+    art = STAGE_ARTIFACT.get(stage)
+    apath = os.path.join(rdir, art) if art else None
+    parents = _clean_stage_runs(stage)
+    lineage[stage] = {
+        "artifact": art,
+        "sha256": _sha256(apath) if apath and os.path.isfile(apath) else None,
+        "parent_run": parents[0] if parents else None,
+    }
 json.dump({"from_stage": from_stage, "reason": reason, "no_clean": no_clean == "1",
-           "reused_stages": reused.split() if reused else [], "ts": int(time.time())},
+           "reused_stages": reused.split() if reused else [],
+           "parent_lineage": lineage, "ts": int(time.time())},
           open(path, "w"), indent=1)
 PY
 }
@@ -585,6 +648,15 @@ fi
 
 if [[ -d "$REPORTS_DIR" ]]; then
   cp -r "$REPORTS_DIR" "$BACKEND_DIR/reports_orfs" 2>/dev/null || true
+fi
+
+# Preserve objects/ too (pilot P1-2, 2026-07-21): ORFS stage rules also depend on
+# objects/ (merged libs, klayout .lyt, ABC scripts). A later signoff restage that
+# recovers results/ but not objects/ leaves `make drc` seeing missing/older
+# prerequisites and IMPLICITLY REBUILDING synth→finish before KLayout. Best-effort
+# like the copies above; _restage_for_signoff.sh restages it identity-aware.
+if [[ -d "$OBJECTS_DIR" ]]; then
+  cp -r "$OBJECTS_DIR" "$BACKEND_DIR/objects" 2>/dev/null || true
 fi
 
 # Copy key artifacts

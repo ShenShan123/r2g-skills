@@ -2382,11 +2382,46 @@ exit 0
         skip(name, f"re-run error: {e!r}"[:120])
 
 
+# verify_case return sentinel: graph generation was INTENTIONALLY denied (signoff
+# gate block / benign skip) — there is no dataset to verify, and that is neither a
+# pass nor a verifier failure (pilot H2: the absent manifest used to raise
+# FileNotFoundError, misreporting an honest denial as a harness crash).
+BLOCKED = -1
+
+
+def _denied_manifest(case):
+    """The run_graphs.sh skip manifest (reports/graph_dataset.json) when graph
+    generation was intentionally denied for this design, else None."""
+    p = os.path.join(case, "reports", "graph_dataset.json")
+    try:
+        with open(p) as fh:
+            doc = json.load(fh)
+    except Exception:
+        return None
+    if isinstance(doc, dict) and doc.get("status") in ("skipped", "blocked_unsigned"):
+        return doc
+    return None
+
+
 def verify_case(case, design=None, json_out=None):
     case = case.rstrip("/")
     SKIPPED.clear()   # per-case; RESULTS is cleared by the batch loop / fresh proc
     feat, labs, ds = case + "/features", case + "/labels", case + "/dataset"
-    man = json.load(open(ds + "/graph_manifest.json"))
+    man_path = ds + "/graph_manifest.json"
+    if not os.path.isfile(man_path):
+        denied = _denied_manifest(case)
+        if denied is not None:
+            design = design or denied.get("design") or os.path.basename(case)
+            print(f"== {design}: BLOCKED / NOT_APPLICABLE — graph generation "
+                  f"intentionally denied: {denied.get('reason')!r} ==")
+            if json_out:
+                with open(json_out, "w") as fh:
+                    json.dump({"design": design, "status": "blocked",
+                               "reason": denied.get("reason"),
+                               "results": [], "skipped": [], "passed": 0,
+                               "failed": 0}, fh, indent=1)
+            return BLOCKED
+    man = json.load(open(man_path))
     design = design or man.get("design") or os.path.basename(case)
     print(f"== {design} ({case}) ==")
 
@@ -2455,6 +2490,14 @@ def verify_case(case, design=None, json_out=None):
     check("b edge count", b.edge_index.shape[1] == exp_b,
           f"got {b.edge_index.shape[1]} want {exp_b}")
     check("b x1 uniform graph_id", bool((b.x[:, 1] == b.x[0, 1]).all()))
+    # Pilot P0-5: the tensor id must agree with the manifest's corpus-level id —
+    # a manifest claiming one id over tensors stamped with another breaks every
+    # cross-design join keyed on x1. (Corpus-wide uniqueness is checked in
+    # --batch, where the other designs are visible.)
+    if man.get("graph_id") is not None and b.x.shape[0]:
+        check("b x1 == manifest.graph_id",
+              float(b.x[0, 1]) == float(man["graph_id"]),
+              f"tensor x1={float(b.x[0, 1])} manifest graph_id={man['graph_id']}")
     check("b y0 == node_type", bool((b.y[:, 0] == b.x[:, 0]).all()))
     names = b.node_name
     ok_names = (names[:ng] == gate["inst_name"].tolist()
@@ -2877,9 +2920,13 @@ def main():
 
     if args.batch:
         root = args.batch.rstrip("/")
+        # Enumerate built datasets AND intentionally-denied designs (pilot H2):
+        # a signoff-gate block leaves no dataset/graph_manifest.json, but the
+        # denial itself must be VISIBLE in the batch report, not invisible.
         cases = sorted(
             os.path.join(root, d) for d in os.listdir(root)
-            if os.path.isfile(os.path.join(root, d, "dataset", "graph_manifest.json")))
+            if os.path.isfile(os.path.join(root, d, "dataset", "graph_manifest.json"))
+            or _denied_manifest(os.path.join(root, d)) is not None)
         if not cases:
             print(f"no cases with dataset/graph_manifest.json under {root}")
             sys.exit(1)
@@ -2893,15 +2940,55 @@ def main():
                                 "detail": repr(e)[:300]})
                 print(f"== {case}: VERIFIER ERROR {e!r}")
                 nf = 1
+            if nf == BLOCKED:
+                summary.append({"case": case, "passed": 0, "failed": 0,
+                                "blocked": True, "results": []})
+                continue
             summary.append({"case": case,
                             "passed": sum(1 for r in RESULTS if r["ok"]),
                             "failed": nf, "results": list(RESULTS)})
             total_fail += nf
+        # Cross-project graph-id uniqueness (pilot P0-5): individually-valid
+        # graphs can still collide at corpus level (build_graphs' old default
+        # stamped graph_id=0 into EVERY manifest and x1 slot). A collision
+        # poisons any cross-design join or batched training set, so it fails
+        # the batch even though every single-case verify passes.
+        gid_owner, collisions = {}, []
+        for s in summary:
+            if s.get("blocked"):
+                continue
+            try:
+                with open(os.path.join(s["case"], "dataset", "graph_manifest.json")) as fh:
+                    gid = json.load(fh).get("graph_id")
+            except Exception:
+                continue
+            if gid is None:
+                continue
+            if gid in gid_owner:
+                collisions.append(f"graph_id={gid}: {os.path.basename(gid_owner[gid])} "
+                                  f"vs {os.path.basename(s['case'])}")
+            else:
+                gid_owner[gid] = s["case"]
+        if collisions:
+            total_fail += len(collisions)
+            summary.append({"case": "__corpus__", "passed": 0, "failed": len(collisions),
+                            "results": [{"check": "corpus graph_id uniqueness",
+                                         "ok": False, "detail": d} for d in collisions]})
         print("\n== batch summary ==")
         for s in summary:
+            if s.get("blocked"):
+                print(f"  [BLOCKED] {os.path.basename(s['case'])}: generation "
+                      "intentionally denied (not verified, not a failure)")
+                continue
             tag = "PASS" if not s["failed"] else "FAIL"
             print(f"  [{tag}] {os.path.basename(s['case'])}: "
                   f"{s['passed']}/{s['passed'] + s['failed']}")
+        if gid_owner or collisions:
+            state = "FAIL" if collisions else "PASS"
+            print(f"  [{state}] corpus graph_id uniqueness "
+                  f"({len(gid_owner)} unique id(s), {len(collisions)} collision(s))")
+            for d in collisions:
+                print(f"    {d}")
         if args.json:
             with open(args.json, "w") as fh:
                 json.dump({"cases": summary,
@@ -2911,7 +2998,9 @@ def main():
     if not args.case_dir:
         ap.error("case_dir or --batch required")
     n_fail = verify_case(args.case_dir, args.design, args.json)
-    sys.exit(1 if n_fail else 0)
+    # 3 = blocked/not_applicable (generation intentionally denied; pilot H2) —
+    # distinct from 0 (verified clean) and 1 (verification failed).
+    sys.exit(3 if n_fail == BLOCKED else (1 if n_fail else 0))
 
 
 if __name__ == "__main__":

@@ -45,10 +45,15 @@ bash r2g-skills/eda-install/bootstrap.sh               # install missing tiers +
    graph), each `OK` / `MISS` (required, absent) / `OPT` (optional, installable), with the exact
    action it would take. The install **channel is chosen by `HAVE_SUDO`** (see below).
 3. **Install** — each tier is `scripts/setup/install_<tier>.sh`; `bootstrap.sh` dispatches to one the
-   moment it exists (and until then prints the command it *would* run). One extra **on-demand helper
-   outside the default plan**: `--tiers platform_rules` materializes the repo's bundled nangate45
-   DRC/LVS/antenna rule decks into the ORFS checkout (`install_platform_rules.sh`, best-effort,
-   HINTs when the repo `tools/` installers are unreachable).
+   moment it exists (and until then prints the command it *would* run). The `platform_rules` tier is
+   **in the default plan** (2026-07-20, round-2 pilot P0-3 — a stock nangate45 checkout has no LVS
+   deck and an unusable 0-area antenna diode, so strict signoff is impossible while every tool reads
+   green): the plan probes `platform_capability.py --platform nangate45 --strict` and shows OK/OPT;
+   being ORFS-mutating it still installs only when named (`--tiers platform_rules`), materializing
+   the repo's bundled nangate45 DRC/LVS/antenna rule decks into the ORFS checkout
+   (`install_platform_rules.sh`, best-effort, HINTs when the repo `tools/` installers are
+   unreachable). `check_env.sh` prints the same per-platform capability table;
+   `R2G_STRICT_PLATFORMS="nangate45"` makes readiness REQUIRED there.
 4. **Pin** (`scripts/setup/write_env_local.sh`) — writes `references/env.local.sh` into **both**
    `signoff-loop` and `def-graph` from the resolved paths, so the flow skills find a conda / `/proj`
    toolchain with no manual edit. It pins only what autodetect would miss (e.g. omits openroad/yosys

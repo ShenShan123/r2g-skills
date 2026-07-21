@@ -97,6 +97,28 @@ else
 fi
 
 echo
+echo "[platform strict-signoff capability]"
+# Tool presence alone does not prove a platform can satisfy a STRICT signoff
+# (2026-07-21 pilot P0-3: green ENV, but nangate45 had no LVS rule and a 0-area
+# antenna diode). Probe borrowed from the sibling signoff-loop skill; advisory
+# here — export R2G_STRICT_PLATFORMS="nangate45" to make readiness REQUIRED.
+_cap_probe="$_skills_root/signoff-loop/scripts/flow/platform_capability.py"
+if [[ -f "$_cap_probe" && -n "${FLOW_DIR:-}" && -d "$FLOW_DIR/platforms" ]]; then
+  python3 "$_cap_probe" --flow-dir "$FLOW_DIR" --summary 2>/dev/null \
+    || echo "--    (capability probe failed)"
+  if [[ -n "${R2G_STRICT_PLATFORMS:-}" ]]; then
+    for _p in ${R2G_STRICT_PLATFORMS}; do
+      if ! python3 "$_cap_probe" --flow-dir "$FLOW_DIR" --platform "$_p" --strict >/dev/null 2>&1; then
+        printf 'MISS strict capability: %s (required via R2G_STRICT_PLATFORMS)\n' "$_p"
+        STATUS=1
+      fi
+    done
+  fi
+else
+  echo "--    (probe or ORFS platforms dir unavailable — capability not probed)"
+fi
+
+echo
 echo "[how to override]"
 echo "  bash ../../bootstrap.sh --dry-run   # auto-detect + plan the toolchain (then drop --dry-run)"
 echo "  ORFS_ROOT=/your/path OPENROAD_EXE=/your/openroad bash check_env.sh"

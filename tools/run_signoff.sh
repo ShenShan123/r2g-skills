@@ -107,12 +107,51 @@ if [[ "$RCX_NEEDED" == "1" ]]; then
   echo "[$NAME] $(now) RCX end status=$RRCX" >> "$LOG"
 fi
 
+# --- Complete strict evidence bundle (pilot P0-2, 2026-07-21) ---------------
+# route.json / ppa.json / timing_check.json were never emitted by the signoff
+# path, so every strict CONSTRAINT/SIGNOFF gate failed even where the raw
+# artifacts existed. Read-only extraction + the binding signoff_manifest.json.
+python3 "$SKILL_DIR/scripts/extract/extract_route.py" "$PROJECT_DIR" "$REPORTS/route.json" >>"$LOG" 2>&1 || true
+python3 "$SKILL_DIR/scripts/extract/extract_ppa.py" "$PROJECT_DIR" "$REPORTS/ppa.json" >>"$LOG" 2>&1 || true
+python3 "$SKILL_DIR/scripts/reports/check_timing.py" "$PROJECT_DIR" >>"$LOG" 2>&1 || true
+python3 "$SKILL_DIR/scripts/reports/build_signoff_manifest.py" "$PROJECT_DIR" >>"$LOG" 2>&1 || true
+
 END="$(date +%s)"
 ELAPSED=$((END - START))
 
-# JSON one-liner to stdout (for jsonl aggregation)
-python3 - "$NAME" "$RDRC" "$RLVS" "$RRCX" "$ELAPSED" <<'PYEOF'
-import json, sys
-name, drc, lvs, rcx, elapsed = sys.argv[1:6]
-print(json.dumps({"case": name, "drc": drc, "lvs": lvs, "rcx": rcx, "elapsed_s": int(elapsed)}))
+# Aggregate terminal state (pilot P1-3): callers observing only the process exit
+# misread "executed to the end" as "signoff succeeded" — the pilot batch exited 0
+# with one design DRC-dirty and another drc=stuck. The JSONL line now carries an
+# explicit aggregate (clean|partial|failed), and strict mode
+# (R2G_SIGNOFF_STRICT_EXIT=1) turns a non-clean aggregate into exit 4 while the
+# default keeps exit 0 = execution-completed for resumable campaign control.
+AGG="$(python3 - "$REPORTS" <<'PYEOF'
+import json, os, sys
+reports = sys.argv[1]
+def load(fn):
+    try:
+        return json.load(open(os.path.join(reports, fn)))
+    except Exception:
+        return {}
+man = load("signoff_manifest.json")
+if man.get("strict_clean"):
+    print("clean"); raise SystemExit
+drc = str(load("drc.json").get("status"))
+lvs = str(load("lvs.json").get("status"))
+hard_dirty = (drc in ("fail", "failed", "violations", "stuck", "timeout")
+              or lvs in ("fail", "failed", "crash", "incomplete"))
+print("failed" if hard_dirty else "partial")
 PYEOF
+)"
+
+# JSON one-liner to stdout (for jsonl aggregation)
+python3 - "$NAME" "$RDRC" "$RLVS" "$RRCX" "$ELAPSED" "$AGG" <<'PYEOF'
+import json, sys
+name, drc, lvs, rcx, elapsed, agg = sys.argv[1:7]
+print(json.dumps({"case": name, "drc": drc, "lvs": lvs, "rcx": rcx,
+                  "elapsed_s": int(elapsed), "aggregate": agg}))
+PYEOF
+
+if [[ "${R2G_SIGNOFF_STRICT_EXIT:-0}" == "1" && "$AGG" != "clean" ]]; then
+  exit 4
+fi

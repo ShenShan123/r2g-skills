@@ -560,3 +560,41 @@ def test_apply_fails_closed_when_lifecycle_unreadable(tmp_path, monkeypatch, cap
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert out["status"] == "lifecycle_blocked"
     assert out["lifecycle_gate_ok"] is False
+
+
+# ---- antenna-model precondition (pilot P1-1, 2026-07-21) ---------------------
+# The pilot selected antenna_diode_repair while OpenROAD reported GRT-0246 (no
+# usable diode): the reroute produced a byte-identical DEF and a ~5,200s full
+# DRC was burned re-grading it. Diode-inserting strategies must not be ranked
+# when the platform's antenna model is PROVABLY unusable; an uninspectable
+# environment fails OPEN.
+
+_ANT_FAIL = {"status": "fail", "total_violations": 4,
+             "categories": {"M2_ANTENNA": {"count": 4}}}
+
+
+def test_antenna_precondition_unusable_blocks_diode_repair(monkeypatch):
+    monkeypatch.setattr(d, "_antenna_precondition",
+                        lambda p: (False, "no usable diode (test)"))
+    plan = d._drc_plan(dict(_ANT_FAIL), {"PLATFORM": "nangate45"}, set())
+    assert plan["strategies"] == []
+    assert plan["status"] == "residual"
+    assert "antenna_model_unusable" in (plan["residual_reason"] or "")
+    assert plan["antenna_model_unusable"] == "no usable diode (test)"
+
+
+def test_antenna_precondition_unknown_fails_open(monkeypatch):
+    monkeypatch.setattr(d, "_antenna_precondition",
+                        lambda p: (None, "cannot inspect (test)"))
+    plan = d._drc_plan(dict(_ANT_FAIL), {"PLATFORM": "nangate45"}, set())
+    assert [s["id"] for s in plan["strategies"]] == ["antenna_diode_repair"]
+
+
+def test_antenna_precondition_keeps_density_relief_elsewhere(monkeypatch):
+    """On non-diode-forced platforms only the diode-inserting strategy is
+    dropped; density relief is a genuine layout change and survives."""
+    monkeypatch.setattr(d, "_antenna_precondition", lambda p: (False, "x"))
+    plan = d._drc_plan(dict(_ANT_FAIL),
+                       {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "40"}, set())
+    ids = [s["id"] for s in plan["strategies"]]
+    assert "antenna_density_relief" in ids and "antenna_diode_iters" not in ids

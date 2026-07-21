@@ -81,6 +81,30 @@ else
 fi
 
 echo
+echo "[platform strict-signoff capability]"
+# A green tool table above does NOT mean a platform can satisfy a STRICT signoff
+# (2026-07-21 pilot P0-3: ENV passed while nangate45 had no LVS rule and an
+# unusable 0-area antenna diode; the gap surfaced only after multi-hour flows).
+# platform_capability.py probes DRC deck / LVS path / antenna model / RCX rules /
+# timing libs per platform. Advisory by default; export
+# R2G_STRICT_PLATFORMS="nangate45 sky130hd" to make readiness REQUIRED for those.
+if [[ -n "${FLOW_DIR:-}" && -d "$FLOW_DIR/platforms" ]]; then
+  python3 "$(dirname "${BASH_SOURCE[0]}")/platform_capability.py" \
+    --flow-dir "$FLOW_DIR" --summary 2>/dev/null || echo "--    (capability probe failed)"
+  if [[ -n "${R2G_STRICT_PLATFORMS:-}" ]]; then
+    for _p in ${R2G_STRICT_PLATFORMS}; do
+      if ! python3 "$(dirname "${BASH_SOURCE[0]}")/platform_capability.py" \
+             --flow-dir "$FLOW_DIR" --platform "$_p" --strict >/dev/null 2>&1; then
+        printf 'MISS strict capability: %s (required via R2G_STRICT_PLATFORMS)\n' "$_p"
+        STATUS=1
+      fi
+    done
+  fi
+else
+  echo "--    (no ORFS platforms dir — capability not probed)"
+fi
+
+echo
 echo "[how to override]"
 echo "  bash ../../../bootstrap.sh --dry-run   # auto-detect + plan the toolchain (then drop --dry-run)"
 echo "  ORFS_ROOT=/your/path OPENROAD_EXE=/your/openroad bash check_env.sh"

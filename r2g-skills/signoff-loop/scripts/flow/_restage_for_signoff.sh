@@ -113,6 +113,10 @@ _restage_dir() {
 if [[ -n "$R2G_BACKEND_RUN" ]]; then
   _restage_dir results        "$ORFS_RESULTS_DIR"
   _restage_dir logs           "$ORFS_LOGS_DIR"
+  # objects/ carries stage prerequisites too (merged libs, klayout .lyt, ABC
+  # scripts); without it `make drc` can implicitly rebuild the flow (pilot P1-2).
+  # Preserved by run_orfs.sh since 2026-07-21; older backends simply lack it.
+  _restage_dir objects        "$ORFS_OBJECTS_DIR"
   _restage_dir reports_orfs   "$FLOW_DIR/reports/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
   _restage_dir reports        "$FLOW_DIR/reports/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 
@@ -132,14 +136,35 @@ if [[ -n "$R2G_BACKEND_RUN" ]]; then
   fi
 fi
 
-# Bump mtimes so make sees the staged artifacts as up-to-date relative to
-# config.mk / sources. Without this the Makefile may still rebuild because the
-# (just-copied) intermediates appear older than config.mk.
-if [[ -d "$ORFS_RESULTS_DIR" ]]; then
-  find "$ORFS_RESULTS_DIR" -type f -exec touch {} + 2>/dev/null || true
+# Bump mtimes so make sees the staged artifacts as up-to-date — in DEPENDENCY
+# ORDER (pilot P1-2, 2026-07-21). The old bulk `find -exec touch` stamped files in
+# filesystem-enumeration order, so an EARLIER stage artifact (e.g. 2_floorplan.odb)
+# could land NEWER than a later one (6_final.gds); ORFS's mtime cascade then judged
+# downstream targets stale and a DRC-only `make drc` silently rebuilt synth→finish
+# before KLayout — nondeterministically, which is why only one pilot fixture hit it.
+# Stamp design inputs (config.mk/SDC) OLDEST, then objects/ + logs, then results
+# grouped by stage-number prefix (1_… → 6_…) with strictly increasing timestamps,
+# so every consumer is provably newer than its producers and inputs.
+_r2g_now=$(date +%s)
+if [[ -d "$ORFS_DESIGN_DIR" ]]; then
+  find "$ORFS_DESIGN_DIR" -maxdepth 1 -type f -exec touch -d "@$((_r2g_now - 120))" {} + 2>/dev/null || true
 fi
-if [[ -d "$ORFS_LOGS_DIR" ]]; then
-  find "$ORFS_LOGS_DIR" -type f -exec touch {} + 2>/dev/null || true
+for _r2g_dir in "$ORFS_OBJECTS_DIR" "$ORFS_LOGS_DIR"; do
+  if [[ -d "$_r2g_dir" ]]; then
+    find "$_r2g_dir" -type f -exec touch -d "@$((_r2g_now - 90))" {} + 2>/dev/null || true
+  fi
+done
+if [[ -d "$ORFS_RESULTS_DIR" ]]; then
+  _r2g_epoch=$((_r2g_now - 60))
+  for _r2g_stage in 1 2 3 4 5 6; do
+    _r2g_epoch=$((_r2g_epoch + 5))
+    find "$ORFS_RESULTS_DIR" -type f -name "${_r2g_stage}_*" \
+      -exec touch -d "@$_r2g_epoch" {} + 2>/dev/null || true
+  done
+  # Non-stage-prefixed outputs (updated SDCs, mem.json, …) newest of all.
+  find "$ORFS_RESULTS_DIR" -type f ! -name "[1-6]_*" \
+    -exec touch -d "@$((_r2g_epoch + 5))" {} + 2>/dev/null || true
 fi
 
-unset _restage_dir _restage_pick_run_dir _fb_marker _fb_pick _fb_staged 2>/dev/null || true
+unset _restage_dir _restage_pick_run_dir _fb_marker _fb_pick _fb_staged \
+      _r2g_now _r2g_epoch _r2g_stage _r2g_dir 2>/dev/null || true

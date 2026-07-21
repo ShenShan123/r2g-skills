@@ -219,6 +219,10 @@ def test_manifest_written_with_stats(mini_csvs, tmp_path, monkeypatch, capsys):
     man = json.load(open(out / "graph_manifest.json"))
     assert man["status"] == "ok" and set(man["variants"]) == {"b", "f"}
     assert man["graph_kind"] == "hetero"                       # default is hetero
+    # Data tier (pilot P0-1): no --signoff-health -> signoff_health 'unrecorded'
+    # -> explicitly research-tier, never the strict clean tier.
+    assert man["signoff_health"]["status"] == "unrecorded"
+    assert man["dataset_tier"] == "research"
     assert man["variants"]["b"]["nodes"] == 7                  # homo total preserved
     assert os.path.isfile(out / "b_graph.pt") and os.path.isfile(out / "f_graph.pt")
     # {v}_graph.pt is a HeteroData; the manifest's per-view hetero breakdown matches
@@ -226,6 +230,37 @@ def test_manifest_written_with_stats(mini_csvs, tmp_path, monkeypatch, capsys):
     assert isinstance(b, HeteroData)
     assert man["variants"]["b"]["hetero"]["node_types"] == {
         nt: int(b[nt].x.shape[0]) for nt in b.node_types}
+
+
+@pytestmark_tensor
+def test_dataset_tier_follows_signoff_health(mini_csvs, tmp_path, monkeypatch):
+    """Pilot P0-1: only the exact gate verdict 'pass' yields the strict clean
+    tier; pass_with_caveats (LVS skipped, timing unknown, ...) is an explicitly
+    research-tier artifact that must never enter a clean index."""
+    import json
+    import sys as _sys
+
+    import build_graphs as bg
+
+    feat, lab = mini_csvs
+    for status, tier in (("pass", "strict_clean"), ("pass_with_caveats", "research")):
+        health = tmp_path / f"gate_{status}.json"
+        health.write_text(json.dumps({"status": status, "blockers": [], "caveats": []}))
+        out = tmp_path / f"ds_{status}"
+        monkeypatch.setattr(_sys, "argv", [
+            "build_graphs.py", "--features", feat, "--labels", lab,
+            "--design", "mini", "--out-dir", str(out), "--variants", "b",
+            "--graph-id", "42", "--signoff-health", str(health)])
+        bg.main()
+        man = json.load(open(out / "graph_manifest.json"))
+        assert man["dataset_tier"] == tier, (status, man["dataset_tier"])
+        assert man["graph_id"] == 42       # pilot P0-5: the corpus id rides the manifest
+        b = torch.load(out / "b_graph.pt", weights_only=False)
+        # ...and the x1 slot of every node store (hetero drops the node_type col,
+        # so graph_id is column 0 of the hetero x).
+        for nt in b.node_types:
+            if b[nt].x.shape[0]:
+                assert float(b[nt].x[0, 0]) == 42.0
 
 
 @pytestmark_tensor

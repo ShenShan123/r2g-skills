@@ -28,11 +28,21 @@ signoff artifacts and decides whether a dataset may be built from this run:
 
 Always writes reports/signoff_gate.json (atomic tmp+rename); build_graphs.py
 embeds it in graph_manifest.json as `signoff_health`. Exit code:
-  0  proceed  (verdict pass/pass_with_caveats, or mode warn/off)
-  3  blocked  (mode enforce and a required check failed)
+  0  proceed  (verdict pass/pass_with_caveats, or mode warn/off;
+              mode strict: exact 'pass' ONLY)
+  3  blocked  (mode enforce and a required check failed, or mode strict and
+              the verdict is anything but exact 'pass')
 
 Fail-closed on MISSING drc/lvs reports in enforce mode: the verifier's old
 vacuous pass (no report -> no check -> "clean") is the exact trap this replaces.
+
+Modes / tiers (pilot P0-1, 2026-07-21): `enforce` (default) blocks on dirty or
+unverifiable signoff but lets pass_with_caveats build — such a dataset is a
+RESEARCH-tier artifact (build_graphs.py stamps dataset_tier accordingly and it
+may never enter a clean index). `strict` is the V1 clean tier: only the exact
+verdict 'pass' (no blockers AND no caveats — full-deck DRC clean, LVS clean,
+six-stage lineage, route clean, antenna clean, timing met, reports bound) may
+build. Select with R2G_SIGNOFF_GATE=strict.
 Overrides: R2G_SIGNOFF_GATE=warn builds anyway with the reasons recorded;
 --def-overridden (R2G_DEF/R2G_ODB set) downgrades to warn — an explicit operator
 override is a deliberate, recorded decision, e.g. the no-backend verifier flows.
@@ -87,37 +97,117 @@ def _check_lvs(reports_dir):
     return out
 
 
+# The six canonical ORFS stages a COMPLETE physical-implementation generation
+# must account for — either in its own ledger or through a reconstructable
+# parent lineage (pilot P0-4, 2026-07-21).
+CANONICAL_STAGES = ("synth", "floorplan", "place", "cts", "route", "finish")
+
+
+def _stage_statuses(run_dir):
+    """{stage: status} from a run dir's stage_log.jsonl, or None when absent."""
+    slog = os.path.join(run_dir, "stage_log.jsonl")
+    if not os.path.isfile(slog):
+        return None
+    stages = {}
+    try:
+        with open(slog, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                stages[str(rec.get("stage", ""))] = rec.get("status")
+    except OSError:
+        return None
+    return stages
+
+
+def _resolve_lineage(run_dir, missing):
+    """Attribute stages absent from this run's own ledger to earlier runs.
+
+    A repair/resume generation (run_orfs.sh FROM_STAGE) reruns only the fixed
+    stages, so its RUN dir ledger holds e.g. only route+finish while synth..cts
+    were consumed from an earlier run's artifacts. Sources, strongest first:
+      * 'recorded'      — resume_meta.json parent_lineage (written at resume time
+                          with the consumed artifact's sha256; 2026-07-21)
+      * 'reconstructed' — newest sibling RUN whose own ledger shows a clean row
+                          for the stage (pre-P0-4 resumes carry no recording)
+    Returns ({stage: {source, parent_run, sha256}}, [unresolved stages])."""
+    meta = _load_json(os.path.join(run_dir, "resume_meta.json"))
+    recorded = (meta or {}).get("parent_lineage") or {}
+    backend = os.path.dirname(os.path.realpath(run_dir))
+    self_run = os.path.basename(os.path.realpath(run_dir))
+    try:
+        siblings = sorted(
+            (d for d in os.listdir(backend)
+             if d.startswith("RUN_") and d != self_run
+             and os.path.isdir(os.path.join(backend, d))),
+            key=lambda d: os.path.getmtime(os.path.join(backend, d)), reverse=True)
+    except OSError:
+        siblings = []
+    lineage, unresolved = {}, []
+    for stage in missing:
+        rec = recorded.get(stage) or {}
+        parent = rec.get("parent_run")
+        if parent and os.path.isdir(os.path.join(backend, parent)):
+            pstages = _stage_statuses(os.path.join(backend, parent)) or {}
+            if pstages.get(stage) in (0, "0"):
+                lineage[stage] = {"source": "recorded", "parent_run": parent,
+                                  "sha256": rec.get("sha256")}
+                continue
+        for sib in siblings:
+            pstages = _stage_statuses(os.path.join(backend, sib)) or {}
+            if pstages.get(stage) in (0, "0"):
+                lineage[stage] = {"source": "reconstructed", "parent_run": sib}
+                break
+        else:
+            unresolved.append(stage)
+    return lineage, unresolved
+
+
 def _check_orfs(run_dir):
     """ORFS completion from the run the DEF came from: stage_log.jsonl is the
     authoritative record (one JSON line per stage, written by run_orfs.sh);
-    run-meta.json make_status is the coarser fallback."""
+    run-meta.json make_status is the coarser fallback.
+
+    'complete' requires a RECONSTRUCTABLE SIX-STAGE LINEAGE, not merely a clean
+    'finish' row (pilot P0-4): a repair-only generation (route+finish rerun)
+    used to read complete here although synth..cts were absent from its ledger
+    and nothing proved which upstream artifacts it consumed."""
     if not run_dir:
         return {"status": "unknown", "detail": "no backend run dir (DEF overridden or externally collected)"}
-    slog = os.path.join(run_dir, "stage_log.jsonl")
-    if os.path.isfile(slog):
-        stages = {}
-        try:
-            with open(slog, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        rec = json.loads(line)
-                    except ValueError:
-                        continue
-                    stages[str(rec.get("stage", ""))] = rec.get("status")
-        except OSError:
-            stages = {}
+    stages = _stage_statuses(run_dir)
+    if stages is not None:
         bad = {s: st for s, st in stages.items() if st not in (0, "0")}
         if bad:
             return {"status": "fail", "detail": f"stage(s) failed: {bad}", "stages": stages}
-        if stages.get("finish") in (0, "0"):
-            return {"status": "complete", "stages": stages}
-        if stages:
-            return {"status": "incomplete",
-                    "detail": f"no clean 'finish' stage in stage_log.jsonl (saw: {sorted(stages)})",
-                    "stages": stages}
+        if stages.get("finish") not in (0, "0"):
+            if stages:
+                return {"status": "incomplete",
+                        "detail": f"no clean 'finish' stage in stage_log.jsonl (saw: {sorted(stages)})",
+                        "stages": stages}
+        else:
+            clean = {s for s, st in stages.items() if st in (0, "0")}
+            missing = [s for s in CANONICAL_STAGES if s not in clean]
+            if not missing:
+                return {"status": "complete", "stages": stages}
+            lineage, unresolved = _resolve_lineage(run_dir, missing)
+            if not unresolved:
+                quality = ("recorded"
+                           if all(v.get("source") == "recorded" for v in lineage.values())
+                           else "reconstructed")
+                return {"status": "complete", "stages": stages,
+                        "lineage": lineage, "lineage_quality": quality,
+                        "detail": f"repair/resume generation; reused stages attributed "
+                                  f"via {quality} parent lineage"}
+            return {"status": "incomplete", "stages": stages,
+                    "lineage": lineage,
+                    "detail": "repair-only generation without a reconstructable "
+                              f"six-stage lineage: unattributed stage(s) {unresolved} "
+                              "(pilot P0-4 — a clean 'finish' row alone is not completion)"}
     meta = _load_json(os.path.join(run_dir, "run-meta.json"))
     if meta is not None and "make_status" in meta:
         ms = meta.get("make_status")
@@ -418,6 +508,12 @@ def evaluate(project_dir, run_dir, def_path=None):
         caveats.append("lvs=skipped")
     if checks["route"]["status"] == "unknown":
         caveats.append("route=unknown")
+    # A repair/resume generation whose reused stages were only RECONSTRUCTED from
+    # sibling ledgers (no recorded parent chain — pre-P0-4 resume) is complete but
+    # weakly bound; record it. A 'recorded' lineage carries consumed-artifact
+    # digests and is not a caveat.
+    if checks["orfs"].get("lineage_quality") == "reconstructed":
+        caveats.append("orfs_lineage=reconstructed")
     # Antenna as its own recorded risk (never a new blocker — a full-deck antenna
     # failure already blocks via `drc`). Anything but a proven-clean antenna is a
     # recorded caveat so a routing-clean-but-antenna-dirty design is visible.
@@ -436,13 +532,13 @@ def main():
     ap.add_argument("--run-dir", default="", help="backend RUN_* dir the DEF came from")
     ap.add_argument("--def", dest="def_path", default="",
                     help="the selected 6_final.def being graphed — bound to --run-dir (P0-17)")
-    ap.add_argument("--mode", default="enforce", choices=("enforce", "warn", "off"))
+    ap.add_argument("--mode", default="enforce", choices=("enforce", "strict", "warn", "off"))
     ap.add_argument("--def-overridden", action="store_true",
                     help="R2G_DEF/R2G_ODB set: downgrade enforce to warn (deliberate operator override)")
     args = ap.parse_args()
 
     mode = args.mode
-    if args.def_overridden and mode == "enforce":
+    if args.def_overridden and mode in ("enforce", "strict"):
         mode = "warn"
 
     if mode == "off":
@@ -462,6 +558,14 @@ def main():
     os.replace(tmp, out)
 
     if verdict["status"] in PROCEED:
+        # Strict V1 tier (pilot P0-1): pass_with_caveats is NOT publishable —
+        # only the exact verdict 'pass' may build the clean tier.
+        if mode == "strict" and verdict["status"] != "pass":
+            print("signoff gate: BLOCKED (strict tier requires exact 'pass'; "
+                  f"got {verdict['status']!r}, caveats: {', '.join(verdict.get('caveats') or [])})",
+                  file=sys.stderr)
+            print(f"  verdict recorded in {out}", file=sys.stderr)
+            return 3
         note = f" (caveats: {', '.join(verdict['caveats'])})" if verdict.get("caveats") else ""
         print(f"signoff gate: {verdict['status']}{note}", file=sys.stderr)
         return 0

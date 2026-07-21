@@ -148,10 +148,13 @@ fi
 # A 6_final.def alone is NOT sign-off: DRC/LVS run in a separate post-finish
 # step, route/antenna residuals survive a "completed" flow, and an aborted ORFS
 # can leave a plausible DEF. Fail-closed here (the dataset builder): dirty OR
-# missing/unverifiable signoff blocks the build. R2G_SIGNOFF_GATE=warn builds
-# anyway with the reasons recorded; the verdict always lands in
-# reports/signoff_gate.json and the manifest's signoff_health. An explicit
-# R2G_DEF override downgrades to warn (deliberate, recorded operator decision).
+# missing/unverifiable signoff blocks the build. R2G_SIGNOFF_GATE=strict is the
+# V1 clean tier — only the exact verdict 'pass' builds (pass_with_caveats is
+# research-tier and blocks; pilot P0-1). R2G_SIGNOFF_GATE=warn builds anyway
+# with the reasons recorded; the verdict always lands in
+# reports/signoff_gate.json and the manifest's signoff_health + dataset_tier.
+# An explicit R2G_DEF override downgrades to warn (deliberate, recorded operator
+# decision).
 # Shared logic: signoff_gate.py (one copy — same rule as _provenance.sh).
 GATE_MODE="${R2G_SIGNOFF_GATE:-enforce}"
 GATE_FLAGS=()
@@ -234,6 +237,22 @@ done
 export R2G_SC_LIB_FILES="$SC_LIB_FILES"
 
 mkdir -p "$DATASET_DIR"
+
+# Corpus-level numeric graph id (pilot P0-5, 2026-07-21): build_graphs.py's
+# --graph-id was never supplied here, so its default 0 landed in EVERY manifest
+# and every x[:,1] slot — a multi-design corpus carried valid individual graphs
+# with colliding graph-level and node-level ids. Derive a stable id from the
+# (platform, design) identity: deterministic across regens, folded into
+# [1, 2^24) so it is exactly representable in the float32 x tensor. 0 is never
+# assigned (it is the legacy-collision sentinel the batch verifier rejects).
+# R2G_GRAPH_ID overrides for corpora with an external id registry.
+GRAPH_ID="${R2G_GRAPH_ID:-}"
+if [[ -z "$GRAPH_ID" ]]; then
+  GRAPH_ID="$(python3 -c 'import hashlib,sys
+h = int(hashlib.sha1((sys.argv[1] + ":" + sys.argv[2]).encode()).hexdigest(), 16)
+print(h % ((1 << 24) - 1) + 1)' "$PLATFORM" "$DESIGN_NAME")"
+fi
+
 GRAPH_TIMEOUT="${GRAPH_TIMEOUT:-2400}"
 VARIANTS="${R2G_GRAPH_VARIANTS:-bcdef}"
 # Output graph_kind (default hetero, 2026-07-16): each {b..f}_graph.pt is a
@@ -250,6 +269,7 @@ timeout --signal=TERM --kill-after=30 "$GRAPH_TIMEOUT" \
     --features "$FEATURES_DIR" --labels "$LABELS_DIR" \
     --design "$DESIGN_NAME" --out-dir "$DATASET_DIR" --variants "$VARIANTS" \
     --kind "$GRAPH_KIND" \
+    --graph-id "$GRAPH_ID" \
     --platform "$PLATFORM" \
     --signoff-health "$REPORTS_DIR/signoff_gate.json"
 

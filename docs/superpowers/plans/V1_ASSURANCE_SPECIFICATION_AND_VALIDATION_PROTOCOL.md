@@ -1,9 +1,11 @@
 # R2G Agent V1 Execution Specification and Validation Protocol
 
 - Status: **Proposed**
-- Version: **0.8**
+- Version: **0.9**
 - Date: **2026-07-20**
-- Repository reference: `265556c` (v0.7 gate-condition baseline)
+- Repository reference: `95c809c` (v0.8 runner/registry relocation baseline; v0.9
+  folds the round-2 pilot findings — strict platform capability GC-ENV-07,
+  signoff evidence-bundle binding, six-stage lineage, strict data tier)
 - Target platforms: `nangate45`, `sky130hd`, `sky130hs`
 - Machine registry: `tools/v1_validation_registry.yaml`
 - Registry runner: `tools/run_v1_validation_registry.py`
@@ -172,6 +174,18 @@ fault-injection proof that provisioning is honest, snapshots are sensitive,
 resolution conflicts fail early, and out-of-domain evidence is excluded. Binding:
 `formal` `VAL-ENV-001..004`.
 
+**GC-ENV-07: Strict per-platform signoff capability.** Executable availability is
+NOT platform capability: the round-2 pilot's ENV gate passed while nangate45 had
+no LVS rule deck and an unusable zero-diff-area antenna diode (pilot P0-3), so
+every strict SIGNOFF/CONSTRAINT gate was unreachable — discovered only after
+multi-hour flows. For every target platform,
+`r2g-skills/signoff-loop/scripts/flow/platform_capability.py --strict` MUST
+report `strict_signoff_ready`: a full DRC deck, an LVS path (KLayout deck, or the
+Magic+Netgen+PDK triple on sky130), a usable antenna model (per-layer
+ANTENNA*AREARATIO rules plus a `CLASS CORE ANTENNACELL` diode with
+`ANTENNADIFFAREA > 0`), RCX rules, and timing liberty. Binding: `command`.
+Evidence: per-platform capability manifest.
+
 ### 2.3 `ACQ-GATE` — traceable, policy-screened candidates
 
 **GC-ACQ-01: Versioned policy layer parseable.** Every screening/repair/publish
@@ -228,6 +242,13 @@ Frozen proof that clock qualification classifies correctly, silent relaxation
 cannot certify the original task, and Fmax objectives bind probe/model/policy/SDC/
 confirming-run identities. Binding: `formal` `VAL-FLOW-007..009`.
 
+The agent-side machine binding is `reports/signoff_manifest.json` `constraint.*`
+(`build_signoff_manifest.py`, pilot P0-2): `qualified` is true only when the
+stamped SDC period matches the Fmax-search winner AND the confirming run's final
+timing tier (`reports/timing_check.json`) is clean. A failing qualification MUST
+ENUMERATE the missing evidence — e.g. the absent final-timing confirmation —
+never merely echo the otherwise-matching proxy and SDC periods (pilot H3).
+
 ### 2.7 `SIGNOFF-GATE` — strict, complete, bounded signoff
 
 **GC-SIG-01: Flow/extractor unit surface.** The `signoff-loop` stage-runner,
@@ -236,8 +257,15 @@ extractor, and report tests MUST pass. Binding: `suite` `DIAG-SIGNOFF-LOOP`
 
 **GC-SIG-02: Downstream signoff gate fails closed.** The shared `signoff_gate.py`
 consumed by `def-graph` MUST fail closed on MISSING DRC/LVS/route reports
-(failure-patterns #34) — proven by the `def-graph` suite's gate tests. Binding:
-`suite` `DIAG-DEF-GRAPH`. Evidence: pytest transcript.
+(failure-patterns #34) — proven by the `def-graph` suite's gate tests. ORFS
+completion MUST require a reconstructable SIX-STAGE lineage, not merely a clean
+`finish` row: a repair-only generation (route+finish rerun) either carries a
+recorded parent chain (`resume_meta.json` `parent_lineage`) or is attributed via
+sibling ledgers, else it is incomplete (pilot P0-4). In strict tier
+(`R2G_SIGNOFF_GATE=strict`) only the exact verdict `pass` may build the clean
+tier; `pass_with_caveats` yields an explicitly research-tier artifact
+(`dataset_tier` in the graph manifest) that MUST NOT enter a clean index (pilot
+P0-1). Binding: `suite` `DIAG-DEF-GRAPH`. Evidence: pytest transcript.
 
 **GC-SIG-03: Dependency, completion, strict-clean, and recovery certification.**
 Frozen proof that stale/cross-run inputs block clean, absent stages stay non-clean,
@@ -305,8 +333,12 @@ transcript.
 good without `tools/verify_graph_dataset.py --batch <corpus>` under
 `$R2G_GRAPH_PYTHON` — it re-derives topology, features, and labels from raw
 DEF/LEF/liberty/SPEF with independent code; silent-value defects are invisible in
-manifest row counts. Binding: `operator` (per generation). Evidence: batch
-verifier report.
+manifest row counts. A design whose graph generation was INTENTIONALLY denied
+(signoff-gate block) reports `BLOCKED / not_applicable` (single-case exit 3),
+never a `FileNotFoundError` crash and never a batch failure (pilot H2). The batch
+additionally enforces corpus-wide `graph_id` uniqueness — individually-valid
+graphs with colliding corpus ids fail the batch (pilot P0-5). Binding: `operator`
+(per generation). Evidence: batch verifier report.
 
 **GC-GRA-03: Input, five-view, identity, semantic, and manifest certification.**
 Frozen proof that unqualified inputs are blocked, all five views survive

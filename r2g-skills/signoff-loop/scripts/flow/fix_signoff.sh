@@ -197,6 +197,31 @@ if v is None and ("tier" in d or "wns" in d or "wns_ns" in d):
 print("" if v is None else v)' "$1" 2>/dev/null || echo ""
 }
 
+_layout_digest() {  # sha256 of the newest backend 6_final.def ("" when none)
+  # Pilot P1-1: the physical-effect fingerprint compared around a fix reflow. A
+  # byte-identical DEF after the rerun means the strategy had NO layout effect,
+  # so the expensive signoff tool re-run is skipped (the existing report already
+  # describes these exact bytes).
+  local d
+  d="$(ls -t "$PROJECT_DIR"/backend/RUN_*/results/6_final.def \
+             "$PROJECT_DIR"/backend/RUN_*/final/6_final.def 2>/dev/null | head -1)"
+  { [[ -n "$d" ]] && sha256sum "$d" 2>/dev/null | cut -d' ' -f1; } || true
+}
+
+_write_antenna_marker() {  # out_path residual_count fix_iters tried_csv
+  # Persistent non-convergence memory (failure-patterns.md #36); shared by the
+  # measured-no-improvement exit and the pilot-P1-1 no-effect exit.
+  python3 -c 'import json,sys
+out, residual, iters, tried = sys.argv[1:5]
+json.dump({"class": "antenna", "residual_count": float(residual) if residual else None,
+           "fix_iters": int(iters), "strategies_tried": [s for s in tried.split(",") if s],
+           "hint": "OpenROAD antenna repair cannot close this residual (model disagrees "
+                   "with the signoff deck or an irreducible multi-gate net). Retry "
+                   "deliberately with R2G_FIX_RETRY_NONCONVERGED=1 after a toolchain "
+                   "change, or accept/escalate the residual."},
+          open(out, "w"), indent=1)' "$1" "$2" "$3" "$4"
+}
+
 _run_extract() {  # $1 = drc|lvs|route|timing
   # timing: no extract — check_timing.py re-measures the reflowed reports/ppa.json
   # into reports/timing_check.json (the rerun IS the check). It exits 1 when timing
@@ -428,9 +453,14 @@ except Exception: print("{}")' <<<"$apply_out")"
     first_aid="$(_journal_knob_deltas "$cfg_delta" "$sid" "$sym" "$root_aid")"
     [[ -z "$root_aid" && -n "$first_aid" ]] && root_aid="$first_aid"
     tried="${tried:+$tried,}$sid"
+    local pre_layout="" post_layout=""
     if [[ -n "$rerun" ]]; then
       # Tier B4: a stage re-run is a loop decision — journal it (symptom-linked).
       _journal_action stage_rerun "$(python3 -c 'import json,sys;print(json.dumps({"from_stage":sys.argv[1],"strategy":sys.argv[2]}))' "$rerun" "$sid")" "$sym"
+      # Pilot P1-1: fingerprint the layout BEFORE the reflow so a no-effect
+      # strategy (e.g. diode repair with no usable diode, GRT-0246) is detected
+      # by byte comparison instead of a multi-hour signoff re-grade.
+      pre_layout="$(_layout_digest)"
       local rc=0
       # Stage-scoped resume is the DEFAULT now (failure-patterns.md #35):
       # run_orfs invalidates the resumed stage (make clean_<stage>) so the
@@ -455,6 +485,36 @@ except Exception: print("{}")' <<<"$apply_out")"
         _log_iter "$check" "$it" "$sid" "$before" "$before" "rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats" "{}"
         return 1
       fi
+      post_layout="$(_layout_digest)"
+    fi
+    # Pilot P1-1 no-effect guard: the reflow produced a BYTE-IDENTICAL layout, so
+    # the strategy provably had no physical effect and re-grading the same bytes
+    # with a multi-hour DRC/LVS cannot change the verdict (the 2026-07-21 pilot
+    # burned ~5,200s of full DRC exactly here). Record recipe_no_effect (negative
+    # evidence, ingested as no_change), count it toward the non-improvement and
+    # antenna non-convergence exits, and skip the signoff tool re-run. drc/lvs
+    # only: route/timing re-checks read the (unchanged) backend reports and are
+    # cheap, and their rerun IS the check.
+    if [[ -n "$rerun" && ( "$check" == "drc" || "$check" == "lvs" ) && \
+          -n "$pre_layout" && "$pre_layout" == "$post_layout" ]]; then
+      verdict="recipe_no_effect"; after="$before"
+      noimp=$((noimp+1))
+      local is_antenna_iter=0
+      [[ "$sid" == antenna* || "$before_vclass" == *[Aa]ntenna* ]] && is_antenna_iter=1
+      (( is_antenna_iter )) && antenna_noimp=$((antenna_noimp+1))
+      (( is_antenna_iter && antenna_noimp >= 2 )) && verdict="antenna_nonconverged"
+      _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta"
+      echo "[$check] iter $it: layout unchanged (sha256 ${pre_layout:0:12}…) after $sid — $verdict; skipping signoff re-run"
+      if [[ "$verdict" == "antenna_nonconverged" ]]; then
+        _write_antenna_marker "$antenna_marker" "$after" "$it" "$tried"
+        echo "[$check] ANTENNA REPAIR NON-CONVERGED: layout unchanged across $antenna_noimp antenna strategies" \
+             "— stopping (marker: reports/antenna_nonconverged.json)"
+        return 0
+      fi
+      if (( it >= BASE_ITERS && noimp >= 2 )); then
+        echo "[$check] $noimp non-improving past base $BASE_ITERS; stopping"; return 0
+      fi
+      continue
     fi
     # route/timing: the rerun (run_orfs from floorplan/synth) IS the check — there
     # is no separate signoff tool. extract_route reads the backend route stage;
@@ -510,15 +570,7 @@ except Exception: print("{}")' <<<"$apply_out")"
       echo "[$check] CLEAN"; return 0
     fi
     if [[ "$verdict" == "antenna_nonconverged" ]]; then
-      python3 -c 'import json,sys
-out, residual, iters, tried = sys.argv[1:5]
-json.dump({"class": "antenna", "residual_count": float(residual) if residual else None,
-           "fix_iters": int(iters), "strategies_tried": [s for s in tried.split(",") if s],
-           "hint": "OpenROAD antenna repair cannot close this residual (model disagrees "
-                   "with the signoff deck or an irreducible multi-gate net). Retry "
-                   "deliberately with R2G_FIX_RETRY_NONCONVERGED=1 after a toolchain "
-                   "change, or accept/escalate the residual."},
-          open(out, "w"), indent=1)' "$antenna_marker" "$after" "$it" "$tried"
+      _write_antenna_marker "$antenna_marker" "$after" "$it" "$tried"
       echo "[$check] ANTENNA REPAIR NON-CONVERGED: $after residual violation(s) unchanged" \
            "after $antenna_noimp antenna strategies — stopping (marker: reports/antenna_nonconverged.json)"
       return 0
@@ -555,6 +607,19 @@ for r in rows:
         c(r.get("before")), c(r.get("after")), c(r.get("verdict"))))
 open(out,"w").write("\n".join(lines)+"\n")' "$LOG" "$REPORTS/fix_summary.md"
 echo "Summary: $REPORTS/fix_summary.md"
+
+# --- Complete strict evidence bundle (pilot P0-2, 2026-07-21) ----------------
+# Whatever --check ran, always leave the CANONICAL evidence set behind: the
+# round-2 pilot failed every CONSTRAINT/SIGNOFF gate because reports/route.json,
+# reports/rcx.json, and reports/timing_check.json were never emitted by the
+# signoff path even where ORFS route, SPEF, and full DRC existed. Read-only
+# extraction over existing artifacts + the binding signoff_manifest.json; never
+# affects this script's exit semantics.
+"$EXTRACT_ROUTE" "$PROJECT_DIR" "$REPORTS/route.json" >/dev/null 2>&1 || true
+"$EXTRACT_PPA" "$PROJECT_DIR" "$REPORTS/ppa.json" >/dev/null 2>&1 || true
+"$CHECK_TIMING" "$PROJECT_DIR" >/dev/null 2>&1 || true
+python3 "$EXTRACT_DIR/extract_rcx.py" "$PROJECT_DIR" "$REPORTS/rcx.json" >/dev/null 2>&1 || true
+python3 "$REPORTS_DIR_SCRIPTS/build_signoff_manifest.py" "$PROJECT_DIR" || true
 
 # exit 0 if final state clean, else 2 if a residual remains. For --check route we
 # judge ONLY route.json (a route fix never produces drc/lvs; a stale route.json

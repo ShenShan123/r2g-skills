@@ -43,6 +43,19 @@ override downgrades to warn. The verdict is written to
 `signoff_health` (`status` ∈ {pass, pass_with_caveats, dirty, gate_off,
 unrecorded} + per-check detail + `blockers`/`caveats`).
 
+Round-2 pilot additions (2026-07-21, failure-patterns #53): `--mode strict`
+(`R2G_SIGNOFF_GATE=strict`) accepts ONLY the exact verdict `pass` (P0-1); ORFS
+completion requires a reconstructable six-stage lineage — recorded
+`resume_meta.json` `parent_lineage` or sibling-ledger reconstruction (the
+`orfs_lineage=reconstructed` caveat) — never a bare clean `finish` row (P0-4).
+The manifest additionally carries `dataset_tier` (`strict_clean` iff the gate
+verdict was exactly `pass`, else `research` — a clean index filters on this) and
+a stable corpus-level `graph_id` (run_graphs.sh derives sha1(platform:design)
+folded into [1, 2^24), float32-exact; `R2G_GRAPH_ID` overrides; P0-5). The
+batch verifier enforces corpus-wide `graph_id` uniqueness and reports
+intentionally-denied designs as `BLOCKED / not_applicable` (exit 3) instead of
+crashing on the absent manifest (H2).
+
 Dependencies: torch + torch_geometric + pandas — the only stage needing them.
 `run_graphs.sh` probes `R2G_GRAPH_PYTHON` (default `python3`) and SKIPs cleanly
 with an install HINT when absent. Install the venv on /proj, never $HOME:

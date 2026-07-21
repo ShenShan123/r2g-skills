@@ -203,6 +203,14 @@ rm -f "$PROJECT_DIR/drc/6_drc.lyrdb" "$PROJECT_DIR/drc/6_drc_count.rpt" \
 DRC_TIMEOUT="${DRC_TIMEOUT:-7200}"
 echo "Timeout: ${DRC_TIMEOUT}s"
 
+# Freeze the layout identity (pilot P1-2, 2026-07-21): a DRC entry point must
+# NEVER rebuild physical implementation. If make's dependency view disagrees
+# (missing objects/, mtime disorder from an older restage), it silently reruns
+# synth→finish first — and the verdict then grades a DIFFERENT layout than the
+# backend run it will be attributed to. Digest the GDS before/after; on a
+# mismatch the result is forced to failed/implicit_rebuild_foreign_layout.
+GDS_SHA_PRE="$(sha256sum "$GDS_FILE" 2>/dev/null | cut -d' ' -f1 || true)"
+
 DRC_STATUS=0
 set +e +o pipefail
 # shellcheck disable=SC2086
@@ -212,6 +220,16 @@ DRC_STATUS=${PIPESTATUS[0]}
 set -e -o pipefail
 if [[ $DRC_STATUS -eq 124 ]]; then
   echo "ERROR: DRC timed out after ${DRC_TIMEOUT}s" >&2
+fi
+
+GDS_SHA_POST="$(sha256sum "$GDS_FILE" 2>/dev/null | cut -d' ' -f1 || true)"
+IMPLICIT_REBUILD=0
+if [[ -n "$GDS_SHA_PRE" && -n "$GDS_SHA_POST" && "$GDS_SHA_PRE" != "$GDS_SHA_POST" ]]; then
+  IMPLICIT_REBUILD=1
+  echo "ERROR: 'make drc' REBUILT the physical flow — 6_final.gds changed under signoff" >&2
+  echo "  pre:  $GDS_SHA_PRE" >&2
+  echo "  post: $GDS_SHA_POST" >&2
+  echo "  This DRC verdict grades a foreign layout, not the frozen backend run (pilot P1-2)." >&2
 fi
 
 # Collect results
@@ -333,6 +351,29 @@ with open(out, "w") as f:
     json.dump(result, f, indent=2)
     f.write("\n")
 PYEOF
+fi
+
+# Implicit-rebuild override (pilot P1-2): the verdict above — even a clean count —
+# grades a layout `make` just rebuilt, NOT the frozen backend GDS this project
+# attributes it to. Force failed/implicit_rebuild_foreign_layout; extract_drc.py
+# honors an explicit failed status over the count, so reports/drc.json inherits it.
+if [[ "$IMPLICIT_REBUILD" == "1" && -f "$DRC_DIR/drc_result.json" ]]; then
+  python3 - "$DRC_DIR/drc_result.json" "$GDS_SHA_PRE" "$GDS_SHA_POST" <<'PYEOF' || true
+import json, sys
+path, pre, post = sys.argv[1:4]
+try:
+    d = json.load(open(path))
+except Exception:
+    d = {}
+d.update(status="failed", reason="implicit_rebuild_foreign_layout",
+         gds_sha256_pre=pre, gds_sha256_post=post,
+         note="make drc rebuilt synth..finish; verdict does not describe the frozen "
+              "backend layout — re-collect the backend or fix the restage (pilot P1-2)")
+with open(path, "w") as f:
+    json.dump(d, f, indent=2)
+    f.write("\n")
+PYEOF
+  if [[ $DRC_STATUS -eq 0 ]]; then DRC_STATUS=1; fi
 fi
 
 # Mirror drc_result.json into the latest backend run, if present

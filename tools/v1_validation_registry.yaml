@@ -3,9 +3,9 @@
   "registry_id": "r2g-v1-validation-registry",
   "protocol": {
     "source": "docs/superpowers/plans/V1_ASSURANCE_SPECIFICATION_AND_VALIDATION_PROTOCOL.md",
-    "version": "0.8",
+    "version": "0.9",
     "status": "Proposed",
-    "sha256": "595ef1e6b5e3a61dab3b1019f5c65a13b6e83bb084e68efacecf26ec868c0f06"
+    "sha256": "d025eda2610cd7b84ecca71f349b82dc8f70f5106da26b9362d57723b5097839"
   },
   "format_note": "This is JSON-compatible YAML 1.2 and is parsed with Python's standard json module.",
   "formal_execution_policy": {
@@ -51,7 +51,12 @@
        "evidence": "pytest transcript"},
       {"id": "GC-ENV-06", "title": "Snapshot identity, conflict, and isolation certification", "requirements": ["ENV-001", "ENV-002", "ENV-003", "ENV-004"],
        "kind": "formal", "cases": ["VAL-ENV-001", "VAL-ENV-002", "VAL-ENV-003", "VAL-ENV-004"],
-       "evidence": "frozen-campaign verdicts"}
+       "evidence": "frozen-campaign verdicts"},
+      {"id": "GC-ENV-07", "title": "Strict per-platform signoff capability (pilot P0-3)", "requirements": ["ENV-001", "ENV-002"],
+       "kind": "command",
+       "command": ["bash", "-c", "source r2g-skills/signoff-loop/scripts/flow/_env.sh >/dev/null 2>&1; python3 r2g-skills/signoff-loop/scripts/flow/platform_capability.py --platform nangate45 --platform sky130hd --platform sky130hs --strict"],
+       "timeout_s": 120,
+       "evidence": "per-platform capability manifest (DRC deck / LVS path / usable antenna model / RCX rules / timing libs)"}
     ],
     "ACQ-GATE": [
       {"id": "GC-ACQ-01", "title": "Versioned policy layer parseable", "requirements": ["ACQ-003"],
@@ -138,7 +143,7 @@
        "evidence": "pytest transcript incl. corner-case pipeline + verifier negative controls"},
       {"id": "GC-GRA-02", "title": "Independent corpus verification before declaring good", "requirements": ["DATA-005"],
        "kind": "operator",
-       "procedure": "$R2G_GRAPH_PYTHON tools/verify_graph_dataset.py --batch <corpus-root> after any extractor fix or corpus regeneration; nonzero exit blocks the clean tier",
+       "procedure": "$R2G_GRAPH_PYTHON tools/verify_graph_dataset.py --batch <corpus-root> after any extractor fix or corpus regeneration; nonzero exit blocks the clean tier. Intentionally-denied designs report BLOCKED/not_applicable (single-case exit 3), never FileNotFoundError (pilot H2); the batch also enforces corpus-wide graph_id uniqueness (pilot P0-5)",
        "evidence": "batch verifier report"},
       {"id": "GC-GRA-03", "title": "Input, five-view, identity, semantic, and manifest certification", "requirements": ["DATA-001", "DATA-002", "DATA-003", "DATA-004", "DATA-005", "DATA-006"],
        "kind": "formal", "cases": ["VAL-DATA-001", "VAL-DATA-002", "VAL-DATA-003", "VAL-DATA-004", "VAL-DATA-005", "VAL-DATA-006"],
