@@ -156,8 +156,11 @@ After a successful backend run, run signoff checks in order:
 Two tool options are available:
 
 1. **KLayout DRC** (default) — `scripts/flow/run_drc.sh <project-dir> [platform]`
-   - Uses ORFS `make drc` target with platform `.lydrc` rules
-   - Outputs: `drc/6_drc.lyrdb`, `drc/6_drc_count.rpt`, `drc/6_drc.log`
+   - Checker-only: invokes KLayout directly on the preserved backend GDS with the platform
+     `.lydrc` rules (never `make drc` — a DRC request must never rebuild physical stages,
+     failure-patterns #54)
+   - Outputs: `drc/6_drc.lyrdb`, `drc/6_drc_count.rpt`, `drc/6_drc.log`; `drc_result.json`
+     carries run tag + GDS/deck sha256 + KLayout version
 
 2. **Magic DRC** (sky130 only) — `scripts/flow/run_magic_drc.sh <project-dir> [platform]`
    - Uses Magic's built-in DRC engine with sky130A tech file
@@ -171,7 +174,8 @@ Two tool options are available:
 Two tool options are available:
 
 1. **KLayout LVS** (default) — `scripts/flow/run_lvs.sh <project-dir> [platform]`
-   - Uses ORFS `make lvs` target with platform `.lylvs` rules + CDL netlist
+   - Uses ORFS `make lvs` target with platform `.lylvs` rules + CDL netlist (guarded by a
+     fail-closed `make --question` preflight + post-run artifact digest set, failure-patterns #54)
    - **Gracefully skips** platforms without LVS rules (produces `lvs/lvs_result.json` with status "skipped")
    - Outputs: `lvs/6_lvs.lvsdb`, `lvs/6_lvs.log`, `lvs/6_final.cdl`
    - nangate45: uses adapted FreePDK45 rules with `connect_implicit("VDD"/"VSS")` for bulk merging and `schematic.purge` for unused cell pins (e.g., QN on DFFR_X1)

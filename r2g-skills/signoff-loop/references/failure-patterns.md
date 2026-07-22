@@ -4998,3 +4998,83 @@ final-timing confirmation. Spec v0.9 + registry sha256 repinned.
 the full evidence bundle from the SAME path that runs the tools, bind it by digest to one run,
 and make "cannot possibly pass" (missing deck, unusable diode, proxy-only timing) detectable
 BEFORE the multi-hour work, not after.*
+
+## Three-Platform Pilot Failures (2026-07-22 — failure-patterns #54)
+
+The three-platform V1 pilot (nangate45 / sky130hd / sky130hs, agent commit 2025737; analysis +
+remediation plan in `docs/superpowers/plans/2026-07-22-three-platform-*.md`) reproduced three
+cross-platform Agent defects and one platform-setup defect. Two of them were RESIDUALS of the
+#53 fixes — shipped guards that detected the failure post-hoc but did not remove its cause.
+
+### RMD-P0-01 — DRC still rebuilt the implementation (the #53 P1-2 fix was incomplete)
+The 07-21 dependency-order restage stamped stage results 1→6 correctly but kept two rebuild
+triggers, so ALL 12 pilot DRC invocations reran Yosys→finish before KLayout:
+(1) the blanket "non-stage results newest of all" rule — `results/clock_period.txt` is declared
+`SDC_FILE_CLOCK_PERIOD` and sits in ORFS `YOSYS_DEPENDENCIES`, so stamping it newest made
+synthesis stale; (2) logs stamped older than their matching stage results — `logs/6_report.log`
+is itself a Make target (depends on `6_1_fill.odb`; `6_final.def`/`.v` depend on the log), so an
+older log reran `final_report`. **Guards:** `run_drc.sh` is now CHECKER-ONLY — it invokes ORFS
+`scripts/klayout.sh` directly on the preserved backend GDS with absolute paths (no `make drc`,
+so physical-stage dependency evaluation cannot run at all; plain `timeout`, never `setsid`, #40)
+and records run tag + GDS/deck sha256 + KLayout version in `drc_result.json`;
+`_restage_for_signoff.sh` stamps non-stage results OLDER than stage 1 and numbered logs at the
+SAME epoch as their matching stage results, with no blanket newest rule; the Make-based
+compatibility path (`run_lvs.sh`) runs a fail-closed `make --question` preflight on
+`5_route.odb`/`6_final.def`/`6_final.v`/`6_final.sdc` (`physical_rebuild_required` on non-zero)
+and the single-GDS post-run digest guard is widened to the full artifact set (route ODB, final
+DEF/ODB/GDS/netlist/SDC/SPEF → `layout_changed_under_signoff`).
+Tests: `tests/test_run_drc_checker_only.py`, `tests/test_restage_for_signoff.py`.
+
+### RMD-P0-02 — report provenance was a dead code path (all 12 reports `source=latest_run`)
+The P0-R7 provenance envelope looked for `backend/RUN_*/.r2g_restaged` — but the restage only
+ever wrote that marker into the ORFS WORKSPACE, so the authoritative branch never fired and
+every report silently degraded to the `latest_run` guess; the three physically-clean sky130hd
+designs stayed research-tier on `report_binding=weak` alone. The runners also copied artifacts
+to `ls | sort | tail -1` (any newest RUN, even an empty crashed one) while the restage picked
+the newest run WITH a GDS — two different answers for "which run?". **Guards:** ONE shared
+resolver (`_backend_run.sh: r2g_pick_backend_run`) used by restage, DRC, LVS (KLayout + Netgen),
+and RCX; it writes the project-side record `backend/.r2g_signoff_run` (run tag + GDS/DEF sha256)
+that `report_io.run_provenance()` reads as the authoritative `signoff_record` source; checkers
+record the exact layout digest they graded (`drc_result.json`, `lvs_provenance.json`,
+`netgen_lvs_result.json`) and the extractors carry it into `reports/{drc,lvs}.json` (the netgen
+and skip paths — which previously stamped NO provenance — now stamp it too; extractors accept an
+explicit `--run-dir`); the def-graph gate's new `artifact_digest` check hard-blocks a recorded
+digest that mismatches the selected run's actual `6_final.gds` bytes (foreign bytes at the
+expected path cannot bypass the gate) and an unreadable record, while digestless legacy evidence
+is a caveat — buildable as research tier, never an exact strict `pass`.
+Tests: `tests/test_report_provenance_record.py`, `def-graph/tests/test_signoff_gate_digest.py`.
+
+### RMD-P0-03 — target-platform readiness was advisory
+`check_env.sh` printed strict capability but enforced it only under a manually-exported
+`R2G_STRICT_PLATFORMS`, so the pilot awarded ENV credit and spent hours in ORFS on platforms
+that could never satisfy the signoff policy. **Guards:** `check_env.sh --platform <p>` (or
+`R2G_TARGET_PLATFORM`) makes the NAMED campaign platform's strict capability REQUIRED and
+fail-closed (exit 1; also fails closed when no ORFS platforms dir is visible); entry points must
+go through check_env.sh so the resolved environment is loaded first (probing from a bare shell
+falsely reports installed tools missing); `platform_capability.py` reports explicit tiers —
+`installed` / `research_ready` (deck+timing) / `strict_signoff_ready` — so a research platform
+can no longer be conflated with a strict one.
+Tests: `tests/test_platform_capability_lyt.py`.
+
+### RMD-P0-04 — sky130hs `.lyt` repair existed but was unverified (all four LVS invalid)
+`tools/patch_sky130hs_lyt.py` was wired into `install_platform_rules.sh` as best-effort ("HINT,
+never fails") and NOTHING verified the postcondition, so an active installation kept legacy
+lefdef options: KLayout mapped every DEF-derived shape to unmappable legacy layer numbers
+(met1→1/0 instead of 68/20 — the shapes EXIST, they're just invisible to Magic's sky130A tech),
+Magic extracted a portless top subckt, and all four pilot Netgen LVS runs were invalid.
+**Guards:** `platform_capability.py` requires the modern-.lyt postcondition for sky130hs LVS
+capability (tool presence alone is not a readiness oracle); `install_platform_rules.sh` runs
+`patch_sky130hs_lyt.py --check` plus the new `tools/sky130hs_gds_canary.py` after patching and
+FAILS setup on a broken postcondition; the canary imports a synthetic DEF (pin + routed net +
+via + special routing) through the platform's own `.lyt` reader options and asserts each
+geometry class lands on its CANONICAL sky130A layer/datatype — counting shapes by name passes
+both ways, only the number check separates patched from legacy. Evidence produced before the
+repair must be regenerated from finish (the gate's digest binding makes stale pre-repair GDS
+non-certifiable once re-signed).
+Tests: canary validated against both the patched `.lyt` (PASS) and the preserved legacy
+`sky130hs.lyt.orig` (FAIL rc=2) on this checkout.
+
+*Generalizable rule: a guard that detects a failure after the fact (digest changed, verdict
+forced failed) is not the fix — remove the CAUSE (don't hand the checker a dependency engine at
+all), and make every repair a verified postcondition of the layer that owns it, probed before
+hours are spent, not after.*

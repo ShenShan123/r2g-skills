@@ -44,15 +44,43 @@ def write_json_atomic(path: Path | str, obj, *, indent: int = 2,
 #
 # This stamps the missing half. Attribution order, most authoritative first:
 #   1. an explicit run_dir the caller already resolved;
-#   2. <ORFS results>/.r2g_restaged — the identity-bearing marker
-#      _restage_for_signoff.sh writes, naming the RUN it staged the artifacts
-#      FROM (full-pipeline Issue 7). This is the run the tool actually judged.
-#   3. the newest backend RUN_* — a guess, recorded as such via `source`.
+#   2. <project>/backend/.r2g_signoff_run — the project-side JSON record
+#      _backend_run.sh's shared resolver writes at every restage/checker run,
+#      naming the RUN whose artifacts were staged (plus their sha256 digests).
+#      This is the run the tool actually judged. (RMD-P0-02, 2026-07-22: the
+#      old `backend/RUN_*/.r2g_restaged` glob below pointed at a marker that
+#      was only ever written into the ORFS WORKSPACE, never under the project
+#      backend — so this branch was dead and every report silently degraded to
+#      the latest_run guess. All 12 three-platform-pilot DRC reports carried
+#      source=latest_run because of it.)
+#   3. <ORFS results>/.r2g_restaged legacy glob (kept for old trees).
+#   4. the newest backend RUN_* — a guess, recorded as such via `source`.
 #
 # Absent provenance is a legacy report, not a lie: the gate treats it as an
 # explicit caveat rather than a blocker, so existing projects keep passing and
 # self-heal on their next signoff run. A report that DISAGREES with the selected
 # run is the hard block.
+
+def _signoff_record(project_root: Path) -> dict | None:
+    """The project-side signoff run record written by _backend_run.sh."""
+    rec_path = project_root / "backend" / ".r2g_signoff_run"
+    if not rec_path.is_file():
+        return None
+    try:
+        text = rec_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        doc = json.loads(text)
+        if isinstance(doc, dict) and doc.get("run_tag"):
+            return doc
+    except ValueError:
+        # Tolerate a plain-text tag (hand-written / older writer).
+        tag = text.strip().splitlines()[0].strip() if text.strip() else ""
+        if tag:
+            return {"run_tag": tag}
+    return None
+
 
 def _restage_run_tag(project_root: Path) -> str:
     """The RUN basename recorded by the last restage, if we can still see it."""
@@ -70,12 +98,27 @@ def run_provenance(project_root: Path | str, run_dir: Path | str | None = None) 
     """The `provenance` envelope every signoff report carries.
 
     `source` records HOW the run was attributed so a consumer can weigh it:
-    'explicit' and 'restage_marker' are authoritative, 'latest_run' is a guess.
+    'explicit', 'signoff_record' and 'restage_marker' are authoritative,
+    'latest_run' is a guess. When the signoff record carries artifact digests
+    they ride along (gds_sha256/def_sha256) so the def-graph gate can bind the
+    report to exact layout bytes, not just a directory name.
     """
     project_root = Path(project_root)
     if run_dir:
         rd = Path(run_dir)
         return {"run_tag": rd.name, "run_dir": str(rd.resolve()), "source": "explicit"}
+
+    rec = _signoff_record(project_root)
+    if rec:
+        tag = str(rec["run_tag"])
+        rd = project_root / "backend" / tag
+        out = {"run_tag": tag,
+               "run_dir": str(rd.resolve()) if rd.is_dir() else None,
+               "source": "signoff_record"}
+        for key in ("gds_sha256", "def_sha256"):
+            if rec.get(key):
+                out[key] = rec[key]
+        return out
 
     tag = _restage_run_tag(project_root)
     if tag:

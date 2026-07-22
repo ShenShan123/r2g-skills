@@ -89,27 +89,43 @@ echo "Running DRC for design: $DESIGN_NAME (variant: $FLOW_VARIANT)"
 echo "Platform: $PLATFORM"
 echo "GDS: $GDS_FILE"
 
-# ── BEOL-only mode: resolve platform DRC deck and generate a FEOL=false copy ──
-EXTRA_MAKE_ARGS=""
+# ── Resolve the platform DRC deck (RMD-P0-01: the checker-only path needs it
+# explicitly — there is no `make drc` left to resolve it for us). Order:
+# KLAYOUT_DRC_FILE from the platform config.mk, then platform drc/*.lydrc, then
+# the DELIBERATE sky130hs<-sky130hd sibling borrow (failure-patterns #32: same
+# sky130A tech, deck is pure process-layer geometry; never a generic borrow). ──
+PLATFORM_DIR_DRC="$FLOW_DIR/platforms/$PLATFORM"
+DRC_DECK=$(grep 'KLAYOUT_DRC_FILE' "$PLATFORM_DIR_DRC/config.mk" 2>/dev/null \
+        | head -1 | sed 's/.*=\s*//' \
+        | sed "s|\$(PLATFORM_DIR)|$PLATFORM_DIR_DRC|g" | tr -d ' ' || true)
+if [[ -z "$DRC_DECK" || ! -f "$DRC_DECK" ]]; then
+  DRC_DECK=$(ls "$PLATFORM_DIR_DRC/drc/"*.lydrc 2>/dev/null | head -1 || true)
+fi
+if [[ -z "$DRC_DECK" && "$PLATFORM" == "sky130hs" ]]; then
+  _SIBLING_DECK="$FLOW_DIR/platforms/sky130hd/drc/sky130hd.lydrc"
+  if [[ -f "$_SIBLING_DECK" ]]; then
+    echo "NOTE: no ORFS DRC deck for $PLATFORM — using the sibling sky130A tech deck: $_SIBLING_DECK (failure-patterns #32)"
+    DRC_DECK="$_SIBLING_DECK"
+  fi
+fi
+
+DRC_DIR="$PROJECT_DIR/drc"
+mkdir -p "$DRC_DIR"
+
+if [[ -z "$DRC_DECK" || ! -f "$DRC_DECK" ]]; then
+  # Honest explicit skip (never the old phantom fail, failure-patterns #32):
+  # the gate treats a skipped DRC as NOT signed off, which is the truth here.
+  echo "WARNING: no KLayout DRC deck found for platform $PLATFORM — DRC not supported" >&2
+  printf '{"status": "skipped", "reason": "no_drc_deck_for_platform", "drc_mode": "%s"}\n' \
+    "$DRC_MODE" > "$DRC_DIR/drc_result.json"
+  echo "Results: $DRC_DIR"
+  exit 0
+fi
+
+# ── BEOL-only mode: generate a FEOL=false copy of the resolved deck ──────────
 if [[ "$DRC_BEOL_ONLY" == "1" ]]; then
-  PLATFORM_DIR_DRC="$FLOW_DIR/platforms/$PLATFORM"
-  # Parse KLAYOUT_DRC_FILE from the platform config.mk (mirror run_lvs.sh style)
-  _deck=$(grep 'KLAYOUT_DRC_FILE' "$PLATFORM_DIR_DRC/config.mk" 2>/dev/null \
-          | head -1 | sed 's/.*=\s*//' \
-          | sed "s|\$(PLATFORM_DIR)|$PLATFORM_DIR_DRC|g" | tr -d ' ')
-  # Verify the parsed path exists
-  if [[ -z "$_deck" || ! -f "$_deck" ]]; then
-    # Fallback: first *.lydrc in the platform drc/ directory
-    _deck=$(ls "$PLATFORM_DIR_DRC/drc/"*.lydrc 2>/dev/null | head -1 || true)
-  fi
-  if [[ -z "$_deck" || ! -f "$_deck" ]]; then
-    echo "ERROR: DRC_BEOL_ONLY=1 but no .lydrc deck found for platform $PLATFORM" >&2
-    exit 1
-  fi
-  # Create project drc dir early (needed for the generated deck)
-  DRC_DIR_EARLY="$PROJECT_DIR/drc"
-  mkdir -p "$DRC_DIR_EARLY"
-  BEOL_DECK="$DRC_DIR_EARLY/$(basename "$_deck" .lydrc).beol.lydrc"
+  BEOL_DECK="$DRC_DIR/$(basename "$DRC_DECK" .lydrc).beol.lydrc"
+  _deck="$DRC_DECK"
   # Disable BOTH FEOL and the ANTENNA group. The ANTENNA checks reference the
   # `gate` layer (`gate = poly & active`), which is DERIVED INSIDE the
   # `if FEOL ... end` block — so with FEOL=false the ANTENNA `connect` fails
@@ -157,39 +173,12 @@ if [[ "$DRC_BEOL_ONLY" == "1" ]]; then
   else
     echo "DRC BEOL-only mode: FEOL and ANTENNA checks skipped (ANTENNA depends on FEOL-derived layers); metal/via routing geometry + off-grid checks run. NOT full DRC-clean, antenna NOT verified; deck=$BEOL_DECK"
   fi
-  EXTRA_MAKE_ARGS="KLAYOUT_DRC_FILE=$BEOL_DECK"
+  DRC_DECK="$BEOL_DECK"
 fi
 # ──────────────────────────────────────────────────────────────────────────────
-
-# ── Sibling-tech DRC deck (failure-patterns.md #32) ──────────────────────────
-# ORFS ships no KLayout DRC deck for sky130hs (its Makefile then echoes "DRC not
-# supported on this platform" and exits 0), so extract_drc filed a phantom
-# failed/no_count_report on EVERY sky130hs design and the fixer burned catalog
-# iterations on a non-existent violation load. The sky130hd deck is pure sky130A
-# process-layer geometry (zero hd-specific content) and hd/hs share the sky130A
-# tech, so pass it explicitly — the ORFS `ifneq ($(KLAYOUT_DRC_FILE),)` branch is
-# parse-time, and a make command-line var flips it to the real KLayout run. Only
-# this DELIBERATE sibling pair; never a generic cross-platform deck borrow.
-if [[ -z "$EXTRA_MAKE_ARGS" && "$PLATFORM" == "sky130hs" ]]; then
-  if ! grep -q 'KLAYOUT_DRC_FILE' "$FLOW_DIR/platforms/$PLATFORM/config.mk" 2>/dev/null; then
-    _SIBLING_DECK="$FLOW_DIR/platforms/sky130hd/drc/sky130hd.lydrc"
-    if [[ -f "$_SIBLING_DECK" ]]; then
-      echo "NOTE: no ORFS DRC deck for $PLATFORM — using the sibling sky130A tech deck: $_SIBLING_DECK (failure-patterns #32)"
-      EXTRA_MAKE_ARGS="KLAYOUT_DRC_FILE=$_SIBLING_DECK"
-    else
-      echo "WARNING: no DRC deck for $PLATFORM and sibling deck missing at $_SIBLING_DECK — ORFS will report 'DRC not supported'" >&2
-    fi
-  fi
-fi
-# ──────────────────────────────────────────────────────────────────────────────
-
-cd "$FLOW_DIR"
-
-# Prevent env collision: ORFS Makefile uses SCRIPTS_DIR internally
-unset SCRIPTS_DIR 2>/dev/null || true
 
 # HONESTY: purge any STALE local DRC artifacts before the run. If the fresh
-# result-copy below (~line 200) is skipped — e.g. a pre-copytree-fix A/B arm dir
+# result-copy below is skipped — e.g. a pre-copytree-fix A/B arm dir
 # that inherited a June-19 6_drc_count.rpt=0, or an interrupted run — an OLD
 # count/lyrdb left in place would be misread by run_drc.sh's count logic AND by
 # extract_drc.py as a fresh 0-violation clean, fabricating a clean signoff over a
@@ -197,76 +186,121 @@ unset SCRIPTS_DIR 2>/dev/null || true
 # falls through to the "no count report" path -> honest stuck/error, never a
 # stale-0 clean. (2026-06-30 asap7 arm fabricated-clean regression; the six
 # asap7 arms recorded drc=clean while the real asap7.lydrc run found 25 viols.)
-rm -f "$PROJECT_DIR/drc/6_drc.lyrdb" "$PROJECT_DIR/drc/6_drc_count.rpt" \
-      "$PROJECT_DIR/drc/6_drc.log" 2>/dev/null || true
+rm -f "$DRC_DIR/6_drc.lyrdb" "$DRC_DIR/6_drc_count.rpt" \
+      "$DRC_DIR/6_drc.log" 2>/dev/null || true
 
 DRC_TIMEOUT="${DRC_TIMEOUT:-7200}"
 echo "Timeout: ${DRC_TIMEOUT}s"
 
-# Freeze the layout identity (pilot P1-2, 2026-07-21): a DRC entry point must
-# NEVER rebuild physical implementation. If make's dependency view disagrees
-# (missing objects/, mtime disorder from an older restage), it silently reruns
-# synth→finish first — and the verdict then grades a DIFFERENT layout than the
-# backend run it will be attributed to. Digest the GDS before/after; on a
-# mismatch the result is forced to failed/implicit_rebuild_foreign_layout.
-GDS_SHA_PRE="$(sha256sum "$GDS_FILE" 2>/dev/null | cut -d' ' -f1 || true)"
+# ── Frozen-layout, checker-only DRC (RMD-P0-01, three-platform pilot
+# 2026-07-22). A DRC entry point must NEVER execute synthesis, floorplan,
+# placement, CTS, routing, or finish. The old `make drc` followed ORFS's mtime
+# dependency cascade back through the whole flow, and the restage timestamp
+# policy handed it a stale-looking chain (clock_period.txt stamped newer than
+# the restored Yosys outputs; numbered logs older than their stage results) —
+# ALL 12 pilot DRC invocations rebuilt synth→finish before KLayout. KLayout
+# needs only the GDS and the deck, so invoke ORFS scripts/klayout.sh DIRECTLY
+# with absolute paths: physical-stage dependency evaluation cannot run at all.
+# Plain `timeout`, never `setsid timeout` (failure-patterns #40: setsid made
+# timeout a group leader and silently disabled its tree-kill).
 
+# Select the frozen layout: the preserved backend run's GDS (the artifact this
+# verdict will be attributed to), falling back to the restaged workspace copy.
+DRC_GDS="$GDS_FILE"
+DRC_RUN_TAG=""
+RUN_DRC_DIR=""
+if [[ -n "${R2G_BACKEND_RUN:-}" && -d "${R2G_BACKEND_RUN:-}" ]]; then
+  DRC_RUN_TAG="$(basename "$R2G_BACKEND_RUN")"
+  RUN_DRC_DIR="$R2G_BACKEND_RUN/drc"
+  for _sub in results final; do
+    if [[ -f "$R2G_BACKEND_RUN/$_sub/6_final.gds" ]]; then
+      DRC_GDS="$R2G_BACKEND_RUN/$_sub/6_final.gds"
+      break
+    fi
+  done
+fi
+
+# Expanded digest set (was: single GDS): every physical artifact of the frozen
+# run must be byte-identical before and after the checker. The checker cannot
+# rebuild anything, so a change means something ELSE mutated the run mid-check
+# — the verdict then grades foreign bytes and is forced to failed.
+DRC_ARTIFACT_DIR="$(dirname "$DRC_GDS")"
+_r2g_digest_set() {
+  local f
+  for f in 5_route.odb 6_final.def 6_final.odb 6_final.gds 6_final.v 6_final.sdc 6_final.spef; do
+    if [[ -f "$DRC_ARTIFACT_DIR/$f" ]]; then
+      sha256sum "$DRC_ARTIFACT_DIR/$f" 2>/dev/null || true
+    fi
+  done
+}
+GDS_SHA_PRE="$(sha256sum "$DRC_GDS" 2>/dev/null | cut -d' ' -f1 || true)"
+DIGEST_SET_PRE="$(_r2g_digest_set)"
+
+if [[ -z "${KLAYOUT_CMD:-}" ]]; then
+  echo "ERROR: KLAYOUT_CMD not resolved — install KLayout or export KLAYOUT_CMD (see eda-install)" >&2
+  printf '{"status": "failed", "reason": "klayout_not_found", "drc_mode": "%s"}\n' \
+    "$DRC_MODE" > "$DRC_DIR/drc_result.json"
+  exit 1
+fi
+export KLAYOUT_CMD
+KLAYOUT_VERSION="$("$KLAYOUT_CMD" -v 2>/dev/null | head -1 || true)"
+DECK_SHA="$(sha256sum "$DRC_DECK" 2>/dev/null | cut -d' ' -f1 || true)"
+
+# Write DRC output under the selected backend run FIRST, then mirror to the
+# project-level drc/ dir (RMD-P0-02: the report is born run-local).
+OUT_DIR="${RUN_DRC_DIR:-$DRC_DIR}"
+mkdir -p "$OUT_DIR"
+LYRDB="$OUT_DIR/6_drc.lyrdb"
+DRC_LOG="$OUT_DIR/6_drc.log"
+rm -f "$LYRDB" "$OUT_DIR/6_drc_count.rpt" 2>/dev/null || true
+
+DRC_STARTED_AT="$(date -Iseconds)"
+_KLAYOUT_WRAPPER="$FLOW_DIR/scripts/klayout.sh"
 DRC_STATUS=0
 set +e +o pipefail
-# shellcheck disable=SC2086
-setsid timeout --signal=TERM --kill-after=60 "$DRC_TIMEOUT" \
-  make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" $EXTRA_MAKE_ARGS drc 2>&1 | tee /tmp/drc_run_$$.log
+if [[ -f "$_KLAYOUT_WRAPPER" ]]; then
+  timeout --signal=TERM --kill-after=60 "$DRC_TIMEOUT" \
+    bash "$_KLAYOUT_WRAPPER" -zz -rd in_gds="$DRC_GDS" \
+    -rd report_file="$LYRDB" -r "$DRC_DECK" 2>&1 | tee "$DRC_LOG"
+else
+  timeout --signal=TERM --kill-after=60 "$DRC_TIMEOUT" \
+    "$KLAYOUT_CMD" -zz -rd in_gds="$DRC_GDS" \
+    -rd report_file="$LYRDB" -r "$DRC_DECK" 2>&1 | tee "$DRC_LOG"
+fi
 DRC_STATUS=${PIPESTATUS[0]}
 set -e -o pipefail
+DRC_ENDED_AT="$(date -Iseconds)"
 if [[ $DRC_STATUS -eq 124 ]]; then
   echo "ERROR: DRC timed out after ${DRC_TIMEOUT}s" >&2
 fi
 
-GDS_SHA_POST="$(sha256sum "$GDS_FILE" 2>/dev/null | cut -d' ' -f1 || true)"
+# Violation count from the lyrdb (same marker count ORFS's drc target derived).
+# Never derive a count from a timed-out/killed run — KLayout writes the report
+# database at the END, but a kill racing that write could leave partial XML
+# that would read as a too-low count (the no-count path classifies honestly).
+if [[ -f "$LYRDB" && $DRC_STATUS -ne 124 && $DRC_STATUS -ne 137 ]]; then
+  grep -c "<value>" "$LYRDB" > "$OUT_DIR/6_drc_count.rpt" 2>/dev/null || true
+fi
+
+GDS_SHA_POST="$(sha256sum "$DRC_GDS" 2>/dev/null | cut -d' ' -f1 || true)"
+DIGEST_SET_POST="$(_r2g_digest_set)"
 IMPLICIT_REBUILD=0
-if [[ -n "$GDS_SHA_PRE" && -n "$GDS_SHA_POST" && "$GDS_SHA_PRE" != "$GDS_SHA_POST" ]]; then
+if [[ "$DIGEST_SET_PRE" != "$DIGEST_SET_POST" ]]; then
   IMPLICIT_REBUILD=1
-  echo "ERROR: 'make drc' REBUILT the physical flow — 6_final.gds changed under signoff" >&2
-  echo "  pre:  $GDS_SHA_PRE" >&2
-  echo "  post: $GDS_SHA_POST" >&2
-  echo "  This DRC verdict grades a foreign layout, not the frozen backend run (pilot P1-2)." >&2
+  echo "ERROR: physical artifacts changed under signoff — the layout is not frozen" >&2
+  diff <(echo "$DIGEST_SET_PRE") <(echo "$DIGEST_SET_POST") >&2 || true
+  echo "  This DRC verdict grades foreign bytes, not the frozen backend run (RMD-P0-01)." >&2
 fi
 
-# Collect results
-DRC_DIR="$PROJECT_DIR/drc"
-mkdir -p "$DRC_DIR"
-cp /tmp/drc_run_$$.log "$DRC_DIR/drc_run.log" 2>/dev/null || true
-rm -f /tmp/drc_run_$$.log
-
-REPORTS_DIR="$FLOW_DIR/reports/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-if [[ ! -d "$REPORTS_DIR" ]]; then
-  REPORTS_DIR="$FLOW_DIR/reports/$PLATFORM/$DESIGN_NAME"
-fi
-
-LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-if [[ ! -d "$LOGS_DIR" ]]; then
-  LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME"
-fi
-
-# Copy DRC artifacts
-if [[ -f "$REPORTS_DIR/6_drc.lyrdb" ]]; then
-  cp "$REPORTS_DIR/6_drc.lyrdb" "$DRC_DIR/" 2>/dev/null || true
-fi
-if [[ -f "$REPORTS_DIR/6_drc_count.rpt" ]]; then
-  cp "$REPORTS_DIR/6_drc_count.rpt" "$DRC_DIR/" 2>/dev/null || true
-fi
-if [[ -f "$LOGS_DIR/6_drc.log" ]]; then
-  cp "$LOGS_DIR/6_drc.log" "$DRC_DIR/" 2>/dev/null || true
-fi
-
-# Also copy to latest backend run
-BACKEND_DIR="$PROJECT_DIR/backend"
-if [[ -d "$BACKEND_DIR" ]]; then
-  LATEST_RUN=$(ls -d "$BACKEND_DIR"/RUN_* 2>/dev/null | sort | tail -1)
-  if [[ -n "$LATEST_RUN" ]]; then
-    mkdir -p "$LATEST_RUN/drc"
-    cp "$DRC_DIR"/* "$LATEST_RUN/drc/" 2>/dev/null || true
-  fi
+# Mirror the run-local DRC output to the project-level drc/ dir. drc_run.log is
+# the combined run log consumed by extract_drc.py's staleness guard + journal.
+cp "$DRC_LOG" "$DRC_DIR/drc_run.log" 2>/dev/null || true
+if [[ "$OUT_DIR" != "$DRC_DIR" ]]; then
+  cp "$DRC_LOG" "$DRC_DIR/6_drc.log" 2>/dev/null || true
+  [[ -f "$LYRDB" ]] && cp "$LYRDB" "$DRC_DIR/" 2>/dev/null || true
+  [[ -f "$OUT_DIR/6_drc_count.rpt" ]] && cp "$OUT_DIR/6_drc_count.rpt" "$DRC_DIR/" 2>/dev/null || true
+else
+  cp "$DRC_LOG" "$DRC_DIR/6_drc.log" 2>/dev/null || true
 fi
 
 # Report results
@@ -325,7 +359,10 @@ else
     fi
     echo "HINT: retry with DRC_BEOL_ONLY=1 to skip the FEOL checks (standard cells are library-verified) — see references/failure-patterns.md"
     # Best-effort cleanup of any orphaned klayout DRC procs from this run.
+    # Match variant+6_drc in EITHER order (the direct invocation puts the GDS
+    # path — which carries the variant — before the 6_drc.lyrdb report arg).
     pkill -9 -f "klayout.*${FLOW_VARIANT}.*6_drc" 2>/dev/null || true
+    pkill -9 -f "klayout.*6_drc.*${FLOW_VARIANT}" 2>/dev/null || true
   elif [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
     STATUS="timeout"
     REASON="drc_timeout"
@@ -353,10 +390,36 @@ with open(out, "w") as f:
 PYEOF
 fi
 
-# Implicit-rebuild override (pilot P1-2): the verdict above — even a clean count —
-# grades a layout `make` just rebuilt, NOT the frozen backend GDS this project
-# attributes it to. Force failed/implicit_rebuild_foreign_layout; extract_drc.py
-# honors an explicit failed status over the count, so reports/drc.json inherits it.
+# Strong provenance stamp (RMD-P0-02): the verdict names the exact run, layout
+# bytes, deck bytes, and toolchain it graded — extract_drc.py carries these into
+# reports/drc.json and the def-graph gate matches the digest against the layout
+# it publishes.
+python3 - "$DRC_DIR/drc_result.json" "$DRC_RUN_TAG" "$DRC_GDS" "$GDS_SHA_PRE" \
+  "$DRC_DECK" "$DECK_SHA" "$KLAYOUT_VERSION" "$DRC_STARTED_AT" "$DRC_ENDED_AT" \
+  "$DRC_TIMEOUT" "$DRC_STATUS" <<'PYEOF' || true
+import json, sys
+(path, run_tag, gds, gds_sha, deck, deck_sha,
+ klayout_version, started, ended, timeout_s, exit_code) = sys.argv[1:12]
+try:
+    d = json.load(open(path))
+except Exception:
+    d = {}
+d.update(checker="klayout_direct",
+         run_tag=run_tag or None,
+         gds_path=gds, gds_sha256=gds_sha or None,
+         deck_path=deck, deck_sha256=deck_sha or None,
+         klayout_version=klayout_version or None,
+         started_at=started, ended_at=ended,
+         timeout_s=int(timeout_s), exit_code=int(exit_code))
+with open(path, "w") as f:
+    json.dump(d, f, indent=2)
+    f.write("\n")
+PYEOF
+
+# Frozen-layout override (RMD-P0-01): the checker itself cannot rebuild, so a
+# changed digest set means the run mutated mid-check — the verdict grades
+# foreign bytes. Force failed; extract_drc.py honors an explicit failed status
+# over the count, so reports/drc.json inherits it.
 if [[ "$IMPLICIT_REBUILD" == "1" && -f "$DRC_DIR/drc_result.json" ]]; then
   python3 - "$DRC_DIR/drc_result.json" "$GDS_SHA_PRE" "$GDS_SHA_POST" <<'PYEOF' || true
 import json, sys
@@ -365,10 +428,10 @@ try:
     d = json.load(open(path))
 except Exception:
     d = {}
-d.update(status="failed", reason="implicit_rebuild_foreign_layout",
+d.update(status="failed", reason="layout_changed_under_signoff",
          gds_sha256_pre=pre, gds_sha256_post=post,
-         note="make drc rebuilt synth..finish; verdict does not describe the frozen "
-              "backend layout — re-collect the backend or fix the restage (pilot P1-2)")
+         note="the frozen run's physical artifacts changed while the checker ran; "
+              "verdict does not describe the preserved backend layout (RMD-P0-01)")
 with open(path, "w") as f:
     json.dump(d, f, indent=2)
     f.write("\n")
@@ -376,13 +439,11 @@ PYEOF
   if [[ $DRC_STATUS -eq 0 ]]; then DRC_STATUS=1; fi
 fi
 
-# Mirror drc_result.json into the latest backend run, if present
-if [[ -f "$DRC_DIR/drc_result.json" && -d "$BACKEND_DIR" ]]; then
-  LATEST_RUN=$(ls -d "$BACKEND_DIR"/RUN_* 2>/dev/null | sort | tail -1)
-  if [[ -n "$LATEST_RUN" ]]; then
-    mkdir -p "$LATEST_RUN/drc"
-    cp "$DRC_DIR/drc_result.json" "$LATEST_RUN/drc/" 2>/dev/null || true
-  fi
+# Mirror drc_result.json into the run the verdict belongs to (RMD-P0-02: the
+# SELECTED run, never `ls | tail -1` — a newer empty RUN dir must not adopt it).
+if [[ -f "$DRC_DIR/drc_result.json" && -n "$RUN_DRC_DIR" ]]; then
+  mkdir -p "$RUN_DRC_DIR"
+  cp "$DRC_DIR/drc_result.json" "$RUN_DRC_DIR/" 2>/dev/null || true
 fi
 
 echo "Results: $DRC_DIR"

@@ -134,15 +134,18 @@ fi
 # Clean up temporary files
 rm -f "$DESIGN_NAME.totCap" 2>/dev/null || true
 
-# Also copy to latest backend run
-BACKEND_DIR="$PROJECT_DIR/backend"
-if [[ -d "$BACKEND_DIR" ]]; then
-  LATEST_RUN=$(ls -d "$BACKEND_DIR"/RUN_* 2>/dev/null | sort | tail -1)
-  if [[ -n "$LATEST_RUN" ]]; then
-    mkdir -p "$LATEST_RUN/rcx"
-    cp "$RCX_DIR"/*.spef "$LATEST_RUN/rcx/" 2>/dev/null || true
-    cp "$RCX_DIR"/rcx.log "$LATEST_RUN/rcx/" 2>/dev/null || true
-  fi
+# Copy to the SELECTED backend run (RMD-P0-02: the shared resolver's pick,
+# never `ls | tail -1` — a newer empty RUN dir must not adopt this SPEF).
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_backend_run.sh"
+TARGET_RUN="$(r2g_pick_backend_run "$PROJECT_DIR" || true)"
+if [[ -z "$TARGET_RUN" || ! -d "$TARGET_RUN" ]]; then
+  TARGET_RUN=$(ls -d "$PROJECT_DIR/backend"/RUN_* 2>/dev/null | sort | tail -1 || true)
+fi
+if [[ -n "$TARGET_RUN" && -d "$TARGET_RUN" ]]; then
+  mkdir -p "$TARGET_RUN/rcx"
+  cp "$RCX_DIR"/*.spef "$TARGET_RUN/rcx/" 2>/dev/null || true
+  cp "$RCX_DIR"/rcx.log "$TARGET_RUN/rcx/" 2>/dev/null || true
 fi
 
 # Report results

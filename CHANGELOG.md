@@ -4,6 +4,39 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-22 — three-platform pilot remediation (signoff-loop, def-graph, eda-install)
+
+Closed the four P0 defects of the 2026-07-22 three-platform pilot (nangate45 / sky130hd /
+sky130hs, agent commit 2025737; `docs/superpowers/plans/2026-07-22-three-platform-*.md`,
+failure-patterns #54). Two were residuals of #53 guards that detected post-hoc without removing
+the cause.
+
+- **RMD-P0-01 frozen-layout DRC** — `run_drc.sh` is checker-only: KLayout invoked directly on the
+  preserved backend GDS (no `make drc`; plain `timeout`, closing this file's leftover #40
+  `setsid`); restage stamps non-stage results (incl. `clock_period.txt`, a YOSYS dependency)
+  OLDER than stage 1 and numbered logs at their stage-result epoch; `run_lvs.sh` gains a
+  fail-closed `make --question` preflight (`physical_rebuild_required`) + a full artifact digest
+  set replacing the single-GDS guard.
+- **RMD-P0-02 strong signoff provenance** — one shared backend-run resolver (`_backend_run.sh`)
+  for restage/DRC/LVS/netgen/RCX writes `backend/.r2g_signoff_run` (run tag + GDS/DEF sha256)
+  where `report_io` actually reads it (the old marker glob was a dead path — 12/12 pilot reports
+  `source=latest_run`); checkers record the exact layout digest graded; extractors carry it (the
+  netgen + skip LVS paths previously stamped NO provenance) and accept `--run-dir`; the def-graph
+  gate's new `artifact_digest` check hard-blocks digest mismatches and unreadable records, and
+  digestless legacy evidence can never be a strict `pass`.
+- **RMD-P0-03 fail-closed platform readiness** — `check_env.sh --platform <p>` /
+  `R2G_TARGET_PLATFORM` makes the named campaign platform's strict capability REQUIRED;
+  `platform_capability.py` reports tiers (`installed`/`research_ready`/`strict_signoff_ready`).
+- **RMD-P0-04 sky130hs GDS import postcondition** — capability requires the modern `.lyt`
+  (patched-options check), and `install_platform_rules.sh` verifies `patch_sky130hs_lyt.py
+  --check` + the new `tools/sky130hs_gds_canary.py` (synthetic DEF import must land routing /
+  pin / special / via geometry on canonical sky130A layer numbers — the legacy failure mode is
+  wrong numbers, not missing shapes) and FAILS setup on a broken repair.
+
+Out of repo scope: RMD-P1-01 (pilot grader registry identity — external harness), RMD-P1-02
+(nangate45 strict-support decision — V1 owner), RMD-P1-03 (sky130hd GCD `m3.2` design case —
+lives in the pilot workspace).
+
 ## 2026-07-20 — the identity chain (all three skills)
 
 Closed the ten claims the 2026-07-19 post-consolidation audit left parked as "architectural"

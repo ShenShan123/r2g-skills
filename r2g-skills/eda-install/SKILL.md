@@ -52,8 +52,12 @@ bash r2g-skills/eda-install/bootstrap.sh               # install missing tiers +
    being ORFS-mutating it still installs only when named (`--tiers platform_rules`), materializing
    the repo's bundled nangate45 DRC/LVS/antenna rule decks into the ORFS checkout
    (`install_platform_rules.sh`, best-effort, HINTs when the repo `tools/` installers are
-   unreachable). `check_env.sh` prints the same per-platform capability table;
-   `R2G_STRICT_PLATFORMS="nangate45"` makes readiness REQUIRED there.
+   unreachable — EXCEPT the sky130hs `.lyt` lefdef repair, a REQUIRED postcondition verified by
+   `patch_sky130hs_lyt.py --check` plus the `sky130hs_gds_canary.py` DEF→GDS geometry canary; a
+   failed repair FAILS setup, RMD-P0-04). `check_env.sh` prints the same per-platform capability
+   table; `check_env.sh --platform <p>` (or `R2G_TARGET_PLATFORM`) makes the NAMED campaign
+   platform's strict readiness REQUIRED and fail-closed (RMD-P0-03);
+   `R2G_STRICT_PLATFORMS="nangate45"` does the same for a standing list.
 4. **Pin** (`scripts/setup/write_env_local.sh`) — writes `references/env.local.sh` into **both**
    `signoff-loop` and `def-graph` from the resolved paths, so the flow skills find a conda / `/proj`
    toolchain with no manual edit. It pins only what autodetect would miss (e.g. omits openroad/yosys

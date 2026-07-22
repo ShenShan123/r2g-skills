@@ -14,6 +14,25 @@ source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 
 STATUS=0
 
+# Target-platform mode (RMD-P0-03, three-platform pilot 2026-07-22): when the
+# campaign's platform is NAMED — `check_env.sh --platform sky130hs` or
+# R2G_TARGET_PLATFORM — its strict-signoff capability is a REQUIRED, fail-closed
+# postcondition, not advisory. The pilot awarded ENV credit and spent hours in
+# ORFS on platforms that could never satisfy the signoff policy (no LVS rule,
+# legacy sky130hs .lyt) because readiness was only enforced when the operator
+# remembered to export R2G_STRICT_PLATFORMS. Entry points must call THIS script
+# (which loads the resolved env first) rather than probing from a bare shell —
+# an empty environment falsely reports installed tools as missing.
+TARGET_PLATFORMS="${R2G_TARGET_PLATFORM:-}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --platform)
+      TARGET_PLATFORMS="${TARGET_PLATFORMS:+$TARGET_PLATFORMS }${2:?--platform needs a value}"
+      shift 2 ;;
+    *) shift ;;
+  esac
+done
+
 print_row() {
   # print_row <label> <value-or-empty> <required?>
   local label="$1" value="$2" required="$3"
@@ -86,22 +105,27 @@ echo "[platform strict-signoff capability]"
 # (2026-07-21 pilot P0-3: ENV passed while nangate45 had no LVS rule and an
 # unusable 0-area antenna diode; the gap surfaced only after multi-hour flows).
 # platform_capability.py probes DRC deck / LVS path / antenna model / RCX rules /
-# timing libs per platform. Advisory by default; export
-# R2G_STRICT_PLATFORMS="nangate45 sky130hd" to make readiness REQUIRED for those.
+# timing libs per platform (incl. the sky130hs modern-.lyt postcondition,
+# RMD-P0-04). Advisory for unnamed platforms; REQUIRED and fail-closed for a
+# NAMED target platform (`--platform X` / R2G_TARGET_PLATFORM, RMD-P0-03) and
+# for R2G_STRICT_PLATFORMS.
 if [[ -n "${FLOW_DIR:-}" && -d "$FLOW_DIR/platforms" ]]; then
   python3 "$(dirname "${BASH_SOURCE[0]}")/platform_capability.py" \
     --flow-dir "$FLOW_DIR" --summary 2>/dev/null || echo "--    (capability probe failed)"
-  if [[ -n "${R2G_STRICT_PLATFORMS:-}" ]]; then
-    for _p in ${R2G_STRICT_PLATFORMS}; do
-      if ! python3 "$(dirname "${BASH_SOURCE[0]}")/platform_capability.py" \
-             --flow-dir "$FLOW_DIR" --platform "$_p" --strict >/dev/null 2>&1; then
-        printf 'MISS strict capability: %s (required via R2G_STRICT_PLATFORMS)\n' "$_p"
-        STATUS=1
-      fi
-    done
-  fi
+  for _p in ${TARGET_PLATFORMS} ${R2G_STRICT_PLATFORMS:-}; do
+    if ! python3 "$(dirname "${BASH_SOURCE[0]}")/platform_capability.py" \
+           --flow-dir "$FLOW_DIR" --platform "$_p" --strict >/dev/null 2>&1; then
+      printf 'MISS strict capability: %s (target platform must be strict_signoff_ready — RMD-P0-03)\n' "$_p"
+      STATUS=1
+    fi
+  done
 else
-  echo "--    (no ORFS platforms dir — capability not probed)"
+  if [[ -n "$TARGET_PLATFORMS" ]]; then
+    printf 'MISS strict capability: %s (no ORFS platforms dir — cannot verify, failing closed)\n' "$TARGET_PLATFORMS"
+    STATUS=1
+  else
+    echo "--    (no ORFS platforms dir — capability not probed)"
+  fi
 fi
 
 echo

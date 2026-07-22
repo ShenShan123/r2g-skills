@@ -205,6 +205,45 @@ if [[ "$PLATFORM" == "sky130hd" || "$PLATFORM" == "sky130hs" ]]; then
   fi
 fi
 
+# ── Frozen-layout preflight (RMD-P0-01, three-platform pilot 2026-07-22).
+# `make lvs` is a Make-based path: its dependency cascade reaches back through
+# finish→route→…→synthesis, so a stale-looking chain silently REBUILDS the
+# physical implementation before the checker — the verdict then grades a
+# foreign layout. `make --question` builds nothing (rc 0 = everything up to
+# date, rc 1 = a rebuild would run, rc 2 = evaluation error): fail CLOSED with
+# physical_rebuild_required instead of silently regenerating the layout.
+_PREFLIGHT_TARGETS=("$RESULTS_DIR/5_route.odb" "$RESULTS_DIR/6_final.def"
+                    "$RESULTS_DIR/6_final.v" "$RESULTS_DIR/6_final.sdc")
+set +e
+make --question DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" \
+  "${_CDL_MAKE_ARGS[@]}" "${_PREFLIGHT_TARGETS[@]}" >/dev/null 2>&1
+_PREFLIGHT_RC=$?
+set -e
+if [[ $_PREFLIGHT_RC -ne 0 ]]; then
+  echo "ERROR: 'make lvs' would rebuild physical stages (make --question rc=$_PREFLIGHT_RC)" >&2
+  echo "  A signoff checker must never regenerate the layout it grades (RMD-P0-01)." >&2
+  echo "  Restage the preserved backend (or re-run run_orfs.sh) and retry." >&2
+  LVS_DIR="$PROJECT_DIR/lvs"
+  mkdir -p "$LVS_DIR"
+  printf '{"status": "failed", "reason": "physical_rebuild_required", "make_question_rc": %s}\n' \
+    "$_PREFLIGHT_RC" > "$LVS_DIR/lvs_result.json"
+  exit 1
+fi
+
+# Expanded frozen-artifact digest set (RMD-P0-01): every physical artifact must
+# be byte-identical before and after the checker run.
+_r2g_lvs_digest_set() {
+  local f
+  for f in 5_route.odb 6_final.def 6_final.odb 6_final.gds 6_final.v 6_final.sdc 6_final.spef; do
+    if [[ -f "$RESULTS_DIR/$f" ]]; then
+      sha256sum "$RESULTS_DIR/$f" 2>/dev/null || true
+    fi
+  done
+}
+LVS_GDS_SHA_PRE="$(sha256sum "$GDS_FILE" 2>/dev/null | cut -d' ' -f1 || true)"
+LVS_DIGEST_SET_PRE="$(_r2g_lvs_digest_set)"
+LVS_STARTED_AT="$(date -Iseconds)"
+
 # Use setsid so timeout can kill the entire process group (prevents zombie klayout)
 LVS_STATUS=0
 for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
@@ -254,6 +293,17 @@ for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   break
 done
 
+# Frozen-layout postcondition (RMD-P0-01): the preflight said nothing would
+# rebuild — verify nothing DID. A changed digest set means the verdict grades
+# foreign bytes; force a failed result (extract_lvs.py honors lvs_result.json).
+LVS_DIGEST_SET_POST="$(_r2g_lvs_digest_set)"
+LVS_IMPLICIT_REBUILD=0
+if [[ "$LVS_DIGEST_SET_PRE" != "$LVS_DIGEST_SET_POST" ]]; then
+  LVS_IMPLICIT_REBUILD=1
+  echo "ERROR: 'make lvs' changed physical artifacts — the layout is not frozen (RMD-P0-01)" >&2
+  diff <(echo "$LVS_DIGEST_SET_PRE") <(echo "$LVS_DIGEST_SET_POST") >&2 || true
+fi
+
 # Collect results
 LVS_DIR="$PROJECT_DIR/lvs"
 mkdir -p "$LVS_DIR"
@@ -262,6 +312,38 @@ rm -f /tmp/lvs_run_$$.log
 # Drop any stale skip-marker from a prior `no rules available` run — once we
 # have a real lvs_run.log/6_lvs.log the skip marker is no longer authoritative.
 rm -f "$LVS_DIR/lvs_result.json"
+if [[ "$LVS_IMPLICIT_REBUILD" == "1" ]]; then
+  printf '{"status": "failed", "reason": "layout_changed_under_signoff", "note": "physical artifacts changed while make lvs ran; verdict does not describe the frozen backend layout (RMD-P0-01)"}\n' \
+    > "$LVS_DIR/lvs_result.json"
+  if [[ $LVS_STATUS -eq 0 ]]; then LVS_STATUS=1; fi
+fi
+
+# Strong provenance sidecar (RMD-P0-02): which run + exact layout bytes this
+# LVS graded. extract_lvs.py lifts these into reports/lvs.json; the def-graph
+# gate matches the digest against the layout it publishes. Kept SEPARATE from
+# lvs_result.json (that file is the skip/failure marker in extract_lvs.py's
+# freshness logic).
+python3 - "$LVS_DIR/lvs_provenance.json" "${R2G_BACKEND_RUN:-}" "$GDS_FILE" \
+  "$LVS_GDS_SHA_PRE" "$KLAYOUT_LVS_RESOLVED" "$LVS_STARTED_AT" <<'PYEOF' || true
+import hashlib, json, os, sys, time
+out, run_dir, gds, gds_sha, rule, started = sys.argv[1:7]
+deck_sha = None
+try:
+    h = hashlib.sha256()
+    with open(rule, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    deck_sha = h.hexdigest()
+except OSError:
+    pass
+doc = {"engine": "klayout", "run_tag": os.path.basename(run_dir) if run_dir else None,
+       "gds_path": gds, "gds_sha256": gds_sha or None,
+       "rule_path": rule, "rule_sha256": deck_sha,
+       "started_at": started, "ended_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+with open(out, "w") as f:
+    json.dump(doc, f, indent=2)
+    f.write("\n")
+PYEOF
 
 # LOGS_DIR was computed before the run loop (used for crash-retry detection).
 
@@ -276,14 +358,16 @@ if [[ -f "$RESULTS_DIR/6_final.cdl" ]]; then
   cp "$RESULTS_DIR/6_final.cdl" "$LVS_DIR/" 2>/dev/null || true
 fi
 
-# Also copy to latest backend run
-BACKEND_DIR="$PROJECT_DIR/backend"
-if [[ -d "$BACKEND_DIR" ]]; then
-  LATEST_RUN=$(ls -d "$BACKEND_DIR"/RUN_* 2>/dev/null | sort | tail -1)
-  if [[ -n "$LATEST_RUN" ]]; then
-    mkdir -p "$LATEST_RUN/lvs"
-    cp "$LVS_DIR"/* "$LATEST_RUN/lvs/" 2>/dev/null || true
-  fi
+# Copy to the SELECTED backend run (RMD-P0-02: the run the restage picked and
+# this verdict describes — never `ls | tail -1`, which can name a newer empty
+# RUN dir from a crashed re-attempt).
+TARGET_RUN="${R2G_BACKEND_RUN:-}"
+if [[ -z "$TARGET_RUN" || ! -d "$TARGET_RUN" ]]; then
+  TARGET_RUN=$(ls -d "$PROJECT_DIR/backend"/RUN_* 2>/dev/null | sort | tail -1 || true)
+fi
+if [[ -n "$TARGET_RUN" && -d "$TARGET_RUN" ]]; then
+  mkdir -p "$TARGET_RUN/lvs"
+  cp "$LVS_DIR"/* "$TARGET_RUN/lvs/" 2>/dev/null || true
 fi
 
 # Parse LVS result

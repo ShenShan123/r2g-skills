@@ -247,12 +247,27 @@ def parse_lvs_log(lvs_dir: Path) -> dict:
 
 
 def main():
-    if len(sys.argv) < 3:
-        print('usage: extract_lvs.py <project-root> <output.json>', file=sys.stderr)
+    # Optional explicit run binding (RMD-P0-02): a caller that already resolved
+    # the backend run passes --run-dir so the provenance envelope is stamped
+    # source=explicit instead of being re-discovered.
+    argv = list(sys.argv[1:])
+    run_dir = None
+    if '--run-dir' in argv:
+        i = argv.index('--run-dir')
+        try:
+            run_dir = argv[i + 1]
+        except IndexError:
+            print('usage: extract_lvs.py <project-root> <output.json> [--run-dir DIR]',
+                  file=sys.stderr)
+            sys.exit(1)
+        del argv[i:i + 2]
+    if len(argv) < 2:
+        print('usage: extract_lvs.py <project-root> <output.json> [--run-dir DIR]',
+              file=sys.stderr)
         sys.exit(1)
 
-    project_root = Path(sys.argv[1])
-    out_path = Path(sys.argv[2])
+    project_root = Path(argv[0])
+    out_path = Path(argv[1])
 
     lvs_dir = project_root / 'lvs'
 
@@ -287,6 +302,9 @@ def main():
         try:
             skip_data = json.loads(skip_file.read_text(encoding='utf-8'))
             if skip_data.get('status') == 'skipped':
+                # Even a skip is attributable (RMD-P0-02) — the gate accepts a
+                # skipped LVS, so it must know WHICH run the skip belongs to.
+                report_io.stamp_run_provenance(skip_data, project_root, run_dir)
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 report_io.write_json_atomic(out_path, skip_data)
                 print(out_path)
@@ -339,6 +357,14 @@ def main():
             }
             if ng_class:
                 out['mismatch_class'] = ng_class
+            # Strong provenance (RMD-P0-02): the netgen path used to return
+            # WITHOUT any provenance envelope, so sky130 production LVS could
+            # never bind to a run. Carry the exact layout digest the verdict
+            # graded, then stamp the run attribution like every other path.
+            for k in ('run_tag', 'gds_path', 'gds_sha256'):
+                if ng.get(k):
+                    out[k] = ng[k]
+            report_io.stamp_run_provenance(out, project_root, run_dir)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             report_io.write_json_atomic(out_path, out)
             print(out_path)
@@ -441,10 +467,28 @@ def main():
         if cls:
             result.update(cls)
 
+    # Strong provenance sidecar (RMD-P0-02): run_lvs.sh records which run + the
+    # exact layout/rule bytes this KLayout LVS graded. Lift them so the def-graph
+    # gate can match the digest against the layout it publishes. Only honored
+    # when the sidecar is at least as fresh as the run log (a stale sidecar from
+    # an older run must not re-attribute this verdict).
+    _prov_file = lvs_dir / 'lvs_provenance.json'
+    if _prov_file.exists():
+        _runlog_m = _runlog.stat().st_mtime if _runlog.exists() else 0.0
+        try:
+            if _prov_file.stat().st_mtime >= _runlog_m - 2.0:
+                _prov = json.loads(_prov_file.read_text(encoding='utf-8'))
+                for k in ('run_tag', 'gds_path', 'gds_sha256', 'rule_sha256'):
+                    if isinstance(_prov, dict) and _prov.get(k):
+                        result[k] = _prov[k]
+        except (ValueError, OSError):
+            pass
+
     # Which backend run's layout this verdict judges (P0-R7): a project-level
     # report must be attributable, or a clean bundle from one run can certify
-    # another run's DEF in the def-graph signoff gate.
-    report_io.stamp_run_provenance(result, project_root)
+    # another run's DEF in the def-graph signoff gate. An explicit --run-dir
+    # wins; otherwise the shared signoff record resolves it (RMD-P0-02).
+    report_io.stamp_run_provenance(result, project_root, run_dir)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     report_io.write_json_atomic(out_path, result)

@@ -129,12 +129,27 @@ def artifacts_stale(drc_dir: Path, tol: float = 2.0) -> bool:
 
 
 def main():
-    if len(sys.argv) < 3:
-        print('usage: extract_drc.py <project-root> <output.json>', file=sys.stderr)
+    # Optional explicit run binding (RMD-P0-02): a caller that already resolved
+    # the backend run passes --run-dir so the provenance envelope is stamped
+    # source=explicit instead of being re-discovered.
+    argv = list(sys.argv[1:])
+    run_dir = None
+    if '--run-dir' in argv:
+        i = argv.index('--run-dir')
+        try:
+            run_dir = argv[i + 1]
+        except IndexError:
+            print('usage: extract_drc.py <project-root> <output.json> [--run-dir DIR]',
+                  file=sys.stderr)
+            sys.exit(1)
+        del argv[i:i + 2]
+    if len(argv) < 2:
+        print('usage: extract_drc.py <project-root> <output.json> [--run-dir DIR]',
+              file=sys.stderr)
         sys.exit(1)
 
-    project_root = Path(sys.argv[1])
-    out_path = Path(sys.argv[2])
+    project_root = Path(argv[0])
+    out_path = Path(argv[1])
 
     drc_dir = project_root / 'drc'
 
@@ -207,8 +222,14 @@ def main():
         result['note'] = ('stale local DRC artifacts (older than drc_run.log); '
                           'fresh 6_drc_count.rpt/6_drc.lyrdb not copied in')
     if drc_result:
-        # Carry through extra context (stuck_at_rule, reason, timeout_s, drc_mode, etc.)
-        for k in ('stuck_at_rule', 'reason', 'timeout_s', 'exit_code', 'note', 'drc_mode'):
+        # Carry through extra context (stuck_at_rule, reason, timeout_s, drc_mode)
+        # plus the strong-provenance fields run_drc.sh records (RMD-P0-02): the
+        # run tag, exact layout/deck digests, and checker toolchain — the
+        # def-graph gate matches gds_sha256 against the layout it publishes.
+        for k in ('stuck_at_rule', 'reason', 'timeout_s', 'exit_code', 'note', 'drc_mode',
+                  'checker', 'run_tag', 'gds_path', 'gds_sha256',
+                  'deck_path', 'deck_sha256', 'klayout_version',
+                  'started_at', 'ended_at'):
             if k in drc_result and k not in result:
                 result[k] = drc_result[k]
 
@@ -242,8 +263,9 @@ def main():
 
     # Which backend run's layout this verdict judges (P0-R7): a project-level
     # report must be attributable, or a clean bundle from one run can certify
-    # another run's DEF in the def-graph signoff gate.
-    report_io.stamp_run_provenance(result, project_root)
+    # another run's DEF in the def-graph signoff gate. An explicit --run-dir
+    # wins; otherwise the shared signoff record resolves it (RMD-P0-02).
+    report_io.stamp_run_provenance(result, project_root, run_dir)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     report_io.write_json_atomic(out_path, result)

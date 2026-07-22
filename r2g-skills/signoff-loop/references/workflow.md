@@ -79,8 +79,11 @@ After a successful backend run, run signoff checks in order:
 ```bash
 scripts/flow/run_drc.sh <project-dir> [platform]
 ```
-- Uses ORFS `make drc` target → KLayout with platform `.lydrc` rules
-- Outputs: `drc/6_drc.lyrdb` (violation database, XML), `drc/6_drc_count.rpt` (count), `drc/6_drc.log`
+- Checker-only: invokes KLayout DIRECTLY (via ORFS `scripts/klayout.sh`) on the preserved
+  backend GDS with the platform `.lydrc` rules — never `make drc`, so a DRC request can never
+  rebuild physical stages (failure-patterns #54 / RMD-P0-01)
+- Outputs: `drc/6_drc.lyrdb` (violation database, XML), `drc/6_drc_count.rpt` (count), `drc/6_drc.log`;
+  `drc_result.json` records the run tag + GDS/deck sha256 + KLayout version (strong provenance)
 - Extract: `scripts/extract/extract_drc.py <project-root> reports/drc.json`
 - Result JSON contains: `status` (clean/fail), `total_violations`, `categories` (per-rule breakdown)
 
@@ -88,7 +91,10 @@ scripts/flow/run_drc.sh <project-dir> [platform]
 ```bash
 scripts/flow/run_lvs.sh <project-dir> [platform]
 ```
-- Uses ORFS `make lvs` target → KLayout with platform `.lylvs` rules + CDL netlist
+- Uses ORFS `make lvs` target → KLayout with platform `.lylvs` rules + CDL netlist; a
+  fail-closed `make --question` preflight rejects the run (`physical_rebuild_required`) if make
+  would rebuild any physical stage, and the artifact digest set is verified unchanged after the
+  checker (failure-patterns #54 / RMD-P0-01)
 - **Gracefully skips** if platform has no LVS rules (e.g., asap7)
 - Outputs: `lvs/6_lvs.lvsdb`, `lvs/6_lvs.log`, `lvs/6_final.cdl`
 - Extract: `scripts/extract/extract_lvs.py <project-root> reports/lvs.json`

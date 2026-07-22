@@ -458,6 +458,82 @@ def _check_report_binding(reports_dir, run_dir):
             **({"weak": weak} if weak else {})}
 
 
+def _sha256_file(path):
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def _check_artifact_digest(reports_dir, run_dir, project_dir):
+    """Bind the signoff reports to the EXACT LAYOUT BYTES of the selected run
+    (RMD-P0-02, three-platform pilot 2026-07-22).
+
+    Run-tag binding (`report_binding` above) proves the report names this run's
+    DIRECTORY — it cannot see foreign bytes copied into the expected path. Each
+    checker now records the sha256 of the GDS it actually graded (drc.json /
+    lvs.json `gds_sha256`, or the provenance envelope's digest from the shared
+    signoff record). Compare every recorded digest against the run's actual
+    6_final.gds:
+
+      * any recorded digest differing from the actual bytes -> `mismatch`
+        (HARD block: the verdict describes a different layout);
+      * an existing but unreadable backend/.r2g_signoff_run record -> `unreadable_record`
+        (HARD block per the remediation plan: broken provenance must fail closed,
+        not silently degrade);
+      * reports present but none recording a digest -> `unrecorded` (a caveat:
+        legacy evidence may still build the research tier, but the strict
+        r2g_clean tier requires exact 'pass', so it can never auto-certify);
+      * no run dir / no GDS to compare -> `unknown` (nothing to check).
+    """
+    rec_path = os.path.join(project_dir, "backend", ".r2g_signoff_run")
+    if os.path.isfile(rec_path):
+        rec = _load_json(rec_path)
+        if not isinstance(rec, dict) or not rec.get("run_tag"):
+            return {"status": "unreadable_record",
+                    "detail": f"backend/.r2g_signoff_run exists but is unreadable — "
+                              "provenance must fail closed (RMD-P0-02)"}
+    if not run_dir or not os.path.isdir(run_dir):
+        return {"status": "unknown", "detail": "no backend run dir to digest"}
+    actual = None
+    for sub in ("results", "final"):
+        p = os.path.join(run_dir, sub, "6_final.gds")
+        if os.path.isfile(p):
+            actual = _sha256_file(p)
+            break
+    if not actual:
+        return {"status": "unknown", "detail": "selected run has no readable 6_final.gds"}
+    recorded, mismatched = {}, []
+    for fn in ("drc.json", "lvs.json"):
+        doc = _load_json(os.path.join(reports_dir, fn))
+        if not isinstance(doc, dict):
+            continue
+        digest = doc.get("gds_sha256")
+        if not digest:
+            prov = doc.get("provenance")
+            digest = (prov or {}).get("gds_sha256") if isinstance(prov, dict) else None
+        if not digest:
+            continue
+        recorded[fn] = digest
+        if digest != actual:
+            mismatched.append(fn)
+    if mismatched:
+        return {"status": "mismatch", "actual_gds_sha256": actual,
+                "recorded": recorded,
+                "detail": "signoff report(s) record a DIFFERENT layout digest than the "
+                          f"selected run's 6_final.gds: {', '.join(sorted(mismatched))} "
+                          "— the verdicts grade foreign bytes (RMD-P0-02)"}
+    if not recorded:
+        return {"status": "unrecorded", "actual_gds_sha256": actual,
+                "detail": "no signoff report records the layout digest it graded "
+                          "(pre-RMD-P0-02 evidence); re-run signoff to bind it"}
+    return {"status": "bound", "actual_gds_sha256": actual, "recorded": recorded}
+
+
 def evaluate(project_dir, run_dir, def_path=None):
     reports_dir = os.path.join(project_dir, "reports")
     checks = {
@@ -469,6 +545,7 @@ def evaluate(project_dir, run_dir, def_path=None):
         "timing": _check_timing(reports_dir),
         "binding": _check_binding(def_path, run_dir),
         "report_binding": _check_report_binding(reports_dir, run_dir),
+        "artifact_digest": _check_artifact_digest(reports_dir, run_dir, project_dir),
     }
     blockers = []
     if checks["drc"]["status"] not in DRC_OK:
@@ -489,6 +566,12 @@ def evaluate(project_dir, run_dir, def_path=None):
     # caveat (see _check_report_binding for why).
     if checks["report_binding"]["status"] == "foreign":
         blockers.append("report_binding")
+    # A recorded layout digest that differs from the selected run's actual GDS
+    # bytes, or an unreadable signoff record, is a hard block (RMD-P0-02):
+    # copying foreign DEF/GDS bytes into the expected run path must not bypass
+    # the gate.
+    if checks["artifact_digest"]["status"] in ("mismatch", "unreadable_record"):
+        blockers.append("artifact_digest")
 
     caveats = []
     # Only a SUPPLIED-but-unverifiable DEF is a recorded caveat; a caller that passes no
@@ -499,6 +582,11 @@ def evaluate(project_dir, run_dir, def_path=None):
         caveats.append("report_binding=unknown")
     elif checks["report_binding"].get("weak"):
         caveats.append("report_binding=weak")
+    # Legacy (pre-RMD-P0-02) evidence carries no layout digest: buildable as
+    # research tier, but never an exact 'pass' — the strict r2g_clean tier
+    # requires digest-bound reports.
+    if checks["artifact_digest"]["status"] == "unrecorded":
+        caveats.append("artifact_digest=unrecorded")
     fp = _def_fingerprint(def_path)
     if fp:
         checks["binding"]["def_fingerprint"] = fp

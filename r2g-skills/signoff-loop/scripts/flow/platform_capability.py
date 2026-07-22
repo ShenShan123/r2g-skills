@@ -45,6 +45,27 @@ import sys
 # deck — pure sky130A process-layer geometry, shared tech (failure-patterns #32).
 SIBLING_DRC_DECK = {"sky130hs": ("sky130hd", "drc/sky130hd.lydrc")}
 
+# Platforms whose KLayout .lyt MUST carry the modern lefdef reader options
+# (RMD-P0-04, three-platform pilot 2026-07-22 / failure-patterns #33): this
+# ORFS ships sky130hs.lyt with LEGACY option names, so KLayout's def2stream
+# merge silently drops ALL DEF-derived geometry — routing, vias, pin rects,
+# special (power) routing. Magic then extracts a portless top subckt and every
+# Netgen LVS is invalid (all four pilot fixtures). Tool presence alone is NOT a
+# sufficient readiness oracle: the probe must verify the postcondition of
+# tools/patch_sky130hs_lyt.py. Scoped to the known-broken platform only (the
+# same deliberate-pair philosophy as SIBLING_DRC_DECK).
+MODERN_LYT_REQUIRED = {"sky130hs"}
+
+
+def _lyt_modern(platform_dir: str, platform: str) -> bool | None:
+    """True when <platform>.lyt carries the modern lefdef reader options
+    (mirrors tools/patch_sky130hs_lyt.py --check); None when unreadable."""
+    text = _read(os.path.join(platform_dir, f"{platform}.lyt"))
+    if text is None:
+        return None
+    return ("<routing-datatype-string>" in text
+            and "<produce-special-routing>" in text)
+
 
 def find_flow_dir(explicit: str | None = None) -> str | None:
     """ORFS flow dir: explicit arg > $FLOW_DIR > $ORFS_ROOT/flow > common roots."""
@@ -156,6 +177,17 @@ def probe_platform(flow_dir: str, platform: str) -> dict:
                        "magic": magic, "netgen": netgen,
                        "pdk_tech": tech if os.path.isfile(tech) else None,
                        "pdk_setup": setup if os.path.isfile(setup) else None}
+        # GDS-import postcondition (RMD-P0-04): a legacy .lyt makes every
+        # Netgen LVS verdict invalid (def2stream drops all DEF geometry ->
+        # portless Magic extraction), so LVS is NOT capable regardless of the
+        # tool triple. Verified here, before any flow spends hours.
+        if platform in MODERN_LYT_REQUIRED:
+            lyt_ok = _lyt_modern(pdir, platform)
+            caps["lvs"]["lyt_modern"] = lyt_ok
+            if lyt_ok is not True:
+                caps["lvs"]["ok"] = False
+                caps["lvs"]["hint"] = ("run tools/patch_sky130hs_lyt.py, then regenerate "
+                                       "GDS from finish (failure-patterns #33 / RMD-P0-04)")
     else:
         rule = _resolve(_mk_var(cfg, "KLAYOUT_LVS_FILE"), pdir, platform)
         if not (rule and os.path.isfile(rule)):
@@ -209,6 +241,18 @@ def probe_platform(flow_dir: str, platform: str) -> dict:
                if not caps[k]["ok"]]
     caps["missing"] = missing
     caps["strict_signoff_ready"] = not missing
+    # Explicit capability tiers (RMD-P0-03): `installed` (the platform dir
+    # exists), `research_ready` (flows + timing + a DRC deck — enough for
+    # research-tier datasets), `strict_signoff_ready` (all five capabilities —
+    # the ONLY tier that may enter a strict V1 campaign). Conflating these is
+    # how ENV credit was awarded on platforms that could never satisfy the
+    # required signoff policy.
+    if not missing:
+        caps["tier"] = "strict_signoff_ready"
+    elif caps["drc_deck"]["ok"] and caps["timing"]["ok"]:
+        caps["tier"] = "research_ready"
+    else:
+        caps["tier"] = "installed"
     return caps
 
 
@@ -245,7 +289,7 @@ def _summary_line(caps: dict) -> str:
         f"{k}={'ok' if caps[k]['ok'] else 'MISS'}"
         for k in ("drc_deck", "lvs", "antenna", "rcx", "timing"))
     state = "STRICT-READY" if caps["strict_signoff_ready"] else \
-        "not-strict (" + ",".join(caps["missing"]) + ")"
+        f"{caps.get('tier', 'installed')} (" + ",".join(caps["missing"]) + ")"
     return f"{caps['platform']:<12} {state:<28} {flags}"
 
 

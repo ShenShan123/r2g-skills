@@ -61,26 +61,13 @@ fi
 #    Source-of-truth: the project backend RUN that actually contains
 #    results/6_final.gds (NOT necessarily the newest mtime — earlier runs
 #    sometimes have artifacts while a later "empty" RUN dir exists from a
-#    crashed re-attempt).
-_restage_pick_run_dir() {
-  local run_dir
-  for run_dir in $(ls -dt "$PROJECT_DIR"/backend/RUN_* 2>/dev/null); do
-    if [[ -f "$run_dir/results/6_final.gds" ]]; then
-      echo "$run_dir"
-      return 0
-    fi
-  done
-  # fallback: any run with a final/6_final.gds (older r2g layout)
-  for run_dir in $(ls -dt "$PROJECT_DIR"/backend/RUN_* 2>/dev/null); do
-    if [[ -f "$run_dir/final/6_final.gds" ]]; then
-      echo "$run_dir"
-      return 0
-    fi
-  done
-  return 1
-}
+#    crashed re-attempt). ONE shared resolver (RMD-P0-02): the same pick is
+#    used by every checker's copy-back and by report extraction, so all of
+#    them name the same run.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_backend_run.sh"
 
-R2G_BACKEND_RUN="$(_restage_pick_run_dir || true)"
+R2G_BACKEND_RUN="$(r2g_pick_backend_run "$PROJECT_DIR" || true)"
 
 if [[ -z "$R2G_BACKEND_RUN" ]]; then
   echo "WARNING: no backend RUN dir contains a final GDS for $DESIGN_NAME ($PROJECT_DIR)" >&2
@@ -136,35 +123,57 @@ if [[ -n "$R2G_BACKEND_RUN" ]]; then
   fi
 fi
 
+# Project-side signoff provenance record (RMD-P0-02): name the run this
+# workspace was staged FROM, with its artifact digests, where report_io.py can
+# actually read it. The workspace-side .r2g_restaged markers above are staging
+# fast-path state, NOT attribution — report extraction never sees them.
+if [[ -n "$R2G_BACKEND_RUN" ]]; then
+  r2g_write_signoff_record "$PROJECT_DIR" "$R2G_BACKEND_RUN" "$PLATFORM" "$FLOW_VARIANT"
+fi
+
 # Bump mtimes so make sees the staged artifacts as up-to-date — in DEPENDENCY
-# ORDER (pilot P1-2, 2026-07-21). The old bulk `find -exec touch` stamped files in
-# filesystem-enumeration order, so an EARLIER stage artifact (e.g. 2_floorplan.odb)
-# could land NEWER than a later one (6_final.gds); ORFS's mtime cascade then judged
-# downstream targets stale and a DRC-only `make drc` silently rebuilt synth→finish
-# before KLayout — nondeterministically, which is why only one pilot fixture hit it.
-# Stamp design inputs (config.mk/SDC) OLDEST, then objects/ + logs, then results
-# grouped by stage-number prefix (1_… → 6_…) with strictly increasing timestamps,
-# so every consumer is provably newer than its producers and inputs.
+# ORDER (pilot P1-2, 2026-07-21; corrected RMD-P0-01, 2026-07-22). The 07-21 fix
+# ordered the numbered stage results 1→6 but kept two rebuild triggers the
+# three-platform pilot hit on all 12 DRC invocations:
+#   * a blanket "non-stage results newest of all" rule — but clock_period.txt
+#     lives in results/, is declared SDC_FILE_CLOCK_PERIOD, and sits in ORFS
+#     YOSYS_DEPENDENCIES, so stamping it newest made SYNTHESIS stale and
+#     `make drc` rebuilt synth→finish before KLayout;
+#   * logs stamped older than their matching stage results — but 6_report.log
+#     is itself an ORFS Make target depending on 6_1_fill.odb, so an older log
+#     re-ran final_report (and 6_final.def/v depend on that log).
+# Corrected policy: design inputs OLDEST; objects + logs next; NON-stage results
+# (clock_period.txt, mem.json, …) are stage INPUTS/prerequisites and stamp OLDER
+# than every stage result; then stages 1→6 strictly increasing, with each
+# numbered log stamped at the SAME epoch as its matching numbered results
+# (equal mtimes read as up-to-date). No blanket newest rule.
 _r2g_now=$(date +%s)
 if [[ -d "$ORFS_DESIGN_DIR" ]]; then
   find "$ORFS_DESIGN_DIR" -maxdepth 1 -type f -exec touch -d "@$((_r2g_now - 120))" {} + 2>/dev/null || true
 fi
 for _r2g_dir in "$ORFS_OBJECTS_DIR" "$ORFS_LOGS_DIR"; do
   if [[ -d "$_r2g_dir" ]]; then
-    find "$_r2g_dir" -type f -exec touch -d "@$((_r2g_now - 90))" {} + 2>/dev/null || true
+    find "$_r2g_dir" -type f -exec touch -d "@$((_r2g_now - 100))" {} + 2>/dev/null || true
   fi
 done
 if [[ -d "$ORFS_RESULTS_DIR" ]]; then
-  _r2g_epoch=$((_r2g_now - 60))
-  for _r2g_stage in 1 2 3 4 5 6; do
-    _r2g_epoch=$((_r2g_epoch + 5))
+  # Non-stage-prefixed results are true inputs (clock_period.txt is in
+  # YOSYS_DEPENDENCIES): newer than the design dir / SDC, older than stage 1.
+  find "$ORFS_RESULTS_DIR" -type f ! -name "[1-6]_*" \
+    -exec touch -d "@$((_r2g_now - 80))" {} + 2>/dev/null || true
+fi
+_r2g_epoch=$((_r2g_now - 70))
+for _r2g_stage in 1 2 3 4 5 6; do
+  _r2g_epoch=$((_r2g_epoch + 10))
+  if [[ -d "$ORFS_RESULTS_DIR" ]]; then
     find "$ORFS_RESULTS_DIR" -type f -name "${_r2g_stage}_*" \
       -exec touch -d "@$_r2g_epoch" {} + 2>/dev/null || true
-  done
-  # Non-stage-prefixed outputs (updated SDCs, mem.json, …) newest of all.
-  find "$ORFS_RESULTS_DIR" -type f ! -name "[1-6]_*" \
-    -exec touch -d "@$((_r2g_epoch + 5))" {} + 2>/dev/null || true
-fi
+  fi
+  if [[ -d "$ORFS_LOGS_DIR" ]]; then
+    find "$ORFS_LOGS_DIR" -type f -name "${_r2g_stage}_*" \
+      -exec touch -d "@$_r2g_epoch" {} + 2>/dev/null || true
+  fi
+done
 
-unset _restage_dir _restage_pick_run_dir _fb_marker _fb_pick _fb_staged \
+unset _restage_dir _fb_marker _fb_pick _fb_staged \
       _r2g_now _r2g_epoch _r2g_stage _r2g_dir 2>/dev/null || true

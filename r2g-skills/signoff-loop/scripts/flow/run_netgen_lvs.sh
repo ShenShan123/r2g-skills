@@ -103,6 +103,22 @@ if [[ -z "$GDS_FILE" ]]; then
   exit 1
 fi
 
+# Strong provenance (RMD-P0-02): resolve the backend run this verdict belongs
+# to with the SAME shared resolver every checker uses, refresh the project-side
+# signoff record, and digest the exact GDS bytes Magic will extract. If the
+# workspace GDS is stale relative to the picked run, the digest mismatch is
+# visible downstream (the def-graph gate compares it against the published
+# layout) instead of silently certifying foreign bytes.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_backend_run.sh"
+R2G_BACKEND_RUN="$(r2g_pick_backend_run "$PROJECT_DIR" || true)"
+LVS_RUN_TAG=""
+if [[ -n "$R2G_BACKEND_RUN" ]]; then
+  LVS_RUN_TAG="$(basename "$R2G_BACKEND_RUN")"
+  r2g_write_signoff_record "$PROJECT_DIR" "$R2G_BACKEND_RUN" "$PLATFORM" "$FLOW_VARIANT"
+fi
+LVS_GDS_SHA="$(sha256sum "$GDS_FILE" 2>/dev/null | cut -d' ' -f1 || true)"
+
 # Find the Verilog netlist (gate-level from synthesis or ORFS)
 VERILOG_NETLIST=""
 # Try ORFS result first
@@ -361,21 +377,25 @@ cat > "$LVS_DIR/netgen_lvs_result.json" << JSON_EOF
   "extracted_spice": "$EXTRACTED_SPICE",
   "reference_netlist": "$VERILOG_NETLIST",
   "report_file": "$NETGEN_REPORT",
-  "log_file": "$NETGEN_LOG"
+  "log_file": "$NETGEN_LOG",
+  "run_tag": "${LVS_RUN_TAG:-}",
+  "gds_path": "$GDS_FILE",
+  "gds_sha256": "${LVS_GDS_SHA:-}"
 }
 JSON_EOF
 
 # Clean up Magic temp files
 rm -f "$LVS_DIR"/*.ext 2>/dev/null || true
 
-# Copy to latest backend run
-BACKEND_DIR="$PROJECT_DIR/backend"
-if [[ -d "$BACKEND_DIR" ]]; then
-  LATEST_RUN=$(ls -d "$BACKEND_DIR"/RUN_* 2>/dev/null | sort | tail -1)
-  if [[ -n "$LATEST_RUN" ]]; then
-    mkdir -p "$LATEST_RUN/lvs"
-    cp "$LVS_DIR"/netgen_lvs* "$LATEST_RUN/lvs/" 2>/dev/null || true
-  fi
+# Copy to the SELECTED backend run (RMD-P0-02: the resolver's pick, never
+# `ls | tail -1` — a newer empty RUN dir must not adopt this verdict).
+TARGET_RUN="${R2G_BACKEND_RUN:-}"
+if [[ -z "$TARGET_RUN" || ! -d "$TARGET_RUN" ]]; then
+  TARGET_RUN=$(ls -d "$PROJECT_DIR/backend"/RUN_* 2>/dev/null | sort | tail -1 || true)
+fi
+if [[ -n "$TARGET_RUN" && -d "$TARGET_RUN" ]]; then
+  mkdir -p "$TARGET_RUN/lvs"
+  cp "$LVS_DIR"/netgen_lvs* "$TARGET_RUN/lvs/" 2>/dev/null || true
 fi
 
 echo ""
