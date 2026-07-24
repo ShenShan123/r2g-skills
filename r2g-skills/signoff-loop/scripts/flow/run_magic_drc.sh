@@ -20,6 +20,14 @@ fi
 # Auto-detect ORFS + tools (honors ORFS_ROOT / PDK_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+# Bounded process-group checker supervisor (RMD2-P0-01)
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_bounded_run.sh"
+# Advisory or not, a cancelled/timed-out Magic must never survive as an orphan:
+# reap the whole checker session on any exit path (same contract as run_drc.sh).
+trap 'r2g_bounded_cleanup' EXIT
+trap 'r2g_bounded_cleanup; exit 130' INT
+trap 'r2g_bounded_cleanup; exit 143' TERM
 
 if [[ -z "${ORFS_ROOT:-}" || ! -d "$FLOW_DIR" ]]; then
   echo "ERROR: ORFS not found. Set ORFS_ROOT to your OpenROAD-flow-scripts checkout." >&2
@@ -139,12 +147,17 @@ MAGIC_EOF
 MAGIC_TIMEOUT="${MAGIC_TIMEOUT:-3600}"
 echo "Timeout: ${MAGIC_TIMEOUT}s"
 
+# Bounded session supervisor (RMD2-P0-01, 2026-07-24 — the last `timeout | tee`
+# in the flow scripts): the old pipeline let a TERM-ignoring Magic descendant
+# hold the tee pipe open past expiry; r2g_bounded_run logs directly to DRC_LOG,
+# TERM→grace→KILLs the whole group, and reaps any session survivor.
 DRC_STATUS=0
-set +e +o pipefail
-timeout --signal=TERM --kill-after=60 "$MAGIC_TIMEOUT" \
-  "$MAGIC_EXE" -dnull -noconsole -T "$MAGIC_TECH" "$DRC_TCL" 2>&1 | tee "$DRC_LOG"
-DRC_STATUS=${PIPESTATUS[0]}
-set -e -o pipefail
+set +e
+r2g_bounded_run "$MAGIC_TIMEOUT" "${MAGIC_KILL_GRACE:-60}" "$DRC_LOG" \
+  "$MAGIC_EXE" -dnull -noconsole -T "$MAGIC_TECH" "$DRC_TCL"
+DRC_STATUS=$?
+set -e
+tail -n 25 "$DRC_LOG" 2>/dev/null || true
 if [[ $DRC_STATUS -eq 124 ]]; then
   echo "ERROR: Magic DRC timed out after ${MAGIC_TIMEOUT}s" >&2
 fi
@@ -155,7 +168,11 @@ fi
 # total_violations field, producing unparseable output.
 VIOLATION_COUNT=0
 if [[ -f "$DRC_LOG" ]]; then
-  COUNT_LINE=$(grep -i "Total DRC errors found:" "$DRC_LOG" 2>/dev/null | tail -1)
+  # `|| true`: under the script-wide pipefail a log WITHOUT the count line
+  # (timeout/crash before Magic printed it) made this grep abort the whole
+  # script at exit 1 — before the JSON below was ever written. Tolerate the
+  # no-match; the numeric guard fail-closes the empty value to 0.
+  COUNT_LINE=$(grep -i "Total DRC errors found:" "$DRC_LOG" 2>/dev/null | tail -1 || true)
   if [[ -n "$COUNT_LINE" ]]; then
     VIOLATION_COUNT=$(echo "$COUNT_LINE" | awk '{print $NF}')
   fi

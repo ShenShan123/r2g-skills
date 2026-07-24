@@ -105,3 +105,83 @@ def test_garbage_count_fails_closed(tmp_path):
     """A non-numeric tail token must be guarded to 0 (never leak into JSON)."""
     d = _emit_json(tmp_path, "Total DRC errors found: magic_drc_total_violations:\n")
     assert d["total_violations"] == 0
+
+
+# ---------------------------------------------------------------------------
+# 3. RMD2-P0-01 (2026-07-24): timeout must terminate the COMPLETE Magic tree.
+#    The old `timeout … | tee` let a TERM-ignoring Magic descendant hold the tee
+#    pipe open past expiry; the script now runs under r2g_bounded_run (own
+#    session, log-not-pipe output, group TERM→grace→KILL, survivor reap).
+#    Harness mirrors test_run_netgen_lvs_timeout_group_kill.py.
+# ---------------------------------------------------------------------------
+import os
+import shutil
+import stat
+import time
+
+_SKILL = Path(__file__).resolve().parents[1]
+
+_STUCK_MAGIC = """#!/usr/bin/env bash
+trap '' TERM
+( trap '' TERM; echo $BASHPID > "{TMP}/magic_child.pid"; exec sleep 300 ) &
+echo $$ > "{TMP}/magic_parent.pid"
+echo "magic drc grinding ..."
+while :; do sleep 5; done
+"""
+
+
+def test_timeout_reaps_term_ignoring_magic_tree(tmp_path):
+    skill = tmp_path / "skill"
+    (skill / "scripts").mkdir(parents=True)
+    shutil.copytree(_SKILL / "scripts" / "flow", skill / "scripts" / "flow")
+    (skill / "knowledge").mkdir()
+    (skill / "references").mkdir()
+
+    orfs = tmp_path / "orfs"
+    rdir = orfs / "flow" / "results" / "sky130hd" / "demo" / "proj"
+    rdir.mkdir(parents=True)
+    (orfs / "flow" / "Makefile").write_text("# fake ORFS Makefile\n")
+    (rdir / "6_final.gds").write_text("gds-bytes")
+
+    pdk = tmp_path / "pdk"
+    (pdk / "sky130A" / "libs.tech" / "magic").mkdir(parents=True)
+    (pdk / "sky130A" / "libs.tech" / "magic" / "sky130A.tech").write_text("# tech\n")
+
+    stub = tmp_path / "bin" / "magic"
+    stub.parent.mkdir()
+    stub.write_text(_STUCK_MAGIC.replace("{TMP}", str(tmp_path)))
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+
+    proj = tmp_path / "proj"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text("export DESIGN_NAME = demo\n")
+
+    env = dict(os.environ, ORFS_ROOT=str(orfs), PDK_ROOT=str(pdk),
+               MAGIC_EXE=str(stub), MAGIC_TIMEOUT="2", MAGIC_KILL_GRACE="2")
+    env.pop("R2G_ENV_FILE", None)
+    t0 = time.monotonic()
+    r = subprocess.run(
+        ["bash", str(skill / "scripts" / "flow" / "run_magic_drc.sh"),
+         str(proj), "sky130hd"],
+        env=env, capture_output=True, text=True, timeout=120)
+    elapsed = time.monotonic() - t0
+    assert r.returncode == 124, f"stdout:\n{r.stdout}\nstderr:\n{r.stderr}"
+    assert elapsed < 60, f"took {elapsed:.0f}s — supervisor did not bound the run"
+
+    for name in ("magic_parent.pid", "magic_child.pid"):
+        pidfile = tmp_path / name
+        assert pidfile.is_file(), f"stub never wrote {name} — harness broken"
+        pid = int(pidfile.read_text().strip())
+        for _ in range(20):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.5)
+        else:
+            raise AssertionError(f"{name}={pid} survived run_magic_drc.sh (RMD2-P0-01)")
+
+    # Output captured directly (no tee pipeline) + fail-closed numeric JSON.
+    assert "magic drc grinding" in (proj / "drc" / "magic_drc.log").read_text()
+    d = json.loads((proj / "drc" / "magic_drc_result.json").read_text())
+    assert d["total_violations"] == 0

@@ -4,6 +4,49 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-24 — three-platform revalidation remediation (signoff-loop, def-graph, eda-install)
+
+Closed the 2026-07-24 revalidation findings (pilot at agent commit 8d449b0 — nangate45 40/49,
+sky130hd 45/49, sky130hs 44/49 Gate cells; `docs/superpowers/plans/2026-07-24-three-platform-*.md`,
+failure-patterns #55). Real design/tool limits (sky130hd GCD `m3.2`, sky130hs SHA-256
+non-closure, nangate45 full-DRC scale) are preserved as measured results, never "fixed" by
+weakening decks, budgets, or gates.
+
+- **RMD2-P0-01 bounded checker termination** — new `_bounded_run.sh` (`r2g_bounded_run`): each
+  checker runs in its own session/process group, logs directly to the run-local file (no
+  `timeout | tee` pipe whose reader can outlive the run), gets TERM→grace→KILL delivered to the
+  WHOLE group at expiry, and no session survivor may exist before the verdict is written. The
+  pilot's Nangate45 SHA-256 DRC had orphaned KLayout at `PPID=1` (GNU timeout supervised the
+  non-exec ORFS wrapper) and froze the campaign behind the tee pipe until an operator SIGKILL.
+  Migrated: `run_drc.sh` (KLayout invoked directly; stuck-rule diagnosis + exit 124 preserved;
+  verdicts also record `cell_count` + `wall_s` for RMD2-LIM-01 scale-stratified throughput),
+  `run_lvs.sh` (crash-retry loop; the pattern-scoped pkill reaper is retired — the supervisor's
+  unconditional session reap covers the 2026-06-03 klayout-leak case), `run_netgen_lvs.sh`
+  (Magic extraction — the cd-into-scratch happens inside the session via `bash -c … exec` —
+  plus the Netgen compare and the OpenROAD powered-netlist write), and the advisory
+  `run_magic_drc.sh` (whose count parse also no longer aborts pre-JSON on a countless log).
+  Grace knobs: `DRC_KILL_GRACE` / `LVS_KILL_GRACE` / `NETGEN_KILL_GRACE` / `MAGIC_KILL_GRACE`.
+- **RMD2-P0-02 digest-complete resume lineage** — ONE versioned stage→artifact contract
+  (`stage_artifacts.py`, v2; the old inline map fingerprinted the nonexistent `1_synth.v`, so
+  every repair run recorded `synth.sha256=null` and the gate accepted it). `run_orfs.sh` appends
+  a per-stage `stage_artifact_manifest.jsonl` row (canonical path/size/sha256, identity,
+  toolchain) after every successful stage; BEFORE a `FROM_STAGE` resume mutates anything,
+  `resume_lineage.py verify` hashes each reused workspace artifact and STOPS the resume (exit 4)
+  unless the bytes match a recorded parent digest (legacy parents degrade LOUDLY to
+  `legacy_stage_log`/unverified — never silently to "newest clean sibling";
+  `R2G_RESUME_LINEAGE_ENFORCE=0` is a recorded operator override). `signoff_gate.py`
+  independently re-verifies every recorded entry — valid sha256, canonical artifact name,
+  same-design/platform/variant parent with a matching manifest digest, acyclic chain, preserved
+  bytes re-hashed — and any failure hard-blocks graph generation; the verdict's
+  `lineage_root_digest` rides `signoff_health` into every graph manifest. def-graph carries a
+  sync-tested fallback copy of the contract.
+- **RMD2-P1-01 fail-closed strict-platform install** — platforms selected via
+  `bootstrap.sh --strict-platforms` / `R2G_STRICT_PLATFORMS` / `--platforms` are FATAL on a
+  missing or failing rule installer or an unverifiable canary, and are gated post-install by
+  `platform_capability.py --strict` with the resolved env; the capability verdict + per-platform
+  collateral sha256 digests land in `eda-install/references/install_manifest.json`; unselected
+  platforms keep best-effort behavior; repeated installation is idempotent.
+
 ## 2026-07-22 — three-platform pilot remediation (signoff-loop, def-graph, eda-install)
 
 Closed the four P0 defects of the 2026-07-22 three-platform pilot (nangate45 / sky130hd /

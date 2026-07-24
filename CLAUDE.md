@@ -134,6 +134,9 @@ bundled (`tools/install_nangate45_lvs.sh`).
   on expiry; a manually-killed driver can still leave the stage's own group running — `kill -9
   -<pgid>` the process group, not just the python. A tool process older than `ORFS_TIMEOUT` with
   `PPID=1` beside a frozen ledger is a hang alarm the honesty DBs cannot see (a hang writes no run).
+  Signoff CHECKERS (DRC/LVS/netgen/magic) never use raw `timeout | tee` — they run under
+  `_bounded_run.sh`'s session supervisor (`r2g_bounded_run`: group TERM→grace→KILL + survivor
+  reap; failure-patterns #55, 2026-07-24).
 - **Escalate to the user before attempting CDC, multi-clock, DFT, or signoff-quality closure.**
   Single-clock flows incl. macro designs (`fakeram45`) are supported; the rest is out of scope.
 - **Don't skip a failed stage** — diagnose first via `references/failure-patterns.md`. The strict
@@ -333,7 +336,9 @@ scaling — so a worker-local patch fixes one consumer and silently leaves the o
   failure-patterns #34). Every stage runs the shared `signoff_gate.py` (drc/lvs/route reports +
   the DEF-run's `stage_log.jsonl`, fail-closed on MISSING reports); `run_graphs.sh` enforces,
   labels/features warn, `R2G_SIGNOFF_GATE` overrides; the verdict rides the manifest as
-  `signoff_health` and the verifier fails unrecorded/dirty provenance.
+  `signoff_health` and the verifier fails unrecorded/dirty provenance. Repair/resume lineage is
+  DIGEST-VERIFIED at gate time (stage contract v2, `stage_artifacts.py`; bytes re-hashed against
+  recorded parent digests) — null/mismatched/foreign/cyclic lineage hard-blocks (#55).
 - **Fail-soft is by design, NOT a pass.** Each stage's workers are independent — a missing input degrades
   ONE column and records a per-item status; it never aborts the others. ALWAYS check
   `reports/{labels,features}_stats.json` + the manifest's `status`/`label_health`/`rc_health` before

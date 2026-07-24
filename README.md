@@ -351,6 +351,16 @@ Key scripts involved:
 | Dataset features (X) | `scripts/flow/run_features.sh` | `features/*.csv` + `reports/features_stats.json` |
 | PyG graph datasets | `scripts/flow/run_graphs.sh` | `dataset/{b..f}_graph.pt` (`HeteroData` by default; `R2G_GRAPH_KIND=homo` for the flat format), `netlist_graph.pt`, `graph_manifest.json` |
 
+Signoff robustness + provenance (2026-07-24, failure-patterns #55): every signoff checker
+(KLayout DRC, KLayout LVS, Netgen LVS incl. its Magic extraction, the advisory Magic DRC) runs
+under a bounded process-group supervisor (`scripts/flow/_bounded_run.sh`) — own session, output
+straight to the run log, TERM→grace→KILL of the whole tree on timeout, so no orphaned tool can
+outlive its script or hang a campaign. Repair/resume runs are digest-complete: `run_orfs.sh`
+records per-stage artifact digests (`stage_artifact_manifest.jsonl`), a `FROM_STAGE` resume
+stops before mutating anything unless every reused stage's bytes match a recorded parent digest
+(`resume_lineage.py`), and the def-graph signoff gate independently re-verifies the chain —
+blocking graph publication on any null, mismatched, foreign, or cyclic lineage.
+
 ---
 
 ## Closed Learning Loop & `engineer_loop`
