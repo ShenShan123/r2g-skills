@@ -5103,10 +5103,17 @@ reader can outlive the supervisor), delivers TERM → grace → KILL to the WHOL
 expiry, and verifies no descendant survives before the verdict is written; `run_drc.sh` invokes
 `KLAYOUT_CMD` directly (the ORFS wrapper only version-checks, already recorded) under EXIT/INT/
 TERM cleanup traps so cancellation cannot orphan the checker either; exit 124 + the stuck-rule
-diagnosis are preserved. `run_lvs.sh` still uses `setsid timeout` + post-hoc pkill reaping —
-same latent shape, no pilot reproduction; migrate it to `r2g_bounded_run` when next touched.
+diagnosis are preserved. `run_lvs.sh` (2026-07-24 follow-up) runs its `make lvs` retry loop
+under the same supervisor — its old `setsid timeout … | tee` combined BOTH defects (#40's
+disabled tree-kill AND the outlivable tee pipe), and the supervisor's UNCONDITIONAL
+session-survivor reap also replaces the pattern-scoped pkill that covered the 2026-06-03
+make-died-klayout-leaked case (whose patterns audit H2 had already caught misfiring).
+Remaining `setsid timeout` sites: `run_netgen_lvs.sh` (magic extraction + netgen) — migrate to
+`r2g_bounded_run` when next touched.
 Tests: `tests/test_run_drc_timeout_group_kill.py` (TERM-ignoring checker + TERM-ignoring
-grandchild fully reaped; stuck + timeout verdicts), `tests/test_run_drc_checker_only.py`.
+grandchild fully reaped; stuck + timeout verdicts), `tests/test_run_lvs_timeout_group_kill.py`
+(same tree shape through the Make-based path; timeout breaks the crash-retry loop),
+`tests/test_run_drc_checker_only.py`.
 
 ### RMD2-P0-02 — repair/resume lineage recorded a null digest and the gate accepted it
 The #53 P0-4 lineage recorder named a NONEXISTENT canonical synth artifact (`1_synth.v` — the

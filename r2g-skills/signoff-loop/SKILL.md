@@ -800,7 +800,8 @@ After a successful ORFS run, the signoff scripts operate on the ORFS results in-
 - `run_drc.sh` — CHECKER-ONLY KLayout DRC on the preserved backend GDS (invokes `KLAYOUT_CMD`
   directly under the `r2g_bounded_run` process-group supervisor — never `make drc`, RMD-P0-01/RMD2-P0-01)
 - `run_magic_drc.sh` — runs Magic DRC with sky130A tech file (sky130 only)
-- `run_lvs.sh` — runs `make DESIGN_CONFIG=<config.mk> lvs` in ORFS flow directory (KLayout)
+- `run_lvs.sh` — runs `make DESIGN_CONFIG=<config.mk> lvs` in ORFS flow directory (KLayout),
+  each attempt under the `r2g_bounded_run` process-group supervisor (RMD2-P0-01)
 - `run_netgen_lvs.sh` — extracts SPICE via Magic, compares with Netgen (sky130 only)
 - `run_rcx.sh` — runs OpenROAD directly with a generated Tcl script reading `6_final.odb`
 

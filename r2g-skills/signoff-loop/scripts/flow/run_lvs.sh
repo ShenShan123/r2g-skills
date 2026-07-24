@@ -19,6 +19,14 @@ fi
 # Auto-detect ORFS + tools (honors ORFS_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+# Bounded process-group checker supervisor (RMD2-P0-01)
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_bounded_run.sh"
+# Cancellation must never orphan the checker: reap the whole checker session on
+# any exit path (same contract as run_drc.sh).
+trap 'r2g_bounded_cleanup' EXIT
+trap 'r2g_bounded_cleanup; exit 130' INT
+trap 'r2g_bounded_cleanup; exit 143' TERM
 
 if [[ -z "${ORFS_ROOT:-}" || ! -d "$FLOW_DIR" ]]; then
   echo "ERROR: ORFS not found. Set ORFS_ROOT to your OpenROAD-flow-scripts checkout." >&2
@@ -244,29 +252,27 @@ LVS_GDS_SHA_PRE="$(sha256sum "$GDS_FILE" 2>/dev/null | cut -d' ' -f1 || true)"
 LVS_DIGEST_SET_PRE="$(_r2g_lvs_digest_set)"
 LVS_STARTED_AT="$(date -Iseconds)"
 
-# Use setsid so timeout can kill the entire process group (prevents zombie klayout)
+# RMD2-P0-01 (2026-07-24, extended from run_drc.sh): the old
+# `setsid timeout … make lvs | tee` had BOTH known liveness defects — `setsid`
+# made timeout a group leader and silently disabled its tree-kill (#40), and
+# `tee` held the output pipe open so a surviving deep klayout grandchild hung
+# this script forever. r2g_bounded_run runs `make lvs` in its own session,
+# writes output DIRECTLY to the run log, TERM→grace→KILLs the WHOLE group on
+# expiry, and — crucially for the 2026-06-03 SIGSEGV leak, where make died on
+# "Error 11" while a multi-GB klayout child kept spinning — reaps ANY session
+# survivor before returning, replacing the fragile pattern-scoped pkill reaper
+# (2026-07-04 audit H2 documented those patterns misfiring).
+LVS_RUN_LOG="/tmp/lvs_run_$$.log"
 LVS_STATUS=0
 for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   set +e +o pipefail
-  setsid timeout --signal=TERM --kill-after=60 "$LVS_TIMEOUT" \
-    make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_CDL_MAKE_ARGS[@]}" lvs 2>&1 | tee /tmp/lvs_run_$$.log
-  LVS_STATUS=${PIPESTATUS[0]}
+  r2g_bounded_run "$LVS_TIMEOUT" "${LVS_KILL_GRACE:-60}" "$LVS_RUN_LOG" \
+    make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_CDL_MAKE_ARGS[@]}" lvs
+  LVS_STATUS=$?
   set -e -o pipefail
-
-  # Reap orphaned klayout from THIS run on ANY nonzero exit. A SIGSEGV gives make
-  # "Error 11" (exit 2) — the old 124/137-only cleanup left a multi-GB klayout child
-  # still spinning (a real leak observed 2026-06-03). Always reap on failure.
-  # 2026-07-04 audit H2: the old patterns assumed cmdline token ORDER
-  # ("variant.*lvs" — but ORFS passes the rule deck BEFORE the GDS, so they never
-  # matched) and one was DESIGN_NAME-scoped (ICCAD designs all share
-  # DESIGN_NAME=top -> could SIGKILL a CONCURRENT worker's LVS). Match variant+lvs
-  # in EITHER order and never scope by DESIGN_NAME; FLOW_VARIANT is unique per
-  # project (hard rule), so this only ever reaps our own run.
-  if [[ $LVS_STATUS -ne 0 ]]; then
-    pkill -9 -f "klayout.*${FLOW_VARIANT}.*lvs" 2>/dev/null || true
-    pkill -9 -f "klayout.*lvs.*${FLOW_VARIANT}" 2>/dev/null || true
-    sleep 2
-  fi
+  # Output goes straight to the log (no pipe reader can outlive the checker) —
+  # surface the tail so operators still see this attempt's outcome.
+  tail -n 25 "$LVS_RUN_LOG" 2>/dev/null || true
 
   # A timeout/external-kill will just recur — do not spend retries on it.
   if [[ $LVS_STATUS -eq 124 || $LVS_STATUS -eq 137 ]]; then
@@ -274,13 +280,13 @@ for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
     break
   fi
 
-  # Crash signature in the ORFS 6_lvs.log or the tee'd run log -> retry for a survivor.
+  # Crash signature in the ORFS 6_lvs.log or the run log -> retry for a survivor.
   # Besides the sort_circuit SIGSEGV heisenbug ("Signal number"), also retry the KLayout
   # INTERNAL lvsdb-writer crash that fires AFTER a successful compare ('net2id.end ()' /
   # 'Internal error ... Executable::cleanup'); it emits a spurious "Netlists don't match"
   # and was misread as a hard lvs=fail on an actually-matching design (2026-06-28 PicoRV32).
   if grep -qaE "Signal number|net2id\.end|dbLayoutVsSchematicWriter|Internal error.*Executable::cleanup" \
-        "$LOGS_DIR/6_lvs.log" /tmp/lvs_run_$$.log 2>/dev/null; then
+        "$LOGS_DIR/6_lvs.log" "$LVS_RUN_LOG" 2>/dev/null; then
     if [[ $_attempt -lt $LVS_CRASH_RETRIES ]]; then
       echo "LVS crashed (KLayout comparer/lvsdb-writer heisenbug); retry $_attempt/$LVS_CRASH_RETRIES ..." >&2
       continue
@@ -307,8 +313,8 @@ fi
 # Collect results
 LVS_DIR="$PROJECT_DIR/lvs"
 mkdir -p "$LVS_DIR"
-cp /tmp/lvs_run_$$.log "$LVS_DIR/lvs_run.log" 2>/dev/null || true
-rm -f /tmp/lvs_run_$$.log
+cp "$LVS_RUN_LOG" "$LVS_DIR/lvs_run.log" 2>/dev/null || true
+rm -f "$LVS_RUN_LOG"
 # Drop any stale skip-marker from a prior `no rules available` run — once we
 # have a real lvs_run.log/6_lvs.log the skip marker is no longer authoritative.
 rm -f "$LVS_DIR/lvs_result.json"
