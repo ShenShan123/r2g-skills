@@ -21,6 +21,14 @@ fi
 # Auto-detect ORFS + tools (honors ORFS_ROOT / PDK_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+# Bounded process-group checker supervisor (RMD2-P0-01)
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_bounded_run.sh"
+# Cancellation must never orphan a tool (openroad/magic/netgen): reap the whole
+# checker session on any exit path (same contract as run_drc.sh / run_lvs.sh).
+trap 'r2g_bounded_cleanup' EXIT
+trap 'r2g_bounded_cleanup; exit 130' INT
+trap 'r2g_bounded_cleanup; exit 143' TERM
 
 if [[ -z "${ORFS_ROOT:-}" || ! -d "$FLOW_DIR" ]]; then
   echo "ERROR: ORFS not found. Set ORFS_ROOT to your OpenROAD-flow-scripts checkout." >&2
@@ -158,10 +166,11 @@ read_db "$ODB_FILE"
 write_verilog -include_pwr_gnd "$POWERED_NETLIST"
 exit
 ORTCL
-  # timeout: the only tool call in this file that had none — a large ODB hangs
-  # write_verilog indefinitely, and inside an `if` set -e never fires (2026-07-04 M3).
-  if timeout --signal=TERM --kill-after=30 900 \
-       "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" > "$LVS_DIR/write_powered_verilog.log" 2>&1 \
+  # Bounded (2026-07-04 M3: a large ODB hangs write_verilog indefinitely, and
+  # inside an `if` set -e never fires). r2g_bounded_run (RMD2-P0-01) also reaps
+  # any session survivor before returning.
+  if r2g_bounded_run 900 30 "$LVS_DIR/write_powered_verilog.log" \
+       "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" \
      && [[ -s "$POWERED_NETLIST" ]] && grep -q 'VPWR' "$POWERED_NETLIST"; then
     echo "Using power-aware netlist from ODB: $POWERED_NETLIST"
     VERILOG_NETLIST="$POWERED_NETLIST"
@@ -235,17 +244,25 @@ MAGIC_EOF
 NETGEN_TIMEOUT="${NETGEN_TIMEOUT:-3600}"
 echo "Timeout: ${NETGEN_TIMEOUT}s per step"
 echo "Step 1: Extracting SPICE netlist from GDS with Magic..."
-# set +e +o pipefail around the tee pipeline (the PIPESTATUS idiom the Netgen step
-# below already uses): under `set -euo pipefail` a Magic TIMEOUT (exit 124 — the
-# exact hang this timeout exists for) aborted the script AT THIS LINE, skipping
-# the intended status:error JSON below, so the timeout reason was lost
-# (2026-07-04 audit M2; fail-closed either way, but undiagnosable).
+# RMD2-P0-01 (2026-07-24): the old `( cd … && setsid timeout … magic ) | tee`
+# had BOTH known liveness defects — `setsid` made timeout a group leader and
+# silently disabled its tree-kill (#40), and `tee` held the output pipe open so
+# a TERM-ignoring descendant could hang this script forever. r2g_bounded_run
+# runs Magic in its own session, logs directly to EXTRACT_LOG, TERM→grace→KILLs
+# the whole group on expiry, and reaps any session survivor before returning.
+# The cd into the scratch dir happens inside the session (bash -c + exec keeps
+# Magic as the session leader) so per-cell *.ext files still land there.
+# set +e around the call (2026-07-04 audit M2): under `set -euo pipefail` a
+# Magic TIMEOUT aborted the script AT THIS LINE, skipping the intended
+# status:error JSON below, so the timeout reason was lost.
 MAGIC_STATUS=0
-set +e +o pipefail
-( cd "$EXT_SCRATCH" && setsid timeout --signal=TERM --kill-after=30 "$NETGEN_TIMEOUT" \
-    "$MAGIC_EXE" -dnull -noconsole -T "$MAGIC_TECH" "$EXTRACT_TCL" ) 2>&1 | tee "$EXTRACT_LOG"
-MAGIC_STATUS=${PIPESTATUS[0]}
-set -e -o pipefail
+set +e
+r2g_bounded_run "$NETGEN_TIMEOUT" "${NETGEN_KILL_GRACE:-30}" "$EXTRACT_LOG" \
+  bash -c 'cd "$1" && exec "$2" -dnull -noconsole -T "$3" "$4"' _ \
+  "$EXT_SCRATCH" "$MAGIC_EXE" "$MAGIC_TECH" "$EXTRACT_TCL"
+MAGIC_STATUS=$?
+set -e
+tail -n 25 "$EXTRACT_LOG" 2>/dev/null || true
 if [[ $MAGIC_STATUS -eq 124 || $MAGIC_STATUS -eq 137 ]]; then
   echo "ERROR: Magic SPICE extraction timed out after ${NETGEN_TIMEOUT}s (exit $MAGIC_STATUS)" >&2
   echo '{"tool": "netgen", "status": "error", "reason": "Magic SPICE extraction timeout"}' > "$LVS_DIR/netgen_lvs_result.json"
@@ -316,13 +333,17 @@ NETGEN_EOF
 fi
 
 LVS_STATUS=0
-set +e +o pipefail
+set +e
 # MAGIC_EXT_USE_GDS=1 tells the PDK's sky130A_setup.tcl that circuit1 came from a
 # GDS extraction, activating its `ignore class` rules for layout-only cells
 # (tapvpwrvgnd, fakediode) so they are ignored instead of flattened into the top.
-MAGIC_EXT_USE_GDS=1 timeout --signal=TERM --kill-after=60 "$NETGEN_TIMEOUT" $NETGEN_CMD -batch source "$NETGEN_TCL" 2>&1 | tee "$NETGEN_LOG"
-LVS_STATUS=${PIPESTATUS[0]}
-set -e -o pipefail
+# Bounded session supervisor (RMD2-P0-01) — the old `timeout … | tee` let a
+# TERM-ignoring netgen descendant hold the pipe open past the timeout.
+r2g_bounded_run "$NETGEN_TIMEOUT" "${NETGEN_KILL_GRACE:-60}" "$NETGEN_LOG" \
+  env MAGIC_EXT_USE_GDS=1 "$NETGEN_CMD" -batch source "$NETGEN_TCL"
+LVS_STATUS=$?
+set -e
+tail -n 25 "$NETGEN_LOG" 2>/dev/null || true
 
 # Parse results
 LVS_RESULT="unknown"

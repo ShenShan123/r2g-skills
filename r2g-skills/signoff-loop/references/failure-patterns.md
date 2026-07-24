@@ -5108,12 +5108,17 @@ under the same supervisor — its old `setsid timeout … | tee` combined BOTH d
 disabled tree-kill AND the outlivable tee pipe), and the supervisor's UNCONDITIONAL
 session-survivor reap also replaces the pattern-scoped pkill that covered the 2026-06-03
 make-died-klayout-leaked case (whose patterns audit H2 had already caught misfiring).
-Remaining `setsid timeout` sites: `run_netgen_lvs.sh` (magic extraction + netgen) — migrate to
-`r2g_bounded_run` when next touched.
+`run_netgen_lvs.sh` (same-day follow-up) moved all three of its tool calls under the supervisor
+— the Magic extraction (whose `( cd … && setsid timeout … ) | tee` had both defects; the cd now
+happens inside the session via `bash -c … exec`), the Netgen compare, and the OpenROAD
+powered-netlist write — with `NETGEN_KILL_GRACE` as the grace knob. The only `timeout … | tee`
+left in the flow scripts is `run_magic_drc.sh` — an ADVISORY, non-authoritative cross-check
+whose caller already best-efforts it (`|| true`); migrate opportunistically.
 Tests: `tests/test_run_drc_timeout_group_kill.py` (TERM-ignoring checker + TERM-ignoring
 grandchild fully reaped; stuck + timeout verdicts), `tests/test_run_lvs_timeout_group_kill.py`
 (same tree shape through the Make-based path; timeout breaks the crash-retry loop),
-`tests/test_run_drc_checker_only.py`.
+`tests/test_run_netgen_lvs_timeout_group_kill.py` (Magic-extraction timeout records the M2
+status:error JSON; Netgen-compare timeout after a real extraction), `tests/test_run_drc_checker_only.py`.
 
 ### RMD2-P0-02 — repair/resume lineage recorded a null digest and the gate accepted it
 The #53 P0-4 lineage recorder named a NONEXISTENT canonical synth artifact (`1_synth.v` — the
