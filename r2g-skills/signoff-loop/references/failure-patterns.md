@@ -5352,3 +5352,29 @@ this gate have a caller?" — #57 adds "and does the caller's caller actually se
 Test a CLI through a subprocess, or you are testing a function that happens to have a `main` in
 its name. Second rule: an absent file, directory, deck, or tool is INFRASTRUCTURE, and must never
 be allowed to become a symptom attributed to the design.*
+
+### OPS-P1-01 — a stale `pool.env` silently overrode the operator's launch sizing (8× oversubscribe)
+Found while relaunching after the #57 repairs. `campaign_resume_waves.sh` re-sources
+`tools/_<platform>_resume_logs/pool.env` at the top of EVERY wave — the documented no-restart
+retune — so it wins over the launch environment. That is correct, but it was also **silent**: a
+`pool.env` retuned on 2026-07-10 with the comment *"host idle (finesim absent)"* carried
+`WORKERS=8 NUM_CORES=8 WAVE_MAX=32`, and an explicit
+`WORKERS=2 NUM_CORES=4 bash tools/campaign_resume_waves.sh` on a host with ~9 free cores launched
+at 8×8 = **64 cores requested** with no message. `waves.log` records the resolved numbers, so the
+evidence exists — but only after the wave has already started thrashing a SHARED box (the hard
+rule `WORKERS × NUM_CORES ≤ free cores` exists precisely because another user's finesim pins ~80/96).
+**Guards:** the driver now snapshots the launch-time `WORKERS`/`NUM_CORES`/`WAVE_MAX` BEFORE
+defaults are applied, and after each `pool.env` source warns per key that was explicitly set and
+then overridden (naming both values and pointing at the file); separately it computes free cores
+and emits an `OVERSUBSCRIBED workers=… num_cores=… req=… free=…` warning to stderr AND `waves.log`
+whenever `WORKERS × NUM_CORES` exceeds them. pool.env still wins — the retune is the point — but
+never quietly. A new `R2G_SIZING_SELFTEST=1` seam (paired with `SKIP_INSTANCE_GUARD=1`, since
+sizing does no wave work) makes both warnings testable while a real campaign is running.
+Tests: `test_campaign_driver_guard.py` (+4), isolated onto a synthetic `r2gselftest` platform so
+they can never clobber a live `pool.env` or append a phantom alarm to an operator's `waves.log` —
+the first cut of these tests did exactly that, which is its own small lesson: *a test that writes
+into the artifact it is testing on is not isolated.*
+
+*Generalizable rule: an override mechanism that outranks the operator must say so. "Documented
+precedence" is not the same as "visible precedence", and on shared infrastructure the gap between
+them is measured in other people's jobs.*

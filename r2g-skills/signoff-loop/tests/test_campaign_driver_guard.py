@@ -13,6 +13,7 @@ These tests drive the guard in isolation via the `R2G_GUARD_SELFTEST=1` hook (wh
 runs ONLY the guard, then prints `guard-passed` and exits before any wave work).
 """
 import os
+import shutil
 import signal
 import subprocess
 import time
@@ -106,3 +107,82 @@ def test_guard_still_detects_a_real_second_driver(tmp_path):
         except (ProcessLookupError, PermissionError):
             proc.kill()
         proc.wait(timeout=10)
+
+
+# --------------------------------------------------------------------------- #
+# pool.env sizing: it may override, but never SILENTLY                        #
+# --------------------------------------------------------------------------- #
+# failure-patterns #57 (2026-07-25): pool.env is re-sourced at the top of every wave,
+# so it wins over the operator's launch-time env — that IS the documented no-restart
+# retune. But a pool.env retuned on 2026-07-10 ("host idle") carried WORKERS=8
+# NUM_CORES=8, and relaunching on a host with ~9 free cores silently requested 64,
+# discarding an explicit `WORKERS=2 NUM_CORES=4` with no message. On a SHARED host that
+# thrashes another user's jobs. The override stays; the silence does not.
+# A platform name no real campaign uses, so these tests get their OWN
+# tools/_<plat>_resume_logs/ and can never clobber a live pool.env or append an
+# OVERSUBSCRIBED line to an operator's waves.log (which the first cut of these tests
+# did — a test that edits the thing it is testing on is not isolated).
+_SIZING_PLATFORM = "r2gselftest"
+_SIZING_LOGDIR = REPO / "tools" / f"_{_SIZING_PLATFORM}_resume_logs"
+
+
+def _sizing_env(tmp_path, **overrides) -> dict:
+    env = dict(os.environ)
+    # SKIP_INSTANCE_GUARD: the sizing seam does no wave work, so it must be runnable
+    # while a REAL campaign driver is up — otherwise these tests pass only on an idle
+    # host and silently skip exactly when a campaign is live.
+    env.update(R2G_SIZING_SELFTEST="1", PLATFORM=_SIZING_PLATFORM,
+               SKIP_INSTANCE_GUARD="1", LEDGER=str(tmp_path / "led.jsonl"))
+    env.update(overrides)
+    return env
+
+
+def _run_sizing(tmp_path, logdir_pool: str | None, **overrides):
+    """Run the sizing seam with a pool.env planted in the platform's log dir."""
+    pool = _SIZING_LOGDIR / "pool.env"
+    try:
+        if logdir_pool is not None:
+            pool.parent.mkdir(parents=True, exist_ok=True)
+            pool.write_text(logdir_pool)
+        return subprocess.run(["bash", str(DRIVER)], cwd=REPO,
+                              env=_sizing_env(tmp_path, **overrides),
+                              capture_output=True, text=True, timeout=60)
+    finally:
+        shutil.rmtree(_SIZING_LOGDIR, ignore_errors=True)
+
+
+def test_pool_env_override_of_an_explicit_launch_value_is_announced(tmp_path):
+    r = _run_sizing(tmp_path, "WORKERS=8\nNUM_CORES=8\nWAVE_MAX=32\n",
+                    WORKERS="2", NUM_CORES="4", WAVE_MAX="8")
+    assert "sizing workers=8 num_cores=8" in r.stdout, r.stdout
+    assert "pool.env overrode your launch WORKERS=2 with 8" in r.stderr, r.stderr
+    assert "pool.env overrode your launch NUM_CORES=4 with 8" in r.stderr, r.stderr
+
+
+def test_no_override_warning_when_launch_env_is_unset(tmp_path):
+    """Only an EXPLICIT launch value can be overridden — defaults must stay quiet."""
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("WORKERS", "NUM_CORES", "WAVE_MAX")}
+    pool = _SIZING_LOGDIR / "pool.env"
+    try:
+        pool.parent.mkdir(parents=True, exist_ok=True)
+        pool.write_text("WORKERS=8\nNUM_CORES=8\n")
+        env.update(R2G_SIZING_SELFTEST="1", PLATFORM=_SIZING_PLATFORM,
+                   SKIP_INSTANCE_GUARD="1", LEDGER=str(tmp_path / "led.jsonl"))
+        r = subprocess.run(["bash", str(DRIVER)], cwd=REPO, env=env,
+                           capture_output=True, text=True, timeout=60)
+    finally:
+        shutil.rmtree(_SIZING_LOGDIR, ignore_errors=True)
+    assert "overrode your launch" not in r.stderr, r.stderr
+
+
+def test_oversubscription_is_reported(tmp_path):
+    """A request far beyond any plausible free-core count must warn."""
+    r = _run_sizing(tmp_path, "WORKERS=512\nNUM_CORES=512\n")
+    assert "OVERSUBSCRIBED" in r.stderr, r.stderr
+    assert "SHARED host" in r.stderr
+
+
+def test_modest_sizing_does_not_warn(tmp_path):
+    r = _run_sizing(tmp_path, "WORKERS=1\nNUM_CORES=1\n")
+    assert "OVERSUBSCRIBED" not in r.stderr, r.stderr

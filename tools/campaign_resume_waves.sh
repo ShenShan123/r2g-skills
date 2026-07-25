@@ -72,9 +72,45 @@ if [[ "${R2G_GUARD_SELFTEST:-0}" == "1" ]]; then echo "guard-passed"; exit 0; fi
 EL=r2g-skills/signoff-loop/scripts/loop/engineer_loop.py
 KDB=r2g-skills/signoff-loop/knowledge/knowledge.sqlite
 INTEG=tools/check_db_integrity.py
+# Remember what the OPERATOR asked for at launch, before pool.env gets a vote. A stale
+# pool.env silently winning over an explicit `WORKERS=2 NUM_CORES=4 bash
+# campaign_resume_waves.sh` is how a 2026-07-10 "host is idle" retune (8x8=64 cores)
+# relaunched onto a host with ~9 free cores on 2026-07-25 — an 8x oversubscription of a
+# SHARED box, with the operator's own sizing discarded and nothing said. pool.env still
+# wins (that IS the documented no-restart retune), but never silently.
+_LAUNCH_WORKERS="${WORKERS:-}"
+_LAUNCH_NUM_CORES="${NUM_CORES:-}"
+_LAUNCH_WAVE_MAX="${WAVE_MAX:-}"
 WAVE_MAX=${WAVE_MAX:-24}
 export NUM_CORES=${NUM_CORES:-4}
 WORKERS=${WORKERS:-3}
+
+# Free cores right now, for the oversubscription warning (integer, floor 1).
+_free_cores() {
+  local total used
+  total=$(nproc 2>/dev/null || echo 1)
+  used=$(ps -eo pcpu= 2>/dev/null | awk '{s+=$1} END {printf "%d", s/100}')
+  echo $(( total - used > 1 ? total - used : 1 ))
+}
+
+# Announce any pool.env override of an EXPLICIT launch value, and any request for more
+# cores than the host has free. Hard rule: WORKERS * NUM_CORES <= free cores.
+_check_pool_sizing() {
+  local free req
+  for _k in WORKERS NUM_CORES WAVE_MAX; do
+    local launch="_LAUNCH_$_k"
+    if [ -n "${!launch}" ] && [ "${!launch}" != "${!_k}" ]; then
+      echo "WARNING: pool.env overrode your launch $_k=${!launch} with ${!_k}" \
+           "($POOL_ENV wins by design — edit or delete that file to change it)" >&2
+    fi
+  done
+  free=$(_free_cores); req=$(( WORKERS * NUM_CORES ))
+  if [ "$req" -gt "$free" ]; then
+    echo "WARNING: OVERSUBSCRIBED — WORKERS($WORKERS) * NUM_CORES($NUM_CORES) = $req" \
+         "but only ~$free core(s) are free on this SHARED host. Retune via $POOL_ENV." >&2
+    echo "$(date +%FT%T%:z) OVERSUBSCRIBED workers=$WORKERS num_cores=$NUM_CORES req=$req free=$free" >>"$PROG"
+  fi
+}
 LOGDIR=tools/_${PLATFORM}_resume_logs
 mkdir -p "$LOGDIR"
 PROG="$LOGDIR/waves.log"
@@ -83,6 +119,17 @@ PROG="$LOGDIR/waves.log"
 # NO restart. Keep WORKERS*NUM_CORES <= free cores. PLATFORM/LEDGER are NOT
 # re-sourced mid-campaign — a ledger swap would conflate two technology rounds.
 POOL_ENV="$LOGDIR/pool.env"
+
+# Sizing self-test seam (mirrors R2G_GUARD_SELFTEST above): source pool.env, run the
+# override/oversubscription checks, report the resolved sizing, exit — no wave work. Lets
+# test_campaign_driver_guard.py prove the warnings fire without launching a campaign.
+if [[ "${R2G_SIZING_SELFTEST:-0}" == "1" ]]; then
+  # shellcheck disable=SC1090
+  [ -f "$POOL_ENV" ] && { source "$POOL_ENV"; export NUM_CORES; }
+  _check_pool_sizing
+  echo "sizing workers=$WORKERS num_cores=$NUM_CORES wave_max=$WAVE_MAX"
+  exit 0
+fi
 
 if [ ! -f "$LEDGER" ]; then
   echo "ERROR: ledger $LEDGER not found. Build it first:" >&2
@@ -127,6 +174,7 @@ wave=0
 while true; do
   # shellcheck disable=SC1090
   [ -f "$POOL_ENV" ] && { source "$POOL_ENV"; export NUM_CORES; }
+  _check_pool_sizing
   p=$(pending_count)
   if [ "$p" -le 0 ]; then echo "ALL_DONE platform=$PLATFORM pending=0"; echo "$(date +%FT%T%:z) ALL_DONE platform=$PLATFORM" >>"$PROG"; break; fi
   wave=$((wave+1))
