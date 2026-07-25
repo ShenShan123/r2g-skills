@@ -239,3 +239,93 @@ def test_run_drains_crash_orphaned_designs(tmp_path, monkeypatch):
     led.add(_entry("d_normal"))
     engineer_loop.run(tmp_path / "ledger.jsonl", max_workers=2)
     assert sorted(processed) == ["d_normal", "d_orphan"]
+
+
+# --------------------------------------------------------------------------- #
+# stale corpus root: a MOVED repo must self-heal, not escalate every design    #
+# --------------------------------------------------------------------------- #
+# 2026-07-25 (failure-patterns #57): every entry in all four campaign ledgers
+# carried an ABSOLUTE project_path baked at build time under the pre-rename root
+# /proj/workarea/user5/agent-r2g. After the rename, run_orfs.sh `cd`-failed on every
+# design, and the loop filed the infra absence as a DESIGN diagnosis
+# (place_arm_incomplete) -- 76 designs burned to 'escalated' in one wave with zero
+# flows run, exit 0, no alarm. The ledger lives INSIDE the corpus, so the live root
+# is always derivable from the ledger's own path.
+def _ledger_in_corpus(tmp_path):
+    led_path = tmp_path / "design_cases" / "_batch" / "campaign.jsonl"
+    led_path.parent.mkdir(parents=True)
+    return led_path
+
+
+def test_reroot_heals_a_moved_corpus(tmp_path):
+    led_path = _ledger_in_corpus(tmp_path)
+    led = engineer_loop.Ledger(led_path)
+    led.add({"design": "d0", "platform": "asap7", "kind": "normal",
+             "project_path": "/proj/workarea/user5/agent-r2g/design_cases/d0"})
+
+    assert led.reroot_project_paths() == ["d0"]
+    healed = str(tmp_path / "design_cases" / "d0")
+    assert led.get("d0")["project_path"] == healed
+    # persisted: a re-open (resume) sees the healed path, not the dead one
+    assert engineer_loop.Ledger(led_path).get("d0")["project_path"] == healed
+
+
+def test_reroot_preserves_state_and_is_idempotent(tmp_path):
+    led_path = _ledger_in_corpus(tmp_path)
+    led = engineer_loop.Ledger(led_path)
+    led.add({"design": "d0", "platform": "asap7", "kind": "normal",
+             "project_path": "/dead/root/design_cases/d0"})
+    led.set_state("d0", "clean")
+
+    led.reroot_project_paths()
+    # a re-root is a path repair, NOT a state change -- a terminal design stays terminal
+    assert led.state("d0") == "clean"
+    assert engineer_loop.Ledger(led_path).state("d0") == "clean"
+    # second call has nothing left to do
+    assert led.reroot_project_paths() == []
+
+
+def test_reroot_leaves_correct_and_live_paths_alone(tmp_path):
+    """Only DEAD paths outside the live corpus are rewritten."""
+    led_path = _ledger_in_corpus(tmp_path)
+    cases = tmp_path / "design_cases"
+    (cases / "d_ok").mkdir()
+    elsewhere = tmp_path / "other_tree" / "d_ext"
+    elsewhere.mkdir(parents=True)
+
+    led = engineer_loop.Ledger(led_path)
+    led.add({"design": "d_ok", "platform": "asap7", "kind": "normal",
+             "project_path": str(cases / "d_ok")})
+    led.add({"design": "d_ext", "platform": "asap7", "kind": "normal",
+             "project_path": str(elsewhere)})   # deliberately out-of-tree, but LIVE
+
+    assert led.reroot_project_paths() == []
+    assert led.get("d_ext")["project_path"] == str(elsewhere)
+
+
+def test_missing_project_dir_is_infra_not_a_design_failure(tmp_path, monkeypatch):
+    """A project dir that does not exist must NOT be diagnosed as a design failure.
+
+    Pre-fix this reached run_orfs.sh, `cd`-failed, and escalated as
+    '<check>_arm_incomplete' / a backend abort -- teaching the ledger that a design
+    failed when the truth is that its directory is gone."""
+    led_path = _ledger_in_corpus(tmp_path)
+    led = engineer_loop.Ledger(led_path)
+    led.add({"design": "d_gone", "platform": "asap7", "kind": "normal",
+             "project_path": str(tmp_path / "design_cases" / "d_gone")})
+
+    ingested = []
+    monkeypatch.setattr(engineer_loop, "_ingest",
+                        lambda e: ingested.append(e["design"]))
+    engineer_loop.process_one(led, led.pending()[0], conn=None)
+
+    assert led.state("d_gone") == "escalated"
+    assert led.get("d_gone")["reason"] == "project_inputs_missing"
+    assert ingested == [], "a nonexistent project must not be ingested as a run"
+
+
+def test_run_flow_reports_missing_project_with_a_distinct_code(tmp_path):
+    """The sentinel is what lets the callers tell infra absence from a backend abort."""
+    entry = {"design": "d_gone", "platform": "asap7", "kind": "normal",
+             "project_path": str(tmp_path / "design_cases" / "nope")}
+    assert engineer_loop._run_flow(entry) == engineer_loop.PROJECT_INPUTS_MISSING_RC

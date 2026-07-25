@@ -26,7 +26,20 @@ from pathlib import Path
 # Was hardcoded /proj/workarea/user5/agent-r2g, which broke when the repo was
 # renamed agent-r2g -> r2g-skills (the old path no longer exists).
 BASE = Path(__file__).resolve().parents[1]
-CASES = BASE / 'design_cases'
+
+
+def _cases_root() -> Path:
+    """The design-case corpus root. `R2G_CASES` overrides <repo>/design_cases.
+
+    A seam, in the same spirit as R2G_LOOP_RUN_FLOW / R2G_DEF: the CLI's exit-code
+    contract can only be proven by running it as a real subprocess, and a subprocess
+    cannot be monkeypatched. Defaults are unchanged when the var is unset.
+    """
+    override = os.environ.get('R2G_CASES')
+    return Path(override) if override else BASE / 'design_cases'
+
+
+CASES = _cases_root()
 RTL_DIR = BASE / 'rtl_designs'
 TOOLS = BASE / 'tools'
 
@@ -1147,4 +1160,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # sys.exit(), NOT a bare main(). main() returns the structural verdict as an exit
+    # code (0=pass, 2=reject, 3=flag, 1=error) and a bare call discards it, so every
+    # invocation exited 0 — including a REJECT. An operator or CI step gating on
+    # `--rtl-verify <case> || revert` was told to keep cutting on a gutted design:
+    # the gate computed the right answer and threw it away at the door
+    # (failure-patterns #56 GATE-P1-02, 2026-07-25).
+    sys.exit(main())

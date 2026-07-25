@@ -19,6 +19,19 @@ REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            # rather than ingested as a junk orfs_status='unknown' row that would
            # poison the verdict (2026-06-23 audit, bug #3).
            "route_arm_incomplete",
+           # The project's INPUTS are not on disk — either the project directory itself
+           # (a moved/renamed corpus whose ledger still names the old root, or an A/B arm
+           # dir wiped between planning and drain) or the RTL/SDC/include paths config.mk
+           # points at. INFRASTRUCTURE absence, deliberately NOT a design diagnosis, and
+           # deliberately NOT ingested. Both halves shipped as design failures before
+           # 2026-07-25: the missing dir as '<check>_arm_incomplete' (76 designs escalated
+           # in one wave with zero flows run), the missing RTL as 24 `fail`/synth runs
+           # carrying orfs-fail-synth events, because make's "No rule to make target
+           # '<dead>/rtl/foo.v'" is indistinguishable from a synth abort once it reaches
+           # the log. run_orfs.sh now refuses with exit 66 BEFORE launching ORFS, and a
+           # drain re-roots stale paths automatically — so a survivor of that heal is
+           # genuinely gone (failure-patterns #57).
+           "project_inputs_missing",
            # A learner-enqueued A/B candidate whose Gate-B is structurally
            # unreachable: fewer than n_ab_designs resolvable on-disk subjects, so
            # plan_trial returns None forever. Surfaced (not silently skipped) so a

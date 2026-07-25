@@ -188,6 +188,31 @@ else
   echo "WARNING: config.mk missing VERILOG_FILES" >&2
 fi
 
+# ...and that those files actually EXIST. Presence of the KEY is not presence of the
+# INPUTS: when the repo was renamed agent-r2g -> r2g-skills, all 848 config.mk files
+# kept absolute VERILOG_FILES/SDC_FILE paths under the dead root. The key was there, so
+# this check passed, ORFS launched, and make died with "No rule to make target
+# '<dead>/rtl/foo.v'" -- which the loop ingested as 24 honest-looking `fail`/synth runs
+# with orfs-fail-synth events. Infrastructure absence became a DESIGN symptom in the
+# learner (failure-patterns #57 RENAME-P0-03). Exit 66 == R2G_INPUTS_MISSING, the same
+# infra code engineer_loop maps to 'project_inputs_missing' (never a design diagnosis,
+# never ingested).
+_missing_inputs=()
+while IFS= read -r _tok; do
+  [[ -e "$_tok" ]] || _missing_inputs+=("$_tok")
+done < <(sed -n 's/^[[:space:]]*export[[:space:]]\+\(VERILOG_FILES\|SDC_FILE\|VERILOG_INCLUDE_DIRS\)[[:space:]]*=[[:space:]]*//p' \
+           "$ORFS_DESIGN_DIR/config.mk" | tr ' ' '\n' | sed 's/\\$//' | grep '^/' || true)
+if (( ${#_missing_inputs[@]} > 0 )); then
+  echo "ERROR: config.mk references ${#_missing_inputs[@]} input file(s) that do not exist:" >&2
+  printf '         %s\n' "${_missing_inputs[@]:0:5}" >&2
+  echo "       This is INFRASTRUCTURE absence (a moved/renamed corpus, or RTL never" >&2
+  echo "       vendored), NOT a design failure -- refusing to run so it cannot be" >&2
+  echo "       ingested as a synth abort. Repair with:" >&2
+  echo "         python3 tools/reroot_project_paths.py --apply   # moved/renamed repo" >&2
+  echo "         python3 tools/setup_rtl_designs.py --force      # regenerate config.mk" >&2
+  exit 66
+fi
+
 # Create this run's unique backend dir + collision-resistant RUN_TAG (full-pipeline
 # Issue 9). The helper mkdir's a fresh dir, regenerating the PID/random suffix on the
 # (vanishingly rare) collision, so two same-second runs never share one dir.

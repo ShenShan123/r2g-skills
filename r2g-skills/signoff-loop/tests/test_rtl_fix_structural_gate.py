@@ -14,6 +14,9 @@ overwritten_after_an_edit` is the test that would have caught it.
 """
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -160,6 +163,61 @@ def test_rtl_verify_exit_codes(case, monkeypatch):
 
 def test_rtl_verify_unknown_case_fails_closed(case, monkeypatch):
     assert _cli(monkeypatch, ["--rtl-verify", "no_such_design"]) == 1
+
+
+# --------------------------------------------------------------------------- #
+# ...and the PROCESS actually exits with it                                    #
+# --------------------------------------------------------------------------- #
+# The tests above call main() in-process and assert its RETURN VALUE. That is not
+# the same thing as the exit status a shell sees, and the difference is exactly how
+# the gate shipped blind on 2026-07-24: `if __name__ == '__main__': main()` dropped
+# the return value on the floor, so `fix_orfs_failures.py --rtl-verify <case> ||
+# revert` read 0 on a structural REJECT and kept cutting. A CLI contract is only
+# provable through a subprocess (failure-patterns #56 GATE-P1-02).
+def _run_cli(cases_root, argv):
+    env = {**os.environ, "R2G_CASES": str(cases_root)}
+    return subprocess.run([sys.executable, str(_TOOL), *argv],
+                          capture_output=True, text=True, env=env)
+
+
+def test_cli_process_exit_status_is_the_verdict(case):
+    cases_root = case.parent
+
+    r = _run_cli(cases_root, ["--rtl-verify", "widget"])
+    assert r.returncode == 1, f"no baseline must fail closed, got {r.returncode}"
+
+    fox._snapshot_baseline(case, "widget")
+    r = _run_cli(cases_root, ["--rtl-verify", "widget"])
+    assert r.returncode == 0, f"preserved structure must exit 0, got {r.returncode}"
+
+    _gut(case)
+    r = _run_cli(cases_root, ["--rtl-verify", "widget"])
+    assert r.returncode == 2, (
+        f"a gutted design must exit 2 from the SHELL, got {r.returncode} — "
+        "the verdict is being computed and then discarded at the __main__ line")
+
+
+def test_cli_process_exit_status_on_rtl_error_reject(case):
+    """--rtl-error dumps context AND fails the process when the edit gutted the design."""
+    cases_root = case.parent
+    _write_log(case, "ERROR: syntax error in widget.v:3\n")
+
+    r = _run_cli(cases_root, ["--rtl-error", "widget"])
+    assert r.returncode == 0, "iteration 1 records the baseline and exits clean"
+
+    _gut(case)
+    r = _run_cli(cases_root, ["--rtl-error", "widget"])
+    assert r.returncode == 2, (
+        f"a structural reject must exit 2 from the SHELL, got {r.returncode}")
+    assert "STRUCTURAL REJECT" in r.stderr, "the operator/LLM must be told to revert"
+
+
+def test_cases_root_env_override_defaults_to_repo(monkeypatch):
+    """The env seam must not change the default: no R2G_CASES -> <repo>/design_cases."""
+    monkeypatch.delenv("R2G_CASES", raising=False)
+    assert fox._cases_root() == fox.BASE / "design_cases"
+    monkeypatch.setenv("R2G_CASES", "/tmp/somewhere/else")
+    assert fox._cases_root() == Path("/tmp/somewhere/else")
 
 
 # --------------------------------------------------------------------------- #

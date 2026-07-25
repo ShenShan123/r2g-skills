@@ -5254,3 +5254,101 @@ A wired-up gate that is still blind. The baseline is now written ONCE and return
 *Generalizable rule: a gate that aborts is worse than a gate that fails — the abort takes the
 evidence with it. And an armed gate nobody calls is indistinguishable from no gate at all, so
 "does this gate have a caller?" belongs in every gate review beside "does this gate have a test?"*
+
+## Dead-Corpus-Root Failures (a moved repo, silently) — 2026-07-25 (failure-patterns #57)
+
+Found by running a campaign wave to exercise #56's newly-wired structural gate. The wave
+"completed" in seconds with exit 0 and moved 76 asap7 designs from `pending` to `escalated`
+**without running a single flow**. Nothing was red: `check_db_integrity` said WARN (a
+pre-existing J4), `honesty.py` said 5/5, and the ledger looked like a normal wave of hard
+designs. The whole round was unrunnable and the loop was writing design diagnoses about it.
+
+The trigger is mundane — the repo was renamed `agent-r2g` → `r2g-skills` — but the blast radius
+is the honesty layer, because `project_path` is not a convenience field: it is the **project
+identity key** for `ingest_run.py` (UPDATEs the latest run row and the previous `cell_count`
+`WHERE project_path=?`), `journal_db.py` (the J2 `run_id` back-fill), `learn_heuristics.py`
+(per-project evidence grouping), and `check_ledger_signoff_backed.py` (an exact join, chosen
+deliberately over a `LIKE '%'||basename` that once cried wolf on ~197/593 rows).
+
+### RENAME-P0-01 — a nonexistent project directory diagnosed as a DESIGN failure
+`build_pending_ledger.py` bakes an ABSOLUTE `project_path` into every entry. After the rename all
+3,266 entries across four ledgers named a path that no longer existed. `run_orfs.sh` `cd`-failed
+(`line 144: cd: …: No such file or directory`), returned non-zero, and `engineer_loop` read that
+as a backend abort: the A/B path filed `<check>_arm_incomplete` and the normal path fell through
+to `_ingest()` on an empty project. Infrastructure absence became a symptom — the same
+mislabelling as #32's phantom `no_count_report` DRC, one layer up. `fmax_search.py` was the only
+component that failed *loudly*, with a raw `FileNotFoundError` traceback per design, and even
+that only produced `fmax_drain characterized 0 design(s)` — a line that reads like "nothing to
+do" rather than "nothing worked".
+**Guards:** `_run_flow` now checks `project_path` existence FIRST and returns the distinct
+`PROJECT_MISSING_RC` (66) with an operator HINT; both call sites map it to
+`reason="project_inputs_missing"` and — critically — **skip the ingest**, so an absent project can
+never enter the memory DBs as a run. `Ledger.reroot_project_paths()` re-points entries whose path
+is both outside the live corpus AND dead on disk onto `self.path.parent.parent` (the ledger lives
+*inside* the corpus, so the live root is always derivable — no env var, no guessing), and runs at
+all three drain entrypoints beside `reclaim_orphans()`. A live out-of-tree path is left alone;
+the appended event carries no `state`, so a re-root never disturbs a terminal design.
+Tests: `test_engineer_loop.py` — heal/persist, state preservation + idempotency, leave-correct-
+and-live-paths-alone, infra-not-design escalation with no ingest, and the sentinel contract.
+
+### RENAME-P0-02 — the memory DBs kept 130,289 rows keyed to the dead root
+Re-rooting the ledger alone is WORSE than doing nothing: the ledger↔DB join is exact, so a
+one-sided migration turned a `fabricated=0, backed=32` gate into `fabricated=6, backed=0` —
+a manufactured ALARM on a corpus that had not changed. Both sides must move together.
+`tools/reroot_project_paths.py` does the whole repair (knowledge `runs`/`fix_events`/
+`escalations`/`fix_trajectories`, journal `actions`/`log_summaries`/`tool_bugs`, and every
+`_batch/*.jsonl` ledger), discovering the old root from the data (the last `/design_cases/`
+segment) rather than hardcoding it, so the next move is covered too. Dry-run by default; `--apply`
+backs up each DB, rewrites in ONE transaction, re-runs the five honesty gates, and **rolls back**
+if they reject. The ledger half APPENDS re-root events rather than rewriting history.
+**The stale root was also suppressing loop-closure evidence:** with paths repaired, asap7's K3
+line went from `ab_trials=13 promoted=1` to `ab_trials=23 promoted=2` — ten trials and a
+promotion that existed all along but could not be attributed to their platform.
+
+### RENAME-P0-03 — the dead root was baked into config.mk too, and became 24 fake synth aborts
+The third layer, and the only one that reached the LEARNER. 848 of 849 `constraints/config.mk`
+files carried absolute `VERILOG_FILES` / `SDC_FILE` / `VERILOG_INCLUDE_DIRS` /
+`POST_GLOBAL_PLACE_TCL` paths under the dead root (3,639 paths total). `run_orfs.sh`'s only input
+check was `grep -q VERILOG_FILES` — presence of the **key**, not of the **files** — so it printed
+"config.mk has VERILOG_FILES entry", launched ORFS, and make died in ~1s with `No rule to make
+target '<dead>/rtl/foo.v'`. The loop read that as a backend abort and ingested **24 `fail`/synth
+runs with `orfs-fail-synth` events**. Every honesty gate stayed green, correctly: the runs *were*
+failures, the events *did* mirror `orfs_status`, parity held 24/24. The lie was one level below
+the gates — the failures were real records of an unreal cause.
+Two things worked correctly and are worth keeping: `ingest_run.py` recorded `platform=sky130hs`
+from **config.mk**, not the `--platform asap7` passed on the command line (the DB records what was
+built, not what was asked for); and `run_orfs.sh`'s `_heal_hook_paths` had already self-healed the
+`POST_GLOBAL_PLACE_TCL` half of the same rename (#39) — the RTL/SDC half simply had no equivalent.
+**Guards:** `run_orfs.sh` now resolves every absolute `VERILOG_FILES`/`SDC_FILE`/
+`VERILOG_INCLUDE_DIRS` token and refuses with **exit 66** (`project_inputs_missing`, never
+ingested) naming the missing files and the two repairs; whole-token matching, so one dead entry in
+a multi-file list still fails. `tools/reroot_project_paths.py` repairs config.mk alongside the DBs
+and ledgers, rewriting only paths that do NOT exist and leaving every tuned knob and `PLATFORM`
+untouched. Tests: `test_run_orfs_missing_inputs.py` (4).
+**Also surfaced here — a platform/ledger split the campaign cannot see:** the asap7 ledger had 710
+pending designs while every `config.mk` said `sky130hs`. `run_orfs.sh` builds config.mk's PLATFORM,
+so a wave driven with `--platform asap7` silently produced sky130hs results. The DB stayed honest;
+the LEDGER is what drifts. Re-point with `setup_rtl_designs.py --platform P --force` before
+resuming a round, and treat "ledger platform != config.mk PLATFORM" as a round-level alarm.
+
+### GATE-P1-02 — the #56 structural gate computed the verdict and discarded it at the door
+`tools/fix_orfs_failures.py` ended with a bare `main()`, not `sys.exit(main())`. `main()` returns
+the structural verdict as an exit code (0=pass, 2=reject, 3=flag, 1=error) — and the process threw
+it away, exiting 0 on every invocation including a REJECT. So the contract a66b4c5's message
+promises ("`--rtl-verify <case>` … the exit code IS the verdict") never held from a shell: an
+operator or CI step gating on `--rtl-verify <case> || revert` was told to keep cutting on a design
+that had been gutted. The gate was fired, wired, tested — and mute at the one boundary that
+matters. Reproduced end-to-end on a two-module case gutted to a bare port list: the JSON said
+`reject` with named reasons while `$?` said 0.
+**Why the 10 new tests missed it:** they call `fox.main()` in-process and assert its RETURN VALUE.
+A function's return value and a process's exit status are different things, and only the second
+is the CLI contract.
+**Guards:** `sys.exit(main())`; a `R2G_CASES` env seam (same spirit as `R2G_LOOP_RUN_FLOW`) so the
+corpus root can be pointed at a fixture; and three tests in `test_rtl_fix_structural_gate.py` that
+run the tool as a **subprocess** and assert `returncode`.
+
+*Generalizable rule: a verdict is only as good as the boundary it survives. #56's lesson was "does
+this gate have a caller?" — #57 adds "and does the caller's caller actually see the answer?"
+Test a CLI through a subprocess, or you are testing a function that happens to have a `main` in
+its name. Second rule: an absent file, directory, deck, or tool is INFRASTRUCTURE, and must never
+be allowed to become a symptom attributed to the design.*

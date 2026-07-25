@@ -151,6 +151,48 @@ class Ledger:
                   f"{' ...' if len(reclaimed) > 8 else ''}", file=sys.stderr)
         return reclaimed
 
+    def reroot_project_paths(self) -> list[str]:
+        """Re-point entries whose `project_path` lives under a DEAD corpus root.
+
+        `build_pending_ledger.py` bakes an ABSOLUTE project_path into every entry, so
+        moving/renaming/cloning the repo strands the whole round: run_orfs.sh `cd`-fails
+        on every design and the loop files the infra absence as a DESIGN diagnosis
+        ('<check>_arm_incomplete'), burning designs to 'escalated' with zero flows run
+        and exit 0 (2026-07-25, failure-patterns #57 — the agent-r2g -> r2g-skills
+        rename left all four ledgers, 3266 designs, pointing at a path that no longer
+        exists).
+
+        The ledger lives INSIDE the corpus (`<cases>/_batch/<round>.jsonl`), so the live
+        root is always `self.path.parent.parent` — no env var, no guessing. Only a path
+        that is BOTH outside the live root AND dead on disk is rewritten: a live
+        out-of-tree project is somebody's deliberate choice and is left alone, and a
+        not-yet-materialized A/B arm dir under the live root is already correct.
+
+        A re-root is a path REPAIR, not a state change — the appended event carries no
+        `state`, so the cumulative reload keeps each design's real state.
+        """
+        live_cases = self.path.parent.parent.resolve()
+        rerooted = []
+        with self._lock:
+            for design, cur in self._entries.items():
+                pp = cur.get("project_path")
+                if not pp:
+                    continue
+                p = Path(pp)
+                if p.parent == live_cases or p.is_dir():
+                    continue
+                e = {"design": design, "ts": _now(),
+                     "project_path": str(live_cases / p.name),
+                     "reason": f"project_path_reroot:{p.parent}"}
+                cur.update(e)
+                self._append(e)
+                rerooted.append(design)
+        if rerooted:
+            print(f"[ledger] re-rooted {len(rerooted)} design(s) onto the live corpus "
+                  f"{live_cases} (the ledger's paths pointed at a corpus root that no "
+                  f"longer exists — a moved/renamed repo)", file=sys.stderr)
+        return rerooted
+
 
 # ---- subprocess seams (monkeypatched in tests; env-overridable like
 # fix_signoff's R2G_RUN_ORFS) -------------------------------------------------
@@ -163,7 +205,25 @@ _SYNTH_ARM_TIMEOUT = 1800   # synth A/B arm: bound the synth stage (a memcap arm
                             # FF-expanded synth is minutes; a wrong timeout subject won't burn 2h)
 
 
+# Distinct from every run_orfs.sh exit code: "the project directory is not there",
+# which is INFRASTRUCTURE absence, not a design failure. Without a distinct code the
+# callers see a plain non-zero rc and diagnose the DESIGN — the 2026-07-25 dead-root
+# wave escalated 76 designs as 'place_arm_incomplete' without running one flow
+# (failure-patterns #57). Same principle as #32's phantom DRC no_count_report: an
+# absent tool/dir must never become a symptom.
+PROJECT_INPUTS_MISSING_RC = 66
+
+
 def _run_flow(entry: dict) -> int:
+    proj = Path(entry["project_path"])
+    if not proj.is_dir():
+        print(f"[loop] HINT: project dir does not exist: {proj} — this is infra "
+              f"absence (moved/renamed corpus, or a wiped A/B arm), NOT a design "
+              f"failure. If the whole round looks like this, the ledger's paths are "
+              f"stale: a drain re-roots them automatically (Ledger.reroot_project_"
+              f"paths); an individual dir needs setup_rtl_designs.py / re-planning.",
+              file=sys.stderr)
+        return PROJECT_INPUTS_MISSING_RC
     # Invalidate STALE project-local signoff verdicts BEFORE re-flowing. reports/{drc,lvs,
     # rcx,route,timing_check}.json are written ONLY by extract_*.py (via fix_signoff); a
     # re-flow -- especially a /r2g-debug platform RE-TARGET (config.mk nangate45 -> asap7) --
@@ -406,6 +466,13 @@ def _process_backend_ab_arm(led: "Ledger", entry: dict, conn) -> None:
         _apply_recipe_strategy(entry)
     led.set_state(design, "flow")
     rc = _run_flow(entry)
+    if rc == PROJECT_INPUTS_MISSING_RC:
+        # The arm DIRECTORY is gone (wiped between planning and drain, or a stale-root
+        # ledger). That is a ghost arm, not an incomplete backend — filing it as
+        # '<check>_arm_incomplete' blames the design for missing infrastructure and
+        # buries the real cause (2026-07-25, failure-patterns #57).
+        led.set_state(design, "escalated", reason="project_inputs_missing")
+        return
     if not _has_backend_run(entry):
         # The arm flow produced no backend at all (clone/setup aborted before any
         # stage ran): do NOT ingest a junk orfs_status='unknown' row; escalate so
@@ -1019,6 +1086,13 @@ def process_one(led: Ledger, entry: dict, conn, *,
         return None
     led.set_state(design, "flow")
     rc = _run_flow(entry)
+    if rc == PROJECT_INPUTS_MISSING_RC:
+        # No project dir => no flow ran => there is NOTHING to ingest. Falling through
+        # would _ingest() an empty project (a junk/absent-report row) and then diagnose
+        # the DESIGN for what is an infrastructure absence (2026-07-25,
+        # failure-patterns #57).
+        led.set_state(design, "escalated", reason="project_inputs_missing")
+        return "escalated"
     if rc != 0:
         # Backend abort. Ingest first (partial runs still teach + record the fail
         # stage), then — if this is a KNOWN, recipe-backed backend-abort (route
@@ -2337,6 +2411,7 @@ def ab_drain(ledger_path: Path, *, n_ab_designs: int = 2,
     import knowledge_db
     led = Ledger(ledger_path)
     led.reclaim_orphans()          # crash-orphaned A/B arms re-run + re-judge (#31)
+    led.reroot_project_paths()     # a moved/renamed corpus heals itself (#57)
     conn = knowledge_db.connect(db_path) if db_path else knowledge_db.connect()
     knowledge_db.ensure_schema(conn)
     plan_arms_for_candidates(led, conn, n_ab_designs=n_ab_designs)
@@ -2531,6 +2606,7 @@ def fmax_drain(ledger_path: Path, *, platform: str | None = None,
     designs that got a real period."""
     led = Ledger(ledger_path)
     led.reclaim_orphans()          # keep the fmax prefix == run's drain prefix (#31)
+    led.reroot_project_paths()     # a moved/renamed corpus heals itself (#57)
     pending = [e for e in led.pending() if e.get("kind", "normal") == "normal"]
     if platform:
         pending = [e for e in pending if e.get("platform") == platform]
@@ -2556,6 +2632,7 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
     import knowledge_db
     led = Ledger(ledger_path)
     led.reclaim_orphans()          # crash-orphaned transients rejoin the drain (#31)
+    led.reroot_project_paths()     # a moved/renamed corpus heals itself (#57)
     conn = knowledge_db.connect()
     knowledge_db.ensure_schema(conn)
     prev_heur = None
