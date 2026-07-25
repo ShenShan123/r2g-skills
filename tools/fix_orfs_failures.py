@@ -432,8 +432,17 @@ def apply_wrong_top_fix(case: str) -> dict:
 #   3. Cross-reference the error against RTL files in the case (via file:line
 #      hints in the log), so the human/LLM operator can see exactly where to
 #      look without trawling the whole log.
-#   4. Record a structural baseline (via check_structural_preservation.py) so
-#      any subsequent RTL edits can be verified for preservation.
+#   4. VERIFY the previous iteration's edits against the preserved structural
+#      baseline (check_structural_preservation.py `verify`), then record the
+#      baseline if this is the first iteration. A 'reject' verdict means the last
+#      edit hollowed the design out rather than fixing it — surfaced in
+#      rtl_error_context.json as `structural_check` and as exit code 2.
+#
+# Until 2026-07-24 step 4 only ever ran `snapshot`; nothing in the repo called
+# `verify`, so the anti-hollowing-out gate was armed and never fired
+# (failure-patterns #56 GATE-P1-01). The baseline is now written ONCE and never
+# overwritten — re-snapshotting after an edit would compare the edited design
+# against itself and pass forever.
 #
 # The dispatcher (apply_other) hands off to this when the failure signature
 # looks RTL-level rather than config-level.
@@ -768,18 +777,36 @@ def _read_snippet(file_path: str, line: int, radius: int = 5) -> str:
     return '\n'.join(buf)
 
 
+_STRUCT_TOOL = 'check_structural_preservation.py'
+# check_structural_preservation.py's documented exit codes.
+_STRUCT_VERDICT = {0: 'pass', 2: 'reject', 3: 'flag', 1: 'error'}
+
+
+def _baseline_path(case_dir: Path) -> Path:
+    return case_dir / '_batch' / 'rtl_baseline.json'
+
+
 def _snapshot_baseline(case_dir: Path, top_module: str) -> dict:
-    """Record structural baseline via check_structural_preservation.py.
+    """Record the structural baseline via check_structural_preservation.py.
+
+    Recorded ONCE per case and then PRESERVED. Re-snapshotting on a later
+    iteration would compare the already-edited RTL against itself, so every
+    subsequent verify would verdict 'pass' no matter how far the design had been
+    hollowed out — the gate would be wired up and still blind. The baseline is
+    the ORIGINAL design or it is worthless.
 
     Returns a {status, path} dict. Failure is non-fatal — the detector is
     still useful without a baseline, just can't enforce the B-thresholds on
     subsequent edits.
     """
-    snap_out = case_dir / '_batch' / 'rtl_baseline.json'
+    snap_out = _baseline_path(case_dir)
     snap_out.parent.mkdir(parents=True, exist_ok=True)
+    if snap_out.exists():
+        return {'status': 'preserved', 'path': str(snap_out),
+                'note': 'pre-existing baseline kept — never re-snapshot after an edit'}
     try:
         r = subprocess.run(
-            ['python3', str(TOOLS / 'check_structural_preservation.py'), 'snapshot',
+            ['python3', str(TOOLS / _STRUCT_TOOL), 'snapshot',
              '--rtl-dir', str(case_dir / 'rtl'),
              '--top-module', top_module,
              '--out', str(snap_out)],
@@ -790,6 +817,49 @@ def _snapshot_baseline(case_dir: Path, top_module: str) -> dict:
         return {'status': 'failed', 'stderr': r.stderr.strip()[:500]}
     except Exception as e:
         return {'status': 'error', 'error': str(e)}
+
+
+def _verify_structure(case_dir: Path) -> dict:
+    """Run the B-threshold gate: is the current RTL still the SAME design?
+
+    This is the other half of `_snapshot_baseline` — the half that had no caller
+    anywhere in the repo until 2026-07-24 (failure-patterns #56 GATE-P1-01), so the
+    anti-hollowing-out rules were armed and never fired. It answers the one question
+    the ORFS logs cannot: did the last edit fix the design, or gut it until the tool
+    stopped complaining?
+
+    Verdicts (from the tool's own exit codes): 'pass' | 'flag' (justify, don't
+    block) | 'reject' (the edit destroyed the design) | 'error'. 'no_baseline' means
+    this is the first iteration — there is nothing to compare against yet, which is
+    NOT a pass.
+    """
+    baseline = _baseline_path(case_dir)
+    if not baseline.exists():
+        return {'status': 'no_baseline',
+                'note': 'first iteration — baseline recorded now, gate applies from the next edit'}
+    out_path = case_dir / '_batch' / 'rtl_structcheck.json'
+    try:
+        r = subprocess.run(
+            ['python3', str(TOOLS / _STRUCT_TOOL), 'verify',
+             '--rtl-dir', str(case_dir / 'rtl'),
+             '--baseline', str(baseline),
+             '--out', str(out_path)],
+            capture_output=True, text=True, timeout=120,
+        )
+    except Exception as e:
+        return {'status': 'error', 'error': str(e)}
+    verdict = _STRUCT_VERDICT.get(r.returncode, 'error')
+    result = {'status': verdict, 'baseline': str(baseline), 'report': str(out_path)}
+    try:
+        detail = json.loads(out_path.read_text())
+        result['reasons_reject'] = detail.get('reasons_reject', [])
+        result['reasons_flag'] = detail.get('reasons_flag', [])
+        result['baseline_summary'] = detail.get('baseline_summary')
+        result['current_summary'] = detail.get('current_summary')
+    except Exception:
+        result['stdout'] = r.stdout.strip()[:1000]
+        result['stderr'] = r.stderr.strip()[:500]
+    return result
 
 
 def apply_rtl_error_fix(case: str) -> dict:
@@ -873,6 +943,11 @@ def apply_rtl_error_fix(case: str) -> dict:
     if focus_ref:
         focus_snippet = _read_snippet(focus_ref['resolved'], focus_ref['line'])
 
+    # ORDER MATTERS: verify FIRST, against whatever baseline a previous iteration
+    # left behind, and only then snapshot (which preserves an existing baseline).
+    # Snapshotting first would overwrite the original design's fingerprint with the
+    # already-edited one and the gate would verdict 'pass' forever.
+    structural_check = _verify_structure(case_dir)
     baseline = _snapshot_baseline(case_dir, top_module) if top_module else {'status': 'no_top'}
 
     stamp = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
@@ -890,6 +965,11 @@ def apply_rtl_error_fix(case: str) -> dict:
         'focus_line':        focus_ref['line']     if focus_ref else None,
         'focus_snippet':     focus_snippet,
         'structural_baseline': baseline,
+        # The B-threshold gate over the PREVIOUS iteration's edits (failure-patterns
+        # #56). 'reject' means the last edit stopped describing the same design —
+        # read reasons_reject BEFORE proposing another fix, and revert rather than
+        # keep cutting. 'no_baseline' = first iteration, nothing to compare yet.
+        'structural_check':  structural_check,
         # Synth-hang classification (present only for exit=124 in synth).
         # hang_class = "ast_pathology" | "scale_timeout" | "unknown". When
         # scale_timeout, focus_file is intentionally None — see comments
@@ -941,6 +1021,10 @@ def apply_rtl_error_fix(case: str) -> dict:
         'archived_as':    str(archived_as) if archived_as else None,
         'history_path':   str(history_path),
         'baseline_status': baseline.get('status'),
+        # The B-threshold verdict over the PREVIOUS iteration's edits. Carried on the
+        # handler's own return value (not just inside rtl_error_context.json) because
+        # the CLI gates its exit code on it — see main().
+        'structural_check': structural_check,
         'hang_class':     hang_classification.get('hang_class'),
         'recovery_hint':  recovery_hint,
     }
@@ -1007,7 +1091,32 @@ def main():
     if len(sys.argv) >= 3 and sys.argv[1] == '--rtl-error':
         result = apply_rtl_error_fix(sys.argv[2])
         print(json.dumps(result, indent=2))
-        return 0 if result.get('status') == 'context_dumped' else 1
+        if result.get('status') != 'context_dumped':
+            return 1
+        # The B-threshold gate now FIRES here (failure-patterns #56 GATE-P1-01): a
+        # 'reject' means the previous iteration's edits stopped describing the same
+        # design, so the dump exits 2 instead of 0 even though the context was
+        # written. A caller that only cares about the dump can read the JSON; a
+        # caller that gates on the exit code now gets the structural verdict too.
+        struct = (result.get('structural_check') or {}).get('status')
+        if struct == 'reject':
+            print('STRUCTURAL REJECT — the last RTL edit does not preserve the design; '
+                  'see structural_check.reasons_reject and revert before editing further',
+                  file=sys.stderr)
+            return 2
+        return 0
+
+    # Standalone gate invocation: verify the current RTL against the preserved
+    # baseline without dumping a new error context. Exit code IS the verdict
+    # (0=pass, 2=reject, 3=flag, 1=error/no-baseline — no baseline is NOT a pass).
+    if len(sys.argv) >= 3 and sys.argv[1] == '--rtl-verify':
+        case_dir = CASES / sys.argv[2]
+        if not case_dir.exists():
+            print(json.dumps({'case': sys.argv[2], 'status': 'no_case_dir'}, indent=2))
+            return 1
+        result = _verify_structure(case_dir)
+        print(json.dumps(result, indent=2))
+        return {'pass': 0, 'reject': 2, 'flag': 3}.get(result.get('status'), 1)
 
     with open('/tmp/fail_categories.json') as f:
         cats = json.load(f)

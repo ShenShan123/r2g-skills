@@ -27,13 +27,20 @@ layer itself**, not the system under test (failure-patterns #56).
   contract: failing condition, missing binary, timeout, raising builtin, `--dry-run` never
   fabricating a pass, and the lint blocking gates on an unfrozen protocol digest / an
   out-of-spec GC id / an unknown builtin.
-- **GATE-P1-01 the anti-hollowing-out gate was never called** — `check_structural_preservation.py`
-  enforces the seven researcher-signed B-thresholds against an LLM gutting the RTL, but
-  `fix_orfs_failures.py` only records the `snapshot`; nothing in the repo calls `verify`, and it
-  had no tests. `signoff-loop/tests/test_check_structural_preservation.py` (19 tests) pins every
-  rule with a negative AND a clean control, the fingerprint, and the CLI exit-code contract.
-  Wiring `verify` into the auto-fix path is left as an operator decision — it changes what the
-  fixer accepts.
+- **GATE-P1-01 the anti-hollowing-out gate was never called — now it fires** —
+  `check_structural_preservation.py` enforces the seven researcher-signed B-thresholds against an
+  LLM gutting the RTL, but `fix_orfs_failures.py` only recorded the `snapshot`; nothing in the
+  repo called `verify`, and it had no tests. Rules pinned by
+  `tests/test_check_structural_preservation.py` (19 — every rule with a negative AND a clean
+  control, the fingerprint, the CLI exit-code contract). Wiring pinned by
+  `tests/test_rtl_fix_structural_gate.py` (10): `apply_rtl_error_fix` now verifies the previous
+  iteration's edits BEFORE snapshotting, the verdict rides `rtl_error_context.json` as
+  `structural_check` + `_batch/rtl_structcheck.json`, `--rtl-error` exits 2 on a `reject`, and a
+  new `--rtl-verify <case>` runs the gate standalone with the verdict as its exit code.
+  The non-obvious half: `_snapshot_baseline` used to OVERWRITE the baseline every call, so
+  calling `verify` without fixing that would have compared each edited design against a
+  fingerprint taken after the edit — `pass` forever. The baseline is now written once and
+  `preserved` thereafter.
 - **Recorded, not changed** — GC-GRA-02 stays `operator` (its corpus is gitignored and
   machine-local, so a `command` binding would red the sweep on a fresh clone); GC-LRN-04's
   evidence is already machine-produced by `check_db_integrity.py` K3 (WARN by design — the

@@ -5212,13 +5212,28 @@ new `translate_off` flagged). `tools/fix_orfs_failures.py` records the baseline 
 could have drifted or a regex could have stopped matching and every edit would have verdicted
 `pass` with nobody the wiser. Same class as the `check_ledger_signoff_backed.py` heredoc that
 "rotted untested" (2026-07-07), one step earlier: this one never even ran.
-**Guards:** `signoff-loop/tests/test_check_structural_preservation.py` pins all seven rules with
-a negative control AND a clean control each (so neither a pass-everything nor a
+**Guards (rules):** `signoff-loop/tests/test_check_structural_preservation.py` pins all seven
+rules with a negative control AND a clean control each (so neither a pass-everything nor a
 reject-everything regression survives), plus the fingerprint itself (an all-zero snapshot makes
 every rule vacuously pass) and the CLI exit-code contract callers branch on
-(0=pass / 2=reject / 3=flag / 1=missing baseline fails closed). Wiring `verify` into the RTL
-auto-fix path is now a one-line change against verified behavior — it is deliberately NOT done
-here, because it changes what the auto-fixer accepts and that is an operator decision.
+(0=pass / 2=reject / 3=flag / 1=missing baseline fails closed).
+
+**Guards (wiring — the gate now FIRES):** `fix_orfs_failures.py` gained `_verify_structure()`
+and calls it from `apply_rtl_error_fix` **before** the snapshot, so each iteration is judged
+against the previous one's baseline; the verdict rides `rtl_error_context.json` as
+`structural_check` (with `reasons_reject`) plus a machine-readable
+`_batch/rtl_structcheck.json`, and `--rtl-error` now exits **2** on a `reject` even though the
+context dump succeeded. New `--rtl-verify <case>` invokes the gate standalone with the verdict
+AS the exit code. `no_baseline` (first iteration) is explicitly **not** a pass.
+
+The non-obvious half was the **baseline lifetime**: `_snapshot_baseline` used to overwrite
+`rtl_baseline.json` on every call, and the RTL-error handler runs once per fix iteration — so
+calling `verify` without fixing that would have compared each edited design against a
+fingerprint taken *after* the edit, verdicting `pass` no matter how far the design was gutted.
+A wired-up gate that is still blind. The baseline is now written ONCE and returns
+`status="preserved"` thereafter. Tests:
+`signoff-loop/tests/test_rtl_fix_structural_gate.py` (10) —
+`test_baseline_is_never_overwritten_after_an_edit` is the one that would have caught it.
 
 ### Standing coverage notes (not defects — decisions, recorded so they are not re-litigated)
 - **`verify_graph_dataset.py --batch` (GC-GRA-02) stays `operator`, not `command`.** It is fully

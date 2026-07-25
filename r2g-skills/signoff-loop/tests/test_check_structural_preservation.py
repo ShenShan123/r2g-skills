@@ -13,10 +13,10 @@ reject-everything regression is caught too.
 Exit-code contract (relied on by any caller that gates on this):
     0 = pass, 2 = reject, 3 = flag-only (needs human attention).
 
-NOTE ON PRODUCTION WIRING: `tools/fix_orfs_failures.py` records the baseline
-(`snapshot`) but nothing in the repo calls `verify`, so today this gate is armed
-and never fired. These tests pin the RULES so that wiring `verify` in is a
-one-line change against verified behavior, not a rewrite.
+SCOPE: this file covers the RULES only. The gate's production WIRING into the RTL
+auto-fix loop (`fix_orfs_failures.py --rtl-error` / `--rtl-verify`, and the baseline
+lifetime that makes the comparison meaningful) is covered by
+`test_rtl_fix_structural_gate.py`.
 """
 import importlib.util
 import json
