@@ -5169,3 +5169,73 @@ Tests: `eda-install/tests/test_platform_rules_failclosed.py`.
 *Generalizable rule: recording provenance is not verifying it — every digest a gate trusts must
 be re-derived from the bytes at judgment time, and the process a timeout supervises must be the
 process tree that actually does the work.*
+
+## Gate-Harness Failures (the gates themselves; 2026-07-24 — failure-patterns #56)
+
+Every other section here is about the *system under test* lying. This one is about the **gate
+layer** lying: a harness that aborts instead of reporting, and gates that are armed but never
+fired. Found by a full sweep of all 37 `GC-*` conditions
+(`tools/run_v1_validation_registry.py gates` → 23/23 executable PASS) plus a hand-execution of
+the three deferred `operator` conditions. The distinguishing symptom is that **nothing looks
+red** — the coverage hole is invisible from the gate report, because a gate that never runs
+contributes no row to it.
+
+### GATE-P0-01 — an unresolvable gate command ABORTED the sweep instead of failing one condition
+`command_gates.execute()` (and the sibling loop in `command_diagnostics`) caught only
+`subprocess.TimeoutExpired`. A gate condition whose `command[0]` cannot be executed — a missing
+tool binary, a bad interpreter, a permission-denied script, i.e. exactly the machine-drift case
+the ENV gate exists to catch — raised `FileNotFoundError` straight out of the command, with three
+consequences: (1) every remaining gate condition went **unexecuted**, so one absent tool masked
+the state of the whole sweep; (2) the evidence report was **never written**, leaving the previous
+run's `gate-conditions.json` on disk still asserting its verdict — a stale green surviving a red
+run, which breaks GC-OPS-03 evidence completeness; (3) the failure surfaced as a Python traceback
+rather than the `harness_error` status the registry's own
+`formal_execution_policy.execution_statuses` already declares for precisely this case. The
+`builtin` path had used `harness_error` since it was written; the `command`/`suite` paths never
+did. Reproduced by pointing a condition at `r2g-no-such-binary-xyz`.
+**Guards:** both call sites now catch `OSError` and record
+`execution_status="harness_error", ok=False` with the exception text, so the condition fails
+CLOSED, the sweep continues, and the report is still written; the diagnostics state line
+distinguishes `HARNESS-ERROR` from `TIMEOUT` (both have `returncode=None`).
+Tests: `signoff-loop/tests/test_v1_registry_runner.py` — the arbiter's **first** tests (9),
+all negative controls: failing condition → gate `fail`; missing binary → `harness_error` +
+sweep continues + report written; timeout → `timeout`; builtin raising → `harness_error`;
+`--dry-run` → `not_scheduled`, never a fabricated pass; unfrozen protocol digest → lint blocks
+gates before anything runs; GC id absent from the spec / unknown builtin → lint errors.
+
+### GATE-P1-01 — the anti-hollowing-out gate was armed and never fired, and never tested
+`tools/check_structural_preservation.py` enforces the seven researcher-signed B-thresholds that
+decide whether an LLM's RTL edits still describe the SAME design (exact top port list; module
+count never drops; bounded always/assign/code-line loss; no new `initial` driving a top output;
+new `translate_off` flagged). `tools/fix_orfs_failures.py` records the baseline via `snapshot`
+— and **nothing in the repo ever calls `verify`**. Combined with zero test coverage, the rules
+could have drifted or a regex could have stopped matching and every edit would have verdicted
+`pass` with nobody the wiser. Same class as the `check_ledger_signoff_backed.py` heredoc that
+"rotted untested" (2026-07-07), one step earlier: this one never even ran.
+**Guards:** `signoff-loop/tests/test_check_structural_preservation.py` pins all seven rules with
+a negative control AND a clean control each (so neither a pass-everything nor a
+reject-everything regression survives), plus the fingerprint itself (an all-zero snapshot makes
+every rule vacuously pass) and the CLI exit-code contract callers branch on
+(0=pass / 2=reject / 3=flag / 1=missing baseline fails closed). Wiring `verify` into the RTL
+auto-fix path is now a one-line change against verified behavior — it is deliberately NOT done
+here, because it changes what the auto-fixer accepts and that is an operator decision.
+
+### Standing coverage notes (not defects — decisions, recorded so they are not re-litigated)
+- **`verify_graph_dataset.py --batch` (GC-GRA-02) stays `operator`, not `command`.** It is fully
+  executable and fail-closed on both an empty and a missing corpus root (`sys.exit(1)` — do not
+  measure this through a pipe, `$?` then reports `tail`'s status). But `design_cases/` is
+  gitignored and machine-local, so wiring it as a registry `command` would turn the whole sweep
+  red on any fresh clone for a purely environmental reason. Same rationale as
+  DIAG-SYNTH-PROJECTION's "vacuously empty on a fresh clone".
+- **GC-LRN-04's evidence is already machine-produced.** The registry marks per-platform promotion
+  liveness `operator`, but `check_db_integrity.py` computes it as K3 on every sweep (via
+  DIAG-DB-INTEGRITY / GC-LRN-02) — WARN-only by design, since a genuinely hard platform can
+  legitimately accumulate inconclusive trials. The manual step is the *judgement*, not the query.
+- **`check_ledger_signoff_backed.py` is not wired into the registry.** Its unit surface runs
+  inside DIAG-SIGNOFF-LOOP, but the gate is never executed against the real campaign ledger by
+  `gates`. Executed by hand 2026-07-24: `fabricated=0, backed=32, not_ingested=531` → WARN, the
+  standing ingest-backlog trend, no fabricated cleans.
+
+*Generalizable rule: a gate that aborts is worse than a gate that fails — the abort takes the
+evidence with it. And an armed gate nobody calls is indistinguishable from no gate at all, so
+"does this gate have a caller?" belongs in every gate review beside "does this gate have a test?"*

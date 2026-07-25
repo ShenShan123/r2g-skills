@@ -4,6 +4,42 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-24 — gate-layer audit: harness fail-closed + the two untested gates (tools, signoff-loop)
+
+Swept all 37 `GC-*` gate conditions (`tools/run_v1_validation_registry.py gates` → **23/23
+executable PASS**, 11 formal conditions / 45 cases + 3 operator conditions deferred) and
+hand-executed all three deferred `operator` conditions: GC-GRA-02 batch verifier green over the
+7-dataset corpus (0 `graph_id` collisions), GC-SIG-04 hang sweep clean, GC-LRN-04 promotion
+liveness green on all four platforms (asap7 13/1, nangate45 151/10, sky130hd 135/2, sky130hs
+98/12 trials/promoted — no arms-identical alarm). The audit's findings were about the **gate
+layer itself**, not the system under test (failure-patterns #56).
+
+- **GATE-P0-01 harness fail-closed** — `command_gates.execute()` and `command_diagnostics`
+  caught only `TimeoutExpired`, so a gate condition whose command binary cannot be executed
+  raised `FileNotFoundError` out of the sweep: every downstream condition went unexecuted AND
+  the evidence report was never written, leaving the *previous* run's `gate-conditions.json`
+  still asserting its verdict — a stale green surviving a red run. Both sites now catch
+  `OSError` and record the `harness_error` status the registry already declares, so the
+  condition fails closed, the sweep continues, and the report is still written.
+- **The arbiter now has tests** — `tools/run_v1_validation_registry.py` decides every gate
+  verdict and had **zero** tests; a bug in it cannot be caught by the gates it runs.
+  `signoff-loop/tests/test_v1_registry_runner.py` (9 negative controls) pins the fail-closed
+  contract: failing condition, missing binary, timeout, raising builtin, `--dry-run` never
+  fabricating a pass, and the lint blocking gates on an unfrozen protocol digest / an
+  out-of-spec GC id / an unknown builtin.
+- **GATE-P1-01 the anti-hollowing-out gate was never called** — `check_structural_preservation.py`
+  enforces the seven researcher-signed B-thresholds against an LLM gutting the RTL, but
+  `fix_orfs_failures.py` only records the `snapshot`; nothing in the repo calls `verify`, and it
+  had no tests. `signoff-loop/tests/test_check_structural_preservation.py` (19 tests) pins every
+  rule with a negative AND a clean control, the fingerprint, and the CLI exit-code contract.
+  Wiring `verify` into the auto-fix path is left as an operator decision — it changes what the
+  fixer accepts.
+- **Recorded, not changed** — GC-GRA-02 stays `operator` (its corpus is gitignored and
+  machine-local, so a `command` binding would red the sweep on a fresh clone); GC-LRN-04's
+  evidence is already machine-produced by `check_db_integrity.py` K3 (WARN by design — the
+  manual step is the judgement, not the query); `check_ledger_signoff_backed.py` remains
+  unwired into the registry (hand-run: `fabricated=0, backed=32, not_ingested=531`).
+
 ## 2026-07-24 — three-platform revalidation remediation (signoff-loop, def-graph, eda-install)
 
 Closed the 2026-07-24 revalidation findings (pilot at agent commit 8d449b0 — nangate45 40/49,

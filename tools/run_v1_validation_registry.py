@@ -769,6 +769,27 @@ def command_gates(args: argparse.Namespace) -> int:
                 "stdout": _tail(exc.stdout if isinstance(exc.stdout, str) else ""),
                 "stderr": _tail(exc.stderr if isinstance(exc.stderr, str) else ""),
             }
+        except OSError as exc:
+            # An unresolvable/unexecutable command (missing tool binary, bad
+            # interpreter, permission denied) is a HARNESS failure, not a
+            # system-under-test failure — but it must still fail CLOSED and, above
+            # all, must NOT abort the sweep. Letting FileNotFoundError propagate
+            # killed command_gates before it wrote the evidence report, so a single
+            # absent tool left every downstream condition unexecuted AND left a
+            # stale gate-conditions.json on disk claiming the previous verdict
+            # (breaking GC-OPS-03 evidence completeness). `harness_error` is already
+            # in formal_execution_policy.execution_statuses for exactly this case;
+            # the builtin path has always used it, the command path never did.
+            return {
+                "execution_status": "harness_error",
+                "returncode": None,
+                "ok": False,
+                "elapsed_s": round(time.time() - started, 3),
+                "command": command,
+                "error": f"{type(exc).__name__}: {exc}",
+                "stdout": _tail(""),
+                "stderr": _tail(str(exc)),
+            }
 
     records: list[dict[str, Any]] = []
     gate_summaries: dict[str, dict[str, Any]] = {}
@@ -972,6 +993,14 @@ def command_diagnostics(args: argparse.Namespace) -> int:
             returncode = None
             stdout = exc.stdout if isinstance(exc.stdout, str) else ""
             stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        except OSError as exc:
+            # Same fail-closed contract as command_gates.execute: an unresolvable
+            # suite interpreter/binary is a harness failure that must be RECORDED,
+            # never allowed to abort the remaining suites or skip the report.
+            execution_status = "harness_error"
+            returncode = None
+            stdout = ""
+            stderr = f"{type(exc).__name__}: {exc}"
         record = {
             "id": suite["id"],
             "official_val_verdict": False,
@@ -984,7 +1013,11 @@ def command_diagnostics(args: argparse.Namespace) -> int:
             "stderr": _tail(stderr),
         }
         records.append(record)
-        state = "PASS" if returncode == 0 else ("TIMEOUT" if returncode is None else "FAIL")
+        state = (
+            "PASS" if returncode == 0
+            else {"timeout": "TIMEOUT", "harness_error": "HARNESS-ERROR"}.get(
+                execution_status, "FAIL")
+        )
         print(f"{suite['id']}: {state} ({record['elapsed_s']}s)")
         failed = failed or returncode != 0
     report = {

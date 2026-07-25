@@ -420,6 +420,8 @@ This skill's failure mode is a plausible-looking CSV with **wrong values**. Full
 | PyG graph datasets (b–f views, tensor schema, RC edges, netlist graph, torch venv) | `r2g-skills/def-graph/references/graph-dataset.md`  |
 | Per-platform tech handling (voltage, tap cells, layers, liberty, SPEF) | `r2g-skills/def-graph/scripts/extract/techlib/`   |
 | Verify a built graph dataset vs raw DEF/LEF/liberty ground truth     | `tools/verify_graph_dataset.py` (`--batch`)       |
+| Run EVERY gate condition across all four skills (one command)        | `python3 tools/run_v1_validation_registry.py gates` (37 `GC-*`; `lint` / `--dry-run` / `--gate X`) |
+| What each gate covers, which are executable vs deferred-formal/operator | `tools/v1_validation_registry.yaml` + `docs/superpowers/plans/V1_ASSURANCE_SPECIFICATION_AND_VALIDATION_PROTOCOL.md` |
 | Dataset silent-value defects (transposed congestion, all-NaN IR, cap units, SPEF join) | `r2g-skills/signoff-loop/references/failure-patterns.md` ("Dataset-Extraction Silent-Value Defects") |
 | Spec / config / SDC templates                                       | `r2g-skills/signoff-loop/references/spec-template.md`, `r2g-skills/signoff-loop/assets/`  |
 | DRC/LVS/route fixing (antenna diode, density/route relief, LVS)     | `r2g-skills/signoff-loop/references/signoff-fixing.md`  |
