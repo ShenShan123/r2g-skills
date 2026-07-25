@@ -151,3 +151,57 @@ def test_cli_strict_exit(tmp_path):
                         "--platform", "np45", "--strict"],
                        capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
+
+
+# --------------------------------------------------------------------------- #
+# product scope: asap7 is not supported in this version                       #
+# --------------------------------------------------------------------------- #
+# 2026-07-25. This is a SCOPE decision, not a capability gap — asap7's platform dir is
+# present and its DRC deck resolves, so every installed-capability check would award it
+# `research_ready` and happily let a campaign spend hours on it. It can never read
+# DRC-clean (irreducible false-violation floor), has no LVS deck, and its authoritative
+# Calibre deck is not installed, so it can never promote a recipe.
+def test_unsupported_platform_is_never_strict_ready(tmp_path):
+    caps = pc.probe_platform(str(tmp_path), "asap7")
+    assert caps["supported"] is False
+    assert caps["tier"] == "unsupported"
+    assert caps["strict_signoff_ready"] is False
+    assert caps["unsupported_reason"]
+
+
+def test_unsupported_verdict_does_not_depend_on_what_is_installed(tmp_path):
+    """Even a FULLY provisioned asap7 stays unsupported — scope outranks capability."""
+    pdir = tmp_path / "platforms" / "asap7"
+    (pdir / "drc").mkdir(parents=True)
+    (pdir / "drc" / "asap7.lydrc").write_text("# deck\n")
+    (pdir / "config.mk").write_text("export RCX_RULES = rules\nexport LIB_FILES = x.lib\n")
+    caps = pc.probe_platform(str(tmp_path), "asap7")
+    assert caps["tier"] == "unsupported"
+    assert caps["strict_signoff_ready"] is False
+
+
+def test_supported_platforms_are_unaffected(tmp_path):
+    # tmp_path has no platforms/ dir, so this takes the pre-existing 'missing_platform'
+    # early return — which carries no `tier` and must keep not carrying one. The point
+    # here is only that the SCOPE gate does not fire on a supported platform.
+    caps = pc.probe_platform(str(tmp_path), "sky130hd")
+    assert caps.get("supported") is not False
+    assert caps.get("tier") != "unsupported"
+    assert "unsupported_reason" not in caps
+
+
+def test_unsupported_reason_reads_as_the_gate_answer(monkeypatch):
+    monkeypatch.delenv("R2G_ALLOW_UNSUPPORTED_PLATFORM", raising=False)
+    assert pc.unsupported_reason("asap7")
+    assert pc.unsupported_reason("sky130hd") is None
+
+
+def test_explicit_override_lets_a_deliberate_experiment_through(monkeypatch):
+    """The escape hatch clears the gate — but the probe still reports the truth."""
+    monkeypatch.setenv("R2G_ALLOW_UNSUPPORTED_PLATFORM", "1")
+    assert pc.unsupported_reason("asap7") is None
+
+
+def test_summary_line_says_unsupported(tmp_path):
+    line = pc._summary_line(pc.probe_platform(str(tmp_path), "asap7"))
+    assert "UNSUPPORTED" in line

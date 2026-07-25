@@ -1069,6 +1069,63 @@ def _looks_like_rtl_error(detail: str) -> bool:
     return any(s.lower() in low for s in RTL_ERROR_DETAIL_SIGS)
 
 
+# Ordered category signatures, first match wins. Only the two categories that
+# `apply_other` does NOT already dispatch need to be recognised here — it handles
+# PPL-0024, FLW-0024, PDN-0179/0185, CTS crashes, exit-124 timeouts and RTL errors
+# itself, so everything else falls through to 'other' rather than duplicating that
+# dispatch table (and letting the two copies drift).
+_FAIL_CATEGORY_SIGS = (
+    ('memory_inference', ('SYNTH_MEMORY_MAX_BITS', 'is too big for the target',
+                          'Failed to detect memory', 'memory inference')),
+    ('missing_include',  ("Can't open include file", 'Cannot open include file',
+                          'cannot find include file')),
+)
+
+
+def classify_failures(results_path: Path) -> dict:
+    """Bucket every failed case in an `orfs_results.jsonl` sweep into fix categories.
+
+    This is the input the batch mode was ALWAYS documented to use — README and
+    failure-patterns.md both say the tool "classifies every failure in
+    design_cases/_batch/orfs_results.jsonl". The code, however, only ever read
+    /tmp/fail_categories.json, which NOTHING in the repo writes: the documented
+    command was dead on arrival, and the live entry points were the `--rtl-error` /
+    `--rtl-verify` escape hatches (2026-07-25). Reading the sweep's own results file
+    makes the documented invocation work as written.
+
+    Returns {category: [[case, design, detail], ...]} — the same shape
+    /tmp/fail_categories.json carries, so both paths feed one dispatcher.
+    """
+    cats: dict[str, list] = {}
+    if not results_path.exists():
+        return cats
+    for ln in results_path.read_text(errors='replace').splitlines():
+        if not ln.strip():
+            continue
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        if not str(rec.get('orfs', '')).startswith('fail'):
+            continue
+        case = rec.get('case')
+        if not case:
+            continue
+        log_path = _find_log(CASES / case)
+        detail = ''
+        if log_path is not None:
+            text = _trim_to_latest_run(log_path.read_text(errors='replace'))
+            # The tail carries the abort; keep it bounded like the RTL-error dump does.
+            detail = text[-50_000:]
+        cat = 'other'
+        for name, sigs in _FAIL_CATEGORY_SIGS:
+            if any(s.lower() in detail.lower() for s in sigs):
+                cat = name
+                break
+        cats.setdefault(cat, []).append([case, rec.get('design', ''), detail])
+    return cats
+
+
 def apply_other(entry) -> dict:
     """Dispatch 'other' category based on error signature."""
     case, _, detail = entry
@@ -1131,8 +1188,43 @@ def main():
         print(json.dumps(result, indent=2))
         return {'pass': 0, 'reject': 2, 'flag': 3}.get(result.get('status'), 1)
 
-    with open('/tmp/fail_categories.json') as f:
-        cats = json.load(f)
+    # Input resolution, in precedence order:
+    #   1. --results <path> / RESULTS_FILE  — an explicit sweep results file
+    #   2. /tmp/fail_categories.json        — a hand-built category dump (back-compat;
+    #      no tool in this repo writes it, which is why relying on it alone made the
+    #      documented `python3 tools/fix_orfs_failures.py` a no-op)
+    #   3. design_cases/_batch/orfs_results.jsonl — the sweep's own results, i.e. what
+    #      README + failure-patterns.md always said this tool reads
+    results = None
+    if len(sys.argv) >= 3 and sys.argv[1] == '--results':
+        results = Path(sys.argv[2])
+    elif os.environ.get('RESULTS_FILE'):
+        results = Path(os.environ['RESULTS_FILE'])
+
+    legacy = Path('/tmp/fail_categories.json')
+    if results is not None:
+        if not results.exists():
+            print(f'ERROR: results file not found: {results}', file=sys.stderr)
+            return 1
+        cats = classify_failures(results)
+    elif legacy.exists():
+        with open(legacy) as f:
+            cats = json.load(f)
+    else:
+        default_results = CASES / '_batch' / 'orfs_results.jsonl'
+        if not default_results.exists():
+            print(f'ERROR: no failures to classify — {default_results} does not exist.\n'
+                  f'       Produce it with a sweep first:\n'
+                  f'         bash tools/batch_orfs_only.sh 8 7200\n'
+                  f'       or point at one explicitly:\n'
+                  f'         python3 tools/fix_orfs_failures.py --results <path>',
+                  file=sys.stderr)
+            return 1
+        cats = classify_failures(default_results)
+
+    if not cats:
+        print('No failed cases to fix.')
+        return 0
 
     results = []
     for cat, entries in cats.items():
@@ -1157,6 +1249,7 @@ def main():
     by_status = Counter(r.get('status', '?') for r in results)
     print('By fix:', dict(by_fix))
     print('By status:', dict(by_status))
+    return 0
 
 
 if __name__ == '__main__':

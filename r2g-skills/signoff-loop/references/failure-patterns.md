@@ -2037,7 +2037,13 @@ those for a Verilog version of the CPU/SoC top.
 
 ## Batch-Campaign Fix Tool
 
-`tools/fix_orfs_failures.py` classifies every failure in `design_cases/_batch/orfs_results.jsonl` by scanning its log for the six signatures above, then rewrites the offending `constraints/config.mk` in place. Run it any time a batch produces failures:
+`tools/fix_orfs_failures.py` classifies every failure in `design_cases/_batch/orfs_results.jsonl`
+by scanning its log for the six signatures above, then rewrites the offending
+`constraints/config.mk` in place. (This is what the tool always CLAIMED to read; until
+2026-07-25 the code only read `/tmp/fail_categories.json`, which no tool in this repo writes —
+so the documented invocation below was a no-op. See #57. `--results <path>` selects a
+different sweep; a missing results file is now a loud non-zero exit, never silence.)
+Run it any time a batch produces failures:
 
 ```bash
 python3 tools/fix_orfs_failures.py

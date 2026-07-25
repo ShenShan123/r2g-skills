@@ -10,7 +10,8 @@ set -euo pipefail
 # Set ORFS_MAX_CPUS to limit CPU cores (default: all available).
 
 PROJECT_DIR="${1:-}"
-PLATFORM="${2:-asap7}"
+PLATFORM="${2:-sky130hd}"   # asap7 is unsupported in this version (#57); sky130hd is
+                            # the reference platform: STRICT-READY and clean-able
 # Derive FLOW_VARIANT from project directory basename to isolate ORFS work dirs
 # per project config (e.g., swerv_cfg1 vs swerv_cfg2 get separate directories).
 # This prevents directory collisions when multiple configs share the same DESIGN_NAME.
@@ -148,6 +149,30 @@ SDC_FILE="$PROJECT_DIR/constraints/constraint.sdc"
 if [[ ! -f "$CONFIG_MK" ]]; then
   echo "ERROR: config.mk not found at $CONFIG_MK" >&2
   exit 1
+fi
+
+# Product-scope gate: refuse a platform this version does not support BEFORE any ORFS
+# work. The single source of truth is platform_capability.UNSUPPORTED_PLATFORMS, so the
+# flow and the capability table can never disagree. Exit 65 == R2G_UNSUPPORTED_PLATFORM.
+# Deliberate experimentation stays available via R2G_ALLOW_UNSUPPORTED_PLATFORM=1.
+_UNSUP=$(python3 -c '
+import os, sys
+sys.path.insert(0, os.path.dirname("'"${BASH_SOURCE[0]}"'") or ".")
+try:
+    import platform_capability as pc
+except Exception:
+    sys.exit(0)                     # never block a flow on a probe import failure
+r = pc.unsupported_reason(sys.argv[1])
+print(r or "", end="")
+' "$PLATFORM" 2>/dev/null || true)
+if [[ -n "$_UNSUP" ]]; then
+  echo "ERROR: platform '$PLATFORM' is NOT SUPPORTED in this version: $_UNSUP" >&2
+  echo "       Supported: nangate45, sky130hd, sky130hs, gf180, ihp-sg13g2." >&2
+  echo "       Re-target this project with:" >&2
+  echo "         python3 tools/setup_rtl_designs.py --platform sky130hd --force" >&2
+  echo "       To experiment anyway (results are NOT sign-off quality):" >&2
+  echo "         R2G_ALLOW_UNSUPPORTED_PLATFORM=1 $0 $*" >&2
+  exit 65
 fi
 
 if [[ ! -f "$SDC_FILE" ]]; then

@@ -38,10 +38,10 @@ if [[ -f "$CONFIG_MK" ]]; then
   [[ -n "$_dn" ]] && DESIGN_NAME="$_dn"
   if [[ -z "$PLATFORM" ]]; then
     _pl=$(grep -E '^\s*(export\s+)?PLATFORM\b' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
-    PLATFORM="${_pl:-asap7}"
+    PLATFORM="${_pl:-sky130hd}"
   fi
 fi
-PLATFORM="${PLATFORM:-asap7}"
+PLATFORM="${PLATFORM:-sky130hd}"
 
 # Distinct exit code for an INVALIDATING skip (signoff-gate BLOCK) so a caller can
 # tell "not signed off" from a benign 0-exit "SKIPs cleanly" (full-pipeline #6).

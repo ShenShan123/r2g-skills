@@ -25,7 +25,7 @@ functional_requirements:
   - fill me
 timing_target: 10
 target_flow: orfs
-target_platform: asap7
+target_platform: sky130hd
 verification_targets:
   - reset behavior
 assumptions:

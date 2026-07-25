@@ -4,6 +4,65 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-25 — asap7 unsupported + the dead-corpus-root family (all skills, tools)
+
+**`asap7` is NOT SUPPORTED in this version.** This is a product-scope decision, not a
+capability gap: asap7's ORFS platform dir is present and its DRC deck resolves, so every
+installed-capability check happily awarded it `research_ready` and let campaigns spend hours
+on it. It can never reach an honest clean verdict — the community KLayout deck carries an
+irreducible false-violation floor (min ~8 on a geometrically clean design), there is no LVS
+deck at all, and the authoritative Calibre deck is not installed — and a platform that can
+never read clean can never promote a recipe, so it yields only failure evidence the learning
+loop cannot close on.
+
+- `platform_capability.UNSUPPORTED_PLATFORMS` is the single source of truth; `probe_platform`
+  short-circuits to tier `unsupported` / `strict_signoff_ready=False` **before** any capability
+  probe, so scope outranks whatever happens to be installed.
+- `run_orfs.sh` refuses an unsupported platform with **exit 65** before any ORFS work, naming
+  the remedy (`setup_rtl_designs.py --platform sky130hd --force`).
+- **The default platform moved `asap7` → `sky130hd`** in all 13 sites (`run_orfs.sh`, the six
+  signoff flow scripts, the four def-graph flow scripts, `engineer_loop --platform`,
+  `fmax_search`, `normalize_spec`). Leaving an unsupported platform as the fallback would have
+  been incoherent. `run_calibre_drc.sh` keeps its asap7 default — it IS the asap7 Calibre scaffold.
+- Deliberate experimentation stays possible via `R2G_ALLOW_UNSUPPORTED_PLATFORM=1`; the probe
+  still reports the truth, and results are not sign-off quality.
+- The abandoned asap7 round was retired to
+  `design_cases/_batch/asap7_campaign.jsonl.retired_unsupported_platform_20260725` with a README.
+  It had 710 `pending` designs whose config.mk had since been re-pointed to sky130hs — so
+  `run_orfs.sh` (which builds config.mk's PLATFORM, never the ledger's) was silently producing
+  sky130hs results under an asap7 round. **Treat "ledger platform != config.mk PLATFORM" as a
+  round-level alarm.**
+- The asap7 material in `failure-patterns.md` is deliberately KEPT — it records WHY the platform
+  behaves this way, and re-deriving it once cost a fabricated-clean incident (2026-06-30/07-01).
+
+**The dead-corpus-root defect family (failure-patterns #57).** Found by running a campaign wave
+to exercise #56's newly-wired structural gate: the wave finished in seconds with exit 0 and
+escalated 76 designs without running a single flow, while every honesty gate stayed green. The
+`agent-r2g` → `r2g-skills` rename had left dead absolute paths in four layers — ledgers (3,266
+designs), both memory DBs (130,289 rows, where `project_path` is the project IDENTITY key),
+`config.mk` (848 files / 3,639 paths, the only layer that reached the learner as 24 bogus
+`fail`/synth runs), and stage hooks (already self-healing since #39).
+
+- `Ledger.reroot_project_paths()` re-roots stale entries at every drain entrypoint;
+  `_run_flow` returns `PROJECT_INPUTS_MISSING_RC` (66) and both call sites escalate
+  `project_inputs_missing` **without ingesting** — infra absence can no longer become a symptom.
+- `run_orfs.sh` now checks that config.mk's `VERILOG_FILES`/`SDC_FILE`/`VERILOG_INCLUDE_DIRS`
+  actually EXIST (presence of the key was never presence of the files), exit 66.
+- **`tools/reroot_project_paths.py`** repairs all four layers together, discovers the old root
+  from the data, dry-runs by default, and rolls back if the honesty gates reject. Re-rooting one
+  side alone is worse than neither — it manufactured `fabricated=6/backed=0` on an unchanged corpus.
+- **GATE-P1-02** — #56's structural gate computed its verdict and discarded it: a bare `main()`
+  instead of `sys.exit(main())` meant `--rtl-verify <case> || revert` read 0 on a REJECT. Its ten
+  tests missed it because they call `main()` in-process and assert the return value, which is not
+  a process exit status. Fixed, with subprocess-level tests and an `R2G_CASES` seam.
+- **OPS-P1-01** — a `pool.env` retuned on an idle day silently overrode an explicit
+  `WORKERS=2 NUM_CORES=4` with `8x8=64` cores on a host with 9 free. It still wins (that is the
+  documented no-restart retune) but now warns per overridden key and on oversubscription.
+- `tools/fix_orfs_failures.py` batch mode now reads `design_cases/_batch/orfs_results.jsonl` —
+  the file README and failure-patterns.md always said it read. It had only ever read
+  `/tmp/fail_categories.json`, which nothing in this repo writes, so the documented command was a
+  no-op; a missing results file is now a loud non-zero exit.
+
 ## 2026-07-24 — gate-layer audit: harness fail-closed + the two untested gates (tools, signoff-loop)
 
 Swept all 37 `GC-*` gate conditions (`tools/run_v1_validation_registry.py gates` → **23/23

@@ -835,6 +835,29 @@ def parse_setup_args(argv):
 
 def main():
     force, selected, platform_override = parse_setup_args(sys.argv[1:])
+    # Scope check BEFORE touching a single config.mk. A technology re-target rewrites the
+    # WHOLE corpus, so refusing here is the difference between a one-line error and 848
+    # designs pinned to a platform that can never sign off — which is how the abandoned
+    # asap7 round came to exist (failure-patterns #57). Single source of truth:
+    # platform_capability.UNSUPPORTED_PLATFORMS.
+    if platform_override:
+        import sys as _sys
+        _sys.path.insert(0, str(BASE_DIR / "r2g-skills" / "signoff-loop"
+                                / "scripts" / "flow"))
+        try:
+            import platform_capability as _pc
+        except Exception:
+            _pc = None                       # never block on a probe import failure
+        _reason = _pc.unsupported_reason(platform_override) if _pc else None
+        if _reason:
+            print(f"ERROR: platform '{platform_override}' is NOT SUPPORTED in this "
+                  f"version: {_reason}\n"
+                  f"       Supported: nangate45, sky130hd, sky130hs, gf180, ihp-sg13g2.\n"
+                  f"       Refusing to re-target the corpus. Set "
+                  f"R2G_ALLOW_UNSUPPORTED_PLATFORM=1 to proceed anyway (results are NOT "
+                  f"sign-off quality).", file=_sys.stderr)
+            raise SystemExit(65)
+
 
     DESIGN_CASES_DIR.mkdir(parents=True, exist_ok=True)
 

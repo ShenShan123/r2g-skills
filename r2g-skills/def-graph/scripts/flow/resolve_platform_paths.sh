@@ -15,7 +15,7 @@ set -euo pipefail
 # KEY=VALUE stdout (resolve.py prints only those lines; diagnostics go to stderr).
 
 CONFIG_MK="${1:-}"
-PLATFORM="${2:-asap7}"
+PLATFORM="${2:-sky130hd}"
 
 # Absolutize CONFIG_MK now: the Make invocation inside resolve.py runs with cwd=$FLOW_DIR,
 # so a relative DESIGN_CONFIG would point at the wrong file (and silently break

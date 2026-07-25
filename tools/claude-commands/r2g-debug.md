@@ -1,5 +1,5 @@
 ---
-description: Drive an RTL→GDS sign-off campaign on an ORFS platform (default sky130hd — genuinely clean-able KLayout DRC + Netgen LVS + RCX; sky130hs equally clean-able since 2026-07-09 via the bundled sibling-DRC-deck + .lyt lefdef repairs; nangate45/asap7/gf180/ihp also work) in parallel waves, hunt r2g-skills bugs, and prove the engineer-learning-loop is closed (DRC/LVS clean where the deck allows + best Fmax + promoted recipes). Also independently VERIFIES the RTL→Graph dataset conversion across three dimensions — topology (5 PyG views b–f, HeteroData by default), feature statistics, and labels↔sign-off reports — against raw DEF/LEF/liberty/SPEF + OpenDB ground truth (opt-in PDNSim IR-drop re-run) — and AUDITS the rtl-acquire synth-only corpus supply line (flow_scope='synth_only' honesty, synth-frontend-* event parity, publish gating).
+description: Drive an RTL→GDS sign-off campaign on an ORFS platform (default sky130hd — genuinely clean-able KLayout DRC + Netgen LVS + RCX; sky130hs equally clean-able since 2026-07-09 via the bundled sibling-DRC-deck + .lyt lefdef repairs; nangate45/gf180/ihp also work) in parallel waves, hunt r2g-skills bugs, and prove the engineer-learning-loop is closed (DRC/LVS clean where the deck allows + best Fmax + promoted recipes). Also independently VERIFIES the RTL→Graph dataset conversion across three dimensions — topology (5 PyG views b–f, HeteroData by default), feature statistics, and labels↔sign-off reports — against raw DEF/LEF/liberty/SPEF + OpenDB ground truth (opt-in PDNSim IR-drop re-run) — and AUDITS the rtl-acquire synth-only corpus supply line (flow_scope='synth_only' honesty, synth-frontend-* event parity, publish gating).
 argument-hint: "[overrides, e.g. PLATFORM=sky130hd WAVE_MAX=24 WORKERS=3 NUM_CORES=4]"
 ---
 
@@ -10,7 +10,7 @@ chosen **ORFS platform**, and use it as the harness that surfaces skill bugs and
 learning loop. **Platform is the central knob** (`$ARGUMENTS`, default `sky130hd`); only the *signoff
 success contract* and a few bug leads change per platform. sky130hd is primary (clean-able DRC/LVS, so
 a clean win can **promote** a recipe); sky130hs is equally clean-able since 2026-07-09 (footnote ³ —
-verify its two bundled repairs each round); nangate45/asap7/gf180/ihp also work.
+verify its two bundled repairs each round); nangate45/gf180/ihp also work.
 
 **Mission (one connected goal):** (1) run all designs through the `$PLATFORM` flow on the *freshly
 symlink-deployed* skill; (2) batch into waves, parallel but not oversubscribed; (3) drive each design to
@@ -49,13 +49,13 @@ on a deck-less platform would mislabel every clean design.
 | nangate45      | Yes (KLayout)  | Yes (KLayout)    | Yes | GDS + DRC clean + LVS clean + RCX |
 | sky130hs       | Yes (KLayout²³)| Yes (Netgen³)    | Yes | GDS + DRC clean + LVS clean + RCX — clean-able ⇒ promotable (VERIFY the two bundled repairs³) |
 | gf180/ihp      | Yes (KLayout)  | Yes (KLayout)    | Yes | GDS + DRC clean + LVS clean + RCX |
-| asap7          | Yes¹ (KLayout) | No (skipped)     | Yes | GDS + **DRC run w/ honest residual floor (NOT clean-able)** + RCX; `lvs=skipped` is honest-clean |
 
-¹ **asap7 KLayout DRC is NOT clean-able** — the community deck has an irreducible false-violation floor
-(min ~8; e.g. traffic_control=25). "No asap7 DRC-clean / no asap7 promotion" is **honest platform truth,
-not a bug** (chasing it spawned the 2026-06-30/07-01 fabricated-clean bug). The authoritative deck is
-Calibre (not installed — guarded scaffold `run_calibre_drc.sh`/`extract_calibre_drc.py`; runbook
-`references/calibre-signoff.md`). See failure-patterns.md "ASAP7 residual-DRC-by-design".
+¹ **`asap7` is NOT SUPPORTED in this version** — `run_orfs.sh` refuses it with exit 65 and the
+capability probe reports tier `unsupported`. It could never reach a clean verdict (community deck
+has an irreducible false-violation floor, no LVS deck, Calibre not installed), so it could never
+promote a recipe. Do NOT open an asap7 round; re-target with `setup_rtl_designs.py --platform
+sky130hd --force`. The historical asap7 notes in failure-patterns.md are kept as the record of WHY
+(chasing an asap7 clean caused the 2026-06-30/07-01 fabricated-clean bug).
 
 ² **sky130 DRC gate = KLayout, not Magic** (2026-07-02, cd33f62+00351d8). Full-chip Magic reports ~4777
 std-cell-internal artifacts on a KLayout-clean design → never the gate; it runs as a non-fatal advisory
@@ -75,7 +75,7 @@ files `status:"error"` ("GDS lost DEF geometry"), never a design `mismatch`.
 **Env, per platform:** sky130hd needs yosys/openroad/ORFS + **KLayout + magic + netgen-lvs + sky130A
 PDK** all green (pinned in `references/env.local.sh`; a red row **blocks** signoff — else DRC/LVS falsely
 *skip* and teach a lie). LVS on sky130 is **Netgen, not KLayout** (wrong-tool = 12/12 false-fail,
-2026-06-17). asap7 needs only KLayout (magic/netgen absent is fine). Sizing is `CORE_UTILIZATION`-based
+2026-06-17). Sizing is `CORE_UTILIZATION`-based
 everywhere, so per-design configs port across platforms (absolute areas/periods differ).
 
 ## Ground truth — read first, they OVERRIDE priors
@@ -240,7 +240,6 @@ linkage, `L1/L2/L3` per-move, `K3` per-platform stall). Each below is a *lead* �
 - **A move in only ONE book** (`J2`/`L1`/`L2`/`J4`) — DBs disagree. `J2` (run + actions, zero back-filled `run_id`) is ALARM; the rest WARN (journal is best-effort).
 - **Misclassified aborts** — diagnose the true reason from the stage log first (early synth abort filed `unseen_crash`; FLW-0024 die-too-small filed as place divergence).
 - **sky130 `lvs=fail`** — check the *tool* first (KLayout-on-sky130 = 100% false-fail) and the match-then-writer-crash class; read the netgen **Final result** line, not intermediate "match uniquely" lines (2026-07-03).
-- **asap7 `lvs=fail`** — must be `skipped` (no LVS deck); marking incomplete/fail on missing LVS is a misclassification.
 - **sky130hs DRC `no_count_report` with `exit_code=0` across a wave** — a *phantom symptom generator*, infra absence not design failure (#32): ORFS's "DRC not supported" echo. Verify `run_drc.sh` resolved the sibling `sky130hd.lydrc` (a missing sibling deck WARNs loudly + keeps the loud no_count_report path, never a silent skip). Pre-fix waves burned `recheck_unparsed → catalog_exhausted` escalations on violations that never existed — requeue those, don't chase them.
 - **sky130hs `lvs=fail` `top_pin_mismatch` with `mismatch_count=null` across the board** — the `.lyt` lefdef regression dropped ALL DEF geometry from the GDS (#33): `python3 tools/patch_sky130hs_lyt.py --check` (exit 2 = unpatched — re-patch, re-merge, re-LVS). The portless-SPICE guard must file `status:"error"`, never teach the learner a design `mismatch`.
 - **Fabricated `clean` from STALE artifacts** (2026-06-30/07-01, worst mode) — `honesty.py` does NOT catch it. Guarded by mtime freshness → `stale` (fail-closed). Invariant: `SELECT COUNT(*) FROM runs WHERE drc_status='stale' OR lvs_status='stale'` MUST be 0; spot-check a clean's `6_drc_count.rpt`/`6_lvs.lvsdb` is NEWER than its `*_run.log`. On asap7, ANY `drc/lvs_status='clean'` is an ALARM by construction (MUST be 0).

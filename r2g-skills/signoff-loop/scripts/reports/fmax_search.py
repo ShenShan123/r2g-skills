@@ -354,7 +354,7 @@ def main() -> int:
     _add_paths()
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("project", type=Path)
-    p.add_argument("platform", nargs="?", default="asap7")
+    p.add_argument("platform", nargs="?", default="sky130hd")
     p.add_argument("--verify", action="store_true",
                    help="Run one full signoff flow at the winning period.")
     p.add_argument("--keep-variants", action="store_true")

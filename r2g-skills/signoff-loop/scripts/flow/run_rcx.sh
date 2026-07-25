@@ -7,7 +7,7 @@ set -euo pipefail
 # Results are collected into <project-dir>/rcx/
 
 PROJECT_DIR="${1:-}"
-PLATFORM="${2:-asap7}"
+PLATFORM="${2:-sky130hd}"
 # Derive FLOW_VARIANT from project directory basename (matching run_orfs.sh logic)
 if [[ -n "${3:-}" ]]; then
   FLOW_VARIANT="$3"

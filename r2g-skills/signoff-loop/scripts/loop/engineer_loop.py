@@ -2670,7 +2670,7 @@ def main(argv=None) -> int:
     pa = sub.add_parser("add")
     pa.add_argument("--ledger", required=True, type=Path)
     pa.add_argument("--project", required=True)
-    pa.add_argument("--platform", default="asap7")
+    pa.add_argument("--platform", default="sky130hd")
     ps = sub.add_parser("status")
     ps.add_argument("--ledger", required=True, type=Path)
     pd = sub.add_parser("ab-drain", help="fire A/B trials for pending candidates")

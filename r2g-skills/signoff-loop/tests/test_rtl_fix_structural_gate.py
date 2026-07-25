@@ -248,3 +248,55 @@ def test_context_dump_still_exits_zero_when_structure_is_preserved(case, monkeyp
     _write_log(case, "ERROR: syntax error in widget.v:3\n")
     assert _cli(monkeypatch, ["--rtl-error", "widget"]) == 0   # iteration 1
     assert _cli(monkeypatch, ["--rtl-error", "widget"]) == 0   # iteration 2, unchanged RTL
+
+
+# --------------------------------------------------------------------------- #
+# batch mode: the DOCUMENTED invocation must actually do something            #
+# --------------------------------------------------------------------------- #
+# README and failure-patterns.md both say `python3 tools/fix_orfs_failures.py`
+# "classifies every failure in design_cases/_batch/orfs_results.jsonl". The code only
+# ever read /tmp/fail_categories.json — which nothing in this repo writes — so the
+# documented command was dead on arrival (2026-07-25).
+def _sweep(cases_root, records):
+    batch = cases_root / "_batch"
+    batch.mkdir(parents=True, exist_ok=True)
+    (batch / "orfs_results.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in records))
+    return batch / "orfs_results.jsonl"
+
+
+def test_classifies_failures_from_the_sweep_results_file(case):
+    cases_root = case.parent
+    _write_log(case, "ERROR: syntax error in widget.v:3\n")
+    results = _sweep(cases_root, [
+        {"case": "widget", "design": "widget", "orfs": "fail(2)"},
+        {"case": "widget", "design": "widget", "orfs": "pass"},   # must be ignored
+    ])
+    cats = fox.classify_failures(results)
+    assert "other" in cats, cats                  # RTL errors dispatch via apply_other
+    assert [e[0] for e in cats["other"]] == ["widget"]
+    assert "syntax error" in cats["other"][0][2]
+
+
+def test_passing_and_skipped_cases_are_not_classified(case):
+    results = _sweep(case.parent, [
+        {"case": "widget", "orfs": "pass"},
+        {"case": "widget", "status": "skip", "reason": "no config.mk"},
+    ])
+    assert fox.classify_failures(results) == {}
+
+
+def test_memory_and_include_categories_are_recognised(case):
+    cases_root = case.parent
+    _write_log(case, "ERROR: Memory bank is too big for the target SYNTH_MEMORY_MAX_BITS\n")
+    results = _sweep(cases_root, [{"case": "widget", "orfs": "fail(2)"}])
+    assert "memory_inference" in fox.classify_failures(results)
+
+    _write_log(case, "ERROR: Can't open include file `defs.vh'\n")
+    assert "missing_include" in fox.classify_failures(results)
+
+
+def test_batch_mode_without_a_sweep_fails_loudly_not_silently(case, monkeypatch, tmp_path):
+    """No results file must be a clear error naming the fix — never a silent no-op."""
+    monkeypatch.setattr(fox, "CASES", tmp_path / "empty_cases")
+    assert _cli(monkeypatch, []) == 1

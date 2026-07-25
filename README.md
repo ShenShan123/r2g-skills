@@ -603,13 +603,26 @@ python3 tools/setup_rtl_designs.py
 bash tools/batch_orfs_only.sh 8 7200
 
 # 3. Classify failures and rewrite config.mk automatically
+#    Reads the sweep's own results file (design_cases/_batch/orfs_results.jsonl)
 python3 tools/fix_orfs_failures.py
+# ...or point it at a different sweep:
+python3 tools/fix_orfs_failures.py --results /path/to/orfs_results.jsonl
 
 # 4. Retry failures
 DESIGNS_LIST=failed.txt bash tools/batch_orfs_only.sh 8 7200
 ```
 
 `fix_orfs_failures.py` handles six failure patterns: wrong top module, `SYNTH_MEMORY_MAX_BITS` overflow, IO pin overflow, place density overflow, PDN strap width, and stage timeout. Full catalog: `r2g-skills/signoff-loop/references/failure-patterns.md`.
+
+It classifies straight from step 2's `orfs_results.jsonl`, so run a sweep first — with no results file it exits non-zero and tells you so rather than silently doing nothing. (Until 2026-07-25 it only read `/tmp/fail_categories.json`, a file nothing in this repo writes, which made the command above a no-op; see failure-patterns.md #57.)
+
+**Structural gate.** RTL-level failures route to a detect-and-dump handler that also runs the anti-hollowing-out check — it fingerprints the design on the first iteration and, on every later one, verifies the edit still describes the same design instead of one gutted until the tool stopped complaining. **The exit code is the verdict**, so it composes:
+
+```bash
+# 0 = structure preserved · 2 = REJECT (revert) · 3 = flag · 1 = error/no baseline
+python3 tools/fix_orfs_failures.py --rtl-verify <case> || git checkout -- design_cases/<case>/rtl
+python3 tools/fix_orfs_failures.py --rtl-error  <case>   # dump context; also exits 2 on a reject
+```
 
 ---
 
@@ -620,9 +633,15 @@ DESIGNS_LIST=failed.txt bash tools/batch_orfs_only.sh 8 7200
 | `nangate45` | yes | yes | — | — | yes |
 | `sky130hd` | yes | yes | yes | yes | yes |
 | `sky130hs` | yes | yes | yes | yes | yes |
-| `asap7` | yes | — | — | — | yes |
 | `gf180` | yes | yes | — | — | yes |
 | `ihp-sg13g2` | yes | yes | — | — | yes |
+
+**`asap7` is not supported in this version.** `run_orfs.sh` refuses it with exit 65 and the
+capability probe reports tier `unsupported`: its community KLayout deck has an irreducible
+false-violation floor, it has no LVS deck, and the authoritative Calibre deck is not
+installed — so it can never reach a clean verdict, and a platform that can never read clean
+can never promote a recipe. Set `R2G_ALLOW_UNSUPPORTED_PLATFORM=1` to experiment anyway
+(results are NOT sign-off quality).
 
 LVS gracefully skips for platforms without `.lylvs` rules (reports `status: "skipped"`).
 

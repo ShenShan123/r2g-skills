@@ -42,10 +42,10 @@ if [[ -f "$CONFIG_MK" ]]; then
   [[ -n "$_dn" ]] && DESIGN_NAME="$_dn"
   if [[ -z "$PLATFORM" ]]; then
     _pl=$(grep -E '^\s*(export\s+)?PLATFORM\b' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
-    PLATFORM="${_pl:-asap7}"
+    PLATFORM="${_pl:-sky130hd}"
   fi
 fi
-PLATFORM="${PLATFORM:-asap7}"
+PLATFORM="${PLATFORM:-sky130hd}"
 
 # --- Locate the collected 6_final.{odb,def} --------------------------------
 # Override via the namespaced R2G_DEF / R2G_ODB only (NOT the bare ORFS DEF_FILE):

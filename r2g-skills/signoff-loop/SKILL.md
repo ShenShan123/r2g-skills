@@ -20,7 +20,8 @@ metadata:
   warnings:
     - Core skill operations are file-based and safe
     - Backend runs invoke make inside ORFS and may take several minutes
-    - Default platform is asap7; change PLATFORM in config.mk for other PDKs
+    - Default platform is sky130hd; change PLATFORM in config.mk for other PDKs
+    - asap7 is NOT SUPPORTED in this version — run_orfs.sh refuses it (exit 65)
     - DRC uses KLayout (all platforms) or Magic (sky130 only); LVS uses KLayout or Netgen (sky130 only)
     - RCX uses OpenRCX via OpenROAD
     - LVS/DRC gracefully skip when rules are absent for a platform
@@ -72,7 +73,16 @@ cp references/env.local.sh.template references/env.local.sh
 
 ### Available platforms
 
-`nangate45`, `sky130hd`, `sky130hs`, `asap7`, `gf180`, `ihp-sg13g2` (default: `asap7`).
+`nangate45`, `sky130hd`, `sky130hs`, `gf180`, `ihp-sg13g2` (default: `sky130hd`).
+
+**`asap7` is NOT SUPPORTED in this version.** `run_orfs.sh` refuses it before any ORFS work
+with exit 65, and `platform_capability.py` reports tier `unsupported` regardless of what is
+installed. The reason is that it cannot reach an honest clean verdict: the community KLayout
+deck carries an irreducible false-violation floor (min ~8 on a geometrically clean design),
+there is no LVS deck at all, and the authoritative Calibre deck is not installed here. A
+platform that can never read clean can never promote a recipe, so it yields only failure
+evidence the learning loop cannot close on. Deliberate experimentation:
+`R2G_ALLOW_UNSUPPORTED_PLATFORM=1` — results are NOT sign-off quality.
 
 ## Workflow
 
@@ -316,7 +326,6 @@ queries (`observe.py trace`) and the full safety-invariant list.
 | nangate45 | Yes | Yes | No | No | Yes |
 | sky130hd | Yes | Yes | Yes | Yes | Yes |
 | sky130hs | Yes¹ | Yes | Yes | Yes² | Yes |
-| asap7 | Yes | No | No | No | Yes |
 | gf180 | Yes | Yes | No | No | Yes |
 | ihp-sg13g2 | Yes | Yes | No | No | Yes |
 

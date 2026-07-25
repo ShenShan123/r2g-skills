@@ -143,9 +143,55 @@ def _read(path: str | None) -> str | None:
         return None
 
 
+# Platforms this VERSION does not support, regardless of what is installed. This is a
+# product-scope decision, not a capability probe: asap7's ORFS platform dir is present
+# and its DRC deck resolves, so every installed-capability check would happily award it
+# `research_ready` and let a campaign spend hours on a platform we do not stand behind.
+#
+# asap7 (2026-07-25): the community KLayout deck has an irreducible false-violation floor
+# (min ~8 violations on a geometrically clean design), so DRC can never read clean; there
+# is no LVS deck at all; and the authoritative sign-off deck is Calibre, which is not
+# installed here (see references/calibre-signoff.md for the guarded scaffold). A platform
+# that cannot reach a clean verdict cannot promote a recipe, so it produces failure
+# evidence the learning loop can never close on.
+#
+# The historical asap7 material in failure-patterns.md is deliberately KEPT — it records
+# WHY this platform behaves the way it does, and re-deriving that cost a documented
+# fabricated-clean incident (2026-06-30/07-01).
+UNSUPPORTED_PLATFORMS = {
+    "asap7": "no clean-able DRC (community deck has an irreducible false-violation "
+             "floor), no LVS deck, and the authoritative Calibre deck is not installed",
+}
+
+# Escape hatch, in the same spirit as R2G_SIGNOFF_GATE: deliberate experimentation stays
+# possible, but it must be an explicit act, and the tier still reports `unsupported`.
+_ALLOW_UNSUPPORTED_ENV = "R2G_ALLOW_UNSUPPORTED_PLATFORM"
+
+
+def unsupported_reason(platform: str) -> str | None:
+    """Why `platform` is unsupported in this version, or None if it is supported.
+
+    Honours the escape hatch: with R2G_ALLOW_UNSUPPORTED_PLATFORM=1 this returns None so
+    callers proceed, while `probe_platform` still records the platform as unsupported.
+    """
+    if os.environ.get(_ALLOW_UNSUPPORTED_ENV) == "1":
+        return None
+    return UNSUPPORTED_PLATFORMS.get(platform)
+
+
 def probe_platform(flow_dir: str, platform: str) -> dict:
     pdir = os.path.join(flow_dir, "platforms", platform)
     caps: dict = {"platform": platform, "platform_dir": pdir}
+    # Scope check BEFORE capability: an unsupported platform is never strict-ready no
+    # matter how complete its install, and saying so first keeps the reason honest
+    # ("we don't support this") instead of a misleading capability gap.
+    if platform in UNSUPPORTED_PLATFORMS:
+        caps.update(supported=False,
+                    unsupported_reason=UNSUPPORTED_PLATFORMS[platform],
+                    tier="unsupported", strict_signoff_ready=False,
+                    missing=["unsupported_platform"])
+        return caps
+    caps["supported"] = True
     cfg = _read(os.path.join(pdir, "config.mk"))
     if cfg is None:
         caps.update(status="missing_platform", strict_signoff_ready=False,
@@ -283,6 +329,9 @@ def antenna_repair_usable(platform: str, flow_dir: str | None = None):
 
 
 def _summary_line(caps: dict) -> str:
+    if caps.get("supported") is False:
+        return (f"{caps['platform']:<12} UNSUPPORTED in this version "
+                f"({caps.get('unsupported_reason', '')})")
     if caps.get("status") == "missing_platform":
         return f"{caps['platform']:<12} MISSING platform dir"
     flags = " ".join(

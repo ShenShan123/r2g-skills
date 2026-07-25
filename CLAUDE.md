@@ -117,7 +117,11 @@ in `check_env.sh` (enables real sky130 Magic DRC + Netgen LVS).
 The graph-stage torch venv is at `/proj/workarea/user5/pyenvs/rtl2graph` (torch 2.12.1+cpu, PyG 2.8.0,
 pandas, pytest) — point `R2G_GRAPH_PYTHON` at its `bin/python`. Install recipe in `README.md`.
 **Never install large packages into `$HOME` (full) — use `/proj`.** Platforms in this checkout:
-`asap7` (default), `nangate45`, `sky130hd`, `sky130hs`, `gf180`, `ihp-sg13g2`. The nangate45 LVS rule is
+`nangate45`, `sky130hd` (default), `sky130hs`, `gf180`, `ihp-sg13g2`. **`asap7` is NOT SUPPORTED in
+this version** — `run_orfs.sh` refuses it (exit 65) and `platform_capability.py` reports tier
+`unsupported`; it can never read DRC-clean (irreducible false-violation floor, no LVS deck, Calibre
+not installed), so it can never promote a recipe. Override for experiments only:
+`R2G_ALLOW_UNSUPPORTED_PLATFORM=1`. The nangate45 LVS rule is
 bundled (`tools/install_nangate45_lvs.sh`).
 
 ## Hard Rules (skill-level)

@@ -91,3 +91,45 @@ def test_multi_file_verilog_list_checks_every_entry(tmp_path):
     r = _run(proj)
     assert r.returncode == INPUTS_MISSING_RC
     assert dead in r.stderr
+
+
+# --------------------------------------------------------------------------- #
+# unsupported platform: refuse BEFORE any ORFS work                           #
+# --------------------------------------------------------------------------- #
+UNSUPPORTED_RC = 65
+
+
+def test_unsupported_platform_is_refused_before_orfs_runs(tmp_path):
+    """asap7 is out of scope in this version — the flow must not start at all."""
+    proj = _project(tmp_path, str(tmp_path / "proj" / "rtl" / "widget.v"))
+    env = dict(os.environ)
+    env["R2G_SKIP_WORKSPACE_LOCK"] = "1"
+    env.pop("R2G_ALLOW_UNSUPPORTED_PLATFORM", None)
+    r = subprocess.run(["bash", str(RUN_ORFS), str(proj), "asap7"],
+                       cwd=REPO, env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == UNSUPPORTED_RC, (
+        f"expected {UNSUPPORTED_RC}, got {r.returncode}: {r.stderr[-800:]}")
+    assert "NOT SUPPORTED" in r.stderr
+    # the operator must be told what to do instead, not just what is refused
+    assert "setup_rtl_designs.py" in r.stderr
+    assert "R2G_ALLOW_UNSUPPORTED_PLATFORM=1" in r.stderr
+
+
+def test_supported_platform_passes_the_scope_gate(tmp_path):
+    proj = _project(tmp_path, str(tmp_path / "proj" / "rtl" / "widget.v"))
+    env = dict(os.environ)
+    env["R2G_SKIP_WORKSPACE_LOCK"] = "1"
+    r = subprocess.run(["bash", str(RUN_ORFS), str(proj), "sky130hd"],
+                       cwd=REPO, env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode != UNSUPPORTED_RC, r.stderr[-800:]
+
+
+def test_explicit_override_clears_the_scope_gate(tmp_path):
+    """A deliberate experiment must remain possible — it just has to be explicit."""
+    proj = _project(tmp_path, str(tmp_path / "proj" / "rtl" / "widget.v"))
+    env = dict(os.environ)
+    env["R2G_SKIP_WORKSPACE_LOCK"] = "1"
+    env["R2G_ALLOW_UNSUPPORTED_PLATFORM"] = "1"
+    r = subprocess.run(["bash", str(RUN_ORFS), str(proj), "asap7"],
+                       cwd=REPO, env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode != UNSUPPORTED_RC, r.stderr[-800:]

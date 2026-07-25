@@ -72,6 +72,30 @@ def build(platform: str, design_cases: Path, *, exclude_arms: bool = True):
     return rows, skipped
 
 
+def _refuse_unsupported_platform(platform: str) -> None:
+    """Refuse a platform this version does not support, at the point of ENTRY.
+
+    The flow-level gate in run_orfs.sh already blocks the build, but by then an operator
+    has re-targeted a whole corpus or enumerated a 700-design ledger for a round that can
+    never sign off — which is exactly how the abandoned asap7 round came to exist
+    (failure-patterns #57). Single source of truth: platform_capability.
+    """
+    import os, sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]
+                           / "r2g-skills" / "signoff-loop" / "scripts" / "flow"))
+    try:
+        import platform_capability as pc
+    except Exception:
+        return                       # never block on a probe import failure
+    reason = pc.unsupported_reason(platform)
+    if reason:
+        print(f"ERROR: platform '{platform}' is NOT SUPPORTED in this version: {reason}\n"
+              f"       Supported: nangate45, sky130hd, sky130hs, gf180, ihp-sg13g2.\n"
+              f"       Set R2G_ALLOW_UNSUPPORTED_PLATFORM=1 to proceed anyway "
+              f"(results are NOT sign-off quality).", file=sys.stderr)
+        raise SystemExit(65)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -88,6 +112,10 @@ def main(argv=None):
     ap.add_argument("--force", action="store_true",
                     help="overwrite --out if it already exists")
     args = ap.parse_args(argv)
+    # Scope check FIRST: refuse before enumerating, so an unsupported round is never
+    # created. Otherwise the operator's next error is a confusing "0 projects configured"
+    # that reads like a setup mistake rather than "we don't support this platform".
+    _refuse_unsupported_platform(args.platform)
 
     if args.out.exists() and not args.force:
         print(f"ERROR: {args.out} exists. Pass --force to overwrite, or pick a new "

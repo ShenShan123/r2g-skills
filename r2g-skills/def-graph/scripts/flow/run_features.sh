@@ -43,10 +43,10 @@ if [[ -f "$CONFIG_MK" ]]; then
   [[ -n "$_dn" ]] && DESIGN_NAME="$_dn"
   if [[ -z "$PLATFORM" ]]; then
     _pl=$(grep -E '^\s*(export\s+)?PLATFORM\b' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
-    PLATFORM="${_pl:-asap7}"
+    PLATFORM="${_pl:-sky130hd}"
   fi
 fi
-PLATFORM="${PLATFORM:-asap7}"
+PLATFORM="${PLATFORM:-sky130hd}"
 
 # --- Locate the collected 6_final.def (same artifact run_labels.sh uses) ---
 # Override via the namespaced R2G_DEF only (NOT the bare ORFS variable DEF_FILE, which an
