@@ -226,10 +226,14 @@ def main():
         # plus the strong-provenance fields run_drc.sh records (RMD-P0-02): the
         # run tag, exact layout/deck digests, and checker toolchain — the
         # def-graph gate matches gds_sha256 against the layout it publishes.
+        # LIM-HO-01: the scale/telemetry quad (cell_count, gds_bytes, wall_s,
+        # peak_rss_kb) must reach reports/drc.json — a stuck full-deck run is
+        # only characterizable if the verdict carries its size and cost.
         for k in ('stuck_at_rule', 'reason', 'timeout_s', 'exit_code', 'note', 'drc_mode',
                   'checker', 'run_tag', 'gds_path', 'gds_sha256',
                   'deck_path', 'deck_sha256', 'klayout_version',
-                  'started_at', 'ended_at'):
+                  'started_at', 'ended_at',
+                  'cell_count', 'gds_bytes', 'wall_s', 'peak_rss_kb'):
             if k in drc_result and k not in result:
                 result[k] = drc_result[k]
 

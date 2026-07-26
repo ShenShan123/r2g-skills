@@ -35,10 +35,12 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 
 # Deliberate sibling deck borrows (NEVER generic): sky130hs uses the sky130hd
@@ -67,16 +69,66 @@ def _lyt_modern(platform_dir: str, platform: str) -> bool | None:
             and "<produce-special-routing>" in text)
 
 
-def find_flow_dir(explicit: str | None = None) -> str | None:
-    """ORFS flow dir: explicit arg > $FLOW_DIR > $ORFS_ROOT/flow > common roots."""
-    for cand in (explicit, os.environ.get("FLOW_DIR"),
-                 os.path.join(os.environ.get("ORFS_ROOT", ""), "flow")
-                 if os.environ.get("ORFS_ROOT") else None,
+def find_flow_dir(explicit: str | None = None,
+                  env: dict | None = None) -> str | None:
+    """ORFS flow dir: explicit arg > $FLOW_DIR > $ORFS_ROOT/flow > common roots.
+    `env` overrides the environment consulted (RMD3-P1-02: a resolved signoff
+    env, not necessarily the ambient one)."""
+    e = os.environ if env is None else env
+    for cand in (explicit, e.get("FLOW_DIR"),
+                 os.path.join(e.get("ORFS_ROOT", ""), "flow")
+                 if e.get("ORFS_ROOT") else None,
                  os.path.expanduser("~/OpenROAD-flow-scripts/flow"),
                  "/opt/OpenROAD-flow-scripts/flow"):
         if cand and os.path.isdir(os.path.join(cand, "platforms")):
             return os.path.realpath(cand)
     return None
+
+
+# The signoff-relevant environment: what the child DRC/LVS/RCX checkers actually
+# resolve via _env.sh (+ references/env.local.sh). PATH rides along because the
+# `_which` fallbacks consult it.
+_SIGNOFF_ENV_KEYS = ("ORFS_ROOT", "FLOW_DIR", "PDK_ROOT", "MAGIC_EXE",
+                     "NETGEN_EXE", "KLAYOUT_CMD", "OPENROAD_EXE", "YOSYS_EXE",
+                     "PATH")
+
+
+def resolve_signoff_env(timeout: int = 90) -> dict | None:
+    """Resolve the canonical signoff environment by sourcing the SAME _env.sh the
+    child DRC/LVS scripts source (RMD3-P1-02, failure-patterns.md #58).
+
+    The 2026-07-24/26 pilots produced manifests whose platform_capability said
+    `missing=["lvs"]` while Netgen LVS evidence in the SAME manifest was clean:
+    the parent entrypoints probed capability against the ambient environment,
+    while every child check resolved tools/PDK through _env.sh. Capability
+    metadata must be generated from the environment the checks executed under —
+    this returns that environment ({key: value}, unset keys omitted), or None
+    when resolution fails (callers fall back to ambient and record the source).
+    """
+    env_sh = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_env.sh")
+    if not os.path.isfile(env_sh):
+        return None
+    keys = ",".join(_SIGNOFF_ENV_KEYS)
+    script = (f"source '{env_sh}' >/dev/null 2>&1 || exit 3\n"
+              f"python3 -c 'import json,os; keys=\"{keys}\".split(\",\"); "
+              f"print(json.dumps({{k: os.environ.get(k) for k in keys}}))'")
+    try:
+        out = subprocess.run(["bash", "-c", script], capture_output=True,
+                             text=True, timeout=timeout)
+        if out.returncode != 0 or not out.stdout.strip():
+            return None
+        data = json.loads(out.stdout.strip().splitlines()[-1])
+        return {k: v for k, v in data.items() if v}
+    except Exception:
+        return None
+
+
+def signoff_env_digest(env: dict) -> str:
+    """Stable digest of the signoff-relevant environment (PATH excluded: it is
+    session noise; the RESOLVED tool paths are what bind the verdict)."""
+    material = {k: env.get(k) for k in _SIGNOFF_ENV_KEYS if k != "PATH"}
+    return hashlib.sha256(
+        json.dumps(material, sort_keys=True).encode()).hexdigest()
 
 
 def _mk_var(text: str, key: str) -> str | None:
@@ -122,12 +174,13 @@ def find_antenna_diodes(sc_lef_text: str) -> list[tuple[str, float | None]]:
     return diodes
 
 
-def _which(env_key: str, *names: str) -> str | None:
-    exe = os.environ.get(env_key)
+def _which(env_key: str, *names: str, env: dict | None = None) -> str | None:
+    e = os.environ if env is None else env
+    exe = e.get(env_key)
     if exe and os.access(exe, os.X_OK):
         return exe
     for name in names:
-        found = shutil.which(name)
+        found = shutil.which(name, path=e.get("PATH", os.defpath))
         if found:
             return found
     return None
@@ -179,7 +232,13 @@ def unsupported_reason(platform: str) -> str | None:
     return UNSUPPORTED_PLATFORMS.get(platform)
 
 
-def probe_platform(flow_dir: str, platform: str) -> dict:
+def probe_platform(flow_dir: str, platform: str,
+                   env: dict | None = None) -> dict:
+    """`env` (RMD3-P1-02): the environment to probe tool/PDK capability against —
+    pass the resolve_signoff_env() result so the metadata describes the SAME
+    environment the child checks executed under; default is ambient (legacy
+    callers that already sourced _env.sh themselves)."""
+    e = os.environ if env is None else env
     pdir = os.path.join(flow_dir, "platforms", platform)
     caps: dict = {"platform": platform, "platform_dir": pdir}
     # Scope check BEFORE capability: an unsupported platform is never strict-ready no
@@ -213,9 +272,9 @@ def probe_platform(flow_dir: str, platform: str) -> dict:
 
     # --- LVS path (mirrors fix_signoff.sh's engine selection) ------------
     if platform.startswith("sky130"):
-        magic = _which("MAGIC_EXE", "magic")
-        netgen = _which("NETGEN_EXE", "netgen", "netgen-lvs")
-        pdk = os.environ.get("PDK_ROOT") or ""
+        magic = _which("MAGIC_EXE", "magic", env=e)
+        netgen = _which("NETGEN_EXE", "netgen", "netgen-lvs", env=e)
+        pdk = e.get("PDK_ROOT") or ""
         tech = os.path.join(pdk, "sky130A", "libs.tech", "magic", "sky130A.tech")
         setup = os.path.join(pdk, "sky130A", "libs.tech", "netgen", "sky130A_setup.tcl")
         ok = bool(magic and netgen and os.path.isfile(tech) and os.path.isfile(setup))

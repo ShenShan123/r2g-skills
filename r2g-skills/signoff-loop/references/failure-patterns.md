@@ -5384,3 +5384,99 @@ into the artifact it is testing on is not isolated.*
 *Generalizable rule: an override mechanism that outranks the operator must say so. "Documented
 precedence" is not the same as "visible precedence", and on shared infrastructure the gap between
 them is measured in other people's jobs.*
+
+## Three-Platform Pilot + Held-Out Failures (2026-07-24/26 — failure-patterns #58)
+
+The fixed four-design pilot (2026-07-24/25, commit 74a0113) and the held-out
+four-design campaign (2026-07-26: PicoRV32, AES, SERV, ChaCha) together confirmed
+three production defects — one P0 learning-safety, two P1 consistency. Both P1s
+reproduced identically across cohorts: the signature of consumers re-deriving a
+shared fact independently, not of a design-specific bug. Plans:
+`docs/superpowers/plans/2026-07-25-three-platform-{pilot-analysis,remediation-plan}-74a0113.md`
+and `docs/superpowers/plans/2026-07-26-heldout-generalization-{analysis,remediation-plan}.md`.
+
+### RMD3-P0-01 — a globally regressive live repair learned as a win
+On sky130hs SHA-256, `density_relief` improved its TARGET check (DRC 10→8) while
+the reflow regressed route 0→32 and broke LVS (`top_pin_mismatch`) — and
+`fix_signoff.sh` recorded `verdict="applied"`, which `ingest_run.py` maps to
+`win`. The publication gate correctly blocked the design, but the LEARNING path
+still banked positive recipe evidence for an intervention that made the design
+globally worse. Root cause: the live loop compared only the target check's
+count, while the A/B judge already enforced a global non-regression veto
+(`_ab_global_regression`) — two different definitions of "win" in one system.
+**Guards:** `knowledge/result_vector.py` is now the ONE comparator for both
+paths: `capture()` snapshots a versioned global result vector (orfs/route/drc/
+lvs/timing/rcx + the protected clock constraint), each signal BOUND to the
+layout it graded (`run_tag`/`gds_sha256` — stale evidence is reported as
+unknown, never guessed); `compare()` fires only on a measured fresh good→bad
+flip. `fix_signoff.sh` snapshots config.mk + the pre-vector before every
+reflow, refreshes the cheap evidence (route/ppa/timing) after the recheck, and
+on a measured regression overrides the verdict to `regression`, REVERTS the
+config edit, and quarantines the evidence (`reports/global_regression_it<N>.json`).
+A session-end reconciliation (`reports/fix_session_compare.json`) catches
+cross-check damage only measurable later (e.g. a DRC-phase reflow that broke
+LVS, discovered when the lvs phase re-graded); the ingester downgrades that
+session's unexplained win/cleared reflow events to `inconclusive` — but never
+erases wins whose regression a live row already explains (the #44 lost-wins
+lesson), and never touches an event whose own check fought the regression.
+The A/B judge now delegates to `result_vector.compare_status_rows` /
+`new_class_regression`, so live repair and A/B judgment can never diverge again.
+Tests: `tests/test_result_vector.py` (incl. the sky130hs replay acceptance).
+
+*Generalizable rule: a repair loop may only claim the scope it re-measured. A
+target-local improvement test silently defines "win" as "made MY number better",
+and the learner will faithfully amplify that definition across every design.*
+
+### RMD3-P1-01 — resumed-flow completion with conflicting consumer semantics
+A digest-verified FROM_STAGE resume (fixed pilot: sky130hs SHA-256; held-out:
+sky130hs AES `density_relief` from floorplan) read ORFS-complete in the
+def-graph FLOW gate (verified parent lineage) but `orfs_status="partial"` in
+ppa.json and the knowledge store — the local stage_log holds only the rerun
+stages, and extract_ppa/ingest_run never applied lineage semantics. FLOW and
+LEARNING then disagreed about the same execution.
+**Guards:** `scripts/flow/effective_stages.py` is the ONE versioned resolver
+(`STAGE_RESOLVER_VERSION`): local ledger + independently verified parent
+lineage (valid sha256, same-identity parent, matching parent manifest digest,
+acyclic chain, preserved bytes re-hashed — the RMD2-P0-02 doctrine), returning
+effective status + machine-readable provenance, with local-only history kept
+separately for audit. Consumers: def-graph `signoff_gate.py` delegates its
+`_resolve_lineage` to it (inline port retained ONLY as the standalone-deployment
+fallback), `extract_ppa.py` upgrades a no-failure partial to `complete` with an
+`orfs_effective` evidence blob, `ingest_run.py` mirrors that into
+`runs.orfs_status`, and `repair_run_status.py` applies the same upgrade so a
+reconciliation pass cannot re-downgrade a lineage-complete resume. Violations,
+unresolved stages, `fail` runs, and synth-only scope are NEVER upgraded.
+Tests: `tests/test_effective_stages.py` (FLOW/PPA/LEARNING agreement + tamper
+fail-closed), def-graph lineage suites unchanged (77 green through delegation).
+
+### RMD3-P1-02 — capability metadata contradicting the executed environment
+All eight final sky130hd/hs manifests declared `platform_capability.
+strict_signoff_ready=false, missing=["lvs"]` while binding clean Netgen LVS
+evidence; six/seven simultaneously said `strict_clean=true`. Root cause: parent
+entrypoints (fix_signoff.sh, tools/run_signoff.sh) invoke the manifest builder
+in the PARENT's ambient environment, while every child check resolves tools/PDK
+through `_env.sh` (+ `references/env.local.sh`) — so capability described an
+environment the checks never ran under.
+**Guards:** `platform_capability.resolve_signoff_env()` sources the SAME
+`_env.sh` the child checkers source and returns the resolved signoff env;
+`probe_platform(env=...)`/`find_flow_dir(env=...)` probe against it; and
+`build_signoff_manifest.py` resolves once, persists `resolved_env` (tool/PDK
+paths) + `env_source` + `env_digest` in the manifest, and FAILS the consistency
+check when an otherwise strict-clean bundle contradicts selected-platform
+capability (or when the environment is unresolvable — executed-clean checks
+require the environment that ran them). One seam fixes both emission points.
+Tests: `tests/test_capability_env_binding.py`.
+
+*Generalizable rule: provenance metadata must be computed under the exact
+environment that produced the evidence it describes. "Best-effort from ambient
+state" quietly documents a DIFFERENT machine than the one that did the work.*
+
+### LIM-HO-01 (telemetry, not a defect) — bounded DRC runs are now characterizable
+nangate45 full-deck DRC: SERV (962 cells) clean in ~187s; PicoRV32/AES/ChaCha
+(9.4K–21K cells) all hit the 7,200s bound at `FreePDK45.lydrc:131`. The bound
+and the `stuck/incomplete` classification are PRESERVED (never relax the deck);
+what changed is that the verdict now carries the scale/cost quad — `cell_count`,
+`gds_bytes`, `wall_s`, `peak_rss_kb` (sampled by `r2g_bounded_run`'s 1s
+supervision tick over the whole checker session) — through `drc_result.json`
+into `reports/drc.json`, so the KLayout/deck scaling investigation has data.
+Tests: `tests/test_drc_scaling_telemetry.py`.

@@ -185,7 +185,8 @@ _VERDICT_MAP = {
 }
 
 
-def _normalize_verdict(raw: str | None, before: Any, after: Any) -> str:
+def _normalize_verdict(raw: str | None, before: Any, after: Any,
+                       global_regressions: list | None = None) -> str:
     if raw in _VERDICT_MAP:
         v = _VERDICT_MAP[raw]
         # 'applied' with a worse count is a regression, not a win.
@@ -193,8 +194,43 @@ def _normalize_verdict(raw: str | None, before: Any, after: Any) -> str:
             return "regression"
         if v == "win" and before is not None and after is not None and after == before:
             return "no_change"
+        # RMD3-P0-01 (failure-patterns.md #58): a row carrying MEASURED global
+        # regressions (result_vector.compare fired on a fresh good->bad flip)
+        # can never be positive evidence, whatever its raw verdict claims —
+        # sky130hs SHA-256 recorded 'applied' for DRC 10->8 while route went
+        # 0->32 and LVS broke. Belt-and-braces: the live loop already emits
+        # 'regression' for these; this guards any other fix_log writer.
+        if v in ("win", "cleared") and global_regressions:
+            return "regression"
         return v
     return "inconclusive"   # stop_* / apply_failed / rerun_failed_* / unknown
+
+
+# Regression strings are "<signal>_regression:...", "new_drc_class:...",
+# "check_missing:<signal>", or "constraint_relaxed:...". Fold each to its signal.
+_REG_SIGNALS = ("orfs", "route", "drc", "lvs", "timing", "rcx", "constraint")
+
+
+def _reg_signal(reg: str) -> str:
+    if reg.startswith("new_drc_class"):
+        return "drc"
+    if reg.startswith("check_missing:"):
+        return reg.split(":", 1)[1]
+    for p in _REG_SIGNALS:
+        if reg.startswith(p):
+            return p
+    return reg.split("_", 1)[0]
+
+
+def _session_compare(project: Path) -> tuple[str | None, list]:
+    """(fix_session_id, hard regressions) from reports/fix_session_compare.json —
+    the session-end reconciliation fix_signoff.sh persists (RMD3-P0-01). The file
+    describes exactly one session; a stale one is keyed to a different session id
+    and therefore never matches. Empty on any problem."""
+    data = _read_json(project / "reports" / "fix_session_compare.json") or {}
+    sid = data.get("fix_session_id")
+    regs = (data.get("comparison") or {}).get("regressions") or []
+    return (sid, regs) if sid else (None, [])
 
 
 def _explicit_family(name: str, families: dict[str, Any]) -> str | None:
@@ -350,12 +386,36 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
     # wrote; else the ambient toolchain. Populates the long-empty tool_versions_json
     # column so a promotion is traceable to its tools (failure-patterns #45).
     ambient_versions = tool_versions.collect_json() if rows else None
+    # RMD3-P0-01 session-end reconciliation: hard regressions the session-compare
+    # measured that NO per-iteration row already accounted for. Signals a row
+    # already flagged live (verdict=regression + reverted config) are excluded —
+    # a later reflow rebuilt from the restored config, so earlier genuine wins
+    # must not be erased (the #44 lost-wins lesson).
+    sess_sid, sess_regs = _session_compare(project)
+    covered = {_reg_signal(reg) for r in rows
+               for reg in (r.get("global_regressions") or [])}
+    sess_residual = ({_reg_signal(x) for x in sess_regs} - covered
+                     if sess_sid and sess_regs else set())
     for r in rows:
         sid = r.get("fix_session_id")
         if not sid:
             continue
         before = _to_float(r.get("before"))
         after = _to_float(r.get("after"))
+        verdict = _normalize_verdict(r.get("verdict"), before, after,
+                                     r.get("global_regressions"))
+        # A win/cleared REFLOW event in a session that ended globally regressed
+        # on a signal no live comparator row explains: downgrade to inconclusive
+        # (attribution to one iteration is ambiguous, but positive evidence must
+        # not enter the learner from a session that left the design worse). An
+        # event whose own check IS the regressed signal fought the regression —
+        # a win there means that check improved — so it is exempt.
+        if (verdict in ("win", "cleared") and r.get("from_stage")
+                and sid == sess_sid and sess_residual):
+            own = ({"route", "orfs"} if r.get("check") in ("route", "orfs_stage")
+                   else {r.get("check")})
+            if sess_residual - own:
+                verdict = "inconclusive"
         sig, symptom_id_ = symptom.from_fix_log_row(r)
         _upsert_symptom(conn, sig, symptom_id_)
         row_versions = r.get("tool_versions")
@@ -382,7 +442,7 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
              r.get("strategy"), r.get("from_stage"), before, after,
              r.get("before_categories"), r.get("after_categories"),
              r.get("before_status"), r.get("after_status"),
-             _normalize_verdict(r.get("verdict"), before, after),
+             verdict,
              r.get("cumulative_config"), r.get("config_delta"), r.get("env_flags"),
              tv_json, symptom_id_, json.dumps(sig, sort_keys=True),
              r.get("ts"), "live"))
@@ -459,6 +519,37 @@ def _norm_stage_status(v: Any) -> str | None:
         if s in ("fail", "failed", "error"):
             return "fail"
     return None
+
+
+_EFFECTIVE_STAGES_MOD: Any = "unloaded"
+
+
+def _effective_stage_upgrade(run_dir: Path, flow_scope: str):
+    """Shared effective-stage resolver hook (RMD3-P1-01): the resolver blob when
+    digest-verified parent lineage completes a no-failure partial, else None.
+    Lazily loaded from scripts/flow/effective_stages.py (the ONE resolver also
+    used by extract_ppa and the def-graph signoff gate); any load/resolve error
+    keeps the local verdict — ingest must never break on it."""
+    global _EFFECTIVE_STAGES_MOD
+    if _EFFECTIVE_STAGES_MOD == "unloaded":
+        _EFFECTIVE_STAGES_MOD = None
+        try:
+            import importlib.util
+            p = (Path(__file__).resolve().parent.parent
+                 / "scripts" / "flow" / "effective_stages.py")
+            spec = importlib.util.spec_from_file_location("r2g_effective_stages", p)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            _EFFECTIVE_STAGES_MOD = mod
+        except Exception:
+            _EFFECTIVE_STAGES_MOD = None
+    if _EFFECTIVE_STAGES_MOD is None:
+        return None
+    try:
+        return _EFFECTIVE_STAGES_MOD.effective_upgrade(
+            str(run_dir), "partial", flow_scope)
+    except Exception:
+        return None
 
 
 _ORFS_ERRCODE_RE = re.compile(r"\[ERROR\s+([A-Z]{2,5}-\d{3,4})\]")
@@ -820,6 +911,18 @@ def ingest(project: Path,
     if flow_scope != "synth_only":
         flow_scope = "full"
     orfs_status, fail_stage = _derive_orfs_status(stage_log, flow_scope)
+    # RMD3-P1-01 (failure-patterns.md #58): a FROM_STAGE resume's local ledger
+    # holds only the rerun stages, so the local classification reads 'partial'
+    # while the def-graph FLOW gate resolves the SAME execution complete via
+    # digest-verified parent lineage — and the LEARNING gate then contradicts
+    # FLOW (sky130hs SHA-256 fixed pilot; sky130hs AES held-out). Apply the ONE
+    # shared resolver so runs.orfs_status agrees. Fail-closed: violations or
+    # unresolved stages keep the honest 'partial'; a 'fail' is NEVER upgraded.
+    if orfs_status == "partial":
+        _rd = stage_log_path.parent
+        if _rd.name.startswith("RUN_") and _effective_stage_upgrade(
+                _rd, flow_scope) is not None:
+            orfs_status, fail_stage = "pass", None
     total_elapsed = sum(_to_float(s.get("elapsed_s")) or 0.0 for s in stage_log) or None
 
     # Cell count: prefer geometry.instance_count (authoritative, from 6_report.json),

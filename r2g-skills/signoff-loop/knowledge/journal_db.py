@@ -46,7 +46,10 @@ DEFAULT_JOURNAL_PATH = DEFAULT_KNOWLEDGE_DIR / "journal.sqlite"
 DEFAULT_SCHEMA_PATH = DEFAULT_KNOWLEDGE_DIR / "journal_schema.sql"
 
 ACTION_TYPES = ("config_knob_delta", "sdc_edit", "stage_rerun", "tool_invoke",
-                "escalate", "ab_launch", "promote", "demote")
+                "escalate", "ab_launch", "promote", "demote",
+                # RMD3-P0-01: fix_signoff.sh reverting a globally regressive
+                # config edit to the last accepted state (failure-patterns #58).
+                "config_restore")
 
 
 def connect(db_path: Path | str = DEFAULT_JOURNAL_PATH) -> sqlite3.Connection:

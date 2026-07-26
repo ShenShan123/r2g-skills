@@ -4,6 +4,42 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-07-26 — pilot + held-out remediation round 3 (failure-patterns #58)
+
+The 2026-07-24/25 fixed pilot and the 2026-07-26 held-out campaign (commit
+74a0113) confirmed one P0 + two P1 production defects; all three are closed.
+Both P1s had reproduced identically across cohorts — shared-contract defects,
+not design bugs.
+
+- **RMD3-P0-01 (P0): globally non-regressive live repair.** New
+  `signoff-loop/knowledge/result_vector.py` — the ONE global comparator for the
+  live fix loop AND the A/B judge (versioned result vector; every signal bound
+  to the layout it graded; fires only on measured fresh good→bad flips).
+  `fix_signoff.sh` now snapshots config + pre-vector around every reflow,
+  records `regression` (never `applied`) on measured cross-check damage,
+  REVERTS the config edit, and writes session-end reconciliation evidence; the
+  ingester excludes such sessions' unexplained wins from positive recipe
+  evidence. Replaying the sky130hs SHA-256 `density_relief` transition
+  (DRC 10→8, route 0→32) can no longer learn a win.
+- **RMD3-P1-01 (P1): ONE effective stage-evidence resolver.** New
+  `signoff-loop/scripts/flow/effective_stages.py` (versioned): local ledger +
+  digest-verified parent lineage, fail-closed on null/tampered/foreign/cyclic
+  lineage. def-graph `signoff_gate.py` delegates to it; `extract_ppa.py`,
+  `ingest_run.py`, and `repair_run_status.py` apply the same upgrade — a valid
+  floorplan resume now reads `complete` in FLOW, ppa.json, and the knowledge
+  store alike (the pilot's FLOW-vs-LEARNING disagreement is gone).
+- **RMD3-P1-02 (P1): capability metadata bound to the executed environment.**
+  `platform_capability.resolve_signoff_env()` sources the same `_env.sh` the
+  child checkers use; `build_signoff_manifest.py` probes under it, persists
+  `resolved_env` + `env_digest`, and fails the consistency check when
+  strict_clean would contradict selected-platform capability. No more
+  `missing=["lvs"]` manifests wrapping clean Netgen evidence.
+- **LIM-HO-01 (telemetry):** bounded DRC verdicts now carry `cell_count`,
+  `gds_bytes`, `wall_s`, `peak_rss_kb` into `reports/drc.json` (supervision-tick
+  RSS sampling in `r2g_bounded_run`). The 7,200s bound and `stuck` semantics
+  are unchanged — this feeds the KLayout scaling investigation, it does not
+  relax it.
+
 ## 2026-07-25 — asap7 unsupported + the dead-corpus-root family (all skills, tools)
 
 **`asap7` is NOT SUPPORTED in this version.** This is a product-scope decision, not a

@@ -1928,24 +1928,15 @@ def _ab_new_drc_regression(conn, a_run_id: str | None,
         except Exception:
             return {}
     try:
-        import symptom as _symptom
-        a_counts = {}
-        for k, v in _cats(a_run_id).items():
-            c = (v or {}).get("count") or 0
-            if c > 0:
-                a_counts[_symptom.normalize_class(k)] = a_counts.get(
-                    _symptom.normalize_class(k), 0) + c
-        b_new = {}
-        for k, v in _cats(b_run_id).items():
-            c = (v or {}).get("count") or 0
-            nk = _symptom.normalize_class(k)
-            if c > 0 and nk not in a_counts:
-                b_new[nk] = b_new.get(nk, 0) + c
+        # RMD3-P0-01: the normalization AND the materiality policy live in
+        # result_vector (shared with the live repair comparator) — one
+        # definition of "a materially worse new DRC class" for both paths.
+        import result_vector
+        a_counts = result_vector._norm_classes(_cats(a_run_id))
+        b_counts = result_vector._norm_classes(_cats(b_run_id))
+        return result_vector.new_class_regression(a_counts, b_counts)
     except Exception:
         return None
-    if b_new and sum(b_new.values()) > sum(a_counts.values()):
-        return "new_drc_class:" + ",".join(sorted(b_new))
-    return None
 
 
 def _parse_mk_knobs(text: str) -> dict:
@@ -2003,12 +1994,12 @@ def _arm_baseline_divergence(a_path: str, b_path: str, check: str) -> str | None
 
 
 # Cross-check severity vocabularies for the global-regression veto (2026-07-16
-# agent-logic issue 4). Values are the ingested ones observed in runs/run_violations;
-# anything outside good/bad (skipped/unknown/''/None) carries NO signal and never
-# drives a veto — the guard only fires on a POSITIVE good->bad flip.
-_LVS_GOOD, _LVS_BAD = {"clean"}, {"fail", "crash", "mismatch", "incomplete", "stale"}
-_DRC_GOOD, _DRC_BAD = {"clean", "clean_beol"}, {"fail", "failed", "stuck"}
-_TIER_RANK = {"clean": 0, "minor": 1, "moderate": 2, "severe": 3, "unconstrained": 3}
+# agent-logic issue 4). RMD3-P0-01 moved the ONE definition into
+# knowledge/result_vector.py so the LIVE repair loop and this A/B judge can never
+# diverge on what "good->bad" means; the module-level aliases stay for callers.
+from result_vector import (LVS_GOOD as _LVS_GOOD, LVS_BAD as _LVS_BAD,   # noqa: E402
+                           DRC_GOOD as _DRC_GOOD, DRC_BAD as _DRC_BAD,
+                           TIER_RANK as _TIER_RANK)
 
 
 def _ab_global_regression(conn, a_run_id: str | None,
@@ -2022,7 +2013,9 @@ def _ab_global_regression(conn, a_run_id: str | None,
     disappeared check is a disabled check, not a pass). Severity is a per-check
     partial order, NEVER folded into the scalar outcome_score (invariant H4).
     'unconstrained' timing ranks as severe: losing the clock constraint disables the
-    check. Fails SAFE (None) on unreadable rows."""
+    check. Fails SAFE (None) on unreadable rows. The comparison itself is
+    result_vector.compare_status_rows — the SAME comparator the live repair loop
+    uses (RMD3-P0-01: one global comparator for live repair and A/B judgment)."""
     if not a_run_id or not b_run_id:
         return None
     try:
@@ -2036,19 +2029,11 @@ def _ab_global_regression(conn, a_run_id: str | None,
         return None
     if not a or not b:
         return None
-    vetoes = []
-    if a["orfs"] == "pass" and b["orfs"] == "fail":
-        vetoes.append("orfs_regression:pass->fail")
-    if a["lvs"] in _LVS_GOOD and b["lvs"] in _LVS_BAD:
-        vetoes.append(f"lvs_regression:{a['lvs']}->{b['lvs']}")
-    elif a["lvs"] in _LVS_GOOD and not b["lvs"]:
-        vetoes.append("check_missing:lvs")
-    if a["drc"] in _DRC_GOOD and b["drc"] in _DRC_BAD:
-        vetoes.append(f"drc_regression:{a['drc']}->{b['drc']}")
-    ra, rb = _TIER_RANK.get(a["tier"] or ""), _TIER_RANK.get(b["tier"] or "")
-    if ra is not None and rb is not None and ra <= 1 and rb >= 2:
-        vetoes.append(f"timing_regression:{a['tier']}->{b['tier']}")
-    return ",".join(vetoes) if vetoes else None
+    try:
+        import result_vector
+        return result_vector.compare_status_rows(a, b)
+    except Exception:
+        return None
 
 
 # ── Cross-check repair-cycle detection (P1-18, 2026-07-15) ────────────────────

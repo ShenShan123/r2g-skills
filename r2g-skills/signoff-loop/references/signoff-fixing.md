@@ -111,6 +111,17 @@ to canonical, and canonical strings pass through **idempotently**. (Regression n
 canonical `win`/`no_change` were previously falling through to `inconclusive`, silently dropping
 the learning signal from timing-journal episodes; fixed so a timing `period_relax` win is kept.)
 
+**Global non-regression (RMD3-P0-01, failure-patterns #58).** A target-count improvement is
+NOT sufficient for `applied`/`cleared`: around every reflow the loop snapshots the global
+result vector (`knowledge/result_vector.py` — the SAME comparator the A/B judge uses) and, on a
+MEASURED fresh good→bad flip of any other signal (route, DRC classes, LVS, timing tier, ORFS
+completion, RCX, or a relaxed clock constraint on a non-timing fix), overrides the verdict to
+`regression`, **reverts the config edit** to the last accepted state, and quarantines the
+evidence (`reports/global_regression_it<N>.json`). Each log row carries `global_regressions`;
+a session-end reconciliation (`reports/fix_session_compare.json`) lets the ingester downgrade
+unexplained win/cleared reflow events of a globally-regressed session to `inconclusive`
+(never erasing wins whose regression a live row already explains — the #44 lesson).
+
 **Exit codes:** 0 = final status clean; 2 = residual violations remain.
 
 ---

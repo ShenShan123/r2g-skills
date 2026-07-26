@@ -215,6 +215,14 @@ def repair(cases_root: Path | str, conn: sqlite3.Connection) -> int:
                 run_dir = stage_log_path.parent  # RUN_* dir holds flow.log
                 stages = ingest_run._read_stage_log(stage_log_path)
                 new_status, new_fail_stage = ingest_run._derive_orfs_status(stages)
+                # RMD3-P1-01: the reconciler must apply the SAME effective-stage
+                # resolver as live ingest, or a repair pass would re-downgrade a
+                # lineage-complete resume back to 'partial'.
+                if (new_status == "partial"
+                        and run_dir.name.startswith("RUN_")
+                        and ingest_run._effective_stage_upgrade(
+                            run_dir, "full") is not None):
+                    new_status, new_fail_stage = "pass", None
                 # 'unknown' means the stage log was empty/unparseable — never
                 # downgrade a row to it; the original value is at least as
                 # informative.

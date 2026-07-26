@@ -447,6 +447,33 @@ The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports
     2026-07-09; test_ensure_schema_backfills_null_flow_scope) so the two-value contract holds
     corpus-wide — never write a third value.
 
+34. **A `win` is GLOBAL, and both learning paths share one comparator (RMD3-P0-01,
+    failure-patterns #58, 2026-07-26).** `knowledge/result_vector.py` is the single definition
+    of "made the design better": the live fix loop (fix_signoff.sh) captures a versioned pre/post
+    result vector around every reflow — each signal BOUND to the layout it graded
+    (run_tag/gds_sha256; stale evidence reads unknown, never guessed) — and a measured fresh
+    good→bad flip on ANY protected signal (route, DRC total/classes, LVS, timing tier, ORFS
+    completion, RCX, non-timing clock relaxation) forces verdict `regression` + a config revert,
+    however much the target count improved. The A/B judge's vetoes (`_ab_global_regression`,
+    `_ab_new_drc_regression`) delegate to the SAME module (`compare_status_rows`,
+    `new_class_regression`), so live repair and A/B judgment cannot diverge on what a win means.
+    Ingest enforces it belt-and-braces: a fix_log row carrying `global_regressions` can never
+    normalize to `win`/`cleared`, and a session whose end-state regressed on a signal no live row
+    explains has its win/cleared reflow events downgraded to `inconclusive` (own-check wins and
+    already-explained regressions are exempt — the #44 lost-wins lesson). Tests:
+    `tests/test_result_vector.py`.
+
+35. **Effective ORFS completion is resolved ONCE, by the shared resolver (RMD3-P1-01,
+    failure-patterns #58, 2026-07-26).** `scripts/flow/effective_stages.py`
+    (`STAGE_RESOLVER_VERSION`) merges a run's local stage ledger with independently verified
+    parent lineage (RMD2-P0-02 doctrine: re-hash preserved bytes, same-identity parent, acyclic
+    chain; violations fail closed). `ingest_run.py` (and `repair_run_status.py`) upgrade a
+    no-failure `partial` to `pass` ONLY through it — the same module the def-graph FLOW gate
+    and `extract_ppa.py` use — so `runs.orfs_status` can no longer contradict graph gating for
+    a digest-bound resume. A `fail` is never upgraded; synth_only scope is exempt (invariant 33
+    owns it); H2 parity is untouched (no failure_event exists for the upgraded runs because
+    nothing failed). Tests: `tests/test_effective_stages.py`.
+
 ## Sharing the store across users
 
 `knowledge.sqlite` (git-tracked) ships the skill pre-trained, but a binary blob does not

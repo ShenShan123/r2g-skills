@@ -141,6 +141,32 @@ _FALLBACK_STAGE_ARTIFACT = {
 STAGE_ARTIFACT, STAGE_CONTRACT_VERSION = _stage_contract()
 
 
+def _effective_stages_module():
+    """The ONE shared effective-stage resolver (RMD3-P1-01) from the sibling
+    signoff-loop skill (scripts/flow/effective_stages.py) — the same module
+    extract_ppa.py and ingest_run.py call, so FLOW / PPA / LEARNING can never
+    disagree about a resume's completion. None on a standalone def-graph
+    deployment: the inline port below then serves as the pinned fallback (an
+    equivalence test asserts the two produce the same verdicts)."""
+    here = os.path.dirname(os.path.realpath(os.path.abspath(__file__)))
+    cand = os.path.normpath(os.path.join(
+        here, "..", "..", "..", "signoff-loop", "scripts", "flow",
+        "effective_stages.py"))
+    if os.path.isfile(cand):
+        import importlib.util
+        try:
+            spec = importlib.util.spec_from_file_location("r2g_effective_stages", cand)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+        except Exception:
+            pass
+    return None
+
+
+_EFFECTIVE_STAGES = _effective_stages_module()
+
+
 def _is_sha256(value):
     return (isinstance(value, str) and len(value) == 64
             and all(c in "0123456789abcdef" for c in value))
@@ -308,6 +334,14 @@ def _resolve_lineage(run_dir, missing):
     cycle, mutated bytes) is a hard VIOLATION — never silently downgraded to
     reconstruction (that would let broken provenance pass as a caveat).
     Returns ({stage: entry}, [unresolved stages], [violations])."""
+    # RMD3-P1-01: delegate to the ONE shared resolver when the sibling skill is
+    # reachable — the same core extract_ppa/ingest_run use. The inline body
+    # below is the pinned standalone fallback.
+    if _EFFECTIVE_STAGES is not None:
+        try:
+            return _EFFECTIVE_STAGES.resolve_lineage(run_dir, missing)
+        except Exception:
+            pass
     meta = _load_json(os.path.join(run_dir, "resume_meta.json"))
     recorded = (meta or {}).get("parent_lineage") or {}
     backend = os.path.dirname(os.path.realpath(run_dir))

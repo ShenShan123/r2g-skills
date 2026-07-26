@@ -291,12 +291,16 @@ except Exception: preds={}
 print(json.dumps(preds))' "$1" "$PROJECT_DIR"
 }
 
-_log_iter() {  # check iter strategy before after verdict from_stage vclass before_cats config_delta
+_log_iter() {  # check iter strategy before after verdict from_stage vclass before_cats config_delta [global_regressions]
   python3 -c 'import json,sys,os
 check,it,strategy,before,after,verdict,from_stage=sys.argv[1:8]
 proj,sid,logp=sys.argv[8],sys.argv[9],sys.argv[10]
 vclass,before_cats_json,ts=sys.argv[11],sys.argv[12],sys.argv[13]
 config_delta=(sys.argv[14] if len(sys.argv)>14 else "") or "{}"
+# RMD3-P0-01: measured global regressions (result_vector.compare) ride the log
+# row so the ingester can never map this iteration to positive evidence.
+try: global_regs=json.loads((sys.argv[15] if len(sys.argv)>15 else "") or "[]")
+except Exception: global_regs=[]
 rep=os.path.join(proj,"reports",check+".json")
 try: report=json.load(open(rep))
 except Exception: report={}
@@ -343,10 +347,41 @@ o=dict(check=check,iter=int(it),strategy=strategy,
        before_categories=(before_cats_json if before_cats_json else None),
        cumulative_config=json.dumps(cum,sort_keys=True),
        config_delta=config_delta, env_flags=json.dumps(env_flags,sort_keys=True),
-       predicates=preds, ts=ts)
+       predicates=preds, global_regressions=global_regs, ts=ts)
 open(logp,"a").write(json.dumps(o)+"\n")' \
     "$1" "$2" "$3" "$4" "$5" "$6" "${7:-}" "$PROJECT_DIR" "$FIX_SESSION_ID" "$LOG" \
-    "${8:-}" "${9:-}" "$(date +%FT%T%:z)" "${10:-}"
+    "${8:-}" "${9:-}" "$(date +%FT%T%:z)" "${10:-}" "${11:-}"
+}
+
+_capture_vector() {  # out_path [target_check] : refresh CHEAP global evidence
+  # (route/ppa/timing — pure log/report parses, never the expensive DRC/LVS
+  # tools) then snapshot the versioned global result vector (RMD3-P0-01).
+  # The TARGET check's own report is never refreshed here: its lifecycle belongs
+  # to fix_one (baseline/_run_extract), and e.g. a route arm's route.json is a
+  # SEEDED abort report a re-extract would silently clobber. Best-effort: never
+  # breaks the flow.
+  local target="${2:-}"
+  [[ "$target" != "route" ]] && "$EXTRACT_ROUTE" "$PROJECT_DIR" "$REPORTS/route.json" >/dev/null 2>&1 || true
+  if [[ "$target" != "timing" ]]; then
+    "$EXTRACT_PPA" "$PROJECT_DIR" "$REPORTS/ppa.json" >/dev/null 2>&1 || true
+    "$CHECK_TIMING" "$PROJECT_DIR" >/dev/null 2>&1 || true
+  fi
+  python3 "$KNOWLEDGE_DIR/result_vector.py" capture "$PROJECT_DIR" --out "$1" >/dev/null 2>&1 || true
+}
+
+_compare_vectors() {  # pre post target : echo the regressions JSON list ("[]" when
+  # clean/unavailable). The comparator only fires on MEASURED fresh good->bad flips
+  # (result_vector doctrine) — an error here fails SAFE to "no regression evidence".
+  python3 - "$KNOWLEDGE_DIR" "$1" "$2" "$3" <<'PYEOF' 2>/dev/null || echo "[]"
+import json, sys
+sys.path.insert(0, sys.argv[1])
+try:
+    import result_vector
+    pre = json.load(open(sys.argv[2])); post = json.load(open(sys.argv[3]))
+    print(json.dumps(result_vector.compare(pre, post, sys.argv[4]).get("regressions") or []))
+except Exception:
+    print("[]")
+PYEOF
 }
 
 _ensure_baseline() {  # $1 = drc|lvs : RUN the signoff tool once if there is no real
@@ -436,6 +471,17 @@ except Exception: print("")' "$antenna_marker")"
       echo "[$check] stop: $rerun ${recheck:-}"; return 0
     fi
     echo "[$check] iter $it: applying $sid (rerun_from=${rerun:-none})"
+    local rv_pre="$REPORTS/.rv_pre.json" cfg_backup="$REPORTS/.rv_cfg_backup.mk" global_regs="[]"
+    if [[ -n "$rerun" ]]; then
+      # RMD3-P0-01 (failure-patterns.md #58): snapshot the ACCEPTED config and the
+      # global result vector BEFORE the fix edit/reflow. A reflow can regress
+      # checks the target-count comparison never looks at (sky130hs SHA-256:
+      # DRC 10->8 was recorded 'applied' while route went 0->32 and LVS broke) —
+      # the pre snapshot is what lets the comparator prove it and the revert
+      # restore the last accepted state.
+      cp -f "$PROJECT_DIR/constraints/config.mk" "$cfg_backup" 2>/dev/null || true
+      _capture_vector "$rv_pre" "$check"
+    fi
     local apply_out cfg_delta="{}"
     # R2G_FIX_RANK_FIRST rides through to --apply too: the apply-time lifecycle
     # gate (2026-07-16 issue 6) blocks candidate/shadow recipes, and arm B of an
@@ -523,6 +569,45 @@ except Exception: print("{}")' <<<"$apply_out")"
     elif [[ "$check" == "lvs" ]]; then "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || true; fi
     _run_extract "$check"
     after="$(_count "$report")"
+    if [[ -n "$rerun" ]]; then
+      # RMD3-P0-01: post-reflow global vector + the ONE comparator. Only signals
+      # measured FRESH on both sides can fire (route/orfs/timing are always
+      # refreshed cheaply by _capture_vector; drc/lvs only when their tool
+      # re-graded the new layout) — stale evidence is reported, never guessed.
+      _capture_vector "$REPORTS/.rv_post.json" "$check"
+      global_regs="$(_compare_vectors "$rv_pre" "$REPORTS/.rv_post.json" "$check")"
+      [[ -n "$global_regs" ]] || global_regs="[]"
+    fi
+    if [[ "$global_regs" != "[]" ]]; then
+      # A measured global regression is a hard verdict override: the target may
+      # have improved, but the design as a whole got WORSE — record `regression`
+      # (negative evidence), restore the last accepted config, and quarantine the
+      # evidence for audit. The regressive layout stays on disk (the strict gate
+      # already blocks it); the restored config means the next reflow rebuilds
+      # from the last accepted state. failure-patterns.md #58.
+      verdict="regression"
+      [[ -f "$cfg_backup" ]] && cp -f "$cfg_backup" "$PROJECT_DIR/constraints/config.mk"
+      python3 - "$REPORTS" "$it" "$sid" "$global_regs" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+rep, it, sid, regs = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+blob = {"iter": int(it), "strategy": sid, "regressions": json.loads(regs),
+        "config_restored": True}
+for side in ("pre", "post"):
+    try: blob[side] = json.load(open(os.path.join(rep, ".rv_%s.json" % side)))
+    except Exception: blob[side] = None
+out = os.path.join(rep, "global_regression_it%s.json" % it)
+json.dump(blob, open(out + ".tmp", "w"), indent=1); os.replace(out + ".tmp", out)
+PYEOF
+      _journal_action config_restore "$(python3 -c 'import json,sys
+print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression","regressions":json.loads(sys.argv[2])}))' "$sid" "$global_regs")" "$sym"
+      noimp=$((noimp+1))
+      _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta" "$global_regs"
+      echo "[$check] iter $it: $before -> ${after:-?} but GLOBAL REGRESSION $global_regs — config edit reverted; recorded as regression"
+      if (( it >= BASE_ITERS && noimp >= 2 )); then
+        echo "[$check] $noimp non-improving past base $BASE_ITERS; stopping"; return 0
+      fi
+      continue
+    fi
     if [[ -z "$after" ]]; then
       # #14 phantom-win guard: the re-check produced no parseable count (extract
       # crashed / report unparseable). This is NOT evidence of a win — record a
@@ -586,6 +671,12 @@ except Exception: print("{}")' <<<"$apply_out")"
 }
 
 : > "$LOG"
+# RMD3-P0-01 session baseline: the state this whole invocation starts from. A
+# stale compare file from a prior (possibly crashed) invocation must not be
+# matched against the new log — remove it; the ingester also keys the compare
+# file to fix_session_id before trusting it.
+rm -f "$REPORTS/fix_session_compare.json"
+_capture_vector "$REPORTS/.rv_session_start.json" "$CHECK"
 # route is the backend-abort check: fix BEFORE signoff (a route abort never reaches
 # drc/lvs). It is its own --check value (not part of "both").
 [[ "$CHECK" == "route" ]] && fix_one route || true
@@ -620,6 +711,34 @@ echo "Summary: $REPORTS/fix_summary.md"
 "$CHECK_TIMING" "$PROJECT_DIR" >/dev/null 2>&1 || true
 python3 "$EXTRACT_DIR/extract_rcx.py" "$PROJECT_DIR" "$REPORTS/rcx.json" >/dev/null 2>&1 || true
 python3 "$REPORTS_DIR_SCRIPTS/build_signoff_manifest.py" "$PROJECT_DIR" || true
+
+# RMD3-P0-01 session reconciliation: compare the session-end vector against the
+# session-start baseline and persist the verdict. Catches cross-check damage the
+# per-iteration comparator could not measure at decision time (e.g. a DRC-phase
+# reflow that broke LVS, only re-graded when the later lvs phase re-ran the
+# tool). The ingester downgrades this session's win/cleared reflow events to
+# `inconclusive` when a hard regression is recorded here — positive evidence
+# must never enter the learner from a session that left the design globally
+# worse. failure-patterns.md #58.
+_capture_vector "$REPORTS/.rv_session_end.json" "$CHECK"
+python3 - "$KNOWLEDGE_DIR" "$REPORTS" "$FIX_SESSION_ID" "$CHECK" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+sys.path.insert(0, sys.argv[1])
+rep, sid, check = sys.argv[2], sys.argv[3], sys.argv[4]
+try:
+    import result_vector
+    pre = json.load(open(os.path.join(rep, ".rv_session_start.json")))
+    post = json.load(open(os.path.join(rep, ".rv_session_end.json")))
+    target = check if check in ("drc", "lvs", "route", "timing") else "both"
+    out = {"fix_session_id": sid, "check": check,
+           "comparison": result_vector.compare(pre, post, target),
+           "pre": pre, "post": post}
+    tmp = os.path.join(rep, "fix_session_compare.json.tmp")
+    json.dump(out, open(tmp, "w"), indent=1)
+    os.replace(tmp, os.path.join(rep, "fix_session_compare.json"))
+except Exception:
+    pass
+PYEOF
 
 # exit 0 if final state clean, else 2 if a residual remains. For --check route we
 # judge ONLY route.json (a route fix never produces drc/lvs; a stale route.json

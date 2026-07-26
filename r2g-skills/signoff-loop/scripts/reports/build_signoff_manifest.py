@@ -194,11 +194,30 @@ def build(project_dir):
         if flow_dir not in sys.path:
             sys.path.insert(0, flow_dir)
         import platform_capability
-        fd = platform_capability.find_flow_dir()
+        # RMD3-P1-02 (failure-patterns.md #58): capability metadata must be
+        # generated from the SAME environment the child DRC/LVS checks executed
+        # under — _env.sh resolution, never the parent's ambient env. The
+        # 2026-07-24/26 pilots shipped manifests claiming missing=["lvs"] with
+        # clean Netgen evidence bound in the same file, because the parent
+        # entrypoints never sourced _env.sh. Resolve once, probe under it, and
+        # persist the resolved tool/PDK paths + a digest so the record is
+        # reproducible provenance, not ambient noise.
+        env = platform_capability.resolve_signoff_env()
+        env_source = "_env.sh" if env is not None else "ambient"
+        probe_env = env if env is not None else dict(os.environ)
+        fd = platform_capability.find_flow_dir(env=probe_env)
         if fd and platform:
-            caps = platform_capability.probe_platform(fd, platform)
+            caps = platform_capability.probe_platform(fd, platform, env=probe_env)
+            resolved = {k: probe_env.get(k)
+                        for k in platform_capability._SIGNOFF_ENV_KEYS
+                        if k != "PATH" and probe_env.get(k)}
             capability = {"strict_signoff_ready": caps.get("strict_signoff_ready"),
-                          "missing": caps.get("missing", [])}
+                          "missing": caps.get("missing", []),
+                          "tier": caps.get("tier"),
+                          "env_source": env_source,
+                          "flow_dir": fd,
+                          "resolved_env": resolved,
+                          "env_digest": platform_capability.signoff_env_digest(probe_env)}
     except Exception:  # noqa: BLE001 — capability context is best-effort
         capability = None
 
@@ -224,6 +243,22 @@ def build(project_dir):
         strict_missing.append(f"timing: tier={tier!r}, need 'clean'")
     if tags and len(uniq) != 1:
         strict_missing.append(f"report binding: reports name {len(uniq)} different runs {uniq}")
+
+    # Capability consistency gate (RMD3-P1-02): a manifest must never declare
+    # strict_clean while its own capability record contradicts it. An otherwise
+    # clean bundle with capability missing/unresolvable is NOT strict-clean —
+    # executed-clean checks REQUIRE the environment that ran them, so an
+    # unresolvable environment means the provenance cannot be bound.
+    if not strict_missing:
+        if capability is None:
+            strict_missing.append(
+                "capability: signoff environment not resolvable — cannot bind "
+                "capability provenance to a strict-clean verdict (RMD3-P1-02)")
+        elif not capability.get("strict_signoff_ready"):
+            strict_missing.append(
+                "capability: strict-clean contradicts selected-platform capability "
+                f"(missing={capability.get('missing')}) — the checks and the "
+                "capability probe must resolve the same environment (RMD3-P1-02)")
 
     return {
         "manifest_version": 1,

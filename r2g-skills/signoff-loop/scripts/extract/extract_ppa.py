@@ -274,6 +274,34 @@ def _progress_from_stage_log(run_dir: Path):
             'orfs_fail_stage': nxt}
 
 
+_EFFECTIVE_STAGES_MOD = "unloaded"
+
+
+def _effective_stage_upgrade(run_dir: Path):
+    """Shared effective-stage resolver hook (RMD3-P1-01): returns the resolver
+    blob when verified parent lineage completes a no-failure partial, else None.
+    Loaded lazily from scripts/flow/effective_stages.py; any load/resolve error
+    keeps the local verdict (never breaks extraction)."""
+    global _EFFECTIVE_STAGES_MOD
+    if _EFFECTIVE_STAGES_MOD == "unloaded":
+        _EFFECTIVE_STAGES_MOD = None
+        try:
+            import importlib.util
+            p = Path(__file__).resolve().parent.parent / "flow" / "effective_stages.py"
+            spec = importlib.util.spec_from_file_location("r2g_effective_stages", p)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            _EFFECTIVE_STAGES_MOD = mod
+        except Exception:
+            _EFFECTIVE_STAGES_MOD = None
+    if _EFFECTIVE_STAGES_MOD is None:
+        return None
+    try:
+        return _EFFECTIVE_STAGES_MOD.effective_upgrade(str(run_dir), "partial")
+    except Exception:
+        return None
+
+
 def detect_orfs_progress(run_dir: Path) -> dict:
     """Classify how far the ORFS backend got.
 
@@ -349,6 +377,25 @@ def main():
     # read it via a flat key lookup). Absent run_dir -> nothing ran.
     if reports.get('run_dir'):
         ppa.update(detect_orfs_progress(Path(reports['run_dir'])))
+        # RMD3-P1-01 (failure-patterns.md #58): a FROM_STAGE resume leaves only
+        # the rerun stages in the local stage_log, so the local classification
+        # reads 'partial' — while the def-graph FLOW gate resolves the same
+        # execution 'complete' through digest-verified parent lineage. Apply
+        # the SAME shared resolver here so ppa.json (and everything ingested
+        # from it) agrees with graph gating. Fail-closed: any lineage
+        # violation/unresolved stage keeps the honest local 'partial'.
+        if ppa.get('orfs_status') == 'partial':
+            eff = _effective_stage_upgrade(Path(reports['run_dir']))
+            if eff is not None:
+                ppa.update({'orfs_status': 'complete',
+                            'orfs_last_stage': 'finish',
+                            'orfs_fail_stage': None})
+                ppa['orfs_effective'] = {
+                    'resolver_version': eff.get('resolver_version'),
+                    'lineage_quality': eff.get('lineage_quality'),
+                    'lineage_root_digest': eff.get('lineage_root_digest'),
+                    'inherited_stages': sorted((eff.get('lineage') or {}).keys()),
+                }
     else:
         ppa.update({'orfs_status': 'fail', 'orfs_last_stage': None,
                     'orfs_fail_stage': 'synth'})

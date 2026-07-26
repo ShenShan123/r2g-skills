@@ -43,7 +43,7 @@ r2g_bounded_cleanup() {
 r2g_bounded_run() {
   local timeout_s="$1" grace_s="$2" log="$3"
   shift 3
-  local pid pgid rc timed_out=0 deadline kdeadline tries
+  local pid pgid rc timed_out=0 deadline kdeadline tries rss
 
   setsid "$@" >"$log" 2>&1 </dev/null &
   pid=$!
@@ -53,8 +53,17 @@ r2g_bounded_run() {
   [[ -n "$pgid" ]] || pgid="$pid"
   _R2G_BOUNDED_SID="$pgid"
 
+  # LIM-HO-01 telemetry: peak resident-set of the WHOLE checker session, sampled
+  # on the existing 1s supervision tick (one `ps` per second — noise next to a
+  # running checker). 0 = never sampled (sub-second command); callers report it
+  # as unavailable. A stuck full-deck DRC needs peak memory recorded so the
+  # KLayout/deck scaling investigation has data, not anecdotes.
+  _R2G_BOUNDED_PEAK_RSS_KB=0
+
   deadline=$(( SECONDS + timeout_s ))
   while kill -0 "$pid" 2>/dev/null; do
+    rss="$(ps -o rss= -s "$pgid" 2>/dev/null | awk '{s+=$1} END{print s+0}')"
+    [[ "${rss:-0}" -gt "$_R2G_BOUNDED_PEAK_RSS_KB" ]] && _R2G_BOUNDED_PEAK_RSS_KB="$rss"
     if (( SECONDS >= deadline )); then
       timed_out=1
       kill -TERM -- "-$pgid" 2>/dev/null || true

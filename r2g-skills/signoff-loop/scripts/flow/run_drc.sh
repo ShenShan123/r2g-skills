@@ -425,15 +425,20 @@ fi
 # it publishes.
 python3 - "$DRC_DIR/drc_result.json" "$DRC_RUN_TAG" "$DRC_GDS" "$GDS_SHA_PRE" \
   "$DRC_DECK" "$DECK_SHA" "$KLAYOUT_VERSION" "$DRC_STARTED_AT" "$DRC_ENDED_AT" \
-  "$DRC_TIMEOUT" "$DRC_STATUS" "$DRC_CELL_COUNT" "$DRC_STARTED_EPOCH" <<'PYEOF' || true
-import json, sys, time
+  "$DRC_TIMEOUT" "$DRC_STATUS" "$DRC_CELL_COUNT" "$DRC_STARTED_EPOCH" \
+  "${_R2G_BOUNDED_PEAK_RSS_KB:-0}" <<'PYEOF' || true
+import json, os, sys, time
 (path, run_tag, gds, gds_sha, deck, deck_sha,
  klayout_version, started, ended, timeout_s, exit_code,
- cell_count, started_epoch) = sys.argv[1:14]
+ cell_count, started_epoch, peak_rss_kb) = sys.argv[1:15]
 try:
     d = json.load(open(path))
 except Exception:
     d = {}
+try:
+    gds_bytes = os.path.getsize(gds)
+except OSError:
+    gds_bytes = None
 d.update(checker="klayout_direct",
          run_tag=run_tag or None,
          gds_path=gds, gds_sha256=gds_sha or None,
@@ -441,9 +446,14 @@ d.update(checker="klayout_direct",
          klayout_version=klayout_version or None,
          started_at=started, ended_at=ended,
          timeout_s=int(timeout_s), exit_code=int(exit_code),
-         # RMD2-LIM-01: design size + checker wall time preserved so full-deck
-         # DRC throughput can be reported scale-stratified.
+         # RMD2-LIM-01 + LIM-HO-01 (held-out 2026-07-26): design scale, GDS
+         # size, wall time, and peak checker memory ride the verdict so a
+         # stuck full-deck run is CHARACTERIZABLE (KLayout/deck scaling is an
+         # investigation, not an acceptance relaxation — the bound and the
+         # stuck/incomplete classification stay).
          cell_count=int(cell_count or 0) or None,
+         gds_bytes=gds_bytes,
+         peak_rss_kb=int(peak_rss_kb or 0) or None,
          wall_s=max(0, int(time.time()) - int(started_epoch)))
 with open(path, "w") as f:
     json.dump(d, f, indent=2)
