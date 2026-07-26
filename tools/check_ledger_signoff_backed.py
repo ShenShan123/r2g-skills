@@ -180,6 +180,24 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     ledger = args.ledger or (args.root / "design_cases/_batch" / f"{args.platform}_campaign.jsonl")
+    if args.ledger is None:
+        # Round-crossing trap (failure-patterns #58, 2026-07-26): the default
+        # targets <platform>_campaign.jsonl, but later rounds live in sibling
+        # ledgers (e.g. sky130hs_r2_campaign.jsonl) that REUSE the same project
+        # dirs. Judging a COMPLETED round's cleans against disk state a newer
+        # round has since overwritten reads as 'FABRICATED' — a false alarm
+        # about history, not a live loop lie. Name the siblings so the
+        # operator judges the round they mean.
+        others = sorted(p.name for p in
+                        (args.root / "design_cases/_batch").glob(
+                            f"{args.platform}*_campaign.jsonl")
+                        if p != ledger)
+        if others:
+            print(f"WARNING: defaulting to {ledger.name}, but sibling round ledger(s) "
+                  f"exist for this platform: {', '.join(others)}. A newer round reuses "
+                  "the project dirs, so a completed round's cleans can read as "
+                  "'fabricated' against current disk state — pass --ledger for the "
+                  "round you are judging.")
     if not ledger.exists():
         print(f"no ledger at {ledger} — nothing to check (fresh platform round?)")
         return 0

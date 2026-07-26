@@ -5545,3 +5545,14 @@ Until one lands, `pin_pdn_short` escalations are honest design-level results, no
 *Generalizable rule: a clean geometric DRC deck proves spacing, not connectivity — an overlap
 between different nets is invisible to it. When LVS and DRC disagree, check who can actually
 SEE the failure class before deciding which one is lying.*
+
+### #58 live-wave find 2 — the signoff-backed gate's default ledger judges the WRONG round
+After r2 wave 1, `check_ledger_signoff_backed.py --platform sky130hs` (no `--ledger`) ALARMed
+`fabricated=1` on `apb_ram`. False alarm about HISTORY: the default ledger is
+`<platform>_campaign.jsonl` — the COMPLETED r1 round — while the live round is
+`sky130hs_r2_campaign.jsonl`, and r2 reuses the same project dirs. apb_ram was honestly clean
+in r1; its r2 re-run (2026-07-25, pre-#58 code) ended `escalated` with drc=unknown on disk, so
+the r1 clean lost its backing evidence. Against the CORRECT r2 ledger: PASS (fabricated=0,
+11/11 cleans backed). The tool now WARNS when sibling round ledgers exist for the platform and
+no `--ledger` was passed. (Also a repeat of the read-the-exit-code-through-a-pipe mistake —
+`tool | tail; echo $?` reports tail's status; see the #56 note.)
