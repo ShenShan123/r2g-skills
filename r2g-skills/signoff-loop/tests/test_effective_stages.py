@@ -199,6 +199,44 @@ def test_flow_gate_ppa_and_learning_agree(tmp_path):
     conn.close()
 
 
+def test_synth_arm_judgment_attributes_resumed_synth(tmp_path):
+    """#58 follow-up (explorer finding): a FROM_STAGE resume has no local synth
+    row, and engineer_loop._synth_cleared_ondisk read every resumed arm run as
+    'synth never cleared' — corrupting synth-arm A/B verdicts. It must now
+    attribute synth through the shared resolver, and stay honest on tamper."""
+    import engineer_loop as el
+    proj, child = _resume_project(tmp_path)
+    assert el._synth_cleared_ondisk(str(proj)) is True
+    art = es.STAGE_ARTIFACT["synth"]
+    (child / "results" / art).write_bytes(b"MUTATED")
+    assert el._synth_cleared_ondisk(str(proj)) is False
+
+
+def test_fail_stage_uses_mtime_newest_run(tmp_path):
+    """#58 follow-up: _fail_stage must judge the SAME run ingest ingests (mtime
+    newest), not the lexically-last RUN dir."""
+    import engineer_loop as el
+    import os as _os
+    import time as _time
+    proj = tmp_path / "p2"
+    old = proj / "backend" / "RUN_ZZZ_lexically_last"   # old FAILED run
+    new = proj / "backend" / "RUN_AAA_but_newest"       # fresh CLEAN run
+    for d, stages, status in ((old, ["synth", "floorplan"], 2),
+                              (new, list(STAGES6), 0)):
+        d.mkdir(parents=True)
+        with open(d / "stage_log.jsonl", "w") as f:
+            for s in stages[:-1]:
+                f.write(json.dumps({"stage": s, "status": 0}) + "\n")
+            f.write(json.dumps({"stage": stages[-1], "status": status}) + "\n")
+    now = _time.time()
+    _os.utime(old, (now - 100, now - 100))
+    _os.utime(new, (now, now))
+    assert el._fail_stage({"project_path": str(proj)}) is None
+    # And the reverse: the mtime-newest run failed -> its stage is reported.
+    _os.utime(old, (now + 100, now + 100))
+    assert el._fail_stage({"project_path": str(proj)}) == "floorplan"
+
+
 def test_invalid_lineage_fails_closed_everywhere(tmp_path):
     proj, child = _resume_project(tmp_path)
     art = es.STAGE_ARTIFACT["synth"]

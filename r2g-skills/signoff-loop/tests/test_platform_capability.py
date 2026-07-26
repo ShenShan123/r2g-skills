@@ -123,7 +123,7 @@ def test_antenna_repair_usable_fails_open_without_env(tmp_path, monkeypatch):
     block a repair on missing introspection."""
     for var in ("FLOW_DIR", "ORFS_ROOT"):
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setattr(pc, "find_flow_dir", lambda explicit=None: None)
+    monkeypatch.setattr(pc, "find_flow_dir", lambda explicit=None, env=None: None)
     usable, reason = pc.antenna_repair_usable("nangate45")
     assert usable is None and "flow dir" in reason
 

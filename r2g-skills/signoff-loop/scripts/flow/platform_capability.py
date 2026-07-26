@@ -368,11 +368,17 @@ def antenna_repair_usable(platform: str, flow_dir: str | None = None):
     AND tech antenna ratios exist; False with a concrete reason when the model
     is PROVABLY unusable; None when the environment cannot be inspected (no
     flow dir / unreadable LEFs) — callers must FAIL OPEN on None, since blocking
-    a repair on missing introspection would regress working setups."""
-    fd = find_flow_dir(flow_dir)
+    a repair on missing introspection would regress working setups.
+
+    When no explicit flow_dir is given, the flow dir is discovered under the
+    RESOLVED signoff env (RMD3-P1-02 follow-up): find_flow_dir's home/opt
+    fallbacks could otherwise resolve a DIFFERENT ORFS checkout than the flow
+    used, and this verdict persists into the learner via diagnose→fix_log."""
+    env = resolve_signoff_env() if flow_dir is None else None
+    fd = find_flow_dir(flow_dir, env=env)
     if not fd:
         return None, "ORFS flow dir not discoverable (FLOW_DIR/ORFS_ROOT unset)"
-    caps = probe_platform(fd, platform)
+    caps = probe_platform(fd, platform, env=env)
     ant = caps.get("antenna") or {}
     if caps.get("status") == "missing_platform" or ant.get("detail"):
         return None, ant.get("detail") or "platform dir missing"
@@ -411,9 +417,21 @@ def main(argv=None) -> int:
     ap.add_argument("--summary", action="store_true",
                     help="human-readable table instead of JSON")
     ap.add_argument("--out", help="also write the JSON manifest to this path")
+    ap.add_argument("--no-resolve-env", action="store_true",
+                    help="probe against the AMBIENT environment instead of the "
+                         "_env.sh-resolved one (tests / deliberate ambient audit)")
     args = ap.parse_args(argv)
 
-    flow_dir = find_flow_dir(args.flow_dir)
+    # RMD3-P1-02 follow-up: the CLI's JSON is PERSISTED by callers (eda-install
+    # embeds it in install_manifest.json), so like the signoff manifest it must
+    # be generated under the resolved signoff env and carry falsifiable env
+    # provenance — 'correct because the caller sourced _env.sh first' is safety
+    # by convention, not construction.
+    env = None if args.no_resolve_env else resolve_signoff_env()
+    env_source = "_env.sh" if env is not None else "ambient"
+    probe_env = env if env is not None else dict(os.environ)
+
+    flow_dir = find_flow_dir(args.flow_dir, env=probe_env)
     if not flow_dir:
         print("ERROR: no ORFS flow dir (set FLOW_DIR or ORFS_ROOT, or pass --flow-dir)",
               file=sys.stderr)
@@ -422,7 +440,12 @@ def main(argv=None) -> int:
         os.path.basename(p) for p in glob.glob(os.path.join(flow_dir, "platforms", "*"))
         if os.path.isfile(os.path.join(p, "config.mk")))  # skip helper dirs (common/, io libs)
     manifest = {"flow_dir": flow_dir,
-                "platforms": {p: probe_platform(flow_dir, p) for p in platforms}}
+                "env_source": env_source,
+                "env_digest": signoff_env_digest(probe_env),
+                "resolved_env": {k: probe_env.get(k) for k in _SIGNOFF_ENV_KEYS
+                                 if k != "PATH" and probe_env.get(k)},
+                "platforms": {p: probe_platform(flow_dir, p, env=probe_env)
+                              for p in platforms}}
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=1)

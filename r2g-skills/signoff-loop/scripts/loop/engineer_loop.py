@@ -550,18 +550,30 @@ def _ingest(entry: dict) -> str | None:
     return None
 
 
+def _newest_stage_log(project_path: str) -> Path | None:
+    """Newest backend run's stage_log, selected by RUN-dir MTIME — the SAME
+    selection ingest_run uses. The old lexical sort could judge a DIFFERENT run
+    than ingest ingested (RUN_ tags don't always sort chronologically across
+    restage/resume), so the loop's diagnosis and the learner's record could
+    describe two different generations (failure-patterns #58 follow-up)."""
+    proj = Path(project_path)
+    runs = [d for d in proj.glob("backend/RUN_*") if (d / "stage_log.jsonl").is_file()]
+    if not runs:
+        return None
+    return max(runs, key=lambda d: d.stat().st_mtime) / "stage_log.jsonl"
+
+
 def _fail_stage(entry: dict) -> str | None:
     """The backend stage that aborted in the newest run's stage_log (its LAST
     line — run_orfs.sh stops at the first failing stage), or None. Lets the loop
     distinguish a KNOWN, recipe-backed backend-abort (route congestion / DRT
     timeout) from a genuinely unhandled crash, so it can fix the former in-loop
     instead of escalating it."""
-    proj = Path(entry["project_path"])
-    logs = sorted(proj.glob("backend/RUN_*/stage_log.jsonl"))
-    if not logs:
+    log = _newest_stage_log(entry["project_path"])
+    if log is None:
         return None
     try:
-        rows = [json.loads(ln) for ln in logs[-1].read_text().splitlines() if ln.strip()]
+        rows = [json.loads(ln) for ln in log.read_text().splitlines() if ln.strip()]
     except Exception:
         return None
     if not rows:
@@ -1789,18 +1801,33 @@ def _synth_cleared_ondisk(project_path: str) -> bool:
     B (recipe: raise cap + die-pair) clears it -> True. The judge metric for a synth arm,
     analogous to the timing arm's wns: judge on the symptom the recipe FIXES, since a
     synth-recovered FF-memory design may still carry downstream DRC/LVS residuals that would
-    tie both arms on the generic is_success (2026-06-28)."""
-    logs = sorted(Path(project_path).glob("backend/RUN_*/stage_log.jsonl"))
-    if not logs:
+    tie both arms on the generic is_success (2026-06-28).
+
+    A FROM_STAGE resume has NO local synth row, and pre-#58 this read every
+    resumed arm run as 'synth never cleared' — corrupting the synth-arm verdict.
+    Now an absent local row is attributed through the shared effective-stage
+    resolver (RMD3-P1-01): a digest-verified/reconstructed parent synth counts
+    as cleared; an unattributable one honestly does not."""
+    log = _newest_stage_log(project_path)
+    if log is None:
         return False
     try:
-        rows = [json.loads(ln) for ln in logs[-1].read_text().splitlines() if ln.strip()]
+        rows = [json.loads(ln) for ln in log.read_text().splitlines() if ln.strip()]
     except Exception:
         return False
     for r in rows:
         if r.get("stage") == "synth":
             return r.get("status") in (0, "0", "pass")
-    return False
+    try:
+        import importlib.util
+        p = Path(__file__).resolve().parent.parent / "flow" / "effective_stages.py"
+        spec = importlib.util.spec_from_file_location("r2g_effective_stages_el", p)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        res = mod.resolve(str(log.parent))
+        return "synth" in (res.get("lineage") or {})
+    except Exception:
+        return False
 
 
 def _symptom_target(conn, symptom_id: str | None) -> tuple[str, str | None] | None:

@@ -5480,3 +5480,35 @@ what changed is that the verdict now carries the scale/cost quad — `cell_count
 supervision tick over the whole checker session) — through `drc_result.json`
 into `reports/drc.json`, so the KLayout/deck scaling investigation has data.
 Tests: `tests/test_drc_scaling_telemetry.py`.
+
+### #58 follow-up sweep (same day) — residuals of the same three families
+A repo-wide consumer sweep after the fixes landed found four residuals, closed
+the same day; three deferred leads are recorded for the next round.
+- **`engineer_loop._synth_cleared_ondisk` scored every resumed arm run "synth
+  never cleared"** (no local synth row after a FROM_STAGE resume) — corrupting
+  synth-arm A/B verdicts; now attributes synth via the shared resolver, honest
+  on tampered lineage. **`_fail_stage` selected the run LEXICALLY** while ingest
+  selects by mtime — the loop could diagnose a different generation than the
+  learner recorded; both now use mtime (`_newest_stage_log`).
+- **`platform_capability` CLI persisted ambient-env probes**: eda-install
+  embeds its `--out` JSON in `install_manifest.json`, correct only because the
+  installer sources `_env.sh` first (convention, not construction). The CLI now
+  resolves the signoff env by default (`--no-resolve-env` escape hatch) and
+  stamps `env_source`/`env_digest`/`resolved_env` into the manifest.
+  `antenna_repair_usable` likewise probes under the resolved env when no
+  explicit flow dir is given (its verdict persists into the learner via
+  diagnose→fix_log, and the home/opt fallbacks could hit a foreign checkout).
+- **`build_signoff_manifest` collapsed a crashed probe to the same `null` as
+  "not probed"** — now records `probe_error` and still blocks strict_clean.
+- **Newly REACHABLE by design:** `ab_runner.auto_demote_on_regression` (window
+  = 2 consecutive live same-domain regressions) was dead code while the live
+  loop could never emit `regression`; with RMD3-P0-01 it activates as designed.
+- **Deferred leads (next round):** `eval_heuristics` re-derives stage reach
+  from the raw local `stage_times_json` (under-ranks resumes; advisory-only per
+  H4) and `_is_finish_reached` re-implements the six-stage question; FIVE sites
+  answer "which run dir?" differently (ingest mtime, def-graph `_select_run.sh`
+  lexical+variant, `extract_route` lexical, `fix_orfs_failures` name-reversed)
+  — a `select_run` companion in `effective_stages.py` would bind FLOW and
+  LEARNING to the same generation before stage resolution even begins;
+  `build_diagnosis`/`extract_progress`/`graph_skip_manifest` carry independent
+  six-stage constants (cosmetic, local-only).

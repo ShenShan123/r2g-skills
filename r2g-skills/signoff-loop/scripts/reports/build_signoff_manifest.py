@@ -218,8 +218,13 @@ def build(project_dir):
                           "flow_dir": fd,
                           "resolved_env": resolved,
                           "env_digest": platform_capability.signoff_env_digest(probe_env)}
-    except Exception:  # noqa: BLE001 — capability context is best-effort
-        capability = None
+    except Exception as exc:  # noqa: BLE001 — capability context is best-effort
+        # "Probe crashed" must be distinguishable from "not probed" (None was
+        # exactly what every pre-fix sky130hs manifest showed, ambiguously).
+        # A capability record with probe_error still blocks strict_clean via
+        # the consistency gate below (strict_signoff_ready is not True).
+        capability = {"strict_signoff_ready": None, "missing": None,
+                      "probe_error": f"{type(exc).__name__}: {exc}"}
 
     # --- strict V1 verdict over the bundle ---------------------------------
     strict_missing = []
@@ -254,6 +259,10 @@ def build(project_dir):
             strict_missing.append(
                 "capability: signoff environment not resolvable — cannot bind "
                 "capability provenance to a strict-clean verdict (RMD3-P1-02)")
+        elif capability.get("probe_error"):
+            strict_missing.append(
+                f"capability: probe crashed ({capability['probe_error']}) — "
+                "cannot bind capability provenance (RMD3-P1-02)")
         elif not capability.get("strict_signoff_ready"):
             strict_missing.append(
                 "capability: strict-clean contradicts selected-platform capability "

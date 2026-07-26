@@ -147,6 +147,42 @@ def test_manifest_blocks_strict_clean_when_env_unresolvable(tmp_path, monkeypatc
     assert any("RMD3-P1-02" in r for r in m["strict_missing"])
 
 
+def test_cli_manifest_carries_env_provenance(tmp_path):
+    """#58 follow-up: the CLI's JSON is persisted by eda-install into
+    install_manifest.json — it must carry falsifiable env provenance."""
+    import subprocess
+    fd = _fake_flow_dir(tmp_path)
+    mod = FLOW / "platform_capability.py"
+    r = subprocess.run([sys.executable, str(mod), "--flow-dir", str(fd),
+                        "--platform", "sky130hd"],
+                       capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    m = json.loads(r.stdout)
+    assert m["env_source"] in ("_env.sh", "ambient")
+    assert len(m["env_digest"]) == 64
+    assert isinstance(m["resolved_env"], dict) and "PATH" not in m["resolved_env"]
+    # Escape hatch: --no-resolve-env probes ambient, and says so.
+    r2 = subprocess.run([sys.executable, str(mod), "--flow-dir", str(fd),
+                         "--platform", "sky130hd", "--no-resolve-env"],
+                        capture_output=True, text=True, timeout=120)
+    assert json.loads(r2.stdout)["env_source"] == "ambient"
+
+
+def test_manifest_records_probe_error_not_ambiguous_none(tmp_path, monkeypatch):
+    """#58 follow-up: 'probe crashed' must be distinguishable from 'not probed'
+    — and still block strict_clean."""
+    proj = _clean_bundle_project(tmp_path)
+
+    def _boom(**kw):
+        raise RuntimeError("probe exploded")
+    monkeypatch.setattr(pc, "resolve_signoff_env", _boom)
+    m = bsm.build(str(proj))
+    cap = m["platform_capability"]
+    assert cap is not None and "probe exploded" in cap["probe_error"]
+    assert m["strict_clean"] is False
+    assert any("probe crashed" in r for r in m["strict_missing"])
+
+
 def test_resolve_signoff_env_returns_dict_or_none():
     env = pc.resolve_signoff_env()
     # Machine-dependent content; the CONTRACT is a dict of non-empty strings
