@@ -302,6 +302,16 @@ echo "Top-level ports extracted: $_TOP_PORTS"
 # "sky130 LVS" cause 5 (fixed 2026-06-11).
 python3 "$(dirname "${BASH_SOURCE[0]}")/normalize_diode_spice.py" "$EXTRACTED_SPICE"
 
+# Restore top-level ports ext2spice dropped to an internal alias (Magic picks a
+# non-port canonical name when an anonymous route fragment precedes the port
+# label in the merge order) — otherwise Netgen reports a FALSE design
+# `top_pin_mismatch` on a healthy layout. Ground truth is the .ext `port`
+# declarations; a merge class holding 2+ ports (a genuine short) is never
+# restored. Fail-open helper: on any problem the honest mismatch remains.
+# See references/failure-patterns.md #58 "Magic ext2spice port-name loss".
+python3 "$(dirname "${BASH_SOURCE[0]}")/restore_ext_ports.py" \
+  "$EXTRACTED_SPICE" "$DESIGN_NAME" "$EXT_SCRATCH/$DESIGN_NAME.ext" || true
+
 # Step 2: Run Netgen LVS comparison
 NETGEN_LOG="$LVS_DIR/netgen_lvs.log"
 NETGEN_REPORT="$LVS_DIR/netgen_lvs.rpt"
@@ -379,6 +389,24 @@ MISMATCH_CLASS=""
 if [[ "$LVS_RESULT" == "mismatch" && -f "$NETGEN_REPORT" ]]; then
   if grep -qi 'Top level cell failed pin matching' "$NETGEN_REPORT"; then
     MISMATCH_CLASS="top_pin_mismatch"
+    # Sharpen the opaque pin-mismatch when the DEF PROVES a real pin-vs-PDN
+    # short (failure-patterns.md #58, ROM_16: met3 IO pins placed on met3 VSS
+    # straps — geometry-only DRC decks cannot see different-net overlaps, so
+    # this arrives as an LVS pin mismatch). A distinct, geometrically-proven
+    # class gives the learner a precise symptom key instead of a grab-bag.
+    _DEF_FOR_SHORT="${GDS_FILE%.gds}.def"
+    if [[ -f "$_DEF_FOR_SHORT" ]]; then
+      _short_rc=0
+      python3 "$(dirname "${BASH_SOURCE[0]}")/../extract/check_pin_pdn_overlap.py" \
+        "$_DEF_FOR_SHORT" --json > "$LVS_DIR/pin_pdn_shorts.json" 2>/dev/null || _short_rc=$?
+      if [[ "$_short_rc" -eq 4 ]]; then
+        MISMATCH_CLASS="pin_pdn_short"
+        echo "LVS mismatch geometrically attributed: IO pin(s) overlap PDN stripes" \
+             "(see $LVS_DIR/pin_pdn_shorts.json; failure-patterns #58)"
+      else
+        rm -f "$LVS_DIR/pin_pdn_shorts.json" 2>/dev/null || true
+      fi
+    fi
   elif grep -qiE 'Number of devices:.*\*\*MISMATCH\*\*|do not match' "$NETGEN_REPORT"; then
     MISMATCH_CLASS="netgen_topology"
   else

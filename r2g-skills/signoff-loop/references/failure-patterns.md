@@ -5512,3 +5512,36 @@ the same day; three deferred leads are recorded for the next round.
   LEARNING to the same generation before stage resolution even begins;
   `build_diagnosis`/`extract_progress`/`graph_skip_manifest` carry independent
   six-stage constants (cosmetic, local-only).
+
+### #58 live-wave find — REAL pin-vs-PDN short behind an opaque `top_pin_mismatch` (2026-07-26, sky130hs r2 wave 1)
+FFT `ROM_16` filed `lvs=mismatch top_pin_mismatch, mismatch_count=null`: extracted top had
+46/48 ports, Netgen net counts 201 vs 203, KLayout DRC clean. The investigation took a wrong
+turn worth recording: the .ext showed `port "w_r[12]"` declared but dropped from the .subckt
+with an internal alias as canonical net name — which looked like a pure ext2spice NAME-LOSS
+artifact. Two guards later, the truth was geometric: **ORFS placed the met3 IO pins
+`w_r[12]`/`w_r[20]` on coordinates crossed by met3 VSS PDN stripes** (pin bbox
+(96700,69780)-(97500,70080) vs stripe (95475,69765)-(97385,70095)) — a REAL short. The
+geometry-only KLayout deck checks spacing, not connectivity, so a different-net OVERLAP is
+DRC-clean; the honest first detector is Netgen, where it surfaces as the opaque pin-mismatch.
+**Guards landed:**
+- `scripts/flow/restore_ext_ports.py` (after normalize_diode_spice in run_netgen_lvs.sh):
+  restores a port ext2spice dropped to an internal alias — but its SAFETY GUARD (a merge class
+  holding 2+ declared ports is a genuine short, never restored) is what exposed this case,
+  printing `merge class holds 3 ports (VSS, w_r[12], w_r[20])`. Restoration only fires on the
+  pure single-port name-loss class; a short always stays Netgen's honest verdict.
+- `scripts/extract/check_pin_pdn_overlap.py`: proves the short GEOMETRICALLY from the DEF
+  (PINS rects vs same-layer SPECIALNETS stripes of a different net; exit 4 + named pins).
+  run_netgen_lvs.sh runs it on every `top_pin_mismatch` and, when proven, sharpens the class
+  to **`pin_pdn_short`** (+ `lvs/pin_pdn_shorts.json` evidence) — a precise, learnable symptom
+  key instead of the grab-bag.
+**Wrong-theory note (kept deliberately):** `gds flatglob "VIA_*"` was briefly added on the
+extraction-artifact theory and REVERTED — flattening merely renamed the shorted blob (the
+canonical name moved from VSS to w_r[20], "restoring" one port vacuously). Do not re-add it to
+"fix" a pin mismatch; the DEF overlap check is the discriminator between artifact and short.
+**Open recipe lead:** the FIX for this class is upstream — keep IO pins off PDN stripe layers
+or offset the stripes (IO_PLACER layer choice / PDN config); no diagnose strategy exists yet.
+Until one lands, `pin_pdn_short` escalations are honest design-level results, not loop bugs.
+
+*Generalizable rule: a clean geometric DRC deck proves spacing, not connectivity — an overlap
+between different nets is invisible to it. When LVS and DRC disagree, check who can actually
+SEE the failure class before deciding which one is lying.*
