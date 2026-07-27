@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-07-27T11:27:33-07:00",
-  "source_run_count": 2779,
+  "generated_at": "2026-07-27T11:50:50-07:00",
+  "source_run_count": 2802,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 6714,
+  "generation": 6739,
   "families": {
     "rv32i": {
       "platforms": {
@@ -311,9 +311,9 @@
           }
         },
         "sky130hs": {
-          "sample_size": 22,
-          "success_count": 18,
-          "success_rate": 0.8181818181818182,
+          "sample_size": 31,
+          "success_count": 26,
+          "success_rate": 0.8387096774193549,
           "core_utilization": {
             "min_safe": 12.0,
             "max_safe": 25.0,
@@ -324,30 +324,30 @@
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 405,
-          "p90_elapsed_s": 154.0,
+          "typical_cell_count": 402,
+          "p90_elapsed_s": 338.0,
           "closing_period": {
-            "min": 1.2660740000000001,
-            "p10": 1.370253,
-            "median": 1.571291,
-            "n": 17
+            "min": 1.033378,
+            "p10": 1.123663,
+            "median": 1.5842509999999999,
+            "n": 25
           },
           "slack_deterioration": {
             "d_fp_pl": {
-              "ns_p90": 0.6796220000000001,
-              "pct_p90": 0.20120206767376922
+              "ns_p90": 0.7690499999999998,
+              "pct_p90": 0.22879273793240237
             },
             "d_pl_fin": {
-              "ns_p90": 0.06043999999999994,
-              "pct_p90": 0.031436105750976495
+              "ns_p90": 0.17307100000000009,
+              "pct_p90": 0.056968845052677124
             },
-            "n": 17
+            "n": 25
           },
           "fix_recipes": {
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 17
+                "n_sessions": 25
               },
               "m3.2": {
                 "strategies": {
@@ -954,43 +954,43 @@
           }
         },
         "sky130hs": {
-          "sample_size": 17,
-          "success_count": 16,
-          "success_rate": 0.9411764705882353,
+          "sample_size": 18,
+          "success_count": 17,
+          "success_rate": 0.9444444444444444,
           "core_utilization": {
             "min_safe": 20.0,
             "max_safe": 25.0,
-            "median": 22.5
+            "median": 20.0
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 354,
-          "p90_elapsed_s": 271.0,
+          "typical_cell_count": 353,
+          "p90_elapsed_s": 175.0,
           "closing_period": {
             "min": 1.065873,
-            "p10": 1.388746,
-            "median": 1.6631125,
-            "n": 16
+            "p10": 1.32304,
+            "median": 1.643745,
+            "n": 17
           },
           "slack_deterioration": {
             "d_fp_pl": {
-              "ns_p90": 1.032257,
-              "pct_p90": 0.30423978156940606
+              "ns_p90": 0.890306,
+              "pct_p90": 0.22641588628138645
             },
             "d_pl_fin": {
               "ns_p90": 0.052690000000000015,
               "pct_p90": 0.018225968805886
             },
-            "n": 16
+            "n": 17
           },
           "fix_recipes": {
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 16
+                "n_sessions": 17
               }
             }
           }
@@ -4931,8 +4931,8 @@
           }
         },
         "sky130hs": {
-          "sample_size": 30,
-          "success_count": 30,
+          "sample_size": 42,
+          "success_count": 42,
           "success_rate": 1.0,
           "core_utilization": {
             "min_safe": 20.0,
@@ -4944,30 +4944,30 @@
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 359,
+          "typical_cell_count": 307,
           "p90_elapsed_s": 172.0,
           "closing_period": {
             "min": 0.9243129999999999,
-            "p10": 1.18919,
-            "median": 2.4306677499999996,
-            "n": 30
+            "p10": 0.995938,
+            "median": 2.24047975,
+            "n": 42
           },
           "slack_deterioration": {
             "d_fp_pl": {
-              "ns_p90": 1.431488,
-              "pct_p90": 0.3002839498764368
+              "ns_p90": 1.2671999999999999,
+              "pct_p90": 0.2967456500594402
             },
             "d_pl_fin": {
               "ns_p90": 0.09916999999999998,
               "pct_p90": 0.018664975268954817
             },
-            "n": 30
+            "n": 42
           },
           "fix_recipes": {
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 30
+                "n_sessions": 42
               }
             }
           }
@@ -13831,7 +13831,7 @@
         "wishbone_master",
         "zipdma"
       ],
-      "n_sessions": 2073,
+      "n_sessions": 2094,
       "strategies": {
         "lvs_resolve_unknown": {
           "attempts": 7,
@@ -16015,7 +16015,7 @@
               "successes": 50,
               "failures": 4,
               "wins": 5,
-              "mean_outcome_score": 0.9056638418079096,
+              "mean_outcome_score": 0.9076412429378531,
               "provenance_sources": [
                 "live"
               ]
@@ -16030,7 +16030,7 @@
               "successes": 18,
               "failures": 3,
               "wins": 3,
-              "mean_outcome_score": 0.8764236111111111,
+              "mean_outcome_score": 0.8812847222222222,
               "provenance_sources": [
                 "live"
               ]
@@ -16062,7 +16062,7 @@
               "successes": 25,
               "failures": 1,
               "wins": 1,
-              "mean_outcome_score": 0.9579012345679012,
+              "mean_outcome_score": 0.9622222222222222,
               "provenance_sources": [
                 "live"
               ]
@@ -16077,7 +16077,7 @@
               "successes": 6,
               "failures": 0,
               "wins": 1,
-              "mean_outcome_score": 0.9328571428571428,
+              "mean_outcome_score": 0.9495238095238095,
               "provenance_sources": [
                 "live"
               ]
