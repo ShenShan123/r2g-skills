@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-07-27T17:39:08-07:00",
-  "source_run_count": 2812,
+  "generated_at": "2026-07-27T20:48:34-07:00",
+  "source_run_count": 2821,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 6749,
+  "generation": 6759,
   "families": {
     "rv32i": {
       "platforms": {
@@ -5121,9 +5121,9 @@
           }
         },
         "sky130hs": {
-          "sample_size": 54,
-          "success_count": 40,
-          "success_rate": 0.7407407407407407,
+          "sample_size": 63,
+          "success_count": 47,
+          "success_rate": 0.746031746031746,
           "core_utilization": {
             "min_safe": 12.0,
             "max_safe": 20.0,
@@ -5134,30 +5134,30 @@
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 13307,
-          "p90_elapsed_s": 2137.0,
+          "typical_cell_count": 14122,
+          "p90_elapsed_s": 4591.0,
           "closing_period": {
             "min": 13.90528,
-            "p10": 17.21771,
-            "median": 37.196105,
-            "n": 34
+            "p10": 14.544659,
+            "median": 30.443558,
+            "n": 41
           },
           "slack_deterioration": {
             "d_fp_pl": {
-              "ns_p90": 6.7104,
-              "pct_p90": 0.14886094827557445
+              "ns_p90": 6.5944,
+              "pct_p90": 0.18939551511212221
             },
             "d_pl_fin": {
-              "ns_p90": 0.3238500000000002,
-              "pct_p90": 0.008424433474097428
+              "ns_p90": 0.4358000000000004,
+              "pct_p90": 0.023721189465506172
             },
-            "n": 34
+            "n": 41
           },
           "fix_recipes": {
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 52
+                "n_sessions": 61
               },
               "m3.2": {
                 "strategies": {
@@ -13831,7 +13831,7 @@
         "wishbone_master",
         "zipdma"
       ],
-      "n_sessions": 2098,
+      "n_sessions": 2105,
       "strategies": {
         "lvs_resolve_unknown": {
           "attempts": 7,
@@ -14127,7 +14127,7 @@
         "uart_tfifo",
         "uart_transmitter"
       ],
-      "n_sessions": 40,
+      "n_sessions": 41,
       "strategies": {}
     },
     "e5582b51cd0017b9": {
@@ -14954,7 +14954,7 @@
         "uart_rfifo",
         "usbfs_core_top"
       ],
-      "n_sessions": 41,
+      "n_sessions": 42,
       "strategies": {}
     },
     "7130eb485d79bfa6": {
@@ -17296,32 +17296,32 @@
         "nangate45": {
           "strategies": {
             "antenna_diode_repair": {
-              "attempts": 5,
-              "successes": 5,
+              "attempts": 6,
+              "successes": 6,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.9,
+              "mean_outcome_score": 0.9166666666666667,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 5
+          "n_sessions": 6
         },
         "*": {
           "strategies": {
             "antenna_diode_repair": {
-              "attempts": 5,
-              "successes": 5,
+              "attempts": 6,
+              "successes": 6,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.9,
+              "mean_outcome_score": 0.9166666666666667,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 5
+          "n_sessions": 6
         }
       },
       "*": {
@@ -17332,7 +17332,7 @@
               "successes": 16,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.8697916666666667,
+              "mean_outcome_score": 0.8802083333333334,
               "provenance_sources": [
                 "live"
               ]
@@ -17347,7 +17347,7 @@
               "successes": 16,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.8697916666666667,
+              "mean_outcome_score": 0.8802083333333334,
               "provenance_sources": [
                 "live"
               ]
@@ -17392,32 +17392,32 @@
         "nangate45": {
           "strategies": {
             "antenna_diode_repair": {
-              "attempts": 6,
-              "successes": 6,
+              "attempts": 5,
+              "successes": 5,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.888888888888889,
+              "mean_outcome_score": 0.9,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 6
+          "n_sessions": 5
         },
         "*": {
           "strategies": {
             "antenna_diode_repair": {
-              "attempts": 6,
-              "successes": 6,
+              "attempts": 5,
+              "successes": 5,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.888888888888889,
+              "mean_outcome_score": 0.9,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 6
+          "n_sessions": 5
         }
       },
       "crypto/medium": {
@@ -17754,7 +17754,7 @@
               "successes": 13,
               "failures": 0,
               "wins": 1,
-              "mean_outcome_score": 0.8690476190476191,
+              "mean_outcome_score": 0.8809523809523809,
               "provenance_sources": [
                 "live"
               ]
@@ -17769,7 +17769,7 @@
               "successes": 13,
               "failures": 0,
               "wins": 1,
-              "mean_outcome_score": 0.8690476190476191,
+              "mean_outcome_score": 0.8809523809523809,
               "provenance_sources": [
                 "live"
               ]
@@ -17786,7 +17786,7 @@
               "successes": 2,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.8333333333333334,
+              "mean_outcome_score": 0.9166666666666667,
               "provenance_sources": [
                 "live"
               ]
@@ -17801,7 +17801,7 @@
               "successes": 2,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.8333333333333334,
+              "mean_outcome_score": 0.9166666666666667,
               "provenance_sources": [
                 "live"
               ]
@@ -18118,7 +18118,7 @@
               "successes": 4,
               "failures": 22,
               "wins": 0,
-              "mean_outcome_score": 0.8782051282051282,
+              "mean_outcome_score": 0.9038461538461539,
               "provenance_sources": [
                 "live"
               ]
@@ -18133,7 +18133,7 @@
               "successes": 8,
               "failures": 34,
               "wins": 0,
-              "mean_outcome_score": 0.8690476190476191,
+              "mean_outcome_score": 0.9007936507936508,
               "provenance_sources": [
                 "live"
               ]
@@ -18163,7 +18163,7 @@
               "successes": 4,
               "failures": 4,
               "wins": 0,
-              "mean_outcome_score": 0.8541666666666667,
+              "mean_outcome_score": 0.8958333333333334,
               "provenance_sources": [
                 "live"
               ]
@@ -18178,7 +18178,7 @@
               "successes": 0,
               "failures": 7,
               "wins": 0,
-              "mean_outcome_score": 0.8333333333333334,
+              "mean_outcome_score": 0.8809523809523809,
               "provenance_sources": [
                 "live"
               ]
@@ -18195,7 +18195,7 @@
               "successes": 18,
               "failures": 68,
               "wins": 0,
-              "mean_outcome_score": 0.8641472868217055,
+              "mean_outcome_score": 0.8874031007751938,
               "provenance_sources": [
                 "live"
               ]
@@ -18210,7 +18210,7 @@
               "successes": 61,
               "failures": 93,
               "wins": 0,
-              "mean_outcome_score": 0.870021645021645,
+              "mean_outcome_score": 0.895995670995671,
               "provenance_sources": [
                 "live"
               ]
@@ -18240,7 +18240,7 @@
               "successes": 23,
               "failures": 13,
               "wins": 0,
-              "mean_outcome_score": 0.8796296296296297,
+              "mean_outcome_score": 0.9074074074074074,
               "provenance_sources": [
                 "live"
               ]
@@ -18255,7 +18255,7 @@
               "successes": 20,
               "failures": 11,
               "wins": 0,
-              "mean_outcome_score": 0.8709677419354839,
+              "mean_outcome_score": 0.9032258064516129,
               "provenance_sources": [
                 "live"
               ]
@@ -18334,7 +18334,7 @@
               "successes": 0,
               "failures": 17,
               "wins": 0,
-              "mean_outcome_score": 0.903921568627451,
+              "mean_outcome_score": 0.9823529411764705,
               "provenance_sources": [
                 "live"
               ]
@@ -18349,7 +18349,7 @@
               "successes": 4,
               "failures": 29,
               "wins": 0,
-              "mean_outcome_score": 0.9101010101010101,
+              "mean_outcome_score": 0.990909090909091,
               "provenance_sources": [
                 "live"
               ]
@@ -18364,7 +18364,7 @@
               "successes": 0,
               "failures": 8,
               "wins": 0,
-              "mean_outcome_score": 0.9166666666666667,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
@@ -18379,7 +18379,7 @@
               "successes": 4,
               "failures": 4,
               "wins": 0,
-              "mean_outcome_score": 0.9166666666666667,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
