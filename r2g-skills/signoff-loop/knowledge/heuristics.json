@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-07-27T21:46:18-07:00",
-  "source_run_count": 2834,
+  "generated_at": "2026-07-28T00:53:03-07:00",
+  "source_run_count": 2849,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 6773,
+  "generation": 6788,
   "families": {
     "rv32i": {
       "platforms": {
@@ -5121,9 +5121,9 @@
           }
         },
         "sky130hs": {
-          "sample_size": 76,
-          "success_count": 60,
-          "success_rate": 0.7894736842105263,
+          "sample_size": 87,
+          "success_count": 71,
+          "success_rate": 0.8160919540229885,
           "core_utilization": {
             "min_safe": 12.0,
             "max_safe": 20.0,
@@ -5134,30 +5134,30 @@
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 14155,
-          "p90_elapsed_s": 4473.0,
+          "typical_cell_count": 15177,
+          "p90_elapsed_s": 4417.0,
           "closing_period": {
             "min": 13.90528,
-            "p10": 14.758167,
-            "median": 28.612679999999997,
-            "n": 54
+            "p10": 15.18421,
+            "median": 32.86069,
+            "n": 65
           },
           "slack_deterioration": {
             "d_fp_pl": {
               "ns_p90": 5.93557,
-              "pct_p90": 0.1801515543895601
+              "pct_p90": 0.1572131296730035
             },
             "d_pl_fin": {
-              "ns_p90": 0.4358000000000004,
-              "pct_p90": 0.017541436464088407
+              "ns_p90": 0.6747999999999994,
+              "pct_p90": 0.01652479913918755
             },
-            "n": 54
+            "n": 65
           },
           "fix_recipes": {
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 74
+                "n_sessions": 85
               },
               "m3.2": {
                 "strategies": {
@@ -5374,9 +5374,9 @@
           }
         },
         "sky130hs": {
-          "sample_size": 40,
-          "success_count": 37,
-          "success_rate": 0.925,
+          "sample_size": 44,
+          "success_count": 41,
+          "success_rate": 0.9318181818181818,
           "core_utilization": {
             "min_safe": 12.0,
             "max_safe": 25.0,
@@ -5387,13 +5387,13 @@
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 1550,
+          "typical_cell_count": 1329,
           "p90_elapsed_s": 286.0,
           "closing_period": {
             "min": -2.5440700000000005,
             "p10": 3.7542090000000004,
-            "median": 7.41721,
-            "n": 37
+            "median": 7.987576000000001,
+            "n": 41
           },
           "slack_deterioration": {
             "d_fp_pl": {
@@ -5404,13 +5404,13 @@
               "ns_p90": 0.09642800000000007,
               "pct_p90": 0.02287402348381677
             },
-            "n": 37
+            "n": 41
           },
           "fix_recipes": {
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 38
+                "n_sessions": 42
               },
               "m3.2": {
                 "strategies": {
@@ -13831,7 +13831,7 @@
         "wishbone_master",
         "zipdma"
       ],
-      "n_sessions": 2118,
+      "n_sessions": 2133,
       "strategies": {
         "lvs_resolve_unknown": {
           "attempts": 7,
@@ -15081,32 +15081,32 @@
         "nangate45": {
           "strategies": {
             "period_relax": {
-              "attempts": 2,
-              "successes": 1,
+              "attempts": 1,
+              "successes": 0,
               "failures": 0,
               "wins": 1,
-              "mean_outcome_score": 0.9166666666666667,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 2
+          "n_sessions": 1
         },
         "*": {
           "strategies": {
             "period_relax": {
-              "attempts": 2,
-              "successes": 1,
+              "attempts": 1,
+              "successes": 0,
               "failures": 0,
               "wins": 1,
-              "mean_outcome_score": 0.9166666666666667,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 2
+          "n_sessions": 1
         }
       },
       "*": {
@@ -15117,7 +15117,7 @@
               "successes": 2,
               "failures": 0,
               "wins": 1,
-              "mean_outcome_score": 0.888888888888889,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
@@ -15132,7 +15132,7 @@
               "successes": 2,
               "failures": 0,
               "wins": 1,
-              "mean_outcome_score": 0.888888888888889,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
@@ -15145,32 +15145,32 @@
         "nangate45": {
           "strategies": {
             "period_relax": {
-              "attempts": 1,
-              "successes": 1,
+              "attempts": 2,
+              "successes": 2,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.8333333333333334,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 1
+          "n_sessions": 2
         },
         "*": {
           "strategies": {
             "period_relax": {
-              "attempts": 1,
-              "successes": 1,
+              "attempts": 2,
+              "successes": 2,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.8333333333333334,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 1
+          "n_sessions": 2
         }
       }
     },
@@ -15968,7 +15968,7 @@
               "successes": 7,
               "failures": 0,
               "wins": 4,
-              "mean_outcome_score": 0.9185606060606061,
+              "mean_outcome_score": 0.9291666666666667,
               "provenance_sources": [
                 "live"
               ]
@@ -15983,7 +15983,7 @@
               "successes": 4,
               "failures": 0,
               "wins": 2,
-              "mean_outcome_score": 0.8784722222222222,
+              "mean_outcome_score": 0.8979166666666667,
               "provenance_sources": [
                 "live"
               ]
@@ -16015,7 +16015,7 @@
               "successes": 50,
               "failures": 4,
               "wins": 5,
-              "mean_outcome_score": 0.9104661016949153,
+              "mean_outcome_score": 0.9144209039548022,
               "provenance_sources": [
                 "live"
               ]
@@ -16030,7 +16030,7 @@
               "successes": 18,
               "failures": 3,
               "wins": 3,
-              "mean_outcome_score": 0.8812847222222222,
+              "mean_outcome_score": 0.8910069444444444,
               "provenance_sources": [
                 "live"
               ]
@@ -16109,7 +16109,7 @@
               "successes": 3,
               "failures": 1,
               "wins": 0,
-              "mean_outcome_score": 0.9125,
+              "mean_outcome_score": 0.9416666666666667,
               "provenance_sources": [
                 "live"
               ]
@@ -16124,7 +16124,7 @@
               "successes": 2,
               "failures": 1,
               "wins": 0,
-              "mean_outcome_score": 0.9222222222222222,
+              "mean_outcome_score": 0.9611111111111111,
               "provenance_sources": [
                 "live"
               ]
@@ -17930,7 +17930,7 @@
       }
     },
     "23906819a0827a04": {
-      "logic/medium": {
+      "logic/large": {
         "nangate45": {
           "strategies": {},
           "n_sessions": 0
@@ -18000,7 +18000,7 @@
           "n_sessions": 0
         }
       },
-      "logic/large": {
+      "logic/medium": {
         "nangate45": {
           "strategies": {},
           "n_sessions": 0
