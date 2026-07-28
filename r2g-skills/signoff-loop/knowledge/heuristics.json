@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-07-28T03:30:28-07:00",
-  "source_run_count": 2880,
+  "generated_at": "2026-07-28T05:58:27-07:00",
+  "source_run_count": 2882,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 6821,
+  "generation": 6824,
   "families": {
     "rv32i": {
       "platforms": {
@@ -5374,9 +5374,9 @@
           }
         },
         "sky130hs": {
-          "sample_size": 74,
+          "sample_size": 76,
           "success_count": 70,
-          "success_rate": 0.9459459459459459,
+          "success_rate": 0.9210526315789473,
           "core_utilization": {
             "min_safe": 12.0,
             "max_safe": 25.0,
@@ -5410,7 +5410,7 @@
             "drc": {
               "null": {
                 "strategies": {},
-                "n_sessions": 72
+                "n_sessions": 74
               },
               "m3.2": {
                 "strategies": {
@@ -14127,7 +14127,7 @@
         "uart_tfifo",
         "uart_transmitter"
       ],
-      "n_sessions": 42,
+      "n_sessions": 44,
       "strategies": {}
     },
     "e5582b51cd0017b9": {
@@ -18114,32 +18114,32 @@
         "nangate45": {
           "strategies": {
             "core_util_relief": {
-              "attempts": 26,
+              "attempts": 22,
               "successes": 4,
-              "failures": 22,
+              "failures": 18,
               "wins": 0,
-              "mean_outcome_score": 0.9038461538461539,
+              "mean_outcome_score": 0.9621212121212122,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 26
+          "n_sessions": 22
         },
         "*": {
           "strategies": {
             "core_util_relief": {
-              "attempts": 42,
+              "attempts": 34,
               "successes": 8,
-              "failures": 34,
+              "failures": 26,
               "wins": 0,
-              "mean_outcome_score": 0.9007936507936508,
+              "mean_outcome_score": 0.9754901960784313,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 42
+          "n_sessions": 34
         },
         "asap7": {
           "strategies": {
@@ -18159,32 +18159,32 @@
         "sky130hd": {
           "strategies": {
             "core_util_relief": {
-              "attempts": 8,
+              "attempts": 6,
               "successes": 4,
-              "failures": 4,
+              "failures": 2,
               "wins": 0,
-              "mean_outcome_score": 0.8958333333333334,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 8
+          "n_sessions": 6
         },
         "sky130hs": {
           "strategies": {
             "core_util_relief": {
-              "attempts": 7,
+              "attempts": 5,
               "successes": 0,
-              "failures": 7,
+              "failures": 5,
               "wins": 0,
-              "mean_outcome_score": 0.8809523809523809,
+              "mean_outcome_score": 1.0,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 7
+          "n_sessions": 5
         }
       },
       "*": {
@@ -18195,7 +18195,7 @@
               "successes": 18,
               "failures": 68,
               "wins": 0,
-              "mean_outcome_score": 0.8951550387596899,
+              "mean_outcome_score": 0.9145348837209303,
               "provenance_sources": [
                 "live"
               ]
@@ -18210,7 +18210,7 @@
               "successes": 61,
               "failures": 93,
               "wins": 0,
-              "mean_outcome_score": 0.9057359307359307,
+              "mean_outcome_score": 0.9273809523809524,
               "provenance_sources": [
                 "live"
               ]
@@ -18240,7 +18240,7 @@
               "successes": 23,
               "failures": 13,
               "wins": 0,
-              "mean_outcome_score": 0.9212962962962963,
+              "mean_outcome_score": 0.9444444444444444,
               "provenance_sources": [
                 "live"
               ]
@@ -18255,7 +18255,7 @@
               "successes": 20,
               "failures": 11,
               "wins": 0,
-              "mean_outcome_score": 0.9139784946236559,
+              "mean_outcome_score": 0.9408602150537635,
               "provenance_sources": [
                 "live"
               ]
@@ -18330,39 +18330,39 @@
         "nangate45": {
           "strategies": {
             "core_util_relief": {
-              "attempts": 17,
+              "attempts": 21,
               "successes": 0,
-              "failures": 17,
+              "failures": 21,
               "wins": 0,
-              "mean_outcome_score": 0.9823529411764705,
+              "mean_outcome_score": 0.9857142857142858,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 17
+          "n_sessions": 21
         },
         "*": {
           "strategies": {
             "core_util_relief": {
-              "attempts": 33,
+              "attempts": 41,
               "successes": 4,
-              "failures": 29,
+              "failures": 37,
               "wins": 0,
-              "mean_outcome_score": 0.990909090909091,
+              "mean_outcome_score": 0.9926829268292683,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 33
+          "n_sessions": 41
         },
         "sky130hd": {
           "strategies": {
             "core_util_relief": {
-              "attempts": 8,
+              "attempts": 10,
               "successes": 0,
-              "failures": 8,
+              "failures": 10,
               "wins": 0,
               "mean_outcome_score": 1.0,
               "provenance_sources": [
@@ -18370,14 +18370,14 @@
               ]
             }
           },
-          "n_sessions": 8
+          "n_sessions": 10
         },
         "sky130hs": {
           "strategies": {
             "core_util_relief": {
-              "attempts": 8,
+              "attempts": 10,
               "successes": 4,
-              "failures": 4,
+              "failures": 6,
               "wins": 0,
               "mean_outcome_score": 1.0,
               "provenance_sources": [
@@ -18385,7 +18385,7 @@
               ]
             }
           },
-          "n_sessions": 8
+          "n_sessions": 10
         }
       },
       "bus_heavy/medium": {
