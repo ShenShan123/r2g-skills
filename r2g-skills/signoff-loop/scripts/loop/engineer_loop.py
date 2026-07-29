@@ -40,6 +40,7 @@ sys.path.insert(0, str(KNOWLEDGE))
 # fixture!=production class as the 22f3e67 fmax pilot bug). Set it at module load.
 sys.path.insert(0, str(REPORTS))
 from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
+import action_domain                        # RMD-HO-P1-02: stage-scoped eligibility
 
 STATES = ("pending", "flow", "signoff", "fixing", "clean", "escalated",
           "abandoned")
@@ -336,22 +337,30 @@ def _recipe_status_version(conn, key: dict):
 
 
 def _known_apply_strategy(conn, strategy: str | None) -> bool:
-    """True if `strategy` has a real application path — it is a catalog/backend strategy,
-    OR it has ever produced a real fix_event (proof it can be applied). Only a strategy
-    failing BOTH is a guaranteed no-op worth parking (P0-6). Fails SAFE (returns True) on
-    any DB error so a transient read never mis-parks a real recipe."""
+    """True if `strategy` has a real application path IN THIS DOMAIN — it is a
+    catalog/backend signoff strategy, OR it has ever produced a real SIGNOFF
+    fix_event (proof it can be applied here). Only a strategy failing BOTH is a
+    guaranteed no-op worth parking (P0-6). Fails SAFE (returns True) on any DB
+    error so a transient read never mis-parks a real recipe.
+
+    RMD-HO-P1-02 (held-out V3): the fallback used to accept ANY strategy carrying a
+    non-empty historical verdict, so rtl-acquire's `acquire_exclude` — written into
+    the signoff repair ledger and projected into fix_events — passed this guard and
+    had physical A/B arms planned over synth-only acquisition workspaces (4
+    inconclusive trials per platform, 12 wasted experiments across three
+    platforms). The fallback is NARROWED, not removed: a strategy whose NAME
+    belongs to another pipeline stage is refused outright, and the evidence that
+    can vouch for an unrecognised name must itself be signoff-domain.
+    """
     if not strategy:
         return True
+    if not action_domain.is_signoff_domain(strategy):
+        return False               # another stage owns it — fail closed
     if strategy in _KNOWN_APPLY_STRATEGIES:
         return True
     if conn is None:
         return True
-    try:
-        return conn.execute(
-            "SELECT 1 FROM fix_events WHERE strategy=? AND COALESCE(verdict,'') "
-            "NOT IN ('', 'none') LIMIT 1", (strategy,)).fetchone() is not None
-    except Exception:
-        return True
+    return action_domain.has_signoff_evidence(conn, strategy)
 
 
 def _symptom_check(conn, symptom_id: str | None, strategy: str | None = None) -> str:
@@ -1552,6 +1561,15 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
             if parked:
                 print(f"[loop] A/B parked {parked} non-divergent candidate(s) "
                       f"(no real edit -> arms cannot diverge)")
+        except Exception:                       # healing must never break the drain
+            pass
+        try:
+            # RMD-HO-P1-02: rows an earlier build let in from another pipeline
+            # stage (rtl-acquire's acquire_exclude) leave the signoff queue here.
+            foreign = recipe_lifecycle.park_foreign_domain(conn)
+            if foreign:
+                print(f"[loop] A/B parked {foreign} foreign-domain candidate(s) "
+                      f"(owned by another pipeline stage -> no signoff handler)")
         except Exception:                       # healing must never break the drain
             pass
     for key in recipe_lifecycle.pending_candidates(conn):

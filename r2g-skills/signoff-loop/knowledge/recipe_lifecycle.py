@@ -36,6 +36,20 @@ UNROSTERED = "unrostered"
 # exactly like 'shadow'.
 NONDIVERGENT_STRATEGIES = frozenset({"lvs_resolve_unknown"})
 
+# Stage isolation at the SOURCE (RMD-HO-P1-02, held-out V3). The signoff Recipe
+# lifecycle is a signoff-domain object: a strategy owned by another pipeline stage
+# (rtl-acquire's `acquire_exclude`, a future graph-stage action) must never become
+# a candidate here, because the physical A/B harness has no handler that can apply
+# it — every trial it plans is a guaranteed-inconclusive no-op run over the wrong
+# kind of workspace. Enqueue refuses them; park_foreign_domain() heals rows that
+# predate the filter, exactly as park_nondivergent() does for its class.
+from action_domain import domain_of, is_signoff_domain  # noqa: E402
+
+
+def _refuse_enqueue(strategy: str | None) -> bool:
+    """True when `strategy` may not enter the candidate queue at all."""
+    return strategy in NONDIVERGENT_STRATEGIES or not is_signoff_domain(strategy)
+
 
 def _iter_keys(heur: dict):
     for sid, classes in (heur.get("recipes") or {}).items():
@@ -58,8 +72,9 @@ def diff_and_enqueue(conn, heur: dict, *, prev: dict | None) -> list[tuple]:
     for key, stats in _iter_keys(heur):
         if prev_stats.get(key) == stats:
             continue
-        if key[3] in NONDIVERGENT_STRATEGIES:
-            continue           # guaranteed-inconclusive: never enters the A/B queue
+        if _refuse_enqueue(key[3]):
+            # guaranteed-inconclusive, or owned by another pipeline stage
+            continue
         row = conn.execute(
             "SELECT status FROM recipe_status WHERE symptom_id=? AND "
             "design_class=? AND platform=? AND strategy=?", key).fetchone()
@@ -86,8 +101,8 @@ def enqueue_candidate(conn, *, provenance: str = "manual_revalidate",
     Returns True iff a new candidate row was created; a no-op (returns False) when
     the recipe is already in the lifecycle — never clobbers an existing verdict.
     """
-    if key["strategy"] in NONDIVERGENT_STRATEGIES:
-        return False           # guaranteed-inconclusive: never enters the A/B queue
+    if _refuse_enqueue(key["strategy"]):
+        return False       # guaranteed-inconclusive, or owned by another stage
     row = conn.execute(
         "SELECT status FROM recipe_status WHERE symptom_id=? AND design_class=? "
         "AND platform=? AND strategy=?",
@@ -212,7 +227,7 @@ def unrostered_keys(conn, heur: dict) -> list[tuple]:
     have = set(conn.execute(
         "SELECT symptom_id, design_class, platform, strategy FROM recipe_status"))
     return [key for key, _ in _iter_keys(heur)
-            if key[3] not in NONDIVERGENT_STRATEGIES and key not in have]
+            if not _refuse_enqueue(key[3]) and key not in have]
 
 
 def ensure_rostered(conn, heur: dict) -> list[tuple]:
@@ -259,6 +274,27 @@ def park_nondivergent(conn) -> int:
         _set(conn, "parked", "nondivergent_no_real_edit",
              symptom_id=sid, design_class=dclass, platform=plat, strategy=strat)
     return len(rows)
+
+
+def park_foreign_domain(conn) -> int:
+    """One-shot heal for the RMD-HO-P1-02 leak: move candidate rows whose strategy
+    is owned by ANOTHER pipeline stage (acquisition, graph) out of the signoff work
+    queue to 'parked'. Same contract as park_nondivergent — non-terminal
+    bookkeeping, routed through _set() so status_version advances, called at the
+    top of every drain so a store that predates the enqueue filter converges with
+    no manual migration. Their evidence is NOT deleted: `fix_events` rows stay
+    queryable, they simply stop steering signoff experiments."""
+    rows = conn.execute(
+        "SELECT symptom_id, design_class, platform, strategy FROM recipe_status"
+        " WHERE status='candidate'").fetchall()
+    parked = 0
+    for sid, dclass, plat, strat in rows:
+        if is_signoff_domain(strat):
+            continue
+        _set(conn, "parked", f"foreign_action_domain:{domain_of(strat)}",
+             symptom_id=sid, design_class=dclass, platform=plat, strategy=strat)
+        parked += 1
+    return parked
 
 
 def pending_candidates(conn) -> list[dict]:

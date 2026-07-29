@@ -5643,3 +5643,59 @@ found in `fix_log.jsonl` is purged on write so existing workspaces converge. The
 `synth-frontend-*` honesty gate is unaffected — it reads `failure_events`, projected from
 `diagnosis.json`, not `fix_events`. Signoff side: see `knowledge/action_domain.py` and the
 `_known_apply_strategy` / `recipe_lifecycle` guards below.
+
+Signoff side: `knowledge/action_domain.py` gives every learnable strategy exactly one pipeline
+stage. `_known_apply_strategy` refuses any strategy whose NAME belongs to another stage, and its
+fix_events fallback — which exists so a stale static catalog can never mis-park a genuinely-learned
+recipe (P0-6) — is NARROWED rather than removed: only evidence that is itself signoff-domain
+(`check_type` in drc/lvs/timing/route/orfs/orfs_stage, with a real verdict) can vouch for an
+unrecognised name. `recipe_lifecycle` refuses foreign domains at enqueue (`_refuse_enqueue`) and
+`park_foreign_domain()` heals stores that predate the filter, called at the top of every drain
+beside `park_nondivergent()`.
+
+The `check_type` asymmetry is what makes the evidence test discriminating rather than decorative:
+acquisition frontend rows use `check="synth"`, while the real backend synth-abort recovery
+(`synth_memory_relax`) rides `check_type='orfs_stage'` with `violation_class='synth'`. So `synth`
+is deliberately ABSENT from `SIGNOFF_CHECK_TYPES` and `synth_memory_relax` still validates normally.
+
+### RMD-HO-P1-04 — a rejected repair left its regressed run ACTIVE
+The global comparator (#58 RMD3-P0-01) correctly rejected a `density_relief` that improved DRC while
+regressing route 0→1 and breaking LVS on sky130hs SPI Flash — and then restored ONLY
+`constraints/config.mk`. `backend/.r2g_signoff_run` and every project-level report (drc/route/lvs/
+manifest/gate) still described the REJECTED rerun. The ingested `runs` row therefore paired the
+restored `core_utilization=30` with the rejected run's DRC/LVS outcome, and the next diagnose,
+repair or ingest started from a run the comparator had explicitly refused.
+
+*Generalizable rule: rolling back a decision means rolling back everything that decision produced.
+A file-oriented revert of the INPUT leaves the OUTPUTS lying.*
+
+**Fix.** `fix_signoff.sh` treats a live repair as a transaction over the whole evidence bundle:
+`_snapshot_accepted_bundle` captures the terminal reports plus the active-run pointer next to the
+existing config + result-vector snapshot; `_restore_accepted_bundle` puts all of them back together
+on a rejection (deleting a report the accepted state never had); and a `.rv_rollback_pending` marker
+plus `_reconcile_pending_rollback` at session start converge an interrupted restore to the COMPLETE
+old state, never a mix. `fix_log.jsonl` is deliberately excluded — the repair ledger is append-only
+history and must keep the rejected attempt as negative evidence. The rejected layout stays under
+`backend/` for audit; only the ACTIVE pointer moves back. The audit artifact
+`global_regression_it<N>.json` now records `evidence_bundle_restored`.
+
+### RMD4-P1-01 — repeat `eda-install` did not reuse the deployed pins
+With no explicit `$R2G_ENV_FILE`, bootstrap selected `/opt/OpenROAD-flow-scripts` and an ambient PDK
+even though both deployed consumer skills already pinned the ORFS and conda PDK production actually
+uses — then tried to install strict platform rules into that wrong, read-only checkout and failed.
+`eda-install` has no `references/env.local.sh` of its own (correctly: it is the pin PRODUCER, not a
+consumer), so its `_env.sh` finds nothing at resolution step 3 and falls through to the hardcoded
+candidate list, where `/opt/OpenROAD-flow-scripts` precedes `/proj/...`. `write_env_local.sh` does
+recall the consumer pins — but only at the PIN step, long after plan and install have run.
+
+**Fix.** `scripts/setup/resolve_pins.sh` is a new layer 0, before detect→plan. It text-parses (never
+sources) each consumer's `env.local.sh`, VALIDATES each pinned path before admitting it as a
+candidate, and applies a documented precedence: explicit operator selection > agreeing deployed pins
+> fresh autodetection; CONFLICTING live pins exit 4 and require an explicit choice. A stale pin to a
+deleted tree is simply not a candidate — it neither wins nor manufactures a conflict. `bootstrap.sh`
+binds `R2G_ENV_FILE` to the selection so plan, install, pin and verify all resolve the SAME
+toolchain, fails closed on conflict in every mode including `--dry-run` (a plan computed against an
+ambiguous toolchain is exactly the misleading output this defect produced), reports an explicit
+override of an agreeing pin, and records the selection + `flow/Makefile` digest + pin-file sha256 in
+`install_manifest.json`. `--plan-from` bypasses resolution: it deliberately supplies its own machine
+description.

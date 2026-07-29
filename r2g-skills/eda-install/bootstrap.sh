@@ -83,6 +83,46 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# ---- resolve the canonical toolchain BEFORE detect/plan (RMD4-P1-01) ---------
+# A repeat bootstrap must act on the SAME installation production flows use. This
+# resolves one canonical selection — explicit operator choice > agreeing deployed
+# consumer pins > fresh autodetection — and fails closed when two live pins
+# disagree. Without it, detect_env.sh resolves through eda-install's own copy of
+# _env.sh, which has no pin file and falls through to the hardcoded candidate list
+# (/opt before /proj): the 2026-07-27 pilot planned and installed against a
+# different ORFS + PDK than every production run used.
+declare -A SEL
+# --plan-from deliberately supplies its own machine description (review/tests), so
+# it bypasses live pin resolution entirely.
+if [[ -z "$plan_from" ]]; then
+  PIN_SEL_OUT="$(bash "$SETUP_DIR/resolve_pins.sh" 2>/dev/null)"; PIN_SEL_RC=$?
+  while IFS='=' read -r _k _v; do
+    [[ -z "$_k" ]] && continue
+    SEL["$_k"]="$_v"
+  done <<< "$PIN_SEL_OUT"
+  # Fail closed in EVERY mode, --dry-run included: a plan computed against an
+  # ambiguous toolchain is exactly the misleading output this defect produced.
+  if [[ "$PIN_SEL_RC" -eq 4 ]]; then
+    echo "error: deployed skill pins disagree — ${SEL[PIN_CONFLICT_DETAIL]:-}" >&2
+    echo "       Repeat bootstrap will not choose between two live installations." >&2
+    echo "       Select one explicitly and re-run:" >&2
+    echo "         export R2G_ENV_FILE=<r2g-skills/<skill>/references/env.local.sh>" >&2
+    echo "       or export ORFS_ROOT=… PDK_ROOT=… ." >&2
+    exit 4
+  fi
+  # Bind detection to the selection so plan, install, pin and verify all resolve
+  # the SAME toolchain. An explicit R2G_ENV_FILE is never overwritten.
+  if [[ -z "${R2G_ENV_FILE:-}" && -n "${SEL[SELECTED_ENV_FILE]:-}" ]]; then
+    export R2G_ENV_FILE="${SEL[SELECTED_ENV_FILE]}"
+  fi
+  echo "== toolchain selection =="
+  printf '  source=%s  orfs=%s\n  pdk=%s\n  env-file=%s\n\n' \
+    "${SEL[SELECTION_SOURCE]:-autodetect}" "${SEL[SELECTED_ORFS_ROOT]:-<autodetect>}" \
+    "${SEL[SELECTED_PDK_ROOT]:-<autodetect>}" "${R2G_ENV_FILE:-<none>}"
+  [[ "${SEL[OVERRIDES_PINS]:-0}" == "1" ]] && \
+    echo "  NOTE: this explicit selection OVERRIDES the agreeing deployed pins." >&2
+fi
+
 # ---- detect ------------------------------------------------------------------
 [[ -n "$prefix" ]]       && export R2G_PREFIX="$prefix"
 [[ -n "$graph_python" ]] && export R2G_GRAPH_PYTHON="$graph_python"
@@ -313,6 +353,54 @@ if [[ -x "$SETUP_DIR/write_env_local.sh" || -f "$SETUP_DIR/write_env_local.sh" ]
   bash "$SETUP_DIR/write_env_local.sh" "${GP_FLAG[@]}" || \
     echo "warning: env.local.sh pin step failed" >&2
 fi
+
+# ---- install manifest (RMD4-P1-01 provenance) --------------------------------
+# Persist WHICH toolchain this invocation acted on, and the digests that identify
+# it, so a later run (or a signoff manifest) can be compared against it instead of
+# re-deriving the answer and possibly getting a different one.
+MANIFEST="${SEL[SELECTED_ENV_FILE]:-}"
+MANIFEST="${MANIFEST%/*}"                       # …/<skill>/references
+MANIFEST="${MANIFEST:-$SKILL_DIR/references}/install_manifest.json"
+python3 - "$MANIFEST" "${SEL[SELECTION_SOURCE]:-autodetect}" \
+  "${SEL[SELECTED_ORFS_ROOT]:-}" "${SEL[SELECTED_PDK_ROOT]:-}" \
+  "${SEL[SELECTED_ENV_FILE]:-}" "${SEL[SELECTED_ENV_SHA256]:-}" \
+  "${SEL[OVERRIDES_PINS]:-0}" "$install_rc" "${strict_platforms:-}" <<'PYEOF' 2>/dev/null || \
+  echo "warning: could not write install_manifest.json" >&2
+import hashlib, json, os, sys, time
+(out, source, orfs, pdk, env_file, env_sha, overrides, rc, strict) = sys.argv[1:10]
+
+def _dirsig(path):
+    """Cheap identity for a checkout: the flow Makefile's digest."""
+    mk = os.path.join(path, "flow", "Makefile") if path else ""
+    if not mk or not os.path.isfile(mk):
+        return None
+    h = hashlib.sha256()
+    with open(mk, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+rec = {
+    "manifest_version": 1,
+    "recorded_at": int(time.time()),
+    "selection_source": source,
+    "overrides_deployed_pins": overrides == "1",
+    "orfs_root": orfs or None,
+    "orfs_flow_makefile_sha256": _dirsig(orfs),
+    "pdk_root": pdk or None,
+    "env_file": env_file or None,
+    "env_file_sha256": env_sha or None,
+    "strict_platforms": [p for p in (strict or "").split() if p],
+    "install_rc": int(rc or 0),
+}
+os.makedirs(os.path.dirname(out), exist_ok=True)
+tmp = out + f".tmp.{os.getpid()}"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(rec, f, indent=1)
+    f.write("\n")
+os.replace(tmp, out)
+print(f"wrote: {out}")
+PYEOF
 
 # ---- verify ------------------------------------------------------------------
 echo

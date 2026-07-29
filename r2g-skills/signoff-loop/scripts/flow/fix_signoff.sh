@@ -208,6 +208,77 @@ _layout_digest() {  # sha256 of the newest backend 6_final.def ("" when none)
   { [[ -n "$d" ]] && sha256sum "$d" 2>/dev/null | cut -d' ' -f1; } || true
 }
 
+# --- accepted-evidence bundle (RMD-HO-P1-04, held-out V3 P1-HO-04) -----------
+#
+# A rejected live repair used to restore ONLY constraints/config.mk. The
+# project-level DRC/route/LVS/manifest/gate reports and backend/.r2g_signoff_run
+# — the active-run pointer every downstream consumer reads — stayed bound to the
+# run the comparator had just REJECTED. The ingested `runs` row therefore paired
+# the restored config with the regressed physical outcome, and the next diagnose
+# or repair iteration started from a run we explicitly refused. Publication was
+# safely blocked either way, but "the active run and the active configuration
+# describe the same accepted state" is an invariant a longer repair loop needs.
+#
+# Rollback is now a TRANSACTION over the whole evidence bundle: snapshot before
+# the reflow, restore config + reports + run pointer together on rejection, and
+# reconcile an interrupted restore to the COMPLETE old state on the next entry
+# (never a mixed state). The rejected run's artifacts stay on disk under
+# backend/ for learning and audit — only the ACTIVE pointer moves back.
+_ACCEPTED_DIR="$REPORTS/.rv_accepted"
+_ROLLBACK_MARK="$REPORTS/.rv_rollback_pending"
+# Terminal signoff evidence. fix_log.jsonl is deliberately EXCLUDED: the repair
+# ledger is append-only history and must record the rejected attempt.
+_BUNDLE_REPORTS=(drc.json lvs.json route.json ppa.json timing_check.json
+                 rcx.json signoff_manifest.json signoff_gate.json)
+
+_snapshot_accepted_bundle() {
+  rm -rf "$_ACCEPTED_DIR" 2>/dev/null || true
+  mkdir -p "$_ACCEPTED_DIR" 2>/dev/null || return 0
+  local f
+  for f in "${_BUNDLE_REPORTS[@]}"; do
+    [[ -f "$REPORTS/$f" ]] && cp -f "$REPORTS/$f" "$_ACCEPTED_DIR/$f" 2>/dev/null || true
+  done
+  if [[ -f "$PROJECT_DIR/backend/.r2g_signoff_run" ]]; then
+    cp -f "$PROJECT_DIR/backend/.r2g_signoff_run" "$_ACCEPTED_DIR/.r2g_signoff_run" 2>/dev/null || true
+  fi
+  # Manifest of what the snapshot owns, so restore knows which files must be
+  # DELETED (a report the rejected run created that the accepted run never had).
+  ( cd "$_ACCEPTED_DIR" 2>/dev/null && ls -A ) > "$_ACCEPTED_DIR.manifest" 2>/dev/null || true
+}
+
+_restore_accepted_bundle() {  # returns 1 when there is no snapshot to restore
+  [[ -d "$_ACCEPTED_DIR" ]] || return 1
+  : > "$_ROLLBACK_MARK"            # crash marker: a partial restore is completable
+  local f
+  for f in "${_BUNDLE_REPORTS[@]}"; do
+    if [[ -f "$_ACCEPTED_DIR/$f" ]]; then
+      cp -f "$_ACCEPTED_DIR/$f" "$REPORTS/$f.rvtmp" 2>/dev/null && \
+        mv -f "$REPORTS/$f.rvtmp" "$REPORTS/$f" 2>/dev/null || true
+    else
+      # The accepted state had no such report — the rejected run created it.
+      rm -f "$REPORTS/$f" 2>/dev/null || true
+    fi
+  done
+  if [[ -f "$_ACCEPTED_DIR/.r2g_signoff_run" ]]; then
+    mkdir -p "$PROJECT_DIR/backend" 2>/dev/null || true
+    cp -f "$_ACCEPTED_DIR/.r2g_signoff_run" "$PROJECT_DIR/backend/.r2g_signoff_run.rvtmp" 2>/dev/null && \
+      mv -f "$PROJECT_DIR/backend/.r2g_signoff_run.rvtmp" "$PROJECT_DIR/backend/.r2g_signoff_run" 2>/dev/null || true
+  else
+    rm -f "$PROJECT_DIR/backend/.r2g_signoff_run" 2>/dev/null || true
+  fi
+  rm -f "$_ROLLBACK_MARK" 2>/dev/null || true
+  return 0
+}
+
+_reconcile_pending_rollback() {
+  # An interruption between the marker and its removal left a MIXED bundle.
+  # Re-running the restore is idempotent and converges to the complete old state.
+  if [[ -f "$_ROLLBACK_MARK" ]]; then
+    echo "[fix] reconciling an interrupted rollback to the last accepted evidence bundle"
+    _restore_accepted_bundle || rm -f "$_ROLLBACK_MARK" 2>/dev/null || true
+  fi
+}
+
 _write_antenna_marker() {  # out_path residual_count fix_iters tried_csv
   # Persistent non-convergence memory (failure-patterns.md #36); shared by the
   # measured-no-improvement exit and the pilot-P1-1 no-effect exit.
@@ -481,6 +552,10 @@ except Exception: print("")' "$antenna_marker")"
       # restore the last accepted state.
       cp -f "$PROJECT_DIR/constraints/config.mk" "$cfg_backup" 2>/dev/null || true
       _capture_vector "$rv_pre" "$check"
+      # RMD-HO-P1-04: the config edit is only PART of the accepted state. Snapshot
+      # the whole evidence bundle (reports + the active-run pointer) so a rejected
+      # repair can be rolled back transactionally, not just textually.
+      _snapshot_accepted_bundle
     fi
     local apply_out cfg_delta="{}"
     # R2G_FIX_RANK_FIRST rides through to --apply too: the apply-time lifecycle
@@ -582,16 +657,27 @@ except Exception: print("{}")' <<<"$apply_out")"
       # A measured global regression is a hard verdict override: the target may
       # have improved, but the design as a whole got WORSE — record `regression`
       # (negative evidence), restore the last accepted config, and quarantine the
-      # evidence for audit. The regressive layout stays on disk (the strict gate
-      # already blocks it); the restored config means the next reflow rebuilds
-      # from the last accepted state. failure-patterns.md #58.
+      # evidence for audit. The regressive layout stays on disk under backend/
+      # (the strict gate already blocks it) but is no longer the ACTIVE run:
+      # config, project-level reports and backend/.r2g_signoff_run are restored
+      # together, so the next diagnose/repair/ingest starts from the accepted
+      # state instead of the one we just refused. failure-patterns.md #58/#59.
       verdict="regression"
       [[ -f "$cfg_backup" ]] && cp -f "$cfg_backup" "$PROJECT_DIR/constraints/config.mk"
-      python3 - "$REPORTS" "$it" "$sid" "$global_regs" <<'PYEOF' 2>/dev/null || true
+      # Transactional rollback (RMD-HO-P1-04): config, project-level reports AND
+      # backend/.r2g_signoff_run return to the accepted run together. Without the
+      # last two, the restored config described one run while every downstream
+      # consumer read the REJECTED run's evidence.
+      bundle_restored=0
+      _restore_accepted_bundle && bundle_restored=1
+      # The target check's own count belongs to the restored baseline again.
+      after_rollback="$(_count "$report")"
+      python3 - "$REPORTS" "$it" "$sid" "$global_regs" "$bundle_restored" <<'PYEOF' 2>/dev/null || true
 import json, os, sys
 rep, it, sid, regs = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+restored = (sys.argv[5] if len(sys.argv) > 5 else "0") == "1"
 blob = {"iter": int(it), "strategy": sid, "regressions": json.loads(regs),
-        "config_restored": True}
+        "config_restored": True, "evidence_bundle_restored": restored}
 for side in ("pre", "post"):
     try: blob[side] = json.load(open(os.path.join(rep, ".rv_%s.json" % side)))
     except Exception: blob[side] = None
@@ -599,10 +685,19 @@ out = os.path.join(rep, "global_regression_it%s.json" % it)
 json.dump(blob, open(out + ".tmp", "w"), indent=1); os.replace(out + ".tmp", out)
 PYEOF
       _journal_action config_restore "$(python3 -c 'import json,sys
-print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression","regressions":json.loads(sys.argv[2])}))' "$sid" "$global_regs")" "$sym"
+print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
+                  "regressions":json.loads(sys.argv[2]),
+                  "evidence_bundle_restored":sys.argv[3]=="1",
+                  "restored_target_count":(sys.argv[4] or None)}))' \
+        "$sid" "$global_regs" "$bundle_restored" "${after_rollback:-}")" "$sym"
       noimp=$((noimp+1))
+      # The ledger records what the ATTEMPT measured ($after) — the rejected
+      # run's count is the negative evidence. The project's ACTIVE state is the
+      # restored baseline ($after_rollback).
       _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta" "$global_regs"
-      echo "[$check] iter $it: $before -> ${after:-?} but GLOBAL REGRESSION $global_regs — config edit reverted; recorded as regression"
+      echo "[$check] iter $it: $before -> ${after:-?} but GLOBAL REGRESSION $global_regs" \
+           "— rolled back to the accepted run (config + reports + run pointer;" \
+           "bundle_restored=$bundle_restored, active count=${after_rollback:-?}); recorded as regression"
       if (( it >= BASE_ITERS && noimp >= 2 )); then
         echo "[$check] $noimp non-improving past base $BASE_ITERS; stopping"; return 0
       fi
@@ -676,6 +771,11 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression","regressio
 # matched against the new log — remove it; the ingester also keys the compare
 # file to fix_session_id before trusting it.
 rm -f "$REPORTS/fix_session_compare.json"
+# RMD-HO-P1-04: if a previous invocation died mid-rollback, the evidence bundle is
+# a MIXED state (some reports restored, some still the rejected run's). Complete
+# the restore BEFORE anything reads a report — reconcile to the complete old
+# state, never expose the mix.
+_reconcile_pending_rollback
 _capture_vector "$REPORTS/.rv_session_start.json" "$CHECK"
 # route is the backend-abort check: fix BEFORE signoff (a route abort never reaches
 # drc/lvs). It is its own --check value (not part of "both").
