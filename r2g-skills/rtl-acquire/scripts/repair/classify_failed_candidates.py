@@ -110,6 +110,13 @@ def classify(source_path: str, notes: str) -> tuple[str, str]:
             "not found" in text or "not part of the design" in text
             or "module `" in text):
         return "retry", "missing_local_module"
+    # Same reasoning for a macro-indirect closure gap (RMD-FE-P1-01): discovery
+    # already declared the closure incomplete, so a missing-module failure is a
+    # KNOWN pipeline gap, not evidence about the source.
+    if "closure_incomplete=" in text and (
+            "not found" in text or "not part of the design" in text
+            or "module `" in text):
+        return "retry", "closure_incomplete"
     # Tokenized match on the FAILURE evidence (shared with discovery's risk
     # flagging — common/rtl_risk.py): the raw-substring version of this test
     # was the same false-positive bug that hard-rejected picorv32 upstream.

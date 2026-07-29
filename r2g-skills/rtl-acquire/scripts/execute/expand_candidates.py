@@ -67,8 +67,38 @@ from common.frontend_capability import (  # noqa: E402
     capability_record,
     select_frontend,
 )
+from common.rtl_readiness import (  # noqa: E402
+    assess as assess_rtl_readiness,
+    find_status_root,
+)
 
 GRAPH_FORMAT = "netlist_graph_v1"
+
+
+def _upstream_repo_dir(source_path: Path) -> Path | None:
+    """The project root a candidate came from — where its own status declaration
+    lives. The clone directly under the downloads root when there is one, else
+    the nearest ancestor carrying a status file (a local_tree candidate has no
+    downloads-root ancestor)."""
+    try:
+        p = Path(source_path).resolve()
+    except OSError:
+        return None
+    try:
+        droot = default_downloads_root().resolve()
+        repo = next((anc for anc in p.parents if anc.parent == droot), None)
+        if repo is not None:
+            return repo
+    except Exception:
+        pass
+    return find_status_root(p)
+
+
+def _read_text_or_none(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore") if path.is_file() else None
+    except OSError:
+        return None
 
 
 def source_provenance(source_path: Path) -> dict[str, str]:
@@ -1585,9 +1615,20 @@ def main() -> int:
                 row[key] = str(stats.get(key, ""))
             row["status"] = "success"
             _src_manifest = _source_manifest(source_files)
+            # Semantic readiness (RMD-HO-P0-01): assessed HERE, where the synth
+            # log and the upstream repo are both at hand, and carried on the
+            # candidate so promotion and the publish gate read one recorded
+            # verdict instead of each re-deriving it. A synth success says the
+            # RTL elaborates; it does not say the design is finished.
+            _readiness = assess_rtl_readiness(
+                repo_dir=_upstream_repo_dir(source_path),
+                synth_log=_read_text_or_none(synth_log_path),
+                declared_dependencies=set(meta.get("declared_dependencies") or []))
             meta.update({
                 "status": "success", "duplicate_reason": "", "notes": notes,
                 "rtl_files": rtl_files,
+                "rtl_readiness": _readiness["rtl_readiness"],
+                "rtl_readiness_evidence": _readiness,
                 # Content provenance (issue 1): the EXACT bytes that earned this
                 # synth success; promote verifies against it before vendoring.
                 "source_manifest": _src_manifest,

@@ -48,7 +48,7 @@ def _args(**over) -> argparse.Namespace:
                 clock_port="", clock_period=10.0, core_utilization=30,
                 place_density=0.20, require_publish_eligible=False,
                 publish_eligible_csv=None, force=False, run=False, dry_run=False,
-                allow_unverified_source=False)
+                allow_unverified_source=False, allow_unready_rtl=False)
     base.update(over)
     return argparse.Namespace(**base)
 
@@ -296,6 +296,58 @@ class SourceProofGateTests(PromoteFixture):
         prov = json.loads((self.base / "stamped" / "metadata.json").read_text())
         self.assertTrue(prov["source_bytes_verified"])
         self.assertNotIn("source_verification_override", prov)
+
+
+class SemanticReadinessGate(PromoteFixture):
+    """RMD-HO-P0-01: byte provenance proves WHICH RTL we have, never that the RTL
+    is a finished design. secworks_sha3 declared itself unusable in its own README
+    and synthesized with substantial undriven internal logic — and promoted."""
+
+    SHA3_README = "# sha3\n\n## Status\nNot completed. Does not work. Do. Not. Use.\n"
+    UNDRIVEN = "\n".join(
+        f"Warning: Wire \\top.\\w{i} is used but has no driver." for i in range(12))
+
+    def _unfinished(self, design: str = "sha3") -> None:
+        self._mk_candidate(design, RTL_CLK, top="toy_top")
+        # The candidate's own repo declares itself unusable ...
+        repo = self.root / "downloads" / design
+        (repo / "README.md").write_text(self.SHA3_README, encoding="utf-8")
+        # ... and its synthesis log shows material structural incompleteness.
+        (self.out_root / design / "synth.log").write_text(self.UNDRIVEN, encoding="utf-8")
+
+    def test_unfinished_rtl_is_blocked_from_normal_promotion(self) -> None:
+        self._unfinished()
+        res = self._promote("sha3")
+        self.assertEqual(res["status"], "rejected_semantic_incomplete", res)
+        self.assertEqual(res["rtl_readiness"], "rejected_semantic_incomplete")
+        self.assertFalse((self.base / "sha3").exists(),
+                         "a rejected candidate must not create a project")
+
+    def test_a_healthy_candidate_still_promotes_and_is_stamped_ready(self) -> None:
+        self._mk_candidate("healthy", RTL_CLK, top="toy_top")
+        res = self._promote("healthy")
+        self.assertEqual(res["status"], "promoted", res)
+        self.assertEqual(res["rtl_readiness"], "ready")
+        prov = json.loads((self.base / "healthy" / "metadata.json").read_text())
+        self.assertEqual(prov["rtl_readiness"], "ready")
+        self.assertNotIn("rtl_readiness_override", prov)
+
+    def test_a_bad_readme_alone_is_manual_review_not_rejection(self) -> None:
+        self._mk_candidate("wip", RTL_CLK, top="toy_top")
+        (self.root / "downloads" / "wip" / "README.md").write_text(
+            self.SHA3_README, encoding="utf-8")
+        res = self._promote("wip")
+        self.assertEqual(res["status"], "manual_review", res)
+
+    def test_operator_override_promotes_but_keeps_the_verdict(self) -> None:
+        self._unfinished("forced")
+        res = self._promote("forced", allow_unready_rtl=True)
+        self.assertEqual(res["status"], "promoted", res)
+        prov = json.loads((self.base / "forced" / "metadata.json").read_text())
+        self.assertEqual(prov["rtl_readiness"], "rejected_semantic_incomplete",
+                         "an override must not launder the verdict")
+        self.assertEqual(prov["rtl_readiness_override"],
+                         "operator:--allow-unready-rtl")
 
     def test_null_digest_entry_cannot_launder_a_pass(self) -> None:
         """_source_manifest writes {"sha256": None} for a file unreadable at synth

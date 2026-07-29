@@ -103,6 +103,7 @@ def main() -> None:
         "low_fidelity",
         "license_status",
         "source_commit",
+        "rtl_readiness",
     ]
     out_rows: list[dict[str, str]] = []
     eligible_count = 0
@@ -149,6 +150,16 @@ def main() -> None:
             reasons.append(f"license_status={license_status}")
         if require_commit and source_kind == "cloned_repo" and not source_commit:
             reasons.append("missing_source_commit")
+        # Semantic readiness gate (RMD-HO-P0-01, failure-patterns #59): a design
+        # whose repository declares itself unusable and whose synthesis shows
+        # material structural incompleteness must not enter the corpus, even if
+        # every physical check happened to pass — physical cleanliness is not a
+        # functional-correctness proof. Absent verdicts (legacy candidates
+        # expanded before the gate) are permitted so the store does not
+        # retroactively invalidate itself; anything BUT `ready` blocks.
+        readiness = str(meta.get("rtl_readiness") or "").strip().lower()
+        if readiness and readiness != "ready":
+            reasons.append(f"rtl_readiness={readiness}")
 
         eligible = not reasons
         if eligible:
@@ -169,6 +180,7 @@ def main() -> None:
                 "low_fidelity": score.get("low_fidelity", "") if score else "",
                 "license_status": license_status,
                 "source_commit": source_commit,
+                "rtl_readiness": readiness,
             }
         )
 

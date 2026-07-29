@@ -5699,3 +5699,61 @@ ambiguous toolchain is exactly the misleading output this defect produced), repo
 override of an agreeing pin, and records the selection + `flow/Makefile` digest + pin-file sha256 in
 `install_manifest.json`. `--plan-from` bypasses resolution: it deliberately supplies its own machine
 description.
+
+### RMD-HO-P0-01 — explicitly unfinished RTL could pass acquisition and promotion
+`secworks_sha3` states in its own README: `Not completed. Does not work. Do. Not. Use.` The Agent
+synthesized and promoted it despite substantial undriven internal-wire evidence, then spent
+physical-design resources until detailed routing reported 8,726 violations. Routing happened to
+block publication that time — but **physical cleanliness is not a functional-correctness proof**.
+A structurally incomplete design that DID route clean would have entered the graph corpus as
+training data, and nothing in the pipeline would have objected.
+
+The hard part of this gate is not detecting SHA3; it is not rejecting healthy designs. README
+keyword matching alone is not admissible: repositories say "unsupported" and "deprecated" in
+historical notes, changelogs and third-party attributions constantly. Structural evidence alone is
+not admissible either: an undriven top-level INPUT port is what an input port IS, and a blackbox
+for a declared hard-macro dependency is expected.
+
+**Fix.** `common/rtl_readiness.py` combines three sources — a project status declaration (full
+phrases like "does not work", never bare words, recorded with file/line/digest), structural
+synthesis integrity (undriven INTERNAL wires past a materiality threshold, unresolved modules that
+are not declared dependencies, driver conflicts), and available functional evidence (recorded as
+`available_not_run` / `not_available`, never a fabricated pass). Verdicts: a strong negative
+CORROBORATED by material structural warnings ⇒ `rejected_semantic_incomplete`; either signal alone
+⇒ `manual_review`; neither ⇒ `ready`. Only `ready` enters normal autonomous promotion.
+
+The verdict is assessed once at expansion (where the synth log and the upstream repo are both at
+hand), stamped on `design_meta.json`, re-checked and enforced by `promote_candidates.py`, carried
+into the promoted project's `metadata.json`, and gated on by `build_publish_candidates.py`
+(anything but `ready` blocks publication). `--allow-unready-rtl` is a logged operator override that
+CANNOT launder the verdict — it rides every downstream manifest, exactly like the
+`source_bytes_verified` override.
+
+### RMD-FE-P1-01 — macro-indirect module dependencies were invisible to closure
+ZipCPU's `zipcore` selects implementations through the preprocessor —
+`` `DIVIDE_MODULE thedivide(...)`` with `` `define DIVIDE_MODULE div`` in a companion header — so
+autonomous closure emitted the top but omitted `div.v`, `mpyop.v` and `slowmpy.v`. The
+source-regex traversal resolves neither the macro substitution nor the dependency chain it implies:
+`INSTANTIATION_RE` cannot even match a backtick where a module name belongs.
+
+**Fix.** A bounded textual resolution, not a preprocessor: `collect_defines()` gathers `` `define``s
+across the whole repo INCLUDING headers (`.vh`/`.svh`/`.h`/`.inc`, which the RTL rglob never sees —
+and which is exactly where a `cpudefs`-style selector lives); `extract_macro_instantiations()` finds
+macros in instantiation position; `resolve_macro()` follows `` `define A `B`` chains with cycle
+detection. A macro resolving to a module the repo defines becomes a real dependency and joins the
+SAME `local_refs` set, so the existing closure walk, refcount and helper/leaf heuristics all see it
+without knowing a macro was involved. A macro that is DEFINED but resolves to nothing local is an
+honest gap ⇒ `closure_incomplete=macro` in the notes, which `classify` routes to retry. A macro the
+repo never defines is ignored — it is far more likely a vendor/assertion macro than a module
+selector, and guessing would flood every bundle with false gaps.
+
+### Frontend-cohort discovery blind spots
+Two independent rejections of good RTL, both in `discover_download_candidates.py`:
+- `src_v` (a very common "verilog sources" layout) was not in `PREFERRED_DIR_PARTS`, so any repo
+  using it was invisible below depth 2. Added along with the other common variants.
+- ANY `$display` rejected a file as a testbench, even inside a synthesis-safe guard. Real cores do
+  this constantly — picorv32's debug tracing is wrapped in `` `ifdef DEBUG``, and
+  `// synopsys translate_off` / `` `ifndef SYNTHESIS`` exist precisely so simulation-only code can
+  live beside synthesizable RTL. `unguarded_testbench_marker()` now strips guarded regions
+  (nesting-aware, so an inner conditional does not close an outer guard early) and judges what a
+  synthesis frontend would actually elaborate. An unguarded `$display` still rejects.

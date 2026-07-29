@@ -67,7 +67,13 @@ SKIP_DIR_PARTS = {
     "formal",
     "verification",
 }
-PREFERRED_DIR_PARTS = {"rtl", "src", "verilog", "hdl", "core", "cores", "design", "designs", "hw"}
+# Held-out V3 frontend cohort, discovery blind spot 1: `src_v` (a very common
+# "verilog sources" layout) was not a preferred RTL directory, so any repo using
+# it was invisible below depth 2. Recognise the common suffix/prefix variants
+# rather than only the bare words.
+PREFERRED_DIR_PARTS = {"rtl", "src", "verilog", "hdl", "core", "cores", "design", "designs", "hw",
+                       "src_v", "rtl_v", "src_rtl", "verilog_src", "sources", "srcs",
+                       "rtl_src", "hdl_src", "vsrc", "sv"}
 GENERATED_DIR_PARTS = {"build", "generated", "gen", "genrtl", "obj_dir", "out"}
 BUILD_MARKER_FILES = {".core", "build.sbt", "fusesoc.conf", "CMakeLists.txt", "pyproject.toml"}
 LOW_VALUE_NAME_MARKERS = (
@@ -467,6 +473,71 @@ def repo_build_markers(repo_dir: Path) -> list[str]:
     return sorted(set(markers))
 
 
+# Held-out V3 frontend cohort, discovery blind spot 2: ANY `$display` rejected a
+# file as a testbench, even when the call sits inside a synthesis-safe guard.
+# Real cores do this constantly — picorv32's debug tracing is wrapped in
+# `` `ifdef DEBUG ``, and the ubiquitous `// synopsys translate_off` /
+# `` `ifndef SYNTHESIS `` idioms exist precisely so simulation-only code can live
+# beside synthesizable RTL. Rejecting on the bare token discards good cores.
+#
+# The rule is now: a marker only counts when it is reachable in a SYNTHESIS
+# elaboration — i.e. not inside a guarded region. This is deliberately a
+# conservative textual scan, not a preprocessor: it removes obviously-guarded
+# regions and judges what is left. A marker outside every guard still rejects.
+_SYNTH_OFF_OPEN = re.compile(
+    r"(?im)^\s*(?://\s*(?:synopsys|synthesis|pragma)\s+translate_off"
+    r"|/\*\s*(?:synopsys|synthesis|pragma)\s+translate_off\s*\*/"
+    r"|`ifdef\s+(?:DEBUG|SIMULATION|SIM|VERBOSE|DEBUGNETS|DEBUGREGS|DEBUGASM|FORMAL)\w*"
+    r"|`ifndef\s+SYNTHESIS\w*)\s*$")
+_SYNTH_OFF_CLOSE = re.compile(
+    r"(?im)^\s*(?://\s*(?:synopsys|synthesis|pragma)\s+translate_on"
+    r"|/\*\s*(?:synopsys|synthesis|pragma)\s+translate_on\s*\*/"
+    r"|`endif|`else)\s*")
+
+
+def strip_synthesis_off_regions(rtl_text: str) -> str:
+    """Drop regions a synthesis frontend would not elaborate.
+
+    Nesting-aware only to the depth that matters: once inside a guarded region we
+    stay there until the matching `endif`/translate_on, counting nested `ifdef`s
+    so an inner conditional does not close the outer guard early.
+    """
+    out, depth, guard_depth = [], 0, None
+    for line in rtl_text.splitlines():
+        stripped = line.strip()
+        opens_cond = bool(re.match(r"(?i)^\s*`if(?:def|ndef|)\b", stripped))
+        if guard_depth is None:
+            if _SYNTH_OFF_OPEN.match(line):
+                guard_depth = depth
+                if opens_cond:
+                    depth += 1
+                continue
+            if opens_cond:
+                depth += 1
+            elif re.match(r"(?i)^\s*`endif\b", stripped):
+                depth = max(0, depth - 1)
+            out.append(line)
+            continue
+        # inside a guarded region
+        if opens_cond:
+            depth += 1
+        elif re.match(r"(?i)^\s*`endif\b", stripped):
+            depth = max(0, depth - 1)
+            if depth <= guard_depth:
+                guard_depth = None
+        elif _SYNTH_OFF_CLOSE.match(line) and depth <= guard_depth:
+            guard_depth = None
+    return "\n".join(out)
+
+
+def unguarded_testbench_marker(rtl_text: str) -> bool:
+    """True iff a simulation-only system task is reachable in synthesis."""
+    if not any(marker in rtl_text for marker in TESTBENCH_MARKERS):
+        return False
+    visible = strip_synthesis_off_regions(rtl_text)
+    return any(marker in visible for marker in TESTBENCH_MARKERS)
+
+
 def file_is_candidate(path: Path) -> tuple[bool, str]:
     if path.suffix not in {".v", ".sv", ".vhd", ".vhdl"}:
         return False, "non_rtl_suffix"
@@ -483,7 +554,7 @@ def file_is_candidate(path: Path) -> tuple[bool, str]:
     else:
         if not re.search(r"\bmodule\b", lower):
             return False, "no_module"
-    if any(marker in text for marker in TESTBENCH_MARKERS):
+    if unguarded_testbench_marker(text):
         return False, "testbench_marker"
     if any(marker in text for marker in BAD_TEMPLATE_MARKERS):
         return False, "template_placeholder"
@@ -536,6 +607,117 @@ def extract_instantiated_modules(rtl_text: str) -> set[str]:
             continue
         refs.add(token)
     return refs
+
+
+# --- macro-indirect dependencies (RMD-FE-P1-01, reserved validation cohort) ---
+#
+# P1-FE-VAL-01: ZipCPU's `zipcore` selects its implementations through the
+# preprocessor —
+#
+#     `DIVIDE_MODULE thedivide(i_clk, ...);
+#     `MPYOP        thempy(...);
+#
+# — with `` `define DIVIDE_MODULE div`` in a companion header. The source-regex
+# traversal resolves neither the macro substitution nor the dependency chain it
+# implies, so autonomous closure omitted div.v, mpyop.v and slowmpy.v and the
+# bundle only synthesized when the authoritative file list was supplied by hand.
+#
+# This is a BOUNDED textual resolution, not a preprocessor: collect `define`s
+# across the repo (headers included), and treat a macro in instantiation position
+# as a dependency only when it resolves to a module the repo actually defines.
+# An unresolvable macro is recorded, never guessed — the honest outcome is
+# `closure_incomplete`, which classify already routes to retry rather than to a
+# permanent low-value exclusion.
+DEFINE_RE = re.compile(
+    r"(?m)^[ \t]*`define[ \t]+([A-Za-z_][A-Za-z0-9_$]*)[ \t]+([^\n]+?)[ \t]*(?://.*)?$")
+# Same shape as INSTANTIATION_RE but the module name is a macro reference.
+MACRO_INSTANTIATION_RE = re.compile(
+    r"(?ms)^\s*`([A-Za-z_][A-Za-z0-9_$]*)\b\s*(?:#\s*\(.*?\)\s*)?"
+    r"([A-Za-z_][A-Za-z0-9_$]*)\b\s*(?:\[[^\]]+\]\s*)*\(")
+# Preprocessor directives that can never name a module.
+_DIRECTIVE_NAMES = {
+    "define", "undef", "ifdef", "ifndef", "elsif", "else", "endif", "include",
+    "timescale", "default_nettype", "resetall", "line", "celldefine",
+    "endcelldefine", "unconnected_drive", "nounconnected_drive", "begin_keywords",
+    "end_keywords", "pragma", "assert", "assume", "cover", "restrict",
+}
+
+DEFINE_SUFFIXES = (".vh", ".svh", ".h", ".inc")
+
+
+def collect_defines(paths) -> dict[str, str]:
+    """`name -> first token of its replacement text`, across a whole repo.
+
+    First definition wins (matching the common "header defines it, guarded
+    redefinition later" layout). Only the first token is kept: a module
+    instantiation substitutes a module NAME, and keeping the tail would turn a
+    parameterized define into an unusable key.
+    """
+    defines: dict[str, str] = {}
+    for path in paths:
+        try:
+            text = path.read_text(errors="ignore")
+        except OSError:
+            continue
+        for name, value in DEFINE_RE.findall(text):
+            if name in defines:
+                continue
+            token = value.strip().split()[0] if value.strip() else ""
+            if token:
+                defines[name] = token
+    return defines
+
+
+def resolve_macro(name: str, defines: dict[str, str], *, max_depth: int = 4) -> str | None:
+    """Follow `` `define A `B `` chains to a concrete identifier. None when the
+    macro is undefined or the chain does not terminate in one."""
+    seen: set[str] = set()
+    cur = name
+    for _ in range(max_depth):
+        if cur in seen:
+            return None
+        seen.add(cur)
+        value = defines.get(cur)
+        if value is None:
+            return None
+        value = value.strip()
+        if value.startswith("`"):
+            cur = value[1:]
+            continue
+        return value if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", value) else None
+    return None
+
+
+def extract_macro_instantiations(rtl_text: str) -> set[str]:
+    """Macro names used where a module name belongs."""
+    out: set[str] = set()
+    for match in MACRO_INSTANTIATION_RE.finditer(strip_verilog_comments(rtl_text)):
+        macro, inst = match.group(1), match.group(2)
+        if macro.lower() in _DIRECTIVE_NAMES or inst.lower() in VERILOG_KEYWORDS:
+            continue
+        out.add(macro)
+    return out
+
+
+def resolve_macro_refs(macros: set[str], defines: dict[str, str],
+                       module_to_path: dict[str, Path]) -> tuple[set[str], list[str]]:
+    """(resolved module names, unresolved macro names).
+
+    A macro that resolves to a module this repo defines becomes a real dependency.
+    A macro that is DEFINED but resolves to something the repo does not define is
+    an honest closure gap. A macro never defined anywhere in the repo is ignored:
+    it is far more likely a vendor/assertion macro than a module selector, and
+    guessing would flood every bundle with false gaps.
+    """
+    resolved: set[str] = set()
+    unresolved: list[str] = []
+    for macro in sorted(macros):
+        target = resolve_macro(macro, defines)
+        if target and target in module_to_path:
+            resolved.add(target)
+        elif macro in defines:
+            unresolved.append(macro)
+    return resolved, unresolved
 
 
 def bundle_closure(
@@ -606,6 +788,15 @@ def standalone_leaf_low_value(info: dict, refcount: Counter[str]) -> bool:
     if any(token in stem for token in ("top", "soc", "ctrl", "control", "dma", "scope", "master", "slave", "bridge", "peripheral")):
         return False
     return True
+
+
+def _closure_macros(info: dict, file_infos: dict) -> list[str]:
+    """Unresolved instantiation macros over the WHOLE bundle — a gap in a
+    dependency is as much a closure gap as one in the top."""
+    out: set[str] = set()
+    for p in info.get("bundle_paths") or [info["path"]]:
+        out.update(file_infos.get(p, {}).get("unresolved_macros") or [])
+    return sorted(out)
 
 
 def rank_candidate(info: dict) -> tuple[int, int, int, int, str]:
@@ -751,6 +942,13 @@ def main() -> None:
         file_infos: dict[Path, dict] = {}
         module_to_path: dict[str, Path] = {}
         refcount: Counter[str] = Counter()
+        # RMD-FE-P1-01: the macro table is REPO-wide and includes headers, which
+        # the RTL rglob never collects — `define DIVIDE_MODULE div` typically
+        # lives in a companion cpudefs/config header, not in the module file.
+        define_paths = list(repo_to_paths[repo_name])
+        for _suffix in DEFINE_SUFFIXES:
+            define_paths.extend(sorted(repo_dir.rglob(f"*{_suffix}")))
+        repo_defines = collect_defines(define_paths)
         for path in repo_to_paths[repo_name]:
             ok, reason = file_is_candidate(path)
             rtl_text = path.read_text(errors="ignore")
@@ -770,6 +968,7 @@ def main() -> None:
                 "module_defs": module_defs,
                 "duplicate_module_defs": duplicate_modules,
                 "instantiated": instantiated,
+                "macro_instantiations": extract_macro_instantiations(rtl_text),
                 "candidate_ok": ok,
                 "candidate_reason": reason,
                 "risk_flags": ram_macro_risk_tokens(rtl_text),
@@ -784,7 +983,14 @@ def main() -> None:
 
         for info in file_infos.values():
             local_refs = {name for name in info["instantiated"] if name in module_to_path and module_to_path[name] != info["path"]}
+            # Macro-indirect dependencies join the SAME ref set, so the existing
+            # closure walk, refcount and helper/leaf heuristics all see them
+            # without any of those needing to know a macro was involved.
+            macro_refs, unresolved_macros = resolve_macro_refs(
+                info.get("macro_instantiations") or set(), repo_defines, module_to_path)
+            local_refs |= {n for n in macro_refs if module_to_path[n] != info["path"]}
             info["local_refs"] = local_refs
+            info["unresolved_macros"] = unresolved_macros
             for ref in local_refs:
                 refcount[ref] += 1
 
@@ -851,6 +1057,13 @@ def main() -> None:
                         + (f"; bundle_incomplete={len(info.get('bundle_unresolved') or [])}; "
                            f"unresolved={'+'.join((info.get('bundle_unresolved') or [])[:8])}"
                            if info.get("bundle_unresolved") else "")
+                        # closure_incomplete (RMD-FE-P1-01): a `define'd macro sits
+                        # in instantiation position but does not resolve to a module
+                        # this repo defines. The closure is honestly incomplete —
+                        # say so rather than shipping a bundle that looks whole.
+                        + (f"; closure_incomplete=macro; "
+                           f"unresolved_macros={'+'.join(_closure_macros(info, file_infos)[:8])}"
+                           if _closure_macros(info, file_infos) else "")
                     ),
                 }
             )

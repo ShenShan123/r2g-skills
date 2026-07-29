@@ -58,12 +58,53 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from skill_env import (  # noqa: E402
     REPO_ROOT,
+    default_downloads_root,
     default_out_root,
     resolve_str_env,
     run_orfs_script,
     signoff_loop_dir,
 )
 from common.clock_infer import infer_clock_ports  # noqa: E402
+from common.rtl_readiness import (  # noqa: E402
+    assess as assess_rtl_readiness,
+    blocks_promotion,
+    find_status_root,
+)
+
+
+def _candidate_repo_dir(design_dir: Path, rtl_files: list[Path]) -> Path | None:
+    """The upstream project root a candidate came from, for status-file
+    inspection: the clone directly under the downloads root when there is one,
+    else the nearest ancestor of the RTL carrying a status file (a `local_tree`
+    candidate has no downloads-root ancestor at all), else the corpus design dir
+    (which vendors the sources and any README copied with them)."""
+    try:
+        droot = default_downloads_root().resolve()
+    except Exception:
+        droot = None
+    for f in rtl_files:
+        try:
+            p = Path(f).resolve()
+        except OSError:
+            continue
+        if droot is not None:
+            repo = next((anc for anc in p.parents if anc.parent == droot), None)
+            if repo is not None:
+                return repo
+        found = find_status_root(p)
+        if found is not None:
+            return found
+    return design_dir if design_dir.is_dir() else None
+
+
+def _read_synth_log(design_dir: Path) -> str | None:
+    """The candidate's synthesis log — the authoritative structural evidence
+    (selected by stage outcome; see expand_candidates.synth_log_from)."""
+    p = design_dir / "synth.log"
+    try:
+        return p.read_text(encoding="utf-8", errors="ignore") if p.is_file() else None
+    except OSError:
+        return None
 
 # Same probe list the synth stage's make_minimal_sdc uses (expand_candidates.py)
 # — a promoted design's clock detection must agree with what already synthesized.
@@ -435,6 +476,38 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
         print(f"WARNING: {design}: promoting with UNVERIFIED source bytes "
               f"(no synth-time manifest) per --allow-unverified-source; "
               f"source_bytes_verified=false is retained downstream", file=sys.stderr)
+    # --- Semantic RTL readiness (RMD-HO-P0-01, failure-patterns #59) --------
+    # Byte provenance proves WHICH RTL we have, never whether that RTL is a
+    # finished design. secworks_sha3 states "Not completed. Does not work. Do.
+    # Not. Use." in its own README and synthesized with substantial undriven
+    # internal logic — and promoted anyway, burning physical-design resources
+    # until detailed routing reported 8,726 violations. Routing blocked
+    # publication that time, but physical cleanliness is not a functional-
+    # correctness proof: a structurally incomplete design that DID route clean
+    # would have entered the graph corpus as training data.
+    #
+    # The verdict combines an explicit repository status declaration with
+    # structural synthesis evidence — neither alone rejects, because README
+    # keywords appear in historical notes and a few undriven wires are routine.
+    readiness = assess_rtl_readiness(
+        repo_dir=_candidate_repo_dir(out_root / design, rtl_files),
+        synth_log=_read_synth_log(out_root / design),
+        declared_dependencies=set(meta.get("declared_dependencies") or []))
+    result["rtl_readiness"] = readiness["rtl_readiness"]
+    result["rtl_readiness_evidence"] = readiness
+    if blocks_promotion(readiness) and not getattr(args, "allow_unready_rtl", False):
+        result["status"] = readiness["rtl_readiness"]
+        result["reason"] = (
+            f"{readiness['rtl_readiness']}: {readiness['reason']}. Pass "
+            f"--allow-unready-rtl to promote anyway (the verdict is retained in "
+            f"every downstream manifest and blocks strict_clean publication)")
+        return result
+    if blocks_promotion(readiness):
+        result["rtl_readiness_override"] = "operator:--allow-unready-rtl"
+        print(f"WARNING: {design}: promoting despite rtl_readiness="
+              f"{readiness['rtl_readiness']} per --allow-unready-rtl; the verdict "
+              f"is retained downstream", file=sys.stderr)
+
     synth_cfg = parse_synth_config(Path(str(meta.get("design_config") or "")))
     # --- Frozen compilation inputs (P0-N2, failure-patterns.md #52) ---------
     # RTL bytes were never the whole compilation input. Top parameters, defines,
@@ -626,7 +699,14 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
                     "promoted_from": str(out_root / design),
                     "promoted_at": result["promoted_at"],
                     "synth_variant": variant, "top": top, "platform": platform,
-                    "source_bytes_verified": bool(result.get("source_bytes_verified"))}
+                    "source_bytes_verified": bool(result.get("source_bytes_verified")),
+                    # RMD-HO-P0-01: the readiness verdict must ride the manifest
+                    # downstream readers open, exactly like source_bytes_verified —
+                    # a project promoted under an override must be distinguishable
+                    # from one that passed the gate. The publish gate keys on this.
+                    "rtl_readiness": result.get("rtl_readiness")}
+        if result.get("rtl_readiness_override"):
+            meta_out["rtl_readiness_override"] = result["rtl_readiness_override"]
         if result.get("source_verification_override"):
             meta_out["source_verification_override"] = \
                 result["source_verification_override"]
@@ -681,6 +761,11 @@ def main() -> int:
     ap.add_argument("--require-publish-eligible", action="store_true",
                     help="additionally gate on the publish-eligibility CSV")
     ap.add_argument("--publish-eligible-csv", type=Path, default=None)
+    ap.add_argument("--allow-unready-rtl", action="store_true",
+                    help="promote despite an rtl_readiness verdict of "
+                         "manual_review / rejected_semantic_incomplete "
+                         "(RMD-HO-P0-01 gate override; the verdict is retained in "
+                         "every downstream manifest and blocks strict_clean publication)")
     ap.add_argument("--allow-unverified-source", action="store_true",
                     help="promote a legacy candidate that has no synth-time "
                          "source_manifest (its proven bytes cannot be "
