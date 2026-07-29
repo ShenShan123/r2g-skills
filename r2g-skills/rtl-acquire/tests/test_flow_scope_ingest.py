@@ -4,7 +4,8 @@
 Proves the Phase-4 contract end-to-end against the REAL signoff-loop ingest
 (no mocks): a synth-only PASS ingests as pass (never 'partial'), a synth-only
 FAIL carries its orfs-fail-synth failure_event, the frontend-diagnosis
-projection adds the synth-frontend-<class> event + the exclude fix_event, and
+projection adds the synth-frontend-<class> event while keeping the acquisition
+disposition OUT of the signoff fix ledger (RMD-HO-P1-02 stage isolation), and
 the fast honesty check (fail count == frontend-event count) passes."""
 from __future__ import annotations
 
@@ -160,13 +161,29 @@ class FlowScopeIngestTests(unittest.TestCase):
         sigs = [r[0] for r in conn.execute(
             "SELECT signature FROM failure_events WHERE run_id=?",
             (row["run_id"],))]
-        fix_count = conn.execute(
-            "SELECT COUNT(*) FROM fix_events WHERE fix_session_id=?",
-            ("acquire-frontend-frontfail",)).fetchone()[0]
+        # STAGE ISOLATION (RMD-HO-P1-02): the acquisition disposition must NOT
+        # reach the signoff repair ledger. It used to be written to
+        # reports/fix_log.jsonl, land in fix_events as `acquire_exclude`, and let
+        # the engineer loop plan physical A/B trials for an action no signoff
+        # handler can apply (4 inconclusive trials per platform, held-out V3).
+        acq_count = conn.execute(
+            "SELECT COUNT(*) FROM fix_events WHERE strategy LIKE 'acquire_%'").fetchone()[0]
         conn.close()
         self.assertIn("synth-frontend-template_placeholder", sigs, sigs)
         self.assertTrue(any(s.startswith("orfs-fail-synth") for s in sigs), sigs)
-        self.assertEqual(fix_count, 1, "exclude decision must land as a fix_event")
+        self.assertEqual(acq_count, 0,
+                         "an acquisition disposition must never become a signoff fix_event")
+
+        # It IS still recorded — in the acquisition-domain ledger beside it.
+        acq_log = project / "reports" / "acquisition_actions.jsonl"
+        self.assertTrue(acq_log.exists(), "acquisition action ledger missing")
+        rows = [json.loads(ln) for ln in acq_log.read_text().splitlines() if ln.strip()]
+        self.assertEqual([r["strategy"] for r in rows], ["acquire_exclude"])
+        self.assertEqual(rows[0]["action_domain"], "acquisition")
+        self.assertFalse((project / "reports" / "fix_log.jsonl").exists()
+                         and any("acquire_" in ln for ln in
+                                 (project / "reports" / "fix_log.jsonl").read_text().splitlines()),
+                         "legacy acquire_* rows must be purged from the signoff ledger")
 
         # The fast honesty check must pass once the projection ran.
         check = subprocess.run(

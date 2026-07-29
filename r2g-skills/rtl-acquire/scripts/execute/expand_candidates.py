@@ -63,6 +63,10 @@ from skill_env import (  # noqa: E402
     run_orfs_script,
 )
 from skill_env import default_downloads_root  # noqa: E402
+from common.frontend_capability import (  # noqa: E402
+    capability_record,
+    select_frontend,
+)
 
 GRAPH_FORMAT = "netlist_graph_v1"
 
@@ -641,12 +645,16 @@ def write_project(
         lines.append("export SYNTH_MEMORY_MAX_BITS = 65536")
     elif base_design in MEMORY_LIMIT_DESIGNS_128K:
         lines.append("export SYNTH_MEMORY_MAX_BITS = 131072")
-    if synth_frontend:
-        lines.append(f"export SYNTH_HDL_FRONTEND = {synth_frontend}")
-    elif any(path.suffix.lower() == ".sv" for path in source_files):
-        lines.append("export SYNTH_HDL_FRONTEND = slang")
-    elif notes and "flattened systemverilog design" in notes:
-        lines.append("export SYNTH_HDL_FRONTEND = slang")
+    # RMD-HO-P1-03: a frontend is selected only when an installed-capability
+    # canary proves this Yosys can load it. Selecting a missing slang plugin
+    # guaranteed a synth failure that the terminal taxonomy then blamed on the
+    # RTL. An unavailable frontend falls back to the default Yosys frontend and
+    # leaves a `frontend_tool_unavailable` marker for the classifier.
+    needs_sv = (any(path.suffix.lower() == ".sv" for path in source_files)
+                or bool(notes and "flattened systemverilog design" in notes))
+    chosen_frontend, _fe_record = select_frontend(synth_frontend, needs_sv=needs_sv)
+    if chosen_frontend:
+        lines.append(f"export SYNTH_HDL_FRONTEND = {chosen_frontend}")
     if top_parameters:
         ordered = " ".join(f"{k} {v}" for k, v in top_parameters.items())
         lines.append(f"export VERILOG_TOP_PARAMS = {{{ordered}}}")
@@ -854,26 +862,207 @@ def _compile_manifest(source_files: list[Path], include_dirs: list[Path],
     return man
 
 
-def synth_log_from(run_dir: Path | None, dest: Path) -> None:
-    candidates = []
-    if run_dir is not None:
-        candidates = [
-            run_dir / "logs" / "1_1_yosys.log",
-            run_dir / "logs" / "1_1_yosys_canonicalize.log",
-            run_dir / "flow.log",
-        ]
-    for path in candidates:
-        if path.exists():
-            shutil.copyfile(path, dest)
-            return
-    dest.write_text("", encoding="utf-8")
+# --- authoritative synthesis-failure evidence (RMD-HO-P1-01, held-out V3) ----
+#
+# ORFS emits SEVERAL logs per synth run. The old FIRST-EXISTING order
+# (1_1_yosys.log -> 1_1_yosys_canonicalize.log -> flow.log) copied whichever
+# filename appeared first, which is the SUCCESSFUL canonicalize log whenever the
+# later mapping step is the one that failed. The terminal exception (e.g.
+# "Synthesized memory size 25856 exceeds SYNTH_MEMORY_MAX_BITS 4096") therefore
+# never reached synth.log; `summarize_synth_failure` tailed a clean log, and
+# classify_failed_candidates fell through to a PERMANENT low_value_failure
+# exclusion for a recoverable memory-limit failure. Mor1kx / JPEG / audio were
+# all excluded this way while being provably synthesizable at a raised cap
+# (held-out V3 P1-HO-01). Selection is now by STAGE OUTCOME: the log carrying
+# the terminal error wins, latest synthesis step first.
+_SYNTH_LOG_GLOB = "1_*yosys*.log"
+# Anchored / specific enough not to fire on ordinary yosys chatter (the word
+# "error" appears in benign context strings), broad enough to catch the ORFS
+# make abort and every terminal frontend exception we classify on.
+_TERMINAL_ERROR_RE = re.compile(
+    r"(?im)^\s*(?:ERROR|Error)[: ]"
+    r"|exceeds\s+SYNTH_MEMORY_MAX_BITS"
+    r"|syntax error"
+    r"|is not part of the design"
+    r"|^make(?:\[\d+\])?:\s+\*\*\*"
+    r"|Command failed"
+)
+# Yosys' memory-guard abort, e.g.
+#   ERROR: Synthesized memory size 25856 exceeds SYNTH_MEMORY_MAX_BITS 4096.
+# Both numbers are captured so the record names the OBSERVED value and the CAP
+# separately (RMD-HO-P1-01 part B) instead of a single opaque string.
+_MEMORY_LIMIT_RE = re.compile(
+    r"(?i)synthesized memory size\s+(\d+)\s+exceeds\s+SYNTH_MEMORY_MAX_BITS\s*(\d+)?")
+# Documented cap tiers — a bounded next cap, never an unbounded "whatever fits".
+MEMORY_CAP_TIERS = (4096, 8192, 16384, 32768, 65536, 131072, 262144)
+
+
+def _stage_rank(path: Path) -> int:
+    """Later synthesis step -> higher rank. flow.log is the aggregate fallback."""
+    name = path.name
+    if name == "flow.log":
+        return 0
+    if "canonicalize" in name:
+        return 1
+    m = re.match(r"1_(\d+)_", name)
+    return 2 + (int(m.group(1)) if m else 0)
+
+
+def _log_candidates(run_dir: Path) -> list[Path]:
+    out: list[Path] = []
+    logs = run_dir / "logs"
+    if logs.is_dir():
+        out.extend(sorted(p for p in logs.glob(_SYNTH_LOG_GLOB) if p.is_file()))
+    flow = run_dir / "flow.log"
+    if flow.is_file():
+        out.append(flow)
+    return out
+
+
+def _has_terminal_error(path: Path) -> bool:
+    try:
+        return bool(_TERMINAL_ERROR_RE.search(path.read_text(encoding="utf-8", errors="ignore")))
+    except OSError:
+        return False
+
+
+def _error_tail(path: Path, lines: int = 40) -> str:
+    """The tail from the FIRST terminal-error line onward (bounded)."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+    m = _TERMINAL_ERROR_RE.search(text)
+    if not m:
+        return ""
+    return "\n".join(text[m.start():].splitlines()[:lines])
+
+
+def _sha256_file(path: Path) -> str | None:
+    try:
+        h = hashlib.sha256()
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def select_synth_failure_log(run_dir: Path | None) -> tuple[Path | None, dict]:
+    """(chosen_log, evidence) — the log that carries the TERMINAL synth failure.
+
+    Rank: carries a terminal error > later synthesis stage > newer mtime. When NO
+    candidate carries an error the failure evidence is incomplete: the caller
+    must classify `diagnostic_incomplete` and retry/escalate, never permanently
+    exclude the source as low value (RMD-HO-P1-01 part A).
+    """
+    evidence: dict = {
+        "failure_stage": None, "log_path": None, "log_sha256": None,
+        "has_terminal_error": False, "considered": [], "diagnostic": "no_run_dir",
+    }
+    if run_dir is None:
+        return None, evidence
+    cands = _log_candidates(run_dir)
+    evidence["considered"] = [p.name for p in cands]
+    if not cands:
+        evidence["diagnostic"] = "no_logs"
+        return None, evidence
+
+    def _key(p: Path) -> tuple[int, int, float]:
+        try:
+            mtime = p.stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        return (1 if _has_terminal_error(p) else 0, _stage_rank(p), mtime)
+
+    chosen = max(cands, key=_key)
+    has_err = _has_terminal_error(chosen)
+    evidence.update({
+        "failure_stage": "synth",
+        "log_path": str(chosen),
+        "log_sha256": _sha256_file(chosen),
+        "has_terminal_error": has_err,
+        "diagnostic": "ok" if has_err else "diagnostic_incomplete",
+    })
+    return chosen, evidence
+
+
+def memory_limit_evidence(text: str) -> dict | None:
+    """Observed inferred-memory bits vs the configured cap, plus the bounded next
+    cap tier. None when the text carries no memory-guard abort.
+
+    An "impossible" summary (observed == 0 while the guard fired) is reported as
+    such rather than silently trusted — the upstream ORFS mem report has been
+    seen claiming zero total bits beside nonzero instances (LIM-FE-02).
+    """
+    m = _MEMORY_LIMIT_RE.search(text or "")
+    if not m:
+        return None
+    observed = int(m.group(1))
+    cap = int(m.group(2)) if m.group(2) else None
+    next_cap = None
+    for tier in MEMORY_CAP_TIERS:
+        if tier > observed and (cap is None or tier > cap):
+            next_cap = tier
+            break
+    return {
+        "observed_bits": observed,
+        "configured_cap_bits": cap,
+        "next_cap_bits": next_cap,
+        "implausible": observed <= 0,
+    }
+
+
+def synth_log_from(run_dir: Path | None, dest: Path) -> dict:
+    """Copy the authoritative failure log to `dest` and return its evidence.
+
+    When the winner is `flow.log` — the aggregate whose "error" is often just the
+    make abort — the newest stage log's tail is APPENDED under a marker, so the
+    yosys-side context is never lost even if its exception text is one our
+    terminal-error regex does not yet recognise. dest is the failure-evidence
+    bundle, and losing the only copy of the real exception is exactly the defect
+    being fixed here.
+    """
+    chosen, evidence = select_synth_failure_log(run_dir)
+    if chosen is None:
+        dest.write_text("", encoding="utf-8")
+        return evidence
+    shutil.copyfile(chosen, dest)
+    if chosen.name == "flow.log":
+        stage_logs = [p for p in _log_candidates(run_dir)      # type: ignore[arg-type]
+                      if p.name != "flow.log"]
+        if stage_logs:
+            newest = max(stage_logs, key=lambda p: (_stage_rank(p), p.stat().st_mtime))
+            tail = _error_tail(newest) or "\n".join(
+                newest.read_text(encoding="utf-8", errors="ignore").splitlines()[-40:])
+            if tail:
+                with dest.open("a", encoding="utf-8") as fh:
+                    fh.write(f"\n=== r2g: stage-log context from {newest.name} ===\n")
+                    fh.write(tail + "\n")
+                evidence["stage_context_from"] = newest.name
+    try:
+        evidence["memory"] = memory_limit_evidence(
+            dest.read_text(encoding="utf-8", errors="ignore"))
+    except OSError:
+        evidence["memory"] = None
+    return evidence
 
 
 def summarize_synth_failure(synth_log_path: Path) -> str:
     if not synth_log_path.exists():
         return "synthesis_failed"
-    lines = synth_log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
-    tail = " | ".join(lines[-8:]).strip()
+    text = synth_log_path.read_text(encoding="utf-8", errors="ignore")
+    lines = text.splitlines()
+    # Prefer the terminal-error region over the raw tail: a yosys log can end
+    # with dozens of benign statistics lines AFTER the abort, which pushed the
+    # actual exception out of an 8-line tail and left the classifier guessing.
+    m = _TERMINAL_ERROR_RE.search(text)
+    if m:
+        err_lines = text[m.start():].splitlines()[:8]
+        tail = " | ".join(err_lines).strip()
+    else:
+        tail = " | ".join(lines[-8:]).strip()
     return tail[:1000] if tail else "synthesis_failed"
 
 
@@ -1200,7 +1389,8 @@ def main() -> int:
             append_design_stage(out_root, design, stage="synthesize", state="start")
             flow_ran = True
             code, netlist, run_dir = synthesize(project, design, top)
-            synth_log_from(run_dir, synth_log_path)
+            synth_evidence = synth_log_from(run_dir, synth_log_path)
+            synth_evidence["exit_code"] = code
             if netlist is None:
                 failure_note = summarize_synth_failure(synth_log_path)
                 has_vhdl = any(p.suffix.lower() in {".vhd", ".vhdl"} for p in source_files)
@@ -1216,7 +1406,8 @@ def main() -> int:
                         rtl_files = [str(p) for p in source_files]
                         src_manifest.write_text("\n".join(rtl_files) + "\n", encoding="utf-8")
                         code, netlist, run_dir = synthesize(project, design, top)
-                        synth_log_from(run_dir, synth_log_path)
+                        synth_evidence = synth_log_from(run_dir, synth_log_path)
+                        synth_evidence["exit_code"] = code
                         if netlist is not None:
                             row["notes"] = f"{notes}; vhd2vl_fallback".strip("; ")
                             fallback_used = "vhd2vl"
@@ -1241,7 +1432,8 @@ def main() -> int:
                         rtl_files = [str(p) for p in source_files]
                         src_manifest.write_text("\n".join(rtl_files) + "\n", encoding="utf-8")
                         code, netlist, run_dir = synthesize(project, design, top)
-                        synth_log_from(run_dir, synth_log_path)
+                        synth_evidence = synth_log_from(run_dir, synth_log_path)
+                        synth_evidence["exit_code"] = code
                         if netlist is not None:
                             row["notes"] = f"{notes}; sv2v_fallback".strip("; ")
                             fallback_used = "sv2v"
@@ -1255,7 +1447,37 @@ def main() -> int:
 
                 if netlist is None:
                     row["status"] = "synth_failed"
+                    # RMD-HO-P1-01: the STRUCTURED failure record rides beside the
+                    # note. The note is a bounded tail and can still truncate the
+                    # decisive line, so the memory-guard numbers and an incomplete
+                    # diagnosis are ALSO appended as explicit markers — the
+                    # classifier keys on them instead of guessing from prose.
+                    mem_ev = (synth_evidence or {}).get("memory") or {}
+                    # A frontend the installed Yosys cannot load is a TOOL gap:
+                    # mark it so the terminal class is a capability defer rather
+                    # than a source-quality exclusion (RMD-HO-P1-03).
+                    _needs_sv = (any(p.suffix.lower() == ".sv" for p in source_files)
+                                 or "flattened systemverilog design" in (notes or ""))
+                    _chosen, _fe = select_frontend(synth_frontend, needs_sv=_needs_sv)
+                    if _chosen is None and _fe.get("frontend") and not _fe.get("available", True):
+                        failure_note = (f"{failure_note} | frontend_tool_unavailable="
+                                        f"{_fe.get('frontend')}")
+                    if mem_ev:
+                        failure_note = (
+                            f"{failure_note} | memory_limit observed_bits="
+                            f"{mem_ev.get('observed_bits')} cap_bits="
+                            f"{mem_ev.get('configured_cap_bits')} next_cap_bits="
+                            f"{mem_ev.get('next_cap_bits')}")
+                    elif not (synth_evidence or {}).get("has_terminal_error", False):
+                        failure_note = f"{failure_note} | diagnostic_incomplete"
                     row["notes"] = failure_note
+                    meta["frontend_capability"] = capability_record()
+                    try:
+                        (design_out / "synth_failure.json").write_text(
+                            json.dumps(synth_evidence, indent=2), encoding="utf-8")
+                    except OSError:
+                        pass
+                    meta["synth_failure_evidence"] = synth_evidence
                     # A FAILED rerun must invalidate the prior generation's success
                     # artifacts (issue 3): stale mapped_netlist.v/netlist_graph.pt
                     # would let the index rebuilder reconstruct 'success'.

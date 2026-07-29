@@ -5556,3 +5556,90 @@ the r1 clean lost its backing evidence. Against the CORRECT r2 ledger: PASS (fab
 11/11 cleans backed). The tool now WARNS when sibling round ledgers exist for the platform and
 no `--ledger` was passed. (Also a repeat of the read-the-exit-code-through-a-pipe mistake —
 `tool | tail; echo $?` reports tail's status; see the #56 note.)
+
+---
+
+## Held-Out V3 + Three-Platform Pilot Failures (2026-07-29 — failure-patterns #59)
+
+Two external cohorts run at baseline `ff01d5c` (three-platform fixed pilot 2026-07-27; held-out
+V3 E2E + frontend development + reserved frontend validation, 2026-07-28) reported ten defects.
+Nine reproduce in this repo and are fixed here; one (`LIM-FE-02`, ORFS `mem_dump.py` reporting
+`Total inferred memory bits: 0` beside nonzero instances) is UPSTREAM in the ORFS checkout, not
+ours — treat total-bits as unusable for cost prediction and key the cap decision on the
+largest-instance number. Plans: `docs/superpowers/plans/2026-07-27-three-platform-{pilot-analysis,
+remediation-plan}-ff01d5c.md` and `docs/superpowers/plans/2026-07-28-heldout-v3-{generalization-
+analysis,remediation-plan}.md`.
+
+The dominant theme is **evidence capture, not decision logic**. Four of the nine are cases where
+a correct decision procedure was fed the wrong input, or where a correct decision left the wrong
+artifacts behind. A classifier cannot be more honest than the log it reads; a rollback cannot be
+more honest than the files it restores.
+
+### RMD-HO-P1-01 — the wrong synthesis log hid every recoverable memory failure
+`rtl-acquire/scripts/execute/expand_candidates.py::synth_log_from` copied the FIRST EXISTING
+filename in the order `1_1_yosys.log` → `1_1_yosys_canonicalize.log` → `flow.log`. The
+canonicalize step SUCCEEDS even when the later mapping step aborts, so the copied `synth.log`
+held a clean log and the terminal exception —
+`ERROR: Synthesized memory size 25856 exceeds SYNTH_MEMORY_MAX_BITS 4096` — never reached it.
+`summarize_synth_failure` tailed the clean log; `classify_failed_candidates.classify` had no
+memory branch and fell through to `exclude, low_value_failure`, a PERMANENT verdict that also
+writes the source path into `failed_candidates_exclude.csv` so normal acquisition never sees the
+design again. mor1kx, JPEG and audio were all burned this way while being provably synthesizable
+at a raised cap (105K / 127K / 224K cells).
+
+Note the recovery machinery already existed and was never reached: `auto_fix_failures.py` knows
+`MEMORY_LIMIT_RE`, sets `synth_memory_max_bits=131072`, and bounds itself to
+`MAX_REPAIR_ATTEMPTS=2`. The bug was one function upstream of it.
+
+**Fix.** Selection is now by STAGE OUTCOME, not filename order: rank every `logs/1_*yosys*.log`
+plus `flow.log` by (carries a terminal error, later synthesis stage, newer mtime). When
+`flow.log` wins — its "error" is often only the make abort — the newest stage log's tail is
+appended so the yosys context survives even for an exception text the regex does not yet know.
+`summarize_synth_failure` now summarizes from the terminal-error line rather than the raw tail
+(a yosys log can end with dozens of benign statistics lines AFTER the abort).
+`select_synth_failure_log` returns a structured record (`failure_stage`, log path, sha256,
+`has_terminal_error`, `considered`) persisted as `<design>/synth_failure.json`;
+`memory_limit_evidence` names the OBSERVED bits and the CONFIGURED cap separately and computes a
+bounded next cap from a documented tier list. A run with no resolvable error log classifies
+`diagnostic_incomplete` → retry, never a terminal low-value verdict: **absent evidence is not
+evidence of low value.**
+
+### RMD-HO-P1-03 — a missing tool blamed on the RTL
+`write_project` emitted `export SYNTH_HDL_FRONTEND = slang` for ANY bundle containing a `.sv`
+file, with no check that the installed Yosys can load the plugin. Without `slang.so` that
+guarantees a synth failure; the sv2v fallback then reinterpreted a valid SystemVerilog constant
+function, Yosys rejected the rewrite, and `classify` mapped `"slang"`/`"frontend"` straight to
+`low_value_failure`. APB4 GPIO and WB DMA were permanently excluded although both compile
+cleanly under an independent standards-aware frontend (Icarus in SV and IEEE-1364-2001 modes).
+
+**Fix.** `common/frontend_capability.py` probes each selectable frontend with a real canary
+(`yosys -p "plugin -i slang"`, the exact operation ORFS performs) and caches the verdict. A
+frontend is selected only when its canary PASSED — an unprobeable or failing frontend falls back
+to the default Yosys frontend and stamps `frontend_tool_unavailable=<name>` on the failure note.
+`classify` gained a third bucket, `defer`, for `frontend_tool_unavailable` and
+`tool_compatibility`; deferred rows land in `failed_candidates_defer.csv`, which discovery does
+NOT read, so the candidate stays eligible once the capability is installed and emits no negative
+source-quality evidence. `tool_compatibility` is kept deliberately narrow (only signatures an
+independent frontend was observed to accept) — a generic `syntax error` is still a source
+failure, because most of them genuinely are.
+
+### RMD-HO-P1-02 — acquisition dispositions planned physical A/B experiments
+`project_frontend_diagnosis.append_fix_row` wrote `strategy="acquire_exclude"`,
+`verdict="no_change"` into `reports/fix_log.jsonl` — the SIGNOFF repair ledger.
+`ingest_run.py` projected it into `fix_events`; `learn_heuristics` turned the step into a
+symptom-keyed recipe; `recipe_lifecycle` enqueued a candidate; and
+`engineer_loop._known_apply_strategy` admitted it because its fix_events fallback accepts any
+strategy with a non-empty historical verdict. `plan_arms_for_candidates` has platform scoping but
+no action-domain or subject-stage filter, so it planned signoff arms over synth-only acquisition
+workspaces: 4 inconclusive trials per platform per cohort, 12 wasted experiments across three
+platforms, and an unapplyable candidate kept alive indefinitely.
+
+*Generalizable rule: a historical event proves an action was RECORDED, not that the current
+executor has a handler for it or that the subject belongs to the same pipeline stage.*
+
+**Fix (two layers).** Acquisition side: dispositions move to `reports/acquisition_actions.jsonl`
+(same schema, same idempotence, plus an explicit `action_domain`), and any legacy `acquire_*` row
+found in `fix_log.jsonl` is purged on write so existing workspaces converge. The
+`synth-frontend-*` honesty gate is unaffected — it reads `failure_events`, projected from
+`diagnosis.json`, not `fix_events`. Signoff side: see `knowledge/action_domain.py` and the
+`_known_apply_strategy` / `recipe_lifecycle` guards below.

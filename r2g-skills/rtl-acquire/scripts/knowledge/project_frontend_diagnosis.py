@@ -44,6 +44,9 @@ from skill_env import (  # noqa: E402
 )
 
 FAILED_STATUSES = {"synth_failed"}
+# Acquisition dispositions live HERE, never in the signoff fix ledger
+# (reports/fix_log.jsonl) — see append_fix_row.
+ACQUISITION_ACTIONS_LOG = "acquisition_actions.jsonl"
 
 
 def now_iso() -> str:
@@ -83,12 +86,29 @@ def write_diagnosis(project: Path, kind: str, summary: str, action: str) -> None
 
 def append_fix_row(project: Path, design: str, reason: str, action: str,
                    cleared: bool) -> None:
+    """Record the acquisition disposition in `reports/acquisition_actions.jsonl`.
+
+    STAGE ISOLATION (RMD-HO-P1-02, held-out V3). These rows used to be written to
+    `reports/fix_log.jsonl` — the SIGNOFF fix ledger. ingest_run.py projects that
+    file into `fix_events`, learn_heuristics turned the resulting `acquire_exclude`
+    steps into a symptom-keyed recipe, and the engineer loop then planned PHYSICAL
+    A/B trials for an action no signoff handler can apply: 4 inconclusive trials
+    per platform, on synth-only workspaces, polluting the A/B corpus and keeping an
+    unapplyable candidate alive.
+
+    An acquisition disposition is not a signoff repair, so it does not belong in the
+    signoff repair ledger. It stays queryable here (same schema, same idempotence)
+    and is still projected into `failure_events` via diagnosis.json — the honesty
+    gate that every synth-fail acquire run carries a `synth-frontend-*` event is
+    unaffected, because that gate reads failure_events, not fix_events.
+    """
     reports = project / "reports"
     reports.mkdir(parents=True, exist_ok=True)
-    fix_log = reports / "fix_log.jsonl"
+    log = reports / ACQUISITION_ACTIONS_LOG
     session = f"acquire-frontend-{design}"
     row = {
         "fix_session_id": session,
+        "action_domain": "acquisition",
         "check": "synth",
         "violation_class": f"frontend_{reason}",
         "iter": 0,
@@ -97,17 +117,18 @@ def append_fix_row(project: Path, design: str, reason: str, action: str,
         "before": 1,
         "after": 0 if cleared else 1,
         "before_status": "fail",
-        "after_status": "clean" if cleared else ("excluded" if action == "exclude" else "fail"),
+        "after_status": "clean" if cleared else _terminal_status(action),
         # exclude = deliberate abandonment (negative learning); a cleared retry
-        # is a win; an uncleared retry is recorded as no_change.
-        "verdict": "cleared" if cleared else "no_change",
+        # is a win; an uncleared retry is recorded as no_change. `defer` is a
+        # capability gap: NO source-quality evidence either way.
+        "verdict": "cleared" if cleared else ("deferred" if action == "defer" else "no_change"),
         "predicates": {"acquire_action": action, "frontend_class": reason},
         "ts": now_iso(),
     }
     # Idempotent per (session, iter, strategy): drop a stale row for the same key.
     rows = []
-    if fix_log.exists():
-        for line in fix_log.read_text(encoding="utf-8").splitlines():
+    if log.exists():
+        for line in log.read_text(encoding="utf-8").splitlines():
             try:
                 r = json.loads(line)
             except Exception:
@@ -116,8 +137,38 @@ def append_fix_row(project: Path, design: str, reason: str, action: str,
                     and r.get("strategy") == row["strategy"]):
                 rows.append(r)
     rows.append(row)
-    fix_log.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
-                       encoding="utf-8")
+    log.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
+                   encoding="utf-8")
+    _purge_legacy_acquire_fix_rows(reports / "fix_log.jsonl")
+
+
+def _terminal_status(action: str) -> str:
+    return {"exclude": "excluded", "defer": "deferred"}.get(action, "fail")
+
+
+def _purge_legacy_acquire_fix_rows(fix_log: Path) -> int:
+    """Drop `acquire_*` rows a PREVIOUS build wrote into the signoff fix ledger.
+
+    Without this, converging an existing workspace would leave the leaking rows
+    in place: they are re-ingested into `fix_events` on the next ingest and the
+    A/B planner keeps seeing them. Returns the number of rows removed.
+    """
+    if not fix_log.exists():
+        return 0
+    kept, dropped = [], 0
+    for line in fix_log.read_text(encoding="utf-8").splitlines():
+        try:
+            r = json.loads(line)
+        except Exception:
+            kept.append(line)
+            continue
+        if str(r.get("strategy", "")).startswith("acquire_"):
+            dropped += 1
+            continue
+        kept.append(line)
+    if dropped:
+        fix_log.write_text(("\n".join(kept) + "\n") if kept else "", encoding="utf-8")
+    return dropped
 
 
 def ingest(project: Path) -> bool:
@@ -212,8 +263,7 @@ def main() -> int:
         elif status in {"success", "graph_skipped", "graph_failed"}:
             # A design that previously failed and now synthesizes: close the
             # trajectory as cleared (retry win). Only if a fix session exists.
-            fix_log = project / "reports" / "fix_log.jsonl"
-            if not fix_log.exists():
+            if not (project / "reports" / ACQUISITION_ACTIONS_LOG).exists():
                 continue
             action, reason = classify(row.get("source_path", ""), row.get("notes", ""))
             append_fix_row(project, design, reason, "retry", cleared=True)

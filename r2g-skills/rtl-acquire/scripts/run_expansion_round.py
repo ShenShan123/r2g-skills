@@ -239,15 +239,27 @@ def build_scoped_retry_candidates(original_candidate_csv: Path, retry_candidates
     with retry_candidates_csv.open(newline="", encoding="utf-8") as f:
         retry_rows = list(csv.DictReader(f))
 
+    # EXECUTION-AFFECTING fields the retry row may carry (held-out V3 frontend
+    # cohort, "retry parameter loss"). The scoped rebuild used to emit a fixed
+    # 8-column row, silently DROPPING every field auto_fix_failures had just
+    # computed — so a retry generated as `synth_memory_max_bits=131072` was
+    # re-run at the stock 4096 cap and reproduced the identical failure, forever.
+    # These are taken from the RETRY row first (it is the repaired one), falling
+    # back to the original candidate; `rtl_files`/`include_dirs` likewise, since
+    # auto-fix can rewrite the bundle (sanitized sources, recovered closures).
+    RETRY_FIRST_FIELDS = (
+        "rtl_files", "include_dirs", "synth_variant", "synth_memory_max_bits",
+        "synth_frontend", "resource_tier", "top_parameters", "defines",
+        "base_design", "equiv_class", "variant_strategy",
+    )
     fieldnames = [
         "source_group",
         "design",
         "priority",
         "expected_top",
         "source_path",
-        "rtl_files",
-        "include_dirs",
         "notes",
+        *RETRY_FIRST_FIELDS,
     ]
     scoped_rows: list[dict[str, str]] = []
     seen_designs: set[str] = set()
@@ -262,18 +274,19 @@ def build_scoped_retry_candidates(original_candidate_csv: Path, retry_candidates
         if not scoped_design or scoped_design in seen_designs:
             continue
         seen_designs.add(scoped_design)
-        scoped_rows.append(
-            {
-                "source_group": original.get("source_group") or original.get("source") or "",
-                "design": scoped_design,
-                "priority": original.get("priority") or retry_row.get("priority") or "high",
-                "expected_top": original.get("expected_top") or retry_row.get("expected_top") or "top",
-                "source_path": original.get("source_path") or source_path,
-                "rtl_files": original.get("rtl_files", ""),
-                "include_dirs": original.get("include_dirs", ""),
-                "notes": retry_row.get("notes") or original.get("notes", ""),
-            }
-        )
+        row = {
+            "source_group": original.get("source_group") or original.get("source") or "",
+            "design": scoped_design,
+            "priority": original.get("priority") or retry_row.get("priority") or "high",
+            "expected_top": original.get("expected_top") or retry_row.get("expected_top") or "top",
+            # The repaired source_path wins: auto-fix may have written a
+            # sanitized/materialized bundle that the original row cannot name.
+            "source_path": retry_row.get("source_path") or original.get("source_path") or source_path,
+            "notes": retry_row.get("notes") or original.get("notes", ""),
+        }
+        for field in RETRY_FIRST_FIELDS:
+            row[field] = (retry_row.get(field) or "").strip() or original.get(field, "")
+        scoped_rows.append(row)
 
     if not scoped_rows:
         return None

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 from pathlib import Path
 
 
@@ -21,6 +22,11 @@ INDEX = out_root_path("index.csv")
 OUT_RETRY = workspace_path("failures/failed_candidates_retry.csv")
 OUT_EXCLUDE = workspace_path("failures/failed_candidates_exclude.csv")
 OUT_RETRY_CANDIDATES = workspace_path("failures/failed_candidates_retry_candidates.csv")
+# Deferred candidates are NOT excluded: discovery reads only the exclude list, so
+# a deferred source stays eligible once the missing capability is installed
+# (RMD-HO-P1-03). They are not auto-retried either — retrying the same missing
+# tool would just burn the attempt budget.
+OUT_DEFER = workspace_path("failures/failed_candidates_defer.csv")
 
 
 def is_high_value_retry(source_path: str, notes: str) -> bool:
@@ -35,8 +41,65 @@ def is_high_value_retry(source_path: str, notes: str) -> bool:
     return False
 
 
+# --- terminal-class detectors (held-out V3 RMD-HO-P1-01 / -P1-03) ------------
+#
+# Before this, EVERY unrecognised synth failure fell through to
+# `exclude, low_value_failure` — a PERMANENT verdict that also writes the source
+# path into failed_candidates_exclude.csv, so normal acquisition never sees the
+# design again. Three whole classes were being burned that way:
+#
+#   * memory_limit  — Yosys refused to infer a memory larger than
+#     SYNTH_MEMORY_MAX_BITS. Mechanically recoverable by raising the cap
+#     (auto_fix_failures already knows how); the held-out cohort proved mor1kx /
+#     JPEG / audio all synthesize at a raised cap. RETRY.
+#   * frontend_tool_unavailable — the SELECTED synthesis frontend is not
+#     installed (no slang.so). A tool-capability gap says nothing about the RTL.
+#     DEFER: keep the candidate, emit no negative source-quality evidence.
+#   * tool_compatibility — the installed frontend rejects language-valid RTL
+#     (Yosys treating the Verilog-2001 port name `int` as a keyword; an sv2v
+#     rewrite changing constant-function semantics). DEFER, same reasoning.
+#
+# `diagnostic_incomplete` is the fourth: the expander could not resolve a log
+# carrying the terminal error, so there is no evidence to classify ON. Retrying
+# is honest; a permanent low-value verdict from absent evidence is not.
+MEMORY_LIMIT_RE = re.compile(
+    r"(?i)synthesized memory size\s+\d+\s+exceeds|exceeds\s+synth_memory_max_bits"
+    r"|\bmemory_limit\s+observed_bits=")
+# A missing plugin surfaces as a yosys `plugin -i` / command-not-found failure.
+FRONTEND_UNAVAILABLE_RE = re.compile(
+    r"(?i)can't load module [`']?[^`' ]*slang"
+    r"|unable to load plugin"
+    r"|plugin .*slang.* not found"
+    r"|no such command: read_slang"
+    r"|frontend_tool_unavailable")
+# Language-valid RTL the installed frontend cannot digest. Kept NARROW on
+# purpose: a generic "syntax error" stays a source failure, because most of them
+# genuinely are. Only signatures an independent standards-aware frontend was
+# observed to accept are listed (held-out V3 P1-HO-03: WB DMA's `int` port,
+# APB4 GPIO's sv2v-mangled constant function).
+TOOL_COMPATIBILITY_RE = re.compile(
+    r"(?i)non-constant expression in constant function"
+    r"|syntax error, unexpected TOK_INT"
+    r"|unexpected TOK_(?:INT|LOGIC|BIT)\b"
+    r"|tool_compatibility")
+DIAGNOSTIC_INCOMPLETE_RE = re.compile(r"(?i)\bdiagnostic_incomplete\b")
+
+
 def classify(source_path: str, notes: str) -> tuple[str, str]:
     text = (notes or "").lower()
+    # Evidence-absent guard FIRST: with no terminal-error log there is nothing to
+    # classify on, so no terminal verdict may be issued (RMD-HO-P1-01 part A).
+    if DIAGNOSTIC_INCOMPLETE_RE.search(text):
+        return "retry", "diagnostic_incomplete"
+    # Recoverable resource guard — a raised cap is a mechanical fix, never a
+    # statement about source quality.
+    if MEMORY_LIMIT_RE.search(text):
+        return "retry", "memory_limit"
+    # Tool-capability gaps: DEFER (candidate preserved, no negative learning).
+    if FRONTEND_UNAVAILABLE_RE.search(text):
+        return "defer", "frontend_tool_unavailable"
+    if TOOL_COMPATIBILITY_RE.search(text):
+        return "defer", "tool_compatibility"
     # Truncated-closure retry (2026-07-16 full-pipeline issue 10): a candidate
     # whose discovery notes carry the bundle_incomplete marker failed synthesis
     # on a module that EXISTS in its own repo but was cut by the closure cap —
@@ -103,6 +166,7 @@ def main() -> None:
     parser.add_argument("--out-retry", type=Path, default=OUT_RETRY)
     parser.add_argument("--out-exclude", type=Path, default=OUT_EXCLUDE)
     parser.add_argument("--out-retry-candidates", type=Path, default=OUT_RETRY_CANDIDATES)
+    parser.add_argument("--out-defer", type=Path, default=OUT_DEFER)
     args = parser.parse_args()
 
     rows = list(csv.DictReader(args.index.open()))
@@ -114,6 +178,7 @@ def main() -> None:
     retry_rows_by_source: dict[str, dict] = {}
     retry_candidate_rows_by_source: dict[str, dict] = {}
     exclude_rows = []
+    defer_rows = []
 
     for row in rows:
         if row["status"] == "success":
@@ -140,7 +205,9 @@ def main() -> None:
             "reason": reason,
             "notes": row.get("notes", ""),
         }
-        if bucket == "retry":
+        if bucket == "defer":
+            defer_rows.append(out_row)
+        elif bucket == "retry":
             existing = retry_rows_by_source.get(source_path)
             if existing and retry_rank(existing["design"]) <= retry_rank(row["design"]):
                 continue
@@ -159,7 +226,8 @@ def main() -> None:
     retry_rows = sorted(retry_rows_by_source.values(), key=lambda row: row["design"])
     retry_candidate_rows = sorted(retry_candidate_rows_by_source.values(), key=lambda row: row["design"])
 
-    for path, data in ((args.out_retry, retry_rows), (args.out_exclude, exclude_rows)):
+    for path, data in ((args.out_retry, retry_rows), (args.out_exclude, exclude_rows),
+                       (args.out_defer, defer_rows)):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=["design", "status", "source_path", "classification", "reason", "notes"])
