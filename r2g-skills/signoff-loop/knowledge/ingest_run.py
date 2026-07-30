@@ -206,6 +206,20 @@ def _normalize_verdict(raw: str | None, before: Any, after: Any,
     return "inconclusive"   # stop_* / apply_failed / rerun_failed_* / unknown
 
 
+def _has_effect_evidence(row: dict[str, Any]) -> bool:
+    for key in ("config_delta", "cumulative_config", "env_flags"):
+        raw = row.get(key)
+        if isinstance(raw, dict) and raw:
+            return True
+        if isinstance(raw, str):
+            try:
+                if json.loads(raw):
+                    return True
+            except (TypeError, ValueError):
+                continue
+    return False
+
+
 # Regression strings are "<signal>_regression:...", "new_drc_class:...",
 # "check_missing:<signal>", or "constraint_relaxed:...". Fold each to its signal.
 _REG_SIGNALS = ("orfs", "route", "drc", "lvs", "timing", "rcx", "constraint")
@@ -404,6 +418,12 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
         after = _to_float(r.get("after"))
         verdict = _normalize_verdict(r.get("verdict"), before, after,
                                      r.get("global_regressions"))
+        # A named strategy with no replayable delta is not positive learning
+        # evidence. The held-out Ethernet recovery recorded core_util_relief as
+        # cleared while all effect fields were empty, so the learner could reward
+        # a label without knowing what changed.
+        if verdict in ("win", "cleared") and not _has_effect_evidence(r):
+            verdict = "inconclusive"
         # A win/cleared REFLOW event in a session that ended globally regressed
         # on a signal no live comparator row explains: downgrade to inconclusive
         # (attribution to one iteration is ambiguous, but positive evidence must

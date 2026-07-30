@@ -104,6 +104,27 @@ def test_search_loop_inconclusive_propagates():
     assert res["status"] == "inconclusive"
 
 
+def test_search_loop_keeps_a_measured_pass_when_faster_probe_is_inconclusive():
+    calls = 0
+
+    def place(period):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return {"place_ws": 0.5, "place_tns": 0.0, "status": "pass"}
+        return {"place_ws": None, "place_tns": None, "status": "inconclusive"}
+
+    res = fm.search_loop(
+        seed_period=10.0,
+        floorplan_probe=lambda period: 0.3,
+        place_probe=place,
+        model=None,
+    )
+    assert res["status"] == "ok"
+    assert res["reason"] == "recovered_last_pass_after_inconclusive"
+    assert res["t_star"] == res["last_pass"]
+
+
 # ── 2026-06-29: null floorplan slack must NOT abort to 'error' (26 clean designs lost Fmax) ──
 def test_search_loop_falls_back_to_place_on_null_floorplan():
     """A pre-place floorplan stage that yields NO slack (common for sequential designs) must

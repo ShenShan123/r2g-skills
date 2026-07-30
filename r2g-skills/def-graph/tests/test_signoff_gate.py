@@ -47,6 +47,25 @@ vgd = importlib.util.module_from_spec(_vspec)
 sys.modules["verify_graph_dataset"] = vgd
 _vspec.loader.exec_module(vgd)
 
+
+def test_promoted_project_with_incomplete_task_provenance_is_blocked(tmp_path):
+    project = tmp_path / "project"
+    reports = project / "reports"
+    reports.mkdir(parents=True)
+    (project / "metadata.json").write_text(json.dumps({
+        "promoted_from": "/corpus/demo",
+        "source_bytes_verified": True,
+        "compile_inputs_verified": False,
+        "rtl_readiness": "ready",
+        "collateral_verified": True,
+    }))
+    (reports / "signoff_manifest.json").write_text(json.dumps({
+        "constraint": {"qualified": True},
+    }))
+    check = sg._check_task_provenance(str(project))
+    assert check["status"] == "incomplete"
+    assert "compile_inputs_verified" in check["missing"]
+
 CLEAN_STAGES = [{"stage": s, "status": 0, "elapsed_s": 1}
                 for s in ("synth", "floorplan", "place", "cts", "route", "finish")]
 

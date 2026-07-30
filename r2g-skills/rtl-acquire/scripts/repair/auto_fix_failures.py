@@ -24,6 +24,7 @@ from skill_env import (
 
 DEFAULT_INDEX = out_root_path("index.csv")
 DEFAULT_EXCLUDE = workspace_path("failures/failed_candidates_exclude.csv")
+DEFAULT_DEFER = workspace_path("failures/failed_candidates_defer.csv")
 DEFAULT_PLAN = workspace_path("failures/auto_fix_plan.json")
 DEFAULT_RETRY = workspace_path("failures/failed_candidates_retry_candidates.csv")
 DEFAULT_RETRY_AUTOFIX = workspace_path("failures/failed_candidates_retry_candidates_autofix.csv")
@@ -589,6 +590,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Auto-apply safe failure fixes based on known signatures.")
     parser.add_argument("--index-csv", type=Path, default=DEFAULT_INDEX)
     parser.add_argument("--exclude-csv", type=Path, default=DEFAULT_EXCLUDE)
+    parser.add_argument("--defer-csv", type=Path, default=DEFAULT_DEFER)
     parser.add_argument("--plan-json", type=Path, default=DEFAULT_PLAN)
     parser.add_argument("--retry-csv", type=Path, default=DEFAULT_RETRY)
     parser.add_argument("--retry-autofix-csv", type=Path, default=DEFAULT_RETRY_AUTOFIX)
@@ -607,6 +609,7 @@ def main() -> None:
 
     index_rows = [row for row in read_index_rows(args.index_csv) if row.get("status") and row.get("status") != "success"]
     exclude_rows, exclude_seen = load_excludes(args.exclude_csv)
+    _, defer_seen = load_excludes(args.defer_csv)
     strategy = load_strategy(args.strategy_json)
     deny_policy = load_deny_policy(args.deny_policy_json)
     repair_log = load_repair_log(args.repair_log_json)
@@ -640,7 +643,7 @@ def main() -> None:
     for row in index_rows:
         design = row.get("design", "")
         source_path = row.get("source_path", "")
-        if (design, source_path) in exclude_seen:
+        if (design, source_path) in exclude_seen or (design, source_path) in defer_seen:
             continue
         notes = row.get("notes", "") or ""
         signature_source = "\n".join(notes.splitlines()[-10:])

@@ -80,7 +80,7 @@ FRONTEND_UNAVAILABLE_RE = re.compile(
 TOOL_COMPATIBILITY_RE = re.compile(
     r"(?i)non-constant expression in constant function"
     r"|syntax error, unexpected TOK_INT"
-    r"|unexpected TOK_(?:INT|LOGIC|BIT)\b"
+    r"|unexpected TOK_(?:INT|LOGIC|BIT|STRING)\b"
     r"|tool_compatibility")
 DIAGNOSTIC_INCOMPLETE_RE = re.compile(r"(?i)\bdiagnostic_incomplete\b")
 

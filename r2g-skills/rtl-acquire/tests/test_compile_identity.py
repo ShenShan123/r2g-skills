@@ -69,9 +69,9 @@ def _corpus(tmp_path, *, rtl_body="module top(); endmodule\n",
 
 
 def _args(**kw):
-    base = dict(clock_port="", allow_virtual_clock=True, platform="",
+    base = dict(clock_port="", clock_period=10.0, allow_virtual_clock=True, platform="",
                 force=True, dry_run=True, allow_unverified_source=False,
-                core_utilization=30, place_density=0.20)
+                core_utilization=30, place_density=0.20, run=False)
     base.update(kw)
     return types.SimpleNamespace(**base)
 
@@ -270,6 +270,135 @@ def test_compile_manifest_digests_headers_and_normalizes_config(tmp_path):
                                 top_parameters={"WIDTH": "16"}, synth_frontend=None,
                                 synth_memory_max_bits=None, synth_variant="area")
     assert diff["config_digest"] != man["config_digest"]
+
+
+def test_compile_manifest_freezes_readmem_payload(tmp_path):
+    import expand_candidates as ec
+
+    repo = tmp_path / "repo"
+    rtl = repo / "rtl"
+    rtl.mkdir(parents=True)
+    top = rtl / "top.v"
+    payload = rtl / "init.mem"
+    top.write_text(
+        'module top; reg [7:0] mem [0:1]; initial $readmemh("init.mem", mem); '
+        "endmodule\n")
+    payload.write_text("00\nff\n")
+
+    man = ec._compile_manifest(
+        [top], [rtl], top="top", top_parameters={},
+        synth_frontend=None, synth_memory_max_bits=None,
+        synth_variant="yosys_abc_area0", repo_dir=repo)
+
+    assert man["unresolved_collateral"] == []
+    assert len(man["collateral_manifest"]) == 1
+    entry = man["collateral_manifest"][0]
+    assert entry["reference"] == "init.mem"
+    assert entry["sha256"] == _digest(payload)
+
+
+def test_dynamic_readmem_path_is_an_unresolved_compile_input(tmp_path):
+    import expand_candidates as ec
+
+    top = tmp_path / "top.v"
+    top.write_text(
+        "module top(input [8*8-1:0] file); reg [7:0] mem [0:1]; "
+        "initial $readmemh(file, mem); endmodule\n")
+    man = ec._compile_manifest(
+        [top], [tmp_path], top="top", top_parameters={},
+        synth_frontend=None, synth_memory_max_bits=None,
+        synth_variant="yosys_abc_area0", repo_dir=tmp_path)
+    assert man["unresolved_collateral"][0]["reason"] == "dynamic_readmem_path"
+
+
+def test_transformed_candidate_without_original_lineage_is_blocked(tmp_path):
+    out_root, cdir = _corpus(tmp_path)
+    meta_path = cdir / "design_meta.json"
+    meta = json.loads(meta_path.read_text())
+    meta["sv2v_fallback_used"] = True
+    meta_path.write_text(json.dumps(meta))
+
+    res = pc.promote_one(
+        "d1", out_root=out_root, base_dir=tmp_path / "cases",
+        args=_args(), index_row={"status": "success", "seq_cells": "0"})
+    assert res["status"] == "transformation_lineage_missing"
+
+
+def test_transformation_manifest_binds_original_and_generated_bytes(
+        tmp_path, monkeypatch):
+    import expand_candidates as ec
+
+    original = tmp_path / "top.sv"
+    generated = tmp_path / "top.v"
+    original.write_text("module top(input logic a); endmodule\n")
+    generated.write_text("module top(input a); endmodule\n")
+    monkeypatch.setattr(ec, "sv2v_path", lambda: None)
+    manifest = ec._transformation_manifest(
+        [original], [generated], "sv2v", [], "top")
+    assert manifest["required"] is True
+    assert manifest["kind"] == "sv2v"
+    assert manifest["original_manifest"][0]["sha256"] == _digest(original)
+    assert manifest["compiled_manifest"][0]["sha256"] == _digest(generated)
+    assert manifest["lineage_digest"]
+
+
+def test_promotion_vendors_and_rebinds_readmem_payload(tmp_path):
+    import expand_candidates as ec
+
+    body = ('module top; reg [7:0] mem [0:1]; '
+            'initial $readmemh("init.mem", mem); endmodule\n')
+    out_root, cdir = _corpus(tmp_path, rtl_body=body)
+    payload = cdir / "rtl" / "init.mem"
+    payload.write_text("00\nff\n")
+    top = cdir / "rtl" / "top.v"
+    man = ec._compile_manifest(
+        [top], [top.parent], top="top", top_parameters={},
+        synth_frontend=None, synth_memory_max_bits=None,
+        synth_variant="yosys_abc_area0", repo_dir=cdir)
+    meta_path = cdir / "design_meta.json"
+    meta = json.loads(meta_path.read_text())
+    # The real expansion records the same compile-time consumer identity in the
+    # source and collateral manifests. Simulate that identity before relocating
+    # the corpus entry to its vendored rtl/ copy.
+    man["collateral_manifest"][0]["consumer"] = meta["source_manifest"][0]["path"]
+    meta["compile_manifest"] = man
+    meta_path.write_text(json.dumps(meta))
+
+    res = pc.promote_one(
+        "d1", out_root=out_root, base_dir=tmp_path / "cases",
+        args=_args(dry_run=False), index_row={"status": "success", "seq_cells": "0"})
+
+    assert res["status"] == "promoted", res
+    promoted = tmp_path / "cases" / "d1"
+    text = (promoted / "rtl" / "top.v").read_text()
+    assert str((promoted / "input" / "init.mem").resolve()) in text
+    metadata = json.loads((promoted / "metadata.json").read_text())
+    assert metadata["collateral_verified"] is True
+
+
+def test_readmem_rebinding_is_scoped_to_the_consuming_rtl(tmp_path):
+    rtl_a = tmp_path / "top_a.v"
+    rtl_b = tmp_path / "top_b.v"
+    body = 'module top; initial $readmemh("init.mem", mem); endmodule\n'
+    rtl_a.write_text(body)
+    rtl_b.write_text(body)
+    payload_a = tmp_path / "a.mem"
+    payload_b = tmp_path / "b.mem"
+    payload_a.write_text("aa\n")
+    payload_b.write_text("bb\n")
+
+    rewrites = pc.rewrite_collateral_references(
+        ["/source/a/top.v", "/source/b/top.v"],
+        [rtl_a, rtl_b],
+        {
+            ("/source/a/top.v", "init.mem"): payload_a,
+            ("/source/b/top.v", "init.mem"): payload_b,
+        })
+
+    assert len(rewrites) == 2
+    assert str(payload_a.resolve()) in rtl_a.read_text()
+    assert str(payload_b.resolve()) in rtl_b.read_text()
+    assert str(payload_b.resolve()) not in rtl_a.read_text()
 
 
 def test_headers_are_vendored_into_the_project(tmp_path):

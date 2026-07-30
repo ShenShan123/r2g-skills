@@ -23,8 +23,13 @@ fi
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GRAPH_SRC="$SKILL_DIR/scripts/extract/graph"
+# Preserve the explicit caller override. A generated env.local.sh may contain a
+# default R2G_GRAPH_PYTHON, but the documented resolution order gives the caller
+# precedence over that default.
+CALLER_GRAPH_PYTHON="${R2G_GRAPH_PYTHON-}"
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+[[ -n "$CALLER_GRAPH_PYTHON" ]] && R2G_GRAPH_PYTHON="$CALLER_GRAPH_PYTHON"
 
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 CONFIG_MK="$PROJECT_DIR/constraints/config.mk"
@@ -46,6 +51,7 @@ PLATFORM="${PLATFORM:-sky130hd}"
 # Distinct exit code for an INVALIDATING skip (signoff-gate BLOCK) so a caller can
 # tell "not signed off" from a benign 0-exit "SKIPs cleanly" (full-pipeline #6).
 GATE_BLOCK_EXIT=7
+PREREQUISITE_BLOCK_EXIT=3
 
 # Supersede a stale-green dataset/graph_manifest.json when the design is no longer
 # signed off for the current DEF (full-pipeline #6, 2026-07-16). The old .pt files
@@ -80,15 +86,16 @@ os.replace(tmp, man)
 PY
 }
 
-# skip <reason> [invalidating]
-# BENIGN skips (missing torch venv, no backend DEF, empty extractor output) record a
+# skip <reason> [invalidating|blocked]
+# BENIGN skips (missing torch venv or empty extractor output) record a
 # reports/graph_dataset.json skip manifest and exit 0 — the documented "SKIPs cleanly"
 # contract — leaving any existing dataset/graph_manifest.json untouched (it still
-# matches its .pt files). An INVALIDATING skip (signoff-gate BLOCK: the design is NOT
-# signed off for the current DEF) ALSO supersedes a stale-green dataset/graph_manifest.json
-# and exits GATE_BLOCK_EXIT so no consumer reads the stale manifest as current.
-skip() {  # reason [invalidating]
-  local reason="$1" invalidating="${2:-}"
+# matches its .pt files). Missing backend DEF is a blocked prerequisite; an
+# INVALIDATING skip means the design is not signed off for the current DEF. Both
+# supersede a stale-green dataset manifest and return a distinct nonzero status.
+skip() {  # reason [invalidating|blocked]
+  local reason="$1" terminal="${2:-}" status="skipped"
+  [[ "$terminal" == "blocked" || "$terminal" == "invalidating" ]] && status="blocked"
   echo "SKIP: $reason" >&2
   # Thread the SPECIFIC upstream backend-failure reason into the skip manifest, not a
   # bare "no 6_final.def" (failure-patterns.md #38 / codex #6). graph_skip_manifest.py
@@ -96,13 +103,18 @@ skip() {  # reason [invalidating]
   # NEVER left without a manifest.
   if ! python3 "$(dirname "${BASH_SOURCE[0]}")/graph_skip_manifest.py" \
         "$DESIGN_NAME" "$PLATFORM" "$reason" "$PROJECT_DIR" "${RUN_DIR:-}" \
+        "$status" \
         > "$REPORTS_DIR/graph_dataset.json" 2>/dev/null; then
-    printf '{"design":"%s","platform":"%s","variants":{},"status":"skipped","reason":"%s"}\n' \
-      "$DESIGN_NAME" "$PLATFORM" "$reason" > "$REPORTS_DIR/graph_dataset.json"
+    printf '{"design":"%s","platform":"%s","variants":{},"status":"%s","reason":"%s"}\n' \
+      "$DESIGN_NAME" "$PLATFORM" "$status" "$reason" > "$REPORTS_DIR/graph_dataset.json"
   fi
-  if [[ -n "$invalidating" ]]; then
+  if [[ "$terminal" == "invalidating" ]]; then
     _invalidate_manifest "$reason"
     exit "$GATE_BLOCK_EXIT"
+  fi
+  if [[ "$terminal" == "blocked" ]]; then
+    _invalidate_manifest "$reason"
+    exit "$PREREQUISITE_BLOCK_EXIT"
   fi
   exit 0
 }
@@ -142,7 +154,8 @@ fi
 if [[ -n "$RUN_DIR" && "${R2G_PLATFORM_FORCE:-0}" != "1" ]]; then
   PLATFORM=$(bash "$(dirname "${BASH_SOURCE[0]}")/_provenance.sh" "$RUN_DIR" "$PLATFORM")
 fi
-[[ -z "$DEF" || ! -f "$DEF" ]] && skip "no 6_final.def found — backend not completed/collected"
+[[ -z "$DEF" || ! -f "$DEF" ]] && \
+  skip "no 6_final.def found — backend not completed/collected" blocked
 
 # --- Signoff gate (failure-patterns.md #34) ---------------------------------
 # A 6_final.def alone is NOT sign-off: DRC/LVS run in a separate post-finish

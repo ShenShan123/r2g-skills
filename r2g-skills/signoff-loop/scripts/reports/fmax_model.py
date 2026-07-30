@@ -137,6 +137,22 @@ def search_loop(seed_period, floorplan_probe, place_probe, model=None, *,
         log.append({"stage": "place", "period": t_ref,
                     "ws": r.get("place_ws"), "status": r.get("status")})
         if r.get("status") == "inconclusive":
+            if last_pass is not None:
+                # A faster probe may fail for tool/runtime reasons after a slower
+                # placement point already passed. Preserve that measured feasible
+                # point as a conservative winner instead of discarding the whole
+                # search and silently falling back to the default SDC.
+                place_proxy_period = max(last_pass - d_pl_fin(last_pass, model), floor)
+                return {
+                    "status": "ok",
+                    "reason": "recovered_last_pass_after_inconclusive",
+                    "t_star": last_pass,
+                    "last_pass": last_pass,
+                    "fmax_predicted_signoff": 1.0 / last_pass,
+                    "t_place_proxy": place_proxy_period,
+                    "fmax_place_proxy": 1.0 / place_proxy_period,
+                    "log": log,
+                }
             # Carry a reason like every other non-ok exit (2026-07-05: 144 of 144
             # inconclusive fmax reports had NO queryable cause — the same
             # observability gap the judge-v2 reason codes fixed for A/B trials).

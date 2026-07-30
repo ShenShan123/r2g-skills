@@ -87,6 +87,26 @@ def test_period_mismatch_disqualifies(tmp_path):
     man = bsm.build(str(_proj(tmp_path, winner=2.0, stamped="1.0")))
     c = man["constraint"]
     assert c["period_match"] is False and c["qualified"] is False
+    assert man["strict_clean"] is False
+    assert any(reason.startswith("constraint:") for reason in man["strict_missing"])
+
+
+def test_promoted_project_requires_complete_task_provenance(tmp_path):
+    proj = _proj(tmp_path)
+    (proj / "metadata.json").write_text(json.dumps({
+        "promoted_from": "/corpus/demo",
+        "source_bytes_verified": True,
+        "compile_inputs_verified": False,
+        "rtl_readiness": "ready",
+        "collateral_verified": True,
+        "source_kind": "cloned_repo",
+        "source_commit": "abc123",
+    }))
+    man = bsm.build(str(proj))
+    assert man["task_provenance"]["status"] == "failed"
+    assert "compile inputs are not digest-verified" in man[
+        "task_provenance"]["missing"]
+    assert man["strict_clean"] is False
 
 
 def test_cli_writes_manifest_and_strict_exit(tmp_path):

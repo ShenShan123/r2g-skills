@@ -803,6 +803,137 @@ def _source_manifest(paths: list[Path]) -> list[dict]:
 
 
 _INCLUDE_RE = re.compile(r'^\s*`include\s+"([^"]+)"', re.MULTILINE)
+_READMEM_CALL_RE = re.compile(r"\$(?:readmemh|readmemb)\s*\((.*?)\)", re.DOTALL)
+_READMEM_LITERAL_RE = re.compile(r'^\s*"([^"]+)"')
+
+
+def _resolve_collateral_path(reference: str, consumer: Path,
+                             repo_dir: Path | None) -> Path | None:
+    """Resolve a literal file-backed synthesis input without depending on CWD."""
+    raw = Path(os.path.expandvars(os.path.expanduser(reference)))
+    candidates = [raw] if raw.is_absolute() else [consumer.parent / raw]
+    if repo_dir is not None and not raw.is_absolute():
+        candidates.append(repo_dir / raw)
+        stripped = list(raw.parts)
+        while stripped and stripped[0] == "..":
+            stripped.pop(0)
+        if stripped:
+            candidates.append(repo_dir.joinpath(*stripped))
+    for candidate in candidates:
+        try:
+            if candidate.is_file():
+                return candidate.resolve()
+        except OSError:
+            continue
+    if repo_dir is not None:
+        try:
+            matches = [p.resolve() for p in repo_dir.rglob(raw.name) if p.is_file()]
+        except OSError:
+            matches = []
+        if len(matches) == 1:
+            return matches[0]
+    return None
+
+
+def _compile_collateral(source_files: list[Path],
+                        repo_dir: Path | None) -> tuple[list[dict], list[dict]]:
+    """Digest literal $readmemh/$readmemb payloads used by the compile closure.
+
+    Dynamic paths cannot be frozen reproducibly and are returned as unresolved.
+    Multiple source literals resolving to the same payload retain their separate
+    references but share the same content digest.
+    """
+    resolved: list[dict] = []
+    unresolved: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for consumer in source_files:
+        try:
+            text = consumer.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for call in _READMEM_CALL_RE.findall(text):
+            literal = _READMEM_LITERAL_RE.match(call)
+            if not literal:
+                unresolved.append({
+                    "consumer": str(consumer),
+                    "reference": call.strip()[:160],
+                    "reason": "dynamic_readmem_path",
+                })
+                continue
+            reference = literal.group(1)
+            path = _resolve_collateral_path(reference, consumer, repo_dir)
+            if path is None:
+                unresolved.append({
+                    "consumer": str(consumer),
+                    "reference": reference,
+                    "reason": "missing_readmem_payload",
+                })
+                continue
+            key = (str(consumer), reference, str(path))
+            if key in seen:
+                continue
+            seen.add(key)
+            data = path.read_bytes()
+            resolved.append({
+                "consumer": str(consumer),
+                "reference": reference,
+                "path": str(path),
+                "size": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            })
+    return resolved, unresolved
+
+
+def _tool_identity(path: str | None) -> dict:
+    if not path:
+        return {"path": None, "sha256": None, "version": None}
+    p = Path(path)
+    try:
+        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+    except OSError:
+        digest = None
+    version = None
+    try:
+        probe = subprocess.run([str(p), "--version"], capture_output=True, text=True,
+                               timeout=15, check=False)
+        version = (probe.stdout or probe.stderr).strip().splitlines()[0][:300]
+    except Exception:
+        pass
+    return {"path": str(p), "sha256": digest, "version": version}
+
+
+def _transformation_manifest(original_files: list[Path], compiled_files: list[Path],
+                             fallback_used: str | None, include_dirs: list[Path],
+                             top: str) -> dict:
+    """Bind original inputs to the exact generated inputs that synthesized."""
+    original = _source_manifest(original_files)
+    compiled = _source_manifest(compiled_files)
+    changed = (
+        [str(p) for p in original_files] != [str(p) for p in compiled_files]
+        or [e.get("sha256") for e in original] != [e.get("sha256") for e in compiled]
+    )
+    if fallback_used == "sv2v":
+        tool = _tool_identity(sv2v_path())
+        argv = [f"-I{d}" for d in include_dirs] + [f"--top={top}"] + [
+            str(p) for p in original_files
+        ]
+    elif fallback_used == "vhd2vl":
+        tool = _tool_identity(vhd2vl_path())
+        argv = [str(p) for p in original_files]
+    else:
+        tool = {"path": "rtl-acquire:build_source_files", "sha256": None,
+                "version": "builtin"}
+        argv = []
+    payload = {
+        "required": changed,
+        "kind": fallback_used or ("acquisition_preprocess" if changed else "identity"),
+        "tool": tool,
+        "argv": argv,
+        "original_manifest": original,
+        "compiled_manifest": compiled,
+    }
+    payload["lineage_digest"] = sha256_text(json.dumps(payload, sort_keys=True))
+    return payload
 
 
 def _header_closure(source_files: list[Path], include_dirs: list[Path],
@@ -856,7 +987,8 @@ def _header_closure(source_files: list[Path], include_dirs: list[Path],
 
 def _compile_manifest(source_files: list[Path], include_dirs: list[Path],
                       *, top: str, top_parameters, synth_frontend,
-                      synth_memory_max_bits, synth_variant, defines=None) -> dict:
+                      synth_memory_max_bits, synth_variant, defines=None,
+                      repo_dir: Path | None = None) -> dict:
     """The FROZEN compilation inputs that produced the synth-only proof.
 
     P0-N2 (failure-patterns.md #52): promotion re-parsed the synth project's
@@ -872,6 +1004,7 @@ def _compile_manifest(source_files: list[Path], include_dirs: list[Path],
     """
     headers = _header_closure(source_files, include_dirs)
     params = dict(top_parameters or {})
+    collateral, unresolved_collateral = _compile_collateral(source_files, repo_dir)
     man = {
         "top": top,
         # Ordered: include search order is semantically significant (first match
@@ -883,11 +1016,15 @@ def _compile_manifest(source_files: list[Path], include_dirs: list[Path],
         "synth_memory_max_bits": synth_memory_max_bits or None,
         "synth_variant": synth_variant or None,
         "header_manifest": _source_manifest(headers),
+        "collateral_manifest": collateral,
+        "unresolved_collateral": unresolved_collateral,
     }
     # One digest over the NORMALIZED inputs — the single value promotion compares.
     man["config_digest"] = sha256_text(json.dumps(
         {k: man[k] for k in ("top", "top_parameters", "defines", "synth_frontend",
-                             "synth_memory_max_bits", "synth_variant")},
+                             "synth_memory_max_bits", "synth_variant",
+                             "header_manifest", "collateral_manifest",
+                             "unresolved_collateral")},
         sort_keys=True))
     return man
 
@@ -1345,6 +1482,7 @@ def main() -> int:
             continue
 
         top = choose_top_name(source_paths, candidate.get("expected_top", ""))
+        original_source_files = list(source_paths)
         source_files = build_source_files(out_root, design, source_paths)
 
         design_out = out_root / design
@@ -1391,7 +1529,6 @@ def main() -> int:
             append_design_stage(out_root, design, stage="config", state="completed",
                                 details={"rtl_file_count": len(rtl_files)})
 
-            original_source_files = list(source_files)
             fallback_used: str | None = None
             fallback_converted: Path | None = None
             # Multi-top repositories (e.g. picorv32) contribute distinct samples
@@ -1615,6 +1752,8 @@ def main() -> int:
                 row[key] = str(stats.get(key, ""))
             row["status"] = "success"
             _src_manifest = _source_manifest(source_files)
+            _transform_manifest = _transformation_manifest(
+                original_source_files, source_files, fallback_used, include_dirs, top)
             # Semantic readiness (RMD-HO-P0-01): assessed HERE, where the synth
             # log and the upstream repo are both at hand, and carried on the
             # candidate so promotion and the publish gate read one recorded
@@ -1632,6 +1771,8 @@ def main() -> int:
                 # Content provenance (issue 1): the EXACT bytes that earned this
                 # synth success; promote verifies against it before vendoring.
                 "source_manifest": _src_manifest,
+                "original_source_manifest": _transform_manifest["original_manifest"],
+                "transformation_manifest": _transform_manifest,
                 "source_digest": sha256_text(
                     "\n".join(str(e["sha256"]) for e in _src_manifest)),
                 # The rest of the compilation input (P0-N2/P0-R5, #52): top
@@ -1644,7 +1785,8 @@ def main() -> int:
                     top=top, top_parameters=top_parameters,
                     synth_frontend=synth_frontend,
                     synth_memory_max_bits=synth_memory_max_bits,
-                    synth_variant=synth_variant),
+                    synth_variant=synth_variant,
+                    repo_dir=_upstream_repo_dir(source_path)),
                 "sv2v_fallback_used": fallback_used == "sv2v",
                 "vhd2vl_fallback_used": fallback_used == "vhd2vl",
                 "lec_lite_status": lec_status,

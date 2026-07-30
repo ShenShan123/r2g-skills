@@ -20,7 +20,8 @@ Fail-soft: any unreadable/absent marker is skipped; `upstream` is omitted when
 empty so the manifest is unchanged for a plain "no backend" skip. Prints the
 manifest JSON to stdout (run_graphs.sh redirects it into graph_dataset.json).
 
-Usage: graph_skip_manifest.py <design> <platform> <reason> <project_dir> [run_dir]
+Usage: graph_skip_manifest.py <design> <platform> <reason> <project_dir>
+                              [run_dir] [status]
 """
 import glob
 import json
@@ -104,8 +105,9 @@ def main(argv):
         return 2
     design, platform, reason, project_dir = argv[1:5]
     run_dir = argv[5] if len(argv) > 5 else ""
+    status = argv[6] if len(argv) > 6 else "skipped"
     out = {"design": design, "platform": platform, "variants": {},
-           "status": "skipped", "reason": reason}
+           "status": status, "reason": reason}
     upstream = collect_upstream(project_dir, run_dir)
     if upstream:
         out["upstream"] = upstream
