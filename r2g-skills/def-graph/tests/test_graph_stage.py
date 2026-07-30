@@ -606,6 +606,27 @@ def test_run_graphs_benign_skip_leaves_manifest(tmp_path):
 
 
 @pytestmark_tensor
+def test_run_graphs_missing_final_def_is_a_blocked_terminal_status(tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    proj = tmp_path / "proj"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = mini\nexport PLATFORM = nangate45\n")
+    env = dict(os.environ, R2G_GRAPH_PYTHON=sys.executable)
+    result = subprocess.run(
+        ["bash", _RUN_GRAPHS, str(proj), "nangate45"],
+        capture_output=True, text=True, env=env, timeout=120)
+    assert result.returncode == 3
+    manifest = json.loads(
+        (proj / "reports" / "graph_dataset.json").read_text())
+    assert manifest["status"] == "blocked"
+    assert "6_final.def" in manifest["reason"]
+
+
+@pytestmark_tensor
 def test_run_graphs_gate_block_invalidates_manifest(tmp_path):
     """An INVALIDATING skip (signoff-gate BLOCK — dirty DRC) supersedes a stale-green
     dataset/graph_manifest.json with status=blocked_unsigned and exits non-zero (7)."""

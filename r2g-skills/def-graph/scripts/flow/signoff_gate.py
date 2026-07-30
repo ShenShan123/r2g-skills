@@ -761,6 +761,51 @@ def _check_artifact_digest(reports_dir, run_dir, project_dir):
     return {"status": "bound", "actual_gds_sha256": actual, "recorded": recorded}
 
 
+def _check_task_provenance(project_dir):
+    """Validate the acquisition/constraint contract for promoted projects."""
+    metadata = _load_json(os.path.join(project_dir, "metadata.json"))
+    if not isinstance(metadata, dict) or not metadata.get("promoted_from"):
+        return {"status": "not_applicable",
+                "detail": "project is not stamped as an rtl-acquire promotion"}
+    missing = []
+    if metadata.get("source_bytes_verified") is not True:
+        missing.append("source_bytes_verified")
+    if metadata.get("compile_inputs_verified") is not True:
+        missing.append("compile_inputs_verified")
+    if metadata.get("rtl_readiness") != "ready":
+        missing.append(f"rtl_readiness={metadata.get('rtl_readiness')!r}")
+    transform = metadata.get("transformation_manifest")
+    if isinstance(transform, dict) and transform.get("required"):
+        if metadata.get("original_source_verified") is not True:
+            missing.append("original_source_verified")
+        if not metadata.get("transformation_lineage_digest"):
+            missing.append("transformation_lineage_digest")
+    if metadata.get("collateral_verified") is not True:
+        missing.append("collateral_verified")
+
+    signoff_manifest = _load_json(
+        os.path.join(project_dir, "reports", "signoff_manifest.json"))
+    if not isinstance(signoff_manifest, dict):
+        missing.append("signoff_manifest")
+    else:
+        constraint = signoff_manifest.get("constraint")
+        if not isinstance(constraint, dict) or constraint.get("qualified") is not True:
+            missing.append("qualified_constraint")
+    if missing:
+        return {
+            "status": "incomplete",
+            "missing": missing,
+            "detail": "promoted task provenance is incomplete: " + ", ".join(missing),
+        }
+    return {
+        "status": "bound",
+        "source_commit": metadata.get("source_commit"),
+        "compile_manifest_digest": metadata.get("compile_manifest_digest"),
+        "transformation_lineage_digest": metadata.get(
+            "transformation_lineage_digest"),
+    }
+
+
 def evaluate(project_dir, run_dir, def_path=None):
     reports_dir = os.path.join(project_dir, "reports")
     checks = {
@@ -773,6 +818,7 @@ def evaluate(project_dir, run_dir, def_path=None):
         "binding": _check_binding(def_path, run_dir),
         "report_binding": _check_report_binding(reports_dir, run_dir),
         "artifact_digest": _check_artifact_digest(reports_dir, run_dir, project_dir),
+        "task_provenance": _check_task_provenance(project_dir),
     }
     blockers = []
     if checks["drc"]["status"] not in DRC_OK:
@@ -799,6 +845,8 @@ def evaluate(project_dir, run_dir, def_path=None):
     # the gate.
     if checks["artifact_digest"]["status"] in ("mismatch", "unreadable_record"):
         blockers.append("artifact_digest")
+    if checks["task_provenance"]["status"] == "incomplete":
+        blockers.append("task_provenance")
 
     caveats = []
     # Only a SUPPLIED-but-unverifiable DEF is a recorded caveat; a caller that passes no
