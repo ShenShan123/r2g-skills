@@ -244,3 +244,66 @@ def test_fix_events_get_symptom_id_and_symptoms_table(tmp_path, tmp_knowledge_di
     assert conn.execute("SELECT COUNT(*) FROM fix_events").fetchone()[0] == 1
     assert conn.execute("SELECT COUNT(*) FROM symptoms").fetchone()[0] == n_symptoms
     conn.close()
+
+
+def test_legacy_writer_rows_are_not_retroactively_downgraded(
+        tmp_path, tmp_knowledge_dir):
+    """The effect gate must be FORWARD-looking, never retroactive.
+
+    Legacy engineer_loop writers (`_record_pdn_fix`/`_record_resize_fix`/
+    `_record_synth_mem_fix` before they learned to record effects) emitted NO
+    effect key at all. Their absence means "this writer never had the chance",
+    not "the strategy had no effect". Applying the gate to them rewrites history
+    on re-ingest: measured on the shipped store, 195 live win/cleared rows would
+    flip to inconclusive — including the trajectory evidence beneath 8 promoted
+    core_util_relief recipes — with no flow having changed.
+    """
+    proj = _mk_project(tmp_path, fix_log=[{
+        # Exactly the legacy row shape: no config_delta / cumulative_config /
+        # env_flags / effect_fingerprint keys present at all.
+        "check": "orfs_stage",
+        "iter": 0,
+        "strategy": "pdn_die_floor",
+        "before": 1,
+        "after": 0,
+        "before_status": "fail",
+        "after_status": "clean",
+        "verdict": "cleared",
+        "from_stage": "floorplan",
+        "fix_session_id": "legacy_writer",
+        "violation_class": "floorplan",
+        "ts": "2026-07-29T00:00:00Z",
+    }])
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    ingest_run.ingest(
+        proj, conn, families_path=tmp_knowledge_dir / "families.json")
+    verdict = conn.execute(
+        "SELECT verdict FROM fix_events WHERE fix_session_id='legacy_writer'"
+    ).fetchone()[0]
+    assert verdict == "cleared", (
+        "a row from a writer that predates effect recording must keep its verdict")
+    conn.close()
+
+
+def test_effect_fingerprint_alone_counts_as_recorded_effect(
+        tmp_path, tmp_knowledge_dir):
+    """The new writers stamp effect_fingerprint; a digest IS a recorded effect
+    even though it is not JSON."""
+    proj = _mk_project(tmp_path, fix_log=[{
+        "check": "orfs_stage", "iter": 0, "strategy": "pdn_die_floor",
+        "before": 1, "after": 0, "verdict": "cleared", "from_stage": "floorplan",
+        "fix_session_id": "fingerprinted", "violation_class": "floorplan",
+        "config_delta": "{}", "cumulative_config": "{}",
+        "effect_fingerprint": "a" * 64,
+        "ts": "2026-07-29T00:00:00Z",
+    }])
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    ingest_run.ingest(
+        proj, conn, families_path=tmp_knowledge_dir / "families.json")
+    verdict = conn.execute(
+        "SELECT verdict FROM fix_events WHERE fix_session_id='fingerprinted'"
+    ).fetchone()[0]
+    assert verdict == "cleared"
+    conn.close()

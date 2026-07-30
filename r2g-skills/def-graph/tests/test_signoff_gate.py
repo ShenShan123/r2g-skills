@@ -617,6 +617,25 @@ def test_verifier_fails_blocked_unsigned_manifest(tmp_path):
     assert any("blocked_unsigned" in f for f in fails)
 
 
+def test_verifier_reports_a_blocked_prerequisite_instead_of_crashing(tmp_path):
+    """A design with no 6_final.def gets reports/graph_dataset.json status="blocked"
+    and exit 3 from run_graphs.sh. _invalidate_manifest is a NO-OP when there is no
+    dataset/graph_manifest.json to supersede, so that skip manifest is the only
+    artifact. The verifier must recognise the status and report BLOCKED; before this
+    was wired up it fell through to json.load on the nonexistent manifest and raised
+    FileNotFoundError — the exact "honest denial reported as a harness crash" defect
+    _denied_manifest exists to prevent."""
+    case = tmp_path / "case"
+    (case / "reports").mkdir(parents=True)
+    json.dump({"design": "mini", "platform": "sky130hs", "variants": {},
+               "status": "blocked",
+               "reason": "no 6_final.def found — backend not completed/collected"},
+              open(case / "reports" / "graph_dataset.json", "w"))
+    assert not (case / "dataset" / "graph_manifest.json").exists()
+    vgd.RESULTS.clear()
+    assert vgd.verify_case(str(case)) == vgd.BLOCKED
+
+
 # ---- graph_skip_manifest.py: specific upstream reasons (codex #6, #38) ----------
 
 def _skip_upstream(tmp_path, *, gate=None, antenna=None, ppa=None, stage_log=None,

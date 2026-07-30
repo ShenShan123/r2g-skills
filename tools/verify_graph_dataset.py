@@ -2398,7 +2398,15 @@ def _denied_manifest(case):
             doc = json.load(fh)
     except Exception:
         return None
-    if isinstance(doc, dict) and doc.get("status") in ("skipped", "blocked_unsigned"):
+    # "blocked" is run_graphs.sh's status for a BLOCKED PREREQUISITE (no
+    # 6_final.def -> exit 3). It must be recognised here: _invalidate_manifest is
+    # a no-op when there is no dataset/graph_manifest.json to supersede, so a
+    # design that never reached layout has ONLY this skip manifest. Omitting the
+    # status made verify_case fall through to json.load on a nonexistent manifest
+    # and raise FileNotFoundError — re-creating the very "honest denial reported
+    # as a harness crash" defect the comment above this function describes.
+    if isinstance(doc, dict) and doc.get("status") in (
+            "skipped", "blocked", "blocked_unsigned"):
         return doc
     return None
 

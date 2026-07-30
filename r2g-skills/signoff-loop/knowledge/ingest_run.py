@@ -206,18 +206,40 @@ def _normalize_verdict(raw: str | None, before: Any, after: Any,
     return "inconclusive"   # stop_* / apply_failed / rerun_failed_* / unknown
 
 
+_EFFECT_KEYS = ("config_delta", "cumulative_config", "env_flags",
+                "effect_fingerprint")
+
+
 def _has_effect_evidence(row: dict[str, Any]) -> bool:
-    for key in ("config_delta", "cumulative_config", "env_flags"):
+    """True when this iteration recorded a REPLAYABLE effect."""
+    for key in _EFFECT_KEYS:
         raw = row.get(key)
         if isinstance(raw, dict) and raw:
             return True
-        if isinstance(raw, str):
+        if isinstance(raw, str) and raw.strip():
             try:
                 if json.loads(raw):
                     return True
             except (TypeError, ValueError):
-                continue
+                # A non-JSON but non-empty scalar (e.g. an effect_fingerprint
+                # hex digest) is still a recorded effect.
+                return True
     return False
+
+
+def _writer_records_effects(row: dict[str, Any]) -> bool:
+    """True when this row came from a writer that KNOWS how to record effects.
+
+    Legacy engineer_loop writers (`_record_pdn_fix`/`_record_resize_fix`/
+    `_record_synth_mem_fix` before the effect-fields change) emitted no effect
+    key at all. Their absence means "this writer never had the chance to record
+    one", NOT "the strategy had no effect" — so the downgrade below must not fire
+    on them. An effect-aware writer that emitted the keys and left them empty IS
+    the case worth catching. Without this, re-ingesting an old project silently
+    rewrites its history: the same row that taught the learner a win last week
+    becomes inconclusive today, with no flow having changed.
+    """
+    return any(key in row for key in _EFFECT_KEYS)
 
 
 # Regression strings are "<signal>_regression:...", "new_drc_class:...",
@@ -418,11 +440,19 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
         after = _to_float(r.get("after"))
         verdict = _normalize_verdict(r.get("verdict"), before, after,
                                      r.get("global_regressions"))
-        # A named strategy with no replayable delta is not positive learning
+        # A named strategy with no replayable effect is not positive learning
         # evidence. The held-out Ethernet recovery recorded core_util_relief as
         # cleared while all effect fields were empty, so the learner could reward
         # a label without knowing what changed.
-        if verdict in ("win", "cleared") and not _has_effect_evidence(r):
+        #
+        # Scoped to rows an effect-aware writer produced (`_writer_records_effects`)
+        # so re-ingesting a project that predates effect recording cannot rewrite
+        # its own history — the writers were only just taught to record effects,
+        # and punishing their earlier output would erase 195 live win/cleared rows
+        # from the shipped store, including the trajectories beneath 8 promoted
+        # recipes. Forward-looking gate, never a retroactive one.
+        if (verdict in ("win", "cleared")
+                and _writer_records_effects(r) and not _has_effect_evidence(r)):
             verdict = "inconclusive"
         # A win/cleared REFLOW event in a session that ended globally regressed
         # on a signal no live comparator row explains: downgrade to inconclusive
