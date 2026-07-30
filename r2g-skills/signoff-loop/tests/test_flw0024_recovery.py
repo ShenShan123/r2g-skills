@@ -122,6 +122,9 @@ def test_process_one_resizes_and_retries_then_recovers(tmp_path, monkeypatch):
     assert resize[0]["check"] == "orfs_stage"
     assert resize[0]["violation_class"] == "place"
     assert resize[0]["verdict"] == "cleared"                     # honest: it cleared
+    delta = json.loads(resize[0]["config_delta"])
+    assert delta["CORE_UTILIZATION"]["after"] == "30"
+    assert resize[0]["effect_fingerprint"]
 
 
 def test_resize_that_does_not_recover_records_no_change(tmp_path, monkeypatch):

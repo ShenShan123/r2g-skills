@@ -836,6 +836,47 @@ def _relieve_pdn_strap_width(entry: dict) -> bool:
     return True
 
 
+def _config_snapshot(entry: dict) -> dict[str, str]:
+    cfg = Path(entry["project_path"]) / "constraints" / "config.mk"
+    if not cfg.is_file():
+        return {}
+    out: dict[str, str] = {}
+    for line in cfg.read_text(encoding="utf-8", errors="ignore").splitlines():
+        match = re.match(r"\s*(?:export\s+)?(\w+)\s*[?:+]?=\s*(.*?)\s*$", line)
+        if match and not line.lstrip().startswith("#"):
+            out[match.group(1)] = match.group(2)
+    return out
+
+
+def _config_effect(before: dict[str, str], after: dict[str, str]) -> dict:
+    delta = {
+        key: {"before": before.get(key), "after": after.get(key)}
+        for key in sorted(set(before) | set(after))
+        if before.get(key) != after.get(key)
+    }
+    canonical = json.dumps(delta, sort_keys=True, separators=(",", ":"))
+    return {
+        "before": before,
+        "after": after,
+        "delta": delta,
+        "effect_fingerprint": hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        if delta else None,
+    }
+
+
+def _effect_fields(entry: dict, *, cleared: bool) -> dict:
+    effect = entry.pop("_r2g_config_effect", None) or {}
+    delta = effect.get("delta") or {}
+    verdict = "cleared" if cleared and delta else (
+        "no_change" if not cleared else "inconclusive_nonpromotable")
+    return {
+        "verdict": verdict,
+        "cumulative_config": json.dumps(effect.get("after") or {}, sort_keys=True),
+        "config_delta": json.dumps(delta, sort_keys=True),
+        "effect_fingerprint": effect.get("effect_fingerprint"),
+    }
+
+
 def _record_pdn_fix(entry: dict, *, cleared: bool) -> None:
     """Record the PDN-0185 die-floor (CORE_UTILIZATION -> explicit PDN-feasible DIE_AREA) as a
     fix_log row so the NEXT _ingest projects it into fix_events -> fix_trajectories -> a Tier-3
@@ -855,7 +896,8 @@ def _record_pdn_fix(entry: dict, *, cleared: bool) -> None:
         "check": "orfs_stage", "violation_class": "floorplan", "from_stage": "floorplan",
         "before": 1, "after": 0 if cleared else 1,
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
-        "verdict": "cleared" if cleared else "no_change", "ts": _now(),
+        "ts": _now(),
+        **_effect_fields(entry, cleared=cleared),
     }
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
@@ -894,7 +936,8 @@ def _record_resize_fix(entry: dict, *, cleared: bool) -> None:
         "check": "orfs_stage", "violation_class": "place", "from_stage": "place",
         "before": 1, "after": 0 if cleared else 1,
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
-        "verdict": "cleared" if cleared else "no_change", "ts": _now(),
+        "ts": _now(),
+        **_effect_fields(entry, cleared=cleared),
     }
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
@@ -1033,7 +1076,8 @@ def _record_synth_mem_fix(entry: dict, *, cleared: bool) -> None:
         "check": "orfs_stage", "violation_class": "synth", "from_stage": "synth",
         "before": 1, "after": 0 if cleared else 1,
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
-        "verdict": "cleared" if cleared else "no_change", "ts": _now(),
+        "ts": _now(),
+        **_effect_fields(entry, cleared=cleared),
     }
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
@@ -1123,6 +1167,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # rather than hand-fixing (2026-06-17). Only genuinely unhandled aborts
         # (synth/place/cts crashes, or a route fix that still fails) escalate.
         _ingest(entry)                      # partial runs still teach
+        repair_config_before = _config_snapshot(entry)
         # FLW-0024 (place density > 1.0): the die is too small for the synthesized
         # cells -- a RECOVERABLE over-pack (the fixed DIE_AREA was sized from an RTL
         # line-count proxy, not gate count), NOT the irrecoverable NesterovSolve
@@ -1131,6 +1176,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
         if (not _resized and entry.get("kind") != "ab_arm"
                 and _fail_stage(entry) == "place" and _is_flw0024(entry)
                 and _resize_to_core_util(entry)):
+            entry["_r2g_config_effect"] = _config_effect(
+                repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
             result = process_one(led, entry, conn, _resized=True)
             # Record the die-resize as a learnable fix attempt so the recovery is
@@ -1150,6 +1197,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
         if (not _resized and entry.get("kind") != "ab_arm"
                 and _fail_stage(entry) == "place" and _is_ppl0024(entry)
                 and _relieve_pin_overflow(entry)):
+            entry["_r2g_config_effect"] = _config_effect(
+                repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
             result = process_one(led, entry, conn, _resized=True)
             _record_resize_fix(entry, cleared=(result == "clean"))
@@ -1173,6 +1222,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
             # synth only to abort at place (failure-patterns.md:1163; no-op if already
             # auto-sized -- the FF memory then just grows the existing die; 2026-06-28 pilot).
             _resize_to_core_util(entry, util=_SYNTH_MEM_CORE_UTIL)
+            entry["_r2g_config_effect"] = _config_effect(
+                repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
             result = process_one(led, entry, conn, _resized=True)
             # The synth fix's verdict is whether the SYNTH abort cleared (the re-flow got
@@ -1195,6 +1246,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
         if (not _resized and entry.get("kind") != "ab_arm"
                 and _fail_stage(entry) == "floorplan" and _is_pdn_strap_width(entry)
                 and _relieve_pdn_strap_width(entry)):
+            entry["_r2g_config_effect"] = _config_effect(
+                repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
             result = process_one(led, entry, conn, _resized=True)
             _record_pdn_fix(entry, cleared=(result == "clean"))

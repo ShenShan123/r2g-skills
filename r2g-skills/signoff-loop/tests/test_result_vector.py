@@ -259,7 +259,10 @@ def _log_row(**kw):
     row = {"check": "drc", "iter": 1, "strategy": "s", "before": 10, "after": 8,
            "verdict": "applied", "from_stage": "floorplan",
            "fix_session_id": "sess1", "violation_class": "li.3",
-           "cumulative_config": "{}", "config_delta": "{}", "env_flags": "{}",
+           "cumulative_config": '{"PLACE_DENSITY_LB_ADDON":"0.05"}',
+           "config_delta": (
+               '{"PLACE_DENSITY_LB_ADDON":{"before":null,"after":"0.05"}}'),
+           "env_flags": "{}",
            "predicates": {}, "ts": "2026-07-26T00:00:00"}
     row.update(kw)
     return row

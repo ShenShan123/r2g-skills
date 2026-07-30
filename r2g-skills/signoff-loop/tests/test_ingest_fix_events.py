@@ -46,6 +46,14 @@ def test_normalize_verdict_passes_through_canonical_strings():
     assert ingest_run._normalize_verdict("apply_failed", None, None) == "inconclusive"
 
 
+def test_positive_learning_requires_replayable_effect_evidence():
+    assert not ingest_run._has_effect_evidence({
+        "config_delta": "{}", "cumulative_config": "{}", "env_flags": "{}"})
+    assert ingest_run._has_effect_evidence({
+        "config_delta": json.dumps({
+            "CORE_UTILIZATION": {"before": "40", "after": "25"}})})
+
+
 def test_project_family_matches_backfill_grouping(tmp_path):
     # Live ingest must group designs the same way backfill_fix_events does (by the
     # project-dir basename, which carries the source-repo prefix), so fix_recipes
@@ -131,6 +139,34 @@ def test_ingest_reads_fix_log_into_fix_events(tmp_path, tmp_knowledge_dir):
     # idempotent re-ingest: no duplicate fix_events
     ingest_run.ingest(proj, conn, families_path=tmp_knowledge_dir / "families.json")
     assert conn.execute("SELECT COUNT(*) FROM fix_events").fetchone()[0] == 2
+    conn.close()
+
+
+def test_empty_effect_cannot_be_ingested_as_positive_evidence(
+        tmp_path, tmp_knowledge_dir):
+    proj = _mk_project(tmp_path, fix_log=[{
+        "check": "orfs_stage",
+        "iter": 1,
+        "strategy": "core_util_relief",
+        "before": "1",
+        "after": "0",
+        "verdict": "cleared",
+        "from_stage": "place",
+        "fix_session_id": "empty_effect",
+        "violation_class": "place",
+        "config_delta": "{}",
+        "cumulative_config": "{}",
+        "env_flags": "{}",
+        "ts": "2026-07-29T00:00:00Z",
+    }])
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    ingest_run.ingest(
+        proj, conn, families_path=tmp_knowledge_dir / "families.json")
+    verdict = conn.execute(
+        "SELECT verdict FROM fix_events WHERE fix_session_id='empty_effect'"
+    ).fetchone()[0]
+    assert verdict == "inconclusive"
     conn.close()
 
 

@@ -165,6 +165,47 @@ def build(project_dir):
         "missing": missing,
     }
 
+    # --- end-to-end source/task provenance ---------------------------------
+    # A promoted rtl-acquire project carries metadata.json. Physical cleanliness
+    # alone cannot certify a strict dataset when the source bytes, compile
+    # closure, transformation lineage, or selected constraints are unverified.
+    metadata = _load(os.path.join(project_dir, "metadata.json"))
+    task_missing = []
+    promoted_project = isinstance(metadata, dict) and bool(metadata.get("promoted_from"))
+    if promoted_project:
+        if metadata.get("source_bytes_verified") is not True:
+            task_missing.append("source bytes are not synth-verified")
+        if metadata.get("compile_inputs_verified") is not True:
+            task_missing.append("compile inputs are not digest-verified")
+        if metadata.get("rtl_readiness") != "ready":
+            task_missing.append(
+                f"rtl readiness is {metadata.get('rtl_readiness')!r}, need 'ready'")
+        transform = metadata.get("transformation_manifest")
+        if isinstance(transform, dict) and transform.get("required"):
+            if metadata.get("original_source_verified") is not True:
+                task_missing.append("transformed RTL lacks verified original sources")
+            if not metadata.get("transformation_lineage_digest"):
+                task_missing.append("transformed RTL lacks a lineage digest")
+        if metadata.get("collateral_verified") is not True:
+            task_missing.append("file-backed compile collateral is not verified")
+        if (metadata.get("source_kind") == "cloned_repo"
+                and not metadata.get("source_commit")):
+            task_missing.append("cloned source has no resolved commit")
+    task_provenance = {
+        "applicable": promoted_project,
+        "status": ("pass" if promoted_project and not task_missing
+                   else "failed" if promoted_project else "not_applicable"),
+        "source_kind": metadata.get("source_kind") if isinstance(metadata, dict) else None,
+        "source_commit": metadata.get("source_commit") if isinstance(metadata, dict) else None,
+        "source_digest": metadata.get("source_digest") if isinstance(metadata, dict) else None,
+        "compile_manifest_digest": (
+            metadata.get("compile_manifest_digest") if isinstance(metadata, dict) else None),
+        "transformation_lineage_digest": (
+            metadata.get("transformation_lineage_digest")
+            if isinstance(metadata, dict) else None),
+        "missing": task_missing,
+    }
+
     # --- confirming run + layout binding ----------------------------------
     backend = os.path.join(project_dir, "backend")
     tags = {fn: e["run_tag"] for fn, e in reports.items() if e.get("run_tag")}
@@ -246,6 +287,10 @@ def build(project_dir):
         strict_missing.append(f"rcx: status={rcx.get('status')!r}, need 'complete'")
     if tier != "clean":
         strict_missing.append(f"timing: tier={tier!r}, need 'clean'")
+    if not constraint["qualified"]:
+        strict_missing.extend(f"constraint: {reason}" for reason in constraint["missing"])
+    if task_missing:
+        strict_missing.extend(f"task provenance: {reason}" for reason in task_missing)
     if tags and len(uniq) != 1:
         strict_missing.append(f"report binding: reports name {len(uniq)} different runs {uniq}")
 
@@ -276,6 +321,7 @@ def build(project_dir):
         "generated_at": int(time.time()),
         "reports": reports,
         "constraint": constraint,
+        "task_provenance": task_provenance,
         "confirming_run": confirming,
         "platform_capability": capability,
         "strict_clean": not strict_missing,
