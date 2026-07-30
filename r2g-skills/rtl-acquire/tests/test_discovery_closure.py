@@ -22,13 +22,17 @@ sys.path.insert(0, str(_SCRIPTS))
 sys.path.insert(0, str(_SCRIPTS / "repair"))
 
 from acquire.discover_download_candidates import (  # noqa: E402
+    PACKAGE_IMPORT_RE,
+    PACKAGE_RE,
     PREFERRED_DIR_PARTS,
+    bundle_closure,
     collect_defines,
     extract_macro_instantiations,
     file_is_candidate,
     path_is_likely_rtl_source,
     resolve_macro,
     resolve_macro_refs,
+    standalone_leaf_low_value,
     strip_synthesis_off_regions,
     unguarded_testbench_marker,
 )
@@ -198,3 +202,58 @@ def test_closure_incomplete_failure_is_a_retry_not_an_exclusion():
     note = ("closure_incomplete=macro; unresolved_macros=DIVIDE_MODULE | "
             "ERROR: module `div' not found")
     assert classify("/src/zipcore.v", note) == ("retry", "closure_incomplete")
+
+
+def test_package_import_joins_the_source_closure(tmp_path):
+    pkg = _write(
+        tmp_path, "rtl/types_pkg.sv",
+        "package types_pkg; typedef logic [7:0] byte_t; endpackage\n")
+    top = _write(
+        tmp_path, "rtl/core.sv",
+        "module core(input logic clk); import types_pkg::*; "
+        "byte_t q; always_ff @(posedge clk) q <= q + 1; endmodule\n")
+    package_names = set(PACKAGE_RE.findall(pkg.read_text()))
+    imports = set(PACKAGE_IMPORT_RE.findall(top.read_text()))
+    symbol_to_path = {"types_pkg": pkg}
+    infos = {
+        top: {"local_refs": imports, "path": top},
+        pkg: {"local_refs": set(), "path": pkg},
+    }
+    assert package_names == {"types_pkg"}
+    closure, unresolved = bundle_closure(top, infos, symbol_to_path)
+    assert closure == [top, pkg]
+    assert unresolved == []
+
+
+def test_large_dependency_closure_is_not_truncated_at_sixteen(tmp_path):
+    paths = [_write(tmp_path, f"rtl/m{i}.v", f"module m{i}; endmodule\n")
+             for i in range(24)]
+    symbols = {f"m{i}": path for i, path in enumerate(paths)}
+    infos = {}
+    for i, path in enumerate(paths):
+        refs = {f"m{i + 1}"} if i + 1 < len(paths) else set()
+        infos[path] = {"local_refs": refs, "path": path}
+    closure, unresolved = bundle_closure(paths[0], infos, symbols)
+    assert len(closure) == 24
+    assert unresolved == []
+
+
+def test_compact_stateful_ip_is_not_filtered_by_its_name(tmp_path):
+    path = _write(tmp_path, "rtl/x1.v", "module x1; endmodule\n")
+    info = {
+        "path": path,
+        "local_refs": set(),
+        "module_defs": {"x1"},
+        "control_hits": 0,
+        "non_empty_line_count": 180,
+        "sequential_processes": 3,
+    }
+    from collections import Counter
+    assert standalone_leaf_low_value(info, Counter()) is False
+
+
+def test_valid_tok_string_failure_is_deferred_not_excluded():
+    assert classify(
+        "/src/ibex_core.sv",
+        "ERROR: syntax error, unexpected TOK_STRING at line 2013",
+    ) == ("defer", "tool_compatibility")

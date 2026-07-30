@@ -114,6 +114,12 @@ CONTROL_KEYWORDS = {
     "scope",
 }
 MODULE_RE = re.compile(r"\bmodule\s+(?:automatic\s+)?([A-Za-z_][A-Za-z0-9_$]*)")
+PACKAGE_RE = re.compile(r"\bpackage\s+([A-Za-z_][A-Za-z0-9_$]*)")
+PACKAGE_IMPORT_RE = re.compile(r"\bimport\s+([A-Za-z_][A-Za-z0-9_$]*)::")
+SEQUENTIAL_RE = re.compile(
+    r"(?i)\balways_(?:ff|latch)\b"
+    r"|\balways\s*@\s*\([^)]*\b(?:pos|neg)edge\b"
+)
 INSTANTIATION_RE = re.compile(
     # Covers both scalar instances and instance arrays:
     #   mux #(32) u_mux (...)
@@ -725,7 +731,7 @@ def bundle_closure(
     file_infos: dict[Path, dict],
     module_to_path: dict[str, Path],
     *,
-    max_files: int = 16,
+    max_files: int = 256,
 ) -> tuple[list[Path], list[str]]:
     """(ordered_bundle, unresolved_modules). unresolved is NON-EMPTY when the
     max_files cap truncated the closure (2026-07-16 full-pipeline issue 10: the
@@ -781,6 +787,11 @@ def standalone_leaf_low_value(info: dict, refcount: Counter[str]) -> bool:
     if referenced_elsewhere > 0:
         return False
     if info["control_hits"] >= 2:
+        return False
+    # A compact standalone CPU/peripheral may have an unhelpful filename and no
+    # child modules, but multiple edge-triggered processes are strong structural
+    # evidence that it is a real stateful design rather than a leaf primitive.
+    if info.get("sequential_processes", 0) >= 2:
         return False
     if info["non_empty_line_count"] >= 1200:
         return False
@@ -953,6 +964,9 @@ def main() -> None:
             ok, reason = file_is_candidate(path)
             rtl_text = path.read_text(errors="ignore")
             module_defs = extract_module_defs(rtl_text)
+            package_defs = set(PACKAGE_RE.findall(strip_verilog_comments(rtl_text)))
+            package_imports = set(PACKAGE_IMPORT_RE.findall(
+                strip_verilog_comments(rtl_text)))
             duplicate_modules = duplicate_module_defs(module_defs)
             if duplicate_modules:
                 ok = False
@@ -966,6 +980,8 @@ def main() -> None:
                 "rel": rel,
                 "rtl_text": rtl_text,
                 "module_defs": module_defs,
+                "package_defs": package_defs,
+                "package_imports": package_imports,
                 "duplicate_module_defs": duplicate_modules,
                 "instantiated": instantiated,
                 "macro_instantiations": extract_macro_instantiations(rtl_text),
@@ -974,15 +990,23 @@ def main() -> None:
                 "risk_flags": ram_macro_risk_tokens(rtl_text),
                 "non_empty_line_count": sum(1 for line in rtl_text.splitlines() if line.strip()),
                 "control_hits": sum(1 for keyword in CONTROL_KEYWORDS if keyword in f"{str(rel).lower()} {rtl_text.lower()}"),
+                "sequential_processes": len(
+                    SEQUENTIAL_RE.findall(strip_verilog_comments(rtl_text))),
             }
             file_infos[path] = info
             if duplicate_modules:
                 continue
             for module_name in module_defs:
                 module_to_path.setdefault(module_name, path)
+            for package_name in package_defs:
+                module_to_path.setdefault(package_name, path)
 
         for info in file_infos.values():
-            local_refs = {name for name in info["instantiated"] if name in module_to_path and module_to_path[name] != info["path"]}
+            local_refs = {
+                name for name in (set(info["instantiated"])
+                                  | set(info.get("package_imports") or []))
+                if name in module_to_path and module_to_path[name] != info["path"]
+            }
             # Macro-indirect dependencies join the SAME ref set, so the existing
             # closure walk, refcount and helper/leaf heuristics all see them
             # without any of those needing to know a macro was involved.

@@ -356,6 +356,120 @@ def vendor_headers(header_manifest: list[dict], candidate_dir: Path,
     return vendored, unresolved
 
 
+def resolve_manifest_file(entry: dict, candidate_dir: Path,
+                          fallback_subdirs: tuple[str, ...] = ("rtl",)) -> Path | None:
+    raw = str(entry.get("path") or "")
+    if not raw:
+        return None
+    recorded = Path(os.path.expandvars(os.path.expanduser(raw)))
+    if _readable_file(recorded):
+        return recorded
+    for subdir in fallback_subdirs:
+        root = candidate_dir / subdir
+        rel = str(entry.get("vendored_relpath") or "")
+        if rel:
+            candidate = candidate_dir / rel
+            if _readable_file(candidate):
+                return candidate
+        candidate = root / recorded.name
+        if _readable_file(candidate):
+            return candidate
+        try:
+            matches = [p for p in root.rglob(recorded.name) if _readable_file(p)]
+        except OSError:
+            matches = []
+        if len(matches) == 1:
+            return matches[0]
+    return None
+
+
+def verify_auxiliary_manifest(entries: list[dict], candidate_dir: Path, *,
+                              fallback_subdirs: tuple[str, ...] = ("rtl",)
+                              ) -> tuple[list[tuple[dict, Path]], list[str]]:
+    verified: list[tuple[dict, Path]] = []
+    errors: list[str] = []
+    for entry in entries or []:
+        path = resolve_manifest_file(entry, candidate_dir, fallback_subdirs)
+        if path is None:
+            errors.append(f"missing:{entry.get('path')}")
+            continue
+        try:
+            got = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            got = None
+        if not entry.get("sha256") or got != entry.get("sha256"):
+            errors.append(f"digest:{entry.get('path')}")
+            continue
+        verified.append((entry, path))
+    return verified, errors
+
+
+def vendor_auxiliary_files(verified: list[tuple[dict, Path]], destination: Path
+                           ) -> dict[tuple[str, str], Path]:
+    destination.mkdir(parents=True, exist_ok=True)
+    by_consumer_reference: dict[tuple[str, str], Path] = {}
+    by_digest: dict[str, Path] = {}
+    for entry, source in verified:
+        digest = str(entry.get("sha256") or "")
+        dst = by_digest.get(digest)
+        if dst is None:
+            name = source.name
+            dst = destination / name
+            suffix = 1
+            while dst.exists() and hashlib.sha256(dst.read_bytes()).hexdigest() != digest:
+                dst = destination / f"{source.stem}_{suffix}{source.suffix}"
+                suffix += 1
+            if not dst.exists():
+                shutil.copyfile(source, dst)
+            by_digest[digest] = dst
+        consumer = str(entry.get("consumer") or "")
+        reference = str(entry.get("reference") or "")
+        if consumer and reference:
+            by_consumer_reference[(consumer, reference)] = dst
+    return by_consumer_reference
+
+
+def rewrite_collateral_references(source_keys: list[str], rtl_files: list[Path],
+                                  references: dict[tuple[str, str], Path]
+                                  ) -> list[dict]:
+    rewrites: list[dict] = []
+    if not references:
+        return rewrites
+    for source_key, rtl in zip(source_keys, rtl_files):
+        try:
+            before = rtl.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        after = before
+        changed_refs = []
+        bindings = sorted(
+            (reference, payload)
+            for (consumer, reference), payload in references.items()
+            if consumer == source_key
+        )
+        for reference, payload in bindings:
+            old = f'"{reference}"'
+            if old not in after:
+                continue
+            replacement = f'"{payload.resolve()}"'
+            after = after.replace(old, replacement)
+            changed_refs.append({
+                "reference": reference,
+                "vendored_path": str(payload.resolve()),
+            })
+        if after == before:
+            continue
+        before_sha = hashlib.sha256(before.encode("utf-8")).hexdigest()
+        rtl.write_text(after, encoding="utf-8")
+        rewrites.append({
+            "rtl": str(rtl),
+            "before_sha256": before_sha,
+            "after_sha256": hashlib.sha256(after.encode("utf-8")).hexdigest(),
+            "references": changed_refs,
+        })
+    return rewrites
+
+
 def render_config_mk(template: str, *, design: str, platform: str,
                      verilog_files: list[Path], sdc_path: Path,
                      core_utilization: int, place_density: float,
@@ -524,6 +638,8 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     # this adds no new hole.
     compile_man = meta.get("compile_manifest") if isinstance(
         meta.get("compile_manifest"), dict) else None
+    verified_originals: list[tuple[dict, Path]] = []
+    verified_collateral: list[tuple[dict, Path]] = []
     if compile_man:
         drift = []
         for cfg_key, man_key in (("VERILOG_TOP_PARAMS", "top_parameters"),
@@ -550,8 +666,59 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
             return result
         result["compile_inputs_verified"] = True
         result["compile_config_digest"] = compile_man.get("config_digest")
+        result["compile_manifest_digest"] = hashlib.sha256(json.dumps(
+            compile_man, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        unresolved_collateral = compile_man.get("unresolved_collateral") or []
+        if unresolved_collateral:
+            result["status"] = "compile_collateral_unresolved"
+            result["reason"] = (
+                "compile_collateral_unresolved: literal or dynamic file-backed "
+                f"synthesis inputs could not be frozen ({unresolved_collateral[:3]}); "
+                "re-expand after supplying the missing payloads")
+            return result
+        verified_collateral, collateral_errors = verify_auxiliary_manifest(
+            compile_man.get("collateral_manifest") or [], out_root / design,
+            fallback_subdirs=("collateral", "rtl"))
+        if collateral_errors:
+            result["status"] = "compile_collateral_changed_or_missing"
+            result["reason"] = (
+                "compile_collateral_changed_or_missing: the file-backed synthesis "
+                f"inputs no longer match their synth-time digests ({collateral_errors[:3]})")
+            return result
     else:
         result["compile_inputs_verified"] = False
+
+    transform = meta.get("transformation_manifest")
+    transformed = bool(meta.get("sv2v_fallback_used") or meta.get("vhd2vl_fallback_used"))
+    if transformed and not isinstance(transform, dict):
+        result["status"] = "transformation_lineage_missing"
+        result["reason"] = (
+            "transformation_lineage_missing: generated frontend output replaced the "
+            "original source closure without a digest-bound transformation record; "
+            "re-expand before promoting")
+        return result
+    if isinstance(transform, dict) and transform.get("required"):
+        originals = transform.get("original_manifest") or meta.get(
+            "original_source_manifest") or []
+        verified_originals, original_errors = verify_auxiliary_manifest(
+            originals, out_root / design, fallback_subdirs=("rtl/original", "rtl"))
+        if original_errors or len(verified_originals) != len(originals):
+            result["status"] = "original_source_lineage_unresolved"
+            result["reason"] = (
+                "original_source_lineage_unresolved: transformed compile inputs are "
+                "present, but their original source bytes are missing or changed "
+                f"({original_errors[:3]}); re-expand before promoting")
+            return result
+        output_manifest = transform.get("compiled_manifest") or []
+        if output_manifest != (meta.get("source_manifest") or []):
+            result["status"] = "transformation_output_manifest_mismatch"
+            result["reason"] = (
+                "transformation_output_manifest_mismatch: transformation output "
+                "identity disagrees with the source manifest that earned synthesis")
+            return result
+        result["original_source_verified"] = True
+        result["transformation_lineage_digest"] = transform.get("lineage_digest")
     # Unconstrained-clock gate (2026-07-16 full-pipeline issue 5): a SEQUENTIAL
     # design falling back to a virtual clock has meaningless setup/hold labels
     # downstream (ethmac: 119 unclocked registers, STA-0450, silently promoted).
@@ -595,6 +762,38 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     # 2. vendor the proven RTL (self-contained project; the synth workspace's
     #    _tmp_cfg conversions are cleanable scratch)
     vendored = vendor_rtl(rtl_files, project / "rtl")
+    if verified_originals:
+        original_dir = project / "rtl_original"
+        original_dir.mkdir(parents=True, exist_ok=True)
+        original_files = []
+        used_originals: set[str] = set()
+        for _, source in verified_originals:
+            name = source.name
+            stem, suffix = source.stem, source.suffix
+            n = 1
+            while name in used_originals:
+                name = f"{stem}_{n}{suffix}"
+                n += 1
+            used_originals.add(name)
+            destination = original_dir / name
+            shutil.copyfile(source, destination)
+            original_files.append(destination)
+        result["vendored_original_source_count"] = len(original_files)
+
+    collateral_refs = vendor_auxiliary_files(
+        verified_collateral, project / "input")
+    collateral_rewrites = rewrite_collateral_references(
+        [entry["key"] for entry in resolved], vendored, collateral_refs)
+    if verified_collateral:
+        if not collateral_rewrites:
+            result["status"] = "compile_collateral_rewrite_failed"
+            result["reason"] = (
+                "compile collateral was verified and vendored, but no compiled RTL "
+                "reference was rebound to the frozen payload")
+            return result
+        result["vendored_collateral_count"] = len(
+            {str(path) for path in collateral_refs.values()})
+        result["collateral_rewrites"] = collateral_rewrites
     # Vendor the frozen header closure too (P0-R5): a promoted project that still
     # reads headers from an external tree can elaborate a different circuit the
     # moment that tree changes, and does not survive being moved or archived.
@@ -700,11 +899,36 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
                     "promoted_at": result["promoted_at"],
                     "synth_variant": variant, "top": top, "platform": platform,
                     "source_bytes_verified": bool(result.get("source_bytes_verified")),
+                    "compile_inputs_verified": bool(
+                        result.get("compile_inputs_verified")),
+                    "compile_manifest_digest": result.get(
+                        "compile_manifest_digest"),
+                    "source_kind": meta.get("source_kind"),
+                    "source_commit": meta.get("source_commit"),
+                    "source_digest": meta.get("source_digest"),
+                    "license_status": meta.get("license_status"),
+                    "original_source_verified": bool(
+                        result.get("original_source_verified",
+                                   not bool(meta.get("transformation_manifest", {})
+                                            .get("required")
+                                            if isinstance(meta.get(
+                                                "transformation_manifest"), dict)
+                                            else False))),
+                    "transformation_lineage_digest": result.get(
+                        "transformation_lineage_digest"),
+                    "collateral_verified": not bool(
+                        (compile_man or {}).get("unresolved_collateral"))
+                    and len(verified_collateral) == len(
+                        (compile_man or {}).get("collateral_manifest") or []),
                     # RMD-HO-P0-01: the readiness verdict must ride the manifest
                     # downstream readers open, exactly like source_bytes_verified —
                     # a project promoted under an override must be distinguishable
                     # from one that passed the gate. The publish gate keys on this.
                     "rtl_readiness": result.get("rtl_readiness")}
+        if isinstance(meta.get("transformation_manifest"), dict):
+            meta_out["transformation_manifest"] = meta["transformation_manifest"]
+        if collateral_rewrites:
+            meta_out["collateral_rewrites"] = collateral_rewrites
         if result.get("rtl_readiness_override"):
             meta_out["rtl_readiness_override"] = result["rtl_readiness_override"]
         if result.get("source_verification_override"):
