@@ -5757,3 +5757,121 @@ Two independent rejections of good RTL, both in `discover_download_candidates.py
   live beside synthesizable RTL. `unguarded_testbench_marker()` now strips guarded regions
   (nesting-aware, so an inner conditional does not close an outer guard early) and judges what a
   synthesis frontend would actually elaborate. An unguarded `$display` still rejects.
+
+## Vendored R2G2.0 Four-Stage Ingestion (2026-08-01 — failure-patterns #60)
+
+The `Dataset_R2G2.0(B).zip` drop was manually verified — but on **one sample, on one platform**
+(`bp_multi_top/v01`, nangate45). Ingesting it into `def-graph` surfaced seven defects, five of which
+are invisible on nangate45 and fire on sky130hd/sky130hs (this repo's defaults). Full delta record
+and re-vendoring procedure: `def-graph/scripts/r2g2/R2G2_UPSTREAM.md`. Regressions:
+`def-graph/tests/test_r2g2_stage_dataset.py`.
+
+**The general lesson: "manually verified" is scoped to the corpus it was verified on.** A
+single-platform verification cannot see a technology-dependent parser, a technology-dependent
+constant, or a quoting dialect. Re-verify an ingested pipeline on *your* default platform before
+trusting its provenance.
+
+### D1 — LEF/DEF `FN`/`FS` pin transforms swapped (silent-value, ~half of all pins)
+
+`02_extract_features.transform_pin` mapped `FN → (x, h−y)` and `FS → (w−x, y)`; LEF/DEF define
+`FN` = MY (changes x) and `FS` = MX (changes y). `FW`/`FE` in the same table were consistent with the
+*correct* `FN`/`FS`, so it was a transcription slip, not a rival convention.
+
+Standard-cell rows alternate `N`/`FS`, so this misplaced roughly half of all pins, and propagated
+into `pin_x/y_um`, normalized/boundary distances, per-net HPWL, `congestion_pin_density` and both
+RUDY features. Measured against OpenDB's own placed pin locations (`aes_core`, sky130hd, 401 pins):
+upstream scored **0/190 on FS** and 211/211 on N; the corrected table scores 190/190 and 211/211.
+
+This is the *third* appearance of this exact swap in this repo — RTL2Graph shipped it too (fixed
+2026-07-14 in `techlib/lef.py:apply_orient`, validated on cordic sky130hs). **Guard:** a
+parametrized test pins all eight orientations AND asserts the vendored copy equals
+`techlib.lef.apply_orient`, so the two can never drift apart again.
+
+### D2 — quote-intolerant Liberty regexes (silent-value, whole-platform)
+
+`01`/`02`'s Liberty parsers matched `cell\s*\(\s*([^)]+?)\s*\)`, `direction\s*:\s*([A-Za-z_]+)` and
+`clock\s*:\s*true`. nangate45 writes `cell (AND2_X1)` / `direction : input;`. sky130, gf180 and ihp
+write `cell ("sky130_fd_sc_hd__a2111o_1")` / `direction : "input";` / `clock : "true"`, and then:
+
+- every master name kept literal `"` quotes → never matched the DEF or Yosys spelling → **every gate
+  fell back to `cell_type_id=UNKNOWN`**;
+- **every pin direction was empty** → `pin_type_id`/`pin_role_id`/`is_driver_pin`/`is_sink_pin`
+  collapsed, `num_drivers`/`num_sinks` went to 0, and `project_gate_graph` emitted **zero** gate→gate
+  edges;
+- `cell_area_um2`, `cell_leakage_power`, `pin_cap_fF`, `max_transition`, `max_capacitance`, `v_nom`
+  and the clock flag were all lost.
+
+Measured on `sky130_fd_sc_hd__tt_025C_1v80.lib`: **1771/1771 pins had an empty direction before the
+fix, 0/1771 after**. Same defect family as the 2026-07 "Quoted-unit liberty defects (sky130)" entry
+below — the earlier one hit units and pin attributes, this one hits the *cell name itself*.
+**Guard:** a quoted-vs-unquoted fixture pair that must parse identically.
+
+### D3 — a nangate45 constant documented as "technology-derived"
+
+`15 FastRoute tracks × 0.14 µm Metal3 pitch = 2.1 µm` was hardcoded in four places (`02`, `03`, `04`,
+and the validator, which asserted literal `2.1`/`4200 DBU`). 0.14 µm is nangate45's Metal3 pitch;
+sky130hd's third routing layer pitch is 0.46 µm, so the correct grid is **6.9 µm — a 3.3× error in
+GCell edge length**, shifting every congestion input feature, the congestion label's grid indexing
+and the `gate|congestion_geom|gate` neighbourhood. The validator's literal check meant a *correct*
+non-nangate45 build failed the contract check.
+
+Now `resolve_congestion_grid_um(cfg)`, defaulting to 2.1 µm so nangate45 stays bit-identical;
+`make_sample_config.py` fills the pitch from the platform tech LEF. **The invariant the validator
+enforces is now the real one** — one fixed grid, identical across features, labels and the Gate-Gate
+relation, with the DBU step consistent with `dbu_per_um`.
+
+### D4 — one optional label's dependency blocked four mandatory ones
+
+`03_extract_labels.py` imported SciPy at module scope, but SciPy is used only by the IR-drop KCL
+solve. Without SciPy the whole label stage refused to start — wirelength, congestion, timing and RC
+went down with it, *even under `--skip-irdrop`*. Now imported lazily inside `solve_vdd_network` with
+an actionable HINT, restoring this skill's contract that a missing input degrades one column, never
+the stage.
+
+### D5 — one of four node tables had no alignment check
+
+`04_assemble_heterograph` ran `require_same_keys` for `nodes_gate.csv`, `nodes_net.csv` and
+`nodes_pin.csv`, then took `io_keys = sorted(io_index)` straight from the unchecked
+`nodes_iopin.csv`. The IO-pin node set was whatever the feature CSV said rather than what the base
+graph said. Added the symmetric check against `base.io_pin_names`.
+
+### D6 — a constant dressed as an alarm
+
+`01.main` always passes empty name-reference maps (stage 01 must not read a DEF), so every gate
+landed in `unmatched_gate_names` and `unmatched_gate_name_count` **always equalled the total gate
+count**. A reader checking that field for trouble would have found "trouble" on every clean run.
+Now gated on `name_reference_enabled` so "no reference supplied" is distinguishable from "reference
+supplied and did not match".
+
+### D7 — exact float equality between two differently-computed copies of one constant
+
+`04` compared the feature-side and label-side congestion grid with exact float set equality. `02`
+records `tracks × pitch`; `03` round-trips through integer DBU (`round(grid*dbu)/dbu`). They agree
+bit-for-bit only when `tracks × pitch` lands on a representable DBU multiple — nangate45
+(`15×0.14 → 2.1`) and sky130hd (`15×0.46 → 6.9`) do; **sky130hs (`15×0.48 → 7.199999999999999` vs
+`7.2`) does not**. A *correct* sky130hs build therefore aborted at stage 04.
+
+This is the purest form of the single-platform-verification problem in this ingestion: the defect is
+in arithmetic, not in any technology-specific parsing, and it stayed invisible purely because the
+verified platform's pitch happened to be in the lucky set. It only surfaced once D3 made the grid
+follow the platform — i.e. **fixing one defect is what exposed the next one**, which is the argument
+for re-running a full real build after an ingestion rather than trusting a green unit suite.
+
+Now `math.isclose(rel_tol=1e-9)` per axis plus an explicit "all label rows agree" check; a genuinely
+different grid and mixed label grids are still rejected, and the validator still re-checks the
+integer DBU step exactly. **General rule: never compare two independently-derived copies of the same
+physical constant with `==`.** Compare the integer form, or compare with a tolerance.
+
+### Ingestion-side defects in our own glue (found by running it)
+
+- **`run_stage_dataset.sh` resolved sibling scripts one directory too high** (`scripts/flow/..` is
+  `scripts`, not the skill root), so every step died on `scripts/scripts/...`. Guard: a test that
+  evaluates the runner's *own* `SKILL_DIR`/`R2G2_DIR`/`ADAPT_DIR` assignments and stats the targets.
+- **`report_checks` returns `""`, it does not return the report.** `puts $fh [report_checks …]`
+  writes an empty file while the report goes to stdout. `emit_timing_reports.py` fences each report
+  with markers on stdout and splits the capture.
+- **OpenSTA renamed `-max_paths`/`-group_count` to `-endpoint_path_count`/`-group_path_count`.** The
+  adapter probes `help report_checks` instead of hardcoding either spelling.
+- **PDNSim in stock OpenROAD (26Q1) has no SPICE export** — only `-voltage_file`/`-error_file`/
+  `-em_outfile`. R2G2.0's `ir_drop_mV` label needs `VDD_extracted.sp`, so on this toolchain the
+  column is honestly NaN with `irdrop_valid=0`; it is *unavailable*, not skipped by preference.
