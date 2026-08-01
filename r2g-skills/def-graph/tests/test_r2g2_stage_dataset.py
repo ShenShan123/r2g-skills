@@ -191,6 +191,199 @@ def test_quoted_and_unquoted_liberty_agree(stage02, tmp_path):
 
 
 # --------------------------------------------------------------------------
+# D8: gzipped Liberty (gf180 ships only .lib.gz) must parse, and an empty
+# parse must fail closed instead of producing a silently featureless dataset.
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def gzipped_lib(tmp_path):
+    import gzip
+
+    path = tmp_path / "quoted.lib.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        handle.write(QUOTED_LIBERTY)
+    return path
+
+
+def test_stage01_reads_gzipped_liberty(stage01, gzipped_lib):
+    directions, masters = stage01.parse_liberty([gzipped_lib])
+    assert masters == ["demo__dff_1"]
+    assert directions["DEMO__DFF_1"]["CLK"] == "INPUT"
+
+
+def test_stage02_reads_gzipped_liberty(stage02, gzipped_lib, quoted_lib):
+    """Compressed and plain must yield identical cell tables."""
+    assert stage02.parse_liberty([gzipped_lib])["cells"] == stage02.parse_liberty([quoted_lib])["cells"]
+
+
+def test_glob_liberty_finds_compressed_files(stage01, tmp_path):
+    (tmp_path / "a.lib").write_text("", encoding="utf-8")
+    (tmp_path / "b.lib.gz").write_bytes(b"")
+    (tmp_path / "c.txt").write_text("", encoding="utf-8")
+    names = sorted(p.name for p in stage01.glob_liberty(tmp_path))
+    assert names == ["a.lib", "b.lib.gz"]
+
+
+def test_stage01_fails_closed_on_an_unparseable_liberty(stage01, tmp_path, monkeypatch):
+    """A Liberty that yields zero cells must raise, not pass vacuously.
+
+    Upstream only raised for masters it FOUND but could not encode, so a file it
+    could not read at all (gf180's gzip decoded as text) sailed through with
+    every Liberty feature dead and zero gate->gate edges.
+    """
+    source = (R2G2_DIR / "01_build_base_graph.py").read_text(encoding="utf-8")
+    assert "if not liberty_masters:" in source
+    assert "Liberty解析结果为空" in source
+
+    empty = tmp_path / "not_really.lib"
+    empty.write_text("this is not liberty\n", encoding="utf-8")
+    _, masters = stage01.parse_liberty([empty])
+    assert masters == []  # the condition the guard fires on
+
+
+def test_stage02_fails_closed_on_an_empty_cell_table():
+    source = (R2G2_DIR / "02_extract_features.py").read_text(encoding="utf-8")
+    assert 'if not lib["cells"]:' in source
+    assert "Liberty解析结果为空" in source
+
+
+def test_encode_map_generator_rejects_an_empty_liberty(tmp_path):
+    """Exit-code contract through the CLI."""
+    bogus = tmp_path / "empty.lib"
+    bogus.write_text("nothing here\n", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(ADAPT_DIR / "build_encode_map.py"),
+         "--platform", "demo", "--lib", str(bogus), "--out", str(tmp_path / "m.csv")],
+        capture_output=True, text=True, timeout=900,
+    )
+    assert result.returncode != 0
+    assert "no Liberty cells parsed" in (result.stdout + result.stderr)
+
+
+def test_explicit_liberty_is_not_widened_by_a_directory_scan(encode_map_mod, tmp_path):
+    """A platform lib directory is not a library.
+
+    gf180's holds 30 files spanning TWO cell libraries (7-track and 9-track)
+    across every PVT corner. Scanning it on top of the ORFS-resolved Liberty
+    would put cells from the wrong physical library into the id vocabulary and
+    make electrical values depend on glob order.
+    """
+    lib_dir = tmp_path / "lib"
+    lib_dir.mkdir()
+    chosen = lib_dir / "fam_9t__ff_n40C.lib"
+    chosen.write_text(QUOTED_LIBERTY, encoding="utf-8")
+    for other in ("fam_7t__ff_125C.lib", "fam_9t__ss_125C.lib"):
+        (lib_dir / other).write_text(QUOTED_LIBERTY, encoding="utf-8")
+
+    only_explicit = encode_map_mod.liberty_files(lib_dir, [chosen])
+    assert [p.name for p in only_explicit] == [chosen.name]
+
+    # …but an operator who explicitly asks for the directory still gets it.
+    scanned = encode_map_mod.liberty_files(lib_dir, [chosen], glob_dir=True)
+    assert len(scanned) == 3
+
+
+def test_sample_config_does_not_scan_the_platform_lib_dir():
+    source = (ADAPT_DIR / "make_sample_config.py").read_text(encoding="utf-8")
+    assert '"yosys_hierarchy_lib_dir": str(libs[0].parent)' not in source
+    assert "Deliberately NOT setting yosys_hierarchy_lib_dir" in source
+
+
+def test_encode_map_generator_globs_compressed_liberty(encode_map_mod, tmp_path):
+    import gzip
+
+    lib_dir = tmp_path / "lib"
+    lib_dir.mkdir()
+    with gzip.open(lib_dir / "x.lib.gz", "wt", encoding="utf-8") as handle:
+        handle.write(QUOTED_LIBERTY)
+    found = encode_map_mod.liberty_files(lib_dir, [])
+    assert [p.name for p in found] == ["x.lib.gz"]
+
+
+# --------------------------------------------------------------------------
+# D10: LEF pin geometry must come from POLYGON as well as RECT (gf180).
+# D11: well-tap detection must be platform-aware (gf180 uses __filltie).
+# --------------------------------------------------------------------------
+
+POLYGON_LEF = textwrap.dedent(
+    """\
+    MACRO demo_poly
+      CLASS core ;
+      SIZE 2.24 BY 5.04 ;
+      PIN I
+        DIRECTION INPUT ;
+        PORT
+          LAYER Metal1 ;
+            POLYGON 0.71 1.21 1.015 1.21 1.015 2.3 1.07 2.3 1.07 2.53 0.71 2.53  ;
+        END
+      END I
+    END demo_poly
+    MACRO demo_rect
+      CLASS core ;
+      SIZE 1.0 BY 2.0 ;
+      PIN A
+        DIRECTION INPUT ;
+        PORT
+          LAYER Metal1 ;
+            RECT 0.1 0.2 0.3 0.6 ;
+        END
+      END A
+    END demo_rect
+    """
+)
+
+
+def test_lef_pin_geometry_reads_polygon_pins(stage02, tmp_path):
+    """gf180 std cells use POLYGON for essentially every signal pin.
+
+    With no geometry a pin falls back to the cell origin, `pin_position_valid`
+    goes 0 for every pin, and because `stage_net_geometry` needs geometry on
+    every endpoint, EVERY net's HPWL/bbox becomes NaN — 13 all-NaN columns on
+    gf180 before this fix.
+    """
+    lef = tmp_path / "poly.lef"
+    lef.write_text(POLYGON_LEF, encoding="utf-8")
+    macros = stage02.parse_lef_geometry([lef])
+
+    assert "DEMO_POLY" in macros
+    # bbox of the polygon is x∈[0.71,1.07], y∈[1.21,2.53] → centre (0.89, 1.87)
+    assert macros["DEMO_POLY"]["pins"]["I"] == pytest.approx((0.89, 1.87))
+    # RECT pins keep working unchanged
+    assert macros["DEMO_RECT"]["pins"]["A"] == pytest.approx((0.2, 0.4))
+
+
+def test_lef_polygon_needs_at_least_three_points(stage02, tmp_path):
+    """A malformed POLYGON must be ignored, not turned into a bogus centre."""
+    lef = tmp_path / "bad.lef"
+    lef.write_text(
+        "MACRO m\n  SIZE 1 BY 1 ;\n  PIN A\n    PORT\n      POLYGON 0.1 0.2 ;\n    END\n"
+        "  END A\nEND m\n",
+        encoding="utf-8",
+    )
+    macros = stage02.parse_lef_geometry([lef])
+    assert macros["M"]["pins"] == {}
+
+
+def test_tap_patterns_are_platform_aware(config_mod):
+    """gf180's well-tap/endcap masters contain no 'TAP'."""
+    assert "TAP" in config_mod.tap_master_patterns("nangate45")
+    gf180 = config_mod.tap_master_patterns("gf180")
+    assert "FILLTIE" in gf180 and "ENDCAP" in gf180
+
+
+def test_feature_stage_reads_tap_patterns_from_config():
+    source = (R2G2_DIR / "02_extract_features.py").read_text(encoding="utf-8")
+    assert 'cfg.get("tap_master_patterns")' in source
+    assert 'if "TAP" in str(row.get("master", "")).upper()' not in source
+
+
+def test_sample_config_emits_tap_patterns():
+    source = (ADAPT_DIR / "make_sample_config.py").read_text(encoding="utf-8")
+    assert '"tap_master_patterns": tap_master_patterns(platform)' in source
+
+
+# --------------------------------------------------------------------------
 # D3: the congestion grid is platform-derived, not a nangate45 constant.
 # --------------------------------------------------------------------------
 
@@ -504,6 +697,45 @@ def test_timing_path_count(timing_mod, tmp_path):
     report = tmp_path / "paths_max.rpt"
     report.write_text("Startpoint: a\nx\nStartpoint: b\ny\n", encoding="utf-8")
     assert timing_mod.count_paths(report) == 2
+
+
+def test_timing_endpoint_budget_favours_breadth(timing_mod):
+    """One path per endpoint, many endpoints -- not the reverse.
+
+    ``-endpoint_path_count`` caps paths PER ENDPOINT. Setting it large spends the
+    whole budget re-walking a handful of endpoints; measured on cordic/nangate45,
+    10005 setup paths covered only 19 of the design's 107 endpoints. The node
+    label is the endpoint's worst slack, so breadth is what matters.
+    """
+    tcl = timing_mod.build_tcl(
+        libs=[Path("/x.lib")], lefs=[Path("/x.lef")], route_def=Path("/r.def"),
+        spef=Path("/r.spef"), sdc=Path("/r.sdc"),
+        max_rpt=Path("/max.rpt"), min_rpt=Path("/min.rpt"),
+        max_paths=10000, endpoint_paths=1,
+        group_flag="-group_path_count", endpoint_flag="-endpoint_path_count",
+    )
+    assert "-endpoint_path_count 1" in tcl
+    assert "-group_path_count 10000" in tcl
+    # the pre-fix shape: the same large number on both knobs
+    assert "-endpoint_path_count 10000" not in tcl
+
+
+def test_timing_endpoint_paths_defaults_to_one():
+    source = (ADAPT_DIR / "emit_timing_reports.py").read_text(encoding="utf-8")
+    assert '"--endpoint-paths", type=int, default=1' in source
+
+
+def test_count_distinct_endpoints(timing_mod, tmp_path):
+    """Endpoint count -- not path count -- bounds how many pins can be labelled."""
+    report = tmp_path / "paths_max.rpt"
+    report.write_text(
+        "Startpoint: a\nEndpoint: e1\nx\n"
+        "Startpoint: b\nEndpoint: e1\ny\n"      # same endpoint again
+        "Startpoint: c\nEndpoint: e2\nz\n",
+        encoding="utf-8",
+    )
+    assert timing_mod.count_paths(report) == 3
+    assert timing_mod.count_distinct_endpoints(report) == 2
 
 
 def test_timing_manifest_schema_matches_label_gate(timing_mod):

@@ -22,7 +22,7 @@ skill; see `../../signoff-loop/SKILL.md`.
 - [`four-stage-dataset.md`](four-stage-dataset.md) — `run_stage_dataset.sh` emits four `HeteroData`
   graphs per design (floorplan / placement / cts / route) sharing one post-synthesis topology and
   one post-route label set, differing only by prediction cutoff. The vendored R2G2.0 pipeline.
-- `../scripts/r2g2/R2G2_UPSTREAM.md` — upstream provenance + the seven local deltas. **Read before
+- `../scripts/r2g2/R2G2_UPSTREAM.md` — upstream provenance + the eleven local deltas. **Read before
   editing anything under `scripts/r2g2/`**; that tree is re-vendored, not hand-merged.
 
 **The tech-lib / LEF / DEF parser**

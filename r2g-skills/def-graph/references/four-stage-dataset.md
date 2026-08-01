@@ -137,6 +137,33 @@ Upstream expects a hand-written JSON pointing at a curated `/data/...` tree.
 * `cell_type_id` / `pin_layer_id` are **per-platform**. Never mix platforms in
   one dataset index without filtering on `platform`.
 
+## Verified technologies
+
+Built and checked on `cordic` across four platforms. The congestion grid is
+derived per platform from the tech LEF, so it differs everywhere — that it does
+is the point:
+
+| Platform | grid | validate | statistics | notes |
+| --- | ---: | --- | --- | --- |
+| nangate45 | 2.1 µm | PASS | PASS, 642 cols, 0 issues | re-derives upstream's hardcoded constant |
+| sky130hd | 6.9 µm | PASS | PASS, 642 cols, 0 issues | 4106/4106 pin coords match OpenDB exactly |
+| sky130hs | 7.2 µm | PASS | PASS, 642 cols, 0 issues | the pitch that exposed D7 |
+| gf180 | 8.4 µm | PASS | PASS, 642 cols, 0 issues | gzipped Liberty + POLYGON pins (D8/D10) |
+
+**Diff the all-NaN column set across platforms — it is the cheapest silent-value
+detector this dataset has.** A column that is NaN on one technology and finite on
+the others is a defect, not a property of the design; that comparison is what
+found D10/D11 (gf180 had 13 extra). Neither checker can see it alone, because
+NaN-with-`valid=0` is a legal state. All four now agree on exactly two:
+
+- `gate.ir_drop_mV` — unavailable on this toolchain (see below);
+- `graph.place_density` — not configured by this design's `config.mk`, which sets
+  `PLACE_DENSITY_LB_ADDON` instead. `place_density_is_default=1` says so; this is
+  the NaN + explicit-validity contract working, not a gap.
+
+`nangate45` and `gf180` backend runs were produced for this verification — the
+corpus contained four-stage runs only on sky130.
+
 ## Known limits on this machine
 
 * **IR drop is unavailable.** R2G2.0 solves the VDD network from a PDNSim SPICE
@@ -144,9 +171,14 @@ Upstream expects a hand-written JSON pointing at a curated `/data/...` tree.
   only `-voltage_file`/`-error_file`/`-em_outfile`. `ir_drop_mV` is therefore
   NaN with `irdrop_valid=0`, and the runner says so. Pass `--irdrop-sp` if a
   build that can export one becomes available.
-* Timing coverage is bounded by `R2G2_MAX_PATHS` (default 10000 endpoint paths
-  per corner). Uncovered pins keep `setup_valid`/`hold_valid` at 0 rather than a
-  fabricated slack.
+* Timing coverage is bounded by `R2G2_MAX_PATHS` (default 10000 paths per path
+  group). `emit_timing_reports.py` reports **one worst path per endpoint**
+  (`--endpoint-paths 1`), because the node label is the endpoint's worst slack —
+  raising it re-walks the same endpoints instead of reaching new ones. The
+  timing manifest records `distinct_max_endpoints`/`distinct_min_endpoints`:
+  **that is the real coverage number, not the path count.** A large path count
+  beside a small endpoint count means the budget is being wasted. Uncovered pins
+  keep `setup_valid`/`hold_valid` at 0 rather than a fabricated slack.
 * Upstream's optional cross-checks (`rc_label_dir`, `irdrop_reference_csv`) are
   wired in the config schema but not produced by our flow; they only ever
   cross-verify, never source a label.

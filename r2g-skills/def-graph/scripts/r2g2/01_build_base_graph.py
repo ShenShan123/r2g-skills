@@ -33,6 +33,40 @@ def canonical_name(value: str) -> str:
     return (value or "").replace("\\", "").strip()
 
 
+LIBERTY_GLOBS = ("*.lib", "*.lib.gz")
+
+
+def read_liberty_text(path: Path) -> str:
+    """Read a Liberty file, transparently decompressing ``.lib.gz``.
+
+    r2g-skills delta vs upstream R2G2.0 (D8): upstream used
+    ``path.read_text()`` unconditionally. gf180 ships **only** gzipped Liberty
+    (30 ``.lib.gz``, 0 ``.lib``), and ORFS ``LIB_FILES`` points straight at one,
+    so upstream decoded gzip bytes as UTF-8-with-replacement: zero cells parsed,
+    zero pin directions, and **no exception**. Every Liberty feature silently
+    died and ``project_gate_graph`` emitted no gate->gate edges at all, while the
+    run still reported success. Yosys itself reads the ``.gz`` fine, so only the
+    Python side was blind. Matches ``techlib/liberty.py``, which already
+    decompresses transparently.
+    """
+
+    if str(path).endswith(".gz"):
+        import gzip
+
+        with gzip.open(path, "rt", encoding="utf-8", errors="replace") as handle:
+            return handle.read()
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def glob_liberty(directory: Path) -> list[Path]:
+    """All Liberty in a directory, compressed or not (sorted, deduped)."""
+
+    found: list[Path] = []
+    for pattern in LIBERTY_GLOBS:
+        found.extend(sorted(directory.glob(pattern)))
+    return list(dict.fromkeys(found))
+
+
 def resolve_path(config_path: Path, raw: str, required: bool = True) -> Path | None:
     if not raw:
         if required:
@@ -264,16 +298,34 @@ def resolve_yosys_hierarchy_libs(
         assert resolved is not None
         paths.append(resolved)
 
+    # r2g-skills delta vs upstream R2G2.0 (D9): upstream ALWAYS scanned the
+    # primary Liberty's own directory when ``yosys_hierarchy_lib_dir`` was
+    # absent. That is right only where a platform's lib/ holds one library plus
+    # its macros (nangate45: 1 std-cell lib + 22 fakeram). Everywhere else that
+    # directory is not a library:
+    #   gf180     30 files = TWO cell libraries (7-track AND 9-track) x PVT
+    #   sky130hs   2 files = the same library at two temperature corners
+    #   sky130hd   2 files = the std-cell lib + a dummy IO lib
+    # Scanning it mixes physical libraries and makes every electrical value
+    # depend on glob order. It is also INCONSISTENT with stage 02, which only
+    # ever scans when the field is set explicitly -- so upstream's stages 01 and
+    # 02 could see different cell sets for the same design.
+    # The scan is now opt-in and symmetric with 02: set
+    # ``yosys_hierarchy_lib_dir`` to a directory, or ``yosys_hierarchy_lib_scan``
+    # to restore upstream's implicit behaviour. ORFS already resolves macro
+    # Liberty into ADDITIONAL_LIBS, which the adapter puts in ``lib``.
     raw_dir = str(cfg.get("yosys_hierarchy_lib_dir", "")).strip()
+    lib_dir: Path | None = None
     if raw_dir:
         lib_dir = Path(raw_dir)
         if not lib_dir.is_absolute():
             lib_dir = (config_path.parent / lib_dir).resolve()
-    else:
+    elif bool(cfg.get("yosys_hierarchy_lib_scan", False)):
         lib_dir = primary_libs[0].parent
-    if not lib_dir.is_dir():
-        raise FileNotFoundError(f"Yosys层次展开Liberty目录不存在: {lib_dir}")
-    paths.extend(sorted(lib_dir.glob("*.lib")))
+    if lib_dir is not None:
+        if not lib_dir.is_dir():
+            raise FileNotFoundError(f"Yosys层次展开Liberty目录不存在: {lib_dir}")
+        paths.extend(glob_liberty(lib_dir))
     unique = list(dict.fromkeys(path.resolve() for path in paths))
     if not unique:
         raise ValueError("Yosys层次展开没有可用Liberty")
@@ -643,7 +695,7 @@ def parse_liberty(
     directions: dict[str, dict[str, str]] = defaultdict(dict)
     masters: list[str] = []
     for path in paths:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = read_liberty_text(path)
         text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
         bus_members = liberty_bus_members(text)
         current_cell = ""
@@ -837,6 +889,18 @@ def main() -> None:
         nets[net_name] = []
 
     pin_directions, liberty_masters = parse_liberty(hierarchy_libs)
+    # r2g-skills delta vs upstream R2G2.0 (D8): fail closed on an empty parse.
+    # The missing-cell check below only fires when masters were FOUND, so a
+    # Liberty that yields nothing (unreadable, wrong format, gzip decoded as
+    # text) sails through it vacuously and the run "succeeds" with every
+    # Liberty feature dead and zero gate->gate edges. An empty parse is never a
+    # legitimate outcome of a non-empty Liberty set.
+    if not liberty_masters:
+        raise ValueError(
+            "Liberty解析结果为空，拒绝继续: "
+            f"{[str(path) for path in hierarchy_libs][:5]}\n"
+            "HINT: 确认文件是Liberty (支持.lib/.lib.gz)，且不是被别的格式占位。"
+        )
     master_to_id = dict(encoding_maps["cell_type_id"])
     if "UNKNOWN" not in master_to_id:
         raise ValueError("encode_map的cell_type_id缺少UNKNOWN")

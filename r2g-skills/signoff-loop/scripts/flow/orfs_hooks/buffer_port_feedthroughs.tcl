@@ -33,6 +33,7 @@ lappend fdbuf_candidates \
   {BUF_X4 A Z} \
   {BUFx4_ASAP7_75t_R A Y} \
   {gf180mcu_fd_sc_mcu7t5v0__buf_4 I Z} \
+  {gf180mcu_fd_sc_mcu9t5v0__buf_4 I Z} \
   {sg13g2_buf_4 A X}
 set fdbuf_master ""
 foreach cand $fdbuf_candidates {
@@ -40,8 +41,53 @@ foreach cand $fdbuf_candidates {
   set m [[ord::get_db] findMaster $fdbuf_cell]
   if { $m != "NULL" && $m != "" } { set fdbuf_master $m; break }
 }
+
+# A hardcoded list is one library variant away from being wrong: gf180 alone
+# ships 7-track and 9-track standard cells, and this hook only knew the 7t
+# spelling, so a gf180 9t flow died at global placement with FLW-0901 even
+# though the library has a perfectly good buffer. Discover one from the DB
+# instead — any master with exactly one signal input and one signal output
+# whose name looks like a buffer. Deterministic: prefer drive-4 spellings, then
+# lexicographic, so the same library always yields the same cell.
 if { $fdbuf_master == "" } {
-  utl::error FLW 901 "buffer_port_feedthroughs: no buffer master found (tried: $fdbuf_candidates)"
+  set discovered {}
+  foreach lib [[ord::get_db] getLibs] {
+    foreach m [$lib getMasters] {
+      set mname [$m getName]
+      if { ![regexp -nocase {buf} $mname] } { continue }
+      if { [regexp -nocase {(clkbuf|bufbuf|tribuf|buf.*inv)} $mname] } { continue }
+      set sig_in {}
+      set sig_out {}
+      foreach mt [$m getMTerms] {
+        if { [$mt getSigType] != "SIGNAL" } { continue }
+        if { [$mt getIoType] == "INPUT" } {
+          lappend sig_in [$mt getName]
+        } elseif { [$mt getIoType] == "OUTPUT" } {
+          lappend sig_out [$mt getName]
+        }
+      }
+      if { [llength $sig_in] == 1 && [llength $sig_out] == 1 } {
+        lappend discovered [list $mname [lindex $sig_in 0] [lindex $sig_out 0]]
+      }
+    }
+  }
+  if { [llength $discovered] > 0 } {
+    set preferred {}
+    foreach cand $discovered {
+      if { [regexp -nocase {(_4$|x4$|_4_|x4_)} [lindex $cand 0]] } { lappend preferred $cand }
+    }
+    if { [llength $preferred] == 0 } { set preferred $discovered }
+    set chosen [lindex [lsort -index 0 $preferred] 0]
+    lassign $chosen fdbuf_cell fdbuf_in fdbuf_out
+    set fdbuf_master [[ord::get_db] findMaster $fdbuf_cell]
+    puts "\[buffer_port_feedthroughs\] discovered buffer master from DB:\
+      $fdbuf_cell ($fdbuf_in -> $fdbuf_out)"
+  }
+}
+if { $fdbuf_master == "" } {
+  utl::error FLW 901 "buffer_port_feedthroughs: no buffer master found\
+    (candidates: $fdbuf_candidates; DB discovery found none with exactly one\
+    signal input and one signal output)"
 }
 
 # fallback location: core center

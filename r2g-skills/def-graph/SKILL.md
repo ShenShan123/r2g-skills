@@ -187,7 +187,7 @@ Key differences from b–f — do not "harmonize" them:
 `checks/summarize_four_stage_graph_data.py --root <generated>` (`structural_issues=0`).
 
 **Editing `scripts/r2g2/` requires reading `scripts/r2g2/R2G2_UPSTREAM.md` first.** That tree is a
-vendored upstream drop plus seven recorded deltas (D1–D7); a new drop is re-vendored and the deltas
+vendored upstream drop plus eleven recorded deltas (D1–D11); a new drop is re-vendored and the deltas
 re-applied, never hand-merged. `scripts/stage_dataset/` is our glue and is edited normally.
 
 ## The five topologies (b–f)
@@ -235,7 +235,7 @@ The shared per-platform tech layer every stage consumes:
 |-----------|------|
 | `references/graph-dataset.md` | Building/reading the PyG b–f graphs, tensor schema, RC-parasitic label views, torch venv, provenance + audit notes. |
 | `references/four-stage-dataset.md` | Building/reading the four-stage causal HeteroData graphs (`run_stage_dataset.sh`), the causal input whitelist, the ORFS adapters, and the two mandatory checkers. |
-| `scripts/r2g2/R2G2_UPSTREAM.md` | **Before editing anything under `scripts/r2g2/`** — upstream provenance, SHA256s, and the seven local deltas (D1–D7) that must be re-applied on a new drop. |
+| `scripts/r2g2/R2G2_UPSTREAM.md` | **Before editing anything under `scripts/r2g2/`** — upstream provenance, SHA256s, and the eleven local deltas (D1–D11) that must be re-applied on a new drop. |
 | `references/label-extraction.md` | Building the Y side (per-cell/per-net labels + stats). |
 | `references/feature-extraction.md` | Building the X side (per-node/per-edge/metadata CSVs + stats). |
 | `scripts/extract/techlib/` | Per-platform tech/LEF/liberty/DEF parsing internals. |

@@ -261,6 +261,24 @@ def write_manifest(
         temporary.unlink(missing_ok=True)
 
 
+def tap_master_patterns(platform: str) -> list[str]:
+    """Well-tap master substrings for this platform.
+
+    Delegates to ``techlib.profile``, the skill's single source of truth for
+    per-platform tap naming, so the four-stage builder and the b-f pipeline
+    cannot disagree about what a tap cell is. Falls back to the bare ``TAP``
+    upstream used if techlib is unavailable.
+    """
+
+    try:
+        sys.path.insert(0, str(SKILL_DIR / "scripts" / "extract"))
+        from techlib.profile import get_profile  # type: ignore
+
+        return [str(token).upper() for token in get_profile(platform).tap_patterns]
+    except Exception:
+        return ["TAP"]
+
+
 TIMING_CONFIG_FIELDS = (
     "timing_max_rpt",
     "timing_min_rpt",
@@ -421,11 +439,25 @@ def main() -> None:
         "spef": str(spef),
         "lib": [str(p) for p in libs],
         "lef": [str(p) for p in lefs],
-        "yosys_hierarchy_lib_dir": str(libs[0].parent),
+        # Deliberately NOT setting yosys_hierarchy_lib_dir. Upstream globs the
+        # primary Liberty's directory to pick up macro liberty sitting beside
+        # the standard cells -- correct on nangate45, where that directory holds
+        # one std-cell lib plus fakeram*. On gf180 the same directory holds 30
+        # files spanning TWO different cell libraries (7-track and 9-track)
+        # across every PVT corner, so globbing it would mix physical libraries
+        # and make every electrical value depend on glob order. ORFS already
+        # resolves the right corner into LIB_FILES and the design's macro
+        # liberty into ADDITIONAL_LIBS -- both are in "lib" above -- so trust
+        # that instead. An operator can still set yosys_hierarchy_lib_dir by
+        # hand when a macro lib genuinely lives outside the resolved set.
         "feature_profile": "pre_route",
         "rc_source_mode": "spef",
         "congestion_grid_tracks": CONGESTION_GRID_TRACKS,
         "congestion_grid_source": grid_source,
+        # Well-tap master substrings for nearest_tap_distance_um. "TAP" alone
+        # misses gf180 entirely (its taps are __filltie / __endcap), which is
+        # why this skill's techlib.profile already carries per-platform extras.
+        "tap_master_patterns": tap_master_patterns(platform),
         "output_dir": str(out_dir / "generated"),
     }
     if sdc.is_file():

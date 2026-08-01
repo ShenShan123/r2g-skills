@@ -42,8 +42,8 @@ lines, excluding context):
 
 | File | Changed lines |
 | --- | ---: |
-| `01_build_base_graph.py` | 31 |
-| `02_extract_features.py` | 83 |
+| `01_build_base_graph.py` | 95 |
+| `02_extract_features.py` | 120 |
 | `03_extract_labels.py` | 63 |
 | `04_assemble_heterograph.py` | 68 |
 | `checks/validate_four_stage.py` | 55 |
@@ -51,7 +51,7 @@ lines, excluding context):
 | `checks/summarize_four_stage_graph_data.py` | 0 (byte-identical) |
 | `configs/encode_map.csv` | 0 (byte-identical) |
 
-300 lines out of 11,871 (2.5%) — the main logic is upstream's.
+401 lines out of 11,871 (3.4%) — the main logic is upstream's.
 
 ### D1 — `FN`/`FS` pin-orientation transforms were swapped (correctness, high)
 
@@ -175,6 +175,109 @@ Now compared with `math.isclose(rel_tol=1e-9)` per axis, plus an explicit
 "all label rows agree" check. A genuinely different grid (2.1 vs 7.2) and mixed
 label grids are both still rejected, and `checks/validate_four_stage.py` still
 re-checks the integer DBU step exactly.
+
+### D8 — gzipped Liberty read as text, failing *open* (silent-value, whole-platform)
+
+`01.parse_liberty` and `02.parse_liberty` used `path.read_text()`
+unconditionally, and the hierarchy-Liberty discovery globbed `*.lib` only.
+
+gf180 ships **only** compressed Liberty — 30 `.lib.gz`, 0 `.lib` — and ORFS
+`LIB_FILES` points straight at one. Upstream therefore decoded gzip bytes as
+UTF-8-with-replacement and parsed **zero cells, zero pin directions — and raised
+nothing**. The existing `missing_liberty_cells` guard only fires for masters it
+*found* but could not encode, so an unreadable Liberty passes it vacuously.
+
+The resulting dataset is fully populated and completely wrong: every gate at
+`cell_type_id=UNKNOWN`, `cell_area_um2`/`cell_leakage_power`/`pin_cap_fF` all 0,
+every pin direction empty (so `is_driver_pin`/`is_sink_pin`/`num_drivers`/
+`num_sinks` collapse), and `project_gate_graph` emitting **no gate→gate edges at
+all**. Yosys itself reads the `.gz` fine, so only the Python side was blind.
+
+Fixed three ways, because the parse fix alone would still fail open on the next
+unreadable format:
+
+1. `read_liberty_text()` decompresses `.gz` transparently (matching
+   `techlib/liberty.py`, which already did);
+2. `glob_liberty()` discovers `*.lib` **and** `*.lib.gz` (also in
+   `stage_dataset/build_encode_map.py`);
+3. **fail closed on an empty parse** — `01` raises when no masters were parsed,
+   `02` raises when the cell table is empty, and `build_encode_map.py` refuses to
+   emit a map whose only `cell_type_id` row is `UNKNOWN`.
+
+Verified on `gf180mcu_fd_sc_mcu9t5v0__ff_n40C_5v50.lib.gz`: **229 masters,
+`v_nom=5.5`, `cap_scale_ff=1000`, 0/848 pins with an empty direction** (before:
+nothing parsed at all).
+
+### D9 — stage 01 scanned the platform Liberty directory; stage 02 did not (asymmetry + wrong library)
+
+`01.resolve_yosys_hierarchy_libs` fell back to scanning **the primary Liberty's
+own directory** whenever `yosys_hierarchy_lib_dir` was unset. Stage 02 only ever
+scans when that field *is* set. So for the same design, upstream's stages 01 and
+02 could see different cell sets.
+
+The scan is right only where a platform's `lib/` is "one library plus its
+macros" — which is true on nangate45 (1 std-cell lib + 22 `fakeram*`) and false
+everywhere else:
+
+| Platform | `lib/` contents |
+| --- | --- |
+| nangate45 | 1 std-cell lib + 22 fakeram macro libs — scan is correct |
+| sky130hd | std-cell lib + `sky130_dummy_io.lib` |
+| sky130hs | the same library at **two temperature corners** |
+| gf180 | **30 files = two different cell libraries (7-track and 9-track) × every PVT corner** |
+
+Scanning mixes physical libraries and makes every electrical value (pin cap,
+area, leakage) depend on which file the glob happened to parse last. On gf180 it
+put 7-track cells into a 9-track design.
+
+Found by the D8 fix: once `.lib.gz` was discoverable, the gf180 scan pulled in
+all 30 files and **the fail-closed guard caught it** — stage 01 refused with
+"encode_map missing 229 Liberty cells, e.g. `GF180MCU_FD_SC_MCU7T5V0__ADDF_1`"
+rather than silently mapping 7T cells to `UNKNOWN`. That is the guard working as
+intended.
+
+The scan is now opt-in and symmetric with stage 02: set
+`yosys_hierarchy_lib_dir` explicitly, or `yosys_hierarchy_lib_scan: true` to
+restore upstream's implicit behaviour. `make_sample_config.py` sets neither,
+because ORFS already resolves macro Liberty into `ADDITIONAL_LIBS`, which the
+adapter puts into `lib`.
+
+### D10 — LEF pin geometry read from `RECT` only, ignoring `POLYGON` (silent-value, whole-platform)
+
+`parse_lef_geometry` matched only `RECT`. LEF equally allows `POLYGON`, and
+gf180's standard cells use it for essentially every signal pin — **2135 POLYGON
+vs 1294 RECT** in the 9-track SC LEF, with all four pins of `__inv_1` polygons.
+
+With no geometry the pin silently falls back to the cell origin, so
+`pin_position_valid` is 0 for **every** pin; and because `stage_net_geometry`
+requires geometry on *every* endpoint before it will emit a bbox,
+**every net's HPWL and bbox becomes NaN too**. Observed exactly that: gf180 came
+out with 13 all-NaN columns at cts/route that no other platform had —
+`hpwl_um`, `net_bbox_width/height_um`, all three `stage_segment_*_hpwl_um`,
+`pin_x/y_normalized`, all four `pin.distance_to_die_*`, and
+`nearest_tap_distance_um` (that last one is D11).
+
+The tell was that `pin_x_um`/`pin_y_um` were *populated* while their normalized
+and die-distance twins were not — the raw coordinate falls back to the origin,
+but the derived fields are gated on `pin_position_valid`.
+
+Now a `POLYGON`'s bbox is stored as one rectangle, so the existing centroid rule
+applies unchanged to both shapes. Verified: gf180 pin geometry went 0 → **229/229
+macros, 1294 pins**; nangate45 (135/135) and sky130hd (440/441) are unchanged.
+Matches `techlib/lef.py`, which already read both.
+
+### D11 — well-tap detection was the literal substring "TAP" (missing feature, whole-platform)
+
+`nearest_tap_distance_um` collected tap cells with `"TAP" in master.upper()`.
+gf180's well-tap/endcap masters are `gf180mcu_fd_sc_mcu9t5v0__filltie` and
+`__endcap` — **324 placed instances in this design, none containing "TAP"** — so
+the feature was NaN for every IO pin.
+
+Now driven by a `tap_master_patterns` config field, which
+`make_sample_config.py` fills from `techlib.profile.get_profile(platform)
+.tap_patterns` — this skill's existing single source of truth for tap naming
+(`_PLATFORM_TAP_EXTRA`, which already carried gf180's `FILLTIE`/`ENDCAP` for
+exactly this reason). Defaults to upstream's `["TAP"]` when the field is absent.
 
 ## Known upstream residue (not changed here)
 

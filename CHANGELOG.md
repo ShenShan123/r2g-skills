@@ -20,22 +20,50 @@ so future drops are re-vendored, not hand-merged.
   derive upstream's `/data/...` config contract from an ORFS run — stage DEFs out
   of the `.odb` snapshots, per-platform `encode_map.csv`, and an OpenSTA
   `r2g2-opensta-timing-v3` manifest run from exactly `route_def + spef + sdc`.
-- **Seven upstream deltas, all recorded in `def-graph/scripts/r2g2/R2G2_UPSTREAM.md`
+- **Eleven upstream deltas, all recorded in `def-graph/scripts/r2g2/R2G2_UPSTREAM.md`
   and pinned by `def-graph/tests/test_r2g2_stage_dataset.py`.** Upstream was
-  verified on one nangate45 sample, so four of them are invisible there and fire on
-  sky130hd/sky130hs: LEF/DEF `FN`/`FS` pin transforms swapped (0/190 → 190/190
-  against OpenDB on FS-oriented pins — the third appearance of this exact swap in
-  this repo); quote-intolerant Liberty regexes (1771/1771 → 0/1771 pins with an
-  empty direction on sky130hd, which had been collapsing every Liberty feature and
-  every gate→gate edge); a nangate45 Metal3 constant documented as
-  "technology-derived" (2.1 µm vs sky130hd's correct 6.9 µm); a module-scope SciPy
-  import that took four unrelated labels down with IR drop; a missing
-  `nodes_iopin.csv` alignment check; and an unmatched-gate statistic that was
-  always equal to the gate count.
-- **Verified end to end on a real run** (`cordic`, sky130hd): both mandatory
-  checkers PASS — `validate_four_stage.py` (contract, NaN↔valid parity, stage input
-  whitelist, route-DEF leakage) and `summarize_four_stage_graph_data.py`
-  (`structural_issues=0` over 642 statistic columns).
+  verified on one nangate45 sample, so eight of them are invisible there:
+  - **D1** LEF/DEF `FN`/`FS` pin transforms swapped — 0/190 → 190/190 against
+    OpenDB on FS-oriented pins; the third appearance of this exact swap here.
+  - **D2** quote-intolerant Liberty regexes — 1771/1771 → 0/1771 pins with an
+    empty direction on sky130hd; had been collapsing every Liberty feature and
+    every gate→gate edge.
+  - **D3** a nangate45 Metal3 constant documented as "technology-derived"
+    (2.1 µm vs sky130hd's 6.9 µm), hardcoded in four places incl. the validator.
+  - **D4** module-scope SciPy import taking four unrelated labels down with IR drop.
+  - **D5** `nodes_iopin.csv` had no alignment check against the base graph.
+  - **D6** an unmatched-gate statistic that always equalled the gate count.
+  - **D7** exact float `==` between two differently-computed copies of the grid
+    constant; only sky130hs's pitch exposes it. Fixing D3 surfaced D7.
+  - **D8** gzipped Liberty read as text — gf180 ships only `.lib.gz`, so zero
+    cells parsed with **no exception**: every gate at `UNKNOWN`, every pin
+    direction empty, zero gate→gate edges. Fixed with transparent decompression
+    plus a fail-closed guard on an empty parse.
+  - **D9** stage 01 scanned the platform Liberty *directory* (stage 02 did not),
+    which on gf180 mixes 7-track and 9-track libraries across every PVT corner.
+    Fixing D8 surfaced D9 — and D8's new guard is what caught it loudly.
+  - **D10** LEF pin geometry read from `RECT` only; gf180 std cells use `POLYGON`
+    for nearly every signal pin, zeroing `pin_position_valid` everywhere and
+    NaN-ing every net's HPWL.
+  - **D11** well-tap detection was the literal substring `"TAP"`, missing gf180's
+    324 `__filltie`/`__endcap` instances; now platform-aware via `techlib.profile`.
+- **Verified end to end on FOUR technologies** — `cordic` built on nangate45,
+  sky130hd, sky130hs and gf180 (the nangate45 and gf180 backend runs were produced
+  for this, since the corpus had none). Both mandatory checkers PASS on all four:
+  `validate_four_stage.py` (contract, NaN↔valid parity, stage input whitelist,
+  route-DEF leakage) and `summarize_four_stage_graph_data.py`
+  (`structural_issues=0` over 642 statistic columns each). All 4106 pin
+  coordinates in the sky130hd dataset match OpenDB exactly, and on nangate45 the
+  adapter re-derives upstream's hardcoded 2.1 µm grid from the tech LEF.
+- **Cross-platform statistics diff is the detector that found D10/D11.** Three
+  technologies agreed on their all-NaN column set; gf180 had 13 more. After the
+  fixes all four agree on exactly two — `ir_drop_mV` (unavailable on this
+  toolchain) and `place_density` (not configured by this design, flagged by
+  `place_density_is_default=1`).
+- **Timing label coverage.** `-endpoint_path_count` caps paths *per endpoint*, so
+  the original setting spent 10,005 paths on 19 of cordic's 107 endpoints. Now one
+  worst path per endpoint: 107/107 covered (56 sequential cells + 51 output ports),
+  `pin_setup_slack` 19→61 and `io_pin` setup/hold 0→51.
 - **Known limit:** `ir_drop_mV` is unavailable, not skipped by preference — R2G2.0
   solves the VDD network from a PDNSim SPICE export and stock OpenROAD 26Q1 offers
   only `-voltage_file`/`-error_file`/`-em_outfile`. The column is NaN with

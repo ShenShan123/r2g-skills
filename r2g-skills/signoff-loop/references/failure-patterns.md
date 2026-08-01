@@ -5761,7 +5761,7 @@ Two independent rejections of good RTL, both in `discover_download_candidates.py
 ## Vendored R2G2.0 Four-Stage Ingestion (2026-08-01 — failure-patterns #60)
 
 The `Dataset_R2G2.0(B).zip` drop was manually verified — but on **one sample, on one platform**
-(`bp_multi_top/v01`, nangate45). Ingesting it into `def-graph` surfaced seven defects, five of which
+(`bp_multi_top/v01`, nangate45). Ingesting it into `def-graph` surfaced eleven defects, eight of which
 are invisible on nangate45 and fire on sky130hd/sky130hs (this repo's defaults). Full delta record
 and re-vendoring procedure: `def-graph/scripts/r2g2/R2G2_UPSTREAM.md`. Regressions:
 `def-graph/tests/test_r2g2_stage_dataset.py`.
@@ -5862,11 +5862,95 @@ different grid and mixed label grids are still rejected, and the validator still
 integer DBU step exactly. **General rule: never compare two independently-derived copies of the same
 physical constant with `==`.** Compare the integer form, or compare with a tolerance.
 
+### D8 — gzipped Liberty read as text, and the guard that could not see it
+
+`01`/`02` read Liberty with `path.read_text()` and globbed `*.lib` only. gf180 ships **only**
+compressed Liberty (30 `.lib.gz`, 0 `.lib`) and ORFS `LIB_FILES` points straight at one, so gzip
+bytes were decoded as UTF-8-with-replacement: **zero cells, zero directions, and no exception.**
+
+The failure mode is the worst kind this skill guards against — fully populated, entirely wrong, and
+green. Every gate lands on `cell_type_id=UNKNOWN`, area/leakage/pin-cap are 0, every pin direction is
+empty (collapsing `is_driver_pin`/`is_sink_pin`/`num_drivers`/`num_sinks`), and `project_gate_graph`
+emits **no gate→gate edges at all**. Yosys reads the `.gz` fine, so only the Python side was blind.
+
+**The guard was the real defect.** `missing_liberty_cells` only fires for masters it *found* but could
+not encode, so "found nothing" passes it vacuously — a validity check that is structurally incapable
+of firing on total failure. Fixed on three levels: transparent `.gz` decompression
+(`read_liberty_text`), `*.lib` + `*.lib.gz` discovery (`glob_liberty`, also in `build_encode_map.py`),
+and **fail-closed on an empty parse** in `01`, `02` and the encode-map generator.
+
+Verified: `gf180mcu_fd_sc_mcu9t5v0__ff_n40C_5v50.lib.gz` → 229 masters, `v_nom=5.5`,
+`cap_scale_ff=1000`, 0/848 pins with an empty direction.
+
+**General rule: a "some of X is bad" check does not cover "X is empty".** Whenever a validator
+iterates a collection to find violations, add the separate assertion that the collection is non-empty
+— otherwise total failure is indistinguishable from perfect success.
+
+### D9 — "the platform lib directory" is not "the library"
+
+`01.resolve_yosys_hierarchy_libs` scanned the primary Liberty's own directory whenever
+`yosys_hierarchy_lib_dir` was unset; `02` only ever scanned when it *was* set. Two problems in one:
+the stages could see **different cell sets for the same design**, and the scan itself is only valid
+where `lib/` means "one library plus its macros".
+
+| Platform | what `lib/` actually holds |
+| --- | --- |
+| nangate45 | 1 std-cell lib + 22 fakeram macro libs — scan is correct |
+| sky130hd | std-cell lib + `sky130_dummy_io.lib` |
+| sky130hs | the same library at **two temperature corners** |
+| gf180 | **30 files = two different cell libraries (7t and 9t) × every PVT corner** |
+
+Scanning mixes physical libraries and makes pin cap / area / leakage depend on glob order. Now
+opt-in and symmetric across 01/02 (`yosys_hierarchy_lib_dir`, or `yosys_hierarchy_lib_scan: true`
+for upstream's behaviour); ORFS's `ADDITIONAL_LIBS` is the correct source for macro Liberty.
+
+**Two lessons.** First, a directory is not a manifest — resolve inputs from the tool that owns them
+(ORFS `LIB_FILES`/`ADDITIONAL_LIBS`), not from what happens to sit next to them. Second, **fixing D8
+is what exposed D9**: making `.lib.gz` discoverable made the bad scan reach 30 files, and the D8
+fail-closed guard then caught it loudly ("encode_map missing 229 Liberty cells, e.g.
+`GF180MCU_FD_SC_MCU7T5V0__ADDF_1`") instead of silently mapping 7t cells to `UNKNOWN`. A guard added
+in one round paid for itself in the next.
+
+### D10/D11 — the two defects only a *fourth* technology could show
+
+Verifying on gf180 produced 13 all-NaN columns at cts/route that nangate45, sky130hd and sky130hs
+did not have. Two independent causes, both invisible on the first three platforms:
+
+- **D10: LEF pin geometry read from `RECT` only.** gf180 std cells use `POLYGON` for essentially
+  every signal pin (2135 POLYGON vs 1294 RECT in the 9t SC LEF). No geometry ⇒ every pin falls back
+  to the cell origin ⇒ `pin_position_valid=0` everywhere ⇒ and because `stage_net_geometry` demands
+  geometry on *every* endpoint, **every net's HPWL and bbox went NaN as well**. The tell was that
+  `pin_x_um` was populated while `pin_x_normalized` and `distance_to_die_*` were not — the raw
+  coordinate has an origin fallback, the derived fields are gated on validity. Fixed by storing a
+  polygon's bbox as one rectangle so the existing centroid rule covers both: gf180 pin geometry
+  0 → 229/229 macros, 1294 pins; nangate45 and sky130hd unchanged.
+- **D11: well-tap detection was the literal substring `"TAP"`.** gf180's taps are `__filltie` /
+  `__endcap` — 324 placed instances, none matching — so `nearest_tap_distance_um` was NaN for every
+  IO pin. Now platform-aware via `techlib.profile.tap_patterns`, which this skill already carried
+  (`_PLATFORM_TAP_EXTRA` exists precisely because of gf180).
+
+**The lesson is about verification breadth, not about LEF.** Three technologies agreed on 642
+statistic columns and both checkers said PASS; the fourth disagreed on 13. A cross-platform *diff of
+the all-NaN column set* is the cheap detector — a column that is NaN on one platform and finite on
+the others is a defect, not a property of the design. Neither checker can see this alone, because
+NaN-with-valid=0 is a legal state; only the comparison makes it suspicious.
+
 ### Ingestion-side defects in our own glue (found by running it)
 
 - **`run_stage_dataset.sh` resolved sibling scripts one directory too high** (`scripts/flow/..` is
   `scripts`, not the skill root), so every step died on `scripts/scripts/...`. Guard: a test that
   evaluates the runner's *own* `SKILL_DIR`/`R2G2_DIR`/`ADAPT_DIR` assignments and stats the targets.
+- **`-endpoint_path_count` caps paths PER ENDPOINT, not in total.** `emit_timing_reports.py` passed
+  the same large number to it and to `-group_path_count`, so the whole budget went on re-walking a
+  few endpoints. Measured on cordic/nangate45: **10,005 setup paths covering only 19 of the design's
+  107 endpoints** (1 distinct startpoint!). Because the node label is the endpoint's worst slack,
+  that capped `pin_setup_slack` at 19/4639 pins and left `io_pin` slack completely empty — the
+  `pin|timing_path|io_pin` relation did not exist at all. Now `-endpoint_path_count 1` (one worst
+  path per endpoint) with a large `-group_path_count`: 107/107 endpoints — exactly the design's
+  56 sequential cells + 51 output ports — and coverage went pin_setup 19→61, io_pin setup/hold 0→51.
+  The manifest now records `distinct_max_endpoints`/`distinct_min_endpoints`, because **the endpoint
+  count, not the path count, is the real coverage number.** A big path count next to a tiny endpoint
+  count is the alarm.
 - **`report_checks` returns `""`, it does not return the report.** `puts $fh [report_checks …]`
   writes an empty file while the report goes to stdout. `emit_timing_reports.py` fences each report
   with markers on stdout and splits the capture.

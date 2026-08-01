@@ -32,6 +32,7 @@ from typing import Any
 TIMING_MANIFEST_SCHEMA = "r2g2-opensta-timing-v3"
 TIMING_SOURCE_CONTRACT = "raw_route_def_raw_spef_audited_sdc"
 _START_RE = re.compile(r"^Startpoint:\s+\S+", re.MULTILINE)
+_END_RE = re.compile(r"^Endpoint:\s+(\S+)", re.MULTILINE)
 MAX_BEGIN = "===R2G2_PATHS_MAX_BEGIN==="
 MAX_END = "===R2G2_PATHS_MAX_END==="
 MIN_BEGIN = "===R2G2_PATHS_MIN_BEGIN==="
@@ -102,6 +103,7 @@ def build_tcl(
     max_rpt: Path,
     min_rpt: Path,
     max_paths: int,
+    endpoint_paths: int,
     group_flag: str,
     endpoint_flag: str,
 ) -> str:
@@ -118,13 +120,18 @@ def build_tcl(
         # empty report. Fence each report with markers on stdout and split the
         # capture instead -- that works on every OpenROAD build regardless of
         # which redirection helpers it ships.
+        # endpoint_flag caps paths PER ENDPOINT; group_flag caps paths per path
+        # group. Setting both large spends the whole budget re-walking a few
+        # endpoints -- measured on cordic/nangate45: 10005 paths covering only
+        # 19 distinct endpoints. The node label is per-endpoint slack, so what
+        # we want is one worst path for as MANY endpoints as possible.
         f"puts {{{MAX_BEGIN}}}",
         "report_checks -path_delay max -format full "
-        f"{endpoint_flag} {max_paths} {group_flag} {max_paths} -slack_max 1e30",
+        f"{endpoint_flag} {endpoint_paths} {group_flag} {max_paths} -slack_max 1e30",
         f"puts {{{MAX_END}}}",
         f"puts {{{MIN_BEGIN}}}",
         "report_checks -path_delay min -format full "
-        f"{endpoint_flag} {max_paths} {group_flag} {max_paths} -slack_max 1e30",
+        f"{endpoint_flag} {endpoint_paths} {group_flag} {max_paths} -slack_max 1e30",
         f"puts {{{MIN_END}}}",
         "exit 0",
     ]
@@ -143,11 +150,33 @@ def count_paths(path: Path) -> int:
     return len(_START_RE.findall(path.read_text(encoding="utf-8", errors="replace")))
 
 
+def count_distinct_endpoints(path: Path) -> int:
+    """How many distinct endpoints the report covers.
+
+    This -- not the raw path count -- bounds how many pins can receive a slack
+    label, so it is recorded in the manifest as the real coverage number.
+    """
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return len(set(_END_RE.findall(text)))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="OpenSTA setup/hold reports + V3 manifest")
     parser.add_argument("--config", required=True, help="four-stage sample config JSON")
     parser.add_argument("--out-dir", default="", help="default <config dir>/time_rpt")
-    parser.add_argument("--max-paths", type=int, default=10000)
+    parser.add_argument(
+        "--max-paths", type=int, default=10000,
+        help="paths per path group (breadth of endpoint coverage)",
+    )
+    parser.add_argument(
+        "--endpoint-paths", type=int, default=1,
+        help=(
+            "paths reported PER ENDPOINT (default 1). The node label is the "
+            "endpoint's worst slack, so 1 maximizes how many distinct pins get "
+            "a label; raising it re-walks the same endpoints instead."
+        ),
+    )
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument(
         "--update-config",
@@ -189,6 +218,7 @@ def main() -> None:
     script = build_tcl(
         libs=libs, lefs=lefs, route_def=route_def, spef=spef, sdc=sdc,
         max_rpt=max_rpt, min_rpt=min_rpt, max_paths=args.max_paths,
+        endpoint_paths=args.endpoint_paths,
         group_flag=group_flag, endpoint_flag=endpoint_flag,
     )
     with tempfile.NamedTemporaryFile("w", suffix=".tcl", delete=False) as handle:
@@ -219,6 +249,8 @@ def main() -> None:
     min_rpt.write_text(min_text, encoding="utf-8")
     max_count = count_paths(max_rpt)
     min_count = count_paths(min_rpt)
+    max_endpoints = count_distinct_endpoints(max_rpt)
+    min_endpoints = count_distinct_endpoints(min_rpt)
     if max_count <= 0 or min_count <= 0:
         # Fail closed: an empty report would otherwise be attested as valid
         # provenance for zero timing labels.
@@ -249,6 +281,9 @@ def main() -> None:
             "max_path_count": max_count,
             "min_path_count": min_count,
             "max_paths_requested": args.max_paths,
+            "endpoint_paths_requested": args.endpoint_paths,
+            "distinct_max_endpoints": max_endpoints,
+            "distinct_min_endpoints": min_endpoints,
         },
     }
     manifest_path = out_dir / "timing_manifest.json"
@@ -261,7 +296,10 @@ def main() -> None:
     finally:
         temporary.unlink(missing_ok=True)
 
-    print(f"[timing] paths_max={max_count} paths_min={min_count}")
+    print(
+        f"[timing] paths_max={max_count} (endpoints={max_endpoints}) "
+        f"paths_min={min_count} (endpoints={min_endpoints})"
+    )
     print(f"[timing] {manifest_path}")
 
     if args.update_config:

@@ -100,7 +100,9 @@ def read_global_rows(base_csv: Path) -> list[dict[str, str]]:
     return kept
 
 
-def liberty_files(lib_dir: Path, extra: list[Path]) -> list[Path]:
+def liberty_files(
+    lib_dir: Path, extra: list[Path], glob_dir: bool | None = None
+) -> list[Path]:
     """The exact Liberty set stage 01 will parse.
 
     ``01.resolve_yosys_hierarchy_libs`` takes the configured ``lib`` list and
@@ -110,8 +112,18 @@ def liberty_files(lib_dir: Path, extra: list[Path]) -> list[Path]:
     """
 
     paths = list(extra)
-    if lib_dir.is_dir():
-        paths.extend(sorted(lib_dir.glob("*.lib")))
+    # Glob the directory only when the caller did not name the Liberty files
+    # explicitly. A platform lib directory is not a library: gf180's holds 30
+    # files covering two different cell libraries (7t and 9t) across every PVT
+    # corner, so globbing it on top of an explicit, ORFS-resolved lib would put
+    # cells from the wrong physical library into the id vocabulary.
+    if glob_dir is None:
+        glob_dir = not extra
+    if lib_dir.is_dir() and glob_dir:
+        # gf180 ships only .lib.gz, so a bare "*.lib" glob finds nothing there
+        # and the map would silently cover no cells (D8).
+        for pattern in ("*.lib", "*.lib.gz"):
+            paths.extend(sorted(lib_dir.glob(pattern)))
     unique = list(dict.fromkeys(path.resolve() for path in paths))
     if not unique:
         raise FileNotFoundError(f"no Liberty found for encode map: {lib_dir}")
@@ -243,11 +255,18 @@ def main() -> None:
         if args.lib_dir
         else (explicit_libs[0].parent if explicit_libs else Path("."))
     )
-    libs = liberty_files(lib_dir, explicit_libs)
+    # An explicit --lib-dir is an operator instruction to scan it; otherwise the
+    # directory is only scanned when no Liberty files were named.
+    libs = liberty_files(lib_dir, explicit_libs, glob_dir=bool(args.lib_dir) or not explicit_libs)
     base_module = load_stage_module("01_build_base_graph.py", "r2g2_base_for_encode_map")
     _, masters = base_module.parse_liberty(libs)
     if not masters:
-        raise SystemExit(f"no Liberty cells parsed from {libs}")
+        # Emitting a cell_type_id map with only UNKNOWN would let stage 01's
+        # missing-cell check pass vacuously (D8).
+        raise SystemExit(
+            f"no Liberty cells parsed from {[str(p) for p in libs][:5]}\n"
+            "HINT: .lib and .lib.gz are supported; check the files are Liberty."
+        )
 
     lefs = [Path(value).resolve() for value in args.lef if value]
     layers = lef_layer_names(lefs)

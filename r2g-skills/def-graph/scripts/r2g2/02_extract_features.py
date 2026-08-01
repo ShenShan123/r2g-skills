@@ -312,6 +312,40 @@ def canonical_name(value: str) -> str:
     return (value or "").replace("\\", "").strip()
 
 
+LIBERTY_GLOBS = ("*.lib", "*.lib.gz")
+
+
+def read_liberty_text(path: Path) -> str:
+    """Read a Liberty file, transparently decompressing ``.lib.gz``.
+
+    r2g-skills delta vs upstream R2G2.0 (D8): upstream used
+    ``path.read_text()`` unconditionally. gf180 ships **only** gzipped Liberty
+    (30 ``.lib.gz``, 0 ``.lib``), and ORFS ``LIB_FILES`` points straight at one,
+    so upstream decoded gzip bytes as UTF-8-with-replacement: zero cells parsed,
+    zero pin directions, and **no exception**. Every Liberty feature silently
+    died and ``project_gate_graph`` emitted no gate->gate edges at all, while the
+    run still reported success. Yosys itself reads the ``.gz`` fine, so only the
+    Python side was blind. Matches ``techlib/liberty.py``, which already
+    decompresses transparently.
+    """
+
+    if str(path).endswith(".gz"):
+        import gzip
+
+        with gzip.open(path, "rt", encoding="utf-8", errors="replace") as handle:
+            return handle.read()
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def glob_liberty(directory: Path) -> list[Path]:
+    """All Liberty in a directory, compressed or not (sorted, deduped)."""
+
+    found: list[Path] = []
+    for pattern in LIBERTY_GLOBS:
+        found.extend(sorted(directory.glob(pattern)))
+    return list(dict.fromkeys(found))
+
+
 def load_config(path: str) -> tuple[Path, dict[str, Any]]:
     config_path = Path(path).resolve()
     with config_path.open("r", encoding="utf-8") as handle:
@@ -635,7 +669,7 @@ def parse_liberty(paths: list[Path]) -> dict[str, Any]:
 
     db: dict[str, Any] = {"cells": {}, "v_nom": None, "cap_scale_ff": 1.0}
     for path in paths:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = read_liberty_text(path)
         text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
         bus_members = liberty_bus_members(text)
         depth = 0
@@ -827,6 +861,24 @@ def parse_lef_geometry(paths: list[Path]) -> dict[str, dict[str, Any]]:
                 )
                 if current_pin and rect:
                     rectangles.append(tuple(map(float, rect.groups())))
+                # r2g-skills delta vs upstream R2G2.0 (D10): upstream read pin
+                # geometry from RECT only. LEF allows POLYGON, and gf180's
+                # standard cells use it for essentially every signal pin (2135
+                # POLYGON vs 1294 RECT in the 9t SC LEF). With no geometry the
+                # pin falls back to the cell origin, pin_position_valid goes 0
+                # for EVERY pin, and because stage_net_geometry requires every
+                # endpoint to have geometry, EVERY net's HPWL/bbox becomes NaN.
+                # Observed exactly that on gf180: 13 columns all-NaN at cts and
+                # route. Matches techlib/lef.py, which already reads both.
+                polygon = re.search(r"\bPOLYGON\s+([-0-9eE.\s]+)", line)
+                if current_pin and polygon:
+                    values = [float(v) for v in polygon.group(1).split()]
+                    if len(values) >= 6 and len(values) % 2 == 0:
+                        xs_p = values[0::2]
+                        ys_p = values[1::2]
+                        # Store the polygon's bbox as one rectangle so the
+                        # centroid rule below is identical for both shapes.
+                        rectangles.append((min(xs_p), min(ys_p), max(xs_p), max(ys_p)))
                 end_match = re.match(r"END\s+(\S+)", line)
                 if end_match and current_pin and canonical_name(
                     end_match.group(1)
@@ -2156,6 +2208,17 @@ def main() -> None:
     ]
     encode_map_path, encoding_maps = load_encode_maps(config_path, cfg)
     congestion_grid_um = resolve_congestion_grid_um(cfg)
+    # r2g-skills delta vs upstream R2G2.0 (D11): upstream matched well-tap cells
+    # with the literal substring "TAP". gf180's well-tap/endcap masters are
+    # named ``__filltie`` / ``__endcap`` and contain no "TAP", so all 324 of
+    # them were invisible and nearest_tap_distance_um came out all-NaN. Same
+    # per-platform extras this skill already keeps in techlib.profile
+    # (_PLATFORM_TAP_EXTRA); make_sample_config.py fills the config field.
+    tap_master_patterns = tuple(
+        str(token).upper()
+        for token in (cfg.get("tap_master_patterns") or ["TAP"])
+        if str(token).strip()
+    ) or ("TAP",)
     base_path = (
         Path(args.base).resolve()
         if args.base
@@ -2207,7 +2270,7 @@ def main() -> None:
             raise FileNotFoundError(
                 f"宏Liberty目录不存在: {hierarchy_lib_dir}"
             )
-        lib_paths.extend(sorted(hierarchy_lib_dir.glob("*.lib")))
+        lib_paths.extend(glob_liberty(hierarchy_lib_dir))
     resolved_lib_paths = list(
         dict.fromkeys(
             path.resolve() for path in lib_paths if path is not None
@@ -2216,6 +2279,15 @@ def main() -> None:
     if not resolved_lib_paths:
         raise ValueError("没有可用于特征提取的Liberty文件")
     lib = parse_liberty(resolved_lib_paths)
+    # r2g-skills delta vs upstream R2G2.0 (D8): an empty cell table means every
+    # Liberty-derived feature (area, leakage, pin cap, direction, sequential
+    # class, clock flag) would silently be 0/""/False for the whole design.
+    if not lib["cells"]:
+        raise ValueError(
+            "Liberty解析结果为空，拒绝生成特征: "
+            f"{[str(path) for path in resolved_lib_paths][:5]}\n"
+            "HINT: 确认文件是Liberty (支持.lib/.lib.gz)。"
+        )
     lef_raw = cfg.get("lef", [])
     lef_values = lef_raw if isinstance(lef_raw, list) else [lef_raw]
     lef_paths = [
@@ -2419,7 +2491,10 @@ def main() -> None:
             float(row.get("y") or 0) / place["dbu"],
         )
         for row in place["components"].values()
-        if "TAP" in str(row.get("master", "")).upper()
+        if any(
+            token in str(row.get("master", "")).upper()
+            for token in tap_master_patterns
+        )
         and row.get("x") is not None
     ]
     for name in sorted(io_map):
