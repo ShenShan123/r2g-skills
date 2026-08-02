@@ -795,6 +795,12 @@ def parse_setup_args(argv):
     """
     global RTL_DESIGNS_DIR
     args = _normalize_value_flags(argv)
+    if "--help" in args or "-h" in args:
+        # Must be handled BEFORE anything else: this tool's main() rewrites the whole
+        # corpus's config.mk, so `--help` must never reach it (it used to fall through
+        # the unknown-flag gap and run the setup, writing _setup_summary.json).
+        print(__doc__ or "setup_rtl_designs.py: see module docstring")
+        raise SystemExit(0)
     force = "--force" in args
     selected = None
     designs_file = None
@@ -820,6 +826,17 @@ def parse_setup_args(argv):
             pass
         elif not arg.startswith("--"):
             selected = arg.split(",")
+        else:
+            # Unknown flags were historically DROPPED in silence, which on this tool
+            # is a mass-rewrite footgun: `--platfrom gf180 --force` (typo) ignored the
+            # override and re-pointed all ~708 config.mk to the DEFAULT platform, exit 0.
+            # `--help` fell through the same way and RAN the setup instead of printing
+            # usage. Same family as the space-vs-`=` silent no-op documented above:
+            # on a whole-corpus re-target, refusing loudly is the only safe default.
+            raise SystemExit(
+                f"setup_rtl_designs: unknown option {arg.split('=', 1)[0]!r}\n"
+                f"known options: --designs, --designs-file, --platform, --rtl-dir, "
+                f"--force (see --help)")
 
     # A designs-file is one design name per line (blank lines / # comments ok).
     if designs_file:
