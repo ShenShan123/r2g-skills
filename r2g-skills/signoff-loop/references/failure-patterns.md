@@ -4300,6 +4300,64 @@ that platform, and an exit-0 "not supported" echo from a vendor flow is a *phant
 symptom generator* — classify infra absence apart from design failure before the
 fixer spends iterations.
 
+#### 32b. The #32 lesson was never applied to the OTHER rows — gf180 promised DRC+LVS+RCX it has none of (2026-08-01)
+
+Opening a gf180 round found the Platform Support Matrix still claiming
+`gf180 | KLayout DRC=Yes | KLayout LVS=Yes | RCX=Yes`. This ORFS checkout ships gf180
+with **no `drc/` directory, no `lvs/` directory** (only `KLayout/*.lyt` layer maps) and
+no `RCX_RULES` — `platform_capability.py` reports `tier=installed`, with
+`drc_deck/lvs/antenna/rcx` all MISS. The `ihp-sg13g2` row overclaimed KLayout LVS the
+same way (it ships `lvs/sg13g2.lvs` + `run_lvs.py`, not a `.lylvs` deck → tier
+`research_ready`). The probe had been telling the truth since RMD-P0-03; only the prose
+was wrong, and nothing compared the two.
+
+Unlike sky130hs there is **no sibling deck to borrow** — gf180mcu is a different process,
+not a sky130A variant. So the honest remedy is to correct the claim, not to wire a deck.
+
+Two consequences, both live and in opposite directions:
+
+- **The campaign over-credits gf180.** The clean-gate accepts a skipped check
+  (`clean_states={"clean","clean_beol","skipped"}`, `engineer_loop.py:1361`), and
+  `run_drc.sh` honestly records `status:"skipped", reason:"no_drc_deck_for_platform"` —
+  so a gf180 design reaches ledger `clean` on **zero DRC/LVS evidence**, and in aggregate
+  stats it is indistinguishable from a real sky130hd clean. **Never promote a recipe on a
+  gf180 "clean"** — there is no DRC/LVS symptom for the A/B judge to have cleared.
+- **def-graph correctly refuses it.** `signoff_gate.py` is stricter than the clean-gate:
+  `DRC_OK={"clean","clean_beol"}` — `skipped` is accepted only for LVS. So every gf180
+  dataset build is gate-blocked with exit 7, and **gf180 can never yield a corpus-eligible
+  dataset**. That asymmetry is deliberate (a campaign asks "did the flow do all it could";
+  a dataset asks "is this layout trustworthy training data") but it was undocumented, so a
+  gf180 "dataset round" looked plannable when it is impossible by construction.
+
+**Fix:** the matrix now carries a `Tier` column and truthful gf180/ihp/asap7 rows, and —
+because prose cannot be trusted to stay true — the invariant is now **executable**:
+`tests/test_support_matrix_matches_probe.py` parses the table out of `SKILL.md` and
+asserts every probed column and the tier against `probe_platform`. It also guards its own
+skip path (an all-skipped run must not read as a green matrix — probing the *ambient*
+env instead of the `_env.sh`-resolved one silently skipped all six rows on the first
+draft, which looked identical to a pass).
+
+**Verified same round:** the def-graph b–f pipeline itself is *correct* on gf180 —
+`cordic_gf180` built all five hetero views with 7/7 label sets, and
+`verify_graph_dataset.py` passed 290/291 checks, the single failure being the signoff
+gate correctly rejecting the deliberate `R2G_SIGNOFF_GATE=warn` override. The gf180
+parser hazards found in the vendored four-stage builder (#60 D8 gzipped Liberty, D10
+POLYGON pin geometry) were already handled in the shared `techlib/` parser
+(`liberty.py` gzip opener, `lef.py` `_POLY_RE`): gates show 49 distinct `cell_type_id`
+with 0.31% UNKNOWN (a gz parse failure collapses to 100%), and `hpwl_um==0` on only 0.4%
+of nets (a POLYGON miss collapses every pin to the cell origin). That is the
+"fix a parse bug ONCE in techlib" rule paying off.
+
+**Known-latent, not fixed:** `platform_capability._resolve` substitutes only
+`$(PLATFORM_DIR)`/`$(PLATFORM)` and returns None on any residual make var, so gf180's
+`TECH_LEF = .../gf180mcu_$(METAL_OPTION)_$(KVALUE)K_$(TRACK_OPTION)_tech.lef` is
+unresolvable and the antenna probe reports `tech/SC LEF unreadable or unresolvable` — a
+misleading reason, since `techlib/resolve.py` resolves those paths fine via `make` (which
+is why the b–f build worked). gf180 is the only supported platform with a composed
+multi-var LEF path, and it has no DRC deck to detect antenna violations with, so there is
+no live consequence today; fix by delegating to the techlib resolver if a composed-path
+platform ever gains a deck.
+
 ### 33. sky130hs def2stream DROPPED all DEF geometry — GDS with labels only ⇒ portless magic extraction ⇒ 100% false Netgen LVS "top pin mismatch" (2026-07-09)
 
 Same wave: every sky130hs design failed Netgen LVS with
