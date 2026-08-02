@@ -309,7 +309,14 @@ def build_base_to_stage_lineage(
 
 
 def canonical_name(value: str) -> str:
-    return (value or "").replace("\\", "").strip()
+    r"""统一 Verilog/DEF转义及层级分隔符形式。
+
+    Yosys常写``\foo[0]``并在flatten后用``.``连接层次，OpenROAD DEF常写
+    ``foo\[0\]``并用``/``连接层次。基础图统一保存Yosys风格的``.``，使
+    ``a.b.c``与``a.b/c``得到同一个稳定实体键。
+    """
+
+    return (value or "").replace("\\", "").replace("/", ".").strip()
 
 
 LIBERTY_GLOBS = ("*.lib", "*.lib.gz")

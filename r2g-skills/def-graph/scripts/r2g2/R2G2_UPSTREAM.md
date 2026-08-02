@@ -9,23 +9,64 @@ than hand-merging our own reimplementation.
 
 | Field | Value |
 | --- | --- |
-| Archive | `Dataset_R2G2.0(B).zip` |
-| Ingested | 2026-08-01 |
+| Archive | `Dataset_R2G2.0(B)v2.zip` (supersedes `Dataset_R2G2.0(B).zip`) |
+| Ingested | 2026-08-01 (v1), re-vendored from v2 the same day |
 | Reference sample | `bp_multi_top/v01` (nangate45), reported PASS on both upstream checks |
 | Contract doc | `upstream_docs/B_VIEW_DATASET_STRUCTURE.md` (+ `_CN`), `upstream_docs/R2G2.0_README.md` |
 
 SHA256 of the files as they arrived (verify before re-vendoring):
 
 ```
-d08f97b08ce24715eaef3304d8565c9994a03e1f2e47543c523d89cc303e3247  01_build_base_graph.py
-3243d850d7d4fa5ba0138ac83baffe16b727c5e82297f03396758b7d0f90a3e8  02_extract_features.py
-a17292207e1e0a50a14d2eb14104bb12b9d86e0905e05d699348b8a487a21dee  03_extract_labels.py
+24249a812ccacbd8c56712ff6af559097009657c7b314181cb9db1e2ca12937e  01_build_base_graph.py   (v2)
+8f067fd0df8add6c2a3885e76ac98dd05e16f090af93f072d210b4996835d883  02_extract_features.py   (v2)
+3b5367fb45734df49a18b7d7f3f0c9d023f66f694cd42bbbb71a61151d320195  03_extract_labels.py     (v2)
 89833662f1d68335798e00c6ac54361888a6849ee75222e313a70e1dcf2a6ff6  04_assemble_heterograph.py
 859c1bc48fc778eeec9e514f8862ed0f6775de99824caa1ad1404bd5c2749a6d  05_build_stage_snapshots.py
 0ca26dd59d310156d23db223436cf98bcbac74490eeb2bbf616a29cf7cfc038b  checks/summarize_four_stage_graph_data.py
 9e8d9a6610553bccc3b0865fd519b7ce402d69e8b44ad0072b7976049d31aa14  checks/validate_four_stage.py
 975fc54a05d74ab7dc7c38b73b7c339a221a1f091bf96b46def3015b9b2e0d91  configs/encode_map.csv
 ```
+
+### v2 re-vendor (2026-08-01) — hierarchy-separator name mapping
+
+v2's **only** code change is `canonical_name`, applied identically in stages 01/02/03:
+
+```python
+-    return (value or "").replace("\\", "").strip()
++    return (value or "").replace("\\", "").replace("/", ".").strip()
+```
+
+Yosys joins flattened hierarchy with `.`; OpenROAD DEF joins it with `/`. Normalizing
+`/`→`.` makes `a.b.c` and `a.b/c` resolve to one stable entity key, so a hierarchical
+design's DEF features join the yosys-derived canonical topology instead of missing it —
+the same failure family as our SPEF↔DEF de-escaping join (CLAUDE.md silent-value catalog).
+
+Adopted **verbatim, no new delta**: upstream is right here, and staying byte-identical
+keeps the next re-vendor cheap. `04`, `05`, both checkers and `configs/encode_map.csv`
+are byte-identical between v1 and v2 (hashes above unchanged), so re-applying this one
+hunk is provably equivalent to a full re-vendor + D1–D11 replay — which is why it was
+done that way rather than by replaying eleven deltas onto three files.
+
+**Inert on this corpus today, adopted as future-proofing.** ORFS synthesizes flat, so
+the divider never appears: `cordic_gf180` has 0 of 4775 DEF components containing `/`
+(51 contain `.`, already matching yosys's 55), and a sweep of all 13 built designs across
+sky130hd/gf180/nangate45 found **0 instance names containing `/`**. It will start to
+matter the moment a non-flattened or hierarchical flow is ingested.
+
+**Caveat (upstream residue, not guarded):** the rewrite is unconditional, so a name where
+`/` is a literal character rather than a hierarchy divider — legal in a Verilog escaped
+identifier such as `\a/b ` — now aliases onto `a.b` and can collide with a genuinely
+distinct entity. Upstream does not detect the collision, and neither do we. Harmless while
+the corpus contains no `/` at all; revisit if a hierarchical flow is ingested.
+
+### Not in the v2 drop (documented but missing)
+
+v2's README §8.1 documents `06_batch_build_dataset.py`, a 300-sample batch scheduler
+(`--mode configs|preflight|run|all`, SHA256 resume fingerprints, per-sample
+`batch_state.json`). **That script is absent from the archive** — only its output
+`configs/batch_config_manifest.json` and 300 generated per-sample configs shipped. We do
+not need it (our batching is `run_stage_dataset.sh` + the campaign driver), but do not
+plan against it, and ask upstream for the file if its resume-fingerprint scheme is wanted.
 
 ## Why there are deltas at all
 

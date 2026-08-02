@@ -25,12 +25,14 @@ from torch_geometric.data import Data
 
 
 def canonical_name(value: str) -> str:
-    """统一 Verilog/DEF 转义形式。
+    r"""统一 Verilog/DEF转义及层级分隔符形式。
 
-    Yosys 常写 ``\foo[0]``，DEF 常写 ``foo\[0\]``。去除反斜杠后两者才能按实体键对齐。
+    Yosys常写``\foo[0]``并在flatten后用``.``连接层次，OpenROAD DEF常写
+    ``foo\[0\]``并用``/``连接层次。基础图统一保存Yosys风格的``.``，使
+    ``a.b.c``与``a.b/c``得到同一个稳定实体键。
     """
 
-    return (value or "").replace("\\", "").strip()
+    return (value or "").replace("\\", "").replace("/", ".").strip()
 
 
 LIBERTY_GLOBS = ("*.lib", "*.lib.gz")
