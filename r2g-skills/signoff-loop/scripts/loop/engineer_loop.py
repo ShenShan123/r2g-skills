@@ -2266,6 +2266,37 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
         success = r.get("lvs_status") == "clean"
     else:
         success = knowledge_db.is_success(r)
+        # A signoff arm that reads SUCCESS with no signoff check actually EXECUTED is
+        # not judgeable. On a deck-less platform (gf180 ships no drc/ and no lvs/ at
+        # all) run_drc/run_lvs honestly record 'skipped', the flow still completes six
+        # stages, and knowledge_db.is_success takes its strict orfs_status='pass' path
+        # -> BOTH arms read is_success=True no matter what the recipe did. The verdict
+        # then turns entirely on wall-clock, so a noise-level cost difference could
+        # promote a signoff recipe backed by ZERO signoff evidence (observed
+        # 2026-08-01: four gf180 pdn_die_floor trials, every arm is_success with
+        # outcome_score 1.0, separated only by 78 vs 79.5s). Marking the sample
+        # unverifiable makes both arms non-success, so judge v2 returns the honest
+        # never-succeeded inconclusive instead of a cost tiebreak.
+        #
+        # Same metric-granularity lesson as the timing/synth/DRC/LVS branches above,
+        # finally applied to the DEFAULT branch. Three deliberate narrowings:
+        #  * only when `success` is already True — a BACKEND-ABORT arm (orfs_status
+        #    'fail', null signoff) never reached signoff because the flow DIED, and
+        #    its honest whole-run False judgment keeps the legacy judged_on.
+        #  * only on an EXPLICIT 'skipped', never NULL. 'skipped' is a positive
+        #    statement by run_drc/run_lvs that the check was deliberately not run
+        #    because the platform has no deck. NULL merely means no signoff data was
+        #    recorded — which is the normal state of a ROUTE arm, whose success is
+        #    legitimately established by the flow getting past route, not by DRC/LVS
+        #    (treating NULL as unverifiable made route_relief unjudgeable).
+        #  * only when BOTH checks are skipped — a DRC-only platform (ihp-sg13g2,
+        #    no KLayout LVS deck) still carries real DRC evidence.
+        # failure-patterns.md #32c.
+        if (success
+                and r.get("drc_status") == "skipped"
+                and r.get("lvs_status") == "skipped"):
+            judged_on = "signoff:unverifiable"
+            success = False
     return {"is_success": bool(success), "judged_on": judged_on,
             "wall_s": r["total_elapsed_s"], "fix_iters": r["fix_iters_to_clean"],
             "outcome_score": r["outcome_score"],

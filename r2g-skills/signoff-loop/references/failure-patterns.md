@@ -4348,6 +4348,61 @@ with 0.31% UNKNOWN (a gz parse failure collapses to 100%), and `hpwl_um==0` on o
 of nets (a POLYGON miss collapses every pin to the cell origin). That is the
 "fix a parse bug ONCE in techlib" rule paying off.
 
+#### 32c. …and the A/B judge scored those evidence-free "cleans" as signoff SUCCESSES (2026-08-01)
+
+The bounded gf180 wave predicted by #32b immediately produced the deeper bug. Four
+`pdn_die_floor` trials came back `inconclusive / success_tie_cost_within_noise`, judge v2,
+`provenance_complete=1`, arms genuinely distinct (4 run_ids) — but every sample read:
+
+```
+judged_on: "signoff",  is_success: true,  outcome_score: 1.0
+```
+
+on a platform where **DRC and LVS never ran**. `_arm_metric`'s default branch falls through
+to `knowledge_db.is_success(r)`, which takes its strict `orfs_status='pass'` path — and a
+gf180 flow does complete six stages. So BOTH arms read success no matter what the recipe
+did, and the verdict reduced to wall-clock: **78s vs 79.5s**. The trials only tied by luck.
+Had one arm been noise-faster, judge v2 would have returned a decisive `win` and promoted a
+signoff recipe backed by **zero signoff evidence** — into the tracked, shipped knowledge
+store. `check_db_integrity` flagged only a soft `K3 ... possible identical-arms stall`; the
+arms were not identical, so that lead points at the wrong thing.
+
+Note this invalidates the reassuring argument that a deck-less platform is self-protecting
+because it "generates no DRC/LVS symptoms": `pdn_die_floor` is a signoff-class strategy that
+was enqueued, planned, run and judged all the way to a verdict.
+
+**Fix:** `_arm_metric` now treats a signoff arm that would read SUCCESS with **no signoff
+check executed** as `judged_on="signoff:unverifiable"`, `is_success=False`. Both arms
+non-success ⇒ judge v2 returns the honest never-succeeded inconclusive instead of a cost
+tiebreak, and no promotion can rest on it. Same metric-granularity lesson `_arm_metric`
+already applied to its timing / synth / DRC / LVS branches — "the generic `is_success` ties
+both arms whenever an UNRELATED residual keeps the run non-clean" — finally applied to the
+DEFAULT branch, for the case where *nothing* ran.
+
+Three narrowings, each one found by a test the first draft broke — the guard is far
+narrower than the obvious "no signoff data ⇒ unjudgeable":
+
+1. **Only when `success` is already True.** A BACKEND-ABORT arm (`orfs_status='fail'`, null
+   signoff) never reached signoff because the flow *died*; its honest whole-run `False`
+   keeps the legacy `judged_on`. (`test_judge_v2_symptom_target::test_no_target_falls_back_to_is_success`.)
+2. **Only on an EXPLICIT `'skipped'`, never NULL.** `'skipped'` is a positive statement by
+   `run_drc`/`run_lvs` that the check was deliberately not run for want of a deck; NULL
+   merely means no signoff data was recorded — the normal state of a **ROUTE** arm, whose
+   success is legitimately established by getting past route, not by DRC/LVS. Treating NULL
+   as unverifiable made `route_relief` unjudgeable
+   (`test_route_ab_loop`, `test_ab_drain_parallel`). Real gf180 rows are explicit
+   `pass|skipped|skipped`, so the narrow form still catches the bug exactly.
+3. **Only when BOTH checks are skipped.** A DRC-only platform (ihp-sg13g2, no KLayout LVS
+   deck) keeps real DRC evidence and stays judgeable.
+
+Test: `tests/test_ab_signoff_unverifiable.py` (6 cases incl. all three narrowings; verified
+RED without the guard, where the arm reads `judged_on='signoff', is_success=True`).
+
+**Lesson (generalizing #32's):** a support-matrix "Yes" must be backed by an executable deck
+— *and* every success metric must be backed by a check that actually EXECUTED. "The tool
+reported no failure" and "the tool ran and found nothing" are different facts, and a
+fail-open success metric silently converts the first into the second.
+
 **Known-latent, not fixed:** `platform_capability._resolve` substitutes only
 `$(PLATFORM_DIR)`/`$(PLATFORM)` and returns None on any residual make var, so gf180's
 `TECH_LEF = .../gf180mcu_$(METAL_OPTION)_$(KVALUE)K_$(TRACK_OPTION)_tech.lef` is

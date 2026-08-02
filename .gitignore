@@ -277,6 +277,7 @@ heter-homo_py.zip
 # Upstream R2G2.0 four-stage drop (2026-08-01) — the pipeline itself is vendored into
 # r2g-skills/def-graph/scripts/r2g2/ with provenance in R2G2_UPSTREAM.md; the archive is not.
 Dataset_R2G2.0(B).zip
+Dataset_R2G2.0(B)v2.zip
 Dataset_R2G2.0(B)/
 
 # V1 validation registry outputs (machine-local run evidence — never commit)
