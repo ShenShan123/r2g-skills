@@ -295,7 +295,7 @@ AB_INCONCLUSIVE_MAX = 3
 # because this static list is stale — only a fabricated/unapplyable strategy is caught.
 _KNOWN_APPLY_STRATEGIES = frozenset({
     "antenna_diode_repair", "antenna_diode_iters", "antenna_density_relief",
-    "density_relief", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
+    "density_relief", "pin_side_rebalance", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
     "beol_only_drc", "rerun_from_stage", "pdn_die_floor",
 }) | _PLACE_STRATEGIES | _TIMING_STRATEGIES | _SYNTH_STRATEGIES
 

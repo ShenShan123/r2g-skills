@@ -172,6 +172,7 @@ e.g. `m3.2`, `via.4*`, `via_OFFGRID`) gets `density_relief` (any platform with a
 | `antenna_diode_iters` | non-nangate45 (working diode) | `MAX_REPAIR_ANTENNAS_ITER_GRT=10`, `MAX_REPAIR_ANTENNAS_ITER_DRT=10` | `route` | Raises OpenROAD repair-antennas iterations (default 5) so more diodes are inserted. Diode auto-discovered from its `CLASS CORE ANTENNACELL` LEF declaration; do NOT set `CORE_ANTENNACELL` (not an ORFS env var). |
 | `antenna_density_relief` | non-nangate45 | `CORE_UTILIZATION` lowered by 5 (floor 5) | `floorplan` | Reduces placement density / grows area so the router can break long metal runs. `PLACE_DENSITY_LB_ADDON` is **never** touched (hard rule: never below 0.10). **Not offered on nangate45** — empirically counterproductive there (enlarging the die lengthens nets → more antennas; fifo_basic 14→16 at util 10→5). |
 | `density_relief` | any (needs `CORE_UTILIZATION`) | `CORE_UTILIZATION` lowered by 8 (floor 8) | `floorplan` | **Non-antenna routing-geometry DRC** (metal/via spacing, off-grid, via enclosure). Gives the router more room → metal/via *spacing* and off-grid rules resolve. Real layout change (bigger die, sparser routes); the routing/signoff deck is **never** relaxed; `PLACE_DENSITY_LB_ADDON` untouched. **Validated 2026-06-16** on sky130hd: `eeprom_top` 4→0, `axil_reg_if` 34→0, `can_fifo` 20→0, `aximrd2wbsp` 10→0, `eth_mac_mii` 6→0 (all `m3.2`/via, all cleared in 1 iter at util 20→12 / 25→17). No-op when only `DIE_AREA` is set (no util lever) or util already at floor → honest residual. |
+| `pin_side_rebalance` | sky130hd | `PLACE_PINS_ARGS=-exclude <edge>:*` | `floorplan` | **A/B-gated candidate.** Offered only when at least two coordinate-bearing `m3.2` markers exist and at least 80% lie within the outer 2% (minimum 2 um) of one unique die edge. The edge is derived from the current `6_final.def` and `6_drc.lyrdb`, never from a design name. It cannot auto-apply until the exact lifecycle key is promoted. |
 
 **Why nangate45 needs `antenna_diode_repair` specifically (verified 2026-06-02, supersedes the
 2026-06-01 "inert/residual" Finding B):** with the antenna model installed, OpenROAD's per-net
@@ -184,6 +185,16 @@ installer). The deck is never relaxed.
 Non-antenna routing-geometry DRC (metal/via spacing, off-grid) is handled by `density_relief`
 where a `CORE_UTILIZATION` knob exists; other non-antenna classes, or designs at the util floor /
 sized by `DIE_AREA`, remain honest residuals.
+
+### Optional repair-action contract
+
+An operator or evaluator may set `R2G_REPAIR_ACTION_POLICY_FILE` to a JSON object with
+`schema_version: r2g-repair-action-policy-1.0`. `allowed_numeric_knobs` maps a config knob
+to optional `minimum` / `maximum` bounds; `allowed_string_knobs` and `allowed_sdc_edits`
+map each knob to its allowed values. Once configured, any undeclared edit is blocked. An
+unreadable or malformed policy fails closed. With the variable unset, normal autonomous
+behavior is unchanged. This contract protects fixed experimental objectives such as die
+footprint and clock constraints while still allowing pre-registered repair actions.
 
 ### route — backend-abort relief (`--check route`, 2026-06-17)
 

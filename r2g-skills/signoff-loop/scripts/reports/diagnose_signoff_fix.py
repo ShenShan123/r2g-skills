@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -24,6 +25,8 @@ from pathlib import Path
 # it means the recipe's A/B arms can't diverge (a no-op edit), so the underlying static
 # strategy stays a legitimate, harmless catalog action.
 _LIVE_BLOCKED_LIFECYCLE = frozenset({"candidate", "shadow"})
+_REPAIR_POLICY_ENV = "R2G_REPAIR_ACTION_POLICY_FILE"
+_PIN_EDGE_DRC_RULES = frozenset({"m3.2"})
 
 
 def _effect_fp(strat: dict) -> str | None:
@@ -557,9 +560,9 @@ def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
 
 def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | None:
     """The strategy a LIVE run should auto-apply: the first auto_apply strategy,
-    SKIPPING any `requires_ab_promotion` (shadow) recipe unless the caller forced
-    it via --rank-first (the A/B arm-B path). This is the Win 6 gate that keeps a
-    backend-aware retune out of blind live runs until it wins its A/B trial.
+    SKIPPING an A/B-gated recipe until its exact lifecycle row is promoted, unless
+    the caller forced it via --rank-first (the A/B arm-B path). This keeps a new
+    strategy out of blind live runs while allowing a validated one to become useful.
 
     Two further gates (2026-07-04, negative-evidence consumption):
     - lifecycle_status == 'shadow' (A/B-demoted): the demotion previously only
@@ -591,8 +594,9 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
     for s in strategies:
         if not s.get("auto_apply"):
             continue
-        if s.get("requires_ab_promotion"):
-            continue        # shadow recipe: never auto-applied in a blind live run
+        if (s.get("requires_ab_promotion")
+                and s.get("lifecycle_status") != "promoted"):
+            continue        # candidate recipe: only live after an A/B promotion
         # A/B-unvalidated ('candidate') or A/B-demoted ('shadow') recipe: never
         # auto-applied in a blind live run, on ANY lookup path (P1-10 + 2026-07-04).
         # A candidate that re-enters via the static catalog with a neutral cold-start
@@ -622,6 +626,198 @@ def apply_edits(config_text: str, edits: dict) -> str:
     block = [BLOCK_START] + [f"export {k} = {v}" for k, v in edits.items()] + [BLOCK_END]
     prefix = (body + "\n\n") if body else ""
     return prefix + "\n".join(block) + "\n"
+
+
+def _load_repair_action_policy() -> tuple[dict | None, str | None]:
+    """Read an optional operator/evaluator-owned repair action contract.
+
+    No configured contract preserves the normal autonomous workflow.  Once a
+    path is explicitly configured, unreadable or malformed content fails
+    closed: the Agent must not mutate a protected task under guessed bounds.
+    """
+    raw = os.environ.get(_REPAIR_POLICY_ENV)
+    if not raw:
+        return None, None
+    path = Path(raw)
+    try:
+        policy = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return {}, f"unreadable repair action policy {path}: {type(exc).__name__}: {exc}"
+    if not isinstance(policy, dict):
+        return {}, f"repair action policy {path} is not a JSON object"
+    if policy.get("schema_version") != "r2g-repair-action-policy-1.0":
+        return {}, f"unsupported repair action policy schema in {path}"
+    for field in ("allowed_numeric_knobs", "allowed_string_knobs", "allowed_sdc_edits"):
+        if not isinstance(policy.get(field, {}), dict):
+            return {}, f"repair action policy field {field} is not an object"
+    for knob, bounds in policy.get("allowed_numeric_knobs", {}).items():
+        if not isinstance(bounds, dict):
+            return {}, f"numeric bounds for {knob} are not an object"
+        parsed = {}
+        for key in ("minimum", "maximum"):
+            if bounds.get(key) is None:
+                continue
+            try:
+                parsed[key] = float(bounds[key])
+            except (TypeError, ValueError):
+                return {}, f"numeric bound {knob}.{key} is not a number"
+            if not math.isfinite(parsed[key]):
+                return {}, f"numeric bound {knob}.{key} is not finite"
+        if parsed.get("minimum", -math.inf) > parsed.get("maximum", math.inf):
+            return {}, f"numeric bounds for {knob} are inverted"
+    for field in ("allowed_string_knobs", "allowed_sdc_edits"):
+        for knob, values in policy.get(field, {}).items():
+            if not isinstance(values, list):
+                return {}, f"allowed values for {field}.{knob} are not a list"
+    return policy, None
+
+
+def _strategy_policy_failure(strategy: dict, policy: dict) -> str | None:
+    numeric = policy.get("allowed_numeric_knobs") or {}
+    strings = policy.get("allowed_string_knobs") or {}
+    for knob, value in (strategy.get("config_edits") or {}).items():
+        if knob in numeric:
+            bounds = numeric[knob] or {}
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return f"{knob}={value!r} is not numeric"
+            if not math.isfinite(number):
+                return f"{knob}={value!r} is not finite"
+            if bounds.get("minimum") is not None and number < float(bounds["minimum"]):
+                return f"{knob}={number:g} is below minimum {bounds['minimum']}"
+            if bounds.get("maximum") is not None and number > float(bounds["maximum"]):
+                return f"{knob}={number:g} is above maximum {bounds['maximum']}"
+            continue
+        if knob in strings:
+            allowed = strings[knob]
+            if not isinstance(allowed, list) or str(value) not in {str(item) for item in allowed}:
+                return f"{knob}={value!r} is outside the allowed value set"
+            continue
+        return f"config knob {knob} is not allowed by the repair action policy"
+    sdc_edits = strategy.get("sdc_edits") or strategy.get("sdc") or {}
+    allowed_sdc = policy.get("allowed_sdc_edits") or {}
+    for knob, value in sdc_edits.items():
+        allowed = allowed_sdc.get(knob)
+        if not isinstance(allowed, list) or str(value) not in {str(item) for item in allowed}:
+            return f"SDC edit {knob}={value!r} is not allowed by the repair action policy"
+    if (strategy.get("env") or strategy.get("env_flags")):
+        return "environment edits are not allowed by the repair action policy"
+    return None
+
+
+def _apply_repair_action_policy(plan: dict) -> dict:
+    policy, error = _load_repair_action_policy()
+    if policy is None:
+        return plan
+    original = list(plan.get("strategies") or [])
+    rejected = []
+    kept = []
+    for strategy in original:
+        reason = error or _strategy_policy_failure(strategy, policy)
+        if reason:
+            rejected.append({"strategy": strategy.get("id"), "reason": reason})
+        else:
+            kept.append(strategy)
+    plan["strategies"] = kept
+    plan["action_policy_gate_ok"] = error is None
+    plan["action_policy_rejections"] = rejected
+    if original and not kept:
+        plan["status"] = "residual"
+        plan["residual_reason"] = (
+            "repair action policy blocked every applicable strategy"
+            + (f": {error}" if error else "")
+        )
+    return plan
+
+
+def _latest_final_def(project: Path) -> Path | None:
+    candidates = []
+    for pattern in ("RUN_*/results/6_final.def", "RUN_*/final/6_final.def"):
+        for path in (project / "backend").glob(pattern):
+            try:
+                candidates.append((path.stat().st_mtime_ns, path))
+            except OSError:
+                continue
+    return max(candidates, default=(0, None), key=lambda item: item[0])[1]
+
+
+def _def_die_bounds_microns(path: Path | None) -> tuple[float, float, float, float] | None:
+    if path is None:
+        return None
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    units = re.search(r"UNITS\s+DISTANCE\s+MICRONS\s+(\d+)\s*;", text)
+    die = re.search(
+        r"DIEAREA\s*\(\s*(-?\d+)\s+(-?\d+)\s*\)\s*"
+        r"\(\s*(-?\d+)\s+(-?\d+)\s*\)\s*;", text)
+    if not units or not die or int(units.group(1)) <= 0:
+        return None
+    scale = float(units.group(1))
+    return tuple(float(die.group(i)) / scale for i in range(1, 5))
+
+
+def _edge_localized_pin_strategy(project: Path, drc: dict, cfg: dict) -> dict | None:
+    """Return an A/B-gated pin repair for a uniquely edge-localized m3.2 cluster."""
+    if cfg.get("PLATFORM") != "sky130hd" or cfg.get("PLACE_PINS_ARGS"):
+        return None
+    categories = drc.get("categories") or {}
+    dominant = max(categories, key=lambda key: categories[key].get("count") or 0,
+                   default="")
+    normalized_rule = dominant.strip("'\"").lower()
+    if normalized_rule not in _PIN_EDGE_DRC_RULES:
+        return None
+    bounds = _def_die_bounds_microns(_latest_final_def(project))
+    if bounds is None:
+        return None
+    try:
+        dashboard_dir = str(Path(__file__).resolve().parents[1] / "dashboard")
+        if dashboard_dir not in sys.path:
+            sys.path.insert(0, dashboard_dir)
+        import render_drc_violation
+        violations = render_drc_violation.parse_lyrdb_violations(
+            project / "drc" / "6_drc.lyrdb")
+    except Exception:
+        return None
+    selected = [v for v in violations
+                if str(v.get("category", "")).strip("'\"").lower() == normalized_rule]
+    if len(selected) < 2:
+        return None
+    x0, y0, x1, y1 = bounds
+    margin = max(2.0, 0.02 * max(x1 - x0, y1 - y0))
+    edge_counts = {
+        "left": sum(v["bbox"][0] <= x0 + margin for v in selected),
+        "right": sum(v["bbox"][2] >= x1 - margin for v in selected),
+        "bottom": sum(v["bbox"][1] <= y0 + margin for v in selected),
+        "top": sum(v["bbox"][3] >= y1 - margin for v in selected),
+    }
+    ranked = sorted(edge_counts.items(), key=lambda item: (-item[1], item[0]))
+    side, count = ranked[0]
+    if count / len(selected) < 0.8 or (len(ranked) > 1 and ranked[1][1] == count):
+        return None
+    return {
+        "id": "pin_side_rebalance",
+        "rationale": (
+            f"{count}/{len(selected)} {dominant} violations are concentrated at the "
+            f"{side} die edge. Exclude that side from automatic IO-pin placement, "
+            "then rerun from floorplan without changing die area, clock, or the DRC deck."
+        ),
+        "config_edits": {"PLACE_PINS_ARGS": f"-exclude {side}:*"},
+        "rerun_from": "floorplan",
+        "recheck": "drc",
+        "auto_apply": True,
+        "requires_ab_promotion": True,
+        "geometry_evidence": {
+            "rule": dominant,
+            "side": side,
+            "edge_count": count,
+            "coordinate_count": len(selected),
+            "edge_fraction": round(count / len(selected), 4),
+            "die_bounds_um": list(bounds),
+        },
+    }
 
 
 def _load(path: Path) -> dict:
@@ -835,9 +1031,8 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
       A/B-demoted ('shadow') strategy is gated on EVERY lookup path, not only
       the indexed-recipe one filter_promoted covers.
 
-    Best-effort by design: any DB problem (locked mid-campaign, missing tables)
-    leaves the plan un-annotated with a WARNING — the gates then simply do not
-    fire, which is the pre-2026-07-04 behavior, never a broken diagnosis."""
+    A lifecycle-store failure is fail-closed for live auto-apply. Diagnosis still
+    returns a visible plan, but `_live_auto_strategy` will not execute it blindly."""
     try:
         import knowledge_db
         conn = (knowledge_db.connect(db_path) if db_path
@@ -887,7 +1082,7 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
             for s in plan_strats:
                 statuses[s["id"]] = recipe_lifecycle.get_status(
                     conn, symptom_id=sid, design_class=design_class,
-                    platform=platform, strategy=s["id"])
+                    platform=platform, strategy=s["id"], default=None)
         for s in plan_strats:
             fp = fp_of.get(s["id"])
             if s["id"] in dead:
@@ -895,7 +1090,7 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
             elif fp and fp in dead_effects:
                 s["dead_here"] = dead_after      # alias of a dead-by-effect strategy
                 s["dead_by_effect"] = True
-            if statuses.get(s["id"]) and statuses[s["id"]] != "promoted":
+            if statuses.get(s["id"]):
                 s["lifecycle_status"] = statuses[s["id"]]
         plan["lifecycle_gate_ok"] = True          # store read OK: gates are authoritative
     except Exception as exc:
@@ -952,7 +1147,7 @@ def main(argv=None) -> int:
     # recipes rank live. Falls back to the symptom/family path when absent.
     try:
         import suggest_config as _sc
-        _stats = _sc.parse_synth_stats(proj / "synth")
+        _stats = _sc.parse_project_synth_stats(proj)
         _cells = _stats.get("cell_count", 0)
         _size = ("unknown" if not _cells else "tiny" if _cells < 100 else
                  "small" if _cells < 5000 else "medium" if _cells < 50000
@@ -1014,6 +1209,14 @@ def main(argv=None) -> int:
             proj, check=args.check, drc=drc, lvs=lvs)
     plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
                       tcheck=tcheck, route=route)
+    if args.check == "drc" and "pin_side_rebalance" not in exclude:
+        pin_strategy = _edge_localized_pin_strategy(proj, drc, cfg)
+        if pin_strategy is not None:
+            plan.setdefault("strategies", []).append(pin_strategy)
+            if plan.get("status") == "residual":
+                plan["status"] = drc.get("status", "fail")
+                plan["residual_reason"] = None
+    _apply_repair_action_policy(plan)
     _rank_plan_strategies(plan, recipes, pooled=pooled)
     if args.check == "route" and len(plan.get("strategies", [])) > 1:
         # P1-2 self-announcing guard (recipe-lifecycle audit 2026-07-14): the live route
@@ -1051,6 +1254,15 @@ def main(argv=None) -> int:
         if not strat.get("auto_apply", False):
             print(f"ERROR: '{args.apply}' is operator-only: {strat.get('operator_note','')}", file=sys.stderr)
             return 3
+        policy, policy_error = _load_repair_action_policy()
+        policy_failure = policy_error or (
+            _strategy_policy_failure(strat, policy) if policy is not None else None)
+        if policy_failure:
+            print(json.dumps({"status": "action_policy_blocked", "applied": None,
+                              "strategy": strat["id"], "reason": policy_failure}))
+            print(f"ERROR: '{strat['id']}' is blocked by the repair action policy: "
+                  f"{policy_failure}", file=sys.stderr)
+            return 6
         # Lifecycle re-validation AT APPLY TIME (2026-07-16 agent-logic issue 6):
         # selection (--next) and apply are separate PROCESS invocations, so a recipe
         # demoted between them still applied — the safety system's withdrawal had no
@@ -1066,7 +1278,9 @@ def main(argv=None) -> int:
                 gate_plan = _annotate_live_gates(
                     {"strategies": [strat]}, proj, check=args.check, sid=_sid,
                     design_class=design_class, platform=plat)
-            if (strat.get("lifecycle_status") in _LIVE_BLOCKED_LIFECYCLE
+            if ((strat.get("requires_ab_promotion")
+                 and strat.get("lifecycle_status") != "promoted")
+                    or strat.get("lifecycle_status") in _LIVE_BLOCKED_LIFECYCLE
                     or gate_plan.get("lifecycle_gate_ok") is False):
                 print(json.dumps({
                     "status": "lifecycle_blocked", "applied": None,
