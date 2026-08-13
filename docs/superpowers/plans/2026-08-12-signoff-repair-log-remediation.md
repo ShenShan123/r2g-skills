@@ -61,3 +61,38 @@ The copied Experiment-2 fixtures did not contain a completed `fmax_search` artif
 their strict manifest remains blocked only on that pre-existing constraint-provenance
 requirement. No Fmax evidence was fabricated. The shipped knowledge database is also
 unchanged: `pin_side_rebalance` still requires a formal A/B promotion before blind live use.
+
+## Eight-RTL controlled rerun
+
+The complete eight-design Experiment-2 development cohort was rerun from a clean campaign
+at Agent commit `d24a2cf45dee35e3bce6b4c9812d6b3e59b3a626`. The cohort and task-spec
+digests remained `c84583ca...` and `bbeb3019...`; Sky130HD, 100 MHz, source closures,
+footprint limits, action allowlists, strict gates, and the frozen knowledge seed were
+unchanged. Only Full R2G was rerun because the three completed Vanilla runs are frozen
+controls and the patch does not affect them.
+
+| Outcome | Before (`e5d3c47`) | After (`d24a2cf`) |
+|---|---:|---:|
+| Overall strict-clean | 5/8 | **6/8** |
+| Repair-needed recovery | 3/6 | **4/6** |
+| Clean-sentinel non-regression | 2/2 | **2/2** |
+
+- can_fifo changed from fail to strict-clean: the Agent parsed the current ORFS
+  `synth_stat.txt`, applied the already-promoted `density_relief` action within the
+  registered utilization range, and cleared full-deck DRC from 10 to 0. Independent
+  evaluation found DRC, LVS, route, timing, antenna, RCX, and provenance clean.
+- SDRAM kept `CORE_UTILIZATION=25`; the previous out-of-contract 25-to-17 mutation did
+  not recur. It remained fail-closed with 60 DRC violations rather than claiming an
+  invalid improvement.
+- GCD remained fail-closed with 6 DRC violations. GCD and SDRAM require formal promotion
+  of the geometry-derived pin-side action before autonomous use; this rerun deliberately
+  did not seed that evidence or bypass the lifecycle gate.
+- The remaining six designs passed all strict gates. No external LLM tokens or human
+  repair interventions were used.
+
+Two startup-only attempts were excluded before scoring: one omitted the locally pinned
+Magic/Netgen environment, and one selected Python 3.7. Both failed before a valid campaign
+could be evaluated. The counted campaign used the pinned EDA tools and Python 3.10, ended
+with runner return code 0, and produced the independent result file at
+`r2g_exp2_v2_repair_d24a2cf_2026_08_12_run01/reports/experiment2_pilot_results.json`.
+Wall time is not compared because the rerun used a shared server under different load.
