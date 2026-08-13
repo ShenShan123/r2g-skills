@@ -336,6 +336,29 @@ def _recipe_status_version(conn, key: dict):
         return None
 
 
+def _lifecycle_move_is_same_ab_corpus(conn, key: dict) -> bool:
+    """True when the current lifecycle move was produced by A/B aggregation.
+
+    ``ab-drain`` judges completed subjects incrementally. The first subject can
+    therefore move candidate -> promoted/shadow while another subject from the
+    same planned cohort is still running. That transition changes no Recipe
+    content and must not invalidate the remaining independent evidence. External
+    moves (operator demotion, live regression, manual revalidation) retain the
+    fail-closed cancellation semantics.
+    """
+    if conn is None:
+        return False
+    try:
+        row = conn.execute(
+            "SELECT provenance FROM recipe_status WHERE symptom_id=? AND "
+            "design_class=? AND platform=? AND strategy=?",
+            (key["symptom_id"], key["design_class"], key["platform"],
+             key["strategy"])).fetchone()
+    except Exception:
+        return False
+    return bool(row and str(row[0] or "").startswith("ab_corpus"))
+
+
 def _known_apply_strategy(conn, strategy: str | None) -> bool:
     """True if `strategy` has a real application path IN THIS DOMAIN — it is a
     catalog/backend signoff strategy, OR it has ever produced a real SIGNOFF
@@ -543,9 +566,15 @@ def _ingest(entry: dict) -> str | None:
     proj = Path(entry["project_path"])
     if not _has_backend_run(entry) and not (proj / "reports" / "ppa.json").exists():
         return None
-    r = subprocess.run(
-        [sys.executable, _script("R2G_LOOP_INGEST", KNOWLEDGE / "ingest_run.py"),
-         entry["project_path"]], capture_output=True, text=True)
+    cmd = [sys.executable,
+           _script("R2G_LOOP_INGEST", KNOWLEDGE / "ingest_run.py"),
+           entry["project_path"]]
+    # Keep A/B and test campaigns isolated. ingest_run's CLI also honors this
+    # environment variable, but passing it explicitly makes the subprocess
+    # contract auditable and protects against a future CLI-default regression.
+    if env_db := os.environ.get("R2G_KNOWLEDGE_DB"):
+        cmd.extend(["--db", env_db])
+    r = subprocess.run(cmd, capture_output=True, text=True)
     for tok in (r.stdout or "").split():
         if tok.startswith("run_id="):
             return tok.split("=", 1)[1]
@@ -2403,7 +2432,9 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         _planned_sv = pair["B"][0].get("recipe_status_version")
         if _planned_sv is not None:
             _cur_sv = _recipe_status_version(conn, pair["B"][0]["ab_key"])
-            if _cur_sv is not None and _cur_sv != _planned_sv:
+            if (_cur_sv is not None and _cur_sv != _planned_sv
+                    and not _lifecycle_move_is_same_ab_corpus(
+                        conn, pair["B"][0]["ab_key"])):
                 print(f"[loop] A/B trial CANCELLED (lifecycle moved: "
                       f"status_version {_planned_sv}->{_cur_sv}): {strat}")
                 for entries in pair.values():

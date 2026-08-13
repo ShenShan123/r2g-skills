@@ -7,6 +7,12 @@ import journal_db
 import knowledge_db
 
 
+def test_cli_default_db_honors_environment(tmp_path, monkeypatch):
+    target = tmp_path / "isolated.sqlite"
+    monkeypatch.setenv("R2G_KNOWLEDGE_DB", str(target))
+    assert ingest_run._default_cli_db_path() == target
+
+
 def _mk_project(tmp_path: Path, name="aes_unit1", cells=1200) -> Path:
     p = tmp_path / name
     (p / "constraints").mkdir(parents=True)

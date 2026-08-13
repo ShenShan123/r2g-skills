@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -33,6 +34,12 @@ from typing import Any
 import knowledge_db
 import symptom
 import tool_versions
+
+
+def _default_cli_db_path() -> Path:
+    """Resolve the no-flag CLI target exactly like knowledge_db.connect()."""
+    return Path(os.environ.get("R2G_KNOWLEDGE_DB")
+                or knowledge_db.DEFAULT_DB_PATH)
 
 
 _CONFIG_LINE_RE = re.compile(r"(?:export\s+)?(\w+)\s*=\s*(.*)")
@@ -1158,8 +1165,9 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("project", type=Path, nargs="?", default=None,
                    help="Path to design_cases/<project> directory (omit when using --backfill)")
-    p.add_argument("--db", type=Path, default=knowledge_db.DEFAULT_DB_PATH,
-                   help="SQLite database path (default: knowledge/knowledge.sqlite)")
+    p.add_argument("--db", type=Path, default=_default_cli_db_path(),
+                   help="SQLite database path (default: R2G_KNOWLEDGE_DB, then "
+                        "knowledge/knowledge.sqlite)")
     p.add_argument("--schema", type=Path, default=knowledge_db.DEFAULT_SCHEMA_PATH,
                    help="Schema SQL path")
     p.add_argument("--families", type=Path, default=knowledge_db.DEFAULT_FAMILIES_PATH,

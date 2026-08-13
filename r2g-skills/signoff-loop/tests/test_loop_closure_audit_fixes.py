@@ -125,6 +125,30 @@ def test_ingest_skips_project_with_no_backend_and_no_ppa(tmp_path, monkeypatch):
     assert ran == []
 
 
+def test_ingest_passes_environment_db_to_subprocess(tmp_path, monkeypatch):
+    """An isolated engineer loop must not write arm runs into the shipped DB."""
+    stage_log = tmp_path / "backend" / "RUN_TEST" / "stage_log.jsonl"
+    stage_log.parent.mkdir(parents=True)
+    stage_log.write_text('{"stage":"synth","status":"success"}\n')
+    target = tmp_path / "isolated.sqlite"
+    monkeypatch.setenv("R2G_KNOWLEDGE_DB", str(target))
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = "Ingested run_id=arm-run-id\n"
+        stderr = ""
+
+    monkeypatch.setattr(
+        el.subprocess, "run",
+        lambda cmd, **kwargs: calls.append((cmd, kwargs)) or Result())
+
+    assert el._ingest({"design": "arm", "project_path": str(tmp_path)}) \
+        == "arm-run-id"
+    cmd = calls[0][0]
+    assert cmd[-2:] == ["--db", str(target)]
+
+
 def test_route_arm_with_no_backend_escalates_not_ingests(tmp_path, monkeypatch):
     proj = tmp_path / "d_abA_route_0"
     proj.mkdir()
