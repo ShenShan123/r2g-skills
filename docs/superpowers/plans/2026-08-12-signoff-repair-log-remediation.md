@@ -59,8 +59,9 @@ the check set. This is used only to create an A/B candidate, not a live promotio
 
 The copied Experiment-2 fixtures did not contain a completed `fmax_search` artifact, so
 their strict manifest remains blocked only on that pre-existing constraint-provenance
-requirement. No Fmax evidence was fabricated. The shipped knowledge database is also
-unchanged: `pin_side_rebalance` still requires a formal A/B promotion before blind live use.
+requirement. No Fmax evidence was fabricated. At this validation stage the shipped
+knowledge database was unchanged and `pin_side_rebalance` still required formal A/B
+promotion; the subsequent promotion campaign is recorded below.
 
 ## Eight-RTL controlled rerun
 
@@ -96,3 +97,51 @@ could be evaluated. The counted campaign used the pinned EDA tools and Python 3.
 with runner return code 0, and produced the independent result file at
 `r2g_exp2_v2_repair_d24a2cf_2026_08_12_run01/reports/experiment2_pilot_results.json`.
 Wall time is not compared because the rerun used a shared server under different load.
+
+## Formal A/B promotion
+
+The two residual designs were retained in the original held-out cohort and then reused as
+post-evaluation remediation evidence because naturally occurring, same-class repair-needed
+RTL is scarce. This promotion campaign is therefore not reported as an additional untouched
+held-out score. It tests whether the proposed action causes the improvement under controlled
+A/B execution.
+
+The clean campaign was
+`/home/yangao/r2g_ab_pin_side_2026_08_12_run05`. It used the code tree captured by commit
+`5fb9fb2`, Sky130HD at the frozen 10 ns period, two independent subjects (GCD and SDRAM),
+two repeats per arm, and two Recipe lifecycle keys (`logic/small` and `logic/medium`). This
+produced 16 physical arm runs and four provenance-complete trials.
+
+| Recipe key | GCD | SDRAM | Independent decisive evidence | Final state |
+|---|---|---|---:|---|
+| `logic/small / sky130hd` | win | inconclusive | 1 win, 0 losses | promoted |
+| `logic/medium / sky130hd` | win | win | 2 wins, 0 losses | promoted |
+
+For both GCD trials, the two control repeats retained the `m3.2` failure while both treated
+repeats cleared it and completed DRC, LVS, route, and timing without a global-regression
+veto. SDRAM was less deterministic: one lifecycle-key trial had neither arm complete and
+was correctly recorded as `both_arms_never_succeed`; the other produced two clean treated
+repeats against two failed controls. No inconclusive row was counted as a win and neither
+Recipe key accrued a loss.
+
+The formal run exposed and fixed two additional Agent defects before its evidence was
+accepted:
+
+1. `engineer_loop` queried the isolated `R2G_KNOWLEDGE_DB`, but its ingest subprocess used
+   an import-time default and wrote arm runs into the shipped database. The CLI and caller
+   now resolve and pass the same explicit database path.
+2. The first completed subject promoted the Recipe and incremented `status_version`; the
+   staleness guard then canceled the remaining subject from the same planned A/B corpus.
+   A lifecycle move produced by that same A/B corpus now preserves the remaining evidence,
+   while operator, regression, generation, and Recipe-content changes remain fail-closed.
+
+The isolated evidence was merged through `knowledge_sync.py`, not copied over the existing
+store. The merge added 18 runs, four trials, and their ownership/lineage records (108 rows
+in total). The tracked lifecycle rows now read `ab_corpus:1w0l` and `ab_corpus:2w0l`.
+All five production honesty gates remained green after the merge. The toolchain-bound
+signoff-loop suite passed with **1181 passed, 1 skipped**; the focused database-isolation
+and incremental-judge group passed **24/24**.
+
+Formal A/B promotion here is a Recipe-efficacy decision, not a graph-publication waiver.
+The original fixtures still lack frozen Fmax provenance, so they remain ineligible for a
+strict published graph until that independent constraint gate is satisfied.
