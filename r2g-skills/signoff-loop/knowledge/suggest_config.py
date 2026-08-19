@@ -260,6 +260,45 @@ def detect_design_type(project: Path, config: dict) -> str:
     return 'logic'
 
 
+def size_class(cell_count: int | None) -> str:
+    """Return the canonical lifecycle size band for a physical-design run."""
+    if not cell_count:
+        return 'unknown'
+    if cell_count < 100:
+        return 'tiny'
+    if cell_count < 5000:
+        return 'small'
+    if cell_count < 50000:
+        return 'medium'
+    return 'large'
+
+
+def detect_design_class(project: Path, config: dict) -> str:
+    """Return the canonical ``type/size`` key used by ingest and live repair.
+
+    PPA geometry is the authoritative post-flow evidence and is also what the
+    learner stores in ``runs.cell_count``.  A copied or archived project may no
+    longer carry its backend directory, so live diagnosis must not silently
+    downgrade that same run to ``*/unknown``.  Synthesis statistics remain the
+    fallback for projects that have not produced PPA evidence yet.
+    """
+    cell_count = None
+    ppa_path = project / 'reports' / 'ppa.json'
+    try:
+        ppa = json.loads(ppa_path.read_text(encoding='utf-8'))
+        geometry = ppa.get('geometry') or {}
+        cell_count = geometry.get('instance_count')
+        if cell_count is None:
+            cell_count = geometry.get('stdcell_count')
+        if cell_count is not None:
+            cell_count = int(cell_count)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        cell_count = None
+    if cell_count is None:
+        cell_count = parse_project_synth_stats(project).get('cell_count')
+    return f"{detect_design_type(project, config)}/{size_class(cell_count)}"
+
+
 def recommend(project: Path, use_learned: bool = True,
               db_path: Path | str | None = None) -> dict:
     """Generate parameter recommendations.

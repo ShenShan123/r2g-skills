@@ -55,6 +55,33 @@ def test_action_policy_blocks_footprint_change_but_keeps_allowed_pin_action(
     }]
 
 
+def test_timing_trial_policy_allows_only_registered_setup_margin(
+        tmp_path: Path, monkeypatch):
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(json.dumps({
+        "schema_version": "r2g-repair-action-policy-1.0",
+        "allowed_numeric_knobs": {
+            "SETUP_SLACK_MARGIN": {"minimum": 0.2, "maximum": 0.2}},
+        "allowed_string_knobs": {},
+        "allowed_sdc_edits": {},
+    }), encoding="utf-8")
+    monkeypatch.setenv("R2G_REPAIR_ACTION_POLICY_FILE", str(policy_path))
+    plan = {"status": "minor", "strategies": [
+        {"id": "setup_slack_margin",
+         "config_edits": {"SETUP_SLACK_MARGIN": "0.2"}, "sdc_edits": {}},
+        {"id": "utilization_reduce",
+         "config_edits": {"CORE_UTILIZATION": "20"}, "sdc_edits": {}},
+        {"id": "period_relax", "config_edits": {},
+         "sdc_edits": {"CLOCK_PERIOD": "11.0"}},
+    ]}
+
+    dsf._apply_repair_action_policy(plan)
+
+    assert [s["id"] for s in plan["strategies"]] == ["setup_slack_margin"]
+    assert {r["strategy"] for r in plan["action_policy_rejections"]} == {
+        "utilization_reduce", "period_relax"}
+
+
 def test_configured_but_unreadable_action_policy_fails_closed(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("R2G_REPAIR_ACTION_POLICY_FILE", str(tmp_path / "missing.json"))
     plan = {"status": "fail", "strategies": [

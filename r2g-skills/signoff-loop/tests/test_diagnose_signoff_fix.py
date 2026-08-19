@@ -38,10 +38,12 @@ def test_antenna_fail_yields_two_ordered_strategies_sky130hd():
     assert relief["CORE_UTILIZATION"] == "5"
 
 
-def test_antenna_fail_nangate45_offers_diode_repair():
+def test_antenna_fail_nangate45_offers_diode_repair(monkeypatch):
     """nangate45: now offers the diode-forced repair strategy (validated 2026-06-02).
     The FreePDK45 deck credits diodes not jumpers, so the strategy disables jumper repair
     and forces diode insertion via the DRT repair iterations."""
+    monkeypatch.setattr(d, "_antenna_precondition",
+                        lambda platform: (True, "test fixture"))
     cfg = {"CORE_UTILIZATION": "10", "PLATFORM": "nangate45"}
     plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, cfg, check="drc")
     ids = [s["id"] for s in plan["strategies"]]
@@ -330,6 +332,11 @@ def _mk_timing_project(tmp_path, *, sdc: str | None):
     return p
 
 
+def _isolated_knowledge_env(tmp_path):
+    return {**os.environ,
+            "R2G_KNOWLEDGE_DB": str(tmp_path / "isolated_knowledge.sqlite")}
+
+
 def test_apply_period_relax_missing_sdc_precondition_failed(tmp_path):
     """rc=0 with ZERO project effect reran a full backend stage and charged the
     unchanged failure against a never-applied recipe (issue 9). A missing
@@ -337,7 +344,8 @@ def test_apply_period_relax_missing_sdc_precondition_failed(tmp_path):
     p = _mk_timing_project(tmp_path, sdc=None)
     cfg_before = (p / "constraints" / "config.mk").read_text()
     r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
-                        "--apply", "period_relax"], capture_output=True, text=True)
+                        "--apply", "period_relax"], capture_output=True, text=True,
+                       env=_isolated_knowledge_env(tmp_path))
     assert r.returncode == 4
     out = json.loads(r.stdout)
     assert out["status"] == "precondition_failed" and out["applied"] is None
@@ -352,7 +360,8 @@ def test_apply_period_relax_unmatchable_sdc_precondition_failed(tmp_path):
     sdc = "create_clock -name clk -period $clk_period [get_ports clk]\n"
     p = _mk_timing_project(tmp_path, sdc=sdc)
     r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
-                        "--apply", "period_relax"], capture_output=True, text=True)
+                        "--apply", "period_relax"], capture_output=True, text=True,
+                       env=_isolated_knowledge_env(tmp_path))
     assert r.returncode == 4
     assert json.loads(r.stdout)["status"] == "precondition_failed"
     assert (p / "constraints" / "constraint.sdc").read_text() == sdc
@@ -364,7 +373,8 @@ def test_apply_period_relax_templated_sdc_verified(tmp_path):
         tmp_path, sdc="set clk_period 4.0\n"
                       "create_clock -name clk -period $clk_period [get_ports clk]\n")
     r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
-                        "--apply", "period_relax"], capture_output=True, text=True)
+                        "--apply", "period_relax"], capture_output=True, text=True,
+                       env=_isolated_knowledge_env(tmp_path))
     assert r.returncode == 0
     out = json.loads(r.stdout)
     assert out["status"] == "applied" and out["applied"] == "period_relax"
@@ -378,13 +388,66 @@ def test_apply_period_relax_literal_period_rewritten(tmp_path):
     p = _mk_timing_project(
         tmp_path, sdc="create_clock -name clk -period 4.0 [get_ports clk]\n")
     r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
-                        "--apply", "period_relax"], capture_output=True, text=True)
+                        "--apply", "period_relax"], capture_output=True, text=True,
+                       env=_isolated_knowledge_env(tmp_path))
     assert r.returncode == 0
     out = json.loads(r.stdout)
     assert out["status"] == "applied"
     text = (p / "constraints" / "constraint.sdc").read_text()
     assert f"-period {out['sdc_edits']['CLOCK_PERIOD']}" in text
     assert "-period 4.0" not in text
+
+
+def _mk_sky130hd_setup_margin_project(tmp_path):
+    p = _mk_project(
+        tmp_path,
+        config=("export DESIGN_NAME = t\n"
+                "export PLATFORM = sky130hd\n"
+                "export CORE_UTILIZATION = 30\n"))
+    (p / "reports" / "timing_check.json").write_text(json.dumps(
+        {"tier": "minor", "wns_ns": -0.018, "clock_period_ns": 10.0}))
+    (p / "reports" / "route.json").write_text(json.dumps(
+        {"status": "clean", "total_violations": 0, "completed": True}))
+    sdc = "create_clock -name clk -period 10.0 [get_ports clk]\n"
+    (p / "constraints" / "constraint.sdc").write_text(sdc)
+    return p, sdc
+
+
+def test_apply_setup_margin_changes_config_but_not_registered_clock(
+        tmp_path, monkeypatch, capsys):
+    """The A/B arm may force the candidate, but its material effect must be only
+    ORFS setup headroom.  The registered clock objective is immutable."""
+    p, sdc_before = _mk_sky130hd_setup_margin_project(tmp_path)
+    monkeypatch.setattr(d, "_annotate_live_gates",
+                        _fake_annotate(status="candidate"))
+    rc = d.main([str(p), "--check", "timing", "--apply", "setup_slack_margin",
+                 "--rank-first", "setup_slack_margin"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out["status"] == "applied"
+    assert out["config_edits"] == {"SETUP_SLACK_MARGIN": "0.2"}
+    assert "export SETUP_SLACK_MARGIN = 0.2" in (
+        p / "constraints" / "config.mk").read_text()
+    assert (p / "constraints" / "constraint.sdc").read_text() == sdc_before
+
+
+def test_setup_margin_requires_promoted_lifecycle_for_live_apply(
+        tmp_path, monkeypatch, capsys):
+    p, _ = _mk_sky130hd_setup_margin_project(tmp_path)
+    monkeypatch.setattr(d, "_annotate_live_gates",
+                        _fake_annotate(status="candidate"))
+    rc = d.main([str(p), "--check", "timing", "--apply", "setup_slack_margin"])
+    assert rc == 5
+    blocked = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert blocked["status"] == "lifecycle_blocked"
+    assert "SETUP_SLACK_MARGIN" not in (p / "constraints" / "config.mk").read_text()
+
+    monkeypatch.setattr(d, "_annotate_live_gates",
+                        _fake_annotate(status="promoted"))
+    rc = d.main([str(p), "--check", "timing", "--apply", "setup_slack_margin"])
+    assert rc == 0
+    applied = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert applied["status"] == "applied"
 
 
 def test_apply_config_strategy_reports_applied_status(tmp_path):
@@ -446,6 +509,9 @@ def _run_driver(proj, sd, max_iters=3):
                R2G_RUN_ORFS=str(sd / "run_orfs.sh"),
                R2G_RUN_DRC=str(sd / "run_drc.sh"),
                R2G_EXTRACT_DRC=str(sd / "extract_drc.py"),
+               # The real capability probe has its own tests below.  Keep this
+               # synthetic driver test independent of the host toolchain state.
+               R2G_ANTENNA_PRECHECK="0",
                # Isolate the negative-evidence/lifecycle gates from the SHIPPED store:
                # this is a functional strategy-application test, not a lifecycle test, so
                # it must not depend on the committed recipe_status (which happens to hold

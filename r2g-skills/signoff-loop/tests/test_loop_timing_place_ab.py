@@ -10,6 +10,7 @@ multi-hour signoff per repeat (the campaign stall). These tests lock:
   - the coverage guard skips arms that cannot diverge (no demote).
 """
 import json
+import subprocess
 from pathlib import Path
 
 import ab_runner
@@ -31,6 +32,7 @@ def test_symptom_check_routes_by_strategy(tmp_path):
     assert engineer_loop._symptom_check(conn, None, "core_util_relief") == "place"
     assert engineer_loop._symptom_check(conn, None, "period_relax") == "timing"
     assert engineer_loop._symptom_check(conn, None, "utilization_reduce") == "timing"
+    assert engineer_loop._symptom_check(conn, None, "setup_slack_margin") == "timing"
     # A DRC/LVS strategy with no special routing stays on the signoff path.
     assert engineer_loop._symptom_check(conn, None, "antenna_diode_repair") == "both"
     assert engineer_loop._symptom_check(conn, None, None) == "both"
@@ -249,21 +251,68 @@ def test_timing_arm_drives_check_timing(tmp_path, monkeypatch):
     assert seen["check"] == "timing"
 
 
+def test_run_fix_timing_ab_arm_adds_checker_only_strict_signoff(monkeypatch):
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs.get("env") or {}))
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(engineer_loop.subprocess, "run", fake_run)
+    rc = engineer_loop._run_fix({
+        "project_path": "/p", "platform": "sky130hd", "kind": "ab_arm",
+        "arm": "B", "strategy": "setup_slack_margin", "check": "timing"})
+    assert rc == 0
+    assert calls[0][0][-2:] == ["--check", "timing"]
+    assert calls[0][1]["R2G_FIX_RANK_FIRST"] == "setup_slack_margin"
+    assert calls[1][0][-4:] == ["--check", "both", "--max-iters", "0"]
+    assert "R2G_FIX_RANK_FIRST" not in calls[1][1]
+
+
+def test_run_fix_live_timing_does_not_add_ab_strict_scan(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        engineer_loop.subprocess, "run",
+        lambda argv, **kwargs: (calls.append(argv) or subprocess.CompletedProcess(argv, 0)))
+    assert engineer_loop._run_fix(
+        {"project_path": "/p", "platform": "sky130hd", "check": "timing"}) == 0
+    assert len(calls) == 1
+
+
 def test_arm_metric_timing_uses_timing_tier(tmp_path):
     """A timing arm judges on the ingested timing verdict (wns_ns/timing_tier), NOT the
     generic is_success — a timing miss never aborts the flow, so both arms reach a GDS."""
     conn = _conn(tmp_path)
-    for pp, tier, wns in (("/p/met", "clean", 0.4), ("/p/miss", "severe", -3.2)):
+    for pp, tier, wns in (("/p/met", "clean", 0.4),
+                          ("/p/minor", "minor", -0.016),
+                          ("/p/miss", "severe", -3.2)):
         conn.execute(
             "INSERT INTO runs (run_id, project_path, ingested_at, orfs_status, "
-            "timing_tier, wns_ns) VALUES (?,?,?,?,?,?)",
-            (pp, pp, "2026-06-24T00:00:00Z", "pass", tier, wns))
+            "drc_status, lvs_status, rcx_status, timing_tier, wns_ns) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (pp, pp, "2026-06-24T00:00:00Z", "pass", "clean", "clean",
+             "complete", tier, wns))
     conn.commit()
     met = engineer_loop._arm_metric(conn, "/p/met", timing=True)
+    minor = engineer_loop._arm_metric(conn, "/p/minor", timing=True)
     miss = engineer_loop._arm_metric(conn, "/p/miss", timing=True)
-    assert met["is_success"] is True and miss["is_success"] is False
+    assert met["is_success"] is True
+    assert minor["is_success"] is False  # auto-fixable is not strict timing closure
+    assert miss["is_success"] is False
     # judge: arm B (relaxed -> met) beats arm A (original -> miss).
-    assert ab_runner.judge_repeated([miss, miss], [met, met]) == "win"
+    assert ab_runner.judge_repeated([minor, minor], [met, met]) == "win"
+
+
+def test_arm_metric_timing_rejects_closed_timing_with_dirty_signoff(tmp_path):
+    conn = _conn(tmp_path)
+    conn.execute(
+        "INSERT INTO runs (run_id, project_path, ingested_at, orfs_status, "
+        "drc_status, lvs_status, rcx_status, timing_tier, wns_ns) "
+        "VALUES ('dirty','/p/dirty','t','pass','fail','clean','complete','clean',0.1)")
+    conn.commit()
+    metric = engineer_loop._arm_metric(conn, "/p/dirty", timing=True)
+    assert metric["is_success"] is False
+    assert metric["judged_on"] == "timing+strict_signoff"
 
 
 def test_arm_metric_timing_ondisk_fallback(tmp_path):
@@ -280,8 +329,10 @@ def test_arm_metric_timing_ondisk_fallback(tmp_path):
         json.dumps({"summary": {"timing": {"setup_wns": -2.1}}}))
     for pp in (met, miss):
         conn.execute("INSERT INTO runs (run_id, project_path, ingested_at, orfs_status, "
-                     "timing_tier, wns_ns) VALUES (?,?,?,?,NULL,NULL)",
-                     (str(pp), str(pp), "2026-06-25T00:00:00Z", "pass"))
+                     "drc_status, lvs_status, rcx_status, timing_tier, wns_ns) "
+                     "VALUES (?,?,?,?,?,?,?,NULL,NULL)",
+                     (str(pp), str(pp), "2026-06-25T00:00:00Z", "pass",
+                      "clean", "clean", "complete"))
     conn.commit()
     assert engineer_loop._arm_metric(conn, str(met), timing=True)["is_success"] is True
     assert engineer_loop._arm_metric(conn, str(miss), timing=True)["is_success"] is False

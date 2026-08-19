@@ -27,6 +27,9 @@ from pathlib import Path
 _LIVE_BLOCKED_LIFECYCLE = frozenset({"candidate", "shadow"})
 _REPAIR_POLICY_ENV = "R2G_REPAIR_ACTION_POLICY_FILE"
 _PIN_EDGE_DRC_RULES = frozenset({"m3.2"})
+_SETUP_MARGIN_PLATFORMS = frozenset({"sky130hd"})
+_SETUP_MARGIN_NS = 0.2
+_SETUP_MARGIN_MAX_DEFICIT_NS = 0.2
 
 
 def _effect_fp(strat: dict) -> str | None:
@@ -494,6 +497,32 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
     except (TypeError, ValueError):
         cur_util = 30
     strategies = []
+    # Three independent Sky130HD development witnesses closed small post-route
+    # setup misses (4.5--18 ps) with ORFS's timing-optimization margin while the
+    # registered clock period stayed byte-identical. Keep this deliberately
+    # narrow: it is not a substitute for RTL pipelining or a clock relaxation,
+    # and it must win a formal A/B trial before live use.
+    try:
+        setup_margin = float(cfg.get("SETUP_SLACK_MARGIN", "0"))
+    except (TypeError, ValueError):
+        setup_margin = 0.0
+    if (cfg.get("PLATFORM") in _SETUP_MARGIN_PLATFORMS
+            and routing_clean
+            and isinstance(wns, (int, float))
+            and math.isfinite(float(wns))
+            and -_SETUP_MARGIN_MAX_DEFICIT_NS <= float(wns) < 0
+            and setup_margin < _SETUP_MARGIN_NS):
+        strategies.append(
+            {"id": "setup_slack_margin",
+             "rationale": (
+                 f"Small post-route setup miss (WNS={float(wns):.6g} ns) on "
+                 "Sky130HD with clean routing: ask ORFS repair_timing for 0.2 ns "
+                 "of setup headroom without changing the registered clock period. "
+                 "Only applicable within the validated 0.2 ns deficit band."
+             ),
+             "config_edits": {"SETUP_SLACK_MARGIN": str(_SETUP_MARGIN_NS)},
+             "sdc_edits": {}, "rerun_from": "floorplan", "recheck": "timing",
+             "auto_apply": True, "requires_ab_promotion": True})
     if tier in ("moderate", "severe") and wns is not None:
         period = tcheck.get("clock_period_ns")
         if period:
@@ -547,7 +576,16 @@ def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
     is given, strategies are re-ranked by empirical clearance (fix_model)."""
     excl = set(exclude or ())
     if check == "timing":
-        routing_clean = (drc or {}).get("status") in ("clean", "clean_beol")
+        # A timing-only A/B arm has a fresh ORFS route.json but intentionally no
+        # inherited signoff reports, and it does not run the full DRC deck before
+        # diagnosis. Prefer that explicit backend route verdict; only fall back to
+        # strict DRC when route evidence is absent. An explicit dirty route must
+        # override a stale clean DRC report.
+        route_status = (route or {}).get("status")
+        if route_status not in (None, "", "unknown"):
+            routing_clean = route_status == "clean"
+        else:
+            routing_clean = (drc or {}).get("status") in ("clean", "clean_beol")
         plan = _timing_plan(tcheck or {}, cfg, excl, routing_clean=routing_clean)
     elif check == "drc":
         plan = _drc_plan(drc or {}, cfg, excl)
@@ -908,6 +946,7 @@ def _platform_count(strat: dict) -> int:
 
 
 def load_symptom_recipe(*, check: str, platform: str, drc: dict, lvs: dict,
+                        tcheck: dict | None = None,
                         heuristics: Path | None = None):
     """Return (recipe_entry, pooled_prior) for the current symptom, indexed by
     symptom_id (NOT family). recipe_entry = the current platform's by_platform
@@ -928,6 +967,9 @@ def load_symptom_recipe(*, check: str, platform: str, drc: dict, lvs: dict,
         report = drc
     elif check == "lvs":
         vclass, report = lvs.get("mismatch_class"), lvs
+    elif check == "timing":
+        report = tcheck or {}
+        vclass = report.get("tier")
     else:
         vclass, report = None, {}
     sig = symptom.canonical_signature(check, vclass, symptom.predicates_for(check, report))
@@ -953,7 +995,8 @@ def load_symptom_recipe(*, check: str, platform: str, drc: dict, lvs: dict,
 
 
 def load_indexed_recipe(*, check: str, platform: str, design_class: str,
-                        drc: dict, lvs: dict, heuristics: Path | None = None):
+                        drc: dict, lvs: dict, tcheck: dict | None = None,
+                        heuristics: Path | None = None):
     """Decision-8 lookup with relaxation: recipes[sid][design_class][platform]
     -> recipes[sid]['*'][platform] (pooled class) -> recipes[sid]['*']['*']
     (pooled platform). Returns (recipe_entry|None, pooled_prior, match_level).
@@ -970,8 +1013,13 @@ def load_indexed_recipe(*, check: str, platform: str, design_class: str,
         cats = drc.get("categories") or {}
         vclass = max(cats, key=lambda k: cats[k].get("count") or 0) if cats else None
         report = drc
-    else:
+    elif check == "lvs":
         vclass, report = lvs.get("mismatch_class"), lvs
+    elif check == "timing":
+        report = tcheck or {}
+        vclass = report.get("tier")
+    else:
+        vclass, report = None, {}
     sig = symptom.canonical_signature(check, vclass,
                                       symptom.predicates_for(check, report))
     bucket = recipes.get(symptom.symptom_id(sig)) or {}
@@ -1006,7 +1054,8 @@ def load_indexed_recipe(*, check: str, platform: str, design_class: str,
     return None, pooled, "none"
 
 
-def _current_vclass(check: str, drc: dict, lvs: dict) -> str | None:
+def _current_vclass(check: str, drc: dict, lvs: dict,
+                    tcheck: dict | None = None) -> str | None:
     """The dominant violation_class for the current symptom (same rule as
     load_symptom_recipe): DRC dominant category, else LVS mismatch_class."""
     if check == "drc":
@@ -1014,6 +1063,8 @@ def _current_vclass(check: str, drc: dict, lvs: dict) -> str | None:
         return max(cats, key=lambda k: cats[k].get("count") or 0) if cats else None
     if check == "lvs":
         return lvs.get("mismatch_class")
+    if check == "timing":
+        return (tcheck or {}).get("tier")
     return None
 
 
@@ -1147,12 +1198,7 @@ def main(argv=None) -> int:
     # recipes rank live. Falls back to the symptom/family path when absent.
     try:
         import suggest_config as _sc
-        _stats = _sc.parse_project_synth_stats(proj)
-        _cells = _stats.get("cell_count", 0)
-        _size = ("unknown" if not _cells else "tiny" if _cells < 100 else
-                 "small" if _cells < 5000 else "medium" if _cells < 50000
-                 else "large")
-        design_class = f"{_sc.detect_design_type(proj, cfg)}/{_size}"
+        design_class = _sc.detect_design_class(proj, cfg)
     except Exception:
         design_class = "unknown/unknown"
     # Route (backend-abort) symptoms index under check=orfs_stage/class=route, not
@@ -1174,13 +1220,14 @@ def main(argv=None) -> int:
     else:
         recipes = pooled = None
         idx_recipe, idx_pooled, idx_level = load_indexed_recipe(
-            check=args.check, platform=plat, design_class=design_class, drc=drc, lvs=lvs)
-    # The symptom key for this diagnosis (drc/lvs only): shared by the lifecycle
+            check=args.check, platform=plat, design_class=design_class,
+            drc=drc, lvs=lvs, tcheck=tcheck)
+    # The symptom key for this diagnosis: shared by the lifecycle
     # filter below and the negative-evidence gates (_annotate_live_gates).
     _sid = None
-    if args.check in ("drc", "lvs"):
-        _vc = _current_vclass(args.check, drc, lvs)
-        _report = drc if args.check == "drc" else lvs
+    if args.check in ("drc", "lvs", "timing"):
+        _vc = _current_vclass(args.check, drc, lvs, tcheck)
+        _report = {"drc": drc, "lvs": lvs, "timing": tcheck}.get(args.check) or {}
         _sid = symptom.symptom_id(symptom.canonical_signature(
             args.check, _vc, symptom.predicates_for(args.check, _report)))
     if args.check != "route" and idx_recipe is not None:
@@ -1204,7 +1251,8 @@ def main(argv=None) -> int:
                   file=sys.stderr)
             recipes, pooled = None, {}
     elif args.check != "route":
-        sym_recipe, pooled = load_symptom_recipe(check=args.check, platform=plat, drc=drc, lvs=lvs)
+        sym_recipe, pooled = load_symptom_recipe(
+            check=args.check, platform=plat, drc=drc, lvs=lvs, tcheck=tcheck)
         recipes = sym_recipe if sym_recipe is not None else _load_recipes(
             proj, check=args.check, drc=drc, lvs=lvs)
     plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
@@ -1231,7 +1279,7 @@ def main(argv=None) -> int:
               "failure-patterns #48); route execution order is static. Wire route indexed "
               "ranking before adding a second route strategy.", file=sys.stderr)
     attach_lessons(plan, check=args.check,
-                   vclass=_current_vclass(args.check, drc, lvs), platform=plat)
+                   vclass=_current_vclass(args.check, drc, lvs, tcheck), platform=plat)
     _annotate_live_gates(plan, proj, check=args.check, sid=_sid,
                          design_class=design_class, platform=plat)
 

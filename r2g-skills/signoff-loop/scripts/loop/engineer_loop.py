@@ -269,7 +269,7 @@ def _run_flow(entry: dict) -> int:
 # them to 'both' -> identical inert arms that can never promote and burn a full
 # multi-hour signoff per repeat (2026-06-24 audit, bugs #1/#3).
 _PLACE_STRATEGIES = frozenset({"core_util_relief"})
-_TIMING_STRATEGIES = frozenset({"period_relax", "utilization_reduce",
+_TIMING_STRATEGIES = frozenset({"setup_slack_margin", "period_relax", "utilization_reduce",
                                 "backend_aware_synth_retune"})
 # synth_memory_relax is a SYNTH backend-abort recovery (raise SYNTH_MEMORY_MAX_BITS +
 # pair a die auto-size): its A/B arm applies the recipe up-front and flows once, like the
@@ -422,11 +422,24 @@ def _run_fix(entry: dict) -> int:
             env["R2G_FIX_EXCLUDE"] = entry["strategy"]
         else:
             env["R2G_FIX_RANK_FIRST"] = entry["strategy"]
-    return subprocess.run(
+    rc = subprocess.run(
         ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
          entry["project_path"], entry["platform"], "--check",
          entry.get("check", "both")],
         env=env).returncode
+    if entry.get("kind") == "ab_arm" and entry.get("check") == "timing":
+        # A timing reflow changes placement/routing, so WNS closure alone cannot
+        # certify a signoff-safe Recipe. Measure DRC/LVS on BOTH arms after their
+        # timing path, with zero repair iterations: this is a checker-only pass,
+        # never a second intervention that could confound the tested action.
+        measure_env = dict(env)
+        measure_env.pop("R2G_FIX_EXCLUDE", None)
+        measure_env.pop("R2G_FIX_RANK_FIRST", None)
+        subprocess.run(
+            ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
+             entry["project_path"], entry["platform"], "--check", "both",
+             "--max-iters", "0"], env=measure_env)
+    return rc
 
 
 def _apply_recipe_strategy(entry: dict) -> None:
@@ -2241,8 +2254,9 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
     (or None if the arm produced no judgeable run). outcome_score is captured as
     an ORDERING HINT only — the verdict never depends on it (invariant H4).
 
-    For a TIMING arm, success is whether the design CLOSED timing (timing_tier in
-    {clean,minor} or WNS>=0), NOT the generic is_success: a timing miss does NOT abort
+    For a TIMING arm, success is whether the design CLOSED timing (timing_tier is
+    clean or WNS>=0) AND retained strict ORFS/DRC/LVS/RCX usability, NOT the
+    generic is_success: a timing miss does NOT abort
     the flow, so both arms reach a GDS and knowledge_db.is_success reads true for both
     -> every timing trial would be a tie -> inconclusive forever (2026-06-24 audit,
     bug #3-timing). The timing signal is the ingested wns_ns/timing_tier.
@@ -2277,7 +2291,20 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
             # ON-DISK timing verdict so a genuinely-closed arm isn't judged a failure
             # (2026-06-25). The verdict is the timing_check.json tier / ppa setup_wns.
             tier, wns = _ondisk_timing(project_path)
-        success = (tier in ("clean", "minor")) or (wns is not None and wns >= 0)
+        # ``minor`` means the live loop is allowed to ATTEMPT an automatic repair;
+        # it is still negative slack and therefore cannot certify an A/B promotion.
+        # Treating minor as success collapses a strict timing-repair experiment into
+        # a cost tiebreak (the untreated arm already "succeeds"), which can demote a
+        # real closure action merely because arm B performed the necessary reflow.
+        timing_closed = tier == "clean" or (wns is not None and wns >= 0)
+        strict_signoff = (
+            r.get("orfs_status") in ("pass", "complete")
+            and r.get("drc_status") in ("clean", "clean_beol")
+            and r.get("lvs_status") == "clean"
+            and r.get("rcx_status") == "complete"
+        )
+        success = timing_closed and strict_signoff
+        judged_on = "timing+strict_signoff"
     elif synth:
         # synth_memory_relax fixes the SYNTH memcap abort: judge on whether the flow got
         # PAST synth, not full signoff (an FF-expanded design may carry downstream DRC/LVS

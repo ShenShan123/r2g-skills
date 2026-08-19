@@ -44,6 +44,30 @@ def test_design_class_stamped_structurally(tmp_path):
     assert row[0] == "crypto/small"
 
 
+def test_ingest_and_live_classifier_share_external_verilog_closure(tmp_path):
+    """A promoted project may reference RTL outside project/rtl. Ingest and live
+    diagnosis must still derive the identical lifecycle design class."""
+    ext = tmp_path / "source" / "sha_core.v"
+    ext.parent.mkdir()
+    ext.write_text("module sha_core(); // sha cipher datapath\nendmodule\n")
+    p = tmp_path / "project"
+    (p / "constraints").mkdir(parents=True)
+    (p / "reports").mkdir()
+    (p / "constraints" / "config.mk").write_text(
+        f"export DESIGN_NAME = sha_core\nexport PLATFORM = sky130hd\n"
+        f"export VERILOG_FILES = {ext}\n")
+    (p / "reports" / "ppa.json").write_text(json.dumps(
+        {"summary": {}, "geometry": {"instance_count": 7000}}))
+    conn = _conn(tmp_path)
+    rid = ingest_run.ingest(p, conn)
+    stored = conn.execute(
+        "SELECT design_class FROM runs WHERE run_id=?", (rid,)).fetchone()[0]
+    cfg = ingest_run._parse_config_mk(p / "constraints" / "config.mk")
+    import suggest_config
+    live = suggest_config.detect_design_class(p, cfg)
+    assert stored == live == "crypto/medium"
+
+
 def test_first_attempt_clean_true_then_false_for_repeat(tmp_path):
     conn = _conn(tmp_path)
     p = _mk_project(tmp_path)
