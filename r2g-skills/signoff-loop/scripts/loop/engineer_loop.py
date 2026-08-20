@@ -269,7 +269,7 @@ def _run_flow(entry: dict) -> int:
 # them to 'both' -> identical inert arms that can never promote and burn a full
 # multi-hour signoff per repeat (2026-06-24 audit, bugs #1/#3).
 _PLACE_STRATEGIES = frozenset({"core_util_relief"})
-_TIMING_STRATEGIES = frozenset({"period_relax", "utilization_reduce",
+_TIMING_STRATEGIES = frozenset({"setup_slack_margin", "period_relax", "utilization_reduce",
                                 "backend_aware_synth_retune"})
 # synth_memory_relax is a SYNTH backend-abort recovery (raise SYNTH_MEMORY_MAX_BITS +
 # pair a die auto-size): its A/B arm applies the recipe up-front and flows once, like the
@@ -295,7 +295,7 @@ AB_INCONCLUSIVE_MAX = 3
 # because this static list is stale — only a fabricated/unapplyable strategy is caught.
 _KNOWN_APPLY_STRATEGIES = frozenset({
     "antenna_diode_repair", "antenna_diode_iters", "antenna_density_relief",
-    "density_relief", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
+    "density_relief", "pin_side_rebalance", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
     "beol_only_drc", "rerun_from_stage", "pdn_die_floor",
 }) | _PLACE_STRATEGIES | _TIMING_STRATEGIES | _SYNTH_STRATEGIES
 
@@ -334,6 +334,29 @@ def _recipe_status_version(conn, key: dict):
         return row[0] if row else None
     except Exception:
         return None
+
+
+def _lifecycle_move_is_same_ab_corpus(conn, key: dict) -> bool:
+    """True when the current lifecycle move was produced by A/B aggregation.
+
+    ``ab-drain`` judges completed subjects incrementally. The first subject can
+    therefore move candidate -> promoted/shadow while another subject from the
+    same planned cohort is still running. That transition changes no Recipe
+    content and must not invalidate the remaining independent evidence. External
+    moves (operator demotion, live regression, manual revalidation) retain the
+    fail-closed cancellation semantics.
+    """
+    if conn is None:
+        return False
+    try:
+        row = conn.execute(
+            "SELECT provenance FROM recipe_status WHERE symptom_id=? AND "
+            "design_class=? AND platform=? AND strategy=?",
+            (key["symptom_id"], key["design_class"], key["platform"],
+             key["strategy"])).fetchone()
+    except Exception:
+        return False
+    return bool(row and str(row[0] or "").startswith("ab_corpus"))
 
 
 def _known_apply_strategy(conn, strategy: str | None) -> bool:
@@ -399,11 +422,24 @@ def _run_fix(entry: dict) -> int:
             env["R2G_FIX_EXCLUDE"] = entry["strategy"]
         else:
             env["R2G_FIX_RANK_FIRST"] = entry["strategy"]
-    return subprocess.run(
+    rc = subprocess.run(
         ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
          entry["project_path"], entry["platform"], "--check",
          entry.get("check", "both")],
         env=env).returncode
+    if entry.get("kind") == "ab_arm" and entry.get("check") == "timing":
+        # A timing reflow changes placement/routing, so WNS closure alone cannot
+        # certify a signoff-safe Recipe. Measure DRC/LVS on BOTH arms after their
+        # timing path, with zero repair iterations: this is a checker-only pass,
+        # never a second intervention that could confound the tested action.
+        measure_env = dict(env)
+        measure_env.pop("R2G_FIX_EXCLUDE", None)
+        measure_env.pop("R2G_FIX_RANK_FIRST", None)
+        subprocess.run(
+            ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
+             entry["project_path"], entry["platform"], "--check", "both",
+             "--max-iters", "0"], env=measure_env)
+    return rc
 
 
 def _apply_recipe_strategy(entry: dict) -> None:
@@ -543,9 +579,15 @@ def _ingest(entry: dict) -> str | None:
     proj = Path(entry["project_path"])
     if not _has_backend_run(entry) and not (proj / "reports" / "ppa.json").exists():
         return None
-    r = subprocess.run(
-        [sys.executable, _script("R2G_LOOP_INGEST", KNOWLEDGE / "ingest_run.py"),
-         entry["project_path"]], capture_output=True, text=True)
+    cmd = [sys.executable,
+           _script("R2G_LOOP_INGEST", KNOWLEDGE / "ingest_run.py"),
+           entry["project_path"]]
+    # Keep A/B and test campaigns isolated. ingest_run's CLI also honors this
+    # environment variable, but passing it explicitly makes the subprocess
+    # contract auditable and protects against a future CLI-default regression.
+    if env_db := os.environ.get("R2G_KNOWLEDGE_DB"):
+        cmd.extend(["--db", env_db])
+    r = subprocess.run(cmd, capture_output=True, text=True)
     for tok in (r.stdout or "").split():
         if tok.startswith("run_id="):
             return tok.split("=", 1)[1]
@@ -2212,8 +2254,9 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
     (or None if the arm produced no judgeable run). outcome_score is captured as
     an ORDERING HINT only — the verdict never depends on it (invariant H4).
 
-    For a TIMING arm, success is whether the design CLOSED timing (timing_tier in
-    {clean,minor} or WNS>=0), NOT the generic is_success: a timing miss does NOT abort
+    For a TIMING arm, success is whether the design CLOSED timing (timing_tier is
+    clean or WNS>=0) AND retained strict ORFS/DRC/LVS/RCX usability, NOT the
+    generic is_success: a timing miss does NOT abort
     the flow, so both arms reach a GDS and knowledge_db.is_success reads true for both
     -> every timing trial would be a tie -> inconclusive forever (2026-06-24 audit,
     bug #3-timing). The timing signal is the ingested wns_ns/timing_tier.
@@ -2248,7 +2291,20 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
             # ON-DISK timing verdict so a genuinely-closed arm isn't judged a failure
             # (2026-06-25). The verdict is the timing_check.json tier / ppa setup_wns.
             tier, wns = _ondisk_timing(project_path)
-        success = (tier in ("clean", "minor")) or (wns is not None and wns >= 0)
+        # ``minor`` means the live loop is allowed to ATTEMPT an automatic repair;
+        # it is still negative slack and therefore cannot certify an A/B promotion.
+        # Treating minor as success collapses a strict timing-repair experiment into
+        # a cost tiebreak (the untreated arm already "succeeds"), which can demote a
+        # real closure action merely because arm B performed the necessary reflow.
+        timing_closed = tier == "clean" or (wns is not None and wns >= 0)
+        strict_signoff = (
+            r.get("orfs_status") in ("pass", "complete")
+            and r.get("drc_status") in ("clean", "clean_beol")
+            and r.get("lvs_status") == "clean"
+            and r.get("rcx_status") == "complete"
+        )
+        success = timing_closed and strict_signoff
+        judged_on = "timing+strict_signoff"
     elif synth:
         # synth_memory_relax fixes the SYNTH memcap abort: judge on whether the flow got
         # PAST synth, not full signoff (an FF-expanded design may carry downstream DRC/LVS
@@ -2403,7 +2459,9 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         _planned_sv = pair["B"][0].get("recipe_status_version")
         if _planned_sv is not None:
             _cur_sv = _recipe_status_version(conn, pair["B"][0]["ab_key"])
-            if _cur_sv is not None and _cur_sv != _planned_sv:
+            if (_cur_sv is not None and _cur_sv != _planned_sv
+                    and not _lifecycle_move_is_same_ab_corpus(
+                        conn, pair["B"][0]["ab_key"])):
                 print(f"[loop] A/B trial CANCELLED (lifecycle moved: "
                       f"status_version {_planned_sv}->{_cur_sv}): {strat}")
                 for entries in pair.values():

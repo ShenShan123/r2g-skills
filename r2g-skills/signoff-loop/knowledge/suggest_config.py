@@ -142,10 +142,15 @@ class _SkipLearned(Exception):
 
 
 def parse_synth_stats(synth_dir: Path) -> dict:
-    """Parse Yosys stat output from synth.log for cell counts."""
+    """Parse legacy ``synth.log`` or an ORFS ``synth_stat.txt`` directory."""
     stats = {}
-    synth_log = synth_dir / 'synth.log'
-    if not synth_log.exists():
+    candidates = (
+        synth_dir if synth_dir.is_file() else synth_dir / 'synth.log',
+        synth_dir / 'synth_stat.txt',
+        synth_dir / 'reports_orfs' / 'synth_stat.txt',
+    )
+    synth_log = next((path for path in candidates if path.is_file()), None)
+    if synth_log is None:
         return stats
 
     text = synth_log.read_text(encoding='utf-8', errors='ignore')
@@ -159,7 +164,45 @@ def parse_synth_stats(synth_dir: Path) -> dict:
     for m in re.finditer(r'Chip area for module.*?:\s+([\d.]+)', text):
         stats['synth_area'] = float(m.group(1))
 
+    # Recent ORFS ``reports_orfs/synth_stat.txt`` uses a tabular stat format:
+    # ``3358 3.78E+04 3358 3.78E+04 cells``.  The first count includes
+    # submodules and is the value used by the learner's size buckets.
+    if 'cell_count' not in stats:
+        match = re.search(r'(?m)^\s*(\d+)\s+\S+\s+\d+\s+\S+\s+cells\s*$', text)
+        if match:
+            stats['cell_count'] = int(match.group(1))
+    if 'wire_count' not in stats:
+        match = re.search(r'(?m)^\s*(\d+)\s+\S+\s+\d+\s+\S+\s+wires\s*$', text)
+        if match:
+            stats['wire_count'] = int(match.group(1))
+
     return stats
+
+
+def parse_project_synth_stats(project: Path) -> dict:
+    """Resolve synthesis statistics from the project or its newest backend run.
+
+    Historical projects copied synthesis evidence into ``project/synth``.  The
+    current flow keeps it under ``backend/RUN_*/reports_orfs``.  Diagnosis must
+    understand both layouts or every normal backend run is misclassified as
+    ``*/unknown`` and misses design-class-scoped promoted Recipes.
+    """
+    legacy = parse_synth_stats(project / 'synth')
+    if legacy.get('cell_count'):
+        return legacy
+    backend = project / 'backend'
+    if not backend.is_dir():
+        return legacy
+    runs = sorted(
+        (path for path in backend.iterdir() if path.is_dir() and path.name.startswith('RUN_')),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+        reverse=True,
+    )
+    for run in runs:
+        stats = parse_synth_stats(run / 'reports_orfs')
+        if stats.get('cell_count'):
+            return stats
+    return legacy
 
 
 def parse_config_mk(config_path: Path) -> dict:
@@ -217,6 +260,45 @@ def detect_design_type(project: Path, config: dict) -> str:
     return 'logic'
 
 
+def size_class(cell_count: int | None) -> str:
+    """Return the canonical lifecycle size band for a physical-design run."""
+    if not cell_count:
+        return 'unknown'
+    if cell_count < 100:
+        return 'tiny'
+    if cell_count < 5000:
+        return 'small'
+    if cell_count < 50000:
+        return 'medium'
+    return 'large'
+
+
+def detect_design_class(project: Path, config: dict) -> str:
+    """Return the canonical ``type/size`` key used by ingest and live repair.
+
+    PPA geometry is the authoritative post-flow evidence and is also what the
+    learner stores in ``runs.cell_count``.  A copied or archived project may no
+    longer carry its backend directory, so live diagnosis must not silently
+    downgrade that same run to ``*/unknown``.  Synthesis statistics remain the
+    fallback for projects that have not produced PPA evidence yet.
+    """
+    cell_count = None
+    ppa_path = project / 'reports' / 'ppa.json'
+    try:
+        ppa = json.loads(ppa_path.read_text(encoding='utf-8'))
+        geometry = ppa.get('geometry') or {}
+        cell_count = geometry.get('instance_count')
+        if cell_count is None:
+            cell_count = geometry.get('stdcell_count')
+        if cell_count is not None:
+            cell_count = int(cell_count)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        cell_count = None
+    if cell_count is None:
+        cell_count = parse_project_synth_stats(project).get('cell_count')
+    return f"{detect_design_type(project, config)}/{size_class(cell_count)}"
+
+
 def recommend(project: Path, use_learned: bool = True,
               db_path: Path | str | None = None) -> dict:
     """Generate parameter recommendations.
@@ -231,7 +313,7 @@ def recommend(project: Path, use_learned: bool = True,
     """
     config_path = project / 'constraints' / 'config.mk'
     config = parse_config_mk(config_path)
-    synth_stats = parse_synth_stats(project / 'synth')
+    synth_stats = parse_project_synth_stats(project)
     design_type = detect_design_type(project, config)
     cell_count = synth_stats.get('cell_count', 0)
     platform = config.get('PLATFORM', 'nangate45')
