@@ -770,6 +770,8 @@ def main() -> None:
             "synth_variant": retry_base.get("synth_variant", ""),
             "synth_memory_max_bits": retry_base.get("synth_memory_max_bits", ""),
             "synth_frontend": retry_base.get("synth_frontend", ""),
+            "expander_bridge_manifest": retry_base.get("expander_bridge_manifest", ""),
+            "expander_design_id": retry_base.get("expander_design_id", ""),
             "notes": retry_base.get("notes", ""),
         }
 
@@ -953,6 +955,8 @@ def main() -> None:
             "synth_variant",
             "synth_memory_max_bits",
             "synth_frontend",
+            "expander_bridge_manifest",
+            "expander_design_id",
             "notes",
         ]
         args.retry_autofix_csv.parent.mkdir(parents=True, exist_ok=True)

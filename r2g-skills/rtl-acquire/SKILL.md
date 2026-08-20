@@ -10,6 +10,14 @@ Execute a staged, artifact-first corpus-expansion workflow for discovered RTL:
 deterministic scripts and policy files; treat the workspace ledgers and
 manifests as the source of truth.
 
+For Internet-scale acquisition, use the embedded
+`vendor/rtl-expander/` engine. It owns safe repository discovery, immutable
+revision acquisition, top/closure recovery, corpus certification, family
+deduplication, and scheduler statistics. R2G consumes only a `CERTIFIED`
+rtl-expander snapshot through
+`scripts/acquire/import_expander_snapshot.py`; never read its live frontier,
+queues, mutable manifests, or partially completed rounds directly.
+
 Positioned **upstream** of the other r2g-skills: it feeds a stream of screened,
 synthesized, graph-converted designs. It **never runs place/route or signoff**
 — hand a promising design to `signoff-loop` for that.
@@ -24,6 +32,30 @@ OWNS (the heart — genuinely net-new for r2g):
   quality scoring, publish eligibility gating, the merged corpus manifest.
 - **repair/** — deterministic frontend repair (include dirs, stubs, memory
   limits, template materialization) + the JSON failure casebook (journal-side).
+
+The embedded expander is an acquisition engine, not a fifth R2G sub-skill.
+After its certified snapshot is imported, the existing rtl-acquire expansion,
+repair, graph, publish, and signoff handoff contracts remain authoritative.
+
+## rtl-expander snapshot handoff
+
+```bash
+python3 scripts/run_expansion_round.py \
+  --expander-corpus-root /path/to/rtl_corpus \
+  --expander-view public_export_allowed \
+  --priorities high medium
+```
+
+The importer fails closed unless the snapshot is certified and all release,
+manifest, source-path, source-byte, commit, and public-license bindings verify.
+It emits a digest-bound bridge manifest, which `expand_candidates.py` verifies
+again immediately before synthesis.
+
+For formal Cold/Warm acquisition comparisons, Cold uses a fresh corpus root.
+Warm also uses a fresh corpus root, then imports only a frozen scheduler-memory
+artifact with `vendor/rtl-expander/scripts/scheduler_memory.py`. Never reuse a
+prior corpus root: that would leak candidates, query cursors, and provider state
+in addition to the intended aggregate scheduling evidence.
 
 BORROWS (converged onto sibling sub-skills — never reimplement these here):
 - **env/toolchain** — the shared byte-identical `scripts/flow/_env.sh` +
