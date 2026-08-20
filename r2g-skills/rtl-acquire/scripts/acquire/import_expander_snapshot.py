@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Any
 
 
-BRIDGE_SCHEMA = "r2g_rtl_expander_bridge_v1"
+BRIDGE_SCHEMA = "r2g_rtl_expander_bridge_v2"
+LEGACY_BRIDGE_SCHEMA = "r2g_rtl_expander_bridge_v1"
 RELEASE_SCHEMA = "rtl_corpus_release_identity_v1"
 CERTIFICATION_SCHEMA = "rtl_corpus_certification_v1"
 VIEWS = {
@@ -31,7 +32,7 @@ DEFAULT_LANGUAGES = {"verilog", "systemverilog"}
 CSV_FIELDS = [
     "source", "design", "priority", "expected_top", "source_path",
     "rtl_files", "include_dirs", "top_parameters", "resource_tier", "notes",
-    "expander_bridge_manifest", "expander_design_id",
+    "function_category", "expander_bridge_manifest", "expander_design_id",
 ]
 
 
@@ -205,6 +206,7 @@ def _candidate_from_record(record: dict[str, Any], corpus_root: Path,
     if not isinstance(parameters, dict):
         raise SnapshotError(f"{design_id}: parameters must be an object")
     top_parameters = ";".join(f"{key}={parameters[key]}" for key in sorted(parameters))
+    function_category = str((record.get("functional_ontology") or {}).get("label") or "other")
     design = f"exp_{design_id}"
     notes = (
         f"rtl-expander snapshot={snapshot_id}; design_id={design_id}; "
@@ -221,6 +223,7 @@ def _candidate_from_record(record: dict[str, Any], corpus_root: Path,
         "top_parameters": top_parameters,
         "resource_tier": _resource_tier(record),
         "notes": notes,
+        "function_category": function_category,
         "expander_bridge_manifest": "",  # filled after the output path is known
         "expander_design_id": design_id,
     }
@@ -236,6 +239,7 @@ def _candidate_from_record(record: dict[str, Any], corpus_root: Path,
         "release_policy": release.get("release_policy"),
         "top_module": top,
         "top_parameters": top_parameters,
+        "function_category": function_category,
         "source_root": str(source_root),
         "compile_source_files": [str(path) for path in compile_paths],
         "include_dirs": [str(path) for path in include_paths],
@@ -277,7 +281,8 @@ def _verified_bridge(path_text: str, content_sha256: str) -> dict[str, Any]:
     if sha256_file(bridge_path) != content_sha256:
         raise SnapshotError("rtl-expander bridge changed while being loaded")
     bridge = _read_json(bridge_path)
-    if bridge.get("schema") != BRIDGE_SCHEMA or bridge_digest(bridge) != bridge.get("bridge_sha256"):
+    schema = bridge.get("schema")
+    if schema not in {BRIDGE_SCHEMA, LEGACY_BRIDGE_SCHEMA} or bridge_digest(bridge) != bridge.get("bridge_sha256"):
         raise SnapshotError("rtl-expander bridge digest mismatch")
     corpus_root = Path(str(bridge.get("corpus_root") or "")).resolve(strict=True)
     snapshot = resolve_snapshot(corpus_root, str(bridge.get("snapshot_id") or ""))
@@ -301,6 +306,8 @@ def _verified_bridge(path_text: str, content_sha256: str) -> dict[str, Any]:
         seen.add(design_id)
         _row, expected = _candidate_from_record(
             records[design_id], corpus_root, snapshot.name, str(bridge["view"]))
+        if schema == LEGACY_BRIDGE_SCHEMA:
+            expected.pop("function_category", None)
         if canonical_bytes(expected) != canonical_bytes(candidate):
             raise SnapshotError(f"bridge candidate differs from certified manifest: {design_id}")
     if not seen:
@@ -396,6 +403,9 @@ def verified_candidate_provenance(candidate: dict[str, str], source_paths: list[
         raise SnapshotError("candidate top does not match rtl-expander bridge")
     if record.get("top_parameters", "") != (candidate.get("top_parameters") or "").strip():
         raise SnapshotError("candidate parameters differ from rtl-expander bridge")
+    candidate_category = (candidate.get("function_category") or "").strip()
+    if candidate_category and candidate_category != str(record.get("function_category") or ""):
+        raise SnapshotError("candidate function category differs from rtl-expander bridge")
     expected_sources = [str(Path(value).resolve()) for value in record.get("compile_source_files") or []]
     actual_sources = [str(Path(value).resolve()) for value in source_paths]
     if actual_sources != expected_sources:

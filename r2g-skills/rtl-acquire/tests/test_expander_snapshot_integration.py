@@ -58,6 +58,7 @@ def _write_certified_snapshot(root: Path, *, certified: bool = True) -> tuple[Pa
             "repository_revision_key": "github:example/core@" + "a" * 40,
         },
         "synthesis": {"generic_pass": True},
+        "functional_ontology": {"label": "arithmetic", "confidence": "HIGH"},
         "quality": {"training_tier": "TRAINING_GOLD"},
         "resource": {"class": "SMALL"},
     }
@@ -106,6 +107,7 @@ def test_certified_snapshot_import_and_pre_synth_reverification(tmp_path: Path):
     assert provenance["source_commit"] == "a" * 40
     assert provenance["license_status"] == "allow"
     assert provenance["expander_provenance"]["snapshot_id"] == "release-001"
+    assert row["function_category"] == "arithmetic"
 
 
 def test_noncertified_snapshot_is_rejected(tmp_path: Path):
@@ -167,3 +169,23 @@ def test_candidate_cannot_borrow_bridge_for_different_top(tmp_path: Path):
             row, [Path(value) for value in row["rtl_files"].split(";")],
             [Path(value) for value in row["include_dirs"].split(";")],
         )
+
+
+def test_legacy_v1_bridge_remains_verifiable(tmp_path: Path):
+    corpus, _rtl = _write_certified_snapshot(tmp_path)
+    output_csv = tmp_path / "candidates.csv"
+    bridge_path = tmp_path / "bridge.json"
+    bridge.import_snapshot(corpus, None, "public_export_allowed", output_csv, bridge_path)
+    payload = json.loads(bridge_path.read_text())
+    payload["schema"] = bridge.LEGACY_BRIDGE_SCHEMA
+    for candidate in payload["candidates"]:
+        candidate.pop("function_category", None)
+    payload["bridge_sha256"] = bridge.bridge_digest(payload)
+    bridge_path.write_bytes(bridge.canonical_bytes(payload))
+    row = next(csv.DictReader(output_csv.open(newline="", encoding="utf-8")))
+    row["function_category"] = ""
+    provenance = bridge.verified_candidate_provenance(
+        row, [Path(value) for value in row["rtl_files"].split(";")],
+        [Path(value) for value in row["include_dirs"].split(";")],
+    )
+    assert provenance["expander_provenance"]["snapshot_id"] == "release-001"

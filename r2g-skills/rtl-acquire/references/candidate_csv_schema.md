@@ -46,6 +46,11 @@ It complements the shorter contract in `SKILL.md` with more operational detail.
 - `resource_tier`
   - use `high` for memory-heavy or long-tail large designs
 
+- `function_category`
+  - certified rtl-expander ontology label used for diversity-aware selection
+  - advisory for ordinary hand-authored candidates; digest-bound and
+    authoritative when emitted through an Expander bridge
+
 - `notes`
   - free-form human annotation
 

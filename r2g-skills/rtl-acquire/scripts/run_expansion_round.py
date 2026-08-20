@@ -35,6 +35,7 @@ PYTHON_BIN = default_python_bin()
 DOWNLOADS_ROOT = default_downloads_root()
 DISCOVER_SCRIPT = SCRIPT_DIR / "acquire" / "discover_download_candidates.py"
 IMPORT_EXPANDER_SCRIPT = SCRIPT_DIR / "acquire" / "import_expander_snapshot.py"
+SELECT_EXPANDER_SCRIPT = SCRIPT_DIR / "acquire" / "select_expander_qualified_candidates.py"
 CLASSIFY_SCRIPT = SCRIPT_DIR / "repair" / "classify_failed_candidates.py"
 FAILURE_KB_CANDIDATES_SCRIPT = SCRIPT_DIR / "repair" / "extract_failure_kb_candidates.py"
 REFRESH_FAILURE_KB_SCRIPT = SCRIPT_DIR / "repair" / "refresh_failure_knowledge_base.py"
@@ -160,6 +161,39 @@ def candidate_count(path: Path) -> int:
         return 0
     lines = path.read_text(encoding="utf-8").strip().splitlines()
     return max(0, len(lines) - 1)
+
+
+def defer_high_resource_candidates(candidate_csv: Path, active_csv: Path,
+                                   deferred_csv: Path) -> tuple[Path, int]:
+    """Keep predicted high-cost designs out of the bounded formal main track.
+
+    This is a cost prediction, not a claim that the design is truly >= the
+    mapped-cell ceiling. Deferred rows remain digest-bound to the same Expander
+    bridge and are retained for a separate large-design qualification track.
+    """
+    with candidate_csv.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            raise ValueError(f"candidate CSV has no header: {candidate_csv}")
+        fields = list(reader.fieldnames)
+        rows = list(reader)
+    deferred = [row for row in rows
+                if (row.get("resource_tier") or "").strip().lower() == "high"]
+    active = [row for row in rows
+              if (row.get("resource_tier") or "").strip().lower() != "high"]
+
+    def write_rows(path: Path, values: list[dict[str, str]]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
+        with temporary.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(values)
+        os.replace(temporary, path)
+
+    write_rows(active_csv, active)
+    write_rows(deferred_csv, deferred)
+    return active_csv, len(deferred)
 
 
 def load_candidate_designs(path: Path) -> list[str]:
@@ -346,6 +380,23 @@ def main() -> None:
                         default="public_export_allowed")
     parser.add_argument("--expander-out", type=Path,
                         default=WORKSPACE_ROOT / "candidates" / "rtl_expander_candidates.csv")
+    parser.add_argument("--expander-formal-target", type=int, default=0,
+                        help="After R2G qualification, select this many balanced candidates; 0 disables formal selection.")
+    parser.add_argument("--expander-formal-platform", default="sky130hd",
+                        help="Frozen ORFS platform used by formal Expander qualification.")
+    parser.add_argument("--expander-qualified-out", type=Path,
+                        default=WORKSPACE_ROOT / "candidates" / "rtl_expander_qualified_selected.csv")
+    parser.add_argument("--expander-selection-manifest", type=Path,
+                        default=WORKSPACE_ROOT / "manifests" / "rtl_expander_qualified_selection.json")
+    parser.add_argument("--expander-large-design-out", type=Path,
+                        default=WORKSPACE_ROOT / "candidates" / "rtl_expander_large_design_track.csv")
+    parser.add_argument("--expander-cost-deferred-out", type=Path,
+                        default=WORKSPACE_ROOT / "candidates" / "rtl_expander_cost_deferred.csv")
+    parser.add_argument("--expander-min-mapped-cells", type=int, default=100)
+    parser.add_argument("--expander-max-mapped-cells-exclusive", type=int, default=100000)
+    parser.add_argument("--expander-max-per-repository", type=int, default=4)
+    parser.add_argument("--expander-defer-high-resource", action="store_true",
+                        help="Cost guard: defer Expander resource_tier=high rows to a supplementary track before ORFS.")
     parser.add_argument("--downloads-root", type=Path, default=DOWNLOADS_ROOT)
     parser.add_argument("--discovered-out", type=Path, default=WORKSPACE_ROOT / "candidates" / "downloads_discovered_candidates.csv")
     parser.add_argument("--priorities", nargs="+", default=["high", "medium", "low"])
@@ -405,6 +456,8 @@ def main() -> None:
         "candidate_csv": str(args.candidate_csv) if args.candidate_csv else "",
         "expander_corpus_root": str(args.expander_corpus_root) if args.expander_corpus_root else "",
         "expander_snapshot": args.expander_snapshot or "",
+        "expander_formal_target": args.expander_formal_target,
+        "expander_formal_platform": args.expander_formal_platform,
         "priorities": args.priorities,
         "active_command": "",
         "last_output_line": "",
@@ -453,6 +506,10 @@ def main() -> None:
         intake_modes = int(args.candidate_csv is not None) + int(args.discover) + int(args.expander_corpus_root is not None)
         if intake_modes > 1:
             raise SystemExit("choose exactly one intake mode: --candidate-csv, --discover, or --expander-corpus-root")
+        if args.expander_formal_target and args.expander_corpus_root is None:
+            raise SystemExit("--expander-formal-target requires --expander-corpus-root")
+        if args.expander_formal_target < 0:
+            raise SystemExit("--expander-formal-target cannot be negative")
 
         if args.clone_missing and args.repo_manifest_csv is None:
             payload["state"] = "failed"
@@ -493,6 +550,14 @@ def main() -> None:
                 import_cmd.extend(["--snapshot", args.expander_snapshot])
             run(import_cmd, status_path=args.status_json, log_path=args.status_log, payload=payload)
             candidate_csv = args.expander_out
+            if args.expander_formal_target and args.expander_defer_high_resource:
+                payload["phase"] = "expander_cost_guard"
+                active_csv = args.expander_out.with_name(
+                    f"{args.expander_out.stem}.bounded{args.expander_out.suffix}")
+                candidate_csv, deferred_count = defer_high_resource_candidates(
+                    args.expander_out, active_csv, args.expander_cost_deferred_out)
+                payload["expander_cost_deferred_count"] = deferred_count
+                payload["expander_cost_deferred_csv"] = str(args.expander_cost_deferred_out)
             payload["candidate_csv"] = str(candidate_csv)
             payload["updated_at"] = now_iso()
             write_status(args.status_json, payload)
@@ -554,6 +619,8 @@ def main() -> None:
                 status_path=args.status_json,
                 log_path=args.status_log,
                 payload=payload,
+                extra_env=({"R2G_ACQUIRE_PLATFORM": args.expander_formal_platform}
+                           if args.expander_formal_target else None),
             )
             run_manifest["commands"].append({"phase": payload["phase"], "cmd": batch_cmd})
 
@@ -607,6 +674,8 @@ def main() -> None:
                 status_path=args.status_json,
                 log_path=args.status_log,
                 payload=payload,
+                extra_env=({"R2G_ACQUIRE_PLATFORM": args.expander_formal_platform}
+                           if args.expander_formal_target else None),
             )
             if not args.skip_classify:
                 payload["phase"] = "reclassify_failures"
@@ -617,6 +686,30 @@ def main() -> None:
                 if mutation_policy.get("allow_failure_kb_refresh", True) and repair_policy.get("enable_failure_kb_refresh", True):
                     payload["phase"] = "refresh_failure_knowledge_base"
                     run([PYTHON_BIN, str(REFRESH_FAILURE_KB_SCRIPT)], status_path=args.status_json, log_path=args.status_log, payload=payload)
+
+        if args.expander_formal_target:
+            payload["phase"] = "select_expander_qualified_candidates"
+            selection_cmd = [
+                PYTHON_BIN,
+                str(SELECT_EXPANDER_SCRIPT),
+                "--candidate-csv", str(candidate_csv),
+                "--qualification-index", str(OUT_ROOT / "index.csv"),
+                "--out-root", str(OUT_ROOT),
+                "--output-csv", str(args.expander_qualified_out),
+                "--selection-manifest", str(args.expander_selection_manifest),
+                "--large-design-csv", str(args.expander_large_design_out),
+                "--target", str(args.expander_formal_target),
+                "--minimum-mapped-cells", str(args.expander_min_mapped_cells),
+                "--maximum-mapped-cells-exclusive", str(args.expander_max_mapped_cells_exclusive),
+                "--max-candidates-per-repository", str(args.expander_max_per_repository),
+                "--platform", args.expander_formal_platform,
+                "--require-target",
+            ]
+            run(selection_cmd, status_path=args.status_json, log_path=args.status_log,
+                payload=payload)
+            payload["expander_qualified_csv"] = str(args.expander_qualified_out)
+            payload["expander_selection_manifest"] = str(args.expander_selection_manifest)
+            run_manifest["commands"].append({"phase": payload["phase"], "cmd": selection_cmd})
 
         # Project frontend failure classes into each failed candidate's
         # reports/diagnosis.json and re-ingest, so knowledge.sqlite

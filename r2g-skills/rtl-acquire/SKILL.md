@@ -51,6 +51,40 @@ manifest, source-path, source-byte, commit, and public-license bindings verify.
 It emits a digest-bound bridge manifest, which `expand_candidates.py` verifies
 again immediately before synthesis.
 
+For a bounded formal Experiment-1 batch, use the complete two-level handoff:
+
+```bash
+python3 scripts/run_expansion_round.py \
+  --expander-corpus-root /path/to/rtl_corpus \
+  --expander-view public_export_allowed \
+  --expander-formal-target 25 \
+  --expander-min-mapped-cells 100 \
+  --expander-max-mapped-cells-exclusive 100000 \
+  --expander-max-per-repository 4 \
+  --expander-defer-high-resource \
+  --run-retry
+```
+
+This mode preserves the certified broad corpus, runs the ordinary R2G
+Sky130HD qualification path, rejects incomplete compile collateral, and writes
+a deterministic selection balanced across repository, Expander functional
+ontology, and mapped-cell stratum. It fails closed when the requested target
+cannot be filled. `resource_tier=high` candidates are retained in
+`rtl_expander_cost_deferred.csv`; measured candidates at or above the cell
+ceiling are retained in `rtl_expander_large_design_track.csv`. Neither class
+is deleted or mislabeled as an RTL correctness failure.
+
+Formal artifacts are:
+
+- `workspace/candidates/rtl_expander_qualified_selected.csv`
+- `workspace/manifests/rtl_expander_qualified_selection.json`
+- `workspace/candidates/rtl_expander_large_design_track.csv`
+- `workspace/candidates/rtl_expander_cost_deferred.csv`
+
+The selection manifest binds the candidate CSV, certified bridge,
+qualification index, policy, output digest, exclusion reasons, and selected
+repository/function/size distributions.
+
 For formal Cold/Warm acquisition comparisons, Cold uses a fresh corpus root.
 Warm also uses a fresh corpus root, then imports only a frozen scheduler-memory
 artifact with `vendor/rtl-expander/scripts/scheduler_memory.py`. Never reuse a

@@ -14,6 +14,14 @@ verifies and translates those snapshots into the existing candidate contract.
 Do not couple downstream ORFS, signoff, or graph stages to expander frontier or
 queue internals.
 
+Formal Experiment-1 intake is deliberately two-level. Expander supplies the
+broad certified discovery pool; R2G then performs the frozen platform
+qualification and creates a digest-bound, diversity-aware selection manifest.
+The selector balances certified functional ontology, repository, and mapped
+size while enforcing the compilation-closure and repository-cap gates. High
+predicted-cost and measured oversize candidates are retained in supplementary
+tracks rather than deleted or counted as RTL failures.
+
 Cold/Warm experiments use `scripts/scheduler_memory.py`. Its Warm artifact is
 scheduler-only and intentionally excludes prior repositories, candidates,
 exact queries, cursors, attempts, and provider state. Yield rows are reduced to
