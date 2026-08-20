@@ -34,6 +34,7 @@ WORKSPACE_ROOT = default_workspace_root()
 PYTHON_BIN = default_python_bin()
 DOWNLOADS_ROOT = default_downloads_root()
 DISCOVER_SCRIPT = SCRIPT_DIR / "acquire" / "discover_download_candidates.py"
+IMPORT_EXPANDER_SCRIPT = SCRIPT_DIR / "acquire" / "import_expander_snapshot.py"
 CLASSIFY_SCRIPT = SCRIPT_DIR / "repair" / "classify_failed_candidates.py"
 FAILURE_KB_CANDIDATES_SCRIPT = SCRIPT_DIR / "repair" / "extract_failure_kb_candidates.py"
 REFRESH_FAILURE_KB_SCRIPT = SCRIPT_DIR / "repair" / "refresh_failure_knowledge_base.py"
@@ -251,6 +252,7 @@ def build_scoped_retry_candidates(original_candidate_csv: Path, retry_candidates
         "rtl_files", "include_dirs", "synth_variant", "synth_memory_max_bits",
         "synth_frontend", "resource_tier", "top_parameters", "defines",
         "base_design", "equiv_class", "variant_strategy",
+        "expander_bridge_manifest", "expander_design_id",
     )
     fieldnames = [
         "source_group",
@@ -336,6 +338,14 @@ def main() -> None:
     parser.add_argument("--repo-manifest-csv", type=Path, default=None)
     parser.add_argument("--clone-missing", action="store_true", help="Clone missing repos from a repo manifest into _downloads before discover/expand.")
     parser.add_argument("--discover", action="store_true", help="Discover new candidates from _downloads before running.")
+    parser.add_argument("--expander-corpus-root", type=Path,
+                        help="Import candidates from a certified rtl-expander snapshot.")
+    parser.add_argument("--expander-snapshot",
+                        help="Snapshot ID/path; default is the latest certified release.")
+    parser.add_argument("--expander-view", choices=["public_export_allowed"],
+                        default="public_export_allowed")
+    parser.add_argument("--expander-out", type=Path,
+                        default=WORKSPACE_ROOT / "candidates" / "rtl_expander_candidates.csv")
     parser.add_argument("--downloads-root", type=Path, default=DOWNLOADS_ROOT)
     parser.add_argument("--discovered-out", type=Path, default=WORKSPACE_ROOT / "candidates" / "downloads_discovered_candidates.csv")
     parser.add_argument("--priorities", nargs="+", default=["high", "medium", "low"])
@@ -393,6 +403,8 @@ def main() -> None:
         "phase": "init",
         "repo_manifest_csv": str(args.repo_manifest_csv) if args.repo_manifest_csv else "",
         "candidate_csv": str(args.candidate_csv) if args.candidate_csv else "",
+        "expander_corpus_root": str(args.expander_corpus_root) if args.expander_corpus_root else "",
+        "expander_snapshot": args.expander_snapshot or "",
         "priorities": args.priorities,
         "active_command": "",
         "last_output_line": "",
@@ -438,6 +450,10 @@ def main() -> None:
         if args.delete_rejected and not mutation_policy.get("allow_delete_rejected", False):
             raise SystemExit("delete_rejected is blocked by mutation_policy.json")
 
+        intake_modes = int(args.candidate_csv is not None) + int(args.discover) + int(args.expander_corpus_root is not None)
+        if intake_modes > 1:
+            raise SystemExit("choose exactly one intake mode: --candidate-csv, --discover, or --expander-corpus-root")
+
         if args.clone_missing and args.repo_manifest_csv is None:
             payload["state"] = "failed"
             payload["phase"] = "error"
@@ -461,6 +477,25 @@ def main() -> None:
                 log_path=args.status_log,
                 payload=payload,
             )
+        if args.expander_corpus_root is not None:
+            payload["phase"] = "import_expander_snapshot"
+            import_cmd = [
+                PYTHON_BIN,
+                str(IMPORT_EXPANDER_SCRIPT),
+                "--corpus-root",
+                str(args.expander_corpus_root),
+                "--view",
+                args.expander_view,
+                "--output-csv",
+                str(args.expander_out),
+            ]
+            if args.expander_snapshot:
+                import_cmd.extend(["--snapshot", args.expander_snapshot])
+            run(import_cmd, status_path=args.status_json, log_path=args.status_log, payload=payload)
+            candidate_csv = args.expander_out
+            payload["candidate_csv"] = str(candidate_csv)
+            payload["updated_at"] = now_iso()
+            write_status(args.status_json, payload)
         if args.discover:
             payload["phase"] = "discover"
             run(

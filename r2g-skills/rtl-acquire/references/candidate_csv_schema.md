@@ -49,6 +49,13 @@ It complements the shorter contract in `SKILL.md` with more operational detail.
 - `notes`
   - free-form human annotation
 
+- `expander_bridge_manifest`, `expander_design_id`
+  - emitted together by `scripts/acquire/import_expander_snapshot.py`
+  - bind a row to one design in a certified rtl-expander snapshot
+  - never hand-author, copy between rows, or keep only one of these fields
+  - `expand_candidates.py` rechecks bridge, top, parameters, source closure,
+    include order, source bytes, commit, and license before synthesis
+
 ## Field Guidance
 
 ### `design`
@@ -123,6 +130,12 @@ CSV**, not the candidate CSV itself:
   `stats_schema_missing:cell_histogram` marks a design whose quality assessment
   was BLOCKED (action forced `conditional`) because its stats predate the
   `cell_histogram` emission — never scored from fabricated zeros.
+
+An rtl-expander import additionally carries `expander_provenance` in
+`design_meta.json`: certified snapshot ID, release/manifest/bridge digests,
+DesignInstance/Family IDs, and RepositoryRevisionKey. A malformed or stale
+bridge is an `expander_provenance_invalid` source-check failure; it must not
+fall back to ordinary local-tree provenance.
 
 ## Anti-Patterns
 
