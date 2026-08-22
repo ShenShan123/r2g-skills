@@ -658,7 +658,9 @@ def learn(db_path: Path | str,
                 # concrete recipe key has a lifecycle row. filter_promoted now FAILS
                 # CLOSED on an absent row, so a recipe a crashed/partial enqueue skipped
                 # would otherwise be silently dropped from live ranking — ensure_rostered
-                # rosters it as an (unvalidated) candidate instead. Idempotent.
+                # rosters positive hypotheses as candidates and inconclusive-only
+                # hypotheses as parked. Both states remain unavailable to live ranking.
+                # Idempotent.
                 recipe_lifecycle.ensure_rostered(lc, data)
                 # P1-13 (2026-07-15): the deterministic production boundary for
                 # regression auto-demotion. Before this, ab_runner.auto_demote_on_regression

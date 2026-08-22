@@ -112,7 +112,10 @@ def test_learner_diff_never_enqueues_a_foreign_domain(tmp_path):
     conn = _conn(tmp_path)
     heur = {"generation": 1, "recipes": {
         ACQ["symptom_id"]: {ACQ["design_class"]: {ACQ["platform"]: {
-            "strategies": {"acquire_exclude": {"n": 3}, "density_relief": {"n": 3}}}}}}}
+            "strategies": {
+                "acquire_exclude": {"n": 3, "successes": 1},
+                "density_relief": {"n": 3, "successes": 1},
+            }}}}}}
     enqueued = recipe_lifecycle.diff_and_enqueue(conn, heur, prev=None)
     assert [k[3] for k in enqueued] == ["density_relief"]
 
