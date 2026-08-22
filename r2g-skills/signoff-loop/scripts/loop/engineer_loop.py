@@ -268,7 +268,7 @@ def _run_flow(entry: dict) -> int:
 # (period_relax's 913f3c.../c9aba8... are absent), so a symptom-only lookup mis-routes
 # them to 'both' -> identical inert arms that can never promote and burn a full
 # multi-hour signoff per repeat (2026-06-24 audit, bugs #1/#3).
-_PLACE_STRATEGIES = frozenset({"core_util_relief"})
+_PLACE_STRATEGIES = frozenset({"core_util_relief", "pin_perimeter_floor"})
 _TIMING_STRATEGIES = frozenset({"setup_slack_margin", "period_relax", "utilization_reduce",
                                 "backend_aware_synth_retune"})
 # synth_memory_relax is a SYNTH backend-abort recovery (raise SYNTH_MEMORY_MAX_BITS +
@@ -417,16 +417,21 @@ def _symptom_check(conn, symptom_id: str | None, strategy: str | None = None) ->
 
 def _run_fix(entry: dict) -> int:
     env = dict(os.environ)
+    fix_args = [
+        "bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
+        entry["project_path"], entry["platform"], "--check",
+        entry.get("check", "both")]
     if entry.get("kind") == "ab_arm":
         if entry.get("arm") == "A":
-            env["R2G_FIX_EXCLUDE"] = entry["strategy"]
+            # The control is a measurement-only baseline. Merely excluding the
+            # target strategy lets diagnose select the next catalog action, so a
+            # timing A arm can silently relax/reconfigure itself and cease to be
+            # a control. Zero iterations runs the fresh check but applies no
+            # Recipe; arm B below remains the sole intervention.
+            fix_args.extend(["--max-iters", "0"])
         else:
             env["R2G_FIX_RANK_FIRST"] = entry["strategy"]
-    rc = subprocess.run(
-        ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
-         entry["project_path"], entry["platform"], "--check",
-         entry.get("check", "both")],
-        env=env).returncode
+    rc = subprocess.run(fix_args, env=env).returncode
     if entry.get("check") == "timing":
         # A timing reflow changes placement/routing, so WNS closure alone cannot
         # certify a signoff-safe result. Measure DRC/LVS after every timing path,
@@ -513,13 +518,16 @@ def _apply_recipe_strategy(entry: dict) -> None:
     """Apply the recipe's backend strategy into the arm's config.mk BEFORE its single
     flow run (arm B of an apply-then-flow backend-abort trial).
 
-    - PLACE (core_util_relief): two sub-cases. A FIXED-die subject (DIE_AREA, no
+    - PLACE (core_util_relief): a FIXED-die subject (DIE_AREA, no
       CORE_UTILIZATION) is converted DIE_AREA -> CORE_UTILIZATION=30 so ORFS auto-sizes a
       die that FITS the cells (the FLW-0024 recovery). A subject that ALREADY auto-sizes
       (CORE_UTILIZATION=N) gets its util LOWERED (more whitespace -> easier place/route).
       Either way arm B's place stage diverges from arm A's (control) untouched config.
       Direct edit — core_util_relief is NOT a diagnose strategy (2026-06-24 audit, bug
       #3-place; the already-auto-sized lowering was the no-op fixed 2026-06-26).
+    - PLACE (pin_perimeter_floor): size an explicit square die from the PPL-0024
+      perimeter requested by the IO placer. This is a different physical effect from
+      core_util_relief and must therefore carry a different Recipe identity.
     - ROUTE (route_relief / route strategies): seed a fail route.json so diagnose can
       resolve the route strategy (no backend exists yet to extract from), then apply it.
     """
@@ -538,7 +546,16 @@ def _apply_recipe_strategy(entry: dict) -> None:
         # The arm copy excludes the subject's backend, so the required perimeter is passed in
         # from the SUBJECT at plan time (pin_perimeter_target); when present, hit it directly.
         tgt = entry.get("pin_perimeter_target")
-        if tgt and _relieve_pin_overflow(entry, perimeter_target=tgt):
+        if entry.get("strategy") == "pin_perimeter_floor":
+            # Replay the exact provenance-bound after-effect. The subject's newest
+            # backend is already clean, so reparsing it for PPL-0024 loses the target
+            # and silently turns B into another control arm.
+            delta = entry.get("recipe_config_delta")
+            if delta and _apply_structured_delta_after(
+                    Path(entry["project_path"]), delta):
+                return
+            if tgt:
+                _relieve_pin_overflow(entry, perimeter_target=tgt)
             return
         # FLW-0024 / generic place relief: a fixed-die subject -> CORE_UTILIZATION=30 (the
         # FLW-0024 recovery). A subject that already auto-sizes makes _resize_to_core_util a
@@ -1084,6 +1101,33 @@ def _record_resize_fix(entry: dict, *, cleared: bool) -> None:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
+def _record_pin_perimeter_fix(entry: dict, *, cleared: bool) -> None:
+    """Record the PPL-0024 perimeter-targeted die action under its own identity.
+
+    PPL-0024 is pin-capacity limited and sets an explicit die from the IO placer's
+    requested perimeter. FLW-0024 is cell-area limited and changes utilization. They
+    previously shared ``core_util_relief``, mixing two non-equivalent effects in one
+    Recipe. Keep the same place-stage symptom for A/B subject discovery, while the
+    strategy name and effect fingerprint preserve the causal distinction.
+    """
+    proj = Path(entry["project_path"])
+    reports = proj / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    runs = sorted(proj.glob("backend/RUN_*"))
+    run_tag = runs[-1].name if runs else "norun"
+    sid = "pinperim_" + hashlib.sha1(f"{proj}:{run_tag}".encode("utf-8")).hexdigest()[:12]
+    row = {
+        "fix_session_id": sid, "iter": 1, "strategy": "pin_perimeter_floor",
+        "check": "orfs_stage", "violation_class": "place", "from_stage": "place",
+        "before": 1, "after": 0 if cleared else 1,
+        "before_status": "fail", "after_status": "clean" if cleared else "fail",
+        "ts": _now(),
+        **_effect_fields(entry, cleared=cleared),
+    }
+    with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, sort_keys=True) + "\n")
+
+
 # ── Synth-stage abort classification + memory-cap recovery ───────────────────
 # An early synth abort (rc!=0 before any reports) is NOT a mystery: the Yosys log
 # names the cause. The loop used to collapse all of them into 'unseen_crash', which
@@ -1370,10 +1414,11 @@ def process_one(led: Ledger, entry: dict, conn, *,
             _ingest(entry)
             return result
         # PPL-0024 (IO pins exceed die perimeter): the die is too small in PERIMETER for
-        # the design's pin count -- recover by ENLARGING the die (lower CORE_UTILIZATION ->
-        # bigger core -> more perimeter pin slots), the same core_util_relief lever applied
-        # for the pin cause. This was the DOMINANT mislabeled-'unseen_crash' class (2026-06-26
-        # audit: ~35 designs). Retry the flow ONCE; the resize is recorded as a learnable fix.
+        # the design's pin count -- recover by ENLARGING the die to provide enough perimeter
+        # pin slots.  Keep this effect distinct from density-based core_util_relief so evidence
+        # for the two physical causes cannot be pooled under one Recipe identity.  This was the
+        # DOMINANT mislabeled-'unseen_crash' class (2026-06-26 audit: ~35 designs). Retry the
+        # flow ONCE; the resize is recorded as a learnable fix.
         if (not _resized and entry.get("kind") != "ab_arm"
                 and _fail_stage(entry) == "place" and _is_ppl0024(entry)
                 and _relieve_pin_overflow(entry)):
@@ -1381,7 +1426,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
             result = process_one(led, entry, conn, _resized=True)
-            _record_resize_fix(entry, cleared=(result == "clean"))
+            _record_pin_perimeter_fix(entry, cleared=(result == "clean"))
             _ingest(entry)
             return result
         # Synth memory-cap (Yosys refuses to infer a memory larger than the default
@@ -1644,15 +1689,106 @@ def _localize_arm_platform(dst: Path, platform: str) -> None:
 
 
 def _config_sha(dst: Path) -> str | None:
-    """sha256 (12 hex) of an arm's constraints/config.mk, or None if absent — the
-    baseline-provenance stamp recorded on each ab_arm ledger entry (P0-3)."""
+    """Semantic sha256 (12 hex) of an arm's baseline config.
+
+    Arm-local absolute paths differ by construction, so hashing the raw file made
+    equivalent A/B baselines look different. Hash parsed make knobs after replacing
+    the arm root with a stable token; real constraint/config differences remain visible.
+    """
     cfg = dst / "constraints" / "config.mk"
     if not cfg.is_file():
         return None
-    return hashlib.sha256(cfg.read_bytes()).hexdigest()[:12]
+    knobs = _parse_mk_knobs(cfg.read_text(encoding="utf-8", errors="ignore"))
+    root = str(dst.resolve())
+    normalized = {key: value.replace(root, "<PROJECT>")
+                  for key, value in knobs.items()}
+    payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
-def _reset_arm_config_baseline(dst: Path) -> str | None:
+def _structured_strategy_delta(source: Path, strategy: str) -> dict | None:
+    """Return the latest trustworthy config delta for ``strategy`` on ``source``.
+
+    Direct backend recoveries write bare make assignments, outside the removable
+    diagnose auto-block. Their fix_log row is therefore the durable record of the
+    pre-intervention baseline. Legacy value-only deltas cannot establish a control.
+    """
+    log = source / "reports" / "fix_log.jsonl"
+    if not log.is_file():
+        return None
+    try:
+        rows = log.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return None
+    for raw in reversed(rows):
+        try:
+            row = json.loads(raw)
+            delta = json.loads(row.get("config_delta") or "{}")
+        except (TypeError, ValueError):
+            continue
+        if row.get("strategy") != strategy or not isinstance(delta, dict) or not delta:
+            continue
+        if all(isinstance(change, dict)
+               and "before" in change and "after" in change
+               for change in delta.values()):
+            if (strategy == "pin_perimeter_floor"
+                    and not set(delta).issubset(
+                        {"CORE_UTILIZATION", "DIE_AREA", "CORE_AREA"})):
+                return None
+            return delta
+    return None
+
+
+def _restore_structured_delta_before(dst: Path, delta: dict) -> bool:
+    """Restore affected make knobs to a structured delta's ``before`` values.
+
+    The copied subject must still match every recorded ``after`` value. A mismatch
+    means stale or unrelated evidence, so restoration fails closed.
+    """
+    cfg = dst / "constraints" / "config.mk"
+    if not cfg.is_file():
+        return False
+    current = _config_snapshot({"project_path": str(dst)})
+    if any(current.get(key) != change.get("after")
+           for key, change in delta.items()):
+        return False
+    affected = set(delta)
+    kept = [line for line in cfg.read_text(encoding="utf-8", errors="ignore").splitlines()
+            if _config_knob(line) not in affected]
+    for key in sorted(affected):
+        before = delta[key].get("before")
+        if before is not None:
+            kept.append(f"export {key} = {before}")
+    cfg.write_text("\n".join(kept).rstrip("\n") + "\n", encoding="utf-8")
+    restored = _config_snapshot({"project_path": str(dst)})
+    return all(restored.get(key) == change.get("before")
+               for key, change in delta.items())
+
+
+def _apply_structured_delta_after(dst: Path, delta: dict) -> bool:
+    """Replay the exact ``after`` side of a provenance-bound config delta."""
+    cfg = dst / "constraints" / "config.mk"
+    if not cfg.is_file() or not delta:
+        return False
+    current = _config_snapshot({"project_path": str(dst)})
+    if any(current.get(key) != change.get("before")
+           for key, change in delta.items()):
+        return False
+    affected = set(delta)
+    kept = [line for line in cfg.read_text(encoding="utf-8", errors="ignore").splitlines()
+            if _config_knob(line) not in affected]
+    for key in sorted(affected):
+        after = delta[key].get("after")
+        if after is not None:
+            kept.append(f"export {key} = {after}")
+    cfg.write_text("\n".join(kept).rstrip("\n") + "\n", encoding="utf-8")
+    applied = _config_snapshot({"project_path": str(dst)})
+    return all(applied.get(key) == change.get("after")
+               for key, change in delta.items())
+
+
+def _reset_arm_config_baseline(dst: Path, *, source: Path | None = None,
+                               strategy: str | None = None) -> str | None:
     """Reconstruct an A/B arm's PRE-RECIPE config baseline by stripping the r2g
     signoff-fix auto-block from its config.mk (P0-3, recipe-lifecycle audit 2026-07-14;
     failure-patterns #48).
@@ -1692,7 +1828,14 @@ def _reset_arm_config_baseline(dst: Path) -> str | None:
     stripped = (body + "\n") if body else ""
     if stripped != text:
         cfg.write_text(stripped, encoding="utf-8")
-    return hashlib.sha256(stripped.encode("utf-8")).hexdigest()[:12]
+
+    # PPL-0024's perimeter floor is a bare config rewrite, not an auto-block edit.
+    # Reconstruct it from exact live evidence; otherwise arm A inherits treatment.
+    if strategy == "pin_perimeter_floor":
+        delta = _structured_strategy_delta(source or dst, strategy)
+        if delta is None or not _restore_structured_delta_before(dst, delta):
+            return None
+    return _config_sha(dst)
 
 
 def _ab_coverage_gap(conn, key: dict) -> bool:
@@ -1919,6 +2062,9 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
         # runner and a timing arm by fix_signoff --check timing (2026-06-24).
         check = _symptom_check(conn, key.get("symptom_id"), key.get("strategy"))
         for d in trial["designs"]:
+            src = Path(d["project_path"])
+            d_recipe_delta = (_structured_strategy_delta(src, key["strategy"])
+                              if key["strategy"] == "pin_perimeter_floor" else None)
             # For a PLACE arm, carry the SUBJECT's PPL-0024 required die perimeter: the arm
             # copy excludes the subject's backend, so arm B cannot re-read the placer message
             # itself. None for FLW-0024/other place aborts -> arm B falls back to the util
@@ -1928,7 +2074,6 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                             if check == "place" else None)
             for arm in ("A", "B"):
                 for r in range(k):
-                    src = Path(d["project_path"])
                     dst = src.parent / f"{src.name}_ab{arm}_{strat8}{trial_h6}_{r}"
                     if not src.is_dir() and not dst.is_dir():
                         # A subject with no dir on disk (wiped round) and no
@@ -1973,7 +2118,16 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                         # previously-fixed subject makes arm A a treated (not control) arm
                         # and arm B's forced recipe a no-op, collapsing the trial to an
                         # uninformative tie. Each arm re-derives its own edits at fix time.
-                        _reset_arm_config_baseline(dst)
+                        _reset_sha = _reset_arm_config_baseline(
+                            dst, source=src, strategy=key["strategy"])
+                        if key["strategy"] == "pin_perimeter_floor" and not _reset_sha:
+                            # A perimeter-fixed subject cannot be a causal control unless
+                            # its exact pre-fix values are recoverable. Remove the unused
+                            # materialization so a later corrected fix_log can be retried.
+                            print(f"[loop] A/B arm skipped (missing/stale pre-recipe "
+                                  f"config evidence): {dst.name}")
+                            shutil.rmtree(dst)
+                            continue
                     # Pin the arm's config.mk PLATFORM to the TRIAL's platform on EVERY plan
                     # (idempotent, guarded on dst.is_dir() so it also corrects an ALREADY-
                     # materialized arm whose config.mk carries a stale prior-round PLATFORM).
@@ -2017,6 +2171,8 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                         arm_entry["recipe_status_version"] = _rsv
                     if d_pin_target:
                         arm_entry["pin_perimeter_target"] = d_pin_target
+                    if d_recipe_delta:
+                        arm_entry["recipe_config_delta"] = d_recipe_delta
                     led.add(arm_entry)
                     appended += 1
     if _skipped_offplatform:                    # no silent caps: report the scope
