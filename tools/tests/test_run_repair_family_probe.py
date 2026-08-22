@@ -141,6 +141,7 @@ def test_materialize_copies_bound_source_provenance_to_metadata(tmp_path):
         source_repo_url="https://example.test/org/repo",
         source_commit=commit,
         rtl_file=[],
+        dependency_file=[],
         project=project,
         family="test-family",
         task_id="test-task",
@@ -174,6 +175,7 @@ def test_materialize_does_not_trust_declared_commit_for_plain_snapshot(tmp_path)
         source_repo_url="https://example.test/org/repo",
         source_commit="a" * 40,
         rtl_file=[],
+        dependency_file=[],
         project=project,
         family="test-family",
         task_id="test-task",
@@ -193,3 +195,54 @@ def test_materialize_does_not_trust_declared_commit_for_plain_snapshot(tmp_path)
     assert metadata["source_provenance_status"] == (
         "snapshot_bytes_bound_repo_commit_unverified"
     )
+
+
+def test_materialize_freezes_include_dependency_without_compiling_it_twice(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    (source / "rtl/top").mkdir(parents=True)
+    (source / "rtl/cores").mkdir()
+    (source / "rtl/top/top.v").write_text(
+        '`include "../cores/child.v"\nmodule top(input wire clk); child u(); endmodule\n',
+        encoding="utf-8",
+    )
+    (source / "rtl/cores/child.v").write_text(
+        "module child; endmodule\n", encoding="utf-8"
+    )
+    args = argparse.Namespace(
+        source=source,
+        source_repo_url=None,
+        source_commit=None,
+        rtl_file=["rtl/top/top.v"],
+        dependency_file=["rtl/cores/child.v"],
+        project=project,
+        family="test-family",
+        task_id="test-task",
+        variant="baseline",
+        platform="sky130hd",
+        top_module="top",
+        clock_port="clk",
+        frequency_mhz=100.0,
+        set=[],
+        unset=[],
+        fastroute_tcl=None,
+    )
+
+    MODULE.materialize(args)
+
+    config = (project / "constraints/config.mk").read_text(encoding="utf-8")
+    verilog_line = next(line for line in config.splitlines() if "VERILOG_FILES" in line)
+    include_line = next(
+        line for line in config.splitlines() if "VERILOG_INCLUDE_DIRS" in line
+    )
+    assert "rtl/top/top.v" in verilog_line
+    assert "rtl/cores/child.v" not in verilog_line
+    assert "rtl/top" in include_line
+    assert "rtl/cores" in include_line
+
+    manifest = json.loads(
+        (project / "repair_family_probe_input.json").read_text(encoding="utf-8")
+    )
+    assert manifest["compilation_units"] == ["rtl/rtl/top/top.v"]
+    assert manifest["dependency_inputs"] == ["rtl/rtl/cores/child.v"]
+    assert len(manifest["files"]) == 2

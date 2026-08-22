@@ -179,18 +179,28 @@ def materialize(args: argparse.Namespace) -> None:
     if bool(args.source_repo_url) != bool(args.source_commit):
         raise ValueError("--source-repo-url and --source-commit must be provided together")
     allowed_suffixes = {".v", ".sv", ".vh", ".svh", ".mem", ".hex"}
+    dependency_values = list(getattr(args, "dependency_file", []) or [])
     if args.rtl_file:
         requested = [Path(value) for value in args.rtl_file]
-        if any(path.is_absolute() or ".." in path.parts for path in requested):
-            raise ValueError("--rtl-file paths must be relative to --source")
-        rtl_files = sorted(source / path for path in requested)
+        dependencies = [Path(value) for value in dependency_values]
+        all_requested = requested + dependencies
+        if any(path.is_absolute() or ".." in path.parts for path in all_requested):
+            raise ValueError("source input paths must be relative to --source")
+        if set(requested) & set(dependencies):
+            raise ValueError("a source input cannot be both --rtl-file and --dependency-file")
+        compile_files = sorted(source / path for path in requested)
+        dependency_files = sorted(source / path for path in dependencies)
+        rtl_files = compile_files + dependency_files
         missing = [path for path in rtl_files if not path.is_file()]
         if missing:
             raise ValueError(f"missing explicit RTL input: {missing[0]}")
         if any(path.suffix.lower() not in allowed_suffixes for path in rtl_files):
             raise ValueError("explicit RTL closure contains an unsupported file type")
         relative_files = [path.relative_to(source) for path in rtl_files]
+        compile_relatives = {path.relative_to(source) for path in compile_files}
     else:
+        if dependency_values:
+            raise ValueError("--dependency-file requires at least one --rtl-file")
         rtl_source = source / "rtl"
         if not rtl_source.is_dir():
             raise ValueError(f"source snapshot has no rtl directory: {source}")
@@ -199,6 +209,10 @@ def materialize(args: argparse.Namespace) -> None:
             if path.is_file() and path.suffix.lower() in allowed_suffixes
         )
         relative_files = [path.relative_to(rtl_source) for path in rtl_files]
+        compile_relatives = {
+            relative for path, relative in zip(rtl_files, relative_files)
+            if path.suffix.lower() in {".v", ".sv"}
+        }
     if not rtl_files:
         raise ValueError(f"source snapshot has no RTL files: {source}")
     provenance_status = source_provenance_status(
@@ -258,7 +272,23 @@ def materialize(args: argparse.Namespace) -> None:
         if not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
             raise ValueError(f"invalid config key to unset: {key}")
         defaults.pop(key, None)
-    verilog = [str(path) for path in copied if path.suffix.lower() in {".v", ".sv"}]
+    copied_by_relative = {
+        path.relative_to(project / "rtl"): path
+        for path in copied
+    }
+    verilog = [
+        str(copied_by_relative[relative])
+        for relative in sorted(compile_relatives)
+        if relative.suffix.lower() in {".v", ".sv"}
+    ]
+    compilation_units = [
+        str(path.relative_to(project)) for path in map(Path, verilog)
+    ]
+    dependency_inputs = [
+        str(path.relative_to(project))
+        for relative, path in sorted(copied_by_relative.items())
+        if relative not in compile_relatives
+    ]
     # VERILOG_INCLUDE_DIRS must cover every directory that could resolve a bare
     # `` `include "file.v" ``. Some real designs (mor1kx, riscv_top, usb_device) keep
     # their defines in a `.v` file one directory above the including module, so
@@ -281,6 +311,8 @@ def materialize(args: argparse.Namespace) -> None:
     config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     protected = {
         "source_digest": source_digest,
+        "compilation_units": compilation_units,
+        "dependency_inputs": dependency_inputs,
         "source_repo_url": args.source_repo_url,
         "source_commit": args.source_commit,
         "top_module": args.top_module,
@@ -305,6 +337,8 @@ def materialize(args: argparse.Namespace) -> None:
         "source_commit": args.source_commit,
         "source_provenance_status": provenance_status,
         "files": file_records,
+        "compilation_units": compilation_units,
+        "dependency_inputs": dependency_inputs,
         "protected_task": protected,
         "protected_task_digest": protected_digest,
         "config_edits": edits,
@@ -587,6 +621,13 @@ def parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="relative compilation input; repeat to freeze an explicit source closure",
+    )
+    prepare.add_argument(
+        "--dependency-file",
+        action="append",
+        default=[],
+        help=("relative include/readmem dependency; repeat to freeze it without adding it "
+              "as an independent Verilog compilation unit"),
     )
     prepare.add_argument("--project", type=Path, required=True)
     prepare.add_argument("--family", required=True)
