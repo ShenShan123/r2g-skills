@@ -3,6 +3,7 @@ import importlib.util
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -106,4 +107,89 @@ def test_failure_patterns_separate_missing_include_from_route_timeout():
         False,
         True,
         ["ROUTE_TIMEOUT"],
+    )
+
+
+def test_materialize_copies_bound_source_provenance_to_metadata(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    (source / "rtl").mkdir(parents=True)
+    (source / "rtl/top.v").write_text(
+        "module top(input wire clk); endmodule\n", encoding="utf-8"
+    )
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    subprocess.run(
+        ["git", "-C", str(source), "remote", "add", "origin", "https://example.test/org/repo.git"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(source), "add", "rtl/top.v"], check=True)
+    subprocess.run(
+        [
+            "git", "-C", str(source), "-c", "user.name=Test", "-c",
+            "user.email=test@example.test", "commit", "-qm", "fixture",
+        ],
+        check=True,
+    )
+    commit = subprocess.run(
+        ["git", "-C", str(source), "rev-parse", "HEAD"],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    args = argparse.Namespace(
+        source=source,
+        source_repo_url="https://example.test/org/repo",
+        source_commit=commit,
+        rtl_file=[],
+        project=project,
+        family="test-family",
+        task_id="test-task",
+        variant="baseline",
+        platform="sky130hd",
+        top_module="top",
+        clock_port="clk",
+        frequency_mhz=100.0,
+        set=[],
+        unset=[],
+        fastroute_tcl=None,
+    )
+
+    MODULE.materialize(args)
+
+    metadata = json.loads((project / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["source_repo_url"] == "https://example.test/org/repo"
+    assert metadata["source_commit"] == commit
+    assert metadata["source_provenance_status"] == "repo_url_commit_and_bytes_bound"
+
+
+def test_materialize_does_not_trust_declared_commit_for_plain_snapshot(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    (source / "rtl").mkdir(parents=True)
+    (source / "rtl/top.v").write_text(
+        "module top(input wire clk); endmodule\n", encoding="utf-8"
+    )
+    args = argparse.Namespace(
+        source=source,
+        source_repo_url="https://example.test/org/repo",
+        source_commit="a" * 40,
+        rtl_file=[],
+        project=project,
+        family="test-family",
+        task_id="test-task",
+        variant="baseline",
+        platform="sky130hd",
+        top_module="top",
+        clock_port="clk",
+        frequency_mhz=100.0,
+        set=[],
+        unset=[],
+        fastroute_tcl=None,
+    )
+
+    MODULE.materialize(args)
+
+    metadata = json.loads((project / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["source_provenance_status"] == (
+        "snapshot_bytes_bound_repo_commit_unverified"
     )

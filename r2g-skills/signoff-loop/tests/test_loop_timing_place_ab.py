@@ -30,6 +30,7 @@ def _conn(tmp_path):
 def test_symptom_check_routes_by_strategy(tmp_path):
     conn = _conn(tmp_path)
     assert engineer_loop._symptom_check(conn, None, "core_util_relief") == "place"
+    assert engineer_loop._symptom_check(conn, None, "pin_perimeter_floor") == "place"
     assert engineer_loop._symptom_check(conn, None, "period_relax") == "timing"
     assert engineer_loop._symptom_check(conn, None, "utilization_reduce") == "timing"
     assert engineer_loop._symptom_check(conn, None, "setup_slack_margin") == "timing"
@@ -215,7 +216,7 @@ def test_process_one_recovers_ppl0024_then_honest_residual(tmp_path, monkeypatch
     monkeypatch.setattr(engineer_loop, "_fail_stage", lambda e: "place")
     monkeypatch.setattr(engineer_loop, "_is_flw0024", lambda e: False)
     monkeypatch.setattr(engineer_loop, "_is_ppl0024", lambda e: True)
-    monkeypatch.setattr(engineer_loop, "_record_resize_fix", lambda e, *, cleared: None)
+    monkeypatch.setattr(engineer_loop, "_record_pin_perimeter_fix", lambda e, *, cleared: None)
     out = engineer_loop.process_one(led, led.pending()[0], conn=conn)
     assert out == "escalated"
     import re
@@ -267,6 +268,24 @@ def test_run_fix_timing_ab_arm_adds_checker_only_strict_signoff(monkeypatch):
     assert calls[0][1]["R2G_FIX_RANK_FIRST"] == "setup_slack_margin"
     assert calls[1][0][-4:] == ["--check", "both", "--max-iters", "0"]
     assert "R2G_FIX_RANK_FIRST" not in calls[1][1]
+
+
+def test_run_fix_timing_control_arm_is_measurement_only(monkeypatch):
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs.get("env") or {}))
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(engineer_loop.subprocess, "run", fake_run)
+    rc = engineer_loop._run_fix({
+        "project_path": "/p", "platform": "sky130hd", "kind": "ab_arm",
+        "arm": "A", "strategy": "setup_slack_margin", "check": "timing"})
+    assert rc == 0
+    assert calls[0][0][-4:] == ["--check", "timing", "--max-iters", "0"]
+    assert "R2G_FIX_EXCLUDE" not in calls[0][1]
+    assert "R2G_FIX_RANK_FIRST" not in calls[0][1]
+    assert calls[1][0][-4:] == ["--check", "both", "--max-iters", "0"]
 
 
 def test_run_fix_live_timing_adds_checker_only_strict_scan(monkeypatch):

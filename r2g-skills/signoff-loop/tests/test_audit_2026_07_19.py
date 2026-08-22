@@ -219,10 +219,13 @@ def test_parked_guard_does_not_block_ordinary_recipes(tmp_path, monkeypatch):
     _seed_candidate(conn, key, version=1)
     monkeypatch.setattr(ab_runner, "_runs_exist", lambda *a, **k: True)
     monkeypatch.setattr(ab_runner, "_arms_owned", lambda *a, **k: True)
-    conn.execute(
+    conn.executemany(
         "INSERT INTO ab_trials (symptom_id, design_class, platform, strategy,"
         " verdict, metrics_json, arm_a_run_id, arm_b_run_id) VALUES (?,?,?,?,?,?,?,?)",
-        (key["symptom_id"], key["design_class"], key["platform"], key["strategy"],
-         "win", json.dumps({"provenance_complete": True}), "RID_A", "RID_B"))
+        [
+            (key["symptom_id"], key["design_class"], key["platform"], key["strategy"],
+             "win", json.dumps({"provenance_complete": True}), f"RID_A{i}", f"RID_B{i}")
+            for i in (1, 2)
+        ])
     conn.commit()
     assert ab_runner.judge_recipe(conn, **key) == "promoted"

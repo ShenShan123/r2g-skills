@@ -26,6 +26,16 @@ from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 
 HEUR_PATH = os.path.join(os.path.dirname(__file__), "heuristics.json")
 
+
+def _heur_path() -> str:
+    """Resolve the same isolated heuristic store used by ingest and the loop.
+
+    A/B subject selection is part of the experiment state.  Reading the shipped
+    heuristics.json while R2G_KNOWLEDGE_DB/R2G_HEURISTICS_PATH points at a sandbox
+    silently mixes main-store evidence into an isolated campaign.
+    """
+    return os.environ.get("R2G_HEURISTICS_PATH") or HEUR_PATH
+
 # An A/B trial copies each subject to <name>_ab{A,B}_<strat8>_<r>. Those copies get
 # ingested (they carry the recipe's symptom), so without this guard plan_trial would
 # re-select an arm dir as a SUBJECT — copying it again into <...>_abA_..._abA_... and
@@ -154,21 +164,23 @@ def _arms_owned(conn, key: dict, arm_a_run_id, arm_b_run_id) -> bool:
 
 
 def _trial_subject(conn, arm_a_run_id, arm_b_run_id, fallback) -> str:
-    """The INDEPENDENT SUBJECT a trial exercised = the base design both arms cloned
-    from. Resolve an arm run_id -> runs.project_path, strip the `_ab[AB]_<strat8>_<r>`
-    arm suffix to the base, and key on it. Two decisive trials on the SAME base subject
-    are pseudo-replicates, not independent corroboration (P1-11, 2026-07-15). A run_id
-    that does not resolve (legacy NULL / pre-existence-check row) falls back to a
-    per-row key, so LEGACY verdicts are unchanged — each legacy row stays its own
-    'subject', exactly as the old raw-row count treated it."""
+    """Resolve the independent evidence unit exercised by a trial.
+
+    Prefer ``runs.design_family`` so multiple tops or aliases from one RTL family
+    remain one vote. Fall back to the base subject directory when family provenance
+    is absent. Repeated arm runs on either identity are pseudo-replicates, not new
+    corroboration (P1-11).
+    """
     for rid in (arm_b_run_id, arm_a_run_id):
         if not rid:
             continue
         try:
-            row = conn.execute("SELECT project_path FROM runs WHERE run_id=?",
+            row = conn.execute("SELECT project_path, design_family FROM runs WHERE run_id=?",
                                (rid,)).fetchone()
         except sqlite3.Error:
             row = None
+        if row and row[1]:
+            return f"family:{row[1]}"
         if row and row[0]:
             base = _ARM_DIR_RE.split(os.path.basename(str(row[0]).rstrip("/")))[0]
             return f"subj:{base}" if base else f"run:{rid}"
@@ -176,6 +188,7 @@ def _trial_subject(conn, arm_a_run_id, arm_b_run_id, fallback) -> str:
 
 N_DESIGNS_DEFAULT = 2     # min matched designs per trial (spec §5.4)
 AB_REPEATS_DEFAULT = 2    # Win 2: k repeats per arm for variance-aware promotion
+AB_MIN_INDEPENDENT_WINS_DEFAULT = 2
 AB_LCB_Z = 1.0            # z for the lower-confidence bound (mean − z·stderr)
 COST_FLOOR = 0.08         # success-tie cost tiebreak: min |Δwall| as a fraction of the
                           # combined mean before it can flip win/loss (2026-06-24 bug #4:
@@ -190,6 +203,15 @@ def ab_repeats() -> int:
         return max(1, int(os.environ.get("R2G_AB_REPEATS", AB_REPEATS_DEFAULT)))
     except (TypeError, ValueError):
         return AB_REPEATS_DEFAULT
+
+
+def ab_min_independent_wins() -> int:
+    """Minimum independent RTL-family wins required for automatic promotion."""
+    try:
+        return max(2, int(os.environ.get(
+            "R2G_AB_MIN_INDEPENDENT_WINS", AB_MIN_INDEPENDENT_WINS_DEFAULT)))
+    except (TypeError, ValueError):
+        return AB_MIN_INDEPENDENT_WINS_DEFAULT
 
 
 def lcb(samples: list[float], z: float = AB_LCB_Z) -> float:
@@ -293,7 +315,7 @@ def judge_repeated_ex(arm_a_samples: list[dict | None],
 def _evidence_designs(symptom_id: str) -> list[str]:
     """Designs the learner recorded as having EXHIBITED this symptom (pre-fix)."""
     try:
-        with open(HEUR_PATH) as fh:
+        with open(_heur_path()) as fh:
             heur = json.load(fh)
     except (OSError, ValueError):
         return []
@@ -671,21 +693,23 @@ def judge_recipe(conn, *, symptom_id: str, design_class: str, platform: str,
               f"run_ids not counted for {key['symptom_id'][:8]}/{key['design_class']}/"
               f"{key['platform']}/{key['strategy']}; state unchanged (legacy_promoted). "
               f"Re-validate via `engineer_loop ab-enqueue`.", file=sys.stderr)
-    if wins > losses:
+    min_wins = ab_min_independent_wins()
+    if wins > losses and wins >= min_wins:
         recipe_lifecycle.promote(conn, evidence=f"ab_corpus:{wins}w{losses}l", **key)
         return "promoted"
     if losses > wins:
         recipe_lifecycle.demote(conn, reason=f"ab_corpus:{wins}w{losses}l", **key)
         return "shadow"
-    if wins:
+    if wins or losses:
         # TIED decisive evidence (2026-07-16 agent-logic issue 2): the state must be
         # a pure function of the corpus, not of insertion order. Returning None here
         # let the FIRST decisive row's transition survive the tie (win-then-loss
         # stayed promoted, loss-then-win stayed shadow — opposite lifecycle states
         # from the SAME net corpus). A tie is unresolved evidence: back to
         # 'candidate' for re-validation, never an inherited transient promotion.
-        recipe_lifecycle.revalidate(
-            conn, reason=f"ab_corpus_tie:{wins}w{losses}l", **key)
+        reason = (f"ab_corpus_tie:{wins}w{losses}l" if wins == losses else
+                  f"ab_corpus_insufficient:{wins}w{losses}l:need{min_wins}")
+        recipe_lifecycle.revalidate(conn, reason=reason, **key)
         return "candidate"
     return None                                # no decisive evidence: unchanged
 

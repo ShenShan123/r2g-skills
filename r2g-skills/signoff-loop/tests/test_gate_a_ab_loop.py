@@ -194,14 +194,21 @@ def test_ab_drain_fires_trial_and_transitions_recipe(tmp_path, monkeypatch):
                         lambda e: ingest_run.ingest(Path(e["project_path"]),
                                                     knowledge_db.connect(db)))
     led_path = tmp_path / "ledger.jsonl"
-    engineer_loop.ab_drain(led_path, n_ab_designs=1, db_path=db)
+    engineer_loop.ab_drain(led_path, n_ab_designs=2, db_path=db)
 
     conn = knowledge_db.connect(db)
     trials = conn.execute("SELECT trial_id, verdict, strategy FROM ab_trials").fetchall()
-    assert trials, "Gate A exit criterion: ab_trials must gain >=1 row"
-    trial_id, verdict, strategy = trials[0]
-    assert verdict in ("win", "loss", "inconclusive")
-    # A recipe transitioned out of 'candidate' (promoted on win, shadow otherwise).
+    assert len(trials) == 2, "Gate A must exercise two independent subjects"
+    assert all(row[1] in ("win", "loss", "inconclusive") for row in trials)
+    strategy = trials[0][2]
+    # Two decisive independent wins promote; two losses shadow. Mixed or
+    # inconclusive evidence remains candidate for another validation round.
     status = conn.execute(
         "SELECT status FROM recipe_status WHERE strategy=?", (strategy,)).fetchone()[0]
-    assert status in ("promoted", "shadow")
+    verdicts = [row[1] for row in trials]
+    if verdicts == ["win", "win"]:
+        assert status == "promoted"
+    elif verdicts == ["loss", "loss"]:
+        assert status == "shadow"
+    else:
+        assert status == "candidate"

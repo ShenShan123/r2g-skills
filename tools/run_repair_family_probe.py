@@ -113,6 +113,64 @@ def parse_edits(values: list[str]) -> dict[str, str]:
     return result
 
 
+def _git_output(repo: Path, *args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return result.stdout.strip()
+
+
+def _normalized_repo_url(value: str) -> str:
+    value = value.strip().removesuffix(".git").rstrip("/")
+    ssh_match = re.fullmatch(r"git@([^:]+):(.+)", value)
+    if ssh_match:
+        return f"{ssh_match.group(1)}/{ssh_match.group(2)}".lower()
+    return re.sub(r"^[a-z]+://", "", value, flags=re.I).lower()
+
+
+def source_provenance_status(
+    source: Path,
+    rtl_files: list[Path],
+    repo_url: str | None,
+    commit: str | None,
+) -> str:
+    """Describe only provenance that can be verified from the source checkout.
+
+    A caller-provided URL and commit are declarations, not evidence. Full binding
+    requires a matching origin, an exact resolved commit, and every frozen source
+    file to match its Git blob at that commit.
+    """
+    if not repo_url or not commit:
+        return "snapshot_bytes_bound_repo_commit_missing"
+    root_text = _git_output(source, "rev-parse", "--show-toplevel")
+    if not root_text:
+        return "snapshot_bytes_bound_repo_commit_unverified"
+    root = Path(root_text).resolve()
+    resolved = _git_output(root, "rev-parse", f"{commit}^{{commit}}")
+    if not resolved or resolved.lower() != commit.lower():
+        return "snapshot_bytes_bound_repo_commit_unverified"
+    origin = _git_output(root, "remote", "get-url", "origin")
+    if not origin or _normalized_repo_url(origin) != _normalized_repo_url(repo_url):
+        return "commit_and_bytes_bound_repo_url_unverified"
+    for path in rtl_files:
+        try:
+            relative = path.resolve().relative_to(root).as_posix()
+        except ValueError:
+            return "snapshot_bytes_bound_repo_commit_unverified"
+        expected_blob = _git_output(root, "rev-parse", f"{resolved}:{relative}")
+        actual_blob = _git_output(root, "hash-object", str(path.resolve()))
+        if not expected_blob or expected_blob != actual_blob:
+            return "snapshot_bytes_bound_repo_commit_unverified"
+    return "repo_url_commit_and_bytes_bound"
+
+
 def materialize(args: argparse.Namespace) -> None:
     source = args.source.resolve()
     project = args.project.resolve()
@@ -143,6 +201,9 @@ def materialize(args: argparse.Namespace) -> None:
         relative_files = [path.relative_to(rtl_source) for path in rtl_files]
     if not rtl_files:
         raise ValueError(f"source snapshot has no RTL files: {source}")
+    provenance_status = source_provenance_status(
+        source, rtl_files, args.source_repo_url, args.source_commit
+    )
     for name in ("rtl", "constraints", "backend", "reports", "drc", "lvs", "rcx", "input"):
         (project / name).mkdir(parents=True, exist_ok=True)
     for source_file, relative in zip(rtl_files, relative_files):
@@ -242,11 +303,7 @@ def materialize(args: argparse.Namespace) -> None:
         "source_snapshot": str(source),
         "source_repo_url": args.source_repo_url,
         "source_commit": args.source_commit,
-        "source_provenance_status": (
-            "repo_commit_and_bytes_bound"
-            if args.source_repo_url and args.source_commit
-            else "snapshot_only_requires_repo_commit_reconstruction"
-        ),
+        "source_provenance_status": provenance_status,
         "files": file_records,
         "protected_task": protected,
         "protected_task_digest": protected_digest,
@@ -262,6 +319,9 @@ def materialize(args: argparse.Namespace) -> None:
             "design_name": args.top_module,
             "platform": args.platform,
             "source_kind": "historical_snapshot_probe",
+            "source_repo_url": args.source_repo_url,
+            "source_commit": args.source_commit,
+            "source_provenance_status": provenance_status,
             "source_digest": source_digest,
             "source_bytes_verified": True,
             "compile_inputs_verified": True,
