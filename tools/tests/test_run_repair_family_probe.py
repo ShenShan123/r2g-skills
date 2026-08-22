@@ -110,6 +110,22 @@ def test_failure_patterns_separate_missing_include_from_route_timeout():
     )
 
 
+def test_zero_cell_netlist_is_input_failure_but_ifp_0065_alone_is_not():
+    empty = (
+        "number instances in verilog is 0\n"
+        "Design area 0 um^2 100% utilization.\n"
+        "[ERROR IFP-0065] No rows created in the core area.\n"
+    )
+    undersized = "[ERROR IFP-0065] No rows created in the core area.\n"
+
+    assert MODULE.classify_flow_failures(empty) == (
+        True,
+        False,
+        ["SYNTH_ZERO_CELL_NETLIST"],
+    )
+    assert MODULE.classify_flow_failures(undersized) == (False, False, [])
+
+
 def test_materialize_copies_bound_source_provenance_to_metadata(tmp_path):
     source = tmp_path / "source"
     project = tmp_path / "project"

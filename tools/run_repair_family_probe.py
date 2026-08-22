@@ -401,16 +401,27 @@ def first_present(*values: Any) -> Any:
 
 
 def classify_flow_failures(flow_log: str) -> tuple[bool, bool, list[str]]:
-    input_failure = bool(
+    missing_include = bool(
         re.search(r"Can't open include file|cannot open include file|missing explicit RTL input", flow_log, re.I)
     )
+    # IFP-0065 alone can describe a genuinely undersized, repairable floorplan.
+    # Classify it as an input-qualification failure only when synthesis/OpenDB also
+    # proves that elaboration produced no physical instances at all.  Otherwise the
+    # recipe learner can wastefully treat an empty netlist as a floorplan challenge.
+    zero_cell_netlist = bool(
+        re.search(r"number instances in verilog is\s+0\b", flow_log, re.I)
+        or re.search(r"Design area\s+0(?:\.0+)?\s+um\^2", flow_log, re.I)
+    )
+    input_failure = missing_include or zero_cell_netlist
     runtime_failure = bool(
         re.search(r"Stage\s+'(?:route|place|cts|synth)'\s+failed\s+\(exit code 124\)", flow_log)
         or re.search(r"timed out after\s+\d+s, exit code 124", flow_log, re.I)
     )
     signatures: list[str] = []
-    if input_failure:
+    if missing_include:
         signatures.append("SYNTH_MISSING_INCLUDE")
+    if zero_cell_netlist:
+        signatures.append("SYNTH_ZERO_CELL_NETLIST")
     if runtime_failure:
         timeout_stage = re.search(r"Stage\s+'([^']+)'\s+failed\s+\(exit code 124\)", flow_log)
         signatures.append(f"{(timeout_stage.group(1) if timeout_stage else 'FLOW').upper()}_TIMEOUT")
