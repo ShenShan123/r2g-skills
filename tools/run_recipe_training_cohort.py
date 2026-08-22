@@ -451,6 +451,10 @@ def replay_failures(args: argparse.Namespace) -> None:
             continue
         if first.get("input_qualification_failure") is True:
             continue
+        if first.get("execution_interrupted") is True:
+            continue
+        if first.get("unclassified_execution_failure") is True:
+            continue
         target = evidence_root / project.name
         target.mkdir(parents=True, exist_ok=True)
         write_json(target / "attempt_1.json", first)
@@ -478,6 +482,10 @@ def replay_failures(args: argparse.Namespace) -> None:
                 and second.get("strict_clean") is False
                 and first.get("environment_failure") is not True
                 and second.get("environment_failure") is not True
+                and first.get("execution_interrupted") is not True
+                and second.get("execution_interrupted") is not True
+                and first.get("unclassified_execution_failure") is not True
+                and second.get("unclassified_execution_failure") is not True
                 and first.get("protected_task_digest") == second.get("protected_task_digest")
                 and first_signature == second_signature
             )
@@ -510,6 +518,8 @@ def summarize(args: argparse.Namespace) -> None:
         "repair_challenge": 0,
         "environment_failure": 0,
         "input_qualification_failure": 0,
+        "execution_interrupted": 0,
+        "unclassified_execution_failure": 0,
         "runner_failure": 0,
         "failure_signatures": {},
         "records": [],
@@ -527,6 +537,10 @@ def summarize(args: argparse.Namespace) -> None:
             status = "environment_failure"
         elif result.get("input_qualification_failure") is True:
             status = "input_qualification_failure"
+        elif result.get("execution_interrupted") is True:
+            status = "execution_interrupted"
+        elif result.get("unclassified_execution_failure") is True:
+            status = "unclassified_execution_failure"
         elif result.get("strict_clean") is True:
             status = "strict_clean"
         else:

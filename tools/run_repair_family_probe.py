@@ -459,6 +459,28 @@ def execution_environment(args: argparse.Namespace, state: Path) -> dict[str, st
     return env
 
 
+def classify_execution_failure(
+    commands: list[dict[str, Any]], known_signatures: list[str]
+) -> tuple[bool, bool, list[str]]:
+    """Classify non-diagnostic ORFS exits so they cannot become repair evidence."""
+    flow_command = next(
+        (
+            item
+            for item in commands
+            if any(str(part).endswith("run_orfs.sh") for part in item.get("command", []))
+        ),
+        None,
+    )
+    if not flow_command:
+        return False, False, []
+    returncode = flow_command.get("returncode")
+    if returncode in (130, 137, 143):
+        return True, False, ["FLOW_INTERRUPTED"]
+    if isinstance(returncode, int) and returncode != 0 and not known_signatures:
+        return False, True, ["FLOW_EXECUTION_FAILED"]
+    return False, False, []
+
+
 def execute(args: argparse.Namespace) -> None:
     project = args.project.resolve()
     manifest = read_json(project / "repair_family_probe_input.json")
@@ -581,6 +603,10 @@ def execute(args: argparse.Namespace) -> None:
         signature.append("SETUP_TIMING")
     if isinstance(metrics["hold_wns_ns"], (int, float)) and metrics["hold_wns_ns"] < 0:
         signature.append("HOLD_TIMING")
+    execution_interrupted, unclassified_execution_failure, execution_signatures = (
+        classify_execution_failure(commands, signature)
+    )
+    signature.extend(execution_signatures)
     signature = sorted(set(signature))
     gate = reports["signoff_gate"]
     strict_clean = gate.get("status") in {"clean", "pass", "strict_clean"}
@@ -600,6 +626,8 @@ def execute(args: argparse.Namespace) -> None:
         "publication_strict_clean": publication_strict_clean,
         "input_qualification_failure": input_qualification_failure,
         "runtime_budget_failure": runtime_budget_failure,
+        "execution_interrupted": execution_interrupted,
+        "unclassified_execution_failure": unclassified_execution_failure,
         "constraint_attestation": {
             "status": "bound",
             "mode": "fixed_registered_target",

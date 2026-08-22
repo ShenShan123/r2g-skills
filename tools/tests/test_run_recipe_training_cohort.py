@@ -1,3 +1,4 @@
+import argparse
 import importlib.util
 import sqlite3
 from pathlib import Path
@@ -139,6 +140,32 @@ def test_stable_replay_projects_filters_unstable_results(tmp_path):
 
     assert complete is True
     assert stable == [Path("/p/a")]
+
+
+def test_replay_skips_interrupted_and_unclassified_execution_failures(tmp_path):
+    campaign = tmp_path / "campaign"
+    projects = []
+    for name, flags in (
+        ("interrupted", {"execution_interrupted": True}),
+        ("unclassified", {"unclassified_execution_failure": True}),
+    ):
+        project = campaign / "projects" / name
+        project.mkdir(parents=True)
+        MODULE.write_json(
+            project / "repair_family_probe_result.json",
+            {"strict_clean": False, "environment_failure": False, **flags},
+        )
+        projects.append({"status": "ready", "project": str(project)})
+    MODULE.write_json(campaign / "state/cohort_manifest.json", {"records": projects})
+    args = argparse.Namespace(
+        campaign_root=campaign,
+        workers=1,
+        cores=1,
+        timeout_seconds=1,
+    )
+    MODULE.replay_failures(args)
+
+    assert not (campaign / "state/failure_replay").exists()
 
 
 def test_quarantine_preexisting_candidates_is_platform_scoped(tmp_path):

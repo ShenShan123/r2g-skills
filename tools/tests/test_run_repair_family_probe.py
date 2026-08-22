@@ -126,6 +126,31 @@ def test_zero_cell_netlist_is_input_failure_but_ifp_0065_alone_is_not():
     assert MODULE.classify_flow_failures(undersized) == (False, False, [])
 
 
+def test_interrupted_orfs_exit_is_not_repair_evidence():
+    commands = [{"command": ["bash", "/r2g/run_orfs.sh"], "returncode": 143}]
+
+    assert MODULE.classify_execution_failure(commands, []) == (
+        True,
+        False,
+        ["FLOW_INTERRUPTED"],
+    )
+
+
+def test_unclassified_nonzero_orfs_exit_fails_closed():
+    commands = [{"command": ["bash", "/r2g/run_orfs.sh"], "returncode": 2}]
+
+    assert MODULE.classify_execution_failure(commands, []) == (
+        False,
+        True,
+        ["FLOW_EXECUTION_FAILED"],
+    )
+    assert MODULE.classify_execution_failure(commands, ["ORD-0001"]) == (
+        False,
+        False,
+        [],
+    )
+
+
 def test_materialize_copies_bound_source_provenance_to_metadata(tmp_path):
     source = tmp_path / "source"
     project = tmp_path / "project"
