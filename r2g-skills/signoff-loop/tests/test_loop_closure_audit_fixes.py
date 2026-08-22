@@ -149,6 +149,42 @@ def test_ingest_passes_environment_db_to_subprocess(tmp_path, monkeypatch):
     assert cmd[-2:] == ["--db", str(target)]
 
 
+def test_learn_uses_isolated_database_and_sibling_heuristics(tmp_path, monkeypatch):
+    """A training campaign must not rebuild the shipped DB or heuristics file."""
+    import learn_heuristics
+
+    target = tmp_path / "sandbox" / "knowledge.sqlite"
+    calls = []
+    monkeypatch.setenv("R2G_KNOWLEDGE_DB", str(target))
+    monkeypatch.delenv("R2G_HEURISTICS_PATH", raising=False)
+    monkeypatch.setattr(
+        learn_heuristics,
+        "learn",
+        lambda db, heuristics: calls.append((db, heuristics)) or {},
+    )
+
+    assert el._learn() == {}
+    assert calls == [(target, target.parent / "heuristics.json")]
+
+
+def test_learn_honors_explicit_isolated_heuristics_path(tmp_path, monkeypatch):
+    import learn_heuristics
+
+    target = tmp_path / "knowledge.sqlite"
+    heuristics = tmp_path / "derived" / "campaign_heuristics.json"
+    calls = []
+    monkeypatch.setenv("R2G_KNOWLEDGE_DB", str(target))
+    monkeypatch.setenv("R2G_HEURISTICS_PATH", str(heuristics))
+    monkeypatch.setattr(
+        learn_heuristics,
+        "learn",
+        lambda db, out: calls.append((db, out)) or {},
+    )
+
+    el._learn()
+    assert calls == [(target, heuristics)]
+
+
 def test_route_arm_with_no_backend_escalates_not_ingests(tmp_path, monkeypatch):
     proj = tmp_path / "d_abA_route_0"
     proj.mkdir()
@@ -162,6 +198,192 @@ def test_route_arm_with_no_backend_escalates_not_ingests(tmp_path, monkeypatch):
     el.process_one(led, led.pending()[0], conn=None)
     assert led.state("d_abA_route_0") == "escalated"
     assert led._entries["d_abA_route_0"].get("reason") == "route_arm_incomplete"
+
+
+def test_route_timeout_ab_arm_preserves_timeout_policy(tmp_path):
+    """A route-timeout candidate must validate the same floor-util effect as live repair."""
+    proj = tmp_path / "d_abB_route_0"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text(
+        "export CORE_UTILIZATION = 25\n", encoding="utf-8")
+    (proj / "repair_family_probe_result.json").write_text(json.dumps({
+        "normalized_failure_signature": ["ROUTE_TIMEOUT"],
+    }), encoding="utf-8")
+
+    el._apply_recipe_strategy({
+        "project_path": str(proj), "strategy": "route_relief", "check": "route",
+    })
+    route = json.loads((proj / "reports" / "route.json").read_text())
+    cfg = (proj / "constraints" / "config.mk").read_text()
+    assert route["status"] == "timeout"
+    assert "export CORE_UTILIZATION = 8" in cfg
+
+
+def test_route_non_timeout_ab_arm_keeps_gentle_policy(tmp_path):
+    proj = tmp_path / "d_abB_route_0"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text(
+        "export CORE_UTILIZATION = 25\n", encoding="utf-8")
+    (proj / "repair_family_probe_result.json").write_text(json.dumps({
+        "normalized_failure_signature": ["ROUTE_RESIDUAL"],
+    }), encoding="utf-8")
+
+    el._apply_recipe_strategy({
+        "project_path": str(proj), "strategy": "route_relief", "check": "route",
+    })
+    route = json.loads((proj / "reports" / "route.json").read_text())
+    cfg = (proj / "constraints" / "config.mk").read_text()
+    assert route["status"] == "fail"
+    assert "export CORE_UTILIZATION = 17" in cfg
+
+
+def _physical_clean_manifest():
+    return {
+        "strict_clean": False,  # fixed-frequency A/B has no Fmax publication stamp
+        "reports": {
+            "drc.json": {"present": True, "status": "clean", "drc_mode": "full",
+                         "total_violations": 0},
+            "lvs.json": {"present": True, "status": "clean"},
+            "route.json": {"present": True, "status": "clean",
+                           "total_violations": 0},
+            "rcx.json": {"present": True, "status": "complete"},
+            "timing_check.json": {"present": True, "tier": "clean", "wns_ns": 0.1},
+        },
+        "platform_capability": {"strict_signoff_ready": True},
+        "confirming_run": {"consensus": True, "run_tag": "RUN_1"},
+    }
+
+
+def test_backend_route_arm_runs_checker_only_signoff_before_clean(
+        tmp_path, monkeypatch):
+    proj = tmp_path / "d_abB_route_0"
+    (proj / "backend" / "RUN_1").mkdir(parents=True)
+    (proj / "reports").mkdir()
+    (proj / "reports" / "signoff_manifest.json").write_text(
+        json.dumps(_physical_clean_manifest()), encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(el, "_apply_recipe_strategy", lambda entry: None)
+    monkeypatch.setattr(el, "_run_flow", lambda entry: 0)
+    monkeypatch.setattr(el, "_has_backend_run", lambda entry: True)
+    monkeypatch.setattr(el, "_run_backend_signoff_measurement",
+                        lambda entry: calls.append(entry["design"]) or 0)
+    monkeypatch.setattr(el, "_ingest", lambda entry: None)
+    led = el.Ledger(tmp_path / "ledger.jsonl")
+    entry = {"design": proj.name, "project_path": str(proj),
+             "platform": "sky130hd", "kind": "ab_arm", "arm": "B",
+             "strategy": "route_relief", "check": "route"}
+    led.add(entry)
+
+    el._process_backend_ab_arm(led, entry, conn=None)
+
+    assert calls == [proj.name]
+    assert led.state(proj.name) == "clean"
+
+
+@pytest.mark.parametrize("manifest", [
+    None,
+    {"strict_clean": False},
+])
+def test_backend_route_arm_rejects_missing_dirty_or_failed_signoff(
+        tmp_path, monkeypatch, manifest):
+    proj = tmp_path / "d_abB_route_0"
+    (proj / "backend" / "RUN_1").mkdir(parents=True)
+    if manifest is not None:
+        (proj / "reports").mkdir()
+        (proj / "reports" / "signoff_manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(el, "_apply_recipe_strategy", lambda entry: None)
+    monkeypatch.setattr(el, "_run_flow", lambda entry: 0)
+    monkeypatch.setattr(el, "_has_backend_run", lambda entry: True)
+    monkeypatch.setattr(el, "_run_backend_signoff_measurement",
+                        lambda entry: 0)
+    monkeypatch.setattr(el, "_ingest", lambda entry: None)
+    led = el.Ledger(tmp_path / "ledger.jsonl")
+    entry = {"design": proj.name, "project_path": str(proj),
+             "platform": "sky130hd", "kind": "ab_arm", "arm": "B",
+             "strategy": "route_relief", "check": "route"}
+    led.add(entry)
+
+    el._process_backend_ab_arm(led, entry, conn=None)
+
+    assert led.state(proj.name) == "escalated"
+    assert led.get(proj.name)["reason"] == "route_arm_signoff_failed"
+
+
+def test_backend_route_arm_accepts_physical_clean_without_fmax(tmp_path, monkeypatch):
+    proj = tmp_path / "d_abB_route_0"
+    (proj / "reports").mkdir(parents=True)
+    (proj / "reports" / "signoff_manifest.json").write_text(
+        json.dumps(_physical_clean_manifest()), encoding="utf-8")
+    monkeypatch.setattr(el, "_apply_recipe_strategy", lambda entry: None)
+    monkeypatch.setattr(el, "_run_flow", lambda entry: 0)
+    monkeypatch.setattr(el, "_has_backend_run", lambda entry: True)
+    # fix_signoff returns non-zero because publication strict_clean also wants Fmax;
+    # the arm-local physical evidence remains authoritative for fixed-target A/B.
+    monkeypatch.setattr(el, "_run_backend_signoff_measurement", lambda entry: 4)
+    monkeypatch.setattr(el, "_ingest", lambda entry: None)
+    led = el.Ledger(tmp_path / "ledger.jsonl")
+    entry = {"design": proj.name, "project_path": str(proj),
+             "platform": "sky130hd", "kind": "ab_arm", "arm": "B",
+             "strategy": "route_relief", "check": "route"}
+    led.add(entry)
+
+    el._process_backend_ab_arm(led, entry, conn=None)
+
+    assert led.state(proj.name) == "clean"
+
+
+def test_backend_signoff_measurement_is_zero_iteration_and_recipe_free(
+        tmp_path, monkeypatch):
+    calls = []
+
+    class _Result:
+        returncode = 0
+
+    monkeypatch.setenv("R2G_FIX_EXCLUDE", "route_relief")
+    monkeypatch.setenv("R2G_FIX_RANK_FIRST", "route_relief")
+    monkeypatch.setattr(el.subprocess, "run",
+                        lambda argv, env=None: calls.append((argv, env)) or _Result())
+    entry = {"project_path": str(tmp_path / "arm"),
+             "platform": "sky130hd"}
+
+    assert el._run_backend_signoff_measurement(entry) == 0
+    argv, env = calls[0]
+    assert argv[-4:] == ["--check", "both", "--max-iters", "0"]
+    assert "R2G_FIX_EXCLUDE" not in env
+    assert "R2G_FIX_RANK_FIRST" not in env
+
+
+def test_route_judge_cannot_promote_orfs_only_b_arm(tmp_path, monkeypatch):
+    a = tmp_path / "d_abA_route_0"
+    b = tmp_path / "d_abB_route_0"
+    a.mkdir()
+    b.mkdir()
+    key = {"symptom_id": "s", "design_class": "bus/large",
+           "platform": "sky130hd", "strategy": "route_relief"}
+    led = el.Ledger(tmp_path / "ledger.jsonl")
+    for arm, proj, state in (("A", a, "escalated"), ("B", b, "clean")):
+        led.add({"design": proj.name, "project_path": str(proj),
+                 "platform": "sky130hd", "kind": "ab_arm", "arm": arm,
+                 "strategy": "route_relief", "check": "route", "repeat": 0,
+                 "state": state, "ab_key": key})
+    monkeypatch.setattr(
+        el, "_arm_metric",
+        lambda conn, pp, timing=False, synth=False, target=None: {
+            "is_success": "abB" in pp, "judged_on": "signoff",
+            "wall_s": 10.0, "fix_iters": None, "outcome_score": 0.5,
+            "run_id": "b" if "abB" in pp else "a",
+        })
+    recorded = []
+    monkeypatch.setattr(ab_runner, "record_trial",
+                        lambda conn, **kw: recorded.append(kw) or 1)
+
+    el.judge_finished_trials(led, None)
+
+    assert recorded[0]["verdict"] == "inconclusive"
+    assert recorded[0]["metrics"]["B_samples"][0]["is_success"] is False
+    assert recorded[0]["metrics"]["B_samples"][0]["judged_on"] == (
+        "backend+strict_signoff")
 
 
 # ── bug #8: an unvalidatable candidate is surfaced, never silently skipped ────

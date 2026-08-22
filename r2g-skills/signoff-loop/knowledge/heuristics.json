@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-08-01T21:11:41-07:00",
-  "source_run_count": 3310,
+  "generated_at": "2026-08-21T22:56:48-07:00",
+  "source_run_count": 3324,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 7324,
+  "generation": 7354,
   "families": {
     "rv32i": {
       "platforms": {
@@ -7286,20 +7286,20 @@
           }
         },
         "sky130hd": {
-          "sample_size": 7,
-          "success_count": 6,
-          "success_rate": 0.8571428571428571,
+          "sample_size": 8,
+          "success_count": 7,
+          "success_rate": 0.875,
           "core_utilization": {
             "min_safe": 15.0,
             "max_safe": 25.0,
-            "median": 17.0
+            "median": 21.0
           },
           "place_density_lb_addon": {
             "min_safe": 0.2,
             "max_safe": 0.2,
             "median": 0.2
           },
-          "typical_cell_count": 11908,
+          "typical_cell_count": 16630,
           "p90_elapsed_s": 3678.0,
           "fix_recipes": {
             "orfs_stage": {
@@ -10533,6 +10533,67 @@
               "null": {
                 "strategies": {},
                 "n_sessions": 2
+              }
+            }
+          }
+        }
+      }
+    },
+    "exp": {
+      "platforms": {
+        "sky130hd": {
+          "sample_size": 10,
+          "success_count": 5,
+          "success_rate": 0.5,
+          "core_utilization": {
+            "min_safe": 8.0,
+            "max_safe": 25.0,
+            "median": 17.0
+          },
+          "place_density_lb_addon": {
+            "min_safe": 0.2,
+            "max_safe": 0.2,
+            "median": 0.2
+          },
+          "typical_cell_count": 92251,
+          "p90_elapsed_s": 6721.0,
+          "fix_recipes": {
+            "drc": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 2
+              },
+              "m3.2": {
+                "strategies": {
+                  "density_relief": {
+                    "attempts": 1,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 1
+              }
+            },
+            "lvs": {
+              "null": {
+                "strategies": {},
+                "n_sessions": 1
+              }
+            },
+            "orfs_stage": {
+              "route": {
+                "strategies": {
+                  "route_relief": {
+                    "attempts": 3,
+                    "successes": 1,
+                    "failures": 0,
+                    "wins": 0,
+                    "median_reduction_pct": 1.0
+                  }
+                },
+                "n_sessions": 3
               }
             }
           }
@@ -14082,6 +14143,7 @@
         "Slave_select",
         "Uart_RX",
         "WMFSM",
+        "ace2_absolute_rope_score_core",
         "add",
         "adder_tree_top",
         "adff",
@@ -14092,6 +14154,7 @@
         "aes_inv_sbox",
         "aes_key_mem",
         "aes_sbox",
+        "agr_fxp_accumulator",
         "ansiportlist",
         "apb3_master",
         "apb_master",
@@ -14367,6 +14430,7 @@
         "paj_framebuftop_hierarchy_no_mem",
         "pci_bridge32",
         "pcie_us_axi_dma",
+        "pcs_rx",
         "pd",
         "pdm_filter",
         "picorv32",
@@ -14524,7 +14588,7 @@
         "wishbone_master",
         "zipdma"
       ],
-      "n_sessions": 2539,
+      "n_sessions": 2542,
       "strategies": {
         "lvs_resolve_unknown": {
           "attempts": 7,
@@ -14557,6 +14621,7 @@
         "sky130hs"
       ],
       "evidence_designs": [
+        "agr_fxp_accumulator",
         "arm9_compatiable_code",
         "axi2axi3",
         "axi_axil_adapter_wr",
@@ -14601,17 +14666,17 @@
         "wbsafety",
         "wbxclk"
       ],
-      "n_sessions": 62,
+      "n_sessions": 63,
       "strategies": {
         "density_relief": {
-          "attempts": 62,
-          "successes": 52,
+          "attempts": 63,
+          "successes": 53,
           "failures": 4,
           "wins": 6,
           "by_platform": {
             "sky130hd": {
-              "attempts": 35,
-              "successes": 32,
+              "attempts": 36,
+              "successes": 33,
               "failures": 1,
               "wins": 2
             },
@@ -14668,6 +14733,7 @@
         "i2c_master",
         "ifft_core",
         "mac2",
+        "pcs_rx",
         "picorv32_axi",
         "poly1305",
         "poly1305_core",
@@ -14678,23 +14744,25 @@
         "sha256_axi4",
         "softmax",
         "td_fused_top_dataflow_in_loop_TOP_LOOP37548",
+        "tsa_axi_lite_top_8x8_i8",
+        "tsa_systolic_8x8_core_i8",
         "udp",
         "udp_64",
         "wbsafety",
         "wbxbar",
         "zipdma"
       ],
-      "n_sessions": 63,
+      "n_sessions": 66,
       "strategies": {
         "route_relief": {
-          "attempts": 56,
-          "successes": 24,
+          "attempts": 59,
+          "successes": 25,
           "failures": 1,
           "wins": 0,
           "by_platform": {
             "sky130hd": {
-              "attempts": 47,
-              "successes": 22,
+              "attempts": 50,
+              "successes": 23,
               "failures": 0,
               "wins": 0
             },
@@ -16671,6 +16739,16 @@
           "strategies": {},
           "n_sessions": 0
         }
+      },
+      "macro_heavy/large": {
+        "sky130hd": {
+          "strategies": {},
+          "n_sessions": 0
+        },
+        "*": {
+          "strategies": {},
+          "n_sessions": 0
+        }
       }
     },
     "04d38c5a585fd332": {
@@ -16725,32 +16803,32 @@
         "sky130hd": {
           "strategies": {
             "density_relief": {
-              "attempts": 35,
-              "successes": 32,
+              "attempts": 36,
+              "successes": 33,
               "failures": 1,
               "wins": 2,
-              "mean_outcome_score": 0.991904761904762,
+              "mean_outcome_score": 0.9921296296296296,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 35
+          "n_sessions": 36
         },
         "*": {
           "strategies": {
             "density_relief": {
-              "attempts": 62,
-              "successes": 52,
+              "attempts": 63,
+              "successes": 53,
               "failures": 4,
               "wins": 6,
-              "mean_outcome_score": 0.9835863377609109,
+              "mean_outcome_score": 0.9838468720821661,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 62
+          "n_sessions": 63
         },
         "sky130hs": {
           "strategies": {
@@ -16772,32 +16850,32 @@
         "sky130hd": {
           "strategies": {
             "density_relief": {
-              "attempts": 19,
-              "successes": 18,
+              "attempts": 20,
+              "successes": 19,
               "failures": 1,
               "wins": 0,
-              "mean_outcome_score": 0.9912280701754386,
+              "mean_outcome_score": 0.9916666666666667,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 19
+          "n_sessions": 20
         },
         "*": {
           "strategies": {
             "density_relief": {
-              "attempts": 27,
-              "successes": 25,
+              "attempts": 28,
+              "successes": 26,
               "failures": 1,
               "wins": 1,
-              "mean_outcome_score": 0.9938271604938271,
+              "mean_outcome_score": 0.9940476190476191,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 27
+          "n_sessions": 28
         },
         "sky130hs": {
           "strategies": {
@@ -17090,32 +17168,32 @@
         "sky130hd": {
           "strategies": {
             "route_relief": {
-              "attempts": 47,
-              "successes": 22,
+              "attempts": 50,
+              "successes": 23,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.5890070921985816,
+              "mean_outcome_score": 0.5936666666666667,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 47
+          "n_sessions": 50
         },
         "*": {
           "strategies": {
             "route_relief": {
-              "attempts": 56,
-              "successes": 24,
+              "attempts": 59,
+              "successes": 25,
               "failures": 1,
               "wins": 0,
-              "mean_outcome_score": 0.5776785714285714,
+              "mean_outcome_score": 0.5822033898305085,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 56
+          "n_sessions": 59
         },
         "nangate45": {
           "strategies": {
@@ -17152,32 +17230,32 @@
         "sky130hd": {
           "strategies": {
             "route_relief": {
-              "attempts": 8,
+              "attempts": 9,
               "successes": 8,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.8333333333333334,
+              "mean_outcome_score": 0.7962962962962963,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 8
+          "n_sessions": 9
         },
         "*": {
           "strategies": {
             "route_relief": {
-              "attempts": 8,
+              "attempts": 9,
               "successes": 8,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.8333333333333334,
+              "mean_outcome_score": 0.7962962962962963,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 8
+          "n_sessions": 9
         }
       },
       "logic/unknown": {
@@ -17278,17 +17356,17 @@
         "*": {
           "strategies": {
             "route_relief": {
-              "attempts": 3,
+              "attempts": 4,
               "successes": 1,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.6111111111111112,
+              "mean_outcome_score": 0.5833333333333334,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 3
+          "n_sessions": 4
         },
         "sky130hs": {
           "strategies": {
@@ -17298,6 +17376,21 @@
               "failures": 0,
               "wins": 0,
               "mean_outcome_score": 0.8333333333333334,
+              "provenance_sources": [
+                "live"
+              ]
+            }
+          },
+          "n_sessions": 1
+        },
+        "sky130hd": {
+          "strategies": {
+            "route_relief": {
+              "attempts": 1,
+              "successes": 0,
+              "failures": 0,
+              "wins": 0,
+              "mean_outcome_score": 0.5,
               "provenance_sources": [
                 "live"
               ]
@@ -17325,17 +17418,32 @@
         "*": {
           "strategies": {
             "route_relief": {
-              "attempts": 3,
-              "successes": 0,
+              "attempts": 4,
+              "successes": 1,
               "failures": 0,
               "wins": 0,
-              "mean_outcome_score": 0.16666666666666666,
+              "mean_outcome_score": 0.375,
               "provenance_sources": [
                 "live"
               ]
             }
           },
-          "n_sessions": 3
+          "n_sessions": 4
+        },
+        "sky130hd": {
+          "strategies": {
+            "route_relief": {
+              "attempts": 1,
+              "successes": 1,
+              "failures": 0,
+              "wins": 0,
+              "mean_outcome_score": 1.0,
+              "provenance_sources": [
+                "live"
+              ]
+            }
+          },
+          "n_sessions": 1
         }
       },
       "bus_heavy/small": {

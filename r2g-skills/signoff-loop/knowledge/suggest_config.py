@@ -16,7 +16,10 @@ from pathlib import Path
 
 import knowledge_db
 
-HEURISTICS_PATH = knowledge_db.DEFAULT_KNOWLEDGE_DIR / "heuristics.json"
+HEURISTICS_PATH = Path(os.environ.get(
+    "R2G_HEURISTICS_PATH",
+    knowledge_db.DEFAULT_KNOWLEDGE_DIR / "heuristics.json",
+))
 FAMILIES_PATH = knowledge_db.DEFAULT_FAMILIES_PATH
 
 # Win 5: numeric pre-route features used for KNN retrieval (presynth.py order).

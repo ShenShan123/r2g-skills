@@ -142,6 +142,29 @@ def test_route_ab_drain_fires_trial_and_transitions_recipe(tmp_path, monkeypatch
     conn.close()
     learn_heuristics.learn(db, tmp_path / "heuristics.json")
 
+    def _measure_strict(entry):
+        reports = Path(entry["project_path"]) / "reports"
+        reports.mkdir(exist_ok=True)
+        manifest = {
+            "reports": {
+                "drc.json": {"present": True, "status": "clean",
+                             "drc_mode": "full", "total_violations": 0},
+                "lvs.json": {"present": True, "status": "clean"},
+                "route.json": {"present": True, "status": "clean",
+                               "total_violations": 0},
+                "rcx.json": {"present": True, "status": "complete"},
+                "timing_check.json": {"present": True, "tier": "clean",
+                                      "wns_ns": 0.1},
+            },
+            "platform_capability": {"strict_signoff_ready": True},
+            "confirming_run": {"consensus": True, "run_tag": "RUN_x"},
+        }
+        (reports / "signoff_manifest.json").write_text(json.dumps(manifest))
+        return 0
+
+    monkeypatch.setattr(engineer_loop, "_run_backend_signoff_measurement",
+                        _measure_strict)
+
     monkeypatch.setattr(engineer_loop, "_ingest",
                         lambda e: ingest_run.ingest(Path(e["project_path"]),
                                                     knowledge_db.connect(db)))

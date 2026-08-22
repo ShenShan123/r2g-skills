@@ -427,19 +427,86 @@ def _run_fix(entry: dict) -> int:
          entry["project_path"], entry["platform"], "--check",
          entry.get("check", "both")],
         env=env).returncode
-    if entry.get("kind") == "ab_arm" and entry.get("check") == "timing":
+    if entry.get("check") == "timing":
         # A timing reflow changes placement/routing, so WNS closure alone cannot
-        # certify a signoff-safe Recipe. Measure DRC/LVS on BOTH arms after their
-        # timing path, with zero repair iterations: this is a checker-only pass,
-        # never a second intervention that could confound the tested action.
+        # certify a signoff-safe result. Measure DRC/LVS after every timing path,
+        # with zero repair iterations: this is a checker-only pass, never a second
+        # intervention. This applies to normal live repair as well as A/B arms;
+        # otherwise a timing fix can be accepted without fresh physical signoff.
         measure_env = dict(env)
         measure_env.pop("R2G_FIX_EXCLUDE", None)
         measure_env.pop("R2G_FIX_RANK_FIRST", None)
-        subprocess.run(
+        measured = subprocess.run(
             ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
              entry["project_path"], entry["platform"], "--check", "both",
              "--max-iters", "0"], env=measure_env)
+        if rc == 0 and measured.returncode != 0:
+            rc = measured.returncode
     return rc
+
+
+def _run_backend_signoff_measurement(entry: dict) -> int:
+    """Measure a completed route/place A/B arm without applying another Recipe.
+
+    Backend-abort arms apply their candidate before the one full ORFS run.  A
+    successful flow proves that the formerly aborting stage completed, but it
+    does not prove that the resulting layout is usable.  Run the existing
+    zero-iteration signoff path so DRC/LVS/RCX/timing are measured while the
+    tested config remains frozen.
+    """
+    env = dict(os.environ)
+    env.pop("R2G_FIX_EXCLUDE", None)
+    env.pop("R2G_FIX_RANK_FIRST", None)
+    return subprocess.run(
+        ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
+         entry["project_path"], entry["platform"], "--check", "both",
+         "--max-iters", "0"], env=env).returncode
+
+
+def _strict_signoff_manifest_clean(project_path: str) -> bool:
+    """True only for an arm-local, strict *physical* signoff bundle.
+
+    The publication manifest's top-level ``strict_clean`` additionally requires
+    an Fmax-search winner.  Fixed-frequency Recipe A/B deliberately holds the
+    registered clock constant, so introducing Fmax search here would change the
+    task and confound the intervention.  Require every physical checker and its
+    run binding instead; _arm_spec_mismatch separately protects the clock/area
+    objective from relaxation.
+    """
+    try:
+        manifest = json.loads(
+            (Path(project_path) / "reports" / "signoff_manifest.json").read_text(
+                encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return False
+    reports = manifest.get("reports") or {}
+    drc = reports.get("drc.json") or {}
+    lvs = reports.get("lvs.json") or {}
+    route = reports.get("route.json") or {}
+    rcx = reports.get("rcx.json") or {}
+    timing = reports.get("timing_check.json") or {}
+    capability = manifest.get("platform_capability") or {}
+    confirming = manifest.get("confirming_run") or {}
+    wns = timing.get("wns_ns", timing.get("wns"))
+    return bool(
+        drc.get("present") is True
+        and drc.get("status") == "clean"
+        and drc.get("drc_mode") == "full"
+        and drc.get("total_violations") == 0
+        and lvs.get("present") is True
+        and lvs.get("status") == "clean"
+        and route.get("present") is True
+        and route.get("status") == "clean"
+        and route.get("total_violations") == 0
+        and rcx.get("present") is True
+        and rcx.get("status") == "complete"
+        and timing.get("present") is True
+        and timing.get("tier") == "clean"
+        and isinstance(wns, (int, float)) and wns >= 0
+        and capability.get("strict_signoff_ready") is True
+        and confirming.get("consensus") is True
+        and confirming.get("run_tag")
+    )
 
 
 def _apply_recipe_strategy(entry: dict) -> None:
@@ -483,8 +550,28 @@ def _apply_recipe_strategy(entry: dict) -> None:
     proj = Path(entry["project_path"])
     reports = proj / "reports"
     reports.mkdir(parents=True, exist_ok=True)
+    # Preserve the backend-abort severity that made this subject eligible.  The
+    # immutable repair-family probe is copied into every arm and therefore remains
+    # available even after the live subject's reports were replaced by a successful
+    # repair.  A route timeout intentionally jumps to the utilization floor, whereas
+    # an ordinary completed route failure takes one gentler step.  Seeding every arm
+    # as generic ``fail`` made A/B validate 25->17 even when the positive live event
+    # being promoted was the timeout policy's 25->8 effect.
+    route_status = "fail"
+    probe = proj / "repair_family_probe_result.json"
+    try:
+        probe_data = json.loads(probe.read_text(encoding="utf-8"))
+        signatures = {
+            str(item).upper()
+            for item in (probe_data.get("normalized_failure_signature") or [])
+        }
+        if "ROUTE_TIMEOUT" in signatures:
+            route_status = "timeout"
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
     (reports / "route.json").write_text(
-        json.dumps({"status": "fail", "total_violations": None}), encoding="utf-8")
+        json.dumps({"status": route_status, "total_violations": None}),
+        encoding="utf-8")
     diagnose = _script("R2G_LOOP_DIAGNOSE",
                        SKILL_ROOT / "scripts" / "reports" / "diagnose_signoff_fix.py")
     # --rank-first: arm B FORCES the candidate under test — the apply-time
@@ -525,11 +612,23 @@ def _process_backend_ab_arm(led: "Ledger", entry: dict, conn) -> None:
         # verdict for the trial (2026-06-23 audit, bug #3).
         led.set_state(design, "escalated", reason=f"{check}_arm_incomplete")
         return
+    # A route/place completion is not sufficient promotion evidence: the new
+    # layout must also remain strict-clean on DRC/LVS/RCX/timing.  Measure only;
+    # max-iters=0 forbids a second Recipe from repairing the candidate's output
+    # and therefore preserves causal isolation.  Synth recovery intentionally
+    # retains its stage-local contract and is judged on clearing synth.
+    signoff_rc = 0
+    if rc == 0 and check in ("route", "place"):
+        signoff_rc = _run_backend_signoff_measurement(entry)
     _ingest(entry)
-    # The judge reads the ingested run's is_success; rc only drives the ledger
-    # terminal state (clean vs escalated) so judge_finished_trials picks it up.
-    led.set_state(design, "clean" if rc == 0 else "escalated",
-                  **({} if rc == 0 else {"reason": f"{check}_arm_failed"}))
+    clean = rc == 0 and (
+        check not in ("route", "place")
+        or _strict_signoff_manifest_clean(entry["project_path"])
+    )
+    reason = (f"{check}_arm_failed" if rc != 0
+              else f"{check}_arm_signoff_failed")
+    led.set_state(design, "clean" if clean else "escalated",
+                  **({} if clean else {"reason": reason}))
 
 
 def _journal_ab_launch(entry: dict) -> None:
@@ -1126,22 +1225,61 @@ def _record_synth_mem_fix(entry: dict, *, cleared: bool) -> None:
 
 
 def _signoff_status(entry: dict) -> dict:
-    out = {}
-    for check in ("drc", "lvs"):
-        p = Path(entry["project_path"]) / "reports" / f"{check}.json"
+    """Return one normalized global signoff vector for the live-loop gate.
+
+    A local DRC/LVS success is not a clean design when route, RCX, or fixed-target
+    timing is incomplete. Keep every component in this shared status map so both
+    the first-pass short circuit and the post-fix acceptance use the same gate.
+    """
+    reports = Path(entry["project_path"]) / "reports"
+    out: dict[str, str] = {}
+    for check in ("drc", "lvs", "route"):
+        p = reports / f"{check}.json"
         try:
             out[check] = json.loads(p.read_text()).get("status", "unknown")
         except Exception:
             out[check] = "unknown"
+    try:
+        rcx = json.loads((reports / "rcx.json").read_text()).get("status", "unknown")
+        out["rcx"] = "clean" if rcx in ("complete", "clean", "ok") else rcx
+    except Exception:
+        out["rcx"] = "unknown"
+    try:
+        timing = json.loads((reports / "timing_check.json").read_text())
+        tier = timing.get("tier", "unknown")
+        wns = timing.get("wns_ns", timing.get("wns"))
+        # Fail closed on contradictory timing evidence: a label saying clean
+        # cannot override a measured negative WNS.
+        if tier == "clean" and isinstance(wns, (int, float)) and wns < 0:
+            tier = "fail"
+        out["timing"] = tier
+    except Exception:
+        out["timing"] = "unknown"
     return out
+
+
+def _all_signoff_clean(status: dict) -> bool:
+    return bool(status) and all(
+        value in ("clean", "clean_beol", "skipped") for value in status.values()
+    )
+
+
+def _physical_signoff_clean(status: dict) -> bool:
+    return all(
+        status.get(check) in ("clean", "clean_beol", "skipped")
+        for check in ("drc", "lvs", "route", "rcx")
+    )
 
 
 def _learn() -> dict:
     import learn_heuristics
     import knowledge_db
     try:
-        return learn_heuristics.learn(knowledge_db.DEFAULT_DB_PATH,
-                                      KNOWLEDGE / "heuristics.json")
+        db_path = Path(os.environ.get("R2G_KNOWLEDGE_DB")
+                       or knowledge_db.DEFAULT_DB_PATH)
+        heuristics_path = Path(os.environ.get("R2G_HEURISTICS_PATH")
+                               or (db_path.parent / "heuristics.json"))
+        return learn_heuristics.learn(db_path, heuristics_path)
     except Exception as exc:
         # learn() can raise on malformed session data (e.g. the mixed-check_type
         # trajectory assert). Ingest-time callers are wrapped; THIS one was not,
@@ -1399,24 +1537,38 @@ def process_one(led: Ledger, entry: dict, conn, *,
     # arm B's R2G_FIX_RANK_FIRST actually diverge the two arms — never short-circuit
     # it to clean on an inherited (or genuinely-empty) verdict (2026-06-23 audit,
     # bug #1, defense-in-depth alongside the reports/-exclude copytree fix above).
-    if (entry.get("kind") != "ab_arm"
-            and all(v in ("clean", "clean_beol", "skipped") for v in status.values())):
+    if entry.get("kind") != "ab_arm" and _all_signoff_clean(status):
         _ingest(entry)
         _mark_clean(led, conn, design, "signoff clean on first pass")
         return "clean"
     led.set_state(design, "fixing")
     fix_rc = _run_fix(entry)
     _ingest(entry)
-    if fix_rc == 0:
+    post_fix_status = _signoff_status(entry)
+    if fix_rc == 0 and _all_signoff_clean(post_fix_status):
         _mark_clean(led, conn, design, "signoff fix cleared residual")
         return "clean"
+    # A normal fixed-target run commonly reaches this point after `--check both`:
+    # DRC/LVS/route/RCX are clean, but timing is still violated. Do not fabricate
+    # clean from the local checker return code; give the timing catalog its own
+    # bounded repair turn, then require the full global vector to be clean.
+    if (entry.get("kind") != "ab_arm"
+            and post_fix_status.get("timing") not in ("clean", "clean_beol", "skipped")
+            and _physical_signoff_clean(post_fix_status)):
+        timing_entry = {**entry, "check": "timing"}
+        timing_rc = _run_fix(timing_entry)
+        _ingest(timing_entry)
+        post_fix_status = _signoff_status(entry)
+        if timing_rc == 0 and _all_signoff_clean(post_fix_status):
+            _mark_clean(led, conn, design, "timing repair passed full signoff recheck")
+            return "clean"
     # Record the POST-fix residual, NOT the pre-fix `status` snapshot. On a first signoff
     # pass `status` (line ~838) is read before any DRC/LVS ran, so it is usually
     # {drc:unknown,lvs:unknown}; recording it made 184 catalog_exhausted escalations all
     # read 'unknown,unknown' in the queue, hiding their genuinely diverse residuals
     # (80 drc=stuck / 67 lvs=fail / 29 both — 2026-06-28 audit). _run_fix has now run the
     # checks, so re-reading reflects WHAT the fixer could not clear: the honest residual.
-    residual = _signoff_status(entry)
+    residual = post_fix_status
     reason = _signoff_escalation_reason(residual)
     led.set_state(design, "escalated", reason=reason)
     if conn is not None:
@@ -2420,9 +2572,24 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         if not timing and not synth:
             ab_key = next(iter(pair.values()))[0].get("ab_key") or {}
             target = _symptom_target(conn, ab_key.get("symptom_id"))
-        samples = {arm: [_arm_metric(conn, e["project_path"], timing=timing,
-                                     synth=synth, target=target)
-                         for e in entries]
+        arm_check = pair["B"][0].get("check")
+
+        def _metric_for_arm(e: dict) -> dict | None:
+            metric = _arm_metric(conn, e["project_path"], timing=timing,
+                                 synth=synth, target=target)
+            if metric is not None and arm_check in ("route", "place"):
+                # ORFS pass alone is deliberately accepted by knowledge_db for
+                # legacy history, but it is insufficient for NEW backend A/B
+                # promotion.  Require the arm-local strict manifest so missing,
+                # skipped, or dirty signoff evidence cannot become a win.
+                metric = dict(metric)
+                metric["is_success"] = bool(
+                    metric.get("is_success")
+                    and _strict_signoff_manifest_clean(e["project_path"]))
+                metric["judged_on"] = "backend+strict_signoff"
+            return metric
+
+        samples = {arm: [_metric_for_arm(e) for e in entries]
                    for arm, entries in pair.items()}
         # If an arm produced NO judgeable run at all (incomplete clone/flow — see
         # _process_backend_ab_arm, bug #3), record NO verdict: a trial that never
@@ -2486,7 +2653,6 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         # when the arms' SPEC diverged (relaxed clock / enlarged die / an unrelated edit
         # arm A lacked) or arm B introduced a NEW DRC class arm A did not have. Neither
         # confound may promote OR demote — the trial is invalid, not decisive.
-        arm_check = pair["B"][0].get("check")
         veto = None
         if verdict in ("win", "loss"):
             veto = _arm_spec_mismatch(pair["A"][0]["project_path"],
@@ -2808,7 +2974,10 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
     conn = knowledge_db.connect()
     knowledge_db.ensure_schema(conn)
     prev_heur = None
-    hp = KNOWLEDGE / "heuristics.json"
+    db_path = Path(os.environ.get("R2G_KNOWLEDGE_DB")
+                   or knowledge_db.DEFAULT_DB_PATH)
+    hp = Path(os.environ.get("R2G_HEURISTICS_PATH")
+              or (db_path.parent / "heuristics.json"))
     if hp.exists():
         prev_heur = json.loads(hp.read_text())
     if max_workers and max_workers > 1:

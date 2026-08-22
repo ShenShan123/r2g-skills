@@ -1180,6 +1180,10 @@ def main(argv=None) -> int:
     ap.add_argument("--rank-first", default=None,
                     help="force this strategy id to the head of the ranked plan (A/B arm B)")
     args = ap.parse_args(argv)
+    heuristics_path = Path(
+        os.environ.get("R2G_HEURISTICS_PATH")
+        or (Path(__file__).resolve().parents[2] / "knowledge" / "heuristics.json")
+    )
 
     proj = Path(args.project_dir)
     drc = _load(proj / "reports" / "drc.json")
@@ -1221,7 +1225,7 @@ def main(argv=None) -> int:
         recipes = pooled = None
         idx_recipe, idx_pooled, idx_level = load_indexed_recipe(
             check=args.check, platform=plat, design_class=design_class,
-            drc=drc, lvs=lvs, tcheck=tcheck)
+            drc=drc, lvs=lvs, tcheck=tcheck, heuristics=heuristics_path)
     # The symptom key for this diagnosis: shared by the lifecycle
     # filter below and the negative-evidence gates (_annotate_live_gates).
     _sid = None
@@ -1252,9 +1256,11 @@ def main(argv=None) -> int:
             recipes, pooled = None, {}
     elif args.check != "route":
         sym_recipe, pooled = load_symptom_recipe(
-            check=args.check, platform=plat, drc=drc, lvs=lvs, tcheck=tcheck)
+            check=args.check, platform=plat, drc=drc, lvs=lvs, tcheck=tcheck,
+            heuristics=heuristics_path)
         recipes = sym_recipe if sym_recipe is not None else _load_recipes(
-            proj, check=args.check, drc=drc, lvs=lvs)
+            proj, check=args.check, drc=drc, lvs=lvs,
+            heuristics=heuristics_path)
     plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
                       tcheck=tcheck, route=route)
     if args.check == "drc" and "pin_side_rebalance" not in exclude:

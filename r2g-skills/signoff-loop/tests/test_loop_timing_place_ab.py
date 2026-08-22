@@ -269,14 +269,16 @@ def test_run_fix_timing_ab_arm_adds_checker_only_strict_signoff(monkeypatch):
     assert "R2G_FIX_RANK_FIRST" not in calls[1][1]
 
 
-def test_run_fix_live_timing_does_not_add_ab_strict_scan(monkeypatch):
+def test_run_fix_live_timing_adds_checker_only_strict_scan(monkeypatch):
     calls = []
     monkeypatch.setattr(
         engineer_loop.subprocess, "run",
         lambda argv, **kwargs: (calls.append(argv) or subprocess.CompletedProcess(argv, 0)))
     assert engineer_loop._run_fix(
         {"project_path": "/p", "platform": "sky130hd", "check": "timing"}) == 0
-    assert len(calls) == 1
+    assert len(calls) == 2
+    assert calls[0][-2:] == ["--check", "timing"]
+    assert calls[1][-4:] == ["--check", "both", "--max-iters", "0"]
 
 
 def test_arm_metric_timing_uses_timing_tier(tmp_path):
