@@ -553,6 +553,22 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
     # then the learned-recipe ranking surfaces it. Not auto-merged into
     # failure-patterns.md (human-review-queue invariant). See orfs-playbook.md.
     if routing_clean and tier in ("moderate", "severe"):
+        # Development candidate, not a live repair: two independent Sky130HD crypto
+        # subjects previously closed 100 MHz post-route setup misses when the ABC
+        # objective changed from the default timing mapping to its area-biased mode.
+        # The mechanism may reduce physical congestion even though it is not a
+        # generally valid timing optimization, so only an A/B arm may force it.
+        # A blind run must never select this candidate before two-family promotion.
+        if str(cfg.get("ABC_AREA", "0")).strip() != "1":
+            strategies.append(
+                {"id": "abc_area_physical_mapping",
+                 "rationale": "Evaluate area-biased ABC mapping as an A/B-gated "
+                              "physical timing candidate after a clean-route setup "
+                              "miss; keep the registered clock and all signoff "
+                              "checks unchanged.",
+                 "config_edits": {"ABC_AREA": "1"},
+                 "sdc_edits": {}, "rerun_from": "synth", "recheck": "timing",
+                 "auto_apply": True, "requires_ab_promotion": True})
         strategies.append(
             {"id": "backend_aware_synth_retune",
              "rationale": "Post-route timing miss with clean routing: re-pick the "

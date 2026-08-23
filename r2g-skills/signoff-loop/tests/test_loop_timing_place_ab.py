@@ -34,6 +34,7 @@ def test_symptom_check_routes_by_strategy(tmp_path):
     assert engineer_loop._symptom_check(conn, None, "period_relax") == "timing"
     assert engineer_loop._symptom_check(conn, None, "utilization_reduce") == "timing"
     assert engineer_loop._symptom_check(conn, None, "setup_slack_margin") == "timing"
+    assert engineer_loop._symptom_check(conn, None, "abc_area_physical_mapping") == "timing"
     # A DRC/LVS strategy with no special routing stays on the signoff path.
     assert engineer_loop._symptom_check(conn, None, "antenna_diode_repair") == "both"
     assert engineer_loop._symptom_check(conn, None, None) == "both"

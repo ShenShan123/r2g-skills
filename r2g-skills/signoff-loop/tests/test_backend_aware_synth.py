@@ -55,3 +55,17 @@ def test_shadow_strategy_selectable_by_ab_arm_rank_first():
     plan = dsf.build_plan({"status": "clean"}, {}, CFG, check="timing", tcheck=TMISS)
     auto = dsf._live_auto_strategy(plan, rank_first="backend_aware_synth_retune")
     assert auto is not None and auto["id"] == "backend_aware_synth_retune"
+
+
+def test_abc_area_candidate_is_ab_only_and_preserves_clock():
+    plan = dsf.build_plan({"status": "clean"}, {}, CFG, check="timing", tcheck=TMISS)
+    candidate = next((x for x in plan["strategies"]
+                      if x["id"] == "abc_area_physical_mapping"), None)
+    assert candidate is not None
+    assert candidate["config_edits"] == {"ABC_AREA": "1"}
+    assert candidate["sdc_edits"] == {}
+    assert candidate["rerun_from"] == "synth"
+    assert candidate["requires_ab_promotion"] is True
+    assert dsf._live_auto_strategy(plan) is not candidate
+    forced = dsf._live_auto_strategy(plan, rank_first="abc_area_physical_mapping")
+    assert forced is candidate

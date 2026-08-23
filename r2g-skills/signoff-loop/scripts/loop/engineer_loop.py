@@ -270,7 +270,7 @@ def _run_flow(entry: dict) -> int:
 # multi-hour signoff per repeat (2026-06-24 audit, bugs #1/#3).
 _PLACE_STRATEGIES = frozenset({"core_util_relief", "pin_perimeter_floor"})
 _TIMING_STRATEGIES = frozenset({"setup_slack_margin", "period_relax", "utilization_reduce",
-                                "backend_aware_synth_retune"})
+                                "backend_aware_synth_retune", "abc_area_physical_mapping"})
 # synth_memory_relax is a SYNTH backend-abort recovery (raise SYNTH_MEMORY_MAX_BITS +
 # pair a die auto-size): its A/B arm applies the recipe up-front and flows once, like the
 # place/route backend-abort arms, and is judged on 'synth cleared' (2026-06-28).
