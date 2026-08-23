@@ -765,7 +765,10 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
   echo "[$check] reached max-iters=$MAX_ITERS"
 }
 
-: > "$LOG"
+# The fix ledger is evidence, not a per-invocation scratch file.  An engineer-loop
+# turn can call us once for timing repair and again for final DRC/LVS validation;
+# truncating here would erase the timing attempt before ingest can learn from it.
+touch "$LOG"
 # RMD3-P0-01 session baseline: the state this whole invocation starts from. A
 # stale compare file from a prior (possibly crashed) invocation must not be
 # matched against the new log — remove it; the ingester also keys the compare
