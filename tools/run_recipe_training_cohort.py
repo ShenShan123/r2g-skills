@@ -288,13 +288,23 @@ def stable_replay_projects(campaign: Path) -> tuple[bool, list[Path]]:
 
 
 def stable_replay_flow_evidence(campaign: Path, project: Path) -> tuple[int, Path]:
-    """Return the verified second baseline's flow return code and evidence path."""
+    """Return the verified second baseline's ORFS return code and evidence path.
+
+    A probe records the ORFS run followed by checker/signoff commands.  The latter can
+    deliberately return nonzero for a real physical symptom, so they must never be
+    replayed as an ORFS crash by the repair loop.
+    """
     evidence = campaign / "state/failure_replay" / project.name / "attempt_2.json"
     result = read_json(evidence, {})
     commands = result.get("commands", []) if isinstance(result, dict) else []
-    if not commands or not isinstance(commands[-1], dict):
+    flow_commands = [
+        item for item in commands
+        if isinstance(item, dict)
+        and any(Path(str(part)).name == "run_orfs.sh" for part in item.get("command", []))
+    ]
+    if len(flow_commands) != 1:
         raise ValueError(f"stable replay has no reusable flow command: {evidence}")
-    return int(commands[-1]["returncode"]), evidence
+    return int(flow_commands[0]["returncode"]), evidence
 
 
 def quarantine_preexisting_candidates(db_path: Path, platform: str) -> list[dict[str, Any]]:
