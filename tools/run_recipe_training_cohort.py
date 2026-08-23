@@ -287,6 +287,16 @@ def stable_replay_projects(campaign: Path) -> tuple[bool, list[Path]]:
     return complete, stable
 
 
+def stable_replay_flow_evidence(campaign: Path, project: Path) -> tuple[int, Path]:
+    """Return the verified second baseline's flow return code and evidence path."""
+    evidence = campaign / "state/failure_replay" / project.name / "attempt_2.json"
+    result = read_json(evidence, {})
+    commands = result.get("commands", []) if isinstance(result, dict) else []
+    if not commands or not isinstance(commands[-1], dict):
+        raise ValueError(f"stable replay has no reusable flow command: {evidence}")
+    return int(commands[-1]["returncode"]), evidence
+
+
 def quarantine_preexisting_candidates(db_path: Path, platform: str) -> list[dict[str, Any]]:
     """Park inherited A/B backlog in an isolated campaign database.
 
@@ -375,6 +385,7 @@ def run_existing_recipes(args: argparse.Namespace) -> None:
     for project in projects:
         if project.name in known:
             continue
+        flow_returncode, replay_evidence = stable_replay_flow_evidence(campaign, project)
         subprocess.run(
             [
                 sys.executable,
@@ -386,6 +397,10 @@ def run_existing_recipes(args: argparse.Namespace) -> None:
                 str(project),
                 "--platform",
                 args.platform,
+                "--reuse-flow-returncode",
+                str(flow_returncode),
+                "--replay-evidence",
+                str(replay_evidence),
             ],
             check=True,
         )

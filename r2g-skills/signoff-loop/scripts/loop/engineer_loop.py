@@ -1373,8 +1373,29 @@ def process_one(led: Ledger, entry: dict, conn, *,
     if entry.get("kind") == "ab_arm" and entry.get("check") in ("route", "place", "synth"):
         _process_backend_ab_arm(led, entry, conn)
         return None
-    led.set_state(design, "flow")
-    rc = _run_flow(entry)
+    # Recipe-training cohorts may already have two digest-bound executions proving the
+    # same baseline failure.  Re-running that baseline a third time before invoking the
+    # fixer wastes the dominant EDA cost (often a full route timeout).  The training
+    # runner therefore opts in with the verified second attempt's return code and
+    # evidence path.  Consume the marker from this in-memory entry so any recursive
+    # post-fix reflow below still executes normally.
+    reused_flow_rc = entry.pop("reuse_existing_flow_returncode", None)
+    if reused_flow_rc is None:
+        led.set_state(design, "flow")
+        rc = _run_flow(entry)
+    else:
+        try:
+            rc = int(reused_flow_rc)
+        except (TypeError, ValueError):
+            led.set_state(design, "escalated", reason="invalid_reused_flow_evidence")
+            return "escalated"
+        led.set_state(
+            design,
+            "flow",
+            flow_evidence_reused=True,
+            reused_flow_returncode=rc,
+            replay_evidence=entry.get("replay_evidence"),
+        )
     if rc == PROJECT_INPUTS_MISSING_RC:
         # No project dir => no flow ran => there is NOTHING to ingest. Falling through
         # would _ingest() an empty project (a junk/absent-report row) and then diagnose
@@ -3168,6 +3189,11 @@ def main(argv=None) -> int:
     pa.add_argument("--ledger", required=True, type=Path)
     pa.add_argument("--project", required=True)
     pa.add_argument("--platform", default="sky130hd")
+    pa.add_argument("--reuse-flow-returncode", type=int, default=None,
+                    help="reuse a prevalidated failed flow result instead of running a "
+                         "third baseline (training/replay callers only)")
+    pa.add_argument("--replay-evidence", default=None,
+                    help="path to the stable replay evidence authorizing flow reuse")
     ps = sub.add_parser("status")
     ps.add_argument("--ledger", required=True, type=Path)
     pd = sub.add_parser("ab-drain", help="fire A/B trials for pending candidates")
@@ -3208,9 +3234,15 @@ def main(argv=None) -> int:
         run(args.ledger, max_designs=args.max, max_workers=args.workers)
     elif args.cmd == "add":
         led = Ledger(args.ledger)
-        led.add({"design": Path(args.project).name,
+        entry = {"design": Path(args.project).name,
                  "project_path": str(Path(args.project).resolve()),
-                 "platform": args.platform})
+                 "platform": args.platform}
+        if args.reuse_flow_returncode is not None:
+            if not args.replay_evidence:
+                ap.error("--reuse-flow-returncode requires --replay-evidence")
+            entry["reuse_existing_flow_returncode"] = args.reuse_flow_returncode
+            entry["replay_evidence"] = str(Path(args.replay_evidence).resolve())
+        led.add(entry)
     elif args.cmd == "ab-drain":
         n = ab_drain(args.ledger, n_ab_designs=args.n_designs,
                      max_workers=args.workers)

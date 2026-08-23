@@ -142,6 +142,21 @@ def test_stable_replay_projects_filters_unstable_results(tmp_path):
     assert stable == [Path("/p/a")]
 
 
+def test_stable_replay_flow_evidence_uses_second_attempt(tmp_path):
+    campaign = tmp_path / "campaign"
+    project = campaign / "projects/demo"
+    evidence = campaign / "state/failure_replay/demo/attempt_2.json"
+    MODULE.write_json(
+        evidence,
+        {"commands": [{"returncode": 124, "command": ["run_orfs.sh"]}]},
+    )
+
+    returncode, path = MODULE.stable_replay_flow_evidence(campaign, project)
+
+    assert returncode == 124
+    assert path == evidence
+
+
 def test_replay_skips_interrupted_and_unclassified_execution_failures(tmp_path):
     campaign = tmp_path / "campaign"
     projects = []

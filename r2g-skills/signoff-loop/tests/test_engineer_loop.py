@@ -46,6 +46,42 @@ def test_process_one_clean_path(tmp_path, monkeypatch):
     assert ("flow", "d0") in calls and ("ingest", "d0") in calls
 
 
+def test_process_one_reuses_prevalidated_flow_once(tmp_path, monkeypatch):
+    """Stable replay can skip its third baseline, but the post-fix flow stays real."""
+    calls = []
+
+    def run_flow(entry):
+        calls.append("post_fix_flow")
+        return 0
+
+    monkeypatch.setattr(engineer_loop, "_run_flow", run_flow)
+    monkeypatch.setattr(engineer_loop, "_fail_stage", lambda entry: "route")
+    monkeypatch.setattr(engineer_loop, "_run_fix", lambda entry: 0)
+    monkeypatch.setattr(engineer_loop, "_ingest", lambda entry: None)
+    statuses = iter([
+        {"drc": "unknown", "lvs": "unknown", "route": "unknown",
+         "rcx": "unknown", "timing": "unknown"},
+        {"drc": "clean", "lvs": "clean", "route": "clean",
+         "rcx": "clean", "timing": "clean"},
+    ])
+    monkeypatch.setattr(engineer_loop, "_signoff_status", lambda entry: next(statuses))
+    led = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
+    entry = _entry("replayed")
+    entry.update({
+        "reuse_existing_flow_returncode": 124,
+        "replay_evidence": str(tmp_path / "attempt_2.json"),
+    })
+    led.add(entry)
+
+    engineer_loop.process_one(led, led.pending()[0], conn=None)
+
+    assert calls == []
+    assert led.state("replayed") == "clean"
+    merged = led.get("replayed")
+    assert merged["flow_evidence_reused"] is True
+    assert merged["reused_flow_returncode"] == 124
+
+
 def test_run_flow_invalidates_stale_signoff_reports(tmp_path, monkeypatch):
     """A re-flow MUST delete stale project-local signoff verdicts so the first-pass clean gate
     cannot _mark_clean from a PRIOR platform's reports -- the 2026-06-30 fabricated-clean bug

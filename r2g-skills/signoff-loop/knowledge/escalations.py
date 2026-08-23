@@ -10,6 +10,9 @@ from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 
 REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
            "repeated_regression",
+           # A training/replay caller requested baseline reuse but supplied a malformed
+           # return code. This is orchestration evidence failure, not a design symptom.
+           "invalid_reused_flow_evidence",
            # A backend route abort whose route_relief fixer is exhausted (util at
            # floor) or inapplicable (DIE_AREA-sized, no CORE_UTILIZATION knob).
            # A KNOWN, recipe-backed residual — NOT an unseen crash (2026-06-17).
