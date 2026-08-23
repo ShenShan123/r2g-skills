@@ -453,9 +453,10 @@ def execution_environment(args: argparse.Namespace, state: Path) -> dict[str, st
             "R2G_STAGE_FRESHNESS": "content",
         }
     )
-    # ORFS_MAX_CPUS is a CPU-index ceiling, not a per-flow worker count. Leaving it
-    # unset lets independently launched probes use the host scheduler normally.
-    env.pop("ORFS_MAX_CPUS", None)
+    # Keep the wrapper's CPU affinity ceiling aligned with the requested OpenROAD
+    # worker count.  A probe must not silently expand to every host core merely
+    # because it is launched outside the normal campaign wrapper.
+    env["ORFS_MAX_CPUS"] = str(args.cores)
     return env
 
 

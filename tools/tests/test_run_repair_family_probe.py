@@ -14,9 +14,7 @@ assert SPEC and SPEC.loader
 SPEC.loader.exec_module(MODULE)
 
 
-def test_parallel_probe_environment_uses_workers_without_cpu_index_pinning(
-    tmp_path, monkeypatch
-):
+def test_parallel_probe_environment_bounds_workers_and_cpu_affinity(tmp_path, monkeypatch):
     monkeypatch.setenv("ORFS_MAX_CPUS", "4")
     args = argparse.Namespace(timeout_seconds=600, cores=4)
 
@@ -24,7 +22,7 @@ def test_parallel_probe_environment_uses_workers_without_cpu_index_pinning(
 
     assert env["NUM_CORES"] == "4"
     assert env["ORFS_TIMEOUT"] == "600"
-    assert "ORFS_MAX_CPUS" not in env
+    assert env["ORFS_MAX_CPUS"] == "4"
 
 
 def test_frozen_probe_input_integrity_fails_closed_on_mutated_sdc(tmp_path):
