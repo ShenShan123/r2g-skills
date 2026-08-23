@@ -1392,6 +1392,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
         led.set_state(
             design,
             "flow",
+            reuse_existing_flow_returncode=None,
             flow_evidence_reused=True,
             reused_flow_returncode=rc,
             replay_evidence=entry.get("replay_evidence"),

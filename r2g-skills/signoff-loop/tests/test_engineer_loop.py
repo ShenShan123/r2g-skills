@@ -47,7 +47,7 @@ def test_process_one_clean_path(tmp_path, monkeypatch):
 
 
 def test_process_one_reuses_prevalidated_flow_once(tmp_path, monkeypatch):
-    """Stable replay can skip its third baseline, but the post-fix flow stays real."""
+    """Stable replay skips its third baseline and durably consumes the marker."""
     calls = []
 
     def run_flow(entry):
@@ -80,6 +80,8 @@ def test_process_one_reuses_prevalidated_flow_once(tmp_path, monkeypatch):
     merged = led.get("replayed")
     assert merged["flow_evidence_reused"] is True
     assert merged["reused_flow_returncode"] == 124
+    reopened = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
+    assert reopened.get("replayed")["reuse_existing_flow_returncode"] is None
 
 
 def test_run_flow_invalidates_stale_signoff_reports(tmp_path, monkeypatch):
