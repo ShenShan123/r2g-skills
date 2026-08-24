@@ -217,6 +217,26 @@ def test_replay_skips_interrupted_unclassified_and_ineligible_capacity_failures(
     assert not (campaign / "state/failure_replay").exists()
 
 
+def test_summary_counts_scale_ineligible_without_treating_it_as_repair_evidence(tmp_path):
+    campaign = tmp_path / "campaign"
+    project = campaign / "projects/too_small"
+    project.mkdir(parents=True)
+    MODULE.write_json(
+        project / "repair_family_probe_result.json",
+        {"scale_ineligible": True, "strict_clean": False},
+    )
+    MODULE.write_json(
+        campaign / "state/cohort_manifest.json",
+        {"records": [{"design": "too_small", "status": "ready", "project": str(project)}]},
+    )
+
+    MODULE.summarize(argparse.Namespace(campaign_root=campaign))
+
+    summary = MODULE.read_json(campaign / "state/cohort_summary.json")
+    assert summary["scale_ineligible"] == 1
+    assert summary["repair_challenge"] == 0
+
+
 def test_quarantine_preexisting_candidates_is_platform_scoped(tmp_path):
     db = tmp_path / "knowledge.sqlite"
     conn = sqlite3.connect(db)

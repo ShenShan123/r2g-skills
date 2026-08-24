@@ -618,6 +618,7 @@ def summarize(args: argparse.Namespace) -> None:
         "environment_failure": 0,
         "input_qualification_failure": 0,
         "capacity_infeasible": 0,
+        "scale_ineligible": 0,
         "execution_interrupted": 0,
         "unclassified_execution_failure": 0,
         "runner_failure": 0,
