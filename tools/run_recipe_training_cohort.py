@@ -287,6 +287,11 @@ def execute(args: argparse.Namespace) -> None:
                         {"project": str(project), "status": "execution_interrupted", "returncode": 0}
                     )
                     continue
+                if existing.get("constraint_coverage_incomplete") is True:
+                    preflight_results.append(
+                        {"project": str(project), "status": "constraint_ineligible", "returncode": 0}
+                    )
+                    continue
                 admitted.append(project)
                 if existing.get("orfs_stages") != "synth floorplan place cts route finish":
                     preflight_admitted.add(project)
@@ -300,12 +305,17 @@ def execute(args: argparse.Namespace) -> None:
                 "returncode": completed.returncode,
                 "mapped_cells": result.get("mapped_cells"),
                 "scale_ineligible": result.get("scale_ineligible") is True,
+                "constraint_coverage": result.get("constraint_coverage"),
                 "stdout_tail": completed.stdout[-2000:],
                 "stderr_tail": completed.stderr[-2000:],
             }
             preflight_results.append(preflight_record)
             write_json(campaign / "state/scale_preflight" / f"{project.name}.json", result)
-            if completed.returncode == 0 and result.get("scale_ineligible") is not True:
+            if (
+                completed.returncode == 0
+                and result.get("scale_ineligible") is not True
+                and result.get("constraint_coverage_incomplete") is not True
+            ):
                 admitted.append(project)
                 preflight_admitted.add(project)
         projects = admitted
@@ -550,6 +560,8 @@ def replay_failures(args: argparse.Namespace) -> None:
             continue
         if first.get("scale_ineligible") is True:
             continue
+        if first.get("constraint_coverage_incomplete") is True:
+            continue
         if first.get("execution_interrupted") is True:
             continue
         if first.get("unclassified_execution_failure") is True:
@@ -619,6 +631,7 @@ def summarize(args: argparse.Namespace) -> None:
         "input_qualification_failure": 0,
         "capacity_infeasible": 0,
         "scale_ineligible": 0,
+        "constraint_ineligible": 0,
         "execution_interrupted": 0,
         "unclassified_execution_failure": 0,
         "runner_failure": 0,
@@ -642,6 +655,8 @@ def summarize(args: argparse.Namespace) -> None:
             status = "capacity_infeasible"
         elif result.get("scale_ineligible") is True:
             status = "scale_ineligible"
+        elif result.get("constraint_coverage_incomplete") is True:
+            status = "constraint_ineligible"
         elif result.get("execution_interrupted") is True:
             status = "execution_interrupted"
         elif result.get("unclassified_execution_failure") is True:

@@ -475,6 +475,34 @@ def mapped_cell_count_out_of_bounds(
     )
 
 
+def constraint_coverage(flow_log: str) -> dict[str, int | str | None]:
+    """Read ORFS ``check_setup`` coverage warnings from a floorplan flow log.
+
+    A finite WNS for one selected clock is not a timing-clean design when other
+    sequential endpoints are outside the SDC. The candidate path therefore
+    requires explicit zero counts for both sequential-coverage warnings.
+    Missing observations fail closed rather than guessing that coverage is good.
+    """
+    patterns = {
+        "unclocked_register_pins": r"There are\s+([0-9,]+)\s+unclocked register/latch pins\.",
+        "unconstrained_endpoints": r"There are\s+([0-9,]+)\s+unconstrained endpoints\.",
+        "input_ports_missing_delay": r"There are\s+([0-9,]+)\s+input ports missing set_input_delay\.",
+        "output_ports_missing_delay": r"There are\s+([0-9,]+)\s+output ports missing set_output_delay\.",
+    }
+    counts: dict[str, int | None] = {}
+    for name, pattern in patterns.items():
+        matches = re.findall(pattern, flow_log, re.I)
+        counts[name] = int(matches[-1].replace(",", "")) if matches else None
+    required = ("unclocked_register_pins", "unconstrained_endpoints")
+    if any(counts[name] is None for name in required):
+        status = "unknown"
+    elif any(int(counts[name] or 0) > 0 for name in required):
+        status = "incomplete"
+    else:
+        status = "complete"
+    return {"status": status, **counts}
+
+
 def final_artifact(run_dir: Path, name: str) -> Path:
     for subdir in ("final", "results", ""):
         candidate = run_dir / subdir / name if subdir else run_dir / name
@@ -632,6 +660,10 @@ def execute(args: argparse.Namespace) -> None:
     )
     if scale_ineligible:
         signature.append("SYNTH_CELL_COUNT_OUT_OF_RANGE")
+    coverage = constraint_coverage(flow_log)
+    constraint_coverage_incomplete = coverage["status"] != "complete"
+    if constraint_coverage_incomplete:
+        signature.append("CONSTRAINT_COVERAGE_INCOMPLETE")
     drc = reports["drc"]
     timing = reports["timing_check"]
     ppa_timing = metric(reports["ppa"], "summary", "timing") or {}
@@ -684,10 +716,13 @@ def execute(args: argparse.Namespace) -> None:
     signature.extend(execution_signatures)
     signature = sorted(set(signature))
     gate = reports["signoff_gate"]
-    strict_clean = gate.get("status") in {"clean", "pass", "strict_clean"}
+    strict_clean = (
+        gate.get("status") in {"clean", "pass", "strict_clean"}
+        and not constraint_coverage_incomplete
+    )
     publication_strict_clean = reports["signoff_manifest"].get("strict_clean") is True
     result = {
-        "schema_version": "repair-family-probe-result-1.2",
+        "schema_version": "repair-family-probe-result-1.3",
         "completed_at": now(),
         "family_id": manifest["family_id"],
         "task_id": manifest["task_id"],
@@ -702,6 +737,8 @@ def execute(args: argparse.Namespace) -> None:
         "input_qualification_failure": input_qualification_failure,
         "capacity_infeasible": capacity_infeasible,
         "scale_ineligible": scale_ineligible,
+        "constraint_coverage_incomplete": constraint_coverage_incomplete,
+        "constraint_coverage": coverage,
         "mapped_cells": cell_count,
         "min_mapped_cells": min_mapped_cells,
         "max_mapped_cells": max_mapped_cells,
@@ -710,7 +747,7 @@ def execute(args: argparse.Namespace) -> None:
         "execution_interrupted": execution_interrupted,
         "unclassified_execution_failure": unclassified_execution_failure,
         "constraint_attestation": {
-            "status": "bound",
+            "status": "bound_and_covered" if not constraint_coverage_incomplete else "bound_but_incomplete",
             "mode": "fixed_registered_target",
             "target_frequency_mhz": manifest["protected_task"]["target_frequency_mhz"],
             "sdc_sha256": manifest["protected_task"]["sdc_sha256"],

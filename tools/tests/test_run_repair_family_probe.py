@@ -159,6 +159,29 @@ def test_mapped_cell_admission_has_both_minimum_and_maximum_bounds():
     assert MODULE.mapped_cell_count_out_of_bounds(100001, 100, 100000) is True
 
 
+def test_constraint_coverage_requires_all_sequential_endpoints_to_be_constrained():
+    clean = (
+        "Warning: There are 2 input ports missing set_input_delay.\n"
+        "Warning: There are 3 output ports missing set_output_delay.\n"
+        "Warning: There are 0 unclocked register/latch pins.\n"
+        "Warning: There are 0 unconstrained endpoints.\n"
+    )
+    incomplete = (
+        "Warning: There are 7302 unclocked register/latch pins.\n"
+        "Warning: There are 7634 unconstrained endpoints.\n"
+    )
+
+    assert MODULE.constraint_coverage(clean) == {
+        "status": "complete",
+        "unclocked_register_pins": 0,
+        "unconstrained_endpoints": 0,
+        "input_ports_missing_delay": 2,
+        "output_ports_missing_delay": 3,
+    }
+    assert MODULE.constraint_coverage(incomplete)["status"] == "incomplete"
+    assert MODULE.constraint_coverage("no check_setup report")["status"] == "unknown"
+
+
 def test_synth_module_redefinition_is_an_input_closure_failure():
     duplicate = (
         "rtl/top/../cores/uart_rx.v:1: "
