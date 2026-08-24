@@ -107,6 +107,16 @@ def test_write_json_is_atomic_and_read_json_round_trips(tmp_path):
     }
 
 
+def test_force_rerun_args_overrides_existing_rerun_field():
+    original = argparse.Namespace(rerun=False, workers=1, max_mapped_cells=100000)
+
+    forced = MODULE.force_rerun_args(original)
+
+    assert forced.rerun is True
+    assert forced.workers == 1
+    assert original.rerun is False
+
+
 def test_stable_replay_projects_requires_all_eligible_results(tmp_path):
     campaign = tmp_path / "campaign"
     for name in ("a", "b"):

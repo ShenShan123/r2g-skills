@@ -244,6 +244,11 @@ def _probe_command(project: Path, args: argparse.Namespace, *, orfs_stages: str 
     return command
 
 
+def force_rerun_args(args: argparse.Namespace) -> argparse.Namespace:
+    """Clone parsed arguments while forcing a full run after an admitted preflight."""
+    return argparse.Namespace(**(vars(args) | {"rerun": True}))
+
+
 def execute_one(project: Path, args: argparse.Namespace) -> dict[str, Any]:
     result_path = project / "repair_family_probe_result.json"
     if result_path.is_file() and not args.rerun:
@@ -315,7 +320,7 @@ def execute(args: argparse.Namespace) -> None:
             },
         )
     results: list[dict[str, Any]] = []
-    full_flow_args = argparse.Namespace(**vars(args), rerun=True)
+    full_flow_args = force_rerun_args(args)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {
             pool.submit(execute_one, project, full_flow_args if project in preflight_admitted else args): project
