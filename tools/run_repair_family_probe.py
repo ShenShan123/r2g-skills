@@ -489,10 +489,17 @@ def constraint_coverage(flow_log: str) -> dict[str, int | str | None]:
         "input_ports_missing_delay": r"There are\s+([0-9,]+)\s+input ports missing set_input_delay\.",
         "output_ports_missing_delay": r"There are\s+([0-9,]+)\s+output ports missing set_output_delay\.",
     }
+    # ORFS emits these lines only when the corresponding count is nonzero.
+    # Absence is therefore evidence of zero *only after* the floorplan
+    # check_setup block is present; without that block the observation remains
+    # unknown and the probe must fail closed.
+    check_setup_seen = re.search(r"\bcheck_setup\b", flow_log, re.I) is not None
     counts: dict[str, int | None] = {}
     for name, pattern in patterns.items():
         matches = re.findall(pattern, flow_log, re.I)
-        counts[name] = int(matches[-1].replace(",", "")) if matches else None
+        counts[name] = (
+            int(matches[-1].replace(",", "")) if matches else (0 if check_setup_seen else None)
+        )
     required = ("unclocked_register_pins", "unconstrained_endpoints")
     if any(counts[name] is None for name in required):
         status = "unknown"
