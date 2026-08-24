@@ -246,9 +246,12 @@ def materialize(args: argparse.Namespace) -> None:
     sdc_path.write_text(sdc, encoding="utf-8")
     edits = parse_edits(args.set)
     defaults = {
-        "CORE_UTILIZATION": "25",
+        "CORE_UTILIZATION": "20",
         "PLACE_DENSITY_LB_ADDON": "0.20",
-        "ABC_AREA": "0",
+        # Keep probe controls on the same Sky130HD baseline as
+        # mk_sky130_project.py. Otherwise ABC_AREA=1 can appear to be a repair
+        # even though it is already part of the production materialization policy.
+        "ABC_AREA": "1",
     }
     defaults.update(edits)
     config_artifacts = []
@@ -400,9 +403,16 @@ def first_present(*values: Any) -> Any:
     return None
 
 
-def classify_flow_failures(flow_log: str) -> tuple[bool, bool, list[str]]:
+def classify_flow_failures(flow_log: str) -> tuple[bool, bool, bool, list[str]]:
     missing_include = bool(
         re.search(r"Can't open include file|cannot open include file|missing explicit RTL input", flow_log, re.I)
+    )
+    # Re-reading the same compilation unit through an explicit file list and a
+    # source-level include is a closure construction error, not an ORFS
+    # execution failure. Treat it like a missing dependency so it cannot enter
+    # the physical-repair or learner paths.
+    module_redefinition = bool(
+        re.search(r"(?:ERROR:\s*)?Re-definition of module\b", flow_log, re.I)
     )
     # IFP-0065 alone can describe a genuinely undersized, repairable floorplan.
     # Classify it as an input-qualification failure only when synthesis/OpenDB also
@@ -412,7 +422,15 @@ def classify_flow_failures(flow_log: str) -> tuple[bool, bool, list[str]]:
         re.search(r"number instances in verilog is\s+0\b", flow_log, re.I)
         or re.search(r"Design area\s+0(?:\.0+)?\s+um\^2", flow_log, re.I)
     )
-    input_failure = missing_include or zero_cell_netlist
+    # A bounded no-macro task cannot turn a large inferred memory into a
+    # physical-design Recipe.  This is neither a malformed RTL closure nor an
+    # unclassified ORFS crash: retain it as explicit capacity evidence and keep
+    # it out of replay, learner, and promotion paths.
+    capacity_infeasible = bool(
+        re.search(r"synthesized memory size\s+\d+\s+exceeds", flow_log, re.I)
+        or re.search(r"exceeds\s+synth_memory_max_bits", flow_log, re.I)
+    )
+    input_failure = missing_include or module_redefinition or zero_cell_netlist
     runtime_failure = bool(
         re.search(r"Stage\s+'(?:route|place|cts|synth)'\s+failed\s+\(exit code 124\)", flow_log)
         or re.search(r"timed out after\s+\d+s, exit code 124", flow_log, re.I)
@@ -420,12 +438,16 @@ def classify_flow_failures(flow_log: str) -> tuple[bool, bool, list[str]]:
     signatures: list[str] = []
     if missing_include:
         signatures.append("SYNTH_MISSING_INCLUDE")
+    if module_redefinition:
+        signatures.append("SYNTH_MODULE_REDEFINITION")
     if zero_cell_netlist:
         signatures.append("SYNTH_ZERO_CELL_NETLIST")
+    if capacity_infeasible:
+        signatures.append("SYNTH_MEMORY_CAPACITY")
     if runtime_failure:
         timeout_stage = re.search(r"Stage\s+'([^']+)'\s+failed\s+\(exit code 124\)", flow_log)
         signatures.append(f"{(timeout_stage.group(1) if timeout_stage else 'FLOW').upper()}_TIMEOUT")
-    return input_failure, runtime_failure, signatures
+    return input_failure, runtime_failure, capacity_infeasible, signatures
 
 
 def final_artifact(run_dir: Path, name: str) -> Path:
@@ -559,7 +581,9 @@ def execute(args: argparse.Namespace) -> None:
     if run_dir and (run_dir / "flow.log").is_file():
         flow_log = (run_dir / "flow.log").read_text(encoding="utf-8", errors="ignore")
     signature = sorted(set(re.findall(r"\[ERROR\s+([A-Z]+-\d+)\]", flow_log)))
-    input_qualification_failure, runtime_budget_failure, classified = classify_flow_failures(flow_log)
+    input_qualification_failure, runtime_budget_failure, capacity_infeasible, classified = (
+        classify_flow_failures(flow_log)
+    )
     signature.extend(classified)
     drc = reports["drc"]
     timing = reports["timing_check"]
@@ -613,7 +637,7 @@ def execute(args: argparse.Namespace) -> None:
     strict_clean = gate.get("status") in {"clean", "pass", "strict_clean"}
     publication_strict_clean = reports["signoff_manifest"].get("strict_clean") is True
     result = {
-        "schema_version": "repair-family-probe-result-1.1",
+        "schema_version": "repair-family-probe-result-1.2",
         "completed_at": now(),
         "family_id": manifest["family_id"],
         "task_id": manifest["task_id"],
@@ -626,6 +650,7 @@ def execute(args: argparse.Namespace) -> None:
         "strict_clean_scope": "fixed_target_physical_signoff",
         "publication_strict_clean": publication_strict_clean,
         "input_qualification_failure": input_qualification_failure,
+        "capacity_infeasible": capacity_infeasible,
         "runtime_budget_failure": runtime_budget_failure,
         "execution_interrupted": execution_interrupted,
         "unclassified_execution_failure": unclassified_execution_failure,

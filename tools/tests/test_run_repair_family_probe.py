@@ -99,11 +99,13 @@ def test_failure_patterns_separate_missing_include_from_route_timeout():
     assert MODULE.classify_flow_failures(missing) == (
         True,
         False,
+        False,
         ["SYNTH_MISSING_INCLUDE"],
     )
     assert MODULE.classify_flow_failures(timeout) == (
         False,
         True,
+        False,
         ["ROUTE_TIMEOUT"],
     )
 
@@ -119,9 +121,39 @@ def test_zero_cell_netlist_is_input_failure_but_ifp_0065_alone_is_not():
     assert MODULE.classify_flow_failures(empty) == (
         True,
         False,
+        False,
         ["SYNTH_ZERO_CELL_NETLIST"],
     )
-    assert MODULE.classify_flow_failures(undersized) == (False, False, [])
+    assert MODULE.classify_flow_failures(undersized) == (False, False, False, [])
+
+
+def test_synth_memory_cap_is_explicit_capacity_infeasibility():
+    memory_cap = (
+        "Largest single memory instance: 180224 bits\n"
+        "SYNTH_MEMORY_MAX_BITS: 4096\n"
+        "Error: Synthesized memory size 4096 exceeds SYNTH_MEMORY_MAX_BITS\n"
+    )
+
+    assert MODULE.classify_flow_failures(memory_cap) == (
+        False,
+        False,
+        True,
+        ["SYNTH_MEMORY_CAPACITY"],
+    )
+
+
+def test_synth_module_redefinition_is_an_input_closure_failure():
+    duplicate = (
+        "rtl/top/../cores/uart_rx.v:1: "
+        "ERROR: Re-definition of module `$abstract\\\\uart_rx'!\n"
+    )
+
+    assert MODULE.classify_flow_failures(duplicate) == (
+        True,
+        False,
+        False,
+        ["SYNTH_MODULE_REDEFINITION"],
+    )
 
 
 def test_interrupted_orfs_exit_is_not_repair_evidence():
@@ -200,6 +232,40 @@ def test_materialize_copies_bound_source_provenance_to_metadata(tmp_path):
     assert metadata["source_repo_url"] == "https://example.test/org/repo"
     assert metadata["source_commit"] == commit
     assert metadata["source_provenance_status"] == "repo_url_commit_and_bytes_bound"
+
+
+def test_materialize_uses_the_frozen_sky130hd_baseline_defaults(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    (source / "rtl").mkdir(parents=True)
+    (source / "rtl/top.v").write_text(
+        "module top(input wire clk); endmodule\n", encoding="utf-8"
+    )
+    args = argparse.Namespace(
+        source=source,
+        source_repo_url=None,
+        source_commit=None,
+        rtl_file=[],
+        dependency_file=[],
+        project=project,
+        family="test-family",
+        task_id="test-task",
+        variant="baseline",
+        platform="sky130hd",
+        top_module="top",
+        clock_port="clk",
+        frequency_mhz=100.0,
+        set=[],
+        unset=[],
+        fastroute_tcl=None,
+    )
+
+    MODULE.materialize(args)
+
+    config = (project / "constraints/config.mk").read_text(encoding="utf-8")
+    assert "export CORE_UTILIZATION = 20" in config
+    assert "export PLACE_DENSITY_LB_ADDON = 0.20" in config
+    assert "export ABC_AREA = 1" in config
 
 
 def test_materialize_does_not_trust_declared_commit_for_plain_snapshot(tmp_path):

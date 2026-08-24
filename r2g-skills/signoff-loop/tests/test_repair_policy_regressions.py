@@ -82,6 +82,37 @@ def test_timing_trial_policy_allows_only_registered_setup_margin(
         "utilization_reduce", "period_relax"}
 
 
+def test_fixed_task_policy_keeps_synthesis_recipe_but_blocks_area_and_clock(
+        tmp_path: Path, monkeypatch):
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(json.dumps({
+        "schema_version": "r2g-repair-action-policy-1.0",
+        "allowed_numeric_knobs": {},
+        "allowed_string_knobs": {
+            "ABC_AREA": ["0", "1"],
+            "SYNTH_HIERARCHICAL": ["0", "1"],
+        },
+        "allowed_sdc_edits": {},
+    }), encoding="utf-8")
+    monkeypatch.setenv("R2G_REPAIR_ACTION_POLICY_FILE", str(policy_path))
+    plan = dsf.build_plan(
+        {}, {},
+        {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "20", "ABC_AREA": "1"},
+        check="timing",
+        tcheck={"tier": "severe", "wns_ns": -3.0, "clock_period_ns": 10.0},
+        route={"status": "clean", "total_violations": 0},
+    )
+
+    dsf._apply_repair_action_policy(plan)
+
+    assert [s["id"] for s in plan["strategies"]] == [
+        "backend_aware_synth_retune"
+    ]
+    assert {r["strategy"] for r in plan["action_policy_rejections"]} == {
+        "period_relax", "utilization_reduce"
+    }
+
+
 def test_configured_but_unreadable_action_policy_fails_closed(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("R2G_REPAIR_ACTION_POLICY_FILE", str(tmp_path / "missing.json"))
     plan = {"status": "fail", "strategies": [

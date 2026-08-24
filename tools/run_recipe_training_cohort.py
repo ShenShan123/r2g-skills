@@ -476,6 +476,8 @@ def replay_failures(args: argparse.Namespace) -> None:
             continue
         if first.get("input_qualification_failure") is True:
             continue
+        if first.get("capacity_infeasible") is True:
+            continue
         if first.get("execution_interrupted") is True:
             continue
         if first.get("unclassified_execution_failure") is True:
@@ -543,6 +545,7 @@ def summarize(args: argparse.Namespace) -> None:
         "repair_challenge": 0,
         "environment_failure": 0,
         "input_qualification_failure": 0,
+        "capacity_infeasible": 0,
         "execution_interrupted": 0,
         "unclassified_execution_failure": 0,
         "runner_failure": 0,
@@ -562,6 +565,8 @@ def summarize(args: argparse.Namespace) -> None:
             status = "environment_failure"
         elif result.get("input_qualification_failure") is True:
             status = "input_qualification_failure"
+        elif result.get("capacity_infeasible") is True:
+            status = "capacity_infeasible"
         elif result.get("execution_interrupted") is True:
             status = "execution_interrupted"
         elif result.get("unclassified_execution_failure") is True:
