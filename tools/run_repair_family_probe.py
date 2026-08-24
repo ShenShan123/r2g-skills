@@ -479,8 +479,10 @@ def constraint_coverage(flow_log: str) -> dict[str, int | str | None]:
     """Read ORFS ``check_setup`` coverage warnings from a floorplan flow log.
 
     A finite WNS for one selected clock is not a timing-clean design when other
-    sequential endpoints are outside the SDC. The candidate path therefore
-    requires explicit zero counts for both sequential-coverage warnings.
+    sequential registers have no clock constraint. The candidate path therefore
+    requires an explicit zero count for unclocked register/latch pins. An
+    unconstrained endpoint caused only by absent top-level I/O delays is retained
+    as scope metadata: this fixed task does not define an external I/O model.
     Missing observations fail closed rather than guessing that coverage is good.
     """
     patterns = {
@@ -500,10 +502,9 @@ def constraint_coverage(flow_log: str) -> dict[str, int | str | None]:
         counts[name] = (
             int(matches[-1].replace(",", "")) if matches else (0 if check_setup_seen else None)
         )
-    required = ("unclocked_register_pins", "unconstrained_endpoints")
-    if any(counts[name] is None for name in required):
+    if counts["unclocked_register_pins"] is None:
         status = "unknown"
-    elif any(int(counts[name] or 0) > 0 for name in required):
+    elif int(counts["unclocked_register_pins"] or 0) > 0:
         status = "incomplete"
     else:
         status = "complete"

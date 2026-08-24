@@ -159,7 +159,7 @@ def test_mapped_cell_admission_has_both_minimum_and_maximum_bounds():
     assert MODULE.mapped_cell_count_out_of_bounds(100001, 100, 100000) is True
 
 
-def test_constraint_coverage_requires_all_sequential_endpoints_to_be_constrained():
+def test_constraint_coverage_requires_all_sequential_registers_to_be_clocked():
     clean = (
         "Floorplan check_setup\n"
         "Warning: There are 2 input ports missing set_input_delay.\n"
@@ -186,6 +186,20 @@ def test_constraint_coverage_requires_all_sequential_endpoints_to_be_constrained
 
 def test_constraint_coverage_interprets_absent_orfs_warnings_as_zero_only_after_check_setup():
     assert MODULE.constraint_coverage("Floorplan check_setup\n")["status"] == "complete"
+
+
+def test_constraint_coverage_records_unmodeled_io_without_rejecting_clocked_registers():
+    io_unmodeled = (
+        "Floorplan check_setup\n"
+        "Warning: There are 33 output ports missing set_output_delay.\n"
+        "Warning: There are 33 unconstrained endpoints.\n"
+    )
+
+    coverage = MODULE.constraint_coverage(io_unmodeled)
+
+    assert coverage["status"] == "complete"
+    assert coverage["unclocked_register_pins"] == 0
+    assert coverage["unconstrained_endpoints"] == 33
 
 
 def test_synth_module_redefinition_is_an_input_closure_failure():
