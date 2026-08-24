@@ -117,6 +117,19 @@ def test_force_rerun_args_overrides_existing_rerun_field():
     assert original.rerun is False
 
 
+def test_constraint_coverage_requires_a_current_explicit_complete_record():
+    assert MODULE.has_complete_constraint_coverage({}) is False
+    assert MODULE.has_complete_constraint_coverage(
+        {"constraint_coverage": {"status": "unknown"}}
+    ) is False
+    assert MODULE.has_complete_constraint_coverage(
+        {"constraint_coverage": {"status": "incomplete"}}
+    ) is False
+    assert MODULE.has_complete_constraint_coverage(
+        {"constraint_coverage": {"status": "complete"}}
+    ) is True
+
+
 def test_stable_replay_projects_requires_all_eligible_results(tmp_path):
     campaign = tmp_path / "campaign"
     for name in ("a", "b"):

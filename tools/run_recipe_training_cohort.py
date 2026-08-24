@@ -249,6 +249,12 @@ def force_rerun_args(args: argparse.Namespace) -> argparse.Namespace:
     return argparse.Namespace(**(vars(args) | {"rerun": True}))
 
 
+def has_complete_constraint_coverage(result: dict[str, Any]) -> bool:
+    """Return true only for a result carrying current explicit SDC coverage proof."""
+    coverage = result.get("constraint_coverage")
+    return isinstance(coverage, dict) and coverage.get("status") == "complete"
+
+
 def execute_one(project: Path, args: argparse.Namespace) -> dict[str, Any]:
     result_path = project / "repair_family_probe_result.json"
     if result_path.is_file() and not args.rerun:
@@ -292,10 +298,14 @@ def execute(args: argparse.Namespace) -> None:
                         {"project": str(project), "status": "constraint_ineligible", "returncode": 0}
                     )
                     continue
-                admitted.append(project)
-                if existing.get("orfs_stages") != "synth floorplan place cts route finish":
-                    preflight_admitted.add(project)
-                continue
+                if has_complete_constraint_coverage(existing):
+                    admitted.append(project)
+                    if existing.get("orfs_stages") != "synth floorplan place cts route finish":
+                        preflight_admitted.add(project)
+                    continue
+                # Pre-coverage records are legacy evidence, not an implicit pass.
+                # Re-run the cheap synth+floorplan preflight below under the current
+                # fail-closed coverage policy before permitting a full physical flow.
             command = _probe_command(project, args, orfs_stages="synth floorplan")
             completed = subprocess.run(command, text=True, capture_output=True)
             result = read_json(result_path, {})
