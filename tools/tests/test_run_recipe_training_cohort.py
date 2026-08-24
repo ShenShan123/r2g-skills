@@ -179,13 +179,14 @@ def test_stable_replay_flow_evidence_ignores_nonzero_signoff_gate(tmp_path):
     assert path == evidence
 
 
-def test_replay_skips_interrupted_unclassified_and_capacity_infeasible_failures(tmp_path):
+def test_replay_skips_interrupted_unclassified_and_ineligible_capacity_failures(tmp_path):
     campaign = tmp_path / "campaign"
     projects = []
     for name, flags in (
         ("interrupted", {"execution_interrupted": True}),
         ("unclassified", {"unclassified_execution_failure": True}),
         ("capacity", {"capacity_infeasible": True}),
+        ("scale", {"scale_ineligible": True}),
     ):
         project = campaign / "projects" / name
         project.mkdir(parents=True)

@@ -142,6 +142,23 @@ def test_synth_memory_cap_is_explicit_capacity_infeasibility():
     )
 
 
+def test_mapped_cell_count_uses_the_floorplan_elaborated_count():
+    flow = (
+        "number instances in verilog is 99,999\n"
+        "[INFO GPL-0006] Number of instances: 105000\n"
+    )
+
+    assert MODULE.mapped_cell_count(flow) == 99999
+    assert MODULE.mapped_cell_count("no floorplan cell count") is None
+
+
+def test_mapped_cell_admission_has_both_minimum_and_maximum_bounds():
+    assert MODULE.mapped_cell_count_out_of_bounds(99, 100, 100000) is True
+    assert MODULE.mapped_cell_count_out_of_bounds(100, 100, 100000) is False
+    assert MODULE.mapped_cell_count_out_of_bounds(100000, 100, 100000) is False
+    assert MODULE.mapped_cell_count_out_of_bounds(100001, 100, 100000) is True
+
+
 def test_synth_module_redefinition_is_an_input_closure_failure():
     duplicate = (
         "rtl/top/../cores/uart_rx.v:1: "
@@ -164,6 +181,17 @@ def test_interrupted_orfs_exit_is_not_repair_evidence():
         False,
         ["FLOW_INTERRUPTED"],
     )
+
+
+def test_collect_only_marks_a_backend_run_without_final_metadata_interrupted(tmp_path):
+    run = tmp_path / "backend/RUN_partial"
+    run.mkdir(parents=True)
+
+    assert MODULE.incomplete_collected_run(run, collect_only=True) is True
+    assert MODULE.incomplete_collected_run(run, collect_only=False) is False
+
+    (run / "run-meta.json").write_text("{}\n")
+    assert MODULE.incomplete_collected_run(run, collect_only=True) is False
 
 
 def test_unclassified_nonzero_orfs_exit_fails_closed():

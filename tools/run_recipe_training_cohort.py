@@ -223,10 +223,7 @@ def prepare(args: argparse.Namespace) -> None:
     print(json.dumps({"ready_count": selected, "record_count": len(records)}, indent=2))
 
 
-def execute_one(project: Path, args: argparse.Namespace) -> dict[str, Any]:
-    result_path = project / "repair_family_probe_result.json"
-    if result_path.is_file() and not args.rerun:
-        return {"project": str(project), "status": "reused", "returncode": 0}
+def _probe_command(project: Path, args: argparse.Namespace, *, orfs_stages: str | None = None) -> list[str]:
     command = [
         sys.executable,
         str(PROBE),
@@ -237,7 +234,21 @@ def execute_one(project: Path, args: argparse.Namespace) -> dict[str, Any]:
         str(args.cores),
         "--timeout-seconds",
         str(args.timeout_seconds),
+        "--min-mapped-cells",
+        str(getattr(args, "min_mapped_cells", 100)),
+        "--max-mapped-cells",
+        str(getattr(args, "max_mapped_cells", 100000)),
     ]
+    if orfs_stages:
+        command.extend(["--orfs-stages", orfs_stages])
+    return command
+
+
+def execute_one(project: Path, args: argparse.Namespace) -> dict[str, Any]:
+    result_path = project / "repair_family_probe_result.json"
+    if result_path.is_file() and not args.rerun:
+        return {"project": str(project), "status": "reused", "returncode": 0}
+    command = _probe_command(project, args)
     completed = subprocess.run(command, text=True, capture_output=True)
     return {
         "project": str(project),
@@ -253,9 +264,63 @@ def execute(args: argparse.Namespace) -> None:
     manifest_path = campaign / "state/cohort_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     projects = [Path(item["project"]) for item in manifest["records"] if item["status"] == "ready"]
+    preflight_admitted: set[Path] = set()
+    if getattr(args, "synth_floorplan_preflight", True):
+        admitted: list[Path] = []
+        preflight_results: list[dict[str, Any]] = []
+        for project in projects:
+            result_path = project / "repair_family_probe_result.json"
+            if result_path.is_file() and not args.rerun:
+                existing = read_json(result_path, {})
+                if existing.get("scale_ineligible") is True:
+                    preflight_results.append(
+                        {"project": str(project), "status": "scale_ineligible", "returncode": 0}
+                    )
+                    continue
+                if existing.get("execution_interrupted") is True:
+                    preflight_results.append(
+                        {"project": str(project), "status": "execution_interrupted", "returncode": 0}
+                    )
+                    continue
+                admitted.append(project)
+                if existing.get("orfs_stages") != "synth floorplan place cts route finish":
+                    preflight_admitted.add(project)
+                continue
+            command = _probe_command(project, args, orfs_stages="synth floorplan")
+            completed = subprocess.run(command, text=True, capture_output=True)
+            result = read_json(result_path, {})
+            preflight_record = {
+                "project": str(project),
+                "status": "completed" if completed.returncode == 0 else "runner_failed",
+                "returncode": completed.returncode,
+                "mapped_cells": result.get("mapped_cells"),
+                "scale_ineligible": result.get("scale_ineligible") is True,
+                "stdout_tail": completed.stdout[-2000:],
+                "stderr_tail": completed.stderr[-2000:],
+            }
+            preflight_results.append(preflight_record)
+            write_json(campaign / "state/scale_preflight" / f"{project.name}.json", result)
+            if completed.returncode == 0 and result.get("scale_ineligible") is not True:
+                admitted.append(project)
+                preflight_admitted.add(project)
+        projects = admitted
+        write_json(
+            campaign / "state/scale_preflight_summary.json",
+            {
+                "schema_version": "recipe-training-scale-preflight-1.0",
+                "updated_at": now(),
+                "min_mapped_cells": getattr(args, "min_mapped_cells", 100),
+                "max_mapped_cells": getattr(args, "max_mapped_cells", 100000),
+                "results": preflight_results,
+            },
+        )
     results: list[dict[str, Any]] = []
+    full_flow_args = argparse.Namespace(**vars(args), rerun=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(execute_one, project, args): project for project in projects}
+        futures = {
+            pool.submit(execute_one, project, full_flow_args if project in preflight_admitted else args): project
+            for project in projects
+        }
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             results.append(result)
@@ -478,6 +543,8 @@ def replay_failures(args: argparse.Namespace) -> None:
             continue
         if first.get("capacity_infeasible") is True:
             continue
+        if first.get("scale_ineligible") is True:
+            continue
         if first.get("execution_interrupted") is True:
             continue
         if first.get("unclassified_execution_failure") is True:
@@ -567,6 +634,8 @@ def summarize(args: argparse.Namespace) -> None:
             status = "input_qualification_failure"
         elif result.get("capacity_infeasible") is True:
             status = "capacity_infeasible"
+        elif result.get("scale_ineligible") is True:
+            status = "scale_ineligible"
         elif result.get("execution_interrupted") is True:
             status = "execution_interrupted"
         elif result.get("unclassified_execution_failure") is True:
@@ -609,6 +678,14 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--workers", type=int, default=2)
     run.add_argument("--cores", type=int, default=4)
     run.add_argument("--timeout-seconds", type=int, default=7200)
+    run.add_argument("--min-mapped-cells", type=int, default=100)
+    run.add_argument("--max-mapped-cells", type=int, default=100000)
+    run.add_argument(
+        "--synth-floorplan-preflight",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="admit only tasks at or below --max-mapped-cells before full P&R",
+    )
     run.add_argument("--rerun", action="store_true")
     run.set_defaults(func=execute)
     replay = subparsers.add_parser("replay-failures")

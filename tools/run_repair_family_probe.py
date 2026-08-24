@@ -450,6 +450,31 @@ def classify_flow_failures(flow_log: str) -> tuple[bool, bool, bool, list[str]]:
     return input_failure, runtime_failure, capacity_infeasible, signatures
 
 
+def mapped_cell_count(flow_log: str) -> int | None:
+    """Return the elaborated cell count reported at floorplan entry.
+
+    ORFS emits this before placement mutates the netlist. It is the only count
+    used for the fixed main-track admission limit; later placement counts include
+    inserted buffers and must not change eligibility.
+    """
+    counts = [
+        int(value.replace(",", ""))
+        for value in re.findall(r"number instances in verilog is\s+([0-9,]+)\b", flow_log, re.I)
+    ]
+    return counts[0] if counts else None
+
+
+def mapped_cell_count_out_of_bounds(
+    cell_count: int | None, min_mapped_cells: int | None, max_mapped_cells: int | None
+) -> bool:
+    if cell_count is None:
+        return False
+    return bool(
+        (min_mapped_cells is not None and cell_count < min_mapped_cells)
+        or (max_mapped_cells is not None and cell_count > max_mapped_cells)
+    )
+
+
 def final_artifact(run_dir: Path, name: str) -> Path:
     for subdir in ("final", "results", ""):
         candidate = run_dir / subdir / name if subdir else run_dir / name
@@ -479,6 +504,9 @@ def execution_environment(args: argparse.Namespace, state: Path) -> dict[str, st
     # worker count.  A probe must not silently expand to every host core merely
     # because it is launched outside the normal campaign wrapper.
     env["ORFS_MAX_CPUS"] = str(args.cores)
+    stages = getattr(args, "orfs_stages", None)
+    if stages:
+        env["ORFS_STAGES"] = stages
     return env
 
 
@@ -502,6 +530,17 @@ def classify_execution_failure(
     if isinstance(returncode, int) and returncode != 0 and not known_signatures:
         return False, True, ["FLOW_EXECUTION_FAILED"]
     return False, False, []
+
+
+def incomplete_collected_run(run_dir: Path | None, collect_only: bool) -> bool:
+    """Recognize an externally stopped run during an explicit offline collection.
+
+    `run-meta.json` is written by run_orfs.sh only after it has emitted a final
+    success/failure exit. A missing file is therefore conclusive only when the
+    caller deliberately performs collection after execution has stopped; it is
+    never used to inspect a live run.
+    """
+    return bool(collect_only and run_dir and not (run_dir / "run-meta.json").is_file())
 
 
 def execute(args: argparse.Namespace) -> None:
@@ -585,6 +624,14 @@ def execute(args: argparse.Namespace) -> None:
         classify_flow_failures(flow_log)
     )
     signature.extend(classified)
+    cell_count = mapped_cell_count(flow_log)
+    min_mapped_cells = getattr(args, "min_mapped_cells", None)
+    max_mapped_cells = getattr(args, "max_mapped_cells", None)
+    scale_ineligible = mapped_cell_count_out_of_bounds(
+        cell_count, min_mapped_cells, max_mapped_cells
+    )
+    if scale_ineligible:
+        signature.append("SYNTH_CELL_COUNT_OUT_OF_RANGE")
     drc = reports["drc"]
     timing = reports["timing_check"]
     ppa_timing = metric(reports["ppa"], "summary", "timing") or {}
@@ -631,6 +678,9 @@ def execute(args: argparse.Namespace) -> None:
     execution_interrupted, unclassified_execution_failure, execution_signatures = (
         classify_execution_failure(commands, signature)
     )
+    if incomplete_collected_run(run_dir, args.collect_only):
+        execution_interrupted = True
+        execution_signatures.append("FLOW_INTERRUPTED")
     signature.extend(execution_signatures)
     signature = sorted(set(signature))
     gate = reports["signoff_gate"]
@@ -651,6 +701,11 @@ def execute(args: argparse.Namespace) -> None:
         "publication_strict_clean": publication_strict_clean,
         "input_qualification_failure": input_qualification_failure,
         "capacity_infeasible": capacity_infeasible,
+        "scale_ineligible": scale_ineligible,
+        "mapped_cells": cell_count,
+        "min_mapped_cells": min_mapped_cells,
+        "max_mapped_cells": max_mapped_cells,
+        "orfs_stages": getattr(args, "orfs_stages", None) or "synth floorplan place cts route finish",
         "runtime_budget_failure": runtime_budget_failure,
         "execution_interrupted": execution_interrupted,
         "unclassified_execution_failure": unclassified_execution_failure,
@@ -710,6 +765,20 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--project", type=Path, required=True)
     run.add_argument("--cores", type=int, default=4)
     run.add_argument("--timeout-seconds", type=int, default=7200)
+    run.add_argument(
+        "--orfs-stages",
+        help="space-separated ORFS stages for bounded preflight execution",
+    )
+    run.add_argument(
+        "--min-mapped-cells",
+        type=int,
+        help="exclude a task when floorplan reports fewer elaborated cells than this floor",
+    )
+    run.add_argument(
+        "--max-mapped-cells",
+        type=int,
+        help="exclude a task when floorplan reports more elaborated cells than this cap",
+    )
     run.add_argument("--skip-orfs", action="store_true", help="reuse the latest completed backend run")
     run.add_argument(
         "--collect-only",
