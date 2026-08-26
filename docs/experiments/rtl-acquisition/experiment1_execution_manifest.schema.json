@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://r2g.local/schemas/experiment1_execution_manifest.schema.json",
+  "title": "R2G Experiment 1 execution manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "campaign_id",
+    "created_at",
+    "protocol",
+    "task_spec",
+    "submission_schema",
+    "model_route_preflight",
+    "agent_snapshot",
+    "toolchain",
+    "model_routes",
+    "batches",
+    "method_reports"
+  ],
+  "properties": {
+    "schema_version": {
+      "enum": [
+        "1.0",
+        "1.1"
+      ]
+    },
+    "experiment_id": {
+      "const": "r2g-exp1-rtl-acquisition-v1"
+    },
+    "campaign_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "protocol": {
+      "$ref": "#/$defs/boundFile"
+    },
+    "task_spec": {
+      "$ref": "#/$defs/boundFile"
+    },
+    "submission_schema": {
+      "$ref": "#/$defs/boundFile"
+    },
+    "implementation_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/boundImplementation"
+      }
+    },
+    "model_route_preflight": {
+      "$ref": "#/$defs/boundFile"
+    },
+    "agent_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "dirty",
+        "worktree_diff_sha256",
+        "knowledge_snapshot_sha256"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "worktree_diff_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "knowledge_snapshot_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null"
+        ]
+      },
+      "required": [
+        "platform",
+        "orfs_root",
+        "orfs_commit",
+        "yosys_version",
+        "pdk_root"
+      ]
+    },
+    "model_routes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "batches": {
+      "type": "array",
+      "minItems": 28,
+      "maxItems": 28,
+      "items": {
+        "type": "object",
+        "required": [
+          "method_id",
+          "batch_id",
+          "status",
+          "submission_path",
+          "submission_sha256",
+          "evaluation_path",
+          "evaluation_sha256"
+        ],
+        "properties": {
+          "method_id": {
+            "enum": [
+              "openai-vanilla",
+              "anthropic-vanilla",
+              "deepseek-vanilla",
+              "qwen-vanilla",
+              "glm-vanilla",
+              "kimi-vanilla",
+              "r2g-expander-cold"
+            ]
+          },
+          "batch_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "submitted",
+              "evaluating",
+              "complete",
+              "invalid"
+            ]
+          },
+          "submission_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "submission_sha256": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "evaluation_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evaluation_sha256": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "method_reports": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "method_id",
+          "status",
+          "report_path",
+          "report_sha256"
+        ],
+        "properties": {
+          "method_id": {
+            "enum": [
+              "openai-vanilla",
+              "anthropic-vanilla",
+              "deepseek-vanilla",
+              "qwen-vanilla",
+              "glm-vanilla",
+              "kimi-vanilla",
+              "r2g-expander-cold"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "complete"
+            ]
+          },
+          "report_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "report_sha256": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "1.1"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "implementation_bindings"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "boundFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "boundImplementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

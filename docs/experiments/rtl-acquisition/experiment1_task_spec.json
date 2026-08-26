@@ -1,0 +1,221 @@
+{
+  "schema_version": "1.8",
+  "experiment_id": "r2g-exp1-rtl-acquisition-v1",
+  "status": "frozen",
+  "frozen_at": "2026-08-25T22:17:07-07:00",
+  "revised_at": "2026-08-25",
+  "objective": "Compare six Vanilla LLMs with frozen R2G-Expander Cold acquisition under the same task, public tools, qualification gates, and per-batch resource bounds.",
+  "core_task_zh": "在公开且可观察的固定预算内，从公开互联网仓库中寻找100个唯一、开源、可综合且来源多样的Verilog/SystemVerilog RTL设计候选，用于Sky130HD synth-only qualification。顶层runner连续执行4个相互隔离的25候选批次，并在方法看到任何正式evaluator结果前锁定全部批次。每个候选必须提交固定commit、top module、完整编译输入闭包、固定commit仓库内的许可证相对路径、规范SPDX标识和来源信息，并在统一综合下满足100 <= mapped cells < 100000。只有通过公共validate_candidate工具全部硬Gate的候选才可提交；最终评分器会从干净clone独立重跑相同Gate，看到结果后不得替换候选。主要比较100个固定名额上的提交完成率、技术合格率、可发布合格率和仅由独立合格候选计算的来源多样性。每批尽量覆盖至少12个独立仓库，同一仓库最多提交4个候选。未验证候选和缺失名额均按失败计。排除testbench、空壳、重复设计、超出主规模范围的设计及需要额外语言转换器的原始源码。允许从统一的12个起始类别自主扩展关键词，并须记录全部查询和工具操作。",
+  "core_task_en": "Within the published and observable frozen budget, find 100 unique, open-source, synthesizable, and source-diverse Verilog/SystemVerilog RTL design candidates from public Internet repositories for Sky130HD synth-only qualification. One top-level runner executes four isolated 25-candidate batches and locks all batches before the method can observe any formal-evaluator result. For every candidate, submit a pinned commit, top module, complete compilation-input closure, a repository-relative license path at that pinned commit, a canonical SPDX identifier, and provenance; the frozen synthesis result must satisfy 100 <= mapped cells < 100000. A candidate is submission-eligible only after passing every hard gate in the public validate_candidate tool. The final evaluator independently reclones and reruns the same gates, and candidates cannot be replaced after results are visible. Primary reporting uses 100 fixed slots for submission completion, technical qualification, publishable qualification, and source diversity computed only from independently qualified candidates. Aim for at least 12 independent repositories per batch and submit no more than four candidates from one repository per batch. Unvalidated candidates and missing slots fail. Exclude testbenches, shells, duplicate designs, out-of-range designs, and raw sources requiring an additional language converter. Methods may expand the twelve common seed categories, but every query and tool action must be logged.",
+  "methods": [
+    {
+      "method_id": "openai-vanilla",
+      "requested_model": "gpt-5.5-pro",
+      "mode": "vanilla_llm"
+    },
+    {
+      "method_id": "anthropic-vanilla",
+      "requested_model": "claude-opus-4-8",
+      "mode": "vanilla_llm"
+    },
+    {
+      "method_id": "deepseek-vanilla",
+      "requested_model": "deepseek-v4-pro",
+      "mode": "vanilla_llm"
+    },
+    {
+      "method_id": "qwen-vanilla",
+      "requested_model": "qwen3.7-max",
+      "mode": "vanilla_llm"
+    },
+    {
+      "method_id": "glm-vanilla",
+      "requested_model": "glm-5.2",
+      "mode": "vanilla_llm"
+    },
+    {
+      "method_id": "kimi-vanilla",
+      "requested_model": "kimi-k2.7-code",
+      "mode": "vanilla_llm"
+    },
+    {
+      "method_id": "r2g-expander-cold",
+      "requested_model": null,
+      "mode": "frozen_r2g_expander_cold"
+    }
+  ],
+  "seed_categories": [
+    "processor",
+    "controller",
+    "accelerator",
+    "interconnect",
+    "communication",
+    "cryptography",
+    "DSP",
+    "memory controller",
+    "UART",
+    "I2C",
+    "SPI",
+    "Ethernet"
+  ],
+  "scope": {
+    "accepted_languages": [
+      "verilog",
+      "systemverilog"
+    ],
+    "out_of_scope_languages": [
+      "vhdl",
+      "chisel",
+      "spinalhdl",
+      "other_generator_source"
+    ],
+    "generated_verilog_systemverilog_checked_into_repo_is_allowed": true,
+    "primary_platform": "sky130hd",
+    "primary_endpoint": "synth_only"
+  },
+  "batch_policy": {
+    "batches_per_method": 4,
+    "target_candidates_per_batch": 25,
+    "raw_exploration_pool_may_exceed_target": true,
+    "final_submission_max_candidates": 25,
+    "missing_submission_slots_count_as_failures": true,
+    "submitted_early_is_score_eligible": true,
+    "provider_failure_is_score_eligible": false,
+    "operator_abort_is_score_eligible": false,
+    "infrastructure_failure_requires_fresh_rerun": true,
+    "selection_order_must_be_frozen_before_evaluation": true,
+    "replacement_after_evaluator_results_allowed": false,
+    "prior_pilot_counts_as_formal_batch": false,
+    "unique_key": [
+      "repo_url",
+      "commit",
+      "top_module"
+    ],
+    "cross_batch_duplicates_allowed": false,
+    "target_unique_repositories_per_batch": 12,
+    "maximum_candidates_per_repository": 4,
+    "extra_stochastic_repeats": 0
+  },
+  "method_aggregate_policy": {
+    "target_candidates_per_method": 100,
+    "all_batches_must_lock_before_formal_evaluation": true,
+    "formal_evaluator_feedback_visible_during_acquisition": false,
+    "vanilla_batch_sessions_are_isolated": true,
+    "r2g_frontier_continues_across_four_checkpoints": true,
+    "unused_budget_transfer_between_batches_allowed": false,
+    "aggregate_missing_slots_count_as_failures": true
+  },
+  "r2g_memory_policy": {
+    "cold_starts_from_fresh_scheduler_state": true,
+    "preloaded_scheduler_memory_forbidden": true
+  },
+  "method_budget": {
+    "wall_time_seconds": 21600,
+    "vanilla_llm_total_tokens": 2000000,
+    "search_requests": 120,
+    "clone_limit": null,
+    "self_synthesis_attempt_limit": null,
+    "stop_at_first_limit": true,
+    "limits_are_disclosed_to_methods": true,
+    "remaining_budget_is_reported_each_turn": true,
+    "budget_warning_thresholds": [
+      0.5,
+      0.75,
+      0.9
+    ]
+  },
+  "license_policy": {
+    "evidence_must_be_repository_relative": true,
+    "remote_license_urls_are_not_scoreable": true,
+    "evidence_is_read_from_pinned_commit": true,
+    "canonical_spdx_identifier_required": true,
+    "declared_spdx_must_match_observed_license": true
+  },
+  "tool_policy": {
+    "shared_tools": [
+      "repository_search",
+      "http_read_only",
+      "git",
+      "terminal",
+      "yosys",
+      "orfs_synth_only",
+      "validate_candidate"
+    ],
+    "vendor_deep_research_allowed": false,
+    "vanilla_r2g_code_allowed": false,
+    "vanilla_r2g_memory_allowed": false,
+    "vanilla_r2g_recipe_allowed": false,
+    "r2g_optional_llm_patch_path_enabled": false,
+    "query_expansion_allowed": true,
+    "human_query_additions_after_start_allowed": false
+  },
+  "evaluator_profile": {
+    "platform": "sky130hd",
+    "clock_period_ns": 10.0,
+    "abc_area": 0,
+    "synth_memory_max_bits": 131072,
+    "candidate_timeout_seconds": 3600,
+    "formal_runs_per_candidate": 1,
+    "minimum_mapped_cells": 100,
+    "maximum_mapped_cells_exclusive": 100000,
+    "require_nonempty_mapped_netlist": true,
+    "require_no_unresolved_modules": true,
+    "require_functional_input_and_output": true,
+    "human_semantic_repairs_allowed": false
+  },
+  "candidate_gate_order": [
+    "candidate_schema_valid",
+    "repo_url_and_commit_match_checked_out_source",
+    "active_compilation_input_closure_complete",
+    "repository_relative_license_path_exists",
+    "declared_canonical_spdx_matches_observed_license",
+    "sky130hd_synth_returns_zero",
+    "mapped_netlist_is_nonempty",
+    "mapped_cells_at_least_100",
+    "mapped_cells_below_100000",
+    "functional_input_and_output_exist",
+    "no_unresolved_modules"
+  ],
+  "public_precheck_and_final_evaluator_share_gate_implementation": true,
+  "final_evaluator_reclones_and_reruns_independently": true,
+  "reporting": {
+    "fixed_primary_denominator": 100,
+    "per_batch_denominator": 25,
+    "primary_capability_metrics": [
+      {
+        "metric_id": "submission_completion_rate",
+        "numerator": "schema_valid_unique_in_scope_submissions",
+        "denominator": 100
+      },
+      {
+        "metric_id": "technical_qualification_rate",
+        "numerator": "independently_technically_qualified_submissions",
+        "denominator": 100
+      },
+      {
+        "metric_id": "publishable_qualification_rate",
+        "numerator": "independently_publishable_qualified_unique_designs",
+        "denominator": 100
+      },
+      {
+        "metric_id": "diverse_qualified_yield",
+        "numerator": "effective_repository_count_among_publishable_unique_designs",
+        "denominator": 100
+      }
+    ],
+    "resource_metrics_are_secondary": [
+      "provider_total_tokens",
+      "method_wall_time",
+      "api_cost"
+    ],
+    "raw_discovery_and_internal_screening_counts_are_diagnostic_only": true,
+    "cell_buckets": [
+      "100-999",
+      "1000-9999",
+      "10000-99999"
+    ],
+    "repository_clustered_statistics": true,
+    "confidence_interval": 0.95,
+    "single_weighted_score_is_primary": false
+  }
+}

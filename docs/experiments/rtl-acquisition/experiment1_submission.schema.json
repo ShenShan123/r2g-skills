@@ -1,0 +1,412 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://r2g.local/schemas/experiment1_submission.schema.json",
+  "title": "R2G Experiment 1 batch submission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "method_id",
+    "batch_id",
+    "model_route",
+    "started_at",
+    "ended_at",
+    "stop_reason",
+    "resource_usage",
+    "queries",
+    "candidates",
+    "out_of_scope"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "experiment_id": {
+      "const": "r2g-exp1-rtl-acquisition-v1"
+    },
+    "method_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "batch_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4
+    },
+    "model_route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested_model",
+        "actual_model",
+        "api_provider",
+        "endpoint_kind",
+        "reasoning_effort",
+        "provider_fingerprint"
+      ],
+      "properties": {
+        "requested_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "actual_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "api_provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endpoint_kind": {
+          "enum": [
+            "official",
+            "gateway",
+            "none"
+          ]
+        },
+        "reasoning_effort": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider_fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "stop_reason": {
+      "enum": [
+        "target_reached",
+        "submitted_early",
+        "wall_time_limit",
+        "token_limit",
+        "search_limit",
+        "search_exhausted",
+        "provider_failure",
+        "operator_abort"
+      ]
+    },
+    "resource_usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method_runtime_seconds",
+        "input_tokens",
+        "output_tokens",
+        "reasoning_tokens",
+        "total_tokens",
+        "cost_usd",
+        "search_requests",
+        "clone_count",
+        "self_synth_attempts",
+        "format_repairs",
+        "human_interventions"
+      ],
+      "properties": {
+        "method_runtime_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 21600
+        },
+        "input_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reasoning_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "total_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2000000
+        },
+        "cost_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "search_requests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 120
+        },
+        "clone_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "self_synth_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "format_repairs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "human_interventions": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "queries": {
+      "type": "array",
+      "maxItems": 120,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "query",
+          "backend",
+          "page",
+          "timestamp"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "backend": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "maxItems": 25,
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    },
+    "out_of_scope": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/outOfScope"
+      }
+    }
+  },
+  "$defs": {
+    "safeRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "(^/|(^|/)\\.\\.(/|$)|^[A-Za-z][A-Za-z0-9+.-]*://)"
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "repo_url",
+        "commit",
+        "top_module",
+        "rtl_files",
+        "header_files",
+        "include_dirs",
+        "defines",
+        "top_parameters",
+        "readmem_files",
+        "language",
+        "license_evidence",
+        "category",
+        "discovery_method",
+        "selection_reason",
+        "confidence"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+        },
+        "repo_url": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        },
+        "top_module": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_$]*$"
+        },
+        "rtl_files": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/safeRelativePath"
+          }
+        },
+        "header_files": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/safeRelativePath"
+          }
+        },
+        "include_dirs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/safeRelativePath"
+          }
+        },
+        "defines": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(=.*)?$"
+          }
+        },
+        "top_parameters": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_$]*$"
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean"
+            ]
+          }
+        },
+        "readmem_files": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/safeRelativePath"
+          }
+        },
+        "language": {
+          "enum": [
+            "verilog",
+            "systemverilog"
+          ]
+        },
+        "license_evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "spdx_id",
+            "repository_path",
+            "note"
+          ],
+          "properties": {
+            "spdx_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "repository_path": {
+              "$ref": "#/$defs/safeRelativePath"
+            },
+            "note": {
+              "type": "string"
+            }
+          }
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "discovery_method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selection_reason": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "outOfScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo_url",
+        "commit",
+        "language",
+        "reason",
+        "discovery_method"
+      ],
+      "properties": {
+        "repo_url": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-fA-F]{40}$"
+        },
+        "language": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "discovery_method": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
