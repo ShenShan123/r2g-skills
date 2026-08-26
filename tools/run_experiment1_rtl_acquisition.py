@@ -26,6 +26,7 @@ PROTOCOL = REPO / "docs/experiments/formal_experiment_1_2_key_design_zh.md"
 TASK_SPEC = EXPERIMENT_DIR / "experiment1_task_spec.json"
 SUBMISSION_SCHEMA = EXPERIMENT_DIR / "experiment1_submission.schema.json"
 MANIFEST_SCHEMA = EXPERIMENT_DIR / "experiment1_execution_manifest.schema.json"
+DEFAULT_BENCHMARK_REGISTRY = EXPERIMENT_DIR / "benchmark_registry_v1"
 METHOD_IDS = {
     "openai-vanilla",
     "anthropic-vanilla",
@@ -101,6 +102,22 @@ def sha256_file(path: Path) -> str:
 
 def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def sha256_tree(root: Path) -> str:
+    """Hash a directory by relative path, type, and file content."""
+    if not root.is_dir():
+        raise ExperimentError(f"bound directory does not exist: {root}")
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        relative = path.relative_to(root).as_posix()
+        kind = "D" if path.is_dir() else "L" if path.is_symlink() else "F"
+        digest.update(f"{kind}\0{relative}\0".encode("utf-8"))
+        if path.is_symlink():
+            digest.update(os.readlink(path).encode("utf-8"))
+        elif path.is_file():
+            digest.update(bytes.fromhex(sha256_file(path)))
+    return digest.hexdigest()
 
 
 def infer_spdx_identifier(text: str) -> str | None:
@@ -375,11 +392,25 @@ def resolved_agent_env() -> dict[str, str]:
     return values
 
 
+def manifest_toolchain_env(manifest: dict[str, Any]) -> dict[str, str]:
+    """Resolve tools, then enforce the exact paths frozen in the campaign."""
+    env = resolved_agent_env()
+    toolchain = manifest["toolchain"]
+    env["ORFS_ROOT"] = str(toolchain["orfs_root"])
+    if toolchain.get("pdk_root"):
+        env["PDK_ROOT"] = str(toolchain["pdk_root"])
+    return env
+
+
 def toolchain_record(env: dict[str, str]) -> dict[str, Any]:
     orfs_root = Path(
         env.get("ORFS_ROOT", "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts")
     ).resolve()
     pdk_root = Path(env.get("PDK_ROOT", "")).resolve() if env.get("PDK_ROOT") else None
+    if not (orfs_root / ".git").exists():
+        raise ExperimentError(
+            "Experiment 1 requires a Git-traceable ORFS checkout: " + str(orfs_root)
+        )
     return {
         "platform": "sky130hd",
         "orfs_root": str(orfs_root),
@@ -414,16 +445,22 @@ def init_campaign(args: argparse.Namespace) -> None:
     if paths["root"].exists() and any(paths["root"].iterdir()):
         raise ExperimentError(f"campaign root is not empty: {paths['root']}")
     env = resolved_agent_env()
+    if args.orfs_root is not None:
+        env["ORFS_ROOT"] = str(args.orfs_root.resolve())
     commit = git_text("rev-parse", "HEAD")
     status = git_text("status", "--porcelain")
     diff = git_text("diff", "--binary", "HEAD")
     task = read_json(TASK_SPEC)
+    if args.allow_dirty_canary and not args.non_scoring_canary:
+        raise ExperimentError(
+            "--allow-dirty-canary requires --non-scoring-canary"
+        )
     if status and not args.allow_dirty_canary:
         raise ExperimentError(
             "formal campaign requires a clean Agent worktree; "
             "use --allow-dirty-canary only for a non-paper canary"
         )
-    if task.get("status") != "frozen" and not args.allow_dirty_canary:
+    if task.get("status") != "frozen" and not args.non_scoring_canary:
         raise ExperimentError(
             "Experiment 1 task spec is not frozen; use --allow-dirty-canary "
             "only for a non-paper canary"
@@ -446,6 +483,21 @@ def init_campaign(args: argparse.Namespace) -> None:
     ]
     model_routes = args.model_routes.resolve()
     model_preflight = args.model_preflight.resolve()
+    benchmark_registry = args.benchmark_registry.resolve()
+    catalog_path = benchmark_registry / "registry_catalog.json"
+    if not catalog_path.is_file():
+        raise ExperimentError(
+            f"benchmark registry catalog is missing: {catalog_path}"
+        )
+    catalog = read_json(catalog_path)
+    profile_id = str(catalog.get("active_profile") or "")
+    profile_path = benchmark_registry / "profiles" / f"{profile_id}.json"
+    if (
+        not profile_id
+        or not profile_path.is_file()
+        or read_json(profile_path).get("ready") is not True
+    ):
+        raise ExperimentError("benchmark registry active profile is not audit-ready")
     validate_model_preflight(model_preflight, model_routes)
     implementation_files = {
         "campaign_controller_and_evaluator": Path(__file__).resolve(),
@@ -469,6 +521,9 @@ def init_campaign(args: argparse.Namespace) -> None:
         "schema_version": "1.1",
         "experiment_id": task["experiment_id"],
         "campaign_id": args.campaign_id or paths["root"].name,
+        "campaign_mode": (
+            "non_scoring_canary" if args.non_scoring_canary else "formal"
+        ),
         "created_at": now_iso(),
         "protocol": bound_file(PROTOCOL),
         "task_spec": bound_file(TASK_SPEC),
@@ -478,6 +533,11 @@ def init_campaign(args: argparse.Namespace) -> None:
             for role, path in implementation_files.items()
         ],
         "model_route_preflight": bound_file(model_preflight),
+        "benchmark_registry": {
+            "path": str(benchmark_registry),
+            "sha256": sha256_tree(benchmark_registry),
+            "active_profile": profile_id,
+        },
         "agent_snapshot": {
             "repository": str(REPO),
             "commit": commit,
@@ -503,8 +563,8 @@ def init_campaign(args: argparse.Namespace) -> None:
         raise ExperimentError("generated manifest is invalid:\n" + "\n".join(errors))
     write_json_atomic(paths["manifest"], manifest)
     print(f"Initialized Experiment 1 campaign: {paths['root']}")
-    if status:
-        print("WARNING: dirty-worktree canary; this campaign is not a paper result.")
+    if args.non_scoring_canary:
+        print("WARNING: non-scoring canary; this campaign is not a paper result.")
 
 
 def prior_candidate_keys(paths: dict[str, Path], method_id: str, batch_id: int) -> set[tuple[str, str, str]]:
@@ -596,6 +656,13 @@ def verify_bound_campaign(manifest: dict[str, Any]) -> None:
                 "campaign implementation changed or disappeared: "
                 f"{record['role']} -> {path}"
             )
+    registry = manifest["benchmark_registry"]
+    registry_path = Path(registry["path"])
+    if sha256_tree(registry_path) != registry["sha256"]:
+        raise ExperimentError(
+            "campaign benchmark registry changed or disappeared: "
+            + str(registry_path)
+        )
 
 
 def source_cache_key(candidate: dict[str, Any]) -> str:
@@ -1354,7 +1421,7 @@ def evaluate_batch(args: argparse.Namespace) -> None:
     evaluation_root.mkdir(parents=True)
     batch["status"] = "evaluating"
     write_json_atomic(paths["manifest"], manifest)
-    env = resolved_agent_env()
+    env = manifest_toolchain_env(manifest)
     env.update({"NUM_CORES": str(args.cores), "ORFS_MAX_CPUS": str(args.cores)})
     source_cache = evaluation_root / "_source_cache"
     source_cache.mkdir()
@@ -1586,6 +1653,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Route configuration to bind into this campaign.",
     )
     init.add_argument("--model-preflight", type=Path, required=True)
+    init.add_argument(
+        "--benchmark-registry",
+        type=Path,
+        default=DEFAULT_BENCHMARK_REGISTRY,
+        help="Immutable contamination registry bound into the campaign.",
+    )
+    init.add_argument(
+        "--orfs-root",
+        type=Path,
+        help="Git-traceable ORFS checkout to freeze into the campaign manifest.",
+    )
+    init.add_argument(
+        "--non-scoring-canary",
+        action="store_true",
+        help="Mark this campaign as diagnostic and permanently ineligible for paper scoring.",
+    )
     init.add_argument(
         "--allow-dirty-canary",
         action="store_true",

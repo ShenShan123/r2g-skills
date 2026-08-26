@@ -1,0 +1,19 @@
+{
+  "benchmark": "rtllm",
+  "fingerprint_count": 1560,
+  "fingerprint_count_by_type": {
+    "ast": 390,
+    "normalized_rtl": 390,
+    "raw_rtl": 390,
+    "semantic": 390
+  },
+  "fingerprints": 390,
+  "schema": "rtl_benchmark_registry_v1",
+  "snapshot_hash": "7cb5139739cebd5f4c7a8a12c3c460c86394586bf798ad52e7d19efc99d31dd5",
+  "source_artifact_count": 390,
+  "source_revision": "51ed553d0ffd32797a1a0a13e051656bf302c81f",
+  "source_root": "/home/yangao/r2g_exp1_expander_2026_08_20_pilot01/benchmarks/rtllm-official",
+  "source_url": "https://github.com/hkust-zhiyao/RTLLM",
+  "status": "ACTIVE",
+  "task_count": null
+}

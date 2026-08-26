@@ -1,0 +1,19 @@
+{
+  "benchmark": "verilog_eval",
+  "fingerprint_count": 2504,
+  "fingerprint_count_by_type": {
+    "ast": 626,
+    "normalized_rtl": 626,
+    "raw_rtl": 626,
+    "semantic": 626
+  },
+  "fingerprints": 626,
+  "schema": "rtl_benchmark_registry_v1",
+  "snapshot_hash": "49318884770ded86f6026ccb55e7b845b38f9e01e2b0d84db946f0453afed143",
+  "source_artifact_count": 626,
+  "source_revision": "c498220d0a52248f8e3fdffe279075215bde2da6",
+  "source_root": "/home/yangao/r2g_exp1_expander_2026_08_20_pilot01/benchmarks/verilog-eval-official",
+  "source_url": "https://github.com/NVlabs/verilog-eval",
+  "status": "ACTIVE",
+  "task_count": null
+}

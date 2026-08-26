@@ -18,6 +18,8 @@ from tools.run_experiment1_rtl_acquisition import (
     semantic_submission_errors,
     synthesis_qualification_failure,
     submission_score_eligibility,
+    manifest_toolchain_env,
+    sha256_tree,
     source_cache_key,
     verify_candidate_inputs,
     validate_json,
@@ -25,9 +27,12 @@ from tools.run_experiment1_rtl_acquisition import (
     write_synth_project,
 )
 from tools.run_experiment1_r2g_method import (
+    classify_expander_stop_reason,
     classify_stop_reason,
     frontier_counts,
+    install_benchmark_registry,
     query_records as expander_query_records,
+    validate_run_mode,
 )
 
 
@@ -146,16 +151,23 @@ def test_campaign_init_binds_formal_protocol_and_preflight(
             campaign_id="canary",
             model_routes=routes,
             model_preflight=preflight,
+            benchmark_registry=experiment.DEFAULT_BENCHMARK_REGISTRY,
+            orfs_root=None,
+            non_scoring_canary=True,
             allow_dirty_canary=True,
         )
     )
     manifest = json.loads((campaign / "execution_manifest.json").read_text())
     assert len(manifest["batches"]) == 28
+    assert manifest["campaign_mode"] == "non_scoring_canary"
     assert len(manifest["method_reports"]) == 7
     assert manifest["protocol"]["path"].endswith(
         "docs/experiments/formal_experiment_1_2_key_design_zh.md"
     )
     assert manifest["model_route_preflight"]["sha256"] == experiment.sha256_file(preflight)
+    assert manifest["benchmark_registry"]["sha256"] == sha256_tree(
+        experiment.DEFAULT_BENCHMARK_REGISTRY
+    )
     assert "r2g_warm_memory" not in manifest
     assert experiment.validate_json(manifest, experiment.MANIFEST_SCHEMA) == []
 
@@ -190,6 +202,71 @@ def test_submitted_early_is_score_eligible_and_keeps_missing_slots_as_failures()
     assert validate_json(value, SUBMISSION_SCHEMA) == []
     assert semantic_submission_errors(value) == []
     assert submission_score_eligibility(value) == (True, None)
+
+
+@pytest.mark.parametrize("reason", ["turn_limit", "finalization_failure"])
+def test_bounded_method_failures_are_score_eligible(reason):
+    value = submission()
+    value["stop_reason"] = reason
+    assert validate_json(value, SUBMISSION_SCHEMA) == []
+    assert submission_score_eligibility(value) == (True, None)
+
+
+def test_expander_finalization_failure_is_not_provider_failure():
+    assert classify_expander_stop_reason(
+        1, 0, 1, {"state": "FAILED_CHILD_ROUND"}
+    ) == "finalization_failure"
+    assert classify_expander_stop_reason(1, 0, 1, None) == "provider_failure"
+
+
+def test_cold_corpus_installs_ready_benchmark_registry(tmp_path):
+    source = tmp_path / "source"
+    (source / "profiles").mkdir(parents=True)
+    (source / "registry_catalog.json").write_text(
+        json.dumps({"active_profile": "profile_v1"}) + "\n"
+    )
+    (source / "profiles/profile_v1.json").write_text(
+        json.dumps({"ready": True}) + "\n"
+    )
+    corpus = tmp_path / "corpus"
+    install_benchmark_registry(source, corpus)
+    assert (corpus / "benchmark_registry/registry_catalog.json").is_file()
+
+
+def test_manifest_toolchain_paths_override_local_resolution(monkeypatch):
+    monkeypatch.setattr(
+        experiment,
+        "resolved_agent_env",
+        lambda: {"ORFS_ROOT": "/wrong/orfs", "PDK_ROOT": "/wrong/pdk"},
+    )
+    env = manifest_toolchain_env(
+        {"toolchain": {"orfs_root": "/frozen/orfs", "pdk_root": "/frozen/pdk"}}
+    )
+    assert env["ORFS_ROOT"] == "/frozen/orfs"
+    assert env["PDK_ROOT"] == "/frozen/pdk"
+
+
+def test_formal_campaign_rejects_diagnostic_r2g_controls():
+    with pytest.raises(experiment.ExperimentError, match="non_scoring_canary"):
+        validate_run_mode(
+            {"campaign_mode": "formal"},
+            family_target=1,
+            non_scoring_target=1,
+            revision_batch=10,
+            max_revision_batch=10,
+            certified_corpus=None,
+        )
+
+
+def test_non_scoring_campaign_accepts_diagnostic_r2g_controls():
+    validate_run_mode(
+        {"campaign_mode": "non_scoring_canary"},
+        family_target=1,
+        non_scoring_target=1,
+        revision_batch=10,
+        max_revision_batch=10,
+        certified_corpus=None,
+    )
 
 
 def test_duplicate_candidate_key_is_rejected():

@@ -29,10 +29,16 @@ from tools.run_experiment1_rtl_acquisition import (  # noqa: E402
     git_text,
     normalized_repo_url,
     read_json,
-    resolved_agent_env,
+    manifest_toolchain_env,
     sha256_file,
+    verify_bound_campaign,
     write_json_atomic,
 )
+
+
+FORMAL_FAMILY_TARGET = 50
+FORMAL_REVISION_BATCH = 100
+FORMAL_MAX_REVISION_BATCH = 200
 
 
 def now_iso() -> str:
@@ -48,6 +54,69 @@ def classify_stop_reason(returncode: int, selected: int, target: int) -> str:
     if selected >= target:
         return "target_reached"
     return "search_exhausted"
+
+
+def classify_expander_stop_reason(
+    returncode: int,
+    selected: int,
+    target: int,
+    controller: dict[str, Any] | None,
+) -> str:
+    """Separate Agent finalization failures from external provider failures."""
+    if returncode in {124, 137}:
+        return "wall_time_limit"
+    state = str((controller or {}).get("state") or "")
+    if returncode != 0 and state in {"FAILED_CHILD_ROUND", "FAILED_FINALIZATION"}:
+        return "finalization_failure"
+    return classify_stop_reason(returncode, selected, target)
+
+
+def load_controller_state(corpus: Path, objective_id: str) -> dict[str, Any] | None:
+    path = corpus / "state/controllers" / objective_id / "controller.json"
+    return read_json(path) if path.is_file() else None
+
+
+def install_benchmark_registry(source: Path, corpus: Path) -> None:
+    """Install the digest-bound immutable contamination profile into a cold corpus."""
+    source = source.resolve()
+    catalog = source / "registry_catalog.json"
+    if not catalog.is_file():
+        raise ExperimentError(f"benchmark registry catalog is missing: {catalog}")
+    payload = read_json(catalog)
+    profile_id = str(payload.get("active_profile") or "")
+    profile = source / "profiles" / f"{profile_id}.json"
+    if (
+        not profile_id
+        or not profile.is_file()
+        or read_json(profile).get("ready") is not True
+    ):
+        raise ExperimentError("benchmark registry active profile is not audit-ready")
+    target = corpus / "benchmark_registry"
+    if target.exists():
+        raise ExperimentError(f"cold corpus benchmark registry already exists: {target}")
+    shutil.copytree(source, target)
+
+
+def validate_run_mode(
+    manifest: dict[str, Any],
+    *,
+    family_target: int,
+    non_scoring_target: int | None,
+    revision_batch: int,
+    max_revision_batch: int,
+    certified_corpus: Path | None,
+) -> None:
+    diagnostic_override = (
+        non_scoring_target is not None
+        or family_target != FORMAL_FAMILY_TARGET
+        or revision_batch != FORMAL_REVISION_BATCH
+        or max_revision_batch != FORMAL_MAX_REVISION_BATCH
+        or certified_corpus is not None
+    )
+    if diagnostic_override and manifest.get("campaign_mode") != "non_scoring_canary":
+        raise ExperimentError(
+            "diagnostic R2G controls require a non_scoring_canary campaign"
+        )
 
 
 def run_logged(
@@ -273,7 +342,16 @@ def main() -> int:
     parser.add_argument("--campaign-root", type=Path, required=True)
     parser.add_argument("--batch-id", type=int, choices=range(1, 5), required=True)
     parser.add_argument("--cores", type=int, default=4)
-    parser.add_argument("--family-target", type=int, default=50)
+    parser.add_argument("--family-target", type=int, default=FORMAL_FAMILY_TARGET)
+    parser.add_argument(
+        "--non-scoring-target",
+        type=int,
+        help="Diagnostic-only selection target; formal runs always use the frozen batch target.",
+    )
+    parser.add_argument("--revision-batch", type=int, default=FORMAL_REVISION_BATCH)
+    parser.add_argument(
+        "--max-revision-batch", type=int, default=FORMAL_MAX_REVISION_BATCH
+    )
     parser.add_argument(
         "--certified-corpus",
         type=Path,
@@ -282,9 +360,22 @@ def main() -> int:
     args = parser.parse_args()
     if args.cores < 1:
         parser.error("--cores must be positive")
+    if args.non_scoring_target is not None and args.non_scoring_target < 1:
+        parser.error("--non-scoring-target must be positive")
+    if args.revision_batch < 1 or args.max_revision_batch < args.revision_batch:
+        parser.error("revision batch bounds are invalid")
 
     campaign = args.campaign_root.resolve()
     manifest = read_json(campaign / "execution_manifest.json")
+    verify_bound_campaign(manifest)
+    validate_run_mode(
+        manifest,
+        family_target=args.family_target,
+        non_scoring_target=args.non_scoring_target,
+        revision_batch=args.revision_batch,
+        max_revision_batch=args.max_revision_batch,
+        certified_corpus=args.certified_corpus,
+    )
     task = read_json(TASK_SPEC)
     if manifest["task_spec"]["sha256"] != sha256_file(TASK_SPEC):
         raise ExperimentError("campaign task-spec binding no longer matches")
@@ -305,13 +396,16 @@ def main() -> int:
             if state_root.exists():
                 raise ExperimentError(f"R2G method state already exists: {state_root}")
             state_root.mkdir(parents=True)
+            install_benchmark_registry(
+                Path(manifest["benchmark_registry"]["path"]), corpus
+            )
         elif not corpus.is_dir():
             raise ExperimentError(
                 f"R2G batch {args.batch_id} requires the preceding method frontier"
             )
     started_at = now_iso()
     started = time.monotonic()
-    env = resolved_agent_env()
+    env = manifest_toolchain_env(manifest)
     env.update({"NUM_CORES": str(args.cores), "ORFS_MAX_CPUS": str(args.cores)})
     for key in ("PYTHONHOME", "PYTHONPATH", "PYTHONEXECUTABLE", "__PYVENV_LAUNCHER__"):
         env.pop(key, None)
@@ -321,9 +415,13 @@ def main() -> int:
     discovery_rc = 0
     counts_before = frontier_counts(corpus)
     query_attempts_before = query_attempts_by_id(corpus)
+    objective = (
+        f"{args.method_id}-batch{args.batch_id}-"
+        + manifest["campaign_id"].replace("_", "-")
+    )
 
     if args.certified_corpus is None:
-        corpus.mkdir(parents=True)
+        corpus.mkdir(parents=True, exist_ok=True)
         seed_command = [
             sys.executable,
             str(expander / "scripts/discover_repositories.py"),
@@ -351,10 +449,6 @@ def main() -> int:
         else:
             elapsed = time.monotonic() - started
             remaining = max(1, int(wall_limit - elapsed))
-            objective = (
-                f"{args.method_id}-batch{args.batch_id}-"
-                + manifest["campaign_id"].replace("_", "-")
-            )
             command = [
                 "timeout",
                 "--signal=TERM",
@@ -367,9 +461,9 @@ def main() -> int:
                 "--target-global-design-families",
                 str(args.family_target * args.batch_id),
                 "--revision-batch",
-                "100",
+                str(args.revision_batch),
                 "--max-revision-batch",
-                "200",
+                str(args.max_revision_batch),
                 "--objective-id",
                 objective,
                 "--providers",
@@ -487,7 +581,11 @@ def main() -> int:
                     )
             prequalified, selection_payload = select_diverse(
                 precheck_rows,
-                target=int(task["batch_policy"]["target_candidates_per_batch"]),
+                target=(
+                    int(args.non_scoring_target)
+                    if args.non_scoring_target is not None
+                    else int(task["batch_policy"]["target_candidates_per_batch"])
+                ),
                 prior_keys=prior_keys,
                 prior_families=prior_families,
             )
@@ -505,14 +603,23 @@ def main() -> int:
     )
     write_json_atomic(method_root / "selection_manifest.json", selection_payload)
     elapsed = min(float(wall_limit), round(time.monotonic() - started, 3))
-    target = int(task["batch_policy"]["target_candidates_per_batch"])
+    target = (
+        int(args.non_scoring_target)
+        if args.non_scoring_target is not None
+        else int(task["batch_policy"]["target_candidates_per_batch"])
+    )
     effective_returncode = discovery_rc
     if elapsed >= wall_limit and len(prequalified) < target:
         effective_returncode = 124
     if snapshot is None and discovery_rc == 0:
         effective_returncode = 1
-    stop_reason = classify_stop_reason(
-        effective_returncode, len(prequalified), target
+    controller = (
+        load_controller_state(corpus, objective)
+        if args.certified_corpus is None
+        else None
+    )
+    stop_reason = classify_expander_stop_reason(
+        effective_returncode, len(prequalified), target, controller
     )
     end = {
         "schema_version": "1.0",
@@ -537,10 +644,12 @@ def main() -> int:
         "public_precheck_attempts": precheck_attempts,
         "precheck_qualified": len(precheck_rows),
         "selected_candidates": len(prequalified),
+        "non_scoring_target": args.non_scoring_target,
+        "controller_state": (controller or {}).get("state"),
     }
     write_json_atomic(method_root / "method_end.json", end)
     print(
-        f"{args.method_id}/batch{args.batch_id}: selected={len(prequalified)}/25 "
+        f"{args.method_id}/batch{args.batch_id}: selected={len(prequalified)}/{target} "
         f"queries={len(queries)} stop={stop_reason}"
     )
     return 0 if stop_reason != "provider_failure" else 3

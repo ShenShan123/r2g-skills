@@ -42,13 +42,14 @@ from tools.run_experiment1_rtl_acquisition import (  # noqa: E402
     read_json,
     prior_candidate_keys,
     campaign_paths,
-    resolved_agent_env,
+    manifest_toolchain_env,
     run_formal_synth,
     semantic_submission_errors,
     submission_score_eligibility,
     synthesis_qualification_failure,
     validate_json,
     verify_candidate_inputs,
+    verify_bound_campaign,
     write_json_atomic,
 )
 
@@ -383,6 +384,12 @@ def normalized_checkout(value: Any) -> str:
     return rendered
 
 
+def campaign_toolchain_env(campaign_root: Path) -> dict[str, str]:
+    manifest = read_json(campaign_root.resolve() / "execution_manifest.json")
+    verify_bound_campaign(manifest)
+    return manifest_toolchain_env(manifest)
+
+
 class VanillaRun:
     def __init__(
         self,
@@ -438,7 +445,7 @@ class VanillaRun:
         self.final: dict[str, Any] | None = None
         self.started_at = now_iso()
         self.started_monotonic = time.monotonic()
-        self.env = resolved_agent_env()
+        self.env = campaign_toolchain_env(self.campaign_root)
 
     def event(self, kind: str, value: dict[str, Any]) -> None:
         record = {"timestamp": now_iso(), "kind": kind, **value}
@@ -1091,7 +1098,9 @@ class VanillaRun:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
-        stop_reason = "operator_abort"
+        # Reaching the deterministic turn budget is an ordinary method outcome.
+        # Reserve operator_abort for a real cancellation outside this loop.
+        stop_reason = "turn_limit"
         try:
             for turn in range(1, self.max_turns + 1):
                 if (

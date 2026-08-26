@@ -1,6 +1,7 @@
 # R2G 正式实验一、实验二、实验三设计要点
 
-状态：实验一已于 `2026-08-25T22:17:07-07:00` 冻结；实验二、实验三仍为讨论稿。
+状态：实验一在不计分 canary 修正停止原因、工具链与污染库绑定后，于
+`2026-08-25T23:33:24-07:00` 重新冻结；实验二、实验三仍为讨论稿。
 
 ## 实验一：RTL Acquisition
 
@@ -46,6 +47,11 @@ R2G Cold 必须从空的搜索调度状态启动，不允许预载历史仓库�
 Token 为0，但使用相同的时间、搜索、clone、综合和CPU限制。正式冻结前先用一个
 不计入论文成绩的小型 canary 验证 Prompt、JSON schema、计数、停止条件、许可证解析、
 clone 和 synth-precheck 链路；canary 通过后冻结代码、Prompt和预算，再从空目录开始正式实验。
+Canary campaign 必须在 manifest 中永久标为 `non_scoring_canary`，其缩小目标、短
+revision batch 和诊断语料不能用于正式成绩。正式 campaign 固定为 `formal`，并绑定
+可追溯 ORFS commit、PDK 路径和只读 benchmark contamination registry 的完整 digest。
+自然耗尽公开轮次或 R2G 内部 finalization 失败属于方法失败，缺失名额照常计分；只有
+可确认的外部 provider 故障或人工中止才允许不计分重跑。
 
 ### Prompt 核心
 

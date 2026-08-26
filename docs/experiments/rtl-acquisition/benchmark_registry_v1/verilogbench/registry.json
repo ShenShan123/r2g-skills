@@ -1,0 +1,19 @@
+{
+  "benchmark": "verilogbench",
+  "fingerprint_count": 0,
+  "fingerprint_count_by_type": {
+    "ast": 0,
+    "normalized_rtl": 0,
+    "raw_rtl": 0,
+    "semantic": 0
+  },
+  "fingerprints": 0,
+  "schema": "rtl_benchmark_registry_v1",
+  "snapshot_hash": null,
+  "source_artifact_count": 0,
+  "source_revision": "UNAVAILABLE",
+  "source_root": null,
+  "source_url": null,
+  "status": "PENDING_SOURCE",
+  "task_count": null
+}

@@ -8,11 +8,13 @@
     "schema_version",
     "experiment_id",
     "campaign_id",
+    "campaign_mode",
     "created_at",
     "protocol",
     "task_spec",
     "submission_schema",
     "model_route_preflight",
+    "benchmark_registry",
     "agent_snapshot",
     "toolchain",
     "model_routes",
@@ -32,6 +34,12 @@
     "campaign_id": {
       "type": "string",
       "minLength": 1
+    },
+    "campaign_mode": {
+      "enum": [
+        "formal",
+        "non_scoring_canary"
+      ]
     },
     "created_at": {
       "type": "string",
@@ -55,6 +63,16 @@
     },
     "model_route_preflight": {
       "$ref": "#/$defs/boundFile"
+    },
+    "benchmark_registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "active_profile"],
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "active_profile": {"type": "string", "minLength": 1}
+      }
     },
     "agent_snapshot": {
       "type": "object",

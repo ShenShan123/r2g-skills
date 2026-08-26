@@ -22,6 +22,11 @@ from tools.run_experiment1_vanilla_method import (
 )
 
 
+@pytest.fixture(autouse=True)
+def fixed_toolchain_env(monkeypatch):
+    monkeypatch.setattr(vanilla, "campaign_toolchain_env", lambda _root: {})
+
+
 def test_endpoint_kind_distinguishes_official_api_from_gateway():
     assert endpoint_kind_for_route({"channel": "official_api"}) == "official"
     assert endpoint_kind_for_route({"channel": "third_party_gateway"}) == "gateway"
@@ -219,6 +224,33 @@ def test_run_kind_selects_distinct_workspace(tmp_path):
     assert runner.token_budget == 2_000_000
     assert runner.wall_time_budget == 21_600
     assert runner.search_budget == 120
+
+
+def test_natural_turn_exhaustion_is_scoreable_turn_limit(tmp_path, monkeypatch):
+    runner = VanillaRun(
+        route={
+            "method_id": "kimi-vanilla",
+            "model_id": "kimi-test",
+            "provider": "test",
+        },
+        campaign_root=tmp_path,
+        batch_id=1,
+        target=1,
+        max_turns=1,
+        max_output_tokens=128,
+        run_kind="smoke",
+    )
+    monkeypatch.setattr(
+        runner,
+        "api_turn",
+        lambda _messages: {"role": "assistant", "content": "searching", "tool_calls": []},
+    )
+    submission_path = runner.run()
+    payload = json.loads(submission_path.read_text())
+    result = json.loads((runner.root / "method_result.json").read_text())
+    assert payload["stop_reason"] == "turn_limit"
+    assert result["score_eligible"] is True
+    assert result["submitted"] == 0
 
 
 def test_submit_uses_only_durably_qualified_candidate(tmp_path):

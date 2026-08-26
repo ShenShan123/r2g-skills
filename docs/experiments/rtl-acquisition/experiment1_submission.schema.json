@@ -99,9 +99,11 @@
         "submitted_early",
         "wall_time_limit",
         "token_limit",
+        "turn_limit",
         "search_limit",
         "search_exhausted",
         "provider_failure",
+        "finalization_failure",
         "operator_abort"
       ]
     },
