@@ -34,8 +34,8 @@
       "mode": "vanilla_llm"
     },
     {
-      "method_id": "grok-vanilla",
-      "requested_model": "grok-4.6",
+      "method_id": "gemini-vanilla",
+      "requested_model": "gemini-3.7-flash",
       "mode": "vanilla_llm"
     },
     {

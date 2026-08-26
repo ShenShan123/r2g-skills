@@ -161,7 +161,7 @@
               "qwen-vanilla",
               "glm-vanilla",
               "kimi-vanilla",
-              "grok-vanilla",
+              "gemini-vanilla",
               "r2g-expander-cold"
             ]
           },
@@ -230,7 +230,7 @@
               "qwen-vanilla",
               "glm-vanilla",
               "kimi-vanilla",
-              "grok-vanilla",
+              "gemini-vanilla",
               "r2g-expander-cold"
             ]
           },

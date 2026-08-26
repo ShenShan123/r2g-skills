@@ -35,7 +35,7 @@ METHOD_IDS = {
     "qwen-vanilla",
     "glm-vanilla",
     "kimi-vanilla",
-    "grok-vanilla",
+    "gemini-vanilla",
     "r2g-expander-cold",
 }
 R2G_METHOD_IDS = {"r2g-expander-cold"}

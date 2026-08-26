@@ -60,7 +60,7 @@ def test_formal_method_set_contains_six_vanilla_and_one_cold_r2g_condition():
         "qwen-vanilla",
         "glm-vanilla",
         "kimi-vanilla",
-        "grok-vanilla",
+        "gemini-vanilla",
     }
     assert "r2g-expander-cold" in METHOD_IDS
     assert "r2g-expander-warm" not in METHOD_IDS
