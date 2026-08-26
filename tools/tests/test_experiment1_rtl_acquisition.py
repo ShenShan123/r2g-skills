@@ -237,13 +237,26 @@ def test_manifest_toolchain_paths_override_local_resolution(monkeypatch):
     monkeypatch.setattr(
         experiment,
         "resolved_agent_env",
-        lambda: {"ORFS_ROOT": "/wrong/orfs", "PDK_ROOT": "/wrong/pdk"},
+        lambda: {
+            "ORFS_ROOT": "/wrong/orfs",
+            "FLOW_HOME": "/wrong/orfs/flow",
+            "DESIGN_HOME": "/wrong/orfs/flow/designs",
+            "PLATFORM_HOME": "/wrong/orfs/flow/platforms",
+            "SCRIPTS_DIR": "/wrong/orfs/flow/scripts",
+            "UTILS_DIR": "/wrong/orfs/flow/util",
+            "PDK_ROOT": "/wrong/pdk",
+        },
     )
     env = manifest_toolchain_env(
         {"toolchain": {"orfs_root": "/frozen/orfs", "pdk_root": "/frozen/pdk"}}
     )
     assert env["ORFS_ROOT"] == "/frozen/orfs"
+    assert env["FLOW_HOME"] == "/frozen/orfs/flow"
     assert env["PDK_ROOT"] == "/frozen/pdk"
+    assert "DESIGN_HOME" not in env
+    assert "PLATFORM_HOME" not in env
+    assert "SCRIPTS_DIR" not in env
+    assert "UTILS_DIR" not in env
 
 
 def test_formal_campaign_rejects_diagnostic_r2g_controls():

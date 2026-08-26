@@ -396,7 +396,21 @@ def manifest_toolchain_env(manifest: dict[str, Any]) -> dict[str, str]:
     """Resolve tools, then enforce the exact paths frozen in the campaign."""
     env = resolved_agent_env()
     toolchain = manifest["toolchain"]
-    env["ORFS_ROOT"] = str(toolchain["orfs_root"])
+    orfs_root = Path(toolchain["orfs_root"]).resolve()
+    # ORFS honours an inherited FLOW_HOME before deriving it from the Makefile.
+    # Drop installation-relative paths from the ambient Agent environment so a
+    # frozen campaign cannot combine one ORFS checkout with another checkout's
+    # scripts, platforms, or design directory.
+    for key in (
+        "FLOW_HOME",
+        "DESIGN_HOME",
+        "PLATFORM_HOME",
+        "SCRIPTS_DIR",
+        "UTILS_DIR",
+    ):
+        env.pop(key, None)
+    env["ORFS_ROOT"] = str(orfs_root)
+    env["FLOW_HOME"] = str(orfs_root / "flow")
     if toolchain.get("pdk_root"):
         env["PDK_ROOT"] = str(toolchain["pdk_root"])
     return env
