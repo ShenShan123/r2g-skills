@@ -667,9 +667,11 @@ def synthesize_design(top: str, top_language: str, vhdl_entities: list[str], pat
     log = out_dir / "yosys.log"
     script = out_dir / "synth.ys"
     commands: list[str] = []
+    process_cwd = out_dir
     if vhdl:
         frontend_dir = out_dir / "vhdl_frontend"
         frontend_dir.mkdir(parents=True, exist_ok=True)
+        process_cwd = frontend_dir
         safe_vhdl: list[Path] = []
         for index, path in enumerate(vhdl):
             safe_path = frontend_dir / f"{index:04d}_{re.sub(r'[^A-Za-z0-9_.-]', '_', path.name)}"
@@ -677,13 +679,20 @@ def synthesize_design(top: str, top_language: str, vhdl_entities: list[str], pat
             safe_vhdl.append(safe_path)
         targets = [top] if top_language == "vhdl" else sorted(set(vhdl_entities))
         for entity in targets:
-            commands.append("ghdl --std=08 " + " ".join(str(path) for path in safe_vhdl) + f" -e {entity}")
+            commands.append(
+                "ghdl --std=08 "
+                + " ".join(path.name for path in safe_vhdl)
+                + f" -e {entity}"
+            )
     if verilog:
         include_flags = " ".join("-I" + yosys_option_path(path) for path in include_dirs)
         commands.append("read_verilog -sv " + include_flags + " " + " ".join(yosys_quote(path) for path in verilog))
+    stats_command_path = Path("..") / stats.name if vhdl else Path(stats.name)
+    netlist_command_path = Path("..") / netlist.name if vhdl else Path(netlist.name)
     commands.extend([
         f"hierarchy -check -top {top}", "proc", "fsm", "memory", "opt", "check",
-        f"stat -json {yosys_quote(stats)}", f"write_verilog -noattr {yosys_quote(netlist)}",
+        f"tee -q -o {stats_command_path.as_posix()} stat -json",
+        f"write_verilog -noattr {netlist_command_path.as_posix()}",
     ])
     atomic_write_text(script, "\n".join(commands) + "\n")
     start = time.monotonic()
@@ -695,6 +704,7 @@ def synthesize_design(top: str, top_language: str, vhdl_entities: list[str], pat
         process = subprocess.Popen(
             command, text=True, encoding="utf-8", errors="replace",
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+            cwd=process_cwd,
         )
         try:
             stdout, stderr = process.communicate(timeout=timeout)
@@ -729,6 +739,10 @@ def synthesize_design(top: str, top_language: str, vhdl_entities: list[str], pat
             "runtime_seconds": runtime,
             "generic_netlist": str(netlist) if passed else None,
             "generic_netlist_hash": digest(netlist.read_bytes()) if passed else None,
+            "generic_stats": str(stats) if passed and stats.is_file() else None,
+            "generic_stats_hash": (
+                digest(stats.read_bytes()) if passed and stats.is_file() else None
+            ),
             "tool": yosys,
             "synth_schema": SYNTH_SCHEMA,
             "frontend": "mixed_language" if verilog and vhdl else top_language,

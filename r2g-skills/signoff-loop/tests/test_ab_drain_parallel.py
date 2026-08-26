@@ -108,7 +108,12 @@ def test_parallel_ab_drain_records_route_verdict(tmp_path, monkeypatch):
                         lambda e: ingest_run.ingest(Path(e["project_path"]),
                                                     knowledge_db.connect(db)))
     # workers=4 -> the (2-design x 2-arm) trial runs its 4 arms concurrently.
-    engineer_loop.ab_drain(tmp_path / "ledger.jsonl", n_ab_designs=2, db_path=db,
+    led_path = tmp_path / "ledger.jsonl"
+    led = engineer_loop.Ledger(led_path)
+    for name in ("crypto_a", "crypto_b"):
+        led.add({"design": name, "project_path": str(tmp_path / "designs" / name),
+                 "platform": "sky130hd"})
+    engineer_loop.ab_drain(led_path, n_ab_designs=2, db_path=db,
                            max_workers=4)
     conn = knowledge_db.connect(db)
     trials = conn.execute(

@@ -202,6 +202,21 @@ def test_constraint_coverage_records_unmodeled_io_without_rejecting_clocked_regi
     assert coverage["unconstrained_endpoints"] == 33
 
 
+def test_final_timing_must_be_finite_and_not_opensta_unconstrained_sentinel():
+    assert MODULE.has_evaluable_final_timing(
+        {"setup_wns_ns": 0.12, "hold_wns_ns": 0.03}
+    ) is True
+    assert MODULE.has_evaluable_final_timing(
+        {"setup_wns_ns": 1.0e39, "hold_wns_ns": 1.0e39}
+    ) is False
+    assert MODULE.has_evaluable_final_timing(
+        {"setup_wns_ns": float("nan"), "hold_wns_ns": 0.03}
+    ) is False
+    assert MODULE.has_evaluable_final_timing(
+        {"setup_wns_ns": 0.12, "hold_wns_ns": None}
+    ) is False
+
+
 def test_synth_module_redefinition_is_an_input_closure_failure():
     duplicate = (
         "rtl/top/../cores/uart_rx.v:1: "
@@ -422,3 +437,40 @@ def test_materialize_freezes_include_dependency_without_compiling_it_twice(tmp_p
     assert manifest["compilation_units"] == ["rtl/rtl/top/top.v"]
     assert manifest["dependency_inputs"] == ["rtl/rtl/cores/child.v"]
     assert len(manifest["files"]) == 2
+
+
+def test_materialize_freezes_readmem_data_dependency_without_compiling_it(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    (source / "rtl").mkdir(parents=True)
+    (source / "rtl/top.v").write_text(
+        'module top(input wire clk); reg [7:0] mem [0:7]; initial $readmemh("init.dat", mem); endmodule\n',
+        encoding="utf-8",
+    )
+    (source / "rtl/init.dat").write_text("00\n", encoding="utf-8")
+    args = argparse.Namespace(
+        source=source,
+        source_repo_url=None,
+        source_commit=None,
+        rtl_file=["rtl/top.v"],
+        dependency_file=["rtl/init.dat"],
+        project=project,
+        family="test-family",
+        task_id="test-task",
+        variant="baseline",
+        platform="sky130hd",
+        top_module="top",
+        clock_port="clk",
+        frequency_mhz=100.0,
+        set=[],
+        unset=[],
+        fastroute_tcl=None,
+    )
+
+    MODULE.materialize(args)
+
+    config = (project / "constraints/config.mk").read_text(encoding="utf-8")
+    verilog_line = next(line for line in config.splitlines() if "VERILOG_FILES" in line)
+    assert "rtl/top.v" in verilog_line
+    assert "rtl/init.dat" not in verilog_line
+    assert (project / "rtl/rtl/init.dat").is_file()

@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -178,7 +179,8 @@ def materialize(args: argparse.Namespace) -> None:
         raise ValueError(f"project already exists: {project}")
     if bool(args.source_repo_url) != bool(args.source_commit):
         raise ValueError("--source-repo-url and --source-commit must be provided together")
-    allowed_suffixes = {".v", ".sv", ".vh", ".svh", ".mem", ".hex"}
+    compile_suffixes = {".v", ".sv"}
+    dependency_suffixes = {".v", ".sv", ".vh", ".svh", ".mem", ".hex", ".dat"}
     dependency_values = list(getattr(args, "dependency_file", []) or [])
     if args.rtl_file:
         requested = [Path(value) for value in args.rtl_file]
@@ -194,8 +196,10 @@ def materialize(args: argparse.Namespace) -> None:
         missing = [path for path in rtl_files if not path.is_file()]
         if missing:
             raise ValueError(f"missing explicit RTL input: {missing[0]}")
-        if any(path.suffix.lower() not in allowed_suffixes for path in rtl_files):
-            raise ValueError("explicit RTL closure contains an unsupported file type")
+        if any(path.suffix.lower() not in compile_suffixes for path in compile_files):
+            raise ValueError("explicit compilation unit contains an unsupported HDL type")
+        if any(path.suffix.lower() not in dependency_suffixes for path in dependency_files):
+            raise ValueError("explicit dependency closure contains an unsupported file type")
         relative_files = [path.relative_to(source) for path in rtl_files]
         compile_relatives = {path.relative_to(source) for path in compile_files}
     else:
@@ -206,12 +210,12 @@ def materialize(args: argparse.Namespace) -> None:
             raise ValueError(f"source snapshot has no rtl directory: {source}")
         rtl_files = sorted(
             path for path in rtl_source.rglob("*")
-            if path.is_file() and path.suffix.lower() in allowed_suffixes
+            if path.is_file() and path.suffix.lower() in dependency_suffixes
         )
         relative_files = [path.relative_to(rtl_source) for path in rtl_files]
         compile_relatives = {
             relative for path, relative in zip(rtl_files, relative_files)
-            if path.suffix.lower() in {".v", ".sv"}
+            if path.suffix.lower() in compile_suffixes
         }
     if not rtl_files:
         raise ValueError(f"source snapshot has no RTL files: {source}")
@@ -511,6 +515,26 @@ def constraint_coverage(flow_log: str) -> dict[str, int | str | None]:
     return {"status": status, **counts}
 
 
+UNCONSTRAINED_TIMING_SENTINEL = 1.0e30
+
+
+def has_evaluable_final_timing(metrics: dict[str, Any]) -> bool:
+    """Require real setup and hold observations for the fixed-frequency task.
+
+    OpenSTA emits values around 1e39 when no constrained timing path exists.
+    A declared clock and zero unclocked-register warnings are not sufficient in
+    that case: a pathless top cannot demonstrate closure at the target period.
+    """
+    for key in ("setup_wns_ns", "hold_wns_ns"):
+        value = metrics.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        numeric = float(value)
+        if not math.isfinite(numeric) or abs(numeric) >= UNCONSTRAINED_TIMING_SENTINEL:
+            return False
+    return True
+
+
 def final_artifact(run_dir: Path, name: str) -> Path:
     for subdir in ("final", "results", ""):
         candidate = run_dir / subdir / name if subdir else run_dir / name
@@ -703,6 +727,9 @@ def execute(args: argparse.Namespace) -> None:
             timing.get("hold_wns"),
         ),
     }
+    timing_evaluation_incomplete = not has_evaluable_final_timing(metrics)
+    if timing_evaluation_incomplete:
+        signature.append("TIMING_EVALUATION_INCOMPLETE")
     categories = drc.get("categories")
     if isinstance(categories, dict):
         for rule_class, detail in categories.items():
@@ -727,6 +754,7 @@ def execute(args: argparse.Namespace) -> None:
     strict_clean = (
         gate.get("status") in {"clean", "pass", "strict_clean"}
         and not constraint_coverage_incomplete
+        and not timing_evaluation_incomplete
     )
     publication_strict_clean = reports["signoff_manifest"].get("strict_clean") is True
     result = {
@@ -746,6 +774,7 @@ def execute(args: argparse.Namespace) -> None:
         "capacity_infeasible": capacity_infeasible,
         "scale_ineligible": scale_ineligible,
         "constraint_coverage_incomplete": constraint_coverage_incomplete,
+        "timing_evaluation_incomplete": timing_evaluation_incomplete,
         "constraint_coverage": coverage,
         "mapped_cells": cell_count,
         "min_mapped_cells": min_mapped_cells,
@@ -755,7 +784,11 @@ def execute(args: argparse.Namespace) -> None:
         "execution_interrupted": execution_interrupted,
         "unclassified_execution_failure": unclassified_execution_failure,
         "constraint_attestation": {
-            "status": "bound_and_covered" if not constraint_coverage_incomplete else "bound_but_incomplete",
+            "status": (
+                "bound_and_covered"
+                if not constraint_coverage_incomplete and not timing_evaluation_incomplete
+                else "bound_but_incomplete"
+            ),
             "mode": "fixed_registered_target",
             "target_frequency_mhz": manifest["protected_task"]["target_frequency_mhz"],
             "sdc_sha256": manifest["protected_task"]["sdc_sha256"],
