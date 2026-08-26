@@ -434,6 +434,32 @@ def test_synth_project_stages_whitespace_paths(tmp_path: Path):
     assert staged.resolve() == rtl.resolve()
 
 
+def test_synth_project_isolates_parallel_evaluation_variants(tmp_path: Path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "top.v").write_text(
+        "module top(input a, output y); assign y=a; endmodule\n",
+        encoding="utf-8",
+    )
+    candidate = deepcopy(submission()["candidates"][0])
+    candidate.update(
+        {
+            "repo_url": "https://github.com/example/parallel",
+            "commit": "c" * 40,
+            "top_module": "top",
+            "rtl_files": ["top.v"],
+            "include_dirs": ["."],
+            "defines": [],
+            "top_parameters": {},
+        }
+    )
+
+    _, variant_a = write_synth_project(candidate, source, tmp_path / "method-a")
+    _, variant_b = write_synth_project(candidate, source, tmp_path / "method-b")
+
+    assert variant_a != variant_b
+
+
 def test_compile_closure_detects_undeclared_transitive_header(tmp_path: Path):
     (tmp_path / "top.v").write_text(
         '`include "defs.vh"\nmodule top(input a, output y); assign y = a; endmodule\n',

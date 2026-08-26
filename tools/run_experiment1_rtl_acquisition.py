@@ -1059,8 +1059,15 @@ def write_synth_project(
         lines.append("export VERILOG_TOP_PARAMS = " + " ".join(rendered))
     config = constraints / "config.mk"
     config.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Include the evaluation workspace in the namespace. Different methods can
+    # legitimately select the same design and run concurrently; a candidate-only
+    # variant would make their clean/synth targets overwrite one another inside
+    # the shared ORFS checkout.
     variant = "exp1_" + hashlib.sha256(
-        f"{candidate['repo_url']}|{candidate['commit']}|{candidate['top_module']}".encode()
+        (
+            f"{candidate['repo_url']}|{candidate['commit']}|"
+            f"{candidate['top_module']}|{project.resolve()}"
+        ).encode()
     ).hexdigest()[:12]
     return config, variant
 
