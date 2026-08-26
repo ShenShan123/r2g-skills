@@ -2,6 +2,7 @@ from copy import deepcopy
 import json
 import os
 from pathlib import Path
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -44,6 +45,36 @@ EXAMPLE = EXPERIMENT_DIR / "experiment1_submission.example.json"
 
 def submission() -> dict:
     return json.loads(EXAMPLE.read_text(encoding="utf-8"))
+
+
+def test_manifest_write_lock_serializes_parallel_writers(tmp_path: Path):
+    manifest = tmp_path / "execution_manifest.json"
+    manifest.write_text("{}\n", encoding="utf-8")
+    first_entered = threading.Event()
+    release_first = threading.Event()
+    second_entered = threading.Event()
+
+    def first_writer():
+        with experiment.manifest_write_lock(manifest):
+            first_entered.set()
+            assert release_first.wait(timeout=2)
+
+    def second_writer():
+        with experiment.manifest_write_lock(manifest):
+            second_entered.set()
+
+    first = threading.Thread(target=first_writer)
+    second = threading.Thread(target=second_writer)
+    first.start()
+    assert first_entered.wait(timeout=1)
+    second.start()
+    assert not second_entered.wait(timeout=0.1)
+    release_first.set()
+    assert second_entered.wait(timeout=1)
+    first.join(timeout=1)
+    second.join(timeout=1)
+    assert not first.is_alive()
+    assert not second.is_alive()
 
 
 def test_example_submission_passes_schema_and_semantics():

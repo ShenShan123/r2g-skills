@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import fcntl
 import hashlib
 import json
 import os
@@ -102,6 +104,19 @@ def write_json_atomic(path: Path, value: Any) -> None:
         encoding="utf-8",
     )
     temporary.replace(path)
+
+
+@contextmanager
+def manifest_write_lock(manifest_path: Path):
+    """Serialize cross-process read-modify-write updates to one campaign manifest."""
+    lock_path = manifest_path.with_name(manifest_path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def sha256_file(path: Path) -> str:
@@ -719,33 +734,40 @@ def find_batch(manifest: dict[str, Any], method_id: str, batch_id: int) -> dict[
 
 def accept_submission(args: argparse.Namespace) -> None:
     paths = campaign_paths(args.campaign_root)
-    manifest = read_json(paths["manifest"])
-    submission, errors = validate_submission(args.submission, campaign_root=paths["root"])
-    if errors:
-        raise ExperimentError("submission rejected:\n" + "\n".join(errors))
-    score_eligible, reason = submission_score_eligibility(submission)
-    if not score_eligible:
-        raise ExperimentError(
-            "submission is a valid audit record but cannot be locked for scoring: "
-            + str(reason)
+    with manifest_write_lock(paths["manifest"]):
+        manifest = read_json(paths["manifest"])
+        submission, errors = validate_submission(
+            args.submission, campaign_root=paths["root"]
         )
-    method_id = submission["method_id"]
-    batch_id = int(submission["batch_id"])
-    batch = find_batch(manifest, method_id, batch_id)
-    if batch["status"] != "pending":
-        raise ExperimentError(f"batch is already locked with status={batch['status']}")
-    destination = paths["submissions"] / f"{method_id}.batch{batch_id}.json"
-    shutil.copyfile(args.submission, destination)
-    batch.update(
-        {
-            "status": "submitted",
-            "submission_path": str(destination),
-            "submission_sha256": sha256_file(destination),
+        if errors:
+            raise ExperimentError("submission rejected:\n" + "\n".join(errors))
+        score_eligible, reason = submission_score_eligibility(submission)
+        if not score_eligible:
+            raise ExperimentError(
+                "submission is a valid audit record but cannot be locked for scoring: "
+                + str(reason)
+            )
+        method_id = submission["method_id"]
+        batch_id = int(submission["batch_id"])
+        batch = find_batch(manifest, method_id, batch_id)
+        if batch["status"] != "pending":
+            raise ExperimentError(f"batch is already locked with status={batch['status']}")
+        destination = paths["submissions"] / f"{method_id}.batch{batch_id}.json"
+        shutil.copyfile(args.submission, destination)
+        batch.update(
+            {
+                "status": "submitted",
+                "submission_path": str(destination),
+                "submission_sha256": sha256_file(destination),
+            }
+        )
+        route = {
+            "method_id": method_id,
+            "batch_id": batch_id,
+            **submission["model_route"],
         }
-    )
-    route = {"method_id": method_id, "batch_id": batch_id, **submission["model_route"]}
-    manifest["model_routes"].append(route)
-    write_json_atomic(paths["manifest"], manifest)
+        manifest["model_routes"].append(route)
+        write_json_atomic(paths["manifest"], manifest)
     print(f"Accepted and digest-locked: {destination}")
 
 
@@ -1507,38 +1529,45 @@ def batch_summary(
 
 def evaluate_batch(args: argparse.Namespace) -> None:
     paths = campaign_paths(args.campaign_root)
-    manifest = read_json(paths["manifest"])
-    verify_bound_campaign(manifest)
-    batch = find_batch(manifest, args.method_id, args.batch_id)
-    method_batches = [
-        row for row in manifest["batches"] if row["method_id"] == args.method_id
-    ]
-    unlocked = [
-        int(row["batch_id"]) for row in method_batches
-        if row["status"] not in {"submitted", "evaluating", "complete"}
-    ]
-    if unlocked:
-        raise ExperimentError(
-            "all four method batches must be digest-locked before formal evaluation; "
-            f"unlocked batches: {unlocked}"
+    with manifest_write_lock(paths["manifest"]):
+        manifest = read_json(paths["manifest"])
+        verify_bound_campaign(manifest)
+        batch = find_batch(manifest, args.method_id, args.batch_id)
+        method_batches = [
+            row for row in manifest["batches"] if row["method_id"] == args.method_id
+        ]
+        unlocked = [
+            int(row["batch_id"]) for row in method_batches
+            if row["status"] not in {"submitted", "evaluating", "complete"}
+        ]
+        if unlocked:
+            raise ExperimentError(
+                "all four method batches must be digest-locked before formal evaluation; "
+                f"unlocked batches: {unlocked}"
+            )
+        if batch["status"] != "submitted":
+            raise ExperimentError(
+                f"batch must be submitted, found status={batch['status']}"
+            )
+        submission_path = Path(batch["submission_path"])
+        if sha256_file(submission_path) != batch["submission_sha256"]:
+            raise ExperimentError("locked submission digest mismatch")
+        submission, errors = validate_submission(
+            submission_path, campaign_root=paths["root"]
         )
-    if batch["status"] != "submitted":
-        raise ExperimentError(f"batch must be submitted, found status={batch['status']}")
-    submission_path = Path(batch["submission_path"])
-    if sha256_file(submission_path) != batch["submission_sha256"]:
-        raise ExperimentError("locked submission digest mismatch")
-    submission, errors = validate_submission(submission_path, campaign_root=paths["root"])
-    if errors:
-        raise ExperimentError("locked submission no longer validates:\n" + "\n".join(errors))
-    score_eligible, reason = submission_score_eligibility(submission)
-    if not score_eligible:
-        raise ExperimentError("locked submission is not score eligible: " + str(reason))
-    evaluation_root = paths["evaluation"] / f"{args.method_id}.batch{args.batch_id}"
-    if evaluation_root.exists():
-        raise ExperimentError(f"formal evaluation already exists: {evaluation_root}")
-    evaluation_root.mkdir(parents=True)
-    batch["status"] = "evaluating"
-    write_json_atomic(paths["manifest"], manifest)
+        if errors:
+            raise ExperimentError(
+                "locked submission no longer validates:\n" + "\n".join(errors)
+            )
+        score_eligible, reason = submission_score_eligibility(submission)
+        if not score_eligible:
+            raise ExperimentError("locked submission is not score eligible: " + str(reason))
+        evaluation_root = paths["evaluation"] / f"{args.method_id}.batch{args.batch_id}"
+        if evaluation_root.exists():
+            raise ExperimentError(f"formal evaluation already exists: {evaluation_root}")
+        evaluation_root.mkdir(parents=True)
+        batch["status"] = "evaluating"
+        write_json_atomic(paths["manifest"], manifest)
     env = manifest_toolchain_env(manifest)
     env.update({"NUM_CORES": str(args.cores), "ORFS_MAX_CPUS": str(args.cores)})
     source_cache = evaluation_root / "_source_cache"
@@ -1555,8 +1584,12 @@ def evaluate_batch(args: argparse.Namespace) -> None:
                 + datetime.now().strftime("%Y%m%d_%H%M%S")
             )
             evaluation_root.replace(failed_path)
-            batch["status"] = "submitted"
-            write_json_atomic(paths["manifest"], manifest)
+            with manifest_write_lock(paths["manifest"]):
+                failed_manifest = read_json(paths["manifest"])
+                find_batch(
+                    failed_manifest, args.method_id, args.batch_id
+                )["status"] = "submitted"
+                write_json_atomic(paths["manifest"], failed_manifest)
             raise ExperimentError(
                 "evaluation aborted because evaluator infrastructure failed; "
                 f"diagnostics archived at {failed_path}"
@@ -1580,14 +1613,24 @@ def evaluate_batch(args: argparse.Namespace) -> None:
     }
     report_path = paths["reports"] / f"{args.method_id}.batch{args.batch_id}.evaluation.json"
     write_json_atomic(report_path, report)
-    batch.update(
-        {
-            "status": "complete",
-            "evaluation_path": str(report_path),
-            "evaluation_sha256": sha256_file(report_path),
-        }
-    )
-    write_json_atomic(paths["manifest"], manifest)
+    with manifest_write_lock(paths["manifest"]):
+        completed_manifest = read_json(paths["manifest"])
+        completed_batch = find_batch(
+            completed_manifest, args.method_id, args.batch_id
+        )
+        if completed_batch["status"] != "evaluating":
+            raise ExperimentError(
+                "batch state changed during evaluation: "
+                + str(completed_batch["status"])
+            )
+        completed_batch.update(
+            {
+                "status": "complete",
+                "evaluation_path": str(report_path),
+                "evaluation_sha256": sha256_file(report_path),
+            }
+        )
+        write_json_atomic(paths["manifest"], completed_manifest)
     summary = report["summary"]
     print(
         f"{args.method_id}/batch{args.batch_id}: "
@@ -1709,14 +1752,22 @@ def summarize_method(args: argparse.Namespace) -> None:
     if report_path.exists():
         raise ExperimentError(f"method report already exists: {report_path}")
     write_json_atomic(report_path, report)
-    method_row.update(
-        {
-            "status": "complete",
-            "report_path": str(report_path),
-            "report_sha256": sha256_file(report_path),
-        }
-    )
-    write_json_atomic(paths["manifest"], manifest)
+    with manifest_write_lock(paths["manifest"]):
+        completed_manifest = read_json(paths["manifest"])
+        completed_method = next(
+            row for row in completed_manifest["method_reports"]
+            if row["method_id"] == args.method_id
+        )
+        if completed_method["status"] != "pending":
+            raise ExperimentError("method report state changed during summarization")
+        completed_method.update(
+            {
+                "status": "complete",
+                "report_path": str(report_path),
+                "report_sha256": sha256_file(report_path),
+            }
+        )
+        write_json_atomic(paths["manifest"], completed_manifest)
     print(
         f"{args.method_id}: publishable={publishable}/{target}, "
         f"technical={technical}/{target}, submitted={len(submitted)}/{target}"
