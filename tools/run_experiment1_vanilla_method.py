@@ -111,6 +111,30 @@ def is_transient_git_failure(text: str) -> bool:
     )
 
 
+def validation_event_summary(result: Any) -> dict[str, Any]:
+    """Keep public gate outcomes auditable without logging candidate contents."""
+    if not isinstance(result, dict):
+        return {}
+    summary = {
+        key: result[key]
+        for key in (
+            "accepted",
+            "precheck_qualified",
+            "failure_class",
+            "identity_field",
+            "synthesis_run",
+        )
+        if key in result
+    }
+    synthesis = result.get("synthesis")
+    if isinstance(synthesis, dict) and "mapped_cells" in synthesis:
+        summary["mapped_cells"] = synthesis["mapped_cells"]
+    schema_errors = result.get("schema_errors")
+    if isinstance(schema_errors, list):
+        summary["schema_errors"] = schema_errors[:5]
+    return summary
+
+
 def submitted_stop_reason(candidate_count: int, target: int) -> str:
     return "target_reached" if candidate_count >= target else "submitted_early"
 
@@ -1251,7 +1275,10 @@ class VanillaRun:
                             else json.loads(raw_arguments)
                         )
                         result = self.execute_tool(name, arguments)
-                        self.event("tool_call", {"tool": name, "ok": True})
+                        event = {"tool": name, "ok": True}
+                        if name == "validate_candidate":
+                            event.update(validation_event_summary(result))
+                        self.event("tool_call", event)
                     except Exception as exc:
                         result = {"error": type(exc).__name__, "message": str(exc)[:1000]}
                         self.event(

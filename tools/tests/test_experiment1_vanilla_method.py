@@ -22,6 +22,7 @@ from tools.run_experiment1_vanilla_method import (
     responses_tools,
     submitted_stop_reason,
     tool_specs,
+    validation_event_summary,
 )
 
 
@@ -567,3 +568,21 @@ def test_transient_network_classification_is_bounded_to_transport_errors():
     assert not is_transient_network_error(ValueError("bad response schema"))
     assert is_transient_git_failure("gnutls_handshake() failed: TLS connection terminated")
     assert not is_transient_git_failure("repository not found")
+
+
+def test_validation_event_summary_exposes_gate_result_without_candidate_payload():
+    result = {
+        "accepted": True,
+        "precheck_qualified": False,
+        "failure_class": "compilation_closure_incomplete",
+        "synthesis_run": False,
+        "input_evidence": {"files": ["large", "private", "payload"]},
+        "schema_errors": ["first", "second"],
+    }
+    assert validation_event_summary(result) == {
+        "accepted": True,
+        "precheck_qualified": False,
+        "failure_class": "compilation_closure_incomplete",
+        "synthesis_run": False,
+        "schema_errors": ["first", "second"],
+    }
