@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -39,6 +40,7 @@ from tools.run_experiment1_rtl_acquisition import (  # noqa: E402
 FORMAL_FAMILY_TARGET = 50
 FORMAL_REVISION_BATCH = 100
 FORMAL_MAX_REVISION_BATCH = 200
+FORMAL_DISCOVERY_QUOTA_RESERVE = 0
 
 
 def now_iso() -> str:
@@ -131,15 +133,44 @@ def run_logged(
     with log.open("a" if append else "w", encoding="utf-8") as stream:
         stream.write("COMMAND: " + json.dumps(command) + "\n")
         stream.flush()
-        return subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=cwd,
             env=env,
             text=True,
             stdout=stream,
             stderr=subprocess.STDOUT,
-            check=False,
+            start_new_session=True,
         )
+        previous_handlers: dict[signal.Signals, Any] = {}
+
+        def forward_termination(signum: int, _frame: Any) -> None:
+            try:
+                os.killpg(process.pid, signum)
+            except ProcessLookupError:
+                pass
+            raise SystemExit(128 + signum)
+
+        for signum in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+            previous_handlers[signum] = signal.getsignal(signum)
+            signal.signal(signum, forward_termination)
+        try:
+            returncode = process.wait()
+        except BaseException:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+                process.wait(timeout=30)
+            except (ProcessLookupError, subprocess.TimeoutExpired):
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+            raise
+        finally:
+            for signum, handler in previous_handlers.items():
+                signal.signal(signum, handler)
+        return subprocess.CompletedProcess(command, returncode)
 
 
 def frontier_counts(corpus: Path) -> dict[str, int]:
@@ -442,6 +473,8 @@ def main() -> int:
             str(len(task["seed_categories"])),
             "--graph-budget",
             "0",
+            "--quota-reserve",
+            str(FORMAL_DISCOVERY_QUOTA_RESERVE),
         ]
         for seed in task["seed_categories"]:
             seed_command.extend(["--query", seed])
@@ -475,6 +508,8 @@ def main() -> int:
                 objective,
                 "--providers",
                 "github",
+                "--discovery-quota-reserve",
+                str(FORMAL_DISCOVERY_QUOTA_RESERVE),
                 "--process-budget",
                 "100",
                 "--pipeline-workers",

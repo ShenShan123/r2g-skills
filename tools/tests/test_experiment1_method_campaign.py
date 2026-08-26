@@ -1,4 +1,5 @@
 from pathlib import Path
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -38,6 +39,7 @@ def test_acquire_locks_four_batches_without_running_evaluator(tmp_path, monkeypa
         lambda path: task if Path(path).name == "task.json" else manifest,
     )
     monkeypatch.setattr(campaign_runner, "verify_bound_campaign", lambda _value: None)
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
 
     def fake_run(command: list[str]) -> None:
         commands.append(command)
@@ -59,6 +61,53 @@ def test_acquire_locks_four_batches_without_running_evaluator(tmp_path, monkeypa
     assert sum("run_experiment1_vanilla_method.py" in " ".join(row) for row in commands) == 4
     assert sum("accept-submission" in row for row in commands) == 4
     assert not any("evaluate-batch" in row for row in commands)
+
+
+def test_formal_acquire_requires_authenticated_github(tmp_path, monkeypatch):
+    manifest = manifest_for("qwen-vanilla")
+    monkeypatch.setattr(campaign_runner, "read_json", lambda _path: manifest)
+    monkeypatch.setattr(campaign_runner, "verify_bound_campaign", lambda _value: None)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    with pytest.raises(ExperimentError, match="authenticated GITHUB_TOKEN"):
+        campaign_runner.acquire(
+            SimpleNamespace(
+                campaign_root=tmp_path,
+                method_id="qwen-vanilla",
+                cores=4,
+                env_file=tmp_path / "api.env",
+                max_turns=100,
+                max_output_tokens=4096,
+            )
+        )
+
+
+def test_campaign_acquisition_lease_serializes_methods(tmp_path):
+    first_entered = threading.Event()
+    release_first = threading.Event()
+    second_entered = threading.Event()
+
+    def first_method():
+        with campaign_runner.campaign_acquisition_lease(tmp_path, "first"):
+            first_entered.set()
+            assert release_first.wait(timeout=2)
+
+    def second_method():
+        with campaign_runner.campaign_acquisition_lease(tmp_path, "second"):
+            second_entered.set()
+
+    first = threading.Thread(target=first_method)
+    second = threading.Thread(target=second_method)
+    first.start()
+    assert first_entered.wait(timeout=1)
+    second.start()
+    assert not second_entered.wait(timeout=0.1)
+    release_first.set()
+    assert second_entered.wait(timeout=1)
+    first.join(timeout=1)
+    second.join(timeout=1)
+    assert not first.is_alive()
+    assert not second.is_alive()
 
 
 def test_evaluate_refuses_partially_locked_method(tmp_path, monkeypatch):

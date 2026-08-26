@@ -2,7 +2,7 @@
   "schema_version": "2.0",
   "experiment_id": "r2g-exp1-rtl-acquisition-v1",
   "status": "frozen",
-  "frozen_at": "2026-08-26T08:32:44-07:00",
+  "frozen_at": "2026-08-26T08:58:16-07:00",
   "revised_at": "2026-08-26",
   "objective": "Compare five Vanilla LLMs with frozen R2G-Expander Cold acquisition under the same task, public tools, qualification gates, and per-batch resource bounds.",
   "core_task_zh": "在公开且可观察的固定预算内，从公开互联网仓库中寻找100个唯一、开源、可综合且来源多样的Verilog/SystemVerilog RTL设计候选，用于Sky130HD synth-only qualification。顶层runner连续执行4个相互隔离的25候选批次，并在方法看到任何正式evaluator结果前锁定全部批次。每个候选必须提交固定commit、top module、完整编译输入闭包、固定commit仓库内的许可证相对路径、规范SPDX标识和来源信息，并在统一综合下满足100 <= mapped cells < 100000。只有通过公共validate_candidate工具全部硬Gate的候选才可提交；最终评分器会从干净clone独立重跑相同Gate，看到结果后不得替换候选。主要比较100个固定名额上的提交完成率、技术合格率、可发布合格率和仅由独立合格候选计算的来源多样性。每批尽量覆盖至少12个独立仓库，同一仓库最多提交4个候选。未验证候选和缺失名额均按失败计。排除testbench、空壳、重复设计、超出主规模范围的设计及需要额外语言转换器的原始源码。允许从统一的12个起始类别自主扩展关键词，并须记录全部查询和工具操作。",
@@ -108,6 +108,9 @@
     "formal_evaluator_feedback_visible_during_acquisition": false,
     "vanilla_batch_sessions_are_isolated": true,
     "r2g_frontier_continues_across_four_checkpoints": true,
+    "cross_method_acquisition_serialized": true,
+    "formal_github_authentication_required": true,
+    "acquisition_lease_wait_excluded_from_method_budget": true,
     "unused_budget_transfer_between_batches_allowed": false,
     "aggregate_missing_slots_count_as_failures": true
   },

@@ -1789,6 +1789,13 @@ def lint_protocol() -> None:
     batch_policy = task.get("batch_policy", {})
     if batch_policy.get("target_unique_repositories_per_batch") != 12:
         errors.append("target unique repositories per batch must be 12")
+    aggregate_policy = task.get("method_aggregate_policy", {})
+    if aggregate_policy.get("cross_method_acquisition_serialized") is not True:
+        errors.append("cross-method acquisition must be serialized")
+    if aggregate_policy.get("formal_github_authentication_required") is not True:
+        errors.append("formal GitHub authentication must be required")
+    if aggregate_policy.get("acquisition_lease_wait_excluded_from_method_budget") is not True:
+        errors.append("acquisition lease wait must be excluded from method budget")
     if batch_policy.get("maximum_candidates_per_repository") != 4:
         errors.append("maximum candidates per repository must be 4")
     aggregate = task.get("method_aggregate_policy", {})

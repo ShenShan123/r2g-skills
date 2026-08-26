@@ -4,9 +4,14 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
+import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
+from typing import Any
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -24,15 +29,58 @@ from tools.run_experiment1_rtl_acquisition import (  # noqa: E402
 
 
 def run_checked(command: list[str]) -> None:
-    result = subprocess.run(command, cwd=REPO, check=False)
-    if result.returncode:
+    process = subprocess.Popen(command, cwd=REPO, start_new_session=True)
+    previous_handlers: dict[signal.Signals, Any] = {}
+
+    def forward_termination(signum: int, _frame: Any) -> None:
+        try:
+            os.killpg(process.pid, signum)
+        except ProcessLookupError:
+            pass
+        raise SystemExit(128 + signum)
+
+    for signum in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+        previous_handlers[signum] = signal.getsignal(signum)
+        signal.signal(signum, forward_termination)
+    try:
+        returncode = process.wait()
+    except BaseException:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            process.wait(timeout=30)
+        except (ProcessLookupError, subprocess.TimeoutExpired):
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
+        raise
+    finally:
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
+    if returncode:
         raise ExperimentError(
-            f"campaign command failed with exit code {result.returncode}: "
+            f"campaign command failed with exit code {returncode}: "
             + " ".join(command)
         )
 
 
-def acquire(args: argparse.Namespace) -> None:
+@contextmanager
+def campaign_acquisition_lease(root: Path, method_id: str):
+    """Serialize methods so shared network and CPU resources cannot cross-contaminate."""
+    lock_path = root / "locks" / "acquisition.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        print(f"{method_id}: waiting for campaign acquisition lease", flush=True)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        print(f"{method_id}: acquired campaign acquisition lease", flush=True)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def _acquire_batches(args: argparse.Namespace) -> None:
     paths = campaign_paths(args.campaign_root)
     manifest = read_json(paths["manifest"])
     verify_bound_campaign(manifest)
@@ -148,6 +196,20 @@ def acquire(args: argparse.Namespace) -> None:
         f"{args.method_id}: all four acquisition batches are digest-locked; "
         "no formal evaluator result was exposed during acquisition."
     )
+
+
+def acquire(args: argparse.Namespace) -> None:
+    paths = campaign_paths(args.campaign_root)
+    manifest = read_json(paths["manifest"])
+    verify_bound_campaign(manifest)
+    if manifest["campaign_mode"] == "formal" and not (
+        os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    ):
+        raise ExperimentError(
+            "formal acquisition requires authenticated GITHUB_TOKEN or GH_TOKEN"
+        )
+    with campaign_acquisition_lease(paths["root"], args.method_id):
+        _acquire_batches(args)
 
 
 def evaluate(args: argparse.Namespace) -> None:

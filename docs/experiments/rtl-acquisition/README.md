@@ -58,6 +58,7 @@ source-yield statistics, or any other acquisition memory.
    locks each submission but never starts the formal evaluator during acquisition:
 
    ```bash
+   export GITHUB_TOKEN="$(gh auth token)"
    python3 tools/run_experiment1_method_campaign.py acquire \
      --campaign-root /path/to/campaign \
      --method-id openai-vanilla \
@@ -67,6 +68,10 @@ source-yield statistics, or any other acquisition memory.
 
    R2G Cold uses the same command without `--env-file`. It starts one empty method frontier,
    which then continues across the four locking checkpoints without receiving evaluator output.
+   Formal acquisition requires the same authenticated GitHub credential for every method.
+   A campaign-wide lease serializes methods even when several tmux windows are launched at
+   once, preventing shared GitHub Search quota and CPU contention from changing method scores;
+   time spent waiting for this lease is outside the method budget.
    A non-scoreable infrastructure termination stops
    the method and requires a fresh, fully recorded rerun.
 
