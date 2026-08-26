@@ -27,6 +27,8 @@ TASK_SPEC = EXPERIMENT_DIR / "experiment1_task_spec.json"
 SUBMISSION_SCHEMA = EXPERIMENT_DIR / "experiment1_submission.schema.json"
 MANIFEST_SCHEMA = EXPERIMENT_DIR / "experiment1_execution_manifest.schema.json"
 DEFAULT_BENCHMARK_REGISTRY = EXPERIMENT_DIR / "benchmark_registry_v1"
+DEFAULT_ORFS_ROOT = Path("/home/yangao/r2g_toolchain/OpenROAD-flow-scripts")
+DEFAULT_PDK_ROOT = Path("/home/yangao/.conda/envs/eda/share/pdk")
 METHOD_IDS = {
     "openai-vanilla",
     "anthropic-vanilla",
@@ -40,6 +42,15 @@ R2G_METHOD_IDS = {"r2g-expander-cold"}
 VANILLA_METHOD_IDS = METHOD_IDS - R2G_METHOD_IDS
 MINIMUM_MAPPED_CELLS = 100
 MAXIMUM_MAPPED_CELLS_EXCLUSIVE = 100000
+FROZEN_TOOLCHAIN_KEYS = (
+    "orfs_root",
+    "orfs_commit",
+    "yosys_exe",
+    "yosys_version",
+    "openroad_exe",
+    "openroad_version",
+    "pdk_root",
+)
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 CELL_RE = re.compile(
@@ -397,6 +408,8 @@ def manifest_toolchain_env(manifest: dict[str, Any]) -> dict[str, str]:
     env = resolved_agent_env()
     toolchain = manifest["toolchain"]
     orfs_root = Path(toolchain["orfs_root"]).resolve()
+    yosys_exe = Path(toolchain["yosys_exe"]).resolve()
+    openroad_exe = Path(toolchain["openroad_exe"]).resolve()
     # ORFS honours an inherited FLOW_HOME before deriving it from the Makefile.
     # Drop installation-relative paths from the ambient Agent environment so a
     # frozen campaign cannot combine one ORFS checkout with another checkout's
@@ -411,8 +424,63 @@ def manifest_toolchain_env(manifest: dict[str, Any]) -> dict[str, str]:
         env.pop(key, None)
     env["ORFS_ROOT"] = str(orfs_root)
     env["FLOW_HOME"] = str(orfs_root / "flow")
+    env["YOSYS_EXE"] = str(yosys_exe)
+    env["OPENROAD_EXE"] = str(openroad_exe)
+    tool_dirs = [str(yosys_exe.parent), str(openroad_exe.parent)]
+    inherited_path = env.get("PATH", "")
+    env["PATH"] = os.pathsep.join(tool_dirs + ([inherited_path] if inherited_path else []))
     if toolchain.get("pdk_root"):
         env["PDK_ROOT"] = str(toolchain["pdk_root"])
+
+    if not (orfs_root / "flow/Makefile").is_file():
+        raise ExperimentError(f"frozen ORFS flow is missing: {orfs_root}")
+    if git_text("rev-parse", "HEAD", cwd=orfs_root) != toolchain["orfs_commit"]:
+        raise ExperimentError("frozen ORFS commit no longer matches the campaign manifest")
+    for label, executable in (("Yosys", yosys_exe), ("OpenROAD", openroad_exe)):
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            raise ExperimentError(f"frozen {label} executable is unavailable: {executable}")
+    if executable_version([str(yosys_exe), "-V"]) != toolchain["yosys_version"]:
+        raise ExperimentError("frozen Yosys version no longer matches the campaign manifest")
+    if executable_version([str(openroad_exe), "-version"]) != toolchain["openroad_version"]:
+        raise ExperimentError("frozen OpenROAD version no longer matches the campaign manifest")
+    pdk_root = Path(toolchain["pdk_root"]).resolve()
+    if not (pdk_root / "sky130A").is_dir():
+        raise ExperimentError(f"frozen Sky130 PDK is unavailable: {pdk_root}")
+    return env
+
+
+def bind_orfs_install_env(
+    base_env: dict[str, str], orfs_root: Path, pdk_root: Path
+) -> dict[str, str]:
+    """Bind one ORFS checkout to the tools installed for that checkout."""
+    root = orfs_root.resolve()
+    pdk = pdk_root.resolve()
+    yosys_exe = root / "tools/install/yosys/bin/yosys"
+    openroad_exe = root / "tools/install/OpenROAD/bin/openroad"
+    if not (root / "flow/Makefile").is_file():
+        raise ExperimentError(f"selected ORFS flow is missing: {root}")
+    for label, executable in (("Yosys", yosys_exe), ("OpenROAD", openroad_exe)):
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            raise ExperimentError(
+                f"selected ORFS checkout has no executable {label}: {executable}"
+            )
+    if not (pdk / "sky130A").is_dir():
+        raise ExperimentError(f"selected Sky130 PDK is unavailable: {pdk}")
+    env = dict(base_env)
+    env.update(
+        {
+            "ORFS_ROOT": str(root),
+            "FLOW_HOME": str(root / "flow"),
+            "YOSYS_EXE": str(yosys_exe),
+            "OPENROAD_EXE": str(openroad_exe),
+            "PDK_ROOT": str(pdk),
+        }
+    )
+    inherited_path = env.get("PATH", "")
+    env["PATH"] = os.pathsep.join(
+        [str(yosys_exe.parent), str(openroad_exe.parent)]
+        + ([inherited_path] if inherited_path else [])
+    )
     return env
 
 
@@ -429,7 +497,9 @@ def toolchain_record(env: dict[str, str]) -> dict[str, Any]:
         "platform": "sky130hd",
         "orfs_root": str(orfs_root),
         "orfs_commit": git_text("rev-parse", "HEAD", cwd=orfs_root),
+        "yosys_exe": str(Path(env["YOSYS_EXE"]).resolve()),
         "yosys_version": executable_version([env.get("YOSYS_EXE", "yosys"), "-V"]),
+        "openroad_exe": str(Path(env["OPENROAD_EXE"]).resolve()),
         "openroad_version": executable_version([env.get("OPENROAD_EXE", "openroad"), "-version"]),
         "pdk_root": str(pdk_root) if pdk_root else None,
         "clock_period_ns": 10.0,
@@ -439,6 +509,28 @@ def toolchain_record(env: dict[str, str]) -> dict[str, Any]:
         "minimum_mapped_cells": MINIMUM_MAPPED_CELLS,
         "maximum_mapped_cells_exclusive": MAXIMUM_MAPPED_CELLS_EXCLUSIVE,
     }
+
+
+def validate_frozen_toolchain(
+    actual: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    """Reject a campaign initialized with a different physical toolchain."""
+    missing = [key for key in FROZEN_TOOLCHAIN_KEYS if key not in expected]
+    if missing:
+        raise ExperimentError(
+            "task spec has an incomplete frozen toolchain binding: "
+            + ", ".join(missing)
+        )
+    mismatches = [
+        f"{key}: expected {expected[key]!r}, found {actual.get(key)!r}"
+        for key in FROZEN_TOOLCHAIN_KEYS
+        if actual.get(key) != expected[key]
+    ]
+    if mismatches:
+        raise ExperimentError(
+            "selected toolchain does not match the frozen Experiment 1 profile:\n"
+            + "\n".join(mismatches)
+        )
 
 
 def campaign_paths(root: Path) -> dict[str, Path]:
@@ -458,13 +550,17 @@ def init_campaign(args: argparse.Namespace) -> None:
         raise ExperimentError(f"campaign already exists: {paths['root']}")
     if paths["root"].exists() and any(paths["root"].iterdir()):
         raise ExperimentError(f"campaign root is not empty: {paths['root']}")
-    env = resolved_agent_env()
-    if args.orfs_root is not None:
-        env["ORFS_ROOT"] = str(args.orfs_root.resolve())
+    env = bind_orfs_install_env(
+        resolved_agent_env(),
+        args.orfs_root or DEFAULT_ORFS_ROOT,
+        args.pdk_root or DEFAULT_PDK_ROOT,
+    )
     commit = git_text("rev-parse", "HEAD")
     status = git_text("status", "--porcelain")
     diff = git_text("diff", "--binary", "HEAD")
     task = read_json(TASK_SPEC)
+    toolchain = toolchain_record(env)
+    validate_frozen_toolchain(toolchain, task.get("toolchain_binding") or {})
     if args.allow_dirty_canary and not args.non_scoring_canary:
         raise ExperimentError(
             "--allow-dirty-canary requires --non-scoring-canary"
@@ -559,7 +655,7 @@ def init_campaign(args: argparse.Namespace) -> None:
             "worktree_diff_sha256": sha256_text(diff) if diff else None,
             "knowledge_snapshot_sha256": sha256_file(knowledge) if knowledge.is_file() else None,
         },
-        "toolchain": toolchain_record(env),
+        "toolchain": toolchain,
         "model_routes": [],
         "batches": batches,
         "method_reports": [
@@ -1655,6 +1751,12 @@ def lint_protocol() -> None:
         errors.append("Vanilla max turns per batch must be 100")
     if budget.get("vanilla_max_output_tokens_per_turn") != 4096:
         errors.append("Vanilla max output tokens per turn must be 4096")
+    binding = task.get("toolchain_binding") or {}
+    missing_binding = [key for key in FROZEN_TOOLCHAIN_KEYS if key not in binding]
+    if missing_binding:
+        errors.append(
+            "frozen toolchain binding is incomplete: " + ", ".join(missing_binding)
+        )
     for schema in (SUBMISSION_SCHEMA, MANIFEST_SCHEMA):
         schema_errors = Draft202012Validator.check_schema(read_json(schema))
         if schema_errors:
@@ -1688,7 +1790,14 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument(
         "--orfs-root",
         type=Path,
+        default=DEFAULT_ORFS_ROOT,
         help="Git-traceable ORFS checkout to freeze into the campaign manifest.",
+    )
+    init.add_argument(
+        "--pdk-root",
+        type=Path,
+        default=DEFAULT_PDK_ROOT,
+        help="Sky130 PDK root to freeze into the campaign manifest.",
     )
     init.add_argument(
         "--non-scoring-canary",

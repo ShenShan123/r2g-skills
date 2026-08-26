@@ -1,7 +1,7 @@
 # R2G 正式实验一、实验二、实验三设计要点
 
-状态：实验一在不计分 canary 修正停止原因、工具链与污染库绑定后，于
-`2026-08-25T23:58:48-07:00` 重新冻结；实验二、实验三仍为讨论稿。
+状态：实验一在不计分 canary 修正停止原因、并发隔离、完整工具链与污染库绑定后，于
+`2026-08-26T04:51:58-07:00` 重新冻结；实验二、实验三仍为讨论稿。
 
 ## 实验一：RTL Acquisition
 
@@ -51,6 +51,10 @@ clone 和 synth-precheck 链路；canary 通过后冻结代码、Prompt和预算
 Canary campaign 必须在 manifest 中永久标为 `non_scoring_canary`，其缩小目标、短
 revision batch 和诊断语料不能用于正式成绩。正式 campaign 固定为 `formal`，并绑定
 可追溯 ORFS commit、PDK 路径和只读 benchmark contamination registry 的完整 digest。
+工具链固定为 ORFS `a5ff7ef7` checkout 自带的 Yosys `0.64`、OpenROAD
+`26Q3-318-g6b9d7fb806` 和 `/home/yangao/.conda/envs/eda/share/pdk`。Manifest
+同时绑定可执行文件绝对路径与版本；任一 commit、路径或版本不匹配时必须在方法启动前
+fail closed，不能回退到系统 `/opt` 工具。
 自然耗尽公开轮次或 R2G 内部 finalization 失败属于方法失败，缺失名额照常计分；只有
 可确认的外部 provider 故障或人工中止才允许不计分重跑。
 API 预检使用与正式运行相同的单轮最大输出上限，以同时检查模型身份、工具调用、usage

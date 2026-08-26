@@ -1,5 +1,6 @@
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,10 +20,12 @@ from tools.run_experiment1_rtl_acquisition import (
     synthesis_qualification_failure,
     submission_score_eligibility,
     manifest_toolchain_env,
+    bind_orfs_install_env,
     sha256_tree,
     source_cache_key,
     verify_candidate_inputs,
     validate_json,
+    validate_frozen_toolchain,
     validate_model_preflight,
     write_synth_project,
 )
@@ -135,15 +138,24 @@ def test_campaign_init_binds_formal_protocol_and_preflight(
     monkeypatch.setattr(experiment, "resolved_agent_env", lambda: {})
     monkeypatch.setattr(
         experiment,
+        "bind_orfs_install_env",
+        lambda env, _orfs_root, _pdk_root: env,
+    )
+    monkeypatch.setattr(
+        experiment,
         "toolchain_record",
         lambda _env: {
             "platform": "sky130hd",
             "orfs_root": "/orfs",
             "orfs_commit": "b" * 40,
+            "yosys_exe": "/orfs/tools/install/yosys/bin/yosys",
             "yosys_version": "Yosys test",
+            "openroad_exe": "/orfs/tools/install/OpenROAD/bin/openroad",
+            "openroad_version": "OpenROAD test",
             "pdk_root": "/pdk",
         },
     )
+    monkeypatch.setattr(experiment, "validate_frozen_toolchain", lambda *_args: None)
     campaign = tmp_path / "campaign"
     experiment.init_campaign(
         SimpleNamespace(
@@ -153,6 +165,7 @@ def test_campaign_init_binds_formal_protocol_and_preflight(
             model_preflight=preflight,
             benchmark_registry=experiment.DEFAULT_BENCHMARK_REGISTRY,
             orfs_root=None,
+            pdk_root=None,
             non_scoring_canary=True,
             allow_dirty_canary=True,
         )
@@ -247,16 +260,73 @@ def test_manifest_toolchain_paths_override_local_resolution(monkeypatch):
             "PDK_ROOT": "/wrong/pdk",
         },
     )
+    monkeypatch.setattr(experiment, "git_text", lambda *_args, **_kwargs: "a" * 40)
+    monkeypatch.setattr(experiment, "executable_version", lambda command: command[0])
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    monkeypatch.setattr(Path, "is_dir", lambda self: True)
+    monkeypatch.setattr(experiment.os, "access", lambda *_args: True)
     env = manifest_toolchain_env(
-        {"toolchain": {"orfs_root": "/frozen/orfs", "pdk_root": "/frozen/pdk"}}
+        {
+            "toolchain": {
+                "orfs_root": "/frozen/orfs",
+                "orfs_commit": "a" * 40,
+                "yosys_exe": "/frozen/orfs/tools/install/yosys/bin/yosys",
+                "yosys_version": "/frozen/orfs/tools/install/yosys/bin/yosys",
+                "openroad_exe": "/frozen/orfs/tools/install/OpenROAD/bin/openroad",
+                "openroad_version": "/frozen/orfs/tools/install/OpenROAD/bin/openroad",
+                "pdk_root": "/frozen/pdk",
+            }
+        }
     )
     assert env["ORFS_ROOT"] == "/frozen/orfs"
     assert env["FLOW_HOME"] == "/frozen/orfs/flow"
     assert env["PDK_ROOT"] == "/frozen/pdk"
+    assert env["YOSYS_EXE"].endswith("tools/install/yosys/bin/yosys")
+    assert env["OPENROAD_EXE"].endswith("tools/install/OpenROAD/bin/openroad")
+    assert env["PATH"].split(os.pathsep)[:2] == [
+        "/frozen/orfs/tools/install/yosys/bin",
+        "/frozen/orfs/tools/install/OpenROAD/bin",
+    ]
     assert "DESIGN_HOME" not in env
     assert "PLATFORM_HOME" not in env
     assert "SCRIPTS_DIR" not in env
     assert "UTILS_DIR" not in env
+
+
+def test_bind_orfs_install_env_selects_checkout_local_tools(tmp_path):
+    orfs = tmp_path / "orfs"
+    (orfs / "flow").mkdir(parents=True)
+    (orfs / "flow/Makefile").write_text("all:\n", encoding="utf-8")
+    yosys = orfs / "tools/install/yosys/bin/yosys"
+    openroad = orfs / "tools/install/OpenROAD/bin/openroad"
+    for executable in (yosys, openroad):
+        executable.parent.mkdir(parents=True)
+        executable.write_text("#!/bin/sh\n", encoding="utf-8")
+        executable.chmod(0o755)
+    pdk = tmp_path / "pdk"
+    (pdk / "sky130A").mkdir(parents=True)
+
+    env = bind_orfs_install_env({"PATH": "/ambient/bin"}, orfs, pdk)
+
+    assert env["YOSYS_EXE"] == str(yosys.resolve())
+    assert env["OPENROAD_EXE"] == str(openroad.resolve())
+    assert env["PDK_ROOT"] == str(pdk.resolve())
+    assert env["PATH"].split(os.pathsep) == [
+        str(yosys.parent.resolve()),
+        str(openroad.parent.resolve()),
+        "/ambient/bin",
+    ]
+
+
+def test_frozen_toolchain_rejects_version_drift():
+    expected = {
+        key: f"expected-{key}" for key in experiment.FROZEN_TOOLCHAIN_KEYS
+    }
+    actual = dict(expected)
+    actual["yosys_version"] = "unexpected-yosys"
+
+    with pytest.raises(experiment.ExperimentError, match="yosys_version"):
+        validate_frozen_toolchain(actual, expected)
 
 
 def test_formal_campaign_rejects_diagnostic_r2g_controls():

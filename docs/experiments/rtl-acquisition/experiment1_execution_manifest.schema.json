@@ -125,7 +125,10 @@
         "platform",
         "orfs_root",
         "orfs_commit",
+        "yosys_exe",
         "yosys_version",
+        "openroad_exe",
+        "openroad_version",
         "pdk_root"
       ]
     },
