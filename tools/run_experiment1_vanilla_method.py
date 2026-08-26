@@ -347,7 +347,11 @@ def tool_specs() -> list[dict[str, Any]]:
         },
         {
             "name": "clone_repository",
-            "description": "Clone a public HTTPS Git repository without submodules and pin a commit.",
+            "description": (
+                "Clone a public HTTPS Git repository without submodules and pin a commit. "
+                "The returned repo_id is an opaque handle; copy its returned repo_url and "
+                "commit exactly into candidates validated with that repo_id."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1197,7 +1201,9 @@ class VanillaRun:
             "You are a Vanilla LLM baseline for a controlled RTL-acquisition experiment. "
             "You have no R2G Agent code, memory, Recipe, or prior candidate list. Use only "
             "the supplied tools. Find public Verilog/SystemVerilog RTL, pin every Git commit, "
-            "identify a real top module and complete compile-input closure, and verify a "
+            "treat clone_repository repo_id values as opaque handles, and copy the exact "
+            "repo_url and commit returned for that same repo_id into every candidate. "
+            "Identify a real top module and complete compile-input closure, and verify a "
             "repository-relative license file at the pinned commit. license_evidence must use "
             "repository_path (never a remote URL) and a canonical SPDX identifier matching "
             "that file. validate_candidate publicly checks the candidate schema, pinned-source "

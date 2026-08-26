@@ -62,6 +62,13 @@ def test_tool_specs_are_self_contained_json_schemas():
     )
     assert "repository_path" in rendered_candidate
     assert "path_or_url" not in rendered_candidate
+    clone = next(
+        item["function"]
+        for item in specs
+        if item["function"]["name"] == "clone_repository"
+    )
+    assert "opaque handle" in clone["description"]
+    assert "copy its returned repo_url and commit exactly" in clone["description"]
 
 
 def test_anthropic_adapter_preserves_tool_calls_and_results():
