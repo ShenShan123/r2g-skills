@@ -61,8 +61,6 @@ VANILLA_METHODS = {
     "qwen-vanilla",
     "glm-vanilla",
     "kimi-vanilla",
-    "gemini-vanilla",
-    "claude-vanilla",
 }
 READ_ONLY_COMMANDS = {
     "cat", "cut", "find", "grep", "head", "ls", "rg", "sed", "sort",

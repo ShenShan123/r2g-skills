@@ -2,9 +2,9 @@
   "schema_version": "2.0",
   "experiment_id": "r2g-exp1-rtl-acquisition-v1",
   "status": "frozen",
-  "frozen_at": "2026-08-26T08:14:52-07:00",
+  "frozen_at": "2026-08-26T08:32:44-07:00",
   "revised_at": "2026-08-26",
-  "objective": "Compare seven Vanilla LLMs with frozen R2G-Expander Cold acquisition under the same task, public tools, qualification gates, and per-batch resource bounds.",
+  "objective": "Compare five Vanilla LLMs with frozen R2G-Expander Cold acquisition under the same task, public tools, qualification gates, and per-batch resource bounds.",
   "core_task_zh": "在公开且可观察的固定预算内，从公开互联网仓库中寻找100个唯一、开源、可综合且来源多样的Verilog/SystemVerilog RTL设计候选，用于Sky130HD synth-only qualification。顶层runner连续执行4个相互隔离的25候选批次，并在方法看到任何正式evaluator结果前锁定全部批次。每个候选必须提交固定commit、top module、完整编译输入闭包、固定commit仓库内的许可证相对路径、规范SPDX标识和来源信息，并在统一综合下满足100 <= mapped cells < 100000。只有通过公共validate_candidate工具全部硬Gate的候选才可提交；最终评分器会从干净clone独立重跑相同Gate，看到结果后不得替换候选。主要比较100个固定名额上的提交完成率、技术合格率、可发布合格率和仅由独立合格候选计算的来源多样性。每批尽量覆盖至少12个独立仓库，同一仓库最多提交4个候选。未验证候选和缺失名额均按失败计。排除testbench、空壳、重复设计、超出主规模范围的设计及需要额外语言转换器的原始源码。允许从统一的12个起始类别自主扩展关键词，并须记录全部查询和工具操作。",
   "core_task_en": "Within the published and observable frozen budget, find 100 unique, open-source, synthesizable, and source-diverse Verilog/SystemVerilog RTL design candidates from public Internet repositories for Sky130HD synth-only qualification. One top-level runner executes four isolated 25-candidate batches and locks all batches before the method can observe any formal-evaluator result. For every candidate, submit a pinned commit, top module, complete compilation-input closure, a repository-relative license path at that pinned commit, a canonical SPDX identifier, and provenance; the frozen synthesis result must satisfy 100 <= mapped cells < 100000. A candidate is submission-eligible only after passing every hard gate in the public validate_candidate tool. The final evaluator independently reclones and reruns the same gates, and candidates cannot be replaced after results are visible. Primary reporting uses 100 fixed slots for submission completion, technical qualification, publishable qualification, and source diversity computed only from independently qualified candidates. Aim for at least 12 independent repositories per batch and submit no more than four candidates from one repository per batch. Unvalidated candidates and missing slots fail. Exclude testbenches, shells, duplicate designs, out-of-range designs, and raw sources requiring an additional language converter. Methods may expand the twelve common seed categories, but every query and tool action must be logged.",
   "methods": [
@@ -31,16 +31,6 @@
     {
       "method_id": "kimi-vanilla",
       "requested_model": "kimi-k2.7-code",
-      "mode": "vanilla_llm"
-    },
-    {
-      "method_id": "gemini-vanilla",
-      "requested_model": "gemini-3.7-flash",
-      "mode": "vanilla_llm"
-    },
-    {
-      "method_id": "claude-vanilla",
-      "requested_model": "claude-opus-4.8",
       "mode": "vanilla_llm"
     },
     {

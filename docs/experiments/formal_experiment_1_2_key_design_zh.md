@@ -15,11 +15,11 @@
 
 | 分组 | 方法 | 作用 |
 |---|---|---|
-| L1-L7 | GPT-5.5、Claude Opus 4.8、Gemini 3.7 Flash、DeepSeek V4 Pro、Qwen3.7-Max、GLM-5.2、Kimi K2.7 Code | 7 个 Vanilla LLM 基线 |
+| L1-L5 | GPT-5.5、DeepSeek V4 Pro、Qwen3.7-Max、GLM-5.2、Kimi K2.7 Code | 5 个 Vanilla LLM 基线 |
 | R1 | R2G-Expander Cold | 空历史状态启动，测冻结系统在无预载搜索记忆时的能力 |
 | H1-H2 | 一强一弱 LLM + R2G | 可选补充，只在 LLM 负责查询扩展、README 理解或 top/依赖歧义处理时有意义 |
 
-主表采用 **6 LLM + 1 个 R2G Cold，共7组**。没有必要把6个模型全部再跑一遍 `LLM + R2G`；如果 LLM 只是启动 `rtl-expander`，不能形成新的有效对照。
+主表采用 **5 LLM + 1 个 R2G Cold，共6组**。没有必要把5个模型全部再跑一遍 `LLM + R2G`；如果 LLM 只是启动 `rtl-expander`，不能形成新的有效对照。
 
 R2G Cold 必须从空的搜索调度状态启动，不允许预载历史仓库、候选列表或搜索产出率统计。它可以使用公开的候选预检工具，但正式 evaluator 只在全部候选锁定后运行，结果不能反馈给方法用于替换失败候选。
 
@@ -146,15 +146,13 @@ Baseline Clean 不进入修复成功率分母，只按冻结的分层抽样规�
 |---|---|
 | Default ORFS | 不诊断、不修复 |
 | GPT-5.5 Vanilla | 通用 LLM |
-| Claude Opus 4.8 Vanilla | 通用 LLM |
-| Gemini 3.7 Flash Vanilla | 通用 LLM |
 | DeepSeek V4 Pro Vanilla | 通用 LLM |
 | Qwen3.7-Max Vanilla | 通用 LLM |
 | GLM-5.2 Vanilla | 通用 LLM |
 | Kimi K2.7 Code Vanilla | 通用 LLM |
 | Full R2G | 完整 diagnosis、Recipe、memory、A/B 与 signoff gate |
 
-实验二共比较 Default ORFS、6个 Vanilla LLM 和 Full R2G。所有智能方法处理完全相同的 Repair Challenge。
+实验二共比较 Default ORFS、5个 Vanilla LLM 和 Full R2G。所有智能方法处理完全相同的 Repair Challenge。
 
 Full R2G 对每个 RTL 都从同一个只读 `K0` 独立开始，不能在实验二测试集内部边跑边学习。持续学习能力留给实验三。
 

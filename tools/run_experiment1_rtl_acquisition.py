@@ -37,8 +37,6 @@ METHOD_IDS = {
     "qwen-vanilla",
     "glm-vanilla",
     "kimi-vanilla",
-    "gemini-vanilla",
-    "claude-vanilla",
     "r2g-expander-cold",
 }
 R2G_METHOD_IDS = {"r2g-expander-cold"}
@@ -376,7 +374,7 @@ def validate_model_preflight(path: Path, model_routes: Path) -> None:
     observed = {str(row.get("method_id")) for row in results}
     if observed != expected:
         raise ExperimentError(
-            "model preflight must contain exactly the seven Vanilla methods; "
+            "model preflight must contain exactly the five Vanilla methods; "
             f"observed={sorted(observed)}"
         )
     failed = [str(row.get("method_id")) for row in results if row.get("status") != "ready"]
@@ -1780,7 +1778,7 @@ def lint_protocol() -> None:
     if task.get("experiment_id") != "r2g-exp1-rtl-acquisition-v1":
         errors.append("unexpected experiment_id")
     if {row.get("method_id") for row in task.get("methods", [])} != METHOD_IDS:
-        errors.append("task spec must contain the seven frozen method IDs")
+        errors.append("task spec must contain the five frozen method IDs plus R2G Cold")
     if task.get("method_budget", {}).get("search_requests") != 120:
         errors.append("search request budget must be 120")
     profile = task.get("evaluator_profile", {})

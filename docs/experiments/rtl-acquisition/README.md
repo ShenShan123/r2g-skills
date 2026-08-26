@@ -1,7 +1,7 @@
 # Experiment 1: RTL Acquisition
 
 This directory contains the post-Pilot revised, machine-readable materials
-for the first paper experiment. The experiment compares seven Vanilla LLM conditions
+for the first paper experiment. The experiment compares five Vanilla LLM conditions
 with frozen R2G-Expander Cold. It stops at independent Sky130HD synth-only
 qualification. Each method is one 100-slot run implemented as four isolated 25-slot
 batches. All four submissions are locked before formal evaluator output is exposed.
@@ -22,7 +22,7 @@ campaign, including when those implementation files are not yet tracked by Git.
 
 ## Preflight And Campaign Initialization
 
-The seven Vanilla LLM routes are defined in `experiment1_model_routes.json`. Credentials
+The five Vanilla LLM routes are defined in `experiment1_model_routes.json`. Credentials
 are referenced only by environment variable name and must never be committed. Before a
 formal Pilot batch, run:
 
@@ -122,7 +122,7 @@ efficiency measures rather than additional capability scores.
 The formal Pilot must not start until:
 
 - the Agent code and R2G knowledge snapshot are frozen at a clean commit;
-- all seven Vanilla model routes pass metadata, structured-tool, and usage preflight;
+- all five Vanilla model routes pass metadata, structured-tool, and usage preflight;
 - R2G Cold starts from an empty scheduler state with no imported acquisition memory;
 - the same repository-search, Git, HTTP, terminal, Yosys, and ORFS interfaces are
   available to every Vanilla LLM;

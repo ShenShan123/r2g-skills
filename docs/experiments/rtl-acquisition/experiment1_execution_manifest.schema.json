@@ -140,8 +140,8 @@
     },
     "batches": {
       "type": "array",
-      "minItems": 32,
-      "maxItems": 32,
+      "minItems": 24,
+      "maxItems": 24,
       "items": {
         "type": "object",
         "required": [
@@ -161,8 +161,6 @@
               "qwen-vanilla",
               "glm-vanilla",
               "kimi-vanilla",
-              "gemini-vanilla",
-              "claude-vanilla",
               "r2g-expander-cold"
             ]
           },
@@ -212,8 +210,8 @@
     },
     "method_reports": {
       "type": "array",
-      "minItems": 8,
-      "maxItems": 8,
+      "minItems": 6,
+      "maxItems": 6,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -231,8 +229,6 @@
               "qwen-vanilla",
               "glm-vanilla",
               "kimi-vanilla",
-              "gemini-vanilla",
-              "claude-vanilla",
               "r2g-expander-cold"
             ]
           },
