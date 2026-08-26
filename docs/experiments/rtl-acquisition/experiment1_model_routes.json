@@ -91,6 +91,23 @@
       "max_output_tokens": 512,
       "formal_reasoning_policy": "thinking_only",
       "documentation": "https://openrouter.ai/moonshotai/kimi-k2.7-code"
+    },
+    {
+      "method_id": "grok-vanilla",
+      "display_model": "Grok 4.6",
+      "provider": "OpenRouter",
+      "channel": "third_party_gateway",
+      "api_style": "openai_chat",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "endpoint_env": "OPENROUTER_BASE_URL",
+      "api_key_env": "GROK_OPENROUTER_KEY",
+      "model_id": "x-ai/grok-4.6",
+      "model_family": "grok-4.6",
+      "tool_choice": "required",
+      "max_output_field": "max_tokens",
+      "max_output_tokens": 256,
+      "formal_reasoning_policy": "provider_default_high",
+      "documentation": "https://openrouter.ai/x-ai/grok-4.6"
     }
   ]
 }

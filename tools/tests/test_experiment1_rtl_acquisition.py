@@ -52,14 +52,15 @@ def test_example_submission_passes_schema_and_semantics():
     assert semantic_submission_errors(value) == []
 
 
-def test_formal_method_set_contains_five_vanilla_and_one_cold_r2g_condition():
-    assert len(METHOD_IDS) == 6
+def test_formal_method_set_contains_six_vanilla_and_one_cold_r2g_condition():
+    assert len(METHOD_IDS) == 7
     assert {item for item in METHOD_IDS if item.endswith("-vanilla")} == {
         "openai-vanilla",
         "deepseek-vanilla",
         "qwen-vanilla",
         "glm-vanilla",
         "kimi-vanilla",
+        "grok-vanilla",
     }
     assert "r2g-expander-cold" in METHOD_IDS
     assert "r2g-expander-warm" not in METHOD_IDS
@@ -170,9 +171,9 @@ def test_campaign_init_binds_formal_protocol_and_preflight(
         )
     )
     manifest = json.loads((campaign / "execution_manifest.json").read_text())
-    assert len(manifest["batches"]) == 24
+    assert len(manifest["batches"]) == 28
     assert manifest["campaign_mode"] == "non_scoring_canary"
-    assert len(manifest["method_reports"]) == 6
+    assert len(manifest["method_reports"]) == 7
     assert manifest["protocol"]["path"].endswith(
         "docs/experiments/formal_experiment_1_2_key_design_zh.md"
     )
