@@ -86,6 +86,7 @@ def is_transient_network_error(exc: BaseException) -> bool:
             ConnectionError,
             socket.timeout,
             ssl.SSLError,
+            http.client.IncompleteRead,
             http.client.RemoteDisconnected,
         ),
     )

@@ -530,9 +530,11 @@ def test_early_submission_has_distinct_scoreable_stop_reason():
 
 
 def test_transient_network_classification_is_bounded_to_transport_errors():
+    import http.client
     import urllib.error
 
     assert is_transient_network_error(urllib.error.URLError("temporary TLS failure"))
+    assert is_transient_network_error(http.client.IncompleteRead(b"partial"))
     assert not is_transient_network_error(ValueError("bad response schema"))
     assert is_transient_git_failure("gnutls_handshake() failed: TLS connection terminated")
     assert not is_transient_git_failure("repository not found")
