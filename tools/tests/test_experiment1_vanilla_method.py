@@ -471,6 +471,35 @@ def test_validate_candidate_checkpoints_only_after_every_gate_passes(
     assert len(runner.qualified_candidates) == 1
 
 
+def test_validate_candidate_normalizes_equivalent_git_repository_urls(
+    tmp_path, monkeypatch
+):
+    runner = validation_runner(tmp_path)
+    candidate = candidate_fixture()
+    candidate["repo_url"] = "https://github.com/EXAMPLE/RTL.git"
+    monkeypatch.setattr(
+        vanilla, "run_formal_synth", lambda *args, **kwargs: passing_synth_result()
+    )
+    result = runner.validate_candidate({"repo_id": "repo", "candidate": candidate})
+    assert result["precheck_qualified"] is True
+
+
+def test_validate_candidate_returns_actionable_repository_identity_mismatch(tmp_path):
+    runner = validation_runner(tmp_path)
+    candidate = candidate_fixture()
+    candidate["repo_url"] = "https://github.com/example/other"
+    result = runner.validate_candidate({"repo_id": "repo", "candidate": candidate})
+    assert result == {
+        "accepted": False,
+        "precheck_qualified": False,
+        "failure_class": "pinned_source_identity_mismatch",
+        "identity_field": "repo_url",
+        "expected_repo_url": "https://github.com/example/rtl",
+        "received_repo_url": "https://github.com/example/other",
+        "synthesis_run": False,
+    }
+
+
 def test_validate_candidate_does_not_checkpoint_synthesis_failure(
     tmp_path, monkeypatch
 ):

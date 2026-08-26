@@ -43,6 +43,7 @@ from tools.run_experiment1_rtl_acquisition import (  # noqa: E402
     prior_candidate_keys,
     campaign_paths,
     manifest_toolchain_env,
+    normalized_repo_url,
     run_formal_synth,
     semantic_submission_errors,
     submission_score_eligibility,
@@ -767,8 +768,18 @@ class VanillaRun:
                 "schema_errors": errors[:20],
             }
         expected = self.repo_meta[repo_id]
-        if candidate["repo_url"].rstrip("/") != expected["repo_url"]:
-            raise ExperimentError("candidate repo_url does not match repo_id")
+        if normalized_repo_url(candidate["repo_url"]) != normalized_repo_url(
+            expected["repo_url"]
+        ):
+            return {
+                "accepted": False,
+                "precheck_qualified": False,
+                "failure_class": "pinned_source_identity_mismatch",
+                "identity_field": "repo_url",
+                "expected_repo_url": expected["repo_url"],
+                "received_repo_url": candidate["repo_url"],
+                "synthesis_run": False,
+            }
         if candidate["commit"].lower() != expected["commit"].lower():
             raise ExperimentError("candidate commit does not match checked-out source")
         candidate_key = (
@@ -862,7 +873,7 @@ class VanillaRun:
         )
         if failure is None:
             key = (
-                str(candidate["repo_url"]).rstrip("/").lower(),
+                normalized_repo_url(str(candidate["repo_url"])),
                 str(candidate["commit"]).lower(),
                 str(candidate["top_module"]),
             )
@@ -882,7 +893,7 @@ class VanillaRun:
         repository_counts: Counter[str] = Counter()
         for candidate in list(arguments.get("candidates") or [])[: self.target]:
             key = (
-                str(candidate.get("repo_url", "")).rstrip("/").lower(),
+                normalized_repo_url(str(candidate.get("repo_url", ""))),
                 str(candidate.get("commit", "")).lower(),
                 str(candidate.get("top_module", "")),
             )
