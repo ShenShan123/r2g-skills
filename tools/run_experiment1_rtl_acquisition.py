@@ -1629,6 +1629,11 @@ def lint_protocol() -> None:
         errors.append("method aggregate target must be 100")
     if aggregate.get("all_batches_must_lock_before_formal_evaluation") is not True:
         errors.append("all method batches must lock before formal evaluation")
+    budget = task.get("method_budget", {})
+    if budget.get("vanilla_max_turns_per_batch") != 100:
+        errors.append("Vanilla max turns per batch must be 100")
+    if budget.get("vanilla_max_output_tokens_per_turn") != 4096:
+        errors.append("Vanilla max output tokens per turn must be 4096")
     for schema in (SUBMISSION_SCHEMA, MANIFEST_SCHEMA):
         schema_errors = Draft202012Validator.check_schema(read_json(schema))
         if schema_errors:

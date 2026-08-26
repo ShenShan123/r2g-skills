@@ -146,6 +146,42 @@ def test_probe_route_rejects_silent_model_substitution(monkeypatch):
     assert result["status"] == "model_identity_mismatch"
 
 
+def test_probe_result_records_requested_output_budget(monkeypatch):
+    route = {
+        "method_id": "test-vanilla",
+        "provider": "gateway",
+        "channel": "third_party_gateway",
+        "model_id": "requested-model",
+        "api_style": "openai_chat",
+        "api_key_env": "TEST_MODEL_KEY",
+        "endpoint": "https://example.invalid/v1/chat/completions",
+        "tool_choice": "required",
+        "max_output_field": "max_tokens",
+        "max_output_tokens": 4096,
+    }
+    monkeypatch.setenv("TEST_MODEL_KEY", "sk-valid-looking-test-value")
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return (
+                b'{"model":"requested-model","choices":[{"message":'
+                b'{"tool_calls":[{"function":{"name":"submit_probe",'
+                b'"arguments":"{\\"value\\":\\"ok\\"}"}}]}}],'
+                b'"usage":{"total_tokens":2}}'
+            )
+
+    monkeypatch.setattr(MODULE.urllib.request, "urlopen", lambda *_a, **_k: Response())
+    result = MODULE.probe_route(route, 1)
+    assert result["status"] == "ready"
+    assert result["probe_max_output_tokens"] == 4096
+
+
 def test_error_body_redacts_secret():
     secret = "sk-sensitive-value"
     raw = (

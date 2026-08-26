@@ -36,6 +36,17 @@ def acquire(args: argparse.Namespace) -> None:
     paths = campaign_paths(args.campaign_root)
     manifest = read_json(paths["manifest"])
     verify_bound_campaign(manifest)
+    task = read_json(Path(manifest["task_spec"]["path"]))
+    frozen_turns = int(task["method_budget"]["vanilla_max_turns_per_batch"])
+    frozen_output = int(
+        task["method_budget"]["vanilla_max_output_tokens_per_turn"]
+    )
+    if manifest["campaign_mode"] == "formal" and (
+        args.max_turns != frozen_turns or args.max_output_tokens != frozen_output
+    ):
+        raise ExperimentError(
+            "formal Vanilla turn/output budgets must match the frozen task spec"
+        )
     python = sys.executable
     for batch_id in range(1, 5):
         manifest = read_json(paths["manifest"])
@@ -100,9 +111,17 @@ def acquire(args: argparse.Namespace) -> None:
                     "--run-kind",
                     "formal",
                     "--max-turns",
-                    str(args.max_turns),
+                    str(
+                        frozen_turns
+                        if manifest["campaign_mode"] == "formal"
+                        else args.max_turns
+                    ),
                     "--max-output-tokens",
-                    str(args.max_output_tokens),
+                    str(
+                        frozen_output
+                        if manifest["campaign_mode"] == "formal"
+                        else args.max_output_tokens
+                    ),
                     "--env-file",
                     str(args.env_file.resolve()),
                 ]

@@ -9,6 +9,8 @@ from tools.run_experiment1_rtl_acquisition import ExperimentError
 
 def manifest_for(method_id: str) -> dict:
     return {
+        "campaign_mode": "formal",
+        "task_spec": {"path": "/frozen/task.json"},
         "batches": [
             {
                 "method_id": method_id,
@@ -23,8 +25,18 @@ def manifest_for(method_id: str) -> dict:
 def test_acquire_locks_four_batches_without_running_evaluator(tmp_path, monkeypatch):
     method_id = "qwen-vanilla"
     manifest = manifest_for(method_id)
+    task = {
+        "method_budget": {
+            "vanilla_max_turns_per_batch": 100,
+            "vanilla_max_output_tokens_per_turn": 4096,
+        }
+    }
     commands: list[list[str]] = []
-    monkeypatch.setattr(campaign_runner, "read_json", lambda _path: manifest)
+    monkeypatch.setattr(
+        campaign_runner,
+        "read_json",
+        lambda path: task if Path(path).name == "task.json" else manifest,
+    )
     monkeypatch.setattr(campaign_runner, "verify_bound_campaign", lambda _value: None)
 
     def fake_run(command: list[str]) -> None:

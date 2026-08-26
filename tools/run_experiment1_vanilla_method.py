@@ -1232,6 +1232,14 @@ def main() -> int:
     args = parser.parse_args()
     if args.run_kind == "formal" and args.target != 25:
         parser.error("--run-kind formal requires --target 25")
+    task = read_json(TASK_SPEC)
+    if args.run_kind == "formal" and (
+        args.max_turns
+        != int(task["method_budget"]["vanilla_max_turns_per_batch"])
+        or args.max_output_tokens
+        != int(task["method_budget"]["vanilla_max_output_tokens_per_turn"])
+    ):
+        parser.error("formal turn/output budgets must match the frozen task spec")
     load_env_file(args.env_file)
     route = load_route(args.routes, args.method_id)
     runner = VanillaRun(

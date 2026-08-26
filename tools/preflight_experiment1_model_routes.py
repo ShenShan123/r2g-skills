@@ -15,6 +15,10 @@ import urllib.request
 from typing import Any
 
 
+REPO = pathlib.Path(__file__).resolve().parents[1]
+TASK_SPEC = REPO / "docs/experiments/rtl-acquisition/experiment1_task_spec.json"
+
+
 PROBE_TOOL = {
     "name": "submit_probe",
     "description": "Submit the API route preflight result.",
@@ -299,6 +303,7 @@ def probe_route(route: dict[str, Any], timeout: int) -> dict[str, Any]:
         "requested_model": route["model_id"],
         "api_style": route["api_style"],
         "credential_env": key_env,
+        "probe_max_output_tokens": int(route.get("max_output_tokens", 256)),
         "started_at": started,
     }
     if not is_usable_secret(api_key):
@@ -393,9 +398,13 @@ def main() -> int:
             print(f"cannot load credential file: {exc}", file=sys.stderr)
             return 2
     config = json.loads(args.routes.read_text(encoding="utf-8"))
+    task = json.loads(TASK_SPEC.read_text(encoding="utf-8"))
+    formal_max_output = int(
+        task["method_budget"]["vanilla_max_output_tokens_per_turn"]
+    )
     selected = set(args.method)
     routes = [
-        route
+        {**route, "max_output_tokens": formal_max_output}
         for route in config.get("routes", [])
         if not selected or route.get("method_id") in selected
     ]
