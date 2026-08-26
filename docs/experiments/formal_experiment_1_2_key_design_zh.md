@@ -1,7 +1,7 @@
 # R2G 正式实验一、实验二、实验三设计要点
 
 状态：实验一在不计分 canary 修正停止原因、并发隔离、完整工具链与污染库绑定后，于
-`2026-08-26T04:51:58-07:00` 重新冻结；实验二、实验三仍为讨论稿。
+`2026-08-26T05:21:03-07:00` 重新冻结；实验二、实验三仍为讨论稿。
 
 ## 实验一：RTL Acquisition
 
@@ -15,7 +15,7 @@
 
 | 分组 | 方法 | 作用 |
 |---|---|---|
-| L1-L6 | GPT-5.5 Pro、Claude Opus 4.8、DeepSeek V4 Pro、Qwen3.7-Max、GLM-5.2、Kimi K2.7 Code | 6 个 Vanilla LLM 基线 |
+| L1-L6 | GPT-5.5、Claude Opus 4.8、DeepSeek V4 Pro、Qwen3.7-Max、GLM-5.2、Kimi K2.7 Code | 6 个 Vanilla LLM 基线 |
 | R1 | R2G-Expander Cold | 空历史状态启动，测冻结系统在无预载搜索记忆时的能力 |
 | H1-H2 | 一强一弱 LLM + R2G | 可选补充，只在 LLM 负责查询扩展、README 理解或 top/依赖歧义处理时有意义 |
 

@@ -17,7 +17,7 @@
       "endpoint": "https://api.vectorengine.ai/v1/chat/completions",
       "endpoint_env": "VECTORENGINE_BASE_URL",
       "api_key_env": "OPENAI_API_KEY",
-      "model_id": "gpt-5.5-pro",
+      "model_id": "gpt-5.5",
       "model_family": "gpt-5.5",
       "tool_choice": "required",
       "max_output_field": "max_tokens",
