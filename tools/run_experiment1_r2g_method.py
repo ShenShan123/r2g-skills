@@ -377,6 +377,13 @@ def main() -> int:
         certified_corpus=args.certified_corpus,
     )
     task = read_json(TASK_SPEC)
+    frozen_cores = int(task["method_budget"]["cpu_cores"])
+    if args.cores != frozen_cores:
+        parser.error(
+            f"--cores must match the frozen Experiment 1 budget ({frozen_cores})"
+        )
+    if int(task["method_budget"]["max_concurrent_synthesis"]) != 1:
+        parser.error("R2G runner supports exactly one concurrent synthesis per method")
     if manifest["task_spec"]["sha256"] != sha256_file(TASK_SPEC):
         raise ExperimentError("campaign task-spec binding no longer matches")
     if manifest["agent_snapshot"]["commit"] != git_text("rev-parse", "HEAD"):

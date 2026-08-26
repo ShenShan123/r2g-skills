@@ -224,6 +224,9 @@ def test_run_kind_selects_distinct_workspace(tmp_path):
     assert runner.token_budget == 2_000_000
     assert runner.wall_time_budget == 21_600
     assert runner.search_budget == 120
+    assert runner.cpu_cores == 4
+    assert runner.env["NUM_CORES"] == "4"
+    assert runner.env["ORFS_MAX_CPUS"] == "4"
 
 
 def test_natural_turn_exhaustion_is_scoreable_turn_limit(tmp_path, monkeypatch):

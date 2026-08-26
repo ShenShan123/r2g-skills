@@ -446,6 +446,17 @@ class VanillaRun:
         self.started_at = now_iso()
         self.started_monotonic = time.monotonic()
         self.env = campaign_toolchain_env(self.campaign_root)
+        self.cpu_cores = int(budget["cpu_cores"])
+        if int(budget["max_concurrent_synthesis"]) != 1:
+            raise ExperimentError(
+                "Vanilla runner supports exactly one concurrent synthesis per method"
+            )
+        self.env.update(
+            {
+                "NUM_CORES": str(self.cpu_cores),
+                "ORFS_MAX_CPUS": str(self.cpu_cores),
+            }
+        )
 
     def event(self, kind: str, value: dict[str, Any]) -> None:
         record = {"timestamp": now_iso(), "kind": kind, **value}
