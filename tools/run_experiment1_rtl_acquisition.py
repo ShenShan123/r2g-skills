@@ -36,6 +36,7 @@ METHOD_IDS = {
     "glm-vanilla",
     "kimi-vanilla",
     "gemini-vanilla",
+    "claude-vanilla",
     "r2g-expander-cold",
 }
 R2G_METHOD_IDS = {"r2g-expander-cold"}
@@ -360,7 +361,7 @@ def validate_model_preflight(path: Path, model_routes: Path) -> None:
     observed = {str(row.get("method_id")) for row in results}
     if observed != expected:
         raise ExperimentError(
-            "model preflight must contain exactly the six Vanilla methods; "
+            "model preflight must contain exactly the seven Vanilla methods; "
             f"observed={sorted(observed)}"
         )
     failed = [str(row.get("method_id")) for row in results if row.get("status") != "ready"]

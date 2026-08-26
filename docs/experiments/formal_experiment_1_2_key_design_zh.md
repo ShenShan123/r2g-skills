@@ -15,7 +15,7 @@
 
 | 分组 | 方法 | 作用 |
 |---|---|---|
-| L1-L6 | GPT-5.5、Gemini 3.7 Flash、DeepSeek V4 Pro、Qwen3.7-Max、GLM-5.2、Kimi K2.7 Code | 6 个 Vanilla LLM 基线 |
+| L1-L7 | GPT-5.5、Claude Opus 4.8、Gemini 3.7 Flash、DeepSeek V4 Pro、Qwen3.7-Max、GLM-5.2、Kimi K2.7 Code | 7 个 Vanilla LLM 基线 |
 | R1 | R2G-Expander Cold | 空历史状态启动，测冻结系统在无预载搜索记忆时的能力 |
 | H1-H2 | 一强一弱 LLM + R2G | 可选补充，只在 LLM 负责查询扩展、README 理解或 top/依赖歧义处理时有意义 |
 
@@ -146,6 +146,7 @@ Baseline Clean 不进入修复成功率分母，只按冻结的分层抽样规�
 |---|---|
 | Default ORFS | 不诊断、不修复 |
 | GPT-5.5 Vanilla | 通用 LLM |
+| Claude Opus 4.8 Vanilla | 通用 LLM |
 | Gemini 3.7 Flash Vanilla | 通用 LLM |
 | DeepSeek V4 Pro Vanilla | 通用 LLM |
 | Qwen3.7-Max Vanilla | 通用 LLM |

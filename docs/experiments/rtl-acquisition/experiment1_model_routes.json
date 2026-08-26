@@ -108,6 +108,23 @@
       "max_output_tokens": 256,
       "formal_reasoning_policy": "provider_default",
       "documentation": "https://openrouter.ai/google/gemini-3.7-flash"
+    },
+    {
+      "method_id": "claude-vanilla",
+      "display_model": "Claude Opus 4.8",
+      "provider": "OpenRouter",
+      "channel": "third_party_gateway",
+      "api_style": "openai_chat",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "endpoint_env": "OPENROUTER_BASE_URL",
+      "api_key_env": "CLAUDE_OPENROUTER_KEY",
+      "model_id": "anthropic/claude-opus-4.8",
+      "model_family": "claude-opus-4.8",
+      "tool_choice": "required",
+      "max_output_field": "max_tokens",
+      "max_output_tokens": 256,
+      "formal_reasoning_policy": "provider_default",
+      "documentation": "https://openrouter.ai/anthropic/claude-opus-4.8"
     }
   ]
 }
