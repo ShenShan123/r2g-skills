@@ -17,6 +17,9 @@ from tools.run_experiment1_vanilla_method import (
     is_transient_network_error,
     normalized_checkout,
     provider_usage,
+    responses_input,
+    responses_response_message,
+    responses_tools,
     submitted_stop_reason,
     tool_specs,
 )
@@ -100,6 +103,58 @@ def test_anthropic_adapter_preserves_tool_calls_and_results():
         }
     )
     assert restored["content"] == "checking"
+    assert restored["tool_calls"][0]["function"]["name"] == "submit_candidates"
+
+
+def test_responses_adapter_preserves_tool_calls_and_results():
+    converted = responses_input(
+        [
+            {"role": "system", "content": "frozen task"},
+            {"role": "user", "content": "find RTL"},
+            {
+                "role": "assistant",
+                "content": "checking",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "function": {
+                            "name": "search_repositories",
+                            "arguments": '{"query":"uart"}',
+                        },
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_1", "content": "[]"},
+        ]
+    )
+    assert converted[2]["role"] == "assistant"
+    assert converted[3]["type"] == "function_call"
+    assert converted[4] == {
+        "type": "function_call_output",
+        "call_id": "call_1",
+        "output": "[]",
+    }
+    assert all("name" in item and "function" not in item for item in responses_tools())
+
+    restored = responses_response_message(
+        {
+            "output": [
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "checking"}],
+                },
+                {
+                    "type": "function_call",
+                    "id": "fc_1",
+                    "call_id": "call_2",
+                    "name": "submit_candidates",
+                    "arguments": '{"candidates":[],"out_of_scope":[]}',
+                },
+            ]
+        }
+    )
+    assert restored["content"] == "checking"
+    assert restored["tool_calls"][0]["id"] == "call_2"
     assert restored["tool_calls"][0]["function"]["name"] == "submit_candidates"
 
 

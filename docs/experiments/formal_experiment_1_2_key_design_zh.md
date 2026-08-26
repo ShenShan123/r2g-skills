@@ -1,7 +1,7 @@
 # R2G 正式实验一、实验二、实验三设计要点
 
 状态：实验一在不计分 canary 修正停止原因、并发隔离、完整工具链与污染库绑定后，于
-`2026-08-26T05:21:03-07:00` 重新冻结；实验二、实验三仍为讨论稿。
+`2026-08-26T05:38:38-07:00` 重新冻结；实验二、实验三仍为讨论稿。
 
 ## 实验一：RTL Acquisition
 
@@ -15,11 +15,11 @@
 
 | 分组 | 方法 | 作用 |
 |---|---|---|
-| L1-L6 | GPT-5.5、Claude Opus 4.8、DeepSeek V4 Pro、Qwen3.7-Max、GLM-5.2、Kimi K2.7 Code | 6 个 Vanilla LLM 基线 |
+| L1-L5 | GPT-5.5、DeepSeek V4 Pro、Qwen3.7-Max、GLM-5.2、Kimi K2.7 Code | 5 个 Vanilla LLM 基线 |
 | R1 | R2G-Expander Cold | 空历史状态启动，测冻结系统在无预载搜索记忆时的能力 |
 | H1-H2 | 一强一弱 LLM + R2G | 可选补充，只在 LLM 负责查询扩展、README 理解或 top/依赖歧义处理时有意义 |
 
-主表采用 **6 LLM + 1 个 R2G Cold，共7组**。没有必要把6个模型全部再跑一遍 `LLM + R2G`；如果 LLM 只是启动 `rtl-expander`，不能形成新的有效对照。
+主表采用 **5 LLM + 1 个 R2G Cold，共6组**。没有必要把5个模型全部再跑一遍 `LLM + R2G`；如果 LLM 只是启动 `rtl-expander`，不能形成新的有效对照。
 
 R2G Cold 必须从空的搜索调度状态启动，不允许预载历史仓库、候选列表或搜索产出率统计。它可以使用公开的候选预检工具，但正式 evaluator 只在全部候选锁定后运行，结果不能反馈给方法用于替换失败候选。
 
@@ -146,7 +146,6 @@ Baseline Clean 不进入修复成功率分母，只按冻结的分层抽样规�
 |---|---|
 | Default ORFS | 不诊断、不修复 |
 | GPT-5.5 Vanilla | 通用 LLM |
-| Claude Opus 4.8 Vanilla | 通用 LLM |
 | DeepSeek V4 Pro Vanilla | 通用 LLM |
 | Qwen3.7-Max Vanilla | 通用 LLM |
 | GLM-5.2 Vanilla | 通用 LLM |

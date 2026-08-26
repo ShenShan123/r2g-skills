@@ -56,7 +56,6 @@ from tools.run_experiment1_rtl_acquisition import (  # noqa: E402
 
 VANILLA_METHODS = {
     "openai-vanilla",
-    "anthropic-vanilla",
     "deepseek-vanilla",
     "qwen-vanilla",
     "glm-vanilla",
@@ -202,6 +201,83 @@ def anthropic_response_message(data: dict[str, Any]) -> dict[str, Any]:
                     },
                 }
             )
+    return {"content": "\n".join(text_parts), "tool_calls": calls}
+
+
+def responses_tools() -> list[dict[str, Any]]:
+    """Translate the common Chat Completions tool schema to Responses tools."""
+    return [
+        {
+            "type": "function",
+            "name": item["function"]["name"],
+            "description": item["function"].get("description", ""),
+            "parameters": item["function"]["parameters"],
+        }
+        for item in tool_specs()
+    ]
+
+
+def responses_input(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Translate provider-neutral history to Responses input items."""
+    converted: list[dict[str, Any]] = []
+    for message in messages:
+        role = message.get("role")
+        if role == "assistant":
+            if message.get("content"):
+                converted.append(
+                    {"role": "assistant", "content": str(message["content"])}
+                )
+            for call in message.get("tool_calls") or []:
+                function = call.get("function") or {}
+                raw_arguments = function.get("arguments") or "{}"
+                arguments = (
+                    json.dumps(raw_arguments, ensure_ascii=True, separators=(",", ":"))
+                    if isinstance(raw_arguments, dict)
+                    else str(raw_arguments)
+                )
+                converted.append(
+                    {
+                        "type": "function_call",
+                        "call_id": str(call.get("id") or ""),
+                        "name": str(function.get("name") or ""),
+                        "arguments": arguments,
+                    }
+                )
+        elif role == "tool":
+            converted.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": str(message.get("tool_call_id") or ""),
+                    "output": str(message.get("content") or ""),
+                }
+            )
+        else:
+            converted.append(
+                {"role": str(role or "user"), "content": str(message.get("content") or "")}
+            )
+    return converted
+
+
+def responses_response_message(data: dict[str, Any]) -> dict[str, Any]:
+    """Translate a Responses result to the runner's common assistant message."""
+    text_parts: list[str] = []
+    calls: list[dict[str, Any]] = []
+    for item in data.get("output") or []:
+        if item.get("type") == "function_call":
+            calls.append(
+                {
+                    "id": str(item.get("call_id") or item.get("id") or ""),
+                    "type": "function",
+                    "function": {
+                        "name": str(item.get("name") or ""),
+                        "arguments": str(item.get("arguments") or "{}"),
+                    },
+                }
+            )
+        elif item.get("type") == "message":
+            for block in item.get("content") or []:
+                if block.get("type") in {"output_text", "text"}:
+                    text_parts.append(str(block.get("text") or ""))
     return {"content": "\n".join(text_parts), "tool_calls": calls}
 
 
@@ -864,7 +940,9 @@ class VanillaRun:
         key = os.environ.get(str(self.route["api_key_env"]))
         if not key:
             raise ExperimentError(f"missing credential: {self.route['api_key_env']}")
-        anthropic = self.route.get("api_style") == "anthropic_messages"
+        api_style = self.route.get("api_style")
+        anthropic = api_style == "anthropic_messages"
+        responses = api_style == "openai_responses"
         if anthropic:
             system, provider_messages = anthropic_messages(messages)
             payload: dict[str, Any] = {
@@ -874,6 +952,14 @@ class VanillaRun:
                 "tools": anthropic_tools(),
                 "tool_choice": {"type": "auto"},
                 "max_tokens": self.max_output_tokens,
+            }
+        elif responses:
+            payload = {
+                "model": self.route["model_id"],
+                "input": responses_input(messages),
+                "tools": responses_tools(),
+                "tool_choice": "auto",
+                "max_output_tokens": self.max_output_tokens,
             }
         else:
             payload = {
@@ -951,6 +1037,8 @@ class VanillaRun:
             raise ExperimentError("token budget exhausted")
         if anthropic:
             return anthropic_response_message(data)
+        if responses:
+            return responses_response_message(data)
         choices = data.get("choices") or []
         if not choices:
             raise ExperimentError("provider returned no choices")
@@ -1217,7 +1305,9 @@ def load_route(path: Path, method_id: str) -> dict[str, Any]:
     routes = read_json(path).get("routes", [])
     for route in routes:
         if route.get("method_id") == method_id:
-            if route.get("api_style") not in {"openai_chat", "anthropic_messages"}:
+            if route.get("api_style") not in {
+                "openai_chat", "openai_responses", "anthropic_messages"
+            }:
                 raise ExperimentError("unsupported Vanilla runner API style")
             return route
     raise ExperimentError(f"route not found: {method_id}")
