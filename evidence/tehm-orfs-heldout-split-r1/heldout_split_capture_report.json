@@ -1,0 +1,45 @@
+{
+  "version": "tehm-orfs-heldout-split-capture-r1",
+  "toolchain": {
+    "openroad": "26Q3-1510-g6cb3f2b704",
+    "yosys": "0.68",
+    "fingerprint": "5f6545216c040a863a4c169d90f895f218ad038bfd61991445f760ed43567c91"
+  },
+  "campaigns": [
+    {
+      "root": "/tmp/tehm-orfs/selector-arbiter-routing-heldout-r1",
+      "design": "selector_arbiter8",
+      "family": "ROUTING_CAPACITY_RECOVERY",
+      "split": "heldout",
+      "full_oracle": true,
+      "oracle_checks": 14,
+      "equivalence": "PASS",
+      "strict_signoff": "PASS",
+      "graph": "complete",
+      "outcome": "NEUTRAL",
+      "original_failure": "UNKNOWN",
+      "learner_eligible": false,
+      "transition_id": "transition_fc663447885909ed",
+      "source_freeze_digest": "f4eba87da9f0c382e171e03365d347ce7bec98086590bba4f85c4ea2673c4347"
+    },
+    {
+      "root": "/tmp/tehm-orfs/selector-alu-density-heldout-r1",
+      "design": "selector_alu16",
+      "family": "DENSITY_RELIEF",
+      "split": "heldout",
+      "full_oracle": false,
+      "oracle_checks": 0,
+      "equivalence": "PASS",
+      "strict_signoff": "FAIL",
+      "graph": "incomplete",
+      "outcome": "FAIL",
+      "original_failure": "PRESENT",
+      "learner_eligible": false,
+      "transition_id": "transition_174e9a3eec886922",
+      "source_freeze_digest": "578b8c2801a6a96161faf54f5b1f8d009b60c7c4ffd6d5f0f4e1fd47ad48c439"
+    }
+  ],
+  "canonical_memory_mutation": "none",
+  "promotion_attempted": false,
+  "production_runtime_input": false
+}
