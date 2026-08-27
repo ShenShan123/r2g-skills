@@ -19,7 +19,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tehm.adapters.orfs_pair import build_orfs_pair_record  # noqa: E402
-from tehm.capability.retention import evaluate_capability_retention  # noqa: E402
+from tehm.capability.retention import (  # noqa: E402
+    evaluate_capability_retention, record_capability_retention,
+    verify_capability_retention,
+)
 from tehm.capability.policy_snapshot import (  # noqa: E402
     validate_policy_load_row, validate_policy_snapshot_row,
 )
@@ -53,6 +56,34 @@ def _load_policy_binding(attribution_report: dict) -> tuple[Path, str, str, str]
     return db_path, policy_id, policy_digest, capability_id
 
 
+def _open_retention_ledger(source_db: Path, ledger_db: Path) -> sqlite3.Connection:
+    """Open an isolated writable ledger cloned from the immutable source DB.
+
+    The attribution snapshot is deliberately opened through the immutable
+    read-only seam.  A ledger path is an explicit opt-in output and is never
+    allowed to alias that source path.  Existing ledgers are reused so a
+    rerun cannot overwrite an immutable receipt with a new payload.
+    """
+    source_db = source_db.resolve()
+    ledger_db = ledger_db.resolve()
+    if source_db == ledger_db:
+        raise ValueError("retention ledger must be separate from attribution DB")
+    ledger_db.parent.mkdir(parents=True, exist_ok=True)
+    if not ledger_db.exists():
+        source = db.connect_read_only(source_db)
+        try:
+            destination = sqlite3.connect(str(ledger_db))
+            try:
+                source.backup(destination)
+            finally:
+                destination.close()
+        finally:
+            source.close()
+    conn = db.connect(ledger_db)
+    db.ensure_schema(conn)
+    return conn
+
+
 def build_orfs_capability_retention(
     attribution_report: Path | str,
     *,
@@ -62,6 +93,7 @@ def build_orfs_capability_retention(
     lineage_id: str,
     config_edits: dict,
     target_check: str = "route",
+    retention_ledger_db: Path | str | None = None,
 ) -> dict:
     report_path = Path(attribution_report).resolve()
     report = json.loads(report_path.read_text())
@@ -75,6 +107,8 @@ def build_orfs_capability_retention(
 
     # Read-only immutable open proves the snapshot exists and the runtime would
     # load the same digest used by the acquisition campaign.
+    runtime_id = ""
+    policy_load_receipt_id = ""
     conn = db.connect_read_only(db_path)
     try:
         row = conn.execute(
@@ -104,6 +138,8 @@ def build_orfs_capability_retention(
                 load_payload.get("policy_digest") != policy_digest or
                 load_payload.get("loaded") is not True):
             raise ValueError("candidate policy runtime load receipt is stale or mismatched")
+        runtime_id = str(checked_load["runtime_id"])
+        policy_load_receipt_id = str(checked_load["receipt_id"])
     finally:
         conn.close()
 
@@ -142,6 +178,34 @@ def build_orfs_capability_retention(
         capability_id=capability_id,
         replay_id="retention_" + evidence_id.split(":", 1)[1][:20],
         replay=replay)
+    ledger_result = None
+    if retention_ledger_db is not None:
+        ledger_path = Path(retention_ledger_db).resolve()
+        ledger = _open_retention_ledger(db_path, ledger_path)
+        try:
+            ledger_receipt = record_capability_retention(
+                ledger, capability_id=capability_id,
+                replay_id=retention.replay_id, replay=replay,
+                candidate_policy_snapshot_id=policy_id,
+                runtime_id=runtime_id,
+                policy_load_receipt_id=policy_load_receipt_id)
+            ledger_verification = verify_capability_retention(
+                ledger, capability_id, ledger_receipt)
+            # A successful pure replay must also be consumable as authority
+            # evidence.  Failed replays are intentionally recorded as
+            # retained=0 audit rows and therefore verify as ineligible.
+            if retention.retained and not ledger_verification["eligible"]:
+                raise ValueError(
+                    "retention ledger verification failed: "
+                    + ";".join(ledger_verification["reasons"]))
+            ledger_result = {
+                "db": str(ledger_path),
+                "receipt": ledger_receipt.to_dict(),
+                "verification": ledger_verification,
+                "authority_eligible": bool(ledger_verification["eligible"]),
+            }
+        finally:
+            ledger.close()
     result = {
         "version": "orfs-capability-retention-v1",
         "attribution_report": str(report_path),
@@ -173,6 +237,7 @@ def build_orfs_capability_retention(
         },
         "replay": replay,
         "retention": retention.to_dict(),
+        "retention_ledger": ledger_result,
         "canonical_memory_mutation": "none",
         "promotion_attempted": False,
         "production_promotion_eligible": False,
@@ -195,16 +260,22 @@ def main(argv=None) -> int:
     parser.add_argument("--lineage-id", required=True)
     parser.add_argument("--config-json", required=True)
     parser.add_argument("--target-check", default="route")
+    parser.add_argument(
+        "--retention-ledger-db", type=Path,
+        help="optional isolated writable DB for authority-grade retention evidence")
     args = parser.parse_args(argv)
     result = build_orfs_capability_retention(
         args.attribution_report, output=args.output,
         before_project=args.before_project, after_project=args.after_project,
         lineage_id=args.lineage_id, config_edits=json.loads(args.config_json),
-        target_check=args.target_check)
+        target_check=args.target_check,
+        retention_ledger_db=args.retention_ledger_db)
     print(json.dumps({
         "capability_id": result["capability_id"],
         "lineage_id": result["lineage_id"],
         "retained": result["retention"]["retained"],
+        "retention_ledger_eligible": bool(
+            (result.get("retention_ledger") or {}).get("authority_eligible", False)),
         "production_promotion_eligible": result["production_promotion_eligible"],
     }, indent=2, sort_keys=True))
     return 0

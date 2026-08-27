@@ -8,7 +8,10 @@ import sys
 from pathlib import Path
 
 from tehm import db
-from tehm.capability import create_policy_snapshot, record_policy_load
+from tehm.capability import (
+    create_policy_snapshot, record_policy_load, register_capability,
+    verify_capability_retention,
+)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from build_orfs_capability_retention import build_orfs_capability_retention  # noqa: E402
 
@@ -73,3 +76,54 @@ def test_real_orfs_retention_replay_is_read_only(tmp_tehm, tmp_path):
     assert result["retention"]["retained"] is True
     assert result["firewall"]["disjoint"] is True
     assert hashlib.sha256(candidate_db.read_bytes()).hexdigest() == digest_before
+
+
+def test_real_orfs_retention_can_write_isolated_verified_ledger(tmp_tehm, tmp_path):
+    """The explicit ledger lane binds a real replay without mutating source DB."""
+    conn, _, _ = tmp_tehm
+    source = tmp_path / "source.sqlite"
+    destination = sqlite3.connect(source)
+    conn.backup(destination)
+    destination.close()
+    conn.close()
+
+    candidate_db = tmp_path / "candidate.sqlite"
+    candidate = db.connect(candidate_db)
+    db.ensure_schema(candidate)
+    capability = register_capability(
+        candidate, mechanism_family="ORFS_RETENTION", applicability={"target": "route"})
+    policy = create_policy_snapshot(
+        candidate, memory_snapshot_id="candidate-memory",
+        promoted_rules=[], retrieval_config={"evaluation_only": True})
+    load = record_policy_load(
+        candidate, policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="runtime", loaded=True)
+    candidate.close()
+    report_path = tmp_path / "attribution.json"
+    report_path.write_text(json.dumps({
+        "derived_db": str(candidate_db),
+        "candidate_policy": policy.to_dict(),
+        "capability": {"capability_id": capability.capability_id},
+        "firewall": {"training_lineages": ["train:a"],
+                      "heldout_lineages": ["held:b"]},
+    }))
+    before = _project(tmp_path, "ledger_before", failed=True)
+    after = _project(tmp_path, "ledger_after", failed=False)
+    source_digest = hashlib.sha256(candidate_db.read_bytes()).hexdigest()
+    ledger_db = tmp_path / "retention-ledger.sqlite"
+    result = build_orfs_capability_retention(
+        report_path, output=tmp_path / "retention.json",
+        before_project=before, after_project=after,
+        lineage_id="retention:c", config_edits={"CORE_UTILIZATION": "40"},
+        retention_ledger_db=ledger_db)
+    assert result["retention"]["retained"] is True
+    assert result["retention_ledger"]["authority_eligible"] is True
+    receipt = result["retention_ledger"]["receipt"]
+    ledger = db.connect_read_only(ledger_db)
+    try:
+        checked = verify_capability_retention(ledger, capability.capability_id, receipt)
+        assert checked["eligible"] is True
+        assert checked["reasons"] == []
+    finally:
+        ledger.close()
+    assert hashlib.sha256(candidate_db.read_bytes()).hexdigest() == source_digest

@@ -2006,7 +2006,11 @@ schema-v4 的 additive extension：fresh schema 直接创建，既有 v4 store �
 `record_capability_authority()` 与 `verify_capability_authority()` 会重新加载并
 验证该 ledger receipt；因此 retention 可以成为 no-regression authority 证据，
 而不会绕过现有 C1–C8 evidence split contract。未提供该字段的历史 fixture 仍按
-旧通用 C7 evidence 兼容，但不应被解释为已完成 retention replay。
+旧通用 C7 evidence 兼容，但不应被解释为已完成 retention replay。外部 ORFS
+retention builder 默认仍为只读报告；只有显式指定独立的
+`--retention-ledger-db`，才会把 replay 写入 source DB 的隔离副本并立即验证
+receipt。该路径用于把真实 ORFS replay 接入 authority-grade 证据链，但仍禁止写回
+canonical/learner 数据库或 production policy。
 
 ---
 

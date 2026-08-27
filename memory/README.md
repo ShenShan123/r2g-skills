@@ -132,10 +132,13 @@ capability、candidate policy snapshot digest、成功的 runtime load receipt�
 回放失败会留下 `retained=0` 的审计证据，但不会修改 capability lifecycle，也不会
 进入 production policy。验证阶段会重新校验 snapshot/load JSON、ledger payload、
 registry evidence 和纯 evaluator 结果，直接 SQL 篡改或 training split 均
-fail-closed。外部 ORFS retention builder 仍保持只读，只在报告中补充 split、lineage
-和 policy digest，不能把外部回放冒充 learner support。C7 authority evidence 现在
-可显式携带 `retention_receipt_id`；一旦提供，authority 记录与消费都会重新验证
-retention ledger，failed/stale receipt 会阻断 capability authority。
+fail-closed。外部 ORFS retention builder 默认仍保持只读，只在报告中补充 split、lineage
+和 policy digest，不能把外部回放冒充 learner support；显式传入独立的
+`--retention-ledger-db` 后，builder 才会把同一 replay 写入隔离副本并立即执行
+`verify_capability_retention()`，输出 authority-grade receipt。该 ledger 仍不改变
+source/canonical DB 或 production policy。C7 authority evidence 现在可显式携带
+`retention_receipt_id`；一旦提供，authority 记录与消费都会重新验证 retention
+ledger，failed/stale receipt 会阻断 capability authority。
 
 ### Online consolidation trigger lane（2026-08-26）
 
