@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import json
 from pathlib import Path
 
 from contracts import (
@@ -27,6 +28,7 @@ from tehm import db as tehm_db
 from tehm import honesty as tehm_honesty
 from tehm.artifact_store import ArtifactStore
 from tehm.canonical.capture import capture as tehm_capture
+from tehm.canonical.transition import OUTCOMES
 from tehm.ids import stable_dumps
 
 SCHEMA_VERSION = "tehm-v4"
@@ -54,6 +56,62 @@ def _backend_crystallize(crystallize_all, conn):
         accepts_commit = False
     return (crystallize_all(conn, commit=False) if accepts_commit
             else crystallize_all(conn))
+
+
+def _validate_activation_result(result: ActivationResult) -> None:
+    """Validate the backend-neutral result before it reaches SQLite."""
+    if not result.activation_id:
+        raise ValueError("activation result requires activation_id")
+    if result.outcome not in OUTCOMES:
+        raise ValueError(
+            f"activation outcome must be one of {OUTCOMES}, got {result.outcome!r}")
+    if not isinstance(result.created_regressions, (list, tuple)):
+        raise ValueError("created_regressions must be a list")
+    if any(not isinstance(item, str) or not item
+           for item in result.created_regressions):
+        raise ValueError("created_regressions must contain non-empty strings")
+    if result.produced_transition_id is not None and (
+            not isinstance(result.produced_transition_id, str)
+            or not result.produced_transition_id):
+        raise ValueError("produced_transition_id must be a non-empty string or None")
+    if result.rollback_receipt is not None and not isinstance(
+            result.rollback_receipt, dict):
+        raise ValueError("rollback_receipt must be a dict or None")
+
+
+def _stored_activation_list(raw: str | None, *, field: str) -> list:
+    if raw is None:
+        return []
+    try:
+        value = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"activation {field} is not valid JSON") from exc
+    if not isinstance(value, list) or any(
+            not isinstance(item, str) or not item for item in value):
+        raise ValueError(f"activation {field} must be a list of non-empty strings")
+    return value
+
+
+def _stored_activation_rollback(raw: str | None) -> dict | None:
+    if raw is None:
+        return None
+    try:
+        value = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("activation rollback_receipt_json is not valid JSON") from exc
+    if not isinstance(value, dict):
+        raise ValueError("activation rollback_receipt_json must be a JSON object")
+    return value
+
+
+def _require_transition(conn, transition_id: str, activation_id: str) -> None:
+    row = conn.execute(
+        "SELECT transition_id FROM tehm_transitions WHERE transition_id=?",
+        (transition_id,)).fetchone()
+    if row is None:
+        raise ValueError(
+            "activation result references missing canonical transition "
+            f"{transition_id} ({activation_id})")
 
 
 class TehmMemoryBackend:
@@ -236,18 +294,65 @@ class TehmMemoryBackend:
 
         The full Phase-8 pipeline owns the rich activation row.  This seam is
         still authoritative for callers that only have the backend-neutral
-        result: it updates that existing row and bumps utility exactly once
-        when the row has not already been finalized by the pipeline.
+        result: it finalizes an UNKNOWN row and bumps utility exactly once
+        when the row has not already been finalized by the pipeline.  A
+        finalized receipt is immutable at this seam: exact replays are a
+        no-op, while changed outcome, regression, rollback, or transition
+        linkage is rejected rather than silently erased.
         """
         if self.read_only_eval:
             raise RuntimeError("cannot record activation in a read-only TEHM evaluation snapshot")
+        _validate_activation_result(result)
         conn, _ = self._open()
         row = conn.execute(
-            "SELECT rule_id, outcome FROM tehm_activations WHERE activation_id=?",
+            """SELECT rule_id, outcome, created_regressions_json,
+                      produced_transition_id, rollback_receipt_json
+                 FROM tehm_activations WHERE activation_id=?""",
             (result.activation_id,)).fetchone()
         if row is None:
             raise KeyError(f"unknown TEHM activation: {result.activation_id}")
+
         prior = row["outcome"]
+        if prior is not None and prior not in OUTCOMES:
+            raise ValueError(
+                f"activation {result.activation_id} has invalid stored outcome")
+        stored_regressions = _stored_activation_list(
+            row["created_regressions_json"],
+            field="created_regressions_json")
+        stored_rollback = _stored_activation_rollback(
+            row["rollback_receipt_json"])
+        stored_transition = row["produced_transition_id"]
+        if stored_transition is not None:
+            _require_transition(conn, str(stored_transition), result.activation_id)
+
+        incoming = (
+            result.outcome,
+            stable_dumps(result.created_regressions),
+            result.produced_transition_id,
+            stable_dumps(result.rollback_receipt)
+            if result.rollback_receipt is not None else None,
+        )
+        existing = (
+            prior,
+            stable_dumps(stored_regressions),
+            stored_transition,
+            stable_dumps(stored_rollback)
+            if stored_rollback is not None else None,
+        )
+        # Activation IDs are replay keys, never overwrite keys.  UNKNOWN is
+        # the sole provisional state that may be finalized by this seam.
+        if prior not in (None, "UNKNOWN"):
+            if incoming != existing:
+                raise ValueError(
+                    "activation replay conflicts with finalized receipt "
+                    f"{result.activation_id}")
+            return
+        if incoming == existing:
+            return
+        if result.produced_transition_id is not None:
+            _require_transition(
+                conn, result.produced_transition_id, result.activation_id)
+
         had_outer_transaction = conn.in_transaction
         savepoint = "tehm_backend_activation_v1"
         conn.execute(f"SAVEPOINT {savepoint}")
@@ -255,10 +360,12 @@ class TehmMemoryBackend:
         try:
             conn.execute(
                 """UPDATE tehm_activations
-                      SET outcome=?, created_regressions_json=?, rollback_receipt_json=?
+                      SET outcome=?, created_regressions_json=?,
+                          produced_transition_id=?, rollback_receipt_json=?
                     WHERE activation_id=?""",
                 (result.outcome,
                  stable_dumps(result.created_regressions),
+                 result.produced_transition_id,
                  stable_dumps(result.rollback_receipt)
                  if result.rollback_receipt is not None else None,
                  result.activation_id))
@@ -278,6 +385,7 @@ class TehmMemoryBackend:
                 conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
                 conn.execute(f"RELEASE SAVEPOINT {savepoint}")
             raise
+
 
     def rebuild(self, *, frozen_source: bool = False) -> BuildReport:
         conn, _ = self._open()

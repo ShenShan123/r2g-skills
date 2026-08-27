@@ -16,12 +16,57 @@ from pathlib import Path
 
 import pytest
 
-from contracts import ExecutionRecord, MemoryQuery, RepairContext
+from contracts import ActivationResult, ExecutionRecord, MemoryQuery, RepairContext
 from factory import BackendLockError, open_memory_backend
+from tehm.ids import rule_id as mint_rule_id, stable_dumps
 
 
 def _record(sample_record_dict) -> ExecutionRecord:
     return ExecutionRecord.from_dict(sample_record_dict)
+
+
+def _seed_backend_rule(conn) -> str:
+    """Create the smallest rule row needed by backend receipt tests."""
+    now = "2026-08-27T00:00:00-07:00"
+    before = {"target_check": "route", "knob": "CORE_UTILIZATION"}
+    after = {"rewrite.value": "20", "execution.recheck": "route"}
+    obligations = ["TARGET_FAILURE_REMOVED"]
+    rule_id = mint_rule_id(
+        domain="flow.signoff", before_pattern=before,
+        after_pattern=after, hard_preconditions=[], obligations=obligations)
+    conn.execute(
+        """INSERT INTO tehm_rules (
+          rule_id,domain,before_pattern_json,after_pattern_json,
+          hard_preconditions_json,context_profile_json,obligations_json,
+          validity_status,validity_profile_json,confidence_json,utility_json,
+          risk_profile_json,predicate_schema_version,role_schema_version,
+          crystallizer_version,merge_trace_digest,created_at,updated_at)
+          VALUES (?,'flow.signoff',?,?, '[]','{}',?,'VALIDATED','{}','{}','{}',
+                  '[]','p','v','c','m',?,?)""",
+        (rule_id, stable_dumps(before), stable_dumps(after),
+         stable_dumps(obligations), now, now))
+    conn.commit()
+    return rule_id
+
+
+def _seed_backend_activation(conn, *, rule_id: str, activation_id: str,
+                             outcome: str = "UNKNOWN",
+                             created_regressions: list | None = None,
+                             produced_transition_id: str | None = None,
+                             rollback_receipt: dict | None = None) -> None:
+    conn.execute(
+        """INSERT INTO tehm_activations (
+          activation_id,rule_id,target_state_id,retrieval_receipt_json,
+          applicability_status,binding_status,binding_json,executability_status,
+          obligation_transfer_json,obligation_coverage,verification_status,
+          verifier_json,outcome,created_regressions_json,produced_transition_id,
+          rollback_receipt_json,trial_uuid,created_at)
+          VALUES (?,?,'target','{}','APPLICABLE','BOUND','{}','EXECUTABLE',
+                  '{}',1.0,'UNKNOWN','{}',?,?,?,?,NULL,'now')""",
+        (activation_id, rule_id, outcome,
+         stable_dumps(created_regressions or []), produced_transition_id,
+         stable_dumps(rollback_receipt) if rollback_receipt is not None else None))
+    conn.commit()
 
 
 # -- selection ----------------------------------------------------------------
@@ -178,6 +223,80 @@ def test_tehm_backend_retrieve_keeps_frozen_query_context(tmp_path, monkeypatch)
     assert captured["query"].query_plan["structural_graph"]["nodes"] == [{"id": "WAIT"}]
     assert captured["query"].query_plan["compatibility_profile"] == "rtl.fsm.single_guard.v1"
     assert captured["limit"] == 7
+
+
+def test_tehm_backend_record_activation_finalizes_and_replays_exactly(tmp_tehm):
+    from tehm_backend import TehmMemoryBackend
+
+    conn, _, tmp_path = tmp_tehm
+    rule_id = _seed_backend_rule(conn)
+    transition_id = "transition_backend_receipt"
+    conn.execute(
+        """INSERT INTO tehm_transitions (
+          transition_id,source_state_id,target_state_id,action_domain,
+          action_json,observation_delta_json,verifier_json,primary_effect_key,
+          outcome,created_regressions_json,newly_observed_json,provenance_json,
+          schema_version)
+          VALUES (?,'state','state','flow.signoff','{}','{}','{}',NULL,
+                  'PASS','[]','[]','{}','tehm-v4')""",
+        (transition_id,))
+    _seed_backend_activation(
+        conn, rule_id=rule_id, activation_id="backend-act",
+        outcome="UNKNOWN")
+    backend = TehmMemoryBackend(
+        db_path=tmp_path / "tehm.sqlite", artifact_root=tmp_path / "artifacts")
+    result = ActivationResult(
+        activation_id="backend-act", outcome="PASS",
+        produced_transition_id=transition_id,
+        rollback_receipt={"verified": True})
+
+    backend.record_activation(result)
+    backend.record_activation(result)  # exact retry is a no-op
+    row = backend._open()[0].execute(
+        """SELECT outcome, created_regressions_json,
+                  produced_transition_id, rollback_receipt_json
+             FROM tehm_activations WHERE activation_id='backend-act'""").fetchone()
+    assert row["outcome"] == "PASS"
+    assert row["created_regressions_json"] == "[]"
+    assert row["produced_transition_id"] == transition_id
+    assert row["rollback_receipt_json"] == '{"verified":true}'
+    utility = backend._open()[0].execute(
+        "SELECT utility_json FROM tehm_rules WHERE rule_id=?", (rule_id,)
+    ).fetchone()[0]
+    assert json.loads(utility)["activations"] == 1
+
+    with pytest.raises(ValueError, match="replay conflicts"):
+        backend.record_activation(
+            ActivationResult(activation_id="backend-act", outcome="FAIL"))
+    assert backend._open()[0].execute(
+        "SELECT outcome FROM tehm_activations WHERE activation_id='backend-act'"
+    ).fetchone()[0] == "PASS"
+    backend.close()
+
+
+def test_tehm_backend_record_activation_rejects_invalid_result_witness(tmp_tehm):
+    from tehm_backend import TehmMemoryBackend
+
+    conn, _, tmp_path = tmp_tehm
+    rule_id = _seed_backend_rule(conn)
+    _seed_backend_activation(conn, rule_id=rule_id, activation_id="backend-invalid")
+    backend = TehmMemoryBackend(
+        db_path=tmp_path / "tehm.sqlite", artifact_root=tmp_path / "artifacts")
+
+    with pytest.raises(ValueError, match="outcome must be one of"):
+        backend.record_activation(
+            ActivationResult(activation_id="backend-invalid", outcome="MAYBE"))
+    with pytest.raises(ValueError, match="missing canonical transition"):
+        backend.record_activation(ActivationResult(
+            activation_id="backend-invalid", outcome="PASS",
+            produced_transition_id="transition-missing"))
+    row = backend._open()[0].execute(
+        "SELECT outcome, produced_transition_id FROM tehm_activations "
+        "WHERE activation_id='backend-invalid'"
+    ).fetchone()
+    assert row["outcome"] == "UNKNOWN"
+    assert row["produced_transition_id"] is None
+    backend.close()
     backend.close()
 
 
