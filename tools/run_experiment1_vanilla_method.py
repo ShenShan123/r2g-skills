@@ -481,7 +481,10 @@ def tool_specs() -> list[dict[str, Any]]:
         },
         {
             "name": "submit_candidates",
-            "description": "Submit the final ordered candidate list. Call only when finished.",
+            "description": (
+                "Submit the final ordered candidate list after at least one candidate has passed "
+                "validate_candidate. Empty submissions are rejected and do not end the run."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1053,6 +1056,18 @@ class VanillaRun:
                 "schema_errors": out_of_scope_errors[:20],
                 "target": self.target,
             }
+        if not candidates:
+            return {
+                "accepted": False,
+                "failure_class": "empty_submission",
+                "instruction": (
+                    "No submission was recorded. Continue searching and validating candidates; "
+                    "submit_candidates only after at least one candidate has passed "
+                    "validate_candidate."
+                ),
+                "submitted": 0,
+                "target": self.target,
+            }
         self.final = {
             "candidates": candidates,
             "out_of_scope": out_of_scope,
@@ -1332,7 +1347,9 @@ class VanillaRun:
             "deterministic runner-state message. Manage the disclosed budget so inspected "
             "candidates are validated incrementally. "
             + completion_instruction
-            + " Call submit_candidates exactly once."
+            + " Do not call submit_candidates with an empty candidate list: an empty call is "
+            "rejected and does not end the run. After at least one candidate passes "
+            "validate_candidate, call submit_candidates once to finalize."
         )
         user = (
             task["core_task_en"]

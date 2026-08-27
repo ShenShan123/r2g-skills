@@ -660,6 +660,22 @@ def test_early_submission_has_distinct_scoreable_stop_reason():
     assert submitted_stop_reason(0, 25) == "submitted_early"
 
 
+def test_empty_submission_is_rejected_without_finalizing(tmp_path: Path):
+    runner = VanillaRun(
+        route={"method_id": "qwen-vanilla"},
+        campaign_root=tmp_path,
+        batch_id=1,
+        target=1,
+        max_turns=4,
+        max_output_tokens=4096,
+        run_kind="smoke",
+    )
+    result = runner.submit({"candidates": [], "out_of_scope": []})
+    assert result["accepted"] is False
+    assert result["failure_class"] == "empty_submission"
+    assert runner.final is None
+
+
 def test_smoke_completion_is_early_relative_to_formal_protocol():
     assert run_submission_stop_reason(1, 1, "smoke") == "submitted_early"
     assert run_submission_stop_reason(200, 200, "formal") == "target_reached"
