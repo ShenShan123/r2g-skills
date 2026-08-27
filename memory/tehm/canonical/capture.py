@@ -164,6 +164,26 @@ def _atomic_capture(fn):
     return wrapped
 
 
+def _assert_existing_row_equivalent(
+        conn: sqlite3.Connection, *, table: str, where_sql: str,
+        where_params: tuple, expected: dict, label: str,
+        ignore_keys: frozenset[str] = frozenset()) -> None:
+    """Fail closed when a deterministic canonical row is replayed differently."""
+    existing = conn.execute(
+        f"SELECT * FROM {table} WHERE {where_sql} LIMIT 1",
+        where_params).fetchone()
+    if existing is None:
+        return
+    mismatches = [
+        key for key, value in expected.items()
+        if key not in ignore_keys and existing[key] != value
+    ]
+    if mismatches:
+        raise ExecutionRecordError(
+            f"{label} evidence is immutable and conflicts: "
+            f"{', '.join(mismatches)}")
+
+
 @_atomic_capture
 def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
             *, materialized_at: str | None = None,
@@ -320,6 +340,17 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
 
     # --- 4. persist (idempotent) --------------------------------------------
     for st in (before_state, after_state):
+        state_row = st.to_row()
+        _assert_existing_row_equivalent(
+            conn, table="tehm_states", where_sql="state_id=?",
+            where_params=(state_row["state_id"],), expected=state_row,
+            label="state", ignore_keys=frozenset({
+                # These columns describe the witness that first introduced
+                # a content-addressed state, but are deliberately excluded
+                # from state_id and may differ across deduplicated lineages.
+                "project_id", "design_id", "lineage_id", "repository_ref",
+                "created_at",
+            }))
         conn.execute(
             """INSERT OR IGNORE INTO tehm_states (
                    state_id, domain, project_id, design_id, lineage_id,
@@ -330,8 +361,17 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
                    :repository_ref, :source_digest, :context_graph_digest,
                    :verifier_snapshot_json, :artifact_manifest_json,
                    :created_at, :schema_version)""",
-            st.to_row())
+            state_row)
 
+    transition_row = transition.to_row()
+    _assert_existing_row_equivalent(
+        conn, table="tehm_transitions", where_sql="transition_id=?",
+        where_params=(transition_row["transition_id"],),
+        expected=transition_row, label="transition",
+        # Provenance is a capture witness, not transition identity: the same
+        # verified action may be re-ingested under another campaign/session.
+        # INSERT OR IGNORE preserves the first witness without overwriting it.
+        ignore_keys=frozenset({"provenance_json"}))
     conn.execute(
         """INSERT OR IGNORE INTO tehm_transitions (
                transition_id, source_state_id, target_state_id, action_domain,
@@ -342,21 +382,63 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
                :action_json, :observation_delta_json, :verifier_json,
                :primary_effect_key, :outcome, :created_regressions_json,
                :newly_observed_json, :provenance_json, :schema_version)""",
-        transition.to_row())
+        transition_row)
 
+    episode_row = episode.to_row()
+    _assert_existing_row_equivalent(
+        conn, table="tehm_episodes", where_sql="episode_id=?",
+        where_params=(episode_row["episode_id"],), expected=episode_row,
+        label="episode",
+        # Episode identity is the ordered transition chain.  A replay or a
+        # second ingest may carry a different capture witness; keep the first
+        # provenance row while refusing changes to the episode facts below.
+        ignore_keys=frozenset({"provenance_json"}))
     conn.execute(
-        """INSERT OR REPLACE INTO tehm_episodes (
+        """INSERT OR IGNORE INTO tehm_episodes (
                episode_id, domain, initial_state_id, terminal_state_id,
                terminal_status, mechanism_family, lineage_id,
                trajectory_summary_json, provenance_json, schema_version)
            VALUES (:episode_id, :domain, :initial_state_id, :terminal_state_id,
                :terminal_status, :mechanism_family, :lineage_id,
                :trajectory_summary_json, :provenance_json, :schema_version)""",
-        episode.to_row())
+        episode_row)
 
-    step_index = int((record.episode or {}).get("step_index", 0))
+    requested_step_index = int((record.episode or {}).get("step_index", 0))
+    step_index = requested_step_index
+    if head is not None:
+        existing_step = conn.execute(
+            "SELECT step_index FROM tehm_episode_steps "
+            "WHERE episode_id=? AND transition_id=? LIMIT 1",
+            (episode.episode_id, transition.transition_id)).fetchone()
+        if existing_step is not None:
+            # Replays retain the original position even if the caller's
+            # source omitted or changed its volatile step metadata.
+            step_index = int(existing_step["step_index"])
+        else:
+            occupied = {
+                int(row["step_index"])
+                for row in conn.execute(
+                    "SELECT step_index FROM tehm_episode_steps "
+                    "WHERE episode_id=?", (head["episode_id"],)).fetchall()
+            }
+            if step_index in occupied:
+                # A session adapter may emit a default zero for each isolated
+                # record.  Preserve the accumulated chain by appending this
+                # new transition instead of replacing an earlier step.
+                step_index = max(occupied, default=-1) + 1
+    step_row = {
+        "episode_id": episode.episode_id,
+        "step_index": step_index,
+        "transition_id": transition.transition_id,
+        "branch_id": "main",
+    }
+    _assert_existing_row_equivalent(
+        conn, table="tehm_episode_steps",
+        where_sql="episode_id=? AND step_index=?",
+        where_params=(step_row["episode_id"], step_row["step_index"]),
+        expected=step_row, label="episode step")
     conn.execute(
-        """INSERT OR REPLACE INTO tehm_episode_steps
+        """INSERT OR IGNORE INTO tehm_episode_steps
                (episode_id, step_index, transition_id, branch_id)
            VALUES (?, ?, ?, 'main')""",
         (episode.episode_id, step_index, transition.transition_id))
@@ -365,14 +447,29 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
     # callers pass a non-training campaign and ``dataset_learner_eligible``
     # false; this prevents a later learner query from seeing the row through
     # an implicit ``live`` membership.
+    membership_row = {
+        "transition_id": transition.transition_id,
+        "campaign_id": dataset_campaign_id,
+        "split": dataset_split,
+        "learner_eligible": int(bool(dataset_learner_eligible)),
+        "frozen_snapshot_digest": frozen_snapshot_digest,
+        "assigned_at": materialized_at,
+    }
+    _assert_existing_row_equivalent(
+        conn, table="tehm_dataset_membership",
+        where_sql="transition_id=? AND campaign_id=?",
+        where_params=(membership_row["transition_id"],
+                      membership_row["campaign_id"]),
+        expected=membership_row, label="dataset membership",
+        ignore_keys=frozenset({"assigned_at"}))
     conn.execute(
-        """INSERT OR REPLACE INTO tehm_dataset_membership
+        """INSERT OR IGNORE INTO tehm_dataset_membership
                (transition_id, campaign_id, split, learner_eligible,
                 frozen_snapshot_digest, assigned_at)
            VALUES (?, ?, ?, ?, ?, ?)""",
-        (transition.transition_id, dataset_campaign_id, dataset_split,
-         int(bool(dataset_learner_eligible)), frozen_snapshot_digest,
-         materialized_at))
+        (membership_row["transition_id"], membership_row["campaign_id"],
+         membership_row["split"], membership_row["learner_eligible"],
+         membership_row["frozen_snapshot_digest"], membership_row["assigned_at"]))
 
     # --- 5. experience-graph edges ------------------------------------------
     edge_kinds: list[str] = []
@@ -381,11 +478,25 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
         ("PRODUCED_STATE", transition.transition_id, after_state.state_id),
         ("PART_OF_EPISODE", transition.transition_id, episode.episode_id),
     ):
+        edge_row = {
+            "source_id": src,
+            "relation_type": rel,
+            "target_id": dst,
+            "metadata_json": stable_dumps({"capture": record.record_id}),
+        }
+        _assert_existing_row_equivalent(
+            conn, table="tehm_edges",
+            where_sql="source_id=? AND relation_type=? AND target_id=?",
+            where_params=(src, rel, dst), expected=edge_row, label="edge",
+            # Edge identity is the relation triple; capture metadata may
+            # legitimately name a second ingest of the same transition.
+            ignore_keys=frozenset({"metadata_json"}))
         conn.execute(
             """INSERT OR IGNORE INTO tehm_edges
                    (source_id, relation_type, target_id, metadata_json)
                VALUES (?, ?, ?, ?)""",
-            (src, rel, dst, stable_dumps({"capture": record.record_id})))
+            (edge_row["source_id"], edge_row["relation_type"],
+             edge_row["target_id"], edge_row["metadata_json"]))
         edge_kinds.append(rel)
     # --- 6. materialize the five views (parametric stays NOT_IMPLEMENTED) ----
     role_map = RoleProjector().project_all(before_graph)
@@ -468,11 +579,23 @@ def _carry_forward_steps(conn: sqlite3.Connection, from_episode: str, to_episode
     for r in conn.execute(
             "SELECT step_index, transition_id, branch_id FROM tehm_episode_steps "
             "WHERE episode_id = ?", (from_episode,)).fetchall():
+        step_row = {
+            "episode_id": to_episode,
+            "step_index": r["step_index"],
+            "transition_id": r["transition_id"],
+            "branch_id": r["branch_id"],
+        }
+        _assert_existing_row_equivalent(
+            conn, table="tehm_episode_steps",
+            where_sql="episode_id=? AND step_index=?",
+            where_params=(to_episode, r["step_index"]),
+            expected=step_row, label="episode step")
         conn.execute(
-            """INSERT OR REPLACE INTO tehm_episode_steps
+            """INSERT OR IGNORE INTO tehm_episode_steps
                    (episode_id, step_index, transition_id, branch_id)
                VALUES (?, ?, ?, ?)""",
-            (to_episode, r["step_index"], r["transition_id"], r["branch_id"]))
+            (step_row["episode_id"], step_row["step_index"],
+             step_row["transition_id"], step_row["branch_id"]))
 
 
 # -- helpers -----------------------------------------------------------------

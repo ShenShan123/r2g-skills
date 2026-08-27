@@ -8,7 +8,9 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from tehm.canonical.capture import ExecutionRecord, capture
+import pytest
+
+from tehm.canonical.capture import ExecutionRecord, ExecutionRecordError, capture
 
 
 def deepcopy_dict(obj: dict) -> dict:
@@ -42,6 +44,44 @@ def test_capture_identical_ids_are_deduped(tmp_tehm, sample_record_dict):
     capture(conn, store, ExecutionRecord.from_dict(sample_record_dict))
     capture(conn, store, ExecutionRecord.from_dict(sample_record_dict))
     assert _counts(conn)["states"] == 2  # still exactly 2 states
+
+
+def test_capture_replay_rejects_tampered_canonical_content(tmp_tehm,
+                                                           sample_record_dict):
+    """A deterministic ID cannot be reused to overwrite raw content."""
+    conn, store, _ = tmp_tehm
+    receipt = capture(conn, store, ExecutionRecord.from_dict(sample_record_dict))
+    before = _counts(conn)
+    # Simulate a stale/corrupted canonical row while keeping the deterministic
+    # source record unchanged.  The replay must detect the content mismatch
+    # instead of silently replacing the row.
+    conn.execute(
+        "UPDATE tehm_transitions SET action_json='{}' WHERE transition_id=?",
+        (receipt.transition_id,))
+    conn.commit()
+    with pytest.raises(ExecutionRecordError, match="immutable and conflicts"):
+        capture(conn, store, ExecutionRecord.from_dict(sample_record_dict))
+    assert _counts(conn) == before
+
+
+def test_capture_replay_cannot_reset_dataset_membership(tmp_tehm,
+                                                        sample_record_dict):
+    """A replay cannot silently move evidence between learner roles."""
+    conn, store, _ = tmp_tehm
+    record = ExecutionRecord.from_dict(sample_record_dict)
+    receipt = capture(conn, store, record,
+                      dataset_campaign_id="role-campaign",
+                      dataset_split="heldout", dataset_learner_eligible=False)
+    with pytest.raises(ExecutionRecordError, match="immutable and conflicts"):
+        capture(conn, store, ExecutionRecord.from_dict(sample_record_dict),
+                dataset_campaign_id="role-campaign", dataset_split="training",
+                dataset_learner_eligible=True)
+    row = conn.execute(
+        "SELECT split, learner_eligible FROM tehm_dataset_membership "
+        "WHERE transition_id=? AND campaign_id='role-campaign'",
+        (receipt.transition_id,),
+    ).fetchone()
+    assert tuple(row) == ("heldout", 0)
 
 
 def test_new_action_creates_new_transition(tmp_tehm, sample_record_dict):
