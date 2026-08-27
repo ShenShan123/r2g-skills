@@ -528,7 +528,7 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
 
 def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
                   artifacts: Path, *,
-                  dataset_campaign_id: str = VERSION,
+                  dataset_campaign_id: str = "live",
                   require_complete_oracle: bool = True) -> None:
     """Capture pair observations with an explicit learner-admission boundary.
 
