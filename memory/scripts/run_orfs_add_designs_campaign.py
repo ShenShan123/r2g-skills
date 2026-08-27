@@ -22,6 +22,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,6 +40,12 @@ from run_orfs_diversity_campaign import (  # noqa: E402
     capture_pairs,
     preflight_orfs_toolchain,
     run_projects,
+)
+from run_orfs_batch0 import (  # noqa: E402
+    _bind_sdc,
+    run_equivalence,
+    run_graph_contexts,
+    run_signoff,
 )
 
 from tehm import db as tehm_db  # noqa: E402
@@ -131,6 +138,57 @@ def _rtl_files(source_dir: Path) -> list[Path]:
         (path.resolve() for path in source_dir.iterdir()
          if path.is_file() and path.suffix.lower() in {".v", ".sv"}),
         key=str)
+
+
+_MODULE_RE = re.compile(r"(?m)^\s*module\s+([A-Za-z_]\w*)\b")
+_INSTANCE_RE = re.compile(
+    r"\b([A-Za-z_]\w*)\s*(?:#\s*\([^;]*?\)\s*)?"
+    r"[A-Za-z_]\w*\s*\(")
+
+
+def _infer_rtl_top(rtl_paths: list[Path], *, design: str,
+                   preferred: str | None = None) -> str:
+    """Infer the RTL top and fail closed on an ambiguous custom source.
+
+    A custom RTL override is a new source lineage, so silently using the
+    template's top is unsafe.  Single-module fixtures are unambiguous; for a
+    multi-module source choose the module that is not instantiated by another
+    declared module and reject ties rather than guessing.
+    """
+    modules: list[str] = []
+    instantiated: set[str] = set()
+    for path in rtl_paths:
+        text = path.read_text(errors="replace")
+        text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+        text = re.sub(r"//.*", " ", text)
+        modules.extend(_MODULE_RE.findall(text))
+        # Remove ordinary module declarations before scanning type/name calls;
+        # this keeps ``module child(...)`` from looking like an instance while
+        # still handling a child instantiation on the same line as its parent.
+        body = re.sub(r"\bmodule\s+[A-Za-z_]\w*\s*(?:#\s*\([^;]*?\)\s*)?\(",
+                      " ", text)
+        instantiated.update(_INSTANCE_RE.findall(body))
+    unique = list(dict.fromkeys(modules))
+    if not unique:
+        raise BatchLaneError(f"cannot infer RTL top for {design}: no module declaration")
+    if preferred and preferred in unique:
+        return preferred
+    if len(unique) == 1:
+        return unique[0]
+    candidates = [name for name in unique if name not in instantiated]
+    if len(candidates) == 1:
+        return candidates[0]
+    raise BatchLaneError(
+        f"ambiguous RTL top for {design}: modules={unique}; pass a single-top RTL override")
+
+
+def _sdc_clock_port(path: Path) -> str:
+    text = path.read_text(errors="replace")
+    matches = re.findall(r"(?m)^\s*set\s+clk_port_name\s+([^\s#]+)", text)
+    if len(matches) != 1 or not matches[0]:
+        raise BatchLaneError(
+            f"custom SDC must declare exactly one 'set clk_port_name <port>': {path}")
+    return matches[0]
 
 
 def _file_record(path: Path) -> dict:
@@ -367,7 +425,9 @@ def main(argv=None) -> int:
                     help="base CORE_UTILIZATION schedule (for example 20 25 30)")
     ap.add_argument("--lineage-prefix", default="orfs-v4",
                     help="prefix for training lineage IDs in this campaign")
-    ap.add_argument("--phase", choices=("all", "freeze", "prepare", "run", "capture", "graph", "report"),
+    ap.add_argument("--phase", choices=(
+        "all", "freeze", "prepare", "run", "equivalence", "signoff",
+        "graph", "capture", "report"),
                     default="all")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--cpus-per-run", type=int, default=6)
@@ -420,26 +480,46 @@ def main(argv=None) -> int:
         _validate_manifest_source_freeze(manifest)
     if args.phase == "prepare":
         return 0
+    allowlist = ({str(Path(p).resolve()) for p in args.projects}
+                 if args.projects else None)
     if args.phase in ("all", "run"):
         run_projects(root, manifest, workers=max(1, args.workers),
                      cpus=max(1, args.cpus_per_run), timeout=args.timeout,
                      supervisor_grace=max(1, args.supervisor_grace),
-                     project_allowlist={str(Path(p).resolve()) for p in args.projects}
-                     if args.projects else None)
+                     project_allowlist=allowlist)
     if args.phase == "run":
+        return 0
+    if args.phase in ("all", "equivalence"):
+        run_equivalence(root, manifest, timeout=args.timeout,
+                        project_allowlist=allowlist)
+    if args.phase == "equivalence":
+        return 0
+    if args.phase in ("all", "signoff"):
+        run_signoff(root, manifest, timeout=args.timeout,
+                    project_allowlist=allowlist)
+    if args.phase == "signoff":
+        return 0
+    if args.phase in ("all", "graph"):
+        # The batch-0 graph phase emits the persisted graph receipt consumed by
+        # assess_full_oracle().  attach_graph_contexts below then binds the
+        # resulting digest to the staging physical effect.
+        run_graph_contexts(root, manifest, project_allowlist=allowlist)
+    if args.phase == "graph":
+        if manifest.get("captured"):
+            attach_graph_contexts(root, manifest, staging_db)
         return 0
     if args.phase in ("all", "capture"):
         capture_pairs(manifest_path, manifest, staging_db, staging_artifacts,
                       dataset_campaign_id=VERSION,
-                      require_complete_oracle=True)
+                      require_complete_oracle=True,
+                      require_full_oracle=True)
         manifest = _load(manifest_path)
     if args.phase == "capture":
         return 0
-    if args.phase in ("all", "graph"):
+    if args.phase == "all":
         attach_graph_contexts(root, manifest, staging_db)
-    if args.phase == "graph":
-        return 0
-    report(root, manifest, staging_db)
+    if args.phase in ("all", "report"):
+        report(root, manifest, staging_db)
     return 0
 
 
@@ -468,6 +548,11 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
         "ROUTING_CAPACITY_RECOVERY": FAMILY_SPECS["ROUTING_CAPACITY_RECOVERY"],
         "PLACEMENT_DENSITY_RECOVERY": FAMILY_SPECS["PLACEMENT_DENSITY_RECOVERY"],
     }
+    custom_top = None
+    custom_clock_port = None
+    if rtl_override_path is not None:
+        custom_top = _infer_rtl_top([rtl_override_path.resolve()], design=str(designs[0]))
+        custom_clock_port = _sdc_clock_port(sdc_override_path.resolve())
     items, baselines = [], []
     for platform in platforms:
         for design in designs:
@@ -514,6 +599,9 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                     common["EQUIVALENCE_CHECK"] = "1"
                 base = _materialize(root / "cases" / f"{platform}_{design}_base_{index}",
                                     cfg, sdc, dict(common))
+                if custom_top is not None:
+                    _bind_sdc(base / "constraints" / "constraint.sdc",
+                              top=custom_top, clock_port=custom_clock_port)
                 baselines.append({"baseline_id": f"{platform}:{design}:base{index}",
                                   "platform": platform, "design": design,
                                   "index": index, "project": str(base)})
@@ -525,6 +613,11 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                     after = _materialize(
                         root / "cases" / f"{platform}_{design}_{slug}_{index}",
                         cfg, sdc, {**common, **after_edits})
+                    if custom_top is not None:
+                        _bind_sdc(after / "constraints" / "constraint.sdc",
+                                  top=custom_top, clock_port=custom_clock_port)
+                    before_binding = _input_binding(base, rtl_paths)
+                    after_binding = _input_binding(after, rtl_paths)
                     items.append({
                         "case_id": f"{platform}:{design}:{index}:{family}:"
                                    f"{before_value}->{after_value}",
@@ -534,10 +627,13 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                         "before_value": before_value, "after_value": after_value,
                         "config_edits": {knob: after_value},
                         "before_project": str(base), "after_project": str(after),
+                        "top": custom_top or _infer_rtl_top(
+                            rtl_paths, design=str(design), preferred=str(design)),
+                        "source_digest": before_binding.get("source_digest"),
                         "rtl_files": [str(path) for path in rtl_paths],
                         "input_bindings": {
-                            "before": _input_binding(base, rtl_paths),
-                            "after": _input_binding(after, rtl_paths),
+                            "before": before_binding,
+                            "after": after_binding,
                         },
                         "timing_contract": {
                             "before": _timing_contract(base),

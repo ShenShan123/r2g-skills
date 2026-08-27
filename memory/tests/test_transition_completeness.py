@@ -6,6 +6,9 @@ FK to tehm_states dangles.
 """
 from __future__ import annotations
 
+import copy
+import json
+
 import pytest
 
 from tehm import honesty
@@ -30,6 +33,23 @@ def test_capture_produces_complete_transition(tmp_tehm, sample_record_dict):
     assert row["action_json"]
     assert row["verifier_json"]
     assert row["outcome"] == "PASS"
+
+
+def test_capture_preserves_expanded_full_oracle_receipt(tmp_tehm, sample_record_dict):
+    record = copy.deepcopy(sample_record_dict)
+    record["verification"]["full_oracle"] = {
+        "before": {"complete": True, "checks": {"strict_signoff": True}},
+        "after": {"complete": True, "checks": {"strict_signoff": True}},
+    }
+    receipt = _capture(tmp_tehm, record)
+    conn, _, _ = tmp_tehm
+    row = conn.execute(
+        "SELECT verifier_json FROM tehm_transitions WHERE transition_id=?",
+        (receipt.transition_id,),
+    ).fetchone()
+    persisted = json.loads(row["verifier_json"])
+    assert persisted["full_oracle"]["before"]["complete"] is True
+    assert persisted["full_oracle"]["after"]["checks"]["strict_signoff"] is True
 
 
 def test_h1_gate_green(tmp_tehm, sample_record_dict):

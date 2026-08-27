@@ -44,6 +44,7 @@ from tehm.batch_lane import (  # noqa: E402
     _input_binding_matches,
     _timing_contract,
     _timing_contract_matches,
+    assess_full_oracle,
     require_staging_destination,
 )
 from orfs_storage import default_work_root, enforce_work_root, storage_policy  # noqa: E402
@@ -536,7 +537,8 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
 def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
                   artifacts: Path, *,
                   dataset_campaign_id: str = "live",
-                  require_complete_oracle: bool = True) -> None:
+                  require_complete_oracle: bool = True,
+                  require_full_oracle: bool = False) -> None:
     """Capture pair observations with an explicit learner-admission boundary.
 
     A route-clean ORFS run is not automatically a complete observation: the
@@ -599,6 +601,30 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             # transition as well as the campaign manifest.  A consumer must
             # not see ``oracle_complete=true`` alongside a failed provenance
             # binding merely because the original adapter oracle passed.
+            record.verification["oracle_complete"] = complete
+        if require_full_oracle:
+            # The pair adapter's historical completeness predicate covers the
+            # target/DRC/timing obligations.  Add-designs promotion candidates
+            # must additionally prove equivalence, aggregate strict signoff,
+            # complete graph, toolchain and artifact provenance on both arms.
+            rtl_files = [Path(path).resolve() for path in item.get("rtl_files") or []]
+            full = {
+                "before": assess_full_oracle(
+                    Path(item["before_project"]), rtl_files=rtl_files,
+                    expected_input_binding=(expected_bindings or {}).get("before")
+                    if isinstance(expected_bindings, dict) else None,
+                    expected_timing_contract=(expected_timing or {}).get("before")
+                    if isinstance(expected_timing, dict) else None),
+                "after": assess_full_oracle(
+                    Path(item["after_project"]), rtl_files=rtl_files,
+                    expected_input_binding=(expected_bindings or {}).get("after")
+                    if isinstance(expected_bindings, dict) else None,
+                    expected_timing_contract=(expected_timing or {}).get("after")
+                    if isinstance(expected_timing, dict) else None),
+            }
+            record.verification["full_oracle"] = full
+            complete = bool(complete and full["before"]["complete"] and
+                            full["after"]["complete"])
             record.verification["oracle_complete"] = complete
         learner_eligible = (complete if require_complete_oracle else True)
         dataset_split = "training" if learner_eligible else "calibration"

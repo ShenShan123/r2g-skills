@@ -55,6 +55,11 @@ class VerifierSnapshot:
     # preserve transition IDs for pre-v4 evidence that has no such fields.
     input_binding: dict | None = None
     timing_contract: dict | None = None
+    # Optional expanded Batch-0 receipt.  It explains the aggregate oracle
+    # decision without making every individual report part of the transition
+    # content digest (and therefore preserves deterministic IDs for older
+    # evidence).
+    full_oracle: dict | None = None
 
     def validate(self) -> None:
         if self.verdict not in VERDICTS:
@@ -69,7 +74,8 @@ class VerifierSnapshot:
         if self.oracle_complete is not None and not isinstance(self.oracle_complete, bool):
             raise ValueError("oracle_complete must be bool or None")
         for name, value in (("input_binding", self.input_binding),
-                            ("timing_contract", self.timing_contract)):
+                            ("timing_contract", self.timing_contract),
+                            ("full_oracle", self.full_oracle)):
             if value is not None and not isinstance(value, dict):
                 raise ValueError(f"{name} must be a mapping or None")
 
@@ -90,6 +96,7 @@ class VerifierSnapshot:
             "tool_versions": self.tool_versions,
             "input_binding": self.input_binding,
             "timing_contract": self.timing_contract,
+            "full_oracle": self.full_oracle,
         }
 
     @classmethod
@@ -106,6 +113,7 @@ class VerifierSnapshot:
             tool_versions=data.get("tool_versions"),
             input_binding=data.get("input_binding"),
             timing_contract=data.get("timing_contract"),
+            full_oracle=data.get("full_oracle"),
         )
         obj.validate()
         return obj

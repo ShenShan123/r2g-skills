@@ -2688,6 +2688,35 @@ canonical。默认 `_env.sh` 选择的 OpenROAD/RCX 仍报 database schema `0.13
 的 non-harmful、完整 strict-oracle support 后，才重新计算六项 authority gate。机器可读
 摘要见 `evidence/tehm-orfs-batch0-riscv32i-replay-r1/{replay_report.json,power_connectivity_probe.json}`。
 
+### 2026-08-27 current exact-toolchain support cohort（staging-only）
+
+为落实上节的“至少两条 non-harmful、完整 strict-oracle lineage”条件，
+`run_orfs_add_designs_campaign.py` 已补齐自定义 RTL 的 top/clock 绑定，并将 add-designs
+的默认执行顺序收紧为 `run → equivalence → strict signoff → graph → capture`。
+`capture_pairs(..., require_full_oracle=True)` 会在写入 staging 前重新执行
+`assess_full_oracle()`，把 synthesis、equivalence、route、finish、timing、DRC、LVS、
+strict signoff、PPA、DEF graph、toolchain、artifact digest、input binding 和 timing
+contract 逐项绑定到 transition verifier；缺项保持 calibration/external-only。
+
+在 packaged OpenROAD 26Q3/Yosys 0.68、sky130hs 下完成两条 source-disjoint RTL
+lineage：`selector_crc16` 与 `selector_uart16` 各执行
+`ROUTING_CAPACITY_RECOVERY default→0.05`。四个 arm 的 full-oracle checks 均为
+`PASS`，两个 pair 的面积、功耗、TNS、WNS delta 均为零，utility=`NEUTRAL`，形成两条
+完整且非 harmful 的 staging support lineage。`selector_fifo16` 的
+`DENSITY_RELIEF 50→40` 则作为完整但 `HARMFUL` 的 negative control 排除。
+
+新增只读脚本 `memory/scripts/audit_orfs_support_cohort.py` 生成
+`evidence/tehm-orfs-current-support-routing-r1/support_cohort_audit.json`。该审计从
+各 campaign staging DB 的 persisted full-oracle receipt 独立推导 support cohort 和
+六项 gate 状态：`obligation_coverage=PASS`、`harmful_rate=PASS`，而
+`rollback_verified`、`registry_verified`、`cross_lineage_te` 与
+`conformal_coverage` 仍为 `NOT_ESTABLISHED`。故当前仍为
+`DENY_CANONICAL_IMPORT`，`promotion_attempted=false`，canonical digest 不变。
+这一步只证明“可建立非 harmful support cohort”，不把 training staging 直接升级为
+rule authority 或 production runtime；下一步是用独立 held-out transfer、rollback/
+registry receipt 与 calibration conformal evidence 补齐剩余 gate，再交由独立
+authority 审核。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）

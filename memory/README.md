@@ -1617,6 +1617,30 @@ canonical。默认 `_env.sh` 选择的 OpenROAD/RCX 仍报 database schema `0.13
 的 non-harmful、完整 strict-oracle support 后，才重新计算六项 authority gate。机器可读
 摘要见 `evidence/tehm-orfs-batch0-riscv32i-replay-r1/{replay_report.json,power_connectivity_probe.json}`。
 
+### 2026-08-27 current exact-toolchain support cohort（staging-only）
+
+`run_orfs_add_designs_campaign.py` 现在把自定义 RTL 的真实 top/clock 绑定写入
+materialized SDC，并按 `run → equivalence → strict signoff → graph → capture` 顺序
+执行；capture 可选的 `require_full_oracle` 会把 Batch-0 的 13 项检查（含 aggregate
+strict signoff、toolchain、artifact、input binding 与 timing contract）重新绑定到
+transition，而不是只凭 route/DRC/timing 组件报告判断完整。
+
+在同一 packaged ORFS tree 上，`selector_crc16` 与 `selector_uart16` 的
+`ROUTING_CAPACITY_RECOVERY default→0.05` 各完成一条独立 sky130hs pair。四个 arm
+均为 equivalence/ORFS/strict signoff/graph 全通过，两个 transition 的 physical
+delta 均为零，utility=`NEUTRAL`，因此形成两条完整、非 harmful 的 staging support
+lineage。此前 `selector_fifo16 DENSITY_RELIEF 50→40` 虽然 full-oracle 完整，但
+utility=`HARMFUL`，被保留为 negative control，不纳入 support。
+
+只读审计脚本
+`memory/scripts/audit_orfs_support_cohort.py` 生成了
+`evidence/tehm-orfs-current-support-routing-r1/support_cohort_audit.json`：
+`obligation_coverage=PASS`、`harmful_rate=PASS`，但 `rollback_verified`、
+`registry_verified`、`cross_lineage_te` 与 `conformal_coverage` 仍为
+`NOT_ESTABLISHED`。因此决定仍是 `DENY_CANONICAL_IMPORT`，
+`promotion_attempted=false`，canonical memory 未改变；这些观察只能作为
+evaluation/staging evidence，不能进入 production runtime。
+
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 
 - 新增独立物理 lineage `orfs-heldout-v5:sky130hs:gcd:base3`，位于

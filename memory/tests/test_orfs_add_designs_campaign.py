@@ -69,6 +69,28 @@ def test_prepare_requires_source_freeze_and_binds_inputs(tmp_path):
                 source_freeze=campaign / "source_freeze.json", **kwargs)
 
 
+def test_custom_rtl_top_is_bound_into_materialized_sdc(tmp_path):
+    orfs = _fake_orfs(tmp_path / "orfs")
+    rtl = tmp_path / "custom.v"
+    rtl.write_text("module custom_top(input clk); endmodule\n")
+    sdc = tmp_path / "custom.sdc"
+    sdc.write_text("current_design template_top\nset clk_port_name clk\nset clk_period 10\n")
+    kwargs = {
+        "designs": ("custom",), "platforms": ("sky130hs",),
+        "families": ("DENSITY_RELIEF",), "indexes": 1, "core_utils": (50,),
+        "lineage_prefix": "top-bind", "rtl_override_path": rtl,
+        "sdc_override_path": sdc, "template_design": "gcd",
+    }
+    campaign = tmp_path / "campaign"
+    build_source_freeze(campaign, orfs, **kwargs)
+    manifest = prepare(campaign, orfs,
+                       source_freeze=campaign / "source_freeze.json", **kwargs)
+    item = manifest["items"][0]
+    assert item["top"] == "custom_top"
+    bound = Path(item["before_project"]) / "constraints" / "constraint.sdc"
+    assert "current_design custom_top" in bound.read_text()
+
+
 def _complete_run(project: Path, tag: str) -> None:
     (project / "constraints").mkdir(parents=True)
     (project / "reports").mkdir()
