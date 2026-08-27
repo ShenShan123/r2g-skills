@@ -8,6 +8,7 @@ successful activation produces a NEW verified transition.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -135,6 +136,27 @@ def test_full_activation_loop(tmp_tehm, sample_record_dict):
     assert conn.execute(
         "SELECT COUNT(*) FROM tehm_memory_events WHERE source_id=?",
         (record.activation_id,)).fetchone()[0] == 1
+
+
+def test_activation_receipt_replay_conflict_is_rejected(tmp_tehm, sample_record_dict):
+    conn, store, _ = tmp_tehm
+    rule_id = _crystallize_one_rule(tmp_tehm, sample_record_dict)
+    record = activate(
+        conn, store, rule_id=rule_id, context=RepairContext(check="drc"),
+        provided_binding={"$H0": "PLACE_DENSITY_LB_ADDON", "$H1": "0.16"},
+        executor=fake_executor, oracle=fake_oracle,
+        authority_mode="evaluation")
+
+    # A deterministic activation ID is a replay key, not permission to erase
+    # the original verification result.  Exact replays remain idempotent.
+    from tehm.activation.update import persist_activation
+    persist_activation(conn, record)
+    with pytest.raises(ValueError, match="activation replay conflicts"):
+        persist_activation(conn, replace(record, outcome="FAIL"))
+    stored = conn.execute(
+        "SELECT outcome FROM tehm_activations WHERE activation_id=?",
+        (record.activation_id,)).fetchone()
+    assert stored["outcome"] == "PASS"
 
 
 def test_activation_can_link_runtime_receipt_to_trial(tmp_tehm, sample_record_dict):

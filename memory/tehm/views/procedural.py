@@ -56,11 +56,15 @@ def build_procedural_view(transition, role_map: dict | None = None, *,
         "hard_preconditions": [],
         "context_predicates": {},
         "obligations": _derive_obligations(transition),
-        "source_substitution": transition.provenance.get("substitution", {}),
+        # Transition provenance contains capture-witness fields (episode/run
+        # IDs) that are intentionally excluded from transition_id.  Do not
+        # copy those volatile witnesses into a transition-keyed view: the
+        # same verified transition may be re-ingested by another episode or
+        # activation.  Canonical owner/source_refs provide the stable audit
+        # anchor; binding details remain in the action and verifier fields.
         "provenance": {
             "transition_id": transition.transition_id,
             "primary_effect_key": transition.primary_effect_key,
-            "episode": transition.provenance.get("episode_id"),
         },
     }
     return ViewRecord(

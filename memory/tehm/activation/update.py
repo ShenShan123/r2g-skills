@@ -73,28 +73,51 @@ def capture_produced_transition(conn: sqlite3.Connection, store, *,
 
 
 def persist_activation(conn: sqlite3.Connection, record, *, commit: bool = True) -> None:
-    """Write the activation authority row (design doc 19.5)."""
+    """Write an activation receipt or accept an exact content replay.
+
+    Activation IDs are deterministic, so ``INSERT OR REPLACE`` could erase a
+    prior verification/binding result when a retry reused the ID with changed
+    content.  Trial reconciliation may still update its explicitly mutable
+    verifier/rollback columns elsewhere; this entry point never overwrites an
+    existing receipt silently.
+    """
     had_outer_transaction = conn.in_transaction
-    conn.execute(
-        """INSERT OR REPLACE INTO tehm_activations (
-               activation_id, rule_id, target_state_id, query_plan_json,
-               retrieval_receipt_json, applicability_status, predicate_snapshot_id,
-               binding_status, binding_json, executability_status,
-               obligation_transfer_json, obligation_coverage, verification_status,
-               verifier_json, outcome, created_regressions_json,
-               produced_transition_id, rollback_receipt_json, trial_uuid, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (record.activation_id, record.rule_id, record.target_state_id,
-         stable_dumps(record.query_plan), stable_dumps(record.retrieval_receipt),
-         record.applicability_status, record.predicate_snapshot_id,
-         record.binding_status, stable_dumps(record.binding),
-         record.executability_status,
-         stable_dumps(record.obligation_transfer), record.obligation_coverage,
-         record.verification_status, stable_dumps(record.verifier),
-         record.outcome, stable_dumps(record.created_regressions),
-         record.produced_transition_id,
-         stable_dumps(record.rollback_receipt) if record.rollback_receipt else None,
-         record.trial_uuid, record.created_at))
+    values = (
+        record.activation_id, record.rule_id, record.target_state_id,
+        stable_dumps(record.query_plan), stable_dumps(record.retrieval_receipt),
+        record.applicability_status, record.predicate_snapshot_id,
+        record.binding_status, stable_dumps(record.binding),
+        record.executability_status,
+        stable_dumps(record.obligation_transfer), record.obligation_coverage,
+        record.verification_status, stable_dumps(record.verifier),
+        record.outcome, stable_dumps(record.created_regressions),
+        record.produced_transition_id,
+        stable_dumps(record.rollback_receipt) if record.rollback_receipt else None,
+        record.trial_uuid, record.created_at)
+    columns = ("activation_id", "rule_id", "target_state_id", "query_plan_json",
+               "retrieval_receipt_json", "applicability_status",
+               "predicate_snapshot_id", "binding_status", "binding_json",
+               "executability_status", "obligation_transfer_json",
+               "obligation_coverage", "verification_status", "verifier_json",
+               "outcome", "created_regressions_json", "produced_transition_id",
+               "rollback_receipt_json", "trial_uuid", "created_at")
+    existing = conn.execute(
+        "SELECT " + ", ".join(columns) +
+        " FROM tehm_activations WHERE activation_id=?",
+        (record.activation_id,)).fetchone()
+    if existing is not None:
+        # created_at is an audit timestamp, not activation identity.
+        mismatches = [column for column, value in zip(columns, values)
+                      if column != "created_at" and existing[column] != value]
+        if mismatches:
+            raise ValueError(
+                "activation replay conflicts with immutable receipt "
+                f"{record.activation_id}: {', '.join(mismatches)}")
+    else:
+        placeholders = ", ".join("?" for _ in columns)
+        conn.execute(
+            "INSERT INTO tehm_activations (" + ", ".join(columns) +
+            ") VALUES (" + placeholders + ")", values)
     if commit and not had_outer_transaction:
         conn.commit()
 

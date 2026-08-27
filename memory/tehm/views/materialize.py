@@ -22,6 +22,7 @@ def materialize_all(conn: sqlite3.Connection, *, state_before, state_after,
                     transition, episode, before_graph, after_graph,
                     before_signature, transition_delta_signature,
                     role_map: dict | None = None,
+                    episode_transitions: list | None = None,
                     materialized_at: str = "", commit: bool = True) -> list[ViewRecord]:
     """Materialize every implemented view reachable from one captured transition."""
     records: list[ViewRecord] = []
@@ -46,12 +47,17 @@ def materialize_all(conn: sqlite3.Connection, *, state_before, state_after,
 
     records.append(materialize_procedural(
         conn, transition, role_map,
-        source_refs=[f"transition:{transition.transition_id}",
-                     f"episode:{episode.episode_id}"],
+        # A transition may be re-ingested into an accumulated episode whose
+        # content-addressed ID grows as later steps arrive.  Keep the
+        # transition-level view provenance anchored to its immutable owner;
+        # the separate episodic view carries episode membership.  Including
+        # the mutable accumulated episode ID here would make an otherwise
+        # identical replay look like conflicting view content.
+        source_refs=[f"transition:{transition.transition_id}"],
         materialized_at=materialized_at, commit=commit))
 
     records.append(materialize_episodic(
-        conn, episode, [transition],
+        conn, episode, list(episode_transitions or [transition]),
         source_refs=[f"episode:{episode.episode_id}"],
         materialized_at=materialized_at, commit=commit))
 

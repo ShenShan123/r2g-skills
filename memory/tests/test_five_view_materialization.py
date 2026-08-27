@@ -2,12 +2,14 @@
 
 Every episode must materialize the implemented views (semantic, diagnostic,
 episodic, procedural); parametric is explicitly NOT_IMPLEMENTED (22.5). Extractor
-versions are stamped, and re-materialization is idempotent (payload-digest
-upsert).
+versions are stamped, and re-materialization is idempotent (exact replay).
 """
 from __future__ import annotations
 
+import pytest
+
 from tehm.canonical.capture import ExecutionRecord, capture
+from tehm.db import read_json
 from tehm.views import parametric_stub
 
 
@@ -43,7 +45,6 @@ def test_view_extractor_versions_stamped(tmp_tehm, sample_record_dict):
 
 def test_parametric_stub_refuses_to_fabricate():
     assert parametric_stub.PARAMETRIC_VIEW_STATUS == "NOT_IMPLEMENTED"
-    import pytest
     with pytest.raises(NotImplementedError):
         parametric_stub.build_parametric_view("state", "state_x")
 
@@ -59,6 +60,33 @@ def test_rematerialization_idempotent(tmp_tehm, sample_record_dict):
     after = [tuple(r) for r in conn.execute(
         "SELECT owner_type, owner_id, view_type, payload_digest FROM tehm_views")]
     assert sorted(before) == sorted(after)
+
+
+def test_view_replay_conflict_is_rejected(tmp_tehm, sample_record_dict):
+    conn, store, _ = tmp_tehm
+    capture(conn, store, ExecutionRecord.from_dict(sample_record_dict))
+    row = conn.execute(
+        "SELECT owner_type, owner_id, view_type, schema_version, "
+        "extractor_version, payload_json, source_refs_json "
+        "FROM tehm_views LIMIT 1").fetchone()
+
+    from tehm.views import ViewRecord, upsert_view
+    record = ViewRecord(
+        owner_type=row["owner_type"], owner_id=row["owner_id"],
+        view_type=row["view_type"], schema_version=row["schema_version"],
+        extractor_version=row["extractor_version"],
+        payload={**read_json(row["payload_json"]), "tampered": True},
+        source_refs=read_json(row["source_refs_json"]),
+        materialized_at="replay")
+    with pytest.raises(ValueError, match="view replay conflicts"):
+        upsert_view(conn, record)
+    stored = conn.execute(
+        "SELECT payload_json FROM tehm_views WHERE owner_type=? AND owner_id=? "
+        "AND view_type=? AND schema_version=? AND extractor_version=?",
+        tuple(row[key] for key in (
+            "owner_type", "owner_id", "view_type", "schema_version",
+            "extractor_version"))).fetchone()
+    assert "tampered" not in stored["payload_json"]
 
 
 def test_semantic_view_carries_graph_and_digest(tmp_tehm, sample_record_dict):

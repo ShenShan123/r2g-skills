@@ -299,10 +299,15 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
         head_steps, head_outcomes = _session_transitions(conn, head["episode_id"])
         if transition.transition_id in head_steps:
             # Idempotent re-capture of a step already in this session.
+            # Reuse the head episode's identity-bearing mechanism family.  A
+            # replay of an earlier step can carry that step's local family,
+            # but the accumulated episode ID is defined by the existing
+            # ordered chain; deriving it from the replay payload would create
+            # a second episode and make procedural view provenance drift.
             episode = CanonicalEpisode(
                 domain=record.domain,
                 initial_state_id=head["initial_state_id"],
-                mechanism_family=ep.get("mechanism_family") or head["mechanism_family"],
+                mechanism_family=head["mechanism_family"],
                 lineage_id=ep.get("lineage_id") or record.lineage_id,
                 terminal_state_id=head["terminal_state_id"],
                 terminal_status=head["terminal_status"],
@@ -511,6 +516,8 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
         before_signature=extract_diagnostic_signature(before_content),
         transition_delta_signature=views_materialize.transition_delta_signature(transition),
         role_map=role_map,
+        episode_transitions=_load_episode_transitions(
+            conn, episode.ordered_transition_ids),
         materialized_at=materialized_at,
         commit=False,
     )
@@ -596,6 +603,48 @@ def _carry_forward_steps(conn: sqlite3.Connection, from_episode: str, to_episode
                VALUES (?, ?, ?, ?)""",
             (step_row["episode_id"], step_row["step_index"],
              step_row["transition_id"], step_row["branch_id"]))
+
+
+def _load_episode_transitions(conn: sqlite3.Connection,
+                              transition_ids: list[str]) -> list[CanonicalTransition]:
+    """Rehydrate an episode's ordered canonical transitions for its view.
+
+    The episodic view is keyed by the accumulated episode ID and therefore
+    must contain the complete ordered chain.  Reconstructing from persisted
+    rows keeps replay independent of the one input record currently being
+    ingested (which may be an earlier step in that chain).
+    """
+    if not transition_ids:
+        return []
+    placeholders = ", ".join("?" for _ in transition_ids)
+    rows = conn.execute(
+        "SELECT * FROM tehm_transitions WHERE transition_id IN (" +
+        placeholders + ")", tuple(transition_ids)).fetchall()
+    by_id = {row["transition_id"]: row for row in rows}
+    missing = [tid for tid in transition_ids if tid not in by_id]
+    if missing:
+        raise ExecutionRecordError(
+            "episode view cannot load missing transitions: " + ", ".join(missing))
+    transitions: list[CanonicalTransition] = []
+    for tid in transition_ids:
+        row = by_id[tid]
+        transitions.append(CanonicalTransition(
+            source_state_id=row["source_state_id"],
+            target_state_id=row["target_state_id"],
+            action=Action.from_dict(tehm_db.read_json(row["action_json"])),
+            observation_delta=ObservationDelta.from_dict(
+                tehm_db.read_json(row["observation_delta_json"])),
+            verifier=VerifierSnapshot.from_dict(
+                tehm_db.read_json(row["verifier_json"])),
+            outcome=row["outcome"],
+            primary_effect_key=row["primary_effect_key"],
+            created_regressions=tehm_db.read_json(
+                row["created_regressions_json"]),
+            newly_observed=tehm_db.read_json(row["newly_observed_json"]),
+            provenance=tehm_db.read_json(row["provenance_json"]),
+            schema_version=row["schema_version"],
+        ))
+    return transitions
 
 
 # -- helpers -----------------------------------------------------------------
