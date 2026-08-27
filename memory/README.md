@@ -356,7 +356,7 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；新增 retention
-ledger 的当前全套回归为 `491 passed`，仍保持 shadow/evaluation-only 的 promotion
+ledger 的当前全套回归为 `492 passed`，仍保持 shadow/evaluation-only 的 promotion
 边界。
 
 Backend activation seam 现在也执行同一条 fail-closed 回执规则：`UNKNOWN` 只能被
