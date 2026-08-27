@@ -10,6 +10,7 @@ from tehm.causal.orfs import (
     build_orfs_causal_shadow, build_orfs_controlled_replication)
 from tehm.causal.replication import evaluate_replicated_effect
 from tehm.causal.authority import evaluate_causal_rule_evidence
+from tehm.causal.path_builder import causal_path_digest
 
 
 def _record(lineage: str) -> ExecutionRecord:
@@ -165,9 +166,23 @@ def test_l3_replication_preserves_outer_transaction(tmp_tehm, tmp_path):
     derived.row_factory = sqlite3.Row
     try:
         path_id = report["path"]["path_id"]
+        path_row = derived.execute(
+            "SELECT mechanism_family, compatibility_profile, "
+            "ordered_nodes_json, ordered_edges_json, source_transitions_json, "
+            "support_json FROM tehm_causal_paths WHERE path_id=?",
+            (path_id,)).fetchone()
+        l2_digest = causal_path_digest(
+            mechanism_family=path_row["mechanism_family"],
+            compatibility_profile=path_row["compatibility_profile"],
+            evidence_level="L2_CONTROLLED_INTERVENTION",
+            source_transition_ids=json.loads(path_row["source_transitions_json"]),
+            node_ids=json.loads(path_row["ordered_nodes_json"]),
+            edge_ids=json.loads(path_row["ordered_edges_json"]),
+            support=json.loads(path_row["support_json"]))
         derived.execute(
-            "UPDATE tehm_causal_paths SET evidence_level=? WHERE path_id=?",
-            ("L2_CONTROLLED_INTERVENTION", path_id),
+            "UPDATE tehm_causal_paths SET evidence_level=?, path_digest=? "
+            "WHERE path_id=?",
+            ("L2_CONTROLLED_INTERVENTION", l2_digest, path_id),
         )
         derived.commit()
         derived.execute(

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from contracts import MemoryQuery
 from tehm.causal.matcher import match_causal_path
+from tehm.causal.path_builder import validate_persisted_path_row
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,13 @@ def retrieve_causal_paths(
               ORDER BY path_id""", statuses).fetchall()
     matches: list[CausalPathMatch] = []
     for row in rows:
+        try:
+            validate_persisted_path_row(row)
+        except ValueError:
+            # Causal paths are derived shadow objects.  A malformed/tampered
+            # path must disappear from the evaluator rather than contribute a
+            # score or become an implicit authority input.
+            continue
         source_ids = _source_transition_ids(row["source_transitions_json"])
         if source_ids is None:
             continue

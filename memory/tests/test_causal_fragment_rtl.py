@@ -49,6 +49,42 @@ def test_rtl_fragment_is_deterministic_and_does_not_mutate_canonical(tmp_tehm):
     assert all(edge.learner_eligible for edge in first.edges)
 
 
+def test_causal_node_replay_rejects_tampered_payload(tmp_tehm):
+    conn, transition_id = _captured(tmp_tehm)
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    node_id = fragment.nodes[0].causal_node_id
+    conn.execute(
+        "UPDATE tehm_causal_nodes SET payload_json=? WHERE causal_node_id=?",
+        ("{}", node_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="causal node replay conflicts"):
+        build_transition_causal_fragment(conn, transition_id)
+
+
+def test_causal_edge_replay_rejects_tampered_witness(tmp_tehm):
+    conn, transition_id = _captured(tmp_tehm)
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    edge_id = fragment.edges[0].causal_edge_id
+    conn.execute(
+        "UPDATE tehm_causal_edges SET evidence_refs_json=? WHERE causal_edge_id=?",
+        ("[\"forged-transition\"]", edge_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="causal edge replay conflicts"):
+        build_transition_causal_fragment(conn, transition_id)
+
+
+def test_causal_path_replay_rejects_tampered_digest(tmp_tehm):
+    conn, transition_id = _captured(tmp_tehm)
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    path = consolidate_causal_path(conn, [fragment])
+    conn.execute(
+        "UPDATE tehm_causal_paths SET support_json=? WHERE path_id=?",
+        ("{}", path.path_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="causal path content digest mismatch"):
+        consolidate_causal_path(conn, [fragment])
+
+
 def test_heldout_fragment_is_audit_only_and_cannot_consolidate(tmp_tehm):
     conn, transition_id = _captured(tmp_tehm)
     assign_transition(conn, transition_id=transition_id,
@@ -88,6 +124,23 @@ def test_intervention_pair_requires_real_oracle_evidence(tmp_tehm):
     assert pair.evidence_level == "L0_ASSOCIATION"
     assert pair.validity_status.startswith("INVALID_")
     assert conn.execute("SELECT COUNT(*) FROM tehm_intervention_pairs").fetchone()[0] == 1
+
+
+def test_intervention_pair_replay_rejects_tampered_payload(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    control_id = capture(conn, store, first).transition_id
+    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second.record_id = "rtl:req_ack_fsm:pair-replay"
+    second.action["payload"]["add_condition"] = "ready"
+    treatment_id = capture(conn, store, second).transition_id
+    pair = build_intervention_pair(control_id, treatment_id, conn=conn)
+    conn.execute(
+        "UPDATE tehm_intervention_pairs SET validity_status=? WHERE pair_id=?",
+        ("VALID_CONTROLLED_PAIR", pair.pair_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="intervention pair replay conflicts"):
+        build_intervention_pair(control_id, treatment_id, conn=conn)
 
 
 def test_real_controlled_pair_creates_l2_shadow_edge(tmp_tehm):

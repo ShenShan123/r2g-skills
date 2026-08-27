@@ -137,19 +137,45 @@ def build_intervention_pair(
     conn.execute(f"SAVEPOINT {savepoint}")
     try:
         now = tehm_db.now_local()
-        conn.execute(
-            """INSERT OR IGNORE INTO tehm_intervention_pairs
-               (pair_id, control_transition_id, treatment_transition_id,
-                target_scope, matched_context_digest, changed_action_digest,
-                outcome_delta_json, oracle_equivalence_json, lineage_id,
-                validity_status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (receipt.pair_id, receipt.control_transition_id,
-             receipt.treatment_transition_id, receipt.target_scope,
-             receipt.matched_context_digest, receipt.changed_action_digest,
-             stable_dumps(receipt.outcome_delta),
-             stable_dumps(receipt.oracle_equivalence), receipt.lineage_id,
-             receipt.validity_status, now))
+        expected_row = {
+            "pair_id": receipt.pair_id,
+            "control_transition_id": receipt.control_transition_id,
+            "treatment_transition_id": receipt.treatment_transition_id,
+            "target_scope": receipt.target_scope,
+            "matched_context_digest": receipt.matched_context_digest,
+            "changed_action_digest": receipt.changed_action_digest,
+            "outcome_delta_json": stable_dumps(receipt.outcome_delta),
+            "oracle_equivalence_json": stable_dumps(receipt.oracle_equivalence),
+            "lineage_id": receipt.lineage_id,
+            "validity_status": receipt.validity_status,
+        }
+        existing = conn.execute(
+            "SELECT pair_id, control_transition_id, treatment_transition_id, "
+            "target_scope, matched_context_digest, changed_action_digest, "
+            "outcome_delta_json, oracle_equivalence_json, lineage_id, "
+            "validity_status FROM tehm_intervention_pairs WHERE pair_id=?",
+            (receipt.pair_id,)).fetchone()
+        if existing is not None:
+            mismatches = [field for field, value in expected_row.items()
+                          if existing[field] != value]
+            if mismatches:
+                raise ValueError(
+                    "intervention pair replay conflicts with immutable pair "
+                    f"{receipt.pair_id}: {', '.join(mismatches)}")
+        else:
+            conn.execute(
+                """INSERT INTO tehm_intervention_pairs
+                   (pair_id, control_transition_id, treatment_transition_id,
+                    target_scope, matched_context_digest, changed_action_digest,
+                    outcome_delta_json, oracle_equivalence_json, lineage_id,
+                    validity_status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (receipt.pair_id, receipt.control_transition_id,
+                 receipt.treatment_transition_id, receipt.target_scope,
+                 receipt.matched_context_digest, receipt.changed_action_digest,
+                 expected_row["outcome_delta_json"],
+                 expected_row["oracle_equivalence_json"], receipt.lineage_id,
+                 receipt.validity_status, now))
         causal_edge_id = None
         if valid:
             # Materialise a single L2 edge only after the pair has matched

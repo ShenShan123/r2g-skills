@@ -10,7 +10,10 @@ from tehm import db as tehm_db
 from tehm.ids import stable_dumps
 
 from .edges import CausalEdge, persist_edge
-from .evidence_level import CausalEvidenceLevel, evidence_rank, transition_evidence_level
+from .evidence_level import (
+    CausalEvidenceLevel, evidence_rank, transition_evidence_level,
+    validate_evidence_level,
+)
 from .mechanism import load_transition_facts, mechanism_signature
 from .nodes import CausalNode, persist_node
 from .receipts import CausalFragment, CausalPathCandidate
@@ -21,6 +24,80 @@ EXTRACTOR_VERSION = "rtl-causal-fragment-v0.1"
 
 def _digest(value: object) -> str:
     return hashlib.sha1(stable_dumps(value).encode()).hexdigest()[:16]
+
+
+def causal_path_digest(*, mechanism_family: str,
+                       compatibility_profile: str | None,
+                       evidence_level: str,
+                       source_transition_ids: Iterable[str],
+                       node_ids: Iterable[str], edge_ids: Iterable[str],
+                       support: dict) -> str:
+    """Derive the content digest used by a persisted causal path.
+
+    Keep this in one place so creation, replay and evaluation cannot silently
+    disagree about JSON/list ordering.  ``path_id`` remains the stable lookup
+    key for a path lineage; ``path_digest`` is the versioned row-content
+    digest and therefore changes when replication support is upgraded.
+    """
+    payload = {
+        "mechanism_family": mechanism_family,
+        "compatibility_profile": compatibility_profile,
+        "evidence_level": evidence_level,
+        "source_transitions": list(source_transition_ids),
+        "nodes": list(node_ids),
+        "edges": list(edge_ids),
+        "support": support,
+    }
+    return "sha1:" + hashlib.sha1(
+        stable_dumps(payload).encode()).hexdigest()
+
+
+def _path_json(raw: object, expected_type, field: str):
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"causal path {field} is malformed JSON") from exc
+    if not isinstance(value, expected_type):
+        raise ValueError(
+            f"causal path {field} must decode to {expected_type.__name__}")
+    return value
+
+
+def validate_persisted_path_row(row: sqlite3.Row) -> None:
+    """Raise when a derived causal-path row is malformed or tampered.
+
+    This is intentionally independent of production authority.  Evaluation
+    retrieval uses it to skip corrupted shadow rows, while mutation paths use
+    it to reject conflicting replays before accepting an existing ID.
+    """
+    if not row["path_id"] or not row["mechanism_family"]:
+        raise ValueError("causal path identity is incomplete")
+    try:
+        validate_evidence_level(row["evidence_level"])
+        validate_path_status(row["status"])
+    except ValueError as exc:
+        raise ValueError(f"causal path enum is invalid: {exc}") from exc
+    nodes = _path_json(row["ordered_nodes_json"], list, "ordered_nodes")
+    edges = _path_json(row["ordered_edges_json"], list, "ordered_edges")
+    sources = _path_json(row["source_transitions_json"], list,
+                         "source_transitions")
+    support = _path_json(row["support_json"], dict, "support")
+    for field, values in (("ordered_nodes", nodes), ("ordered_edges", edges),
+                          ("source_transitions", sources)):
+        if not values:
+            raise ValueError(f"causal path {field} is empty")
+        if any(not isinstance(value, str) or not value for value in values):
+            raise ValueError(f"causal path {field} contains an invalid ID")
+        if len(set(values)) != len(values):
+            raise ValueError(f"causal path {field} contains duplicate IDs")
+    expected = causal_path_digest(
+        mechanism_family=row["mechanism_family"],
+        compatibility_profile=row["compatibility_profile"],
+        evidence_level=row["evidence_level"],
+        source_transition_ids=sources, node_ids=nodes, edge_ids=edges,
+        support=support)
+    if row["path_digest"] != expected:
+        raise ValueError("causal path content digest mismatch")
 
 
 def _validate_persisted_fragments(
@@ -324,16 +401,11 @@ def consolidate_causal_path(
     support["primary_effect_keys"] = sorted(effects)
     support["action_digests"] = sorted(action_digests)
     support["failure_graph_digests"] = sorted(graph_digests)
-    digest_payload = {
-        "mechanism_family": next(iter(families)),
-        "compatibility_profile": next(iter(profiles)),
-        "evidence_level": level,
-        "source_transitions": source_ids,
-        "nodes": node_ids,
-        "edges": edge_ids,
-        "support": support,
-    }
-    path_digest = "sha1:" + hashlib.sha1(stable_dumps(digest_payload).encode()).hexdigest()
+    path_digest = causal_path_digest(
+        mechanism_family=next(iter(families)),
+        compatibility_profile=next(iter(profiles)),
+        evidence_level=level, source_transition_ids=source_ids,
+        node_ids=node_ids, edge_ids=edge_ids, support=support)
     candidate = CausalPathCandidate(
         path_id="causal_path_" + path_digest.split(":", 1)[1][:16],
         path_digest=path_digest,
@@ -348,22 +420,50 @@ def consolidate_causal_path(
     if conn is not None:
         had_outer_transaction = conn.in_transaction
         now = tehm_db.now_local()
-        conn.execute(
-            """INSERT OR IGNORE INTO tehm_causal_paths
-               (path_id, mechanism_family, compatibility_profile,
-                ordered_nodes_json, ordered_edges_json, evidence_level,
-                support_json, source_transitions_json, path_digest, status,
-                created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (candidate.path_id, candidate.mechanism_family,
-             candidate.compatibility_profile, stable_dumps(list(node_ids)),
-             stable_dumps(list(edge_ids)), candidate.evidence_level,
-             stable_dumps(candidate.support), stable_dumps(list(source_ids)),
-             candidate.path_digest, candidate.status, now, now))
+        expected_row = {
+            "path_id": candidate.path_id,
+            "mechanism_family": candidate.mechanism_family,
+            "compatibility_profile": candidate.compatibility_profile,
+            "ordered_nodes_json": stable_dumps(list(node_ids)),
+            "ordered_edges_json": stable_dumps(list(edge_ids)),
+            "evidence_level": candidate.evidence_level,
+            "support_json": stable_dumps(candidate.support),
+            "source_transitions_json": stable_dumps(list(source_ids)),
+            "path_digest": candidate.path_digest,
+            "status": candidate.status,
+        }
+        existing = conn.execute(
+            "SELECT path_id, mechanism_family, compatibility_profile, "
+            "ordered_nodes_json, ordered_edges_json, evidence_level, "
+            "support_json, source_transitions_json, path_digest, status "
+            "FROM tehm_causal_paths WHERE path_id=?",
+            (candidate.path_id,)).fetchone()
+        if existing is not None:
+            validate_persisted_path_row(existing)
+            mismatches = [field for field, value in expected_row.items()
+                          if existing[field] != value]
+            if mismatches:
+                raise ValueError(
+                    "causal path replay conflicts with immutable path "
+                    f"{candidate.path_id}: {', '.join(mismatches)}")
+        else:
+            conn.execute(
+                """INSERT INTO tehm_causal_paths
+                   (path_id, mechanism_family, compatibility_profile,
+                    ordered_nodes_json, ordered_edges_json, evidence_level,
+                    support_json, source_transitions_json, path_digest, status,
+                    created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (candidate.path_id, candidate.mechanism_family,
+                 candidate.compatibility_profile, expected_row["ordered_nodes_json"],
+                 expected_row["ordered_edges_json"], candidate.evidence_level,
+                 expected_row["support_json"], expected_row["source_transitions_json"],
+                 candidate.path_digest, candidate.status, now, now))
         if not had_outer_transaction:
             conn.commit()
     return candidate
 
 
-__all__ = ["CausalFragment", "CausalPathCandidate",
-           "build_transition_causal_fragment", "consolidate_causal_path"]
+__all__ = ["CausalFragment", "CausalPathCandidate", "causal_path_digest",
+           "validate_persisted_path_row", "build_transition_causal_fragment",
+           "consolidate_causal_path"]

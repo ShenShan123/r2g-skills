@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from tehm import db as tehm_db
 from tehm.causal.evidence_level import CausalEvidenceLevel, evidence_rank
 from tehm.causal.witness import learner_edge_transition_coverage
+from tehm.causal.path_builder import (
+    causal_path_digest, validate_persisted_path_row,
+)
 
 
 def _source_transition_ids(raw: object) -> tuple[tuple[str, ...] | None, str | None]:
@@ -70,8 +73,19 @@ def evaluate_replicated_effect(
     transition_ids, source_error = _source_transition_ids(
         row["source_transitions_json"])
     if transition_ids is None:
+        # Preserve the specific source-witness diagnosis used by the causal
+        # authority receipt; malformed source JSON must never be hidden behind
+        # a more general row-integrity message.
         return ReplicationReceipt(path_id, False, row["evidence_level"], (), (), (),
                                   source_error or "malformed_source_transitions")
+    try:
+        validate_persisted_path_row(row)
+    except ValueError:
+        # A stale/tampered derived row is not eligible for an upgrade.  Keep
+        # the historical replication reason stable so callers can distinguish
+        # it from a valid but insufficient controlled witness.
+        return ReplicationReceipt(path_id, False, row["evidence_level"], (), (), (),
+                                  "requires_controlled_pairs_and_disjoint_learner_lineages")
     placeholders = ",".join("?" for _ in transition_ids)
     rows = conn.execute(
         f"""SELECT t.transition_id, s.lineage_id, s.design_id,
@@ -133,13 +147,21 @@ def evaluate_replicated_effect(
                         "unique_runs": sorted(runs),
                         "replication_campaign": campaign_id})
         had_outer_transaction = conn.in_transaction
+        updated_digest = causal_path_digest(
+            mechanism_family=row["mechanism_family"],
+            compatibility_profile=row["compatibility_profile"],
+            evidence_level=CausalEvidenceLevel.L3_REPLICATED_EFFECT.value,
+            source_transition_ids=transition_ids,
+            node_ids=json.loads(row["ordered_nodes_json"]),
+            edge_ids=json.loads(row["ordered_edges_json"]),
+            support=support)
         conn.execute(
             """UPDATE tehm_causal_paths
-                  SET evidence_level=?, support_json=?, updated_at=?
+                  SET evidence_level=?, support_json=?, path_digest=?, updated_at=?
                 WHERE path_id=?""",
             (CausalEvidenceLevel.L3_REPLICATED_EFFECT.value,
              json.dumps(support, sort_keys=True, separators=(",", ":")),
-             tehm_db.now_local(), path_id))
+             updated_digest, tehm_db.now_local(), path_id))
         if commit and not had_outer_transaction:
             conn.commit()
     return ReplicationReceipt(

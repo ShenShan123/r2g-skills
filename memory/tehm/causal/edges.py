@@ -68,8 +68,24 @@ class CausalEdge:
 
 def persist_edge(conn: sqlite3.Connection, edge: CausalEdge,
                  *, created_at: str | None = None) -> str:
+    """Insert an immutable edge or accept an exact replay."""
+    expected = edge.to_row(created_at=created_at)
+    existing = conn.execute(
+        "SELECT source_node_id, relation_type, target_node_id, evidence_level, "
+        "support_json, confidence_json, evidence_refs_json, campaign_id, "
+        "learner_eligible FROM tehm_causal_edges WHERE causal_edge_id=?",
+        (expected["causal_edge_id"],)).fetchone()
+    if existing is not None:
+        fields = ("source_node_id", "relation_type", "target_node_id",
+                  "evidence_level", "support_json", "confidence_json",
+                  "evidence_refs_json", "campaign_id", "learner_eligible")
+        if any(existing[field] != expected[field] for field in fields):
+            raise ValueError(
+                f"causal edge replay conflicts with immutable edge "
+                f"{expected['causal_edge_id']}")
+        return expected["causal_edge_id"]
     conn.execute(
-        """INSERT OR IGNORE INTO tehm_causal_edges
+        """INSERT INTO tehm_causal_edges
            (causal_edge_id, source_node_id, relation_type, target_node_id,
             evidence_level, support_json, confidence_json, evidence_refs_json,
             campaign_id, learner_eligible, created_at)
@@ -77,8 +93,8 @@ def persist_edge(conn: sqlite3.Connection, edge: CausalEdge,
                    :target_node_id, :evidence_level, :support_json,
                    :confidence_json, :evidence_refs_json, :campaign_id,
                    :learner_eligible, :created_at)""",
-        edge.to_row(created_at=created_at))
-    return edge.causal_edge_id
+        expected)
+    return expected["causal_edge_id"]
 
 
 __all__ = ["CausalEdge", "persist_edge"]

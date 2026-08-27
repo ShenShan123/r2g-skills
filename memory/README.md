@@ -330,7 +330,7 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
-回归为 `467 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+回归为 `471 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
 
 Rule retrieval loader 现在也执行同一条内容完整性边界：加载时严格解析
 `before/after/hard_preconditions/context/validity/confidence/utility/risk` 字段，
@@ -353,6 +353,12 @@ content-addressed `event_id`；链或事件内容被直接篡改时，后续 app
 fail-closed。`tehm_rule_revisions` 对相同 revision ID 只接受完全相同的 validation
 payload，冲突内容不会被 `INSERT OR IGNORE` 静默吞掉。该约束仍只保护 shadow/derived
 evolution provenance，不授予 rule lifecycle 或 production authority。
+
+Causal shadow objects 现在也采用 immutable replay：node、edge 与 intervention pair
+在相同 ID 重放时必须逐字段一致，path 会重算 `path_digest` 并拒绝损坏的
+source/support/evidence JSON；causal recall 遇到 digest 不匹配的 derived path 会
+直接跳过，L3 replication 只有在完整校验后才更新版本化 digest。该 guard 只强化
+causal shadow 的可重放性，不把 causal score 变成 production authority。
 
 Dataset membership 也有同一条硬约束：只有 training split 可以标记
 `learner_eligible`；capture/assignment 会拒绝非 training 的显式 opt-in，直接写入的
