@@ -32,15 +32,22 @@ def parse_evidence_refs(raw: object) -> tuple[tuple[str, ...] | None, str | None
 
 def _resolve_transition_ids(
     conn: sqlite3.Connection, refs: tuple[str, ...],
-) -> tuple[str, ...]:
-    """Resolve direct transition refs and valid intervention-pair refs."""
-    direct = set()
+) -> tuple[tuple[str, ...], bool]:
+    """Resolve refs and report whether every ref has a valid witness.
+
+    ``evidence_refs_json`` is an authority input, not a best-effort hint.  A
+    row containing one valid transition alongside an unknown or invalid pair
+    must therefore be rejected as a whole; otherwise the valid subset could
+    mask a forged/typoed reference.
+    """
+    direct: set[str] = set()
     placeholders = ",".join("?" for _ in refs)
     for row in conn.execute(
         f"SELECT transition_id FROM tehm_transitions "
         f"WHERE transition_id IN ({placeholders})", refs):
         direct.add(str(row["transition_id"]))
 
+    valid_pairs: set[str] = set()
     pairs = conn.execute(
         f"""SELECT pair_id, control_transition_id, treatment_transition_id,
                     validity_status
@@ -48,9 +55,14 @@ def _resolve_transition_ids(
               WHERE pair_id IN ({placeholders})""", refs).fetchall()
     for row in pairs:
         if row["validity_status"] == "VALID_CONTROLLED_PAIR":
+            valid_pairs.add(str(row["pair_id"]))
             direct.add(str(row["control_transition_id"]))
             direct.add(str(row["treatment_transition_id"]))
-    return tuple(sorted(direct))
+    resolved_refs = {
+        ref for ref in refs
+        if ref in direct or ref in valid_pairs
+    }
+    return tuple(sorted(direct)), len(resolved_refs) == len(refs)
 
 
 def learner_edge_transition_coverage(
@@ -84,7 +96,10 @@ def learner_edge_transition_coverage(
         refs, error = parse_evidence_refs(edge["evidence_refs_json"])
         if refs is None:
             continue
-        resolved = set(_resolve_transition_ids(conn, refs))
+        resolved_ids, all_refs_resolved = _resolve_transition_ids(conn, refs)
+        if not all_refs_resolved:
+            continue
+        resolved = set(resolved_ids)
         if not resolved:
             continue
         placeholders = ",".join("?" for _ in resolved)

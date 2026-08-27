@@ -269,6 +269,32 @@ def test_causal_authority_requires_complete_l2_source_coverage(tmp_tehm):
     assert replication.eligible is False
 
 
+def test_causal_authority_rejects_partial_unknown_edge_witness(tmp_tehm):
+    """An unknown edge ref cannot be masked by one valid transition ref."""
+    conn, transition_id = _captured(tmp_tehm)
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    path = consolidate_causal_path(conn, [fragment])
+    conn.execute(
+        "UPDATE tehm_causal_paths SET evidence_level='L2_CONTROLLED_INTERVENTION' "
+        "WHERE path_id=?", (path.path_id,))
+    conn.execute(
+        """INSERT INTO tehm_causal_edges
+           (causal_edge_id, source_node_id, relation_type, target_node_id,
+            evidence_level, support_json, confidence_json, evidence_refs_json,
+            campaign_id, learner_eligible, created_at)
+           VALUES ('partial-unknown-l2', 'source', 'SUPPORTS', 'target',
+                   'L2_CONTROLLED_INTERVENTION', '{}', '{}', ?, 'live', 1,
+                   '2026-01-01')""",
+        (json.dumps([transition_id, "missing-transition"]),))
+    conn.commit()
+
+    authority = evaluate_causal_rule_evidence(
+        conn, path.path_id, campaign_id="live",
+        required_level="L2_CONTROLLED_INTERVENTION", min_lineages=1)
+    assert authority.eligible is False
+    assert "controlled_intervention_support_missing" in authority.reason
+
+
 def test_causal_shadow_writes_preserve_outer_transaction(tmp_tehm):
     conn, transition_id = _captured(tmp_tehm)
     conn.execute(
