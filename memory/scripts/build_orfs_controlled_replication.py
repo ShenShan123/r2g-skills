@@ -22,7 +22,9 @@ def main(argv=None) -> int:
     parser.add_argument("--pair", action="append", nargs=4, metavar=(
         "BEFORE", "AFTER", "LINEAGE", "CONFIG_JSON"), required=True,
         help="one before/after project pair and JSON config edit mapping")
-    parser.add_argument("--split", default="training")
+    parser.add_argument(
+        "--split", choices=("training",), default="training",
+        help="learner split for controlled L2/L3 replication (training only)")
     parser.add_argument("--min-lineages", type=int, default=2)
     args = parser.parse_args(argv)
     pairs = [

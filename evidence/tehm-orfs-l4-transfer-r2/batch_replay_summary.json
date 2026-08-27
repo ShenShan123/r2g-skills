@@ -1,0 +1,32 @@
+{
+  "version": "causal-transfer-batch-v1",
+  "source_database": "/tmp/tehm-l4-rebuild/tehm.sqlite",
+  "source_database_sha256": "302d8dcd972b1f52b51e176ae8a5613d618c8796c34c8c984fe6afaf27467607",
+  "database_unchanged": true,
+  "path_id": "causal_path_cbf18212f189747b",
+  "training_campaign_id": "orfs-authority-v7-failpass-r2-rebuild",
+  "transfer_campaign_id": "orfs-authority-v7-failpass-heldout-r2",
+  "manifest": "transfer_manifest.json",
+  "require_full_oracle": true,
+  "summary": {
+    "batch_status": "FAIL",
+    "case_count": 1,
+    "eligible_count": 0,
+    "failed_count": 1,
+    "independent_lineage_count": 0,
+    "reasons": [
+      "one_or_more_transfer_cases_ineligible"
+    ]
+  },
+  "isolated_ledger": {
+    "path": "/tmp/tehm-l4-batch-r2/ledger.sqlite",
+    "sha256": "c16331ac1d9365f3a4200fba62b7cada814aaa16f101de8e204f6375b7a9a728",
+    "receipt_ids": [
+      "causal_transfer_6c1f04a8302fb6e62b66"
+    ],
+    "all_receipts_verified": true
+  },
+  "canonical_memory_mutation": "none",
+  "promotion_eligible": false,
+  "promotion_attempted": false
+}

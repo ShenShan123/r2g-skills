@@ -19,7 +19,9 @@ def main(argv=None) -> int:
     parser.add_argument("--staging-db", type=Path, required=True)
     parser.add_argument("--campaign-id", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--split", default="training")
+    parser.add_argument(
+        "--split", choices=("training",), default="training",
+        help="learner split for causal consolidation (training only)")
     args = parser.parse_args(argv)
     report = build_orfs_causal_shadow(
         args.staging_db, campaign_id=args.campaign_id,

@@ -1,0 +1,12 @@
+{
+  "version": "causal-transfer-batch-v1",
+  "cases": [
+    {
+      "case_id": "shift32-heldout",
+      "lineage_id": "failpass-r2-heldout:shift32",
+      "transition_ids": [
+        "transition_6640a4fc9385a8e8"
+      ]
+    }
+  ]
+}

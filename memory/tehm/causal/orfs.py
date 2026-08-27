@@ -73,6 +73,15 @@ def build_orfs_causal_shadow(
         raise ValueError("campaign_id is required")
     if split not in {"training", "calibration", "heldout", "ab"}:
         raise ValueError(f"invalid dataset split: {split!r}")
+    # Causal paths are learner-side derived support.  Evaluation/audit rows
+    # may be retained in the staging database, but they must never be
+    # consolidated into a path. Reject the non-training selector up front so
+    # a legacy/direct-SQL contradiction cannot make an audit split look like
+    # learner evidence.
+    if split != "training":
+        raise ValueError(
+            "ORFS causal shadow consolidation requires split='training'; "
+            "use the transfer evaluator for heldout/calibration/ab evidence")
 
     output = Path(output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -101,9 +110,10 @@ def build_orfs_causal_shadow(
         """SELECT t.transition_id
              FROM tehm_transitions t
              JOIN tehm_dataset_membership dm ON dm.transition_id=t.transition_id
-            WHERE dm.campaign_id=? AND dm.split=? AND dm.learner_eligible=1
+            WHERE dm.campaign_id=? AND dm.split='training'
+              AND dm.learner_eligible=1
             ORDER BY t.transition_id""",
-        (campaign_id, split),
+        (campaign_id,),
     ).fetchall()
     if not rows:
         conn.close()
@@ -271,6 +281,13 @@ def build_orfs_controlled_replication(
         raise ValueError("ORFS replication pairs require unique lineages")
     if len(set(lineages)) < max(1, int(min_lineages)):
         raise ValueError("insufficient disjoint ORFS lineages for replication")
+    # Controlled replication builds L2 edges and an L3 learner path. A
+    # heldout/calibration/AB pair belongs in the audit/transfer lane and must
+    # not be admitted as learner support by this writer.
+    if split != "training":
+        raise ValueError(
+            "ORFS controlled replication requires split='training'; "
+            "capture non-training pairs audit-only and evaluate transfer separately")
 
     source = Path(staging_db).resolve()
     if not source.is_file():
@@ -297,10 +314,10 @@ def build_orfs_controlled_replication(
         control = _control_record(treatment)
         control_capture = capture(
             conn, store, control, dataset_campaign_id=campaign_id,
-            dataset_split=split, dataset_learner_eligible=True)
+            dataset_split="training", dataset_learner_eligible=True)
         treatment_capture = capture(
             conn, store, treatment, dataset_campaign_id=campaign_id,
-            dataset_split=split, dataset_learner_eligible=True)
+            dataset_split="training", dataset_learner_eligible=True)
         intervention = build_intervention_pair(
             conn, control_capture.transition_id,
             treatment_capture.transition_id, target_scope="flow.signoff",

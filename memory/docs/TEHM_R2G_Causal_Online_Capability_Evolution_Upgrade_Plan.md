@@ -2728,6 +2728,11 @@ fail→pass、lineage/design 不相交或 full-oracle 不完整均返回 fail-cl
 不写 causal path、canonical evidence、rule lifecycle 或 production runtime。当前
 高利用率 `selector_alu16` 试跑的 placement/route 失败仅作为 incomplete external
 evidence，未进入 staging/learner，也未改变当前 routing support cohort 的六项 gate。
+本轮从 v4 快照重建了带 distinct run witness 的 L3 path，并对独立 `shift32`
+held-out pair 执行 `require_full_oracle=true` 的重放；因 exact 14-check ORFS
+contract 不完整，receipt 明确为 `heldout_transfer_witness_failed`，不会升级为
+ORFS L4。机器可读负证据位于
+`evidence/tehm-orfs-l4-transfer-r2/transfer_replay_report.json`。
 
 L4 transfer receipt 另由 `tehm.causal.record_causal_transfer()` 写入 additive
 `tehm_causal_transfer_receipts` shadow ledger；receipt 绑定 path digest、训练/held-out
@@ -2762,6 +2767,9 @@ membership。请求 training 但 oracle 不完整时仍强制降级为 calibrati
 重放数据库中保留 training causal path 与独立 held-out transition，随后运行 L4 batch
 evaluator；修改 manifest split 不能绕过 source-freeze request 校验。该入口仍不写
 canonical memory、不触发 online consolidation，也不改变 production runtime。
+与此一致，ORFS causal shadow 和 controlled-replication builder 只允许
+`split='training'`；held-out/calibration/A-B 只能作为 staging audit 输入，经 L4
+transfer evaluator 重放，不能通过 `--split` 参数直接生成 learner causal path。
 
 ---
 

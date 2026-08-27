@@ -4,6 +4,7 @@ from __future__ import annotations
 import sqlite3
 import json
 from tehm.causal.orfs import _control_record
+import pytest
 
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.causal.orfs import (
@@ -87,6 +88,58 @@ def test_orfs_staging_becomes_l1_shadow_without_canonical_mutation(tmp_tehm, tmp
     assert report["rule_evidence"][0]["eligible"] is False
     assert "controlled_intervention_support_missing" in report["rule_evidence"][0]["reason"]
     assert report["source_counts"]["transitions"] == before_transitions
+
+
+def test_orfs_causal_shadow_rejects_nontraining_split(tmp_tehm, tmp_path):
+    """Audit/transfer rows cannot be consolidated into a learner path."""
+    conn, store, _ = tmp_tehm
+    receipt = capture(
+        conn, store, _record("orfs:heldout"),
+        dataset_campaign_id="orfs-heldout-shadow-test",
+        dataset_split="heldout", dataset_learner_eligible=False)
+    # Exercise the legacy/direct-SQL contradiction explicitly: the query must
+    # still bind the learner predicate to training, rather than trusting the
+    # bit in isolation.
+    conn.execute(
+        "UPDATE tehm_dataset_membership SET learner_eligible=1 "
+        "WHERE transition_id=? AND campaign_id=?",
+        (receipt.transition_id, "orfs-heldout-shadow-test"))
+    conn.commit()
+    source_db = tmp_path / "source-heldout.sqlite"
+    destination = sqlite3.connect(source_db)
+    conn.backup(destination)
+    destination.close()
+    conn.close()
+    try:
+        build_orfs_causal_shadow(
+            source_db, campaign_id="orfs-heldout-shadow-test",
+            output_dir=tmp_path / "derived-training", split="training")
+    except ValueError as exc:
+        assert "no learner-eligible training transitions" in str(exc)
+    else:  # pragma: no cover - keeps the firewall failure diagnostic explicit
+        raise AssertionError("heldout row bypassed the training split predicate")
+    try:
+        build_orfs_causal_shadow(
+            source_db, campaign_id="orfs-heldout-shadow-test",
+            output_dir=tmp_path / "derived-heldout", split="heldout")
+    except ValueError as exc:
+        assert "requires split='training'" in str(exc)
+    else:  # pragma: no cover - keeps the firewall failure diagnostic explicit
+        raise AssertionError("non-training ORFS shadow consolidation was accepted")
+
+
+def test_orfs_controlled_replication_rejects_nontraining_split(tmp_path):
+    with pytest.raises(ValueError, match="requires split='training'"):
+        build_orfs_controlled_replication(
+            tmp_path / "missing.sqlite", pairs=[
+                {"before_project": "before", "after_project": "after",
+                 "lineage_id": "orfs:heldout",
+                 "config_edits": {"CORE_UTILIZATION": "40"}},
+                {"before_project": "before2", "after_project": "after2",
+                 "lineage_id": "orfs:heldout2",
+                 "config_edits": {"CORE_UTILIZATION": "40"}},
+            ], campaign_id="orfs-heldout-replication-test",
+            output_dir=tmp_path / "controlled", split="heldout")
 
 
 def _completed_orfs_project(root, name, utilization):

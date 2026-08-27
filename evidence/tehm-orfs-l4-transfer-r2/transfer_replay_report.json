@@ -1,0 +1,52 @@
+{
+  "version": "tehm-orfs-l4-transfer-r2",
+  "database": {
+    "path": "/tmp/tehm-l4-rebuild/tehm.sqlite",
+    "sha256_before": "302d8dcd972b1f52b51e176ae8a5613d618c8796c34c8c984fe6afaf27467607",
+    "sha256_after": "302d8dcd972b1f52b51e176ae8a5613d618c8796c34c8c984fe6afaf27467607",
+    "database_unchanged": true
+  },
+  "training": {
+    "campaign_id": "orfs-authority-v7-failpass-r2-rebuild",
+    "path_id": "causal_path_cbf18212f189747b",
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "lineages": [
+      "failpass-r2:mux32",
+      "failpass-r2:parity64"
+    ],
+    "designs": [
+      "failpass-r2:mux32",
+      "failpass-r2:parity64"
+    ],
+    "run_witnesses": [
+      "RUN_2026-08-26_03-15-29_8_1cc7",
+      "RUN_2026-08-26_03-17-05_29667_4bda"
+    ]
+  },
+  "heldout": {
+    "campaign_id": "orfs-authority-v7-failpass-heldout-r2",
+    "transition_id": "transition_6640a4fc9385a8e8",
+    "lineage_id": "failpass-r2-heldout:shift32",
+    "design_id": "failpass-r2-heldout:shift32",
+    "split": "heldout",
+    "learner_eligible": false,
+    "full_oracle_required": true,
+    "full_oracle_complete": false,
+    "mechanism_match": true,
+    "effect_match": true,
+    "verifier_pass": false
+  },
+  "receipt": {
+    "eligible": false,
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "reason": "heldout_transfer_witness_failed",
+    "promotion_eligible": false,
+    "matched_transition_ids": [],
+    "mismatched_transition_ids": [
+      "transition_6640a4fc9385a8e8"
+    ]
+  },
+  "canonical_memory_mutation": "none",
+  "promotion_attempted": false,
+  "production_runtime_input": false
+}

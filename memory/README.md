@@ -353,6 +353,10 @@ Batch-0 14 项 checks（含 strict signoff、DEF graph、toolchain、input bindi
 contract），仅有 `oracle_complete=true` 或手工缩减的 checks 集合不能满足 L4。
 缺失 held-out receipt、非 fail→pass、full-oracle 不完整或 utility harmful 都只保留
 为 evaluation/negative evidence，不会进入 learner、canonical memory 或 production。
+本轮从 v4 快照重建了带 run witness 的 L3 path，并对独立 `shift32` held-out pair
+执行 `require_full_oracle=true` 的重放；因两侧未具备精确 14 项 ORFS checks，结果明确为
+`heldout_transfer_witness_failed`，机器可读负证据见
+[`evidence/tehm-orfs-l4-transfer-r2/transfer_replay_report.json`](../evidence/tehm-orfs-l4-transfer-r2/transfer_replay_report.json)。
 
 L4 receipt 现在还可以通过 `tehm.causal.record_causal_transfer()` 写入 additive
 `tehm_causal_transfer_receipts` shadow ledger。ledger 绑定 path digest、训练/held-out
@@ -487,6 +491,10 @@ Dataset membership 也有同一条硬约束：只有 training split 可以标记
 `learner_eligible`；capture/assignment 会拒绝非 training 的显式 opt-in，直接写入的
 矛盾行会被 crystallization、causal、gap、conflict 和 online trigger 排除，同时由
 honesty 审计报告为防火墙违规。
+
+ORFS causal shadow/controlled-replication builder 进一步只接受 `training` split；
+held-out、calibration 和 A/B 证据必须留在 audit staging，并通过 L4 transfer evaluator
+重放，不能借参数把非 training row 合并进 learner path。
 
 新增五类独立 RTL cluster（handshake completion、credit/obligation recovery、reset
 semantic loss、width correction、overlap-priority protocol/IP）的冻结 M1/M8 A/B 报告位于
