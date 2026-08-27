@@ -13,7 +13,8 @@ from tehm.lifecycle.orfs_trial import (
     reconcile_route_trial_evidence,
     run_pending_orfs_trials,
 )
-from tehm.lifecycle.rule_status import enter_shadow, set_status
+from tehm.lifecycle.rule_authority import verify_rule_authority
+from tehm.lifecycle.rule_status import enter_shadow, get_status, set_status
 
 
 def _insert_rule(conn, rule_id="rule_orfs_real", scope="drc"):
@@ -133,6 +134,49 @@ def test_real_orfs_ab_promotes_and_records_rollback(tmp_tehm, tmp_path):
     assert all(json.loads(r[0])["verified"] for r in activations)
     assert all(r[1] for r in activations)
     assert h10_rollback_authority(conn)[0] is True
+
+
+def test_strict_orfs_trial_projects_db_authority_and_ignores_gate_booleans(
+        tmp_tehm, tmp_path):
+    """Production mode must consume the trial projector, not gate booleans."""
+    conn, store, _ = tmp_tehm
+    rule_id = _insert_rule(conn)
+    project = _project(tmp_path)
+    flow, fix = _scripts(tmp_path)
+    trials = run_pending_orfs_trials(
+        conn, store,
+        base_entries=[{"design": "subject", "project_path": str(project),
+                       "platform": "nangate45", "kind": "normal"}],
+        run_flow_script=flow, fix_signoff_script=fix,
+        n_designs=1, repeats=2, work_root=tmp_path / "strict_arms",
+        production_authority=True,
+        # These values are deliberately forged diagnostics.  They must never
+        # become authority evidence in the strict path.
+        promotion_gate_inputs={rule_id: {
+            "cross_lineage_te": 1.0, "harmful_rate": 0.0,
+            "conformal_coverage": 1.0,
+        }})
+
+    assert len(trials) == 1
+    assert trials[0]["verdict"] == "win"
+    assert trials[0]["new_status"] is None
+    assert get_status(conn, rule_id=rule_id, target_scope="drc")["status"] == (
+        "candidate")
+    metrics = json.loads(conn.execute(
+        "SELECT metrics_json FROM tehm_trials WHERE rule_id=?", (rule_id,)
+    ).fetchone()[0])
+    authority = metrics["authority_receipt"]
+    assert authority["eligible"] is False
+    assert authority["gate_status"]["rollback_verified"] == "PASS"
+    assert authority["gate_status"]["obligation_coverage"] == "PASS"
+    assert authority["gate_status"]["registry_verified"] == "PASS"
+    assert authority["gate_status"]["cross_lineage_te"] == "NOT_ESTABLISHED"
+    assert authority["gate_status"]["harmful_rate"] == "NOT_ESTABLISHED"
+    assert authority["gate_status"]["conformal_coverage"] == "NOT_ESTABLISHED"
+    replay = verify_rule_authority(conn, authority)
+    assert "trial_binding_mismatch" not in replay["reasons"]
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_rule_authority_receipts").fetchone()[0] == 1
 
 
 def test_orfs_ab_trial_is_idempotent(tmp_tehm, tmp_path):

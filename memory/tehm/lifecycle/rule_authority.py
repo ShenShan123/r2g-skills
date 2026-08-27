@@ -59,6 +59,15 @@ _RULE_JSON_FIELDS = frozenset({
     "context_profile_json", "obligations_json", "validity_profile_json",
     "confidence_json", "utility_json", "risk_profile_json",
 })
+# Trial rows are enriched after the authority attempt with derived metadata.
+# Keep that metadata out of the content-bound trial witness so a receipt can be
+# replayed after the runner stamps registry/authority summaries.  Measured arm
+# pairs and their scalar outcomes remain in the binding and are still
+# tamper-sensitive.
+_TRIAL_DERIVED_METRIC_KEYS = frozenset({
+    "authority_receipt", "promotion_gates", "registry_authority",
+    "authority_projection_error", "evidence_reconciliation",
+})
 
 
 @dataclass(frozen=True)
@@ -851,7 +860,11 @@ def _trial_binding(conn: sqlite3.Connection, *, rule_id: str,
         "ORDER BY created_at DESC LIMIT 1", (trial_id, trial_id)).fetchone()
     if row is None:
         return False, {}, ["trial_evidence_missing"]
-    metrics = _json_mapping(row["metrics_json"])
+    raw_metrics = _json_mapping(row["metrics_json"])
+    metrics = {
+        key: value for key, value in raw_metrics.items()
+        if key not in _TRIAL_DERIVED_METRIC_KEYS
+    }
     binding = {
         "trial_id": row["trial_id"],
         "trial_uuid": row["trial_uuid"],

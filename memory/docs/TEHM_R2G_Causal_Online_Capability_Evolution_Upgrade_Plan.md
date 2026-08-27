@@ -2876,6 +2876,23 @@ verdict，生成可直接交给
 conformal/cross-lineage 证据。该 projector 只建立数据库绑定的已测量 gates，不改变
 canonical、runtime 或 promotion 行为，回归位于 `memory/tests/test_rule_authority.py`。
 
+本轮进一步将 projector 接入真实 ORFS 的 strict lifecycle seam：
+`run_pending_orfs_trials(..., production_authority=True)` 在
+`record_external_trial()` 之后从同一数据库重放 trial/activation witness，保存
+`RuleAuthorityReceipt`，并把该 receipt 传给
+`apply_production_trial_verdict()`；因此 ORFS runner 不再只是把 gate map 作为参数
+传入，而是实际消费数据库绑定 authority。旧的 `promotion_gate_inputs` 在 strict
+模式下仅保留为诊断快照；`promotion_authority_evidence` 只允许独立
+harmful/conformal payload rows，cross-lineage 必须使用
+`causal_transfer_receipt_ids`。崩溃恢复与 route evidence reconciliation 也重放同一
+receipt。projector 失败时只记录不完整 receipt 和诊断错误，strict wrapper 仍拒绝
+promotion；兼容模式不变。回归覆盖位于
+`memory/tests/test_orfs_trial.py::test_strict_orfs_trial_projects_db_authority_and_ignores_gate_booleans`。
+trial binding digest 只覆盖实际 arm/pair 测量及其结果，后续追加的
+`registry_authority`、gate summary 和 reconciliation metadata 作为派生审计字段排除在
+witness digest 外；因此 authority receipt 在正常的结果落库或崩溃恢复后仍可重放，
+而 pair/测量篡改仍会被拒绝。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）

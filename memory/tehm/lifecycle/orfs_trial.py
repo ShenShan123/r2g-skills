@@ -20,6 +20,7 @@ import sqlite3
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Mapping
 from pathlib import Path
 
 from contracts import RepairContext
@@ -33,15 +34,97 @@ from tehm.activation.update import persist_activation
 from tehm.ids import stable_dumps
 from tehm.lifecycle.authority import (
     apply_production_trial_verdict, apply_trial_verdict)
-from tehm.lifecycle.promotion_gates import evaluate_promotion_gates
+from tehm.lifecycle.promotion_gates import REQUIRED_GATES, evaluate_promotion_gates
+from tehm.lifecycle.rule_authority import (
+    build_trial_authority_evidence, record_rule_authority)
 from tehm.lifecycle.rule_status import get_status
 from tehm.lifecycle.trial_adapter import judge_trial, record_external_trial
 from tehm.retrieval.index import build_index
 from tehm.retrieval.result import APPLICABLE
 
-ORFS_TRIAL_VERSION = "orfs-trial-v0.3"
+# v0.4 changes strict production authority from caller gate-map diagnostics to
+# a DB-bound RuleAuthorityReceipt.  The version participates in trial UUIDs so
+# an older v0.3 trial cannot be mistaken for one that passed the new seam.
+ORFS_TRIAL_VERSION = "orfs-trial-v0.4"
 SUPPORTED_SCOPES = frozenset({"drc", "lvs", "timing", "route"})
+_ADAPTER_AUTHORITY_GATES = frozenset({
+    "rollback_verified", "obligation_coverage", "registry_verified"})
+_INDEPENDENT_AUTHORITY_GATES = frozenset({"harmful_rate", "conformal_coverage"})
 _CFG_RE = re.compile(r"^(\s*(?:override\s+)?(?:export\s+)?)([A-Z0-9_]+)(\s*[:?]?=\s*).*$")
+
+
+def _record_orfs_rule_authority(
+        conn: sqlite3.Connection, *, trial_id: str, rule_id: str,
+        target_scope: str, expected_status_version: int,
+        independent_evidence: Mapping | None = None,
+        transfer_receipt_ids=None):
+    """Build and persist the strict authority receipt for one ORFS trial.
+
+    The trial adapter owns rollback, obligation and registry measurements.  A
+    caller may add only independent payload-bearing utility/calibration rows;
+    cross-lineage evidence is accepted through the replaying transfer-ledger
+    seam.  If a persisted activation witness is malformed, the helper records
+    an intentionally incomplete receipt rather than allowing a hand-authored
+    replacement to reach production authority.
+    """
+    projection_error = None
+    try:
+        evidence = build_trial_authority_evidence(
+            conn, trial_id=trial_id, rule_id=rule_id, target_scope=target_scope)
+        if independent_evidence is None:
+            independent_evidence = {}
+        if not isinstance(independent_evidence, Mapping):
+            raise ValueError("strict authority evidence must be a mapping")
+        for gate, raw_entries in independent_evidence.items():
+            if gate not in REQUIRED_GATES:
+                raise ValueError(f"unsupported strict authority gate: {gate}")
+            if gate in _ADAPTER_AUTHORITY_GATES:
+                raise ValueError(
+                    f"{gate} is adapter-owned and cannot be caller supplied")
+            if gate == "cross_lineage_te":
+                raise ValueError(
+                    "cross_lineage_te requires causal transfer receipt IDs")
+            if gate not in _INDEPENDENT_AUTHORITY_GATES:
+                raise ValueError(f"unsupported strict authority gate: {gate}")
+            if raw_entries is None:
+                continue
+            if isinstance(raw_entries, Mapping):
+                raw_entries = [raw_entries]
+            elif isinstance(raw_entries, (str, bytes)):
+                raise ValueError(f"{gate} evidence must be row mappings")
+            else:
+                try:
+                    raw_entries = list(raw_entries)
+                except TypeError as exc:
+                    raise ValueError(f"{gate} evidence must be iterable") from exc
+            for entry in raw_entries:
+                if not isinstance(entry, Mapping):
+                    raise ValueError(f"{gate} evidence row must be a mapping")
+                evidence[gate].append(dict(entry))
+    except (TypeError, ValueError) as exc:
+        # An incomplete receipt is still useful audit evidence, but it cannot
+        # satisfy the adapter-owned gates.  Never fall back to caller booleans.
+        projection_error = str(exc)
+        evidence = {gate: [] for gate in REQUIRED_GATES}
+        if isinstance(independent_evidence, Mapping):
+            for gate in _INDEPENDENT_AUTHORITY_GATES:
+                raw_entries = independent_evidence.get(gate)
+                if raw_entries is None:
+                    continue
+                if isinstance(raw_entries, Mapping):
+                    evidence[gate] = [dict(raw_entries)]
+                elif not isinstance(raw_entries, (str, bytes)):
+                    try:
+                        evidence[gate] = [dict(entry) for entry in raw_entries
+                                          if isinstance(entry, Mapping)]
+                    except TypeError:
+                        pass
+
+    receipt = record_rule_authority(
+        conn, rule_id=rule_id, target_scope=target_scope, evidence=evidence,
+        trial_id=trial_id, expected_status_version=expected_status_version,
+        causal_transfer_receipt_ids=transfer_receipt_ids)
+    return receipt, projection_error
 
 
 def run_pending_orfs_trials(
@@ -53,7 +136,9 @@ def run_pending_orfs_trials(
         lifecycle_statuses: frozenset[str] = frozenset({"candidate"}),
         mutate_lifecycle: bool = True,
         promotion_gate_inputs: dict[str, dict] | None = None,
-        production_authority: bool = False) -> list[dict]:
+        production_authority: bool = False,
+        promotion_authority_evidence: dict[str, dict] | None = None,
+        causal_transfer_receipt_ids: dict[str, object] | None = None) -> list[dict]:
     """Execute selected admissible lifecycle rules on on-disk subjects.
 
     The default is the promotion-authority candidate drain.  A caller may
@@ -63,7 +148,12 @@ def run_pending_orfs_trials(
     ``production_authority=True`` enables the six-gate firewall for every
     lifecycle mutation.  This is required by the backend; the default remains
     compatibility mode for deterministic unit fixtures that exercise only the
-    older A/B adapter contract.
+    older A/B adapter contract.  In strict mode, rollback/obligation/registry
+    evidence is projected from the persisted trial and activation rows, while
+    independent harmful/conformal evidence may be supplied as payload-bearing
+    rows through ``promotion_authority_evidence``.  Cross-lineage TE must be
+    supplied as replay-verified causal-transfer receipt IDs.  The legacy
+    ``promotion_gate_inputs`` map remains diagnostic only in strict mode.
     """
     allowed_statuses = frozenset(lifecycle_statuses)
     if not allowed_statuses or not allowed_statuses <= {"candidate", "promoted"}:
@@ -72,6 +162,18 @@ def run_pending_orfs_trials(
         raise ValueError("lifecycle authority mutation is candidate-only")
     index = build_index(conn)
     provided_bindings = provided_bindings or {}
+    if promotion_authority_evidence is None:
+        promotion_authority_evidence = {}
+    if causal_transfer_receipt_ids is None:
+        causal_transfer_receipt_ids = {}
+    if (not isinstance(promotion_authority_evidence, Mapping) or
+            not isinstance(causal_transfer_receipt_ids, Mapping)):
+        raise ValueError(
+            "strict authority evidence and transfer selections must be mappings")
+    if ((promotion_authority_evidence or causal_transfer_receipt_ids) and
+            not (production_authority and mutate_lifecycle)):
+        raise ValueError(
+            "authority evidence selections require strict lifecycle mutation")
     placeholders = ",".join("?" for _ in allowed_statuses)
     rows = conn.execute(
         "SELECT rule_id, target_scope, status, status_version FROM tehm_rule_status "
@@ -119,7 +221,10 @@ def run_pending_orfs_trials(
                 strict_recovery = bool(
                     production_authority or metrics.get("production_authority") or
                     recovered_gates is not None)
-                recovered_inputs = dict(recovered_gates or {})
+                # The legacy map is diagnostic only when strict authority is
+                # active.  Recovery must replay the DB-bound witness rows.
+                recovered_inputs = ({} if strict_recovery
+                                    else dict(recovered_gates or {}))
                 recovered_inputs.update({
                     "rollback_verified": metrics.get("rollback_verified") is True,
                     "obligation_coverage": metrics.get("obligation_coverage"),
@@ -129,6 +234,21 @@ def run_pending_orfs_trials(
                                    target_scope=scope).get("status_version") ==
                         existing["status_version"]),
                 })
+                authority_receipt = None
+                authority_projection_error = None
+                if strict_recovery:
+                    authority_receipt, authority_projection_error = (
+                        _record_orfs_rule_authority(
+                            conn, trial_id=f"trial_{trial_uuid}",
+                            rule_id=rule_id, target_scope=scope,
+                            expected_status_version=existing["status_version"],
+                            independent_evidence=(
+                                promotion_authority_evidence.get(rule_id)
+                                if production_authority else None),
+                            transfer_receipt_ids=(
+                                causal_transfer_receipt_ids.get(rule_id)
+                                if production_authority and rule_id in
+                                causal_transfer_receipt_ids else None)))
                 authority = (apply_production_trial_verdict
                              if strict_recovery else apply_trial_verdict)
                 new_status = authority(
@@ -143,7 +263,8 @@ def run_pending_orfs_trials(
                                 "executor": ORFS_TRIAL_VERSION,
                                 "recovered": True},
                     promotion_gates=recovered_inputs,
-                    strict_promotion_gates=strict_recovery)
+                    strict_promotion_gates=strict_recovery,
+                    authority_receipt=authority_receipt)
                 after = get_status(conn, rule_id=rule_id, target_scope=scope) or {}
                 registry = {
                     "before": {"status": "candidate",
@@ -152,6 +273,23 @@ def run_pending_orfs_trials(
                     "verified": (after.get("status_version") ==
                                  existing["status_version"] + (1 if new_status else 0)),
                 }
+                if authority_receipt is not None:
+                    metrics["authority_receipt"] = authority_receipt.to_dict()
+                    metrics["promotion_gates"] = {
+                        "source": "db_bound_rule_authority",
+                        "authority_receipt_id": (
+                            authority_receipt.authority_receipt_id),
+                        "eligible": authority_receipt.eligible,
+                        "checks": dict(authority_receipt.checks),
+                        "gate_status": dict(authority_receipt.gate_status),
+                        "missing": list(authority_receipt.missing),
+                        "failed": list(authority_receipt.failed),
+                        "not_established": list(
+                            authority_receipt.not_established),
+                    }
+                if authority_projection_error:
+                    metrics["authority_projection_error"] = (
+                        authority_projection_error)
                 metrics["registry_authority"] = registry
                 conn.execute(
                     "UPDATE tehm_trials SET metrics_json=? WHERE trial_uuid=?",
@@ -237,20 +375,34 @@ def run_pending_orfs_trials(
             arm_a_run_id=pairs[0]["arm_a"]["run_id"] if pairs else None,
             arm_b_run_id=pairs[0]["arm_b"]["run_id"] if pairs else None)
         new_status = None
+        authority_receipt = None
+        authority_projection_error = None
         if mutate_lifecycle:
-            supplied_gates = dict((promotion_gate_inputs or {}).get(rule_id) or {})
-            # These three fields are authority-owned measurements.  Caller
-            # supplied evidence may add cross-lineage TE/harmful/conformal
-            # values, but it cannot override rollback, obligation, or registry
-            # facts observed by this adapter.
-            supplied_gates.update({"rollback_verified": rollback_ok,
-                                   "obligation_coverage": coverage})
-            # The authority checks the expected candidate/version transition;
-            # the concrete registry result is stamped and verified below.
-            supplied_gates["registry_verified"] = (
-                row["status"] == "candidate" and
-                get_status(conn, rule_id=rule_id, target_scope=scope).get(
-                    "status_version") == row["status_version"])
+            if production_authority:
+                # Strict authority is built from immutable DB-bound evidence;
+                # the legacy gate map remains diagnostic only.
+                authority_receipt, authority_projection_error = (
+                    _record_orfs_rule_authority(
+                        conn, trial_id=trial["trial_id"], rule_id=rule_id,
+                        target_scope=scope,
+                        expected_status_version=row["status_version"],
+                        independent_evidence=(
+                            promotion_authority_evidence.get(rule_id)),
+                        transfer_receipt_ids=(
+                            causal_transfer_receipt_ids.get(rule_id)
+                            if rule_id in causal_transfer_receipt_ids else None)))
+                supplied_gates = {}
+            else:
+                supplied_gates = dict(
+                    (promotion_gate_inputs or {}).get(rule_id) or {})
+                # Compatibility-mode callers retain the historical adapter
+                # measurements.  They are never used by strict production.
+                supplied_gates.update({"rollback_verified": rollback_ok,
+                                       "obligation_coverage": coverage})
+                supplied_gates["registry_verified"] = (
+                    row["status"] == "candidate" and
+                    get_status(conn, rule_id=rule_id, target_scope=scope).get(
+                        "status_version") == row["status_version"])
             strict_gates = (production_authority or
                             (promotion_gate_inputs is not None and
                              rule_id in promotion_gate_inputs))
@@ -264,7 +416,8 @@ def run_pending_orfs_trials(
                 provenance={"trial_uuid": trial_uuid,
                             "executor": ORFS_TRIAL_VERSION},
                 promotion_gates=supplied_gates,
-                strict_promotion_gates=strict_gates)
+                strict_promotion_gates=strict_gates,
+                authority_receipt=authority_receipt)
         registry_after = get_status(
             conn, rule_id=rule_id, target_scope=scope) or {}
         if not mutate_lifecycle:
@@ -288,13 +441,30 @@ def run_pending_orfs_trials(
                      else "revalidation_no_mutation"),
         }
         if mutate_lifecycle and strict_gates:
-            gate_inputs = dict(
-                (promotion_gate_inputs or {}).get(rule_id) or {})
-            gate_inputs.update({"rollback_verified": rollback_ok,
-                                "registry_verified": registry_verified,
-                                "obligation_coverage": coverage})
-            metrics["promotion_gates"] = evaluate_promotion_gates(
-                gate_inputs, strict=True, min_obligation_coverage=1.0)
+            if production_authority and authority_receipt is not None:
+                metrics["authority_receipt"] = authority_receipt.to_dict()
+                metrics["promotion_gates"] = {
+                    "source": "db_bound_rule_authority",
+                    "authority_receipt_id": (
+                        authority_receipt.authority_receipt_id),
+                    "eligible": authority_receipt.eligible,
+                    "checks": dict(authority_receipt.checks),
+                    "gate_status": dict(authority_receipt.gate_status),
+                    "missing": list(authority_receipt.missing),
+                    "failed": list(authority_receipt.failed),
+                    "not_established": list(
+                        authority_receipt.not_established),
+                }
+            else:
+                gate_inputs = dict(
+                    (promotion_gate_inputs or {}).get(rule_id) or {})
+                gate_inputs.update({"rollback_verified": rollback_ok,
+                                    "registry_verified": registry_verified,
+                                    "obligation_coverage": coverage})
+                metrics["promotion_gates"] = evaluate_promotion_gates(
+                    gate_inputs, strict=True, min_obligation_coverage=1.0)
+        if authority_projection_error:
+            metrics["authority_projection_error"] = authority_projection_error
         conn.execute(
             "UPDATE tehm_trials SET metrics_json=? WHERE trial_uuid=?",
             (stable_dumps(metrics), trial_uuid))
@@ -412,16 +582,25 @@ def reconcile_route_trial_evidence(
     reconciliation_gates = dict(metrics.get("promotion_gate_inputs") or {})
     strict_reconciliation = bool(metrics.get("production_authority") or
                                  metrics.get("promotion_gate_inputs") is not None)
+    authority_receipt = None
+    authority_projection_error = None
     new_status = None
     if (current.get("status") == "candidate" and
             current.get("status_version") == base_version):
-        reconciliation_gates.update({
-            "rollback_verified": rollback_ok,
-            "obligation_coverage": coverage,
-            "registry_verified": (
-                current.get("status") == "candidate" and
-                current.get("status_version") == base_version),
-        })
+        if strict_reconciliation:
+            reconciliation_gates = {}
+            authority_receipt, authority_projection_error = (
+                _record_orfs_rule_authority(
+                    conn, trial_id=f"trial_{trial_uuid}", rule_id=rule_id,
+                    target_scope="route", expected_status_version=base_version))
+        else:
+            reconciliation_gates.update({
+                "rollback_verified": rollback_ok,
+                "obligation_coverage": coverage,
+                "registry_verified": (
+                    current.get("status") == "candidate" and
+                    current.get("status_version") == base_version),
+            })
         authority = (apply_production_trial_verdict
                      if strict_reconciliation
                      else apply_trial_verdict)
@@ -433,7 +612,8 @@ def reconcile_route_trial_evidence(
             provenance={"trial_uuid": trial_uuid, "executor": ORFS_TRIAL_VERSION,
                         "evidence_reconciled": True},
             promotion_gates=reconciliation_gates,
-            strict_promotion_gates=strict_reconciliation)
+            strict_promotion_gates=strict_reconciliation,
+            authority_receipt=authority_receipt)
         current = get_status(conn, rule_id=rule_id, target_scope="route") or {}
     elif (current.get("status") == "promoted" and
           current.get("status_version") == base_version + 1):
@@ -450,9 +630,24 @@ def reconcile_route_trial_evidence(
              current.get("status_version") == base_version)),
     }
     if strict_reconciliation:
-        metrics["promotion_gates"] = evaluate_promotion_gates(
-            reconciliation_gates, strict=True,
-            min_obligation_coverage=1.0)
+        if authority_receipt is not None:
+            metrics["authority_receipt"] = authority_receipt.to_dict()
+            metrics["promotion_gates"] = {
+                "source": "db_bound_rule_authority",
+                "authority_receipt_id": authority_receipt.authority_receipt_id,
+                "eligible": authority_receipt.eligible,
+                "checks": dict(authority_receipt.checks),
+                "gate_status": dict(authority_receipt.gate_status),
+                "missing": list(authority_receipt.missing),
+                "failed": list(authority_receipt.failed),
+                "not_established": list(authority_receipt.not_established),
+            }
+        else:
+            metrics["promotion_gates"] = evaluate_promotion_gates(
+                reconciliation_gates, strict=True,
+                min_obligation_coverage=1.0)
+    if authority_projection_error:
+        metrics["authority_projection_error"] = authority_projection_error
     conn.execute(
         "UPDATE tehm_trials SET verdict=?, metrics_json=? WHERE trial_uuid=?",
         (verdict, stable_dumps(metrics), trial_uuid))

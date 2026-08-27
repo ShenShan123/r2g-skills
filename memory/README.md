@@ -140,6 +140,18 @@ activation row 缺失或不一致时直接拒绝。它不会从 target PASS
 推断 harmless，也不会伪造 conformal 或 cross-lineage 证据，生成的 evidence 仍需与
 独立 L4/calibration rows 一起交给 `record_rule_authority()`。
 
+真实 ORFS `run_pending_orfs_trials(..., production_authority=True)` 现在已经接通这条
+projector：trial 落库后先从同一 DB 重放 activation witness，再生成并保存
+`RuleAuthorityReceipt`，最后才调用 strict lifecycle wrapper。`promotion_gate_inputs`
+在该模式下只作为诊断快照，不能授予 authority；独立的 harmful/conformal rows 通过
+`promotion_authority_evidence` 传入，cross-lineage 必须通过
+`causal_transfer_receipt_ids` 由 L4 ledger replay 产生。崩溃恢复路径会重新生成同一
+receipt；缺失/篡改 witness 只会生成不完整、不可晋级的 receipt，绝不回退到调用方
+布尔值。兼容模式仍保留给旧的确定性 fixture，不能代表 production authority。
+authority receipt 的 trial binding 只覆盖 arm/pair 和测量结果；runner 后续追加的
+`registry_authority`、gate summary 等派生审计字段不进入 witness digest，因此崩溃恢复
+后可以重放同一 receipt，同时仍会拒绝 pair 或结果字段篡改。
+
 ### Capability retention replay ledger（2026-08-27）
 
 新增 `capability.retention.record_capability_retention()` /
