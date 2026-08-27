@@ -349,6 +349,8 @@ Causal path 的 `ordered_nodes` / `ordered_edges` 现在使用 `causal-path-orde
 还会重算 node/edge 的 canonical JSON、payload digest 与 content-addressed ID，确认
 所有 transition owner、edge witness 和共同 training campaign 均完整覆盖；即使攻击
 者同步重算 path digest，篡改后的派生 node/edge 也不能进入 causal evaluator。
+L2 `evaluate_causal_rule_evidence()` 也复用同一条完整 replay firewall，因而不会仅凭
+内存中的 evidence level 或全局 edge 交集接受损坏的路径。
 
 Rule retrieval loader 现在也执行同一条内容完整性边界：加载时严格解析
 `before/after/hard_preconditions/context/validity/confidence/utility/risk` 字段，

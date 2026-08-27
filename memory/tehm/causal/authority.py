@@ -11,6 +11,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from .evidence_level import CausalEvidenceLevel, evidence_rank
+from .path_builder import validate_persisted_path_row
 from .replication import evaluate_replicated_effect
 from .witness import learner_edge_transition_coverage
 
@@ -75,8 +76,8 @@ def evaluate_causal_rule_evidence(
     if not campaign_id:
         raise ValueError("campaign_id is required")
     row = conn.execute(
-        "SELECT evidence_level, source_transitions_json FROM tehm_causal_paths "
-        "WHERE path_id=?", (path_id,)).fetchone()
+        "SELECT * FROM tehm_causal_paths WHERE path_id=?", (path_id,)
+    ).fetchone()
     if row is None:
         raise KeyError(f"unknown causal path: {path_id}")
     source_ids, source_error = _source_transition_ids(
@@ -88,6 +89,16 @@ def evaluate_causal_rule_evidence(
             unique_lineages=(), learner_eligible=False,
             required_level=required_level,
             reason=source_error or "malformed_source_transitions",
+            promotion_eligible=False)
+    try:
+        validate_persisted_path_row(row, conn)
+    except ValueError as exc:
+        return CausalRuleEvidenceReceipt(
+            path_id=path_id, eligible=False,
+            evidence_level=row["evidence_level"],
+            source_transition_ids=source_ids, unique_lineages=(),
+            learner_eligible=False, required_level=required_level,
+            reason="path_integrity_failed:" + str(exc),
             promotion_eligible=False)
     placeholders = ",".join("?" for _ in source_ids)
     memberships = []

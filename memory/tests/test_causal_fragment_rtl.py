@@ -33,6 +33,24 @@ def _captured(tmp_tehm):
     return conn, receipt.transition_id
 
 
+def _set_path_evidence_level(conn, path_id: str, level: str) -> None:
+    """Keep a direct-SQL authority fixture internally digest-consistent."""
+    row = conn.execute(
+        "SELECT * FROM tehm_causal_paths WHERE path_id=?", (path_id,)
+    ).fetchone()
+    support = json.loads(row["support_json"])
+    digest = causal_path_digest(
+        mechanism_family=row["mechanism_family"],
+        compatibility_profile=row["compatibility_profile"],
+        evidence_level=level,
+        source_transition_ids=json.loads(row["source_transitions_json"]),
+        node_ids=json.loads(row["ordered_nodes_json"]),
+        edge_ids=json.loads(row["ordered_edges_json"]), support=support)
+    conn.execute(
+        "UPDATE tehm_causal_paths SET evidence_level=?, path_digest=? "
+        "WHERE path_id=?", (level, digest, path_id))
+
+
 def test_rtl_fragment_is_deterministic_and_does_not_mutate_canonical(tmp_tehm):
     conn, transition_id = _captured(tmp_tehm)
     before = conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0]
@@ -190,6 +208,11 @@ def test_causal_path_rejects_tampered_node_even_with_new_digest(tmp_tehm):
     ).fetchone()
     with pytest.raises(ValueError, match="content-addressed ID mismatch"):
         validate_persisted_path_row(tampered, conn)
+    authority = evaluate_causal_rule_evidence(
+        conn, candidate.path_id, campaign_id="live",
+        required_level="L0_ASSOCIATION", min_lineages=1)
+    assert authority.eligible is False
+    assert authority.reason.startswith("path_integrity_failed:")
 
 
 def test_causal_path_rejects_tampered_edge_campaign_even_with_new_digest(tmp_tehm):
@@ -369,9 +392,8 @@ def test_causal_authority_ignores_l2_edge_from_another_campaign(tmp_tehm):
     # that edge to a different campaign.  The authority and replication
     # checks must both fail closed instead of treating global L2 evidence as
     # support for ``live``.
-    conn.execute(
-        "UPDATE tehm_causal_paths SET evidence_level='L2_CONTROLLED_INTERVENTION' "
-        "WHERE path_id=?", (path.path_id,))
+    _set_path_evidence_level(
+        conn, path.path_id, "L2_CONTROLLED_INTERVENTION")
     conn.execute(
         """INSERT INTO tehm_causal_edges
            (causal_edge_id, source_node_id, relation_type, target_node_id,
@@ -425,9 +447,8 @@ def test_causal_authority_requires_complete_l2_source_coverage(tmp_tehm):
         build_transition_causal_fragment(conn, first_id),
         build_transition_causal_fragment(conn, second_id),
     ])
-    conn.execute(
-        "UPDATE tehm_causal_paths SET evidence_level='L2_CONTROLLED_INTERVENTION' "
-        "WHERE path_id=?", (path.path_id,))
+    _set_path_evidence_level(
+        conn, path.path_id, "L2_CONTROLLED_INTERVENTION")
     conn.execute(
         """INSERT INTO tehm_causal_edges
            (causal_edge_id, source_node_id, relation_type, target_node_id,
@@ -453,9 +474,8 @@ def test_causal_authority_rejects_partial_unknown_edge_witness(tmp_tehm):
     conn, transition_id = _captured(tmp_tehm)
     fragment = build_transition_causal_fragment(conn, transition_id)
     path = consolidate_causal_path(conn, [fragment])
-    conn.execute(
-        "UPDATE tehm_causal_paths SET evidence_level='L2_CONTROLLED_INTERVENTION' "
-        "WHERE path_id=?", (path.path_id,))
+    _set_path_evidence_level(
+        conn, path.path_id, "L2_CONTROLLED_INTERVENTION")
     conn.execute(
         """INSERT INTO tehm_causal_edges
            (causal_edge_id, source_node_id, relation_type, target_node_id,
