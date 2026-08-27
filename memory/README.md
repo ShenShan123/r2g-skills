@@ -119,6 +119,19 @@ TE、harmful-rate 和 conformal coverage；`verify_rule_authority()` 在消费�
 原子写入；不可变 evidence 冲突或后续写入失败会回滚整组 C1–C8 rows，不留下部分
 authority 证据。若调用方已有事务，则只释放 savepoint，由调用方继续负责最终提交。
 
+### Capability retention replay ledger（2026-08-27）
+
+新增 `capability.retention.record_capability_retention()` /
+`verify_capability_retention()`，把原先纯函数的 retention replay 绑定到不可变
+capability、candidate policy snapshot digest、成功的 runtime load receipt，以及
+`heldout`/`ab` 的独立 lineage。receipt 以内容 digest 生成 ID，并与
+`tehm_capability_evidence` 的 `capability_retention` 行在同一 savepoint 中写入；
+回放失败会留下 `retained=0` 的审计证据，但不会修改 capability lifecycle，也不会
+进入 production policy。验证阶段会重新校验 snapshot/load JSON、ledger payload、
+registry evidence 和纯 evaluator 结果，直接 SQL 篡改或 training split 均
+fail-closed。外部 ORFS retention builder 仍保持只读，只在报告中补充 split、lineage
+和 policy digest，不能把外部回放冒充 learner support。
+
 ### Online consolidation trigger lane（2026-08-26）
 
 `evolution.observe_transition()` 现在在记录 transition/causal/novelty/conflict
@@ -339,8 +352,9 @@ snapshot digest、runtime identity 和 `loaded` 字段；篡改 receipt 后即�
 snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重算 content digest
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
-不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
-回归为 `488 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+不把 `status`、canonical evidence 或 production runtime 变成可写入口；新增 retention
+ledger 的当前全套回归为 `491 passed`，仍保持 shadow/evaluation-only 的 promotion
+边界。
 
 Backend activation seam 现在也执行同一条 fail-closed 回执规则：`UNKNOWN` 只能被
 一次性收敛为最终 outcome；已 finalized 的 outcome、created regressions、rollback

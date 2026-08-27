@@ -514,3 +514,29 @@ CREATE TABLE IF NOT EXISTS tehm_policy_load_receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_policy_load_receipts_policy
     ON tehm_policy_load_receipts(policy_snapshot_id, runtime_id, loaded);
+
+-- Capability retention is an additive v4 evidence ledger.  It is also
+-- created lazily by tehm.capability.retention for existing v4 stores so the
+-- immutable v1->v4 migration chain does not need to be rewritten.
+CREATE TABLE IF NOT EXISTS tehm_capability_retention_receipts (
+    retention_receipt_id          TEXT PRIMARY KEY,
+    capability_id                 TEXT NOT NULL,
+    replay_id                     TEXT NOT NULL,
+    candidate_policy_snapshot_id TEXT NOT NULL,
+    candidate_policy_digest       TEXT NOT NULL,
+    runtime_id                    TEXT NOT NULL,
+    policy_load_receipt_id        TEXT NOT NULL,
+    split                         TEXT NOT NULL CHECK (split IN
+                                  ('heldout', 'ab')),
+    lineage_id                    TEXT,
+    evidence_id                   TEXT,
+    retained                      INTEGER NOT NULL CHECK (retained IN (0, 1)),
+    replay_verdict                TEXT NOT NULL,
+    disjoint_lineage              INTEGER NOT NULL CHECK (disjoint_lineage IN (0, 1)),
+    non_target_regression_zero    INTEGER NOT NULL CHECK (non_target_regression_zero IN (0, 1)),
+    receipt_json                  TEXT NOT NULL,
+    receipt_digest                TEXT NOT NULL UNIQUE,
+    created_at                    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_capability_retention_scope
+    ON tehm_capability_retention_receipts(capability_id, split, retained);

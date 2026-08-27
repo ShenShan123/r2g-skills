@@ -1985,6 +1985,24 @@ Memory Change
 → Capability Gain
 ```
 
+### 6.6 Retention replay evidence ledger（2026-08-27 implementation）
+
+`evaluate_capability_retention()` 继续作为外部报告的纯 evaluator，但不能单独
+满足 C6/C7 的 authority 证据。数据库绑定路径必须调用
+`record_capability_retention()`，将 replay 绑定到 capability 内容、candidate
+policy snapshot/digest、成功的 runtime load receipt，以及 `heldout` 或 `ab`
+split 下的独立 `lineage_id`。它以内容寻址 receipt ID 写入
+`tehm_capability_retention_receipts`，并在同一 savepoint 写入
+`tehm_capability_evidence(evidence_type=capability_retention)`；失败回放同样
+记录为 `retained=0`，但不改变 capability lifecycle 或 production policy。
+
+`verify_capability_retention()` 在消费前重新校验 snapshot/load 内容 digest、
+ledger payload、registry evidence 和纯 evaluator 结果。training split、缺失
+lineage、stale/tampered load receipt、直接 SQL 修改均 fail-closed。该表是
+schema-v4 的 additive extension：fresh schema 直接创建，既有 v4 store 在首次
+调用时惰性创建，以保持已发布的 v1→v4 migration chain 不变。外部 ORFS retention
+脚本仍保持 read-only，只输出可重放报告字段，不能把 replay 写入 learner support。
+
 ---
 
 # 7. 建议的 Schema v4
@@ -3114,7 +3132,7 @@ store
 - [ ] policy snapshot digest
 - [ ] runtime load receipt
 - [ ] memory ablation harness
-- [ ] capability retention replay
+- [x] capability retention replay（纯 evaluator + DB-bound ledger/verification；仍需真实 held-out ORFS 批量证据）
 
 ## Asset
 

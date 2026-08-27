@@ -13,6 +13,7 @@ from tehm.capability import (
     evaluate_capability_attribution_from_db, record_policy_load,
     load_policy_snapshot,
     evaluate_capability_retention,
+    record_capability_retention, verify_capability_retention,
     evaluate_capability_campaign,
 )
 
@@ -467,6 +468,104 @@ def test_capability_retention_replay_fails_closed():
         replay={"verdict": "PASS", "disjoint_lineage": True,
                 "non_target_regression_zero": False, "evidence_id": "r2"})
     assert failed.retained is False
+
+
+def test_capability_retention_binds_policy_runtime_and_registry_evidence(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    # Existing v4 snapshots may predate this additive table; first use must
+    # lazily create it without changing the migration version.
+    conn.execute("DROP TABLE tehm_capability_retention_receipts")
+    capability = register_capability(
+        conn, mechanism_family="RETENTION", applicability={"profile": "p"})
+    policy = create_policy_snapshot(
+        conn, memory_snapshot_id="retention-memory", promoted_rules=["r1"])
+    load = record_policy_load(
+        conn, policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="retention-runtime", loaded=True,
+        receipt={"execution_receipt_id": "retention-exec"})
+    replay = {
+        "verdict": "PASS", "disjoint_lineage": True,
+        "non_target_regression_zero": True, "evidence_id": "retention-e1",
+        "split": "heldout", "lineage_id": "heldout:retention",
+        "candidate_policy_digest": policy.policy_digest,
+    }
+    receipt = record_capability_retention(
+        conn, capability_id=capability.capability_id, replay_id="replay-e1",
+        replay=replay, candidate_policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="retention-runtime", policy_load_receipt_id=load.receipt_id)
+    assert receipt.retained is True
+    assert receipt.retention_receipt_id.startswith("capability_retention_")
+    assert conn.execute(
+        "SELECT status FROM tehm_capabilities WHERE capability_id=?",
+        (capability.capability_id,)).fetchone()[0] == "observed_gap"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_capability_retention_receipts").fetchone()[0] == 1
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_capability_evidence "
+        "WHERE evidence_type='capability_retention'").fetchone()[0] == 1
+    checked = verify_capability_retention(
+        conn, capability.capability_id, receipt)
+    assert checked["eligible"] is True
+    assert checked["reasons"] == []
+
+
+def test_capability_retention_rejects_tampered_receipts_and_loads(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="RETENTION_TAMPER", applicability={"profile": "p"})
+    policy = create_policy_snapshot(
+        conn, memory_snapshot_id="retention-memory", promoted_rules=[])
+    load = record_policy_load(
+        conn, policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="retention-runtime", loaded=True)
+    replay = {
+        "verdict": "PASS", "disjoint_lineage": True,
+        "non_target_regression_zero": True, "evidence_id": "retention-e2",
+        "split": "ab", "lineage_id": "ab:retention",
+    }
+    receipt = record_capability_retention(
+        conn, capability_id=capability.capability_id, replay_id="replay-e2",
+        replay=replay, candidate_policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="retention-runtime", policy_load_receipt_id=load.receipt_id)
+    tampered = receipt.to_dict()
+    tampered["payload"] = {**tampered["payload"], "retained": False}
+    failed = verify_capability_retention(
+        conn, capability.capability_id, tampered)
+    assert failed["eligible"] is False
+    assert "retention_receipt_digest_mismatch" in failed["reasons"]
+    conn.execute(
+        "UPDATE tehm_policy_load_receipts SET receipt_json=? WHERE receipt_id=?",
+        ("{}", load.receipt_id))
+    failed_load = verify_capability_retention(
+        conn, capability.capability_id, receipt)
+    assert failed_load["eligible"] is False
+    assert any(reason in failed_load["reasons"] for reason in (
+        "runtime_load_receipt_digest_mismatch",
+        "runtime_load_snapshot_id_mismatch",
+    ))
+
+
+def test_capability_retention_training_split_is_recorded_but_not_eligible(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="RETENTION_SPLIT", applicability={"profile": "p"})
+    policy = create_policy_snapshot(
+        conn, memory_snapshot_id="retention-memory", promoted_rules=[])
+    load = record_policy_load(
+        conn, policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="retention-runtime", loaded=True)
+    receipt = record_capability_retention(
+        conn, capability_id=capability.capability_id, replay_id="replay-training",
+        replay={"verdict": "PASS", "disjoint_lineage": True,
+                "non_target_regression_zero": True, "evidence_id": "e3",
+                "split": "training", "lineage_id": "train:retention"},
+        candidate_policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="retention-runtime", policy_load_receipt_id=load.receipt_id)
+    assert receipt.retained is False
+    checked = verify_capability_retention(
+        conn, capability.capability_id, receipt)
+    assert checked["eligible"] is False
+    assert "retention_split_must_be_heldout_or_ab" in checked["reasons"]
 
 
 def test_capability_campaign_binds_exact_frozen_controls(tmp_tehm):

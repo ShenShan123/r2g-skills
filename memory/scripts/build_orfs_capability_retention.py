@@ -20,6 +20,9 @@ if str(ROOT) not in sys.path:
 
 from tehm.adapters.orfs_pair import build_orfs_pair_record  # noqa: E402
 from tehm.capability.retention import evaluate_capability_retention  # noqa: E402
+from tehm.capability.policy_snapshot import (  # noqa: E402
+    validate_policy_load_row, validate_policy_snapshot_row,
+)
 from tehm.causal.mechanism import action_digest  # noqa: E402
 from tehm import db  # noqa: E402
 
@@ -75,16 +78,32 @@ def build_orfs_capability_retention(
     conn = db.connect_read_only(db_path)
     try:
         row = conn.execute(
-            "SELECT policy_digest FROM tehm_policy_snapshots "
+            "SELECT * FROM tehm_policy_snapshots "
             "WHERE policy_snapshot_id=?", (policy_id,)).fetchone()
         load = conn.execute(
-            "SELECT loaded, receipt_json FROM tehm_policy_load_receipts "
-            "WHERE policy_snapshot_id=? ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM tehm_policy_load_receipts "
+            "WHERE policy_snapshot_id=? ORDER BY created_at DESC, receipt_id DESC LIMIT 1",
             (policy_id,)).fetchone()
-        if row is None or row["policy_digest"] != policy_digest:
+        if row is None:
+            raise ValueError("candidate policy digest binding is stale or mismatched")
+        try:
+            snapshot = validate_policy_snapshot_row(row)
+        except ValueError as exc:
+            raise ValueError("candidate policy snapshot is malformed") from exc
+        if snapshot["policy_digest"] != policy_digest:
             raise ValueError("candidate policy digest binding is stale or mismatched")
         if load is None or bool(load["loaded"]) is not True:
             raise ValueError("candidate policy has no successful runtime load receipt")
+        try:
+            checked_load = validate_policy_load_row(load)
+            load_payload = json.loads(checked_load["receipt_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ValueError("candidate policy runtime load receipt is malformed") from exc
+        if (not isinstance(load_payload, dict) or
+                load_payload.get("policy_snapshot_id") != policy_id or
+                load_payload.get("policy_digest") != policy_digest or
+                load_payload.get("loaded") is not True):
+            raise ValueError("candidate policy runtime load receipt is stale or mismatched")
     finally:
         conn.close()
 
@@ -112,6 +131,9 @@ def build_orfs_capability_retention(
         "disjoint_lineage": lineage_id not in training_lineages | heldout_lineages,
         "non_target_regression_zero": no_regression,
         "evidence_id": evidence_id,
+        "split": "heldout",
+        "lineage_id": lineage_id,
+        "candidate_policy_digest": policy_digest,
         "baseline_failed": before_failed,
         "candidate_pass": candidate_pass,
         "target_check": target_check,

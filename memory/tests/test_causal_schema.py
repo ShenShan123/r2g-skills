@@ -23,6 +23,9 @@ def test_fresh_schema_is_v4_and_has_shadow_tables(tmp_path):
             "SELECT name FROM sqlite_master WHERE type='table'")
     }
     assert V4_TABLES <= tables
+    # Retention is an additive v4 extension included in fresh stores; an
+    # already-migrated v3->v4 store creates it lazily on first use.
+    assert "tehm_capability_retention_receipts" in tables
     assert conn.execute(
         "SELECT value FROM tehm_meta WHERE key='schema_version'").fetchone()[0] == "tehm-v4"
 
