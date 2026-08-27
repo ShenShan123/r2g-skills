@@ -1,0 +1,116 @@
+{
+  "version": "tehm-orfs-batch0-riscv32i-replay-r1",
+  "classification": "INCOMPLETE_EXTERNAL_ONLY",
+  "date": "2026-08-27",
+  "campaign_id": "orfs-batch0-v1",
+  "scratch_root": "/tmp/tehm-orfs/batch0-riscv32i-replay-r1",
+  "source_spec": {
+    "path": "memory/evaluation/orfs_batch0_rtl_manifest_v1.json",
+    "sha256": "2dbfa00f7e154c9807ae000b579da13c2e0a797843742634405dfe9a34f3c64c"
+  },
+  "source_freeze": {
+    "version": "orfs-batch-source-freeze-v1",
+    "sha256": "01e63bd9a9105ab06044a8dfc1d1483ed8494d31e4082eb1412a724940782e07"
+  },
+  "toolchain": {
+    "orfs_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+    "status": "bound_internal",
+    "fingerprint": "5f6545216c040a863a4c169d90f895f218ad038bfd61991445f760ed43567c91",
+    "openroad": "26Q3-1510-g6cb3f2b704",
+    "openroad_sha256": "561ef17403ce2b55198496e8ab74435d90aba88e03a7a86b6526f7d1a0fae3a6",
+    "yosys": "0.68",
+    "yosys_sha256": "6dca418413bcab1e0d6583974f65870064a43439d30f9a0ab41b95bea3041bd0"
+  },
+  "scope": {
+    "case_id": "sky130hs:riscv32i:u50->u40",
+    "design": "riscv32i",
+    "split": "support",
+    "lineage_id": "batch0-v1:sky130hs:riscv32i",
+    "family": "DENSITY_RELIEF",
+    "action": {"config_edits": {"CORE_UTILIZATION": "40"}},
+    "source_digest": "c32d2dfca39640fb78b37203554d71c4141c67bda6c6bde7057548501c10b4d2",
+    "receipt_id": "orfs-observation:62ea650db26e5eac82117a46",
+    "receipt_sha256": "c469c9f7a85570f4f04df19f6331724ebb8fe7086fcab0679016128e59d1b18b",
+    "record_id": "orfs-pair:b68b537f1fff8478b42327e9",
+    "repository_ref": "orfs-source:162204981cf694d993af977d93529ca5f2b3f255579a561d22db8afa855eb1e5"
+  },
+  "execution": {
+    "before": {
+      "result": "SUCCESS",
+      "stages": {"synth": 0, "floorplan": 0, "place": 0, "cts": 0, "route": 0, "finish": 0},
+      "route": "clean",
+      "drc": "clean",
+      "rcx": "complete",
+      "run_tag": "RUN_2026-08-27_09-42-58_14_67bf",
+      "run_meta_sha256": "ab07475b909ffcad6776dca9acd4fc33216e27062d39bb9a4d83fb90d652cc80",
+      "stage_log_sha256": "a752f3e8b5bd364130c30b6be538b1343efe134a6f90552568bf41bf4fb92af1"
+    },
+    "after": {
+      "result": "SUCCESS",
+      "stages": {"synth": 0, "floorplan": 0, "place": 0, "cts": 0, "route": 0, "finish": 0},
+      "route": "clean",
+      "drc": "clean",
+      "rcx": "complete",
+      "run_tag": "RUN_2026-08-27_09-42-58_13_74d8",
+      "run_meta_sha256": "67e489ea0c6ea533c7ab7d219022ebe89b3a74d95c2ce879d3231cbf08af4e12",
+      "stage_log_sha256": "a3a2141b4efa8d5dedbffb9b5c0b1e2c82aa93bdf90ec8d08d20632c0076a8df"
+    }
+  },
+  "oracles": {
+    "equivalence": {
+      "verdict": "PASS",
+      "proof_type": "CRYPTOGRAPHIC_SOURCE_IDENTITY_V1",
+      "report_sha256": "7cff17985ee86f790b67dbaed636407d861d3ccac58236f0c9e83ed94b599721"
+    },
+    "strict_signoff": {
+      "before_rc": 1,
+      "after_rc": 1,
+      "status": "FAIL",
+      "blocker": "lvs",
+      "lvs": "mismatch",
+      "lvs_mismatch_class": "netgen_topology",
+      "drc": "clean",
+      "rcx": "complete",
+      "report_sha256": "3355b10b5582436ecb356834e3ad1249188d76c14347321de4130b0384746eba"
+    },
+    "timing": {
+      "status": "FAIL",
+      "tier": "severe",
+      "before": {"clock_period_ns": 4.0, "wns_ns": -0.49875, "tns_ns": -345.517, "violations": 1056},
+      "after": {"clock_period_ns": 4.0, "wns_ns": -0.249082, "tns_ns": -102.761, "violations": 834}
+    },
+    "graph": {
+      "before": "invalid",
+      "after": "invalid",
+      "reason": "strict signoff gate blocked def-graph feature extraction",
+      "report_sha256": "f13f6b23501162f454753ea96b8c152417b11f2d5ff7c2feeda9e637ba23a716"
+    }
+  },
+  "ppa": {
+    "before": {"die_area_um2": 173876, "power_w": 0.0507941, "utilization": 0.624452, "instances": 17886},
+    "after": {"die_area_um2": 217123, "power_w": 0.0510368, "utilization": 0.501156, "instances": 22251},
+    "delta": {"die_area_um2": 43247, "power_w": 0.0002427, "wns_improvement_ns": 0.249668, "tns_improvement_ns": 242.756},
+    "utility_verdict": "HARMFUL"
+  },
+  "admission": {
+    "manifest_observations": 7,
+    "classifications": {"INCOMPLETE_EXTERNAL_ONLY": 7},
+    "learner_eligible": 0,
+    "promotion_eligible": 0,
+    "staging_imported": 0,
+    "canonical_memory_mutation": "none",
+    "promotion_attempted": false,
+    "canonical_snapshot_sha256": "0d5472e9ad52e325c588aac273aae2f6847348b79ef3ea61d128ab1d4a08246f",
+    "canonical_transitions": 9,
+    "canonical_physical_effects": 0
+  },
+  "phase_reports": {
+    "equivalence_report_sha256": "7cff17985ee86f790b67dbaed636407d861d3ccac58236f0c9e83ed94b599721",
+    "signoff_report_sha256": "3355b10b5582436ecb356834e3ad1249188d76c14347321de4130b0384746eba",
+    "graph_report_sha256": "f13f6b23501162f454753ea96b8c152417b11f2d5ff7c2feeda9e637ba23a716",
+    "staging_import_report_sha256": "34d35e3e0281052daedb29910cc7abe32bfcf17b712839ef8e11aca131138c50",
+    "batch0_report_sha256": "d6f3e02f010b7f96f4031f8c96cd4b0bd0a34d45fec0e1f76bdfe2ede5fd5a9b",
+    "external_chain_sha256": "c7630bc29dc66bcd7ed1c4939ecc44de3682de385557dd2ceb9da47f5c010fd8"
+  },
+  "next_gate": "repair the LVS/topology and timing blockers, then regenerate graph features and obtain an independent non-harmful support cohort before any authority review"
+}

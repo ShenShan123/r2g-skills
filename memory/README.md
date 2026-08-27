@@ -1563,6 +1563,26 @@ digest 源）、`features/`（def-graph 已提取特征）、`lvs/`（powered.v 
   config/SDC/RTL binding 与 timing contract。任一依赖或输入漂移都会停止该 phase，
   防止长批次在中途更换 flow 后继续复用旧结果。
 
+### Batch-0 `riscv32i` exact-toolchain replay（2026-08-27）
+
+在上述 source-freeze 下只选择一个 source-disjoint support pair：
+`sky130hs:riscv32i:u50->u40`。同一 packaged ORFS tree 的两个 arm 均完成
+synth/floorplan/place/CTS/route/finish，route/DRC clean，RCX complete，独立 RTL
+equivalence 为 `PASS`。但两臂 Netgen LVS 均为 `netgen_topology` mismatch，setup timing
+仍为 severe（before WNS/TNS `-0.498750/-345.517 ns`，after
+`-0.249082/-102.761 ns`），strict signoff 两臂均 `FAIL`，def-graph 因 strict gate
+被 fail-closed 为 `invalid`。`CORE_UTILIZATION 50->40` 使面积 `173876->217123 µm²`
+（`+43247`）和功耗 `0.0507941->0.0510368 W`（`+0.0002427 W`），所以 utility 明确为
+`HARMFUL`。7 条 manifest observation 全部是 `INCOMPLETE_EXTERNAL_ONLY`，
+`learner_eligible=0`、staging imported `0`、`promotion_attempted=false`，canonical
+digest/transition count 不变。该结果是实际 ORFS 负证据和 provenance 链路验证，不是
+support rule、capability gain 或 promotion；机器可读摘要见
+[`evidence/tehm-orfs-batch0-riscv32i-replay-r1/replay_report.json`](../evidence/tehm-orfs-batch0-riscv32i-replay-r1/replay_report.json)。
+
+因此下一步不是扩大到完整 14-arm，而是先修复 LVS/topology 与 timing contract，重新
+生成有效 def-graph，再在至少两条独立 lineage 上取得 non-harmful、完整 oracle 的
+support cohort，随后才重跑六项 authority gate。
+
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 
 - 新增独立物理 lineage `orfs-heldout-v5:sky130hs:gcd:base3`，位于

@@ -2574,6 +2574,27 @@ equivalence、strict signoff、PPA 与 DEF graph 全部通过，产生 1 条
 仍需取得至少一条完整 support pair，再独立建立六项 rule promotion gate 后才可考虑
 canonical import。
 
+### 2026-08-27 `riscv32i` support replay（exact toolchain，负证据）
+
+为继续推进而不扩大实验面，本轮只选择 source-disjoint support lineage
+`sky130hs:riscv32i:u50->u40`，在同一 source-freeze 与 packaged ORFS tree 上完成
+两个 arm 的全流程。synth/floorplan/place/CTS/route/finish 均为 `0`，route/DRC clean、
+RCX complete，独立 RTL equivalence `PASS`；但两臂 LVS 都是 Netgen
+`netgen_topology` mismatch，setup timing 仍为 severe（before
+`WNS/TNS=-0.498750/-345.517 ns`，after `-0.249082/-102.761 ns`），strict signoff
+两臂均 `FAIL`，def-graph 因 strict gate 被 `invalid`。实际 PPA 显示 density relief
+使面积增加 `43247 µm²`、功耗增加 `0.0002427 W`，因此 utility=`HARMFUL`。
+
+该 pair 的 receipt 虽保留了完整 ORFS/PPA/等价物证，但 pair completeness 仍缺
+`timing/lvs/graph`；7 条 manifest observation 全部分类为
+`INCOMPLETE_EXTERNAL_ONLY`，没有 learner-eligible/support admission，staging 导入
+为 `0`，canonical digest 与 transition count 均未改变，`promotion_attempted=false`。
+这组结果确认了 exact-toolchain 运行和 fail-closed admission，同时给出下一项可执行
+工作：修复 LVS/topology 与 timing contract，恢复有效 graph features；只有在至少两条
+独立 lineage 得到 non-harmful 且完整 oracle 的 support cohort 后，才再次评估六项
+authority gate。机器可读摘要见
+`evidence/tehm-orfs-batch0-riscv32i-replay-r1/replay_report.json`。
+
 随后取得了第一条当前 exact toolchain 的完整 support pair：参数化 UART 在
 `CORE_UTILIZATION 50→40` 下使用 ORFS 自带 AES SDC 模板重绑定得到固定 `2.8 ns`
 timing contract；before/after 两个 arm 的 synthesis、route、finish、equivalence、
