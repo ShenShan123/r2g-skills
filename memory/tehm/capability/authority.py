@@ -224,11 +224,45 @@ def _normalise_evidence_refs(
                 reasons.append("C4:execution_receipt_id_missing")
             else:
                 normalised[gate]["execution_receipt_id"] = execution_receipt_id
+        if gate == "C7" and "retention_receipt_id" in raw:
+            retention_receipt_id = str(raw.get("retention_receipt_id") or "")
+            if not retention_receipt_id:
+                reasons.append("C7:retention_receipt_id_missing")
+            else:
+                normalised[gate]["retention_receipt_id"] = retention_receipt_id
         if split not in GATE_ALLOWED_SPLITS[gate]:
             reasons.append(f"{gate}:invalid_evidence_split")
         if verdict != "PASS":
             reasons.append(f"{gate}:evidence_verdict_not_pass")
     return normalised, reasons
+
+
+def _retention_binding_reasons(
+    conn: sqlite3.Connection, *, capability_id: str,
+    evidence_ref: Mapping,
+) -> list[str]:
+    """Optionally bind C7 to a replayable retention ledger receipt.
+
+    The field is optional for compatibility with older authority fixtures.  If
+    supplied, it is a hard dependency: a missing, tampered, failed, or
+    capability-mismatched retention receipt makes the authority attempt
+    ineligible.  The retention receipt itself remains evaluation evidence and
+    does not mutate capability lifecycle.
+    """
+    retention_receipt_id = str(evidence_ref.get("retention_receipt_id") or "")
+    if not retention_receipt_id:
+        return []
+    from .retention import (
+        load_capability_retention_receipt, verify_capability_retention,
+    )
+    retention = load_capability_retention_receipt(conn, retention_receipt_id)
+    if retention is None:
+        return ["C7:retention_receipt_missing"]
+    checked = verify_capability_retention(conn, capability_id, retention)
+    if checked.get("eligible") is True:
+        return []
+    return [f"C7:retention:{reason}"
+            for reason in checked.get("reasons") or ("not_eligible",)]
 
 
 def record_capability_authority(
@@ -263,7 +297,9 @@ def record_capability_authority(
         conn, attribution, candidate_policy_snapshot_id=candidate_policy_snapshot_id,
         runtime_id=runtime_id,
         execution_receipt_id=(refs.get("C4") or {}).get("execution_receipt_id"))
-    reasons = list(evidence_reasons) + policy_reasons
+    retention_reasons = _retention_binding_reasons(
+        conn, capability_id=capability_id, evidence_ref=refs.get("C7") or {})
+    reasons = list(evidence_reasons) + policy_reasons + retention_reasons
     if attribution.get("promotable") is not True:
         reasons.append("attribution_receipt_not_promotable")
     if any(attribution_gates.get(gate) is not True for gate in CAPABILITY_GATES):
@@ -409,6 +445,10 @@ def verify_capability_authority(
             lineage_id=ref.get("lineage_id"))
         if row["evidence_digest"] != recomputed or ref.get("evidence_digest") != recomputed:
             reasons.append(f"evidence:{gate}:digest_mismatch")
+    c7_ref = refs.get("C7") if isinstance(refs, Mapping) else None
+    if isinstance(c7_ref, Mapping):
+        reasons.extend(_retention_binding_reasons(
+            conn, capability_id=capability_id, evidence_ref=c7_ref))
     # Re-check the candidate snapshot and actual runtime load after the receipt
     # was written; this prevents a stale or copied policy receipt being reused.
     attribution_digest = data.get("attribution_digest")

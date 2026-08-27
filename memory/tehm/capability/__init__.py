@@ -21,7 +21,8 @@ from .registry import (
 from .retention import (
     RETENTION_EVIDENCE_TYPE, RETENTION_SPLITS, RETENTION_VERSION,
     CapabilityRetentionReceipt, evaluate_capability_retention,
-    record_capability_retention, verify_capability_retention,
+    load_capability_retention_receipt, record_capability_retention,
+    verify_capability_retention,
 )
 from .harness import CapabilityCampaignReceipt, evaluate_capability_campaign
 
@@ -39,6 +40,7 @@ __all__ = [
     "promote_capability", "record_capability_evidence", "register_capability",
     "CapabilityRetentionReceipt", "evaluate_capability_retention",
     "RETENTION_VERSION", "RETENTION_EVIDENCE_TYPE", "RETENTION_SPLITS",
-    "record_capability_retention", "verify_capability_retention",
+    "record_capability_retention", "load_capability_retention_receipt",
+    "verify_capability_retention",
     "CapabilityCampaignReceipt", "evaluate_capability_campaign",
 ]

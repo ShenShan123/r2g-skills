@@ -397,6 +397,55 @@ def record_capability_retention(
     return receipt
 
 
+def load_capability_retention_receipt(
+    conn: sqlite3.Connection, retention_receipt_id: str,
+) -> dict | None:
+    """Load one ledger row as a verifiable receipt mapping.
+
+    Loading does not trust the row or return ``retained`` as authority; the
+    caller must pass the mapping to :func:`verify_capability_retention`.
+    Returning ``None`` for a missing/malformed row lets authority callers
+    report a fail-closed evidence reason without mutating the database.
+    """
+    if not _table_exists(conn, "tehm_capability_retention_receipts"):
+        return None
+    row = conn.execute(
+        "SELECT * FROM tehm_capability_retention_receipts "
+        "WHERE retention_receipt_id=?", (retention_receipt_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    try:
+        payload = json.loads(row["receipt_json"] or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    reasons = payload.get("reasons") or []
+    if not isinstance(reasons, list) or any(not isinstance(item, str)
+                                            for item in reasons):
+        reasons = ["retention_payload_reasons_malformed"]
+    return {
+        "capability_id": row["capability_id"],
+        "replay_id": row["replay_id"],
+        "retained": bool(row["retained"]),
+        "replay_verdict": row["replay_verdict"],
+        "disjoint_lineage": bool(row["disjoint_lineage"]),
+        "non_target_regression_zero": bool(row["non_target_regression_zero"]),
+        "evidence_id": row["evidence_id"],
+        "reason": "retention_verified" if bool(row["retained"]) else ";".join(reasons),
+        "retention_receipt_id": row["retention_receipt_id"],
+        "candidate_policy_snapshot_id": row["candidate_policy_snapshot_id"],
+        "candidate_policy_digest": row["candidate_policy_digest"],
+        "runtime_id": row["runtime_id"],
+        "policy_load_receipt_id": row["policy_load_receipt_id"],
+        "split": row["split"],
+        "lineage_id": row["lineage_id"],
+        "receipt_digest": row["receipt_digest"],
+        "payload": dict(payload),
+    }
+
+
 def verify_capability_retention(
     conn: sqlite3.Connection,
     capability_id: str,
@@ -542,5 +591,6 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
 __all__ = [
     "RETENTION_VERSION", "RETENTION_EVIDENCE_TYPE", "RETENTION_SPLITS",
     "CapabilityRetentionReceipt", "evaluate_capability_retention",
-    "record_capability_retention", "verify_capability_retention",
+    "record_capability_retention", "load_capability_retention_receipt",
+    "verify_capability_retention",
 ]

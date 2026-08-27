@@ -133,7 +133,9 @@ capability、candidate policy snapshot digest、成功的 runtime load receipt�
 进入 production policy。验证阶段会重新校验 snapshot/load JSON、ledger payload、
 registry evidence 和纯 evaluator 结果，直接 SQL 篡改或 training split 均
 fail-closed。外部 ORFS retention builder 仍保持只读，只在报告中补充 split、lineage
-和 policy digest，不能把外部回放冒充 learner support。
+和 policy digest，不能把外部回放冒充 learner support。C7 authority evidence 现在
+可显式携带 `retention_receipt_id`；一旦提供，authority 记录与消费都会重新验证
+retention ledger，failed/stale receipt 会阻断 capability authority。
 
 ### Online consolidation trigger lane（2026-08-26）
 
@@ -356,7 +358,7 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；新增 retention
-ledger 的当前全套回归为 `492 passed`，仍保持 shadow/evaluation-only 的 promotion
+ledger 的当前全套回归为 `493 passed`，仍保持 shadow/evaluation-only 的 promotion
 边界。
 
 Backend activation seam 现在也执行同一条 fail-closed 回执规则：`UNKNOWN` 只能被

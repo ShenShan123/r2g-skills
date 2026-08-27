@@ -568,6 +568,65 @@ def test_capability_retention_training_split_is_recorded_but_not_eligible(tmp_te
     assert "retention_split_must_be_heldout_or_ab" in checked["reasons"]
 
 
+def test_capability_authority_can_bind_c7_to_retention_receipt(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="RETENTION_AUTHORITY", applicability={"profile": "p"},
+        status="candidate")
+    baseline = create_policy_snapshot(
+        conn, memory_snapshot_id="m0", promoted_rules=[])
+    candidate = create_policy_snapshot(
+        conn, memory_snapshot_id="m1", promoted_rules=["r1"])
+    load = record_policy_load(
+        conn, policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="authority-runtime", loaded=True,
+        receipt={"execution_receipt_id": "exec-retention"})
+    attribution = evaluate_capability_attribution_from_db(
+        conn, capability_id=capability.capability_id,
+        baseline_memory_digest="m0", candidate_memory_digest="m1",
+        baseline_policy_snapshot_id=baseline.policy_snapshot_id,
+        candidate_policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="authority-runtime", baseline_behavior_digest="b0",
+        candidate_behavior_digest="b1", target_gain=True, no_regression=True,
+        heldout={"verdict": "PASS", "disjoint_lineage": True,
+                 "evidence_id": "heldout-retention"},
+        ablation={"gain_without_memory": False, "gain_with_memory": True})
+    retention = record_capability_retention(
+        conn, capability_id=capability.capability_id, replay_id="replay-auth",
+        replay={"verdict": "PASS", "disjoint_lineage": True,
+                "non_target_regression_zero": True, "evidence_id": "ret-auth",
+                "split": "heldout", "lineage_id": "heldout:auth",
+                "candidate_policy_digest": candidate.policy_digest},
+        candidate_policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="authority-runtime", policy_load_receipt_id=load.receipt_id)
+    refs = {
+        f"C{i}": {"evidence_id": f"auth-e{i}", "split": "ab",
+                   "verdict": "PASS"} for i in range(1, 9)}
+    refs["C4"]["split"] = "training"
+    refs["C4"]["execution_receipt_id"] = "exec-retention"
+    refs["C5"]["split"] = "training"
+    refs["C6"]["split"] = "heldout"
+    refs["C7"].update({"split": "heldout",
+                        "retention_receipt_id": retention.retention_receipt_id})
+    authority = record_capability_authority(
+        conn, capability_id=capability.capability_id,
+        attribution_receipt=attribution, evidence_refs=refs,
+        candidate_policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="authority-runtime", gates={f"C{i}": True for i in range(1, 9)})
+    assert authority.eligible is True
+    assert verify_capability_authority(
+        conn, capability.capability_id, authority)["eligible"] is True
+
+    conn.execute(
+        "UPDATE tehm_capability_retention_receipts SET receipt_json=? "
+        "WHERE retention_receipt_id=?", ("{}", retention.retention_receipt_id))
+    checked = verify_capability_authority(
+        conn, capability.capability_id, authority)
+    assert checked["eligible"] is False
+    assert any(reason.startswith("C7:retention:")
+               for reason in checked["reasons"])
+
+
 def test_capability_campaign_binds_exact_frozen_controls(tmp_tehm):
     conn, _, _ = tmp_tehm
     capability = register_capability(

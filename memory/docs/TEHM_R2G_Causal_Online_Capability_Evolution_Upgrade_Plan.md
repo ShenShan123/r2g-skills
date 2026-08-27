@@ -2002,6 +2002,11 @@ lineage、stale/tampered load receipt、直接 SQL 修改均 fail-closed。该�
 schema-v4 的 additive extension：fresh schema 直接创建，既有 v4 store 在首次
 调用时惰性创建，以保持已发布的 v1→v4 migration chain 不变。外部 ORFS retention
 脚本仍保持 read-only，只输出可重放报告字段，不能把 replay 写入 learner support。
+当 C7 authority evidence 显式携带 `retention_receipt_id` 时，
+`record_capability_authority()` 与 `verify_capability_authority()` 会重新加载并
+验证该 ledger receipt；因此 retention 可以成为 no-regression authority 证据，
+而不会绕过现有 C1–C8 evidence split contract。未提供该字段的历史 fixture 仍按
+旧通用 C7 evidence 兼容，但不应被解释为已完成 retention replay。
 
 ---
 
