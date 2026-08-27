@@ -70,7 +70,7 @@ def test_tool_specs_are_self_contained_json_schemas():
         if item["function"]["name"] == "clone_repository"
     )
     assert "opaque handle" in clone["description"]
-    assert "copy its returned repo_url and commit exactly" in clone["description"]
+    assert "provenance is bound" in clone["description"]
     search = next(
         item["function"]
         for item in specs
@@ -586,20 +586,23 @@ def test_validate_candidate_normalizes_equivalent_git_repository_urls(
     assert result["precheck_qualified"] is True
 
 
-def test_validate_candidate_returns_actionable_repository_identity_mismatch(tmp_path):
+def test_validate_candidate_binds_provenance_to_the_repository_handle(
+    tmp_path, monkeypatch
+):
     runner = validation_runner(tmp_path)
     candidate = candidate_fixture()
     candidate["repo_url"] = "https://github.com/example/other"
+    candidate["commit"] = "b" * 40
+    monkeypatch.setattr(
+        vanilla, "run_formal_synth", lambda *args, **kwargs: passing_synth_result()
+    )
     result = runner.validate_candidate({"repo_id": "repo", "candidate": candidate})
-    assert result == {
-        "accepted": False,
-        "precheck_qualified": False,
-        "failure_class": "pinned_source_identity_mismatch",
-        "identity_field": "repo_url",
-        "expected_repo_url": "https://github.com/example/rtl",
-        "received_repo_url": "https://github.com/example/other",
-        "synthesis_run": False,
-    }
+    assert result["accepted"] is True
+    assert result["precheck_qualified"] is True
+    assert result["source_identity_bound_by_runner"] is True
+    qualified = next(iter(runner.qualified_candidates.values()))
+    assert qualified["repo_url"] == "https://github.com/example/rtl"
+    assert qualified["commit"] == "a" * 40
 
 
 def test_validate_candidate_does_not_checkpoint_synthesis_failure(

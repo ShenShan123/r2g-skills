@@ -398,8 +398,8 @@ def tool_specs() -> list[dict[str, Any]]:
             "name": "clone_repository",
             "description": (
                 "Clone a public HTTPS Git repository without submodules and pin a commit. "
-                "The returned repo_id is an opaque handle; copy its returned repo_url and "
-                "commit exactly into candidates validated with that repo_id."
+                "The returned repo_id is an opaque handle. Candidate provenance is bound to "
+                "that handle's returned repo_url and pinned commit during validation."
             ),
             "parameters": {
                 "type": "object",
@@ -465,8 +465,8 @@ def tool_specs() -> list[dict[str, Any]]:
         {
             "name": "validate_candidate",
             "description": (
-                "Run the public deterministic candidate precheck: schema and pinned-source "
-                "identity, active compilation-input closure, repository-relative license "
+                "Run the public deterministic candidate precheck: schema, repo_id-bound "
+                "pinned-source provenance, active compilation-input closure, repository-relative license "
                 "evidence with matching canonical SPDX, then the frozen Sky130HD synth-only "
                 "screen (nonempty mapped netlist, at least 100 mapped cells, functional input "
                 "and output, and no unresolved modules). Only a full pass is checkpointed. "
@@ -886,7 +886,7 @@ class VanillaRun:
     def validate_candidate(self, arguments: dict[str, Any]) -> dict[str, Any]:
         repo_id = str(arguments["repo_id"])
         source = self.repository(repo_id)
-        candidate = arguments["candidate"]
+        candidate = copy.deepcopy(arguments["candidate"])
         candidate_schema = inline_safe_paths(
             copy.deepcopy(read_json(SUBMISSION_SCHEMA)["$defs"]["candidate"])
         )
@@ -899,20 +899,15 @@ class VanillaRun:
                 "schema_errors": errors[:20],
             }
         expected = self.repo_meta[repo_id]
-        if normalized_repo_url(candidate["repo_url"]) != normalized_repo_url(
-            expected["repo_url"]
-        ):
-            return {
-                "accepted": False,
-                "precheck_qualified": False,
-                "failure_class": "pinned_source_identity_mismatch",
-                "identity_field": "repo_url",
-                "expected_repo_url": expected["repo_url"],
-                "received_repo_url": candidate["repo_url"],
-                "synthesis_run": False,
-            }
-        if candidate["commit"].lower() != expected["commit"].lower():
-            raise ExperimentError("candidate commit does not match checked-out source")
+        source_identity_bound = (
+            normalized_repo_url(candidate["repo_url"])
+            != normalized_repo_url(expected["repo_url"])
+            or candidate["commit"].lower() != expected["commit"].lower()
+        )
+        # repo_id names the immutable checkout. Bind its authoritative source identity so
+        # models are evaluated on RTL discovery and qualification, not string transcription.
+        candidate["repo_url"] = expected["repo_url"]
+        candidate["commit"] = expected["commit"]
         candidate_key = (
             str(candidate["repo_url"]).rstrip("/"),
             str(candidate["commit"]).lower(),
@@ -1014,6 +1009,7 @@ class VanillaRun:
             "accepted": True,
             "precheck_qualified": failure is None,
             "failure_class": failure,
+            "source_identity_bound_by_runner": source_identity_bound,
             "input_evidence": input_summary,
             "synthesis_run": True,
             "synthesis": summary,
@@ -1321,8 +1317,8 @@ class VanillaRun:
             "You are a Vanilla LLM baseline for a controlled RTL-acquisition experiment. "
             "You have no R2G Agent code, memory, Recipe, or prior candidate list. Use only "
             "the supplied tools. Find public Verilog/SystemVerilog RTL, pin every Git commit, "
-            "treat clone_repository repo_id values as opaque handles, and copy the exact "
-            "repo_url and commit returned for that same repo_id into every candidate. "
+            "and treat clone_repository repo_id values as opaque handles: the runner binds "
+            "each validated candidate to that handle's exact repo_url and pinned commit. "
             "Identify a real top module and complete compile-input closure, and verify a "
             "repository-relative license file at the pinned commit. license_evidence must use "
             "repository_path (never a remote URL) and a canonical SPDX identifier matching "
