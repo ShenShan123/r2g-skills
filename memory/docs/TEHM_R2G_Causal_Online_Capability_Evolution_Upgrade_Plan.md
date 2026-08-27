@@ -2648,6 +2648,12 @@ compatibility gap
 
 只生成 gap receipt。
 
+当前实现的 provenance 边界已收紧：`detect_capability_gaps()` 不再直接解析
+`tehm_assets.compatibility_json`，而是只消费经过 `assets.registry.get_asset()`
+重算 content digest、ID 和全部 contract 的 promoted asset。JSON 语法正确但内容
+被篡改的 status row 会被忽略并重新生成 gap；该 detector 仍只生成 receipt，不写
+asset、capability 或 production lifecycle。
+
 ---
 
 ## Phase C5 — Shadow Asset Synthesis

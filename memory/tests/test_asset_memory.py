@@ -380,6 +380,51 @@ def test_gap_detector_requires_repeated_lineage_evidence(tmp_tehm):
     assert "repeated_unsupported_mechanism" in gap.reason
 
 
+def test_gap_detector_ignores_tampered_promoted_asset(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    oracle = IcarusOracle()
+    if not oracle.available:
+        pytest.skip("Icarus unavailable")
+    for name in ("req_ack_bug", "req_ack_bug2"):
+        capture_rtl_causal_fragment(
+            conn, store, PROJECTS / name, oracle=oracle,
+            campaign_id="gap-tamper-campaign")
+    proposal = _proposal()
+    registered = register_asset_proposal(conn, proposal)
+    set_asset_status(conn, asset_id=registered.asset_id,
+                     target_scope=registered.target_scope, status="shadow")
+    set_asset_status(conn, asset_id=registered.asset_id,
+                     target_scope=registered.target_scope, status="candidate")
+    set_asset_status(
+        conn, asset_id=registered.asset_id,
+        target_scope=registered.target_scope, status="promoted",
+        gates={"schema_valid": True, "static_valid": True,
+               "independent_verifier": True, "compatibility_verified": True,
+               "cross_lineage_verified": True, "regression_zero": True,
+               "rollback_verified": True})
+    covered = detect_capability_gaps(
+        conn, campaign_id="gap-tamper-campaign", min_lineages=2,
+        min_failures=99)
+    assert not any(
+        item.mechanism_family == "HANDSHAKE_COMPLETION" and
+        "repeated_unsupported_mechanism" in item.reason
+        for item in covered)
+
+    # Keep JSON syntactically valid but invalidate the content-addressed asset
+    # digest.  A status row must not make this untrusted asset cover the gap.
+    conn.execute(
+        "UPDATE tehm_assets SET compatibility_json=? WHERE asset_id=?",
+        ('{"compatibility_profile":"rtl.fsm.single_guard.v1"}',
+         registered.asset_id))
+    conn.commit()
+    gaps = detect_capability_gaps(
+        conn, campaign_id="gap-tamper-campaign", min_lineages=2,
+        min_failures=99)
+    gap = next(item for item in gaps
+               if item.mechanism_family == "HANDSHAKE_COMPLETION")
+    assert "repeated_unsupported_mechanism" in gap.reason
+
+
 def test_asset_registry_writers_preserve_outer_transaction(tmp_tehm):
     conn, _, _ = tmp_tehm
     proposal = _proposal()

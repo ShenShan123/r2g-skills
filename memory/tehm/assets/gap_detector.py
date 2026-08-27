@@ -6,7 +6,6 @@ changes a rule status, or consumes calibration/held-out evidence.
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
 from collections import defaultdict
 
@@ -15,19 +14,25 @@ from tehm.causal.mechanism import load_transition_facts
 from tehm.ids import stable_dumps
 
 from .receipts import CapabilityGapReceipt
+from .registry import get_asset
 
 
 def _promoted_asset_profiles(conn: sqlite3.Connection) -> set[str]:
     rows = conn.execute(
-        """SELECT a.compatibility_json
-             FROM tehm_assets a JOIN tehm_asset_status s ON s.asset_id=a.asset_id
+        """SELECT DISTINCT s.asset_id
+             FROM tehm_asset_status s
             WHERE s.status='promoted'"""
     ).fetchall()
     profiles: set[str] = set()
     for row in rows:
-        try:
-            compatibility = json.loads(row["compatibility_json"])
-        except (TypeError, json.JSONDecodeError):
+        # Gap detection is a learner-facing consumer.  Do not let a status
+        # row or JSON blob bypass the registry's content-addressed checks:
+        # get_asset() validates every contract, provenance JSON and digest.
+        asset = get_asset(conn, str(row["asset_id"]))
+        if asset is None:
+            continue
+        compatibility = asset.get("compatibility")
+        if not isinstance(compatibility, dict):
             continue
         profile = (compatibility.get("compatibility_profile") or
                    compatibility.get("profile"))

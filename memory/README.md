@@ -73,6 +73,9 @@ rows，但仍只保持 candidate-only 结论；没有自动 promotion 或 produc
 ledger schema 初始化不再通过会隐式提交的 `executescript` 完成；整组 evidence
 rows 与 authority receipt 现在共用 savepoint，晚到的 immutable-row 冲突会整体回滚，
 且不会提交调用方已有事务。
+Gap detector 现在只通过 `assets.registry.get_asset()` 消费 promoted asset：兼容性
+profile、全部 contract 和 content digest 必须先完整校验；JSON 合法但 digest 被
+篡改的 status row 会被忽略并重新报告 capability gap，不会伪造覆盖证据。
 
 ### C1-C8 RTL capability attribution（2026-08-26）
 
