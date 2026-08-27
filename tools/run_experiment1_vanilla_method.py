@@ -483,7 +483,9 @@ def tool_specs() -> list[dict[str, Any]]:
             "name": "submit_candidates",
             "description": (
                 "Submit the final ordered candidate list after at least one candidate has passed "
-                "validate_candidate. Empty submissions are rejected and do not end the run."
+                "validate_candidate. Reuse each qualifying candidate_id and top_module; the runner "
+                "retains its repository-handle-bound provenance. Empty submissions are rejected and "
+                "do not end the run."
             ),
             "parameters": {
                 "type": "object",
@@ -1005,7 +1007,7 @@ class VanillaRun:
             )
             self.qualified_candidates.setdefault(key, copy.deepcopy(candidate))
             self.write_qualification_checkpoints()
-        return {
+        response = {
             "accepted": True,
             "precheck_qualified": failure is None,
             "failure_class": failure,
@@ -1014,6 +1016,14 @@ class VanillaRun:
             "synthesis_run": True,
             "synthesis": summary,
         }
+        if failure is None:
+            response["qualified_candidate_reference"] = {
+                "candidate_id": candidate["candidate_id"],
+                "repo_url": candidate["repo_url"],
+                "commit": candidate["commit"],
+                "top_module": candidate["top_module"],
+            }
+        return response
 
     def submit(self, arguments: dict[str, Any]) -> dict[str, Any]:
         candidates = []
@@ -1026,6 +1036,17 @@ class VanillaRun:
                 str(candidate.get("top_module", "")),
             )
             qualified = self.qualified_candidates.get(key)
+            if qualified is None:
+                # A candidate_id/top_module pair is a stable reference after validation.
+                # Resolve it to runner-held provenance rather than string transcription.
+                references = [
+                    value
+                    for value in self.qualified_candidates.values()
+                    if value["candidate_id"] == candidate.get("candidate_id")
+                    and value["top_module"] == candidate.get("top_module")
+                ]
+                if len(references) == 1:
+                    qualified = references[0]
             if qualified is None:
                 rejected.append(str(candidate.get("candidate_id", "unknown")))
                 continue
@@ -1343,7 +1364,9 @@ class VanillaRun:
             "deterministic runner-state message. Manage the disclosed budget so inspected "
             "candidates are validated incrementally. "
             + completion_instruction
-            + " Do not call submit_candidates with an empty candidate list: an empty call is "
+            + " When validation returns qualified_candidate_reference, reuse its candidate_id and "
+            "top_module in the final submission; the runner retains canonical source provenance. "
+            "Do not call submit_candidates with an empty candidate list: an empty call is "
             "rejected and does not end the run. After at least one candidate passes "
             "validate_candidate, call submit_candidates once to finalize."
         )

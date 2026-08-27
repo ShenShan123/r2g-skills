@@ -447,6 +447,35 @@ def test_submit_uses_only_durably_qualified_candidate(tmp_path):
     assert runner.final is None
 
 
+def test_submit_resolves_a_validated_candidate_reference_to_canonical_provenance(
+    tmp_path,
+):
+    runner = VanillaRun(
+        route={
+            "method_id": "qwen-vanilla",
+            "model_id": "qwen-test",
+            "provider": "test",
+        },
+        campaign_root=tmp_path,
+        batch_id=1,
+        target=1,
+        max_turns=100,
+        max_output_tokens=4096,
+        run_kind="formal",
+    )
+    qualified = candidate_fixture()
+    runner.qualified_candidates[
+        (qualified["repo_url"], qualified["commit"], qualified["top_module"])
+    ] = qualified
+    replay = dict(qualified)
+    replay["repo_url"] = "https://github.com/example/transcribed-wrong"
+    replay["commit"] = "b" * 40
+    result = runner.submit({"candidates": [replay], "out_of_scope": []})
+    assert result["accepted"] is True
+    assert runner.final is not None
+    assert runner.final["candidates"][0]["repo_url"] == qualified["repo_url"]
+
+
 def candidate_fixture() -> dict:
     return {
         "candidate_id": "local_top",
