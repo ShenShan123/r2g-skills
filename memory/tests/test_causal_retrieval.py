@@ -88,6 +88,10 @@ def test_causal_recall_matches_profile_and_mechanism_only(tmp_tehm):
     assert matches[0].quality_status == "NOT_ESTABLISHED"
     assert matches[0].utility_score == 0.5
     assert matches[0].risk_penalty == 0.5
+    assert matches[0].evidence_support_score == 0.5
+    assert matches[0].evidence_support_count == 1
+    assert matches[0].evidence_lineage_count == 1
+    assert matches[0].evidence_support_status == "NOT_ESTABLISHED"
     mismatch = MemoryQuery(query_plan={
         "compatibility_profile": "rtl.sequential.reset_branch.v1",
         "mechanism_signature": {"mechanism_family": "HANDSHAKE_COMPLETION"},
@@ -212,7 +216,7 @@ def test_causal_recall_quality_reranks_shadow_paths(tmp_tehm):
     assert matches[0].mechanism_score == matches[1].mechanism_score
     assert matches[0].score > matches[1].score
     assert matches[0].score == pytest.approx(
-        matches[0].mechanism_score * 0.9 * 0.9)
+        matches[0].mechanism_score * 0.9 * 0.5 * 0.9)
 
 
 def test_causal_recall_skips_malformed_quality_claim(tmp_tehm):
@@ -249,8 +253,59 @@ def test_causal_recall_derives_quality_from_canonical_transition(tmp_tehm):
     assert match.quality_evidence_transition_ids == (transition_id,)
     assert match.utility_score == 1.0
     assert match.risk_penalty == 0.0
-    assert match.score == match.mechanism_score
+    assert match.evidence_support_score == 0.5
+    assert match.score == pytest.approx(match.mechanism_score * 0.5)
     assert match.quality_reason == "canonical_utility_verdict_bound"
+
+
+def test_causal_recall_establishes_independent_lineage_support(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first_id = capture(conn, store, first).transition_id
+
+    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second.record_id = "rtl:req_ack_fsm:lineage-b"
+    second.lineage_id = "lineage-b"
+    second.episode = dict(second.episode or {})
+    second.episode.update(
+        episode_id="rtl_ep:req_ack_fsm:lineage-b", lineage_id="lineage-b")
+    # Lineage is intentionally excluded from state identity.  Add a harmless
+    # source witness so this is a distinct canonical transition/run.
+    second.before["config"]["lineage_witness"] = "lineage-b"
+    second.after["config"]["lineage_witness"] = "lineage-b"
+    second_id = capture(conn, store, second).transition_id
+    assert second_id != first_id
+
+    first_fragment = build_transition_causal_fragment(conn, first_id)
+    second_fragment = build_transition_causal_fragment(conn, second_id)
+    path = consolidate_causal_path(conn, [first_fragment, second_fragment])
+    query = MemoryQuery(query_plan={
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "mechanism_signature": {"mechanism_family": "HANDSHAKE_COMPLETION"},
+    })
+    matches = retrieve_causal_paths(conn, query)
+    assert [match.path_id for match in matches] == [path.path_id]
+    match = matches[0]
+    assert match.evidence_support_count == 2
+    assert match.evidence_lineage_count == 2
+    assert match.evidence_support_score == 1.0
+    assert match.evidence_support_status == "ESTABLISHED"
+    assert match.evidence_support_reason == "independent_lineage_support_bound"
+    assert match.score == pytest.approx(match.mechanism_score * 0.5 * 0.5)
+
+
+def test_causal_recall_rejects_inconsistent_fragment_support_count(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    transition_id = capture(conn, store, record).transition_id
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    path = consolidate_causal_path(conn, [fragment])
+    _rewrite_path_support(conn, path.path_id, fragment_count=2)
+    query = MemoryQuery(query_plan={
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "mechanism_signature": {"mechanism_family": "HANDSHAKE_COMPLETION"},
+    })
+    assert retrieve_causal_paths(conn, query) == []
 
 
 def test_causal_recall_skips_malformed_canonical_quality_witness(tmp_tehm):

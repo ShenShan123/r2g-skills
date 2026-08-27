@@ -976,6 +976,22 @@ C_evidence   = causal evidence level + support
 R            = regression / uncertainty / harmful risk
 ```
 
+当前 evaluation-only causal lane 将 `support` 进一步拆成可重放的
+source-transition 与独立 lineage 覆盖，而不是接受调用方自报的 support 分数：
+
+```text
+source_component  = min(1, canonical_source_transition_count / 2)
+lineage_component = min(1, distinct_canonical_source_state_lineages / 2)
+C_support         = mean(source_component, lineage_component)
+```
+
+单一 source transition 的 `C_support=0.5`；至少两个 source transitions 且来自至少
+两个独立 canonical lineage 才标记 `ESTABLISHED` 并得到 `C_support=1.0`。source
+transition 缺失、重复、`fragment_count` 与实际 witness 不一致，或 canonical lineage
+无法重放时，causal evaluator 必须 fail-closed。当前 shadow score 因此实现为
+`S_causal × C_support × U × (1-R)`；该因子只用于 evaluation/shadow 排序，不能成为
+production retrieval 或 promotion authority。
+
 **symbolic veto 始终高于 score。**
 
 ---
@@ -2355,12 +2371,17 @@ R2: + causal path
 重建六组 shadow path，并在 derived DB 中执行四个 held-out lineage 的 R0/R1/R2
 查询。R0 只匹配 transformation family，R1 增加 compatibility profile，R2 再要求
 mechanism family 与 held-out effect key；另设同 metadata、但 module 不相容的
-negative slice。2026-08-26 的冻结报告记录三组 positive recall@3 均为 `1.0`，
+negative slice。2026-08-27 的冻结报告记录三组 positive recall@3 均为 `1.0`，
 R0/R1 negative false transfer rate 均为 `1.0`，R2 为 `0.0`。这验证了当前
 matcher 的结构细节 veto 与 held-out firewall，但不证明普适迁移收益，也不授予
 任何 rule/capability promotion authority。报告和重放脚本位于
 `evidence/tehm-causal-retrieval-rtl-r1-dev/`；source DB SHA 在报告中绑定，
 `canonical_memory_mutation=none` 且 `promotion_attempted=false`。
+
+该 A3 v4 报告还记录每条 path 的 `evidence_support_score`、source count 和 lineage
+count；单源训练 path 保持 `NOT_ESTABLISHED`，不会被误写成跨 lineage 机制证据。
+该字段与 `evidence_level`、utility/risk 分开记录，便于后续在真实 ORFS 多 lineage
+试验中替换为预注册阈值，而不改变 production 边界。
 
 ---
 

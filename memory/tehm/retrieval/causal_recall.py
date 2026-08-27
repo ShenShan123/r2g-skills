@@ -10,7 +10,7 @@ import json
 import math
 import sqlite3
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from contracts import MemoryQuery
 from tehm.canonical.transition import Action, ObservationDelta, classify_outcome
@@ -41,6 +41,11 @@ class CausalPathMatch:
     quality_source: str = "prior"
     quality_evidence_transition_ids: tuple[str, ...] = ()
     quality_reason: str = ""
+    evidence_support_score: float = 1.0
+    evidence_support_count: int = 0
+    evidence_lineage_count: int = 0
+    evidence_support_status: str = "NOT_ESTABLISHED"
+    evidence_support_reason: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -64,6 +69,11 @@ class CausalPathMatch:
             "quality_evidence_transition_ids": list(
                 self.quality_evidence_transition_ids),
             "quality_reason": self.quality_reason,
+            "evidence_support_score": self.evidence_support_score,
+            "evidence_support_count": self.evidence_support_count,
+            "evidence_lineage_count": self.evidence_lineage_count,
+            "evidence_support_status": self.evidence_support_status,
+            "evidence_support_reason": self.evidence_support_reason,
         }
 
 
@@ -83,6 +93,11 @@ class CausalPathQuality:
     reason: str = ""
     source: str = "prior"
     evidence_transition_ids: tuple[str, ...] = ()
+    evidence_support_score: float = 1.0
+    evidence_support_count: int = 0
+    evidence_lineage_count: int = 0
+    evidence_support_status: str = "NOT_ESTABLISHED"
+    evidence_support_reason: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -92,6 +107,11 @@ class CausalPathQuality:
             "reason": self.reason,
             "source": self.source,
             "evidence_transition_ids": list(self.evidence_transition_ids),
+            "evidence_support_score": self.evidence_support_score,
+            "evidence_support_count": self.evidence_support_count,
+            "evidence_lineage_count": self.evidence_lineage_count,
+            "evidence_support_status": self.evidence_support_status,
+            "evidence_support_reason": self.evidence_support_reason,
         }
 
 
@@ -292,10 +312,93 @@ def _get_path_value(path, key: str, default=None):
         return getattr(path, key, default)
 
 
+def _path_source_ids(path) -> tuple[str, ...] | None:
+    """Normalize a path's source witness for support/evidence accounting."""
+    source_raw = _get_path_value(path, "source_transition_ids", None)
+    if source_raw is None:
+        source_raw = _get_path_value(path, "source_transitions_json", [])
+    source_ids = _source_transition_ids(source_raw)
+    if source_ids is not None:
+        return source_ids
+    if isinstance(source_raw, (list, tuple)):
+        values = tuple(str(item).strip() for item in source_raw)
+        if (values and all(values) and len(set(values)) == len(values)):
+            return tuple(sorted(values))
+    return None
+
+
+def _path_evidence_support(
+    path, support: Mapping, source_ids: tuple[str, ...] | None,
+    conn: sqlite3.Connection | None,
+) -> CausalPathQuality | None:
+    """Bound causal support to canonical source count and lineage coverage."""
+    if source_ids is None:
+        return CausalPathQuality(
+            utility_score=0.5, risk_penalty=0.5, status="NOT_ESTABLISHED",
+            reason="utility_or_risk_not_established", source="prior",
+            evidence_support_score=(1.0 if conn is None else 0.5),
+            evidence_support_status="NOT_ESTABLISHED",
+            evidence_support_reason="source_transition_witness_unavailable",
+        )
+    declared_count = support.get("fragment_count")
+    if (declared_count is not None
+            and (isinstance(declared_count, bool)
+                 or not isinstance(declared_count, int)
+                 or declared_count != len(source_ids))):
+        return None
+    if conn is None:
+        return CausalPathQuality(
+            utility_score=0.5, risk_penalty=0.5, status="NOT_ESTABLISHED",
+            reason="utility_or_risk_not_established", source="prior",
+            evidence_support_score=1.0,
+            evidence_support_count=len(source_ids),
+            evidence_support_reason="canonical_support_unavailable",
+        )
+    placeholders = ",".join("?" for _ in source_ids)
+    rows = conn.execute(
+        "SELECT t.transition_id, s.lineage_id "
+        "FROM tehm_transitions t JOIN tehm_states s "
+        "ON s.state_id=t.source_state_id "
+        f"WHERE t.transition_id IN ({placeholders})", source_ids).fetchall()
+    if len(rows) != len(source_ids):
+        return None
+    by_id = {str(row["transition_id"]): row for row in rows}
+    if set(by_id) != set(source_ids):
+        return None
+    lineages = {
+        str(by_id[source_id]["lineage_id"])
+        for source_id in source_ids
+        if by_id[source_id]["lineage_id"] not in (None, "")
+    }
+    source_component = min(1.0, len(source_ids) / 2.0)
+    lineage_component = min(1.0, len(lineages) / 2.0)
+    support_score = round((source_component + lineage_component) / 2.0, 6)
+    established = len(source_ids) >= 2 and len(lineages) >= 2
+    return CausalPathQuality(
+        utility_score=0.5, risk_penalty=0.5, status="NOT_ESTABLISHED",
+        reason="utility_or_risk_not_established", source="prior",
+        evidence_support_score=support_score,
+        evidence_support_count=len(source_ids),
+        evidence_lineage_count=len(lineages),
+        evidence_support_status=("ESTABLISHED" if established
+                                 else "NOT_ESTABLISHED"),
+        evidence_support_reason=("independent_lineage_support_bound"
+                                 if established
+                                 else "causal_support_below_replication_threshold"),
+    )
+
+
 def score_causal_path(
     path, mechanism_score: float, *, conn: sqlite3.Connection | None = None,
 ) -> tuple[float, CausalPathQuality] | None:
-    """Apply ``S_causal × U × (1-R)`` for shadow retrieval only."""
+    """Apply bounded causal/evidence quality for shadow retrieval only.
+
+    The mechanism matcher supplies the causal evidence-level weight.  This
+    function adds a separate source/lineage support factor so one fragment
+    cannot look as strong as replicated evidence.  Canonical transition
+    utility/risk remains authoritative when path support does not provide an
+    explicit quality claim.
+    """
     causal_score = _quality_number(mechanism_score)
     if causal_score is None:
         return None
@@ -308,15 +411,15 @@ def score_causal_path(
             support = json.loads(support)
         except (TypeError, json.JSONDecodeError):
             return None
-    if isinstance(support, Mapping) and not any(
-            key in support for key in ("utility_score", "utility",
-                                       "risk_penalty", "risk")):
-        source_raw = _get_path_value(path, "source_transition_ids", None)
-        if source_raw is None:
-            source_raw = _get_path_value(path, "source_transitions_json", [])
-        source_ids = _source_transition_ids(source_raw)
-        if source_ids is None and isinstance(source_raw, (list, tuple)):
-            source_ids = tuple(sorted(str(item) for item in source_raw))
+    if not isinstance(support, Mapping):
+        return None
+    support = dict(support)
+    source_ids = _path_source_ids(path)
+    support_quality = _path_evidence_support(path, support, source_ids, conn)
+    if support_quality is None:
+        return None
+    if not any(key in support for key in ("utility_score", "utility",
+                                          "risk_penalty", "risk")):
         if source_ids:
             canonical_quality, malformed = _canonical_transition_quality(
                 conn, source_ids)
@@ -326,7 +429,17 @@ def score_causal_path(
                 quality = canonical_quality
     if quality is None:
         return None
-    score = causal_score * quality.utility_score * (1.0 - quality.risk_penalty)
+    quality = replace(
+        quality,
+        evidence_support_score=support_quality.evidence_support_score,
+        evidence_support_count=support_quality.evidence_support_count,
+        evidence_lineage_count=support_quality.evidence_lineage_count,
+        evidence_support_status=support_quality.evidence_support_status,
+        evidence_support_reason=support_quality.evidence_support_reason,
+    )
+    score = (causal_score * quality.utility_score
+             * quality.evidence_support_score
+             * (1.0 - quality.risk_penalty))
     return round(score, 6), quality
 
 
@@ -397,7 +510,12 @@ def retrieve_causal_paths(
             quality_status=quality.status,
             quality_source=quality.source,
             quality_evidence_transition_ids=quality.evidence_transition_ids,
-            quality_reason=quality.reason))
+            quality_reason=quality.reason,
+            evidence_support_score=quality.evidence_support_score,
+            evidence_support_count=quality.evidence_support_count,
+            evidence_lineage_count=quality.evidence_lineage_count,
+            evidence_support_status=quality.evidence_support_status,
+            evidence_support_reason=quality.evidence_support_reason))
     matches.sort(key=lambda item: (-item.score, item.path_id))
     return matches[:max(0, int(limit))]
 

@@ -40,7 +40,7 @@
 Parametric View 只有在 distance、coverage、uncertainty、lineage diversity 四项同时通过，并且该 bundle 可重放后，才允许进入 shadow RFC。
 <!-- TEHM_EVIDENCE_V3_END -->
 
-### Current v4 development freeze（2026-08-26）
+### Current v4 development freeze（2026-08-27）
 
 当前源码已生成便携 development freeze：
 [`evidence/tehm-evidence-freeze-v4-dev`](../evidence/tehm-evidence-freeze-v4-dev)。
@@ -182,9 +182,17 @@ metadata、但 module 结构不符”的 negative slice 中，R0/R1 的 false tr
 均为 `1.0`，R2 降为 `0.0`。这只是可解释 matcher 的 evaluation-only 证据，不是
 production retrieval、rule promotion 或 capability gain；报告明确记录
 `heldout_learner_eligible=false`、`canonical_memory_mutation=none`、
-`promotion_attempted=false`。报告 v3 还记录 causal 机制分、质量重排字段及质量来源；当前训练
+`promotion_attempted=false`。报告 v4 还记录 causal 机制分、质量重排字段及质量来源；当前训练
 path 缺少质量证据，因此按保守先验标记 `NOT_ESTABLISHED`，不把该结果误写成
 utility/risk 实测收益。重放入口为报告目录下的 `reproduce.sh`。
+
+2026-08-27 再将 source-transition 数量与 canonical state 的独立 lineage 覆盖纳入
+shadow evidence support：单来源 path 的支持分为 `0.5`，至少两个来源且来自至少
+两个独立 lineage 才标记 `ESTABLISHED` 并得到 `1.0`；来源行缺失、重复、数量声明
+不一致或 lineage witness 不可解析时 evaluator fail-closed。该支持分独立于
+`evidence_level` 与 utility/risk，最终只作为 evaluation-only 的
+`S_causal × support × U × (1-R)` 因子，仍不写 canonical memory、不进入 production
+retrieval，也不满足 promotion gate。
 
 ### B3 Online evolution evidence（2026-08-26）
 
@@ -332,7 +340,7 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
-回归为 `486 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+回归为 `488 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
 
 Backend activation seam 现在也执行同一条 fail-closed 回执规则：`UNKNOWN` 只能被
 一次性收敛为最终 outcome；已 finalized 的 outcome、created regressions、rollback

@@ -8,6 +8,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -23,7 +28,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_a68b69d4f587fa2e"
               ],
@@ -33,6 +38,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -48,7 +58,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
@@ -58,6 +68,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -73,7 +88,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_f9f8a121a2c7ed48"
               ],
@@ -86,6 +101,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -101,7 +121,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_a68b69d4f587fa2e"
               ],
@@ -111,6 +131,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -126,7 +151,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
@@ -136,6 +161,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -151,7 +181,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_f9f8a121a2c7ed48"
               ],
@@ -176,6 +206,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -191,7 +226,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_a68b69d4f587fa2e"
               ],
@@ -201,6 +236,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -216,7 +256,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
@@ -226,6 +266,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -241,7 +286,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_f9f8a121a2c7ed48"
               ],
@@ -254,6 +299,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -269,7 +319,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_a68b69d4f587fa2e"
               ],
@@ -279,6 +329,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -294,7 +349,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
@@ -304,6 +359,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -319,7 +379,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_f9f8a121a2c7ed48"
               ],
@@ -346,6 +406,11 @@
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 1,
+              "evidence_support_count": 1,
+              "evidence_support_reason": "causal_support_below_replication_threshold",
+              "evidence_support_score": 0.5,
+              "evidence_support_status": "NOT_ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -361,7 +426,7 @@
               "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
               "risk_penalty": 0.5,
-              "score": 0.15625,
+              "score": 0.078125,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
@@ -408,6 +473,11 @@
             {
               "compatibility_profile": "rtl.sequential.reset_branch.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -437,6 +507,11 @@
             {
               "compatibility_profile": "rtl.sequential.reset_branch.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -478,6 +553,11 @@
             {
               "compatibility_profile": "rtl.sequential.reset_branch.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -507,6 +587,11 @@
             {
               "compatibility_profile": "rtl.sequential.reset_branch.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -550,6 +635,11 @@
             {
               "compatibility_profile": "rtl.sequential.reset_branch.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -613,6 +703,11 @@
             {
               "compatibility_profile": "rtl.combinational.width_assignment.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -642,6 +737,11 @@
             {
               "compatibility_profile": "rtl.combinational.width_assignment.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -683,6 +783,11 @@
             {
               "compatibility_profile": "rtl.combinational.width_assignment.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -712,6 +817,11 @@
             {
               "compatibility_profile": "rtl.combinational.width_assignment.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -755,6 +865,11 @@
             {
               "compatibility_profile": "rtl.combinational.width_assignment.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -818,6 +933,11 @@
             {
               "compatibility_profile": "rtl.protocol.overlap_priority.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -847,6 +967,11 @@
             {
               "compatibility_profile": "rtl.protocol.overlap_priority.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -888,6 +1013,11 @@
             {
               "compatibility_profile": "rtl.protocol.overlap_priority.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -917,6 +1047,11 @@
             {
               "compatibility_profile": "rtl.protocol.overlap_priority.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -960,6 +1095,11 @@
             {
               "compatibility_profile": "rtl.protocol.overlap_priority.v1",
               "evidence_level": "L1_EXECUTED_INTERVENTION",
+              "evidence_lineage_count": 2,
+              "evidence_support_count": 2,
+              "evidence_support_reason": "independent_lineage_support_bound",
+              "evidence_support_score": 1.0,
+              "evidence_support_status": "ESTABLISHED",
               "evidence_weight": 0.625,
               "matched_fields": [
                 "transformation_family"
@@ -1051,7 +1191,7 @@
   },
   "production_promotion_eligible": false,
   "promotion_attempted": false,
-  "report_digest": "sha256:ee52e1b9a84f0aa0293c40b5fae79ca4a3f867a47b0e69d8a2cc3438c3386771",
+  "report_digest": "sha256:f174791c5420467cbc7f777cb5fedf0baae5230655e98fd41f4d0e05de470eb4",
   "source_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
   "source_db_sha256": "298a04ca1f0524245fa2f57c6570b69fce85dff818a7ce6a83172c76cb0078b1",
   "training": {
@@ -1543,5 +1683,5 @@
     "p3_overlap_priority_a",
     "p3_overlap_priority_b"
   ],
-  "version": "tehm-causal-retrieval-eval-v3"
+  "version": "tehm-causal-retrieval-eval-v4"
 }
