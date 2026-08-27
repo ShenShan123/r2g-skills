@@ -14,6 +14,34 @@ from run_orfs_diversity_campaign import capture_pairs  # noqa: E402
 from tehm.batch_lane import BatchLaneError  # noqa: E402
 
 
+def _project(root: Path, name: str, *, util, rc, failed_stage=None,
+             route=None, drc=None, ppa=None):
+    """Create the minimal production-run evidence used by capture tests."""
+    project = root / name
+    (project / "constraints").mkdir(parents=True)
+    (project / "reports").mkdir()
+    run = project / "backend" / f"RUN_{name}"
+    run.mkdir(parents=True)
+    (project / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = demo\nexport PLATFORM = sky130hs\n"
+        f"export CORE_UTILIZATION = {util}\n")
+    (run / "run-meta.json").write_text(json.dumps({
+        "run_tag": f"RUN_{name}", "make_status": rc,
+        "config_mk": str(project / "constraints/config.mk")}))
+    stages = [{"stage": "synth", "status": 0}]
+    if failed_stage:
+        stages.append({"stage": failed_stage, "status": rc})
+    else:
+        stages += [{"stage": "route", "status": 0},
+                   {"stage": "finish", "status": 0}]
+    (run / "stage_log.jsonl").write_text(
+        "".join(json.dumps(entry) + "\n" for entry in stages))
+    for key, value in (("route", route), ("drc", drc), ("ppa", ppa)):
+        if value is not None:
+            (project / "reports" / f"{key}.json").write_text(json.dumps(value))
+    return project
+
+
 def test_prepare_has_disjoint_heldout_and_platform_family_matrix(tmp_path):
     orfs = tmp_path / "orfs"
     templates = (("sky130hs", "gcd", "gcd"),
@@ -146,3 +174,46 @@ def test_capture_quarantines_incomplete_oracle_from_learner(tmp_path):
     with pytest.raises(BatchLaneError, match="conflicts with existing learner"):
         capture_pairs(manifest_path, manifest, staging_db,
                       root / "staging" / "artifacts")
+
+
+def test_capture_explicit_heldout_is_audit_only(tmp_path):
+    """A complete held-out pair must remain non-learner evidence."""
+    root = tmp_path / "heldout-campaign"
+    before = _project(tmp_path, "heldout_dense", util=50, rc=2,
+                      failed_stage="route")
+    after = _project(
+        tmp_path, "heldout_safe", util=40, rc=0,
+        route={"status": "clean"}, drc={"status": "clean"},
+        ppa={"summary": {"timing": {"setup_wns": 0.2},
+                          "area": {"design_area_um2": 100.0}}})
+    (after / "reports" / "timing_check.json").write_text(
+        json.dumps({"status": "clean"}))
+    item = {
+        "case_id": "sky130hs:heldout:route",
+        "lineage_id": "heldout:selector:route",
+        "platform": "sky130hs", "family": "ROUTING_CAPACITY_RECOVERY",
+        "check": "route", "config_edits": {"ROUTING_LAYER_ADJUSTMENT": "0.05"},
+        "before_project": str(before), "after_project": str(after),
+        "dataset_split": "heldout",
+    }
+    manifest = {
+        "items": [item],
+        "heldout": {"lineage_id": "legacy-heldout-sentinel"},
+        "captured": [],
+    }
+    manifest_path = root / "campaign_manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(json.dumps(manifest))
+    staging_db = root / "staging" / "tehm.sqlite"
+    capture_pairs(
+        manifest_path, manifest, staging_db, root / "staging" / "artifacts",
+        dataset_campaign_id="heldout-campaign", require_full_oracle=False)
+
+    captured = manifest["captured"][0]
+    assert captured["dataset_split"] == "heldout"
+    assert captured["learner_eligible"] is False
+    conn = __import__("sqlite3").connect(staging_db)
+    assert conn.execute(
+        "SELECT split, learner_eligible FROM tehm_dataset_membership"
+    ).fetchone() == ("heldout", 0)
+    conn.close()

@@ -91,6 +91,28 @@ def test_custom_rtl_top_is_bound_into_materialized_sdc(tmp_path):
     assert "current_design custom_top" in bound.read_text()
 
 
+def test_non_training_split_is_bound_into_source_freeze(tmp_path):
+    """Changing a held-out campaign back to training requires a new freeze."""
+    orfs = _fake_orfs(tmp_path / "orfs")
+    override = tmp_path / "override.sdc"
+    override.write_text("set clk_period 10\n")
+    kwargs = {
+        **_kwargs(override),
+        "dataset_split": "heldout",
+    }
+    campaign = tmp_path / "heldout-campaign"
+    build_source_freeze(campaign, orfs, **kwargs)
+    manifest = prepare(campaign, orfs,
+                       source_freeze=campaign / "source_freeze.json", **kwargs)
+    assert manifest["dataset_split"] == "heldout"
+    assert manifest["items"][0]["dataset_split"] == "heldout"
+    training_kwargs = {**kwargs, "dataset_split": "training"}
+    with pytest.raises(BatchLaneError, match="source freeze request mismatch"):
+        prepare(campaign, orfs,
+                source_freeze=campaign / "source_freeze.json",
+                **training_kwargs)
+
+
 def _complete_run(project: Path, tag: str) -> None:
     (project / "constraints").mkdir(parents=True)
     (project / "reports").mkdir()

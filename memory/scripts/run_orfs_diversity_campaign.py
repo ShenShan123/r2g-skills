@@ -31,6 +31,7 @@ sys.path.insert(0, str(MEMORY_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from tehm import db as tehm_db  # noqa: E402
+from tehm.dataset import SPLITS  # noqa: E402
 from tehm.adapters.orfs_pair import build_orfs_pair_record  # noqa: E402
 from tehm.artifact_store import ArtifactStore  # noqa: E402
 from tehm.canonical.capture import capture  # noqa: E402
@@ -538,7 +539,8 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
                   artifacts: Path, *,
                   dataset_campaign_id: str = "live",
                   require_complete_oracle: bool = True,
-                  require_full_oracle: bool = False) -> None:
+                  require_full_oracle: bool = False,
+                  default_dataset_split: str | None = None) -> None:
     """Capture pair observations with an explicit learner-admission boundary.
 
     A route-clean ORFS run is not automatically a complete observation: the
@@ -626,8 +628,30 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             complete = bool(complete and full["before"]["complete"] and
                             full["after"]["complete"])
             record.verification["oracle_complete"] = complete
-        learner_eligible = (complete if require_complete_oracle else True)
-        dataset_split = "training" if learner_eligible else "calibration"
+        # A prepared manifest may explicitly classify a pair as held-out or
+        # calibration.  This is needed for a real transfer lane: the pair is
+        # still captured as immutable audit evidence, but it must never become
+        # learner support merely because its full oracle passed.  Legacy
+        # manifests omit the field and retain the historical
+        # complete->training / incomplete->calibration behavior.
+        requested_split = item.get("dataset_split")
+        if requested_split is None:
+            requested_split = default_dataset_split
+        if requested_split is not None:
+            requested_split = str(requested_split)
+            if requested_split not in SPLITS:
+                raise BatchLaneError(
+                    f"invalid dataset split for {item.get('case_id')}: "
+                    f"{requested_split!r}")
+        if requested_split is None:
+            dataset_split = "training" if complete else "calibration"
+        elif requested_split == "training":
+            # Training admission still requires a complete oracle.  Do not
+            # silently create a training membership for a failed pair.
+            dataset_split = "training" if complete else "calibration"
+        else:
+            dataset_split = requested_split
+        learner_eligible = bool(dataset_split == "training" and complete)
         if require_complete_oracle and not complete:
             stale = conn.execute(
                 "SELECT dm.campaign_id, dm.split "
@@ -665,8 +689,18 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
     conn.close()
     manifest["captured"] = [captured[k] for k in sorted(captured)]
     # Explicitly prove the held-out subject did not enter ordinary support.
-    assert manifest["heldout"]["lineage_id"] not in {
-        row["lineage_id"] for row in manifest["captured"]}
+    # Item-level held-out rows are allowed in a dedicated transfer campaign,
+    # but the sentinel lineage carried by legacy add-designs manifests must
+    # never be captured as training evidence.
+    sentinel = (manifest.get("heldout") or {}).get("lineage_id")
+    if sentinel:
+        assert sentinel not in {
+            row["lineage_id"] for row in manifest["captured"]
+            if row.get("dataset_split") == "training"
+        }
+    for row in manifest["captured"]:
+        if row.get("dataset_split") != "training":
+            assert row.get("learner_eligible") is False
     _write(manifest_path, manifest)
 
 

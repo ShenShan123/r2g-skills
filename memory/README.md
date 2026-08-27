@@ -140,6 +140,15 @@ source/canonical DB 或 production policy。C7 authority evidence 现在可显�
 `retention_receipt_id`；一旦提供，authority 记录与消费都会重新验证 retention
 ledger，failed/stale receipt 会阻断 capability authority。
 
+真实 causal transfer 的 ORFS pair 现在也有显式 split 入口：
+`run_orfs_add_designs_campaign.py --dataset-split heldout` 会把 split 写入 source
+freeze 和每个 manifest item；`capture_pairs()` 只有在 `training` 且 full oracle
+完整时才允许 `learner_eligible=1`。heldout/calibration/ab pair 即使通过全部
+oracle，也只作为隔离 staging 的 audit evidence，并可与 training path 放在同一派生
+DB 中供 `evaluate_causal_transfer_batch.py` 重放。请求 training 但 oracle 不完整会
+fail-closed 降级为 calibration，修改 manifest split 也会被 source-freeze request
+校验拒绝；该入口不写 canonical、不触发 consolidation 或 production runtime。
+
 为支持后续真实 held-out 批量积累，新增 `scripts/build_orfs_capability_retention_batch.py`。
 它先整体校验 manifest 的 case/lineage 唯一性、项目路径和 attribution firewall，再逐条
 调用上述单 pair builder；不完整 pair 会保留在失败分母中，少于默认两个独立 lineage 时

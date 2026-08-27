@@ -257,8 +257,11 @@ def _freeze_request(*, designs, platforms, families, indexes: int,
                     core_utils, lineage_prefix: str,
                     rtl_override_path: Path | None,
                     sdc_override_path: Path | None,
-                    template_design: str, orfs_root: Path) -> dict:
-    return {
+                    template_design: str, orfs_root: Path,
+                    dataset_split: str = "training") -> dict:
+    if dataset_split not in {"training", "calibration", "heldout", "ab"}:
+        raise ValueError(f"invalid dataset split: {dataset_split!r}")
+    request = {
         "orfs_root": str(Path(orfs_root).resolve()),
         "designs": [str(value) for value in designs],
         "platforms": [str(value) for value in platforms],
@@ -270,22 +273,29 @@ def _freeze_request(*, designs, platforms, families, indexes: int,
         "rtl_override": (str(Path(rtl_override_path).resolve())
                           if rtl_override_path is not None else None),
         "sdc_override": (str(Path(sdc_override_path).resolve())
-                         if sdc_override_path is not None else None),
+                          if sdc_override_path is not None else None),
     }
+    # Preserve compatibility with already-frozen training campaigns while
+    # binding non-training capture roles into new source freezes.  A held-out
+    # transfer run must not be reclassified by editing only the manifest.
+    if dataset_split != "training":
+        request["dataset_split"] = dataset_split
+    return request
 
 
 def build_source_freeze(root: Path, orfs_root: Path, *, designs, platforms,
                         families, indexes: int, core_utils,
                         lineage_prefix: str, rtl_override_path: Path | None,
                         sdc_override_path: Path | None,
-                        template_design: str) -> dict:
+                        template_design: str,
+                        dataset_split: str = "training") -> dict:
     """Freeze campaign inputs before any project is materialized or run."""
     request = _freeze_request(
         designs=designs, platforms=platforms, families=families,
         indexes=indexes, core_utils=core_utils, lineage_prefix=lineage_prefix,
         rtl_override_path=rtl_override_path,
         sdc_override_path=sdc_override_path, template_design=template_design,
-        orfs_root=orfs_root)
+        orfs_root=orfs_root, dataset_split=dataset_split)
     inputs = _campaign_inputs(
         Path(orfs_root).resolve(), designs=designs, platforms=platforms,
         rtl_override_path=rtl_override_path,
@@ -314,7 +324,8 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
                             platforms, families, indexes: int, core_utils,
                             lineage_prefix: str, rtl_override_path: Path | None,
                             sdc_override_path: Path | None,
-                            template_design: str) -> dict:
+                            template_design: str,
+                            dataset_split: str = "training") -> dict:
     path = Path(path).resolve()
     try:
         freeze = json.loads(path.read_text())
@@ -334,7 +345,7 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
         indexes=indexes, core_utils=core_utils, lineage_prefix=lineage_prefix,
         rtl_override_path=rtl_override_path,
         sdc_override_path=sdc_override_path, template_design=template_design,
-        orfs_root=orfs_root)
+        orfs_root=orfs_root, dataset_split=dataset_split)
     if freeze.get("request") != expected_request:
         raise BatchLaneError(
             "source freeze request mismatch; use the same campaign arguments "
@@ -394,8 +405,9 @@ def _validate_manifest_source_freeze(manifest: dict) -> dict:
         rtl_override_path=(Path(request["rtl_override"])
                           if request.get("rtl_override") else None),
         sdc_override_path=(Path(request["sdc_override"])
-                         if request.get("sdc_override") else None),
+                          if request.get("sdc_override") else None),
         template_design=str(request["template_design"]),
+        dataset_split=str(request.get("dataset_split", "training")),
     )
     return freeze
 
@@ -425,6 +437,10 @@ def main(argv=None) -> int:
                     help="base CORE_UTILIZATION schedule (for example 20 25 30)")
     ap.add_argument("--lineage-prefix", default="orfs-v4",
                     help="prefix for training lineage IDs in this campaign")
+    ap.add_argument("--dataset-split", choices=("training", "calibration", "heldout", "ab"),
+                    default="training",
+                    help=("capture role for this bounded campaign; non-training "
+                          "roles remain audit-only and cannot become learner support"))
     ap.add_argument("--phase", choices=(
         "all", "freeze", "prepare", "run", "equivalence", "signoff",
         "graph", "capture", "report"),
@@ -456,7 +472,8 @@ def main(argv=None) -> int:
                                if args.rtl_override else None),
             sdc_override_path=(args.sdc_override.resolve()
                                if args.sdc_override else None),
-            template_design=args.template_design)
+            template_design=args.template_design,
+            dataset_split=args.dataset_split)
         if args.phase == "freeze":
             return 0
 
@@ -472,6 +489,7 @@ def main(argv=None) -> int:
                            sdc_override_path=(args.sdc_override.resolve()
                                               if args.sdc_override else None),
                            template_design=args.template_design,
+                           dataset_split=args.dataset_split,
                            source_freeze=freeze_path)
     else:
         manifest = _load(manifest_path)
@@ -512,7 +530,8 @@ def main(argv=None) -> int:
         capture_pairs(manifest_path, manifest, staging_db, staging_artifacts,
                       dataset_campaign_id=VERSION,
                       require_complete_oracle=True,
-                      require_full_oracle=True)
+                      require_full_oracle=True,
+                      default_dataset_split=manifest.get("dataset_split"))
         manifest = _load(manifest_path)
     if args.phase == "capture":
         return 0
@@ -528,6 +547,7 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
             lineage_prefix: str = "orfs-v4", rtl_override_path: Path | None = None,
             sdc_override_path: Path | None = None,
             template_design: str = "gcd",
+            dataset_split: str = "training",
             source_freeze: Path | None = None) -> dict:
     core_utils = tuple(int(x) for x in core_utils)
     if not core_utils:
@@ -540,7 +560,8 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
         platforms=platforms, families=families, indexes=indexes,
         core_utils=core_utils, lineage_prefix=lineage_prefix,
         rtl_override_path=rtl_override_path,
-        sdc_override_path=sdc_override_path, template_design=template_design)
+        sdc_override_path=sdc_override_path, template_design=template_design,
+        dataset_split=dataset_split)
     family_specs = {
         "DENSITY_RELIEF": ("CORE_UTILIZATION", "density",
                            lambda i: str(core_utils[i]),
@@ -639,7 +660,8 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                             "before": _timing_contract(base),
                             "after": _timing_contract(after),
                         },
-                        "role": "training",
+                        "role": dataset_split,
+                        "dataset_split": dataset_split,
                     })
 
     if not items:
@@ -649,6 +671,7 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                "role": "calibration_only", "capturable": False}
     manifest = {
         "campaign_version": VERSION, "lineage_prefix": lineage_prefix,
+        "dataset_split": dataset_split,
         "orfs_root": str(orfs_root),
         "source_freeze": str(Path(source_freeze).resolve()),
         "source_freeze_sha256": _sha(source_freeze),
@@ -657,8 +680,10 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
         "storage_policy": storage_policy(root),
         "families": list(families), "heldout": heldout,
         "firewall": {
-            "training_lineages": sorted({x["lineage_id"] for x in items}),
-            "heldout_lineages": [heldout["lineage_id"]],
+            "training_lineages": sorted({x["lineage_id"] for x in items
+                                           if dataset_split == "training"}),
+            "heldout_lineages": ([heldout["lineage_id"]] if dataset_split != "heldout"
+                                  else sorted({x["lineage_id"] for x in items})),
             "disjoint": heldout["lineage_id"] not in {x["lineage_id"] for x in items},
             # spi must NEVER be a training lineage here.
             "spi_absent_from_training": "spi" not in {x["design"] for x in items},

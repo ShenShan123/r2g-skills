@@ -2753,6 +2753,16 @@ source-disjoint fail→pass held-out 之前，不会因为一次现场 L4 计算
 C6 authority 显式绑定。ORFS 必须传 `--require-full-oracle`，因此 generic PASS 不能
 替代 14 项完整 ORFS held-out 证据。
 
+为让真实 ORFS held-out 证据能够进入上述 transfer evaluator，而不被误写成 training，
+`run_orfs_add_designs_campaign.py` 现在支持显式 `--dataset-split`（并将非默认角色写入
+source-freeze request）。`capture_pairs()` 同时接受 manifest 的 item-level split：
+完整 pair 只有在 `training` split 才能得到 `learner_eligible=1`；`heldout`、
+`calibration` 和 `ab` 即使 full oracle 通过，也只写入同一隔离 staging DB 的 audit
+membership。请求 training 但 oracle 不完整时仍强制降级为 calibration。这样可以在同一可
+重放数据库中保留 training causal path 与独立 held-out transition，随后运行 L4 batch
+evaluator；修改 manifest split 不能绕过 source-freeze request 校验。该入口仍不写
+canonical memory、不触发 online consolidation，也不改变 production runtime。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）
