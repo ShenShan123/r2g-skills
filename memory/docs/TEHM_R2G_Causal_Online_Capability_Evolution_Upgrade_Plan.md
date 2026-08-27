@@ -2557,6 +2557,12 @@ observe 对该 contract 做独立核对；缺失、重复或不一致的 timing 
 为避免先运行后补 provenance，`prepare` 现在还要求 campaign 已经由 `--phase freeze`
 生成 source-freeze manifest；缺失或路径失效会直接拒绝 batch preparation，不能以
 `source_freeze_sha256=null` 绕过可复现性边界。
+Batch-0 的同一边界已经延伸到后续 phase：`run`、`equivalence`、`signoff`、`graph`、
+`observe` 以及 staging/report 入口会重放 source spec、TEHM 执行源码、ORFS 依赖
+面和 toolchain fingerprint；`observe` 还会逐 pair 重检 materialized config/SDC/RTL
+binding 与 timing contract。长批次中任一 flow 依赖或输入发生漂移，phase 直接
+fail-closed，而不是沿用旧报告生成新的 external receipt。该校验只强化 provenance，
+不改变 staging-only 与 canonical promotion 边界。
 随后在同树打包 OpenROAD `26Q3-1510-g6cb3f2b704` / Yosys `0.68` 上完成了 SPI
 `CORE_UTILIZATION 50→40` held-out pair：两个 arm 的 synthesis、route、finish、独立
 equivalence、strict signoff、PPA 与 DEF graph 全部通过，产生 1 条

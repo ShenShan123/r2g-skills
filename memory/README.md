@@ -1557,6 +1557,11 @@ digest 源）、`features/`（def-graph 已提取特征）、`lvs/`（powered.v 
   字节摘要与 toolchain fingerprint。prepare 会重算这些摘要并记录每个 pair 的
   `input_bindings` 和 `timing_contract`；任何 freeze 后漂移都会在 materialize 前
   fail-closed，observe/capture 也会再次校验，不能把改过的输入当成同一实验。
+  `run_orfs_batch0.py` 的 freeze 也不再只是 prepare 前置文件：run、equivalence、
+  signoff、graph、observe 和 staging/report 入口会重放 source spec、TEHM 执行源码、
+  ORFS 依赖面与 toolchain fingerprint；observe 还会逐 pair 重检 materialized
+  config/SDC/RTL binding 与 timing contract。任一依赖或输入漂移都会停止该 phase，
+  防止长批次在中途更换 flow 后继续复用旧结果。
 
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 

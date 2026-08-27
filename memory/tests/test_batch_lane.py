@@ -1,6 +1,7 @@
 """Batch-0 lane stays external/staging until independent authority admits it."""
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from tehm.batch_lane import (
     validate_canonical_import_authority,
     write_external_observations,
 )
+from tehm.rtl.equivalence import YosysEquivalenceOracle
 
 
 def test_orfs_config_rewrite_removes_replaced_make_continuations():
@@ -60,7 +62,100 @@ def test_batch_prepare_requires_source_freeze(tmp_path):
             tmp_path / "manifest.json",
             source_freeze=tmp_path / "campaign" / "source_freeze.json",
         )
-from tehm.rtl.equivalence import YosysEquivalenceOracle
+
+
+def _minimal_batch_orfs(root: Path) -> Path:
+    """Create the dependency surface needed by the source-freeze validator."""
+    flow = root / "flow"
+    (flow / "scripts").mkdir(parents=True)
+    (flow / "util").mkdir()
+    (flow / "platforms" / "sky130hs").mkdir(parents=True)
+    (flow / "Makefile").write_text("all:\n\t@true\n")
+    (flow / "settings.mk").write_text("# frozen test flow\n")
+    return root
+
+
+def _batch_manifest_for_freeze(root: Path, orfs: Path, spec: Path) -> dict:
+    freeze = root / "source_freeze.json"
+    return {
+        "orfs_root": str(orfs.resolve()),
+        "source_spec": str(spec.resolve()),
+        "source_spec_sha256": hashlib.sha256(spec.read_bytes()).hexdigest(),
+        "source_freeze": str(freeze.resolve()),
+        "source_freeze_sha256": hashlib.sha256(freeze.read_bytes()).hexdigest(),
+        "items": [],
+    }
+
+
+def test_batch_source_freeze_rejects_dependency_drift(tmp_path):
+    from scripts.run_orfs_batch0 import build_source_freeze, validate_source_freeze
+
+    root = tmp_path / "campaign"
+    orfs = _minimal_batch_orfs(tmp_path / "orfs")
+    spec = Path(__file__).resolve().parents[1] / "evaluation" / (
+        "orfs_batch0_rtl_manifest_v1.json")
+    build_source_freeze(root, orfs, spec)
+    manifest = _batch_manifest_for_freeze(root, orfs, spec)
+    validate_source_freeze(manifest, check_projects=False)
+
+    config = orfs / "flow" / "designs" / "sky130hs" / "gcd" / "config.mk"
+    config.parent.mkdir(parents=True)
+    config.write_text("export DESIGN_NAME = gcd\n")
+    with pytest.raises(BatchLaneError, match="config/SDC/RTL inputs changed"):
+        validate_source_freeze(manifest, check_projects=False)
+
+    # Re-freeze after the input change, then exercise the independent flow
+    # dependency guard.
+    build_source_freeze(root, orfs, spec)
+    manifest = _batch_manifest_for_freeze(root, orfs, spec)
+    validate_source_freeze(manifest, check_projects=False)
+    (orfs / "flow" / "settings.mk").write_text("# changed flow\n")
+    with pytest.raises(BatchLaneError, match="dependency surface changed"):
+        validate_source_freeze(manifest, check_projects=False)
+
+
+def test_batch_source_freeze_rechecks_materialized_pair_bindings(tmp_path):
+    from scripts.run_orfs_batch0 import build_source_freeze, validate_source_freeze
+    from tehm.batch_lane import _input_binding, _timing_contract
+
+    root = tmp_path / "campaign"
+    orfs = _minimal_batch_orfs(tmp_path / "orfs")
+    spec = Path(__file__).resolve().parents[1] / "evaluation" / (
+        "orfs_batch0_rtl_manifest_v1.json")
+    build_source_freeze(root, orfs, spec)
+    rtl = tmp_path / "top.v"
+    rtl.write_text("module top(input clk); endmodule\n")
+    projects = []
+    for side in ("before", "after"):
+        project = root / side
+        (project / "constraints").mkdir(parents=True)
+        (project / "constraints" / "config.mk").write_text(
+            "export DESIGN_NAME = top\n")
+        (project / "constraints" / "constraint.sdc").write_text(
+            "set clk_period 3.0\n")
+        projects.append(project)
+    item = {
+        "case_id": "freeze-binding",
+        "before_project": str(projects[0]),
+        "after_project": str(projects[1]),
+        "rtl_files": [str(rtl)],
+        "input_bindings": {
+            "before": _input_binding(projects[0], [rtl]),
+            "after": _input_binding(projects[1], [rtl]),
+        },
+        "timing_contract": {
+            "before": _timing_contract(projects[0]),
+            "after": _timing_contract(projects[1]),
+        },
+    }
+    manifest = _batch_manifest_for_freeze(root, orfs, spec)
+    manifest["items"] = [item]
+    validate_source_freeze(manifest)
+
+    (projects[1] / "constraints" / "constraint.sdc").write_text(
+        "set clk_period 2.5\n")
+    with pytest.raises(BatchLaneError, match="input binding drifted"):
+        validate_source_freeze(manifest)
 
 
 def test_staging_destination_is_campaign_local_and_not_canonical(tmp_path):

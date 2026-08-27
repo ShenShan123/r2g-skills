@@ -43,7 +43,9 @@ from tehm.batch_lane import (  # noqa: E402
     assert_snapshots_unchanged,
     import_support_to_staging,
     _input_binding,
+    _input_binding_matches,
     _timing_contract,
+    _timing_contract_matches,
     require_staging_destination,
     write_external_observations,
 )
@@ -52,6 +54,7 @@ from tehm.rtl.equivalence import YosysEquivalenceOracle  # noqa: E402
 
 
 VERSION = "orfs-batch0-v1"
+SOURCE_FREEZE_VERSION = "orfs-batch-source-freeze-v1"
 DEFAULT_SPEC = MEMORY_ROOT / "evaluation" / "orfs_batch0_rtl_manifest_v1.json"
 NEAR_DUPLICATE_THRESHOLD = 0.92
 ACTION_FAMILY = "DENSITY_RELIEF"
@@ -107,6 +110,13 @@ def main(argv=None) -> int:
         if not manifest:
             raise BatchLaneError(f"campaign manifest missing: {manifest_path}")
 
+    # A single invocation can span many hours.  Recheck the immutable inputs
+    # immediately before execution and observation so a source/toolchain
+    # change between phases cannot be mistaken for the same experiment.
+    if args.phase in {"all", "run", "equivalence", "signoff", "graph",
+                      "observe", "import-staging", "report"}:
+        validate_source_freeze(manifest)
+
     if args.phase in {"all", "run"}:
         run_projects(
             root, manifest, workers=max(1, args.workers),
@@ -135,6 +145,7 @@ def main(argv=None) -> int:
             return 0
 
     if args.phase in {"all", "observe"}:
+        validate_source_freeze(manifest)
         observe(root, manifest, observations_path)
         if args.phase == "observe":
             return 0
@@ -164,6 +175,13 @@ def prepare(root: Path, orfs_root: Path, source_spec: Path, *, source_freeze: Pa
         raise BatchLaneError(
             "source freeze is required before prepare; run --phase freeze first: "
             f"{source_freeze}")
+    validate_source_freeze({
+        "orfs_root": str(Path(orfs_root).resolve()),
+        "source_spec": str(Path(source_spec).resolve()),
+        "source_spec_sha256": _sha(source_spec),
+        "source_freeze": str(source_freeze),
+        "source_freeze_sha256": _sha(source_freeze),
+    }, check_projects=False)
     spec = _load(source_spec)
     entries = validate_source_spec(spec, orfs_root=orfs_root)
     cases = root / "cases"
@@ -402,6 +420,10 @@ def _merge_phase_results(path: Path, rows: list[dict]) -> dict:
 
 
 def observe(root: Path, manifest: dict, observations_path: Path) -> dict:
+    # Observe is the last boundary before external receipts are written.  A
+    # direct API caller must receive the same provenance protection as the CLI
+    # phase path; do not rely on the caller having performed the earlier check.
+    validate_source_freeze(manifest)
     before = canonical_snapshots()
     observations = [build_external_observation(item) for item in manifest["items"]]
     chain = write_external_observations(observations_path, observations)
@@ -483,27 +505,24 @@ def build_report(root: Path, manifest: dict, observations_path: Path,
 
 
 def build_source_freeze(root: Path, orfs_root: Path, source_spec: Path) -> dict:
-    source_paths = []
-    for base in (MEMORY_ROOT / "tehm", MEMORY_ROOT / "scripts"):
-        source_paths.extend(path for path in base.rglob("*")
-                            if path.is_file() and "__pycache__" not in path.parts)
-    source_paths.extend(path for path in (
-        MEMORY_ROOT / "schema.sql", MEMORY_ROOT / "requirements.txt", source_spec)
-        if path.is_file())
-    records = [{"path": str(path.resolve().relative_to(REPO_ROOT)),
-                "sha256": _sha(path), "bytes": path.stat().st_size}
-               for path in sorted(set(source_paths), key=str)]
+    orfs_root = Path(orfs_root).resolve()
+    source_spec = Path(source_spec).resolve()
+    source_records = _source_freeze_records(source_spec)
+    input_records = _batch_input_records(orfs_root, source_spec)
     git_status = _command(["git", "status", "--porcelain=v1"], cwd=REPO_ROOT)
     orfs_identity = _orfs_dependency_identity(orfs_root)
     toolchain = preflight_orfs_toolchain({"orfs_root": str(orfs_root)})
     freeze = {
-        "version": "orfs-batch-source-freeze-v1",
+        "version": SOURCE_FREEZE_VERSION,
         "git_head": _command(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT).strip(),
         "git_status_sha256": hashlib.sha256(git_status.encode()).hexdigest(),
         "dirty_entries": len([line for line in git_status.splitlines() if line]),
         "source_tree_digest": hashlib.sha256(
-            stable_json(records).encode()).hexdigest(),
-        "source_files": records,
+            stable_json(source_records).encode()).hexdigest(),
+        "source_files": source_records,
+        "input_digest": hashlib.sha256(
+            stable_json(input_records).encode()).hexdigest(),
+        "inputs": input_records,
         "dependencies": {
             "python": sys.version,
             # Do not report a PATH-discovered host Yosys/OpenROAD as if it were
@@ -523,6 +542,124 @@ def build_source_freeze(root: Path, orfs_root: Path, source_spec: Path) -> dict:
     }
     freeze["freeze_digest"] = hashlib.sha256(stable_json(freeze).encode()).hexdigest()
     _write(root / "source_freeze.json", freeze)
+    return freeze
+
+
+def _source_freeze_records(source_spec: Path) -> list[dict]:
+    """Return the exact source surface represented by a Batch-0 freeze."""
+    source_paths = []
+    for base in (MEMORY_ROOT / "tehm", MEMORY_ROOT / "scripts"):
+        source_paths.extend(path for path in base.rglob("*")
+                            if path.is_file() and "__pycache__" not in path.parts)
+    source_paths.extend(path for path in (
+        MEMORY_ROOT / "schema.sql", MEMORY_ROOT / "requirements.txt", source_spec)
+        if path.is_file())
+    records = []
+    for path in sorted(set(source_paths), key=str):
+        resolved = path.resolve()
+        try:
+            display_path = str(resolved.relative_to(REPO_ROOT))
+        except ValueError:
+            display_path = str(resolved)
+        records.append({
+            "path": display_path,
+            "sha256": _sha(path),
+            "bytes": path.stat().st_size,
+        })
+    return records
+
+
+def _batch_input_records(orfs_root: Path, source_spec: Path) -> list[dict]:
+    """Freeze each Batch-0 config/SDC/RTL input named by the source spec."""
+    spec = _load(source_spec)
+    rows = []
+    for raw in spec.get("designs") or ():
+        design_id = str(raw.get("design_id") or "")
+        config = (Path(orfs_root) / str(raw.get("config_template") or "")).resolve()
+        sdc = (Path(orfs_root) / str(raw.get("sdc_template") or "")).resolve()
+        rtl = []
+        for pattern in raw.get("rtl_globs") or ():
+            rtl.extend(path.resolve() for path in Path(orfs_root).glob(str(pattern))
+                       if path.is_file())
+        rows.append({
+            "design_id": design_id,
+            "top": str(raw.get("top") or ""),
+            "config": {"path": str(config), "sha256": _sha(config),
+                       "bytes": config.stat().st_size if config.is_file() else None},
+            "sdc": {"path": str(sdc), "sha256": _sha(sdc),
+                    "bytes": sdc.stat().st_size if sdc.is_file() else None},
+            "rtl": [{"path": str(path), "sha256": _sha(path),
+                     "bytes": path.stat().st_size}
+                    for path in sorted(set(rtl), key=str)],
+        })
+    return rows
+
+
+def validate_source_freeze(manifest: dict, *, check_projects: bool = True) -> dict:
+    """Revalidate Batch-0 source/toolchain/input provenance before a phase."""
+    raw_path = manifest.get("source_freeze")
+    if not raw_path:
+        raise BatchLaneError(
+            "campaign manifest has no source freeze; run --phase freeze then prepare")
+    path = Path(str(raw_path)).expanduser().resolve()
+    if manifest.get("source_freeze_sha256") != _sha(path):
+        raise BatchLaneError("campaign source freeze file changed after prepare")
+    source_spec = Path(str(manifest.get("source_spec") or "")).expanduser().resolve()
+    orfs_root = Path(str(manifest.get("orfs_root") or "")).expanduser().resolve()
+    if not source_spec.is_file():
+        raise BatchLaneError(f"Batch-0 source spec is missing: {source_spec}")
+    try:
+        freeze = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BatchLaneError("campaign source freeze is malformed") from exc
+    if not isinstance(freeze, dict) or freeze.get("version") != SOURCE_FREEZE_VERSION:
+        raise BatchLaneError("campaign source freeze version mismatch")
+    digest = freeze.get("freeze_digest")
+    unsigned = dict(freeze)
+    unsigned.pop("freeze_digest", None)
+    if not digest or hashlib.sha256(stable_json(unsigned).encode()).hexdigest() != digest:
+        raise BatchLaneError("campaign source freeze digest mismatch")
+    if manifest.get("source_spec_sha256") != _sha(source_spec):
+        raise BatchLaneError("Batch-0 source spec changed after prepare")
+    expected_records = _source_freeze_records(source_spec)
+    expected_tree = hashlib.sha256(stable_json(expected_records).encode()).hexdigest()
+    if freeze.get("source_tree_digest") != expected_tree:
+        raise BatchLaneError("Batch-0 source tree changed after freeze")
+    expected_inputs = _batch_input_records(orfs_root, source_spec)
+    expected_input_digest = hashlib.sha256(
+        stable_json(expected_inputs).encode()).hexdigest()
+    if (freeze.get("input_digest") != expected_input_digest or
+            freeze.get("inputs") != expected_inputs):
+        raise BatchLaneError("Batch-0 config/SDC/RTL inputs changed after freeze")
+    dependencies = freeze.get("dependencies") or {}
+    frozen_orfs = dependencies.get("orfs_root")
+    if frozen_orfs != str(orfs_root):
+        raise BatchLaneError("Batch-0 ORFS root differs from source freeze")
+    current_orfs = _orfs_dependency_identity(orfs_root)
+    if current_orfs != dependencies.get("orfs"):
+        raise BatchLaneError("Batch-0 ORFS dependency surface changed after freeze")
+    current_toolchain = preflight_orfs_toolchain({"orfs_root": str(orfs_root)})
+    frozen_toolchain = dependencies.get("toolchain_preflight") or {}
+    if (current_toolchain.get("fingerprint") != frozen_toolchain.get("fingerprint") or
+            current_toolchain.get("status") != frozen_toolchain.get("status")):
+        raise BatchLaneError("Batch-0 toolchain fingerprint/status changed after freeze")
+    if check_projects:
+        for item in manifest.get("items") or ():
+            rtl_files = [Path(path) for path in item.get("rtl_files") or ()]
+            bindings = item.get("input_bindings") or {}
+            timings = item.get("timing_contract") or {}
+            for side, field in (("before", "before_project"),
+                                ("after", "after_project")):
+                expected_binding = bindings.get(side)
+                if not isinstance(expected_binding, dict) or not _input_binding_matches(
+                        _input_binding(Path(item[field]), rtl_files), expected_binding):
+                    raise BatchLaneError(
+                        f"Batch-0 {side} input binding drifted for {item.get('case_id')}")
+                expected_timing = timings.get(side)
+                if not isinstance(expected_timing, dict) or not _timing_contract_matches(
+                        _timing_contract(Path(item[field])), expected_timing):
+                    raise BatchLaneError(
+                        f"Batch-0 {side} timing contract drifted for {item.get('case_id')}")
     return freeze
 
 

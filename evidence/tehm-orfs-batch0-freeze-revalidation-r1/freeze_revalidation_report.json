@@ -1,0 +1,59 @@
+{
+  "version": "tehm-orfs-batch0-freeze-revalidation-r1",
+  "classification": "PROVENANCE_PREFLIGHT_ONLY",
+  "command": "run_orfs_batch0.py --phase freeze, followed by --phase prepare",
+  "scratch_root": "/tmp/tehm-orfs/batch0-source-freeze-r1",
+  "source_spec": {
+    "path": "memory/evaluation/orfs_batch0_rtl_manifest_v1.json",
+    "sha256": "2dbfa00f7e154c9807ae000b579da13c2e0a797843742634405dfe9a34f3c64c"
+  },
+  "source_freeze": {
+    "version": "orfs-batch-source-freeze-v1",
+    "digest": "9493979526e28b4cc7702606bfbe092054710079ba52f3b49dca1e5bebde3e9f",
+    "sha256": "fa65c35a169d7d9ffc7cf33ecf34af5b66ffd9a19c2c69e47afaaeb0dfa71126",
+    "source_tree_digest": "a7f5ba4981b3688f67686b4445b3687184228f53d608364b9006e9914775642e",
+    "source_file_count": 215,
+    "input_digest": "118c101661468f8ceaa18add10f9699f4f6ac0e1c64f9e936974a049c09f222b",
+    "input_count": 7,
+    "orfs_dependency": {
+      "identity_kind": "tree_sha256",
+      "git_commit": null,
+      "tree_sha256": "ad4ffa94274faefe806fa8c142a7999bf6952a3ea6a1565a5040b3edd357fc91",
+      "file_count": 156,
+      "total_bytes": 115039835,
+      "complete": true
+    }
+  },
+  "toolchain": {
+    "orfs_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+    "status": "bound_internal",
+    "fingerprint": "5f6545216c040a863a4c169d90f895f218ad038bfd61991445f760ed43567c91",
+    "openroad": "26Q3-1510-g6cb3f2b704",
+    "openroad_sha256": "561ef17403ce2b55198496e8ab74435d90aba88e03a7a86b6526f7d1a0fae3a6",
+    "yosys": "0.68",
+    "yosys_sha256": "6dca418413bcab1e0d6583974f65870064a43439d30f9a0ab41b95bea3041bd0",
+    "yosys_read_liberty_unit_delay": "PASS"
+  },
+  "campaign": {
+    "manifest_items": 7,
+    "manifest_source_freeze_sha256": "da725a235b8aae5c601dd818412ae70d647a0334bfd255d6f382cf7e20035fe1",
+    "partitions": {
+      "support": 4,
+      "calibration": 2,
+      "heldout": 1
+    }
+  },
+  "revalidation": {
+    "freeze_to_prepare": "PASS",
+    "dependency_drift": "REJECTED",
+    "materialized_input_drift": "REJECTED",
+    "canonical_snapshots_unchanged": true
+  },
+  "admission": {
+    "orfs_executed": false,
+    "external_observation_written": false,
+    "staging_imported": false,
+    "canonical_memory_mutation": "none",
+    "promotion_attempted": false
+  }
+}
