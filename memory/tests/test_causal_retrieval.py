@@ -228,3 +228,64 @@ def test_causal_recall_skips_malformed_quality_claim(tmp_tehm):
         "mechanism_signature": {"mechanism_family": "HANDSHAKE_COMPLETION"},
     })
     assert retrieve_causal_paths(conn, query) == []
+
+
+def test_causal_recall_derives_quality_from_canonical_transition(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record.observation_delta["utility_verdict"] = "PARETO_SAFE"
+    transition_id = capture(conn, store, record).transition_id
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    path = consolidate_causal_path(conn, [fragment])
+    query = MemoryQuery(query_plan={
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "mechanism_signature": {"mechanism_family": "HANDSHAKE_COMPLETION"},
+    })
+    matches = retrieve_causal_paths(conn, query)
+    assert [match.path_id for match in matches] == [path.path_id]
+    match = matches[0]
+    assert match.quality_status == "ESTABLISHED"
+    assert match.quality_source == "canonical_transition"
+    assert match.quality_evidence_transition_ids == (transition_id,)
+    assert match.utility_score == 1.0
+    assert match.risk_penalty == 0.0
+    assert match.score == match.mechanism_score
+    assert match.quality_reason == "canonical_utility_verdict_bound"
+
+
+def test_causal_recall_skips_malformed_canonical_quality_witness(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record.observation_delta["utility_verdict"] = "PARETO_SAFE"
+    transition_id = capture(conn, store, record).transition_id
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    consolidate_causal_path(conn, [fragment])
+    conn.execute(
+        "UPDATE tehm_transitions SET observation_delta_json=? "
+        "WHERE transition_id=?", ("{", transition_id))
+    conn.commit()
+    query = MemoryQuery(query_plan={
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "mechanism_signature": {"mechanism_family": "HANDSHAKE_COMPLETION"},
+    })
+    assert retrieve_causal_paths(conn, query) == []
+
+
+def test_causal_recall_skips_tampered_canonical_quality_payload(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record.observation_delta["utility_verdict"] = "PARETO_SAFE"
+    transition_id = capture(conn, store, record).transition_id
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    consolidate_causal_path(conn, [fragment])
+    delta = dict(record.observation_delta)
+    delta["utility_verdict"] = "HARMFUL"
+    conn.execute(
+        "UPDATE tehm_transitions SET observation_delta_json=? "
+        "WHERE transition_id=?", (stable_dumps(delta), transition_id))
+    conn.commit()
+    query = MemoryQuery(query_plan={
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "mechanism_signature": {"mechanism_family": "HANDSHAKE_COMPLETION"},
+    })
+    assert retrieve_causal_paths(conn, query) == []

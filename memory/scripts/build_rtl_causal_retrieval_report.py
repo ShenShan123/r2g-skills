@@ -40,7 +40,7 @@ from tehm.rtl.rtl_oracle import IcarusOracle  # noqa: E402
 from contracts import MemoryQuery  # noqa: E402
 
 
-REPORT_VERSION = "tehm-causal-retrieval-eval-v2"
+REPORT_VERSION = "tehm-causal-retrieval-eval-v3"
 CAMPAIGN_ID = "live"
 MATERIALIZED_AT = "2026-08-22T00:00:00+00:00"
 DEFAULT_TRAINING = (

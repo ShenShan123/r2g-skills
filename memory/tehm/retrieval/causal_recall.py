@@ -13,6 +13,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from contracts import MemoryQuery
+from tehm.canonical.transition import Action, ObservationDelta, classify_outcome
+from tehm.canonical.verifier import VerifierSnapshot
+from tehm.ids import transition_id
 from tehm.causal.matcher import match_causal_path
 from tehm.causal.path_builder import validate_persisted_path_row
 
@@ -35,6 +38,9 @@ class CausalPathMatch:
     utility_score: float = 0.5
     risk_penalty: float = 0.5
     quality_status: str = "NOT_ESTABLISHED"
+    quality_source: str = "prior"
+    quality_evidence_transition_ids: tuple[str, ...] = ()
+    quality_reason: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -54,6 +60,10 @@ class CausalPathMatch:
             "utility_score": self.utility_score,
             "risk_penalty": self.risk_penalty,
             "quality_status": self.quality_status,
+            "quality_source": self.quality_source,
+            "quality_evidence_transition_ids": list(
+                self.quality_evidence_transition_ids),
+            "quality_reason": self.quality_reason,
         }
 
 
@@ -71,6 +81,8 @@ class CausalPathQuality:
     risk_penalty: float
     status: str
     reason: str = ""
+    source: str = "prior"
+    evidence_transition_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +90,8 @@ class CausalPathQuality:
             "risk_penalty": self.risk_penalty,
             "status": self.status,
             "reason": self.reason,
+            "source": self.source,
+            "evidence_transition_ids": list(self.evidence_transition_ids),
         }
 
 
@@ -129,6 +143,8 @@ def _path_quality(path) -> CausalPathQuality | None:
             utility_value = (utility.get("score")
                              if utility.get("score") is not None
                              else utility.get("normalized"))
+            if utility_value is None and utility:
+                return None
         elif utility is not None:
             utility_value = utility
     risk_value = support.get("risk_penalty")
@@ -138,6 +154,8 @@ def _path_quality(path) -> CausalPathQuality | None:
             risk_value = (risk.get("penalty")
                           if risk.get("penalty") is not None
                           else risk.get("harmful_rate"))
+            if risk_value is None and risk:
+                return None
         elif risk is not None:
             risk_value = risk
     utility_explicit = utility_value is not None
@@ -153,7 +171,115 @@ def _path_quality(path) -> CausalPathQuality | None:
         utility_score=utility_score, risk_penalty=risk_penalty, status=status,
         reason=("utility_and_risk_bound" if status == "ESTABLISHED"
                 else "utility_or_risk_not_established"),
+        source="path_support" if utility_explicit or risk_explicit else "prior",
     )
+
+
+_UTILITY_SCORE = {"PARETO_SAFE": 1.0, "NEUTRAL": 0.5, "HARMFUL": 0.0}
+_RISK_PENALTY = {"PARETO_SAFE": 0.0, "NEUTRAL": 0.5, "HARMFUL": 1.0}
+
+
+def _decode_quality_json(raw: object, *, field: str):
+    """Decode a canonical JSON field and reject malformed evidence."""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"canonical quality {field} is malformed JSON") from exc
+    return raw
+
+
+def _canonical_transition_quality(
+    conn: sqlite3.Connection, source_ids: tuple[str, ...],
+) -> tuple[CausalPathQuality | None, bool]:
+    """Derive quality from immutable transition observations when available.
+
+    The raw ``utility_verdict`` is a canonical observation, not a caller-side
+    path annotation.  We aggregate utility by mean and risk by worst case; an
+    unknown verdict remains conservative rather than being treated as safe.
+    The boolean result distinguishes an unavailable quality signal from a
+    malformed canonical witness so retrieval can fail closed on corruption.
+    """
+    if conn is None or not source_ids:
+        return None, False
+    placeholders = ",".join("?" for _ in source_ids)
+    rows = conn.execute(
+        "SELECT transition_id, source_state_id, target_state_id, action_json, "
+        "observation_delta_json, verifier_json, outcome, "
+        "created_regressions_json, newly_observed_json "
+        f"FROM tehm_transitions WHERE transition_id IN ({placeholders})",
+        source_ids).fetchall()
+    if len(rows) != len(source_ids):
+        return None, True
+    by_id = {str(row["transition_id"]): row for row in rows}
+    if set(by_id) != set(source_ids):
+        return None, True
+    utility_values: list[float] = []
+    risk_values: list[float] = []
+    for source_transition_id in source_ids:
+        row = by_id[source_transition_id]
+        try:
+            action = _decode_quality_json(
+                row["action_json"], field="action")
+            delta = _decode_quality_json(
+                row["observation_delta_json"], field="observation_delta")
+            verifier = _decode_quality_json(
+                row["verifier_json"], field="verifier")
+            regressions = _decode_quality_json(
+                row["created_regressions_json"], field="created_regressions")
+            newly_observed = _decode_quality_json(
+                row["newly_observed_json"], field="newly_observed")
+        except ValueError:
+            return None, True
+        if (not isinstance(action, Mapping) or not isinstance(delta, Mapping)
+                or not isinstance(verifier, Mapping)):
+            return None, True
+        if not isinstance(regressions, list) or not isinstance(newly_observed, list):
+            return None, True
+        delta_regressions = delta.get("created_regressions", [])
+        delta_newly_observed = delta.get("newly_observed_failures", [])
+        if (not isinstance(delta_regressions, list)
+                or not isinstance(delta_newly_observed, list)
+                or regressions != delta_regressions
+                or newly_observed != delta_newly_observed):
+            return None, True
+        try:
+            canonical_action = Action.from_dict(dict(action))
+            canonical_delta = ObservationDelta.from_dict(dict(delta))
+            canonical_verifier = VerifierSnapshot.from_dict(dict(verifier))
+        except (TypeError, ValueError):
+            return None, True
+        expected_id = transition_id(
+            source_state_id=str(row["source_state_id"]),
+            target_state_id=str(row["target_state_id"]),
+            action=canonical_action.to_dict(),
+            observation_delta=canonical_delta.to_dict(),
+            verifier=canonical_verifier.content())
+        if expected_id != source_transition_id or str(row["outcome"] or "") != classify_outcome(
+                canonical_delta, canonical_verifier):
+            return None, True
+        verdict = str(delta.get("utility_verdict") or "UNKNOWN").upper()
+        if verdict in _UTILITY_SCORE:
+            utility_values.append(_UTILITY_SCORE[verdict])
+            risk_values.append(_RISK_PENALTY[verdict])
+        if regressions or newly_observed or str(row["outcome"] or "").upper() in {
+                "FAIL", "REGRESSION"}:
+            risk_values.append(1.0)
+    if not utility_values and not risk_values:
+        return None, False
+    utility = (sum(utility_values) / len(utility_values)
+               if utility_values else 0.5)
+    risk = max(risk_values) if risk_values else 0.5
+    complete = len(utility_values) == len(source_ids)
+    quality = CausalPathQuality(
+        utility_score=round(utility, 6), risk_penalty=round(risk, 6),
+        status="ESTABLISHED" if complete else "NOT_ESTABLISHED",
+        reason=("canonical_utility_verdict_bound" if complete
+                else "canonical_quality_partially_established"),
+        source="canonical_transition",
+        evidence_transition_ids=tuple(sorted(source_ids)),
+    )
+    return quality, False
 
 
 def _get_path_value(path, key: str, default=None):
@@ -166,12 +292,38 @@ def _get_path_value(path, key: str, default=None):
         return getattr(path, key, default)
 
 
-def score_causal_path(path, mechanism_score: float) -> tuple[float, CausalPathQuality] | None:
+def score_causal_path(
+    path, mechanism_score: float, *, conn: sqlite3.Connection | None = None,
+) -> tuple[float, CausalPathQuality] | None:
     """Apply ``S_causal × U × (1-R)`` for shadow retrieval only."""
     causal_score = _quality_number(mechanism_score)
     if causal_score is None:
         return None
     quality = _path_quality(path)
+    support = _get_path_value(path, "support", None)
+    if support is None:
+        support = _get_path_value(path, "support_json", {})
+    if isinstance(support, str):
+        try:
+            support = json.loads(support)
+        except (TypeError, json.JSONDecodeError):
+            return None
+    if isinstance(support, Mapping) and not any(
+            key in support for key in ("utility_score", "utility",
+                                       "risk_penalty", "risk")):
+        source_raw = _get_path_value(path, "source_transition_ids", None)
+        if source_raw is None:
+            source_raw = _get_path_value(path, "source_transitions_json", [])
+        source_ids = _source_transition_ids(source_raw)
+        if source_ids is None and isinstance(source_raw, (list, tuple)):
+            source_ids = tuple(sorted(str(item) for item in source_raw))
+        if source_ids:
+            canonical_quality, malformed = _canonical_transition_quality(
+                conn, source_ids)
+            if malformed:
+                return None
+            if canonical_quality is not None:
+                quality = canonical_quality
     if quality is None:
         return None
     score = causal_score * quality.utility_score * (1.0 - quality.risk_penalty)
@@ -224,7 +376,7 @@ def retrieve_causal_paths(
         match = match_causal_path(row, plan)
         if not match.eligible:
             continue
-        scored = score_causal_path(row, match.score)
+        scored = score_causal_path(row, match.score, conn=conn)
         if scored is None:
             # A supplied but malformed quality claim is not silently replaced
             # with a neutral prior; exclude it from the evaluation result.
@@ -242,7 +394,10 @@ def retrieve_causal_paths(
             reason=match.reason, mechanism_score=match.score,
             utility_score=quality.utility_score,
             risk_penalty=quality.risk_penalty,
-            quality_status=quality.status))
+            quality_status=quality.status,
+            quality_source=quality.source,
+            quality_evidence_transition_ids=quality.evidence_transition_ids,
+            quality_reason=quality.reason))
     matches.sort(key=lambda item: (-item.score, item.path_id))
     return matches[:max(0, int(limit))]
 
