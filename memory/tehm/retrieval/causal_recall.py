@@ -7,7 +7,9 @@ existing promoted-only rule retrieval remains unchanged.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from contracts import MemoryQuery
@@ -29,6 +31,10 @@ class CausalPathMatch:
     matched_fields: tuple[str, ...] = ()
     mismatched_fields: tuple[str, ...] = ()
     reason: str = ""
+    mechanism_score: float = 0.0
+    utility_score: float = 0.5
+    risk_penalty: float = 0.5
+    quality_status: str = "NOT_ESTABLISHED"
 
     def to_dict(self) -> dict:
         return {
@@ -43,6 +49,34 @@ class CausalPathMatch:
             "mechanism_match": self.mechanism_match,
             "matched_fields": list(self.matched_fields),
             "mismatched_fields": list(self.mismatched_fields),
+            "reason": self.reason,
+            "mechanism_score": self.mechanism_score,
+            "utility_score": self.utility_score,
+            "risk_penalty": self.risk_penalty,
+            "quality_status": self.quality_status,
+        }
+
+
+@dataclass(frozen=True)
+class CausalPathQuality:
+    """Bounded quality factors for evaluation-only causal reranking.
+
+    ``NOT_ESTABLISHED`` is deliberately conservative: absent utility/risk
+    evidence receives neutral utility and a 0.5 risk penalty, so a path can be
+    inspected for recall but cannot outrank a fully evidenced low-risk path.
+    Explicitly malformed quality fields return no score and are excluded.
+    """
+
+    utility_score: float
+    risk_penalty: float
+    status: str
+    reason: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "utility_score": self.utility_score,
+            "risk_penalty": self.risk_penalty,
+            "status": self.status,
             "reason": self.reason,
         }
 
@@ -59,6 +93,89 @@ def _source_transition_ids(raw: object) -> tuple[str, ...] | None:
     if any(not value for value in ids) or len(set(ids)) != len(ids):
         return None
     return tuple(sorted(ids))
+
+
+def _quality_number(value: object) -> float | None:
+    """Return a finite [0, 1] quality value, or reject the field."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or not 0.0 <= number <= 1.0:
+        return None
+    return round(number, 6)
+
+
+def _path_quality(path) -> CausalPathQuality | None:
+    """Parse optional path quality without treating missing evidence as safe."""
+    raw = _get_path_value(path, "support", None)
+    if raw is None:
+        raw = _get_path_value(path, "support_json", {})
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            return None
+    if not isinstance(raw, Mapping):
+        return None
+    support = dict(raw)
+
+    utility_value = support.get("utility_score")
+    if utility_value is None:
+        utility = support.get("utility")
+        if isinstance(utility, Mapping):
+            utility_value = (utility.get("score")
+                             if utility.get("score") is not None
+                             else utility.get("normalized"))
+        elif utility is not None:
+            utility_value = utility
+    risk_value = support.get("risk_penalty")
+    if risk_value is None:
+        risk = support.get("risk")
+        if isinstance(risk, Mapping):
+            risk_value = (risk.get("penalty")
+                          if risk.get("penalty") is not None
+                          else risk.get("harmful_rate"))
+        elif risk is not None:
+            risk_value = risk
+    utility_explicit = utility_value is not None
+    risk_explicit = risk_value is not None
+    utility_score = (0.5 if not utility_explicit else
+                     _quality_number(utility_value))
+    risk_penalty = (0.5 if not risk_explicit else
+                    _quality_number(risk_value))
+    if utility_score is None or risk_penalty is None:
+        return None
+    status = "ESTABLISHED" if utility_explicit and risk_explicit else "NOT_ESTABLISHED"
+    return CausalPathQuality(
+        utility_score=utility_score, risk_penalty=risk_penalty, status=status,
+        reason=("utility_and_risk_bound" if status == "ESTABLISHED"
+                else "utility_or_risk_not_established"),
+    )
+
+
+def _get_path_value(path, key: str, default=None):
+    """Read a mapping-like or sqlite row path without coupling to row type."""
+    if isinstance(path, Mapping):
+        return path.get(key, default)
+    try:
+        return path[key]
+    except (KeyError, IndexError, TypeError):
+        return getattr(path, key, default)
+
+
+def score_causal_path(path, mechanism_score: float) -> tuple[float, CausalPathQuality] | None:
+    """Apply ``S_causal × U × (1-R)`` for shadow retrieval only."""
+    causal_score = _quality_number(mechanism_score)
+    if causal_score is None:
+        return None
+    quality = _path_quality(path)
+    if quality is None:
+        return None
+    score = causal_score * quality.utility_score * (1.0 - quality.risk_penalty)
+    return round(score, 6), quality
 
 
 def retrieve_causal_paths(
@@ -107,18 +224,28 @@ def retrieve_causal_paths(
         match = match_causal_path(row, plan)
         if not match.eligible:
             continue
+        scored = score_causal_path(row, match.score)
+        if scored is None:
+            # A supplied but malformed quality claim is not silently replaced
+            # with a neutral prior; exclude it from the evaluation result.
+            continue
+        score, quality = scored
         matches.append(CausalPathMatch(
             path_id=row["path_id"], mechanism_family=row["mechanism_family"],
             compatibility_profile=row["compatibility_profile"],
-            evidence_level=row["evidence_level"], score=match.score,
+            evidence_level=row["evidence_level"], score=score,
             status=row["status"], source_transition_ids=source_ids,
             evidence_weight=match.evidence_weight,
             mechanism_match=match.mechanism_match,
             matched_fields=match.matched_fields,
             mismatched_fields=match.mismatched_fields,
-            reason=match.reason))
+            reason=match.reason, mechanism_score=match.score,
+            utility_score=quality.utility_score,
+            risk_penalty=quality.risk_penalty,
+            quality_status=quality.status))
     matches.sort(key=lambda item: (-item.score, item.path_id))
     return matches[:max(0, int(limit))]
 
 
-__all__ = ["CausalPathMatch", "retrieve_causal_paths"]
+__all__ = ["CausalPathMatch", "CausalPathQuality", "score_causal_path",
+           "retrieve_causal_paths"]

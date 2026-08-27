@@ -19,11 +19,15 @@ from tehm.retrieval.recall import high_recall
 from tehm.retrieval.symbolic_filter import apply_symbolic_filter
 from tehm.retrieval.rerank import rerank
 from tehm.retrieval.pipeline import retrieve
-from tehm.retrieval.causal_recall import CausalPathMatch, retrieve_causal_paths
+from tehm.retrieval.causal_recall import (
+    CausalPathMatch, CausalPathQuality, retrieve_causal_paths,
+    score_causal_path,
+)
 
 __all__ = [
     "RetrievalReceipt", "RetrievedRule",
     "plan_query", "retrieve_query", "RuleIndex", "build_index", "high_recall",
     "apply_symbolic_filter", "rerank", "retrieve",
-    "CausalPathMatch", "retrieve_causal_paths",
+    "CausalPathMatch", "CausalPathQuality", "score_causal_path",
+    "retrieve_causal_paths",
 ]

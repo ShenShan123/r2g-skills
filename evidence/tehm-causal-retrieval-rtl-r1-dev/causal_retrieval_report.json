@@ -14,14 +14,18 @@
               ],
               "mechanism_family": "FIFO_CAPACITY_COMPLETION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_7ff90c33d1686b14",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_a68b69d4f587fa2e"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             },
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
@@ -32,14 +36,18 @@
               ],
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_f09cc6a9b3e68ff1",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             },
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
@@ -50,14 +58,18 @@
               ],
               "mechanism_family": "VALID_READY_COMMIT",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_f3edf1bb3ed99c74",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_f9f8a121a2c7ed48"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": true,
@@ -71,14 +83,18 @@
               ],
               "mechanism_family": "FIFO_CAPACITY_COMPLETION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_7ff90c33d1686b14",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_a68b69d4f587fa2e"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             },
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
@@ -89,14 +105,18 @@
               ],
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_f09cc6a9b3e68ff1",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             },
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
@@ -107,14 +127,18 @@
               ],
               "mechanism_family": "VALID_READY_COMMIT",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_f3edf1bb3ed99c74",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_f9f8a121a2c7ed48"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_query_plan": {
@@ -140,14 +164,18 @@
               ],
               "mechanism_family": "FIFO_CAPACITY_COMPLETION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_7ff90c33d1686b14",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_a68b69d4f587fa2e"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             },
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
@@ -158,14 +186,18 @@
               ],
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_f09cc6a9b3e68ff1",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             },
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
@@ -176,14 +208,18 @@
               ],
               "mechanism_family": "VALID_READY_COMMIT",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_f3edf1bb3ed99c74",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_f9f8a121a2c7ed48"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": true,
@@ -197,14 +233,18 @@
               ],
               "mechanism_family": "FIFO_CAPACITY_COMPLETION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_7ff90c33d1686b14",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_a68b69d4f587fa2e"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             },
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
@@ -215,14 +255,18 @@
               ],
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_f09cc6a9b3e68ff1",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             },
             {
               "compatibility_profile": "rtl.fsm.single_guard.v1",
@@ -233,14 +277,18 @@
               ],
               "mechanism_family": "VALID_READY_COMMIT",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_f3edf1bb3ed99c74",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_f9f8a121a2c7ed48"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_query_plan": {
@@ -268,14 +316,18 @@
               ],
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_f09cc6a9b3e68ff1",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_66da3c80fe636ba0"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": false,
@@ -323,15 +375,19 @@
               ],
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_b82b7592fc2fe5a5",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_afd2f3e5be69c10f",
                 "transition_cf9935138e7603da"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": true,
@@ -345,15 +401,19 @@
               ],
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_b82b7592fc2fe5a5",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_afd2f3e5be69c10f",
                 "transition_cf9935138e7603da"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_query_plan": {
@@ -379,15 +439,19 @@
               ],
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_b82b7592fc2fe5a5",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_afd2f3e5be69c10f",
                 "transition_cf9935138e7603da"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": true,
@@ -401,15 +465,19 @@
               ],
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_b82b7592fc2fe5a5",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_afd2f3e5be69c10f",
                 "transition_cf9935138e7603da"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_query_plan": {
@@ -437,15 +505,19 @@
               ],
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_b82b7592fc2fe5a5",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_afd2f3e5be69c10f",
                 "transition_cf9935138e7603da"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": false,
@@ -493,15 +565,19 @@
               ],
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_66149cff0545672c",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_cb7c3069ea28348b",
                 "transition_e7cb10d56f5d8405"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": true,
@@ -515,15 +591,19 @@
               ],
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_66149cff0545672c",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_cb7c3069ea28348b",
                 "transition_e7cb10d56f5d8405"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_query_plan": {
@@ -549,15 +629,19 @@
               ],
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_66149cff0545672c",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_cb7c3069ea28348b",
                 "transition_e7cb10d56f5d8405"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": true,
@@ -571,15 +655,19 @@
               ],
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_66149cff0545672c",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_cb7c3069ea28348b",
                 "transition_e7cb10d56f5d8405"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_query_plan": {
@@ -607,15 +695,19 @@
               ],
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_66149cff0545672c",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_cb7c3069ea28348b",
                 "transition_e7cb10d56f5d8405"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": false,
@@ -663,15 +755,19 @@
               ],
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_7db028af3afece27",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_6f906a4d273f5982",
                 "transition_9422852166c1765d"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": true,
@@ -685,15 +781,19 @@
               ],
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_7db028af3afece27",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_6f906a4d273f5982",
                 "transition_9422852166c1765d"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_query_plan": {
@@ -719,15 +819,19 @@
               ],
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_7db028af3afece27",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_6f906a4d273f5982",
                 "transition_9422852166c1765d"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": true,
@@ -741,15 +845,19 @@
               ],
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_7db028af3afece27",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_6f906a4d273f5982",
                 "transition_9422852166c1765d"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_query_plan": {
@@ -777,15 +885,19 @@
               ],
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
+              "mechanism_score": 0.625,
               "mismatched_fields": [],
               "path_id": "causal_path_7db028af3afece27",
+              "quality_status": "NOT_ESTABLISHED",
               "reason": "causal_mechanism_match",
-              "score": 0.625,
+              "risk_penalty": 0.5,
+              "score": 0.15625,
               "source_transition_ids": [
                 "transition_6f906a4d273f5982",
                 "transition_9422852166c1765d"
               ],
-              "status": "shadow"
+              "status": "shadow",
+              "utility_score": 0.5
             }
           ],
           "negative_false_transfer": false,
@@ -855,7 +967,7 @@
   },
   "production_promotion_eligible": false,
   "promotion_attempted": false,
-  "report_digest": "sha256:697507ccf0ae17572e74cbb4f25c68da2aef2590796dee50822ca0254f762800",
+  "report_digest": "sha256:aa79b6b12ded7014867b665e73464aebf71df0a623b81b3efca0040f31263246",
   "source_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
   "source_db_sha256": "298a04ca1f0524245fa2f57c6570b69fce85dff818a7ce6a83172c76cb0078b1",
   "training": {
@@ -1347,5 +1459,5 @@
     "p3_overlap_priority_a",
     "p3_overlap_priority_b"
   ],
-  "version": "tehm-causal-retrieval-eval-v1"
+  "version": "tehm-causal-retrieval-eval-v2"
 }

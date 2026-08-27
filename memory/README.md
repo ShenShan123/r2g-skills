@@ -13,7 +13,7 @@
 ## 当前进度：Phase 0 - 11（实现骨架；能力验证分开记账）
 
 设计文档中的 Phase 0–11 已有对应模块和脚手架，但“模块存在”不等于“研究能力
-已验证”。截至 2026-08-26，工作树已补齐 P0 数据完整性/重现性与 P1
+已验证”。截至 2026-08-27，工作树已补齐 P0 数据完整性/重现性与 P1
 结构化绑定证明，并生成当前源码绑定的 v4 development freeze；下方 v3 数字仍是
 历史外部 freeze 的声明，不能当作本工作树的现时测试结果。v3 的完整 reproduce
 仍需要它自己的 freeze 指针；当前 v4 可直接由本地 `evidence/` bundle 重放。
@@ -182,7 +182,9 @@ metadata、但 module 结构不符”的 negative slice 中，R0/R1 的 false tr
 均为 `1.0`，R2 降为 `0.0`。这只是可解释 matcher 的 evaluation-only 证据，不是
 production retrieval、rule promotion 或 capability gain；报告明确记录
 `heldout_learner_eligible=false`、`canonical_memory_mutation=none`、
-`promotion_attempted=false`。重放入口为报告目录下的 `reproduce.sh`。
+`promotion_attempted=false`。报告 v2 还记录 causal 机制分与质量重排字段；当前训练
+path 缺少质量证据，因此按保守先验标记 `NOT_ESTABLISHED`，不把该结果误写成
+utility/risk 实测收益。重放入口为报告目录下的 `reproduce.sh`。
 
 ### B3 Online evolution evidence（2026-08-26）
 
@@ -330,7 +332,7 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
-回归为 `481 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+回归为 `483 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
 
 Backend activation seam 现在也执行同一条 fail-closed 回执规则：`UNKNOWN` 只能被
 一次性收敛为最终 outcome；已 finalized 的 outcome、created regressions、rollback
@@ -379,6 +381,14 @@ Causal shadow objects 现在也采用 immutable replay：node、edge 与 interve
 source/support/evidence JSON；causal recall 遇到 digest 不匹配的 derived path 会
 直接跳过，L3 replication 只有在完整校验后才更新版本化 digest。该 guard 只强化
 causal shadow 的可重放性，不把 causal score 变成 production authority。
+
+2026-08-27 又把 A3 causal recall 的质量重排接到同一条 evaluation-only 管线：每条
+匹配回执同时暴露 `mechanism_score`、`utility_score`、`risk_penalty` 与
+`quality_status`，并按 `S_causal × U × (1-R)` 计算可解释 shadow score。路径缺少
+utility/risk 证据时使用保守的 `U=0.5`、`R=0.5` 并标记
+`NOT_ESTABLISHED`；显式质量字段损坏、越界或非有限时直接从 evaluator 剔除，不能
+被默认当成安全证据。该层只影响 causal shadow 排序和审计字段，不写 canonical
+memory、不进入 production retrieval，也不改变任何 promotion gate。
 
 Typed view 与 activation receipt 也已改为 immutable replay：相同 owner/schema/extractor
 的 view 只接受完全一致的 payload、digest 与 source refs，冲突 materialization 会
