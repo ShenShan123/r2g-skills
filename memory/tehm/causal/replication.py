@@ -54,7 +54,15 @@ def evaluate_replicated_effect(
     campaign_id: str = "live",
     min_lineages: int = 2,
     persist: bool = True,
+    commit: bool = True,
 ) -> ReplicationReceipt:
+    """Evaluate an L3 replication claim and optionally update its shadow path.
+
+    The path update is derived evidence only. When the caller already owns a
+    transaction, the update remains pending for that transaction even when
+    commit=True; with no outer transaction, commit=True commits the
+    helper-owned update. persist=False remains strictly read-only.
+    """
     row = conn.execute("SELECT * FROM tehm_causal_paths WHERE path_id=?",
                        (path_id,)).fetchone()
     if row is None:
@@ -124,6 +132,7 @@ def evaluate_replicated_effect(
                         "unique_designs": list(designs),
                         "unique_runs": sorted(runs),
                         "replication_campaign": campaign_id})
+        had_outer_transaction = conn.in_transaction
         conn.execute(
             """UPDATE tehm_causal_paths
                   SET evidence_level=?, support_json=?, updated_at=?
@@ -131,7 +140,8 @@ def evaluate_replicated_effect(
             (CausalEvidenceLevel.L3_REPLICATED_EFFECT.value,
              json.dumps(support, sort_keys=True, separators=(",", ":")),
              tehm_db.now_local(), path_id))
-        conn.commit()
+        if commit and not had_outer_transaction:
+            conn.commit()
     return ReplicationReceipt(
         path_id=path_id, eligible=eligible,
         evidence_level=(CausalEvidenceLevel.L3_REPLICATED_EFFECT.value

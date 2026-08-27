@@ -42,6 +42,7 @@ def set_status(conn: sqlite3.Connection, *, rule_id: str, target_scope: str,
         raise RuleLifecycleError(f"invalid lifecycle status {status!r}")
     current = get_status(conn, rule_id=rule_id, target_scope=target_scope)
     version = (current["status_version"] if current else 0) + 1
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR REPLACE INTO tehm_rule_status (
                rule_id, target_scope, status, status_version,
@@ -49,7 +50,7 @@ def set_status(conn: sqlite3.Connection, *, rule_id: str, target_scope: str,
            VALUES (?, ?, ?, ?, ?, ?)""",
         (rule_id, target_scope, status, version,
          stable_dumps(provenance or {}), tehm_db.now_local()))
-    if commit:
+    if commit and not had_outer_transaction:
         conn.commit()
     return version
 

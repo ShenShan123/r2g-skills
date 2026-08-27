@@ -116,6 +116,7 @@ def record_rule_revision(
                 "evidence_refs": refs}
     revision_id = "revision_" + hashlib.sha1(
         stable_dumps(identity).encode()).hexdigest()[:20]
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR IGNORE INTO tehm_rule_revisions
            (revision_id, parent_rule_id, child_rule_id, operation,
@@ -124,7 +125,7 @@ def record_rule_revision(
         (revision_id, parent_rule_id, child_rule_id, operation,
          trigger_event_id, stable_dumps(list(refs)),
          stable_dumps(validation or {}), created_at or tehm_db.now_local()))
-    if commit:
+    if commit and not had_outer_transaction:
         conn.commit()
     return RuleRevisionReceipt(
         revision_id=revision_id, parent_rule_id=parent_rule_id,

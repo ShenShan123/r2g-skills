@@ -142,6 +142,58 @@ def test_real_orfs_pairs_upgrade_to_l3_without_promotion(tmp_tehm, tmp_path):
     assert report["promotion_eligible"] is False
 
 
+def test_l3_replication_preserves_outer_transaction(tmp_tehm, tmp_path):
+    conn, _, _ = tmp_tehm
+    source_db = tmp_path / "source.sqlite"
+    destination = sqlite3.connect(source_db)
+    conn.backup(destination)
+    destination.close()
+    conn.close()
+    pairs = []
+    for design in ("and32", "toggle32"):
+        before = _completed_orfs_project(tmp_path, f"{design}_before", 50)
+        after = _completed_orfs_project(tmp_path, f"{design}_after", 40)
+        pairs.append({
+            "before_project": str(before), "after_project": str(after),
+            "lineage_id": f"orfs-test:{design}",
+            "config_edits": {"CORE_UTILIZATION": "40"},
+        })
+    report = build_orfs_controlled_replication(
+        source_db, pairs=pairs, campaign_id="orfs-l3-transaction-test",
+        output_dir=tmp_path / "controlled")
+    derived = sqlite3.connect(report["derived_db"])
+    derived.row_factory = sqlite3.Row
+    try:
+        path_id = report["path"]["path_id"]
+        derived.execute(
+            "UPDATE tehm_causal_paths SET evidence_level=? WHERE path_id=?",
+            ("L2_CONTROLLED_INTERVENTION", path_id),
+        )
+        derived.commit()
+        derived.execute(
+            "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+            ("replication-caller-sentinel", "pending"),
+        )
+        receipt = evaluate_replicated_effect(
+            derived, path_id, campaign_id="orfs-l3-transaction-test")
+        assert receipt.eligible is True
+        assert derived.in_transaction is True
+        assert derived.execute(
+            "SELECT evidence_level FROM tehm_causal_paths WHERE path_id=?",
+            (path_id,),
+        ).fetchone()[0] == "L3_REPLICATED_EFFECT"
+        derived.rollback()
+        assert derived.execute(
+            "SELECT evidence_level FROM tehm_causal_paths WHERE path_id=?",
+            (path_id,),
+        ).fetchone()[0] == "L2_CONTROLLED_INTERVENTION"
+        assert derived.execute(
+            "SELECT 1 FROM tehm_meta WHERE key='replication-caller-sentinel'"
+        ).fetchone() is None
+    finally:
+        derived.close()
+
+
 def test_control_preserves_an_executed_baseline_failure():
     control = _control_record(_record("orfs:failed-baseline"))
     assert control.verification["verdict"] == "FAIL"

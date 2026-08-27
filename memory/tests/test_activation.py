@@ -255,3 +255,68 @@ def test_unknown_rule_rejected(tmp_tehm):
     with pytest.raises(ActivationError):
         activate(conn, None, rule_id="rule_does_not_exist",
                  context=RepairContext(check="drc"), authority_mode="evaluation")
+
+
+def test_utility_feedback_preserves_outer_transaction(tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_one_rule(tmp_tehm, sample_record_dict)
+    from tehm import db as tehm_db
+    from tehm.activation.update import update_rule_utility
+
+    before = tehm_db.read_json(conn.execute(
+        "SELECT utility_json FROM tehm_rules WHERE rule_id=?",
+        (rule_id,)).fetchone()["utility_json"])
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("activation-utility-caller-sentinel", "pending"),
+    )
+    update_rule_utility(
+        conn, rule_id, "PASS", activation_id="activation-tx",
+        campaign_id="activation-evaluation")
+    assert conn.in_transaction is True
+    assert conn.execute(
+        "SELECT 1 FROM tehm_memory_events WHERE source_id='activation-tx'"
+    ).fetchone() is not None
+    conn.rollback()
+    after = tehm_db.read_json(conn.execute(
+        "SELECT utility_json FROM tehm_rules WHERE rule_id=?",
+        (rule_id,)).fetchone()["utility_json"])
+    assert after == before
+    assert conn.execute(
+        "SELECT 1 FROM tehm_memory_events WHERE source_id='activation-tx'"
+    ).fetchone() is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='activation-utility-caller-sentinel'"
+    ).fetchone() is None
+
+
+def test_activation_pipeline_updates_are_atomic_with_outer_transaction(
+        tmp_tehm, sample_record_dict):
+    conn, store, _ = tmp_tehm
+    rule_id = _crystallize_one_rule(tmp_tehm, sample_record_dict)
+    before_transitions = conn.execute(
+        "SELECT COUNT(*) FROM tehm_transitions").fetchone()[0]
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("activation-pipeline-caller-sentinel", "pending"),
+    )
+    record = activate(
+        conn, store, rule_id=rule_id, context=RepairContext(check="drc"),
+        provided_binding={"$H0": "PLACE_DENSITY_LB_ADDON", "$H1": "0.16"},
+        executor=fake_executor, oracle=fake_oracle,
+        authority_mode="evaluation")
+    assert conn.in_transaction is True
+    assert conn.execute(
+        "SELECT 1 FROM tehm_activations WHERE activation_id=?",
+        (record.activation_id,)).fetchone() is not None
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == before_transitions + 1
+    conn.rollback()
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='activation-pipeline-caller-sentinel'"
+    ).fetchone() is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_activations WHERE activation_id=?",
+        (record.activation_id,)).fetchone() is None
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == before_transitions

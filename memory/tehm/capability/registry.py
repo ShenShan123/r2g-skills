@@ -43,6 +43,7 @@ def register_capability(
     status: str = "observed_gap",
     version: int = 1,
     provenance: dict | None = None,
+    commit: bool = True,
 ) -> CapabilityReceipt:
     if not mechanism_family:
         raise ValueError("mechanism_family is required")
@@ -64,6 +65,7 @@ def register_capability(
     capability_id = "capability_" + hashlib.sha1(
         stable_dumps(identity).encode()).hexdigest()[:20]
     now = tehm_db.now_local()
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR IGNORE INTO tehm_capabilities
            (capability_id, mechanism_family, applicability_json,
@@ -75,7 +77,8 @@ def register_capability(
          stable_dumps(list(required_rules)), stable_dumps(list(required_assets)),
          stable_dumps(obligations or {}), stable_dumps(budget or {}), status,
          int(version), stable_dumps(provenance or {}), now, now))
-    conn.commit()
+    if commit and not had_outer_transaction:
+        conn.commit()
     return CapabilityReceipt(capability_id, mechanism_family, status, int(version))
 
 
@@ -111,6 +114,7 @@ def record_capability_evidence(
         if existing["evidence_digest"] != digest:
             raise ValueError("capability evidence is immutable and conflicts")
         return digest
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT INTO tehm_capability_evidence
            (capability_id, evidence_type, evidence_id, split, lineage_id,
@@ -118,7 +122,7 @@ def record_capability_evidence(
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (capability_id, evidence_type, evidence_id, split, lineage_id,
          verdict, digest))
-    if commit:
+    if commit and not had_outer_transaction:
         conn.commit()
     return digest
 
@@ -126,7 +130,8 @@ def record_capability_evidence(
 def promote_capability(conn: sqlite3.Connection, capability_id: str,
                        *, gates: dict | None = None,
                        attribution_receipt: dict | None = None,
-                       authority_receipt: dict | None = None) -> CapabilityReceipt:
+                       authority_receipt: dict | None = None,
+                       commit: bool = True) -> CapabilityReceipt:
     """Promote only after a database-bound C1-C8 authority receipt.
 
     ``gates`` and ``attribution_receipt`` are retained as compatibility
@@ -177,12 +182,14 @@ def promote_capability(conn: sqlite3.Connection, capability_id: str,
     gate_report = authority_check["gate_report"]
     provenance = stable_dumps({"authority": authority_data,
                                "gates": gate_report})
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """UPDATE tehm_capabilities
               SET status='promoted', provenance_json=?, updated_at=?
             WHERE capability_id=?""",
         (provenance, tehm_db.now_local(), capability_id))
-    conn.commit()
+    if commit and not had_outer_transaction:
+        conn.commit()
     return CapabilityReceipt(capability_id, row["mechanism_family"], "promoted",
                              int(row["version"]))
 

@@ -158,6 +158,7 @@ def append_memory_event(
     # the standard library.  Event identity remains content-addressed and does
     # not include this cosmetic timestamp.
     stamp = created_at or tehm_db.now_local()
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR IGNORE INTO tehm_memory_events
            (event_id, event_type, source_type, source_id, campaign_id,
@@ -167,7 +168,7 @@ def append_memory_event(
         (event_id, event_type, source_type, source_id, campaign_id,
          int(bool(learner_eligible)), payload_json, previous,
          event_digest, stamp))
-    if commit:
+    if commit and not had_outer_transaction:
         conn.commit()
     return MemoryEventReceipt(
         event_id=event_id, event_type=event_type, source_type=source_type,

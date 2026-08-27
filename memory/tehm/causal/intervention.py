@@ -21,12 +21,16 @@ def build_intervention_pair(
     target_scope: str | None = None,
     lineage_id: str | None = None,
     campaign_id: str | None = None,
+    commit: bool = True,
 ) -> InterventionReceipt:
     """Compare two executed transitions without mutating canonical evidence.
 
     A valid pair requires matched source graph/toolchain context and a changed
     action.  Invalid pairs are still returned as audit receipts, but are never
-    labelled controlled intervention evidence.
+    labelled controlled intervention evidence.  An already-active caller
+    transaction remains open; ``commit=True`` commits only when this helper
+    owns the transaction.  ``commit=False`` leaves the derived pair/edge rows
+    for the enclosing savepoint or transaction.
     """
     if isinstance(control_transition_id, sqlite3.Connection):
         conn = control_transition_id
@@ -128,49 +132,64 @@ def build_intervention_pair(
         lineage_id=lineage_id or control.lineage_id,
         outcome_delta=outcome_delta,
         oracle_equivalence=oracle_equivalence)
-    now = tehm_db.now_local()
-    conn.execute(
-        """INSERT OR IGNORE INTO tehm_intervention_pairs
-           (pair_id, control_transition_id, treatment_transition_id,
-            target_scope, matched_context_digest, changed_action_digest,
-            outcome_delta_json, oracle_equivalence_json, lineage_id,
-            validity_status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (receipt.pair_id, receipt.control_transition_id,
-         receipt.treatment_transition_id, receipt.target_scope,
-         receipt.matched_context_digest, receipt.changed_action_digest,
-         stable_dumps(receipt.outcome_delta),
-         stable_dumps(receipt.oracle_equivalence), receipt.lineage_id,
-         receipt.validity_status, now))
-    causal_edge_id = None
-    if valid:
-        # Materialise a single L2 edge only after the pair has matched source
-        # context, toolchain, oracle scope, lineage, and changed action.  The
-        # pair itself remains a separate audit object.
-        from .path_builder import build_transition_causal_fragment
+    had_outer_transaction = conn.in_transaction
+    savepoint = "tehm_intervention_pair_v1"
+    conn.execute(f"SAVEPOINT {savepoint}")
+    try:
+        now = tehm_db.now_local()
+        conn.execute(
+            """INSERT OR IGNORE INTO tehm_intervention_pairs
+               (pair_id, control_transition_id, treatment_transition_id,
+                target_scope, matched_context_digest, changed_action_digest,
+                outcome_delta_json, oracle_equivalence_json, lineage_id,
+                validity_status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (receipt.pair_id, receipt.control_transition_id,
+             receipt.treatment_transition_id, receipt.target_scope,
+             receipt.matched_context_digest, receipt.changed_action_digest,
+             stable_dumps(receipt.outcome_delta),
+             stable_dumps(receipt.oracle_equivalence), receipt.lineage_id,
+             receipt.validity_status, now))
+        causal_edge_id = None
+        if valid:
+            # Materialise a single L2 edge only after the pair has matched
+            # source context, toolchain, oracle scope, lineage, and changed
+            # action.  The pair itself remains a separate audit object.
+            from .path_builder import build_transition_causal_fragment
 
-        control_fragment = build_transition_causal_fragment(
-            conn, control_transition_id, campaign_id=selected_campaign)
-        treatment_fragment = build_transition_causal_fragment(
-            conn, treatment_transition_id, campaign_id=selected_campaign)
-        treatment_action = next(
-            node for node in treatment_fragment.nodes if node.node_type == "ACTION")
-        treatment_outcome = next(
-            node for node in treatment_fragment.nodes if node.node_type == "ORACLE_OUTCOME")
-        campaign = treatment_fragment.campaign_id
-        learner = bool(control_fragment.learner_eligible and
-                       treatment_fragment.learner_eligible)
-        edge = CausalEdge(
-            treatment_action.causal_node_id, "SUPPORTS",
-            treatment_outcome.causal_node_id,
-            CausalEvidenceLevel.L2_CONTROLLED_INTERVENTION.value,
-            support={"pair_id": pair_id, "control": control_transition_id,
-                     "treatment": treatment_transition_id},
-            confidence={"controlled_pair": True},
-            evidence_refs=(pair_id, control_transition_id, treatment_transition_id),
-            campaign_id=campaign, learner_eligible=learner)
-        causal_edge_id = persist_edge(conn, edge)
-    conn.commit()
+            control_fragment = build_transition_causal_fragment(
+                conn, control_transition_id, campaign_id=selected_campaign,
+                commit=False)
+            treatment_fragment = build_transition_causal_fragment(
+                conn, treatment_transition_id, campaign_id=selected_campaign,
+                commit=False)
+            treatment_action = next(
+                node for node in treatment_fragment.nodes
+                if node.node_type == "ACTION")
+            treatment_outcome = next(
+                node for node in treatment_fragment.nodes
+                if node.node_type == "ORACLE_OUTCOME")
+            campaign = treatment_fragment.campaign_id
+            learner = bool(control_fragment.learner_eligible and
+                           treatment_fragment.learner_eligible)
+            edge = CausalEdge(
+                treatment_action.causal_node_id, "SUPPORTS",
+                treatment_outcome.causal_node_id,
+                CausalEvidenceLevel.L2_CONTROLLED_INTERVENTION.value,
+                support={"pair_id": pair_id, "control": control_transition_id,
+                         "treatment": treatment_transition_id},
+                confidence={"controlled_pair": True},
+                evidence_refs=(pair_id, control_transition_id,
+                               treatment_transition_id),
+                campaign_id=campaign, learner_eligible=learner)
+            causal_edge_id = persist_edge(conn, edge)
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+    except Exception:
+        conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise
+    if commit and not had_outer_transaction:
+        conn.commit()
     return InterventionReceipt(
         pair_id=receipt.pair_id,
         control_transition_id=receipt.control_transition_id,

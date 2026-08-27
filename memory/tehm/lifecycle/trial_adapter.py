@@ -74,9 +74,40 @@ def judge_trial(arm_a_samples: list[float], arm_b_samples: list[float], *,
     return ("inconclusive", f"LCBs not separated (A={lcb_a:.3f}, B={lcb_b:.3f})")
 
 
+def _check_deterministic_replay(conn: sqlite3.Connection, *,
+                                trial_id: str, trial_uuid: str,
+                                expected: dict) -> bool:
+    """Reject conflicting writes for a deterministic trial identity.
+
+    A retry with the same UUID is allowed only when every persisted evidence
+    field is identical.  This protects the authority ledger from silent
+    replacement data loss while leaving legacy UUID-less trials unchanged.
+    Callers that enrich metrics after the initial evidence write continue to
+    use an explicit UPDATE (the ORFS/RTL crash-recovery path).
+    """
+    if not trial_uuid:
+        return False
+    existing = conn.execute(
+        "SELECT * FROM tehm_trials WHERE trial_uuid=? OR trial_id=?",
+        (trial_uuid, trial_id)).fetchone()
+    if existing is None:
+        return False
+    mismatches = [
+        key for key, value in expected.items()
+        if existing[key] != value
+    ]
+    if mismatches:
+        fields = ", ".join(mismatches)
+        raise ValueError(
+            f"trial evidence replay conflicts with immutable trial "
+            f"{trial_uuid}: {fields}")
+    return True
+
+
 def run_trial(conn: sqlite3.Connection, *, subject: TrialSubject,
               context, arm_a_evaluator, arm_b_evaluator,
-              repeats: int = 2, trial_uuid: str = "") -> dict:
+              repeats: int = 2, trial_uuid: str = "",
+              commit: bool = True) -> dict:
     """Execute and judge one A/B trial over ``repeats`` rounds.
 
     ``arm_a_evaluator(plan, context)`` / ``arm_b_evaluator(plan, context)``:
@@ -103,6 +134,25 @@ def run_trial(conn: sqlite3.Connection, *, subject: TrialSubject,
         "reason": reason,
         "status_version": subject.status_version,
     }
+    metrics_json = stable_dumps({"reason": reason,
+                                 "arm_a_samples": a_samples,
+                                 "arm_b_samples": b_samples})
+    if _check_deterministic_replay(
+            conn, trial_id=trial["trial_id"], trial_uuid=trial_uuid,
+            expected={
+                "trial_id": trial["trial_id"],
+                "rule_id": trial["rule_id"],
+                "target_scope": trial["target_scope"],
+                "arm_a_run_id": None,
+                "arm_b_run_id": None,
+                "verdict": verdict,
+                "metrics_json": metrics_json,
+                "match_level": "exact",
+                "trial_uuid": trial_uuid,
+                "status_version": subject.status_version,
+            }):
+        return trial
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR REPLACE INTO tehm_trials (
                trial_id, rule_id, target_scope, arm_a_run_id, arm_b_run_id,
@@ -115,7 +165,8 @@ def run_trial(conn: sqlite3.Connection, *, subject: TrialSubject,
                                             "arm_b_samples": b_samples}),
          "exact", trial_uuid or None, subject.status_version,
          tehm_db.now_local()))
-    conn.commit()
+    if commit and not had_outer_transaction:
+        conn.commit()
     return trial
 
 
@@ -124,7 +175,8 @@ def record_external_trial(conn: sqlite3.Connection, *, rule_id: str,
                           status_version: int, trial_uuid: str,
                           arm_a_run_id: str | None,
                           arm_b_run_id: str | None,
-                          match_level: str = "exact") -> dict:
+                          match_level: str = "exact",
+                          commit: bool = True) -> dict:
     """Persist a trial executed by the shared real ORFS base.
 
     Unlike ``run_trial`` this function does not own execution; it records the
@@ -134,6 +186,26 @@ def record_external_trial(conn: sqlite3.Connection, *, rule_id: str,
     if not trial_uuid:
         raise ValueError("external TEHM trial requires deterministic trial_uuid")
     trial_id = f"trial_{trial_uuid}"
+    metrics_json = stable_dumps(metrics)
+    if _check_deterministic_replay(
+            conn, trial_id=trial_id, trial_uuid=trial_uuid,
+            expected={
+                "trial_id": trial_id,
+                "rule_id": rule_id,
+                "target_scope": target_scope,
+                "arm_a_run_id": arm_a_run_id,
+                "arm_b_run_id": arm_b_run_id,
+                "verdict": verdict,
+                "metrics_json": metrics_json,
+                "match_level": match_level,
+                "trial_uuid": trial_uuid,
+                "status_version": status_version,
+            }):
+        return {"trial_id": trial_id, "rule_id": rule_id,
+                "target_scope": target_scope, "verdict": verdict,
+                "trial_uuid": trial_uuid, "status_version": status_version,
+                "metrics": metrics}
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR REPLACE INTO tehm_trials (
                trial_id, rule_id, target_scope, arm_a_run_id, arm_b_run_id,
@@ -143,7 +215,8 @@ def record_external_trial(conn: sqlite3.Connection, *, rule_id: str,
         (trial_id, rule_id, target_scope, arm_a_run_id, arm_b_run_id,
          verdict, stable_dumps(metrics), match_level, trial_uuid,
          status_version, tehm_db.now_local()))
-    conn.commit()
+    if commit and not had_outer_transaction:
+        conn.commit()
     return {"trial_id": trial_id, "rule_id": rule_id,
             "target_scope": target_scope, "verdict": verdict,
             "trial_uuid": trial_uuid, "status_version": status_version,

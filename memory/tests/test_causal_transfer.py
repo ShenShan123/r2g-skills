@@ -21,7 +21,8 @@ from tehm.rtl.rtl_evidence import build_rtl_execution_record
 RTL_PROJECT = Path(__file__).resolve().parent / "fixtures" / "rtl_projects" / "req_ack_bug"
 
 
-def _completed_orfs_project(root, name, utilization):
+def _completed_orfs_project(root, name, utilization, *, route_status="clean",
+                            make_status=0):
     project = root / name
     (project / "constraints").mkdir(parents=True)
     (project / "reports").mkdir()
@@ -31,12 +32,12 @@ def _completed_orfs_project(root, name, utilization):
         f"export DESIGN_NAME = {name}\nexport PLATFORM = sky130hs\n"
         f"export CORE_UTILIZATION = {utilization}\n")
     (run / "run-meta.json").write_text(json.dumps({
-        "run_tag": f"RUN_{name}", "make_status": 0,
+        "run_tag": f"RUN_{name}", "make_status": make_status,
         "config_mk": str(project / "constraints" / "config.mk")}))
     (run / "stage_log.jsonl").write_text(
         json.dumps({"stage": "route", "status": 0}) + "\n")
     for report, payload in {
-        "route": {"status": "clean"}, "drc": {"status": "clean"},
+        "route": {"status": route_status}, "drc": {"status": "clean"},
         "lvs": {"status": "clean"}, "timing_check": {"tier": "clean"},
         "ppa": {"summary": {"timing": {"setup_wns": 1.0},
                               "area": {"design_area_um2": 100.0}}},
@@ -54,7 +55,8 @@ def _training_replication(tmp_tehm, tmp_path):
     conn.close()
     pairs = []
     for design in ("and32", "toggle32"):
-        before = _completed_orfs_project(tmp_path, f"{design}_before", 50)
+        before = _completed_orfs_project(
+            tmp_path, f"{design}_before", 50, route_status="fail", make_status=1)
         after = _completed_orfs_project(tmp_path, f"{design}_after", 40)
         pairs.append({
             "before_project": str(before), "after_project": str(after),
@@ -71,7 +73,8 @@ def test_l4_transfer_requires_disjoint_heldout_and_is_read_only(tmp_tehm, tmp_pa
     conn = db.connect(report["derived_db"])
     db.ensure_schema(conn)
     store = ArtifactStore(tmp_path / "transfer-artifacts")
-    before = _completed_orfs_project(tmp_path, "heldout_before", 50)
+    before = _completed_orfs_project(
+        tmp_path, "heldout_before", 50, route_status="fail", make_status=1)
     after = _completed_orfs_project(tmp_path, "heldout_after", 40)
     transfer = build_orfs_pair_record(
         before, after, lineage_id="orfs-l4:heldout",

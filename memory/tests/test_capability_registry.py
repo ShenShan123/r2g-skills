@@ -423,3 +423,68 @@ def test_capability_campaign_binds_exact_frozen_controls(tmp_tehm):
         candidate_controls={**controls, "seed": 8})
     assert mismatched.controls_match is False
     assert mismatched.promotable is False
+
+
+def test_capability_and_policy_writers_preserve_outer_transaction(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("capability-caller-sentinel", "pending"),
+    )
+    capability = register_capability(
+        conn, mechanism_family="TRANSACTIONAL_CAPABILITY",
+        applicability={"profile": "p"})
+    record_capability_evidence(
+        conn, capability_id=capability.capability_id,
+        evidence_type="external", evidence_id="tx-evidence",
+        split="training", verdict="PASS", lineage_id="lineage-tx")
+    policy = create_policy_snapshot(
+        conn, memory_snapshot_id="memory-tx", promoted_rules=["rule-tx"])
+    load = record_policy_load(
+        conn, policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="runtime-tx", loaded=True)
+    assert conn.in_transaction is True
+    assert conn.execute(
+        "SELECT 1 FROM tehm_capabilities WHERE capability_id=?",
+        (capability.capability_id,)).fetchone() is not None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_policy_load_receipts WHERE receipt_id=?",
+        (load.receipt_id,)).fetchone() is not None
+    conn.rollback()
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='capability-caller-sentinel'"
+    ).fetchone() is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_capabilities WHERE capability_id=?",
+        (capability.capability_id,)).fetchone() is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_policy_snapshots WHERE policy_snapshot_id=?",
+        (policy.policy_snapshot_id,)).fetchone() is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_policy_load_receipts WHERE receipt_id=?",
+        (load.receipt_id,)).fetchone() is None
+
+
+def test_capability_promotion_preserves_outer_transaction(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="TRANSACTIONAL_PROMOTION",
+        applicability={"profile": "p"}, status="candidate")
+    attribution, authority, gates = _full_attribution_and_authority(
+        conn, capability.capability_id)
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("capability-promotion-sentinel", "pending"),
+    )
+    promoted = promote_capability(
+        conn, capability.capability_id, gates=gates,
+        attribution_receipt=attribution, authority_receipt=authority)
+    assert promoted.status == "promoted"
+    assert conn.in_transaction is True
+    conn.rollback()
+    assert conn.execute(
+        "SELECT status FROM tehm_capabilities WHERE capability_id=?",
+        (capability.capability_id,)).fetchone()[0] == "candidate"
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='capability-promotion-sentinel'"
+    ).fetchone() is None

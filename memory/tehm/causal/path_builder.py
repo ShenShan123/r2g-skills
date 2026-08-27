@@ -142,7 +142,9 @@ def build_transition_causal_fragment(
     The only writes are ``tehm_causal_*`` rows.  Canonical states, transitions,
     episodes, and memberships are read-only inputs and are never rewritten.
     ``commit=False`` is reserved for an enclosing online savepoint so a causal
-    fragment cannot be left behind when a later event/proposal fails.
+    fragment cannot be left behind when a later event/proposal fails.  When
+    ``commit=True``, an already-active caller transaction is left open; this
+    helper commits only when it owns the transaction.
     """
     facts = load_transition_facts(conn, transition_id)
     selected_campaign, learner_eligible, split = _membership(
@@ -221,12 +223,13 @@ def build_transition_causal_fragment(
                    outcome_node.causal_node_id, level, support,
                    {"level": level}, refs, selected_campaign, learner_eligible),
     )
+    had_outer_transaction = conn.in_transaction
     created_at = tehm_db.now_local()
     for node in nodes:
         persist_node(conn, node, created_at=created_at)
     for edge in edges:
         persist_edge(conn, edge, created_at=created_at)
-    if commit:
+    if commit and not had_outer_transaction:
         conn.commit()
     return CausalFragment(
         transition_id=transition_id,
@@ -254,7 +257,9 @@ def consolidate_causal_path(
     ``consolidate_causal_path(conn, fragments)`` form are accepted.  A
     held-out/calibration fragment is rejected rather than quietly becoming
     learner support.  Persistence, when requested, is limited to the causal
-    shadow table and never changes rule lifecycle.
+    shadow table and never changes rule lifecycle.  An already-active caller
+    transaction remains open; ``commit=True`` commits only when this helper
+    owns the transaction.
     """
     if isinstance(fragments_or_conn, sqlite3.Connection):
         conn = fragments_or_conn
@@ -341,6 +346,7 @@ def consolidate_causal_path(
         support=support,
         status=status)
     if conn is not None:
+        had_outer_transaction = conn.in_transaction
         now = tehm_db.now_local()
         conn.execute(
             """INSERT OR IGNORE INTO tehm_causal_paths
@@ -354,7 +360,8 @@ def consolidate_causal_path(
              stable_dumps(list(edge_ids)), candidate.evidence_level,
              stable_dumps(candidate.support), stable_dumps(list(source_ids)),
              candidate.path_digest, candidate.status, now, now))
-        conn.commit()
+        if not had_outer_transaction:
+            conn.commit()
     return candidate
 
 

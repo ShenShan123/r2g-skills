@@ -267,3 +267,59 @@ def test_causal_authority_requires_complete_l2_source_coverage(tmp_tehm):
     assert authority.eligible is False
     assert "controlled_intervention_source_coverage_incomplete" in authority.reason
     assert replication.eligible is False
+
+
+def test_causal_shadow_writes_preserve_outer_transaction(tmp_tehm):
+    conn, transition_id = _captured(tmp_tehm)
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("caller-sentinel", "pending"),
+    )
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    path = consolidate_causal_path(conn, [fragment])
+    assert conn.in_transaction is True
+    assert conn.execute(
+        "SELECT 1 FROM tehm_causal_paths WHERE path_id=?", (path.path_id,)
+    ).fetchone() is not None
+
+    conn.rollback()
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='caller-sentinel'"
+    ).fetchone() is None
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_causal_nodes"
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT 1 FROM tehm_causal_paths WHERE path_id=?", (path.path_id,)
+    ).fetchone() is None
+
+
+def test_intervention_pair_preserves_outer_transaction(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    control = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    control_id = capture(conn, store, control).transition_id
+    treatment = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    treatment.record_id = "rtl:req_ack_fsm:transaction-safe"
+    treatment.action["payload"]["add_condition"] = "ready"
+    treatment_id = capture(conn, store, treatment).transition_id
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("pair-sentinel", "pending"),
+    )
+
+    pair = build_intervention_pair(control_id, treatment_id, conn=conn)
+    assert pair.validity_status.startswith("INVALID_")
+    assert conn.in_transaction is True
+    assert conn.execute(
+        "SELECT 1 FROM tehm_intervention_pairs WHERE pair_id=?",
+        (pair.pair_id,),
+    ).fetchone() is not None
+
+    conn.rollback()
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='pair-sentinel'"
+    ).fetchone() is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_intervention_pairs WHERE pair_id=?",
+        (pair.pair_id,),
+    ).fetchone() is None

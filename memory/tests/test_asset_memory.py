@@ -366,3 +366,43 @@ def test_gap_detector_requires_repeated_lineage_evidence(tmp_tehm):
     assert "RTL_REWRITE_TEMPLATE" in gap.missing_asset_types
     assert len(gap.evidence_lineages) == 2
     assert "repeated_unsupported_mechanism" in gap.reason
+
+
+def test_asset_registry_writers_preserve_outer_transaction(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    proposal = _proposal()
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("asset-caller-sentinel", "pending"),
+    )
+    registered = register_asset_proposal(conn, proposal)
+    assert conn.in_transaction is True
+    assert get_asset(conn, registered.asset_id) is not None
+    assert conn.execute(
+        "SELECT status FROM tehm_asset_status WHERE asset_id=? AND target_scope=?",
+        (registered.asset_id, registered.target_scope)).fetchone()[0] == "draft"
+    conn.rollback()
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='asset-caller-sentinel'"
+    ).fetchone() is None
+    assert get_asset(conn, registered.asset_id) is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_asset_status WHERE asset_id=? AND target_scope=?",
+        (registered.asset_id, registered.target_scope)).fetchone() is None
+
+    registered = register_asset_proposal(conn, proposal)
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("asset-status-sentinel", "pending"),
+    )
+    set_asset_status(conn, asset_id=registered.asset_id,
+                     target_scope=registered.target_scope, status="shadow")
+    assert conn.in_transaction is True
+    conn.rollback()
+    assert get_asset(conn, registered.asset_id) is not None
+    assert conn.execute(
+        "SELECT status FROM tehm_asset_status WHERE asset_id=? AND target_scope=?",
+        (registered.asset_id, registered.target_scope)).fetchone()[0] == "draft"
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='asset-status-sentinel'"
+    ).fetchone() is None

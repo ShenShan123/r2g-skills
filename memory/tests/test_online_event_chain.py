@@ -279,3 +279,55 @@ def test_rule_revision_rejects_tampered_event_chain(tmp_tehm):
             conn, parent_rule_id=None, child_rule_id="rule-new",
             operation="SPECIALIZE", trigger_event_id=event_id,
             evidence_refs=[transition_id])
+
+
+def test_event_writer_preserves_outer_transaction(tmp_tehm):
+    conn, transition_id = _transition(tmp_tehm)
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("event-caller-sentinel", "pending"),
+    )
+    event = append_memory_event(
+        conn, event_type="TRANSITION_CAPTURED", source_type="transition",
+        source_id=transition_id, campaign_id="live", learner_eligible=True,
+        payload={"transaction_safe": True})
+    assert conn.in_transaction is True
+    assert conn.execute(
+        "SELECT 1 FROM tehm_memory_events WHERE event_id=?", (event.event_id,)
+    ).fetchone() is not None
+
+    conn.rollback()
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='event-caller-sentinel'"
+    ).fetchone() is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_memory_events WHERE event_id=?", (event.event_id,)
+    ).fetchone() is None
+
+
+def test_rule_revision_writer_preserves_outer_transaction(tmp_tehm):
+    conn, transition_id = _transition(tmp_tehm)
+    observation = observe_transition(conn, transition_id)
+    event_id = observation.events[-1].event_id
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("revision-caller-sentinel", "pending"),
+    )
+    revision = record_rule_revision(
+        conn, parent_rule_id="rule-old", child_rule_id="rule-new",
+        operation="SPECIALIZE", trigger_event_id=event_id,
+        evidence_refs=[transition_id], validation={"shadow": True})
+    assert conn.in_transaction is True
+    assert conn.execute(
+        "SELECT 1 FROM tehm_rule_revisions WHERE revision_id=?",
+        (revision.revision_id,),
+    ).fetchone() is not None
+
+    conn.rollback()
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='revision-caller-sentinel'"
+    ).fetchone() is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_rule_revisions WHERE revision_id=?",
+        (revision.revision_id,),
+    ).fetchone() is None

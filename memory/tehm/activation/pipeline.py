@@ -175,13 +175,30 @@ def activate(conn: sqlite3.Connection, store, *, rule_id: str,
         created_at=created_at,
     )
     if not dry_run:
-        persist_activation(conn, record)
-        update_rule_utility(
-            conn, rule_id, outcome, activation_id=record.activation_id,
-            campaign_id=("live" if authority_mode == "production"
-                         else f"activation-{authority_mode}"),
-            learner_eligible=(authority_mode == "production"),
-            created_regressions=created_regressions)
+        # Activation authority, utility and feedback are one derived update.
+        # Keep the caller's outer transaction intact; if feedback persistence
+        # fails, the activation row must not be left as a committed prefix.
+        had_outer_transaction = conn.in_transaction
+        savepoint = "tehm_activation_update_v1"
+        conn.execute(f"SAVEPOINT {savepoint}")
+        savepoint_active = True
+        try:
+            persist_activation(conn, record, commit=False)
+            update_rule_utility(
+                conn, rule_id, outcome, activation_id=record.activation_id,
+                campaign_id=("live" if authority_mode == "production"
+                             else f"activation-{authority_mode}"),
+                learner_eligible=(authority_mode == "production"),
+                created_regressions=created_regressions, commit=False)
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            savepoint_active = False
+            if not had_outer_transaction:
+                conn.commit()
+        except Exception:
+            if savepoint_active:
+                conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            raise
     return record
 
 

@@ -288,7 +288,7 @@ provenance 中 `unique_runs=[]` 仍被误判为 replicated effect；该 causal r
 
 新增 `tehm.causal.evaluate_transfer_supported_mechanism()`：只有训练 path 已由
 L3 controlled replication 重放通过，且显式 held-out transition 同时满足
-`split=heldout`、`learner_eligible=false`、oracle PASS、无 regression、机制族/
+`split=heldout`、`learner_eligible=false`、原始失败被移除后的 oracle PASS、无 regression、机制族/
 typed action/profile/effect 匹配，并拥有与训练完全不重叠的 lineage/design witness，
 才返回 `L4_TRANSFER_SUPPORTED_MECHANISM`。该评估器是只读 receipt，不修改 path、
 canonical evidence、rule lifecycle 或 production retrieval；复用训练 transition、

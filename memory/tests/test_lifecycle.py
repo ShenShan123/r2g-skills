@@ -25,6 +25,7 @@ from tehm.lifecycle.trial_adapter import (
     TEHMRuleTrialSubject,
     judge_trial,
     lcb,
+    record_external_trial,
     run_trial,
 )
 
@@ -186,3 +187,113 @@ def test_authority_refuses_stale_or_non_differing_or_regression(tmp_tehm, sample
     status = get_status(conn, rule_id=rule_id, target_scope="drc")
     assert status["status"] == "shadow"
     assert status["status_version"] == version
+
+
+def test_lifecycle_status_preserves_outer_transaction(tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_valid_rule(tmp_tehm, sample_record_dict)
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("lifecycle-caller-sentinel", "pending"),
+    )
+    version = enter_shadow(conn, rule_id=rule_id, target_scope="drc")
+    assert version == 1
+    assert conn.in_transaction is True
+    conn.rollback()
+    assert get_status(conn, rule_id=rule_id, target_scope="drc") is None
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='lifecycle-caller-sentinel'"
+    ).fetchone() is None
+
+
+def test_trial_writers_preserve_outer_transaction(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    subject = TEHMRuleTrialSubject(rule_id="rule_tx", status_version=3)
+    conn.execute(
+        "INSERT INTO tehm_meta(key, value) VALUES (?, ?)",
+        ("trial-caller-sentinel", "pending"),
+    )
+    trial = run_trial(
+        conn, subject=subject, context=RepairContext(check="drc"),
+        arm_a_evaluator=lambda _plan, _ctx: {"success": False},
+        arm_b_evaluator=lambda _plan, _ctx: {"success": True},
+        repeats=2, trial_uuid="tx-run")
+    external = record_external_trial(
+        conn, rule_id="rule_tx", target_scope="drc", verdict="win",
+        metrics={"source": "external"}, status_version=3,
+        trial_uuid="tx-external", arm_a_run_id="a", arm_b_run_id="b")
+    assert trial["verdict"] == "win"
+    assert external["trial_id"] == "trial_tx-external"
+    assert conn.in_transaction is True
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_trials WHERE trial_uuid IN (?, ?)",
+        ("tx-run", "tx-external")).fetchone()[0] == 2
+    conn.rollback()
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_trials WHERE trial_uuid IN (?, ?)",
+        ("tx-run", "tx-external")).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT 1 FROM tehm_meta WHERE key='trial-caller-sentinel'"
+    ).fetchone() is None
+
+
+def test_external_trial_replay_is_idempotent_and_conflicts_rejected(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    kwargs = {
+        "rule_id": "rule_replay",
+        "target_scope": "drc",
+        "verdict": "win",
+        "metrics": {"source": "external", "samples": [0.0, 1.0]},
+        "status_version": 4,
+        "trial_uuid": "replay-external",
+        "arm_a_run_id": "a-1",
+        "arm_b_run_id": "b-1",
+    }
+    first = record_external_trial(conn, **kwargs)
+    second = record_external_trial(conn, **kwargs)
+    assert second == first
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_trials WHERE trial_uuid=?",
+        (kwargs["trial_uuid"],)).fetchone()[0] == 1
+
+    with pytest.raises(ValueError, match="replay conflicts"):
+        record_external_trial(
+            conn, **{**kwargs, "metrics": {"source": "tampered"}})
+    with pytest.raises(ValueError, match="replay conflicts"):
+        record_external_trial(
+            conn, **{**kwargs, "verdict": "loss"})
+    assert conn.execute(
+        "SELECT verdict, metrics_json FROM tehm_trials WHERE trial_uuid=?",
+        (kwargs["trial_uuid"],)).fetchone()["verdict"] == "win"
+
+
+def test_run_trial_replay_is_idempotent_and_conflicts_rejected(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    subject = TEHMRuleTrialSubject(rule_id="rule_run_replay", status_version=2)
+    context = RepairContext(check="drc")
+
+    def control(_plan, _ctx):
+        return {"success": False}
+
+    def winning_rule(_plan, _ctx):
+        return {"success": True}
+
+    first = run_trial(
+        conn, subject=subject, context=context,
+        arm_a_evaluator=control, arm_b_evaluator=winning_rule,
+        repeats=2, trial_uuid="replay-run")
+    second = run_trial(
+        conn, subject=subject, context=context,
+        arm_a_evaluator=control, arm_b_evaluator=winning_rule,
+        repeats=2, trial_uuid="replay-run")
+    assert second == first
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_trials WHERE trial_uuid='replay-run'"
+    ).fetchone()[0] == 1
+
+    with pytest.raises(ValueError, match="replay conflicts"):
+        run_trial(
+            conn, subject=subject, context=context,
+            arm_a_evaluator=lambda _plan, _ctx: {"success": True},
+            arm_b_evaluator=winning_rule, repeats=2,
+            trial_uuid="replay-run")

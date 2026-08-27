@@ -135,7 +135,9 @@ def evaluate_transfer_supported_mechanism(
     campaign, with disjoint lineage and design witnesses.  Concrete module,
     state, and guard names are intentionally parameters of the mechanism; the
     typed action domain, mechanism family, compatibility profile, and effect
-    key remain hard matching dimensions.
+    key remain hard matching dimensions.  A held-out observation that was
+    already clean before the action is not sufficient: transfer must show a
+    verified unseen fail-to-pass repair.
     """
     if not training_campaign_id:
         raise ValueError("training_campaign_id is required")
@@ -262,7 +264,8 @@ def evaluate_transfer_supported_mechanism(
         facts = load_transition_facts(conn, transition_id)
         verifier = facts.verifier or {}
         clean = bool(
-            facts.outcome in {"PASS", "NEUTRAL"} and
+            facts.outcome == "PASS" and
+            facts.delta.get("original_failure") in {"REMOVED", "PRESENT"} and
             verifier.get("verdict") == "PASS" and
             verifier.get("oracle_type") not in {None, "UNKNOWN"} and
             verifier.get("evidence_refs") and

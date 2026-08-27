@@ -72,8 +72,9 @@ def capture_produced_transition(conn: sqlite3.Connection, store, *,
     return receipt.transition_id
 
 
-def persist_activation(conn: sqlite3.Connection, record) -> None:
+def persist_activation(conn: sqlite3.Connection, record, *, commit: bool = True) -> None:
     """Write the activation authority row (design doc 19.5)."""
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR REPLACE INTO tehm_activations (
                activation_id, rule_id, target_state_id, query_plan_json,
@@ -94,7 +95,8 @@ def persist_activation(conn: sqlite3.Connection, record) -> None:
          record.produced_transition_id,
          stable_dumps(record.rollback_receipt) if record.rollback_receipt else None,
          record.trial_uuid, record.created_at))
-    conn.commit()
+    if commit and not had_outer_transaction:
+        conn.commit()
 
 
 def update_rule_utility(conn: sqlite3.Connection, rule_id: str, outcome: str,
@@ -137,6 +139,7 @@ def update_rule_utility(conn: sqlite3.Connection, rule_id: str, outcome: str,
     # Utility and its append-only feedback event form one derived update.  A
     # failed event write (for example a missing activation witness) must not
     # leave counters advanced without the provenance needed to replay them.
+    had_outer_transaction = conn.in_transaction
     savepoint = "tehm_activation_utility_v1"
     conn.execute(f"SAVEPOINT {savepoint}")
     savepoint_active = True
@@ -165,7 +168,7 @@ def update_rule_utility(conn: sqlite3.Connection, rule_id: str, outcome: str,
         savepoint_active = False
         # ``commit`` retains the historical default for direct callers;
         # callers composing a larger transaction can explicitly defer it.
-        if commit:
+        if commit and not had_outer_transaction:
             conn.commit()
     except Exception:
         if savepoint_active:

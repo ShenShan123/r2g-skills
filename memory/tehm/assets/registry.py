@@ -59,6 +59,7 @@ def register_asset(
     compatibility: dict,
     provenance: dict | None = None,
     target_scope: str | None = None,
+    commit: bool = True,
 ) -> AssetReceipt:
     asset_type = validate_asset_type(asset_type)
     if not name or not version:
@@ -81,6 +82,7 @@ def register_asset(
     asset_id = "asset_" + digest.split(":", 1)[1][:24]
     scope = str(target_scope or _default_scope(compatibility))
     now = tehm_db.now_local()
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR IGNORE INTO tehm_assets
            (asset_id, asset_type, name, version, definition_json,
@@ -98,7 +100,8 @@ def register_asset(
             updated_at)
            VALUES (?, ?, 'draft', 1, ?, ?)""",
         (asset_id, scope, stable_dumps({"authority": "asset_registry"}), now))
-    conn.commit()
+    if commit and not had_outer_transaction:
+        conn.commit()
     return AssetReceipt(asset_id, asset_type, name, version, digest,
                         scope, "draft", 1)
 
@@ -142,6 +145,7 @@ def set_asset_status(
     gates: dict | None = None,
     authority_receipt=None,
     strict_asset_authority: bool = False,
+    commit: bool = True,
 ) -> AssetReceipt:
     status = validate_asset_status(status)
     asset = get_asset(conn, asset_id)
@@ -185,13 +189,15 @@ def set_asset_status(
     merged_provenance = dict(provenance or {})
     if gates is not None:
         merged_provenance["promotion_gates"] = dict(gates)
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """UPDATE tehm_asset_status
               SET status=?, status_version=?, provenance_json=?, updated_at=?
             WHERE asset_id=? AND target_scope=?""",
         (status, version, stable_dumps(merged_provenance), tehm_db.now_local(),
          asset_id, target_scope))
-    conn.commit()
+    if commit and not had_outer_transaction:
+        conn.commit()
     return AssetReceipt(
         asset_id=asset_id, asset_type=asset["asset_type"], name=asset["name"],
         version=asset["version"], content_digest=asset["content_digest"],

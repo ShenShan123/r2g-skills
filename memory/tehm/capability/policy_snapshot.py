@@ -50,6 +50,7 @@ def create_policy_snapshot(
     promoted_assets: list[str] | tuple[str, ...] = (),
     retrieval_config: dict | None = None,
     routing_config: dict | None = None,
+    commit: bool = True,
 ) -> PolicySnapshotReceipt:
     if not memory_snapshot_id:
         raise ValueError("memory_snapshot_id is required")
@@ -63,6 +64,7 @@ def create_policy_snapshot(
     policy_digest = "sha256:" + hashlib.sha256(
         stable_dumps(content).encode()).hexdigest()
     snapshot_id = "policy_" + policy_digest.split(":", 1)[1][:20]
+    had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR IGNORE INTO tehm_policy_snapshots
            (policy_snapshot_id, memory_snapshot_id, promoted_rules_json,
@@ -75,7 +77,8 @@ def create_policy_snapshot(
          stable_dumps(content["retrieval_config"]),
          stable_dumps(content["routing_config"]), policy_digest,
          tehm_db.now_local()))
-    conn.commit()
+    if commit and not had_outer_transaction:
+        conn.commit()
     return PolicySnapshotReceipt(snapshot_id, memory_snapshot_id, policy_digest)
 
 
@@ -96,6 +99,7 @@ def record_policy_load(
     runtime_id: str,
     loaded: bool = True,
     receipt: dict | None = None,
+    commit: bool = True,
 ) -> PolicyLoadReceipt:
     """Record the runtime's actual policy-load result.
 
@@ -119,6 +123,7 @@ def record_policy_load(
     # second-resolution, which can make two successive loads reorder by their
     # content-addressed IDs; use microseconds here so the latest execution
     # binding is deterministic even when a runtime reloads immediately.
+    had_outer_transaction = conn.in_transaction
     created_at = datetime.datetime.now().astimezone().isoformat(
         timespec="microseconds")
     conn.execute(
@@ -128,7 +133,8 @@ def record_policy_load(
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (receipt_id, policy_snapshot_id, runtime_id, int(bool(loaded)),
          stable_dumps(payload), receipt_digest, created_at))
-    conn.commit()
+    if commit and not had_outer_transaction:
+        conn.commit()
     return PolicyLoadReceipt(receipt_id, policy_snapshot_id, runtime_id,
                              bool(loaded), receipt_digest)
 

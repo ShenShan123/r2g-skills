@@ -248,23 +248,36 @@ class TehmMemoryBackend:
         if row is None:
             raise KeyError(f"unknown TEHM activation: {result.activation_id}")
         prior = row["outcome"]
-        conn.execute(
-            """UPDATE tehm_activations
-                  SET outcome=?, created_regressions_json=?, rollback_receipt_json=?
-                WHERE activation_id=?""",
-            (result.outcome,
-             stable_dumps(result.created_regressions),
-             stable_dumps(result.rollback_receipt)
-             if result.rollback_receipt is not None else None,
-             result.activation_id))
-        if prior in (None, "UNKNOWN") and result.outcome != "UNKNOWN":
-            from tehm.activation.update import update_rule_utility
-            update_rule_utility(
-                conn, row["rule_id"], result.outcome,
-                activation_id=result.activation_id,
-                created_regressions=result.created_regressions)
-        else:
-            conn.commit()
+        had_outer_transaction = conn.in_transaction
+        savepoint = "tehm_backend_activation_v1"
+        conn.execute(f"SAVEPOINT {savepoint}")
+        savepoint_active = True
+        try:
+            conn.execute(
+                """UPDATE tehm_activations
+                      SET outcome=?, created_regressions_json=?, rollback_receipt_json=?
+                    WHERE activation_id=?""",
+                (result.outcome,
+                 stable_dumps(result.created_regressions),
+                 stable_dumps(result.rollback_receipt)
+                 if result.rollback_receipt is not None else None,
+                 result.activation_id))
+            if prior in (None, "UNKNOWN") and result.outcome != "UNKNOWN":
+                from tehm.activation.update import update_rule_utility
+                update_rule_utility(
+                    conn, row["rule_id"], result.outcome,
+                    activation_id=result.activation_id,
+                    created_regressions=result.created_regressions,
+                    commit=False)
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            savepoint_active = False
+            if not had_outer_transaction:
+                conn.commit()
+        except Exception:
+            if savepoint_active:
+                conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            raise
 
     def rebuild(self, *, frozen_source: bool = False) -> BuildReport:
         conn, _ = self._open()

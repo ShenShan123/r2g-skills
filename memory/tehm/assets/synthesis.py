@@ -113,7 +113,8 @@ def build_rtl_asset_proposal(
 
 
 def register_asset_proposal(conn, proposal: AssetProposal,
-                            *, target_scope: str | None = None) -> AssetReceipt:
+                            *, target_scope: str | None = None,
+                            commit: bool = True) -> AssetReceipt:
     if proposal.promotion_eligible:
         raise ValueError("asset proposals cannot be promotion eligible")
     return register_asset(
@@ -123,7 +124,7 @@ def register_asset_proposal(conn, proposal: AssetProposal,
         output_contract=proposal.output_contract,
         verifier_contract=proposal.verifier_contract,
         compatibility=proposal.compatibility, provenance=proposal.provenance,
-        target_scope=target_scope)
+        target_scope=target_scope, commit=commit)
 
 
 def bind_rtl_asset_to_project(asset: Mapping, project: Path | str, *,
