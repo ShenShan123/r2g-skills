@@ -3127,47 +3127,47 @@ store
 
 ## Baseline freeze
 
-- [ ] 固定 commit `1bb1fab...`
+- [x] 固定历史 baseline commit `1bb1fab...`（当前可复现冻结由 v4 bundle commit 绑定）
 - [x] 修复 query seam 后重新生成 freeze
 - [x] 记录 schema / canonical SHA / counts
 - [x] 保存现有 M1/M8 / LOCO / V2 selector evidence
 
 ## Causal
 
-- [ ] schema v4 migration
-- [ ] causal evidence-level enum
-- [ ] deterministic path digest
-- [ ] transition → causal fragment
-- [ ] A/B → intervention pair
-- [ ] held-out firewall test
-- [ ] causal retrieval evaluation-only flag
+- [x] schema v4 migration（causal tables are additive/derived）
+- [x] causal evidence-level enum
+- [x] deterministic path digest
+- [x] transition → causal fragment
+- [x] A/B → intervention pair
+- [x] held-out firewall test
+- [x] causal retrieval evaluation-only flag
 
 ## Online
 
-- [ ] hash-chained memory events
-- [ ] affected-group lookup
-- [ ] incremental/full rebuild equivalence test
-- [ ] rule revision lineage
-- [ ] conflict detector
-- [ ] no automatic production promotion
+- [x] hash-chained memory events
+- [x] affected-group lookup
+- [x] incremental/full rebuild equivalence test
+- [x] rule revision lineage
+- [x] conflict detector
+- [x] no automatic production promotion
 
 ## Capability
 
-- [ ] capability schema
-- [ ] policy snapshot digest
-- [ ] runtime load receipt
-- [ ] memory ablation harness
+- [x] capability schema
+- [x] policy snapshot digest
+- [x] runtime load receipt
+- [x] memory ablation harness
 - [x] capability retention replay（纯 evaluator + DB-bound ledger/verification；仍需真实 held-out ORFS 批量证据）
 - [x] capability retention batch orchestrator（manifest/firewall/lineage quota；仍不授予 authority）
 
 ## Asset
 
-- [ ] asset registry
-- [ ] asset compatibility contract
-- [ ] independent verifier contract
-- [ ] gap receipt
-- [ ] shadow asset execution
-- [ ] no self-promotion
+- [x] asset registry
+- [x] asset compatibility contract
+- [x] independent verifier contract
+- [x] gap receipt
+- [x] shadow asset execution
+- [x] no self-promotion
 
 ---
 
