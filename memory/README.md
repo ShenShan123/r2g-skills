@@ -359,6 +359,16 @@ evidence、rule lifecycle 或 production policy。验证器还会校验 receipt 
 未携带该字段的旧 generic held-out fixture 仍保持兼容，但不应解释为已完成 causal
 transfer ledger 绑定。
 
+为累积真实 source-disjoint transfer，新增
+`scripts/evaluate_causal_transfer_batch.py`。它在第一次评估前整体校验 case、唯一
+transition 和唯一 lineage manifest，随后用 immutable source DB 逐案评估；失败案例
+保留在分母，默认不写任何 DB。显式指定 `--ledger-db` 时，脚本先备份 source DB 到
+新建的隔离库，再在一个外层事务中写入并逐条 replay 验证 shadow receipt；source DB
+哈希必须保持不变。批量 `PASS` 只表示 transfer cohort 的 evaluation 状态，仍固定
+`promotion_eligible=false`/`promotion_attempted=false`，但输出的 receipt IDs 可由
+C6 authority 显式绑定。ORFS 调用必须同时使用 `--require-full-oracle`，因此 generic
+fixture 的 PASS 不会伪装成完整 ORFS transfer。
+
 Activation update 现在也会把反馈写入同一条 hash-chained event log：PASS 产生
 `SUPPORT_INCREASED`，中性结果产生 `UTILITY_DRIFT`，FAIL/REGRESSION 产生
 `RULE_HARMFUL`，payload 绑定 activation ID 与 utility 前后快照。evaluation/backend

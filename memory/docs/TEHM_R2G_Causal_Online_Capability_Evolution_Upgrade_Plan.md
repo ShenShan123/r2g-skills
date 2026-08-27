@@ -2743,6 +2743,16 @@ authority 必须逐条重放并确认 `verified=true`、L4 与声明 lineage 一
 source-disjoint fail→pass held-out 之前，不会因为一次现场 L4 计算就误把
 `cross_lineage_te` 计为 PASS。
 
+为支持多条 source-disjoint held-out 的可重放积累，新增
+`scripts/evaluate_causal_transfer_batch.py`。该入口在第一次 evaluator 调用前整体
+校验 case、transition 与 lineage 的唯一性；所有失败案例均保留在分母，source DB
+以 immutable 方式读取。只有显式指定新建的 `--ledger-db` 时，才会把 source DB 备份
+到隔离库，在同一外层事务中写入并 replay 验证每条 transfer ledger receipt；source
+哈希必须保持不变。批量状态仍是 evaluation-only，固定
+`promotion_eligible=false`/`promotion_attempted=false`，输出的 receipt IDs 可供
+C6 authority 显式绑定。ORFS 必须传 `--require-full-oracle`，因此 generic PASS 不能
+替代 14 项完整 ORFS held-out 证据。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）
