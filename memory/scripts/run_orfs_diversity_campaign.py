@@ -553,6 +553,21 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
         complete = record.verification.get("oracle_complete") is True
         learner_eligible = (complete if require_complete_oracle else True)
         dataset_split = "training" if learner_eligible else "calibration"
+        if require_complete_oracle and not complete:
+            stale = conn.execute(
+                "SELECT dm.campaign_id, dm.split "
+                "FROM tehm_dataset_membership dm "
+                "JOIN tehm_transitions t ON t.transition_id=dm.transition_id "
+                "WHERE dm.learner_eligible=1 AND t.provenance_json LIKE ?",
+                (f'%\"record_id\":\"{record.record_id}\"%',),
+            ).fetchall()
+            if stale:
+                campaigns = ", ".join(
+                    f"{row['campaign_id']}:{row['split']}" for row in stale)
+                raise BatchLaneError(
+                    "incomplete ORFS pair conflicts with existing learner "
+                    f"membership ({campaigns}); use a fresh staging DB or "
+                    "audit the prior campaign before recapture")
         receipt = capture(
             conn, store, record, dataset_campaign_id=dataset_campaign_id,
             dataset_split=dataset_split,

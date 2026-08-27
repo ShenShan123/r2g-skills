@@ -1549,6 +1549,9 @@ digest 源）、`features/`（def-graph 已提取特征）、`lvs/`（powered.v 
   `ROUTING_CAPACITY_RECOVERY`（sky130hs/gcd，base→0.05）preflight 已验证两臂
   `flow_rc=0` 与 route/DEF graph，但仅 `obligation_coverage=1/3`、timing violated、
   DRC/LVS 缺失，故不构成 support evidence，canonical 未变。
+  若同一 incomplete transition 已被旧 campaign 错误登记为 training/eligible，strict
+  capture 会拒绝追加 calibration membership 并要求新 staging/人工审计，避免
+  `EXISTS` learner 查询被历史矛盾行重新污染；旧 membership 不会被静默覆盖。
 
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 

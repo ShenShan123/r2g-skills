@@ -2523,6 +2523,10 @@ obligation 只有 route `1/3`，timing WNS `-0.256353 ns` 且 DRC/LVS report 缺
 `learner_eligible=1`；不完整 pair 仍写入隔离 calibration、`learner_eligible=0`，
 并在 manifest/report 中显式记录 `oracle_complete`、split 与 admission。该门不改变
 canonical promotion policy，也不把 diagnostic observation 当作正向机制效果。
+如果同一 transition 在旧 campaign 中已经存在 `training/learner_eligible=1`，而
+当前证据仍不完整，strict capture 会 fail-closed 拒绝追加新的 calibration row；由于
+membership 是不可变审计事实，系统要求新建隔离 staging 或先完成旧证据审计，不能
+用第二条 membership 覆盖矛盾状态。
 
 本轮又把该约束落实为代码门：`preflight_orfs_toolchain()` 只接受 ORFS tree
 内置的 OpenROAD/Yosys，或调用方显式传入的 `OPENROAD_EXE`/`YOSYS_EXE`；没有

@@ -1,0 +1,79 @@
+{
+  "version": "tehm-orfs-routing-preflight-v1",
+  "classification": "INCOMPLETE_EXTERNAL_ONLY",
+  "campaign": {
+    "script": "memory/scripts/run_orfs_add_designs_campaign.py",
+    "phase_sequence": ["prepare", "run", "capture", "graph"],
+    "root": "/tmp/tehm-orfs/orfs-next-routing-preflight",
+    "manifest_sha256": "6d6b6b42949651527e7e3e7564bfa244f9336774e33ed881c05f903a19946f4f",
+    "recovery_report_sha256": "b21e45ac3b6a429e86b93ac5ddf08a885423ed551caa221f722c4d97ca6c3e19",
+    "physical_graph_contexts_sha256": "0c2ed3c3d4b1d1d183fbaee969a89b5c2f1c17a2a3bbddf97021d8c94a5b0537",
+    "staging_db_sha256": "ca534f47e864d25d705c8517b3e19db22fa103920928889bee99eca35d4f2b21"
+  },
+  "toolchain": {
+    "orfs_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+    "openroad": {
+      "version": "26Q3-1510-g6cb3f2b704",
+      "sha256": "561ef17403ce2b55198496e8ab74435d90aba88e03a7a86b6526f7d1a0fae3a6"
+    },
+    "yosys": {
+      "version": "Yosys 0.68+ (git sha1 a5af9d690, Release, GNU /usr/bin/c++ 11.4.0)",
+      "sha256": "6dca418413bcab1e0d6583974f65870064a43439d30f9a0ab41b95bea3041bd0",
+      "read_liberty_unit_delay": "PASS"
+    },
+    "preflight_status": "bound_internal",
+    "fingerprint": "5f6545216c040a863a4c169d90f895f218ad038bfd61991445f760ed43567c91"
+  },
+  "case": {
+    "case_id": "sky130hs:gcd:0:ROUTING_CAPACITY_RECOVERY:default->0.05",
+    "lineage_id": "orfs-v4:sky130hs:gcd:base0",
+    "family": "ROUTING_CAPACITY_RECOVERY",
+    "action": {
+      "domain": "flow.CONFIG_DELTA",
+      "config_edits": {"ROUTING_LAYER_ADJUSTMENT": "0.05"}
+    },
+    "before": {
+      "run_tag": "RUN_2026-08-27_08-28-13_8_6106",
+      "flow_rc": 0,
+      "route": "clean",
+      "signoff": "dirty",
+      "run_meta_sha256": "8bad1bed1afde531d2a760f72df5505f5f9bf1d3dad5fe747eda99d91a59c1f8",
+      "stage_log_sha256": "227a39b6dfb6c0c14609935e900290b062baccf0ed20150ad69415502938f529"
+    },
+    "after": {
+      "run_tag": "RUN_2026-08-27_08-29-45_1771_4fcf",
+      "flow_rc": 0,
+      "route": "clean",
+      "signoff": "missing",
+      "run_meta_sha256": "b88d3886bae71d0ec05d94b736c8730a7b2f07c548c94ad1d31565335a988065",
+      "stage_log_sha256": "c568df8dada9ccdf55c584f0dea9d479faacbea8f20db258e0ae7fe20b3150b8"
+    },
+    "graph": {
+      "status": "complete",
+      "context_digest": "678a3c8531335eb437d5e72409732ae101b046db60df2c6a0ea86c0aa0bafe3b",
+      "def_sha256": "7d9ae9c6c8dd2e5de80aab0ea3b4660126db894c34c2bf76320c8074a7829199"
+    },
+    "verification": {
+      "verdict": "PASS",
+      "oracle_type": "TARGET_TEST",
+      "scope": "signoff:route",
+      "obligation_coverage": 0.3333333333333333,
+      "oracle_complete": false,
+      "original_failure": "UNKNOWN",
+      "utility_verdict": "NEUTRAL",
+      "created_regressions": []
+    }
+  },
+  "admission": {
+    "canonical_memory_mutation": "none",
+    "promotion_attempted": false,
+    "dataset_split": "calibration",
+    "learner_eligible": false,
+    "historical_conflicting_membership": "legacy live/training/1 row was observed in the scratch DB before the strict recapture guard",
+    "strict_recapture": "fail_closed_on_conflicting_learner_membership"
+  },
+  "canonical_freeze": {
+    "path": "evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+    "sha256": "52ed1c4093f711062ca231cc920a5b4cd4e5be8cb53a746e25d822477f8b7b48"
+  }
+}

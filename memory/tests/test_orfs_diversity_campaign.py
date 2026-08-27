@@ -5,10 +5,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "memory" / "scripts" / "run_orfs_diversity_campaign.py"
 sys.path.insert(0, str(REPO / "memory" / "scripts"))
 from run_orfs_diversity_campaign import capture_pairs  # noqa: E402
+from tehm.batch_lane import BatchLaneError  # noqa: E402
 
 
 def test_prepare_has_disjoint_heldout_and_platform_family_matrix(tmp_path):
@@ -128,4 +131,18 @@ def test_capture_quarantines_incomplete_oracle_from_learner(tmp_path):
     assert conn.execute(
         "SELECT split, learner_eligible FROM tehm_dataset_membership"
     ).fetchone() == ("calibration", 0)
+    # Simulate a pre-gate campaign that incorrectly left an eligible row.  The
+    # new strict capture must refuse to append a calibration row beside it,
+    # because learner queries use EXISTS over campaign memberships.
+    transition_id = captured["transition_id"]
+    conn.execute(
+        "INSERT INTO tehm_dataset_membership "
+        "(transition_id,campaign_id,split,learner_eligible,assigned_at) "
+        "VALUES (?,?,?,?,?)",
+        (transition_id, "legacy", "training", 1, "2026-08-27T00:00:00+00:00"),
+    )
+    conn.commit()
     conn.close()
+    with pytest.raises(BatchLaneError, match="conflicts with existing learner"):
+        capture_pairs(manifest_path, manifest, staging_db,
+                      root / "staging" / "artifacts")
