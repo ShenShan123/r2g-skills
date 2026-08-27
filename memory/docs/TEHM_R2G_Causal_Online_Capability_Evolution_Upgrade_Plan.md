@@ -2771,6 +2771,27 @@ canonical memory、不触发 online consolidation，也不改变 production runt
 `split='training'`；held-out/calibration/A-B 只能作为 staging audit 输入，经 L4
 transfer evaluator 重放，不能通过 `--split` 参数直接生成 learner causal path。
 
+### 2026-08-27 ORFS held-out fail→pass r3（仍未满足 L4）
+
+在独立 source-freeze `tehm-heldout-fifo-density-r9` 上，以 packaged
+OpenROAD 26Q3/Yosys 0.68 顺序执行 `selector_fifo16` 的
+`CORE_UTILIZATION 85→75`。before arm 在 route（`flow_rc=2`）失败，after arm
+完整通过 14 项 ORFS checks，因而本轮得到一条可审计的真实 ORFS fail→pass 观测。
+但 exact L4 contract 要求 before/after 两侧都具备完整 14-check witness；该
+before arm 缺少 route/finish/timing/DRC/LVS/strict-signoff/PPA/graph/artifact
+等九项，故 capture 保留为 `heldout` audit row（`learner_eligible=false`、
+`oracle_complete=false`），不进入 causal learner、canonical memory 或
+production runtime。机器可读摘要见
+`evidence/tehm-orfs-l4-transfer-r3/orfs_l4_transfer_report.json`。
+
+本次积累还修复了 diversity runner 的同设计调度竞态：同一逻辑
+`platform + DESIGN_NAME` 的 before/after 现在串行执行，不同设计仍可并行；
+`pytest` 在当前环境不可用，但 py_compile、git diff 检查及 workspace-key
+smoke 均通过。下一步不是放宽 full-oracle，而是保留这类失败分母，并设计
+“完整且可判定的 before failure”语义（例如独立 semantic oracle 与物理
+14-check 解耦），或取得两侧均完成但原始目标失败被明确记录的 ORFS witness，
+再运行 L4 batch evaluator 和六项 authority gate。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）

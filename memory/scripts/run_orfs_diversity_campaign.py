@@ -391,6 +391,34 @@ def _materialize(project: Path, cfg_template: Path, sdc_template: Path,
     return project.resolve()
 
 
+def _workspace_key(project: Path, platform: str) -> tuple[str, str]:
+    """Return the workspace identity protected by ``run_orfs.sh``.
+
+    ``run_orfs.sh`` includes the generated flow variant in its fd lock, but
+    all variants still share the logical ORFS design tree and tool inputs.
+    Resolve that logical identity from the materialized config so a campaign
+    serializes same-design variants conservatively while keeping unrelated
+    designs parallel.  Fall back to the project name for an old/incomplete
+    project so the scheduler never silently drops serialization.
+    """
+    values: dict[str, str] = {}
+    try:
+        config = (Path(project) / "constraints" / "config.mk").read_text(
+            errors="replace")
+    except OSError:
+        config = ""
+    for line in config.splitlines():
+        match = re.match(
+            r"^\s*(?:export\s+)?([A-Z0-9_]+)\s*[:?]?=\s*(.*?)\s*$",
+            line)
+        if match:
+            values[match.group(1)] = match.group(2).strip()
+    # run_orfs.sh keys results and its lock by DESIGN_NICKNAME, falling back
+    # to DESIGN_NAME for legacy configs; mirror that precedence exactly.
+    design = values.get("DESIGN_NICKNAME") or values.get("DESIGN_NAME")
+    return str(platform), str(design or Path(project).name)
+
+
 def _apply_edits(text: str, edits: dict[str, str | None]) -> str:
     pending, lines = dict(edits), []
     skip_replaced_continuation = False
@@ -438,6 +466,13 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
         if item.get("role") == "routing_positive_stress"
     }
     lock = threading.Lock()
+    # Even though run_orfs.sh's fd lock includes FLOW_VARIANT, before/after
+    # variants share the logical ORFS design tree and tool inputs.  A manifest
+    # legitimately contains both arms of one design, so keep those arms
+    # serialized while allowing unrelated designs to run in parallel.  This
+    # avoids contaminating evidence with scheduler-induced FLOW_FAILUREs.
+    workspace_locks: dict[tuple[str, str], threading.Lock] = {}
+    workspace_locks_guard = threading.Lock()
     runner = REPO_ROOT / "r2g-skills/signoff-loop/scripts/flow/run_orfs.sh"
     extract_route = REPO_ROOT / "r2g-skills/signoff-loop/scripts/extract/extract_route.py"
     extract_ppa = REPO_ROOT / "r2g-skills/signoff-loop/scripts/extract/extract_ppa.py"
@@ -482,13 +517,19 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
             env.update(FROM_STAGE=resume_from, R2G_RESUME_NO_CLEAN="1")
         cmd = ["bash", str(runner), str(project), platform, project.name]
         started = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
-        returncode, supervisor_timeout = _run_bounded(
-            cmd, log, env=env, timeout=max(1, timeout),
-            grace=max(1, supervisor_grace))
-        for extractor, name in ((extract_route, "route.json"), (extract_ppa, "ppa.json")):
-            subprocess.run([sys.executable, str(extractor), str(project),
-                            str(project / "reports" / name)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        workspace_key = _workspace_key(project, platform)
+        with workspace_locks_guard:
+            workspace_lock = workspace_locks.setdefault(
+                workspace_key, threading.Lock())
+        with workspace_lock:
+            returncode, supervisor_timeout = _run_bounded(
+                cmd, log, env=env, timeout=max(1, timeout),
+                grace=max(1, supervisor_grace))
+            for extractor, name in ((extract_route, "route.json"),
+                                     (extract_ppa, "ppa.json")):
+                subprocess.run([sys.executable, str(extractor), str(project),
+                                str(project / "reports" / name)],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         checkpoint = _stage_checkpoint(project)
         completed = returncode == 0 and _has_run(project)
         failure_class, failure_domain = _classify_attempt(

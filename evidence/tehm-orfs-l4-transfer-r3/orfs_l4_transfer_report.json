@@ -1,0 +1,48 @@
+{
+  "version": "tehm-orfs-l4-transfer-r3",
+  "campaign_root": "/tmp/tehm-orfs/selector-fifo-density-heldout-r9",
+  "source_freeze_sha256": "d738d261c1d62c1b9c655a3feed3b062d1cbec30edd759e03738fd25a3ae0566",
+  "manifest_sha256": "87ec37bbc4d5eb3712988cebe13a0612712f9b69f7d0afecd376f82c1ee03713",
+  "staging_db_sha256": "3a980c55f65ed768d222a391a417dd4c43736b8c6fa5d94bbc4ec9fc1b21b83b",
+  "toolchain_fingerprint": "5f6545216c040a863a4c169d90f895f218ad038bfd61991445f760ed43567c91",
+  "case": {
+    "case_id": "sky130hs:selector_fifo16:0:DENSITY_RELIEF:85->75",
+    "lineage_id": "tehm-heldout-fifo-density-r9:sky130hs:selector_fifo16:base0",
+    "split": "heldout",
+    "design": "selector_fifo16",
+    "platform": "sky130hs",
+    "family": "DENSITY_RELIEF",
+    "knob": "CORE_UTILIZATION",
+    "before_value": "85",
+    "after_value": "75"
+  },
+  "before": {
+    "run_tag": "RUN_2026-08-27_14-40-49_11_094b",
+    "flow_rc": 2,
+    "failure_class": "FLOW_FAILURE",
+    "failure_stage": "route",
+    "full_oracle_complete": false,
+    "missing_gates": ["route", "finish", "timing", "drc", "lvs", "strict_signoff", "ppa", "graph", "artifact_digest"]
+  },
+  "after": {
+    "run_tag": "RUN_2026-08-27_14-41-49_1393_6146",
+    "flow_rc": 0,
+    "failure_class": "SUCCESS",
+    "full_oracle_complete": true,
+    "missing_gates": []
+  },
+  "capture": {
+    "transition_id": "transition_c76bdad154c417b4",
+    "outcome": "PASS",
+    "oracle_complete": false,
+    "dataset_split": "heldout",
+    "learner_eligible": false
+  },
+  "interpretation": {
+    "orfs_fail_to_pass": true,
+    "exact_14_check_pair": false,
+    "l4_transfer_eligible": false,
+    "canonical_memory_mutation": "none",
+    "promotion_attempted": false
+  }
+}

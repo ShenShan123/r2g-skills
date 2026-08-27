@@ -3,7 +3,7 @@ from pathlib import Path
 
 from scripts.run_orfs_diversity_campaign import (
     _classify_attempt, _has_run, _resume_stage, _reusable_success, _run_bounded,
-    _stage_checkpoint,
+    _stage_checkpoint, _workspace_key,
 )
 from scripts.orfs_storage import default_work_root, enforce_work_root
 
@@ -87,6 +87,25 @@ def test_attempt_classifier_keeps_infrastructure_separate(tmp_path):
         "INFRASTRUCTURE_FAILURE", "infrastructure")
     assert _classify_attempt(124, False, False, None, log) == (
         "TIMEOUT", "infrastructure")
+
+
+def test_workspace_key_serializes_logical_design_variants(tmp_path):
+    project = tmp_path / "variant"
+    config = project / "constraints" / "config.mk"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        "export DESIGN_NICKNAME = fifo_variant\n"
+        "export DESIGN_NAME = selector_fifo16\n")
+    # The scheduler deliberately omits FLOW_VARIANT: before/after variants of
+    # one logical design must not run concurrently against shared ORFS inputs.
+    assert _workspace_key(project, "sky130hs") == (
+        "sky130hs", "fifo_variant")
+
+
+def test_workspace_key_falls_back_for_incomplete_project(tmp_path):
+    project = tmp_path / "unmaterialized_variant"
+    assert _workspace_key(project, "sky130hs") == (
+        "sky130hs", "unmaterialized_variant")
 
 
 def test_outer_supervisor_reaps_timed_out_process_group(tmp_path):
