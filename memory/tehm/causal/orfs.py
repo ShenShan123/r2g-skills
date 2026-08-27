@@ -370,9 +370,16 @@ def build_orfs_controlled_replication(
     path_report = path.to_dict()
     path_report["evidence_level"] = replication.evidence_level
     stored_path = conn.execute(
-        "SELECT support_json FROM tehm_causal_paths WHERE path_id=?",
+        "SELECT path_digest, evidence_level, support_json "
+        "FROM tehm_causal_paths WHERE path_id=?",
         (path.path_id,)).fetchone()
     if stored_path:
+        # Replication may upgrade the persisted path from L2 to L3 and
+        # recompute its content digest.  Do not serialize the pre-upgrade
+        # in-memory candidate, otherwise a later transfer/authority replay
+        # sees a report digest that disagrees with the actual path row.
+        path_report["path_digest"] = stored_path["path_digest"]
+        path_report["evidence_level"] = stored_path["evidence_level"]
         try:
             path_report["support"] = json.loads(stored_path["support_json"])
         except (TypeError, json.JSONDecodeError):

@@ -21,6 +21,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
 from tehm import db as tehm_db
+from tehm.causal.transfer_ledger import (
+    load_causal_transfer_receipt, verify_causal_transfer)
 from tehm.ids import stable_dumps
 
 from .promotion_gates import PROMOTION_GATE_VERSION, REQUIRED_GATES, evaluate_promotion_gates
@@ -257,6 +259,108 @@ def _payload_number(entry: Mapping, names: tuple[str, ...]) -> float | None:
     return _finite_number(entry.get("value"))
 
 
+def _receipt_ids(values) -> tuple[str, ...]:
+    """Normalize an explicit causal-transfer receipt selection."""
+    if isinstance(values, (str, bytes)) or values is None:
+        raise ValueError("causal transfer receipt IDs must be a sequence")
+    try:
+        result = tuple(str(value).strip() for value in values)
+    except TypeError as exc:
+        raise ValueError(
+            "causal transfer receipt IDs must be a sequence") from exc
+    if not result or any(not value for value in result):
+        raise ValueError("causal transfer receipt IDs must be non-empty")
+    if len(set(result)) != len(result):
+        raise ValueError("causal transfer receipt IDs contain duplicates")
+    return tuple(sorted(result))
+
+
+def _transfer_entry(conn: sqlite3.Connection, receipt_id: str) -> tuple[dict | None, list[str]]:
+    """Build one cross-lineage gate row from a replay-verified L4 receipt.
+
+    The receipt's convenience projection is never trusted: verification
+    replays the path and transfer witnesses against the same database before
+    an authority evidence row is created.  Invalid or merely negative
+    transfer receipts are returned as diagnostics and cannot satisfy the gate.
+    """
+    errors: list[str] = []
+    try:
+        ledger = load_causal_transfer_receipt(conn, receipt_id)
+    except (TypeError, ValueError, sqlite3.Error) as exc:
+        return None, [f"cross_lineage_te:transfer_receipt_malformed:{exc}"]
+    if ledger is None:
+        return None, ["cross_lineage_te:transfer_receipt_missing"]
+    try:
+        checked = verify_causal_transfer(conn, ledger.to_dict())
+    except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+        return None, [f"cross_lineage_te:transfer_replay_error:{exc}"]
+    if checked.get("verified") is not True:
+        return None, [
+            "cross_lineage_te:transfer_receipt_unverified:" +
+            ",".join(str(x) for x in checked.get("reasons") or ())]
+    transfer = ledger.transfer_receipt
+    if (checked.get("eligible") is not True or
+            checked.get("evidence_level") != "L4_TRANSFER_SUPPORTED_MECHANISM"):
+        return None, ["cross_lineage_te:transfer_receipt_not_l4"]
+    training_lineages = tuple(sorted({str(x) for x in
+                                      transfer.get("training_lineages") or ()
+                                      if str(x)}))
+    transfer_lineages = tuple(sorted({str(x) for x in
+                                      transfer.get("transfer_lineages") or ()
+                                      if str(x)}))
+    if len(training_lineages) < 2 or not transfer_lineages:
+        return None, ["cross_lineage_te:transfer_lineage_witness_insufficient"]
+    payload = {
+        "causal_transfer_verified": True,
+        "transfer_supported": True,
+        "te_pass": True,
+        "evidence_level": "L4_TRANSFER_SUPPORTED_MECHANISM",
+        "transfer_receipt_id": ledger.transfer_receipt_id,
+        "path_id": ledger.path_id,
+        "path_digest": ledger.path_digest,
+        "training_campaign_id": ledger.training_campaign_id,
+        "transfer_campaign_id": ledger.transfer_campaign_id,
+        "training_lineages": list(training_lineages),
+        "transfer_lineages": list(transfer_lineages),
+        "training_lineage_count": len(training_lineages),
+        "transfer_lineage_count": len(transfer_lineages),
+        "require_full_oracle": ledger.require_full_oracle,
+    }
+    return {
+        "evidence_id": ledger.transfer_receipt_id,
+        "split": "heldout",
+        # A transfer receipt may cover several held-out rows.  The complete
+        # lineage vectors remain in the signed payload; this scalar is only a
+        # legacy index field and is deterministic for a singleton case.
+        "lineage_id": transfer_lineages[0],
+        "verdict": "PASS",
+        "payload": payload,
+    }, errors
+
+
+def build_causal_transfer_evidence(
+        conn: sqlite3.Connection, receipt_ids: Iterable[str]) -> list[dict]:
+    """Return authority-ready rows for replay-verified L4 receipts.
+
+    This helper is intentionally strict.  A caller that wants an ineligible
+    transfer recorded as a negative attempt should call
+    :func:`record_rule_authority` without this helper and provide ordinary
+    evidence rows; a transfer selected for a cross-lineage gate must be
+    verified against the current shadow ledger first.
+    """
+    ids = _receipt_ids(receipt_ids)
+    entries: list[dict] = []
+    errors: list[str] = []
+    for receipt_id in ids:
+        entry, entry_errors = _transfer_entry(conn, receipt_id)
+        errors.extend(entry_errors)
+        if entry is not None:
+            entries.append(entry)
+    if errors:
+        raise ValueError("; ".join(sorted(set(errors))))
+    return entries
+
+
 def _derive_gate_inputs(
     entries: Mapping[str, list[dict]],
     errors: Iterable[str],
@@ -315,6 +419,9 @@ def _derive_gate_inputs(
     lineages = sorted({str(item.get("lineage_id")) for item in transfer
                        if item.get("lineage_id") not in (None, "")})
     transfer_pass = []
+    transfer_training_lineages: set[str] = set()
+    transfer_heldout_lineages: set[str] = set()
+    verified_transfer_rows = []
     for item in transfer:
         payload = item.get("payload") or {}
         supported = payload.get("te_pass")
@@ -324,14 +431,37 @@ def _derive_gate_inputs(
             coverage = _payload_number(item, ("te", "coverage"))
             supported = coverage is not None and coverage >= min_cross_lineage_te
         transfer_pass.append(item.get("verdict") == "PASS" and supported is True)
+        if payload.get("causal_transfer_verified") is True:
+            verified_transfer_rows.append(item)
+            transfer_training_lineages.update(
+                str(value) for value in payload.get("training_lineages") or ()
+                if str(value))
+            transfer_heldout_lineages.update(
+                str(value) for value in payload.get("transfer_lineages") or ()
+                if str(value))
     if transfer:
-        # A singleton lineage is a measured failure, never a missing gate: it
-        # cannot establish transfer even if that one row passed.
-        gate_inputs["cross_lineage_te"] = (
-            sum(transfer_pass) / len(transfer_pass)
-            if len(lineages) >= 2 else 0.0)
+        if verified_transfer_rows:
+            # A replay-verified L4 receipt carries the complete training and
+            # held-out lineage vectors.  One such receipt is sufficient to
+            # establish the transfer gate because the underlying evaluator
+            # already proves L3 replication plus a disjoint held-out witness.
+            gate_inputs["cross_lineage_te"] = (
+                1.0 if all(transfer_pass) and
+                len(transfer_training_lineages) >= 2 and
+                bool(transfer_heldout_lineages) else 0.0)
+        else:
+            # Legacy direct evidence retains the measured singleton failure:
+            # it cannot establish transfer even if its boolean says PASS.
+            gate_inputs["cross_lineage_te"] = (
+                sum(transfer_pass) / len(transfer_pass)
+                if len(lineages) >= 2 else 0.0)
     details["cross_lineage_lineages"] = lineages
     details["cross_lineage_count"] = len(transfer)
+    details["causal_transfer_count"] = len(verified_transfer_rows)
+    details["causal_transfer_training_lineages"] = sorted(
+        transfer_training_lineages)
+    details["causal_transfer_heldout_lineages"] = sorted(
+        transfer_heldout_lineages)
 
     utility = entries.get("harmful_rate", [])
     harmful_values: list[bool] = []
@@ -507,6 +637,7 @@ def record_rule_authority(
     min_cross_lineage_te: float = 1.0,
     max_harmful_rate: float = 0.0,
     min_conformal_coverage: float = 0.80,
+    causal_transfer_receipt_ids: Iterable[str] | None = None,
 ) -> RuleAuthorityReceipt:
     """Record independently supplied evidence and derive all six gates.
 
@@ -514,6 +645,9 @@ def record_rule_authority(
     boolean is accepted as authority input: values are derived from those rows
     and the current rule/status/trial rows.  ``trial_id`` is mandatory for an
     eligible receipt and binds the conjunction to a real winning A/B trial.
+    When ``causal_transfer_receipt_ids`` is supplied, the cross-lineage gate is
+    constructed only from replay-verified L4 ledger receipts in this same DB;
+    hand-authored cross-lineage rows are rejected rather than merged.
     """
     if not isinstance(evidence, Mapping):
         evidence = {}
@@ -531,6 +665,23 @@ def record_rule_authority(
         # Presence of malformed data is a measured authority failure, not an
         # unestablished gate.  A sentinel is unnecessary; gate derivation sees
         # the non-empty entries and returns a failing value where applicable.
+    if causal_transfer_receipt_ids is not None:
+        # A caller must choose one authority source for cross-lineage TE.  A
+        # hand-authored row mixed with ledger receipts would make it possible
+        # to retain a forged PASS alongside a verified witness.
+        if entries["cross_lineage_te"]:
+            errors.append(
+                "cross_lineage_te:direct_evidence_conflicts_with_transfer_receipts")
+        try:
+            transfer_ids = _receipt_ids(causal_transfer_receipt_ids)
+        except ValueError as exc:
+            transfer_ids = ()
+            errors.append(f"cross_lineage_te:{exc}")
+        for transfer_id in transfer_ids:
+            entry, transfer_errors = _transfer_entry(conn, transfer_id)
+            errors.extend(transfer_errors)
+            if entry is not None:
+                entries["cross_lineage_te"].append(entry)
     gate_inputs, derived_details = _derive_gate_inputs(
         entries, errors, rule_row=row, status=status,
         expected_status_version=expected_status_version,
@@ -745,6 +896,21 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
     loaded, evidence_reasons = _load_evidence_rows(
         conn, rule_id=rule_id, target_scope=target_scope, refs=refs)
     reasons.extend(evidence_reasons)
+    # A cross-lineage row produced by the L4 bridge is only valid while its
+    # referenced transfer ledger receipt still replays against this database.
+    # The immutable rule-authority row alone is not an independent witness.
+    for item in loaded.get("cross_lineage_te", []):
+        payload_item = item.get("payload") or {}
+        if payload_item.get("causal_transfer_verified") is not True:
+            continue
+        transfer_id = str(payload_item.get("transfer_receipt_id") or "")
+        entry, transfer_errors = _transfer_entry(conn, transfer_id)
+        if transfer_errors:
+            reasons.extend(transfer_errors)
+        elif entry is None:
+            reasons.append("cross_lineage_te:transfer_receipt_replay_missing")
+        elif stable_dumps(entry) != stable_dumps(item):
+            reasons.append("cross_lineage_te:transfer_evidence_projection_mismatch")
     expected_evidence = payload.get("evidence")
     if not isinstance(expected_evidence, Mapping):
         reasons.append("authority_evidence_payload_missing")
@@ -848,6 +1014,7 @@ def promote_rule(conn: sqlite3.Connection, authority_receipt,
 
 __all__ = [
     "AUTHORITY_VERSION", "EVIDENCE_SPLITS", "GATE_ALLOWED_SPLITS",
-    "RULE_EVIDENCE_TYPES", "RuleAuthorityReceipt", "promote_rule",
+    "RULE_EVIDENCE_TYPES", "RuleAuthorityReceipt", "build_causal_transfer_evidence",
+    "promote_rule",
     "record_rule_authority", "rule_content_digest", "verify_rule_authority",
 ]

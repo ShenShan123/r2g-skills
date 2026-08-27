@@ -2851,6 +2851,18 @@ authority 或 usefulness 结论：没有把 held-out 写入 learner/canonical/ru
 obligation coverage、cross-lineage TE、harmful-rate、conformal coverage）仍需由
 独立 authority receipt 逐项重放；Parametric 继续 shadow-only。
 
+为避免 L4 报告被再次手写成 gate 布尔值，`lifecycle.rule_authority` 新增
+`build_causal_transfer_evidence()` 与 `record_rule_authority(...,
+causal_transfer_receipt_ids=...)` seam。它只从同一 shadow DB 的
+`tehm_causal_transfer_receipts` 加载 receipt，调用 `verify_causal_transfer()` 重放 path、
+transition、split、lineage 和 L4 level，并要求至少两条 training lineage 加一条
+独立 held-out lineage；验证后的 payload 才能形成 `cross_lineage_te` authority row。
+若同时提供手工 cross-lineage rows、receipt 缺失/篡改、或 replay 不是 L4，整个
+authority attempt fail-closed；`verify_rule_authority()` 消费时再次重放该 ledger row。
+这一步只把真实 L4 transfer 接入 authority evidence 链，不替代 rollback、registry、
+obligation、harmful-rate、conformal gates，也不触发 canonical/lifecycle/runtime
+变更。回归覆盖位于 `memory/tests/test_causal_transfer.py`。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）

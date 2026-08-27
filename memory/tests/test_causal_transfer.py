@@ -16,6 +16,8 @@ from tehm.causal import (
     record_causal_transfer,
     verify_causal_transfer,
 )
+from tehm.lifecycle import build_causal_transfer_evidence
+from tehm.lifecycle.rule_authority import _derive_gate_inputs
 from tehm.adapters.orfs_pair import build_orfs_pair_record
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 
@@ -206,6 +208,46 @@ def test_causal_transfer_ledger_replays_and_binds_path(tmp_tehm, tmp_path):
     checked_nested = verify_causal_transfer(conn, nested_tampered)
     assert checked_nested["verified"] is False
     assert "transfer_receipt_projection_mismatch" in checked_nested["reasons"]
+    conn.close()
+
+
+def test_verified_l4_receipt_is_the_only_transfer_authority_projection(
+        tmp_tehm, tmp_path):
+    """Rule authority consumes replayed L4 lineage vectors, not a caller flag."""
+    report = _training_replication(tmp_tehm, tmp_path)
+    conn = db.connect(report["derived_db"])
+    db.ensure_schema(conn)
+    store = ArtifactStore(tmp_path / "transfer-authority-artifacts")
+    before = _completed_orfs_project(
+        tmp_path, "heldout_authority_before", 50, route_status="fail", make_status=1)
+    after = _completed_orfs_project(tmp_path, "heldout_authority_after", 40)
+    transfer = build_orfs_pair_record(
+        before, after, lineage_id="orfs-l4:heldout-authority",
+        config_edits={"CORE_UTILIZATION": "40"})
+    transition_id = capture(
+        conn, store, transfer, dataset_campaign_id="l4-heldout-authority",
+        dataset_split="heldout", dataset_learner_eligible=False).transition_id
+    ledger = record_causal_transfer(
+        conn, path_id=report["path"]["path_id"],
+        transfer_transition_ids=[transition_id],
+        training_campaign_id="l4-training",
+        transfer_campaign_id="l4-heldout-authority")
+    entries = build_causal_transfer_evidence(
+        conn, [ledger.transfer_receipt_id])
+    inputs, details = _derive_gate_inputs(
+        {"cross_lineage_te": entries}, (), rule_row=None, status=None,
+        expected_status_version=None, rule_digest=None,
+        min_obligation_coverage=1.0, min_cross_lineage_te=1.0,
+        max_harmful_rate=0.0, min_conformal_coverage=0.8)
+    assert inputs["cross_lineage_te"] == 1.0
+    assert details["causal_transfer_count"] == 1
+    assert len(details["causal_transfer_training_lineages"]) == 2
+    try:
+        build_causal_transfer_evidence(conn, ["missing-transfer-receipt"])
+    except ValueError as exc:
+        assert "transfer_receipt_missing" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("missing L4 receipt bypassed authority projection")
     conn.close()
 
 

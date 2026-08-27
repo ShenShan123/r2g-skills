@@ -122,6 +122,14 @@ TE、harmful-rate 和 conformal coverage；`verify_rule_authority()` 在消费�
 原子写入；不可变 evidence 冲突或后续写入失败会回滚整组 C1–C8 rows，不留下部分
 authority 证据。若调用方已有事务，则只释放 savepoint，由调用方继续负责最终提交。
 
+rule authority 的 `cross_lineage_te` 现在还支持显式的
+`causal_transfer_receipt_ids` 输入：每条 receipt 必须在同一 shadow DB 中由
+`verify_causal_transfer()` replay 为 `L4_TRANSFER_SUPPORTED_MECHANISM`，并携带至少
+两条 training lineage 与独立 held-out lineage；系统据此生成 authority evidence，拒绝
+把手写 `te_pass=true` 与 ledger witness 混用。该桥只建立可重放的 gate evidence，
+不会自动补齐 rollback、registry、obligation、harmful-rate 或 conformal gate，也不会
+改变 canonical/lifecycle/runtime。
+
 ### Capability retention replay ledger（2026-08-27）
 
 新增 `capability.retention.record_capability_retention()` /

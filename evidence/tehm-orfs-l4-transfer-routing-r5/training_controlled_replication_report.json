@@ -9,7 +9,7 @@
     "transitions": 4
   },
   "derived_db": "/tmp/tehm-orfs/routing-semantic-train-r5/controlled/tehm.sqlite",
-  "derived_db_sha256": "2488baa876285c1a25cec1210e38feec5591c4da7a67c0cb3a1ec0f879d9b178",
+  "derived_db_sha256": "f7dcb168e10a8ce87c75ca1ee27e44e1aa75dd50100d50ef8180c37837a85fd1",
   "fragments": [
     {
       "campaign_id": "orfs-add-designs-v0.1",
@@ -207,7 +207,7 @@
       "causal_node_fda3753da24ce3fe",
       "causal_node_1d07970d88e5e83b"
     ],
-    "path_digest": "sha1:54ba6f410c35d0b272b4845195391fc73f77ef65",
+    "path_digest": "sha1:ac64cf60e1ec7517187540d1db632447e483b1d8",
     "path_id": "causal_path_54ba6f410c35d0b2",
     "source_transition_ids": [
       "transition_07200f8f36e0b77a",
