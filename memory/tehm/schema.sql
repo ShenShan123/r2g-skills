@@ -540,3 +540,26 @@ CREATE TABLE IF NOT EXISTS tehm_capability_retention_receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_capability_retention_scope
     ON tehm_capability_retention_receipts(capability_id, split, retained);
+
+-- Held-out causal-transfer evidence is an additive v4 shadow ledger.  The
+-- causal transfer module also creates these rows lazily for already-frozen v4
+-- stores, keeping the published migration chain unchanged.
+CREATE TABLE IF NOT EXISTS tehm_causal_transfer_receipts (
+    transfer_receipt_id       TEXT PRIMARY KEY,
+    path_id                   TEXT NOT NULL,
+    path_digest               TEXT NOT NULL,
+    training_campaign_id      TEXT NOT NULL,
+    transfer_campaign_id      TEXT NOT NULL,
+    training_transition_ids_json TEXT NOT NULL,
+    transfer_transition_ids_json TEXT NOT NULL,
+    require_full_oracle      INTEGER NOT NULL CHECK
+                              (require_full_oracle IN (0, 1)),
+    eligible                  INTEGER NOT NULL CHECK (eligible IN (0, 1)),
+    evidence_level            TEXT NOT NULL,
+    reason                    TEXT NOT NULL,
+    receipt_json              TEXT NOT NULL,
+    receipt_digest            TEXT NOT NULL UNIQUE,
+    created_at                TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_causal_transfer_receipts_path
+    ON tehm_causal_transfer_receipts(path_id, eligible);

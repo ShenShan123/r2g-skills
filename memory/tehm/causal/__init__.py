@@ -21,6 +21,11 @@ from .transfer import (
     TransferReceipt, evaluate_transfer_supported_mechanism,
     full_oracle_complete,
 )
+from .transfer_ledger import (
+    CausalTransferLedgerReceipt, ensure_transfer_ledger_schema,
+    load_causal_transfer_receipt, record_causal_transfer,
+    verify_causal_transfer,
+)
 from .orfs import (
     ORFS_CAUSAL_SHADOW_VERSION, build_orfs_causal_shadow,
     build_orfs_controlled_replication,
@@ -41,6 +46,9 @@ __all__ = [
     "evaluate_replicated_effect",
     "TransferReceipt", "evaluate_transfer_supported_mechanism",
     "full_oracle_complete",
+    "CausalTransferLedgerReceipt", "ensure_transfer_ledger_schema",
+    "load_causal_transfer_receipt", "record_causal_transfer",
+    "verify_causal_transfer",
     "ORFS_CAUSAL_SHADOW_VERSION", "build_orfs_causal_shadow",
     "build_orfs_controlled_replication",
     "CausalRuleEvidenceReceipt", "evaluate_causal_rule_evidence",

@@ -345,6 +345,14 @@ contract），仅有 `oracle_complete=true` 或手工缩减的 checks 集合不�
 缺失 held-out receipt、非 fail→pass、full-oracle 不完整或 utility harmful 都只保留
 为 evaluation/negative evidence，不会进入 learner、canonical memory 或 production。
 
+L4 receipt 现在还可以通过 `tehm.causal.record_causal_transfer()` 写入 additive
+`tehm_causal_transfer_receipts` shadow ledger。ledger 绑定 path digest、训练/held-out
+campaign、transition witness 和 `require_full_oracle`；`verify_causal_transfer()` 会
+重新验证 path provenance 并重跑纯 evaluator。有效的负结果返回
+`verified=true, eligible=false`，篡改、stale path 或 replay mismatch 则
+fail-closed。该写入只产生可审计的派生 receipt，不改变 causal path、canonical
+evidence、rule lifecycle 或 production policy。
+
 Activation update 现在也会把反馈写入同一条 hash-chained event log：PASS 产生
 `SUPPORT_INCREASED`，中性结果产生 `UTILITY_DRIFT`，FAIL/REGRESSION 产生
 `RULE_HARMFUL`，payload 绑定 activation ID 与 utility 前后快照。evaluation/backend

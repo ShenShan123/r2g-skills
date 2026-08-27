@@ -2729,6 +2729,15 @@ fail→pass、lineage/design 不相交或 full-oracle 不完整均返回 fail-cl
 高利用率 `selector_alu16` 试跑的 placement/route 失败仅作为 incomplete external
 evidence，未进入 staging/learner，也未改变当前 routing support cohort 的六项 gate。
 
+L4 transfer receipt 另由 `tehm.causal.record_causal_transfer()` 写入 additive
+`tehm_causal_transfer_receipts` shadow ledger；receipt 绑定 path digest、训练/held-out
+campaign、transition witness 与 full-oracle contract。消费前必须调用
+`verify_causal_transfer()`，它会重新校验 path provenance、ledger row digest 并重跑
+纯 evaluator；失败尝试也只作为 `eligible=false` 的可审计负证据，不能改变 causal
+path、canonical evidence、rule lifecycle 或 production policy。这样在获得真实
+source-disjoint fail→pass held-out 之前，不会因为一次现场 L4 计算就误把
+`cross_lineage_te` 计为 PASS。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）

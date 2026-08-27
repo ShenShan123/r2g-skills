@@ -13,6 +13,8 @@ from tehm.causal import (
     build_transition_causal_fragment,
     consolidate_causal_path,
     evaluate_transfer_supported_mechanism,
+    record_causal_transfer,
+    verify_causal_transfer,
 )
 from tehm.adapters.orfs_pair import build_orfs_pair_record
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
@@ -145,6 +147,78 @@ def test_orfs_l4_requires_exact_two_arm_full_oracle(tmp_tehm, tmp_path):
     assert receipt.reason == "heldout_transfer_witness_failed"
     assert receipt.details[0]["full_oracle_required"] is True
     assert receipt.details[0]["full_oracle_complete"] is False
+
+
+def test_causal_transfer_ledger_replays_and_binds_path(tmp_tehm, tmp_path):
+    """A transfer receipt is durable shadow evidence, not path authority."""
+    report = _training_replication(tmp_tehm, tmp_path)
+    conn = db.connect(report["derived_db"])
+    db.ensure_schema(conn)
+    store = ArtifactStore(tmp_path / "transfer-ledger-artifacts")
+    before = _completed_orfs_project(
+        tmp_path, "heldout_ledger_before", 50, route_status="fail", make_status=1)
+    after = _completed_orfs_project(tmp_path, "heldout_ledger_after", 40)
+    transfer = build_orfs_pair_record(
+        before, after, lineage_id="orfs-l4:heldout-ledger",
+        config_edits={"CORE_UTILIZATION": "40"})
+    transition_id = capture(
+        conn, store, transfer, dataset_campaign_id="l4-heldout-ledger",
+        dataset_split="heldout", dataset_learner_eligible=False).transition_id
+    path_id = report["path"]["path_id"]
+    before_path_digest = conn.execute(
+        "SELECT path_digest FROM tehm_causal_paths WHERE path_id=?", (path_id,)
+    ).fetchone()[0]
+
+    ledger = record_causal_transfer(
+        conn, path_id=path_id, transfer_transition_ids=[transition_id],
+        training_campaign_id="l4-training",
+        transfer_campaign_id="l4-heldout-ledger")
+    checked = verify_causal_transfer(conn, ledger)
+    assert checked["verified"] is True
+    assert checked["eligible"] is True
+    assert ledger.transfer_receipt_id.startswith("causal_transfer_")
+    assert conn.execute(
+        "SELECT path_digest FROM tehm_causal_paths WHERE path_id=?", (path_id,)
+    ).fetchone()[0] == before_path_digest
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_causal_transfer_receipts"
+    ).fetchone()[0] == 1
+
+    tampered = ledger.to_dict()
+    tampered["payload"] = dict(tampered["payload"])
+    tampered["payload"]["eligible"] = False
+    assert verify_causal_transfer(conn, tampered)["verified"] is False
+    conn.close()
+
+
+def test_causal_transfer_ledger_keeps_ineligible_receipt_auditable(
+        tmp_tehm, tmp_path):
+    """Missing full ORFS proof is recorded and remains non-promotable."""
+    report = _training_replication(tmp_tehm, tmp_path)
+    conn = db.connect(report["derived_db"])
+    db.ensure_schema(conn)
+    store = ArtifactStore(tmp_path / "transfer-ledger-negative-artifacts")
+    before = _completed_orfs_project(
+        tmp_path, "heldout_ledger_bad_before", 50, route_status="fail", make_status=1)
+    after = _completed_orfs_project(tmp_path, "heldout_ledger_bad_after", 40)
+    transfer = build_orfs_pair_record(
+        before, after, lineage_id="orfs-l4:heldout-ledger-bad",
+        config_edits={"CORE_UTILIZATION": "40"})
+    transition_id = capture(
+        conn, store, transfer, dataset_campaign_id="l4-heldout-ledger-bad",
+        dataset_split="heldout", dataset_learner_eligible=False).transition_id
+    ledger = record_causal_transfer(
+        conn, path_id=report["path"]["path_id"],
+        transfer_transition_ids=[transition_id],
+        training_campaign_id="l4-training",
+        transfer_campaign_id="l4-heldout-ledger-bad",
+        require_full_oracle=True)
+    checked = verify_causal_transfer(conn, ledger.to_dict())
+    assert ledger.eligible is False
+    assert checked["verified"] is True
+    assert checked["eligible"] is False
+    assert ledger.transfer_receipt["promotion_eligible"] is False
+    conn.close()
 
 
 def test_causal_path_rejects_mixed_learner_campaigns(tmp_tehm):
