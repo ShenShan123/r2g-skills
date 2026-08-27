@@ -20,6 +20,7 @@ MEMORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MEMORY_ROOT))
 
 from tehm.batch_lane import canonical_snapshots  # noqa: E402
+from tehm.causal.transfer import full_oracle_complete  # noqa: E402
 
 GATES = (
     "rollback_verified", "registry_verified", "obligation_coverage",
@@ -95,13 +96,7 @@ def _campaign(root: Path, *, selected: bool) -> dict:
         captured = item_by_transition.get(transition_id, {})
         delta = _json(row["observation_delta_json"])
         verifier = _json(row["verifier_json"])
-        full = verifier.get("full_oracle") or {}
-        full_complete = bool(full) and all(
-            isinstance(side, dict) and side.get("complete") is True and
-            isinstance(side.get("checks"), dict) and
-            all(value is True for value in side["checks"].values())
-            for side in full.values()
-        )
+        full_complete = full_oracle_complete(verifier)
         utility = str(delta.get("utility_verdict") or "UNKNOWN")
         observations.append({
             "case_id": captured.get("case_id"),

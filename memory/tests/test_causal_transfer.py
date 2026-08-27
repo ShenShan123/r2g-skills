@@ -120,6 +120,33 @@ def test_l4_transfer_cannot_reuse_training_transition(tmp_tehm, tmp_path):
     assert receipt.reason == "transfer_reuses_training_transition"
 
 
+def test_orfs_l4_requires_exact_two_arm_full_oracle(tmp_tehm, tmp_path):
+    """A generic verifier PASS cannot masquerade as an ORFS full receipt."""
+    report = _training_replication(tmp_tehm, tmp_path)
+    conn = db.connect(report["derived_db"])
+    db.ensure_schema(conn)
+    store = ArtifactStore(tmp_path / "transfer-artifacts-full")
+    before = _completed_orfs_project(
+        tmp_path, "heldout_full_before", 50, route_status="fail", make_status=1)
+    after = _completed_orfs_project(tmp_path, "heldout_full_after", 40)
+    transfer = build_orfs_pair_record(
+        before, after, lineage_id="orfs-l4:heldout-full",
+        config_edits={"CORE_UTILIZATION": "40"})
+    transition_id = capture(
+        conn, store, transfer, dataset_campaign_id="l4-transfer-full",
+        dataset_split="heldout", dataset_learner_eligible=False).transition_id
+    receipt = evaluate_transfer_supported_mechanism(
+        conn, report["path"]["path_id"], [transition_id],
+        training_campaign_id="l4-training",
+        transfer_campaign_id="l4-transfer-full", require_full_oracle=True)
+    conn.close()
+
+    assert receipt.eligible is False
+    assert receipt.reason == "heldout_transfer_witness_failed"
+    assert receipt.details[0]["full_oracle_required"] is True
+    assert receipt.details[0]["full_oracle_complete"] is False
+
+
 def test_causal_path_rejects_mixed_learner_campaigns(tmp_tehm):
     conn, store, _ = tmp_tehm
     first = capture(conn, store, build_rtl_execution_record(

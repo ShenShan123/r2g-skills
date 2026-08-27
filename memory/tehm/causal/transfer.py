@@ -19,6 +19,44 @@ from .mechanism import load_transition_facts, mechanism_signature
 from .replication import evaluate_replicated_effect
 
 
+# The ORFS lane has a stricter contract than a generic RTL verifier.  Keep the
+# list local to this evaluator so causal code does not depend on the batch
+# executor (and therefore cannot accidentally import or mutate a staging DB).
+_FULL_ORACLE_SIDES = ("before", "after")
+_FULL_ORACLE_CHECKS = (
+    "synthesis", "equivalence", "route", "finish", "timing", "drc",
+    "lvs", "strict_signoff", "ppa", "graph", "artifact_digest",
+    "input_binding", "timing_contract", "toolchain_binding",
+)
+
+
+def _full_oracle_complete(verifier: Mapping) -> bool:
+    """Return true only for an explicitly complete two-arm ORFS receipt."""
+    full = verifier.get("full_oracle")
+    if not isinstance(full, Mapping):
+        return False
+    for side in _FULL_ORACLE_SIDES:
+        receipt = full.get(side)
+        if not isinstance(receipt, Mapping) or receipt.get("complete") is not True:
+            return False
+        checks = receipt.get("checks")
+        if not isinstance(checks, Mapping):
+            return False
+        # Requiring the exact pinned check set prevents a reduced or
+        # caller-invented ``{"complete": true}`` receipt from satisfying an
+        # ORFS held-out gate.
+        if set(checks) != set(_FULL_ORACLE_CHECKS):
+            return False
+        if any(checks.get(name) is not True for name in _FULL_ORACLE_CHECKS):
+            return False
+    return True
+
+
+def full_oracle_complete(verifier: Mapping) -> bool:
+    """Public read-only predicate shared by ORFS audits and L4 evaluation."""
+    return _full_oracle_complete(verifier)
+
+
 def _source_transition_ids(raw: object) -> tuple[tuple[str, ...] | None, str | None]:
     try:
         values = json.loads(raw or "[]") if isinstance(raw, str) else raw
@@ -127,6 +165,7 @@ def evaluate_transfer_supported_mechanism(
     transfer_campaign_id: str | None = None,
     min_training_lineages: int = 2,
     min_transfer_lineages: int = 1,
+    require_full_oracle: bool = False,
 ) -> TransferReceipt:
     """Evaluate L4 transfer without mutating any database row.
 
@@ -137,7 +176,10 @@ def evaluate_transfer_supported_mechanism(
     typed action domain, mechanism family, compatibility profile, and effect
     key remain hard matching dimensions.  A held-out observation that was
     already clean before the action is not sufficient: transfer must show a
-    verified unseen fail-to-pass repair.
+    verified unseen fail-to-pass repair.  ``require_full_oracle`` is used by
+    ORFS authority audits to require the pinned two-arm full-oracle receipt;
+    generic RTL callers may leave it false and use their own executable oracle
+    contract.
     """
     if not training_campaign_id:
         raise ValueError("training_campaign_id is required")
@@ -271,6 +313,9 @@ def evaluate_transfer_supported_mechanism(
             verifier.get("evidence_refs") and
             not facts.delta.get("created_regressions") and
             not facts.delta.get("newly_observed_failures"))
+        full_oracle = _full_oracle_complete(verifier)
+        if require_full_oracle:
+            clean = bool(clean and full_oracle)
         signature = mechanism_signature(facts)
         # Concrete module/state/guard values are bound slots, while these
         # typed dimensions define the transferable mechanism family.
@@ -289,6 +334,8 @@ def evaluate_transfer_supported_mechanism(
             "lineage_id": by_id[transition_id]["lineage_id"],
             "design_id": by_id[transition_id]["design_id"],
             "verifier_pass": clean,
+            "full_oracle_required": bool(require_full_oracle),
+            "full_oracle_complete": full_oracle,
             "mechanism_match": match.to_dict(),
             "effect_match": effect_match,
         }
@@ -319,4 +366,5 @@ def evaluate_transfer_supported_mechanism(
         details=tuple(details), reason=reason, promotion_eligible=False)
 
 
-__all__ = ["TransferReceipt", "evaluate_transfer_supported_mechanism"]
+__all__ = ["TransferReceipt", "evaluate_transfer_supported_mechanism",
+           "full_oracle_complete"]

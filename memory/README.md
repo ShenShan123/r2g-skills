@@ -336,6 +336,15 @@ canonical evidence、rule lifecycle 或 production retrieval；复用训练 tran
 跨 campaign 或损坏 fragment witness 均 fail-closed。当前测试用真实 ORFS adapter
 构造的两条训练 lineage 与独立 held-out lineage 验证了该边界。
 
+新增 `scripts/evaluate_causal_transfer.py` 作为冻结 DB 的 CLI 审计入口：数据库以
+immutable/read-only 方式打开，报告记录输入 digest、transfer receipt 和
+`database_unchanged=true`，且始终 `promotion_eligible=false`。ORFS 评估必须传入
+`--require-full-oracle`；此时 before/after 两侧必须各自具备完整且精确的
+Batch-0 14 项 checks（含 strict signoff、DEF graph、toolchain、input binding 与 timing
+contract），仅有 `oracle_complete=true` 或手工缩减的 checks 集合不能满足 L4。
+缺失 held-out receipt、非 fail→pass、full-oracle 不完整或 utility harmful 都只保留
+为 evaluation/negative evidence，不会进入 learner、canonical memory 或 production。
+
 Activation update 现在也会把反馈写入同一条 hash-chained event log：PASS 产生
 `SUPPORT_INCREASED`，中性结果产生 `UTILITY_DRIFT`，FAIL/REGRESSION 产生
 `RULE_HARMFUL`，payload 绑定 activation ID 与 utility 前后快照。evaluation/backend
@@ -1640,6 +1649,13 @@ utility=`HARMFUL`，被保留为 negative control，不纳入 support。
 `NOT_ESTABLISHED`。因此决定仍是 `DENY_CANONICAL_IMPORT`，
 `promotion_attempted=false`，canonical memory 未改变；这些观察只能作为
 evaluation/staging evidence，不能进入 production runtime。
+
+随后针对独立 held-out 候选 `selector_alu16` 做了 80→70、70→60、60→50
+的有界 ORFS 探索：80→70 在 placement 因利用率超过 100% 失败，70→60 的 after
+臂在 global-route 仍有拥塞，60→50 也未形成完整双臂 oracle。所有失败均留在
+scratch 的 external-only 日志中，未写入 support staging。该结果说明当前
+routing support 不能直接外推为 density fail→pass transfer；必须先得到完整、
+non-harmful 且 source-disjoint 的 held-out pair，才能重新计算 `cross_lineage_te`。
 
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 

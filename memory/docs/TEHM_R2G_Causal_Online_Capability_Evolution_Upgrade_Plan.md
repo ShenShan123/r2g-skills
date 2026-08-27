@@ -2717,6 +2717,18 @@ rule authority 或 production runtime；下一步是用独立 held-out transfer�
 registry receipt 与 calibration conformal evidence 补齐剩余 gate，再交由独立
 authority 审核。
 
+为使下一步 held-out 评估可重放，本轮补充 `scripts/evaluate_causal_transfer.py` CLI。
+它对冻结 v4 DB 使用 immutable/read-only 连接，输出数据库 digest 与
+`database_unchanged=true`，并固定 `promotion_eligible=false`。传入
+`--require-full-oracle` 时，L4 evaluator 逐侧要求完整且精确的 14 项 ORFS checks：
+`synthesis/equivalence/route/finish/timing/drc/lvs/strict_signoff/ppa/graph/`
+`artifact_digest/input_binding/timing_contract/toolchain_binding`；仅有一个
+`oracle_complete=true` 或删减后的 checks map 不再被接受。held-out 缺失、非
+fail→pass、lineage/design 不相交或 full-oracle 不完整均返回 fail-closed receipt，
+不写 causal path、canonical evidence、rule lifecycle 或 production runtime。当前
+高利用率 `selector_alu16` 试跑的 placement/route 失败仅作为 incomplete external
+evidence，未进入 staging/learner，也未改变当前 routing support cohort 的六项 gate。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）

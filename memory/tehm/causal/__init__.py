@@ -17,7 +17,10 @@ from .path_builder import build_transition_causal_fragment, consolidate_causal_p
 from .receipts import CausalFragment, CausalPathCandidate, InterventionReceipt
 from .rtl import RtlCausalReceipt, capture_rtl_causal_fragment
 from .replication import ReplicationReceipt, evaluate_replicated_effect
-from .transfer import TransferReceipt, evaluate_transfer_supported_mechanism
+from .transfer import (
+    TransferReceipt, evaluate_transfer_supported_mechanism,
+    full_oracle_complete,
+)
 from .orfs import (
     ORFS_CAUSAL_SHADOW_VERSION, build_orfs_causal_shadow,
     build_orfs_controlled_replication,
@@ -37,6 +40,7 @@ __all__ = [
     "MechanismMatch", "match_causal_path",
     "evaluate_replicated_effect",
     "TransferReceipt", "evaluate_transfer_supported_mechanism",
+    "full_oracle_complete",
     "ORFS_CAUSAL_SHADOW_VERSION", "build_orfs_causal_shadow",
     "build_orfs_controlled_replication",
     "CausalRuleEvidenceReceipt", "evaluate_causal_rule_evidence",

@@ -1,88 +1,153 @@
 {
-  "version": "tehm-orfs-support-cohort-audit-v1",
+  "all_gates_established": false,
   "campaigns": [
     {
+      "campaign_manifest_sha256": "e7a4b92d01e6c236d1bec279d99e08ba67f5689f53e79e877a78c5c0575d46f0",
       "campaign_root": "/tmp/tehm-orfs/selector-crc-routing-r1",
+      "complete_count": 1,
+      "harmful_complete_count": 0,
+      "incomplete_count": 0,
+      "observations": [
+        {
+          "case_id": "sky130hs:selector_crc16:0:ROUTING_CAPACITY_RECOVERY:default->0.05",
+          "dataset_split": "training",
+          "deltas": {
+            "area_um2": 0.0,
+            "congestion": null,
+            "drc_violations": null,
+            "power_w": 0.0,
+            "tns_ns": 0.0,
+            "wns_ns": 0.0
+          },
+          "full_oracle_complete": true,
+          "learner_eligible": true,
+          "lineage_id": "tehm-current-crc-routing-r1:sky130hs:selector_crc16:base0",
+          "oracle_complete": true,
+          "run_id": "RUN_2026-08-27_11-43-51_23_65c6",
+          "transition_id": "transition_f531a2ecf704e27f",
+          "utility_verdict": "NEUTRAL"
+        }
+      ],
+      "selected": true,
+      "selected_support_count": 1,
       "source_freeze_digest": "7811f454cb49f4fc5303958f95089e794735310b5b5cf4916bf48bfae5b0f288",
-      "staging_db_sha256": "d56a993fc1fef5d4e4ccc30c751037d26169738514ba238841e36bae7783d53a",
-      "case_id": "sky130hs:selector_crc16:0:ROUTING_CAPACITY_RECOVERY:default->0.05",
-      "transition_id": "transition_f531a2ecf704e27f",
-      "lineage_id": "tehm-current-crc-routing-r1:sky130hs:selector_crc16:base0",
-      "run_id": "RUN_2026-08-27_11-43-51_23_65c6",
-      "full_oracle_complete": true,
-      "dataset_split": "training",
-      "learner_eligible": true,
-      "utility_verdict": "NEUTRAL",
-      "deltas": {
-        "area_um2": 0.0,
-        "power_w": 0.0,
-        "tns_ns": 0.0,
-        "wns_ns": 0.0
-      }
+      "staging_db": "/tmp/tehm-orfs/selector-crc-routing-r1/staging/complete/tehm.sqlite",
+      "staging_db_sha256": "d56a993fc1fef5d4e4ccc30c751037d26169738514ba238841e36bae7783d53a"
     },
     {
+      "campaign_manifest_sha256": "bde8e867d7f4cb0bc82392a43d3f549d12c7419463df9f842bca8ca9237c1ce9",
       "campaign_root": "/tmp/tehm-orfs/selector-uart-routing-r1",
+      "complete_count": 1,
+      "harmful_complete_count": 0,
+      "incomplete_count": 0,
+      "observations": [
+        {
+          "case_id": "sky130hs:selector_uart16:0:ROUTING_CAPACITY_RECOVERY:default->0.05",
+          "dataset_split": "training",
+          "deltas": {
+            "area_um2": 0.0,
+            "congestion": null,
+            "drc_violations": null,
+            "power_w": 0.0,
+            "tns_ns": 0.0,
+            "wns_ns": 0.0
+          },
+          "full_oracle_complete": true,
+          "learner_eligible": true,
+          "lineage_id": "tehm-current-uart-routing-r1:sky130hs:selector_uart16:base0",
+          "oracle_complete": true,
+          "run_id": "RUN_2026-08-27_11-47-07_23_4aa7",
+          "transition_id": "transition_251687e53847ac76",
+          "utility_verdict": "NEUTRAL"
+        }
+      ],
+      "selected": true,
+      "selected_support_count": 1,
       "source_freeze_digest": "912d6f92da752c1be2a9dc939b6e3fcc3f0ab87d869f93dd34ef68dc73d752d5",
-      "staging_db_sha256": "3076794d56d44f8b7bbbbf8fef5b6218e2bd9ef3d9529b840eb275fa7256e92e",
-      "case_id": "sky130hs:selector_uart16:0:ROUTING_CAPACITY_RECOVERY:default->0.05",
-      "transition_id": "transition_251687e53847ac76",
-      "lineage_id": "tehm-current-uart-routing-r1:sky130hs:selector_uart16:base0",
-      "run_id": "RUN_2026-08-27_11-47-07_23_4aa7",
-      "full_oracle_complete": true,
-      "dataset_split": "training",
-      "learner_eligible": true,
-      "utility_verdict": "NEUTRAL",
-      "deltas": {
-        "area_um2": 0.0,
-        "power_w": 0.0,
-        "tns_ns": 0.0,
-        "wns_ns": 0.0
-      }
+      "staging_db": "/tmp/tehm-orfs/selector-uart-routing-r1/staging/complete/tehm.sqlite",
+      "staging_db_sha256": "3076794d56d44f8b7bbbbf8fef5b6218e2bd9ef3d9529b840eb275fa7256e92e"
     }
   ],
-  "negative_control": {
-    "campaign_root": "/tmp/tehm-orfs/selector-fifo-current-r2",
-    "source_freeze_digest": "2b84f799fadee0eec19ed6d90d7fa82566bec87458e4315c8098bbe0fd5ac409",
-    "staging_db_sha256": "b1732ec167f4a1856213d728e7511f51dba7a61ab7517ff27a9e6b3c6fcaeeed",
-    "case_id": "sky130hs:selector_fifo16:0:DENSITY_RELIEF:50->40",
-    "transition_id": "transition_b5514c5eeda8e968",
-    "lineage_id": "tehm-current-r2:sky130hs:selector_fifo16:base0",
-    "full_oracle_complete": true,
-    "learner_eligible": true,
-    "utility_verdict": "HARMFUL",
-    "deltas": {
-      "area_um2": 7868.3,
-      "power_w": 0.000226,
-      "tns_ns": 0.0,
-      "wns_ns": 0.07206
+  "canonical_memory_mutation": "none",
+  "canonical_snapshots": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "6ac1266fa6824faa4a8595613f998f6d30eff9f8b0af0a2d287e425cdc10f039",
+      "transitions": 9
     },
-    "selected_for_support": false
-  },
-  "support_observation_count": 2,
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transitions": null
+    }
+  ],
   "complete_observation_count": 2,
+  "decision": "DENY_CANONICAL_IMPORT",
+  "gate_status": {
+    "conformal_coverage": "NOT_ESTABLISHED",
+    "cross_lineage_te": "NOT_ESTABLISHED",
+    "harmful_rate": "PASS",
+    "obligation_coverage": "PASS",
+    "registry_verified": "NOT_ESTABLISHED",
+    "rollback_verified": "NOT_ESTABLISHED"
+  },
+  "gates": {
+    "conformal_coverage": false,
+    "cross_lineage_te": false,
+    "harmful_rate": true,
+    "obligation_coverage": true,
+    "registry_verified": false,
+    "rollback_verified": false
+  },
+  "harmful_complete_count": 0,
+  "harmful_rate": 0.0,
   "incomplete_observation_count": 0,
+  "negative_control_campaigns": [
+    {
+      "campaign_manifest_sha256": "440645703d401118ef1039502502562ecbe59bbd1c1275af30abde78fb809332",
+      "campaign_root": "/tmp/tehm-orfs/selector-fifo-current-r2",
+      "complete_count": 1,
+      "harmful_complete_count": 1,
+      "incomplete_count": 0,
+      "observations": [
+        {
+          "case_id": "sky130hs:selector_fifo16:0:DENSITY_RELIEF:50->40",
+          "dataset_split": "training",
+          "deltas": {
+            "area_um2": 7868.3,
+            "congestion": null,
+            "drc_violations": null,
+            "power_w": 0.000226,
+            "tns_ns": 0.0,
+            "wns_ns": 0.07206
+          },
+          "full_oracle_complete": true,
+          "learner_eligible": true,
+          "lineage_id": "tehm-current-r2:sky130hs:selector_fifo16:base0",
+          "oracle_complete": true,
+          "run_id": "RUN_2026-08-27_11-36-28_23_4685",
+          "transition_id": "transition_b5514c5eeda8e968",
+          "utility_verdict": "HARMFUL"
+        }
+      ],
+      "selected": false,
+      "selected_support_count": 0,
+      "source_freeze_digest": "2b84f799fadee0eec19ed6d90d7fa82566bec87458e4315c8098bbe0fd5ac409",
+      "staging_db": "/tmp/tehm-orfs/selector-fifo-current-r2/staging/full/tehm.sqlite",
+      "staging_db_sha256": "b1732ec167f4a1856213d728e7511f51dba7a61ab7517ff27a9e6b3c6fcaeeed"
+    }
+  ],
+  "negative_control_harmful_count": 1,
+  "promotion_attempted": false,
+  "support_observation_count": 2,
+  "unique_lineage_count": 2,
   "unique_lineages": [
     "tehm-current-crc-routing-r1:sky130hs:selector_crc16:base0",
     "tehm-current-uart-routing-r1:sky130hs:selector_uart16:base0"
   ],
-  "unique_lineage_count": 2,
-  "harmful_rate": 0.0,
-  "gate_status": {
-    "rollback_verified": "NOT_ESTABLISHED",
-    "registry_verified": "NOT_ESTABLISHED",
-    "obligation_coverage": "PASS",
-    "cross_lineage_te": "NOT_ESTABLISHED",
-    "harmful_rate": "PASS",
-    "conformal_coverage": "NOT_ESTABLISHED"
-  },
-  "all_gates_established": false,
-  "decision": "DENY_CANONICAL_IMPORT",
-  "promotion_attempted": false,
-  "canonical_memory_mutation": "none",
-  "canonical_snapshot_at_audit": {
-    "closed_loop_sha256": "6ac1266fa6824faa4a8595613f998f6d30eff9f8b0af0a2d287e425cdc10f039",
-    "closed_loop_transitions": 9,
-    "closed_loop_physical_effects": 0
-  },
-  "auditor": "memory/scripts/audit_orfs_support_cohort.py"
+  "version": "tehm-orfs-support-cohort-audit-v1"
 }
