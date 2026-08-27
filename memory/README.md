@@ -1583,6 +1583,12 @@ support rule、capability gain 或 promotion；机器可读摘要见
 生成有效 def-graph，再在至少两条独立 lineage 上取得 non-harmful、完整 oracle 的
 support cohort，随后才重跑六项 authority gate。
 
+完整 oracle 还显式要求 `reports/strict_signoff.json` 的聚合 `status=pass`。单独存在
+`drc.json`、`lvs.json`、`rcx.json` 等组件报告不能替代同一 bounded checker run 的严格
+签核收据；缺失或失败时仍分类为 `INCOMPLETE_EXTERNAL_ONLY`。这修复了“组件报告看似
+齐全但没有执行 strict gate”可能穿过 support admission 的 authority 缺口，并已由
+`memory/tests/test_batch_lane.py` 回归覆盖。
+
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 
 - 新增独立物理 lineage `orfs-heldout-v5:sky130hs:gcd:base3`，位于

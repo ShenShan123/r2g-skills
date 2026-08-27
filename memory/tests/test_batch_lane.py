@@ -233,6 +233,58 @@ def test_full_oracle_extracts_area_from_orfs_geometry_payload():
     assert metrics["area_um2"] == 123.5
 
 
+def test_full_oracle_requires_strict_signoff_receipt(
+        tmp_path, monkeypatch):
+    """Component reports cannot substitute for the aggregate strict gate."""
+    project = tmp_path / "project"
+    run = project / "backend" / "RUN_1"
+    reports = project / "reports"
+    constraints = project / "constraints"
+    final = run / "final"
+    for path in (reports, constraints, final):
+        path.mkdir(parents=True, exist_ok=True)
+    rtl = project / "top.v"
+    rtl.write_text("module top(input clk); endmodule\n")
+    (constraints / "config.mk").write_text("export DESIGN_NAME = top\n")
+    (constraints / "constraint.sdc").write_text("current_design top\n")
+    (run / "run-meta.json").write_text(json.dumps({
+        "run_tag": "RUN_1", "make_status": 0,
+        "openroad_exe": "/opt/openroad", "yosys_exe": "/opt/yosys"}))
+    (run / "stage_log.jsonl").write_text("".join(
+        json.dumps({"stage": stage, "status": 0}) + "\n"
+        for stage in ("synth", "route", "finish")))
+    (final / "6_final.def").write_text("VERSION 5.8 ;\n")
+    (final / "6_final.gds").write_bytes(b"gds")
+    documents = {
+        "route.json": {"status": "clean"},
+        "timing_check.json": {"tier": "clean"},
+        "drc.json": {"status": "clean"},
+        "lvs.json": {"status": "clean"},
+        "ppa.json": {"timing": {"setup_wns": 0.1, "setup_tns": 0.0},
+                     "area": {"design_area_um2": 12.0},
+                     "power": {"total": 0.01}},
+        # Deliberately omit strict_signoff.json: component reports alone must
+        # remain incomplete even when graph and provenance fixtures are present.
+        "features_stats.json": {"status": "ok"},
+        "batch_graph_context.json": {"status": "complete", "digest": "graph-digest"},
+    }
+    for name, value in documents.items():
+        (reports / name).write_text(json.dumps(value))
+
+    class Context:
+        status = "complete"
+
+        def to_dict(self):
+            return {"status": "complete", "digest": "graph-digest"}
+
+    monkeypatch.setattr("tehm.batch_lane.load_defgraph_context",
+                        lambda project, def_path: Context())
+    result = assess_full_oracle(project, rtl_files=[rtl])
+    assert result["complete"] is False
+    assert result["checks"]["strict_signoff"] is False
+    assert "strict_signoff" in result["missing_oracles"]
+
+
 def test_full_oracle_rejects_post_prepare_input_mutation(tmp_path):
     from tehm.batch_lane import _input_binding, _timing_contract
 

@@ -2595,6 +2595,12 @@ RCX complete，独立 RTL equivalence `PASS`；但两臂 LVS 都是 Netgen
 authority gate。机器可读摘要见
 `evidence/tehm-orfs-batch0-riscv32i-replay-r1/replay_report.json`。
 
+完整 oracle 还显式要求 `reports/strict_signoff.json` 的聚合 `status=pass`。单独的
+`drc.json`、`lvs.json`、`rcx.json` 组件报告不能替代同一 bounded checker run 的严格
+签核收据；缺失或失败时必须保持 `INCOMPLETE_EXTERNAL_ONLY`，不得进入 learner 或
+staging。该收紧由 `tehm.batch_lane.REQUIRED_ORACLES` 与回归测试共同约束，避免“手工
+拼齐组件报告”绕过 strict gate。
+
 随后取得了第一条当前 exact toolchain 的完整 support pair：参数化 UART 在
 `CORE_UTILIZATION 50→40` 下使用 ORFS 自带 AES SDC 模板重绑定得到固定 `2.8 ns`
 timing contract；before/after 两个 arm 的 synthesis、route、finish、equivalence、

@@ -40,6 +40,7 @@ REQUIRED_ORACLES = (
     "timing",
     "drc",
     "lvs",
+    "strict_signoff",
     "ppa",
     "graph",
     "artifact_digest",
@@ -208,6 +209,12 @@ def assess_full_oracle(project: Path, *, rtl_files: Iterable[Path],
         # evidence but is not a strict positive experience.
         "drc": drc.get("status") == "clean",
         "lvs": lvs.get("status") == "clean",
+        # The individual DRC/LVS/RCX reports are necessary but not sufficient:
+        # strict signoff is the aggregate receipt emitted by the same bounded
+        # checker run and its absence must keep the pair external-only.  This
+        # closes the gap where hand-carried component reports could otherwise
+        # look complete without an executed strict gate.
+        "strict_signoff": strict_signoff.get("status") == "pass",
         "ppa": all(value is not None for value in ppa_metrics.values()),
         "graph": (graph_detail.get("status") == "complete" and
                   bool(graph_detail.get("digest")) and
