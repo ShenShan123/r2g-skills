@@ -1621,7 +1621,7 @@ canonical。默认 `_env.sh` 选择的 OpenROAD/RCX 仍报 database schema `0.13
 
 `run_orfs_add_designs_campaign.py` 现在把自定义 RTL 的真实 top/clock 绑定写入
 materialized SDC，并按 `run → equivalence → strict signoff → graph → capture` 顺序
-执行；capture 可选的 `require_full_oracle` 会把 Batch-0 的 13 项检查（含 aggregate
+执行；capture 可选的 `require_full_oracle` 会把完整 Batch-0 检查集（含 aggregate
 strict signoff、toolchain、artifact、input binding 与 timing contract）重新绑定到
 transition，而不是只凭 route/DRC/timing 组件报告判断完整。
 
