@@ -7,10 +7,11 @@ physical run.  This module supplies a small, executable semantic contract that
 is evaluated from the frozen project inputs, never from caller-provided
 booleans or copied verdicts.
 
-The first contract is a pre-registered numeric bound over ``config.mk``.  It
-is useful for resource-budget experiments such as ``CORE_UTILIZATION <= 65``;
-the physical reports remain independent evidence and are still required by
-``assess_full_oracle``.
+The first contracts are pre-registered predicates over ``config.mk``: numeric
+bounds are useful for resource-budget experiments such as
+``CORE_UTILIZATION <= 65``, while presence predicates can describe a required
+configuration intervention.  The physical reports remain independent
+evidence and are still required by ``assess_full_oracle``.
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ from tehm.adapters.r2g_evidence import parse_config_mk
 from tehm.ids import stable_dumps
 
 SEMANTIC_ORACLE_VERSION = "orfs-semantic-oracle-v1"
-_KINDS = frozenset({"config_numeric_bound"})
+_KINDS = frozenset({"config_numeric_bound", "config_presence"})
 _OPERATORS = frozenset({"le", "lt", "ge", "gt", "eq"})
 
 
@@ -44,25 +45,34 @@ def normalize_spec(spec: Mapping) -> dict:
     key = str(spec.get("config_key") or "").strip()
     if not key or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for ch in key):
         raise SemanticOracleError("config_key must be an uppercase config assignment")
-    operator = str(spec.get("operator") or "")
-    if operator not in _OPERATORS:
-        raise SemanticOracleError(f"unsupported semantic oracle operator: {operator!r}")
-    try:
-        threshold = float(spec["threshold"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise SemanticOracleError("semantic oracle threshold must be numeric") from exc
-    if not math.isfinite(threshold):
-        raise SemanticOracleError("semantic oracle threshold must be finite")
-    # Only these fields are executable contract.  Free-form annotations are
-    # deliberately excluded from the normalized digest so a label cannot
-    # change the oracle semantics or transition identity.
-    return {
+    normalized = {
         "version": SEMANTIC_ORACLE_VERSION,
         "kind": kind,
         "config_key": key,
-        "operator": operator,
-        "threshold": threshold,
     }
+    if kind == "config_numeric_bound":
+        operator = str(spec.get("operator") or "")
+        try:
+            threshold = float(spec["threshold"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise SemanticOracleError(
+                "semantic oracle threshold must be numeric") from exc
+        if not math.isfinite(threshold):
+            raise SemanticOracleError("semantic oracle threshold must be finite")
+        if operator not in _OPERATORS:
+            raise SemanticOracleError(
+                f"unsupported semantic oracle operator: {operator!r}")
+        normalized.update({"operator": operator, "threshold": threshold})
+    else:
+        expected_present = spec.get("expected_present")
+        if not isinstance(expected_present, bool):
+            raise SemanticOracleError(
+                "config_presence requires boolean expected_present")
+        normalized["expected_present"] = expected_present
+    # Only these fields are executable contract.  Free-form annotations are
+    # deliberately excluded from the normalized digest so a label cannot
+    # change the oracle semantics or transition identity.
+    return normalized
 
 
 def load_spec(path: Path | str) -> dict:
@@ -103,22 +113,31 @@ def evaluate(project: Path | str, spec: Mapping) -> dict:
     except OSError:
         config = {}
     raw = config.get(normalized["config_key"])
-    try:
-        observed = float(raw)
-    except (TypeError, ValueError):
-        observed = None
-    if observed is None or not math.isfinite(observed):
-        verdict, reason = "UNKNOWN", "config_value_missing_or_non_numeric"
-    else:
-        verdict = ("PASS" if _compare(observed, normalized["operator"],
-                                      normalized["threshold"]) else "FAIL")
+    if normalized["kind"] == "config_presence":
+        present = normalized["config_key"] in config and str(raw).strip() != ""
+        observed = raw if present else None
+        verdict = ("PASS" if present == normalized["expected_present"]
+                   else "FAIL")
         reason = ""
+    else:
+        try:
+            observed = float(raw)
+        except (TypeError, ValueError):
+            observed = None
+        if observed is None or not math.isfinite(observed):
+            verdict, reason = "UNKNOWN", "config_value_missing_or_non_numeric"
+        else:
+            verdict = ("PASS" if _compare(observed, normalized["operator"],
+                                          normalized["threshold"]) else "FAIL")
+            reason = ""
     payload = {
         "version": SEMANTIC_ORACLE_VERSION,
         "spec": normalized,
         "project": str(project),
         "config_key": normalized["config_key"],
         "observed": observed,
+        "present": (normalized["config_key"] in config and
+                    str(raw).strip() != ""),
         "verdict": verdict,
         "reason": reason,
         "config_sha256": _config_sha256(project),

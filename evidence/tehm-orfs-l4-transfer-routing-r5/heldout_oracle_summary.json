@@ -1,0 +1,68 @@
+{
+  "observation_delta": {
+    "created_regressions": [],
+    "experiment_kind": "REPAIR",
+    "failing_tests": {
+      "after": 0,
+      "before": 1
+    },
+    "first_divergence": {
+      "after": 0,
+      "before": 1
+    },
+    "newly_observed_failures": [],
+    "original_failure": "REMOVED",
+    "utility_verdict": "NEUTRAL"
+  },
+  "oracle_complete": true,
+  "physical_14_check_complete": {
+    "after": true,
+    "before": true
+  },
+  "physical_14_check_names": {
+    "after": [
+      "artifact_digest",
+      "drc",
+      "equivalence",
+      "finish",
+      "graph",
+      "input_binding",
+      "lvs",
+      "ppa",
+      "route",
+      "strict_signoff",
+      "synthesis",
+      "timing",
+      "timing_contract",
+      "toolchain_binding"
+    ],
+    "before": [
+      "artifact_digest",
+      "drc",
+      "equivalence",
+      "finish",
+      "graph",
+      "input_binding",
+      "lvs",
+      "ppa",
+      "route",
+      "strict_signoff",
+      "synthesis",
+      "timing",
+      "timing_contract",
+      "toolchain_binding"
+    ]
+  },
+  "run_id": "RUN_2026-08-27_13-39-04_21_4279",
+  "semantic": {
+    "after_config_sha256": "d88edbf2e2e6ae415597d99d47d9fe1b6901763d9d7d371e90acc9f0112dd5df",
+    "after_present": true,
+    "after_verdict": "PASS",
+    "before_config_sha256": "94fcfeb5abc0071bc0e16348f1dd32c7a46dd74b4b9c6b1716be198025bbbebb",
+    "before_present": false,
+    "before_verdict": "FAIL",
+    "config_key": "ROUTING_LAYER_ADJUSTMENT",
+    "kind": "config_presence"
+  },
+  "transition_id": "transition_244da7ab1e4c4bac"
+}

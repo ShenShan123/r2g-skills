@@ -1,0 +1,6 @@
+{
+  "version": "orfs-semantic-oracle-v1",
+  "kind": "config_presence",
+  "config_key": "ROUTING_LAYER_ADJUSTMENT",
+  "expected_present": true
+}

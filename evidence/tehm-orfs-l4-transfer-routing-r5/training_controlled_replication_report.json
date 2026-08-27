@@ -1,0 +1,348 @@
+{
+  "authority_note": "L3 replicated causal evidence is evaluation-only; capability and rule promotion still require their independent authority gates",
+  "campaign_id": "orfs-add-designs-v0.1",
+  "canonical_memory_mutation": "none",
+  "derived_counts": {
+    "causal_edges": 14,
+    "causal_nodes": 16,
+    "causal_paths": 1,
+    "transitions": 4
+  },
+  "derived_db": "/tmp/tehm-orfs/routing-semantic-train-r5/controlled/tehm.sqlite",
+  "derived_db_sha256": "2488baa876285c1a25cec1210e38feec5591c4da7a67c0cb3a1ec0f879d9b178",
+  "fragments": [
+    {
+      "campaign_id": "orfs-add-designs-v0.1",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_0edd59dfbe4f2fc6",
+        "causal_edge_06ccae90e0170633",
+        "causal_edge_15f048e03bc59e5b"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_82eda13846beb6a8",
+      "learner_eligible": true,
+      "lineage_id": "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+      "mechanism_family": "ROUTING_CAPACITY_RECOVERY",
+      "node_ids": [
+        "causal_node_f6d31ed6a3dcd52a",
+        "causal_node_9adac4fc7d023a3a",
+        "causal_node_fda3753da24ce3fe",
+        "causal_node_1d07970d88e5e83b"
+      ],
+      "transition_id": "transition_c3c58fea56a5b11f"
+    },
+    {
+      "campaign_id": "orfs-add-designs-v0.1",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_eed37ba868006e3d",
+        "causal_edge_bf989bf9c3dc181d",
+        "causal_edge_7f20dbc070814dbb"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_82eda13846beb6a8",
+      "learner_eligible": true,
+      "lineage_id": "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+      "mechanism_family": "ROUTING_CAPACITY_RECOVERY",
+      "node_ids": [
+        "causal_node_58f21436dc5f141c",
+        "causal_node_eefd788c84a10a33",
+        "causal_node_0d0a13d6da563a42",
+        "causal_node_d3809780d7b631c3"
+      ],
+      "transition_id": "transition_96b7ae835fa770c4"
+    },
+    {
+      "campaign_id": "orfs-add-designs-v0.1",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_40d74134fb817eb6",
+        "causal_edge_8ec858f9717e4935",
+        "causal_edge_393515247bb3ba3f"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_08de35a5fdbf9b5b",
+      "learner_eligible": true,
+      "lineage_id": "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0",
+      "mechanism_family": "ROUTING_CAPACITY_RECOVERY",
+      "node_ids": [
+        "causal_node_6ddf1492b1d6cf6d",
+        "causal_node_f4f126994d9c44e4",
+        "causal_node_da5066e4e615ed73",
+        "causal_node_e887c22255a5cfae"
+      ],
+      "transition_id": "transition_363afa2496231927"
+    },
+    {
+      "campaign_id": "orfs-add-designs-v0.1",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_795a23d0e9831685",
+        "causal_edge_b3d28e859ca41889",
+        "causal_edge_589dc95377fbace5"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_08de35a5fdbf9b5b",
+      "learner_eligible": true,
+      "lineage_id": "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0",
+      "mechanism_family": "ROUTING_CAPACITY_RECOVERY",
+      "node_ids": [
+        "causal_node_228eb180bbb98fbc",
+        "causal_node_11746f644c086949",
+        "causal_node_b5db4d3e4e856228",
+        "causal_node_3257ed3339b3acc1"
+      ],
+      "transition_id": "transition_07200f8f36e0b77a"
+    }
+  ],
+  "pair_count": 2,
+  "pairs": [
+    {
+      "control_outcome": "FAIL",
+      "control_transition_id": "transition_c3c58fea56a5b11f",
+      "intervention": {
+        "causal_edge_id": "causal_edge_5089ddda014567fa",
+        "changed_action_digest": "sha1:3b2d7710e583959e6e2720de6cbc38ebf71aeb23",
+        "control_transition_id": "transition_c3c58fea56a5b11f",
+        "evidence_level": "L2_CONTROLLED_INTERVENTION",
+        "lineage_id": "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+        "matched_context_digest": "ctx_82eda13846beb6a8",
+        "oracle_equivalence": {
+          "campaign_id": "orfs-add-designs-v0.1",
+          "same_learner_campaign": true,
+          "same_oracle_type": true,
+          "same_scope": true,
+          "same_toolchain": true
+        },
+        "outcome_delta": {
+          "control": {
+            "outcome": "FAIL",
+            "verdict": "FAIL"
+          },
+          "treatment": {
+            "outcome": "PASS",
+            "verdict": "PASS"
+          }
+        },
+        "pair_id": "intervention_pair_25ee1f7ee9393a24",
+        "target_scope": "flow.signoff",
+        "treatment_transition_id": "transition_96b7ae835fa770c4",
+        "validity_status": "VALID_CONTROLLED_PAIR"
+      },
+      "lineage_id": "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+      "treatment_outcome": "PASS",
+      "treatment_transition_id": "transition_96b7ae835fa770c4"
+    },
+    {
+      "control_outcome": "FAIL",
+      "control_transition_id": "transition_363afa2496231927",
+      "intervention": {
+        "causal_edge_id": "causal_edge_3f966fdf29ace912",
+        "changed_action_digest": "sha1:3b2d7710e583959e6e2720de6cbc38ebf71aeb23",
+        "control_transition_id": "transition_363afa2496231927",
+        "evidence_level": "L2_CONTROLLED_INTERVENTION",
+        "lineage_id": "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0",
+        "matched_context_digest": "ctx_08de35a5fdbf9b5b",
+        "oracle_equivalence": {
+          "campaign_id": "orfs-add-designs-v0.1",
+          "same_learner_campaign": true,
+          "same_oracle_type": true,
+          "same_scope": true,
+          "same_toolchain": true
+        },
+        "outcome_delta": {
+          "control": {
+            "outcome": "FAIL",
+            "verdict": "FAIL"
+          },
+          "treatment": {
+            "outcome": "PASS",
+            "verdict": "PASS"
+          }
+        },
+        "pair_id": "intervention_pair_9c868a59c9eeb3cd",
+        "target_scope": "flow.signoff",
+        "treatment_transition_id": "transition_07200f8f36e0b77a",
+        "validity_status": "VALID_CONTROLLED_PAIR"
+      },
+      "lineage_id": "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0",
+      "treatment_outcome": "PASS",
+      "treatment_transition_id": "transition_07200f8f36e0b77a"
+    }
+  ],
+  "path": {
+    "compatibility_profile": null,
+    "edge_ids": [
+      "causal_edge_795a23d0e9831685",
+      "causal_edge_b3d28e859ca41889",
+      "causal_edge_589dc95377fbace5",
+      "causal_edge_40d74134fb817eb6",
+      "causal_edge_8ec858f9717e4935",
+      "causal_edge_393515247bb3ba3f",
+      "causal_edge_eed37ba868006e3d",
+      "causal_edge_bf989bf9c3dc181d",
+      "causal_edge_7f20dbc070814dbb",
+      "causal_edge_0edd59dfbe4f2fc6",
+      "causal_edge_06ccae90e0170633",
+      "causal_edge_15f048e03bc59e5b"
+    ],
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "mechanism_family": "ROUTING_CAPACITY_RECOVERY",
+    "node_ids": [
+      "causal_node_228eb180bbb98fbc",
+      "causal_node_11746f644c086949",
+      "causal_node_b5db4d3e4e856228",
+      "causal_node_3257ed3339b3acc1",
+      "causal_node_6ddf1492b1d6cf6d",
+      "causal_node_f4f126994d9c44e4",
+      "causal_node_da5066e4e615ed73",
+      "causal_node_e887c22255a5cfae",
+      "causal_node_58f21436dc5f141c",
+      "causal_node_eefd788c84a10a33",
+      "causal_node_0d0a13d6da563a42",
+      "causal_node_d3809780d7b631c3",
+      "causal_node_f6d31ed6a3dcd52a",
+      "causal_node_9adac4fc7d023a3a",
+      "causal_node_fda3753da24ce3fe",
+      "causal_node_1d07970d88e5e83b"
+    ],
+    "path_digest": "sha1:54ba6f410c35d0b272b4845195391fc73f77ef65",
+    "path_id": "causal_path_54ba6f410c35d0b2",
+    "source_transition_ids": [
+      "transition_07200f8f36e0b77a",
+      "transition_363afa2496231927",
+      "transition_96b7ae835fa770c4",
+      "transition_c3c58fea56a5b11f"
+    ],
+    "status": "shadow",
+    "support": {
+      "action_digests": [
+        "sha1:1f81279552f1821f4d892c1352924e7dc783af6d",
+        "sha1:3b2d7710e583959e6e2720de6cbc38ebf71aeb23"
+      ],
+      "evidence_levels": [
+        "L1_EXECUTED_INTERVENTION"
+      ],
+      "failure_graph_digests": [
+        "ctx_08de35a5fdbf9b5b",
+        "ctx_82eda13846beb6a8"
+      ],
+      "fragment_count": 4,
+      "mechanism_signatures": [
+        {
+          "action_domain": "flow.BASELINE_CONTROL",
+          "compatibility_profile": null,
+          "failure_graph_digest": "ctx_08de35a5fdbf9b5b",
+          "guard": null,
+          "mechanism_family": "ROUTING_CAPACITY_RECOVERY",
+          "module": null,
+          "source_state": null,
+          "target_state": null,
+          "transformation_family": "ROUTING_CAPACITY_RECOVERY"
+        },
+        {
+          "action_domain": "flow.BASELINE_CONTROL",
+          "compatibility_profile": null,
+          "failure_graph_digest": "ctx_82eda13846beb6a8",
+          "guard": null,
+          "mechanism_family": "ROUTING_CAPACITY_RECOVERY",
+          "module": null,
+          "source_state": null,
+          "target_state": null,
+          "transformation_family": "ROUTING_CAPACITY_RECOVERY"
+        },
+        {
+          "action_domain": "flow.CONFIG_DELTA",
+          "compatibility_profile": null,
+          "failure_graph_digest": "ctx_08de35a5fdbf9b5b",
+          "guard": null,
+          "mechanism_family": "ROUTING_CAPACITY_RECOVERY",
+          "module": null,
+          "source_state": null,
+          "target_state": null,
+          "transformation_family": "ROUTING_CAPACITY_RECOVERY"
+        },
+        {
+          "action_domain": "flow.CONFIG_DELTA",
+          "compatibility_profile": null,
+          "failure_graph_digest": "ctx_82eda13846beb6a8",
+          "guard": null,
+          "mechanism_family": "ROUTING_CAPACITY_RECOVERY",
+          "module": null,
+          "source_state": null,
+          "target_state": null,
+          "transformation_family": "ROUTING_CAPACITY_RECOVERY"
+        }
+      ],
+      "path_order_version": "causal-path-order-v1",
+      "primary_effect_keys": [
+        "effect_10a68dfbf690e52c",
+        "effect_10d356d364b08786"
+      ],
+      "replication_campaign": "orfs-add-designs-v0.1",
+      "source_campaigns": [
+        "orfs-add-designs-v0.1"
+      ],
+      "unique_designs": [
+        "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+        "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+      ],
+      "unique_lineages": [
+        "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+        "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+      ],
+      "unique_runs": [
+        "RUN_2026-08-27_11-43-51_23_65c6",
+        "RUN_2026-08-27_11-47-07_23_4aa7"
+      ]
+    }
+  },
+  "promotion_eligible": false,
+  "replication": {
+    "eligible": true,
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "path_id": "causal_path_54ba6f410c35d0b2",
+    "reason": "replicated_effect_supported",
+    "unique_designs": [
+      "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+      "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+    ],
+    "unique_lineages": [
+      "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+      "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+    ],
+    "unique_runs": [
+      "RUN_2026-08-27_11-43-51_23_65c6",
+      "RUN_2026-08-27_11-47-07_23_4aa7"
+    ]
+  },
+  "rule_evidence": {
+    "eligible": true,
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "learner_eligible": true,
+    "path_id": "causal_path_54ba6f410c35d0b2",
+    "promotion_eligible": false,
+    "reason": "causal_rule_evidence_eligible",
+    "required_level": "L2_CONTROLLED_INTERVENTION",
+    "source_transition_ids": [
+      "transition_07200f8f36e0b77a",
+      "transition_363afa2496231927",
+      "transition_96b7ae835fa770c4",
+      "transition_c3c58fea56a5b11f"
+    ],
+    "unique_lineages": [
+      "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+      "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+    ]
+  },
+  "schema_version": "tehm-v4",
+  "source_staging_db": "/tmp/tehm-orfs/routing-semantic-train-r5/staging/tehm.sqlite",
+  "source_staging_sha256": "b02dedfe989b26fd42f41cb0f8b3edee86ea20fc483ccf42dda153e4a4a8a2b5",
+  "split": "training",
+  "unique_lineages": [
+    "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+    "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+  ],
+  "version": "orfs-controlled-replication-v1"
+}

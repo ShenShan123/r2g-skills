@@ -96,6 +96,50 @@ def test_semantic_oracle_distinguishes_complete_physical_pair(tmp_path):
     assert record.verification["semantic_oracle"]["after"]["verdict"] == "PASS"
 
 
+def test_semantic_presence_oracle_binds_intervention_to_config(tmp_path):
+    """A routing intervention is a source-bound semantic fail-to-pass witness."""
+    before = _project(tmp_path, "routing_before", util=50, rc=0,
+                      route={"status": "clean"}, drc={"status": "clean"},
+                      ppa={"summary": {"timing": {"setup_wns": 0.1}}})
+    after = _project(tmp_path, "routing_after", util=50, rc=0,
+                     route={"status": "clean"}, drc={"status": "clean"},
+                     ppa={"summary": {"timing": {"setup_wns": 0.1}}})
+    (after / "constraints" / "config.mk").write_text(
+        (after / "constraints" / "config.mk").read_text()
+        + "export ROUTING_LAYER_ADJUSTMENT = 0.05\n")
+    spec = {
+        "version": "orfs-semantic-oracle-v1",
+        "kind": "config_presence",
+        "config_key": "ROUTING_LAYER_ADJUSTMENT",
+        "expected_present": True,
+    }
+    record = build_orfs_pair_record(
+        before, after, lineage_id="orfs:routing-presence",
+        config_edits={"ROUTING_LAYER_ADJUSTMENT": "0.05"},
+        semantic_oracle=spec)
+    assert record.observation_delta["original_failure"] == "REMOVED"
+    assert record.verification["semantic_oracle"]["before"]["verdict"] == "FAIL"
+    assert record.verification["semantic_oracle"]["after"]["verdict"] == "PASS"
+
+
+def test_semantic_presence_oracle_rejects_non_boolean_contract(tmp_path):
+    before = _project(tmp_path, "presence_before", util=50, rc=0,
+                      route={"status": "clean"}, drc={"status": "clean"},
+                      ppa={"summary": {"timing": {"setup_wns": 0.1}}})
+    after = _project(tmp_path, "presence_after", util=50, rc=0,
+                     route={"status": "clean"}, drc={"status": "clean"},
+                     ppa={"summary": {"timing": {"setup_wns": 0.1}}})
+    with pytest.raises(ValueError, match="expected_present"):
+        build_orfs_pair_record(
+            before, after, lineage_id="orfs:routing-presence",
+            config_edits={}, semantic_oracle={
+                "version": "orfs-semantic-oracle-v1",
+                "kind": "config_presence",
+                "config_key": "ROUTING_LAYER_ADJUSTMENT",
+                "expected_present": "yes",
+            })
+
+
 def test_pair_refuses_missing_production_evidence(tmp_path):
     before = tmp_path / "before"
     after = tmp_path / "after"

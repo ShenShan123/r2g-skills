@@ -28,6 +28,9 @@ def main(argv=None) -> int:
         help="learner split for controlled L2/L3 replication (training only)")
     parser.add_argument("--min-lineages", type=int, default=2)
     parser.add_argument(
+        "--transformation-family", default="DENSITY_RELIEF",
+        help="mechanism family bound to every controlled pair")
+    parser.add_argument(
         "--semantic-oracle", type=Path, default=None,
         help=("source-frozen semantic oracle JSON applied to every pair; "
               "physical full-oracle checks remain mandatory"))
@@ -36,6 +39,7 @@ def main(argv=None) -> int:
     pairs = [
         {"before_project": before, "after_project": after,
          "lineage_id": lineage, "config_edits": json.loads(config_json),
+         "transformation_family": args.transformation_family,
          **({"semantic_oracle": semantic_oracle}
             if semantic_oracle is not None else {})}
         for before, after, lineage, config_json in args.pair

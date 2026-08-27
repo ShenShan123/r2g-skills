@@ -1710,6 +1710,28 @@ batch replay，ledger receipt 可重放且 source DB 不变。density utility �
 `promotion_attempted=false`、canonical memory 和 production runtime 均未改变。
 详见 [`evidence/tehm-orfs-l4-transfer-r4/transfer_report.json`](../evidence/tehm-orfs-l4-transfer-r4/transfer_report.json)。
 
+### 2026-08-27 routing semantic fail→pass 与跨 lineage L4（evaluation-only）
+
+`orfs-semantic-oracle-v1` 新增 source-bound `config_presence` 合约，直接从
+materialized `constraints/config.mk` 判断 `ROUTING_LAYER_ADJUSTMENT` 是否存在；
+因此 default before 的 semantic verdict 为 `FAIL`，routing after 为 `PASS`，而不是
+接受调用方传入的布尔值。该 receipt 绑定配置字节摘要、观测值和 pair digest，物理
+14-check full oracle 仍独立强制。
+
+复用完整 ORFS 的 `selector_crc16`、`selector_uart16` training arms 构造两条
+`ROUTING_CAPACITY_RECOVERY` lineage，controlled path
+`causal_path_54ba6f410c35d0b2` 达到 `L3_REPLICATED_EFFECT`。独立 held-out
+`selector_arbiter8` 以 `split=heldout`、`learner_eligible=false` 捕获；两侧 14 项
+physical oracle 完整、semantic `FAIL→PASS`、utility=`NEUTRAL`。batch transfer
+replay 返回 `L4_TRANSFER_SUPPORTED_MECHANISM` 和 `batch_status=PASS`，isolated
+ledger receipt replay verified，source DB 未改变。机器可读证据见
+[`evidence/tehm-orfs-l4-transfer-routing-r5/transfer_report.json`](../evidence/tehm-orfs-l4-transfer-routing-r5/transfer_report.json)。
+
+这只证明 routing 机制的跨 lineage 可迁移性，不是 authority 或收益结论：
+`promotion_attempted=false`，canonical memory、learner 和 production runtime 均未
+写入；rollback、registry、obligation、cross-lineage TE、harmful-rate、conformal
+coverage 仍需独立 gate receipt，Parametric 仍为 shadow-only。
+
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 
 - 新增独立物理 lineage `orfs-heldout-v5:sky130hs:gcd:base3`，位于

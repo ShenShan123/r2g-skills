@@ -2823,6 +2823,34 @@ cohort 不能贡献 non-harmful support，也不能填充六项 authority gate�
 再独立补齐 rollback、registry、cross-lineage TE 与 conformal coverage，最后才允许
 authority 复核；任何 L4 PASS 仍只能停留在 shadow/ledger。
 
+### 2026-08-27 ORFS routing semantic fail→pass r5（L4 跨 lineage 扩展，仍为 shadow）
+
+为避免把“routing knob 已写入配置”误当成调用方声明，本轮扩展
+`orfs-semantic-oracle-v1` 的 source-bound 合约，新增
+`config_presence(ROUTING_LAYER_ADJUSTMENT, expected_present=true)`。evaluator 直接
+读取 materialized `constraints/config.mk`：default before 的 key 缺失为 semantic
+`FAIL`，routing after 的 key 存在为 `PASS`；缺失 key、空值和 malformed 合约均
+fail-closed。语义 receipt 绑定 config SHA、观测值和 pair digest，物理 ORFS 14 项
+仍由独立 full-oracle 保持硬门。
+
+在 exact packaged ORFS toolchain 上，复用已冻结且 physical-complete 的
+`selector_crc16` 与 `selector_uart16` routing arms，构造两条 source-disjoint training
+lineage，并以显式 no-op control 重放，得到
+`ROUTING_CAPACITY_RECOVERY` 的 `L3_REPLICATED_EFFECT` path
+`causal_path_54ba6f410c35d0b2`。独立 held-out `selector_arbiter8` pair 只进入
+`split=heldout`、`learner_eligible=false` 的隔离 staging；两侧 exact 14-check
+physical oracle 均完整，semantic witness 为 `FAIL → PASS`，utility=`NEUTRAL`。
+`evaluate_causal_transfer_batch.py --require-full-oracle` 返回
+`batch_status=PASS`、`L4_TRANSFER_SUPPORTED_MECHANISM`，机制/效果/lineage binding
+与 isolated ledger replay 均通过，且 source DB hash 未变化。机器可读证据见
+`evidence/tehm-orfs-l4-transfer-routing-r5/`。
+
+该结果只建立了 routing mechanism 的真实跨 lineage transfer evidence，不是
+authority 或 usefulness 结论：没有把 held-out 写入 learner/canonical/runtime，
+`promotion_attempted=false` 仍保持。六项 gate（尤其 rollback、registry、
+obligation coverage、cross-lineage TE、harmful-rate、conformal coverage）仍需由
+独立 authority receipt 逐项重放；Parametric 继续 shadow-only。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）

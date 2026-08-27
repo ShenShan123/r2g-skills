@@ -1,0 +1,208 @@
+{
+  "canonical_memory_mutation": "none",
+  "canonical_snapshots": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "4c826929a4930ed7e6743ab126c62cc5485adff222aba6368aa11e9315f40607",
+      "transitions": 9
+    },
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transitions": null
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "sky130hs:selector_arbiter8:0:ROUTING_CAPACITY_RECOVERY:default->0.05",
+      "declared_lineage_id": "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0",
+      "eligible": true,
+      "evidence_level": "L4_TRANSFER_SUPPORTED_MECHANISM",
+      "lineage_binding": true,
+      "reason": "transfer_supported_mechanism",
+      "receipt": {
+        "details": [
+          {
+            "design_id": "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0",
+            "effect_match": true,
+            "full_oracle_complete": true,
+            "full_oracle_required": true,
+            "lineage_id": "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0",
+            "mechanism_match": {
+              "eligible": true,
+              "evidence_weight": 0.875,
+              "family_match": true,
+              "matched_fields": [
+                "action_domain",
+                "transformation_family"
+              ],
+              "mechanism_match": true,
+              "mismatched_fields": [],
+              "missing_fields": [],
+              "profile_match": true,
+              "reason": "causal_mechanism_match",
+              "score": 0.875
+            },
+            "transition_id": "transition_244da7ab1e4c4bac",
+            "verifier_pass": true
+          }
+        ],
+        "eligible": true,
+        "evidence_level": "L4_TRANSFER_SUPPORTED_MECHANISM",
+        "matched_transition_ids": [
+          "transition_244da7ab1e4c4bac"
+        ],
+        "mismatched_transition_ids": [],
+        "path_id": "causal_path_54ba6f410c35d0b2",
+        "promotion_eligible": false,
+        "reason": "transfer_supported_mechanism",
+        "training_campaign_id": "orfs-add-designs-v0.1",
+        "training_designs": [
+          "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+          "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+        ],
+        "training_lineages": [
+          "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+          "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+        ],
+        "training_transition_ids": [
+          "transition_07200f8f36e0b77a",
+          "transition_363afa2496231927",
+          "transition_96b7ae835fa770c4",
+          "transition_c3c58fea56a5b11f"
+        ],
+        "transfer_campaign_id": "orfs-routing-transfer-r5",
+        "transfer_designs": [
+          "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0"
+        ],
+        "transfer_lineages": [
+          "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0"
+        ],
+        "transfer_transition_ids": [
+          "transition_244da7ab1e4c4bac"
+        ]
+      },
+      "transfer_lineages": [
+        "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0"
+      ],
+      "transition_ids": [
+        "transition_244da7ab1e4c4bac"
+      ]
+    }
+  ],
+  "database": "/tmp/tehm-orfs/routing-semantic-train-r5/combined/staging/tehm.sqlite",
+  "database_sha256": "1c1b924f61cf7666e5aa4c7b637a0d3a503da4da090992d04318bab42a26a6b4",
+  "database_unchanged": true,
+  "isolated_ledger_only": true,
+  "ledger_db": "/tmp/tehm-orfs/routing-semantic-train-r5/combined/transfer_ledger.sqlite",
+  "ledger_db_sha256": "ea66246eb7d2e4aa3af3700d303aa346685b36f99608f34938e6e5bb802464af",
+  "ledger_receipt_ids": [
+    "causal_transfer_1a7ecbdba8119b1717c0"
+  ],
+  "ledger_receipts": [
+    {
+      "case_id": "sky130hs:selector_arbiter8:0:ROUTING_CAPACITY_RECOVERY:default->0.05",
+      "declared_lineage_id": "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0",
+      "eligible": true,
+      "evidence_level": "L4_TRANSFER_SUPPORTED_MECHANISM",
+      "ledger_eligible": true,
+      "ledger_verified": true,
+      "lineage_binding": true,
+      "reason": "transfer_supported_mechanism",
+      "receipt": {
+        "details": [
+          {
+            "design_id": "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0",
+            "effect_match": true,
+            "full_oracle_complete": true,
+            "full_oracle_required": true,
+            "lineage_id": "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0",
+            "mechanism_match": {
+              "eligible": true,
+              "evidence_weight": 0.875,
+              "family_match": true,
+              "matched_fields": [
+                "action_domain",
+                "transformation_family"
+              ],
+              "mechanism_match": true,
+              "mismatched_fields": [],
+              "missing_fields": [],
+              "profile_match": true,
+              "reason": "causal_mechanism_match",
+              "score": 0.875
+            },
+            "transition_id": "transition_244da7ab1e4c4bac",
+            "verifier_pass": true
+          }
+        ],
+        "eligible": true,
+        "evidence_level": "L4_TRANSFER_SUPPORTED_MECHANISM",
+        "matched_transition_ids": [
+          "transition_244da7ab1e4c4bac"
+        ],
+        "mismatched_transition_ids": [],
+        "path_id": "causal_path_54ba6f410c35d0b2",
+        "promotion_eligible": false,
+        "reason": "transfer_supported_mechanism",
+        "training_campaign_id": "orfs-add-designs-v0.1",
+        "training_designs": [
+          "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+          "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+        ],
+        "training_lineages": [
+          "tehm-current-crc-routing-r5:sky130hs:selector_crc16:base0",
+          "tehm-current-uart-routing-r5:sky130hs:selector_uart16:base0"
+        ],
+        "training_transition_ids": [
+          "transition_07200f8f36e0b77a",
+          "transition_363afa2496231927",
+          "transition_96b7ae835fa770c4",
+          "transition_c3c58fea56a5b11f"
+        ],
+        "transfer_campaign_id": "orfs-routing-transfer-r5",
+        "transfer_designs": [
+          "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0"
+        ],
+        "transfer_lineages": [
+          "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0"
+        ],
+        "transfer_transition_ids": [
+          "transition_244da7ab1e4c4bac"
+        ]
+      },
+      "transfer_lineages": [
+        "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0"
+      ],
+      "transfer_receipt_id": "causal_transfer_1a7ecbdba8119b1717c0",
+      "transition_ids": [
+        "transition_244da7ab1e4c4bac"
+      ]
+    }
+  ],
+  "manifest": "/tmp/tehm-orfs/routing-semantic-train-r5/combined/transfer_manifest.json",
+  "min_transfer_lineages": 1,
+  "path_id": "causal_path_54ba6f410c35d0b2",
+  "promotion_attempted": false,
+  "promotion_eligible": false,
+  "read_only_source": true,
+  "require_full_oracle": true,
+  "summary": {
+    "batch_status": "PASS",
+    "case_count": 1,
+    "eligible_count": 1,
+    "failed_count": 0,
+    "independent_lineage_count": 1,
+    "reasons": []
+  },
+  "training_campaign_id": "orfs-add-designs-v0.1",
+  "transfer_campaign_id": "orfs-routing-transfer-r5",
+  "transfer_lineages": [
+    "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0"
+  ],
+  "version": "causal-transfer-batch-v1"
+}

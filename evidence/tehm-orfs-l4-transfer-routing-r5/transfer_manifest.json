@@ -1,0 +1,12 @@
+{
+  "cases": [
+    {
+      "case_id": "sky130hs:selector_arbiter8:0:ROUTING_CAPACITY_RECOVERY:default->0.05",
+      "lineage_id": "tehm-heldout-arbiter-routing-r1:sky130hs:selector_arbiter8:base0",
+      "transition_ids": [
+        "transition_244da7ab1e4c4bac"
+      ]
+    }
+  ],
+  "version": "causal-transfer-batch-v1"
+}
