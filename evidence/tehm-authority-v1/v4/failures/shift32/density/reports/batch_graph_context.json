@@ -1,0 +1,138 @@
+{
+  "dataset_tier": "strict_clean",
+  "def_sha256": "7ec243facd3a16944576f457cce02bacc72577e10d71c158acbdd0ae4c5e1c9a",
+  "design": "shift32",
+  "digest": "150d410abe3eab2cda35ece2fc05f9ceaeae204f6e3074a56a7227d85932ed2f",
+  "extractor_version": "def-graph-feature-context-v0.2",
+  "feature_digests": {
+    "edges_gate_pin": "f884721ae99c81b908ec9fd6e45750b78eb8a9740d5d6cd05f2738ca534fd710",
+    "edges_iopin_net": "7adeeca6e1104c55adb06293501d694230044259aa5024be14aabb9c6216fed7",
+    "edges_pin_net": "cd2dec692c10ea4181f376403bb0cabdfccd3e5e5d9c501ce43cafd930c181e4",
+    "features_stats": "10d85437d281d949f9dc385b6e5e8b58228b9e33c263e479b41ba615bbb71cc4",
+    "metadata": "cd2950590e48b7e0a3405ce4c69e916960b8569bca9a652986935f2f67a6f693",
+    "nodes_gate": "20aa9373692c16e0a1a8b2139fd81b2a64dfe53fc358ae2c8accf5a608caa136",
+    "nodes_iopin": "7a84de806c33d8d1aaad7a427a3267c8e7514441647941e28c974c3c8f48262d",
+    "nodes_net": "7ca00abd9403c73cbeb5dc9300024bdc25cecadc1bc7b1e912b1ef90442057ef",
+    "nodes_pin": "2c1b08ddb3eb6fbeb004c72311abebea3217cabdefddf83b4af830eff2aaa97a",
+    "signoff_gate": "cf33ab5d91773b4698335782e788451404cfac2d56a0dec33b673b86e6fdbb5f"
+  },
+  "feature_health": {
+    "edges_gate_pin": {
+      "status": "ok"
+    },
+    "edges_iopin_net": {
+      "status": "ok"
+    },
+    "edges_pin_net": {
+      "status": "ok"
+    },
+    "metadata": {
+      "status": "ok"
+    },
+    "nodes_gate": {
+      "status": "ok"
+    },
+    "nodes_iopin": {
+      "status": "ok"
+    },
+    "nodes_net": {
+      "status": "ok"
+    },
+    "nodes_pin": {
+      "status": "ok"
+    }
+  },
+  "graph_features": {
+    "ABC_AREA": 1.0,
+    "CORE_UTILIZATION": 40.0,
+    "C_total": 804.085131,
+    "PLACE_DENSITY": "Default",
+    "V_nom": 1.8,
+    "avg_fanout": 1.889240506329114,
+    "core_area": 6213.380625000001,
+    "dbu_unit": 1000.0,
+    "die_height": 78.825,
+    "die_width": 78.825,
+    "freq_Hz": 454545455.0,
+    "num_cells": 711.0,
+    "num_ios": 68.0,
+    "num_nets": 316.0,
+    "tracks_detail": "li1:377|met1:426|met2:328|met3:212|met4:164|met5:46",
+    "tracks_per_layer": 258.833
+  },
+  "platform": "sky130hs",
+  "signoff_health": {
+    "blockers": [],
+    "caveats": [],
+    "def_overridden": false,
+    "mode": "strict",
+    "status": "pass"
+  },
+  "source_refs": [
+    {
+      "kind": "def",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/backend/RUN_2026-08-24_22-26-06_15866_5153/final/6_final.def",
+      "sha256": "7ec243facd3a16944576f457cce02bacc72577e10d71c158acbdd0ae4c5e1c9a"
+    },
+    {
+      "kind": "features_stats",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/reports/features_stats.json",
+      "sha256": "10d85437d281d949f9dc385b6e5e8b58228b9e33c263e479b41ba615bbb71cc4"
+    },
+    {
+      "kind": "signoff_gate",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/reports/signoff_gate.json",
+      "sha256": "cf33ab5d91773b4698335782e788451404cfac2d56a0dec33b673b86e6fdbb5f"
+    },
+    {
+      "kind": "metadata",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/features/metadata.csv",
+      "sha256": "cd2950590e48b7e0a3405ce4c69e916960b8569bca9a652986935f2f67a6f693"
+    },
+    {
+      "kind": "nodes_gate",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/features/nodes_gate.csv",
+      "sha256": "20aa9373692c16e0a1a8b2139fd81b2a64dfe53fc358ae2c8accf5a608caa136"
+    },
+    {
+      "kind": "nodes_net",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/features/nodes_net.csv",
+      "sha256": "7ca00abd9403c73cbeb5dc9300024bdc25cecadc1bc7b1e912b1ef90442057ef"
+    },
+    {
+      "kind": "nodes_iopin",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/features/nodes_iopin.csv",
+      "sha256": "7a84de806c33d8d1aaad7a427a3267c8e7514441647941e28c974c3c8f48262d"
+    },
+    {
+      "kind": "nodes_pin",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/features/nodes_pin.csv",
+      "sha256": "2c1b08ddb3eb6fbeb004c72311abebea3217cabdefddf83b4af830eff2aaa97a"
+    },
+    {
+      "kind": "edges_gate_pin",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/features/edges_gate_pin.csv",
+      "sha256": "f884721ae99c81b908ec9fd6e45750b78eb8a9740d5d6cd05f2738ca534fd710"
+    },
+    {
+      "kind": "edges_pin_net",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/features/edges_pin_net.csv",
+      "sha256": "cd2dec692c10ea4181f376403bb0cabdfccd3e5e5d9c501ce43cafd930c181e4"
+    },
+    {
+      "kind": "edges_iopin_net",
+      "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/features/edges_iopin_net.csv",
+      "sha256": "7adeeca6e1104c55adb06293501d694230044259aa5024be14aabb9c6216fed7"
+    }
+  ],
+  "status": "complete",
+  "topology_rows": {
+    "edges_gate_pin": 845,
+    "edges_iopin_net": 68,
+    "edges_pin_net": 845,
+    "nodes_gate": 711,
+    "nodes_iopin": 68,
+    "nodes_net": 316,
+    "nodes_pin": 913
+  }
+}

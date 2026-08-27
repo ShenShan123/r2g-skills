@@ -1,0 +1,96 @@
+{
+  "abstained_count": 6,
+  "canonical_memory_mutation": "none",
+  "contract_digest": "e912789aa5152c3dc74f4c670bb9cf993a14ed537bae106763aa8208ba787b36",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V1",
+  "observations": "/tmp/tehm-authority-v1/prospective-batch-full/external/observations.jsonl",
+  "observations_sha256": "e0645eccad60e4c6bc8fe64fc0614877ecad8a7a61cca183c035e699fc251bf7",
+  "policy": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-authority-v1/v4/conformal_calibration_report.json",
+  "policy_sha256": "f613be102ba56cb5b7d62624f1e3553365a1a17bfde4fc8b2870d63e3d535c6a",
+  "promotion_eligible": false,
+  "proposed_count": 0,
+  "results": [
+    {
+      "abstain_reasons": [
+        "wns_interval_below_objective",
+        "area_interval_exceeds_budget",
+        "power_interval_exceeds_budget"
+      ],
+      "case_id": "sky130hs:prospect_accum32:heldout:50->40",
+      "lineage_id": "prospective-v1-accum32:sky130hs:prospect_accum32:base0",
+      "nearest_distance": 0.195049,
+      "status": "ABSTAINED",
+      "support": 5,
+      "unique_graph_contexts": 8
+    },
+    {
+      "abstain_reasons": [
+        "wns_interval_below_objective",
+        "area_interval_exceeds_budget",
+        "power_interval_exceeds_budget"
+      ],
+      "case_id": "sky130hs:prospect_alu32:calibration:50->40",
+      "lineage_id": "prospective-v1-alu32:sky130hs:prospect_alu32:base0",
+      "nearest_distance": 0.000995,
+      "status": "ABSTAINED",
+      "support": 5,
+      "unique_graph_contexts": 8
+    },
+    {
+      "abstain_reasons": [
+        "wns_interval_below_objective",
+        "area_interval_exceeds_budget",
+        "power_interval_exceeds_budget"
+      ],
+      "case_id": "sky130hs:prospect_counter32:calibration:50->40",
+      "lineage_id": "prospective-v1-counter32:sky130hs:prospect_counter32:base0",
+      "nearest_distance": 0.197583,
+      "status": "ABSTAINED",
+      "support": 5,
+      "unique_graph_contexts": 8
+    },
+    {
+      "abstain_reasons": [
+        "wns_interval_below_objective",
+        "area_interval_exceeds_budget",
+        "power_interval_exceeds_budget"
+      ],
+      "case_id": "sky130hs:prospect_ctrl32:heldout:50->40",
+      "lineage_id": "prospective-v1-ctrl32:sky130hs:prospect_ctrl32:base0",
+      "nearest_distance": 0.196773,
+      "status": "ABSTAINED",
+      "support": 5,
+      "unique_graph_contexts": 8
+    },
+    {
+      "abstain_reasons": [
+        "wns_interval_below_objective",
+        "area_interval_exceeds_budget",
+        "power_interval_exceeds_budget"
+      ],
+      "case_id": "sky130hs:prospect_mux32:heldout:50->40",
+      "lineage_id": "prospective-v1-mux32:sky130hs:prospect_mux32:base0",
+      "nearest_distance": 0.217244,
+      "status": "ABSTAINED",
+      "support": 5,
+      "unique_graph_contexts": 8
+    },
+    {
+      "abstain_reasons": [
+        "wns_interval_below_objective",
+        "area_interval_exceeds_budget",
+        "power_interval_exceeds_budget"
+      ],
+      "case_id": "sky130hs:prospect_parity32:heldout:50->40",
+      "lineage_id": "prospective-v1-parity32:sky130hs:prospect_parity32:base0",
+      "nearest_distance": 0.314674,
+      "status": "ABSTAINED",
+      "support": 5,
+      "unique_graph_contexts": 8
+    }
+  ],
+  "sample_count": 6,
+  "staging_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-authority-v1/v4/staging/tehm.sqlite",
+  "status": "PROPOSAL_ONLY_REPLAY",
+  "version": "timing-relief-budgeted-v1-selector-replay-v1"
+}

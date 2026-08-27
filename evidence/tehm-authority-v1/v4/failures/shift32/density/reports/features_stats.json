@@ -1,0 +1,130 @@
+{
+ "design": "shift32",
+ "platform": "sky130hs",
+ "features": {
+  "metadata": {
+   "status": "ok",
+   "rows": 1,
+   "num_cells": 711.0,
+   "num_nets": 316.0,
+   "num_ios": 68.0,
+   "avg_fanout": 1.889240506329114,
+   "C_total": 804.085131
+  },
+  "nodes_gate": {
+   "status": "ok",
+   "rows": 711,
+   "cell_area": {
+    "min": 0.0,
+    "max": 31.968,
+    "mean": 4.732253164556962,
+    "p50": 0.0,
+    "p90": 12.7872,
+    "p95": 17.5824,
+    "p99": 27.1728
+   },
+   "cell_power": {
+    "min": 0.0,
+    "max": 0.37155,
+    "mean": 0.04857104078762307,
+    "p50": 0.0,
+    "p90": 0.13849,
+    "p95": 0.21989,
+    "p99": 0.37155
+   }
+  },
+  "nodes_net": {
+   "status": "ok",
+   "rows": 316,
+   "fanout": {
+    "min": 1.0,
+    "max": 10.0,
+    "mean": 1.889240506329114,
+    "p50": 1.0,
+    "p90": 3.0,
+    "p95": 10.0,
+    "p99": 10.0
+   },
+   "pin_count": {
+    "min": 2.0,
+    "max": 11.0,
+    "mean": 2.8892405063291138,
+    "p50": 2.0,
+    "p90": 4.0,
+    "p95": 11.0,
+    "p99": 11.0
+   },
+   "num_layer": {
+    "min": 2.0,
+    "max": 5.0,
+    "mean": 2.9525316455696204,
+    "p50": 3.0,
+    "p90": 4.0,
+    "p95": 4.0,
+    "p99": 4.0
+   },
+   "hpwl_um": {
+    "min": 1.5,
+    "max": 101.82,
+    "mean": 14.27481012658228,
+    "p50": 7.5,
+    "p90": 35.260000000000005,
+    "p95": 56.86750000000001,
+    "p99": 74.45750000000015
+   }
+  },
+  "nodes_iopin": {
+   "status": "ok",
+   "rows": 68,
+   "nearest_tap_distance_um": {
+    "min": 3.170827,
+    "max": 15.250023,
+    "mean": 9.178662970588235,
+    "p50": 7.641007999999999,
+    "p90": 15.123822,
+    "p95": 15.20585265,
+    "p99": 15.250022999999999
+   }
+  },
+  "nodes_pin": {
+   "status": "ok",
+   "rows": 913,
+   "sum_pin_cap_fF": {
+    "min": 0.043388,
+    "max": 31.61,
+    "mean": 10.059815745892662,
+    "p50": 3.1,
+    "p90": 28.2,
+    "p95": 29.98,
+    "p99": 31.61
+   }
+  },
+  "edges_gate_pin": {
+   "status": "ok",
+   "rows": 845
+  },
+  "edges_pin_net": {
+   "status": "ok",
+   "rows": 845
+  },
+  "edges_iopin_net": {
+   "status": "ok",
+   "rows": 68
+  }
+ },
+ "spef_present": true,
+ "provenance": {
+  "stage": "features",
+  "stage_schema_version": 1,
+  "def_fingerprint": {
+   "path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/backend/RUN_2026-08-24_22-26-06_15866_5153/final/6_final.def",
+   "size": 250815,
+   "mtime": 1787635652,
+   "sha256": "7ec243facd3a16944576f457cce02bacc72577e10d71c158acbdd0ae4c5e1c9a"
+  },
+  "run_dir": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/backend/RUN_2026-08-24_22-26-06_15866_5153",
+  "run_tag": "RUN_2026-08-24_22-26-06_15866_5153",
+  "flow_variant": "sky130hs_shift32_density_0",
+  "platform": "sky130hs"
+ }
+}

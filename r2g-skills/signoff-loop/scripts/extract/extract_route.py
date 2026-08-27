@@ -89,13 +89,27 @@ def _residual_from_report(run_dir: Path) -> int | None:
 
 def _residual_from_log(run_dir: Path) -> int | None:
     """Last DRT 'with N violations' from the detailed-route log (the grind
-    snapshot), used when a killed run left no final 5_route_drc.rpt."""
+    snapshot), used when a killed run left no final 5_route_drc.rpt.
+
+    ``run_orfs.sh`` production collection intentionally keeps a self-contained
+    ``flow.log`` even when the bulky ORFS log tree is not copied.  Treat that
+    collected log as an equally authoritative fallback; otherwise a completed
+    route with a final DRT count of zero is mislabeled ``fail/null`` merely
+    because extraction runs after the live variant has moved on.
+    """
     logs = glob.glob(str(run_dir / "logs" / "**" / "5_2_route.log"), recursive=True)
+    if (run_dir / "flow.log").is_file():
+        logs.append(str(run_dir / "flow.log"))
     if not logs:
         return None
     text = Path(sorted(logs)[-1]).read_text(encoding="utf-8", errors="ignore")
-    matches = re.findall(r"with (\d+) violations", text)
-    return int(matches[-1]) if matches else None
+    matches = re.findall(
+        r"(?:with\s+(\d+)\s+violations|Number of violations\s*=\s*(\d+))",
+        text, flags=re.IGNORECASE)
+    if not matches:
+        return None
+    left, right = matches[-1]
+    return int(left or right)
 
 
 def extract(project_root: Path) -> dict:

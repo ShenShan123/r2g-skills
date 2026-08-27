@@ -42,17 +42,12 @@ def test_route_abort_fixed_in_loop(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(engineer_loop, "_run_fix",
                         lambda e: (calls.append(e.get("check")) or 0))
-    statuses = iter([
-        {"drc": "unknown", "lvs": "unknown", "route": "unknown", "rcx": "unknown", "timing": "unknown"},
-        {"drc": "clean", "lvs": "clean", "route": "clean", "rcx": "clean", "timing": "clean"},
-    ])
-    monkeypatch.setattr(engineer_loop, "_signoff_status", lambda e: next(statuses))
     engineer_loop.process_one(led, led.pending()[0], conn=None)
     # Route fixer first, then the SIGNOFF fixer on the fresh GDS -- a cleared
     # route abort is "the flow completes", NOT the platform's clean state.
     assert calls[0] == "route"                  # loop drove the route fixer
     assert len(calls) == 2                      # ... then real signoff ran
-    assert led.state("crypto_x") == "clean"     # clean only AFTER global signoff cleared
+    assert led.state("crypto_x") == "clean"     # clean only AFTER signoff cleared
 
 
 def test_route_abort_clear_still_requires_signoff(tmp_path, monkeypatch):

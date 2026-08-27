@@ -1,4 +1,0 @@
-interface:
-  display_name: "RTL Expander"
-  short_description: "Build scalable, validated RTL corpora"
-  default_prompt: "Use $rtl-expander to grow and certify a provenance-complete, synthesis-valid DesignFamily corpus."

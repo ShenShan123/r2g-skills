@@ -1,0 +1,22 @@
+{
+  "design": "req_ack_fsm2",
+  "mechanism_family": "HANDSHAKE_COMPLETION",
+  "bug": {
+    "type": "handshake_completion_violation",
+    "description": "WRITE->VERIFY transition fires without waiting for `wr_done` (variant names).",
+    "first_divergence_signal": "wr_done"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "description": "WRITE: next_state = VERIFY;  -->  WRITE: if (wr_ack) next_state = VERIFY;",
+    "module": "req_ack_fsm",
+    "source_state": "WRITE",
+    "target_state": "VERIFY",
+    "add_condition": "wr_ack"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "exit_code": 0,
+  "ran": true,
+  "stderr_tail": "",
+  "stdout_tail": "Honesty gates over /data1/zhangdy/r2g-skills/r2g-skills/signoff-loop/knowledge/knowledge.sqlite:\n  [OK  ] fail_event_parity: fail_runs=390 fail_runs_with_event=390\n  [OK  ] every_fail_has_event: fail_without_event=[]\n  [OK  ] no_event_on_nonfail_run: event_on_nonfail_run=[]\n  [OK  ] ab_trials_nonempty_when_failures: failpartial_runs=486 ab_trials=422\n  [OK  ] failure_events_derivable: stage_mismatch=[]\nALL HONESTY GATES GREEN.\n"
+}

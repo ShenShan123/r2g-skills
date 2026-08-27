@@ -1,0 +1,83 @@
+{
+  "version": "orfs-batch0-rtl-manifest-v1",
+  "platform": "sky130hs",
+  "action_family": "DENSITY_RELIEF",
+  "action": {"CORE_UTILIZATION": "40"},
+  "partition_policy": "source-disjoint-single-clock-v1",
+  "lineage_note": "Batch-0 support extension: promote parameterized uart into support while retaining source-disjoint heldout spi.",
+  "designs": [
+    {
+      "design_id": "gcd",
+      "top": "gcd",
+      "clock_port": "clk",
+      "clock_count": 1,
+      "split": "support",
+      "config_template": "flow/designs/sky130hs/gcd/config.mk",
+      "sdc_template": "flow/designs/sky130hs/gcd/constraint.sdc",
+      "rtl_globs": ["flow/designs/src/gcd/*.v"]
+    },
+    {
+      "design_id": "aes",
+      "top": "aes_cipher_top",
+      "clock_port": "clk",
+      "clock_count": 1,
+      "split": "support",
+      "config_template": "flow/designs/sky130hs/aes/config.mk",
+      "sdc_template": "flow/designs/sky130hs/aes/constraint.sdc",
+      "rtl_globs": ["flow/designs/src/aes/*.v"]
+    },
+    {
+      "design_id": "jpeg",
+      "top": "jpeg_encoder",
+      "clock_port": "clk",
+      "clock_count": 1,
+      "split": "support",
+      "config_template": "flow/designs/sky130hs/jpeg/config.mk",
+      "sdc_template": "flow/designs/sky130hs/jpeg/constraint.sdc",
+      "rtl_globs": ["flow/designs/src/jpeg/*.v"]
+    },
+    {
+      "design_id": "riscv32i",
+      "top": "riscv",
+      "clock_port": "clk",
+      "clock_count": 1,
+      "split": "support",
+      "config_template": "flow/designs/sky130hs/riscv32i/config.mk",
+      "sdc_template": "flow/designs/sky130hs/riscv32i/constraint.sdc",
+      "rtl_globs": ["flow/designs/src/riscv32i/*.v"]
+    },
+    {
+      "design_id": "ibex",
+      "top": "ibex_core",
+      "clock_port": "clk_i",
+      "clock_count": 1,
+      "split": "calibration",
+      "config_template": "flow/designs/sky130hs/ibex/config.mk",
+      "sdc_template": "flow/designs/sky130hs/ibex/constraint.sdc",
+      "rtl_globs": [
+        "flow/designs/src/ibex_sv/*.sv",
+        "flow/designs/src/ibex_sv/syn/rtl/prim_clock_gating.v"
+      ]
+    },
+    {
+      "design_id": "uart",
+      "top": "uart",
+      "clock_port": "clk",
+      "clock_count": 1,
+      "split": "support",
+      "config_template": "flow/designs/sky130hs/gcd/config.mk",
+      "sdc_template": "flow/designs/sky130hs/aes/constraint.sdc",
+      "rtl_globs": ["flow/designs/src/uart/*.v"]
+    },
+    {
+      "design_id": "spi",
+      "top": "spi",
+      "clock_port": "clk",
+      "clock_count": 1,
+      "split": "heldout",
+      "config_template": "flow/designs/sky130hs/gcd/config.mk",
+      "sdc_template": "flow/designs/sky130hs/gcd/constraint.sdc",
+      "rtl_globs": ["flow/designs/src/spi/*.v"]
+    }
+  ]
+}

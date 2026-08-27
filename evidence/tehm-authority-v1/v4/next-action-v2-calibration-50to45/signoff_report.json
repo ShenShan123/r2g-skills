@@ -1,0 +1,41 @@
+{
+  "results": [
+    {
+      "case_id": "sky130hs:v2_cal_hash16:calibration:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u45",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:v2_cal_hash16:calibration:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u50",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:v2_cal_router8:calibration:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u45",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:v2_cal_router8:calibration:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u50",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:v2_cal_shift32:calibration:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u45",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:v2_cal_shift32:calibration:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u50",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    }
+  ],
+  "version": "orfs-batch0-v1"
+}

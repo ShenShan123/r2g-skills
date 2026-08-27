@@ -1,0 +1,71 @@
+{
+ "status": "pass",
+ "blockers": [],
+ "caveats": [],
+ "checks": {
+  "drc": {
+   "status": "clean",
+   "violations": 0
+  },
+  "lvs": {
+   "status": "clean",
+   "mismatch_count": 0
+  },
+  "orfs": {
+   "status": "complete",
+   "stages": {
+    "synth": 0,
+    "floorplan": 0,
+    "place": 0,
+    "cts": 0,
+    "route": 0,
+    "finish": 0
+   }
+  },
+  "route": {
+   "status": "clean",
+   "violations": 0
+  },
+  "antenna": {
+   "status": "clean",
+   "violations": 0
+  },
+  "timing": {
+   "status": "met",
+   "setup_wns": 1.05243,
+   "source": "ppa.json"
+  },
+  "binding": {
+   "status": "bound",
+   "def_run_dir": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/backend/RUN_2026-08-25_23-00-37_9_007a",
+   "def_fingerprint": {
+    "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/backend/RUN_2026-08-25_23-00-37_9_007a/final/6_final.def",
+    "size": 132986,
+    "mtime": 1787724114,
+    "sha256": "6d26d404c0c3e761137808c99e647313d4170ae877b7aacac8342c1ae1e69cb9"
+   }
+  },
+  "report_binding": {
+   "status": "bound",
+   "expected_run": "RUN_2026-08-25_23-00-37_9_007a",
+   "reports": {
+    "drc.json": "RUN_2026-08-25_23-00-37_9_007a",
+    "lvs.json": "RUN_2026-08-25_23-00-37_9_007a",
+    "route.json": "RUN_2026-08-25_23-00-37_9_007a"
+   }
+  },
+  "artifact_digest": {
+   "status": "bound",
+   "actual_gds_sha256": "8bcfbc9bf881d6532486dfaae8bee428dfa5478fe13a166f49baff61a546d072",
+   "recorded": {
+    "drc.json": "8bcfbc9bf881d6532486dfaae8bee428dfa5478fe13a166f49baff61a546d072",
+    "lvs.json": "8bcfbc9bf881d6532486dfaae8bee428dfa5478fe13a166f49baff61a546d072"
+   }
+  },
+  "task_provenance": {
+   "status": "not_applicable",
+   "detail": "project is not stamped as an rtl-acquire promotion"
+  }
+ },
+ "mode": "strict"
+}

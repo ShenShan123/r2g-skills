@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tehm://schema/parametric-shadow-receipt-v1",
+  "title": "TEHM Parametric Shadow Receipt v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "record_version",
+    "record_type",
+    "receipt_id",
+    "case_id",
+    "join_key",
+    "proposal_digest",
+    "target_graph_context_digest",
+    "action",
+    "action_digest",
+    "mode",
+    "provenance",
+    "proposal",
+    "canonical_counts_before",
+    "canonical_memory_mutation",
+    "promotion_eligible"
+  ],
+  "properties": {
+    "record_version": {"const": "parametric-shadow-receipt-v1"},
+    "record_type": {"const": "shadow_receipt"},
+    "receipt_id": {"type": "string", "minLength": 1},
+    "case_id": {"type": "string", "minLength": 1},
+    "join_key": {"type": "string", "minLength": 1},
+    "proposal_digest": {"type": "string", "minLength": 1},
+    "target_graph_context_digest": {"type": "string", "minLength": 1},
+    "action": {"type": "object"},
+    "action_digest": {"type": "string", "minLength": 1},
+    "candidate_rank": {"type": ["integer", "null"], "minimum": 1},
+    "mode": {"enum": ["observation", "decision"]},
+    "provenance": {
+      "type": "object",
+      "required": ["policy_digest", "bundle_digest", "manifest_digest"],
+      "properties": {
+        "policy_digest": {"type": "string", "minLength": 1},
+        "bundle_digest": {"type": "string", "minLength": 1},
+        "manifest_digest": {"type": "string", "minLength": 1},
+        "memory_snapshot_digest": {"type": "string", "minLength": 1}
+      }
+    },
+    "proposal": {"type": "object"},
+    "canonical_counts_before": {"type": "object"},
+    "canonical_memory_mutation": {"const": "none"},
+    "promotion_eligible": {"const": false}
+  }
+}

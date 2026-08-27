@@ -1,0 +1,18 @@
+{
+  "candidate_profile": "flow.rtl.top-equivalence.v1",
+  "candidate_source_sha256": "0529941f4978288b7c06a2674acc1b4ec5e2fde990f3ae8a74de4c4955a9a66f",
+  "candidate_top": "selector_arbiter8",
+  "case_id": "sky130hs:selector_arbiter8:preflight:50->40",
+  "oracle_type": "YOSYS_EQUIV",
+  "output_sha256": "8ac7de5340fed1bfa315ed6421ceced6968e2b5fdc29ec67d62954c0cc118926",
+  "output_tail": "byte-identical complete RTL source sets",
+  "proof_type": "CRYPTOGRAPHIC_SOURCE_IDENTITY_V1",
+  "reason": "",
+  "reference_profile": "flow.rtl.top-equivalence.v1",
+  "reference_source_sha256": "0529941f4978288b7c06a2674acc1b4ec5e2fde990f3ae8a74de4c4955a9a66f",
+  "reference_top": "selector_arbiter8",
+  "returncode": 0,
+  "source_digest": "9640deae1eb9c47d3a19bda31e2db9cdc551a1aa70130be017d495510f15b3df",
+  "verdict": "PASS",
+  "version": "yosys-equivalence-oracle-v1"
+}

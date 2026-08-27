@@ -1,0 +1,48 @@
+{
+  "version": "orfs-infra-recovery-targets-v1",
+  "selection_rule": "Retry only previously attempted non-evaluable ORFS projects; receipts remain outside TEHM capture and lifecycle authority.",
+  "tasks": [
+    {
+      "task_id": "orfs:route:aes:sky130hs:u70",
+      "projects": [
+        {"role": "before", "platform": "sky130hs", "path": "/data1/zhangdy/tehm-campaigns/orfs-v2-diversity/cases/sky130hs_aes_density_relief_before"},
+        {"role": "after", "platform": "sky130hs", "path": "/data1/zhangdy/tehm-campaigns/orfs-v2-diversity/cases/sky130hs_aes_density_relief_after"}
+      ]
+    },
+    {
+      "task_id": "orfs:route:ibex:sky130hs:u70",
+      "projects": [
+        {"role": "before", "platform": "sky130hs", "path": "/data1/zhangdy/tehm-campaigns/orfs-v2-diversity/cases/sky130hs_ibex_density_relief_before"},
+        {"role": "after", "platform": "sky130hs", "path": "/data1/zhangdy/tehm-campaigns/orfs-v2-diversity/cases/sky130hs_ibex_density_relief_after"}
+      ]
+    },
+    {
+      "task_id": "orfs:route:jpeg:gf180:u70",
+      "projects": [
+        {"role": "before", "platform": "gf180", "path": "/data1/zhangdy/tehm-campaigns/orfs-v2-diversity/cases/gf180_jpeg_density_relief_before"},
+        {"role": "after", "platform": "gf180", "path": "/data1/zhangdy/tehm-campaigns/orfs-v2-diversity/cases/gf180_jpeg_density_relief_after"}
+      ]
+    },
+    {
+      "task_id": "orfs:route:riscv32i:gf180:u70",
+      "projects": [
+        {"role": "before", "platform": "gf180", "path": "/data1/zhangdy/tehm-campaigns/orfs-v2-diversity/cases/gf180_riscv32i_density_relief_before"},
+        {"role": "after", "platform": "gf180", "path": "/data1/zhangdy/tehm-campaigns/orfs-v2-diversity/cases/gf180_riscv32i_density_relief_after"}
+      ]
+    },
+    {
+      "task_id": "orfs:route:fifo:sky130hs:placement0",
+      "projects": [
+        {"role": "before", "platform": "sky130hs", "path": "/data1/zhangdy/tehm-campaigns/orfs-v4-add-designs/cases/sky130hs_fifo_base_0"},
+        {"role": "after", "platform": "sky130hs", "path": "/data1/zhangdy/tehm-campaigns/orfs-v4-add-designs/cases/sky130hs_fifo_placement_0"}
+      ]
+    },
+    {
+      "task_id": "orfs:route:fifo:sky130hd:base0",
+      "projects": [
+        {"role": "subject", "platform": "sky130hd", "path": "/data1/zhangdy/tehm-campaigns/orfs-v4-add-designs/cases/sky130hd_fifo_base_0"},
+        {"role": "relief", "platform": "sky130hd", "path": "/data1/zhangdy/tehm-campaigns/orfs-v4-add-designs/cases/sky130hd_fifo_density_0"}
+      ]
+    }
+  ]
+}

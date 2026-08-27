@@ -1,0 +1,47 @@
+{
+  "results": [
+    {
+      "case_id": "sky130hs:mux32:0:DENSITY_RELIEF:50->40",
+      "digest": "e99a24ba998c9a1e6ded8a6b422e2c42a13d380c607c6a08b04745fdf7b0964b",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_mux32_base_0",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:mux32:0:DENSITY_RELIEF:50->40",
+      "digest": "3a10141207d4163a431791f58aa0d0557d6baac0e6f868cdf555a3e1cb8584e8",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_mux32_density_0",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:parity64:0:DENSITY_RELIEF:50->40",
+      "digest": "c9a210cde86deab7aa879b2e40b155bf5d6e4a97404758d8cde6f4ba4196edce",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_parity64_base_0",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:parity64:0:DENSITY_RELIEF:50->40",
+      "digest": "9d77863dcbeec93c2271a7fd40d32f04bf4cf7e44a73b4f089fa44f4711166d4",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_parity64_density_0",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:shift32:0:DENSITY_RELIEF:50->40",
+      "digest": null,
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_base_0",
+      "status": "invalid"
+    },
+    {
+      "case_id": "sky130hs:shift32:0:DENSITY_RELIEF:50->40",
+      "digest": "150d410abe3eab2cda35ece2fc05f9ceaeae204f6e3074a56a7227d85932ed2f",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0",
+      "status": "complete"
+    }
+  ],
+  "version": "orfs-batch0-v1"
+}

@@ -8,12 +8,6 @@ are terminal, skips a pair with a still-running arm, and NEVER re-judges (idempo
 import engineer_loop as el
 
 
-def _metric(conn, pp, timing=False, synth=False, target=None):
-    return {"is_success": pp.endswith("abB"), "wall_s": 10.0,
-            "fix_iters": None,
-            "outcome_score": 0.5 if pp.endswith("abB") else 0.333}
-
-
 def _arm(design, arm, state, key):
     return {"design": design, "project_path": f"/p/{design}", "kind": "ab_arm",
             "arm": arm, "strategy": "core_util_relief", "repeat": 0, "state": state,
@@ -58,72 +52,6 @@ def test_judges_only_both_terminal_pairs_and_is_idempotent(tmp_path, monkeypatch
     el.judge_finished_trials(led, None)
     assert len(recorded) == 2
     assert led._entries["d2_abA"].get("judged") and led._entries["d2_abB"].get("judged")
-
-
-def test_same_ab_corpus_promotion_does_not_cancel_remaining_subject(
-        tmp_path, monkeypatch):
-    """The first incremental win must not erase the second planned subject."""
-    import ab_runner
-    import knowledge_db
-    conn = knowledge_db.connect(tmp_path / "k.sqlite")
-    knowledge_db.ensure_schema(conn)
-    key = {"symptom_id": "s", "design_class": "logic/small",
-           "platform": "sky130hd", "strategy": "core_util_relief"}
-    conn.execute(
-        "INSERT INTO recipe_status (symptom_id,design_class,platform,strategy,"
-        "status,provenance,status_version,updated_at) VALUES (?,?,?,?,?,?,?,?)",
-        (*key.values(), "promoted", "ab_corpus:1w0l", 2,
-         "2026-08-13T00:00:00-07:00"))
-    conn.commit()
-    led = el.Ledger(tmp_path / "l.jsonl")
-    for role, state in (("A", "escalated"), ("B", "clean")):
-        entry = _arm(f"d2_ab{role}", role, state, key)
-        entry["recipe_status_version"] = 1
-        led.add(entry)
-    monkeypatch.setattr(el, "_arm_metric", _metric)
-    monkeypatch.setattr(el, "_arm_spec_mismatch", lambda *a, **k: None)
-    monkeypatch.setattr(el, "_arm_baseline_divergence", lambda *a, **k: None)
-    monkeypatch.setattr(el, "_ab_new_drc_regression", lambda *a, **k: None)
-    monkeypatch.setattr(el, "_ab_global_regression", lambda *a, **k: None)
-    recorded = []
-    monkeypatch.setattr(ab_runner, "record_trial",
-                        lambda conn, **kw: recorded.append(kw) or 2)
-
-    el.judge_finished_trials(led, conn)
-
-    assert len(recorded) == 1
-    assert recorded[0]["verdict"] == "win"
-
-
-def test_external_lifecycle_move_still_cancels_subject(tmp_path, monkeypatch):
-    """An operator/live-regression withdrawal remains authoritative."""
-    import ab_runner
-    import knowledge_db
-    conn = knowledge_db.connect(tmp_path / "k.sqlite")
-    knowledge_db.ensure_schema(conn)
-    key = {"symptom_id": "s", "design_class": "logic/small",
-           "platform": "sky130hd", "strategy": "core_util_relief"}
-    conn.execute(
-        "INSERT INTO recipe_status (symptom_id,design_class,platform,strategy,"
-        "status,provenance,status_version,updated_at) VALUES (?,?,?,?,?,?,?,?)",
-        (*key.values(), "shadow", "repeated_regression", 2,
-         "2026-08-13T00:00:00-07:00"))
-    conn.commit()
-    led = el.Ledger(tmp_path / "l.jsonl")
-    for role, state in (("A", "escalated"), ("B", "clean")):
-        entry = _arm(f"d2_ab{role}", role, state, key)
-        entry["recipe_status_version"] = 1
-        led.add(entry)
-    monkeypatch.setattr(el, "_arm_metric", _metric)
-    recorded = []
-    monkeypatch.setattr(ab_runner, "record_trial",
-                        lambda conn, **kw: recorded.append(kw) or 2)
-
-    el.judge_finished_trials(led, conn)
-
-    assert recorded == []
-    assert led.get("d2_abA").get("judged")
-    assert led.get("d2_abB").get("judged")
 
 
 def test_waits_for_full_repeat_cohort_before_judging(tmp_path, monkeypatch):

@@ -71,10 +71,6 @@ from common.rtl_readiness import (  # noqa: E402
     assess as assess_rtl_readiness,
     find_status_root,
 )
-from acquire.import_expander_snapshot import (  # noqa: E402
-    SnapshotError as ExpanderSnapshotError,
-    verified_candidate_provenance,
-)
 
 GRAPH_FORMAT = "netlist_graph_v1"
 
@@ -1485,30 +1481,6 @@ def main() -> int:
             flush_index()
             continue
 
-        # A row imported from rtl-expander carries a digest-bound bridge back to
-        # its CERTIFIED release.  Recheck it immediately before any source
-        # transformation or ORFS execution.  Never silently downgrade a broken
-        # bridge to ordinary local-tree provenance: that would retain the bytes
-        # while losing the release/commit/license evidence that admitted them.
-        try:
-            expander_provenance = verified_candidate_provenance(
-                candidate, source_paths, include_dirs)
-        except (OSError, ExpanderSnapshotError) as exc:
-            failure_note = f"expander_provenance_invalid:{exc}"
-            write_design_status(out_root, design, stage="source_check", state="failed",
-                                details={"status": "unsupported", "notes": failure_note})
-            append_design_stage(out_root, design, stage="source_check", state="failed",
-                                details={"notes": failure_note})
-            rows_by_design[design] = {
-                "design": design, "top": candidate.get("expected_top", ""),
-                "synth_variant": synth_variant, "status": "unsupported",
-                "cells": "", "comb_cells": "", "seq_cells": "", "nets": "",
-                "source_path": str(source_path), "graph_format": GRAPH_FORMAT,
-                "duplicate_reason": "", "notes": failure_note,
-            }
-            flush_index()
-            continue
-
         top = choose_top_name(source_paths, candidate.get("expected_top", ""))
         original_source_files = list(source_paths)
         source_files = build_source_files(out_root, design, source_paths)
@@ -1528,7 +1500,6 @@ def main() -> int:
             "source_path": str(source_path), "graph_format": GRAPH_FORMAT,
             "duplicate_reason": "", "notes": notes,
         }
-        origin_provenance = expander_provenance or source_provenance(source_path)
         meta: dict[str, object] = {
             "design": design, "top": top, "synth_variant": synth_variant,
             "synth_memory_max_bits": synth_memory_max_bits,
@@ -1536,7 +1507,7 @@ def main() -> int:
             "platform": acquire_platform(), "graph_schema_version": GRAPH_FORMAT,
             # Origin provenance (issue 2): commit + license ride every meta from
             # birth; the publish gate reads them fail-closed.
-            **origin_provenance,
+            **source_provenance(source_path),
         }
         flow_ran = False
         project: Path | None = None

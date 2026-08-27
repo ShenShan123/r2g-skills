@@ -1,0 +1,19 @@
+{
+  "version": "timing-relief-selector-preflight-spec-v1",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V1",
+  "utility_contract_digest": "e912789aa5152c3dc74f4c670bb9cf993a14ed537bae106763aa8208ba787b36",
+  "platform": "sky130hs",
+  "family": "DENSITY_RELIEF",
+  "before_core_utilization": 50,
+  "after_core_utilization": 40,
+  "clock_port": "clk",
+  "sdc_template": "memory/evaluation/rtl_selector_preflight/selector_clk.sdc",
+  "lineages": [
+    {"id": "selector-v1-xor32", "design": "selector_xor32", "top": "selector_xor32", "split": "calibration", "rtl": "memory/evaluation/rtl_selector_preflight/selector_xor32.v"},
+    {"id": "selector-v1-fifo16", "design": "selector_fifo16", "top": "selector_fifo16", "split": "calibration", "rtl": "memory/evaluation/rtl_selector_preflight/selector_fifo16.v"},
+    {"id": "selector-v1-arbiter8", "design": "selector_arbiter8", "top": "selector_arbiter8", "split": "heldout", "rtl": "memory/evaluation/rtl_selector_preflight/selector_arbiter8.v"},
+    {"id": "selector-v1-crc16", "design": "selector_crc16", "top": "selector_crc16", "split": "heldout", "rtl": "memory/evaluation/rtl_selector_preflight/selector_crc16.v"},
+    {"id": "selector-v1-alu16", "design": "selector_alu16", "top": "selector_alu16", "split": "heldout", "rtl": "memory/evaluation/rtl_selector_preflight/selector_alu16.v"},
+    {"id": "selector-v1-uart16", "design": "selector_uart16", "top": "selector_uart16", "split": "heldout", "rtl": "memory/evaluation/rtl_selector_preflight/selector_uart16.v"}
+  ]
+}

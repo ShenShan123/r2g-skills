@@ -1,0 +1,79 @@
+{
+  "version": "rtl-compatibility-negative-v1",
+  "purpose": "fail-closed structural negative and equivalence cases",
+  "cases": [
+    {
+      "id": "profile_mismatch",
+      "source": {"compatibility_profile": "rtl.fsm.single_guard.v1", "module": "m", "case_expr": "state"},
+      "candidate": {"compatibility_profile": "rtl.combinational.width_assignment.v1", "module": "m", "case_expr": "state"},
+      "expected": "INAPPLICABLE"
+    },
+    {
+      "id": "missing_profile",
+      "source": {"module": "m", "case_expr": "state"},
+      "candidate": {"module": "m", "case_expr": "state"},
+      "expected": "UNRESOLVED"
+    },
+    {
+      "id": "module_context_mismatch",
+      "source": {"compatibility_profile": "rtl.fsm.single_guard.v1", "module": "m_a", "case_expr": "state"},
+      "candidate": {"compatibility_profile": "rtl.fsm.single_guard.v1", "module": "m_b", "case_expr": "state"},
+      "expected": "UNRESOLVED"
+    },
+    {
+      "id": "case_context_mismatch",
+      "source": {"compatibility_profile": "rtl.fsm.single_guard.v1", "module": "m", "case_expr": "state_a"},
+      "candidate": {"compatibility_profile": "rtl.fsm.single_guard.v1", "module": "m", "case_expr": "state_b"},
+      "expected": "UNRESOLVED"
+    }
+  ],
+  "formal_oracle": {
+    "tool": "yosys",
+    "required_verdict": "PASS",
+    "unknown_or_fail": "not_promotion_evidence"
+  },
+  "profile_matrix": [
+    {
+      "profile": "rtl.fsm.single_guard.v1",
+      "domain": "rtl.GUARD_STRENGTHEN",
+      "negative_cases": ["profile_mismatch", "missing_profile", "module_context_mismatch", "case_context_mismatch"],
+      "formal_fixture_pair": ["p3_obligation_recovery", "p3_obligation_recovery_b"],
+      "formal_expected": "FAIL_OR_UNKNOWN_UNLESS_PROVEN"
+    },
+    {
+      "profile": "rtl.sequential.reset_branch.v1",
+      "domain": "rtl.RESET_RESTORE",
+      "negative_cases": ["profile_mismatch", "missing_profile", "module_context_mismatch", "case_context_mismatch"],
+      "formal_fixture_pair": ["p3_reset_restore_a", "p3_reset_restore_b"],
+      "formal_expected": "FAIL_OR_UNKNOWN_UNLESS_PROVEN"
+    },
+    {
+      "profile": "rtl.combinational.width_assignment.v1",
+      "domain": "rtl.WIDTH_CORRECT",
+      "negative_cases": ["profile_mismatch", "missing_profile", "module_context_mismatch", "case_context_mismatch"],
+      "formal_fixture_pair": ["p3_width_correct_a", "p3_width_correct_b"],
+      "formal_expected": "FAIL_OR_UNKNOWN_UNLESS_PROVEN"
+    },
+    {
+      "profile": "rtl.fsm.case_reorder.v1",
+      "domain": "rtl.PRIORITY_REORDER",
+      "negative_cases": ["profile_mismatch", "missing_profile", "module_context_mismatch", "case_context_mismatch"],
+      "formal_fixture_pair": ["p4_case_reorder_a", "p4_case_reorder_b"],
+      "formal_expected": "FAIL_OR_UNKNOWN_UNLESS_PROVEN"
+    },
+    {
+      "profile": "rtl.ast.literal_rewrite.v1",
+      "domain": "rtl.AST_REWRITE",
+      "negative_cases": ["profile_mismatch", "missing_profile", "module_context_mismatch", "case_context_mismatch"],
+      "formal_fixture_pair": ["p4_ast_literal_a", "p4_ast_literal_b"],
+      "formal_expected": "FAIL_OR_UNKNOWN_UNLESS_PROVEN"
+    },
+    {
+      "profile": "rtl.protocol.overlap_priority.v1",
+      "domain": "rtl.PRIORITY_REORDER",
+      "negative_cases": ["profile_mismatch", "missing_profile", "module_context_mismatch", "case_context_mismatch"],
+      "formal_fixture_pair": ["p3_overlap_priority_a", "p3_overlap_priority_b"],
+      "formal_expected": "FAIL_OR_UNKNOWN_UNLESS_PROVEN"
+    }
+  ]
+}

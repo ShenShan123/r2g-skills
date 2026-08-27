@@ -1,0 +1,148 @@
+{
+  "version": "parametric-prospective-manifest-v1",
+  "status": "FROZEN",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+  "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863",
+  "source_freeze": {
+    "bundle_digest": "705a72a58b7f87f0880d9d976710753ba16530184e52db26cd1ad50244d24e51",
+    "manifest_digest": "pre-registered-v2-before-execution"
+  },
+  "action_signature": {
+    "domain": "flow.CONFIG_DELTA",
+    "family": "DENSITY_RELIEF",
+    "config_edits": {"CORE_UTILIZATION": "45"},
+    "operation_point": "50->45"
+  },
+  "firewall": {
+    "training_lineages": [
+      "batch0-v1:sky130hs:gcd",
+      "batch0-v1:sky130hs:jpeg",
+      "orfs-v4:sky130hs:uart:base0",
+      "orfs-v5-add32:sky130hs:add32:base0",
+      "orfs-v5-mux32:sky130hs:mux32:base0",
+      "orfs-v5-parity64:sky130hs:parity64:base0",
+      "orfs-v6-and32:sky130hs:and32:base0",
+      "orfs-v6-toggle32:sky130hs:toggle32:base0",
+      "selector-v1-xor32",
+      "selector-v1-fifo16",
+      "selector-v1-arbiter8",
+      "selector-v1-crc16",
+      "selector-v1-alu16",
+      "selector-v1-uart16"
+    ],
+    "calibration_lineages": [
+      "batch0-v1:sky130hs:spi",
+      "batch0-v1:sky130hs:uart",
+      "orfs-authority-fresh:counter"
+    ],
+    "heldout_lineages": [],
+    "ab_lineages": []
+  },
+  "cases": [
+    {
+      "case_id": "prospective-v2:xor64:calibration",
+      "target_id": "prospective-v2-target:xor64",
+      "lineage_id": "prospective-v2:sky130hs:xor64:cal0",
+      "platform": "sky130hs",
+      "family": "DENSITY_RELIEF",
+      "phase": "observation",
+      "prospective_split": "calibration",
+      "design_class": "small_combination_and_datapath",
+      "graph_context_digest": "PLANNED:prospective-v2:sky130hs:xor64:cal0",
+      "candidate_actions": [
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "DENSITY_RELIEF", "payload": {"config_edits": {"CORE_UTILIZATION": "45"}, "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"}}
+      ]
+    },
+    {
+      "case_id": "prospective-v2:queue24:calibration",
+      "target_id": "prospective-v2-target:queue24",
+      "lineage_id": "prospective-v2:sky130hs:queue24:cal0",
+      "platform": "sky130hs",
+      "family": "DENSITY_RELIEF",
+      "phase": "observation",
+      "prospective_split": "calibration",
+      "design_class": "small_sequential_datapath",
+      "graph_context_digest": "PLANNED:prospective-v2:sky130hs:queue24:cal0",
+      "candidate_actions": [
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "DENSITY_RELIEF", "payload": {"config_edits": {"CORE_UTILIZATION": "45"}, "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"}}
+      ]
+    },
+    {
+      "case_id": "prospective-v2:arbiter16:heldout-ab",
+      "target_id": "prospective-v2-target:arbiter16",
+      "lineage_id": "prospective-v2:sky130hs:arbiter16:ab0",
+      "platform": "sky130hs",
+      "family": "DENSITY_RELIEF",
+      "phase": "decision",
+      "prospective_split": "heldout_ab",
+      "design_class": "medium_controller",
+      "graph_context_digest": "PLANNED:prospective-v2:sky130hs:arbiter16:ab0",
+      "candidate_actions": [
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "DENSITY_RELIEF", "payload": {"config_edits": {"CORE_UTILIZATION": "45"}, "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"}},
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "CONTROL", "payload": {"config_edits": {"CORE_UTILIZATION": "50"}, "utility_contract_id": "CONTROL_ARM_V2"}}
+      ]
+    },
+    {
+      "case_id": "prospective-v2:crc32:heldout-ab",
+      "target_id": "prospective-v2-target:crc32",
+      "lineage_id": "prospective-v2:sky130hs:crc32:ab0",
+      "platform": "sky130hs",
+      "family": "DENSITY_RELIEF",
+      "phase": "decision",
+      "prospective_split": "heldout_ab",
+      "design_class": "small_datapath",
+      "graph_context_digest": "PLANNED:prospective-v2:sky130hs:crc32:ab0",
+      "candidate_actions": [
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "DENSITY_RELIEF", "payload": {"config_edits": {"CORE_UTILIZATION": "45"}, "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"}},
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "CONTROL", "payload": {"config_edits": {"CORE_UTILIZATION": "50"}, "utility_contract_id": "CONTROL_ARM_V2"}}
+      ]
+    },
+    {
+      "case_id": "prospective-v2:packet_ctrl:heldout-ab",
+      "target_id": "prospective-v2-target:packet_ctrl",
+      "lineage_id": "prospective-v2:sky130hs:packet_ctrl:ab0",
+      "platform": "sky130hs",
+      "family": "DENSITY_RELIEF",
+      "phase": "decision",
+      "prospective_split": "heldout_ab",
+      "design_class": "medium_controller_and_datapath",
+      "graph_context_digest": "PLANNED:prospective-v2:sky130hs:packet_ctrl:ab0",
+      "candidate_actions": [
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "DENSITY_RELIEF", "payload": {"config_edits": {"CORE_UTILIZATION": "45"}, "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"}},
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "CONTROL", "payload": {"config_edits": {"CORE_UTILIZATION": "50"}, "utility_contract_id": "CONTROL_ARM_V2"}}
+      ]
+    },
+    {
+      "case_id": "prospective-v2:mac32:heldout-ab",
+      "target_id": "prospective-v2-target:mac32",
+      "lineage_id": "prospective-v2:sky130hs:mac32:ab0",
+      "platform": "sky130hs",
+      "family": "DENSITY_RELIEF",
+      "phase": "decision",
+      "prospective_split": "heldout_ab",
+      "design_class": "medium_datapath",
+      "graph_context_digest": "PLANNED:prospective-v2:sky130hs:mac32:ab0",
+      "candidate_actions": [
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "DENSITY_RELIEF", "payload": {"config_edits": {"CORE_UTILIZATION": "45"}, "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"}},
+        {"domain": "flow.CONFIG_DELTA", "transformation_family": "CONTROL", "payload": {"config_edits": {"CORE_UTILIZATION": "50"}, "utility_contract_id": "CONTROL_ARM_V2"}}
+      ]
+    }
+  ],
+  "pre_registered_metrics": {
+    "hard_ood_ceiling": 3.0,
+    "min_interval_coverage": 0.8,
+    "max_harmful_rate": 0.0,
+    "min_obligation_coverage": 1.0,
+    "min_proposal_coverage": 0.5,
+    "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+    "raw_pareto_harmful_rate_is_descriptive_only": true
+  },
+  "decision_gate": {
+    "min_observation_proposal_coverage": 0.5,
+    "min_observation_outcome_coverage": 1.0,
+    "min_observation_obligation_coverage": 1.0,
+    "required_physical_metrics": ["area_um2", "power_w", "wns_ns"],
+    "min_metric_evaluations": 4,
+    "contract_selected_harmful_rate": 0.0
+  }
+}

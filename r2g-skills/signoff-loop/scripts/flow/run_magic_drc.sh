@@ -54,7 +54,9 @@ if [[ -z "${MAGIC_EXE:-}" ]] && ! command -v magic &>/dev/null; then
 fi
 : "${MAGIC_EXE:=$(command -v magic)}"
 
-DESIGN_NAME=$(grep 'DESIGN_NAME' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NICKNAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NICKNAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
+DESIGN_NICKNAME="${DESIGN_NICKNAME:-$DESIGN_NAME}"
 
 # Map platform to Magic tech file
 MAGIC_TECH=""
@@ -79,11 +81,10 @@ if [[ ! -f "$MAGIC_TECH" ]]; then
   exit 1
 fi
 
-# Verify GDS exists from a prior ORFS run
-RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-if [[ ! -d "$RESULTS_DIR" ]]; then
-  RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME"
-fi
+# Verify GDS from the exact preserved backend run.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_restage_for_signoff.sh"
+RESULTS_DIR="$ORFS_RESULTS_DIR"
 
 GDS_FILE=$(find "$RESULTS_DIR" -name "6_final.gds" 2>/dev/null | head -1)
 if [[ -z "$GDS_FILE" ]]; then

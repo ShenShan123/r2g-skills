@@ -71,7 +71,9 @@ if [[ ! -f "$CONFIG_MK" ]]; then
   exit 1
 fi
 
-DESIGN_NAME=$(grep 'DESIGN_NAME' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NICKNAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NICKNAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
+DESIGN_NICKNAME="${DESIGN_NICKNAME:-$DESIGN_NAME}"
 
 # Re-stage project artifacts into ORFS workspace if missing. This makes the
 # script idempotent across re-runs: even if the ORFS scratch dirs were cleaned

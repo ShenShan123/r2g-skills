@@ -1,0 +1,11 @@
+{
+  "design": "ast_literal_b",
+  "fix": {
+    "domain": "rtl.AST_REWRITE",
+    "transformation_family": "AST_REWRITE",
+    "compatibility_profile": "rtl.ast.literal_rewrite.v1",
+    "target": "1'b0",
+    "replacement": "1'b1",
+    "count": 1
+  }
+}

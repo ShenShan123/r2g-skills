@@ -67,7 +67,9 @@ if [[ -z "${NETGEN_EXE:-}" ]]; then
 fi
 NETGEN_CMD="$NETGEN_EXE"
 
-DESIGN_NAME=$(grep 'DESIGN_NAME' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NICKNAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NICKNAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
+DESIGN_NICKNAME="${DESIGN_NICKNAME:-$DESIGN_NAME}"
 
 # Map platform to PDK files
 MAGIC_TECH=""
@@ -87,6 +89,8 @@ case "$PLATFORM" in
     exit 0
     ;;
 esac
+NETGEN_EFFECTIVE_SETUP="$NETGEN_SETUP"
+NETGEN_COMPAT_SETUP=""
 
 if [[ ! -f "$MAGIC_TECH" ]]; then
   echo "ERROR: Magic tech file not found at $MAGIC_TECH" >&2
@@ -98,11 +102,37 @@ if [[ ! -f "$NETGEN_SETUP" ]]; then
   exit 1
 fi
 
-# Verify GDS exists from a prior ORFS run
-RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-if [[ ! -d "$RESULTS_DIR" ]]; then
-  RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME"
+# The open_pdks tech file may declare the oldest Magic revision whose extraction
+# semantics it supports.  Treat that as an executable compatibility contract,
+# not an informational warning: an older binary has produced crashes and
+# unusable LVS evidence on this host.
+MAGIC_REQUIRED="$(sed -nE 's/.*requires[[:space:]]+magic-([0-9.]+).*/\1/p' "$MAGIC_TECH" | head -1)"
+MAGIC_VERSION="${R2G_MAGIC_VERSION:-}"
+if [[ -n "$MAGIC_REQUIRED" || "${R2G_STRICT_SIGNOFF:-0}" == "1" ]]; then
+  MAGIC_VERSION="$(timeout 10 "$MAGIC_EXE" --version 2>/dev/null | head -1 | tr -d '[:space:]' || true)"
 fi
+if [[ -n "$MAGIC_REQUIRED" ]]; then
+  _magic_first="$(printf '%s\n%s\n' "$MAGIC_REQUIRED" "$MAGIC_VERSION" | sort -V | head -1)"
+  if [[ "$_magic_first" != "$MAGIC_REQUIRED" ]]; then
+    echo "ERROR: $MAGIC_TECH requires Magic >= $MAGIC_REQUIRED; found $MAGIC_VERSION at $MAGIC_EXE" >&2
+    exit 1
+  fi
+fi
+NETGEN_VERSION="${R2G_NETGEN_VERSION:-}"
+if [[ "${R2G_STRICT_SIGNOFF:-0}" == "1" ]]; then
+  NETGEN_VERSION="$(timeout 10 "$NETGEN_CMD" -batch 2>/dev/null | head -1 | tr -d '\r' || true)"
+  NETGEN_REVISION="$(printf '%s' "$NETGEN_VERSION" | sed -nE 's/.*Netgen[[:space:]]+1\.5\.([0-9]+).*/\1/p')"
+  if [[ -z "$NETGEN_REVISION" || "$NETGEN_REVISION" -lt 312 ]]; then
+    echo "ERROR: strict sky130 LVS requires Netgen >= 1.5.312; found '${NETGEN_VERSION:-unknown}'" >&2
+    echo "  1.5.312 fixes loss of definitions when a library and Verilog are read into one circuit." >&2
+    exit 1
+  fi
+fi
+
+# Verify GDS from the exact preserved backend run.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_restage_for_signoff.sh"
+RESULTS_DIR="$ORFS_RESULTS_DIR"
 
 GDS_FILE=$(find "$RESULTS_DIR" -name "6_final.gds" 2>/dev/null | head -1)
 if [[ -z "$GDS_FILE" ]]; then
@@ -134,7 +164,7 @@ for candidate in \
   "$RESULTS_DIR/6_final.v" \
   "$RESULTS_DIR/6_1_fill.v" \
   "$RESULTS_DIR/5_route.v" \
-  "$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/base/6_final.v" \
+  "$FLOW_DIR/results/$PLATFORM/$DESIGN_NICKNAME/base/6_final.v" \
   "$PROJECT_DIR/synth/synth_output.v"; do
   if [[ -f "$candidate" ]]; then
     VERILOG_NETLIST="$candidate"
@@ -169,7 +199,12 @@ ORTCL
   # Bounded (2026-07-04 M3: a large ODB hangs write_verilog indefinitely, and
   # inside an `if` set -e never fires). r2g_bounded_run (RMD2-P0-01) also reaps
   # any session survivor before returning.
-  if r2g_bounded_run 900 30 "$LVS_DIR/write_powered_verilog.log" \
+  # A healthy write_verilog finishes in seconds.  Some OpenROAD builds abort
+  # and leave a pipe/session survivor; waiting the historical fixed 900s before
+  # the deterministic SPICE-signature fallback made a recoverable crash dominate
+  # strict-signoff runtime.  Keep this probe independently bounded.
+  POWERED_VERILOG_TIMEOUT="${POWERED_VERILOG_TIMEOUT:-120}"
+  if r2g_bounded_run "$POWERED_VERILOG_TIMEOUT" 10 "$LVS_DIR/write_powered_verilog.log" \
        "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" \
      && [[ -s "$POWERED_NETLIST" ]] && grep -q 'VPWR' "$POWERED_NETLIST"; then
     echo "Using power-aware netlist from ODB: $POWERED_NETLIST"
@@ -201,8 +236,44 @@ case "$PLATFORM" in
 esac
 SC_SPICE="$PDK_ROOT/sky130A/libs.ref/$SC_LIB_NAME/spice/$SC_LIB_NAME.spice"
 if [[ ! -f "$SC_SPICE" ]]; then
-  echo "WARNING: std-cell SPICE not found at $SC_SPICE — schematic cells will be hollow" >&2
-  SC_SPICE=""
+  _R2G_SC_SPICE="$HOME/.local/share/r2g-pdk/$SC_LIB_NAME/$SC_LIB_NAME.spice"
+  if [[ -f "$_R2G_SC_SPICE" ]]; then
+    SC_SPICE="$_R2G_SC_SPICE"
+    echo "Using user-local SkyWater transistor SPICE: $SC_SPICE"
+  else
+  # Some ORFS installations deliberately ship the production CDL beside the
+  # platform instead of duplicating the very large transistor library under
+  # open_pdks.  CDL is valid SPICE input for Netgen and is the exact library
+  # used by the selected ORFS platform.
+  _ORFS_SC_CDL="$FLOW_DIR/platforms/$PLATFORM/cdl/$PLATFORM.cdl"
+  if [[ -f "$_ORFS_SC_CDL" ]]; then
+    SC_SPICE="$_ORFS_SC_CDL"
+    echo "Using ORFS platform standard-cell CDL: $SC_SPICE"
+  else
+    echo "WARNING: std-cell SPICE/CDL not found — schematic cells will be hollow" >&2
+    SC_SPICE=""
+  fi
+  fi
+fi
+SC_SPICE_SOURCE="$SC_SPICE"
+
+# Some OpenROAD builds abort in write_verilog on otherwise valid ODBs.  Fall
+# back to the logical final netlist plus the exact power-pin signature of the
+# transistor SPICE library.  Named functional pins and top-level pin ordering
+# are preserved; only library-declared supply pins are added.
+if [[ -n "$SC_SPICE_SOURCE" ]] && ! grep -q '\.VPWR[[:space:]]*(' "$VERILOG_NETLIST"; then
+  POWERED_FALLBACK="$LVS_DIR/powered_from_spice.v"
+  if python3 "$(dirname "${BASH_SOURCE[0]}")/power_verilog_from_spice.py" \
+       "$VERILOG_NETLIST" "$SC_SPICE_SOURCE" "$POWERED_FALLBACK" \
+       --receipt "$LVS_DIR/powered_from_spice.json"; then
+    echo "Using SPICE-signature powered netlist: $POWERED_FALLBACK"
+    VERILOG_NETLIST="$POWERED_FALLBACK"
+  elif [[ "${R2G_STRICT_SIGNOFF:-0}" == "1" ]]; then
+    echo "ERROR: unable to construct an explicit powered schematic for strict LVS" >&2
+    exit 1
+  else
+    echo "WARNING: powered schematic fallback failed; implicit supply nets may mismatch" >&2
+  fi
 fi
 
 # Step 1: Extract SPICE netlist from GDS using Magic (hierarchical — no flatten, so
@@ -214,6 +285,11 @@ EXTRACT_TCL="$LVS_DIR/run_magic_extract.tcl"
 EXTRACT_LOG="$LVS_DIR/magic_extract.log"
 EXT_SCRATCH="$LVS_DIR/magic_ext"
 rm -rf "$EXT_SCRATCH"; mkdir -p "$EXT_SCRATCH"
+# A failed extractor must never be graded using a prior successful netlist.
+rm -f "$EXTRACTED_SPICE" "$LVS_DIR/netgen_lvs.log" \
+  "$LVS_DIR/netgen_lvs.rpt" "$LVS_DIR/netgen_lvs_result.json" \
+  "$LVS_DIR/extracted.raw.spice" "$LVS_DIR/layout_normalization.json" \
+  "$LVS_DIR/library_normalization.json" "$LVS_DIR/standard_cells.normalized.spice"
 
 # Connectivity-only extraction. LVS compares topology (devices + nets), never
 # parasitics, so capacitance/coupling/resistance extraction is pure waste here --
@@ -269,6 +345,12 @@ if [[ $MAGIC_STATUS -eq 124 || $MAGIC_STATUS -eq 137 ]]; then
   exit 1
 fi
 
+if [[ $MAGIC_STATUS -ne 0 ]]; then
+  echo "ERROR: Magic SPICE extraction exited $MAGIC_STATUS" >&2
+  echo '{"tool": "netgen", "status": "error", "reason": "Magic SPICE extraction nonzero"}' > "$LVS_DIR/netgen_lvs_result.json"
+  exit 1
+fi
+
 if [[ ! -f "$EXTRACTED_SPICE" ]]; then
   echo "ERROR: Magic SPICE extraction failed — $EXTRACTED_SPICE not created" >&2
   echo '{"tool": "netgen", "status": "error", "reason": "Magic SPICE extraction failed"}' > "$LVS_DIR/netgen_lvs_result.json"
@@ -294,6 +376,8 @@ if [[ "${_TOP_PORTS:-0}" -eq 0 ]]; then
   exit 1
 fi
 echo "Top-level ports extracted: $_TOP_PORTS"
+RAW_EXTRACTED_SPICE="$LVS_DIR/extracted.raw.spice"
+cp "$EXTRACTED_SPICE" "$RAW_EXTRACTED_SPICE"
 
 # Normalize antenna-diode primitives in the extracted netlist (X subcircuit
 # instance -> D device, perim= -> pj=) so the diode class matches the PDK cell
@@ -301,6 +385,23 @@ echo "Top-level ports extracted: $_TOP_PORTS"
 # pin matching. See normalize_diode_spice.py and references/failure-patterns.md
 # "sky130 LVS" cause 5 (fixed 2026-06-11).
 python3 "$(dirname "${BASH_SOURCE[0]}")/normalize_diode_spice.py" "$EXTRACTED_SPICE"
+
+# Reconcile extractor-vs-library representation differences without touching
+# the source GDS, powered Verilog, original PDK library, or canonical open_pdks
+# setup.  Each normalized artifact has an exact transform-count/digest receipt.
+# The compatibility setup keeps diode topology/model/polarity/area strict and
+# drops only its non-comparable Magic-vs-library perimeter convention.
+SKY130_NORMALIZER="$(dirname "${BASH_SOURCE[0]}")/normalize_sky130_lvs_spice.py"
+if [[ -n "$SC_SPICE" ]]; then
+  python3 "$SKY130_NORMALIZER" layout "$EXTRACTED_SPICE" \
+    --receipt "$LVS_DIR/layout_normalization.json"
+  NORMALIZED_SC_SPICE="$LVS_DIR/standard_cells.normalized.spice"
+  python3 "$SKY130_NORMALIZER" library "$SC_SPICE" "$NORMALIZED_SC_SPICE" \
+    --receipt "$LVS_DIR/library_normalization.json"
+  SC_SPICE="$NORMALIZED_SC_SPICE"
+  NETGEN_COMPAT_SETUP="$(dirname "${BASH_SOURCE[0]}")/sky130_netgen_compat.tcl"
+  NETGEN_EFFECTIVE_SETUP="$NETGEN_COMPAT_SETUP"
+fi
 
 # Restore top-level ports ext2spice dropped to an internal alias (Magic picks a
 # non-port canonical name when an anonymous route fragment precedes the port
@@ -332,13 +433,13 @@ if [[ -n "$SC_SPICE" ]]; then
 set circuit1 [readnet spice "$EXTRACTED_SPICE"]
 set circuit2 [readnet spice "$SC_SPICE"]
 readnet verilog "$VERILOG_NETLIST" \$circuit2
-lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" "$NETGEN_SETUP" "$NETGEN_REPORT"
+lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" "$NETGEN_EFFECTIVE_SETUP" "$NETGEN_REPORT"
 NETGEN_EOF
 else
   cat > "$NETGEN_TCL" << NETGEN_EOF
 set circuit1 [readnet spice "$EXTRACTED_SPICE"]
 set circuit2 [readnet verilog "$VERILOG_NETLIST"]
-lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" "$NETGEN_SETUP" "$NETGEN_REPORT"
+lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" "$NETGEN_EFFECTIVE_SETUP" "$NETGEN_REPORT"
 NETGEN_EOF
 fi
 
@@ -350,7 +451,8 @@ set +e
 # Bounded session supervisor (RMD2-P0-01) — the old `timeout … | tee` let a
 # TERM-ignoring netgen descendant hold the pipe open past the timeout.
 r2g_bounded_run "$NETGEN_TIMEOUT" "${NETGEN_KILL_GRACE:-60}" "$NETGEN_LOG" \
-  env MAGIC_EXT_USE_GDS=1 "$NETGEN_CMD" -batch source "$NETGEN_TCL"
+  env MAGIC_EXT_USE_GDS=1 R2G_NETGEN_BASE_SETUP="$NETGEN_SETUP" \
+  "$NETGEN_CMD" -batch source "$NETGEN_TCL"
 LVS_STATUS=$?
 set -e
 tail -n 25 "$NETGEN_LOG" 2>/dev/null || true
@@ -359,7 +461,17 @@ tail -n 25 "$NETGEN_LOG" 2>/dev/null || true
 LVS_RESULT="unknown"
 MATCH_STATUS="unknown"
 if [[ -f "$NETGEN_LOG" ]]; then
-  if grep -qi "Circuits match uniquely\|Result: PASS\|netlists match" "$NETGEN_LOG" 2>/dev/null; then
+  # Parser diagnostics invalidate the comparison itself.  Older Netgen builds
+  # can continue after malformed escaped identifiers and emit a plausible
+  # topology mismatch; that is an infrastructure error, never design evidence.
+  if grep -qiE "Expected to find (instance pin block|end of instance)|Error:  No match in call for pin|has no pins" "$NETGEN_LOG" 2>/dev/null; then
+    LVS_RESULT="error"
+    MATCH_STATUS="unknown"
+    [[ "$LVS_STATUS" -ne 0 ]] || LVS_STATUS=2
+  elif grep -qi "property errors" "$NETGEN_LOG" 2>/dev/null; then
+    LVS_RESULT="mismatch"
+    MATCH_STATUS="mismatch"
+  elif grep -qi "Circuits match uniquely\|Result: PASS\|netlists match" "$NETGEN_LOG" 2>/dev/null; then
     LVS_RESULT="clean"
     MATCH_STATUS="match"
   elif grep -qi "mismatch\|NOT match\|Result: FAIL\|netlists do not match" "$NETGEN_LOG" 2>/dev/null; then
@@ -370,7 +482,10 @@ fi
 
 # Also check the report file
 if [[ -f "$NETGEN_REPORT" ]] && [[ "$MATCH_STATUS" == "unknown" ]]; then
-  if grep -qi "Circuits match\|PASS" "$NETGEN_REPORT" 2>/dev/null; then
+  if grep -qi "property errors" "$NETGEN_REPORT" 2>/dev/null; then
+    LVS_RESULT="mismatch"
+    MATCH_STATUS="mismatch"
+  elif grep -qi "Circuits match\|PASS" "$NETGEN_REPORT" 2>/dev/null; then
     LVS_RESULT="clean"
     MATCH_STATUS="match"
   elif grep -qi "mismatch\|FAIL" "$NETGEN_REPORT" 2>/dev/null; then
@@ -387,7 +502,10 @@ fi
 # netgen_topology — real device/net count differences; generic — anything else.
 MISMATCH_CLASS=""
 if [[ "$LVS_RESULT" == "mismatch" && -f "$NETGEN_REPORT" ]]; then
-  if grep -qi 'Top level cell failed pin matching' "$NETGEN_REPORT"; then
+  if grep -qi 'property errors' "$NETGEN_REPORT"; then
+    MISMATCH_CLASS="netgen_property"
+  elif grep -qi 'Top level cell failed pin matching' "$NETGEN_REPORT" && \
+       ! grep -qiE 'Number of (devices|nets):.*\*\*Mismatch\*\*' "$NETGEN_REPORT"; then
     MISMATCH_CLASS="top_pin_mismatch"
     # Sharpen the opaque pin-mismatch when the DEF PROVES a real pin-vs-PDN
     # short (failure-patterns.md #58, ROM_16: met3 IO pins placed on met3 VSS
@@ -407,7 +525,7 @@ if [[ "$LVS_RESULT" == "mismatch" && -f "$NETGEN_REPORT" ]]; then
         rm -f "$LVS_DIR/pin_pdn_shorts.json" 2>/dev/null || true
       fi
     fi
-  elif grep -qiE 'Number of devices:.*\*\*MISMATCH\*\*|do not match' "$NETGEN_REPORT"; then
+  elif grep -qiE 'Number of (devices|nets):.*\*\*MISMATCH\*\*|do not match|Top level cell failed pin matching' "$NETGEN_REPORT"; then
     MISMATCH_CLASS="netgen_topology"
   else
     MISMATCH_CLASS="generic"
@@ -424,7 +542,23 @@ cat > "$LVS_DIR/netgen_lvs_result.json" << JSON_EOF
   "match": "$MATCH_STATUS",
   "mismatch_class": "$MISMATCH_CLASS",
   "extracted_spice": "$EXTRACTED_SPICE",
+  "raw_extracted_spice": "$RAW_EXTRACTED_SPICE",
+  "raw_extracted_sha256": "$(sha256sum "$RAW_EXTRACTED_SPICE" | cut -d' ' -f1)",
   "reference_netlist": "$VERILOG_NETLIST",
+  "reference_sha256": "$(sha256sum "$VERILOG_NETLIST" | cut -d' ' -f1)",
+  "extracted_sha256": "$(sha256sum "$EXTRACTED_SPICE" | cut -d' ' -f1)",
+  "standard_cell_library_source": "$SC_SPICE_SOURCE",
+  "standard_cell_library_source_sha256": "$([[ -n "$SC_SPICE_SOURCE" ]] && sha256sum "$SC_SPICE_SOURCE" | cut -d' ' -f1 || true)",
+  "standard_cell_library": "$SC_SPICE",
+  "standard_cell_library_sha256": "$([[ -n "$SC_SPICE" ]] && sha256sum "$SC_SPICE" | cut -d' ' -f1 || true)",
+  "netgen_setup_sha256": "$(sha256sum "$NETGEN_SETUP" | cut -d' ' -f1)",
+  "netgen_compat_setup": "$NETGEN_COMPAT_SETUP",
+  "netgen_compat_setup_sha256": "$([[ -n "$NETGEN_COMPAT_SETUP" ]] && sha256sum "$NETGEN_COMPAT_SETUP" | cut -d' ' -f1 || true)",
+  "magic_executable": "$MAGIC_EXE",
+  "magic_version": "$MAGIC_VERSION",
+  "magic_required": "$MAGIC_REQUIRED",
+  "netgen_executable": "$NETGEN_CMD",
+  "netgen_version": "$NETGEN_VERSION",
   "report_file": "$NETGEN_REPORT",
   "log_file": "$NETGEN_LOG",
   "run_tag": "${LVS_RUN_TAG:-}",
@@ -445,6 +579,7 @@ fi
 if [[ -n "$TARGET_RUN" && -d "$TARGET_RUN" ]]; then
   mkdir -p "$TARGET_RUN/lvs"
   cp "$LVS_DIR"/netgen_lvs* "$TARGET_RUN/lvs/" 2>/dev/null || true
+  cp "$LVS_DIR"/*normalization.json "$TARGET_RUN/lvs/" 2>/dev/null || true
 fi
 
 echo ""

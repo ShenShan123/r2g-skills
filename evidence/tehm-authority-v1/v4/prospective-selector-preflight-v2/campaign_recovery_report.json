@@ -1,0 +1,213 @@
+{
+  "latest_class_counts": {
+    "FLOW_FAILURE": 1,
+    "SUCCESS": 5
+  },
+  "projects": [
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "33f6a77aadb9b7f36f683777e664341a1ee24f797e19741e3d96f3be103f6ee6",
+        "ended_at": "2026-08-26T00:19:02-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 8,
+          "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/backend/RUN_2026-08-26_00-07-03_8_44fa/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/campaign_flow.log",
+        "log_sha256": "0c29947e849f3136c17736b56729ace0cc5850d436722bb5b81b45553e05e87b",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-26T00:07:03-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "795df48af26549a5ecf82e84034df5790b48fca061d03235e5de13b370581391",
+        "ended_at": "2026-08-26T00:08:56-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 8,
+          "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/backend/RUN_2026-08-26_00-07-03_7_1b30/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/campaign_flow.log",
+        "log_sha256": "2e8a1e7d1a3964913d8dd087f19db9dbfb060f27b807072db283243662d002a7",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-26T00:07:03-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "d479c91ae81145f914986e9a40d4333cdee8f96250ab1851a238bc8d11e6b644",
+        "ended_at": "2026-08-26T00:21:33-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 11,
+          "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/backend/RUN_2026-08-26_00-07-03_9_5302/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/campaign_flow.log",
+        "log_sha256": "7112fa499c542b127191df8fee2b90f6bc232753accf1f256cbfe92e6a881d60",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-26T00:07:03-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "FLOW_FAILURE"
+      ],
+      "domains": [
+        "design_or_tool"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": false,
+        "config_sha256": "1961e5e22f82edbcd27c16760c7c86048a370193d2e3e2e2e4f35f13befdb4dc",
+        "ended_at": "2026-08-26T00:09:24-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "FLOW_FAILURE",
+        "failure_domain": "design_or_tool",
+        "flow_rc": 2,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 7,
+          "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/backend/RUN_2026-08-26_00-08-56_5087_21bc/stage_log.jsonl",
+          "stage": "floorplan",
+          "status": 2
+        },
+        "log": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/campaign_flow.log",
+        "log_sha256": "5cdcc761b7150f20f636196f641d8badfc57e1ecd680d25268a9cdeb9cad5bd6",
+        "platform": "sky130hs",
+        "resumable": false,
+        "resume_from": null,
+        "started_at": "2026-08-26T00:08:56-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "0525678ea005dc46731e6ffad18b584a6b61bf7a27a65eb6b67ba6c5f3298017",
+        "ended_at": "2026-08-26T00:11:41-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 9,
+          "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/backend/RUN_2026-08-26_00-09-24_6240_6046/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/campaign_flow.log",
+        "log_sha256": "9c74eb5d9f0b540283f0033a093f997cb3f09eb78ddb8b9712433fd20fdbc533",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-26T00:09:24-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "24c58b40393568df3477675d1148b159fd42717f26e0b0a14f15928e47751f1e",
+        "ended_at": "2026-08-26T00:14:23-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 12,
+          "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/backend/RUN_2026-08-26_00-11-41_8783_436d/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/campaign_flow.log",
+        "log_sha256": "a1f46ff8a51da286597b3eaba44f7f14a795f702ea8c86f93104750aebe78356",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-26T00:11:41-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50"
+    }
+  ],
+  "version": "orfs-diversity-v0.3"
+}

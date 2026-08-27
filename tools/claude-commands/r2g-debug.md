@@ -1,5 +1,5 @@
 ---
-description: Drive an RTL→GDS sign-off campaign on an ORFS platform (default sky130hd — genuinely clean-able KLayout DRC + Netgen LVS + RCX; sky130hs equally clean-able since 2026-07-09 via the bundled sibling-DRC-deck + .lyt lefdef repairs; nangate45 also clean-able; ihp is DRC-only; gf180 signs off NOTHING and can build no dataset) in parallel waves, hunt r2g-skills bugs, and prove the engineer-learning-loop is closed (DRC/LVS clean where the deck allows + best Fmax + promoted recipes). Also independently VERIFIES the RTL→Graph dataset conversion across three dimensions — topology (5 PyG views b–f, HeteroData by default), feature statistics, and labels↔sign-off reports — against raw DEF/LEF/liberty/SPEF + OpenDB ground truth (opt-in PDNSim IR-drop re-run) — and AUDITS the rtl-acquire synth-only corpus supply line (flow_scope='synth_only' honesty, synth-frontend-* event parity, publish gating).
+description: Drive an RTL→GDS sign-off campaign on an ORFS platform (default sky130hd — genuinely clean-able KLayout DRC + Netgen LVS + RCX; sky130hs equally clean-able since 2026-07-09 via the bundled sibling-DRC-deck + .lyt lefdef repairs; nangate45/gf180/ihp also work) in parallel waves, hunt r2g-skills bugs, and prove the engineer-learning-loop is closed (DRC/LVS clean where the deck allows + best Fmax + promoted recipes). Also independently VERIFIES the RTL→Graph dataset conversion across three dimensions — topology (5 PyG views b–f, HeteroData by default), feature statistics, and labels↔sign-off reports — against raw DEF/LEF/liberty/SPEF + OpenDB ground truth (opt-in PDNSim IR-drop re-run) — and AUDITS the rtl-acquire synth-only corpus supply line (flow_scope='synth_only' honesty, synth-frontend-* event parity, publish gating).
 argument-hint: "[overrides, e.g. PLATFORM=sky130hd WAVE_MAX=24 WORKERS=3 NUM_CORES=4]"
 ---
 
@@ -10,9 +10,7 @@ chosen **ORFS platform**, and use it as the harness that surfaces skill bugs and
 learning loop. **Platform is the central knob** (`$ARGUMENTS`, default `sky130hd`); only the *signoff
 success contract* and a few bug leads change per platform. sky130hd is primary (clean-able DRC/LVS, so
 a clean win can **promote** a recipe); sky130hs is equally clean-able since 2026-07-09 (footnote ³ —
-verify its two bundled repairs each round); nangate45 is equally clean-able. **ihp-sg13g2 has
-no KLayout LVS deck and gf180 has NO decks at all** — a gf180 round can reach GDS + Fmax but
-signs off nothing and can build no dataset (footnote ⁴). Pick the platform accordingly.
+verify its two bundled repairs each round); nangate45/gf180/ihp also work.
 
 **Mission (one connected goal):** (1) run all designs through the `$PLATFORM` flow on the *freshly
 symlink-deployed* skill; (2) batch into waves, parallel but not oversubscribed; (3) drive each design to
@@ -50,8 +48,7 @@ on a deck-less platform would mislabel every clean design.
 | **sky130hd** ★ | Yes (KLayout²) | Yes (Netgen)     | Yes | GDS + DRC clean + LVS clean + RCX — clean-able ⇒ a clean win can promote |
 | nangate45      | Yes (KLayout)  | Yes (KLayout)    | Yes | GDS + DRC clean + LVS clean + RCX |
 | sky130hs       | Yes (KLayout²³)| Yes (Netgen³)    | Yes | GDS + DRC clean + LVS clean + RCX — clean-able ⇒ promotable (VERIFY the two bundled repairs³) |
-| ihp-sg13g2     | Yes (KLayout)  | **No deck**⁴     | Yes | GDS + DRC clean + `lvs=skipped` + RCX |
-| **gf180**      | **No deck**⁴   | **No deck**⁴     | No⁴ | GDS only — signs off NOTHING; see ⁴ |
+| gf180/ihp      | Yes (KLayout)  | Yes (KLayout)    | Yes | GDS + DRC clean + LVS clean + RCX |
 
 ¹ **`asap7` is NOT SUPPORTED in this version** — `run_orfs.sh` refuses it with exit 65 and the
 capability probe reports tier `unsupported`. It could never reach a clean verdict (community deck
@@ -74,26 +71,6 @@ lefdef option names → `def2stream` silently drops ALL DEF geometry → portles
 `top_pin_mismatch`. Run `python3 tools/patch_sky130hs_lyt.py --check` (exit 2 = unpatched; **re-run
 after every ORFS update** — an update restores the stock .lyt); the `run_netgen_lvs.sh` portless guard
 files `status:"error"` ("GDS lost DEF geometry"), never a design `mismatch`.
-
-⁴ **gf180 signs off NOTHING; ihp has no KLayout LVS deck** (2026-08-01, failure-patterns #32b —
-this table previously claimed `gf180/ihp | Yes (KLayout) | Yes (KLayout) | Yes`, which was false for
-both). This ORFS checkout ships gf180 with **no `drc/`, no `lvs/`, no `RCX_RULES`** (only
-`KLayout/*.lyt` layer maps) → `platform_capability` tier `installed`, all four MISS; ihp ships
-`lvs/sg13g2.lvs` + `run_lvs.py` rather than a `.lylvs` deck → tier `research_ready`. **There is no
-sibling deck to borrow for gf180** — gf180mcu is a different process, not a sky130A variant.
-Consequences to hold in mind before opening a gf180 round:
-(a) `run_drc.sh` honestly files `status:"skipped", reason:"no_drc_deck_for_platform"`, and the
-clean-gate accepts `skipped` — so **gf180 designs reach ledger `clean` on zero DRC/LVS evidence** and
-look identical to a real sky130hd clean in aggregate. **Never promote a recipe on a gf180 "clean"**:
-there is no DRC/LVS symptom for the A/B judge to have cleared.
-(b) def-graph's `signoff_gate.py` is stricter (`DRC_OK={"clean","clean_beol"}`; `skipped` counts only
-for LVS), so **every gf180 dataset build is gate-blocked with exit 7** — Step 5 cannot produce a
-corpus-eligible dataset on gf180. Verified 2026-08-01: the b–f *extraction* is correct on gf180
-(`cordic_gf180` 290/291 verifier checks, the one failure being the gate correctly rejecting a
-deliberate `R2G_SIGNOFF_GATE=warn` override) — the blocker is the platform's missing decks, not the
-pipeline. Use gf180 for flow / route / timing / Fmax work; use sky130hd/hs or nangate45 for anything
-that must sign off or become training data. The matrix is now machine-checked by
-`signoff-loop/tests/test_support_matrix_matches_probe.py`.
 
 **Env, per platform:** sky130hd needs yosys/openroad/ORFS + **KLayout + magic + netgen-lvs + sky130A
 PDK** all green (pinned in `references/env.local.sh`; a red row **blocks** signoff — else DRC/LVS falsely

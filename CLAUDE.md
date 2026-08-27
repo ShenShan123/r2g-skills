@@ -69,10 +69,7 @@ r2g-skills/                     # The skill collection — installs THREE Claude
     scripts/flow/                 # run_labels.sh, run_features.sh, run_graphs.sh, resolve_platform_paths.sh, _env.sh
     scripts/extract/techlib/      # Per-platform tech/LEF/liberty/DEF/SPEF parser (shared by both stages)
     scripts/extract/{labels,features,graph}/  # Y labels, X features, the five graph topologies (+ odb_to_def)
-    scripts/r2g2/                 # VENDORED R2G2.0 four-stage builder (01..05 + checks/ + encode_map)
-                                  #   R2G2_UPSTREAM.md = provenance + the 11 local deltas (read before editing)
-    scripts/stage_dataset/        # our ORFS glue for it: make_sample_config, build_encode_map, emit_timing_reports
-    references/  tests/           # graph-dataset/feature/label/four-stage docs; def-graph pytest + corner-case suites
+    references/  tests/           # graph-dataset/feature/label docs; def-graph pytest + corner-case suites
   rtl-acquire/                  # SKILL 3 — corpus-scale RTL acquisition → synth-only netlist graphs
     SKILL.md                      # acquire → expand → repair → validate → publish; scoped-reuse contract
     scripts/{acquire,execute,repair,validate,publish,report,hygiene,knowledge}/  # stage-grouped
@@ -271,23 +268,6 @@ runs or fixes PnR** — produce those inputs with `signoff-loop` first. **Full d
    Auto-runs stages 1–2 when their CSVs are stale — freshness judged by the `reports/{features,labels}_stats.json`
    stage-completion markers (written LAST), **not** an early CSV (the 2026-07-05 irdrop half-finish incident).
 
-### The SECOND dataset product — the R2G2.0 four-stage causal graphs (2026-08-01)
-
-`scripts/flow/run_stage_dataset.sh` builds **four `HeteroData` graphs per design** — `floorplan`,
-`placement`, `cts`, `route` — from the *same* backend run: one shared canonical topology taken from
-`1_2_yosys.v` (NOT the DEF, so the node set is identical in all four and a resizer-deleted gate stays
-a node with `placement_valid=0`), one shared set of post-route labels, and per-stage features limited
-to what that prediction cutoff could legally see (`2_floorplan`/`3_place`/`4_cts` DEF respectively;
-floorplan reads no DEF). `5_route.def`/SPEF/STA are **label-only**. Labels here are RAW physical
-values with a boolean `y_valid_mask` — deliberately NOT the `y`/`y_raw` log-twin convention of b–f;
-don't "align" them. The upstream logic is vendored verbatim in `scripts/r2g2/`; **read
-`scripts/r2g2/R2G2_UPSTREAM.md` before editing it** — a new drop is re-vendored and the eleven recorded
-deltas (D1–D11) re-applied, never hand-merged. Detail: `references/four-stage-dataset.md`.
-
-Its honesty gate is *two* checkers, both mandatory: `checks/validate_four_stage.py` (contract, NaN↔
-valid parity, stage input whitelist, route-DEF leakage) and `checks/summarize_four_stage_graph_data.py`
-(`structural_issues=0`). A built `heterograph.pt` is not evidence on its own.
-
 ### The data contract (never break this)
 
 - X and Y read the SAME `6_final.def`, so rows **join on `graph_id`(=`DESIGN_NAME`) + `inst_name`/`net_name`**.
@@ -440,8 +420,6 @@ This skill's failure mode is a plausible-looking CSV with **wrong values**. Full
 | Historical debug narratives + corpus results                        | `r2g-skills/signoff-loop/references/lessons-learned.md`   |
 | How to read PPA / signoff JSON                                      | `r2g-skills/signoff-loop/references/ppa-report-guide.md`  |
 | How does def-graph build the dataset (labels → features → graphs)?  | `r2g-skills/def-graph/SKILL.md`                   |
-| Four-stage causal dataset (floorplan/placement/cts/route HeteroData) | `r2g-skills/def-graph/references/four-stage-dataset.md` + `scripts/flow/run_stage_dataset.sh` |
-| Vendored R2G2.0 provenance + the 11 local deltas (D1–D11)             | `r2g-skills/def-graph/scripts/r2g2/R2G2_UPSTREAM.md` |
 | Dataset label/feature extraction (Y/X CSV columns, units, joins)    | `r2g-skills/def-graph/references/{label,feature}-extraction.md`  |
 | PyG graph datasets (b–f views, tensor schema, RC edges, netlist graph, torch venv) | `r2g-skills/def-graph/references/graph-dataset.md`  |
 | Per-platform tech handling (voltage, tap cells, layers, liberty, SPEF) | `r2g-skills/def-graph/scripts/extract/techlib/`   |

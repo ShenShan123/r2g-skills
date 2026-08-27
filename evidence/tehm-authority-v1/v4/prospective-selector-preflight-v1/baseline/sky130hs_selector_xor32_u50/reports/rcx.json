@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "spef_file": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50/rcx/6_final.spef",
+  "spef_size_bytes": 176449,
+  "header": {
+    "design": "NAME_SCOPE LOCAL",
+    "date": "23:07:43 Tuesday August 25, 2026",
+    "vendor": "The OpenROAD Project",
+    "divider": "/"
+  },
+  "net_count": 257,
+  "total_cap_ff": 818.0676,
+  "total_res_ohm": 15374.5628,
+  "cap_unit": "1.0 PF",
+  "res_unit": "1.0 OHM",
+  "log_info": {
+    "nets_extracted": 257
+  }
+}

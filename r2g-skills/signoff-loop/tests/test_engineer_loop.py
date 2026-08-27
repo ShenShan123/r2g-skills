@@ -2,8 +2,10 @@
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import engineer_loop
+import pytest
 
 
 def _entry(name="d0", kind="normal"):
@@ -22,10 +24,49 @@ def test_ledger_roundtrip_and_resume(tmp_path):
     assert [e["design"] for e in led2.pending()] == ["d1"]
 
 
+def test_ledger_binds_memory_and_rejects_backend_switch(tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    led = engineer_loop.Ledger(path)
+    led.bind_memory(SimpleNamespace(
+        backend="tehm", snapshot_id="snap-a", schema_version="tehm-v1"))
+    resumed = engineer_loop.Ledger(path)
+    assert resumed.memory_session()["memory_backend"] == "tehm"
+    with pytest.raises(RuntimeError, match="refusing resume"):
+        resumed.bind_memory(SimpleNamespace(
+            backend="legacy", snapshot_id="legacy-a",
+            schema_version="legacy-v1"))
+
+
+def test_frozen_resume_rejects_snapshot_drift(tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    engineer_loop.Ledger(path).bind_memory(SimpleNamespace(
+        backend="tehm", snapshot_id="snap-a", schema_version="tehm-v1"),
+        read_only_eval=True)
+    with pytest.raises(RuntimeError, match="snapshot changed"):
+        engineer_loop.Ledger(path).bind_memory(SimpleNamespace(
+            backend="tehm", snapshot_id="snap-b", schema_version="tehm-v1"),
+            read_only_eval=True)
+
+
+def test_nonlegacy_learn_cycle_never_calls_legacy_learner(tmp_path, monkeypatch):
+    class Backend:
+        name = "tehm"
+
+        def rebuild(self, *, frozen_source=False):
+            return SimpleNamespace(ok=True, detail="ok", rebuilt={"rules": 1})
+
+    monkeypatch.setattr(
+        engineer_loop, "_learn",
+        lambda: (_ for _ in ()).throw(AssertionError("legacy learner called")))
+    out = engineer_loop.learn_cycle(
+        engineer_loop.Ledger(tmp_path / "l.jsonl"), None,
+        prev_heur=None, backend=Backend())
+    assert out == {"backend": "tehm", "ok": True, "rebuilt": {"rules": 1}}
+
+
 def test_state_transitions_are_legal_only(tmp_path):
     led = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
     led.add(_entry("d0"))
-    import pytest
     with pytest.raises(ValueError):
         led.set_state("d0", "bogus_state")
 
@@ -44,44 +85,6 @@ def test_process_one_clean_path(tmp_path, monkeypatch):
     engineer_loop.process_one(led, led.pending()[0], conn=None)
     assert led.state("d0") == "clean"
     assert ("flow", "d0") in calls and ("ingest", "d0") in calls
-
-
-def test_process_one_reuses_prevalidated_flow_once(tmp_path, monkeypatch):
-    """Stable replay skips its third baseline and durably consumes the marker."""
-    calls = []
-
-    def run_flow(entry):
-        calls.append("post_fix_flow")
-        return 0
-
-    monkeypatch.setattr(engineer_loop, "_run_flow", run_flow)
-    monkeypatch.setattr(engineer_loop, "_fail_stage", lambda entry: "route")
-    monkeypatch.setattr(engineer_loop, "_run_fix", lambda entry: 0)
-    monkeypatch.setattr(engineer_loop, "_ingest", lambda entry: None)
-    statuses = iter([
-        {"drc": "unknown", "lvs": "unknown", "route": "unknown",
-         "rcx": "unknown", "timing": "unknown"},
-        {"drc": "clean", "lvs": "clean", "route": "clean",
-         "rcx": "clean", "timing": "clean"},
-    ])
-    monkeypatch.setattr(engineer_loop, "_signoff_status", lambda entry: next(statuses))
-    led = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
-    entry = _entry("replayed")
-    entry.update({
-        "reuse_existing_flow_returncode": 124,
-        "replay_evidence": str(tmp_path / "attempt_2.json"),
-    })
-    led.add(entry)
-
-    engineer_loop.process_one(led, led.pending()[0], conn=None)
-
-    assert calls == []
-    assert led.state("replayed") == "clean"
-    merged = led.get("replayed")
-    assert merged["flow_evidence_reused"] is True
-    assert merged["reused_flow_returncode"] == 124
-    reopened = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
-    assert reopened.get("replayed")["reuse_existing_flow_returncode"] is None
 
 
 def test_run_flow_invalidates_stale_signoff_reports(tmp_path, monkeypatch):

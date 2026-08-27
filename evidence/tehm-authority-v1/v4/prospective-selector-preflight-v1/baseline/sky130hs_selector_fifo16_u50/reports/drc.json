@@ -1,0 +1,30 @@
+{
+  "status": "clean",
+  "total_violations": 0,
+  "raw_marker_count": 0,
+  "categories": {},
+  "log_info": {
+    "elapsed_seconds": 12.94
+  },
+  "timeout_s": 900,
+  "exit_code": 0,
+  "drc_mode": "full",
+  "checker": "klayout_direct",
+  "run_tag": "RUN_2026-08-25_23-01-54_4582_1ffb",
+  "gds_path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/backend/RUN_2026-08-25_23-01-54_4582_1ffb/results/6_final.gds",
+  "gds_sha256": "1dc23af4f230997aaf5b2156e1f635cc06364f9a1dd18e88fbd14c34d72e135c",
+  "deck_path": "/opt/EDA4AI/OpenROAD-flow-scripts/flow/platforms/sky130hs/drc/sky130hs.lydrc",
+  "deck_sha256": "029722ea1fc2cf8c48f09fc670c0b72efb295f799c4eb236b7e9767930ecf772",
+  "klayout_version": "KLayout 0.29.12",
+  "started_at": "2026-08-25T23:07:45-07:00",
+  "ended_at": "2026-08-25T23:07:57-07:00",
+  "cell_count": 1253,
+  "gds_bytes": 1446880,
+  "wall_s": 12,
+  "peak_rss_kb": 518724,
+  "provenance": {
+    "run_tag": "RUN_2026-08-25_23-01-54_4582_1ffb",
+    "run_dir": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/backend/RUN_2026-08-25_23-01-54_4582_1ffb",
+    "source": "explicit"
+  }
+}

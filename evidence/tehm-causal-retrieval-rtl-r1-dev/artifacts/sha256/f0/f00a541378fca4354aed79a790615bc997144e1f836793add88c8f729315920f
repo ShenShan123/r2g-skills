@@ -1,0 +1,8 @@
+module width_correct_c (
+    input wire [5:0] payload,
+    output reg [5:0] payload_out
+);
+    always @(*) begin
+        payload_out = payload[5:0]; // BUG: truncates the upper payload bits
+    end
+endmodule

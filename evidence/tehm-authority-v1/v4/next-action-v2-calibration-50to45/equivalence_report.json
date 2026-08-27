@@ -1,0 +1,61 @@
+{
+  "all_proven": true,
+  "oracle_available": true,
+  "results": [
+    {
+      "candidate_profile": "flow.rtl.top-equivalence.v1",
+      "candidate_source_sha256": "52a25dc1b40757d4ecbf01df5f97fe488aa330e0c8858f5154f730933a1ca5de",
+      "candidate_top": "v2_cal_shift32",
+      "case_id": "sky130hs:v2_cal_shift32:calibration:50->45",
+      "oracle_type": "YOSYS_EQUIV",
+      "output_sha256": "b84b3f6f336614ae1f35567ad101c7f18fa1e6752abbeb32dea9143ec3a0ef5c",
+      "output_tail": "byte-identical complete RTL source sets",
+      "proof_type": "CRYPTOGRAPHIC_SOURCE_IDENTITY_V1",
+      "reason": "",
+      "reference_profile": "flow.rtl.top-equivalence.v1",
+      "reference_source_sha256": "52a25dc1b40757d4ecbf01df5f97fe488aa330e0c8858f5154f730933a1ca5de",
+      "reference_top": "v2_cal_shift32",
+      "returncode": 0,
+      "source_digest": "df42b87c00dc2240f4d28b129f5d51f2ac8cb0eeadaedd1c6ac27b372e899d2f",
+      "verdict": "PASS",
+      "version": "yosys-equivalence-oracle-v1"
+    },
+    {
+      "candidate_profile": "flow.rtl.top-equivalence.v1",
+      "candidate_source_sha256": "8fe91087618ba669bd0e4d437ab3ea57de533d8b9e526e2c2a63963d4ea76e6e",
+      "candidate_top": "v2_cal_router8",
+      "case_id": "sky130hs:v2_cal_router8:calibration:50->45",
+      "oracle_type": "YOSYS_EQUIV",
+      "output_sha256": "2f8fb8b8c4dd3085eeea5a5e6e86a7c7222e4a36acc95b3c4833c69e5977a22d",
+      "output_tail": "byte-identical complete RTL source sets",
+      "proof_type": "CRYPTOGRAPHIC_SOURCE_IDENTITY_V1",
+      "reason": "",
+      "reference_profile": "flow.rtl.top-equivalence.v1",
+      "reference_source_sha256": "8fe91087618ba669bd0e4d437ab3ea57de533d8b9e526e2c2a63963d4ea76e6e",
+      "reference_top": "v2_cal_router8",
+      "returncode": 0,
+      "source_digest": "5071bb47da3839bbb415240cd0508eda16eeb6b9f129d7d685487fdf248d9a05",
+      "verdict": "PASS",
+      "version": "yosys-equivalence-oracle-v1"
+    },
+    {
+      "candidate_profile": "flow.rtl.top-equivalence.v1",
+      "candidate_source_sha256": "47445a2f928d884b5760cda5e5691a6339b849019aa343a54924e59f501f5600",
+      "candidate_top": "v2_cal_hash16",
+      "case_id": "sky130hs:v2_cal_hash16:calibration:50->45",
+      "oracle_type": "YOSYS_EQUIV",
+      "output_sha256": "53ac8c1b7cec1193afc736ac6960f8dd45c26a1f8f51a3a4d642dc1ccf3257b3",
+      "output_tail": "byte-identical complete RTL source sets",
+      "proof_type": "CRYPTOGRAPHIC_SOURCE_IDENTITY_V1",
+      "reason": "",
+      "reference_profile": "flow.rtl.top-equivalence.v1",
+      "reference_source_sha256": "47445a2f928d884b5760cda5e5691a6339b849019aa343a54924e59f501f5600",
+      "reference_top": "v2_cal_hash16",
+      "returncode": 0,
+      "source_digest": "3d7c9c37ed454dcf235a4b74228f21faaadc6ba7ba871aac3709f2d28c6db207",
+      "verdict": "PASS",
+      "version": "yosys-equivalence-oracle-v1"
+    }
+  ],
+  "version": "orfs-batch0-v1"
+}

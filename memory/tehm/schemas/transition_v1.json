@@ -1,0 +1,43 @@
+{
+  "schema_version": "transition-v1",
+  "description": "Canonical verified transition e_t = <S_t, A_t, S_t+1, O_t, V_t> (design doc 4.1)",
+  "required": ["transition_id", "source_state_id", "target_state_id", "action", "observation_delta", "verifier"],
+  "properties": {
+    "transition_id": {"type": "string", "description": "content-addressed sha1"},
+    "source_state_id": {"type": "string"},
+    "target_state_id": {"type": "string"},
+    "action": {
+      "required": ["domain", "transformation_family", "payload"],
+      "properties": {
+        "domain": {"enum": ["flow.CONFIG_DELTA", "flow.SDC_EDIT", "flow.STAGE_RERUN", "signoff.REPAIR_ACTION", "rtl.AST_REWRITE", "rtl.GUARD_STRENGTHEN", "rtl.RESET_RESTORE", "rtl.WIDTH_CORRECT", "rtl.PRIORITY_REORDER"]},
+        "transformation_family": {"type": "string"},
+        "payload": {"type": "object"}
+      }
+    },
+    "observation_delta": {
+      "required": ["original_failure"],
+      "properties": {
+        "original_failure": {"enum": ["REMOVED", "PRESENT", "UNKNOWN"]},
+        "first_divergence": {"type": ["object", "null"]},
+        "failing_tests": {"type": ["object", "null"]},
+        "created_regressions": {"type": "array"},
+        "newly_observed_failures": {"type": "array"},
+        "experiment_kind": {"enum": ["REPAIR", "OBSERVATION", "UNKNOWN"]},
+        "utility_verdict": {"enum": ["PARETO_SAFE", "HARMFUL", "NEUTRAL", "UNKNOWN"]}
+      }
+    },
+    "verifier": {
+      "required": ["verdict", "oracle_type", "confidence_tier"],
+      "properties": {
+        "verdict": {"enum": ["PASS", "FAIL", "UNKNOWN"]},
+        "oracle_type": {"enum": ["FORMAL", "REGRESSION", "DIFFERENTIAL_SIM", "TARGET_TEST", "COMPILE", "LINT", "UNKNOWN"]},
+        "confidence_tier": {"enum": ["F", "R", "T", "H"]},
+        "obligation_coverage": {"type": ["number", "null"]},
+        "oracle_complete": {"type": ["boolean", "null"]},
+        "evidence_refs": {"type": "array"}
+      }
+    },
+    "outcome": {"enum": ["PASS", "PARTIAL", "NEUTRAL", "UNKNOWN", "FAIL", "REGRESSION"]},
+    "primary_effect_key": {"type": "string"}
+  }
+}

@@ -1,0 +1,47 @@
+# Predicate schema v1 (design doc 6.5, 23.1).
+# Mirror of tehm.graph.predicates.PREDICATE_SCHEMA.
+# Every predicate evaluates to TRUE | FALSE | UNKNOWN.
+# UNKNOWN means insufficient observation — NEVER semantic false (H3).
+schema_version: predicate-v0.1
+
+predicates:
+  target_check_failed:
+    kind: any_check_failed
+    description: any CHECK node is not clean
+  drc_clean:
+    kind: check_clean
+    check: drc
+  lvs_clean:
+    kind: check_clean
+    check: lvs
+  timing_clean:
+    kind: check_clean
+    check: timing
+  route_clean:
+    kind: check_clean
+    check: route
+  antenna_present:
+    kind: violation_class_prefix
+    prefix: antenna
+  density_violation_present:
+    kind: violation_class_prefix
+    prefix: density
+  # RTL predicates are not observable in the flow/signoff v1 graph;
+  # they stay UNKNOWN unless a caller supplies evidence.
+  single_clock_domain:
+    kind: unobserved
+  synchronous_reset:
+    kind: unobserved
+  handshake_completion_precedes_transition:
+    kind: unobserved
+  reset_semantics_preserved:
+    kind: unobserved
+
+truth_value:
+  - TRUE
+  - FALSE
+  - UNKNOWN
+
+metrics:
+  support: "n_T / (n_T + n_F)"
+  coverage: "(n_T + n_F) / (n_T + n_F + n_U)"

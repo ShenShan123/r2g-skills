@@ -1,0 +1,212 @@
+{
+  "latest_class_counts": {
+    "SUCCESS": 6
+  },
+  "projects": [
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "23e38d8cd2ccdaece0c823f798facec200f22f9041437e46df0e6d94eafc6b06",
+        "ended_at": "2026-08-25T23:49:04-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 7,
+          "path": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u45/backend/RUN_2026-08-25_23-47-41_7_3104/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u45/campaign_flow.log",
+        "log_sha256": "55bdddb55c4d62a89ed8a2f5accdad15c41ae6aa0bc7c116a136ec0b9766547c",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:47:41-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u45"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "f426aa2940abdc85d0cac8cb5fdaf26b63ad1c45d29e9c58cc3e8eda42605895",
+        "ended_at": "2026-08-25T23:49:05-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 8,
+          "path": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u50/backend/RUN_2026-08-25_23-47-41_6_1a5c/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u50/campaign_flow.log",
+        "log_sha256": "9f11aa7272f7d537bad05a37d639a73b95ec6eb36132fd5db5d49e273ea3ab26",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:47:41-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u50"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "6678bd7659872438bca0e2bea20b5be30805abddb5a963106f557c36b6336d61",
+        "ended_at": "2026-08-25T23:50:40-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 8,
+          "path": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u45/backend/RUN_2026-08-25_23-49-04_4705_1613/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u45/campaign_flow.log",
+        "log_sha256": "94c3639775774e644255ac87305e071752aa81e0478f6128c329b1bcf15eb8e4",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:49:04-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u45"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "6c67655423026c801ecd1f9a108f411be942343055270edfb5117c47d252fad4",
+        "ended_at": "2026-08-25T23:50:42-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 8,
+          "path": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u50/backend/RUN_2026-08-25_23-49-05_4912_31d8/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u50/campaign_flow.log",
+        "log_sha256": "87a72386475f1fa8337d2730bfe59f2b9390d7c4226c64ab3d31373d6845b13b",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:49:05-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u50"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "c06f2600330d4afe7259ec3265b2fd8c0809d86de84d850620c011a34e81b819",
+        "ended_at": "2026-08-25T23:52:28-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 9,
+          "path": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u45/backend/RUN_2026-08-25_23-50-40_9387_65a1/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u45/campaign_flow.log",
+        "log_sha256": "113182eb631fb758d2ddb951bbc0f3a29539c1d088cc58c4879fab3e7addea05",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:50:40-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u45"
+    },
+    {
+      "attempts": 1,
+      "classes": [
+        "SUCCESS"
+      ],
+      "domains": [
+        "none"
+      ],
+      "latest": {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "ae7b4520980dad3e8ca3e1af7b123d149f0947d31abb88c0e58933ebc5b7f71c",
+        "ended_at": "2026-08-25T23:52:32-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 8,
+          "path": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u50/backend/RUN_2026-08-25_23-50-42_9743_1800/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u50/campaign_flow.log",
+        "log_sha256": "beeb7271645e68a0c9e19e41fce1f19fd0de2448a177b8879ba27a5747404e3c",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:50:42-07:00",
+        "supervisor_timeout": false
+      },
+      "project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u50"
+    }
+  ],
+  "version": "orfs-diversity-v0.3"
+}

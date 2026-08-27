@@ -1,0 +1,28 @@
+{
+  "design": "overlap_priority_b",
+  "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
+  "bug": {
+    "type": "overlap_priority_reversed",
+    "description": "A broad valid match wins over the specific selected transaction match.",
+    "first_divergence_signal": "state"
+  },
+  "fix": {
+    "domain": "rtl.PRIORITY_REORDER",
+    "transformation_family": "PRIORITY_REORDER",
+    "compatibility_profile": "rtl.protocol.overlap_priority.v1",
+    "module": "overlap_priority_b",
+    "case_expr": "{valid, select}",
+    "higher_label": "2'b?1",
+    "lower_label": "2'b1?"
+  },
+  "verification": {
+    "target_test": "tb/tb_priority.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "PROVISIONAL_VALID",
+    "recovery_obligation": "PRESERVE_ARBITRATION_PRIORITY"
+  }
+}

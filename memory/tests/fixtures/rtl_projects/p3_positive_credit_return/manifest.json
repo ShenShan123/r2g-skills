@@ -1,0 +1,28 @@
+{
+  "design": "positive_credit_return_fsm",
+  "mechanism_family": "CREDIT_RETURN_COMPLETION",
+  "bug": {
+    "type": "completion_without_credit_return",
+    "description": "WAIT->DONE advances before the credit-return role is observed.",
+    "first_divergence_signal": "done"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "description": "WAIT: next_state = DONE; --> WAIT: if (credit_return) next_state = DONE;",
+    "module": "positive_credit_return_fsm",
+    "compatibility_profile": "rtl.fsm.single_guard.v1",
+    "source_state": "WAIT",
+    "target_state": "DONE",
+    "add_condition": "credit_return"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "PROVISIONAL_VALID"
+  }
+}

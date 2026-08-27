@@ -1,0 +1,53 @@
+{
+  "canonical_after": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "canonical_before": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "canonical_memory_mutation": "none",
+  "chain": {
+    "chain_head": "6f35382b081e3c658ccc648207523bdf08a25d0362ace094ce4d77bd46270fe6",
+    "count": 3,
+    "eligible_positive": 2,
+    "learner_eligible": 2,
+    "path": "/tmp/tehm-authority-v1/batch1-tiny-full/external/observations.jsonl",
+    "sha256": "895d58731d338ab086a322dc2861fc5fe4dbb2da693155cb586809d2e9bd3e75",
+    "version": "orfs-external-observation-v1"
+  },
+  "classifications": {
+    "ELIGIBLE_POSITIVE": 2,
+    "INCOMPLETE_EXTERNAL_ONLY": 1
+  },
+  "splits": {
+    "calibration": 1,
+    "support": 2
+  },
+  "version": "orfs-batch0-v1"
+}

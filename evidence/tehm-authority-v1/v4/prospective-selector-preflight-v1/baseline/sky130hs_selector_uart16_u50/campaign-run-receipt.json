@@ -1,0 +1,36 @@
+{
+  "attempt": 1,
+  "command": [
+    "bash",
+    "/data1/zhangdy/Typed-Executable-Hardware-Memory/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50",
+    "sky130hs",
+    "sky130hs_selector_uart16_u50"
+  ],
+  "completed": true,
+  "config_sha256": "a3175cde662b7e25cf06e21dffb0d9ff5df542518de6ff04322fef458860d3e4",
+  "ended_at": "2026-08-25T23:04:24-07:00",
+  "expected_failure_observed": false,
+  "failure_class": "SUCCESS",
+  "failure_domain": "none",
+  "flow_rc": 0,
+  "force_clean_run": false,
+  "last_checkpoint": {
+    "elapsed_s": 8,
+    "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50/backend/RUN_2026-08-25_23-02-48_6798_6151/stage_log.jsonl",
+    "stage": "finish",
+    "status": 0
+  },
+  "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50/campaign_flow.log",
+  "log_sha256": "c163b12bedc7244d9a34a47dc0b35af495cbed1b874e645bb96a9b24aff18c2d",
+  "platform": "sky130hs",
+  "receipt_version": "orfs-diversity-v0.3",
+  "resumable": true,
+  "resume_from": null,
+  "stage_log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50/backend/RUN_2026-08-25_23-02-48_6798_6151/stage_log.jsonl",
+  "stage_log_sha256": "be7405de9c041062ef243a349244f1ad077eb930f60ed2534077926077cbaf76",
+  "started_at": "2026-08-25T23:02:48-07:00",
+  "supervisor_grace_s": 90,
+  "supervisor_timeout": false,
+  "timeout_s": 1800
+}

@@ -1,0 +1,82 @@
+{
+  "attribution": {
+    "attribution": {
+      "capability_id": "capability_c02f53b2911c40b996cd",
+      "detail": {
+        "ablation": {
+          "gain_with_memory": false,
+          "gain_without_memory": false
+        },
+        "baseline": {
+          "behavior_digest": "sha256:9ddfd0567850abfe2bb6a7bbd00384cde05ee329ff3f4c99ce1c38a4dc73ca51",
+          "memory_digest": "sha256:a0f52c15138ac3440c18e393f146a048b4eb4878e3e89cc24c36463b5f645ef3",
+          "policy_digest": "sha256:17bf32d0b79e6487ad40d5b3561ebecbab9b4fbcb6f11a1abac2f57327c9b1cc"
+        },
+        "candidate": {
+          "behavior_digest": "sha256:9ddfd0567850abfe2bb6a7bbd00384cde05ee329ff3f4c99ce1c38a4dc73ca51",
+          "memory_digest": "sha256:5c83b2cda70a51bc0c6ca20523af7f1249bbe563e71d83d88cacc4a57fe42860",
+          "no_regression": false,
+          "policy_digest": "sha256:72bbe79a4bca3075bf7ec8bc75fc7dda01801b7c839a7bb9a22e6a35a7142c06",
+          "target_gain": false
+        },
+        "heldout": {
+          "disjoint_lineage": false,
+          "verdict": "UNKNOWN"
+        }
+      },
+      "gates": {
+        "C1": true,
+        "C2": true,
+        "C3": true,
+        "C4": false,
+        "C5": false,
+        "C6": false,
+        "C7": false,
+        "C8": false
+      },
+      "missing_gates": [
+        "C4",
+        "C5",
+        "C6",
+        "C7",
+        "C8"
+      ],
+      "promotable": false
+    },
+    "capability_id": "capability_c02f53b2911c40b996cd",
+    "control_digest": "sha256:cfb15b7095ba7c2409938f8a9ebf0c55eb74d1618de2603c5924aab56d4dcd2a",
+    "controls_match": true,
+    "promotable": false
+  },
+  "baseline_policy": {
+    "memory_snapshot_id": "sha256:a0f52c15138ac3440c18e393f146a048b4eb4878e3e89cc24c36463b5f645ef3",
+    "policy_digest": "sha256:17bf32d0b79e6487ad40d5b3561ebecbab9b4fbcb6f11a1abac2f57327c9b1cc",
+    "policy_snapshot_id": "policy_17bf32d0b79e6487ad40"
+  },
+  "candidate_policy": {
+    "memory_snapshot_id": "sha256:5c83b2cda70a51bc0c6ca20523af7f1249bbe563e71d83d88cacc4a57fe42860",
+    "policy_digest": "sha256:72bbe79a4bca3075bf7ec8bc75fc7dda01801b7c839a7bb9a22e6a35a7142c06",
+    "policy_snapshot_id": "policy_72bbe79a4bca3075bf7e"
+  },
+  "canonical_memory_mutation": "none",
+  "capability": {
+    "capability_id": "capability_c02f53b2911c40b996cd",
+    "mechanism_family": "DENSITY_RELIEF",
+    "status": "candidate",
+    "version": 1
+  },
+  "derived_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-capability-preflight-r2-dev/tehm.sqlite",
+  "derived_db_sha256": "96a4dc410f61da7808a4e463fe4b8a599968d9642e624e96f51483aaffe2bbda",
+  "interpretation": "C1-C3 infrastructure receipts exist, but behavior, target gain, held-out transfer, no-regression, and ablation were not executed; this is not capability evidence",
+  "policy_load": {
+    "loaded": true,
+    "policy_snapshot_id": "policy_72bbe79a4bca3075bf7e",
+    "receipt_digest": "sha256:0ff08a77ce8193ad2c204479bc8b44c66c8a5b42f341eaa1087a0a41e11a2af6",
+    "receipt_id": "policy_load_0ff08a77ce8193ad2c20",
+    "runtime_id": "tehm-capability-preflight-evaluation"
+  },
+  "promotion_eligible": false,
+  "source_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-causal-orfs-l3-r2-dev/tehm.sqlite",
+  "source_db_sha256": "a0f52c15138ac3440c18e393f146a048b4eb4878e3e89cc24c36463b5f645ef3",
+  "version": "capability-attribution-preflight-v1"
+}

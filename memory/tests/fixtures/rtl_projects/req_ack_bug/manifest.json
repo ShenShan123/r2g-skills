@@ -1,0 +1,22 @@
+{
+  "design": "req_ack_fsm",
+  "mechanism_family": "HANDSHAKE_COMPLETION",
+  "bug": {
+    "type": "handshake_completion_violation",
+    "description": "SEND->DONE transition fires without waiting for `ack`; done asserts while ack is low.",
+    "first_divergence_signal": "done"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "description": "SEND: next_state = DONE;  -->  SEND: if (ack) next_state = DONE;",
+    "module": "req_ack_fsm",
+    "source_state": "SEND",
+    "target_state": "DONE",
+    "add_condition": "ack"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  }
+}

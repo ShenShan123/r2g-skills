@@ -1,0 +1,27 @@
+// Independent recovery lineage: the completion guard is ack_reply.
+module obligation_recovery_b_fsm (
+    input wire clk, input wire rst_n, input wire launch, input wire ack_reply,
+    output reg complete
+);
+    localparam [1:0] IDLE = 2'd0, WAIT_ACK = 2'd1, COMPLETE = 2'd2;
+    reg [1:0] state, next_state;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) state <= IDLE;
+        else state <= next_state;
+    end
+
+    always @(*) begin
+        next_state = state;
+        case (state)
+            IDLE: if (launch) next_state = WAIT_ACK;
+            WAIT_ACK: if (ack_reply) next_state = COMPLETE; // BUG: acknowledgement is required
+            COMPLETE: next_state = IDLE;
+        endcase
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) complete <= 1'b0;
+        else complete <= (state == COMPLETE);
+    end
+endmodule

@@ -1,0 +1,1 @@
+{"command":"python3 -m compileall -q memory","returncode":0,"status":"PASS","stderr":""}

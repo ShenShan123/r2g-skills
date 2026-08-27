@@ -1,0 +1,497 @@
+{
+  "calibration": {
+    "canonical_memory_mutation": "none",
+    "group_count": 1,
+    "group_key_definition": "platform|family|dataset_tier|action_signature_sha256_24",
+    "groups": {
+      "sky130hs|DENSITY_RELIEF|research|56dc755f12d0dfb5e37d6904": {
+        "canonical_memory_mutation": "none",
+        "checks": {
+          "conformal_lineage_coverage": true,
+          "harmful_rate": true,
+          "lineage_firewall": true,
+          "minimum_lineage_groups": true,
+          "pareto_definition_validated": true,
+          "per_metric_support": true
+        },
+        "conformal": {
+          "method": "split_conformal_residual_lineage_grouped_v1",
+          "per_metric": {
+            "area_um2": {
+              "conformal_radius": 12.229482,
+              "coverage": 1.0,
+              "covered": 6,
+              "evaluated": 6,
+              "lineage_group_coverage": 1.0,
+              "lineage_groups": 6
+            },
+            "power_w": {
+              "conformal_radius": 1.9e-05,
+              "coverage": 1.0,
+              "covered": 6,
+              "evaluated": 6,
+              "lineage_group_coverage": 1.0,
+              "lineage_groups": 6
+            },
+            "tns_ns": {
+              "conformal_radius": 0.0,
+              "coverage": 1.0,
+              "covered": 6,
+              "evaluated": 6,
+              "lineage_group_coverage": 1.0,
+              "lineage_groups": 6
+            },
+            "wns_ns": {
+              "conformal_radius": 0.020024,
+              "coverage": 1.0,
+              "covered": 6,
+              "evaluated": 6,
+              "lineage_group_coverage": 1.0,
+              "lineage_groups": 6
+            }
+          },
+          "radii": {
+            "area_um2": 12.229482,
+            "power_w": 1.9e-05,
+            "tns_ns": 0.0,
+            "wns_ns": 0.020024
+          }
+        },
+        "firewall": {
+          "disjoint": true,
+          "heldout_lineages": [
+            "future-prospective-v63:sky130hs:future_prospective_logic_v63:base0",
+            "future-prospective-v64:sky130hs:future_prospective_logic_v64:base0",
+            "future-prospective-v65:sky130hs:future_prospective_logic_v65:base0",
+            "future-prospective-v66:sky130hs:future_prospective_logic_v66:base0",
+            "future-prospective-v67:sky130hs:future_prospective_logic_v67:base0",
+            "future-prospective-v68:sky130hs:future_prospective_logic_v68:base0"
+          ],
+          "overlap": [],
+          "training_lineages": [
+            "future-parametric-v10:sky130hs:calibration_logic_v10:base0",
+            "future-parametric-v11:sky130hs:calibration_logic_v11:base0",
+            "future-prospective-v12:sky130hs:future_prospective_logic_v12:base0",
+            "future-prospective-v13:sky130hs:future_prospective_logic_v13:base0",
+            "future-prospective-v33:sky130hs:future_prospective_logic_v33:base0",
+            "future-prospective-v34:sky130hs:future_prospective_logic_v34:base0",
+            "future-prospective-v35:sky130hs:future_prospective_logic_v35:base0",
+            "future-prospective-v36:sky130hs:future_prospective_logic_v36:base0",
+            "future-prospective-v37:sky130hs:future_prospective_logic_v37:base0",
+            "future-prospective-v38:sky130hs:future_prospective_logic_v38:base0",
+            "future-prospective-v39:sky130hs:future_prospective_logic_v39:base0",
+            "future-prospective-v40:sky130hs:future_prospective_logic_v40:base0",
+            "future-prospective-v41:sky130hs:future_prospective_logic_v41:base0",
+            "future-prospective-v42:sky130hs:future_prospective_logic_v42:base0",
+            "future-prospective-v43:sky130hs:future_prospective_logic_v43:base0",
+            "future-prospective-v44:sky130hs:future_prospective_logic_v44:base0",
+            "future-prospective-v45:sky130hs:future_prospective_logic_v45:base0",
+            "future-prospective-v46:sky130hs:future_prospective_logic_v46:base0",
+            "future-prospective-v47:sky130hs:future_prospective_logic_v47:base0",
+            "future-prospective-v48:sky130hs:future_prospective_logic_v48:base0",
+            "future-prospective-v49:sky130hs:future_prospective_logic_v49:base0",
+            "future-prospective-v50:sky130hs:future_prospective_logic_v50:base0",
+            "future-prospective-v57:sky130hs:future_prospective_logic_v57:base0",
+            "future-prospective-v58:sky130hs:future_prospective_logic_v58:base0",
+            "future-prospective-v59:sky130hs:future_prospective_logic_v59:base0",
+            "future-prospective-v60:sky130hs:future_prospective_logic_v60:base0",
+            "future-prospective-v61:sky130hs:future_prospective_logic_v61:base0",
+            "future-prospective-v62:sky130hs:future_prospective_logic_v62:base0",
+            "orfs-v2:aes",
+            "orfs-v2:gcd",
+            "orfs-v2:jpeg",
+            "orfs-v2:riscv32i",
+            "orfs-v3:ihp-sg13g2:gcd:base0",
+            "orfs-v3:ihp-sg13g2:gcd:base1",
+            "orfs-v3:ihp-sg13g2:gcd:base2",
+            "orfs-v3:sky130hd:gcd:base0",
+            "orfs-v3:sky130hd:gcd:base1",
+            "orfs-v3:sky130hd:gcd:base2",
+            "orfs-v3:sky130hs:gcd:base0",
+            "orfs-v3:sky130hs:gcd:base1",
+            "orfs-v3:sky130hs:gcd:base2",
+            "orfs-v4:sky130hs:fifo:base0",
+            "orfs-v4:sky130hs:fifo:base1",
+            "orfs-v4:sky130hs:fifo:base2",
+            "orfs-v4:sky130hs:uart:base0",
+            "orfs-v4:sky130hs:uart:base1",
+            "orfs-v4:sky130hs:uart:base2"
+          ]
+        },
+        "invalid_samples": [],
+        "lineage_group_count": 6,
+        "per_lineage_coverage": {
+          "future-prospective-v63:sky130hs:future_prospective_logic_v63:base0": {
+            "area_um2": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "power_w": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "tns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "wns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            }
+          },
+          "future-prospective-v64:sky130hs:future_prospective_logic_v64:base0": {
+            "area_um2": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "power_w": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "tns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "wns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            }
+          },
+          "future-prospective-v65:sky130hs:future_prospective_logic_v65:base0": {
+            "area_um2": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "power_w": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "tns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "wns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            }
+          },
+          "future-prospective-v66:sky130hs:future_prospective_logic_v66:base0": {
+            "area_um2": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "power_w": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "tns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "wns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            }
+          },
+          "future-prospective-v67:sky130hs:future_prospective_logic_v67:base0": {
+            "area_um2": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "power_w": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "tns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "wns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            }
+          },
+          "future-prospective-v68:sky130hs:future_prospective_logic_v68:base0": {
+            "area_um2": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "power_w": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "tns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            },
+            "wns_ns": {
+              "coverage": 1.0,
+              "covered": 1,
+              "evaluated": 1
+            }
+          }
+        },
+        "promotion_eligible": false,
+        "safety": {
+          "definition": {
+            "favorable_sign": {
+              "area_um2": -1.0,
+              "congestion": -1.0,
+              "drc_violations": -1.0,
+              "power_w": -1.0,
+              "tns_ns": 1.0,
+              "wns_ns": 1.0
+            },
+            "harmful": "constraint violation under max_regression",
+            "pareto_safe": "no harmful metric and at least one favorable delta"
+          },
+          "harmful_rate": 0.0,
+          "lineage_rates": [
+            {
+              "harmful_rate": 0.0,
+              "lineage_id": "future-prospective-v63:sky130hs:future_prospective_logic_v63:base0",
+              "pareto_safe_rate": 1.0,
+              "samples": 1
+            },
+            {
+              "harmful_rate": 0.0,
+              "lineage_id": "future-prospective-v64:sky130hs:future_prospective_logic_v64:base0",
+              "pareto_safe_rate": 1.0,
+              "samples": 1
+            },
+            {
+              "harmful_rate": 0.0,
+              "lineage_id": "future-prospective-v65:sky130hs:future_prospective_logic_v65:base0",
+              "pareto_safe_rate": 1.0,
+              "samples": 1
+            },
+            {
+              "harmful_rate": 0.0,
+              "lineage_id": "future-prospective-v66:sky130hs:future_prospective_logic_v66:base0",
+              "pareto_safe_rate": 1.0,
+              "samples": 1
+            },
+            {
+              "harmful_rate": 0.0,
+              "lineage_id": "future-prospective-v67:sky130hs:future_prospective_logic_v67:base0",
+              "pareto_safe_rate": 1.0,
+              "samples": 1
+            },
+            {
+              "harmful_rate": 0.0,
+              "lineage_id": "future-prospective-v68:sky130hs:future_prospective_logic_v68:base0",
+              "pareto_safe_rate": 1.0,
+              "samples": 1
+            }
+          ],
+          "rows": [
+            {
+              "harmful": false,
+              "improved": true,
+              "lineage_id": "future-prospective-v63:sky130hs:future_prospective_logic_v63:base0",
+              "pareto_safe": true,
+              "violating_metrics": []
+            },
+            {
+              "harmful": false,
+              "improved": true,
+              "lineage_id": "future-prospective-v64:sky130hs:future_prospective_logic_v64:base0",
+              "pareto_safe": true,
+              "violating_metrics": []
+            },
+            {
+              "harmful": false,
+              "improved": true,
+              "lineage_id": "future-prospective-v65:sky130hs:future_prospective_logic_v65:base0",
+              "pareto_safe": true,
+              "violating_metrics": []
+            },
+            {
+              "harmful": false,
+              "improved": true,
+              "lineage_id": "future-prospective-v66:sky130hs:future_prospective_logic_v66:base0",
+              "pareto_safe": true,
+              "violating_metrics": []
+            },
+            {
+              "harmful": false,
+              "improved": true,
+              "lineage_id": "future-prospective-v67:sky130hs:future_prospective_logic_v67:base0",
+              "pareto_safe": true,
+              "violating_metrics": []
+            },
+            {
+              "harmful": false,
+              "improved": true,
+              "lineage_id": "future-prospective-v68:sky130hs:future_prospective_logic_v68:base0",
+              "pareto_safe": true,
+              "violating_metrics": []
+            }
+          ]
+        },
+        "sample_count": 6,
+        "shadow_only": true,
+        "status": "ready_for_shadow",
+        "thresholds": {
+          "max_harmful_rate": 0.0,
+          "max_regression": {
+            "area_um2": 0.05,
+            "congestion": 0.05,
+            "drc_violations": 0.0,
+            "power_w": 0.05,
+            "tns_ns": -0.05,
+            "wns_ns": -0.05
+          },
+          "min_lineages": 3,
+          "min_samples_per_metric": 3,
+          "target_coverage": 0.8
+        },
+        "version": "parametric-lineage-calibration-v1"
+      }
+    },
+    "invalid_samples": [],
+    "promotion_eligible": false,
+    "sample_count": 6,
+    "shadow_only": true,
+    "status": "ready_for_shadow",
+    "training_lineages": [
+      "future-parametric-v10:sky130hs:calibration_logic_v10:base0",
+      "future-parametric-v11:sky130hs:calibration_logic_v11:base0",
+      "future-prospective-v12:sky130hs:future_prospective_logic_v12:base0",
+      "future-prospective-v13:sky130hs:future_prospective_logic_v13:base0",
+      "future-prospective-v33:sky130hs:future_prospective_logic_v33:base0",
+      "future-prospective-v34:sky130hs:future_prospective_logic_v34:base0",
+      "future-prospective-v35:sky130hs:future_prospective_logic_v35:base0",
+      "future-prospective-v36:sky130hs:future_prospective_logic_v36:base0",
+      "future-prospective-v37:sky130hs:future_prospective_logic_v37:base0",
+      "future-prospective-v38:sky130hs:future_prospective_logic_v38:base0",
+      "future-prospective-v39:sky130hs:future_prospective_logic_v39:base0",
+      "future-prospective-v40:sky130hs:future_prospective_logic_v40:base0",
+      "future-prospective-v41:sky130hs:future_prospective_logic_v41:base0",
+      "future-prospective-v42:sky130hs:future_prospective_logic_v42:base0",
+      "future-prospective-v43:sky130hs:future_prospective_logic_v43:base0",
+      "future-prospective-v44:sky130hs:future_prospective_logic_v44:base0",
+      "future-prospective-v45:sky130hs:future_prospective_logic_v45:base0",
+      "future-prospective-v46:sky130hs:future_prospective_logic_v46:base0",
+      "future-prospective-v47:sky130hs:future_prospective_logic_v47:base0",
+      "future-prospective-v48:sky130hs:future_prospective_logic_v48:base0",
+      "future-prospective-v49:sky130hs:future_prospective_logic_v49:base0",
+      "future-prospective-v50:sky130hs:future_prospective_logic_v50:base0",
+      "future-prospective-v57:sky130hs:future_prospective_logic_v57:base0",
+      "future-prospective-v58:sky130hs:future_prospective_logic_v58:base0",
+      "future-prospective-v59:sky130hs:future_prospective_logic_v59:base0",
+      "future-prospective-v60:sky130hs:future_prospective_logic_v60:base0",
+      "future-prospective-v61:sky130hs:future_prospective_logic_v61:base0",
+      "future-prospective-v62:sky130hs:future_prospective_logic_v62:base0",
+      "orfs-v2:aes",
+      "orfs-v2:gcd",
+      "orfs-v2:jpeg",
+      "orfs-v2:riscv32i",
+      "orfs-v3:ihp-sg13g2:gcd:base0",
+      "orfs-v3:ihp-sg13g2:gcd:base1",
+      "orfs-v3:ihp-sg13g2:gcd:base2",
+      "orfs-v3:sky130hd:gcd:base0",
+      "orfs-v3:sky130hd:gcd:base1",
+      "orfs-v3:sky130hd:gcd:base2",
+      "orfs-v3:sky130hs:gcd:base0",
+      "orfs-v3:sky130hs:gcd:base1",
+      "orfs-v3:sky130hs:gcd:base2",
+      "orfs-v4:sky130hs:fifo:base0",
+      "orfs-v4:sky130hs:fifo:base1",
+      "orfs-v4:sky130hs:fifo:base2",
+      "orfs-v4:sky130hs:uart:base0",
+      "orfs-v4:sky130hs:uart:base1",
+      "orfs-v4:sky130hs:uart:base2"
+    ],
+    "version": "parametric-lineage-grouped-calibration-v1"
+  },
+  "canonical_memory_mutation": "none",
+  "canonical_physical_count_after": 142,
+  "canonical_physical_count_before": 142,
+  "db": "/tmp/tehm-p2-calibration-expansion-v63v68/staging/closed_loop/tehm.sqlite",
+  "excluded": [],
+  "parametric_view_status": "NOT_IMPLEMENTED",
+  "promotion_eligible": false,
+  "sample_count": 6,
+  "samples": "/tmp/tehm-p2-calibration-expansion-v63v68/prospective_samples.json",
+  "source_digests": {
+    "db_sha256": "76de1868543f19259a10be71e6d4d85508bf921a980d22737c4ca74e4f7f15d2",
+    "samples_sha256": "5cf12f2d31d8f1a27d6455b79e1ab8e47ffd35733e46f4317cf1df8c223ad69a",
+    "training_report_sha256": "f0e60c3db476c7e1927706fde7417f02291d8ada8295e2799b201d62f5601473"
+  },
+  "training_lineages": [
+    "future-parametric-v10:sky130hs:calibration_logic_v10:base0",
+    "future-parametric-v11:sky130hs:calibration_logic_v11:base0",
+    "future-prospective-v12:sky130hs:future_prospective_logic_v12:base0",
+    "future-prospective-v13:sky130hs:future_prospective_logic_v13:base0",
+    "future-prospective-v33:sky130hs:future_prospective_logic_v33:base0",
+    "future-prospective-v34:sky130hs:future_prospective_logic_v34:base0",
+    "future-prospective-v35:sky130hs:future_prospective_logic_v35:base0",
+    "future-prospective-v36:sky130hs:future_prospective_logic_v36:base0",
+    "future-prospective-v37:sky130hs:future_prospective_logic_v37:base0",
+    "future-prospective-v38:sky130hs:future_prospective_logic_v38:base0",
+    "future-prospective-v39:sky130hs:future_prospective_logic_v39:base0",
+    "future-prospective-v40:sky130hs:future_prospective_logic_v40:base0",
+    "future-prospective-v41:sky130hs:future_prospective_logic_v41:base0",
+    "future-prospective-v42:sky130hs:future_prospective_logic_v42:base0",
+    "future-prospective-v43:sky130hs:future_prospective_logic_v43:base0",
+    "future-prospective-v44:sky130hs:future_prospective_logic_v44:base0",
+    "future-prospective-v45:sky130hs:future_prospective_logic_v45:base0",
+    "future-prospective-v46:sky130hs:future_prospective_logic_v46:base0",
+    "future-prospective-v47:sky130hs:future_prospective_logic_v47:base0",
+    "future-prospective-v48:sky130hs:future_prospective_logic_v48:base0",
+    "future-prospective-v49:sky130hs:future_prospective_logic_v49:base0",
+    "future-prospective-v50:sky130hs:future_prospective_logic_v50:base0",
+    "future-prospective-v57:sky130hs:future_prospective_logic_v57:base0",
+    "future-prospective-v58:sky130hs:future_prospective_logic_v58:base0",
+    "future-prospective-v59:sky130hs:future_prospective_logic_v59:base0",
+    "future-prospective-v60:sky130hs:future_prospective_logic_v60:base0",
+    "future-prospective-v61:sky130hs:future_prospective_logic_v61:base0",
+    "future-prospective-v62:sky130hs:future_prospective_logic_v62:base0",
+    "orfs-v2:aes",
+    "orfs-v2:gcd",
+    "orfs-v2:jpeg",
+    "orfs-v2:riscv32i",
+    "orfs-v3:ihp-sg13g2:gcd:base0",
+    "orfs-v3:ihp-sg13g2:gcd:base1",
+    "orfs-v3:ihp-sg13g2:gcd:base2",
+    "orfs-v3:sky130hd:gcd:base0",
+    "orfs-v3:sky130hd:gcd:base1",
+    "orfs-v3:sky130hd:gcd:base2",
+    "orfs-v3:sky130hs:gcd:base0",
+    "orfs-v3:sky130hs:gcd:base1",
+    "orfs-v3:sky130hs:gcd:base2",
+    "orfs-v4:sky130hs:fifo:base0",
+    "orfs-v4:sky130hs:fifo:base1",
+    "orfs-v4:sky130hs:fifo:base2",
+    "orfs-v4:sky130hs:uart:base0",
+    "orfs-v4:sky130hs:uart:base1",
+    "orfs-v4:sky130hs:uart:base2"
+  ],
+  "training_report": "/tmp/tehm-p2-calibration-expansion-v63v68/calibration_expansion_report.json",
+  "usable_count": 6,
+  "version": "readonly-physical-exact-calibration-v1"
+}

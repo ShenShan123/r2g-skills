@@ -1,0 +1,138 @@
+{
+  "dataset_tier": "strict_clean",
+  "def_sha256": "f8007fd0bc25b1a3358a44731ef82ea375d129ec4af3cae2672b589ed30342d2",
+  "design": "selector_fifo16",
+  "digest": "d0ef19bd9cb5ea122e077bd1328494cf2472868d50604dc13035309006fb892f",
+  "extractor_version": "def-graph-feature-context-v0.2",
+  "feature_digests": {
+    "edges_gate_pin": "b005891f83d693795ccb15c52ac737f33a1b82d84bc6da22e8b95e2e9ca4818f",
+    "edges_iopin_net": "673cced696af4ccdc3f71da07fe05f7a3ea54a70c868a94dd27772adb21c0a2e",
+    "edges_pin_net": "be8f4f31bf1cf5749a38701de7b184675b03de7b7b444b6feb4736850a18fba5",
+    "features_stats": "8b6476fd9f5cc5ca18d99b3663a7eccb226ec51245ed2ef81bf7e8264974c65e",
+    "metadata": "d7e105d9a80e5aca0eab5fc4f1f450ec23a8b35fa85c68c526606dc6d15e7307",
+    "nodes_gate": "e1b140b26638e780bba7d4c1d70f4e03ea869ddc83da3f004162827a52560c20",
+    "nodes_iopin": "5a56c8e3590bde61739b670334b6fd6a22d37ca233e46490ac7c1b9fe9cbe635",
+    "nodes_net": "4e5ac9e8452b0a6dad6bfd689dfa3c10fff2fe77cdbcb687ef06693902897ebf",
+    "nodes_pin": "cff806289da0b05e12babc29b5e71001db25f255251efcc97daa2209c23c6203",
+    "signoff_gate": "88384e30d94b20b80d5e275081f28aeba50309a1915c95053faf952b7ffce1da"
+  },
+  "feature_health": {
+    "edges_gate_pin": {
+      "status": "ok"
+    },
+    "edges_iopin_net": {
+      "status": "ok"
+    },
+    "edges_pin_net": {
+      "status": "ok"
+    },
+    "metadata": {
+      "status": "ok"
+    },
+    "nodes_gate": {
+      "status": "ok"
+    },
+    "nodes_iopin": {
+      "status": "ok"
+    },
+    "nodes_net": {
+      "status": "ok"
+    },
+    "nodes_pin": {
+      "status": "ok"
+    }
+  },
+  "graph_features": {
+    "ABC_AREA": 1.0,
+    "CORE_UTILIZATION": 50.0,
+    "C_total": 5466.648897,
+    "PLACE_DENSITY": "Default",
+    "V_nom": 1.8,
+    "avg_fanout": 2.5412147505422995,
+    "core_area": 31840.833599999998,
+    "dbu_unit": 1000.0,
+    "die_height": 178.44,
+    "die_width": 178.44,
+    "freq_Hz": 454545455.0,
+    "num_cells": 2863.0,
+    "num_ios": 38.0,
+    "num_nets": 922.0,
+    "tracks_detail": "li1:854|met1:964|met2:744|met3:482|met4:372|met5:106",
+    "tracks_per_layer": 587.0
+  },
+  "platform": "sky130hs",
+  "signoff_health": {
+    "blockers": [],
+    "caveats": [],
+    "def_overridden": false,
+    "mode": "strict",
+    "status": "pass"
+  },
+  "source_refs": [
+    {
+      "kind": "def",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/backend/RUN_2026-08-25_23-01-54_4582_1ffb/final/6_final.def",
+      "sha256": "f8007fd0bc25b1a3358a44731ef82ea375d129ec4af3cae2672b589ed30342d2"
+    },
+    {
+      "kind": "features_stats",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/reports/features_stats.json",
+      "sha256": "8b6476fd9f5cc5ca18d99b3663a7eccb226ec51245ed2ef81bf7e8264974c65e"
+    },
+    {
+      "kind": "signoff_gate",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/reports/signoff_gate.json",
+      "sha256": "88384e30d94b20b80d5e275081f28aeba50309a1915c95053faf952b7ffce1da"
+    },
+    {
+      "kind": "metadata",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/features/metadata.csv",
+      "sha256": "d7e105d9a80e5aca0eab5fc4f1f450ec23a8b35fa85c68c526606dc6d15e7307"
+    },
+    {
+      "kind": "nodes_gate",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/features/nodes_gate.csv",
+      "sha256": "e1b140b26638e780bba7d4c1d70f4e03ea869ddc83da3f004162827a52560c20"
+    },
+    {
+      "kind": "nodes_net",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/features/nodes_net.csv",
+      "sha256": "4e5ac9e8452b0a6dad6bfd689dfa3c10fff2fe77cdbcb687ef06693902897ebf"
+    },
+    {
+      "kind": "nodes_iopin",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/features/nodes_iopin.csv",
+      "sha256": "5a56c8e3590bde61739b670334b6fd6a22d37ca233e46490ac7c1b9fe9cbe635"
+    },
+    {
+      "kind": "nodes_pin",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/features/nodes_pin.csv",
+      "sha256": "cff806289da0b05e12babc29b5e71001db25f255251efcc97daa2209c23c6203"
+    },
+    {
+      "kind": "edges_gate_pin",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/features/edges_gate_pin.csv",
+      "sha256": "b005891f83d693795ccb15c52ac737f33a1b82d84bc6da22e8b95e2e9ca4818f"
+    },
+    {
+      "kind": "edges_pin_net",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/features/edges_pin_net.csv",
+      "sha256": "be8f4f31bf1cf5749a38701de7b184675b03de7b7b444b6feb4736850a18fba5"
+    },
+    {
+      "kind": "edges_iopin_net",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/features/edges_iopin_net.csv",
+      "sha256": "673cced696af4ccdc3f71da07fe05f7a3ea54a70c868a94dd27772adb21c0a2e"
+    }
+  ],
+  "status": "complete",
+  "topology_rows": {
+    "edges_gate_pin": 3227,
+    "edges_iopin_net": 38,
+    "edges_pin_net": 3227,
+    "nodes_gate": 2863,
+    "nodes_iopin": 38,
+    "nodes_net": 922,
+    "nodes_pin": 3265
+  }
+}

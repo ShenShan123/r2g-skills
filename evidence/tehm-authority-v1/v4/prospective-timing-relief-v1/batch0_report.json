@@ -1,0 +1,67 @@
+{
+  "action_signature": {
+    "config_edits": {
+      "CORE_UTILIZATION": "40"
+    },
+    "domain": "flow.CONFIG_DELTA",
+    "family": "DENSITY_RELIEF",
+    "operation_point": "50->40",
+    "utility_contract_id": "TIMING_RELIEF_BUDGETED_V1"
+  },
+  "campaign_id": "timing-relief-budgeted-v1-prospective-full",
+  "canonical_memory_mutation": "none",
+  "canonical_snapshots": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "classifications": {
+    "ELIGIBLE_POSITIVE": 6
+  },
+  "design_count": 6,
+  "eligible_positive": 6,
+  "execution": {
+    "attempt_count": 0,
+    "latest_outcomes": {},
+    "project_count": 0
+  },
+  "external_chain": {
+    "chain_head": "77045536b875007103947993861339f6c2e766795591f2604e58b7af7793cd63",
+    "count": 6,
+    "eligible_positive": 6,
+    "learner_eligible": 0,
+    "path": "/tmp/tehm-authority-v1/prospective-batch-full/external/observations.jsonl",
+    "sha256": "e0645eccad60e4c6bc8fe64fc0614877ecad8a7a61cca183c035e699fc251bf7",
+    "version": "orfs-external-observation-v1"
+  },
+  "external_observations": 6,
+  "learner_eligible_support": 0,
+  "oracle_summary": {
+    "graph_complete": 12,
+    "graph_projects": 12,
+    "missing_arm_counts": {},
+    "signoff_projects": 12,
+    "strict_signoff_success": 12,
+    "timing_success": 12
+  },
+  "promotion_attempted": false,
+  "source_freeze_sha256": "d1a571d56ccb5d51d3241d130ec71d82fb0f57d63d67f5a40e839aff43259249",
+  "splits": {
+    "calibration": 2,
+    "heldout": 4
+  },
+  "staging_db": "/tmp/tehm-authority-v1/prospective-batch-full/staging/tehm.sqlite",
+  "staging_imported": 0,
+  "version": "orfs-batch0-v1"
+}

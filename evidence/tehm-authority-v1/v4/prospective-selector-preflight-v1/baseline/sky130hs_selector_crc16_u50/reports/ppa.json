@@ -1,0 +1,53 @@
+{
+  "summary": {
+    "area": {
+      "design_area_um2": 1690.0,
+      "utilization": 0.73
+    },
+    "timing": {
+      "setup_wns": 1.05243,
+      "setup_tns": 0,
+      "hold_wns": 0.320278,
+      "hold_tns": 0,
+      "clock_skew_setup": 0.00733696,
+      "clock_skew_hold": 0.00733696,
+      "setup_violation_count": 0,
+      "hold_violation_count": 0,
+      "max_cap_violations": 0,
+      "max_slew_violations": 0
+    },
+    "power": {
+      "total_power_w": 0.00104258,
+      "internal_power_w": 0.000737558,
+      "switching_power_w": 0.000305007,
+      "leakage_power_w": 2.03407e-08
+    },
+    "drc": {},
+    "timing_staged": {
+      "floorplan_setup_ws": 1.23154,
+      "place_setup_ws": 0.911467,
+      "finish_setup_ws": 1.05243
+    }
+  },
+  "geometry": {
+    "die_area_um2": 2790.48,
+    "core_area_um2": 2327.27,
+    "utilization": 0.725962,
+    "instance_count": 195,
+    "stdcell_count": 195,
+    "stdcell_area_um2": 1689.51,
+    "macro_count": 0,
+    "macro_area_um2": 0,
+    "io_count": 27,
+    "rows": 14,
+    "sites": 1456,
+    "clock_buffer_count": 3,
+    "sequential_count": 16,
+    "warnings": 11,
+    "errors": 0
+  },
+  "run_dir": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/backend/RUN_2026-08-25_23-00-37_9_007a",
+  "orfs_status": "complete",
+  "orfs_last_stage": "finish",
+  "orfs_fail_stage": null
+}

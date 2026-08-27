@@ -1,0 +1,16 @@
+{
+  "version": "tehm-canonical-freeze-pointer-v1",
+  "contract": "tehm-evidence-freeze-v4-dev",
+  "canonical_bundle_id": "tehm-evidence-freeze-v4-dev",
+  "canonical_bundle": "../../evidence/tehm-evidence-freeze-v4-dev",
+  "canonical_bundle_locator": "relative-to-pointer-or-TEHM_CANONICAL_BUNDLE",
+  "bundle_digest": "b0cebeea4c5e55f2cc7d21aea29703cd9abb25664002825c4341fed1f63ca815",
+  "manifest_digest": "eb71930a7bc20f83db624dba0c6a7db67eb69cc3538250171ffef70fc4a04dfa",
+  "expected_tests_passed": ["compileall", "P0_regression_smoke", "H9", "H11"],
+  "expected_calibration_memory_count": null,
+  "immutable_until": "tehm-evidence-freeze-v5",
+  "development_baseline": {
+    "git_tag": null,
+    "git_commit": "db1fd5a"
+  }
+}

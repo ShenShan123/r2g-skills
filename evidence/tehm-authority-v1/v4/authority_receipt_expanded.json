@@ -1,0 +1,70 @@
+{
+  "authority_kind": "independent_orfs_promotion_authority",
+  "bindings": {
+    "canonical_db_sha256_before": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+    "observations_sha256": "a686a17a2cd979e8c72105e24578589f35e0aed424cbaf23a881f81aa6231df1",
+    "staging_db_sha256": "d23df5a0969624f7cc1ae23e83aeeb04818f6d3f972761e2d662bdebc1240888"
+  },
+  "campaign_id": "authority-v1-batch1-expanded-v2",
+  "case_ids": [
+    "sky130hs:add32:0:DENSITY_RELIEF:50->40",
+    "sky130hs:and32:0:DENSITY_RELIEF:50->40",
+    "sky130hs:gcd:u50->u40",
+    "sky130hs:jpeg:u50->u40",
+    "sky130hs:mux32:0:DENSITY_RELIEF:50->40",
+    "sky130hs:parity64:0:DENSITY_RELIEF:50->40",
+    "sky130hs:toggle32:0:DENSITY_RELIEF:50->40",
+    "sky130hs:uart:0:DENSITY_RELIEF:50->40"
+  ],
+  "decision": "DENY_CANONICAL_IMPORT",
+  "gate_evaluation": {
+    "checks": {
+      "conformal_coverage": true,
+      "cross_lineage_te": true,
+      "harmful_rate": false,
+      "obligation_coverage": true,
+      "registry_verified": true,
+      "rollback_verified": true
+    },
+    "eligible": false,
+    "missing": [],
+    "strict": true,
+    "thresholds": {
+      "conformal_coverage": 0.8,
+      "cross_lineage_te": 1.0,
+      "harmful_rate": 0.0,
+      "obligation_coverage": 1.0
+    },
+    "version": "promotion-gates-v1"
+  },
+  "observation_count": 8,
+  "promotion_attempted": false,
+  "promotion_gates": {
+    "conformal_coverage": true,
+    "cross_lineage_te": true,
+    "harmful_rate": false,
+    "obligation_coverage": true,
+    "registry_verified": true,
+    "rollback_verified": true
+  },
+  "rule_id": "rule_d6f296ce7fc988ce",
+  "snapshots": {
+    "canonical_before": {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    "staging": {
+      "exists": true,
+      "path": "/tmp/tehm-authority-v1/authority-campaign-v4/staging/tehm.sqlite",
+      "physical_effects": 8,
+      "sha256": "d23df5a0969624f7cc1ae23e83aeeb04818f6d3f972761e2d662bdebc1240888",
+      "transitions": 8
+    }
+  },
+  "status_version": 2,
+  "target_scope": "route",
+  "version": "orfs-canonical-import-authority-v1"
+}

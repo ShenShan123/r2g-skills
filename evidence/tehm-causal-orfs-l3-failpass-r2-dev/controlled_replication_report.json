@@ -1,0 +1,279 @@
+{
+  "authority_note": "L3 replicated causal evidence is evaluation-only; capability and rule promotion still require their independent authority gates",
+  "campaign_id": "orfs-authority-v7-failpass-r2",
+  "canonical_memory_mutation": "none",
+  "derived_counts": {
+    "causal_edges": 14,
+    "causal_nodes": 16,
+    "causal_paths": 1,
+    "transitions": 13
+  },
+  "derived_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-causal-orfs-l3-failpass-r2-dev/tehm.sqlite",
+  "derived_db_sha256": "a2d328c6d88dfaaefa82213d194b00c4dee131f22c22050fe0d9455c908d052c",
+  "fragments": [
+    {
+      "campaign_id": "orfs-authority-v7-failpass-r2",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_bb511478dda4e3cf",
+        "causal_edge_531d22120b89efa9",
+        "causal_edge_1cf9390462a6ba8a"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_6a9d7593bd085c96",
+      "learner_eligible": true,
+      "lineage_id": "failpass-r2:mux32",
+      "mechanism_family": "DENSITY_RELIEF",
+      "node_ids": [
+        "causal_node_ca89baa10665198b",
+        "causal_node_556e5a3464d9711a",
+        "causal_node_c89ea188782791f8",
+        "causal_node_cae7d4e642b5c54d"
+      ],
+      "transition_id": "transition_d62fdaedf288afb5"
+    },
+    {
+      "campaign_id": "orfs-authority-v7-failpass-r2",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_a76389c083a19046",
+        "causal_edge_6c31836f7154cc31",
+        "causal_edge_c53030280c506e48"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_6a9d7593bd085c96",
+      "learner_eligible": true,
+      "lineage_id": "failpass-r2:mux32",
+      "mechanism_family": "DENSITY_RELIEF",
+      "node_ids": [
+        "causal_node_5e5aec21d36b5017",
+        "causal_node_66ddd61f4b3b7ee2",
+        "causal_node_11329d817f007435",
+        "causal_node_f6685cbaa839466f"
+      ],
+      "transition_id": "transition_5f8b2ffb4a2ceec5"
+    },
+    {
+      "campaign_id": "orfs-authority-v7-failpass-r2",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_bf93f2d87db902d2",
+        "causal_edge_e82a411916987855",
+        "causal_edge_9cc5ec78c3e7ee89"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_2765d48db702ba3c",
+      "learner_eligible": true,
+      "lineage_id": "failpass-r2:parity64",
+      "mechanism_family": "DENSITY_RELIEF",
+      "node_ids": [
+        "causal_node_8c93a5f3260c8b25",
+        "causal_node_cfa3917a6471e079",
+        "causal_node_eebedd18c35668a9",
+        "causal_node_9d5ae89cba38a5ad"
+      ],
+      "transition_id": "transition_c4abe9765d080edb"
+    },
+    {
+      "campaign_id": "orfs-authority-v7-failpass-r2",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_109cb5e82604d3d1",
+        "causal_edge_3a366af2d966908c",
+        "causal_edge_fe7b747b230d3f2b"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_2765d48db702ba3c",
+      "learner_eligible": true,
+      "lineage_id": "failpass-r2:parity64",
+      "mechanism_family": "DENSITY_RELIEF",
+      "node_ids": [
+        "causal_node_b24fd01fdae82951",
+        "causal_node_0156f48e0057c4b3",
+        "causal_node_c3aeb2b4d7866f09",
+        "causal_node_33a3e90499cd8e9f"
+      ],
+      "transition_id": "transition_656fbb6b1558cd5b"
+    }
+  ],
+  "pair_count": 2,
+  "pairs": [
+    {
+      "control_outcome": "FAIL",
+      "control_transition_id": "transition_d62fdaedf288afb5",
+      "intervention": {
+        "causal_edge_id": "causal_edge_5ac1e47eb71ff636",
+        "changed_action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+        "control_transition_id": "transition_d62fdaedf288afb5",
+        "evidence_level": "L2_CONTROLLED_INTERVENTION",
+        "lineage_id": "failpass-r2:mux32",
+        "matched_context_digest": "ctx_6a9d7593bd085c96",
+        "oracle_equivalence": {
+          "same_oracle_type": true,
+          "same_scope": true,
+          "same_toolchain": true
+        },
+        "outcome_delta": {
+          "control": {
+            "outcome": "FAIL",
+            "verdict": "FAIL"
+          },
+          "treatment": {
+            "outcome": "PASS",
+            "verdict": "PASS"
+          }
+        },
+        "pair_id": "intervention_pair_e9598e4b72d46d25",
+        "target_scope": "flow.signoff",
+        "treatment_transition_id": "transition_5f8b2ffb4a2ceec5",
+        "validity_status": "VALID_CONTROLLED_PAIR"
+      },
+      "lineage_id": "failpass-r2:mux32",
+      "treatment_outcome": "PASS",
+      "treatment_transition_id": "transition_5f8b2ffb4a2ceec5"
+    },
+    {
+      "control_outcome": "FAIL",
+      "control_transition_id": "transition_c4abe9765d080edb",
+      "intervention": {
+        "causal_edge_id": "causal_edge_3d2ebd44328e0d79",
+        "changed_action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+        "control_transition_id": "transition_c4abe9765d080edb",
+        "evidence_level": "L2_CONTROLLED_INTERVENTION",
+        "lineage_id": "failpass-r2:parity64",
+        "matched_context_digest": "ctx_2765d48db702ba3c",
+        "oracle_equivalence": {
+          "same_oracle_type": true,
+          "same_scope": true,
+          "same_toolchain": true
+        },
+        "outcome_delta": {
+          "control": {
+            "outcome": "FAIL",
+            "verdict": "FAIL"
+          },
+          "treatment": {
+            "outcome": "PASS",
+            "verdict": "PASS"
+          }
+        },
+        "pair_id": "intervention_pair_4e7ac467049ce35b",
+        "target_scope": "flow.signoff",
+        "treatment_transition_id": "transition_656fbb6b1558cd5b",
+        "validity_status": "VALID_CONTROLLED_PAIR"
+      },
+      "lineage_id": "failpass-r2:parity64",
+      "treatment_outcome": "PASS",
+      "treatment_transition_id": "transition_656fbb6b1558cd5b"
+    }
+  ],
+  "path": {
+    "compatibility_profile": null,
+    "edge_ids": [
+      "causal_edge_109cb5e82604d3d1",
+      "causal_edge_1cf9390462a6ba8a",
+      "causal_edge_3a366af2d966908c",
+      "causal_edge_531d22120b89efa9",
+      "causal_edge_6c31836f7154cc31",
+      "causal_edge_9cc5ec78c3e7ee89",
+      "causal_edge_a76389c083a19046",
+      "causal_edge_bb511478dda4e3cf",
+      "causal_edge_bf93f2d87db902d2",
+      "causal_edge_c53030280c506e48",
+      "causal_edge_e82a411916987855",
+      "causal_edge_fe7b747b230d3f2b"
+    ],
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "mechanism_family": "DENSITY_RELIEF",
+    "node_ids": [
+      "causal_node_0156f48e0057c4b3",
+      "causal_node_11329d817f007435",
+      "causal_node_33a3e90499cd8e9f",
+      "causal_node_556e5a3464d9711a",
+      "causal_node_5e5aec21d36b5017",
+      "causal_node_66ddd61f4b3b7ee2",
+      "causal_node_8c93a5f3260c8b25",
+      "causal_node_9d5ae89cba38a5ad",
+      "causal_node_b24fd01fdae82951",
+      "causal_node_c3aeb2b4d7866f09",
+      "causal_node_c89ea188782791f8",
+      "causal_node_ca89baa10665198b",
+      "causal_node_cae7d4e642b5c54d",
+      "causal_node_cfa3917a6471e079",
+      "causal_node_eebedd18c35668a9",
+      "causal_node_f6685cbaa839466f"
+    ],
+    "path_digest": "sha1:ace0489a24d4a7800e5eee2acbcc6775b8ebbcd6",
+    "path_id": "causal_path_ace0489a24d4a780",
+    "source_transition_ids": [
+      "transition_5f8b2ffb4a2ceec5",
+      "transition_656fbb6b1558cd5b",
+      "transition_c4abe9765d080edb",
+      "transition_d62fdaedf288afb5"
+    ],
+    "status": "shadow",
+    "support": {
+      "evidence_levels": [
+        "L1_EXECUTED_INTERVENTION"
+      ],
+      "fragment_count": 4,
+      "replication_campaign": "orfs-authority-v7-failpass-r2",
+      "source_campaigns": [
+        "orfs-authority-v7-failpass-r2"
+      ],
+      "unique_designs": [
+        "failpass-r2:mux32",
+        "failpass-r2:parity64"
+      ],
+      "unique_lineages": [
+        "failpass-r2:mux32",
+        "failpass-r2:parity64"
+      ],
+      "unique_runs": []
+    }
+  },
+  "promotion_eligible": false,
+  "replication": {
+    "eligible": true,
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "path_id": "causal_path_ace0489a24d4a780",
+    "reason": "replicated_effect_supported",
+    "unique_designs": [
+      "failpass-r2:mux32",
+      "failpass-r2:parity64"
+    ],
+    "unique_lineages": [
+      "failpass-r2:mux32",
+      "failpass-r2:parity64"
+    ],
+    "unique_runs": []
+  },
+  "rule_evidence": {
+    "eligible": true,
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "learner_eligible": true,
+    "path_id": "causal_path_ace0489a24d4a780",
+    "promotion_eligible": false,
+    "reason": "causal_rule_evidence_eligible",
+    "required_level": "L2_CONTROLLED_INTERVENTION",
+    "source_transition_ids": [
+      "transition_5f8b2ffb4a2ceec5",
+      "transition_656fbb6b1558cd5b",
+      "transition_c4abe9765d080edb",
+      "transition_d62fdaedf288afb5"
+    ],
+    "unique_lineages": [
+      "failpass-r2:mux32",
+      "failpass-r2:parity64"
+    ]
+  },
+  "schema_version": "tehm-v4",
+  "source_staging_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-r2-dev/closed_loop/tehm.sqlite",
+  "source_staging_sha256": "b0c209c211c4f258e637189e97587b8308e0bb8fe29d6d9f1090427ee118e00b",
+  "split": "training",
+  "unique_lineages": [
+    "failpass-r2:mux32",
+    "failpass-r2:parity64"
+  ],
+  "version": "orfs-controlled-replication-v1"
+}

@@ -1,0 +1,27 @@
+{
+  "design": "reset_restore_c",
+  "mechanism_family": "RESET_SEMANTIC_LOSS",
+  "bug": {
+    "type": "reset_value_not_restored",
+    "description": "finished is asserted during active-low reset instead of being cleared.",
+    "first_divergence_signal": "finished"
+  },
+  "fix": {
+    "domain": "rtl.AST_REWRITE",
+    "transformation_family": "RESET_RESTORE",
+    "compatibility_profile": "rtl.sequential.reset_branch.v1",
+    "target": "finished <= 1'b1;",
+    "replacement": "finished <= 1'b0;",
+    "count": 1
+  },
+  "verification": {
+    "target_test": "tb/tb_reset.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "PROVISIONAL_VALID",
+    "recovery_obligation": "PRESERVE_RESET_CLEAR"
+  }
+}

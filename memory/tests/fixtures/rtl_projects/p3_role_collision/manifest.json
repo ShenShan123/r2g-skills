@@ -1,0 +1,33 @@
+{
+  "design": "role_collision_fsm",
+  "mechanism_family": "HANDSHAKE_COMPLETION",
+  "bug": {
+    "type": "structural_role_collision",
+    "description": "CAPTURE->COMMIT advances without the acknowledgement role.",
+    "first_divergence_signal": "done"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "module": "role_collision_fsm",
+    "source_state": "CAPTURE",
+    "target_state": "COMMIT",
+    "add_condition": "ack"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": false,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "PROVISIONAL_VALID",
+    "ablation_actions": {
+      "M5": {
+        "source_state": "CAPTURE",
+        "target_state": "COMMIT",
+        "add_condition": "1'b0"
+      }
+    }
+  }
+}

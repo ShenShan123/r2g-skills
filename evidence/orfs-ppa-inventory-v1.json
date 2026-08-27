@@ -1,0 +1,104 @@
+{
+  "failures": [],
+  "mutation": {
+    "canonical_memory": "unchanged",
+    "sqlite_opened": false
+  },
+  "runs": [
+    {
+      "complete": false,
+      "ppa": {
+        "area_um2": 2789.54,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 0.000198922,
+        "tns_ns": 0.0,
+        "wns_ns": 11.024
+      },
+      "provenance": {
+        "design_name": "csr",
+        "evidence_refs": [
+          {
+            "bytes": 502,
+            "path": "/data1/zhangdy/Tools/agent-r2g/r2g-rtl2gds/design_cases/csr/backend/RUN_2026-05-29_21-28-59/run-meta.json",
+            "sha256": "12d1e43e75dce87016bdb82ef815140850ed333928b3a6ceea0dffdedc1df8cc"
+          },
+          {
+            "bytes": 3090,
+            "path": "/data1/zhangdy/Tools/OpenROAD-flow-scripts/flow/logs/nangate45/csr/csr/6_report.json",
+            "sha256": "e45c727c4341550c73af7901aacc1d1644e50b1aa62a31723153ed115c6e7324"
+          },
+          {
+            "bytes": 20054,
+            "path": "/data1/zhangdy/Tools/OpenROAD-flow-scripts/flow/reports/nangate45/csr/csr/5_global_route.rpt",
+            "sha256": "8a59bbfdeedc1af5c76f5f218b6864f69fe0074f125fb95e4237c55ff9ee60bf"
+          }
+        ],
+        "make_status": 0,
+        "metric_sources": {
+          "area_um2": "ORFS 6_report.json finish__design__instance__area",
+          "power_w": "ORFS 6_report.json finish__power__total",
+          "tns_ns": "ORFS 6_report.json finish__timing__setup__tns",
+          "wns_ns": "ORFS 6_report.json finish__timing__setup__ws"
+        },
+        "missing_metrics": [
+          "congestion",
+          "drc_violations"
+        ],
+        "platform": "nangate45",
+        "report": "/data1/zhangdy/Tools/OpenROAD-flow-scripts/flow/logs/nangate45/csr/csr/6_report.json",
+        "run_meta": "/data1/zhangdy/Tools/agent-r2g/r2g-rtl2gds/design_cases/csr/backend/RUN_2026-05-29_21-28-59/run-meta.json",
+        "version": "orfs-ppa-extractor-v1"
+      },
+      "version": "orfs-ppa-extractor-v1"
+    },
+    {
+      "complete": false,
+      "ppa": {
+        "area_um2": 1570.2,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 0.000237265,
+        "tns_ns": 0.0,
+        "wns_ns": 7.21829
+      },
+      "provenance": {
+        "design_name": "axilgpio",
+        "evidence_refs": [
+          {
+            "bytes": 569,
+            "path": "/data1/zhangdy/Tools/agent-r2g/r2g-rtl2gds/design_cases/wb2axip_axilgpio/backend/RUN_2026-05-30_12-32-43/run-meta.json",
+            "sha256": "2c1e5280c85276fd8a41ff8f7974b9ef5581eb2d6f9b5bff51d2a35154f1e73b"
+          },
+          {
+            "bytes": 3085,
+            "path": "/data1/zhangdy/Tools/OpenROAD-flow-scripts/flow/logs/nangate45/axilgpio/wb2axip_axilgpio/6_report.json",
+            "sha256": "38c71df62c3b12f8e2657f298cb8cd1a669b0fb249d922fc6e682b44986f0f80"
+          },
+          {
+            "bytes": 17981,
+            "path": "/data1/zhangdy/Tools/OpenROAD-flow-scripts/flow/reports/nangate45/axilgpio/wb2axip_axilgpio/5_global_route.rpt",
+            "sha256": "44710d1d8eda8eb7bcaa8a3ad233fa0fa5dfdcdfff1a22973cf4f23af06813d9"
+          }
+        ],
+        "make_status": 0,
+        "metric_sources": {
+          "area_um2": "ORFS 6_report.json finish__design__instance__area",
+          "power_w": "ORFS 6_report.json finish__power__total",
+          "tns_ns": "ORFS 6_report.json finish__timing__setup__tns",
+          "wns_ns": "ORFS 6_report.json finish__timing__setup__ws"
+        },
+        "missing_metrics": [
+          "congestion",
+          "drc_violations"
+        ],
+        "platform": "nangate45",
+        "report": "/data1/zhangdy/Tools/OpenROAD-flow-scripts/flow/logs/nangate45/axilgpio/wb2axip_axilgpio/6_report.json",
+        "run_meta": "/data1/zhangdy/Tools/agent-r2g/r2g-rtl2gds/design_cases/wb2axip_axilgpio/backend/RUN_2026-05-30_12-32-43/run-meta.json",
+        "version": "orfs-ppa-extractor-v1"
+      },
+      "version": "orfs-ppa-extractor-v1"
+    }
+  ],
+  "version": "orfs-ppa-inventory-v1"
+}

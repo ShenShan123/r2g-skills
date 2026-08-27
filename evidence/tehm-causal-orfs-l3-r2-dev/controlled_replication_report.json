@@ -1,0 +1,279 @@
+{
+  "authority_note": "L3 replicated causal evidence is evaluation-only; capability and rule promotion still require their independent authority gates",
+  "campaign_id": "orfs-authority-v6-controlled-r2",
+  "canonical_memory_mutation": "none",
+  "derived_counts": {
+    "causal_edges": 14,
+    "causal_nodes": 16,
+    "causal_paths": 1,
+    "transitions": 13
+  },
+  "derived_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-causal-orfs-l3-r2-dev/tehm.sqlite",
+  "derived_db_sha256": "a0f52c15138ac3440c18e393f146a048b4eb4878e3e89cc24c36463b5f645ef3",
+  "fragments": [
+    {
+      "campaign_id": "orfs-authority-v6-controlled-r2",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_e4a29f5b567aa928",
+        "causal_edge_f49afcdae3ccc44a",
+        "causal_edge_d1d56e3129588858"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_9ccc27aba701d895",
+      "learner_eligible": true,
+      "lineage_id": "orfs-v6-and32",
+      "mechanism_family": "DENSITY_RELIEF",
+      "node_ids": [
+        "causal_node_ca9f0c7e68a5292d",
+        "causal_node_14e905ee0b0bb625",
+        "causal_node_63db975fe71b3bc4",
+        "causal_node_55b7138564c8bab3"
+      ],
+      "transition_id": "transition_28a6a3af536fb49a"
+    },
+    {
+      "campaign_id": "orfs-authority-v6-controlled-r2",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_ba366cca1d5d8913",
+        "causal_edge_4932f3a2e16b059d",
+        "causal_edge_26ac489d957c1f4a"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_9ccc27aba701d895",
+      "learner_eligible": true,
+      "lineage_id": "orfs-v6-and32",
+      "mechanism_family": "DENSITY_RELIEF",
+      "node_ids": [
+        "causal_node_40943cbb2d928b4a",
+        "causal_node_68c6df0fd54c5b05",
+        "causal_node_2d82fe051034af6c",
+        "causal_node_09b125091db74093"
+      ],
+      "transition_id": "transition_0570ec1d81d28657"
+    },
+    {
+      "campaign_id": "orfs-authority-v6-controlled-r2",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_2d5ca0ee20370395",
+        "causal_edge_06720ac36c909c67",
+        "causal_edge_69464f27d5d3c5f9"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_8b1cfe2ccce6666f",
+      "learner_eligible": true,
+      "lineage_id": "orfs-v6-toggle32",
+      "mechanism_family": "DENSITY_RELIEF",
+      "node_ids": [
+        "causal_node_a3cb84f6d38e4203",
+        "causal_node_ca706ee61c1b8323",
+        "causal_node_6c4fb56aa8807e05",
+        "causal_node_3eb97e66361aeef0"
+      ],
+      "transition_id": "transition_2d0d6dc9b5fd23b4"
+    },
+    {
+      "campaign_id": "orfs-authority-v6-controlled-r2",
+      "compatibility_profile": null,
+      "edge_ids": [
+        "causal_edge_8648dfa0bb781257",
+        "causal_edge_e65750bb587894e5",
+        "causal_edge_32364bab9530fa35"
+      ],
+      "evidence_level": "L1_EXECUTED_INTERVENTION",
+      "failure_graph_digest": "ctx_8b1cfe2ccce6666f",
+      "learner_eligible": true,
+      "lineage_id": "orfs-v6-toggle32",
+      "mechanism_family": "DENSITY_RELIEF",
+      "node_ids": [
+        "causal_node_2f50171d322456d2",
+        "causal_node_a54534d6b3c3c549",
+        "causal_node_ebe62dcbe07b98d4",
+        "causal_node_793061b742afc038"
+      ],
+      "transition_id": "transition_be489caa451c2a96"
+    }
+  ],
+  "pair_count": 2,
+  "pairs": [
+    {
+      "control_outcome": "NEUTRAL",
+      "control_transition_id": "transition_28a6a3af536fb49a",
+      "intervention": {
+        "causal_edge_id": "causal_edge_2016d531d0ec7c8f",
+        "changed_action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+        "control_transition_id": "transition_28a6a3af536fb49a",
+        "evidence_level": "L2_CONTROLLED_INTERVENTION",
+        "lineage_id": "orfs-v6-and32",
+        "matched_context_digest": "ctx_9ccc27aba701d895",
+        "oracle_equivalence": {
+          "same_oracle_type": true,
+          "same_scope": true,
+          "same_toolchain": true
+        },
+        "outcome_delta": {
+          "control": {
+            "outcome": "NEUTRAL",
+            "verdict": "PASS"
+          },
+          "treatment": {
+            "outcome": "NEUTRAL",
+            "verdict": "PASS"
+          }
+        },
+        "pair_id": "intervention_pair_879157c9690ade34",
+        "target_scope": "flow.signoff",
+        "treatment_transition_id": "transition_0570ec1d81d28657",
+        "validity_status": "VALID_CONTROLLED_PAIR"
+      },
+      "lineage_id": "orfs-v6-and32",
+      "treatment_outcome": "NEUTRAL",
+      "treatment_transition_id": "transition_0570ec1d81d28657"
+    },
+    {
+      "control_outcome": "NEUTRAL",
+      "control_transition_id": "transition_2d0d6dc9b5fd23b4",
+      "intervention": {
+        "causal_edge_id": "causal_edge_08e02bb2e30e7f1a",
+        "changed_action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+        "control_transition_id": "transition_2d0d6dc9b5fd23b4",
+        "evidence_level": "L2_CONTROLLED_INTERVENTION",
+        "lineage_id": "orfs-v6-toggle32",
+        "matched_context_digest": "ctx_8b1cfe2ccce6666f",
+        "oracle_equivalence": {
+          "same_oracle_type": true,
+          "same_scope": true,
+          "same_toolchain": true
+        },
+        "outcome_delta": {
+          "control": {
+            "outcome": "NEUTRAL",
+            "verdict": "PASS"
+          },
+          "treatment": {
+            "outcome": "NEUTRAL",
+            "verdict": "PASS"
+          }
+        },
+        "pair_id": "intervention_pair_3bc191784d3dbfb3",
+        "target_scope": "flow.signoff",
+        "treatment_transition_id": "transition_be489caa451c2a96",
+        "validity_status": "VALID_CONTROLLED_PAIR"
+      },
+      "lineage_id": "orfs-v6-toggle32",
+      "treatment_outcome": "NEUTRAL",
+      "treatment_transition_id": "transition_be489caa451c2a96"
+    }
+  ],
+  "path": {
+    "compatibility_profile": null,
+    "edge_ids": [
+      "causal_edge_06720ac36c909c67",
+      "causal_edge_26ac489d957c1f4a",
+      "causal_edge_2d5ca0ee20370395",
+      "causal_edge_32364bab9530fa35",
+      "causal_edge_4932f3a2e16b059d",
+      "causal_edge_69464f27d5d3c5f9",
+      "causal_edge_8648dfa0bb781257",
+      "causal_edge_ba366cca1d5d8913",
+      "causal_edge_d1d56e3129588858",
+      "causal_edge_e4a29f5b567aa928",
+      "causal_edge_e65750bb587894e5",
+      "causal_edge_f49afcdae3ccc44a"
+    ],
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "mechanism_family": "DENSITY_RELIEF",
+    "node_ids": [
+      "causal_node_09b125091db74093",
+      "causal_node_14e905ee0b0bb625",
+      "causal_node_2d82fe051034af6c",
+      "causal_node_2f50171d322456d2",
+      "causal_node_3eb97e66361aeef0",
+      "causal_node_40943cbb2d928b4a",
+      "causal_node_55b7138564c8bab3",
+      "causal_node_63db975fe71b3bc4",
+      "causal_node_68c6df0fd54c5b05",
+      "causal_node_6c4fb56aa8807e05",
+      "causal_node_793061b742afc038",
+      "causal_node_a3cb84f6d38e4203",
+      "causal_node_a54534d6b3c3c549",
+      "causal_node_ca706ee61c1b8323",
+      "causal_node_ca9f0c7e68a5292d",
+      "causal_node_ebe62dcbe07b98d4"
+    ],
+    "path_digest": "sha1:ff32da6b9a4f648b279b971a4e658c4eb1dc9a6d",
+    "path_id": "causal_path_ff32da6b9a4f648b",
+    "source_transition_ids": [
+      "transition_0570ec1d81d28657",
+      "transition_28a6a3af536fb49a",
+      "transition_2d0d6dc9b5fd23b4",
+      "transition_be489caa451c2a96"
+    ],
+    "status": "shadow",
+    "support": {
+      "evidence_levels": [
+        "L1_EXECUTED_INTERVENTION"
+      ],
+      "fragment_count": 4,
+      "replication_campaign": "orfs-authority-v6-controlled-r2",
+      "source_campaigns": [
+        "orfs-authority-v6-controlled-r2"
+      ],
+      "unique_designs": [
+        "orfs-v6-and32",
+        "orfs-v6-toggle32"
+      ],
+      "unique_lineages": [
+        "orfs-v6-and32",
+        "orfs-v6-toggle32"
+      ],
+      "unique_runs": []
+    }
+  },
+  "promotion_eligible": false,
+  "replication": {
+    "eligible": true,
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "path_id": "causal_path_ff32da6b9a4f648b",
+    "reason": "replicated_effect_supported",
+    "unique_designs": [
+      "orfs-v6-and32",
+      "orfs-v6-toggle32"
+    ],
+    "unique_lineages": [
+      "orfs-v6-and32",
+      "orfs-v6-toggle32"
+    ],
+    "unique_runs": []
+  },
+  "rule_evidence": {
+    "eligible": true,
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "learner_eligible": true,
+    "path_id": "causal_path_ff32da6b9a4f648b",
+    "promotion_eligible": false,
+    "reason": "causal_rule_evidence_eligible",
+    "required_level": "L2_CONTROLLED_INTERVENTION",
+    "source_transition_ids": [
+      "transition_0570ec1d81d28657",
+      "transition_28a6a3af536fb49a",
+      "transition_2d0d6dc9b5fd23b4",
+      "transition_be489caa451c2a96"
+    ],
+    "unique_lineages": [
+      "orfs-v6-and32",
+      "orfs-v6-toggle32"
+    ]
+  },
+  "schema_version": "tehm-v4",
+  "source_staging_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-r2-dev/closed_loop/tehm.sqlite",
+  "source_staging_sha256": "cf654f9a8e5f340e1e867b410250e18d5d21d71599ee28707c5339f1b658255a",
+  "split": "training",
+  "unique_lineages": [
+    "orfs-v6-and32",
+    "orfs-v6-toggle32"
+  ],
+  "version": "orfs-controlled-replication-v1"
+}

@@ -1,0 +1,73 @@
+{
+  "record_id": "sample_drc_antenna_fix_001",
+  "domain": "flow.signoff",
+  "project_id": "proj_demo",
+  "design_id": "demo_design",
+  "lineage_id": "lineage_a",
+  "repository_ref": "abc123",
+  "before": {
+    "repository_commit": "abc123",
+    "config": {
+      "DESIGN_NAME": "demo",
+      "PLATFORM": "sky130hd",
+      "CORE_UTILIZATION": "12",
+      "PLACE_DENSITY_LB_ADDON": "0.10"
+    },
+    "reports": {
+      "drc": {
+        "status": "violations",
+        "total_violations": 7,
+        "categories": {"antenna_diode_repair": {"count": 7}}
+      },
+      "lvs": {"status": "clean"}
+    },
+    "failure_signature": {
+      "check": "drc",
+      "class": "antenna_diode",
+      "predicates": {"antenna_present": true}
+    }
+  },
+  "action": {
+    "domain": "signoff.REPAIR_ACTION",
+    "transformation_family": "ANTENNA_DIODE_REPAIR",
+    "payload": {
+      "config_edits": {"PLACE_DENSITY_LB_ADDON": "0.14"},
+      "rerun_from": "place",
+      "recheck": "drc"
+    }
+  },
+  "after": {
+    "repository_commit": "def456",
+    "config": {
+      "DESIGN_NAME": "demo",
+      "PLATFORM": "sky130hd",
+      "CORE_UTILIZATION": "12",
+      "PLACE_DENSITY_LB_ADDON": "0.14"
+    },
+    "reports": {
+      "drc": {"status": "clean", "total_violations": 0},
+      "lvs": {"status": "clean"}
+    }
+  },
+  "observation_delta": {
+    "original_failure": "REMOVED",
+    "first_divergence": {"before": 12, "after": null},
+    "failing_tests": {"before": 1, "after": 0},
+    "created_regressions": [],
+    "newly_observed_failures": []
+  },
+  "verification": {
+    "verdict": "PASS",
+    "oracle_type": "REGRESSION",
+    "confidence_tier": "R",
+    "obligation_coverage": 1.0,
+    "evidence_refs": ["drc_report", "lvs_report"]
+  },
+  "episode": {
+    "episode_id": "episode_sample_001",
+    "mechanism_family": "antenna_repair",
+    "lineage_id": "lineage_a",
+    "step_index": 0,
+    "terminal_status": "VERIFIED_REPAIR"
+  }
+}

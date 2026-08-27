@@ -24,12 +24,6 @@ def _heur(gen, attempts):
             "n_sessions": attempts}}}}}
 
 
-def _heur_with_stats(gen, **stats):
-    return {"generation": gen, "recipes": {KEY["symptom_id"]: {
-        KEY["design_class"]: {KEY["platform"]: {
-            "strategies": {KEY["strategy"]: stats}, "n_sessions": 1}}}}}
-
-
 def test_diff_enqueues_new_recipe_as_candidate(tmp_path):
     conn = _conn(tmp_path)
     cands = recipe_lifecycle.diff_and_enqueue(conn, _heur(2, 1), prev=_heur(1, 0))
@@ -134,42 +128,3 @@ def test_ensure_rostered_skips_nondivergent(tmp_path):
                                "wins": 0}}, "n_sessions": 1}}}}}
     assert recipe_lifecycle.unrostered_keys(conn, heur) == []
     assert recipe_lifecycle.ensure_rostered(conn, heur) == []
-
-
-def test_inconclusive_only_recipe_is_rostered_but_not_auto_enqueued(tmp_path):
-    conn = _conn(tmp_path)
-    heur = _heur_with_stats(2, attempts=1, successes=0, failures=0, wins=0)
-    assert recipe_lifecycle.diff_and_enqueue(conn, heur, prev=None) == []
-    row = conn.execute(
-        "SELECT status, provenance FROM recipe_status WHERE symptom_id=? AND "
-        "design_class=? AND platform=? AND strategy=?", tuple(KEY.values())).fetchone()
-    assert row == ("parked", recipe_lifecycle.NO_POSITIVE_EVIDENCE_PROVENANCE)
-
-
-def test_positive_evidence_revives_only_learner_evidence_park(tmp_path):
-    conn = _conn(tmp_path)
-    empty = _heur_with_stats(1, attempts=1, successes=0, failures=0, wins=0)
-    positive = _heur_with_stats(2, attempts=2, successes=0, failures=0, wins=1)
-    recipe_lifecycle.diff_and_enqueue(conn, empty, prev=None)
-    assert recipe_lifecycle.diff_and_enqueue(conn, positive, prev=empty) == [tuple(KEY.values())]
-    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
-
-
-def test_ensure_rostered_heals_legacy_inconclusive_candidate(tmp_path):
-    conn = _conn(tmp_path)
-    heur = _heur_with_stats(2, attempts=3, successes=0, failures=0, wins=0)
-    conn.execute(
-        "INSERT INTO recipe_status (symptom_id, design_class, platform, strategy, "
-        "status, provenance, status_version, updated_at) VALUES (?,?,?,?,?,?,1,'now')",
-        (*tuple(KEY.values()), "candidate", "learner_diff"))
-    conn.commit()
-    assert recipe_lifecycle.ensure_rostered(conn, heur) == []
-    assert recipe_lifecycle.get_status(conn, **KEY) == "parked"
-
-
-def test_manual_review_can_override_no_positive_evidence_park(tmp_path):
-    conn = _conn(tmp_path)
-    heur = _heur_with_stats(2, attempts=1, successes=0, failures=0, wins=0)
-    recipe_lifecycle.diff_and_enqueue(conn, heur, prev=None)
-    assert recipe_lifecycle.enqueue_candidate(conn, **KEY, provenance="operator_review")
-    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"

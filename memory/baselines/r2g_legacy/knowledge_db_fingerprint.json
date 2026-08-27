@@ -1,0 +1,272 @@
+{
+  "db_path": "/data1/zhangdy/r2g-skills/r2g-skills/signoff-loop/knowledge/knowledge.sqlite",
+  "db_sha256": "e5b46fe49c289b609c39df077be4cfcf444366767f54edc75686cc50f1d449f0",
+  "tables": {
+    "ab_trials": {
+      "columns": [
+        "trial_id",
+        "symptom_id",
+        "design_class",
+        "platform",
+        "strategy",
+        "arm_a_run_id",
+        "arm_b_run_id",
+        "verdict",
+        "metrics_json",
+        "match_level",
+        "ts",
+        "trial_uuid"
+      ],
+      "row_count": 422
+    },
+    "config_lineage": {
+      "columns": [
+        "id",
+        "design_name",
+        "platform",
+        "current_run_id",
+        "previous_run_id",
+        "diff_json",
+        "current_outcome",
+        "created_at"
+      ],
+      "row_count": 1982
+    },
+    "escalations": {
+      "columns": [
+        "escalation_id",
+        "design",
+        "project_path",
+        "run_id",
+        "symptom_id",
+        "reason",
+        "status",
+        "notes",
+        "created_at",
+        "resolved_at"
+      ],
+      "row_count": 1103
+    },
+    "failure_events": {
+      "columns": [
+        "id",
+        "run_id",
+        "stage",
+        "signature",
+        "detail"
+      ],
+      "row_count": 394
+    },
+    "fix_events": {
+      "columns": [
+        "fix_event_id",
+        "fix_session_id",
+        "project_path",
+        "design_name",
+        "design_family",
+        "platform",
+        "check_type",
+        "violation_class",
+        "iter",
+        "strategy",
+        "from_stage",
+        "before_count",
+        "after_count",
+        "before_categories_json",
+        "after_categories_json",
+        "rule_details_json",
+        "before_status",
+        "after_status",
+        "verdict",
+        "config_delta_json",
+        "cumulative_config_json",
+        "env_flags_json",
+        "tool_versions_json",
+        "stage_metrics_json",
+        "stacked",
+        "elapsed_s",
+        "ts",
+        "provenance",
+        "symptom_id",
+        "signature_json"
+      ],
+      "row_count": 5342
+    },
+    "fix_events_archive": {
+      "columns": [
+        "fix_event_id",
+        "fix_session_id",
+        "project_path",
+        "design_name",
+        "design_family",
+        "platform",
+        "check_type",
+        "violation_class",
+        "iter",
+        "strategy",
+        "from_stage",
+        "before_count",
+        "after_count",
+        "before_categories_json",
+        "after_categories_json",
+        "rule_details_json",
+        "before_status",
+        "after_status",
+        "verdict",
+        "config_delta_json",
+        "cumulative_config_json",
+        "env_flags_json",
+        "tool_versions_json",
+        "stage_metrics_json",
+        "stacked",
+        "elapsed_s",
+        "ts",
+        "provenance",
+        "symptom_id",
+        "signature_json"
+      ],
+      "row_count": 0
+    },
+    "fix_trajectories": {
+      "columns": [
+        "fix_session_id",
+        "project_path",
+        "design_name",
+        "design_family",
+        "platform",
+        "check_type",
+        "violation_class",
+        "path_json",
+        "n_iters",
+        "outcome",
+        "winning_strategy",
+        "winning_config_json",
+        "failed_strategies_json",
+        "initial_count",
+        "final_count",
+        "total_elapsed_s",
+        "symptom_id",
+        "signature_json",
+        "provenance"
+      ],
+      "row_count": 5039
+    },
+    "lessons": {
+      "columns": [
+        "lesson_id",
+        "source_doc",
+        "section_title",
+        "status",
+        "symptom_trigger_json",
+        "strategy_ids_json",
+        "prose_excerpt",
+        "evidence_runs_json",
+        "content_hash",
+        "synced_at"
+      ],
+      "row_count": 9
+    },
+    "meta": {
+      "columns": [
+        "key",
+        "value"
+      ],
+      "row_count": 1
+    },
+    "recipe_status": {
+      "columns": [
+        "symptom_id",
+        "design_class",
+        "platform",
+        "strategy",
+        "status",
+        "provenance",
+        "generation",
+        "updated_at",
+        "status_version"
+      ],
+      "row_count": 148
+    },
+    "run_violations": {
+      "columns": [
+        "run_id",
+        "design_family",
+        "platform",
+        "drc_status",
+        "drc_categories_json",
+        "lvs_status",
+        "lvs_mismatch_class",
+        "timing_tier",
+        "wns_ns",
+        "snapshot_ts",
+        "symptom_id",
+        "signature_json"
+      ],
+      "row_count": 3763
+    },
+    "runs": {
+      "columns": [
+        "run_id",
+        "project_path",
+        "design_name",
+        "design_family",
+        "platform",
+        "ingested_at",
+        "core_utilization",
+        "place_density_lb_addon",
+        "synth_hierarchical",
+        "abc_area",
+        "die_area",
+        "clock_period_ns",
+        "extra_config_json",
+        "orfs_status",
+        "orfs_fail_stage",
+        "wns_ns",
+        "tns_ns",
+        "timing_tier",
+        "cell_count",
+        "area_um2",
+        "power_mw",
+        "drc_status",
+        "drc_violations",
+        "lvs_status",
+        "rcx_status",
+        "total_elapsed_s",
+        "stage_times_json",
+        "lvs_mismatch_class",
+        "eval_arm",
+        "floorplan_setup_ws",
+        "place_setup_ws",
+        "finish_setup_ws",
+        "design_class",
+        "heuristics_generation",
+        "first_attempt_clean",
+        "fix_iters_to_clean",
+        "wall_s_to_clean",
+        "outcome_score",
+        "is_bench",
+        "presynth_features_json",
+        "flow_scope"
+      ],
+      "row_count": 3786
+    },
+    "sqlite_sequence": {
+      "columns": [
+        "name",
+        "seq"
+      ],
+      "row_count": 5
+    },
+    "symptoms": {
+      "columns": [
+        "symptom_id",
+        "check_type",
+        "class",
+        "predicates_json",
+        "symptom_schema_version",
+        "first_seen"
+      ],
+      "row_count": 39
+    }
+  }
+}

@@ -37,6 +37,17 @@ set +eu  # tolerate unset vars and detect misses from sourced snippets
 _R2G_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _R2G_SKILL_DIR="$(cd "$_R2G_ENV_DIR/../.." && pwd)"
 
+# Preserve true caller overrides across sourced environment scripts.  The
+# documented precedence says an exported caller value wins, but historically
+# /opt/openroad_tools_env.sh could overwrite KLAYOUT_CMD/OPENROAD_EXE after the
+# fact, making hermetic checks silently run the host tools instead of their
+# requested binaries.
+declare -A _r2g_caller_env=()
+for _r2g_var in ORFS_ROOT OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EXE \
+                STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT SKY130A_DIR; do
+  [[ -n "${!_r2g_var:-}" ]] && _r2g_caller_env["$_r2g_var"]="${!_r2g_var}"
+done
+
 # --- 1. User-provided env snippets ---------------------------------------
 if [[ -n "${R2G_ENV_FILE:-}" && -f "$R2G_ENV_FILE" ]]; then
   # shellcheck disable=SC1090
@@ -93,6 +104,10 @@ if [[ -f /opt/openroad_tools_env.sh ]]; then
   # shellcheck disable=SC1091
   source /opt/openroad_tools_env.sh
 fi
+
+for _r2g_var in "${!_r2g_caller_env[@]}"; do
+  export "$_r2g_var=${_r2g_caller_env[$_r2g_var]}"
+done
 
 # --- 4. Autodetect each tool binary --------------------------------------
 _r2g_detect() {
@@ -165,12 +180,22 @@ _r2g_detect VERILATOR_EXE verilator  \
 _r2g_detect KLAYOUT_CMD   klayout    \
   /usr/local/bin/klayout /usr/bin/klayout "$_r2g_conda_bin/klayout"
 
+# The host environment script exports its distribution Magic explicitly.  A
+# compatible user-local build must outrank that autodetected system default,
+# while a true caller override (restored above) still wins.
+if [[ -z "${_r2g_caller_env[MAGIC_EXE]:-}" && -x "$HOME/.local/bin/magic" ]]; then
+  export MAGIC_EXE="$HOME/.local/bin/magic"
+fi
 _r2g_detect MAGIC_EXE     magic      \
-  "$_r2g_conda_bin/magic" /usr/local/bin/magic /usr/bin/magic
+  "$HOME/.local/bin/magic" "$_r2g_conda_bin/magic" /usr/local/bin/magic /usr/bin/magic
 
 # Netgen ships under several names; try each in turn
 if [[ -z "${NETGEN_EXE:-}" ]]; then
+  if [[ -x "$HOME/.local/bin/netgen" ]]; then
+    export NETGEN_EXE="$HOME/.local/bin/netgen"
+  fi
   for _cand in netgen-lvs netgen; do
+    [[ -n "${NETGEN_EXE:-}" ]] && break
     if _hit="$(command -v "$_cand" 2>/dev/null)"; then
       if [[ -n "$_hit" ]]; then export NETGEN_EXE="$_hit"; break; fi
     fi
@@ -224,7 +249,7 @@ if [[ -n "${PDK_ROOT:-}" && -d "$PDK_ROOT/sky130A" ]]; then
 fi
 
 unset _r2g_orfs_openroad _r2g_orfs_yosys _cand _hit _p _detected _base _r2g_env \
-      _r2g_conda_bases _r2g_conda_bin
+      _r2g_conda_bases _r2g_conda_bin _r2g_var _r2g_caller_env
 # Restore caller's options
 case "$_r2g_saved_opts" in
   *e*) set -e ;;

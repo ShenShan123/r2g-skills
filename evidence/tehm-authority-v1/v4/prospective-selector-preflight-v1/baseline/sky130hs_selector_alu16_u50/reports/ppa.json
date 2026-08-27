@@ -1,0 +1,22 @@
+{
+  "summary": {
+    "area": {
+      "design_area_um2": 31706.0,
+      "utilization": 0.74
+    },
+    "timing": {
+      "setup_tns": 100.0
+    },
+    "power": {},
+    "drc": {},
+    "timing_staged": {
+      "floorplan_setup_ws": -0.824274,
+      "place_setup_ws": -2.023
+    }
+  },
+  "geometry": {},
+  "run_dir": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50/backend/RUN_2026-08-25_23-00-37_7_7d45",
+  "orfs_status": "fail",
+  "orfs_last_stage": "cts",
+  "orfs_fail_stage": "route"
+}

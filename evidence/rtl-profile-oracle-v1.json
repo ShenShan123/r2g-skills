@@ -1,0 +1,330 @@
+{
+  "all_formal_negative_cases_rejected": true,
+  "all_formal_profiles_proven": false,
+  "all_negative_expectations_met": true,
+  "manifest": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_compatibility_negative_manifest_v1.json",
+  "oracle_selftest": {
+    "candidate_profile": "rtl.ast.literal_rewrite.v1",
+    "candidate_top": "ast_literal_c",
+    "oracle_type": "YOSYS_EQUIV",
+    "output_sha256": "371be64627368ab31a55fc32e461b32d7feafb21e41cc93bddc549f707edeb4e",
+    "output_tail": "ule `\\ast_literal_c'.\nRemoving unused module `\\gold'.\nRemoved 2 unused modules.\n\n10.2. Executing PROC pass (convert processes to netlists).\n\n10.2.1. Executing PROC_CLEAN pass (remove empty switches from decision trees).\nCleaned up 0 empty switches.\n\n10.2.2. Executing PROC_RMDEAD pass (remove dead branches from decision trees).\nRemoved a total of 0 dead cases.\n\n10.2.3. Executing PROC_INIT pass (extract init attributes).\n\n10.2.4. Executing PROC_ARST pass (detect async resets in processes).\n\n10.2.5. Executing PROC_MUX pass (convert decision trees to multiplexers).\n\n10.2.6. Executing PROC_DLATCH pass (convert process syncs to latches).\n\n10.2.7. Executing PROC_DFF pass (convert process syncs to FFs).\n\n10.2.8. Executing PROC_CLEAN pass (remove empty switches from decision trees).\nCleaned up 0 empty switches.\n\n10.3. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.5. Executing CHECK pass (checking for obvious problems).\nchecking module equiv..\nfound and reported 0 problems.\n\n10.6. Executing OPT pass (performing simple optimizations).\n\n10.6.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.6.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\equiv'.\nRemoved a total of 0 cells.\n\n10.6.3. Executing OPT_MUXTREE pass (detect dead branches in mux trees).\nRunning muxtree optimizer on module \\equiv..\n  Creating internal representation of mux trees.\n  No muxes found in this module.\nRemoved 0 multiplexer ports.\n\n10.6.4. Executing OPT_REDUCE pass (consolidate $*mux and $reduce_* inputs).\n  Optimizing cells in module \\equiv.\nPerformed a total of 0 changes.\n\n10.6.5. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\equiv'.\nRemoved a total of 0 cells.\n\n10.6.6. Executing OPT_RMDFF pass (remove dff with constant values).\n\n10.6.7. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.6.8. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.6.9. Finished OPT passes. (There is nothing left to do.)\n\n10.7. Executing WREDUCE pass (reducing word size of cells).\n\n10.8. Executing MEMORY_DFF pass (merging $dff cells to $memrd and $memwr).\n\n10.9. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.10. Executing MEMORY_COLLECT pass (generating $mem cells).\n\n10.11. Executing OPT pass (performing simple optimizations).\n\n10.11.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.11.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\equiv'.\nRemoved a total of 0 cells.\n\n10.11.3. Executing OPT_RMDFF pass (remove dff with constant values).\n\n10.11.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.11.5. Finished fast OPT passes.\n\n10.12. Printing statistics.\n\n=== equiv ===\n\n   Number of wires:                  6\n   Number of wire bits:              6\n   Number of public wires:           6\n   Number of public wire bits:       6\n   Number of memories:               0\n   Number of memory bits:            0\n   Number of processes:              0\n   Number of cells:                  1\n     $equiv                          1\n\n10.13. Executing CHECK pass (checking for obvious problems).\nchecking module equiv..\nfound and reported 0 problems.\n\n11. Executing EQUIV_SIMPLE pass.\nProved 0 previously unproven $equiv cells.\n\n12. Executing EQUIV_STATUS pass.\nFound 1 $equiv cells in equiv:\n  Of those cells 1 are proven and 0 are unproven.\n  Equivalence successfully proven!\n\nEnd of script. Logfile hash: e7dbdf97df\nCPU: user 0.01s system 0.00s, MEM: 16.16 MB total, 10.41 MB resident\nYosys 0.9 (git sha1 1979e0b)\nTime spent: 26% 10x opt_clean (0 sec), 23% 8x opt_expr (0 sec), ...\n",
+    "reason": "",
+    "reference_profile": "rtl.ast.literal_rewrite.v1",
+    "reference_top": "ast_literal_a",
+    "returncode": 0,
+    "verdict": "PASS",
+    "version": "yosys-equivalence-oracle-v1"
+  },
+  "oracle_selftest_pass": true,
+  "profiles": [
+    {
+      "domain": "rtl.GUARD_STRENGTHEN",
+      "formal": {
+        "candidate_profile": "rtl.fsm.single_guard.v1",
+        "candidate_top": "obligation_recovery_b_fsm",
+        "oracle_type": "YOSYS_EQUIV",
+        "output_sha256": "9ccddfe540f679cfb52f5d7ed72884a36ccee4442e41c163f0bba8af3d012598",
+        "output_tail": "to $memrd and $memwr).\n\n7.2. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\obligation_recovery_b_fsm..\nFinding unused cells or wires in module \\gold..\nRemoved 2 unused cells and 9 unused wires.\n<suppressed ~3 debug messages>\n\n7.3. Executing MEMORY_SHARE pass (consolidating $memrd/$memwr cells).\n\n7.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\gold..\nFinding unused cells or wires in module \\obligation_recovery_b_fsm..\n\n7.5. Executing MEMORY_COLLECT pass (generating $mem cells).\n\n7.6. Executing MEMORY_MAP pass (converting $mem cells to logic and flip-flops).\n\n8. Executing OPT pass (performing simple optimizations).\n\n8.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module gold.\nOptimizing module obligation_recovery_b_fsm.\n<suppressed ~2 debug messages>\n\n8.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\gold'.\nFinding identical cells in module `\\obligation_recovery_b_fsm'.\n<suppressed ~6 debug messages>\nRemoved a total of 2 cells.\n\n8.3. Executing OPT_MUXTREE pass (detect dead branches in mux trees).\nRunning muxtree optimizer on module \\gold..\n  Creating internal representation of mux trees.\n  Evaluating internal representation of mux trees.\n  Analyzing evaluation results.\nRunning muxtree optimizer on module \\obligation_recovery_b_fsm..\n  Creating internal representation of mux trees.\n  Evaluating internal representation of mux trees.\n  Analyzing evaluation results.\n    dead port 2/2 on $mux $procmux$34.\nRemoved 1 multiplexer ports.\n<suppressed ~2 debug messages>\n\n8.4. Executing OPT_REDUCE pass (consolidate $*mux and $reduce_* inputs).\n  Optimizing cells in module \\gold.\n  Optimizing cells in module \\obligation_recovery_b_fsm.\nPerformed a total of 0 changes.\n\n8.5. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\gold'.\nFinding identical cells in module `\\obligation_recovery_b_fsm'.\nRemoved a total of 0 cells.\n\n8.6. Executing OPT_RMDFF pass (remove dff with constant values).\n\n8.7. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\gold..\nFinding unused cells or wires in module \\obligation_recovery_b_fsm..\nRemoved 0 unused cells and 3 unused wires.\n<suppressed ~1 debug messages>\n\n8.8. Executing OPT_EXPR pass (perform const folding).\nOptimizing module gold.\nOptimizing module obligation_recovery_b_fsm.\n\n8.9. Rerunning OPT passes. (Maybe there is more to do..)\n\n8.10. Executing OPT_MUXTREE pass (detect dead branches in mux trees).\nRunning muxtree optimizer on module \\gold..\n  Creating internal representation of mux trees.\n  Evaluating internal representation of mux trees.\n  Analyzing evaluation results.\nRunning muxtree optimizer on module \\obligation_recovery_b_fsm..\n  Creating internal representation of mux trees.\n  Evaluating internal representation of mux trees.\n  Analyzing evaluation results.\nRemoved 0 multiplexer ports.\n<suppressed ~2 debug messages>\n\n8.11. Executing OPT_REDUCE pass (consolidate $*mux and $reduce_* inputs).\n  Optimizing cells in module \\gold.\n  Optimizing cells in module \\obligation_recovery_b_fsm.\nPerformed a total of 0 changes.\n\n8.12. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\gold'.\nFinding identical cells in module `\\obligation_recovery_b_fsm'.\nRemoved a total of 0 cells.\n\n8.13. Executing OPT_RMDFF pass (remove dff with constant values).\n\n8.14. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\gold..\nFinding unused cells or wires in module \\obligation_recovery_b_fsm..\n\n8.15. Executing OPT_EXPR pass (perform const folding).\nOptimizing module gold.\nOptimizing module obligation_recovery_b_fsm.\n\n8.16. Finished OPT passes. (There is nothing left to do.)\n\n9. Executing EQUIV_MAKE pass (creating equiv checking module).\nERROR: Can't match gate port `ack_reply_gate' to a gold port.\n",
+        "reason": "equivalence_not_proven",
+        "reference_profile": "rtl.fsm.single_guard.v1",
+        "reference_top": "obligation_recovery_fsm",
+        "returncode": 1,
+        "verdict": "FAIL",
+        "version": "yosys-equivalence-oracle-v1"
+      },
+      "formal_negative_rejected": true,
+      "formal_promotion_eligible": false,
+      "negative": {
+        "case_context_mismatch": {
+          "mismatched": [
+            "case_expr"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "missing_profile": {
+          "reason": "missing_compatibility_profile",
+          "status": "UNRESOLVED"
+        },
+        "module_context_mismatch": {
+          "mismatched": [
+            "module"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "profile_mismatch": {
+          "candidate_profile": "rtl.sequential.reset_branch.v1",
+          "reason": "compatibility_profile_mismatch",
+          "source_profile": "rtl.fsm.single_guard.v1",
+          "status": "INAPPLICABLE"
+        }
+      },
+      "negative_expected": {
+        "case_context_mismatch": "UNRESOLVED",
+        "missing_profile": "UNRESOLVED",
+        "module_context_mismatch": "UNRESOLVED",
+        "profile_mismatch": "INAPPLICABLE"
+      },
+      "profile": "rtl.fsm.single_guard.v1"
+    },
+    {
+      "domain": "rtl.RESET_RESTORE",
+      "formal": {
+        "candidate_profile": "rtl.sequential.reset_branch.v1",
+        "candidate_top": "reset_restore_b",
+        "oracle_type": "YOSYS_EQUIV",
+        "output_sha256": "57bb50073743c6f234381464c2eac816c02cc9d4a257d60776172a9fbd90b4fe",
+        "output_tail": "ead cases.\n\n6.3. Executing PROC_INIT pass (extract init attributes).\n\n6.4. Executing PROC_ARST pass (detect async resets in processes).\nFound async reset \\rst_n in `\\reset_restore_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_reset_restore_b/rtl/reset_restore_b.v:7$7'.\n\n6.5. Executing PROC_MUX pass (convert decision trees to multiplexers).\nCreating decoders for process `\\reset_restore_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_reset_restore_b/rtl/reset_restore_b.v:7$7'.\n     1/1: $0\\complete[0:0]\n\n6.6. Executing PROC_DLATCH pass (convert process syncs to latches).\n\n6.7. Executing PROC_DFF pass (convert process syncs to FFs).\nCreating register for signal `\\reset_restore_b.\\complete' using process `\\reset_restore_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_reset_restore_b/rtl/reset_restore_b.v:7$7'.\n  created $adff cell `$procdff$12' with positive edge clock and negative level reset.\n\n6.8. Executing PROC_CLEAN pass (remove empty switches from decision trees).\nFound and cleaned up 1 empty switch in `\\reset_restore_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_reset_restore_b/rtl/reset_restore_b.v:7$7'.\nRemoving empty process `reset_restore_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_reset_restore_b/rtl/reset_restore_b.v:7$7'.\nCleaned up 1 empty switch.\n\n7. Executing MEMORY pass.\n\n7.1. Executing MEMORY_DFF pass (merging $dff cells to $memrd and $memwr).\n\n7.2. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\reset_restore_b..\nFinding unused cells or wires in module \\gold..\nRemoved 1 unused cells and 3 unused wires.\n<suppressed ~2 debug messages>\n\n7.3. Executing MEMORY_SHARE pass (consolidating $memrd/$memwr cells).\n\n7.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\gold..\nFinding unused cells or wires in module \\reset_restore_b..\n\n7.5. Executing MEMORY_COLLECT pass (generating $mem cells).\n\n7.6. Executing MEMORY_MAP pass (converting $mem cells to logic and flip-flops).\n\n8. Executing OPT pass (performing simple optimizations).\n\n8.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module gold.\nOptimizing module reset_restore_b.\n\n8.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\gold'.\nFinding identical cells in module `\\reset_restore_b'.\nRemoved a total of 0 cells.\n\n8.3. Executing OPT_MUXTREE pass (detect dead branches in mux trees).\nRunning muxtree optimizer on module \\gold..\n  Creating internal representation of mux trees.\n  Evaluating internal representation of mux trees.\n  Analyzing evaluation results.\nRunning muxtree optimizer on module \\reset_restore_b..\n  Creating internal representation of mux trees.\n  Evaluating internal representation of mux trees.\n  Analyzing evaluation results.\nRemoved 0 multiplexer ports.\n<suppressed ~2 debug messages>\n\n8.4. Executing OPT_REDUCE pass (consolidate $*mux and $reduce_* inputs).\n  Optimizing cells in module \\gold.\n  Optimizing cells in module \\reset_restore_b.\nPerformed a total of 0 changes.\n\n8.5. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\gold'.\nFinding identical cells in module `\\reset_restore_b'.\nRemoved a total of 0 cells.\n\n8.6. Executing OPT_RMDFF pass (remove dff with constant values).\n\n8.7. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\gold..\nFinding unused cells or wires in module \\reset_restore_b..\n\n8.8. Executing OPT_EXPR pass (perform const folding).\nOptimizing module gold.\nOptimizing module reset_restore_b.\n\n8.9. Finished OPT passes. (There is nothing left to do.)\n\n9. Executing EQUIV_MAKE pass (creating equiv checking module).\nERROR: Can't match gate port `complete_gate' to a gold port.\n",
+        "reason": "equivalence_not_proven",
+        "reference_profile": "rtl.sequential.reset_branch.v1",
+        "reference_top": "reset_restore_a",
+        "returncode": 1,
+        "verdict": "FAIL",
+        "version": "yosys-equivalence-oracle-v1"
+      },
+      "formal_negative_rejected": true,
+      "formal_promotion_eligible": false,
+      "negative": {
+        "case_context_mismatch": {
+          "mismatched": [
+            "case_expr"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "missing_profile": {
+          "reason": "missing_compatibility_profile",
+          "status": "UNRESOLVED"
+        },
+        "module_context_mismatch": {
+          "mismatched": [
+            "module"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "profile_mismatch": {
+          "candidate_profile": "rtl.fsm.single_guard.v1",
+          "reason": "compatibility_profile_mismatch",
+          "source_profile": "rtl.sequential.reset_branch.v1",
+          "status": "INAPPLICABLE"
+        }
+      },
+      "negative_expected": {
+        "case_context_mismatch": "UNRESOLVED",
+        "missing_profile": "UNRESOLVED",
+        "module_context_mismatch": "UNRESOLVED",
+        "profile_mismatch": "INAPPLICABLE"
+      },
+      "profile": "rtl.sequential.reset_branch.v1"
+    },
+    {
+      "domain": "rtl.WIDTH_CORRECT",
+      "formal": {
+        "candidate_profile": "rtl.combinational.width_assignment.v1",
+        "candidate_top": "width_correct_b",
+        "oracle_type": "YOSYS_EQUIV",
+        "output_sha256": "bf7ac5c16f048450f3849e3c10cc796a34367108bcd0494d880f791c17e3ea69",
+        "output_tail": "projects/p3_width_correct_b/rtl/width_correct_b.v\nParsing SystemVerilog input from `/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_width_correct_b/rtl/width_correct_b.v' to AST representation.\nGenerating RTLIL representation for module `\\width_correct_b'.\nSuccessfully finished Verilog frontend.\n\n6. Executing PROC pass (convert processes to netlists).\n\n6.1. Executing PROC_CLEAN pass (remove empty switches from decision trees).\nCleaned up 0 empty switches.\n\n6.2. Executing PROC_RMDEAD pass (remove dead branches from decision trees).\nRemoved a total of 0 dead cases.\n\n6.3. Executing PROC_INIT pass (extract init attributes).\n\n6.4. Executing PROC_ARST pass (detect async resets in processes).\n\n6.5. Executing PROC_MUX pass (convert decision trees to multiplexers).\nCreating decoders for process `\\width_correct_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_width_correct_b/rtl/width_correct_b.v:5$2'.\n     1/1: $0\\result[7:0]\n\n6.6. Executing PROC_DLATCH pass (convert process syncs to latches).\nNo latch inferred for signal `\\width_correct_b.\\result' from process `\\width_correct_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_width_correct_b/rtl/width_correct_b.v:5$2'.\n\n6.7. Executing PROC_DFF pass (convert process syncs to FFs).\n\n6.8. Executing PROC_CLEAN pass (remove empty switches from decision trees).\nRemoving empty process `width_correct_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_width_correct_b/rtl/width_correct_b.v:5$2'.\nCleaned up 0 empty switches.\n\n7. Executing MEMORY pass.\n\n7.1. Executing MEMORY_DFF pass (merging $dff cells to $memrd and $memwr).\n\n7.2. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\width_correct_b..\nFinding unused cells or wires in module \\gold..\nRemoved 0 unused cells and 1 unused wires.\n<suppressed ~1 debug messages>\n\n7.3. Executing MEMORY_SHARE pass (consolidating $memrd/$memwr cells).\n\n7.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\gold..\nFinding unused cells or wires in module \\width_correct_b..\n\n7.5. Executing MEMORY_COLLECT pass (generating $mem cells).\n\n7.6. Executing MEMORY_MAP pass (converting $mem cells to logic and flip-flops).\n\n8. Executing OPT pass (performing simple optimizations).\n\n8.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module gold.\nOptimizing module width_correct_b.\n\n8.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\gold'.\nFinding identical cells in module `\\width_correct_b'.\nRemoved a total of 0 cells.\n\n8.3. Executing OPT_MUXTREE pass (detect dead branches in mux trees).\nRunning muxtree optimizer on module \\gold..\n  Creating internal representation of mux trees.\n  No muxes found in this module.\nRunning muxtree optimizer on module \\width_correct_b..\n  Creating internal representation of mux trees.\n  No muxes found in this module.\nRemoved 0 multiplexer ports.\n\n8.4. Executing OPT_REDUCE pass (consolidate $*mux and $reduce_* inputs).\n  Optimizing cells in module \\gold.\n  Optimizing cells in module \\width_correct_b.\nPerformed a total of 0 changes.\n\n8.5. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\gold'.\nFinding identical cells in module `\\width_correct_b'.\nRemoved a total of 0 cells.\n\n8.6. Executing OPT_RMDFF pass (remove dff with constant values).\n\n8.7. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\gold..\nFinding unused cells or wires in module \\width_correct_b..\n\n8.8. Executing OPT_EXPR pass (perform const folding).\nOptimizing module gold.\nOptimizing module width_correct_b.\n\n8.9. Finished OPT passes. (There is nothing left to do.)\n\n9. Executing EQUIV_MAKE pass (creating equiv checking module).\nERROR: Can't match gate port `result_gate' to a gold port.\n",
+        "reason": "equivalence_not_proven",
+        "reference_profile": "rtl.combinational.width_assignment.v1",
+        "reference_top": "width_correct_a",
+        "returncode": 1,
+        "verdict": "FAIL",
+        "version": "yosys-equivalence-oracle-v1"
+      },
+      "formal_negative_rejected": true,
+      "formal_promotion_eligible": false,
+      "negative": {
+        "case_context_mismatch": {
+          "mismatched": [
+            "case_expr"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "missing_profile": {
+          "reason": "missing_compatibility_profile",
+          "status": "UNRESOLVED"
+        },
+        "module_context_mismatch": {
+          "mismatched": [
+            "module"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "profile_mismatch": {
+          "candidate_profile": "rtl.fsm.single_guard.v1",
+          "reason": "compatibility_profile_mismatch",
+          "source_profile": "rtl.combinational.width_assignment.v1",
+          "status": "INAPPLICABLE"
+        }
+      },
+      "negative_expected": {
+        "case_context_mismatch": "UNRESOLVED",
+        "missing_profile": "UNRESOLVED",
+        "module_context_mismatch": "UNRESOLVED",
+        "profile_mismatch": "INAPPLICABLE"
+      },
+      "profile": "rtl.combinational.width_assignment.v1"
+    },
+    {
+      "domain": "rtl.PRIORITY_REORDER",
+      "formal": {
+        "candidate_profile": "rtl.fsm.case_reorder.v1",
+        "candidate_top": "case_reorder_b",
+        "oracle_type": "YOSYS_EQUIV",
+        "output_sha256": "448aa953c1c9df0df32474bd4874169e344df14669977b325e923cebef3916ad",
+        "output_tail": "\n\n10.2.2. Executing PROC_RMDEAD pass (remove dead branches from decision trees).\nRemoved a total of 0 dead cases.\n\n10.2.3. Executing PROC_INIT pass (extract init attributes).\n\n10.2.4. Executing PROC_ARST pass (detect async resets in processes).\n\n10.2.5. Executing PROC_MUX pass (convert decision trees to multiplexers).\n\n10.2.6. Executing PROC_DLATCH pass (convert process syncs to latches).\n\n10.2.7. Executing PROC_DFF pass (convert process syncs to FFs).\n\n10.2.8. Executing PROC_CLEAN pass (remove empty switches from decision trees).\nCleaned up 0 empty switches.\n\n10.3. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.5. Executing CHECK pass (checking for obvious problems).\nchecking module equiv..\nfound and reported 0 problems.\n\n10.6. Executing OPT pass (performing simple optimizations).\n\n10.6.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.6.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\equiv'.\nRemoved a total of 0 cells.\n\n10.6.3. Executing OPT_MUXTREE pass (detect dead branches in mux trees).\nRunning muxtree optimizer on module \\equiv..\n  Creating internal representation of mux trees.\n  Evaluating internal representation of mux trees.\n  Analyzing evaluation results.\nRemoved 0 multiplexer ports.\n<suppressed ~2 debug messages>\n\n10.6.4. Executing OPT_REDUCE pass (consolidate $*mux and $reduce_* inputs).\n  Optimizing cells in module \\equiv.\nPerformed a total of 0 changes.\n\n10.6.5. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\equiv'.\nRemoved a total of 0 cells.\n\n10.6.6. Executing OPT_RMDFF pass (remove dff with constant values).\n\n10.6.7. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.6.8. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.6.9. Finished OPT passes. (There is nothing left to do.)\n\n10.7. Executing WREDUCE pass (reducing word size of cells).\nRemoved top 1 bits (of 2) from mux cell equiv.$procmux$9_gate ($mux).\nRemoved top 1 bits (of 2) from wire equiv.$procmux$9_Y_gate.\n\n10.8. Executing MEMORY_DFF pass (merging $dff cells to $memrd and $memwr).\n\n10.9. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\nRemoved 0 unused cells and 1 unused wires.\n<suppressed ~1 debug messages>\n\n10.10. Executing MEMORY_COLLECT pass (generating $mem cells).\n\n10.11. Executing OPT pass (performing simple optimizations).\n\n10.11.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.11.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\equiv'.\nRemoved a total of 0 cells.\n\n10.11.3. Executing OPT_RMDFF pass (remove dff with constant values).\n\n10.11.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.11.5. Finished fast OPT passes.\n\n10.12. Printing statistics.\n\n=== equiv ===\n\n   Number of wires:                 11\n   Number of wire bits:             16\n   Number of public wires:           9\n   Number of public wire bits:      12\n   Number of memories:               0\n   Number of memory bits:            0\n   Number of processes:              0\n   Number of cells:                  6\n     $equiv                          2\n     $mux                            4\n\n10.13. Executing CHECK pass (checking for obvious problems).\nchecking module equiv..\nfound and reported 0 problems.\n\n11. Executing EQUIV_SIMPLE pass.\nFound 2 unproven $equiv cells (1 groups) in equiv:\n Grouping SAT models for \\state:\n  Trying to prove $equiv for \\state [0]: failed.\n  Trying to prove $equiv for \\state [1]: failed.\nProved 0 previously unproven $equiv cells.\n\n12. Executing EQUIV_STATUS pass.\nERROR: Found 2 unproven $equiv cells in 'equiv_status -assert'.\n",
+        "reason": "equivalence_not_proven",
+        "reference_profile": "rtl.fsm.case_reorder.v1",
+        "reference_top": "case_reorder_a",
+        "returncode": 1,
+        "verdict": "FAIL",
+        "version": "yosys-equivalence-oracle-v1"
+      },
+      "formal_negative_rejected": true,
+      "formal_promotion_eligible": false,
+      "negative": {
+        "case_context_mismatch": {
+          "mismatched": [
+            "case_expr"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "missing_profile": {
+          "reason": "missing_compatibility_profile",
+          "status": "UNRESOLVED"
+        },
+        "module_context_mismatch": {
+          "mismatched": [
+            "module"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "profile_mismatch": {
+          "candidate_profile": "rtl.fsm.single_guard.v1",
+          "reason": "compatibility_profile_mismatch",
+          "source_profile": "rtl.fsm.case_reorder.v1",
+          "status": "INAPPLICABLE"
+        }
+      },
+      "negative_expected": {
+        "case_context_mismatch": "UNRESOLVED",
+        "missing_profile": "UNRESOLVED",
+        "module_context_mismatch": "UNRESOLVED",
+        "profile_mismatch": "INAPPLICABLE"
+      },
+      "profile": "rtl.fsm.case_reorder.v1"
+    },
+    {
+      "domain": "rtl.AST_REWRITE",
+      "formal": {
+        "candidate_profile": "rtl.ast.literal_rewrite.v1",
+        "candidate_top": "ast_literal_b",
+        "oracle_type": "YOSYS_EQUIV",
+        "output_sha256": "b4282d793451caeb3101289351b6f13681f34ca43111537ab840eb84e6b1573f",
+        "output_tail": " (managing design hierarchy).\n\n10.1.1. Analyzing design hierarchy..\nTop module:  \\equiv\n\n10.1.2. Analyzing design hierarchy..\nTop module:  \\equiv\nRemoving unused module `\\ast_literal_b'.\nRemoving unused module `\\gold'.\nRemoved 2 unused modules.\n\n10.2. Executing PROC pass (convert processes to netlists).\n\n10.2.1. Executing PROC_CLEAN pass (remove empty switches from decision trees).\nCleaned up 0 empty switches.\n\n10.2.2. Executing PROC_RMDEAD pass (remove dead branches from decision trees).\nRemoved a total of 0 dead cases.\n\n10.2.3. Executing PROC_INIT pass (extract init attributes).\n\n10.2.4. Executing PROC_ARST pass (detect async resets in processes).\n\n10.2.5. Executing PROC_MUX pass (convert decision trees to multiplexers).\n\n10.2.6. Executing PROC_DLATCH pass (convert process syncs to latches).\n\n10.2.7. Executing PROC_DFF pass (convert process syncs to FFs).\n\n10.2.8. Executing PROC_CLEAN pass (remove empty switches from decision trees).\nCleaned up 0 empty switches.\n\n10.3. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.5. Executing CHECK pass (checking for obvious problems).\nchecking module equiv..\nfound and reported 0 problems.\n\n10.6. Executing OPT pass (performing simple optimizations).\n\n10.6.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.6.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\equiv'.\nRemoved a total of 0 cells.\n\n10.6.3. Executing OPT_MUXTREE pass (detect dead branches in mux trees).\nRunning muxtree optimizer on module \\equiv..\n  Creating internal representation of mux trees.\n  No muxes found in this module.\nRemoved 0 multiplexer ports.\n\n10.6.4. Executing OPT_REDUCE pass (consolidate $*mux and $reduce_* inputs).\n  Optimizing cells in module \\equiv.\nPerformed a total of 0 changes.\n\n10.6.5. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\equiv'.\nRemoved a total of 0 cells.\n\n10.6.6. Executing OPT_RMDFF pass (remove dff with constant values).\n\n10.6.7. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.6.8. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.6.9. Finished OPT passes. (There is nothing left to do.)\n\n10.7. Executing WREDUCE pass (reducing word size of cells).\n\n10.8. Executing MEMORY_DFF pass (merging $dff cells to $memrd and $memwr).\n\n10.9. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.10. Executing MEMORY_COLLECT pass (generating $mem cells).\n\n10.11. Executing OPT pass (performing simple optimizations).\n\n10.11.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module equiv.\n\n10.11.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\equiv'.\nRemoved a total of 0 cells.\n\n10.11.3. Executing OPT_RMDFF pass (remove dff with constant values).\n\n10.11.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\equiv..\n\n10.11.5. Finished fast OPT passes.\n\n10.12. Printing statistics.\n\n=== equiv ===\n\n   Number of wires:                  6\n   Number of wire bits:              6\n   Number of public wires:           6\n   Number of public wire bits:       6\n   Number of memories:               0\n   Number of memory bits:            0\n   Number of processes:              0\n   Number of cells:                  1\n     $equiv                          1\n\n10.13. Executing CHECK pass (checking for obvious problems).\nchecking module equiv..\nfound and reported 0 problems.\n\n11. Executing EQUIV_SIMPLE pass.\nFound 1 unproven $equiv cells (1 groups) in equiv:\n  Trying to prove $equiv for \\out: failed.\nProved 0 previously unproven $equiv cells.\n\n12. Executing EQUIV_STATUS pass.\nERROR: Found 1 unproven $equiv cells in 'equiv_status -assert'.\n",
+        "reason": "equivalence_not_proven",
+        "reference_profile": "rtl.ast.literal_rewrite.v1",
+        "reference_top": "ast_literal_a",
+        "returncode": 1,
+        "verdict": "FAIL",
+        "version": "yosys-equivalence-oracle-v1"
+      },
+      "formal_negative_rejected": true,
+      "formal_promotion_eligible": false,
+      "negative": {
+        "case_context_mismatch": {
+          "mismatched": [
+            "case_expr"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "missing_profile": {
+          "reason": "missing_compatibility_profile",
+          "status": "UNRESOLVED"
+        },
+        "module_context_mismatch": {
+          "mismatched": [
+            "module"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "profile_mismatch": {
+          "candidate_profile": "rtl.fsm.single_guard.v1",
+          "reason": "compatibility_profile_mismatch",
+          "source_profile": "rtl.ast.literal_rewrite.v1",
+          "status": "INAPPLICABLE"
+        }
+      },
+      "negative_expected": {
+        "case_context_mismatch": "UNRESOLVED",
+        "missing_profile": "UNRESOLVED",
+        "module_context_mismatch": "UNRESOLVED",
+        "profile_mismatch": "INAPPLICABLE"
+      },
+      "profile": "rtl.ast.literal_rewrite.v1"
+    },
+    {
+      "domain": "rtl.PRIORITY_REORDER",
+      "formal": {
+        "candidate_profile": "rtl.protocol.overlap_priority.v1",
+        "candidate_top": "overlap_priority_b",
+        "oracle_type": "YOSYS_EQUIV",
+        "output_sha256": "006de28b9f0666e35b1ef73f4f08f668bafce6123da4beaf43495a388ef20cf7",
+        "output_tail": "/memory/tests/fixtures/rtl_projects/p3_overlap_priority_b/rtl/overlap_priority_b.v:10$10'.\n     1/1: $0\\state[1:0]\n\n6.6. Executing PROC_DLATCH pass (convert process syncs to latches).\nNo latch inferred for signal `\\overlap_priority_b.\\next_state' from process `\\overlap_priority_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_overlap_priority_b/rtl/overlap_priority_b.v:14$12'.\n\n6.7. Executing PROC_DFF pass (convert process syncs to FFs).\nCreating register for signal `\\overlap_priority_b.\\state' using process `\\overlap_priority_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_overlap_priority_b/rtl/overlap_priority_b.v:10$10'.\n  created $adff cell `$procdff$18' with positive edge clock and negative level reset.\n\n6.8. Executing PROC_CLEAN pass (remove empty switches from decision trees).\nFound and cleaned up 1 empty switch in `\\overlap_priority_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_overlap_priority_b/rtl/overlap_priority_b.v:14$12'.\nRemoving empty process `overlap_priority_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_overlap_priority_b/rtl/overlap_priority_b.v:14$12'.\nRemoving empty process `overlap_priority_b.$proc$/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/p3_overlap_priority_b/rtl/overlap_priority_b.v:10$10'.\nCleaned up 1 empty switch.\n\n7. Executing MEMORY pass.\n\n7.1. Executing MEMORY_DFF pass (merging $dff cells to $memrd and $memwr).\n\n7.2. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\overlap_priority_b..\nFinding unused cells or wires in module \\gold..\nRemoved 1 unused cells and 7 unused wires.\n<suppressed ~2 debug messages>\n\n7.3. Executing MEMORY_SHARE pass (consolidating $memrd/$memwr cells).\n\n7.4. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\gold..\nFinding unused cells or wires in module \\overlap_priority_b..\n\n7.5. Executing MEMORY_COLLECT pass (generating $mem cells).\n\n7.6. Executing MEMORY_MAP pass (converting $mem cells to logic and flip-flops).\n\n8. Executing OPT pass (performing simple optimizations).\n\n8.1. Executing OPT_EXPR pass (perform const folding).\nOptimizing module gold.\nOptimizing module overlap_priority_b.\n\n8.2. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\gold'.\nFinding identical cells in module `\\overlap_priority_b'.\nRemoved a total of 0 cells.\n\n8.3. Executing OPT_MUXTREE pass (detect dead branches in mux trees).\nRunning muxtree optimizer on module \\gold..\n  Creating internal representation of mux trees.\n  Evaluating internal representation of mux trees.\n  Analyzing evaluation results.\nRunning muxtree optimizer on module \\overlap_priority_b..\n  Creating internal representation of mux trees.\n  Evaluating internal representation of mux trees.\n  Analyzing evaluation results.\nRemoved 0 multiplexer ports.\n<suppressed ~2 debug messages>\n\n8.4. Executing OPT_REDUCE pass (consolidate $*mux and $reduce_* inputs).\n  Optimizing cells in module \\gold.\n  Optimizing cells in module \\overlap_priority_b.\nPerformed a total of 0 changes.\n\n8.5. Executing OPT_MERGE pass (detect identical cells).\nFinding identical cells in module `\\gold'.\nFinding identical cells in module `\\overlap_priority_b'.\nRemoved a total of 0 cells.\n\n8.6. Executing OPT_RMDFF pass (remove dff with constant values).\n\n8.7. Executing OPT_CLEAN pass (remove unused cells and wires).\nFinding unused cells or wires in module \\gold..\nFinding unused cells or wires in module \\overlap_priority_b..\n\n8.8. Executing OPT_EXPR pass (perform const folding).\nOptimizing module gold.\nOptimizing module overlap_priority_b.\n\n8.9. Finished OPT passes. (There is nothing left to do.)\n\n9. Executing EQUIV_MAKE pass (creating equiv checking module).\nERROR: Can't match gate port `select_gate' to a gold port.\n",
+        "reason": "equivalence_not_proven",
+        "reference_profile": "rtl.protocol.overlap_priority.v1",
+        "reference_top": "overlap_priority_a",
+        "returncode": 1,
+        "verdict": "FAIL",
+        "version": "yosys-equivalence-oracle-v1"
+      },
+      "formal_negative_rejected": true,
+      "formal_promotion_eligible": false,
+      "negative": {
+        "case_context_mismatch": {
+          "mismatched": [
+            "case_expr"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "missing_profile": {
+          "reason": "missing_compatibility_profile",
+          "status": "UNRESOLVED"
+        },
+        "module_context_mismatch": {
+          "mismatched": [
+            "module"
+          ],
+          "reason": "structural_context_mismatch",
+          "status": "UNRESOLVED"
+        },
+        "profile_mismatch": {
+          "candidate_profile": "rtl.fsm.single_guard.v1",
+          "reason": "compatibility_profile_mismatch",
+          "source_profile": "rtl.protocol.overlap_priority.v1",
+          "status": "INAPPLICABLE"
+        }
+      },
+      "negative_expected": {
+        "case_context_mismatch": "UNRESOLVED",
+        "missing_profile": "UNRESOLVED",
+        "module_context_mismatch": "UNRESOLVED",
+        "profile_mismatch": "INAPPLICABLE"
+      },
+      "profile": "rtl.protocol.overlap_priority.v1"
+    }
+  ],
+  "unknown_or_fail_is_not_promotion_evidence": true,
+  "version": "rtl-profile-oracle-v1"
+}

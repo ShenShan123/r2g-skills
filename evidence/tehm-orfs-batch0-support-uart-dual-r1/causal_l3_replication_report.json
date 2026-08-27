@@ -1,0 +1,45 @@
+{
+  "version": "orfs-controlled-replication-v1",
+  "campaign_id": "orfs-batch0-uart-dual-l3-r2",
+  "split": "training",
+  "source_staging_db": "/tmp/tehm-orfs/orfs-batch0-uart-dual-support-r1/staging/tehm.sqlite",
+  "source_staging_sha256": "5c0cebdb1172881eb1fae81d585c4c071dd5af1721176a1c210c7d8ea2825bf0",
+  "derived_db": "/tmp/tehm-orfs/orfs-batch0-uart-dual-l3-r2/tehm.sqlite",
+  "derived_db_sha256": "46341a419263386c8d84bae44148b1da186dc1b930682526f06cd92ca2f320ca",
+  "canonical_memory_mutation": "none",
+  "promotion_eligible": false,
+  "pair_count": 2,
+  "unique_lineages": [
+    "batch0-v1:sky130hs:uart",
+    "batch0-v1:sky130hs:uart_no_param"
+  ],
+  "path": {
+    "path_id": "causal_path_e4bf96d16d5766f2",
+    "path_digest": "sha1:e4bf96d16d5766f2d9e85772788ddaf09900923b",
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "source_transition_count": 4,
+    "unique_designs": [
+      "batch0-v1:sky130hs:uart",
+      "batch0-v1:sky130hs:uart_no_param"
+    ],
+    "unique_lineages": [
+      "batch0-v1:sky130hs:uart",
+      "batch0-v1:sky130hs:uart_no_param"
+    ],
+    "unique_runs": [
+      "RUN_2026-08-26_17-50-01_10_0cb5",
+      "RUN_2026-08-26_17-52-14_4284_4980"
+    ]
+  },
+  "replication": {
+    "eligible": true,
+    "reason": "replicated_effect_supported",
+    "evidence_level": "L3_REPLICATED_EFFECT"
+  },
+  "rule_evidence": {
+    "eligible": true,
+    "required_level": "L2_CONTROLLED_INTERVENTION",
+    "promotion_eligible": false
+  },
+  "authority_note": "L3 eligibility now requires disjoint learner lineages, design witnesses, and distinct run witnesses; this remains causal shadow evidence and does not promote a rule or mutate canonical memory."
+}

@@ -1,0 +1,22 @@
+{
+  "design": "fifo_space_fsm",
+  "mechanism_family": "FIFO_CAPACITY_COMPLETION",
+  "bug": {
+    "type": "dequeue_without_space_return",
+    "description": "DRAIN->DONE transition fires without waiting for space_return.",
+    "first_divergence_signal": "done"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "description": "DRAIN: next_state = DONE;  -->  DRAIN: if (space_return) next_state = DONE;",
+    "module": "req_ack_fsm",
+    "source_state": "DRAIN",
+    "target_state": "DONE",
+    "add_condition": "space_return"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  }
+}

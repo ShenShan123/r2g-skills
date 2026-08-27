@@ -1,0 +1,44 @@
+{
+  "action_signature": {
+    "config_edits": {
+      "CORE_UTILIZATION": "40"
+    },
+    "domain": "flow.CONFIG_DELTA",
+    "family": "DENSITY_RELIEF",
+    "operation_point": "50->40"
+  },
+  "after_core_utilization": 40,
+  "baseline_only_before_selection": true,
+  "batch_lane_version": "orfs-batch-lane-v1",
+  "before_core_utilization": 50,
+  "campaign_id": "timing-relief-budgeted-v1-selector-preflight-selected",
+  "canonical_memory_mutation": "none",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V1",
+  "firewall": {
+    "calibration": [
+      "selector-v1-fifo16",
+      "selector-v1-xor32"
+    ],
+    "disjoint": true,
+    "heldout": [
+      "selector-v1-alu16",
+      "selector-v1-arbiter8",
+      "selector-v1-crc16",
+      "selector-v1-uart16"
+    ],
+    "selected_lineages": [],
+    "source_digests_unique": true,
+    "support": [],
+    "version": "timing-relief-selector-preflight-firewall-v1"
+  },
+  "items": [],
+  "orfs_root": "/opt/EDA4AI/OpenROAD-flow-scripts",
+  "promotion_attempted": false,
+  "selector_policy": "external_policy_read_only",
+  "source_freeze": "/tmp/tehm-authority-v1/selector-preflight-v1/source_freeze.json",
+  "source_freeze_sha256": "955c54cf1d0da7948f02551e3ed778f02d8b6308523ebcc774fe4973ad07ad46",
+  "source_spec": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/timing_relief_selector_preflight_spec_v1.json",
+  "source_spec_sha256": "c2fdea036517c4f265b526cc183487496afd8ddbc129de024acb7a111ff58050",
+  "utility_contract_digest": "e912789aa5152c3dc74f4c670bb9cf993a14ed537bae106763aa8208ba787b36",
+  "version": "timing-relief-selector-preflight-v1"
+}

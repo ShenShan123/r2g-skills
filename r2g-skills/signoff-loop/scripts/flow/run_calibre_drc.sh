@@ -101,7 +101,9 @@ fi
 
 # ── 3. restage backend GDS (reuse the shared signoff restager) ──
 if [[ ! -f "$CONFIG_MK" ]]; then _emit_skip skipped "no_config_mk:$CONFIG_MK"; exit 0; fi
-DESIGN_NAME=$(grep 'DESIGN_NAME' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NICKNAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NICKNAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
+DESIGN_NICKNAME="${DESIGN_NICKNAME:-$DESIGN_NAME}"
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_restage_for_signoff.sh"
 GDS_FILE="$ORFS_RESULTS_DIR/6_final.gds"

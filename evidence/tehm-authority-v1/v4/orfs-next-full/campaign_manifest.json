@@ -1,0 +1,60 @@
+{
+  "action_signature": {
+    "config_edits": {"CORE_UTILIZATION": "40"},
+    "family": "DENSITY_RELIEF"
+  },
+  "batch_lane_version": "orfs-batch-lane-v1",
+  "campaign_id": "orfs-authority-v6-next-full",
+  "canonical_memory_mutation": "none",
+  "equivalence_policy": {
+    "authority": "independent_equivalence_report",
+    "config_only_source_identity_allowed": true,
+    "missing_or_failed_proof_classification": "INCOMPLETE",
+    "orfs_internal_equivalence_check": false
+  },
+  "firewall": {
+    "disjoint": true,
+    "support": [
+      "orfs-v6-and32:sky130hs:and32:base0",
+      "orfs-v6-toggle32:sky130hs:toggle32:base0"
+    ],
+    "source_digests_unique": true,
+    "version": "orfs-batch-v6-firewall-v1"
+  },
+  "items": [
+    {
+      "after_project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0",
+      "before_project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0",
+      "case_id": "sky130hs:and32:0:DENSITY_RELIEF:50->40",
+      "check": "route",
+      "config_edits": {"CORE_UTILIZATION": "40"},
+      "design": "and32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "orfs-v6-and32:sky130hs:and32:base0",
+      "platform": "sky130hs",
+      "role": "observation",
+      "rtl_files": ["/tmp/tehm-authority-v1/and32.v"],
+      "source_digest": "5bf79dfc7994496b43630942a029cfd9d428f8ad5c8e02333f4094cbdc9ad3fb",
+      "split": "support",
+      "top": "and32"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_toggle32_density_0",
+      "before_project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_toggle32_base_0",
+      "case_id": "sky130hs:toggle32:0:DENSITY_RELIEF:50->40",
+      "check": "route",
+      "config_edits": {"CORE_UTILIZATION": "40"},
+      "design": "toggle32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "orfs-v6-toggle32:sky130hs:toggle32:base0",
+      "platform": "sky130hs",
+      "role": "observation",
+      "rtl_files": ["/tmp/tehm-authority-v1/toggle32.v"],
+      "source_digest": "13f386287cfb0b641361ecaf4c3388d6e28445882f9256fe75b78261461f257e",
+      "split": "support",
+      "top": "toggle32"
+    }
+  ],
+  "orfs_root": "/opt/EDA4AI/OpenROAD-flow-scripts",
+  "version": "orfs-batch-v6"
+}

@@ -19,14 +19,11 @@ metadata:
       PDK_ROOT: "(autodetected) directory containing sky130A etc."
       R2G_GRAPH_PYTHON: "path to a python with torch + torch_geometric + pandas (graph stage only)"
       R2G_GRAPH_VARIANTS: "which of b..f to build (default bcdef)"
-      R2G2_MAX_PATHS: "OpenSTA endpoint-path cap for the four-stage timing labels (default 10000)"
   warnings:
     - Operates on ALREADY signed-off backend outputs (6_final.def/.odb/.spef) — it does NOT run PnR.
     - The label/feature stages are fail-soft — a missing input degrades one column, never aborts.
     - The graph-assembly stage SKIPs cleanly (with an install HINT) when the torch venv is absent.
     - Platform-agnostic: liberty/LEF/supply-voltage are resolved from the ORFS platform config.
-    - Two dataset products: the b–f views (run_graphs.sh) and the four-stage causal graphs
-      (run_stage_dataset.sh, vendored R2G2.0 — see scripts/r2g2/R2G2_UPSTREAM.md before editing it).
 ---
 # def-graph Skill
 
@@ -152,44 +149,6 @@ reason is in `label_health`. `signoff_health.status` outside {pass, pass_with_ca
 dataset was built past the signoff gate (warn/off mode) on a design that is not signed off — the
 blockers list says why.
 
-### 4. Four-stage causal dataset — `scripts/flow/run_stage_dataset.sh <project-dir>`
-
-The **second dataset product**, built from the same backend run but answering a different question.
-Stages 1–3 above fold one finished layout (`6_final.def`) into five views; this builder emits **four
-`HeteroData` graphs per design** — `floorplan`, `placement`, `cts`, `route` — that share one
-canonical post-synthesis topology and one set of post-route labels, and differ only in *what was
-legally knowable before that stage ran*. It is the vendored, manually-verified **R2G2.0** pipeline
-(`scripts/r2g2/`, upstream contract in `scripts/r2g2/upstream_docs/B_VIEW_DATASET_STRUCTURE.md`).
-
-```bash
-R2G_GRAPH_PYTHON=/proj/<you>/pyenvs/r2g-graph/bin/python \
-  scripts/flow/run_stage_dataset.sh <project-dir> [--run-dir DIR] [--out-dir DIR]
-```
-
-Needs a backend run with all four stage `.odb` (`2_floorplan`/`3_place`/`4_cts`/`5_route`) plus
-`6_final.spef`; the runner picks the newest such run, passes the signoff gate, exports the stage
-DEFs from ODB, then runs `01…05` and both upstream checkers. See
-**`references/four-stage-dataset.md`**.
-
-Key differences from b–f — do not "harmonize" them:
-
-- **Topology comes from `1_2_yosys.v`, not the DEF.** The node set is identical in all four graphs;
-  a gate the resizer deleted stays a node with `placement_valid=0`.
-- **Labels are raw physical values** (no log/normalize twin), carried as per-type `y[N,2]` with an
-  explicit boolean `y_valid_mask`. `04` refuses a graph where `isfinite(y) != y_valid_mask`.
-- **Timing/RC relations are supervision only** — their `edge_attr` is `[E, 0]`; only the three
-  logical incidence relations (plus `gate|congestion_geom|gate` at cts/route) are encoder input.
-- **`5_route.def`/SPEF/STA are label-only.** Stage 02 forks one subprocess per prediction stage so a
-  stage can only open its own DEF, and `checks/validate_four_stage.py` re-checks leakage independently.
-
-**Both checkers must PASS, and a built `heterograph.pt` is not evidence on its own** —
-`checks/validate_four_stage.py --config <cfg>` (contract + leakage) and
-`checks/summarize_four_stage_graph_data.py --root <generated>` (`structural_issues=0`).
-
-**Editing `scripts/r2g2/` requires reading `scripts/r2g2/R2G2_UPSTREAM.md` first.** That tree is a
-vendored upstream drop plus eleven recorded deltas (D1–D11); a new drop is re-vendored and the deltas
-re-applied, never hand-merged. `scripts/stage_dataset/` is our glue and is edited normally.
-
 ## The five topologies (b–f)
 
 | Variant | Nodes kept | Folded into edges |
@@ -234,8 +193,6 @@ The shared per-platform tech layer every stage consumes:
 | Read this | When |
 |-----------|------|
 | `references/graph-dataset.md` | Building/reading the PyG b–f graphs, tensor schema, RC-parasitic label views, torch venv, provenance + audit notes. |
-| `references/four-stage-dataset.md` | Building/reading the four-stage causal HeteroData graphs (`run_stage_dataset.sh`), the causal input whitelist, the ORFS adapters, and the two mandatory checkers. |
-| `scripts/r2g2/R2G2_UPSTREAM.md` | **Before editing anything under `scripts/r2g2/`** — upstream provenance, SHA256s, and the eleven local deltas (D1–D11) that must be re-applied on a new drop. |
 | `references/label-extraction.md` | Building the Y side (per-cell/per-net labels + stats). |
 | `references/feature-extraction.md` | Building the X side (per-node/per-edge/metadata CSVs + stats). |
 | `scripts/extract/techlib/` | Per-platform tech/LEF/liberty/DEF parsing internals. |

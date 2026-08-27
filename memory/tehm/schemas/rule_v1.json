@@ -1,0 +1,20 @@
+{
+  "schema_version": "rule-v1",
+  "description": "Crystallized procedural rule r = <L, R, P_h, P_c, Q, Pi, Gamma, U, Risk, nu_P> (design doc 4.3). Populated by Phase 5-6 crystallization; the store schema is in place now.",
+  "required": ["rule_id", "domain", "before_pattern", "after_pattern", "hard_preconditions", "obligations"],
+  "properties": {
+    "rule_id": {"type": "string"},
+    "domain": {"type": "string"},
+    "before_pattern": {"type": "object", "description": "anti-unified L with shared holes"},
+    "after_pattern": {"type": "object", "description": "anti-unified R sharing hole namespace with L"},
+    "hard_preconditions": {"type": "array", "items": {"type": "string"}},
+    "context_predicates": {"type": "object"},
+    "obligations": {"type": "array", "items": {"type": "string"}},
+    "validity_status": {"enum": ["CANDIDATE", "REJECT_DEGENERATE", "REJECT_UNFAITHFUL", "PROVISIONAL_VALID", "VALIDATED", "UNSTABLE_CANDIDATE", "INSTANCE_MEMORY"]},
+    "validity_profile": {"type": "object"},
+    "confidence": {"type": "object"},
+    "utility": {"type": "object"},
+    "risk_profiles": {"type": "array"},
+    "source_episodes": {"type": "array", "items": {"type": "string"}}
+  }
+}

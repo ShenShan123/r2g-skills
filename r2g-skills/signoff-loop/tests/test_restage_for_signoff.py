@@ -8,6 +8,7 @@ the staged run, and a differing identity forces a clobber re-stage. A same-ident
 stays the fast-path no-op.
 """
 import os
+import json
 import subprocess
 import time
 from pathlib import Path
@@ -30,13 +31,15 @@ def _mk_run(proj: Path, run_name: str, gds_content: str, mtime: float):
         os.utime(p, (mtime, mtime))
 
 
-def _restage(proj: Path, flow_dir: Path) -> subprocess.CompletedProcess:
+def _restage(proj: Path, flow_dir: Path, nickname: str | None = None) -> subprocess.CompletedProcess:
     env = dict(
         os.environ,
         PROJECT_DIR=str(proj), PLATFORM=PLATFORM, DESIGN_NAME=DESIGN,
         FLOW_VARIANT=VARIANT, FLOW_DIR=str(flow_dir),
         CONFIG_MK=str(proj / "constraints" / "config.mk"),
     )
+    if nickname is not None:
+        env["DESIGN_NICKNAME"] = nickname
     return subprocess.run(
         ["bash", "-c", f'source "{RESTAGE}"'],
         env=env, capture_output=True, text=True, timeout=60,
@@ -222,3 +225,38 @@ def test_signoff_record_written(tmp_path):
     rec2 = _json.loads(rec_path.read_text())
     assert rec2["run_tag"] == "RUN_TWO"
     assert rec2["gds_sha256"] == hashlib.sha256(b"GDS_TWO").hexdigest()
+
+
+def test_nickname_keys_orfs_work_dirs_but_not_design_config_dir(tmp_path):
+    """ORFS variables.mk keys work products by DESIGN_NICKNAME, while r2g's
+    isolated DESIGN_CONFIG remains under DESIGN_NAME/FLOW_VARIANT."""
+    proj, flow_dir = _setup(tmp_path)
+    _mk_run(proj, "RUN_ONE", "GDS_NICK", time.time())
+
+    r = _restage(proj, flow_dir, nickname="demo_workspace")
+    assert r.returncode == 0, r.stderr
+
+    work = flow_dir / "results" / PLATFORM / "demo_workspace" / VARIANT
+    assert (work / "6_final.gds").read_text() == "GDS_NICK"
+    assert not (flow_dir / "results" / PLATFORM / DESIGN / VARIANT).exists()
+    assert (flow_dir / "designs" / PLATFORM / DESIGN / VARIANT / "config.mk").is_file()
+
+
+def test_recorded_project_work_home_is_reused_for_signoff(tmp_path):
+    """A new production run must never be re-staged back into a read-only ORFS tree."""
+    proj, flow_dir = _setup(tmp_path)
+    _mk_run(proj, "RUN_LOCAL", "GDS_LOCAL", time.time())
+    local_work = proj / ".orfs-work"
+    (proj / "backend" / "RUN_LOCAL" / "run-meta.json").write_text(json.dumps({
+        "make_status": 0, "orfs_work_home": str(local_work),
+        "design_name": DESIGN, "design_nickname": DESIGN,
+        "flow_variant": VARIANT,
+    }))
+
+    result = _restage(proj, flow_dir)
+    assert result.returncode == 0, result.stderr
+    assert (local_work / "results" / PLATFORM / DESIGN / VARIANT /
+            "6_final.gds").read_text() == "GDS_LOCAL"
+    assert not (flow_dir / "results").exists()
+    assert (proj / ".orfs-design" / PLATFORM / DESIGN / VARIANT /
+            "config.mk").is_file()

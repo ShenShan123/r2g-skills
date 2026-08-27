@@ -1,0 +1,15 @@
+module reset_restore_a (
+    input  wire clk,
+    input  wire rst_n,
+    input  wire start,
+    output reg  done
+);
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            done <= 1'b1; // BUG: reset must clear done
+        else if (start)
+            done <= 1'b1;
+        else
+            done <= 1'b0;
+    end
+endmodule

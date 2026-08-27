@@ -1,0 +1,22 @@
+{
+  "summary": {
+    "area": {
+      "design_area_um2": 4877.0,
+      "utilization": 0.59
+    },
+    "timing": {
+      "setup_tns": 100.0
+    },
+    "power": {},
+    "drc": {},
+    "timing_staged": {
+      "floorplan_setup_ws": -1.18243,
+      "place_setup_ws": -1.60667
+    }
+  },
+  "geometry": {},
+  "run_dir": "/tmp/tehm-authority-v1/batch1-add/cases/sky130hd_uart_base_0/backend/RUN_2026-08-24_21-13-45_5_1f1c",
+  "orfs_status": "fail",
+  "orfs_last_stage": "place",
+  "orfs_fail_stage": "cts"
+}

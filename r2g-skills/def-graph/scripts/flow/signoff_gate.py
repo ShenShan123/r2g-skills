@@ -940,7 +940,7 @@ def main():
         for k in verdict["blockers"])
     print(f"signoff gate: NOT SIGNED OFF — {detail}", file=sys.stderr)
     print(f"  verdict recorded in {out}", file=sys.stderr)
-    if mode == "enforce":
+    if mode in ("enforce", "strict"):
         return 3
     print("  proceeding anyway (mode=warn) — the manifest will carry signoff_health="
           f"{verdict['status']!r}", file=sys.stderr)

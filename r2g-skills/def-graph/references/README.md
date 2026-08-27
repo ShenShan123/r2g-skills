@@ -18,13 +18,6 @@ skill; see `../../signoff-loop/SKILL.md`.
   into the five b–f graph topologies + the synthesis-netlist graph. Tensor schemas, RC-parasitic
   label views, torch-venv setup, and the 2026-07-05 RTL2Graph audit record.
 
-**Build the four-stage causal dataset from the same run**
-- [`four-stage-dataset.md`](four-stage-dataset.md) — `run_stage_dataset.sh` emits four `HeteroData`
-  graphs per design (floorplan / placement / cts / route) sharing one post-synthesis topology and
-  one post-route label set, differing only by prediction cutoff. The vendored R2G2.0 pipeline.
-- `../scripts/r2g2/R2G2_UPSTREAM.md` — upstream provenance + the eleven local deltas. **Read before
-  editing anything under `scripts/r2g2/`**; that tree is re-vendored, not hand-merged.
-
 **The tech-lib / LEF / DEF parser**
 - `../scripts/extract/techlib/` — the shared per-platform tech layer every stage consumes
   (`profile.py`, `resolve.py`, `def_parse.py`, `lef.py`, `liberty.py`, `cell_types.py`).
@@ -39,7 +32,6 @@ skill; see `../../signoff-loop/SKILL.md`.
 | Doc | Purpose |
 | --- | --- |
 | [`feature-extraction.md`](feature-extraction.md) | The dataset **X** side: `run_features.sh` per-node/per-edge/graph feature tables plus per-design stats. |
-| [`four-stage-dataset.md`](four-stage-dataset.md) | The four-stage causal dataset: `run_stage_dataset.sh`, the vendored R2G2.0 `01..05`, the ORFS adapters, and its two mandatory checkers. |
 | [`graph-dataset.md`](graph-dataset.md) | Training-ready PyG graphs: `run_graphs.sh` joins X+Y into the five b–f graph topologies + the synthesis-netlist graph (torch venv, fail-soft). |
 | [`label-extraction.md`](label-extraction.md) | The dataset **Y** side: `run_labels.sh` per-cell/per-net regression-target tables plus per-design stats. |
 

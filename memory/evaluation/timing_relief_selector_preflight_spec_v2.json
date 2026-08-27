@@ -1,0 +1,19 @@
+{
+  "version": "timing-relief-selector-preflight-spec-v2",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+  "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863",
+  "platform": "sky130hs",
+  "family": "DENSITY_RELIEF",
+  "before_core_utilization": 50,
+  "after_core_utilization": 45,
+  "clock_port": "clk",
+  "sdc_template": "memory/evaluation/rtl_selector_preflight/selector_clk.sdc",
+  "lineages": [
+    {"id": "prospective-v2:sky130hs:xor64:cal0", "design": "v2_xor64", "top": "v2_xor64", "split": "calibration", "rtl": "memory/evaluation/rtl_v2_heldout/v2_xor64.v"},
+    {"id": "prospective-v2:sky130hs:queue24:cal0", "design": "v2_queue24", "top": "v2_queue24", "split": "calibration", "rtl": "memory/evaluation/rtl_v2_heldout/v2_queue24.v"},
+    {"id": "prospective-v2:sky130hs:arbiter16:ab0", "design": "v2_arbiter16", "top": "v2_arbiter16", "split": "heldout", "rtl": "memory/evaluation/rtl_v2_heldout/v2_arbiter16.v"},
+    {"id": "prospective-v2:sky130hs:crc32:ab0", "design": "v2_crc32", "top": "v2_crc32", "split": "heldout", "rtl": "memory/evaluation/rtl_v2_heldout/v2_crc32.v"},
+    {"id": "prospective-v2:sky130hs:packet_ctrl:ab0", "design": "v2_packet_ctrl", "top": "v2_packet_ctrl", "split": "heldout", "rtl": "memory/evaluation/rtl_v2_heldout/v2_packet_ctrl.v"},
+    {"id": "prospective-v2:sky130hs:mac32:ab0", "design": "v2_mac32", "top": "v2_mac32", "split": "heldout", "rtl": "memory/evaluation/rtl_v2_heldout/v2_mac32.v"}
+  ]
+}

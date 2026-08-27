@@ -1,0 +1,33 @@
+{
+  "design": "validity_boundary_fsm",
+  "mechanism_family": "HANDSHAKE_COMPLETION",
+  "bug": {
+    "type": "degenerate_rule_boundary",
+    "description": "ARM->FINISH requires ack; an always-true candidate is degenerate.",
+    "first_divergence_signal": "done"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "module": "validity_boundary_fsm",
+    "source_state": "ARM",
+    "target_state": "FINISH",
+    "add_condition": "ack"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "REJECT_DEGENERATE",
+    "ablation_actions": {
+      "M4": {
+        "source_state": "ARM",
+        "target_state": "FINISH",
+        "add_condition": "1'b1"
+      }
+    }
+  }
+}

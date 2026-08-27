@@ -1,0 +1,22 @@
+{
+  "tier": "unknown",
+  "wns": null,
+  "tns": null,
+  "wns_tier": "unknown",
+  "tns_tier": "unknown",
+  "message": "No setup_wns found in ppa.json. Timing data may be missing.",
+  "options": [
+    {
+      "number": 1,
+      "action": "proceed_anyway",
+      "description": "Proceed to signoff (the GDS may be non-functional)",
+      "risk": "unknown"
+    },
+    {
+      "number": 2,
+      "action": "stop",
+      "description": "Stop and investigate why timing data is missing",
+      "risk": "none"
+    }
+  ]
+}

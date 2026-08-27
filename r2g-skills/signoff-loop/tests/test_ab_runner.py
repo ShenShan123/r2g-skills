@@ -49,15 +49,6 @@ def _seed_history(conn, base, n=3, design_class="crypto/small", platform="nangat
     conn.commit()
 
 
-def test_evidence_designs_honors_isolated_heuristics_path(tmp_path, monkeypatch):
-    isolated = tmp_path / "heuristics.json"
-    isolated.write_text(json.dumps({
-        "symptoms": {KEY["symptom_id"]: {"evidence_designs": ["isolated_d"]}}
-    }))
-    monkeypatch.setenv("R2G_HEURISTICS_PATH", str(isolated))
-    assert ab_runner._evidence_designs(KEY["symptom_id"]) == ["isolated_d"]
-
-
 def test_plan_trial_selects_cheapest_matched_designs(tmp_path):
     conn = _conn(tmp_path)
     _seed_history(conn, tmp_path)
@@ -89,7 +80,7 @@ def test_plan_trial_relaxes_class_when_exact_too_few(tmp_path):
     assert len(trial["designs"]) == 2
 
 
-def test_judge_requires_two_independent_family_wins_to_promote(tmp_path):
+def test_judge_win_promotes(tmp_path):
     conn = _conn(tmp_path)
     recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
     arm_a = {"is_success": False, "wall_s": 900.0, "fix_iters": None}
@@ -99,8 +90,6 @@ def test_judge_requires_two_independent_family_wins_to_promote(tmp_path):
     tid = ab_runner.record_trial(conn, key=KEY, verdict=verdict,
                                  arm_a_run_id="ra", arm_b_run_id="rb",
                                  metrics={"a": arm_a, "b": arm_b})
-    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
-    _record_subject_verdict(conn, "subjZ", "win", design_family="family_z")
     assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"
     row = conn.execute("SELECT verdict FROM ab_trials WHERE trial_id=?",
                        (tid,)).fetchone()
@@ -156,11 +145,9 @@ def test_incomplete_provenance_win_does_not_promote(tmp_path):
     ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="rx",
                            arm_b_run_id="rx", metrics={})
     assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"   # still NOT promoted
-    # One genuinely verifiable family is still insufficient; a second promotes.
+    # a genuinely verifiable win (distinct run_ids) finally promotes
     ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
                            arm_b_run_id="rb", metrics={})
-    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
-    _record_subject_verdict(conn, "subjZ", "win", design_family="family_z")
     assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"
 
 
@@ -171,31 +158,17 @@ def test_incomplete_provenance_loss_does_not_demote(tmp_path):
     recipe_lifecycle.enqueue_candidate(conn, **KEY)
     ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
                            arm_b_run_id="rb", metrics={})           # verifiable win
-    _record_subject_verdict(conn, "subjZ", "win", design_family="family_z")
     assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"
     ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id=None,
                            arm_b_run_id=None, metrics={})           # unverifiable loss
     assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"   # unchanged
 
 
-def _seed_run(conn, rid, base, platform="nangate45", design_family=None):
+def _seed_run(conn, rid, base, platform="nangate45"):
     conn.execute("INSERT OR REPLACE INTO runs (run_id, project_path, design_name, "
-                 "platform, ingested_at, cell_count, design_family) "
-                 "VALUES (?,?,?,?,?,?,?)",
-                 (rid, str(base), "d", platform, "2026-06-10T00:00:00Z", 1000,
-                  design_family))
+                 "platform, ingested_at, cell_count) VALUES (?,?,?,?,?,?)",
+                 (rid, str(base), "d", platform, "2026-06-10T00:00:00Z", 1000))
     conn.commit()
-
-
-def _record_subject_verdict(conn, base, verdict, *, design_family=None, repeat=0):
-    a, b = f"{base}a{repeat}", f"{base}b{repeat}"
-    root = conn_dir(conn)
-    _seed_run(conn, a, root / f"{base}_abA_antenna__{repeat}",
-              design_family=design_family)
-    _seed_run(conn, b, root / f"{base}_abB_antenna__{repeat}",
-              design_family=design_family)
-    return ab_runner.record_trial(conn, key=KEY, verdict=verdict,
-                                  arm_a_run_id=a, arm_b_run_id=b, metrics={})
 
 
 def test_fabricated_run_ids_never_promote(tmp_path):
@@ -249,8 +222,9 @@ def test_pseudo_replication_cannot_overturn_a_genuine_loss(tmp_path):
     assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
 
 
-def test_pseudo_replicated_wins_count_once_and_cannot_promote(tmp_path):
-    """P1-11: five wins on one subject remain one vote and cannot satisfy the two-family gate."""
+def test_pseudo_replicated_wins_count_once_in_evidence(tmp_path):
+    """P1-11: five wins on one subject promote HONESTLY as 1w0l — the evidence string
+    reflects one independent subject, not five (no fabricated corroboration)."""
     conn = _conn(tmp_path)
     recipe_lifecycle.enqueue_candidate(conn, **KEY)
     _win_trials_on_subject(conn, "s1", 5)
@@ -259,8 +233,7 @@ def test_pseudo_replicated_wins_count_once_and_cannot_promote(tmp_path):
         "AND platform=? AND strategy=?",
         (KEY["symptom_id"], KEY["design_class"], KEY["platform"],
          KEY["strategy"])).fetchone()[0]
-    assert prov == "ab_corpus_insufficient:1w0l:need2"
-    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
+    assert prov == "ab_corpus:1w0l"                          # one subject, not "5w0l"
 
 
 def test_trial_uuid_makes_record_idempotent(tmp_path):
@@ -394,9 +367,8 @@ def test_verdict_journaled(tmp_path, monkeypatch):
     monkeypatch.setenv("R2G_JOURNAL_DB", str(jdb))
     conn = _conn(tmp_path)
     recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
-    ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
-                           arm_b_run_id="rb", metrics={"lcb": 0.8})
-    tid = _record_subject_verdict(conn, "subjZ", "win", design_family="family_z")
+    tid = ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
+                                 arm_b_run_id="rb", metrics={"lcb": 0.8})
     jc = journal_db.connect(jdb)
     row = jc.execute("SELECT action_type, symptom_id, "
                      "json_extract(payload_json,'$.trial_id'), "
@@ -405,19 +377,15 @@ def test_verdict_journaled(tmp_path, monkeypatch):
     assert row[1] == KEY["symptom_id"]
     assert row[2] == tid
     assert row[3] == KEY["strategy"]
-    # Journaling follows lifecycle transitions. With family-level votes, losses on one
-    # family cannot be multiplied into several votes; demotion is journaled only when
-    # the independent-family corpus itself becomes net-negative.
+    # Journaling follows the corpus TRANSITION (2026-06-24 L1-02): after the win (1w0l
+    # -> promoted) a single loss is 1w1l (tie) -> status UNCHANGED -> no demote journal;
+    # a SECOND loss is 1w2l (net-negative) -> shadow -> demote journaled.
     ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id="ra",
                            arm_b_run_id="rb", metrics={})
     assert [r[0] for r in jc.execute(
         "SELECT action_type FROM actions ORDER BY action_id").fetchall()] == ["promote"]
     ab_runner.record_trial(conn, key=KEY, verdict="loss", arm_a_run_id="ra",
                            arm_b_run_id="rb", metrics={})
-    assert [r[0] for r in jc.execute(
-        "SELECT action_type FROM actions ORDER BY action_id").fetchall()] == ["promote"]
-    _record_subject_verdict(conn, "subjZ", "loss",
-                            design_family="family_z", repeat=1)
     types = [r[0] for r in jc.execute(
         "SELECT action_type FROM actions ORDER BY action_id").fetchall()]
     assert types == ["promote", "demote"]
@@ -433,7 +401,6 @@ def test_verdict_journal_disabled_is_silent(tmp_path, monkeypatch):
     recipe_lifecycle.stage_shadow(conn, provenance="test", **KEY)
     ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
                            arm_b_run_id="rb", metrics={})
-    _record_subject_verdict(conn, "subjZ", "win", design_family="family_z")
     assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"   # knowledge unaffected
     assert not jdb.exists()                                          # nothing journaled
 
@@ -470,9 +437,9 @@ def test_late_loss_does_not_bury_net_winner(tmp_path):
     last-trial UPSERT would have demoted it to shadow on the trailing loss."""
     conn = _conn(tmp_path)
     recipe_lifecycle.enqueue_candidate(conn, **KEY)
-    _record_subject_verdict(conn, "win1", "win", design_family="family_1")
-    _record_subject_verdict(conn, "win2", "win", design_family="family_2")
-    _record_subject_verdict(conn, "loss1", "loss", design_family="family_3")
+    for v in ("win", "win", "loss"):
+        ab_runner.record_trial(conn, key=KEY, verdict=v, arm_a_run_id="ra",
+                               arm_b_run_id="rb", metrics={})
     assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"
 
 
@@ -500,8 +467,6 @@ def test_later_win_revives_shadow(tmp_path):
     assert recipe_lifecycle.get_status(conn, **KEY) == "shadow"
     ab_runner.record_trial(conn, key=KEY, verdict="win", arm_a_run_id="ra",
                            arm_b_run_id="rb", metrics={})        # 2w1l net +1
-    assert recipe_lifecycle.get_status(conn, **KEY) == "candidate"
-    _record_subject_verdict(conn, "subjZ", "win", design_family="family_z")
     assert recipe_lifecycle.get_status(conn, **KEY) == "promoted"
 
 

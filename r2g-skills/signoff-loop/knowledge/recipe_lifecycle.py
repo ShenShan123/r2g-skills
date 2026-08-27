@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """Recipe lifecycle: candidate <-> promoted/shadow (engineer-loop §5.3).
 
-Only PROMOTED recipes affect live ranking. New/changed recipes with at least one
-observed clearance or partial win are authored as 'candidate' (Gate-A
-diff_and_enqueue / enqueue_candidate) and queued for inline A/B (ab_runner).
-Inconclusive-only learner entries are rostered as 'parked' until positive evidence
-or an explicit operator review appears. Status is then a
+Only PROMOTED recipes affect live ranking. New/changed recipes from a learn
+rebuild are authored directly as 'candidate' (Gate-A diff_and_enqueue /
+enqueue_candidate) and queued for inline A/B (ab_runner). Status is then a
 function of the recipe's FULL ab_trials corpus (ab_runner.judge_recipe,
 2026-06-24): net-positive DECISIVE (win/loss) evidence promotes, net-negative
 demotes to 'shadow', and an `inconclusive` carries no information — it never
@@ -25,14 +23,6 @@ GRANDFATHERED = "promoted"   # absent-row default for the STATIC cold-start path
 # (a crashed/partial learn rebuild) — so it is UNVALIDATED, not grandfathered-live
 # (P0-2, failure-patterns #48, 2026-07-14). filter_promoted treats it as non-promoted.
 UNROSTERED = "unrostered"
-
-# Automatic A/B is expensive and must start from at least one useful observation.
-# A learner recipe backed only by inconclusive/no-terminal episodes is still valuable
-# negative/ranking evidence, but it is not a causal hypothesis worth scheduling yet.
-# Keep it rostered (so the indexed live path still fails closed) in a parked state;
-# a later cleared/partial-win episode or an explicit operator request may revive it.
-NO_POSITIVE_EVIDENCE_PROVENANCE = "learner_no_positive_evidence"
-_AUTO_LEARNER_PROVENANCE = frozenset({"learner_diff", "learner_coverage"})
 
 # Strategies whose A/B arms CANNOT diverge (no real edit applied): arm A and arm B
 # do byte-identical work, so every trial is guaranteed-inconclusive and burns a full
@@ -61,15 +51,6 @@ def _refuse_enqueue(strategy: str | None) -> bool:
     return strategy in NONDIVERGENT_STRATEGIES or not is_signoff_domain(strategy)
 
 
-def _has_positive_evidence(stats: dict | None) -> bool:
-    """Whether learner statistics contain an observed improvement worth A/B testing."""
-    stats = stats or {}
-    try:
-        return int(stats.get("successes") or 0) > 0 or int(stats.get("wins") or 0) > 0
-    except (TypeError, ValueError):
-        return False
-
-
 def _iter_keys(heur: dict):
     for sid, classes in (heur.get("recipes") or {}).items():
         for dclass, plats in classes.items():
@@ -95,27 +76,8 @@ def diff_and_enqueue(conn, heur: dict, *, prev: dict | None) -> list[tuple]:
             # guaranteed-inconclusive, or owned by another pipeline stage
             continue
         row = conn.execute(
-            "SELECT status, provenance FROM recipe_status WHERE symptom_id=? AND "
+            "SELECT status FROM recipe_status WHERE symptom_id=? AND "
             "design_class=? AND platform=? AND strategy=?", key).fetchone()
-        if not _has_positive_evidence(stats):
-            if row is None:
-                conn.execute(
-                    "INSERT INTO recipe_status (symptom_id, design_class, platform, "
-                    "strategy, status, provenance, generation, status_version, updated_at) "
-                    "VALUES (?,?,?,?,?,?,?,1,?)",
-                    (*key, "parked", NO_POSITIVE_EVIDENCE_PROVENANCE,
-                     heur.get("generation"), _now()))
-            elif row[0] == "candidate" and row[1] in _AUTO_LEARNER_PROVENANCE:
-                _set(conn, "parked", NO_POSITIVE_EVIDENCE_PROVENANCE,
-                     symptom_id=key[0], design_class=key[1], platform=key[2],
-                     strategy=key[3])
-            continue
-        if row is not None and row[0] == "parked" and row[1] == NO_POSITIVE_EVIDENCE_PROVENANCE:
-            _set(conn, "candidate", "learner_positive_evidence",
-                 symptom_id=key[0], design_class=key[1], platform=key[2],
-                 strategy=key[3])
-            enqueued.append(key)
-            continue
         if row is not None:
             continue               # already in lifecycle — A/B verdict owns it
         conn.execute(
@@ -142,13 +104,10 @@ def enqueue_candidate(conn, *, provenance: str = "manual_revalidate",
     if _refuse_enqueue(key["strategy"]):
         return False       # guaranteed-inconclusive, or owned by another stage
     row = conn.execute(
-        "SELECT status, provenance FROM recipe_status WHERE symptom_id=? AND design_class=? "
+        "SELECT status FROM recipe_status WHERE symptom_id=? AND design_class=? "
         "AND platform=? AND strategy=?",
         (key["symptom_id"], key["design_class"], key["platform"],
          key["strategy"])).fetchone()
-    if row is not None and row[0] == "parked" and row[1] == NO_POSITIVE_EVIDENCE_PROVENANCE:
-        _set(conn, "candidate", provenance, **key)
-        return True
     if row is not None:
         return False
     conn.execute(
@@ -262,7 +221,7 @@ def filter_promoted(conn, recipe_entry: dict | None, *, symptom_id: str,
 def unrostered_keys(conn, heur: dict) -> list[tuple]:
     """Concrete (non-rollup, non-NONDIVERGENT) recipe keys present in `heur` that carry
     NO recipe_status row — the P0-2 fail-open surface. An EMPTY list is the healthy
-    invariant: every learned recipe is rostered as candidate or parked, so
+    invariant: every learned recipe is rostered as at least a candidate, so
     filter_promoted's fail-closed default never strips a recipe merely because its
     enqueue was skipped. Used by ensure_rostered (self-heal) and the honesty CLI."""
     have = set(conn.execute(
@@ -275,43 +234,17 @@ def ensure_rostered(conn, heur: dict) -> list[tuple]:
     """P0-2 coverage self-heal (failure-patterns #48): guarantee every concrete learned
     recipe key has a lifecycle row, so filter_promoted's fail-closed default never
     strips a recipe just because a crashed/partial diff_and_enqueue skipped it. A
-    still-unrostered key with positive evidence is enqueued as a **candidate**
-    (provenance 'learner_coverage'); an inconclusive-only key is rostered as
-    **parked**. Both choices fail closed and neither fabricates promotion. Idempotent;
-    returns the keys it newly rostered. NONDIVERGENT strategies stay out of the queue
-    (park_nondivergent owns them)."""
+    still-unrostered key is enqueued as a **candidate** (provenance 'learner_coverage')
+    — the fail-closed choice: unvalidated until it wins A/B, NEVER fabricated as
+    promoted. Idempotent; returns the keys it newly rostered. NONDIVERGENT strategies
+    stay out of the queue (park_nondivergent owns them)."""
     rostered = unrostered_keys(conn, heur)
-    stats_by_key = dict(_iter_keys(heur))
     for key in rostered:
-        positive = _has_positive_evidence(stats_by_key.get(key))
         conn.execute(
             "INSERT OR IGNORE INTO recipe_status (symptom_id, design_class, platform, "
             "strategy, status, provenance, generation, status_version, updated_at) "
             "VALUES (?,?,?,?,?,?,?,1,?)",
-            (*key,
-             "candidate" if positive else "parked",
-             "learner_coverage" if positive else NO_POSITIVE_EVIDENCE_PROVENANCE,
-             heur.get("generation"), _now()))
-    # Reconcile stores created by older builds: learner-owned candidates with no
-    # positive evidence leave the work queue, while only this specific parked state
-    # wakes automatically when a later live episode supplies a cleared/win signal.
-    for key, stats in stats_by_key.items():
-        if _refuse_enqueue(key[3]):
-            continue
-        row = conn.execute(
-            "SELECT status, provenance FROM recipe_status WHERE symptom_id=? AND "
-            "design_class=? AND platform=? AND strategy=?", key).fetchone()
-        if row is None:
-            continue
-        positive = _has_positive_evidence(stats)
-        if not positive and row[0] == "candidate" and row[1] in _AUTO_LEARNER_PROVENANCE:
-            _set(conn, "parked", NO_POSITIVE_EVIDENCE_PROVENANCE,
-                 symptom_id=key[0], design_class=key[1], platform=key[2],
-                 strategy=key[3])
-        elif positive and row[0] == "parked" and row[1] == NO_POSITIVE_EVIDENCE_PROVENANCE:
-            _set(conn, "candidate", "learner_positive_evidence",
-                 symptom_id=key[0], design_class=key[1], platform=key[2],
-                 strategy=key[3])
+            (*key, "candidate", "learner_coverage", heur.get("generation"), _now()))
     conn.commit()
     return rostered
 

@@ -1,0 +1,138 @@
+{
+  "dataset_tier": "strict_clean",
+  "def_sha256": "6d26d404c0c3e761137808c99e647313d4170ae877b7aacac8342c1ae1e69cb9",
+  "design": "selector_crc16",
+  "digest": "5c95b680a85ba5e8aee5cf9957670e82b8153582c1215e983bc084eda20c93d5",
+  "extractor_version": "def-graph-feature-context-v0.2",
+  "feature_digests": {
+    "edges_gate_pin": "0390a969437f12650196083d9008e7e7baa485dbfeb58808a453f06089455a67",
+    "edges_iopin_net": "d6ec6c932ff4488d2ebc612bc9ce05aa5aed906ee6e1566301eda2bd106b52c8",
+    "edges_pin_net": "ff5d3f6e4d871a3f899a322c5c3212d7124be9cb4843d36c667cf7691904fc87",
+    "features_stats": "f9536629fb9058cd373d3a564c4e0a8ac3e7b44ba634c2b862cff16847e72538",
+    "metadata": "9ce00a9e0a659bf6f72b488c8b8bfd2c2dc9af714eb356b0410a1f99f87b275c",
+    "nodes_gate": "0ad1c41cbfc88fabb9d71ab7792984976aa3053dba467274625eec11c5311a09",
+    "nodes_iopin": "5e915ff0f9e370cdf8fbd8c20d28c361d0dc83a02c9c71cb4158e80161ec71d7",
+    "nodes_net": "b71478bf15ce0504237c8da58f54cb210573210d82d4f84f94539b95561640a0",
+    "nodes_pin": "29bab9e824663c60a75bae6ea9e6702d11f5387c0f11f69aeb6fd19454ee95d8",
+    "signoff_gate": "7b949c89b0f572042c1de27bfc4355e6463f118790b32858ff2497cae662a127"
+  },
+  "feature_health": {
+    "edges_gate_pin": {
+      "status": "ok"
+    },
+    "edges_iopin_net": {
+      "status": "ok"
+    },
+    "edges_pin_net": {
+      "status": "ok"
+    },
+    "metadata": {
+      "status": "ok"
+    },
+    "nodes_gate": {
+      "status": "ok"
+    },
+    "nodes_iopin": {
+      "status": "ok"
+    },
+    "nodes_net": {
+      "status": "ok"
+    },
+    "nodes_pin": {
+      "status": "ok"
+    }
+  },
+  "graph_features": {
+    "ABC_AREA": 1.0,
+    "CORE_UTILIZATION": 50.0,
+    "C_total": 370.745315,
+    "PLACE_DENSITY": "Default",
+    "V_nom": 1.8,
+    "avg_fanout": 1.9502762430939227,
+    "core_area": 2790.480625,
+    "dbu_unit": 1000.0,
+    "die_height": 52.825,
+    "die_width": 52.825,
+    "freq_Hz": 454545455.0,
+    "num_cells": 324.0,
+    "num_ios": 27.0,
+    "num_nets": 181.0,
+    "tracks_detail": "li1:253|met1:286|met2:220|met3:142|met4:110|met5:32",
+    "tracks_per_layer": 173.833
+  },
+  "platform": "sky130hs",
+  "signoff_health": {
+    "blockers": [],
+    "caveats": [],
+    "def_overridden": false,
+    "mode": "strict",
+    "status": "pass"
+  },
+  "source_refs": [
+    {
+      "kind": "def",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/backend/RUN_2026-08-25_23-00-37_9_007a/final/6_final.def",
+      "sha256": "6d26d404c0c3e761137808c99e647313d4170ae877b7aacac8342c1ae1e69cb9"
+    },
+    {
+      "kind": "features_stats",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/reports/features_stats.json",
+      "sha256": "f9536629fb9058cd373d3a564c4e0a8ac3e7b44ba634c2b862cff16847e72538"
+    },
+    {
+      "kind": "signoff_gate",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/reports/signoff_gate.json",
+      "sha256": "7b949c89b0f572042c1de27bfc4355e6463f118790b32858ff2497cae662a127"
+    },
+    {
+      "kind": "metadata",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/features/metadata.csv",
+      "sha256": "9ce00a9e0a659bf6f72b488c8b8bfd2c2dc9af714eb356b0410a1f99f87b275c"
+    },
+    {
+      "kind": "nodes_gate",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/features/nodes_gate.csv",
+      "sha256": "0ad1c41cbfc88fabb9d71ab7792984976aa3053dba467274625eec11c5311a09"
+    },
+    {
+      "kind": "nodes_net",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/features/nodes_net.csv",
+      "sha256": "b71478bf15ce0504237c8da58f54cb210573210d82d4f84f94539b95561640a0"
+    },
+    {
+      "kind": "nodes_iopin",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/features/nodes_iopin.csv",
+      "sha256": "5e915ff0f9e370cdf8fbd8c20d28c361d0dc83a02c9c71cb4158e80161ec71d7"
+    },
+    {
+      "kind": "nodes_pin",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/features/nodes_pin.csv",
+      "sha256": "29bab9e824663c60a75bae6ea9e6702d11f5387c0f11f69aeb6fd19454ee95d8"
+    },
+    {
+      "kind": "edges_gate_pin",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/features/edges_gate_pin.csv",
+      "sha256": "0390a969437f12650196083d9008e7e7baa485dbfeb58808a453f06089455a67"
+    },
+    {
+      "kind": "edges_pin_net",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/features/edges_pin_net.csv",
+      "sha256": "ff5d3f6e4d871a3f899a322c5c3212d7124be9cb4843d36c667cf7691904fc87"
+    },
+    {
+      "kind": "edges_iopin_net",
+      "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/features/edges_iopin_net.csv",
+      "sha256": "d6ec6c932ff4488d2ebc612bc9ce05aa5aed906ee6e1566301eda2bd106b52c8"
+    }
+  ],
+  "status": "complete",
+  "topology_rows": {
+    "edges_gate_pin": 507,
+    "edges_iopin_net": 27,
+    "edges_pin_net": 507,
+    "nodes_gate": 324,
+    "nodes_iopin": 27,
+    "nodes_net": 181,
+    "nodes_pin": 534
+  }
+}

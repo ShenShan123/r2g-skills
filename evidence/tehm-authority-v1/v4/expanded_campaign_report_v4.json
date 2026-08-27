@@ -1,0 +1,237 @@
+{
+  "action_signature": {
+    "config_edits": {
+      "CORE_UTILIZATION": "40"
+    },
+    "domain": "flow.CONFIG_DELTA",
+    "family": "DENSITY_RELIEF",
+    "operation_point": "50->40"
+  },
+  "calibration": {
+    "action_signature_bound": true,
+    "empirical_coverage": 1.0,
+    "heldout_lineages": [
+      "batch0-v1:sky130hs:spi",
+      "batch0-v1:sky130hs:uart",
+      "orfs-authority-fresh:counter"
+    ],
+    "sample_count": 3,
+    "status": "ready",
+    "training_lineages": [
+      "batch0-v1:sky130hs:gcd",
+      "batch0-v1:sky130hs:jpeg",
+      "orfs-v4:sky130hs:uart:base0",
+      "orfs-v5-add32:sky130hs:add32:base0",
+      "orfs-v5-mux32:sky130hs:mux32:base0",
+      "orfs-v5-parity64:sky130hs:parity64:base0",
+      "orfs-v6-and32:sky130hs:and32:base0",
+      "orfs-v6-toggle32:sky130hs:toggle32:base0"
+    ]
+  },
+  "campaign_id": "authority-v1-batch1-expanded-v2",
+  "canonical_memory_mutation": "none",
+  "evidence": {
+    "canonical_after": {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    "canonical_before": {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    "observations_path": "/tmp/tehm-authority-v1/authority-campaign-v4/external/observations.jsonl",
+    "observations_sha256": "a686a17a2cd979e8c72105e24578589f35e0aed424cbaf23a881f81aa6231df1",
+    "staging_db": {
+      "exists": true,
+      "path": "/tmp/tehm-authority-v1/authority-campaign-v4/staging/tehm.sqlite",
+      "physical_effects": 8,
+      "sha256": "d23df5a0969624f7cc1ae23e83aeeb04818f6d3f972761e2d662bdebc1240888",
+      "transitions": 8
+    }
+  },
+  "failures_preserved": {
+    "batch1_add_designs_sky130hd_uart_flow_failure": true,
+    "batch1_aes_timeout_or_failure": true,
+    "batch1_fifo_incomplete": true,
+    "batch1_ibex_drc_failure": true,
+    "batch1_next_and32_full_orfs_success": true,
+    "batch1_next_toggle32_full_orfs_success": true,
+    "batch1_riscv32i_timing_failure": true,
+    "shift32_base_lvs_mismatch": true
+  },
+  "next_step": "remain staging-only; define a new typed utility contract or action family before accepting area/power tradeoffs; do not relax harmful gate",
+  "promotion_attempted": false,
+  "rule": {
+    "provenance": {
+      "authority_campaign": "authority-v1-batch1",
+      "reason": "ORFS executor requires canonical supported scope",
+      "rollback_required": true,
+      "scope": "route",
+      "transition": "candidate",
+      "typed_action_signature": "flow.CONFIG_DELTA|DENSITY_RELIEF|CORE_UTILIZATION:50->40"
+    },
+    "registry": [
+      {
+        "rule_id": "rule_d6f296ce7fc988ce",
+        "status": "candidate",
+        "status_version": 2,
+        "target_scope": "route"
+      }
+    ],
+    "rule_id": "rule_d6f296ce7fc988ce",
+    "source_count": 8,
+    "source_lineage_count": 8,
+    "validity_status": "VALIDATED"
+  },
+  "support": {
+    "count": 8,
+    "full_oracle_count": 8,
+    "lineages": [
+      "batch0-v1:sky130hs:gcd",
+      "batch0-v1:sky130hs:jpeg",
+      "orfs-v4:sky130hs:uart:base0",
+      "orfs-v5-add32:sky130hs:add32:base0",
+      "orfs-v5-mux32:sky130hs:mux32:base0",
+      "orfs-v5-parity64:sky130hs:parity64:base0",
+      "orfs-v6-and32:sky130hs:and32:base0",
+      "orfs-v6-toggle32:sky130hs:toggle32:base0"
+    ],
+    "rows": [
+      {
+        "deltas": {
+          "area_um2": 66.0,
+          "congestion": null,
+          "drc_violations": null,
+          "power_w": 2e-05,
+          "tns_ns": 0.0,
+          "wns_ns": 0.031802
+        },
+        "graph_context": true,
+        "harmful": true,
+        "lineage_id": "batch0-v1:sky130hs:gcd",
+        "oracle_complete": true,
+        "transition_id": "transition_ca790bf270052afd"
+      },
+      {
+        "deltas": {
+          "area_um2": 8881.0,
+          "congestion": null,
+          "drc_violations": null,
+          "power_w": 0.03467,
+          "tns_ns": 0.0,
+          "wns_ns": 0.1872
+        },
+        "graph_context": true,
+        "harmful": true,
+        "lineage_id": "batch0-v1:sky130hs:jpeg",
+        "oracle_complete": true,
+        "transition_id": "transition_dc2962c802cc512b"
+      },
+      {
+        "deltas": {
+          "area_um2": 104.0,
+          "congestion": null,
+          "drc_violations": null,
+          "power_w": 0.000293,
+          "tns_ns": 0.0,
+          "wns_ns": 0.015785
+        },
+        "graph_context": true,
+        "harmful": true,
+        "lineage_id": "orfs-v4:sky130hs:uart:base0",
+        "oracle_complete": true,
+        "transition_id": "transition_623942520ca2d4ad"
+      },
+      {
+        "deltas": {
+          "area_um2": 94.0,
+          "congestion": null,
+          "drc_violations": null,
+          "power_w": 0.000136,
+          "tns_ns": 0.0,
+          "wns_ns": -0.031253
+        },
+        "graph_context": true,
+        "harmful": true,
+        "lineage_id": "orfs-v5-add32:sky130hs:add32:base0",
+        "oracle_complete": true,
+        "transition_id": "transition_53fba1be5c31b333"
+      },
+      {
+        "deltas": {
+          "area_um2": 10.0,
+          "congestion": null,
+          "drc_violations": null,
+          "power_w": -6e-06,
+          "tns_ns": 0.0,
+          "wns_ns": -0.01309
+        },
+        "graph_context": true,
+        "harmful": true,
+        "lineage_id": "orfs-v5-mux32:sky130hs:mux32:base0",
+        "oracle_complete": true,
+        "transition_id": "transition_e14e707e704d89d6"
+      },
+      {
+        "deltas": {
+          "area_um2": 27.0,
+          "congestion": null,
+          "drc_violations": null,
+          "power_w": -3e-06,
+          "tns_ns": 0.0,
+          "wns_ns": -0.015221
+        },
+        "graph_context": true,
+        "harmful": true,
+        "lineage_id": "orfs-v5-parity64:sky130hs:parity64:base0",
+        "oracle_complete": true,
+        "transition_id": "transition_ab680dad6cb21346"
+      },
+      {
+        "deltas": {
+          "area_um2": 60.0,
+          "congestion": null,
+          "drc_violations": null,
+          "power_w": 0.000178,
+          "tns_ns": 0.0,
+          "wns_ns": -0.00225
+        },
+        "graph_context": true,
+        "harmful": true,
+        "lineage_id": "orfs-v6-and32:sky130hs:and32:base0",
+        "oracle_complete": true,
+        "transition_id": "transition_ffc91c1a17437198"
+      },
+      {
+        "deltas": {
+          "area_um2": -27.0,
+          "congestion": null,
+          "drc_violations": null,
+          "power_w": -0.000129,
+          "tns_ns": 0.0,
+          "wns_ns": 0.03598
+        },
+        "graph_context": true,
+        "harmful": false,
+        "lineage_id": "orfs-v6-toggle32:sky130hs:toggle32:base0",
+        "oracle_complete": true,
+        "transition_id": "transition_c8ae328d3f86140c"
+      }
+    ],
+    "unique_graph_contexts": 8
+  },
+  "utility": {
+    "classification": "HARMFUL_GATE_FAIL",
+    "gate_pass": false,
+    "gate_threshold": 0.0,
+    "harmful_count": 7,
+    "harmful_rate": 0.875
+  },
+  "version": "authority-v1-batch1-expanded-v2-report-v1"
+}

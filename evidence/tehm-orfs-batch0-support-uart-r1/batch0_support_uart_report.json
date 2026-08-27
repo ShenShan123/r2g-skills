@@ -1,0 +1,126 @@
+{
+  "version": "tehm-orfs-batch0-support-uart-r1",
+  "campaign": "orfs-batch0-v1",
+  "source_spec": {
+    "path": "memory/evaluation/orfs_batch0_rtl_manifest_support_uart_param_v1.json",
+    "sha256": "777f3a6aadc5d59f8dda3214cec90f74bb075c769b9a61e9aa02430a3a860c67",
+    "source_freeze_sha256": "0028afd5e379dc8f9c81a7a1a94a16042dcc34336cb4580fe84a74500e6f4761"
+  },
+  "scratch_root": "/tmp/tehm-orfs/orfs-batch0-uart-param-28-support-r1",
+  "toolchain": {
+    "orfs_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+    "status": "bound_internal",
+    "compatibility": "tree_packaged",
+    "fingerprint": "5f6545216c040a863a4c169d90f895f218ad038bfd61991445f760ed43567c91",
+    "openroad_version": "26Q3-1510-g6cb3f2b704",
+    "openroad_sha256": "561ef17403ce2b55198496e8ab74435d90aba88e03a7a86b6526f7d1a0fae3a6",
+    "yosys_version": "Yosys 0.68+",
+    "yosys_sha256": "6dca418413bcab1e0d6583974f65870064a43439d30f9a0ab41b95bea3041bd0",
+    "yosys_read_liberty_unit_delay": "PASS"
+  },
+  "pair": {
+    "case_id": "sky130hs:uart:u50->u40",
+    "lineage_id": "batch0-v1:sky130hs:uart",
+    "split": "support",
+    "action": {
+      "family": "DENSITY_RELIEF",
+      "config_edits": {"CORE_UTILIZATION": "40"},
+      "timing_contract_clock_period_ns": 2.8,
+      "timing_contract_sdc_sha256": "acf219bf4ab3933d1bda9649401186feeac579496c8b294bc6dcafa4a3f74112"
+    },
+    "classification": "ELIGIBLE_POSITIVE",
+    "learner_eligible": true,
+    "promotion_eligible": false,
+    "receipt_id": "orfs-observation:c54883adc6d47f33a9d26fb6",
+    "record_id": "orfs-pair:d739f288be7ebc532b60bfc3",
+    "before": {
+      "all_oracles": true,
+      "input_binding": true,
+      "timing_contract": true,
+      "strict_signoff": "pass",
+      "graph_digest": "c2cbf18f96bfab5c5412feac87d3298d9eb3aacaee7b625c5140a9f03f50b03f",
+      "run_tag": "RUN_2026-08-26_16-03-27_28_0566",
+      "final_def_sha256": "fc451421ceb57172d607077f2eeddabf06ac721f2514ccbfaef4ffe507478d8d",
+      "final_gds_sha256": "d1c83e5d47293068f7984ebc5a946e961e59dd11cb5f02a3c567fa18055c6bc7",
+      "ppa": {
+        "area_um2": 12715.9,
+        "power_w": 0.00780787,
+        "wns_ns": 0.527744,
+        "tns_ns": 0.0
+      }
+    },
+    "after": {
+      "all_oracles": true,
+      "input_binding": true,
+      "timing_contract": true,
+      "strict_signoff": "pass",
+      "graph_digest": "00b273be5c859cadbd302f6c9c32207e7da46b118dae9a763aedcc20b073864b",
+      "run_tag": "RUN_2026-08-26_16-03-27_27_2520",
+      "final_def_sha256": "61447db944f2a9633687cf2f8e5397444e6ec2021537eb3890b7465983cdcc14",
+      "final_gds_sha256": "cf055117d90bc792b3e0ee4159e8e553eb0c26b0257f72b025d59657832e9d76",
+      "ppa": {
+        "area_um2": 15835.7,
+        "power_w": 0.00785946,
+        "wns_ns": 0.399981,
+        "tns_ns": 0.0
+      }
+    },
+    "observed_deltas": {
+      "area_um2": 3119.8,
+      "power_w": 0.000052,
+      "wns_ns": -0.127763,
+      "tns_ns": 0.0,
+      "utility_verdict": "HARMFUL"
+    }
+  },
+  "observation_chain": {
+    "count": 7,
+    "eligible_positive": 1,
+    "learner_eligible": 1,
+    "sha256": "139cfbac4e54ff69c47a34b3085e941a0b755e3ba23b7f09d71ff407efbc6709",
+    "chain_head": "ca2ca077e3c8be1574b32b9122eb492d3ab3f1665c845a480a3d7e2ff30fef83"
+  },
+  "staging_import": {
+    "imported": 1,
+    "excluded_external_only": 6,
+    "staging_db_sha256": "de56917036b5fc807a09141aa3325fd93e36f12f736e215fc0172954af6f5768",
+    "staging_transitions": 1,
+    "staging_physical_effects": 1
+  },
+  "rule_authority": {
+    "receipt_sha256": "26675f8632793f21b126cd46bc6320fd0ee19a6688a5f40f254ad02eeef5d65b",
+    "decision": "DENY_CANONICAL_IMPORT",
+    "promotion_attempted": false,
+    "gate_status": {
+      "rollback_verified": "NOT_ESTABLISHED",
+      "registry_verified": "NOT_ESTABLISHED",
+      "obligation_coverage": "PASS",
+      "cross_lineage_te": "FAIL",
+      "harmful_rate": "FAIL",
+      "conformal_coverage": "NOT_ESTABLISHED"
+    },
+    "all_gates_established": false,
+    "failed": ["cross_lineage_te", "harmful_rate"],
+    "not_established": [
+      "rollback_verified",
+      "registry_verified",
+      "conformal_coverage"
+    ],
+    "gate_derivation": {
+      "source": "external_observation_receipts",
+      "eligible_lineages": ["batch0-v1:sky130hs:uart"],
+      "obligation_coverages": [1.0],
+      "utility_verdicts": ["HARMFUL"],
+      "rollback_observations": 0,
+      "conformal_coverages": []
+    }
+  },
+  "canonical_memory": {
+    "mutation": "none",
+    "sha256_before": "0db31a3c9b299bcab7f7de931af40a62c17af8778ce7d0af7e66b6973941ecce",
+    "sha256_after": "0db31a3c9b299bcab7f7de931af40a62c17af8778ce7d0af7e66b6973941ecce",
+    "transitions": 9,
+    "physical_effects": 0
+  },
+  "next_gate": "collect an independent non-harmful support cohort across multiple lineages, establish rollback/registry/conformal evidence, and re-evaluate cross-lineage TE and harmful-rate before canonical import"
+}

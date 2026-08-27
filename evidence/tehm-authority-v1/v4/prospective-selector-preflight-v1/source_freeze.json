@@ -1,0 +1,833 @@
+{
+  "canonical_snapshots": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "dependencies": {
+    "iverilog": "Icarus Verilog version 11.0 (stable) ()",
+    "openroad": "v2.0-17598-ga008522d8",
+    "orfs": {
+      "complete": true,
+      "file_count": 141,
+      "git_commit": null,
+      "identity_kind": "tree_sha256",
+      "roots": [
+        "flow/Makefile",
+        "flow/settings.mk",
+        "flow/scripts",
+        "flow/util",
+        "flow/platforms/sky130hs"
+      ],
+      "total_bytes": 115124878,
+      "tree_sha256": "6f960412f2cb205f7f83cf9f1966a573fd24df29e9ba534e925bf8c3bf39348b"
+    },
+    "orfs_root": "/opt/EDA4AI/OpenROAD-flow-scripts",
+    "python": "3.13.5 | packaged by Anaconda, Inc. | (main, Jun 12 2025, 16:09:02) [GCC 11.2.0]",
+    "yosys": "Yosys 0.9 (git sha1 1979e0b)"
+  },
+  "dirty_entries": 145,
+  "freeze_digest": "2171d243526425b5c120be384da5878c60928bbd4410f9075db0581c65db7812",
+  "git_head": "db1fd5a2e5f7fdc2eb84b1bf9f27b96a927176a8",
+  "git_status_sha256": "4d3516c2a9db4287365b31f26d215bf710d7bb14c8a07c7ef7487e4d6985c9dd",
+  "source_files": [
+    {
+      "bytes": 1518,
+      "path": "memory/evaluation/timing_relief_selector_preflight_spec_v1.json",
+      "sha256": "c2fdea036517c4f265b526cc183487496afd8ddbc129de024acb7a111ff58050"
+    },
+    {
+      "bytes": 3660,
+      "path": "memory/scripts/audit_procedural_memory.py",
+      "sha256": "c145b9798ab8770e55fa0f790bfdc5ea607f16d1ea3e25917a5a5aea2c78dd5e"
+    },
+    {
+      "bytes": 4955,
+      "path": "memory/scripts/build_orfs_authority_receipt.py",
+      "sha256": "2a9e334680f5c40f5feeaed3fa256d67aa22b48d1e78385f3c02b75852037683"
+    },
+    {
+      "bytes": 7114,
+      "path": "memory/scripts/build_second_heldout_freeze.py",
+      "sha256": "5d7b41cf028546bd8830cdddacd8fe32fef18817747ace4073427bbb174ba5ee"
+    },
+    {
+      "bytes": 14425,
+      "path": "memory/scripts/build_v4_dev_freeze.py",
+      "sha256": "da70f642decbb5d48b5bb682485aea514903990eaa3ca67105d2d136f8690bfc"
+    },
+    {
+      "bytes": 5018,
+      "path": "memory/scripts/calibrate_fresh_physical_policy.py",
+      "sha256": "eb84fa35211ab45a13fc575adb8e7e5f56312d1cb410f0f4d74e6dea5777f1c5"
+    },
+    {
+      "bytes": 2252,
+      "path": "memory/scripts/cleanup_campaign_disk.sh",
+      "sha256": "e3201f1134a15b90b422380987ef1987102dcf0e1b349f370a922608d7b379e5"
+    },
+    {
+      "bytes": 1457,
+      "path": "memory/scripts/collect_orfs_ppa_inventory_v1.py",
+      "sha256": "0cece986a00048e833513d6b0c8434a79e05a7d55c0822edc83d08772b93da8d"
+    },
+    {
+      "bytes": 4717,
+      "path": "memory/scripts/evaluate_timing_relief_contract_prospective.py",
+      "sha256": "1b46eb3d5e1683f6eb7a9efbb467d7b9b3027324d778ac6dcefad8376ee77848"
+    },
+    {
+      "bytes": 4662,
+      "path": "memory/scripts/evaluate_timing_relief_contract_retrospective.py",
+      "sha256": "d4ca6ab9303968d6847aae3a7e905003052d2bcb460b30359cd01c3d03cc647e"
+    },
+    {
+      "bytes": 10786,
+      "path": "memory/scripts/freeze_evidence.py",
+      "sha256": "1dac719f278189c9b83fea73068aed68e0bb4fd6d63ade0b849992f5660b44fc"
+    },
+    {
+      "bytes": 22365,
+      "path": "memory/scripts/freeze_evidence_v3.py",
+      "sha256": "0a58ae3ad716df281a1348a5b30537241f55290d7b805f69e912b59958a5bc2e"
+    },
+    {
+      "bytes": 1722,
+      "path": "memory/scripts/orfs_storage.py",
+      "sha256": "7aa8192ca82e80442780336d4db921e8346d4070dc24e490003e1c1567fa71c9"
+    },
+    {
+      "bytes": 6957,
+      "path": "memory/scripts/p0_regression_smoke.py",
+      "sha256": "15e22dd65e64b388af0ae2131b20535938e39cb8fd3eeea6534597a015c57223"
+    },
+    {
+      "bytes": 8889,
+      "path": "memory/scripts/prepare_calibrated_shadow_cases.py",
+      "sha256": "30f200148bebd41ee062cdb48e34e5c733b6f24e4e6d8024ffb463c8b4464a13"
+    },
+    {
+      "bytes": 12141,
+      "path": "memory/scripts/prepare_parametric_prospective_manifest.py",
+      "sha256": "b3fcdbcbe52c51ff4a19f4c68e568c9f0536bbbb979978c996d1f03fe4bdde97"
+    },
+    {
+      "bytes": 11185,
+      "path": "memory/scripts/prepare_procedural_ablation_manifest.py",
+      "sha256": "d6bcb06f60d7f5ffd878034e57e8433f1f9c4ef5ab781e307e44c8e1bd01cca8"
+    },
+    {
+      "bytes": 4133,
+      "path": "memory/scripts/prepare_second_physical_calibration.py",
+      "sha256": "7579448872cfe1fc2473c024d0280530fbecbb8409ac0622f35fd280eb69b336"
+    },
+    {
+      "bytes": 2643,
+      "path": "memory/scripts/promote_future_shadow_evidence.py",
+      "sha256": "7e2772f51cf9cd56f4c889bd1bb261606736651ea0d4b929e553f9c6c79e3210"
+    },
+    {
+      "bytes": 1560,
+      "path": "memory/scripts/promote_orfs_batch_observations.py",
+      "sha256": "e47b8aec83eb0aa872c4495201b97c6410075621981aeaa0b4bb780d5cc37eda"
+    },
+    {
+      "bytes": 5480,
+      "path": "memory/scripts/promote_orfs_evidence.py",
+      "sha256": "68d6291c35829215592c44b24d027e34282c29ac08504aee00522961114b1626"
+    },
+    {
+      "bytes": 6570,
+      "path": "memory/scripts/promote_procedural_evidence.py",
+      "sha256": "0481d79c9c992112da3555f9a2d680dc1b0a2f2bc57832ec6fd40e8dfc457a94"
+    },
+    {
+      "bytes": 3268,
+      "path": "memory/scripts/rebuild_graph_contexts.py",
+      "sha256": "85d6cce4088d5c1591eb3a8d713458e096f4237fac8fb54911f2a250f1afcf30"
+    },
+    {
+      "bytes": 4445,
+      "path": "memory/scripts/replay_timing_relief_selector.py",
+      "sha256": "3b90055153a6a5529e720092e2a2ad7bc7609c8bbb9b934d895800720feb5662"
+    },
+    {
+      "bytes": 3723,
+      "path": "memory/scripts/reproduce_v4_dev.py",
+      "sha256": "37b007733728b2412709196f82a5f6c58849176d674e548bdb71320e7252d755"
+    },
+    {
+      "bytes": 31681,
+      "path": "memory/scripts/run_calibration_expansion.py",
+      "sha256": "5e3362f0b102aa217a90cd112c0861e041ad2853424f32406f5b5e4c415d1c36"
+    },
+    {
+      "bytes": 18031,
+      "path": "memory/scripts/run_controlled_m0_m1_m8.py",
+      "sha256": "e2c197b8ea4ba8b33276fe220f56916ce82226d3cb1c0c200359d284835357c0"
+    },
+    {
+      "bytes": 19070,
+      "path": "memory/scripts/run_controlled_m0_m8_v2.py",
+      "sha256": "3b5ebaa4c33a73a9ac39ece9d3dce64ad8a3b5c09ea230c6b21b4db75d99dfe0"
+    },
+    {
+      "bytes": 15131,
+      "path": "memory/scripts/run_fresh_physical_calibration.py",
+      "sha256": "a99c6c77a6e14e794c5d3f61583ee877a7eb9830a20d5d90317435d76342b0c2"
+    },
+    {
+      "bytes": 16034,
+      "path": "memory/scripts/run_fresh_prospective_observation.py",
+      "sha256": "151dbaa857d5392da8fb7abe5eeacbd097d72c6f80569d79113cb618bc30178b"
+    },
+    {
+      "bytes": 15216,
+      "path": "memory/scripts/run_orfs_add_designs_campaign.py",
+      "sha256": "7e8f730bb403deeaec5da8a0ce9ecaf6ad6e175d1ad15be3da0b790d8bda7ebc"
+    },
+    {
+      "bytes": 27787,
+      "path": "memory/scripts/run_orfs_batch0.py",
+      "sha256": "a57057c8ca6c68389c3bcd7417c17583b4d7002b3d7c072178eaae5181e1efab"
+    },
+    {
+      "bytes": 24728,
+      "path": "memory/scripts/run_orfs_campaign.py",
+      "sha256": "5b8d9197dffdfdecafcb5523d5f5f9dea273552a09c478489f99b243d71f4d1c"
+    },
+    {
+      "bytes": 19197,
+      "path": "memory/scripts/run_orfs_context_campaign.py",
+      "sha256": "50f416abfb1b80219fea06aff3e02daba00d1c574a73126a3b67f4ab9f7b7e07"
+    },
+    {
+      "bytes": 40645,
+      "path": "memory/scripts/run_orfs_diversity_campaign.py",
+      "sha256": "68368312ce8d96d3097bc09016dc06b802321604b9616617040221a307f1072d"
+    },
+    {
+      "bytes": 8115,
+      "path": "memory/scripts/run_orfs_recovery.py",
+      "sha256": "e8385a20eae62f392625ac70eb70c12d052d53e91258c8974b2798e200262591"
+    },
+    {
+      "bytes": 3621,
+      "path": "memory/scripts/run_orfs_replay.py",
+      "sha256": "7d24eb33d440123bb0f461b4bc088294dd087618d02b6dbfbf9e225fac9eb53d"
+    },
+    {
+      "bytes": 1755,
+      "path": "memory/scripts/run_parametric_lineage_calibration_v1.py",
+      "sha256": "d7730b42ff193b06e70a16dc4b38f9873c391073f310d765af462b3ef60cb47e"
+    },
+    {
+      "bytes": 16050,
+      "path": "memory/scripts/run_parametric_shadow_campaign.py",
+      "sha256": "463264b59d341c8ffcf24af622cef87caf61df6487b82bdf2881cd4cc5d89ae9"
+    },
+    {
+      "bytes": 19829,
+      "path": "memory/scripts/run_physical_heldout_calibration.py",
+      "sha256": "bbcfc41a2c1f0248f0ffd90944f72e412a153c5a82ffff5c9a63855f6b36a301"
+    },
+    {
+      "bytes": 11317,
+      "path": "memory/scripts/run_physical_heldout_lineage_v2.py",
+      "sha256": "f4788c0bc086a6741c5824503d401e080465a1b7350864b83db4fbb195d6d396"
+    },
+    {
+      "bytes": 19383,
+      "path": "memory/scripts/run_procedural_ab_v4_dev.py",
+      "sha256": "76b9679bad73b6b82e6b147ff8c8b240405cd029c43496918ab6fde32b4bb95b"
+    },
+    {
+      "bytes": 29251,
+      "path": "memory/scripts/run_procedural_ablation.py",
+      "sha256": "09663a9e609dfa0fed46fe643323d8d2f9e71b0d6d638a93f20509fe45ae2ec8"
+    },
+    {
+      "bytes": 11403,
+      "path": "memory/scripts/run_procedural_growth_ablation.py",
+      "sha256": "63b41b4fe415a55a1cb6ffbda188d13f3b3a3ed09920c347ea5182148ebe410e"
+    },
+    {
+      "bytes": 13502,
+      "path": "memory/scripts/run_procedural_loco_v1.py",
+      "sha256": "c95130b51853f0fd82880f23b9a2b41f5a42fcd509d3734a3a1b670dbeaa2056"
+    },
+    {
+      "bytes": 7512,
+      "path": "memory/scripts/run_procedural_rule_growth.py",
+      "sha256": "ed6d7cf883102af77140cf5f155863f9e49e7bda2777932a7fab3a51b65a072d"
+    },
+    {
+      "bytes": 11855,
+      "path": "memory/scripts/run_procedural_rule_stability.py",
+      "sha256": "29cbae0e94484850b8fd63097ab082ed6be8fd6cf2f83316286c3e3270489fc4"
+    },
+    {
+      "bytes": 6278,
+      "path": "memory/scripts/run_readonly_physical_exact_calibration_v1.py",
+      "sha256": "9215061b6495660103e78b5b78af72939de1c0579735a5027bd00c71098ac3d5"
+    },
+    {
+      "bytes": 4069,
+      "path": "memory/scripts/run_real_orfs_lineage_calibration_v1.py",
+      "sha256": "dd167e64abe88859cc6ac2108ba90a925d9f5aa4c98bf3d427b42b585c91051e"
+    },
+    {
+      "bytes": 11931,
+      "path": "memory/scripts/run_real_orfs_tehm_trial.py",
+      "sha256": "6d98a6b6a318b5bbbe45b8620a69710df2f64b86aaa2bb537b5e1f5785c73c4d"
+    },
+    {
+      "bytes": 10702,
+      "path": "memory/scripts/run_rtl_campaign.py",
+      "sha256": "bfc04c59549bb8a40db3e63e1e4a3e6bb8877e28938635b483939dfd027a8693"
+    },
+    {
+      "bytes": 5971,
+      "path": "memory/scripts/run_rtl_profile_oracle_v1.py",
+      "sha256": "8a5432b301c9a60750a119252a0092096c286f86c6984a7f47ec773f20d9914d"
+    },
+    {
+      "bytes": 17556,
+      "path": "memory/scripts/run_timing_relief_selector_preflight.py",
+      "sha256": "dde4bed4daaa3c49b13bfeb692d1ba92691a25df5faa6f64fc2d3bd6655bb827"
+    },
+    {
+      "bytes": 4270,
+      "path": "memory/scripts/update_evidence_docs.py",
+      "sha256": "a490478240b4b81cab1a151ac134506d5aa66594d5265f1fe2c92b4b8fbddc5f"
+    },
+    {
+      "bytes": 5302,
+      "path": "memory/scripts/verify_evidence_freeze_v3.py",
+      "sha256": "b7a01b7b37dec78e270da07d7a16e464a5c3797dcecc4ed026bea12ca4922322"
+    },
+    {
+      "bytes": 5755,
+      "path": "memory/scripts/verify_orfs_snapshot.py",
+      "sha256": "c957ac40ac881687a22ae33a62c6ef46896cfd386297378a427c9b90c45ac63a"
+    },
+    {
+      "bytes": 1624,
+      "path": "memory/tehm/__init__.py",
+      "sha256": "d8000bcfec1b68f80f35781779fb194bd22be9547505494a1c61be5239a7e48a"
+    },
+    {
+      "bytes": 1079,
+      "path": "memory/tehm/activation/__init__.py",
+      "sha256": "7da10c8f35f35bb942f08e2b9d85b41e226ad863209139f0eeaf05efe3ac9e32"
+    },
+    {
+      "bytes": 719,
+      "path": "memory/tehm/activation/applicability.py",
+      "sha256": "e337a4134f51410d3bc4567e274c12bc2c63cdd4b8443a7cdc4e3e71cd36ff66"
+    },
+    {
+      "bytes": 6325,
+      "path": "memory/tehm/activation/binding.py",
+      "sha256": "d90d505b7117522b098cf468f7fd62a1a838c640080b208683bea00dd8003f04"
+    },
+    {
+      "bytes": 1164,
+      "path": "memory/tehm/activation/execute_adapter.py",
+      "sha256": "98dfbe01733c59ece6331baf29fd7616ea844747686a09a1aba71efa3a4e8927"
+    },
+    {
+      "bytes": 2912,
+      "path": "memory/tehm/activation/instantiate.py",
+      "sha256": "33494df9c22494a50dc09dfb721eb09b684b028ef6376ba5f12723560cc93879"
+    },
+    {
+      "bytes": 4668,
+      "path": "memory/tehm/activation/obligation_transfer.py",
+      "sha256": "c88e25d7ba4394c6c845cbc8278b66cb3eedc700ce723f0a85164a4d7cdee266"
+    },
+    {
+      "bytes": 8365,
+      "path": "memory/tehm/activation/pipeline.py",
+      "sha256": "434ef88f231f292f7b868525429cbd85e7616e7cb83213bba423f305ac1746b9"
+    },
+    {
+      "bytes": 6979,
+      "path": "memory/tehm/activation/update.py",
+      "sha256": "2232d67663586efa9e9f6a72904c525db55aee7063ced6ca7f8bcbd21962d6e9"
+    },
+    {
+      "bytes": 1750,
+      "path": "memory/tehm/activation/verify.py",
+      "sha256": "3d0af31e6df8246956b7da48f81ed17a1137af8033caffff7a3d0365f2558a60"
+    },
+    {
+      "bytes": 125,
+      "path": "memory/tehm/adapters/__init__.py",
+      "sha256": "b1b85c2e10e867fc15763ba6d01d9f80f515d721cc9fcbc50d252965f75a5781"
+    },
+    {
+      "bytes": 13407,
+      "path": "memory/tehm/adapters/orfs_pair.py",
+      "sha256": "2e6dbabc8d9d77a47d19dabf5f4677a22d53c81d8b54863006c9f1706022d57b"
+    },
+    {
+      "bytes": 13941,
+      "path": "memory/tehm/adapters/r2g_evidence.py",
+      "sha256": "ba353c91f2ad0d0669d7576b93b143bcfba0ae953ef138ffd96147c689416e0b"
+    },
+    {
+      "bytes": 4379,
+      "path": "memory/tehm/artifact_store.py",
+      "sha256": "4a6084e43adf83fea0d6d30ba5bf1eac48d2d4a7639f10e1cd874811b3c0a968"
+    },
+    {
+      "bytes": 22448,
+      "path": "memory/tehm/batch_lane.py",
+      "sha256": "7ab561ede6f36f9b276a68a150012cd932d552efe7c22bf612f096cfb4efaf92"
+    },
+    {
+      "bytes": 1064,
+      "path": "memory/tehm/canonical/__init__.py",
+      "sha256": "84335a9ca6e5c785b91c4dc42b80cf9c3de499edeb948c2cf69e8a1a70bd9935"
+    },
+    {
+      "bytes": 21165,
+      "path": "memory/tehm/canonical/capture.py",
+      "sha256": "c0f5c7b605c2eff346d72830426abe8b0aee933d1dac31d5c9ec6c29ffdacfaa"
+    },
+    {
+      "bytes": 4089,
+      "path": "memory/tehm/canonical/episode.py",
+      "sha256": "04ca609b9def7b8f1c099bcaebfb5dbfc782080187da6a610a5b4387bcf67558"
+    },
+    {
+      "bytes": 4050,
+      "path": "memory/tehm/canonical/state.py",
+      "sha256": "23982b6ea0d3cb5f15b379447add28ff77c1950ade179031fe3b80df06c6a825"
+    },
+    {
+      "bytes": 9136,
+      "path": "memory/tehm/canonical/transition.py",
+      "sha256": "c5049b9d9543bd1b769ef2e2056c7fb145ee825fa220899853120e192fb5b883"
+    },
+    {
+      "bytes": 6263,
+      "path": "memory/tehm/canonical/verifier.py",
+      "sha256": "f20f5f8fd6f92cbb9a423d28759f47cb2c810a96bdbc92334fe2195d5760262f"
+    },
+    {
+      "bytes": 18978,
+      "path": "memory/tehm/cli.py",
+      "sha256": "f360ba75ff6edfe683e32d39e955b30ad1552b0e7dbf0d190f65ca6edd8871a2"
+    },
+    {
+      "bytes": 1975,
+      "path": "memory/tehm/config.py",
+      "sha256": "9588e7a423c69da1473ffbb7470e5c5141623671e6bdffd187b5f5add01c1af0"
+    },
+    {
+      "bytes": 2639,
+      "path": "memory/tehm/crystallization/__init__.py",
+      "sha256": "97616cb3e383c2360d17141634d93ed7af4fd9ce42878ecef6b80aecfb463069"
+    },
+    {
+      "bytes": 10090,
+      "path": "memory/tehm/crystallization/anti_unify.py",
+      "sha256": "8fa7bdcc6c1f44849ef67b08c640da1b1b986121a01b249fd70578c87f27ed5f"
+    },
+    {
+      "bytes": 11236,
+      "path": "memory/tehm/crystallization/build_rules.py",
+      "sha256": "49fa6e8061b25c8d31587be144f1b27d9d192eddd3935a362102198178b4c5b0"
+    },
+    {
+      "bytes": 6183,
+      "path": "memory/tehm/crystallization/effects.py",
+      "sha256": "f8f91a5769ef6e4684a2d51ddc4635950cf812fd2c9d3f84dcdf1f8bf3aaf84f"
+    },
+    {
+      "bytes": 11892,
+      "path": "memory/tehm/crystallization/preflight.py",
+      "sha256": "65b21fa156305fc7971ef2f7770c45b3fde3829085551b3a4e407b915c52fe1e"
+    },
+    {
+      "bytes": 1831,
+      "path": "memory/tehm/crystallization/risk.py",
+      "sha256": "0f0fe880c5d0e9e1286dc0c2503aa2ca377ebcc131d1474cae8f72ccc0627a2d"
+    },
+    {
+      "bytes": 6199,
+      "path": "memory/tehm/crystallization/role_normalize.py",
+      "sha256": "7854a9393f2549e10185caa514c8f58230ed7e8fcb65c105985531fb73f78d42"
+    },
+    {
+      "bytes": 5182,
+      "path": "memory/tehm/crystallization/synthesize_skill.py",
+      "sha256": "a32702e71ed23202800d84e0dae017c8de532dd91f8b4966ed2beabd6eb0a65b"
+    },
+    {
+      "bytes": 10831,
+      "path": "memory/tehm/crystallization/validity.py",
+      "sha256": "353c34ce37722fed62b46600a4ccc55f0e565b76544a553bab2c786e418c009c"
+    },
+    {
+      "bytes": 3085,
+      "path": "memory/tehm/dataset.py",
+      "sha256": "905b0290765f5a136178ae2a743b4f5c5b02cf39820e8bb96ec049692119602e"
+    },
+    {
+      "bytes": 4687,
+      "path": "memory/tehm/db.py",
+      "sha256": "fd055e7622060c808aa327c1b4732983654d09390cb77aa7c0f1b64b3793da93"
+    },
+    {
+      "bytes": 53,
+      "path": "memory/tehm/evaluation/__init__.py",
+      "sha256": "4574674aa785bd663957b9a3d03623afe3b05623a2da158948bdc7a1c1761cac"
+    },
+    {
+      "bytes": 8775,
+      "path": "memory/tehm/evaluation/campaign_metrics.py",
+      "sha256": "b2da158a94f7b5ce41f79d29f0487c2d9c3e03eae28ca28b115fc365a8aefee7"
+    },
+    {
+      "bytes": 1104,
+      "path": "memory/tehm/graph/__init__.py",
+      "sha256": "c19f8f22287a2852ecf275d1b10edafc3a07be457c4d15a8d3936ea16ef2e374"
+    },
+    {
+      "bytes": 3412,
+      "path": "memory/tehm/graph/feature_extractor.py",
+      "sha256": "a62c0a7054011533b28b45fe87fcbdbffc7398282a6abd60192938e5c176670a"
+    },
+    {
+      "bytes": 6189,
+      "path": "memory/tehm/graph/local_design_graph.py",
+      "sha256": "0efb4f79402776c27cb752e0886628a404c4604e076346f86b8dc22d54c20b66"
+    },
+    {
+      "bytes": 6639,
+      "path": "memory/tehm/graph/predicates.py",
+      "sha256": "194cdf94939224f8e2066a8b4b91031e48ad6c77866f6675156e5f854502c469"
+    },
+    {
+      "bytes": 5756,
+      "path": "memory/tehm/graph/roles.py",
+      "sha256": "28bb88660cf27f150f0bcf950d0f5993a71796b052c5a45f102729e8be348060"
+    },
+    {
+      "bytes": 19919,
+      "path": "memory/tehm/honesty.py",
+      "sha256": "7c49a6f45743332d2ae0c7025a08f3232f6f8bb58774ec6df4c6a68917e747df"
+    },
+    {
+      "bytes": 2809,
+      "path": "memory/tehm/ids.py",
+      "sha256": "108e0616f059e509f66fc8774563da57714cdeecf8e68ee527a366f6e47fd0e1"
+    },
+    {
+      "bytes": 227,
+      "path": "memory/tehm/integration/__init__.py",
+      "sha256": "3abd3ca1c4a5d7383162f3012a33387e1392a71962822463066d87f309a56445"
+    },
+    {
+      "bytes": 2800,
+      "path": "memory/tehm/integration/fix_consultation.py",
+      "sha256": "608142716189ca9634e284f899fb29f97c80d8284ed133938b5f55b0fae8a101"
+    },
+    {
+      "bytes": 1363,
+      "path": "memory/tehm/lifecycle/__init__.py",
+      "sha256": "0c16513d39e66999db912100acf22821be231a54be265b168db395e29763e69f"
+    },
+    {
+      "bytes": 3647,
+      "path": "memory/tehm/lifecycle/authority.py",
+      "sha256": "4b77fcbc4c0252bb9e15e7905279ae12ea6d4863de1ff9f2189da9a0f7297d66"
+    },
+    {
+      "bytes": 35163,
+      "path": "memory/tehm/lifecycle/orfs_trial.py",
+      "sha256": "9d21f28bf4eb51ee49a725fae93bcb6c7bdece3e2ee5c901b5b05aed43f6b06e"
+    },
+    {
+      "bytes": 2857,
+      "path": "memory/tehm/lifecycle/promotion_gates.py",
+      "sha256": "47bc4f5788231a5e39a598750fdd3ab34c8c26aa5972663e682fc822454e61f1"
+    },
+    {
+      "bytes": 14780,
+      "path": "memory/tehm/lifecycle/rtl_trial.py",
+      "sha256": "b1c3cdfcbeac2bf075c352cf08ed4cdc147a1953cfa502fd6167b7c4cd36035c"
+    },
+    {
+      "bytes": 3034,
+      "path": "memory/tehm/lifecycle/rule_status.py",
+      "sha256": "d205233f2620922eb319d13f8a53c69c1e3519f2693b1a11c8e033ddf4c0046d"
+    },
+    {
+      "bytes": 6048,
+      "path": "memory/tehm/lifecycle/trial_adapter.py",
+      "sha256": "a623d73b312a6da113032574cf162aeca7cb2c1bad3f8b316ebf01d6ac1cb576"
+    },
+    {
+      "bytes": 5184,
+      "path": "memory/tehm/migrations.py",
+      "sha256": "46ee5e79fb9375cc7f9d8901a495f706dd219162c8e810fb15fc1ac064e40dc8"
+    },
+    {
+      "bytes": 1018,
+      "path": "memory/tehm/parametric/__init__.py",
+      "sha256": "f778e30d687f5a6c030066677abf9702cf0e2035c7c2ab7d6f5c2b8c203e9ede"
+    },
+    {
+      "bytes": 14053,
+      "path": "memory/tehm/parametric/calibration.py",
+      "sha256": "498b91d7b99329a56da53a8923f65185aa59b8f2dd0db62f6f6c8c3673fae6c0"
+    },
+    {
+      "bytes": 13392,
+      "path": "memory/tehm/parametric/shadow.py",
+      "sha256": "9926d8d598dd7c4c614183b1c30d2c7f0f262cd89ae74c4c1372ca3c0341c819"
+    },
+    {
+      "bytes": 27085,
+      "path": "memory/tehm/parametric/shadow_campaign.py",
+      "sha256": "39550b95fec1ee917ef658cf883e6dc398440217062f84041b11bfdba516cc6f"
+    },
+    {
+      "bytes": 2020,
+      "path": "memory/tehm/physical/__init__.py",
+      "sha256": "fa51c0c6c13fa3b3e1cf53ab33f766694d69cad2cf5d65f17aee013505bd3f72"
+    },
+    {
+      "bytes": 17058,
+      "path": "memory/tehm/physical/calibration.py",
+      "sha256": "947a6a7d3d18d7a2d3aa4deefc6d73a501bb5db34bc2a9e2a1ee7b1b102b0a20"
+    },
+    {
+      "bytes": 3286,
+      "path": "memory/tehm/physical/effects.py",
+      "sha256": "2ec9676ea797c6d4dab42abbb393f48d3197a4874fb3e1941242aec4b5669edf"
+    },
+    {
+      "bytes": 6265,
+      "path": "memory/tehm/physical/graph_context.py",
+      "sha256": "8f11ec5f922b5889e2bb3f0e1e8d9d19b1602144c0f04aad522468c0814604d6"
+    },
+    {
+      "bytes": 39764,
+      "path": "memory/tehm/physical/memory.py",
+      "sha256": "8b89f8ccc407495159674fd83599c1496062174b63b2a3b633f3c8b3776fdbd4"
+    },
+    {
+      "bytes": 8287,
+      "path": "memory/tehm/physical/orfs_ppa.py",
+      "sha256": "4a1dc7394b787549900c6ddd2ea52d9060bbffb56cc5be381738617fd6f7d14d"
+    },
+    {
+      "bytes": 22553,
+      "path": "memory/tehm/physical/utility_contracts.py",
+      "sha256": "aa994aff2e765924c6cb146d3c94e809cee302a74dc1bad5ca5ad8dae9a264e2"
+    },
+    {
+      "bytes": 1235,
+      "path": "memory/tehm/retrieval/__init__.py",
+      "sha256": "f0ea9286e7e335bce1fa3b76eca3c318403f5e5367730fd06912c57fcccae34f"
+    },
+    {
+      "bytes": 4776,
+      "path": "memory/tehm/retrieval/index.py",
+      "sha256": "b663b6157e1a9d31f14a6e3e257857641ca824661ee0d0bfa94084c2cb1f4639"
+    },
+    {
+      "bytes": 2615,
+      "path": "memory/tehm/retrieval/pipeline.py",
+      "sha256": "2370a46c0a7e074daba157c2e7bfd355a162af8cf393b522cfb3e4996c3d66db"
+    },
+    {
+      "bytes": 1341,
+      "path": "memory/tehm/retrieval/query_planner.py",
+      "sha256": "02e281a56f216ce3c022888a1766ee4bef64a83bc3a20765e8c68fd7b4ee4bbb"
+    },
+    {
+      "bytes": 2906,
+      "path": "memory/tehm/retrieval/recall.py",
+      "sha256": "05aad1b5daf5158e576aca429bc65de3e3b404bbcccf3deb6194fcbf43b9e3bb"
+    },
+    {
+      "bytes": 3076,
+      "path": "memory/tehm/retrieval/rerank.py",
+      "sha256": "75a0aa3ba1d795dedbddab3dbcd6f5ce4eaf89129afe3ee734535b5b0d26c2b6"
+    },
+    {
+      "bytes": 2088,
+      "path": "memory/tehm/retrieval/result.py",
+      "sha256": "406ef25c9a6ea9ee625c882049848581df3d6f3da58ce49f5f975e55bd74cb82"
+    },
+    {
+      "bytes": 2103,
+      "path": "memory/tehm/retrieval/symbolic_filter.py",
+      "sha256": "c774a0483009e7c9ae45d0814ac9b1f2bbf65253992edba8d8829b9345816e6c"
+    },
+    {
+      "bytes": 1625,
+      "path": "memory/tehm/rtl/__init__.py",
+      "sha256": "da319a6a4f0c991a187eb23b79444898e96e5da6a2ef6d5c48e0b3ecec43308a"
+    },
+    {
+      "bytes": 3802,
+      "path": "memory/tehm/rtl/compatibility.py",
+      "sha256": "79d365b71521f94855f919fca5abacdf1e83e1dcdb2626d94b239dbb792c950e"
+    },
+    {
+      "bytes": 7373,
+      "path": "memory/tehm/rtl/equivalence.py",
+      "sha256": "88520c4afb3d6f431901f9f7d28f301e6249c03d6c03391250bf0ad5179d4384"
+    },
+    {
+      "bytes": 15486,
+      "path": "memory/tehm/rtl/rtl_actions.py",
+      "sha256": "7f41a7353ed59512e5bee41002779b7942f3b36382bae8e583d0dd46ff47b993"
+    },
+    {
+      "bytes": 8603,
+      "path": "memory/tehm/rtl/rtl_evidence.py",
+      "sha256": "a0c1446d840688fe13721db58ba1df3dfdaac38ea1a0734df168f0746cb4f657"
+    },
+    {
+      "bytes": 3477,
+      "path": "memory/tehm/rtl/rtl_graph.py",
+      "sha256": "6c4dbddf6ea8f6c1ba33de4d995bea15a7c60df737f71742fc8f37559d38e09e"
+    },
+    {
+      "bytes": 5076,
+      "path": "memory/tehm/rtl/rtl_oracle.py",
+      "sha256": "e65ef2d835326207fe9bfd73dec3475d16a9c3719167864b55db4bb4998dfa4e"
+    },
+    {
+      "bytes": 10577,
+      "path": "memory/tehm/rtl/verilog_parse.py",
+      "sha256": "8a8c8d04e6cbdd55f0fc08ed384bbddc1cd1cbcd872719a02bc8c4002889ce2e"
+    },
+    {
+      "bytes": 10060,
+      "path": "memory/tehm/schema.sql",
+      "sha256": "19c2c2afd99b2cada69417ad2b380ce6d1076e4d0f29475522df1ec7580266da"
+    },
+    {
+      "bytes": 1084,
+      "path": "memory/tehm/schemas/activation_v1.json",
+      "sha256": "e90a9a8d22f48f69f69224024f7c939105c27c40f49becf950d8c2dae956011c"
+    },
+    {
+      "bytes": 1050,
+      "path": "memory/tehm/schemas/episode_v1.json",
+      "sha256": "3c4f3ea9543e51546ced4ffe301e6100693b012fe9f489b518684caa43dad424"
+    },
+    {
+      "bytes": 815,
+      "path": "memory/tehm/schemas/obligation_v1.yaml",
+      "sha256": "5edb784cd06e9dcc404eebb6d970465ef2e6950ddc245726a913880f503fde41"
+    },
+    {
+      "bytes": 2308,
+      "path": "memory/tehm/schemas/parametric_prospective_manifest_v1.json",
+      "sha256": "0c0739956ce42209114b0fcea1cb9102b99bbc0cc4d1d741181855d42b6839b3"
+    },
+    {
+      "bytes": 1407,
+      "path": "memory/tehm/schemas/parametric_shadow_receipt_v1.json",
+      "sha256": "e5172fd2112acfa085f1d309f6ccb0e8fad87d07f58a57cdacc21a482f6b7530"
+    },
+    {
+      "bytes": 1186,
+      "path": "memory/tehm/schemas/predicate_v1.yaml",
+      "sha256": "862c8584164b78ea4bd5105053fa3683c4014d7a389d28edbe3dab63ece04fbf"
+    },
+    {
+      "bytes": 830,
+      "path": "memory/tehm/schemas/procedural_ablation_task_manifest_v1.json",
+      "sha256": "1a3ab34d1b3b0105b5a24a0847ce35dae7db775fba31087b4917ea8712d48440"
+    },
+    {
+      "bytes": 1765,
+      "path": "memory/tehm/schemas/role_v1.yaml",
+      "sha256": "fc8474e6f777bbaaf011e60a5099b80c81ea6c933b5c3fdec51dc47f483b4889"
+    },
+    {
+      "bytes": 1202,
+      "path": "memory/tehm/schemas/rule_v1.json",
+      "sha256": "369107f0c2465a8f15ce5edde7695109e235f15a69a0ade28257f1de15b81e69"
+    },
+    {
+      "bytes": 2091,
+      "path": "memory/tehm/schemas/transition_v1.json",
+      "sha256": "69e1a58778fb92c76732c07e5c4b2490fc30239a31b87d537334369cfe563226"
+    },
+    {
+      "bytes": 1966,
+      "path": "memory/tehm/schemas/typed_utility_contract_v1.json",
+      "sha256": "c6bd459fbe348818d78e96120b48acc1b342ae14d6447ce2ed9c72b5e268f2e8"
+    },
+    {
+      "bytes": 9481,
+      "path": "memory/tehm/sync/__init__.py",
+      "sha256": "5ad09d237747b2bb4b02ec1493310fc135da88519b6983697fd5fa10f3b886a3"
+    },
+    {
+      "bytes": 1528,
+      "path": "memory/tehm/views/__init__.py",
+      "sha256": "7cc6d7cf796abae386befaefc03737a5af94c33906c0291acc6ed168b4ae952d"
+    },
+    {
+      "bytes": 3237,
+      "path": "memory/tehm/views/base.py",
+      "sha256": "2d0ae2752e138f6f24d6792dd00a8e076334d28c7d26283b320de8a9e6d1cb51"
+    },
+    {
+      "bytes": 3407,
+      "path": "memory/tehm/views/diagnostic.py",
+      "sha256": "b96ebba06f72678347e1214713512b8ef85656be60951ab57ed9df02d69fd37f"
+    },
+    {
+      "bytes": 2342,
+      "path": "memory/tehm/views/episodic.py",
+      "sha256": "7980cf956651bf5a4b9fb93bc0063419159f07d4a0f6960f5bbefc40a17d16a9"
+    },
+    {
+      "bytes": 2816,
+      "path": "memory/tehm/views/materialize.py",
+      "sha256": "6d341b1ca11d6677dfc51744d47c8e7e13051888ae3006f628ec66800ce4e504"
+    },
+    {
+      "bytes": 650,
+      "path": "memory/tehm/views/parametric_stub.py",
+      "sha256": "741da1128eb15aadb08eb236945ba65a71ab0ae26e54bb3997e0e0f1ed90f35c"
+    },
+    {
+      "bytes": 4080,
+      "path": "memory/tehm/views/procedural.py",
+      "sha256": "a31895326ba2e0626c1ca50feaec247be4fdd76ebc349379e2652e848b02c3e0"
+    },
+    {
+      "bytes": 1713,
+      "path": "memory/tehm/views/semantic.py",
+      "sha256": "90a410f1b7e63a22f3b4d67492348858b6e0407e09e3dece2984631ad69681c3"
+    }
+  ],
+  "source_tree_digest": "e3619c1d714ec5fcb77614e781e6ca50b9ff09c5e176622447dc260d0e8cd927",
+  "version": "orfs-batch-source-freeze-v1"
+}

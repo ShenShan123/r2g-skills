@@ -1,0 +1,98 @@
+{
+  "version": "tehm-orfs-batch0-support-uart-dual-r1",
+  "campaign_id": "orfs-batch0-v1",
+  "source_spec": {
+    "path": "memory/evaluation/orfs_batch0_rtl_manifest_support_uart_dual_v1.json",
+    "sha256": "a74218c7e62b233b134d4a9bb44ee4e9bd58a3d8717d15bd2a8dfd467f8a0015"
+  },
+  "source_freeze_sha256": "574401879749476ba0b83b1927752b2447b615bc4b60958e64585b7baa0f974b",
+  "scratch_root": "/tmp/tehm-orfs/orfs-batch0-uart-dual-support-r1",
+  "toolchain": {
+    "orfs_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+    "status": "bound_internal",
+    "fingerprint": "5f6545216c040a863a4c169d90f895f218ad038bfd61991445f760ed43567c91",
+    "openroad_version": "26Q3-1510-g6cb3f2b704",
+    "openroad_sha256": "561ef17403ce2b55198496e8ab74435d90aba88e03a7a86b6526f7d1a0fae3a6",
+    "yosys_version": "Yosys 0.68+",
+    "yosys_sha256": "6dca418413bcab1e0d6583974f65870064a43439d30f9a0ab41b95bea3041bd0",
+    "yosys_read_liberty_unit_delay": "PASS"
+  },
+  "cohort": {
+    "design_count": 8,
+    "support_count": 6,
+    "eligible_positive": 2,
+    "incomplete_external_only": 6,
+    "case_ids": [
+      "sky130hs:uart:u50->u40",
+      "sky130hs:uart_no_param:u50->u40"
+    ],
+    "lineage_ids": [
+      "batch0-v1:sky130hs:uart",
+      "batch0-v1:sky130hs:uart_no_param"
+    ],
+    "timing_contract_clock_period_ns": 2.8,
+    "strict_signoff_success_arms": 4,
+    "graph_complete_arms": 4,
+    "equivalence": "PASS"
+  },
+  "observed_utility": {
+    "uart": {
+      "area_delta_um2": 3119.8,
+      "power_delta_w": 0.00005159,
+      "wns_delta_ns": -0.127763,
+      "tns_delta_ns": 0.0,
+      "verdict": "HARMFUL"
+    },
+    "uart_no_param": {
+      "area_delta_um2": 3119.8,
+      "power_delta_w": 0.00005159,
+      "wns_delta_ns": -0.127763,
+      "tns_delta_ns": 0.0,
+      "verdict": "HARMFUL"
+    }
+  },
+  "observation_chain": {
+    "path": "/tmp/tehm-orfs/orfs-batch0-uart-dual-support-r1/external/observations.jsonl",
+    "count": 8,
+    "eligible_positive": 2,
+    "learner_eligible": 2,
+    "sha256": "f3f9d329d2dff53bd34d0f5b5b48b895019a19d61e60d1807c3db834305ea14e",
+    "chain_head": "c2eb64050cc70f8964b3120c5263e0b829eb3b2702bad8221624657357213569"
+  },
+  "staging": {
+    "path": "/tmp/tehm-orfs/orfs-batch0-uart-dual-support-r1/staging/tehm.sqlite",
+    "transitions": 2,
+    "physical_effects": 2,
+    "sha256": "5c0cebdb1172881eb1fae81d585c4c071dd5af1721176a1c210c7d8ea2825bf0"
+  },
+  "authority": {
+    "rule_id": "rule:orfs:DENSITY_RELIEF",
+    "target_scope": "route",
+    "decision": "DENY_CANONICAL_IMPORT",
+    "promotion_attempted": false,
+    "promotion_gates": {
+      "rollback_verified": false,
+      "registry_verified": false,
+      "obligation_coverage": true,
+      "cross_lineage_te": true,
+      "harmful_rate": false,
+      "conformal_coverage": false
+    },
+    "gate_status": {
+      "rollback_verified": "NOT_ESTABLISHED",
+      "registry_verified": "NOT_ESTABLISHED",
+      "obligation_coverage": "PASS",
+      "cross_lineage_te": "PASS",
+      "harmful_rate": "FAIL",
+      "conformal_coverage": "NOT_ESTABLISHED"
+    },
+    "authority_receipt_sha256": "062941a7fd744fdcc2d86501ba53a2f44b96c79d5075a2a55136dd092ec1e189"
+  },
+  "canonical_memory": {
+    "mutation": "none",
+    "sha256_before": "0db31a3c9b299bcab7f7de931af40a62c17af8778ce7d0af7e66b6973941ecce",
+    "sha256_after": "0db31a3c9b299bcab7f7de931af40a62c17af8778ce7d0af7e66b6973941ecce",
+    "transitions": 9,
+    "physical_effects": 0
+  }
+}

@@ -1,0 +1,331 @@
+{
+  "attempts": {
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50": [
+      {
+        "attempt": 1,
+        "completed": false,
+        "config_sha256": "0777221196482af4956d6141b0d8849f6c2bba26635c31c77a326c1816fdd0dd",
+        "ended_at": "2026-08-25T23:07:33-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "FLOW_FAILURE",
+        "failure_domain": "design_or_tool",
+        "flow_rc": 2,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 165,
+          "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50/backend/RUN_2026-08-25_23-00-37_7_7d45/stage_log.jsonl",
+          "stage": "route",
+          "status": 2
+        },
+        "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50/campaign_flow.log",
+        "log_sha256": "26831aa25a0cd57a8f48fe3cc97c7c90a759d8293d50a6b28e9e0bbbfbdcfca0",
+        "platform": "sky130hs",
+        "resumable": false,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:00:37-07:00",
+        "supervisor_timeout": false
+      },
+      {
+        "attempt": 2,
+        "completed": false,
+        "config_sha256": "0777221196482af4956d6141b0d8849f6c2bba26635c31c77a326c1816fdd0dd",
+        "ended_at": "2026-08-25T23:17:20-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "FLOW_FAILURE",
+        "failure_domain": "design_or_tool",
+        "flow_rc": 2,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 138,
+          "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50/backend/RUN_2026-08-25_23-12-43_16_751d/stage_log.jsonl",
+          "stage": "route",
+          "status": 2
+        },
+        "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50/campaign_flow.log",
+        "log_sha256": "033a3524cabae9b34f1659e3f0633811fe6e3f7eb59ed4ba6f34c0ce8ce1a572",
+        "platform": "sky130hs",
+        "resumable": false,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:12:43-07:00",
+        "supervisor_timeout": false
+      }
+    ],
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_arbiter8_u50": [
+      {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "e320fbbb6595b95bc4cd8d72b55798f64054d52533df94627bc87e8d81ec1da2",
+        "ended_at": "2026-08-25T23:02:48-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 16,
+          "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_arbiter8_u50/backend/RUN_2026-08-25_23-00-37_8_7ffd/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_arbiter8_u50/campaign_flow.log",
+        "log_sha256": "a5ec6eae387bc3fad5638c1ab613c344e6f2e10b99762c7890eefc7cf47104de",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:00:37-07:00",
+        "supervisor_timeout": false
+      }
+    ],
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50": [
+      {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "e77c957169445e3ed3cf1738a9b9e0a0f44087b2d3880d9bcab40525328327ee",
+        "ended_at": "2026-08-25T23:01:54-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 9,
+          "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/backend/RUN_2026-08-25_23-00-37_9_007a/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/campaign_flow.log",
+        "log_sha256": "0ac1178baa9a20f84157aec5231c524c2f334f62560fd476c988e26dc2266d15",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:00:37-07:00",
+        "supervisor_timeout": false
+      }
+    ],
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50": [
+      {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "e7a4f1fe933956daaa4513333d8520ddd103d5b2668f8dd7e193fa25195fb2a4",
+        "ended_at": "2026-08-25T23:05:46-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 10,
+          "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/backend/RUN_2026-08-25_23-01-54_4582_1ffb/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/campaign_flow.log",
+        "log_sha256": "f76a58271b54c05a41d5a363b6c79b9e8370e8fa0eac2f8bfeaa3e398504c111",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:01:54-07:00",
+        "supervisor_timeout": false
+      }
+    ],
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50": [
+      {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "a3175cde662b7e25cf06e21dffb0d9ff5df542518de6ff04322fef458860d3e4",
+        "ended_at": "2026-08-25T23:04:24-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 8,
+          "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50/backend/RUN_2026-08-25_23-02-48_6798_6151/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50/campaign_flow.log",
+        "log_sha256": "c163b12bedc7244d9a34a47dc0b35af495cbed1b874e645bb96a9b24aff18c2d",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:02:48-07:00",
+        "supervisor_timeout": false
+      }
+    ],
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50": [
+      {
+        "attempt": 1,
+        "completed": true,
+        "config_sha256": "d944f6e85439fc7877407826a3ca5610b634b7febb937b4ee654c42b11aa4d71",
+        "ended_at": "2026-08-25T23:06:10-07:00",
+        "expected_failure_observed": false,
+        "failure_class": "SUCCESS",
+        "failure_domain": "none",
+        "flow_rc": 0,
+        "force_clean_run": false,
+        "last_checkpoint": {
+          "elapsed_s": 8,
+          "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50/backend/RUN_2026-08-25_23-04-24_10241_2e87/stage_log.jsonl",
+          "stage": "finish",
+          "status": 0
+        },
+        "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50/campaign_flow.log",
+        "log_sha256": "70fdb5c560afbc241e7f0853c120ac230a05ef836b88449e89f9d1aaace039e5",
+        "platform": "sky130hs",
+        "resumable": true,
+        "resume_from": null,
+        "started_at": "2026-08-25T23:04:24-07:00",
+        "supervisor_timeout": false
+      }
+    ]
+  },
+  "runs": {
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50": {
+      "attempt": 2,
+      "completed": false,
+      "config_sha256": "0777221196482af4956d6141b0d8849f6c2bba26635c31c77a326c1816fdd0dd",
+      "ended_at": "2026-08-25T23:17:20-07:00",
+      "expected_failure_observed": false,
+      "failure_class": "FLOW_FAILURE",
+      "failure_domain": "design_or_tool",
+      "flow_rc": 2,
+      "force_clean_run": false,
+      "last_checkpoint": {
+        "elapsed_s": 138,
+        "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50/backend/RUN_2026-08-25_23-12-43_16_751d/stage_log.jsonl",
+        "stage": "route",
+        "status": 2
+      },
+      "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50/campaign_flow.log",
+      "log_sha256": "033a3524cabae9b34f1659e3f0633811fe6e3f7eb59ed4ba6f34c0ce8ce1a572",
+      "platform": "sky130hs",
+      "resumable": false,
+      "resume_from": null,
+      "started_at": "2026-08-25T23:12:43-07:00",
+      "supervisor_timeout": false
+    },
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_arbiter8_u50": {
+      "attempt": 1,
+      "completed": true,
+      "config_sha256": "e320fbbb6595b95bc4cd8d72b55798f64054d52533df94627bc87e8d81ec1da2",
+      "ended_at": "2026-08-25T23:02:48-07:00",
+      "expected_failure_observed": false,
+      "failure_class": "SUCCESS",
+      "failure_domain": "none",
+      "flow_rc": 0,
+      "force_clean_run": false,
+      "last_checkpoint": {
+        "elapsed_s": 16,
+        "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_arbiter8_u50/backend/RUN_2026-08-25_23-00-37_8_7ffd/stage_log.jsonl",
+        "stage": "finish",
+        "status": 0
+      },
+      "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_arbiter8_u50/campaign_flow.log",
+      "log_sha256": "a5ec6eae387bc3fad5638c1ab613c344e6f2e10b99762c7890eefc7cf47104de",
+      "platform": "sky130hs",
+      "resumable": true,
+      "resume_from": null,
+      "started_at": "2026-08-25T23:00:37-07:00",
+      "supervisor_timeout": false
+    },
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50": {
+      "attempt": 1,
+      "completed": true,
+      "config_sha256": "e77c957169445e3ed3cf1738a9b9e0a0f44087b2d3880d9bcab40525328327ee",
+      "ended_at": "2026-08-25T23:01:54-07:00",
+      "expected_failure_observed": false,
+      "failure_class": "SUCCESS",
+      "failure_domain": "none",
+      "flow_rc": 0,
+      "force_clean_run": false,
+      "last_checkpoint": {
+        "elapsed_s": 9,
+        "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/backend/RUN_2026-08-25_23-00-37_9_007a/stage_log.jsonl",
+        "stage": "finish",
+        "status": 0
+      },
+      "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50/campaign_flow.log",
+      "log_sha256": "0ac1178baa9a20f84157aec5231c524c2f334f62560fd476c988e26dc2266d15",
+      "platform": "sky130hs",
+      "resumable": true,
+      "resume_from": null,
+      "started_at": "2026-08-25T23:00:37-07:00",
+      "supervisor_timeout": false
+    },
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50": {
+      "attempt": 1,
+      "completed": true,
+      "config_sha256": "e7a4f1fe933956daaa4513333d8520ddd103d5b2668f8dd7e193fa25195fb2a4",
+      "ended_at": "2026-08-25T23:05:46-07:00",
+      "expected_failure_observed": false,
+      "failure_class": "SUCCESS",
+      "failure_domain": "none",
+      "flow_rc": 0,
+      "force_clean_run": false,
+      "last_checkpoint": {
+        "elapsed_s": 10,
+        "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/backend/RUN_2026-08-25_23-01-54_4582_1ffb/stage_log.jsonl",
+        "stage": "finish",
+        "status": 0
+      },
+      "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50/campaign_flow.log",
+      "log_sha256": "f76a58271b54c05a41d5a363b6c79b9e8370e8fa0eac2f8bfeaa3e398504c111",
+      "platform": "sky130hs",
+      "resumable": true,
+      "resume_from": null,
+      "started_at": "2026-08-25T23:01:54-07:00",
+      "supervisor_timeout": false
+    },
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50": {
+      "attempt": 1,
+      "completed": true,
+      "config_sha256": "a3175cde662b7e25cf06e21dffb0d9ff5df542518de6ff04322fef458860d3e4",
+      "ended_at": "2026-08-25T23:04:24-07:00",
+      "expected_failure_observed": false,
+      "failure_class": "SUCCESS",
+      "failure_domain": "none",
+      "flow_rc": 0,
+      "force_clean_run": false,
+      "last_checkpoint": {
+        "elapsed_s": 8,
+        "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50/backend/RUN_2026-08-25_23-02-48_6798_6151/stage_log.jsonl",
+        "stage": "finish",
+        "status": 0
+      },
+      "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50/campaign_flow.log",
+      "log_sha256": "c163b12bedc7244d9a34a47dc0b35af495cbed1b874e645bb96a9b24aff18c2d",
+      "platform": "sky130hs",
+      "resumable": true,
+      "resume_from": null,
+      "started_at": "2026-08-25T23:02:48-07:00",
+      "supervisor_timeout": false
+    },
+    "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50": {
+      "attempt": 1,
+      "completed": true,
+      "config_sha256": "d944f6e85439fc7877407826a3ca5610b634b7febb937b4ee654c42b11aa4d71",
+      "ended_at": "2026-08-25T23:06:10-07:00",
+      "expected_failure_observed": false,
+      "failure_class": "SUCCESS",
+      "failure_domain": "none",
+      "flow_rc": 0,
+      "force_clean_run": false,
+      "last_checkpoint": {
+        "elapsed_s": 8,
+        "path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50/backend/RUN_2026-08-25_23-04-24_10241_2e87/stage_log.jsonl",
+        "stage": "finish",
+        "status": 0
+      },
+      "log": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50/campaign_flow.log",
+      "log_sha256": "70fdb5c560afbc241e7f0853c120ac230a05ef836b88449e89f9d1aaace039e5",
+      "platform": "sky130hs",
+      "resumable": true,
+      "resume_from": null,
+      "started_at": "2026-08-25T23:04:24-07:00",
+      "supervisor_timeout": false
+    }
+  },
+  "version": "orfs-diversity-v0.3"
+}

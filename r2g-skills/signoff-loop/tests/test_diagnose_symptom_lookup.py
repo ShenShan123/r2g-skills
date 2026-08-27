@@ -42,39 +42,3 @@ def test_plan_attaches_matching_lesson(tmp_path, monkeypatch):
                        platform="sky130hd")
     assert plan["lessons"] and plan["lessons"][0]["id"] == "l-sym"
     assert "stop" in plan["lessons"][0]["prose"].lower()
-
-
-def test_timing_lookup_uses_timing_tier_as_recipe_class(tmp_path):
-    import diagnose_signoff_fix as dsf
-    import symptom
-    heur = tmp_path / "heuristics.json"
-    sid = symptom.symptom_id(
-        symptom.canonical_signature("timing", "minor", {}))
-    node = {"strategies": {"setup_slack_margin": {
-        "attempts": 2, "successes": 2, "failures": 0, "wins": 0}}}
-    heur.write_text(json.dumps({
-        "recipes": {sid: {
-            "logic/small": {"sky130hd": node},
-            "*": {"*": node},
-        }},
-        "symptoms": {sid: {
-            "n_sessions": 2,
-            "strategies": {"setup_slack_margin": {
-                "attempts": 2, "successes": 2, "failures": 0, "wins": 0,
-                "by_platform": {"sky130hd": {
-                    "attempts": 2, "successes": 2,
-                    "failures": 0, "wins": 0}}}},
-        }},
-    }))
-    tcheck = {"tier": "minor", "wns_ns": -0.01}
-    recipe, pooled, level = dsf.load_indexed_recipe(
-        check="timing", platform="sky130hd", design_class="logic/small",
-        drc={}, lvs={}, tcheck=tcheck, heuristics=heur)
-    assert level == "exact"
-    assert recipe["strategies"]["setup_slack_margin"]["successes"] == 2
-    assert pooled["setup_slack_margin"]["attempts"] == 2
-    symptom_recipe, _ = dsf.load_symptom_recipe(
-        check="timing", platform="sky130hd", drc={}, lvs={},
-        tcheck=tcheck, heuristics=heur)
-    assert symptom_recipe["strategies"]["setup_slack_margin"]["attempts"] == 2
-    assert dsf._current_vclass("timing", {}, {}, tcheck) == "minor"

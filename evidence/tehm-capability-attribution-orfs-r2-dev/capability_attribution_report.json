@@ -1,0 +1,828 @@
+{
+  "ablation_runtime": {
+    "behavior_digest": "sha256:45903690fe0d72035286ccda42a2bcb14f877b0f582830b436522b9dd4ab255e",
+    "policy_load": {
+      "loaded": true,
+      "policy_snapshot_id": "policy_1c68ca6e1481a49633cc",
+      "receipt_digest": "sha256:2d06f7d807d8d7fa194d4190daea1ba15d285d24ef93a0b70013e4fedca7f7f4",
+      "receipt_id": "policy_load_2d06f7d807d8d7fa194d",
+      "runtime_id": "tehm-orfs-capability-evaluation"
+    },
+    "runtime": {
+      "decisions": [
+        {
+          "action_digest": null,
+          "causal_path_id": null,
+          "lineage_id": "failpass-r2:mux32",
+          "selected_action": "none",
+          "source_record_id": "orfs-pair:20b164a872fa2ab0f8649b38"
+        },
+        {
+          "action_digest": null,
+          "causal_path_id": null,
+          "lineage_id": "failpass-r2:parity64",
+          "selected_action": "none",
+          "source_record_id": "orfs-pair:78d5826b7f4b82ff4f87aaf2"
+        },
+        {
+          "action_digest": null,
+          "causal_path_id": null,
+          "lineage_id": "failpass-r2-heldout:shift32",
+          "selected_action": "none",
+          "source_record_id": "orfs-pair:9986041ef90e6427edb7952a"
+        }
+      ],
+      "evaluation_only": true,
+      "loaded": true,
+      "policy_digest": "sha256:1c68ca6e1481a49633cce78938925f230484bb7d6ae901a1a3abcfccf25b28c3",
+      "policy_snapshot_id": "policy_1c68ca6e1481a49633cc",
+      "receipt_id": "sha256:4c82d66cc0ea854354be9bc561be5f6e30ba2b4264cdd144a6a63dcb2c02235f",
+      "runtime_id": "tehm-orfs-capability-evaluation",
+      "version": "tehm-evaluation-policy-runtime-v1"
+    }
+  },
+  "attribution": {
+    "attribution": {
+      "capability_id": "capability_d55f8909c8d7cace47f7",
+      "detail": {
+        "ablation": {
+          "behavior_digest": "sha256:45903690fe0d72035286ccda42a2bcb14f877b0f582830b436522b9dd4ab255e",
+          "evidence_id": "sha256:7888626e8afc7b4eeaa2891c0172a6b9333748222f04d422178aef27a8cbb4e8",
+          "gain_with_memory": true,
+          "gain_without_memory": false,
+          "policy_load_receipt_id": "policy_load_2d06f7d807d8d7fa194d",
+          "policy_snapshot_id": "policy_1c68ca6e1481a49633cc",
+          "runtime_receipt_id": "sha256:4c82d66cc0ea854354be9bc561be5f6e30ba2b4264cdd144a6a63dcb2c02235f",
+          "selected_actions": {
+            "failpass-r2:mux32": "none",
+            "failpass-r2:parity64": "none"
+          },
+          "target_lineages": [
+            "failpass-r2:mux32",
+            "failpass-r2:parity64"
+          ]
+        },
+        "baseline": {
+          "behavior_digest": "sha256:45903690fe0d72035286ccda42a2bcb14f877b0f582830b436522b9dd4ab255e",
+          "memory_digest": "sha256:cf654f9a8e5f340e1e867b410250e18d5d21d71599ee28707c5339f1b658255a",
+          "policy_digest": "sha256:1c68ca6e1481a49633cce78938925f230484bb7d6ae901a1a3abcfccf25b28c3"
+        },
+        "candidate": {
+          "behavior_digest": "sha256:486dfb085929cf9d778ab4847fe6a2e087fda9859d814b4556a66c95e8a72b4d",
+          "memory_digest": "sha256:e4c8198a3167d8fcff8a9fe5503abbc14adae899cc7a995b6bcffc14e95745d4",
+          "no_regression": true,
+          "policy_digest": "sha256:7e9ba58f9133a125a8ef32466246ca2c55d0bee02ddf83331cc0828ddef1305a",
+          "target_gain": true
+        },
+        "heldout": {
+          "baseline_failed": true,
+          "disjoint_lineage": true,
+          "evidence_id": "sha256:930e9271755c72a081b8a2d3a5d78bce3e5fc2d27750b362dcacd66e3559b1ea",
+          "lineage_id": "failpass-r2-heldout:shift32",
+          "verdict": "PASS"
+        }
+      },
+      "gates": {
+        "C1": true,
+        "C2": true,
+        "C3": true,
+        "C4": true,
+        "C5": true,
+        "C6": true,
+        "C7": true,
+        "C8": true
+      },
+      "missing_gates": [],
+      "promotable": true
+    },
+    "capability_id": "capability_d55f8909c8d7cace47f7",
+    "control_digest": "sha256:7838ea2b5aa2fc6dff011348d039eb323f036cb557a562f3c3562c1c7a1d2826",
+    "controls_match": true,
+    "promotable": true
+  },
+  "attribution_promotable": true,
+  "authority_note": "C1-C8 attribution and its database-bound authority receipt are evaluation-only. The candidate policy has no promoted rule/asset and is not loaded into production; the independent six-gate rule authority receipt remains absent.",
+  "baseline_policy": {
+    "memory_snapshot_id": "sha256:cf654f9a8e5f340e1e867b410250e18d5d21d71599ee28707c5339f1b658255a",
+    "policy_digest": "sha256:1c68ca6e1481a49633cce78938925f230484bb7d6ae901a1a3abcfccf25b28c3",
+    "policy_snapshot_id": "policy_1c68ca6e1481a49633cc"
+  },
+  "candidate_memory_digest": "sha256:e4c8198a3167d8fcff8a9fe5503abbc14adae899cc7a995b6bcffc14e95745d4",
+  "candidate_policy": {
+    "memory_snapshot_id": "sha256:e4c8198a3167d8fcff8a9fe5503abbc14adae899cc7a995b6bcffc14e95745d4",
+    "policy_digest": "sha256:7e9ba58f9133a125a8ef32466246ca2c55d0bee02ddf83331cc0828ddef1305a",
+    "policy_snapshot_id": "policy_7e9ba58f9133a125a8ef"
+  },
+  "canonical_memory_mutation": "none",
+  "capability": {
+    "capability_id": "capability_d55f8909c8d7cace47f7",
+    "mechanism_family": "DENSITY_RELIEF",
+    "status": "candidate",
+    "version": 1
+  },
+  "capability_authority_gates": {
+    "checks": {
+      "C1": true,
+      "C2": true,
+      "C3": true,
+      "C4": true,
+      "C5": true,
+      "C6": true,
+      "C7": true,
+      "C8": true
+    },
+    "eligible": true,
+    "missing": [],
+    "required": [
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "C5",
+      "C6",
+      "C7",
+      "C8"
+    ],
+    "strict": true,
+    "version": "capability-promotion-gates-v1"
+  },
+  "capability_authority_receipt": {
+    "attribution_digest": "sha256:179de9aceb32f2ac1832cb94cc97165ad40e95792272955f862125dff207d5e7",
+    "authority_receipt_id": "capability_authority_b176659aadcb6cbb64e7",
+    "authority_version": "capability-promotion-authority-v1",
+    "candidate_policy_snapshot_id": "policy_7e9ba58f9133a125a8ef",
+    "capability_id": "capability_d55f8909c8d7cace47f7",
+    "eligible": true,
+    "evidence_refs": {
+      "C1": {
+        "evidence_digest": "sha1:f3c1a95b065f45d3831b724fd41715023af03e8c",
+        "evidence_id": "sha256:56e187d9f35ae7f05527648df825365be269a1dd1a8fd83689552eef953fa3a1",
+        "lineage_id": null,
+        "split": "ab",
+        "verdict": "PASS"
+      },
+      "C2": {
+        "evidence_digest": "sha1:a596d4e6725b1da3bf56334d9a153250e58a09b7",
+        "evidence_id": "sha256:f66c5f2fb3f5010ec289887290d6309bc5c2fc9c52e62274a5a0cf4f06203805",
+        "lineage_id": null,
+        "split": "ab",
+        "verdict": "PASS"
+      },
+      "C3": {
+        "evidence_digest": "sha1:9f4c21e47f3f698161d579ed7c5d250796bb551e",
+        "evidence_id": "policy_load_f46a6e8259324651312b",
+        "lineage_id": null,
+        "split": "ab",
+        "verdict": "PASS"
+      },
+      "C4": {
+        "evidence_digest": "sha1:79da7e81d4991d46998615e8c7dfd1125ce6a6ae",
+        "evidence_id": "sha256:486dfb085929cf9d778ab4847fe6a2e087fda9859d814b4556a66c95e8a72b4d",
+        "execution_receipt_id": "sha256:22bc839b68d335bdad325dacc78e5b96a078ef766ea95e42d9b4e8dcc1332652",
+        "lineage_id": null,
+        "split": "ab",
+        "verdict": "PASS"
+      },
+      "C5": {
+        "evidence_digest": "sha1:8a9d583b86519010fe047f27f7e14cfd0d9f330b",
+        "evidence_id": "sha256:156ddb5333b3735650573efc5a44cf813207be08e82934d9f1ab8e87a21fa7a2",
+        "lineage_id": null,
+        "split": "training",
+        "verdict": "PASS"
+      },
+      "C6": {
+        "evidence_digest": "sha1:6c0f9fd32ec2ae0a44e307c7293bec91290b5153",
+        "evidence_id": "sha256:930e9271755c72a081b8a2d3a5d78bce3e5fc2d27750b362dcacd66e3559b1ea",
+        "lineage_id": null,
+        "split": "heldout",
+        "verdict": "PASS"
+      },
+      "C7": {
+        "evidence_digest": "sha1:67437b92e5bdad17b7ded8ca0926d9f64c5ebbea",
+        "evidence_id": "sha256:03cfcbb511890040f5cd19391dd394257b1c1b061a6d9aeb3fd41ee09ac268fc",
+        "lineage_id": null,
+        "split": "ab",
+        "verdict": "PASS"
+      },
+      "C8": {
+        "evidence_digest": "sha1:df9786727e54b089f55f02b455b7429a3a07c246",
+        "evidence_id": "sha256:7888626e8afc7b4eeaa2891c0172a6b9333748222f04d422178aef27a8cbb4e8",
+        "lineage_id": null,
+        "split": "ab",
+        "verdict": "PASS"
+      }
+    },
+    "gates": {
+      "C1": true,
+      "C2": true,
+      "C3": true,
+      "C4": true,
+      "C5": true,
+      "C6": true,
+      "C7": true,
+      "C8": true
+    },
+    "payload": {
+      "attribution_digest": "sha256:179de9aceb32f2ac1832cb94cc97165ad40e95792272955f862125dff207d5e7",
+      "authority_version": "capability-promotion-authority-v1",
+      "candidate_policy_snapshot_id": "policy_7e9ba58f9133a125a8ef",
+      "capability_id": "capability_d55f8909c8d7cace47f7",
+      "eligible": true,
+      "evidence_refs": {
+        "C1": {
+          "evidence_id": "sha256:56e187d9f35ae7f05527648df825365be269a1dd1a8fd83689552eef953fa3a1",
+          "lineage_id": null,
+          "split": "ab",
+          "verdict": "PASS"
+        },
+        "C2": {
+          "evidence_id": "sha256:f66c5f2fb3f5010ec289887290d6309bc5c2fc9c52e62274a5a0cf4f06203805",
+          "lineage_id": null,
+          "split": "ab",
+          "verdict": "PASS"
+        },
+        "C3": {
+          "evidence_id": "policy_load_f46a6e8259324651312b",
+          "lineage_id": null,
+          "split": "ab",
+          "verdict": "PASS"
+        },
+        "C4": {
+          "evidence_id": "sha256:486dfb085929cf9d778ab4847fe6a2e087fda9859d814b4556a66c95e8a72b4d",
+          "execution_receipt_id": "sha256:22bc839b68d335bdad325dacc78e5b96a078ef766ea95e42d9b4e8dcc1332652",
+          "lineage_id": null,
+          "split": "ab",
+          "verdict": "PASS"
+        },
+        "C5": {
+          "evidence_id": "sha256:156ddb5333b3735650573efc5a44cf813207be08e82934d9f1ab8e87a21fa7a2",
+          "lineage_id": null,
+          "split": "training",
+          "verdict": "PASS"
+        },
+        "C6": {
+          "evidence_id": "sha256:930e9271755c72a081b8a2d3a5d78bce3e5fc2d27750b362dcacd66e3559b1ea",
+          "lineage_id": null,
+          "split": "heldout",
+          "verdict": "PASS"
+        },
+        "C7": {
+          "evidence_id": "sha256:03cfcbb511890040f5cd19391dd394257b1c1b061a6d9aeb3fd41ee09ac268fc",
+          "lineage_id": null,
+          "split": "ab",
+          "verdict": "PASS"
+        },
+        "C8": {
+          "evidence_id": "sha256:7888626e8afc7b4eeaa2891c0172a6b9333748222f04d422178aef27a8cbb4e8",
+          "lineage_id": null,
+          "split": "ab",
+          "verdict": "PASS"
+        }
+      },
+      "gates": {
+        "C1": true,
+        "C2": true,
+        "C3": true,
+        "C4": true,
+        "C5": true,
+        "C6": true,
+        "C7": true,
+        "C8": true
+      },
+      "reasons": [],
+      "required_assets": [],
+      "runtime_id": "tehm-orfs-capability-evaluation"
+    },
+    "reasons": [],
+    "receipt_digest": "sha256:b176659aadcb6cbb64e7133cfe2d1e3b7f36185d88bf17320c0bf4c011d8bc22",
+    "runtime_id": "tehm-orfs-capability-evaluation"
+  },
+  "capability_authority_verified": {
+    "attribution_digest": "sha256:179de9aceb32f2ac1832cb94cc97165ad40e95792272955f862125dff207d5e7",
+    "eligible": true,
+    "gate_report": {
+      "checks": {
+        "C1": true,
+        "C2": true,
+        "C3": true,
+        "C4": true,
+        "C5": true,
+        "C6": true,
+        "C7": true,
+        "C8": true
+      },
+      "eligible": true,
+      "missing": [],
+      "required": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5",
+        "C6",
+        "C7",
+        "C8"
+      ],
+      "strict": true,
+      "version": "capability-promotion-gates-v1"
+    },
+    "reasons": []
+  },
+  "capability_promotion_eligible": true,
+  "causal_path_id": "causal_path_ace0489a24d4a780",
+  "causal_report": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-causal-orfs-l3-failpass-r2-dev/controlled_replication_report.json",
+  "derived_db": "/tmp/tehm-capability-attribution-orfs-r2-next/tehm.sqlite",
+  "derived_db_sha256": "555c5e29b6d8e522b12aa227878b09440b9aa033e440a2bcd58a3023b076711d",
+  "firewall": {
+    "disjoint": true,
+    "heldout_entered_candidate_memory": false,
+    "heldout_lineages": [
+      "failpass-r2-heldout:shift32"
+    ],
+    "training_lineages": [
+      "failpass-r2:mux32",
+      "failpass-r2:parity64"
+    ]
+  },
+  "heldout": {
+    "action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+    "before_failed": true,
+    "candidate_pass": true,
+    "candidate_verdict": "PASS",
+    "created_regressions": [],
+    "evidence_refs": [
+      {
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_before_u95/backend/RUN_2026-08-26_03-24-31_8_2c32/run-meta.json",
+        "sha256": "a8d46ec77e70e6627022f7d28fd662e4cbab91d2889610cac451e48044e89b81",
+        "side": "before"
+      },
+      {
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_before_u95/backend/RUN_2026-08-26_03-24-31_8_2c32/stage_log.jsonl",
+        "sha256": "df600564087b484d73c8123d3acb8e4a5aaa26ef12fdcdd55357072f753ca253",
+        "side": "before"
+      },
+      {
+        "oracle": "ppa",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_before_u95/reports/ppa.json",
+        "sha256": "c56d3613f3f8f23d665d139877a1f1799b8c3e0abae98fcda43e431f61e8a39d",
+        "side": "before"
+      },
+      {
+        "oracle": "route",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_before_u95/reports/route.json",
+        "sha256": "3cc3ad0d238dfaa7e15188217588d2051f9d3048e30cd7e1bf47995bfae0a0af",
+        "side": "before"
+      },
+      {
+        "oracle": "timing",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_before_u95/reports/timing_check.json",
+        "sha256": "c13be564bc5db5163828b040d1885e05018f0972eeb3f2ec7eb090778e19418c",
+        "side": "before"
+      },
+      {
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_after_u40/backend/RUN_2026-08-26_03-24-31_7_08e1/run-meta.json",
+        "sha256": "b12f305d33a2c2d256e7bc9f642ec02aa919a86bd3872f75213a63efe4579ac2",
+        "side": "after"
+      },
+      {
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_after_u40/backend/RUN_2026-08-26_03-24-31_7_08e1/stage_log.jsonl",
+        "sha256": "82778f84061b5a825d70b432e96f55ae2c5bd9f1d6f457a6b2eacf30361b99ff",
+        "side": "after"
+      },
+      {
+        "oracle": "ppa",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_after_u40/reports/ppa.json",
+        "sha256": "979564c7c49d0aeafb2288a90a10cf61062f7a7642823094ff6abf7e7287393a",
+        "side": "after"
+      },
+      {
+        "oracle": "route",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_after_u40/reports/route.json",
+        "sha256": "d7626ef73d0671beacd8c46746c02d71f9e7ab1ef3c891a0fac7f75cdd2b7bf4",
+        "side": "after"
+      },
+      {
+        "oracle": "drc",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_after_u40/reports/drc.json",
+        "sha256": "a91e02b0853c8417adab6c0c1fcae8fa5ba24e32359c35548d143aeb29ce81bc",
+        "side": "after"
+      },
+      {
+        "oracle": "lvs",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_after_u40/reports/lvs.json",
+        "sha256": "102b9ecd946d32e49b180c9f7aac3acc000efdc054e3db91a337dec78d658071",
+        "side": "after"
+      },
+      {
+        "oracle": "timing",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_after_u40/reports/timing_check.json",
+        "sha256": "3049a0e69d552ccece7bed118d025c752ae4788fefcb2b80bfcbf286dbd2f843",
+        "side": "after"
+      },
+      {
+        "oracle": "rcx",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-heldout/cases/shift32_after_u40/reports/rcx.json",
+        "sha256": "de9e43ff812a48e33f77a49f65671909fe1e19697d29c851d473ea3b4248bcb6",
+        "side": "after"
+      }
+    ],
+    "lineage_id": "failpass-r2-heldout:shift32",
+    "original_failure": "REMOVED",
+    "record_id": "orfs-pair:9986041ef90e6427edb7952a",
+    "target_check": "route",
+    "utility_verdict": "HARMFUL"
+  },
+  "non_target": {
+    "action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+    "before_failed": false,
+    "candidate_pass": true,
+    "candidate_verdict": "PASS",
+    "created_regressions": [],
+    "evidence_refs": [
+      {
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0/backend/RUN_2026-08-25_21-12-15_5_1109/run-meta.json",
+        "sha256": "a2548ce9cc025a1424a9045c4a703d17cf5b7a264a963365d29e71df745160c3",
+        "side": "before"
+      },
+      {
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0/backend/RUN_2026-08-25_21-12-15_5_1109/stage_log.jsonl",
+        "sha256": "0321ef4c4df0feba4f691b5f8ddc63d173579b5aca40499031c5bf4cbdd3087a",
+        "side": "before"
+      },
+      {
+        "oracle": "ppa",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0/reports/ppa.json",
+        "sha256": "0801e8b20d5f875c5d2a99b3baf9e89cab41e966f9b484ff7ca262adbf2e3be4",
+        "side": "before"
+      },
+      {
+        "oracle": "route",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0/reports/route.json",
+        "sha256": "00b3b9ca19f77ea4c5c0b737a3c53521ee52b8730d29f4d6a682fe4f59a8ad50",
+        "side": "before"
+      },
+      {
+        "oracle": "drc",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0/reports/drc.json",
+        "sha256": "4de40d54c2abf821a1760a739e295da3766facfb9f30aa59f7bdc68f3b218e20",
+        "side": "before"
+      },
+      {
+        "oracle": "lvs",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0/reports/lvs.json",
+        "sha256": "393c11e09ab1eb4ce8d476fd76f02b11204c0e9cb34de719dac75ab05789bdf5",
+        "side": "before"
+      },
+      {
+        "oracle": "timing",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0/reports/timing_check.json",
+        "sha256": "40dc1229f86203b56e0dcfbc9b90c230adc08f277ba6d42a18faa7cbadfc0028",
+        "side": "before"
+      },
+      {
+        "oracle": "rcx",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0/reports/rcx.json",
+        "sha256": "6ce0fbc81ecbeac68f3f97091927d20e93d48c9810efcc96b5fcc7489743b2f6",
+        "side": "before"
+      },
+      {
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0/backend/RUN_2026-08-25_21-13-51_19394_7848/run-meta.json",
+        "sha256": "b7a7c2da34bb97ed04003e0e7aa93a9def0846363b7aeeaf3b8c609ce05a5d62",
+        "side": "after"
+      },
+      {
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0/backend/RUN_2026-08-25_21-13-51_19394_7848/stage_log.jsonl",
+        "sha256": "dfeadc44bbab3e49050fe10ea6efedb83d37ddcbcc48633f897b54cdcc8af0e1",
+        "side": "after"
+      },
+      {
+        "oracle": "ppa",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0/reports/ppa.json",
+        "sha256": "69182fed0c35e2eae5806ba2af8e17d6e15caeb2b7e19674e03b4e2292b45f5b",
+        "side": "after"
+      },
+      {
+        "oracle": "route",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0/reports/route.json",
+        "sha256": "dfe22d401aa073f83c068d391802dba0a04449a0d738e4f5d553b9d5281eb179",
+        "side": "after"
+      },
+      {
+        "oracle": "drc",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0/reports/drc.json",
+        "sha256": "2ab1db3d3a578cdf6fdbeafb92e5ab758c3a34e9a7eee952ace7d17d9a19ddaf",
+        "side": "after"
+      },
+      {
+        "oracle": "lvs",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0/reports/lvs.json",
+        "sha256": "35527ad2410b17d0d4dcc7f4ea43cc75e9ea10e9ce8f9d0b80948bbe5c2cf328",
+        "side": "after"
+      },
+      {
+        "oracle": "timing",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0/reports/timing_check.json",
+        "sha256": "df6c3bd397cb07c17cb8ad317a31a01d1c26ecbeb565e434babc60430001bdd5",
+        "side": "after"
+      },
+      {
+        "oracle": "rcx",
+        "path": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0/reports/rcx.json",
+        "sha256": "965130fc994f9755ff5f1496436bfcaf44f981c34de43024baab52c60b1f3e3a",
+        "side": "after"
+      }
+    ],
+    "lineage_id": "non-target:and32",
+    "original_failure": "UNKNOWN",
+    "record_id": "orfs-pair:8e0a5f5f61ef2b652594524d",
+    "target_check": "route",
+    "utility_verdict": "HARMFUL"
+  },
+  "non_target_evidence_id": "sha256:03cfcbb511890040f5cd19391dd394257b1c1b061a6d9aeb3fd41ee09ac268fc",
+  "policy_load": {
+    "execution_receipt_id": "sha256:22bc839b68d335bdad325dacc78e5b96a078ef766ea95e42d9b4e8dcc1332652",
+    "loaded": true,
+    "policy_digest": "sha256:7e9ba58f9133a125a8ef32466246ca2c55d0bee02ddf83331cc0828ddef1305a",
+    "policy_snapshot_id": "policy_7e9ba58f9133a125a8ef",
+    "receipt_digest": "sha256:f46a6e8259324651312ba640960dd1e8d5160a1d32066d2ee0952c2a658d28be",
+    "receipt_id": "policy_load_f46a6e8259324651312b",
+    "runtime_id": "tehm-orfs-capability-evaluation"
+  },
+  "production_promotion_eligible": false,
+  "promotion_attempted": false,
+  "rule_authority_gates": {
+    "checks": {
+      "conformal_coverage": false,
+      "cross_lineage_te": false,
+      "harmful_rate": false,
+      "obligation_coverage": false,
+      "registry_verified": false,
+      "rollback_verified": false
+    },
+    "eligible": false,
+    "missing": [
+      "conformal_coverage",
+      "cross_lineage_te",
+      "harmful_rate",
+      "obligation_coverage",
+      "registry_verified",
+      "rollback_verified"
+    ],
+    "strict": true,
+    "thresholds": {
+      "conformal_coverage": 0.8,
+      "cross_lineage_te": 1.0,
+      "harmful_rate": 0.0,
+      "obligation_coverage": 1.0
+    },
+    "version": "promotion-gates-v1"
+  },
+  "runtime_behavior": {
+    "baseline": {
+      "decisions": [
+        {
+          "action_digest": null,
+          "causal_path_id": null,
+          "lineage_id": "failpass-r2:mux32",
+          "selected_action": "none",
+          "source_record_id": "orfs-pair:20b164a872fa2ab0f8649b38"
+        },
+        {
+          "action_digest": null,
+          "causal_path_id": null,
+          "lineage_id": "failpass-r2:parity64",
+          "selected_action": "none",
+          "source_record_id": "orfs-pair:78d5826b7f4b82ff4f87aaf2"
+        },
+        {
+          "action_digest": null,
+          "causal_path_id": null,
+          "lineage_id": "failpass-r2-heldout:shift32",
+          "selected_action": "none",
+          "source_record_id": "orfs-pair:9986041ef90e6427edb7952a"
+        }
+      ],
+      "evaluation_only": true,
+      "loaded": true,
+      "policy_digest": "sha256:1c68ca6e1481a49633cce78938925f230484bb7d6ae901a1a3abcfccf25b28c3",
+      "policy_snapshot_id": "policy_1c68ca6e1481a49633cc",
+      "receipt_id": "sha256:4c82d66cc0ea854354be9bc561be5f6e30ba2b4264cdd144a6a63dcb2c02235f",
+      "runtime_id": "tehm-orfs-capability-evaluation",
+      "version": "tehm-evaluation-policy-runtime-v1"
+    },
+    "candidate": {
+      "decisions": [
+        {
+          "action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+          "causal_path_id": "causal_path_ace0489a24d4a780",
+          "lineage_id": "failpass-r2:mux32",
+          "selected_action": "DENSITY_RELIEF",
+          "source_record_id": "orfs-pair:20b164a872fa2ab0f8649b38"
+        },
+        {
+          "action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+          "causal_path_id": "causal_path_ace0489a24d4a780",
+          "lineage_id": "failpass-r2:parity64",
+          "selected_action": "DENSITY_RELIEF",
+          "source_record_id": "orfs-pair:78d5826b7f4b82ff4f87aaf2"
+        },
+        {
+          "action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+          "causal_path_id": "causal_path_ace0489a24d4a780",
+          "lineage_id": "failpass-r2-heldout:shift32",
+          "selected_action": "DENSITY_RELIEF",
+          "source_record_id": "orfs-pair:9986041ef90e6427edb7952a"
+        }
+      ],
+      "evaluation_only": true,
+      "loaded": true,
+      "policy_digest": "sha256:7e9ba58f9133a125a8ef32466246ca2c55d0bee02ddf83331cc0828ddef1305a",
+      "policy_snapshot_id": "policy_7e9ba58f9133a125a8ef",
+      "receipt_id": "sha256:22bc839b68d335bdad325dacc78e5b96a078ef766ea95e42d9b4e8dcc1332652",
+      "runtime_id": "tehm-orfs-capability-evaluation",
+      "version": "tehm-evaluation-policy-runtime-v1"
+    }
+  },
+  "source_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-r2-dev/closed_loop/tehm.sqlite",
+  "source_db_sha256": "cf654f9a8e5f340e1e867b410250e18d5d21d71599ee28707c5339f1b658255a",
+  "training": [
+    {
+      "action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+      "before_failed": true,
+      "candidate_pass": true,
+      "candidate_verdict": "PASS",
+      "created_regressions": [],
+      "evidence_refs": [
+        {
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_before_u95/backend/RUN_2026-08-26_03-15-29_8_1cc7/run-meta.json",
+          "sha256": "14c6e259e386aa625fdde9d91daaf307a9ffbeb255fd474eea8acefdbb2d0332",
+          "side": "before"
+        },
+        {
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_before_u95/backend/RUN_2026-08-26_03-15-29_8_1cc7/stage_log.jsonl",
+          "sha256": "6ec49b19931e0a6f625f9531fdd080cb4246ab56f773b3becde702820ea37e1e",
+          "side": "before"
+        },
+        {
+          "oracle": "ppa",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_before_u95/reports/ppa.json",
+          "sha256": "d76e7b98773933737c9b67d49449c50bf20a06f956a9d8008a98ee671dde1961",
+          "side": "before"
+        },
+        {
+          "oracle": "route",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_before_u95/reports/route.json",
+          "sha256": "e076581b3da16bec26d11881a5f2392f80a44fb43070097982feb3ecce4a57b1",
+          "side": "before"
+        },
+        {
+          "oracle": "timing",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_before_u95/reports/timing_check.json",
+          "sha256": "c13be564bc5db5163828b040d1885e05018f0972eeb3f2ec7eb090778e19418c",
+          "side": "before"
+        },
+        {
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_after_u40/backend/RUN_2026-08-26_03-15-29_7_4556/run-meta.json",
+          "sha256": "1316a0911525a7dfe44afb8099d83c82a2e29ec7eeee75453fa9d30390d87761",
+          "side": "after"
+        },
+        {
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_after_u40/backend/RUN_2026-08-26_03-15-29_7_4556/stage_log.jsonl",
+          "sha256": "c4fde41c8f6405fb1ee92ee88b37d11e5710a8a33345c851a7e098069252016c",
+          "side": "after"
+        },
+        {
+          "oracle": "ppa",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_after_u40/reports/ppa.json",
+          "sha256": "d8c23620b218ddb047d57263763c1fd2b665226ec79f9ee78ac5a6ccbe3c6e13",
+          "side": "after"
+        },
+        {
+          "oracle": "route",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_after_u40/reports/route.json",
+          "sha256": "b8baebbad4f35965701f0f0fe840199405b988c4f6b2dfd2de7a902f030426fd",
+          "side": "after"
+        },
+        {
+          "oracle": "drc",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_after_u40/reports/drc.json",
+          "sha256": "37401d7db71c529918254d4d3ae08913d35d18650e8c5c7f648c8c54cd7222af",
+          "side": "after"
+        },
+        {
+          "oracle": "lvs",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_after_u40/reports/lvs.json",
+          "sha256": "b954ef2eb5a621ecd871282109d8d387976a19e8c6f8b28b872189891985542a",
+          "side": "after"
+        },
+        {
+          "oracle": "timing",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_after_u40/reports/timing_check.json",
+          "sha256": "82ebfb5f83a9d6fded967e2ff90cb3813b3163c98ba0b451d68d7444f4bfa832",
+          "side": "after"
+        },
+        {
+          "oracle": "rcx",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/mux32_after_u40/reports/rcx.json",
+          "sha256": "7112be1ffe3f65df9ddf125d8d76897f113680d7a3859f88a835ed4b2b866206",
+          "side": "after"
+        }
+      ],
+      "lineage_id": "failpass-r2:mux32",
+      "original_failure": "REMOVED",
+      "record_id": "orfs-pair:20b164a872fa2ab0f8649b38",
+      "target_check": "route",
+      "utility_verdict": "HARMFUL"
+    },
+    {
+      "action_digest": "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08",
+      "before_failed": true,
+      "candidate_pass": true,
+      "candidate_verdict": "PASS",
+      "created_regressions": [],
+      "evidence_refs": [
+        {
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_before_u95/backend/RUN_2026-08-26_03-17-05_29667_4bda/run-meta.json",
+          "sha256": "422fbb6b4e7ebbf265994c2bd113e6943a8351c7228860c6928d5a899b307d49",
+          "side": "before"
+        },
+        {
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_before_u95/backend/RUN_2026-08-26_03-17-05_29667_4bda/stage_log.jsonl",
+          "sha256": "f50c27d399e3e6a5184805af86063e25b37f896ea658e4d4ba0390924821321f",
+          "side": "before"
+        },
+        {
+          "oracle": "ppa",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_before_u95/reports/ppa.json",
+          "sha256": "27ee6ecbc04ed390b6a384bf29daf19eab7159db3e1e4f92da85f441c27a142d",
+          "side": "before"
+        },
+        {
+          "oracle": "route",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_before_u95/reports/route.json",
+          "sha256": "986a772cb5a15c162d19d0d73b11cbf6729ea26920d3be7af52cde4b8006190c",
+          "side": "before"
+        },
+        {
+          "oracle": "timing",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_before_u95/reports/timing_check.json",
+          "sha256": "c13be564bc5db5163828b040d1885e05018f0972eeb3f2ec7eb090778e19418c",
+          "side": "before"
+        },
+        {
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_after_u40/backend/RUN_2026-08-26_03-16-00_1974_0b3b/run-meta.json",
+          "sha256": "8ebe489febf7eaadc3bf5309fd47d5c218d3fab1f545306c1cd97cf5a860e233",
+          "side": "after"
+        },
+        {
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_after_u40/backend/RUN_2026-08-26_03-16-00_1974_0b3b/stage_log.jsonl",
+          "sha256": "f9745f00a225278a8b14d7df3a64515c391d1a6106ec86ad3062ed8a6005c624",
+          "side": "after"
+        },
+        {
+          "oracle": "ppa",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_after_u40/reports/ppa.json",
+          "sha256": "83658b0621f196f5badd95a0f88931501ae5da46fb1f17d6e64976db04550939",
+          "side": "after"
+        },
+        {
+          "oracle": "route",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_after_u40/reports/route.json",
+          "sha256": "553a4acf890f50852075c54441cad5c03cf4ff2a06004d0672c0c9625703cfba",
+          "side": "after"
+        },
+        {
+          "oracle": "drc",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_after_u40/reports/drc.json",
+          "sha256": "4de05d8349081f77f29cb0399fda3ed827b169c78560b20c5358c918318448fb",
+          "side": "after"
+        },
+        {
+          "oracle": "lvs",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_after_u40/reports/lvs.json",
+          "sha256": "5f8cf512f31f6e5e02f60a69bd2971178b247f385cb6c68fdfa85236fdfa0b7c",
+          "side": "after"
+        },
+        {
+          "oracle": "timing",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_after_u40/reports/timing_check.json",
+          "sha256": "51da7b4008a962682fe7c7d9bd59b4e2ec0712ce258d140ef78c0290a163b216",
+          "side": "after"
+        },
+        {
+          "oracle": "rcx",
+          "path": "/tmp/tehm-authority-v1/failpass-r2/cases/parity64_after_u40/reports/rcx.json",
+          "sha256": "353b47ac2d3e9b01117458f6e6b6b808fc5d4b410308ec49b56abaa11b9196f9",
+          "side": "after"
+        }
+      ],
+      "lineage_id": "failpass-r2:parity64",
+      "original_failure": "REMOVED",
+      "record_id": "orfs-pair:78d5826b7f4b82ff4f87aaf2",
+      "target_check": "route",
+      "utility_verdict": "HARMFUL"
+    }
+  ],
+  "training_evidence_digest": "sha256:a4d9dd90fff241583006b2a28ce117a35d31556ab62488311554ee2ac460b047",
+  "version": "orfs-capability-attribution-v2"
+}

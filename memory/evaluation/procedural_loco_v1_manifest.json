@@ -1,0 +1,37 @@
+{
+  "version": "procedural-loco-v1",
+  "source_snapshot": {
+    "canonical_bundle_id": "tehm-evidence-freeze-v4-dev",
+    "task_manifest": "procedural_ab_v4_dev_manifest.json"
+  },
+  "budget": {
+    "arms": ["M1", "M8"],
+    "repeats_per_fold": 1,
+    "oracle": "IcarusOracle",
+    "same_action_budget": true
+  },
+  "lineages": [
+    "p3_positive_valid_ready",
+    "p3_positive_fifo_space",
+    "p3_positive_credit_return",
+    "p3_obligation_recovery",
+    "p3_obligation_recovery_b",
+    "p3_reset_restore_a",
+    "p3_reset_restore_c",
+    "p3_reset_restore_b",
+    "p3_width_correct_a",
+    "p3_width_correct_b",
+    "p3_width_correct_c",
+    "p3_overlap_priority_a",
+    "p3_overlap_priority_b",
+    "p3_overlap_priority_c"
+  ],
+  "acceptance": {
+    "min_folds": 3,
+    "require_heldout_source_exclusion": true,
+    "require_complete_obligation_coverage": true,
+    "require_m8_successes": true,
+    "max_m8_harmful_rate": 0.0,
+    "require_canonical_memory_mutation": false
+  }
+}

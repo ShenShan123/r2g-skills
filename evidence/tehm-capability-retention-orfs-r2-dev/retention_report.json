@@ -1,0 +1,133 @@
+{
+  "attribution_report": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-capability-attribution-orfs-r2-dev/capability_attribution_report.json",
+  "attribution_report_sha256": "ba72c37aa78c47905d6cf80cf0af67633b00f2cf1ce5f42cc12545d4c61d2f9f",
+  "authority_note": "retention is an evaluation-only replay of a frozen candidate policy; no capability lifecycle or production policy mutation",
+  "candidate_policy": {
+    "derived_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-capability-attribution-orfs-r2-dev/tehm.sqlite",
+    "policy_digest": "sha256:0f8f9734a789486a5d75b15852a38687e81608f73e8026578475caed1cc580b6",
+    "policy_snapshot_id": "policy_0f8f9734a789486a5d75",
+    "read_only_verified": true
+  },
+  "canonical_memory_mutation": "none",
+  "capability_id": "capability_d55f8909c8d7cace47f7",
+  "firewall": {
+    "disjoint": true,
+    "entered_learner_support": false,
+    "heldout_lineages": [
+      "failpass-r2-heldout:shift32"
+    ],
+    "retention_lineage": "failpass-r2-retention:toggle32",
+    "training_lineages": [
+      "failpass-r2:mux32",
+      "failpass-r2:parity64"
+    ]
+  },
+  "lineage_id": "failpass-r2-retention:toggle32",
+  "production_promotion_eligible": false,
+  "promotion_attempted": false,
+  "record": {
+    "after_project": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_after_u40",
+    "before_failed": true,
+    "before_project": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_before_u95",
+    "candidate_pass": true,
+    "created_regressions": [],
+    "evidence_refs": [
+      {
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_before_u95/backend/RUN_2026-08-26_03-47-14_8_4588/run-meta.json",
+        "sha256": "601e2ec4c450746293720752becae5866fba81506ab6f367ab2018b1973f9515",
+        "side": "before"
+      },
+      {
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_before_u95/backend/RUN_2026-08-26_03-47-14_8_4588/stage_log.jsonl",
+        "sha256": "77b737f8d0d5e8f0f4747685c6034008517882f6579c649bc09148a1e028d77f",
+        "side": "before"
+      },
+      {
+        "oracle": "ppa",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_before_u95/reports/ppa.json",
+        "sha256": "33594ea9165f37ff03223dba90eb25c5a33dc8aa88d2214cd47989ae225bedab",
+        "side": "before"
+      },
+      {
+        "oracle": "route",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_before_u95/reports/route.json",
+        "sha256": "f72a447dd6eb8a50d83c329a4fc392daa6ad1bc2e3dc1df8c48025a5afc4baf2",
+        "side": "before"
+      },
+      {
+        "oracle": "timing",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_before_u95/reports/timing_check.json",
+        "sha256": "c13be564bc5db5163828b040d1885e05018f0972eeb3f2ec7eb090778e19418c",
+        "side": "before"
+      },
+      {
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_after_u40/backend/RUN_2026-08-26_03-47-14_6_5a1a/run-meta.json",
+        "sha256": "adeecaa5bc4efc8fad4ed2f78403564a0d4edbc17cf4438ab605f0d7284f7ddb",
+        "side": "after"
+      },
+      {
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_after_u40/backend/RUN_2026-08-26_03-47-14_6_5a1a/stage_log.jsonl",
+        "sha256": "6ad489f7e92c3caabadb4a5a2189363b5e6fc93dcab77af9f888ed1d792c0ba4",
+        "side": "after"
+      },
+      {
+        "oracle": "ppa",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_after_u40/reports/ppa.json",
+        "sha256": "831f868f60982f5c344e7f2b6c29579f4debac2dc69a4d5de8eb10bf83edf5a6",
+        "side": "after"
+      },
+      {
+        "oracle": "route",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_after_u40/reports/route.json",
+        "sha256": "c82db6c784cadcb84a808a2c48e70df49cd0e542c4e30adfbcc1349182ab2ee0",
+        "side": "after"
+      },
+      {
+        "oracle": "drc",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_after_u40/reports/drc.json",
+        "sha256": "d6ce6ef93f58113ded47f1a65d85a27b88a172b3ad98f6de4fccd3149ceab987",
+        "side": "after"
+      },
+      {
+        "oracle": "lvs",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_after_u40/reports/lvs.json",
+        "sha256": "fec12f5de57683015a544fdf200449d818527e046ff6ed0e2a377b914054e51d",
+        "side": "after"
+      },
+      {
+        "oracle": "timing",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_after_u40/reports/timing_check.json",
+        "sha256": "4a50d2f6ef48b93a8ce82633a35dc1257d45bc1505407fe6c2a8516c9cacaec7",
+        "side": "after"
+      },
+      {
+        "oracle": "rcx",
+        "path": "/tmp/tehm-authority-v1/failpass-r2-retention/cases/toggle32_after_u40/reports/rcx.json",
+        "sha256": "d19bebeade62d8a768d3f75e386809b307cb0357face854bd11c79f79f48e459",
+        "side": "after"
+      }
+    ],
+    "record_id": "orfs-pair:e7c5cd05749c6bfc0be8f9ef",
+    "utility_verdict": "HARMFUL"
+  },
+  "replay": {
+    "baseline_failed": true,
+    "candidate_pass": true,
+    "disjoint_lineage": true,
+    "evidence_id": "sha256:33ae57a73a3385164058c073a92b88defcd42e5fab4069df6d87a3535c17d000",
+    "non_target_regression_zero": true,
+    "target_check": "route",
+    "verdict": "PASS"
+  },
+  "retention": {
+    "capability_id": "capability_d55f8909c8d7cace47f7",
+    "disjoint_lineage": true,
+    "evidence_id": "sha256:33ae57a73a3385164058c073a92b88defcd42e5fab4069df6d87a3535c17d000",
+    "non_target_regression_zero": true,
+    "reason": "retention_verified",
+    "replay_id": "retention_33ae57a73a3385164058",
+    "replay_verdict": "PASS",
+    "retained": true
+  },
+  "version": "orfs-capability-retention-v1"
+}

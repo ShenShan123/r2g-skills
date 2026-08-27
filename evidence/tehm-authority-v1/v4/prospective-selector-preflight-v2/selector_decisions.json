@@ -1,0 +1,227 @@
+{
+  "abstained_count": 6,
+  "campaign_id": "timing_relief_budgeted_v2_50_to_45-selector-preflight",
+  "canonical_memory_mutation": "none",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+  "decisions": [
+    {
+      "abstain_reasons": [
+        "wns_interval_below_objective",
+        "power_interval_exceeds_budget"
+      ],
+      "baseline_checks": {
+        "artifact_digest": true,
+        "drc": true,
+        "equivalence": true,
+        "finish": true,
+        "graph": true,
+        "lvs": true,
+        "ppa": true,
+        "route": true,
+        "synthesis": true,
+        "timing": true
+      },
+      "baseline_graph_digest": "a215eaabf2e20c4b474f1d3b1861e61c55332171ce613cd27d5d963cbd1cc667",
+      "baseline_ppa_metrics": {
+        "area_um2": 5646.0,
+        "power_w": 0.00350581,
+        "tns_ns": 0.0,
+        "wns_ns": 1.04407
+      },
+      "canonical_memory_mutation": "none",
+      "case_id": "sky130hs:v2_xor64:preflight:50->45",
+      "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+      "lineage_id": "prospective-v2:sky130hs:xor64:cal0",
+      "nearest_distance": 0.610837,
+      "policy_sha256": "c47073b0f8043ab14b453e352e47be4f0b2ca6a7ebd83122d8768b70122eb952",
+      "promotion_eligible": false,
+      "split": "calibration",
+      "status": "ABSTAINED",
+      "support": 4,
+      "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863"
+    },
+    {
+      "abstain_reasons": [
+        "wns_interval_below_objective"
+      ],
+      "baseline_checks": {
+        "artifact_digest": true,
+        "drc": true,
+        "equivalence": true,
+        "finish": true,
+        "graph": true,
+        "lvs": true,
+        "ppa": true,
+        "route": true,
+        "synthesis": true,
+        "timing": true
+      },
+      "baseline_graph_digest": "2e7b6c673540609036ab0944bd2e5e4e56b18ae882edefa937265fbd7c5c8dc1",
+      "baseline_ppa_metrics": {
+        "area_um2": 14750.0,
+        "power_w": 0.0147661,
+        "tns_ns": 0.0,
+        "wns_ns": 0.392324
+      },
+      "canonical_memory_mutation": "none",
+      "case_id": "sky130hs:v2_queue24:preflight:50->45",
+      "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+      "lineage_id": "prospective-v2:sky130hs:queue24:cal0",
+      "nearest_distance": 0.563797,
+      "policy_sha256": "c47073b0f8043ab14b453e352e47be4f0b2ca6a7ebd83122d8768b70122eb952",
+      "promotion_eligible": false,
+      "split": "calibration",
+      "status": "ABSTAINED",
+      "support": 4,
+      "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863"
+    },
+    {
+      "abstain_reasons": [
+        "missing_graph_context_digest"
+      ],
+      "baseline_checks": {
+        "artifact_digest": true,
+        "drc": true,
+        "equivalence": true,
+        "finish": true,
+        "graph": false,
+        "lvs": true,
+        "ppa": true,
+        "route": true,
+        "synthesis": true,
+        "timing": false
+      },
+      "baseline_graph_digest": null,
+      "baseline_ppa_metrics": {
+        "area_um2": 9526.0,
+        "power_w": 0.0211758,
+        "tns_ns": -7.75669,
+        "wns_ns": -0.51509
+      },
+      "canonical_memory_mutation": "none",
+      "case_id": "sky130hs:v2_arbiter16:preflight:50->45",
+      "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+      "lineage_id": "prospective-v2:sky130hs:arbiter16:ab0",
+      "nearest_distance": null,
+      "policy_sha256": "c47073b0f8043ab14b453e352e47be4f0b2ca6a7ebd83122d8768b70122eb952",
+      "promotion_eligible": false,
+      "split": "heldout",
+      "status": "ABSTAINED",
+      "support": null,
+      "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863"
+    },
+    {
+      "abstain_reasons": [
+        "wns_interval_below_objective",
+        "power_interval_exceeds_budget"
+      ],
+      "baseline_checks": {
+        "artifact_digest": true,
+        "drc": true,
+        "equivalence": true,
+        "finish": true,
+        "graph": true,
+        "lvs": true,
+        "ppa": true,
+        "route": true,
+        "synthesis": true,
+        "timing": true
+      },
+      "baseline_graph_digest": "4513e3e4d2ebeae2c998979d316242274019775af31ebf476c2b8bad6dd0e8cf",
+      "baseline_ppa_metrics": {
+        "area_um2": 3812.0,
+        "power_w": 0.00390055,
+        "tns_ns": 0.0,
+        "wns_ns": 0.751009
+      },
+      "canonical_memory_mutation": "none",
+      "case_id": "sky130hs:v2_crc32:preflight:50->45",
+      "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+      "lineage_id": "prospective-v2:sky130hs:crc32:ab0",
+      "nearest_distance": 0.506628,
+      "policy_sha256": "c47073b0f8043ab14b453e352e47be4f0b2ca6a7ebd83122d8768b70122eb952",
+      "promotion_eligible": false,
+      "split": "heldout",
+      "status": "ABSTAINED",
+      "support": 4,
+      "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863"
+    },
+    {
+      "abstain_reasons": [
+        "missing_graph_context_digest"
+      ],
+      "baseline_checks": {
+        "artifact_digest": false,
+        "drc": false,
+        "equivalence": true,
+        "finish": false,
+        "graph": false,
+        "lvs": false,
+        "ppa": false,
+        "route": false,
+        "synthesis": true,
+        "timing": false
+      },
+      "baseline_graph_digest": null,
+      "baseline_ppa_metrics": {
+        "area_um2": 308.0,
+        "power_w": null,
+        "tns_ns": 100.0,
+        "wns_ns": null
+      },
+      "canonical_memory_mutation": "none",
+      "case_id": "sky130hs:v2_packet_ctrl:preflight:50->45",
+      "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+      "lineage_id": "prospective-v2:sky130hs:packet_ctrl:ab0",
+      "nearest_distance": null,
+      "policy_sha256": "c47073b0f8043ab14b453e352e47be4f0b2ca6a7ebd83122d8768b70122eb952",
+      "promotion_eligible": false,
+      "split": "heldout",
+      "status": "ABSTAINED",
+      "support": null,
+      "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863"
+    },
+    {
+      "abstain_reasons": [
+        "missing_graph_context_digest"
+      ],
+      "baseline_checks": {
+        "artifact_digest": true,
+        "drc": true,
+        "equivalence": true,
+        "finish": true,
+        "graph": false,
+        "lvs": true,
+        "ppa": true,
+        "route": true,
+        "synthesis": true,
+        "timing": false
+      },
+      "baseline_graph_digest": null,
+      "baseline_ppa_metrics": {
+        "area_um2": 34289.0,
+        "power_w": 0.0538285,
+        "tns_ns": -40.2419,
+        "wns_ns": -1.84077
+      },
+      "canonical_memory_mutation": "none",
+      "case_id": "sky130hs:v2_mac32:preflight:50->45",
+      "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+      "lineage_id": "prospective-v2:sky130hs:mac32:ab0",
+      "nearest_distance": null,
+      "policy_sha256": "c47073b0f8043ab14b453e352e47be4f0b2ca6a7ebd83122d8768b70122eb952",
+      "promotion_eligible": false,
+      "split": "heldout",
+      "status": "ABSTAINED",
+      "support": null,
+      "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863"
+    }
+  ],
+  "policy": "/tmp/tehm-authority-v1/v2-calibration-50to45/v2_calibration_policy_report.json",
+  "policy_sha256": "c47073b0f8043ab14b453e352e47be4f0b2ca6a7ebd83122d8768b70122eb952",
+  "promotion_attempted": false,
+  "proposed_count": 0,
+  "sample_count": 6,
+  "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863",
+  "version": "timing-relief-selector-preflight-v1"
+}

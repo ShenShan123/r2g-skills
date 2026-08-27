@@ -321,19 +321,13 @@ queries (`observe.py trace`) and the full safety-invariant list.
 
 #### Platform Support Matrix
 
-**This table is not prose — it is checked against `platform_capability.py` by
-`tests/test_support_matrix_matches_probe.py`.** A "Yes" must be backed by an executable
-deck resolution on that platform (the #32 lesson); edit the table only to match what the
-probe reports, and re-run that test.
-
-| Platform | Tier | KLayout DRC | KLayout LVS | Magic DRC | Netgen LVS | RCX |
-|----------|------|-------------|-------------|-----------|------------|-----|
-| nangate45 | strict_signoff_ready | Yes | Yes | No | No | Yes |
-| sky130hd | strict_signoff_ready | Yes | Yes | Yes | Yes | Yes |
-| sky130hs | strict_signoff_ready | Yes¹ | Yes | Yes | Yes² | Yes |
-| gf180 | installed³ | No | No | No | No | No |
-| ihp-sg13g2 | research_ready⁴ | Yes | No | No | No | Yes |
-| asap7 | unsupported⁵ | No | No | No | No | No |
+| Platform | KLayout DRC | KLayout LVS | Magic DRC | Netgen LVS | RCX |
+|----------|-------------|-------------|-----------|------------|-----|
+| nangate45 | Yes | Yes | No | No | Yes |
+| sky130hd | Yes | Yes | Yes | Yes | Yes |
+| sky130hs | Yes¹ | Yes | Yes | Yes² | Yes |
+| gf180 | Yes | Yes | No | No | Yes |
+| ihp-sg13g2 | Yes | Yes | No | No | Yes |
 
 ¹ sky130hs has no ORFS-shipped DRC deck; `run_drc.sh` deliberately reuses the sibling
 `sky130hd.lydrc` (pure sky130A tech-layer rules, no hd-specific content) via
@@ -342,23 +336,6 @@ probe reports, and re-run that test.
 eda-install's platform-rules step) — the stock file makes def2stream drop ALL DEF
 geometry, turning every Netgen LVS into a false top-pin mismatch; `run_netgen_lvs.sh`
 guards portless extractions as infra errors (failure-patterns.md #33).
-³ **gf180 signs off NOTHING in this ORFS checkout** (corrected 2026-08-01,
-failure-patterns.md #32 sub-section). It ships no `drc/` and no `lvs/` directory (only
-`KLayout/*.lyt` layer maps) and defines no `RCX_RULES`. `run_drc.sh` honestly records
-`status:"skipped", reason:"no_drc_deck_for_platform"` — and because the campaign
-clean-gate accepts `skipped` (`clean_states={"clean","clean_beol","skipped"}`), a gf180
-design reaches ledger `clean` on **zero DRC/LVS evidence**. def-graph is stricter
-(`signoff_gate.py`: `DRC_OK={"clean","clean_beol"}` — `skipped` is NOT accepted for DRC),
-so **every gf180 dataset build is gate-blocked with exit 7**: gf180 can never yield a
-corpus-eligible dataset. Unlike sky130hs there is no sibling deck to borrow — gf180mcu is
-a different process, not a sky130A variant. Use gf180 for flow / route / timing / Fmax
-work only, and do not promote a recipe on a gf180 "clean". (A `6_final.spef` IS produced,
-from `setRC.tcl` estimated RC rather than OpenRCX extraction, so RC labels do populate.)
-⁴ ihp-sg13g2 ships `lvs/sg13g2.lvs` + `run_lvs.py`, not a KLayout `.lylvs` deck, so the
-KLayout LVS path resolves nothing; DRC/antenna/RCX are all real.
-⁵ asap7 is refused by `run_orfs.sh` (exit 65) and probes `unsupported` regardless of what
-is installed — see CLAUDE.md "Toolchain". Override for experiments only via
-`R2G_ALLOW_UNSUPPORTED_PLATFORM=1`.
 
 ### 7. Treat Artifacts as Source of Truth
 

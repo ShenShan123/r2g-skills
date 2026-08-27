@@ -24,20 +24,6 @@ def _seed_ppl(proj, msg=_PPL):
     (run / "flow.log").write_text(msg)
 
 
-def _seed_recorded_pin_fix(proj, util="12", target=851.76):
-    """Turn a failing subject into the exact post-live-fix shape selected for A/B."""
-    cfg = proj / "constraints" / "config.mk"
-    cfg.write_text(f"export CORE_UTILIZATION = {util}\n")
-    before = el._config_snapshot({"project_path": str(proj)})
-    assert el._set_explicit_die(str(proj), target)
-    entry = {
-        "project_path": str(proj),
-        "_r2g_config_effect": el._config_effect(
-            before, el._config_snapshot({"project_path": str(proj)})),
-    }
-    el._record_pin_perimeter_fix(entry, cleared=True)
-
-
 def _core_perimeter(cfg_text):
     m = re.search(r"CORE_AREA = \d+ \d+ (\d+) \d+", cfg_text)
     assert m, f"no square CORE_AREA in:\n{cfg_text}"
@@ -130,63 +116,11 @@ def test_apply_recipe_strategy_uses_pin_target(tmp_path):
     (proj / "constraints").mkdir(parents=True)
     (proj / "constraints" / "config.mk").write_text("export CORE_UTILIZATION = 12\n")
     el._apply_recipe_strategy(
-        {"project_path": str(proj), "strategy": "pin_perimeter_floor",
+        {"project_path": str(proj), "strategy": "core_util_relief",
          "pin_perimeter_target": 851.76})
     cfg = (proj / "constraints" / "config.mk").read_text()
     assert "DIE_AREA" in cfg and "CORE_UTILIZATION" not in cfg
     assert _core_perimeter(cfg) >= 851.76
-
-
-def test_pin_perimeter_recipe_without_target_is_honest_noop(tmp_path):
-    proj = tmp_path / "d_abB"
-    (proj / "constraints").mkdir(parents=True)
-    config = proj / "constraints" / "config.mk"
-    config.write_text("export CORE_UTILIZATION = 20\n")
-    before = config.read_text()
-    el._apply_recipe_strategy(
-        {"project_path": str(proj), "strategy": "pin_perimeter_floor"})
-    assert config.read_text() == before
-
-
-def test_pin_perimeter_recipe_replays_recorded_effect_without_old_error_log(tmp_path):
-    """A clean subject no longer has PPL-0024 in its newest backend; B uses fix evidence."""
-    proj = tmp_path / "d_abB"
-    (proj / "constraints").mkdir(parents=True)
-    config = proj / "constraints" / "config.mk"
-    config.write_text("export CORE_UTILIZATION = 25\n")
-    delta = {
-        "CORE_UTILIZATION": {"before": "25", "after": None},
-        "DIE_AREA": {"before": None, "after": "0 0 510 510"},
-        "CORE_AREA": {"before": None, "after": "10 10 500 500"},
-    }
-    el._apply_recipe_strategy({
-        "project_path": str(proj),
-        "strategy": "pin_perimeter_floor",
-        "recipe_config_delta": delta,
-    })
-    cfg = config.read_text()
-    assert "CORE_UTILIZATION" not in cfg
-    assert "DIE_AREA = 0 0 510 510" in cfg
-    assert "CORE_AREA = 10 10 500 500" in cfg
-
-
-def test_pin_perimeter_fix_has_distinct_learning_identity(tmp_path):
-    proj = tmp_path / "p"
-    (proj / "constraints").mkdir(parents=True)
-    (proj / "constraints" / "config.mk").write_text("export CORE_UTILIZATION = 25\n")
-    before = el._config_snapshot({"project_path": str(proj)})
-    assert el._set_explicit_die(str(proj), 851.76)
-    entry = {
-        "project_path": str(proj),
-        "_r2g_config_effect": el._config_effect(
-            before, el._config_snapshot({"project_path": str(proj)})),
-    }
-    el._record_pin_perimeter_fix(entry, cleared=True)
-    row = __import__("json").loads(
-        (proj / "reports" / "fix_log.jsonl").read_text().strip())
-    assert row["strategy"] == "pin_perimeter_floor"
-    assert row["verdict"] == "cleared"
-    assert row["effect_fingerprint"]
 
 
 def test_apply_recipe_strategy_no_target_keeps_util_lever(tmp_path):
@@ -201,19 +135,16 @@ def test_apply_recipe_strategy_no_target_keeps_util_lever(tmp_path):
     assert m and int(m.group(1)) < 20 and "DIE_AREA" not in cfg
 
 
-# ── plan_arms_for_candidates carries the exact recorded effect ───────
-def test_plan_arms_stamps_recorded_pin_effect_after_subject_is_clean(tmp_path, monkeypatch):
+# ── plan_arms_for_candidates stamps the SUBJECT's perimeter onto place arms ──
+def test_plan_arms_stamps_pin_target_for_place(tmp_path, monkeypatch):
     import recipe_lifecycle
     import ab_runner
     subj = tmp_path / "subj"
     (subj / "constraints").mkdir(parents=True)
+    (subj / "constraints" / "config.mk").write_text("export CORE_UTILIZATION = 12\n")
     _seed_ppl(subj)
-    _seed_recorded_pin_fix(subj)
-    clean_run = subj / "backend" / "RUN_2026-06-28_00-00-00"
-    clean_run.mkdir(parents=True)
-    (clean_run / "flow.log").write_text("Flow complete without PPL errors\n")
     key = {"symptom_id": "af17c0ba7f62c48e", "design_class": "logic/small",
-           "platform": "nangate45", "strategy": "pin_perimeter_floor"}
+           "platform": "nangate45", "strategy": "core_util_relief"}
     monkeypatch.setattr(el, "_ab_coverage_gap", lambda conn, k: False)
     monkeypatch.setattr(el, "_symptom_check", lambda conn, sid, strat: "place")
     monkeypatch.setattr(recipe_lifecycle, "pending_candidates", lambda conn: [key])
@@ -225,35 +156,5 @@ def test_plan_arms_stamps_recorded_pin_effect_after_subject_is_clean(tmp_path, m
     el.plan_arms_for_candidates(led, None, n_ab_designs=1)
     arms = [e for e in led.entries() if e.get("kind") == "ab_arm"]
     assert arms, "no arm entries planned"
-    assert all("pin_perimeter_target" not in e for e in arms), \
-        "test precondition broken: newest clean run should not expose old PPL text"
-    assert all(e.get("recipe_config_delta") for e in arms), \
-        "place arms missing the provenance-bound exact effect"
-    assert len({e["baseline_config_sha"] for e in arms}) == 1
-    for arm in arms:
-        cfg = (__import__("pathlib").Path(arm["project_path"])
-               / "constraints" / "config.mk").read_text()
-        assert "CORE_UTILIZATION = 12" in cfg
-        assert "DIE_AREA" not in cfg and "CORE_AREA" not in cfg
-
-
-def test_plan_arms_rejects_pin_subject_without_pre_fix_evidence(tmp_path, monkeypatch):
-    """A post-fix PPL subject without structured before/after evidence is not a control."""
-    import recipe_lifecycle
-    import ab_runner
-    subj = tmp_path / "legacy_fixed_subj"
-    (subj / "constraints").mkdir(parents=True)
-    (subj / "constraints" / "config.mk").write_text(
-        "export DIE_AREA = 0 0 230 230\nexport CORE_AREA = 10 10 220 220\n")
-    _seed_ppl(subj)
-    key = {"symptom_id": "af17c0ba7f62c48e", "design_class": "logic/small",
-           "platform": "sky130hd", "strategy": "pin_perimeter_floor"}
-    monkeypatch.setattr(el, "_ab_coverage_gap", lambda conn, k: False)
-    monkeypatch.setattr(el, "_symptom_check", lambda conn, sid, strat: "place")
-    monkeypatch.setattr(recipe_lifecycle, "pending_candidates", lambda conn: [key])
-    monkeypatch.setattr(ab_runner, "plan_trial",
-                        lambda conn, **kw: {"designs": [{"project_path": str(subj)}],
-                                            "match_level": "exact"})
-    led = el.Ledger(tmp_path / "l.jsonl")
-    assert el.plan_arms_for_candidates(led, None, n_ab_designs=1, repeats=1) == 0
-    assert not [e for e in led.entries() if e.get("kind") == "ab_arm"]
+    assert all(e.get("pin_perimeter_target") == 851.76 for e in arms), \
+        "place arms missing the subject's PPL-0024 perimeter target"

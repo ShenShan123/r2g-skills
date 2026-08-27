@@ -1,0 +1,23 @@
+{
+  "wns": 1.05113,
+  "tns": 0,
+  "wns_ns": 1.05113,
+  "wns_tier": "clean",
+  "tns_tier": "clean",
+  "tier": "clean",
+  "violation_count": 0,
+  "clock_period": 2.2,
+  "clock_period_ns": 2.2,
+  "utilization": 50.0,
+  "hold_wns": 0.381973,
+  "hold_tns": 0,
+  "thresholds": {
+    "wns_moderate": -2.0,
+    "wns_severe": -5.0,
+    "tns_moderate": -10.0,
+    "tns_severe": -100.0
+  },
+  "auto_fixable": false,
+  "options": [],
+  "message": "Timing clean. WNS=1.0511ns, TNS=0.0000ns."
+}

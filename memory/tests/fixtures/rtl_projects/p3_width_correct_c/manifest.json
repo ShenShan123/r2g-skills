@@ -1,0 +1,29 @@
+{
+  "design": "width_correct_c",
+  "mechanism_family": "WIDTH_SEMANTIC_LOSS",
+  "bug": {
+    "type": "truncated_data_assignment",
+    "description": "A six-bit payload is truncated to two bits before reaching the output.",
+    "first_divergence_signal": "payload_out"
+  },
+  "fix": {
+    "domain": "rtl.WIDTH_CORRECT",
+    "transformation_family": "WIDTH_CORRECT",
+    "compatibility_profile": "rtl.combinational.width_assignment.v1",
+    "module": "width_correct_c",
+    "signal": "payload_out",
+    "target": "payload_out = payload[1:0];",
+    "replacement": "payload_out = payload[5:0];",
+    "count": 1
+  },
+  "verification": {
+    "target_test": "tb/tb_width.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "PROVISIONAL_VALID",
+    "recovery_obligation": "PRESERVE_DATA_WIDTH"
+  }
+}

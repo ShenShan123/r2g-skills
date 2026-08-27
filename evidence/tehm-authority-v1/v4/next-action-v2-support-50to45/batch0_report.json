@@ -1,0 +1,68 @@
+{
+  "action_signature": {
+    "config_edits": {
+      "CORE_UTILIZATION": "45"
+    },
+    "domain": "flow.CONFIG_DELTA",
+    "family": "DENSITY_RELIEF",
+    "operation_point": "50->45",
+    "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"
+  },
+  "campaign_id": "timing-relief-budgeted-v2-50-to-45-support",
+  "canonical_memory_mutation": "none",
+  "canonical_snapshots": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "classifications": {
+    "ELIGIBLE_POSITIVE": 4
+  },
+  "design_count": 4,
+  "eligible_positive": 4,
+  "execution": {
+    "attempt_count": 4,
+    "latest_outcomes": {
+      "SUCCESS": 4
+    },
+    "project_count": 4
+  },
+  "external_chain": {
+    "chain_head": "fb90387c10570ec562e295f8a9bc1b6de92c849997051405b063cd0ec54294e4",
+    "count": 4,
+    "eligible_positive": 4,
+    "learner_eligible": 4,
+    "path": "/tmp/tehm-authority-v1/v2-support-50to45/external/observations.jsonl",
+    "sha256": "bdc36c72e00974e147a19ffe2c3ff35cf580fa99400da6916bfd230b0bf0f7e5",
+    "version": "orfs-external-observation-v1"
+  },
+  "external_observations": 4,
+  "learner_eligible_support": 4,
+  "oracle_summary": {
+    "graph_complete": 8,
+    "graph_projects": 8,
+    "missing_arm_counts": {},
+    "signoff_projects": 8,
+    "strict_signoff_success": 8,
+    "timing_success": 8
+  },
+  "promotion_attempted": false,
+  "source_freeze_sha256": null,
+  "splits": {
+    "support": 4
+  },
+  "staging_db": "/tmp/tehm-authority-v1/v2-support-50to45/staging/tehm.sqlite",
+  "staging_imported": 4,
+  "version": "orfs-batch0-v1"
+}

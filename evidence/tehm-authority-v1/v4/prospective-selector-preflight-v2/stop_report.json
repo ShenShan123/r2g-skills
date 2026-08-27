@@ -1,0 +1,57 @@
+{
+  "campaign_id": "timing_relief_budgeted_v2_50_to_45-selector-preflight",
+  "canonical_after": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "canonical_before": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "canonical_memory_mutation": "none",
+  "conformal_coverage": 1.0,
+  "cross_lineage_te": null,
+  "cross_lineage_te_status": "NOT_EVALUABLE_NO_SELECTED_AFTER_ARMS",
+  "promotion_attempted": false,
+  "promotion_gates": {
+    "conformal_coverage": false,
+    "cross_lineage_te": false,
+    "harmful_rate": false,
+    "obligation_coverage": false,
+    "registry_verified": false,
+    "rollback_verified": false
+  },
+  "proposal_coverage": 0.0,
+  "proposal_coverage_minimum": 0.5,
+  "proposed_count": 0,
+  "reason": "selector proposal coverage below frozen 50% threshold for 50->45; keep this action shadow-only until a separately authorized cohort clears the gates",
+  "sample_count": 6,
+  "selected_harmful_rate": null,
+  "selected_harmful_rate_status": "NOT_EVALUABLE_NO_SELECTED_AFTER_ARMS",
+  "status": "STOP_50_TO_45_LOW_PROPOSAL_COVERAGE",
+  "version": "timing-relief-selector-preflight-v1"
+}

@@ -1,0 +1,12 @@
+{
+  "design": "case_reorder_a",
+  "fix": {
+    "domain": "rtl.PRIORITY_REORDER",
+    "transformation_family": "PRIORITY_REORDER",
+    "compatibility_profile": "rtl.fsm.case_reorder.v1",
+    "module": "case_reorder_a",
+    "case_expr": "{req, psel}",
+    "higher_label": "2'b?1",
+    "lower_label": "2'b1?"
+  }
+}

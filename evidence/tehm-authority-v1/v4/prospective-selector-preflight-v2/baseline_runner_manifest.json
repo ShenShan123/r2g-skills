@@ -1,0 +1,165 @@
+{
+  "action_signature": {
+    "config_edits": {
+      "CORE_UTILIZATION": "45"
+    },
+    "domain": "flow.CONFIG_DELTA",
+    "family": "DENSITY_RELIEF",
+    "operation_point": "50->45",
+    "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"
+  },
+  "after_core_utilization": 45,
+  "baseline_only_before_selection": true,
+  "batch_lane_version": "orfs-batch-lane-v1",
+  "before_core_utilization": 50,
+  "campaign_id": "timing-relief-budgeted-v1-selector-preflight",
+  "canonical_memory_mutation": "none",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+  "firewall": {
+    "calibration": [
+      "prospective-v2:sky130hs:queue24:cal0",
+      "prospective-v2:sky130hs:xor64:cal0"
+    ],
+    "disjoint": true,
+    "heldout": [
+      "prospective-v2:sky130hs:arbiter16:ab0",
+      "prospective-v2:sky130hs:crc32:ab0",
+      "prospective-v2:sky130hs:mac32:ab0",
+      "prospective-v2:sky130hs:packet_ctrl:ab0"
+    ],
+    "source_digests_unique": true,
+    "support": [],
+    "version": "timing-relief-selector-preflight-firewall-v1"
+  },
+  "items": [
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50",
+      "before_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50",
+      "case_id": "sky130hs:v2_xor64:preflight:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "v2_xor64",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v2:sky130hs:xor64:cal0",
+      "platform": "sky130hs",
+      "role": "selector_preflight",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_xor64.v"
+      ],
+      "source_digest": "88809c6b8a9f2a1abbf116c993db75773811bae9de25c08fec8a7e6bf7174e42",
+      "split": "calibration",
+      "top": "v2_xor64"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50",
+      "before_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50",
+      "case_id": "sky130hs:v2_queue24:preflight:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "v2_queue24",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v2:sky130hs:queue24:cal0",
+      "platform": "sky130hs",
+      "role": "selector_preflight",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_queue24.v"
+      ],
+      "source_digest": "56f67fbd3ae01bd0ad41ce5dc6bd1a7a025d96de22f3385e7defc625cfd747e6",
+      "split": "calibration",
+      "top": "v2_queue24"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50",
+      "before_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50",
+      "case_id": "sky130hs:v2_arbiter16:preflight:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "v2_arbiter16",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v2:sky130hs:arbiter16:ab0",
+      "platform": "sky130hs",
+      "role": "selector_preflight",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_arbiter16.v"
+      ],
+      "source_digest": "e902d448d0a9c3882c11d60f2e27f5e02bd94787e61aa198ca3cc9d0e9393e11",
+      "split": "heldout",
+      "top": "v2_arbiter16"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50",
+      "before_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50",
+      "case_id": "sky130hs:v2_crc32:preflight:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "v2_crc32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v2:sky130hs:crc32:ab0",
+      "platform": "sky130hs",
+      "role": "selector_preflight",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_crc32.v"
+      ],
+      "source_digest": "9b001daeb98dfffbfb43a65c33ecade9171717761a16bd075943ff9dabdb60b1",
+      "split": "heldout",
+      "top": "v2_crc32"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50",
+      "before_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50",
+      "case_id": "sky130hs:v2_packet_ctrl:preflight:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "v2_packet_ctrl",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v2:sky130hs:packet_ctrl:ab0",
+      "platform": "sky130hs",
+      "role": "selector_preflight",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_packet_ctrl.v"
+      ],
+      "source_digest": "95dc04b69186b61f573150d1317a1c7e792b1dc6eb83e483d6347b43971b04e0",
+      "split": "heldout",
+      "top": "v2_packet_ctrl"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50",
+      "before_project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50",
+      "case_id": "sky130hs:v2_mac32:preflight:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "v2_mac32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v2:sky130hs:mac32:ab0",
+      "platform": "sky130hs",
+      "role": "selector_preflight",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_mac32.v"
+      ],
+      "source_digest": "774cbdbe1dc2da809fa7592db368ae48f24083d9560367cf568e1bbce6283a1c",
+      "split": "heldout",
+      "top": "v2_mac32"
+    }
+  ],
+  "orfs_root": "/opt/EDA4AI/OpenROAD-flow-scripts",
+  "promotion_attempted": false,
+  "selector_policy": "external_policy_read_only",
+  "source_freeze": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/source_freeze.json",
+  "source_freeze_sha256": "3ab25196fbfeef085a0030c02facf29c1240aa113a4176144cf7395253491858",
+  "source_spec": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/timing_relief_selector_preflight_spec_v2.json",
+  "source_spec_sha256": "1fdf041d0af20bb70ea42ca7adf2e1691709712e63225e0c92f54cf9742d2a73",
+  "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863",
+  "version": "timing-relief-selector-preflight-v1"
+}

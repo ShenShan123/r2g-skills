@@ -1,0 +1,66 @@
+{
+  "version": "procedural-growth-ablation-task-manifest-v2",
+  "status": "EXECUTED",
+  "source_snapshot": {
+    "evidence_contract": "tehm-evidence-freeze-v3",
+    "canonical_bundle": "../../evidence/tehm-evidence-freeze-v3-refresh",
+    "bundle_digest": "1f9f2e6cfa8ac94de11797bb008611840ef07f803abbe8037b9a02c018af6e36"
+  },
+  "firewall": {
+    "training_lineages": [
+      "req_ack_bug", "req_ack_bug2", "req_ack_bug3", "req_ack_bug4",
+      "reset_restore_a", "reset_restore_b", "reset_restore_c"
+    ],
+    "heldout_lineages": ["tehm-evidence-freeze-v3:heldout"],
+    "future_lineages": [
+      "future-procedural-growth-v2:reset-a",
+      "future-procedural-growth-v2:reset-b"
+    ],
+    "disjoint": true
+  },
+  "rule_selection": {
+    "transformation_family": "RESET_RESTORE",
+    "note": "The RESET_RESTORE rule is candidate-only inside staging for runtime measurement; six production promotion gates are not evaluated."
+  },
+  "tasks": [
+    {
+      "task_id": "p3-growth:reset-restore:a",
+      "component": "obligation_transfer",
+      "ablated_arm": "M7",
+      "task_family": "reset_semantic_loss",
+      "transformation_family": "RESET_RESTORE",
+      "lineage_id": "future-procedural-growth-v2:reset-a",
+      "lineage_cluster": "rtl:reset-restore",
+      "required_signal": "M8 restores reset semantics and M7 cannot claim complete repair",
+      "oracle_requirements": ["RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS", "RTL_COMPILE_PASS"],
+      "source_status": "READY",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_reset_restore_a"
+    },
+    {
+      "task_id": "p3-growth:reset-restore:b",
+      "component": "validity_gate",
+      "ablated_arm": "M4",
+      "task_family": "reset_semantic_loss",
+      "transformation_family": "RESET_RESTORE",
+      "lineage_id": "future-procedural-growth-v2:reset-b",
+      "lineage_cluster": "rtl:reset-restore",
+      "required_signal": "M8 blocks the explicitly invalid candidate while M4 executes the ablated rule",
+      "oracle_requirements": ["RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS", "RTL_COMPILE_PASS"],
+      "source_status": "READY",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_reset_restore_b"
+    }
+  ],
+  "acceptance": {
+    "min_non_singleton_effect_groups": 4,
+    "min_cross_lineage_rule_support": 2,
+    "min_validated_rules": 2,
+    "min_rule_coverage": 0.25,
+    "min_vcg": 0.0,
+    "max_harmful_activation_rate": 0.1,
+    "require_cluster_intervals": true
+  },
+  "task_sources": {
+    "status": "EXECUTED",
+    "note": "Fresh AST_REWRITE lineages are captured and replayed in an isolated staging snapshot; no canonical rule status is changed."
+  }
+}

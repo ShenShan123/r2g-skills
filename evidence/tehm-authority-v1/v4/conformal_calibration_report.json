@@ -1,0 +1,300 @@
+{
+  "heldout_lineages": [
+    "batch0-v1:sky130hs:spi",
+    "batch0-v1:sky130hs:uart",
+    "orfs-authority-fresh:counter"
+  ],
+  "mutation": "none; heldout samples external only",
+  "physical_memory_count_after": 8,
+  "physical_memory_count_before": 8,
+  "policy": {
+    "action_signature": {
+      "config_edit_keys": [
+        "CORE_UTILIZATION"
+      ],
+      "config_edit_values": {
+        "CORE_UTILIZATION": "40"
+      },
+      "domain": "flow.CONFIG_DELTA",
+      "transformation_family": "DENSITY_RELIEF",
+      "typed_action": null
+    },
+    "calibration": {
+      "conformal_quantiles": {
+        "area_um2": 87.69799,
+        "power_w": 0.000192,
+        "tns_ns": 0.0,
+        "wns_ns": 0.030519
+      },
+      "covered_comparisons": 12,
+      "distance_quantile": 0.95,
+      "empirical_coverage": 1.0,
+      "in_distribution_predictions": 3,
+      "interval_method": "split_conformal_residual_v1",
+      "metric_comparisons": 12,
+      "observed_distance_range": [
+        0.0,
+        0.324635
+      ],
+      "per_metric": {
+        "area_um2": {
+          "comparisons": 3,
+          "coverage": 1.0,
+          "covered": 3,
+          "max_interval_width": 175.39598
+        },
+        "power_w": {
+          "comparisons": 3,
+          "coverage": 1.0,
+          "covered": 3,
+          "max_interval_width": 0.000384
+        },
+        "tns_ns": {
+          "comparisons": 3,
+          "coverage": 1.0,
+          "covered": 3,
+          "max_interval_width": 0.0
+        },
+        "wns_ns": {
+          "comparisons": 3,
+          "coverage": 1.0,
+          "covered": 3,
+          "max_interval_width": 0.061037999999999926
+        }
+      },
+      "per_metric_coverage_failures": [],
+      "required_metrics": [
+        "area_um2",
+        "power_w",
+        "tns_ns",
+        "wns_ns"
+      ],
+      "sample_count": 3,
+      "selective_risk_coverage": [
+        {
+          "interval_coverage": 1.0,
+          "max_distance": 0.0,
+          "metric_comparisons": 4,
+          "risk": 0.0,
+          "sample_coverage": 0.3333333333333333
+        },
+        {
+          "interval_coverage": 1.0,
+          "max_distance": 0.277822,
+          "metric_comparisons": 8,
+          "risk": 0.0,
+          "sample_coverage": 0.6666666666666666
+        },
+        {
+          "interval_coverage": 1.0,
+          "max_distance": 0.324635,
+          "metric_comparisons": 12,
+          "risk": 0.0,
+          "sample_coverage": 1.0
+        }
+      ],
+      "uncertainty_quantile": 0.95,
+      "usable_predictions": 3
+    },
+    "evaluations": [
+      {
+        "abstain_reasons": [],
+        "abstained": false,
+        "index": 0,
+        "lineage_id": "batch0-v1:sky130hs:spi",
+        "metrics": {
+          "area_um2": {
+            "conformal_radius": 87.69799,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 175.39598,
+            "lower_95": -76.44865200000001,
+            "observed": 57.0,
+            "upper_95": 98.947328
+          },
+          "power_w": {
+            "conformal_radius": 0.000192,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.000384,
+            "lower_95": -0.00021700000000000002,
+            "observed": 7.089100000000012e-05,
+            "upper_95": 0.000167
+          },
+          "tns_ns": {
+            "conformal_radius": 0.0,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.0,
+            "lower_95": 0.0,
+            "observed": 0.0,
+            "upper_95": 0.0
+          },
+          "wns_ns": {
+            "conformal_radius": 0.030518999999999963,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.061037999999999926,
+            "lower_95": -0.016754999999999964,
+            "observed": -0.016754999999999964,
+            "upper_95": 0.04428299999999996
+          }
+        },
+        "nearest_distance": 0.277822,
+        "query_graph_context_digest": "1a16a198236d0ee85ee9fc576694f774e02165fb8c409dd7f03af42b032812b2",
+        "status": "evaluated"
+      },
+      {
+        "abstain_reasons": [],
+        "abstained": false,
+        "index": 1,
+        "lineage_id": "batch0-v1:sky130hs:uart",
+        "metrics": {
+          "area_um2": {
+            "conformal_radius": 87.69799,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 175.39598,
+            "lower_95": 7.629530000000003,
+            "observed": 104.0,
+            "upper_95": 183.02551
+          },
+          "power_w": {
+            "conformal_radius": 0.000192,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.000384,
+            "lower_95": 4.9e-05,
+            "observed": 0.0002932999999999998,
+            "upper_95": 0.000433
+          },
+          "tns_ns": {
+            "conformal_radius": 0.0,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.0,
+            "lower_95": 0.0,
+            "observed": 0.0,
+            "upper_95": 0.0
+          },
+          "wns_ns": {
+            "conformal_radius": 0.030518999999999963,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.061037999999999926,
+            "lower_95": -0.019559999999999963,
+            "observed": 0.015784999999999938,
+            "upper_95": 0.04147799999999996
+          }
+        },
+        "nearest_distance": 0.0,
+        "query_graph_context_digest": "dc9acba970eec3396e93f261b12aaf97d39720c0a9c69e190065766c81bddbfc",
+        "status": "evaluated"
+      },
+      {
+        "abstain_reasons": [],
+        "abstained": false,
+        "index": 2,
+        "lineage_id": "orfs-authority-fresh:counter",
+        "metrics": {
+          "area_um2": {
+            "conformal_radius": 87.69799,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 175.39598,
+            "lower_95": -71.39598000000001,
+            "observed": 104.0,
+            "upper_95": 104.0
+          },
+          "power_w": {
+            "conformal_radius": 0.000192,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.000384,
+            "lower_95": -0.000202,
+            "observed": 0.000182,
+            "upper_95": 0.000182
+          },
+          "tns_ns": {
+            "conformal_radius": 0.0,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.0,
+            "lower_95": 0.0,
+            "observed": 0.0,
+            "upper_95": 0.0
+          },
+          "wns_ns": {
+            "conformal_radius": 0.030518999999999963,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.061037999999999926,
+            "lower_95": -0.020953999999999962,
+            "observed": -0.00331,
+            "upper_95": 0.04008399999999997
+          }
+        },
+        "nearest_distance": 0.324635,
+        "query_graph_context_digest": "a1153780431f209d1be4ef87cc11985b4b8f0f64ba108031d234c529fb965263",
+        "status": "evaluated"
+      }
+    ],
+    "family": "DENSITY_RELIEF",
+    "firewall": {
+      "action_signature_bound": true,
+      "disjoint": true,
+      "heldout_lineages": [
+        "batch0-v1:sky130hs:spi",
+        "batch0-v1:sky130hs:uart",
+        "orfs-authority-fresh:counter"
+      ],
+      "overlap": [],
+      "training_lineages": [
+        "batch0-v1:sky130hs:gcd",
+        "batch0-v1:sky130hs:jpeg",
+        "orfs-v4:sky130hs:uart:base0",
+        "orfs-v5-add32:sky130hs:add32:base0",
+        "orfs-v5-mux32:sky130hs:mux32:base0",
+        "orfs-v5-parity64:sky130hs:parity64:base0",
+        "orfs-v6-and32:sky130hs:and32:base0",
+        "orfs-v6-toggle32:sky130hs:toggle32:base0"
+      ]
+    },
+    "interval_method": "split_conformal_residual_v1",
+    "mutation": "none; held-out samples were not recorded in TEHM",
+    "reason": "calibrated",
+    "status": "ready",
+    "thresholds": {
+      "conformal_quantiles": {
+        "area_um2": 87.69799,
+        "power_w": 0.000192,
+        "tns_ns": 0.0,
+        "wns_ns": 0.030519
+      },
+      "distance_ceiling": 3.0,
+      "max_distance": 0.3199537,
+      "max_uncertainty_widths": {
+        "area_um2": 175.39598,
+        "power_w": 0.000384,
+        "tns_ns": 0.0,
+        "wns_ns": 0.061037999999999926
+      },
+      "min_unique_contexts": 3,
+      "required_coverage": 0.8,
+      "required_metric_coverage": 0.8
+    },
+    "version": "physical-retrieval-calibration-v0.3"
+  },
+  "staging_db": "/tmp/tehm-authority-v1/authority-campaign-v4/staging/tehm.sqlite",
+  "training_lineages": [
+    "batch0-v1:sky130hs:gcd",
+    "batch0-v1:sky130hs:jpeg",
+    "orfs-v4:sky130hs:uart:base0",
+    "orfs-v5-add32:sky130hs:add32:base0",
+    "orfs-v5-mux32:sky130hs:mux32:base0",
+    "orfs-v5-parity64:sky130hs:parity64:base0",
+    "orfs-v6-and32:sky130hs:and32:base0",
+    "orfs-v6-toggle32:sky130hs:toggle32:base0"
+  ],
+  "version": "authority-v1-batch1-expanded-v2-calibration"
+}

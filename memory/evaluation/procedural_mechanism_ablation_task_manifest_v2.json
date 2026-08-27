@@ -1,0 +1,112 @@
+{
+  "version": "procedural-mechanism-ablation-task-manifest-v2",
+  "status": "EXECUTED",
+  "source_snapshot": {
+    "evidence_contract": "tehm-evidence-freeze-v3",
+    "canonical_bundle": "../../evidence/tehm-evidence-freeze-v3-refresh",
+    "bundle_digest": "1f9f2e6cfa8ac94de11797bb008611840ef07f803abbe8037b9a02c018af6e36"
+  },
+  "firewall": {
+    "training_lineages": [
+      "req_ack_bug", "req_ack_bug2", "req_ack_bug3", "req_ack_bug4",
+      "valid_ready_bug", "fifo_space_bug"
+    ],
+    "heldout_lineages": ["tehm-evidence-freeze-v3:heldout"],
+    "future_lineages": [
+      "future-procedural-v1:role-collision",
+      "future-procedural-v1:predicate-unknown",
+      "future-procedural-v1:validity-degenerate",
+      "future-procedural-v1:obligation-recovery",
+      "future-procedural-v2:positive-valid-ready",
+      "future-procedural-v2:positive-fifo-space"
+    ],
+    "disjoint": true
+  },
+  "tasks": [
+    {
+      "task_id": "p3:v2:role-view:structural-role-collision",
+      "component": "role_view",
+      "ablated_arm": "M5",
+      "task_family": "structural_role_collision",
+      "lineage_id": "future-procedural-v1:role-collision",
+      "lineage_cluster": "rtl:role-collision",
+      "required_signal": "M8 and M5 differ in structural binding or harmful activation",
+      "oracle_requirements": ["RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS", "RTL_COMPILE_PASS"],
+      "source_status": "READY",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_role_collision"
+    },
+    {
+      "task_id": "p3:v2:predicate-view:unknown-mechanism",
+      "component": "predicate_view",
+      "ablated_arm": "M6",
+      "task_family": "unknown_predicate_and_mechanism_confusion",
+      "lineage_id": "future-procedural-v1:predicate-unknown",
+      "lineage_cluster": "rtl:predicate-conflict",
+      "required_signal": "UNKNOWN is preserved and M8 abstains or avoids harmful cross-mechanism binding",
+      "oracle_requirements": ["RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS", "RTL_COMPILE_PASS"],
+      "source_status": "READY",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_predicate_unknown"
+    },
+    {
+      "task_id": "p3:v2:validity-gate:degenerate-rule",
+      "component": "validity_gate",
+      "ablated_arm": "M4",
+      "task_family": "degenerate_or_unstable_rule",
+      "lineage_id": "future-procedural-v1:validity-degenerate",
+      "lineage_cluster": "rtl:validity-boundary",
+      "required_signal": "M8 blocks a degenerate or unstable rule that M4 would execute",
+      "oracle_requirements": ["RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS", "RTL_COMPILE_PASS"],
+      "source_status": "READY",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_validity_boundary"
+    },
+    {
+      "task_id": "p3:v2:obligation-transfer:recovery-branch",
+      "component": "obligation_transfer",
+      "ablated_arm": "M7",
+      "task_family": "obligation_preservation_and_recovery_branch",
+      "lineage_id": "future-procedural-v1:obligation-recovery",
+      "lineage_cluster": "rtl:obligation-recovery",
+      "required_signal": "M8 preserves obligations while M7 cannot claim a complete repair",
+      "oracle_requirements": ["RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS", "RTL_COMPILE_PASS"],
+      "source_status": "READY",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_obligation_recovery"
+    },
+    {
+      "task_id": "p3:v2:positive-valid-ready",
+      "component": "full_mechanism_path",
+      "ablated_arm": "M7",
+      "task_family": "positive_role_predicate_validity_binding",
+      "lineage_id": "future-procedural-v2:positive-valid-ready",
+      "lineage_cluster": "rtl:positive-guard-strengthen",
+      "required_signal": "M8 executes a role/predicate/validity-compatible repair",
+      "oracle_requirements": ["RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS", "RTL_COMPILE_PASS"],
+      "source_status": "READY",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_positive_valid_ready"
+    },
+    {
+      "task_id": "p3:v2:positive-fifo-space",
+      "component": "full_mechanism_path",
+      "ablated_arm": "M7",
+      "task_family": "positive_role_predicate_validity_binding",
+      "lineage_id": "future-procedural-v2:positive-fifo-space",
+      "lineage_cluster": "rtl:positive-guard-strengthen",
+      "required_signal": "M8 executes a second compatible repair from a distinct protocol family",
+      "oracle_requirements": ["RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS", "RTL_COMPILE_PASS"],
+      "source_status": "READY",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_positive_fifo_space"
+    }
+  ],
+  "acceptance": {
+    "min_non_singleton_effect_groups": 4,
+    "min_cross_lineage_rule_support": 2,
+    "min_validated_rules": 2,
+    "min_rule_coverage": 0.5,
+    "min_vcg": 0.5,
+    "max_harmful_activation_rate": 0.1,
+    "require_cluster_intervals": true
+  },
+  "task_sources": {
+    "status": "EXECUTED",
+    "note": "Two positive future lineages extend the mechanism-discrimination cohort without changing canonical v3; replay receipts are external to the freeze."
+  }
+}

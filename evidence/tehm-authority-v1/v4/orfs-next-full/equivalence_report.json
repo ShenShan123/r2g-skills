@@ -1,0 +1,43 @@
+{
+  "all_proven": true,
+  "oracle_available": true,
+  "results": [
+    {
+      "candidate_profile": "flow.rtl.top-equivalence.v1",
+      "candidate_source_sha256": "b7aba8a3b3961fec5bb43ce0b476594a52d72987aec52eeb8a1e1a41a137f1ee",
+      "candidate_top": "and32",
+      "case_id": "sky130hs:and32:0:DENSITY_RELIEF:50->40",
+      "oracle_type": "YOSYS_EQUIV",
+      "output_sha256": "9bf2d1ddb8cfc3d588a7b74eb91430a6f9e2e9d933a619d199887b3fbcd8036a",
+      "output_tail": "byte-identical complete RTL source sets",
+      "proof_type": "CRYPTOGRAPHIC_SOURCE_IDENTITY_V1",
+      "reason": "",
+      "reference_profile": "flow.rtl.top-equivalence.v1",
+      "reference_source_sha256": "b7aba8a3b3961fec5bb43ce0b476594a52d72987aec52eeb8a1e1a41a137f1ee",
+      "reference_top": "and32",
+      "returncode": 0,
+      "source_digest": "5bf79dfc7994496b43630942a029cfd9d428f8ad5c8e02333f4094cbdc9ad3fb",
+      "verdict": "PASS",
+      "version": "yosys-equivalence-oracle-v1"
+    },
+    {
+      "candidate_profile": "flow.rtl.top-equivalence.v1",
+      "candidate_source_sha256": "ccb1dc9299e1c6e69f9576fe1acddd4a68b1e7f9aec12bd2ccae86d90ecfb5a7",
+      "candidate_top": "toggle32",
+      "case_id": "sky130hs:toggle32:0:DENSITY_RELIEF:50->40",
+      "oracle_type": "YOSYS_EQUIV",
+      "output_sha256": "e87907b05d76d598f041ee23391976a2d52a0520add17940dfdc79de614b40eb",
+      "output_tail": "byte-identical complete RTL source sets",
+      "proof_type": "CRYPTOGRAPHIC_SOURCE_IDENTITY_V1",
+      "reason": "",
+      "reference_profile": "flow.rtl.top-equivalence.v1",
+      "reference_source_sha256": "ccb1dc9299e1c6e69f9576fe1acddd4a68b1e7f9aec12bd2ccae86d90ecfb5a7",
+      "reference_top": "toggle32",
+      "returncode": 0,
+      "source_digest": "13f386287cfb0b641361ecaf4c3388d6e28445882f9256fe75b78261461f257e",
+      "verdict": "PASS",
+      "version": "yosys-equivalence-oracle-v1"
+    }
+  ],
+  "version": "orfs-batch0-v1"
+}

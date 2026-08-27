@@ -1,0 +1,1139 @@
+{
+  "asset_authority_receipt": {
+    "asset_content_digest": "sha256:1a6b18362b12a4ce6e6f43dc75766bc2d206952a42552cf6745f4811be1fe951",
+    "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+    "authority_receipt_id": "asset_authority_70741cfee73e45ee5276",
+    "authority_version": "asset-promotion-authority-v1",
+    "checks": {
+      "compatibility_verified": true,
+      "cross_lineage_verified": true,
+      "independent_verifier": true,
+      "regression_zero": true,
+      "rollback_verified": true,
+      "schema_valid": true,
+      "static_valid": true
+    },
+    "eligible": true,
+    "evidence": {
+      "bindings": [
+        {
+          "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+          "asset_type": "RTL_REWRITE_TEMPLATE",
+          "compatibility": {
+            "action_domain": "rtl.GUARD_STRENGTHEN",
+            "compatibility_profile": "rtl.fsm.single_guard.v1"
+          },
+          "compatibility_json": "{\"action_domain\":\"rtl.GUARD_STRENGTHEN\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\"}",
+          "content_digest": "sha256:1a6b18362b12a4ce6e6f43dc75766bc2d206952a42552cf6745f4811be1fe951",
+          "created_at": "2026-08-26T10:46:59-07:00",
+          "definition": {
+            "action": {
+              "domain": "rtl.GUARD_STRENGTHEN",
+              "payload": {
+                "add_condition": "ack",
+                "compatibility_profile": "rtl.fsm.single_guard.v1",
+                "domain": "rtl.GUARD_STRENGTHEN",
+                "module": "req_ack_fsm",
+                "source_state": "SEND",
+                "target_state": "DONE"
+              },
+              "transformation_family": "GUARD_STRENGTHEN"
+            },
+            "executor": "tehm.rtl.rtl_actions.apply_rtl_action",
+            "template_kind": "parser_backed_rtl_rewrite"
+          },
+          "definition_json": "{\"action\":{\"domain\":\"rtl.GUARD_STRENGTHEN\",\"payload\":{\"add_condition\":\"ack\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"domain\":\"rtl.GUARD_STRENGTHEN\",\"module\":\"req_ack_fsm\",\"source_state\":\"SEND\",\"target_state\":\"DONE\"},\"transformation_family\":\"GUARD_STRENGTHEN\"},\"executor\":\"tehm.rtl.rtl_actions.apply_rtl_action\",\"template_kind\":\"parser_backed_rtl_rewrite\"}",
+          "input_contract": {
+            "compatibility_profile": "rtl.fsm.single_guard.v1",
+            "required": [
+              "rtl_source",
+              "structural_graph",
+              "failure_trace"
+            ]
+          },
+          "input_contract_json": "{\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"required\":[\"rtl_source\",\"structural_graph\",\"failure_trace\"]}",
+          "name": "rtl.handshake_guard_strengthen.template",
+          "output_contract": {
+            "preserves": [
+              "module_parseability"
+            ],
+            "required": [
+              "rtl_source",
+              "parser_graph_delta",
+              "edit_receipt"
+            ]
+          },
+          "output_contract_json": "{\"preserves\":[\"module_parseability\"],\"required\":[\"rtl_source\",\"parser_graph_delta\",\"edit_receipt\"]}",
+          "provenance": {
+            "asset_version": "rtl-rewrite-asset-v0.1",
+            "binding_contract": "manifest_fix_v1",
+            "binding_digest": "sha256:96c5eeddbd910ed36c6e4db188ee117c4c91366c81d80f6881dcb84bf3db709f",
+            "bound_design": "req_ack_fsm",
+            "bound_mechanism_family": "HANDSHAKE_COMPLETION",
+            "bound_project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug",
+            "creator": "tehm-c4-c5-shadow-synthesizer",
+            "evidence_transitions": [
+              "transition_129e9515877a027a",
+              "transition_d9840df69f3e5747"
+            ],
+            "gap_id": "gap_1f8bf7f47c5af79829eb",
+            "generator_is_verifier": false,
+            "registry_version": "asset-registry-v0.1"
+          },
+          "provenance_json": "{\"asset_version\":\"rtl-rewrite-asset-v0.1\",\"creator\":\"tehm-c4-c5-shadow-synthesizer\",\"evidence_transitions\":[\"transition_129e9515877a027a\",\"transition_d9840df69f3e5747\"],\"gap_id\":\"gap_1f8bf7f47c5af79829eb\",\"generator_is_verifier\":false,\"registry_version\":\"asset-registry-v0.1\"}",
+          "verifier_contract": {
+            "independent": true,
+            "obligations": [
+              "RTL_COMPILE_PASS",
+              "RTL_FROZEN_REGRESSION_PASS",
+              "RTL_TARGET_TEST_PASS"
+            ],
+            "oracle_types": [
+              "TARGET_TEST",
+              "REGRESSION",
+              "FORMAL"
+            ],
+            "runner": "registered_external_oracle"
+          },
+          "verifier_contract_json": "{\"independent\":true,\"obligations\":[\"RTL_COMPILE_PASS\",\"RTL_FROZEN_REGRESSION_PASS\",\"RTL_TARGET_TEST_PASS\"],\"oracle_types\":[\"TARGET_TEST\",\"REGRESSION\",\"FORMAL\"],\"runner\":\"registered_external_oracle\"}",
+          "version": "rtl-rewrite-asset-v0.1"
+        },
+        {
+          "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+          "asset_type": "RTL_REWRITE_TEMPLATE",
+          "compatibility": {
+            "action_domain": "rtl.GUARD_STRENGTHEN",
+            "compatibility_profile": "rtl.fsm.single_guard.v1"
+          },
+          "compatibility_json": "{\"action_domain\":\"rtl.GUARD_STRENGTHEN\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\"}",
+          "content_digest": "sha256:1a6b18362b12a4ce6e6f43dc75766bc2d206952a42552cf6745f4811be1fe951",
+          "created_at": "2026-08-26T10:46:59-07:00",
+          "definition": {
+            "action": {
+              "domain": "rtl.GUARD_STRENGTHEN",
+              "payload": {
+                "add_condition": "wr_ack",
+                "compatibility_profile": "rtl.fsm.single_guard.v1",
+                "domain": "rtl.GUARD_STRENGTHEN",
+                "module": "req_ack_fsm",
+                "source_state": "WRITE",
+                "target_state": "VERIFY"
+              },
+              "transformation_family": "GUARD_STRENGTHEN"
+            },
+            "executor": "tehm.rtl.rtl_actions.apply_rtl_action",
+            "template_kind": "parser_backed_rtl_rewrite"
+          },
+          "definition_json": "{\"action\":{\"domain\":\"rtl.GUARD_STRENGTHEN\",\"payload\":{\"add_condition\":\"ack\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"domain\":\"rtl.GUARD_STRENGTHEN\",\"module\":\"req_ack_fsm\",\"source_state\":\"SEND\",\"target_state\":\"DONE\"},\"transformation_family\":\"GUARD_STRENGTHEN\"},\"executor\":\"tehm.rtl.rtl_actions.apply_rtl_action\",\"template_kind\":\"parser_backed_rtl_rewrite\"}",
+          "input_contract": {
+            "compatibility_profile": "rtl.fsm.single_guard.v1",
+            "required": [
+              "rtl_source",
+              "structural_graph",
+              "failure_trace"
+            ]
+          },
+          "input_contract_json": "{\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"required\":[\"rtl_source\",\"structural_graph\",\"failure_trace\"]}",
+          "name": "rtl.handshake_guard_strengthen.template",
+          "output_contract": {
+            "preserves": [
+              "module_parseability"
+            ],
+            "required": [
+              "rtl_source",
+              "parser_graph_delta",
+              "edit_receipt"
+            ]
+          },
+          "output_contract_json": "{\"preserves\":[\"module_parseability\"],\"required\":[\"rtl_source\",\"parser_graph_delta\",\"edit_receipt\"]}",
+          "provenance": {
+            "asset_version": "rtl-rewrite-asset-v0.1",
+            "binding_contract": "manifest_fix_v1",
+            "binding_digest": "sha256:e326bdf2942ab6ffa188f0a8ef80f86bb68dac23b5cb9d3e76b415cfd56a9ce0",
+            "bound_design": "req_ack_fsm2",
+            "bound_mechanism_family": "HANDSHAKE_COMPLETION",
+            "bound_project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug2",
+            "creator": "tehm-c4-c5-shadow-synthesizer",
+            "evidence_transitions": [
+              "transition_129e9515877a027a",
+              "transition_d9840df69f3e5747"
+            ],
+            "gap_id": "gap_1f8bf7f47c5af79829eb",
+            "generator_is_verifier": false,
+            "registry_version": "asset-registry-v0.1"
+          },
+          "provenance_json": "{\"asset_version\":\"rtl-rewrite-asset-v0.1\",\"creator\":\"tehm-c4-c5-shadow-synthesizer\",\"evidence_transitions\":[\"transition_129e9515877a027a\",\"transition_d9840df69f3e5747\"],\"gap_id\":\"gap_1f8bf7f47c5af79829eb\",\"generator_is_verifier\":false,\"registry_version\":\"asset-registry-v0.1\"}",
+          "verifier_contract": {
+            "independent": true,
+            "obligations": [
+              "RTL_COMPILE_PASS",
+              "RTL_FROZEN_REGRESSION_PASS",
+              "RTL_TARGET_TEST_PASS"
+            ],
+            "oracle_types": [
+              "TARGET_TEST",
+              "REGRESSION",
+              "FORMAL"
+            ],
+            "runner": "registered_external_oracle"
+          },
+          "verifier_contract_json": "{\"independent\":true,\"obligations\":[\"RTL_COMPILE_PASS\",\"RTL_FROZEN_REGRESSION_PASS\",\"RTL_TARGET_TEST_PASS\"],\"oracle_types\":[\"TARGET_TEST\",\"REGRESSION\",\"FORMAL\"],\"runner\":\"registered_external_oracle\"}",
+          "version": "rtl-rewrite-asset-v0.1"
+        },
+        {
+          "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+          "asset_type": "RTL_REWRITE_TEMPLATE",
+          "compatibility": {
+            "action_domain": "rtl.GUARD_STRENGTHEN",
+            "compatibility_profile": "rtl.fsm.single_guard.v1"
+          },
+          "compatibility_json": "{\"action_domain\":\"rtl.GUARD_STRENGTHEN\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\"}",
+          "content_digest": "sha256:1a6b18362b12a4ce6e6f43dc75766bc2d206952a42552cf6745f4811be1fe951",
+          "created_at": "2026-08-26T10:46:59-07:00",
+          "definition": {
+            "action": {
+              "domain": "rtl.GUARD_STRENGTHEN",
+              "payload": {
+                "add_condition": "rd_ack",
+                "compatibility_profile": "rtl.fsm.single_guard.v1",
+                "domain": "rtl.GUARD_STRENGTHEN",
+                "module": "req_ack_fsm",
+                "source_state": "RCV",
+                "target_state": "RD_DONE"
+              },
+              "transformation_family": "GUARD_STRENGTHEN"
+            },
+            "executor": "tehm.rtl.rtl_actions.apply_rtl_action",
+            "template_kind": "parser_backed_rtl_rewrite"
+          },
+          "definition_json": "{\"action\":{\"domain\":\"rtl.GUARD_STRENGTHEN\",\"payload\":{\"add_condition\":\"ack\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"domain\":\"rtl.GUARD_STRENGTHEN\",\"module\":\"req_ack_fsm\",\"source_state\":\"SEND\",\"target_state\":\"DONE\"},\"transformation_family\":\"GUARD_STRENGTHEN\"},\"executor\":\"tehm.rtl.rtl_actions.apply_rtl_action\",\"template_kind\":\"parser_backed_rtl_rewrite\"}",
+          "input_contract": {
+            "compatibility_profile": "rtl.fsm.single_guard.v1",
+            "required": [
+              "rtl_source",
+              "structural_graph",
+              "failure_trace"
+            ]
+          },
+          "input_contract_json": "{\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"required\":[\"rtl_source\",\"structural_graph\",\"failure_trace\"]}",
+          "name": "rtl.handshake_guard_strengthen.template",
+          "output_contract": {
+            "preserves": [
+              "module_parseability"
+            ],
+            "required": [
+              "rtl_source",
+              "parser_graph_delta",
+              "edit_receipt"
+            ]
+          },
+          "output_contract_json": "{\"preserves\":[\"module_parseability\"],\"required\":[\"rtl_source\",\"parser_graph_delta\",\"edit_receipt\"]}",
+          "provenance": {
+            "asset_version": "rtl-rewrite-asset-v0.1",
+            "binding_contract": "manifest_fix_v1",
+            "binding_digest": "sha256:aa78fa403267252e4512d12b0dc826173d801f58ac2db53fb4fd0e1c6f3bcaf5",
+            "bound_design": "req_ack_fsm3",
+            "bound_mechanism_family": "HANDSHAKE_COMPLETION",
+            "bound_project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug3",
+            "creator": "tehm-c4-c5-shadow-synthesizer",
+            "evidence_transitions": [
+              "transition_129e9515877a027a",
+              "transition_d9840df69f3e5747"
+            ],
+            "gap_id": "gap_1f8bf7f47c5af79829eb",
+            "generator_is_verifier": false,
+            "registry_version": "asset-registry-v0.1"
+          },
+          "provenance_json": "{\"asset_version\":\"rtl-rewrite-asset-v0.1\",\"creator\":\"tehm-c4-c5-shadow-synthesizer\",\"evidence_transitions\":[\"transition_129e9515877a027a\",\"transition_d9840df69f3e5747\"],\"gap_id\":\"gap_1f8bf7f47c5af79829eb\",\"generator_is_verifier\":false,\"registry_version\":\"asset-registry-v0.1\"}",
+          "verifier_contract": {
+            "independent": true,
+            "obligations": [
+              "RTL_COMPILE_PASS",
+              "RTL_FROZEN_REGRESSION_PASS",
+              "RTL_TARGET_TEST_PASS"
+            ],
+            "oracle_types": [
+              "TARGET_TEST",
+              "REGRESSION",
+              "FORMAL"
+            ],
+            "runner": "registered_external_oracle"
+          },
+          "verifier_contract_json": "{\"independent\":true,\"obligations\":[\"RTL_COMPILE_PASS\",\"RTL_FROZEN_REGRESSION_PASS\",\"RTL_TARGET_TEST_PASS\"],\"oracle_types\":[\"TARGET_TEST\",\"REGRESSION\",\"FORMAL\"],\"runner\":\"registered_external_oracle\"}",
+          "version": "rtl-rewrite-asset-v0.1"
+        }
+      ],
+      "derived_evidence": {
+        "binding_count": 3,
+        "lineages": [
+          "req_ack_fsm",
+          "req_ack_fsm2",
+          "req_ack_fsm3"
+        ],
+        "rollback": {
+          "entries": [
+            {
+              "baseline_regression_verdict": "PASS",
+              "baseline_target_verdict": "FAIL",
+              "fixed_sha256": "08b492324c55e8d58f5e3b8f52ebc97ef7fe71f428600f44c1b56b0fa9dac780",
+              "original_sha256": "7304bd56605babe7200db9db7a7bf4a44e14be3166e84636b7008582a11cfc30",
+              "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug",
+              "restored_sha256": "7304bd56605babe7200db9db7a7bf4a44e14be3166e84636b7008582a11cfc30",
+              "verified": true
+            },
+            {
+              "baseline_regression_verdict": "PASS",
+              "baseline_target_verdict": "FAIL",
+              "fixed_sha256": "3fa21f96a43c5e9697522de36354c9bd4f8ec4e81100bae8c9d0ff3376f3f6d4",
+              "original_sha256": "a4a9226a9fcbb25cdb05f20db9dc1d2ff95bfb1ff918cbe3151a0e0805fbf455",
+              "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug2",
+              "restored_sha256": "a4a9226a9fcbb25cdb05f20db9dc1d2ff95bfb1ff918cbe3151a0e0805fbf455",
+              "verified": true
+            },
+            {
+              "baseline_regression_verdict": "PASS",
+              "baseline_target_verdict": "FAIL",
+              "fixed_sha256": "285e4f78755d9f8c15f34d1ddcfad963f27abb215134284bc8771887da75e555",
+              "original_sha256": "7316bf15073d74e2f8fdd532079f2d794dca604c7d01f34a18a1b272bf86cc38",
+              "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug3",
+              "restored_sha256": "7316bf15073d74e2f8fdd532079f2d794dca604c7d01f34a18a1b272bf86cc38",
+              "verified": true
+            }
+          ],
+          "oracle": "icarus/vvp",
+          "verified": true
+        },
+        "schema_errors": [],
+        "validation_count": 3
+      },
+      "evidence_refs": {
+        "binding": [
+          {
+            "evidence_digest": "sha256:002fbe41ab4eb248cfd7485d39be5683339d6ad6beca804726b28290f3770dde",
+            "evidence_id": "asset_evidence_3cf53f22aa6666e8e3a67d13",
+            "evidence_type": "asset_binding",
+            "lineage_id": "req_ack_fsm",
+            "source_id": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug",
+            "split": "training",
+            "verdict": "PASS"
+          },
+          {
+            "evidence_digest": "sha256:bdfa3ecc92347a37f5e082cb36923fbaa3b49a830b13b0aebf6db702630ba91d",
+            "evidence_id": "asset_evidence_7a2701a18f8c78009ffd2987",
+            "evidence_type": "asset_binding",
+            "lineage_id": "req_ack_fsm2",
+            "source_id": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug2",
+            "split": "training",
+            "verdict": "PASS"
+          },
+          {
+            "evidence_digest": "sha256:619d0f93acb0507da09834e1952d3d5668632eeb19beac980f37eafd6f1a9add",
+            "evidence_id": "asset_evidence_22db0b1b414b7e61c24967e3",
+            "evidence_type": "asset_binding",
+            "lineage_id": "req_ack_fsm3",
+            "source_id": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug3",
+            "split": "heldout",
+            "verdict": "PASS"
+          }
+        ],
+        "rollback": [
+          {
+            "evidence_digest": "sha256:0a07e844069f89a1286e325bd3fc16544383f26969d2b6ad960a18d57ddbe007",
+            "evidence_id": "asset_evidence_e6297aa7dfee198ec2a2deb0",
+            "evidence_type": "asset_rollback",
+            "lineage_id": null,
+            "source_id": "",
+            "split": "ab",
+            "verdict": "PASS"
+          }
+        ],
+        "validation": [
+          {
+            "evidence_digest": "sha256:e623fa907988b565cb3969de1a5415cfb35530e8ce43b5c7abbb931dd4fe7026",
+            "evidence_id": "asset_evidence_4fe916ee73e3264400c08f0f",
+            "evidence_type": "asset_validation",
+            "lineage_id": "req_ack_fsm",
+            "source_id": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug",
+            "split": "training",
+            "verdict": "PASS"
+          },
+          {
+            "evidence_digest": "sha256:9702300381b7cd87a1288d946687498b8c407e970e798d7d852a60a5e5e7e5e2",
+            "evidence_id": "asset_evidence_773967bb16fccbe61a31910e",
+            "evidence_type": "asset_validation",
+            "lineage_id": "req_ack_fsm2",
+            "source_id": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug2",
+            "split": "training",
+            "verdict": "PASS"
+          },
+          {
+            "evidence_digest": "sha256:a9dcffee5a6d9612bea041848a72b962a0a1e423ac81df17b15b51321bd039d4",
+            "evidence_id": "asset_evidence_6c318a787f71fb9622c2e072",
+            "evidence_type": "asset_validation",
+            "lineage_id": "req_ack_fsm3",
+            "source_id": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug3",
+            "split": "heldout",
+            "verdict": "PASS"
+          }
+        ]
+      },
+      "min_lineages": 2,
+      "rollback_receipt": {
+        "entries": [
+          {
+            "baseline_regression_verdict": "PASS",
+            "baseline_target_verdict": "FAIL",
+            "fixed_sha256": "08b492324c55e8d58f5e3b8f52ebc97ef7fe71f428600f44c1b56b0fa9dac780",
+            "original_sha256": "7304bd56605babe7200db9db7a7bf4a44e14be3166e84636b7008582a11cfc30",
+            "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug",
+            "restored_sha256": "7304bd56605babe7200db9db7a7bf4a44e14be3166e84636b7008582a11cfc30",
+            "verified": true
+          },
+          {
+            "baseline_regression_verdict": "PASS",
+            "baseline_target_verdict": "FAIL",
+            "fixed_sha256": "3fa21f96a43c5e9697522de36354c9bd4f8ec4e81100bae8c9d0ff3376f3f6d4",
+            "original_sha256": "a4a9226a9fcbb25cdb05f20db9dc1d2ff95bfb1ff918cbe3151a0e0805fbf455",
+            "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug2",
+            "restored_sha256": "a4a9226a9fcbb25cdb05f20db9dc1d2ff95bfb1ff918cbe3151a0e0805fbf455",
+            "verified": true
+          },
+          {
+            "baseline_regression_verdict": "PASS",
+            "baseline_target_verdict": "FAIL",
+            "fixed_sha256": "285e4f78755d9f8c15f34d1ddcfad963f27abb215134284bc8771887da75e555",
+            "original_sha256": "7316bf15073d74e2f8fdd532079f2d794dca604c7d01f34a18a1b272bf86cc38",
+            "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug3",
+            "restored_sha256": "7316bf15073d74e2f8fdd532079f2d794dca604c7d01f34a18a1b272bf86cc38",
+            "verified": true
+          }
+        ],
+        "oracle": "icarus/vvp",
+        "verified": true
+      },
+      "validation_receipts": [
+        {
+          "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+          "errors": [],
+          "independent_verifier": true,
+          "oracle_verdict": "PASS",
+          "regression_verdict": "PASS",
+          "schema_valid": true,
+          "static_valid": true,
+          "status": "SHADOW_ORACLE_PASS"
+        },
+        {
+          "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+          "errors": [],
+          "independent_verifier": true,
+          "oracle_verdict": "PASS",
+          "regression_verdict": "PASS",
+          "schema_valid": true,
+          "static_valid": true,
+          "status": "SHADOW_ORACLE_PASS"
+        },
+        {
+          "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+          "errors": [],
+          "independent_verifier": true,
+          "oracle_verdict": "PASS",
+          "regression_verdict": "PASS",
+          "schema_valid": true,
+          "static_valid": true,
+          "status": "SHADOW_ORACLE_PASS"
+        }
+      ]
+    },
+    "missing": [],
+    "receipt_digest": "sha256:70741cfee73e45ee52766539ec6c6a246728387fa37d58273376a929d9a958ac",
+    "target_scope": "rtl.fsm.single_guard.v1"
+  },
+  "asset_authority_verification": {
+    "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+    "checks": {
+      "compatibility_verified": true,
+      "cross_lineage_verified": true,
+      "independent_verifier": true,
+      "regression_zero": true,
+      "rollback_verified": true,
+      "schema_valid": true,
+      "static_valid": true
+    },
+    "eligible": true,
+    "evidence_verified": true,
+    "reasons": [],
+    "target_scope": "rtl.fsm.single_guard.v1"
+  },
+  "asset_promotion_eligible": true,
+  "asset_proposal": {
+    "asset_type": "RTL_REWRITE_TEMPLATE",
+    "compatibility": {
+      "action_domain": "rtl.GUARD_STRENGTHEN",
+      "compatibility_profile": "rtl.fsm.single_guard.v1"
+    },
+    "definition": {
+      "action": {
+        "domain": "rtl.GUARD_STRENGTHEN",
+        "payload": {
+          "add_condition": "ack",
+          "compatibility_profile": "rtl.fsm.single_guard.v1",
+          "domain": "rtl.GUARD_STRENGTHEN",
+          "module": "req_ack_fsm",
+          "source_state": "SEND",
+          "target_state": "DONE"
+        },
+        "transformation_family": "GUARD_STRENGTHEN"
+      },
+      "executor": "tehm.rtl.rtl_actions.apply_rtl_action",
+      "template_kind": "parser_backed_rtl_rewrite"
+    },
+    "input_contract": {
+      "compatibility_profile": "rtl.fsm.single_guard.v1",
+      "required": [
+        "rtl_source",
+        "structural_graph",
+        "failure_trace"
+      ]
+    },
+    "name": "rtl.handshake_guard_strengthen.template",
+    "output_contract": {
+      "preserves": [
+        "module_parseability"
+      ],
+      "required": [
+        "rtl_source",
+        "parser_graph_delta",
+        "edit_receipt"
+      ]
+    },
+    "promotion_eligible": false,
+    "provenance": {
+      "asset_version": "rtl-rewrite-asset-v0.1",
+      "creator": "tehm-c4-c5-shadow-synthesizer",
+      "evidence_transitions": [
+        "transition_129e9515877a027a",
+        "transition_d9840df69f3e5747"
+      ],
+      "gap_id": "gap_1f8bf7f47c5af79829eb",
+      "generator_is_verifier": false
+    },
+    "verifier_contract": {
+      "independent": true,
+      "obligations": [
+        "RTL_COMPILE_PASS",
+        "RTL_FROZEN_REGRESSION_PASS",
+        "RTL_TARGET_TEST_PASS"
+      ],
+      "oracle_types": [
+        "TARGET_TEST",
+        "REGRESSION",
+        "FORMAL"
+      ],
+      "runner": "registered_external_oracle"
+    },
+    "version": "rtl-rewrite-asset-v0.1"
+  },
+  "asset_registration": {
+    "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+    "asset_type": "RTL_REWRITE_TEMPLATE",
+    "content_digest": "sha256:1a6b18362b12a4ce6e6f43dc75766bc2d206952a42552cf6745f4811be1fe951",
+    "name": "rtl.handshake_guard_strengthen.template",
+    "status": "draft",
+    "status_version": 1,
+    "target_scope": "rtl.fsm.single_guard.v1",
+    "version": "rtl-rewrite-asset-v0.1"
+  },
+  "authority_note": "C4 emits a receipt from repeated learner-eligible failures; C5 registers and executes a narrow parser-backed RTL template as a candidate only. No canonical or production authority is changed; the asset authority receipt is audit-only; no lifecycle promotion or production policy mutation is attempted.",
+  "campaign_id": "rtl-asset-gap-shadow-r1",
+  "candidate_status": {
+    "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+    "asset_type": "RTL_REWRITE_TEMPLATE",
+    "content_digest": "sha256:1a6b18362b12a4ce6e6f43dc75766bc2d206952a42552cf6745f4811be1fe951",
+    "name": "rtl.handshake_guard_strengthen.template",
+    "status": "candidate",
+    "status_version": 3,
+    "target_scope": "rtl.fsm.single_guard.v1",
+    "version": "rtl-rewrite-asset-v0.1"
+  },
+  "canonical_memory_mutation": "none",
+  "derived_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-asset-gap-shadow-rtl-r1-dev/tehm.sqlite",
+  "derived_db_sha256": "a328278275147acd6a3157998a58ac79b2102748ad4f5647860697dd34f74e8a",
+  "firewall": {
+    "disjoint": true,
+    "heldout_entered_learner_memory": false,
+    "heldout_lineages": [
+      "req_ack_fsm3"
+    ],
+    "training_lineages": [
+      "req_ack_fsm",
+      "req_ack_fsm2"
+    ]
+  },
+  "gap_receipts": [
+    {
+      "compatibility_profile": "rtl.fsm.single_guard.v1",
+      "confidence": 1.0,
+      "current_action_coverage": {
+        "failure_evidence": 2,
+        "failures": 0,
+        "initial_failure_evidence": 2,
+        "observed": 2,
+        "promoted_asset": false,
+        "promoted_rule": false
+      },
+      "evidence_lineages": [
+        "req_ack_fsm",
+        "req_ack_fsm2"
+      ],
+      "evidence_transitions": [
+        "transition_129e9515877a027a",
+        "transition_d9840df69f3e5747"
+      ],
+      "gap_id": "gap_1f8bf7f47c5af79829eb",
+      "mechanism_family": "HANDSHAKE_COMPLETION",
+      "missing_asset_types": [
+        "RTL_REWRITE_TEMPLATE"
+      ],
+      "reason": "repeated_unsupported_mechanism+structural_coverage_gap"
+    }
+  ],
+  "heldout_validation": [
+    {
+      "asset": {
+        "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+        "asset_type": "RTL_REWRITE_TEMPLATE",
+        "compatibility": {
+          "action_domain": "rtl.GUARD_STRENGTHEN",
+          "compatibility_profile": "rtl.fsm.single_guard.v1"
+        },
+        "compatibility_json": "{\"action_domain\":\"rtl.GUARD_STRENGTHEN\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\"}",
+        "content_digest": "sha256:1a6b18362b12a4ce6e6f43dc75766bc2d206952a42552cf6745f4811be1fe951",
+        "created_at": "2026-08-26T10:46:59-07:00",
+        "definition": {
+          "action": {
+            "domain": "rtl.GUARD_STRENGTHEN",
+            "payload": {
+              "add_condition": "rd_ack",
+              "compatibility_profile": "rtl.fsm.single_guard.v1",
+              "domain": "rtl.GUARD_STRENGTHEN",
+              "module": "req_ack_fsm",
+              "source_state": "RCV",
+              "target_state": "RD_DONE"
+            },
+            "transformation_family": "GUARD_STRENGTHEN"
+          },
+          "executor": "tehm.rtl.rtl_actions.apply_rtl_action",
+          "template_kind": "parser_backed_rtl_rewrite"
+        },
+        "definition_json": "{\"action\":{\"domain\":\"rtl.GUARD_STRENGTHEN\",\"payload\":{\"add_condition\":\"ack\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"domain\":\"rtl.GUARD_STRENGTHEN\",\"module\":\"req_ack_fsm\",\"source_state\":\"SEND\",\"target_state\":\"DONE\"},\"transformation_family\":\"GUARD_STRENGTHEN\"},\"executor\":\"tehm.rtl.rtl_actions.apply_rtl_action\",\"template_kind\":\"parser_backed_rtl_rewrite\"}",
+        "input_contract": {
+          "compatibility_profile": "rtl.fsm.single_guard.v1",
+          "required": [
+            "rtl_source",
+            "structural_graph",
+            "failure_trace"
+          ]
+        },
+        "input_contract_json": "{\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"required\":[\"rtl_source\",\"structural_graph\",\"failure_trace\"]}",
+        "name": "rtl.handshake_guard_strengthen.template",
+        "output_contract": {
+          "preserves": [
+            "module_parseability"
+          ],
+          "required": [
+            "rtl_source",
+            "parser_graph_delta",
+            "edit_receipt"
+          ]
+        },
+        "output_contract_json": "{\"preserves\":[\"module_parseability\"],\"required\":[\"rtl_source\",\"parser_graph_delta\",\"edit_receipt\"]}",
+        "provenance": {
+          "asset_version": "rtl-rewrite-asset-v0.1",
+          "binding_contract": "manifest_fix_v1",
+          "binding_digest": "sha256:aa78fa403267252e4512d12b0dc826173d801f58ac2db53fb4fd0e1c6f3bcaf5",
+          "bound_design": "req_ack_fsm3",
+          "bound_mechanism_family": "HANDSHAKE_COMPLETION",
+          "bound_project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug3",
+          "creator": "tehm-c4-c5-shadow-synthesizer",
+          "evidence_transitions": [
+            "transition_129e9515877a027a",
+            "transition_d9840df69f3e5747"
+          ],
+          "gap_id": "gap_1f8bf7f47c5af79829eb",
+          "generator_is_verifier": false,
+          "registry_version": "asset-registry-v0.1"
+        },
+        "provenance_json": "{\"asset_version\":\"rtl-rewrite-asset-v0.1\",\"creator\":\"tehm-c4-c5-shadow-synthesizer\",\"evidence_transitions\":[\"transition_129e9515877a027a\",\"transition_d9840df69f3e5747\"],\"gap_id\":\"gap_1f8bf7f47c5af79829eb\",\"generator_is_verifier\":false,\"registry_version\":\"asset-registry-v0.1\"}",
+        "verifier_contract": {
+          "independent": true,
+          "obligations": [
+            "RTL_COMPILE_PASS",
+            "RTL_FROZEN_REGRESSION_PASS",
+            "RTL_TARGET_TEST_PASS"
+          ],
+          "oracle_types": [
+            "TARGET_TEST",
+            "REGRESSION",
+            "FORMAL"
+          ],
+          "runner": "registered_external_oracle"
+        },
+        "verifier_contract_json": "{\"independent\":true,\"obligations\":[\"RTL_COMPILE_PASS\",\"RTL_FROZEN_REGRESSION_PASS\",\"RTL_TARGET_TEST_PASS\"],\"oracle_types\":[\"TARGET_TEST\",\"REGRESSION\",\"FORMAL\"],\"runner\":\"registered_external_oracle\"}",
+        "version": "rtl-rewrite-asset-v0.1"
+      },
+      "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug3",
+      "receipt": {
+        "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+        "errors": [],
+        "independent_verifier": true,
+        "oracle_verdict": "PASS",
+        "regression_verdict": "PASS",
+        "schema_valid": true,
+        "static_valid": true,
+        "status": "SHADOW_ORACLE_PASS"
+      }
+    }
+  ],
+  "mechanism_family": "HANDSHAKE_COMPLETION",
+  "non_target_compatibility": [
+    {
+      "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/valid_ready_bug",
+      "reason": "project mechanism family is incompatible with the asset gap: 'VALID_READY_COMMIT' != 'HANDSHAKE_COMPLETION'",
+      "status": "INAPPLICABLE"
+    }
+  ],
+  "production_promotion_eligible": false,
+  "promotion_attempted": false,
+  "rollback_receipt": {
+    "entries": [
+      {
+        "baseline_regression_verdict": "PASS",
+        "baseline_target_verdict": "FAIL",
+        "fixed_sha256": "08b492324c55e8d58f5e3b8f52ebc97ef7fe71f428600f44c1b56b0fa9dac780",
+        "original_sha256": "7304bd56605babe7200db9db7a7bf4a44e14be3166e84636b7008582a11cfc30",
+        "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug",
+        "restored_sha256": "7304bd56605babe7200db9db7a7bf4a44e14be3166e84636b7008582a11cfc30",
+        "verified": true
+      },
+      {
+        "baseline_regression_verdict": "PASS",
+        "baseline_target_verdict": "FAIL",
+        "fixed_sha256": "3fa21f96a43c5e9697522de36354c9bd4f8ec4e81100bae8c9d0ff3376f3f6d4",
+        "original_sha256": "a4a9226a9fcbb25cdb05f20db9dc1d2ff95bfb1ff918cbe3151a0e0805fbf455",
+        "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug2",
+        "restored_sha256": "a4a9226a9fcbb25cdb05f20db9dc1d2ff95bfb1ff918cbe3151a0e0805fbf455",
+        "verified": true
+      },
+      {
+        "baseline_regression_verdict": "PASS",
+        "baseline_target_verdict": "FAIL",
+        "fixed_sha256": "285e4f78755d9f8c15f34d1ddcfad963f27abb215134284bc8771887da75e555",
+        "original_sha256": "7316bf15073d74e2f8fdd532079f2d794dca604c7d01f34a18a1b272bf86cc38",
+        "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug3",
+        "restored_sha256": "7316bf15073d74e2f8fdd532079f2d794dca604c7d01f34a18a1b272bf86cc38",
+        "verified": true
+      }
+    ],
+    "oracle": "icarus/vvp",
+    "verified": true
+  },
+  "selected_gap": {
+    "compatibility_profile": "rtl.fsm.single_guard.v1",
+    "confidence": 1.0,
+    "current_action_coverage": {
+      "failure_evidence": 2,
+      "failures": 0,
+      "initial_failure_evidence": 2,
+      "observed": 2,
+      "promoted_asset": false,
+      "promoted_rule": false
+    },
+    "evidence_lineages": [
+      "req_ack_fsm",
+      "req_ack_fsm2"
+    ],
+    "evidence_transitions": [
+      "transition_129e9515877a027a",
+      "transition_d9840df69f3e5747"
+    ],
+    "gap_id": "gap_1f8bf7f47c5af79829eb",
+    "mechanism_family": "HANDSHAKE_COMPLETION",
+    "missing_asset_types": [
+      "RTL_REWRITE_TEMPLATE"
+    ],
+    "reason": "repeated_unsupported_mechanism+structural_coverage_gap"
+  },
+  "shadow_execution": {
+    "heldout_pass": true,
+    "independent_oracle": "icarus/vvp",
+    "no_regression": true,
+    "training_pass": true
+  },
+  "source_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+  "source_db_sha256": "968cbb2efae17d33a7f5af13196a9e5a544950ef2f7aeda8f98d6183400fe47b",
+  "training_capture": [
+    {
+      "capture": {
+        "artifacts_written": 4,
+        "edge_kinds": [
+          "EXECUTED_FROM",
+          "PRODUCED_STATE",
+          "PART_OF_EPISODE"
+        ],
+        "episode_id": "episode_752c9f32122141c4",
+        "outcome": "PASS",
+        "primary_effect_key": "effect_bfe387b8d475f70c",
+        "record_id": "rtl:req_ack_fsm",
+        "state_ids": {
+          "after": "state_ee16cb58ebc26fd2",
+          "before": "state_10c8e1a0090e8b11"
+        },
+        "transition_id": "transition_129e9515877a027a",
+        "views_materialized": 6
+      },
+      "fragment": {
+        "campaign_id": "rtl-asset-gap-shadow-r1",
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "edge_ids": [
+          "causal_edge_6ab72fdba5ec7b5b",
+          "causal_edge_7903d24514b6f9af",
+          "causal_edge_0313e5113778e48c"
+        ],
+        "evidence_level": "L1_EXECUTED_INTERVENTION",
+        "failure_graph_digest": "ctx_8c99c33ecc60a542",
+        "learner_eligible": true,
+        "lineage_id": "req_ack_fsm",
+        "mechanism_family": "HANDSHAKE_COMPLETION",
+        "node_ids": [
+          "causal_node_c684eb09976fd5e9",
+          "causal_node_9ad4f9d73a02a111",
+          "causal_node_94a71fbbadce4198",
+          "causal_node_78027eba93709dc4"
+        ],
+        "transition_id": "transition_129e9515877a027a"
+      },
+      "verifier": {
+        "confidence_tier": "T",
+        "created_regressions": [],
+        "evidence_refs": [
+          "target",
+          "regression"
+        ],
+        "extractor_version": "icarus-oracle-v0.1",
+        "newly_observed_failures": [],
+        "obligation_coverage": 1.0,
+        "oracle_type": "REGRESSION",
+        "regression": {
+          "confidence_tier": "R",
+          "oracle_type": "REGRESSION",
+          "output": "REGRESSION basic: cycles=101 done_high=1 (done reached: yes)\nREGRESSION PASS: basic transfer completed\n",
+          "reason": "",
+          "scope": "rtl:regression",
+          "verdict": "PASS"
+        },
+        "scope": "rtl:target+regression",
+        "target": {
+          "confidence_tier": "T",
+          "oracle_type": "TARGET_TEST",
+          "output": "TARGET handshake: violations=0 (0 expected)\nTARGET PASS: handshake preserved\n",
+          "reason": "",
+          "scope": "rtl:target",
+          "verdict": "PASS"
+        },
+        "verdict": "PASS"
+      }
+    },
+    {
+      "capture": {
+        "artifacts_written": 4,
+        "edge_kinds": [
+          "EXECUTED_FROM",
+          "PRODUCED_STATE",
+          "PART_OF_EPISODE"
+        ],
+        "episode_id": "episode_90f3620329f3bd7f",
+        "outcome": "PASS",
+        "primary_effect_key": "effect_bfe387b8d475f70c",
+        "record_id": "rtl:req_ack_fsm2",
+        "state_ids": {
+          "after": "state_95cedf29ea71577b",
+          "before": "state_ec9aefe21b51f677"
+        },
+        "transition_id": "transition_d9840df69f3e5747",
+        "views_materialized": 6
+      },
+      "fragment": {
+        "campaign_id": "rtl-asset-gap-shadow-r1",
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "edge_ids": [
+          "causal_edge_9c93a86e1de25829",
+          "causal_edge_2b457e58cbacc68c",
+          "causal_edge_80ce295102ccc74e"
+        ],
+        "evidence_level": "L1_EXECUTED_INTERVENTION",
+        "failure_graph_digest": "ctx_2ff316b300ef10c2",
+        "learner_eligible": true,
+        "lineage_id": "req_ack_fsm2",
+        "mechanism_family": "HANDSHAKE_COMPLETION",
+        "node_ids": [
+          "causal_node_f3c74e0ece5a0918",
+          "causal_node_7978c21d1009709e",
+          "causal_node_94c4d8c7c0424057",
+          "causal_node_117d38cc80bb04c9"
+        ],
+        "transition_id": "transition_d9840df69f3e5747"
+      },
+      "verifier": {
+        "confidence_tier": "T",
+        "created_regressions": [],
+        "evidence_refs": [
+          "target",
+          "regression"
+        ],
+        "extractor_version": "icarus-oracle-v0.1",
+        "newly_observed_failures": [],
+        "obligation_coverage": 1.0,
+        "oracle_type": "REGRESSION",
+        "regression": {
+          "confidence_tier": "R",
+          "oracle_type": "REGRESSION",
+          "output": "REGRESSION basic: cycles=101 done_high=1 (done reached: yes)\nREGRESSION PASS: basic transfer completed\n",
+          "reason": "",
+          "scope": "rtl:regression",
+          "verdict": "PASS"
+        },
+        "scope": "rtl:target+regression",
+        "target": {
+          "confidence_tier": "T",
+          "oracle_type": "TARGET_TEST",
+          "output": "TARGET handshake: violations=0 (0 expected)\nTARGET PASS: handshake preserved\n",
+          "reason": "",
+          "scope": "rtl:target",
+          "verdict": "PASS"
+        },
+        "verdict": "PASS"
+      }
+    }
+  ],
+  "training_oracle_validation": [
+    {
+      "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug",
+      "receipt": {
+        "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+        "errors": [],
+        "independent_verifier": true,
+        "oracle_verdict": "PASS",
+        "regression_verdict": "PASS",
+        "schema_valid": true,
+        "static_valid": true,
+        "status": "SHADOW_ORACLE_PASS"
+      }
+    },
+    {
+      "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug2",
+      "receipt": {
+        "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+        "errors": [],
+        "independent_verifier": true,
+        "oracle_verdict": "PASS",
+        "regression_verdict": "PASS",
+        "schema_valid": true,
+        "static_valid": true,
+        "status": "SHADOW_ORACLE_PASS"
+      }
+    }
+  ],
+  "training_static_validation": [
+    {
+      "asset": {
+        "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+        "asset_type": "RTL_REWRITE_TEMPLATE",
+        "compatibility": {
+          "action_domain": "rtl.GUARD_STRENGTHEN",
+          "compatibility_profile": "rtl.fsm.single_guard.v1"
+        },
+        "compatibility_json": "{\"action_domain\":\"rtl.GUARD_STRENGTHEN\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\"}",
+        "content_digest": "sha256:1a6b18362b12a4ce6e6f43dc75766bc2d206952a42552cf6745f4811be1fe951",
+        "created_at": "2026-08-26T10:46:59-07:00",
+        "definition": {
+          "action": {
+            "domain": "rtl.GUARD_STRENGTHEN",
+            "payload": {
+              "add_condition": "ack",
+              "compatibility_profile": "rtl.fsm.single_guard.v1",
+              "domain": "rtl.GUARD_STRENGTHEN",
+              "module": "req_ack_fsm",
+              "source_state": "SEND",
+              "target_state": "DONE"
+            },
+            "transformation_family": "GUARD_STRENGTHEN"
+          },
+          "executor": "tehm.rtl.rtl_actions.apply_rtl_action",
+          "template_kind": "parser_backed_rtl_rewrite"
+        },
+        "definition_json": "{\"action\":{\"domain\":\"rtl.GUARD_STRENGTHEN\",\"payload\":{\"add_condition\":\"ack\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"domain\":\"rtl.GUARD_STRENGTHEN\",\"module\":\"req_ack_fsm\",\"source_state\":\"SEND\",\"target_state\":\"DONE\"},\"transformation_family\":\"GUARD_STRENGTHEN\"},\"executor\":\"tehm.rtl.rtl_actions.apply_rtl_action\",\"template_kind\":\"parser_backed_rtl_rewrite\"}",
+        "input_contract": {
+          "compatibility_profile": "rtl.fsm.single_guard.v1",
+          "required": [
+            "rtl_source",
+            "structural_graph",
+            "failure_trace"
+          ]
+        },
+        "input_contract_json": "{\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"required\":[\"rtl_source\",\"structural_graph\",\"failure_trace\"]}",
+        "name": "rtl.handshake_guard_strengthen.template",
+        "output_contract": {
+          "preserves": [
+            "module_parseability"
+          ],
+          "required": [
+            "rtl_source",
+            "parser_graph_delta",
+            "edit_receipt"
+          ]
+        },
+        "output_contract_json": "{\"preserves\":[\"module_parseability\"],\"required\":[\"rtl_source\",\"parser_graph_delta\",\"edit_receipt\"]}",
+        "provenance": {
+          "asset_version": "rtl-rewrite-asset-v0.1",
+          "binding_contract": "manifest_fix_v1",
+          "binding_digest": "sha256:96c5eeddbd910ed36c6e4db188ee117c4c91366c81d80f6881dcb84bf3db709f",
+          "bound_design": "req_ack_fsm",
+          "bound_mechanism_family": "HANDSHAKE_COMPLETION",
+          "bound_project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug",
+          "creator": "tehm-c4-c5-shadow-synthesizer",
+          "evidence_transitions": [
+            "transition_129e9515877a027a",
+            "transition_d9840df69f3e5747"
+          ],
+          "gap_id": "gap_1f8bf7f47c5af79829eb",
+          "generator_is_verifier": false,
+          "registry_version": "asset-registry-v0.1"
+        },
+        "provenance_json": "{\"asset_version\":\"rtl-rewrite-asset-v0.1\",\"creator\":\"tehm-c4-c5-shadow-synthesizer\",\"evidence_transitions\":[\"transition_129e9515877a027a\",\"transition_d9840df69f3e5747\"],\"gap_id\":\"gap_1f8bf7f47c5af79829eb\",\"generator_is_verifier\":false,\"registry_version\":\"asset-registry-v0.1\"}",
+        "verifier_contract": {
+          "independent": true,
+          "obligations": [
+            "RTL_COMPILE_PASS",
+            "RTL_FROZEN_REGRESSION_PASS",
+            "RTL_TARGET_TEST_PASS"
+          ],
+          "oracle_types": [
+            "TARGET_TEST",
+            "REGRESSION",
+            "FORMAL"
+          ],
+          "runner": "registered_external_oracle"
+        },
+        "verifier_contract_json": "{\"independent\":true,\"obligations\":[\"RTL_COMPILE_PASS\",\"RTL_FROZEN_REGRESSION_PASS\",\"RTL_TARGET_TEST_PASS\"],\"oracle_types\":[\"TARGET_TEST\",\"REGRESSION\",\"FORMAL\"],\"runner\":\"registered_external_oracle\"}",
+        "version": "rtl-rewrite-asset-v0.1"
+      },
+      "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug",
+      "receipt": {
+        "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+        "errors": [],
+        "independent_verifier": false,
+        "oracle_verdict": null,
+        "regression_verdict": null,
+        "schema_valid": true,
+        "static_valid": true,
+        "status": "SHADOW_STATIC_PASS"
+      }
+    },
+    {
+      "asset": {
+        "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+        "asset_type": "RTL_REWRITE_TEMPLATE",
+        "compatibility": {
+          "action_domain": "rtl.GUARD_STRENGTHEN",
+          "compatibility_profile": "rtl.fsm.single_guard.v1"
+        },
+        "compatibility_json": "{\"action_domain\":\"rtl.GUARD_STRENGTHEN\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\"}",
+        "content_digest": "sha256:1a6b18362b12a4ce6e6f43dc75766bc2d206952a42552cf6745f4811be1fe951",
+        "created_at": "2026-08-26T10:46:59-07:00",
+        "definition": {
+          "action": {
+            "domain": "rtl.GUARD_STRENGTHEN",
+            "payload": {
+              "add_condition": "wr_ack",
+              "compatibility_profile": "rtl.fsm.single_guard.v1",
+              "domain": "rtl.GUARD_STRENGTHEN",
+              "module": "req_ack_fsm",
+              "source_state": "WRITE",
+              "target_state": "VERIFY"
+            },
+            "transformation_family": "GUARD_STRENGTHEN"
+          },
+          "executor": "tehm.rtl.rtl_actions.apply_rtl_action",
+          "template_kind": "parser_backed_rtl_rewrite"
+        },
+        "definition_json": "{\"action\":{\"domain\":\"rtl.GUARD_STRENGTHEN\",\"payload\":{\"add_condition\":\"ack\",\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"domain\":\"rtl.GUARD_STRENGTHEN\",\"module\":\"req_ack_fsm\",\"source_state\":\"SEND\",\"target_state\":\"DONE\"},\"transformation_family\":\"GUARD_STRENGTHEN\"},\"executor\":\"tehm.rtl.rtl_actions.apply_rtl_action\",\"template_kind\":\"parser_backed_rtl_rewrite\"}",
+        "input_contract": {
+          "compatibility_profile": "rtl.fsm.single_guard.v1",
+          "required": [
+            "rtl_source",
+            "structural_graph",
+            "failure_trace"
+          ]
+        },
+        "input_contract_json": "{\"compatibility_profile\":\"rtl.fsm.single_guard.v1\",\"required\":[\"rtl_source\",\"structural_graph\",\"failure_trace\"]}",
+        "name": "rtl.handshake_guard_strengthen.template",
+        "output_contract": {
+          "preserves": [
+            "module_parseability"
+          ],
+          "required": [
+            "rtl_source",
+            "parser_graph_delta",
+            "edit_receipt"
+          ]
+        },
+        "output_contract_json": "{\"preserves\":[\"module_parseability\"],\"required\":[\"rtl_source\",\"parser_graph_delta\",\"edit_receipt\"]}",
+        "provenance": {
+          "asset_version": "rtl-rewrite-asset-v0.1",
+          "binding_contract": "manifest_fix_v1",
+          "binding_digest": "sha256:e326bdf2942ab6ffa188f0a8ef80f86bb68dac23b5cb9d3e76b415cfd56a9ce0",
+          "bound_design": "req_ack_fsm2",
+          "bound_mechanism_family": "HANDSHAKE_COMPLETION",
+          "bound_project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug2",
+          "creator": "tehm-c4-c5-shadow-synthesizer",
+          "evidence_transitions": [
+            "transition_129e9515877a027a",
+            "transition_d9840df69f3e5747"
+          ],
+          "gap_id": "gap_1f8bf7f47c5af79829eb",
+          "generator_is_verifier": false,
+          "registry_version": "asset-registry-v0.1"
+        },
+        "provenance_json": "{\"asset_version\":\"rtl-rewrite-asset-v0.1\",\"creator\":\"tehm-c4-c5-shadow-synthesizer\",\"evidence_transitions\":[\"transition_129e9515877a027a\",\"transition_d9840df69f3e5747\"],\"gap_id\":\"gap_1f8bf7f47c5af79829eb\",\"generator_is_verifier\":false,\"registry_version\":\"asset-registry-v0.1\"}",
+        "verifier_contract": {
+          "independent": true,
+          "obligations": [
+            "RTL_COMPILE_PASS",
+            "RTL_FROZEN_REGRESSION_PASS",
+            "RTL_TARGET_TEST_PASS"
+          ],
+          "oracle_types": [
+            "TARGET_TEST",
+            "REGRESSION",
+            "FORMAL"
+          ],
+          "runner": "registered_external_oracle"
+        },
+        "verifier_contract_json": "{\"independent\":true,\"obligations\":[\"RTL_COMPILE_PASS\",\"RTL_FROZEN_REGRESSION_PASS\",\"RTL_TARGET_TEST_PASS\"],\"oracle_types\":[\"TARGET_TEST\",\"REGRESSION\",\"FORMAL\"],\"runner\":\"registered_external_oracle\"}",
+        "version": "rtl-rewrite-asset-v0.1"
+      },
+      "project": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tests/fixtures/rtl_projects/req_ack_bug2",
+      "receipt": {
+        "asset_id": "asset_1a6b18362b12a4ce6e6f43dc",
+        "errors": [],
+        "independent_verifier": false,
+        "oracle_verdict": null,
+        "regression_verdict": null,
+        "schema_valid": true,
+        "static_valid": true,
+        "status": "SHADOW_STATIC_PASS"
+      }
+    }
+  ],
+  "version": "rtl-asset-gap-shadow-v1"
+}

@@ -1,0 +1,99 @@
+{
+  "action_signature": {
+    "config_edits": {
+      "CORE_UTILIZATION": "45"
+    },
+    "domain": "flow.CONFIG_DELTA",
+    "family": "DENSITY_RELIEF",
+    "operation_point": "50->45",
+    "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"
+  },
+  "batch_lane_version": "orfs-batch-lane-v1",
+  "campaign_id": "timing-relief-budgeted-v2-50-to-45-calibration",
+  "canonical_memory_mutation": "none",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+  "equivalence_policy": {
+    "authority": "independent_equivalence_report",
+    "config_only_source_identity_allowed": true,
+    "missing_or_failed_proof_classification": "INCOMPLETE",
+    "orfs_internal_equivalence_check": false
+  },
+  "firewall": {
+    "calibration": [
+      "prospective-v2:v2_cal_shift32:calibration",
+      "prospective-v2:v2_cal_router8:calibration",
+      "prospective-v2:v2_cal_hash16:calibration"
+    ],
+    "disjoint": true,
+    "heldout": [],
+    "source_digests_unique": true,
+    "support": [],
+    "version": "v2-calibration-firewall-v1"
+  },
+  "items": [
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u45",
+      "before_project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_shift32_u50",
+      "case_id": "sky130hs:v2_cal_shift32:calibration:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "v2_cal_shift32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v2:v2_cal_shift32:calibration",
+      "platform": "sky130hs",
+      "role": "v2_calibration",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_support_calibration/v2_cal_shift32.v"
+      ],
+      "source_digest": "df42b87c00dc2240f4d28b129f5d51f2ac8cb0eeadaedd1c6ac27b372e899d2f",
+      "split": "calibration",
+      "top": "v2_cal_shift32"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u45",
+      "before_project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_router8_u50",
+      "case_id": "sky130hs:v2_cal_router8:calibration:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "v2_cal_router8",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v2:v2_cal_router8:calibration",
+      "platform": "sky130hs",
+      "role": "v2_calibration",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_support_calibration/v2_cal_router8.v"
+      ],
+      "source_digest": "5071bb47da3839bbb415240cd0508eda16eeb6b9f129d7d685487fdf248d9a05",
+      "split": "calibration",
+      "top": "v2_cal_router8"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u45",
+      "before_project": "/tmp/tehm-authority-v1/v2-calibration-50to45/cases/sky130hs_v2_cal_hash16_u50",
+      "case_id": "sky130hs:v2_cal_hash16:calibration:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "v2_cal_hash16",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v2:v2_cal_hash16:calibration",
+      "platform": "sky130hs",
+      "role": "v2_calibration",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_support_calibration/v2_cal_hash16.v"
+      ],
+      "source_digest": "3d7c9c37ed454dcf235a4b74228f21faaadc6ba7ba871aac3709f2d28c6db207",
+      "split": "calibration",
+      "top": "v2_cal_hash16"
+    }
+  ],
+  "orfs_root": "/opt/EDA4AI/OpenROAD-flow-scripts",
+  "promotion_attempted": false,
+  "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863",
+  "version": "orfs-batch0-v2-calibration-v1"
+}

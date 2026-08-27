@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import re
 import sqlite3
 import sys
@@ -34,12 +33,6 @@ from typing import Any
 import knowledge_db
 import symptom
 import tool_versions
-
-
-def _default_cli_db_path() -> Path:
-    """Resolve the no-flag CLI target exactly like knowledge_db.connect()."""
-    return Path(os.environ.get("R2G_KNOWLEDGE_DB")
-                or knowledge_db.DEFAULT_DB_PATH)
 
 
 _CONFIG_LINE_RE = re.compile(r"(?:export\s+)?(\w+)\s*=\s*(.*)")
@@ -320,6 +313,43 @@ def _load_bench_designs(path: Path | None = None) -> set[str]:
     data = _read_json(p) or {}
     return {d.get("design_name") for d in (data.get("designs") or [])
             if d.get("design_name")}
+
+
+# Size bands match suggest_config.recommend (tiny<100, small<5000, medium<50000).
+def _size_class(cell_count: int | None) -> str:
+    if not cell_count:
+        return "unknown"
+    if cell_count < 100:
+        return "tiny"
+    if cell_count < 5000:
+        return "small"
+    if cell_count < 50000:
+        return "medium"
+    return "large"
+
+
+# Keep keyword sets in sync with suggest_config.detect_design_type (the
+# canonical classifier; this is the ingest-side mirror for stored runs).
+_BUS_KW = ("crossbar", "arbiter", "interconnect", "wb_conmax", "axi_", "ahb_")
+_CRYPTO_KW = ("aes", "sha", "des_", "cipher", "encrypt", "sbox")
+
+
+def _design_type(project: Path, cfg: dict[str, str]) -> str:
+    blob = ""
+    rtl_dir = project / "rtl"
+    if rtl_dir.is_dir():
+        for f in sorted(rtl_dir.glob("*.v"))[:50]:
+            try:
+                blob += f.read_text(encoding="utf-8", errors="ignore").lower()
+            except OSError:
+                pass
+    if any(k in blob for k in _BUS_KW):
+        return "bus_heavy"
+    if any(k in blob for k in _CRYPTO_KW):
+        return "crypto"
+    if "sram" in blob or cfg.get("ADDITIONAL_LEFS"):
+        return "macro_heavy"
+    return "logic"
 
 
 def _heuristics_generation() -> int | None:
@@ -983,15 +1013,7 @@ def ingest(project: Path,
             (str(project.resolve()),)).fetchone()
         if prior and prior[0]:
             class_cell_count = prior[0]
-    import suggest_config
-    detected_class = suggest_config.detect_design_class(project, cfg)
-    detected_type, _, detected_size = detected_class.partition("/")
-    # Preserve the existing failed-run stabilization rule: if this attempt has
-    # no current size evidence, retain the most recent known size for the same
-    # project rather than spawning a new lifecycle key.
-    if detected_size == "unknown" and class_cell_count is not None:
-        detected_size = suggest_config.size_class(class_cell_count)
-    design_class = f"{detected_type}/{detected_size}"
+    design_class = f"{_design_type(project, cfg)}/{_size_class(class_cell_count)}"
     # Win 3 r2g-bench: flag held-out designs (by DESIGN_NAME or project basename).
     # Filtered ONLY at the learning read — failure_events/run_violations below are
     # still written for bench runs (honesty invariant H3).
@@ -1136,9 +1158,8 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("project", type=Path, nargs="?", default=None,
                    help="Path to design_cases/<project> directory (omit when using --backfill)")
-    p.add_argument("--db", type=Path, default=_default_cli_db_path(),
-                   help="SQLite database path (default: R2G_KNOWLEDGE_DB, then "
-                        "knowledge/knowledge.sqlite)")
+    p.add_argument("--db", type=Path, default=knowledge_db.DEFAULT_DB_PATH,
+                   help="SQLite database path (default: knowledge/knowledge.sqlite)")
     p.add_argument("--schema", type=Path, default=knowledge_db.DEFAULT_SCHEMA_PATH,
                    help="Schema SQL path")
     p.add_argument("--families", type=Path, default=knowledge_db.DEFAULT_FAMILIES_PATH,
@@ -1147,6 +1168,42 @@ def main() -> int:
                    help="Backfill staged-slack + clock_period_ns columns for all "
                         "already-ingested projects under this dir, then exit.")
     args = p.parse_args()
+
+    import os
+    backend_name = os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower()
+    if backend_name not in {"none", "legacy", "tehm"}:
+        print(f"ERROR: invalid R2G_MEMORY_BACKEND={backend_name!r}; "
+              "refusing silent fallback", file=sys.stderr)
+        return 2
+    if os.environ.get("R2G_MEMORY_READ_ONLY_EVAL", "0") == "1":
+        if args.project is None:
+            p.error("project is required for read-only evaluation evidence")
+        # Evaluation metrics live outside the frozen memory authority.  This
+        # ingest touchpoint must not mutate either legacy or TEHM stores.
+        print(f"Ingested run_id=frozen:{args.project.name} from {args.project} "
+              f"(memory_backend={backend_name}, read_only_eval=true, receipts=0)")
+        return 0
+    if backend_name != "legacy":
+        if args.backfill is not None:
+            print(f"ERROR: --backfill is legacy-only, not valid for backend "
+                  f"{backend_name}", file=sys.stderr)
+            return 2
+        if args.project is None:
+            p.error("project is required unless --backfill is given")
+        memory_root = Path(os.environ.get("R2G_TEHM_ROOT") or
+                           Path(__file__).resolve().parents[3] / "memory")
+        if str(memory_root) not in sys.path:
+            sys.path.insert(0, str(memory_root))
+        try:
+            from runtime_router import ingest_project
+            receipt = ingest_project(args.project)
+        except Exception as exc:
+            print(f"ERROR: {backend_name} ingest unavailable (fail-closed; no "
+                  f"legacy fallback): {exc}", file=sys.stderr)
+            return 1
+        print(f"Ingested run_id={receipt['record_id']} from {args.project} "
+              f"(memory_backend={backend_name}, receipts={receipt['receipts']})")
+        return 0
 
     conn = knowledge_db.connect(args.db)
     knowledge_db.ensure_schema(conn, schema_path=args.schema)
@@ -1174,7 +1231,6 @@ def main() -> int:
     print(f"Ingested run_id={run_id} from {args.project}")
     # Autonomous post-ingest: re-derive Tier-2/Tier-3 and enforce the size policy
     # (env-gated; a failure here must never break the flow ingest above).
-    import os
     if os.environ.get("R2G_FIX_AUTOLEARN", "1") == "1":
         try:
             import fix_log_manager

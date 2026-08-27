@@ -1,0 +1,53 @@
+{
+  "results": [
+    {
+      "case_id": "sky130hs:selector_crc16:support:50->45",
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:selector_fifo16:support:50->45",
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:selector_uart16:support:50->45",
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:selector_xor32:support:50->45",
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:selector_crc16:support:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-support-50to45/cases/sky130hs_selector_crc16_u45",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:selector_fifo16:support:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-support-50to45/cases/sky130hs_selector_fifo16_u45",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:selector_uart16:support:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-support-50to45/cases/sky130hs_selector_uart16_u45",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:selector_xor32:support:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-support-50to45/cases/sky130hs_selector_xor32_u45",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    }
+  ],
+  "version": "orfs-batch0-v1"
+}

@@ -67,6 +67,32 @@ def test_run_meta_records_flow_variant():
     src = RUN_ORFS.read_text()
     assert '"flow_variant": "$FLOW_VARIANT"' in src, \
         "run-meta.json must include flow_variant so fix_signoff can recover the workspace"
+    assert '"design_nickname": "$DESIGN_NICKNAME"' in src
+    assert '"orfs_work_home": "$WORK_HOME"' in src
+
+
+def test_workspace_paths_use_local_work_home_and_design_nickname():
+    """Mutable ORFS state is project-local and keyed by DESIGN_NICKNAME."""
+    src = RUN_ORFS.read_text()
+    for kind in ("results", "logs", "objects", "reports"):
+        assert f'$WORK_HOME/{kind}/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT' in src
+        assert f'$FLOW_DIR/{kind}/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT' not in src
+    assert 'export WORK_HOME="${R2G_ORFS_WORK_HOME:-$PROJECT_DIR/.orfs-work}"' in src
+    assert 'ORFS_DESIGN_DIR="$PROJECT_DIR/.orfs-design/' in src
+    assert 'RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"' not in src
+
+
+def test_success_without_collected_gds_fails_closed():
+    src = RUN_ORFS.read_text()
+    assert 'if [[ $MAKE_STATUS -eq 0 ]] && ! ls "$BACKEND_DIR"/final/*.gds' in src
+
+
+def test_hierarchical_block_configs_follow_staged_design_config():
+    src = RUN_ORFS.read_text()
+    assert "hierarchical BLOCK" in src
+    assert 'cp -r "$_R2G_BLOCK_SRC"/. "$ORFS_DESIGN_DIR/$_R2G_BLOCK"/' in src
+    assert 'cd "$WORK_HOME"' in src
+    assert 'make -f \\"$FLOW_DIR/Makefile\\" DESIGN_CONFIG=' in src
 
 
 def test_workspace_lock_blocks_second_acquisition(tmp_path):

@@ -1,0 +1,34 @@
+{
+  "version": "typed-utility-contract-v1",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+  "status": "PRE_REGISTERED_NEW_ACTION_SIGNATURE",
+  "action_signature": {
+    "domain": "flow.CONFIG_DELTA",
+    "transformation_family": "DENSITY_RELIEF",
+    "config_edits": {"CORE_UTILIZATION": "45"},
+    "operation_point": "50->45"
+  },
+  "primary_objective": {"wns_delta_ns": {"minimum": 0.01}},
+  "hard_constraints": {
+    "equivalence": "PASS",
+    "drc": "PASS",
+    "lvs": "PASS",
+    "timing": "PASS",
+    "tns_delta_ns": {"minimum": 0.0}
+  },
+  "resource_budgets": {
+    "area_delta_percent": {"maximum": 2.0},
+    "power_delta_percent": {"maximum": 3.0}
+  },
+  "runtime_policy": {
+    "interval_must_fit_contract": true,
+    "ood_action": "ABSTAIN",
+    "missing_evidence_action": "ABSTAIN"
+  },
+  "authority": {
+    "raw_pareto_gate_unchanged": true,
+    "canonical_memory_mutation": "none",
+    "promotion_eligible": false
+  },
+  "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863"
+}

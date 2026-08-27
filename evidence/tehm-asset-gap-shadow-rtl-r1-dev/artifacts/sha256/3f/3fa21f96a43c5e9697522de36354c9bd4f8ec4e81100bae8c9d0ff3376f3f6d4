@@ -1,0 +1,39 @@
+// req_ack_fsm — variant of the request/acknowledge handshake FSM (different
+// state/signal names, SAME mechanism: handshake completion violation).
+//
+// BUG: the WRITE -> VERIFY transition fires without waiting for `wr_ack`.
+// Canonical fix (rtl.GUARD_STRENGTHEN):
+//   WRITE: next_state = VERIFY;  -->  WRITE: if (wr_ack) next_state = VERIFY;
+module req_ack_fsm (
+    input  wire        clk,
+    input  wire        rst_n,
+    input  wire        wr_req,
+    input  wire        wr_ack,
+    output reg         wr_done
+);
+    localparam [1:0] IDLE = 2'd0,
+                     WRITE = 2'd1,
+                     VERIFY = 2'd2;
+
+    reg [1:0] state;
+    reg [1:0] next_state;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) state <= IDLE;
+        else state <= next_state;
+    end
+
+    always @(*) begin
+        next_state = state;
+        case (state)
+            IDLE:   if (wr_req) next_state = WRITE;
+            WRITE:  if (wr_ack) next_state = VERIFY;          // BUG: no wr_ack guard
+            VERIFY: next_state = IDLE;
+        endcase
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) wr_done <= 1'b0;
+        else wr_done <= (state == VERIFY);
+    end
+endmodule

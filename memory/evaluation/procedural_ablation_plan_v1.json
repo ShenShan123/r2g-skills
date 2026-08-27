@@ -1,0 +1,51 @@
+{
+  "version": "procedural-ablation-plan-v1",
+  "status": "EXECUTED",
+  "source_snapshot": {
+    "evidence_contract": "tehm-evidence-freeze-v3",
+    "canonical_bundle": "../../evidence/tehm-evidence-freeze-v3-refresh",
+    "current_pilot_task_count": 6,
+    "task_manifest": "evaluation/procedural_ablation_task_manifest_v1.json"
+  },
+  "current_evidence_limit": "The original six-task pilot did not identify Role View, Predicate View, or Validity Gate. The four-task future-lineage replay now observes all four preregistered contrasts, but acceptance remains false because only one canonical rule is VALIDATED (minimum is two).",
+  "required_contrasts": [
+    {
+      "component": "role_view",
+      "ablated_arm": "M5",
+      "task_family": "structural_role_collision",
+      "required_signal": "M8 and M5 differ in applicable binding or harmful activation"
+    },
+    {
+      "component": "predicate_view",
+      "ablated_arm": "M6",
+      "task_family": "unknown_predicate_and_mechanism_confusion",
+      "required_signal": "UNKNOWN is preserved and M8 abstains or avoids a harmful cross-mechanism binding"
+    },
+    {
+      "component": "validity_gate",
+      "ablated_arm": "M4",
+      "task_family": "degenerate_or_unstable_rule",
+      "required_signal": "M8 blocks a rule that M4 would execute"
+    },
+    {
+      "component": "obligation_transfer",
+      "ablated_arm": "M7",
+      "task_family": "obligation_preservation_and_recovery_branch",
+      "required_signal": "M8 preserves obligations while M7 cannot claim a complete repair"
+    }
+  ],
+  "acceptance": {
+    "cross_lineage_effective_support": true,
+    "non_singleton_groups": true,
+    "validated_rules": true,
+    "rule_coverage_reported": true,
+    "harmful_activation_rate_not_increased": true,
+    "wilson_or_cluster_interval_required": true
+  },
+  "task_sources": {
+    "status": "EXECUTED",
+    "report": "/data1/zhangdy/tehm-campaigns/tehm-procedural-ablation-v1/procedural_ablation_report.json",
+    "acceptance_passed": false,
+    "note": "Four fixtures and real Icarus receipts are executed evidence outside canonical v3; the acceptance failure is retained and no rule promotion is implied."
+  }
+}

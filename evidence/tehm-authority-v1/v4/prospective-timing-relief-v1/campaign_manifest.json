@@ -1,0 +1,139 @@
+{
+  "action_signature": {
+    "config_edits": {"CORE_UTILIZATION": "40"},
+    "family": "DENSITY_RELIEF",
+    "domain": "flow.CONFIG_DELTA",
+    "operation_point": "50->40",
+    "utility_contract_id": "TIMING_RELIEF_BUDGETED_V1"
+  },
+  "contract_id": "TIMING_RELIEF_BUDGETED_V1",
+  "utility_contract_digest": "e912789aa5152c3dc74f4c670bb9cf993a14ed537bae106763aa8208ba787b36",
+  "contract_spec": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-authority-v1/v4/typed_utility_contract_v1.json",
+  "batch_lane_version": "orfs-batch-lane-v1",
+  "campaign_id": "timing-relief-budgeted-v1-prospective-full",
+  "source_freeze": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-authority-v1/v4/freeze_manifest.json",
+  "source_freeze_sha256": "d1a571d56ccb5d51d3241d130ec71d82fb0f57d63d67f5a40e839aff43259249",
+  "canonical_memory_mutation": "none",
+  "equivalence_policy": {
+    "authority": "independent_equivalence_report",
+    "config_only_source_identity_allowed": true,
+    "missing_or_failed_proof_classification": "INCOMPLETE",
+    "orfs_internal_equivalence_check": false
+  },
+  "firewall": {
+    "disjoint": true,
+    "support": [],
+    "calibration": [
+      "prospective-v1-counter32:sky130hs:prospect_counter32:base0",
+      "prospective-v1-alu32:sky130hs:prospect_alu32:base0"
+    ],
+      "heldout": [
+      "prospective-v1-mux32:sky130hs:prospect_mux32:base0",
+      "prospective-v1-parity32:sky130hs:prospect_parity32:base0",
+      "prospective-v1-accum32:sky130hs:prospect_accum32:base0",
+      "prospective-v1-ctrl32:sky130hs:prospect_ctrl32:base0"
+    ],
+    "source_digests_unique": true,
+    "version": "timing-relief-budgeted-v1-prospective-firewall"
+  },
+  "items": [
+    {
+      "after_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_counter32_density_0",
+      "before_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_counter32_base_0",
+      "case_id": "sky130hs:prospect_counter32:calibration:50->40",
+      "check": "route",
+      "config_edits": {"CORE_UTILIZATION": "40"},
+      "design": "prospect_counter32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v1-counter32:sky130hs:prospect_counter32:base0",
+      "platform": "sky130hs",
+      "role": "calibration",
+      "rtl_files": ["/tmp/tehm-authority-v1/prospect_counter32.v"],
+      "source_digest": "eae4107a162a07110fdda7622b846d35fa868af2f7ebb7c7e9d6e87b5a023344",
+      "split": "calibration",
+      "top": "prospect_counter32"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_alu32_density_0",
+      "before_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_alu32_base_0",
+      "case_id": "sky130hs:prospect_alu32:calibration:50->40",
+      "check": "route",
+      "config_edits": {"CORE_UTILIZATION": "40"},
+      "design": "prospect_alu32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v1-alu32:sky130hs:prospect_alu32:base0",
+      "platform": "sky130hs",
+      "role": "calibration",
+      "rtl_files": ["/tmp/tehm-authority-v1/prospect_alu32.v"],
+      "source_digest": "8a54c9b1f1e1d7164df404bd6512968bb5e590c683410a130cd7602b9d3874d8",
+      "split": "calibration",
+      "top": "prospect_alu32"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_mux32_density_0",
+      "before_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_mux32_base_0",
+      "case_id": "sky130hs:prospect_mux32:heldout:50->40",
+      "check": "route",
+      "config_edits": {"CORE_UTILIZATION": "40"},
+      "design": "prospect_mux32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v1-mux32:sky130hs:prospect_mux32:base0",
+      "platform": "sky130hs",
+      "role": "heldout_ab_candidate",
+      "rtl_files": ["/tmp/tehm-authority-v1/prospect_mux32.v"],
+      "source_digest": "f0031e2835482dfb9f00d90dbbb2c12ec336c87afd8ba6e842d85a51e61f5ff4",
+      "split": "heldout",
+      "top": "prospect_mux32"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_parity32_density_0",
+      "before_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_parity32_base_0",
+      "case_id": "sky130hs:prospect_parity32:heldout:50->40",
+      "check": "route",
+      "config_edits": {"CORE_UTILIZATION": "40"},
+      "design": "prospect_parity32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v1-parity32:sky130hs:prospect_parity32:base0",
+      "role": "heldout_ab_candidate",
+      "rtl_files": ["/tmp/tehm-authority-v1/prospect_parity32.v"],
+      "source_digest": "ff659b311e0e7629619509e145ad8e1fdccb740cb0b994589c1cb2d46a687e33",
+      "split": "heldout",
+      "top": "prospect_parity32",
+      "platform": "sky130hs"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_accum32_density_0",
+      "before_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_accum32_base_0",
+      "case_id": "sky130hs:prospect_accum32:heldout:50->40",
+      "check": "route",
+      "config_edits": {"CORE_UTILIZATION": "40"},
+      "design": "prospect_accum32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v1-accum32:sky130hs:prospect_accum32:base0",
+      "role": "heldout_ab_candidate",
+      "rtl_files": ["/tmp/tehm-authority-v1/prospect_accum32.v"],
+      "source_digest": "41e3c2afb66306af735ea4c8117b98e2e1f8cee0f8902c88f2df9aa15c8c1612",
+      "split": "heldout",
+      "top": "prospect_accum32",
+      "platform": "sky130hs"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_ctrl32_density_0",
+      "before_project": "/tmp/tehm-authority-v1/prospective-batch/cases/sky130hs_prospect_ctrl32_base_0",
+      "case_id": "sky130hs:prospect_ctrl32:heldout:50->40",
+      "check": "route",
+      "config_edits": {"CORE_UTILIZATION": "40"},
+      "design": "prospect_ctrl32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "prospective-v1-ctrl32:sky130hs:prospect_ctrl32:base0",
+      "role": "heldout_ab_candidate",
+      "rtl_files": ["/tmp/tehm-authority-v1/prospect_ctrl32.v"],
+      "source_digest": "eba186d907006e61e94b5404b7a641c3d6506823bebd51707cd1a3efed25ff80",
+      "split": "heldout",
+      "top": "prospect_ctrl32",
+      "platform": "sky130hs"
+    }
+  ],
+  "orfs_root": "/opt/EDA4AI/OpenROAD-flow-scripts",
+  "version": "timing-relief-budgeted-v1-prospective-full"
+}

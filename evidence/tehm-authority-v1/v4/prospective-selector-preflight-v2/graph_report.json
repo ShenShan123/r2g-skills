@@ -1,0 +1,45 @@
+{
+  "results": [
+    {
+      "case_id": "sky130hs:v2_arbiter16:preflight:50->45",
+      "digest": null,
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50",
+      "status": "invalid"
+    },
+    {
+      "case_id": "sky130hs:v2_crc32:preflight:50->45",
+      "digest": "4513e3e4d2ebeae2c998979d316242274019775af31ebf476c2b8bad6dd0e8cf",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:v2_mac32:preflight:50->45",
+      "digest": null,
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50",
+      "status": "invalid"
+    },
+    {
+      "case_id": "sky130hs:v2_packet_ctrl:preflight:50->45",
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50",
+      "status": "missing_final_def"
+    },
+    {
+      "case_id": "sky130hs:v2_queue24:preflight:50->45",
+      "digest": "2e7b6c673540609036ab0944bd2e5e4e56b18ae882edefa937265fbd7c5c8dc1",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:v2_xor64:preflight:50->45",
+      "digest": "a215eaabf2e20c4b474f1d3b1861e61c55332171ce613cd27d5d963cbd1cc667",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50",
+      "status": "complete"
+    }
+  ],
+  "version": "orfs-batch0-v1"
+}

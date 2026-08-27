@@ -1,0 +1,21 @@
+{
+  "design": "req_ack_fsm4",
+  "mechanism_family": "HANDSHAKE_COMPLETION",
+  "bug": {
+    "type": "handshake_completion_violation",
+    "description": "WAIT->DONE transition fires without waiting for ready.",
+    "first_divergence_signal": "done"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "module": "req_ack_fsm",
+    "source_state": "WAIT",
+    "target_state": "DONE",
+    "add_condition": "ready"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  }
+}

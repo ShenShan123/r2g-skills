@@ -1,0 +1,29 @@
+{
+  "design": "width_correct_a",
+  "mechanism_family": "WIDTH_SEMANTIC_LOSS",
+  "bug": {
+    "type": "truncated_data_assignment",
+    "description": "A four-bit data path is truncated to two bits before reaching the output.",
+    "first_divergence_signal": "out"
+  },
+  "fix": {
+    "domain": "rtl.WIDTH_CORRECT",
+    "transformation_family": "WIDTH_CORRECT",
+    "compatibility_profile": "rtl.combinational.width_assignment.v1",
+    "module": "width_correct_a",
+    "signal": "out",
+    "target": "out = data[1:0];",
+    "replacement": "out = data[3:0];",
+    "count": 1
+  },
+  "verification": {
+    "target_test": "tb/tb_width.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "PROVISIONAL_VALID",
+    "recovery_obligation": "PRESERVE_DATA_WIDTH"
+  }
+}

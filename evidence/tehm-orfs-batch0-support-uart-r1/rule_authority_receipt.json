@@ -1,0 +1,105 @@
+{
+  "authority_kind": "independent_orfs_promotion_authority",
+  "bindings": {
+    "canonical_db_sha256_before": "0db31a3c9b299bcab7f7de931af40a62c17af8778ce7d0af7e66b6973941ecce",
+    "observations_sha256": "139cfbac4e54ff69c47a34b3085e941a0b755e3ba23b7f09d71ff407efbc6709",
+    "staging_db_sha256": "de56917036b5fc807a09141aa3325fd93e36f12f736e215fc0172954af6f5768"
+  },
+  "campaign_id": "orfs-batch0-v1",
+  "case_ids": [
+    "sky130hs:uart:u50->u40"
+  ],
+  "decision": "DENY_CANONICAL_IMPORT",
+  "gate_derivation": {
+    "conformal_coverages": [],
+    "eligible_lineages": [
+      "batch0-v1:sky130hs:uart"
+    ],
+    "eligible_positive_case_ids": [
+      "sky130hs:uart:u50->u40"
+    ],
+    "obligation_coverages": [
+      1.0
+    ],
+    "rollback_observations": 0,
+    "selected_case_ids": [
+      "sky130hs:uart:u50->u40"
+    ],
+    "source": "external_observation_receipts",
+    "utility_verdicts": [
+      "HARMFUL"
+    ]
+  },
+  "gate_evaluation": {
+    "all_gates_established": false,
+    "checks": {
+      "conformal_coverage": false,
+      "cross_lineage_te": false,
+      "harmful_rate": false,
+      "obligation_coverage": true,
+      "registry_verified": false,
+      "rollback_verified": false
+    },
+    "eligible": false,
+    "failed": [
+      "cross_lineage_te",
+      "harmful_rate"
+    ],
+    "gate_status": {
+      "conformal_coverage": "NOT_ESTABLISHED",
+      "cross_lineage_te": "FAIL",
+      "harmful_rate": "FAIL",
+      "obligation_coverage": "PASS",
+      "registry_verified": "NOT_ESTABLISHED",
+      "rollback_verified": "NOT_ESTABLISHED"
+    },
+    "missing": [
+      "conformal_coverage",
+      "registry_verified",
+      "rollback_verified"
+    ],
+    "not_established": [
+      "rollback_verified",
+      "registry_verified",
+      "conformal_coverage"
+    ],
+    "strict": true,
+    "thresholds": {
+      "conformal_coverage": 0.8,
+      "cross_lineage_te": 1.0,
+      "harmful_rate": 0.0,
+      "obligation_coverage": 1.0
+    },
+    "version": "promotion-gates-v1"
+  },
+  "observation_count": 7,
+  "promotion_attempted": false,
+  "promotion_gates": {
+    "conformal_coverage": false,
+    "cross_lineage_te": false,
+    "harmful_rate": false,
+    "obligation_coverage": true,
+    "registry_verified": false,
+    "rollback_verified": false
+  },
+  "rule_id": "rule:orfs:DENSITY_RELIEF",
+  "snapshots": {
+    "canonical_before": {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "0db31a3c9b299bcab7f7de931af40a62c17af8778ce7d0af7e66b6973941ecce",
+      "transitions": 9
+    },
+    "staging": {
+      "exists": true,
+      "path": "/tmp/tehm-orfs/orfs-batch0-uart-param-28-support-r1/campaign/staging/tehm.sqlite",
+      "physical_effects": 1,
+      "sha256": "de56917036b5fc807a09141aa3325fd93e36f12f736e215fc0172954af6f5768",
+      "transitions": 1
+    }
+  },
+  "status_version": null,
+  "target_scope": "route",
+  "version": "orfs-canonical-import-authority-v1"
+}

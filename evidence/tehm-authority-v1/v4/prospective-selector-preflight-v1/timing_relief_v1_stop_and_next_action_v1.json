@@ -1,0 +1,37 @@
+{
+  "version": "timing-relief-stop-decision-v1",
+  "closed_action": {
+    "contract_id": "TIMING_RELIEF_BUDGETED_V1",
+    "family": "DENSITY_RELIEF",
+    "operation_point": "CORE_UTILIZATION 50->40",
+    "status": "CLOSED_LOW_PROPOSAL_COVERAGE",
+    "preflight_manifest_sha256": "c07d79c662a6532b2e62037c894b1dfb940ae8aca559e6a4abcbd93cb7f4c902",
+    "stop_report_sha256": "1e46754ee39de6cb51ca27073f6f5de7b07fc48d2daa5053b36fe248fa1649"
+  },
+  "observed_gate": {
+    "proposal_coverage": 0.0,
+    "minimum_proposal_coverage": 0.5,
+    "selected_harmful_rate": null,
+    "status": "STOP_BEFORE_AFTER_ARM"
+  },
+  "next_action_policy": {
+    "status": "INDEPENDENT_SIGNATURE_REQUIRED",
+    "must_be_pre_registered_before_execution": true,
+    "must_not_reuse_closed_50_to_40_rule": true,
+    "candidate_signatures": [
+      {
+        "family": "DENSITY_RELIEF",
+        "operation_point": "CORE_UTILIZATION 50->45",
+        "status": "DRAFT_ONLY"
+      },
+      {
+        "family": "ROUTING_CAPACITY_RECOVERY",
+        "operation_point": "NEW_ROUTING_SIGNATURE",
+        "status": "DRAFT_ONLY"
+      }
+    ],
+    "selection": "not chosen; requires a fresh contract and source-disjoint prospective manifest"
+  },
+  "canonical_memory_mutation": "none",
+  "promotion_attempted": false
+}

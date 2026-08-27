@@ -1,0 +1,79 @@
+{
+  "version": "tehm-orfs-batch0-exact-r1",
+  "campaign": "orfs-batch0-v1",
+  "scratch_root": "/tmp/tehm-orfs/orfs-batch0-spi-timing-contract-r1",
+  "toolchain": {
+    "orfs_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+    "status": "bound_internal",
+    "compatibility": "tree_packaged",
+    "fingerprint": "5f6545216c040a863a4c169d90f895f218ad038bfd61991445f760ed43567c91",
+    "openroad_version": "26Q3-1510-g6cb3f2b704",
+    "openroad_sha256": "561ef17403ce2b55198496e8ab74435d90aba88e03a7a86b6526f7d1a0fae3a6",
+    "yosys_version": "Yosys 0.68+",
+    "yosys_sha256": "6dca418413bcab1e0d6583974f65870064a43439d30f9a0ab41b95bea3041bd0",
+    "yosys_read_liberty_unit_delay": "PASS"
+  },
+  "pair": {
+    "case_id": "sky130hs:spi:u50->u40",
+    "lineage_id": "batch0-v1:sky130hs:spi",
+    "split": "heldout",
+    "classification": "ELIGIBLE_POSITIVE",
+    "learner_eligible": false,
+    "promotion_eligible": false,
+    "receipt_id": "orfs-observation:e98f7bd00c5add9f48ebcbe1",
+    "before": {
+      "all_oracles": true,
+      "input_binding": true,
+      "timing_contract": {
+        "clock_period_ns": 1.4,
+        "sdc_sha256": "e9ec2417a1c2f05d6faed2573b6c6357dd763d619b3c02b0dce9dec3f8fcf968"
+      },
+      "graph_digest": "e4c658fbd981f75ea962f57e3b7a50134afded9ad075e73f03904745bf2edf4c",
+      "ppa": {
+        "area_um2": 2933.31,
+        "power_w": 0.00147007,
+        "tns_ns": 0.0,
+        "wns_ns": 0.135395
+      }
+    },
+    "after": {
+      "all_oracles": true,
+      "input_binding": true,
+      "timing_contract": {
+        "clock_period_ns": 1.4,
+        "sdc_sha256": "e9ec2417a1c2f05d6faed2573b6c6357dd763d619b3c02b0dce9dec3f8fcf968"
+      },
+      "graph_digest": "81901b7b444b16fcff46d487e986599688c68086e556671d37a63ecda1ce46e4",
+      "ppa": {
+        "area_um2": 3637.9,
+        "power_w": 0.0015235,
+        "tns_ns": 0.0,
+        "wns_ns": 0.134804
+      }
+    }
+  },
+  "observation_chain": {
+    "count": 7,
+    "eligible_positive": 1,
+    "learner_eligible": 0,
+    "sha256": "2eb642aba26f221f4c27462f695554587e5bbb46ee14fad1601101b58a001095",
+    "chain_head": "cd4e15bd0d878c9134fe3389e404cec22eee60eb92105ee686966bf7ff0ab0b9"
+  },
+  "staging_import": {
+    "imported": 0,
+    "excluded_external_only": 7,
+    "canonical_memory_mutation": "none",
+    "canonical_sha256": "c43829fb33b8ceee16edf2e9140c2900ae8834f9681863e5a878903fb7c7325c",
+    "canonical_transitions": 9,
+    "canonical_physical_effects": 0
+  },
+  "negative_evidence": {
+    "scratch_root": "/tmp/tehm-orfs/orfs-batch0-jpeg-r1",
+    "jpeg_before": "FLOW_FAILURE: CTS-0080 Sink not found",
+    "jpeg_after": "TIMEOUT: detailed route",
+    "learner_eligible": false
+  },
+  "canonical_memory_mutation": "none",
+  "promotion_attempted": false,
+  "next_gate": "obtain at least one complete support pair, then independently review rollback/registry/obligation/cross-lineage/harmful/conformal gates before canonical import"
+}

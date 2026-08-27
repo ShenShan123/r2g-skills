@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "case_id": "sky130hs:and32:0:DENSITY_RELIEF:50->40",
+      "project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:and32:0:DENSITY_RELIEF:50->40",
+      "project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:toggle32:0:DENSITY_RELIEF:50->40",
+      "project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_toggle32_base_0",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    },
+    {
+      "case_id": "sky130hs:toggle32:0:DENSITY_RELIEF:50->40",
+      "project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_toggle32_density_0",
+      "strict_signoff_rc": 0,
+      "timing_rc": 0
+    }
+  ],
+  "version": "orfs-batch0-v1"
+}

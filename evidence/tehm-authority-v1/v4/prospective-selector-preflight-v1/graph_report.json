@@ -1,0 +1,47 @@
+{
+  "results": [
+    {
+      "case_id": "sky130hs:selector_alu16:preflight:50->40",
+      "digest": null,
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_alu16_u50",
+      "status": "invalid"
+    },
+    {
+      "case_id": "sky130hs:selector_arbiter8:preflight:50->40",
+      "digest": null,
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_arbiter8_u50",
+      "status": "invalid"
+    },
+    {
+      "case_id": "sky130hs:selector_crc16:preflight:50->40",
+      "digest": "5c95b680a85ba5e8aee5cf9957670e82b8153582c1215e983bc084eda20c93d5",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:selector_fifo16:preflight:50->40",
+      "digest": "d0ef19bd9cb5ea122e077bd1328494cf2472868d50604dc13035309006fb892f",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:selector_uart16:preflight:50->40",
+      "digest": "8ef09f2a3cf5efe73ad5085d6b16e78be43551fa02ad542d7a4dfe6a07636f09",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:selector_xor32:preflight:50->40",
+      "digest": "20913142df321a3cab5d13c1419b1568bc626416af8ecedf6e1b3b6a4d8000d1",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50",
+      "status": "complete"
+    }
+  ],
+  "version": "orfs-batch0-v1"
+}

@@ -1,0 +1,9 @@
+{
+  "design": "req_ack_fsm3",
+  "mechanism_family": "HANDSHAKE_COMPLETION",
+  "bug": {"type": "handshake_completion_violation", "description": "RCV->RD_DONE fires without rd_ack."},
+  "fix": {"domain": "rtl.GUARD_STRENGTHEN", "transformation_family": "GUARD_STRENGTHEN",
+          "module": "req_ack_fsm", "source_state": "RCV", "target_state": "RD_DONE",
+          "add_condition": "rd_ack"},
+  "verification": {"target_test": "tb/tb_handshake.v", "frozen_regression": "tb/tb_basic.v"}
+}

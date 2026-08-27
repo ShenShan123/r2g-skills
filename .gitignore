@@ -274,11 +274,31 @@ r2g-skills/*/references/env.local.sh.bak-*
 RTL2Graph_v3.zip
 RTL2Graph_v3/
 heter-homo_py.zip
-# Upstream R2G2.0 four-stage drop (2026-08-01) — the pipeline itself is vendored into
-# r2g-skills/def-graph/scripts/r2g2/ with provenance in R2G2_UPSTREAM.md; the archive is not.
-Dataset_R2G2.0(B).zip
-Dataset_R2G2.0(B)v2.zip
-Dataset_R2G2.0(B)/
 
 # V1 validation registry outputs (machine-local run evidence — never commit)
 docs/superpowers/plans/validation-reports/
+
+# TEHM ORFS evidence keeps compact reports/manifests, not re-runnable worktrees.
+# The raw runs remain available under the local evidence freeze and can be
+# regenerated from the committed campaign manifests when needed.
+evidence/**/source/
+evidence/**/.orfs-work/
+evidence/**/backend/
+evidence/**/lvs/
+evidence/**/staging/artifacts/
+evidence/**/*.png
+evidence/**/*.rtlil
+evidence/**/*.ext
+evidence/**/*.spice
+evidence/**/*.log
+evidence/**/*.jsonl
+evidence/**/*.gds
+evidence/**/*.def
+evidence/**/*.lef
+evidence/**/*.lib
+evidence/**/*.odb
+evidence/**/*.spef
+evidence/**/*.lyrdb
+evidence/**/*.csv
+evidence/**/*.sqlite
+evidence/**/*.sqlite-*

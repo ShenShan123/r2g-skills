@@ -8,6 +8,9 @@ set -euo pipefail
 # Optional flow_variant (default: derived from project dir) isolates ORFS work directories.
 # Set ORFS_TIMEOUT (seconds) to limit runtime (default: 7200 = 2 hours).
 # Set ORFS_MAX_CPUS to limit CPU cores (default: all available).
+# Set R2G_ORFS_WORK_HOME to override the writable ORFS output root.  It defaults
+# to <project-dir>/.orfs-work so a production run never requires write access to
+# the shared ORFS checkout under /opt.
 
 PROJECT_DIR="${1:-}"
 PLATFORM="${2:-sky130hd}"   # asap7 is unsupported in this version (#57); sky130hd is
@@ -180,22 +183,40 @@ if [[ ! -f "$SDC_FILE" ]]; then
   exit 1
 fi
 
-# Create a design directory inside ORFS for this project.
+# Create a project-local design-config directory.  The ORFS checkout, platform
+# files, PDK, and template RTL are immutable inputs; only the copied config/SDC
+# and WORK_HOME outputs belong to this run.  Keeping these writes out of
+# $FLOW_DIR is required on production installations mounted read-only.
 # Key fix: include FLOW_VARIANT in the path so concurrent runs that share
 # DESIGN_NAME (e.g. all ICCAD benchmarks use DESIGN_NAME=top) do not overwrite
 # each other's config.mk at the shared $FLOW_DIR/designs/<platform>/<name>/ path.
-DESIGN_NAME=$(grep 'DESIGN_NAME' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+# ORFS deliberately separates the logical top cell (DESIGN_NAME) from the
+# workspace key (DESIGN_NICKNAME).  Several production designs use that split
+# (aes/aes_cipher_top, riscv32i/riscv); all results/logs/objects/reports paths
+# are keyed by the nickname in variables.mk.  Falling back preserves legacy
+# configs which do not declare a nickname.
+DESIGN_NICKNAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NICKNAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
+DESIGN_NICKNAME="${DESIGN_NICKNAME:-$DESIGN_NAME}"
 
 # Serialize the shared ORFS workspace BEFORE any write/EDA (config copy, clean_all,
 # stage builds). Contention = the DESIGN_NAME+FLOW_VARIANT hard-rule violation: fail
 # fast with a clear message rather than corrupt both runs (full-pipeline Issue 9).
 # The lock is fd-scoped — released automatically when this script exits.
 if [[ "${R2G_SKIP_WORKSPACE_LOCK:-0}" != "1" ]]; then
-  _r2g_acquire_workspace_lock "$PLATFORM" "$DESIGN_NAME" "$FLOW_VARIANT" || exit 1
+  _r2g_acquire_workspace_lock "$PLATFORM" "$DESIGN_NICKNAME" "$FLOW_VARIANT" || exit 1
 fi
 
-ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+ORFS_DESIGN_DIR="$PROJECT_DIR/.orfs-design/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 mkdir -p "$ORFS_DESIGN_DIR"
+
+# variables.mk honors these environment variables through ?=.  DESIGN_HOME
+# deliberately remains the canonical ORFS designs tree because stock configs
+# use $(DESIGN_HOME)/src and platform-specific io.tcl paths.  WORK_HOME is the
+# independently writable results/logs/objects/reports root.
+export DESIGN_HOME="${R2G_ORFS_DESIGN_HOME:-$FLOW_DIR/designs}"
+export WORK_HOME="${R2G_ORFS_WORK_HOME:-$PROJECT_DIR/.orfs-work}"
+mkdir -p "$WORK_HOME"
 
 # Repoint any dead stage-hook path (skill-relocation staleness; #39) before copy so
 # the durable source AND this run's working copy are both corrected.
@@ -204,6 +225,63 @@ _heal_hook_paths "$CONFIG_MK"
 # Copy config.mk and constraint.sdc
 cp "$CONFIG_MK" "$ORFS_DESIGN_DIR/config.mk"
 cp "$SDC_FILE" "$ORFS_DESIGN_DIR/constraint.sdc"
+
+# Some deployed ORFS revisions carry official designs with
+# ``SYNTH_HDL_FRONTEND = slang`` but their synth_preamble.tcl still invokes
+# read_verilog for both canonicalization and synthesis.  That makes valid
+# package-using SystemVerilog (for example Ibex) fail before synthesis.  Keep
+# the shared ORFS checkout immutable: stage a complete project-local scripts
+# overlay and replace only the preamble with a bridge that feeds Slang-produced
+# RTLIL into the canonical ORFS pipeline.  The bridge is fail-closed on a
+# missing plugin and is included in the stage toolchain fingerprint below.
+R2G_SYNTH_FRONTEND=$(grep -E '^[[:space:]]*export[[:space:]]+SYNTH_HDL_FRONTEND[[:space:]]*=' \
+  "$ORFS_DESIGN_DIR/config.mk" | head -1 | sed -E 's/^[^=]*=[[:space:]]*//' | tr -d ' ' || true)
+R2G_FRONTEND_BRIDGE_SHA=""
+if [[ "$R2G_SYNTH_FRONTEND" == "slang" ]]; then
+  R2G_SLANG_BRIDGE="$FLOW_SCRIPTS_DIR/synth_preamble_slang_bridge.tcl"
+  if [[ ! -f "$R2G_SLANG_BRIDGE" ]]; then
+    echo "ERROR: SYNTH_HDL_FRONTEND=slang but bridge is missing: $R2G_SLANG_BRIDGE" >&2
+    exit 69
+  fi
+  if ! "$YOSYS_EXE" -m slang -p 'help read_slang' 2>&1 | grep -q 'Slang-based SystemVerilog frontend'; then
+    echo "ERROR: SYNTH_HDL_FRONTEND=slang requires a Yosys read_slang plugin: $YOSYS_EXE" >&2
+    exit 69
+  fi
+  R2G_ORFS_SCRIPT_OVERLAY="$ORFS_DESIGN_DIR/flow-scripts"
+  mkdir -p "$R2G_ORFS_SCRIPT_OVERLAY"
+  cp -a "$FLOW_DIR/scripts/." "$R2G_ORFS_SCRIPT_OVERLAY/"
+  cp "$R2G_SLANG_BRIDGE" "$R2G_ORFS_SCRIPT_OVERLAY/synth_preamble.tcl"
+  export R2G_ORFS_CANONICAL_SCRIPTS_DIR="$FLOW_DIR/scripts"
+  R2G_FRONTEND_BRIDGE_SHA="$(sha256sum "$R2G_SLANG_BRIDGE" | awk '{print $1}')"
+  export YOSYS_FLAGS="${YOSYS_FLAGS:--v 3} -m slang"
+  echo "run_orfs: bound Slang frontend bridge sha256=$R2G_FRONTEND_BRIDGE_SHA yosys=$YOSYS_EXE"
+fi
+
+# Hierarchical ORFS designs resolve each BLOCK's config relative to
+# dirname(DESIGN_CONFIG), not DESIGN_HOME (Makefile GENERATE_ABSTRACT_RULE).
+# A project-local staged parent config therefore must carry the canonical block
+# config subtree too; otherwise recursive make sees a missing DESIGN_CONFIG and
+# aborts before synthesis with "PLATFORM variable not set".
+_R2G_BLOCKS=$(grep -E '^[[:space:]]*export[[:space:]]+BLOCKS[[:space:]]*=' \
+  "$ORFS_DESIGN_DIR/config.mk" | head -1 | sed -E 's/^[^=]*=[[:space:]]*//' || true)
+for _R2G_BLOCK in $_R2G_BLOCKS; do
+  _R2G_BLOCK_SRC="$DESIGN_HOME/$PLATFORM/$DESIGN_NICKNAME/$_R2G_BLOCK"
+  if [[ ! -f "$_R2G_BLOCK_SRC/config.mk" ]]; then
+    echo "ERROR: hierarchical BLOCK '$_R2G_BLOCK' config missing at $_R2G_BLOCK_SRC/config.mk" >&2
+    exit 66
+  fi
+  mkdir -p "$ORFS_DESIGN_DIR/$_R2G_BLOCK"
+  cp -r "$_R2G_BLOCK_SRC"/. "$ORFS_DESIGN_DIR/$_R2G_BLOCK"/
+  if [[ "${R2G_DISABLE_IO_CONSTRAINTS:-0}" == "1" ]]; then
+    sed -i -E 's|^([[:space:]]*export[[:space:]]+IO_CONSTRAINTS[[:space:]]*=).*$|\1 |' \
+      "$ORFS_DESIGN_DIR/$_R2G_BLOCK/config.mk"
+  fi
+done
+if [[ "${R2G_DISABLE_IO_CONSTRAINTS:-0}" == "1" ]]; then
+  sed -i -E 's|^([[:space:]]*export[[:space:]]+IO_CONSTRAINTS[[:space:]]*=).*$|\1 |' \
+    "$ORFS_DESIGN_DIR/config.mk"
+fi
+unset _R2G_BLOCKS _R2G_BLOCK _R2G_BLOCK_SRC 2>/dev/null || true
 
 # Ensure RTL path in config.mk is absolute
 # (The config.mk should already use absolute paths, but let's verify)
@@ -246,19 +324,27 @@ _bd_pair="$(_r2g_new_backend_dir "$PROJECT_DIR/backend")" \
 BACKEND_DIR="${_bd_pair%%$'\t'*}"; RUN_TAG="${_bd_pair#*$'\t'}"; unset _bd_pair
 echo "Starting ORFS run: $RUN_TAG"
 echo "Design: $DESIGN_NAME"
+echo "ORFS workspace nickname: $DESIGN_NICKNAME"
 echo "Platform: $PLATFORM"
 echo "Flow variant: $FLOW_VARIANT"
 echo "Config: $ORFS_DESIGN_DIR/config.mk"
+echo "Writable ORFS work home: $WORK_HOME"
 
-# Run the ORFS flow
-cd "$FLOW_DIR"
+# Run the immutable ORFS Makefile from the writable work root.  A few
+# hierarchical rules still use relative results/... paths even when WORK_HOME
+# is absolute; launching from $FLOW_DIR would redirect those reads into the
+# read-only checkout and lose block-generated LIB/LEF artifacts.
+cd "$WORK_HOME"
 
 # Prevent env collision: ORFS Makefile uses SCRIPTS_DIR internally
 unset SCRIPTS_DIR 2>/dev/null || true
+if [[ "$R2G_SYNTH_FRONTEND" == "slang" ]]; then
+  export SCRIPTS_DIR="$R2G_ORFS_SCRIPT_OVERLAY"
+fi
 
 if [[ -z "$FROM_STAGE" ]]; then
   echo "Cleaning previous ORFS state for variant=$FLOW_VARIANT ..."
-  make DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" clean_all 2>&1 | tail -5 || echo "WARNING: clean_all returned non-zero (may be first run)" >&2
+  make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" clean_all 2>&1 | tail -5 || echo "WARNING: clean_all returned non-zero (may be first run)" >&2
 else
   echo "Skipping clean_all (resuming from stage: $FROM_STAGE)"
 fi
@@ -267,7 +353,7 @@ fi
 
 # Timeout and CPU limit support
 ORFS_TIMEOUT="${ORFS_TIMEOUT:-7200}"
-MAKE_CMD="make DESIGN_CONFIG=\"$ORFS_DESIGN_DIR/config.mk\" FLOW_VARIANT=\"$FLOW_VARIANT\""
+MAKE_CMD="make -f \"$FLOW_DIR/Makefile\" DESIGN_CONFIG=\"$ORFS_DESIGN_DIR/config.mk\" FLOW_VARIANT=\"$FLOW_VARIANT\""
 
 # Allow config.mk to opt into PLACE_FAST / ROUTE_FAST without requiring the
 # caller to set the env var. A line like `export ROUTE_FAST = 1` in
@@ -398,8 +484,8 @@ fi
 # + per-stage {artifact, sha256, parent_run, verified} land in resume_meta.json.
 if [[ -n "$FROM_STAGE" ]]; then
   RERUN_REASON="${R2G_RERUN_REASON:-stage-scoped resume: config edit forces clean_$FROM_STAGE; earlier stages reused}"
-  _RESUME_RDIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-  [[ -d "$_RESUME_RDIR" ]] || _RESUME_RDIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME"
+  _RESUME_RDIR="$WORK_HOME/results/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
+  [[ -d "$_RESUME_RDIR" ]] || _RESUME_RDIR="$WORK_HOME/results/$PLATFORM/$DESIGN_NICKNAME"
   _RESUME_NO_CLEAN=0
   [[ "${R2G_RESUME_NO_CLEAN:-0}" == "1" ]] && _RESUME_NO_CLEAN=1
   set +e +o pipefail
@@ -422,7 +508,7 @@ if [[ -n "$FROM_STAGE" ]]; then
   if [[ "$_RESUME_NO_CLEAN" != "1" ]]; then
     echo "Invalidating resumed stage: make clean_$FROM_STAGE — reason: $RERUN_REASON (earlier stages reused)" \
       | tee -a "$BACKEND_DIR/flow.log"
-    make DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "clean_$FROM_STAGE" 2>&1 | tail -3 \
+    make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "clean_$FROM_STAGE" 2>&1 | tail -3 \
       || echo "WARNING: clean_$FROM_STAGE returned non-zero (stage may have no artifacts yet)" >&2
   else
     echo "Resuming FROM_STAGE=$FROM_STAGE (R2G_RESUME_NO_CLEAN=1: pure crash-resume, no clean) — reason: $RERUN_REASON" \
@@ -433,7 +519,7 @@ fi
 # Toolchain fingerprint for the stage-artifact manifest (RMD2-P0-02 §5.2):
 # ORFS commit + resolved tool paths. Best-effort, computed once.
 _R2G_ORFS_COMMIT="$(git -C "$ORFS_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-_R2G_TOOLCHAIN_FP="orfs=$ORFS_ROOT@$_R2G_ORFS_COMMIT openroad=${OPENROAD_EXE:-} yosys=${YOSYS_EXE:-}"
+_R2G_TOOLCHAIN_FP="orfs=$ORFS_ROOT@$_R2G_ORFS_COMMIT openroad=${OPENROAD_EXE:-} yosys=${YOSYS_EXE:-} frontend=${R2G_SYNTH_FRONTEND:-default} frontend_bridge_sha256=${R2G_FRONTEND_BRIDGE_SHA:-none}"
 
 run_stage() {
   local stage="$1"
@@ -468,8 +554,8 @@ run_stage() {
   # earlier stage is auditable (WHAT it produced, WHEN). Best-effort, fail-soft.
   # The {stage,status,elapsed_s} contract is PRESERVED (many readers key on
   # status per row) — the new keys are purely additive.
-  local _rdir="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-  [[ -d "$_rdir" ]] || _rdir="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME"
+  local _rdir="$WORK_HOME/results/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
+  [[ -d "$_rdir" ]] || _rdir="$WORK_HOME/results/$PLATFORM/$DESIGN_NICKNAME"
   local _extra="\"ts_start\": $stage_start, \"ts_end\": $stage_end"
   if [[ $STAGE_STATUS -eq 0 && -d "$_rdir" ]]; then
     local _art _artmt
@@ -555,7 +641,7 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
     fi
     # Auto-suggest ROUTE_FAST when failure is on a ChipTop/BOOM-scale design
     # (large 4_cts.odb is the cheapest signal; no need to walk the netlist).
-    CTS_ODB="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT/4_cts.odb"
+    CTS_ODB="$WORK_HOME/results/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT/4_cts.odb"
     CTS_SIZE=0
     if [[ -f "$CTS_ODB" ]]; then
       CTS_SIZE=$(stat -c%s "$CTS_ODB" 2>/dev/null || echo 0)
@@ -591,7 +677,10 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
       GP_STUCK=1
     fi
     if [[ -n "${FLOW_DIR:-}" ]]; then
-      LATEST_PLACE_TMP=$(ls -t "$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT/3_4_place_resized.tmp.log" 2>/dev/null | head -1)
+      # A detail-place failure commonly has no resized tmp log.  This is an
+      # optional diagnostic probe: no match must not trigger set -e/pipefail
+      # and skip the mandatory run-meta.json failure receipt below.
+      LATEST_PLACE_TMP=$(ls -t "$WORK_HOME/logs/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT/3_4_place_resized.tmp.log" 2>/dev/null | head -1 || true)
       if [[ -f "$LATEST_PLACE_TMP" ]] && tail -200 "$LATEST_PLACE_TMP" 2>/dev/null | grep -qE "Iteration\s+\|.*Resized.*Buffers.*Nets repaired"; then
         RESIZED_STUCK=1
       fi
@@ -642,17 +731,17 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
 fi
 
 # Collect results (ORFS uses FLOW_VARIANT as subdirectory)
-RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-OBJECTS_DIR="$FLOW_DIR/objects/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-REPORTS_DIR="$FLOW_DIR/reports/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+RESULTS_DIR="$WORK_HOME/results/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
+LOGS_DIR="$WORK_HOME/logs/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
+OBJECTS_DIR="$WORK_HOME/objects/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
+REPORTS_DIR="$WORK_HOME/reports/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
 
 # Fallback: if variant dir doesn't exist, try without it
 if [[ ! -d "$RESULTS_DIR" ]]; then
-  RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME"
-  LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME"
-  OBJECTS_DIR="$FLOW_DIR/objects/$PLATFORM/$DESIGN_NAME"
-  REPORTS_DIR="$FLOW_DIR/reports/$PLATFORM/$DESIGN_NAME"
+  RESULTS_DIR="$WORK_HOME/results/$PLATFORM/$DESIGN_NICKNAME"
+  LOGS_DIR="$WORK_HOME/logs/$PLATFORM/$DESIGN_NICKNAME"
+  OBJECTS_DIR="$WORK_HOME/objects/$PLATFORM/$DESIGN_NICKNAME"
+  REPORTS_DIR="$WORK_HOME/reports/$PLATFORM/$DESIGN_NICKNAME"
 fi
 
 # Copy results to project backend directory
@@ -699,8 +788,8 @@ done
 # never reached backend/final/ (disk full, permissions) must not report
 # success — signoff would later find no GDS and misdiagnose the design.
 # Downgrade to failure with an explicit reason; run-meta records the new status.
-if [[ $MAKE_STATUS -eq 0 && -n "$GDS_FILES" ]] && ! ls "$BACKEND_DIR"/final/*.gds >/dev/null 2>&1; then
-  echo "ERROR: flow succeeded but no GDS reached $BACKEND_DIR/final (result copy failed — disk full?)" | tee -a "$BACKEND_DIR/flow.log"
+if [[ $MAKE_STATUS -eq 0 ]] && ! ls "$BACKEND_DIR"/final/*.gds >/dev/null 2>&1; then
+  echo "ERROR: flow succeeded but expected ORFS GDS was absent or did not reach $BACKEND_DIR/final (workspace=$DESIGN_NICKNAME/$FLOW_VARIANT)" | tee -a "$BACKEND_DIR/flow.log"
   MAKE_STATUS=1
 fi
 
@@ -709,13 +798,22 @@ cat > "$BACKEND_DIR/run-meta.json" <<METAEOF
 {
   "run_tag": "$RUN_TAG",
   "design_name": "$DESIGN_NAME",
+  "design_nickname": "$DESIGN_NICKNAME",
   "platform": "$PLATFORM",
   "flow_variant": "$FLOW_VARIANT",
+  "synth_hdl_frontend": "${R2G_SYNTH_FRONTEND:-default}",
+  "frontend_bridge_sha256": "${R2G_FRONTEND_BRIDGE_SHA:-}",
+  "openroad_exe": "${OPENROAD_EXE:-}",
+  "yosys_exe": "${YOSYS_EXE:-}",
+  "toolchain_fingerprint": "$_R2G_TOOLCHAIN_FP",
+  "orfs_work_home": "$WORK_HOME",
   "config_mk": "$CONFIG_MK",
   "sdc_file": "$SDC_FILE",
   "make_status": $MAKE_STATUS,
   "orfs_results": "$RESULTS_DIR",
-  "orfs_logs": "$LOGS_DIR"
+  "orfs_logs": "$LOGS_DIR",
+  "orfs_objects": "$OBJECTS_DIR",
+  "orfs_reports": "$REPORTS_DIR"
 }
 METAEOF
 

@@ -1,0 +1,28 @@
+{
+  "design": "positive_valid_ready_fsm",
+  "mechanism_family": "VALID_READY_COMMIT",
+  "bug": {
+    "type": "commit_without_ready",
+    "description": "ACCEPT->COMMIT advances before the ready role is observed.",
+    "first_divergence_signal": "commit"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "description": "ACCEPT: next_state = COMMIT; --> ACCEPT: if (ready) next_state = COMMIT;",
+    "module": "positive_valid_ready_fsm",
+    "compatibility_profile": "rtl.fsm.single_guard.v1",
+    "source_state": "ACCEPT",
+    "target_state": "COMMIT",
+    "add_condition": "ready"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "PROVISIONAL_VALID"
+  }
+}

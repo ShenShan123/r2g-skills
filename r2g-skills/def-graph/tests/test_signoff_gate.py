@@ -206,6 +206,16 @@ def test_warn_mode_records_and_proceeds(tmp_path):
     assert "proceeding anyway" in err
 
 
+def test_strict_mode_blocks_dirty_verdict(tmp_path):
+    """Strict is stronger than enforce; dirty evidence must never fall through
+    the warn-only continuation path."""
+    proj, run = _proj(tmp_path, lvs="mismatch")
+    rc, verdict, err = _cli(proj, run, mode="strict")
+    assert rc == 3
+    assert verdict["status"] == "dirty" and verdict["mode"] == "strict"
+    assert "proceeding anyway" not in err
+
+
 def test_def_override_downgrades_enforce(tmp_path):
     """An explicit R2G_DEF override is a deliberate operator decision (e.g. the
     no-backend verifier flows) — enforce degrades to warn, recorded."""

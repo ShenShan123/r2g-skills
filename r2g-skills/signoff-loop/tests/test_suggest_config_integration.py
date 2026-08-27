@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
 
 import suggest_config
@@ -114,6 +116,38 @@ def test_suggest_config_falls_back_without_heuristics(tmp_path, tmp_knowledge_di
     assert result["size_class"] == "medium"
     assert result["recommendations"]["CORE_UTILIZATION"] == 25
     assert result.get("learned_source") is None
+
+
+def test_none_backend_never_reads_legacy_memory(tmp_path, monkeypatch):
+    project = _make_fake_project(tmp_path)
+    monkeypatch.setenv("R2G_MEMORY_BACKEND", "none")
+    monkeypatch.setattr(
+        suggest_config, "_load_feature_corpus",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("legacy KNN opened")))
+    monkeypatch.setattr(
+        suggest_config.knowledge_db, "get_family_heuristics",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("legacy heuristics opened")))
+    result = suggest_config.recommend(project)
+    assert result["memory_backend"] == "none"
+    assert result["learned_source"] is None
+    assert result["memory_proposal"] is None
+
+
+def test_tehm_config_proposal_still_obeys_safety_clamps(tmp_path, monkeypatch):
+    project = _make_fake_project(tmp_path)
+    monkeypatch.setenv("R2G_MEMORY_BACKEND", "tehm")
+    fake_router = types.SimpleNamespace(config_recommendation=lambda **kwargs: {
+        "config_edits": {"CORE_UTILIZATION": 99,
+                         "PLACE_DENSITY_LB_ADDON": 0.01},
+        "source": "tehm_rule", "rule_id": "rule_test",
+        "activation_id": "activation_test", "score": 1.0,
+        "obligation_coverage": 1.0,
+    })
+    monkeypatch.setitem(sys.modules, "runtime_router", fake_router)
+    result = suggest_config.recommend(project)
+    assert result["learned_source"] == "tehm_rule:rule_test"
+    assert result["recommendations"]["CORE_UTILIZATION"] == 25
+    assert result["recommendations"]["PLACE_DENSITY_LB_ADDON"] == 0.10
 
 
 def test_learned_median_float_rounded_to_int(tmp_path, tmp_knowledge_dir, monkeypatch):

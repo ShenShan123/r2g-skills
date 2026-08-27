@@ -47,10 +47,13 @@ r2g_bounded_run() {
 
   setsid "$@" >"$log" 2>&1 </dev/null &
   pid=$!
-  # setsid makes the child a session+group leader (sid == pgid == pid); read the
-  # real pgid back defensively in case the child already exited or setsid forked.
-  pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
-  [[ -n "$pgid" ]] || pgid="$pid"
+  # The asynchronously started `setsid` child has not necessarily executed
+  # setsid(2) when the parent reaches this line.  Reading PGID here therefore
+  # has a race: it can still report the CALLER's process group, and cleanup then
+  # kills the campaign shell itself.  A background shell child is not a process
+  # group leader, so GNU setsid execs in-place and the new SID/PGID is exactly
+  # the PID returned by `$!`; bind to that deterministic identity directly.
+  pgid="$pid"
   _R2G_BOUNDED_SID="$pgid"
 
   # LIM-HO-01 telemetry: peak resident-set of the WHOLE checker session, sampled

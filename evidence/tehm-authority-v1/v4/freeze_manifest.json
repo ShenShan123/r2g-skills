@@ -1,0 +1,35 @@
+{
+  "version": "tehm-authority-v4-freeze-v1",
+  "campaign_id": "authority-v1-batch1-expanded-v2",
+  "status": "FROZEN_NEGATIVE_BASELINE",
+  "canonical_memory_mutation": "none",
+  "promotion_attempted": false,
+  "artifacts": {
+    "authority_receipt_expanded.json": "01255ac78a47e350c7f93e9093f7b0c50467637e9d6f458834b7ccef5525cd38",
+    "expanded_campaign_report_v4.json": "103ea26ba2b0edc098e1600fc987c3c1c22e614333e0ebaf4f015efa10d6616a",
+    "conformal_calibration_report.json": "f613be102ba56cb5b7d62624f1e3553365a1a17bfde4fc8b2870d63e3d535c6a",
+    "external/observations.jsonl": "a686a17a2cd979e8c72105e24578589f35e0aed424cbaf23a881f81aa6231df1",
+    "staging/tehm.sqlite": "d23df5a0969624f7cc1ae23e83aeeb04818f6d3f972761e2d662bdebc1240888",
+    "orfs-next-full/equivalence_report.json": "d2df7ecb0fb612d06a763ff4891cc82a79f86c0708a84ebef9aae9f26398b4ff",
+    "orfs-next-full/signoff_report.json": "9b5841b3c5da84b9c9dc54f0acc9ee43544b0e1b914f2281213b1c4c3ff3f4f3",
+    "orfs-next-full/graph_report.json": "8df04e8e57e93b02b792238765fbc1da1cca545b99de22bb2054ece7c134320c",
+    "orfs-next-full/observation_report.json": "4abccca35a00b70f172b80e1b4b44988407f57b39c137b0b17566384d12e4eae"
+  },
+  "support": {
+    "count": 8,
+    "full_oracle_count": 8,
+    "unique_graph_contexts": 8,
+    "raw_pareto_harmful_count": 7,
+    "raw_pareto_harmful_rate": 0.875,
+    "harmful_gate_threshold": 0.0
+  },
+  "registry": [
+    {
+      "rule_id": "rule_d6f296ce7fc988ce",
+      "target_scope": "route",
+      "status": "candidate",
+      "status_version": 2
+    }
+  ],
+  "canonical_sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f"
+}

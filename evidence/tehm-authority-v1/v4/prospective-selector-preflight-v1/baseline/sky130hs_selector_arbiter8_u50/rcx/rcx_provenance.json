@@ -1,0 +1,11 @@
+{
+  "engine": "openrcx",
+  "run_tag": "RUN_2026-08-25_23-00-37_8_7ffd",
+  "odb_path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_arbiter8_u50/.orfs-work/results/sky130hs/selector_arbiter8/sky130hs_selector_arbiter8_u50/6_final.odb",
+  "odb_sha256": "68a3cc6862d719e0b2eea3f2b862c8f6695c43db96d0c0a81a1474a6e099f3e4",
+  "rules_path": "/opt/EDA4AI/OpenROAD-flow-scripts/flow/platforms/sky130hs/rcx_patterns.rules",
+  "rules_sha256": "d5bd9b1077ceac9929416abca272a6d52e51cd9a575453a31d129817bb286476",
+  "spef_path": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_arbiter8_u50/rcx/6_final.spef",
+  "started_at": "2026-08-25T23:08:17-07:00",
+  "ended_at": "2026-08-25T23:08:18-0700"
+}

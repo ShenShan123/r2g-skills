@@ -1,0 +1,33 @@
+{
+  "design": "predicate_unknown_fsm",
+  "mechanism_family": "HANDSHAKE_COMPLETION",
+  "bug": {
+    "type": "predicate_unknown_mechanism_confusion",
+    "description": "WAIT->COMMIT requires ready, but the predicate is not observable.",
+    "first_divergence_signal": "accepted"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "module": "predicate_unknown_fsm",
+    "source_state": "WAIT",
+    "target_state": "COMMIT",
+    "add_condition": "ready"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "UNKNOWN",
+    "candidate_validity_status": "PROVISIONAL_VALID",
+    "ablation_actions": {
+      "M6": {
+        "source_state": "WAIT",
+        "target_state": "COMMIT",
+        "add_condition": "valid"
+      }
+    }
+  }
+}

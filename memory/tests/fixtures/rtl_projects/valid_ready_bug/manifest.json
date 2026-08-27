@@ -1,0 +1,22 @@
+{
+  "design": "valid_ready_fsm",
+  "mechanism_family": "VALID_READY_COMMIT",
+  "bug": {
+    "type": "commit_without_ready",
+    "description": "ACCEPT->COMMIT transition fires without waiting for ready.",
+    "first_divergence_signal": "commit"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "description": "ACCEPT: next_state = COMMIT;  -->  ACCEPT: if (ready) next_state = COMMIT;",
+    "module": "req_ack_fsm",
+    "source_state": "ACCEPT",
+    "target_state": "COMMIT",
+    "add_condition": "ready"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  }
+}

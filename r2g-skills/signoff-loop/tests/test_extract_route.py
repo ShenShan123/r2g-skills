@@ -80,6 +80,18 @@ def test_no_route_stage_is_unknown(tmp_path):
     assert res["status"] == "unknown"
 
 
+def test_collected_flow_log_supplies_final_route_residual(tmp_path):
+    run = _mk_run(tmp_path, route_status=0)
+    (run / "flow.log").write_text(
+        "Completing 100% with 35 violations.\n"
+        "[INFO DRT-0199] Number of violations = 35.\n"
+        "Completing 100% with 0 violations.\n"
+        "[INFO DRT-0199] Number of violations = 0.\n")
+    res = _run(tmp_path)
+    assert res["status"] == "clean"
+    assert res["total_violations"] == 0
+
+
 def test_no_backend_is_unknown(tmp_path):
     res = _run(tmp_path)
     assert res["status"] == "unknown"

@@ -1,0 +1,211 @@
+{
+  "action": {
+    "domain": "flow.CONFIG_DELTA",
+    "payload": {
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"
+    },
+    "transformation_family": "DENSITY_RELIEF"
+  },
+  "canonical_memory_mutation": "none",
+  "contract": {
+    "action_signature": {
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "domain": "flow.CONFIG_DELTA",
+      "operation_point": "50->45",
+      "transformation_family": "DENSITY_RELIEF"
+    },
+    "authority": {
+      "canonical_memory_mutation": "none",
+      "promotion_eligible": false,
+      "raw_pareto_gate_unchanged": true
+    },
+    "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+    "hard_constraints": {
+      "drc": "PASS",
+      "equivalence": "PASS",
+      "lvs": "PASS",
+      "timing": "PASS",
+      "tns_delta_ns": {
+        "minimum": 0.0
+      }
+    },
+    "primary_objective": {
+      "wns_delta_ns": {
+        "minimum": 0.01
+      }
+    },
+    "resource_budgets": {
+      "area_delta_percent": {
+        "maximum": 2.0
+      },
+      "power_delta_percent": {
+        "maximum": 3.0
+      }
+    },
+    "runtime_policy": {
+      "interval_must_fit_contract": true,
+      "missing_evidence_action": "ABSTAIN",
+      "ood_action": "ABSTAIN"
+    },
+    "status": "PRE_REGISTERED_NEW_ACTION_SIGNATURE",
+    "version": "typed-utility-contract-v1"
+  },
+  "contract_abstain_count": 0,
+  "contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863",
+  "contract_fail_count": 3,
+  "contract_pass_count": 1,
+  "contract_selected_harmful_rate": 0.0,
+  "contract_selected_rate": 0.25,
+  "promotion_eligible": false,
+  "raw_pareto_harmful_count": 4,
+  "raw_pareto_harmful_rate": 1.0,
+  "results": [
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:selector_crc16:support:50->45",
+      "contract_eligible": false,
+      "contract_harmful": true,
+      "contract_status": "FAIL",
+      "failures": [
+        "wns_delta_below_objective"
+      ],
+      "lineage_id": "selector-v1-crc16",
+      "observed_deltas": {
+        "area_um2": 1.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 2e-06,
+        "tns_ns": 0.0,
+        "wns_ns": 0.00578
+      },
+      "observed_relative": {
+        "area_delta_percent": 0.05917159763313609,
+        "power_delta_percent": 0.191831801876115
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "power_w"
+        ],
+        "improved_metrics": [
+          "wns_ns"
+        ],
+        "verdict": "HARMFUL"
+      },
+      "split": "support"
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:selector_fifo16:support:50->45",
+      "contract_eligible": true,
+      "contract_harmful": false,
+      "contract_status": "PASS",
+      "failures": [],
+      "lineage_id": "selector-v1-fifo16",
+      "observed_deltas": {
+        "area_um2": 43.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 0.000417,
+        "tns_ns": 0.0,
+        "wns_ns": 0.015862
+      },
+      "observed_relative": {
+        "area_delta_percent": 0.22241762789013603,
+        "power_delta_percent": 2.2359848789511783
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "power_w"
+        ],
+        "improved_metrics": [
+          "wns_ns"
+        ],
+        "verdict": "HARMFUL"
+      },
+      "split": "support"
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:selector_uart16:support:50->45",
+      "contract_eligible": false,
+      "contract_harmful": true,
+      "contract_status": "FAIL",
+      "failures": [
+        "wns_delta_below_objective",
+        "area_budget_exceeded",
+        "power_budget_exceeded"
+      ],
+      "lineage_id": "selector-v1-uart16",
+      "observed_deltas": {
+        "area_um2": 29.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 9.8e-05,
+        "tns_ns": 0.0,
+        "wns_ns": -0.01421
+      },
+      "observed_relative": {
+        "area_delta_percent": 2.541630148992112,
+        "power_delta_percent": 14.358153893037613
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "power_w",
+          "wns_ns"
+        ],
+        "improved_metrics": [],
+        "verdict": "HARMFUL"
+      },
+      "split": "support"
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:selector_xor32:support:50->45",
+      "contract_eligible": false,
+      "contract_harmful": true,
+      "contract_status": "FAIL",
+      "failures": [
+        "wns_delta_below_objective",
+        "power_budget_exceeded"
+      ],
+      "lineage_id": "selector-v1-xor32",
+      "observed_deltas": {
+        "area_um2": 56.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 0.000153,
+        "tns_ns": 0.0,
+        "wns_ns": -0.01008
+      },
+      "observed_relative": {
+        "area_delta_percent": 1.966982788900597,
+        "power_delta_percent": 9.108769423111271
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "power_w",
+          "wns_ns"
+        ],
+        "improved_metrics": [],
+        "verdict": "HARMFUL"
+      },
+      "split": "support"
+    }
+  ],
+  "sample_count": 4,
+  "source_manifest": "/tmp/tehm-authority-v1/v2-support-50to45/campaign_manifest.json",
+  "source_manifest_sha256": "4aab698c3f631c46dfc14565719e5fec23cd8ab94d95096565ba3d91b721a440",
+  "source_observations": "/tmp/tehm-authority-v1/v2-support-50to45/external/observations.jsonl",
+  "source_observations_sha256": "bdc36c72e00974e147a19ffe2c3ff35cf580fa99400da6916bfd230b0bf0f7e5",
+  "status": "PROSPECTIVE_EXTERNAL_EVIDENCE",
+  "version": "timing-relief-budgeted-v1-prospective-v1"
+}

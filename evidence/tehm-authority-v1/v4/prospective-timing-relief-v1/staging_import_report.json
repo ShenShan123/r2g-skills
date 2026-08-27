@@ -1,0 +1,46 @@
+{
+  "canonical_after": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "canonical_before": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "canonical_memory_mutation": "none",
+  "destination": "staging",
+  "excluded_external_only": 6,
+  "imported": [],
+  "staging_db": {
+    "exists": true,
+    "path": "/tmp/tehm-authority-v1/prospective-batch-full/staging/tehm.sqlite",
+    "physical_effects": 0,
+    "sha256": "75c826c12375bc290d924a389414bc580ed297a2e23a0314044f31e0502c857a",
+    "transitions": 0
+  },
+  "version": "orfs-batch-lane-v1"
+}

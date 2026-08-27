@@ -1,0 +1,28 @@
+{
+  "design": "obligation_recovery_fsm",
+  "mechanism_family": "HANDSHAKE_COMPLETION",
+  "bug": {
+    "type": "obligation_transfer_recovery_branch",
+    "description": "WAIT_REPLY->COMPLETE needs reply and a preserved recovery obligation.",
+    "first_divergence_signal": "done"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "module": "obligation_recovery_fsm",
+    "compatibility_profile": "rtl.fsm.single_guard.v1",
+    "source_state": "WAIT_REPLY",
+    "target_state": "COMPLETE",
+    "add_condition": "reply"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "PROVISIONAL_VALID",
+    "recovery_obligation": "PRESERVE_RECOVERY_BRANCH"
+  }
+}

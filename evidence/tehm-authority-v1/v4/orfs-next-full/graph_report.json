@@ -1,0 +1,33 @@
+{
+  "results": [
+    {
+      "case_id": "sky130hs:and32:0:DENSITY_RELIEF:50->40",
+      "digest": "e8a516b024e5b85ced30d9cd9ded29868bfcab43f7cbaccf4327206eab877d17",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_base_0",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:and32:0:DENSITY_RELIEF:50->40",
+      "digest": "cdfb48e13521ad67c1744b86c436e3e483ed25189e4eb26b3e4f81f23624dcf0",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_and32_density_0",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:toggle32:0:DENSITY_RELIEF:50->40",
+      "digest": "306a3a8a1912ae0bc06865163f87541927746677a9bb5daa5a26d8cf88034636",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_toggle32_base_0",
+      "status": "complete"
+    },
+    {
+      "case_id": "sky130hs:toggle32:0:DENSITY_RELIEF:50->40",
+      "digest": "32f9166683e54c7f0646b9fcff1c35dbb55655e11300805ee49d2629662752a4",
+      "features_rc": 0,
+      "project": "/tmp/tehm-authority-v1/batch1-next/cases/sky130hs_toggle32_density_0",
+      "status": "complete"
+    }
+  ],
+  "version": "orfs-batch0-v1"
+}

@@ -1,0 +1,299 @@
+{
+  "calibration_lineages": [
+    "prospective-v2:v2_cal_hash16:calibration",
+    "prospective-v2:v2_cal_router8:calibration",
+    "prospective-v2:v2_cal_shift32:calibration"
+  ],
+  "calibration_observations": "/tmp/tehm-authority-v1/v2-calibration-50to45/external/observations.jsonl",
+  "calibration_observations_sha256": "892d7e11bbf2dbb7749a9a15ead8fceb13caf0318b076f459a9d93f19cba24a4",
+  "canonical_memory_mutation": "none",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+  "policy": {
+    "action_signature": {
+      "config_edit_keys": [
+        "CORE_UTILIZATION"
+      ],
+      "config_edit_values": {
+        "CORE_UTILIZATION": "45"
+      },
+      "domain": "flow.CONFIG_DELTA",
+      "transformation_family": "DENSITY_RELIEF",
+      "typed_action": null
+    },
+    "calibration": {
+      "conformal_quantiles": {
+        "area_um2": 15.5339,
+        "power_w": 0.000176,
+        "tns_ns": 0.0,
+        "wns_ns": 0.013094
+      },
+      "covered_comparisons": 12,
+      "distance_quantile": 0.95,
+      "empirical_coverage": 1.0,
+      "in_distribution_predictions": 3,
+      "interval_method": "split_conformal_residual_v1",
+      "metric_comparisons": 12,
+      "observed_distance_range": [
+        0.22559,
+        0.687335
+      ],
+      "per_metric": {
+        "area_um2": {
+          "comparisons": 3,
+          "coverage": 1.0,
+          "covered": 3,
+          "max_interval_width": 31.067800000000002
+        },
+        "power_w": {
+          "comparisons": 3,
+          "coverage": 1.0,
+          "covered": 3,
+          "max_interval_width": 0.000352
+        },
+        "tns_ns": {
+          "comparisons": 3,
+          "coverage": 1.0,
+          "covered": 3,
+          "max_interval_width": 0.0
+        },
+        "wns_ns": {
+          "comparisons": 3,
+          "coverage": 1.0,
+          "covered": 3,
+          "max_interval_width": 0.026188000000000003
+        }
+      },
+      "per_metric_coverage_failures": [],
+      "required_metrics": [
+        "area_um2",
+        "power_w",
+        "tns_ns",
+        "wns_ns"
+      ],
+      "sample_count": 3,
+      "selective_risk_coverage": [
+        {
+          "interval_coverage": 1.0,
+          "max_distance": 0.22559,
+          "metric_comparisons": 4,
+          "risk": 0.0,
+          "sample_coverage": 0.3333333333333333
+        },
+        {
+          "interval_coverage": 1.0,
+          "max_distance": 0.237898,
+          "metric_comparisons": 8,
+          "risk": 0.0,
+          "sample_coverage": 0.6666666666666666
+        },
+        {
+          "interval_coverage": 1.0,
+          "max_distance": 0.687335,
+          "metric_comparisons": 12,
+          "risk": 0.0,
+          "sample_coverage": 1.0
+        }
+      ],
+      "uncertainty_quantile": 0.95,
+      "usable_predictions": 3
+    },
+    "evaluations": [
+      {
+        "abstain_reasons": [],
+        "abstained": false,
+        "index": 0,
+        "lineage_id": "prospective-v2:v2_cal_hash16:calibration",
+        "metrics": {
+          "area_um2": {
+            "conformal_radius": 15.5339,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 31.0678,
+            "lower_95": 8.0,
+            "observed": 8.0,
+            "upper_95": 39.0678
+          },
+          "power_w": {
+            "conformal_radius": 0.000176,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.000352,
+            "lower_95": -9.599999999999999e-05,
+            "observed": 2e-05,
+            "upper_95": 0.000256
+          },
+          "tns_ns": {
+            "conformal_radius": 0.0,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.0,
+            "lower_95": 0.0,
+            "observed": 0.0,
+            "upper_95": 0.0
+          },
+          "wns_ns": {
+            "conformal_radius": 0.013094000000000001,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.026188000000000003,
+            "lower_95": -0.0194,
+            "observed": -0.00384,
+            "upper_95": 0.0067880000000000015
+          }
+        },
+        "nearest_distance": 0.237898,
+        "query_graph_context_digest": "3a06ac275a06af1e7256968be7f9042afa6c86ebab98a4031489a10af1bd7448",
+        "status": "evaluated"
+      },
+      {
+        "abstain_reasons": [],
+        "abstained": false,
+        "index": 1,
+        "lineage_id": "prospective-v2:v2_cal_router8:calibration",
+        "metrics": {
+          "area_um2": {
+            "conformal_radius": 15.5339,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 31.067800000000002,
+            "lower_95": 19.35538,
+            "observed": 37.0,
+            "upper_95": 50.42318
+          },
+          "power_w": {
+            "conformal_radius": 0.000176,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.000352,
+            "lower_95": -6.8e-05,
+            "observed": 0.000125,
+            "upper_95": 0.00028399999999999996
+          },
+          "tns_ns": {
+            "conformal_radius": 0.0,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.0,
+            "lower_95": 0.0,
+            "observed": 0.0,
+            "upper_95": 0.0
+          },
+          "wns_ns": {
+            "conformal_radius": 0.013094000000000001,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.026188000000000003,
+            "lower_95": -0.018328,
+            "observed": 0.00434,
+            "upper_95": 0.007860000000000002
+          }
+        },
+        "nearest_distance": 0.22559,
+        "query_graph_context_digest": "96b534e35bcd17cb5421f784d7fc76b185f2f547bfd6b6e2cb5118e26d3fa61c",
+        "status": "evaluated"
+      },
+      {
+        "abstain_reasons": [],
+        "abstained": false,
+        "index": 2,
+        "lineage_id": "prospective-v2:v2_cal_shift32:calibration",
+        "metrics": {
+          "area_um2": {
+            "conformal_radius": 15.5339,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 31.067799999999995,
+            "lower_95": 16.553482,
+            "observed": 21.0,
+            "upper_95": 47.621281999999994
+          },
+          "power_w": {
+            "conformal_radius": 0.000176,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.000352,
+            "lower_95": -5.099999999999999e-05,
+            "observed": -5.1e-05,
+            "upper_95": 0.000301
+          },
+          "tns_ns": {
+            "conformal_radius": 0.0,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.0,
+            "lower_95": 0.0,
+            "observed": 0.0,
+            "upper_95": 0.0
+          },
+          "wns_ns": {
+            "conformal_radius": 0.013094000000000001,
+            "covered": true,
+            "interval_method": "split_conformal_residual_v1",
+            "interval_width": 0.026188000000000003,
+            "lower_95": -0.0164,
+            "observed": -0.0164,
+            "upper_95": 0.009788000000000002
+          }
+        },
+        "nearest_distance": 0.687335,
+        "query_graph_context_digest": "66e5b1742bdfafb1d00d85e151f06fe5cd247bcace22712a1f3d21ac0b17345f",
+        "status": "evaluated"
+      }
+    ],
+    "family": "DENSITY_RELIEF",
+    "firewall": {
+      "action_signature_bound": true,
+      "disjoint": true,
+      "heldout_lineages": [
+        "prospective-v2:v2_cal_hash16:calibration",
+        "prospective-v2:v2_cal_router8:calibration",
+        "prospective-v2:v2_cal_shift32:calibration"
+      ],
+      "overlap": [],
+      "training_lineages": [
+        "selector-v1-crc16",
+        "selector-v1-fifo16",
+        "selector-v1-uart16",
+        "selector-v1-xor32"
+      ]
+    },
+    "interval_method": "split_conformal_residual_v1",
+    "mutation": "none; held-out samples were not recorded in TEHM",
+    "reason": "calibrated",
+    "status": "ready",
+    "thresholds": {
+      "conformal_quantiles": {
+        "area_um2": 15.5339,
+        "power_w": 0.000176,
+        "tns_ns": 0.0,
+        "wns_ns": 0.013094
+      },
+      "distance_ceiling": 3.0,
+      "max_distance": 0.6423912999999999,
+      "max_uncertainty_widths": {
+        "area_um2": 31.067800000000002,
+        "power_w": 0.000352,
+        "tns_ns": 0.0,
+        "wns_ns": 0.026188000000000003
+      },
+      "min_unique_contexts": 3,
+      "required_coverage": 0.8,
+      "required_metric_coverage": 0.8
+    },
+    "version": "physical-retrieval-calibration-v0.3"
+  },
+  "promotion_eligible": false,
+  "status": "ready",
+  "support_db": "/tmp/tehm-authority-v1/v2-support-50to45/staging/tehm.sqlite",
+  "support_db_sha256": "2c1ce3b297ec7a5db6cbd2ba0113a8c204cd4146c2918964ed9c81cf09d8a212",
+  "support_manifest": "/tmp/tehm-authority-v1/v2-support-50to45/campaign_manifest.json",
+  "support_manifest_sha256": "4aab698c3f631c46dfc14565719e5fec23cd8ab94d95096565ba3d91b721a440",
+  "training_lineages": [
+    "selector-v1-xor32",
+    "selector-v1-fifo16",
+    "selector-v1-crc16",
+    "selector-v1-uart16"
+  ],
+  "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863",
+  "version": "timing-relief-calibration-v1"
+}

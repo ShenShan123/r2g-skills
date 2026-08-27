@@ -1,0 +1,20 @@
+{
+  "status": "clean",
+  "mismatch_count": 0,
+  "lvsdb": {},
+  "log_info": {
+    "tool": "netgen",
+    "match": "match",
+    "report_file": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/lvs/netgen_lvs.rpt",
+    "log_file": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/lvs/netgen_lvs.log"
+  },
+  "tool": "netgen",
+  "run_tag": "RUN_2026-08-24_22-26-06_15866_5153",
+  "gds_path": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/.orfs-work/results/sky130hs/shift32/sky130hs_shift32_density_0/6_final.gds",
+  "gds_sha256": "7cad8793ef0cd79ee72380480c692b17ab65e8488f0c2279b76f756b4cd291c4",
+  "provenance": {
+    "run_tag": "RUN_2026-08-24_22-26-06_15866_5153",
+    "run_dir": "/tmp/tehm-authority-v1/batch1-tiny/cases/sky130hs_shift32_density_0/backend/RUN_2026-08-24_22-26-06_15866_5153",
+    "source": "explicit"
+  }
+}

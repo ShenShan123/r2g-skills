@@ -1,0 +1,135 @@
+{
+  "version": "orfs-batch0-preflight-v3",
+  "campaign_id": "orfs-batch0-v1",
+  "run_roots": [
+    "/tmp/tehm-orfs/orfs-batch0-smoke-r1",
+    "/tmp/tehm-orfs/orfs-batch0-smoke-r2"
+  ],
+  "source_freeze": {
+    "orfs_root": "/data1/zhangdy/Tools/OpenROAD-flow-scripts",
+    "orfs_git_commit": "eb14d768b6c34cf4f8c5177f3531422b94cf2544",
+    "orfs_tree_sha256": "037f67fce06f330717260cbab03e4fb625c42c0ddd28956e9d271056aa5a8bb3",
+    "freeze_file_sha256": "2aa32d8033167bb1ee566171467036da0d2260c38743a683581c06a532eb96a1",
+    "tool_versions": {
+      "yosys": "0.9 (git sha1 1979e0b)",
+      "iverilog": "11.0",
+      "openroad": "v2.0-17598-ga008522d8"
+    }
+  },
+  "toolchain_binding": {
+    "pre_fix_runs": {
+      "source_manifest_root": "/data1/zhangdy/Tools/OpenROAD-flow-scripts",
+      "executor_root": "/opt/EDA4AI/OpenROAD-flow-scripts",
+      "mismatch": true,
+      "classification": "diagnostic_only_not_eligible"
+    },
+    "post_fix_probe": {
+      "root": "/tmp/tehm-orfs/orfs-batch0-orfsroot-r3",
+      "executor_root": "/data1/zhangdy/Tools/OpenROAD-flow-scripts",
+      "route_verdict": "FLOW_FAILURE",
+      "failure_marker": "openroad dbTable assertion during detailed_route",
+      "classification": "toolchain_incompatible_fail_closed"
+    },
+    "guard_policy": "preflight_orfs_toolchain accepts only ORFS-packaged binaries or explicit OPENROAD_EXE/YOSYS_EXE; absent binding fails before EDA and no PATH fallback is allowed",
+    "preflight_receipt": {
+      "version": "orfs-toolchain-preflight-v1",
+      "orfs_root": "/data1/zhangdy/Tools/OpenROAD-flow-scripts",
+      "status": "blocked",
+      "reasons": [
+        "/data1/zhangdy/Tools/OpenROAD-flow-scripts has no packaged openroad; set OPENROAD_EXE explicitly",
+        "/data1/zhangdy/Tools/OpenROAD-flow-scripts has no packaged yosys; set YOSYS_EXE explicitly"
+      ],
+      "classification": "fail_closed_before_eda"
+    }
+  },
+  "manifest": {
+    "design_count": 7,
+    "splits": {
+      "support": 4,
+      "calibration": 2,
+      "heldout": 1
+    },
+    "source_disjoint": true,
+    "equivalence": "7/7 PASS (cryptographic source identity for config-only arms)"
+  },
+  "fresh_pair": {
+    "lineage": "batch0-v1:sky130hs:gcd",
+    "action": {
+      "family": "DENSITY_RELIEF",
+      "config_edit": {
+        "CORE_UTILIZATION": "50 -> 40"
+      }
+    },
+    "replication": {
+      "r1": {
+        "workers": 1,
+        "cpus_per_run": 2,
+        "before": {
+          "route": "FAIL",
+          "failure_marker": "GRT-0116",
+          "total_overflow": 6
+        },
+        "after": {
+          "route": "PASS",
+          "finish": "PASS",
+          "timing_wns_ns": -0.573391,
+          "timing_tns_ns": -21.2427,
+          "timing_violations": 48,
+          "strict_signoff": "pass_with_caveats",
+          "graph": "BLOCKED_BY_STRICT_TIMING"
+        }
+      },
+      "r2": {
+        "workers": 1,
+        "cpus_per_run": 6,
+        "before": {
+          "route": "FAIL",
+          "failure_marker": "GRT-0116"
+        },
+        "after": {
+          "route": "PASS",
+          "finish": "PASS",
+          "timing_wns_ns": -0.573391,
+          "timing_tns_ns": -21.2427,
+          "timing_violations": 48,
+          "strict_signoff": "pass_with_caveats",
+          "graph": "NOT_RUN_AFTER_TIMING_BLOCK"
+        }
+      }
+    }
+  },
+  "oracle_summary": {
+    "route_fail_to_pass_reproduced": true,
+    "route_fail_to_pass_bound_toolchain": false,
+    "timing_clean": false,
+    "strict_signoff_clean": false,
+    "def_graph_complete": false,
+    "eligible_positive": 0,
+    "learner_eligible": 0,
+    "full_batch_eligible": false,
+    "toolchain_preflight_blocked": true,
+    "blocking_gates": [
+      "toolchain_compatibility",
+      "timing_clean",
+      "strict_signoff_exact_pass",
+      "def_graph_complete",
+      "complete_artifact_digest"
+    ]
+  },
+  "boundary": {
+    "canonical_memory_mutation": "none",
+    "canonical_snapshot_sha256": "968cbb2efae17d33a7f5af13196a9e5a544950ef2f7aeda8f98d6183400fe47b",
+    "staging_imported": 0,
+    "promotion_attempted": false,
+    "production_promotion_eligible": false
+  },
+  "next_gate": "supply a toolchain-compatible ORFS_ROOT plus packaged or explicitly bound OPENROAD/Yosys binaries, then repair_or_reparameterize timing/signoff and rerun this single pair through equivalence, signoff, graph, observe, and staging before expanding to all 14 arms",
+  "commands": [
+    "run_orfs_batch0.py --root /tmp/tehm-orfs/orfs-batch0-smoke-r2 --phase freeze",
+    "run_orfs_batch0.py --root /tmp/tehm-orfs/orfs-batch0-smoke-r2 --phase prepare",
+    "run_orfs_batch0.py --root /tmp/tehm-orfs/orfs-batch0-smoke-r2 --phase run --projects <gcd-before> <gcd-after> --cpus-per-run 6",
+    "run_orfs_batch0.py --root /tmp/tehm-orfs/orfs-batch0-smoke-r2 --phase equivalence",
+    "run_orfs_batch0.py --root /tmp/tehm-orfs/orfs-batch0-smoke-r2 --phase signoff --projects <gcd-after>",
+    "run_orfs_batch0.py --root /tmp/tehm-orfs/orfs-batch0-smoke-r2 --phase observe"
+  ]
+}

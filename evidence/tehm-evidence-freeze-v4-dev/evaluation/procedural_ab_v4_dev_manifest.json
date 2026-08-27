@@ -1,0 +1,86 @@
+{
+  "version": "procedural-ab-v4-development-v2",
+  "status": "FROZEN_TASKS",
+  "source_snapshot": {
+    "freeze_pointer": "canonical_freeze_pointer_v1.json",
+    "canonical_bundle_id": "tehm-evidence-freeze-v4-dev"
+  },
+  "budget": {
+    "arms": ["M1", "M8"],
+    "repeats_per_task": 3,
+    "oracle": "IcarusOracle",
+    "same_action_budget": true
+  },
+  "firewall": {
+    "training_lineages": [
+      "p3_positive_valid_ready",
+      "p3_positive_fifo_space",
+      "p3_obligation_recovery_b",
+      "p3_reset_restore_a",
+      "p3_reset_restore_c",
+      "p3_width_correct_a",
+      "p3_width_correct_b",
+      "p3_overlap_priority_a",
+      "p3_overlap_priority_b"
+    ],
+    "heldout_lineages": [
+      "p3_positive_credit_return",
+      "p3_obligation_recovery",
+      "p3_reset_restore_b"
+      ,"p3_overlap_priority_c"
+    ],
+    "ab_lineages": [
+      "p3_positive_credit_return",
+      "p3_obligation_recovery",
+      "p3_reset_restore_b"
+      ,"p3_overlap_priority_c"
+    ],
+    "disjoint": true
+  },
+  "tasks": [
+    {
+      "task_id": "v4:p3-positive-credit-return",
+      "lineage_id": "p3_positive_credit_return",
+      "lineage_cluster": "rtl:credit-return",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_positive_credit_return",
+      "expected_mechanism_family": "CREDIT_RETURN_COMPLETION"
+    },
+    {
+      "task_id": "v4:p3-obligation-recovery",
+      "lineage_id": "p3_obligation_recovery",
+      "lineage_cluster": "rtl:obligation-recovery",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_obligation_recovery",
+      "expected_mechanism_family": "HANDSHAKE_COMPLETION"
+    },
+    {
+      "task_id": "v4:p3-reset-restore-b",
+      "lineage_id": "p3_reset_restore_b",
+      "lineage_cluster": "rtl:reset-restore",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_reset_restore_b",
+      "expected_mechanism_family": "RESET_SEMANTIC_LOSS"
+    },
+    {
+      "task_id": "v4:p3-width-correct-c",
+      "lineage_id": "p3_width_correct_c",
+      "lineage_cluster": "rtl:width-correction",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_width_correct_c",
+      "expected_mechanism_family": "WIDTH_CORRECT"
+    },
+    {
+      "task_id": "v4:p3-overlap-priority-c",
+      "lineage_id": "p3_overlap_priority_c",
+      "lineage_cluster": "rtl:overlap-priority",
+      "fixture": "memory/tests/fixtures/rtl_projects/p3_overlap_priority_c",
+      "expected_mechanism_family": "OVERLAP_PRIORITY_ARBITRATION"
+    }
+  ],
+  "acceptance": {
+    "min_tasks": 5,
+    "require_cluster_intervals": true,
+    "min_m8_successes": 1,
+    "max_m8_harmful_rate": 0.0,
+    "m1_m8_success_delta_positive": true,
+    "require_complete_obligation_coverage": true,
+    "require_canonical_memory_mutation": false
+  }
+}

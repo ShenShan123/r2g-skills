@@ -1,0 +1,188 @@
+"""Rule lifecycle + A/B (design doc 20.10, 24.3, 26 Phase 9; test list 27.1).
+
+Validity-gated entry into shadow (H6); monotonic status_version; variance-aware
+A/B judging; promotion authority refuses stale / non-differing / regression /
+low-coverage trials.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from contracts import RepairContext
+from tehm.canonical.capture import ExecutionRecord, capture
+from tehm.crystallization.build_rules import crystallize_all
+from tehm.lifecycle.authority import apply_trial_verdict
+from tehm.lifecycle.rule_status import (
+    RuleLifecycleError,
+    enter_shadow,
+    get_status,
+    set_status,
+)
+from tehm.lifecycle.trial_adapter import (
+    TEHMRuleTrialSubject,
+    judge_trial,
+    lcb,
+    run_trial,
+)
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def _crystallize_valid_rule(tmp_tehm, sample_record_dict) -> str:
+    conn, store, _ = tmp_tehm
+    base = json.loads(json.dumps(sample_record_dict))
+    for i in range(3):
+        rec = json.loads(json.dumps(base))
+        rec["record_id"] = f"lf_{i}"
+        rec["lineage_id"] = f"lineage_{i}"
+        rec["episode"] = {"episode_id": f"ep_lf_{i}", "lineage_id": f"lineage_{i}",
+                          "step_index": 0, "terminal_status": "VERIFIED_REPAIR"}
+        rec["action"]["payload"]["config_edits"] = {"PLACE_DENSITY_LB_ADDON": f"0.1{i + 4}"}
+        rec["before"]["config"]["PLACE_DENSITY_LB_ADDON"] = "0.10"
+        rec["after"]["config"]["PLACE_DENSITY_LB_ADDON"] = f"0.1{i + 4}"
+        rec["observation_delta"]["first_divergence"]["before"] = 10 + i
+        capture(conn, store, ExecutionRecord.from_dict(rec))
+    rules = crystallize_all(conn)
+    return rules[0]["rule_id"]
+
+
+# -- rule status ----------------------------------------------------------------
+
+def test_enter_shadow_validity_gated(tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    valid_rule = _crystallize_valid_rule(tmp_tehm, sample_record_dict)
+    version = enter_shadow(conn, rule_id=valid_rule, target_scope="drc",
+                           provenance={"source": "test"})
+    assert version == 1
+    status = get_status(conn, rule_id=valid_rule, target_scope="drc")
+    assert status["status"] == "shadow"
+    assert status["status_version"] == 1
+
+    # a below-validity rule is refused (H6)
+    conn.execute(
+        """INSERT OR REPLACE INTO tehm_rules (
+               rule_id, domain, before_pattern_json, after_pattern_json,
+               hard_preconditions_json, context_profile_json, obligations_json,
+               validity_status, validity_profile_json, confidence_json,
+               utility_json, risk_profile_json, predicate_schema_version,
+               role_schema_version, crystallizer_version, merge_trace_digest,
+               created_at, updated_at)
+           VALUES (?, 'flow.signoff', '{}', '{}', '[]', '{}', '[]',
+               'REJECT_DEGENERATE', '{}', '{}', '{}', '[]',
+               'predicate-v0.1', 'role-v0.1', 'x', 'x', '', '')""",
+        ("rule_bad",))
+    conn.commit()
+    with pytest.raises(RuleLifecycleError, match="H6"):
+        enter_shadow(conn, rule_id="rule_bad", target_scope="drc")
+
+
+def test_status_version_bumps_on_every_transition(tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_valid_rule(tmp_tehm, sample_record_dict)
+    enter_shadow(conn, rule_id=rule_id, target_scope="drc")
+    set_status(conn, rule_id=rule_id, target_scope="drc", status="candidate")
+    set_status(conn, rule_id=rule_id, target_scope="drc", status="promoted")
+    status = get_status(conn, rule_id=rule_id, target_scope="drc")
+    assert status["status_version"] == 3
+
+
+# -- A/B judging -----------------------------------------------------------------
+
+def test_lcb_variance_aware():
+    assert lcb([1.0, 1.0, 1.0], z=1.0) == 1.0
+    assert lcb([0.0, 0.0, 0.0], z=1.0) == 0.0
+    assert lcb([1.0]) < 1.0  # one sample -> maximal uncertainty (0.5 se)
+
+
+def test_judge_trial_verdicts():
+    assert judge_trial([0.0, 0.0], [1.0, 1.0])[0] == "win"
+    assert judge_trial([1.0, 1.0], [0.0, 0.0])[0] == "loss"
+    assert judge_trial([0.0, 1.0], [0.0, 1.0])[0] == "inconclusive"
+
+
+def test_run_trial_records_tehm_trials(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    subject = TEHMRuleTrialSubject(rule_id="rule_x", status_version=1)
+
+    def arm_a(plan, ctx):   # control fails
+        return {"success": False}
+
+    def arm_b(plan, ctx):   # rule succeeds
+        return {"success": True}
+
+    trial = run_trial(conn, subject=subject, context=RepairContext(check="drc"),
+                      arm_a_evaluator=arm_a, arm_b_evaluator=arm_b, repeats=2,
+                      trial_uuid="u1")
+    assert trial["verdict"] == "win"
+    row = conn.execute(
+        "SELECT verdict, rule_id, status_version FROM tehm_trials WHERE trial_uuid='u1'"
+    ).fetchone()
+    assert row["verdict"] == "win"
+    assert row["rule_id"] == "rule_x"
+
+
+# -- promotion authority ----------------------------------------------------------
+
+def test_authority_promotes_on_win(tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_valid_rule(tmp_tehm, sample_record_dict)
+    enter_shadow(conn, rule_id=rule_id, target_scope="drc")
+    set_status(conn, rule_id=rule_id, target_scope="drc", status="candidate")
+    version = get_status(conn, rule_id=rule_id, target_scope="drc")["status_version"]
+    new_status = apply_trial_verdict(
+        conn, rule_id=rule_id, target_scope="drc", verdict="win",
+        obligation_coverage=1.0, created_regressions=[], arms_differ=True,
+        expected_status_version=version)
+    assert new_status == "promoted"
+    assert get_status(conn, rule_id=rule_id, target_scope="drc")["status"] == "promoted"
+
+
+def test_authority_demotes_on_loss(tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_valid_rule(tmp_tehm, sample_record_dict)
+    enter_shadow(conn, rule_id=rule_id, target_scope="drc")
+    version = get_status(conn, rule_id=rule_id, target_scope="drc")["status_version"]
+    new_status = apply_trial_verdict(
+        conn, rule_id=rule_id, target_scope="drc", verdict="loss",
+        obligation_coverage=1.0, created_regressions=[], arms_differ=True,
+        expected_status_version=version)
+    assert new_status == "demoted"
+
+
+def test_authority_refuses_stale_or_non_differing_or_regression(tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_valid_rule(tmp_tehm, sample_record_dict)
+    enter_shadow(conn, rule_id=rule_id, target_scope="drc")
+    version = get_status(conn, rule_id=rule_id, target_scope="drc")["status_version"]
+
+    # stale version
+    assert apply_trial_verdict(
+        conn, rule_id=rule_id, target_scope="drc", verdict="win",
+        obligation_coverage=1.0, created_regressions=[], arms_differ=True,
+        expected_status_version=version + 99) is None
+    # arms did identical work
+    assert apply_trial_verdict(
+        conn, rule_id=rule_id, target_scope="drc", verdict="win",
+        obligation_coverage=1.0, created_regressions=[], arms_differ=False,
+        expected_status_version=version) is None
+    # hard regression
+    assert apply_trial_verdict(
+        conn, rule_id=rule_id, target_scope="drc", verdict="win",
+        obligation_coverage=1.0, created_regressions=["lvs"],
+        arms_differ=True, expected_status_version=version) is None
+    # insufficient obligation coverage
+    assert apply_trial_verdict(
+        conn, rule_id=rule_id, target_scope="drc", verdict="win",
+        obligation_coverage=0.2, created_regressions=[], arms_differ=True,
+        expected_status_version=version) is None
+    # inconclusive leaves unchanged
+    assert apply_trial_verdict(
+        conn, rule_id=rule_id, target_scope="drc", verdict="inconclusive",
+        obligation_coverage=1.0, created_regressions=[], arms_differ=True,
+        expected_status_version=version) is None
+    status = get_status(conn, rule_id=rule_id, target_scope="drc")
+    assert status["status"] == "shadow"
+    assert status["status_version"] == version

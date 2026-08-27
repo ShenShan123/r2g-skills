@@ -1,0 +1,23 @@
+module positive_credit_return_fsm (
+    input wire clk, input wire rst_n, input wire request, input wire credit_return,
+    output reg done
+);
+    localparam [1:0] IDLE = 2'd0, WAIT = 2'd1, DONE = 2'd2;
+    reg [1:0] state, next_state;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) state <= IDLE;
+        else state <= next_state;
+    end
+    always @(*) begin
+        next_state = state;
+        case (state)
+            IDLE: if (request) next_state = WAIT;
+            WAIT: next_state = DONE;
+            DONE: next_state = IDLE;
+        endcase
+    end
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) done <= 1'b0;
+        else done <= (state == DONE);
+    end
+endmodule

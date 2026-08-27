@@ -1,0 +1,1448 @@
+# TEHM — Typed Executable Hardware Memory
+
+**Versioned Verified Hardware Experience Graph**：R2G 记忆平面的完整替换方案。
+
+设计文档：[`docs/Typed_Executable_Hardware_Memory_R2G.md`](docs/Typed_Executable_Hardware_Memory_R2G.md)
+
+> 本目录是设计文档指定的工作路径。目标是用三层 + 五视图的 Typed Executable
+> Hardware Memory **完整替换** R2G 原始 symptom-indexed statistical memory，
+> 同时把原版 R2G memory 保留为独立 baseline（二者严格隔离，honesty H5）。
+
+---
+
+## 当前进度：Phase 0 - 11（实现骨架；能力验证分开记账）
+
+设计文档中的 Phase 0–11 已有对应模块和脚手架，但“模块存在”不等于“研究能力
+已验证”。截至 2026-08-26，工作树已补齐 P0 数据完整性/重现性与 P1
+结构化绑定证明，并生成当前源码绑定的 v4 development freeze；下方 v3 数字仍是
+历史外部 freeze 的声明，不能当作本工作树的现时测试结果。v3 的完整 reproduce
+仍需要它自己的 freeze 指针；当前 v4 可直接由本地 `evidence/` bundle 重放。
+
+<!-- TEHM_EVIDENCE_V3_START -->
+### Evidence Contract v3（由 freeze manifest 自动生成）
+
+- Freeze contract：`tehm-evidence-freeze-v3`；唯一 canonical bundle id：
+  `tehm-evidence-freeze-v3-refresh`；路径必须通过机器可读指针
+  后续脚本和报告必须以机器可读指针
+  [`evaluation/canonical_freeze_pointer_v1.json`](evaluation/canonical_freeze_pointer_v1.json)
+  为唯一解析入口；不得引用其它 v3 目录；
+  当前开发基线为 tag `tehm-p0-baseline-20260817-postaudit`（commit `86178eb`）。
+- TEHM snapshot：116 transitions / 606 views / 114 physical effects / 2 rules。
+- 回归：`225 passed`；H1–H12 + A1 审计：`ALL GREEN`；H7=`1 activations preserve obligation honesty`；H10=`1 real ORFS trial(s) have verified rollback receipts`。
+- H11：export → import → export byte-stable；reproduce 入口为 `reproduce.sh`。
+- M0/M1/M8 pilot：M0=0/6，M1=0/6，M8=6/6；该结果仍不是普适 benchmark。
+- Physical calibration：memory count 114 → 114；策略状态：`ihp-sg13g2|DENSITY_RELIEF|research=ready, ihp-sg13g2|PLACEMENT_DENSITY_RECOVERY|research=ready, ihp-sg13g2|ROUTING_CAPACITY_RECOVERY|research=ready, sky130hd|DENSITY_RELIEF|strict_clean=ready, sky130hd|PLACEMENT_DENSITY_RECOVERY|strict_clean=ready, sky130hd|ROUTING_CAPACITY_RECOVERY|strict_clean=ready, sky130hs|DENSITY_RELIEF|research=ready, sky130hs|PLACEMENT_DENSITY_RECOVERY|research=ready, sky130hs|ROUTING_CAPACITY_RECOVERY|research=ready`。
+- Parametric readiness：`READY_FOR_IMPLEMENTATION`（只表示可运行 shadow RFC）；Parametric
+  View：`NOT_IMPLEMENTED`；lineage diversity 2/2。该 readiness 不授予 canonical 或
+  production authority。
+- Source binding（HEAD、dirty-diff、workspace state digest）记录在 `bundle_manifest.json`，由 reproduce 验证。
+
+Parametric View 只有在 distance、coverage、uncertainty、lineage diversity 四项同时通过，并且该 bundle 可重放后，才允许进入 shadow RFC。
+<!-- TEHM_EVIDENCE_V3_END -->
+
+### Current v4 development freeze（2026-08-26）
+
+当前源码已生成便携 development freeze：
+[`evidence/tehm-evidence-freeze-v4-dev`](../evidence/tehm-evidence-freeze-v4-dev)。
+其 bundle digest 与 manifest digest 以该目录内 `bundle_manifest.json` 为准，源码绑定
+也记录在那里；不在 README 中复制易失的 digest 文本。内含 schema-v4 canonical snapshot、真实 Icarus
+training receipts、P0 dependency-free regression smoke、H1–H12/A1 审计；H9 与
+H11 均为实际检查而非 N/A。pytest 仍因当前环境缺少依赖未计入该 development
+freeze。
+
+### C4/C5 RTL Asset Memory shadow（2026-08-26）
+
+已用 `req_ack_bug` / `req_ack_bug2` 两个独立 training lineage 生成真实
+`CapabilityGapReceipt`，并通过 manifest/结构化槽位绑定同一
+`RTL_REWRITE_TEMPLATE`。模板在两个 training lineage 与 held-out
+`req_ack_bug3` 上均由 Icarus/vvp 通过 target + frozen regression；异构
+`valid_ready_bug` 被兼容性边界拒绝为 `INAPPLICABLE`。asset 只在派生 shadow
+数据库注册为 `candidate`，不写 canonical、不进入 production。由这些独立 receipt
+推导的七项 asset authority gate（schema/static/verifier/compatibility/
+cross-lineage/regression/rollback）当前均为 `true`，但这只是 audit-only 的
+`asset_promotion_eligible`，没有执行 lifecycle promotion 或 production runtime
+导入。完整 receipt 位于
+[`evidence/tehm-asset-gap-shadow-rtl-r1-dev/asset_gap_shadow_report.json`](../evidence/tehm-asset-gap-shadow-rtl-r1-dev/asset_gap_shadow_report.json)，
+重放入口为 `scripts/build_rtl_asset_gap_shadow.py`。
+当前新增的 `assets.authority` 还提供 content-bound
+`record_asset_authority()`/`verify_asset_authority()` 与 strict `promote_asset()`；
+它们会重新读取 registry asset、校验 content digest，并将 validation/binding/
+rollback evidence 写入 append-only ledger；replay 时从 ledger 重新推导七项 gate，
+再允许显式 authority 调用 lifecycle。shadow builder 已写入并验证这两类 ledger
+rows，但仍只保持 candidate-only 结论；没有自动 promotion 或 production import。
+ledger schema 初始化不再通过会隐式提交的 `executescript` 完成；整组 evidence
+rows 与 authority receipt 现在共用 savepoint，晚到的 immutable-row 冲突会整体回滚，
+且不会提交调用方已有事务。
+
+### C1-C8 RTL capability attribution（2026-08-26）
+
+在上述 asset shadow 之上新增了 evaluation-only capability harness：基线策略、
+候选策略和移除 asset 的 ablation 都重新调用 Icarus/vvp；候选策略的 runtime
+load receipt 绑定到实际执行 receipt，而不是只读取数据库中的 policy row。两个
+training lineage 的 target failure 均被修复，独立 held-out `req_ack_bug3` 通过，
+异构 `valid_ready_bug` 保持 `INAPPLICABLE`，因此 C1–C8 attribution gates 全部为
+`true`。这只证明该小型 fixture 上的可归因行为变化，capability 仍为
+`candidate`，`capability_promotion_eligible` 是审计结果，不执行 capability 或
+production promotion。报告位于
+[`evidence/tehm-capability-attribution-rtl-r1-dev/rtl_capability_attribution_report.json`](../evidence/tehm-capability-attribution-rtl-r1-dev/rtl_capability_attribution_report.json)，
+重放入口为 `scripts/build_rtl_capability_attribution.py`。
+
+### C1-C8 ORFS capability attribution（2026-08-26）
+
+真实 ORFS fail→pass pair 的 attribution lane 现在也会把 C1–C8 写入派生 v4
+数据库：每个 gate 都绑定不可变的 capability evidence row，并重新校验 candidate
+policy snapshot 与 evaluation-runtime load receipt；最新的 candidate load receipt
+还绑定实际 runtime execution receipt，避免仅凭 snapshot lookup 满足 C3。当前
+failpass-r2 cohort 的
+C1–C8 与 capability authority receipt 均为 `eligible=true`，但这仍是
+evaluation-only capability evidence；六项 rule promotion gates 仍全部缺失，
+`promotion_attempted=false`、`production_promotion_eligible=false`，canonical
+memory 未发生变化。C8 的 `gain_without_memory` 现在由实际执行的 baseline
+`M_t+1 - ΔMemory` ablation receipt 推导，并绑定独立 policy-load receipt，不再接受
+调用方布尔值。重放入口为 `scripts/build_orfs_capability_attribution.py`，
+报告为
+[`evidence/tehm-capability-attribution-orfs-r2-dev/capability_attribution_report.json`](../evidence/tehm-capability-attribution-orfs-r2-dev/capability_attribution_report.json)。
+
+authority evaluator 现在区分 `NOT_ESTABLISHED`、`FAIL` 和 `PASS`：空 gate map
+会报告六项 `NOT_ESTABLISHED`，而已提交但未达阈值的证据才报告 `FAIL`；新增的
+`not_established`、`failed`、`all_gates_established` 只改善 receipt 可审计性，不
+改变六项合取或 promotion 行为。
+现在 rule promotion 也有独立的数据库绑定 authority seam：
+`lifecycle/rule_authority.py` 将每个 gate 的 payload 写入 immutable evidence ledger，
+并把 rule 内容 digest、candidate `status_version` 与真实 winning `tehm_trials` 行绑定。
+`record_rule_authority()` 从这些行重新推导 rollback、registry、obligation、cross-lineage
+TE、harmful-rate 和 conformal coverage；`verify_rule_authority()` 在消费前再次重放。
+因此 production wrapper 没有 authority receipt 时即使收到全 `True` map 也保持拒绝，只有
+验证通过的 receipt 才能调用 `promote_rule()` 或 strict trial authority；失败尝试只留下
+审计行，不改变 lifecycle。
+能力 authority 的 gate evidence 与最终 authority row 现在通过同一 savepoint
+原子写入；不可变 evidence 冲突或后续写入失败会回滚整组 C1–C8 rows，不留下部分
+authority 证据。若调用方已有事务，则只释放 savepoint，由调用方继续负责最终提交。
+
+### Online consolidation trigger lane（2026-08-26）
+
+`evolution.observe_transition()` 现在在记录 transition/causal/novelty/conflict
+事件后，额外生成确定性的 `ConsolidationTriggerReceipt`：novel mechanism、达到
+learner support、冲突或 harmful outcome 会标出受影响的 effect group，并写入
+hash-chained `CONSOLIDATION_TRIGGERED` 事件。触发后会继续运行两个
+`dry_run=True` 投影（受影响 group 与完整 campaign rebuild），把等价性、规则
+来源 witness 和 `mode=preview` 写入 `RULE_REVISION_PROPOSED`；同时由纯函数决策层
+给出 `RETAIN`/`ADD`/`MERGE`/`REVISE`/`SPLIT`/`QUARANTINE` 等 shadow operation。
+该 proposal 仍是
+shadow-only，不写 `tehm_rules`、`tehm_rule_revisions` 或 lifecycle。这里的
+*triggered* 只表示满足 consolidation 条件，不表示规则已经生效；learner 支持的
+语义谓词现在固定为 `split='training' AND learner_eligible=1`，因此 held-out/
+calibration/A-B transition 即使被错误写成 `learner_eligible=1` 也会在 API 和所有
+learner 查询入口 fail-closed，并返回 `NOT_LEARNER_ELIGIBLE`，不会触发 consolidation。
+novelty lookup 也只承认目标 campaign 的 training learner path；held-out/calibration
+shadow path 不能抑制 learner-side 的 `NOVEL_MECHANISM` 触发。
+事件写入器本身还会反向解析 transition/causal-fragment/activation 的 canonical
+witness；没有同 campaign 的 training membership 时，即使调用方传入
+`learner_eligible=true` 也会拒绝，事件链审计同样会报告该违规。
+真正的增量 crystallization 仍须由显式、隔离的调用执行，不能自动改变 production
+lifecycle。
+
+当 preview 需要进入试验阶段时，`evolution.run_shadow_candidate_trial()` 会把 TEHM
+连接复制到内存 staging DB，在 staging 内重建并登记 `shadow → candidate`，然后复用
+现有 A/B trial adapter。Icarus/ORFS 执行器通过 evaluator callback 注入；即使六项
+promotion gate 全部满足，该 API 也只返回可供 authority 审查的 receipt，
+`promotion_attempted=false`、production lifecycle 不变，源连接的逻辑 digest 必须保持
+一致。receipt 还包含 `isolated-rollback-receipt-v1`，明确记录 source/staging
+digest 和 `isolated_staging_discard` authority；它只覆盖 staging DB，不替代真实
+RTL/ORFS 文件树的 rollback authority。
+
+Causal evaluation lane 现在有独立的 `tehm.causal.matcher`：在不接入 production
+retrieval 的前提下，按 mechanism family/profile、结构细节、required/forbidden
+effect、prior action 和 evidence level 做可解释匹配。causal recall 强制所有 path
+source transition 属于目标 campaign 的 training learner 集合；兼容 profile 相同但
+guard/module/state 等机制细节不符时 fail-closed，不会被误报为可迁移 causal path。
+L2/L3 causal authority 与 replication 还会把 controlled edge 的
+`campaign_id`/`learner_eligible` 绑定到当前评估 campaign；损坏、重复或空的
+`source_transitions_json` 只产生 fail-closed receipt，不会把其它 campaign 的 edge
+当作当前 campaign 的 intervention support。`build_intervention_pair()` 只有在
+control/treatment 共享同一 training campaign 时才会生成 L2 edge；显式 campaign
+不匹配或跨 held-out split 的 pair 只能保留为无效审计 receipt。
+此外，L2/L3 authority 不再把单个 edge 与 path source 的一次交集当作充分证明：
+共享的 `causal.witness` resolver 会解析直接 transition 或合法 intervention-pair
+引用，并要求 path 中每个 source transition 都被同一 campaign 的 training learner
+edge 完整覆盖；缺失、重复、未知、跨 campaign 或 malformed witness 均 fail-closed。
+Asset promotion/validation 入口也对非 mapping、损坏 JSON、非对象 contract 和损坏
+registry row fail-closed，返回不可晋级 receipt 或 unknown-asset 结果，不把解析异常
+当作 verifier authority。
+
+### A3 RTL causal retrieval evaluation lane（2026-08-26）
+
+新增 `scripts/build_rtl_causal_retrieval_report.py`，在 v4 freeze 的只读备份上把
+training transition 重建为六组 causal shadow path，并用四个未参与 learner 的
+RTL lineage 做固定 R0/R1/R2 查询：R0 仅按 transformation family，R1 再加
+compatibility profile，R2 再加 mechanism family 与 held-out effect key。报告位于
+[`evidence/tehm-causal-retrieval-rtl-r1-dev`](../evidence/tehm-causal-retrieval-rtl-r1-dev)。
+本轮真实 Icarus held-out execution 的三组 positive recall@3 都是 `1.0`；在“同一
+metadata、但 module 结构不符”的 negative slice 中，R0/R1 的 false transfer rate
+均为 `1.0`，R2 降为 `0.0`。这只是可解释 matcher 的 evaluation-only 证据，不是
+production retrieval、rule promotion 或 capability gain；报告明确记录
+`heldout_learner_eligible=false`、`canonical_memory_mutation=none`、
+`promotion_attempted=false`。重放入口为报告目录下的 `reproduce.sh`。
+
+### B3 Online evolution evidence（2026-08-26）
+
+新增 `scripts/build_rtl_online_evolution_report.py`，在 v4 freeze 的 derived DB
+中执行一个真实 Icarus learner transition 与一个 held-out transition。learner
+transition 会触发 `NOVEL_MECHANISM`/`CONSOLIDATION_TRIGGERED` 并生成
+`RULE_REVISION_PROPOSED` shadow receipt；held-out 即使产生诊断事件，也被硬性标记
+为 `NOT_LEARNER_ELIGIBLE`，不会触发 consolidation。随后只有显式调用
+`crystallize_affected_groups()` 才写入 derived rule/revision，并比较 affected 与
+full rebuild。报告显示 `training_triggered=true`、`heldout_not_triggered=true`、
+`incremental_full_rebuild_equivalent=true`、event chain 有效，且 observation 与
+显式 persist 前后 raw evidence digest 均保持不变。事件链校验改为沿 predecessor
+指针重放，允许 deterministic staging 将多个事件固定在同一时间戳而不丢失拓扑。
+增量 persist 现在在单一 SQLite savepoint 中完成规则、事件和 revision 写入；它会
+把 `raw_evidence_before_digest`/`raw_evidence_after_digest` 绑定到 receipt，并在
+full-rebuild 等价性或 raw-evidence 检查失败时整体回滚，避免留下半个 derived
+revision。该原子性只保护 derived update，不授予 production lifecycle authority。
+online observation 现在也把 causal fragment 与整条事件链放在同一 savepoint 中；
+novelty/conflict/preview 的晚到异常会整体回滚，不能留下孤立的事件前缀或 causal
+nodes/edges。已有外层事务时只释放 savepoint，由调用方负责最终提交。
+该报告仍是 shadow/evaluation-only，`canonical_memory_mutation=none`、
+`promotion_attempted=false`；重放入口为
+[`evidence/tehm-online-evolution-rtl-b3-dev/reproduce.sh`](../evidence/tehm-online-evolution-rtl-b3-dev/reproduce.sh)。
+
+### ORFS Batch-0 preflight（2026-08-26）
+
+Batch-0 已完成新 scratch root 的真实 `gcd` pair smoke，并在 2 CPU 与默认 6 CPU
+下复现同一诊断结果：`CORE_UTILIZATION 50→40` 使 route 从 GRT-0116 congestion
+fail 变为 route/finish pass。但这两次旧 smoke 的 executor 实际落到了
+`/opt/EDA4AI/OpenROAD-flow-scripts`，与 manifest 的 `/data1/zhangdy/Tools/`
+source root 不一致，故只能作为 diagnostic；修复 ORFS_ROOT 绑定后，用 `/data1`
+执行会暴露 OpenROAD binary/flow assertion mismatch，已 fail-closed 记录。
+即使暂不计该 provenance 阻塞，u40 arm 的完整 signoff 仍为
+`pass_with_caveats`（WNS `-0.573391 ns`、48 setup violations），因此 DEF graph
+与 full-oracle eligibility 被严格 gate 拒绝；7 条 manifest lineage 当前
+`eligible_positive=0`、`learner_eligible=0`。该结论和 canonical digest 不变性已
+固化在
+[`evidence/tehm-orfs-batch0-smoke-r2-dev/batch0_preflight_report.json`](../evidence/tehm-orfs-batch0-smoke-r2-dev/batch0_preflight_report.json)。
+当前 run/signoff/graph 已显式绑定 manifest `ORFS_ROOT`；在提供匹配的
+OpenROAD/Yosys toolchain、修正 timing/signoff contract 并由同一 pair 重新跑通
+graph、observe、staging 之前，不扩大到完整 14-arm 批跑。
+
+本轮新增 `preflight_orfs_toolchain()` 运行前门：只有 ORFS tree 内置的
+OpenROAD/Yosys，或调用方显式设置的 `OPENROAD_EXE`/`YOSYS_EXE` 才能执行；缺失
+时在 EDA stage 前 fail-closed，禁止 `_env.sh` 静默回退到宿主 PATH。receipt 会
+绑定工具来源、路径、版本、SHA256 与 fingerprint；外部 override 标记为
+`operator_bound_unverified`。成功 flow 的 `campaign-run-receipt.json` 必须携带
+该绑定，旧的无绑定结果只能作为 diagnostic，不能成为 learner evidence。
+另外，preflight 现在会对真实 Yosys 版本探测当前 ORFS
+`read_liberty -unit_delay` 能力；已知不兼容版本在 synth 前直接 `blocked`，避免把
+工具版本错误误记为设计失败或消耗完整 campaign 预算。
+prepare 还会把每个 before/after project 的 `config.mk`、`constraint.sdc` 和有序
+RTL 字节流写入 `input_bindings`。observe 时重新计算并逐项比对；任何 post-prepare
+改动（包括为了 timing smoke 临时改 SDC）都会落为
+`INCOMPLETE_EXTERNAL_ONLY`，即使后续 ORFS 报告全部为 clean，也不能进入 learner
+或 staging。与此同时，manifest 会记录固定 `timing_contract`（当前 SDC 的
+`clk_period` 与摘要）；缺失、重复或不一致的 timing target 也会 fail-closed。
+为避免先运行后补 provenance，`prepare` 现在还要求 campaign 已经由 `--phase freeze`
+生成 source-freeze manifest；缺失或路径失效会直接拒绝 batch preparation，不能以
+`source_freeze_sha256=null` 绕过可复现性边界。
+在同树打包工具链（OpenROAD `26Q3-1510-g6cb3f2b704`、Yosys `0.68`）下，SPI
+`u50→u40` held-out pair 已完成全部 oracle（equivalence、strict signoff、PPA、DEF
+graph），得到 1 条 `ELIGIBLE_POSITIVE` external receipt；由于 split=heldout，
+`learner_eligible=0`，staging 实际导入 0 行，canonical digest 保持不变。JPEG
+pair 同轮保留为负证据（before `CTS-0080 Sink not found`，after detailed-route
+timeout）。详见
+[`evidence/tehm-orfs-batch0-exact-r1/batch0_exact_pair_report.json`](../evidence/tehm-orfs-batch0-exact-r1/batch0_exact_pair_report.json)。
+
+随后用同一打包 toolchain 完成了第一条 support pair：参数化 UART 的
+`CORE_UTILIZATION 50→40` 在固定 `2.8 ns` contract 下两个 arm 均通过完整 ORFS、
+equivalence、strict signoff、PPA 与 DEF graph，并安全导入 campaign-local staging。
+该 pair 的物理 utility 为 `HARMFUL`（面积 `+3119.8 µm²`、功耗 `+0.000052 W`、WNS
+`−0.127763 ns`），所以没有 canonical import 或 promotion。独立 authority receipt
+从外部 observation chain 推导出 `obligation_coverage=PASS`、`cross_lineage_te=FAIL`、
+`harmful_rate=FAIL`；`rollback_verified`、`registry_verified`、
+`conformal_coverage` 仍为 `NOT_ESTABLISHED`，决定为 `DENY_CANONICAL_IMPORT`，
+`promotion_attempted=false`；完整报告见
+[`evidence/tehm-orfs-batch0-support-uart-r1/batch0_support_uart_report.json`](../evidence/tehm-orfs-batch0-support-uart-r1/batch0_support_uart_report.json)。
+`build_orfs_authority_receipt.py` 的生产 CLI 不再接受 caller-supplied gate
+booleans，而是从 observation receipts 推导可用测量；缺失测量保留为
+`NOT_ESTABLISHED`，不会伪造实测 `False`。`build_receipt(..., gate_inputs=...)`
+仅保留给旧 deterministic fixture replay。
+
+在同一 source-freeze 与 exact toolchain 下又完成了第二条 source-disjoint support
+lineage：参数化 UART 与 `uart_no_param` 各自独立跑 `CORE_UTILIZATION 50→40`，四个
+arm 均通过完整 ORFS、equivalence、strict signoff、PPA 与 DEF graph，并各自导入
+campaign-local staging。两条 lineage 的物理 utility 均为 `HARMFUL`（面积
+`+3119.8 µm²`、功耗约 `+0.000052 W`、WNS `−0.127763 ns`）；因此这次只把
+`cross_lineage_te` 提升为 `PASS`，`harmful_rate` 仍为 `FAIL`，
+`rollback_verified`、`registry_verified`、`conformal_coverage` 仍为
+`NOT_ESTABLISHED`，authority 继续 `DENY_CANONICAL_IMPORT`，canonical digest
+保持不变。完整机器可读证据见
+[`evidence/tehm-orfs-batch0-support-uart-dual-r1/dual_support_report.json`](../evidence/tehm-orfs-batch0-support-uart-dual-r1/dual_support_report.json)。
+
+随后用这两条真实 pair 重放了 L2/L3 causal shadow；path 达到
+`L3_REPLICATED_EFFECT`，并明确记录 2 个独立 design/lineage 与 2 个独立 run
+witness。L3 gate 现在对缺失 run/design witness fail-closed，防止旧 transition
+provenance 中 `unique_runs=[]` 仍被误判为 replicated effect；该 causal receipt
+仍为 evaluation-only，不改变 rule 或 canonical authority，详见
+[`causal_l3_replication_report.json`](../evidence/tehm-orfs-batch0-support-uart-dual-r1/causal_l3_replication_report.json)。
+
+### L4 held-out causal transfer shadow（2026-08-26）
+
+新增 `tehm.causal.evaluate_transfer_supported_mechanism()`：只有训练 path 已由
+L3 controlled replication 重放通过，且显式 held-out transition 同时满足
+`split=heldout`、`learner_eligible=false`、oracle PASS、无 regression、机制族/
+typed action/profile/effect 匹配，并拥有与训练完全不重叠的 lineage/design witness，
+才返回 `L4_TRANSFER_SUPPORTED_MECHANISM`。该评估器是只读 receipt，不修改 path、
+canonical evidence、rule lifecycle 或 production retrieval；复用训练 transition、
+跨 campaign 或损坏 fragment witness 均 fail-closed。当前测试用真实 ORFS adapter
+构造的两条训练 lineage 与独立 held-out lineage 验证了该边界。
+
+Activation update 现在也会把反馈写入同一条 hash-chained event log：PASS 产生
+`SUPPORT_INCREASED`，中性结果产生 `UTILITY_DRIFT`，FAIL/REGRESSION 产生
+`RULE_HARMFUL`，payload 绑定 activation ID 与 utility 前后快照。evaluation/backend
+反馈默认使用非 learner campaign；同一 activation ID 的重试不会重复累计 utility 或
+事件。
+utility 前后快照与对应 feedback event 现在在同一 savepoint 中原子更新；事件写入
+失败会回滚 utility counter，避免出现“计数已增长但 provenance 缺失”的半提交状态。
+
+Full rebuild 的 stale-rule retirement 现在在修改 lifecycle 前后计算
+`raw-evidence-preservation-v1` fingerprint，覆盖 canonical states/transitions/
+episodes/episode steps、dataset membership、experience edges 和 physical effects。
+若 derived-memory maintenance 试图改写这些原始证据，crystallization 会
+fail-closed；`retired` 仍只撤销 runtime authority，不删除 evidence。
+`PhysicalEffectMemory.record()` 对同一 transition 采用 immutable replay：相同 payload
+幂等返回，PPA/delta/provenance 冲突直接 fail-closed，不再使用 `INSERT OR REPLACE`
+静默改写 raw physical evidence；图上下文只能通过明确的空值→已绑定 enrichment
+路径补齐。
+
+Capability registry 也保持同一 authority 边界：注册只能从 `observed_gap` 或
+`candidate` 开始，不能用 `register_capability()` 伪造 `verified/promoted`；同一
+capability evidence ID 只能幂等重放，若 split/verdict/lineage 改变则拒绝覆盖。
+promotion 现在还必须消费由 `record_capability_authority()` 生成的数据库绑定
+authority receipt：C1–C8（以及所需 asset gate）的 evidence rows、candidate policy
+snapshot 和实际 runtime load receipt 都会在 promotion 前重新校验；C4 evidence
+还必须携带与最新 load row 一致的 `execution_receipt_id`，因此单独写入
+`loaded=true` 不能满足 C3/C4。调用方自报的布尔 gate 不能单独授予 capability
+authority。DB attribution 在计算 C3 时也会校验 runtime load JSON 的内容 digest、
+snapshot digest、runtime identity 和 `loaded` 字段；篡改 receipt 后即使 SQLite
+`loaded=1` 仍会 fail-closed。
+
+Dataset membership 也有同一条硬约束：只有 training split 可以标记
+`learner_eligible`；capture/assignment 会拒绝非 training 的显式 opt-in，直接写入的
+矛盾行会被 crystallization、causal、gap、conflict 和 online trigger 排除，同时由
+honesty 审计报告为防火墙违规。
+
+新增五类独立 RTL cluster（handshake completion、credit/obligation recovery、reset
+semantic loss、width correction、overlap-priority protocol/IP）的冻结 M1/M8 A/B 报告位于
+[`evidence/tehm-procedural-ab-v4-dev`](../evidence/tehm-procedural-ab-v4-dev)：
+M1 `0/5`、M8 `5/5`，每个 task 运行 3 次（15 次 M8 Icarus execution），五个 cluster
+的真实 Icarus obligation coverage 均为 `1.0`，M8 harmful activation rate 为 `0`，
+canonical SQLite digest 前后不变。RTL rule lookup 已绑定显式
+`(transformation_family, compatibility_profile)`，因此 overlap-priority 不再依靠
+额外同簇样本弥补结构不兼容。该轮仍是小样本 development evidence，不是普适
+benchmark 或 production promotion 依据。
+
+### Parametric Shadow RFC（当前工程边界）
+
+v3 的证据门槛已经满足，但 Parametric View 仍保持 `NOT_IMPLEMENTED`。当前只
+实现只读的 `tehm.parametric.shadow.build_shadow_proposal`：它绑定 readiness、
+platform/family/tier calibration policy、freeze replay receipt 和 graph context，输出
+带 digest、距离、uncertainty、lineage 与 abstain reason 的 shadow receipt；不
+写 canonical memory、不进入 runtime retrieval、不改变 lifecycle 或 promotion。
+完整契约见 [`docs/Parametric_Shadow_RFC.md`](docs/Parametric_Shadow_RFC.md)。
+独立 campaign 的 receipt/outcome/join/report 流程也在该 RFC 中定义；其默认工作根
+为 `/tmp/tehm-parametric-shadow`，不改变 `memory/tehm.sqlite`。
+
+这条边界是有意的：Parametric 输出是连续 knob 的预测建议，不是带真实
+transition/verifier/obligation/provenance 的 executable rule。写入 canonical 会把
+预测反馈成 learner support，污染 held-out 与 lineage 统计；直接进入 production
+则会绕过 applicability、typed action、rollback 和 registry authority。后续只有在
+精确 `platform|family|dataset_tier|action_signature` 分区中通过独立 conformal/
+harmful-rate/Pareto 证据，再叠加真实 A/B 的 rollback、registry、obligation 与
+cross-lineage TE，才可进入 candidate；promotion 由六项门控合取，shadow proposal
+本身不具备 authority。
+
+### ORFS Batch-0 experience lane（2026-08-24）
+
+Batch lane 已实现为独立执行面：
+[`scripts/run_orfs_batch0.py`](scripts/run_orfs_batch0.py) 只允许
+`<campaign-root>/staging` 下的 SQLite/artifacts，输出 hash-chained external
+observations；canonical import 只能通过独立的
+[`scripts/promote_orfs_batch_observations.py`](scripts/promote_orfs_batch_observations.py)
+并提供完整 authority receipt。batch runner 本身没有 promotion phase。
+canonical import 还会拒绝 authority 选择未知 case、空选择，或
+`split/classification/learner_eligible` 不一致的 observation，避免 held-out/空批次
+借由 authority payload 伪装成 learner 写入。
+
+support receipt 的 staging import 与 authority-gated canonical import 也采用单一
+caller-safe savepoint：一批记录中的 canonical capture、typed views 与 physical
+effect row 只有在整批成功后才提交；晚到的 malformed receipt 或 physical write
+异常会回滚整批，不能留下部分 learner projection。capture 前已创建但最终无引用的
+content-addressed artifact 仍只会成为可审计 orphan，不会被 canonical row 采用。
+
+首轮 `/tmp/tehm-orfs/orfs-batch0-v1` 固定 sky130hs、7 个单时钟 RTL lineage、
+`DENSITY_RELIEF/CORE_UTILIZATION 50→40`，按 support/calibration/heldout=`4/2/1`
+隔离。当前冻结累计 34 个 bounded attempt；每个项目的 latest outcome 为 12 个
+`SUCCESS`、1 个真实 routing-congestion `FLOW_FAILURE`（AES u50）和 1 个冻结
+3600 秒 `TIMEOUT`（AES u40）。ORFS 的 Slang 配置通过只读 synth bridge 接入支持
+`read_slang` 的 Yosys，未修改冻结 RTL 或系统 ORFS 安装；配置不改 RTL的 7 个 pair
+均由独立 cryptographic source-identity proof 证明，若 RTL 字节变化仍必须走实际
+Yosys/formal proof。
+
+本轮绑定 Magic `8.3.677`、Netgen `1.5.323` 和完整 sky130hs transistor CDL，完成
+GCD strict-signoff smoke 后再依次解封 support、calibration 和 heldout。最终 8 个
+ORFS project 同时通过 full GDS DRC、Netgen LVS、OpenRCX、timing、artifact/run
+binding 和 graph gate，对应 GCD、UART、JPEG、SPI 四个 before/after pair；其中
+SPI 是冻结 support 后才运行的独立 heldout。AES 因 flow failure/timeout 不完整，
+Ibex 因 strict DRC 不完整，RISC-V 虽 DRC/LVS/RCX clean，但两臂 setup WNS 为负，
+因此 strict gate 均 fail closed。
+
+7 条 hash-chained external observation 的最终分类为 4 个 `ELIGIBLE_POSITIVE`、
+3 个 `INCOMPLETE_EXTERNAL_ONLY`；只有 support split 的 GCD/JPEG 两条
+`learner_eligible=true` 并进入 staging。calibration UART 和 heldout SPI 即使为正也
+不回灌 learner。staging 为 2 transitions / 2 physical effects，canonical snapshot
+仍为 9 transitions / 0 physical effects，SQLite SHA-256
+`bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f`，
+`canonical_memory_mutation=none`。
+
+这里的 `ELIGIBLE_POSITIVE` 只表示 before/after 的全 oracle、obligation 和证据绑定
+完整，**不表示 Pareto utility 为正**。两条 support effect 的平均 ΔWNS 为
+`+0.109501 ns`，但平均 Δarea=`+4473.5 um²`、Δpower=`+0.017345 W`，profile 会把
+area/power 标为 harmful；heldout SPI 更是 ΔWNS=`-0.016755 ns`、
+Δarea=`+57 um²`、Δpower=`+0.000070891 W`。因此该批证明了可审计经验采集与
+action effect 的非单调性，没有证明 `CORE_UTILIZATION 50→40` 是可直接执行的安全
+策略。staging 的两条 physical effect 已绑定 2 个不同的真实 strict-clean graph
+context；空 `{}` 不再被重复导入误记为 graph support。
+
+因此当前结论是：已经具备继续进行**受控 Batch0/Batch1-prep 全 ORFS 经验积累**的
+工程能力，但还没有 production promotion authority。下一轮应冻结新的 lineage 和
+action signature，优先扩充独立 support/calibration、把 AES timeout 与 Ibex DRC/
+RISC-V timing 作为分层失败标签，而不是调低门槛。只有独立真实 A/B 同时满足
+rollback、registry、obligation coverage、cross-lineage TE、harmful rate 和
+conformal coverage 六门，才可由独立 authority 执行 canonical import；batch runner
+与 Parametric shadow 仍无该权限。
+
+### V4 负面基线与 typed utility contract
+
+V4 已持久化到 `evidence/tehm-authority-v1/v4/`，其中 broad
+`DENSITY_RELIEF / CORE_UTILIZATION 50→40` 保留为不可晋升的负面基线：8 条
+full-oracle lineage、raw Pareto harmful rate=`7/8`、authority decision 为
+`DENY_CANONICAL_IMPORT`，canonical SHA 前后不变。历史的非支持 scope
+`orfs:sky130hs:route` 不在下一次 authority staging registry 中；支持的
+`route` 仍为 candidate v2。
+
+下一阶段的 contract 定义位于
+`tehm/physical/utility_contracts.py`，contract id 为
+`TIMING_RELIEF_BUDGETED_V1`。它保留 raw Pareto verdict，另加 WNS、TNS、area
+和 power 的预注册边界；`select_contract_proposal` 只返回 `PROPOSED` 或
+`ABSTAINED`，要求 action binding、ready calibration、完整 hard oracle、OOD
+ceiling 和所有预测区间同时满足，且永远返回
+`canonical_memory_mutation=none`、`promotion_eligible=false`。
+
+当前 8 条样本上的 contract 评分仅为 retrospective design evidence（4/8
+通过、4/8 拒绝），不构成 promotion 验证。prospective manifest 已冻结为 2
+条 calibration 加 4 条 held-out A/B；必须先由 selector 决定 proposal/abstain，
+再执行新的 ORFS cohort。
+
+该执行顺序已经由
+`memory/scripts/run_timing_relief_selector_preflight.py` 实际验证：6 条新
+lineage 先完成 50% baseline，随后 selector 得到 `PROPOSED=0`、`ABSTAINED=6`，
+没有任何 40% after arm 被 materialize。由于 proposal coverage=`0.0` 低于冻结的
+`0.5` 门槛，`TIMING_RELIEF_BUDGETED_V1` 按停止条件关闭；不能通过扩大 interval
+或复用 broad rule 继续运行。完整 preflight 证据在
+`evidence/tehm-authority-v1/v4/prospective-selector-preflight-v1/`，下一动作必须
+重新注册独立 action signature。
+
+### V2 独立 action signature（50→45）
+
+下一轮已注册独立的 `TIMING_RELIEF_BUDGETED_V2_50_TO_45`（digest
+`f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863`），并用 4 条
+support + 3 条源隔离 calibration 建立只读物理策略。support 的 4 条 A/B 均完成
+ORFS、equivalence、strict signoff 和 graph，contract 仅 `1/4` 通过且 raw Pareto
+harmful=`4/4`；calibration 的 contract 为 `0/3`，raw Pareto harmful=`3/3`，但
+经过数值稳定的闭区间判定后 split-conformal policy 达到 empirical/per-metric
+coverage=`1.0`，仍保持宽 uncertainty interval。
+
+随后对全新 6 条 RTL（2 calibration + 4 held-out）先跑 50% baseline，再执行
+action-bound selector；结果 `PROPOSED=0`、`ABSTAINED=6`、after materialized=`0`，
+proposal coverage=`0.0 < 0.5`，停止状态为
+`STOP_50_TO_45_LOW_PROPOSAL_COVERAGE`。3 条 baseline 因 strict signoff/graph 不完整
+直接 fail-closed，另外 3 条的 WNS/power 区间无法同时满足 contract。V2 因此也关闭
+为 shadow-only；没有 selected after ORFS、cross-lineage TE 或 promotion gate，
+canonical snapshot 仍为 9 transitions / 0 physical effects。证据分别位于
+`evidence/tehm-authority-v1/v4/next-action-v2-support-50to45/`、
+`next-action-v2-calibration-50to45/` 和 `prospective-selector-preflight-v2/`。
+
+这说明当前卡点不是“缺少更多 ORFS 命令”，而是两个独立 action signature 都在
+selector-before-execution 阶段没有足够的安全提案覆盖。下一步应注册新的、语义更
+窄且可解释的 action（或扩充源隔离 support/calibration 以缩窄 interval），不能放宽
+OOD/coverage/utility contract，也不能把 calibration 或 shadow outcome 写回
+canonical memory。
+
+### 下一阶段工程状态（P0–P3）
+
+- 当前工作树已提交完成 P0 的 schema v3/migration、dataset membership
+  firewall、episode-owned witness、utility-preserving re-crystallization、
+  stale-rule retirement、obligation evidence finalization，以及 production
+  仅允许 `promoted` rule；P1 已把 RTL parser graph 接入 canonical state，并在
+  binding receipt 中记录 target-context digest 和每个 hole 的来源证明。已用
+  fresh DB、migration、capture/re-crystallize、RTL/Icarus 和 activation smoke
+  checks 验证；当前环境未安装 pytest，因此本轮以 dependency-free compileall、v4
+  freeze reproduce 和定向 preflight smoke 作为可复核证据；最终源码绑定的
+  development freeze 已随本轮源码变化重新生成，不沿用历史 v3 数字。
+
+- 历史 P0 基线已封存于 tag `tehm-p0-baseline-20260817-postaudit`（提交
+  `86178eb`）；这不是当前工作树的提交，也不覆盖本轮未提交的完整性修复。
+  v3 refresh 仍是历史 canonical bundle，后续 campaign 必须从明确的 freeze 指针
+  派生，并把可重建 ORFS RUN/logs/results/objects 留在 `/tmp`。
+- P1 已实现：独立 receipt/log/outcome/join/report，源码提交 `9b841a1`；shadow
+  记录不能写 canonical memory 或授予 promotion authority。
+- 当前 v4 development A/B 已覆盖五个独立 held-out cluster：M1=`0/5`、M8=`5/5`，
+  每 task 3 repeats；四类 parser-backed action family（另含
+  `PRIORITY_REORDER`）均有
+  真实 Icarus target/regression evidence、binding proof、obligation coverage=1.0，
+  harmful activation=0，canonical SQLite 不变。对应报告在
+  `evidence/tehm-procedural-ab-v4-dev/`；该样本仍不是 benchmark。
+- leave-one-cluster-out harness 已落地于
+  `scripts/run_procedural_loco_v1.py`，报告在
+- `evidence/tehm-procedural-loco-v1/`。当前 5 folds 中 M8=`5/5`；每个 fold 都保留
+  held-out source exclusion、显式 compatibility profile 与 obligation evidence。
+  这仍不能把 development replay 扩展成普适泛化结论。
+- Phase-10 RTL campaign 的历史 receipt 生成过 Section-13 funnel：真实 Icarus
+  external A/B trial 的 `RC_ret→AY→BSR→IVR→RU=1`、`OC=1`、`HAR=0`、`TE=1`，且
+  3/3 activation rollback receipt 与 registry authority 均 verified；不再使用 fake
+  evaluator 作为主证据。当前 smoke runner 还会显式补齐缺失的 PPA/conformal gate
+  为失败值，因此只记录 candidate，不把该小样本 funnel 当作 production promotion。
+- P2 已实现入口门控：`prepare_parametric_prospective_manifest.py` 强制 future
+  lineage 与 training/calibration/held-out/A-B firewall 不相交，并要求 decision
+  target 至少有两个候选 action；已执行一轮独立 observation pilot（见下方），
+  但尚未进入 decision round。现在 decision case 还必须提供已完成的
+  `shadow_metrics.json`；`validate_observation_gate` 会 fail-closed 检查
+  proposal/outcome/obligation coverage、OOD ceiling、harmful rate 和预注册的
+  physical interval coverage。
+- P3 已物化四个独立 future-lineage RTL fixture，并由
+  `scripts/run_procedural_ablation.py` 使用真实 Icarus 完成逐 arm replay。Role View、
+  Predicate View、Validity Gate、Obligation Transfer 四个对照均观察到预注册的
+  component contrast；M8 的 harmful activation rate 为 0，canonical counters
+  前后不变。报告位于 `/data1/zhangdy/tehm-campaigns/tehm-procedural-ablation-v1/`。
+  该轮 acceptance 仍为 false：当前 canonical 只有 1 条 `VALIDATED` rule，低于
+  manifest 要求的 2 条；不能把组件对照结果扩展成普适 benchmark。
+- 当前 canonical snapshot 的只读 procedural audit 为 9 个 effect groups、8 个
+  non-singleton groups、2 条 rules（group→rule conversion `0.25`）。独立
+  `rule-growth` replay 已在 canonical 副本上完成，不能把副本结果当成 canonical
+  promotion。
+- P3 rule-growth replay 已使用真实 Icarus 捕获 `valid_ready_bug` 与 `fifo_space_bug`：
+  隔离副本从 2 条增长到 8 条 rules，其中 7 条为 cross-lineage `VALIDATED`；canonical
+  仍保持 2 rules / 116 transitions，promotion authority=`NOT_AUTHORIZED`。报告位于
+  `/data1/zhangdy/tehm-campaigns/tehm-procedural-rule-growth-v1/`，后续须用更多
+  独立 lineage 和 leave-one-lineage-out stability 复核后才能考虑进入 lifecycle。
+- P3 growth + runtime ablation v2 已加入两条 prospective `RESET_RESTORE` AST_REWRITE
+  lineage，并用第三条独立 reset lineage 做 rule-growth training；隔离 staging 中
+  执行真实 Icarus 逐 arm replay：validated rules=`7`、
+  cross-lineage support=`8`、Rule Coverage=`0.5`、VCG=`0.5`、harmful activation rate=`0`；
+  validity 与 obligation 两个对照可辨识，预注册 acceptance=`true`。RESET rule 只以
+  `candidate` 状态提供给隔离 runtime evaluator；没有在 staging 或 canonical 中写入
+  `promoted`，因为该实验没有完整六项 production promotion gates；报告位于
+  `/data1/zhangdy/tehm-campaigns/tehm-procedural-growth-ablation-v2/`。
+- P3 leave-one-lineage-out stability replay 已完成：全量隔离副本 7 条
+  `VALIDATED` rules；去掉 `fifo_space_bug` 后保留 7/7，去掉 `valid_ready_bug` 后保留
+  6/7，最小 validated-rule retention=`0.857`。这是稳定性证据，不是 runtime Rule
+  Coverage/VCG 或 promotion 证据；报告位于
+  `/data1/zhangdy/tehm-campaigns/tehm-procedural-rule-stability-v1/`。
+- P3 mechanism-family v3 已把 role、predicate、validity、obligation 四类 fixture 与
+  两个既有 RTL lineage 合并为六谱系隔离 replay：rule-growth 得到 8 个 profile、7
+  个 cross-lineage `VALIDATED` rules、8 个 non-singleton effect groups；leave-one-
+  lineage-out 最小 retention=`0.857`。在临时 enrolled staging 中，四个 component
+  contrast 均可辨识，harmful activation rate=`0`，但 runtime Rule Coverage/VCG 仅为
+  `0.25/0.25`（没有超过 reset v2 的 `0.5/0.5`），所以该结果只扩大机制区分证据，
+  不授予 production lifecycle authority。紧凑报告位于
+  `/data1/zhangdy/tehm-campaigns/tehm-procedural-rule-growth-v3/`，promotion
+  receipt 明确 `canonical_memory_mutation=none`、`promotion_eligible=false`。
+- P3 mechanism-family v2 cohort 在 v3 基础上加入两个独立的正向
+  role/predicate/validity-compatible lineage，并把 acceptance 预注册为
+  Rule Coverage/VCG `>=0.5`。六任务真实 Icarus replay 达到 validated rules=`7`、
+  cross-lineage support=`8`、non-singleton groups=`8`、Rule Coverage/VCG=`0.5/0.5`、
+  harmful activation rate=`0`，四个 component contrast 仍全部可辨识；cluster-level
+  M8 rate=`0.4`，所以仍是有限 cohort 的 staging evidence，不是 production promotion。
+  紧凑证据位于 `/data1/zhangdy/tehm-campaigns/tehm-procedural-mechanism-ablation-v2/`。
+- P2 calibration supplement 已在独立 `/tmp` ORFS scratch 中完成：新
+  `future-parametric-v5` RTL lineage 在 sky130hs/IHP 各有一个真实 base→density pair，
+  与既有只读 held-out samples 合并后 9 个 retrieval policy 全部 `ready`；校准 DB
+  的 physical memory count 保持 `114 → 114`，没有写入 canonical v3。小型 durable
+  证据位于 `/data1/zhangdy/tehm-campaigns/tehm-p2-future-v5-physical/`。这只证明
+  calibration gate 可在不放宽硬 OOD ceiling 的前提下恢复，尚未证明 Parametric View
+  已实现，也不能直接把旧 observation pilot 晋级为 decision round；必须用新 policy
+  重新生成 observation receipts 并通过预注册的 coverage/interval/obligation gate。
+- P2 v8/v9 prospective observation 已按新 calibration policy 完成真实 sky130hs
+  ORFS route/PPA join：2/2 proposal、2/2 outcome、obligation coverage=1.0，OOD
+  distance=0.430214，canonical 六类 counters 零变化；但 harmful rate=1.0（阈值≤0.1）
+  且 WNS interval coverage=0/2（要求≥0.8），所以 decision gate 保持失败，不能执行
+  candidate ranking 或 Parametric View promotion。证据位于
+  `/data1/zhangdy/tehm-campaigns/tehm-prospective-shadow-v89/`；下一步是扩充独立
+  calibration/support 或改进物理 effect model，再重新预注册 cohort，不能调低门槛。
+- shadow predictor 现已可选绑定候选 action 的 domain/family/config-edit keys；缺失
+  transition action provenance 时 fail-closed，不回退到 family-wide profile。对 v8/v9
+  的 action-conditioned 重放选中了同一 evidence pool，预测和门禁失败均未改变，故这
+  是 provenance 完整性改进而非效果改进。诊断证据位于
+  `/data1/zhangdy/tehm-campaigns/tehm-prospective-shadow-v89-action-conditioned/`。
+- 当前 P3 还补上了 `typed_action_signature` 的 shadow-only 结构：除 exact
+  config-edit key/value 外，候选 action 可声明单一 knob、direction、finite
+  relative change 与 operation point；字段不完整即拒绝，避免把数值插值误当成已有
+  支持。校准器可显式选择 `split_conformal_residual_v1`，用独立 held-out residual
+  的保守 order statistic 形成 interval；默认旧 policy 仍使用
+  `normal_weighted_mean_v1`，因此没有偷偷改写历史证据或放宽任何 gate。
+- P2 fresh calibration v10/v11 已完成独立 physical firewall 与真实 ORFS 尝试：4 条
+  fresh lineages 中 2 条 sky130hs 样本可评估，2 条 sky130hd 运行因 TritonRoute
+  SIGABRT/route congestion 作为 infrastructure failure 保留，未转成 physical
+  positive。合并旧样本后的 `sky130hs|DENSITY_RELIEF|research` policy 为
+  `coverage_failed`（18/24=`0.75` < `0.80`），distance max=`0.430214`，canonical
+  physical count 保持 `114 → 114`；证据位于
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-fresh-calibration-v10v11/`。
+- P2 fresh prospective observation v12/v13 已按该 policy 真实完成 2/2 ORFS outcome
+  join，但两条 proposal 均因 `calibration_policy_not_ready` abstain，proposal
+  coverage=`0`、obligation coverage min=`0.333333`；decision gate fail-closed，
+  decision prepare 以 rc=`2` 拒绝，未执行 candidate ranking 或 promotion。证据位于
+  `/data1/zhangdy/tehm-campaigns/tehm-prospective-shadow-v12v13/`。
+- P2 calibration expansion v14–v23 已在 `/tmp` 完成 10 条真实 sky130hs
+  base→CORE_UTILIZATION=22 pair；v18–v20 作为 calibration held-out 时 policy
+  aggregate coverage=`0.916667`、max distance=`0.117634`，staging physical
+  count=`122`，canonical v3 未变。该 policy 的 area 单指标 coverage 仍为 `2/3`，
+  所以不能把 `ready` 标签等同于 decision gate 通过。独立 v21–v23 observation
+  已完成 3/3 receipt、3/3 outcome join：2 条因 OOD abstain、1 条 proposed，
+  proposal coverage=`0.333333`、harmful rate=`1.0`、obligation coverage
+  min=`0.333333`；decision prepare 按预注册门槛以 rc=`2` 拒绝。compact evidence
+  位于 `/data1/zhangdy/tehm-campaigns/tehm-p2-calibration-expansion-v14v23/`
+  与 `/data1/zhangdy/tehm-campaigns/tehm-prospective-shadow-v21v23/`，没有复制
+  ORFS RUN/logs/results/objects，Parametric View 仍为 `NOT_IMPLEMENTED`。
+- P2 fresh observation v30–v32 使用三条全新 sky130hs lineage，3/3 outcome join；
+  仅 v30 被 proposal，v31/v32 因 OOD abstain，proposal coverage=`0.333333`、
+  harmful rate=`1.0`、obligation coverage min=`0.333333`，WNS interval coverage=`0/1`，
+  decision prepare 仍以 rc=`2` fail-closed。证据位于
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-calibration-expansion-v30v32/` 与
+  `/data1/zhangdy/tehm-campaigns/tehm-prospective-shadow-v30v32/`，canonical v3 未变。
+- P2 action-conditioned calibration v33–v38 先用 v33–v35 的 `CORE_UTILIZATION=40`
+  作为 support，再在 v36–v38 held-out 上评估；将 numeric edit value 纳入 action
+  signature 后，policy coverage=`0.416667`，status=`coverage_failed`，因此没有生成
+  shadow/decision receipt。该结果证明不同 knob value 不能共用同一 empirical effect
+  pool；紧凑 evidence 位于
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v33v38/`。
+- P2 action-40 follow-up v39–v44 使用 6 条全新、独立 sky130hs lineage；6/6
+  ORFS base→`CORE_UTILIZATION=40` pair 可评估。以 v33–v38 作为 staging support 后，
+  exact-signature policy 的 aggregate interval coverage=`0.583333`，其中 area=`0.667`、
+  power=`0.167`、TNS=`1.0`、WNS=`0.5`，仍为 `coverage_failed`，未生成 shadow/decision
+  receipt。compact evidence 位于
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v39v44/`；ORFS RUN 树
+  保留在 `/tmp/tehm-p2-calibration-expansion-v39v44`，canonical 未变。
+- P2 action-40 calibration v45–v50 再使用 6 条完全新的 lineage；6/6 pair 可评估，
+  以 v33–v44 为 staging support 时 policy aggregate coverage=`0.833333`、
+  `status=ready`，distance max=`0.1677005`。area/power 单指标 coverage 仍为
+  `0.667/0.667`，所以它只可用于 observation，不能直接作为 decision gate 通过。
+  staging snapshot digest=`2bfaa913beecd4b0284711ed310fc1cd050b45c51c832c3bb81235b1d744b12b`。
+- P2 v51–v56 observation 使用与 v45–v50 完全 disjoint 的 6 条 lineage，并绑定同一
+  staging snapshot digest；6/6 outcome join，4/6 proposal，2/6 因
+  `prediction_uncertainty_above_threshold` abstain。proposal coverage=`0.666667`、
+  harmful rate=`0.5`、obligation min=`0.333333`、area interval coverage=`0.75`，
+  decision gate 仍 fail-closed。compact evidence 位于
+  `/data1/zhangdy/tehm-campaigns/tehm-prospective-shadow-v51v56/`，Parametric View
+  仍为 `NOT_IMPLEMENTED`。
+- P2 v57–v62 full-oracle follow-up 使用 6 条全新、与既有 calibration/held-out
+  完全 disjoint 的 sky130hs lineage。12/12 before/after project 均完成 strict
+  signoff/timing oracle，dirty strict 结果按事实保留，没有被转成 physical positive。
+  action-40 policy 的 aggregate coverage=`0.708333`，area/power/TNS/WNS=
+  `0.667/0.667/1.0/0.5`，因此仍为 `coverage_failed`，没有生成 observation/decision
+  receipt。compact evidence 位于
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v57v62/`。
+- P2 action-40 calibration v63–v68 使用 6 条新的 held-out sky130hs lineage；
+  12/12 before/after project 均完成 strict signoff/timing oracle，policy
+  aggregate coverage=`0.916667`，area/power/TNS/WNS=`1.0/1.0/1.0/0.667`，
+  max distance=`0.168773`。该 policy 仅作为 observation 支持，staging
+  physical snapshot digest=`76de1868543f19259a10be71e6d4d85508bf921a980d22737c4ca74e4f7f15d2`，
+  canonical v3 未变；由于 WNS 单指标仍未达到预注册 coverage，不得直接进入 decision。
+- P2 prospective shadow v69–v74 使用与 calibration 完全 disjoint 的 6 条 future
+  lineage，并以正确的 v3 verifier replay receipt 重跑 observation：6/6 proposal
+  receipts、6/6 ORFS outcomes join、obligation coverage=`1.0`、OOD max=`0.051424`；
+  但 proposal coverage=`0.666667`、harmful rate=`0.75`、area/power/TNS/WNS
+  interval coverage=`0.75/1.0/1.0/0.25`，故 decision gate 继续 fail-closed，未执行
+  ranking、activation 或 promotion。紧凑 evidence 位于
+  `/data1/zhangdy/tehm-campaigns/tehm-prospective-shadow-v69v74/`；ORFS RUN 树仍在
+  `/tmp/tehm-p2-prospective-v69v74`；staging counters=`116/142/2/190/144/606` 前后不变，
+  canonical v3 counters=`116/114/2/190/116/606` 未变。
+- P2 action-40 calibration v75–v80 是又一批与既有 calibration/held-out 完全
+  disjoint 的 6 条 sky130hs lineage。12/12 before/after 项目均完成 strict-signoff
+  与 timing report；strict dirty 结果按事实保留，timing reports 均为 clean，未把
+  signoff failure 转成 physical positive。exact-signature policy 的 aggregate
+  interval coverage=`0.708333`，area/power/TNS/WNS=`0.5/0.667/1.0/0.667`，
+  observed distance range=`0.021573..0.209407`，因此仍为 `coverage_failed`，没有
+  生成 shadow/decision receipt。staging physical count=`130`，snapshot digest=
+  `14af2b4aa038a92cca92750833da19e883b50b71151fc1edec7c296d5c4f7f58`；canonical
+  v3 未变。紧凑 evidence 位于
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v75v80/`，可再用的
+  v81–v86 fixtures 仅作为预注册后续 cohort，尚未运行或计入 calibration。
+- P2 action-policy binding 已补齐：`calibrate_retrieval` 现在把完整 action
+  signature（domain/family/config-edit keys/normalized values）写入 policy；held-out
+  cohort 若混合 action value、部分缺失 provenance 或 action 非法则直接
+  `firewall_failed`。`PhysicalEffectMemory.predict` 在 policy/query signature 不一致、
+  或 action-conditioned query 使用未绑定 policy 时 fail-closed，避免校准阈值跨 knob
+  value 借用。新增契约测试后当前工作树为 `273 passed`；canonical v3 仍固定为 `225`。
+- Calibration policy v0.2 进一步把每个 required physical metric 的 interval
+  coverage 绑定到预注册 target（默认与 aggregate target 相同）；aggregate 达标但
+  单项 metric 不达标时也会输出 `coverage_failed`，`PhysicalEffectMemory.predict`
+  对任何非-`ready` policy 统一 `heldout_calibration_not_ready` abstain。这个门只
+  收紧 future campaign 的 promotion/readiness 语义，不回写历史 evidence，也不放宽
+  OOD/uncertainty ceiling。
+- calibration expansion runner 现在提供显式 `--strict-oracle` 阶段：对每个
+  before/after project 运行 strict signoff，并单独生成 `timing_check.json`；该阶段
+  只写 campaign reports，不调用 TEHM capture/crystallize/lifecycle。
+- Shadow receipt 现在额外绑定 calibration staging memory snapshot digest；case 指向
+  错误 DB 会在 prepare 阶段直接拒绝，而不是产生一批无意义的
+  `no_action_compatible_contexts` metrics。
+- Calibration report 现在额外输出按 nearest-distance 的
+  `selective_risk_coverage` 曲线（样本 coverage、metric interval coverage、risk），
+  仅作为诊断，不会放宽 hard OOD 或覆盖 gate；v39–v44 曲线显示全量保留时 risk
+  为 `0.416667`，因此当前失败来自真实 coverage/分布失配，而不是缺少报告字段。
+- Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
+  receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
+  `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选
+  共用错误的 knob-value calibration。多候选 outcome 必须按 `receipt_id` join；这只
+  完善实验闭环，不改变 canonical memory 或授予 promotion authority。
+- ORFS campaign 默认 scratch root 为 `/tmp/tehm-orfs/<campaign>`；写入
+  `/data1/zhangdy/tehm-campaigns` 会被拒绝，除非显式设置
+  `R2G_ALLOW_DATA1_ORFS_WORK=1`。每个 campaign manifest 记录可删除的 RUN/logs/results/objects
+  与应复制到 evidence root 的 receipts/reports/DEF/summary。
+  将 durable 产物提升到证据目录使用 `scripts/promote_orfs_evidence.py`；它不会删除
+  scratch，也不会复制 RUN 的 results/objects；RUN 下的最终 DEF/GDS/JSON 和
+  `run-meta/stage_log` 会展平到 evidence 的 `final/<run-id>/`、`receipts/<run-id>/`，
+  evidence root 不保留 `RUN_*` 目录。
+
+### P3 procedural component replay（非 canonical v3 freeze）
+
+2026-08-17 已完成四个 future lineage 的真实 Icarus replay。每个 fixture 的 baseline
+target oracle 为 FAIL、frozen regression 为 PASS；M5/M6/M4/M7 分别移除 role、predicate、
+validity、obligation gate。四个 component discrimination 均为
+`component_contrast_observed`，但 `validated_rules=1 < 2`，所以 procedural acceptance
+保持 fail-closed。该证据只写入独立目录，不回灌 canonical v3。
+
+### P3 procedural rule-growth replay（隔离副本，非 canonical v3 freeze）
+
+`scripts/run_procedural_rule_growth.py` 在 `/tmp` 的 canonical 副本上重新捕获两个真实
+RTL lineage，并运行 `crystallize_all` 与 validity profile。副本得到 8 条 rules、7 条
+cross-lineage `VALIDATED` rules；源 canonical 的 2 rules / 116 transitions 前后完全不变。
+该结果证明 rule-growth harness 可工作，但没有任何写入或 promotion 权限。
+
+### P3 procedural growth + runtime ablation v2（隔离 staging，非 canonical v3 freeze）
+
+新增 `p3_reset_restore_a/b` 两条 prospective lineage，并以 `p3_reset_restore_c`
+作为第三条独立 rule-growth training lineage，分别验证 reset 语义恢复、regression
+保留与 AST payload 的 role-normalized binding。三条 fixture 的 target/regression
+均由真实 Icarus 返回 PASS；隔离 staging 结晶出的 `RESET_RESTORE` rule 通过 V4
+并成为 `VALIDATED`，仅在该副本临时进入 runtime scope。两任务逐 arm replay 的
+M8 Rule Coverage=`0.5`、VCG=`0.5`、
+harmful activation rate=`0`，validity gate 与 obligation transfer 均有可辨识对照，
+接受门全通过；canonical v3 的 SHA-256 与 counters 均未变化。该结果是 runtime
+mechanism evidence，不是 canonical promotion，也不证明其它 RTL mechanism 已具备
+同等覆盖。
+
+### P3 procedural rule-stability replay（隔离副本，非 canonical v3 freeze）
+
+`scripts/run_procedural_rule_stability.py` 对 full、去掉每条 fixture 的
+leave-one-lineage-out 副本按 executable-pattern signature 比较规则，而不比较易变的
+rule ID。full 副本的 7 条 `VALIDATED` rules 在两个 LOO 变体中的最小 retention 为
+`0.857`；runtime Rule Coverage/VCG 明确标记为 `NOT_AVAILABLE`，因为该审计不执行
+activation/A-B，也不写 canonical。
+
+### P3 mechanism-family v3 replay（隔离副本，非 canonical v3 freeze）
+
+本轮把 `valid_ready_bug`、`fifo_space_bug` 与 `p3_role_collision`、
+`p3_predicate_unknown`、`p3_validity_boundary`、`p3_obligation_recovery` 六个真实
+Icarus fixture 放入同一只读 canonical 副本的 rule-growth harness。growth report
+记录 8 个 rule profile，其中 7 个通过 cross-lineage V4；stability report 的
+leave-one-lineage-out 最小 validated-rule retention 为 `0.857142857`. 隔离 staging
+再临时 enrolled 可执行 RTL rule，逐 arm component replay 的 acceptance=`true`，
+role/predicate/validity/obligation 四个 contrast 均为 `component_contrast_observed`，
+harmful activation rate=`0`，non-singleton effect groups=`8`，cross-lineage rule
+support=`8`。不过 M8 Rule Coverage=`0.25`、VCG=`0.25`，低于此前 reset v2 的
+`0.5/0.5`；因此这里的进展是机制可辨识性和谱系覆盖的扩大，而不是覆盖率提升，
+不得据此升级 runtime authority 或实现 Parametric View。所有 durable 文件仅为报告、
+manifest 和 promotion receipt；staging SQLite、artifact/eval_work 与 ORFS tree
+仍留在 `/tmp`。
+
+### P3 mechanism-family v2 coverage replay（隔离 staging，非 canonical v3 freeze）
+
+为验证 v3 的低 Coverage 是否只是所有任务都在测试 veto，新增
+`p3_positive_valid_ready` 与 `p3_positive_fifo_space` 两个独立 future lineage；两者
+均声明 role-compatible、predicate=`TRUE`、candidate validity=`PROVISIONAL_VALID`，
+并通过真实 Icarus target/regression oracle。六任务 manifest 将四个负迁移/门控任务与
+这两个正向路径任务绑定，acceptance 预注册为 Rule Coverage/VCG `>=0.5`。隔离
+staging 的逐 arm replay 结果为：M8=`3/6`、M0=`0/6`，Rule Coverage/VCG=`0.5/0.5`，
+validated rules=`7`，cross-lineage support=`8`，non-singleton groups=`8`，harmful
+activation rate=`0`，四个 component contrast 全部为 `component_contrast_observed`。
+cluster-level M8 rate 为 `0.4`，Wilson 区间仍较宽，因此该结果只证明可执行正向路径
+已补齐到 reset-v2 的覆盖基线；canonical v3 未写入，runtime authority 仍为 staging-only。
+报告和 v2 manifest 位于 `/data1/zhangdy/tehm-campaigns/tehm-procedural-mechanism-ablation-v2/`。
+
+### P3 mechanism-family v3 credit-return follow-up（隔离 staging，非 canonical v3 freeze）
+
+新增独立 `p3_positive_credit_return` guard-strengthen lineage，并与既有训练/对照
+fixture 一起做 9-lineage rule-growth、leave-one-lineage-out stability 与 7-task
+逐 arm replay。隔离 staging 结晶出 7 条 `VALIDATED` rules、8 条 cross-lineage
+support；runtime Rule Coverage/VCG=`0.5714/0.5714`，harmful activation rate=`0`，
+四个 component contrast 仍全部可辨识，预注册 acceptance=`true`，LOO 最小 retention
+=`0.8571`。cluster-level M8 rate 仍为 `0.4`，所以这是稳定性与可执行性增强证据，
+不是 production promotion；canonical v3 counters/SHA-256 未变，Parametric View 仍为
+`NOT_IMPLEMENTED`。compact evidence 位于
+`/data1/zhangdy/tehm-campaigns/tehm-procedural-mechanism-ablation-v3-credit/`。
+
+### P2 prospective observation pilot（非 canonical v3 freeze）
+
+2026-08-17 已在独立 staging DB 与 `/tmp` scratch 上完成最小 observation pilot：
+两个新 lineage（`future-shadow-v3:sky130hs:future_shadow_logic:base0`、
+`future-shadow-v3:ihp-sg13g2:future_shadow_logic:base0`）各生成一个固定
+`DENSITY_RELIEF` action。2/2 shadow receipt 与 2/2 outcome 成功 join，canonical
+六类 counters 前后完全不变；两条 proposal 均因 calibrated OOD gate
+`ABSTAINED`（reason distribution=`out_of_distribution:2`，OOD distance
+0.945599–0.952020），所以 proposal coverage=0，obligation coverage=0.333，decision
+round 按预注册门槛暂不启动。小型证据目录为
+`/data1/zhangdy/tehm-campaigns/tehm-prospective-shadow-v3/`，其中只保留
+receipts、reports、最终 DEF/GDS/JSON 与 shadow metrics；该 pilot 尚未写入或
+覆盖 canonical v3 bundle。
+
+### P2 prospective observation v89（非 canonical v3 freeze）
+
+future-prospective-v8/v9 两条独立 sky130hs lineage 使用固定 CORE_UTILIZATION=22
+observation action，并以 ORFS route/PPA 作为 post-execution oracle。proposal/outcome
+均完整 join，且 canonical memory 未变；预注册 decision gate 明确失败于 harmful-rate
+和 WNS interval coverage，故 decision cases 未准备、候选 action 未执行。完整 manifest、
+hash-chained log、outcomes、metrics 与 fail-closed gate report 位于
+`/data1/zhangdy/tehm-campaigns/tehm-prospective-shadow-v89/`。
+
+> **历史 Evidence Freeze v1（2026-08-08；仅用于审计比较）**：已生成可重现证据包
+> `/data1/zhangdy/tehm-campaigns/tehm-evidence-freeze-v1/`。冻结快照是独立的
+> `closed_loop/tehm.sqlite`，避免把历史恢复库和闭环重放证据混在一起。快照当前包含
+> **47 transitions / 7 rules / 8 activations / 8 trials**；其中 RTL 与真实 ORFS route
+> 各有真实 A/B 闭环，另保留不可判定/timeout 的 ORFS attempt receipts。入口命令为 `./reproduce.sh`，现在会实际重跑一个 bundle 内的最小 ORFS A/B（而不仅是验证历史 receipt）；完整哈希和计数见
+> `bundle_manifest.json`。
+> 冻结的 M0/M1/M8 报告位于 `evaluation/m0_m1_m8_report.{json,md}`，任务清单位于
+> `evaluation/heldout_task_manifest.json`：当前包含 1 个 RTL task 和 1 个真实 ORFS
+> held-out trial。当前 task selection 报告 6 个可判定 task、5 个 lineage clusters：task-level M0=3/6、M1=3/6、M8=6/6；保守 cluster-level M0=2/5、M1=2/5、M8=5/5。另有 7 个明确披露的 duplicate/infrastructure-excluded attempts；该结果是第一份 cluster-aware controlled comparison，仍不宣称普适 benchmark。
+
+| Phase | 内容 | 状态 |
+|---|---|---|
+| 0 | 冻结 legacy baseline 快照 | ✅ `baselines/r2g_legacy/` |
+| 1 | Backend seam（`R2G_MEMORY_BACKEND=none\|legacy\|tehm`）+ 真实 reports 捕获 | ✅ |
+| 2 | 独立 TEHM Canonical Store（states / transitions / episodes / artifacts / 经验图边；capture 与五视图物化由同一 caller-safe savepoint 原子提交） | ✅ |
+| 3 | 五视图 + φ 物化（semantic / diagnostic / episodic / procedural；parametric = NOT_IMPLEMENTED） | ✅ |
+| 4 | Effect Canonicalization（`K_primary`）+ Crystallizability Preflight | ✅ |
+| 5 | Joint Rewrite Anti-Unification + Skill Synthesis（φ_P，候选 rule 生成） | ✅ |
+| 6 | Rule Validity Gate（V2 → V1 → V3 → V4）+ Risk Stratification | ✅ |
+| 7 | Typed Retrieval（query planning → high-recall → symbolic filter → rerank） | ✅ |
+| 8 | 八步 Activation Pipeline（Applicable ⟂ Executable ⟂ Verifiable） | ✅ |
+| 9 | 独立 Rule Lifecycle + A/B（shadow → candidate → promoted/demoted） | ✅ |
+| 10 | 完整 RTL AST 扩展（rtl.* 域 + Verilog 解析 + 真实 Icarus oracle + RTL 捕获） | ✅ |
+| 11 | **Cross-stage Physical Effect Memory** | ✅ |
+
+**Phase 11**（设计文档 26 Phase 11）——`tehm/physical/`，连接 flow/RTL 阶段与物理
+signoff 阶段：
+
+    (RTL/flow context, action) → (ΔWNS, ΔTNS, ΔArea, ΔPower, ΔCongestion, ΔDRC)
+
+- `effects.py` — `extract_deltas(before_ppa, after_ppa)` 计算六维物理 delta；
+  任一侧缺失的 metric → `None`（绝不造假，H3）。
+- `memory.py` — `PhysicalEffectMemory`：记录每次动作的物理效果 →
+  `tehm_physical_effects` 表；按 transformation family / effect key 聚合出
+  经验 profile（mean/min/max delta + support + harmful 信号），支持按
+  `graph_context_digest` 做条件化 profile，也支持 platform/tier-compatible 的
+  robust-scaled kNN、逐 metric 95% uncertainty 与 fail-closed abstain；production
+  log PPA 可在不改 canonical
+  transition ID 的前提下带证据回填。
+- `graph_context.py` — 消费 def-graph 的 8 张 X-side feature tables，保存紧凑物理图
+  特征、topology row counts、DEF/CSV sha256、extractor version 与 signoff gate；
+  feature 完整度和 dataset tier 分开记录，dirty gate 只能是 `research` tier。
+- DB schema v2：`tehm_physical_effects` 新增 graph context JSON/digest/extractor
+  version；v1 store 通过 forward-only migration 原地升级。
+- **第一阶段不声称可微梯度**：`predict` 返回经验均值 + support，并显式标注
+  "no differentiable gradient claimed"。
+- CLI：`physical-record`（before/after PPA → 记录）/ `physical-profile`（聚合）。
+- 与 def-graph 的连接已完成：真实 AES/RISC-V DEF 特征已进入 campaign Physical
+  Effect Memory；缺少 final DEF 或 strict signoff provenance 的设计不会伪装为可用。
+
+**Phase 10**（设计文档 26 Phase 10、22.1 RTL v2）——`tehm/rtl/`：
+- `verilog_parse.py` — 纯 Python 结构化 Verilog 解析器（模块/端口/信号/always
+  block/FSM case 转移与守卫，begin/end 平衡）。
+- `rtl_graph.py` — RTL 语义图（MODULE/ALWAYS_BLOCK/SIGNAL/STATE_REG/
+  FSM_TRANSITION/CLOCK/RESET 节点 + CONTROL_PATH 边）+ 内容寻址 digest。
+- `rtl_actions.py` — rtl.* action 域（AST_REWRITE / GUARD_STRENGTHEN /
+  RESET_RESTORE / WIDTH_CORRECT / PRIORITY_REORDER）；`GUARD_STRENGTHEN` 注释感知
+  重写（只改非注释代码区，幂等）。
+- `rtl_oracle.py` — **真实 Icarus oracle**（iverilog/vvp compile+sim，测试基准
+  `$fatal` → exit code 判定 PASS/FAIL；工具缺失时优雅降级）。
+- `rtl_evidence.py` — RTL 工程（rtl/*.v + tb/*.v + manifest.json）→ 真实验证的
+  ExecutionRecord（`rtl.GUARD_STRENGTHEN` action）。
+- RTL action 参数作为 role-normalize slot（`rtl.source_state` 等）→ 两个不同
+  状态名的同机制修复结晶成带 `$SRC/$DST/$COND` holes 的规则。
+
+**真实 campaign**（`scripts/run_rtl_campaign.py`，用真实 iverilog/vvp）：
+在 3 个真实 Verilog 设计（`req_ack_bug` / `req_ack_bug2` 训练，`req_ack_bug3`
+held-out，均为 handshake-completion bug）上跑通全闭环：
+`训练捕获(PASS) → 结晶+审计(GUARD_STRENGTHEN PROVISIONAL_VALID, $SRC/$DST/$COND)
+→ 检索(held-out APPLICABLE) → 激活(真实 guard-strengthen + 真实 sim PASS → 新
+transition) → shadow → candidate → A/B win → promoted`。
+
+**engineer_loop 闭环接线**（backend-routed、env 门控、fail-closed）：
+- `ingest_run.py`：单一 backend authority。`legacy` 只写 legacy store；`tehm`
+  只 capture canonical experience 并 rebuild/crystallize；`none` 不写长期记忆。
+  不再使用“先写 legacy、再镜像 TEHM”的污染路径。
+- `diagnose_signoff_fix.py`：按 backend 隔离 authority。`legacy` 保持原 indexed
+  recipe/lifecycle/lessons 路径；`none` 只用共同 cold-start catalog；`tehm` 不读取
+  legacy recipe/lifecycle/lessons，经 `runtime_router.py` 的统一 MemoryBackend 接口
+  执行 query → retrieve → propose_activation，并把 APPLICABLE 规则 prepend 为
+  `source='tehm_rule'` 策略（28.4 归因）。错误可见且 fail-closed 到 cold-start。
+- `runtime_router.py` — Phase 1 runtime router；诊断脚本不再直接打开 TEHM DB。
+- `tehm_backend.propose_activation` — rule lookup → binding → rewrite instantiate →
+  obligation transfer → 确定性 activation ID。
+- runtime retrieval 只索引 `promoted` rule；VALIDATED 但仍处于 shadow/candidate 的
+  rule 只允许审计/A/B，不能贡献生产 Rule Coverage。
+- `tehm/integration/fix_consultation.py` — 低层咨询适配器（campaign/tests 使用）。
+- `suggest_config.py`：`legacy` 保持 feature-KNN/heuristics，`none` 只用共同静态
+  policy，`tehm` 只接收 backend 产生的 typed config proposal；所有 proposal 仍经过
+  design-type clamps 与 `PLACE_DENSITY_LB_ADDON >= 0.10` 安全下限。
+- `engineer_loop.py`：非 legacy run 不打开 legacy DB、不运行 legacy learner/A/B；
+  TEHM 每轮调用 backend rebuild，新 admissible rules 独立进入
+  `tehm_rule_status: shadow → candidate`。Ledger 记录 backend/schema/snapshot，禁止
+  跨 backend resume；冻结 evaluation snapshot 漂移时拒绝 resume。
+- TEHM `ab-drain` 已接真实 ORFS sandbox executor：arm A 为未修改 control，arm B
+  只应用被测 typed rule；两边执行真实 `run_orfs`，再以
+  `fix_signoff --max-iters 0` 建立 oracle（不追加 catalog repair）。结果只写
+  `tehm_trials` / `tehm_activations`，由 promotion authority 更新
+  `tehm_rule_status`，绝不打开 legacy `ab_trials` / `recipe_status`。
+- A/B rollback authority：source 的 `constraints/` + `rtl/` 内容快照、sandbox、
+  lifecycle status_version 全部入 receipt；source 漂移会自动精确恢复并 re-hash，
+  regression/stale/non-divergent/低 obligation coverage 均不能 promotion。
+- `R2G_MEMORY_READ_ONLY_EVAL=1`：TEHM 使用 SQLite `mode=ro`，所有 backend 的
+  ingest/learn/lifecycle mutation 均关闭，held-out evaluation 不回灌 memory。
+
+**Phase 8**（设计文档 10、11、21.3、26 章）——`activation/` 包，八步：
+`1 Retrieve(Phase 7) → 2 Applicability → 3 Structural Binding → 4 Obligation
+Transfer → 5 Instantiate Rewrite → 6 Sandbox Execute → 7 Oracle Verify → 8
+Update`。三个 activation-time 轴——**Applicable ⟂ Executable ⟂ Verifiable**——在
+`ActivationRecord` 中分开存储，绝不压成单一 success（设计文档 11）。成功的激活
+会通过 canonical capture 产生**新的 verified transition**（喂给下一轮结晶）。
+R2G 执行基座（engineer_loop / run_orfs / fix_signoff / oracle）作为可注入 callable
+（21.3），生产接线留给完整 Phase 1。
+
+**Phase 9**（设计文档 20.10、24.3、26 章）——`lifecycle/` 包：
+- `rule_status.py`：`shadow → candidate → promoted/demoted/quarantined`，每次
+  状态迁移 `status_version` 单调递增；**只有 PROVISIONAL_VALID/VALIDATED 规则
+  能进入 shadow**（H6）。lifecycle 行在 `tehm_rule_status`，verdict 在
+  `tehm_trials`——绝不写 legacy `recipe_status`/`ab_trials`。
+- `trial_adapter.py`：backend-neutral TrialSubject（arm A = control，arm B =
+  强制 TEHM rule 激活），variance-aware LCB 判决（镜像 legacy `judge_repeated_ex`）。
+- `authority.py`：promotion authority（24.3）——真实 A/B、obligation coverage
+  足够、无 hard regression、status version 未变、arms 实际有差异；production 路径
+  还必须同时通过 rollback、registry、cross-lineage TE、harmful-rate 与 conformal
+  coverage 六项 gate；任一缺失/失败即拒绝并保持 candidate。
+
+**记忆闭环**（一次完整流转）：
+```
+capture(训练语料) → crystallize+audit(VALIDATED) → retrieve(held-out)
+→ activate(APPLICABLE/EXECUTABLE/PASS → 新 transition) → lifecycle
+→ shadow → candidate → A/B win → promoted
+```
+
+**Phase 7**（设计文档 9、26 章）——检索对象是 **当前修复状态 → 相似规则**，绝非
+文本查询 → 文本块（9.1）：
+- `retrieval/query_planner.py` — Stage 0：`RepairContext → MemoryQuery`（per-view
+  优先级 + 嵌入修复证据 check/design/platform）。
+- `retrieval/index.py` + `recall.py` — Stage 1 high-recall：只索引
+  `PROVISIONAL_VALID`/`VALIDATED` 规则（H6），按 check/family/obligation 建
+  metadata 索引；相似度 = check match + obligation overlap（刻意宽松，精度交给
+  Stage 2）。
+- `retrieval/symbolic_filter.py` — Stage 2：`P_h(S_q) → APPLICABLE | INAPPLICABLE
+  | UNRESOLVED`。**UNKNOWN 永不过默认通过**（H3）；INAPPLICABLE 是最终 veto。
+- `retrieval/rerank.py` — Stage 3：透明乘法分
+  `Score = Similarity × Utility × Confidence × (1 − RiskPenalty)`；veto 不被
+  ranker 覆盖（9.5）；UNRESOLVED 降权不丢弃。
+- `retrieval/pipeline.py` — `retrieve(conn, context)` 编排四阶段 → `RetrievalReceipt`。
+- `tehm_backend.retrieve` 已接入（不再为空）。
+
+**Phase 6**（设计文档 7、8、24.1、26 章）：
+- `validity.py` — 有序有效性审计 `V2 → V1 → V3 → V4`（状态机）：
+  - **V2 Non-Triviality**：排除 instance memorization（hole_ratio=0 且 support<3）与
+    wildcard collapse（hole_ratio 过高）；规则必须落在有效抽象带。
+  - **V1 Derivation-Faithful Replay**：只用 anti-unification 的 crystallization-time
+    witness 重放（`r[Θ_i^AU] ≈ A_i`），**禁止重新搜索有利 binding**（honesty H5：
+    V2 严格先于 V1 被咨询）。
+  - **V3 Effective Support**：报告 raw support / unique attempts / unique lineages /
+    unique families；cross-lineage 标注（单 bug 多 seed 不支撑跨 lineage 声明）。
+  - **V4 Stability**：leave-one-out 重结晶（`r_{-i} = φ_P(G \ e_i)`）检查能否解释
+    held-out episode；**n < 3 时 V4 = N/A 而非 FAIL**（7.5）。
+  - 结果状态：`REJECT_DEGENERATE` / `REJECT_UNFAITHFUL` / `INSTANCE_MEMORY` /
+    `PROVISIONAL_VALID` / `UNSTABLE_CANDIDATE` / `VALIDATED`。仅
+    `PROVISIONAL_VALID`/`VALIDATED` 可进入 runtime lifecycle（H6）。
+- `risk.py` — 风险分层（设计文档 8）：`CREATED_REGRESSION`（PASS→FAIL）与
+  `NEWLY_OBSERVED_FAILURE`（N/A→FAIL）单独记录 activation context；v1 不自动把
+  `P_c` promotion 为 `P_h`（status = CONTEXT_DEPENDENT）。
+- `crystallize_all` 现在自动跑审计：合成 rule → 审计 → 存 `validity_status` +
+  `validity_profile` + `risk_profile`。
+
+**Phase 5**（设计文档 6.6、22.4、26 章，`crystallization/` 的核心算法贡献）：
+- `role_normalize.py` — 把每个 verified transition 投影到固定的 role-aligned slot
+  schema（`match.target_check` / `match.knob` / `rewrite.value` / `execution.rerun_from` /
+  `execution.recheck` / `verification.*`）。knob/check 等结构身份作为 slot VALUE，
+  便于 anti-unification 在跨实例不同时把它们 hole 化。
+- `anti_unify.py` — **joint rewrite anti-unification**：按设计文档 6.6 的合并顺序
+  （pairwise AU cost → 最低 cost → episode id tie-break → 合并 → 重算），吸收式
+  合并保证**每个 slot 路径只有一个 hole**（共享 hole namespace，before/after 不冲突），
+  `source_substitutions` 保留每个来源的 crystallization-time witness，`merge_trace`
+  完整保留。
+- `synthesize_skill.py` — 把 AntiUnifyResult 变成候选 rule（设计文档 4.3/22.4）：
+  `skill_type` + `match` + `rewrite` + `execution` + `verification` obligations，
+  content-addressed `rule_id`，`status: CANDIDATE`（V2 审计在 Phase 6）。
+- `build_rules.py` — 完整管线：`preflight → 按 effect 组 role-normalize → joint
+  anti-unify → synthesize → 持久化到 `tehm_rules` + `tehm_rule_sources`。
+  singleton 永不结晶（V2 原则）；整次 rule/source 重建及 stale retirement 由
+  caller-safe savepoint 原子提交，失败不会留下半个 rule projection。
+
+**Phase 4**（设计文档 6.2、6.3、26 章）：
+- `crystallization/effects.py` — `K_primary = Canon(ΔV_target/preserve, ΔF, ΔC)`：
+  target verdict delta + preserve pass count + **归一化的** failure delta
+  （FIXED/SHIFTED/NEW/REDUCED/INCREASED…，非实例原始值）+ coarse structural
+  delta（transformation family + 结构 flag）。`CREATED_REGRESSION` /
+  `NEWLY_OBSERVED_FAILURE` 按设计文档 6.2 **不属于 primary key**（进 risk
+  stratification）。capture 存储的 key 与 preflight 分组 key 共用同一 canon。
+- `crystallization/preflight.py` — 按 effect key 分组，报告 `singleton_rate`、
+  `CC_raw`、`CC_lineage`、`key_precision`、`key_recall`，输出设计文档 Phase 4 的
+  5 个文件（`groups.json` / `group_report.md` / `group_size.csv` /
+  `lineage_support.csv` / `manual_audit_sample.json`），并给出诚实的 verdict
+  （`crystallizable` / `crystallizable_raw_only` / `marginal` /
+  `instance_dominated`）——实例主导的语料不会被宣称可结晶。
+
+**Phase 1 的运行时接入方式**（`R2G_MEMORY_BACKEND` seam）：
+- `memory/interface.py`（MemoryBackend Protocol）+ `memory/contracts.py`（共享数据契约）+ `memory/factory.py`（进程启动时锁定 backend，fail-closed）。
+- 三个 backend：`none`（无记忆基线）/ `legacy`（对 legacy knowledge 的**只读**适配器，retrieve 直接读提交的 `heuristics.json`，语义不变）/ `tehm`（完整替换，走 canonical capture）。
+- `tehm/adapters/r2g_evidence.py`：读真实 R2G project dir（`reports/*.json` + `config.mk` + `fix_log.jsonl`），每个 fix 迭代 → 一条 Verified Transition，同 `fix_session_id` 累积成 Repair Episode Graph。
+- `ingest_run.py`、`suggest_config.py`、`diagnose_signoff_fix.py` 与
+  `engineer_loop.py` 已按 backend 路由并严格隔离 authority。
+- TEHM learner/lifecycle 与真实 ORFS A/B executor 均已接入 engineer loop；无法
+  完整 binding 或不能产生 config delta 的 rule 会诚实地不可执行，不会造出差异。
+- Phase-1 golden/firewall gates：默认 legacy 与显式 legacy 的 suggest 输出字节一致、
+  ingest logical DB rows 一致；Python process audit 验证 TEHM 不打开 legacy authority，
+  legacy 不打开 TEHM authority。
+
+**隔离原则**：TEHM 不读任何 legacy `knowledge/` 对象作为 memory authority；TEHM DB 路径有 fail-closed 校验（H5）；legacy backend 只读 legacy（H8）。
+
+---
+
+## 目录
+
+```
+memory/
+├── README.md                      # 本文件
+├── docs/                          # 设计文档（唯一权威）
+├── baselines/
+│   ├── r2g_legacy/                # Phase 0 冻结的 legacy 快照
+│   └── freeze_legacy_baseline.py  # 冻结脚本（只读 legacy，绝不写入）
+├── __init__.py                    # memory 包标记
+├── .gitignore                     # 忽略运行时产物（tehm.sqlite/artifacts/__pycache__）
+│
+├── interface.py                   # Phase 1: MemoryBackend Protocol（设计文档 17.1）
+├── contracts.py                   # Phase 1: 共享数据契约（ExecutionRecord/RepairContext/MemoryQuery/...）
+├── factory.py                     # Phase 1: R2G_MEMORY_BACKEND 选择 + 进程锁（17.2-17.4）
+├── none_backend.py                # Phase 1: 无记忆基线（M0 arm）
+├── legacy_backend.py              # Phase 1: legacy 只读适配器（retrieve 读 heuristics.json，ingest_project 走真实 ingest_run.py）
+├── tehm_backend.py                # Phase 1: TEHM backend（capture/retrieve/propose）
+├── runtime_router.py              # Phase 1: backend-neutral signoff runtime consultation
+│
+├── tehm/                          # TEHM 包（stdlib-only，无第三方依赖）
+│   ├── __init__.py                # 版本 + schema/predicate/role 版本常量
+│   ├── config.py                  # TEHM_DB / TEHM_ARTIFACTS_ROOT / legacy 隔离校验（H5）
+│   ├── schema.sql                 # 12 张 tehm_* 表（设计文档 19.2-19.7, 20.11）
+│   ├── db.py / migrations.py      # 连接（WAL/busy_timeout/FK）/ schema 版本化迁移
+│   ├── ids.py                     # 内容寻址 ID（state/transition/episode/rule/activation）+ stable_dumps
+│   ├── artifact_store.py          # sha256 内容寻址 artifact 存储（19.8）
+│   ├── canonical/                 # Verified State / Transition / Episode / Verifier / Capture
+│   │   ├── verifier.py            #   V_t 证据分层（F/R/T/H）+ toolchain snapshot
+│   │   ├── state.py               #   CanonicalState + source_digest（内容寻址）
+│   │   ├── transition.py          #   Action/ObservationDelta/outcome 分类（含 created vs newly）
+│   │   ├── episode.py             #   Repair Episode Graph + trajectory_summary
+│   │   └── capture.py             #   ExecutionRecord → 规范存储（含会话累积 + 视图物化）
+│   ├── graph/                     # LocalDesignGraph + RoleProjector + PredicateExtractor
+│   │   ├── local_design_graph.py  #   RunContextGraph（flow/signoff v1 语义图，22.1）
+│   │   ├── feature_extractor.py   #   ψ: G_D → 特征集（6.5）
+│   │   ├── roles.py               #   RoleProjector（6.4，含 UNKNOWN）
+│   │   └── predicates.py          #   三值 PredicateExtractor（UNKNOWN != FALSE，H3）
+│   ├── views/                     # 五视图物化（parametric 明确 NOT_IMPLEMENTED）
+│   │   ├── base.py                #   ViewRecord + payload_digest + upsert
+│   │   ├── semantic.py            #   RunContextGraph 视图
+│   │   ├── diagnostic.py          #   故障签名 F（22.2）
+│   │   ├── episodic.py            #   修复轨迹视图（22.3）
+│   │   ├── procedural.py          #   实例级可执行规则视图（22.4）
+│   │   ├── parametric_stub.py     #   NOT_IMPLEMENTED（22.5，不造假数据）
+│   │   └── materialize.py         #   φ 调度（5）
+│   ├── parametric/                # read-only shadow RFC（不物化 Parametric View）
+│   │   ├── shadow.py              # readiness/replay/OOD gates + provenance receipt
+│   │   └── __init__.py
+│   ├── adapters/
+│   │   ├── r2g_evidence.py        # Phase 1: 真实 reports/config/fix_log → ExecutionRecord + episode 累积
+│   │   └── orfs_pair.py           # 普通 production ORFS before/after pair（与 A/B 严格分离）
+│   ├── crystallization/           # Phase 4-5: 经验结晶（核心算法 φ_P）
+│   │   ├── effects.py             #   Phase 4: K_primary 规范 Canon（6.2，归一化 delta）
+│   │   ├── preflight.py           #   Phase 4: 可结晶性预检（6.3，5 个输出文件 + verdict）
+│   │   ├── role_normalize.py      #   Phase 5: role-aligned slot 投影（6.4）
+│   │   ├── anti_unify.py          #   Phase 5: joint anti-unification + merge trace（6.6/23.2）
+│   │   ├── synthesize_skill.py    #   Phase 5: candidate rule 生成（22.4/4.3）
+│   │   ├── build_rules.py         #   Phase 5-6: preflight→anti-unify→audit→persist（20.5）
+│   │   ├── validity.py            #   Phase 6: 有序有效性审计 V2→V1→V3→V4（7/24.1）
+│   │   └── risk.py                #   Phase 6: 风险分层 created/newly（8）
+│   ├── retrieval/                 # Phase 7: 类型化检索（9）
+│   │   ├── query_planner.py       #   Stage 0: RepairContext → MemoryQuery（9.2）
+│   │   ├── index.py               #   admissible rule 索引（by_check/family/obligation）
+│   │   ├── recall.py              #   Stage 1: high-recall（9.3）
+│   │   ├── symbolic_filter.py     #   Stage 2: P_h(S_q) 硬过滤，UNKNOWN 不过（9.4）
+│   │   ├── rerank.py              #   Stage 3: 透明乘法分，veto 不被覆盖（9.5）
+│   │   ├── pipeline.py            #   retrieve() 编排 + RetrievalReceipt
+│   │   ├── causal_recall.py       #   evaluation-only causal path recall
+│   │   └── result.py              #   RetrievedRule / RetrievalReceipt
+│   ├── activation/                # Phase 8: 八步激活（10/11）
+│   │   ├── applicability.py       #   Step 2: P_h(S_q)（复用 retrieval 符号过滤）
+│   │   ├── binding.py             #   Step 3: 结构绑定 θ_L（hole → 实体）
+│   │   ├── obligation_transfer.py #   Step 4: BOUND/SYNTHESIZABLE/UNAVAILABLE + OC
+│   │   ├── instantiate.py         #   Step 5: 结构化 action（config_edits/rerun/recheck）
+│   │   ├── execute_adapter.py     #   Step 6: 沙箱执行（注入 R2G 基座 callable）
+│   │   ├── verify.py              #   Step 7: oracle 验证（F/R/T/H 证据）
+│   │   ├── update.py              #   Step 8: 捕获新 transition + utility 更新
+│   │   └── pipeline.py            #   八步编排 + ActivationRecord（三轴分离）
+│   ├── lifecycle/                 # Phase 9: 独立 rule lifecycle + A/B（20.10/24.3）
+│   │   ├── rule_status.py         #   shadow→candidate→promoted/demoted（版本递增，H6 门控）
+│   │   ├── trial_adapter.py       #   TrialSubject + variance-aware LCB 判决
+│   │   ├── authority.py           #   promotion authority（真实 A/B/无 regression/版本未变）
+│   │   └── orfs_trial.py           #   真实 ORFS arms + oracle + activation/trial + rollback
+│   ├── rtl/                       # Phase 10: 完整 RTL AST 扩展
+│   │   ├── verilog_parse.py       #   结构化 Verilog 解析器（22.1 RTL v2）
+│   │   ├── rtl_graph.py           #   RTL 语义图（MODULE/STATE_REG/FSM_TRANSITION/...）
+│   │   ├── rtl_actions.py         #   rtl.* 域 + guard_strengthen 注释感知重写
+│   │   ├── rtl_oracle.py          #   真实 Icarus oracle（iverilog/vvp）
+│   │   └── rtl_evidence.py        #   RTL 工程 → 真实验证的 ExecutionRecord
+│   ├── integration/               # typed rule 到执行策略的低层适配
+│   │   └── fix_consultation.py    #   TEHM rule → diagnose 策略（source=tehm_rule）
+│   ├── physical/                  # Phase 11: Cross-stage Physical Effect Memory
+│   │   ├── effects.py             #   extract_deltas（ΔWNS/ΔTNS/ΔArea/ΔPower/ΔCong/ΔDRC）
+│   │   ├── graph_context.py       #   def-graph X context + digest/provenance/tier
+│   │   └── memory.py              #   profile + similar-graph uncertainty/abstain + PPA backfill
+│   ├── evaluation/
+│   │   └── campaign_metrics.py    #   RC/AY/BSR/IVR/RU/HAR/OC/TE 精确分母
+│   └── cli.py                     # ... / physical-profile / physical-predict / health / honesty
+├── scripts/
+│   ├── run_rtl_campaign.py        # 真实 RTL campaign：全闭环演示（真实 iverilog）
+│   ├── run_orfs_campaign.py       # 可恢复 production ORFS campaign/A-B/metrics/def-graph
+│   └── run_orfs_diversity_campaign.py # multi-family/platform + held-out lineage
+│   ├── honesty.py                 # H1-H12 honesty gates + A1 artifact audit
+│   ├── cli.py                     # init-db / capture / capture-r2g / preflight / health / honesty
+│   └── schemas/                   # transition/episode/rule/activation/predicate/role/obligation v1 参考
+│
+├── tests/                         # pytest（当前工作树 273 个测试，全 stdlib + tmp_path 隔离）
+│   ├── conftest.py                # sys.path 注入 + tmp_tehm/sample_record 等 fixture
+│   ├── fixtures/
+│   │   ├── sample_antenna_fix_record.json      # 合成 ExecutionRecord
+│   │   ├── project_antenna_fix/                # 真实格式 project（3 迭代 fix_log）
+│   │   └── project_clean_run/                  # 无 fix_log 的 clean run
+│   └── test_*.py                  # 当前测试文件集合（见「测试」一节）
+│
+└── tehm.sqlite / artifacts/       # 运行时产物（默认位置，可用 TEHM_DB / TEHM_ARTIFACTS_ROOT 覆盖）
+```
+
+## 核心概念（速览）
+
+- **记忆原子** = Verified State Transition：`e_t = <S_t, A_t, S_{t+1}, O_t, V_t>`
+- **记忆片段** = Repair Episode Graph（有序 transition 序列 + 分支）
+- **五视图** = Semantic / Diagnostic / Episodic / Procedural / Parametric（`tehm_views` first-class 物化）
+- **三值逻辑**：`UNKNOWN != FALSE`（H3，任何 coverage 缺失都不能生成负证据）
+- **证据分层**：`F / R / T / H`（formal / regression / target / compile-lint）
+- **内容寻址**：相同内容 → 相同 ID（幂等捕获、去重、跨进程确定性）
+
+## 使用
+
+```bash
+# 0. Backend 选择（Phase 1 seam；进程启动时锁定）
+export R2G_MEMORY_BACKEND=none|legacy|tehm   # 默认 legacy；tehm 时才走 TEHM
+
+# 1. 建库（默认 memory/tehm.sqlite）
+export TEHM_DB=/path/to/tehm.sqlite           # 可选，默认 memory/tehm.sqlite
+export TEHM_ARTIFACTS_ROOT=/path/to/artifacts # 可选，默认 memory/artifacts
+python3 tehm/cli.py init-db
+
+# 2a. 捕获一条 ExecutionRecord（结构见 tests/fixtures/sample_antenna_fix_record.json）
+python3 tehm/cli.py capture tests/fixtures/sample_antenna_fix_record.json
+
+# 2b. 从真实 R2G project dir 捕获（读 reports/*.json + config.mk + fix_log.jsonl，
+#     每个 fix 迭代 → 一条 Verified Transition，同 session 累积成 episode 图）
+python3 tehm/cli.py capture-r2g /path/to/design_cases/<project>
+
+# 3. 可结晶性 preflight（Phase 4；--out-dir 写 5 个输出文件）
+python3 tehm/cli.py preflight --campaign-id live --out-dir preflight/
+
+# 4. 结晶 + 有效性审计（Phase 5-6；anti-unify → 审计 V2→V1→V3→V4 → tehm_rules）
+python3 tehm/cli.py crystallize --campaign-id live --dry-run    # 先 dry-run 看候选规则与有效性状态
+python3 tehm/cli.py crystallize --campaign-id live              # 持久化（含 validity_status + risk_profile）
+
+# 5. 检索（Phase 7；对当前修复状态召回 admissible 规则）
+python3 tehm/cli.py retrieve --check drc
+python3 tehm/cli.py retrieve --check drc --project /path/to/design_cases/<proj>
+
+# 6. 激活检查（Phase 8；默认 production 只允许 promoted rule）
+python3 tehm/cli.py activate --rule <rule_id> --check drc --binding '{"\$H0":"0.16"}' --dry-run
+# 受控 ab/audit 才显式使用 evaluation，不改变 production authority
+python3 tehm/cli.py activate --authority-mode evaluation --rule <rule_id> --check drc --dry-run
+
+# 7. 真实 RTL campaign（Phase 10；全闭环 + 真实 iverilog/vvp）
+python3 scripts/run_rtl_campaign.py
+
+# 8. 物理效果记忆（Phase 11；记录、exact profile、相似图预测）
+python3 tehm/cli.py physical-record --transition t1 --family DENSITY_RELIEF \
+    --before before_ppa.json --after after_ppa.json
+python3 tehm/cli.py physical-profile --family DENSITY_RELIEF
+python3 tehm/cli.py physical-predict --family DENSITY_RELIEF \
+    --graph-context query_graph_context.json --k 5 \
+    --min-unique-contexts 3 --max-distance 3.0
+
+相似图预测只在 platform 与 dataset tier 一致的 context 内做 robust-scaled kNN；
+同一 graph digest 的重复观测先聚合，不能虚增几何 support。输出逐 metric 的加权
+95% mean interval；context 数不足、metric support 不足、tier/platform 不兼容或
+query 超出经验分布时 `abstained=true`（CLI 退出码 2），且不声称梯度或因果泛化。
+
+# 9a. Parametric shadow（只读、外部 log，不物化 Parametric View）
+python3 scripts/run_parametric_shadow_campaign.py --phase prepare \
+    --db /path/to/frozen/tehm.sqlite --cases prospective_cases.jsonl \
+    --readiness parametric_readiness.json --replay-evidence replay_receipt.json \
+    --prospective-manifest prospective_manifest.json \
+    --out-dir /tmp/tehm-parametric-shadow
+
+# 9. 健康检查 + honesty gates
+python3 tehm/cli.py health
+python3 tehm/cli.py honesty          # 全绿退出码 0；否则 1 = HONESTY BREACH
+
+# 10. 真实 TEHM ORFS A/B（candidate rules → tehm_trials → promotion authority）
+R2G_MEMORY_BACKEND=tehm TEHM_DB=/path/to/tehm.sqlite \
+  python3 ../r2g-skills/signoff-loop/scripts/loop/engineer_loop.py \
+  ab-drain --ledger /path/to/ledger.jsonl --n-designs 1
+# 含 holes 的规则显式提供 target binding（rule_id -> hole -> concrete value）
+export R2G_TEHM_AB_BINDINGS='{"rule_x":{"$H0":"CORE_UTILIZATION","$H1":"20"}}'
+
+# 11. 冻结 legacy baseline（Phase 0，只读 legacy）
+python3 baselines/freeze_legacy_baseline.py
+```
+
+**真实 loop 接入**：`engineer_loop` 每次 flow 后调用 `ingest_run.py`，且只写所选
+backend。TEHM 捕获 canonical store 后自动 crystallize/enroll lifecycle；错误
+fail-closed，绝不写 legacy authority。
+直接验证：
+
+```bash
+R2G_MEMORY_BACKEND=tehm python3 ../r2g-skills/signoff-loop/knowledge/ingest_run.py <project> --db /tmp/knowledge.sqlite
+```
+
+### ExecutionRecord 输入契约
+
+```json
+{
+  "record_id": "...", "domain": "flow.signoff",
+  "project_id": "...", "design_id": "...", "lineage_id": "...", "repository_ref": "...",
+  "before":  {"repository_commit": "...", "config": {...}, "reports": {...},
+              "failure_signature": {...}},
+  "action":  {"domain": "signoff.REPAIR_ACTION", "transformation_family": "...", "payload": {...}},
+  "after":   {"repository_commit": "...", "config": {...}, "reports": {...}},
+  "observation_delta": {"original_failure": "REMOVED|PRESENT|UNKNOWN",
+                        "first_divergence": {...}, "failing_tests": {...},
+                        "created_regressions": [...], "newly_observed_failures": [...]},
+  "verification": {"verdict": "PASS|FAIL|UNKNOWN", "oracle_type": "REGRESSION|FORMAL|...",
+                   "confidence_tier": "F|R|T|H", "obligation_coverage": 1.0,
+                   "evidence_refs": [...]},
+  "episode": {"mechanism_family": "...", "lineage_id": "...", "step_index": 0,
+              "terminal_status": "VERIFIED_REPAIR"}
+}
+```
+
+Phase 2 的首批来源是 R2G 已有的 signoff/config 修复轨迹（action 已结构化、
+before/after 已存在、oracle 可执行）——后续用真实 `reports/*.json` + `fix_log.jsonl`
+喂给 capture adapter 即可。
+
+## 测试
+
+```bash
+python3 -m pytest tests/ -q     # 当前工作树 273 passed；canonical v3 freeze 为 225
+```
+
+测试全部 hermetic：temp sqlite + temp artifact root，不碰真实 TEHM DB，不碰
+legacy（legacy 测试用临时 DB + 只读 heuristics.json），不需要任何 EDA 工具。
+覆盖设计文档 27.1 的关键项：content-addressed IDs、transition completeness、
+created vs newly-observed、UNKNOWN != FALSE、五视图物化、artifact digest
+integrity、effect key 确定性、backend 隔离、捕获幂等；Phase 1 的 factory
+选择/进程锁/fail-closed、tehm/legacy backend、真实 reports 捕获、ingest_run
+钩子 golden no-op；Phase 4 的 effect canon 归一化（FIXED/SHIFTED/REDUCED…、
+config 值不入 key、created regression 不入 primary key）、capture 与 preflight
+key 一致性、preflight metrics/5 输出文件/verdict 诚实性；Phase 5 的 anti-unify
+确定性、共享 hole namespace、吸收式单 hole/slot、witness 完整性、merge trace
+保留、singleton 永不结晶、rule 幂等持久化；Phase 6 的有序审计（V2 退化拒绝、
+V1 witness-only 重放、V3 支持度/cross-lineage、V4 leave-one-out、n<3 N/A、
+risk CONTEXT_DEPENDENT）；Phase 7 的检索（query planning 嵌入修复状态、
+high-recall 只索引 admissible 规则、符号 veto 不被 ranker 覆盖、UNRESOLVED
+降权不丢弃、透明乘法分、backend 检索集成）；Phase 8 的八步激活（注入
+executor/oracle 完整闭环、三轴分离、成功激活产生新 transition、FAIL/REGRESSION
+负证据捕获、dry-run 不持久化）；Phase 9 的 lifecycle（validity 门控进入 shadow、
+status_version 单调、variance-aware LCB 判决、authority 拒绝 stale/未差异/
+regression/低 coverage 的 trial）；Phase 10 的 RTL（Verilog 结构化解析/FSM
+守卫提取、RTL 语义图、注释感知 guard_strengthen 重写与幂等、真实 Icarus oracle
+检测 bug→修复 PASS、RTL 捕获、真实 campaign 全闭环 + lifecycle promoted）；
+engineer_loop 咨询接线（tehm_rule 策略归因、符号 veto）；Phase 11 的物理效果记忆
+（六维 delta 提取、缺失 metric → None 不造假、按 family 聚合经验 profile、
+harmful 信号、predict 诚实标注无梯度声称）。
+
+## Honesty gates（tehm/honesty.py）
+
+| Gate | 含义 |
+|---|---|
+| H1 | 每条 transition 必须有 source state / action / target state / verifier snapshot |
+| H2 | 每个物化 view 可回溯 canonical owner + extractor version + digest 一致 |
+| H3 | coverage 缺失 → UNKNOWN，绝不生成负证据（UNKNOWN != FALSE） |
+| H4 | 每个 source substitution 必须有 episode-owned witness 且可重放 |
+| H5 | validity gate 必须按 V2 → V1 顺序执行 |
+| H6 | 低于最低 validity 的 rule 不得进入 runtime lifecycle |
+| H7 | activation 缺失 obligation 或 verifier 结果不得记为通过 |
+| H8 | TEHM 与 legacy backend 必须完全隔离 |
+| H9 | held-out / A-B episode 不得进入 learner support |
+| H10 | 真实 ORFS trial 必须有 source/config/registry 三层可验证 rollback receipt |
+| H11 | evidence bundle export → import → export 必须 byte-stable |
+| H12 | TEHM 错误 fail-closed，绝不静默回退 legacy |
+| A1 | artifact 内容寻址完整性（blob re-hash，补充审计） |
+
+## 设计文档 26 的 12 个分阶段（Phase 0-11）已全部实施 ✅
+
+### 2026-08-01 production ORFS campaigns（历史基线；已由下节补强）
+
+- canonical store 共 **41 条普通 transitions**，达到设计目标的 30–50 区间；其中
+  diversity campaign 新增 8 条，覆盖 `DENSITY_RELIEF` /
+  `ROUTING_CAPACITY_RECOVERY`、sky130hs / gf180、4 个训练 lineage。所有 A/B arm
+  均由 H9 firewall 排除在 training/capture 外。
+- 新增 transition 分层结果：density 1/4 positive（Wilson 95%
+  `[0.046, 0.699]`），routing 0/4（`[0, 0.490]`）；sky130hs 1/4，gf180 0/4。
+  因此 routing family 尚未形成可晋升规则，不能用总体 coverage 掩盖这一弱项。
+- 真正未见的 held-out `ihp-sg13g2/spi`（训练 lineage 和训练 platform 均未出现）：
+  70% utilization control A `[0,0]`，promoted typed density-relief B（20%）
+  `[1,1]`；两次真实 ORFS 均为 A floorplan fail、B route/finish clean，LCB
+  `1.0 > 0.0`，无 created regression。rollback source digest 2/2 一致；规则保持
+  `promoted v3`，revalidation 不修改 lifecycle authority。
+- 8-case frozen funnel：RCret=RCexec=AY=BSR=IVR=OC=1.0，RU=4/7=0.571，
+  HAR=0/7，TE=4/6=0.667；activation rollback 7/7、registry authority 4/4。
+  1 个 infrastructure trial / 2 个 activation 从 RU/TE 分母显式排除，历史 UART
+  失败证据保留但不冒充设计负例。
+- strict-signoff 工具链已可真实执行：用户本地 Magic 8.3.677、Netgen 1.5.323、
+  官方 sky130_fd_sc_hd transistor SPICE；AES/RISC-V KLayout DRC 均为 0，OpenRCX
+  均产出非空 SPEF。Netgen LVS 当前诚实报告 `top_pin_mismatch`，所以 strict gate
+  仍为 dirty，物理图 context 不会冒充 `strict_clean`。
+- def-graph：5 个唯一 context digest 覆盖 15/41 physical effects；本轮 3 个真实
+  final DEF 均产出完整特征并保持 `research` tier。相似图策略用 platform/tier
+  firewall、唯一图去重、robust-scaled kNN 和逐 metric 95% interval；真实 IHP
+  OOD 查询因 `no_platform_compatible_contexts` abstain，同平台稀疏查询因只有 2 个
+  唯一 context（阈值 3）而 abstain，二者均 `gradient_claimed=false`。
+- 结果：`/data1/zhangdy/tehm-campaigns/orfs-v2-diversity/` 下的
+  `campaign_metrics.{json,md}`、`diversity_report.json`、`ab_result.json`、
+  `physical_graph_contexts.json`、`physical_prediction_report.json`。
+
+### 2026-08-02 strict/context/calibration 补强（已完成）
+
+- powered schematic 不再依赖会崩溃的 OpenROAD 输出：按标准单元 transistor SPICE 的
+  精确 power-pin signature 生成 named-pin Verilog；layout/library 只做有 receipt 的
+  Sky130 Netgen representation normalization，拓扑、model、polarity、area 仍严格比较。
+  AES、RISC-V 与 GCD 均达到 `Circuits match uniquely`；GCD 的 3 个训练 source 和独立
+  SPI held-out 的 3 个 source 均通过 DRC/LVS/RCX/timing strict gate，生成真实
+  `strict_clean` context。OpenROAD `write_verilog` crash probe 现在短超时后立即进入
+  deterministic fallback，不再固定等待 900 秒。
+- production context campaign 新增 **36 条 transitions**，canonical/physical store 从
+  41 增至 **77**。`sky130hd/strict_clean`、`sky130hs/research`、
+  `ihp-sg13g2/research` × `DENSITY_RELIEF`、`ROUTING_CAPACITY_RECOVERY`、新
+  `PLACEMENT_DENSITY_RECOVERY` 共 9 个 strata，全部各有 **3 个唯一成功 DEF digest**；
+  重复观测不计 geometric support。GF180 的 detail route 在 0 violation 后发生
+  `_dbITerm` infrastructure assertion，失败证据保留但未冒充设计负例，第三平台改用
+  完整成功的 IHP-SG13G2。
+- routing family 从 0/4 补到 **6 条真实 fail→pass positive**（Sky130HD 3、IHP 3）。
+  Sky130HS 小 GCD 即使 99% routing-capacity derating 仍能完成，3 条仅记为 neutral
+  stress probe，不伪装为 recovery positive。本轮 36 条 outcome 为 6 PASS、21 NEUTRAL、
+  9 REGRESSION，原始证据全部保留。
+- 独立 `orfs-heldout-v3:spi` lineage 在三个平台各运行 3 个 source × 3 个 family：
+  **36 个 production flow 全部成功**，形成 27 个只读 A/B 观测；不调用 capture、record、
+  crystallize 或 lifecycle mutation，physical-memory count 前后均为 77。
+- held-out 最近距离为 Sky130HS `3.659–4.654`、Sky130HD `7.408–7.852`、IHP
+  `431.714–431.718`，均超过既有 OOD safety ceiling `3.0`。校准器现在只允许在 ceiling
+  内用样本拟合 distance quantile、empirical coverage 和 uncertainty-width threshold，
+  绝不因一个远端 held-out 反向放宽边界。因此 9/9 policies 均为
+  `insufficient_support`，实际 gated prediction 9/9 以
+  `heldout_calibration_not_ready` abstain，`gradient_claimed=false`，held-out 不回灌。
+- parametric view 的证据审计结果为 `DEFERRED_INSUFFICIENT_EVIDENCE`：当前只有一个
+  独立 held-out RTL lineage，且 9 个相似图 policy 都尚未越过 OOD/support gate；继续
+  保持 `NOT_IMPLEMENTED` 比构造 steering vector 或伪 learned ranker 更诚实。
+- 主要结果：`/data1/zhangdy/tehm-campaigns/orfs-v3-contexts/` 的
+  `context_coverage_audit.json`、`physical_graph_contexts.json`，以及
+  `/data1/zhangdy/tehm-campaigns/orfs-v3-heldout-calibration/` 的
+  `calibration_report.json`、`parametric_readiness.json`。
+
+下一步证据优先级（仍属于 Phase 11 成熟度，不虚构 Phase 12）：sky130hs 的 distance
+目标已达成（held-out 最近距离 1.55–1.58，全部落进 ceiling 3.0），下一步是
+(a) 补 sky130hs `DENSITY_RELIEF` 的 coverage——SPI 的 density delta 比 uart/fifo 训练
+context 小，需引入密度响应更小的设计/context，或诚实记录该分布差异；(b) 为 sky130hd
+strict_clean 三 family 生成 contexts（fifo/uart 在 sky130hs 已证明可行）；(c) 条件满足后
+用第二条冻结 held-out lineage 做外部复核。只有 distance、coverage、uncertainty 和
+lineage diversity 同时通过，才重新评估 parametric view 实现。
+
+**2026-08-02 磁盘清理（Tier 1+2，已执行）**：删除全部 campaign 的 ORFS 再生中间产物
+（`backend/RUN_*/{logs,results,objects}`，~20 GB）+ 整删废弃的 `orfs-v1`，tehm-campaigns
+50G→30G，磁盘可用 29G→46G。**保留** `final/`（6_final.def/.gds——物理图 context 的
+digest 源）、`features/`（def-graph 已提取特征）、`lvs/`（powered.v + result）、
+`drc/`、`rcx/`、`reports/`、`stage_log.jsonl`/`run-meta.json`、以及全部审计 JSON
+（context_coverage_audit / calibration_report / parametric_readiness），digest 仍可对字节
+重验。`orfs-v2-diversity/tehm_ab`（A/B arm 克隆 933M）属 Tier 3 暂保留待决定。幂等清理
+脚本：`scripts/cleanup_campaign_disk.sh`（`DRY=1` 预览，无参执行）。
+
+### 2026-08-02 v1-era 证据恢复 + orfs-v4 sky130hs 聚焦批次（已完成）
+
+- **v1-era ~33 条项目证据确认不可恢复**：整删 `orfs-v1` 时连同项目证据一并删除（reports/
+  fix_log 均无残留）。可恢复上限为保留证据的 **44 条**（v2: 9 DEFs + v3: 42 DEFs），已按内容
+  寻址全部重建进 `memory/tehm.sqlite`（44 transitions / 44 effects / 13 unique contexts，
+  距离与原报告一致，honesty 全绿）。
+- **orfs-v4-add-designs 驱动扩展**：`run_orfs_add_designs_campaign.py` 新增多 family + 多 index
+  （`--families` / `--indexes`），`FAMILY_SPECS` 沿袭 v3-contexts 的 index 调度
+  （`CORE_UTILIZATION 30/35/40`、`ROUTING_LAYER_ADJUSTMENT 0.05/0.10/0.15`、
+  `PLACE_DENSITY 0.50/0.55/0.60`）；`_apply_edits` 支持 `None` 删除行（PLACEMENT after 移除
+  `PLACE_DENSITY_LB_ADDON`，否则 util.tcl 优先 LB_ADDON 而忽略 `PLACE_DENSITY`）。
+- **sky130hs 聚焦批次（uart+fifo × 3 index × 3 family）**：**24/24 flows 成功**（rc=0，0 失败）；
+  capture **18 条 transitions**（17 NEUTRAL + 1 FAIL 负证据：`fifo:0:PLACEMENT_DENSITY_RECOVERY`）；
+  canonical/physical store 从 50 增至 **66**，unique graph contexts **13 → 20**（+4 新 base digest）。
+- **held-out 距离骤降**：sky130hs SPI held-out 最近距离 **4.27–4.65 → 1.55–1.58**，3/3 全部落进
+  OOD ceiling 3.0。校准策略 9 个中 **2 个转 ready**（sky130hs `PLACEMENT_DENSITY_RECOVERY`、
+  `ROUTING_CAPACITY_RECOVERY`，empirical coverage 1.0）；sky130hs `DENSITY_RELIEF` 支持度足够但
+  **coverage_failed**（41.7% < 80%）：SPI 的 density-relief delta（area 79–108）小于 uart/fifo
+  训练 context 的响应，观测值落在校准区间下界之外——真实分布差异，非可调 knob。
+- ihp-sg13g2 与 sky130hd strict_clean 三 family 仍 `insufficient_support`（本批未覆盖；ihp 距离
+  431 固有困难）。parametric view 维持 `NOT_IMPLEMENTED` / `DEFERRED_INSUFFICIENT_EVIDENCE`
+  （2/9 ready + 仅 1 条独立 held-out lineage）。
+- honesty gates 全绿（66 transitions / 336 views / 102 artifacts 校验通过）。
+- v4 当前可复核产物是 `campaign_manifest.json`、`campaign_state.json`、
+  `physical_graph_contexts.json` 和 `sky130hs_batch_run.log`；
+  `add_designs_report.json` 当前缺失，因此不再把它列为已生成结果。
+  v3 calibration 的 `calibration_report.json` 与 `parametric_readiness.json` 仍可复核。
+
+### 2026-08-08 第二条物理 held-out 外部复核（已完成）
+
+- 新增独立物理 lineage `orfs-heldout-v5:sky130hs:gcd:base3`，位于
+  `/data1/zhangdy/tehm-campaigns/orfs-v5-heldout-sky130hs-gcd7/`：sky130hs/gcd 的
+  3 个 baseline × 3 个 transformation family，**12/12 ORFS flow 成功**，形成 9 个
+  可评估、3 个独立 graph-context digest 的只读 calibration samples。
+- samples 只进入校准器，不调用 capture/record/crystallize/lifecycle；合并 SPI held-out
+  后，物理 memory count 保持 **66 → 66**。training lineage（23 条）与两条 physical
+  held-out lineage disjoint；RTL held-out `req_ack_bug4` 仍单独披露、不计入 physical
+  lineage diversity。
+- v0.2 校准结果：sky130hs 的 placement/routing 两族保持 `ready`；density-relief
+  因 coverage 不足而 fail-closed；sky130hd strict_clean 与 IHP 三族仍
+  `insufficient_support`。因此 `parametric_readiness` 仍为
+  `DEFERRED_INSUFFICIENT_EVIDENCE`，Parametric View 继续 `NOT_IMPLEMENTED`。
+- 当前下一证据优先级是补齐 sky130hs density-relief coverage，并为 sky130hd/IHP
+  建立足够的同平台 strict/research support；在 distance、coverage、uncertainty、
+  lineage diversity 四项同时通过前，不进入 shadow 或任何 parametric implementation。
+
+每个阶段实现时遵循同样的纪律：honesty gates 先行、确定性测试、与 legacy 严格隔离。

@@ -39,6 +39,7 @@ if [[ -z "$PROJECT_DIR" ]]; then
 fi
 
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+FLOW_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KNOWLEDGE_DIR_J="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../knowledge" && pwd)"
 CONFIG_MK="$PROJECT_DIR/constraints/config.mk"
 
@@ -47,7 +48,9 @@ if [[ ! -f "$CONFIG_MK" ]]; then
   exit 1
 fi
 
-DESIGN_NAME=$(grep 'DESIGN_NAME' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+DESIGN_NICKNAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NICKNAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
+DESIGN_NICKNAME="${DESIGN_NICKNAME:-$DESIGN_NAME}"
 
 # Re-stage project artifacts into ORFS workspace if missing. This makes the
 # script idempotent across re-runs even if the ORFS scratch dirs were cleaned.
@@ -118,16 +121,16 @@ if [[ ! -f "$ORFS_CONFIG" ]]; then
   exit 1
 fi
 
-cd "$FLOW_DIR"
+cd "$WORK_HOME"
 
 # Prevent env collision: ORFS Makefile uses SCRIPTS_DIR internally
 unset SCRIPTS_DIR 2>/dev/null || true
 
 # Detect design cell count from 6_report.json — drives BOTH timeout auto-scaling
 # and crash-retry gating, so compute it unconditionally (init to 0 for set -u safety).
-_LVS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+_LVS_LOGS_DIR="$WORK_HOME/logs/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
 if [[ ! -d "$_LVS_LOGS_DIR" ]]; then
-  _LVS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME"
+  _LVS_LOGS_DIR="$WORK_HOME/logs/$PLATFORM/$DESIGN_NICKNAME"
 fi
 _REPORT_JSON=$(find "$_LVS_LOGS_DIR" -name "6_report.json" 2>/dev/null | head -1)
 # Fallback: check the project backend directory
@@ -157,9 +160,9 @@ echo "Timeout: ${LVS_TIMEOUT}s"
 
 # Where ORFS writes 6_lvs.log — needed below for crash-retry detection AND for the
 # result-collection copy further down. Computed once, here, before the run loop.
-LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+LOGS_DIR="$WORK_HOME/logs/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
 if [[ ! -d "$LOGS_DIR" ]]; then
-  LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME"
+  LOGS_DIR="$WORK_HOME/logs/$PLATFORM/$DESIGN_NICKNAME"
 fi
 
 # KLayout 0.30.7's netlist comparer has a NON-DETERMINISTIC SIGSEGV heisenbug in
@@ -206,7 +209,7 @@ if [[ "$PLATFORM" == "sky130hd" || "$PLATFORM" == "sky130hs" ]]; then
   # Use the r2g-corrected LVS rule (adds a SPICE-reader delegate that shorts the
   # now-0-ohm tie/power resistors so they are not unmatched schematic-only devices;
   # the stock rule extracts MOS only). Override KLAYOUT_LVS_FILE on the make line.
-  _R2G_LVS_RULE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/assets/platforms/$PLATFORM/lvs/${PLATFORM}_r2g.lylvs"
+  _R2G_LVS_RULE="$(cd "$FLOW_SCRIPTS_DIR/../.." && pwd)/assets/platforms/$PLATFORM/lvs/${PLATFORM}_r2g.lylvs"
   if [[ -f "$_R2G_LVS_RULE" ]]; then
     _CDL_MAKE_ARGS+=("KLAYOUT_LVS_FILE=$_R2G_LVS_RULE")
     echo "sky130 LVS: using r2g-corrected rule -> $_R2G_LVS_RULE"
@@ -223,7 +226,7 @@ fi
 _PREFLIGHT_TARGETS=("$RESULTS_DIR/5_route.odb" "$RESULTS_DIR/6_final.def"
                     "$RESULTS_DIR/6_final.v" "$RESULTS_DIR/6_final.sdc")
 set +e
-make --question DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" \
+make -f "$FLOW_DIR/Makefile" --question DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" \
   "${_CDL_MAKE_ARGS[@]}" "${_PREFLIGHT_TARGETS[@]}" >/dev/null 2>&1
 _PREFLIGHT_RC=$?
 set -e
@@ -267,7 +270,7 @@ LVS_STATUS=0
 for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   set +e +o pipefail
   r2g_bounded_run "$LVS_TIMEOUT" "${LVS_KILL_GRACE:-60}" "$LVS_RUN_LOG" \
-    make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_CDL_MAKE_ARGS[@]}" lvs
+    make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_CDL_MAKE_ARGS[@]}" lvs
   LVS_STATUS=$?
   set -e -o pipefail
   # Output goes straight to the log (no pipe reader can outlive the checker) —

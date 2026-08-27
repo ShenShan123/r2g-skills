@@ -1,0 +1,120 @@
+{
+  "action_signature": {
+    "config_edits": {
+      "CORE_UTILIZATION": "45"
+    },
+    "domain": "flow.CONFIG_DELTA",
+    "family": "DENSITY_RELIEF",
+    "operation_point": "50->45",
+    "utility_contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45"
+  },
+  "batch_lane_version": "orfs-batch-lane-v1",
+  "campaign_id": "timing-relief-budgeted-v2-50-to-45-support",
+  "canonical_memory_mutation": "none",
+  "contract_id": "TIMING_RELIEF_BUDGETED_V2_50_TO_45",
+  "equivalence_policy": {
+    "authority": "independent_equivalence_report",
+    "config_only_source_identity_allowed": true,
+    "missing_or_failed_proof_classification": "INCOMPLETE",
+    "orfs_internal_equivalence_check": false
+  },
+  "firewall": {
+    "calibration": [],
+    "disjoint": true,
+    "heldout": [],
+    "source_digests_unique": true,
+    "support": [
+      "selector-v1-xor32",
+      "selector-v1-fifo16",
+      "selector-v1-crc16",
+      "selector-v1-uart16"
+    ],
+    "version": "v2-support-firewall-v1"
+  },
+  "items": [
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-support-50to45/cases/sky130hs_selector_xor32_u45",
+      "before_project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_xor32_u50",
+      "case_id": "sky130hs:selector_xor32:support:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "selector_xor32",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "selector-v1-xor32",
+      "platform": "sky130hs",
+      "role": "v2_support",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_selector_preflight/selector_xor32.v"
+      ],
+      "source_digest": "402866e405962c7126f01fa7ae4d44d230b84b1f43d3abf5408c306941e219fc",
+      "split": "support",
+      "top": "selector_xor32"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-support-50to45/cases/sky130hs_selector_fifo16_u45",
+      "before_project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_fifo16_u50",
+      "case_id": "sky130hs:selector_fifo16:support:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "selector_fifo16",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "selector-v1-fifo16",
+      "platform": "sky130hs",
+      "role": "v2_support",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_selector_preflight/selector_fifo16.v"
+      ],
+      "source_digest": "99240755f3540efa4f98bc2436ef6d056a2834dfa388f583e3c5927161b46e9b",
+      "split": "support",
+      "top": "selector_fifo16"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-support-50to45/cases/sky130hs_selector_crc16_u45",
+      "before_project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_crc16_u50",
+      "case_id": "sky130hs:selector_crc16:support:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "selector_crc16",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "selector-v1-crc16",
+      "platform": "sky130hs",
+      "role": "v2_support",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_selector_preflight/selector_crc16.v"
+      ],
+      "source_digest": "18455390a5e9238cf97a988dc134c65bd2b7f8d3e3685d66e609e1c61f756c7e",
+      "split": "support",
+      "top": "selector_crc16"
+    },
+    {
+      "after_project": "/tmp/tehm-authority-v1/v2-support-50to45/cases/sky130hs_selector_uart16_u45",
+      "before_project": "/tmp/tehm-authority-v1/selector-preflight-v1/baseline/sky130hs_selector_uart16_u50",
+      "case_id": "sky130hs:selector_uart16:support:50->45",
+      "check": "route",
+      "config_edits": {
+        "CORE_UTILIZATION": "45"
+      },
+      "design": "selector_uart16",
+      "family": "DENSITY_RELIEF",
+      "lineage_id": "selector-v1-uart16",
+      "platform": "sky130hs",
+      "role": "v2_support",
+      "rtl_files": [
+        "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_selector_preflight/selector_uart16.v"
+      ],
+      "source_digest": "9d8cfe9297c700bf293a4df8a95b254041317abc48f28c63ea12e8c5309e600e",
+      "split": "support",
+      "top": "selector_uart16"
+    }
+  ],
+  "orfs_root": "/opt/EDA4AI/OpenROAD-flow-scripts",
+  "promotion_attempted": false,
+  "utility_contract_digest": "f9b5824716868e3bd247c97ff47e75230bdff88984b6845e5db01e0239048863",
+  "version": "orfs-batch0-v2-support-v1"
+}

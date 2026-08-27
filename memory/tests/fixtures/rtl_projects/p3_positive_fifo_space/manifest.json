@@ -1,0 +1,28 @@
+{
+  "design": "positive_fifo_space_fsm",
+  "mechanism_family": "FIFO_CAPACITY_COMPLETION",
+  "bug": {
+    "type": "dequeue_without_space_return",
+    "description": "DRAIN->DONE advances before the capacity-return role is observed.",
+    "first_divergence_signal": "done"
+  },
+  "fix": {
+    "domain": "rtl.GUARD_STRENGTHEN",
+    "transformation_family": "GUARD_STRENGTHEN",
+    "description": "DRAIN: next_state = DONE; --> DRAIN: if (space_return) next_state = DONE;",
+    "module": "positive_fifo_space_fsm",
+    "compatibility_profile": "rtl.fsm.single_guard.v1",
+    "source_state": "DRAIN",
+    "target_state": "DONE",
+    "add_condition": "space_return"
+  },
+  "verification": {
+    "target_test": "tb/tb_handshake.v",
+    "frozen_regression": "tb/tb_basic.v"
+  },
+  "p3": {
+    "role_compatible": true,
+    "predicate_status": "TRUE",
+    "candidate_validity_status": "PROVISIONAL_VALID"
+  }
+}

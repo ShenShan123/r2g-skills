@@ -1,0 +1,55 @@
+{
+  "canonical_after": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "canonical_before": [
+    {
+      "exists": true,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
+      "physical_effects": 0,
+      "sha256": "bd64290d6bdf4db59376325ca38b781b7c98b51dc12b3fb10377eb3c1d8ac89f",
+      "transitions": 9
+    },
+    {
+      "exists": false,
+      "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/tehm.sqlite",
+      "physical_effects": null,
+      "sha256": null,
+      "transitions": null
+    }
+  ],
+  "canonical_memory_mutation": "none",
+  "destination": "staging",
+  "excluded_external_only": 0,
+  "imported": [
+    {
+      "case_id": "sky130hs:and32:0:DENSITY_RELIEF:50->40",
+      "transition_id": "transition_ffc91c1a17437198"
+    },
+    {
+      "case_id": "sky130hs:toggle32:0:DENSITY_RELIEF:50->40",
+      "transition_id": "transition_c8ae328d3f86140c"
+    }
+  ],
+  "staging_db": {
+    "exists": true,
+    "path": "/tmp/tehm-authority-v1/batch1-next-full/staging/tehm.sqlite",
+    "physical_effects": 4,
+    "sha256": "c244a2b7b5061264dea7d350c62e77f842f74df8d3b14faf88e497966f0c5caf",
+    "transitions": 4
+  },
+  "version": "orfs-batch-lane-v1"
+}

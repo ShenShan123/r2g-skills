@@ -1,0 +1,330 @@
+{
+  "action": {
+    "domain": "flow.CONFIG_DELTA",
+    "payload": {
+      "config_edits": {
+        "CORE_UTILIZATION": "40"
+      },
+      "utility_contract_id": "TIMING_RELIEF_BUDGETED_V1"
+    },
+    "transformation_family": "DENSITY_RELIEF"
+  },
+  "canonical_memory_mutation": "none",
+  "contract": {
+    "action_signature": {
+      "config_edits": {
+        "CORE_UTILIZATION": "40"
+      },
+      "domain": "flow.CONFIG_DELTA",
+      "operation_point": "50->40",
+      "transformation_family": "DENSITY_RELIEF"
+    },
+    "authority": {
+      "canonical_memory_mutation": "none",
+      "promotion_eligible": false,
+      "raw_pareto_gate_unchanged": true
+    },
+    "contract_id": "TIMING_RELIEF_BUDGETED_V1",
+    "hard_constraints": {
+      "drc": "PASS",
+      "equivalence": "PASS",
+      "lvs": "PASS",
+      "timing": "PASS",
+      "tns_delta_ns": {
+        "minimum": 0.0
+      }
+    },
+    "primary_objective": {
+      "wns_delta_ns": {
+        "minimum": 0.01
+      }
+    },
+    "resource_budgets": {
+      "area_delta_percent": {
+        "maximum": 2.0
+      },
+      "power_delta_percent": {
+        "maximum": 3.0
+      }
+    },
+    "runtime_policy": {
+      "interval_must_fit_contract": true,
+      "missing_evidence_action": "ABSTAIN",
+      "ood_action": "ABSTAIN"
+    },
+    "status": "PRE_REGISTERED_FOR_PROSPECTIVE_COHORT",
+    "version": "typed-utility-contract-v1"
+  },
+  "contract_abstain_count": 0,
+  "contract_digest": "e912789aa5152c3dc74f4c670bb9cf993a14ed537bae106763aa8208ba787b36",
+  "contract_fail_count": 4,
+  "contract_pass_count": 4,
+  "contract_selected_harmful_rate": 0.0,
+  "contract_selected_rate": 0.5,
+  "promotion_eligible": false,
+  "prospective_validation_required": true,
+  "raw_pareto_harmful_count": 7,
+  "raw_pareto_harmful_rate": 0.875,
+  "results": [
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:add32:0:DENSITY_RELIEF:50->40",
+      "contract_eligible": false,
+      "contract_harmful": true,
+      "contract_status": "FAIL",
+      "failures": [
+        "wns_delta_below_objective",
+        "power_budget_exceeded"
+      ],
+      "lineage_id": "orfs-v5-add32:sky130hs:add32:base0",
+      "observed_deltas": {
+        "area_um2": 94.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 0.000136,
+        "tns_ns": 0.0,
+        "wns_ns": -0.031253
+      },
+      "observed_relative": {
+        "area_delta_percent": 1.4470443349753694,
+        "power_delta_percent": 4.718257575231923
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "power_w",
+          "wns_ns"
+        ],
+        "improved_metrics": [],
+        "verdict": "HARMFUL"
+      }
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:and32:0:DENSITY_RELIEF:50->40",
+      "contract_eligible": false,
+      "contract_harmful": true,
+      "contract_status": "FAIL",
+      "failures": [
+        "wns_delta_below_objective",
+        "power_budget_exceeded"
+      ],
+      "lineage_id": "orfs-v6-and32:sky130hs:and32:base0",
+      "observed_deltas": {
+        "area_um2": 60.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 0.000178,
+        "tns_ns": 0.0,
+        "wns_ns": -0.00225
+      },
+      "observed_relative": {
+        "area_delta_percent": 1.8645121193287757,
+        "power_delta_percent": 11.191308502879561
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "power_w",
+          "wns_ns"
+        ],
+        "improved_metrics": [],
+        "verdict": "HARMFUL"
+      }
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:gcd:u50->u40",
+      "contract_eligible": true,
+      "contract_harmful": false,
+      "contract_status": "PASS",
+      "failures": [],
+      "lineage_id": "batch0-v1:sky130hs:gcd",
+      "observed_deltas": {
+        "area_um2": 66.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 2e-05,
+        "tns_ns": 0.0,
+        "wns_ns": 0.031802
+      },
+      "observed_relative": {
+        "area_delta_percent": 1.2900703674745895,
+        "power_delta_percent": 0.5408650595762864
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "power_w"
+        ],
+        "improved_metrics": [
+          "wns_ns"
+        ],
+        "verdict": "HARMFUL"
+      }
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:jpeg:u50->u40",
+      "contract_eligible": true,
+      "contract_harmful": false,
+      "contract_status": "PASS",
+      "failures": [],
+      "lineage_id": "batch0-v1:sky130hs:jpeg",
+      "observed_deltas": {
+        "area_um2": 8881.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 0.03467,
+        "tns_ns": 0.0,
+        "wns_ns": 0.1872
+      },
+      "observed_relative": {
+        "area_delta_percent": 1.2870716041367156,
+        "power_delta_percent": 2.9379364110907735
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "power_w"
+        ],
+        "improved_metrics": [
+          "wns_ns"
+        ],
+        "verdict": "HARMFUL"
+      }
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:mux32:0:DENSITY_RELIEF:50->40",
+      "contract_eligible": false,
+      "contract_harmful": true,
+      "contract_status": "FAIL",
+      "failures": [
+        "wns_delta_below_objective"
+      ],
+      "lineage_id": "orfs-v5-mux32:sky130hs:mux32:base0",
+      "observed_deltas": {
+        "area_um2": 10.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": -6e-06,
+        "tns_ns": 0.0,
+        "wns_ns": -0.01309
+      },
+      "observed_relative": {
+        "area_delta_percent": 0.3158559696778269,
+        "power_delta_percent": -0.3676335428844528
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "wns_ns"
+        ],
+        "improved_metrics": [
+          "power_w"
+        ],
+        "verdict": "HARMFUL"
+      }
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:parity64:0:DENSITY_RELIEF:50->40",
+      "contract_eligible": false,
+      "contract_harmful": true,
+      "contract_status": "FAIL",
+      "failures": [
+        "wns_delta_below_objective"
+      ],
+      "lineage_id": "orfs-v5-parity64:sky130hs:parity64:base0",
+      "observed_deltas": {
+        "area_um2": 27.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": -3e-06,
+        "tns_ns": 0.0,
+        "wns_ns": -0.015221
+      },
+      "observed_relative": {
+        "area_delta_percent": 0.9171195652173914,
+        "power_delta_percent": -0.3570943943321978
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "wns_ns"
+        ],
+        "improved_metrics": [
+          "power_w"
+        ],
+        "verdict": "HARMFUL"
+      }
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:toggle32:0:DENSITY_RELIEF:50->40",
+      "contract_eligible": true,
+      "contract_harmful": false,
+      "contract_status": "PASS",
+      "failures": [],
+      "lineage_id": "orfs-v6-toggle32:sky130hs:toggle32:base0",
+      "observed_deltas": {
+        "area_um2": -27.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": -0.000129,
+        "tns_ns": 0.0,
+        "wns_ns": 0.03598
+      },
+      "observed_relative": {
+        "area_delta_percent": -1.231190150478796,
+        "power_delta_percent": -7.813399070871768
+      },
+      "raw_pareto": {
+        "harmful_metrics": [],
+        "improved_metrics": [
+          "area_um2",
+          "power_w",
+          "wns_ns"
+        ],
+        "verdict": "PARETO_SAFE"
+      }
+    },
+    {
+      "abstain_reasons": [],
+      "case_id": "sky130hs:uart:0:DENSITY_RELIEF:50->40",
+      "contract_eligible": true,
+      "contract_harmful": false,
+      "contract_status": "PASS",
+      "failures": [],
+      "lineage_id": "orfs-v4:sky130hs:uart:base0",
+      "observed_deltas": {
+        "area_um2": 104.0,
+        "congestion": null,
+        "drc_violations": null,
+        "power_w": 0.000293,
+        "tns_ns": 0.0,
+        "wns_ns": 0.015785
+      },
+      "observed_relative": {
+        "area_delta_percent": 1.3362456636258513,
+        "power_delta_percent": 1.880676530055522
+      },
+      "raw_pareto": {
+        "harmful_metrics": [
+          "area_um2",
+          "power_w"
+        ],
+        "improved_metrics": [
+          "wns_ns"
+        ],
+        "verdict": "HARMFUL"
+      }
+    }
+  ],
+  "sample_count": 8,
+  "source_observations": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-authority-v1/v4/external/observations.jsonl",
+  "source_observations_sha256": "a686a17a2cd979e8c72105e24578589f35e0aed424cbaf23a881f81aa6231df1",
+  "status": "RETROSPECTIVE_DESIGN_EVIDENCE",
+  "version": "timing-relief-budgeted-v1-retrospective-v1"
+}

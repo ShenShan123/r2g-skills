@@ -1,0 +1,1092 @@
+{
+  "baseline_count": 6,
+  "campaign_id": "timing-relief-budgeted-v1-selector-preflight",
+  "canonical_memory_mutation": "none",
+  "promotion_attempted": false,
+  "results": [
+    {
+      "assessment": {
+        "checks": {
+          "artifact_digest": true,
+          "drc": true,
+          "equivalence": true,
+          "finish": true,
+          "graph": true,
+          "lvs": true,
+          "ppa": true,
+          "route": true,
+          "synthesis": true,
+          "timing": true
+        },
+        "complete": true,
+        "evidence_refs": [
+          {
+            "bytes": 582,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/constraints/config.mk",
+            "sha256": "24c58b40393568df3477675d1148b159fd42717f26e0b0a14f15928e47751f1e"
+          },
+          {
+            "bytes": 418,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/constraints/constraint.sdc",
+            "sha256": "b7128e5b2bbb3257b7a931b30d0a6a4385274535a3f6f9361a65b419bc311857"
+          },
+          {
+            "bytes": 332,
+            "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_xor64.v",
+            "sha256": "88809c6b8a9f2a1abbf116c993db75773811bae9de25c08fec8a7e6bf7174e42"
+          },
+          {
+            "bytes": 1352,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/backend/RUN_2026-08-26_00-11-41_8783_436d/run-meta.json",
+            "sha256": "38d0d5c479cc807fd14a9af7ea92e9aebb705d88dab6369ea797a8a2f183a553"
+          },
+          {
+            "bytes": 858,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/backend/RUN_2026-08-26_00-11-41_8783_436d/stage_log.jsonl",
+            "sha256": "998d2a1d9315839d736cec5ba7dbfe7136e79100fabbfdbd2da6ca0b5ba90300"
+          },
+          {
+            "bytes": 836,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/equivalence.json",
+            "sha256": "51e242d1c161f9535d88054803444a60a202cca11f2124f4b976b4cbc1df7eaa"
+          },
+          {
+            "bytes": 171,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/route.json",
+            "sha256": "fc87bcd7982e2f861d293c391f26f9fdb16d1728545fed8d82aa52625db22b89"
+          },
+          {
+            "bytes": 480,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/timing_check.json",
+            "sha256": "7effbc218ee94ca6404c74d751430bf3e9c10cc676a5452a13dc7a04a32e9da7"
+          },
+          {
+            "bytes": 1165,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/drc.json",
+            "sha256": "2697afd5adbb2d37ccd9481d3e91af67eaa945cfb4b20b0ed6e9de8d75d2383c"
+          },
+          {
+            "bytes": 939,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/lvs.json",
+            "sha256": "34f1110f1b2cfb9f698641e5fd60607acf45d0f1dc25f84b054919a0d8498b5f"
+          },
+          {
+            "bytes": 1363,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/ppa.json",
+            "sha256": "162c63a5a65ad0b6df4748b80f8ac0e0c281f9fa0af4d9a37c3d9164a681c3d8"
+          },
+          {
+            "bytes": 5643,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/strict_signoff.json",
+            "sha256": "b38ac81b80ec54369ec4e85b7074cc9b9e058ccef6d75b3de59f2ff9a0b2cae7"
+          },
+          {
+            "bytes": 2699,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/features_stats.json",
+            "sha256": "a898eeee0a3a13c8bcaa6a01eb735a3b18ff1050c63ef0a7a99d7084af4a613f"
+          },
+          {
+            "bytes": 5311,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/batch_graph_context.json",
+            "sha256": "6d572c92f8d7b9a780f355826df5cb5fa9fddc4128363152eb3bd851e05b156f"
+          },
+          {
+            "bytes": 365391,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/backend/RUN_2026-08-26_00-11-41_8783_436d/final/6_final.def",
+            "sha256": "7e80635b9cab8e6c46cdc89cf885e6039f7df2db3802df9d5a5507009a8c1ffb"
+          },
+          {
+            "bytes": 493384,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/backend/RUN_2026-08-26_00-11-41_8783_436d/final/6_final.gds",
+            "sha256": "6fda11a3934fcf13f0dfac16f3dd53799c6de533e94225390129e7bc53b9ca51"
+          }
+        ],
+        "graph": {
+          "dataset_tier": "strict_clean",
+          "def_sha256": "7e80635b9cab8e6c46cdc89cf885e6039f7df2db3802df9d5a5507009a8c1ffb",
+          "design": "v2_xor64",
+          "digest": "a215eaabf2e20c4b474f1d3b1861e61c55332171ce613cd27d5d963cbd1cc667",
+          "extractor_version": "def-graph-feature-context-v0.2",
+          "feature_digests": {
+            "edges_gate_pin": "6e449e58dd5fb2cca0e2963829f076e15f41974723aa67e0522d6a184377bfb1",
+            "edges_iopin_net": "3eabea52e2d132ce6f66e499a48219d1f1b7c6fbd586f496c4460928b798128c",
+            "edges_pin_net": "ce677437d26703e031c1972398376c770b727474894a91ffd2c137d979311a86",
+            "features_stats": "a898eeee0a3a13c8bcaa6a01eb735a3b18ff1050c63ef0a7a99d7084af4a613f",
+            "metadata": "b67b8b6f56bd0b5b297e343f56d0cef73b49698a4e4a6f11d8a0d5fceff7dc0c",
+            "nodes_gate": "09eabf7943a6f2ec51238a795035f7ed15d98fbbe04056189ede710e5b778b69",
+            "nodes_iopin": "a533b8ed15ab697edfe016b23e6ecb37b7bbd6555ee5d660438227f9102d7e25",
+            "nodes_net": "1040c08d2718ea1e7c4b77b881a91bfaba8d4183ba3fa92bd01ab3d98d65a877",
+            "nodes_pin": "0d1da80f5dbe0a441961d3233a3b1df0614739a036fddbaa66ef1ea8bc7c892f",
+            "signoff_gate": "38a5570b50d45fce2ce34748505840af1bdf552a5e1f88afaf3cab945c436eaa"
+          },
+          "feature_health": {
+            "edges_gate_pin": {
+              "status": "ok"
+            },
+            "edges_iopin_net": {
+              "status": "ok"
+            },
+            "edges_pin_net": {
+              "status": "ok"
+            },
+            "metadata": {
+              "status": "ok"
+            },
+            "nodes_gate": {
+              "status": "ok"
+            },
+            "nodes_iopin": {
+              "status": "ok"
+            },
+            "nodes_net": {
+              "status": "ok"
+            },
+            "nodes_pin": {
+              "status": "ok"
+            }
+          },
+          "graph_features": {
+            "ABC_AREA": 1.0,
+            "CORE_UTILIZATION": 50.0,
+            "C_total": 1467.354218,
+            "PLACE_DENSITY": "Default",
+            "V_nom": 1.8,
+            "avg_fanout": 1.8060606060606061,
+            "core_area": 7650.126225000001,
+            "dbu_unit": 1000.0,
+            "die_height": 87.465,
+            "die_width": 87.465,
+            "freq_Hz": 454545455.0,
+            "num_cells": 751.0,
+            "num_ios": 131.0,
+            "num_nets": 495.0,
+            "tracks_detail": "li1:418|met1:472|met2:364|met3:236|met4:182|met5:52",
+            "tracks_per_layer": 287.333
+          },
+          "platform": "sky130hs",
+          "signoff_health": {
+            "blockers": [],
+            "caveats": [],
+            "def_overridden": false,
+            "mode": "strict",
+            "status": "pass"
+          },
+          "source_refs": [
+            {
+              "kind": "def",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/backend/RUN_2026-08-26_00-11-41_8783_436d/final/6_final.def",
+              "sha256": "7e80635b9cab8e6c46cdc89cf885e6039f7df2db3802df9d5a5507009a8c1ffb"
+            },
+            {
+              "kind": "features_stats",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/features_stats.json",
+              "sha256": "a898eeee0a3a13c8bcaa6a01eb735a3b18ff1050c63ef0a7a99d7084af4a613f"
+            },
+            {
+              "kind": "signoff_gate",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/reports/signoff_gate.json",
+              "sha256": "38a5570b50d45fce2ce34748505840af1bdf552a5e1f88afaf3cab945c436eaa"
+            },
+            {
+              "kind": "metadata",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/features/metadata.csv",
+              "sha256": "b67b8b6f56bd0b5b297e343f56d0cef73b49698a4e4a6f11d8a0d5fceff7dc0c"
+            },
+            {
+              "kind": "nodes_gate",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/features/nodes_gate.csv",
+              "sha256": "09eabf7943a6f2ec51238a795035f7ed15d98fbbe04056189ede710e5b778b69"
+            },
+            {
+              "kind": "nodes_net",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/features/nodes_net.csv",
+              "sha256": "1040c08d2718ea1e7c4b77b881a91bfaba8d4183ba3fa92bd01ab3d98d65a877"
+            },
+            {
+              "kind": "nodes_iopin",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/features/nodes_iopin.csv",
+              "sha256": "a533b8ed15ab697edfe016b23e6ecb37b7bbd6555ee5d660438227f9102d7e25"
+            },
+            {
+              "kind": "nodes_pin",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/features/nodes_pin.csv",
+              "sha256": "0d1da80f5dbe0a441961d3233a3b1df0614739a036fddbaa66ef1ea8bc7c892f"
+            },
+            {
+              "kind": "edges_gate_pin",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/features/edges_gate_pin.csv",
+              "sha256": "6e449e58dd5fb2cca0e2963829f076e15f41974723aa67e0522d6a184377bfb1"
+            },
+            {
+              "kind": "edges_pin_net",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/features/edges_pin_net.csv",
+              "sha256": "ce677437d26703e031c1972398376c770b727474894a91ffd2c137d979311a86"
+            },
+            {
+              "kind": "edges_iopin_net",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50/features/edges_iopin_net.csv",
+              "sha256": "3eabea52e2d132ce6f66e499a48219d1f1b7c6fbd586f496c4460928b798128c"
+            }
+          ],
+          "status": "complete",
+          "topology_rows": {
+            "edges_gate_pin": 1258,
+            "edges_iopin_net": 131,
+            "edges_pin_net": 1258,
+            "nodes_gate": 751,
+            "nodes_iopin": 131,
+            "nodes_net": 495,
+            "nodes_pin": 1389
+          }
+        },
+        "missing_oracles": [],
+        "ppa_metrics": {
+          "area_um2": 5646.0,
+          "power_w": 0.00350581,
+          "tns_ns": 0.0,
+          "wns_ns": 1.04407
+        },
+        "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50",
+        "run_tag": "RUN_2026-08-26_00-11-41_8783_436d",
+        "strict_signoff_status": "pass",
+        "version": "orfs-batch-lane-v1"
+      },
+      "case_id": "sky130hs:v2_xor64:preflight:50->45",
+      "lineage_id": "prospective-v2:sky130hs:xor64:cal0",
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_xor64_u50"
+    },
+    {
+      "assessment": {
+        "checks": {
+          "artifact_digest": true,
+          "drc": true,
+          "equivalence": true,
+          "finish": true,
+          "graph": true,
+          "lvs": true,
+          "ppa": true,
+          "route": true,
+          "synthesis": true,
+          "timing": true
+        },
+        "complete": true,
+        "evidence_refs": [
+          {
+            "bytes": 588,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/constraints/config.mk",
+            "sha256": "0525678ea005dc46731e6ffad18b584a6b61bf7a27a65eb6b67ba6c5f3298017"
+          },
+          {
+            "bytes": 420,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/constraints/constraint.sdc",
+            "sha256": "1c329778dbf6c4aa064a41c6e6878aad3b26bc22eea8c4591427c2bac30d3507"
+          },
+          {
+            "bytes": 926,
+            "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_queue24.v",
+            "sha256": "56f67fbd3ae01bd0ad41ce5dc6bd1a7a025d96de22f3385e7defc625cfd747e6"
+          },
+          {
+            "bytes": 1388,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/backend/RUN_2026-08-26_00-09-24_6240_6046/run-meta.json",
+            "sha256": "766e16aa6975e46aeff314510aa65f6b2d04dd3da420244eacfd103064fbf7e6"
+          },
+          {
+            "bytes": 857,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/backend/RUN_2026-08-26_00-09-24_6240_6046/stage_log.jsonl",
+            "sha256": "9eb515534d1463fc18edbc034f687cabab81e2381fc804b7fb9ce7c845630525"
+          },
+          {
+            "bytes": 842,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/equivalence.json",
+            "sha256": "3485a58cb6857335a04f3c98c9b4338d4737b77b93cc56e7a08302d8e4f2d819"
+          },
+          {
+            "bytes": 171,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/route.json",
+            "sha256": "a29282d3aeb31b24d89b2f5bce5c4a17eb5bfe130505106ab4f8dc57f6b50b69"
+          },
+          {
+            "bytes": 482,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/timing_check.json",
+            "sha256": "47265e00a93c2c5a45e2fe379622748d1bf71d6d4b268f7221d2a073bb41bded"
+          },
+          {
+            "bytes": 1172,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/drc.json",
+            "sha256": "5c5dc408761f959390eb45f2379d42c9a783b0227a153c76bc88706034d51b9d"
+          },
+          {
+            "bytes": 951,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/lvs.json",
+            "sha256": "010144383cdb806b3ad667f1f3c63c218c9e66ed3a5a9fdeb79660fd2b5e9d52"
+          },
+          {
+            "bytes": 1369,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/ppa.json",
+            "sha256": "b8ae49c6be6a654a2e27750987369138f9495a7a8332989782ed2421536b0b71"
+          },
+          {
+            "bytes": 5669,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/strict_signoff.json",
+            "sha256": "65c0ae809420b438abd5c5e26eb887c444d34736e8eb476984404356df81b430"
+          },
+          {
+            "bytes": 2677,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/features_stats.json",
+            "sha256": "173176a8b25bfdba50080f4413840fac1eb4cb84a34ef052a46c1fc53dc1e8b5"
+          },
+          {
+            "bytes": 5336,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/batch_graph_context.json",
+            "sha256": "aa58f9e09f893cb2bf3d6822272460809683b53cfd87f9b96adcdd8cb544e676"
+          },
+          {
+            "bytes": 843199,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/backend/RUN_2026-08-26_00-09-24_6240_6046/final/6_final.def",
+            "sha256": "b161071ff79f2aeaf5f5f4c872c1fc4180a04e2087eee74acc0ec23e510188dd"
+          },
+          {
+            "bytes": 1143958,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/backend/RUN_2026-08-26_00-09-24_6240_6046/final/6_final.gds",
+            "sha256": "630ed36c46dd9e4f0c0be7b6768868a426aea5be3c8d6ced724f8857f863e6bc"
+          }
+        ],
+        "graph": {
+          "dataset_tier": "strict_clean",
+          "def_sha256": "b161071ff79f2aeaf5f5f4c872c1fc4180a04e2087eee74acc0ec23e510188dd",
+          "design": "v2_queue24",
+          "digest": "2e7b6c673540609036ab0944bd2e5e4e56b18ae882edefa937265fbd7c5c8dc1",
+          "extractor_version": "def-graph-feature-context-v0.2",
+          "feature_digests": {
+            "edges_gate_pin": "61ee5df089ec864fc682ac5d6f25cedfbc2b5823ac2364c57eb0ee468ba03983",
+            "edges_iopin_net": "973032c2c7f5ccae2f98c42a56346474e36d5fd5e70167a3c4d17b45591d4c45",
+            "edges_pin_net": "1c89b10dd35e563d4a2365d37876e103e2416ca61decd9beb919febbbb46b26d",
+            "features_stats": "173176a8b25bfdba50080f4413840fac1eb4cb84a34ef052a46c1fc53dc1e8b5",
+            "metadata": "32d60c248e238563c20314cced361e1539ae53a09993bf84d2ec6b2e2eab5772",
+            "nodes_gate": "fbf130ac63c937136c08c660cb04b06530eebc2482a10f99b721f3d5d7188011",
+            "nodes_iopin": "f389f1c6f2903b6fde265dbd9be8ec93b733fbc4d00238d452c395d1eb0393b2",
+            "nodes_net": "088e6348b3c3c121039840b6bf99df65565e129d7e16eadaa139cddad5eb8ec5",
+            "nodes_pin": "2a0227c1c9ceb0dc237b22a925a22b96f747a2a26c5b678ce80b7b59dadbffaf",
+            "signoff_gate": "50a4325f75aa362762784b107a6a83e031b2199a688dea8fe705cabe7771cf59"
+          },
+          "feature_health": {
+            "edges_gate_pin": {
+              "status": "ok"
+            },
+            "edges_iopin_net": {
+              "status": "ok"
+            },
+            "edges_pin_net": {
+              "status": "ok"
+            },
+            "metadata": {
+              "status": "ok"
+            },
+            "nodes_gate": {
+              "status": "ok"
+            },
+            "nodes_iopin": {
+              "status": "ok"
+            },
+            "nodes_net": {
+              "status": "ok"
+            },
+            "nodes_pin": {
+              "status": "ok"
+            }
+          },
+          "graph_features": {
+            "ABC_AREA": 1.0,
+            "CORE_UTILIZATION": 50.0,
+            "C_total": 3730.227121,
+            "PLACE_DENSITY": "Default",
+            "V_nom": 1.8,
+            "avg_fanout": 2.402061855670103,
+            "core_area": 24848.793224999998,
+            "dbu_unit": 1000.0,
+            "die_height": 157.635,
+            "die_width": 157.635,
+            "freq_Hz": 454545455.0,
+            "num_cells": 2298.0,
+            "num_ios": 54.0,
+            "num_nets": 776.0,
+            "tracks_detail": "li1:754|met1:852|met2:656|met3:426|met4:328|met5:94",
+            "tracks_per_layer": 518.333
+          },
+          "platform": "sky130hs",
+          "signoff_health": {
+            "blockers": [],
+            "caveats": [],
+            "def_overridden": false,
+            "mode": "strict",
+            "status": "pass"
+          },
+          "source_refs": [
+            {
+              "kind": "def",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/backend/RUN_2026-08-26_00-09-24_6240_6046/final/6_final.def",
+              "sha256": "b161071ff79f2aeaf5f5f4c872c1fc4180a04e2087eee74acc0ec23e510188dd"
+            },
+            {
+              "kind": "features_stats",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/features_stats.json",
+              "sha256": "173176a8b25bfdba50080f4413840fac1eb4cb84a34ef052a46c1fc53dc1e8b5"
+            },
+            {
+              "kind": "signoff_gate",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/reports/signoff_gate.json",
+              "sha256": "50a4325f75aa362762784b107a6a83e031b2199a688dea8fe705cabe7771cf59"
+            },
+            {
+              "kind": "metadata",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/features/metadata.csv",
+              "sha256": "32d60c248e238563c20314cced361e1539ae53a09993bf84d2ec6b2e2eab5772"
+            },
+            {
+              "kind": "nodes_gate",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/features/nodes_gate.csv",
+              "sha256": "fbf130ac63c937136c08c660cb04b06530eebc2482a10f99b721f3d5d7188011"
+            },
+            {
+              "kind": "nodes_net",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/features/nodes_net.csv",
+              "sha256": "088e6348b3c3c121039840b6bf99df65565e129d7e16eadaa139cddad5eb8ec5"
+            },
+            {
+              "kind": "nodes_iopin",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/features/nodes_iopin.csv",
+              "sha256": "f389f1c6f2903b6fde265dbd9be8ec93b733fbc4d00238d452c395d1eb0393b2"
+            },
+            {
+              "kind": "nodes_pin",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/features/nodes_pin.csv",
+              "sha256": "2a0227c1c9ceb0dc237b22a925a22b96f747a2a26c5b678ce80b7b59dadbffaf"
+            },
+            {
+              "kind": "edges_gate_pin",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/features/edges_gate_pin.csv",
+              "sha256": "61ee5df089ec864fc682ac5d6f25cedfbc2b5823ac2364c57eb0ee468ba03983"
+            },
+            {
+              "kind": "edges_pin_net",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/features/edges_pin_net.csv",
+              "sha256": "1c89b10dd35e563d4a2365d37876e103e2416ca61decd9beb919febbbb46b26d"
+            },
+            {
+              "kind": "edges_iopin_net",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50/features/edges_iopin_net.csv",
+              "sha256": "973032c2c7f5ccae2f98c42a56346474e36d5fd5e70167a3c4d17b45591d4c45"
+            }
+          ],
+          "status": "complete",
+          "topology_rows": {
+            "edges_gate_pin": 2586,
+            "edges_iopin_net": 54,
+            "edges_pin_net": 2586,
+            "nodes_gate": 2298,
+            "nodes_iopin": 54,
+            "nodes_net": 776,
+            "nodes_pin": 2640
+          }
+        },
+        "missing_oracles": [],
+        "ppa_metrics": {
+          "area_um2": 14750.0,
+          "power_w": 0.0147661,
+          "tns_ns": 0.0,
+          "wns_ns": 0.392324
+        },
+        "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50",
+        "run_tag": "RUN_2026-08-26_00-09-24_6240_6046",
+        "strict_signoff_status": "pass",
+        "version": "orfs-batch-lane-v1"
+      },
+      "case_id": "sky130hs:v2_queue24:preflight:50->45",
+      "lineage_id": "prospective-v2:sky130hs:queue24:cal0",
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_queue24_u50"
+    },
+    {
+      "assessment": {
+        "checks": {
+          "artifact_digest": true,
+          "drc": true,
+          "equivalence": true,
+          "finish": true,
+          "graph": false,
+          "lvs": true,
+          "ppa": true,
+          "route": true,
+          "synthesis": true,
+          "timing": false
+        },
+        "complete": false,
+        "evidence_refs": [
+          {
+            "bytes": 594,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/constraints/config.mk",
+            "sha256": "33f6a77aadb9b7f36f683777e664341a1ee24f797e19741e3d96f3be103f6ee6"
+          },
+          {
+            "bytes": 422,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/constraints/constraint.sdc",
+            "sha256": "182941af347961ac09ded326fce1f7c63a3abf6f41ad8d57aafc9c36675ef2b6"
+          },
+          {
+            "bytes": 627,
+            "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_arbiter16.v",
+            "sha256": "e902d448d0a9c3882c11d60f2e27f5e02bd94787e61aa198ca3cc9d0e9393e11"
+          },
+          {
+            "bytes": 1421,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/backend/RUN_2026-08-26_00-07-03_8_44fa/run-meta.json",
+            "sha256": "4912c5371ee5342c2ce39993ec4868016d17bd521fa86bf11ba98ce6c8237076"
+          },
+          {
+            "bytes": 859,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/backend/RUN_2026-08-26_00-07-03_8_44fa/stage_log.jsonl",
+            "sha256": "9a219f31628c291c87966cd62abeb762370381d99d7736f1053ec304c5541607"
+          },
+          {
+            "bytes": 848,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/reports/equivalence.json",
+            "sha256": "79405f7c01a05ac5cc30cf98566e52316daeb2a3fba45b54c39078efd80a39db"
+          },
+          {
+            "bytes": 168,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/reports/route.json",
+            "sha256": "026df1052908b74c072c65d89ed24c9897040a306ae6e54ef2f2466bdf079c34"
+          },
+          {
+            "bytes": 624,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/reports/timing_check.json",
+            "sha256": "1a77a423d5e4d85fb30439614ebd166c1b52b5395b5d65e8a8c99fdff43200df"
+          },
+          {
+            "bytes": 1163,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/reports/drc.json",
+            "sha256": "be1490cb5d148660ca1b6312f1f1e78200314538313fddef1d73c6a7be8bd0da"
+          },
+          {
+            "bytes": 954,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/reports/lvs.json",
+            "sha256": "6bcf1331bec04d769b785624fa163aeace6344c6c72baa4c0d20c44d58ddcc6c"
+          },
+          {
+            "bytes": 1409,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/reports/ppa.json",
+            "sha256": "233269165f8eafa12d707bce61a5dbd03d35913080fb59bfb564a6584c08a46b"
+          },
+          {
+            "bytes": 5697,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/reports/strict_signoff.json",
+            "sha256": "a4424cae14f8ebc6297a810ca3a26556ee4b13ab7812511579a40885579489be"
+          },
+          {
+            "bytes": 121,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/reports/features_stats.json",
+            "sha256": "8efa808292d55d5d10219bf3dfea63fb89299828a122366a72b512f21ae9237e"
+          },
+          {
+            "bytes": 97,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/reports/batch_graph_context.json",
+            "sha256": "0e93a7a02e6782493bcfb6be87064832b3004970b99956bad3b7adae596ad6ff"
+          },
+          {
+            "bytes": 873165,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/backend/RUN_2026-08-26_00-07-03_8_44fa/final/6_final.def",
+            "sha256": "b622a73b66c7425c5124989bce36229d24436497f9618bbcce7d3d49d79e6b12"
+          },
+          {
+            "bytes": 1566302,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50/backend/RUN_2026-08-26_00-07-03_8_44fa/final/6_final.gds",
+            "sha256": "9fcf54b2806818301a359bb07d62f9d866fac56934ce05fe8a5ebf957272e3d5"
+          }
+        ],
+        "graph": {
+          "reason": "def-graph metadata is not a valid completed feature set",
+          "status": "invalid"
+        },
+        "missing_oracles": [
+          "timing",
+          "graph"
+        ],
+        "ppa_metrics": {
+          "area_um2": 9526.0,
+          "power_w": 0.0211758,
+          "tns_ns": -7.75669,
+          "wns_ns": -0.51509
+        },
+        "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50",
+        "run_tag": "RUN_2026-08-26_00-07-03_8_44fa",
+        "strict_signoff_status": "fail",
+        "version": "orfs-batch-lane-v1"
+      },
+      "case_id": "sky130hs:v2_arbiter16:preflight:50->45",
+      "lineage_id": "prospective-v2:sky130hs:arbiter16:ab0",
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_arbiter16_u50"
+    },
+    {
+      "assessment": {
+        "checks": {
+          "artifact_digest": true,
+          "drc": true,
+          "equivalence": true,
+          "finish": true,
+          "graph": true,
+          "lvs": true,
+          "ppa": true,
+          "route": true,
+          "synthesis": true,
+          "timing": true
+        },
+        "complete": true,
+        "evidence_refs": [
+          {
+            "bytes": 582,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/constraints/config.mk",
+            "sha256": "795df48af26549a5ecf82e84034df5790b48fca061d03235e5de13b370581391"
+          },
+          {
+            "bytes": 418,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/constraints/constraint.sdc",
+            "sha256": "66fe9ce2633594776386d39d837b2ea658d787179fc04a03f8d282e2070b02e4"
+          },
+          {
+            "bytes": 516,
+            "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_crc32.v",
+            "sha256": "9b001daeb98dfffbfb43a65c33ecade9171717761a16bd075943ff9dabdb60b1"
+          },
+          {
+            "bytes": 1349,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/backend/RUN_2026-08-26_00-07-03_7_1b30/run-meta.json",
+            "sha256": "0c299d70e6dcc1e381ed7a7ab2e0006aa44cc038dc8a9cf2a6c0c45d5818c39e"
+          },
+          {
+            "bytes": 857,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/backend/RUN_2026-08-26_00-07-03_7_1b30/stage_log.jsonl",
+            "sha256": "9c4f5ff3f4ba02bd5c2e7473b36b65335fba33a345716e7f784620c678bc77f0"
+          },
+          {
+            "bytes": 836,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/equivalence.json",
+            "sha256": "4a5d74d4ffc5555280eb06f504fa11d1d1d78d32da80d99e1f43db2386251643"
+          },
+          {
+            "bytes": 168,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/route.json",
+            "sha256": "ee0835a65fb917e65fe80e540bddf668d5f564b89c33f5cb7f8bcb973dbe76ad"
+          },
+          {
+            "bytes": 482,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/timing_check.json",
+            "sha256": "695f0ff9fe44e3c964b991d375d89702ee559ac1625d39aff740ba917c0bd6f1"
+          },
+          {
+            "bytes": 1152,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/drc.json",
+            "sha256": "5448aec6be36add5bb37ecc3ec494d3b6a310c0b08659534855a99afdcf42012"
+          },
+          {
+            "bytes": 930,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/lvs.json",
+            "sha256": "5ef7fe0afcb6bd0b403c89776dfcd0f602abe09d59264d279873f355b217a9e7"
+          },
+          {
+            "bytes": 1365,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/ppa.json",
+            "sha256": "3c1bc6386b197f06f92ee3ddff754d20be062d91950a24b2ecd0099187e307de"
+          },
+          {
+            "bytes": 5597,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/strict_signoff.json",
+            "sha256": "9fbfb485fed3efce105ff2b063f5b4ec9a27c6af49c81da1ca8634fd06f9cc01"
+          },
+          {
+            "bytes": 2697,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/features_stats.json",
+            "sha256": "163d5bf879136981bb67b44d4f990065a8268cb3e42409731b645cc6918d78e6"
+          },
+          {
+            "bytes": 5302,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/batch_graph_context.json",
+            "sha256": "a6a0163e91bd792d073a5f315cc5e4c9aefab4605506ce65698449386c634e44"
+          },
+          {
+            "bytes": 272756,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/backend/RUN_2026-08-26_00-07-03_7_1b30/final/6_final.def",
+            "sha256": "d584a8669cfe6cb6bc55d91e0b9f4d489bd125d068b2cab6bb862b6c9c0d4103"
+          },
+          {
+            "bytes": 530856,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/backend/RUN_2026-08-26_00-07-03_7_1b30/final/6_final.gds",
+            "sha256": "dd0bce7d5393f4c6b9f34a2b046c4ed050314b3f921253ecc623f3e566761d32"
+          }
+        ],
+        "graph": {
+          "dataset_tier": "strict_clean",
+          "def_sha256": "d584a8669cfe6cb6bc55d91e0b9f4d489bd125d068b2cab6bb862b6c9c0d4103",
+          "design": "v2_crc32",
+          "digest": "4513e3e4d2ebeae2c998979d316242274019775af31ebf476c2b8bad6dd0e8cf",
+          "extractor_version": "def-graph-feature-context-v0.2",
+          "feature_digests": {
+            "edges_gate_pin": "e895b4eace500e704c3c5a2a2c8b808c8a03ba4b4e4a2f2b91d81a27565a049a",
+            "edges_iopin_net": "505c915853e40be952f2e0a8cde30d7e54d46f08932df6ca15e641cd9da14e5c",
+            "edges_pin_net": "b9b14b6a86cba42fcc486ed9d5a9a6e447a77cd020e94fc42c38d359b355fb35",
+            "features_stats": "163d5bf879136981bb67b44d4f990065a8268cb3e42409731b645cc6918d78e6",
+            "metadata": "4a4c946831185b66d0855e302764029975a368a20fe8b68a3009ce3be4f37110",
+            "nodes_gate": "57848931e0ecf59c849caa2a0ef98a19dc30db44267b2b3a495cbfa3ba1ec0e6",
+            "nodes_iopin": "b3170f8c674d88c84ad5f34c70fd605c015639386a7a8d38795f3e72d97bf053",
+            "nodes_net": "c4f74546b22896de7249fa870eee0bcd23a88bbc59f3a6406f283770c85e3c3f",
+            "nodes_pin": "298ede10e9a3e9212d7a224ed130388b778a379026626f624010aa1c96b12624",
+            "signoff_gate": "e4cc407cd5490311f3b330d3e50baf63992f4d50ad379317891ffebf5e3c1c5c"
+          },
+          "feature_health": {
+            "edges_gate_pin": {
+              "status": "ok"
+            },
+            "edges_iopin_net": {
+              "status": "ok"
+            },
+            "edges_pin_net": {
+              "status": "ok"
+            },
+            "metadata": {
+              "status": "ok"
+            },
+            "nodes_gate": {
+              "status": "ok"
+            },
+            "nodes_iopin": {
+              "status": "ok"
+            },
+            "nodes_net": {
+              "status": "ok"
+            },
+            "nodes_pin": {
+              "status": "ok"
+            }
+          },
+          "graph_features": {
+            "ABC_AREA": 1.0,
+            "CORE_UTILIZATION": 50.0,
+            "C_total": 966.789197,
+            "PLACE_DENSITY": "Default",
+            "V_nom": 1.8,
+            "avg_fanout": 2.0903790087463556,
+            "core_area": 5923.611225000001,
+            "dbu_unit": 1000.0,
+            "die_height": 76.965,
+            "die_width": 76.965,
+            "freq_Hz": 454545455.0,
+            "num_cells": 659.0,
+            "num_ios": 43.0,
+            "num_nets": 343.0,
+            "tracks_detail": "li1:368|met1:416|met2:320|met3:208|met4:160|met5:46",
+            "tracks_per_layer": 253.0
+          },
+          "platform": "sky130hs",
+          "signoff_health": {
+            "blockers": [],
+            "caveats": [],
+            "def_overridden": false,
+            "mode": "strict",
+            "status": "pass"
+          },
+          "source_refs": [
+            {
+              "kind": "def",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/backend/RUN_2026-08-26_00-07-03_7_1b30/final/6_final.def",
+              "sha256": "d584a8669cfe6cb6bc55d91e0b9f4d489bd125d068b2cab6bb862b6c9c0d4103"
+            },
+            {
+              "kind": "features_stats",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/features_stats.json",
+              "sha256": "163d5bf879136981bb67b44d4f990065a8268cb3e42409731b645cc6918d78e6"
+            },
+            {
+              "kind": "signoff_gate",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/reports/signoff_gate.json",
+              "sha256": "e4cc407cd5490311f3b330d3e50baf63992f4d50ad379317891ffebf5e3c1c5c"
+            },
+            {
+              "kind": "metadata",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/features/metadata.csv",
+              "sha256": "4a4c946831185b66d0855e302764029975a368a20fe8b68a3009ce3be4f37110"
+            },
+            {
+              "kind": "nodes_gate",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/features/nodes_gate.csv",
+              "sha256": "57848931e0ecf59c849caa2a0ef98a19dc30db44267b2b3a495cbfa3ba1ec0e6"
+            },
+            {
+              "kind": "nodes_net",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/features/nodes_net.csv",
+              "sha256": "c4f74546b22896de7249fa870eee0bcd23a88bbc59f3a6406f283770c85e3c3f"
+            },
+            {
+              "kind": "nodes_iopin",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/features/nodes_iopin.csv",
+              "sha256": "b3170f8c674d88c84ad5f34c70fd605c015639386a7a8d38795f3e72d97bf053"
+            },
+            {
+              "kind": "nodes_pin",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/features/nodes_pin.csv",
+              "sha256": "298ede10e9a3e9212d7a224ed130388b778a379026626f624010aa1c96b12624"
+            },
+            {
+              "kind": "edges_gate_pin",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/features/edges_gate_pin.csv",
+              "sha256": "e895b4eace500e704c3c5a2a2c8b808c8a03ba4b4e4a2f2b91d81a27565a049a"
+            },
+            {
+              "kind": "edges_pin_net",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/features/edges_pin_net.csv",
+              "sha256": "b9b14b6a86cba42fcc486ed9d5a9a6e447a77cd020e94fc42c38d359b355fb35"
+            },
+            {
+              "kind": "edges_iopin_net",
+              "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50/features/edges_iopin_net.csv",
+              "sha256": "505c915853e40be952f2e0a8cde30d7e54d46f08932df6ca15e641cd9da14e5c"
+            }
+          ],
+          "status": "complete",
+          "topology_rows": {
+            "edges_gate_pin": 1017,
+            "edges_iopin_net": 43,
+            "edges_pin_net": 1017,
+            "nodes_gate": 659,
+            "nodes_iopin": 43,
+            "nodes_net": 343,
+            "nodes_pin": 1060
+          }
+        },
+        "missing_oracles": [],
+        "ppa_metrics": {
+          "area_um2": 3812.0,
+          "power_w": 0.00390055,
+          "tns_ns": 0.0,
+          "wns_ns": 0.751009
+        },
+        "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50",
+        "run_tag": "RUN_2026-08-26_00-07-03_7_1b30",
+        "strict_signoff_status": "pass",
+        "version": "orfs-batch-lane-v1"
+      },
+      "case_id": "sky130hs:v2_crc32:preflight:50->45",
+      "lineage_id": "prospective-v2:sky130hs:crc32:ab0",
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_crc32_u50"
+    },
+    {
+      "assessment": {
+        "checks": {
+          "artifact_digest": false,
+          "drc": false,
+          "equivalence": true,
+          "finish": false,
+          "graph": false,
+          "lvs": false,
+          "ppa": false,
+          "route": false,
+          "synthesis": true,
+          "timing": false
+        },
+        "complete": false,
+        "evidence_refs": [
+          {
+            "bytes": 600,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/constraints/config.mk",
+            "sha256": "1961e5e22f82edbcd27c16760c7c86048a370193d2e3e2e2e4f35f13befdb4dc"
+          },
+          {
+            "bytes": 424,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/constraints/constraint.sdc",
+            "sha256": "9ffa17a16b496d02baf5c9b9cec92df8ae787b11c115bdf4dd4c072e2381a7db"
+          },
+          {
+            "bytes": 892,
+            "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_packet_ctrl.v",
+            "sha256": "95dc04b69186b61f573150d1317a1c7e792b1dc6eb83e483d6347b43971b04e0"
+          },
+          {
+            "bytes": 1460,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/backend/RUN_2026-08-26_00-08-56_5087_21bc/run-meta.json",
+            "sha256": "22027e20858e9d947d3482a339c34d137632d2ddc713e7637dfdf44524372fa4"
+          },
+          {
+            "bytes": 193,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/backend/RUN_2026-08-26_00-08-56_5087_21bc/stage_log.jsonl",
+            "sha256": "725b4add94f5ce422284a673d64c778792b2cf7974f9559b112f35eaf963948c"
+          },
+          {
+            "bytes": 854,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/reports/equivalence.json",
+            "sha256": "1c0d7300943fa65e9ba3ba80214556497576b5b0afb8f448d238112a26b9b789"
+          },
+          {
+            "bytes": 180,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/reports/route.json",
+            "sha256": "4c9c2b249c495574dd7905c99e066ef9e92b0b59e01475101d0e04c1cc5e4857"
+          },
+          {
+            "bytes": 512,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/reports/timing_check.json",
+            "sha256": "c13be564bc5db5163828b040d1885e05018f0972eeb3f2ec7eb090778e19418c"
+          },
+          {
+            "bytes": 501,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50/reports/ppa.json",
+            "sha256": "dd3bcd6b69ec761b543b827ab8e62d03ec8efa06cf9e96e7aaf4489867dd5691"
+          }
+        ],
+        "graph": {
+          "status": "missing"
+        },
+        "missing_oracles": [
+          "route",
+          "finish",
+          "timing",
+          "drc",
+          "lvs",
+          "ppa",
+          "graph",
+          "artifact_digest"
+        ],
+        "ppa_metrics": {
+          "area_um2": 308.0,
+          "power_w": null,
+          "tns_ns": 100.0,
+          "wns_ns": null
+        },
+        "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50",
+        "run_tag": "RUN_2026-08-26_00-08-56_5087_21bc",
+        "strict_signoff_status": null,
+        "version": "orfs-batch-lane-v1"
+      },
+      "case_id": "sky130hs:v2_packet_ctrl:preflight:50->45",
+      "lineage_id": "prospective-v2:sky130hs:packet_ctrl:ab0",
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_packet_ctrl_u50"
+    },
+    {
+      "assessment": {
+        "checks": {
+          "artifact_digest": true,
+          "drc": true,
+          "equivalence": true,
+          "finish": true,
+          "graph": false,
+          "lvs": true,
+          "ppa": true,
+          "route": true,
+          "synthesis": true,
+          "timing": false
+        },
+        "complete": false,
+        "evidence_refs": [
+          {
+            "bytes": 582,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/constraints/config.mk",
+            "sha256": "d479c91ae81145f914986e9a40d4333cdee8f96250ab1851a238bc8d11e6b644"
+          },
+          {
+            "bytes": 418,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/constraints/constraint.sdc",
+            "sha256": "5962878f117c9a2d22eec97f34c4e91c47492523f01802254961c296ca6f9670"
+          },
+          {
+            "bytes": 329,
+            "path": "/data1/zhangdy/Typed-Executable-Hardware-Memory/memory/evaluation/rtl_v2_heldout/v2_mac32.v",
+            "sha256": "774cbdbe1dc2da809fa7592db368ae48f24083d9560367cf568e1bbce6283a1c"
+          },
+          {
+            "bytes": 1349,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/backend/RUN_2026-08-26_00-07-03_9_5302/run-meta.json",
+            "sha256": "a5782836ec6386c3d54e83911a7e2d40c2b1558d962553b0522ec3e35c66ef08"
+          },
+          {
+            "bytes": 861,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/backend/RUN_2026-08-26_00-07-03_9_5302/stage_log.jsonl",
+            "sha256": "44b88c77d8534af4f56716dade55da9ef0f2d763e54cfe7c736499eb4c201622"
+          },
+          {
+            "bytes": 836,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/reports/equivalence.json",
+            "sha256": "35434445f14c9722460e096c52310f25e146513c562515c5bb1ba97896a22e8a"
+          },
+          {
+            "bytes": 168,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/reports/route.json",
+            "sha256": "03cc1586970350ce72637c399283d30ba55588ac0ebc7ae3915c172341c53ab8"
+          },
+          {
+            "bytes": 1807,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/reports/timing_check.json",
+            "sha256": "dbd72db3efc6674222164e80ce381745f9843513ac8ea5cb496c813547730535"
+          },
+          {
+            "bytes": 1156,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/reports/drc.json",
+            "sha256": "3fe1712a82e32652e2969ce4f750e279591ba4f29f196e999a31ed2353852d68"
+          },
+          {
+            "bytes": 930,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/reports/lvs.json",
+            "sha256": "c9df6a74b48434f91e491af1a1cdd9ac85668d0fcf180eee8ccbb330cf0d10f1"
+          },
+          {
+            "bytes": 1376,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/reports/ppa.json",
+            "sha256": "8a60977593b846a0645e208136c736a888ec9e2966b14d18d7fb812864b6194b"
+          },
+          {
+            "bytes": 5659,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/reports/strict_signoff.json",
+            "sha256": "b8ed6da23bffcd503a55921401bc2d8a2f267bd5adcc6baaf595aca93f1b17a2"
+          },
+          {
+            "bytes": 117,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/reports/features_stats.json",
+            "sha256": "165bd9dc91868f96b1a2106067efe875bdff0a2908f977e7bd73e834ff9a3842"
+          },
+          {
+            "bytes": 97,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/reports/batch_graph_context.json",
+            "sha256": "0e93a7a02e6782493bcfb6be87064832b3004970b99956bad3b7adae596ad6ff"
+          },
+          {
+            "bytes": 3066146,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/backend/RUN_2026-08-26_00-07-03_9_5302/final/6_final.def",
+            "sha256": "23e215619e230c3131bc0b453694bca56f2595eece14696f611cf617473d4752"
+          },
+          {
+            "bytes": 3973990,
+            "path": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50/backend/RUN_2026-08-26_00-07-03_9_5302/final/6_final.gds",
+            "sha256": "ada6be5e595c2d6dbbf47aae3c020ce373e09853c9801942407601d912fb3351"
+          }
+        ],
+        "graph": {
+          "reason": "def-graph metadata is not a valid completed feature set",
+          "status": "invalid"
+        },
+        "missing_oracles": [
+          "timing",
+          "graph"
+        ],
+        "ppa_metrics": {
+          "area_um2": 34289.0,
+          "power_w": 0.0538285,
+          "tns_ns": -40.2419,
+          "wns_ns": -1.84077
+        },
+        "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50",
+        "run_tag": "RUN_2026-08-26_00-07-03_9_5302",
+        "strict_signoff_status": "fail",
+        "version": "orfs-batch-lane-v1"
+      },
+      "case_id": "sky130hs:v2_mac32:preflight:50->45",
+      "lineage_id": "prospective-v2:sky130hs:mac32:ab0",
+      "project": "/tmp/tehm-authority-v1/v2-selector-preflight-50to45/baseline/sky130hs_v2_mac32_u50"
+    }
+  ],
+  "version": "timing-relief-selector-preflight-v1"
+}

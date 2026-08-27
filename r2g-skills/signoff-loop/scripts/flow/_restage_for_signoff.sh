@@ -6,6 +6,7 @@
 #   PROJECT_DIR      — absolute path to design_cases/<project>
 #   PLATFORM         — e.g. nangate45
 #   DESIGN_NAME      — DESIGN_NAME from config.mk
+#   DESIGN_NICKNAME  — optional ORFS workspace key; defaults to DESIGN_NAME
 #   FLOW_VARIANT     — typically basename of PROJECT_DIR
 #   FLOW_DIR         — $ORFS_ROOT/flow
 #   CONFIG_MK        — $PROJECT_DIR/constraints/config.mk
@@ -23,14 +24,37 @@ _R2G_RESTAGE_FOR_SIGNOFF=1
 : "${PROJECT_DIR:?PROJECT_DIR must be set}"
 : "${PLATFORM:?PLATFORM must be set}"
 : "${DESIGN_NAME:?DESIGN_NAME must be set}"
+: "${DESIGN_NICKNAME:=$DESIGN_NAME}"
 : "${FLOW_VARIANT:?FLOW_VARIANT must be set}"
 : "${FLOW_DIR:?FLOW_DIR must be set}"
 : "${CONFIG_MK:?CONFIG_MK must be set}"
 
-ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-ORFS_RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-ORFS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-ORFS_OBJECTS_DIR="$FLOW_DIR/objects/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+# Resolve the exact backend producer before choosing a workspace.  New
+# production runs record a project-local writable WORK_HOME; legacy runs omit
+# it and retain the historical $FLOW_DIR layout.  This keeps old preserved
+# projects reproducible while allowing read-only ORFS installations.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_backend_run.sh"
+R2G_BACKEND_RUN="$(r2g_pick_backend_run "$PROJECT_DIR" || true)"
+_R2G_RECORDED_WORK_HOME=""
+if [[ -n "$R2G_BACKEND_RUN" && -f "$R2G_BACKEND_RUN/run-meta.json" ]]; then
+  _R2G_RECORDED_WORK_HOME=$(python3 -c '
+import json,sys
+try: print(json.load(open(sys.argv[1])).get("orfs_work_home") or "")
+except Exception: print("")
+' "$R2G_BACKEND_RUN/run-meta.json" 2>/dev/null || true)
+fi
+export WORK_HOME="${R2G_ORFS_WORK_HOME:-${_R2G_RECORDED_WORK_HOME:-$FLOW_DIR}}"
+export DESIGN_HOME="${R2G_ORFS_DESIGN_HOME:-$FLOW_DIR/designs}"
+if [[ "$WORK_HOME" == "$FLOW_DIR" ]]; then
+  ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+else
+  ORFS_DESIGN_DIR="$PROJECT_DIR/.orfs-design/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+fi
+ORFS_RESULTS_DIR="$WORK_HOME/results/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
+ORFS_LOGS_DIR="$WORK_HOME/logs/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
+ORFS_OBJECTS_DIR="$WORK_HOME/objects/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
+ORFS_REPORTS_DIR="$WORK_HOME/reports/$PLATFORM/$DESIGN_NICKNAME/$FLOW_VARIANT"
 
 # 1. Stage config.mk + constraint.sdc into the design dir (only if missing).
 if [[ ! -f "$ORFS_DESIGN_DIR/config.mk" ]]; then
@@ -64,11 +88,6 @@ fi
 #    crashed re-attempt). ONE shared resolver (RMD-P0-02): the same pick is
 #    used by every checker's copy-back and by report extraction, so all of
 #    them name the same run.
-# shellcheck source=/dev/null
-source "$(dirname "${BASH_SOURCE[0]}")/_backend_run.sh"
-
-R2G_BACKEND_RUN="$(r2g_pick_backend_run "$PROJECT_DIR" || true)"
-
 if [[ -z "$R2G_BACKEND_RUN" ]]; then
   echo "WARNING: no backend RUN dir contains a final GDS for $DESIGN_NAME ($PROJECT_DIR)" >&2
 fi
@@ -104,8 +123,8 @@ if [[ -n "$R2G_BACKEND_RUN" ]]; then
   # scripts); without it `make drc` can implicitly rebuild the flow (pilot P1-2).
   # Preserved by run_orfs.sh since 2026-07-21; older backends simply lack it.
   _restage_dir objects        "$ORFS_OBJECTS_DIR"
-  _restage_dir reports_orfs   "$FLOW_DIR/reports/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
-  _restage_dir reports        "$FLOW_DIR/reports/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+  _restage_dir reports_orfs   "$ORFS_REPORTS_DIR"
+  _restage_dir reports        "$ORFS_REPORTS_DIR"
 
   # Older r2g runs only kept the final/ subset; fall back to those if results/
   # wasn't preserved. Identity-aware (full-pipeline Issue 7): a newer pick re-stages
@@ -176,4 +195,4 @@ for _r2g_stage in 1 2 3 4 5 6; do
 done
 
 unset _restage_dir _fb_marker _fb_pick _fb_staged \
-      _r2g_now _r2g_epoch _r2g_stage _r2g_dir 2>/dev/null || true
+      _r2g_now _r2g_epoch _r2g_stage _r2g_dir _R2G_RECORDED_WORK_HOME 2>/dev/null || true
