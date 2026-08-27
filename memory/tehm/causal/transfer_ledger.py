@@ -308,6 +308,24 @@ def verify_causal_transfer(conn: sqlite3.Connection, receipt) -> dict:
     for field_name in fields:
         if data.get(field_name) != payload.get(field_name):
             reasons.append(f"transfer_{field_name}_mismatch")
+    # ``to_dict()`` exposes a small convenience projection of the nested pure
+    # receipt at the ledger top level.  It is not an independent authority
+    # source: every exposed value must agree with the content-addressed
+    # payload.  Without these checks a caller could alter the top-level
+    # eligibility/evidence/reason fields (or the nested receipt) while keeping
+    # an otherwise valid payload digest and receive ``verified=True``.
+    transfer_payload = payload.get("transfer_receipt")
+    if not isinstance(transfer_payload, Mapping):
+        transfer_payload = {}
+        reasons.append("transfer_receipt_witness_missing")
+    for field_name in ("eligible", "evidence_level", "reason"):
+        if data.get(field_name) != transfer_payload.get(field_name):
+            reasons.append(f"transfer_{field_name}_mismatch")
+    exposed_transfer = data.get("transfer_receipt")
+    if not isinstance(exposed_transfer, Mapping):
+        reasons.append("transfer_receipt_projection_missing")
+    elif stable_dumps(dict(exposed_transfer)) != stable_dumps(dict(transfer_payload)):
+        reasons.append("transfer_receipt_projection_mismatch")
     path_id = str(payload.get("path_id") or "")
     training_campaign_id = str(payload.get("training_campaign_id") or "")
     transfer_campaign_id = str(payload.get("transfer_campaign_id") or "")
@@ -324,10 +342,7 @@ def verify_causal_transfer(conn: sqlite3.Connection, receipt) -> dict:
         current_path_digest = None
     if current_path_digest is not None and payload.get("path_digest") != current_path_digest:
         reasons.append("path_digest_mismatch")
-    transfer = payload.get("transfer_receipt")
-    if not isinstance(transfer, Mapping):
-        reasons.append("transfer_receipt_witness_missing")
-        transfer = {}
+    transfer = transfer_payload
     if ids and path_id and training_campaign_id and transfer_campaign_id:
         replay = evaluate_transfer_supported_mechanism(
             conn, path_id, ids, training_campaign_id=training_campaign_id,

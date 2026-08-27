@@ -2734,7 +2734,12 @@ L4 transfer receipt 另由 `tehm.causal.record_causal_transfer()` 写入 additiv
 campaign、transition witness 与 full-oracle contract。消费前必须调用
 `verify_causal_transfer()`，它会重新校验 path provenance、ledger row digest 并重跑
 纯 evaluator；失败尝试也只作为 `eligible=false` 的可审计负证据，不能改变 causal
-path、canonical evidence、rule lifecycle 或 production policy。这样在获得真实
+path、canonical evidence、rule lifecycle 或 production policy。验证器同时校验
+receipt 顶层投影字段与签名 payload，防止只篡改 `eligible`/`reason` 等便捷字段就绕过
+replay。Capability C6 evidence 可选绑定一个或多个该 ledger receipt；若绑定，则
+authority 必须逐条重放并确认 `verified=true`、L4 与声明 lineage 一致，否则只产生
+不可晋级的 authority 尝试。旧 generic C6 fixture 未提供绑定字段时仍兼容，但不应
+被解释为 causal-transfer ledger 已建立。这样在获得真实
 source-disjoint fail→pass held-out 之前，不会因为一次现场 L4 计算就误把
 `cross_lineage_te` 计为 PASS。
 

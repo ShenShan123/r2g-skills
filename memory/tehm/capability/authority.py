@@ -224,6 +224,26 @@ def _normalise_evidence_refs(
                 reasons.append("C4:execution_receipt_id_missing")
             else:
                 normalised[gate]["execution_receipt_id"] = execution_receipt_id
+        if gate == "C6" and "causal_transfer_receipt_id" in raw:
+            transfer_receipt_id = str(raw.get("causal_transfer_receipt_id") or "")
+            if not transfer_receipt_id:
+                reasons.append("C6:causal_transfer_receipt_id_missing")
+            else:
+                normalised[gate]["causal_transfer_receipt_id"] = transfer_receipt_id
+        if gate == "C6" and "causal_transfer_receipt_ids" in raw:
+            raw_ids = raw.get("causal_transfer_receipt_ids")
+            if "causal_transfer_receipt_id" in raw:
+                reasons.append("C6:causal_transfer_receipt_id_and_ids_ambiguous")
+            if (not isinstance(raw_ids, (list, tuple)) or not raw_ids or
+                    any(not str(value or "") for value in raw_ids)):
+                reasons.append("C6:causal_transfer_receipt_ids_malformed")
+            else:
+                normalised[gate]["causal_transfer_receipt_ids"] = [
+                    str(value) for value in raw_ids]
+        elif gate != "C6" and "causal_transfer_receipt_ids" in raw:
+            reasons.append(f"{gate}:causal_transfer_receipt_ids_not_allowed")
+        elif gate != "C6" and "causal_transfer_receipt_id" in raw:
+            reasons.append(f"{gate}:causal_transfer_receipt_id_not_allowed")
         if gate == "C7" and "retention_receipt_id" in raw:
             retention_receipt_id = str(raw.get("retention_receipt_id") or "")
             if not retention_receipt_id:
@@ -289,6 +309,70 @@ def _retention_binding_reasons(
     return reasons
 
 
+def _causal_transfer_binding_reasons(
+    conn: sqlite3.Connection, *, evidence_ref: Mapping,
+) -> list[str]:
+    """Optionally bind C6 to replayable causal-transfer shadow receipts.
+
+    C6 remains compatible with older generic capability fixtures that only
+    have a held-out evidence row.  When a transfer receipt is supplied, it is
+    a hard dependency: the receipt must exist, replay against the current DB,
+    and establish an eligible L4 transfer.  This makes a causal C6 claim
+    stronger without turning the causal ledger itself into lifecycle authority.
+    """
+    transfer_receipt_id = str(
+        evidence_ref.get("causal_transfer_receipt_id") or "")
+    raw_ids = evidence_ref.get("causal_transfer_receipt_ids")
+    if raw_ids is not None:
+        if (not isinstance(raw_ids, (list, tuple)) or not raw_ids or
+                any(not str(value or "") for value in raw_ids)):
+            return ["C6:causal_transfer_receipt_ids_malformed"]
+        if transfer_receipt_id:
+            return ["C6:causal_transfer_receipt_id_and_ids_ambiguous"]
+        receipt_ids = [str(value) for value in raw_ids]
+    elif transfer_receipt_id:
+        receipt_ids = [transfer_receipt_id]
+    else:
+        return []
+
+    from tehm.causal import (  # local import avoids package import cycles
+        load_causal_transfer_receipt, verify_causal_transfer,
+    )
+
+    expected_lineage = evidence_ref.get("lineage_id")
+    reasons: list[str] = []
+    for ordinal, receipt_id in enumerate(receipt_ids):
+        prefix = f"C6:causal_transfer[{ordinal}]"
+        try:
+            receipt = load_causal_transfer_receipt(conn, receipt_id)
+        except (TypeError, ValueError, sqlite3.Error):
+            receipt = None
+        if receipt is None:
+            reasons.append(f"{prefix}:receipt_missing")
+            continue
+        try:
+            checked = verify_causal_transfer(conn, receipt)
+        except (TypeError, ValueError, sqlite3.Error) as exc:
+            reasons.append(f"{prefix}:verification_error:{exc}")
+            continue
+        if checked.get("verified") is not True:
+            reasons.extend(
+                f"{prefix}:{reason}"
+                for reason in checked.get("reasons") or ("not_verified",))
+        elif checked.get("eligible") is not True:
+            reasons.append(f"{prefix}:not_eligible")
+        if receipt.evidence_level != "L4_TRANSFER_SUPPORTED_MECHANISM":
+            reasons.append(f"{prefix}:evidence_level_not_l4")
+        if expected_lineage not in (None, ""):
+            transfer_lineages = set(
+                str(value) for value in
+                (receipt.transfer_receipt.get("transfer_lineages") or ())
+            )
+            if str(expected_lineage) not in transfer_lineages:
+                reasons.append(f"{prefix}:lineage_mismatch")
+    return reasons
+
+
 def record_capability_authority(
     conn: sqlite3.Connection,
     *,
@@ -323,7 +407,10 @@ def record_capability_authority(
         execution_receipt_id=(refs.get("C4") or {}).get("execution_receipt_id"))
     retention_reasons = _retention_binding_reasons(
         conn, capability_id=capability_id, evidence_ref=refs.get("C7") or {})
-    reasons = list(evidence_reasons) + policy_reasons + retention_reasons
+    transfer_reasons = _causal_transfer_binding_reasons(
+        conn, evidence_ref=refs.get("C6") or {})
+    reasons = (list(evidence_reasons) + policy_reasons + retention_reasons +
+               transfer_reasons)
     if attribution.get("promotable") is not True:
         reasons.append("attribution_receipt_not_promotable")
     if any(attribution_gates.get(gate) is not True for gate in CAPABILITY_GATES):
@@ -473,6 +560,10 @@ def verify_capability_authority(
     if isinstance(c7_ref, Mapping):
         reasons.extend(_retention_binding_reasons(
             conn, capability_id=capability_id, evidence_ref=c7_ref))
+    c6_ref = refs.get("C6") if isinstance(refs, Mapping) else None
+    if isinstance(c6_ref, Mapping):
+        reasons.extend(_causal_transfer_binding_reasons(
+            conn, evidence_ref=c6_ref))
     # Re-check the candidate snapshot and actual runtime load after the receipt
     # was written; this prevents a stale or copied policy receipt being reused.
     attribution_digest = data.get("attribution_digest")

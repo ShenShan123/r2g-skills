@@ -351,7 +351,13 @@ campaign、transition witness 和 `require_full_oracle`；`verify_causal_transfe
 重新验证 path provenance 并重跑纯 evaluator。有效的负结果返回
 `verified=true, eligible=false`，篡改、stale path 或 replay mismatch 则
 fail-closed。该写入只产生可审计的派生 receipt，不改变 causal path、canonical
-evidence、rule lifecycle 或 production policy。
+evidence、rule lifecycle 或 production policy。验证器还会校验 receipt 顶层投影
+（`eligible`/`evidence_level`/`reason`/`transfer_receipt`）与签名 payload 一致，避免
+只修改便捷字段却被误判为已验证。Capability authority 的 C6 held-out evidence
+可选携带一个或多个 `causal_transfer_receipt_id(s)`；一旦提供，authority 会逐条
+重放并要求 `verified=true`、L4 和 lineage 绑定，否则 C6 只留下不可晋级的审计尝试。
+未携带该字段的旧 generic held-out fixture 仍保持兼容，但不应解释为已完成 causal
+transfer ledger 绑定。
 
 Activation update 现在也会把反馈写入同一条 hash-chained event log：PASS 产生
 `SUPPORT_INCREASED`，中性结果产生 `UTILITY_DRIFT`，FAIL/REGRESSION 产生

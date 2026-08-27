@@ -19,7 +19,7 @@ from tehm.capability import (
 
 
 def _full_attribution_and_authority(conn, capability_id, *, required_assets=(),
-                                    asset_gate=True):
+                                    asset_gate=True, c6_extra=None):
     baseline = create_policy_snapshot(
         conn, memory_snapshot_id="m0", promoted_rules=["r0"])
     candidate = create_policy_snapshot(
@@ -49,6 +49,8 @@ def _full_attribution_and_authority(conn, capability_id, *, required_assets=(),
         "C7": {"evidence_id": "no-regression", "split": "heldout", "verdict": "PASS"},
         "C8": {"evidence_id": "ablation-loss", "split": "ab", "verdict": "PASS"},
     }
+    if c6_extra:
+        refs["C6"].update(c6_extra)
     gates = {f"C{i}": True for i in range(1, 9)}
     if required_assets:
         refs["asset_authority_verified"] = {
@@ -455,6 +457,22 @@ def test_capability_authority_rejects_wrong_gate_split(tmp_tehm):
         runtime_id="authority-runtime")
     assert authority.eligible is False
     assert "C5:invalid_evidence_split" in authority.reasons
+
+
+def test_capability_authority_c6_transfer_binding_is_fail_closed(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="CAUSAL_TRANSFER_AUTHORITY",
+        applicability={"profile": "p"}, status="candidate")
+    _, authority, _ = _full_attribution_and_authority(
+        conn, capability.capability_id,
+        c6_extra={"causal_transfer_receipt_id": "missing-transfer-receipt"})
+    assert authority.eligible is False
+    assert "C6:causal_transfer[0]:receipt_missing" in authority.reasons
+    checked = verify_capability_authority(
+        conn, capability.capability_id, authority)
+    assert checked["eligible"] is False
+    assert "C6:causal_transfer[0]:receipt_missing" in checked["reasons"]
 
 
 def test_capability_retention_replay_fails_closed():

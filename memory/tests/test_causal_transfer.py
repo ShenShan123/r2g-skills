@@ -188,6 +188,24 @@ def test_causal_transfer_ledger_replays_and_binds_path(tmp_tehm, tmp_path):
     tampered["payload"] = dict(tampered["payload"])
     tampered["payload"]["eligible"] = False
     assert verify_causal_transfer(conn, tampered)["verified"] is False
+
+    # The wrapper's convenience projection is also signed data.  Mutating it
+    # must not be accepted merely because the nested payload remains intact.
+    for field_name, value in (("eligible", False),
+                              ("evidence_level", "L3_REPLICATED_EFFECT"),
+                              ("reason", "tampered")):
+        projection_tampered = ledger.to_dict()
+        projection_tampered[field_name] = value
+        checked_projection = verify_causal_transfer(conn, projection_tampered)
+        assert checked_projection["verified"] is False
+        assert f"transfer_{field_name}_mismatch" in checked_projection["reasons"]
+
+    nested_tampered = ledger.to_dict()
+    nested_tampered["transfer_receipt"] = dict(nested_tampered["transfer_receipt"])
+    nested_tampered["transfer_receipt"]["reason"] = "tampered"
+    checked_nested = verify_causal_transfer(conn, nested_tampered)
+    assert checked_nested["verified"] is False
+    assert "transfer_receipt_projection_mismatch" in checked_nested["reasons"]
     conn.close()
 
 
