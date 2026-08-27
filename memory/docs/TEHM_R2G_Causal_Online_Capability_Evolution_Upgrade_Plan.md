@@ -2012,6 +2012,14 @@ retention builder 默认仍为只读报告；只有显式指定独立的
 receipt。该路径用于把真实 ORFS replay 接入 authority-grade 证据链，但仍禁止写回
 canonical/learner 数据库或 production policy。
 
+为避免将单条 retention 当成批量稳定性结论，后续 held-out ORFS 回放统一使用
+`scripts/build_orfs_capability_retention_batch.py`。该入口在第一条 replay 前校验所有
+case 的 project、typed action、唯一 `lineage_id` 以及 training/held-out firewall；聚合
+时任何失败都留在分母，独立 lineage 数不足则输出 `NOT_ESTABLISHED`。因此它适合累积
+C7 证据，但不会自动进入 canonical 或 production；只有显式隔离 ledger 中的每条 receipt
+都可验证、且后续 capability authority 的其他 gates 全部建立，才可交给独立 authority
+审查。
+
 ---
 
 # 7. 建议的 Schema v4
@@ -3148,6 +3156,7 @@ store
 - [ ] runtime load receipt
 - [ ] memory ablation harness
 - [x] capability retention replay（纯 evaluator + DB-bound ledger/verification；仍需真实 held-out ORFS 批量证据）
+- [x] capability retention batch orchestrator（manifest/firewall/lineage quota；仍不授予 authority）
 
 ## Asset
 

@@ -140,6 +140,14 @@ source/canonical DB 或 production policy。C7 authority evidence 现在可显�
 `retention_receipt_id`；一旦提供，authority 记录与消费都会重新验证 retention
 ledger，failed/stale receipt 会阻断 capability authority。
 
+为支持后续真实 held-out 批量积累，新增 `scripts/build_orfs_capability_retention_batch.py`。
+它先整体校验 manifest 的 case/lineage 唯一性、项目路径和 attribution firewall，再逐条
+调用上述单 pair builder；不完整 pair 会保留在失败分母中，少于默认两个独立 lineage 时
+状态为 `NOT_ESTABLISHED`，而不是误报 PASS。显式指定 `--retention-ledger-db` 时所有
+receipt 写入同一个 source DB 的隔离副本并逐条重放验证；聚合报告仍固定
+`canonical_memory_mutation=none`、`promotion_attempted=false`，不能替代 capability
+authority 或 rule promotion。
+
 ### Online consolidation trigger lane（2026-08-26）
 
 `evolution.observe_transition()` 现在在记录 transition/causal/novelty/conflict
