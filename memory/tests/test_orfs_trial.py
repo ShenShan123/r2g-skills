@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from tehm import db as tehm_db
-from tehm.ids import stable_dumps
+from tehm.ids import rule_id as mint_rule_id, stable_dumps
 from tehm.honesty import h10_rollback_authority
 from tehm.lifecycle.orfs_trial import (
     _infrastructure_failures,
@@ -21,6 +21,11 @@ def _insert_rule(conn, rule_id="rule_orfs_real", scope="drc"):
               "knob": "CORE_UTILIZATION"}
     after = {"rewrite.value": "20", "execution.rerun_from": "floorplan",
              "execution.recheck": scope}
+    if rule_id == "rule_orfs_real":
+        rule_id = mint_rule_id(
+            domain="flow.signoff", before_pattern=before,
+            after_pattern=after, hard_preconditions=[],
+            obligations=["TARGET_FAILURE_REMOVED", "PRESERVE_LVS"])
     now = tehm_db.now_local()
     conn.execute(
         """INSERT INTO tehm_rules (
@@ -277,8 +282,8 @@ def test_route_evidence_reconciliation_replays_preserved_flow_logs(
                "B_samples": [0.0, 0.0], "rollback_verified": True}
     conn.execute(
         "INSERT INTO tehm_trials VALUES "
-        "('trial_trial','rule_orfs_real','route',NULL,NULL,'inconclusive',?,"
-        "NULL,'trial',2,'now')", (stable_dumps(metrics),))
+        "('trial_trial',?,'route',NULL,NULL,'inconclusive',?,"
+        "NULL,'trial',2,'now')", (rule_id, stable_dumps(metrics)))
     conn.commit()
 
     extractor = (Path(__file__).resolve().parents[2] /

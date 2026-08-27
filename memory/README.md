@@ -330,7 +330,14 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
-回归为 `464 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+回归为 `467 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+
+Rule retrieval loader 现在也执行同一条内容完整性边界：加载时严格解析
+`before/after/hard_preconditions/context/validity/confidence/utility/risk` 字段，
+并用不可变定义重算 `rule_id`。坏 JSON、错误类型、profile 冲突或定义 digest
+不匹配的 rule 会被记录在 `RuleIndex.rejected` 但不会进入任何 recall/activation
+索引；hard preconditions 与 context predicates 不再因字段遗漏被默认为空。这样
+runtime 只能消费完整、内容寻址且生命周期已授权的规则。
 
 RTL oracle 的 obligation coverage 也改为逐项 fail-closed 重放：
 `RTL_TARGET_TEST_PASS`、`RTL_FROZEN_REGRESSION_PASS` 和 `RTL_COMPILE_PASS` 只在

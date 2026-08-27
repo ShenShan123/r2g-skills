@@ -4,12 +4,18 @@ from __future__ import annotations
 import json
 
 from tehm.evaluation.campaign_metrics import evaluate_campaign
-from tehm.ids import stable_dumps
+from tehm.ids import rule_id as mint_rule_id, stable_dumps
 from tehm.lifecycle.rule_status import enter_shadow, set_status
 
 
 def _rule(conn):
     now = "2026-08-01T00:00:00-07:00"
+    before = {"target_check": "route", "knob": "CORE_UTILIZATION"}
+    after = {"rewrite.value": "20", "execution.recheck": "route"}
+    obligations = ["TARGET_FAILURE_REMOVED"]
+    rule_id = mint_rule_id(
+        domain="flow.signoff", before_pattern=before,
+        after_pattern=after, hard_preconditions=[], obligations=obligations)
     conn.execute(
         """INSERT INTO tehm_rules (
           rule_id,domain,before_pattern_json,after_pattern_json,
@@ -17,20 +23,21 @@ def _rule(conn):
           validity_status,validity_profile_json,confidence_json,utility_json,
           risk_profile_json,predicate_schema_version,role_schema_version,
           crystallizer_version,merge_trace_digest,created_at,updated_at)
-          VALUES ('r','flow.signoff',?,?, '[]','{}',?,'VALIDATED','{}','{}','{}',
+          VALUES (?,'flow.signoff',?,?, '[]','{}',?,'VALIDATED','{}','{}','{}',
                   '[]','p','v','c','m',?,?)""",
-        (stable_dumps({"target_check": "route", "knob": "CORE_UTILIZATION"}),
-         stable_dumps({"rewrite.value": "20", "execution.recheck": "route"}),
-         stable_dumps(["TARGET_FAILURE_REMOVED"]), now, now))
-    conn.execute("INSERT INTO tehm_rule_sources VALUES ('r','ep','{}','{}','train')")
+        (rule_id, stable_dumps(before), stable_dumps(after),
+         stable_dumps(obligations), now, now))
+    conn.execute("INSERT INTO tehm_rule_sources VALUES (?,'ep','{}','{}','train')",
+                 (rule_id,))
     conn.commit()
-    enter_shadow(conn, rule_id="r", target_scope="route")
-    set_status(conn, rule_id="r", target_scope="route", status="promoted")
+    enter_shadow(conn, rule_id=rule_id, target_scope="route")
+    set_status(conn, rule_id=rule_id, target_scope="route", status="promoted")
+    return rule_id
 
 
 def test_funnel_and_rollback_metrics_have_explicit_denominators(tmp_tehm):
     conn, _, _ = tmp_tehm
-    _rule(conn)
+    rule_id = _rule(conn)
     rollback = stable_dumps({"verified": True})
     transfer = stable_dumps({"results": [{"obligation": "x", "status": "BOUND"}]})
     conn.execute(
@@ -40,14 +47,15 @@ def test_funnel_and_rollback_metrics_have_explicit_denominators(tmp_tehm):
           obligation_transfer_json,obligation_coverage,verification_status,
           verifier_json,outcome,created_regressions_json,rollback_receipt_json,
           trial_uuid,created_at)
-          VALUES ('a','r','t','{}','APPLICABLE','BOUND','{}','EXECUTABLE',?,1.0,
-                  'PASS','{}','PASS','[]',?,'trial','now')""", (transfer, rollback))
+          VALUES ('a',?,'t','{}','APPLICABLE','BOUND','{}','EXECUTABLE',?,1.0,
+                  'PASS','{}','PASS','[]',?,'trial','now')""",
+        (rule_id, transfer, rollback))
     metrics = {"pairs": [{"subject_lineage": "heldout",
                            "arm_b": {"success": True}}],
                "registry_authority": {"verified": True}}
     conn.execute(
-        "INSERT INTO tehm_trials VALUES ('t','r','route',NULL,NULL,'win',?,NULL,'trial',1,'now')",
-        (json.dumps(metrics),))
+        "INSERT INTO tehm_trials VALUES (?,?,'route',NULL,NULL,'win',?,NULL,'trial',1,'now')",
+        ("t", rule_id, json.dumps(metrics)))
     conn.commit()
 
     report = evaluate_campaign(conn, [{"case_id": "c", "design_id": "heldout",

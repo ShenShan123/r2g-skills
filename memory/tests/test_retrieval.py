@@ -81,6 +81,54 @@ def test_index_loads_only_admissible_rules(tmp_tehm, sample_record_dict):
     assert rule["transformation_family"] == "ANTENNA_DIODE_REPAIR"
     assert "drc" in index.by_check
     assert rule["source_episodes"]  # populated from tehm_rule_sources
+    assert rule["hard_preconditions"] == []
+    assert rule["context_predicates"] == {}
+
+
+def test_index_rejects_tampered_rule_definition(tmp_tehm, sample_record_dict):
+    conn = _capture_and_crystallize(tmp_tehm, sample_record_dict)
+    rule_id = conn.execute("SELECT rule_id FROM tehm_rules LIMIT 1").fetchone()[0]
+    conn.execute(
+        "UPDATE tehm_rules SET before_pattern_json=? WHERE rule_id=?",
+        (json.dumps({"target_check": "lvs"}), rule_id))
+    conn.commit()
+
+    index = build_index(conn)
+    assert index.get(rule_id) is None
+    assert rule_id in index.rejected
+    assert "content digest mismatch" in index.rejected[rule_id]
+
+
+def test_index_never_defaults_malformed_hard_preconditions_to_empty(
+        tmp_tehm, sample_record_dict):
+    conn = _capture_and_crystallize(tmp_tehm, sample_record_dict)
+    rule_id = conn.execute("SELECT rule_id FROM tehm_rules LIMIT 1").fetchone()[0]
+    conn.execute(
+        "UPDATE tehm_rules SET hard_preconditions_json=? WHERE rule_id=?",
+        (json.dumps({"requires": "drc"}), rule_id))
+    conn.commit()
+
+    index = build_index(conn)
+    assert index.get(rule_id) is None
+    assert "hard_preconditions must decode to list" in index.rejected[rule_id]
+
+
+def test_context_profile_is_loaded_and_enforced(tmp_tehm, sample_record_dict):
+    conn = _capture_and_crystallize(tmp_tehm, sample_record_dict)
+    rule_id = conn.execute("SELECT rule_id FROM tehm_rules LIMIT 1").fetchone()[0]
+    conn.execute(
+        "UPDATE tehm_rules SET context_profile_json=? WHERE rule_id=?",
+        (json.dumps({"compatibility_profile": "rtl.test.v1"}), rule_id))
+    conn.commit()
+
+    rule = build_index(conn).get(rule_id)
+    assert rule["context_predicates"]["compatibility_profile"] == "rtl.test.v1"
+    assert apply_symbolic_filter(
+        rule, plan_query(RepairContext(check="drc",
+                                       compatibility_profile="rtl.test.v1"))) == APPLICABLE
+    assert apply_symbolic_filter(
+        rule, plan_query(RepairContext(check="drc",
+                                       compatibility_profile="rtl.other.v1"))) == INAPPLICABLE
 
 
 def test_invalid_rules_require_explicit_evaluation_opt_in(tmp_tehm, sample_record_dict):

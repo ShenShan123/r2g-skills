@@ -26,8 +26,7 @@ def apply_symbolic_filter(rule: dict, query: MemoryQuery) -> str:
     """
     check = (query.query_plan or {}).get("check")
 
-    rule_profile = (rule.get("before_pattern") or {}).get(
-        "compatibility_profile")
+    rule_profile = _rule_compatibility_profile(rule)
     query_profile = (query.query_plan or {}).get("compatibility_profile")
     if isinstance(rule_profile, str) and not rule_profile.startswith("$H"):
         if not query_profile:
@@ -50,3 +49,23 @@ def apply_symbolic_filter(rule: dict, query: MemoryQuery) -> str:
 
     # Hole target_check = matches any check; needs at least a check to apply.
     return APPLICABLE if check else UNRESOLVED
+
+
+def _rule_compatibility_profile(rule: dict):
+    """Read the persisted context contract without losing its authority.
+
+    Crystallization keeps the profile in both the match pattern (so it can be
+    anti-unified) and ``context_predicates`` (so the context scope remains
+    explicit).  The index validates that the two copies agree; this helper
+    accepts either shape for older evaluation fixtures while never inventing a
+    profile when one is absent.
+    """
+    before = rule.get("before_pattern") or {}
+    profile = before.get("compatibility_profile")
+    if profile is None:
+        profile = before.get("match.compatibility_profile")
+    if profile is None:
+        context = rule.get("context_predicates") or {}
+        if isinstance(context, dict):
+            profile = context.get("compatibility_profile")
+    return profile
