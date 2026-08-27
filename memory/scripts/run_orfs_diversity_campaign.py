@@ -527,7 +527,19 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
 
 
 def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
-                  artifacts: Path) -> None:
+                  artifacts: Path, *,
+                  dataset_campaign_id: str = VERSION,
+                  require_complete_oracle: bool = True) -> None:
+    """Capture pair observations with an explicit learner-admission boundary.
+
+    A route-clean ORFS run is not automatically a complete observation: the
+    adapter also requires definitive before/after evidence for the target,
+    DRC and timing obligations.  Incomplete pairs remain useful diagnostic
+    observations, but they are assigned to the calibration split and can
+    never be marked learner eligible.  This keeps campaign capture aligned
+    with the design document's fail-closed oracle contract while preserving
+    the immutable transition/effect evidence for audit.
+    """
     db_path = require_staging_destination(db_path, campaign_root=manifest_path.parent)
     conn = tehm_db.connect(db_path)
     tehm_db.ensure_schema(conn)
@@ -538,7 +550,13 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             Path(item["before_project"]), Path(item["after_project"]),
             lineage_id=item["lineage_id"], target_check=item["check"],
             config_edits=item["config_edits"], transformation_family=item["family"])
-        receipt = capture(conn, store, record)
+        complete = record.verification.get("oracle_complete") is True
+        learner_eligible = (complete if require_complete_oracle else True)
+        dataset_split = "training" if learner_eligible else "calibration"
+        receipt = capture(
+            conn, store, record, dataset_campaign_id=dataset_campaign_id,
+            dataset_split=dataset_split,
+            dataset_learner_eligible=learner_eligible)
         physical.record(
             transition_id=receipt.transition_id, action_domain=record.action["domain"],
             transformation_family=item["family"],
@@ -550,6 +568,9 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             "case_id": item["case_id"], "transition_id": receipt.transition_id,
             "family": item["family"], "platform": item["platform"],
             "lineage_id": item["lineage_id"], "outcome": receipt.outcome,
+            "oracle_complete": complete,
+            "dataset_split": dataset_split,
+            "learner_eligible": learner_eligible,
         }
     conn.close()
     manifest["captured"] = [captured[k] for k in sorted(captured)]

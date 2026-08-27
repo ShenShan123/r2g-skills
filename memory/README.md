@@ -1542,6 +1542,13 @@ digest 源）、`features/`（def-graph 已提取特征）、`lvs/`（powered.v 
   `physical_graph_contexts.json` 和 `sky130hs_batch_run.log`；
   `add_designs_report.json` 当前缺失，因此不再把它列为已生成结果。
   v3 calibration 的 `calibration_report.json` 与 `parametric_readiness.json` 仍可复核。
+- **capture fail-closed（2026-08-27）**：`run_orfs_diversity_campaign.py` 的 pair capture
+  现在按 `verification.oracle_complete` 决定 learner admission；缺少 DRC/timing 等
+  obligation 的 route-clean pair 仍保留为 calibration observation，但写入
+  `learner_eligible=0`，不会被训练查询误收。一次受限的 exact-toolchain
+  `ROUTING_CAPACITY_RECOVERY`（sky130hs/gcd，base→0.05）preflight 已验证两臂
+  `flow_rc=0` 与 route/DEF graph，但仅 `obligation_coverage=1/3`、timing violated、
+  DRC/LVS 缺失，故不构成 support evidence，canonical 未变。
 
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 

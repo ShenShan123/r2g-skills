@@ -5,9 +5,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "memory" / "scripts" / "run_orfs_diversity_campaign.py"
+sys.path.insert(0, str(REPO / "memory" / "scripts"))
+from run_orfs_diversity_campaign import capture_pairs  # noqa: E402
 
 
 def test_prepare_has_disjoint_heldout_and_platform_family_matrix(tmp_path):
@@ -75,3 +76,56 @@ def test_heldout_phase_preserves_captured_training_rows(tmp_path):
     assert manifest["captured"] == original["captured"]
     assert manifest["heldout"]["lineage_id"] == "orfs-heldout:spi"
     assert manifest["firewall"]["disjoint"] is True
+
+
+def test_capture_quarantines_incomplete_oracle_from_learner(tmp_path):
+    """A route-only success must not become training support."""
+    root = tmp_path / "campaign"
+    before = root / "cases" / "before"
+    after = root / "cases" / "after"
+    for project, run_tag, util in ((before, "RUN_before", "50"),
+                                   (after, "RUN_after", "40")):
+        (project / "constraints").mkdir(parents=True)
+        (project / "reports").mkdir()
+        run = project / "backend" / run_tag
+        run.mkdir(parents=True)
+        (project / "constraints" / "config.mk").write_text(
+            "export DESIGN_NAME = gcd\nexport PLATFORM = sky130hs\n"
+            f"export CORE_UTILIZATION = {util}\n")
+        (run / "run-meta.json").write_text(json.dumps({
+            "run_tag": run_tag, "make_status": 0,
+            "config_mk": str(project / "constraints" / "config.mk")}))
+        (run / "stage_log.jsonl").write_text(
+            json.dumps({"stage": "route", "status": 0}) + "\n" +
+            json.dumps({"stage": "finish", "status": 0}) + "\n")
+        (project / "reports" / "route.json").write_text(
+            json.dumps({"status": "clean"}))
+
+    manifest = {
+        "items": [{
+            "case_id": "sky130hs:gcd:ROUTING_CAPACITY_RECOVERY:default->0.05",
+            "lineage_id": "orfs-test:sky130hs:gcd",
+            "platform": "sky130hs", "family": "ROUTING_CAPACITY_RECOVERY",
+            "check": "route", "config_edits": {"ROUTING_LAYER_ADJUSTMENT": "0.05"},
+            "before_project": str(before), "after_project": str(after),
+        }],
+        "heldout": {"lineage_id": "orfs-heldout:spi"},
+        "captured": [],
+    }
+    manifest_path = root / "campaign_manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(json.dumps(manifest))
+    staging_db = root / "staging" / "tehm.sqlite"
+    capture_pairs(manifest_path, manifest, staging_db,
+                  root / "staging" / "artifacts")
+
+    captured = manifest["captured"][0]
+    assert captured["oracle_complete"] is False
+    assert captured["dataset_split"] == "calibration"
+    assert captured["learner_eligible"] is False
+    import sqlite3
+    conn = sqlite3.connect(staging_db)
+    assert conn.execute(
+        "SELECT split, learner_eligible FROM tehm_dataset_membership"
+    ).fetchone() == ("calibration", 0)
+    conn.close()

@@ -161,7 +161,9 @@ def main(argv=None) -> int:
     if args.phase == "run":
         return 0
     if args.phase in ("all", "capture"):
-        capture_pairs(manifest_path, manifest, staging_db, staging_artifacts)
+        capture_pairs(manifest_path, manifest, staging_db, staging_artifacts,
+                      dataset_campaign_id=VERSION,
+                      require_complete_oracle=True)
         manifest = _load(manifest_path)
     if args.phase == "capture":
         return 0
@@ -282,9 +284,16 @@ def report(root: Path, manifest: dict, db_path: Path) -> dict:
         "SELECT COUNT(DISTINCT graph_context_digest) FROM tehm_physical_effects "
         "WHERE graph_context_digest IS NOT NULL AND graph_context_digest != ''").fetchone()[0]
     conn.close()
+    captured = list(manifest.get("captured", []))
+    learner_rows = [row for row in captured if row.get("learner_eligible") is True]
+    incomplete_rows = [row for row in captured
+                       if row.get("oracle_complete") is not True]
     result = {
         "campaign_version": VERSION,
-        "captured": len(manifest.get("captured", [])),
+        "captured": len(captured),
+        "oracle_complete": len(captured) - len(incomplete_rows),
+        "incomplete_oracle": len(incomplete_rows),
+        "learner_eligible": len(learner_rows),
         "canonical_transition_total": n_trans,
         "physical_effect_total": n_effects,
         "unique_graph_contexts": unique_ctx,

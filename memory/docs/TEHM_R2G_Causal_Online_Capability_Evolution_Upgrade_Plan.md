@@ -2508,6 +2508,22 @@ observation（`learner_eligible=0`），canonical digest 保持不变；完整 r
 在提供匹配的 OpenROAD/Yosys toolchain、修正 timing/signoff contract 并让同一 pair
 通过 graph → observe → staging 之前，不启动完整 14-arm 批跑。
 
+### 2026-08-27 bounded action-family preflight
+
+在 exact packaged toolchain（OpenROAD `26Q3-1510-g6cb3f2b704` / Yosys `0.68`）上，
+只运行 `sky130hs/gcd` 的 `ROUTING_CAPACITY_RECOVERY` 单 pair（base→
+`ROUTING_LAYER_ADJUSTMENT=0.05`），没有启动 14-arm campaign。两个 arm 的 ORFS
+`flow_rc=0`，route report clean，source DEF graph context complete；但该 pair 的
+obligation 只有 route `1/3`，timing WNS `-0.256353 ns` 且 DRC/LVS report 缺失，
+因此 `oracle_complete=false`，utility 为 `NEUTRAL`，只属于 diagnostic/calibration
+观察，不是 support 或 capability evidence。
+
+为防止这类 route-only 成功污染 learner，campaign capture 现在在写入 membership
+时强制检查 `verification.oracle_complete`：完整 oracle 才能进入 training/
+`learner_eligible=1`；不完整 pair 仍写入隔离 calibration、`learner_eligible=0`，
+并在 manifest/report 中显式记录 `oracle_complete`、split 与 admission。该门不改变
+canonical promotion policy，也不把 diagnostic observation 当作正向机制效果。
+
 本轮又把该约束落实为代码门：`preflight_orfs_toolchain()` 只接受 ORFS tree
 内置的 OpenROAD/Yosys，或调用方显式传入的 `OPENROAD_EXE`/`YOSYS_EXE`；没有
 内置工具且没有显式 override 时，在任何 EDA stage 前返回 `blocked`，不会再让
