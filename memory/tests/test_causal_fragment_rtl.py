@@ -15,6 +15,9 @@ from tehm.causal import (
     evaluate_replicated_effect,
     evaluate_causal_rule_evidence,
 )
+from tehm.causal.path_builder import (
+    causal_path_digest, validate_persisted_path_row,
+)
 from tehm.dataset import assign_transition
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 
@@ -110,6 +113,43 @@ def test_learner_fragment_can_form_shadow_path(tmp_tehm):
         "SELECT evidence_level, status FROM tehm_causal_paths WHERE path_id=?",
         (candidate.path_id,)).fetchone()
     assert tuple(row) == ("L0_ASSOCIATION", "shadow")
+    node_types = [conn.execute(
+        "SELECT node_type FROM tehm_causal_nodes WHERE causal_node_id=?",
+        (node_id,)).fetchone()[0] for node_id in candidate.node_ids]
+    assert node_types == [
+        "STATE_CONDITION", "ACTION", "INTERMEDIATE_EFFECT", "ORACLE_OUTCOME"]
+    edge_relations = [conn.execute(
+        "SELECT relation_type FROM tehm_causal_edges WHERE causal_edge_id=?",
+        (edge_id,)).fetchone()[0] for edge_id in candidate.edge_ids]
+    assert edge_relations == ["INTERVENES_ON", "CHANGES", "SUPPORTS"]
+
+
+def test_causal_path_rejects_reordered_topology_even_with_new_digest(tmp_tehm):
+    conn, transition_id = _captured(tmp_tehm)
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    candidate = consolidate_causal_path(conn, [fragment])
+    row = conn.execute(
+        "SELECT * FROM tehm_causal_paths WHERE path_id=?", (candidate.path_id,)
+    ).fetchone()
+    nodes = json.loads(row["ordered_nodes_json"])
+    nodes[0], nodes[1] = nodes[1], nodes[0]
+    support = json.loads(row["support_json"])
+    digest = causal_path_digest(
+        mechanism_family=row["mechanism_family"],
+        compatibility_profile=row["compatibility_profile"],
+        evidence_level=row["evidence_level"],
+        source_transition_ids=json.loads(row["source_transitions_json"]),
+        node_ids=nodes, edge_ids=json.loads(row["ordered_edges_json"]),
+        support=support)
+    conn.execute(
+        "UPDATE tehm_causal_paths SET ordered_nodes_json=?, path_digest=? "
+        "WHERE path_id=?", (json.dumps(nodes), digest, candidate.path_id))
+    conn.commit()
+    tampered = conn.execute(
+        "SELECT * FROM tehm_causal_paths WHERE path_id=?", (candidate.path_id,)
+    ).fetchone()
+    with pytest.raises(ValueError, match="topology order"):
+        validate_persisted_path_row(tampered, conn)
 
 
 def test_intervention_pair_requires_real_oracle_evidence(tmp_tehm):

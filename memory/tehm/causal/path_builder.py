@@ -20,6 +20,34 @@ from .receipts import CausalFragment, CausalPathCandidate
 from .schema import validate_path_status
 
 EXTRACTOR_VERSION = "rtl-causal-fragment-v0.1"
+PATH_ORDER_VERSION = "causal-path-order-v1"
+
+_NODE_ORDER = {
+    "STATE_CONDITION": 0,
+    "ACTION": 1,
+    "INTERMEDIATE_EFFECT": 2,
+    "FAILURE_MECHANISM": 3,
+    "PHYSICAL_EFFECT": 4,
+    "ORACLE_OUTCOME": 5,
+    "OBLIGATION": 6,
+    "REGRESSION": 7,
+    "ASSET": 8,
+    "CAPABILITY": 9,
+}
+_EDGE_ORDER = {
+    "ENABLES": 0,
+    "BLOCKS": 0,
+    "INTERVENES_ON": 1,
+    "CHANGES": 2,
+    "MEDIATES": 3,
+    "REMOVES": 4,
+    "CREATES": 4,
+    "PRESERVES": 4,
+    "CONTRADICTS": 5,
+    "SUPPORTS": 6,
+    "SPECIALIZES": 7,
+    "GENERALIZES": 7,
+}
 
 
 def _digest(value: object) -> str:
@@ -63,7 +91,85 @@ def _path_json(raw: object, expected_type, field: str):
     return value
 
 
-def validate_persisted_path_row(row: sqlite3.Row) -> None:
+def _ordered_unique_ids(
+    source: tuple[CausalFragment, ...], *, kind: str,
+) -> tuple[str, ...]:
+    """Return deterministic causal-topology order, independent of input order."""
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for fragment in sorted(source, key=lambda item: item.transition_id):
+        if kind == "nodes":
+            values = sorted(
+                fragment.nodes,
+                key=lambda item: (_NODE_ORDER.get(item.node_type, 99),
+                                  item.causal_node_id),
+            )
+            ids = (item.causal_node_id for item in values)
+        else:
+            values = sorted(
+                fragment.edges,
+                key=lambda item: (_EDGE_ORDER.get(item.relation_type, 99),
+                                  item.source_node_id, item.target_node_id,
+                                  item.causal_edge_id),
+            )
+            ids = (item.causal_edge_id for item in values)
+        for value in ids:
+            if value not in seen:
+                seen.add(value)
+                ordered.append(value)
+    return tuple(ordered)
+
+
+def _validate_path_topology(conn: sqlite3.Connection, node_ids: list[str],
+                            edge_ids: list[str]) -> None:
+    """Validate persisted endpoints and canonical causal order when possible."""
+    node_placeholders = ",".join("?" for _ in node_ids)
+    node_rows = conn.execute(
+        "SELECT causal_node_id, node_type, owner_id FROM tehm_causal_nodes "
+        f"WHERE causal_node_id IN ({node_placeholders})", node_ids).fetchall()
+    if len(node_rows) != len(node_ids):
+        raise ValueError("causal path references a missing node")
+    by_node = {str(row["causal_node_id"]): row for row in node_rows}
+    expected_nodes = sorted(
+        node_ids,
+        key=lambda node_id: (
+            str(by_node[node_id]["owner_id"] or ""),
+            _NODE_ORDER.get(str(by_node[node_id]["node_type"]), 99),
+            node_id,
+        ),
+    )
+    if node_ids != expected_nodes:
+        raise ValueError("causal path ordered_nodes are not in causal topology order")
+
+    edge_placeholders = ",".join("?" for _ in edge_ids)
+    edge_rows = conn.execute(
+        "SELECT causal_edge_id, source_node_id, relation_type, target_node_id "
+        f"FROM tehm_causal_edges WHERE causal_edge_id IN ({edge_placeholders})",
+        edge_ids).fetchall()
+    if len(edge_rows) != len(edge_ids):
+        raise ValueError("causal path references a missing edge")
+    by_edge = {str(row["causal_edge_id"]): row for row in edge_rows}
+    node_set = set(node_ids)
+    if any(str(row["source_node_id"]) not in node_set or
+           str(row["target_node_id"]) not in node_set for row in edge_rows):
+        raise ValueError("causal path edge endpoint is outside ordered_nodes")
+
+    def edge_key(edge_id: str) -> tuple:
+        edge = by_edge[edge_id]
+        source = str(edge["source_node_id"])
+        return (
+            str(by_node[source]["owner_id"] or ""),
+            _EDGE_ORDER.get(str(edge["relation_type"]), 99),
+            source, str(edge["target_node_id"]), edge_id,
+        )
+
+    expected_edges = sorted(edge_ids, key=edge_key)
+    if edge_ids != expected_edges:
+        raise ValueError("causal path ordered_edges are not in causal topology order")
+
+
+def validate_persisted_path_row(row: sqlite3.Row,
+                                conn: sqlite3.Connection | None = None) -> None:
     """Raise when a derived causal-path row is malformed or tampered.
 
     This is intentionally independent of production authority.  Evaluation
@@ -98,6 +204,8 @@ def validate_persisted_path_row(row: sqlite3.Row) -> None:
         support=support)
     if row["path_digest"] != expected:
         raise ValueError("causal path content digest mismatch")
+    if conn is not None:
+        _validate_path_topology(conn, nodes, edges)
 
 
 def _validate_persisted_fragments(
@@ -358,8 +466,8 @@ def consolidate_causal_path(
         raise ValueError("causal path requires one mechanism family and profile")
     level = min(source, key=lambda fragment: evidence_rank(fragment.evidence_level)).evidence_level
     source_ids = tuple(sorted({fragment.transition_id for fragment in source}))
-    node_ids = tuple(sorted({node_id for fragment in source for node_id in fragment.node_ids}))
-    edge_ids = tuple(sorted({edge_id for fragment in source for edge_id in fragment.edge_ids}))
+    node_ids = _ordered_unique_ids(source, kind="nodes")
+    edge_ids = _ordered_unique_ids(source, kind="edges")
     support = {
         "fragment_count": len(source),
         "unique_lineages": sorted({fragment.lineage_id for fragment in source
@@ -401,6 +509,7 @@ def consolidate_causal_path(
     support["primary_effect_keys"] = sorted(effects)
     support["action_digests"] = sorted(action_digests)
     support["failure_graph_digests"] = sorted(graph_digests)
+    support["path_order_version"] = PATH_ORDER_VERSION
     path_digest = causal_path_digest(
         mechanism_family=next(iter(families)),
         compatibility_profile=next(iter(profiles)),
@@ -439,7 +548,7 @@ def consolidate_causal_path(
             "FROM tehm_causal_paths WHERE path_id=?",
             (candidate.path_id,)).fetchone()
         if existing is not None:
-            validate_persisted_path_row(existing)
+            validate_persisted_path_row(existing, conn)
             mismatches = [field for field, value in expected_row.items()
                           if existing[field] != value]
             if mismatches:
@@ -464,6 +573,7 @@ def consolidate_causal_path(
     return candidate
 
 
-__all__ = ["CausalFragment", "CausalPathCandidate", "causal_path_digest",
+__all__ = ["CausalFragment", "CausalPathCandidate", "PATH_ORDER_VERSION",
+           "causal_path_digest",
            "validate_persisted_path_row", "build_transition_causal_fragment",
            "consolidate_causal_path"]

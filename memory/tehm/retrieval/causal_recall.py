@@ -87,7 +87,7 @@ def retrieve_causal_paths(
     matches: list[CausalPathMatch] = []
     for row in rows:
         try:
-            validate_persisted_path_row(row)
+            validate_persisted_path_row(row, conn)
         except ValueError:
             # Causal paths are derived shadow objects.  A malformed/tampered
             # path must disappear from the evaluator rather than contribute a

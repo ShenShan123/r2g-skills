@@ -79,7 +79,7 @@ def evaluate_replicated_effect(
         return ReplicationReceipt(path_id, False, row["evidence_level"], (), (), (),
                                   source_error or "malformed_source_transitions")
     try:
-        validate_persisted_path_row(row)
+        validate_persisted_path_row(row, conn)
     except ValueError:
         # A stale/tampered derived row is not eligible for an upgrade.  Keep
         # the historical replication reason stable so callers can distinguish
