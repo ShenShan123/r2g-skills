@@ -330,7 +330,7 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
-回归为 `479 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+回归为 `481 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
 
 Backend activation seam 现在也执行同一条 fail-closed 回执规则：`UNKNOWN` 只能被
 一次性收敛为最终 outcome；已 finalized 的 outcome、created regressions、rollback
@@ -345,7 +345,10 @@ membership 不能原地升级为 learner support，lineage 批量分配通过 sa
 Causal path 的 `ordered_nodes` / `ordered_edges` 现在使用 `causal-path-order-v1`
 拓扑顺序（transition → state condition → action → effect → oracle outcome），并在
 有数据库上下文的 replay/retrieval/replication 入口校验节点、边端点及顺序；重排或
-缺失 witness 即从 shadow evaluator 中剔除，不影响 canonical evidence。
+缺失 witness 即从 shadow evaluator 中剔除，不影响 canonical evidence。路径 replay
+还会重算 node/edge 的 canonical JSON、payload digest 与 content-addressed ID，确认
+所有 transition owner、edge witness 和共同 training campaign 均完整覆盖；即使攻击
+者同步重算 path digest，篡改后的派生 node/edge 也不能进入 causal evaluator。
 
 Rule retrieval loader 现在也执行同一条内容完整性边界：加载时严格解析
 `before/after/hard_preconditions/context/validity/confidence/utility/risk` 字段，

@@ -1,6 +1,7 @@
 """RTL transition -> causal shadow fragment tests."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -149,6 +150,76 @@ def test_causal_path_rejects_reordered_topology_even_with_new_digest(tmp_tehm):
         "SELECT * FROM tehm_causal_paths WHERE path_id=?", (candidate.path_id,)
     ).fetchone()
     with pytest.raises(ValueError, match="topology order"):
+        validate_persisted_path_row(tampered, conn)
+
+
+def test_causal_path_rejects_tampered_node_even_with_new_digest(tmp_tehm):
+    """Recomputing a path digest cannot make a forged node authoritative."""
+    conn, transition_id = _captured(tmp_tehm)
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    candidate = consolidate_causal_path(conn, [fragment])
+    node_id = candidate.node_ids[0]
+    forged_payload = {"transition_id": transition_id, "forged": True}
+    forged_json = json.dumps(
+        forged_payload, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True)
+    forged_digest = "sha1:" + hashlib.sha1(
+        forged_json.encode()).hexdigest()[:16]
+    conn.execute(
+        "UPDATE tehm_causal_nodes SET payload_json=?, payload_digest=? "
+        "WHERE causal_node_id=?",
+        (forged_json, forged_digest, node_id),
+    )
+    row = conn.execute(
+        "SELECT * FROM tehm_causal_paths WHERE path_id=?", (candidate.path_id,)
+    ).fetchone()
+    support = json.loads(row["support_json"])
+    digest = causal_path_digest(
+        mechanism_family=row["mechanism_family"],
+        compatibility_profile=row["compatibility_profile"],
+        evidence_level=row["evidence_level"],
+        source_transition_ids=json.loads(row["source_transitions_json"]),
+        node_ids=json.loads(row["ordered_nodes_json"]),
+        edge_ids=json.loads(row["ordered_edges_json"]), support=support)
+    conn.execute(
+        "UPDATE tehm_causal_paths SET path_digest=? WHERE path_id=?",
+        (digest, candidate.path_id))
+    conn.commit()
+    tampered = conn.execute(
+        "SELECT * FROM tehm_causal_paths WHERE path_id=?", (candidate.path_id,)
+    ).fetchone()
+    with pytest.raises(ValueError, match="content-addressed ID mismatch"):
+        validate_persisted_path_row(tampered, conn)
+
+
+def test_causal_path_rejects_tampered_edge_campaign_even_with_new_digest(tmp_tehm):
+    """A forged edge campaign cannot be hidden by a recomputed path digest."""
+    conn, transition_id = _captured(tmp_tehm)
+    fragment = build_transition_causal_fragment(conn, transition_id)
+    candidate = consolidate_causal_path(conn, [fragment])
+    edge_id = candidate.edge_ids[0]
+    conn.execute(
+        "UPDATE tehm_causal_edges SET campaign_id='foreign-campaign' "
+        "WHERE causal_edge_id=?", (edge_id,))
+    row = conn.execute(
+        "SELECT * FROM tehm_causal_paths WHERE path_id=?", (candidate.path_id,)
+    ).fetchone()
+    support = json.loads(row["support_json"])
+    digest = causal_path_digest(
+        mechanism_family=row["mechanism_family"],
+        compatibility_profile=row["compatibility_profile"],
+        evidence_level=row["evidence_level"],
+        source_transition_ids=json.loads(row["source_transitions_json"]),
+        node_ids=json.loads(row["ordered_nodes_json"]),
+        edge_ids=json.loads(row["ordered_edges_json"]), support=support)
+    conn.execute(
+        "UPDATE tehm_causal_paths SET path_digest=? WHERE path_id=?",
+        (digest, candidate.path_id))
+    conn.commit()
+    tampered = conn.execute(
+        "SELECT * FROM tehm_causal_paths WHERE path_id=?", (candidate.path_id,)
+    ).fetchone()
+    with pytest.raises(ValueError, match="content-addressed ID mismatch"):
         validate_persisted_path_row(tampered, conn)
 
 

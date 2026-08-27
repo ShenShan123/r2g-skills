@@ -168,6 +168,150 @@ def _validate_path_topology(conn: sqlite3.Connection, node_ids: list[str],
         raise ValueError("causal path ordered_edges are not in causal topology order")
 
 
+def _validate_path_provenance(
+    conn: sqlite3.Connection,
+    node_ids: list[str],
+    edge_ids: list[str],
+    source_ids: list[str],
+    support: dict,
+) -> None:
+    """Rebuild every path witness from the canonical/immutable rows.
+
+    A path digest alone is not an authority boundary: an actor able to edit
+    derived rows could otherwise edit a node/edge and simply recompute the
+    enclosing path digest.  Replay therefore validates the content-addressed
+    node/edge IDs, their canonical JSON, transition owners, edge witnesses,
+    and the common training campaign.  This remains a shadow-only check; it
+    never mutates canonical or lifecycle state.
+    """
+    source_placeholders = ",".join("?" for _ in source_ids)
+    transitions = conn.execute(
+        "SELECT transition_id FROM tehm_transitions "
+        f"WHERE transition_id IN ({source_placeholders})", source_ids,
+    ).fetchall()
+    if len(transitions) != len(source_ids):
+        raise ValueError("causal path references a missing transition")
+
+    campaigns = conn.execute(
+        """SELECT campaign_id, transition_id
+             FROM tehm_dataset_membership
+            WHERE split='training' AND learner_eligible=1
+              AND transition_id IN ({})""".format(source_placeholders),
+        source_ids,
+    ).fetchall()
+    by_campaign: dict[str, set[str]] = {}
+    for row in campaigns:
+        by_campaign.setdefault(str(row["campaign_id"]), set()).add(
+            str(row["transition_id"]))
+    complete_campaigns = {
+        campaign for campaign, ids in by_campaign.items()
+        if ids == set(source_ids)
+    }
+    declared_campaigns = support.get("source_campaigns")
+    if not isinstance(declared_campaigns, list) or len(declared_campaigns) != 1:
+        raise ValueError("causal path source campaign witness is incomplete")
+    campaign_id = str(declared_campaigns[0])
+    if campaign_id not in complete_campaigns:
+        raise ValueError("causal path sources are not one training campaign")
+    if support.get("path_order_version") != PATH_ORDER_VERSION:
+        raise ValueError("causal path order version is unsupported")
+
+    node_placeholders = ",".join("?" for _ in node_ids)
+    node_rows = conn.execute(
+        "SELECT causal_node_id, node_type, owner_type, owner_id, "
+        "payload_json, payload_digest, extractor_version "
+        f"FROM tehm_causal_nodes WHERE causal_node_id IN ({node_placeholders})",
+        node_ids,
+    ).fetchall()
+    if len(node_rows) != len(node_ids):
+        raise ValueError("causal path references a missing node")
+    transition_owners: set[str] = set()
+    for row in node_rows:
+        try:
+            payload = json.loads(row["payload_json"])
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError("causal path node payload is malformed JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("causal path node payload must be an object")
+        try:
+            node = CausalNode(
+                str(row["node_type"]), payload,
+                owner_type=row["owner_type"], owner_id=row["owner_id"],
+                extractor_version=str(row["extractor_version"]),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("causal path node content is invalid") from exc
+        if row["payload_json"] != stable_dumps(payload):
+            raise ValueError("causal path node payload JSON is not canonical")
+        if row["payload_digest"] != node.payload_digest:
+            raise ValueError("causal path node payload digest mismatch")
+        if row["causal_node_id"] != node.causal_node_id:
+            raise ValueError("causal path node content-addressed ID mismatch")
+        if row["owner_type"] == "transition":
+            owner_id = str(row["owner_id"] or "")
+            if owner_id not in source_ids:
+                raise ValueError("causal path node owner is outside source transitions")
+            transition_owners.add(owner_id)
+            payload_transition = payload.get("transition_id")
+            if payload_transition is not None and str(payload_transition) != owner_id:
+                raise ValueError("causal path node transition witness mismatch")
+    if transition_owners != set(source_ids):
+        raise ValueError("causal path nodes do not cover source transitions")
+
+    edge_placeholders = ",".join("?" for _ in edge_ids)
+    edge_rows = conn.execute(
+        "SELECT causal_edge_id, source_node_id, relation_type, target_node_id, "
+        "evidence_level, support_json, confidence_json, evidence_refs_json, "
+        "campaign_id, learner_eligible "
+        f"FROM tehm_causal_edges WHERE causal_edge_id IN ({edge_placeholders})",
+        edge_ids,
+    ).fetchall()
+    if len(edge_rows) != len(edge_ids):
+        raise ValueError("causal path references a missing edge")
+    node_set = set(node_ids)
+    witnessed_sources: set[str] = set()
+    for row in edge_rows:
+        try:
+            edge_support = json.loads(row["support_json"])
+            confidence = json.loads(row["confidence_json"])
+            refs = json.loads(row["evidence_refs_json"])
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError("causal path edge payload is malformed JSON") from exc
+        if (not isinstance(edge_support, dict) or not isinstance(confidence, dict)
+                or not isinstance(refs, list) or not refs
+                or any(not isinstance(ref, str) or not ref for ref in refs)
+                or len(set(refs)) != len(refs)):
+            raise ValueError("causal path edge witness is malformed")
+        if (row["support_json"] != stable_dumps(edge_support)
+                or row["confidence_json"] != stable_dumps(confidence)
+                or row["evidence_refs_json"] != stable_dumps(refs)):
+            raise ValueError("causal path edge JSON is not canonical")
+        if (str(row["source_node_id"]) not in node_set
+                or str(row["target_node_id"]) not in node_set):
+            raise ValueError("causal path edge endpoint is outside ordered_nodes")
+        try:
+            edge = CausalEdge(
+                str(row["source_node_id"]), str(row["relation_type"]),
+                str(row["target_node_id"]), str(row["evidence_level"]),
+                edge_support, confidence, tuple(refs),
+                campaign_id=row["campaign_id"],
+                learner_eligible=bool(row["learner_eligible"]),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("causal path edge content is invalid") from exc
+        if row["causal_edge_id"] != edge.causal_edge_id:
+            raise ValueError("causal path edge content-addressed ID mismatch")
+        if (str(row["campaign_id"] or "") != campaign_id
+                or not bool(row["learner_eligible"])):
+            raise ValueError("causal path edge learner campaign witness mismatch")
+        bare_refs = {ref for ref in refs if not ref.startswith("oracle:")}
+        if not bare_refs or not bare_refs <= set(source_ids):
+            raise ValueError("causal path edge has an unknown transition witness")
+        witnessed_sources.update(bare_refs)
+    if witnessed_sources != set(source_ids):
+        raise ValueError("causal path edge witnesses do not cover source transitions")
+
+
 def validate_persisted_path_row(row: sqlite3.Row,
                                 conn: sqlite3.Connection | None = None) -> None:
     """Raise when a derived causal-path row is malformed or tampered.
@@ -206,6 +350,7 @@ def validate_persisted_path_row(row: sqlite3.Row,
         raise ValueError("causal path content digest mismatch")
     if conn is not None:
         _validate_path_topology(conn, nodes, edges)
+        _validate_path_provenance(conn, nodes, edges, sources, support)
 
 
 def _validate_persisted_fragments(
