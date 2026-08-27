@@ -330,12 +330,17 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
-回归为 `475 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+回归为 `478 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
 
 Backend activation seam 现在也执行同一条 fail-closed 回执规则：`UNKNOWN` 只能被
 一次性收敛为最终 outcome；已 finalized 的 outcome、created regressions、rollback
 receipt 与 canonical transition linkage 只接受精确重放，冲突或缺失 transition
 witness 直接拒绝，utility/event feedback 不会因重试重复累计。
+
+Online causal seam 也不再接受调用方伪造的 lineage 或 learner eligibility：intervention
+pair 的 lineage 必须由 canonical transition 推导，consolidation trigger 必须与
+数据库 membership、transition 和 campaign 一致；同一 campaign 的 audit-only
+membership 不能原地升级为 learner support，lineage 批量分配通过 savepoint 原子化。
 
 Rule retrieval loader 现在也执行同一条内容完整性边界：加载时严格解析
 `before/after/hard_preconditions/context/validity/confidence/utility/risk` 字段，

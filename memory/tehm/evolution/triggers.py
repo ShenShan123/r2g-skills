@@ -60,6 +60,29 @@ def evaluate_consolidation_trigger(
         raise ValueError("transition_id and campaign_id are required")
     if min_support < 1:
         raise ValueError("min_support must be positive")
+    if novelty not in {"NOVEL_MECHANISM", "KNOWN_MECHANISM"}:
+        raise ValueError(f"invalid novelty status: {novelty!r}")
+    if (conflict.transition_id != transition_id or
+            conflict.campaign_id != campaign_id):
+        raise ValueError(
+            "consolidation trigger conflict receipt does not match transition/campaign")
+    membership = conn.execute(
+        """SELECT split, learner_eligible FROM tehm_dataset_membership
+             WHERE transition_id=? AND campaign_id=?""",
+        (transition_id, campaign_id)).fetchone()
+    if membership is None:
+        raise ValueError(
+            "consolidation trigger requires explicit dataset membership")
+    authority_eligible = bool(
+        membership["learner_eligible"] and
+        str(membership["split"]) == "training")
+    if bool(learner_eligible) != authority_eligible:
+        raise ValueError(
+            "consolidation trigger learner_eligible conflicts with dataset membership")
+    # The database membership is the authority; the argument is retained only
+    # as a consistency check for callers and compatibility with the existing
+    # manager seam.
+    learner_eligible = authority_eligible
     facts = load_transition_facts(conn, transition_id)
     support_count = 0
     if learner_eligible:

@@ -55,6 +55,14 @@ def build_intervention_pair(
     treatment = load_transition_facts(conn, treatment_transition_id)
     if control_transition_id == treatment_transition_id:
         raise ValueError("control and treatment transitions must differ")
+    canonical_lineage = control.lineage_id
+    # ``lineage_id`` is provenance, not a caller-owned label.  A forged
+    # override could make a valid pair appear to belong to a disjoint lineage
+    # (or make an invalid pair look replicated) in downstream L3/L4 gates.
+    if (lineage_id is not None and
+            str(lineage_id) != str(canonical_lineage)):
+        raise ValueError(
+            "intervention pair lineage_id does not match canonical transition")
     matched_context = (
         control.failure_graph_digest
         if control.failure_graph_digest and
@@ -111,7 +119,7 @@ def build_intervention_pair(
         "matched_context_digest": matched_context,
         "changed_action_digest": action_digest(treatment.action),
         "validity_status": validity,
-        "lineage_id": lineage_id or control.lineage_id,
+        "lineage_id": canonical_lineage,
         "campaign_id": selected_campaign,
     }
     pair_id = "intervention_pair_" + hashlib.sha1(
@@ -129,7 +137,7 @@ def build_intervention_pair(
         changed_action_digest=action_digest(treatment.action),
         validity_status=validity,
         evidence_level=evidence_level,
-        lineage_id=lineage_id or control.lineage_id,
+        lineage_id=canonical_lineage,
         outcome_delta=outcome_delta,
         oracle_equivalence=oracle_equivalence)
     had_outer_transaction = conn.in_transaction

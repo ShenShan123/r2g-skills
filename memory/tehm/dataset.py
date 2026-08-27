@@ -38,8 +38,44 @@ def assign_transition(conn: sqlite3.Connection, *, transition_id: str,
             (transition_id,)).fetchone() is None:
         raise ValueError(f"unknown TEHM transition: {transition_id}")
     eligible = (split == "training") if learner_eligible is None else bool(learner_eligible)
+    existing = conn.execute(
+        """SELECT split, learner_eligible, frozen_snapshot_digest
+             FROM tehm_dataset_membership
+            WHERE transition_id=? AND campaign_id=?""",
+        (transition_id, campaign_id)).fetchone()
+    if existing is not None:
+        old_authority = bool(
+            existing["learner_eligible"] and existing["split"] == "training")
+        # A campaign membership is an evidence-firewall fact.  Reclassifying
+        # audit evidence into learner support in place would let held-out or
+        # calibration data become training merely by overwriting one row.
+        # Start a new campaign for a new learner partition instead.
+        if not old_authority and eligible:
+            raise ValueError(
+                "dataset membership cannot be upgraded to learner support in place")
+        old_digest = existing["frozen_snapshot_digest"]
+        if old_digest is not None and old_digest != frozen_snapshot_digest:
+            raise ValueError(
+                "dataset membership frozen_snapshot_digest is immutable")
+        if (existing["split"] == split and
+                bool(existing["learner_eligible"]) == bool(eligible) and
+                (old_digest == frozen_snapshot_digest or
+                 (old_digest is None and frozen_snapshot_digest is None))):
+            return
+        # Explicit reclassification (normally training -> audit-only) is
+        # represented as an UPDATE, never a replace/delete+insert.  The
+        # transition itself remains immutable and all learner queries still
+        # require training + learner_eligible=1.
+        conn.execute(
+            """UPDATE tehm_dataset_membership
+                  SET split=?, learner_eligible=?, frozen_snapshot_digest=?,
+                      assigned_at=?
+                WHERE transition_id=? AND campaign_id=?""",
+            (split, int(eligible), frozen_snapshot_digest, tehm_db.now_local(),
+             transition_id, campaign_id))
+        return
     conn.execute(
-        """INSERT OR REPLACE INTO tehm_dataset_membership
+        """INSERT INTO tehm_dataset_membership
            (transition_id, campaign_id, split, learner_eligible,
             frozen_snapshot_digest, assigned_at)
            VALUES (?, ?, ?, ?, ?, ?)""",
@@ -57,12 +93,22 @@ def assign_lineage(conn: sqlite3.Connection, *, lineage_id: str,
              FROM tehm_transitions t
              JOIN tehm_states s ON s.state_id=t.source_state_id
             WHERE s.lineage_id=?""", (lineage_id,)).fetchall()
-    for row in rows:
-        assign_transition(
-            conn, transition_id=row["transition_id"], campaign_id=campaign_id,
-            split=split, learner_eligible=learner_eligible,
-            frozen_snapshot_digest=frozen_snapshot_digest)
-    conn.commit()
+    had_outer_transaction = conn.in_transaction
+    savepoint = "tehm_dataset_lineage_v1"
+    conn.execute(f"SAVEPOINT {savepoint}")
+    try:
+        for row in rows:
+            assign_transition(
+                conn, transition_id=row["transition_id"], campaign_id=campaign_id,
+                split=split, learner_eligible=learner_eligible,
+                frozen_snapshot_digest=frozen_snapshot_digest)
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+    except Exception:
+        conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise
+    if not had_outer_transaction:
+        conn.commit()
     return len(rows)
 
 

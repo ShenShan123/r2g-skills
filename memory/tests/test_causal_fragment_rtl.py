@@ -126,6 +126,21 @@ def test_intervention_pair_requires_real_oracle_evidence(tmp_tehm):
     assert conn.execute("SELECT COUNT(*) FROM tehm_intervention_pairs").fetchone()[0] == 1
 
 
+def test_intervention_pair_rejects_forged_lineage_override(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    control = capture(conn, store, build_rtl_execution_record(
+        PROJECT, oracle=None, store=store)).transition_id
+    alternate = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    alternate.record_id = "rtl:req_ack_fsm:forged-lineage"
+    alternate.action["payload"]["add_condition"] = "ready"
+    treatment = capture(conn, store, alternate).transition_id
+    with pytest.raises(ValueError, match="lineage_id does not match"):
+        build_intervention_pair(
+            control, treatment, conn=conn, lineage_id="forged-lineage")
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_intervention_pairs").fetchone()[0] == 0
+
+
 def test_intervention_pair_replay_rejects_tampered_payload(tmp_tehm):
     conn, store, _ = tmp_tehm
     first = build_rtl_execution_record(PROJECT, oracle=None, store=store)

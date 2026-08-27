@@ -15,6 +15,8 @@ from tehm.evolution import (
     append_memory_event, detect_novelty, observe_transition,
     record_rule_revision, verify_event_chain,
 )
+from tehm.evolution.conflict import ConflictReceipt
+from tehm.evolution.triggers import evaluate_consolidation_trigger
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 
 
@@ -151,6 +153,40 @@ def test_directly_corrupted_nontraining_membership_is_fail_closed(
     assert receipt.learner_eligible is False
     assert receipt.consolidation_triggered is False
     assert receipt.trigger_reasons == ("NOT_LEARNER_ELIGIBLE",)
+
+
+def test_trigger_rejects_forged_learner_eligibility(tmp_tehm):
+    conn, store, _ = tmp_tehm
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    transition_id = capture(
+        conn, store, record, dataset_campaign_id="trigger-heldout",
+        dataset_split="heldout", dataset_learner_eligible=False).transition_id
+    conflict = ConflictReceipt(
+        transition_id=transition_id, campaign_id="trigger-heldout",
+        mechanism_family="unused", compatibility_profile=None)
+    with pytest.raises(ValueError, match="learner_eligible conflicts"):
+        evaluate_consolidation_trigger(
+            conn, transition_id, campaign_id="trigger-heldout",
+            learner_eligible=True, novelty="NOVEL_MECHANISM",
+            conflict=conflict)
+
+
+def test_dataset_membership_cannot_upgrade_audit_row_to_learner_support(
+        tmp_tehm):
+    conn, store, _ = tmp_tehm
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    transition_id = capture(
+        conn, store, record, dataset_campaign_id="membership-guard",
+        dataset_split="heldout", dataset_learner_eligible=False).transition_id
+    with pytest.raises(ValueError, match="cannot be upgraded"):
+        assign_transition(
+            conn, transition_id=transition_id, campaign_id="membership-guard",
+            split="training", learner_eligible=True)
+    row = conn.execute(
+        "SELECT split, learner_eligible FROM tehm_dataset_membership "
+        "WHERE transition_id=? AND campaign_id='membership-guard'",
+        (transition_id,)).fetchone()
+    assert (row["split"], row["learner_eligible"]) == ("heldout", 0)
 
 
 def test_novelty_ignores_path_sourced_only_from_heldout_campaign(tmp_tehm):
