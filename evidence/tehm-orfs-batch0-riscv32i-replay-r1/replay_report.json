@@ -112,5 +112,49 @@
     "batch0_report_sha256": "d6f3e02f010b7f96f4031f8c96cd4b0bd0a34d45fec0e1f76bdfe2ede5fd5a9b",
     "external_chain_sha256": "c7630bc29dc66bcd7ed1c4939ecc44de3682de385557dd2ceb9da47f5c010fd8"
   },
-  "next_gate": "repair the LVS/topology and timing blockers, then regenerate graph features and obtain an independent non-harmful support cohort before any authority review"
+  "follow_up_replay": {
+    "date": "2026-08-27",
+    "purpose": "diagnostic hierarchical power-connectivity repair",
+    "classification": "DIAGNOSTIC_EXTERNAL_ONLY",
+    "learner_eligible": 0,
+    "canonical_import": 0,
+    "toolchain": {
+      "orfs_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+      "openroad": "26Q3-1510-g6cb3f2b704",
+      "magic": "8.3.677",
+      "netgen": "1.5.323",
+      "openrcx": "packaged exact-toolchain"
+    },
+    "repair": {
+      "function": "propagate_hierarchical_power_ports",
+      "modules_seen": 3,
+      "modules_powered": [
+        "ALU_32_0_32_0_32_unused_CO_X_KOGGE_STONE",
+        "ALU_33_0_33_0_33_unused_CO_X_KOGGE_STONE",
+        "riscv"
+      ],
+      "child_instances_connected": 2,
+      "positional_child_instances_skipped": 0
+    },
+    "arms": {
+      "riscv32i_before_u50": {
+        "run_tag": "RUN_2026-08-27_09-42-58_14_67bf",
+        "drc": {"status": "clean", "report_sha256": "4aee99f6a0a20973ecafff79a62b4eb078cd0769660345d4c9e42b36b7280f6f"},
+        "lvs": {"status": "clean", "mismatch_count": 0, "report_sha256": "a436b3b10d58581a5bdeea90484816f31d5cee387231a83c83f6d3356eb5c2f2", "netgen_report_sha256": "633835f8c3c2e857d09763f554e916c68ce1eed0bea76726a10d33da497e3167"},
+        "rcx": {"status": "complete", "net_count": 5966, "report_sha256": "1b619c70d8daf590db17f2dbc823cade653e31d0f8f9febd8bc199e6c1ac3fb3"},
+        "signoff_gate": {"status": "pass_with_caveats", "timing": "violated", "setup_wns_ns": -0.49875, "report_sha256": "684474efeef0849449e8f9593da1fb51cc90fc0418131390302e7fe94d36fab3"},
+        "strict_signoff": {"status": "fail", "reason": "aggregate timing gate", "report_sha256": "44d883041cce435ac0f78b38182a7dc96e332e22528518315937e3cf2b2e1d1a"}
+      },
+      "riscv32i_after_u40": {
+        "run_tag": "RUN_2026-08-27_09-42-58_13_74d8",
+        "drc": {"status": "clean", "report_sha256": "8f0b16b8070ad12fb82bde61f6d15972390852de3c18789b405c47b9170ff781"},
+        "lvs": {"status": "clean", "mismatch_count": 0, "report_sha256": "1a50e3cbd4d9fe5111d1f220983318134ceaf93e7fe7fa04a2283145099dfab7", "netgen_report_sha256": "36e275ef83f8e42144a4833fbac64194f300c16195ef02b4c01e2ff06ba3ac9e"},
+        "rcx": {"status": "complete", "net_count": 6033, "report_sha256": "94751990a4b30c818b75d3b720e1a1ac5eba65b9a876a5fca4e30997e067d368"},
+        "signoff_gate": {"status": "pass_with_caveats", "timing": "violated", "setup_wns_ns": -0.249082, "report_sha256": "d9ee9bafb5bd1ca0c849c0a47251fd344707a056c77438c064ea549d54808136"},
+        "strict_signoff": {"status": "fail", "reason": "aggregate timing gate", "report_sha256": "0cd765493eb97ee28e8feffa17a76c9a8d70a43ef01c3cd50b02b3ba09339f19"}
+      }
+    },
+    "conclusion": "hierarchical LVS topology is repaired in both arms; DRC/LVS/RCX are clean/complete, but timing remains violated and strict aggregate signoff remains fail; no graph or support admission"
+  },
+  "next_gate": "with hierarchical LVS repaired, resolve the timing contract, regenerate valid def-graph features, and obtain an independent non-harmful support cohort before any authority review"
 }

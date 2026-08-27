@@ -1589,6 +1589,34 @@ support cohort，随后才重跑六项 authority gate。
 齐全但没有执行 strict gate”可能穿过 support admission 的 authority 缺口，并已由
 `memory/tests/test_batch_lane.py` 回归覆盖。
 
+### 2026-08-27 hierarchical power connectivity repair（diagnostic-only）
+
+对上一节 `sky130hs:riscv32i:u50->u40` 的 Netgen 拓扑错配做了定向复现。错配并非
+顶层 VDD/VSS 的排列问题，而是 `6_final.v` 保留的两个 RTL-generated child module
+没有 power ports；对 child 内标准单元补脚后，VDD/VSS 变成每个 child 的隐式局部网，
+于是 Netgen 看到 `6128 vs 6132` nets。新增
+`r2g-skills/signoff-loop/scripts/flow/normalize_power_connectivity.py`，由
+`propagate_hierarchical_power_ports()` 在派生 schematic 中闭合 powered module 的
+`inout VDD/VSS`，并在父实例上增加 named `.VDD(VDD), .VSS(VSS)` 连接；不改 RTL、ODB
+或 layout，且用 receipt 绑定输入/输出 digest。
+
+在兼容的 packaged OpenROAD 26Q3/RCX 工具链上重跑两臂后，
+`riscv32i_before_u50`（5878 devices、6128 nets）与 `riscv32i_after_u40`
+（5932 devices、6196 nets）均得到 DRC `clean`、LVS `clean`（Netgen
+`Circuits match uniquely`）和 RCX `complete`；独立 RTL equivalence 仍为 `PASS`。
+这确认原 LVS blocker 是层级电源闭合问题，而不是顶层端口顺序。两臂 strict signoff
+仍为 `FAIL`，但原因已收敛为 aggregate timing gate：setup WNS 分别为
+`-0.498750 ns` 与 `-0.249082 ns`。`CORE_UTILIZATION 50->40` 的 utility 仍为
+`HARMFUL`，因此不构成 support cohort、graph validity 或 capability gain。
+
+该 probe 仅是 diagnostic evidence，`learner_eligible=false`、不进入 staging 或
+canonical。默认 `_env.sh` 选择的 OpenROAD/RCX 仍报 database schema `0.139 > 0.98`
+（packaged writer/RCX 才是本次可复现组合）；若 writer 失败，`6_final.v` fallback
+还缺少 layout 中 route 插入的 5 个 antenna-diode instances。下一步应固定兼容工具链
+指纹，先解决 timing contract 并重新生成有效 def-graph；只有取得至少两条独立 lineage
+的 non-harmful、完整 strict-oracle support 后，才重新计算六项 authority gate。机器可读
+摘要见 `evidence/tehm-orfs-batch0-riscv32i-replay-r1/{replay_report.json,power_connectivity_probe.json}`。
+
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 
 - 新增独立物理 lineage `orfs-heldout-v5:sky130hs:gcd:base3`，位于

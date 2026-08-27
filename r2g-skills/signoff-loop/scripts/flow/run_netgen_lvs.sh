@@ -188,6 +188,8 @@ fi
 # references/failure-patterns.md "sky130 LVS".
 LVS_DIR="$PROJECT_DIR/lvs"
 mkdir -p "$LVS_DIR"
+# Derived schematic normalization receipts must never be reused across LVS runs.
+rm -f "$LVS_DIR/powered_hierarchical.v" "$LVS_DIR/power_connectivity.json"
 ODB_FILE=$(find "$RESULTS_DIR" -name "6_final.odb" 2>/dev/null | head -1)
 if [[ -n "$ODB_FILE" && -n "${OPENROAD_EXE:-}" ]]; then
   POWERED_NETLIST="$LVS_DIR/powered.v"
@@ -259,8 +261,9 @@ SC_SPICE_SOURCE="$SC_SPICE"
 
 # Some OpenROAD builds abort in write_verilog on otherwise valid ODBs.  Fall
 # back to the logical final netlist plus the exact power-pin signature of the
-# transistor SPICE library.  Named functional pins and top-level pin ordering
-# are preserved; only library-declared supply pins are added.
+# transistor SPICE library. Named functional pins are preserved; only
+# library-declared supply pins and their explicit hierarchical propagation are
+# added to the derived schematic.
 if [[ -n "$SC_SPICE_SOURCE" ]] && ! grep -q '\.VPWR[[:space:]]*(' "$VERILOG_NETLIST"; then
   POWERED_FALLBACK="$LVS_DIR/powered_from_spice.v"
   if python3 "$(dirname "${BASH_SOURCE[0]}")/power_verilog_from_spice.py" \
@@ -274,6 +277,25 @@ if [[ -n "$SC_SPICE_SOURCE" ]] && ! grep -q '\.VPWR[[:space:]]*(' "$VERILOG_NETL
   else
     echo "WARNING: powered schematic fallback failed; implicit supply nets may mismatch" >&2
   fi
+fi
+
+# ORFS can retain non-flattened RTL-generated child modules.  Explicit power
+# pins inside those children otherwise become private implicit nets, producing
+# a real Netgen topology mismatch (for riscv32i: 6128 vs 6132 nets).  Propagate
+# VDD/VSS through powered child-module ports in a derived schematic only; the
+# source Verilog, ODB, and layout are untouched.  The receipt binds this
+# transformation to the exact input bytes.
+POWER_HIER_NETLIST="$LVS_DIR/powered_hierarchical.v"
+POWER_CONNECTIVITY_RECEIPT="$LVS_DIR/power_connectivity.json"
+if python3 "$(dirname "${BASH_SOURCE[0]}")/normalize_power_connectivity.py" \
+     "$VERILOG_NETLIST" "$DESIGN_NAME" "$POWER_HIER_NETLIST" \
+     --receipt "$POWER_CONNECTIVITY_RECEIPT"; then
+  VERILOG_NETLIST="$POWER_HIER_NETLIST"
+elif [[ "${R2G_STRICT_SIGNOFF:-0}" == "1" ]]; then
+  echo "ERROR: unable to close derived schematic over hierarchical power nets" >&2
+  exit 1
+else
+  echo "WARNING: hierarchical power normalization failed; retaining $VERILOG_NETLIST" >&2
 fi
 
 # Step 1: Extract SPICE netlist from GDS using Magic (hierarchical — no flatten, so
@@ -554,6 +576,8 @@ cat > "$LVS_DIR/netgen_lvs_result.json" << JSON_EOF
   "netgen_setup_sha256": "$(sha256sum "$NETGEN_SETUP" | cut -d' ' -f1)",
   "netgen_compat_setup": "$NETGEN_COMPAT_SETUP",
   "netgen_compat_setup_sha256": "$([[ -n "$NETGEN_COMPAT_SETUP" ]] && sha256sum "$NETGEN_COMPAT_SETUP" | cut -d' ' -f1 || true)",
+  "power_connectivity_receipt": "$POWER_CONNECTIVITY_RECEIPT",
+  "power_connectivity_receipt_sha256": "$(sha256sum "$POWER_CONNECTIVITY_RECEIPT" 2>/dev/null | cut -d' ' -f1 || true)",
   "magic_executable": "$MAGIC_EXE",
   "magic_version": "$MAGIC_VERSION",
   "magic_required": "$MAGIC_REQUIRED",
@@ -580,6 +604,7 @@ if [[ -n "$TARGET_RUN" && -d "$TARGET_RUN" ]]; then
   mkdir -p "$TARGET_RUN/lvs"
   cp "$LVS_DIR"/netgen_lvs* "$TARGET_RUN/lvs/" 2>/dev/null || true
   cp "$LVS_DIR"/*normalization.json "$TARGET_RUN/lvs/" 2>/dev/null || true
+  cp "$LVS_DIR"/power_connectivity.json "$TARGET_RUN/lvs/" 2>/dev/null || true
 fi
 
 echo ""

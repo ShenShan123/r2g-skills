@@ -361,7 +361,9 @@ def main():
             # WITHOUT any provenance envelope, so sky130 production LVS could
             # never bind to a run. Carry the exact layout digest the verdict
             # graded, then stamp the run attribution like every other path.
-            for k in ('run_tag', 'gds_path', 'gds_sha256'):
+            for k in ('run_tag', 'gds_path', 'gds_sha256',
+                      'power_connectivity_receipt',
+                      'power_connectivity_receipt_sha256'):
                 if ng.get(k):
                     out[k] = ng[k]
             report_io.stamp_run_provenance(out, project_root, run_dir)
