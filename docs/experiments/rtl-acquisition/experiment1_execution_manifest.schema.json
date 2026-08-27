@@ -140,8 +140,8 @@
     },
     "batches": {
       "type": "array",
-      "minItems": 6,
-      "maxItems": 6,
+      "minItems": 7,
+      "maxItems": 7,
       "items": {
         "type": "object",
         "required": [
@@ -157,9 +157,10 @@
           "method_id": {
             "enum": [
               "openai-vanilla",
+              "grok-vanilla",
+              "nemotron-vanilla",
               "deepseek-vanilla",
               "qwen-vanilla",
-              "glm-vanilla",
               "kimi-vanilla",
               "r2g-expander-cold"
             ]
@@ -210,8 +211,8 @@
     },
     "method_reports": {
       "type": "array",
-      "minItems": 6,
-      "maxItems": 6,
+      "minItems": 7,
+      "maxItems": 7,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -225,9 +226,10 @@
           "method_id": {
             "enum": [
               "openai-vanilla",
+              "grok-vanilla",
+              "nemotron-vanilla",
               "deepseek-vanilla",
               "qwen-vanilla",
-              "glm-vanilla",
               "kimi-vanilla",
               "r2g-expander-cold"
             ]

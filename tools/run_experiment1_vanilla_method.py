@@ -59,9 +59,10 @@ from tools.run_experiment1_rtl_acquisition import (  # noqa: E402
 
 VANILLA_METHODS = {
     "openai-vanilla",
+    "grok-vanilla",
+    "nemotron-vanilla",
     "deepseek-vanilla",
     "qwen-vanilla",
-    "glm-vanilla",
     "kimi-vanilla",
 }
 READ_ONLY_COMMANDS = {

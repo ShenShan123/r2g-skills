@@ -2,15 +2,25 @@
   "schema_version": "3.0",
   "experiment_id": "r2g-exp1-rtl-acquisition-v2",
   "status": "frozen",
-  "frozen_at": "2026-08-27T04:33:06-07:00",
+  "frozen_at": "2026-08-27T06:36:39-07:00",
   "revised_at": "2026-08-27",
-  "objective": "Compare five Vanilla LLMs with frozen R2G-Expander Cold acquisition under the same task, public tools, qualification gates, and one continuous per-method resource budget.",
+  "objective": "Compare six Vanilla LLMs with frozen R2G-Expander Cold acquisition under the same task, public tools, qualification gates, and one continuous per-method resource budget.",
   "core_task_zh": "在公开且可观察的固定预算内，从公开互联网仓库中一次连续寻找200个唯一、开源、可综合且来源多样的Verilog/SystemVerilog RTL设计候选，用于Sky130HD synth-only qualification。每种方法只运行一个连续会话，在50/100/150/200个候选处写入不可回滚检查点，并在看到任何正式evaluator结果前锁定最终提交。每个候选必须提交固定commit、top module、完整编译输入闭包、固定commit仓库内的许可证相对路径、规范SPDX标识和来源信息，并在统一综合下满足100 <= mapped cells < 100000。只有通过公共validate_candidate工具全部硬Gate的候选才可提交；最终评分器会从干净clone独立重跑相同Gate，看到结果后不得替换候选。主要比较200个固定名额上的提交完成率、技术合格率、可发布合格率和仅由独立合格候选计算的来源多样性。整个运行尽量覆盖至少50个独立仓库，同一仓库最多提交4个候选。未验证候选和缺失名额均按失败计。排除testbench、空壳、重复设计、超出主规模范围的设计及需要额外语言转换器的原始源码。允许从统一的12个起始类别自主扩展关键词，并须记录全部查询和工具操作。",
   "core_task_en": "Within the published and observable frozen budget, find 200 unique, open-source, synthesizable, and source-diverse Verilog/SystemVerilog RTL design candidates in one continuous run from public Internet repositories for Sky130HD synth-only qualification. Each method uses one continuous session, writes irrevocable checkpoints at 50/100/150/200 qualified candidates, and locks its final submission before observing any formal-evaluator result. For every candidate, submit a pinned commit, top module, complete compilation-input closure, a repository-relative license path at that pinned commit, a canonical SPDX identifier, and provenance; the frozen synthesis result must satisfy 100 <= mapped cells < 100000. A candidate is submission-eligible only after passing every hard gate in the public validate_candidate tool. The final evaluator independently reclones and reruns the same gates, and candidates cannot be replaced after those results are visible. Primary reporting uses 200 fixed slots for submission completion, technical qualification, publishable qualification, and source diversity computed only from independently qualified candidates. Aim for at least 50 independent repositories over the run and submit no more than four candidates from one repository. Unvalidated candidates and missing slots fail. Exclude testbenches, shells, duplicate designs, out-of-range designs, and raw sources requiring an additional language converter. Methods may expand the twelve common seed categories, but every query and tool action must be logged.",
   "methods": [
     {
       "method_id": "openai-vanilla",
       "requested_model": "gpt-5.5",
+      "mode": "vanilla_llm"
+    },
+    {
+      "method_id": "grok-vanilla",
+      "requested_model": "grok-4.3",
+      "mode": "vanilla_llm"
+    },
+    {
+      "method_id": "nemotron-vanilla",
+      "requested_model": "nemotron-3-ultra-550b-a55b",
       "mode": "vanilla_llm"
     },
     {
@@ -21,11 +31,6 @@
     {
       "method_id": "qwen-vanilla",
       "requested_model": "qwen3.7-max",
-      "mode": "vanilla_llm"
-    },
-    {
-      "method_id": "glm-vanilla",
-      "requested_model": "glm-5.2",
       "mode": "vanilla_llm"
     },
     {
@@ -114,14 +119,15 @@
     "one_continuous_session_per_method": true,
     "r2g_frontier_continues_across_checkpoints": true,
     "cross_method_acquisition_serialized": false,
-    "simultaneous_method_limit": 6,
+    "simultaneous_method_limit": 7,
     "method_cpu_sets": {
       "openai-vanilla": "0-3",
-      "deepseek-vanilla": "4-7",
-      "qwen-vanilla": "8-11",
-      "glm-vanilla": "12-15",
-      "kimi-vanilla": "16-19",
-      "r2g-expander-cold": "20-23"
+      "grok-vanilla": "4-7",
+      "nemotron-vanilla": "8-11",
+      "deepseek-vanilla": "12-15",
+      "qwen-vanilla": "16-19",
+      "kimi-vanilla": "20-23",
+      "r2g-expander-cold": "24-27"
     },
     "github_api_min_interval_seconds": 2.2,
     "formal_github_authentication_required": true,

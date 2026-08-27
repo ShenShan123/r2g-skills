@@ -33,9 +33,10 @@ DEFAULT_ORFS_ROOT = Path("/home/yangao/r2g_toolchain/OpenROAD-flow-scripts")
 DEFAULT_PDK_ROOT = Path("/home/yangao/.conda/envs/eda/share/pdk")
 METHOD_IDS = {
     "openai-vanilla",
+    "grok-vanilla",
+    "nemotron-vanilla",
     "deepseek-vanilla",
     "qwen-vanilla",
-    "glm-vanilla",
     "kimi-vanilla",
     "r2g-expander-cold",
 }
@@ -379,7 +380,7 @@ def validate_model_preflight(path: Path, model_routes: Path) -> None:
     observed = {str(row.get("method_id")) for row in results}
     if observed != expected:
         raise ExperimentError(
-            "model preflight must contain exactly the five Vanilla methods; "
+            "model preflight must contain exactly the configured Vanilla methods; "
             f"observed={sorted(observed)}"
         )
     failed = [str(row.get("method_id")) for row in results if row.get("status") != "ready"]

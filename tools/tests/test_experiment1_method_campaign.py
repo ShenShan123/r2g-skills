@@ -26,11 +26,12 @@ def parallel_policy() -> dict:
     return {
         "method_cpu_sets": {
             "openai-vanilla": "0-3",
-            "deepseek-vanilla": "4-7",
-            "qwen-vanilla": "8-11",
-            "glm-vanilla": "12-15",
-            "kimi-vanilla": "16-19",
-            "r2g-expander-cold": "20-23",
+            "grok-vanilla": "4-7",
+            "nemotron-vanilla": "8-11",
+            "deepseek-vanilla": "12-15",
+            "qwen-vanilla": "16-19",
+            "kimi-vanilla": "20-23",
+            "r2g-expander-cold": "24-27",
         },
         "github_api_min_interval_seconds": 2.2,
     }
@@ -76,7 +77,7 @@ def test_acquire_locks_one_continuous_run_without_running_evaluator(tmp_path, mo
     assert sum("run_experiment1_vanilla_method.py" in " ".join(row) for row in commands) == 1
     assert sum("accept-submission" in row for row in commands) == 1
     assert any("--target" in row and "200" in row for row in commands)
-    assert any(row[0] == "cpu=8-11" for row in commands)
+    assert any(row[0] == "cpu=16-19" for row in commands)
     assert not any("evaluate-batch" in row for row in commands)
 
 
@@ -104,7 +105,7 @@ def test_frozen_parallel_policy_assigns_disjoint_cpu_sets():
     first = campaign_runner.configured_cpu_set({"method_aggregate_policy": policy}, "openai-vanilla")
     second = campaign_runner.configured_cpu_set({"method_aggregate_policy": policy}, "deepseek-vanilla")
     assert first == "0-3"
-    assert second == "4-7"
+    assert second == "12-15"
 
 
 def test_evaluate_refuses_unlocked_continuous_run(tmp_path, monkeypatch):

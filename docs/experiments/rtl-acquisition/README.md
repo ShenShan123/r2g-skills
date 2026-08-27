@@ -1,7 +1,7 @@
 # Experiment 1: RTL Acquisition
 
 This directory contains the post-Pilot revised, machine-readable materials
-for the first paper experiment. The experiment compares five Vanilla LLM conditions
+for the first paper experiment. The experiment compares six Vanilla LLM conditions
 with frozen R2G-Expander Cold. It stops at independent Sky130HD synth-only
 qualification. Each method is one continuous 200-slot run with audit checkpoints at
 50/100/150/200 qualified candidates. The final submission is locked before formal
@@ -24,7 +24,7 @@ campaign, including when those implementation files are not yet tracked by Git.
 
 ## Preflight And Campaign Initialization
 
-The five Vanilla LLM routes are defined in `experiment1_model_routes.json`. Credentials
+The six Vanilla LLM routes are defined in `experiment1_model_routes.json`. Credentials
 are referenced only by environment variable name and must never be committed. Before a
 formal Pilot batch, run:
 
@@ -79,9 +79,10 @@ source-yield statistics, or any other acquisition memory.
    one replenishment round produces neither a new family nor a new screenable candidate.
    Formal-evaluator feedback is never part of this loop.
    Formal acquisition requires the same authenticated GitHub credential for every method.
-   A campaign-wide lease serializes methods even when several tmux windows are launched at
-   once, preventing shared GitHub Search quota and CPU contention from changing method scores;
-   time spent waiting for this lease is outside the method budget.
+   Methods run concurrently on disjoint, frozen four-core CPU sets. A narrow shared lock
+   enforces only the common GitHub REST pacing interval; it does not serialize clone,
+   qualification, or synthesis work. Time spent waiting for this shared API slot is outside
+   the method budget.
    A non-scoreable infrastructure termination stops
    the method and requires a fresh, fully recorded rerun.
 
@@ -137,7 +138,7 @@ efficiency measures rather than additional capability scores.
 The formal Pilot must not start until:
 
 - the Agent code and R2G knowledge snapshot are frozen at a clean commit;
-- all five Vanilla model routes pass metadata, structured-tool, and usage preflight;
+- all six Vanilla model routes pass metadata, structured-tool, and usage preflight;
 - R2G Cold starts from an empty scheduler state with no imported acquisition memory;
 - the same repository-search, Git, HTTP, terminal, Yosys, and ORFS interfaces are
   available to every Vanilla LLM;
