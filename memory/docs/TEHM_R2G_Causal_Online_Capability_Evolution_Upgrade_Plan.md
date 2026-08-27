@@ -2866,6 +2866,16 @@ authority attempt fail-closed；`verify_rule_authority()` 消费时再次重放�
 obligation、harmful-rate、conformal gates，也不触发 canonical/lifecycle/runtime
 变更。回归覆盖位于 `memory/tests/test_causal_transfer.py`。
 
+同一 authority seam 现在新增 `build_trial_authority_evidence()`：它从指定
+`tehm_trials` row 重放对应 `tehm_activations` 的 rollback receipt、obligation
+coverage、candidate registry/status 和 produced-transition 中明确记录的 utility
+verdict，生成可直接交给
+`record_rule_authority()` 的 evidence rows。pair JSON、activation row、rule/status
+或 trial UUID 任一不一致都会 fail-closed；没有显式 utility 只保持
+`harmful_rate=NOT_ESTABLISHED`，不会把 target PASS 当作 harmless，也不会生成
+conformal/cross-lineage 证据。该 projector 只建立数据库绑定的已测量 gates，不改变
+canonical、runtime 或 promotion 行为，回归位于 `memory/tests/test_rule_authority.py`。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）

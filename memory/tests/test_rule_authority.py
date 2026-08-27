@@ -8,10 +8,13 @@ import pytest
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.crystallization.build_rules import crystallize_all
 from tehm.lifecycle import (
-    apply_production_trial_verdict, enter_shadow, get_status, promote_rule,
-    record_rule_authority, rule_content_digest, set_status,
+    apply_production_trial_verdict, build_trial_authority_evidence,
+    enter_shadow, get_status, promote_rule, record_rule_authority,
+    rule_content_digest, set_status,
     verify_rule_authority,
 )
+from tehm.activation.pipeline import ActivationRecord
+from tehm.activation.update import persist_activation
 from tehm.lifecycle.trial_adapter import record_external_trial
 
 
@@ -101,6 +104,65 @@ def test_rule_authority_derives_six_gates_and_promotes(tmp_tehm, sample_record_d
         obligation_coverage=1.0, created_regressions=[], arms_differ=True,
         expected_status_version=version, authority_receipt=receipt) == "promoted"
     assert get_status(conn, rule_id=rule_id, target_scope="drc")["status"] == "promoted"
+
+
+def test_trial_authority_projection_replays_activation_witnesses(
+        tmp_tehm, sample_record_dict):
+    conn, rule_id, version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    rollback = {
+        "version": "test-rollback-v1",
+        "source_before_digest": "sha256:before",
+        "source_after_restore_digest": "sha256:before",
+        "verified": True,
+    }
+    persist_activation(
+        conn,
+        ActivationRecord(
+            activation_id="act-authority-projection",
+            rule_id=rule_id, target_state_id="target-authority-projection",
+            obligation_coverage=1.0, rollback_receipt=rollback,
+            outcome="PASS", verification_status="PASS", trial_uuid="authority-trial"),
+    )
+    metrics = {
+        "arms_differ": True, "obligation_coverage": 1.0,
+        "created_regressions": [],
+        "pairs": [{
+            "activation_id": "act-authority-projection",
+            "subject_lineage": "authority-lineage",
+            "repeat": 1, "obligation_coverage": 1.0,
+            "created_regressions": [], "rollback_receipt": rollback,
+        }],
+    }
+    conn.execute("UPDATE tehm_trials SET metrics_json=? WHERE trial_id=?",
+                 (json.dumps(metrics, sort_keys=True), trial_id))
+    conn.commit()
+    evidence = build_trial_authority_evidence(
+        conn, trial_id=trial_id, rule_id=rule_id, target_scope="drc")
+    assert evidence["rollback_verified"][0]["payload"]["verified"] is True
+    assert evidence["obligation_coverage"][0]["payload"]["coverage"] == 1.0
+    assert evidence["registry_verified"][0]["verdict"] == "PASS"
+    assert evidence["harmful_rate"] == []
+    receipt = record_rule_authority(
+        conn, rule_id=rule_id, target_scope="drc", evidence=evidence,
+        trial_id=trial_id, expected_status_version=version)
+    assert receipt.checks["rollback_verified"] is True
+    assert receipt.checks["registry_verified"] is True
+    assert receipt.checks["obligation_coverage"] is True
+    assert receipt.gate_status["harmful_rate"] == "NOT_ESTABLISHED"
+    assert receipt.gate_status["cross_lineage_te"] == "NOT_ESTABLISHED"
+
+    # A pair JSON change without the corresponding persisted activation row is
+    # not a new measurement; the source-bound projector rejects the mismatch.
+    tampered = dict(metrics)
+    tampered["pairs"] = [dict(metrics["pairs"][0],
+                               rollback_receipt={**rollback, "verified": False})]
+    conn.execute("UPDATE tehm_trials SET metrics_json=? WHERE trial_id=?",
+                 (json.dumps(tampered, sort_keys=True), trial_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="rollback_witness_mismatch"):
+        build_trial_authority_evidence(
+            conn, trial_id=trial_id, rule_id=rule_id, target_scope="drc")
 
 
 def test_promote_rule_consumes_only_verified_receipt(tmp_tehm, sample_record_dict):

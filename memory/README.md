@@ -132,6 +132,14 @@ rule authority 的 `cross_lineage_te` 现在还支持显式的
 held-out action domain、rule source transition 和 training campaign；因此一张合法的
 L4 receipt 不能被复用给无关 candidate rule。
 
+`build_trial_authority_evidence()` 还可从指定 `tehm_trials` row 及其
+`tehm_activations` rollback/obligation witness 生成 database-bound 的
+`rollback_verified`、`obligation_coverage`、`registry_verified` 以及由
+produced transition observation delta 明确记录的 utility evidence；pair JSON 与
+activation row 缺失或不一致时直接拒绝。它不会从 target PASS
+推断 harmless，也不会伪造 conformal 或 cross-lineage 证据，生成的 evidence 仍需与
+独立 L4/calibration rows 一起交给 `record_rule_authority()`。
+
 ### Capability retention replay ledger（2026-08-27）
 
 新增 `capability.retention.record_capability_retention()` /

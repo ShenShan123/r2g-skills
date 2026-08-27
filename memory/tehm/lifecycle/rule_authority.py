@@ -259,6 +259,173 @@ def _payload_number(entry: Mapping, names: tuple[str, ...]) -> float | None:
     return _finite_number(entry.get("value"))
 
 
+def _strict_json_value(raw, *, label: str):
+    """Decode one persisted JSON value without silently accepting corruption."""
+    try:
+        value = json.loads(raw or "null")
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"trial_authority:{label}_malformed") from exc
+    return value
+
+
+def _trial_authority_row(conn: sqlite3.Connection, trial_id: str):
+    """Load one immutable trial row by ID or deterministic UUID."""
+    row = conn.execute(
+        "SELECT * FROM tehm_trials WHERE trial_id=? OR trial_uuid=? "
+        "ORDER BY created_at DESC LIMIT 1", (trial_id, trial_id)).fetchone()
+    if row is None:
+        raise ValueError("trial_authority:trial_missing")
+    return row
+
+
+def build_trial_authority_evidence(
+        conn: sqlite3.Connection, *, trial_id: str, rule_id: str,
+        target_scope: str) -> dict[str, list[dict]]:
+    """Project measured trial/activation rows into rule-gate evidence.
+
+    This is the database-bound counterpart to hand-authored gate payloads.  It
+    only projects rollback, obligation, registry, and explicit utility facts
+    that are present in the trial's activation witnesses.  Missing conformal
+    or cross-lineage evidence is intentionally left unestablished for the
+    caller to provide through their independent calibration/transfer ledgers.
+    Any malformed or mismatched activation witness aborts the projection.
+    """
+    row = _trial_authority_row(conn, trial_id)
+    if row["rule_id"] != rule_id or row["target_scope"] != target_scope:
+        raise ValueError("trial_authority:trial_rule_scope_mismatch")
+    metrics = _strict_json_value(row["metrics_json"], label="metrics")
+    if not isinstance(metrics, Mapping):
+        raise ValueError("trial_authority:metrics_not_mapping")
+    raw_pairs = metrics.get("pairs")
+    if raw_pairs is None:
+        raw_pairs = []
+    if not isinstance(raw_pairs, list):
+        raise ValueError("trial_authority:pairs_not_list")
+
+    evidence: dict[str, list[dict]] = {
+        gate: [] for gate in REQUIRED_GATES}
+    seen_activation_ids: set[str] = set()
+    for ordinal, raw_pair in enumerate(raw_pairs):
+        if not isinstance(raw_pair, Mapping):
+            raise ValueError(f"trial_authority:pair_{ordinal}_malformed")
+        activation_id = str(raw_pair.get("activation_id") or "").strip()
+        if not activation_id:
+            raise ValueError(f"trial_authority:pair_{ordinal}_activation_missing")
+        if activation_id in seen_activation_ids:
+            raise ValueError("trial_authority:duplicate_activation_witness")
+        seen_activation_ids.add(activation_id)
+        activation = conn.execute(
+            "SELECT * FROM tehm_activations WHERE activation_id=?",
+            (activation_id,)).fetchone()
+        if activation is None:
+            raise ValueError("trial_authority:activation_missing")
+        if (activation["rule_id"] != rule_id or
+                activation["trial_uuid"] not in (None, row["trial_uuid"])):
+            raise ValueError("trial_authority:activation_trial_binding_mismatch")
+        lineage_id = str(raw_pair.get("subject_lineage") or
+                         raw_pair.get("lineage_id") or "").strip()
+        if not lineage_id:
+            raise ValueError(f"trial_authority:pair_{ordinal}_lineage_missing")
+
+        pair_rollback = raw_pair.get("rollback_receipt")
+        if not isinstance(pair_rollback, Mapping):
+            raise ValueError("trial_authority:rollback_witness_missing")
+        db_rollback = _strict_json_value(
+            activation["rollback_receipt_json"], label="rollback_receipt")
+        if (not isinstance(db_rollback, Mapping) or
+                stable_dumps(dict(pair_rollback)) != stable_dumps(dict(db_rollback))):
+            raise ValueError("trial_authority:rollback_witness_mismatch")
+        if not isinstance(db_rollback.get("verified"), bool):
+            raise ValueError("trial_authority:rollback_verdict_missing")
+
+        pair_coverage = _finite_number(raw_pair.get("obligation_coverage"))
+        db_coverage = _finite_number(activation["obligation_coverage"])
+        if (pair_coverage is None or db_coverage is None or
+                pair_coverage != db_coverage):
+            raise ValueError("trial_authority:obligation_witness_mismatch")
+
+        base_id = f"{row['trial_id']}:{activation_id}"
+        evidence["rollback_verified"].append({
+            "evidence_id": f"{base_id}:rollback",
+            "split": "ab", "lineage_id": lineage_id,
+            "verdict": "PASS" if db_rollback["verified"] else "FAIL",
+            "payload": {
+                "trial_id": row["trial_id"],
+                "trial_uuid": row["trial_uuid"],
+                "activation_id": activation_id,
+                "verified": db_rollback["verified"],
+                "rollback_receipt": dict(db_rollback),
+            },
+        })
+        evidence["obligation_coverage"].append({
+            "evidence_id": f"{base_id}:obligation",
+            "split": "ab", "lineage_id": lineage_id, "verdict": "PASS",
+            "payload": {
+                "trial_id": row["trial_id"],
+                "trial_uuid": row["trial_uuid"],
+                "activation_id": activation_id,
+                "coverage": db_coverage,
+                "obligation_coverage": db_coverage,
+            },
+        })
+
+        # Utility is projected only from a durable produced transition's
+        # observation delta.  Trial-summary JSON is not an independent
+        # utility witness: absence is NOT_ESTABLISHED, never an inferred safe
+        # outcome from a successful target oracle.
+        utility = None
+        produced_transition_id = str(
+            activation["produced_transition_id"] or "").strip()
+        if produced_transition_id:
+            transition = conn.execute(
+                "SELECT observation_delta_json FROM tehm_transitions "
+                "WHERE transition_id=?", (produced_transition_id,)).fetchone()
+            if transition is None:
+                raise ValueError("trial_authority:utility_transition_missing")
+            delta = _strict_json_value(
+                transition["observation_delta_json"], label="utility_delta")
+            if not isinstance(delta, Mapping):
+                raise ValueError("trial_authority:utility_delta_not_mapping")
+            utility = delta.get("utility_verdict")
+        if utility is not None:
+            utility = str(utility).upper()
+            if utility not in {"HARMFUL", "REGRESSION", "PARETO_SAFE",
+                               "SUPPORT", "NEUTRAL", "PASS"}:
+                raise ValueError("trial_authority:utility_verdict_malformed")
+            evidence["harmful_rate"].append({
+                "evidence_id": f"{base_id}:utility",
+                "split": "ab", "lineage_id": lineage_id, "verdict": "PASS",
+                "payload": {
+                    "trial_id": row["trial_id"],
+                    "trial_uuid": row["trial_uuid"],
+                    "activation_id": activation_id,
+                    "utility_verdict": utility,
+                    "harmful": utility in {"HARMFUL", "REGRESSION"},
+                },
+            })
+
+    rule_row = _rule_row(conn, rule_id)
+    digest = _rule_content_digest(rule_row)
+    status = get_status(conn, rule_id=rule_id, target_scope=target_scope)
+    registry_ok = bool(
+        rule_row is not None and digest and status is not None and
+        status.get("status") == "candidate" and
+        status.get("status_version") == row["status_version"])
+    evidence["registry_verified"].append({
+        "evidence_id": f"{row['trial_id']}:registry",
+        "split": "ab", "lineage_id": None,
+        "verdict": "PASS" if registry_ok else "FAIL",
+        "payload": {
+            "trial_id": row["trial_id"],
+            "trial_uuid": row["trial_uuid"],
+            "status": status.get("status") if status else None,
+            "status_version": status.get("status_version") if status else None,
+            "rule_content_digest": digest,
+        },
+    })
+    return evidence
+
+
 def _receipt_ids(values) -> tuple[str, ...]:
     """Normalize an explicit causal-transfer receipt selection."""
     if isinstance(values, (str, bytes)) or values is None:
@@ -1147,7 +1314,8 @@ def promote_rule(conn: sqlite3.Connection, authority_receipt,
 
 __all__ = [
     "AUTHORITY_VERSION", "EVIDENCE_SPLITS", "GATE_ALLOWED_SPLITS",
-    "RULE_EVIDENCE_TYPES", "RuleAuthorityReceipt", "build_causal_transfer_evidence",
+    "RULE_EVIDENCE_TYPES", "RuleAuthorityReceipt",
+    "build_causal_transfer_evidence", "build_trial_authority_evidence",
     "promote_rule",
     "record_rule_authority", "rule_content_digest", "verify_rule_authority",
 ]
