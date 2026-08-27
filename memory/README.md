@@ -128,7 +128,9 @@ rule authority 的 `cross_lineage_te` 现在还支持显式的
 两条 training lineage 与独立 held-out lineage；系统据此生成 authority evidence，拒绝
 把手写 `te_pass=true` 与 ledger witness 混用。该桥只建立可重放的 gate evidence，
 不会自动补齐 rollback、registry、obligation、harmful-rate 或 conformal gate，也不会
-改变 canonical/lifecycle/runtime。
+改变 canonical/lifecycle/runtime。传入 `rule_id` 时还会绑定 path mechanism family、
+held-out action domain、rule source transition 和 training campaign；因此一张合法的
+L4 receipt 不能被复用给无关 candidate rule。
 
 ### Capability retention replay ledger（2026-08-27）
 

@@ -16,8 +16,11 @@ from tehm.causal import (
     record_causal_transfer,
     verify_causal_transfer,
 )
-from tehm.lifecycle import build_causal_transfer_evidence
+from tehm.lifecycle import (
+    build_causal_transfer_evidence, record_rule_authority,
+    verify_rule_authority)
 from tehm.lifecycle.rule_authority import _derive_gate_inputs
+from tehm.lifecycle.trial_adapter import record_external_trial
 from tehm.adapters.orfs_pair import build_orfs_pair_record
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 
@@ -242,6 +245,79 @@ def test_verified_l4_receipt_is_the_only_transfer_authority_projection(
     assert inputs["cross_lineage_te"] == 1.0
     assert details["causal_transfer_count"] == 1
     assert len(details["causal_transfer_training_lineages"]) == 2
+    # An L4 receipt is not universal authority for every candidate rule.  The
+    # selected rule must expose the same mechanism/action domain and source
+    # transition witnesses in the training campaign.
+    source_ids = [row[0] for row in conn.execute(
+        "SELECT transition_id FROM tehm_dataset_membership "
+        "WHERE campaign_id='l4-training' AND split='training' "
+        "AND learner_eligible=1 ORDER BY transition_id LIMIT 2")]
+    path_family = report["path"]["mechanism_family"]
+    rule_columns = (
+        "rule_id, domain, before_pattern_json, after_pattern_json, "
+        "hard_preconditions_json, context_profile_json, obligations_json, "
+        "validity_status, validity_profile_json, confidence_json, utility_json, "
+        "risk_profile_json, predicate_schema_version, role_schema_version, "
+        "crystallizer_version, merge_trace_digest, created_at, updated_at")
+    rule_values = (
+        "rule_transfer_binding", "flow.signoff",
+        json.dumps({"action_domain": "flow.CONFIG_DELTA",
+                    "type": path_family}),
+        json.dumps({"action_domain": "flow.CONFIG_DELTA",
+                    "type": path_family}),
+        "[]", "{}", "[]", "PROVISIONAL_VALID", "{}", "{}", "{}", "[]",
+        "predicate-v0.1", "role-v0.1", "test", "test", "now", "now")
+    conn.execute(
+        f"INSERT INTO tehm_rules ({rule_columns}) VALUES ({','.join('?' for _ in rule_values)})",
+        rule_values)
+    conn.execute(
+        "INSERT INTO tehm_rule_sources "
+        "(rule_id, episode_id, source_substitution_json, evidence_profile_json, lineage_id) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("rule_transfer_binding", "episode-transfer-binding",
+         json.dumps({source_id: {} for source_id in source_ids}),
+         "{}", "training-lineage"))
+    bound = build_causal_transfer_evidence(
+        conn, [ledger.transfer_receipt_id], rule_id="rule_transfer_binding")
+    assert bound[0]["payload"]["rule_binding"]["transfer_action_domains"] == [
+        "flow.CONFIG_DELTA"]
+    conn.execute(
+        "INSERT INTO tehm_rule_status "
+        "(rule_id, target_scope, status, status_version, provenance_json, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("rule_transfer_binding", "route", "candidate", 1, "{}", "now"))
+    trial = record_external_trial(
+        conn, rule_id="rule_transfer_binding", target_scope="route",
+        verdict="win", metrics={"arms_differ": True,
+                                 "obligation_coverage": 1.0,
+                                 "created_regressions": []},
+        status_version=1, trial_uuid="transfer-authority-trial",
+        arm_a_run_id="a", arm_b_run_id="b")
+    authority = record_rule_authority(
+        conn, rule_id="rule_transfer_binding", target_scope="route",
+        evidence={}, trial_id=trial["trial_id"], expected_status_version=1,
+        causal_transfer_receipt_ids=[ledger.transfer_receipt_id])
+    assert authority.gate_status["cross_lineage_te"] == "PASS"
+    assert authority.eligible is False
+    assert "cross_lineage_te" not in authority.not_established
+    replayed = verify_rule_authority(conn, authority)
+    assert replayed["eligible"] is False
+    assert replayed["checks"]["cross_lineage_te"] is True
+    conn.execute(
+        "UPDATE tehm_rules SET before_pattern_json=?, after_pattern_json=? "
+        "WHERE rule_id=?", (
+            json.dumps({"action_domain": "flow.BASELINE_CONTROL",
+                        "type": path_family}),
+            json.dumps({"action_domain": "flow.BASELINE_CONTROL",
+                        "type": path_family}),
+            "rule_transfer_binding"))
+    try:
+        build_causal_transfer_evidence(
+            conn, [ledger.transfer_receipt_id], rule_id="rule_transfer_binding")
+    except ValueError as exc:
+        assert "rule_binding_action_domain_mismatch" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("unrelated rule accepted an L4 transfer receipt")
     try:
         build_causal_transfer_evidence(conn, ["missing-transfer-receipt"])
     except ValueError as exc:

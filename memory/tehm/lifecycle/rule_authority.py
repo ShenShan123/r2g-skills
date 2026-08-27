@@ -275,7 +275,118 @@ def _receipt_ids(values) -> tuple[str, ...]:
     return tuple(sorted(result))
 
 
-def _transfer_entry(conn: sqlite3.Connection, receipt_id: str) -> tuple[dict | None, list[str]]:
+def _rule_binding_fields(row) -> tuple[set[str], set[str]]:
+    """Extract mechanism families and action domains from a rule definition."""
+    families: set[str] = set()
+    domains: set[str] = set()
+    if row is None:
+        return families, domains
+    for field_name in ("before_pattern_json", "after_pattern_json"):
+        try:
+            pattern = _json_mapping(row[field_name])
+        except (KeyError, IndexError, TypeError):
+            pattern = {}
+        for key in ("type", "transformation_family", "mechanism_family"):
+            value = pattern.get(key)
+            if isinstance(value, str) and value:
+                families.add(value)
+        value = pattern.get("action_domain")
+        if isinstance(value, str) and value:
+            domains.add(value)
+    return families, domains
+
+
+def _rule_source_transition_ids(
+        conn: sqlite3.Connection, rule_id: str) -> tuple[str, ...]:
+    """Read transition witnesses attached to one crystallized rule."""
+    if not _table_exists(conn, "tehm_rule_sources"):
+        return ()
+    rows = conn.execute(
+        "SELECT source_substitution_json FROM tehm_rule_sources "
+        "WHERE rule_id=? ORDER BY episode_id", (rule_id,)).fetchall()
+    transition_ids: set[str] = set()
+    for row in rows:
+        substitutions = _json_mapping(row["source_substitution_json"])
+        transition_ids.update(
+            str(value) for value in substitutions.keys() if str(value))
+    return tuple(sorted(transition_ids))
+
+
+def _bind_transfer_to_rule(
+        conn: sqlite3.Connection, ledger, *, rule_id: str,
+        rule_row, rule_digest: str | None) -> tuple[dict | None, list[str]]:
+    """Require an L4 receipt to witness the selected rule's mechanism.
+
+    A valid transfer receipt is not universal authority for every candidate:
+    its path family, held-out action domain, training campaign, and source
+    transition witnesses must agree with the rule currently being evaluated.
+    """
+    errors: list[str] = []
+    path = conn.execute(
+        "SELECT mechanism_family FROM tehm_causal_paths WHERE path_id=?",
+        (ledger.path_id,)).fetchone()
+    if path is None:
+        return None, ["cross_lineage_te:rule_binding_path_missing"]
+    path_family = str(path["mechanism_family"] or "")
+    families, rule_domains = _rule_binding_fields(rule_row)
+    if not path_family or path_family not in families:
+        errors.append("cross_lineage_te:rule_binding_mechanism_mismatch")
+
+    transfer_ids = tuple(str(value) for value in
+                         (ledger.transfer_receipt.get(
+                             "transfer_transition_ids") or ()) if str(value))
+    transfer_domains: set[str] = set()
+    for transition_id in transfer_ids:
+        transition = conn.execute(
+            "SELECT action_domain, action_json FROM tehm_transitions "
+            "WHERE transition_id=?", (transition_id,)).fetchone()
+        if transition is None:
+            errors.append("cross_lineage_te:rule_binding_transfer_transition_missing")
+            continue
+        action_domain = str(transition["action_domain"] or "")
+        if action_domain:
+            transfer_domains.add(action_domain)
+        action = _json_mapping(transition["action_json"])
+        family = action.get("transformation_family")
+        if family and str(family) != path_family:
+            errors.append("cross_lineage_te:rule_binding_transition_family_mismatch")
+    if rule_domains and (not transfer_domains or
+                         not transfer_domains.issubset(rule_domains)):
+        errors.append("cross_lineage_te:rule_binding_action_domain_mismatch")
+
+    source_ids = _rule_source_transition_ids(conn, rule_id)
+    training_ids = tuple(str(value) for value in
+                         (ledger.transfer_receipt.get(
+                             "training_transition_ids") or ()) if str(value))
+    if not source_ids:
+        errors.append("cross_lineage_te:rule_binding_sources_missing")
+    elif not set(source_ids).issubset(set(training_ids)):
+        errors.append("cross_lineage_te:rule_binding_training_sources_mismatch")
+    for transition_id in source_ids:
+        membership = conn.execute(
+            "SELECT 1 FROM tehm_dataset_membership "
+            "WHERE transition_id=? AND campaign_id=? AND split='training' "
+            "AND learner_eligible=1 LIMIT 1",
+            (transition_id, ledger.training_campaign_id)).fetchone()
+        if membership is None:
+            errors.append("cross_lineage_te:rule_binding_source_firewall_mismatch")
+    if errors:
+        return None, errors
+    binding = {
+        "rule_id": rule_id,
+        "rule_content_digest": rule_digest,
+        "path_mechanism_family": path_family,
+        "rule_action_domains": sorted(rule_domains),
+        "transfer_action_domains": sorted(transfer_domains),
+        "rule_source_transition_ids": list(source_ids),
+    }
+    return binding, []
+
+
+def _transfer_entry(
+        conn: sqlite3.Connection, receipt_id: str, *, rule_id: str | None = None,
+        rule_row=None, rule_digest: str | None = None,
+        ) -> tuple[dict | None, list[str]]:
     """Build one cross-lineage gate row from a replay-verified L4 receipt.
 
     The receipt's convenience projection is never trusted: verification
@@ -310,6 +421,13 @@ def _transfer_entry(conn: sqlite3.Connection, receipt_id: str) -> tuple[dict | N
                                       if str(x)}))
     if len(training_lineages) < 2 or not transfer_lineages:
         return None, ["cross_lineage_te:transfer_lineage_witness_insufficient"]
+    rule_binding = None
+    if rule_id is not None:
+        rule_binding, binding_errors = _bind_transfer_to_rule(
+            conn, ledger, rule_id=rule_id, rule_row=rule_row,
+            rule_digest=rule_digest)
+        if binding_errors:
+            return None, binding_errors
     payload = {
         "causal_transfer_verified": True,
         "transfer_supported": True,
@@ -326,6 +444,8 @@ def _transfer_entry(conn: sqlite3.Connection, receipt_id: str) -> tuple[dict | N
         "transfer_lineage_count": len(transfer_lineages),
         "require_full_oracle": ledger.require_full_oracle,
     }
+    if rule_binding is not None:
+        payload["rule_binding"] = rule_binding
     return {
         "evidence_id": ledger.transfer_receipt_id,
         "split": "heldout",
@@ -339,20 +459,29 @@ def _transfer_entry(conn: sqlite3.Connection, receipt_id: str) -> tuple[dict | N
 
 
 def build_causal_transfer_evidence(
-        conn: sqlite3.Connection, receipt_ids: Iterable[str]) -> list[dict]:
+        conn: sqlite3.Connection, receipt_ids: Iterable[str], *,
+        rule_id: str | None = None) -> list[dict]:
     """Return authority-ready rows for replay-verified L4 receipts.
 
     This helper is intentionally strict.  A caller that wants an ineligible
     transfer recorded as a negative attempt should call
     :func:`record_rule_authority` without this helper and provide ordinary
     evidence rows; a transfer selected for a cross-lineage gate must be
-    verified against the current shadow ledger first.
+    verified against the current shadow ledger first.  Supplying ``rule_id``
+    additionally binds each receipt to that rule's mechanism, action domain,
+    training witnesses, and content digest.
     """
     ids = _receipt_ids(receipt_ids)
+    rule_row = _rule_row(conn, rule_id) if rule_id is not None else None
+    rule_digest = _rule_content_digest(rule_row) if rule_id is not None else None
+    if rule_id is not None and (rule_row is None or rule_digest is None):
+        raise ValueError("cross_lineage_te:rule_binding_rule_missing")
     entries: list[dict] = []
     errors: list[str] = []
     for receipt_id in ids:
-        entry, entry_errors = _transfer_entry(conn, receipt_id)
+        entry, entry_errors = _transfer_entry(
+            conn, receipt_id, rule_id=rule_id, rule_row=rule_row,
+            rule_digest=rule_digest)
         errors.extend(entry_errors)
         if entry is not None:
             entries.append(entry)
@@ -678,7 +807,9 @@ def record_rule_authority(
             transfer_ids = ()
             errors.append(f"cross_lineage_te:{exc}")
         for transfer_id in transfer_ids:
-            entry, transfer_errors = _transfer_entry(conn, transfer_id)
+            entry, transfer_errors = _transfer_entry(
+                conn, transfer_id, rule_id=rule_id, rule_row=row,
+                rule_digest=rule_digest)
             errors.extend(transfer_errors)
             if entry is not None:
                 entries["cross_lineage_te"].append(entry)
@@ -904,7 +1035,9 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         if payload_item.get("causal_transfer_verified") is not True:
             continue
         transfer_id = str(payload_item.get("transfer_receipt_id") or "")
-        entry, transfer_errors = _transfer_entry(conn, transfer_id)
+        entry, transfer_errors = _transfer_entry(
+            conn, transfer_id, rule_id=rule_id, rule_row=row,
+            rule_digest=current_digest)
         if transfer_errors:
             reasons.extend(transfer_errors)
         elif entry is None:

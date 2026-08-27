@@ -2857,6 +2857,9 @@ causal_transfer_receipt_ids=...)` seam。它只从同一 shadow DB 的
 `tehm_causal_transfer_receipts` 加载 receipt，调用 `verify_causal_transfer()` 重放 path、
 transition、split、lineage 和 L4 level，并要求至少两条 training lineage 加一条
 独立 held-out lineage；验证后的 payload 才能形成 `cross_lineage_te` authority row。
+在 authority 调用中，receipt 还必须与当前 rule 的 mechanism family、held-out action
+domain、rule source transition 及 training campaign 一致，避免将一张通用的 L4 receipt
+复用到无关 candidate。
 若同时提供手工 cross-lineage rows、receipt 缺失/篡改、或 replay 不是 L4，整个
 authority attempt fail-closed；`verify_rule_authority()` 消费时再次重放该 ledger row。
 这一步只把真实 L4 transfer 接入 authority evidence 链，不替代 rollback、registry、
