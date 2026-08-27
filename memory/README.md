@@ -330,7 +330,7 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
-回归为 `462 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+回归为 `464 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
 
 RTL oracle 的 obligation coverage 也改为逐项 fail-closed 重放：
 `RTL_TARGET_TEST_PASS`、`RTL_FROZEN_REGRESSION_PASS` 和 `RTL_COMPILE_PASS` 只在
@@ -339,6 +339,13 @@ RTL oracle 的 obligation coverage 也改为逐项 fail-closed 重放：
 `oracle_complete=false`，且 target 通过但 regression 未运行不再伪造
 `created_regressions`。因此 target-only 仍可作为 T-tier 执行反馈，但不能满足完整
 RTL verifier 或 promotion gate；只有两侧都实际运行才可得到完整 R-tier coverage。
+
+Online evolution 的事件与 revision receipt 也已补上 content-bound replay guard：
+事件写入前会重放并校验当前 campaign hash-chain、`event_digest` 与
+content-addressed `event_id`；链或事件内容被直接篡改时，后续 append/replay 会
+fail-closed。`tehm_rule_revisions` 对相同 revision ID 只接受完全相同的 validation
+payload，冲突内容不会被 `INSERT OR IGNORE` 静默吞掉。该约束仍只保护 shadow/derived
+evolution provenance，不授予 rule lifecycle 或 production authority。
 
 Dataset membership 也有同一条硬约束：只有 training split 可以标记
 `learner_eligible`；capture/assignment 会拒绝非 training 的显式 opt-in，直接写入的

@@ -27,6 +27,37 @@ def _event_digest(payload: dict) -> str:
     return "sha256:" + hashlib.sha256(stable_dumps(payload).encode()).hexdigest()
 
 
+def _event_id(event_digest: str) -> str:
+    return "event_" + event_digest.split(":", 1)[1][:24]
+
+
+def _validate_event_row(row: sqlite3.Row) -> None:
+    """Validate the content-addressed identity of a stored event row.
+
+    Event rows are append-only derived evidence.  A direct SQL edit must not
+    be silently accepted by a later idempotent append, even when the edited
+    row still matches the natural event lookup (same source/payload).
+    """
+    try:
+        payload = json.loads(row["payload_json"])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("memory event payload is not valid JSON") from exc
+    identity = {
+        "event_type": row["event_type"],
+        "source_type": row["source_type"],
+        "source_id": row["source_id"],
+        "campaign_id": row["campaign_id"],
+        "learner_eligible": bool(row["learner_eligible"]),
+        "payload": payload,
+        "previous_event_digest": row["previous_event_digest"],
+    }
+    digest = _event_digest(identity)
+    if row["event_digest"] != digest:
+        raise ValueError("memory event replay conflicts with event_digest")
+    if row["event_id"] != _event_id(digest):
+        raise ValueError("memory event replay conflicts with event_id")
+
+
 def _previous(conn: sqlite3.Connection, campaign_id: str | None) -> str | None:
     rows = conn.execute(
         """SELECT event_digest, previous_event_digest
@@ -124,16 +155,21 @@ def append_memory_event(
         _verify_learner_source(
             conn, source_type=source_type, source_id=source_id,
             campaign_id=str(campaign_id))
+    chain = verify_event_chain(conn, campaign_id=campaign_id)
+    if not chain.get("ok"):
+        raise ValueError(
+            "memory event replay conflicts: existing event chain is invalid")
     payload = dict(payload or {})
     payload_json = stable_dumps(payload)
     existing = conn.execute(
         """SELECT * FROM tehm_memory_events
              WHERE event_type=? AND source_type=? AND source_id=?
                AND campaign_id IS ? AND learner_eligible=? AND payload_json=?
-             ORDER BY created_at, event_id LIMIT 1""",
+             LIMIT 1""",
         (event_type, source_type, source_id, campaign_id,
          int(bool(learner_eligible)), payload_json)).fetchone()
     if existing is not None:
+        _validate_event_row(existing)
         return MemoryEventReceipt(
             event_id=existing["event_id"], event_type=existing["event_type"],
             source_type=existing["source_type"], source_id=existing["source_id"],
@@ -152,7 +188,20 @@ def append_memory_event(
         "previous_event_digest": previous,
     }
     event_digest = _event_digest(identity)
-    event_id = "event_" + event_digest.split(":", 1)[1][:24]
+    event_id = _event_id(event_digest)
+    # A prefix collision is extraordinarily unlikely, but an existing row
+    # with this ID must still be treated as immutable rather than ignored.
+    colliding = conn.execute(
+        "SELECT * FROM tehm_memory_events WHERE event_id=?", (event_id,)
+    ).fetchone()
+    if colliding is not None:
+        try:
+            _validate_event_row(colliding)
+        except ValueError as exc:
+            raise ValueError(
+                "memory event replay conflicts with existing event ID"
+            ) from exc
+        raise ValueError("memory event ID collision")
     # Use TEHM's single timestamp source so isolated replays can pin event
     # materialization (and therefore the derived DB digest) without patching
     # the standard library.  Event identity remains content-addressed and does
@@ -244,6 +293,10 @@ def verify_event_chain(conn: sqlite3.Connection,
             "payload": payload, "previous_event_digest": previous,
         }
         digest = _event_digest(identity)
+        if row["event_id"] != _event_id(digest):
+            return {"ok": False, "events": len(rows),
+                    "bad_event_id": row["event_id"],
+                    "reason": "event ID is not content-addressed"}
         if row["previous_event_digest"] != previous or row["event_digest"] != digest:
             return {"ok": False, "events": len(rows), "bad_event_id": row["event_id"]}
         next_ids = children.get(digest, [])

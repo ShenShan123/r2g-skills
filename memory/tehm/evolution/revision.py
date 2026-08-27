@@ -116,6 +116,32 @@ def record_rule_revision(
                 "evidence_refs": refs}
     revision_id = "revision_" + hashlib.sha1(
         stable_dumps(identity).encode()).hexdigest()[:20]
+    expected_row = {
+        "revision_id": revision_id,
+        "parent_rule_id": parent_rule_id,
+        "child_rule_id": child_rule_id,
+        "operation": operation,
+        "trigger_event_id": trigger_event_id,
+        "evidence_refs_json": stable_dumps(list(refs)),
+        "validation_json": stable_dumps(validation or {}),
+    }
+    existing = conn.execute(
+        "SELECT * FROM tehm_rule_revisions WHERE revision_id=?",
+        (revision_id,),
+    ).fetchone()
+    if existing is not None:
+        mismatches = [
+            key for key, value in expected_row.items()
+            if existing[key] != value
+        ]
+        if mismatches:
+            raise ValueError(
+                "rule revision replay conflicts with immutable revision "
+                f"{revision_id}: {', '.join(mismatches)}")
+        return RuleRevisionReceipt(
+            revision_id=revision_id, parent_rule_id=parent_rule_id,
+            child_rule_id=child_rule_id, operation=operation,
+            trigger_event_id=trigger_event_id, evidence_refs=refs)
     had_outer_transaction = conn.in_transaction
     conn.execute(
         """INSERT OR IGNORE INTO tehm_rule_revisions
@@ -123,8 +149,8 @@ def record_rule_revision(
             trigger_event_id, evidence_refs_json, validation_json, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         (revision_id, parent_rule_id, child_rule_id, operation,
-         trigger_event_id, stable_dumps(list(refs)),
-         stable_dumps(validation or {}), created_at or tehm_db.now_local()))
+         trigger_event_id, expected_row["evidence_refs_json"],
+         expected_row["validation_json"], created_at or tehm_db.now_local()))
     if commit and not had_outer_transaction:
         conn.commit()
     return RuleRevisionReceipt(

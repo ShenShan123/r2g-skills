@@ -281,6 +281,55 @@ def test_rule_revision_rejects_tampered_event_chain(tmp_tehm):
             evidence_refs=[transition_id])
 
 
+def test_rule_revision_replay_rejects_conflicting_validation(tmp_tehm):
+    conn, transition_id = _transition(tmp_tehm)
+    observation = observe_transition(conn, transition_id)
+    event_id = observation.events[-1].event_id
+    first = record_rule_revision(
+        conn, parent_rule_id="rule-old", child_rule_id="rule-new",
+        operation="SPECIALIZE", trigger_event_id=event_id,
+        evidence_refs=[transition_id], validation={"shadow": True})
+    replay = record_rule_revision(
+        conn, parent_rule_id="rule-old", child_rule_id="rule-new",
+        operation="SPECIALIZE", trigger_event_id=event_id,
+        evidence_refs=[transition_id], validation={"shadow": True})
+    assert replay.revision_id == first.revision_id
+    # The immutable identity cannot be used to overwrite the validation
+    # witness; the conflicting replay must be rejected instead.
+    with pytest.raises(ValueError, match="replay conflicts"):
+        record_rule_revision(
+            conn, parent_rule_id="rule-old", child_rule_id="rule-new",
+            operation="SPECIALIZE", trigger_event_id=event_id,
+            evidence_refs=[transition_id], validation={"shadow": "tampered"})
+
+
+def test_event_replay_rejects_tampered_content_and_id(tmp_tehm):
+    conn, transition_id = _transition(tmp_tehm)
+    event = append_memory_event(
+        conn, event_type="TRANSITION_CAPTURED", source_type="transition",
+        source_id=transition_id, campaign_id="live", learner_eligible=True,
+        payload={"tamper": "guard"})
+    conn.execute(
+        "UPDATE tehm_memory_events SET payload_json=? WHERE event_id=?",
+        (json.dumps({"tamper": "changed"}), event.event_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="replay conflicts"):
+        append_memory_event(
+            conn, event_type="TRANSITION_CAPTURED", source_type="transition",
+            source_id=transition_id, campaign_id="live", learner_eligible=True,
+            payload={"tamper": "guard"})
+
+    conn.execute(
+        "UPDATE tehm_memory_events SET payload_json=?, event_digest=? "
+        "WHERE event_id=?",
+        (json.dumps({"tamper": "guard"}), event.event_digest, event.event_id))
+    conn.execute(
+        "UPDATE tehm_memory_events SET event_id=? WHERE event_id=?",
+        ("event_wrong_id", event.event_id))
+    conn.commit()
+    assert verify_event_chain(conn, campaign_id="live")["ok"] is False
+
+
 def test_event_writer_preserves_outer_transaction(tmp_tehm):
     conn, transition_id = _transition(tmp_tehm)
     conn.execute(
