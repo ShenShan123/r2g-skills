@@ -325,6 +325,13 @@ authority。DB attribution 在计算 C3 时也会校验 runtime load JSON 的内
 snapshot digest、runtime identity 和 `loaded` 字段；篡改 receipt 后即使 SQLite
 `loaded=1` 仍会 fail-closed。
 
+2026-08-27 又补齐了 registry 内容完整性重放：capability 定义、Asset 定义、policy
+snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重算 content digest
+及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
+直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
+不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
+回归为 `459 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+
 Dataset membership 也有同一条硬约束：只有 training split 可以标记
 `learner_eligible`；capture/assignment 会拒绝非 training 的显式 opt-in，直接写入的
 矛盾行会被 crystallization、causal、gap、conflict 和 online trigger 排除，同时由

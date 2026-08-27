@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from tehm import db as tehm_db
@@ -29,6 +30,43 @@ class CapabilityReceipt:
             "status": self.status,
             "version": self.version,
         }
+
+
+def capability_content_digest(capability: Mapping) -> str | None:
+    """Recompute the content digest implied by a registry capability row."""
+    if not isinstance(capability, Mapping):
+        return None
+    try:
+        content = {
+            "mechanism_family": capability["mechanism_family"],
+            "applicability": json.loads(capability["applicability_json"]),
+            "required_rules": json.loads(capability["required_rules_json"]),
+            "required_assets": json.loads(capability["required_assets_json"]),
+            "obligations": json.loads(capability["obligations_json"]),
+            "budget": json.loads(capability["budget_json"]),
+            "version": int(capability["version"]),
+        }
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if (not isinstance(content["required_rules"], list) or
+            not isinstance(content["required_assets"], list) or
+            any(not isinstance(item, str)
+                for item in (*content["required_rules"],
+                             *content["required_assets"]))):
+        return None
+    return "sha1:" + hashlib.sha1(
+        stable_dumps(content).encode()).hexdigest()
+
+
+def validate_capability_row(row: Mapping) -> dict:
+    """Fail closed when the content-addressed capability row is corrupted."""
+    data = dict(row)
+    digest = capability_content_digest(data)
+    expected_id = ("capability_" + digest.split(":", 1)[1][:20]
+                   if digest else None)
+    if not digest or data.get("capability_id") != expected_id:
+        raise ValueError("capability registry content digest mismatch")
+    return data
 
 
 def register_capability(
@@ -77,6 +115,23 @@ def register_capability(
          stable_dumps(list(required_rules)), stable_dumps(list(required_assets)),
          stable_dumps(obligations or {}), stable_dumps(budget or {}), status,
          int(version), stable_dumps(provenance or {}), now, now))
+    stored = conn.execute(
+        "SELECT * FROM tehm_capabilities WHERE capability_id=?",
+        (capability_id,)).fetchone()
+    if stored is None:
+        raise ValueError("capability was not persisted")
+    validate_capability_row(stored)
+    expected_fields = {
+        "mechanism_family": mechanism_family,
+        "applicability_json": stable_dumps(applicability),
+        "required_rules_json": stable_dumps(list(required_rules)),
+        "required_assets_json": stable_dumps(list(required_assets)),
+        "obligations_json": stable_dumps(obligations or {}),
+        "budget_json": stable_dumps(budget or {}),
+        "version": int(version),
+    }
+    if any(stored[field] != value for field, value in expected_fields.items()):
+        raise ValueError("capability is immutable and conflicts")
     if commit and not had_outer_transaction:
         conn.commit()
     return CapabilityReceipt(capability_id, mechanism_family, status, int(version))
@@ -93,9 +148,12 @@ def record_capability_evidence(
     lineage_id: str | None = None,
     commit: bool = True,
 ) -> str:
-    if not conn.execute("SELECT 1 FROM tehm_capabilities WHERE capability_id=?",
-                       (capability_id,)).fetchone():
+    capability_row = conn.execute(
+        "SELECT * FROM tehm_capabilities WHERE capability_id=?",
+        (capability_id,)).fetchone()
+    if capability_row is None:
         raise ValueError("unknown capability_id")
+    validate_capability_row(capability_row)
     if split not in EVIDENCE_SPLITS:
         raise ValueError(f"invalid capability evidence split: {split!r}")
     if not evidence_type or not evidence_id:
@@ -141,11 +199,12 @@ def promote_capability(conn: sqlite3.Connection, capability_id: str,
     its referenced evidence rows are re-verified before the lifecycle update.
     """
     row = conn.execute(
-        """SELECT mechanism_family, version, status, required_assets_json
+        """SELECT *
              FROM tehm_capabilities WHERE capability_id=?""",
         (capability_id,)).fetchone()
     if row is None:
         raise ValueError("unknown capability_id")
+    row = validate_capability_row(row)
     # Once the capability id is known, the authority receipt is the first
     # required boundary.  A lifecycle state alone must never look sufficient
     # for promotion (especially for an ``observed_gap`` capability).
@@ -195,5 +254,6 @@ def promote_capability(conn: sqlite3.Connection, capability_id: str,
 
 
 __all__ = ["CAPABILITY_STATUSES", "CapabilityReceipt", "EVIDENCE_SPLITS",
+           "capability_content_digest", "validate_capability_row",
            "promote_capability", "record_capability_evidence",
            "register_capability"]

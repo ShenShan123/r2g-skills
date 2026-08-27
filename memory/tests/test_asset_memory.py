@@ -186,6 +186,18 @@ def test_asset_registry_corruption_is_not_loaded(tmp_tehm):
     assert get_asset(conn, receipt.asset_id) is None
 
 
+def test_asset_registry_rejects_valid_json_with_tampered_digest(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    receipt = register_asset_proposal(conn, _proposal())
+    conn.execute(
+        "UPDATE tehm_assets SET definition_json=? WHERE asset_id=?",
+        ('{"tampered": true}', receipt.asset_id))
+    conn.commit()
+    assert get_asset(conn, receipt.asset_id) is None
+    with pytest.raises(ValueError, match="content digest mismatch"):
+        register_asset_proposal(conn, _proposal())
+
+
 def test_asset_authority_is_content_bound_and_replayable(tmp_tehm):
     from tehm.assets import (
         promote_asset, record_asset_authority, verify_asset_authority,

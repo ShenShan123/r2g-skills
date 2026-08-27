@@ -108,6 +108,30 @@ def test_capability_registration_cannot_grant_authority_or_rewrite_evidence(
             evidence_id="e1", split="training", verdict="FAIL", lineage_id="l1")
 
 
+def test_capability_registry_replay_rejects_tampered_definition(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="IMMUTABLE_CAPABILITY",
+        applicability={"profile": "p"}, required_rules=["r0"],
+        obligations={"target": "PASS"})
+    conn.execute(
+        "UPDATE tehm_capabilities SET required_rules_json=? "
+        "WHERE capability_id=?",
+        (json.dumps(["tampered-rule"]), capability.capability_id))
+    conn.commit()
+
+    with pytest.raises(ValueError, match="content digest mismatch"):
+        register_capability(
+            conn, mechanism_family="IMMUTABLE_CAPABILITY",
+            applicability={"profile": "p"}, required_rules=["r0"],
+            obligations={"target": "PASS"})
+    with pytest.raises(ValueError, match="content digest mismatch"):
+        record_capability_evidence(
+            conn, capability_id=capability.capability_id,
+            evidence_type="external", evidence_id="e1", split="training",
+            verdict="PASS")
+
+
 def test_capability_attribution_requires_all_eight_gates():
     receipt = evaluate_capability_attribution(
         capability_id="capability-x",

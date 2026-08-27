@@ -21,6 +21,7 @@ from tehm.lifecycle.promotion_gates import (
 )
 
 from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
+from .registry import validate_capability_row
 
 
 AUTHORITY_VERSION = "capability-promotion-authority-v1"
@@ -100,10 +101,11 @@ def _evidence_digest(*, capability_id: str, evidence_type: str,
 
 def _capability_row(conn: sqlite3.Connection, capability_id: str):
     row = conn.execute(
-        "SELECT required_assets_json FROM tehm_capabilities "
+        "SELECT * FROM tehm_capabilities "
         "WHERE capability_id=?", (capability_id,)).fetchone()
     if row is None:
         raise ValueError("unknown capability_id")
+    row = validate_capability_row(row)
     try:
         assets = json.loads(row["required_assets_json"] or "[]")
     except (TypeError, json.JSONDecodeError):

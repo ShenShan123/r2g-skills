@@ -94,6 +94,24 @@ def register_asset(
          stable_dumps(verifier_contract), stable_dumps(compatibility),
          stable_dumps({**provenance, "registry_version": ASSET_REGISTRY_VERSION}),
          digest, now))
+    stored = conn.execute(
+        "SELECT * FROM tehm_assets WHERE asset_id=?", (asset_id,)).fetchone()
+    if stored is None:
+        raise ValueError("asset was not persisted")
+    stored_asset = get_asset(conn, asset_id)
+    if stored_asset is None:
+        raise ValueError("asset registry content digest mismatch")
+    expected_fields = {
+        "asset_type": asset_type, "name": name, "version": version,
+        "definition_json": stable_dumps(definition),
+        "input_contract_json": stable_dumps(input_contract),
+        "output_contract_json": stable_dumps(output_contract),
+        "verifier_contract_json": stable_dumps(verifier_contract),
+        "compatibility_json": stable_dumps(compatibility),
+        "content_digest": digest,
+    }
+    if any(stored[field] != value for field, value in expected_fields.items()):
+        raise ValueError("asset is immutable and conflicts")
     conn.execute(
         """INSERT OR IGNORE INTO tehm_asset_status
            (asset_id, target_scope, status, status_version, provenance_json,
@@ -124,6 +142,14 @@ def get_asset(conn: sqlite3.Connection, asset_id: str) -> dict | None:
         if not isinstance(decoded, dict):
             return None
         result[key[:-5] if key.endswith("_json") else key] = decoded
+    computed_digest = asset_content_digest(result)
+    expected_id = ("asset_" + computed_digest.split(":", 1)[1][:24]
+                   if computed_digest else None)
+    if (not computed_digest or result.get("content_digest") != computed_digest or
+            result.get("asset_id") != expected_id):
+        # A row with valid JSON but a mismatched content digest is still
+        # untrusted: status/lifecycle and evaluators must not consume it.
+        return None
     return result
 
 

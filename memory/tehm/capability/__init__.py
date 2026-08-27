@@ -15,13 +15,15 @@ from .policy_snapshot import (
 )
 from .registry import (
     CAPABILITY_STATUSES, EVIDENCE_SPLITS, CapabilityReceipt,
-    promote_capability, record_capability_evidence, register_capability,
+    capability_content_digest, promote_capability, record_capability_evidence,
+    register_capability, validate_capability_row,
 )
 from .retention import CapabilityRetentionReceipt, evaluate_capability_retention
 from .harness import CapabilityCampaignReceipt, evaluate_capability_campaign
 
 __all__ = [
     "CAPABILITY_STATUSES", "EVIDENCE_SPLITS", "CapabilityReceipt",
+    "capability_content_digest", "validate_capability_row",
     "AUTHORITY_VERSION", "CapabilityAuthorityReceipt", "GATE_ALLOWED_SPLITS",
     "GATE_EVIDENCE_TYPES", "record_capability_authority",
     "verify_capability_authority",
