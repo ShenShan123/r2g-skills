@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import abc
+from contextlib import contextmanager
 import datetime as dt
 import email.utils
+import fcntl
 import json
 import os
 import time
@@ -35,6 +37,41 @@ class ProviderError(RuntimeError):
         self.reset_at = reset_at
         self.status_code = status_code
         self.rate_limited = rate_limited
+
+
+@contextmanager
+def github_api_slot(url: str):
+    """Honor the Experiment-1 shared GitHub REST pacing contract when active."""
+    lock_value = os.environ.get("R2G_EXPERIMENT1_GITHUB_API_LOCK")
+    if not lock_value or urllib.parse.urlsplit(url).netloc.lower() != "api.github.com":
+        yield
+        return
+    try:
+        interval = float(os.environ.get("R2G_EXPERIMENT1_GITHUB_API_MIN_INTERVAL_SECONDS", "2.2"))
+    except ValueError as exc:
+        raise ProviderError("invalid GitHub API pacing interval") from exc
+    if interval <= 0:
+        raise ProviderError("GitHub API pacing interval must be positive")
+    path = os.fspath(lock_value)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        lock.seek(0)
+        try:
+            previous = float(lock.read().strip() or "0")
+        except ValueError:
+            previous = 0.0
+        delay = interval - (time.monotonic() - previous)
+        if delay > 0:
+            time.sleep(delay)
+        try:
+            yield
+        finally:
+            lock.seek(0)
+            lock.truncate()
+            lock.write(str(time.monotonic()))
+            lock.flush()
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def _reset_at(headers: dict[str, str], retry_after: str | None = None) -> tuple[int, str | None]:
@@ -71,9 +108,10 @@ class HTTPJSONClient:
     def get_json(self, url: str, headers: dict[str, str] | None = None) -> tuple[Any, dict[str, str]]:
         request = urllib.request.Request(url, headers={"User-Agent": "rtl-expander/1", **(headers or {})})
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                body = response.read(16 * 1024 * 1024)
-                return json.loads(body), {key.lower(): value for key, value in response.headers.items()}
+            with github_api_slot(url):
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    body = response.read(16 * 1024 * 1024)
+                    return json.loads(body), {key.lower(): value for key, value in response.headers.items()}
         except urllib.error.HTTPError as exc:
             response_headers = {key.lower(): value for key, value in exc.headers.items()}
             remaining = response_headers.get("x-ratelimit-remaining") or response_headers.get("ratelimit-remaining")

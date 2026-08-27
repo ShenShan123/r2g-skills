@@ -1,5 +1,4 @@
 from pathlib import Path
-import threading
 from types import SimpleNamespace
 
 import pytest
@@ -23,6 +22,20 @@ def manifest_for(method_id: str) -> dict:
     }
 
 
+def parallel_policy() -> dict:
+    return {
+        "method_cpu_sets": {
+            "openai-vanilla": "0-3",
+            "deepseek-vanilla": "4-7",
+            "qwen-vanilla": "8-11",
+            "glm-vanilla": "12-15",
+            "kimi-vanilla": "16-19",
+            "r2g-expander-cold": "20-23",
+        },
+        "github_api_min_interval_seconds": 2.2,
+    }
+
+
 def test_acquire_locks_one_continuous_run_without_running_evaluator(tmp_path, monkeypatch):
     method_id = "qwen-vanilla"
     manifest = manifest_for(method_id)
@@ -32,6 +45,7 @@ def test_acquire_locks_one_continuous_run_without_running_evaluator(tmp_path, mo
             "vanilla_max_output_tokens_per_turn": 4096,
         },
         "batch_policy": {"batches_per_method": 1, "target_candidates_per_batch": 200},
+        "method_aggregate_policy": parallel_policy(),
     }
     commands: list[list[str]] = []
     monkeypatch.setattr(
@@ -42,8 +56,8 @@ def test_acquire_locks_one_continuous_run_without_running_evaluator(tmp_path, mo
     monkeypatch.setattr(campaign_runner, "verify_bound_campaign", lambda _value: None)
     monkeypatch.setenv("GITHUB_TOKEN", "test-token")
 
-    def fake_run(command: list[str]) -> None:
-        commands.append(command)
+    def fake_run(command: list[str], *, cpu_set: str | None = None) -> None:
+        commands.append([*( [f"cpu={cpu_set}"] if cpu_set else []), *command])
         if "accept-submission" in command:
             batch_id = int(Path(command[-1]).parent.name.split("batch", 1)[1].split(".", 1)[0])
             manifest["batches"][batch_id - 1]["status"] = "submitted"
@@ -62,6 +76,7 @@ def test_acquire_locks_one_continuous_run_without_running_evaluator(tmp_path, mo
     assert sum("run_experiment1_vanilla_method.py" in " ".join(row) for row in commands) == 1
     assert sum("accept-submission" in row for row in commands) == 1
     assert any("--target" in row and "200" in row for row in commands)
+    assert any(row[0] == "cpu=8-11" for row in commands)
     assert not any("evaluate-batch" in row for row in commands)
 
 
@@ -84,37 +99,20 @@ def test_formal_acquire_requires_authenticated_github(tmp_path, monkeypatch):
         )
 
 
-def test_campaign_acquisition_lease_serializes_methods(tmp_path):
-    first_entered = threading.Event()
-    release_first = threading.Event()
-    second_entered = threading.Event()
-
-    def first_method():
-        with campaign_runner.campaign_acquisition_lease(tmp_path, "first"):
-            first_entered.set()
-            assert release_first.wait(timeout=2)
-
-    def second_method():
-        with campaign_runner.campaign_acquisition_lease(tmp_path, "second"):
-            second_entered.set()
-
-    first = threading.Thread(target=first_method)
-    second = threading.Thread(target=second_method)
-    first.start()
-    assert first_entered.wait(timeout=1)
-    second.start()
-    assert not second_entered.wait(timeout=0.1)
-    release_first.set()
-    assert second_entered.wait(timeout=1)
-    first.join(timeout=1)
-    second.join(timeout=1)
-    assert not first.is_alive()
-    assert not second.is_alive()
+def test_frozen_parallel_policy_assigns_disjoint_cpu_sets():
+    policy = parallel_policy()
+    first = campaign_runner.configured_cpu_set({"method_aggregate_policy": policy}, "openai-vanilla")
+    second = campaign_runner.configured_cpu_set({"method_aggregate_policy": policy}, "deepseek-vanilla")
+    assert first == "0-3"
+    assert second == "4-7"
 
 
 def test_evaluate_refuses_unlocked_continuous_run(tmp_path, monkeypatch):
     manifest = manifest_for("openai-vanilla")
-    task = {"batch_policy": {"batches_per_method": 1}}
+    task = {
+        "batch_policy": {"batches_per_method": 1},
+        "method_aggregate_policy": parallel_policy(),
+    }
     monkeypatch.setattr(
         campaign_runner,
         "read_json",

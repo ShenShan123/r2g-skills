@@ -258,6 +258,15 @@ def test_search_result_exposes_clone_repository_url_field():
     assert result["license_spdx"] == "MIT"
 
 
+def test_github_api_slot_persists_shared_pacing_timestamp(tmp_path, monkeypatch):
+    lock = tmp_path / "locks" / "github_api.lock"
+    monkeypatch.setenv("R2G_EXPERIMENT1_GITHUB_API_LOCK", str(lock))
+    monkeypatch.setenv("R2G_EXPERIMENT1_GITHUB_API_MIN_INTERVAL_SECONDS", "2.2")
+    with vanilla.github_api_slot():
+        assert lock.exists()
+    assert float(lock.read_text(encoding="utf-8")) > 0
+
+
 def test_context_compaction_keeps_only_four_recent_tool_turns():
     runner = VanillaRun.__new__(VanillaRun)
     runner.queries = []

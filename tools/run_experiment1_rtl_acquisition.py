@@ -1825,12 +1825,40 @@ def lint_protocol() -> None:
     if batch_policy.get("target_unique_repositories_per_run") != 50:
         errors.append("target unique repositories per run must be 50")
     aggregate_policy = task.get("method_aggregate_policy", {})
-    if aggregate_policy.get("cross_method_acquisition_serialized") is not True:
-        errors.append("cross-method acquisition must be serialized")
+    if aggregate_policy.get("cross_method_acquisition_serialized") is not False:
+        errors.append("cross-method acquisition must use the frozen parallel schedule")
+    if aggregate_policy.get("simultaneous_method_limit") != len(METHOD_IDS):
+        errors.append("parallel schedule must admit all frozen methods")
+    raw_cpu_sets = aggregate_policy.get("method_cpu_sets") or {}
+    if set(raw_cpu_sets) != METHOD_IDS:
+        errors.append("parallel schedule must define one CPU set per method")
+    else:
+        used_cpus: set[int] = set()
+        for method_id, raw_cpu_set in raw_cpu_sets.items():
+            if not isinstance(raw_cpu_set, str):
+                errors.append(f"CPU set for {method_id} must be a string")
+                continue
+            indices: set[int] = set()
+            try:
+                for span in raw_cpu_set.split(","):
+                    left, *right = span.split("-", 1)
+                    start = int(left)
+                    end = int(right[0]) if right else start
+                    if start < 0 or end < start:
+                        raise ValueError
+                    indices.update(range(start, end + 1))
+            except ValueError:
+                errors.append(f"CPU set for {method_id} is invalid")
+                continue
+            if len(indices) != int(task.get("method_budget", {}).get("cpu_cores", 0)):
+                errors.append(f"CPU set for {method_id} must contain exactly four CPUs")
+            if used_cpus.intersection(indices):
+                errors.append(f"CPU set for {method_id} overlaps another method")
+            used_cpus.update(indices)
+    if aggregate_policy.get("github_api_min_interval_seconds") != 2.2:
+        errors.append("global GitHub API pacing interval must be 2.2 seconds")
     if aggregate_policy.get("formal_github_authentication_required") is not True:
         errors.append("formal GitHub authentication must be required")
-    if aggregate_policy.get("acquisition_lease_wait_excluded_from_method_budget") is not True:
-        errors.append("acquisition lease wait must be excluded from method budget")
     if batch_policy.get("maximum_candidates_per_repository") != 4:
         errors.append("maximum candidates per repository must be 4")
     aggregate = task.get("method_aggregate_policy", {})

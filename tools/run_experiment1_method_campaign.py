@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-import fcntl
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -28,7 +28,12 @@ from tools.run_experiment1_rtl_acquisition import (  # noqa: E402
 )
 
 
-def run_checked(command: list[str]) -> None:
+CPU_SET_PATTERN = re.compile(r"^[0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)?)*$")
+
+
+def run_checked(command: list[str], *, cpu_set: str | None = None) -> None:
+    if cpu_set is not None:
+        command = ["taskset", "--cpu-list", cpu_set, *command]
     process = subprocess.Popen(command, cwd=REPO, start_new_session=True)
     previous_handlers: dict[signal.Signals, Any] = {}
 
@@ -65,19 +70,35 @@ def run_checked(command: list[str]) -> None:
         )
 
 
+def configured_cpu_set(task: dict[str, Any], method_id: str) -> str:
+    policy = task.get("method_aggregate_policy") or {}
+    configured = (policy.get("method_cpu_sets") or {}).get(method_id)
+    if not isinstance(configured, str) or not CPU_SET_PATTERN.fullmatch(configured):
+        raise ExperimentError(f"missing or invalid frozen CPU set for {method_id}")
+    return configured
+
+
 @contextmanager
-def campaign_acquisition_lease(root: Path, method_id: str):
-    """Serialize methods so shared network and CPU resources cannot cross-contaminate."""
-    lock_path = root / "locks" / "acquisition.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as lock:
-        print(f"{method_id}: waiting for campaign acquisition lease", flush=True)
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        print(f"{method_id}: acquired campaign acquisition lease", flush=True)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+def github_api_rate_limit_env(root: Path, task: dict[str, Any]):
+    """Share only GitHub REST pacing; acquisition workspaces remain independent."""
+    policy = task.get("method_aggregate_policy") or {}
+    interval = policy.get("github_api_min_interval_seconds")
+    if not isinstance(interval, (int, float)) or interval <= 0:
+        raise ExperimentError("missing frozen GitHub API pacing interval")
+    updates = {
+        "R2G_EXPERIMENT1_GITHUB_API_LOCK": str(root / "locks" / "github_api.lock"),
+        "R2G_EXPERIMENT1_GITHUB_API_MIN_INTERVAL_SECONDS": str(interval),
+    }
+    old = {key: os.environ.get(key) for key in updates}
+    os.environ.update(updates)
+    try:
+        yield
+    finally:
+        for key, value in old.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def _acquire_batches(args: argparse.Namespace) -> None:
@@ -88,6 +109,7 @@ def _acquire_batches(args: argparse.Namespace) -> None:
     frozen_turns = int(task["method_budget"]["vanilla_max_turns_per_run"])
     batch_count = int(task["batch_policy"]["batches_per_method"])
     target = int(task["batch_policy"]["target_candidates_per_batch"])
+    cpu_set = configured_cpu_set(task, args.method_id)
     frozen_output = int(
         task["method_budget"]["vanilla_max_output_tokens_per_turn"]
     )
@@ -122,7 +144,7 @@ def _acquire_batches(args: argparse.Namespace) -> None:
                 "--cores",
                 str(args.cores),
             ]
-            run_checked(method_command)
+            run_checked(method_command, cpu_set=cpu_set)
             method_root = (
                 paths["root"]
                 / "method_runs"
@@ -141,7 +163,8 @@ def _acquire_batches(args: argparse.Namespace) -> None:
                     str(batch_id),
                     "--output",
                     str(submission),
-                ]
+                ],
+                cpu_set=cpu_set,
             )
         else:
             if args.env_file is None:
@@ -174,7 +197,8 @@ def _acquire_batches(args: argparse.Namespace) -> None:
                     ),
                     "--env-file",
                     str(args.env_file.resolve()),
-                ]
+                ],
+                cpu_set=cpu_set,
             )
             submission = (
                 paths["root"]
@@ -210,7 +234,10 @@ def acquire(args: argparse.Namespace) -> None:
         raise ExperimentError(
             "formal acquisition requires authenticated GITHUB_TOKEN or GH_TOKEN"
         )
-    with campaign_acquisition_lease(paths["root"], args.method_id):
+    task = read_json(Path(manifest["task_spec"]["path"]))
+    cpu_set = configured_cpu_set(task, args.method_id)
+    print(f"{args.method_id}: starting independent acquisition on CPU set {cpu_set}", flush=True)
+    with github_api_rate_limit_env(paths["root"], task):
         _acquire_batches(args)
 
 
@@ -219,6 +246,7 @@ def evaluate(args: argparse.Namespace) -> None:
     manifest = read_json(paths["manifest"])
     verify_bound_campaign(manifest)
     task = read_json(Path(manifest["task_spec"]["path"]))
+    cpu_set = configured_cpu_set(task, args.method_id)
     batch_count = int(task["batch_policy"]["batches_per_method"])
     states = {
         batch_id: find_batch(manifest, args.method_id, batch_id)["status"]
@@ -246,7 +274,8 @@ def evaluate(args: argparse.Namespace) -> None:
                 str(batch_id),
                 "--cores",
                 str(args.cores),
-            ]
+            ],
+            cpu_set=cpu_set,
         )
     run_checked(
         [

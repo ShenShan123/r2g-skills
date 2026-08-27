@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from contextlib import contextmanager
 import copy
+import fcntl
 import hashlib
 import http.client
 import json
@@ -71,6 +73,41 @@ READ_ONLY_GIT = {"status", "log", "show", "ls-tree", "grep", "rev-parse", "diff"
 
 class TokenBudgetError(ExperimentError):
     pass
+
+
+@contextmanager
+def github_api_slot() -> Any:
+    """Coordinate GitHub REST pacing without serializing non-network work."""
+    lock_value = os.environ.get("R2G_EXPERIMENT1_GITHUB_API_LOCK")
+    if not lock_value:
+        yield
+        return
+    try:
+        interval = float(os.environ.get("R2G_EXPERIMENT1_GITHUB_API_MIN_INTERVAL_SECONDS", "2.2"))
+    except ValueError as exc:
+        raise ExperimentError("invalid GitHub API pacing interval") from exc
+    if interval <= 0:
+        raise ExperimentError("GitHub API pacing interval must be positive")
+    lock_path = Path(lock_value)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        lock.seek(0)
+        try:
+            previous = float(lock.read().strip() or "0")
+        except ValueError:
+            previous = 0.0
+        delay = interval - (time.monotonic() - previous)
+        if delay > 0:
+            time.sleep(delay)
+        try:
+            yield
+        finally:
+            lock.seek(0)
+            lock.truncate()
+            lock.write(str(time.monotonic()))
+            lock.flush()
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 NETWORK_RETRY_DELAYS = (0, 2, 5, 10, 20, 40, 60)
@@ -684,8 +721,9 @@ class VanillaRun:
                 time.sleep(delay)
             self.last_search_monotonic = time.monotonic()
             try:
-                with urllib.request.urlopen(request, timeout=60) as response:
-                    data = json.loads(response.read().decode("utf-8"))
+                with github_api_slot():
+                    with urllib.request.urlopen(request, timeout=60) as response:
+                        data = json.loads(response.read().decode("utf-8"))
                 break
             except urllib.error.HTTPError as exc:
                 last_error = exc
