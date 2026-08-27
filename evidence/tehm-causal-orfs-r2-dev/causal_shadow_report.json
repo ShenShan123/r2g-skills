@@ -9,7 +9,7 @@
     "transitions": 4
   },
   "derived_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-causal-orfs-r2-dev/tehm.sqlite",
-  "derived_db_sha256": "bdaf9da63d2705b0699f3db65c39acf77ac8b30fc2b4ab2556255ed4e2baff21",
+  "derived_db_sha256": "8746d36d043b10e7a45913cb87418adead896174f1483da1707fef798c1e2d3d",
   "fragments": [
     {
       "campaign_id": "orfs-authority-v6-next-full",
@@ -58,37 +58,72 @@
     {
       "compatibility_profile": null,
       "edge_ids": [
-        "causal_edge_404a9e4d06ddb8b9",
-        "causal_edge_5c2366f89f07575c",
+        "causal_edge_75c4ff08eabba22a",
         "causal_edge_67edc546e3893869",
         "causal_edge_6b0b5f69c5386e3a",
-        "causal_edge_75c4ff08eabba22a",
+        "causal_edge_5c2366f89f07575c",
+        "causal_edge_404a9e4d06ddb8b9",
         "causal_edge_e33bb77842bc2007"
       ],
       "evidence_level": "L1_EXECUTED_INTERVENTION",
       "mechanism_family": "DENSITY_RELIEF",
       "node_ids": [
+        "causal_node_67b3a7220291b7fb",
+        "causal_node_37ffcb6e47da058f",
         "causal_node_014cb05db8c44616",
         "causal_node_214a4fd0734caa1f",
-        "causal_node_37ffcb6e47da058f",
-        "causal_node_3c33e6afbde55dda",
-        "causal_node_67b3a7220291b7fb",
-        "causal_node_67bc401afc24ebdd",
         "causal_node_8dc17476c1c4df3d",
+        "causal_node_3c33e6afbde55dda",
+        "causal_node_67bc401afc24ebdd",
         "causal_node_e6f2c88348f315f8"
       ],
-      "path_digest": "sha1:6ddeffb8b1aa23df5c0fa77e2e1092f9bb310ec8",
-      "path_id": "causal_path_6ddeffb8b1aa23df",
+      "path_digest": "sha1:019c5fc33a8cd8c621525167d820e4a39d583269",
+      "path_id": "causal_path_019c5fc33a8cd8c6",
       "source_transition_ids": [
         "transition_c8ae328d3f86140c",
         "transition_ffc91c1a17437198"
       ],
       "status": "shadow",
       "support": {
+        "action_digests": [
+          "sha1:3e6d7fbfae0bce56a4640b853f782afd4eb31a08"
+        ],
         "evidence_levels": [
           "L1_EXECUTED_INTERVENTION"
         ],
+        "failure_graph_digests": [
+          "ctx_2e4908112cd771e6",
+          "ctx_cbeeca2d8cb0b582"
+        ],
         "fragment_count": 2,
+        "mechanism_signatures": [
+          {
+            "action_domain": "flow.CONFIG_DELTA",
+            "compatibility_profile": null,
+            "failure_graph_digest": "ctx_2e4908112cd771e6",
+            "guard": null,
+            "mechanism_family": "DENSITY_RELIEF",
+            "module": null,
+            "source_state": null,
+            "target_state": null,
+            "transformation_family": "DENSITY_RELIEF"
+          },
+          {
+            "action_domain": "flow.CONFIG_DELTA",
+            "compatibility_profile": null,
+            "failure_graph_digest": "ctx_cbeeca2d8cb0b582",
+            "guard": null,
+            "mechanism_family": "DENSITY_RELIEF",
+            "module": null,
+            "source_state": null,
+            "target_state": null,
+            "transformation_family": "DENSITY_RELIEF"
+          }
+        ],
+        "path_order_version": "causal-path-order-v1",
+        "primary_effect_keys": [
+          "effect_7903238f2ac07364"
+        ],
         "source_campaigns": [
           "orfs-authority-v6-next-full"
         ],
@@ -104,7 +139,7 @@
     {
       "eligible": false,
       "evidence_level": "L1_EXECUTED_INTERVENTION",
-      "path_id": "causal_path_6ddeffb8b1aa23df",
+      "path_id": "causal_path_019c5fc33a8cd8c6",
       "reason": "requires_controlled_pairs_and_disjoint_learner_lineages",
       "unique_designs": [
         "orfs-v6-and32:sky130hs:and32:base0",
@@ -122,7 +157,7 @@
       "eligible": false,
       "evidence_level": "L1_EXECUTED_INTERVENTION",
       "learner_eligible": true,
-      "path_id": "causal_path_6ddeffb8b1aa23df",
+      "path_id": "causal_path_019c5fc33a8cd8c6",
       "promotion_eligible": false,
       "reason": "path_evidence_level_below_required;controlled_intervention_support_missing",
       "required_level": "L2_CONTROLLED_INTERVENTION",

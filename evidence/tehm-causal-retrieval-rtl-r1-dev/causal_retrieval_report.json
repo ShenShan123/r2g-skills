@@ -12,14 +12,14 @@
               "matched_fields": [
                 "transformation_family"
               ],
-              "mechanism_family": "VALID_READY_COMMIT",
+              "mechanism_family": "FIFO_CAPACITY_COMPLETION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_42f76cc4010dde9d",
+              "path_id": "causal_path_7ff90c33d1686b14",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_19140f3d9bcf5f98"
+                "transition_a68b69d4f587fa2e"
               ],
               "status": "shadow"
             },
@@ -33,11 +33,11 @@
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_59a1a3831413cc4a",
+              "path_id": "causal_path_f09cc6a9b3e68ff1",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_7ec79970f8600e8f"
+                "transition_66da3c80fe636ba0"
               ],
               "status": "shadow"
             },
@@ -48,14 +48,14 @@
               "matched_fields": [
                 "transformation_family"
               ],
-              "mechanism_family": "FIFO_CAPACITY_COMPLETION",
+              "mechanism_family": "VALID_READY_COMMIT",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_e07349664998dcae",
+              "path_id": "causal_path_f3edf1bb3ed99c74",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_b48f55f45754745d"
+                "transition_f9f8a121a2c7ed48"
               ],
               "status": "shadow"
             }
@@ -69,14 +69,14 @@
               "matched_fields": [
                 "transformation_family"
               ],
-              "mechanism_family": "VALID_READY_COMMIT",
+              "mechanism_family": "FIFO_CAPACITY_COMPLETION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_42f76cc4010dde9d",
+              "path_id": "causal_path_7ff90c33d1686b14",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_19140f3d9bcf5f98"
+                "transition_a68b69d4f587fa2e"
               ],
               "status": "shadow"
             },
@@ -90,11 +90,11 @@
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_59a1a3831413cc4a",
+              "path_id": "causal_path_f09cc6a9b3e68ff1",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_7ec79970f8600e8f"
+                "transition_66da3c80fe636ba0"
               ],
               "status": "shadow"
             },
@@ -105,14 +105,14 @@
               "matched_fields": [
                 "transformation_family"
               ],
-              "mechanism_family": "FIFO_CAPACITY_COMPLETION",
+              "mechanism_family": "VALID_READY_COMMIT",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_e07349664998dcae",
+              "path_id": "causal_path_f3edf1bb3ed99c74",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_b48f55f45754745d"
+                "transition_f9f8a121a2c7ed48"
               ],
               "status": "shadow"
             }
@@ -138,14 +138,14 @@
               "matched_fields": [
                 "transformation_family"
               ],
-              "mechanism_family": "VALID_READY_COMMIT",
+              "mechanism_family": "FIFO_CAPACITY_COMPLETION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_42f76cc4010dde9d",
+              "path_id": "causal_path_7ff90c33d1686b14",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_19140f3d9bcf5f98"
+                "transition_a68b69d4f587fa2e"
               ],
               "status": "shadow"
             },
@@ -159,11 +159,11 @@
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_59a1a3831413cc4a",
+              "path_id": "causal_path_f09cc6a9b3e68ff1",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_7ec79970f8600e8f"
+                "transition_66da3c80fe636ba0"
               ],
               "status": "shadow"
             },
@@ -174,14 +174,14 @@
               "matched_fields": [
                 "transformation_family"
               ],
-              "mechanism_family": "FIFO_CAPACITY_COMPLETION",
+              "mechanism_family": "VALID_READY_COMMIT",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_e07349664998dcae",
+              "path_id": "causal_path_f3edf1bb3ed99c74",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_b48f55f45754745d"
+                "transition_f9f8a121a2c7ed48"
               ],
               "status": "shadow"
             }
@@ -195,14 +195,14 @@
               "matched_fields": [
                 "transformation_family"
               ],
-              "mechanism_family": "VALID_READY_COMMIT",
+              "mechanism_family": "FIFO_CAPACITY_COMPLETION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_42f76cc4010dde9d",
+              "path_id": "causal_path_7ff90c33d1686b14",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_19140f3d9bcf5f98"
+                "transition_a68b69d4f587fa2e"
               ],
               "status": "shadow"
             },
@@ -216,11 +216,11 @@
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_59a1a3831413cc4a",
+              "path_id": "causal_path_f09cc6a9b3e68ff1",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_7ec79970f8600e8f"
+                "transition_66da3c80fe636ba0"
               ],
               "status": "shadow"
             },
@@ -231,14 +231,14 @@
               "matched_fields": [
                 "transformation_family"
               ],
-              "mechanism_family": "FIFO_CAPACITY_COMPLETION",
+              "mechanism_family": "VALID_READY_COMMIT",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_e07349664998dcae",
+              "path_id": "causal_path_f3edf1bb3ed99c74",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_b48f55f45754745d"
+                "transition_f9f8a121a2c7ed48"
               ],
               "status": "shadow"
             }
@@ -269,11 +269,11 @@
               "mechanism_family": "HANDSHAKE_COMPLETION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_59a1a3831413cc4a",
+              "path_id": "causal_path_f09cc6a9b3e68ff1",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_7ec79970f8600e8f"
+                "transition_66da3c80fe636ba0"
               ],
               "status": "shadow"
             }
@@ -308,7 +308,7 @@
       "oracle_verdict": "PASS",
       "project": "p3_obligation_recovery",
       "transformation_family": "GUARD_STRENGTHEN",
-      "transition_id": "transition_ee4aa7fd5aeddffe"
+      "transition_id": "transition_9742c66e214a96ca"
     },
     {
       "arms": {
@@ -324,12 +324,12 @@
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_67e7db159d172695",
+              "path_id": "causal_path_b82b7592fc2fe5a5",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_0b131239d89953e9",
-                "transition_dd2e64068c4724e1"
+                "transition_afd2f3e5be69c10f",
+                "transition_cf9935138e7603da"
               ],
               "status": "shadow"
             }
@@ -346,12 +346,12 @@
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_67e7db159d172695",
+              "path_id": "causal_path_b82b7592fc2fe5a5",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_0b131239d89953e9",
-                "transition_dd2e64068c4724e1"
+                "transition_afd2f3e5be69c10f",
+                "transition_cf9935138e7603da"
               ],
               "status": "shadow"
             }
@@ -380,12 +380,12 @@
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_67e7db159d172695",
+              "path_id": "causal_path_b82b7592fc2fe5a5",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_0b131239d89953e9",
-                "transition_dd2e64068c4724e1"
+                "transition_afd2f3e5be69c10f",
+                "transition_cf9935138e7603da"
               ],
               "status": "shadow"
             }
@@ -402,12 +402,12 @@
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_67e7db159d172695",
+              "path_id": "causal_path_b82b7592fc2fe5a5",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_0b131239d89953e9",
-                "transition_dd2e64068c4724e1"
+                "transition_afd2f3e5be69c10f",
+                "transition_cf9935138e7603da"
               ],
               "status": "shadow"
             }
@@ -438,12 +438,12 @@
               "mechanism_family": "RESET_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_67e7db159d172695",
+              "path_id": "causal_path_b82b7592fc2fe5a5",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_0b131239d89953e9",
-                "transition_dd2e64068c4724e1"
+                "transition_afd2f3e5be69c10f",
+                "transition_cf9935138e7603da"
               ],
               "status": "shadow"
             }
@@ -478,7 +478,7 @@
       "oracle_verdict": "PASS",
       "project": "p3_reset_restore_b",
       "transformation_family": "RESET_RESTORE",
-      "transition_id": "transition_c3f207c24fc1dd5d"
+      "transition_id": "transition_ca5788c0955aef99"
     },
     {
       "arms": {
@@ -494,12 +494,12 @@
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_57bffccdc25dcc11",
+              "path_id": "causal_path_66149cff0545672c",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_985504d3a02868df",
-                "transition_e3fd6b88fc6de2d4"
+                "transition_cb7c3069ea28348b",
+                "transition_e7cb10d56f5d8405"
               ],
               "status": "shadow"
             }
@@ -516,12 +516,12 @@
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_57bffccdc25dcc11",
+              "path_id": "causal_path_66149cff0545672c",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_985504d3a02868df",
-                "transition_e3fd6b88fc6de2d4"
+                "transition_cb7c3069ea28348b",
+                "transition_e7cb10d56f5d8405"
               ],
               "status": "shadow"
             }
@@ -550,12 +550,12 @@
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_57bffccdc25dcc11",
+              "path_id": "causal_path_66149cff0545672c",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_985504d3a02868df",
-                "transition_e3fd6b88fc6de2d4"
+                "transition_cb7c3069ea28348b",
+                "transition_e7cb10d56f5d8405"
               ],
               "status": "shadow"
             }
@@ -572,12 +572,12 @@
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_57bffccdc25dcc11",
+              "path_id": "causal_path_66149cff0545672c",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_985504d3a02868df",
-                "transition_e3fd6b88fc6de2d4"
+                "transition_cb7c3069ea28348b",
+                "transition_e7cb10d56f5d8405"
               ],
               "status": "shadow"
             }
@@ -608,12 +608,12 @@
               "mechanism_family": "WIDTH_SEMANTIC_LOSS",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_57bffccdc25dcc11",
+              "path_id": "causal_path_66149cff0545672c",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_985504d3a02868df",
-                "transition_e3fd6b88fc6de2d4"
+                "transition_cb7c3069ea28348b",
+                "transition_e7cb10d56f5d8405"
               ],
               "status": "shadow"
             }
@@ -648,7 +648,7 @@
       "oracle_verdict": "PASS",
       "project": "p3_width_correct_c",
       "transformation_family": "WIDTH_CORRECT",
-      "transition_id": "transition_ef7b0a19f963c6f8"
+      "transition_id": "transition_9f581c9b3392e7d0"
     },
     {
       "arms": {
@@ -664,12 +664,12 @@
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_fd87407f99ad71f7",
+              "path_id": "causal_path_7db028af3afece27",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_1fc03bde886e7c27",
-                "transition_be14c18e19f71231"
+                "transition_6f906a4d273f5982",
+                "transition_9422852166c1765d"
               ],
               "status": "shadow"
             }
@@ -686,12 +686,12 @@
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_fd87407f99ad71f7",
+              "path_id": "causal_path_7db028af3afece27",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_1fc03bde886e7c27",
-                "transition_be14c18e19f71231"
+                "transition_6f906a4d273f5982",
+                "transition_9422852166c1765d"
               ],
               "status": "shadow"
             }
@@ -720,12 +720,12 @@
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_fd87407f99ad71f7",
+              "path_id": "causal_path_7db028af3afece27",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_1fc03bde886e7c27",
-                "transition_be14c18e19f71231"
+                "transition_6f906a4d273f5982",
+                "transition_9422852166c1765d"
               ],
               "status": "shadow"
             }
@@ -742,12 +742,12 @@
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_fd87407f99ad71f7",
+              "path_id": "causal_path_7db028af3afece27",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_1fc03bde886e7c27",
-                "transition_be14c18e19f71231"
+                "transition_6f906a4d273f5982",
+                "transition_9422852166c1765d"
               ],
               "status": "shadow"
             }
@@ -778,12 +778,12 @@
               "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
               "mechanism_match": true,
               "mismatched_fields": [],
-              "path_id": "causal_path_fd87407f99ad71f7",
+              "path_id": "causal_path_7db028af3afece27",
               "reason": "causal_mechanism_match",
               "score": 0.625,
               "source_transition_ids": [
-                "transition_1fc03bde886e7c27",
-                "transition_be14c18e19f71231"
+                "transition_6f906a4d273f5982",
+                "transition_9422852166c1765d"
               ],
               "status": "shadow"
             }
@@ -818,11 +818,11 @@
       "oracle_verdict": "PASS",
       "project": "p3_overlap_priority_c",
       "transformation_family": "PRIORITY_REORDER",
-      "transition_id": "transition_1bf5498efe03ae60"
+      "transition_id": "transition_55b7a315a060f0e3"
     }
   ],
   "derived_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-causal-retrieval-rtl-r1-dev/tehm.sqlite",
-  "derived_db_sha256": "79a5fc7d53ec9a22303c4785bd9758dbaa56423fb2fbef6a58d6f82f6b4033f3",
+  "derived_db_sha256": "863c717058d83bf54e684c48b9a506249f57a0b4674c8dc38a883fbef9791ac4",
   "evaluation_only": true,
   "firewall": {
     "canonical_memory_mutation": "none",
@@ -855,31 +855,31 @@
   },
   "production_promotion_eligible": false,
   "promotion_attempted": false,
-  "report_digest": "sha256:d1d5cfcc6836ad6086fc41bbf6708acce2ea58266af8e7cd117702a5bd73e7ed",
+  "report_digest": "sha256:697507ccf0ae17572e74cbb4f25c68da2aef2590796dee50822ca0254f762800",
   "source_db": "/data1/zhangdy/Typed-Executable-Hardware-Memory/evidence/tehm-evidence-freeze-v4-dev/closed_loop/tehm.sqlite",
-  "source_db_sha256": "968cbb2efae17d33a7f5af13196a9e5a544950ef2f7aeda8f98d6183400fe47b",
+  "source_db_sha256": "298a04ca1f0524245fa2f57c6570b69fce85dff818a7ce6a83172c76cb0078b1",
   "training": {
     "path_count": 6,
     "paths": [
       {
         "compatibility_profile": "rtl.fsm.single_guard.v1",
         "edge_ids": [
-          "causal_edge_54368e4d3aaf2182",
-          "causal_edge_57c767907af386f4",
-          "causal_edge_fb79720e0d09446b"
+          "causal_edge_981d6365d126e70a",
+          "causal_edge_b5cc872d1798c060",
+          "causal_edge_38313dcc733e9666"
         ],
         "evidence_level": "L1_EXECUTED_INTERVENTION",
         "mechanism_family": "FIFO_CAPACITY_COMPLETION",
         "node_ids": [
-          "causal_node_c35ca5a37b6c0993",
-          "causal_node_c5b4805c65d5662d",
-          "causal_node_f4e1b6c17b2a3076",
-          "causal_node_fd8b0aedd162d50d"
+          "causal_node_cec1967c245f5764",
+          "causal_node_0cfb589dad113f57",
+          "causal_node_ed980ef90b25459b",
+          "causal_node_85ccfecbb6475a7e"
         ],
-        "path_digest": "sha1:e07349664998dcae46123313eacca6262f10207b",
-        "path_id": "causal_path_e07349664998dcae",
+        "path_digest": "sha1:7ff90c33d1686b14cb7c7682908248afae0b5d95",
+        "path_id": "causal_path_7ff90c33d1686b14",
         "source_transition_ids": [
-          "transition_b48f55f45754745d"
+          "transition_a68b69d4f587fa2e"
         ],
         "status": "shadow",
         "support": {
@@ -906,6 +906,7 @@
               "transformation_family": "GUARD_STRENGTHEN"
             }
           ],
+          "path_order_version": "causal-path-order-v1",
           "primary_effect_keys": [
             "effect_bfe387b8d475f70c"
           ],
@@ -920,22 +921,22 @@
       {
         "compatibility_profile": "rtl.fsm.single_guard.v1",
         "edge_ids": [
-          "causal_edge_070bb2eb4471a179",
-          "causal_edge_2a7e170792de0c14",
-          "causal_edge_b925919d900c364f"
+          "causal_edge_fd9ea4c406c76a2b",
+          "causal_edge_94ee37abcbecc994",
+          "causal_edge_08104956a615746c"
         ],
         "evidence_level": "L1_EXECUTED_INTERVENTION",
         "mechanism_family": "HANDSHAKE_COMPLETION",
         "node_ids": [
-          "causal_node_049356d70ea2968f",
-          "causal_node_3a318f9a7a476089",
-          "causal_node_5263e3c9dafb360b",
-          "causal_node_d41e6e793c2737f7"
+          "causal_node_4bb1ef71ecdc9783",
+          "causal_node_be87771fef0f394e",
+          "causal_node_24d1eab0338e916c",
+          "causal_node_29aba5c833815aac"
         ],
-        "path_digest": "sha1:59a1a3831413cc4a6211b4737251b9c7650a6e6b",
-        "path_id": "causal_path_59a1a3831413cc4a",
+        "path_digest": "sha1:f09cc6a9b3e68ff1073eb3e4b7d8e574c52ef2b0",
+        "path_id": "causal_path_f09cc6a9b3e68ff1",
         "source_transition_ids": [
-          "transition_7ec79970f8600e8f"
+          "transition_66da3c80fe636ba0"
         ],
         "status": "shadow",
         "support": {
@@ -962,6 +963,7 @@
               "transformation_family": "GUARD_STRENGTHEN"
             }
           ],
+          "path_order_version": "causal-path-order-v1",
           "primary_effect_keys": [
             "effect_bfe387b8d475f70c"
           ],
@@ -976,30 +978,30 @@
       {
         "compatibility_profile": "rtl.protocol.overlap_priority.v1",
         "edge_ids": [
-          "causal_edge_0ade2707ed183b71",
-          "causal_edge_4a9d3d794a08d01e",
-          "causal_edge_9102015585229fee",
-          "causal_edge_9a8334c293feabf8",
-          "causal_edge_c55cbf81e2d8b294",
-          "causal_edge_fad400f3908795de"
+          "causal_edge_cd3a4ad7d1086667",
+          "causal_edge_a115a3b754f9a4de",
+          "causal_edge_619a01d99cb1f798",
+          "causal_edge_ac555a5be1c3eefe",
+          "causal_edge_f58b6c7ab2733093",
+          "causal_edge_153baebd4d749276"
         ],
         "evidence_level": "L1_EXECUTED_INTERVENTION",
         "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
         "node_ids": [
-          "causal_node_10c787ee76430055",
-          "causal_node_3f135ed514fc4b8b",
-          "causal_node_43aa17b0ddf6ef1b",
-          "causal_node_5ec2c47a254010ee",
-          "causal_node_84c301f4d49afa16",
-          "causal_node_b0efd3cac2562322",
-          "causal_node_c6973728c4898743",
-          "causal_node_d7ac8a48283e94c6"
+          "causal_node_e31f7fd4632e0705",
+          "causal_node_23d659e451419e90",
+          "causal_node_7bb47ecedbe01132",
+          "causal_node_04c268114825e508",
+          "causal_node_8c8a9d3c83dec721",
+          "causal_node_2cf7346417abe968",
+          "causal_node_e1c83b3d5ebac9ec",
+          "causal_node_d7956ceb77867b21"
         ],
-        "path_digest": "sha1:fd87407f99ad71f72a84ee3b5b77dd2d3a0b55a9",
-        "path_id": "causal_path_fd87407f99ad71f7",
+        "path_digest": "sha1:7db028af3afece273fd1b3f71302a0a1d7019f59",
+        "path_id": "causal_path_7db028af3afece27",
         "source_transition_ids": [
-          "transition_1fc03bde886e7c27",
-          "transition_be14c18e19f71231"
+          "transition_6f906a4d273f5982",
+          "transition_9422852166c1765d"
         ],
         "status": "shadow",
         "support": {
@@ -1039,6 +1041,7 @@
               "transformation_family": "PRIORITY_REORDER"
             }
           ],
+          "path_order_version": "causal-path-order-v1",
           "primary_effect_keys": [
             "effect_626bbe4b8044fb29"
           ],
@@ -1054,30 +1057,30 @@
       {
         "compatibility_profile": "rtl.sequential.reset_branch.v1",
         "edge_ids": [
-          "causal_edge_20caedf7d13c1678",
-          "causal_edge_40f01984abc89167",
-          "causal_edge_72a216ec3c4286d1",
-          "causal_edge_898ae6a8bcabfbe6",
-          "causal_edge_bc4dde430c3d8823",
-          "causal_edge_ce7bab3657c3a6e0"
+          "causal_edge_754d203a22718ea8",
+          "causal_edge_53ebe5ad6c73e0e0",
+          "causal_edge_c81dfbf9677438a8",
+          "causal_edge_96a865d938366bc2",
+          "causal_edge_449d997103446456",
+          "causal_edge_c0d53e4e3795537c"
         ],
         "evidence_level": "L1_EXECUTED_INTERVENTION",
         "mechanism_family": "RESET_SEMANTIC_LOSS",
         "node_ids": [
-          "causal_node_0dc3eb2851f2f104",
-          "causal_node_3dba7cff193f2833",
-          "causal_node_79bcaf27caa19b5d",
-          "causal_node_95dbe24c12fb4d7d",
-          "causal_node_affac566f1ce9470",
-          "causal_node_c1d576f3173746b0",
-          "causal_node_e7809dac5c04428e",
-          "causal_node_f881d5a99e4b4a8e"
+          "causal_node_f32ebf79ab8c9c24",
+          "causal_node_ff3d82e1cccbddc1",
+          "causal_node_7a91524b6f277e3d",
+          "causal_node_63b3fd221de3a0e7",
+          "causal_node_c4cc6fa984d2be47",
+          "causal_node_e97cbe2489a5f22f",
+          "causal_node_0bb790d90bf7458c",
+          "causal_node_381cfc4597149535"
         ],
-        "path_digest": "sha1:67e7db159d172695a8a2fce73bfa5bf6a5451fbc",
-        "path_id": "causal_path_67e7db159d172695",
+        "path_digest": "sha1:b82b7592fc2fe5a59baa1a649ed7997e17eb336c",
+        "path_id": "causal_path_b82b7592fc2fe5a5",
         "source_transition_ids": [
-          "transition_0b131239d89953e9",
-          "transition_dd2e64068c4724e1"
+          "transition_afd2f3e5be69c10f",
+          "transition_cf9935138e7603da"
         ],
         "status": "shadow",
         "support": {
@@ -1117,6 +1120,7 @@
               "transformation_family": "RESET_RESTORE"
             }
           ],
+          "path_order_version": "causal-path-order-v1",
           "primary_effect_keys": [
             "effect_2597256087f5749b"
           ],
@@ -1132,22 +1136,22 @@
       {
         "compatibility_profile": "rtl.fsm.single_guard.v1",
         "edge_ids": [
-          "causal_edge_6fa523f23f9d28fb",
-          "causal_edge_9a8d5af67641ab22",
-          "causal_edge_9dedce945231c719"
+          "causal_edge_2e55306f28e9243e",
+          "causal_edge_3e9ba2df9af561e3",
+          "causal_edge_b5b0e253718c11a0"
         ],
         "evidence_level": "L1_EXECUTED_INTERVENTION",
         "mechanism_family": "VALID_READY_COMMIT",
         "node_ids": [
-          "causal_node_47005708be7a008f",
-          "causal_node_49879330e801dac2",
-          "causal_node_d4cd89aa5d9ae4b3",
-          "causal_node_ed5b3bfe7df5b1b4"
+          "causal_node_b17625951eb52627",
+          "causal_node_74e11ef81396fb1e",
+          "causal_node_a840bfa531d6f666",
+          "causal_node_f5be4676d7157d48"
         ],
-        "path_digest": "sha1:42f76cc4010dde9d3000a23be475e5f6482b4c6f",
-        "path_id": "causal_path_42f76cc4010dde9d",
+        "path_digest": "sha1:f3edf1bb3ed99c74f36d1f967b5234a5f8753b65",
+        "path_id": "causal_path_f3edf1bb3ed99c74",
         "source_transition_ids": [
-          "transition_19140f3d9bcf5f98"
+          "transition_f9f8a121a2c7ed48"
         ],
         "status": "shadow",
         "support": {
@@ -1174,6 +1178,7 @@
               "transformation_family": "GUARD_STRENGTHEN"
             }
           ],
+          "path_order_version": "causal-path-order-v1",
           "primary_effect_keys": [
             "effect_bfe387b8d475f70c"
           ],
@@ -1188,30 +1193,30 @@
       {
         "compatibility_profile": "rtl.combinational.width_assignment.v1",
         "edge_ids": [
-          "causal_edge_32e121deefabbc18",
-          "causal_edge_5f86a3f07010d1cc",
-          "causal_edge_98cb49f57eb89177",
-          "causal_edge_be4e3cd9b6ccb621",
-          "causal_edge_ca840cc0fc2f3ecb",
-          "causal_edge_d4f84bca83ecc4b7"
+          "causal_edge_ffe1ffaae1d26708",
+          "causal_edge_973f5e36c03e607e",
+          "causal_edge_e9afd7045d8efcaa",
+          "causal_edge_24e43f8d5a378d5d",
+          "causal_edge_6b5e9fbc1e02fc85",
+          "causal_edge_f9874ab0e54f00a7"
         ],
         "evidence_level": "L1_EXECUTED_INTERVENTION",
         "mechanism_family": "WIDTH_SEMANTIC_LOSS",
         "node_ids": [
-          "causal_node_0445cbe66171043e",
-          "causal_node_0a22c49a8d0dbdec",
-          "causal_node_4f5a7748fd51a609",
-          "causal_node_905c0d4c68550a9f",
-          "causal_node_a15407b86259c259",
-          "causal_node_c3405acc698f4f94",
-          "causal_node_ecea14cf5fc035d8",
-          "causal_node_fa98e7c692a2e2c4"
+          "causal_node_9fd3873462e3c761",
+          "causal_node_e1e11d18bc464a09",
+          "causal_node_496b13341a47cd0e",
+          "causal_node_86f1d9d3da61f3fb",
+          "causal_node_a92d56b1ae3c1a8c",
+          "causal_node_946f0eeab76c8ab2",
+          "causal_node_0a7b608293880ea4",
+          "causal_node_44383c8be5d4388c"
         ],
-        "path_digest": "sha1:57bffccdc25dcc1123e3256849537f4a5e32dd0a",
-        "path_id": "causal_path_57bffccdc25dcc11",
+        "path_digest": "sha1:66149cff0545672cd44d2c7a808a5ab92f1724fa",
+        "path_id": "causal_path_66149cff0545672c",
         "source_transition_ids": [
-          "transition_985504d3a02868df",
-          "transition_e3fd6b88fc6de2d4"
+          "transition_cb7c3069ea28348b",
+          "transition_e7cb10d56f5d8405"
         ],
         "status": "shadow",
         "support": {
@@ -1251,6 +1256,7 @@
               "transformation_family": "WIDTH_CORRECT"
             }
           ],
+          "path_order_version": "causal-path-order-v1",
           "primary_effect_keys": [
             "effect_f37ba2a9d2c72344"
           ],
@@ -1270,63 +1276,63 @@
         "lineage_id": "positive_valid_ready_fsm",
         "mechanism_family": "VALID_READY_COMMIT",
         "project": "p3_positive_valid_ready",
-        "transition_id": "transition_19140f3d9bcf5f98"
+        "transition_id": "transition_f9f8a121a2c7ed48"
       },
       {
         "compatibility_profile": "rtl.fsm.single_guard.v1",
         "lineage_id": "positive_fifo_space_fsm",
         "mechanism_family": "FIFO_CAPACITY_COMPLETION",
         "project": "p3_positive_fifo_space",
-        "transition_id": "transition_b48f55f45754745d"
+        "transition_id": "transition_a68b69d4f587fa2e"
       },
       {
         "compatibility_profile": "rtl.fsm.single_guard.v1",
         "lineage_id": "obligation_recovery_b_fsm",
         "mechanism_family": "HANDSHAKE_COMPLETION",
         "project": "p3_obligation_recovery_b",
-        "transition_id": "transition_7ec79970f8600e8f"
+        "transition_id": "transition_66da3c80fe636ba0"
       },
       {
         "compatibility_profile": "rtl.sequential.reset_branch.v1",
         "lineage_id": "reset_restore_a",
         "mechanism_family": "RESET_SEMANTIC_LOSS",
         "project": "p3_reset_restore_a",
-        "transition_id": "transition_0b131239d89953e9"
+        "transition_id": "transition_cf9935138e7603da"
       },
       {
         "compatibility_profile": "rtl.sequential.reset_branch.v1",
         "lineage_id": "reset_restore_c",
         "mechanism_family": "RESET_SEMANTIC_LOSS",
         "project": "p3_reset_restore_c",
-        "transition_id": "transition_dd2e64068c4724e1"
+        "transition_id": "transition_afd2f3e5be69c10f"
       },
       {
         "compatibility_profile": "rtl.combinational.width_assignment.v1",
         "lineage_id": "width_correct_a",
         "mechanism_family": "WIDTH_SEMANTIC_LOSS",
         "project": "p3_width_correct_a",
-        "transition_id": "transition_985504d3a02868df"
+        "transition_id": "transition_cb7c3069ea28348b"
       },
       {
         "compatibility_profile": "rtl.combinational.width_assignment.v1",
         "lineage_id": "width_correct_b",
         "mechanism_family": "WIDTH_SEMANTIC_LOSS",
         "project": "p3_width_correct_b",
-        "transition_id": "transition_e3fd6b88fc6de2d4"
+        "transition_id": "transition_e7cb10d56f5d8405"
       },
       {
         "compatibility_profile": "rtl.protocol.overlap_priority.v1",
         "lineage_id": "overlap_priority_a",
         "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
         "project": "p3_overlap_priority_a",
-        "transition_id": "transition_be14c18e19f71231"
+        "transition_id": "transition_9422852166c1765d"
       },
       {
         "compatibility_profile": "rtl.protocol.overlap_priority.v1",
         "lineage_id": "overlap_priority_b",
         "mechanism_family": "OVERLAP_PRIORITY_ARBITRATION",
         "project": "p3_overlap_priority_b",
-        "transition_id": "transition_1fc03bde886e7c27"
+        "transition_id": "transition_6f906a4d273f5982"
       }
     ]
   },
