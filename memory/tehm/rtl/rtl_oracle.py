@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-ICARUS_VERSION = "icarus-oracle-v0.1"
+ICARUS_VERSION = "icarus-oracle-v0.2"
 RTL_OBLIGATIONS = ("RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS",
                    "RTL_COMPILE_PASS")
 
@@ -34,13 +34,15 @@ class IcarusOracle:
         """Compile + run one testbench. ``kind`` = target | regression."""
         if not self.available:
             return {"verdict": "UNKNOWN", "oracle_type": "UNKNOWN",
-                    "reason": "iverilog/vvp not available", "output": ""}
+                    "reason": "iverilog/vvp not available", "output": "",
+                    "compile_verdict": "UNKNOWN", "kind": kind}
         work = Path(tempfile.mkdtemp(prefix="tehm_icarus_"))
         sim = work / "sim"
         compile_ok = self._compile(rtl_files, tb, sim)
         if not compile_ok:
             return {"verdict": "FAIL", "oracle_type": "COMPILE",
-                    "reason": "compile failed", "output": self._last_output}
+                    "reason": "compile failed", "output": self._last_output,
+                    "compile_verdict": "FAIL", "kind": kind}
         run_ok, output = self._run(sim)
         verdict = "PASS" if run_ok else "FAIL"
         return {
@@ -51,6 +53,8 @@ class IcarusOracle:
             "confidence_tier": "R" if kind == "regression" else "T",
             "output": output,
             "reason": "" if run_ok else "testbench $fatal / runtime error",
+            "compile_verdict": "PASS",
+            "kind": kind,
         }
 
     def verify(self, rtl_files: list[Path], *, target_tb: Path | None,
@@ -58,9 +62,12 @@ class IcarusOracle:
                ) -> dict:
         """Run target + frozen regression; produce a VerifierSnapshot verdict."""
         target = self.run_test(rtl_files, target_tb, kind="target") \
-            if target_tb else {"verdict": "UNKNOWN"}
+            if target_tb else {"verdict": "UNKNOWN",
+                               "compile_verdict": "UNKNOWN", "kind": "target"}
         regression = self.run_test(rtl_files, regression_tb, kind="regression") \
-            if regression_tb else {"verdict": "UNKNOWN"}
+            if regression_tb else {"verdict": "UNKNOWN",
+                                   "compile_verdict": "UNKNOWN",
+                                   "kind": "regression"}
         target_ok = target.get("verdict") == "PASS"
         regression_ok = regression.get("verdict") == "PASS"
 
@@ -73,31 +80,49 @@ class IcarusOracle:
 
         created_regressions = []
         newly_observed = []
-        if target_ok and not regression_ok:
+        # A missing/unknown regression is an incomplete oracle, not evidence
+        # that the target fix created a regression.  Only a definitive FAIL
+        # in the frozen regression arm can create that observation.
+        if target_ok and regression.get("verdict") == "FAIL":
             created_regressions.append("RTL_FROZEN_REGRESSION_PASS")
         if not target_ok and target.get("verdict") == "FAIL":
             newly_observed.append("RTL_TARGET_TEST_PASS")
 
-        required = obligations or RTL_OBLIGATIONS
-        checked = [o for o in required
-                   if o in ("RTL_COMPILE_PASS",) or target.get("verdict") != "UNKNOWN"
-                   or regression.get("verdict") != "UNKNOWN"]
+        required = tuple(dict.fromkeys(obligations or RTL_OBLIGATIONS))
+        evidence = {
+            "RTL_TARGET_TEST_PASS": target.get("verdict") != "UNKNOWN",
+            "RTL_FROZEN_REGRESSION_PASS": regression.get("verdict") != "UNKNOWN",
+            # A compile result is evidence for the compile obligation whether
+            # it passed or failed; a missing test arm contributes no compile
+            # evidence.  This keeps coverage about checked obligations rather
+            # than silently treating an absent arm as checked.
+            "RTL_COMPILE_PASS": any(
+                run.get("compile_verdict") != "UNKNOWN"
+                for run in (target, regression)),
+        }
+        checked = [o for o in required if evidence.get(o, False)]
+        known_refs = []
+        if target.get("verdict") != "UNKNOWN":
+            known_refs.append("target")
+        if regression.get("verdict") != "UNKNOWN":
+            known_refs.append("regression")
+        oracle_type, confidence_tier = _aggregate_oracle_type(
+            target, regression, target_known=bool(known_refs),
+            regression_known=regression.get("verdict") != "UNKNOWN")
         return {
             "verdict": verdict,
-            "oracle_type": "REGRESSION",
+            "oracle_type": oracle_type,
             "scope": "rtl:target+regression",
-            "confidence_tier": "T",
+            "confidence_tier": confidence_tier,
             "obligation_coverage": len(checked) / len(required) if required else None,
-            "evidence_refs": [r for r in ("target", "regression")
-                              if target.get("verdict") != "UNKNOWN"
-                              or regression.get("verdict") != "UNKNOWN"],
+            "oracle_complete": bool(required) and len(checked) == len(required),
+            "evidence_refs": known_refs,
             "created_regressions": created_regressions,
             "newly_observed_failures": newly_observed,
             "target": target,
             "regression": regression,
             "extractor_version": ICARUS_VERSION,
         }
-
     # -- internals ------------------------------------------------------------
 
     def _compile(self, rtl_files, tb, sim: Path) -> bool:
@@ -113,3 +138,26 @@ class IcarusOracle:
                               capture_output=True, text=True,
                               timeout=self.timeout)
         return proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def _aggregate_oracle_type(target: dict, regression: dict, *,
+                           target_known: bool,
+                           regression_known: bool) -> tuple[str, str]:
+    """Report the strongest oracle actually exercised by this invocation.
+
+    The aggregate used to claim ``REGRESSION``/tier ``R`` even when only the
+    target test (or merely compilation) ran.  That made partial verification
+    look equivalent to a complete target+frozen-regression receipt.
+    """
+    if regression_known and regression.get("oracle_type") == "REGRESSION":
+        return "REGRESSION", "R"
+    if ((target_known and target.get("oracle_type") == "COMPILE") or
+            (regression_known and regression.get("oracle_type") == "COMPILE")):
+        return "COMPILE", "H"
+    if target_known and target.get("oracle_type") == "TARGET_TEST":
+        return "TARGET_TEST", "T"
+    if regression_known:
+        return str(regression.get("oracle_type", "UNKNOWN")), "H"
+    if target_known:
+        return str(target.get("oracle_type", "UNKNOWN")), "H"
+    return "UNKNOWN", "H"

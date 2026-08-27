@@ -330,7 +330,15 @@ snapshot 和 runtime-load receipt 在每次复用时都会从数据库字段重�
 及 content-addressed ID；`INSERT OR IGNORE` 遇到同一 ID 的冲突内容不再静默接受，
 直接 SQL 篡改会被 registry/authority/loader 拒绝或转换为不可晋级结果。该 guard
 不把 `status`、canonical evidence 或 production runtime 变成可写入口；当前全套
-回归为 `459 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+回归为 `462 passed`，仍保持 shadow/evaluation-only 的 promotion 边界。
+
+RTL oracle 的 obligation coverage 也改为逐项 fail-closed 重放：
+`RTL_TARGET_TEST_PASS`、`RTL_FROZEN_REGRESSION_PASS` 和 `RTL_COMPILE_PASS` 只在
+对应 test/compile arm 实际产生结果时计入 checked；缺失 target 或 frozen regression
+不会被另一侧的结果掩盖。partial run 会返回真实的 `oracle_type`/confidence tier、
+`oracle_complete=false`，且 target 通过但 regression 未运行不再伪造
+`created_regressions`。因此 target-only 仍可作为 T-tier 执行反馈，但不能满足完整
+RTL verifier 或 promotion gate；只有两侧都实际运行才可得到完整 R-tier coverage。
 
 Dataset membership 也有同一条硬约束：只有 training split 可以标记
 `learner_eligible`；capture/assignment 会拒绝非 training 的显式 opt-in，直接写入的

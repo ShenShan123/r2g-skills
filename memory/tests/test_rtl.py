@@ -336,6 +336,59 @@ def test_icarus_oracle_detects_regression():
     assert "RTL_FROZEN_REGRESSION_PASS" in res["created_regressions"]
 
 
+def test_icarus_oracle_partial_target_is_not_complete_regression():
+    """A target-only run must not claim frozen-regression coverage."""
+    oracle = IcarusOracle()
+    if not oracle.available:
+        pytest.skip("iverilog/vvp not available")
+    fixed, _ = apply_guard_strengthen(
+        SRC, source_state="SEND", target_state="DONE", add_condition="ack")
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        fixed_path = Path(tmp) / "req_ack_fsm.v"
+        fixed_path.write_text(fixed)
+        result = oracle.verify(
+            [fixed_path], target_tb=PROJ / "tb" / "tb_handshake.v",
+            regression_tb=None)
+    assert result["verdict"] == "UNKNOWN"
+    assert result["oracle_type"] == "TARGET_TEST"
+    assert result["confidence_tier"] == "T"
+    assert result["obligation_coverage"] == pytest.approx(2 / 3)
+    assert result["oracle_complete"] is False
+    assert result["evidence_refs"] == ["target"]
+    assert result["created_regressions"] == []
+
+
+def test_icarus_oracle_partial_regression_is_not_target_evidence():
+    """A regression-only run must leave the target obligation unchecked."""
+    oracle = IcarusOracle()
+    if not oracle.available:
+        pytest.skip("iverilog/vvp not available")
+    result = oracle.verify(
+        [PROJ / "rtl" / "req_ack_fsm.v"],
+        target_tb=None,
+        regression_tb=PROJ / "tb" / "tb_basic.v")
+    assert result["verdict"] == "UNKNOWN"
+    assert result["oracle_type"] == "REGRESSION"
+    assert result["confidence_tier"] == "R"
+    assert result["obligation_coverage"] == pytest.approx(2 / 3)
+    assert result["oracle_complete"] is False
+    assert result["evidence_refs"] == ["regression"]
+    assert result["created_regressions"] == []
+
+
+def test_icarus_oracle_without_testbench_has_no_checked_obligations():
+    oracle = IcarusOracle()
+    if not oracle.available:
+        pytest.skip("iverilog/vvp not available")
+    result = oracle.verify([PROJ / "rtl" / "req_ack_fsm.v"],
+                           target_tb=None, regression_tb=None)
+    assert result["verdict"] == "UNKNOWN"
+    assert result["obligation_coverage"] == 0.0
+    assert result["oracle_complete"] is False
+    assert result["evidence_refs"] == []
+
+
 # -- RTL capture --------------------------------------------------------------
 
 def test_capture_rtl_fix_real_oracle(tmp_path):
