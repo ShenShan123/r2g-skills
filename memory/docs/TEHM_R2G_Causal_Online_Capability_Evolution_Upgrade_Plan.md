@@ -2018,7 +2018,9 @@ case 的 project、typed action、唯一 `lineage_id` 以及 training/held-out f
 时任何失败都留在分母，独立 lineage 数不足则输出 `NOT_ESTABLISHED`。因此它适合累积
 C7 证据，但不会自动进入 canonical 或 production；只有显式隔离 ledger 中的每条 receipt
 都可验证、且后续 capability authority 的其他 gates 全部建立，才可交给独立 authority
-审查。
+审查。批处理在隔离 ledger 中同时生成内容寻址的 `capability_gate:C7` 聚合 evidence；
+C7 引用可携带多个 retention receipt ID，authority 消费时逐条重放并拒绝任一失效项，
+不把聚合摘要当作新的事实来源。
 
 ---
 

@@ -11,6 +11,7 @@ the optional retention ledger is an isolated clone of the attribution DB.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import tempfile
@@ -24,6 +25,9 @@ from build_orfs_capability_retention import (  # noqa: E402
     _load_policy_binding,
     build_orfs_capability_retention,
 )
+from tehm import db  # noqa: E402
+from tehm.capability.registry import record_capability_evidence  # noqa: E402
+from tehm.ids import stable_dumps  # noqa: E402
 
 
 BATCH_VERSION = "orfs-capability-retention-batch-v1"
@@ -179,6 +183,46 @@ def build_orfs_capability_retention_batch(
     else:
         batch_status = "PASS"
         reasons = []
+    c7_evidence = None
+    if ledger_path is not None:
+        # The aggregate row is itself capability evidence.  Its payload is
+        # represented by the receipt IDs below; verification of authority
+        # replays every referenced immutable ledger row rather than trusting
+        # this summary verdict.
+        attribution = _load(report_path)
+        capability_id = str((attribution.get("capability") or {}).get(
+            "capability_id") or "")
+        receipt_ids = [row["retention_receipt_id"] for row in results
+                       if row["retention_receipt_id"]]
+        aggregate = {
+            "version": BATCH_VERSION,
+            "capability_id": capability_id,
+            "minimum_independent_lineages": minimum,
+            "lineages": [row["lineage_id"] for row in results],
+            "retention_receipt_ids": receipt_ids,
+            "batch_status": batch_status,
+        }
+        evidence_id = "retention_batch_" + hashlib.sha256(
+            stable_dumps(aggregate).encode("utf-8")).hexdigest()[:20]
+        ledger = db.connect(ledger_path)
+        try:
+            evidence_digest = record_capability_evidence(
+                ledger, capability_id=capability_id,
+                evidence_type="capability_gate:C7", evidence_id=evidence_id,
+                split="heldout", verdict=("PASS" if batch_status == "PASS"
+                                           else "FAIL"),
+                lineage_id="retention-batch:" + evidence_id, commit=True)
+        finally:
+            ledger.close()
+        c7_evidence = {
+            "evidence_id": evidence_id,
+            "split": "heldout",
+            "verdict": "PASS" if batch_status == "PASS" else "FAIL",
+            "lineage_id": "retention-batch:" + evidence_id,
+            "evidence_digest": evidence_digest,
+            "retention_receipt_ids": receipt_ids,
+            "aggregate": aggregate,
+        }
     result = {
         "version": BATCH_VERSION,
         "manifest": str(manifest_path),
@@ -187,6 +231,7 @@ def build_orfs_capability_retention_batch(
         "minimum_independent_lineages": minimum,
         "firewall": {**firewall, "entered_learner_support": False},
         "cases": results,
+        "capability_c7_evidence": c7_evidence,
         "summary": {
             "case_count": len(results),
             "retained_count": retained,

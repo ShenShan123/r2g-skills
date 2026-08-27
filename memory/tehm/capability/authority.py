@@ -230,6 +230,18 @@ def _normalise_evidence_refs(
                 reasons.append("C7:retention_receipt_id_missing")
             else:
                 normalised[gate]["retention_receipt_id"] = retention_receipt_id
+        if gate == "C7" and "retention_receipt_ids" in raw:
+            raw_ids = raw.get("retention_receipt_ids")
+            if "retention_receipt_id" in raw:
+                reasons.append("C7:retention_receipt_id_and_ids_ambiguous")
+            if (not isinstance(raw_ids, (list, tuple)) or not raw_ids or
+                    any(not str(value or "") for value in raw_ids)):
+                reasons.append("C7:retention_receipt_ids_malformed")
+            else:
+                normalised[gate]["retention_receipt_ids"] = [
+                    str(value) for value in raw_ids]
+        elif gate != "C7" and "retention_receipt_ids" in raw:
+            reasons.append(f"{gate}:retention_receipt_ids_not_allowed")
         if split not in GATE_ALLOWED_SPLITS[gate]:
             reasons.append(f"{gate}:invalid_evidence_split")
         if verdict != "PASS":
@@ -250,19 +262,31 @@ def _retention_binding_reasons(
     does not mutate capability lifecycle.
     """
     retention_receipt_id = str(evidence_ref.get("retention_receipt_id") or "")
-    if not retention_receipt_id:
+    raw_ids = evidence_ref.get("retention_receipt_ids")
+    if raw_ids is not None:
+        if (not isinstance(raw_ids, (list, tuple)) or not raw_ids or
+                any(not str(value or "") for value in raw_ids)):
+            return ["C7:retention_receipt_ids_malformed"]
+        receipt_ids = [str(value) for value in raw_ids]
+    elif retention_receipt_id:
+        receipt_ids = [retention_receipt_id]
+    else:
         return []
     from .retention import (
         load_capability_retention_receipt, verify_capability_retention,
     )
-    retention = load_capability_retention_receipt(conn, retention_receipt_id)
-    if retention is None:
-        return ["C7:retention_receipt_missing"]
-    checked = verify_capability_retention(conn, capability_id, retention)
-    if checked.get("eligible") is True:
-        return []
-    return [f"C7:retention:{reason}"
-            for reason in checked.get("reasons") or ("not_eligible",)]
+    reasons: list[str] = []
+    for ordinal, receipt_id in enumerate(receipt_ids):
+        retention = load_capability_retention_receipt(conn, receipt_id)
+        if retention is None:
+            reasons.append(f"C7:retention[{ordinal}]:receipt_missing")
+            continue
+        checked = verify_capability_retention(conn, capability_id, retention)
+        if checked.get("eligible") is not True:
+            reasons.extend(
+                f"C7:retention[{ordinal}]:{reason}"
+                for reason in checked.get("reasons") or ("not_eligible",))
+    return reasons
 
 
 def record_capability_authority(

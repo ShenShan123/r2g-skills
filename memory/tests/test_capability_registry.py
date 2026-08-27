@@ -599,6 +599,14 @@ def test_capability_authority_can_bind_c7_to_retention_receipt(tmp_tehm):
                 "candidate_policy_digest": candidate.policy_digest},
         candidate_policy_snapshot_id=candidate.policy_snapshot_id,
         runtime_id="authority-runtime", policy_load_receipt_id=load.receipt_id)
+    retention_second = record_capability_retention(
+        conn, capability_id=capability.capability_id, replay_id="replay-auth-second",
+        replay={"verdict": "PASS", "disjoint_lineage": True,
+                "non_target_regression_zero": True, "evidence_id": "ret-auth-2",
+                "split": "heldout", "lineage_id": "heldout:auth-second",
+                "candidate_policy_digest": candidate.policy_digest},
+        candidate_policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="authority-runtime", policy_load_receipt_id=load.receipt_id)
     refs = {
         f"C{i}": {"evidence_id": f"auth-e{i}", "split": "ab",
                    "verdict": "PASS"} for i in range(1, 9)}
@@ -607,7 +615,10 @@ def test_capability_authority_can_bind_c7_to_retention_receipt(tmp_tehm):
     refs["C5"]["split"] = "training"
     refs["C6"]["split"] = "heldout"
     refs["C7"].update({"split": "heldout",
-                        "retention_receipt_id": retention.retention_receipt_id})
+                        "retention_receipt_ids": [
+                            retention.retention_receipt_id,
+                            retention_second.retention_receipt_id,
+                        ]})
     authority = record_capability_authority(
         conn, capability_id=capability.capability_id,
         attribution_receipt=attribution, evidence_refs=refs,
@@ -619,7 +630,7 @@ def test_capability_authority_can_bind_c7_to_retention_receipt(tmp_tehm):
 
     conn.execute(
         "UPDATE tehm_capability_retention_receipts SET receipt_json=? "
-        "WHERE retention_receipt_id=?", ("{}", retention.retention_receipt_id))
+        "WHERE retention_receipt_id=?", ("{}", retention_second.retention_receipt_id))
     checked = verify_capability_authority(
         conn, capability.capability_id, authority)
     assert checked["eligible"] is False

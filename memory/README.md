@@ -146,7 +146,9 @@ ledger，failed/stale receipt 会阻断 capability authority。
 状态为 `NOT_ESTABLISHED`，而不是误报 PASS。显式指定 `--retention-ledger-db` 时所有
 receipt 写入同一个 source DB 的隔离副本并逐条重放验证；聚合报告仍固定
 `canonical_memory_mutation=none`、`promotion_attempted=false`，不能替代 capability
-authority 或 rule promotion。
+authority 或 rule promotion。若 ledger 可写，批处理还会在隔离库生成一个内容寻址的
+`capability_gate:C7` 聚合 evidence，并列出全部 retention receipt IDs；后续 authority
+消费该引用时会逐条重放这些 receipt，而不是信任聚合布尔值。
 
 ### Online consolidation trigger lane（2026-08-26）
 

@@ -202,6 +202,8 @@ def test_retention_batch_binds_two_lineages_to_isolated_ledger(tmp_tehm, tmp_pat
     assert result["summary"]["retained_count"] == 2
     assert result["summary"]["ledger_authority_eligible_count"] == 2
     assert result["firewall"]["entered_learner_support"] is False
+    assert result["capability_c7_evidence"]["verdict"] == "PASS"
+    assert len(result["capability_c7_evidence"]["retention_receipt_ids"]) == 2
     assert hashlib.sha256(candidate_db.read_bytes()).hexdigest() == source_digest
     ledger = db.connect_read_only(ledger_db)
     try:
@@ -209,5 +211,10 @@ def test_retention_batch_binds_two_lineages_to_isolated_ledger(tmp_tehm, tmp_pat
             "SELECT COUNT(*) FROM tehm_capability_retention_receipts "
             "WHERE capability_id=?", (capability.capability_id,)).fetchone()[0]
         assert count == 2
+        c7 = ledger.execute(
+            "SELECT verdict FROM tehm_capability_evidence "
+            "WHERE capability_id=? AND evidence_type='capability_gate:C7'",
+            (capability.capability_id,)).fetchone()
+        assert c7[0] == "PASS"
     finally:
         ledger.close()
