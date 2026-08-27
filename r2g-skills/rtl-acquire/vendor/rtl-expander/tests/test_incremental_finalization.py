@@ -315,9 +315,7 @@ class IncrementalFinalizationTests(unittest.TestCase):
                     run_key="no-rtl", artifact_path=str(artifact),
                 )
             cohort = corpus / "cohort_lock.json"
-            key_digest = hashlib.sha256(
-                json.dumps([key], separators=(",", ":")).encode()
-            ).hexdigest()
+            key_digest = run_until_revision_target.stable_hash([key])
             cohort.write_text(json.dumps({
                 "revision_keys": [key], "acquired_revision_count": 1,
                 "cohort_size": 1, "revision_keys_sha256": key_digest,
@@ -346,6 +344,16 @@ class IncrementalFinalizationTests(unittest.TestCase):
             self.assertEqual(
                 prepared["plan"]["terminal_identity"]["backfilled_revision_key_count"], 1,
             )
+
+    def test_finalizer_uses_the_cohort_producer_key_digest(self):
+        keys = {
+            "github:example/core@" + "a" * 40,
+            "github:example/uart@" + "b" * 40,
+        }
+        self.assertEqual(
+            finalize_staged_round.cohort_key_digest(keys),
+            run_until_revision_target.stable_hash(keys),
+        )
 
 
 if __name__ == "__main__":

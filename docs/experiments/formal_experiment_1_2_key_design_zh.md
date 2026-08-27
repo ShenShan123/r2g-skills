@@ -1,11 +1,10 @@
 # R2G 正式实验一、实验二、实验三设计要点
 
-状态：实验一在不计分 canary 修正停止原因、并发隔离、完整工具链与污染库绑定后，于
-`2026-08-26T05:51:08-07:00` 重新冻结；实验二、实验三仍为讨论稿。
+状态：实验一根据首轮校准结果改为单次连续200候选协议，当前等待回归和 canary 后重新冻结；实验二、实验三仍为讨论稿。
 
 ## 实验一：RTL Acquisition
 
-冻结版本：`r2g-exp1-rtl-acquisition-v1`。正式运行开始后，方法集合、Prompt、预算、Gate、Runner 和评分器不得修改；任何修改都必须建立新的实验版本并从头运行。
+待冻结版本：`r2g-exp1-rtl-acquisition-v2`。当前 1×200 协议完成回归与 canary 后再冻结；正式运行开始后，方法集合、Prompt、预算、Gate、Runner 和评分器不得修改，任何修改都必须建立新的实验版本并从头运行。
 
 ### 目的
 
@@ -25,30 +24,32 @@ R2G Cold 必须从空的搜索调度状态启动，不允许预载历史仓库�
 
 ### 样本与预算
 
-- 每组由一个顶层 runner 一次启动并自动完成100个唯一 RTL；内部仍保留
-  `4批 × 25个` 的锁定检查点，而不是人工启动四次。
-- 每个检查点结束后立即写入只读 submission manifest。下一批只接收上一批的
-  `(repo, commit, top)` 与 RTL-family 排除表，不接收正式 evaluator 的结果，也不能
-  根据前一批得分调整 Prompt、策略或候选。
-- Vanilla LLM 的四批使用相互隔离的新会话；R2G Cold 仅在方法开始时初始化一次空状态，随后在四个批次间连续扩展搜索 frontier。
-  顶层 runner 负责累计数量、去重和资源，不允许方法自行遗漏已发现记录。
+- 每组由一个顶层 runner 启动一个连续会话，目标为200个唯一 RTL；在合格候选达到
+  50/100/150/200时写入只读审计检查点，不重置模型上下文或搜索 frontier。
+- 检查点只保存进度，不运行正式 evaluator，也不能根据得分替换候选。最终200名额
+  submission 锁定后才允许独立评分。
+- Vanilla LLM 与 R2G Cold 都在一个连续运行中维护已搜索、已拒绝、已验证和已提交记录，
+  避免旧版隔离批次在看不到历史候选时产生不可避免的跨批重复。
 - 唯一性同时检查 `(repo, commit, top)` 和 RTL family，避免 fork 或同源变体重复计数。
-- 每批锁定后不能换人，也不能把后一批的剩余额度借给前一批；不足100个的名额按失败计算。
+- 不足200个的名额按失败计算，检查点之间不存在额度重置或转移。
 - 六种方法统一使用同一个已认证 GitHub 凭据，并由 campaign acquisition lease 串行执行。
   可以同时启动六个后台窗口排队，但一次只能有一个方法搜索、clone 和综合；等待租约的
   时间不计入该方法预算，从而避免共享 API 配额和 CPU 争用污染完成率及时间指标。
 
-| 每批25个的资源 | 上限 |
+| 每个连续200候选运行的资源 | 上限 |
 |---|---:|
-| 墙钟时间 | 6小时 |
-| Vanilla LLM Token | 2,000,000 |
-| Vanilla LLM 最大轮次 / 单轮最大输出 | 100 / 4,096 Token |
-| 搜索请求 | 120 |
+| 墙钟时间 | 48小时 |
+| Vanilla LLM Token | 20,000,000 |
+| Vanilla LLM 最大轮次 / 单轮最大输出 | 1,600 / 4,096 Token |
+| 搜索请求 | 960 |
 | CPU / 同时综合 | 4核 / 1个 |
 
-一次完整运行的总上限等价于原四批预算，即24小时、8,000,000 Vanilla LLM Token
-和480次搜索请求；每批仍分别受上表约束，未使用预算不能跨批转移。R2G 外部 LLM
-Token 为0，但使用相同的时间、搜索、clone、综合和CPU限制。正式冻结前先用一个
+这里的 Turn 是一次 LLM 响应/API交互，一轮可以调用多个工具，不等于一次搜索或综合。
+R2G 外部 LLM Token 为0且没有Turn概念，但使用相同的48小时、960次搜索、4核、单路
+综合和完整资源审计。R2G 首轮固定建立2000个 synthesis-valid family；公共预检若仍不足
+200个正式合格候选，后续每轮按“当前缺口×15”定向补充，只对从未筛过的 family 重新执行
+Gate，并在同一总预算内循环，直到达到200、资源耗尽，或一轮没有新增 family 和可筛候选。
+该循环不能读取正式 evaluator 结果。正式冻结前先用一个
 不计入论文成绩的小型 canary 验证 Prompt、JSON schema、计数、停止条件、许可证解析、
 clone 和 synth-precheck 链路；canary 通过后冻结代码、Prompt和预算，再从空目录开始正式实验。
 Canary campaign 必须在 manifest 中永久标为 `non_scoring_canary`，其缩小目标、短
@@ -68,21 +69,20 @@ API 预检使用与正式运行相同的单轮最大输出上限，以同时检�
 所有 LLM 获得语义相同的 Prompt，并明确告诉它们评分规则和剩余预算：
 
 ```text
-从公开代码仓库寻找100个唯一、开源、可综合、允许公开发布的
-Verilog/SystemVerilog RTL。任务由runner一次启动，按4个连续批次执行，每批最多
-锁定25个；批次之间不得重复。每个候选必须提交固定的仓库URL和commit、可综合
+从公开代码仓库连续寻找200个唯一、开源、可综合、允许公开发布的
+Verilog/SystemVerilog RTL。任务由runner一次启动，在50/100/150/200个合格候选处
+记录只读检查点，但不重置上下文。每个候选必须提交固定的仓库URL和commit、可综合
 top module、完整有效的编译输入闭包、仓库内许可证文件路径、规范SPDX标识和
 provenance。你必须维护已发现、已检查、已拒绝和已提交候选的结构化记录。
 
 主实验候选在统一 Sky130HD 预检下必须满足 `100 <= mapped cells < 100000`；
-过小或超大设计只能记入审计日志，不能占正式提交名额。每批至少覆盖12个独立
+过小或超大设计只能记入审计日志，不能占正式提交名额。整个运行尽量覆盖至少50个独立
 仓库，同一仓库最多提交4个候选，并尽量覆盖不同功能类别和三档规模。
 
 可以使用统一的搜索、Git、终端、Yosys/ORFS synth-only 和候选预检工具；可以修复
 top 选择、source/include/package/define 闭包、编译顺序和构建配置，但不能改变 RTL
-功能。每批达到25个合规提交，或达到该批时间、Token、搜索请求中的任一上限时立即
-停止并锁定manifest。锁定后不得替换候选，也不能看到正式evaluator结果。四批全部
-结束或总计锁定100个候选后，runner终止并输出最终JSON结果。
+功能。达到200个合规提交，或达到总时间、Token、Turn、搜索请求中的任一上限时立即
+停止并锁定manifest。锁定后不得替换候选，也不能看到正式evaluator结果。
 
 评分以独立evaluator为准：综合通过但许可证缺失仍算最终失败；重复设计、错误top、
 不完整编译闭包、不可复现commit、规模越界或provenance不完整也都不能获得最终合格分。
@@ -94,11 +94,11 @@ top 选择、source/include/package/define 闭包、编译顺序和构建配置�
 
 | 指标 | 含义 |
 |---|---|
-| Submission Completion / 100 | 在预算内按 schema 锁定的唯一、in-scope 候选数；空缺名额直接计为失败 |
-| Technical Qualification / 100 | repo/commit 可复现，top 正确，编译闭包完整，属于 Verilog/SystemVerilog，并且独立 Sky130HD 综合成功、网表非空、没有 unresolved module |
-| Publishable Qualification / 100 | Technical 全部通过，同时不是重复设计、provenance 完整、仓库内许可证存在且 SPDX 判定一致；这是论文的主要成功率 |
-| Diverse-qualified yield | 每批只对最终合格 RTL 计算 `effective repository count / 25`，主表报告四批均值及离散程度；同时报告100个结果的独立仓库数和RTL-family数 |
-| Token、时间、费用 | 报告完整100-candidate运行的总量及每批分布；资源效率不能补偿资格失败 |
+| Submission Completion / 200 | 在预算内按 schema 锁定的唯一、in-scope 候选数；空缺名额直接计为失败 |
+| Technical Qualification / 200 | repo/commit 可复现，top 正确，编译闭包完整，属于 Verilog/SystemVerilog，并且独立 Sky130HD 综合成功、网表非空、没有 unresolved module |
+| Publishable Qualification / 200 | Technical 全部通过，同时不是重复设计、provenance 完整、仓库内许可证存在且 SPDX 判定一致；这是论文的主要成功率 |
+| Diverse-qualified yield | 只对最终合格 RTL 计算 `effective repository count / 200`，并报告独立仓库数和RTL-family数 |
+| Token、时间、费用 | 报告完整200-candidate运行总量；资源效率不能补偿资格失败 |
 
 附表再报告：独立仓库/RTL family 数、最大仓库占比、规模和功能分布、方法间重复率、总共得到多少不重复 RTL，以及失败原因。
 
@@ -109,11 +109,11 @@ top 选择、source/include/package/define 闭包、编译顺序和构建配置�
 - top/闭包错误、综合失败或存在 unresolved module：两项都失败；
 - 少于100 cells 或达到100000 cells：不符合主实验规模门，提交后按资格失败；方法可在锁定前继续寻找替代候选；
 - RTL 可综合但与其他候选同源重复，或 provenance 不完整：Technical 可以通过，Publishable 失败；
-- 不足100个的空缺名额：两项都失败。
+- 不足200个的空缺名额：两项都失败。
 
-原始搜索可以产生超过100个候选，但它们只是方法内部候选池，不是正式提交，也不能
+原始搜索可以产生超过200个候选，但它们只是方法内部候选池，不是正式提交，也不能
 把“发现数”写成“合格数”。本实验不再单设规模能力附加实验；Expander 的供给能力由
-Publishable Qualification、完成100个提交所需时间、合格来源多样性和失败漏斗共同体现。
+Publishable Qualification、完成200个提交所需时间、合格来源多样性和失败漏斗共同体现。
 
 ---
 

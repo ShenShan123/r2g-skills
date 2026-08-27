@@ -23,7 +23,7 @@
       "const": "1.0"
     },
     "experiment_id": {
-      "const": "r2g-exp1-rtl-acquisition-v1"
+      "const": "r2g-exp1-rtl-acquisition-v2"
     },
     "method_id": {
       "type": "string",
@@ -32,7 +32,7 @@
     "batch_id": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 4
+      "maximum": 1
     },
     "model_route": {
       "type": "object",
@@ -112,6 +112,7 @@
       "additionalProperties": false,
       "required": [
         "method_runtime_seconds",
+        "llm_turns",
         "input_tokens",
         "output_tokens",
         "reasoning_tokens",
@@ -127,7 +128,15 @@
         "method_runtime_seconds": {
           "type": "number",
           "minimum": 0,
-          "maximum": 21600
+          "maximum": 172800
+        },
+        "llm_turns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1600
         },
         "input_tokens": {
           "type": [
@@ -156,7 +165,7 @@
             "null"
           ],
           "minimum": 0,
-          "maximum": 2000000
+          "maximum": 20000000
         },
         "cost_usd": {
           "type": [
@@ -168,7 +177,7 @@
         "search_requests": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 120
+          "maximum": 960
         },
         "clone_count": {
           "type": "integer",
@@ -191,7 +200,7 @@
     },
     "queries": {
       "type": "array",
-      "maxItems": 120,
+      "maxItems": 960,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -221,7 +230,7 @@
     },
     "candidates": {
       "type": "array",
-      "maxItems": 25,
+      "maxItems": 200,
       "items": {
         "$ref": "#/$defs/candidate"
       }

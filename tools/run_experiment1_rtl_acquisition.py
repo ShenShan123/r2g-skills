@@ -286,7 +286,7 @@ def semantic_submission_errors(
     submission: dict[str, Any],
     *,
     prior_keys: set[tuple[str, str, str]] | None = None,
-    target_candidates: int = 25,
+    target_candidates: int = 200,
 ) -> list[str]:
     errors: list[str] = []
     method_id = submission.get("method_id")
@@ -324,6 +324,7 @@ def semantic_submission_errors(
     token_fields = ("input_tokens", "output_tokens", "reasoning_tokens")
     components = [usage.get(key) for key in token_fields]
     total = usage.get("total_tokens")
+    llm_turns = usage.get("llm_turns")
     if all(value is not None for value in components) and total is not None:
         if sum(int(value) for value in components) != int(total):
             errors.append("total_tokens must equal input + output + reasoning tokens")
@@ -331,11 +332,15 @@ def semantic_submission_errors(
     if method_id in R2G_METHOD_IDS:
         if total not in (0, None):
             errors.append("R2G-Expander model tokens must be zero or null")
+        if llm_turns is not None:
+            errors.append("R2G-Expander llm_turns must be null because no external LLM is used")
         if any(route.get(key) is not None for key in ("requested_model", "actual_model", "api_provider")):
             errors.append("R2G-Expander must not declare an LLM route")
         if route.get("endpoint_kind") != "none":
             errors.append("R2G-Expander endpoint_kind must be none")
     else:
+        if not isinstance(llm_turns, int):
+            errors.append("Vanilla LLM submissions require an integer llm_turns count")
         if not route.get("requested_model") or not route.get("actual_model"):
             errors.append("Vanilla LLM submissions require requested_model and actual_model")
         if route.get("endpoint_kind") not in {"official", "gateway"}:
@@ -712,14 +717,25 @@ def validate_submission(
     if errors:
         return submission, errors
     prior: set[tuple[str, str, str]] = set()
+    target = int(read_json(TASK_SPEC)["batch_policy"]["target_candidates_per_batch"])
     if campaign_root is not None:
         paths = campaign_paths(campaign_root)
+        manifest = read_json(paths["manifest"])
+        target = int(
+            read_json(Path(manifest["task_spec"]["path"]))["batch_policy"][
+                "target_candidates_per_batch"
+            ]
+        )
         prior = prior_candidate_keys(
             paths,
             str(submission["method_id"]),
             int(submission["batch_id"]),
         )
-    errors.extend(semantic_submission_errors(submission, prior_keys=prior))
+    errors.extend(
+        semantic_submission_errors(
+            submission, prior_keys=prior, target_candidates=target
+        )
+    )
     return submission, errors
 
 
@@ -1443,7 +1459,7 @@ def evaluate_candidate(
 
 
 def batch_summary(
-    results: list[dict[str, Any]], *, target_candidates: int = 25
+    results: list[dict[str, Any]], *, target_candidates: int = 200
 ) -> dict[str, Any]:
     repositories = Counter(
         str(item["key"][0]).rstrip("/")
@@ -1540,7 +1556,7 @@ def evaluate_batch(args: argparse.Namespace) -> None:
         ]
         if unlocked:
             raise ExperimentError(
-                "all four method batches must be digest-locked before formal evaluation; "
+                "the method submission must be digest-locked before formal evaluation; "
                 f"unlocked batches: {unlocked}"
             )
         if batch["status"] != "submitted":
@@ -1637,7 +1653,7 @@ def evaluate_batch(args: argparse.Namespace) -> None:
 
 
 def summarize_method(args: argparse.Namespace) -> None:
-    """Create the primary 100-slot result after all four batches complete."""
+    """Create the primary 200-slot result after the continuous run completes."""
     paths = campaign_paths(args.campaign_root)
     manifest = read_json(paths["manifest"])
     verify_bound_campaign(manifest)
@@ -1650,10 +1666,14 @@ def summarize_method(args: argparse.Namespace) -> None:
         (row for row in manifest["batches"] if row["method_id"] == args.method_id),
         key=lambda row: int(row["batch_id"]),
     )
-    if len(batches) != 4 or any(row["status"] != "complete" for row in batches):
+    task = read_json(TASK_SPEC)
+    expected_batches = int(task["batch_policy"]["batches_per_method"])
+    if len(batches) != expected_batches or any(
+        row["status"] != "complete" for row in batches
+    ):
         states = {int(row["batch_id"]): row["status"] for row in batches}
         raise ExperimentError(
-            "method summary requires four completed formal evaluations; "
+            "method summary requires the completed continuous formal evaluation; "
             f"states={states}"
         )
 
@@ -1671,9 +1691,8 @@ def summarize_method(args: argparse.Namespace) -> None:
 
     results = [item for report in batch_reports for item in report["results"]]
     submitted = [item for submission in submissions for item in submission["candidates"]]
-    task = read_json(TASK_SPEC)
     target = int(task["method_aggregate_policy"]["target_candidates_per_method"])
-    if target != 100:
+    if target != 200:
         raise ExperimentError("method aggregate target changed after campaign freeze")
 
     # Exact evaluator-produced mapped-netlist equivalence is a conservative
@@ -1705,6 +1724,15 @@ def summarize_method(args: argparse.Namespace) -> None:
         int((submission.get("resource_usage") or {}).get("total_tokens") or 0)
         for submission in submissions
     )
+    llm_turn_values = [
+        (submission.get("resource_usage") or {}).get("llm_turns")
+        for submission in submissions
+    ]
+    total_llm_turns = (
+        sum(int(value) for value in llm_turn_values if value is not None)
+        if any(value is not None for value in llm_turn_values)
+        else None
+    )
     total_time = sum(
         float((submission.get("resource_usage") or {}).get("method_runtime_seconds") or 0)
         for submission in submissions
@@ -1724,7 +1752,7 @@ def summarize_method(args: argparse.Namespace) -> None:
         "experiment_id": task["experiment_id"],
         "method_id": args.method_id,
         "fixed_denominator": target,
-        "all_batches_locked_before_evaluation": True,
+        "submission_locked_before_evaluation": True,
         "batch_report_sha256": [
             sha256_file(Path(str(row["evaluation_path"]))) for row in batches
         ],
@@ -1741,6 +1769,7 @@ def summarize_method(args: argparse.Namespace) -> None:
             "qualified_effective_repository_count": effective_repositories,
             "diverse_qualified_yield": min(effective_repositories, target) / target,
             "total_external_llm_tokens": total_tokens,
+            "total_external_llm_turns": total_llm_turns,
             "total_method_wall_time_seconds": round(total_time, 3),
             "total_api_cost_usd": round(total_cost, 6),
         },
@@ -1775,20 +1804,26 @@ def summarize_method(args: argparse.Namespace) -> None:
 def lint_protocol() -> None:
     errors: list[str] = []
     task = read_json(TASK_SPEC)
-    if task.get("experiment_id") != "r2g-exp1-rtl-acquisition-v1":
+    if task.get("experiment_id") != "r2g-exp1-rtl-acquisition-v2":
         errors.append("unexpected experiment_id")
     if {row.get("method_id") for row in task.get("methods", [])} != METHOD_IDS:
         errors.append("task spec must contain the five frozen method IDs plus R2G Cold")
-    if task.get("method_budget", {}).get("search_requests") != 120:
-        errors.append("search request budget must be 120")
+    if task.get("method_budget", {}).get("search_requests") != 960:
+        errors.append("search request budget must be 960")
     profile = task.get("evaluator_profile", {})
     if profile.get("minimum_mapped_cells") != MINIMUM_MAPPED_CELLS:
         errors.append("minimum mapped cell threshold must be 100")
     if profile.get("maximum_mapped_cells_exclusive") != MAXIMUM_MAPPED_CELLS_EXCLUSIVE:
         errors.append("maximum mapped cell threshold must be exclusive 100000")
     batch_policy = task.get("batch_policy", {})
-    if batch_policy.get("target_unique_repositories_per_batch") != 12:
-        errors.append("target unique repositories per batch must be 12")
+    if batch_policy.get("batches_per_method") != 1:
+        errors.append("Experiment 1 must use one continuous acquisition run")
+    if batch_policy.get("target_candidates_per_batch") != 200:
+        errors.append("continuous acquisition target must be 200")
+    if batch_policy.get("checkpoint_targets") != [50, 100, 150, 200]:
+        errors.append("checkpoint targets must be 50/100/150/200")
+    if batch_policy.get("target_unique_repositories_per_run") != 50:
+        errors.append("target unique repositories per run must be 50")
     aggregate_policy = task.get("method_aggregate_policy", {})
     if aggregate_policy.get("cross_method_acquisition_serialized") is not True:
         errors.append("cross-method acquisition must be serialized")
@@ -1799,13 +1834,30 @@ def lint_protocol() -> None:
     if batch_policy.get("maximum_candidates_per_repository") != 4:
         errors.append("maximum candidates per repository must be 4")
     aggregate = task.get("method_aggregate_policy", {})
-    if aggregate.get("target_candidates_per_method") != 100:
-        errors.append("method aggregate target must be 100")
-    if aggregate.get("all_batches_must_lock_before_formal_evaluation") is not True:
-        errors.append("all method batches must lock before formal evaluation")
+    if aggregate.get("target_candidates_per_method") != 200:
+        errors.append("method aggregate target must be 200")
+    if aggregate.get("submission_must_lock_before_formal_evaluation") is not True:
+        errors.append("the method submission must lock before formal evaluation")
+    if aggregate.get("one_continuous_session_per_method") is not True:
+        errors.append("each method must use one continuous session")
+    if aggregate.get("single_budget_pool_per_method") is not True:
+        errors.append("each method must use one continuous resource budget")
+    replenishment = task.get("r2g_replenishment_policy", {})
+    if replenishment.get("initial_synthesis_valid_family_target") != 2000:
+        errors.append("R2G initial synthesis-valid family target must be 2000")
+    if replenishment.get("synthesis_valid_families_per_missing_candidate") != 15:
+        errors.append("R2G qualification-gap family multiplier must be 15")
+    if replenishment.get("screen_only_previously_unseen_candidate_keys_and_families") is not True:
+        errors.append("R2G replenishment must gate only unseen candidates and families")
+    if replenishment.get("formal_evaluator_feedback_is_not_used") is not True:
+        errors.append("R2G replenishment must not consume formal-evaluator feedback")
     budget = task.get("method_budget", {})
-    if budget.get("vanilla_max_turns_per_batch") != 100:
-        errors.append("Vanilla max turns per batch must be 100")
+    if budget.get("vanilla_max_turns_per_run") != 1600:
+        errors.append("Vanilla max turns per run must be 1600")
+    if budget.get("vanilla_llm_total_tokens") != 20000000:
+        errors.append("Vanilla total token budget per run must be 20000000")
+    if budget.get("wall_time_seconds") != 172800:
+        errors.append("method wall-time budget per run must be 172800 seconds")
     if budget.get("vanilla_max_output_tokens_per_turn") != 4096:
         errors.append("Vanilla max output tokens per turn must be 4096")
     binding = task.get("toolchain_binding") or {}
@@ -1878,7 +1930,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate = subparsers.add_parser("evaluate-batch")
     evaluate.add_argument("--campaign-root", type=Path, required=True)
     evaluate.add_argument("--method-id", choices=sorted(METHOD_IDS), required=True)
-    evaluate.add_argument("--batch-id", type=int, choices=range(1, 5), required=True)
+    evaluate.add_argument("--batch-id", type=int, choices=(1,), required=True)
     evaluate.add_argument("--cores", type=int, default=4)
     summarize = subparsers.add_parser("summarize-method")
     summarize.add_argument("--campaign-root", type=Path, required=True)

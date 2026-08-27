@@ -54,6 +54,12 @@ def atomic_json(path: Path, value: Any) -> None:
     os.replace(temporary, path)
 
 
+def cohort_key_digest(keys: set[str] | list[str]) -> str:
+    """Match the cohort-lock producer's canonical revision-key digest."""
+    material = "\n".join(sorted(map(str, keys))) + "\n"
+    return hashlib.sha256(material.encode()).hexdigest()
+
+
 def load_cohort(path: Path) -> tuple[dict[str, Any], set[str]]:
     cohort = json.loads(path.read_text(encoding="utf-8"))
     keys = {str(value) for value in cohort.get("revision_keys", [])}
@@ -182,7 +188,7 @@ def staged_payloads_with_identity(
         "resolved_revision_count": len(bindings),
         "explicit_revision_key_count": len(bindings) - backfilled,
         "backfilled_revision_key_count": backfilled,
-        "revision_keys_sha256": digest_bytes(canonical(sorted(cohort_keys))),
+        "revision_keys_sha256": cohort_key_digest(cohort_keys),
         "run_identity_bindings_sha256": digest_bytes(canonical(bindings)),
     }
     return repositories, designs, identity
@@ -319,9 +325,7 @@ def recorded_cohort_digest(corpus: Path, round_id: str, cohort: dict[str, Any]) 
     if not re.fullmatch(r"[0-9a-f]{64}", recorded):
         raise RuntimeError("REHASH_REQUIRED: cohort lock lacks an admission digest")
     keys = sorted(map(str, cohort.get("revision_keys", [])))
-    key_digest = hashlib.sha256(
-        json.dumps(keys, separators=(",", ":")).encode()
-    ).hexdigest()
+    key_digest = cohort_key_digest(keys)
     recorded_key_digest = controller.get("cohort_revision_keys_sha256") or cohort.get(
         "revision_keys_sha256"
     )

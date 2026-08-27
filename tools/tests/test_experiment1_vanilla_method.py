@@ -16,10 +16,12 @@ from tools.run_experiment1_vanilla_method import (
     is_transient_git_failure,
     is_transient_network_error,
     normalized_checkout,
+    public_repository_record,
     provider_usage,
     responses_input,
     responses_response_message,
     responses_tools,
+    run_submission_stop_reason,
     submitted_stop_reason,
     tool_specs,
     validation_event_summary,
@@ -69,6 +71,12 @@ def test_tool_specs_are_self_contained_json_schemas():
     )
     assert "opaque handle" in clone["description"]
     assert "copy its returned repo_url and commit exactly" in clone["description"]
+    search = next(
+        item["function"]
+        for item in specs
+        if item["function"]["name"] == "search_repositories"
+    )
+    assert "pass that exact HTTPS value unchanged" in search["description"]
 
 
 def test_anthropic_adapter_preserves_tool_calls_and_results():
@@ -192,6 +200,32 @@ def test_provider_usage_normalizes_responses_reasoning_fields():
     ) == {"input": 40, "output": 7, "reasoning": 3, "total": 50}
 
 
+def test_provider_usage_normalizes_separate_reasoning_fields():
+    assert provider_usage(
+        {
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 18,
+                "total_tokens": 125,
+                "completion_tokens_details": {"reasoning_tokens": 7},
+            }
+        }
+    ) == {"input": 100, "output": 18, "reasoning": 7, "total": 125}
+
+
+def test_provider_usage_reconciles_inconsistent_gateway_total():
+    assert provider_usage(
+        {
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 25,
+                "total_tokens": 122,
+                "completion_tokens_details": {"reasoning_tokens": 7},
+            }
+        }
+    ) == {"input": 100, "output": 15, "reasoning": 7, "total": 122}
+
+
 def test_empty_tool_calls_are_not_replayed_to_provider():
     value = assistant_history_message({"content": "continue", "tool_calls": []})
     assert value == {"role": "assistant", "content": "continue"}
@@ -211,6 +245,19 @@ def test_optional_commit_spellings_resolve_to_head():
     assert normalized_checkout("a" * 40) == "a" * 40
 
 
+def test_search_result_exposes_clone_repository_url_field():
+    result = public_repository_record(
+        {
+            "full_name": "example/rtl",
+            "html_url": "https://github.com/example/rtl",
+            "license": {"spdx_id": "MIT"},
+        }
+    )
+    assert result["repo_url"] == "https://github.com/example/rtl"
+    assert result["html_url"] == result["repo_url"]
+    assert result["license_spdx"] == "MIT"
+
+
 def test_context_compaction_keeps_only_four_recent_tool_turns():
     runner = VanillaRun.__new__(VanillaRun)
     runner.queries = []
@@ -220,6 +267,8 @@ def test_context_compaction_keeps_only_four_recent_tool_turns():
     runner.search_budget = 120
     runner.token_budget = 2_000_000
     runner.wall_time_budget = 21_600
+    runner.turn_count = 40
+    runner.max_turns = 100
     runner.usage = {"input": 1_490_000, "output": 10_000, "reasoning": 0, "total": 1_500_000}
     runner.started_monotonic = __import__("time").monotonic() - 60
     messages = [
@@ -247,6 +296,8 @@ def test_context_compaction_keeps_only_four_recent_tool_turns():
     state = json.loads(compacted[2]["content"].split(": ", 1)[1])
     assert state["provider_token_budget"] == 2_000_000
     assert state["provider_tokens_remaining"] == 500_000
+    assert state["llm_turns_used"] == 40
+    assert state["llm_turns_remaining"] == 60
     assert state["budget_phase"] == "low"
     assert state["qualified_candidate_count"] == 0
     assert "validate_candidate" in state["instruction"]
@@ -284,12 +335,38 @@ def test_run_kind_selects_distinct_workspace(tmp_path):
     assert runner.root.name == "qwen-vanilla.batch1.formal"
     assert runner.last_search_monotonic is None
     assert runner.qualified_candidates == {}
-    assert runner.token_budget == 2_000_000
-    assert runner.wall_time_budget == 21_600
-    assert runner.search_budget == 120
+    assert runner.token_budget == 20_000_000
+    assert runner.wall_time_budget == 172_800
+    assert runner.search_budget == 960
     assert runner.cpu_cores == 4
     assert runner.env["NUM_CORES"] == "4"
     assert runner.env["ORFS_MAX_CPUS"] == "4"
+
+
+def test_qualification_checkpoint_is_written_once(tmp_path):
+    runner = VanillaRun(
+        route={
+            "method_id": "qwen-vanilla",
+            "model_id": "qwen-test",
+            "provider": "test",
+        },
+        campaign_root=tmp_path,
+        batch_id=1,
+        target=1,
+        max_turns=1,
+        max_output_tokens=128,
+        run_kind="smoke",
+    )
+    runner.checkpoint_targets = (1,)
+    candidate = candidate_fixture()
+    key = (candidate["repo_url"], candidate["commit"], candidate["top_module"])
+    runner.qualified_candidates[key] = candidate
+    runner.write_qualification_checkpoints()
+    checkpoint = runner.root / "checkpoints" / "qualified_001.json"
+    first = checkpoint.read_text(encoding="utf-8")
+    runner.write_qualification_checkpoints()
+    assert checkpoint.read_text(encoding="utf-8") == first
+    assert json.loads(first)["candidates"] == [candidate]
 
 
 def test_natural_turn_exhaustion_is_scoreable_turn_limit(tmp_path, monkeypatch):
@@ -306,15 +383,23 @@ def test_natural_turn_exhaustion_is_scoreable_turn_limit(tmp_path, monkeypatch):
         max_output_tokens=128,
         run_kind="smoke",
     )
-    monkeypatch.setattr(
-        runner,
-        "api_turn",
-        lambda _messages: {"role": "assistant", "content": "searching", "tool_calls": []},
-    )
+    observed: dict = {}
+
+    def fake_turn(messages):
+        observed["messages"] = messages
+        return {"role": "assistant", "content": "searching", "tool_calls": []}
+
+    monkeypatch.setattr(runner, "api_turn", fake_turn)
     submission_path = runner.run()
     payload = json.loads(submission_path.read_text())
     result = json.loads((runner.root / "method_result.json").read_text())
     assert payload["stop_reason"] == "turn_limit"
+    assert payload["resource_usage"]["llm_turns"] == 1
+    prompt = "\n".join(str(message.get("content") or "") for message in observed["messages"])
+    assert "20000000 cumulative provider tokens" in prompt
+    assert "1 LLM response turns" in prompt
+    assert "960 repository searches" in prompt
+    assert "172800 seconds of method wall time" in prompt
     assert result["score_eligible"] is True
     assert result["submitted"] == 0
 
@@ -564,6 +649,11 @@ def test_early_submission_has_distinct_scoreable_stop_reason():
     assert submitted_stop_reason(25, 25) == "target_reached"
     assert submitted_stop_reason(1, 25) == "submitted_early"
     assert submitted_stop_reason(0, 25) == "submitted_early"
+
+
+def test_smoke_completion_is_early_relative_to_formal_protocol():
+    assert run_submission_stop_reason(1, 1, "smoke") == "submitted_early"
+    assert run_submission_stop_reason(200, 200, "formal") == "target_reached"
 
 
 def test_transient_network_classification_is_bounded_to_transport_errors():

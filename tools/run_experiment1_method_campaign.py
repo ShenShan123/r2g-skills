@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one Experiment 1 method through four locked batches, then score it."""
+"""Run one continuous Experiment 1 acquisition method, then score it."""
 
 from __future__ import annotations
 
@@ -85,7 +85,9 @@ def _acquire_batches(args: argparse.Namespace) -> None:
     manifest = read_json(paths["manifest"])
     verify_bound_campaign(manifest)
     task = read_json(Path(manifest["task_spec"]["path"]))
-    frozen_turns = int(task["method_budget"]["vanilla_max_turns_per_batch"])
+    frozen_turns = int(task["method_budget"]["vanilla_max_turns_per_run"])
+    batch_count = int(task["batch_policy"]["batches_per_method"])
+    target = int(task["batch_policy"]["target_candidates_per_batch"])
     frozen_output = int(
         task["method_budget"]["vanilla_max_output_tokens_per_turn"]
     )
@@ -96,7 +98,7 @@ def _acquire_batches(args: argparse.Namespace) -> None:
             "formal Vanilla turn/output budgets must match the frozen task spec"
         )
     python = sys.executable
-    for batch_id in range(1, 5):
+    for batch_id in range(1, batch_count + 1):
         manifest = read_json(paths["manifest"])
         batch = find_batch(manifest, args.method_id, batch_id)
         if batch["status"] in {"submitted", "complete"}:
@@ -155,7 +157,7 @@ def _acquire_batches(args: argparse.Namespace) -> None:
                     "--batch-id",
                     str(batch_id),
                     "--target",
-                    "25",
+                    str(target),
                     "--run-kind",
                     "formal",
                     "--max-turns",
@@ -193,7 +195,7 @@ def _acquire_batches(args: argparse.Namespace) -> None:
             ]
         )
     print(
-        f"{args.method_id}: all four acquisition batches are digest-locked; "
+        f"{args.method_id}: the continuous acquisition submission is digest-locked; "
         "no formal evaluator result was exposed during acquisition."
     )
 
@@ -216,16 +218,18 @@ def evaluate(args: argparse.Namespace) -> None:
     paths = campaign_paths(args.campaign_root)
     manifest = read_json(paths["manifest"])
     verify_bound_campaign(manifest)
+    task = read_json(Path(manifest["task_spec"]["path"]))
+    batch_count = int(task["batch_policy"]["batches_per_method"])
     states = {
         batch_id: find_batch(manifest, args.method_id, batch_id)["status"]
-        for batch_id in range(1, 5)
+        for batch_id in range(1, batch_count + 1)
     }
     if any(status not in {"submitted", "complete"} for status in states.values()):
         raise ExperimentError(
-            "evaluation requires all four batches to be locked; " f"states={states}"
+            "evaluation requires the acquisition submission to be locked; " f"states={states}"
         )
     python = sys.executable
-    for batch_id in range(1, 5):
+    for batch_id in range(1, batch_count + 1):
         manifest = read_json(paths["manifest"])
         if find_batch(manifest, args.method_id, batch_id)["status"] == "complete":
             continue
@@ -264,7 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--campaign-root", type=Path, required=True)
     parser.add_argument("--cores", type=int, default=4)
     parser.add_argument("--env-file", type=Path)
-    parser.add_argument("--max-turns", type=int, default=100)
+    parser.add_argument("--max-turns", type=int, default=1600)
     parser.add_argument("--max-output-tokens", type=int, default=4096)
     return parser
 

@@ -8,7 +8,10 @@ from types import SimpleNamespace
 import pytest
 
 import tools.run_experiment1_rtl_acquisition as experiment
-from tools.build_experiment1_r2g_submission import query_records
+from tools.build_experiment1_r2g_submission import (
+    normalized_submission_stop_reason,
+    query_records,
+)
 from tools.run_experiment1_rtl_acquisition import (
     EXPERIMENT_DIR,
     METHOD_IDS,
@@ -33,9 +36,13 @@ from tools.run_experiment1_rtl_acquisition import (
 from tools.run_experiment1_r2g_method import (
     classify_expander_stop_reason,
     classify_stop_reason,
+    discovery_family_target,
     frontier_counts,
+    formal_synthesis_valid_family_count,
     install_benchmark_registry,
     query_records as expander_query_records,
+    replenishment_family_target,
+    select_diverse,
     validate_run_mode,
 )
 
@@ -114,24 +121,19 @@ def test_preflight_is_digest_bound(tmp_path: Path):
     )
     validate_model_preflight(preflight, routes)
 
-def test_evaluator_rejects_feedback_before_all_four_batches_lock(
+def test_evaluator_rejects_feedback_before_continuous_submission_locks(
     tmp_path: Path, monkeypatch
 ):
     campaign = tmp_path / "campaign"
     campaign.mkdir()
     manifest = {
         "batches": [
-            {
-                "method_id": "openai-vanilla",
-                "batch_id": batch_id,
-                "status": "submitted" if batch_id < 4 else "pending",
-            }
-            for batch_id in range(1, 5)
+            {"method_id": "openai-vanilla", "batch_id": 1, "status": "pending"}
         ]
     }
     (campaign / "execution_manifest.json").write_text(json.dumps(manifest))
     monkeypatch.setattr(experiment, "verify_bound_campaign", lambda _manifest: None)
-    with pytest.raises(experiment.ExperimentError, match="all four"):
+    with pytest.raises(experiment.ExperimentError, match="submission"):
         experiment.evaluate_batch(
             SimpleNamespace(
                 campaign_root=campaign,
@@ -201,7 +203,7 @@ def test_campaign_init_binds_formal_protocol_and_preflight(
         )
     )
     manifest = json.loads((campaign / "execution_manifest.json").read_text())
-    assert len(manifest["batches"]) == 24
+    assert len(manifest["batches"]) == 6
     assert manifest["campaign_mode"] == "non_scoring_canary"
     assert len(manifest["method_reports"]) == 6
     assert manifest["protocol"]["path"].endswith(
@@ -215,11 +217,31 @@ def test_campaign_init_binds_formal_protocol_and_preflight(
     assert experiment.validate_json(manifest, experiment.MANIFEST_SCHEMA) == []
 
 
-def test_target_reached_requires_25_candidates():
+def test_target_reached_requires_200_candidates():
     value = submission()
     value["stop_reason"] = "target_reached"
     errors = semantic_submission_errors(value)
-    assert any("exactly 25" in item for item in errors)
+    assert any("exactly 200" in item for item in errors)
+
+
+def test_r2g_submission_rejects_llm_turn_accounting():
+    value = submission()
+    value["method_id"] = "r2g-expander-cold"
+    value["model_route"] = {
+        "requested_model": None,
+        "actual_model": None,
+        "api_provider": None,
+        "endpoint_kind": "none",
+        "reasoning_effort": None,
+        "provider_fingerprint": None,
+    }
+    value["resource_usage"]["input_tokens"] = 0
+    value["resource_usage"]["output_tokens"] = 0
+    value["resource_usage"]["reasoning_tokens"] = 0
+    value["resource_usage"]["total_tokens"] = 0
+    value["resource_usage"]["llm_turns"] = 0
+    errors = semantic_submission_errors(value)
+    assert any("llm_turns must be null" in item for item in errors)
 
 
 def test_smoke_target_reached_uses_explicit_target():
@@ -260,6 +282,68 @@ def test_expander_finalization_failure_is_not_provider_failure():
         1, 0, 1, {"state": "FAILED_CHILD_ROUND"}
     ) == "finalization_failure"
     assert classify_expander_stop_reason(1, 0, 1, None) == "provider_failure"
+
+
+def test_formal_discovery_starts_at_2000_then_requests_fifteen_per_gap():
+    assert discovery_family_target(1, 0, 0, 200) == 2000
+    assert discovery_family_target(2, 2000, 150, 200) == 2750
+    assert discovery_family_target(3, 2750, 200, 200) == 2750
+
+
+def test_diagnostic_discovery_keeps_first_target_separate_from_gap_multiplier():
+    assert discovery_family_target(
+        1, 0, 0, 8, initial_target=20, gap_multiplier=15
+    ) == 20
+    assert discovery_family_target(
+        2, 20, 7, 8, initial_target=20, gap_multiplier=15
+    ) == 35
+
+
+def test_formal_family_count_uses_synthesis_and_provenance_gate(tmp_path):
+    state = tmp_path / "state"
+    state.mkdir()
+    connection = __import__("sqlite3").connect(state / "corpus.sqlite")
+    connection.execute(
+        "CREATE TABLE designs(family_id TEXT,synthesis_valid INTEGER,provenance_complete INTEGER)"
+    )
+    connection.executemany(
+        "INSERT INTO designs VALUES(?,?,?)",
+        [("a", 1, 1), ("a", 1, 1), ("b", 1, 0), ("c", 0, 1)],
+    )
+    connection.commit()
+    connection.close()
+    assert formal_synthesis_valid_family_count(tmp_path) == 1
+
+
+def test_diversity_selection_preserves_immutable_checkpoint_candidate():
+    def row(candidate_id, repo, family):
+        return {
+            "candidate": {
+                "candidate_id": candidate_id,
+                "repo_url": repo,
+                "commit": "a" * 40,
+                "top_module": candidate_id,
+                "category": "controller",
+            },
+            "family_id": family,
+            "mapped_cells": 500,
+        }
+
+    locked = row("z_locked", "https://github.com/example/locked", "family-z")
+    newcomer = row("a_new", "https://github.com/example/new", "family-a")
+    key = (
+        locked["candidate"]["repo_url"],
+        locked["candidate"]["commit"],
+        locked["candidate"]["top_module"],
+    )
+    selected, _ = select_diverse(
+        [locked, newcomer],
+        target=1,
+        prior_keys=set(),
+        prior_families=set(),
+        locked_keys=[key],
+    )
+    assert [candidate["candidate_id"] for candidate in selected] == ["z_locked"]
 
 
 def test_cold_corpus_installs_ready_benchmark_registry(tmp_path):
@@ -455,10 +539,10 @@ def test_r2g_submission_query_records_reads_jsonl(tmp_path: Path):
 def test_schema_rejects_path_escape_and_search_overrun():
     value = submission()
     value["candidates"][0]["rtl_files"] = ["../private.v"]
-    value["resource_usage"]["search_requests"] = 121
+    value["resource_usage"]["search_requests"] = 961
     errors = validate_json(value, SUBMISSION_SCHEMA)
     assert any("private.v" in item for item in errors)
-    assert any("greater than the maximum of 120" in item for item in errors)
+    assert any("greater than the maximum of 960" in item for item in errors)
 
 
 def test_schema_requires_repository_relative_license_evidence():
@@ -724,6 +808,21 @@ def test_r2g_method_stop_reason_distinguishes_completion_from_crash():
     assert classify_stop_reason(124, 20, 25) == "wall_time_limit"
     assert classify_stop_reason(1, 20, 25) == "provider_failure"
     assert classify_stop_reason(1, 25, 25) == "provider_failure"
+
+
+def test_r2g_non_scoring_completion_is_early_relative_to_formal_target():
+    assert normalized_submission_stop_reason(
+        "target_reached",
+        candidate_count=4,
+        formal_target=200,
+        non_scoring_canary=True,
+    ) == "submitted_early"
+    assert normalized_submission_stop_reason(
+        "target_reached",
+        candidate_count=4,
+        formal_target=200,
+        non_scoring_canary=False,
+    ) == "provider_failure"
 
 
 def test_expander_search_budget_counts_requests_not_query_definitions(tmp_path: Path):

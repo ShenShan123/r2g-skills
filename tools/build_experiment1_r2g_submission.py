@@ -18,6 +18,7 @@ sys.path.insert(0, str(REPO))
 
 from tools.run_experiment1_rtl_acquisition import (  # noqa: E402
     R2G_METHOD_IDS,
+    TASK_SPEC,
     ExperimentError,
     infer_spdx_identifier,
     read_json,
@@ -308,23 +309,39 @@ def count_synth_attempts(workspace: Path) -> int:
     )
 
 
+def normalized_submission_stop_reason(
+    stop_reason: str,
+    *,
+    candidate_count: int,
+    formal_target: int,
+    non_scoring_canary: bool,
+) -> str:
+    if non_scoring_canary and stop_reason == "target_reached" and candidate_count:
+        return "submitted_early"
+    if candidate_count < formal_target and stop_reason == "target_reached":
+        return "provider_failure"
+    return stop_reason
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign-root", type=Path, required=True)
     parser.add_argument("--method-id", choices=sorted(R2G_METHOD_IDS), required=True)
-    parser.add_argument("--batch-id", type=int, choices=range(1, 5), default=1)
+    parser.add_argument("--batch-id", type=int, choices=(1,), default=1)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
     campaign = args.campaign_root.resolve()
+    campaign_manifest = read_json(campaign / "execution_manifest.json")
     method_root = campaign / "method_runs" / f"{args.method_id}.batch{args.batch_id}.formal"
     end = read_json(method_root / "method_end.json")
+    target = int(read_json(TASK_SPEC)["batch_policy"]["target_candidates_per_batch"])
     prequalified = method_root / "prequalified_candidates.json"
     if prequalified.is_file():
         candidates = read_json(prequalified)
         if not isinstance(candidates, list):
             raise ExperimentError("prequalified candidate artifact must be a JSON array")
-        candidates = candidates[:25]
+        candidates = candidates[:target]
         conversion_errors: list[str] = []
         queries = list(end.get("queries") or [])
         stop_reason = str(end["stop_reason"])
@@ -337,7 +354,7 @@ def main() -> int:
         keys: set[tuple[str, str, str]] = set()
         conversion_errors = []
         for row in rows:
-            if len(candidates) >= 25:
+            if len(candidates) >= target:
                 break
             try:
                 candidate = candidate_from_meta(corpus / row["design"] / "design_meta.json")
@@ -357,8 +374,15 @@ def main() -> int:
             encoding="utf-8",
         )
 
-    if len(candidates) < 25 and stop_reason == "target_reached":
-        stop_reason = "provider_failure"
+    stop_reason = normalized_submission_stop_reason(
+        stop_reason,
+        candidate_count=len(candidates),
+        formal_target=target,
+        non_scoring_canary=(
+            campaign_manifest.get("campaign_mode") == "non_scoring_canary"
+            and end.get("non_scoring_target") is not None
+        ),
+    )
     submission = {
         "schema_version": "1.0",
         "experiment_id": end["experiment_id"],
@@ -377,6 +401,7 @@ def main() -> int:
         "stop_reason": stop_reason,
         "resource_usage": {
             "method_runtime_seconds": end["method_runtime_seconds"],
+            "llm_turns": None,
             "input_tokens": 0,
             "output_tokens": 0,
             "reasoning_tokens": 0,

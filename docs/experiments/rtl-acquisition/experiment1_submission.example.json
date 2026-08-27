@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "experiment_id": "r2g-exp1-rtl-acquisition-v1",
+  "experiment_id": "r2g-exp1-rtl-acquisition-v2",
   "method_id": "openai-vanilla",
   "batch_id": 1,
   "model_route": {
@@ -16,6 +16,7 @@
   "stop_reason": "provider_failure",
   "resource_usage": {
     "method_runtime_seconds": 600,
+    "llm_turns": 1,
     "input_tokens": 100,
     "output_tokens": 200,
     "reasoning_tokens": 300,

@@ -138,6 +138,14 @@ def submitted_stop_reason(candidate_count: int, target: int) -> str:
     return "target_reached" if candidate_count >= target else "submitted_early"
 
 
+def run_submission_stop_reason(
+    candidate_count: int, target: int, run_kind: str
+) -> str:
+    if run_kind == "smoke" and candidate_count:
+        return "submitted_early"
+    return submitted_stop_reason(candidate_count, target)
+
+
 def assistant_history_message(message: dict[str, Any]) -> dict[str, Any]:
     calls = message.get("tool_calls") or []
     value: dict[str, Any] = {
@@ -332,7 +340,11 @@ def tool_specs() -> list[dict[str, Any]]:
     definitions = [
         {
             "name": "search_repositories",
-            "description": "Search public GitHub repositories. Every call consumes one search request.",
+            "description": (
+                "Search public GitHub repositories. Every result item contains a repo_url; "
+                "pass that exact HTTPS value unchanged to clone_repository. Every call "
+                "consumes one search request."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -437,7 +449,7 @@ def tool_specs() -> list[dict[str, Any]]:
                 "properties": {
                     "candidates": {
                         "type": "array",
-                        "maxItems": 25,
+                        "maxItems": 200,
                         "items": candidate,
                     },
                     "out_of_scope": {"type": "array", "items": out_of_scope},
@@ -465,10 +477,30 @@ def provider_usage(data: dict[str, Any]) -> dict[str, int]:
         usage.get("completion_tokens") or usage.get("output_tokens") or 0
     )
     reasoning_tokens = int(details.get("reasoning_tokens") or 0)
-    output_tokens = max(0, completion_tokens - reasoning_tokens)
-    total_tokens = int(
-        usage.get("total_tokens") or input_tokens + completion_tokens
-    )
+    reported_total = usage.get("total_tokens")
+
+    # OpenAI-compatible gateways expose both common token conventions:
+    # completion/output tokens may include reasoning tokens, or may contain
+    # visible output only. Prefer the interpretation matching the provider's
+    # reported total. Some gateways also return slightly inconsistent details;
+    # in that case keep their total authoritative and derive visible output so
+    # the normalized accounting remains internally exact.
+    inclusive_output = max(0, completion_tokens - reasoning_tokens)
+    inclusive_total = input_tokens + inclusive_output + reasoning_tokens
+    separate_output = completion_tokens
+    separate_total = input_tokens + separate_output + reasoning_tokens
+    if reported_total is None:
+        output_tokens = inclusive_output
+        total_tokens = inclusive_total
+    else:
+        total_tokens = max(0, int(reported_total))
+        if total_tokens == inclusive_total:
+            output_tokens = inclusive_output
+        elif total_tokens == separate_total:
+            output_tokens = separate_output
+        else:
+            output_tokens = max(0, total_tokens - input_tokens - reasoning_tokens)
+            total_tokens = input_tokens + output_tokens + reasoning_tokens
     return {
         "input": input_tokens,
         "output": output_tokens,
@@ -488,6 +520,21 @@ def normalized_checkout(value: Any) -> str:
     if rendered.lower() in {"", "null", "none", "head"}:
         return "HEAD"
     return rendered
+
+
+def public_repository_record(item: dict[str, Any]) -> dict[str, Any]:
+    """Expose one canonical URL field shared with clone_repository."""
+    repo_url = item.get("html_url")
+    return {
+        "full_name": item.get("full_name"),
+        "repo_url": repo_url,
+        "html_url": repo_url,
+        "description": item.get("description"),
+        "default_branch": item.get("default_branch"),
+        "license_spdx": (item.get("license") or {}).get("spdx_id"),
+        "stars": item.get("stargazers_count"),
+        "updated_at": item.get("updated_at"),
+    }
 
 
 def campaign_toolchain_env(campaign_root: Path) -> dict[str, str]:
@@ -520,6 +567,10 @@ class VanillaRun:
         self.token_budget = int(budget["vanilla_llm_total_tokens"])
         self.wall_time_budget = int(budget["wall_time_seconds"])
         self.search_budget = int(budget["search_requests"])
+        self.turn_count = 0
+        self.checkpoint_targets = tuple(
+            int(value) for value in task["batch_policy"].get("checkpoint_targets", [])
+        )
         self.method_id = str(route["method_id"])
         self.root = (
             self.campaign_root
@@ -563,6 +614,28 @@ class VanillaRun:
                 "ORFS_MAX_CPUS": str(self.cpu_cores),
             }
         )
+
+    def write_qualification_checkpoints(self) -> None:
+        """Persist auditable progress snapshots without exposing evaluator feedback."""
+        count = len(self.qualified_candidates)
+        checkpoint_root = self.root / "checkpoints"
+        for target in self.checkpoint_targets:
+            if count < target:
+                continue
+            path = checkpoint_root / f"qualified_{target:03d}.json"
+            if path.exists():
+                continue
+            checkpoint_root.mkdir(parents=True, exist_ok=True)
+            write_json_atomic(
+                path,
+                {
+                    "schema_version": "1.0",
+                    "method_id": self.method_id,
+                    "target": target,
+                    "recorded_at": now_iso(),
+                    "candidates": list(self.qualified_candidates.values())[:target],
+                },
+            )
 
     def event(self, kind: str, value: dict[str, Any]) -> None:
         record = {"timestamp": now_iso(), "kind": kind, **value}
@@ -636,18 +709,7 @@ class VanillaRun:
             raise ExperimentError(f"GitHub search failed without a response: {last_error}")
         return {
             "total_count": data.get("total_count", 0),
-            "items": [
-                {
-                    "full_name": item.get("full_name"),
-                    "html_url": item.get("html_url"),
-                    "description": item.get("description"),
-                    "default_branch": item.get("default_branch"),
-                    "license_spdx": (item.get("license") or {}).get("spdx_id"),
-                    "stars": item.get("stargazers_count"),
-                    "updated_at": item.get("updated_at"),
-                }
-                for item in data.get("items", [])
-            ],
+            "items": [public_repository_record(item) for item in data.get("items", [])],
         }
 
     def clone(self, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -905,6 +967,7 @@ class VanillaRun:
                 str(candidate["top_module"]),
             )
             self.qualified_candidates.setdefault(key, copy.deepcopy(candidate))
+            self.write_qualification_checkpoints()
         return {
             "accepted": True,
             "precheck_qualified": failure is None,
@@ -1107,6 +1170,9 @@ class VanillaRun:
         else:
             budget_phase = "normal"
         state = {
+            "llm_turns_used": self.turn_count,
+            "llm_turn_budget": self.max_turns,
+            "llm_turns_remaining": max(0, self.max_turns - self.turn_count),
             "queries_used": len(self.queries),
             "search_budget": self.search_budget,
             "provider_tokens_used": token_used,
@@ -1144,7 +1210,7 @@ class VanillaRun:
         candidates = final["candidates"][: self.target]
         return {
             "schema_version": "1.0",
-            "experiment_id": "r2g-exp1-rtl-acquisition-v1",
+            "experiment_id": "r2g-exp1-rtl-acquisition-v2",
             "method_id": self.method_id,
             "batch_id": self.batch_id,
             "model_route": {
@@ -1160,6 +1226,7 @@ class VanillaRun:
             "stop_reason": stop_reason,
             "resource_usage": {
                 "method_runtime_seconds": round(time.monotonic() - self.started_monotonic, 3),
+                "llm_turns": self.turn_count,
                 "input_tokens": self.usage["input"],
                 "output_tokens": self.usage["output"],
                 "reasoning_tokens": self.usage["reasoning"],
@@ -1193,8 +1260,8 @@ class VanillaRun:
                 "frozen resource limit prevents further work. Missing slots count as failures."
             )
             run_instruction = (
-                f"This is formal Batch {self.batch_id}. Submit up to {self.target} "
-                "candidates, then stop."
+                f"This is one continuous formal run. Submit up to {self.target} "
+                "candidates, with audit checkpoints at 50, 100, 150, and 200, then stop."
             )
         system = (
             "You are a Vanilla LLM baseline for a controlled RTL-acquisition experiment. "
@@ -1215,11 +1282,12 @@ class VanillaRun:
             "do not occupy submission slots. The primary comparison reports valid unique "
             "submission rate, independent qualification rate, and diverse-qualified yield, "
             "which is effective repository count among independently qualified candidates "
-            "divided by 25. Aim for at least 12 repositories and submit no more than four "
+            f"divided by {self.target}. Aim for at least 50 repositories and submit no more than four "
             "candidates from one repository. Missing slots fail; unqualified repositories "
             "cannot increase the diversity metric. Do not invent paths, commits, synthesis "
             "results, or licenses. "
             f"The exact limits are {self.token_budget} cumulative provider tokens, "
+            f"{self.max_turns} LLM response turns, "
             f"{self.search_budget} repository searches, and {self.wall_time_budget} seconds "
             "of method wall time. Current usage and remaining budget are shown in every "
             "deterministic runner-state message. Manage the disclosed budget so inspected "
@@ -1250,6 +1318,7 @@ class VanillaRun:
                 ):
                     stop_reason = "wall_time_limit"
                     break
+                self.turn_count = turn
                 message = self.api_turn(self.compact_messages(messages))
                 calls = message.get("tool_calls") or []
                 messages.append(assistant_history_message(message))
@@ -1298,8 +1367,10 @@ class VanillaRun:
                         }
                     )
                 if self.final is not None:
-                    stop_reason = submitted_stop_reason(
-                        len(self.final.get("candidates") or []), self.target
+                    stop_reason = run_submission_stop_reason(
+                        len(self.final.get("candidates") or []),
+                        self.target,
+                        self.run_kind,
                     )
                     break
         except TokenBudgetError as exc:
@@ -1364,8 +1435,8 @@ def main() -> int:
         "--method-id", choices=sorted(VANILLA_METHODS), required=True
     )
     parser.add_argument("--campaign-root", type=Path, required=True)
-    parser.add_argument("--batch-id", type=int, choices=range(1, 5), default=1)
-    parser.add_argument("--target", type=int, choices=range(1, 26), default=1)
+    parser.add_argument("--batch-id", type=int, choices=(1,), default=1)
+    parser.add_argument("--target", type=int, choices=range(1, 201), default=1)
     parser.add_argument("--max-turns", type=int, default=30)
     parser.add_argument("--max-output-tokens", type=int, default=4096)
     parser.add_argument("--run-kind", choices=("smoke", "formal"), default="smoke")
@@ -1376,12 +1447,13 @@ def main() -> int:
     )
     parser.add_argument("--env-file", type=Path, required=True)
     args = parser.parse_args()
-    if args.run_kind == "formal" and args.target != 25:
-        parser.error("--run-kind formal requires --target 25")
     task = read_json(TASK_SPEC)
+    formal_target = int(task["batch_policy"]["target_candidates_per_batch"])
+    if args.run_kind == "formal" and args.target != formal_target:
+        parser.error(f"--run-kind formal requires --target {formal_target}")
     if args.run_kind == "formal" and (
         args.max_turns
-        != int(task["method_budget"]["vanilla_max_turns_per_batch"])
+        != int(task["method_budget"]["vanilla_max_turns_per_run"])
         or args.max_output_tokens
         != int(task["method_budget"]["vanilla_max_output_tokens_per_turn"])
     ):
