@@ -60,6 +60,10 @@ class VerifierSnapshot:
     # content digest (and therefore preserves deterministic IDs for older
     # evidence).
     full_oracle: dict | None = None
+    # A source-bound semantic contract can explain why a physically complete
+    # before arm is unacceptable.  It is provenance, not a replacement for
+    # the physical oracle, and is intentionally excluded from ``content()``.
+    semantic_oracle: dict | None = None
 
     def validate(self) -> None:
         if self.verdict not in VERDICTS:
@@ -75,7 +79,8 @@ class VerifierSnapshot:
             raise ValueError("oracle_complete must be bool or None")
         for name, value in (("input_binding", self.input_binding),
                             ("timing_contract", self.timing_contract),
-                            ("full_oracle", self.full_oracle)):
+                            ("full_oracle", self.full_oracle),
+                            ("semantic_oracle", self.semantic_oracle)):
             if value is not None and not isinstance(value, dict):
                 raise ValueError(f"{name} must be a mapping or None")
 
@@ -97,6 +102,7 @@ class VerifierSnapshot:
             "input_binding": self.input_binding,
             "timing_contract": self.timing_contract,
             "full_oracle": self.full_oracle,
+            "semantic_oracle": self.semantic_oracle,
         }
 
     @classmethod
@@ -114,6 +120,7 @@ class VerifierSnapshot:
             input_binding=data.get("input_binding"),
             timing_contract=data.get("timing_contract"),
             full_oracle=data.get("full_oracle"),
+            semantic_oracle=data.get("semantic_oracle"),
         )
         obj.validate()
         return obj

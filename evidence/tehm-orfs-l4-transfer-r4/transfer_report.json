@@ -1,0 +1,93 @@
+{
+  "version": "tehm-orfs-l4-transfer-r4",
+  "semantic_oracles": [
+    {
+      "path": "memory/evaluation/orfs_semantic_oracles/core_utilization_le_45.json",
+      "sha256": "78f4fe9289b1a68f2f4f6aab1622f02b7ef10b2e0f594758319cbfe2d84b464b",
+      "role": "training",
+      "contract": "CORE_UTILIZATION <= 45"
+    },
+    {
+      "path": "memory/evaluation/orfs_semantic_oracles/core_utilization_le_65.json",
+      "sha256": "0d981bb66dbbfeb7aa7b049dacbfaaa311595b9c83a014eef6c25cac393f304d",
+      "role": "heldout",
+      "contract": "CORE_UTILIZATION <= 65"
+    }
+  ],
+  "training": {
+    "physical_run_manifest": "/tmp/tehm-orfs/orfs-batch0-uart-dual-support-r1/campaign_manifest.json",
+    "physical_source_freeze": "/tmp/tehm-orfs/orfs-batch0-uart-dual-support-r1/source_freeze.json",
+    "physical_source_freeze_sha256": "574401879749476ba0b83b1927752b2447b615bc4b60958e64585b7baa0f974b",
+    "semantic_contract_bound_at_recapture": true,
+    "path_id": "causal_path_69ab879fe338f882",
+    "path_digest": "sha1:69ab879fe338f882f098369d4b9e180b62f5b720",
+    "evidence_level": "L3_REPLICATED_EFFECT",
+    "replication": "replicated_effect_supported",
+    "lineages": [
+      "tehm-training-semantic-r11:sky130hs:uart",
+      "tehm-training-semantic-r11:sky130hs:uart_no_param"
+    ],
+    "treatment_transition_ids": [
+      "transition_d0e610300a36aaa8",
+      "transition_a399cedbff33f083"
+    ],
+    "semantic_transition": "50 FAIL -> 40 PASS",
+    "utility_verdict": "HARMFUL",
+    "run_witnesses": [
+      "RUN_2026-08-26_17-50-01_10_0cb5",
+      "RUN_2026-08-26_17-52-14_4284_4980"
+    ]
+  },
+  "heldout": {
+    "transition_id": "transition_40b69b61faf3eb7f",
+    "lineage_id": "tehm-heldout-fifo-semantic-r10:sky130hs:selector_fifo16:base0",
+    "split": "heldout",
+    "learner_eligible": false,
+    "semantic_transition": "70 FAIL -> 60 PASS",
+    "physical_full_oracle": {
+      "required_checks": [
+        "synthesis",
+        "equivalence",
+        "route",
+        "finish",
+        "timing",
+        "drc",
+        "lvs",
+        "strict_signoff",
+        "ppa",
+        "graph",
+        "artifact_digest",
+        "input_binding",
+        "timing_contract",
+        "toolchain_binding"
+      ],
+      "before": "PASS",
+      "after": "PASS"
+    },
+    "utility_verdict": "HARMFUL"
+  },
+  "transfer": {
+    "batch_status": "PASS",
+    "case_count": 1,
+    "eligible_count": 1,
+    "path_id": "causal_path_69ab879fe338f882",
+    "receipt_id": "causal_transfer_d05027ca9063d25f1c5f",
+    "evidence_level": "L4_TRANSFER_SUPPORTED_MECHANISM",
+    "reason": "transfer_supported_mechanism",
+    "mechanism_match": true,
+    "effect_match": true,
+    "lineage_binding": true,
+    "ledger_verified": true,
+    "require_full_oracle": true,
+    "source_database_unchanged": true,
+    "source_database_sha256": "b54c43337183f48bebef827821c7dfe794c641e8e3126bc8f912d09ce5d985b4",
+    "isolated_ledger_sha256": "235a4f927df69c1f041ba320735841d1c225c598ef9e42a67eaf96b13e613af3"
+  },
+  "authority": {
+    "canonical_memory_mutation": "none",
+    "promotion_eligible": false,
+    "promotion_attempted": false,
+    "decision": "DENY_CANONICAL_IMPORT",
+    "reason": "physical utility harmful; rollback/registry/cross-lineage-TE/conformal authority receipts are not established"
+  }
+}

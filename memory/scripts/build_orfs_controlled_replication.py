@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tehm.causal.orfs import build_orfs_controlled_replication  # noqa: E402
+from tehm.adapters.semantic_oracle import load_spec  # noqa: E402
 
 
 def main(argv=None) -> int:
@@ -26,10 +27,17 @@ def main(argv=None) -> int:
         "--split", choices=("training",), default="training",
         help="learner split for controlled L2/L3 replication (training only)")
     parser.add_argument("--min-lineages", type=int, default=2)
+    parser.add_argument(
+        "--semantic-oracle", type=Path, default=None,
+        help=("source-frozen semantic oracle JSON applied to every pair; "
+              "physical full-oracle checks remain mandatory"))
     args = parser.parse_args(argv)
+    semantic_oracle = load_spec(args.semantic_oracle) if args.semantic_oracle else None
     pairs = [
         {"before_project": before, "after_project": after,
-         "lineage_id": lineage, "config_edits": json.loads(config_json)}
+         "lineage_id": lineage, "config_edits": json.loads(config_json),
+         **({"semantic_oracle": semantic_oracle}
+            if semantic_oracle is not None else {})}
         for before, after, lineage, config_json in args.pair
     ]
     report = build_orfs_controlled_replication(

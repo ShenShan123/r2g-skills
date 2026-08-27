@@ -54,6 +54,7 @@ from tehm.batch_lane import (  # noqa: E402
     _input_binding,
     _timing_contract,
 )
+from tehm.adapters.semantic_oracle import load_spec  # noqa: E402
 from orfs_storage import default_work_root, enforce_work_root, storage_policy  # noqa: E402
 
 VERSION = "orfs-add-designs-v0.1"
@@ -205,7 +206,8 @@ def _file_record(path: Path) -> dict:
 def _campaign_inputs(orfs_root: Path, *, designs, platforms,
                      rtl_override_path: Path | None,
                      sdc_override_path: Path | None,
-                     template_design: str) -> list[dict]:
+                     template_design: str,
+                     semantic_oracle_path: Path | None = None) -> list[dict]:
     """Resolve the exact config/SDC/RTL inputs before materialization.
 
     The record is intentionally independent of generated project directories:
@@ -228,12 +230,15 @@ def _campaign_inputs(orfs_root: Path, *, designs, platforms,
                    if rtl_override_path is not None else
                    _rtl_files(Path(orfs_root) / "flow" / "designs" /
                               "src" / design))
-            rows.append({
+            row = {
                 "platform": str(platform), "design": str(design),
                 "template_design": str(platform_design),
                 "config": _file_record(cfg), "sdc": _file_record(sdc),
                 "rtl": [_file_record(path) for path in rtl],
-            })
+            }
+            if semantic_oracle_path is not None:
+                row["semantic_oracle"] = _file_record(semantic_oracle_path)
+            rows.append(row)
     return rows
 
 
@@ -258,7 +263,8 @@ def _freeze_request(*, designs, platforms, families, indexes: int,
                     rtl_override_path: Path | None,
                     sdc_override_path: Path | None,
                     template_design: str, orfs_root: Path,
-                    dataset_split: str = "training") -> dict:
+                    dataset_split: str = "training",
+                    semantic_oracle_path: Path | None = None) -> dict:
     if dataset_split not in {"training", "calibration", "heldout", "ab"}:
         raise ValueError(f"invalid dataset split: {dataset_split!r}")
     request = {
@@ -280,6 +286,11 @@ def _freeze_request(*, designs, platforms, families, indexes: int,
     # transfer run must not be reclassified by editing only the manifest.
     if dataset_split != "training":
         request["dataset_split"] = dataset_split
+    if semantic_oracle_path is not None:
+        # Validate before writing the freeze, then bind the exact file path in
+        # the request and its digest via ``_campaign_inputs``.
+        load_spec(semantic_oracle_path)
+        request["semantic_oracle"] = str(Path(semantic_oracle_path).resolve())
     return request
 
 
@@ -288,18 +299,21 @@ def build_source_freeze(root: Path, orfs_root: Path, *, designs, platforms,
                         lineage_prefix: str, rtl_override_path: Path | None,
                         sdc_override_path: Path | None,
                         template_design: str,
-                        dataset_split: str = "training") -> dict:
+                        dataset_split: str = "training",
+                        semantic_oracle_path: Path | None = None) -> dict:
     """Freeze campaign inputs before any project is materialized or run."""
     request = _freeze_request(
         designs=designs, platforms=platforms, families=families,
         indexes=indexes, core_utils=core_utils, lineage_prefix=lineage_prefix,
         rtl_override_path=rtl_override_path,
         sdc_override_path=sdc_override_path, template_design=template_design,
-        orfs_root=orfs_root, dataset_split=dataset_split)
+        orfs_root=orfs_root, dataset_split=dataset_split,
+        semantic_oracle_path=semantic_oracle_path)
     inputs = _campaign_inputs(
         Path(orfs_root).resolve(), designs=designs, platforms=platforms,
         rtl_override_path=rtl_override_path,
-        sdc_override_path=sdc_override_path, template_design=template_design)
+        sdc_override_path=sdc_override_path, template_design=template_design,
+        semantic_oracle_path=semantic_oracle_path)
     toolchain = preflight_orfs_toolchain({"orfs_root": request["orfs_root"]})
     source_code = _source_code_records()
     freeze = {
@@ -325,7 +339,8 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
                             lineage_prefix: str, rtl_override_path: Path | None,
                             sdc_override_path: Path | None,
                             template_design: str,
-                            dataset_split: str = "training") -> dict:
+                            dataset_split: str = "training",
+                            semantic_oracle_path: Path | None = None) -> dict:
     path = Path(path).resolve()
     try:
         freeze = json.loads(path.read_text())
@@ -345,7 +360,8 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
         indexes=indexes, core_utils=core_utils, lineage_prefix=lineage_prefix,
         rtl_override_path=rtl_override_path,
         sdc_override_path=sdc_override_path, template_design=template_design,
-        orfs_root=orfs_root, dataset_split=dataset_split)
+        orfs_root=orfs_root, dataset_split=dataset_split,
+        semantic_oracle_path=semantic_oracle_path)
     if freeze.get("request") != expected_request:
         raise BatchLaneError(
             "source freeze request mismatch; use the same campaign arguments "
@@ -353,7 +369,8 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
     current_inputs = _campaign_inputs(
         Path(orfs_root).resolve(), designs=designs, platforms=platforms,
         rtl_override_path=rtl_override_path,
-        sdc_override_path=sdc_override_path, template_design=template_design)
+        sdc_override_path=sdc_override_path, template_design=template_design,
+        semantic_oracle_path=semantic_oracle_path)
     if (freeze.get("input_digest") !=
             hashlib.sha256(_stable(current_inputs).encode()).hexdigest()):
         raise BatchLaneError(
@@ -408,6 +425,8 @@ def _validate_manifest_source_freeze(manifest: dict) -> dict:
                           if request.get("sdc_override") else None),
         template_design=str(request["template_design"]),
         dataset_split=str(request.get("dataset_split", "training")),
+        semantic_oracle_path=(Path(request["semantic_oracle"])
+                              if request.get("semantic_oracle") else None),
     )
     return freeze
 
@@ -427,6 +446,9 @@ def main(argv=None) -> int:
                     help="custom RTL file used for every requested design; the design is a new lineage")
     ap.add_argument("--sdc-override", type=Path, default=None,
                     help="SDC template paired with --rtl-override")
+    ap.add_argument("--semantic-oracle", type=Path, default=None,
+                    help=("source-frozen JSON semantic failure contract; evaluated "
+                          "from each materialized config, never caller booleans"))
     ap.add_argument("--template-design", default="gcd",
                     help="platform design template for --rtl-override (default: gcd)")
     ap.add_argument("--families", nargs="+", default=list(DEFAULT_FAMILIES),
@@ -473,7 +495,9 @@ def main(argv=None) -> int:
             sdc_override_path=(args.sdc_override.resolve()
                                if args.sdc_override else None),
             template_design=args.template_design,
-            dataset_split=args.dataset_split)
+            dataset_split=args.dataset_split,
+            semantic_oracle_path=(args.semantic_oracle.resolve()
+                                  if args.semantic_oracle else None))
         if args.phase == "freeze":
             return 0
 
@@ -490,6 +514,8 @@ def main(argv=None) -> int:
                                               if args.sdc_override else None),
                            template_design=args.template_design,
                            dataset_split=args.dataset_split,
+                           semantic_oracle_path=(args.semantic_oracle.resolve()
+                                                 if args.semantic_oracle else None),
                            source_freeze=freeze_path)
     else:
         manifest = _load(manifest_path)
@@ -548,6 +574,7 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
             sdc_override_path: Path | None = None,
             template_design: str = "gcd",
             dataset_split: str = "training",
+            semantic_oracle_path: Path | None = None,
             source_freeze: Path | None = None) -> dict:
     core_utils = tuple(int(x) for x in core_utils)
     if not core_utils:
@@ -561,7 +588,10 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
         core_utils=core_utils, lineage_prefix=lineage_prefix,
         rtl_override_path=rtl_override_path,
         sdc_override_path=sdc_override_path, template_design=template_design,
-        dataset_split=dataset_split)
+        dataset_split=dataset_split,
+        semantic_oracle_path=semantic_oracle_path)
+    semantic_oracle = (load_spec(semantic_oracle_path)
+                       if semantic_oracle_path is not None else None)
     family_specs = {
         "DENSITY_RELIEF": ("CORE_UTILIZATION", "density",
                            lambda i: str(core_utils[i]),
@@ -660,6 +690,7 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                             "before": _timing_contract(base),
                             "after": _timing_contract(after),
                         },
+                        "semantic_oracle": semantic_oracle,
                         "role": dataset_split,
                         "dataset_split": dataset_split,
                     })
@@ -672,6 +703,11 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
     manifest = {
         "campaign_version": VERSION, "lineage_prefix": lineage_prefix,
         "dataset_split": dataset_split,
+        "semantic_oracle": semantic_oracle,
+        "semantic_oracle_path": (str(Path(semantic_oracle_path).resolve())
+                                  if semantic_oracle_path is not None else None),
+        "semantic_oracle_sha256": (_sha(semantic_oracle_path)
+                                    if semantic_oracle_path is not None else None),
         "orfs_root": str(orfs_root),
         "source_freeze": str(Path(source_freeze).resolve()),
         "source_freeze_sha256": _sha(source_freeze),

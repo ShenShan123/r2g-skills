@@ -1698,6 +1698,18 @@ scratch 的 external-only 日志中，未写入 support staging。该结果说�
 routing support 不能直接外推为 density fail→pass transfer；必须先得到完整、
 non-harmful 且 source-disjoint 的 held-out pair，才能重新计算 `cross_lineage_te`。
 
+### 2026-08-27 semantic fail→pass contract 与 L4 transfer（evaluation-only）
+
+新增 source-bound `orfs-semantic-oracle-v1`，直接从 materialized
+`constraints/config.mk` 计算配置失败/通过，补足“物理 before 完整但语义上失败”的
+可执行 witness；物理 ORFS 14 项仍是独立硬门。UART 与 `uart_no_param` 两条 training
+lineage 形成 L3 path `causal_path_69ab879fe338f882`，独立 held-out
+`selector_fifo16` 的 `70 FAIL→60 PASS` pair 在 `--require-full-oracle` 下通过 L4
+batch replay，ledger receipt 可重放且 source DB 不变。density utility 仍为
+`HARMFUL`，所以这只是 mechanism-transfer evidence，不能升级为 authority；
+`promotion_attempted=false`、canonical memory 和 production runtime 均未改变。
+详见 [`evidence/tehm-orfs-l4-transfer-r4/transfer_report.json`](../evidence/tehm-orfs-l4-transfer-r4/transfer_report.json)。
+
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 
 - 新增独立物理 lineage `orfs-heldout-v5:sky130hs:gcd:base3`，位于

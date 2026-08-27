@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
 from tehm.adapters.r2g_evidence import parse_config_mk
+from tehm.adapters.semantic_oracle import evaluate_pair
 from tehm.canonical.capture import ExecutionRecord
 from tehm.physical.effects import extract_deltas
 
@@ -26,7 +28,8 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
                            lineage_id: str, target_check: str = "route",
                            config_edits: dict | None = None,
                            transformation_family: str = "DENSITY_RELIEF",
-                           rerun_from: str = "floorplan") -> ExecutionRecord:
+                           rerun_from: str = "floorplan",
+                           semantic_oracle: Mapping | None = None) -> ExecutionRecord:
     """Build a replayable record from two completed production-run attempts."""
     before_project, after_project = Path(before_project), Path(after_project)
     before_run, after_run = _run_evidence(before_project), _run_evidence(after_project)
@@ -40,15 +43,32 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
     after_ok = _scope_success(target_check, after_run["reports"])
     before_definitive = _scope_definitive(target_check, before_run)
     after_definitive = _scope_definitive(target_check, after_run)
-    original = ("REMOVED" if not before_ok and after_ok else
-                "PRESENT" if before_definitive and not before_ok else "UNKNOWN")
-    verdict = "PASS" if after_ok else ("FAIL" if after_definitive else "UNKNOWN")
+    semantic_receipt = (evaluate_pair(before_project, after_project, semantic_oracle)
+                        if semantic_oracle is not None else None)
+    if semantic_receipt is None:
+        original = ("REMOVED" if not before_ok and after_ok else
+                    "PRESENT" if before_definitive and not before_ok else "UNKNOWN")
+        verdict = "PASS" if after_ok else ("FAIL" if after_definitive else "UNKNOWN")
+        before_failure = 0 if before_ok else (1 if before_definitive else None)
+        after_failure = 0 if after_ok else (1 if after_definitive else None)
+    else:
+        # Keep physical target success/failure separate from the semantic
+        # contract.  A complete physical run may still be a semantic failure
+        # before the action; only the source-bound receipt can set REMOVED.
+        original = str(semantic_receipt["original_failure"])
+        semantic_after = str(semantic_receipt["after"]["verdict"])
+        verdict = ("PASS" if after_ok and semantic_after == "PASS" else
+                   "FAIL" if after_definitive or semantic_after == "FAIL"
+                   else "UNKNOWN")
+        before_failure = (0 if semantic_receipt["before"]["verdict"] == "PASS"
+                          else 1 if semantic_receipt["before"]["verdict"] == "FAIL"
+                          else None)
+        after_failure = (0 if semantic_after == "PASS" else
+                         1 if semantic_after == "FAIL" else None)
     created = _created_regressions(before_run["reports"], after_run["reports"],
                                    target_check)
     checked, required = _obligation_counts(after_run, target_check)
     coverage = checked / required if required else None
-    before_fail = 0 if before_ok else (1 if before_definitive else None)
-    after_fail = 0 if after_ok else (1 if after_definitive else None)
     experiment_kind = "REPAIR" if original in {"REMOVED", "PRESENT"} else "OBSERVATION"
     utility_verdict = _utility_verdict(
         before_run["reports"].get("ppa") or {}, after_run["reports"].get("ppa") or {})
@@ -59,6 +79,7 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
     record_id = "orfs-pair:" + hashlib.sha1(_stable({
         "before": before_run["run_meta"], "after": after_run["run_meta"],
         "lineage": lineage_id, "edit": config_edits, "check": target_check,
+        "semantic_oracle": semantic_receipt,
     }).encode()).hexdigest()[:24]
     episode_id = "episode:" + record_id.split(":", 1)[1]
     refs = _evidence_refs(before_project, before_run, "before") + \
@@ -95,8 +116,8 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
         },
         observation_delta={
             "original_failure": original,
-            "first_divergence": {"before": before_fail, "after": after_fail},
-            "failing_tests": {"before": before_fail, "after": after_fail},
+            "first_divergence": {"before": before_failure, "after": after_failure},
+            "failing_tests": {"before": before_failure, "after": after_failure},
             "created_regressions": created, "newly_observed_failures": [],
             "experiment_kind": experiment_kind,
             "utility_verdict": utility_verdict,
@@ -111,6 +132,7 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
             "required_obligations": required, "checked_obligations": checked,
             "oracle_complete": oracle_complete,
             "adapter_version": PAIR_ADAPTER_VERSION,
+            "semantic_oracle": semantic_receipt,
         },
         episode={"episode_id": episode_id,
                  "mechanism_family": transformation_family,

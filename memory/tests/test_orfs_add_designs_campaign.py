@@ -113,6 +113,37 @@ def test_non_training_split_is_bound_into_source_freeze(tmp_path):
                 **training_kwargs)
 
 
+def test_semantic_oracle_is_source_frozen_and_materialized(tmp_path):
+    orfs = _fake_orfs(tmp_path / "orfs")
+    override = tmp_path / "override.sdc"
+    override.write_text("set clk_period 10\n")
+    semantic = tmp_path / "semantic.json"
+    semantic.write_text(json.dumps({
+        "version": "orfs-semantic-oracle-v1",
+        "kind": "config_numeric_bound",
+        "config_key": "CORE_UTILIZATION",
+        "operator": "le",
+        "threshold": 65,
+    }))
+    kwargs = {
+        **_kwargs(override),
+        "semantic_oracle_path": semantic,
+        "dataset_split": "heldout",
+    }
+    campaign = tmp_path / "semantic-campaign"
+    build_source_freeze(campaign, orfs, **kwargs)
+    manifest = prepare(campaign, orfs,
+                       source_freeze=campaign / "source_freeze.json", **kwargs)
+    assert manifest["semantic_oracle"]["threshold"] == 65.0
+    assert manifest["items"][0]["semantic_oracle"] == manifest["semantic_oracle"]
+    request = json.loads((campaign / "source_freeze.json").read_text())["request"]
+    assert request["semantic_oracle"] == str(semantic.resolve())
+    semantic.write_text(semantic.read_text().replace("65", "64"))
+    with pytest.raises(BatchLaneError, match="input digest mismatch"):
+        prepare(campaign, orfs,
+                source_freeze=campaign / "source_freeze.json", **kwargs)
+
+
 def _complete_run(project: Path, tag: str) -> None:
     (project / "constraints").mkdir(parents=True)
     (project / "reports").mkdir()

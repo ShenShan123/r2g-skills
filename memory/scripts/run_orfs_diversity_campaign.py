@@ -601,7 +601,8 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
         record = build_orfs_pair_record(
             Path(item["before_project"]), Path(item["after_project"]),
             lineage_id=item["lineage_id"], target_check=item["check"],
-            config_edits=item["config_edits"], transformation_family=item["family"])
+            config_edits=item["config_edits"], transformation_family=item["family"],
+            semantic_oracle=item.get("semantic_oracle"))
         complete = record.verification.get("oracle_complete") is True
         expected_bindings = item.get("input_bindings")
         expected_timing = item.get("timing_contract")

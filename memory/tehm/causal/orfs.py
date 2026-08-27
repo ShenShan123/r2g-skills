@@ -13,11 +13,13 @@ import sqlite3
 import copy
 from dataclasses import replace
 from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
 
 from tehm import db
 from tehm.artifact_store import ArtifactStore
 from tehm.adapters.orfs_pair import build_orfs_pair_record
+from tehm.adapters.semantic_oracle import evaluate_pair
 from tehm.canonical.capture import capture
 
 from .intervention import build_intervention_pair
@@ -214,6 +216,23 @@ def _control_record(treatment):
         isinstance(returncode, int) and returncode != 0 or
         bool(treatment.before.get("failure_signature"))))
     baseline_verdict = "FAIL" if baseline_failed else ("PASS" if baseline_ok else "UNKNOWN")
+    # If the treatment was evaluated under a semantic contract, re-evaluate
+    # the no-op control with the same source-bound contract.  Copying the
+    # treatment's before->after receipt would claim that the unchanged
+    # baseline passed after the intervention, creating an internally
+    # contradictory control witness.
+    semantic = verification.get("semantic_oracle")
+    if isinstance(semantic, Mapping):
+        spec = semantic.get("spec")
+        before = semantic.get("before")
+        project = before.get("project") if isinstance(before, Mapping) else None
+        if isinstance(spec, Mapping) and project:
+            control_semantic = evaluate_pair(project, project, spec)
+            verification["semantic_oracle"] = control_semantic
+            semantic_after = str(control_semantic["after"]["verdict"])
+            if semantic_after in {"PASS", "FAIL"}:
+                baseline_verdict = semantic_after
+                baseline_failed = semantic_after == "FAIL"
     if baseline_failed:
         delta = {
             "original_failure": "PRESENT",
@@ -310,7 +329,14 @@ def build_orfs_controlled_replication(
             config_edits=dict(item["config_edits"]),
             transformation_family=str(
                 item.get("transformation_family") or "DENSITY_RELIEF"),
-            rerun_from=str(item.get("rerun_from") or "floorplan"))
+            rerun_from=str(item.get("rerun_from") or "floorplan"),
+            # A semantic contract is executable evidence, not a caller-supplied
+            # verdict.  Keep the optional mapping on each pair so mixed
+            # campaigns can bind distinct pre-registered contracts while
+            # preserving the historical API for ordinary ORFS pairs.
+            semantic_oracle=(item.get("semantic_oracle")
+                             if isinstance(item.get("semantic_oracle"), Mapping)
+                             else None))
         control = _control_record(treatment)
         control_capture = capture(
             conn, store, control, dataset_campaign_id=campaign_id,

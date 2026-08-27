@@ -1,0 +1,7 @@
+{
+  "config_key": "CORE_UTILIZATION",
+  "kind": "config_numeric_bound",
+  "operator": "le",
+  "threshold": 45.0,
+  "version": "orfs-semantic-oracle-v1"
+}

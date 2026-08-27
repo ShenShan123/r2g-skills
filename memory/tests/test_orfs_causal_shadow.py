@@ -12,6 +12,7 @@ from tehm.causal.orfs import (
 from tehm.causal.replication import evaluate_replicated_effect
 from tehm.causal.authority import evaluate_causal_rule_evidence
 from tehm.causal.path_builder import causal_path_digest
+from tehm.adapters.semantic_oracle import evaluate_pair
 
 
 def _record(lineage: str) -> ExecutionRecord:
@@ -267,6 +268,29 @@ def test_control_preserves_an_executed_baseline_failure():
     assert control.verification["verdict"] == "FAIL"
     assert control.observation_delta["original_failure"] == "PRESENT"
     assert control.observation_delta["failing_tests"] == {"before": 1, "after": 1}
+
+
+def test_semantic_control_rechecks_the_unchanged_baseline(tmp_path):
+    project = tmp_path / "baseline"
+    (project / "constraints").mkdir(parents=True)
+    (project / "constraints" / "config.mk").write_text(
+        "export CORE_UTILIZATION = 50\n")
+    spec = {
+        "version": "orfs-semantic-oracle-v1",
+        "kind": "config_numeric_bound",
+        "config_key": "CORE_UTILIZATION",
+        "operator": "le",
+        "threshold": 45.0,
+    }
+    treatment = _record("orfs:semantic-control")
+    treatment.verification["semantic_oracle"] = evaluate_pair(
+        project, project, spec)
+    control = _control_record(treatment)
+    semantic = control.verification["semantic_oracle"]
+    assert semantic["before"]["verdict"] == "FAIL"
+    assert semantic["after"]["verdict"] == "FAIL"
+    assert control.verification["verdict"] == "FAIL"
+    assert control.observation_delta["original_failure"] == "PRESENT"
 
 
 def test_l3_replication_requires_distinct_run_witnesses(tmp_tehm, tmp_path):

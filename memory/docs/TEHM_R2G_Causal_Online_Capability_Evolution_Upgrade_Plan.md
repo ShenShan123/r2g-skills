@@ -2792,6 +2792,37 @@ smoke 均通过。下一步不是放宽 full-oracle，而是保留这类失败�
 14-check 解耦），或取得两侧均完成但原始目标失败被明确记录的 ORFS witness，
 再运行 L4 batch evaluator 和六项 authority gate。
 
+### 2026-08-27 ORFS semantic fail→pass r4（L4 transfer 已建立，authority 仍拒绝）
+
+针对 r3 的结构性缺口，本轮加入 source-frozen、可执行的
+`orfs-semantic-oracle-v1`：当前预注册契约为 `CORE_UTILIZATION <= 45`（training）
+与 `CORE_UTILIZATION <= 65`（held-out）。evaluator 直接解析每个 materialized
+project 的 `constraints/config.mk`，把配置字节摘要、观测值、verdict 和 pair digest
+写入 verifier receipt；调用方不能传入或覆盖布尔 failure。物理 ORFS 的完整 14 项
+检查仍独立保留，semantic receipt 只补充“before 可判定失败”的 witness。controlled
+replication 的 no-op control 也会重新执行同一 semantic oracle，避免复制 treatment
+receipt 造成 baseline 自相矛盾。
+
+在此前 exact packaged toolchain 的真实 ORFS arms 上，UART 与 `uart_no_param` 两条
+独立 training lineage 形成 L2/L3 controlled path：path
+`causal_path_69ab879fe338f882`、`replicated_effect_supported`，两条 treatment 均为
+semantic `50 FAIL → 40 PASS`，并保留独立 run witness。随后把独立 held-out
+`selector_fifo16` 的真实 `70 FAIL → 60 PASS` pair（两侧 physical 14-check 全部通过、
+`learner_eligible=false`）放入同一隔离 staging DB，运行
+`evaluate_causal_transfer_batch.py --require-full-oracle`。batch 为 `PASS`，ledger
+receipt `causal_transfer_d05027ca9063d25f1c5f` replay verified，L4
+`transfer_supported_mechanism` 且 mechanism/effect/lineage binding 全部通过；source DB
+哈希保持不变，canonical memory、rule lifecycle 和 production runtime 均未写入。
+机器可读摘要见 `evidence/tehm-orfs-l4-transfer-r4/`。
+
+这只是机制可迁移性的 evidence，不是有用性或晋级结果：training 与 held-out 的
+`DENSITY_RELIEF` 物理 utility 均为 `HARMFUL`（面积/功耗上升、WNS 变差），所以该
+cohort 不能贡献 non-harmful support，也不能填充六项 authority gate；当前仍应保持
+`DENY_CANONICAL_IMPORT`、`promotion_attempted=false`。下一步应在不改变 semantic 与
+14-check 契约的前提下寻找至少两条 non-harmful、完整 strict-signoff 的 support lineage，
+再独立补齐 rollback、registry、cross-lineage TE 与 conformal coverage，最后才允许
+authority 复核；任何 L4 PASS 仍只能停留在 shadow/ledger。
+
 ---
 
 ## Phase C1 — Capability Registry（先不做 Asset Synthesis）

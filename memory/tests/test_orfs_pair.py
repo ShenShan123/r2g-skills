@@ -71,6 +71,31 @@ def test_clean_before_after_is_observation_not_verified_repair(tmp_path):
     assert record.episode["terminal_status"] == "VERIFIED_OBSERVATION"
 
 
+def test_semantic_oracle_distinguishes_complete_physical_pair(tmp_path):
+    """A source-bound semantic failure can coexist with physical PASS arms."""
+    before = _project(tmp_path, "semantic_before", util=70, rc=0,
+                      route={"status": "clean"}, drc={"status": "clean"},
+                      ppa={"summary": {"timing": {"setup_wns": 0.1}}})
+    after = _project(tmp_path, "semantic_after", util=60, rc=0,
+                     route={"status": "clean"}, drc={"status": "clean"},
+                     ppa={"summary": {"timing": {"setup_wns": 0.1}}})
+    spec = {
+        "version": "orfs-semantic-oracle-v1",
+        "kind": "config_numeric_bound",
+        "config_key": "CORE_UTILIZATION",
+        "operator": "le",
+        "threshold": 65,
+    }
+    record = build_orfs_pair_record(
+        before, after, lineage_id="orfs:semantic",
+        config_edits={"CORE_UTILIZATION": "60"}, semantic_oracle=spec)
+    assert record.observation_delta["original_failure"] == "REMOVED"
+    assert record.observation_delta["experiment_kind"] == "REPAIR"
+    assert record.verification["verdict"] == "PASS"
+    assert record.verification["semantic_oracle"]["before"]["verdict"] == "FAIL"
+    assert record.verification["semantic_oracle"]["after"]["verdict"] == "PASS"
+
+
 def test_pair_refuses_missing_production_evidence(tmp_path):
     before = tmp_path / "before"
     after = tmp_path / "after"
