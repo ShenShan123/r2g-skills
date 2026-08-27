@@ -3577,3 +3577,31 @@ Capability Gap            = repeated verified failure not covered by current pro
 Capability                = verified mechanism-specific behavior under predicates/budget/obligations
 Capability Evolution      = attributable verified expansion or revision of capability set
 ```
+
+### 2026-08-27 external observation → rule authority projection（仍不授予晋级）
+
+当前 ORFS external/staging cohort 已经能够保留 hash-chained observation 和完整的
+staging transition，但此前 `build_orfs_authority_receipt.py` 仍主要生成文件级 gate
+map。为避免把调用方整理的布尔值误当成数据库 authority，新增
+`tehm.lifecycle.build_external_observation_authority_evidence()`：
+
+1. 先重放 observation JSONL 的 sequence、previous digest 和 receipt digest；
+2. 以只读 SQLite 连接固定 staging 的一致性快照，并计算逻辑 DB dump digest（不受
+   WAL checkpoint 版式影响）；
+3. 对每个选定 case 要求 `ELIGIBLE_POSITIVE`、`calibration/heldout`、
+   `learner_eligible=false`，并把 `record_id` 解析到 staging 中唯一的一条
+   `tehm_transitions.provenance_json`；
+4. 逐字段重放 action、observation delta、verifier、lineage/state 和 campaign
+   membership，拒绝缺失、重复、篡改或 split firewall 冲突；
+5. 只投影有明确 utility 的 `harmful_rate` 和 calibration conformal rows，payload
+   同时绑定 observation digest、staging digest、receipt、transition、lineage 与
+   split。rollback、registry、obligation、cross-lineage TE 仍必须来自各自独立的
+   activation/trial/transfer ledger。
+
+这些 rows 可以直接交给 `record_rule_authority()`，因此 external/staging 证据终于
+有了可重放的 rule-authority 入口；但是缺少其他 gate 时仍是
+`NOT_ESTABLISHED`，不会写 canonical memory、修改 rule lifecycle 或进入 production
+runtime。回归测试覆盖：唯一 transition 绑定、calibration conformal 聚合以及把
+`learner_eligible=true` 的篡改 observation fail-closed。下一步是对真实 held-out
+transfer 与 rollback/registry receipt 运行同一投影并重算六门，而不是放宽 split 或
+直接启用 Parametric。

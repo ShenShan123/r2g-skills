@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 
 import pytest
 
+from tehm import db as tehm_db
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.crystallization.build_rules import crystallize_all
 from tehm.lifecycle import (
     apply_production_trial_verdict, build_trial_authority_evidence,
+    build_external_observation_authority_evidence,
     enter_shadow, get_status, promote_rule, record_rule_authority,
     rule_content_digest, set_status,
     verify_rule_authority,
@@ -16,6 +19,8 @@ from tehm.lifecycle import (
 from tehm.activation.pipeline import ActivationRecord
 from tehm.activation.update import persist_activation
 from tehm.lifecycle.trial_adapter import record_external_trial
+from tehm.batch_lane import write_external_observations
+from tehm.artifact_store import ArtifactStore
 
 
 def _candidate_with_trial(tmp_tehm, sample_record_dict):
@@ -248,6 +253,72 @@ def test_forbidden_gate_split_fails_closed(tmp_tehm, sample_record_dict):
     assert receipt.eligible is False
     assert receipt.gate_status["conformal_coverage"] == "FAIL"
     assert "conformal_coverage:invalid_evidence_split" in receipt.reasons
+
+
+def test_external_observation_projection_binds_staging_transition(
+        tmp_tehm, sample_record_dict):
+    """External calibration evidence must resolve to one audit transition."""
+    authority_conn, _, tmp_root = tmp_tehm
+    _, rule_id, status_version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    staging_db = tmp_root / "external-campaign" / "staging" / "tehm.sqlite"
+    staging_db.parent.mkdir(parents=True)
+    staging_conn = tehm_db.connect(staging_db)
+    tehm_db.ensure_schema(staging_conn)
+    record = json.loads(json.dumps(sample_record_dict))
+    record["record_id"] = "external-calibration-record"
+    record["lineage_id"] = "external-calibration-lineage"
+    record["episode"]["episode_id"] = "external-calibration-episode"
+    record["episode"]["lineage_id"] = record["lineage_id"]
+    record["observation_delta"]["experiment_kind"] = "REPAIR"
+    record["observation_delta"]["utility_verdict"] = "NEUTRAL"
+    record["verification"]["conformal"] = {
+        "covered": 9, "total": 10, "method": "split_conformal_test"
+    }
+    # Normalise omitted dataclass defaults exactly as capture() will persist.
+    normalised = asdict(ExecutionRecord.from_dict(record))
+    capture(
+        staging_conn, ArtifactStore(staging_db.parent / "artifacts"),
+        ExecutionRecord.from_dict(normalised),
+        dataset_campaign_id="external-campaign",
+        dataset_split="calibration", dataset_learner_eligible=False)
+    staging_conn.close()
+
+    observations = tmp_root / "external-campaign" / "observations.jsonl"
+    write_external_observations(observations, [{
+        "receipt_id": "external-receipt-1",
+        "case_id": "external-calibration-case",
+        "lineage_id": normalised["lineage_id"],
+        "split": "calibration",
+        "classification": "ELIGIBLE_POSITIVE",
+        "learner_eligible": False,
+        "before": {"complete": True},
+        "after": {"complete": True},
+        "record": normalised,
+    }])
+    evidence = build_external_observation_authority_evidence(
+        authority_conn, observations_path=observations, staging_db=staging_db,
+        campaign_id="external-campaign", case_ids=["external-calibration-case"])
+    assert evidence["harmful_rate"][0]["payload"]["utility_verdict"] == "NEUTRAL"
+    assert evidence["harmful_rate"][0]["payload"]["harmful"] is False
+    assert evidence["conformal_coverage"][0]["payload"]["coverage"] == 0.9
+    assert evidence["conformal_coverage"][0]["payload"]["transition_id"]
+    assert evidence["rollback_verified"] == []
+    assert evidence["cross_lineage_te"] == []
+    authority_receipt = record_rule_authority(
+        authority_conn, rule_id=rule_id, target_scope="drc", evidence=evidence,
+        trial_id=trial_id, expected_status_version=status_version)
+    assert authority_receipt.gate_status["harmful_rate"] == "PASS"
+    assert authority_receipt.gate_status["conformal_coverage"] == "PASS"
+    assert authority_receipt.gate_status["rollback_verified"] == "NOT_ESTABLISHED"
+
+    bad_row = json.loads(observations.read_text().splitlines()[0])
+    bad_row["learner_eligible"] = True
+    write_external_observations(observations, [bad_row])
+    with pytest.raises(ValueError, match="learner_firewall_violation"):
+        build_external_observation_authority_evidence(
+            authority_conn, observations_path=observations, staging_db=staging_db,
+            campaign_id="external-campaign", case_ids=["external-calibration-case"])
 
 
 def test_authority_evidence_and_receipt_write_atomically_on_conflict(

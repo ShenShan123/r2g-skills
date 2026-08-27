@@ -30,6 +30,7 @@ from tehm.lifecycle.promotion_gates import (
     evaluate_capability_promotion_gates, evaluate_promotion_gates)
 from tehm.lifecycle.rule_authority import (
     RuleAuthorityReceipt, build_causal_transfer_evidence,
+    build_external_observation_authority_evidence,
     build_trial_authority_evidence, promote_rule, record_rule_authority,
     rule_content_digest, verify_rule_authority)
 from tehm.lifecycle.rtl_trial import run_rtl_external_trial
@@ -41,6 +42,7 @@ __all__ = [
     "apply_trial_verdict", "apply_production_trial_verdict",
     "evaluate_promotion_gates", "evaluate_capability_promotion_gates",
     "RuleAuthorityReceipt", "build_causal_transfer_evidence",
+    "build_external_observation_authority_evidence",
     "build_trial_authority_evidence", "record_rule_authority",
     "verify_rule_authority",
     "rule_content_digest", "promote_rule",

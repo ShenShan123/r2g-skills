@@ -19,6 +19,7 @@ import math
 import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from tehm import db as tehm_db
 from tehm.causal.transfer_ledger import (
@@ -30,6 +31,7 @@ from .rule_status import get_status, set_status
 
 
 AUTHORITY_VERSION = "rule-promotion-authority-v1"
+EXTERNAL_AUTHORITY_PROJECTION_VERSION = "external-orfs-authority-v1"
 RULE_EVIDENCE_TYPES = {
     gate: f"rule_gate:{gate}" for gate in REQUIRED_GATES
 }
@@ -67,6 +69,11 @@ _RULE_JSON_FIELDS = frozenset({
 _TRIAL_DERIVED_METRIC_KEYS = frozenset({
     "authority_receipt", "promotion_gates", "registry_authority",
     "authority_projection_error", "evidence_reconciliation",
+})
+
+_EXTERNAL_AUTHORITY_SPLITS = frozenset({"calibration", "heldout"})
+_EXTERNAL_UTILITY_VERDICTS = frozenset({
+    "HARMFUL", "REGRESSION", "PARETO_SAFE", "SUPPORT", "NEUTRAL",
 })
 
 
@@ -275,6 +282,312 @@ def _strict_json_value(raw, *, label: str):
     except (TypeError, json.JSONDecodeError) as exc:
         raise ValueError(f"trial_authority:{label}_malformed") from exc
     return value
+
+
+def _external_file_digest(path: Path) -> str:
+    """Hash an external evidence file without changing it."""
+    path = Path(path).expanduser().resolve()
+    if not path.is_file():
+        raise ValueError(f"external_authority:evidence_file_missing:{path}")
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+    except OSError as exc:
+        raise ValueError(f"external_authority:evidence_file_unreadable:{path}") from exc
+    return digest.hexdigest()
+
+
+def _open_external_staging_snapshot(path: Path):
+    """Open a campaign DB read-only and return its logical content digest.
+
+    The authority boundary consumes a closed/checkpointed staging snapshot.
+    An outstanding WAL/SHM sidecar is rejected rather than opened with plain
+    ``mode=ro`` (which can create a new ``-shm`` file while reading).  Once the
+    snapshot is sidecar-free, ``immutable=1`` prevents all filesystem writes;
+    hashing ``iterdump()`` binds logical content rather than SQLite layout.
+    """
+    path = Path(path).expanduser().resolve()
+    if not path.is_file():
+        raise ValueError(f"external_authority:staging_db_missing:{path}")
+    if Path(str(path) + "-wal").exists() or Path(str(path) + "-shm").exists():
+        raise ValueError("external_authority:staging_db_not_checkpointed")
+    conn = None
+    try:
+        conn = sqlite3.connect(
+            f"file:{path}?mode=ro&immutable=1", uri=True, timeout=30)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA query_only=ON")
+        # Hold one consistent read snapshot while hashing and projecting.  A
+        # concurrent writer may append a later staging campaign, but it cannot
+        # make this projection mix rows from two database states.
+        conn.execute("BEGIN")
+        meta = conn.execute(
+            "SELECT value FROM tehm_meta WHERE key='schema_version'"
+        ).fetchone()
+        expected = f"tehm-v{tehm_db.config.DB_SCHEMA_VERSION}"
+        if meta is None or meta["value"] != expected:
+            conn.close()
+            raise ValueError("external_authority:staging_schema_mismatch")
+        required = {"tehm_transitions", "tehm_states", "tehm_dataset_membership"}
+        present = {
+            str(row[0]) for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        missing = sorted(required - present)
+        if missing:
+            conn.close()
+            raise ValueError(
+                "external_authority:staging_tables_missing:" + ",".join(missing))
+        dump = "\n".join(str(line) for line in conn.iterdump()).encode()
+        return conn, hashlib.sha256(dump).hexdigest()
+    except ValueError:
+        raise
+    except (OSError, sqlite3.Error) as exc:
+        if conn is not None:
+            conn.close()
+        raise ValueError(f"external_authority:staging_db_unreadable:{path}") from exc
+
+
+def _external_conformal_value(record: Mapping):
+    """Extract and validate an explicitly recorded calibration coverage."""
+    verification = record.get("verification")
+    if not isinstance(verification, Mapping):
+        verification = {}
+    candidates = []
+    for source in (record.get("conformal"), verification.get("conformal")):
+        if source is not None:
+            candidates.append(source)
+    if not candidates:
+        return None
+    if any(not isinstance(source, Mapping) or
+           stable_dumps(dict(source)) != stable_dumps(dict(candidates[0]))
+           for source in candidates[1:]):
+        raise ValueError("external_authority:conformal_sources_mismatch")
+    raw = candidates[0]
+    if not isinstance(raw, Mapping):
+        raise ValueError("external_authority:conformal_malformed")
+    coverage = _finite_number(raw.get("coverage"))
+    covered = raw.get("covered")
+    total = raw.get("total")
+    if covered is not None or total is not None:
+        if (isinstance(covered, bool) or isinstance(total, bool) or
+                not isinstance(covered, int) or not isinstance(total, int) or
+                total <= 0 or covered < 0 or covered > total):
+            raise ValueError("external_authority:conformal_counts_malformed")
+        ratio = covered / total
+        if coverage is None:
+            coverage = ratio
+        elif not math.isclose(coverage, ratio, rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError("external_authority:conformal_coverage_mismatch")
+    if coverage is None or not 0.0 <= coverage <= 1.0:
+        raise ValueError("external_authority:conformal_coverage_malformed")
+    payload = {"coverage": coverage}
+    if covered is not None:
+        payload.update({"covered": covered, "total": total})
+    for key in ("method", "interval_method", "calibration_digest"):
+        if key in raw:
+            payload[key] = raw[key]
+    return payload
+
+
+def _external_transition_binding(
+        staging: sqlite3.Connection, *, record: Mapping):
+    """Require one staging transition to match the external record witness."""
+    record_id = str(record.get("record_id") or "").strip()
+    lineage_id = str(record.get("lineage_id") or "").strip()
+    action = record.get("action")
+    delta = record.get("observation_delta")
+    verification = record.get("verification")
+    action_domain = str(action.get("domain") or "") if isinstance(action, Mapping) else ""
+    if (not record_id or not lineage_id or not isinstance(action, Mapping) or
+            not action_domain or not str(action.get("transformation_family") or "")):
+        raise ValueError("external_authority:record_identity_incomplete")
+    if not isinstance(delta, Mapping) or not isinstance(verification, Mapping):
+        raise ValueError("external_authority:record_payload_incomplete")
+    candidates = []
+    for candidate in staging.execute(
+            "SELECT * FROM tehm_transitions ORDER BY transition_id").fetchall():
+        try:
+            provenance = json.loads(candidate["provenance_json"] or "{}")
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError("external_authority:transition_provenance_malformed") from exc
+        if isinstance(provenance, Mapping) and str(provenance.get("record_id") or "") == record_id:
+            candidates.append(candidate)
+    if len(candidates) != 1:
+        raise ValueError(
+            "external_authority:record_transition_count=" + str(len(candidates)))
+    transition = candidates[0]
+    try:
+        persisted_action = json.loads(transition["action_json"] or "null")
+        persisted_delta = json.loads(transition["observation_delta_json"] or "null")
+        persisted_verifier = json.loads(transition["verifier_json"] or "null")
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("external_authority:transition_payload_malformed") from exc
+    if (stable_dumps(dict(persisted_action or {})) != stable_dumps(dict(action)) or
+            stable_dumps(dict(persisted_delta or {})) != stable_dumps(dict(delta))):
+        raise ValueError("external_authority:transition_semantic_mismatch")
+    # The capture adapter normalises VerifierSnapshot and therefore drops
+    # adapter-only fields.  Compare every persisted field supplied by the
+    # external record; an extra external field is harmless, a mismatch is not.
+    if not isinstance(persisted_verifier, Mapping):
+        raise ValueError("external_authority:transition_verifier_malformed")
+    for key, value in persisted_verifier.items():
+        if key in verification and verification[key] != value:
+            raise ValueError(f"external_authority:transition_verifier_mismatch:{key}")
+    if transition["action_domain"] != action.get("domain"):
+        raise ValueError("external_authority:transition_action_domain_mismatch")
+    states = staging.execute(
+        "SELECT state_id, lineage_id FROM tehm_states WHERE state_id IN (?, ?)",
+        (transition["source_state_id"], transition["target_state_id"])).fetchall()
+    if len(states) != 2 or any(str(state["lineage_id"] or "") != lineage_id
+                                for state in states):
+        raise ValueError("external_authority:transition_lineage_mismatch")
+    return transition
+
+
+def build_external_observation_authority_evidence(
+        conn: sqlite3.Connection, *, observations_path: Path,
+        staging_db: Path, campaign_id: str,
+        case_ids: Iterable[str]) -> dict[str, list[dict]]:
+    """Project selected external observations into DB-bound authority rows.
+
+    The observation JSONL is only a source receipt.  A row becomes authority
+    evidence only when it is a complete positive calibration/held-out record,
+    its record ID resolves to exactly one immutable staging transition, the
+    transition payload and lineage agree, and the requested campaign contains
+    the same split with ``learner_eligible=0``.  This projector deliberately
+    emits only ``harmful_rate`` and ``conformal_coverage`` rows.  Rollback,
+    registry, obligation and cross-lineage TE must still come from their own
+    independent ledgers.
+    """
+    if not isinstance(campaign_id, str) or not campaign_id.strip():
+        raise ValueError("external_authority:campaign_id_required")
+    if isinstance(case_ids, (str, bytes)):
+        raise ValueError("external_authority:case_ids_must_be_sequence")
+    try:
+        requested = tuple(str(value).strip() for value in case_ids)
+    except TypeError as exc:
+        raise ValueError("external_authority:case_ids_must_be_sequence") from exc
+    if not requested or any(not value for value in requested):
+        raise ValueError("external_authority:case_ids_required")
+    if len(set(requested)) != len(requested):
+        raise ValueError("external_authority:case_ids_duplicate")
+
+    observations_path = Path(observations_path).expanduser().resolve()
+    observation_digest = _external_file_digest(observations_path)
+    # Import locally to keep lifecycle imports independent of the batch lane.
+    from tehm.batch_lane import read_external_observations
+    rows = read_external_observations(observations_path)
+    by_case: dict[str, dict] = {}
+    for row in rows:
+        case_id = str(row.get("case_id") or "").strip()
+        if not case_id:
+            raise ValueError("external_authority:case_id_missing")
+        if case_id in by_case:
+            raise ValueError("external_authority:duplicate_observation_case")
+        by_case[case_id] = row
+    missing = sorted(set(requested) - set(by_case))
+    if missing:
+        raise ValueError("external_authority:case_ids_missing:" + ",".join(missing))
+
+    staging, staging_digest = _open_external_staging_snapshot(staging_db)
+    evidence = {gate: [] for gate in REQUIRED_GATES}
+    try:
+        for case_id in sorted(requested):
+            row = by_case[case_id]
+            split = str(row.get("split") or "")
+            if split not in _EXTERNAL_AUTHORITY_SPLITS:
+                raise ValueError("external_authority:invalid_authority_split")
+            if row.get("classification") != "ELIGIBLE_POSITIVE":
+                raise ValueError("external_authority:observation_not_positive")
+            if row.get("learner_eligible") is not False:
+                raise ValueError("external_authority:learner_firewall_violation")
+            if any((not isinstance(row.get(side), Mapping) or
+                    row[side].get("complete") is not True)
+                   for side in ("before", "after")):
+                raise ValueError("external_authority:full_oracle_incomplete")
+            record = row.get("record")
+            if not isinstance(record, Mapping):
+                raise ValueError("external_authority:record_missing")
+            record = dict(record)
+            record_lineage = str(record.get("lineage_id") or "").strip()
+            row_lineage = str(row.get("lineage_id") or "").strip()
+            if not row_lineage or not record_lineage or row_lineage != record_lineage:
+                raise ValueError("external_authority:lineage_mismatch")
+            transition = _external_transition_binding(staging, record=record)
+            membership = staging.execute(
+                """SELECT split, learner_eligible FROM tehm_dataset_membership
+                   WHERE transition_id=? AND campaign_id=?""",
+                (transition["transition_id"], campaign_id)).fetchall()
+            if len(membership) != 1:
+                raise ValueError("external_authority:membership_missing_or_duplicate")
+            if (membership[0]["split"] != split or
+                    int(membership[0]["learner_eligible"]) != 0):
+                raise ValueError("external_authority:membership_firewall_mismatch")
+
+            receipt_id = str(row.get("receipt_id") or "").strip()
+            receipt_digest = str(row.get("receipt_sha256") or "").strip()
+            if not receipt_id or not receipt_digest:
+                raise ValueError("external_authority:receipt_digest_missing")
+            base_payload = {
+                "projection_version": EXTERNAL_AUTHORITY_PROJECTION_VERSION,
+                "source_receipt_id": receipt_id,
+                "source_receipt_sha256": receipt_digest,
+                "observations_sha256": observation_digest,
+                "staging_db_sha256": staging_digest,
+                "campaign_id": campaign_id,
+                "case_id": case_id,
+                "record_id": str(record["record_id"]),
+                "transition_id": transition["transition_id"],
+                "lineage_id": record_lineage,
+                "split": split,
+                "action_domain": str(record["action"]["domain"]),
+                "transformation_family": str(
+                    record["action"].get("transformation_family") or ""),
+            }
+            delta = dict(record["observation_delta"])
+            verifier = dict(record["verification"])
+            if verifier.get("verdict") != "PASS":
+                raise ValueError("external_authority:record_not_pass")
+            if delta.get("created_regressions"):
+                raise ValueError("external_authority:record_has_regressions")
+            utility = str(delta.get("utility_verdict") or "").upper()
+            if utility in {"", "UNKNOWN"}:
+                utility = None
+            elif utility not in _EXTERNAL_UTILITY_VERDICTS:
+                raise ValueError("external_authority:utility_verdict_malformed")
+            persisted_delta = json.loads(transition["observation_delta_json"])
+            persisted_utility = str(
+                (persisted_delta or {}).get("utility_verdict") or "").upper()
+            if (utility or "UNKNOWN") != (persisted_utility or "UNKNOWN"):
+                raise ValueError("external_authority:utility_verdict_mismatch")
+            if utility is not None:
+                harmful_payload = {
+                    **base_payload,
+                    "utility_verdict": utility,
+                    "harmful": utility in {"HARMFUL", "REGRESSION"},
+                }
+                evidence["harmful_rate"].append({
+                    "evidence_id": f"external-orfs:{receipt_digest}:harmful",
+                    "split": split, "lineage_id": record_lineage,
+                    "verdict": "PASS", "payload": harmful_payload,
+                })
+
+            conformal = _external_conformal_value(record)
+            if conformal is not None:
+                if split != "calibration":
+                    raise ValueError("external_authority:conformal_invalid_split")
+                evidence["conformal_coverage"].append({
+                    "evidence_id": f"external-orfs:{receipt_digest}:conformal",
+                    "split": split, "lineage_id": record_lineage,
+                    "verdict": "PASS",
+                    "payload": {**base_payload, **conformal},
+                })
+    finally:
+        staging.close()
+    return evidence
 
 
 def _trial_authority_row(conn: sqlite3.Connection, trial_id: str):
@@ -1327,8 +1640,10 @@ def promote_rule(conn: sqlite3.Connection, authority_receipt,
 
 __all__ = [
     "AUTHORITY_VERSION", "EVIDENCE_SPLITS", "GATE_ALLOWED_SPLITS",
+    "EXTERNAL_AUTHORITY_PROJECTION_VERSION",
     "RULE_EVIDENCE_TYPES", "RuleAuthorityReceipt",
     "build_causal_transfer_evidence", "build_trial_authority_evidence",
+    "build_external_observation_authority_evidence",
     "promote_rule",
     "record_rule_authority", "rule_content_digest", "verify_rule_authority",
 ]

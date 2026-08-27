@@ -1781,3 +1781,20 @@ coverage 仍需独立 gate receipt，Parametric 仍为 shadow-only。
   lineage diversity 四项同时通过前，不进入 shadow 或任何 parametric implementation。
 
 每个阶段实现时遵循同样的纪律：honesty gates 先行、确定性测试、与 legacy 严格隔离。
+
+### 2026-08-27 external/staging → rule authority（仍为 shadow）
+
+新增 `tehm.lifecycle.build_external_observation_authority_evidence()`，把选定的
+external ORFS receipt 投影为数据库绑定的 authority evidence。投影器会重放 JSONL
+hash-chain，以只读一致性快照绑定 staging DB，并要求每个 case 同时满足：
+`ELIGIBLE_POSITIVE`、`calibration/heldout`、`learner_eligible=false`、唯一
+`record_id → tehm_transitions.provenance_json`、action/delta/verifier/lineage 一致，
+以及同 campaign 的 audit membership。utility 只有在 transition 与 external
+record 同时明确记录时才形成 `harmful_rate`；conformal 只接受 calibration 的显式
+coverage/counts。每个 payload 绑定 observation/staging digest、receipt、transition
+和 lineage，防止把文件级 gate map 伪装成 rule authority。
+
+该接口只产生 `harmful_rate` 与 `conformal_coverage` rows；rollback、registry、
+obligation、cross-lineage TE 仍必须由 activation/trial/transfer 的独立 evidence
+建立。rows 可以交给 `record_rule_authority()`，但缺失其余 gate 时仍是
+`NOT_ESTABLISHED`，不会写 canonical memory、改变 lifecycle 或进入 production。
