@@ -49,6 +49,12 @@ class VerifierSnapshot:
     evidence_refs: list[str] = field(default_factory=list)
     extractor_version: str = "verifier-v0.1"
     tool_versions: dict | None = None
+    # Optional campaign provenance checks.  These are retained in the
+    # verifier receipt so a replay can explain why an otherwise passing oracle
+    # was quarantined; they are deliberately excluded from ``content()`` to
+    # preserve transition IDs for pre-v4 evidence that has no such fields.
+    input_binding: dict | None = None
+    timing_contract: dict | None = None
 
     def validate(self) -> None:
         if self.verdict not in VERDICTS:
@@ -62,6 +68,10 @@ class VerifierSnapshot:
             raise ValueError(f"obligation_coverage must be in [0,1], got {self.obligation_coverage}")
         if self.oracle_complete is not None and not isinstance(self.oracle_complete, bool):
             raise ValueError("oracle_complete must be bool or None")
+        for name, value in (("input_binding", self.input_binding),
+                            ("timing_contract", self.timing_contract)):
+            if value is not None and not isinstance(value, dict):
+                raise ValueError(f"{name} must be a mapping or None")
 
     @property
     def is_pass(self) -> bool:
@@ -78,6 +88,8 @@ class VerifierSnapshot:
             "evidence_refs": list(self.evidence_refs),
             "extractor_version": self.extractor_version,
             "tool_versions": self.tool_versions,
+            "input_binding": self.input_binding,
+            "timing_contract": self.timing_contract,
         }
 
     @classmethod
@@ -92,6 +104,8 @@ class VerifierSnapshot:
             evidence_refs=list(data.get("evidence_refs", [])),
             extractor_version=str(data.get("extractor_version", "verifier-v0.1")),
             tool_versions=data.get("tool_versions"),
+            input_binding=data.get("input_binding"),
+            timing_contract=data.get("timing_contract"),
         )
         obj.validate()
         return obj
@@ -116,6 +130,8 @@ class VerifierSnapshot:
             evidence_refs=list(result.get("evidence_refs", [])),
             extractor_version=str(result.get("extractor_version", "verifier-v0.1")),
             tool_versions=result.get("tool_versions"),
+            input_binding=result.get("input_binding"),
+            timing_contract=result.get("timing_contract"),
         )
 
     def content(self) -> dict:

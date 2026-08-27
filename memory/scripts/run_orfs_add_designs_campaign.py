@@ -19,7 +19,10 @@ Firewall: spi is never a training lineage here.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -34,13 +37,20 @@ from run_orfs_diversity_campaign import (  # noqa: E402
     _write,
     attach_graph_contexts,
     capture_pairs,
+    preflight_orfs_toolchain,
     run_projects,
 )
 
 from tehm import db as tehm_db  # noqa: E402
+from tehm.batch_lane import (  # noqa: E402
+    BatchLaneError,
+    _input_binding,
+    _timing_contract,
+)
 from orfs_storage import default_work_root, enforce_work_root, storage_policy  # noqa: E402
 
 VERSION = "orfs-add-designs-v0.1"
+SOURCE_FREEZE_VERSION = "orfs-add-designs-source-freeze-v1"
 
 # Per-index knob schedules (mirror the v3-contexts campaign's scheme so new
 # training contexts are comparable to the strata already in the store).
@@ -92,6 +102,246 @@ _SRC_ONLY_DESIGNS = {
 }
 
 
+def _sha(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _stable(value) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"),
+                      default=str)
+
+
+def _git_output(*args: str) -> str:
+    try:
+        proc = subprocess.run(
+            ["git", *args], cwd=REPO_ROOT, capture_output=True,
+            text=True, check=False)
+    except OSError as exc:
+        return f"UNAVAILABLE:{exc}"
+    return proc.stdout if proc.returncode == 0 else f"RC={proc.returncode}:{proc.stderr}"
+
+
+def _rtl_files(source_dir: Path) -> list[Path]:
+    if not source_dir.is_dir():
+        return []
+    return sorted(
+        (path.resolve() for path in source_dir.iterdir()
+         if path.is_file() and path.suffix.lower() in {".v", ".sv"}),
+        key=str)
+
+
+def _file_record(path: Path) -> dict:
+    path = Path(path).resolve()
+    try:
+        size = path.stat().st_size
+        exists = path.is_file()
+    except OSError:
+        size, exists = None, False
+    return {"path": str(path), "exists": exists,
+            "sha256": _sha(path) if exists else None, "bytes": size}
+
+
+def _campaign_inputs(orfs_root: Path, *, designs, platforms,
+                     rtl_override_path: Path | None,
+                     sdc_override_path: Path | None,
+                     template_design: str) -> list[dict]:
+    """Resolve the exact config/SDC/RTL inputs before materialization.
+
+    The record is intentionally independent of generated project directories:
+    a later prepare/observe step can recompute it and reject any source drift
+    instead of treating a changed input as the same experiment.
+    """
+    rows = []
+    for platform in platforms:
+        for design in designs:
+            src_template = (template_design if rtl_override_path is not None
+                            else _SRC_ONLY_DESIGNS.get(design))
+            platform_design = src_template if src_template else design
+            template = (Path(orfs_root) / "flow" / "designs" /
+                        platform / platform_design)
+            cfg = template / "config.mk"
+            sdc = (Path(sdc_override_path).resolve()
+                   if sdc_override_path is not None
+                   else template / "constraint.sdc")
+            rtl = ([Path(rtl_override_path).resolve()]
+                   if rtl_override_path is not None else
+                   _rtl_files(Path(orfs_root) / "flow" / "designs" /
+                              "src" / design))
+            rows.append({
+                "platform": str(platform), "design": str(design),
+                "template_design": str(platform_design),
+                "config": _file_record(cfg), "sdc": _file_record(sdc),
+                "rtl": [_file_record(path) for path in rtl],
+            })
+    return rows
+
+
+def _source_code_records() -> list[dict]:
+    roots = [MEMORY_ROOT / "tehm"]
+    explicit = [
+        MEMORY_ROOT / "schema.sql",
+        MEMORY_ROOT / "requirements.txt",
+        Path(__file__).resolve(),
+        MEMORY_ROOT / "scripts" / "run_orfs_diversity_campaign.py",
+        MEMORY_ROOT / "scripts" / "orfs_storage.py",
+    ]
+    paths = list(explicit)
+    for base in roots:
+        paths.extend(path for path in base.rglob("*")
+                     if path.is_file() and "__pycache__" not in path.parts)
+    return [_file_record(path) for path in sorted(set(paths), key=str)]
+
+
+def _freeze_request(*, designs, platforms, families, indexes: int,
+                    core_utils, lineage_prefix: str,
+                    rtl_override_path: Path | None,
+                    sdc_override_path: Path | None,
+                    template_design: str, orfs_root: Path) -> dict:
+    return {
+        "orfs_root": str(Path(orfs_root).resolve()),
+        "designs": [str(value) for value in designs],
+        "platforms": [str(value) for value in platforms],
+        "families": [str(value) for value in families],
+        "indexes": int(indexes),
+        "core_utils": [int(value) for value in core_utils],
+        "lineage_prefix": str(lineage_prefix),
+        "template_design": str(template_design),
+        "rtl_override": (str(Path(rtl_override_path).resolve())
+                          if rtl_override_path is not None else None),
+        "sdc_override": (str(Path(sdc_override_path).resolve())
+                         if sdc_override_path is not None else None),
+    }
+
+
+def build_source_freeze(root: Path, orfs_root: Path, *, designs, platforms,
+                        families, indexes: int, core_utils,
+                        lineage_prefix: str, rtl_override_path: Path | None,
+                        sdc_override_path: Path | None,
+                        template_design: str) -> dict:
+    """Freeze campaign inputs before any project is materialized or run."""
+    request = _freeze_request(
+        designs=designs, platforms=platforms, families=families,
+        indexes=indexes, core_utils=core_utils, lineage_prefix=lineage_prefix,
+        rtl_override_path=rtl_override_path,
+        sdc_override_path=sdc_override_path, template_design=template_design,
+        orfs_root=orfs_root)
+    inputs = _campaign_inputs(
+        Path(orfs_root).resolve(), designs=designs, platforms=platforms,
+        rtl_override_path=rtl_override_path,
+        sdc_override_path=sdc_override_path, template_design=template_design)
+    toolchain = preflight_orfs_toolchain({"orfs_root": request["orfs_root"]})
+    source_code = _source_code_records()
+    freeze = {
+        "version": SOURCE_FREEZE_VERSION,
+        "git_head": _git_output("rev-parse", "HEAD").strip(),
+        "git_status_sha256": hashlib.sha256(
+            _git_output("status", "--porcelain=v1").encode()).hexdigest(),
+        "request": request,
+        "source_code": source_code,
+        "source_tree_digest": hashlib.sha256(_stable(source_code).encode()).hexdigest(),
+        "inputs": inputs,
+        "input_digest": hashlib.sha256(_stable(inputs).encode()).hexdigest(),
+        "toolchain": toolchain,
+    }
+    freeze["freeze_digest"] = hashlib.sha256(
+        _stable(freeze).encode()).hexdigest()
+    _write(Path(root) / "source_freeze.json", freeze)
+    return freeze
+
+
+def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
+                            platforms, families, indexes: int, core_utils,
+                            lineage_prefix: str, rtl_override_path: Path | None,
+                            sdc_override_path: Path | None,
+                            template_design: str) -> dict:
+    path = Path(path).resolve()
+    try:
+        freeze = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BatchLaneError(
+            "source freeze is required and must be valid JSON; run --phase freeze first: "
+            f"{path}") from exc
+    if not isinstance(freeze, dict) or freeze.get("version") != SOURCE_FREEZE_VERSION:
+        raise BatchLaneError(f"source freeze version mismatch: {path}")
+    digest = freeze.get("freeze_digest")
+    unsigned = dict(freeze)
+    unsigned.pop("freeze_digest", None)
+    if not digest or hashlib.sha256(_stable(unsigned).encode()).hexdigest() != digest:
+        raise BatchLaneError("source freeze digest mismatch; rebuild the freeze")
+    expected_request = _freeze_request(
+        designs=designs, platforms=platforms, families=families,
+        indexes=indexes, core_utils=core_utils, lineage_prefix=lineage_prefix,
+        rtl_override_path=rtl_override_path,
+        sdc_override_path=sdc_override_path, template_design=template_design,
+        orfs_root=orfs_root)
+    if freeze.get("request") != expected_request:
+        raise BatchLaneError(
+            "source freeze request mismatch; use the same campaign arguments "
+            "or run --phase freeze again")
+    current_inputs = _campaign_inputs(
+        Path(orfs_root).resolve(), designs=designs, platforms=platforms,
+        rtl_override_path=rtl_override_path,
+        sdc_override_path=sdc_override_path, template_design=template_design)
+    if (freeze.get("input_digest") !=
+            hashlib.sha256(_stable(current_inputs).encode()).hexdigest()):
+        raise BatchLaneError(
+            "source freeze input digest mismatch; config/SDC/RTL drifted after freeze")
+    current_source = _source_code_records()
+    if (freeze.get("source_tree_digest") !=
+            hashlib.sha256(_stable(current_source).encode()).hexdigest()):
+        raise BatchLaneError(
+            "source freeze code digest mismatch; rebuild the freeze before prepare")
+    current_toolchain = preflight_orfs_toolchain(
+        {"orfs_root": str(Path(orfs_root).resolve())})
+    frozen_toolchain = freeze.get("toolchain") or {}
+    if current_toolchain.get("fingerprint") != frozen_toolchain.get("fingerprint"):
+        raise BatchLaneError(
+            "source freeze toolchain fingerprint mismatch; rerun --phase freeze")
+    return freeze
+
+
+def _validate_manifest_source_freeze(manifest: dict) -> dict:
+    """Revalidate an already-prepared campaign before any later phase."""
+    raw_path = manifest.get("source_freeze")
+    if not raw_path:
+        raise BatchLaneError(
+            "campaign manifest has no source freeze; rerun --phase freeze then prepare")
+    path = Path(str(raw_path)).expanduser().resolve()
+    if manifest.get("source_freeze_sha256") != _sha(path):
+        raise BatchLaneError("campaign source freeze file changed after prepare")
+    try:
+        freeze = json.loads(path.read_text())
+        request = freeze["request"]
+        if not isinstance(request, dict):
+            raise TypeError("request is not an object")
+        required = {
+            "orfs_root", "designs", "platforms", "families", "indexes",
+            "core_utils", "lineage_prefix", "template_design",
+        }
+        if not required.issubset(request):
+            raise KeyError("request fields are incomplete")
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise BatchLaneError("campaign source freeze is malformed") from exc
+    if manifest.get("source_freeze_digest") != freeze.get("freeze_digest"):
+        raise BatchLaneError("campaign manifest/source-freeze digest mismatch")
+    _validate_source_freeze(
+        path, orfs_root=Path(request["orfs_root"]),
+        designs=tuple(request["designs"]), platforms=tuple(request["platforms"]),
+        families=tuple(request["families"]), indexes=int(request["indexes"]),
+        core_utils=tuple(request["core_utils"]),
+        lineage_prefix=str(request["lineage_prefix"]),
+        rtl_override_path=(Path(request["rtl_override"])
+                          if request.get("rtl_override") else None),
+        sdc_override_path=(Path(request["sdc_override"])
+                         if request.get("sdc_override") else None),
+        template_design=str(request["template_design"]),
+    )
+    return freeze
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--root", type=Path,
@@ -117,7 +367,7 @@ def main(argv=None) -> int:
                     help="base CORE_UTILIZATION schedule (for example 20 25 30)")
     ap.add_argument("--lineage-prefix", default="orfs-v4",
                     help="prefix for training lineage IDs in this campaign")
-    ap.add_argument("--phase", choices=("all", "prepare", "run", "capture", "graph", "report"),
+    ap.add_argument("--phase", choices=("all", "freeze", "prepare", "run", "capture", "graph", "report"),
                     default="all")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--cpus-per-run", type=int, default=6)
@@ -133,9 +383,25 @@ def main(argv=None) -> int:
     staging_db = (args.staging_db or root / "staging" / "tehm.sqlite").resolve()
     staging_artifacts = (args.staging_artifacts or root / "staging" / "artifacts").resolve()
     manifest_path = root / "campaign_manifest.json"
+    orfs_root = args.orfs_root.resolve()
+    freeze_path = root / "source_freeze.json"
+
+    if args.phase in ("all", "freeze"):
+        build_source_freeze(
+            root, orfs_root, designs=tuple(args.designs),
+            platforms=tuple(args.platforms), families=tuple(args.families),
+            indexes=args.indexes, core_utils=tuple(args.core_utils),
+            lineage_prefix=args.lineage_prefix,
+            rtl_override_path=(args.rtl_override.resolve()
+                               if args.rtl_override else None),
+            sdc_override_path=(args.sdc_override.resolve()
+                               if args.sdc_override else None),
+            template_design=args.template_design)
+        if args.phase == "freeze":
+            return 0
 
     if args.phase in ("all", "prepare"):
-        manifest = prepare(root, args.orfs_root.resolve(),
+        manifest = prepare(root, orfs_root,
                            designs=tuple(args.designs),
                            platforms=tuple(args.platforms),
                            families=tuple(args.families),
@@ -145,11 +411,13 @@ def main(argv=None) -> int:
                                               if args.rtl_override else None),
                            sdc_override_path=(args.sdc_override.resolve()
                                               if args.sdc_override else None),
-                           template_design=args.template_design)
+                           template_design=args.template_design,
+                           source_freeze=freeze_path)
     else:
         manifest = _load(manifest_path)
         if not manifest:
             raise RuntimeError(f"manifest missing: {manifest_path}")
+        _validate_manifest_source_freeze(manifest)
     if args.phase == "prepare":
         return 0
     if args.phase in ("all", "run"):
@@ -179,10 +447,20 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
             families, indexes: int = 1, core_utils=CORE_UTILS,
             lineage_prefix: str = "orfs-v4", rtl_override_path: Path | None = None,
             sdc_override_path: Path | None = None,
-            template_design: str = "gcd") -> dict:
+            template_design: str = "gcd",
+            source_freeze: Path | None = None) -> dict:
     core_utils = tuple(int(x) for x in core_utils)
     if not core_utils:
         raise ValueError("core_utils must contain at least one utilization")
+    if source_freeze is None:
+        raise BatchLaneError(
+            "source freeze is required before prepare; run --phase freeze first")
+    frozen = _validate_source_freeze(
+        source_freeze, orfs_root=orfs_root, designs=designs,
+        platforms=platforms, families=families, indexes=indexes,
+        core_utils=core_utils, lineage_prefix=lineage_prefix,
+        rtl_override_path=rtl_override_path,
+        sdc_override_path=sdc_override_path, template_design=template_design)
     family_specs = {
         "DENSITY_RELIEF": ("CORE_UTILIZATION", "density",
                            lambda i: str(core_utils[i]),
@@ -205,18 +483,24 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                       f"({template})", file=sys.stderr)
                 continue
             rtl_override = None
+            rtl_paths: list[Path] = []
             if rtl_override_path is not None:
                 if not rtl_override_path.is_file():
                     raise FileNotFoundError(f"custom RTL override missing: {rtl_override_path}")
                 rtl_override = str(rtl_override_path)
+                rtl_paths = [rtl_override_path.resolve()]
             elif src_template:
                 src_dir = orfs_root / "flow" / "designs" / "src" / design
-                src_rtl = sorted(src_dir.glob("*.v"))
+                src_rtl = _rtl_files(src_dir)
                 if not src_rtl:
                     print(f"[prepare] SKIP {platform}/{design}: no src RTL in "
                           f"{src_dir}", file=sys.stderr)
                     continue
                 rtl_override = " ".join(str(p.resolve()) for p in src_rtl)
+                rtl_paths = src_rtl
+            else:
+                rtl_paths = _rtl_files(
+                    orfs_root / "flow" / "designs" / "src" / design)
             for index in range(indexes):
                 util = core_utils[index % len(core_utils)]
                 common = {"CORE_UTILIZATION": str(util),
@@ -250,6 +534,15 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                         "before_value": before_value, "after_value": after_value,
                         "config_edits": {knob: after_value},
                         "before_project": str(base), "after_project": str(after),
+                        "rtl_files": [str(path) for path in rtl_paths],
+                        "input_bindings": {
+                            "before": _input_binding(base, rtl_paths),
+                            "after": _input_binding(after, rtl_paths),
+                        },
+                        "timing_contract": {
+                            "before": _timing_contract(base),
+                            "after": _timing_contract(after),
+                        },
                         "role": "training",
                     })
 
@@ -261,6 +554,9 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
     manifest = {
         "campaign_version": VERSION, "lineage_prefix": lineage_prefix,
         "orfs_root": str(orfs_root),
+        "source_freeze": str(Path(source_freeze).resolve()),
+        "source_freeze_sha256": _sha(source_freeze),
+        "source_freeze_digest": frozen.get("freeze_digest"),
         "items": items, "baselines": baselines, "core_utils": list(core_utils),
         "storage_policy": storage_policy(root),
         "families": list(families), "heldout": heldout,
@@ -290,6 +586,9 @@ def report(root: Path, manifest: dict, db_path: Path) -> dict:
                        if row.get("oracle_complete") is not True]
     result = {
         "campaign_version": VERSION,
+        "source_freeze": manifest.get("source_freeze"),
+        "source_freeze_sha256": manifest.get("source_freeze_sha256"),
+        "source_freeze_digest": manifest.get("source_freeze_digest"),
         "captured": len(captured),
         "oracle_complete": len(captured) - len(incomplete_rows),
         "incomplete_oracle": len(incomplete_rows),

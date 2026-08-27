@@ -38,7 +38,14 @@ from tehm.evaluation.campaign_metrics import evaluate_campaign, to_markdown  # n
 from tehm.physical.graph_context import load_defgraph_context  # noqa: E402
 from tehm.physical.memory import PhysicalEffectMemory  # noqa: E402
 from tehm_backend import TehmMemoryBackend  # noqa: E402
-from tehm.batch_lane import BatchLaneError, require_staging_destination  # noqa: E402
+from tehm.batch_lane import (  # noqa: E402
+    BatchLaneError,
+    _input_binding,
+    _input_binding_matches,
+    _timing_contract,
+    _timing_contract_matches,
+    require_staging_destination,
+)
 from orfs_storage import default_work_root, enforce_work_root, storage_policy  # noqa: E402
 
 VERSION = "orfs-diversity-v0.3"
@@ -551,6 +558,48 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             lineage_id=item["lineage_id"], target_check=item["check"],
             config_edits=item["config_edits"], transformation_family=item["family"])
         complete = record.verification.get("oracle_complete") is True
+        expected_bindings = item.get("input_bindings")
+        expected_timing = item.get("timing_contract")
+        if isinstance(expected_bindings, dict) or isinstance(expected_timing, dict):
+            rtl_files = [Path(path) for path in item.get("rtl_files") or []]
+            actual_bindings = {
+                "before": _input_binding(Path(item["before_project"]), rtl_files),
+                "after": _input_binding(Path(item["after_project"]), rtl_files),
+            }
+            binding_ok = True
+            if isinstance(expected_bindings, dict):
+                binding_ok = all(
+                    isinstance(expected_bindings.get(side), dict) and
+                    _input_binding_matches(actual_bindings[side],
+                                           expected_bindings[side])
+                    for side in ("before", "after"))
+            actual_timing = {
+                "before": _timing_contract(Path(item["before_project"])),
+                "after": _timing_contract(Path(item["after_project"])),
+            }
+            timing_ok = True
+            if isinstance(expected_timing, dict):
+                timing_ok = all(
+                    isinstance(expected_timing.get(side), dict) and
+                    _timing_contract_matches(actual_timing[side],
+                                             expected_timing[side])
+                    for side in ("before", "after"))
+            record.verification["input_binding"] = {
+                "expected": expected_bindings,
+                "actual": actual_bindings,
+                "verified": binding_ok,
+            }
+            record.verification["timing_contract"] = {
+                "expected": expected_timing,
+                "actual": actual_timing,
+                "verified": timing_ok,
+            }
+            complete = bool(complete and binding_ok and timing_ok)
+            # Persist the effective admission decision inside the canonical
+            # transition as well as the campaign manifest.  A consumer must
+            # not see ``oracle_complete=true`` alongside a failed provenance
+            # binding merely because the original adapter oracle passed.
+            record.verification["oracle_complete"] = complete
         learner_eligible = (complete if require_complete_oracle else True)
         dataset_split = "training" if learner_eligible else "calibration"
         if require_complete_oracle and not complete:

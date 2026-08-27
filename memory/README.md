@@ -1552,6 +1552,11 @@ digest 源）、`features/`（def-graph 已提取特征）、`lvs/`（powered.v 
   若同一 incomplete transition 已被旧 campaign 错误登记为 training/eligible，strict
   capture 会拒绝追加 calibration membership 并要求新 staging/人工审计，避免
   `EXISTS` learner 查询被历史矛盾行重新污染；旧 membership 不会被静默覆盖。
+  `run_orfs_add_designs_campaign.py` 的下一轮 prepare 现在必须先执行
+  `--phase freeze`：source-freeze 同时绑定 campaign 参数、ORFS config/SDC/RTL
+  字节摘要与 toolchain fingerprint。prepare 会重算这些摘要并记录每个 pair 的
+  `input_bindings` 和 `timing_contract`；任何 freeze 后漂移都会在 materialize 前
+  fail-closed，observe/capture 也会再次校验，不能把改过的输入当成同一实验。
 
 ### 2026-08-08 第二条物理 held-out 外部复核（已完成）
 

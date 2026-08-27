@@ -1,0 +1,41 @@
+{
+  "version": "tehm-orfs-add-designs-freeze-preflight-v1",
+  "classification": "PROVENANCE_PREFLIGHT_ONLY",
+  "command": "run_orfs_add_designs_campaign.py --phase freeze, followed by --phase prepare",
+  "scratch_root": "/tmp/tehm-orfs/add-designs-freeze-r1",
+  "source_freeze": {
+    "digest": "664f28d7e285b44f8aab6024968b0ae51c933963c7264508b3318ea3635199d0",
+    "sha256": "89fb5986cf77f60bb200d4cd3f8554110691885f72c6f15394561a0bb1c3610e",
+    "source_file_count": 153,
+    "input_count": 1
+  },
+  "toolchain": {
+    "orfs_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+    "preflight_status": "bound_internal",
+    "fingerprint": "5f6545216c040a863a4c169d90f895f218ad038bfd61991445f760ed43567c91",
+    "openroad": "26Q3-1510-g6cb3f2b704",
+    "yosys": "0.68"
+  },
+  "campaign": {
+    "designs": ["uart"],
+    "platforms": ["sky130hs"],
+    "families": ["DENSITY_RELIEF"],
+    "indexes": 1,
+    "core_utils": [50],
+    "lineage_prefix": "orfs-freeze-r1"
+  },
+  "pair": {
+    "case_id": "sky130hs:uart:0:DENSITY_RELIEF:50->40",
+    "source_digest": "910296f759417d91ece0530607b0074a711e04187094bf820d5b45d8225095ef",
+    "before_config_sha256": "552e61404fa6d8d4d7b730436f76c74d41983be34003a5c8253df4b0c1933a40",
+    "after_config_sha256": "df0614c00c6878ff38e6ee08556f6c70f5041f9728ee1f27e8c396216cbaa280",
+    "sdc_sha256": "2c7add8cd37dfec901885073760cf6265490ad7c25fa86a6c1ea5f61bae17954",
+    "timing_contract_ns": 1.4
+  },
+  "admission": {
+    "orfs_executed": false,
+    "canonical_memory_mutation": "none",
+    "promotion_attempted": false,
+    "post_freeze_input_drift": "rejected"
+  }
+}

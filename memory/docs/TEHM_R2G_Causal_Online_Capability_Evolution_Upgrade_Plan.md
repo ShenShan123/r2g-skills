@@ -2528,6 +2528,14 @@ canonical promotion policy，也不把 diagnostic observation 当作正向机制
 membership 是不可变审计事实，系统要求新建隔离 staging 或先完成旧证据审计，不能
 用第二条 membership 覆盖矛盾状态。
 
+针对 add-designs 批次，prepare 现在还必须先经过独立的 `--phase freeze`。该
+source-freeze 绑定本次 campaign 的 designs/platforms/families/index 参数、ORFS
+config/SDC/RTL 字节摘要、TEHM 执行源码摘要和 toolchain fingerprint；prepare 会
+重放摘要并把每个 pair 的 `input_bindings` 与 `timing_contract` 写入 manifest。
+freeze 后任何输入或源码漂移都会在 materialize 前 fail-closed；capture/observe
+再次核对 binding，避免“先改 SDC/RTL、后沿用旧成功结果”进入 learner。source-freeze
+只建立 provenance，不改变 canonical promotion policy。
+
 本轮又把该约束落实为代码门：`preflight_orfs_toolchain()` 只接受 ORFS tree
 内置的 OpenROAD/Yosys，或调用方显式传入的 `OPENROAD_EXE`/`YOSYS_EXE`；没有
 内置工具且没有显式 override 时，在任何 EDA stage 前返回 `blocked`，不会再让
