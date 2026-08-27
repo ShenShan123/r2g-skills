@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 import datetime
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from tehm import db as tehm_db
@@ -42,6 +44,70 @@ class PolicyLoadReceipt:
         }
 
 
+def _policy_content_from_row(row: Mapping) -> dict:
+    """Decode one policy row into the canonical content-addressed payload."""
+    try:
+        rules = json.loads(row["promoted_rules_json"] or "[]")
+        assets = json.loads(row["promoted_assets_json"] or "[]")
+        retrieval = json.loads(row["retrieval_config_json"] or "{}")
+        routing = json.loads(row["routing_config_json"] or "{}")
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("policy snapshot row contains malformed JSON") from exc
+    if (not isinstance(rules, list) or
+            any(not isinstance(item, str) for item in rules)):
+        raise ValueError("policy snapshot promoted_rules is malformed")
+    if (not isinstance(assets, list) or
+            any(not isinstance(item, str) for item in assets)):
+        raise ValueError("policy snapshot promoted_assets is malformed")
+    if not isinstance(retrieval, dict) or not isinstance(routing, dict):
+        raise ValueError("policy snapshot config is malformed")
+    return {
+        "memory_snapshot_id": row["memory_snapshot_id"],
+        "promoted_rules": rules,
+        "promoted_assets": assets,
+        "retrieval_config": retrieval,
+        "routing_config": routing,
+    }
+
+
+def _policy_digest(content: Mapping) -> str:
+    return "sha256:" + hashlib.sha256(
+        stable_dumps(dict(content)).encode()).hexdigest()
+
+
+def validate_policy_snapshot_row(row: Mapping) -> dict:
+    """Fail closed when a content-addressed policy row was tampered with."""
+    data = dict(row)
+    content = _policy_content_from_row(data)
+    digest = _policy_digest(content)
+    expected_id = "policy_" + digest.split(":", 1)[1][:20]
+    if (data.get("policy_digest") != digest or
+            data.get("policy_snapshot_id") != expected_id):
+        raise ValueError("policy snapshot content digest mismatch")
+    return data
+
+
+def validate_policy_load_row(row: Mapping) -> dict:
+    """Verify a content-addressed runtime load receipt row before reuse."""
+    data = dict(row)
+    try:
+        payload = json.loads(data.get("receipt_json") or "{}")
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("policy load receipt contains malformed JSON") from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError("policy load receipt payload is malformed")
+    digest = "sha256:" + hashlib.sha256(
+        stable_dumps(dict(payload)).encode()).hexdigest()
+    expected_id = "policy_load_" + digest.split(":", 1)[1][:20]
+    if (data.get("receipt_digest") != digest or
+            data.get("receipt_id") != expected_id or
+            data.get("policy_snapshot_id") != payload.get("policy_snapshot_id") or
+            data.get("runtime_id") != payload.get("runtime_id") or
+            int(bool(data.get("loaded"))) != int(bool(payload.get("loaded")))):
+        raise ValueError("policy load receipt digest mismatch")
+    return data
+
+
 def create_policy_snapshot(
     conn: sqlite3.Connection,
     *,
@@ -61,8 +127,7 @@ def create_policy_snapshot(
         "retrieval_config": retrieval_config or {},
         "routing_config": routing_config or {},
     }
-    policy_digest = "sha256:" + hashlib.sha256(
-        stable_dumps(content).encode()).hexdigest()
+    policy_digest = _policy_digest(content)
     snapshot_id = "policy_" + policy_digest.split(":", 1)[1][:20]
     had_outer_transaction = conn.in_transaction
     conn.execute(
@@ -77,6 +142,22 @@ def create_policy_snapshot(
          stable_dumps(content["retrieval_config"]),
          stable_dumps(content["routing_config"]), policy_digest,
          tehm_db.now_local()))
+    stored = conn.execute(
+        "SELECT * FROM tehm_policy_snapshots WHERE policy_snapshot_id=?",
+        (snapshot_id,)).fetchone()
+    if stored is None:
+        raise ValueError("policy snapshot was not persisted")
+    validate_policy_snapshot_row(stored)
+    expected_fields = {
+        "memory_snapshot_id": memory_snapshot_id,
+        "promoted_rules_json": stable_dumps(content["promoted_rules"]),
+        "promoted_assets_json": stable_dumps(content["promoted_assets"]),
+        "retrieval_config_json": stable_dumps(content["retrieval_config"]),
+        "routing_config_json": stable_dumps(content["routing_config"]),
+        "policy_digest": policy_digest,
+    }
+    if any(stored[field] != value for field, value in expected_fields.items()):
+        raise ValueError("policy snapshot is immutable and conflicts")
     if commit and not had_outer_transaction:
         conn.commit()
     return PolicySnapshotReceipt(snapshot_id, memory_snapshot_id, policy_digest)
@@ -89,7 +170,7 @@ def load_policy_snapshot(conn: sqlite3.Connection,
         (policy_snapshot_id,)).fetchone()
     if row is None:
         raise KeyError(f"unknown policy snapshot: {policy_snapshot_id}")
-    return dict(row)
+    return validate_policy_snapshot_row(row)
 
 
 def record_policy_load(
@@ -133,6 +214,12 @@ def record_policy_load(
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (receipt_id, policy_snapshot_id, runtime_id, int(bool(loaded)),
          stable_dumps(payload), receipt_digest, created_at))
+    stored = conn.execute(
+        "SELECT * FROM tehm_policy_load_receipts WHERE receipt_id=?",
+        (receipt_id,)).fetchone()
+    if stored is None:
+        raise ValueError("policy load receipt was not persisted")
+    validate_policy_load_row(stored)
     if commit and not had_outer_transaction:
         conn.commit()
     return PolicyLoadReceipt(receipt_id, policy_snapshot_id, runtime_id,
@@ -140,4 +227,5 @@ def record_policy_load(
 
 
 __all__ = ["PolicyLoadReceipt", "PolicySnapshotReceipt", "create_policy_snapshot",
-           "load_policy_snapshot", "record_policy_load"]
+           "load_policy_snapshot", "record_policy_load",
+           "validate_policy_load_row", "validate_policy_snapshot_row"]

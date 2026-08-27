@@ -11,6 +11,7 @@ from tehm.capability import (
     create_policy_snapshot, promote_capability, record_capability_evidence,
     register_capability, evaluate_capability_attribution,
     evaluate_capability_attribution_from_db, record_policy_load,
+    load_policy_snapshot,
     evaluate_capability_retention,
     evaluate_capability_campaign,
 )
@@ -198,6 +199,65 @@ def test_policy_load_replay_uses_latest_microsecond_order(tmp_tehm):
         "ORDER BY created_at DESC, receipt_id DESC LIMIT 1",
         (policy.policy_snapshot_id, "runtime-order")).fetchone()
     assert json.loads(row["receipt_json"])["receipt"]["execution_receipt_id"] == "exec-2"
+
+
+def test_policy_snapshot_replay_rejects_tampered_content(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    policy = create_policy_snapshot(
+        conn, memory_snapshot_id="m0", promoted_rules=["r0"])
+    conn.execute(
+        "UPDATE tehm_policy_snapshots SET promoted_rules_json=? "
+        "WHERE policy_snapshot_id=?",
+        (json.dumps(["tampered-rule"]), policy.policy_snapshot_id))
+    conn.commit()
+
+    with pytest.raises(ValueError, match="content digest mismatch"):
+        load_policy_snapshot(conn, policy.policy_snapshot_id)
+    with pytest.raises(ValueError, match="content digest mismatch"):
+        create_policy_snapshot(
+            conn, memory_snapshot_id="m0", promoted_rules=["r0"])
+
+
+def test_policy_load_replay_rejects_tampered_receipt(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    policy = create_policy_snapshot(
+        conn, memory_snapshot_id="m0", promoted_rules=["r0"])
+    load = record_policy_load(
+        conn, policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="runtime-tamper", loaded=True,
+        receipt={"execution_receipt_id": "exec-1"})
+    conn.execute(
+        "UPDATE tehm_policy_load_receipts SET receipt_json=? WHERE receipt_id=?",
+        (json.dumps({"loaded": True}), load.receipt_id))
+    conn.commit()
+
+    with pytest.raises(ValueError, match="receipt digest mismatch"):
+        record_policy_load(
+            conn, policy_snapshot_id=policy.policy_snapshot_id,
+            runtime_id="runtime-tamper", loaded=True,
+            receipt={"execution_receipt_id": "exec-1"})
+
+
+def test_capability_authority_rejects_tampered_policy_snapshot(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="M", applicability={}, status="candidate")
+    attribution, authority, gates = _full_attribution_and_authority(
+        conn, capability.capability_id)
+    conn.execute(
+        "UPDATE tehm_policy_snapshots SET routing_config_json=? "
+        "WHERE policy_snapshot_id=?",
+        (json.dumps({"tampered": True}), authority.candidate_policy_snapshot_id))
+    conn.commit()
+
+    checked = verify_capability_authority(
+        conn, capability.capability_id, authority)
+    assert checked["eligible"] is False
+    assert "candidate_policy_snapshot_digest_mismatch" in checked["reasons"]
+    with pytest.raises(ValueError, match="authority receipt is not eligible"):
+        promote_capability(conn, capability.capability_id, gates=gates,
+                           attribution_receipt=attribution,
+                           authority_receipt=authority)
 
 
 def test_capability_promotion_requires_attribution_and_all_gates(tmp_tehm):

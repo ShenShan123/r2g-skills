@@ -10,7 +10,8 @@ from .attribution import (
 )
 from .policy_snapshot import (
     PolicyLoadReceipt, PolicySnapshotReceipt, create_policy_snapshot,
-    load_policy_snapshot, record_policy_load,
+    load_policy_snapshot, record_policy_load, validate_policy_load_row,
+    validate_policy_snapshot_row,
 )
 from .registry import (
     CAPABILITY_STATUSES, EVIDENCE_SPLITS, CapabilityReceipt,
@@ -27,7 +28,8 @@ __all__ = [
     "CapabilityAttributionReceipt", "evaluate_capability_attribution",
     "evaluate_capability_attribution_from_db",
     "PolicyLoadReceipt", "PolicySnapshotReceipt", "create_policy_snapshot",
-    "load_policy_snapshot", "record_policy_load",
+    "load_policy_snapshot", "record_policy_load", "validate_policy_load_row",
+    "validate_policy_snapshot_row",
     "promote_capability", "record_capability_evidence", "register_capability",
     "CapabilityRetentionReceipt", "evaluate_capability_retention",
     "CapabilityCampaignReceipt", "evaluate_capability_campaign",

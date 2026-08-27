@@ -13,6 +13,8 @@ from collections.abc import Mapping
 
 from tehm.ids import stable_dumps
 
+from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
+
 
 @dataclass(frozen=True)
 class CapabilityAttributionReceipt:
@@ -102,14 +104,26 @@ def evaluate_capability_attribution_from_db(
 ) -> CapabilityAttributionReceipt:
     """Build C2/C3 inputs from the policy snapshot/load receipt tables."""
     snapshots = conn.execute(
-        """SELECT policy_snapshot_id, policy_digest FROM tehm_policy_snapshots
+        """SELECT * FROM tehm_policy_snapshots
              WHERE policy_snapshot_id IN (?, ?)""",
         (baseline_policy_snapshot_id, candidate_policy_snapshot_id)).fetchall()
-    policies = {row["policy_snapshot_id"]: row["policy_digest"] for row in snapshots}
-    if set(policies) != {baseline_policy_snapshot_id, candidate_policy_snapshot_id}:
+    snapshot_ids = {str(row["policy_snapshot_id"]) for row in snapshots}
+    required_ids = {baseline_policy_snapshot_id, candidate_policy_snapshot_id}
+    if snapshot_ids != required_ids:
         raise ValueError("both baseline and candidate policy snapshots are required")
-    load = conn.execute(
-        """SELECT receipt_id, receipt_json, receipt_digest, loaded
+    policies: dict[str, str | None] = {}
+    corrupt_snapshots: set[str] = set()
+    for row in snapshots:
+        snapshot_id = str(row["policy_snapshot_id"])
+        try:
+            checked = validate_policy_snapshot_row(row)
+        except ValueError:
+            corrupt_snapshots.add(snapshot_id)
+            policies[snapshot_id] = None
+        else:
+            policies[snapshot_id] = checked["policy_digest"]
+    load = None if candidate_policy_snapshot_id in corrupt_snapshots else conn.execute(
+        """SELECT *
              FROM tehm_policy_load_receipts
              WHERE policy_snapshot_id=? AND runtime_id=?
              ORDER BY created_at DESC, receipt_id DESC LIMIT 1""",
@@ -128,8 +142,9 @@ def evaluate_capability_attribution_from_db(
         valid_load = False
         payload = None
         try:
-            payload = json.loads(load["receipt_json"] or "{}")
-        except (TypeError, json.JSONDecodeError):
+            checked_load = validate_policy_load_row(load)
+            payload = json.loads(checked_load["receipt_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
             payload = None
         if isinstance(payload, Mapping):
             expected_digest = "sha256:" + hashlib.sha256(
@@ -151,10 +166,10 @@ def evaluate_capability_attribution_from_db(
     return evaluate_capability_attribution(
         capability_id=capability_id,
         baseline={"memory_digest": baseline_memory_digest,
-                  "policy_digest": policies[baseline_policy_snapshot_id],
+                  "policy_digest": policies.get(baseline_policy_snapshot_id),
                   "behavior_digest": baseline_behavior_digest},
         candidate={"memory_digest": candidate_memory_digest,
-                   "policy_digest": policies[candidate_policy_snapshot_id],
+                   "policy_digest": policies.get(candidate_policy_snapshot_id),
                    "behavior_digest": candidate_behavior_digest,
                    "target_gain": target_gain,
                    "no_regression": no_regression},

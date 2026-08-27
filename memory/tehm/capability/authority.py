@@ -20,6 +20,8 @@ from tehm.lifecycle.promotion_gates import (
     CAPABILITY_GATES, evaluate_capability_promotion_gates,
 )
 
+from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
+
 
 AUTHORITY_VERSION = "capability-promotion-authority-v1"
 GATE_EVIDENCE_TYPES = {gate: f"capability_gate:{gate}"
@@ -125,11 +127,16 @@ def _policy_binding_reasons(
         reasons.append("runtime_id_required")
         return reasons
     snapshot = conn.execute(
-        "SELECT memory_snapshot_id, policy_digest FROM tehm_policy_snapshots "
+        "SELECT * FROM tehm_policy_snapshots "
         "WHERE policy_snapshot_id=?", (candidate_policy_snapshot_id,)
     ).fetchone()
     if snapshot is None:
         reasons.append("candidate_policy_snapshot_missing")
+        return reasons
+    try:
+        snapshot = validate_policy_snapshot_row(snapshot)
+    except ValueError:
+        reasons.append("candidate_policy_snapshot_digest_mismatch")
         return reasons
     detail = attribution.get("detail") or {}
     candidate = detail.get("candidate") or {}
@@ -140,7 +147,7 @@ def _policy_binding_reasons(
     if candidate.get("memory_digest") and candidate["memory_digest"] != snapshot["memory_snapshot_id"]:
         reasons.append("candidate_memory_snapshot_mismatch")
     load = conn.execute(
-        """SELECT loaded, receipt_json, receipt_digest
+        """SELECT *
              FROM tehm_policy_load_receipts
              WHERE policy_snapshot_id=? AND runtime_id=?
              ORDER BY created_at DESC, receipt_id DESC LIMIT 1""",
@@ -150,8 +157,9 @@ def _policy_binding_reasons(
         reasons.append("candidate_policy_runtime_load_missing")
     else:
         try:
-            receipt = json.loads(load["receipt_json"] or "{}")
-        except (TypeError, json.JSONDecodeError):
+            checked_load = validate_policy_load_row(load)
+            receipt = json.loads(checked_load["receipt_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
             receipt = {}
         if not isinstance(receipt, Mapping):
             receipt = {}
@@ -406,12 +414,18 @@ def verify_capability_authority(
     # digest still binds the authority receipt to the caller's immutable audit.
     # Policy rows/load receipts provide the independently verifiable C2/C3 part.
     snapshot = conn.execute(
-        "SELECT policy_digest FROM tehm_policy_snapshots WHERE policy_snapshot_id=?",
+        "SELECT * FROM tehm_policy_snapshots WHERE policy_snapshot_id=?",
         (data.get("candidate_policy_snapshot_id"),)).fetchone()
     if snapshot is None:
         reasons.append("candidate_policy_snapshot_missing")
+    else:
+        try:
+            snapshot = validate_policy_snapshot_row(snapshot)
+        except ValueError:
+            reasons.append("candidate_policy_snapshot_digest_mismatch")
+            snapshot = None
     load = conn.execute(
-        """SELECT loaded, receipt_json, receipt_digest
+        """SELECT *
              FROM tehm_policy_load_receipts
              WHERE policy_snapshot_id=? AND runtime_id=? AND loaded=1
              ORDER BY created_at DESC, receipt_id DESC LIMIT 1""",
@@ -421,8 +435,9 @@ def verify_capability_authority(
         reasons.append("candidate_policy_runtime_load_missing")
     else:
         try:
-            load_payload = json.loads(load["receipt_json"] or "{}")
-        except (TypeError, json.JSONDecodeError):
+            checked_load = validate_policy_load_row(load)
+            load_payload = json.loads(checked_load["receipt_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
             load_payload = {}
         if not isinstance(load_payload, Mapping):
             load_payload = {}
