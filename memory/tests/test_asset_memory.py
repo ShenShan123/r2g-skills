@@ -1,6 +1,7 @@
 """Asset Memory registry, gap, validation, and lifecycle tests."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -92,7 +93,9 @@ def test_asset_status_replay_is_idempotent_but_provenance_immutable(tmp_tehm):
         "FROM tehm_asset_status WHERE asset_id=? AND target_scope=?",
         (receipt.asset_id, receipt.target_scope)).fetchone()
     assert row["status"] == "shadow"
-    assert row["status_version"] == 1
+    # Registration creates draft version 1; the draft -> shadow transition
+    # advances the lifecycle witness to version 2.
+    assert row["status_version"] == 2
     assert json.loads(row["provenance_json"]) == {"source": "first"}
 
 
@@ -341,6 +344,38 @@ def test_asset_authority_ledger_is_idempotent_and_tamper_evident(tmp_tehm):
     checked = verify_asset_authority(conn, authority)
     assert checked["eligible"] is False
     assert "evidence:validation:digest_mismatch" in checked["reasons"]
+
+
+def test_asset_authority_replay_rejects_weakly_typed_receipt_eligible(tmp_tehm):
+    from tehm.assets import record_asset_authority, verify_asset_authority
+
+    conn, _, _ = tmp_tehm
+    registered = register_asset_proposal(conn, _proposal())
+    asset = get_asset(conn, registered.asset_id)
+    assert asset is not None
+    asset["asset_id"] = registered.asset_id
+    bound_one = bind_rtl_asset_to_project(
+        asset, PROJECTS / "req_ack_bug",
+        expected_mechanism_family="HANDSHAKE_COMPLETION")
+    bound_two = bind_rtl_asset_to_project(
+        asset, PROJECTS / "req_ack_bug2",
+        expected_mechanism_family="HANDSHAKE_COMPLETION")
+    validation = {
+        "static_valid": True, "independent_verifier": True,
+        "oracle_verdict": "PASS", "regression_verdict": "PASS", "errors": [],
+    }
+    authority = record_asset_authority(
+        conn, asset_id=registered.asset_id, target_scope=registered.target_scope,
+        validation_receipts=[validation, validation],
+        bindings=[bound_one, bound_two], rollback_receipt={"verified": True})
+    conn.execute("PRAGMA ignore_check_constraints=ON")
+    conn.execute(
+        "UPDATE tehm_asset_authority_receipts SET eligible='false' "
+        "WHERE authority_receipt_id=?", (authority.authority_receipt_id,))
+    conn.commit()
+    checked = verify_asset_authority(conn, authority)
+    assert checked["eligible"] is False
+    assert "authority_receipt_row_eligible_malformed" in checked["reasons"]
 
 
 def test_asset_authority_evidence_is_atomic_on_late_failure(tmp_tehm):

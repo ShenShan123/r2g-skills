@@ -104,6 +104,13 @@ def _receipt_id(receipt_digest: str) -> str:
     return "asset_authority_" + receipt_digest.split(":", 1)[1][:20]
 
 
+def _stored_bool(value, *, field: str) -> bool:
+    """Decode an asset authority ledger boolean without truthy coercion."""
+    if type(value) is not int or value not in (0, 1):
+        raise ValueError(f"asset authority {field} field is malformed")
+    return bool(value)
+
+
 def _evidence_id(*, asset_id: str, target_scope: str, evidence_type: str,
                  payload: Mapping, split: str, lineage_id, source_id: str,
                  ordinal: int) -> str:
@@ -591,6 +598,12 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         if receipt_row is None:
             reasons.append("authority_receipt_row_missing")
         else:
+            stored_eligible = None
+            try:
+                stored_eligible = _stored_bool(
+                    receipt_row["eligible"], field="eligible")
+            except ValueError:
+                reasons.append("authority_receipt_row_eligible_malformed")
             try:
                 stored_payload = json.loads(receipt_row["receipt_json"] or "{}")
             except (TypeError, json.JSONDecodeError):
@@ -599,10 +612,14 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
                 reasons.append("authority_receipt_row_malformed")
             elif stable_dumps(dict(stored_payload)) != stable_dumps(payload):
                 reasons.append("authority_receipt_row_mismatch")
-            if (receipt_row["asset_id"], receipt_row["target_scope"],
-                    bool(receipt_row["eligible"]), receipt_row["receipt_digest"]) != (
-                        asset_id, str(payload["target_scope"] or ""),
-                        data.get("eligible") is True, expected_digest):
+            expected_row = (
+                asset_id, str(payload["target_scope"] or ""),
+                (data.get("eligible") if type(data.get("eligible")) is bool
+                 else None), expected_digest)
+            actual_row = (
+                receipt_row["asset_id"], receipt_row["target_scope"],
+                stored_eligible, receipt_row["receipt_digest"])
+            if stored_eligible is None or actual_row != expected_row:
                 reasons.append("authority_receipt_row_digest_mismatch")
     else:
         reasons.append("authority_receipt_ledger_missing")

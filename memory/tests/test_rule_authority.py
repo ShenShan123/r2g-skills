@@ -132,6 +132,24 @@ def test_rule_authority_replay_fail_closes_on_malformed_threshold_or_status(
     assert "authority_status_version_malformed" in checked["reasons"]
 
 
+def test_rule_authority_replay_rejects_weakly_typed_receipt_eligible(
+        tmp_tehm, sample_record_dict):
+    conn, rule_id, version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    receipt = record_rule_authority(
+        conn, rule_id=rule_id, target_scope="drc",
+        evidence=_full_evidence(conn, rule_id), trial_id=trial_id,
+        expected_status_version=version)
+    conn.execute("PRAGMA ignore_check_constraints=ON")
+    conn.execute(
+        "UPDATE tehm_rule_authority_receipts SET eligible='false' "
+        "WHERE authority_receipt_id=?", (receipt.authority_receipt_id,))
+    conn.commit()
+    checked = verify_rule_authority(conn, receipt)
+    assert checked["eligible"] is False
+    assert "authority_receipt_row_eligible_malformed" in checked["reasons"]
+
+
 def test_external_conformal_coverage_rejects_boolean_measurement():
     with pytest.raises(ValueError, match="conformal_coverage_malformed"):
         _external_conformal_value({"conformal": {"coverage": True}})

@@ -333,6 +333,13 @@ def _finite_number(value) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _stored_bool(value, *, field: str) -> bool:
+    """Decode an authority ledger boolean without accepting truthy text."""
+    if type(value) is not int or value not in (0, 1):
+        raise ValueError(f"authority receipt {field} field is malformed")
+    return bool(value)
+
+
 def _authority_thresholds(raw, reasons: list[str]) -> dict[str, float]:
     """Read persisted gate thresholds without allowing malformed replay input.
 
@@ -589,8 +596,16 @@ def build_external_observation_authority_evidence(
         if bound_rule_digest is None:
             raise ValueError("external_authority:rule_content_digest_unavailable")
     # Import locally to keep lifecycle imports independent of the batch lane.
-    from tehm.batch_lane import read_external_observations
-    rows = read_external_observations(observations_path)
+    from tehm.batch_lane import BatchLaneError, read_external_observations
+    try:
+        rows = read_external_observations(observations_path)
+    except BatchLaneError as exc:
+        # Keep the authority projector's public error vocabulary stable even
+        # when the lower-level observation reader catches a contradictory
+        # learner flag before row projection begins.
+        if "learner firewall" in str(exc):
+            raise ValueError("external_authority:learner_firewall_violation") from exc
+        raise
     by_case: dict[str, dict] = {}
     for row in rows:
         case_id = str(row.get("case_id") or "").strip()
@@ -1964,6 +1979,12 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         if stored is None:
             reasons.append("authority_receipt_row_missing")
         else:
+            stored_eligible = None
+            try:
+                stored_eligible = _stored_bool(
+                    stored["eligible"], field="eligible")
+            except ValueError:
+                reasons.append("authority_receipt_row_eligible_malformed")
             try:
                 stored_payload = json.loads(stored["receipt_json"] or "{}")
             except (TypeError, json.JSONDecodeError):
@@ -1971,10 +1992,12 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
             if not isinstance(stored_payload, Mapping) or stable_dumps(
                     dict(stored_payload)) != stable_dumps(payload):
                 reasons.append("authority_receipt_row_mismatch")
-            if tuple(stored) != (
-                    rule_id, target_scope, expected_version,
-                    int(data.get("eligible") is True),
-                    stored["receipt_json"], expected_digest):
+            expected_row = (
+                rule_id, target_scope, expected_version,
+                (int(data.get("eligible"))
+                 if type(data.get("eligible")) is bool else None),
+                stored["receipt_json"], expected_digest)
+            if stored_eligible is None or tuple(stored) != expected_row:
                 reasons.append("authority_receipt_row_digest_mismatch")
     else:
         reasons.append("authority_receipt_ledger_missing")

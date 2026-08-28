@@ -3944,3 +3944,12 @@ L4 transfer 是跨 lineage 的 shadow evidence，不能因为 ledger 行可读�
 `require_full_oracle` 改成字符串时，`load`/`verify` 返回 malformed、不可验证的 receipt，
 不会把 L4 结果投影成 `cross_lineage_te=PASS`。该修复只强化 causal shadow ledger 的
 replay 防火墙，不修改 causal path、canonical memory、rule lifecycle 或 production runtime。
+
+### 2026-08-28 authority receipt storage type closure
+
+rule 与 RTL asset authority receipt 的 replay reader 现在也验证持久化的 `eligible` 为
+严格 SQLite `0/1`。复制数据库后写入字符串化的 `"false"` 会产生显式 malformed reason，
+不会被 `bool(...)` 当作可晋级证据；同时 external-authority projector 将底层 learner
+firewall 拒绝统一映射为 `external_authority:learner_firewall_violation`，避免错误层级
+泄漏并保持审计契约稳定。该修复只加强派生 authority replay 与错误边界，不新增 gate、
+不写 canonical memory，也不改变 Parametric shadow-only 或 production runtime 约束。
