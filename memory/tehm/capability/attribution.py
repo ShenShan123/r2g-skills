@@ -45,6 +45,7 @@ def evaluate_capability_attribution(
     ablation: dict,
     memory_delta: Mapping | None = None,
     strict_memory_delta: bool = False,
+    memory_snapshot_binding: Mapping | None = None,
 ) -> CapabilityAttributionReceipt:
     """Evaluate the eight explicit attribution gates.
 
@@ -69,6 +70,50 @@ def evaluate_capability_attribution(
         memory_delta_verified = bool(
             baseline_memory_digest and candidate_memory_digest and
             baseline_memory_digest != candidate_memory_digest)
+    # A strict campaign must bind the two caller labels to the immutable
+    # policy snapshots that supplied them.  Without this check, a caller can
+    # provide an unrelated pair of digests and a valid-looking object delta;
+    # C1 would then be true even though the evaluated Policy_t/Policy_t+1 do
+    # not refer to those memory states.  Strict callers must provide the
+    # database-bound witness; only non-strict historical fixtures may omit it.
+    snapshot_binding = None
+    if memory_snapshot_binding is not None:
+        if isinstance(memory_snapshot_binding, Mapping):
+            snapshot_binding = dict(memory_snapshot_binding)
+            if strict_memory_delta:
+                required_binding_fields = (
+                    "version", "strict", "baseline_policy_snapshot_id",
+                    "candidate_policy_snapshot_id", "baseline_memory_digest",
+                    "candidate_memory_digest", "baseline_memory_snapshot_id",
+                    "candidate_memory_snapshot_id", "eligible", "reasons",
+                )
+                incomplete = (
+                    snapshot_binding.get("version") !=
+                    "policy-memory-binding-v1" or
+                    snapshot_binding.get("strict") is not True or
+                    any(field not in snapshot_binding
+                        for field in required_binding_fields) or
+                    snapshot_binding.get("eligible") is not True or
+                    not isinstance(snapshot_binding.get("reasons"), list)
+                )
+                if incomplete:
+                    memory_delta_verified = False
+                    reasons = list(snapshot_binding.get("reasons") or [])
+                    reasons.append("memory_snapshot_binding_incomplete")
+                    snapshot_binding["eligible"] = False
+                    snapshot_binding["reasons"] = sorted(set(reasons))
+        elif strict_memory_delta:
+            snapshot_binding = {
+                "eligible": False,
+                "reasons": ["memory_snapshot_binding_malformed"],
+            }
+            memory_delta_verified = False
+    elif strict_memory_delta:
+        snapshot_binding = {
+            "eligible": False,
+            "reasons": ["memory_snapshot_binding_required"],
+        }
+        memory_delta_verified = False
     policy_delta = bool(baseline.get("policy_digest") and
                         candidate.get("policy_digest") and
                         baseline.get("policy_digest") != candidate.get("policy_digest"))
@@ -103,7 +148,9 @@ def evaluate_capability_attribution(
                 "memory_delta": (
                     delta_receipt.to_dict() if delta_receipt is not None else
                     ({"eligible": False, "reasons": ["memory_delta_required"]}
-                     if strict_memory_delta else None))})
+                     if strict_memory_delta else None)),
+                **({"memory_snapshot_binding": snapshot_binding}
+                   if snapshot_binding is not None else {})})
 
 
 def evaluate_capability_attribution_from_db(
@@ -134,6 +181,7 @@ def evaluate_capability_attribution_from_db(
     if snapshot_ids != required_ids:
         raise ValueError("both baseline and candidate policy snapshots are required")
     policies: dict[str, str | None] = {}
+    memory_snapshot_ids: dict[str, str | None] = {}
     corrupt_snapshots: set[str] = set()
     for row in snapshots:
         snapshot_id = str(row["policy_snapshot_id"])
@@ -142,8 +190,39 @@ def evaluate_capability_attribution_from_db(
         except ValueError:
             corrupt_snapshots.add(snapshot_id)
             policies[snapshot_id] = None
+            memory_snapshot_ids[snapshot_id] = None
         else:
             policies[snapshot_id] = checked["policy_digest"]
+            memory_snapshot_ids[snapshot_id] = checked["memory_snapshot_id"]
+
+    # Policy snapshots are the database-bound witnesses for M_t and M_t+1.
+    # Keep the claimed labels in the receipt so authority can replay the
+    # binding later; strict campaigns fail C1 when either label is unrelated
+    # to its corresponding immutable snapshot.
+    binding_reasons: list[str] = []
+    baseline_snapshot_memory = memory_snapshot_ids.get(baseline_policy_snapshot_id)
+    candidate_snapshot_memory = memory_snapshot_ids.get(candidate_policy_snapshot_id)
+    if strict_memory_delta:
+        if baseline_snapshot_memory is None:
+            binding_reasons.append("baseline_policy_snapshot_memory_missing")
+        elif baseline_memory_digest != baseline_snapshot_memory:
+            binding_reasons.append("baseline_memory_snapshot_mismatch")
+        if candidate_snapshot_memory is None:
+            binding_reasons.append("candidate_policy_snapshot_memory_missing")
+        elif candidate_memory_digest != candidate_snapshot_memory:
+            binding_reasons.append("candidate_memory_snapshot_mismatch")
+    memory_snapshot_binding = {
+        "version": "policy-memory-binding-v1",
+        "strict": bool(strict_memory_delta),
+        "baseline_policy_snapshot_id": baseline_policy_snapshot_id,
+        "candidate_policy_snapshot_id": candidate_policy_snapshot_id,
+        "baseline_memory_digest": baseline_memory_digest,
+        "candidate_memory_digest": candidate_memory_digest,
+        "baseline_memory_snapshot_id": baseline_snapshot_memory,
+        "candidate_memory_snapshot_id": candidate_snapshot_memory,
+        "eligible": not binding_reasons,
+        "reasons": sorted(set(binding_reasons)),
+    }
     load = None if candidate_policy_snapshot_id in corrupt_snapshots else conn.execute(
         """SELECT *
              FROM tehm_policy_load_receipts
@@ -196,7 +275,8 @@ def evaluate_capability_attribution_from_db(
                    "target_gain": target_gain,
                    "no_regression": no_regression},
         runtime_receipt=runtime_receipt, heldout=heldout, ablation=ablation,
-        memory_delta=memory_delta, strict_memory_delta=strict_memory_delta)
+        memory_delta=memory_delta, strict_memory_delta=strict_memory_delta,
+        memory_snapshot_binding=memory_snapshot_binding)
 
 
 __all__ = ["CapabilityAttributionReceipt", "evaluate_capability_attribution",

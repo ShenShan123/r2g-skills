@@ -147,7 +147,15 @@ def _policy_binding_reasons(
         reasons.append("attribution_candidate_policy_digest_missing")
     elif candidate["policy_digest"] != snapshot["policy_digest"]:
         reasons.append("candidate_policy_digest_mismatch")
-    if candidate.get("memory_digest") and candidate["memory_digest"] != snapshot["memory_snapshot_id"]:
+    binding = detail.get("memory_snapshot_binding")
+    if isinstance(binding, Mapping) and binding.get("strict") is True:
+        reasons.extend(_memory_snapshot_binding_reasons(
+            conn, binding,
+            candidate_policy_snapshot_id=candidate_policy_snapshot_id))
+    elif (candidate.get("memory_digest") and
+          candidate["memory_digest"] != snapshot["memory_snapshot_id"]):
+        # Preserve the historical authority check for compatibility receipts
+        # that predate the explicit strict binding witness.
         reasons.append("candidate_memory_snapshot_mismatch")
     load = conn.execute(
         """SELECT *
@@ -186,6 +194,72 @@ def _policy_binding_reasons(
             if isinstance(nested, Mapping) else None)
         if execution_receipt_id and actual_execution_id != execution_receipt_id:
             reasons.append("candidate_runtime_execution_receipt_mismatch")
+    return reasons
+
+
+def _memory_snapshot_binding_reasons(
+    conn: sqlite3.Connection,
+    binding: Mapping,
+    *,
+    candidate_policy_snapshot_id: str,
+) -> list[str]:
+    """Replay strict C1's M_t/M_t+1-to-policy-snapshot binding.
+
+    ``memory_delta`` proves that some concrete object changed; this witness
+    proves that the two labels used for that delta are the memory states named
+    by the exact baseline/candidate policy snapshots.  It is intentionally a
+    derived authority check and never creates or mutates a memory snapshot.
+    """
+    if not isinstance(binding, Mapping):
+        return ["C1:memory_snapshot_binding_malformed"]
+    reasons: list[str] = []
+    if binding.get("version") != "policy-memory-binding-v1":
+        reasons.append("C1:memory_snapshot_binding_version_mismatch")
+    if binding.get("strict") is not True:
+        reasons.append("C1:memory_snapshot_binding_not_strict")
+    baseline_policy_id = str(binding.get("baseline_policy_snapshot_id") or "")
+    candidate_policy_id = str(binding.get("candidate_policy_snapshot_id") or "")
+    if not baseline_policy_id:
+        reasons.append("C1:baseline_policy_snapshot_required")
+    if not candidate_policy_id:
+        reasons.append("C1:candidate_policy_snapshot_required")
+    if candidate_policy_id and candidate_policy_id != candidate_policy_snapshot_id:
+        reasons.append("C1:candidate_policy_snapshot_binding_mismatch")
+
+    snapshots: dict[str, dict | None] = {}
+    for side, policy_id in (("baseline", baseline_policy_id),
+                            ("candidate", candidate_policy_id)):
+        if not policy_id:
+            snapshots[side] = None
+            continue
+        row = conn.execute(
+            "SELECT * FROM tehm_policy_snapshots WHERE policy_snapshot_id=?",
+            (policy_id,)).fetchone()
+        if row is None:
+            reasons.append(f"C1:{side}_policy_snapshot_missing")
+            snapshots[side] = None
+            continue
+        try:
+            snapshots[side] = validate_policy_snapshot_row(row)
+        except ValueError:
+            reasons.append(f"C1:{side}_policy_snapshot_digest_mismatch")
+            snapshots[side] = None
+
+    for side in ("baseline", "candidate"):
+        snapshot = snapshots[side]
+        if snapshot is None:
+            continue
+        snapshot_memory_id = snapshot["memory_snapshot_id"]
+        claimed_snapshot_id = binding.get(f"{side}_memory_snapshot_id")
+        if claimed_snapshot_id != snapshot_memory_id:
+            reasons.append(f"C1:{side}_memory_snapshot_witness_mismatch")
+        claimed_digest = binding.get(f"{side}_memory_digest")
+        if claimed_digest != snapshot_memory_id:
+            reasons.append(f"C1:{side}_memory_snapshot_mismatch")
+
+    expected_eligible = not reasons
+    if binding.get("eligible") is not expected_eligible:
+        reasons.append("C1:memory_snapshot_binding_eligibility_mismatch")
     return reasons
 
 
@@ -489,6 +563,14 @@ def record_capability_authority(
     }
     if memory_delta is not None:
         payload["memory_delta"] = memory_delta
+    memory_snapshot_binding = (attribution.get("detail") or {}).get(
+        "memory_snapshot_binding")
+    if (isinstance(memory_snapshot_binding, Mapping) and
+            memory_snapshot_binding.get("strict") is True):
+        # Persist the strict M_t/M_t+1 witness alongside the delta so later
+        # authority replay can validate both policy snapshots independently of
+        # the opaque attribution digest.
+        payload["memory_snapshot_binding"] = dict(memory_snapshot_binding)
     receipt_digest = "sha256:" + hashlib.sha256(
         stable_dumps(payload).encode()).hexdigest()
     receipt_id = "capability_authority_" + receipt_digest.split(":", 1)[1][:20]
@@ -584,6 +666,16 @@ def verify_capability_authority(
                     "memory_delta": payload_memory_delta,
                 }})
             reasons.extend(memory_delta_reasons)
+    payload_memory_snapshot_binding = payload.get("memory_snapshot_binding")
+    if payload_memory_snapshot_binding is not None:
+        if (not isinstance(payload_memory_snapshot_binding, Mapping) or
+                payload_memory_snapshot_binding.get("strict") is not True):
+            reasons.append("C1:memory_snapshot_binding_malformed")
+        else:
+            reasons.extend(_memory_snapshot_binding_reasons(
+                conn, payload_memory_snapshot_binding,
+                candidate_policy_snapshot_id=str(
+                    payload.get("candidate_policy_snapshot_id") or "")))
     for key in ("candidate_policy_snapshot_id", "runtime_id", "attribution_digest"):
         if payload.get(key) != data.get(key):
             reasons.append(f"authority_{key}_payload_mismatch")

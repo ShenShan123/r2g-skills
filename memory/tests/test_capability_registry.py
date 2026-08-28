@@ -247,6 +247,47 @@ def test_strict_capability_attribution_rejects_digest_only_c1():
         "memory_delta_required"]
 
 
+def test_strict_capability_attribution_binds_policy_memory_snapshots(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="STRICT_MEMORY_BINDING", applicability={},
+        status="candidate")
+    baseline = create_policy_snapshot(
+        conn, memory_snapshot_id="snapshot-m0", promoted_rules=[])
+    candidate = create_policy_snapshot(
+        conn, memory_snapshot_id="snapshot-m1", promoted_rules=["r1"])
+    record_policy_load(
+        conn, policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="strict-binding-runtime", loaded=True,
+        receipt={"execution_receipt_id": "exec-strict-binding"})
+    receipt = evaluate_capability_attribution_from_db(
+        conn, capability_id=capability.capability_id,
+        # The delta itself is well-formed, but these labels are not the
+        # memory states bound to the two evaluated policy snapshots.
+        baseline_memory_digest="caller-m0", candidate_memory_digest="caller-m1",
+        baseline_policy_snapshot_id=baseline.policy_snapshot_id,
+        candidate_policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="strict-binding-runtime", baseline_behavior_digest="b0",
+        candidate_behavior_digest="b1", target_gain=True, no_regression=True,
+        heldout={"verdict": "PASS", "disjoint_lineage": True,
+                 "evidence_id": "h-strict-binding"},
+        ablation={"gain_without_memory": False, "gain_with_memory": True},
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "caller-m0",
+            "candidate_memory_digest": "caller-m1",
+            "added_rule_ids": ["r1"],
+        }, strict_memory_delta=True)
+    assert receipt.gates["C1"] is False
+    assert receipt.promotable is False
+    binding = receipt.detail["memory_snapshot_binding"]
+    assert binding["eligible"] is False
+    assert binding["baseline_memory_snapshot_id"] == "snapshot-m0"
+    assert binding["candidate_memory_snapshot_id"] == "snapshot-m1"
+    assert "baseline_memory_snapshot_mismatch" in binding["reasons"]
+    assert "candidate_memory_snapshot_mismatch" in binding["reasons"]
+
+
 def test_capability_authority_replays_content_bound_memory_delta(tmp_tehm):
     conn, _, _ = tmp_tehm
     capability = register_capability(
@@ -270,6 +311,32 @@ def test_capability_authority_replays_content_bound_memory_delta(tmp_tehm):
     assert checked["eligible"] is False
     assert "authority_receipt_digest_mismatch" in checked["reasons"]
     assert "C1:memory_delta_changed_ids_mismatch" in checked["reasons"]
+
+
+def test_capability_authority_replays_policy_memory_snapshot_binding(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="STRICT_AUTHORITY_BINDING", applicability={},
+        status="candidate")
+    _, authority, _ = _full_attribution_and_authority(
+        conn, capability.capability_id,
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "m0",
+            "candidate_memory_digest": "m1",
+            "added_rule_ids": ["r1"],
+        })
+    assert authority.eligible is True
+    assert verify_capability_authority(
+        conn, capability.capability_id, authority)["eligible"] is True
+
+    authority.payload["memory_snapshot_binding"]["baseline_memory_digest"] = (
+        "tampered-baseline")
+    checked = verify_capability_authority(
+        conn, capability.capability_id, authority)
+    assert checked["eligible"] is False
+    assert "authority_receipt_digest_mismatch" in checked["reasons"]
+    assert "C1:baseline_memory_snapshot_mismatch" in checked["reasons"]
 
 
 def test_capability_attribution_from_policy_and_runtime_receipts(tmp_tehm):

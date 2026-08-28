@@ -3815,3 +3815,17 @@ canonical 写入路径。所有未通过 lifecycle replay 的状态都 fail-clos
 shadow log、staging evidence、candidate/shadow 和 malformed rows 仍不能进入
 production。真实 ORFS/RTL evidence、独立 rollback/registry/obligation/TE/harmful/
 conformal gate 仍需单独建立。
+
+### 2026-08-28 strict C1 policy-memory snapshot binding
+
+`memory-delta-v1` 只证明调用方列出了一个可重放的 changed-object 集合；如果
+`baseline_memory_digest`/`candidate_memory_digest` 仍是与 PolicySnapshot 无关的外部
+标签，C1 仍可能把错误的 `M_t`、`M_t+1` 绑定到实际评估的 `Policy_t`、`Policy_t+1`。
+现在 strict attribution 要求两个 digest 分别等于两条经过 content-digest 校验的
+PolicySnapshot 的 `memory_snapshot_id`。receipt 保存
+`policy-memory-binding-v1` witness，记录两条 policy ID、两侧 memory ID、计算出的
+eligible/reasons；任一不一致都会使 C1 fail-closed。capability authority 记录该 witness
+并在 replay 时重新读取、校验 baseline/candidate snapshot，不能只依赖 attribution
+digest 或 candidate 单侧检查。非 strict 历史 fixture 仍保留兼容路径；该升级只收紧
+evaluation/authority 证据，不写 canonical memory，不改变 promotion gates，也不允许
+Parametric shadow 或 staging evidence 进入 production runtime。
