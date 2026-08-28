@@ -328,6 +328,43 @@ def _finite_number(value) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _authority_thresholds(raw, reasons: list[str]) -> dict[str, float]:
+    """Read persisted gate thresholds without allowing malformed replay input.
+
+    A receipt with a missing threshold is an older/incomplete receipt and is
+    reported as such.  A present non-finite or non-numeric threshold is
+    likewise invalid, but verification must return an ineligible result rather
+    than raising while replaying an untrusted receipt.
+    """
+    defaults = {
+        "obligation_coverage": 1.0,
+        "cross_lineage_te": 1.0,
+        "harmful_rate": 0.0,
+        "conformal_coverage": 0.80,
+    }
+    if not isinstance(raw, Mapping):
+        reasons.append("authority_thresholds_missing")
+        return defaults
+    result = {}
+    for name, default in defaults.items():
+        if name not in raw:
+            reasons.append(f"authority_threshold_{name}_missing")
+            result[name] = default
+            continue
+        value = raw.get(name)
+        if isinstance(value, bool):
+            reasons.append(f"authority_threshold_{name}_malformed")
+            result[name] = default
+            continue
+        number = _finite_number(value)
+        if number is None:
+            reasons.append(f"authority_threshold_{name}_malformed")
+            result[name] = default
+            continue
+        result[name] = number
+    return result
+
+
 def _payload_number(entry: Mapping, names: tuple[str, ...]) -> float | None:
     payload = entry.get("payload")
     if not isinstance(payload, Mapping):
@@ -1843,6 +1880,12 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         reasons.append("rule_content_digest_mismatch")
     status = get_status(conn, rule_id=rule_id, target_scope=target_scope)
     expected_version = payload.get("status_version")
+    replay_status_version = expected_version
+    if expected_version is not None:
+        if (isinstance(expected_version, bool) or
+                not isinstance(expected_version, int) or expected_version <= 0):
+            reasons.append("authority_status_version_malformed")
+            replay_status_version = None
     if status is None:
         reasons.append("candidate_status_missing")
     elif status.get("status") != "candidate":
@@ -1878,25 +1921,21 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         canonical_loaded = _payload_from_entries(loaded)
         if stable_dumps(dict(expected_evidence)) != stable_dumps(canonical_loaded):
             reasons.append("authority_evidence_payload_mismatch")
-    thresholds = payload.get("thresholds")
-    if not isinstance(thresholds, Mapping):
-        thresholds = {}
-        reasons.append("authority_thresholds_missing")
+    thresholds = _authority_thresholds(payload.get("thresholds"), reasons)
     gate_inputs, details = _derive_gate_inputs(
         loaded, (), rule_row=row, status=status,
-        expected_status_version=(int(expected_version)
-                                 if expected_version is not None else None),
+        expected_status_version=replay_status_version,
         rule_digest=current_digest,
-        min_obligation_coverage=float(thresholds.get("obligation_coverage", 1.0)),
-        min_cross_lineage_te=float(thresholds.get("cross_lineage_te", 1.0)),
-        max_harmful_rate=float(thresholds.get("harmful_rate", 0.0)),
-        min_conformal_coverage=float(thresholds.get("conformal_coverage", 0.80)))
+        min_obligation_coverage=thresholds["obligation_coverage"],
+        min_cross_lineage_te=thresholds["cross_lineage_te"],
+        max_harmful_rate=thresholds["harmful_rate"],
+        min_conformal_coverage=thresholds["conformal_coverage"])
     gate_report = evaluate_promotion_gates(
         gate_inputs, strict=True,
-        min_obligation_coverage=float(thresholds.get("obligation_coverage", 1.0)),
-        min_cross_lineage_te=float(thresholds.get("cross_lineage_te", 1.0)),
-        max_harmful_rate=float(thresholds.get("harmful_rate", 0.0)),
-        min_conformal_coverage=float(thresholds.get("conformal_coverage", 0.80)))
+        min_obligation_coverage=thresholds["obligation_coverage"],
+        min_cross_lineage_te=thresholds["cross_lineage_te"],
+        max_harmful_rate=thresholds["harmful_rate"],
+        min_conformal_coverage=thresholds["conformal_coverage"])
     for key in ("checks", "gate_status", "missing", "failed",
                 "not_established", "all_gates_established"):
         if stable_dumps(payload.get(key)) != stable_dumps(gate_report.get(key)):
@@ -1904,8 +1943,7 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
     trial_id = payload.get("trial_id")
     trial_ok, trial_binding, trial_reasons = _trial_binding(
         conn, rule_id=rule_id, target_scope=target_scope, trial_id=trial_id,
-        expected_status_version=(int(expected_version)
-                                 if expected_version is not None else None))
+        expected_status_version=replay_status_version)
     reasons.extend(trial_reasons)
     if stable_dumps(payload.get("trial_binding") or {}) != stable_dumps(trial_binding):
         reasons.append("trial_binding_mismatch")

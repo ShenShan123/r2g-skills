@@ -7,6 +7,7 @@ unit fixtures; production executors pass ``strict=True`` and an explicit map.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 
 
@@ -36,6 +37,13 @@ def evaluate_promotion_gates(
     strict mode; this prevents a report that merely omits TE or conformal
     coverage from becoming production authority.
     """
+    min_obligation_coverage = _finite_threshold(
+        min_obligation_coverage, "min_obligation_coverage")
+    min_cross_lineage_te = _finite_threshold(
+        min_cross_lineage_te, "min_cross_lineage_te")
+    max_harmful_rate = _finite_threshold(max_harmful_rate, "max_harmful_rate")
+    min_conformal_coverage = _finite_threshold(
+        min_conformal_coverage, "min_conformal_coverage")
     source = dict(gates or {})
     checks = {}
     checks["rollback_verified"] = source.get("rollback_verified") is True
@@ -74,16 +82,31 @@ def evaluate_promotion_gates(
 
 def _at_least(value, threshold: float) -> bool:
     try:
-        return float(value) >= float(threshold)
+        number = float(value)
+        return math.isfinite(number) and number >= float(threshold)
     except (TypeError, ValueError):
         return False
 
 
 def _at_most(value, threshold: float) -> bool:
     try:
-        return float(value) <= float(threshold)
+        number = float(value)
+        return math.isfinite(number) and number <= float(threshold)
     except (TypeError, ValueError):
         return False
+
+
+def _finite_threshold(value, name: str) -> float:
+    """Validate operator policy thresholds before they enter a receipt."""
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a finite number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"{name} must be a finite number")
+    return number
 
 
 def evaluate_capability_promotion_gates(

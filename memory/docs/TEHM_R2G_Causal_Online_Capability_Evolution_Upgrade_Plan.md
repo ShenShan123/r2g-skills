@@ -3900,3 +3900,13 @@ calibration authority row 也不会通过 `int(...)` 转换进入 gate evidence�
 fail-closed。该修复只收紧 canonical-import/authority replay 的 typed membership 边界，
 不新增 promotion gate、不执行 promotion，也不改变 Parametric shadow-only 与
 production runtime 约束。
+
+### 2026-08-28 promotion gate finite-number replay firewall
+
+六项 rule-promotion gate 的数值阈值与测量值现在均拒绝非有限数。`NaN` 或 `±∞` 不再
+参与 coverage/rate 比较，避免通过 IEEE 比较语义伪造 obligation、TE、harmful-rate 或
+conformal gate；operator threshold 的 malformed 值会在 gate evaluator 入口直接拒绝。
+rule-authority replay 对损坏的 `status_version` 或 threshold 不再抛出未处理异常，而是
+返回不可晋级的 fail-closed receipt，并保留具体 malformed reason。该修复只增强
+authority receipt 的确定性与可审计性，不新增 gate、不写 canonical memory，也不改变
+Parametric shadow-only 或 production runtime 边界。

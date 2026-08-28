@@ -1,6 +1,8 @@
 """Promotion receipts distinguish unestablished gates from measured failures."""
 from __future__ import annotations
 
+import pytest
+
 from tehm.lifecycle.promotion_gates import (
     evaluate_capability_promotion_gates,
     evaluate_promotion_gates,
@@ -34,6 +36,22 @@ def test_empty_capability_authority_reports_unestablished_c1_c8():
     assert result["eligible"] is False
     assert result["not_established"] == [f"C{i}" for i in range(1, 9)]
     assert result["failed"] == []
+
+
+def test_rule_gate_rejects_nonfinite_measurements():
+    result = evaluate_promotion_gates(
+        {"obligation_coverage": float("inf"),
+         "cross_lineage_te": 1.0, "harmful_rate": float("-inf"),
+         "conformal_coverage": 0.9}, strict=True)
+    assert result["checks"]["obligation_coverage"] is False
+    assert result["checks"]["harmful_rate"] is False
+    assert result["gate_status"]["obligation_coverage"] == "FAIL"
+    assert result["gate_status"]["harmful_rate"] == "FAIL"
+
+
+def test_rule_gate_rejects_nonfinite_thresholds():
+    with pytest.raises(ValueError, match="finite number"):
+        evaluate_promotion_gates({}, min_conformal_coverage=float("nan"))
 
 
 def test_orfs_authority_receipt_legacy_fixture_preserves_unestablished_gate_state(tmp_path):

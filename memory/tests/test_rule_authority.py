@@ -114,6 +114,23 @@ def test_rule_authority_derives_six_gates_and_promotes(tmp_tehm, sample_record_d
     assert get_status(conn, rule_id=rule_id, target_scope="drc")["status"] == "promoted"
 
 
+def test_rule_authority_replay_fail_closes_on_malformed_threshold_or_status(
+        tmp_tehm, sample_record_dict):
+    conn, rule_id, version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    receipt = record_rule_authority(
+        conn, rule_id=rule_id, target_scope="drc",
+        evidence=_full_evidence(conn, rule_id), trial_id=trial_id,
+        expected_status_version=version)
+    tampered = json.loads(json.dumps(receipt.to_dict()))
+    tampered["payload"]["thresholds"]["conformal_coverage"] = "not-a-number"
+    tampered["payload"]["status_version"] = "not-an-integer"
+    checked = verify_rule_authority(conn, tampered)
+    assert checked["eligible"] is False
+    assert "authority_threshold_conformal_coverage_malformed" in checked["reasons"]
+    assert "authority_status_version_malformed" in checked["reasons"]
+
+
 def test_trial_authority_projection_replays_activation_witnesses(
         tmp_tehm, sample_record_dict):
     conn, rule_id, version, trial_id = _candidate_with_trial(
