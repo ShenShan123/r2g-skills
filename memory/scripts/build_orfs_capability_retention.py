@@ -126,13 +126,15 @@ def build_orfs_capability_retention(
             raise ValueError("candidate policy snapshot is malformed") from exc
         if snapshot["policy_digest"] != policy_digest:
             raise ValueError("candidate policy digest binding is stale or mismatched")
-        if load is None or bool(load["loaded"]) is not True:
+        if load is None:
             raise ValueError("candidate policy has no successful runtime load receipt")
         try:
             checked_load = validate_policy_load_row(load)
             load_payload = json.loads(checked_load["receipt_json"] or "{}")
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             raise ValueError("candidate policy runtime load receipt is malformed") from exc
+        if checked_load["loaded"] != 1:
+            raise ValueError("candidate policy has no successful runtime load receipt")
         if (not isinstance(load_payload, dict) or
                 load_payload.get("policy_snapshot_id") != policy_id or
                 load_payload.get("policy_digest") != policy_digest or

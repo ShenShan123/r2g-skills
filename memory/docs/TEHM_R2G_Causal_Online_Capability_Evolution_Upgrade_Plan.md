@@ -3964,3 +3964,11 @@ preview 做结构化类型校验：`triggered`、`full_rebuild_equivalent` 和
 一个顶层字段就重新解释历史 observation。该修复只加强 B1/B2/B3 fast-memory 的
 deterministic replay，不触发 consolidation、canonical write、promotion 或 production
 runtime。
+
+### 2026-08-28 ORFS retention runtime-load validation order closure
+
+`build_orfs_capability_retention.py` 现在先通过
+`validate_policy_load_row()` 校验不可变 runtime-load receipt 的存储类型、payload
+与内容摘要，再检查 `loaded=1`；不再在 receipt 校验前用宽松 `bool(...)` 解释数据库
+字段。该边界只影响 held-out capability-retention 的 fail-closed 审计，不改变
+canonical memory、learner support、promotion 或 production runtime。
