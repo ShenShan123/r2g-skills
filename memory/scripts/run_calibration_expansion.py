@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -376,6 +377,41 @@ def _external_transition_id(sample: dict) -> str:
     return "external-calibration:" + hashlib.sha256(payload).hexdigest()[:24]
 
 
+def _persist_external_transition(conn, *, transition_id: str, sample: dict,
+                                 action: dict, action_json: str) -> None:
+    """Insert one staging transition without overwriting immutable evidence."""
+    values = (
+        transition_id, "external_before:" + transition_id,
+        "external_after:" + transition_id,
+        str(action.get("domain") or "flow.CONFIG_DELTA"), action_json,
+        canonical_json({"original_failure": "REMOVED"}).decode(),
+        canonical_json({"verdict": "PASS", "oracle_type": "TARGET_TEST"}).decode(),
+        "", "PASS", "[]", "[]",
+        canonical_json({"source": "external_calibration_sample",
+                        "lineage_id": sample["lineage_id"]}).decode(),
+        "tehm-canonical-v0.1")
+    columns = (
+        "transition_id", "source_state_id", "target_state_id", "action_domain",
+        "action_json", "observation_delta_json", "verifier_json",
+        "primary_effect_key", "outcome", "created_regressions_json",
+        "newly_observed_json", "provenance_json", "schema_version")
+    existing = conn.execute(
+        "SELECT * FROM tehm_transitions WHERE transition_id=?",
+        (transition_id,)).fetchone()
+    if existing is not None:
+        conflicts = [column for column, value in zip(columns, values)
+                     if str(existing[column] or "") != str(value or "")]
+        if conflicts:
+            raise ValueError(
+                "external calibration transition is immutable and conflicts: "
+                + ",".join(conflicts))
+        return
+    placeholders = ",".join("?" for _ in columns)
+    conn.execute(
+        f"INSERT INTO tehm_transitions ({','.join(columns)}) "
+        f"VALUES ({placeholders})", values)
+
+
 def _load_external_training(root: Path, conn, store: ArtifactStore,
                             samples: list[dict]) -> list[str]:
     """Bind external samples to staging-only transitions for action filtering."""
@@ -388,20 +424,9 @@ def _load_external_training(root: Path, conn, store: ArtifactStore,
         # This minimal transition is deliberately staging-only.  It carries the
         # action provenance required by action-conditioned physical retrieval;
         # the actual PPA evidence remains in the physical row and report.
-        conn.execute(
-            "INSERT OR REPLACE INTO tehm_transitions ("
-            "transition_id,source_state_id,target_state_id,action_domain,action_json,"
-            "observation_delta_json,verifier_json,primary_effect_key,outcome,"
-            "created_regressions_json,newly_observed_json,provenance_json,schema_version)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (transition_id, "external_before:" + transition_id,
-             "external_after:" + transition_id, str(action.get("domain") or "flow.CONFIG_DELTA"),
-             action_json, canonical_json({"original_failure": "REMOVED"}).decode(),
-             canonical_json({"verdict": "PASS", "oracle_type": "TARGET_TEST"}).decode(),
-             "", "PASS", "[]", "[]",
-             canonical_json({"source": "external_calibration_sample",
-                             "lineage_id": sample["lineage_id"]}).decode(),
-             "tehm-canonical-v0.1"))
+        _persist_external_transition(
+            conn, transition_id=transition_id, sample=sample,
+            action=action, action_json=action_json)
         conn.commit()
         physical.record(
             transition_id=transition_id,

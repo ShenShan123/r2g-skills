@@ -150,6 +150,12 @@ def validate_staging_import_witness(
             if not record_id or record_id in record_ids:
                 raise BatchLaneError("staging witness record IDs are ambiguous")
             record_ids.add(record_id)
+            if (external.get("split") != "support" or
+                    external.get("classification") != "ELIGIBLE_POSITIVE" or
+                    external.get("learner_eligible") is not True):
+                raise BatchLaneError(
+                    "staging witness external row is not importable: " +
+                    str(external.get("case_id")))
             matches = transition_by_record.get(record_id, [])
             if len(matches) != 1:
                 raise BatchLaneError(
@@ -159,6 +165,20 @@ def validate_staging_import_witness(
             action = Action.from_dict(record.action)
             delta = ObservationDelta.from_dict(record.observation_delta)
             verifier = VerifierSnapshot.from_dict(record.verification)
+            external_lineage = str(external.get("lineage_id") or "").strip()
+            if external_lineage != str(record.lineage_id or "").strip():
+                raise BatchLaneError(
+                    "staging witness external lineage mismatch: " + record_id)
+            if str(external.get("family") or "").strip() != action.transformation_family:
+                raise BatchLaneError(
+                    "staging witness external family mismatch: " + record_id)
+            config = record.before.get("config") or record.after.get("config") or {}
+            record_platform = str(
+                config.get("PLATFORM") or config.get("platform") or "").strip()
+            if (not record_platform or
+                    str(external.get("platform") or "").strip() != record_platform):
+                raise BatchLaneError(
+                    "staging witness external platform mismatch: " + record_id)
             expected_fields = {
                 "action_domain": action.domain,
                 "action_json": stable_dumps(action.to_dict()),

@@ -3709,3 +3709,10 @@ evaluation 的逐项 `checks` 还必须与 authority 顶层六门完全一致，
 external observation JSONL 同时拒绝重复 `case_id`，避免一个逻辑 case 被重复导入。
 该修复提高 authority receipt 的不可变重放边界，不创建 gate、不自动导入 canonical、
 不改变 lifecycle/runtime authority；六项 gate 仍必须由独立证据建立。
+
+### 2026-08-28 calibration staging immutable transition write
+
+校准扩展脚本的 staging-only 外部 transition 也遵守 immutable evidence：重复导入先
+逐字段比较，只有 content-equivalent replay 才幂等返回；action、provenance 或其它
+transition payload 漂移会 fail-closed。该 helper 不再使用 `INSERT OR REPLACE`，并由
+回归覆盖冲突重放；它仍只用于隔离 calibration，不产生 canonical 或 learner support。

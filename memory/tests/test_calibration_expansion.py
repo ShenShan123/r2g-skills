@@ -4,9 +4,18 @@ import sys
 import json
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from run_calibration_expansion import (_strict_oracle_one, _strict_oracle_projects,
-                                       _subset_manifest)  # noqa: E402
+from run_calibration_expansion import (  # noqa: E402
+    _external_transition_id,
+    _persist_external_transition,
+    _strict_oracle_one,
+    _strict_oracle_projects,
+    _subset_manifest,
+)
+from tehm import db as tehm_db
+from tehm.sync import canonical_json
 
 
 def test_subset_manifest_selects_scratch_lineages_without_mutating_source():
@@ -62,3 +71,29 @@ def test_strict_oracle_runs_signoff_and_timing_and_reuses_bound_receipt(tmp_path
     assert second["strict_rc"] is None
     assert second["timing_rc"] is None
     assert len(calls) == 2
+
+
+def test_external_calibration_transition_is_immutable(tmp_path):
+    conn = tehm_db.connect(tmp_path / "staging.sqlite")
+    tehm_db.ensure_schema(conn)
+    sample = {"case_id": "case-a", "lineage_id": "lineage-a",
+              "graph_context": {"digest": "graph-a"}}
+    action = {"domain": "flow.CONFIG_DELTA",
+              "transformation_family": "DENSITY_RELIEF",
+              "payload": {"config_edits": {"CORE_UTILIZATION": "40"}}}
+    transition_id = _external_transition_id({**sample, "action": action})
+    action_json = canonical_json(action).decode()
+    _persist_external_transition(
+        conn, transition_id=transition_id, sample=sample,
+        action=action, action_json=action_json)
+    _persist_external_transition(
+        conn, transition_id=transition_id, sample=sample,
+        action=action, action_json=action_json)
+    conn.execute("UPDATE tehm_transitions SET action_json=? WHERE transition_id=?",
+                 ("{}", transition_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="immutable and conflicts"):
+        _persist_external_transition(
+            conn, transition_id=transition_id, sample=sample,
+            action=action, action_json=action_json)
+    conn.close()

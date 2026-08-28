@@ -247,6 +247,11 @@ transition、training membership、physical effect 及其 typed payload，并保
 TOCTOU 修改都会 fail-closed 并回滚，不能把“文件存在且哈希相同”误当作 canonical
 authority。缺少该 witness 的旧 allow receipt 也不再可消费。
 
+另外，calibration expansion 的 staging-only 外部 transition 已改为冲突检查的
+immutable insert：重复导入必须 content-equivalent，直接 SQL 篡改或 payload 漂移会被
+拒绝，不再使用 `INSERT OR REPLACE` 静默覆盖 evidence。该路径仍只服务隔离校准，
+不创建 canonical/learner support。
+
 当 preview 需要进入试验阶段时，`evolution.run_shadow_candidate_trial()` 会把 TEHM
 连接复制到内存 staging DB，在 staging 内重建并登记 `shadow → candidate`，然后复用
 现有 A/B trial adapter。Icarus/ORFS 执行器通过 evaluator callback 注入；即使六项

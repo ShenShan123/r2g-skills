@@ -639,8 +639,8 @@ def test_canonical_import_binds_authority_case_selection_and_campaign(
     record["episode"]["lineage_id"] = "lineage-a"
     write_external_observations(observations, [{
         "receipt_id": "receipt-case-a", "case_id": "case-a",
-        "lineage_id": "lineage-a", "platform": "sky130hs",
-        "family": "DENSITY_RELIEF", "split": "support",
+        "lineage_id": "lineage-a", "platform": "sky130hd",
+        "family": "ANTENNA_DIODE_REPAIR", "split": "support",
         "classification": "ELIGIBLE_POSITIVE", "learner_eligible": True,
         "record": record, "canonical_memory_mutation": "none",
         "promotion_eligible": False,
@@ -680,7 +680,8 @@ def test_canonical_import_binds_authority_case_selection_and_campaign(
             canonical_db=canonical, campaign_id="other-campaign")
 
     tampered_record = json.loads(json.dumps(record))
-    tampered_record["action"]["transformation_family"] = "different-family"
+    tampered_record["action"]["payload"]["config_edits"][
+        "PLACE_DENSITY_LB_ADDON"] = "different-value"
     with pytest.raises(BatchLaneError, match="transition content mismatch"):
         validate_staging_import_witness(
             rows=[{**json.loads(json.dumps(authority_row)), "record": tampered_record}
