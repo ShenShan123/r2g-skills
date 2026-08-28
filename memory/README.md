@@ -110,6 +110,15 @@ authority evaluator 现在区分 `NOT_ESTABLISHED`、`FAIL` 和 `PASS`：空 gat
 会报告六项 `NOT_ESTABLISHED`，而已提交但未达阈值的证据才报告 `FAIL`；新增的
 `not_established`、`failed`、`all_gates_established` 只改善 receipt 可审计性，不
 改变六项合取或 promotion 行为。
+Capability attribution 的 C1 现在还提供 `memory-delta-v1`：strict campaign 必须
+列出实际新增/删除/修订的 transition、rule、asset、causal path 或 capability ID，
+并校验 delta 内的 baseline/candidate memory digest；仅传入两个不同字符串不能再
+满足 strict C1。历史通用 fixture 仍保留兼容模式，新 ORFS/RTL/preflight 入口均已
+切换到 strict memory-delta receipt。该校验仍是 evaluation-only，不会写 canonical
+memory、触发 lifecycle promotion 或使 policy 进入 production runtime。
+当 attribution receipt 进入 capability authority 时，C1 receipt 会随 authority
+payload 保存并在 replay 中重新归一化/校验；ORFS/RTL 的 C1 evidence ID 也绑定完整
+delta receipt，而不是只绑定两端 digest。
 现在 rule promotion 也有独立的数据库绑定 authority seam：
 `lifecycle/rule_authority.py` 将每个 gate 的 payload 写入 immutable evidence ledger，
 并把 rule 内容 digest、candidate `status_version` 与真实 winning `tehm_trials` 行绑定。

@@ -13,6 +13,7 @@ from collections.abc import Mapping
 
 from tehm.ids import stable_dumps
 
+from .delta import MemoryDeltaReceipt, evaluate_memory_delta
 from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
 
 
@@ -42,6 +43,8 @@ def evaluate_capability_attribution(
     runtime_receipt: dict,
     heldout: dict,
     ablation: dict,
+    memory_delta: Mapping | None = None,
+    strict_memory_delta: bool = False,
 ) -> CapabilityAttributionReceipt:
     """Evaluate the eight explicit attribution gates.
 
@@ -50,9 +53,22 @@ def evaluate_capability_attribution(
     """
     if not capability_id:
         raise ValueError("capability_id is required")
-    memory_delta = bool(baseline.get("memory_digest") and
-                        candidate.get("memory_digest") and
-                        baseline.get("memory_digest") != candidate.get("memory_digest"))
+    baseline_memory_digest = baseline.get("memory_digest")
+    candidate_memory_digest = candidate.get("memory_digest")
+    delta_receipt: MemoryDeltaReceipt | None = None
+    if memory_delta is not None:
+        delta_receipt = evaluate_memory_delta(
+            baseline_memory_digest, candidate_memory_digest, memory_delta)
+        memory_delta_verified = delta_receipt.eligible
+    elif strict_memory_delta:
+        memory_delta_verified = False
+    else:
+        # Compatibility mode for historical fixtures.  New capability
+        # campaigns should pass ``strict_memory_delta=True`` so C1 is bound to
+        # concrete changed objects rather than merely unequal labels.
+        memory_delta_verified = bool(
+            baseline_memory_digest and candidate_memory_digest and
+            baseline_memory_digest != candidate_memory_digest)
     policy_delta = bool(baseline.get("policy_digest") and
                         candidate.get("policy_digest") and
                         baseline.get("policy_digest") != candidate.get("policy_digest"))
@@ -69,7 +85,7 @@ def evaluate_capability_attribution(
     ablation_removes_gain = bool(ablation.get("gain_without_memory") is False and
                                  ablation.get("gain_with_memory") is True)
     gates = {
-        "C1": memory_delta,
+        "C1": memory_delta_verified,
         "C2": policy_delta,
         "C3": runtime_loaded,
         "C4": behavior_changed,
@@ -83,7 +99,11 @@ def evaluate_capability_attribution(
         capability_id=capability_id, gates=gates, missing_gates=missing,
         promotable=not missing,
         detail={"baseline": dict(baseline), "candidate": dict(candidate),
-                "heldout": dict(heldout), "ablation": dict(ablation)})
+                "heldout": dict(heldout), "ablation": dict(ablation),
+                "memory_delta": (
+                    delta_receipt.to_dict() if delta_receipt is not None else
+                    ({"eligible": False, "reasons": ["memory_delta_required"]}
+                     if strict_memory_delta else None))})
 
 
 def evaluate_capability_attribution_from_db(
@@ -101,6 +121,8 @@ def evaluate_capability_attribution_from_db(
     no_regression: bool,
     heldout: dict,
     ablation: dict,
+    memory_delta: Mapping | None = None,
+    strict_memory_delta: bool = False,
 ) -> CapabilityAttributionReceipt:
     """Build C2/C3 inputs from the policy snapshot/load receipt tables."""
     snapshots = conn.execute(
@@ -173,7 +195,8 @@ def evaluate_capability_attribution_from_db(
                    "behavior_digest": candidate_behavior_digest,
                    "target_gain": target_gain,
                    "no_regression": no_regression},
-        runtime_receipt=runtime_receipt, heldout=heldout, ablation=ablation)
+        runtime_receipt=runtime_receipt, heldout=heldout, ablation=ablation,
+        memory_delta=memory_delta, strict_memory_delta=strict_memory_delta)
 
 
 __all__ = ["CapabilityAttributionReceipt", "evaluate_capability_attribution",

@@ -179,14 +179,18 @@ def build_orfs_capability_attribution(
     # Only training observations enter the candidate learner snapshot.  The
     # held-out and non-target checks below are external evaluation receipts.
     train_records = []
+    train_transition_ids = []
     train_summaries = []
     for spec in training_pairs:
         record = _build_record(spec)
         summary = _summary(record, target_check=str(spec.get("target_check") or "route"))
         if not (summary["before_failed"] and summary["candidate_pass"]):
             raise ValueError(f"training pair is not baseline-fail -> candidate-pass: {summary}")
-        capture(conn, store, record, dataset_campaign_id="orfs-capability-attribution-r2",
-                dataset_split="training", dataset_learner_eligible=True)
+        captured = capture(
+            conn, store, record,
+            dataset_campaign_id="orfs-capability-attribution-r2",
+            dataset_split="training", dataset_learner_eligible=True)
+        train_transition_ids.append(captured.transition_id)
         train_records.append(record)
         train_summaries.append(summary)
     record_capability_training_digest = _stable_digest(train_summaries)
@@ -349,7 +353,14 @@ def build_orfs_capability_attribution(
         candidate_behavior_digest=candidate_behavior_digest,
         target_gain=target_gain, no_regression=no_regression,
         heldout=heldout, ablation=ablation,
-        baseline_controls=controls, candidate_controls=dict(controls))
+        baseline_controls=controls, candidate_controls=dict(controls),
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": baseline_memory_digest,
+            "candidate_memory_digest": candidate_memory_digest,
+            "added_transition_ids": train_transition_ids,
+            "added_capability_ids": [capability.capability_id],
+        }, strict_memory_delta=True)
 
     # Materialize the same database-bound authority receipt used by the RTL
     # attribution lane.  This is deliberately separate from the six rule
@@ -362,7 +373,8 @@ def build_orfs_capability_attribution(
     authority_evidence_refs = {
         "C1": {"evidence_id": _stable_digest({
             "baseline_memory": baseline_memory_digest,
-            "candidate_memory": candidate_memory_digest}),
+            "candidate_memory": candidate_memory_digest,
+            "memory_delta": attribution.attribution.detail["memory_delta"]}),
                 "split": "ab", "verdict": "PASS"},
         "C2": {"evidence_id": _stable_digest({
             "baseline_policy": baseline_policy.policy_snapshot_id,
@@ -407,6 +419,13 @@ def build_orfs_capability_attribution(
         "derived_db": str(derived_db),
         "derived_db_sha256": _sha256(derived_db),
         "candidate_memory_digest": candidate_memory_digest,
+        "memory_delta": {
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": baseline_memory_digest,
+            "candidate_memory_digest": candidate_memory_digest,
+            "added_transition_ids": train_transition_ids,
+            "added_capability_ids": [capability.capability_id],
+        },
         "causal_report": str(report_path),
         "causal_path_id": causal_path_id,
         "canonical_memory_mutation": "none",

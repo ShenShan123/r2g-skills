@@ -20,6 +20,7 @@ from tehm.lifecycle.promotion_gates import (
     CAPABILITY_GATES, evaluate_capability_promotion_gates,
 )
 
+from .delta import evaluate_memory_delta
 from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
 from .registry import validate_capability_row
 
@@ -373,6 +374,52 @@ def _causal_transfer_binding_reasons(
     return reasons
 
 
+def _memory_delta_binding(
+    attribution: Mapping,
+) -> tuple[dict | None, list[str]]:
+    """Validate and return a self-contained C1 memory-delta receipt.
+
+    Historical attribution fixtures omit ``detail.memory_delta`` and remain
+    compatible.  New strict campaigns include the receipt; authority records
+    it in the signed payload so a later replay cannot silently reduce C1 to a
+    comparison of two opaque digest labels.
+    """
+    detail = attribution.get("detail")
+    if not isinstance(detail, Mapping):
+        return None, []
+    raw = detail.get("memory_delta")
+    if raw is None:
+        return None, []
+    if not isinstance(raw, Mapping):
+        return None, ["C1:memory_delta_malformed"]
+    baseline = (detail.get("baseline") or {})
+    candidate = (detail.get("candidate") or {})
+    if not isinstance(baseline, Mapping) or not isinstance(candidate, Mapping):
+        return None, ["C1:memory_delta_baseline_candidate_malformed"]
+    baseline_digest = baseline.get("memory_digest")
+    candidate_digest = candidate.get("memory_digest")
+    delta = raw.get("delta")
+    if not isinstance(delta, Mapping):
+        return None, ["C1:memory_delta_delta_malformed"]
+    manifest = {
+        "version": raw.get("version"),
+        "baseline_memory_digest": raw.get("baseline_memory_digest"),
+        "candidate_memory_digest": raw.get("candidate_memory_digest"),
+        **dict(delta),
+    }
+    checked = evaluate_memory_delta(baseline_digest, candidate_digest, manifest)
+    reasons: list[str] = []
+    if checked.eligible is not True:
+        reasons.extend(f"C1:{reason}" for reason in checked.reasons)
+    if raw.get("eligible") is not checked.eligible:
+        reasons.append("C1:memory_delta_eligibility_mismatch")
+    if raw.get("changed_ids") != list(checked.changed_ids):
+        reasons.append("C1:memory_delta_changed_ids_mismatch")
+    if raw.get("delta") != checked.delta:
+        reasons.append("C1:memory_delta_normalisation_mismatch")
+    return dict(raw), reasons
+
+
 def record_capability_authority(
     conn: sqlite3.Connection,
     *,
@@ -409,8 +456,9 @@ def record_capability_authority(
         conn, capability_id=capability_id, evidence_ref=refs.get("C7") or {})
     transfer_reasons = _causal_transfer_binding_reasons(
         conn, evidence_ref=refs.get("C6") or {})
+    memory_delta, memory_delta_reasons = _memory_delta_binding(attribution)
     reasons = (list(evidence_reasons) + policy_reasons + retention_reasons +
-               transfer_reasons)
+               transfer_reasons + memory_delta_reasons)
     if attribution.get("promotable") is not True:
         reasons.append("attribution_receipt_not_promotable")
     if any(attribution_gates.get(gate) is not True for gate in CAPABILITY_GATES):
@@ -439,6 +487,8 @@ def record_capability_authority(
         "eligible": eligible,
         "reasons": sorted(set(reasons)),
     }
+    if memory_delta is not None:
+        payload["memory_delta"] = memory_delta
     receipt_digest = "sha256:" + hashlib.sha256(
         stable_dumps(payload).encode()).hexdigest()
     receipt_id = "capability_authority_" + receipt_digest.split(":", 1)[1][:20]
@@ -518,6 +568,22 @@ def verify_capability_authority(
     }
     if stable_dumps(payload.get("evidence_refs") or {}) != stable_dumps(canonical_data_refs):
         reasons.append("authority_evidence_payload_mismatch")
+    payload_memory_delta = payload.get("memory_delta")
+    if "memory_delta" in payload:
+        if not isinstance(payload_memory_delta, Mapping):
+            reasons.append("C1:memory_delta_malformed")
+        else:
+            _, memory_delta_reasons = _memory_delta_binding({
+                "detail": {
+                    "baseline": {
+                        "memory_digest": payload_memory_delta.get(
+                            "baseline_memory_digest")},
+                    "candidate": {
+                        "memory_digest": payload_memory_delta.get(
+                            "candidate_memory_digest")},
+                    "memory_delta": payload_memory_delta,
+                }})
+            reasons.extend(memory_delta_reasons)
     for key in ("candidate_policy_snapshot_id", "runtime_id", "attribution_digest"):
         if payload.get(key) != data.get(key):
             reasons.append(f"authority_{key}_payload_mismatch")
@@ -581,6 +647,10 @@ def verify_capability_authority(
         except ValueError:
             reasons.append("candidate_policy_snapshot_digest_mismatch")
             snapshot = None
+    if isinstance(payload_memory_delta, Mapping) and snapshot is not None:
+        if (payload_memory_delta.get("candidate_memory_digest") !=
+                snapshot["memory_snapshot_id"]):
+            reasons.append("C1:candidate_memory_snapshot_mismatch")
     load = conn.execute(
         """SELECT *
              FROM tehm_policy_load_receipts

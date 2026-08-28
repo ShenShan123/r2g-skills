@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from collections.abc import Mapping
 
 from tehm.ids import stable_dumps
 
@@ -52,6 +53,8 @@ def evaluate_capability_campaign(
     ablation: dict,
     baseline_controls: dict,
     candidate_controls: dict,
+    memory_delta: Mapping | None = None,
+    strict_memory_delta: bool = False,
 ) -> CapabilityCampaignReceipt:
     """Evaluate attribution with an exact frozen-control comparison."""
     if not capability_id:
@@ -73,7 +76,8 @@ def evaluate_capability_campaign(
         baseline_behavior_digest=baseline_behavior_digest,
         candidate_behavior_digest=candidate_behavior_digest,
         target_gain=target_gain, no_regression=no_regression,
-        heldout=heldout, ablation=ablation)
+        heldout=heldout, ablation=ablation, memory_delta=memory_delta,
+        strict_memory_delta=strict_memory_delta)
     if not controls_match:
         detail = dict(attribution.detail)
         detail["controls_match"] = False

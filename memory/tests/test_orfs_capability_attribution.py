@@ -114,6 +114,13 @@ def test_orfs_capability_authority_is_db_bound_and_read_only(
     assert result["promotion_attempted"] is False
     assert result["production_promotion_eligible"] is False
     assert result["canonical_memory_mutation"] == "none"
+    memory_delta = result["attribution"]["attribution"]["detail"]["memory_delta"]
+    assert memory_delta["eligible"] is True
+    transition_ids = memory_delta["delta"]["added_transition_ids"]
+    assert len(transition_ids) == len(set(transition_ids)) == 2
+    assert all(item.startswith("transition_") for item in transition_ids)
+    assert result["memory_delta"]["candidate_memory_digest"] == (
+        memory_delta["candidate_memory_digest"])
     assert hashlib.sha256(source.read_bytes()).hexdigest() == source_before
     ablation = result["ablation_runtime"]
     detail_ablation = result["attribution"]["attribution"]["detail"]["ablation"]

@@ -382,7 +382,14 @@ def build_rtl_capability_attribution(
         candidate_behavior_digest=candidate_behavior_digest,
         target_gain=training_gain, no_regression=no_regression,
         heldout=heldout_evidence, ablation=ablation,
-        baseline_controls=controls, candidate_controls=dict(controls))
+        baseline_controls=controls, candidate_controls=dict(controls),
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": baseline_memory_digest,
+            "candidate_memory_digest": candidate_memory_digest,
+            "added_asset_ids": [asset_id],
+            "added_capability_ids": [capability.capability_id],
+        }, strict_memory_delta=True)
     capability_gates = evaluate_capability_promotion_gates(
         {**attribution.attribution.gates,
          "asset_authority_verified": asset_authority.get("eligible") is True},
@@ -400,7 +407,8 @@ def build_rtl_capability_attribution(
     authority_evidence_refs = {
         "C1": {"evidence_id": _stable_digest({
             "baseline_memory": baseline_memory_digest,
-            "candidate_memory": candidate_memory_digest}),
+            "candidate_memory": candidate_memory_digest,
+            "memory_delta": attribution.attribution.detail["memory_delta"]}),
                 "split": "ab", "verdict": "PASS"},
         "C2": {"evidence_id": _stable_digest({
             "baseline_policy": baseline_policy.policy_snapshot_id,
@@ -449,9 +457,14 @@ def build_rtl_capability_attribution(
         "derived_db": str(derived_db),
         "derived_db_sha256": _sha256(derived_db),
         "memory_delta": {
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": baseline_memory_digest,
+            "candidate_memory_digest": candidate_memory_digest,
             "baseline_sha256": baseline_memory_digest,
             "candidate_asset_snapshot_sha256": candidate_memory_digest,
             "asset_id": asset_id,
+            "added_asset_ids": [asset_id],
+            "added_capability_ids": [capability.capability_id],
             "asset_status": "candidate",
         },
         "canonical_memory_mutation": "none",

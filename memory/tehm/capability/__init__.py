@@ -8,6 +8,10 @@ from .attribution import (
     CapabilityAttributionReceipt, evaluate_capability_attribution,
     evaluate_capability_attribution_from_db,
 )
+from .delta import (
+    MEMORY_DELTA_ID_FIELDS, MEMORY_DELTA_VERSION, MemoryDeltaReceipt,
+    evaluate_memory_delta,
+)
 from .policy_snapshot import (
     PolicyLoadReceipt, PolicySnapshotReceipt, create_policy_snapshot,
     load_policy_snapshot, record_policy_load, validate_policy_load_row,
@@ -34,6 +38,8 @@ __all__ = [
     "verify_capability_authority",
     "CapabilityAttributionReceipt", "evaluate_capability_attribution",
     "evaluate_capability_attribution_from_db",
+    "MEMORY_DELTA_ID_FIELDS", "MEMORY_DELTA_VERSION", "MemoryDeltaReceipt",
+    "evaluate_memory_delta",
     "PolicyLoadReceipt", "PolicySnapshotReceipt", "create_policy_snapshot",
     "load_policy_snapshot", "record_policy_load", "validate_policy_load_row",
     "validate_policy_snapshot_row",

@@ -3735,3 +3735,17 @@ provenance 完全相同时才幂等返回，冲突重放直接拒绝。状态转
 asset，格式损坏的状态行不会覆盖 capability gap。该修复只收紧 derived lifecycle
 状态的可重放性，不新增 promotion gate，也不把普通 asset status 调用升级为
 production authority。
+
+### 2026-08-28 capability C1 content-bound memory delta
+
+仅比较两个 caller 提供的 `memory_digest` 字符串不足以证明 capability evolution：
+数据库文件可能因无关写入而变化，或者调用方根本没有指出哪一个记忆对象发生了变化。
+现已增加 evaluation-only 的 `memory-delta-v1` receipt。strict capability campaign
+必须绑定 baseline/candidate memory digest，并列出至少一个实际新增、删除或修订的
+transition、rule、asset、causal path 或 capability ID；字段版本、digest 一致性、ID
+类型/唯一性以及同一实体的 added/removed/revised 互斥关系均由 evaluator 重放校验。
+ORFS、RTL 与 preflight attribution 入口均使用 strict C1，历史通用 fixture 仍保留
+digest-only 兼容模式以支持迁移。该 receipt 只提高 C1 的 attribution 证据质量，不写
+canonical memory、不改变 lifecycle，也不授权 production runtime。进入 capability
+authority 时，该 receipt 会随 authority payload 保存并重新归一化校验；因此 C1 的
+authority replay 也不能退化为只比较两个 opaque digest。

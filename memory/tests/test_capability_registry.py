@@ -15,11 +15,13 @@ from tehm.capability import (
     evaluate_capability_retention,
     record_capability_retention, verify_capability_retention,
     evaluate_capability_campaign,
+    evaluate_memory_delta,
 )
 
 
 def _full_attribution_and_authority(conn, capability_id, *, required_assets=(),
-                                    asset_gate=True, c6_extra=None):
+                                    asset_gate=True, c6_extra=None,
+                                    memory_delta=None):
     baseline = create_policy_snapshot(
         conn, memory_snapshot_id="m0", promoted_rules=["r0"])
     candidate = create_policy_snapshot(
@@ -37,7 +39,9 @@ def _full_attribution_and_authority(conn, capability_id, *, required_assets=(),
         candidate_behavior_digest="b1", target_gain=True, no_regression=True,
         heldout={"verdict": "PASS", "disjoint_lineage": True,
                  "evidence_id": "heldout-gain"},
-        ablation={"gain_without_memory": False, "gain_with_memory": True})
+        ablation={"gain_without_memory": False, "gain_with_memory": True},
+        memory_delta=memory_delta,
+        strict_memory_delta=memory_delta is not None)
     refs = {
         "C1": {"evidence_id": "memory-delta", "split": "ab", "verdict": "PASS"},
         "C2": {"evidence_id": "policy-delta", "split": "ab", "verdict": "PASS"},
@@ -149,6 +153,90 @@ def test_capability_attribution_requires_all_eight_gates():
         ablation={"gain_without_memory": False, "gain_with_memory": True})
     assert receipt.promotable is True
     assert receipt.missing_gates == ()
+
+
+def test_memory_delta_requires_content_bound_changed_objects():
+    valid = evaluate_memory_delta(
+        "sha256:baseline", "sha256:candidate", {
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "sha256:baseline",
+            "candidate_memory_digest": "sha256:candidate",
+            "added_asset_ids": ["asset_new"],
+        })
+    assert valid.eligible is True
+    assert valid.changed_ids == ("asset_new",)
+    assert valid.to_dict()["delta"]["added_asset_ids"] == ["asset_new"]
+
+    unchanged = evaluate_memory_delta(
+        "sha256:same", "sha256:same", {
+            "version": "memory-delta-v1",
+            "added_rule_ids": ["rule_new"],
+        })
+    assert unchanged.eligible is False
+    assert "memory_digest_unchanged" in unchanged.reasons
+
+    malformed = evaluate_memory_delta(
+        "sha256:baseline", "sha256:candidate", {
+            "version": "memory-delta-v1",
+            "added_rule_ids": ["rule_new", "rule_new"],
+        })
+    assert malformed.eligible is False
+    assert "added_rule_ids:duplicate_id" in malformed.reasons
+
+    overlap = evaluate_memory_delta(
+        "sha256:baseline", "sha256:candidate", {
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "sha256:wrong",
+            "added_rule_ids": ["rule_new"],
+            "revised_rule_ids": ["rule_new"],
+        })
+    assert overlap.eligible is False
+    assert "baseline_memory_digest_mismatch" in overlap.reasons
+    assert "rule:delta_sets_overlap" in overlap.reasons
+
+
+def test_strict_capability_attribution_rejects_digest_only_c1():
+    receipt = evaluate_capability_attribution(
+        capability_id="capability-strict-c1",
+        baseline={"memory_digest": "m0", "policy_digest": "p0",
+                  "behavior_digest": "b0"},
+        candidate={"memory_digest": "m1", "policy_digest": "p1",
+                   "behavior_digest": "b1", "target_gain": True,
+                   "no_regression": True},
+        runtime_receipt={"loaded": True, "policy_digest": "p1"},
+        heldout={"verdict": "PASS", "disjoint_lineage": True,
+                 "evidence_id": "heldout-1"},
+        ablation={"gain_without_memory": False, "gain_with_memory": True},
+        strict_memory_delta=True)
+    assert receipt.gates["C1"] is False
+    assert receipt.promotable is False
+    assert receipt.detail["memory_delta"]["reasons"] == [
+        "memory_delta_required"]
+
+
+def test_capability_authority_replays_content_bound_memory_delta(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="STRICT_C1", applicability={}, status="candidate")
+    attribution, authority, gates = _full_attribution_and_authority(
+        conn, capability.capability_id,
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "m0",
+            "candidate_memory_digest": "m1",
+            "added_rule_ids": ["r1"],
+        })
+    assert authority.eligible is True
+    assert authority.payload["memory_delta"]["changed_ids"] == ["r1"]
+    assert verify_capability_authority(
+        conn, capability.capability_id, authority)["eligible"] is True
+
+    authority.payload["memory_delta"]["delta"]["added_rule_ids"] = []
+    checked = verify_capability_authority(
+        conn, capability.capability_id, authority)
+    assert checked["eligible"] is False
+    assert "authority_receipt_digest_mismatch" in checked["reasons"]
+    assert "C1:memory_delta_changed_ids_mismatch" in checked["reasons"]
 
 
 def test_capability_attribution_from_policy_and_runtime_receipts(tmp_tehm):

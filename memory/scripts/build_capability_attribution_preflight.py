@@ -95,7 +95,13 @@ def build_capability_attribution_preflight(
         target_gain=False, no_regression=False,
         heldout={"verdict": "UNKNOWN", "disjoint_lineage": False},
         ablation={"gain_without_memory": False, "gain_with_memory": False},
-        baseline_controls=controls, candidate_controls=dict(controls))
+        baseline_controls=controls, candidate_controls=dict(controls),
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": baseline_memory_digest,
+            "candidate_memory_digest": candidate_memory_digest,
+            "added_capability_ids": [capability.capability_id],
+        }, strict_memory_delta=True)
     conn.close()
     report = {
         "version": "capability-attribution-preflight-v1",
@@ -103,6 +109,12 @@ def build_capability_attribution_preflight(
         "source_db_sha256": _sha256(source),
         "derived_db": str(derived_db),
         "derived_db_sha256": _sha256(derived_db),
+        "memory_delta": {
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": baseline_memory_digest,
+            "candidate_memory_digest": candidate_memory_digest,
+            "added_capability_ids": [capability.capability_id],
+        },
         "canonical_memory_mutation": "none",
         "capability": capability.to_dict(),
         "baseline_policy": baseline_policy.to_dict(),
