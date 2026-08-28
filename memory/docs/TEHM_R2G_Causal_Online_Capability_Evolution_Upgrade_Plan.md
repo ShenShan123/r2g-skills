@@ -3716,3 +3716,7 @@ external observation JSONL 同时拒绝重复 `case_id`，避免一个逻辑 cas
 逐字段比较，只有 content-equivalent replay 才幂等返回；action、provenance 或其它
 transition payload 漂移会 fail-closed。该 helper 不再使用 `INSERT OR REPLACE`，并由
 回归覆盖冲突重放；它仍只用于隔离 calibration，不产生 canonical 或 learner support。
+
+同一原则已延伸到 `lifecycle.trial_adapter.run_trial()` 的 UUID-less 兼容路径：
+`trial_id` 现在参与 deterministic replay 校验，重试仅在完整证据字段相同时幂等返回，
+冲突写入 fail-closed；trial evidence 不再依赖 `INSERT OR REPLACE` 静默覆盖。

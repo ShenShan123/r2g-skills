@@ -297,3 +297,27 @@ def test_run_trial_replay_is_idempotent_and_conflicts_rejected(tmp_tehm):
             arm_a_evaluator=lambda _plan, _ctx: {"success": True},
             arm_b_evaluator=winning_rule, repeats=2,
             trial_uuid="replay-run")
+
+
+def test_uuidless_run_trial_replay_is_immutable(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    subject = TEHMRuleTrialSubject(rule_id="rule_uuidless", status_version=1)
+    context = RepairContext(check="drc")
+    control = lambda _plan, _ctx: {"success": False}
+    winner = lambda _plan, _ctx: {"success": True}
+
+    first = run_trial(conn, subject=subject, context=context,
+                      arm_a_evaluator=control, arm_b_evaluator=winner,
+                      repeats=2)
+    second = run_trial(conn, subject=subject, context=context,
+                       arm_a_evaluator=control, arm_b_evaluator=winner,
+                       repeats=2)
+    assert second == first
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_trials WHERE trial_id=?",
+        ("trial:rule_uuidless",)).fetchone()[0] == 1
+
+    with pytest.raises(ValueError, match="replay conflicts"):
+        run_trial(conn, subject=subject, context=context,
+                  arm_a_evaluator=winner, arm_b_evaluator=winner,
+                  repeats=2)

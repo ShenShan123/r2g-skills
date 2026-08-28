@@ -252,6 +252,10 @@ immutable insert：重复导入必须 content-equivalent，直接 SQL 篡改或 
 拒绝，不再使用 `INSERT OR REPLACE` 静默覆盖 evidence。该路径仍只服务隔离校准，
 不创建 canonical/learner support。
 
+生命周期 trial writer 也对 UUID-less 兼容调用执行相同的确定性重放检查；相同
+`trial_id` 只能 content-equivalent 重放，冲突会失败，不再通过 `INSERT OR REPLACE`
+覆盖旧的 trial evidence。
+
 当 preview 需要进入试验阶段时，`evolution.run_shadow_candidate_trial()` 会把 TEHM
 连接复制到内存 staging DB，在 staging 内重建并登记 `shadow → candidate`，然后复用
 现有 A/B trial adapter。Icarus/ORFS 执行器通过 evaluator callback 注入；即使六项

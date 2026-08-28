@@ -79,17 +79,15 @@ def _check_deterministic_replay(conn: sqlite3.Connection, *,
                                 expected: dict) -> bool:
     """Reject conflicting writes for a deterministic trial identity.
 
-    A retry with the same UUID is allowed only when every persisted evidence
-    field is identical.  This protects the authority ledger from silent
-    replacement data loss while leaving legacy UUID-less trials unchanged.
+    A retry with the same deterministic identity is allowed only when every
+    persisted evidence field is identical.  This protects the authority ledger
+    from silent replacement data loss, including for legacy UUID-less trials.
     Callers that enrich metrics after the initial evidence write continue to
     use an explicit UPDATE (the ORFS/RTL crash-recovery path).
     """
-    if not trial_uuid:
-        return False
     existing = conn.execute(
         "SELECT * FROM tehm_trials WHERE trial_uuid=? OR trial_id=?",
-        (trial_uuid, trial_id)).fetchone()
+        (trial_uuid or None, trial_id)).fetchone()
     if existing is None:
         return False
     mismatches = [
@@ -148,13 +146,13 @@ def run_trial(conn: sqlite3.Connection, *, subject: TrialSubject,
                 "verdict": verdict,
                 "metrics_json": metrics_json,
                 "match_level": "exact",
-                "trial_uuid": trial_uuid,
+                "trial_uuid": trial_uuid or None,
                 "status_version": subject.status_version,
             }):
         return trial
     had_outer_transaction = conn.in_transaction
     conn.execute(
-        """INSERT OR REPLACE INTO tehm_trials (
+        """INSERT INTO tehm_trials (
                trial_id, rule_id, target_scope, arm_a_run_id, arm_b_run_id,
                verdict, metrics_json, match_level, trial_uuid, status_version,
                created_at)
@@ -207,7 +205,7 @@ def record_external_trial(conn: sqlite3.Connection, *, rule_id: str,
                 "metrics": metrics}
     had_outer_transaction = conn.in_transaction
     conn.execute(
-        """INSERT OR REPLACE INTO tehm_trials (
+        """INSERT INTO tehm_trials (
                trial_id, rule_id, target_scope, arm_a_run_id, arm_b_run_id,
                verdict, metrics_json, match_level, trial_uuid, status_version,
                created_at)
