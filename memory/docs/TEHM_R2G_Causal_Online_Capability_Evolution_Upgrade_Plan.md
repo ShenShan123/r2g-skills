@@ -3933,3 +3933,14 @@ C3/C4；不再对 SQLite 返回值调用宽松的 `bool(...)`。因此即使复�
 runtime-loaded 证据。这个读侧闭环与写入端类型契约及 retention/C8 load binding 保持一致，
 只强化 derived authority replay，不增加 promotion gate、不写 canonical memory，也不改变
 Parametric shadow-only 与 production runtime 边界。
+
+### 2026-08-28 causal-transfer ledger type closure
+
+L4 transfer 是跨 lineage 的 shadow evidence，不能因为 ledger 行可读就自动成为 authority。
+现已收紧 `tehm_causal_transfer_receipts` 的写入、读取和 replay：
+`require_full_oracle`/`eligible` 的请求与 JSON payload 必须是实际布尔值，SQLite 存储列只
+接受严格 `0/1`；读取时同时校验 payload、顶层投影、transition-ID 列、receipt JSON canonical
+形式、content digest 和 receipt ID。复制数据库把 `eligible` 或
+`require_full_oracle` 改成字符串时，`load`/`verify` 返回 malformed、不可验证的 receipt，
+不会把 L4 结果投影成 `cross_lineage_te=PASS`。该修复只强化 causal shadow ledger 的
+replay 防火墙，不修改 causal path、canonical memory、rule lifecycle 或 production runtime。

@@ -211,6 +211,19 @@ def test_causal_transfer_ledger_replays_and_binds_path(tmp_tehm, tmp_path):
     checked_nested = verify_causal_transfer(conn, nested_tampered)
     assert checked_nested["verified"] is False
     assert "transfer_receipt_projection_mismatch" in checked_nested["reasons"]
+
+    # SQLite's dynamic typing still permits a copied/altered ledger to store
+    # truthy text in an INTEGER boolean column when checks are bypassed.  The
+    # reader must reject that row instead of returning ``eligible=True``.
+    conn.execute("PRAGMA ignore_check_constraints=ON")
+    conn.execute(
+        "UPDATE tehm_causal_transfer_receipts SET eligible='false' "
+        "WHERE transfer_receipt_id=?", (ledger.transfer_receipt_id,))
+    conn.commit()
+    weak_storage = verify_causal_transfer(conn, ledger.to_dict())
+    assert weak_storage["verified"] is False
+    assert any(reason.startswith("transfer_receipt_row_malformed:")
+               for reason in weak_storage["reasons"])
     conn.close()
 
 

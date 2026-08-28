@@ -100,6 +100,20 @@ def _receipt_id(receipt_digest: str) -> str:
     return "causal_transfer_" + receipt_digest.split(":", 1)[1][:20]
 
 
+def _require_bool(value, *, field: str) -> bool:
+    """Require a real boolean in an in-memory transfer request/payload."""
+    if type(value) is not bool:
+        raise ValueError(f"causal transfer {field} must be a boolean")
+    return value
+
+
+def _stored_bool(value, *, field: str) -> bool:
+    """Decode a SQLite boolean column without accepting truthy text."""
+    if type(value) is not int or value not in (0, 1):
+        raise ValueError(f"causal transfer {field} field is malformed")
+    return bool(value)
+
+
 def _ids(values, *, name: str) -> tuple[str, ...]:
     if isinstance(values, (str, bytes)) or values is None:
         raise ValueError(f"{name} must be a non-empty sequence")
@@ -134,7 +148,7 @@ def _payload(
         "path_digest": path_digest,
         "training_campaign_id": training_campaign_id,
         "transfer_campaign_id": transfer_campaign_id,
-        "require_full_oracle": bool(require_full_oracle),
+        "require_full_oracle": require_full_oracle,
         "training_transition_ids": list(receipt.get("training_transition_ids") or []),
         "transfer_transition_ids": list(receipt.get("transfer_transition_ids") or []),
         "eligible": receipt.get("eligible") is True,
@@ -154,6 +168,47 @@ def _from_row(row: sqlite3.Row) -> CausalTransferLedgerReceipt:
     transfer = payload.get("transfer_receipt")
     if not isinstance(transfer, Mapping):
         raise ValueError("causal transfer receipt witness is missing")
+    required = _stored_bool(row["require_full_oracle"],
+                            field="require_full_oracle")
+    eligible = _stored_bool(row["eligible"], field="eligible")
+    if payload.get("ledger_version") != TRANSFER_LEDGER_VERSION:
+        raise ValueError("causal transfer receipt ledger version is malformed")
+    if type(payload.get("require_full_oracle")) is not bool:
+        raise ValueError("causal transfer receipt require_full_oracle is malformed")
+    if type(payload.get("eligible")) is not bool:
+        raise ValueError("causal transfer receipt eligible is malformed")
+    if payload["require_full_oracle"] != required:
+        raise ValueError("causal transfer receipt require_full_oracle mismatch")
+    if payload["eligible"] != eligible:
+        raise ValueError("causal transfer receipt eligible mismatch")
+    if type(transfer.get("eligible")) is not bool:
+        raise ValueError("causal transfer nested eligible is malformed")
+    if transfer.get("eligible") != payload["eligible"]:
+        raise ValueError("causal transfer nested eligible mismatch")
+    expected_digest = _receipt_digest(payload)
+    if row["receipt_digest"] != expected_digest:
+        raise ValueError("causal transfer receipt digest mismatch")
+    if row["transfer_receipt_id"] != _receipt_id(expected_digest):
+        raise ValueError("causal transfer receipt ID mismatch")
+    if row["receipt_json"] != stable_dumps(payload):
+        raise ValueError("causal transfer receipt JSON is not canonical")
+    if (row["path_id"] != payload.get("path_id") or
+            row["path_digest"] != payload.get("path_digest") or
+            row["training_campaign_id"] != payload.get("training_campaign_id") or
+            row["transfer_campaign_id"] != payload.get("transfer_campaign_id") or
+            row["evidence_level"] != payload.get("evidence_level") or
+            row["reason"] != payload.get("reason")):
+        raise ValueError("causal transfer receipt identity mismatch")
+    try:
+        training_ids = json.loads(row["training_transition_ids_json"] or "[]")
+        transfer_ids = json.loads(row["transfer_transition_ids_json"] or "[]")
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("causal transfer receipt transition IDs are malformed") from exc
+    if (stable_dumps(training_ids) !=
+            stable_dumps(payload.get("training_transition_ids") or []) or
+            stable_dumps(transfer_ids) !=
+            stable_dumps(payload.get("transfer_transition_ids") or [])):
+        raise ValueError("causal transfer receipt transition IDs mismatch")
     return CausalTransferLedgerReceipt(
         transfer_receipt_id=str(row["transfer_receipt_id"]),
         receipt_digest=str(row["receipt_digest"]),
@@ -161,8 +216,8 @@ def _from_row(row: sqlite3.Row) -> CausalTransferLedgerReceipt:
         path_digest=str(row["path_digest"]),
         training_campaign_id=str(row["training_campaign_id"]),
         transfer_campaign_id=str(row["transfer_campaign_id"]),
-        require_full_oracle=bool(row["require_full_oracle"]),
-        eligible=bool(row["eligible"]),
+        require_full_oracle=required,
+        eligible=eligible,
         evidence_level=str(row["evidence_level"]),
         reason=str(row["reason"]),
         transfer_receipt=dict(transfer),
@@ -190,6 +245,8 @@ def record_causal_transfer(
         raise ValueError("path_id is required")
     if not isinstance(training_campaign_id, str) or not training_campaign_id.strip():
         raise ValueError("training_campaign_id is required")
+    require_full_oracle = _require_bool(
+        require_full_oracle, field="require_full_oracle")
     transfer_campaign_id = str(transfer_campaign_id or training_campaign_id)
     if not transfer_campaign_id.strip():
         raise ValueError("transfer_campaign_id is required")
@@ -295,6 +352,12 @@ def verify_causal_transfer(conn: sqlite3.Connection, receipt) -> dict:
         return {"verified": False, "eligible": False,
                 "reasons": ["causal_transfer_payload_missing"]}
     payload = dict(payload)
+    required_full_oracle = payload.get("require_full_oracle")
+    if type(required_full_oracle) is not bool:
+        reasons.append("transfer_require_full_oracle_malformed")
+        required_full_oracle = None
+    if type(payload.get("eligible")) is not bool:
+        reasons.append("transfer_eligible_malformed")
     expected_digest = _receipt_digest(payload)
     expected_id = _receipt_id(expected_digest)
     if data.get("version") != TRANSFER_LEDGER_VERSION:
@@ -343,15 +406,20 @@ def verify_causal_transfer(conn: sqlite3.Connection, receipt) -> dict:
     if current_path_digest is not None and payload.get("path_digest") != current_path_digest:
         reasons.append("path_digest_mismatch")
     transfer = transfer_payload
-    if ids and path_id and training_campaign_id and transfer_campaign_id:
+    if (ids and path_id and training_campaign_id and transfer_campaign_id and
+            required_full_oracle is not None):
         replay = evaluate_transfer_supported_mechanism(
             conn, path_id, ids, training_campaign_id=training_campaign_id,
             transfer_campaign_id=transfer_campaign_id,
-            require_full_oracle=bool(payload.get("require_full_oracle")))
+            require_full_oracle=required_full_oracle)
         if stable_dumps(replay.to_dict()) != stable_dumps(dict(transfer)):
             reasons.append("transfer_replay_mismatch")
-    stored = load_causal_transfer_receipt(
-        conn, str(data.get("transfer_receipt_id") or ""))
+    try:
+        stored = load_causal_transfer_receipt(
+            conn, str(data.get("transfer_receipt_id") or ""))
+    except ValueError as exc:
+        stored = None
+        reasons.append(f"transfer_receipt_row_malformed:{exc}")
     if stored is None:
         reasons.append("transfer_receipt_row_missing")
     else:
@@ -362,8 +430,11 @@ def verify_causal_transfer(conn: sqlite3.Connection, receipt) -> dict:
             payload.get("training_campaign_id"), payload.get("transfer_campaign_id"),
             stable_dumps(payload.get("training_transition_ids") or []),
             stable_dumps(payload.get("transfer_transition_ids") or []),
-            int(bool(payload.get("require_full_oracle"))),
-            int(payload.get("eligible") is True), payload.get("evidence_level"),
+            (int(required_full_oracle)
+             if required_full_oracle is not None else None),
+            (int(payload.get("eligible"))
+             if type(payload.get("eligible")) is bool else None),
+            payload.get("evidence_level"),
             payload.get("reason"), stable_dumps(payload), expected_digest,
         )
         actual_row = conn.execute(
