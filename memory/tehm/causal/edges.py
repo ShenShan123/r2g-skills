@@ -6,6 +6,7 @@ import sqlite3
 from dataclasses import dataclass, field
 
 from tehm import db as tehm_db
+from tehm.dataset import require_learner_bool
 from tehm.ids import stable_dumps
 
 from .evidence_level import validate_evidence_level
@@ -35,6 +36,8 @@ class CausalEdge:
         validate_evidence_level(self.evidence_level)
         if not self.evidence_refs:
             raise ValueError("causal edge needs canonical evidence_refs")
+        require_learner_bool(self.learner_eligible,
+                             field="causal edge learner_eligible")
 
     @property
     def causal_edge_id(self) -> str:
@@ -47,7 +50,7 @@ class CausalEdge:
             "confidence": self.confidence,
             "evidence_refs": list(self.evidence_refs),
             "campaign_id": self.campaign_id,
-            "learner_eligible": bool(self.learner_eligible),
+            "learner_eligible": self.learner_eligible,
         })
 
     def to_row(self, *, created_at: str | None = None) -> dict:
@@ -61,7 +64,7 @@ class CausalEdge:
             "confidence_json": stable_dumps(self.confidence),
             "evidence_refs_json": stable_dumps(list(self.evidence_refs)),
             "campaign_id": self.campaign_id,
-            "learner_eligible": int(bool(self.learner_eligible)),
+            "learner_eligible": int(self.learner_eligible),
             "created_at": created_at or tehm_db.now_local(),
         }
 

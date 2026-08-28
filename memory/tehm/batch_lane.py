@@ -526,14 +526,33 @@ def write_external_observations(path: Path, observations: Iterable[Mapping]) -> 
     """Write deterministic hash-chained JSONL receipts."""
     path = Path(path).resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
+    validated = []
+    for raw in observations:
+        observation = dict(raw)
+        try:
+            learner_eligible = require_learner_bool(
+                observation.get("learner_eligible"),
+                field="external learner_eligible")
+        except ValueError as exc:
+            raise BatchLaneError(
+                "external observation learner_eligible must be boolean") from exc
+        split = observation.get("split")
+        if split is not None and (type(split) is not str or
+                                  split not in OBSERVATION_SPLITS):
+            raise BatchLaneError("external observation split is invalid")
+        # Keep the writer permissive about a contradictory split so the
+        # resulting hash-bound receipt can be audited and rejected by the
+        # staging/authority reader; only the typed flag is normalized here.
+        observation["learner_eligible"] = learner_eligible
+        validated.append(observation)
     rows = []
     previous = None
     for index, observation in enumerate(sorted(
             # Re-chaining a previously persisted observation set is a normal
             # authority operation.  The prior top-level receipt belongs to
             # the old chain and must not remain inside the new digest body.
-            ({key: value for key, value in dict(row).items()
-              if key != "receipt_sha256"} for row in observations),
+            ({key: value for key, value in observation.items()
+              if key != "receipt_sha256"} for observation in validated),
             key=lambda row: row["case_id"])):
         body = {**observation, "sequence": index, "previous_sha256": previous}
         digest = hashlib.sha256(stable_dumps(body).encode()).hexdigest()

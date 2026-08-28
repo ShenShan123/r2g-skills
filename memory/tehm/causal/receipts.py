@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from tehm.dataset import require_learner_bool
+
 
 @dataclass(frozen=True)
 class CausalFragment:
@@ -16,6 +18,12 @@ class CausalFragment:
     failure_graph_digest: str | None
     nodes: tuple = field(default_factory=tuple)
     edges: tuple = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        # A fragment is a typed shadow receipt.  Do not let a caller-provided
+        # string/int flag be normalized later into learner authority.
+        require_learner_bool(self.learner_eligible,
+                             field="causal fragment learner_eligible")
 
     @property
     def node_ids(self) -> tuple[str, ...]:

@@ -972,6 +972,40 @@ def test_capability_retention_rejects_tampered_receipts_and_loads(tmp_tehm):
     ))
 
 
+def test_capability_retention_rejects_weak_boolean_payload(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="RETENTION_TYPED", applicability={})
+    policy = create_policy_snapshot(
+        conn, memory_snapshot_id="retention-typed-memory", promoted_rules=[])
+    load = record_policy_load(
+        conn, policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="retention-typed-runtime", loaded=True)
+    receipt = record_capability_retention(
+        conn, capability_id=capability.capability_id, replay_id="typed-replay",
+        replay={"verdict": "PASS", "disjoint_lineage": True,
+                "non_target_regression_zero": True, "evidence_id": "typed-e1",
+                "split": "heldout", "lineage_id": "heldout:typed"},
+        candidate_policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="retention-typed-runtime", policy_load_receipt_id=load.receipt_id)
+    tampered = receipt.to_dict()
+    tampered["payload"] = {**tampered["payload"], "retained": "false"}
+    tampered["retained"] = "false"
+    checked = verify_capability_retention(
+        conn, capability.capability_id, tampered)
+    assert checked["eligible"] is False
+    assert "retention_retained_type_invalid" in checked["reasons"]
+
+    conn.execute("PRAGMA ignore_check_constraints=ON")
+    conn.execute(
+        "UPDATE tehm_capability_retention_receipts SET retained='false' "
+        "WHERE retention_receipt_id=?", (receipt.retention_receipt_id,))
+    conn.commit()
+    from tehm.capability.retention import load_capability_retention_receipt
+    assert load_capability_retention_receipt(
+        conn, receipt.retention_receipt_id) is None
+
+
 def test_capability_retention_training_split_is_recorded_but_not_eligible(tmp_tehm):
     conn, _, _ = tmp_tehm
     capability = register_capability(

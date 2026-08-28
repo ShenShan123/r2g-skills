@@ -3879,3 +3879,14 @@ manager、causal path/authority、revision 与 held-out transfer 均复用该读
 或损坏 row fail-closed；external support 观察也不能凭 truthy 字符串进入 staging。
 该修复只加强数据防火墙和重放确定性，不增加 promotion gate、不写 canonical memory，
 也不改变 Parametric shadow 或 production runtime 边界。
+
+### 2026-08-28 derived causal/retention boolean firewall
+
+同一 typed-evidence 约束也覆盖 causal shadow 与 capability retention：
+`CausalEdge`/`CausalFragment` 不再把调用方传入的字符串或整数 learner flag 通过
+`bool(...)` 归一化后写入 edge/path，retention ledger 的 `retained`、独立 lineage 和
+non-target regression 字段在 load/verify 时只接受严格的 `0/1` 或布尔值。损坏的
+retention row 返回缺失并由 authority fail-closed，payload 中的字符串化布尔值会产生
+显式 type-invalid reason。该修复加强 derived evidence 的 content/replay 防火墙，不
+增加 C1-C8 或 rule promotion gate，不写 canonical memory，也不改变 production runtime
+入口。

@@ -16,6 +16,7 @@ from tehm.causal import (
     evaluate_replicated_effect,
     evaluate_causal_rule_evidence,
 )
+from tehm.causal.edges import CausalEdge
 from tehm.causal.path_builder import (
     causal_path_digest, validate_persisted_path_row,
 )
@@ -49,6 +50,14 @@ def _set_path_evidence_level(conn, path_id: str, level: str) -> None:
     conn.execute(
         "UPDATE tehm_causal_paths SET evidence_level=?, path_digest=? "
         "WHERE path_id=?", (level, digest, path_id))
+
+
+def test_causal_edge_rejects_weakly_typed_learner_flag():
+    with pytest.raises(ValueError, match="learner_eligible"):
+        CausalEdge(
+            "state", "SUPPORTS", "outcome", "L0_ASSOCIATION",
+            {"transition_id": "t"}, {"level": "L0_ASSOCIATION"},
+            ("t",), "live", "false")
 
 
 def test_rtl_fragment_is_deterministic_and_does_not_mutate_canonical(tmp_tehm):

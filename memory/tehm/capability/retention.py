@@ -143,6 +143,15 @@ def _text(value) -> str | None:
     return value or None
 
 
+def _stored_bool(value: object, *, field: str) -> bool:
+    """Normalize a ledger boolean without accepting truthy strings."""
+    if type(value) is bool:
+        return value
+    if type(value) is int and value in (0, 1):
+        return bool(value)
+    raise ValueError(f"{field} is not a stored boolean")
+
+
 def evaluate_capability_retention(
     *,
     capability_id: str,
@@ -206,7 +215,7 @@ def _policy_load_binding(
     if not isinstance(payload, Mapping):
         reasons.append("runtime_load_receipt_payload_malformed")
         return row, reasons
-    if not bool(row["loaded"]):
+    if checked["loaded"] != 1:
         reasons.append("candidate_policy_runtime_load_missing")
     if row["policy_snapshot_id"] != snapshot_id or payload.get("policy_snapshot_id") != snapshot_id:
         reasons.append("runtime_load_snapshot_id_mismatch")
@@ -421,6 +430,15 @@ def load_capability_retention_receipt(
         return None
     if not isinstance(payload, Mapping):
         return None
+    try:
+        retained = _stored_bool(row["retained"], field="retained")
+        disjoint_lineage = _stored_bool(
+            row["disjoint_lineage"], field="disjoint_lineage")
+        non_target_regression_zero = _stored_bool(
+            row["non_target_regression_zero"],
+            field="non_target_regression_zero")
+    except ValueError:
+        return None
     reasons = payload.get("reasons") or []
     if not isinstance(reasons, list) or any(not isinstance(item, str)
                                             for item in reasons):
@@ -428,12 +446,12 @@ def load_capability_retention_receipt(
     return {
         "capability_id": row["capability_id"],
         "replay_id": row["replay_id"],
-        "retained": bool(row["retained"]),
+        "retained": retained,
         "replay_verdict": row["replay_verdict"],
-        "disjoint_lineage": bool(row["disjoint_lineage"]),
-        "non_target_regression_zero": bool(row["non_target_regression_zero"]),
+        "disjoint_lineage": disjoint_lineage,
+        "non_target_regression_zero": non_target_regression_zero,
         "evidence_id": row["evidence_id"],
-        "reason": "retention_verified" if bool(row["retained"]) else ";".join(reasons),
+        "reason": "retention_verified" if retained else ";".join(reasons),
         "retention_receipt_id": row["retention_receipt_id"],
         "candidate_policy_snapshot_id": row["candidate_policy_snapshot_id"],
         "candidate_policy_digest": row["candidate_policy_digest"],
@@ -472,12 +490,17 @@ def verify_capability_retention(
         reasons.append("retention_receipt_id_mismatch")
     if payload.get("retention_version") != RETENTION_VERSION:
         reasons.append("retention_version_mismatch")
+    bool_fields = {
+        "retained", "disjoint_lineage", "non_target_regression_zero",
+    }
     for key in (
         "capability_id", "replay_id", "candidate_policy_snapshot_id",
         "candidate_policy_digest", "runtime_id", "policy_load_receipt_id",
         "split", "lineage_id", "evidence_id", "retained",
         "replay_verdict", "disjoint_lineage", "non_target_regression_zero",
     ):
+        if key in bool_fields and type(payload.get(key)) is not bool:
+            reasons.append(f"retention_{key}_type_invalid")
         if data.get(key) != payload.get(key):
             reasons.append(f"retention_{key}_payload_mismatch")
     if payload.get("capability_id") != capability_id:
@@ -495,7 +518,9 @@ def verify_capability_retention(
             reasons.append("retention_ledger_payload_mismatch")
         if row["capability_id"] != capability_id:
             reasons.append("retention_ledger_capability_mismatch")
-        if row["retained"] != int(bool(payload.get("retained"))):
+        payload_retained = payload.get("retained")
+        if (type(payload_retained) is bool and
+                row["retained"] != int(payload_retained)):
             reasons.append("retention_ledger_status_mismatch")
     try:
         capability_row = conn.execute(
@@ -528,7 +553,8 @@ def verify_capability_retention(
             base = evaluate_capability_retention(
                 capability_id=capability_id,
                 replay_id=str(payload.get("replay_id") or ""), replay=replay)
-            if base.retained != bool(payload.get("retained")):
+            if (type(payload.get("retained")) is bool and
+                    base.retained != payload.get("retained")):
                 reasons.append("retention_replay_status_mismatch")
             if base.replay_verdict != payload.get("replay_verdict"):
                 reasons.append("retention_replay_verdict_mismatch")
