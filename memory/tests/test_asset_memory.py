@@ -73,6 +73,42 @@ def test_asset_candidate_requires_all_independent_gates(tmp_tehm):
     assert get_asset(conn, receipt.asset_id)["asset_id"] == receipt.asset_id
 
 
+def test_asset_status_replay_is_idempotent_but_provenance_immutable(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    receipt = register_asset_proposal(conn, _proposal())
+    first = set_asset_status(
+        conn, asset_id=receipt.asset_id, target_scope=receipt.target_scope,
+        status="shadow", provenance={"source": "first"})
+    replay = set_asset_status(
+        conn, asset_id=receipt.asset_id, target_scope=receipt.target_scope,
+        status="shadow", provenance={"source": "first"})
+    assert replay.to_dict() == first.to_dict()
+    with pytest.raises(ValueError, match="immutable provenance"):
+        set_asset_status(
+            conn, asset_id=receipt.asset_id, target_scope=receipt.target_scope,
+            status="shadow", provenance={"source": "tampered"})
+    row = conn.execute(
+        "SELECT status, status_version, provenance_json "
+        "FROM tehm_asset_status WHERE asset_id=? AND target_scope=?",
+        (receipt.asset_id, receipt.target_scope)).fetchone()
+    assert row["status"] == "shadow"
+    assert row["status_version"] == 1
+    assert json.loads(row["provenance_json"]) == {"source": "first"}
+
+
+def test_asset_status_reader_fails_closed_on_malformed_lifecycle_row(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    receipt = register_asset_proposal(conn, _proposal())
+    conn.execute(
+        "UPDATE tehm_asset_status SET provenance_json=? WHERE asset_id=? "
+        "AND target_scope=?", ("[]", receipt.asset_id, receipt.target_scope))
+    conn.commit()
+    with pytest.raises(ValueError, match="malformed provenance"):
+        from tehm.assets import get_asset_status
+        get_asset_status(conn, asset_id=receipt.asset_id,
+                         target_scope=receipt.target_scope)
+
+
 def test_asset_authority_is_derived_from_receipts_and_rollback(tmp_tehm):
     proposal = _proposal().to_dict()
     bound_one = bind_rtl_asset_to_project(
@@ -409,6 +445,20 @@ def test_gap_detector_ignores_tampered_promoted_asset(tmp_tehm):
         item.mechanism_family == "HANDSHAKE_COMPLETION" and
         "repeated_unsupported_mechanism" in item.reason
         for item in covered)
+
+    # A syntactically valid asset must still lose coverage when its lifecycle
+    # witness is malformed; the raw ``status='promoted'`` column is not enough.
+    conn.execute(
+        "UPDATE tehm_asset_status SET provenance_json=? WHERE asset_id=? "
+        "AND target_scope=?", ("[]", registered.asset_id,
+                                registered.target_scope))
+    conn.commit()
+    gaps = detect_capability_gaps(
+        conn, campaign_id="gap-tamper-campaign", min_lineages=2,
+        min_failures=99)
+    gap = next(item for item in gaps
+               if item.mechanism_family == "HANDSHAKE_COMPLETION")
+    assert "repeated_unsupported_mechanism" in gap.reason
 
     # Keep JSON syntactically valid but invalidate the content-addressed asset
     # digest.  A status row must not make this untrusted asset cover the gap.

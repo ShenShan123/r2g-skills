@@ -14,17 +14,28 @@ from tehm.causal.mechanism import load_transition_facts
 from tehm.ids import stable_dumps
 
 from .receipts import CapabilityGapReceipt
-from .registry import get_asset
+from .registry import get_asset, get_asset_status
 
 
 def _promoted_asset_profiles(conn: sqlite3.Connection) -> set[str]:
     rows = conn.execute(
-        """SELECT DISTINCT s.asset_id
+        """SELECT DISTINCT s.asset_id, s.target_scope
              FROM tehm_asset_status s
             WHERE s.status='promoted'"""
     ).fetchall()
     profiles: set[str] = set()
     for row in rows:
+        try:
+            status = get_asset_status(
+                conn, asset_id=str(row["asset_id"]),
+                target_scope=str(row["target_scope"]))
+        except ValueError:
+            # A malformed lifecycle row is untrusted and must not cover a
+            # capability gap merely because its raw status column says
+            # ``promoted``.
+            continue
+        if status is None or status["status"] != "promoted":
+            continue
         # Gap detection is a learner-facing consumer.  Do not let a status
         # row or JSON blob bypass the registry's content-addressed checks:
         # get_asset() validates every contract, provenance JSON and digest.

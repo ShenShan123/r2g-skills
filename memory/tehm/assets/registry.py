@@ -158,7 +158,34 @@ def get_asset_status(conn: sqlite3.Connection, *, asset_id: str,
     row = conn.execute(
         "SELECT * FROM tehm_asset_status WHERE asset_id=? AND target_scope=?",
         (asset_id, target_scope)).fetchone()
-    return dict(row) if row else None
+    if row is None:
+        return None
+    data = dict(row)
+    try:
+        data["status"] = validate_asset_status(data["status"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("asset status row contains an invalid status") from exc
+    try:
+        version = data["status_version"]
+        # bool is an int subclass, but it is not a valid lifecycle version.
+        if isinstance(version, bool):
+            raise ValueError
+        version = int(version)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("asset status row contains an invalid status_version") from exc
+    if version < 1:
+        raise ValueError("asset status row contains an invalid status_version")
+    try:
+        provenance = json.loads(data["provenance_json"] or "{}")
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("asset status row contains malformed provenance") from exc
+    if not isinstance(provenance, dict):
+        raise ValueError("asset status row contains malformed provenance")
+    if not isinstance(data.get("updated_at"), str) or not data["updated_at"]:
+        raise ValueError("asset status row contains an invalid updated_at")
+    data["status_version"] = version
+    data["provenance"] = provenance
+    return data
 
 
 def set_asset_status(
@@ -215,6 +242,18 @@ def set_asset_status(
     merged_provenance = dict(provenance or {})
     if gates is not None:
         merged_provenance["promotion_gates"] = dict(gates)
+    # A same-status call is a replay, not an opportunity to rewrite lifecycle
+    # provenance at the same version.  This makes retries idempotent while
+    # refusing a direct or stale caller that tries to replace the witness.
+    if status == old_status:
+        if stable_dumps(current.get("provenance") or {}) != stable_dumps(
+                merged_provenance):
+            raise ValueError("asset status replay conflicts with immutable provenance")
+        return AssetReceipt(
+            asset_id=asset_id, asset_type=asset["asset_type"],
+            name=asset["name"], version=asset["version"],
+            content_digest=asset["content_digest"], target_scope=target_scope,
+            status=status, status_version=int(current["status_version"]))
     had_outer_transaction = conn.in_transaction
     conn.execute(
         """UPDATE tehm_asset_status
@@ -222,6 +261,15 @@ def set_asset_status(
             WHERE asset_id=? AND target_scope=?""",
         (status, version, stable_dumps(merged_provenance), tehm_db.now_local(),
          asset_id, target_scope))
+    # Re-read the row through the same integrity gate used by all consumers;
+    # an ignored/partial write must never be returned as a lifecycle receipt.
+    persisted = get_asset_status(
+        conn, asset_id=asset_id, target_scope=target_scope)
+    if (persisted is None or persisted["status"] != status or
+            persisted["status_version"] != version or
+            stable_dumps(persisted.get("provenance") or {}) != stable_dumps(
+                merged_provenance)):
+        raise ValueError("asset status write did not persist an equivalent row")
     if commit and not had_outer_transaction:
         conn.commit()
     return AssetReceipt(

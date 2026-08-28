@@ -3722,3 +3722,16 @@ savepoint，晚到的 malformed sample 会回滚前缀写入。它仍只用于�
 同一原则已延伸到 `lifecycle.trial_adapter.run_trial()` 的 UUID-less 兼容路径：
 `trial_id` 现在参与 deterministic replay 校验，重试仅在完整证据字段相同时幂等返回，
 冲突写入 fail-closed；trial evidence 不再依赖 `INSERT OR REPLACE` 静默覆盖。
+
+### 2026-08-28 asset lifecycle status replay boundary
+
+Asset content 本身已有 content-addressed digest，但此前同一
+`(asset_id, target_scope, status)` 的重复写入仍可能在不增加
+`status_version` 的情况下覆盖 `provenance_json`。这会让 stale/误绑定的 lifecycle
+调用把同一状态解释成另一条证据。现在 `get_asset_status()` 对 status、正整数
+`status_version`、provenance JSON 和更新时间做 fail-closed 校验；同状态重试只有在
+provenance 完全相同时才幂等返回，冲突重放直接拒绝。状态转换写入后还会重新读取并比对
+完整行，避免忽略写入被伪装成成功 receipt。gap detector 同时通过该校验读取 promoted
+asset，格式损坏的状态行不会覆盖 capability gap。该修复只收紧 derived lifecycle
+状态的可重放性，不新增 promotion gate，也不把普通 asset status 调用升级为
+production authority。
