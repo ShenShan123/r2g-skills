@@ -4051,3 +4051,17 @@ binding 与 transfer evaluator 对训练 membership 也改为读取后调用
 `training_firewall_violation` 或 rule-binding malformed reason，而不会依赖 SQL 的宽松
 比较。上述变化继续停留在 causal/authority shadow ledger，不写 canonical memory、不
 触发 promotion，也不改变 Parametric shadow-only 与 production runtime 边界。
+
+### 2026-08-28 capability authority evidence-reference closure
+
+Capability C1--C8 authority 的写入与 replay 现在也共享严格的 evidence-reference
+边界：`evidence_id`、`split`、`verdict`、`evidence_digest` 和可选 `lineage_id` 必须是
+非空字符串；C4 的 execution receipt、C6 的 causal-transfer receipt、C7 的 retention
+receipt 及其 ID 向量拒绝整数、布尔、空值和重复项，并在查找 ledger row 之前 fail-closed。
+receipt-ID 向量会规范化排序，顶层 ref、evidence row 和 authority payload 三处必须
+一致，避免用 `str(...)` 将错误对象重新解释成另一条能力证据。该修复只加强 C1--C8
+derived authority replay；authority、policy/runtime、memory-binding 和 required-asset
+身份同样拒绝弱类型容器或隐式字符串化，损坏的 `gates`/`evidence_refs` 会返回
+结构化 malformed reason 而不是在 replay 中抛出未捕获异常。该修复不改变 capability
+gate 合取，不写 canonical memory，也不使 evaluation/runtime 或 Parametric shadow
+进入 production。

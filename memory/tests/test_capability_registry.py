@@ -787,6 +787,43 @@ def test_capability_authority_rechecks_immutable_evidence_rows(tmp_tehm):
                            authority_receipt=authority)
 
 
+def test_capability_authority_replay_rejects_weak_evidence_reference(tmp_tehm):
+    """Replay must not stringify a forged capability evidence ID."""
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="CAPABILITY_TYPED_REF", applicability={},
+        status="candidate")
+    attribution, authority, _ = _full_attribution_and_authority(
+        conn, capability.capability_id)
+    tampered = authority.to_dict()
+    tampered["evidence_refs"] = {
+        gate: dict(ref) for gate, ref in tampered["evidence_refs"].items()}
+    tampered["evidence_refs"]["C1"]["evidence_id"] = 1
+    checked = verify_capability_authority(
+        conn, capability.capability_id, tampered)
+    assert checked["eligible"] is False
+    assert "evidence:C1:ref_identity_malformed" in checked["reasons"]
+
+
+def test_capability_authority_replay_rejects_weak_container_fields(tmp_tehm):
+    """Malformed gate/ref containers must fail closed instead of raising."""
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="CAPABILITY_TYPED_CONTAINER", applicability={},
+        status="candidate")
+    attribution, authority, _ = _full_attribution_and_authority(
+        conn, capability.capability_id)
+    for field, value, reason in (
+            ("gates", [1], "authority_gates_malformed"),
+            ("evidence_refs", [1], "authority_evidence_refs_malformed")):
+        tampered = authority.to_dict()
+        tampered[field] = value
+        checked = verify_capability_authority(
+            conn, capability.capability_id, tampered)
+        assert checked["eligible"] is False
+        assert reason in checked["reasons"]
+
+
 def test_capability_authority_evidence_is_atomic_on_late_failure(tmp_tehm):
     conn, _, _ = tmp_tehm
     capability = register_capability(

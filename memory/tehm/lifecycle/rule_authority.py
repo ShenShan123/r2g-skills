@@ -355,6 +355,13 @@ def _finite_number(value) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _strict_text(value, *, label: str) -> str:
+    """Return one non-empty text identity without coercing weak values."""
+    if type(value) is not str or not value.strip():
+        raise ValueError(f"{label}_malformed")
+    return value.strip()
+
+
 def _stored_bool(value, *, field: str) -> bool:
     """Decode an authority ledger boolean without accepting truthy text."""
     if type(value) is not int or value not in (0, 1):
@@ -530,14 +537,21 @@ def _external_conformal_value(record: Mapping):
 def _external_transition_binding(
         staging: sqlite3.Connection, *, record: Mapping):
     """Require one staging transition to match the external record witness."""
-    record_id = str(record.get("record_id") or "").strip()
-    lineage_id = str(record.get("lineage_id") or "").strip()
+    try:
+        record_id = _strict_text(record.get("record_id"), label="record_id")
+        lineage_id = _strict_text(record.get("lineage_id"), label="lineage_id")
+    except ValueError as exc:
+        raise ValueError("external_authority:record_identity_incomplete") from exc
     action = record.get("action")
     delta = record.get("observation_delta")
     verification = record.get("verification")
-    action_domain = str(action.get("domain") or "") if isinstance(action, Mapping) else ""
-    if (not record_id or not lineage_id or not isinstance(action, Mapping) or
-            not action_domain or not str(action.get("transformation_family") or "")):
+    if not isinstance(action, Mapping):
+        raise ValueError("external_authority:record_identity_incomplete")
+    try:
+        action_domain = _strict_text(action.get("domain"), label="action_domain")
+        _strict_text(action.get("transformation_family"),
+                     label="transformation_family")
+    except ValueError as exc:
         raise ValueError("external_authority:record_identity_incomplete")
     if not isinstance(delta, Mapping) or not isinstance(verification, Mapping):
         raise ValueError("external_authority:record_payload_incomplete")
@@ -548,7 +562,12 @@ def _external_transition_binding(
             provenance = json.loads(candidate["provenance_json"] or "{}")
         except (TypeError, json.JSONDecodeError) as exc:
             raise ValueError("external_authority:transition_provenance_malformed") from exc
-        if isinstance(provenance, Mapping) and str(provenance.get("record_id") or "") == record_id:
+        if not isinstance(provenance, Mapping):
+            raise ValueError("external_authority:transition_provenance_malformed")
+        persisted_record_id = provenance.get("record_id")
+        if type(persisted_record_id) is not str or not persisted_record_id.strip():
+            raise ValueError("external_authority:transition_provenance_malformed")
+        if persisted_record_id.strip() == record_id:
             candidates.append(candidate)
     if len(candidates) != 1:
         raise ValueError(
@@ -560,8 +579,10 @@ def _external_transition_binding(
         persisted_verifier = json.loads(transition["verifier_json"] or "null")
     except (TypeError, json.JSONDecodeError) as exc:
         raise ValueError("external_authority:transition_payload_malformed") from exc
-    if (stable_dumps(dict(persisted_action or {})) != stable_dumps(dict(action)) or
-            stable_dumps(dict(persisted_delta or {})) != stable_dumps(dict(delta))):
+    if (not isinstance(persisted_action, Mapping) or
+            not isinstance(persisted_delta, Mapping) or
+            stable_dumps(dict(persisted_action)) != stable_dumps(dict(action)) or
+            stable_dumps(dict(persisted_delta)) != stable_dumps(dict(delta))):
         raise ValueError("external_authority:transition_semantic_mismatch")
     # The capture adapter normalises VerifierSnapshot and therefore drops
     # adapter-only fields.  Compare every persisted field supplied by the
@@ -571,14 +592,20 @@ def _external_transition_binding(
     for key, value in persisted_verifier.items():
         if key in verification and verification[key] != value:
             raise ValueError(f"external_authority:transition_verifier_mismatch:{key}")
-    if transition["action_domain"] != action.get("domain"):
+    if type(transition["action_domain"]) is not str or not transition["action_domain"].strip():
+        raise ValueError("external_authority:transition_action_domain_mismatch")
+    if transition["action_domain"] != action_domain:
         raise ValueError("external_authority:transition_action_domain_mismatch")
     states = staging.execute(
         "SELECT state_id, lineage_id FROM tehm_states WHERE state_id IN (?, ?)",
         (transition["source_state_id"], transition["target_state_id"])).fetchall()
-    if len(states) != 2 or any(str(state["lineage_id"] or "") != lineage_id
-                                for state in states):
+    if len(states) != 2:
         raise ValueError("external_authority:transition_lineage_mismatch")
+    for state in states:
+        if (type(state["lineage_id"]) is not str or
+                not state["lineage_id"].strip() or
+                state["lineage_id"].strip() != lineage_id):
+            raise ValueError("external_authority:transition_lineage_mismatch")
     return transition
 
 
@@ -602,11 +629,14 @@ def build_external_observation_authority_evidence(
     if isinstance(case_ids, (str, bytes)):
         raise ValueError("external_authority:case_ids_must_be_sequence")
     try:
-        requested = tuple(str(value).strip() for value in case_ids)
+        requested = tuple(case_ids)
     except TypeError as exc:
         raise ValueError("external_authority:case_ids_must_be_sequence") from exc
-    if not requested or any(not value for value in requested):
+    if (not requested or
+            any(type(value) is not str or not value.strip()
+                for value in requested)):
         raise ValueError("external_authority:case_ids_required")
+    requested = tuple(value.strip() for value in requested)
     if len(set(requested)) != len(requested):
         raise ValueError("external_authority:case_ids_duplicate")
 
@@ -630,9 +660,10 @@ def build_external_observation_authority_evidence(
         raise
     by_case: dict[str, dict] = {}
     for row in rows:
-        case_id = str(row.get("case_id") or "").strip()
-        if not case_id:
+        case_id = row.get("case_id")
+        if type(case_id) is not str or not case_id.strip():
             raise ValueError("external_authority:case_id_missing")
+        case_id = case_id.strip()
         if case_id in by_case:
             raise ValueError("external_authority:duplicate_observation_case")
         by_case[case_id] = row
@@ -645,7 +676,10 @@ def build_external_observation_authority_evidence(
     try:
         for case_id in sorted(requested):
             row = by_case[case_id]
-            split = str(row.get("split") or "")
+            split = row.get("split")
+            if type(split) is not str:
+                raise ValueError("external_authority:invalid_authority_split")
+            split = split.strip()
             if split not in _EXTERNAL_AUTHORITY_SPLITS:
                 raise ValueError("external_authority:invalid_authority_split")
             if row.get("classification") != "ELIGIBLE_POSITIVE":
@@ -663,9 +697,14 @@ def build_external_observation_authority_evidence(
             if rule_id is not None:
                 _validate_external_rule_binding(
                     conn, rule_id=rule_id, record=record)
-            record_lineage = str(record.get("lineage_id") or "").strip()
-            row_lineage = str(row.get("lineage_id") or "").strip()
-            if not row_lineage or not record_lineage or row_lineage != record_lineage:
+            try:
+                record_lineage = _strict_text(
+                    record.get("lineage_id"), label="record_lineage")
+                row_lineage = _strict_text(
+                    row.get("lineage_id"), label="row_lineage")
+            except ValueError as exc:
+                raise ValueError("external_authority:lineage_mismatch") from exc
+            if row_lineage != record_lineage:
                 raise ValueError("external_authority:lineage_mismatch")
             transition = _external_transition_binding(staging, record=record)
             membership = staging.execute(
@@ -683,10 +722,13 @@ def build_external_observation_authority_evidence(
             if (membership[0]["split"] != split or membership_eligible is not False):
                 raise ValueError("external_authority:membership_firewall_mismatch")
 
-            receipt_id = str(row.get("receipt_id") or "").strip()
-            receipt_digest = str(row.get("receipt_sha256") or "").strip()
-            if not receipt_id or not receipt_digest:
-                raise ValueError("external_authority:receipt_digest_missing")
+            try:
+                receipt_id = _strict_text(
+                    row.get("receipt_id"), label="receipt_id")
+                receipt_digest = _strict_text(
+                    row.get("receipt_sha256"), label="receipt_sha256")
+            except ValueError as exc:
+                raise ValueError("external_authority:receipt_digest_missing") from exc
             base_payload = {
                 "projection_version": EXTERNAL_AUTHORITY_PROJECTION_VERSION,
                 "source_receipt_id": receipt_id,
@@ -714,14 +756,24 @@ def build_external_observation_authority_evidence(
                 raise ValueError("external_authority:record_not_pass")
             if delta.get("created_regressions"):
                 raise ValueError("external_authority:record_has_regressions")
-            utility = str(delta.get("utility_verdict") or "").upper()
+            raw_utility = delta.get("utility_verdict")
+            if raw_utility is not None and type(raw_utility) is not str:
+                raise ValueError("external_authority:utility_verdict_malformed")
+            utility = (raw_utility.strip().upper()
+                       if isinstance(raw_utility, str) else "")
             if utility in {"", "UNKNOWN"}:
                 utility = None
             elif utility not in _EXTERNAL_UTILITY_VERDICTS:
                 raise ValueError("external_authority:utility_verdict_malformed")
             persisted_delta = json.loads(transition["observation_delta_json"])
-            persisted_utility = str(
-                (persisted_delta or {}).get("utility_verdict") or "").upper()
+            persisted_raw_utility = ((persisted_delta or {}).get(
+                "utility_verdict") if isinstance(persisted_delta, Mapping) else None)
+            if (persisted_raw_utility is not None and
+                    type(persisted_raw_utility) is not str):
+                raise ValueError("external_authority:utility_verdict_malformed")
+            persisted_utility = (
+                persisted_raw_utility.strip().upper()
+                if isinstance(persisted_raw_utility, str) else "")
             if (utility or "UNKNOWN") != (persisted_utility or "UNKNOWN"):
                 raise ValueError("external_authority:utility_verdict_mismatch")
             if utility is not None:
@@ -791,19 +843,24 @@ def build_external_observation_authority_evidence_batch(
         staging_db = Path(source["staging_db"]).expanduser().resolve()
         campaign_id = source["campaign_id"]
         case_ids = source["case_ids"]
+        if type(campaign_id) is not str or not campaign_id.strip():
+            raise ValueError("external_authority:source_campaign_id_required")
         if isinstance(case_ids, (str, bytes)):
             raise ValueError("external_authority:source_case_ids_must_be_sequence")
         try:
-            case_ids = tuple(str(value).strip() for value in case_ids)
+            case_ids = tuple(case_ids)
         except TypeError as exc:
             raise ValueError(
                 "external_authority:source_case_ids_must_be_sequence") from exc
-        if not case_ids or any(not value for value in case_ids):
+        if (not case_ids or
+                any(type(value) is not str or not value.strip()
+                    for value in case_ids)):
             raise ValueError("external_authority:source_case_ids_required")
+        case_ids = tuple(value.strip() for value in case_ids)
         normalised.append({
             "observations_path": observations_path,
             "staging_db": staging_db,
-            "campaign_id": campaign_id,
+            "campaign_id": campaign_id.strip(),
             "case_ids": case_ids,
         })
 

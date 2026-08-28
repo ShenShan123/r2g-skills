@@ -100,6 +100,31 @@ def _evidence_digest(*, capability_id: str, evidence_type: str,
     return "sha1:" + hashlib.sha1(stable_dumps(payload).encode()).hexdigest()
 
 
+def _strict_text(value, *, label: str) -> str:
+    """Return one non-empty text identity without implicit string coercion."""
+    if type(value) is not str or not value.strip():
+        raise ValueError(f"{label}_malformed")
+    return value.strip()
+
+
+def _strict_optional_text(value, *, label: str) -> str | None:
+    if value is None:
+        return None
+    return _strict_text(value, label=label)
+
+
+def _strict_id_vector(value, *, label: str) -> list[str] | None:
+    """Normalize optional receipt-ID vectors while rejecting weak elements."""
+    if not isinstance(value, (list, tuple)) or not value:
+        return None
+    if any(type(item) is not str or not item.strip() for item in value):
+        return None
+    result = [item.strip() for item in value]
+    if len(set(result)) != len(result):
+        return None
+    return sorted(result)
+
+
 def _capability_row(conn: sqlite3.Connection, capability_id: str):
     row = conn.execute(
         "SELECT * FROM tehm_capabilities "
@@ -110,8 +135,11 @@ def _capability_row(conn: sqlite3.Connection, capability_id: str):
     try:
         assets = json.loads(row["required_assets_json"] or "[]")
     except (TypeError, json.JSONDecodeError):
-        assets = []
-    return tuple(str(item) for item in assets)
+        raise ValueError("capability required assets are malformed")
+    if (not isinstance(assets, list) or
+            any(type(item) is not str for item in assets)):
+        raise ValueError("capability required assets are malformed")
+    return tuple(assets)
 
 
 def _policy_binding_reasons(
@@ -244,8 +272,27 @@ def _memory_snapshot_binding_reasons(
         reasons.append("C1:memory_snapshot_binding_version_mismatch")
     if binding.get("strict") is not True:
         reasons.append("C1:memory_snapshot_binding_not_strict")
-    baseline_policy_id = str(binding.get("baseline_policy_snapshot_id") or "")
-    candidate_policy_id = str(binding.get("candidate_policy_snapshot_id") or "")
+    if type(candidate_policy_snapshot_id) is not str or not candidate_policy_snapshot_id.strip():
+        reasons.append("C1:candidate_policy_snapshot_required")
+        candidate_policy_snapshot_id = ""
+    else:
+        candidate_policy_snapshot_id = candidate_policy_snapshot_id.strip()
+    baseline_policy_id = binding.get("baseline_policy_snapshot_id")
+    candidate_policy_id = binding.get("candidate_policy_snapshot_id")
+    if (baseline_policy_id is not None and
+            (type(baseline_policy_id) is not str or not baseline_policy_id.strip())):
+        reasons.append("C1:baseline_policy_snapshot_malformed")
+        baseline_policy_id = ""
+    elif isinstance(baseline_policy_id, str):
+        baseline_policy_id = baseline_policy_id.strip()
+    if (candidate_policy_id is not None and
+            (type(candidate_policy_id) is not str or not candidate_policy_id.strip())):
+        reasons.append("C1:candidate_policy_snapshot_malformed")
+        candidate_policy_id = ""
+    elif isinstance(candidate_policy_id, str):
+        candidate_policy_id = candidate_policy_id.strip()
+    baseline_policy_id = baseline_policy_id or ""
+    candidate_policy_id = candidate_policy_id or ""
     if not baseline_policy_id:
         reasons.append("C1:baseline_policy_snapshot_required")
     if not candidate_policy_id:
@@ -460,12 +507,15 @@ def _normalise_evidence_refs(
         raw = evidence_refs.get(gate)
         if not isinstance(raw, Mapping):
             raise ValueError(f"missing evidence reference for {gate}")
-        evidence_id = str(raw.get("evidence_id") or "")
-        split = str(raw.get("split") or "")
-        verdict = str(raw.get("verdict") or "")
-        lineage_id = raw.get("lineage_id")
-        if not evidence_id or not split or not verdict:
-            raise ValueError(f"incomplete evidence reference for {gate}")
+        try:
+            evidence_id = _strict_text(
+                raw.get("evidence_id"), label=f"{gate}:evidence_id")
+            split = _strict_text(raw.get("split"), label=f"{gate}:split")
+            verdict = _strict_text(raw.get("verdict"), label=f"{gate}:verdict")
+            lineage_id = _strict_optional_text(
+                raw.get("lineage_id"), label=f"{gate}:lineage_id")
+        except ValueError as exc:
+            raise ValueError(f"incomplete evidence reference for {gate}") from exc
         if split not in {"training", "calibration", "heldout", "ab"}:
             raise ValueError(f"invalid evidence split for {gate}: {split!r}")
         key = (GATE_EVIDENCE_TYPES[gate], evidence_id)
@@ -479,14 +529,20 @@ def _normalise_evidence_refs(
             "lineage_id": lineage_id,
         }
         if gate == "C4":
-            execution_receipt_id = str(raw.get("execution_receipt_id") or "")
-            if not execution_receipt_id:
+            try:
+                execution_receipt_id = _strict_text(
+                    raw.get("execution_receipt_id"),
+                    label="C4:execution_receipt_id")
+            except ValueError:
                 reasons.append("C4:execution_receipt_id_missing")
             else:
                 normalised[gate]["execution_receipt_id"] = execution_receipt_id
         if gate == "C6" and "causal_transfer_receipt_id" in raw:
-            transfer_receipt_id = str(raw.get("causal_transfer_receipt_id") or "")
-            if not transfer_receipt_id:
+            try:
+                transfer_receipt_id = _strict_text(
+                    raw.get("causal_transfer_receipt_id"),
+                    label="C6:causal_transfer_receipt_id")
+            except ValueError:
                 reasons.append("C6:causal_transfer_receipt_id_missing")
             else:
                 normalised[gate]["causal_transfer_receipt_id"] = transfer_receipt_id
@@ -494,19 +550,22 @@ def _normalise_evidence_refs(
             raw_ids = raw.get("causal_transfer_receipt_ids")
             if "causal_transfer_receipt_id" in raw:
                 reasons.append("C6:causal_transfer_receipt_id_and_ids_ambiguous")
-            if (not isinstance(raw_ids, (list, tuple)) or not raw_ids or
-                    any(not str(value or "") for value in raw_ids)):
+            transfer_ids = _strict_id_vector(
+                raw_ids, label="C6:causal_transfer_receipt_ids")
+            if transfer_ids is None:
                 reasons.append("C6:causal_transfer_receipt_ids_malformed")
             else:
-                normalised[gate]["causal_transfer_receipt_ids"] = [
-                    str(value) for value in raw_ids]
+                normalised[gate]["causal_transfer_receipt_ids"] = transfer_ids
         elif gate != "C6" and "causal_transfer_receipt_ids" in raw:
             reasons.append(f"{gate}:causal_transfer_receipt_ids_not_allowed")
         elif gate != "C6" and "causal_transfer_receipt_id" in raw:
             reasons.append(f"{gate}:causal_transfer_receipt_id_not_allowed")
         if gate == "C7" and "retention_receipt_id" in raw:
-            retention_receipt_id = str(raw.get("retention_receipt_id") or "")
-            if not retention_receipt_id:
+            try:
+                retention_receipt_id = _strict_text(
+                    raw.get("retention_receipt_id"),
+                    label="C7:retention_receipt_id")
+            except ValueError:
                 reasons.append("C7:retention_receipt_id_missing")
             else:
                 normalised[gate]["retention_receipt_id"] = retention_receipt_id
@@ -514,12 +573,12 @@ def _normalise_evidence_refs(
             raw_ids = raw.get("retention_receipt_ids")
             if "retention_receipt_id" in raw:
                 reasons.append("C7:retention_receipt_id_and_ids_ambiguous")
-            if (not isinstance(raw_ids, (list, tuple)) or not raw_ids or
-                    any(not str(value or "") for value in raw_ids)):
+            retention_ids = _strict_id_vector(
+                raw_ids, label="C7:retention_receipt_ids")
+            if retention_ids is None:
                 reasons.append("C7:retention_receipt_ids_malformed")
             else:
-                normalised[gate]["retention_receipt_ids"] = [
-                    str(value) for value in raw_ids]
+                normalised[gate]["retention_receipt_ids"] = retention_ids
         elif gate != "C7" and "retention_receipt_ids" in raw:
             reasons.append(f"{gate}:retention_receipt_ids_not_allowed")
         if split not in GATE_ALLOWED_SPLITS[gate]:
@@ -527,6 +586,72 @@ def _normalise_evidence_refs(
         if verdict != "PASS":
             reasons.append(f"{gate}:evidence_verdict_not_pass")
     return normalised, reasons
+
+
+def _validate_replay_evidence_ref(
+        ref: Mapping, *, gate: str) -> tuple[dict | None, list[str]]:
+    """Validate one persisted capability ref before using it as a lookup key."""
+    reasons: list[str] = []
+    try:
+        evidence_id = _strict_text(
+            ref.get("evidence_id"), label=f"{gate}:evidence_id")
+        split = _strict_text(ref.get("split"), label=f"{gate}:split")
+        verdict = _strict_text(ref.get("verdict"), label=f"{gate}:verdict")
+        lineage_id = _strict_optional_text(
+            ref.get("lineage_id"), label=f"{gate}:lineage_id")
+        evidence_digest = _strict_text(
+            ref.get("evidence_digest"), label=f"{gate}:evidence_digest")
+    except ValueError:
+        return None, [f"evidence:{gate}:ref_identity_malformed"]
+    if split not in {"training", "calibration", "heldout", "ab"}:
+        reasons.append(f"evidence:{gate}:ref_invalid_split")
+    elif split not in GATE_ALLOWED_SPLITS[gate]:
+        reasons.append(f"evidence:{gate}:ref_invalid_evidence_split")
+    if "execution_receipt_id" in ref:
+        if gate != "C4":
+            reasons.append(f"evidence:{gate}:execution_receipt_id_not_allowed")
+        try:
+            execution_id = _strict_text(
+                ref.get("execution_receipt_id"),
+                label=f"{gate}:execution_receipt_id")
+        except ValueError:
+            reasons.append(f"evidence:{gate}:execution_receipt_id_malformed")
+            execution_id = None
+    else:
+        execution_id = None
+    optional_vectors: dict[str, list[str]] = {}
+    for key in ("causal_transfer_receipt_ids", "retention_receipt_ids"):
+        if key not in ref:
+            continue
+        if ((key.startswith("causal_") and gate != "C6") or
+                (key.startswith("retention_") and gate != "C7")):
+            reasons.append(f"evidence:{gate}:{key}_not_allowed")
+        vector = _strict_id_vector(ref.get(key), label=f"{gate}:{key}")
+        if vector is None:
+            reasons.append(f"evidence:{gate}:{key}_malformed")
+        else:
+            optional_vectors[key] = vector
+    for key in ("causal_transfer_receipt_id", "retention_receipt_id"):
+        if key not in ref:
+            continue
+        expected_gate = "C6" if key.startswith("causal_") else "C7"
+        if gate != expected_gate:
+            reasons.append(f"evidence:{gate}:{key}_not_allowed")
+        try:
+            optional_vectors[key] = [_strict_text(
+                ref.get(key), label=f"{gate}:{key}")]
+        except ValueError:
+            reasons.append(f"evidence:{gate}:{key}_malformed")
+    if reasons:
+        return None, reasons
+    result = {
+        "evidence_id": evidence_id, "split": split, "verdict": verdict,
+        "lineage_id": lineage_id, "evidence_digest": evidence_digest,
+    }
+    if execution_id is not None:
+        result["execution_receipt_id"] = execution_id
+    result.update(optional_vectors)
+    return result, []
 
 
 def _retention_binding_reasons(
@@ -541,13 +666,21 @@ def _retention_binding_reasons(
     ineligible.  The retention receipt itself remains evaluation evidence and
     does not mutate capability lifecycle.
     """
-    retention_receipt_id = str(evidence_ref.get("retention_receipt_id") or "")
+    retention_receipt_id = evidence_ref.get("retention_receipt_id")
+    if retention_receipt_id is not None and (
+            type(retention_receipt_id) is not str or
+            not retention_receipt_id.strip()):
+        return ["C7:retention_receipt_id_malformed"]
+    if isinstance(retention_receipt_id, str):
+        retention_receipt_id = retention_receipt_id.strip()
     raw_ids = evidence_ref.get("retention_receipt_ids")
     if raw_ids is not None:
-        if (not isinstance(raw_ids, (list, tuple)) or not raw_ids or
-                any(not str(value or "") for value in raw_ids)):
+        receipt_ids = _strict_id_vector(
+            raw_ids, label="C7:retention_receipt_ids")
+        if receipt_ids is None:
             return ["C7:retention_receipt_ids_malformed"]
-        receipt_ids = [str(value) for value in raw_ids]
+        if retention_receipt_id:
+            return ["C7:retention_receipt_id_and_ids_ambiguous"]
     elif retention_receipt_id:
         receipt_ids = [retention_receipt_id]
     else:
@@ -580,16 +713,21 @@ def _causal_transfer_binding_reasons(
     and establish an eligible L4 transfer.  This makes a causal C6 claim
     stronger without turning the causal ledger itself into lifecycle authority.
     """
-    transfer_receipt_id = str(
-        evidence_ref.get("causal_transfer_receipt_id") or "")
+    transfer_receipt_id = evidence_ref.get("causal_transfer_receipt_id")
+    if transfer_receipt_id is not None and (
+            type(transfer_receipt_id) is not str or
+            not transfer_receipt_id.strip()):
+        return ["C6:causal_transfer_receipt_id_malformed"]
+    if isinstance(transfer_receipt_id, str):
+        transfer_receipt_id = transfer_receipt_id.strip()
     raw_ids = evidence_ref.get("causal_transfer_receipt_ids")
     if raw_ids is not None:
-        if (not isinstance(raw_ids, (list, tuple)) or not raw_ids or
-                any(not str(value or "") for value in raw_ids)):
+        receipt_ids = _strict_id_vector(
+            raw_ids, label="C6:causal_transfer_receipt_ids")
+        if receipt_ids is None:
             return ["C6:causal_transfer_receipt_ids_malformed"]
         if transfer_receipt_id:
             return ["C6:causal_transfer_receipt_id_and_ids_ambiguous"]
-        receipt_ids = [str(value) for value in raw_ids]
     elif transfer_receipt_id:
         receipt_ids = [transfer_receipt_id]
     else:
@@ -600,6 +738,12 @@ def _causal_transfer_binding_reasons(
     )
 
     expected_lineage = evidence_ref.get("lineage_id")
+    if expected_lineage is not None and (
+            type(expected_lineage) is not str or
+            not expected_lineage.strip()):
+        return ["C6:lineage_id_malformed"]
+    if isinstance(expected_lineage, str):
+        expected_lineage = expected_lineage.strip()
     reasons: list[str] = []
     for ordinal, receipt_id in enumerate(receipt_ids):
         prefix = f"C6:causal_transfer[{ordinal}]"
@@ -624,11 +768,13 @@ def _causal_transfer_binding_reasons(
         if receipt.evidence_level != "L4_TRANSFER_SUPPORTED_MECHANISM":
             reasons.append(f"{prefix}:evidence_level_not_l4")
         if expected_lineage not in (None, ""):
-            transfer_lineages = set(
-                str(value) for value in
-                (receipt.transfer_receipt.get("transfer_lineages") or ())
-            )
-            if str(expected_lineage) not in transfer_lineages:
+            transfer_lineages = receipt.transfer_receipt.get("transfer_lineages")
+            if (not isinstance(transfer_lineages, (list, tuple)) or
+                    any(type(value) is not str or not value.strip()
+                        for value in transfer_lineages)):
+                reasons.append(f"{prefix}:lineages_malformed")
+            elif expected_lineage not in {
+                    value.strip() for value in transfer_lineages}:
                 reasons.append(f"{prefix}:lineage_mismatch")
     return reasons
 
@@ -695,6 +841,13 @@ def record_capability_authority(
     evidence as a failed authority attempt and returns ``eligible=False``.
     It never changes capability lifecycle status.
     """
+    try:
+        capability_id = _strict_text(capability_id, label="capability_id")
+        candidate_policy_snapshot_id = _strict_text(
+            candidate_policy_snapshot_id, label="candidate_policy_snapshot_id")
+        runtime_id = _strict_text(runtime_id, label="runtime_id")
+    except ValueError as exc:
+        raise ValueError("capability authority identity is malformed") from exc
     required_assets = _capability_row(conn, capability_id)
     attribution = _as_dict(attribution_receipt)
     attribution_gates = attribution.get("gates") or {}
@@ -830,6 +983,25 @@ def verify_capability_authority(
     expected_digest = "sha256:" + hashlib.sha256(
         stable_dumps(dict(payload)).encode()).hexdigest()
     reasons: list[str] = []
+    for field in (
+            "authority_receipt_id", "authority_version", "attribution_digest",
+            "candidate_policy_snapshot_id", "runtime_id", "receipt_digest"):
+        value = data.get(field)
+        if type(value) is not str or not value.strip():
+            reasons.append(f"authority_{field}_malformed")
+    payload_candidate_policy_id = payload.get("candidate_policy_snapshot_id")
+    payload_runtime_id = payload.get("runtime_id")
+    if (type(payload_candidate_policy_id) is not str or
+            not payload_candidate_policy_id.strip()):
+        reasons.append("authority_candidate_policy_snapshot_id_payload_malformed")
+        payload_candidate_policy_id = ""
+    else:
+        payload_candidate_policy_id = payload_candidate_policy_id.strip()
+    if type(payload_runtime_id) is not str or not payload_runtime_id.strip():
+        reasons.append("authority_runtime_id_payload_malformed")
+        payload_runtime_id = ""
+    else:
+        payload_runtime_id = payload_runtime_id.strip()
     if data.get("authority_version") != AUTHORITY_VERSION:
         reasons.append("authority_version_mismatch")
     if data.get("receipt_digest") != expected_digest:
@@ -840,7 +1012,12 @@ def verify_capability_authority(
         reasons.append("authority_receipt_not_eligible")
     if stable_dumps(payload.get("gates") or {}) != stable_dumps(data.get("gates") or {}):
         reasons.append("authority_gate_payload_mismatch")
-    data_refs = data.get("evidence_refs") or {}
+    data_refs = data.get("evidence_refs")
+    if data_refs is None:
+        data_refs = {}
+    elif not isinstance(data_refs, Mapping):
+        reasons.append("authority_evidence_refs_malformed")
+        data_refs = {}
     canonical_data_refs = {
         gate: {key: value for key, value in ref.items()
                if key != "evidence_digest"}
@@ -873,8 +1050,7 @@ def verify_capability_authority(
         else:
             reasons.extend(_memory_snapshot_binding_reasons(
                 conn, payload_memory_snapshot_binding,
-                candidate_policy_snapshot_id=str(
-                    payload.get("candidate_policy_snapshot_id") or "")))
+                candidate_policy_snapshot_id=payload_candidate_policy_id))
     payload_runtime_behavior_binding = payload.get("runtime_behavior_binding")
     if payload_runtime_behavior_binding is not None:
         if (not isinstance(payload_runtime_behavior_binding, Mapping) or
@@ -883,9 +1059,8 @@ def verify_capability_authority(
         else:
             reasons.extend(_runtime_behavior_binding_reasons(
                 conn, payload_runtime_behavior_binding,
-                candidate_policy_snapshot_id=str(
-                    payload.get("candidate_policy_snapshot_id") or ""),
-                runtime_id=str(payload.get("runtime_id") or "")))
+                candidate_policy_snapshot_id=payload_candidate_policy_id,
+                runtime_id=payload_runtime_id))
     payload_policy_ablation_binding = payload.get("policy_ablation_binding")
     if payload_policy_ablation_binding is not None:
         if (not isinstance(payload_policy_ablation_binding, Mapping) or
@@ -899,13 +1074,19 @@ def verify_capability_authority(
             reasons.extend(_policy_ablation_binding_reasons(
                 conn, payload_policy_ablation_binding,
                 baseline_policy_snapshot_id=expected_baseline_policy,
-                runtime_id=str(payload.get("runtime_id") or "")))
+                runtime_id=payload_runtime_id))
     for key in ("candidate_policy_snapshot_id", "runtime_id", "attribution_digest"):
         if payload.get(key) != data.get(key):
             reasons.append(f"authority_{key}_payload_mismatch")
     required_assets = _capability_row(conn, capability_id)
+    raw_gates = data.get("gates")
+    if raw_gates is None:
+        raw_gates = {}
+    elif not isinstance(raw_gates, Mapping):
+        reasons.append("authority_gates_malformed")
+        raw_gates = {}
     gate_report = evaluate_capability_promotion_gates(
-        data.get("gates") or {}, required_assets=required_assets, strict=True)
+        raw_gates, required_assets=required_assets, strict=True)
     if not gate_report["eligible"]:
         reasons.extend(f"gate:{name}" for name in gate_report["missing"])
     refs = data.get("evidence_refs")
@@ -917,7 +1098,11 @@ def verify_capability_authority(
         if not isinstance(ref, Mapping):
             reasons.append(f"evidence:{gate}:missing")
             continue
-        evidence_id = str(ref.get("evidence_id") or "")
+        checked_ref, ref_reasons = _validate_replay_evidence_ref(ref, gate=gate)
+        reasons.extend(ref_reasons)
+        if checked_ref is None:
+            continue
+        evidence_id = checked_ref["evidence_id"]
         evidence_type = GATE_EVIDENCE_TYPES[gate]
         row = conn.execute(
             """SELECT split, lineage_id, verdict, evidence_digest
@@ -929,14 +1114,16 @@ def verify_capability_authority(
             reasons.append(f"evidence:{gate}:row_missing")
             continue
         if (row["split"], row["lineage_id"], row["verdict"]) != (
-                ref.get("split"), ref.get("lineage_id"), ref.get("verdict")):
+                checked_ref["split"], checked_ref["lineage_id"],
+                checked_ref["verdict"]):
             reasons.append(f"evidence:{gate}:row_mismatch")
         recomputed = _evidence_digest(
             capability_id=capability_id, evidence_type=evidence_type,
-            evidence_id=evidence_id, split=str(ref.get("split") or ""),
-            verdict=str(ref.get("verdict") or ""),
-            lineage_id=ref.get("lineage_id"))
-        if row["evidence_digest"] != recomputed or ref.get("evidence_digest") != recomputed:
+            evidence_id=evidence_id, split=checked_ref["split"],
+            verdict=checked_ref["verdict"],
+            lineage_id=checked_ref["lineage_id"])
+        if (row["evidence_digest"] != recomputed or
+                checked_ref["evidence_digest"] != recomputed):
             reasons.append(f"evidence:{gate}:digest_mismatch")
     c7_ref = refs.get("C7") if isinstance(refs, Mapping) else None
     if isinstance(c7_ref, Mapping):
@@ -1019,16 +1206,24 @@ def verify_capability_authority(
             reasons.append("authority_evidence_row_split_mismatch")
         if authority_row["verdict"] != "PASS":
             reasons.append("authority_evidence_row_not_pass")
-        authority_digest = _evidence_digest(
-            capability_id=capability_id,
-            evidence_type="capability_authority",
-            evidence_id=str(data.get("authority_receipt_id") or ""),
-            split=str(authority_row["split"] or ""),
-            verdict=str(authority_row["verdict"] or ""),
-            lineage_id=None,
-        )
-        if authority_row["evidence_digest"] != authority_digest:
-            reasons.append("authority_evidence_row_digest_mismatch")
+        authority_id = data.get("authority_receipt_id")
+        row_split = authority_row["split"]
+        row_verdict = authority_row["verdict"]
+        if (type(authority_id) is not str or not authority_id.strip() or
+                type(row_split) is not str or not row_split.strip() or
+                type(row_verdict) is not str or not row_verdict.strip()):
+            reasons.append("authority_evidence_row_identity_malformed")
+        else:
+            authority_digest = _evidence_digest(
+                capability_id=capability_id,
+                evidence_type="capability_authority",
+                evidence_id=authority_id.strip(),
+                split=row_split.strip(),
+                verdict=row_verdict.strip(),
+                lineage_id=None,
+            )
+            if authority_row["evidence_digest"] != authority_digest:
+                reasons.append("authority_evidence_row_digest_mismatch")
     return {
         "eligible": not reasons,
         "reasons": sorted(set(reasons)),
