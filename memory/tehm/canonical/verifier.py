@@ -11,6 +11,7 @@ layer; this module owns the per-verification ``VerifierSnapshot``.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -73,8 +74,15 @@ class VerifierSnapshot:
         if self.confidence_tier not in CONFIDENCE_TIERS:
             raise ValueError(
                 f"confidence_tier must be one of {CONFIDENCE_TIERS}, got {self.confidence_tier!r}")
-        if self.obligation_coverage is not None and not (0.0 <= self.obligation_coverage <= 1.0):
-            raise ValueError(f"obligation_coverage must be in [0,1], got {self.obligation_coverage}")
+        if self.obligation_coverage is not None:
+            coverage = self.obligation_coverage
+            if (isinstance(coverage, bool) or
+                    not isinstance(coverage, (int, float)) or
+                    not math.isfinite(float(coverage)) or
+                    not 0.0 <= float(coverage) <= 1.0):
+                raise ValueError(
+                    "obligation_coverage must be a finite number in [0,1], "
+                    f"got {coverage!r}")
         if self.oracle_complete is not None and not isinstance(self.oracle_complete, bool):
             raise ValueError("oracle_complete must be bool or None")
         for name, value in (("input_binding", self.input_binding),

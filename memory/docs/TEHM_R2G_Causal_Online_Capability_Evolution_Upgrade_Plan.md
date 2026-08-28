@@ -3980,3 +3980,10 @@ promotion gate、canonical memory、Parametric shadow-only 或 production runtim
 与内容摘要，再检查 `loaded=1`；不再在 receipt 校验前用宽松 `bool(...)` 解释数据库
 字段。该边界只影响 held-out capability-retention 的 fail-closed 审计，不改变
 canonical memory、learner support、promotion 或 production runtime。
+
+### 2026-08-28 verifier obligation-coverage type closure
+
+`VerifierSnapshot` 现在只接受有限的数值型 `obligation_coverage`，明确拒绝布尔值、
+字符串化数字和 `NaN/±∞`；因此 activation obligation witness 不能把状态位或非有限
+值解释成完整覆盖率。该修复只收紧 canonical/activation verifier 的证据解析，不改变
+obligation gate 阈值、canonical promotion、Parametric shadow-only 或 production runtime。

@@ -70,6 +70,16 @@ def test_external_authority_does_not_treat_boolean_coverage_as_numeric():
     assert details["obligation_coverages"] == []
 
 
+def test_verifier_snapshot_rejects_weak_or_nonfinite_coverage():
+    from tehm.canonical.verifier import VerifierSnapshot
+
+    for value in (True, "1.0", float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="finite number"):
+            VerifierSnapshot(
+                verdict="PASS", oracle_type="REGRESSION",
+                confidence_tier="R", obligation_coverage=value).validate()
+
+
 def test_orfs_authority_receipt_legacy_fixture_preserves_unestablished_gate_state(tmp_path):
     """Legacy fixture overrides preserve NOT_ESTABLISHED instead of becoming False."""
     from scripts.build_orfs_authority_receipt import build_receipt
