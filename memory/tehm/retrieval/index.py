@@ -50,6 +50,11 @@ def build_index(conn: sqlite3.Connection, *,
     integrity is always checked here: no runtime flag can make a tampered rule
     executable.
     """
+    # Import lazily: ``tehm.lifecycle`` re-exports the activation pipeline,
+    # while activation imports this index.  A module-level import would create
+    # a cycle during package initialization.
+    from tehm.lifecycle.rule_status import RuleLifecycleError, get_status
+
     index = RuleIndex()
     rows = conn.execute(
         "SELECT rule_id, domain, before_pattern_json, after_pattern_json, "
@@ -66,9 +71,27 @@ def build_index(conn: sqlite3.Connection, *,
         placeholders = ",".join("?" for _ in lifecycle_statuses)
         if not placeholders:
             return index
-        allowed_rule_ids = {r["rule_id"] for r in conn.execute(
-            f"SELECT rule_id FROM tehm_rule_status WHERE status IN ({placeholders})",
-            tuple(sorted(lifecycle_statuses)))}
+        # Do not treat the mutable ``status`` column as authority by itself.
+        # Runtime callers select promoted rows, but a copied/tampered database
+        # can still contain a forged status with an invalid version,
+        # provenance, or timestamp.  Re-read every selected row through the
+        # lifecycle reader so malformed derived state is omitted fail-closed.
+        allowed_rule_ids = set()
+        for status_row in conn.execute(
+                f"SELECT rule_id, target_scope FROM tehm_rule_status "
+                f"WHERE status IN ({placeholders})",
+                tuple(sorted(lifecycle_statuses))):
+            rule_key = status_row["rule_id"]
+            try:
+                checked = get_status(
+                    conn, rule_id=rule_key,
+                    target_scope=status_row["target_scope"])
+            except RuleLifecycleError as exc:
+                index.rejected.setdefault(
+                    rule_key, f"invalid lifecycle status: {exc}")
+                continue
+            if checked is not None and checked["status"] in lifecycle_statuses:
+                allowed_rule_ids.add(rule_key)
     for row in rows:
         if require_validity and row["validity_status"] not in ADMISSIBLE_FOR_LIFECYCLE:
             continue

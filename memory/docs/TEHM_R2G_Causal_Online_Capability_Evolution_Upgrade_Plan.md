@@ -3785,3 +3785,18 @@ capability 报告为 candidate。`promote_capability()` 在 authority receipt �
 savepoint 写入并完整重读；已 promoted 状态只有在 authority provenance 完全一致时幂等，
 冲突证据直接拒绝。该修复只保护 capability derived lifecycle，不新增 C1-C8 gate，也不
 允许 capability 绕过 authority 进入 production policy。
+
+### 2026-08-28 runtime retrieval lifecycle-row firewall
+
+Runtime retrieval 的 lifecycle filter 不得把 `tehm_rule_status.status` 单列当作
+authority。若复制的数据库中某行被篡改为 `promoted`，但其 `status_version`、
+provenance JSON 或 `updated_at` 已损坏，直接 SQL 过滤会使该行进入
+`build_index()`，进而影响 activation。现已将所有选中的 lifecycle rows 交给
+`lifecycle.rule_status.get_status()` 复核；复核失败的 rule 以 rejected reason 记录，
+不进入 retrieval index，因此 backend、production activation 和 runtime 都 fail-closed。
+
+这是一项 derived-state replay/firewall 修复，不是新的 promotion gate。只有已经由
+独立 authority 写入且整行可重放的 `promoted` 状态才有 runtime 读取资格；candidate、
+shadow、损坏状态、Parametric shadow log 和 staging evidence 均不能借此进入
+production。后续仍需真实 ORFS/RTL evidence 与六项 authority gate 来建立晋级，而不应
+用此防火墙修复替代 promotion 证据。

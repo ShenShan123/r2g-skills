@@ -233,6 +233,29 @@ def test_retrieve_excludes_valid_but_unpromoted_rule(tmp_tehm, sample_record_dic
     assert receipt.results == []
 
 
+def test_runtime_index_rejects_malformed_promoted_lifecycle_row(
+        tmp_tehm, sample_record_dict):
+    conn = _capture_and_crystallize(tmp_tehm, sample_record_dict)
+    _grant_runtime_authority(conn)
+    rule_id = conn.execute(
+        "SELECT rule_id FROM tehm_rules LIMIT 1").fetchone()[0]
+    # A forged promoted status must not become runtime authority when its
+    # immutable lifecycle metadata is malformed.
+    conn.execute(
+        "UPDATE tehm_rule_status SET provenance_json=? "
+        "WHERE rule_id=? AND target_scope=?",
+        ("[]", rule_id, "drc"))
+    conn.commit()
+
+    index = build_index(conn, lifecycle_statuses=frozenset({"promoted"}))
+    assert index.get(rule_id) is None
+    assert rule_id in index.rejected
+    assert "malformed provenance" in index.rejected[rule_id]
+    receipt = retrieve(conn, RepairContext(check="drc"), limit=5)
+    assert receipt.candidates_retrieved == 0
+    assert receipt.results == []
+
+
 def test_retrieve_returns_applicable_rule(tmp_tehm, sample_record_dict):
     conn = _capture_and_crystallize(tmp_tehm, sample_record_dict)
     _grant_runtime_authority(conn)

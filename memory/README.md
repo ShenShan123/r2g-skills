@@ -1907,3 +1907,13 @@ fail-closed。external observation hash-chain 也拒绝重复 `case_id`，避免
 约束；gate evaluation 的逐项 `checks` 还必须与 authority 顶层六门完全一致，不能只
 伪造一个顶层 `eligible` 布尔值。六门未建立时仍不允许 canonical import，Parametric 与
 production runtime 边界不变。
+
+### 2026-08-28 runtime retrieval lifecycle-row firewall
+
+`retrieval.index.build_index()` 之前只按 SQL 的 `tehm_rule_status.status` 过滤，
+因此一条被篡改为 `promoted` 但 `status_version`、provenance 或更新时间损坏的
+derived row 仍可能进入检索/activation。现在所有被选中的 `candidate/promoted`
+行都会通过 `lifecycle.rule_status.get_status()` 完整重放；任何 malformed row 都被
+记录为 rejected 并从 index 排除。这样 runtime 仍只消费经 authority 写入且可重放的
+`promoted` 状态，不能靠直接修改状态列绕过 lifecycle authority；该修复不新增 gate、
+不写 canonical memory，也不改变 Parametric shadow-only 边界。
