@@ -90,6 +90,45 @@ def test_status_version_bumps_on_every_transition(tmp_tehm, sample_record_dict):
     assert status["status_version"] == 3
 
 
+def test_status_replay_is_idempotent_but_provenance_immutable(
+        tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_valid_rule(tmp_tehm, sample_record_dict)
+    first = enter_shadow(
+        conn, rule_id=rule_id, target_scope="drc",
+        provenance={"source": "lifecycle-test"})
+    replay = set_status(
+        conn, rule_id=rule_id, target_scope="drc", status="shadow",
+        provenance={"source": "lifecycle-test"})
+    assert replay == first
+    with pytest.raises(RuleLifecycleError, match="immutable provenance"):
+        set_status(
+            conn, rule_id=rule_id, target_scope="drc", status="shadow",
+            provenance={"source": "tampered"})
+    row = conn.execute(
+        "SELECT status, status_version, provenance_json "
+        "FROM tehm_rule_status WHERE rule_id=? AND target_scope=?",
+        (rule_id, "drc")).fetchone()
+    assert row["status"] == "shadow"
+    assert row["status_version"] == 1
+    assert json.loads(row["provenance_json"]) == {
+        "source": "lifecycle-test"}
+
+
+def test_status_reader_fails_closed_on_malformed_provenance(
+        tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_valid_rule(tmp_tehm, sample_record_dict)
+    enter_shadow(conn, rule_id=rule_id, target_scope="drc")
+    conn.execute(
+        "UPDATE tehm_rule_status SET provenance_json=? "
+        "WHERE rule_id=? AND target_scope=?",
+        ("[]", rule_id, "drc"))
+    conn.commit()
+    with pytest.raises(RuleLifecycleError, match="malformed provenance"):
+        get_status(conn, rule_id=rule_id, target_scope="drc")
+
+
 # -- A/B judging -----------------------------------------------------------------
 
 def test_lcb_variance_aware():

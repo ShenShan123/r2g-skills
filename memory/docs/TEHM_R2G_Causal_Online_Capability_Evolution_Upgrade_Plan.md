@@ -3749,3 +3749,14 @@ digest-only 兼容模式以支持迁移。该 receipt 只提高 C1 的 attributi
 canonical memory、不改变 lifecycle，也不授权 production runtime。进入 capability
 authority 时，该 receipt 会随 authority payload 保存并重新归一化校验；因此 C1 的
 authority replay 也不能退化为只比较两个 opaque digest。
+
+### 2026-08-28 rule lifecycle status replay boundary
+
+`tehm_rule_status` 原先通过 `INSERT OR REPLACE` 写入：同一状态的重试会递增版本并可能
+覆盖 provenance，状态转换还会走删除/重插入路径。现已改为 immutable replay 语义：同
+状态调用只有在 provenance 完全一致时幂等返回原 `status_version`，冲突证据直接
+fail-closed；新状态使用 INSERT/UPDATE 后重新读取并校验完整持久化行。`get_status()`
+同时校验生命周期枚举、正整数版本、provenance JSON 与更新时间，损坏行不会被
+authority、retrieval 或 runtime 当成有效状态。该修复只收紧 derived lifecycle 的
+可重放性，不新增 promotion gate，也不改变 canonical memory 或 production runtime
+边界。

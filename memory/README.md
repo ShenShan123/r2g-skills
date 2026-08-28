@@ -119,6 +119,10 @@ memory、触发 lifecycle promotion 或使 policy 进入 production runtime。
 当 attribution receipt 进入 capability authority 时，C1 receipt 会随 authority
 payload 保存并在 replay 中重新归一化/校验；ORFS/RTL 的 C1 evidence ID 也绑定完整
 delta receipt，而不是只绑定两端 digest。
+rule lifecycle status 也已采用同一 replay 边界：`set_status()` 对同状态只接受
+provenance 完全一致的幂等重放，对冲突直接拒绝；状态转换改为 UPDATE 后完整重读校验，
+`get_status()` 对 status/version/provenance/更新时间损坏 fail-closed，不再使用
+`INSERT OR REPLACE` 静默覆盖。
 现在 rule promotion 也有独立的数据库绑定 authority seam：
 `lifecycle/rule_authority.py` 将每个 gate 的 payload 写入 immutable evidence ledger，
 并把 rule 内容 digest、candidate `status_version` 与真实 winning `tehm_trials` 行绑定。
