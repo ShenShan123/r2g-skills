@@ -72,6 +72,11 @@ def _build_record(spec: dict):
         raise ValueError("pair_spec_malformed")
     lineage_id = _strict_text(spec.get("lineage_id"), label="lineage_id")
     target_check = _target_check(spec.get("target_check"))
+    raw_family = spec.get("_transformation_family")
+    if raw_family is None:
+        raw_family = "DENSITY_RELIEF"
+    transformation_family = _strict_text(
+        raw_family, label="transformation_family")
     config_edits = spec.get("config_edits")
     if not isinstance(config_edits, Mapping):
         raise ValueError("config_edits_malformed")
@@ -80,7 +85,7 @@ def _build_record(spec: dict):
         lineage_id=lineage_id,
         target_check=target_check,
         config_edits=dict(config_edits),
-        transformation_family="DENSITY_RELIEF")
+        transformation_family=transformation_family)
     return record
 
 
@@ -208,12 +213,16 @@ def build_orfs_capability_attribution(
     causal = json.loads(report_path.read_text())
     if not isinstance(causal, Mapping):
         raise ValueError("causal report is malformed")
-    causal_path_id = (causal.get("path") or {}).get("path_id")
+    causal_path = causal.get("path")
+    replication = causal.get("replication")
+    if not isinstance(causal_path, Mapping) or not isinstance(replication, Mapping):
+        raise ValueError("causal report path/replication is malformed")
+    causal_path_id = causal_path.get("path_id")
     if type(causal_path_id) is not str:
         causal_path_id = ""
     else:
         causal_path_id = causal_path_id.strip()
-    if not causal_path_id or (causal.get("replication") or {}).get("eligible") is not True:
+    if not causal_path_id or replication.get("eligible") is not True:
         raise ValueError("causal report must contain an eligible replicated path")
     if len(training_pairs) < 2:
         raise ValueError("attribution requires at least two training lineages")
@@ -244,7 +253,9 @@ def build_orfs_capability_attribution(
     train_transition_ids = []
     train_summaries = []
     for spec in training_pairs:
-        record = _build_record(spec)
+        record_spec = dict(spec)
+        record_spec["_transformation_family"] = mechanism_family
+        record = _build_record(record_spec)
         summary = _summary(
             record, target_check=_target_check(spec.get("target_check")))
         if not (summary["before_failed"] and summary["candidate_pass"]):
@@ -288,7 +299,7 @@ def build_orfs_capability_attribution(
         promoted_rules=[], promoted_assets=[],
         retrieval_config={"causal_shadow": True, "evaluation_only": True},
         routing_config={"causal_path_id": causal_path_id,
-                        "selected_action": "DENSITY_RELIEF",
+                        "selected_action": mechanism_family,
                         "production_authority": False})
     # C3 is an evaluation-runtime load receipt.  It deliberately says nothing
     # about production eligibility.
@@ -298,7 +309,9 @@ def build_orfs_capability_attribution(
         receipt={"mode": "evaluation_only", "production_authority": False,
                  "causal_path_id": causal_path_id})
 
-    held_record = _build_record(heldout_pair)
+    held_record_spec = dict(heldout_pair)
+    held_record_spec["_transformation_family"] = mechanism_family
+    held_record = _build_record(held_record_spec)
     held_summary = _summary(
         held_record, target_check=_target_check(
             heldout_pair.get("target_check")))
@@ -308,7 +321,9 @@ def build_orfs_capability_attribution(
                                        "lineage": held_lineage,
                                        "causal_path_id": causal_path_id})
 
-    non_target_record = _build_record(non_target_pair)
+    non_target_record_spec = dict(non_target_pair)
+    non_target_record_spec["_transformation_family"] = mechanism_family
+    non_target_record = _build_record(non_target_record_spec)
     non_target_summary = _summary(
         non_target_record, target_check=_target_check(
             non_target_pair.get("target_check")))
@@ -381,9 +396,9 @@ def build_orfs_capability_attribution(
                "lineage_id": held_lineage,
                "baseline_failed": held_summary["before_failed"]}
     ablation_gain_without_memory = _runtime_selects_action(
-        baseline_runtime, train_lineages, "DENSITY_RELIEF")
+        baseline_runtime, train_lineages, mechanism_family)
     candidate_selected_action = _runtime_selects_action(
-        candidate_runtime, train_lineages, "DENSITY_RELIEF")
+        candidate_runtime, train_lineages, mechanism_family)
     ablation = {
         "policy_snapshot_id": baseline_policy.policy_snapshot_id,
         "behavior_digest": baseline_behavior_digest,

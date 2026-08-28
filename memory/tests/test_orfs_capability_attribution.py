@@ -15,7 +15,7 @@ if str(SCRIPTS) not in sys.path:
 import build_orfs_capability_attribution as orfs_attribution  # noqa: E402
 
 
-def _record(lineage: str) -> ExecutionRecord:
+def _record(lineage: str, family: str = "DENSITY_RELIEF") -> ExecutionRecord:
     return ExecutionRecord(
         record_id=f"orfs-capability:{lineage}",
         domain="flow.signoff",
@@ -31,7 +31,7 @@ def _record(lineage: str) -> ExecutionRecord:
         },
         action={
             "domain": "flow.CONFIG_DELTA",
-            "transformation_family": "DENSITY_RELIEF",
+            "transformation_family": family,
             "payload": {"config_edits": {"CORE_UTILIZATION": "40"},
                         "rerun_from": "floorplan", "recheck": "route"},
         },
@@ -56,7 +56,7 @@ def _record(lineage: str) -> ExecutionRecord:
             "tool_versions": {"orfs": "test"}, "oracle_complete": True,
         },
         episode={"episode_id": f"episode:{lineage}",
-                 "mechanism_family": "DENSITY_RELIEF",
+                 "mechanism_family": family,
                  "lineage_id": lineage, "terminal_status": "VERIFIED_REPAIR"},
     )
 
@@ -91,8 +91,11 @@ def test_orfs_capability_authority_is_db_bound_and_read_only(
     conn.close()
     source_before = hashlib.sha256(source.read_bytes()).hexdigest()
 
-    monkeypatch.setattr(orfs_attribution, "_build_record",
-                        lambda spec: _record(str(spec["lineage_id"])))
+    monkeypatch.setattr(
+        orfs_attribution, "_build_record",
+        lambda spec: _record(str(spec["lineage_id"]),
+                              str(spec.get("_transformation_family",
+                                          "DENSITY_RELIEF"))))
     causal_report = tmp_path / "causal.json"
     causal_report.write_text(json.dumps({
         "path": {"path_id": "causal_path_test"},
@@ -109,6 +112,7 @@ def test_orfs_capability_authority_is_db_bound_and_read_only(
                       "config_edits": {"CORE_UTILIZATION": "40"}},
         non_target_pair={"lineage_id": "non-target:d",
                          "config_edits": {"CORE_UTILIZATION": "40"}},
+        mechanism_family="CUSTOM_RELIEF",
     )
 
     assert result["attribution"]["attribution"]["gates"] == {
@@ -121,6 +125,14 @@ def test_orfs_capability_authority_is_db_bound_and_read_only(
     assert result["promotion_attempted"] is False
     assert result["production_promotion_eligible"] is False
     assert result["canonical_memory_mutation"] == "none"
+    assert result["capability"]["mechanism_family"] == "CUSTOM_RELIEF"
+    policy_row = sqlite3.connect(result["derived_db"]).execute(
+        "SELECT routing_config_json FROM tehm_policy_snapshots WHERE "
+        "policy_snapshot_id=?", (result["candidate_policy"][
+            "policy_snapshot_id"],)).fetchone()
+    assert json.loads(policy_row[0])["selected_action"] == "CUSTOM_RELIEF"
+    assert all(row["selected_action"] == "CUSTOM_RELIEF" for row in
+               result["runtime_behavior"]["candidate"]["decisions"])
     memory_delta = result["attribution"]["attribution"]["detail"]["memory_delta"]
     assert memory_delta["eligible"] is True
     transition_ids = memory_delta["delta"]["added_transition_ids"]

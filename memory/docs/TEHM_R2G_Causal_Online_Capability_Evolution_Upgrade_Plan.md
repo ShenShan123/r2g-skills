@@ -4080,7 +4080,8 @@ rollback/obligation/utility authority projector 的 replay 输入，不改变六
 
 build_orfs_capability_attribution.py 的 evaluation-only runtime 与 pair 输入现在
 也拒绝弱类型 lineage、target check、config、mechanism/runtime ID，以及 runtime
-decision 的 lineage/action；其 digest serializer 不再使用 default=str 把不支持的
+decision 的 lineage/action；pair action 的 transformation family 现在由 capability
+family 绑定，而不是由 builder 固定写死；其 digest serializer 不再使用 default=str 把不支持的
 对象隐式改写。这样 C1--C8 attribution receipt 的生成与
 capability.authority replay 使用同一类 typed witness 约束。该脚本仍只在 derived
 DB 中执行，held-out/non-target 不进入 learner snapshot，promotion_attempted=false
