@@ -300,12 +300,12 @@ def _retention_binding_reasons(
     for ordinal, receipt_id in enumerate(receipt_ids):
         retention = load_capability_retention_receipt(conn, receipt_id)
         if retention is None:
-            reasons.append(f"C7:retention[{ordinal}]:receipt_missing")
+            reasons.append(f"C7:retention:{ordinal}:receipt_missing")
             continue
         checked = verify_capability_retention(conn, capability_id, retention)
         if checked.get("eligible") is not True:
             reasons.extend(
-                f"C7:retention[{ordinal}]:{reason}"
+                f"C7:retention:{ordinal}:{reason}"
                 for reason in checked.get("reasons") or ("not_eligible",))
     return reasons
 

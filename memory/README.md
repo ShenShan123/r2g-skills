@@ -138,6 +138,11 @@ TE、harmful-rate 和 conformal coverage；`verify_rule_authority()` 在消费�
 能力 authority 的 gate evidence 与最终 authority row 现在通过同一 savepoint
 原子写入；不可变 evidence 冲突或后续写入失败会回滚整组 C1–C8 rows，不留下部分
 authority 证据。若调用方已有事务，则只释放 savepoint，由调用方继续负责最终提交。
+Capability registry 的 lifecycle replay 也已收紧：registry reader 会校验 status、版本、
+provenance 与时间字段；重复 evidence 会逐字段比较 split/verdict/lineage/digest。已
+promoted capability 的再次 promotion 只有在 authority provenance 完全一致时才幂等，
+冲突会拒绝；注册重放返回数据库中的实际 lifecycle status，不会把 promoted 状态伪装成
+candidate，也不会覆盖 production provenance。
 
 rule authority 的 `cross_lineage_te` 现在还支持显式的
 `causal_transfer_receipt_ids` 输入：每条 receipt 必须在同一 shadow DB 中由

@@ -3773,3 +3773,15 @@ projection，不能借同一 `rule_id` 改写已经 promoted 的 production rule
 处理。utility、confidence 等既有可累积字段仍不由 crystallizer 覆盖。该边界只防止
 derived rebuild 绕过 production authority，不新增 promotion gate，也不把 staging 或
 canonical evidence 自动升级为 runtime 规则。
+
+### 2026-08-28 capability lifecycle replay boundary
+
+Capability registry 现在也遵守与 asset/rule lifecycle 相同的 fail-closed replay 约束。
+`validate_capability_row()` 会校验 lifecycle status、正版本、provenance JSON 以及创建/更新时间；
+`record_capability_evidence()` 对同一 evidence key 逐字段比较 split、verdict、lineage 和
+digest，任何篡改不会被幂等路径吞掉。`register_capability()` 仍只能创建
+`observed_gap/candidate`，但重放时返回数据库中真实的 lifecycle status，不能把已晋级
+capability 报告为 candidate。`promote_capability()` 在 authority receipt 重放成功后采用
+savepoint 写入并完整重读；已 promoted 状态只有在 authority provenance 完全一致时幂等，
+冲突证据直接拒绝。该修复只保护 capability derived lifecycle，不新增 C1-C8 gate，也不
+允许 capability 绕过 authority 进入 production policy。

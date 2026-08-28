@@ -66,6 +66,30 @@ def validate_capability_row(row: Mapping) -> dict:
                    if digest else None)
     if not digest or data.get("capability_id") != expected_id:
         raise ValueError("capability registry content digest mismatch")
+    status = data.get("status")
+    if status not in CAPABILITY_STATUSES:
+        raise ValueError("capability registry lifecycle status is invalid")
+    version = data.get("version")
+    if isinstance(version, bool):
+        raise ValueError("capability registry version is invalid")
+    try:
+        version = int(version)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("capability registry version is invalid") from exc
+    if version < 1:
+        raise ValueError("capability registry version is invalid")
+    try:
+        provenance = json.loads(data.get("provenance_json") or "{}")
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            "capability registry provenance is malformed") from exc
+    if not isinstance(provenance, dict):
+        raise ValueError("capability registry provenance is malformed")
+    for field in ("created_at", "updated_at"):
+        if not isinstance(data.get(field), str) or not data[field]:
+            raise ValueError(f"capability registry {field} is invalid")
+    data["version"] = version
+    data["provenance"] = provenance
     return data
 
 
@@ -90,8 +114,17 @@ def register_capability(
     if status not in {"observed_gap", "candidate"}:
         raise ValueError(
             "capability registration cannot grant verified/promoted/lifecycle status")
+    if isinstance(version, bool):
+        raise ValueError("capability version must be positive")
+    try:
+        version = int(version)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("capability version must be positive") from exc
     if version < 1:
         raise ValueError("capability version must be positive")
+    if provenance is not None and not isinstance(provenance, Mapping):
+        raise ValueError("capability provenance must be a mapping")
+    requested_provenance = dict(provenance or {})
     identity = {
         "mechanism_family": mechanism_family,
         "applicability": applicability,
@@ -114,7 +147,7 @@ def register_capability(
         (capability_id, mechanism_family, stable_dumps(applicability),
          stable_dumps(list(required_rules)), stable_dumps(list(required_assets)),
          stable_dumps(obligations or {}), stable_dumps(budget or {}), status,
-         int(version), stable_dumps(provenance or {}), now, now))
+         version, stable_dumps(requested_provenance), now, now))
     stored = conn.execute(
         "SELECT * FROM tehm_capabilities WHERE capability_id=?",
         (capability_id,)).fetchone()
@@ -134,7 +167,11 @@ def register_capability(
         raise ValueError("capability is immutable and conflicts")
     if commit and not had_outer_transaction:
         conn.commit()
-    return CapabilityReceipt(capability_id, mechanism_family, status, int(version))
+    # ``status`` is lifecycle state, not capability identity.  A replay after
+    # an authority transition must report the persisted state and never
+    # appear to downgrade a promoted row back to candidate/observed_gap.
+    return CapabilityReceipt(capability_id, mechanism_family,
+                             stored["status"], int(stored["version"]))
 
 
 def record_capability_evidence(
@@ -156,20 +193,23 @@ def record_capability_evidence(
     validate_capability_row(capability_row)
     if split not in EVIDENCE_SPLITS:
         raise ValueError(f"invalid capability evidence split: {split!r}")
-    if not evidence_type or not evidence_id:
-        raise ValueError("evidence_type and evidence_id are required")
+    if not evidence_type or not evidence_id or not verdict:
+        raise ValueError("evidence_type, evidence_id, and verdict are required")
     digest = "sha1:" + hashlib.sha1(stable_dumps({
         "capability_id": capability_id, "evidence_type": evidence_type,
         "evidence_id": evidence_id, "split": split, "verdict": verdict,
         "lineage_id": lineage_id,
     }).encode()).hexdigest()
     existing = conn.execute(
-        """SELECT evidence_digest FROM tehm_capability_evidence
+        """SELECT split, lineage_id, verdict, evidence_digest
+             FROM tehm_capability_evidence
              WHERE capability_id=? AND evidence_type=? AND evidence_id=?""",
         (capability_id, evidence_type, evidence_id),
     ).fetchone()
     if existing is not None:
-        if existing["evidence_digest"] != digest:
+        if ((existing["split"], existing["lineage_id"], existing["verdict"],
+             existing["evidence_digest"]) !=
+                (split, lineage_id, verdict, digest)):
             raise ValueError("capability evidence is immutable and conflicts")
         return digest
     had_outer_transaction = conn.in_transaction
@@ -210,7 +250,7 @@ def promote_capability(conn: sqlite3.Connection, capability_id: str,
     # for promotion (especially for an ``observed_gap`` capability).
     if authority_receipt is None:
         raise ValueError("capability promotion requires a recorded authority receipt")
-    if row["status"] not in {"candidate", "verified"}:
+    if row["status"] not in {"candidate", "verified", "promoted"}:
         raise ValueError(
             f"capability status {row['status']!r} is not promotable")
     from .authority import verify_capability_authority
@@ -234,19 +274,45 @@ def promote_capability(conn: sqlite3.Connection, capability_id: str,
             stable_dumps(attribution_data).encode()).hexdigest()
         if attribution_digest != authority_data.get("attribution_digest"):
             raise ValueError("attribution receipt does not match authority receipt")
-    try:
-        required_assets = json.loads(row["required_assets_json"] or "[]")
-    except (TypeError, json.JSONDecodeError):
-        required_assets = []
     gate_report = authority_check["gate_report"]
     provenance = stable_dumps({"authority": authority_data,
                                "gates": gate_report})
+    if row["status"] == "promoted":
+        # A repeated promotion request is a replay of the same lifecycle
+        # transition.  It is idempotent only when the persisted authority
+        # provenance is byte-equivalent; a different authority receipt must
+        # not overwrite the production history for this capability.
+        if row["provenance_json"] != provenance:
+            raise ValueError(
+                "capability promotion replay conflicts with immutable provenance")
+        return CapabilityReceipt(capability_id, row["mechanism_family"],
+                                 "promoted", int(row["version"]))
+
     had_outer_transaction = conn.in_transaction
-    conn.execute(
-        """UPDATE tehm_capabilities
-              SET status='promoted', provenance_json=?, updated_at=?
-            WHERE capability_id=?""",
-        (provenance, tehm_db.now_local(), capability_id))
+    savepoint = "tehm_capability_promotion_v1"
+    conn.execute(f"SAVEPOINT {savepoint}")
+    try:
+        updated_at = tehm_db.now_local()
+        conn.execute(
+            """UPDATE tehm_capabilities
+                  SET status='promoted', provenance_json=?, updated_at=?
+                WHERE capability_id=? AND status IN ('candidate', 'verified')""",
+            (provenance, updated_at, capability_id))
+        persisted = conn.execute(
+            "SELECT * FROM tehm_capabilities WHERE capability_id=?",
+            (capability_id,)).fetchone()
+        if persisted is None:
+            raise ValueError("capability promotion row disappeared")
+        checked = validate_capability_row(persisted)
+        if (checked["status"] != "promoted" or
+                persisted["provenance_json"] != provenance):
+            raise ValueError(
+                "capability promotion write is immutable and conflicts")
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+    except Exception:
+        conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise
     if commit and not had_outer_transaction:
         conn.commit()
     return CapabilityReceipt(capability_id, row["mechanism_family"], "promoted",

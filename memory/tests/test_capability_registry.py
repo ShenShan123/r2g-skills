@@ -115,6 +115,25 @@ def test_capability_registration_cannot_grant_authority_or_rewrite_evidence(
             evidence_id="e1", split="training", verdict="FAIL", lineage_id="l1")
 
 
+def test_capability_evidence_replay_checks_all_immutable_fields(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="EVIDENCE_REPLAY", applicability={})
+    record_capability_evidence(
+        conn, capability_id=capability.capability_id, evidence_type="external",
+        evidence_id="e1", split="training", verdict="PASS", lineage_id="l1")
+    conn.execute(
+        "UPDATE tehm_capability_evidence SET verdict='FAIL' "
+        "WHERE capability_id=? AND evidence_type='external' AND evidence_id='e1'",
+        (capability.capability_id,))
+    conn.commit()
+    with pytest.raises(ValueError, match="immutable and conflicts"):
+        record_capability_evidence(
+            conn, capability_id=capability.capability_id,
+            evidence_type="external", evidence_id="e1", split="training",
+            verdict="PASS", lineage_id="l1")
+
+
 def test_capability_registry_replay_rejects_tampered_definition(tmp_tehm):
     conn, _, _ = tmp_tehm
     capability = register_capability(
@@ -137,6 +156,20 @@ def test_capability_registry_replay_rejects_tampered_definition(tmp_tehm):
             conn, capability_id=capability.capability_id,
             evidence_type="external", evidence_id="e1", split="training",
             verdict="PASS")
+
+
+def test_capability_registry_lifecycle_reader_fails_closed(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="LIFECYCLE_REPLAY", applicability={})
+    conn.execute(
+        "UPDATE tehm_capabilities SET provenance_json=? "
+        "WHERE capability_id=?",
+        (json.dumps([]), capability.capability_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="provenance is malformed"):
+        register_capability(
+            conn, mechanism_family="LIFECYCLE_REPLAY", applicability={})
 
 
 def test_capability_attribution_requires_all_eight_gates():
@@ -389,6 +422,50 @@ def test_capability_promotion_requires_attribution_and_all_gates(tmp_tehm):
     assert conn.execute(
         "SELECT status FROM tehm_capabilities WHERE capability_id=?",
         (capability.capability_id,)).fetchone()[0] == "promoted"
+
+
+def test_capability_promotion_replay_is_idempotent_and_provenance_bound(
+        tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="PROMOTION_REPLAY", applicability={},
+        status="candidate")
+    attribution, authority, gates = _full_attribution_and_authority(
+        conn, capability.capability_id)
+    first = promote_capability(
+        conn, capability.capability_id, gates=gates,
+        attribution_receipt=attribution, authority_receipt=authority)
+    replay = promote_capability(
+        conn, capability.capability_id, gates=gates,
+        attribution_receipt=attribution, authority_receipt=authority)
+    assert first == replay
+
+    conn.execute(
+        "UPDATE tehm_capabilities SET provenance_json=? "
+        "WHERE capability_id=?",
+        (json.dumps({"tampered": True}), capability.capability_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="replay conflicts"):
+        promote_capability(
+            conn, capability.capability_id, gates=gates,
+            attribution_receipt=attribution, authority_receipt=authority)
+
+
+def test_capability_registration_replay_reports_persisted_status(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="REGISTRATION_REPLAY", applicability={},
+        status="candidate")
+    attribution, authority, gates = _full_attribution_and_authority(
+        conn, capability.capability_id)
+    promote_capability(
+        conn, capability.capability_id, gates=gates,
+        attribution_receipt=attribution, authority_receipt=authority)
+    replay = register_capability(
+        conn, mechanism_family="REGISTRATION_REPLAY", applicability={},
+        status="candidate")
+    assert replay.capability_id == capability.capability_id
+    assert replay.status == "promoted"
 
 
 def test_capability_with_asset_requires_independent_asset_gate(tmp_tehm):
