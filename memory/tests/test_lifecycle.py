@@ -129,6 +129,23 @@ def test_status_reader_fails_closed_on_malformed_provenance(
         get_status(conn, rule_id=rule_id, target_scope="drc")
 
 
+def test_status_reader_fails_closed_on_weakly_typed_version(
+        tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_valid_rule(tmp_tehm, sample_record_dict)
+    enter_shadow(conn, rule_id=rule_id, target_scope="drc")
+    # SQLite's dynamic typing permits a copied/altered status row to store a
+    # string in the INTEGER version column when checks are bypassed.  A
+    # lifecycle replay must not coerce that text into a valid version.
+    conn.execute("PRAGMA ignore_check_constraints=ON")
+    conn.execute(
+        "UPDATE tehm_rule_status SET status_version='version-1' "
+        "WHERE rule_id=? AND target_scope=?", (rule_id, "drc"))
+    conn.commit()
+    with pytest.raises(RuleLifecycleError, match="invalid status_version"):
+        get_status(conn, rule_id=rule_id, target_scope="drc")
+
+
 # -- A/B judging -----------------------------------------------------------------
 
 def test_lcb_variance_aware():

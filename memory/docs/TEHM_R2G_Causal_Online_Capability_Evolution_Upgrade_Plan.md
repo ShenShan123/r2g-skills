@@ -3965,6 +3965,14 @@ preview 做结构化类型校验：`triggered`、`full_rebuild_equivalent` 和
 deterministic replay，不触发 consolidation、canonical write、promotion 或 production
 runtime。
 
+### 2026-08-28 lifecycle status-version replay type closure
+
+`lifecycle.rule_status.get_status()` 现在要求持久化的 `status_version` 为严格的
+SQLite integer 且大于零，不再把复制数据库中的字符串化版本通过 `int(...)` 转成有效
+状态。这样 trial staleness、registry authority 与 runtime retrieval 都会在版本列被
+弱类型篡改时 fail-closed。该修复只收紧 lifecycle derived-state replay，不改变
+promotion gate、canonical memory、Parametric shadow-only 或 production runtime 语义。
+
 ### 2026-08-28 ORFS retention runtime-load validation order closure
 
 `build_orfs_capability_retention.py` 现在先通过

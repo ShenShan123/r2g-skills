@@ -106,14 +106,9 @@ def get_status(conn: sqlite3.Connection, *, rule_id: str,
     if status not in LIFECYCLE_STATUSES:
         raise RuleLifecycleError("rule lifecycle status row contains invalid status")
     version = row["status_version"]
-    if isinstance(version, bool):
+    if type(version) is not int:
         raise RuleLifecycleError(
             "rule lifecycle status row contains invalid status_version")
-    try:
-        version = int(version)
-    except (TypeError, ValueError) as exc:
-        raise RuleLifecycleError(
-            "rule lifecycle status row contains invalid status_version") from exc
     if version < 1:
         raise RuleLifecycleError(
             "rule lifecycle status row contains invalid status_version")
