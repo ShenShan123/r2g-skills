@@ -3915,3 +3915,11 @@ Parametric shadow-only 或 production runtime 边界。
 `true/false` 作为 `1/0` 接受；布尔状态必须通过专用布尔字段表达。这样调用方无法用
 一个状态位伪造完美 coverage 或零 harmful-rate，外部 ORFS authority projector 与 rule
 authority replay 共同保持这一类型边界。
+
+### 2026-08-28 policy-load 写入端类型闭环
+
+`record_policy_load()` 现在与 `validate_policy_load_row()` 共享严格的布尔契约：
+`loaded` 必须是实际 Python/JSON boolean，字符串化的 `"false"` 在写入前即被拒绝，
+不会生成看似成功的 runtime-load receipt。这样 C3/C4 的 policy/runtime witness 在
+写入端和 replay 端形成闭环；该修复不改变 capability gate 合取、不写 canonical memory，
+也不允许 evaluation load 进入 production runtime。

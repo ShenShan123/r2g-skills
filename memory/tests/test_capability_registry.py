@@ -592,6 +592,10 @@ def test_policy_and_load_validators_reject_weakly_typed_identity_fields(tmp_tehm
 
     policy = create_policy_snapshot(
         conn, memory_snapshot_id="typed-memory-load", promoted_rules=[])
+    with pytest.raises(ValueError, match="loaded must be a boolean"):
+        record_policy_load(
+            conn, policy_snapshot_id=policy.policy_snapshot_id,
+            runtime_id="typed-runtime", loaded="false")
     load = record_policy_load(
         conn, policy_snapshot_id=policy.policy_snapshot_id,
         runtime_id="typed-runtime", loaded=True)

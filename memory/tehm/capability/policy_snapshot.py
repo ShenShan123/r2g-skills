@@ -207,6 +207,8 @@ def record_policy_load(
     A DB snapshot alone is insufficient for C3; callers must explicitly record
     the runtime identity and whether it accepted that exact policy digest.
     """
+    if type(loaded) is not bool:
+        raise ValueError("loaded must be a boolean")
     snapshot = load_policy_snapshot(conn, policy_snapshot_id)
     if not runtime_id:
         raise ValueError("runtime_id is required")
@@ -214,7 +216,7 @@ def record_policy_load(
         "policy_snapshot_id": policy_snapshot_id,
         "policy_digest": snapshot["policy_digest"],
         "runtime_id": runtime_id,
-        "loaded": bool(loaded),
+        "loaded": loaded,
         "receipt": dict(receipt or {}),
     }
     receipt_digest = "sha256:" + hashlib.sha256(
@@ -232,7 +234,7 @@ def record_policy_load(
            (receipt_id, policy_snapshot_id, runtime_id, loaded,
             receipt_json, receipt_digest, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (receipt_id, policy_snapshot_id, runtime_id, int(bool(loaded)),
+        (receipt_id, policy_snapshot_id, runtime_id, int(loaded),
          stable_dumps(payload), receipt_digest, created_at))
     stored = conn.execute(
         "SELECT * FROM tehm_policy_load_receipts WHERE receipt_id=?",
@@ -243,7 +245,7 @@ def record_policy_load(
     if commit and not had_outer_transaction:
         conn.commit()
     return PolicyLoadReceipt(receipt_id, policy_snapshot_id, runtime_id,
-                             bool(loaded), receipt_digest)
+                             loaded, receipt_digest)
 
 
 __all__ = ["PolicyLoadReceipt", "PolicySnapshotReceipt", "create_policy_snapshot",
