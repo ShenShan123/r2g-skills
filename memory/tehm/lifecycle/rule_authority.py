@@ -1130,12 +1130,15 @@ def _receipt_ids(values) -> tuple[str, ...]:
     if isinstance(values, (str, bytes)) or values is None:
         raise ValueError("causal transfer receipt IDs must be a sequence")
     try:
-        result = tuple(str(value).strip() for value in values)
+        values = tuple(values)
     except TypeError as exc:
         raise ValueError(
             "causal transfer receipt IDs must be a sequence") from exc
-    if not result or any(not value for value in result):
+    if (not values or
+            any(type(value) is not str or not value.strip()
+                for value in values)):
         raise ValueError("causal transfer receipt IDs must be non-empty")
+    result = tuple(value.strip() for value in values)
     if len(set(result)) != len(result):
         raise ValueError("causal transfer receipt IDs contain duplicates")
     return tuple(sorted(result))

@@ -3981,6 +3981,14 @@ promotion gate、canonical memory、Parametric shadow-only 或 production runtim
 字段。该边界只影响 held-out capability-retention 的 fail-closed 审计，不改变
 canonical memory、learner support、promotion 或 production runtime。
 
+### 2026-08-28 causal transfer ID type closure
+
+因果 transfer evaluator、transfer ledger 与 rule-authority receipt selection 现在只接受
+非空字符串 ID，不再将整数或其他对象通过 `str(...)` 隐式转换后参与 path/transition
+重放。非法 ID 会产生明确的 malformed receipt 或 fail-closed authority reason；该修复
+只强化 shadow/evaluation evidence 的 provenance 解析，不改变 L4 级别、canonical memory、
+promotion 或 production runtime 边界。
+
 ### 2026-08-28 verifier obligation-coverage type closure
 
 `VerifierSnapshot` 现在只接受有限的数值型 `obligation_coverage`，明确拒绝布尔值、

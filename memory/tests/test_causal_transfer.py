@@ -127,6 +127,19 @@ def test_l4_transfer_cannot_reuse_training_transition(tmp_tehm, tmp_path):
     assert receipt.reason == "transfer_reuses_training_transition"
 
 
+def test_l4_transfer_rejects_non_string_transition_ids(tmp_tehm, tmp_path):
+    report = _training_replication(tmp_tehm, tmp_path)
+    conn = db.connect(report["derived_db"])
+    try:
+        receipt = evaluate_transfer_supported_mechanism(
+            conn, report["path"]["path_id"], [123],
+            training_campaign_id="l4-training")
+    finally:
+        conn.close()
+    assert receipt.eligible is False
+    assert receipt.reason == "malformed_transfer_transitions"
+
+
 def test_orfs_l4_requires_exact_two_arm_full_oracle(tmp_tehm, tmp_path):
     """A generic verifier PASS cannot masquerade as an ORFS full receipt."""
     report = _training_replication(tmp_tehm, tmp_path)

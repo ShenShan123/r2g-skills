@@ -83,9 +83,9 @@ def _transfer_ids(values) -> tuple[tuple[str, ...] | None, str | None]:
         return None, "malformed_transfer_transitions"
     if not values:
         return None, "transfer_transitions_missing"
-    ids = tuple(str(value).strip() for value in values)
-    if any(not value for value in ids):
+    if any(type(value) is not str or not value.strip() for value in values):
         return None, "malformed_transfer_transitions"
+    ids = tuple(value.strip() for value in values)
     if len(set(ids)) != len(ids):
         return None, "duplicate_transfer_transitions"
     return tuple(sorted(ids)), None

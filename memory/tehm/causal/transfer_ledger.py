@@ -118,11 +118,14 @@ def _ids(values, *, name: str) -> tuple[str, ...]:
     if isinstance(values, (str, bytes)) or values is None:
         raise ValueError(f"{name} must be a non-empty sequence")
     try:
-        result = tuple(str(value).strip() for value in values)
+        values = tuple(values)
     except TypeError as exc:
         raise ValueError(f"{name} must be a non-empty sequence") from exc
-    if not result or any(not value for value in result):
+    if (not values or
+            any(type(value) is not str or not value.strip()
+                for value in values)):
         raise ValueError(f"{name} must be a non-empty sequence")
+    result = tuple(value.strip() for value in values)
     if len(set(result)) != len(result):
         raise ValueError(f"{name} contains duplicate transition IDs")
     return tuple(sorted(result))
