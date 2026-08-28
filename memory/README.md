@@ -1917,3 +1917,13 @@ derived row 仍可能进入检索/activation。现在所有被选中的 `candida
 记录为 rejected 并从 index 排除。这样 runtime 仍只消费经 authority 写入且可重放的
 `promoted` 状态，不能靠直接修改状态列绕过 lifecycle authority；该修复不新增 gate、
 不写 canonical memory，也不改变 Parametric shadow-only 边界。
+
+### 2026-08-28 lifecycle consumers revalidate authority
+
+runtime consultation 在把 retrieval receipt 的 rule ID 解析回定义时，现在再次使用
+`promoted` lifecycle filter；如果 retrieval 与 definition lookup 之间发生 demotion 或
+状态损坏，旧 receipt 不会被转成 live strategy。ORFS candidate/promoted trial lane
+也先用同一 lifecycle reader 规范化 status/version，再生成 trial identity 和 lifecycle
+decision。Capability-gap detector 对 promoted rule family 的覆盖判断同样不再信任裸
+`status` 列，损坏状态不能抑制新的 gap receipt。这些都是 derived-state replay 修复，
+不授予新 authority，不写 canonical memory，并保持 Parametric shadow-only。

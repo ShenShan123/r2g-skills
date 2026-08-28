@@ -90,6 +90,32 @@ def test_consultation_consistent_with_retrieval(tmp_tehm, sample_record_dict):
         {r.rule_id for r in receipt.results}
 
 
+def test_consultation_rechecks_authority_after_retrieval(
+        monkeypatch, tmp_tehm, sample_record_dict):
+    conn, _, _ = tmp_tehm
+    rule_id = _crystallize_drc_rule(tmp_tehm, sample_record_dict)
+    _promote(conn, rule_id)
+
+    # Simulate a lifecycle transition between receipt production and the
+    # second rule-definition lookup.  A stale retrieval hit must not become a
+    # strategy after the rule is demoted.
+    import tehm.integration.fix_consultation as consultation
+    real_retrieve = consultation.retrieve
+
+    def retrieve_then_demote(connection, context, *, limit):
+        receipt = real_retrieve(connection, context, limit=limit)
+        set_status(connection, rule_id=rule_id, target_scope="drc",
+                   status="demoted")
+        return receipt
+
+    monkeypatch.setattr(consultation, "retrieve", retrieve_then_demote)
+    strategies = consultation.tehm_strategies_for(
+        conn, check="drc", design_id="heldout", platform="sky130hd",
+        cfg={"DESIGN_NAME": "heldout"},
+        drc={"status": "violations", "total_violations": 7}, lvs={})
+    assert strategies == []
+
+
 def test_runtime_router_uses_tehm_backend(monkeypatch, tmp_tehm,
                                           sample_record_dict):
     conn, _, root = tmp_tehm

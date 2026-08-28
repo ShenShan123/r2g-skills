@@ -53,14 +53,35 @@ def _promoted_asset_profiles(conn: sqlite3.Connection) -> set[str]:
 
 
 def _promoted_rule_families(conn: sqlite3.Connection) -> set[str]:
+    # A raw ``status='promoted'`` value is not enough to establish coverage:
+    # lifecycle metadata is derived state and may be malformed in a copied or
+    # externally edited database.  Reuse the lifecycle reader before a
+    # promoted rule can suppress a capability-gap receipt.
+    from tehm.lifecycle.rule_status import RuleLifecycleError, get_status
+
+    promoted_rule_ids: set[str] = set()
+    for row in conn.execute(
+            "SELECT rule_id, target_scope FROM tehm_rule_status "
+            "WHERE status='promoted'"):
+        try:
+            status = get_status(
+                conn, rule_id=row["rule_id"], target_scope=row["target_scope"])
+        except RuleLifecycleError:
+            continue
+        if status is not None and status["status"] == "promoted":
+            promoted_rule_ids.add(row["rule_id"])
+    if not promoted_rule_ids:
+        return set()
+    placeholders = ",".join("?" for _ in promoted_rule_ids)
     rows = conn.execute(
-        """SELECT e.mechanism_family
-             FROM tehm_rule_status rs
-             JOIN tehm_rule_sources rsrc ON rsrc.rule_id=rs.rule_id
-             JOIN tehm_episodes e ON e.episode_id=rsrc.episode_id
-            WHERE rs.status='promoted' AND e.mechanism_family IS NOT NULL"""
-    ).fetchall()
-    return {str(row["mechanism_family"]) for row in rows if row["mechanism_family"]}
+        f"""SELECT e.mechanism_family
+              FROM tehm_rule_sources rsrc
+              JOIN tehm_episodes e ON e.episode_id=rsrc.episode_id
+             WHERE rsrc.rule_id IN ({placeholders})
+               AND e.mechanism_family IS NOT NULL""",
+        tuple(sorted(promoted_rule_ids))).fetchall()
+    return {str(row["mechanism_family"]) for row in rows
+            if row["mechanism_family"]}
 
 
 def detect_capability_gaps(

@@ -475,6 +475,41 @@ def test_gap_detector_ignores_tampered_promoted_asset(tmp_tehm):
     assert "repeated_unsupported_mechanism" in gap.reason
 
 
+def test_gap_detector_ignores_malformed_promoted_rule_status(tmp_tehm):
+    from tehm.assets.gap_detector import _promoted_rule_families
+
+    conn, _, _ = tmp_tehm
+    conn.execute(
+        """INSERT INTO tehm_episodes (
+               episode_id, domain, initial_state_id, terminal_state_id,
+               terminal_status, mechanism_family, lineage_id,
+               trajectory_summary_json, provenance_json, schema_version)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ("episode-gap-rule", "rtl", "state-gap-rule", "state-gap-rule-target",
+         "VERIFIED_REPAIR", "HANDSHAKE_COMPLETION", "lineage-gap-rule",
+         "{}", "{}", "tehm-v4"))
+    conn.execute(
+        """INSERT INTO tehm_rule_sources (
+               rule_id, episode_id, source_substitution_json,
+               evidence_profile_json, lineage_id)
+           VALUES (?, ?, ?, ?, ?)""",
+        ("rule-gap-rule", "episode-gap-rule", "[]", "{}", "lineage-gap-rule"))
+    conn.execute(
+        """INSERT INTO tehm_rule_status (
+               rule_id, target_scope, status, status_version,
+               provenance_json, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        ("rule-gap-rule", "rtl", "promoted", 1, "{}", "2026-08-28T00:00:00"))
+    conn.commit()
+
+    assert _promoted_rule_families(conn) == {"HANDSHAKE_COMPLETION"}
+    conn.execute(
+        "UPDATE tehm_rule_status SET provenance_json=? WHERE rule_id=?",
+        ("[]", "rule-gap-rule"))
+    conn.commit()
+    assert _promoted_rule_families(conn) == set()
+
+
 def test_asset_registry_writers_preserve_outer_transaction(tmp_tehm):
     conn, _, _ = tmp_tehm
     proposal = _proposal()

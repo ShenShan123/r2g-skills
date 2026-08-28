@@ -3800,3 +3800,18 @@ provenance JSON 或 `updated_at` 已损坏，直接 SQL 过滤会使该行进入
 shadow、损坏状态、Parametric shadow log 和 staging evidence 均不能借此进入
 production。后续仍需真实 ORFS/RTL evidence 与六项 authority gate 来建立晋级，而不应
 用此防火墙修复替代 promotion 证据。
+
+### 2026-08-28 lifecycle consumers revalidate authority
+
+除 `retrieval.index.build_index()` 外，所有会把 lifecycle rule 转成行为或能力判断的
+下游也必须重放完整 status row。runtime consultation 在 retrieval receipt 与 rule
+definition lookup 之间再次按 `promoted` 过滤，避免 demotion 后的 stale receipt 变成
+live strategy；ORFS candidate/promoted trial lane 在生成 trial UUID、status version
+和 lifecycle decision 前通过 `get_status()` 规范化并拒绝损坏行；capability-gap
+detector 也通过同一 reader 判断 promoted rule family，避免损坏状态错误抑制 gap。
+
+该修复覆盖的是 derived-state consumer firewall，不是 promotion gate，也不是新的
+canonical 写入路径。所有未通过 lifecycle replay 的状态都 fail-closed；Parametric
+shadow log、staging evidence、candidate/shadow 和 malformed rows 仍不能进入
+production。真实 ORFS/RTL evidence、独立 rollback/registry/obligation/TE/harmful/
+conformal gate 仍需单独建立。

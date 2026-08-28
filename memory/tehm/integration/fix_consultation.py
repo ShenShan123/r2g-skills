@@ -33,7 +33,10 @@ def tehm_strategies_for(conn: sqlite3.Connection, *, check: str,
         check=check, design_id=design_id, platform=platform, cfg=cfg,
         reports={"drc": drc or {}, "lvs": lvs or {}})
     receipt = retrieve(conn, context, limit=limit)
-    index = build_index(conn)
+    # Revalidate the same production authority when resolving receipt IDs back
+    # to rule definitions.  An intervening demotion or malformed lifecycle row
+    # must not turn a previously retrieved ID into a live strategy.
+    index = build_index(conn, lifecycle_statuses=frozenset({"promoted"}))
 
     strategies: list[dict] = []
     for r in receipt.results:

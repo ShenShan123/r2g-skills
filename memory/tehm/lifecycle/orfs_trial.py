@@ -37,7 +37,7 @@ from tehm.lifecycle.authority import (
 from tehm.lifecycle.promotion_gates import REQUIRED_GATES, evaluate_promotion_gates
 from tehm.lifecycle.rule_authority import (
     build_trial_authority_evidence, record_rule_authority)
-from tehm.lifecycle.rule_status import get_status
+from tehm.lifecycle.rule_status import RuleLifecycleError, get_status
 from tehm.lifecycle.trial_adapter import judge_trial, record_external_trial
 from tehm.retrieval.index import build_index
 from tehm.retrieval.result import APPLICABLE
@@ -160,7 +160,7 @@ def run_pending_orfs_trials(
         raise ValueError("ORFS trials accept only candidate/promoted lifecycle statuses")
     if mutate_lifecycle and allowed_statuses != {"candidate"}:
         raise ValueError("lifecycle authority mutation is candidate-only")
-    index = build_index(conn)
+    index = build_index(conn, lifecycle_statuses=allowed_statuses)
     provided_bindings = provided_bindings or {}
     if promotion_authority_evidence is None:
         promotion_authority_evidence = {}
@@ -179,6 +179,26 @@ def run_pending_orfs_trials(
         "SELECT rule_id, target_scope, status, status_version FROM tehm_rule_status "
         f"WHERE status IN ({placeholders}) ORDER BY rule_id, target_scope",
         tuple(sorted(allowed_statuses))).fetchall()
+    # The selection query is only a cheap candidate scan.  Normalize each row
+    # through the lifecycle reader before using its version/status in a trial
+    # UUID or lifecycle decision; malformed derived state is skipped.
+    validated_rows = []
+    for raw_row in rows:
+        try:
+            status = get_status(
+                conn, rule_id=raw_row["rule_id"],
+                target_scope=raw_row["target_scope"])
+        except RuleLifecycleError:
+            continue
+        if status is None or status["status"] not in allowed_statuses:
+            continue
+        normalized = dict(raw_row)
+        normalized.update({
+            "status": status["status"],
+            "status_version": status["status_version"],
+        })
+        validated_rows.append(normalized)
+    rows = validated_rows
     results: list[dict] = []
     subjects = [e for e in base_entries
                 if e.get("kind", "normal") == "normal"
