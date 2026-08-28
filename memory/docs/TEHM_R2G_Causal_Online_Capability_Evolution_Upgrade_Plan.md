@@ -3829,3 +3829,14 @@ eligible/reasons；任一不一致都会使 C1 fail-closed。capability authorit
 digest 或 candidate 单侧检查。非 strict 历史 fixture 仍保留兼容路径；该升级只收紧
 evaluation/authority 证据，不写 canonical memory，不改变 promotion gates，也不允许
 Parametric shadow 或 staging evidence 进入 production runtime。
+
+### 2026-08-28 policy/runtime receipt type firewall
+
+PolicySnapshot 与 runtime-load receipt 的 content digest 不能只覆盖 JSON 字节，还要
+先确认 identity 字段的类型和取值域。现在 policy validator 拒绝空或非字符串的
+`memory_snapshot_id`、缺失/空的 `created_at`；load validator 拒绝非 0/1 的存储
+`loaded`、非布尔 JSON `loaded` 以及空的 snapshot/runtime identity。这样复制数据库或
+外部 row mapping 中的字符串化 `false`、空 snapshot 等不会被 `bool(...)` 强转成有效
+的 C3 load。schema 约束仍是第一道防线，validator 是 authority/replay 读取时的第二道
+防线；该修复只收紧 policy/runtime derived evidence，不写 canonical memory，不改变
+promotion gate 或 production runtime 边界。

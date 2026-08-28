@@ -53,6 +53,13 @@ def _policy_content_from_row(row: Mapping) -> dict:
         routing = json.loads(row["routing_config_json"] or "{}")
     except (KeyError, TypeError, json.JSONDecodeError) as exc:
         raise ValueError("policy snapshot row contains malformed JSON") from exc
+    try:
+        memory_snapshot_id = row["memory_snapshot_id"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ValueError("policy snapshot memory_snapshot_id is malformed") from exc
+    if (not isinstance(memory_snapshot_id, str) or
+            not memory_snapshot_id.strip()):
+        raise ValueError("policy snapshot memory_snapshot_id is malformed")
     if (not isinstance(rules, list) or
             any(not isinstance(item, str) for item in rules)):
         raise ValueError("policy snapshot promoted_rules is malformed")
@@ -62,7 +69,7 @@ def _policy_content_from_row(row: Mapping) -> dict:
     if not isinstance(retrieval, dict) or not isinstance(routing, dict):
         raise ValueError("policy snapshot config is malformed")
     return {
-        "memory_snapshot_id": row["memory_snapshot_id"],
+        "memory_snapshot_id": memory_snapshot_id,
         "promoted_rules": rules,
         "promoted_assets": assets,
         "retrieval_config": retrieval,
@@ -84,6 +91,9 @@ def validate_policy_snapshot_row(row: Mapping) -> dict:
     if (data.get("policy_digest") != digest or
             data.get("policy_snapshot_id") != expected_id):
         raise ValueError("policy snapshot content digest mismatch")
+    if (not isinstance(data.get("created_at"), str) or
+            not data["created_at"]):
+        raise ValueError("policy snapshot created_at is malformed")
     return data
 
 
@@ -96,6 +106,16 @@ def validate_policy_load_row(row: Mapping) -> dict:
         raise ValueError("policy load receipt contains malformed JSON") from exc
     if not isinstance(payload, Mapping):
         raise ValueError("policy load receipt payload is malformed")
+    stored_loaded = data.get("loaded")
+    if type(stored_loaded) is not int or stored_loaded not in (0, 1):
+        raise ValueError("policy load receipt loaded field is malformed")
+    if not isinstance(payload.get("loaded"), bool):
+        raise ValueError("policy load receipt payload loaded field is malformed")
+    if (not isinstance(data.get("policy_snapshot_id"), str) or
+            not data["policy_snapshot_id"] or
+            not isinstance(data.get("runtime_id"), str) or
+            not data["runtime_id"]):
+        raise ValueError("policy load receipt identity is malformed")
     digest = "sha256:" + hashlib.sha256(
         stable_dumps(dict(payload)).encode()).hexdigest()
     expected_id = "policy_load_" + digest.split(":", 1)[1][:20]
@@ -103,7 +123,7 @@ def validate_policy_load_row(row: Mapping) -> dict:
             data.get("receipt_id") != expected_id or
             data.get("policy_snapshot_id") != payload.get("policy_snapshot_id") or
             data.get("runtime_id") != payload.get("runtime_id") or
-            int(bool(data.get("loaded"))) != int(bool(payload.get("loaded")))):
+            stored_loaded != int(payload.get("loaded"))):
         raise ValueError("policy load receipt digest mismatch")
     return data
 

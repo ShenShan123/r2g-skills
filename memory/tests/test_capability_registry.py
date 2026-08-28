@@ -11,7 +11,7 @@ from tehm.capability import (
     create_policy_snapshot, promote_capability, record_capability_evidence,
     register_capability, evaluate_capability_attribution,
     evaluate_capability_attribution_from_db, record_policy_load,
-    load_policy_snapshot,
+    load_policy_snapshot, validate_policy_load_row,
     evaluate_capability_retention,
     record_capability_retention, verify_capability_retention,
     evaluate_capability_campaign,
@@ -431,6 +431,37 @@ def test_policy_snapshot_replay_rejects_tampered_content(tmp_tehm):
     with pytest.raises(ValueError, match="content digest mismatch"):
         create_policy_snapshot(
             conn, memory_snapshot_id="m0", promoted_rules=["r0"])
+
+
+def test_policy_and_load_validators_reject_weakly_typed_identity_fields(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    policy = create_policy_snapshot(
+        conn, memory_snapshot_id="typed-memory", promoted_rules=[])
+    conn.execute(
+        "UPDATE tehm_policy_snapshots SET memory_snapshot_id='' "
+        "WHERE policy_snapshot_id=?", (policy.policy_snapshot_id,))
+    conn.commit()
+    with pytest.raises(ValueError, match="memory_snapshot_id"):
+        load_policy_snapshot(conn, policy.policy_snapshot_id)
+
+    policy = create_policy_snapshot(
+        conn, memory_snapshot_id="typed-memory-load", promoted_rules=[])
+    load = record_policy_load(
+        conn, policy_snapshot_id=policy.policy_snapshot_id,
+        runtime_id="typed-runtime", loaded=True)
+    row = conn.execute(
+        "SELECT * FROM tehm_policy_load_receipts WHERE receipt_id=?",
+        (load.receipt_id,)).fetchone()
+    weak_storage_row = dict(row)
+    weak_storage_row["loaded"] = "false"
+    with pytest.raises(ValueError, match="loaded field"):
+        validate_policy_load_row(weak_storage_row)
+    weak_payload_row = dict(row)
+    payload = json.loads(weak_payload_row["receipt_json"])
+    payload["loaded"] = "false"
+    weak_payload_row["receipt_json"] = json.dumps(payload)
+    with pytest.raises(ValueError, match="payload loaded field"):
+        validate_policy_load_row(weak_payload_row)
 
 
 def test_policy_load_replay_rejects_tampered_receipt(tmp_tehm):
