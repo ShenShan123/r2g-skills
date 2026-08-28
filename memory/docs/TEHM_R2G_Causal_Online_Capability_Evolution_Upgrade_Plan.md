@@ -3981,6 +3981,14 @@ promotion gate、canonical memory、Parametric shadow-only 或 production runtim
 字段。该边界只影响 held-out capability-retention 的 fail-closed 审计，不改变
 canonical memory、learner support、promotion 或 production runtime。
 
+### 2026-08-28 calibration numeric evidence firewall
+
+physical 与 Parametric calibration 现在只接受有限的真实数值作为 coverage、距离、
+metric 和 regression threshold；布尔值、字符串化数字与 `NaN/±∞` 会直接 fail-closed，
+不能被 `float(...)` 解释成 conformal 或 utility evidence。该修复只强化 calibration
+shadow/evaluation 的输入边界，不改变 OOD 阈值、canonical memory、promotion 或
+production runtime。
+
 ### 2026-08-28 causal transfer ID type closure
 
 因果 transfer evaluator、transfer ledger 与 rule-authority receipt selection 现在只接受

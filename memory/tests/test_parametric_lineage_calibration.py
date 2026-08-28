@@ -1,3 +1,5 @@
+import pytest
+
 from tehm.parametric.calibration import calibrate_lineage_grouped
 
 
@@ -27,3 +29,14 @@ def test_lineage_firewall_fails_closed():
         training_lineages=["heldout:a"])
     assert report["status"] == "firewall_failed"
     assert report["canonical_memory_mutation"] == "none"
+
+
+def test_parametric_calibration_does_not_accept_boolean_numeric_evidence():
+    samples = [_sample(f"heldout:{idx}") for idx in range(3)]
+    samples[0]["observed_deltas"]["wns_ns"] = True
+    with pytest.raises(ValueError, match="max_regression"):
+        calibrate_lineage_grouped(
+            samples, max_regression={"wns_ns": True})
+    report = calibrate_lineage_grouped(samples, min_samples_per_metric=3)
+    assert report["status"] == "shadow_calibration_failed"
+    assert report["conformal"]["per_metric"]["wns_ns"]["evaluated"] == 2

@@ -44,8 +44,8 @@ def calibrate_retrieval(memory, *, family: str, heldout_samples: list[dict],
     else:
         per_metric_target_coverage = _probability(
             per_metric_target_coverage, "per_metric_target_coverage")
-    distance_ceiling = float(distance_ceiling)
-    if not math.isfinite(distance_ceiling) or distance_ceiling <= 0:
+    distance_ceiling = _finite_numeric(distance_ceiling)
+    if distance_ceiling is None or distance_ceiling <= 0:
         raise ValueError("distance_ceiling must be finite and positive")
     distance_quantile = _probability(distance_quantile, "distance_quantile")
     uncertainty_quantile = _probability(
@@ -112,22 +112,21 @@ def calibrate_retrieval(memory, *, family: str, heldout_samples: list[dict],
         if result.get("abstained"):
             evaluations.append(evaluation)
             continue
-        distance = result.get("nearest_distance")
-        if isinstance(distance, (int, float)) and math.isfinite(float(distance)):
-            distances.append(float(distance))
-            if float(distance) <= distance_ceiling:
-                in_distribution_distances.append(float(distance))
+        distance = _finite_numeric(result.get("nearest_distance"))
+        if distance is not None:
+            distances.append(distance)
+            if distance <= distance_ceiling:
+                in_distribution_distances.append(distance)
         observed = sample.get("observed_deltas") or {}
         compared = 0
         for metric in PHYSICAL_METRICS:
-            actual = observed.get(metric)
-            point = (result.get("mean_deltas") or {}).get(metric)
+            actual = _finite_numeric(observed.get(metric))
+            point = _finite_numeric((result.get("mean_deltas") or {}).get(metric))
             interval = (result.get("uncertainty_95") or {}).get(metric) or {}
-            lower, upper = interval.get("lower_95"), interval.get("upper_95")
-            if not all(isinstance(x, (int, float)) and math.isfinite(float(x))
-                       for x in (actual, point)):
+            lower = _finite_numeric(interval.get("lower_95"))
+            upper = _finite_numeric(interval.get("upper_95"))
+            if actual is None or point is None:
                 continue
-            actual, point = float(actual), float(point)
             if interval_method == "split_conformal_residual_v1":
                 metric_observations[metric].append({
                     "index": index, "observed": actual, "point": point,
@@ -135,10 +134,8 @@ def calibrate_retrieval(memory, *, family: str, heldout_samples: list[dict],
                 })
                 compared += 1
                 continue
-            if not all(isinstance(x, (int, float)) and math.isfinite(float(x))
-                       for x in (lower, upper)):
+            if lower is None or upper is None:
                 continue
-            lower, upper = float(lower), float(upper)
             hit = _interval_contains(actual, lower, upper)
             width = max(0.0, upper - lower)
             metric_total[metric] += 1
@@ -153,8 +150,7 @@ def calibrate_retrieval(memory, *, family: str, heldout_samples: list[dict],
         if compared:
             usable_predictions += 1
             selective_rows.append({
-                "distance": float(distance) if isinstance(distance, (int, float))
-                and math.isfinite(float(distance)) else None,
+                "distance": distance,
                 "comparisons": compared,
                 "covered": sum(int(detail["covered"])
                                for detail in evaluation["metrics"].values()),
@@ -196,9 +192,7 @@ def calibrate_retrieval(memory, *, family: str, heldout_samples: list[dict],
             if not metrics:
                 continue
             selective_rows.append({
-                "distance": (float(evaluation["nearest_distance"])
-                              if isinstance(evaluation.get("nearest_distance"),
-                                            (int, float)) else None),
+                "distance": _finite_numeric(evaluation.get("nearest_distance")),
                 "comparisons": len(metrics),
                 "covered": sum(int(detail["covered"])
                                for detail in metrics.values()),
@@ -302,10 +296,18 @@ def calibrate_retrieval(memory, *, family: str, heldout_samples: list[dict],
 
 
 def _probability(value: float, name: str) -> float:
-    value = float(value)
-    if not 0.0 <= value <= 1.0:
+    value = _finite_numeric(value)
+    if value is None or not 0.0 <= value <= 1.0:
         raise ValueError(f"{name} must be in [0, 1]")
     return value
+
+
+def _finite_numeric(value):
+    """Accept only finite JSON-number-like values, never bool or text."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    value = float(value)
+    return value if math.isfinite(value) else None
 
 
 def _interval_contains(value: float, lower: float, upper: float) -> bool:
@@ -364,15 +366,15 @@ def _selective_risk_coverage(rows: list[dict]) -> list[dict]:
     calibration decision gate.
     """
     usable = [row for row in rows
-              if isinstance(row.get("distance"), (int, float)) and
-              math.isfinite(float(row["distance"])) and
+              if _finite_numeric(row.get("distance")) is not None and
               int(row.get("comparisons") or 0) > 0]
     if not usable:
         return []
     total = len(usable)
     result = []
-    for threshold in sorted({float(row["distance"]) for row in usable}):
-        selected = [row for row in usable if float(row["distance"]) <= threshold]
+    for threshold in sorted({_finite_numeric(row["distance"]) for row in usable}):
+        selected = [row for row in usable
+                    if _finite_numeric(row["distance"]) <= threshold]
         comparisons = sum(int(row["comparisons"]) for row in selected)
         covered = sum(int(row["covered"]) for row in selected)
         interval_coverage = covered / comparisons if comparisons else None

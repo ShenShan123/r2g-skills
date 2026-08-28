@@ -145,7 +145,11 @@ def calibrate_lineage_grouped(
 
     regression = dict(DEFAULT_MAX_REGRESSION)
     if max_regression is not None:
-        regression.update({str(k): float(v) for k, v in max_regression.items()})
+        for key, value in max_regression.items():
+            parsed = _finite(value)
+            if parsed is None:
+                raise ValueError("max_regression must contain finite numbers")
+            regression[str(key)] = parsed
     residuals = defaultdict(list)
     for rows in groups.values():
         for sample in rows:
@@ -280,6 +284,8 @@ def _failed(status, reason, **extra):
 
 
 def _finite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
     try:
         value = float(value)
     except (TypeError, ValueError):
@@ -296,7 +302,7 @@ def _conformal_radius(values, coverage):
 
 
 def _probability(value, name):
-    value = float(value)
-    if not 0.0 <= value <= 1.0:
+    value = _finite(value)
+    if value is None or not 0.0 <= value <= 1.0:
         raise ValueError(f"{name} must be in [0,1]")
     return value

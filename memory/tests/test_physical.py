@@ -440,6 +440,17 @@ def test_calibration_rejects_mixed_action_signatures(tmp_path):
     conn.close()
 
 
+def test_calibration_rejects_weak_or_nonfinite_thresholds(tmp_path):
+    conn = _open(tmp_path)
+    mem = PhysicalEffectMemory(conn)
+    for value in (True, "0.8", float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="in \[0, 1\]"):
+            calibrate_retrieval(
+                mem, family="DENSITY_RELIEF", heldout_samples=[],
+                target_coverage=value)
+    conn.close()
+
+
 def _heldout(cells, observed, lineage="heldout:independent"):
     return {
         "lineage_id": lineage,
