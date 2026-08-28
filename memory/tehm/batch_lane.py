@@ -23,8 +23,11 @@ from tehm import db as tehm_db
 from tehm.adapters.orfs_pair import build_orfs_pair_record
 from tehm.artifact_store import ArtifactStore
 from tehm.canonical.capture import ExecutionRecord, capture
+from tehm.canonical.transition import Action, ObservationDelta, classify_outcome
+from tehm.canonical.verifier import VerifierSnapshot
 from tehm.ids import stable_dumps
 from tehm.physical.graph_context import load_defgraph_context
+from tehm.physical.effects import extract_deltas
 from tehm.physical.memory import PhysicalEffectMemory
 
 
@@ -79,6 +82,143 @@ def canonical_case_selection_digest(case_ids: Iterable[str]) -> str:
         raise BatchLaneError(
             "canonical import case_ids must be unique and non-empty")
     return hashlib.sha256(stable_dumps(sorted(values)).encode()).hexdigest()
+
+
+def staging_witness_digest(witness: Iterable[Mapping]) -> str:
+    """Digest the case→canonical-transition mapping proven in staging."""
+    rows = []
+    for item in witness:
+        if not isinstance(item, Mapping):
+            raise BatchLaneError("staging witness row is malformed")
+        rows.append({
+            "case_id": str(item.get("case_id") or "").strip(),
+            "record_id": str(item.get("record_id") or "").strip(),
+            "transition_id": str(item.get("transition_id") or "").strip(),
+        })
+    if (not rows or any(not value for row in rows for value in row.values()) or
+            len({row["case_id"] for row in rows}) != len(rows) or
+            len({row["record_id"] for row in rows}) != len(rows) or
+            len({row["transition_id"] for row in rows}) != len(rows)):
+        raise BatchLaneError("staging witness rows must be unique and complete")
+    return hashlib.sha256(stable_dumps(sorted(rows, key=lambda row: row["case_id"])).encode()).hexdigest()
+
+
+def validate_staging_import_witness(
+        *, rows: Iterable[Mapping], staging_db: Path,
+        campaign_id: str) -> list[dict]:
+    """Replay selected external records against their staging DB witnesses.
+
+    File hashes prove that a staging snapshot is unchanged, but not that it
+    contains the exact records an authority selected.  This read-only replay
+    binds each selected case to one transition whose provenance, canonical
+    action/delta/verifier, lineage, learner membership and physical effect all
+    match the external record.  Any ambiguity or missing witness fails closed.
+    """
+    if not campaign_id:
+        raise BatchLaneError("staging witness campaign_id is required")
+    selected = [dict(row) for row in rows]
+    if not selected:
+        raise BatchLaneError("staging witness selection is empty")
+    case_ids = [str(row.get("case_id") or "").strip() for row in selected]
+    if any(not case_id for case_id in case_ids) or len(set(case_ids)) != len(case_ids):
+        raise BatchLaneError("staging witness case selection is invalid")
+    record_ids: set[str] = set()
+    try:
+        conn = tehm_db.connect_read_only(Path(staging_db))
+    except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+        raise BatchLaneError("staging witness DB is not a readable TEHM snapshot") from exc
+    try:
+        transition_by_record: dict[str, list[sqlite3.Row]] = {}
+        for transition in conn.execute(
+                "SELECT * FROM tehm_transitions").fetchall():
+            try:
+                provenance = json.loads(transition["provenance_json"] or "{}")
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if isinstance(provenance, Mapping) and provenance.get("record_id"):
+                transition_by_record.setdefault(
+                    str(provenance["record_id"]), []).append(transition)
+        witness = []
+        for external in selected:
+            raw_record = external.get("record")
+            try:
+                record = ExecutionRecord.from_dict(dict(raw_record))
+            except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+                raise BatchLaneError(
+                    f"staging witness record is malformed: {external.get('case_id')}") from exc
+            record_id = str(record.record_id or "").strip()
+            if not record_id or record_id in record_ids:
+                raise BatchLaneError("staging witness record IDs are ambiguous")
+            record_ids.add(record_id)
+            matches = transition_by_record.get(record_id, [])
+            if len(matches) != 1:
+                raise BatchLaneError(
+                    "staging witness transition is missing or ambiguous: " + record_id)
+            transition = matches[0]
+            transition_id = str(transition["transition_id"])
+            action = Action.from_dict(record.action)
+            delta = ObservationDelta.from_dict(record.observation_delta)
+            verifier = VerifierSnapshot.from_dict(record.verification)
+            expected_fields = {
+                "action_domain": action.domain,
+                "action_json": stable_dumps(action.to_dict()),
+                "observation_delta_json": stable_dumps(delta.to_dict()),
+                "verifier_json": stable_dumps(verifier.to_dict()),
+                "outcome": classify_outcome(delta, verifier),
+            }
+            if any(transition[field] != value
+                   for field, value in expected_fields.items()):
+                raise BatchLaneError(
+                    "staging witness transition content mismatch: " + record_id)
+            state = conn.execute(
+                "SELECT lineage_id FROM tehm_states WHERE state_id=?",
+                (transition["source_state_id"],)).fetchone()
+            if state is None or str(state["lineage_id"] or "") != str(
+                    record.lineage_id or ""):
+                raise BatchLaneError(
+                    "staging witness lineage mismatch: " + record_id)
+            memberships = conn.execute(
+                """SELECT split, learner_eligible
+                     FROM tehm_dataset_membership
+                    WHERE transition_id=? AND campaign_id=?""",
+                (transition_id, campaign_id)).fetchall()
+            if (len(memberships) != 1 or memberships[0]["split"] != "training"
+                    or not bool(memberships[0]["learner_eligible"])):
+                raise BatchLaneError(
+                    "staging witness is not training learner evidence: " + record_id)
+            physical = conn.execute(
+                "SELECT * FROM tehm_physical_effects WHERE transition_id=?",
+                (transition_id,)).fetchone()
+            if physical is None:
+                raise BatchLaneError(
+                    "staging witness physical effect is missing: " + record_id)
+            before_ppa = (record.before.get("reports") or {}).get("ppa") or {}
+            after_ppa = (record.after.get("reports") or {}).get("ppa") or {}
+            expected_deltas = stable_dumps(extract_deltas(before_ppa, after_ppa))
+            expected_effect_fields = {
+                "action_domain": action.domain,
+                "transformation_family": action.transformation_family,
+                "effect_key": str(transition["primary_effect_key"] or ""),
+                "before_ppa_json": stable_dumps(before_ppa),
+                "after_ppa_json": stable_dumps(after_ppa),
+                "deltas_json": expected_deltas,
+                "evidence_refs_json": stable_dumps(
+                    list(verifier.evidence_refs)),
+            }
+            if any(physical[field] != value
+                   for field, value in expected_effect_fields.items()):
+                raise BatchLaneError(
+                    "staging witness physical effect mismatch: " + record_id)
+            witness.append({"case_id": str(external["case_id"]).strip(),
+                            "record_id": record_id,
+                            "transition_id": transition_id})
+        staging_witness_digest(witness)
+        return sorted(witness, key=lambda item: item["case_id"])
+    except (IndexError, sqlite3.Error) as exc:
+        raise BatchLaneError(
+            "staging witness DB is not a readable TEHM snapshot") from exc
+    finally:
+        conn.close()
 
 
 def canonical_db_candidates() -> tuple[Path, ...]:
@@ -635,10 +775,27 @@ def validate_canonical_import_authority(
     }
     if any(bindings.get(key) != value for key, value in expected.items()):
         raise BatchLaneError("canonical import authority is not bound to current evidence")
+    rows = read_external_observations(Path(observations_path))
     if ("observation_count" in authority and
-            authority.get("observation_count") != len(read_external_observations(
-                Path(observations_path)))):
+            authority.get("observation_count") != len(rows)):
         raise BatchLaneError("canonical import authority observation count mismatch")
+    selected_ids = {str(case_id).strip() for case_id in authority["case_ids"]}
+    selected = [row for row in rows
+                if str(row.get("case_id") or "").strip() in selected_ids]
+    if len(selected) != len(selected_ids):
+        raise BatchLaneError("canonical import authority selects unknown case_ids")
+    bound_campaign = str(campaign_id or authority.get("campaign_id") or "").strip()
+    if not bound_campaign:
+        raise BatchLaneError("canonical import authority campaign is required")
+    try:
+        witness = validate_staging_import_witness(
+            rows=selected, staging_db=Path(staging_db), campaign_id=bound_campaign)
+        witness_digest = staging_witness_digest(witness)
+    except BatchLaneError as exc:
+        raise BatchLaneError(
+            "canonical import staging witness is invalid") from exc
+    if bindings.get("staging_witness_sha256") != witness_digest:
+        raise BatchLaneError("canonical import authority is not bound to staging witnesses")
 
 
 def import_support_to_canonical(*, observations_path: Path, staging_db: Path,
@@ -698,6 +855,24 @@ def import_support_to_canonical(*, observations_path: Path, staging_db: Path,
             )
             imported.append({"case_id": row["case_id"],
                              "transition_id": receipt.transition_id})
+        # The authority validates immutable snapshots before opening the
+        # destination.  Recheck both source files while the canonical
+        # savepoint is still uncommitted, so a concurrent rewrite cannot leave
+        # a partially authorized import behind.
+        bindings = authority.get("bindings")
+        if not isinstance(bindings, Mapping):
+            raise BatchLaneError(
+                "canonical import authority bindings are required for TOCTOU recheck")
+        bound_observation_sha = bindings.get("observations_sha256")
+        bound_staging_sha = bindings.get("staging_db_sha256")
+        if not bound_observation_sha or not bound_staging_sha:
+            raise BatchLaneError(
+                "canonical import authority snapshot bindings are incomplete")
+        if _sha(observations_path) != bound_observation_sha:
+            raise BatchLaneError(
+                "external observation chain changed during canonical import")
+        if _sha(staging_db) != bound_staging_sha:
+            raise BatchLaneError("staging DB changed during canonical import")
         conn.execute(f"RELEASE SAVEPOINT {savepoint}")
         savepoint_active = False
         conn.commit()

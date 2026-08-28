@@ -1446,6 +1446,15 @@ held-out 或 A/B 通过错误的显式标记进入 learner。capture/assignment 
 非 training 的 `learner_eligible=true`；为兼容旧库，所有 learner 查询入口仍重复检查
 training split，遇到直接 SQL 造成的矛盾行也必须 fail-closed。
 
+canonical import 的 staging 绑定不再停留在文件级 digest。authority builder 会对选中的
+每个 case 在只读 staging 快照中重放 execution record、唯一 transition、training
+membership、typed observation/verifier payload 和 physical effect，并把规范化后的
+`case_id/record_id/transition_id` 集合固化为 `staging_witness_sha256`。消费 authority
+时重新执行同一 witness replay；随后导入 savepoint 在释放前再次检查 observations 与
+staging DB digest，以阻断文件内容在校验和写入之间发生的 TOCTOU 漂移。任何缺失、重复、
+跨 campaign、非 training 或 payload/delta 不一致都 fail-closed，旧的无 witness allow
+receipt 不能进入 canonical。
+
 也就是说：
 
 > **Online 指 canonical evidence 一旦合法进入 learner 后，memory management 可以 interaction-driven；不表示外部 observation 可以绕过 authority 即时训练。**

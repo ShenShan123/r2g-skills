@@ -239,6 +239,14 @@ event hash-chain 及 causal fragment 的 content-addressed replay，再返回原
 直接 fail-closed；没有该摘要的旧 capture 链也不会被静默追加第二种解释。该机制只保证 fast-memory 观察的时间一致性，仍不授予 canonical
 import、lifecycle promotion 或 production runtime 权限。
 
+canonical import 的绑定现已从 staging 文件哈希扩展为内容级 witness：authority
+receipt 会对选中的 external row 在只读 staging DB 中逐条重放，核对 execution record、
+transition、training membership、physical effect 及其 typed payload，并保存排序后的
+`staging_witness_sha256`。导入时会重新计算该 witness，且在同一 savepoint 释放前再次
+检查 observations/staging DB 哈希；任何 witness 漂移、campaign/split 不一致或
+TOCTOU 修改都会 fail-closed 并回滚，不能把“文件存在且哈希相同”误当作 canonical
+authority。缺少该 witness 的旧 allow receipt 也不再可消费。
+
 当 preview 需要进入试验阶段时，`evolution.run_shadow_candidate_trial()` 会把 TEHM
 连接复制到内存 staging DB，在 staging 内重建并登记 `shadow → candidate`，然后复用
 现有 A/B trial adapter。Icarus/ORFS 执行器通过 evaluator callback 注入；即使六项
