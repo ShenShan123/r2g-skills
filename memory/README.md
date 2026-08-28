@@ -1854,3 +1854,16 @@ obligation、cross-lineage TE 仍必须由 activation/trial/transfer 的独立 e
 可以从数据库重放 activation → transition 关系；新增回归断言覆盖这一绑定。该修复只
 纠正 provenance/lineage 可追溯性，不改变 canonical capture 的 verified 条件、rule
 lifecycle、promotion gate 或 production runtime authority。
+
+### 2026-08-28 canonical-import authority selection binding（仍需独立 authority）
+
+进一步收紧 external → staging → canonical 边界：canonical-import authority 现在除了
+六项 gate 和 observation/staging/canonical 快照哈希，还必须绑定规范化的
+`case_ids` selection digest、campaign、`promotion_attempted=false` 与
+`gate_evaluation.all_gates_established=true`。因此同一 observation 文件内改选另一组
+case、跨 campaign 重放 authority 或把已发生的 canonical mutation 伪装成预授权都会
+fail-closed。external observation hash-chain 也拒绝重复 `case_id`，避免一次 authority
+选择导入同一逻辑 case 的多个 receipt。该改动只加强可审计的 authority/provenance
+约束；gate evaluation 的逐项 `checks` 还必须与 authority 顶层六门完全一致，不能只
+伪造一个顶层 `eligible` 布尔值。六门未建立时仍不允许 canonical import，Parametric 与
+production runtime 边界不变。

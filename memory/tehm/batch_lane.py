@@ -62,6 +62,25 @@ class BatchLaneError(RuntimeError):
     """A fail-closed batch-lane contract violation."""
 
 
+def canonical_case_selection_digest(case_ids: Iterable[str]) -> str:
+    """Digest the exact support-case set approved by an authority receipt.
+
+    The observation-file digest binds all available evidence, but it does not
+    bind which rows the authority selected.  A separate canonical selection
+    digest prevents a valid receipt from being replayed after its ``case_ids``
+    are changed to import a different support case.
+    """
+    if isinstance(case_ids, (str, bytes)):
+        raise BatchLaneError(
+            "canonical import case_ids must be a sequence, not a string")
+    values = [str(case_id).strip() for case_id in case_ids]
+    if (not values or any(not value for value in values) or
+            len(set(values)) != len(values)):
+        raise BatchLaneError(
+            "canonical import case_ids must be unique and non-empty")
+    return hashlib.sha256(stable_dumps(sorted(values)).encode()).hexdigest()
+
+
 def canonical_db_candidates() -> tuple[Path, ...]:
     """Resolve known canonical stores without opening any of them.
 
@@ -377,6 +396,7 @@ def write_external_observations(path: Path, observations: Iterable[Mapping]) -> 
 def read_external_observations(path: Path) -> list[dict]:
     rows = _jsonl(Path(path))
     previous = None
+    seen_cases: set[str] = set()
     for index, row in enumerate(rows):
         digest = row.get("receipt_sha256")
         body = {key: value for key, value in row.items() if key != "receipt_sha256"}
@@ -385,6 +405,13 @@ def read_external_observations(path: Path) -> list[dict]:
         actual = hashlib.sha256(stable_dumps(body).encode()).hexdigest()
         if digest != actual:
             raise BatchLaneError("external observation receipt digest mismatch")
+        case_id = str(row.get("case_id") or "").strip()
+        if not case_id:
+            raise BatchLaneError("external observation case_id is required")
+        if case_id in seen_cases:
+            raise BatchLaneError(
+                "external observation chain contains duplicate case_id: " + case_id)
+        seen_cases.add(case_id)
         previous = digest
     return rows
 
@@ -561,9 +588,12 @@ def import_audit_to_staging(*, observations_path: Path, staging_db: Path,
     }
 
 
-def validate_canonical_import_authority(authority: Mapping, *, observations_path: Path,
-                                        staging_db: Path, canonical_db: Path) -> None:
+def validate_canonical_import_authority(
+        authority: Mapping, *, observations_path: Path, staging_db: Path,
+        canonical_db: Path, campaign_id: str | None = None) -> None:
     """Validate the independent authority receipt required for canonical import."""
+    if not isinstance(authority, Mapping):
+        raise BatchLaneError("canonical import authority must be a mapping")
     if authority.get("version") != CANONICAL_IMPORT_AUTHORITY_VERSION:
         raise BatchLaneError("canonical import authority version mismatch")
     if authority.get("decision") != "ALLOW_CANONICAL_IMPORT":
@@ -571,14 +601,44 @@ def validate_canonical_import_authority(authority: Mapping, *, observations_path
     gates = authority.get("promotion_gates") or {}
     if any(gates.get(name) is not True for name in PROMOTION_GATES):
         raise BatchLaneError("canonical import promotion gates are incomplete")
+    gate_evaluation = authority.get("gate_evaluation")
+    evaluated_checks = (gate_evaluation.get("checks")
+                        if isinstance(gate_evaluation, Mapping) else None)
+    if (not isinstance(gate_evaluation, Mapping) or
+            not isinstance(evaluated_checks, Mapping) or
+            any(evaluated_checks.get(name) is not gates.get(name)
+                for name in PROMOTION_GATES) or
+            gate_evaluation.get("eligible") is not True or
+            gate_evaluation.get("all_gates_established") is not True):
+        raise BatchLaneError(
+            "canonical import authority gate evaluation is incomplete")
+    if authority.get("promotion_attempted") is not False:
+        raise BatchLaneError("canonical import authority must be pre-promotion")
+    if authority.get("canonical_memory_mutation", "none") != "none":
+        raise BatchLaneError(
+            "canonical import authority has prior canonical mutation")
+    if campaign_id is not None and authority.get("campaign_id") != campaign_id:
+        raise BatchLaneError("canonical import authority campaign mismatch")
+    try:
+        selection_digest = canonical_case_selection_digest(authority["case_ids"])
+    except (KeyError, TypeError, BatchLaneError) as exc:
+        raise BatchLaneError(
+            "canonical import authority case selection is invalid") from exc
     bindings = authority.get("bindings") or {}
+    if not isinstance(bindings, Mapping):
+        raise BatchLaneError("canonical import authority bindings are malformed")
     expected = {
         "observations_sha256": _sha(Path(observations_path)),
         "staging_db_sha256": _sha(Path(staging_db)),
         "canonical_db_sha256_before": _sha(Path(canonical_db)),
+        "case_selection_sha256": selection_digest,
     }
     if any(bindings.get(key) != value for key, value in expected.items()):
         raise BatchLaneError("canonical import authority is not bound to current evidence")
+    if ("observation_count" in authority and
+            authority.get("observation_count") != len(read_external_observations(
+                Path(observations_path)))):
+        raise BatchLaneError("canonical import authority observation count mismatch")
 
 
 def import_support_to_canonical(*, observations_path: Path, staging_db: Path,
@@ -590,7 +650,8 @@ def import_support_to_canonical(*, observations_path: Path, staging_db: Path,
     canonical_db = Path(canonical_db).resolve()
     validate_canonical_import_authority(
         authority, observations_path=observations_path,
-        staging_db=staging_db, canonical_db=canonical_db)
+        staging_db=staging_db, canonical_db=canonical_db,
+        campaign_id=campaign_id)
     rows = read_external_observations(observations_path)
     allowed = set(authority.get("case_ids") or ())
     if not allowed:

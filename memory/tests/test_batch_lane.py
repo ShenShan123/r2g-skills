@@ -12,6 +12,7 @@ from tehm.batch_lane import (
     BatchLaneError,
     assess_full_oracle,
     assert_snapshots_unchanged,
+    canonical_case_selection_digest,
     import_audit_to_staging,
     import_support_to_staging,
     read_external_observations,
@@ -621,6 +622,77 @@ def test_canonical_import_requires_all_gates_and_exact_bindings(tmp_path):
         validate_canonical_import_authority(
             authority, observations_path=observations,
             staging_db=staging, canonical_db=canonical)
+
+
+def _complete_canonical_import_authority(
+        *, observations: Path, staging: Path, canonical: Path,
+        case_ids: list[str], campaign_id: str = "campaign") -> dict:
+    """Build the minimum shape of a fully established import authority."""
+    return {
+        "version": "orfs-canonical-import-authority-v1",
+        "authority_kind": "independent_orfs_promotion_authority",
+        "decision": "ALLOW_CANONICAL_IMPORT",
+        "campaign_id": campaign_id,
+        "promotion_attempted": False,
+        "canonical_memory_mutation": "none",
+        "case_ids": list(case_ids),
+        "promotion_gates": {name: True for name in (
+            "rollback_verified", "registry_verified", "obligation_coverage",
+            "cross_lineage_te", "harmful_rate", "conformal_coverage")},
+        "gate_evaluation": {
+            "eligible": True, "all_gates_established": True,
+            "checks": {name: True for name in (
+                "rollback_verified", "registry_verified", "obligation_coverage",
+                "cross_lineage_te", "harmful_rate", "conformal_coverage")},
+        },
+        "bindings": {
+            "observations_sha256": hashlib.sha256(observations.read_bytes()).hexdigest(),
+            "staging_db_sha256": hashlib.sha256(staging.read_bytes()).hexdigest(),
+            "canonical_db_sha256_before": hashlib.sha256(canonical.read_bytes()).hexdigest(),
+            "case_selection_sha256": canonical_case_selection_digest(case_ids),
+        },
+    }
+
+
+def test_canonical_import_binds_authority_case_selection_and_campaign(tmp_path):
+    observations = tmp_path / "observations.jsonl"
+    observations.write_text("observation-chain")
+    staging = tmp_path / "staging.sqlite"
+    canonical = tmp_path / "canonical.sqlite"
+    staging.write_bytes(b"staging")
+    canonical.write_bytes(b"canonical")
+    authority = _complete_canonical_import_authority(
+        observations=observations, staging=staging, canonical=canonical,
+        case_ids=["case-a", "case-b"])
+    validate_canonical_import_authority(
+        authority, observations_path=observations, staging_db=staging,
+        canonical_db=canonical, campaign_id="campaign")
+
+    tampered_selection = {**authority, "case_ids": ["case-b"]}
+    with pytest.raises(BatchLaneError, match="not bound to current evidence"):
+        validate_canonical_import_authority(
+            tampered_selection, observations_path=observations,
+            staging_db=staging, canonical_db=canonical, campaign_id="campaign")
+
+    with pytest.raises(BatchLaneError, match="campaign mismatch"):
+        validate_canonical_import_authority(
+            authority, observations_path=observations, staging_db=staging,
+            canonical_db=canonical, campaign_id="other-campaign")
+
+
+def test_external_observation_chain_rejects_duplicate_case_ids(tmp_path):
+    path = tmp_path / "observations.jsonl"
+    base = {
+        "receipt_id": "receipt", "case_id": "duplicate",
+        "lineage_id": "lineage", "platform": "sky130hs",
+        "family": "DENSITY_RELIEF", "split": "heldout",
+        "classification": "INCOMPLETE_EXTERNAL_ONLY",
+        "learner_eligible": False, "canonical_memory_mutation": "none",
+        "promotion_eligible": False,
+    }
+    write_external_observations(path, [base, {**base, "receipt_id": "receipt-2"}])
+    with pytest.raises(BatchLaneError, match="duplicate case_id"):
+        read_external_observations(path)
 
 
 def test_byte_identical_complete_rtl_set_is_positive_identity_proof(tmp_path):

@@ -3686,3 +3686,17 @@ content-addressed `activation_id`。这会使 produced transition 的
 稳定绑定 activation、produced transition 与后续 feedback event；该修复只补齐
 provenance/lineage，不创建新的 authority evidence，不改变 canonical/lifecycle/runtime
 边界，也不等价于任何 promotion gate 已建立。
+
+### 2026-08-28 canonical-import authority selection binding（仍需独立 authority）
+
+复核 `batch_lane.import_support_to_canonical()` 后发现，原有 authority 校验虽然绑定
+了 observation/staging/canonical 文件哈希，却没有绑定 authority 实际批准的 `case_ids`
+集合，也没有把 authority 的 campaign 与导入参数做一致性校验；同一证据文件内改选
+另一 support case 可能绕过原始 selection。现已增加规范化 case-selection digest，并
+要求 `gate_evaluation.eligible=true`、`all_gates_established=true`、
+`promotion_attempted=false`、`canonical_memory_mutation=none` 及 campaign 一致。gate
+evaluation 的逐项 `checks` 还必须与 authority 顶层六门完全一致，不能仅凭一个顶层
+`eligible` 布尔值通过导入校验。
+external observation JSONL 同时拒绝重复 `case_id`，避免一个逻辑 case 被重复导入。
+该修复提高 authority receipt 的不可变重放边界，不创建 gate、不自动导入 canonical、
+不改变 lifecycle/runtime authority；六项 gate 仍必须由独立证据建立。

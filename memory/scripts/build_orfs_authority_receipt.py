@@ -21,6 +21,7 @@ sys.path.insert(0, str(MEMORY_ROOT))
 from tehm.batch_lane import (  # noqa: E402
     CANONICAL_IMPORT_AUTHORITY_VERSION,
     PROMOTION_GATES,
+    canonical_case_selection_digest,
     read_external_observations,
     sqlite_snapshot,
 )
@@ -153,6 +154,7 @@ def build_receipt(*, observations: Path, staging_db: Path, canonical_db: Path,
         "target_scope": target_scope,
         "status_version": status_version,
         "case_ids": sorted(case_ids),
+        "canonical_memory_mutation": "none",
         "promotion_gates": {**gate_inputs, **gates["checks"]},
         "gate_evaluation": gates,
         "gate_derivation": gate_derivation,
@@ -160,6 +162,7 @@ def build_receipt(*, observations: Path, staging_db: Path, canonical_db: Path,
             "observations_sha256": _sha(observations),
             "staging_db_sha256": _sha(staging_db),
             "canonical_db_sha256_before": _sha(canonical_db),
+            "case_selection_sha256": canonical_case_selection_digest(case_ids),
         },
         "snapshots": {
             "staging": sqlite_snapshot(staging_db),
