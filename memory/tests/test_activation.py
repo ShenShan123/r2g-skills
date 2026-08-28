@@ -104,6 +104,10 @@ def test_full_activation_loop(tmp_tehm, sample_record_dict):
     assert record.verification_status == "PASS"
     assert record.outcome == "PASS"
     assert record.produced_transition_id.startswith("transition_")
+    provenance = json.loads(conn.execute(
+        "SELECT provenance_json FROM tehm_transitions WHERE transition_id=?",
+        (record.produced_transition_id,)).fetchone()["provenance_json"])
+    assert provenance["record_id"] == f"activation:{record.activation_id}"
 
     # a NEW verified transition was captured into the canonical store
     assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == \

@@ -3674,3 +3674,15 @@ observation 的可重放语义，不扩大 learner admission，也不改变 cano
 production authority。没有该摘要的历史 capture 链也会被拒绝继续追加，以免把旧的、
 无法完整重放的派生结果静默解释成另一条 observation；这类数据必须先做显式迁移或
 operator 清理。
+
+### 2026-08-28 activation → produced-transition provenance binding（仍不授予晋级）
+
+发现 activation pipeline 在调用 `capture_produced_transition()` 时使用了
+`act:<rule>:<state>` 临时标识，而 `ActivationRecord` 实际使用包含 context 的
+content-addressed `activation_id`。这会使 produced transition 的
+`provenance_json.record_id` 无法与 `tehm_activations.activation_id` 做一对一数据库重放。
+现已改为传入实际的 `ActivationRecord.activation_id`，并增加回归断言验证
+`provenance_json.record_id == activation:<activation_id>`。这样 trial/authority 可以
+稳定绑定 activation、produced transition 与后续 feedback event；该修复只补齐
+provenance/lineage，不创建新的 authority evidence，不改变 canonical/lifecycle/runtime
+边界，也不等价于任何 promotion gate 已建立。

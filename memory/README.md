@@ -1844,3 +1844,13 @@ external record 的 action domain/transformation family 绑定到当前 rule def
 obligation、cross-lineage TE 仍必须由 activation/trial/transfer 的独立 evidence
 建立。rows 可以交给 `record_rule_authority()`，但缺失其余 gate 时仍是
 `NOT_ESTABLISHED`，不会写 canonical memory、改变 lifecycle 或进入 production。
+
+### 2026-08-28 activation → produced-transition provenance binding（仍不授予晋级）
+
+修复 activation 产出 transition 的 provenance 绑定：`capture_produced_transition()`
+现在使用实际持久化的 content-addressed `ActivationRecord.activation_id`，而不再构造
+独立的 `act:<rule>:<state>` 临时 ID。因此 produced transition 的
+`provenance_json.record_id` 与 `tehm_activations.activation_id` 一一对应，trial/authority
+可以从数据库重放 activation → transition 关系；新增回归断言覆盖这一绑定。该修复只
+纠正 provenance/lineage 可追溯性，不改变 canonical capture 的 verified 条件、rule
+lifecycle、promotion gate 或 production runtime authority。

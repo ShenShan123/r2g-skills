@@ -148,7 +148,8 @@ def activate(conn: sqlite3.Connection, store, *, rule_id: str,
     if (not dry_run and execution is not None
             and verification_status in ("PASS", "FAIL") and capture_evidence):
         produced_transition_id = capture_produced_transition(
-            conn, store, activation_id=f"act:{rule_id}:{target_state_id}",
+            conn, store, activation_id=_activation_id(rule_id, target_state_id,
+                                                       context),
             context=context, action=action, execution=execution,
             verification=verification, authority_mode=authority_mode)
 
