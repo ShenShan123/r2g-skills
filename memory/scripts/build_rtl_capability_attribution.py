@@ -298,19 +298,20 @@ def build_rtl_capability_attribution(
     candidate_runtime = _run_policy(
         conn, candidate_policy.policy_snapshot_id, target_projects + non_target,
         oracle, mechanism_family, baseline=False)
-    # Bind C3 to the actual execution receipt, not merely to a DB row created
-    # before the runtime was invoked.  The evaluator selects this latest load
-    # receipt for the candidate policy/runtime pair.
+    baseline_behavior = _behavior_summary(baseline_runtime, roles)
+    candidate_behavior = _behavior_summary(candidate_runtime, roles)
+    baseline_behavior_digest = _stable_digest(baseline_behavior)
+    candidate_behavior_digest = _stable_digest(candidate_behavior)
+    # Bind C3/C4 to the exact candidate execution and derived behavior digest,
+    # not merely to a policy row created before the runtime was invoked.  The
+    # evaluator selects this latest immutable load receipt for the pair.
     load = record_policy_load(
         conn, policy_snapshot_id=candidate_policy.policy_snapshot_id,
         runtime_id=runtime_id, loaded=True,
         receipt={"mode": "evaluation_only", "asset_id": asset_id,
                  "production_authority": False,
-                 "execution_receipt_id": candidate_runtime["receipt_id"]})
-    baseline_behavior = _behavior_summary(baseline_runtime, roles)
-    candidate_behavior = _behavior_summary(candidate_runtime, roles)
-    baseline_behavior_digest = _stable_digest(baseline_behavior)
-    candidate_behavior_digest = _stable_digest(candidate_behavior)
+                 "execution_receipt_id": candidate_runtime["receipt_id"],
+                 "behavior_digest": candidate_behavior_digest})
 
     by_lineage = {
         row["lineage_id"]: row

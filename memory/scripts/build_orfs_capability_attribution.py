@@ -270,17 +270,6 @@ def build_orfs_capability_attribution(
         conn, policy_snapshot_id=candidate_policy.policy_snapshot_id,
         records=train_records + [held_record],
         causal_path_id=causal_path_id, runtime_id=runtime_id)
-    # Bind the latest candidate-policy load to the runtime execution receipt.
-    # A successful snapshot lookup alone is not C3: the authority replay must
-    # be able to show that this exact loaded policy produced the C4 behavior
-    # receipt used below.  ``verify_capability_authority`` selects this latest
-    # load row by (policy_snapshot_id, runtime_id).
-    load = record_policy_load(
-        conn, policy_snapshot_id=candidate_policy.policy_snapshot_id,
-        runtime_id=runtime_id, loaded=True,
-        receipt={"mode": "evaluation_only", "production_authority": False,
-                 "causal_path_id": causal_path_id,
-                 "execution_receipt_id": candidate_runtime["receipt_id"]})
     baseline_behavior = {
         "runtime_receipt_id": baseline_runtime["receipt_id"],
         "policy": baseline_policy.policy_snapshot_id,
@@ -299,6 +288,17 @@ def build_orfs_capability_attribution(
     }
     baseline_behavior_digest = _stable_digest(baseline_behavior)
     candidate_behavior_digest = _stable_digest(candidate_behavior)
+    # Bind the latest candidate-policy load to both the runtime execution and
+    # the behavior digest derived from that execution.  A successful snapshot
+    # lookup alone is not C3/C4 evidence; authority replay selects this latest
+    # immutable load row by (policy_snapshot_id, runtime_id).
+    load = record_policy_load(
+        conn, policy_snapshot_id=candidate_policy.policy_snapshot_id,
+        runtime_id=runtime_id, loaded=True,
+        receipt={"mode": "evaluation_only", "production_authority": False,
+                 "causal_path_id": causal_path_id,
+                 "execution_receipt_id": candidate_runtime["receipt_id"],
+                 "behavior_digest": candidate_behavior_digest})
     target_gain = bool(train_summaries and all(
         row["before_failed"] and row["candidate_pass"] for row in train_summaries))
     heldout = {"verdict": "PASS" if held_summary["candidate_pass"] else "FAIL",

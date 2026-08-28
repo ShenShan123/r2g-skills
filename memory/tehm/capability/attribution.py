@@ -46,6 +46,7 @@ def evaluate_capability_attribution(
     memory_delta: Mapping | None = None,
     strict_memory_delta: bool = False,
     memory_snapshot_binding: Mapping | None = None,
+    behavior_binding: Mapping | None = None,
 ) -> CapabilityAttributionReceipt:
     """Evaluate the eight explicit attribution gates.
 
@@ -122,6 +123,38 @@ def evaluate_capability_attribution(
     behavior_changed = bool(candidate.get("behavior_digest") and
                             baseline.get("behavior_digest") and
                             candidate.get("behavior_digest") != baseline.get("behavior_digest"))
+    behavior_witness = None
+    if behavior_binding is not None:
+        if isinstance(behavior_binding, Mapping):
+            behavior_witness = dict(behavior_binding)
+            if strict_memory_delta:
+                required_behavior_fields = (
+                    "version", "strict", "candidate_policy_snapshot_id",
+                    "runtime_id", "candidate_execution_receipt_id",
+                    "candidate_behavior_digest", "loaded_behavior_digest",
+                    "eligible", "reasons",
+                )
+                incomplete = (
+                    behavior_witness.get("version") !=
+                    "policy-runtime-behavior-v1" or
+                    behavior_witness.get("strict") is not True or
+                    any(field not in behavior_witness
+                        for field in required_behavior_fields) or
+                    behavior_witness.get("eligible") is not True or
+                    not isinstance(behavior_witness.get("reasons"), list)
+                )
+                if incomplete:
+                    behavior_changed = False
+                    reasons = list(behavior_witness.get("reasons") or [])
+                    reasons.append("runtime_behavior_binding_incomplete")
+                    behavior_witness["eligible"] = False
+                    behavior_witness["reasons"] = sorted(set(reasons))
+        elif strict_memory_delta:
+            behavior_witness = {
+                "eligible": False,
+                "reasons": ["runtime_behavior_binding_malformed"],
+            }
+            behavior_changed = False
     target_gain = bool(candidate.get("target_gain") is True)
     heldout_transfer = bool(heldout.get("verdict") == "PASS" and
                             heldout.get("disjoint_lineage") is True and
@@ -150,7 +183,9 @@ def evaluate_capability_attribution(
                     ({"eligible": False, "reasons": ["memory_delta_required"]}
                      if strict_memory_delta else None)),
                 **({"memory_snapshot_binding": snapshot_binding}
-                   if snapshot_binding is not None else {})})
+                   if snapshot_binding is not None else {}),
+                **({"runtime_behavior_binding": behavior_witness}
+                   if behavior_witness is not None else {})})
 
 
 def evaluate_capability_attribution_from_db(
@@ -239,6 +274,8 @@ def evaluate_capability_attribution_from_db(
         "policy_digest": None,
         "runtime_id": runtime_id,
     }
+    execution_receipt_id = None
+    loaded_behavior_digest = None
     if load is not None and bool(load["loaded"]):
         valid_load = False
         payload = None
@@ -262,8 +299,29 @@ def evaluate_capability_attribution_from_db(
                 runtime_receipt["policy_digest"] = payload["policy_digest"]
                 nested = payload.get("receipt")
                 if isinstance(nested, Mapping):
-                    runtime_receipt["execution_receipt_id"] = nested.get(
-                        "execution_receipt_id")
+                    execution_receipt_id = nested.get("execution_receipt_id")
+                    loaded_behavior_digest = nested.get("behavior_digest")
+                    runtime_receipt["execution_receipt_id"] = execution_receipt_id
+                    runtime_receipt["behavior_digest"] = loaded_behavior_digest
+    behavior_binding_reasons: list[str] = []
+    if strict_memory_delta:
+        if not execution_receipt_id:
+            behavior_binding_reasons.append("candidate_execution_receipt_required")
+        if not isinstance(loaded_behavior_digest, str) or not loaded_behavior_digest:
+            behavior_binding_reasons.append("candidate_behavior_digest_receipt_required")
+        elif loaded_behavior_digest != candidate_behavior_digest:
+            behavior_binding_reasons.append("candidate_behavior_digest_receipt_mismatch")
+    behavior_binding = {
+        "version": "policy-runtime-behavior-v1",
+        "strict": bool(strict_memory_delta),
+        "candidate_policy_snapshot_id": candidate_policy_snapshot_id,
+        "runtime_id": runtime_id,
+        "candidate_execution_receipt_id": execution_receipt_id,
+        "candidate_behavior_digest": candidate_behavior_digest,
+        "loaded_behavior_digest": loaded_behavior_digest,
+        "eligible": not behavior_binding_reasons,
+        "reasons": sorted(set(behavior_binding_reasons)),
+    }
     return evaluate_capability_attribution(
         capability_id=capability_id,
         baseline={"memory_digest": baseline_memory_digest,
@@ -276,7 +334,8 @@ def evaluate_capability_attribution_from_db(
                    "no_regression": no_regression},
         runtime_receipt=runtime_receipt, heldout=heldout, ablation=ablation,
         memory_delta=memory_delta, strict_memory_delta=strict_memory_delta,
-        memory_snapshot_binding=memory_snapshot_binding)
+        memory_snapshot_binding=memory_snapshot_binding,
+        behavior_binding=behavior_binding)
 
 
 __all__ = ["CapabilityAttributionReceipt", "evaluate_capability_attribution",

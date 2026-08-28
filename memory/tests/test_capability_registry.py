@@ -29,7 +29,8 @@ def _full_attribution_and_authority(conn, capability_id, *, required_assets=(),
         promoted_assets=list(required_assets))
     record_policy_load(conn, policy_snapshot_id=candidate.policy_snapshot_id,
                        runtime_id="authority-runtime", loaded=True,
-                       receipt={"execution_receipt_id": "exec-candidate"})
+                       receipt={"execution_receipt_id": "exec-candidate",
+                                "behavior_digest": "b1"})
     attribution = evaluate_capability_attribution_from_db(
         conn, capability_id=capability_id,
         baseline_memory_digest="m0", candidate_memory_digest="m1",
@@ -259,7 +260,8 @@ def test_strict_capability_attribution_binds_policy_memory_snapshots(tmp_tehm):
     record_policy_load(
         conn, policy_snapshot_id=candidate.policy_snapshot_id,
         runtime_id="strict-binding-runtime", loaded=True,
-        receipt={"execution_receipt_id": "exec-strict-binding"})
+        receipt={"execution_receipt_id": "exec-strict-binding",
+                 "behavior_digest": "b1"})
     receipt = evaluate_capability_attribution_from_db(
         conn, capability_id=capability.capability_id,
         # The delta itself is well-formed, but these labels are not the
@@ -286,6 +288,45 @@ def test_strict_capability_attribution_binds_policy_memory_snapshots(tmp_tehm):
     assert binding["candidate_memory_snapshot_id"] == "snapshot-m1"
     assert "baseline_memory_snapshot_mismatch" in binding["reasons"]
     assert "candidate_memory_snapshot_mismatch" in binding["reasons"]
+
+
+def test_strict_capability_attribution_binds_candidate_behavior_receipt(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="STRICT_BEHAVIOR_BINDING", applicability={},
+        status="candidate")
+    baseline = create_policy_snapshot(
+        conn, memory_snapshot_id="m0-behavior", promoted_rules=[])
+    candidate = create_policy_snapshot(
+        conn, memory_snapshot_id="m1-behavior", promoted_rules=["r1"])
+    record_policy_load(
+        conn, policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="behavior-binding-runtime", loaded=True,
+        receipt={"execution_receipt_id": "exec-behavior",
+                 "behavior_digest": "b0"})
+    receipt = evaluate_capability_attribution_from_db(
+        conn, capability_id=capability.capability_id,
+        baseline_memory_digest="m0-behavior",
+        candidate_memory_digest="m1-behavior",
+        baseline_policy_snapshot_id=baseline.policy_snapshot_id,
+        candidate_policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="behavior-binding-runtime", baseline_behavior_digest="b0",
+        candidate_behavior_digest="b1", target_gain=True, no_regression=True,
+        heldout={"verdict": "PASS", "disjoint_lineage": True,
+                 "evidence_id": "h-behavior-binding"},
+        ablation={"gain_without_memory": False, "gain_with_memory": True},
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "m0-behavior",
+            "candidate_memory_digest": "m1-behavior",
+            "added_rule_ids": ["r1"],
+        }, strict_memory_delta=True)
+    assert receipt.gates["C1"] is True
+    assert receipt.gates["C4"] is False
+    assert receipt.promotable is False
+    binding = receipt.detail["runtime_behavior_binding"]
+    assert binding["eligible"] is False
+    assert "candidate_behavior_digest_receipt_mismatch" in binding["reasons"]
 
 
 def test_capability_authority_replays_content_bound_memory_delta(tmp_tehm):
@@ -337,6 +378,29 @@ def test_capability_authority_replays_policy_memory_snapshot_binding(tmp_tehm):
     assert checked["eligible"] is False
     assert "authority_receipt_digest_mismatch" in checked["reasons"]
     assert "C1:baseline_memory_snapshot_mismatch" in checked["reasons"]
+
+
+def test_capability_authority_replays_candidate_behavior_binding(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="STRICT_BEHAVIOR_AUTHORITY", applicability={},
+        status="candidate")
+    _, authority, _ = _full_attribution_and_authority(
+        conn, capability.capability_id,
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "m0",
+            "candidate_memory_digest": "m1",
+            "added_rule_ids": ["r1"],
+        })
+    assert authority.eligible is True
+    authority.payload["runtime_behavior_binding"]["loaded_behavior_digest"] = (
+        "tampered-behavior")
+    checked = verify_capability_authority(
+        conn, capability.capability_id, authority)
+    assert checked["eligible"] is False
+    assert "authority_receipt_digest_mismatch" in checked["reasons"]
+    assert "C4:behavior_digest_binding_mismatch" in checked["reasons"]
 
 
 def test_capability_attribution_from_policy_and_runtime_receipts(tmp_tehm):

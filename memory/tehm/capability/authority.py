@@ -157,6 +157,13 @@ def _policy_binding_reasons(
         # Preserve the historical authority check for compatibility receipts
         # that predate the explicit strict binding witness.
         reasons.append("candidate_memory_snapshot_mismatch")
+    behavior_binding = detail.get("runtime_behavior_binding")
+    if isinstance(behavior_binding, Mapping) and behavior_binding.get("strict") is True:
+        reasons.extend(_runtime_behavior_binding_reasons(
+            conn, behavior_binding,
+            candidate_policy_snapshot_id=candidate_policy_snapshot_id,
+            runtime_id=runtime_id,
+            expected_behavior_digest=candidate.get("behavior_digest")))
     load = conn.execute(
         """SELECT *
              FROM tehm_policy_load_receipts
@@ -260,6 +267,79 @@ def _memory_snapshot_binding_reasons(
     expected_eligible = not reasons
     if binding.get("eligible") is not expected_eligible:
         reasons.append("C1:memory_snapshot_binding_eligibility_mismatch")
+    return reasons
+
+
+def _runtime_behavior_binding_reasons(
+    conn: sqlite3.Connection,
+    binding: Mapping,
+    *,
+    candidate_policy_snapshot_id: str,
+    runtime_id: str,
+    expected_behavior_digest: str | None = None,
+) -> list[str]:
+    """Replay strict C4's binding to the exact candidate runtime load.
+
+    C4 must describe behavior emitted after the candidate policy was loaded,
+    not an unrelated caller-provided digest.  The nested execution receipt and
+    behavior digest are therefore checked against the latest immutable load
+    row for this policy/runtime pair.
+    """
+    if not isinstance(binding, Mapping):
+        return ["C4:runtime_behavior_binding_malformed"]
+    reasons: list[str] = []
+    if binding.get("version") != "policy-runtime-behavior-v1":
+        reasons.append("C4:runtime_behavior_binding_version_mismatch")
+    if binding.get("strict") is not True:
+        reasons.append("C4:runtime_behavior_binding_not_strict")
+    if binding.get("candidate_policy_snapshot_id") != candidate_policy_snapshot_id:
+        reasons.append("C4:candidate_policy_snapshot_binding_mismatch")
+    if binding.get("runtime_id") != runtime_id:
+        reasons.append("C4:runtime_binding_runtime_id_mismatch")
+    if expected_behavior_digest is not None and (
+            binding.get("candidate_behavior_digest") != expected_behavior_digest):
+        reasons.append("C4:behavior_digest_claim_mismatch")
+    execution_id = binding.get("candidate_execution_receipt_id")
+    if not isinstance(execution_id, str) or not execution_id:
+        reasons.append("C4:candidate_execution_receipt_required")
+    loaded_behavior = binding.get("loaded_behavior_digest")
+    if not isinstance(loaded_behavior, str) or not loaded_behavior:
+        reasons.append("C4:candidate_behavior_digest_receipt_required")
+    if (isinstance(expected_behavior_digest, str) and
+            isinstance(loaded_behavior, str) and
+            loaded_behavior != expected_behavior_digest):
+        reasons.append("C4:candidate_behavior_digest_receipt_mismatch")
+
+    load = conn.execute(
+        """SELECT * FROM tehm_policy_load_receipts
+            WHERE policy_snapshot_id=? AND runtime_id=? AND loaded=1
+            ORDER BY created_at DESC, receipt_id DESC LIMIT 1""",
+        (candidate_policy_snapshot_id, runtime_id)).fetchone()
+    receipt: Mapping | None = None
+    if load is None:
+        reasons.append("C4:candidate_policy_runtime_load_missing")
+    else:
+        try:
+            checked = validate_policy_load_row(load)
+            raw = json.loads(checked["receipt_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            raw = None
+        if isinstance(raw, Mapping):
+            nested = raw.get("receipt")
+            receipt = nested if isinstance(nested, Mapping) else None
+        if receipt is None:
+            reasons.append("C4:runtime_behavior_receipt_malformed")
+        else:
+            actual_execution_id = receipt.get("execution_receipt_id")
+            actual_behavior = receipt.get("behavior_digest")
+            if actual_execution_id != execution_id:
+                reasons.append("C4:execution_receipt_binding_mismatch")
+            if actual_behavior != loaded_behavior:
+                reasons.append("C4:behavior_digest_binding_mismatch")
+
+    expected_eligible = not reasons
+    if binding.get("eligible") is not expected_eligible:
+        reasons.append("C4:runtime_behavior_binding_eligibility_mismatch")
     return reasons
 
 
@@ -571,6 +651,13 @@ def record_capability_authority(
         # authority replay can validate both policy snapshots independently of
         # the opaque attribution digest.
         payload["memory_snapshot_binding"] = dict(memory_snapshot_binding)
+    runtime_behavior_binding = (attribution.get("detail") or {}).get(
+        "runtime_behavior_binding")
+    if (isinstance(runtime_behavior_binding, Mapping) and
+            runtime_behavior_binding.get("strict") is True):
+        # Persist the execution-to-behavior witness so C4 can be independently
+        # replayed after the in-memory attribution object is gone.
+        payload["runtime_behavior_binding"] = dict(runtime_behavior_binding)
     receipt_digest = "sha256:" + hashlib.sha256(
         stable_dumps(payload).encode()).hexdigest()
     receipt_id = "capability_authority_" + receipt_digest.split(":", 1)[1][:20]
@@ -676,6 +763,17 @@ def verify_capability_authority(
                 conn, payload_memory_snapshot_binding,
                 candidate_policy_snapshot_id=str(
                     payload.get("candidate_policy_snapshot_id") or "")))
+    payload_runtime_behavior_binding = payload.get("runtime_behavior_binding")
+    if payload_runtime_behavior_binding is not None:
+        if (not isinstance(payload_runtime_behavior_binding, Mapping) or
+                payload_runtime_behavior_binding.get("strict") is not True):
+            reasons.append("C4:runtime_behavior_binding_malformed")
+        else:
+            reasons.extend(_runtime_behavior_binding_reasons(
+                conn, payload_runtime_behavior_binding,
+                candidate_policy_snapshot_id=str(
+                    payload.get("candidate_policy_snapshot_id") or ""),
+                runtime_id=str(payload.get("runtime_id") or "")))
     for key in ("candidate_policy_snapshot_id", "runtime_id", "attribution_digest"):
         if payload.get(key) != data.get(key):
             reasons.append(f"authority_{key}_payload_mismatch")

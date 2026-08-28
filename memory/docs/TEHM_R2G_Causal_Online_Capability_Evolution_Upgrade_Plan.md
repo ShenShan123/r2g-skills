@@ -3830,6 +3830,19 @@ digest 或 candidate 单侧检查。非 strict 历史 fixture 仍保留兼容路
 evaluation/authority 证据，不写 canonical memory，不改变 promotion gates，也不允许
 Parametric shadow 或 staging evidence 进入 production runtime。
 
+### 2026-08-28 strict C3/C4 runtime-behavior witness
+
+仅有 `loaded=true` 与调用方传入的 `candidate_behavior_digest` 仍不能完整证明
+`Policy_t+1 → C_t+1`：两者可能来自不同执行。strict attribution 现在要求 candidate
+policy/runtime 的最新 load receipt 嵌套一个 execution receipt ID 和由该执行计算的
+`behavior_digest`，并保存 `policy-runtime-behavior-v1` witness；digest 缺失或不一致时
+C4 fail-closed。capability authority 同时保存该 witness，并在 replay 时重新读取最新
+load row、校验 snapshot/runtime、execution ID 和 behavior digest。ORFS/RTL evaluation
+入口已把 candidate behavior digest 写入同一 load witness；preflight 与历史非 strict
+fixture 仍只用于基础设施/兼容验证。该修复加强 C3/C4 的可归因证据，不写 canonical
+memory，不改变 capability promotion gates，也不使 evaluation runtime 变成 production
+runtime。
+
 ### 2026-08-28 policy/runtime receipt type firewall
 
 PolicySnapshot 与 runtime-load receipt 的 content digest 不能只覆盖 JSON 字节，还要
