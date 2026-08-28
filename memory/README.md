@@ -212,6 +212,18 @@ witness；没有同 campaign 的 training membership 时，即使调用方传入
 真正的增量 crystallization 仍须由显式、隔离的调用执行，不能自动改变 production
 lifecycle。
 
+为让 fast-memory receipt 能够被后续审计和 consolidation 重放，online observation
+现在还绑定 typed `mechanism_signature`、`affected_rule_ids` 与
+`affected_path_ids`。rule witness 只解析该 transition 直接拥有的 episode-step
+来源；path witness 则逐行重放 source transition、training campaign 和持久化 path
+校验。缺失、重复、损坏或跨 campaign 的 path/source 关系直接 fail-closed，不会用
+effect key 或 mechanism family 猜测受影响规则。上述字段同时写入
+`CAUSAL_FRAGMENT_CREATED`、`NOVEL_MECHANISM`、`RULE_CONFLICT`、
+`RULE_HARMFUL`、`CONSOLIDATION_TRIGGERED` 和 `RULE_REVISION_PROPOSED` 事件，receipt
+仍保持 `path_id=null`（受影响 path 可能是多个），且整个绑定过程与事件链共享同一
+savepoint。它只增强 shadow/evaluation evidence，不写 canonical rule、lifecycle 或
+production runtime。
+
 当 preview 需要进入试验阶段时，`evolution.run_shadow_candidate_trial()` 会把 TEHM
 连接复制到内存 staging DB，在 staging 内重建并登记 `shadow → candidate`，然后复用
 现有 A/B trial adapter。Icarus/ORFS 执行器通过 evaluator callback 注入；即使六项

@@ -3627,3 +3627,22 @@ observation/staging 快照，重复 case/receipt/record/transition 直接 fail-c
 且严格路径会校验 external action domain/transformation family 与当前 rule。该组合
 只完善 harmful/conformal evidence 的可重放性，仍不填补 rollback、registry 或
 obligation gate，也不会写 canonical/lifecycle/runtime。
+
+### 2026-08-28 online fast-memory affected-witness binding（仍为 shadow）
+
+根据 4.2/4.8 的证据链要求，`OnlineMemoryReceipt` 不再只返回 effect key 和单一
+`path_id`，而是携带确定性的 `mechanism_signature`、`affected_rule_ids` 和
+`affected_path_ids`。signature 直接由已捕获 transition facts 计算；rule IDs 只来自
+该 transition 的 episode-step source witness，避免通过 effect group 或 family 反向
+猜规则。path IDs 只来自当前 observation 时已持久化、未 retired 且机制/profile 匹配的
+path，并逐个重放 `source_transitions_json`、path provenance、training learner
+membership 与 campaign 归属。任何 malformed、重复、缺失或跨 campaign witness 都
+fail-closed；不会为了返回一个“看似相关”的 path 而放宽边界。
+
+上述 typed witness 同时写入 causal fragment、novelty/conflict/harmful、consolidation
+trigger 与 revision-preview 事件，且与 fragment/event chain 共用一个 SQLite
+savepoint。因此晚到的 path replay 或 provenance 错误会回滚整次 online observation，
+不留下孤立的事件前缀。该改动仍属于 fast-memory shadow lane：不创建或覆盖 canonical
+rule，不改变 lifecycle，不进入 production runtime；后续若要由这些 witness 推动
+crystallization，仍需单独的 authority receipt、held-out/rollback/registry/obligation
+证据和显式隔离 persist。

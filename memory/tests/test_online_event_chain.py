@@ -8,7 +8,8 @@ from unittest.mock import patch
 import pytest
 
 from tehm.canonical.capture import capture
-from tehm.causal import build_transition_causal_fragment
+from tehm.causal import (build_transition_causal_fragment,
+                          consolidate_causal_path)
 from tehm.crystallization.build_rules import crystallize_all
 from tehm.dataset import assign_transition
 from tehm.evolution import (
@@ -47,6 +48,67 @@ def test_online_observation_is_idempotent_and_hash_chained(tmp_tehm):
     assert conn.execute("SELECT COUNT(*) FROM tehm_memory_events").fetchone()[0] == 5
     assert conn.execute(
         "SELECT COUNT(*) FROM tehm_rule_revisions").fetchone()[0] == 0
+
+
+def test_online_receipt_binds_mechanism_and_affected_rule_witness(
+        tmp_tehm):
+    """Fast-memory output names typed mechanism and source-owned rule impact."""
+    conn, store, _ = tmp_tehm
+    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first_id = capture(conn, store, first).transition_id
+    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second.record_id = "rtl:req_ack:affected-rule"
+    second.action["payload"]["add_condition"] = "ready"
+    second_id = capture(conn, store, second).transition_id
+    rules = crystallize_all(conn, campaign_id="live")
+    assert rules
+    expected_rule_ids = tuple(sorted({rule["rule_id"] for rule in rules}))
+
+    receipt = observe_transition(conn, second_id, campaign_id="live")
+    assert receipt.mechanism_signature["mechanism_family"] == (
+        "HANDSHAKE_COMPLETION")
+    assert receipt.affected_rule_ids == expected_rule_ids
+    assert receipt.affected_path_ids == ()
+    fragment_event = next(
+        event for event in receipt.events
+        if event.event_type == "CAUSAL_FRAGMENT_CREATED")
+    payload = conn.execute(
+        "SELECT payload_json FROM tehm_memory_events WHERE event_id=?",
+        (fragment_event.event_id,)).fetchone()[0]
+    decoded = json.loads(payload)
+    assert decoded["mechanism_signature"] == receipt.mechanism_signature
+    assert tuple(decoded["affected_rule_ids"]) == expected_rule_ids
+    assert decoded["affected_path_ids"] == []
+    assert first_id != second_id
+
+
+def test_online_receipt_replays_affected_path_witness(tmp_tehm):
+    """A persisted shadow path is exposed only after full replay validation."""
+    conn, store, _ = tmp_tehm
+    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first.record_id = "rtl:req_ack:path-first"
+    first_id = capture(conn, store, first).transition_id
+    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second.record_id = "rtl:req_ack:path-second"
+    second.action["payload"]["add_condition"] = "ready"
+    second_id = capture(conn, store, second).transition_id
+    path = consolidate_causal_path(
+        conn,
+        [build_transition_causal_fragment(
+            conn, first_id, campaign_id="live"),
+         build_transition_causal_fragment(
+            conn, second_id, campaign_id="live")],
+        campaign_id="live")
+
+    receipt = observe_transition(conn, second_id, campaign_id="live")
+    assert receipt.affected_path_ids == (path.path_id,)
+    fragment_event = next(
+        event for event in receipt.events
+        if event.event_type == "CAUSAL_FRAGMENT_CREATED")
+    payload = json.loads(conn.execute(
+        "SELECT payload_json FROM tehm_memory_events WHERE event_id=?",
+        (fragment_event.event_id,)).fetchone()[0])
+    assert payload["affected_path_ids"] == [path.path_id]
 
 
 def test_online_observation_rolls_back_fragment_and_events_on_late_failure(

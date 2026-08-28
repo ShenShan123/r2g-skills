@@ -34,6 +34,11 @@ class OnlineMemoryReceipt:
     campaign_id: str
     learner_eligible: bool
     fragment: object | None
+    # Typed fast-memory witnesses.  These are derived references for a later
+    # shadow consolidation pass; they never grant lifecycle authority.
+    mechanism_signature: dict = field(default_factory=dict)
+    affected_rule_ids: tuple[str, ...] = field(default_factory=tuple)
+    affected_path_ids: tuple[str, ...] = field(default_factory=tuple)
     events: tuple[MemoryEventReceipt, ...] = field(default_factory=tuple)
     novelty: str = "UNKNOWN"
     consolidation_triggered: bool = False
@@ -51,6 +56,9 @@ class OnlineMemoryReceipt:
             "campaign_id": self.campaign_id,
             "learner_eligible": self.learner_eligible,
             "fragment": self.fragment.to_dict() if self.fragment else None,
+            "mechanism_signature": dict(self.mechanism_signature),
+            "affected_rule_ids": list(self.affected_rule_ids),
+            "affected_path_ids": list(self.affected_path_ids),
             "events": [event.to_dict() for event in self.events],
             "novelty": self.novelty,
             "consolidation_triggered": self.consolidation_triggered,
