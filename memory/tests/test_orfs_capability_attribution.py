@@ -72,6 +72,13 @@ def test_orfs_ablation_action_check_fails_closed_on_missing_or_duplicate_receipt
     ]}
     assert orfs_attribution._runtime_selects_action(
         duplicate, {"train:a"}, "DENSITY_RELIEF") is False
+    assert orfs_attribution._runtime_selects_action(
+        {"decisions": [{"lineage_id": True,
+                        "selected_action": "DENSITY_RELIEF"}]},
+        {"train:a"}, "DENSITY_RELIEF") is False
+    assert orfs_attribution._runtime_selects_action(
+        {"decisions": [{"lineage_id": "train:a", "selected_action": True}]},
+        {"train:a"}, "DENSITY_RELIEF") is False
 
 
 def test_orfs_capability_authority_is_db_bound_and_read_only(

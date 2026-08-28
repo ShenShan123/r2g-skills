@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,25 +38,44 @@ from tehm.adapters.orfs_pair import build_orfs_pair_record  # noqa: E402
 
 def _stable_digest(value: object) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"),
-                         ensure_ascii=False, default=str).encode()
+                         ensure_ascii=False).encode()
     return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+def _strict_text(value, *, label: str) -> str:
+    if type(value) is not str or not value.strip():
+        raise ValueError(f"{label}_malformed")
+    return value.strip()
 
 
 def _pair(before: str, after: str, lineage: str, config_json: str,
           target_check: str):
+    lineage = _strict_text(lineage, label="lineage_id")
+    target_check = _strict_text(target_check, label="target_check")
+    config_edits = json.loads(config_json)
+    if not isinstance(config_edits, Mapping):
+        raise ValueError("config_edits_malformed")
     return {
         "before_project": before, "after_project": after,
-        "lineage_id": lineage, "config_edits": json.loads(config_json),
+        "lineage_id": lineage, "config_edits": dict(config_edits),
         "target_check": target_check,
     }
 
 
 def _build_record(spec: dict):
+    if not isinstance(spec, Mapping):
+        raise ValueError("pair_spec_malformed")
+    lineage_id = _strict_text(spec.get("lineage_id"), label="lineage_id")
+    target_check = _strict_text(
+        spec.get("target_check") or "route", label="target_check")
+    config_edits = spec.get("config_edits")
+    if not isinstance(config_edits, Mapping):
+        raise ValueError("config_edits_malformed")
     record = build_orfs_pair_record(
         Path(spec["before_project"]), Path(spec["after_project"]),
-        lineage_id=str(spec["lineage_id"]),
-        target_check=str(spec.get("target_check") or "route"),
-        config_edits=dict(spec["config_edits"]),
+        lineage_id=lineage_id,
+        target_check=target_check,
+        config_edits=dict(config_edits),
         transformation_family="DENSITY_RELIEF")
     return record
 
@@ -90,7 +110,13 @@ def _run_evaluation_policy(conn, *, policy_snapshot_id: str,
     """
     snapshot = load_policy_snapshot(conn, policy_snapshot_id)
     routing = json.loads(snapshot.get("routing_config_json") or "{}")
-    selected = str(routing.get("selected_action") or "none")
+    if not isinstance(routing, Mapping):
+        raise ValueError("evaluation policy routing config is malformed")
+    selected = routing.get("selected_action")
+    if selected is None:
+        selected = "none"
+    else:
+        selected = _strict_text(selected, label="selected_action")
     decisions = []
     for record in records:
         action = record.action if selected != "none" else None
@@ -123,7 +149,10 @@ def _runtime_selects_action(runtime: dict, lineages: set[str],
     contain one decision for each target lineage and the exact action under
     test.  Missing, duplicated, or malformed decisions fail closed.
     """
-    if not lineages or not isinstance(runtime, dict):
+    if (not lineages or not isinstance(runtime, dict) or
+            any(type(lineage) is not str or not lineage.strip()
+                for lineage in lineages) or
+            type(expected_action) is not str or not expected_action.strip()):
         return False
     decisions = runtime.get("decisions")
     if not isinstance(decisions, list):
@@ -132,10 +161,18 @@ def _runtime_selects_action(runtime: dict, lineages: set[str],
     for decision in decisions:
         if not isinstance(decision, dict):
             return False
-        lineage = str(decision.get("lineage_id") or "")
+        lineage = decision.get("lineage_id")
+        if type(lineage) is not str or not lineage.strip():
+            return False
+        lineage = lineage.strip()
         if lineage in selected:
             return False
-        selected[lineage] = decision.get("selected_action")
+        selected_action = decision.get("selected_action")
+        if selected_action is not None and type(selected_action) is not str:
+            return False
+        selected[lineage] = (
+            selected_action.strip() if isinstance(selected_action, str)
+            else None)
     return (set(selected) >= set(lineages) and
             all(selected[lineage] == expected_action for lineage in lineages))
 
@@ -152,19 +189,34 @@ def build_orfs_capability_attribution(
     runtime_id: str = "tehm-orfs-capability-evaluation",
 ) -> dict:
     """Evaluate C1-C8 while retaining an explicit non-production boundary."""
+    mechanism_family = _strict_text(mechanism_family, label="mechanism_family")
+    runtime_id = _strict_text(runtime_id, label="runtime_id")
+    if not isinstance(training_pairs, (list, tuple)):
+        raise ValueError("training_pairs_malformed")
+    if (not isinstance(heldout_pair, Mapping) or
+            not isinstance(non_target_pair, Mapping)):
+        raise ValueError("evaluation_pair_malformed")
     source = Path(source_db).resolve()
     if not source.is_file():
         raise FileNotFoundError(f"source database not found: {source}")
     source_digest = _sha256(source)
     report_path = Path(causal_report).resolve()
     causal = json.loads(report_path.read_text())
-    causal_path_id = str((causal.get("path") or {}).get("path_id") or "")
+    causal_path_id = (causal.get("path") or {}).get("path_id")
+    if type(causal_path_id) is not str:
+        causal_path_id = ""
+    else:
+        causal_path_id = causal_path_id.strip()
     if not causal_path_id or (causal.get("replication") or {}).get("eligible") is not True:
         raise ValueError("causal report must contain an eligible replicated path")
     if len(training_pairs) < 2:
         raise ValueError("attribution requires at least two training lineages")
-    train_lineages = {str(item["lineage_id"]) for item in training_pairs}
-    held_lineage = str(heldout_pair["lineage_id"])
+    train_lineages = {
+        _strict_text(item.get("lineage_id"), label="lineage_id")
+        for item in training_pairs
+    }
+    held_lineage = _strict_text(
+        heldout_pair.get("lineage_id"), label="lineage_id")
     if held_lineage in train_lineages:
         raise ValueError("held-out lineage leaked into training")
 
@@ -183,7 +235,9 @@ def build_orfs_capability_attribution(
     train_summaries = []
     for spec in training_pairs:
         record = _build_record(spec)
-        summary = _summary(record, target_check=str(spec.get("target_check") or "route"))
+        summary = _summary(
+            record, target_check=_strict_text(
+                spec.get("target_check") or "route", label="target_check"))
         if not (summary["before_failed"] and summary["candidate_pass"]):
             raise ValueError(f"training pair is not baseline-fail -> candidate-pass: {summary}")
         captured = capture(
@@ -236,8 +290,9 @@ def build_orfs_capability_attribution(
                  "causal_path_id": causal_path_id})
 
     held_record = _build_record(heldout_pair)
-    held_summary = _summary(held_record,
-                            target_check=str(heldout_pair.get("target_check") or "route"))
+    held_summary = _summary(
+        held_record, target_check=_strict_text(
+            heldout_pair.get("target_check") or "route", label="target_check"))
     if not (held_summary["before_failed"] and held_summary["candidate_pass"]):
         raise ValueError(f"held-out pair is not baseline-fail -> candidate-pass: {held_summary}")
     held_evidence_id = _stable_digest({"pair": held_summary,
@@ -246,8 +301,9 @@ def build_orfs_capability_attribution(
 
     non_target_record = _build_record(non_target_pair)
     non_target_summary = _summary(
-        non_target_record,
-        target_check=str(non_target_pair.get("target_check") or "route"))
+        non_target_record, target_check=_strict_text(
+            non_target_pair.get("target_check") or "route",
+            label="target_check"))
     no_regression = bool(non_target_summary["candidate_pass"] and
                          not non_target_summary["created_regressions"])
     non_target_evidence_id = _stable_digest({"pair": non_target_summary,
@@ -350,7 +406,8 @@ def build_orfs_capability_attribution(
         "seed_policy": "fixed project materialization",
         "candidate_budget": len(training_pairs),
         "heldout_lineage": held_lineage,
-        "non_target_lineage": str(non_target_pair["lineage_id"]),
+        "non_target_lineage": _strict_text(
+            non_target_pair.get("lineage_id"), label="lineage_id"),
     }
     attribution = evaluate_capability_campaign(
         conn, capability_id=capability.capability_id,

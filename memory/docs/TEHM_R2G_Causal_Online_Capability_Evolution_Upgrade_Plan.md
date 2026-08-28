@@ -4075,3 +4075,13 @@ gate 合取，不写 canonical memory，也不使 evaluation/runtime 或 Paramet
 弱类型 domain、transformation family 与 compatibility profile。该修复只收紧
 rollback/obligation/utility authority projector 的 replay 输入，不改变六项 gate 合取，
 不写 canonical memory，也不使 shadow/evaluation 进入 production runtime。
+
+### 2026-08-28 ORFS capability attribution input firewall
+
+build_orfs_capability_attribution.py 的 evaluation-only runtime 与 pair 输入现在
+也拒绝弱类型 lineage、target check、config、mechanism/runtime ID，以及 runtime
+decision 的 lineage/action；其 digest serializer 不再使用 default=str 把不支持的
+对象隐式改写。这样 C1--C8 attribution receipt 的生成与
+capability.authority replay 使用同一类 typed witness 约束。该脚本仍只在 derived
+DB 中执行，held-out/non-target 不进入 learner snapshot，promotion_attempted=false
+和 canonical_memory_mutation=none 边界保持不变。
