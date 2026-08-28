@@ -1254,12 +1254,27 @@ def _bind_transfer_to_rule(
     elif not set(source_ids).issubset(set(training_ids)):
         errors.append("cross_lineage_te:rule_binding_training_sources_mismatch")
     for transition_id in source_ids:
-        membership = conn.execute(
-            "SELECT 1 FROM tehm_dataset_membership "
-            "WHERE transition_id=? AND campaign_id=? AND split='training' "
-            "AND learner_eligible=1 LIMIT 1",
-            (transition_id, ledger.training_campaign_id)).fetchone()
-        if membership is None:
+        memberships = conn.execute(
+            "SELECT split, learner_eligible FROM tehm_dataset_membership "
+            "WHERE transition_id=? AND campaign_id=?",
+            (transition_id, ledger.training_campaign_id)).fetchall()
+        source_ok = False
+        malformed_membership = False
+        for membership in memberships:
+            if membership["split"] != "training":
+                continue
+            try:
+                eligible = normalize_stored_learner_bool(
+                    membership["learner_eligible"])
+            except ValueError:
+                malformed_membership = True
+                continue
+            if eligible is True:
+                source_ok = True
+        if malformed_membership:
+            errors.append(
+                "cross_lineage_te:rule_binding_source_membership_malformed")
+        if not source_ok:
             errors.append("cross_lineage_te:rule_binding_source_firewall_mismatch")
     if errors:
         return None, errors
@@ -1880,7 +1895,45 @@ def _load_evidence_rows(conn: sqlite3.Connection, *, rule_id: str,
             if not isinstance(ref, Mapping):
                 reasons.append(f"evidence:{gate}:ref_malformed")
                 continue
-            evidence_id = str(ref.get("evidence_id") or "")
+            # Replay is an authority boundary too.  Do not turn a weakly
+            # typed receipt reference (for example ``1``) into the string
+            # ``"1"`` and then look it up: that would let a caller select a
+            # different immutable evidence row than the one named by the
+            # content-addressed receipt.  The write-side normaliser applies
+            # the same identity rules; keeping them symmetric makes a
+            # receipt fail closed even when its outer digest is stale.
+            evidence_id = ref.get("evidence_id")
+            split = ref.get("split")
+            verdict = ref.get("verdict")
+            lineage_id = ref.get("lineage_id")
+            evidence_digest = ref.get("evidence_digest")
+            malformed = False
+            for field_name, value in (
+                    ("evidence_id", evidence_id),
+                    ("split", split),
+                    ("verdict", verdict),
+                    ("evidence_digest", evidence_digest)):
+                if type(value) is not str or not value.strip():
+                    reasons.append(f"evidence:{gate}:ref_{field_name}_malformed")
+                    malformed = True
+            if lineage_id is not None and (
+                    type(lineage_id) is not str or not lineage_id.strip()):
+                reasons.append(f"evidence:{gate}:ref_lineage_id_malformed")
+                malformed = True
+            if malformed:
+                continue
+            evidence_id = evidence_id.strip()
+            split = split.strip()
+            verdict = verdict.strip()
+            evidence_digest = evidence_digest.strip()
+            if lineage_id is not None:
+                lineage_id = lineage_id.strip()
+            if split not in EVIDENCE_SPLITS:
+                reasons.append(f"evidence:{gate}:ref_invalid_split")
+                continue
+            if split not in GATE_ALLOWED_SPLITS[gate]:
+                reasons.append(f"evidence:{gate}:ref_invalid_evidence_split")
+                continue
             row = conn.execute(
                 """SELECT split, lineage_id, verdict, payload_json,
                           evidence_digest
@@ -1900,9 +1953,9 @@ def _load_evidence_rows(conn: sqlite3.Connection, *, rule_id: str,
                 lineage_id=row["lineage_id"], verdict=str(row["verdict"]),
                 payload=payload)
             if (row["split"], row["lineage_id"], row["verdict"]) != (
-                    ref.get("split"), ref.get("lineage_id"), ref.get("verdict")):
+                    split, lineage_id, verdict):
                 reasons.append(f"evidence:{gate}:row_mismatch")
-            if row["evidence_digest"] != expected or ref.get("evidence_digest") != expected:
+            if row["evidence_digest"] != expected or evidence_digest != expected:
                 reasons.append(f"evidence:{gate}:digest_mismatch")
             loaded[gate].append({
                 "evidence_id": evidence_id, "split": row["split"],

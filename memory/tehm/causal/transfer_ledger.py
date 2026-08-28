@@ -114,14 +114,15 @@ def _stored_bool(value, *, field: str) -> bool:
     return bool(value)
 
 
-def _ids(values, *, name: str) -> tuple[str, ...]:
+def _normalise_ids(values, *, name: str,
+                   allow_empty: bool = False) -> tuple[str, ...]:
     if isinstance(values, (str, bytes)) or values is None:
         raise ValueError(f"{name} must be a non-empty sequence")
     try:
         values = tuple(values)
     except TypeError as exc:
         raise ValueError(f"{name} must be a non-empty sequence") from exc
-    if (not values or
+    if ((not allow_empty and not values) or
             any(type(value) is not str or not value.strip()
                 for value in values)):
         raise ValueError(f"{name} must be a non-empty sequence")
@@ -129,6 +130,19 @@ def _ids(values, *, name: str) -> tuple[str, ...]:
     if len(set(result)) != len(result):
         raise ValueError(f"{name} contains duplicate transition IDs")
     return tuple(sorted(result))
+
+
+def _ids(values, *, name: str) -> tuple[str, ...]:
+    return _normalise_ids(values, name=name)
+
+
+def _canonical_ids(values, *, name: str,
+                   allow_empty: bool = False) -> tuple[str, ...]:
+    """Require a JSON list to already be the sorted, duplicate-free vector."""
+    normalised = _normalise_ids(values, name=name, allow_empty=allow_empty)
+    if not isinstance(values, list) or values != list(normalised):
+        raise ValueError(f"{name} is not canonical")
+    return normalised
 
 
 def _path_binding(conn: sqlite3.Connection, path_id: str) -> str:
@@ -207,11 +221,42 @@ def _from_row(row: sqlite3.Row) -> CausalTransferLedgerReceipt:
         transfer_ids = json.loads(row["transfer_transition_ids_json"] or "[]")
     except (TypeError, json.JSONDecodeError) as exc:
         raise ValueError("causal transfer receipt transition IDs are malformed") from exc
-    if (stable_dumps(training_ids) !=
-            stable_dumps(payload.get("training_transition_ids") or []) or
-            stable_dumps(transfer_ids) !=
-            stable_dumps(payload.get("transfer_transition_ids") or [])):
+    try:
+        # A path with an ineligible/negative result may legitimately carry no
+        # training witnesses, but both vectors must still be JSON sequences of
+        # unique, non-empty string IDs.  In particular, a copied receipt must
+        # not turn ``1`` into ``"1"`` during replay.
+        stored_training_ids = _canonical_ids(
+            training_ids, name="training_transition_ids", allow_empty=True)
+        stored_transfer_ids = _canonical_ids(
+            transfer_ids, name="transfer_transition_ids")
+        payload_training_ids = _canonical_ids(
+            payload.get("training_transition_ids"),
+            name="payload.training_transition_ids", allow_empty=True)
+        payload_transfer_ids = _canonical_ids(
+            payload.get("transfer_transition_ids"),
+            name="payload.transfer_transition_ids")
+    except ValueError as exc:
+        raise ValueError(
+            "causal transfer receipt transition IDs are malformed") from exc
+    try:
+        nested_training_ids = _canonical_ids(
+            transfer.get("training_transition_ids"),
+            name="transfer.training_transition_ids", allow_empty=True)
+        nested_transfer_ids = _canonical_ids(
+            transfer.get("transfer_transition_ids"),
+            name="transfer.transfer_transition_ids")
+    except ValueError as exc:
+        raise ValueError(
+            "causal transfer nested transition IDs are malformed") from exc
+    if (stable_dumps(list(stored_training_ids)) !=
+            stable_dumps(list(payload_training_ids)) or
+            stable_dumps(list(stored_transfer_ids)) !=
+            stable_dumps(list(payload_transfer_ids))):
         raise ValueError("causal transfer receipt transition IDs mismatch")
+    if (nested_training_ids != payload_training_ids or
+            nested_transfer_ids != payload_transfer_ids):
+        raise ValueError("causal transfer nested transition IDs mismatch")
     return CausalTransferLedgerReceipt(
         transfer_receipt_id=str(row["transfer_receipt_id"]),
         receipt_digest=str(row["receipt_digest"]),

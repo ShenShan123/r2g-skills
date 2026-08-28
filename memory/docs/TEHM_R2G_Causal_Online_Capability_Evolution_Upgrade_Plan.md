@@ -4033,3 +4033,21 @@ memory，也不改变 Parametric shadow-only 或 production runtime 边界。
 为保证这类 fail-closed 决策可审计，`_derive_gate_inputs()` 现在会在所有 gate 解析完成
 后再写入 `details.errors`；后续发现的 registry/measurement malformed reason 不会只影响
 内部 gate 值而从 receipt 的派生诊断中消失。
+
+### 2026-08-28 authority replay reference 与 transfer membership closure
+
+authority receipt 的 replay reader 现在与写入端使用同一套 evidence-reference 类型边界：
+`evidence_id`、`split`、`verdict`、`evidence_digest` 必须是非空字符串，
+`lineage_id` 只能是 `None` 或非空字符串；非法 split 在查询 immutable evidence row 之前
+即停止。这样复制/篡改的 receipt 不会把整数 ID 通过 `str(...)` 转换后命中另一条证据，
+也不会让缺失 digest 的 ref 借助数据库行被重新解释。该修复只影响 authority replay，
+并将 malformed reference 记录为 gate-scoped reason。
+
+causal transfer ledger replay 现在同时校验顶层 payload、嵌套 transfer receipt 和 SQLite
+列中的 training/transfer transition-ID 向量：向量必须是规范化的字符串 ID、无重复且与
+三处投影完全一致（负结果允许空 training vector，但 transfer vector 仍必须存在）。rule
+binding 与 transfer evaluator 对训练 membership 也改为读取后调用
+`normalize_stored_learner_bool()`，遇到复制数据库中的弱类型 learner flag 会产生
+`training_firewall_violation` 或 rule-binding malformed reason，而不会依赖 SQL 的宽松
+比较。上述变化继续停留在 causal/authority shadow ledger，不写 canonical memory、不
+触发 promotion，也不改变 Parametric shadow-only 与 production runtime 边界。

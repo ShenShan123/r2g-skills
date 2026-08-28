@@ -233,19 +233,43 @@ def evaluate_transfer_supported_mechanism(
                         evidence_level=replication.evidence_level)
 
     placeholders = ",".join("?" for _ in source_ids)
-    training_rows = conn.execute(
-        f"""SELECT t.transition_id, s.lineage_id, s.design_id
+    training_memberships = conn.execute(
+        f"""SELECT t.transition_id, s.lineage_id, s.design_id,
+                         dm.split, dm.learner_eligible
               FROM tehm_transitions t
               JOIN tehm_states s ON s.state_id=t.source_state_id
               JOIN tehm_dataset_membership dm ON dm.transition_id=t.transition_id
              WHERE t.transition_id IN ({placeholders})
-               AND dm.campaign_id=? AND dm.split='training'
-               AND dm.learner_eligible=1""",
+               AND dm.campaign_id=?""",
         (*source_ids, training_campaign_id)).fetchall()
+    training_rows = []
+    training_firewall_violation = False
+    for training_row in training_memberships:
+        if training_row["split"] != "training":
+            continue
+        try:
+            eligible = normalize_stored_learner_bool(
+                training_row["learner_eligible"])
+        except ValueError:
+            training_firewall_violation = True
+            continue
+        if eligible is True:
+            training_rows.append(training_row)
     training_lineages = tuple(sorted({str(row["lineage_id"]) for row in training_rows
                                       if row["lineage_id"]}))
     training_designs = tuple(sorted({str(row["design_id"]) for row in training_rows
                                     if row["design_id"]}))
+
+    if training_firewall_violation:
+        return _failure(path_id=path_id,
+                        training_campaign_id=training_campaign_id,
+                        transfer_campaign_id=transfer_campaign_id,
+                        reason="training_firewall_violation",
+                        training_transition_ids=source_ids,
+                        transfer_transition_ids=ids,
+                        training_lineages=training_lineages,
+                        training_designs=training_designs,
+                        evidence_level=str(path["evidence_level"]))
 
     placeholders = ",".join("?" for _ in ids)
     transfer_rows = conn.execute(

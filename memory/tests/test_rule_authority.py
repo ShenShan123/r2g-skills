@@ -165,6 +165,24 @@ def test_rule_authority_rejects_weakly_typed_evidence_identity(
     assert "obligation_coverage:entry_0_lineage_id_malformed" in receipt.reasons
 
 
+def test_rule_authority_replay_rejects_weakly_typed_evidence_reference(
+        tmp_tehm, sample_record_dict):
+    """Replay must not stringify a forged reference before its DB lookup."""
+    conn, rule_id, version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    receipt = record_rule_authority(
+        conn, rule_id=rule_id, target_scope="drc",
+        evidence=_full_evidence(conn, rule_id), trial_id=trial_id,
+        expected_status_version=version)
+    tampered = json.loads(json.dumps(receipt.to_dict()))
+    tampered["payload"]["evidence_refs"]["rollback_verified"][0][
+        "evidence_id"] = 1
+    checked = verify_rule_authority(conn, tampered)
+    assert checked["eligible"] is False
+    assert "evidence:rollback_verified:ref_evidence_id_malformed" in checked[
+        "reasons"]
+
+
 def test_rule_authority_rejects_boolean_registry_status_version(
         tmp_tehm, sample_record_dict):
     conn, rule_id, version, trial_id = _candidate_with_trial(

@@ -237,6 +237,19 @@ def test_causal_transfer_ledger_replays_and_binds_path(tmp_tehm, tmp_path):
     assert weak_storage["verified"] is False
     assert any(reason.startswith("transfer_receipt_row_malformed:")
                for reason in weak_storage["reasons"])
+
+    # Transition witness vectors are typed replay data too.  A copied ledger
+    # that replaces an ID string with an integer must fail before the receipt
+    # can be loaded as a valid transfer witness.
+    conn.execute(
+        "UPDATE tehm_causal_transfer_receipts "
+        "SET eligible=1, training_transition_ids_json='[1]' "
+        "WHERE transfer_receipt_id=?", (ledger.transfer_receipt_id,))
+    conn.commit()
+    weak_vector = verify_causal_transfer(conn, ledger.to_dict())
+    assert weak_vector["verified"] is False
+    assert any(reason.startswith("transfer_receipt_row_malformed:")
+               for reason in weak_vector["reasons"])
     conn.close()
 
 
