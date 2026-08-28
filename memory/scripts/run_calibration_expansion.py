@@ -15,7 +15,6 @@ import hashlib
 import json
 import os
 import shutil
-import sqlite3
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
