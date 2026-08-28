@@ -35,7 +35,7 @@ from tehm.graph.local_design_graph import (
 )
 from tehm.graph.roles import RoleProjector
 from tehm.graph.predicates import extract_predicates
-from tehm.dataset import SPLITS
+from tehm.dataset import SPLITS, require_learner_bool
 from tehm.views import materialize as views_materialize
 from tehm.views.diagnostic import extract_diagnostic_signature
 from tehm.ids import stable_dumps
@@ -196,8 +196,10 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
 
     if not dataset_campaign_id:
         raise ValueError("dataset_campaign_id is required")
-    if dataset_split not in SPLITS:
+    if type(dataset_split) is not str or dataset_split not in SPLITS:
         raise ValueError(f"unknown dataset_split: {dataset_split!r}")
+    require_learner_bool(dataset_learner_eligible,
+                         field="dataset_learner_eligible")
     if dataset_split != "training" and dataset_learner_eligible:
         raise ValueError(
             "only training evidence may be marked learner_eligible")
@@ -456,7 +458,7 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
         "transition_id": transition.transition_id,
         "campaign_id": dataset_campaign_id,
         "split": dataset_split,
-        "learner_eligible": int(bool(dataset_learner_eligible)),
+        "learner_eligible": int(dataset_learner_eligible),
         "frozen_snapshot_digest": frozen_snapshot_digest,
         "assigned_at": materialized_at,
     }

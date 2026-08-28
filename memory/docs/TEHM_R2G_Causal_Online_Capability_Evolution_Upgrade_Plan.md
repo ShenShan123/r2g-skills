@@ -3866,3 +3866,16 @@ authority 保存，并在 replay 时重新读取 baseline load row、校验 payl
 load witness；preflight/旧非 strict fixture 仍只用于兼容或未完成证据。该升级只加强
 memory ablation 的 attribution，不写 canonical memory，不改变 promotion gate 或
 production runtime 边界。
+
+### 2026-08-28 learner eligibility type firewall
+
+`learner_eligible` 是 dataset/evidence firewall 的 typed authority bit，不能在写入或
+重放时用 `bool(value)` 宽松转换；否则字符串化的 `"false"` 会变成真值并进入 learner
+support。现在 canonical capture、dataset assignment、online event append/replay 和
+external observation reader 要求输入为真实布尔值；SQLite/derived row 读取只接受严格的
+整数 `0/1`（或未序列化的布尔值），membership 还必须满足
+`training ∧ learner_eligible`，非 training 的矛盾行只能按 audit-only 处理。online
+manager、causal path/authority、revision 与 held-out transfer 均复用该读取校验，弱类型
+或损坏 row fail-closed；external support 观察也不能凭 truthy 字符串进入 staging。
+该修复只加强数据防火墙和重放确定性，不增加 promotion gate、不写 canonical memory，
+也不改变 Parametric shadow 或 production runtime 边界。

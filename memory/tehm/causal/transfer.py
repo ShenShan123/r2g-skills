@@ -13,6 +13,8 @@ import sqlite3
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 
+from tehm.dataset import normalize_stored_learner_bool
+
 from .evidence_level import CausalEvidenceLevel
 from .matcher import match_causal_path
 from .mechanism import load_transition_facts, mechanism_signature
@@ -269,8 +271,21 @@ def evaluate_transfer_supported_mechanism(
                                       if row["lineage_id"]}))
     transfer_designs = tuple(sorted({str(row["design_id"]) for row in transfer_rows
                                     if row["design_id"]}))
-    if any(row["split"] != "heldout" or bool(row["learner_eligible"])
-           for row in transfer_rows):
+    transfer_firewall_violation = False
+    for transfer_row in transfer_rows:
+        if transfer_row["split"] != "heldout":
+            transfer_firewall_violation = True
+            break
+        try:
+            eligible = normalize_stored_learner_bool(
+                transfer_row["learner_eligible"])
+        except ValueError:
+            transfer_firewall_violation = True
+            break
+        if eligible:
+            transfer_firewall_violation = True
+            break
+    if transfer_firewall_violation:
         reason = "transfer_firewall_violation"
     elif len(transfer_lineages) < max(1, int(min_transfer_lineages)):
         reason = "insufficient_transfer_lineages"

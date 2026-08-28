@@ -14,6 +14,7 @@ from .evidence_level import CausalEvidenceLevel, evidence_rank
 from .path_builder import validate_persisted_path_row
 from .replication import evaluate_replicated_effect
 from .witness import learner_edge_transition_coverage
+from tehm.dataset import validate_membership_row
 
 
 @dataclass(frozen=True)
@@ -114,9 +115,17 @@ def evaluate_causal_rule_evidence(
             (*source_ids, campaign_id)).fetchall()
     lineages = tuple(sorted({row["lineage_id"] for row in memberships
                              if row["lineage_id"]}))
+    parsed_memberships: list[tuple[bool, str | None]] = []
+    membership_types_valid = True
+    for membership in memberships:
+        try:
+            parsed_memberships.append(validate_membership_row(membership))
+        except ValueError:
+            membership_types_valid = False
+            parsed_memberships.append((False, None))
     all_members = len(memberships) == len(source_ids)
-    all_learner = all(bool(row["learner_eligible"]) for row in memberships)
-    all_training = all(row["split"] == "training" for row in memberships)
+    all_learner = all(eligible for eligible, _ in parsed_memberships)
+    all_training = all(split == "training" for _, split in parsed_memberships)
     level_ok = evidence_rank(row["evidence_level"]) >= evidence_rank(required_level)
     covered_sources = learner_edge_transition_coverage(
         conn, source_ids, campaign_id=campaign_id, required_level=required_level)
@@ -129,6 +138,8 @@ def evaluate_causal_rule_evidence(
         reasons.append("missing_campaign_membership")
     if not all_learner or not all_training:
         reasons.append("learner_firewall_or_split_violation")
+    if not membership_types_valid:
+        reasons.append("learner_membership_type_invalid")
     if len(lineages) < max(1, int(min_lineages)):
         reasons.append("insufficient_disjoint_lineages")
     if evidence_rank(required_level) >= evidence_rank(

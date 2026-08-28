@@ -11,6 +11,8 @@ import json
 import sqlite3
 
 from tehm import db as tehm_db
+from tehm.dataset import (normalize_stored_learner_bool,
+                          require_learner_bool, validate_membership_row)
 from tehm.ids import stable_dumps
 
 from .receipts import MemoryEventReceipt
@@ -42,12 +44,13 @@ def _validate_event_row(row: sqlite3.Row) -> None:
         payload = json.loads(row["payload_json"])
     except (TypeError, json.JSONDecodeError) as exc:
         raise ValueError("memory event payload is not valid JSON") from exc
+    event_eligible = normalize_stored_learner_bool(row["learner_eligible"])
     identity = {
         "event_type": row["event_type"],
         "source_type": row["source_type"],
         "source_id": row["source_id"],
         "campaign_id": row["campaign_id"],
-        "learner_eligible": bool(row["learner_eligible"]),
+        "learner_eligible": event_eligible,
         "payload": payload,
         "previous_event_digest": row["previous_event_digest"],
     }
@@ -124,13 +127,18 @@ def _verify_learner_source(
         (campaign_id, *transition_ids),
     ).fetchall()
     by_id = {str(row["transition_id"]): row for row in rows}
-    if len(by_id) != len(set(transition_ids)) or any(
-            str(row_id) not in by_id or
-            str(by_id[str(row_id)]["split"]) != "training" or
-            not bool(by_id[str(row_id)]["learner_eligible"])
-            for row_id in transition_ids):
+    if len(by_id) != len(set(transition_ids)):
         raise ValueError(
             "learner-eligible event source is not training learner evidence")
+    for row_id in transition_ids:
+        try:
+            eligible, split = validate_membership_row(by_id[str(row_id)])
+        except ValueError as exc:
+            raise ValueError(
+                "learner-eligible event source has malformed membership") from exc
+        if split != "training" or not eligible:
+            raise ValueError(
+                "learner-eligible event source is not training learner evidence")
 
 
 def append_memory_event(
@@ -149,6 +157,7 @@ def append_memory_event(
         raise ValueError(f"unknown online memory event type: {event_type!r}")
     if not source_type or not source_id:
         raise ValueError("event source_type and source_id are required")
+    learner_eligible = require_learner_bool(learner_eligible)
     if learner_eligible and not campaign_id:
         raise ValueError("learner-eligible event requires campaign_id")
     if learner_eligible:
@@ -167,14 +176,15 @@ def append_memory_event(
                AND campaign_id IS ? AND learner_eligible=? AND payload_json=?
              LIMIT 1""",
         (event_type, source_type, source_id, campaign_id,
-         int(bool(learner_eligible)), payload_json)).fetchone()
+         int(learner_eligible), payload_json)).fetchone()
     if existing is not None:
         _validate_event_row(existing)
         return MemoryEventReceipt(
             event_id=existing["event_id"], event_type=existing["event_type"],
             source_type=existing["source_type"], source_id=existing["source_id"],
             campaign_id=existing["campaign_id"],
-            learner_eligible=bool(existing["learner_eligible"]),
+            learner_eligible=normalize_stored_learner_bool(
+                existing["learner_eligible"]),
             previous_event_digest=existing["previous_event_digest"],
             event_digest=existing["event_digest"])
     previous = _previous(conn, campaign_id)
@@ -183,7 +193,7 @@ def append_memory_event(
         "source_type": source_type,
         "source_id": source_id,
         "campaign_id": campaign_id,
-        "learner_eligible": bool(learner_eligible),
+        "learner_eligible": learner_eligible,
         "payload": payload,
         "previous_event_digest": previous,
     }
@@ -215,14 +225,14 @@ def append_memory_event(
             event_digest, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (event_id, event_type, source_type, source_id, campaign_id,
-         int(bool(learner_eligible)), payload_json, previous,
+         int(learner_eligible), payload_json, previous,
          event_digest, stamp))
     if commit and not had_outer_transaction:
         conn.commit()
     return MemoryEventReceipt(
         event_id=event_id, event_type=event_type, source_type=source_type,
         source_id=source_id, campaign_id=campaign_id,
-        learner_eligible=bool(learner_eligible),
+        learner_eligible=learner_eligible,
         previous_event_digest=previous, event_digest=event_digest)
 
 
@@ -269,7 +279,14 @@ def verify_event_chain(conn: sqlite3.Connection,
                     "reason": "event chain contains a cycle"}
         visited.add(digest)
         row = by_digest[digest]
-        if bool(row["learner_eligible"]):
+        try:
+            event_eligible = normalize_stored_learner_bool(
+                row["learner_eligible"])
+        except ValueError:
+            return {"ok": False, "events": len(rows),
+                    "bad_event_id": row["event_id"],
+                    "reason": "event learner_eligible type is invalid"}
+        if event_eligible:
             try:
                 _verify_learner_source(
                     conn, source_type=str(row["source_type"]),
@@ -289,7 +306,7 @@ def verify_event_chain(conn: sqlite3.Connection,
         identity = {
             "event_type": row["event_type"], "source_type": row["source_type"],
             "source_id": row["source_id"], "campaign_id": row["campaign_id"],
-            "learner_eligible": bool(row["learner_eligible"]),
+            "learner_eligible": event_eligible,
             "payload": payload, "previous_event_digest": previous,
         }
         digest = _event_digest(identity)

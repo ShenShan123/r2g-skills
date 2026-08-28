@@ -11,7 +11,8 @@ from tehm.canonical.capture import capture
 from tehm.causal import (build_transition_causal_fragment,
                           consolidate_causal_path)
 from tehm.crystallization.build_rules import crystallize_all
-from tehm.dataset import assign_transition
+from tehm.dataset import (assign_transition, normalize_stored_learner_bool,
+                          require_learner_bool, validate_membership_row)
 from tehm.evolution import (
     append_memory_event, detect_novelty, observe_transition,
     record_rule_revision, verify_event_chain,
@@ -288,6 +289,46 @@ def test_nontraining_membership_cannot_be_marked_learner_eligible(
         assign_transition(conn, transition_id=transition_id,
                           campaign_id="calibration", split="calibration",
                           learner_eligible=True)
+
+
+def test_learner_eligibility_boundary_rejects_weak_types(tmp_tehm):
+    """Stringified booleans cannot become learner authority via coercion."""
+    conn, store, _ = tmp_tehm
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    with pytest.raises(ValueError, match="must be a boolean"):
+        capture(conn, store, record, dataset_learner_eligible="false")
+    transition_id = capture(conn, store, record).transition_id
+    with pytest.raises(ValueError, match="must be a boolean"):
+        assign_transition(conn, transition_id=transition_id,
+                          campaign_id="typed-input", split="training",
+                          learner_eligible="false")
+    with pytest.raises(ValueError, match="must be a boolean"):
+        append_memory_event(
+            conn, event_type="TRANSITION_CAPTURED", source_type="audit",
+            source_id="typed-event", learner_eligible="false")
+    assert require_learner_bool(False) is False
+    assert normalize_stored_learner_bool(0) is False
+    assert validate_membership_row({"split": "training",
+                                    "learner_eligible": 1}) == (True, "training")
+    with pytest.raises(ValueError, match="stored as integer"):
+        normalize_stored_learner_bool("false")
+    with pytest.raises(ValueError, match="non-training"):
+        validate_membership_row({"split": "heldout", "learner_eligible": 1})
+
+
+def test_event_chain_rejects_weakly_typed_learner_bit(tmp_tehm):
+    conn, transition_id = _transition(tmp_tehm)
+    append_memory_event(
+        conn, event_type="TRANSITION_CAPTURED", source_type="transition",
+        source_id=transition_id, campaign_id="live", learner_eligible=True)
+    conn.execute("PRAGMA ignore_check_constraints=ON")
+    conn.execute(
+        "UPDATE tehm_memory_events SET learner_eligible='false' "
+        "WHERE source_id=?", (transition_id,))
+    conn.commit()
+    result = verify_event_chain(conn, campaign_id="live")
+    assert result["ok"] is False
+    assert result["reason"] == "event learner_eligible type is invalid"
 
 
 def test_directly_corrupted_nontraining_membership_is_fail_closed(

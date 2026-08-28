@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from tehm.canonical.transition import HARMFUL_OUTCOMES
 from tehm.causal.mechanism import load_transition_facts, mechanism_signature
+from tehm.dataset import require_learner_bool, validate_membership_row
 
 from .conflict import ConflictReceipt
 
@@ -68,6 +69,7 @@ def evaluate_consolidation_trigger(
     """
     if not transition_id or not campaign_id:
         raise ValueError("transition_id and campaign_id are required")
+    learner_eligible = require_learner_bool(learner_eligible)
     if min_support < 1:
         raise ValueError("min_support must be positive")
     if novelty not in {"NOVEL_MECHANISM", "KNOWN_MECHANISM"}:
@@ -83,10 +85,16 @@ def evaluate_consolidation_trigger(
     if membership is None:
         raise ValueError(
             "consolidation trigger requires explicit dataset membership")
-    authority_eligible = bool(
-        membership["learner_eligible"] and
-        str(membership["split"]) == "training")
-    if bool(learner_eligible) != authority_eligible:
+    try:
+        stored_eligible, split = validate_membership_row(membership)
+    except ValueError as exc:
+        # Keep a contradictory non-training row audit-only for compatibility
+        # with legacy databases; weakly typed values still fail closed.
+        if str(exc) != "non-training dataset membership cannot be learner-eligible":
+            raise
+        stored_eligible, split = False, membership["split"]
+    authority_eligible = stored_eligible and split == "training"
+    if learner_eligible != authority_eligible:
         raise ValueError(
             "consolidation trigger learner_eligible conflicts with dataset membership")
     # The database membership is the authority; the argument is retained only

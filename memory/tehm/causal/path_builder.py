@@ -7,6 +7,7 @@ import sqlite3
 from collections.abc import Iterable
 
 from tehm import db as tehm_db
+from tehm.dataset import normalize_stored_learner_bool, validate_membership_row
 from tehm.ids import stable_dumps
 
 from .edges import CausalEdge, persist_edge
@@ -295,14 +296,16 @@ def _validate_path_provenance(
                 str(row["target_node_id"]), str(row["evidence_level"]),
                 edge_support, confidence, tuple(refs),
                 campaign_id=row["campaign_id"],
-                learner_eligible=bool(row["learner_eligible"]),
+                learner_eligible=normalize_stored_learner_bool(
+                    row["learner_eligible"]),
             )
         except (TypeError, ValueError) as exc:
             raise ValueError("causal path edge content is invalid") from exc
         if row["causal_edge_id"] != edge.causal_edge_id:
             raise ValueError("causal path edge content-addressed ID mismatch")
         if (str(row["campaign_id"] or "") != campaign_id
-                or not bool(row["learner_eligible"])):
+                or not normalize_stored_learner_bool(
+                    row["learner_eligible"])):
             raise ValueError("causal path edge learner campaign witness mismatch")
         bare_refs = {ref for ref in refs if not ref.startswith("oracle:")}
         if not bare_refs or not bare_refs <= set(source_ids):
@@ -390,12 +393,18 @@ def _validate_persisted_fragments(
               WHERE campaign_id=? AND transition_id IN ({placeholders})""",
         (selected, *transition_ids)).fetchall()
     by_transition = {str(row["transition_id"]): row for row in memberships}
-    if len(by_transition) != len(transition_ids) or any(
-            str(by_transition[transition_id]["split"]) != "training" or
-            not bool(by_transition[transition_id]["learner_eligible"])
-            for transition_id in transition_ids):
+    if len(by_transition) != len(transition_ids):
         raise ValueError(
             "causal path sources must be training learner evidence")
+    for transition_id in transition_ids:
+        try:
+            eligible, split = validate_membership_row(by_transition[transition_id])
+        except ValueError as exc:
+            raise ValueError(
+                "causal path sources have malformed membership") from exc
+        if split != "training" or not eligible:
+            raise ValueError(
+                "causal path sources must be training learner evidence")
 
     for fragment in fragments:
         for node in fragment.nodes:
@@ -453,11 +462,19 @@ def _membership(conn: sqlite3.Connection, transition_id: str,
     if row is None:
         # Missing membership is not silently treated as training evidence.
         return campaign_id, False, None
-    split = str(row["split"])
+    try:
+        eligible, split = validate_membership_row(row)
+    except ValueError as exc:
+        # Preserve an audit-only fragment for a contradictory legacy row, but
+        # never let its learner bit become authority.  Weakly typed rows are
+        # still surfaced as malformed rather than coerced.
+        if str(exc) != "non-training dataset membership cannot be learner-eligible":
+            raise
+        split = row["split"]
+        return str(row["campaign_id"]), False, split
     # Keep the semantic split in the authority predicate even if a legacy or
     # direct-SQL row contradicts the API invariant.
-    return str(row["campaign_id"]), bool(row["learner_eligible"] and
-                                          split == "training"), split
+    return str(row["campaign_id"]), eligible and split == "training", split
 
 
 def build_transition_causal_fragment(

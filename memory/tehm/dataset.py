@@ -14,6 +14,54 @@ from tehm import db as tehm_db
 SPLITS = frozenset({"training", "calibration", "heldout", "ab"})
 
 
+def require_learner_bool(value: object, *, field: str = "learner_eligible") -> bool:
+    """Require an API/evidence value to be a real JSON/Python boolean.
+
+    ``bool(value)`` is unsafe at the evidence boundary: values such as the
+    string ``"false"`` are truthy and would otherwise become learner support.
+    Callers that accept a public learner flag must use this helper rather than
+    coercing arbitrary objects.
+    """
+    if type(value) is not bool:
+        raise ValueError(f"{field} must be a boolean")
+    return value
+
+
+def normalize_stored_learner_bool(value: object, *,
+                                  field: str = "learner_eligible") -> bool:
+    """Normalize a persisted SQLite learner bit, fail-closed on weak types.
+
+    SQLite returns ``INTEGER`` columns as ``int``.  A direct row mapping may
+    instead contain a JSON boolean, which is also unambiguous.  Strings,
+    floats and arbitrary truthy values are deliberately rejected.
+    """
+    if type(value) is bool:
+        return value
+    if type(value) is int and value in (0, 1):
+        return bool(value)
+    raise ValueError(f"{field} must be stored as integer 0/1 or boolean")
+
+
+def validate_membership_row(row: object) -> tuple[bool, str]:
+    """Validate and return ``(learner_eligible, split)`` for a membership row.
+
+    This is the read-side firewall shared by online/evolution consumers.  The
+    schema provides the first line of defence; derived readers must still
+    reject malformed copied rows and contradictory non-training membership.
+    """
+    try:
+        split = row["split"]  # type: ignore[index]
+        raw_eligible = row["learner_eligible"]  # type: ignore[index]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ValueError("dataset membership row is missing split/learner_eligible") from exc
+    if type(split) is not str or split not in SPLITS:
+        raise ValueError("dataset membership split is invalid")
+    eligible = normalize_stored_learner_bool(raw_eligible)
+    if eligible and split != "training":
+        raise ValueError("non-training dataset membership cannot be learner-eligible")
+    return eligible, split
+
+
 def assign_transition(conn: sqlite3.Connection, *, transition_id: str,
                       campaign_id: str = "live", split: str = "training",
                       learner_eligible: bool | None = None,
@@ -25,8 +73,10 @@ def assign_transition(conn: sqlite3.Connection, *, transition_id: str,
     """
     if not transition_id or not campaign_id:
         raise ValueError("transition_id and campaign_id are required")
-    if split not in SPLITS:
+    if type(split) is not str or split not in SPLITS:
         raise ValueError(f"unknown dataset split: {split!r}")
+    if learner_eligible is not None:
+        require_learner_bool(learner_eligible)
     # Calibration, held-out, and A/B evidence may be retained for audit, but
     # none of those splits can be learner support.  Reject contradictory
     # requests instead of persisting a row that a learner query could consume.
@@ -37,15 +87,15 @@ def assign_transition(conn: sqlite3.Connection, *, transition_id: str,
             "SELECT 1 FROM tehm_transitions WHERE transition_id=?",
             (transition_id,)).fetchone() is None:
         raise ValueError(f"unknown TEHM transition: {transition_id}")
-    eligible = (split == "training") if learner_eligible is None else bool(learner_eligible)
+    eligible = (split == "training") if learner_eligible is None else learner_eligible
     existing = conn.execute(
         """SELECT split, learner_eligible, frozen_snapshot_digest
              FROM tehm_dataset_membership
             WHERE transition_id=? AND campaign_id=?""",
         (transition_id, campaign_id)).fetchone()
     if existing is not None:
-        old_authority = bool(
-            existing["learner_eligible"] and existing["split"] == "training")
+        old_eligible, old_split = validate_membership_row(existing)
+        old_authority = old_eligible and old_split == "training"
         # A campaign membership is an evidence-firewall fact.  Reclassifying
         # audit evidence into learner support in place would let held-out or
         # calibration data become training merely by overwriting one row.
@@ -57,8 +107,8 @@ def assign_transition(conn: sqlite3.Connection, *, transition_id: str,
         if old_digest is not None and old_digest != frozen_snapshot_digest:
             raise ValueError(
                 "dataset membership frozen_snapshot_digest is immutable")
-        if (existing["split"] == split and
-                bool(existing["learner_eligible"]) == bool(eligible) and
+        if (old_split == split and
+                old_eligible == eligible and
                 (old_digest == frozen_snapshot_digest or
                  (old_digest is None and frozen_snapshot_digest is None))):
             return

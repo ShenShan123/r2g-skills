@@ -5,6 +5,7 @@ import hashlib
 import sqlite3
 
 from tehm import db as tehm_db
+from tehm.dataset import normalize_stored_learner_bool, validate_membership_row
 from tehm.ids import stable_dumps
 
 from .events import verify_event_chain
@@ -40,7 +41,12 @@ def _validate_provenance(
         raise ValueError(
             "revision trigger must be a consolidation or rule-proposal event")
     campaign_id = event["campaign_id"]
-    if not campaign_id or not bool(event["learner_eligible"]):
+    try:
+        event_eligible = normalize_stored_learner_bool(
+            event["learner_eligible"])
+    except ValueError as exc:
+        raise ValueError("revision trigger learner_eligible type is invalid") from exc
+    if not campaign_id or not event_eligible:
         raise ValueError(
             "revision trigger must be learner-eligible and campaign-bound")
     chain = verify_event_chain(conn, campaign_id=str(campaign_id))
@@ -78,11 +84,15 @@ def _validate_provenance(
         raise ValueError(
             "revision evidence is missing trigger-campaign membership: "
             + ",".join(missing_membership))
-    invalid = [
-        ref for ref in evidence_refs
-        if not bool(by_id[ref]["learner_eligible"])
-        or str(by_id[ref]["split"]) != "training"
-    ]
+    invalid = []
+    for ref in evidence_refs:
+        try:
+            eligible, split = validate_membership_row(by_id[ref])
+        except ValueError:
+            invalid.append(ref)
+            continue
+        if not eligible or split != "training":
+            invalid.append(ref)
     if invalid:
         raise ValueError(
             "revision evidence must be learner-eligible training data: "

@@ -7,6 +7,8 @@ import sqlite3
 from tehm.causal import build_transition_causal_fragment
 from tehm.causal.mechanism import load_transition_facts, mechanism_signature
 from tehm.causal.path_builder import validate_persisted_path_row
+from tehm.dataset import (normalize_stored_learner_bool,
+                          validate_membership_row)
 
 from .conflict import detect_conflicts
 from .consolidation import ConsolidationDecisionReceipt, decide_consolidation
@@ -26,11 +28,21 @@ def _membership(conn: sqlite3.Connection, transition_id: str,
         (transition_id, campaign_id)).fetchone()
     if row is None:
         raise ValueError("online observation requires explicit dataset membership")
-    split = str(row["split"])
     # The split is part of the learner authority predicate.  This protects
     # the online lane from contradictory rows created by old/direct-SQL
-    # writers, even when learner_eligible is set to 1.
-    return bool(row["learner_eligible"] and split == "training"), split
+    # writers, even when learner_eligible is set to 1.  The shared reader
+    # additionally rejects weakly typed copied rows.
+    try:
+        eligible, split = validate_membership_row(row)
+    except ValueError as exc:
+        # A legacy/direct-SQL writer may have marked an audit split with a
+        # learner bit.  Keep the online lane fail-closed (audit-only) for
+        # this known contradiction while still surfacing weakly typed rows.
+        if str(exc) != "non-training dataset membership cannot be learner-eligible":
+            raise
+        split = row["split"]
+        return False, split
+    return eligible and split == "training", split
 
 
 def _affected_rule_ids(conn: sqlite3.Connection,
@@ -102,12 +114,18 @@ def _affected_rule_ids(conn: sqlite3.Connection,
             (campaign_id, *sorted(source_ids))).fetchall()
         by_transition = {str(item["transition_id"]): item
                          for item in memberships}
-        if len(by_transition) != len(source_ids) or any(
-                str(by_transition[source_id]["split"]) != "training" or
-                not bool(by_transition[source_id]["learner_eligible"])
-                for source_id in source_ids):
+        if len(by_transition) != len(source_ids):
             raise ValueError(
                 "online affected rule source is not target-campaign training evidence")
+        for source_id in source_ids:
+            try:
+                eligible, split = validate_membership_row(by_transition[source_id])
+            except ValueError as exc:
+                raise ValueError(
+                    "online affected rule source has malformed membership") from exc
+            if split != "training" or not eligible:
+                raise ValueError(
+                    "online affected rule source is not target-campaign training evidence")
         affected.append(rule_id)
     return tuple(sorted(set(affected)))
 
@@ -163,7 +181,8 @@ def _event_receipt(row: sqlite3.Row) -> MemoryEventReceipt:
         event_id=str(row["event_id"]), event_type=str(row["event_type"]),
         source_type=str(row["source_type"]), source_id=str(row["source_id"]),
         campaign_id=row["campaign_id"],
-        learner_eligible=bool(row["learner_eligible"]),
+        learner_eligible=normalize_stored_learner_bool(
+            row["learner_eligible"]),
         previous_event_digest=row["previous_event_digest"],
         event_digest=str(row["event_digest"]))
 
@@ -200,10 +219,14 @@ def _preview_from_dict(payload: dict | None) -> IncrementalCrystallizationReceip
 def _decision_from_dict(payload: dict) -> ConsolidationDecisionReceipt:
     if not isinstance(payload, dict):
         raise ValueError("online observation decision snapshot is malformed")
+    learner_eligible = payload.get("learner_eligible")
+    if type(learner_eligible) is not bool:
+        raise ValueError(
+            "online observation decision learner_eligible is not boolean")
     return ConsolidationDecisionReceipt(
         transition_id=str(payload.get("transition_id") or ""),
         campaign_id=str(payload.get("campaign_id") or ""),
-        learner_eligible=bool(payload.get("learner_eligible")),
+        learner_eligible=learner_eligible,
         triggered=bool(payload.get("triggered")),
         operation=str(payload.get("operation") or ""),
         reasons=tuple(str(value) for value in (payload.get("reasons") or [])),
@@ -290,7 +313,9 @@ def _replay_existing_observation(
     capture_row, capture_payload, snapshot = candidates[0]
     if not isinstance(snapshot, dict) or snapshot.get("version") != "online-receipt-v1":
         raise ValueError("online observation snapshot is malformed")
-    if bool(capture_row["learner_eligible"]) != bool(learner_eligible):
+    capture_eligible = normalize_stored_learner_bool(
+        capture_row["learner_eligible"])
+    if capture_eligible != learner_eligible:
         raise ValueError("online observation replay conflicts with learner eligibility")
     sequence = snapshot.get("event_sequence")
     if not isinstance(sequence, list) or len(sequence) < 2:
@@ -337,7 +362,7 @@ def _replay_existing_observation(
     decision = _decision_from_dict(snapshot.get("consolidation_decision") or {})
     if (decision.transition_id != transition_id or
             decision.campaign_id != campaign_id or
-            decision.learner_eligible != bool(learner_eligible)):
+            decision.learner_eligible != learner_eligible):
         raise ValueError("online observation decision snapshot conflicts")
     preview = _preview_from_dict(snapshot.get("consolidation_preview"))
     if preview is not None and preview.campaign_id != campaign_id:
@@ -346,7 +371,7 @@ def _replay_existing_observation(
                    if row["event_type"] == "CONSOLIDATION_TRIGGERED"]
     return OnlineMemoryReceipt(
         transition_id=transition_id, campaign_id=campaign_id,
-        learner_eligible=bool(learner_eligible), fragment=fragment,
+        learner_eligible=learner_eligible, fragment=fragment,
         mechanism_signature=dict(signature),
         affected_rule_ids=tuple(str(value) for value in
                                 (snapshot.get("affected_rule_ids") or [])),

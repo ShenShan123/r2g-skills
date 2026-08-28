@@ -40,6 +40,17 @@ def test_orfs_config_rewrite_removes_replaced_make_continuations():
     assert "export VERILOG_INCLUDE_DIRS = \\\n    include/\n" in rewritten
 
 
+def test_external_observation_rejects_stringified_learner_flag(tmp_path):
+    path = tmp_path / "observations.jsonl"
+    write_external_observations(path, [{
+        "receipt_id": "typed", "case_id": "typed", "split": "support",
+        "classification": "INCOMPLETE_EXTERNAL_ONLY",
+        "learner_eligible": "false",
+    }])
+    with pytest.raises(BatchLaneError, match="learner_eligible must be boolean"):
+        read_external_observations(path)
+
+
 def test_batch_phase_reports_merge_allowlisted_subsets(tmp_path):
     from scripts.run_orfs_batch0 import _merge_phase_results
 

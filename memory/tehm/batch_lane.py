@@ -25,6 +25,7 @@ from tehm.artifact_store import ArtifactStore
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.canonical.transition import Action, ObservationDelta, classify_outcome
 from tehm.canonical.verifier import VerifierSnapshot
+from tehm.dataset import require_learner_bool
 from tehm.ids import stable_dumps
 from tehm.physical.graph_context import load_defgraph_context
 from tehm.physical.effects import extract_deltas
@@ -58,7 +59,7 @@ PROMOTION_GATES = (
     "harmful_rate",
     "conformal_coverage",
 )
-OBSERVATION_SPLITS = frozenset({"support", "calibration", "heldout"})
+OBSERVATION_SPLITS = frozenset({"support", "calibration", "heldout", "ab"})
 
 
 class BatchLaneError(RuntimeError):
@@ -568,6 +569,23 @@ def read_external_observations(path: Path) -> list[dict]:
         case_id = str(row.get("case_id") or "").strip()
         if not case_id:
             raise BatchLaneError("external observation case_id is required")
+        try:
+            learner_eligible = require_learner_bool(
+                row.get("learner_eligible"), field="external learner_eligible")
+        except ValueError as exc:
+            raise BatchLaneError(
+                "external observation learner_eligible must be boolean") from exc
+        split = row.get("split")
+        # Legacy diagnostic receipts may omit split when they are explicitly
+        # non-learner.  Any present split is still typed, and a learner row
+        # must identify the support partition so it cannot enter staging via a
+        # truthy string or a contradictory held-out label.
+        if split is not None and (type(split) is not str or
+                                  split not in OBSERVATION_SPLITS):
+            raise BatchLaneError("external observation split is invalid")
+        if learner_eligible and split != "support":
+            raise BatchLaneError(
+                "external observation learner firewall: learner evidence must use support split")
         if case_id in seen_cases:
             raise BatchLaneError(
                 "external observation chain contains duplicate case_id: " + case_id)
