@@ -3611,3 +3611,8 @@ transition 绑定、calibration conformal 聚合、audit membership 防火墙以
 `learner_eligible=true` 的篡改 observation fail-closed。下一步是对真实 held-out
 transfer 与 rollback/registry receipt 运行同一投影并重算六门，而不是放宽 split 或
 直接启用 Parametric。
+
+对应的 operator CLI 为 `scripts/record_external_rule_authority.py`。它要求显式的
+authority DB、candidate rule/trial、staging campaign 与 case IDs，输出完整的
+DB-bound receipt；即使 receipt 不 eligible，也只记录不可晋级的 authority attempt，
+不导入 canonical transition、不改变 lifecycle status。

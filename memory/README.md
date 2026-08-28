@@ -1801,6 +1801,11 @@ savepoint 与 canonical digest 守护。之后才可用上述 projector 生成 a
 `record_rule_authority_from_external_observations()`，由系统自动组合 external rows
 与 trial/transfer authority，避免调用方手工拼接 gate。
 
+对应的 operator 入口是
+[`scripts/record_external_rule_authority.py`](scripts/record_external_rule_authority.py)：
+它只向指定 authority DB 写 rule evidence/receipt ledger，输出仍可为
+`NOT_ESTABLISHED`，不导入 transition、不修改 lifecycle，也不触发 promotion。
+
 该接口只产生 `harmful_rate` 与 `conformal_coverage` rows；rollback、registry、
 obligation、cross-lineage TE 仍必须由 activation/trial/transfer 的独立 evidence
 建立。rows 可以交给 `record_rule_authority()`，但缺失其余 gate 时仍是
