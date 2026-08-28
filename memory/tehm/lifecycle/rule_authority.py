@@ -289,13 +289,35 @@ def _normalise_entries(values, *, gate: str) -> tuple[list[dict], list[str]]:
         if not isinstance(raw, Mapping):
             errors.append(f"{gate}:entry_{ordinal}_malformed")
             continue
-        evidence_id = str(raw.get("evidence_id") or "")
-        split = str(raw.get("split") or "")
-        verdict = str(raw.get("verdict") or "")
+        # Evidence identity is part of the content-addressed witness.  Do
+        # not stringify caller values here: ``1`` and ``"1"`` must not become
+        # interchangeable IDs, and a truthy object must not become a verdict
+        # or split accepted by the authority ledger.
+        evidence_id = raw.get("evidence_id")
+        split = raw.get("split")
+        verdict = raw.get("verdict")
         lineage_id = raw.get("lineage_id")
-        if not evidence_id or not split or not verdict:
-            errors.append(f"{gate}:entry_{ordinal}_incomplete")
+        identity_error = False
+        if type(evidence_id) is not str or not evidence_id.strip():
+            errors.append(f"{gate}:entry_{ordinal}_evidence_id_malformed")
+            identity_error = True
+        if type(split) is not str or not split.strip():
+            errors.append(f"{gate}:entry_{ordinal}_split_malformed")
+            identity_error = True
+        if type(verdict) is not str or not verdict.strip():
+            errors.append(f"{gate}:entry_{ordinal}_verdict_malformed")
+            identity_error = True
+        if lineage_id is not None and (
+                type(lineage_id) is not str or not lineage_id.strip()):
+            errors.append(f"{gate}:entry_{ordinal}_lineage_id_malformed")
+            identity_error = True
+        if identity_error:
             continue
+        evidence_id = evidence_id.strip()
+        split = split.strip()
+        verdict = verdict.strip()
+        if lineage_id is not None:
+            lineage_id = lineage_id.strip()
         if split not in EVIDENCE_SPLITS:
             errors.append(f"{gate}:invalid_split")
         elif split not in GATE_ALLOWED_SPLITS[gate]:

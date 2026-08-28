@@ -10,6 +10,7 @@ from tehm.ids import rule_id as mint_rule_id, stable_dumps
 from tehm.honesty import h10_rollback_authority
 from tehm.lifecycle.orfs_trial import (
     _infrastructure_failures,
+    _strict_authority_from_metrics,
     reconcile_route_trial_evidence,
     run_pending_orfs_trials,
 )
@@ -95,6 +96,17 @@ printf '{"tier":"clean"}' > "$p/reports/timing_check.json"
 exit 0
 """)
     return flow, fix
+
+
+def test_strict_authority_metadata_replay_fails_closed_on_weak_types():
+    assert _strict_authority_from_metrics({
+        "production_authority": False}) is False
+    assert _strict_authority_from_metrics({
+        "production_authority": True}) is True
+    assert _strict_authority_from_metrics({
+        "production_authority": "false"}) is True
+    assert _strict_authority_from_metrics({
+        "promotion_gate_inputs": "false"}) is True
 
 
 def test_real_orfs_ab_promotes_and_records_rollback(tmp_tehm, tmp_path):

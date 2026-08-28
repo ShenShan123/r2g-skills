@@ -81,6 +81,8 @@ def evaluate_promotion_gates(
 
 
 def _at_least(value, threshold: float) -> bool:
+    if isinstance(value, bool):
+        return False
     try:
         number = float(value)
         return math.isfinite(number) and number >= float(threshold)
@@ -89,6 +91,8 @@ def _at_least(value, threshold: float) -> bool:
 
 
 def _at_most(value, threshold: float) -> bool:
+    if isinstance(value, bool):
+        return False
     try:
         number = float(value)
         return math.isfinite(number) and number <= float(threshold)

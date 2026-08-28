@@ -150,6 +150,21 @@ def test_rule_authority_replay_rejects_weakly_typed_receipt_eligible(
     assert "authority_receipt_row_eligible_malformed" in checked["reasons"]
 
 
+def test_rule_authority_rejects_weakly_typed_evidence_identity(
+        tmp_tehm, sample_record_dict):
+    conn, rule_id, version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    evidence = _full_evidence(conn, rule_id)
+    evidence["rollback_verified"][0]["evidence_id"] = 1
+    evidence["obligation_coverage"][0]["lineage_id"] = False
+    receipt = record_rule_authority(
+        conn, rule_id=rule_id, target_scope="drc", evidence=evidence,
+        trial_id=trial_id, expected_status_version=version)
+    assert receipt.eligible is False
+    assert "rollback_verified:entry_0_evidence_id_malformed" in receipt.reasons
+    assert "obligation_coverage:entry_0_lineage_id_malformed" in receipt.reasons
+
+
 def test_external_conformal_coverage_rejects_boolean_measurement():
     with pytest.raises(ValueError, match="conformal_coverage_malformed"):
         _external_conformal_value({"conformal": {"coverage": True}})

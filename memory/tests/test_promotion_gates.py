@@ -54,6 +54,16 @@ def test_rule_gate_rejects_nonfinite_thresholds():
         evaluate_promotion_gates({}, min_conformal_coverage=float("nan"))
 
 
+def test_rule_gate_rejects_boolean_measurements_as_numeric_evidence():
+    result = evaluate_promotion_gates(
+        {"obligation_coverage": True, "cross_lineage_te": True,
+         "harmful_rate": False, "conformal_coverage": True}, strict=True)
+    assert result["checks"]["obligation_coverage"] is False
+    assert result["checks"]["cross_lineage_te"] is False
+    assert result["checks"]["harmful_rate"] is False
+    assert result["checks"]["conformal_coverage"] is False
+
+
 def test_external_authority_does_not_treat_boolean_coverage_as_numeric():
     from scripts.build_orfs_authority_receipt import derive_gate_inputs
 

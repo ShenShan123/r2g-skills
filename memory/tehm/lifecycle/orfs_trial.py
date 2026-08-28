@@ -53,6 +53,22 @@ _INDEPENDENT_AUTHORITY_GATES = frozenset({"harmful_rate", "conformal_coverage"})
 _CFG_RE = re.compile(r"^(\s*(?:override\s+)?(?:export\s+)?)([A-Z0-9_]+)(\s*[:?]?=\s*).*$")
 
 
+def _strict_authority_from_metrics(metrics: Mapping) -> bool:
+    """Fail closed when persisted authority-mode metadata is weakly typed.
+
+    A malformed ``production_authority`` marker must never make recovery fall
+    back to the compatibility lifecycle path.  Treat it as strict so the
+    DB-bound receipt is required; well-typed false remains the legacy path.
+    """
+    marker = metrics.get("production_authority")
+    if marker is not None and type(marker) is not bool:
+        return True
+    gate_map = metrics.get("promotion_gate_inputs")
+    if gate_map is not None and not isinstance(gate_map, Mapping):
+        return True
+    return marker is True or gate_map is not None
+
+
 def _record_orfs_rule_authority(
         conn: sqlite3.Connection, *, trial_id: str, rule_id: str,
         target_scope: str, expected_status_version: int,
@@ -155,6 +171,10 @@ def run_pending_orfs_trials(
     supplied as replay-verified causal-transfer receipt IDs.  The legacy
     ``promotion_gate_inputs`` map remains diagnostic only in strict mode.
     """
+    if type(mutate_lifecycle) is not bool:
+        raise ValueError("mutate_lifecycle must be a boolean")
+    if type(production_authority) is not bool:
+        raise ValueError("production_authority must be a boolean")
     allowed_statuses = frozenset(lifecycle_statuses)
     if not allowed_statuses or not allowed_statuses <= {"candidate", "promoted"}:
         raise ValueError("ORFS trials accept only candidate/promoted lifecycle statuses")
@@ -238,9 +258,9 @@ def run_pending_orfs_trials(
             # the same authority decision against the stamped status_version.
             if not registry and mutate_lifecycle:
                 recovered_gates = metrics.get("promotion_gate_inputs")
-                strict_recovery = bool(
-                    production_authority or metrics.get("production_authority") or
-                    recovered_gates is not None)
+                strict_recovery = (
+                    production_authority is True or
+                    _strict_authority_from_metrics(metrics))
                 # The legacy map is diagnostic only when strict authority is
                 # active.  Recovery must replay the DB-bound witness rows.
                 recovered_inputs = ({} if strict_recovery
@@ -276,8 +296,8 @@ def run_pending_orfs_trials(
                     verdict=existing["verdict"],
                     obligation_coverage=metrics.get("obligation_coverage"),
                     created_regressions=metrics.get("created_regressions") or [],
-                    arms_differ=bool(metrics.get("arms_differ") and
-                                      metrics.get("rollback_verified")),
+                    arms_differ=(metrics.get("arms_differ") is True and
+                                 metrics.get("rollback_verified") is True),
                     expected_status_version=existing["status_version"],
                     provenance={"trial_uuid": trial_uuid,
                                 "executor": ORFS_TRIAL_VERSION,
@@ -562,7 +582,7 @@ def reconcile_route_trial_evidence(
             pair["arm_a"]["reports"], pair["arm_b"]["reports"], "route")
         activation_id = pair.get("activation_id")
         if activation_id:
-            success = bool(pair["arm_b"]["success"])
+            success = pair["arm_b"].get("success") is True
             conn.execute(
                 "UPDATE tehm_activations SET verification_status=?, verifier_json=?, "
                 "outcome=?, created_regressions_json=? WHERE activation_id=?",
@@ -599,9 +619,10 @@ def reconcile_route_trial_evidence(
 
     rule_id, base_version = row["rule_id"], row["status_version"]
     current = get_status(conn, rule_id=rule_id, target_scope="route") or {}
-    reconciliation_gates = dict(metrics.get("promotion_gate_inputs") or {})
-    strict_reconciliation = bool(metrics.get("production_authority") or
-                                 metrics.get("promotion_gate_inputs") is not None)
+    persisted_gates = metrics.get("promotion_gate_inputs")
+    reconciliation_gates = (
+        dict(persisted_gates) if isinstance(persisted_gates, Mapping) else {})
+    strict_reconciliation = _strict_authority_from_metrics(metrics)
     authority_receipt = None
     authority_projection_error = None
     new_status = None
@@ -638,8 +659,7 @@ def reconcile_route_trial_evidence(
     elif (current.get("status") == "promoted" and
           current.get("status_version") == base_version + 1):
         new_status = "promoted"
-        strict_reconciliation = bool(metrics.get("production_authority") or
-                                     metrics.get("promotion_gate_inputs") is not None)
+        strict_reconciliation = _strict_authority_from_metrics(metrics)
     metrics["registry_authority"] = {
         "before": {"status": "candidate", "status_version": base_version},
         "after": current, "authorized_status": new_status,

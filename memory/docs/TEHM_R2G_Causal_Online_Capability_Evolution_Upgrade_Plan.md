@@ -4003,3 +4003,23 @@ promotion 或 production runtime 边界。
 字符串化数字和 `NaN/±∞`；因此 activation obligation witness 不能把状态位或非有限
 值解释成完整覆盖率。该修复只收紧 canonical/activation verifier 的证据解析，不改变
 obligation gate 阈值、canonical promotion、Parametric shadow-only 或 production runtime。
+
+### 2026-08-28 authority evidence identity 与 ORFS recovery type closure
+
+rule-authority evidence row 的 `evidence_id`、`split`、`verdict` 和可选
+`lineage_id` 现在要求真实、非空字符串，不再在 authority ledger 入口通过 `str(...)`
+隐式转换整数、布尔或其他对象。这样一条弱类型 witness 不会先被写入 receipt、再在
+SQLite round-trip 后改变其身份；该错误会直接成为对应 gate 的 fail-closed reason。
+
+ORFS trial 的 `mutate_lifecycle` 与 `production_authority` 调用参数也要求真实布尔值；
+崩溃恢复和 route-evidence reconciliation 对持久化 authority marker、legacy gate map
+及 arm success 只接受结构化类型。损坏的 marker 会强制走 DB-bound strict authority，
+而不会回退到兼容 lifecycle；损坏的 gate map 不会触发未捕获的 `dict(...)` 转换异常。
+这一步只强化 authority/recovery replay 的确定性，不新增 promotion gate、不写 canonical
+memory，也不改变 Parametric shadow-only 或 production runtime 边界。
+
+同时，六门 gate evaluator 的 numeric measurement path 现在在比较前显式拒绝布尔值；
+即使绕过上游 projector 直接传入 `True/False`，也只能得到 measured `FAIL`，不能利用
+Python 的 `bool` 是 `int` 子类这一语义伪造 coverage、TE 或零 harmful-rate。阈值校验与
+receipt replay 的有限数值约束保持不变；该修复只收紧 authority evaluator，不改变 gate
+阈值和生命周期行为。
