@@ -25,7 +25,7 @@ from tehm.artifact_store import ArtifactStore
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.canonical.transition import Action, ObservationDelta, classify_outcome
 from tehm.canonical.verifier import VerifierSnapshot
-from tehm.dataset import require_learner_bool
+from tehm.dataset import normalize_stored_learner_bool, require_learner_bool
 from tehm.ids import stable_dumps
 from tehm.physical.graph_context import load_defgraph_context
 from tehm.physical.effects import extract_deltas
@@ -203,8 +203,15 @@ def validate_staging_import_witness(
                      FROM tehm_dataset_membership
                     WHERE transition_id=? AND campaign_id=?""",
                 (transition_id, campaign_id)).fetchall()
+            membership_eligible = None
+            if len(memberships) == 1:
+                try:
+                    membership_eligible = normalize_stored_learner_bool(
+                        memberships[0]["learner_eligible"])
+                except ValueError:
+                    membership_eligible = None
             if (len(memberships) != 1 or memberships[0]["split"] != "training"
-                    or not bool(memberships[0]["learner_eligible"])):
+                    or membership_eligible is not True):
                 raise BatchLaneError(
                     "staging witness is not training learner evidence: " + record_id)
             physical = conn.execute(

@@ -24,6 +24,7 @@ from pathlib import Path
 from tehm import db as tehm_db
 from tehm.causal.transfer_ledger import (
     load_causal_transfer_receipt, verify_causal_transfer)
+from tehm.dataset import normalize_stored_learner_bool
 from tehm.ids import stable_dumps
 
 from .promotion_gates import PROMOTION_GATE_VERSION, REQUIRED_GATES, evaluate_promotion_gates
@@ -594,8 +595,13 @@ def build_external_observation_authority_evidence(
                 (transition["transition_id"], campaign_id)).fetchall()
             if len(membership) != 1:
                 raise ValueError("external_authority:membership_missing_or_duplicate")
-            if (membership[0]["split"] != split or
-                    int(membership[0]["learner_eligible"]) != 0):
+            try:
+                membership_eligible = normalize_stored_learner_bool(
+                    membership[0]["learner_eligible"])
+            except ValueError as exc:
+                raise ValueError(
+                    "external_authority:membership_learner_flag_malformed") from exc
+            if (membership[0]["split"] != split or membership_eligible is not False):
                 raise ValueError("external_authority:membership_firewall_mismatch")
 
             receipt_id = str(row.get("receipt_id") or "").strip()

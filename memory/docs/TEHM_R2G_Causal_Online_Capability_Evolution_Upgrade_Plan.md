@@ -3890,3 +3890,13 @@ retention row 返回缺失并由 authority fail-closed，payload 中的字符串
 显式 type-invalid reason。该修复加强 derived evidence 的 content/replay 防火墙，不
 增加 C1-C8 或 rule promotion gate，不写 canonical memory，也不改变 production runtime
 入口。
+
+### 2026-08-28 staging/authority membership replay firewall
+
+canonical import 前的 staging witness 与 external-authority projector 现在也使用同一
+`normalize_stored_learner_bool()` 读取存储 membership。即使复制数据库绕过 SQLite
+`CHECK` 写入字符串化的 `"false"`，training witness 不会再被 `bool(...)` 接受，held-out/
+calibration authority row 也不会通过 `int(...)` 转换进入 gate evidence；两条路径均
+fail-closed。该修复只收紧 canonical-import/authority replay 的 typed membership 边界，
+不新增 promotion gate、不执行 promotion，也不改变 Parametric shadow-only 与
+production runtime 约束。

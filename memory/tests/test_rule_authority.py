@@ -505,6 +505,21 @@ def test_external_authority_batch_rejects_cross_source_replay(
         build_external_observation_authority_evidence_batch(
             authority_conn, sources=[source, source])
 
+    # External authority must reject stringified storage booleans even when a
+    # copied staging database has had SQLite CHECK constraints bypassed.
+    tamper_conn = tehm_db.connect(staging_db)
+    tamper_conn.execute("PRAGMA ignore_check_constraints=ON")
+    tamper_conn.execute(
+        "UPDATE tehm_dataset_membership SET learner_eligible='false' "
+        "WHERE campaign_id=?", ("duplicate-campaign",))
+    tamper_conn.commit()
+    tamper_conn.close()
+    with pytest.raises(ValueError, match="membership_learner_flag_malformed"):
+        build_external_observation_authority_evidence(
+            authority_conn, observations_path=observations,
+            staging_db=staging_db, campaign_id="duplicate-campaign",
+            case_ids=["duplicate-case"])
+
 
 def test_authority_evidence_and_receipt_write_atomically_on_conflict(
         tmp_tehm, sample_record_dict):

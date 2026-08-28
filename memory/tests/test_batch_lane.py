@@ -706,6 +706,21 @@ def test_canonical_import_binds_authority_case_selection_and_campaign(
             tampered_authority, observations_path=observations,
             staging_db=staging, canonical_db=canonical, campaign_id="campaign")
 
+    # A staging membership row is an authority witness, not an ordinary
+    # truthy value. Even with SQLite CHECK constraints disabled, a stringified
+    # false must fail closed instead of being accepted by bool(...).
+    tamper_conn = tehm_db.connect(staging)
+    tamper_conn.execute("PRAGMA ignore_check_constraints=ON")
+    tamper_conn.execute(
+        "UPDATE tehm_dataset_membership SET learner_eligible='false' "
+        "WHERE campaign_id=?", ("campaign",))
+    tamper_conn.commit()
+    tamper_conn.close()
+    with pytest.raises(BatchLaneError, match="not training learner evidence"):
+        validate_staging_import_witness(
+            rows=read_external_observations(observations),
+            staging_db=staging, campaign_id="campaign")
+
 
 def test_external_observation_chain_rejects_duplicate_case_ids(tmp_path):
     path = tmp_path / "observations.jsonl"
