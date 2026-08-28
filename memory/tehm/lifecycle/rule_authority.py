@@ -77,6 +77,69 @@ _EXTERNAL_UTILITY_VERDICTS = frozenset({
 })
 
 
+def _validate_external_rule_binding(
+        conn: sqlite3.Connection, *, rule_id: str, record: Mapping) -> None:
+    """Require an external record to describe the candidate rule's action.
+
+    Utility and conformal values are otherwise easy to attach to an unrelated
+    rule: both are valid evidence rows in isolation.  Strict authority must
+    bind the observation's action domain and transformation family to the
+    immutable rule definition before allowing either value into the ledger.
+    """
+    row = _rule_row(conn, rule_id)
+    if row is None:
+        raise ValueError("external_authority:rule_missing")
+    action = record.get("action")
+    if not isinstance(action, Mapping):
+        raise ValueError("external_authority:record_action_malformed")
+    action_domain = str(action.get("domain") or "").strip()
+    family = str(action.get("transformation_family") or "").strip()
+    if not action_domain or not family:
+        raise ValueError("external_authority:record_action_incomplete")
+    before = _json_mapping(row["before_pattern_json"])
+    after = _json_mapping(row["after_pattern_json"])
+    context = _json_mapping(row["context_profile_json"])
+    expected_domains = {
+        str(value).strip() for value in
+        (before.get("action_domain"), after.get("action_domain"))
+        if str(value or "").strip()
+    }
+    expected_families = {
+        str(value).strip() for value in
+        (before.get("transformation_family"), after.get("transformation_family"),
+         before.get("type"), after.get("type"))
+        if str(value or "").strip()
+    }
+    if not expected_domains or not expected_families:
+        raise ValueError("external_authority:rule_action_binding_unavailable")
+    if action_domain not in expected_domains:
+        raise ValueError("external_authority:rule_action_domain_mismatch")
+    if family not in expected_families:
+        raise ValueError("external_authority:rule_transformation_mismatch")
+    # Compatibility is part of a typed action when both sides declare it.  A
+    # missing profile on the external record is not silently treated as a
+    # match, because that would let a profile-agnostic row support a typed
+    # rule.  Older untyped rules remain supported when neither side declares
+    # the profile.
+    expected_profiles = {
+        str(value).strip() for value in (
+            before.get("compatibility_profile"),
+            after.get("compatibility_profile"),
+            context.get("compatibility_profile"),
+        ) if str(value or "").strip()
+    }
+    if expected_profiles:
+        action_payload = action.get("payload")
+        if not isinstance(action_payload, Mapping):
+            action_payload = {}
+        observed_profile = str(
+            action.get("compatibility_profile") or
+            action_payload.get("compatibility_profile") or
+            record.get("compatibility_profile") or "").strip()
+        if observed_profile not in expected_profiles:
+            raise ValueError("external_authority:compatibility_profile_mismatch")
+
+
 @dataclass(frozen=True)
 class RuleAuthorityReceipt:
     """Content-addressed, DB-bound rule promotion authority receipt."""
@@ -450,7 +513,7 @@ def _external_transition_binding(
 def build_external_observation_authority_evidence(
         conn: sqlite3.Connection, *, observations_path: Path,
         staging_db: Path, campaign_id: str,
-        case_ids: Iterable[str]) -> dict[str, list[dict]]:
+        case_ids: Iterable[str], rule_id: str | None = None) -> dict[str, list[dict]]:
     """Project selected external observations into DB-bound authority rows.
 
     The observation JSONL is only a source receipt.  A row becomes authority
@@ -477,6 +540,11 @@ def build_external_observation_authority_evidence(
 
     observations_path = Path(observations_path).expanduser().resolve()
     observation_digest = _external_file_digest(observations_path)
+    bound_rule_digest = None
+    if rule_id is not None:
+        bound_rule_digest = _rule_content_digest(_rule_row(conn, rule_id))
+        if bound_rule_digest is None:
+            raise ValueError("external_authority:rule_content_digest_unavailable")
     # Import locally to keep lifecycle imports independent of the batch lane.
     from tehm.batch_lane import read_external_observations
     rows = read_external_observations(observations_path)
@@ -512,6 +580,9 @@ def build_external_observation_authority_evidence(
             if not isinstance(record, Mapping):
                 raise ValueError("external_authority:record_missing")
             record = dict(record)
+            if rule_id is not None:
+                _validate_external_rule_binding(
+                    conn, rule_id=rule_id, record=record)
             record_lineage = str(record.get("lineage_id") or "").strip()
             row_lineage = str(row.get("lineage_id") or "").strip()
             if not row_lineage or not record_lineage or row_lineage != record_lineage:
@@ -547,6 +618,11 @@ def build_external_observation_authority_evidence(
                 "transformation_family": str(
                     record["action"].get("transformation_family") or ""),
             }
+            if rule_id is not None:
+                base_payload.update({
+                    "rule_id": rule_id,
+                    "rule_content_digest": bound_rule_digest,
+                })
             delta = dict(record["observation_delta"])
             verifier = dict(record["verification"])
             if verifier.get("verdict") != "PASS":
@@ -590,6 +666,172 @@ def build_external_observation_authority_evidence(
     return evidence
 
 
+def build_external_observation_authority_evidence_batch(
+        conn: sqlite3.Connection, *, sources: Iterable[Mapping],
+        rule_id: str | None = None) -> dict[str, list[dict]]:
+    """Combine several independently frozen external/staging evidence sources.
+
+    A real authority cohort often spans multiple campaign-local staging DBs:
+    for example, a calibration campaign, a held-out transfer campaign, and a
+    second source-disjoint support replay.  Callers must not concatenate the
+    projected dictionaries themselves because that can silently double-count
+    one transition or make source ordering part of an untracked receipt.  This
+    seam reuses the single-source projector, orders sources deterministically,
+    and rejects duplicate receipt/evidence/transition witnesses before the
+    result reaches :func:`record_rule_authority`.
+
+    ``conn`` is accepted for API symmetry with the single-source projector;
+    all external/staging inputs are opened read-only and the caller's
+    authority connection is not mutated by this function.
+    """
+    if isinstance(sources, (str, bytes)):
+        raise ValueError("external_authority:sources_must_be_sequence")
+    try:
+        raw_sources = list(sources)
+    except TypeError as exc:
+        raise ValueError("external_authority:sources_must_be_sequence") from exc
+    if not raw_sources:
+        raise ValueError("external_authority:sources_required")
+
+    normalised: list[dict] = []
+    for source in raw_sources:
+        if not isinstance(source, Mapping):
+            raise ValueError("external_authority:source_must_be_mapping")
+        required = ("observations_path", "staging_db", "campaign_id", "case_ids")
+        missing = [name for name in required if name not in source]
+        if missing:
+            raise ValueError(
+                "external_authority:source_fields_missing:" + ",".join(missing))
+        observations_path = Path(source["observations_path"]).expanduser().resolve()
+        staging_db = Path(source["staging_db"]).expanduser().resolve()
+        campaign_id = source["campaign_id"]
+        case_ids = source["case_ids"]
+        if isinstance(case_ids, (str, bytes)):
+            raise ValueError("external_authority:source_case_ids_must_be_sequence")
+        try:
+            case_ids = tuple(str(value).strip() for value in case_ids)
+        except TypeError as exc:
+            raise ValueError(
+                "external_authority:source_case_ids_must_be_sequence") from exc
+        if not case_ids or any(not value for value in case_ids):
+            raise ValueError("external_authority:source_case_ids_required")
+        normalised.append({
+            "observations_path": observations_path,
+            "staging_db": staging_db,
+            "campaign_id": campaign_id,
+            "case_ids": case_ids,
+        })
+
+    # Stable source order makes the enclosing content-addressed authority
+    # receipt independent of the order in which an operator listed campaigns.
+    normalised.sort(key=lambda source: (
+        str(source["campaign_id"]), str(source["observations_path"]),
+        str(source["staging_db"]), source["case_ids"]))
+
+    merged = {gate: [] for gate in REQUIRED_GATES}
+    seen_evidence: set[tuple[str, str]] = set()
+    # One external record can legitimately establish both the utility and
+    # calibration gates, so witness IDs are unique per gate.  Reusing the
+    # same transition from a *different* source, however, would double-count
+    # the cohort and is rejected below.
+    seen_gate_receipts: set[tuple[str, str]] = set()
+    seen_gate_transitions: set[tuple[str, str]] = set()
+    seen_gate_records: set[tuple[str, str]] = set()
+    seen_cases: set[str] = set()
+    case_sources: dict[str, tuple[str, str, str]] = {}
+    transition_sources: dict[str, tuple[str, str, str]] = {}
+    transition_cases: dict[str, str] = {}
+    record_sources: dict[str, tuple[str, str, str]] = {}
+    record_cases: dict[str, str] = {}
+    receipt_sources: dict[str, tuple[str, str, str]] = {}
+    receipt_cases: dict[str, str] = {}
+    for source in normalised:
+        projected = build_external_observation_authority_evidence(
+            conn,
+            observations_path=source["observations_path"],
+            staging_db=source["staging_db"],
+            campaign_id=source["campaign_id"],
+            case_ids=source["case_ids"],
+            rule_id=rule_id,
+        )
+        for gate in REQUIRED_GATES:
+            for entry in projected.get(gate, []):
+                payload = entry.get("payload") or {}
+                receipt_id = str(payload.get("source_receipt_id") or "")
+                transition_id = str(payload.get("transition_id") or "")
+                record_id = str(payload.get("record_id") or "")
+                case_id = str(payload.get("case_id") or "")
+                source_identity = (
+                    str(payload.get("observations_sha256") or ""),
+                    str(payload.get("staging_db_sha256") or ""),
+                    str(payload.get("campaign_id") or ""),
+                )
+                evidence_key = (gate, str(entry.get("evidence_id") or ""))
+                if evidence_key in seen_evidence:
+                    raise ValueError(
+                        "external_authority:duplicate_evidence_witness")
+                if case_id and case_id in seen_cases:
+                    # The same case may be represented by utility and
+                    # conformal rows in one source, but not by two source
+                    # specifications.  Gate-specific rows are handled by the
+                    # source identity check below.
+                    prior_case_source = case_sources.get(case_id)
+                    if prior_case_source != source_identity:
+                        raise ValueError(
+                            "external_authority:duplicate_case_witness")
+                if (receipt_id and
+                        (gate, receipt_id) in seen_gate_receipts):
+                    raise ValueError(
+                        "external_authority:duplicate_receipt_witness")
+                if (transition_id and
+                        (gate, transition_id) in seen_gate_transitions):
+                    raise ValueError(
+                        "external_authority:duplicate_transition_witness")
+                if (record_id and
+                        (gate, record_id) in seen_gate_records):
+                    raise ValueError(
+                        "external_authority:duplicate_record_witness")
+                if transition_id:
+                    previous_source = transition_sources.get(transition_id)
+                    if (previous_source is not None and
+                            (previous_source != source_identity or
+                             transition_cases.get(transition_id) != case_id)):
+                        raise ValueError(
+                            "external_authority:duplicate_transition_witness")
+                    transition_sources[transition_id] = source_identity
+                    transition_cases[transition_id] = case_id
+                if record_id:
+                    previous_source = record_sources.get(record_id)
+                    if (previous_source is not None and
+                            (previous_source != source_identity or
+                             record_cases.get(record_id) != case_id)):
+                        raise ValueError(
+                            "external_authority:duplicate_record_witness")
+                    record_sources[record_id] = source_identity
+                    record_cases[record_id] = case_id
+                if receipt_id:
+                    previous_source = receipt_sources.get(receipt_id)
+                    if (previous_source is not None and
+                            (previous_source != source_identity or
+                             receipt_cases.get(receipt_id) != case_id)):
+                        raise ValueError(
+                            "external_authority:duplicate_receipt_witness")
+                    receipt_sources[receipt_id] = source_identity
+                    receipt_cases[receipt_id] = case_id
+                seen_evidence.add(evidence_key)
+                if receipt_id:
+                    seen_gate_receipts.add((gate, receipt_id))
+                if transition_id:
+                    seen_gate_transitions.add((gate, transition_id))
+                if record_id:
+                    seen_gate_records.add((gate, record_id))
+                if case_id:
+                    seen_cases.add(case_id)
+                    case_sources[case_id] = source_identity
+                merged[gate].append(entry)
+    return merged
+
+
 def record_rule_authority_from_external_observations(
         conn: sqlite3.Connection, *, rule_id: str, target_scope: str,
         trial_id: str, expected_status_version: int | None,
@@ -607,9 +849,51 @@ def record_rule_authority_from_external_observations(
     remain owned by :func:`record_rule_authority`.  Any source binding error is
     raised before the authority ledger write is attempted.
     """
-    evidence = build_external_observation_authority_evidence(
-        conn, observations_path=observations_path, staging_db=staging_db,
-        campaign_id=campaign_id, case_ids=case_ids)
+    evidence = build_external_observation_authority_evidence_batch(
+        conn, sources=[{
+            "observations_path": observations_path,
+            "staging_db": staging_db,
+            "campaign_id": campaign_id,
+            "case_ids": case_ids,
+        }], rule_id=rule_id)
+    trial_evidence = build_trial_authority_evidence(
+        conn, trial_id=trial_id, rule_id=rule_id, target_scope=target_scope)
+    for gate in ("rollback_verified", "registry_verified",
+                 "obligation_coverage", "harmful_rate"):
+        evidence[gate].extend(trial_evidence.get(gate, []))
+    return record_rule_authority(
+        conn, rule_id=rule_id, target_scope=target_scope, evidence=evidence,
+        trial_id=trial_id, expected_status_version=expected_status_version,
+        min_obligation_coverage=min_obligation_coverage,
+        min_cross_lineage_te=min_cross_lineage_te,
+        max_harmful_rate=max_harmful_rate,
+        min_conformal_coverage=min_conformal_coverage,
+        causal_transfer_receipt_ids=causal_transfer_receipt_ids)
+
+
+def record_rule_authority_from_external_observation_sources(
+        conn: sqlite3.Connection, *, rule_id: str, target_scope: str,
+        trial_id: str, expected_status_version: int | None,
+        sources: Iterable[Mapping], causal_transfer_receipt_ids=None,
+        min_obligation_coverage: float = 1.0,
+        min_cross_lineage_te: float = 1.0,
+        max_harmful_rate: float = 0.0,
+        min_conformal_coverage: float = 0.80) -> "RuleAuthorityReceipt":
+    """Record authority from multiple independently frozen audit sources.
+
+    This is the multi-campaign counterpart of
+    :func:`record_rule_authority_from_external_observations`.  It composes
+    only the external harmful/conformal planes; trial/activation and optional
+    causal-transfer evidence remain independently replayed by
+    :func:`record_rule_authority`.
+    """
+    evidence = build_external_observation_authority_evidence_batch(
+        conn, sources=sources, rule_id=rule_id)
+    trial_evidence = build_trial_authority_evidence(
+        conn, trial_id=trial_id, rule_id=rule_id, target_scope=target_scope)
+    for gate in ("rollback_verified", "registry_verified",
+                 "obligation_coverage", "harmful_rate"):
+        evidence[gate].extend(trial_evidence.get(gate, []))
     return record_rule_authority(
         conn, rule_id=rule_id, target_scope=target_scope, evidence=evidence,
         trial_id=trial_id, expected_status_version=expected_status_version,
@@ -1023,8 +1307,22 @@ def _derive_gate_inputs(
     min_conformal_coverage: float,
 ) -> tuple[dict, dict]:
     """Derive gate inputs and audit metrics solely from recorded evidence."""
+    errors = list(errors)
     gate_inputs: dict = {}
     details: dict = {"errors": sorted(set(errors))}
+
+    # External projections optionally carry the rule digest they were bound
+    # against.  Re-check it here (and therefore during receipt replay) so a
+    # rule edit between projection and authority recording cannot reuse stale
+    # utility/calibration rows.
+    for gate in REQUIRED_GATES:
+        for item in entries.get(gate, []):
+            payload = item.get("payload") or {}
+            bound_digest = payload.get("rule_content_digest")
+            if (bound_digest is not None and
+                    bound_digest != rule_digest):
+                errors.append(f"{gate}:rule_content_digest_mismatch")
+    details["errors"] = sorted(set(errors))
 
     rollback = entries.get("rollback_verified", [])
     if rollback:
@@ -1674,6 +1972,8 @@ __all__ = [
     "RULE_EVIDENCE_TYPES", "RuleAuthorityReceipt",
     "build_causal_transfer_evidence", "build_trial_authority_evidence",
     "build_external_observation_authority_evidence",
+    "build_external_observation_authority_evidence_batch",
+    "record_rule_authority_from_external_observation_sources",
     "record_rule_authority_from_external_observations",
     "promote_rule",
     "record_rule_authority", "rule_content_digest", "verify_rule_authority",

@@ -12,8 +12,10 @@ from tehm.crystallization.build_rules import crystallize_all
 from tehm.lifecycle import (
     apply_production_trial_verdict, build_trial_authority_evidence,
     build_external_observation_authority_evidence,
+    build_external_observation_authority_evidence_batch,
     enter_shadow, get_status, promote_rule, record_rule_authority,
     record_rule_authority_from_external_observations,
+    record_rule_authority_from_external_observation_sources,
     rule_content_digest, set_status,
     verify_rule_authority,
 )
@@ -322,6 +324,186 @@ def test_external_observation_projection_binds_staging_transition(
         build_external_observation_authority_evidence(
             authority_conn, observations_path=observations, staging_db=staging_db,
             campaign_id="external-campaign", case_ids=["external-calibration-case"])
+
+    # A semantically valid external row for an unrelated action family must
+    # not be attachable to this candidate rule by the strict wrapper.
+    unrelated = json.loads(json.dumps(record))
+    unrelated["record_id"] = "unrelated-action-record"
+    unrelated["lineage_id"] = "unrelated-action-lineage"
+    unrelated["episode"]["episode_id"] = "unrelated-action-episode"
+    unrelated["episode"]["lineage_id"] = unrelated["lineage_id"]
+    unrelated["action"]["transformation_family"] = "UNRELATED_FAMILY"
+    unrelated["observation_delta"]["first_divergence"]["before"] = 13
+    unrelated_conn = tehm_db.connect(staging_db)
+    capture(
+        unrelated_conn,
+        ArtifactStore(staging_db.parent / "artifacts"),
+        ExecutionRecord.from_dict(unrelated),
+        dataset_campaign_id="external-campaign",
+        dataset_split="calibration", dataset_learner_eligible=False)
+    unrelated_conn.close()
+    unrelated_observations = tmp_root / "external-campaign" / "unrelated.jsonl"
+    write_external_observations(unrelated_observations, [{
+        "receipt_id": "unrelated-receipt", "case_id": "unrelated-case",
+        "lineage_id": unrelated["lineage_id"], "split": "calibration",
+        "classification": "ELIGIBLE_POSITIVE", "learner_eligible": False,
+        "before": {"complete": True}, "after": {"complete": True},
+        "record": unrelated,
+    }])
+    with pytest.raises(ValueError, match="rule_transformation_mismatch"):
+        build_external_observation_authority_evidence(
+            authority_conn, observations_path=unrelated_observations,
+            staging_db=staging_db, campaign_id="external-campaign",
+            case_ids=["unrelated-case"], rule_id=rule_id)
+
+
+def test_external_authority_batch_combines_sources_deterministically(
+        tmp_tehm, sample_record_dict):
+    """Multi-campaign utility/calibration evidence is bound without hand merge."""
+    authority_conn, _, tmp_root = tmp_tehm
+    _, rule_id, status_version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+
+    def make_source(name, split, record_id, conformal=None):
+        source_root = tmp_root / name
+        staging_db = source_root / "staging" / "tehm.sqlite"
+        staging_db.parent.mkdir(parents=True)
+        staging_conn = tehm_db.connect(staging_db)
+        tehm_db.ensure_schema(staging_conn)
+        record = json.loads(json.dumps(sample_record_dict))
+        record["record_id"] = record_id
+        record["lineage_id"] = f"lineage-{record_id}"
+        record["episode"]["episode_id"] = f"episode-{record_id}"
+        record["episode"]["lineage_id"] = record["lineage_id"]
+        record["action"]["payload"]["config_edits"] = {
+            "PLACE_DENSITY_LB_ADDON": "0.20" if split == "calibration" else "0.21"
+        }
+        record["before"]["config"]["PLACE_DENSITY_LB_ADDON"] = "0.10"
+        record["after"]["config"]["PLACE_DENSITY_LB_ADDON"] = (
+            "0.20" if split == "calibration" else "0.21")
+        record["observation_delta"]["experiment_kind"] = "REPAIR"
+        record["observation_delta"]["utility_verdict"] = "NEUTRAL"
+        if conformal is not None:
+            record["verification"]["conformal"] = conformal
+        normalised = asdict(ExecutionRecord.from_dict(record))
+        capture(
+            staging_conn, ArtifactStore(staging_db.parent / "artifacts"),
+            ExecutionRecord.from_dict(normalised),
+            dataset_campaign_id=f"campaign-{name}", dataset_split=split,
+            dataset_learner_eligible=False)
+        staging_conn.close()
+        observations = source_root / "observations.jsonl"
+        write_external_observations(observations, [{
+            "receipt_id": f"receipt-{record_id}", "case_id": f"case-{record_id}",
+            "lineage_id": normalised["lineage_id"], "split": split,
+            "classification": "ELIGIBLE_POSITIVE", "learner_eligible": False,
+            "before": {"complete": True}, "after": {"complete": True},
+            "record": normalised,
+        }])
+        return {
+            "observations_path": observations, "staging_db": staging_db,
+            "campaign_id": f"campaign-{name}",
+            "case_ids": [f"case-{record_id}"],
+        }
+
+    calibration = make_source(
+        "calibration-source", "calibration", "batch-calibration",
+        {"covered": 9, "total": 10, "method": "split_conformal_test"})
+    heldout = make_source("heldout-source", "heldout", "batch-heldout")
+
+    first = build_external_observation_authority_evidence_batch(
+        authority_conn, sources=[heldout, calibration], rule_id=rule_id)
+    second = build_external_observation_authority_evidence_batch(
+        authority_conn, sources=[calibration, heldout], rule_id=rule_id)
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+    assert len(first["harmful_rate"]) == 2
+    assert len(first["conformal_coverage"]) == 1
+    assert {row["split"] for row in first["harmful_rate"]} == {
+        "calibration", "heldout"}
+
+    rollback = {
+        "version": "batch-authority-rollback-v1",
+        "source_before_digest": "sha256:before",
+        "source_after_restore_digest": "sha256:before",
+        "verified": True,
+    }
+    persist_activation(
+        authority_conn,
+        ActivationRecord(
+            activation_id="batch-authority-activation",
+            rule_id=rule_id, target_state_id="batch-authority-target",
+            obligation_coverage=1.0, rollback_receipt=rollback,
+            outcome="PASS", verification_status="PASS",
+            trial_uuid="authority-trial"),
+    )
+    authority_conn.execute(
+        "UPDATE tehm_trials SET metrics_json=? WHERE trial_id=?",
+        (json.dumps({
+            "arms_differ": True, "obligation_coverage": 1.0,
+            "created_regressions": [], "pairs": [{
+                "activation_id": "batch-authority-activation",
+                "subject_lineage": "batch-authority-lineage",
+                "obligation_coverage": 1.0,
+                "created_regressions": [],
+                "rollback_receipt": rollback,
+            }],
+        }, sort_keys=True), trial_id))
+    authority_conn.commit()
+    receipt = record_rule_authority_from_external_observation_sources(
+        authority_conn, rule_id=rule_id, target_scope="drc", trial_id=trial_id,
+        expected_status_version=status_version, sources=[calibration, heldout])
+    assert receipt.gate_status["harmful_rate"] == "PASS"
+    assert receipt.gate_status["conformal_coverage"] == "PASS"
+    assert receipt.gate_status["rollback_verified"] == "PASS"
+    assert receipt.gate_status["registry_verified"] == "PASS"
+    assert receipt.gate_status["obligation_coverage"] == "PASS"
+    # The external rows are content-bound too; editing the rule after the
+    # attempt invalidates replay rather than leaving utility evidence usable.
+    authority_conn.execute(
+        "UPDATE tehm_rules SET after_pattern_json=? WHERE rule_id=?",
+        (json.dumps({"tampered": True}, sort_keys=True), rule_id))
+    authority_conn.commit()
+    replay = verify_rule_authority(authority_conn, receipt)
+    assert replay["eligible"] is False
+    assert "rule_content_digest_mismatch" in replay["reasons"]
+
+
+def test_external_authority_batch_rejects_cross_source_replay(
+        tmp_tehm, sample_record_dict):
+    """The same transition cannot be counted twice through two source specs."""
+    authority_conn, _, tmp_root = tmp_tehm
+    source_root = tmp_root / "duplicate-source"
+    staging_db = source_root / "staging" / "tehm.sqlite"
+    staging_db.parent.mkdir(parents=True)
+    staging_conn = tehm_db.connect(staging_db)
+    tehm_db.ensure_schema(staging_conn)
+    record = json.loads(json.dumps(sample_record_dict))
+    record["record_id"] = "duplicate-record"
+    record["lineage_id"] = "duplicate-lineage"
+    record["episode"]["episode_id"] = "duplicate-episode"
+    record["episode"]["lineage_id"] = record["lineage_id"]
+    record["observation_delta"]["experiment_kind"] = "REPAIR"
+    record["observation_delta"]["utility_verdict"] = "NEUTRAL"
+    normalised = asdict(ExecutionRecord.from_dict(record))
+    capture(
+        staging_conn, ArtifactStore(staging_db.parent / "artifacts"),
+        ExecutionRecord.from_dict(normalised),
+        dataset_campaign_id="duplicate-campaign", dataset_split="heldout",
+        dataset_learner_eligible=False)
+    staging_conn.close()
+    observations = source_root / "observations.jsonl"
+    write_external_observations(observations, [{
+        "receipt_id": "duplicate-receipt", "case_id": "duplicate-case",
+        "lineage_id": normalised["lineage_id"], "split": "heldout",
+        "classification": "ELIGIBLE_POSITIVE", "learner_eligible": False,
+        "before": {"complete": True}, "after": {"complete": True},
+        "record": normalised,
+    }])
+    source = {"observations_path": observations, "staging_db": staging_db,
+              "campaign_id": "duplicate-campaign", "case_ids": ["duplicate-case"]}
+    with pytest.raises(ValueError, match="duplicate_evidence_witness"):
+        build_external_observation_authority_evidence_batch(
+            authority_conn, sources=[source, source])
 
 
 def test_authority_evidence_and_receipt_write_atomically_on_conflict(

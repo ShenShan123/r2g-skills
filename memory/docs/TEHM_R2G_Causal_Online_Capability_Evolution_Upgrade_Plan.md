@@ -3616,3 +3616,14 @@ transfer 与 rollback/registry receipt 运行同一投影并重算六门，而�
 authority DB、candidate rule/trial、staging campaign 与 case IDs，输出完整的
 DB-bound receipt；即使 receipt 不 eligible，也只记录不可晋级的 authority attempt，
 不导入 canonical transition、不改变 lifecycle status。
+
+当一项 rule 的 calibration、held-out 和 A/B 证据跨越多个 campaign-local staging DB
+时，追加的 `build_external_observation_authority_evidence_batch()` 与
+`record_rule_authority_from_external_observation_sources()` 提供唯一组合入口；
+`scripts/record_external_rule_authority_batch.py` 消费
+`external-authority-sources-v1` manifest。source 会按 campaign、路径和 case selection
+稳定排序并逐一重放只读
+observation/staging 快照，重复 case/receipt/record/transition 直接 fail-closed，
+且严格路径会校验 external action domain/transformation family 与当前 rule。该组合
+只完善 harmful/conformal evidence 的可重放性，仍不填补 rollback、registry 或
+obligation gate，也不会写 canonical/lifecycle/runtime。

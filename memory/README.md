@@ -1806,6 +1806,13 @@ savepoint 与 canonical digest 守护。之后才可用上述 projector 生成 a
 它只向指定 authority DB 写 rule evidence/receipt ledger，输出仍可为
 `NOT_ESTABLISHED`，不导入 transition、不修改 lifecycle，也不触发 promotion。
 
+当 calibration、held-out 或 A/B 证据分散在多个 campaign 时，使用
+[`scripts/record_external_rule_authority_batch.py`](scripts/record_external_rule_authority_batch.py)
+和 `external-authority-sources-v1` manifest。系统会按 campaign、路径和 case selection
+稳定排序，逐 source 重放 hash-chain/staging snapshot，并拒绝重复 case、receipt、
+record 或 transition；因此不需要调用方手工合并 evidence rows。严格入口还会把
+external record 的 action domain/transformation family 绑定到当前 rule definition。
+
 该接口只产生 `harmful_rate` 与 `conformal_coverage` rows；rollback、registry、
 obligation、cross-lineage TE 仍必须由 activation/trial/transfer 的独立 evidence
 建立。rows 可以交给 `record_rule_authority()`，但缺失其余 gate 时仍是
