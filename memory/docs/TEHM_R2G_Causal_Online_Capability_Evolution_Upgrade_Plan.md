@@ -4023,3 +4023,13 @@ memory，也不改变 Parametric shadow-only 或 production runtime 边界。
 Python 的 `bool` 是 `int` 子类这一语义伪造 coverage、TE 或零 harmful-rate。阈值校验与
 receipt replay 的有限数值约束保持不变；该修复只收紧 authority evaluator，不改变 gate
 阈值和生命周期行为。
+
+另外，registry gate 的 `status_version` witness 现在也要求严格的正整数；不能利用
+Python 中 `True == 1` 的比较规则把布尔值伪装成当前 candidate 版本。trial binding 对
+调用方提供的 expected version 使用同一约束，类型错误会形成不可晋级 receipt，而不会
+改变 lifecycle。该修复只强化 rule-authority 的版本绑定，不新增 gate、不写 canonical
+memory，也不改变 Parametric shadow-only 或 production runtime 边界。
+
+为保证这类 fail-closed 决策可审计，`_derive_gate_inputs()` 现在会在所有 gate 解析完成
+后再写入 `details.errors`；后续发现的 registry/measurement malformed reason 不会只影响
+内部 gate 值而从 receipt 的派生诊断中消失。

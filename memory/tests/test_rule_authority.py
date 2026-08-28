@@ -165,6 +165,20 @@ def test_rule_authority_rejects_weakly_typed_evidence_identity(
     assert "obligation_coverage:entry_0_lineage_id_malformed" in receipt.reasons
 
 
+def test_rule_authority_rejects_boolean_registry_status_version(
+        tmp_tehm, sample_record_dict):
+    conn, rule_id, version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    evidence = _full_evidence(conn, rule_id)
+    evidence["registry_verified"][0]["payload"]["status_version"] = True
+    receipt = record_rule_authority(
+        conn, rule_id=rule_id, target_scope="drc", evidence=evidence,
+        trial_id=trial_id, expected_status_version=version)
+    assert receipt.eligible is False
+    assert receipt.gate_status["registry_verified"] == "FAIL"
+    assert "registry_verified:status_version_malformed" in receipt.reasons
+
+
 def test_external_conformal_coverage_rejects_boolean_measurement():
     with pytest.raises(ValueError, match="conformal_coverage_malformed"):
         _external_conformal_value({"conformal": {"coverage": True}})

@@ -1425,14 +1425,22 @@ def _derive_gate_inputs(
         registry_ok = bool(
             rule_row is not None and status is not None and
             status.get("status") == "candidate" and
-            expected_status_version is not None and
+            type(expected_status_version) is int and
+            expected_status_version > 0 and
             status.get("status_version") == expected_status_version and
             rule_digest)
         for item in registry:
             payload = item.get("payload") or {}
+            payload_version = payload.get("status_version")
+            if (type(payload_version) is not int or payload_version <= 0 or
+                    type(expected_status_version) is not int or
+                    expected_status_version <= 0):
+                errors.append("registry_verified:status_version_malformed")
             registry_ok = registry_ok and item.get("verdict") == "PASS" and (
                 payload.get("rule_content_digest") == rule_digest and
-                payload.get("status_version") == expected_status_version and
+                type(payload_version) is int and
+                payload_version > 0 and
+                payload_version == expected_status_version and
                 payload.get("status") == "candidate")
         gate_inputs["registry_verified"] = registry_ok
     details["registry_count"] = len(registry)
@@ -1563,6 +1571,11 @@ def _derive_gate_inputs(
             gate_inputs[gate] = False
         else:
             gate_inputs[gate] = None
+    # Registry/measurement validation above can discover additional errors
+    # after the initial diagnostic snapshot.  Keep the derived audit details
+    # complete so a receipt does not hide the reason that forced a gate to
+    # fail closed.
+    details["errors"] = sorted(set(errors))
     return gate_inputs, details
 
 
@@ -1607,7 +1620,11 @@ def _trial_binding(conn: sqlite3.Connection, *, rule_id: str,
     binding["trial_digest"] = digest
     if row["rule_id"] != rule_id or row["target_scope"] != target_scope:
         reasons.append("trial_rule_scope_mismatch")
-    if expected_status_version is None or row["status_version"] != expected_status_version:
+    if (expected_status_version is None or
+            type(expected_status_version) is not int or
+            expected_status_version <= 0):
+        reasons.append("trial_status_version_malformed")
+    elif row["status_version"] != expected_status_version:
         reasons.append("trial_status_version_mismatch")
     if row["verdict"] != "win":
         reasons.append("trial_verdict_not_win")
