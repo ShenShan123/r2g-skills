@@ -4065,3 +4065,13 @@ derived authority replay；authority、policy/runtime、memory-binding 和 requi
 结构化 malformed reason 而不是在 replay 中抛出未捕获异常。该修复不改变 capability
 gate 合取，不写 canonical memory，也不使 evaluation/runtime 或 Parametric shadow
 进入 production。
+
+### 2026-08-28 trial authority projector witness typing closure
+
+`build_trial_authority_evidence()` 现在在读取 `tehm_trials` 与
+`tehm_activations` 时拒绝弱类型的 trial/rule/scope/activation/lineage/produced-transition
+身份，并只接受有限的真实数值型 obligation coverage；不会把整数、布尔、字符串化
+数字或损坏的 SQLite 字段转换成可晋级 witness。外部 rule-action binding 同样拒绝
+弱类型 domain、transformation family 与 compatibility profile。该修复只收紧
+rollback/obligation/utility authority projector 的 replay 输入，不改变六项 gate 合取，
+不写 canonical memory，也不使 shadow/evaluation 进入 production runtime。

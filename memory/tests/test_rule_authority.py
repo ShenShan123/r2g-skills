@@ -261,6 +261,61 @@ def test_trial_authority_projection_replays_activation_witnesses(
             conn, trial_id=trial_id, rule_id=rule_id, target_scope="drc")
 
 
+def test_trial_authority_projection_rejects_weak_witness_types(
+        tmp_tehm, sample_record_dict):
+    """Trial projection must not stringify IDs or numeric measurements."""
+    conn, rule_id, _, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    rollback = {
+        "version": "test-rollback-v1",
+        "source_before_digest": "sha256:before",
+        "source_after_restore_digest": "sha256:before",
+        "verified": True,
+    }
+    persist_activation(
+        conn,
+        ActivationRecord(
+            activation_id="act-typed-witness",
+            rule_id=rule_id, target_state_id="target-typed-witness",
+            obligation_coverage=1.0, rollback_receipt=rollback,
+            outcome="PASS", verification_status="PASS",
+            trial_uuid="authority-trial"),
+    )
+    pair = {
+        "activation_id": "act-typed-witness",
+        "subject_lineage": "typed-lineage",
+        "obligation_coverage": 1.0,
+        "rollback_receipt": rollback,
+    }
+    metrics = {
+        "arms_differ": True, "obligation_coverage": 1.0,
+        "created_regressions": [], "pairs": [pair],
+    }
+    conn.execute(
+        "UPDATE tehm_trials SET metrics_json=? WHERE trial_id=?",
+        (json.dumps(metrics, sort_keys=True), trial_id))
+    conn.commit()
+    assert build_trial_authority_evidence(
+        conn, trial_id=trial_id, rule_id=rule_id,
+        target_scope="drc")["rollback_verified"]
+
+    for field, value, message in (
+            ("activation_id", 1, "activation_missing"),
+            ("obligation_coverage", "1.0", "obligation_witness_mismatch"),
+            ("subject_lineage", True, "lineage_missing")):
+        tampered_pair = dict(pair)
+        tampered_pair[field] = value
+        tampered_metrics = dict(metrics, pairs=[tampered_pair])
+        conn.execute(
+            "UPDATE tehm_trials SET metrics_json=? WHERE trial_id=?",
+            (json.dumps(tampered_metrics, sort_keys=True), trial_id))
+        conn.commit()
+        with pytest.raises(ValueError, match=message):
+            build_trial_authority_evidence(
+                conn, trial_id=trial_id, rule_id=rule_id,
+                target_scope="drc")
+
+
 def test_promote_rule_consumes_only_verified_receipt(tmp_tehm, sample_record_dict):
     conn, rule_id, version, trial_id = _candidate_with_trial(
         tmp_tehm, sample_record_dict)

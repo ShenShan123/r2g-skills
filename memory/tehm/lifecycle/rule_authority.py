@@ -93,24 +93,25 @@ def _validate_external_rule_binding(
     action = record.get("action")
     if not isinstance(action, Mapping):
         raise ValueError("external_authority:record_action_malformed")
-    action_domain = str(action.get("domain") or "").strip()
-    family = str(action.get("transformation_family") or "").strip()
-    if not action_domain or not family:
+    action_domain = action.get("domain")
+    family = action.get("transformation_family")
+    if (type(action_domain) is not str or not action_domain.strip() or
+            type(family) is not str or not family.strip()):
         raise ValueError("external_authority:record_action_incomplete")
+    action_domain = action_domain.strip()
+    family = family.strip()
     before = _json_mapping(row["before_pattern_json"])
     after = _json_mapping(row["after_pattern_json"])
     context = _json_mapping(row["context_profile_json"])
-    expected_domains = {
-        str(value).strip() for value in
-        (before.get("action_domain"), after.get("action_domain"))
-        if str(value or "").strip()
-    }
-    expected_families = {
-        str(value).strip() for value in
-        (before.get("transformation_family"), after.get("transformation_family"),
-         before.get("type"), after.get("type"))
-        if str(value or "").strip()
-    }
+    raw_domains = (before.get("action_domain"), after.get("action_domain"))
+    raw_families = (before.get("transformation_family"), after.get("transformation_family"),
+                    before.get("type"), after.get("type"))
+    if any(value is not None and
+           (type(value) is not str or not value.strip())
+           for value in (*raw_domains, *raw_families)):
+        raise ValueError("external_authority:rule_action_binding_unavailable")
+    expected_domains = {value.strip() for value in raw_domains if value is not None}
+    expected_families = {value.strip() for value in raw_families if value is not None}
     if not expected_domains or not expected_families:
         raise ValueError("external_authority:rule_action_binding_unavailable")
     if action_domain not in expected_domains:
@@ -122,21 +123,30 @@ def _validate_external_rule_binding(
     # match, because that would let a profile-agnostic row support a typed
     # rule.  Older untyped rules remain supported when neither side declares
     # the profile.
-    expected_profiles = {
-        str(value).strip() for value in (
-            before.get("compatibility_profile"),
-            after.get("compatibility_profile"),
-            context.get("compatibility_profile"),
-        ) if str(value or "").strip()
-    }
+    raw_profiles = (
+        before.get("compatibility_profile"),
+        after.get("compatibility_profile"),
+        context.get("compatibility_profile"),
+    )
+    if any(value is not None and
+           (type(value) is not str or not value.strip())
+           for value in raw_profiles):
+        raise ValueError("external_authority:rule_action_binding_unavailable")
+    expected_profiles = {value.strip() for value in raw_profiles if value is not None}
     if expected_profiles:
         action_payload = action.get("payload")
         if not isinstance(action_payload, Mapping):
             action_payload = {}
-        observed_profile = str(
-            action.get("compatibility_profile") or
-            action_payload.get("compatibility_profile") or
-            record.get("compatibility_profile") or "").strip()
+        observed_profile = (
+            action.get("compatibility_profile")
+            if action.get("compatibility_profile") is not None
+            else action_payload.get("compatibility_profile")
+            if action_payload.get("compatibility_profile") is not None
+            else record.get("compatibility_profile"))
+        if (type(observed_profile) is not str or
+                not observed_profile.strip()):
+            raise ValueError("external_authority:compatibility_profile_mismatch")
+        observed_profile = observed_profile.strip()
         if observed_profile not in expected_profiles:
             raise ValueError("external_authority:compatibility_profile_mismatch")
 
@@ -352,6 +362,14 @@ def _finite_number(value) -> float | None:
         number = float(value)
     except (TypeError, ValueError):
         return None
+    return number if math.isfinite(number) else None
+
+
+def _strict_measurement(value) -> float | None:
+    """Read a JSON/SQLite measurement without accepting string numerics."""
+    if isinstance(value, bool) or type(value) not in (int, float):
+        return None
+    number = float(value)
     return number if math.isfinite(number) else None
 
 
@@ -1048,6 +1066,10 @@ def record_rule_authority_from_external_observation_sources(
 
 def _trial_authority_row(conn: sqlite3.Connection, trial_id: str):
     """Load one immutable trial row by ID or deterministic UUID."""
+    try:
+        trial_id = _strict_text(trial_id, label="trial_id")
+    except ValueError as exc:
+        raise ValueError("trial_authority:trial_id_malformed") from exc
     row = conn.execute(
         "SELECT * FROM tehm_trials WHERE trial_id=? OR trial_uuid=? "
         "ORDER BY created_at DESC LIMIT 1", (trial_id, trial_id)).fetchone()
@@ -1069,7 +1091,18 @@ def build_trial_authority_evidence(
     Any malformed or mismatched activation witness aborts the projection.
     """
     row = _trial_authority_row(conn, trial_id)
-    if row["rule_id"] != rule_id or row["target_scope"] != target_scope:
+    try:
+        rule_id = _strict_text(rule_id, label="rule_id")
+        target_scope = _strict_text(target_scope, label="target_scope")
+        row_rule_id = _strict_text(row["rule_id"], label="trial_rule_id")
+        row_target_scope = _strict_text(
+            row["target_scope"], label="trial_target_scope")
+        row_trial_id = _strict_text(row["trial_id"], label="trial_row_id")
+        row_trial_uuid = (_strict_text(row["trial_uuid"], label="trial_uuid")
+                          if row["trial_uuid"] is not None else None)
+    except ValueError as exc:
+        raise ValueError("trial_authority:trial_identity_malformed") from exc
+    if row_rule_id != rule_id or row_target_scope != target_scope:
         raise ValueError("trial_authority:trial_rule_scope_mismatch")
     metrics = _strict_json_value(row["metrics_json"], label="metrics")
     if not isinstance(metrics, Mapping):
@@ -1086,9 +1119,12 @@ def build_trial_authority_evidence(
     for ordinal, raw_pair in enumerate(raw_pairs):
         if not isinstance(raw_pair, Mapping):
             raise ValueError(f"trial_authority:pair_{ordinal}_malformed")
-        activation_id = str(raw_pair.get("activation_id") or "").strip()
-        if not activation_id:
-            raise ValueError(f"trial_authority:pair_{ordinal}_activation_missing")
+        try:
+            activation_id = _strict_text(
+                raw_pair.get("activation_id"), label="activation_id")
+        except ValueError as exc:
+            raise ValueError(
+                f"trial_authority:pair_{ordinal}_activation_missing") from exc
         if activation_id in seen_activation_ids:
             raise ValueError("trial_authority:duplicate_activation_witness")
         seen_activation_ids.add(activation_id)
@@ -1097,13 +1133,28 @@ def build_trial_authority_evidence(
             (activation_id,)).fetchone()
         if activation is None:
             raise ValueError("trial_authority:activation_missing")
-        if (activation["rule_id"] != rule_id or
-                activation["trial_uuid"] not in (None, row["trial_uuid"])):
+        activation_trial_uuid = activation["trial_uuid"]
+        activation_rule_id = activation["rule_id"]
+        if type(activation_rule_id) is not str or not activation_rule_id.strip():
+            raise ValueError("trial_authority:activation_rule_identity_malformed")
+        activation_rule_id = activation_rule_id.strip()
+        if activation_trial_uuid is not None and (
+                type(activation_trial_uuid) is not str or
+                not activation_trial_uuid.strip()):
+            raise ValueError("trial_authority:activation_trial_identity_malformed")
+        if isinstance(activation_trial_uuid, str):
+            activation_trial_uuid = activation_trial_uuid.strip()
+        if (activation_rule_id != rule_id or
+                activation_trial_uuid not in (None, row_trial_uuid)):
             raise ValueError("trial_authority:activation_trial_binding_mismatch")
-        lineage_id = str(raw_pair.get("subject_lineage") or
-                         raw_pair.get("lineage_id") or "").strip()
-        if not lineage_id:
-            raise ValueError(f"trial_authority:pair_{ordinal}_lineage_missing")
+        raw_lineage = raw_pair.get("subject_lineage")
+        if raw_lineage is None:
+            raw_lineage = raw_pair.get("lineage_id")
+        try:
+            lineage_id = _strict_text(raw_lineage, label="pair_lineage")
+        except ValueError as exc:
+            raise ValueError(
+                f"trial_authority:pair_{ordinal}_lineage_missing") from exc
 
         pair_rollback = raw_pair.get("rollback_receipt")
         if not isinstance(pair_rollback, Mapping):
@@ -1116,20 +1167,21 @@ def build_trial_authority_evidence(
         if not isinstance(db_rollback.get("verified"), bool):
             raise ValueError("trial_authority:rollback_verdict_missing")
 
-        pair_coverage = _finite_number(raw_pair.get("obligation_coverage"))
-        db_coverage = _finite_number(activation["obligation_coverage"])
+        pair_coverage = _strict_measurement(
+            raw_pair.get("obligation_coverage"))
+        db_coverage = _strict_measurement(activation["obligation_coverage"])
         if (pair_coverage is None or db_coverage is None or
                 pair_coverage != db_coverage):
             raise ValueError("trial_authority:obligation_witness_mismatch")
 
-        base_id = f"{row['trial_id']}:{activation_id}"
+        base_id = f"{row_trial_id}:{activation_id}"
         evidence["rollback_verified"].append({
             "evidence_id": f"{base_id}:rollback",
             "split": "ab", "lineage_id": lineage_id,
             "verdict": "PASS" if db_rollback["verified"] else "FAIL",
             "payload": {
-                "trial_id": row["trial_id"],
-                "trial_uuid": row["trial_uuid"],
+                "trial_id": row_trial_id,
+                "trial_uuid": row_trial_uuid,
                 "activation_id": activation_id,
                 "verified": db_rollback["verified"],
                 "rollback_receipt": dict(db_rollback),
@@ -1139,8 +1191,8 @@ def build_trial_authority_evidence(
             "evidence_id": f"{base_id}:obligation",
             "split": "ab", "lineage_id": lineage_id, "verdict": "PASS",
             "payload": {
-                "trial_id": row["trial_id"],
-                "trial_uuid": row["trial_uuid"],
+                "trial_id": row_trial_id,
+                "trial_uuid": row_trial_uuid,
                 "activation_id": activation_id,
                 "coverage": db_coverage,
                 "obligation_coverage": db_coverage,
@@ -1152,8 +1204,14 @@ def build_trial_authority_evidence(
         # utility witness: absence is NOT_ESTABLISHED, never an inferred safe
         # outcome from a successful target oracle.
         utility = None
-        produced_transition_id = str(
-            activation["produced_transition_id"] or "").strip()
+        produced_transition_id = activation["produced_transition_id"]
+        if produced_transition_id is not None:
+            try:
+                produced_transition_id = _strict_text(
+                    produced_transition_id, label="produced_transition_id")
+            except ValueError as exc:
+                raise ValueError(
+                    "trial_authority:produced_transition_id_malformed") from exc
         if produced_transition_id:
             transition = conn.execute(
                 "SELECT observation_delta_json FROM tehm_transitions "
@@ -1166,7 +1224,9 @@ def build_trial_authority_evidence(
                 raise ValueError("trial_authority:utility_delta_not_mapping")
             utility = delta.get("utility_verdict")
         if utility is not None:
-            utility = str(utility).upper()
+            if type(utility) is not str or not utility.strip():
+                raise ValueError("trial_authority:utility_verdict_malformed")
+            utility = utility.strip().upper()
             if utility not in {"HARMFUL", "REGRESSION", "PARETO_SAFE",
                                "SUPPORT", "NEUTRAL", "PASS"}:
                 raise ValueError("trial_authority:utility_verdict_malformed")
@@ -1174,8 +1234,8 @@ def build_trial_authority_evidence(
                 "evidence_id": f"{base_id}:utility",
                 "split": "ab", "lineage_id": lineage_id, "verdict": "PASS",
                 "payload": {
-                    "trial_id": row["trial_id"],
-                    "trial_uuid": row["trial_uuid"],
+                    "trial_id": row_trial_id,
+                    "trial_uuid": row_trial_uuid,
                     "activation_id": activation_id,
                     "utility_verdict": utility,
                     "harmful": utility in {"HARMFUL", "REGRESSION"},
@@ -1190,12 +1250,12 @@ def build_trial_authority_evidence(
         status.get("status") == "candidate" and
         status.get("status_version") == row["status_version"])
     evidence["registry_verified"].append({
-        "evidence_id": f"{row['trial_id']}:registry",
+        "evidence_id": f"{row_trial_id}:registry",
         "split": "ab", "lineage_id": None,
         "verdict": "PASS" if registry_ok else "FAIL",
         "payload": {
-            "trial_id": row["trial_id"],
-            "trial_uuid": row["trial_uuid"],
+            "trial_id": row_trial_id,
+            "trial_uuid": row_trial_uuid,
             "status": status.get("status") if status else None,
             "status_version": status.get("status_version") if status else None,
             "rule_content_digest": digest,
@@ -1776,6 +1836,13 @@ def record_rule_authority(
     constructed only from replay-verified L4 ledger receipts in this same DB;
     hand-authored cross-lineage rows are rejected rather than merged.
     """
+    try:
+        rule_id = _strict_text(rule_id, label="rule_id")
+        target_scope = _strict_text(target_scope, label="target_scope")
+        if trial_id is not None:
+            trial_id = _strict_text(trial_id, label="trial_id")
+    except ValueError as exc:
+        raise ValueError("rule authority identity is malformed") from exc
     if not isinstance(evidence, Mapping):
         evidence = {}
     row = _rule_row(conn, rule_id)
@@ -2001,22 +2068,37 @@ def _load_evidence_rows(conn: sqlite3.Connection, *, rule_id: str,
             if row is None:
                 reasons.append(f"evidence:{gate}:row_missing")
                 continue
-            if str(row["split"]) not in GATE_ALLOWED_SPLITS[gate]:
+            row_split = row["split"]
+            row_verdict = row["verdict"]
+            row_lineage = row["lineage_id"]
+            row_digest = row["evidence_digest"]
+            if (type(row_split) is not str or not row_split.strip() or
+                    type(row_verdict) is not str or not row_verdict.strip() or
+                    (row_lineage is not None and
+                     (type(row_lineage) is not str or not row_lineage.strip())) or
+                    type(row_digest) is not str or not row_digest.strip()):
+                reasons.append(f"evidence:{gate}:row_identity_malformed")
+                continue
+            row_split = row_split.strip()
+            row_verdict = row_verdict.strip()
+            row_lineage = row_lineage.strip() if row_lineage is not None else None
+            row_digest = row_digest.strip()
+            if row_split not in GATE_ALLOWED_SPLITS[gate]:
                 reasons.append(f"evidence:{gate}:invalid_evidence_split")
             payload = _json_mapping(row["payload_json"])
             expected = _evidence_digest(
                 rule_id=rule_id, target_scope=target_scope, gate_name=gate,
-                evidence_id=evidence_id, split=str(row["split"]),
-                lineage_id=row["lineage_id"], verdict=str(row["verdict"]),
+                evidence_id=evidence_id, split=row_split,
+                lineage_id=row_lineage, verdict=row_verdict,
                 payload=payload)
-            if (row["split"], row["lineage_id"], row["verdict"]) != (
+            if (row_split, row_lineage, row_verdict) != (
                     split, lineage_id, verdict):
                 reasons.append(f"evidence:{gate}:row_mismatch")
-            if row["evidence_digest"] != expected or evidence_digest != expected:
+            if row_digest != expected or evidence_digest != expected:
                 reasons.append(f"evidence:{gate}:digest_mismatch")
             loaded[gate].append({
-                "evidence_id": evidence_id, "split": row["split"],
-                "lineage_id": row["lineage_id"], "verdict": row["verdict"],
+                "evidence_id": evidence_id, "split": row_split,
+                "lineage_id": row_lineage, "verdict": row_verdict,
                 "payload": payload,
             })
     return loaded, reasons
@@ -2033,6 +2115,15 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         return {"eligible": False, "reasons": ["authority_payload_missing"]}
     payload = dict(payload)
     reasons: list[str] = []
+    for field in ("authority_version", "authority_receipt_id",
+                  "receipt_digest", "rule_id", "target_scope"):
+        value = data.get(field)
+        if type(value) is not str or not value.strip():
+            reasons.append(f"authority_{field}_malformed")
+    for field in ("rule_id", "target_scope"):
+        value = payload.get(field)
+        if type(value) is not str or not value.strip():
+            reasons.append(f"authority_{field}_payload_malformed")
     expected_digest = _receipt_digest(payload)
     if data.get("authority_version") != AUTHORITY_VERSION:
         reasons.append("authority_version_mismatch")
@@ -2040,8 +2131,11 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         reasons.append("authority_receipt_digest_mismatch")
     if data.get("authority_receipt_id") != _receipt_id(expected_digest):
         reasons.append("authority_receipt_id_mismatch")
-    rule_id = str(data.get("rule_id") or payload.get("rule_id") or "")
-    target_scope = str(data.get("target_scope") or payload.get("target_scope") or "")
+    rule_id = data.get("rule_id") if type(data.get("rule_id")) is str else ""
+    target_scope = (data.get("target_scope")
+                    if type(data.get("target_scope")) is str else "")
+    rule_id = rule_id.strip()
+    target_scope = target_scope.strip()
     if payload.get("rule_id") != rule_id or payload.get("target_scope") != target_scope:
         reasons.append("authority_scope_payload_mismatch")
     row = _rule_row(conn, rule_id)
@@ -2076,7 +2170,11 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         payload_item = item.get("payload") or {}
         if payload_item.get("causal_transfer_verified") is not True:
             continue
-        transfer_id = str(payload_item.get("transfer_receipt_id") or "")
+        transfer_id = payload_item.get("transfer_receipt_id")
+        if type(transfer_id) is not str or not transfer_id.strip():
+            reasons.append("cross_lineage_te:transfer_receipt_id_malformed")
+            continue
+        transfer_id = transfer_id.strip()
         entry, transfer_errors = _transfer_entry(
             conn, transfer_id, rule_id=rule_id, rule_row=row,
             rule_digest=current_digest)
@@ -2113,6 +2211,12 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         if stable_dumps(payload.get(key)) != stable_dumps(gate_report.get(key)):
             reasons.append(f"authority_{key}_mismatch")
     trial_id = payload.get("trial_id")
+    if trial_id is not None and (
+            type(trial_id) is not str or not trial_id.strip()):
+        reasons.append("authority_trial_id_malformed")
+        trial_id = None
+    elif isinstance(trial_id, str):
+        trial_id = trial_id.strip()
     trial_ok, trial_binding, trial_reasons = _trial_binding(
         conn, rule_id=rule_id, target_scope=target_scope, trial_id=trial_id,
         expected_status_version=replay_status_version)
