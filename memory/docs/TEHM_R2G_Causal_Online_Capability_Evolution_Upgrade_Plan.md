@@ -3923,3 +3923,13 @@ authority replay 共同保持这一类型边界。
 不会生成看似成功的 runtime-load receipt。这样 C3/C4 的 policy/runtime witness 在
 写入端和 replay 端形成闭环；该修复不改变 capability gate 合取、不写 canonical memory，
 也不允许 evaluation load 进入 production runtime。
+
+### 2026-08-28 capability attribution policy-load reader closure
+
+`evaluate_capability_attribution_from_db()` 与 capability authority replay 的 policy-load
+读取路径现在先通过 `validate_policy_load_row()`，再按严格的存储值 `loaded == 1` 判断
+C3/C4；不再对 SQLite 返回值调用宽松的 `bool(...)`。因此即使复制数据库在关闭约束后把
+`loaded` 写成字符串化的 `"false"`，该行也只能产生 malformed/missing witness，不能成为
+runtime-loaded 证据。这个读侧闭环与写入端类型契约及 retention/C8 load binding 保持一致，
+只强化 derived authority replay，不增加 promotion gate、不写 canonical memory，也不改变
+Parametric shadow-only 与 production runtime 边界。

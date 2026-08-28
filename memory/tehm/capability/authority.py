@@ -181,14 +181,24 @@ def _policy_binding_reasons(
              ORDER BY created_at DESC, receipt_id DESC LIMIT 1""",
         (candidate_policy_snapshot_id, runtime_id),
     ).fetchone()
-    if load is None or not bool(load["loaded"]):
+    if load is None:
         reasons.append("candidate_policy_runtime_load_missing")
     else:
+        checked_load = None
         try:
             checked_load = validate_policy_load_row(load)
             receipt = json.loads(checked_load["receipt_json"] or "{}")
         except (TypeError, ValueError, json.JSONDecodeError):
+            # Do not let SQLite's weak typing (for example, the string
+            # ``"false"`` in an INTEGER column) become a truthy runtime load.
+            # A malformed row is an explicit failed witness; it must never
+            # enter the receipt-binding checks below as if it were loaded.
+            reasons.append("candidate_policy_runtime_load_malformed")
             receipt = {}
+        if load is not None and (
+                not isinstance(checked_load, Mapping) or
+                checked_load.get("loaded") != 1):
+            reasons.append("candidate_policy_runtime_load_missing")
         if not isinstance(receipt, Mapping):
             receipt = {}
         expected_load_digest = "sha256:" + hashlib.sha256(

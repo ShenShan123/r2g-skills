@@ -311,12 +311,14 @@ def evaluate_capability_attribution_from_db(
     }
     execution_receipt_id = None
     loaded_behavior_digest = None
-    if load is not None and bool(load["loaded"]):
+    if load is not None:
         valid_load = False
         payload = None
+        checked_load = None
         try:
             checked_load = validate_policy_load_row(load)
-            payload = json.loads(checked_load["receipt_json"] or "{}")
+            if checked_load["loaded"] == 1:
+                payload = json.loads(checked_load["receipt_json"] or "{}")
         except (TypeError, ValueError, json.JSONDecodeError):
             payload = None
         if isinstance(payload, Mapping):

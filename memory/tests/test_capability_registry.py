@@ -541,6 +541,39 @@ def test_capability_attribution_rejects_tampered_runtime_load_receipt(tmp_tehm):
     assert receipt.promotable is False
 
 
+def test_capability_attribution_rejects_weakly_typed_runtime_loaded_flag(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="M", applicability={"profile": "p"})
+    baseline = create_policy_snapshot(
+        conn, memory_snapshot_id="m0", promoted_rules=["r0"])
+    candidate = create_policy_snapshot(
+        conn, memory_snapshot_id="m1", promoted_rules=["r0", "r1"])
+    load = record_policy_load(
+        conn, policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="runtime-weak-loaded", loaded=True,
+        receipt={"execution_receipt_id": "exec-1"})
+    # SQLite permits text in an INTEGER column when CHECK constraints are
+    # bypassed.  The attribution reader must not treat truthy text as loaded.
+    conn.execute("PRAGMA ignore_check_constraints=ON")
+    conn.execute(
+        "UPDATE tehm_policy_load_receipts SET loaded='false' "
+        "WHERE receipt_id=?", (load.receipt_id,))
+    conn.commit()
+    receipt = evaluate_capability_attribution_from_db(
+        conn, capability_id=capability.capability_id,
+        baseline_memory_digest="memory-0", candidate_memory_digest="memory-1",
+        baseline_policy_snapshot_id=baseline.policy_snapshot_id,
+        candidate_policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="runtime-weak-loaded", baseline_behavior_digest="b0",
+        candidate_behavior_digest="b1", target_gain=True, no_regression=True,
+        heldout={"verdict": "PASS", "disjoint_lineage": True,
+                 "evidence_id": "h1"},
+        ablation={"gain_without_memory": False, "gain_with_memory": True})
+    assert receipt.gates["C3"] is False
+    assert receipt.promotable is False
+
+
 def test_policy_load_replay_uses_latest_microsecond_order(tmp_tehm):
     conn, _, _ = tmp_tehm
     policy = create_policy_snapshot(
