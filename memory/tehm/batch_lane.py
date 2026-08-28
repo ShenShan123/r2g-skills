@@ -461,6 +461,106 @@ def import_support_to_staging(*, observations_path: Path, staging_db: Path,
     }
 
 
+def import_audit_to_staging(*, observations_path: Path, staging_db: Path,
+                            staging_artifacts: Path, campaign_root: Path,
+                            campaign_id: str) -> dict:
+    """Import calibration/held-out/A-B observations into audit-only staging.
+
+    This is deliberately separate from :func:`import_support_to_staging`:
+    non-training evidence may be retained as an immutable transition witness,
+    but it must be captured with its declared ``calibration``/``heldout``/``ab``
+    split and ``learner_eligible=0``.  The function never imports support rows,
+    writes canonical memory, or changes rule lifecycle.  Incomplete external
+    rows without a valid record remain excluded; complete rows can later be
+    selected by the DB-bound authority projector.
+    """
+    staging_db = require_staging_destination(staging_db, campaign_root=campaign_root)
+    staging_artifacts = Path(staging_artifacts).resolve()
+    staging_root = (Path(campaign_root).resolve() / "staging")
+    try:
+        staging_artifacts.relative_to(staging_root)
+    except ValueError as exc:
+        raise BatchLaneError(
+            "staging artifacts must remain under campaign staging root") from exc
+    before_canonical = canonical_snapshots()
+    rows = read_external_observations(observations_path)
+    conn = tehm_db.connect(staging_db)
+    tehm_db.ensure_schema(conn)
+    store = ArtifactStore(staging_artifacts)
+    physical = PhysicalEffectMemory(conn)
+    imported = []
+    excluded = []
+    skipped_support = []
+    savepoint = "tehm_batch_audit_staging_import_v1"
+    conn.execute(f"SAVEPOINT {savepoint}")
+    savepoint_active = True
+    try:
+        for row in rows:
+            split = str(row.get("split") or "")
+            if split == "support":
+                skipped_support.append(str(row.get("case_id") or ""))
+                continue
+            if split not in {"calibration", "heldout", "ab"}:
+                raise BatchLaneError("audit staging received an invalid split")
+            if row.get("learner_eligible") is not False:
+                raise BatchLaneError(
+                    "audit staging observation violates learner firewall")
+            if row.get("classification") not in {
+                    "ELIGIBLE_POSITIVE", "INCOMPLETE_EXTERNAL_ONLY"}:
+                raise BatchLaneError("audit staging observation classification is invalid")
+            if not row.get("record"):
+                excluded.append({"case_id": row.get("case_id"),
+                                 "reason": "record_missing"})
+                continue
+            try:
+                record = ExecutionRecord.from_dict(dict(row["record"]))
+            except (TypeError, ValueError) as exc:
+                raise BatchLaneError(
+                    f"audit staging record is malformed: {row.get('case_id')}") from exc
+            receipt = capture(
+                conn, store, record, dataset_campaign_id=campaign_id,
+                dataset_split=split, dataset_learner_eligible=False)
+            physical.record(
+                transition_id=receipt.transition_id,
+                action_domain=record.action["domain"],
+                transformation_family=record.action["transformation_family"],
+                before_ppa=record.before.get("reports", {}).get("ppa") or {},
+                after_ppa=record.after.get("reports", {}).get("ppa") or {},
+                effect_key=receipt.primary_effect_key,
+                evidence_refs=record.verification.get("evidence_refs"),
+                graph_context=(row.get("before") or {}).get("graph"),
+                commit=False,
+            )
+            imported.append({
+                "case_id": row["case_id"], "transition_id": receipt.transition_id,
+                "split": split, "classification": row["classification"],
+                "learner_eligible": False,
+            })
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        savepoint_active = False
+        conn.commit()
+    except Exception:
+        if savepoint_active:
+            conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise
+    finally:
+        conn.close()
+    after_canonical = canonical_snapshots()
+    assert_snapshots_unchanged(before_canonical, after_canonical)
+    return {
+        "version": BATCH_LANE_VERSION,
+        "destination": "staging",
+        "staging_db": sqlite_snapshot(staging_db),
+        "imported": imported,
+        "excluded_external_only": excluded,
+        "skipped_support_case_ids": sorted(skipped_support),
+        "canonical_before": before_canonical,
+        "canonical_after": after_canonical,
+        "canonical_memory_mutation": "none",
+    }
+
+
 def validate_canonical_import_authority(authority: Mapping, *, observations_path: Path,
                                         staging_db: Path, canonical_db: Path) -> None:
     """Validate the independent authority receipt required for canonical import."""

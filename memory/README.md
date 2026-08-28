@@ -1794,6 +1794,13 @@ record 同时明确记录时才形成 `harmful_rate`；conformal 只接受 calib
 coverage/counts。每个 payload 绑定 observation/staging digest、receipt、transition
 和 lineage，防止把文件级 gate map 伪装成 rule authority。
 
+为让 calibration/heldout receipt 真正具备可绑定的 transition witness，
+`tehm.batch_lane.import_audit_to_staging()` 现在提供独立的 audit 导入路径：只写
+`calibration/heldout/ab` membership、强制 `learner_eligible=0`、跳过 support，并用整批
+savepoint 与 canonical digest 守护。之后才可用上述 projector 生成 authority rows；也可使用
+`record_rule_authority_from_external_observations()`，由系统自动组合 external rows
+与 trial/transfer authority，避免调用方手工拼接 gate。
+
 该接口只产生 `harmful_rate` 与 `conformal_coverage` rows；rollback、registry、
 obligation、cross-lineage TE 仍必须由 activation/trial/transfer 的独立 evidence
 建立。rows 可以交给 `record_rule_authority()`，但缺失其余 gate 时仍是

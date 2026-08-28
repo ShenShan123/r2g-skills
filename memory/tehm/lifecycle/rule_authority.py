@@ -590,6 +590,36 @@ def build_external_observation_authority_evidence(
     return evidence
 
 
+def record_rule_authority_from_external_observations(
+        conn: sqlite3.Connection, *, rule_id: str, target_scope: str,
+        trial_id: str, expected_status_version: int | None,
+        observations_path: Path, staging_db: Path, campaign_id: str,
+        case_ids: Iterable[str], causal_transfer_receipt_ids=None,
+        min_obligation_coverage: float = 1.0,
+        min_cross_lineage_te: float = 1.0,
+        max_harmful_rate: float = 0.0,
+        min_conformal_coverage: float = 0.80) -> "RuleAuthorityReceipt":
+    """Compose external calibration evidence with the strict rule authority.
+
+    This convenience seam prevents callers from manually merging independent
+    evidence planes.  External observations contribute only harmful/conformal
+    rows; trial/activation projection and optional replay-verified L4 transfer
+    remain owned by :func:`record_rule_authority`.  Any source binding error is
+    raised before the authority ledger write is attempted.
+    """
+    evidence = build_external_observation_authority_evidence(
+        conn, observations_path=observations_path, staging_db=staging_db,
+        campaign_id=campaign_id, case_ids=case_ids)
+    return record_rule_authority(
+        conn, rule_id=rule_id, target_scope=target_scope, evidence=evidence,
+        trial_id=trial_id, expected_status_version=expected_status_version,
+        min_obligation_coverage=min_obligation_coverage,
+        min_cross_lineage_te=min_cross_lineage_te,
+        max_harmful_rate=max_harmful_rate,
+        min_conformal_coverage=min_conformal_coverage,
+        causal_transfer_receipt_ids=causal_transfer_receipt_ids)
+
+
 def _trial_authority_row(conn: sqlite3.Connection, trial_id: str):
     """Load one immutable trial row by ID or deterministic UUID."""
     row = conn.execute(
@@ -1644,6 +1674,7 @@ __all__ = [
     "RULE_EVIDENCE_TYPES", "RuleAuthorityReceipt",
     "build_causal_transfer_evidence", "build_trial_authority_evidence",
     "build_external_observation_authority_evidence",
+    "record_rule_authority_from_external_observations",
     "promote_rule",
     "record_rule_authority", "rule_content_digest", "verify_rule_authority",
 ]

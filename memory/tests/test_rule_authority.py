@@ -13,6 +13,7 @@ from tehm.lifecycle import (
     apply_production_trial_verdict, build_trial_authority_evidence,
     build_external_observation_authority_evidence,
     enter_shadow, get_status, promote_rule, record_rule_authority,
+    record_rule_authority_from_external_observations,
     rule_content_digest, set_status,
     verify_rule_authority,
 )
@@ -305,9 +306,11 @@ def test_external_observation_projection_binds_staging_transition(
     assert evidence["conformal_coverage"][0]["payload"]["transition_id"]
     assert evidence["rollback_verified"] == []
     assert evidence["cross_lineage_te"] == []
-    authority_receipt = record_rule_authority(
-        authority_conn, rule_id=rule_id, target_scope="drc", evidence=evidence,
-        trial_id=trial_id, expected_status_version=status_version)
+    authority_receipt = record_rule_authority_from_external_observations(
+        authority_conn, rule_id=rule_id, target_scope="drc", trial_id=trial_id,
+        expected_status_version=status_version, observations_path=observations,
+        staging_db=staging_db, campaign_id="external-campaign",
+        case_ids=["external-calibration-case"])
     assert authority_receipt.gate_status["harmful_rate"] == "PASS"
     assert authority_receipt.gate_status["conformal_coverage"] == "PASS"
     assert authority_receipt.gate_status["rollback_verified"] == "NOT_ESTABLISHED"

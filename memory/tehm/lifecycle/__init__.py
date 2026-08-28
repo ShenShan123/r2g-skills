@@ -32,7 +32,8 @@ from tehm.lifecycle.rule_authority import (
     RuleAuthorityReceipt, build_causal_transfer_evidence,
     build_external_observation_authority_evidence,
     build_trial_authority_evidence, promote_rule, record_rule_authority,
-    rule_content_digest, verify_rule_authority)
+    record_rule_authority_from_external_observations, rule_content_digest,
+    verify_rule_authority)
 from tehm.lifecycle.rtl_trial import run_rtl_external_trial
 
 __all__ = [
@@ -44,6 +45,7 @@ __all__ = [
     "RuleAuthorityReceipt", "build_causal_transfer_evidence",
     "build_external_observation_authority_evidence",
     "build_trial_authority_evidence", "record_rule_authority",
+    "record_rule_authority_from_external_observations",
     "verify_rule_authority",
     "rule_content_digest", "promote_rule",
     "run_rtl_external_trial",

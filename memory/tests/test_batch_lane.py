@@ -12,6 +12,7 @@ from tehm.batch_lane import (
     BatchLaneError,
     assess_full_oracle,
     assert_snapshots_unchanged,
+    import_audit_to_staging,
     import_support_to_staging,
     read_external_observations,
     require_staging_destination,
@@ -389,6 +390,104 @@ def test_staging_import_rolls_back_all_rows_on_late_receipt_failure(
     try:
         assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM tehm_physical_effects").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_audit_staging_import_preserves_calibration_and_heldout_firewall(
+        tmp_path, sample_record_dict):
+    """Calibration/held-out/A-B rows become audit transitions, never learner rows."""
+    root = tmp_path / "campaign"
+    observations = root / "external" / "observations.jsonl"
+    rows = []
+    for index, (case_id, split) in enumerate(
+            (("calibration-case", "calibration"), ("heldout-case", "heldout"),
+             ("ab-case", "ab"))):
+        record = json.loads(json.dumps(sample_record_dict))
+        record["record_id"] = case_id
+        record["lineage_id"] = f"lineage-{case_id}"
+        record["episode"]["episode_id"] = f"episode-{case_id}"
+        record["episode"]["lineage_id"] = record["lineage_id"]
+        record["observation_delta"]["experiment_kind"] = "REPAIR"
+        record["observation_delta"]["utility_verdict"] = "NEUTRAL"
+        record["observation_delta"]["first_divergence"]["before"] += index
+        rows.append({
+            "receipt_id": f"receipt-{case_id}", "case_id": case_id,
+            "lineage_id": record["lineage_id"], "split": split,
+            "classification": "ELIGIBLE_POSITIVE", "learner_eligible": False,
+            "before": {"complete": True}, "after": {"complete": True},
+            "record": record,
+        })
+    rows.append({
+        "receipt_id": "support-case", "case_id": "support-case",
+        "lineage_id": "support-lineage", "split": "support",
+        "classification": "ELIGIBLE_POSITIVE", "learner_eligible": True,
+        "record": sample_record_dict,
+    })
+    write_external_observations(observations, rows)
+    result = import_audit_to_staging(
+        observations_path=observations,
+        staging_db=root / "staging" / "tehm.sqlite",
+        staging_artifacts=root / "staging" / "artifacts",
+        campaign_root=root, campaign_id="audit-campaign")
+    assert [row["case_id"] for row in result["imported"]] == [
+        "ab-case", "calibration-case", "heldout-case"]
+    assert result["skipped_support_case_ids"] == ["support-case"]
+    conn = tehm_db.connect(root / "staging" / "tehm.sqlite")
+    try:
+        memberships = conn.execute(
+            "SELECT split, learner_eligible FROM tehm_dataset_membership "
+            "ORDER BY split").fetchall()
+        assert [(row["split"], row["learner_eligible"]) for row in memberships] == [
+            ("ab", 0), ("calibration", 0), ("heldout", 0)]
+    finally:
+        conn.close()
+
+
+def test_audit_staging_import_rejects_learner_opt_in(tmp_path, sample_record_dict):
+    root = tmp_path / "campaign"
+    observations = root / "external" / "observations.jsonl"
+    row = {
+        "receipt_id": "bad-audit", "case_id": "bad-audit",
+        "lineage_id": "bad-lineage", "split": "heldout",
+        "classification": "ELIGIBLE_POSITIVE", "learner_eligible": True,
+        "record": sample_record_dict,
+    }
+    write_external_observations(observations, [row])
+    with pytest.raises(BatchLaneError, match="learner firewall"):
+        import_audit_to_staging(
+            observations_path=observations,
+            staging_db=root / "staging" / "tehm.sqlite",
+            staging_artifacts=root / "staging" / "artifacts",
+            campaign_root=root, campaign_id="audit-firewall")
+
+
+def test_audit_staging_import_rolls_back_on_malformed_record(
+        tmp_path, sample_record_dict):
+    root = tmp_path / "campaign"
+    observations = root / "external" / "observations.jsonl"
+    valid = {
+        "receipt_id": "valid-audit", "case_id": "valid-audit",
+        "lineage_id": "valid-lineage", "split": "calibration",
+        "classification": "ELIGIBLE_POSITIVE", "learner_eligible": False,
+        "record": sample_record_dict,
+    }
+    malformed = {
+        "receipt_id": "malformed-audit", "case_id": "malformed-audit",
+        "lineage_id": "malformed-lineage", "split": "heldout",
+        "classification": "ELIGIBLE_POSITIVE", "learner_eligible": False,
+        "record": {"record_id": "malformed"},
+    }
+    write_external_observations(observations, [valid, malformed])
+    with pytest.raises(BatchLaneError, match="record is malformed"):
+        import_audit_to_staging(
+            observations_path=observations,
+            staging_db=root / "staging" / "tehm.sqlite",
+            staging_artifacts=root / "staging" / "artifacts",
+            campaign_root=root, campaign_id="audit-atomic")
+    conn = tehm_db.connect(root / "staging" / "tehm.sqlite")
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == 0
     finally:
         conn.close()
 

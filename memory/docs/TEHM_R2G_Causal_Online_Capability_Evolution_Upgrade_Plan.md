@@ -3598,10 +3598,16 @@ map。为避免把调用方整理的布尔值误当成数据库 authority，新�
    split。rollback、registry、obligation、cross-lineage TE 仍必须来自各自独立的
    activation/trial/transfer ledger。
 
-这些 rows 可以直接交给 `record_rule_authority()`，因此 external/staging 证据终于
+这些 rows 可以直接交给 `record_rule_authority()`；为避免调用方手工拼接证据平面，
+同时提供 `record_rule_authority_from_external_observations()` 组合入口，因此
+external/staging 证据终于
 有了可重放的 rule-authority 入口；但是缺少其他 gate 时仍是
 `NOT_ESTABLISHED`，不会写 canonical memory、修改 rule lifecycle 或进入 production
-runtime。回归测试覆盖：唯一 transition 绑定、calibration conformal 聚合以及把
+runtime。为使这条入口可实际消费 calibration/held-out，`batch_lane.py` 同时新增
+`import_audit_to_staging()`：它只接收 calibration/held-out/A-B split，把完整或可解析的 external
+record 捕获为 `learner_eligible=0` 的 audit transition，support row 会被跳过，且整批
+导入使用 caller-safe savepoint 并验证 canonical digest 不变。回归测试覆盖：唯一
+transition 绑定、calibration conformal 聚合、audit membership 防火墙以及把
 `learner_eligible=true` 的篡改 observation fail-closed。下一步是对真实 held-out
 transfer 与 rollback/registry receipt 运行同一投影并重算六门，而不是放宽 split 或
 直接启用 Parametric。
