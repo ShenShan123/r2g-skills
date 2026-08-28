@@ -123,6 +123,50 @@ def test_online_receipt_replays_affected_path_witness(tmp_tehm):
     assert payload["affected_path_ids"] == [path.path_id]
 
 
+def test_online_replay_keeps_original_witness_after_late_path_creation(tmp_tehm):
+    """A retry cannot reinterpret one observation using a later shadow path."""
+    conn, store, _ = tmp_tehm
+    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first.record_id = "rtl:req_ack:late-path-first"
+    first_id = capture(conn, store, first).transition_id
+    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second.record_id = "rtl:req_ack:late-path-second"
+    second.action["payload"]["add_condition"] = "ready"
+    second_id = capture(conn, store, second).transition_id
+
+    original = observe_transition(conn, second_id, campaign_id="live")
+    assert original.affected_path_ids == ()
+    fragments = [
+        build_transition_causal_fragment(conn, first_id, campaign_id="live"),
+        build_transition_causal_fragment(conn, second_id, campaign_id="live"),
+    ]
+    consolidate_causal_path(conn, fragments, campaign_id="live")
+
+    replay = observe_transition(conn, second_id, campaign_id="live")
+    assert replay.to_dict() == original.to_dict()
+    assert replay.affected_path_ids == ()
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_memory_events").fetchone()[0] == len(original.events)
+
+
+def test_online_replay_rejects_tampered_receipt_snapshot(tmp_tehm):
+    """The immutable snapshot is covered by the event digest, not trusted raw."""
+    conn, transition_id = _transition(tmp_tehm)
+    observe_transition(conn, transition_id)
+    row = conn.execute(
+        "SELECT event_id, payload_json FROM tehm_memory_events "
+        "WHERE event_type='TRANSITION_CAPTURED'").fetchone()
+    payload = json.loads(row["payload_json"])
+    payload["online_observation"]["novelty"] = "KNOWN_MECHANISM"
+    conn.execute(
+        "UPDATE tehm_memory_events SET payload_json=? WHERE event_id=?",
+        (json.dumps(payload), row["event_id"]))
+    conn.commit()
+
+    with pytest.raises(ValueError, match="event chain"):
+        observe_transition(conn, transition_id)
+
+
 def test_online_observation_rejects_corrupt_affected_rule_witness(tmp_tehm):
     """Malformed source provenance cannot produce a partial online chain."""
     conn, store, _ = tmp_tehm

@@ -3660,3 +3660,17 @@ rule witness 的实现也在 observation 边界重放 `tehm_rule_sources`：逐�
 transition 被 episode-step 关联却被 source map 遗漏，或 source 集合跨 campaign/损坏，
 observation 直接 fail-closed 并回滚 savepoint；不会返回一个未经完整 provenance
 证明的局部 affected rule ID。
+
+### 2026-08-28 online observation replay snapshot（仍为 shadow）
+
+补齐 fast-memory 的时间一致性边界：同一 `transition_id + campaign_id` 的 observation
+ 不能因稍后出现新的 causal path、rule 或 support 而被重新解释。首个
+ `TRANSITION_CAPTURED` 事件现在绑定 `online-receipt-v1` 摘要（fragment IDs、typed
+ witnesses、novelty/trigger/decision/preview）及不含 event-id 的预期事件序列。重试
+时先验证 campaign hash-chain 的唯一连续后继，再重放 content-addressed fragment，
+最后从摘要恢复原 receipt；不会追加第二条事件链。多个摘要、链断裂、fragment ID
+漂移、摘要损坏或 learner membership 变化都会 fail-closed。该改动只固定 shadow
+observation 的可重放语义，不扩大 learner admission，也不改变 canonical/lifecycle/
+production authority。没有该摘要的历史 capture 链也会被拒绝继续追加，以免把旧的、
+无法完整重放的派生结果静默解释成另一条 observation；这类数据必须先做显式迁移或
+operator 清理。

@@ -231,6 +231,14 @@ step 覆盖关系，确认引用的 rule 仍存在，并要求该 rule 的全部
 目标 campaign 的 training learner evidence。缺失、损坏、遗漏当前 transition 或混合
 campaign 会拒绝整个 observation，防止只返回一个局部 rule ID。
 
+online observation 的首个 `TRANSITION_CAPTURED` 事件现在额外保存
+`online-receipt-v1` 摘要和无 event-id 的预期链序列。重复调用会先校验该摘要、当前
+event hash-chain 及 causal fragment 的 content-addressed replay，再返回原始 receipt；
+不会因为之后出现新的 shadow path、rule 或 support 而重新解释同一 transition，也不会
+追加第二条事件链。摘要损坏、链不连续、fragment ID 漂移或 learner membership 改变时
+直接 fail-closed；没有该摘要的旧 capture 链也不会被静默追加第二种解释。该机制只保证 fast-memory 观察的时间一致性，仍不授予 canonical
+import、lifecycle promotion 或 production runtime 权限。
+
 当 preview 需要进入试验阶段时，`evolution.run_shadow_candidate_trial()` 会把 TEHM
 连接复制到内存 staging DB，在 staging 内重建并登记 `shadow → candidate`，然后复用
 现有 A/B trial adapter。Icarus/ORFS 执行器通过 evaluator callback 注入；即使六项
