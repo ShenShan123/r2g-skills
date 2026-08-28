@@ -250,7 +250,8 @@ authority。缺少该 witness 的旧 allow receipt 也不再可消费。
 另外，calibration expansion 的 staging-only 外部 transition 已改为冲突检查的
 immutable insert：重复导入必须 content-equivalent，直接 SQL 篡改或 payload 漂移会被
 拒绝，不再使用 `INSERT OR REPLACE` 静默覆盖 evidence。该路径仍只服务隔离校准，
-不创建 canonical/learner support。
+不创建 canonical/learner support；整批 external sample 写入也共用 caller-safe
+savepoint，晚到的 malformed sample 会回滚此前已写入的 staging rows。
 
 生命周期 trial writer 也对 UUID-less 兼容调用执行相同的确定性重放检查；相同
 `trial_id` 只能 content-equivalent 重放，冲突会失败，不再通过 `INSERT OR REPLACE`

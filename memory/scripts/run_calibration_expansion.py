@@ -416,24 +416,39 @@ def _load_external_training(root: Path, conn, store: ArtifactStore,
     """Bind external samples to staging-only transitions for action filtering."""
     physical = PhysicalEffectMemory(conn)
     lineages = []
-    for sample in samples:
-        transition_id = _external_transition_id(sample)
-        action = sample.get("action") or {}
-        action_json = canonical_json(action).decode()
-        # This minimal transition is deliberately staging-only.  It carries the
-        # action provenance required by action-conditioned physical retrieval;
-        # the actual PPA evidence remains in the physical row and report.
-        _persist_external_transition(
-            conn, transition_id=transition_id, sample=sample,
-            action=action, action_json=action_json)
-        conn.commit()
-        physical.record(
-            transition_id=transition_id,
-            action_domain=str(action.get("domain") or "flow.CONFIG_DELTA"),
-            transformation_family=str(sample.get("family") or "DENSITY_RELIEF"),
-            before_ppa=sample["before_ppa"], after_ppa=sample["after_ppa"],
-            effect_key="", evidence_refs=[], graph_context=sample["graph_context"])
-        lineages.append(str(sample["lineage_id"]))
+    had_outer_transaction = conn.in_transaction
+    savepoint = "tehm_calibration_external_training_v1"
+    conn.execute(f"SAVEPOINT {savepoint}")
+    savepoint_active = True
+    try:
+        for sample in samples:
+            transition_id = _external_transition_id(sample)
+            action = sample.get("action") or {}
+            action_json = canonical_json(action).decode()
+            # This minimal transition is deliberately staging-only.  It carries
+            # the action provenance required by action-conditioned physical
+            # retrieval; the actual PPA evidence remains in the physical row
+            # and report.
+            _persist_external_transition(
+                conn, transition_id=transition_id, sample=sample,
+                action=action, action_json=action_json)
+            physical.record(
+                transition_id=transition_id,
+                action_domain=str(action.get("domain") or "flow.CONFIG_DELTA"),
+                transformation_family=str(sample.get("family") or "DENSITY_RELIEF"),
+                before_ppa=sample["before_ppa"], after_ppa=sample["after_ppa"],
+                effect_key="", evidence_refs=[], graph_context=sample["graph_context"],
+                commit=False)
+            lineages.append(str(sample["lineage_id"]))
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        savepoint_active = False
+        if not had_outer_transaction:
+            conn.commit()
+    except Exception:
+        if savepoint_active:
+            conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise
     return sorted(set(lineages))
 
 

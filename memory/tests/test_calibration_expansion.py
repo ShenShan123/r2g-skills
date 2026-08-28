@@ -9,12 +9,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from run_calibration_expansion import (  # noqa: E402
     _external_transition_id,
+    _load_external_training,
     _persist_external_transition,
     _strict_oracle_one,
     _strict_oracle_projects,
     _subset_manifest,
 )
 from tehm import db as tehm_db
+from tehm.artifact_store import ArtifactStore
 from tehm.sync import canonical_json
 
 
@@ -96,4 +98,24 @@ def test_external_calibration_transition_is_immutable(tmp_path):
         _persist_external_transition(
             conn, transition_id=transition_id, sample=sample,
             action=action, action_json=action_json)
+    conn.close()
+
+
+def test_external_training_staging_is_atomic_on_late_failure(tmp_path):
+    conn = tehm_db.connect(tmp_path / "staging.sqlite")
+    tehm_db.ensure_schema(conn)
+    action = {"domain": "flow.CONFIG_DELTA",
+              "transformation_family": "DENSITY_RELIEF",
+              "payload": {"config_edits": {"CORE_UTILIZATION": "40"}}}
+    valid = {"case_id": "case-a", "lineage_id": "lineage-a",
+             "graph_context": {}, "action": action,
+             "before_ppa": {}, "after_ppa": {}}
+    malformed = {"case_id": "case-b", "lineage_id": "lineage-b",
+                 "graph_context": {}, "action": action}
+    with pytest.raises(KeyError, match="before_ppa"):
+        _load_external_training(
+            tmp_path, conn, ArtifactStore(tmp_path / "artifacts"),
+            [valid, malformed])
+    assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM tehm_physical_effects").fetchone()[0] == 0
     conn.close()
