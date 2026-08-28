@@ -39,6 +39,17 @@ def _sha(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _finite_measurement(value):
+    """Parse a numeric authority measurement without treating booleans as numbers."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
 def derive_gate_inputs(rows: list[dict], case_ids: list[str]) -> tuple[dict, dict]:
     """Derive available rule gates from preserved observation payloads.
 
@@ -74,11 +85,8 @@ def derive_gate_inputs(rows: list[dict], case_ids: list[str]) -> tuple[dict, dic
         record = row.get("record") or {}
         verification = record.get("verification") or {}
         coverage = verification.get("obligation_coverage")
-        try:
-            coverage = float(coverage)
-        except (TypeError, ValueError):
-            coverage = None
-        if coverage is not None and math.isfinite(coverage):
+        coverage = _finite_measurement(coverage)
+        if coverage is not None:
             obligation_values.append(coverage)
         delta = record.get("observation_delta") or {}
         utility = str(delta.get("utility_verdict") or "").upper()
@@ -93,11 +101,8 @@ def derive_gate_inputs(rows: list[dict], case_ids: list[str]) -> tuple[dict, dic
         conformal = record.get("conformal") or verification.get("conformal")
         if isinstance(conformal, dict):
             value = conformal.get("coverage")
-            try:
-                value = float(value)
-            except (TypeError, ValueError):
-                value = None
-            if value is not None and math.isfinite(value):
+            value = _finite_measurement(value)
+            if value is not None:
                 conformal_values.append(value)
     if eligible and len(obligation_values) == len(eligible) and obligation_values:
         derived["obligation_coverage"] = min(obligation_values)

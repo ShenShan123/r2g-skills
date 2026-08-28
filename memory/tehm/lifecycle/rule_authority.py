@@ -321,6 +321,11 @@ def _normalise_entries(values, *, gate: str) -> tuple[list[dict], list[str]]:
 
 
 def _finite_number(value) -> float | None:
+    # Boolean values are not numeric evidence.  ``float(True)`` and
+    # ``float(False)`` would otherwise turn a caller's status bit into a
+    # perfect/failing coverage or rate measurement.
+    if isinstance(value, bool):
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError):

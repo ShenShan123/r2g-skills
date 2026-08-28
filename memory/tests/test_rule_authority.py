@@ -19,6 +19,7 @@ from tehm.lifecycle import (
     rule_content_digest, set_status,
     verify_rule_authority,
 )
+from tehm.lifecycle.rule_authority import _external_conformal_value
 from tehm.activation.pipeline import ActivationRecord
 from tehm.activation.update import persist_activation
 from tehm.lifecycle.trial_adapter import record_external_trial
@@ -129,6 +130,11 @@ def test_rule_authority_replay_fail_closes_on_malformed_threshold_or_status(
     assert checked["eligible"] is False
     assert "authority_threshold_conformal_coverage_malformed" in checked["reasons"]
     assert "authority_status_version_malformed" in checked["reasons"]
+
+
+def test_external_conformal_coverage_rejects_boolean_measurement():
+    with pytest.raises(ValueError, match="conformal_coverage_malformed"):
+        _external_conformal_value({"conformal": {"coverage": True}})
 
 
 def test_trial_authority_projection_replays_activation_witnesses(

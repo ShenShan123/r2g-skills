@@ -54,6 +54,22 @@ def test_rule_gate_rejects_nonfinite_thresholds():
         evaluate_promotion_gates({}, min_conformal_coverage=float("nan"))
 
 
+def test_external_authority_does_not_treat_boolean_coverage_as_numeric():
+    from scripts.build_orfs_authority_receipt import derive_gate_inputs
+
+    rows = [{
+        "case_id": "bool-coverage", "split": "support",
+        "classification": "ELIGIBLE_POSITIVE", "learner_eligible": True,
+        "lineage_id": "lineage-bool", "record": {
+            "verification": {"obligation_coverage": True},
+            "observation_delta": {"utility_verdict": "NEUTRAL"},
+        },
+    }]
+    derived, details = derive_gate_inputs(rows, ["bool-coverage"])
+    assert "obligation_coverage" not in derived
+    assert details["obligation_coverages"] == []
+
+
 def test_orfs_authority_receipt_legacy_fixture_preserves_unestablished_gate_state(tmp_path):
     """Legacy fixture overrides preserve NOT_ESTABLISHED instead of becoming False."""
     from scripts.build_orfs_authority_receipt import build_receipt

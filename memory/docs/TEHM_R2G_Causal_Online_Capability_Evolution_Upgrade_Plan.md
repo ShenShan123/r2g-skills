@@ -3910,3 +3910,8 @@ rule-authority replay 对损坏的 `status_version` 或 threshold 不再抛出�
 返回不可晋级的 fail-closed receipt，并保留具体 malformed reason。该修复只增强
 authority receipt 的确定性与可审计性，不新增 gate、不写 canonical memory，也不改变
 Parametric shadow-only 或 production runtime 边界。
+
+同时，obligation/conformal coverage、TE 与 harmful-rate 等数值 evidence 不再把
+`true/false` 作为 `1/0` 接受；布尔状态必须通过专用布尔字段表达。这样调用方无法用
+一个状态位伪造完美 coverage 或零 harmful-rate，外部 ORFS authority projector 与 rule
+authority replay 共同保持这一类型边界。
