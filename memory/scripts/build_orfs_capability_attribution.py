@@ -48,10 +48,15 @@ def _strict_text(value, *, label: str) -> str:
     return value.strip()
 
 
+def _target_check(value) -> str:
+    return _strict_text("route" if value is None else value,
+                        label="target_check")
+
+
 def _pair(before: str, after: str, lineage: str, config_json: str,
           target_check: str):
     lineage = _strict_text(lineage, label="lineage_id")
-    target_check = _strict_text(target_check, label="target_check")
+    target_check = _target_check(target_check)
     config_edits = json.loads(config_json)
     if not isinstance(config_edits, Mapping):
         raise ValueError("config_edits_malformed")
@@ -66,8 +71,7 @@ def _build_record(spec: dict):
     if not isinstance(spec, Mapping):
         raise ValueError("pair_spec_malformed")
     lineage_id = _strict_text(spec.get("lineage_id"), label="lineage_id")
-    target_check = _strict_text(
-        spec.get("target_check") or "route", label="target_check")
+    target_check = _target_check(spec.get("target_check"))
     config_edits = spec.get("config_edits")
     if not isinstance(config_edits, Mapping):
         raise ValueError("config_edits_malformed")
@@ -202,6 +206,8 @@ def build_orfs_capability_attribution(
     source_digest = _sha256(source)
     report_path = Path(causal_report).resolve()
     causal = json.loads(report_path.read_text())
+    if not isinstance(causal, Mapping):
+        raise ValueError("causal report is malformed")
     causal_path_id = (causal.get("path") or {}).get("path_id")
     if type(causal_path_id) is not str:
         causal_path_id = ""
@@ -211,12 +217,16 @@ def build_orfs_capability_attribution(
         raise ValueError("causal report must contain an eligible replicated path")
     if len(training_pairs) < 2:
         raise ValueError("attribution requires at least two training lineages")
+    if any(not isinstance(item, Mapping) for item in training_pairs):
+        raise ValueError("training pair is malformed")
     train_lineages = {
         _strict_text(item.get("lineage_id"), label="lineage_id")
         for item in training_pairs
     }
     held_lineage = _strict_text(
         heldout_pair.get("lineage_id"), label="lineage_id")
+    if len(train_lineages) < 2:
+        raise ValueError("attribution requires independent training lineages")
     if held_lineage in train_lineages:
         raise ValueError("held-out lineage leaked into training")
 
@@ -236,8 +246,7 @@ def build_orfs_capability_attribution(
     for spec in training_pairs:
         record = _build_record(spec)
         summary = _summary(
-            record, target_check=_strict_text(
-                spec.get("target_check") or "route", label="target_check"))
+            record, target_check=_target_check(spec.get("target_check")))
         if not (summary["before_failed"] and summary["candidate_pass"]):
             raise ValueError(f"training pair is not baseline-fail -> candidate-pass: {summary}")
         captured = capture(
@@ -291,8 +300,8 @@ def build_orfs_capability_attribution(
 
     held_record = _build_record(heldout_pair)
     held_summary = _summary(
-        held_record, target_check=_strict_text(
-            heldout_pair.get("target_check") or "route", label="target_check"))
+        held_record, target_check=_target_check(
+            heldout_pair.get("target_check")))
     if not (held_summary["before_failed"] and held_summary["candidate_pass"]):
         raise ValueError(f"held-out pair is not baseline-fail -> candidate-pass: {held_summary}")
     held_evidence_id = _stable_digest({"pair": held_summary,
@@ -301,9 +310,8 @@ def build_orfs_capability_attribution(
 
     non_target_record = _build_record(non_target_pair)
     non_target_summary = _summary(
-        non_target_record, target_check=_strict_text(
-            non_target_pair.get("target_check") or "route",
-            label="target_check"))
+        non_target_record, target_check=_target_check(
+            non_target_pair.get("target_check")))
     no_regression = bool(non_target_summary["candidate_pass"] and
                          not non_target_summary["created_regressions"])
     non_target_evidence_id = _stable_digest({"pair": non_target_summary,
