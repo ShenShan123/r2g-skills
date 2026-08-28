@@ -28,6 +28,9 @@ class ConsolidationDecisionReceipt:
     reasons: tuple[str, ...] = field(default_factory=tuple)
     affected_effect_keys: tuple[str, ...] = field(default_factory=tuple)
     candidate_rule_ids: tuple[str, ...] = field(default_factory=tuple)
+    mechanism_signature: dict = field(default_factory=dict)
+    affected_rule_ids: tuple[str, ...] = field(default_factory=tuple)
+    affected_path_ids: tuple[str, ...] = field(default_factory=tuple)
     full_rebuild_equivalent: bool | None = None
     rationale: str = ""
     authority: str = "shadow_only"
@@ -42,6 +45,9 @@ class ConsolidationDecisionReceipt:
             "reasons": list(self.reasons),
             "affected_effect_keys": list(self.affected_effect_keys),
             "candidate_rule_ids": list(self.candidate_rule_ids),
+            "mechanism_signature": dict(self.mechanism_signature),
+            "affected_rule_ids": list(self.affected_rule_ids),
+            "affected_path_ids": list(self.affected_path_ids),
             "full_rebuild_equivalent": self.full_rebuild_equivalent,
             "rationale": self.rationale,
             "authority": self.authority,
@@ -100,6 +106,9 @@ def decide_consolidation(
         reasons=reasons,
         affected_effect_keys=trigger.affected_effect_keys,
         candidate_rule_ids=candidate_rule_ids,
+        mechanism_signature=dict(trigger.mechanism_signature or {}),
+        affected_rule_ids=tuple(trigger.affected_rule_ids),
+        affected_path_ids=tuple(trigger.affected_path_ids),
         full_rebuild_equivalent=equivalent,
         rationale=rationale,
     )

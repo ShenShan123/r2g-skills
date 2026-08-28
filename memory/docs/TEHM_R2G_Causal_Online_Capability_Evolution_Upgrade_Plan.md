@@ -3646,3 +3646,10 @@ savepoint。因此晚到的 path replay 或 provenance 错误会回滚整次 onl
 rule，不改变 lifecycle，不进入 production runtime；后续若要由这些 witness 推动
 crystallization，仍需单独的 authority receipt、held-out/rollback/registry/obligation
 证据和显式隔离 persist。
+
+为避免下游只解析事件 JSON，`ConsolidationTriggerReceipt` 与
+`ConsolidationDecisionReceipt` 现在也携带相同的 mechanism/rule/path witness。trigger
+函数从 canonical transition facts 计算 signature，并只接受 manager 已解析的
+source-owned IDs；decision 直接复制 trigger witness，因而 proposal、CLI 和测试可在
+不读取事件表的情况下保持同一 lineage。这里的 API 传播仍是 shadow evidence，不改变
+任何 learner admission、canonical import 或 production authority。

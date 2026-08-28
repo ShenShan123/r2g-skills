@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from tehm.canonical.transition import HARMFUL_OUTCOMES
-from tehm.causal.mechanism import load_transition_facts
+from tehm.causal.mechanism import load_transition_facts, mechanism_signature
 
 from .conflict import ConflictReceipt
 
@@ -26,6 +26,11 @@ class ConsolidationTriggerReceipt:
     affected_effect_keys: tuple[str, ...]
     support_count: int
     conflict_types: tuple[str, ...] = ()
+    # Typed witnesses are propagated from the transition rather than inferred
+    # by a later consumer from effect-group names.
+    mechanism_signature: dict = field(default_factory=dict)
+    affected_rule_ids: tuple[str, ...] = ()
+    affected_path_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -37,6 +42,9 @@ class ConsolidationTriggerReceipt:
             "affected_effect_keys": list(self.affected_effect_keys),
             "support_count": self.support_count,
             "conflict_types": list(self.conflict_types),
+            "mechanism_signature": dict(self.mechanism_signature or {}),
+            "affected_rule_ids": list(self.affected_rule_ids),
+            "affected_path_ids": list(self.affected_path_ids),
         }
 
 
@@ -49,6 +57,8 @@ def evaluate_consolidation_trigger(
     novelty: str,
     conflict: ConflictReceipt,
     min_support: int = 2,
+    affected_rule_ids: tuple[str, ...] = (),
+    affected_path_ids: tuple[str, ...] = (),
 ) -> ConsolidationTriggerReceipt:
     """Evaluate online trigger reasons without mutating rules or lifecycle.
 
@@ -84,6 +94,7 @@ def evaluate_consolidation_trigger(
     # manager seam.
     learner_eligible = authority_eligible
     facts = load_transition_facts(conn, transition_id)
+    signature = mechanism_signature(facts)
     support_count = 0
     if learner_eligible:
         row = conn.execute(
@@ -102,7 +113,12 @@ def evaluate_consolidation_trigger(
             learner_eligible=False, triggered=False,
             reasons=("NOT_LEARNER_ELIGIBLE",), affected_effect_keys=(),
             support_count=support_count,
-            conflict_types=tuple(conflict.conflict_types))
+            conflict_types=tuple(conflict.conflict_types),
+            mechanism_signature=signature,
+            affected_rule_ids=tuple(sorted(str(value) for value in affected_rule_ids
+                                           if str(value))),
+            affected_path_ids=tuple(sorted(str(value) for value in affected_path_ids
+                                           if str(value))))
 
     reasons: set[str] = set()
     if novelty == "NOVEL_MECHANISM":
@@ -122,7 +138,12 @@ def evaluate_consolidation_trigger(
         affected_effect_keys=((facts.primary_effect_key,)
                               if facts.primary_effect_key else ()),
         support_count=support_count,
-        conflict_types=tuple(conflict.conflict_types))
+        conflict_types=tuple(conflict.conflict_types),
+        mechanism_signature=signature,
+        affected_rule_ids=tuple(sorted(str(value) for value in affected_rule_ids
+                                       if str(value))),
+        affected_path_ids=tuple(sorted(str(value) for value in affected_path_ids
+                                       if str(value))))
 
 
 __all__ = ["TRIGGER_REASONS", "ConsolidationTriggerReceipt",

@@ -180,7 +180,8 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
         trigger = evaluate_consolidation_trigger(
             conn, transition_id, campaign_id=campaign_id,
             learner_eligible=learner_eligible, novelty=novelty,
-            conflict=conflict)
+            conflict=conflict, affected_rule_ids=affected_rule_ids,
+            affected_path_ids=affected_path_ids)
         trigger_event = None
         if trigger.triggered:
             trigger_event = emit(

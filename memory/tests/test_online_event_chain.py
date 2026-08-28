@@ -69,6 +69,10 @@ def test_online_receipt_binds_mechanism_and_affected_rule_witness(
         "HANDSHAKE_COMPLETION")
     assert receipt.affected_rule_ids == expected_rule_ids
     assert receipt.affected_path_ids == ()
+    assert receipt.consolidation_decision.mechanism_signature == (
+        receipt.mechanism_signature)
+    assert receipt.consolidation_decision.affected_rule_ids == (
+        expected_rule_ids)
     fragment_event = next(
         event for event in receipt.events
         if event.event_type == "CAUSAL_FRAGMENT_CREATED")
@@ -79,6 +83,14 @@ def test_online_receipt_binds_mechanism_and_affected_rule_witness(
     assert decoded["mechanism_signature"] == receipt.mechanism_signature
     assert tuple(decoded["affected_rule_ids"]) == expected_rule_ids
     assert decoded["affected_path_ids"] == []
+    trigger_event = next(
+        event for event in receipt.events
+        if event.event_type == "CONSOLIDATION_TRIGGERED")
+    trigger_payload = json.loads(conn.execute(
+        "SELECT payload_json FROM tehm_memory_events WHERE event_id=?",
+        (trigger_event.event_id,)).fetchone()[0])
+    assert trigger_payload["mechanism_signature"] == receipt.mechanism_signature
+    assert tuple(trigger_payload["affected_rule_ids"]) == expected_rule_ids
     assert first_id != second_id
 
 

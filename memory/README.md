@@ -221,8 +221,10 @@ effect key 或 mechanism family 猜测受影响规则。上述字段同时写入
 `CAUSAL_FRAGMENT_CREATED`、`NOVEL_MECHANISM`、`RULE_CONFLICT`、
 `RULE_HARMFUL`、`CONSOLIDATION_TRIGGERED` 和 `RULE_REVISION_PROPOSED` 事件，receipt
 仍保持 `path_id=null`（受影响 path 可能是多个），且整个绑定过程与事件链共享同一
-savepoint。它只增强 shadow/evaluation evidence，不写 canonical rule、lifecycle 或
-production runtime。
+savepoint。`ConsolidationTriggerReceipt` 与
+`ConsolidationDecisionReceipt` 也复用同一 signature/rule/path witness，调用方无需
+依赖事件 JSON 反查。它只增强 shadow/evaluation evidence，不写 canonical rule、lifecycle
+或 production runtime。
 
 当 preview 需要进入试验阶段时，`evolution.run_shadow_candidate_trial()` 会把 TEHM
 连接复制到内存 staging DB，在 staging 内重建并登记 `shadow → candidate`，然后复用
