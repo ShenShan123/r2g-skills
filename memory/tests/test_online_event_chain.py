@@ -168,6 +168,28 @@ def test_online_replay_rejects_tampered_receipt_snapshot(tmp_tehm):
         observe_transition(conn, transition_id)
 
 
+def test_online_snapshot_replay_rejects_weakly_typed_decision_fields(tmp_tehm):
+    """Decision/preview snapshots cannot turn strings into shadow operations."""
+    conn, transition_id = _transition(tmp_tehm)
+    receipt = observe_transition(conn, transition_id)
+    from tehm.evolution.manager import _decision_from_dict, _preview_from_dict
+
+    decision = receipt.consolidation_decision.to_dict()
+    decision["triggered"] = "false"
+    with pytest.raises(ValueError, match="triggered is not boolean"):
+        _decision_from_dict(decision)
+
+    preview = receipt.consolidation_preview.to_dict()
+    preview["full_rebuild_equivalent"] = "false"
+    with pytest.raises(ValueError, match="full_rebuild_equivalent is not boolean"):
+        _preview_from_dict(preview)
+
+    preview = receipt.consolidation_preview.to_dict()
+    preview["affected_group_keys"] = False
+    with pytest.raises(ValueError, match="preview groups are malformed"):
+        _preview_from_dict(preview)
+
+
 def test_online_observation_rejects_corrupt_affected_rule_witness(tmp_tehm):
     """Malformed source provenance cannot produce a partial online chain."""
     conn, store, _ = tmp_tehm

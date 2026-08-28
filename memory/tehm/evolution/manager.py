@@ -11,7 +11,9 @@ from tehm.dataset import (normalize_stored_learner_bool,
                           validate_membership_row)
 
 from .conflict import detect_conflicts
-from .consolidation import ConsolidationDecisionReceipt, decide_consolidation
+from .consolidation import (CONSOLIDATION_OPERATIONS,
+                             ConsolidationDecisionReceipt,
+                             decide_consolidation)
 from .events import append_memory_event, verify_event_chain
 from .incremental_crystallize import preview_affected_groups
 from .novelty import detect_novelty
@@ -187,32 +189,87 @@ def _event_receipt(row: sqlite3.Row) -> MemoryEventReceipt:
         event_digest=str(row["event_digest"]))
 
 
+def _strict_optional_bool(value, *, label: str) -> bool | None:
+    """Decode an optional snapshot boolean without truthy coercion."""
+    if value is None:
+        return None
+    if type(value) is not bool:
+        raise ValueError(f"online observation {label} is not boolean")
+    return value
+
+
+def _strict_string_tuple(payload: dict, key: str, *, label: str) -> tuple[str, ...]:
+    """Decode a snapshot list of non-empty string IDs/reasons."""
+    values = payload.get(key)
+    if values is None:
+        return ()
+    if not isinstance(values, list) or any(
+            type(value) is not str or not value for value in values):
+        raise ValueError(f"online observation {label} is malformed")
+    return tuple(values)
+
+
+def _strict_digest(payload: dict, key: str, *, label: str) -> str | None:
+    """Decode an optional content digest field from a replay snapshot."""
+    value = payload.get(key)
+    if value is None:
+        return None
+    if type(value) is not str or not value:
+        raise ValueError(f"online observation {label} is malformed")
+    return value
+
+
 def _preview_from_dict(payload: dict | None) -> IncrementalCrystallizationReceipt | None:
     if payload is None:
         return None
     if not isinstance(payload, dict):
         raise ValueError("online observation preview snapshot is malformed")
-    groups = payload.get("affected_group_keys") or []
+    groups = payload.get("affected_group_keys")
+    if groups is None:
+        groups = []
     if not isinstance(groups, list) or any(
-            not isinstance(group, (list, tuple)) or len(group) != 2
+            not isinstance(group, (list, tuple)) or len(group) != 2 or
+            type(group[0]) is not str or not group[0] or
+            (group[1] is not None and
+             (type(group[1]) is not str or not group[1]))
             for group in groups):
         raise ValueError("online observation preview groups are malformed")
+    transition_ids = _strict_string_tuple(
+        payload, "transition_ids", label="preview transition IDs")
+    effect_keys = _strict_string_tuple(
+        payload, "affected_effect_keys", label="preview effect keys")
+    full_rule_ids = _strict_string_tuple(
+        payload, "full_rebuild_rule_ids", label="preview full-rebuild rule IDs")
+    raw_before = _strict_digest(
+        payload, "raw_evidence_before_digest", label="preview raw-before digest")
+    raw_after = _strict_digest(
+        payload, "raw_evidence_after_digest", label="preview raw-after digest")
+    rules = payload.get("rules")
+    if not isinstance(rules, list) or any(not isinstance(rule, dict) for rule in rules):
+        raise ValueError("online observation preview rules are malformed")
+    campaign_id = payload.get("campaign_id")
+    mode = payload.get("mode")
+    if type(campaign_id) is not str or not campaign_id:
+        raise ValueError("online observation preview campaign is malformed")
+    if type(mode) is not str or mode != "preview":
+        raise ValueError("online observation preview mode is malformed")
     return IncrementalCrystallizationReceipt(
-        campaign_id=str(payload.get("campaign_id") or ""),
-        transition_ids=tuple(str(value) for value in
-                             (payload.get("transition_ids") or [])),
-        affected_effect_keys=tuple(str(value) for value in
-                                   (payload.get("affected_effect_keys") or [])),
-        rules=tuple(payload.get("rules") or ()),
-        full_rebuild_equivalent=payload.get("full_rebuild_equivalent"),
-        full_rebuild_rule_ids=tuple(str(value) for value in
-                                    (payload.get("full_rebuild_rule_ids") or [])),
-        mode=str(payload.get("mode") or ""),
+        campaign_id=campaign_id,
+        transition_ids=transition_ids,
+        affected_effect_keys=effect_keys,
+        rules=tuple(rules),
+        full_rebuild_equivalent=_strict_optional_bool(
+            payload.get("full_rebuild_equivalent"),
+            label="preview full_rebuild_equivalent"),
+        full_rebuild_rule_ids=full_rule_ids,
+        mode=mode,
         affected_group_keys=tuple(
             (str(group[0]), group[1]) for group in groups),
-        raw_evidence_before_digest=payload.get("raw_evidence_before_digest"),
-        raw_evidence_after_digest=payload.get("raw_evidence_after_digest"),
-        raw_evidence_preserved=payload.get("raw_evidence_preserved"),
+        raw_evidence_before_digest=raw_before,
+        raw_evidence_after_digest=raw_after,
+        raw_evidence_preserved=_strict_optional_bool(
+            payload.get("raw_evidence_preserved"),
+            label="preview raw_evidence_preserved"),
     )
 
 
@@ -223,25 +280,51 @@ def _decision_from_dict(payload: dict) -> ConsolidationDecisionReceipt:
     if type(learner_eligible) is not bool:
         raise ValueError(
             "online observation decision learner_eligible is not boolean")
+    triggered = payload.get("triggered")
+    if type(triggered) is not bool:
+        raise ValueError(
+            "online observation decision triggered is not boolean")
+    transition_id = payload.get("transition_id")
+    campaign_id = payload.get("campaign_id")
+    operation = payload.get("operation")
+    rationale = payload.get("rationale")
+    authority = payload.get("authority")
+    if (type(transition_id) is not str or not transition_id or
+            type(campaign_id) is not str or not campaign_id or
+            type(operation) is not str or operation not in CONSOLIDATION_OPERATIONS or
+            type(rationale) is not str or
+            type(authority) is not str or authority != "shadow_only"):
+        raise ValueError("online observation decision identity is malformed")
+    reasons = _strict_string_tuple(
+        payload, "reasons", label="decision reasons")
+    affected_effect_keys = _strict_string_tuple(
+        payload, "affected_effect_keys", label="decision effect keys")
+    candidate_rule_ids = _strict_string_tuple(
+        payload, "candidate_rule_ids", label="decision candidate rule IDs")
+    affected_rule_ids = _strict_string_tuple(
+        payload, "affected_rule_ids", label="decision affected rule IDs")
+    affected_path_ids = _strict_string_tuple(
+        payload, "affected_path_ids", label="decision affected path IDs")
+    signature = payload.get("mechanism_signature")
+    if not isinstance(signature, dict):
+        raise ValueError("online observation decision mechanism signature is malformed")
     return ConsolidationDecisionReceipt(
-        transition_id=str(payload.get("transition_id") or ""),
-        campaign_id=str(payload.get("campaign_id") or ""),
+        transition_id=transition_id,
+        campaign_id=campaign_id,
         learner_eligible=learner_eligible,
-        triggered=bool(payload.get("triggered")),
-        operation=str(payload.get("operation") or ""),
-        reasons=tuple(str(value) for value in (payload.get("reasons") or [])),
-        affected_effect_keys=tuple(
-            str(value) for value in (payload.get("affected_effect_keys") or [])),
-        candidate_rule_ids=tuple(
-            str(value) for value in (payload.get("candidate_rule_ids") or [])),
-        mechanism_signature=dict(payload.get("mechanism_signature") or {}),
-        affected_rule_ids=tuple(
-            str(value) for value in (payload.get("affected_rule_ids") or [])),
-        affected_path_ids=tuple(
-            str(value) for value in (payload.get("affected_path_ids") or [])),
-        full_rebuild_equivalent=payload.get("full_rebuild_equivalent"),
-        rationale=str(payload.get("rationale") or ""),
-        authority=str(payload.get("authority") or "shadow_only"),
+        triggered=triggered,
+        operation=operation,
+        reasons=reasons,
+        affected_effect_keys=affected_effect_keys,
+        candidate_rule_ids=candidate_rule_ids,
+        mechanism_signature=signature,
+        affected_rule_ids=affected_rule_ids,
+        affected_path_ids=affected_path_ids,
+        full_rebuild_equivalent=_strict_optional_bool(
+            payload.get("full_rebuild_equivalent"),
+            label="decision full_rebuild_equivalent"),
+        rationale=rationale,
+        authority=authority,
     )
 
 
@@ -352,39 +435,69 @@ def _replay_existing_observation(
 
     fragment = build_transition_causal_fragment(
         conn, transition_id, campaign_id=campaign_id, commit=False)
-    if list(fragment.node_ids) != list(snapshot.get("fragment_node_ids") or []) or \
-            list(fragment.edge_ids) != list(snapshot.get("fragment_edge_ids") or []):
-        raise ValueError("online observation replay conflicts with causal fragment")
+    fragment_node_ids = _strict_string_tuple(
+        snapshot, "fragment_node_ids", label="fragment node IDs")
+    fragment_edge_ids = _strict_string_tuple(
+        snapshot, "fragment_edge_ids", label="fragment edge IDs")
+    if (fragment_node_ids != tuple(fragment.node_ids) or
+            fragment_edge_ids != tuple(fragment.edge_ids)):
+        raise ValueError("online observation causal fragment witness conflicts")
     signature = snapshot.get("mechanism_signature")
     if not isinstance(signature, dict) or signature != capture_payload.get(
             "mechanism_signature"):
         raise ValueError("online observation mechanism snapshot is malformed")
     decision = _decision_from_dict(snapshot.get("consolidation_decision") or {})
+    snapshot_triggered = snapshot.get("consolidation_triggered")
+    if type(snapshot_triggered) is not bool:
+        raise ValueError(
+            "online observation consolidation_triggered is not boolean")
+    snapshot_operation = snapshot.get("consolidation_operation")
+    if (type(snapshot_operation) is not str or
+            snapshot_operation not in CONSOLIDATION_OPERATIONS):
+        raise ValueError(
+            "online observation consolidation operation is malformed")
     if (decision.transition_id != transition_id or
             decision.campaign_id != campaign_id or
-            decision.learner_eligible != learner_eligible):
+            decision.learner_eligible != learner_eligible or
+            decision.triggered != snapshot_triggered or
+            decision.operation != snapshot_operation):
         raise ValueError("online observation decision snapshot conflicts")
     preview = _preview_from_dict(snapshot.get("consolidation_preview"))
     if preview is not None and preview.campaign_id != campaign_id:
         raise ValueError("online observation preview snapshot conflicts")
+    snapshot_rule_ids = _strict_string_tuple(
+        snapshot, "affected_rule_ids", label="affected rule IDs")
+    snapshot_path_ids = _strict_string_tuple(
+        snapshot, "affected_path_ids", label="affected path IDs")
+    snapshot_effect_keys = _strict_string_tuple(
+        snapshot, "affected_effect_keys", label="affected effect keys")
+    snapshot_reasons = _strict_string_tuple(
+        snapshot, "trigger_reasons", label="trigger reasons")
+    if (snapshot_rule_ids != decision.affected_rule_ids or
+            snapshot_path_ids != decision.affected_path_ids or
+            snapshot_effect_keys != decision.affected_effect_keys or
+            snapshot_reasons != decision.reasons):
+        raise ValueError("online observation decision witness conflicts")
+    if (preview is not None and
+            preview.full_rebuild_equivalent != decision.full_rebuild_equivalent):
+        raise ValueError("online observation preview decision conflicts")
+    novelty = snapshot.get("novelty")
+    if type(novelty) is not str or not novelty:
+        raise ValueError("online observation novelty is malformed")
     trigger_ids = [row["event_id"] for row in event_rows
                    if row["event_type"] == "CONSOLIDATION_TRIGGERED"]
     return OnlineMemoryReceipt(
         transition_id=transition_id, campaign_id=campaign_id,
         learner_eligible=learner_eligible, fragment=fragment,
         mechanism_signature=dict(signature),
-        affected_rule_ids=tuple(str(value) for value in
-                                (snapshot.get("affected_rule_ids") or [])),
-        affected_path_ids=tuple(str(value) for value in
-                                (snapshot.get("affected_path_ids") or [])),
+        affected_rule_ids=snapshot_rule_ids,
+        affected_path_ids=snapshot_path_ids,
         events=tuple(_event_receipt(row) for row in event_rows),
-        novelty=str(snapshot.get("novelty") or "UNKNOWN"),
-        consolidation_triggered=bool(snapshot.get("consolidation_triggered")),
+        novelty=novelty,
+        consolidation_triggered=snapshot_triggered,
         path_id=None,
-        trigger_reasons=tuple(str(value) for value in
-                              (snapshot.get("trigger_reasons") or [])),
-        affected_effect_keys=tuple(str(value) for value in
-                                   (snapshot.get("affected_effect_keys") or [])),
+        trigger_reasons=snapshot_reasons,
+        affected_effect_keys=snapshot_effect_keys,
         trigger_event_id=(str(trigger_ids[0]) if trigger_ids else None),
         consolidation_preview=preview,
         consolidation_operation=str(

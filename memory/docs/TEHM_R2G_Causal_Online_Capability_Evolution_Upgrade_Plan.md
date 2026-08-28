@@ -3953,3 +3953,14 @@ rule 与 RTL asset authority receipt 的 replay reader 现在也验证持久化�
 firewall 拒绝统一映射为 `external_authority:learner_firewall_violation`，避免错误层级
 泄漏并保持审计契约稳定。该修复只加强派生 authority replay 与错误边界，不新增 gate、
 不写 canonical memory，也不改变 Parametric shadow-only 或 production runtime 约束。
+
+### 2026-08-28 online decision/preview replay type closure
+
+fast-memory 的 `online-receipt-v1` replay 现在对 consolidation decision 与 incremental
+preview 做结构化类型校验：`triggered`、`full_rebuild_equivalent` 和
+`raw_evidence_preserved` 只接受真实布尔值，operation 必须属于受限 shadow operation
+集合，ID/reason 列表必须是非空字符串列表，preview 必须明确保持 `mode=preview`。重放时
+还会比较 snapshot 与 decision 的 trigger、operation、rule/path/effect witness，避免只改
+一个顶层字段就重新解释历史 observation。该修复只加强 B1/B2/B3 fast-memory 的
+deterministic replay，不触发 consolidation、canonical write、promotion 或 production
+runtime。
