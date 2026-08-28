@@ -4086,3 +4086,18 @@ family 绑定，而不是由 builder 固定写死；其 digest serializer 不再
 capability.authority replay 使用同一类 typed witness 约束。该脚本仍只在 derived
 DB 中执行，held-out/non-target 不进入 learner snapshot，promotion_attempted=false
 和 canonical_memory_mutation=none 边界保持不变。
+
+### 2026-08-28 ORFS support-cohort L4 transfer projector
+
+`audit_orfs_support_cohort.py` 现在可以在显式提供 shadow transfer ledger 与
+receipt ID 时，使用 `verify_causal_transfer()` 重放 L4 witness，再将
+`cross_lineage_te` 投影为 gate 状态。投影要求 receipt 为 replay-verified 的
+`L4_TRANSFER_SUPPORTED_MECHANISM`，至少包含两条 training lineage 与一条独立
+held-out lineage，并且 training lineage 必须属于当前 support cohort、held-out
+lineage 必须与其不相交、path mechanism family 必须匹配 cohort；缺失输入仍为
+`NOT_ESTABLISHED`，输入存在但损坏或不匹配则为 `FAIL`。lineage vector 也必须是
+规范化的非空字符串列表，不能通过 `str()` 隐式转换。
+
+该 projector 只读 shadow ledger，不写 authority/canonical/lifecycle/runtime；它只
+解除“真实 L4 witness 已存在但 support audit 无法消费”的审计断点，rollback、
+registry、obligation、harmful-rate 与 conformal gates 仍须各自独立证据。

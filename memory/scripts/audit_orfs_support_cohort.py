@@ -21,6 +21,8 @@ sys.path.insert(0, str(MEMORY_ROOT))
 
 from tehm.batch_lane import canonical_snapshots  # noqa: E402
 from tehm.causal.transfer import full_oracle_complete  # noqa: E402
+from tehm.causal.transfer_ledger import (  # noqa: E402
+    load_causal_transfer_receipt, verify_causal_transfer)
 
 GATES = (
     "rollback_verified", "registry_verified", "obligation_coverage",
@@ -41,6 +43,159 @@ def _json(raw, fallback=None):
     except (TypeError, json.JSONDecodeError):
         return {} if fallback is None else fallback
     return value
+
+
+def _strict_string_vector(value, *, label: str, allow_empty: bool = False) -> list[str]:
+    """Require a canonical JSON vector of non-empty strings.
+
+    Transfer receipts are content-addressed, but their lineage projections are
+    still an input boundary for this audit.  Do not let ``str(...)`` turn a
+    malformed value into a lineage that happens to match the support cohort.
+    """
+    if not isinstance(value, list):
+        raise ValueError(f"{label}_malformed")
+    if not allow_empty and not value:
+        raise ValueError(f"{label}_empty")
+    if any(type(item) is not str or not item.strip() for item in value):
+        raise ValueError(f"{label}_malformed")
+    normalized = [item.strip() for item in value]
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(f"{label}_duplicate")
+    if normalized != sorted(normalized):
+        raise ValueError(f"{label}_not_canonical")
+    return normalized
+
+
+def _audit_transfer_witness(
+        ledger_db: Path | None, receipt_ids, *, selected_lineages: set[str],
+        selected_families: set[str]) -> dict:
+    """Replay optional L4 transfer receipts against this support cohort.
+
+    The support auditor is read-only.  A transfer receipt can establish
+    ``cross_lineage_te`` here only when the ledger replay is verified, the
+    receipt is an eligible L4 result, its training lineages are a subset of
+    the selected support cohort, its held-out lineages are disjoint, and the
+    path mechanism family agrees with the cohort.  Missing optional input is
+    ``NOT_ESTABLISHED``; supplied but malformed/mismatched evidence is
+    ``FAIL``.  No summary boolean is accepted as authority.
+    """
+    if ledger_db is None and receipt_ids in (None, (), []):
+        return {
+            "gate_status": "NOT_ESTABLISHED", "receipt_ids": [],
+            "receipts": [], "errors": [], "training_lineages": [],
+            "transfer_lineages": [], "mechanism_families": [],
+        }
+    if ledger_db is None or not isinstance(receipt_ids, (list, tuple)):
+        return {
+            "gate_status": "FAIL", "receipt_ids": list(receipt_ids or []),
+            "receipts": [], "errors": ["transfer_input_incomplete"],
+            "training_lineages": [], "transfer_lineages": [],
+            "mechanism_families": [],
+        }
+    ids = list(receipt_ids)
+    if (not ids or any(type(value) is not str or not value.strip()
+                       for value in ids) or len(set(ids)) != len(ids)):
+        return {
+            "gate_status": "FAIL", "receipt_ids": ids, "receipts": [],
+            "errors": ["transfer_receipt_ids_malformed"],
+            "training_lineages": [], "transfer_lineages": [],
+            "mechanism_families": [],
+        }
+    db_path = Path(ledger_db).resolve()
+    if not db_path.is_file():
+        return {
+            "gate_status": "FAIL", "ledger_db": str(db_path),
+            "receipt_ids": ids, "receipts": [],
+            "errors": ["transfer_ledger_missing"],
+            "training_lineages": [], "transfer_lineages": [],
+            "mechanism_families": [],
+        }
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+    except sqlite3.Error as exc:
+        return {
+            "gate_status": "FAIL", "ledger_db": str(db_path),
+            "receipt_ids": ids, "receipts": [],
+            "errors": [f"transfer_ledger_open_failed:{exc}"],
+            "training_lineages": [], "transfer_lineages": [],
+            "mechanism_families": [],
+        }
+    rows = []
+    errors = []
+    training_lineages: set[str] = set()
+    transfer_lineages: set[str] = set()
+    mechanism_families: set[str] = set()
+    try:
+        for receipt_id in ids:
+            detail = {"receipt_id": receipt_id, "verified": False,
+                      "eligible": False, "reasons": []}
+            try:
+                ledger = load_causal_transfer_receipt(conn, receipt_id)
+                if ledger is None:
+                    raise ValueError("transfer_receipt_missing")
+                checked = verify_causal_transfer(conn, ledger.to_dict())
+                detail.update({
+                    "verified": checked.get("verified") is True,
+                    "eligible": checked.get("eligible") is True,
+                    "evidence_level": checked.get("evidence_level"),
+                    "path_id": checked.get("path_id"),
+                    "reasons": list(checked.get("reasons") or []),
+                })
+                if (checked.get("verified") is not True or
+                        checked.get("eligible") is not True or
+                        checked.get("evidence_level") !=
+                        "L4_TRANSFER_SUPPORTED_MECHANISM"):
+                    raise ValueError("transfer_receipt_not_verified_l4")
+                transfer = ledger.transfer_receipt
+                train = _strict_string_vector(
+                    transfer.get("training_lineages"),
+                    label="training_lineages")
+                heldout = _strict_string_vector(
+                    transfer.get("transfer_lineages"),
+                    label="transfer_lineages")
+                path_id = ledger.path_id
+                path = conn.execute(
+                    "SELECT mechanism_family FROM tehm_causal_paths "
+                    "WHERE path_id=?", (path_id,)).fetchone()
+                if path is None or type(path["mechanism_family"]) is not str:
+                    raise ValueError("transfer_path_mechanism_missing")
+                family = path["mechanism_family"].strip()
+                if not family:
+                    raise ValueError("transfer_path_mechanism_missing")
+                if not selected_families or family not in selected_families:
+                    raise ValueError("transfer_mechanism_cohort_mismatch")
+                if len(set(train)) < 2:
+                    raise ValueError("transfer_training_lineages_insufficient")
+                if not set(train).issubset(selected_lineages):
+                    raise ValueError("transfer_training_lineage_cohort_mismatch")
+                if set(heldout) & selected_lineages:
+                    raise ValueError("transfer_heldout_lineage_not_disjoint")
+                training_lineages.update(train)
+                transfer_lineages.update(heldout)
+                mechanism_families.add(family)
+                detail.update({"training_lineages": train,
+                               "transfer_lineages": heldout,
+                               "mechanism_family": family})
+            except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+                reason = str(exc)
+                detail.setdefault("reasons", []).append(reason)
+                errors.append(f"{receipt_id}:{reason}")
+            rows.append(detail)
+    finally:
+        conn.close()
+    status = ("PASS" if rows and not errors and len(training_lineages) >= 2
+              and transfer_lineages else "FAIL")
+    return {
+        "ledger_db": str(db_path),
+        "receipt_ids": ids,
+        "receipts": rows,
+        "errors": sorted(set(errors)),
+        "training_lineages": sorted(training_lineages),
+        "transfer_lineages": sorted(transfer_lineages),
+        "mechanism_families": sorted(mechanism_families),
+        "gate_status": status,
+    }
 
 
 def _staging_db(root: Path) -> Path:
@@ -85,7 +240,7 @@ def _campaign(root: Path, *, selected: bool) -> dict:
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         "SELECT t.transition_id, t.observation_delta_json, t.verifier_json, "
-        "t.provenance_json, p.deltas_json "
+        "t.provenance_json, t.action_json, p.deltas_json "
         "FROM tehm_transitions t LEFT JOIN tehm_physical_effects p "
         "ON p.transition_id=t.transition_id ORDER BY t.transition_id"
     ).fetchall()
@@ -98,6 +253,11 @@ def _campaign(root: Path, *, selected: bool) -> dict:
         verifier = _json(row["verifier_json"])
         full_complete = full_oracle_complete(verifier)
         utility = str(delta.get("utility_verdict") or "UNKNOWN")
+        action = _json(row["action_json"], fallback={})
+        manifest_family = captured.get("family")
+        action_family = action.get("transformation_family")
+        mechanism_family = (manifest_family if type(manifest_family) is str
+                            and manifest_family.strip() else action_family)
         observations.append({
             "case_id": captured.get("case_id"),
             "transition_id": transition_id,
@@ -109,6 +269,7 @@ def _campaign(root: Path, *, selected: bool) -> dict:
             "utility_verdict": utility,
             "run_id": (_json(row["provenance_json"]).get("run_id")
                        or _json(row["provenance_json"]).get("record_id")),
+            "mechanism_family": mechanism_family,
             "deltas": _json(row["deltas_json"], fallback={}),
         })
     complete = [row for row in observations
@@ -131,7 +292,9 @@ def _campaign(root: Path, *, selected: bool) -> dict:
     }
 
 
-def audit(roots: list[Path], *, negative_roots: list[Path]) -> dict:
+def audit(roots: list[Path], *, negative_roots: list[Path],
+          transfer_ledger_db: Path | None = None,
+          transfer_receipt_ids: list[str] | tuple[str, ...] = ()) -> dict:
     selected_campaigns = [_campaign(path, selected=True) for path in roots]
     negative_campaigns = [_campaign(path, selected=False) for path in negative_roots]
     selected = [row for campaign in selected_campaigns
@@ -143,6 +306,14 @@ def audit(roots: list[Path], *, negative_roots: list[Path]) -> dict:
                for row in campaign["observations"]
                if row["oracle_complete"] and row["full_oracle_complete"]
                and row["utility_verdict"] == "HARMFUL"]
+    selected_families = {
+        row["mechanism_family"] for row in selected
+        if type(row.get("mechanism_family")) is str
+        and row["mechanism_family"].strip()
+    }
+    transfer_evidence = _audit_transfer_witness(
+        transfer_ledger_db, transfer_receipt_ids,
+        selected_lineages=set(lineages), selected_families=selected_families)
     negative_harmful = [row for campaign in negative_campaigns
                         for row in campaign["observations"]
                         if row["oracle_complete"] and row["full_oracle_complete"]
@@ -159,7 +330,7 @@ def audit(roots: list[Path], *, negative_roots: list[Path]) -> dict:
         "registry_verified": "NOT_ESTABLISHED",
         "obligation_coverage": "PASS" if selected and incomplete_count == 0 and all(
             row["full_oracle_complete"] for row in selected) else "NOT_ESTABLISHED",
-        "cross_lineage_te": "NOT_ESTABLISHED",
+        "cross_lineage_te": transfer_evidence["gate_status"],
         "harmful_rate": "PASS" if selected and not harmful else (
             "FAIL" if harmful else "NOT_ESTABLISHED"),
         "conformal_coverage": "NOT_ESTABLISHED",
@@ -185,6 +356,7 @@ def audit(roots: list[Path], *, negative_roots: list[Path]) -> dict:
         "promotion_attempted": False,
         "canonical_memory_mutation": "none",
         "canonical_snapshots": canonical_snapshots(),
+        "cross_lineage_evidence": transfer_evidence,
     }
     return report
 
@@ -195,9 +367,17 @@ def main(argv=None) -> int:
                         help="campaign roots supplying candidate support observations")
     parser.add_argument("--negative-root", action="append", type=Path, default=[],
                         help="complete campaign root retained as an excluded negative control")
+    parser.add_argument("--transfer-ledger-db", type=Path, default=None,
+                        help="read-only shadow DB containing replayable L4 transfer receipts")
+    parser.add_argument("--transfer-receipt-id", dest="transfer_receipt_ids",
+                        action="append", default=[],
+                        help="replay-verified L4 receipt ID (repeatable)")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
-    report = audit(args.roots, negative_roots=args.negative_root)
+    report = audit(
+        args.roots, negative_roots=args.negative_root,
+        transfer_ledger_db=args.transfer_ledger_db,
+        transfer_receipt_ids=args.transfer_receipt_ids)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(json.dumps({
