@@ -189,6 +189,63 @@ def _load_transitions(conn: sqlite3.Connection, *, campaign_id: str = "live"):
 def _persist_rule(conn: sqlite3.Connection, rule: dict, *, commit: bool = True) -> None:
     from tehm.ids import stable_dumps
 
+    # A normal crystallization pass is a derived candidate projection.  It is
+    # not an authority-bearing revision operation.  Once a rule is promoted,
+    # changing any definition/validity/provenance witness behind the same
+    # content id would silently change what production retrieval executes (or
+    # what the authority receipt describes).  Replays of the exact same
+    # projection are harmless; any drift must go through an explicit shadow
+    # revision and its independent authority path.
+    existing = conn.execute(
+        "SELECT * FROM tehm_rules WHERE rule_id=?", (rule["rule_id"],)
+    ).fetchone()
+    promoted = conn.execute(
+        "SELECT 1 FROM tehm_rule_status "
+        "WHERE rule_id=? AND status='promoted' LIMIT 1",
+        (rule["rule_id"],),
+    ).fetchone()
+    if existing is not None and promoted is not None:
+        expected_fields = {
+            "domain": rule["domain"],
+            "before_pattern_json": stable_dumps(rule["before_pattern"]),
+            "after_pattern_json": stable_dumps(rule["after_pattern"]),
+            "hard_preconditions_json": stable_dumps(rule["hard_preconditions"]),
+            "context_profile_json": stable_dumps(rule["context_predicates"]),
+            "obligations_json": stable_dumps(rule["obligations"]),
+            "validity_status": rule["validity_status"],
+            "validity_profile_json": stable_dumps(rule["validity_profile"]),
+            "risk_profile_json": stable_dumps(rule["risk_profile"]),
+            "predicate_schema_version": rule["predicate_schema_version"],
+            "role_schema_version": rule["role_schema_version"],
+            "crystallizer_version": rule["crystallizer_version"],
+            "merge_trace_digest": rule["merge_trace_digest"],
+        }
+        mismatches = [
+            field for field, value in expected_fields.items()
+            if existing[field] != value
+        ]
+        expected_sources = sorted(
+            (source["episode_id"], source["source_substitution_json"],
+             source["evidence_profile_json"], source["lineage_id"])
+            for source in rule_sources(rule))
+        persisted_sources = sorted(
+            (row["episode_id"], row["source_substitution_json"],
+             row["evidence_profile_json"], row["lineage_id"])
+            for row in conn.execute(
+                "SELECT episode_id, source_substitution_json, "
+                "evidence_profile_json, lineage_id FROM tehm_rule_sources "
+                "WHERE rule_id=?", (rule["rule_id"],)))
+        if persisted_sources != expected_sources:
+            mismatches.append("rule_sources")
+        if mismatches:
+            raise ValueError(
+                "promoted rule is immutable; explicit revision authority "
+                "required: " + ",".join(mismatches))
+        # Preserve utility, confidence, timestamps, and row identity on an
+        # exact replay.  There is no reason to issue an UPDATE that could
+        # perturb a promoted row while returning the same rule ID.
+        return
+
     conn.execute(
         """INSERT INTO tehm_rules (
                rule_id, domain, before_pattern_json, after_pattern_json,

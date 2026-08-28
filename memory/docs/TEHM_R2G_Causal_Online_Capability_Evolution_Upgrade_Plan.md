@@ -3760,3 +3760,16 @@ fail-closed；新状态使用 INSERT/UPDATE 后重新读取并校验完整持久
 authority、retrieval 或 runtime 当成有效状态。该修复只收紧 derived lifecycle 的
 可重放性，不新增 promotion gate，也不改变 canonical memory 或 production runtime
 边界。
+
+### 2026-08-28 promoted rule crystallization boundary
+
+普通 `crystallize_all()` 与 `crystallize_affected_groups()` 属于 derived candidate
+projection，不能借同一 `rule_id` 改写已经 promoted 的 production rule。此前
+`_persist_rule()` 在冲突时会更新 validity/risk/merge metadata，并删除后重插入
+`tehm_rule_sources`；即使 rule ID 没变，也可能让 runtime 读取到未经 authority 批准的
+新定义或 source witness。现在如果该 rule 在任一 scope 已 promoted，persist 会逐字段比较
+定义、validity/risk、crystallizer/merge digest 以及完整 source witness 集合；完全相同的
+重放直接 no-op，任一漂移都 fail-closed，并要求通过显式 shadow revision 与独立 authority
+处理。utility、confidence 等既有可累积字段仍不由 crystallizer 覆盖。该边界只防止
+derived rebuild 绕过 production authority，不新增 promotion gate，也不把 staging 或
+canonical evidence 自动升级为 runtime 规则。

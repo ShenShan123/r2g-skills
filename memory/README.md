@@ -123,6 +123,10 @@ rule lifecycle status 也已采用同一 replay 边界：`set_status()` 对同�
 provenance 完全一致的幂等重放，对冲突直接拒绝；状态转换改为 UPDATE 后完整重读校验，
 `get_status()` 对 status/version/provenance/更新时间损坏 fail-closed，不再使用
 `INSERT OR REPLACE` 静默覆盖。
+普通 `crystallize_all()` / `crystallize_affected_groups()` 也不会再通过同一
+`rule_id` 改写已 promoted rule 的定义或 source witness；完全相同的重建才是幂等 no-op，
+任何 projection 漂移都必须进入显式 shadow revision 与 authority 路径。这样新增训练
+证据不会在没有晋级收据时悄悄改变 production retrieval 的规则语义。
 现在 rule promotion 也有独立的数据库绑定 authority seam：
 `lifecycle/rule_authority.py` 将每个 gate 的 payload 写入 immutable evidence ledger，
 并把 rule 内容 digest、candidate `status_version` 与真实 winning `tehm_trials` 行绑定。

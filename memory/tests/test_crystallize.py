@@ -13,6 +13,7 @@ from unittest.mock import patch
 from tehm.adapters.r2g_evidence import capture_r2g_project
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.crystallization.build_rules import crystallize_all
+from tehm.lifecycle.rule_status import enter_shadow, set_status
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 ANTENNA_PROJ = FIXTURES / "project_antenna_fix"
@@ -118,6 +119,34 @@ def test_idempotent_recrystallize(tmp_tehm, sample_record_dict):
     rules2 = crystallize_all(conn)
     assert rules1[0]["rule_id"] == rules2[0]["rule_id"]
     assert conn.execute("SELECT COUNT(*) FROM tehm_rules").fetchone()[0] == 1
+
+
+def test_promoted_rule_recrystallize_requires_exact_projection(
+        tmp_tehm, sample_record_dict):
+    """A normal rebuild cannot rewrite a production-authoritative rule."""
+    conn, _, _ = tmp_tehm
+    _capture_repeats(tmp_tehm, sample_record_dict, n=3)
+    rule = crystallize_all(conn)[0]
+    rule_id = rule["rule_id"]
+    enter_shadow(conn, rule_id=rule_id, target_scope="drc")
+    set_status(conn, rule_id=rule_id, target_scope="drc", status="candidate")
+    set_status(conn, rule_id=rule_id, target_scope="drc", status="promoted")
+
+    # An exact replay remains a no-op, including after promotion.
+    assert crystallize_all(conn)[0]["rule_id"] == rule_id
+
+    import copy
+    import pytest
+    import tehm.crystallization.build_rules as build_rules
+    tampered = copy.deepcopy(rule)
+    tampered["validity_profile"] = {
+        **tampered["validity_profile"], "tampered": True}
+    with pytest.raises(ValueError, match="promoted rule is immutable"):
+        build_rules._persist_rule(conn, tampered, commit=False)
+    stored = conn.execute(
+        "SELECT validity_profile_json FROM tehm_rules WHERE rule_id=?",
+        (rule_id,)).fetchone()
+    assert json.loads(stored["validity_profile_json"]) == rule["validity_profile"]
 
 
 def test_singletons_never_crystallize(tmp_tehm):
