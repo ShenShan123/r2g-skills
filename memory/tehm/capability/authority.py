@@ -164,6 +164,16 @@ def _policy_binding_reasons(
             candidate_policy_snapshot_id=candidate_policy_snapshot_id,
             runtime_id=runtime_id,
             expected_behavior_digest=candidate.get("behavior_digest")))
+    ablation_binding = detail.get("policy_ablation_binding")
+    if isinstance(ablation_binding, Mapping) and ablation_binding.get("strict") is True:
+        memory_binding = detail.get("memory_snapshot_binding")
+        expected_baseline_policy = (
+            memory_binding.get("baseline_policy_snapshot_id")
+            if isinstance(memory_binding, Mapping) else None)
+        reasons.extend(_policy_ablation_binding_reasons(
+            conn, ablation_binding,
+            baseline_policy_snapshot_id=expected_baseline_policy,
+            runtime_id=runtime_id))
     load = conn.execute(
         """SELECT *
              FROM tehm_policy_load_receipts
@@ -340,6 +350,91 @@ def _runtime_behavior_binding_reasons(
     expected_eligible = not reasons
     if binding.get("eligible") is not expected_eligible:
         reasons.append("C4:runtime_behavior_binding_eligibility_mismatch")
+    return reasons
+
+
+def _policy_ablation_binding_reasons(
+    conn: sqlite3.Connection,
+    binding: Mapping,
+    *,
+    baseline_policy_snapshot_id: str | None = None,
+    runtime_id: str | None = None,
+) -> list[str]:
+    """Replay strict C8's baseline-policy ablation witness.
+
+    The ablation must load the exact baseline policy, execute it, and bind the
+    resulting behavior digest.  A pair of booleans without this witness is
+    only a claim and cannot establish that memory removal caused the loss.
+    """
+    if not isinstance(binding, Mapping):
+        return ["C8:policy_ablation_binding_malformed"]
+    reasons: list[str] = []
+    if binding.get("version") != "policy-ablation-v1":
+        reasons.append("C8:policy_ablation_binding_version_mismatch")
+    if binding.get("strict") is not True:
+        reasons.append("C8:policy_ablation_binding_not_strict")
+    baseline_policy_id = binding.get("baseline_policy_snapshot_id")
+    if not isinstance(baseline_policy_id, str) or not baseline_policy_id:
+        reasons.append("C8:baseline_policy_snapshot_required")
+    if (baseline_policy_snapshot_id is not None and
+            baseline_policy_id != baseline_policy_snapshot_id):
+        reasons.append("C8:baseline_policy_snapshot_binding_mismatch")
+    bound_runtime_id = binding.get("runtime_id")
+    if not isinstance(bound_runtime_id, str) or not bound_runtime_id:
+        reasons.append("C8:runtime_id_required")
+    if runtime_id is not None and bound_runtime_id != runtime_id:
+        reasons.append("C8:runtime_binding_runtime_id_mismatch")
+    load_id = binding.get("policy_load_receipt_id")
+    if not isinstance(load_id, str) or not load_id:
+        reasons.append("C8:policy_load_receipt_required")
+    execution_id = binding.get("baseline_execution_receipt_id")
+    if not isinstance(execution_id, str) or not execution_id:
+        reasons.append("C8:execution_receipt_required")
+    expected_behavior = binding.get("baseline_behavior_digest")
+    loaded_behavior = binding.get("loaded_behavior_digest")
+    if not isinstance(expected_behavior, str) or not expected_behavior:
+        reasons.append("C8:baseline_behavior_digest_required")
+    if not isinstance(loaded_behavior, str) or not loaded_behavior:
+        reasons.append("C8:ablation_behavior_digest_required")
+    if (isinstance(expected_behavior, str) and isinstance(loaded_behavior, str) and
+            expected_behavior != loaded_behavior):
+        reasons.append("C8:ablation_behavior_digest_mismatch")
+
+    load = None
+    if isinstance(load_id, str) and load_id:
+        load = conn.execute(
+            "SELECT * FROM tehm_policy_load_receipts WHERE receipt_id=?",
+            (load_id,)).fetchone()
+    receipt: Mapping | None = None
+    if load is None:
+        reasons.append("C8:policy_load_receipt_missing")
+    else:
+        raw = None
+        try:
+            checked = validate_policy_load_row(load)
+            raw = json.loads(checked["receipt_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            raw = None
+        if isinstance(raw, Mapping):
+            nested = raw.get("receipt")
+            receipt = nested if isinstance(nested, Mapping) else None
+            if (raw.get("policy_snapshot_id") != baseline_policy_id or
+                    raw.get("runtime_id") != bound_runtime_id or
+                    raw.get("loaded") is not True):
+                reasons.append("C8:policy_load_binding_mismatch")
+        else:
+            reasons.append("C8:policy_load_receipt_malformed")
+        if receipt is None:
+            reasons.append("C8:ablation_execution_receipt_malformed")
+        else:
+            if receipt.get("execution_receipt_id") != execution_id:
+                reasons.append("C8:ablation_execution_receipt_mismatch")
+            if receipt.get("behavior_digest") != loaded_behavior:
+                reasons.append("C8:ablation_behavior_receipt_mismatch")
+
+    expected_eligible = not reasons
+    if binding.get("eligible") is not expected_eligible:
+        reasons.append("C8:policy_ablation_binding_eligibility_mismatch")
     return reasons
 
 
@@ -658,6 +753,13 @@ def record_capability_authority(
         # Persist the execution-to-behavior witness so C4 can be independently
         # replayed after the in-memory attribution object is gone.
         payload["runtime_behavior_binding"] = dict(runtime_behavior_binding)
+    policy_ablation_binding = (attribution.get("detail") or {}).get(
+        "policy_ablation_binding")
+    if (isinstance(policy_ablation_binding, Mapping) and
+            policy_ablation_binding.get("strict") is True):
+        # Persist the baseline-policy ablation witness for independent C8
+        # replay; the booleans alone are never treated as authority.
+        payload["policy_ablation_binding"] = dict(policy_ablation_binding)
     receipt_digest = "sha256:" + hashlib.sha256(
         stable_dumps(payload).encode()).hexdigest()
     receipt_id = "capability_authority_" + receipt_digest.split(":", 1)[1][:20]
@@ -773,6 +875,20 @@ def verify_capability_authority(
                 conn, payload_runtime_behavior_binding,
                 candidate_policy_snapshot_id=str(
                     payload.get("candidate_policy_snapshot_id") or ""),
+                runtime_id=str(payload.get("runtime_id") or "")))
+    payload_policy_ablation_binding = payload.get("policy_ablation_binding")
+    if payload_policy_ablation_binding is not None:
+        if (not isinstance(payload_policy_ablation_binding, Mapping) or
+                payload_policy_ablation_binding.get("strict") is not True):
+            reasons.append("C8:policy_ablation_binding_malformed")
+        else:
+            payload_memory_binding = payload.get("memory_snapshot_binding")
+            expected_baseline_policy = (
+                payload_memory_binding.get("baseline_policy_snapshot_id")
+                if isinstance(payload_memory_binding, Mapping) else None)
+            reasons.extend(_policy_ablation_binding_reasons(
+                conn, payload_policy_ablation_binding,
+                baseline_policy_snapshot_id=expected_baseline_policy,
                 runtime_id=str(payload.get("runtime_id") or "")))
     for key in ("candidate_policy_snapshot_id", "runtime_id", "attribution_digest"):
         if payload.get(key) != data.get(key):

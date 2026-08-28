@@ -47,6 +47,7 @@ def evaluate_capability_attribution(
     strict_memory_delta: bool = False,
     memory_snapshot_binding: Mapping | None = None,
     behavior_binding: Mapping | None = None,
+    ablation_binding: Mapping | None = None,
 ) -> CapabilityAttributionReceipt:
     """Evaluate the eight explicit attribution gates.
 
@@ -123,6 +124,8 @@ def evaluate_capability_attribution(
     behavior_changed = bool(candidate.get("behavior_digest") and
                             baseline.get("behavior_digest") and
                             candidate.get("behavior_digest") != baseline.get("behavior_digest"))
+    ablation_removes_gain = bool(ablation.get("gain_without_memory") is False and
+                                 ablation.get("gain_with_memory") is True)
     behavior_witness = None
     if behavior_binding is not None:
         if isinstance(behavior_binding, Mapping):
@@ -155,13 +158,43 @@ def evaluate_capability_attribution(
                 "reasons": ["runtime_behavior_binding_malformed"],
             }
             behavior_changed = False
+    ablation_witness = None
+    if ablation_binding is not None:
+        if isinstance(ablation_binding, Mapping):
+            ablation_witness = dict(ablation_binding)
+            if strict_memory_delta:
+                required_ablation_fields = (
+                    "version", "strict", "baseline_policy_snapshot_id",
+                    "runtime_id", "policy_load_receipt_id",
+                    "baseline_execution_receipt_id", "baseline_behavior_digest",
+                    "loaded_behavior_digest", "eligible", "reasons",
+                )
+                incomplete = (
+                    ablation_witness.get("version") !=
+                    "policy-ablation-v1" or
+                    ablation_witness.get("strict") is not True or
+                    any(field not in ablation_witness
+                        for field in required_ablation_fields) or
+                    ablation_witness.get("eligible") is not True or
+                    not isinstance(ablation_witness.get("reasons"), list)
+                )
+                if incomplete:
+                    ablation_removes_gain = False
+                    reasons = list(ablation_witness.get("reasons") or [])
+                    reasons.append("policy_ablation_binding_incomplete")
+                    ablation_witness["eligible"] = False
+                    ablation_witness["reasons"] = sorted(set(reasons))
+        elif strict_memory_delta:
+            ablation_witness = {
+                "eligible": False,
+                "reasons": ["policy_ablation_binding_malformed"],
+            }
+            ablation_removes_gain = False
     target_gain = bool(candidate.get("target_gain") is True)
     heldout_transfer = bool(heldout.get("verdict") == "PASS" and
                             heldout.get("disjoint_lineage") is True and
                             heldout.get("evidence_id"))
     no_regression = bool(candidate.get("no_regression") is True)
-    ablation_removes_gain = bool(ablation.get("gain_without_memory") is False and
-                                 ablation.get("gain_with_memory") is True)
     gates = {
         "C1": memory_delta_verified,
         "C2": policy_delta,
@@ -185,7 +218,9 @@ def evaluate_capability_attribution(
                 **({"memory_snapshot_binding": snapshot_binding}
                    if snapshot_binding is not None else {}),
                 **({"runtime_behavior_binding": behavior_witness}
-                   if behavior_witness is not None else {})})
+                   if behavior_witness is not None else {}),
+                **({"policy_ablation_binding": ablation_witness}
+                   if ablation_witness is not None else {})})
 
 
 def evaluate_capability_attribution_from_db(
@@ -322,6 +357,69 @@ def evaluate_capability_attribution_from_db(
         "eligible": not behavior_binding_reasons,
         "reasons": sorted(set(behavior_binding_reasons)),
     }
+    ablation_binding_reasons: list[str] = []
+    ablation_policy_snapshot_id = None
+    ablation_load_receipt_id = None
+    ablation_execution_receipt_id = None
+    ablation_loaded_behavior_digest = None
+    if isinstance(ablation, Mapping):
+        ablation_policy_snapshot_id = ablation.get("policy_snapshot_id")
+        ablation_load_receipt_id = ablation.get("policy_load_receipt_id")
+        ablation_execution_receipt_id = ablation.get("runtime_receipt_id")
+    if strict_memory_delta:
+        if ablation_policy_snapshot_id != baseline_policy_snapshot_id:
+            ablation_binding_reasons.append("ablation_policy_snapshot_mismatch")
+        if not isinstance(ablation_load_receipt_id, str) or not ablation_load_receipt_id:
+            ablation_binding_reasons.append("ablation_policy_load_receipt_required")
+        if not isinstance(ablation_execution_receipt_id, str) or not ablation_execution_receipt_id:
+            ablation_binding_reasons.append("ablation_execution_receipt_required")
+        ablation_load = None
+        if isinstance(ablation_load_receipt_id, str) and ablation_load_receipt_id:
+            ablation_load = conn.execute(
+                "SELECT * FROM tehm_policy_load_receipts WHERE receipt_id=?",
+                (ablation_load_receipt_id,)).fetchone()
+        if ablation_load is None:
+            ablation_binding_reasons.append("ablation_policy_load_receipt_missing")
+        else:
+            ablation_payload = None
+            try:
+                checked_ablation_load = validate_policy_load_row(ablation_load)
+                ablation_payload = json.loads(
+                    checked_ablation_load["receipt_json"] or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                ablation_payload = None
+            nested = (ablation_payload.get("receipt")
+                      if isinstance(ablation_payload, Mapping) else None)
+            if not isinstance(ablation_payload, Mapping):
+                ablation_binding_reasons.append("ablation_policy_load_receipt_malformed")
+            elif (ablation_payload.get("policy_snapshot_id") !=
+                  baseline_policy_snapshot_id or
+                  ablation_payload.get("runtime_id") != runtime_id or
+                  ablation_payload.get("loaded") is not True):
+                ablation_binding_reasons.append("ablation_policy_load_binding_mismatch")
+            if not isinstance(nested, Mapping):
+                ablation_binding_reasons.append("ablation_execution_receipt_malformed")
+            else:
+                actual_load_id = str(ablation_load["receipt_id"])
+                if actual_load_id != ablation_load_receipt_id:
+                    ablation_binding_reasons.append("ablation_policy_load_receipt_id_mismatch")
+                if nested.get("execution_receipt_id") != ablation_execution_receipt_id:
+                    ablation_binding_reasons.append("ablation_execution_receipt_mismatch")
+                ablation_loaded_behavior_digest = nested.get("behavior_digest")
+                if ablation_loaded_behavior_digest != ablation.get("behavior_digest"):
+                    ablation_binding_reasons.append("ablation_behavior_digest_mismatch")
+    ablation_binding = {
+        "version": "policy-ablation-v1",
+        "strict": bool(strict_memory_delta),
+        "baseline_policy_snapshot_id": baseline_policy_snapshot_id,
+        "runtime_id": runtime_id,
+        "policy_load_receipt_id": ablation_load_receipt_id,
+        "baseline_execution_receipt_id": ablation_execution_receipt_id,
+        "baseline_behavior_digest": baseline_behavior_digest,
+        "loaded_behavior_digest": ablation_loaded_behavior_digest,
+        "eligible": not ablation_binding_reasons,
+        "reasons": sorted(set(ablation_binding_reasons)),
+    }
     return evaluate_capability_attribution(
         capability_id=capability_id,
         baseline={"memory_digest": baseline_memory_digest,
@@ -335,7 +433,8 @@ def evaluate_capability_attribution_from_db(
         runtime_receipt=runtime_receipt, heldout=heldout, ablation=ablation,
         memory_delta=memory_delta, strict_memory_delta=strict_memory_delta,
         memory_snapshot_binding=memory_snapshot_binding,
-        behavior_binding=behavior_binding)
+        behavior_binding=behavior_binding,
+        ablation_binding=ablation_binding)
 
 
 __all__ = ["CapabilityAttributionReceipt", "evaluate_capability_attribution",

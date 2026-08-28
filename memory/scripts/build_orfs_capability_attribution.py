@@ -288,6 +288,16 @@ def build_orfs_capability_attribution(
     }
     baseline_behavior_digest = _stable_digest(baseline_behavior)
     candidate_behavior_digest = _stable_digest(candidate_behavior)
+    # Bind the baseline ablation arm to the behavior digest it actually
+    # produced.  This latest row supersedes the pre-execution load witness for
+    # strict C8 replay.
+    ablation_load = record_policy_load(
+        conn, policy_snapshot_id=baseline_policy.policy_snapshot_id,
+        runtime_id=runtime_id, loaded=True,
+        receipt={"mode": "evaluation_only_ablation",
+                 "memory_removed": True, "production_authority": False,
+                 "execution_receipt_id": baseline_runtime["receipt_id"],
+                 "behavior_digest": baseline_behavior_digest})
     # Bind the latest candidate-policy load to both the runtime execution and
     # the behavior digest derived from that execution.  A successful snapshot
     # lookup alone is not C3/C4 evidence; authority replay selects this latest

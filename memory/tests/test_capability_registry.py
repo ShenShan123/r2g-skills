@@ -27,6 +27,11 @@ def _full_attribution_and_authority(conn, capability_id, *, required_assets=(),
     candidate = create_policy_snapshot(
         conn, memory_snapshot_id="m1", promoted_rules=["r0", "r1"],
         promoted_assets=list(required_assets))
+    baseline_load = record_policy_load(
+        conn, policy_snapshot_id=baseline.policy_snapshot_id,
+        runtime_id="authority-runtime", loaded=True,
+        receipt={"execution_receipt_id": "exec-baseline",
+                 "behavior_digest": "b0"})
     record_policy_load(conn, policy_snapshot_id=candidate.policy_snapshot_id,
                        runtime_id="authority-runtime", loaded=True,
                        receipt={"execution_receipt_id": "exec-candidate",
@@ -40,7 +45,11 @@ def _full_attribution_and_authority(conn, capability_id, *, required_assets=(),
         candidate_behavior_digest="b1", target_gain=True, no_regression=True,
         heldout={"verdict": "PASS", "disjoint_lineage": True,
                  "evidence_id": "heldout-gain"},
-        ablation={"gain_without_memory": False, "gain_with_memory": True},
+        ablation={"policy_snapshot_id": baseline.policy_snapshot_id,
+                  "runtime_receipt_id": "exec-baseline",
+                  "policy_load_receipt_id": baseline_load.receipt_id,
+                  "behavior_digest": "b0",
+                  "gain_without_memory": False, "gain_with_memory": True},
         memory_delta=memory_delta,
         strict_memory_delta=memory_delta is not None)
     refs = {
@@ -329,6 +338,56 @@ def test_strict_capability_attribution_binds_candidate_behavior_receipt(tmp_tehm
     assert "candidate_behavior_digest_receipt_mismatch" in binding["reasons"]
 
 
+def test_strict_capability_attribution_binds_memory_ablation_receipt(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="STRICT_ABLATION_BINDING", applicability={},
+        status="candidate")
+    baseline = create_policy_snapshot(
+        conn, memory_snapshot_id="m0-ablation", promoted_rules=[])
+    candidate = create_policy_snapshot(
+        conn, memory_snapshot_id="m1-ablation", promoted_rules=["r1"])
+    baseline_load = record_policy_load(
+        conn, policy_snapshot_id=baseline.policy_snapshot_id,
+        runtime_id="ablation-binding-runtime", loaded=True,
+        receipt={"execution_receipt_id": "exec-baseline",
+                 "behavior_digest": "b0"})
+    record_policy_load(
+        conn, policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="ablation-binding-runtime", loaded=True,
+        receipt={"execution_receipt_id": "exec-candidate",
+                 "behavior_digest": "b1"})
+    receipt = evaluate_capability_attribution_from_db(
+        conn, capability_id=capability.capability_id,
+        baseline_memory_digest="m0-ablation",
+        candidate_memory_digest="m1-ablation",
+        baseline_policy_snapshot_id=baseline.policy_snapshot_id,
+        candidate_policy_snapshot_id=candidate.policy_snapshot_id,
+        runtime_id="ablation-binding-runtime", baseline_behavior_digest="b0",
+        candidate_behavior_digest="b1", target_gain=True, no_regression=True,
+        heldout={"verdict": "PASS", "disjoint_lineage": True,
+                 "evidence_id": "h-ablation-binding"},
+        ablation={
+            "policy_snapshot_id": baseline.policy_snapshot_id,
+            "runtime_receipt_id": "exec-baseline",
+            "policy_load_receipt_id": baseline_load.receipt_id,
+            "behavior_digest": "tampered-baseline",
+            "gain_without_memory": False, "gain_with_memory": True,
+        },
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "m0-ablation",
+            "candidate_memory_digest": "m1-ablation",
+            "added_rule_ids": ["r1"],
+        }, strict_memory_delta=True)
+    assert receipt.gates["C1"] is True
+    assert receipt.gates["C8"] is False
+    assert receipt.promotable is False
+    binding = receipt.detail["policy_ablation_binding"]
+    assert binding["eligible"] is False
+    assert "ablation_behavior_digest_mismatch" in binding["reasons"]
+
+
 def test_capability_authority_replays_content_bound_memory_delta(tmp_tehm):
     conn, _, _ = tmp_tehm
     capability = register_capability(
@@ -401,6 +460,29 @@ def test_capability_authority_replays_candidate_behavior_binding(tmp_tehm):
     assert checked["eligible"] is False
     assert "authority_receipt_digest_mismatch" in checked["reasons"]
     assert "C4:behavior_digest_binding_mismatch" in checked["reasons"]
+
+
+def test_capability_authority_replays_memory_ablation_binding(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    capability = register_capability(
+        conn, mechanism_family="STRICT_ABLATION_AUTHORITY", applicability={},
+        status="candidate")
+    _, authority, _ = _full_attribution_and_authority(
+        conn, capability.capability_id,
+        memory_delta={
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "m0",
+            "candidate_memory_digest": "m1",
+            "added_rule_ids": ["r1"],
+        })
+    assert authority.eligible is True
+    authority.payload["policy_ablation_binding"]["loaded_behavior_digest"] = (
+        "tampered-ablation")
+    checked = verify_capability_authority(
+        conn, capability.capability_id, authority)
+    assert checked["eligible"] is False
+    assert "authority_receipt_digest_mismatch" in checked["reasons"]
+    assert "C8:ablation_behavior_receipt_mismatch" in checked["reasons"]
 
 
 def test_capability_attribution_from_policy_and_runtime_receipts(tmp_tehm):

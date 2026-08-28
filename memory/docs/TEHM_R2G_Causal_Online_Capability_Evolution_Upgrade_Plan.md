@@ -3853,3 +3853,16 @@ PolicySnapshot 与 runtime-load receipt 的 content digest 不能只覆盖 JSON 
 的 C3 load。schema 约束仍是第一道防线，validator 是 authority/replay 读取时的第二道
 防线；该修复只收紧 policy/runtime derived evidence，不写 canonical memory，不改变
 promotion gate 或 production runtime 边界。
+
+### 2026-08-28 strict C8 policy-ablation witness
+
+仅比较 `gain_without_memory=false` 与 `gain_with_memory=true` 仍可能只是调用方布尔值，
+不能证明确实执行了 `M_t+1 - ΔMemory`。strict attribution 现在要求 ablation 指定
+baseline PolicySnapshot、baseline policy-load receipt、execution receipt 和 behavior
+digest；该 load 必须在同一 runtime 中成功加载 baseline policy，嵌套 receipt 的 execution
+ID/behavior digest 必须与 ablation 声明一致。`policy-ablation-v1` witness 会随 capability
+authority 保存，并在 replay 时重新读取 baseline load row、校验 payload 与执行行为；任一
+缺失或漂移都会使 C8 fail-closed。ORFS/RTL evaluation lane 已写入 baseline ablation
+load witness；preflight/旧非 strict fixture 仍只用于兼容或未完成证据。该升级只加强
+memory ablation 的 attribution，不写 canonical memory，不改变 promotion gate 或
+production runtime 边界。

@@ -302,6 +302,16 @@ def build_rtl_capability_attribution(
     candidate_behavior = _behavior_summary(candidate_runtime, roles)
     baseline_behavior_digest = _stable_digest(baseline_behavior)
     candidate_behavior_digest = _stable_digest(candidate_behavior)
+    # Record the baseline execution used for memory ablation with its own
+    # behavior witness.  Strict C8 replay must prove this exact baseline
+    # policy/load/execution, rather than trusting two booleans in ``ablation``.
+    ablation_load = record_policy_load(
+        conn, policy_snapshot_id=baseline_policy.policy_snapshot_id,
+        runtime_id=runtime_id, loaded=True,
+        receipt={"mode": "evaluation_only_ablation", "asset_id": asset_id,
+                 "production_authority": False,
+                 "execution_receipt_id": baseline_runtime["receipt_id"],
+                 "behavior_digest": baseline_behavior_digest})
     # Bind C3/C4 to the exact candidate execution and derived behavior digest,
     # not merely to a policy row created before the runtime was invoked.  The
     # evaluator selects this latest immutable load receipt for the pair.
@@ -343,6 +353,8 @@ def build_rtl_capability_attribution(
     ablation = {
         "policy_snapshot_id": baseline_policy.policy_snapshot_id,
         "behavior_digest": baseline_behavior_digest,
+        "runtime_receipt_id": baseline_runtime["receipt_id"],
+        "policy_load_receipt_id": ablation_load.receipt_id,
         "gain_without_memory": any(
             by_lineage[lineage]["target_verdict"] == "PASS"
             for lineage in train_lineages),
