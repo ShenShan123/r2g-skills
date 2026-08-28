@@ -123,6 +123,40 @@ def test_online_receipt_replays_affected_path_witness(tmp_tehm):
     assert payload["affected_path_ids"] == [path.path_id]
 
 
+def test_online_observation_rejects_corrupt_affected_rule_witness(tmp_tehm):
+    """Malformed source provenance cannot produce a partial online chain."""
+    conn, store, _ = tmp_tehm
+    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first.record_id = "rtl:req_ack:corrupt-first"
+    capture(conn, store, first)
+    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second.record_id = "rtl:req_ack:corrupt-second"
+    second.action["payload"]["add_condition"] = "ready"
+    second_id = capture(conn, store, second).transition_id
+    rules = crystallize_all(conn, campaign_id="live")
+    assert rules
+    source_row = None
+    for row in conn.execute(
+            "SELECT rule_id, episode_id, source_substitution_json "
+            "FROM tehm_rule_sources"):
+        if second_id in json.loads(row["source_substitution_json"]):
+            source_row = row
+            break
+    assert source_row is not None
+    conn.execute(
+        "UPDATE tehm_rule_sources SET source_substitution_json=? "
+        "WHERE rule_id=? AND episode_id=?",
+        ("{}", source_row["rule_id"], source_row["episode_id"]))
+    conn.commit()
+
+    with pytest.raises(ValueError, match="affected rule source witness is malformed"):
+        observe_transition(conn, second_id, campaign_id="live")
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_memory_events").fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_causal_nodes").fetchone()[0] == 0
+
+
 def test_online_observation_rolls_back_fragment_and_events_on_late_failure(
         tmp_tehm):
     conn, transition_id = _transition(tmp_tehm)

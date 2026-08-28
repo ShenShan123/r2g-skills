@@ -33,7 +33,8 @@ def _membership(conn: sqlite3.Connection, transition_id: str,
 
 
 def _affected_rule_ids(conn: sqlite3.Connection,
-                       transition_id: str) -> tuple[str, ...]:
+                       transition_id: str, *,
+                       campaign_id: str) -> tuple[str, ...]:
     """Resolve rules whose episode-owned witnesses include this transition.
 
     A rule is affected only when its immutable source witness names the
@@ -46,7 +47,68 @@ def _affected_rule_ids(conn: sqlite3.Connection,
              JOIN tehm_episode_steps es ON es.episode_id=rs.episode_id
             WHERE es.transition_id=?
             ORDER BY rs.rule_id""", (transition_id,)).fetchall()
-    return tuple(str(row["rule_id"]) for row in rows if row["rule_id"])
+    affected: list[str] = []
+    for raw in rows:
+        rule_id = str(raw["rule_id"] or "")
+        if not rule_id:
+            raise ValueError("online affected rule witness has no rule ID")
+        if conn.execute(
+                "SELECT 1 FROM tehm_rules WHERE rule_id=?", (rule_id,)
+        ).fetchone() is None:
+            raise ValueError("online affected rule witness references missing rule")
+        source_rows = conn.execute(
+            """SELECT episode_id, source_substitution_json
+                 FROM tehm_rule_sources
+                WHERE rule_id=? ORDER BY episode_id""", (rule_id,)
+        ).fetchall()
+        if not source_rows:
+            raise ValueError("online affected rule witness has no source rows")
+        source_ids: set[str] = set()
+        owns_transition = False
+        for source_row in source_rows:
+            episode_id = str(source_row["episode_id"] or "")
+            try:
+                substitutions = json.loads(
+                    source_row["source_substitution_json"] or "{}")
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise ValueError(
+                    "online affected rule source witness is malformed") from exc
+            if (not isinstance(substitutions, dict) or not substitutions or
+                    any(not isinstance(key, str) or not key
+                        for key in substitutions)):
+                raise ValueError("online affected rule source witness is malformed")
+            episode_steps = conn.execute(
+                """SELECT transition_id FROM tehm_episode_steps
+                    WHERE episode_id=?""", (episode_id,)).fetchall()
+            step_ids = {str(step["transition_id"]) for step in episode_steps}
+            row_ids = {str(key) for key in substitutions}
+            if not row_ids <= step_ids:
+                raise ValueError(
+                    "online affected rule source is outside episode witness")
+            owns_transition = owns_transition or transition_id in row_ids
+            source_ids.update(row_ids)
+        if not owns_transition:
+            # The initial join selected the rule through an episode step, so a
+            # source map omitting that transition is a direct provenance
+            # contradiction rather than an unrelated rule.
+            raise ValueError(
+                "online affected rule source omits observed transition")
+        placeholders = ",".join("?" for _ in source_ids)
+        memberships = conn.execute(
+            f"""SELECT transition_id, split, learner_eligible
+                   FROM tehm_dataset_membership
+                  WHERE campaign_id=? AND transition_id IN ({placeholders})""",
+            (campaign_id, *sorted(source_ids))).fetchall()
+        by_transition = {str(item["transition_id"]): item
+                         for item in memberships}
+        if len(by_transition) != len(source_ids) or any(
+                str(by_transition[source_id]["split"]) != "training" or
+                not bool(by_transition[source_id]["learner_eligible"])
+                for source_id in source_ids):
+            raise ValueError(
+                "online affected rule source is not target-campaign training evidence")
+        affected.append(rule_id)
+    return tuple(sorted(set(affected)))
 
 
 def _affected_path_ids(
@@ -127,7 +189,8 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
             created_at=created_at)
         fragment = build_transition_causal_fragment(
             conn, transition_id, campaign_id=campaign_id, commit=False)
-        affected_rule_ids = _affected_rule_ids(conn, transition_id)
+        affected_rule_ids = _affected_rule_ids(
+            conn, transition_id, campaign_id=campaign_id)
         affected_path_ids = _affected_path_ids(
             conn, transition_id, mechanism_family=fragment.mechanism_family,
             compatibility_profile=fragment.compatibility_profile,

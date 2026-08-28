@@ -226,6 +226,11 @@ savepoint。`ConsolidationTriggerReceipt` 与
 依赖事件 JSON 反查。它只增强 shadow/evaluation evidence，不写 canonical rule、lifecycle
 或 production runtime。
 
+rule witness 的解析还会重放 `tehm_rule_sources.source_substitution_json` 与 episode
+step 覆盖关系，确认引用的 rule 仍存在，并要求该 rule 的全部 source transitions 都是
+目标 campaign 的 training learner evidence。缺失、损坏、遗漏当前 transition 或混合
+campaign 会拒绝整个 observation，防止只返回一个局部 rule ID。
+
 当 preview 需要进入试验阶段时，`evolution.run_shadow_candidate_trial()` 会把 TEHM
 连接复制到内存 staging DB，在 staging 内重建并登记 `shadow → candidate`，然后复用
 现有 A/B trial adapter。Icarus/ORFS 执行器通过 evaluator callback 注入；即使六项

@@ -3653,3 +3653,10 @@ crystallization，仍需单独的 authority receipt、held-out/rollback/registry
 source-owned IDs；decision 直接复制 trigger witness，因而 proposal、CLI 和测试可在
 不读取事件表的情况下保持同一 lineage。这里的 API 传播仍是 shadow evidence，不改变
 任何 learner admission、canonical import 或 production authority。
+
+rule witness 的实现也在 observation 边界重放 `tehm_rule_sources`：逐行解析
+`source_substitution_json`，验证 source ID 属于对应 episode steps、rule 定义存在且
+全部 source transition 都满足目标 campaign 的 `training ∧ learner_eligible`。若当前
+transition 被 episode-step 关联却被 source map 遗漏，或 source 集合跨 campaign/损坏，
+observation 直接 fail-closed 并回滚 savepoint；不会返回一个未经完整 provenance
+证明的局部 affected rule ID。
