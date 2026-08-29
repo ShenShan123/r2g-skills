@@ -139,6 +139,51 @@ def preflight_digest(result: Mapping) -> str:
     return hashlib.sha256(stable_dumps(dict(result)).encode("utf-8")).hexdigest()
 
 
+def validate_persisted_execution_preflight(
+        action: Mapping, verification: Mapping) -> dict | None:
+    """Require an effective routing receipt when replaying a learner row.
+
+    A persisted ORFS record is a source receipt, not proof that a config edit
+    reached the flow.  The capture lane records the preflight beside the
+    verifier, but legacy or hand-authored rows can omit it.  Any routing edit
+    without a content-bound ``EFFECTIVE`` receipt is therefore rejected at the
+    authority/import boundary.  Non-routing actions retain the historical
+    schema and return ``None``.
+    """
+    if not isinstance(action, Mapping):
+        raise ValueError("routing_preflight_action_malformed")
+    payload = action.get("payload")
+    edits = payload.get("config_edits") if isinstance(payload, Mapping) else {}
+    if not isinstance(edits, Mapping):
+        edits = {}
+    if ROUTING_LAYER_ADJUSTMENT not in edits:
+        return None
+    if not isinstance(verification, Mapping):
+        raise ValueError("routing_preflight_verification_malformed")
+    receipt = verification.get("execution_preflight")
+    if not isinstance(receipt, Mapping):
+        raise ValueError("routing_preflight_missing")
+    receipt = dict(receipt)
+    if receipt.get("version") != PREFLIGHT_VERSION:
+        raise ValueError("routing_preflight_version_mismatch")
+    if receipt.get("knob") != ROUTING_LAYER_ADJUSTMENT:
+        raise ValueError("routing_preflight_knob_mismatch")
+    if receipt.get("requested") is not True:
+        raise ValueError("routing_preflight_request_missing")
+    if receipt.get("enforced") is not True:
+        raise ValueError("routing_preflight_not_enforced")
+    if receipt.get("status") != "EFFECTIVE":
+        raise ValueError(
+            "routing_preflight_not_effective:" + str(receipt.get("status")))
+    digest = receipt.get("digest")
+    if type(digest) is not str or not digest:
+        raise ValueError("routing_preflight_digest_missing")
+    unsigned = {key: value for key, value in receipt.items() if key != "digest"}
+    if digest != preflight_digest(unsigned):
+        raise ValueError("routing_preflight_digest_mismatch")
+    return receipt
+
+
 def _expand_make_path(value: str, *, root: Path, platform: str,
                       config: Mapping) -> str:
     """Resolve the small Make-variable vocabulary used by ORFS config files."""

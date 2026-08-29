@@ -1,0 +1,34 @@
+{
+  "version": "tehm-orfs-routing-authority-preflight-v1",
+  "scope": "legacy-and-direct-import-boundaries",
+  "routing_knob": "ROUTING_LAYER_ADJUSTMENT",
+  "required_receipt": {
+    "version": "orfs-routing-preflight-v1",
+    "status": "EFFECTIVE",
+    "requested": true,
+    "enforced": true,
+    "digest_bound": true
+  },
+  "fail_closed_cases": [
+    "missing receipt",
+    "NOT_CHECKED receipt",
+    "NO_OP receipt",
+    "UNKNOWN receipt",
+    "version mismatch",
+    "digest mismatch"
+  ],
+  "protected_boundaries": [
+    "support staging import",
+    "staging witness replay for canonical import",
+    "external authority harmful/conformal projection"
+  ],
+  "validation": {
+    "orfs_preflight_direct_tests": 8,
+    "legacy_support_import_rejected": true,
+    "legacy_authority_projection_rejected": true,
+    "non_routing_compatibility_preserved": true,
+    "canonical_memory_mutation": "none",
+    "authority_mutation": "none",
+    "production_runtime_import": false
+  }
+}

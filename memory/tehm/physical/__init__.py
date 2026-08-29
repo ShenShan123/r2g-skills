@@ -28,7 +28,7 @@ from tehm.physical.orfs_ppa import (
     ORFS_PPA_VERSION, build_orfs_pair, calibration_group_key, extract_orfs_ppa)
 from tehm.physical.orfs_preflight import (
     PREFLIGHT_VERSION, inspect_routing_layer_adjustment, parse_orfs_config,
-    preflight_digest)
+    preflight_digest, validate_persisted_execution_preflight)
 from tehm.physical.utility_contracts import (
     TIMING_RELIEF_BUDGETED_V1_ID,
     TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID,
@@ -48,6 +48,7 @@ __all__ = ["PHYSICAL_METRICS", "PhysicalEffect", "extract_deltas",
            "calibration_group_key",
            "PREFLIGHT_VERSION", "inspect_routing_layer_adjustment",
            "parse_orfs_config", "preflight_digest",
+           "validate_persisted_execution_preflight",
            "GRAPH_CONTEXT_VERSION",
            "PhysicalGraphContext", "load_defgraph_context",
            "TIMING_RELIEF_BUDGETED_V1_ID",

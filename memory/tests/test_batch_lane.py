@@ -636,6 +636,35 @@ def test_canonical_import_requires_all_gates_and_exact_bindings(tmp_path):
             staging_db=staging, canonical_db=canonical)
 
 
+def test_support_routing_record_without_preflight_is_rejected(
+        tmp_path, sample_record_dict):
+    """Legacy routing rows cannot cross the learner staging boundary."""
+    root = tmp_path / "routing-legacy"
+    observations = root / "observations.jsonl"
+    record = json.loads(json.dumps(sample_record_dict))
+    record["record_id"] = "legacy-routing-record"
+    record["lineage_id"] = "legacy-routing-lineage"
+    record["episode"]["episode_id"] = "legacy-routing-episode"
+    record["episode"]["lineage_id"] = record["lineage_id"]
+    record["action"]["payload"]["config_edits"] = {
+        "ROUTING_LAYER_ADJUSTMENT": "0.05"
+    }
+    write_external_observations(observations, [{
+        "receipt_id": "legacy-routing-receipt",
+        "case_id": "legacy-routing-case",
+        "lineage_id": record["lineage_id"],
+        "platform": "sky130hs", "family": "DENSITY_RELIEF",
+        "split": "support", "classification": "ELIGIBLE_POSITIVE",
+        "learner_eligible": True, "record": record,
+    }])
+    with pytest.raises(BatchLaneError, match="routing preflight is invalid"):
+        import_support_to_staging(
+            observations_path=observations,
+            staging_db=root / "staging" / "tehm.sqlite",
+            staging_artifacts=root / "staging" / "artifacts",
+            campaign_root=root, campaign_id="legacy-routing")
+
+
 def test_canonical_import_binds_authority_case_selection_and_campaign(
         tmp_path, sample_record_dict):
     from scripts.build_orfs_authority_receipt import build_receipt

@@ -3,8 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tehm.physical.orfs_preflight import (
-    inspect_routing_layer_adjustment, preflight_digest)
+    inspect_routing_layer_adjustment, preflight_digest,
+    validate_persisted_execution_preflight)
 
 
 def _orfs_root(tmp_path: Path, platform: str, text: str) -> Path:
@@ -81,3 +84,39 @@ def test_non_routing_action_is_not_applicable():
         orfs_root="/does/not/matter")
     assert result["status"] == "NOT_APPLICABLE"
     assert result["enforced"] is False
+
+
+def test_persisted_effective_receipt_is_digest_bound(tmp_path):
+    root = _orfs_root(
+        tmp_path, "asap7",
+        "set_global_routing_layer_adjustment $::env(MIN_ROUTING_LAYER)-"
+        "$::env(MAX_ROUTING_LAYER) $::env(ROUTING_LAYER_ADJUSTMENT)\n")
+    receipt = inspect_routing_layer_adjustment(
+        "asap7", {"ROUTING_LAYER_ADJUSTMENT": "0.05"}, orfs_root=root)
+    receipt["digest"] = preflight_digest(receipt)
+    action = {"payload": {"config_edits": {
+        "ROUTING_LAYER_ADJUSTMENT": "0.05"}}}
+    assert validate_persisted_execution_preflight(
+        action, {"execution_preflight": receipt})["status"] == "EFFECTIVE"
+
+    tampered = dict(receipt)
+    tampered["hook_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="digest_mismatch"):
+        validate_persisted_execution_preflight(
+            action, {"execution_preflight": tampered})
+
+
+def test_persisted_routing_receipt_missing_or_noop_fails_closed():
+    action = {"payload": {"config_edits": {
+        "ROUTING_LAYER_ADJUSTMENT": "0.05"}}}
+    with pytest.raises(ValueError, match="preflight_missing"):
+        validate_persisted_execution_preflight(action, {})
+    noop = {
+        "version": "orfs-routing-preflight-v1",
+        "knob": "ROUTING_LAYER_ADJUSTMENT", "requested": True,
+        "enforced": True, "status": "NO_OP",
+    }
+    noop["digest"] = preflight_digest(noop)
+    with pytest.raises(ValueError, match="not_effective:NO_OP"):
+        validate_persisted_execution_preflight(
+            action, {"execution_preflight": noop})

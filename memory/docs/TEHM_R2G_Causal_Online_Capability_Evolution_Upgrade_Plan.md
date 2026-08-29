@@ -4267,3 +4267,19 @@ physical-looking complete pair：`sky130hs` 固定 `0.2` hook 会在 capture 中
 authority/lifecycle 或 production runtime。下一步仍是在 `asap7` 的 `EFFECTIVE` hook
 上重建 source-disjoint action cohort，再将其 calibration/held-out receipts 送入
 六门 gate 的 DB-bound replay。
+
+### 2026-08-28 authority/import replay preflight firewall
+
+capture 入口的防火墙不能自动修复更早已经落盘的 legacy receipt，也不能阻止操作者
+直接调用 staging/canonical import seam。现已在三处 learner 边界复用同一个持久化
+receipt 校验：support staging import、canonical import 的 staging witness，以及
+external authority projector。只要 action payload 含
+`ROUTING_LAYER_ADJUSTMENT`，记录必须携带 `orfs-routing-preflight-v1` 的
+`EFFECTIVE` receipt、`requested=true`、`enforced=true` 与匹配的 content digest；
+缺失、`NOT_CHECKED`、`NO_OP`、`UNKNOWN`、版本错误或 digest 篡改均 fail-closed。
+
+该校验只针对 routing action，不改变既有非 routing 记录的 transition ID 或 schema
+兼容性。它不回写、不删除历史 staging 数据；历史 no-op row 仍可作为审计材料保留，
+但不能再建立 harmful/conformal authority gate，也不能进入 learner support 或
+canonical memory。下一步仍需在 `asap7` 的真实 `EFFECTIVE` hook 上重新 capture，
+再进行 source-disjoint calibration、held-out transfer 与 A/B efficacy 重放。

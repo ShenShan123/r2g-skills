@@ -30,6 +30,7 @@ from tehm.ids import stable_dumps
 from tehm.physical.graph_context import load_defgraph_context
 from tehm.physical.effects import extract_deltas
 from tehm.physical.memory import PhysicalEffectMemory
+from tehm.physical.orfs_preflight import validate_persisted_execution_preflight
 
 
 BATCH_LANE_VERSION = "orfs-batch-lane-v1"
@@ -166,6 +167,12 @@ def validate_staging_import_witness(
             action = Action.from_dict(record.action)
             delta = ObservationDelta.from_dict(record.observation_delta)
             verifier = VerifierSnapshot.from_dict(record.verification)
+            try:
+                validate_persisted_execution_preflight(action.to_dict(),
+                                                       verifier.to_dict())
+            except ValueError as exc:
+                raise BatchLaneError(
+                    "staging witness routing preflight is invalid: " + str(exc)) from exc
             external_lineage = str(external.get("lineage_id") or "").strip()
             if external_lineage != str(record.lineage_id or "").strip():
                 raise BatchLaneError(
@@ -648,6 +655,12 @@ def import_support_to_staging(*, observations_path: Path, staging_db: Path,
             if row.get("classification") != "ELIGIBLE_POSITIVE" or not row.get("record"):
                 raise BatchLaneError("learner-eligible receipt lacks complete positive evidence")
             record = ExecutionRecord.from_dict(dict(row["record"]))
+            try:
+                validate_persisted_execution_preflight(
+                    record.action, record.verification)
+            except ValueError as exc:
+                raise BatchLaneError(
+                    "learner support routing preflight is invalid: " + str(exc)) from exc
             receipt = capture(
                 conn, store, record, dataset_campaign_id=campaign_id,
                 dataset_split="training", dataset_learner_eligible=True)
@@ -903,6 +916,12 @@ def import_support_to_canonical(*, observations_path: Path, staging_db: Path,
                     not row.get("record")):
                 raise BatchLaneError("authority selected a non-importable observation")
             record = ExecutionRecord.from_dict(dict(row["record"]))
+            try:
+                validate_persisted_execution_preflight(
+                    record.action, record.verification)
+            except ValueError as exc:
+                raise BatchLaneError(
+                    "canonical import routing preflight is invalid: " + str(exc)) from exc
             receipt = capture(
                 conn, store, record, dataset_campaign_id=campaign_id,
                 dataset_split="training", dataset_learner_eligible=True)

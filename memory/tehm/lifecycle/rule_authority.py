@@ -26,6 +26,7 @@ from tehm.causal.transfer_ledger import (
     load_causal_transfer_receipt, verify_causal_transfer)
 from tehm.dataset import normalize_stored_learner_bool
 from tehm.ids import stable_dumps
+from tehm.physical.orfs_preflight import validate_persisted_execution_preflight
 
 from .promotion_gates import PROMOTION_GATE_VERSION, REQUIRED_GATES, evaluate_promotion_gates
 from .rule_status import get_status, set_status
@@ -770,6 +771,12 @@ def build_external_observation_authority_evidence(
                 })
             delta = dict(record["observation_delta"])
             verifier = dict(record["verification"])
+            try:
+                validate_persisted_execution_preflight(
+                    record.get("action"), verifier)
+            except ValueError as exc:
+                raise ValueError(
+                    "external_authority:" + str(exc)) from exc
             if verifier.get("verdict") != "PASS":
                 raise ValueError("external_authority:record_not_pass")
             if delta.get("created_regressions"):

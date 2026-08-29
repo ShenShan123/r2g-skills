@@ -39,3 +39,16 @@ When `ORFS_ROOT` is declared but the hook cannot be read, the preflight is
 `UNKNOWN` and the real executor does not launch either arm. Compatibility
 fake-flow fixtures without `ORFS_ROOT` are marked `NOT_CHECKED` rather than
 being treated as production semantic evidence.
+
+## Authority/import replay firewall
+
+The same receipt requirement is now enforced when old or hand-authored rows are
+replayed: a routing action must carry a digest-bound `EFFECTIVE` preflight with
+`requested=true` and `enforced=true`. Missing, `NOT_CHECKED`, `NO_OP`,
+`UNKNOWN`, version-mismatched, or tampered receipts are rejected by support
+staging import, canonical staging-witness replay, and external authority
+projection. Historical rows remain available for audit and are not rewritten;
+they simply cannot establish learner or promotion evidence.
+
+The bounded validation receipt is
+`authority_replay_preflight_report.json`.

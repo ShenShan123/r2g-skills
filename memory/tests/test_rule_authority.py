@@ -500,6 +500,47 @@ def test_external_observation_projection_binds_staging_transition(
             case_ids=["unrelated-case"], rule_id=rule_id)
 
 
+def test_external_authority_rejects_legacy_routing_receipt_without_preflight(
+        tmp_tehm, sample_record_dict):
+    """A complete-looking legacy routing row cannot establish a gate."""
+    authority_conn, _, tmp_root = tmp_tehm
+    staging_db = tmp_root / "legacy-routing" / "staging" / "tehm.sqlite"
+    staging_db.parent.mkdir(parents=True)
+    record = json.loads(json.dumps(sample_record_dict))
+    record["record_id"] = "legacy-routing-authority-record"
+    record["lineage_id"] = "legacy-routing-authority-lineage"
+    record["episode"]["episode_id"] = "legacy-routing-authority-episode"
+    record["episode"]["lineage_id"] = record["lineage_id"]
+    record["action"]["payload"]["config_edits"] = {
+        "ROUTING_LAYER_ADJUSTMENT": "0.05"
+    }
+    record["observation_delta"]["experiment_kind"] = "REPAIR"
+    record["observation_delta"]["utility_verdict"] = "NEUTRAL"
+    normalised = asdict(ExecutionRecord.from_dict(record))
+    staging_conn = tehm_db.connect(staging_db)
+    tehm_db.ensure_schema(staging_conn)
+    capture(
+        staging_conn, ArtifactStore(staging_db.parent / "artifacts"),
+        ExecutionRecord.from_dict(normalised),
+        dataset_campaign_id="legacy-routing", dataset_split="calibration",
+        dataset_learner_eligible=False)
+    staging_conn.close()
+    observations = staging_db.parent.parent / "observations.jsonl"
+    write_external_observations(observations, [{
+        "receipt_id": "legacy-routing-authority-receipt",
+        "case_id": "legacy-routing-authority-case",
+        "lineage_id": normalised["lineage_id"], "split": "calibration",
+        "classification": "ELIGIBLE_POSITIVE", "learner_eligible": False,
+        "before": {"complete": True}, "after": {"complete": True},
+        "record": normalised,
+    }])
+    with pytest.raises(ValueError, match="routing_preflight_missing"):
+        build_external_observation_authority_evidence(
+            authority_conn, observations_path=observations,
+            staging_db=staging_db, campaign_id="legacy-routing",
+            case_ids=["legacy-routing-authority-case"])
+
+
 def test_external_authority_batch_combines_sources_deterministically(
         tmp_tehm, sample_record_dict):
     """Multi-campaign utility/calibration evidence is bound without hand merge."""
