@@ -1,0 +1,71 @@
+{
+  "version": "tehm-orfs-calibration-c50-r1",
+  "platform": "sky130hs",
+  "family": "DENSITY_RELIEF",
+  "action": {
+    "domain": "flow.CONFIG_DELTA",
+    "config_edits": {
+      "CORE_UTILIZATION": "40"
+    },
+    "before": "50",
+    "after": "40"
+  },
+  "lineages": [
+    {
+      "lineage_id": "orfs-v4:sky130hs:future12:base0",
+      "source_digest": "a4e5fe8555aa3269eb9ccfe8c39bb37f4ce63efaaf700a7fb9b8eff7853b9a51",
+      "manifest_sha256": "882376e3777b167a492c4a890f8ac56f87d070c3a2d65300e6955f861a8305d9"
+    },
+    {
+      "lineage_id": "orfs-v4:sky130hs:future13:base0",
+      "source_digest": "af0fa605e995abc75fb5fd0119c2d89b3c27fd3fafc049b567bf16c8dda4da60",
+      "manifest_sha256": "46756040649b36ed35743db53844f62c4d03ba209b13cdf85158739d5c15d237"
+    },
+    {
+      "lineage_id": "orfs-v4:sky130hs:future14:base0",
+      "source_digest": "e197bfc45d7b2b65c771326d8fe28331bba8007a7f49507fb9e819b52ff006fa",
+      "manifest_sha256": "fbeede25a75c398996ea833748b75c5b1d7452da6ca3751be08bca273b2e01dd"
+    }
+  ],
+  "oracle_and_graph": {
+    "orfs_arms": 6,
+    "orfs_success_arms": 6,
+    "equivalence_pass": 3,
+    "strict_signoff_rc_zero": 6,
+    "graph_complete_arms": 6,
+    "capture_oracle_complete": 3,
+    "dataset_split": "calibration",
+    "learner_eligible": false
+  },
+  "prediction": {
+    "authority_snapshot": "/tmp/tehm-orfs/density-calibration-authority-shadow-r1/authority_shadow.sqlite",
+    "authority_snapshot_sha256": "9699301c2df087b434499e264405f35e88c6bbc2e8cb5ddc5a620198d2cc9780",
+    "support": 3,
+    "unique_graph_contexts": 3,
+    "nearest_distance": {
+      "future12": 0.401083,
+      "future13": 0.373894,
+      "future14": 0.0
+    },
+    "finite_metrics": ["wns_ns", "tns_ns", "area_um2", "power_w"],
+    "empirical_coverage": 1.0,
+    "lineage_group_coverage": 1.0
+  },
+  "calibration": {
+    "status": "shadow_calibration_failed",
+    "checks": {
+      "lineage_firewall": true,
+      "minimum_lineage_groups": true,
+      "per_metric_support": true,
+      "conformal_lineage_coverage": true,
+      "harmful_rate": false,
+      "pareto_definition_validated": true
+    },
+    "harmful_rate": 1.0,
+    "harmful_lineages": 3,
+    "reason": "all three rows exceed the current max-regression policy on area and/or timing"
+  },
+  "canonical_memory_mutation": "none",
+  "promotion_eligible": false,
+  "promotion_attempted": false
+}

@@ -110,6 +110,40 @@ _SRC_ONLY_DESIGNS = {
 }
 
 
+def _template_auxiliary_edits(
+        cfg_template: Path, template: Path, *, logical_top_changed: bool) -> dict[str, str]:
+    """Bind template-owned auxiliary paths when the logical RTL top changes.
+
+    Source-only/custom-RTL campaigns reuse a platform design template but set
+    ``DESIGN_NAME`` to the source-bound top.  A template such as nangate45/gcd
+    expresses its PDN path through ``$(DESIGN_NAME)``; without rebinding, the
+    materialized project asks ORFS for ``flow/designs/<new-top>/grid_*.tcl``
+    even though the file belongs to the reused gcd template.  Resolve only
+    paths that explicitly depend on the changed top and require the concrete
+    template file to exist.  Native designs retain their original config
+    semantics unchanged.
+    """
+    if not logical_top_changed:
+        return {}
+    try:
+        text = cfg_template.read_text(errors="replace")
+    except OSError as exc:
+        raise BatchLaneError(f"template config unreadable: {cfg_template}") from exc
+    match = re.search(
+        r"(?m)^\s*(?:override\s+)?(?:export\s+)?PDN_TCL\s*[:?]?=\s*(.*?)\s*$",
+        text)
+    if not match:
+        return {}
+    raw = match.group(1).strip().rstrip("\\").strip()
+    if "$(DESIGN_NAME)" not in raw and "$(DESIGN_NICKNAME)" not in raw:
+        return {}
+    candidate = (template / Path(raw.split()[-1]).name).resolve()
+    if not candidate.is_file():
+        raise BatchLaneError(
+            f"template auxiliary PDN_TCL is missing for source-bound design: {candidate}")
+    return {"PDN_TCL": str(candidate)}
+
+
 def _sha(path: Path) -> str | None:
     try:
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -230,12 +264,21 @@ def _campaign_inputs(orfs_root: Path, *, designs, platforms,
                    if rtl_override_path is not None else
                    _rtl_files(Path(orfs_root) / "flow" / "designs" /
                               "src" / design))
+            auxiliary_edits = _template_auxiliary_edits(
+                cfg, template,
+                logical_top_changed=(rtl_override_path is not None or
+                                      bool(_SRC_ONLY_DESIGNS.get(design))))
             row = {
                 "platform": str(platform), "design": str(design),
                 "template_design": str(platform_design),
                 "config": _file_record(cfg), "sdc": _file_record(sdc),
                 "rtl": [_file_record(path) for path in rtl],
             }
+            if auxiliary_edits:
+                row["auxiliary"] = [
+                    {"key": key, "file": _file_record(Path(value))}
+                    for key, value in sorted(auxiliary_edits.items())
+                ]
             if semantic_oracle_path is not None:
                 row["semantic_oracle"] = _file_record(semantic_oracle_path)
             rows.append(row)
@@ -641,6 +684,10 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                 util = core_utils[index % len(core_utils)]
                 common = {"CORE_UTILIZATION": str(util),
                           "PLACE_DENSITY_LB_ADDON": "0.25"}
+                common.update(_template_auxiliary_edits(
+                    cfg, template,
+                    logical_top_changed=(rtl_override_path is not None or
+                                          bool(src_template))))
                 if rtl_override:
                     # The logical campaign label may intentionally differ
                     # from the Verilog module name (for example ``fifo``

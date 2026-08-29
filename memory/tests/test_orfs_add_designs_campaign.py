@@ -38,8 +38,10 @@ def _fake_orfs(root: Path) -> Path:
     cfg.mkdir(parents=True)
     (root / "flow" / "Makefile").write_text("all:\n\t@true\n")
     (cfg / "config.mk").write_text(
-        "export DESIGN_NAME = gcd\nexport PLATFORM = sky130hs\n")
+        "export DESIGN_NAME = gcd\nexport PLATFORM = sky130hs\n"
+        "export PDN_TCL ?= $(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NAME)/grid.tcl\n")
     (cfg / "constraint.sdc").write_text("set clk_period 10\n")
+    (cfg / "grid.tcl").write_text("# template PDN\n")
     src = root / "flow" / "designs" / "src" / "uart"
     src.mkdir(parents=True)
     (src / "uart.v").write_text("module uart(input clk); endmodule\n")
@@ -62,6 +64,9 @@ def test_prepare_requires_source_freeze_and_binds_inputs(tmp_path):
     item = manifest["items"][0]
     assert item["input_bindings"]["before"]["source_digest"]
     assert item["timing_contract"]["before"]["clock_period_ns"] == 10.0
+    config = Path(item["before_project"]) / "constraints" / "config.mk"
+    assert str((orfs / "flow/designs/sky130hs/gcd/grid.tcl").resolve()) in config.read_text()
+    assert manifest["source_freeze_digest"]
 
     override.write_text("set clk_period 11\n")
     with pytest.raises(BatchLaneError, match="input digest mismatch"):

@@ -4320,3 +4320,33 @@ in-scope 平台的 DRC/LVS/RCX/timing strict oracle；后者仍须由 strict sig
 DRC/LVS/RCX/timing/graph/toolchain receipts。若当前 ORFS tree 没有这样的 routing
 平台，应先修复/安装受支持的 signoff deck 并重新 source-freeze；在此之前保留
 `asap7` 结果为负证据，继续维护 Parametric shadow-only 边界。
+
+### 2026-08-29 source-disjoint calibration cohort 与 safety gate 负证据
+
+按上述依赖顺序没有继续重跑 `asap7`，而是在 authority 有历史 support 的
+`sky130hs` 上建立了三条新的 source-disjoint custom RTL lineage：
+`future_prospective_logic_v12/v13/v14`，执行 `DENSITY_RELIEF` 的
+`CORE_UTILIZATION 50 -> 40`。六个 before/after arm 均完成 ORFS
+（synthesis→finish、route、PPA、timing），三条 Yosys source-equivalence 均为
+`PASS`，六个 strict-signoff 返回码均为 `0`，六个 graph extraction 均完成；capture
+记录 `oracle_complete=true`，但因为是 `calibration` split，三条 membership 均为
+`learner_eligible=false`。完整摘要保存在
+`evidence/tehm-orfs-calibration-c50-r1/`，原始 EDA 树仍只在 scratch 中。
+
+使用独立 staging support 组成的临时 authority snapshot 做 physical kNN 时，三条
+query 都取得了三个 action-compatible strict-clean graph context，最近距离分别为
+`0.401083/0.373894/0.0`，四个有限 PPA metric 的 empirical 与 lineage-grouped
+coverage 都为 `1.0`。但 conformal safety gate 的结果是
+`harmful_rate=1.0`：三条 row 都在当前 max-regression policy 下出现面积和/或时序
+退化。因此 calibration 状态保持 `shadow_calibration_failed`，不能生成可供
+Parametric runtime 读取的 ready policy，也不能投影为 harmful/conformal authority
+PASS。该负结果是有效的 safety evidence，不是失败的模型训练结果；canonical memory、
+authority ledger、lifecycle 和 production runtime 均未改变。
+
+本轮还修复了 source-only/custom RTL 物料化时的模板辅助文件绑定：当模板
+`PDN_TCL` 通过 `$(DESIGN_NAME)` 间接引用 `grid_*.tcl` 时，campaign source freeze
+现在记录并绑定模板中的真实文件，避免新 top 下的缺文件被误判为 RTL 或模型失败。
+对应回归测试覆盖 source freeze 与物料化 config。下一步应选择确实有可观测正向
+utility（而非仅完成）的 action point，重新构造 training/calibration/held-out
+分层；在 harmful-rate、conformal、cross-lineage 与 efficacy LCB 同时通过前，仍不
+得进入 canonical 或 production。
