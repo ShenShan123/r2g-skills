@@ -170,7 +170,13 @@ def migrate(source: Path, output: Path, *, report: Path | None = None,
 
 def _open_read_only(path: Path) -> sqlite3.Connection:
     encoded = str(path).replace("?", "%3F")
-    conn = sqlite3.connect(f"file:{encoded}?mode=ro", uri=True, timeout=30)
+    # ``immutable=1`` is required here just as it is for the normal TEHM
+    # read-only connector.  A plain ``mode=ro`` connection may still create a
+    # ``-shm`` sidecar when the source snapshot is WAL-backed; that is a
+    # filesystem mutation of the supposedly immutable input and makes the
+    # source-identity check report a false migration failure.
+    conn = sqlite3.connect(
+        f"file:{encoded}?mode=ro&immutable=1", uri=True, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     return conn

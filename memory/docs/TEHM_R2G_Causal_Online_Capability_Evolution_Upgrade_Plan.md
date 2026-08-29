@@ -4460,3 +4460,20 @@ source-disjoint、strict-clean 且跨 lineage 的 support，再重算 conformal/
 receipts 与 staging SQLite/artifacts）位于
 `/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v81v86-clean/`，原始
 ORFS RUN 树仍保留在 `/tmp/tehm-v4-clean-v81v86`。
+
+### 2026-08-29 v3 快照迁移的源不变性修复与 authority 负审计
+
+对 `evidence/tehm-authority-v1/v4/staging/tehm.sqlite` 做了真正的输出式
+`tehm-v3 -> tehm-v4` migration。首次执行暴露出 migration reader 使用普通
+`mode=ro` 时，SQLite 会为 WAL 源快照创建 `-wal/-shm` sidecar，从而把“只读读取”
+误判成 source mutation。现已统一改为 `mode=ro&immutable=1`，并加入 WAL-backed
+regression test；迁移报告确认 13 张 canonical 表逐表 count/digest 保持不变、源文件
+`source_unchanged=true`，但输出文件明确标记 `replay_required=true`。
+
+迁移副本随后执行完整 H1–H12/A1 审计，结果仍为负：H1 通过，但 H2 有 dangling
+transition/episode provenance，H7 有 obligation coverage/status 不完整，H10 缺失
+activation rollback authority；因此最终决策为 `DENY_REPLAY_NOT_VERIFIED`，不会被当作
+support、policy replay 或 promotion 输入。可复核材料位于
+`evidence/tehm-authority-v1/v4/migration-audit-v1/`。这进一步确认 schema migration
+只能修复读取兼容性，不能修复历史证据完整性；下一步仍需用当前 v4 capture/replay
+重建完整 staging fixture，再进行 observation 和六项 promotion gate。

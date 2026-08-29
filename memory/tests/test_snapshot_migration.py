@@ -11,6 +11,11 @@ from tehm import db
 
 def _v3_source(path):
     conn = sqlite3.connect(path)
+    # Keep the source as a WAL-backed snapshot without sidecars.  A plain
+    # ``mode=ro`` reader creates ``-wal``/``-shm`` here, which used to make the
+    # migration's source-immutability check fail even though no source rows
+    # were changed.  The migration must use SQLite's immutable URI mode.
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
     conn.executescript("""
         CREATE TABLE tehm_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);

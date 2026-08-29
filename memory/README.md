@@ -1002,6 +1002,13 @@ canonical memory。
   strict/sample/calibration receipts 与 staging SQLite/artifacts）位于
   `/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v81v86-clean/`，原始
   ORFS RUN 树仍保留在 `/tmp/tehm-v4-clean-v81v86`。
+- v3 authority staging 快照已通过输出式 migration 生成 v4 副本；migration reader
+  改用 SQLite `immutable=1`，避免 WAL 源在只读审计时产生 `-wal/-shm` sidecar 并误报
+  source mutation。13 张 canonical 表逐表 count/digest 保持不变，且回归测试覆盖
+  WAL-backed source。迁移副本的 H1–H12/A1 审计仍因 H2 dangling provenance、H7
+  obligation 不完整、H10 rollback authority 缺失而 `DENY_REPLAY_NOT_VERIFIED`；完整
+  负证据位于 `evidence/tehm-authority-v1/v4/migration-audit-v1/`。migration 只修复
+  schema 可读性，不修复证据完整性，也不改变 canonical memory、authority 或 runtime。
 - Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
   receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
   `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选

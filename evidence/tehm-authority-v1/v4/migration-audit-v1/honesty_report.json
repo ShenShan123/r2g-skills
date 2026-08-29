@@ -1,0 +1,80 @@
+{
+  "blocking_gates": {
+    "H10": "FAIL: activation lacks rollback authority receipt",
+    "H2": "FAIL: dangling transition/episode provenance inherited from v3 snapshot",
+    "H7": "FAIL: activation obligation coverage/status is incomplete"
+  },
+  "canonical_memory_mutation": "none; output-only migration and read-only audit",
+  "counts": {
+    "tehm_activations": 3,
+    "tehm_physical_effects": 8,
+    "tehm_states": 16,
+    "tehm_transitions": 8,
+    "tehm_views": 54
+  },
+  "decision": "DENY_REPLAY_NOT_VERIFIED",
+  "honesty": {
+    "A1": {
+      "detail": "16 artifacts verified against content-addressed blobs",
+      "ok": true
+    },
+    "H1": {
+      "detail": "8 complete transitions",
+      "ok": true
+    },
+    "H10": {
+      "detail": "1 rollback authority failures: ['manual-v2-303a0882449eb7ba:no-activation-rollback']",
+      "ok": false
+    },
+    "H11": {
+      "detail": "not_applicable: no evidence bundle supplied",
+      "ok": true
+    },
+    "H12": {
+      "detail": "fail-closed backend; no silent legacy fallback",
+      "ok": true
+    },
+    "H2": {
+      "detail": "6 provenance/integrity issues: ['transition:dangling:transition_6a37be1a4c1c6a67', 'transition:dangling:transition_6a37be1a4c1c6a67', 'transition:dangling:transition_9ae239fae6942495', 'transition:dangling:transition_9ae239fae6942495', 'episode:dangling:episode_8023440e659690ea']",
+      "ok": false
+    },
+    "H3": {
+      "detail": "all stored semantic views re-extract tri-valid predicates",
+      "ok": true
+    },
+    "H4": {
+      "detail": "8 rule sources have episode-owned witnesses",
+      "ok": true
+    },
+    "H5": {
+      "detail": "1 rules preserve V2→V1 validity order",
+      "ok": true
+    },
+    "H6": {
+      "detail": "1 rules, 1 lifecycle rows (validity-gated)",
+      "ok": true
+    },
+    "H7": {
+      "detail": "2 activation honesty failures: ['act_ab_ec5dede43615c311cf:incomplete-obligation-coverage', 'act_ab_ec5dede43615c311cf:unverified-obligation-result']",
+      "ok": false
+    },
+    "H8": {
+      "detail": "isolated TEHM store; no legacy authority present",
+      "ok": true
+    },
+    "H9": {
+      "detail": "not_applicable: no evaluation firewall manifest",
+      "ok": true
+    }
+  },
+  "honesty_all_ok": false,
+  "migrated_output": "migrated_snapshot.sqlite",
+  "migrated_output_sha256": "c1a9922092fac83925c3d7554140cfd8f6cc9be14b971f3ffdd51b45eb77e0cb",
+  "migration_report": "migration_report.json",
+  "note": "Schema migration preserves canonical rows but does not repair evidence integrity; rebuild a fresh v4 staging fixture before policy replay.",
+  "promotion_attempted": false,
+  "promotion_eligible": false,
+  "schema_version": "tehm-v4",
+  "source_snapshot": "evidence/tehm-authority-v1/v4/staging/tehm.sqlite",
+  "version": "tehm-authority-v4-migration-audit-v1"
+}
