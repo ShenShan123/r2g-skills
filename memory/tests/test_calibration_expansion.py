@@ -19,6 +19,7 @@ from run_calibration_expansion import (  # noqa: E402
     _strict_oracle_one,
     _strict_oracle_projects,
     make_samples,
+    main,
     _subset_manifest,
 )
 from tehm import db as tehm_db
@@ -45,6 +46,53 @@ def test_v87_v92_cohort_is_preregistered_and_source_disjoint():
         assert f"current_design {design}" in sdc.read_text()
         digests.add(hashlib.sha256(rtl.read_bytes()).hexdigest())
     assert len(digests) == len(suffixes)
+
+
+def test_v93_v104_action_screen_is_exact_and_preregistered():
+    specs = {row["suffix"]: row for row in LINEAGES}
+    action36 = [f"v{index}" for index in range(93, 99)]
+    action38 = [f"v{index}" for index in range(99, 105)]
+    assert [specs[suffix]["base"] for suffix in action36] == [
+        "30", "32", "34", "30", "32", "34"]
+    assert [specs[suffix]["base"] for suffix in action38] == [
+        "30", "32", "34", "30", "32", "34"]
+    assert {specs[suffix]["action"] for suffix in action36} == {"36"}
+    assert {specs[suffix]["action"] for suffix in action38} == {"38"}
+    for suffixes in (action36, action38):
+        assert [specs[suffix]["screen_split"] for suffix in suffixes] == [
+            "support", "support", "support",
+            "heldout", "heldout", "heldout"]
+
+    fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "physical_rtl"
+    rtl_digests = set()
+    for suffix in action36 + action38:
+        design = specs[suffix]["design"]
+        rtl = fixture_root / f"{design}.v"
+        sdc = fixture_root / f"{design}.sdc"
+        assert rtl.is_file() and sdc.is_file()
+        assert f"module {design}" in rtl.read_text()
+        assert f"current_design {design}" in sdc.read_text()
+        rtl_digests.add(hashlib.sha256(rtl.read_bytes()).hexdigest())
+    assert len(rtl_digests) == 12
+
+    replacements = {
+        "v105": {"action": "36", "base": "34", "replacement_for": "v95"},
+        "v106": {"action": "38", "base": "30", "replacement_for": "v99"},
+    }
+    for suffix, expected in replacements.items():
+        replacement = specs[suffix]
+        assert replacement["action"] == expected["action"]
+        assert replacement["base"] == expected["base"]
+        assert replacement["screen_split"] == "support"
+        assert replacement["replacement_for"] == expected["replacement_for"]
+        design = replacement["design"]
+        rtl = fixture_root / f"{design}.v"
+        sdc = fixture_root / f"{design}.sdc"
+        assert rtl.is_file() and sdc.is_file()
+        digest = hashlib.sha256(rtl.read_bytes()).hexdigest()
+        assert digest not in rtl_digests
+        rtl_digests.add(digest)
+    assert len(rtl_digests) == 14
 
 
 def test_grouped_shadow_admission_rejects_harmful_heldout_lineage():
@@ -127,6 +175,30 @@ def test_subset_manifest_selects_scratch_lineages_without_mutating_source():
     assert [item["case_id"] for item in selected["items"]] == ["v40"]
     assert selected["selected_suffixes"] == ["v40"]
     assert len(manifest["items"]) == 2
+
+
+def test_promote_phase_accepts_sample_only_support_campaign(tmp_path):
+    root = tmp_path / "scratch"
+    evidence = tmp_path / "evidence"
+    root.mkdir()
+    (root / "campaign_manifest.json").write_text(json.dumps({
+        "version": "calibration-expansion-v1", "items": [],
+    }))
+    (root / "prospective_samples.json").write_text(json.dumps({
+        "samples": [{"lineage_id": "support:a"}], "evidence": [],
+    }))
+    missing = tmp_path / "not-used.json"
+    assert main([
+        "--phase", "promote", "--root", str(root),
+        "--evidence-root", str(evidence),
+        "--v10v11-samples", str(missing),
+        "--v12v13-pairs", str(missing),
+        "--training-manifest", str(missing),
+    ]) == 0
+    assert not (root / "calibration_expansion_report.json").exists()
+    promoted = json.loads((evidence / "promotion_report.json").read_text())
+    assert promoted["evaluated_lineages"] == ["support:a"]
+    assert promoted["promotion_eligible"] is False
 
 
 def test_strict_oracle_runs_signoff_and_timing_and_reuses_bound_receipt(tmp_path,

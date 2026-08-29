@@ -1019,6 +1019,14 @@ canonical memory。
   interval 诊断与 Parametric grouped admission；conformal radius 的 inclusive 浮点边界
   也已按既有 epsilon 修复。durable receipts 位于
   `/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v87v92-clean/`。
+- action36/action38 筛选分别建立了 3 条 strict-clean exact-signature support 与 3 条
+  完全独立 held-out；原 support v95/v99 strict-dirty 后由显式绑定
+  `replacement_for` 的 v105/v106 补位，没有降低 support 下限。两组 held-out 均 3/3
+  strict-clean，normal coverage 都为 `0.583333`，grouped conformal 四项均为 `1.0`；
+  但 v97/v103 的面积分别退化 `+2/+26um²`，使两组 `harmful_rate=1/3`，所以均未
+  materialize policy 或运行 shadow。sample-only campaign 的 `--phase promote` 也已
+  修复为不再错误依赖 calibration report；support 与 held-out receipts 保存在
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-action36-*` 和 `tehm-p2-action38-*`。
 - Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
   receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
   `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选

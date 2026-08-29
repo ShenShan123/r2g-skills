@@ -138,6 +138,34 @@ LINEAGES = (
     {"suffix": "v90", "design": "future_prospective_logic_v90", "base": "30", "action": "40"},
     {"suffix": "v91", "design": "future_prospective_logic_v91", "base": "32", "action": "40"},
     {"suffix": "v92", "design": "future_prospective_logic_v92", "base": "34", "action": "40"},
+    {"suffix": "v93", "design": "future_prospective_logic_v93", "base": "30",
+     "action": "36", "screen_split": "support"},
+    {"suffix": "v94", "design": "future_prospective_logic_v94", "base": "32",
+     "action": "36", "screen_split": "support"},
+    {"suffix": "v95", "design": "future_prospective_logic_v95", "base": "34",
+     "action": "36", "screen_split": "support"},
+    {"suffix": "v96", "design": "future_prospective_logic_v96", "base": "30",
+     "action": "36", "screen_split": "heldout"},
+    {"suffix": "v97", "design": "future_prospective_logic_v97", "base": "32",
+     "action": "36", "screen_split": "heldout"},
+    {"suffix": "v98", "design": "future_prospective_logic_v98", "base": "34",
+     "action": "36", "screen_split": "heldout"},
+    {"suffix": "v99", "design": "future_prospective_logic_v99", "base": "30",
+     "action": "38", "screen_split": "support"},
+    {"suffix": "v100", "design": "future_prospective_logic_v100", "base": "32",
+     "action": "38", "screen_split": "support"},
+    {"suffix": "v101", "design": "future_prospective_logic_v101", "base": "34",
+     "action": "38", "screen_split": "support"},
+    {"suffix": "v102", "design": "future_prospective_logic_v102", "base": "30",
+     "action": "38", "screen_split": "heldout"},
+    {"suffix": "v103", "design": "future_prospective_logic_v103", "base": "32",
+     "action": "38", "screen_split": "heldout"},
+    {"suffix": "v104", "design": "future_prospective_logic_v104", "base": "34",
+     "action": "38", "screen_split": "heldout"},
+    {"suffix": "v105", "design": "future_prospective_logic_v105", "base": "34",
+     "action": "36", "screen_split": "support", "replacement_for": "v95"},
+    {"suffix": "v106", "design": "future_prospective_logic_v106", "base": "30",
+     "action": "38", "screen_split": "support", "replacement_for": "v99"},
 )
 
 
@@ -202,6 +230,8 @@ def prepare(root: Path, orfs_root: Path) -> dict:
             "design": spec["design"], "family": "DENSITY_RELIEF", "check": "route",
             "before_project": str(before), "after_project": str(after),
             "config_edits": {"CORE_UTILIZATION": action_value},
+            "screen_split": spec.get("screen_split"),
+            "replacement_for": spec.get("replacement_for"),
             "role": "prospective_observation", "capturable": False,
         })
     manifest = {
@@ -986,8 +1016,6 @@ def main(argv=None) -> int:
                           prior_samples=tuple(path.resolve() for path in args.prior_samples),
                           fresh_suffixes=set(args.fresh_suffix) or None,
                           interval_method=args.interval_method)
-    else:
-        report = _read(root / "calibration_expansion_report.json")
     if args.phase in {"all", "evaluate"}:
         print(json.dumps({"ok": True, "policy_status": report["policy"]["status"],
                           "shadow_admission_status": report[

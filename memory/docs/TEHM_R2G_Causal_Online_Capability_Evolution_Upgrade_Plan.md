@@ -4511,3 +4511,41 @@ source-disjoint 的 cohort 上先筛选 `harmful_rate=0` 且存在 positive util
 point，再冻结独立 calibration/held-out/observation split。只有 grouped gate 真正返回
 `ready_for_shadow` 并成功 materialize shadow-only policy 后，才进入 replay bundle 与
 prospective shadow observation；六项 promotion authority 仍是更后的独立阶段。
+
+### 2026-08-29 action36/action38 exact-signature 筛选负证据
+
+按上一节把 action value 设为预注册实验变量，新建 v93–v104，并将每个 exact action
+固定为三条 support 与三条 held-out，base 利用率均覆盖 30/32/34。action36 的原 support
+v95、action38 的原 support v99 均因 action arm strict-signoff failure 被 pair firewall
+排除；系统没有把另一侧 clean 当作可用 support，而是分别新增 source-disjoint replacement
+v105/v106，并在 manifest 中绑定 `replacement_for=v95/v99`。replacement 两侧均为
+strict pass/timing clean，最终 action36 support 为 v93/v94/v105，action38 support 为
+v100/v101/v106；所有 support membership 仍是 staging-only calibration，未成为 learner。
+
+独立 held-out 的 v96–v98 与 v102–v104 共 12 个 arm 全部完成 ORFS 且 12/12
+strict pass/timing clean。两组 normal retrieval policy 的 aggregate coverage 都为
+`0.583333`。lineage-grouped split-conformal 对 area/power/TNS/WNS 的 coverage 在两组中
+都为 `1.0`，lineage firewall、minimum groups、per-metric support 与 positive utility
+均通过，但 safety gate 均失败：
+
+1. action36 的 v97 area delta=`+2um²`，grouped `harmful_rate=1/3`、positive utility
+   rate=`2/3`；
+2. action38 的 v103 area delta=`+26um²`，grouped `harmful_rate=1/3`、positive utility
+   rate=`2/3`。
+
+因此两个 action 都保持 `shadow_calibration_failed`，两份
+`shadow_policy_materialization` 均为 `not_materialized`；没有选择“较好失败者”、没有
+运行 replay/shadow observation，也没有 canonical/authority/lifecycle/runtime mutation。
+durable evidence 分别位于
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action36-{support-v93v95,support-replacement-v105,heldout-v96v98}/`
+与
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action38-{support-v99v101,support-replacement-v106,heldout-v102v104}/`；
+held-out calibration report SHA256 分别为
+`42c8bfe29914a8b3b441713895db553acdbd4151f955042712e1f7d7e03d67f3` 与
+`bcfbd9a6e7b8a441f2a519ae399198df94e9aeda14e7c14b7d36906beeac922a`。
+
+本轮还修复了 sample-only support campaign 的 evidence 导出：`--phase promote` 不再
+错误要求 `calibration_expansion_report.json`，而是只复制实际存在的 manifest、strict、
+sample 与 recovery receipts，并继续固定 `promotion_eligible=false`。下一轮应预注册
+更温和的 exact action34，使用与 v81–v106 全部 source-disjoint 的 support/held-out；
+若仍出现任一 harmful lineage，则继续保留负证据，不能进入 shadow。
