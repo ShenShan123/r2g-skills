@@ -740,12 +740,22 @@ def _run_pair(conn, *, rule: dict, rule_id: str, scope: str,
         # The variants are distinct (arm_a / arm_b), so the production ORFS
         # workspace lock keeps them isolated and both may run concurrently.
         # Repeats remain sequential because their variant basenames coincide.
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            future_a = pool.submit(_execute_arm, arm_a, platform, scope,
-                                   run_flow_script, fix_signoff_script, env)
-            future_b = pool.submit(_execute_arm, arm_b, platform, scope,
-                                   run_flow_script, fix_signoff_script, env)
-            action_a, action_b = future_a.result(), future_b.result()
+        # High-utilization ORFS subjects can exceed the host memory budget when
+        # two OpenROAD processes are launched together.  The explicit serial
+        # switch preserves the default parallel path while making such trials
+        # reproducibly distinguish infrastructure pressure from an A/B result.
+        if os.environ.get("R2G_ORFS_SERIAL_AB") == "1":
+            action_a = _execute_arm(
+                arm_a, platform, scope, run_flow_script, fix_signoff_script, env)
+            action_b = _execute_arm(
+                arm_b, platform, scope, run_flow_script, fix_signoff_script, env)
+        else:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                future_a = pool.submit(_execute_arm, arm_a, platform, scope,
+                                       run_flow_script, fix_signoff_script, env)
+                future_b = pool.submit(_execute_arm, arm_b, platform, scope,
+                                       run_flow_script, fix_signoff_script, env)
+                action_a, action_b = future_a.result(), future_b.result()
     else:
         action_a, action_b = _not_run("control"), _not_run("rule")
     arms_differ = baseline_a == baseline_b and _snapshot_digest(

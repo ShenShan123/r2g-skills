@@ -191,6 +191,30 @@ def test_strict_orfs_trial_projects_db_authority_and_ignores_gate_booleans(
         "SELECT COUNT(*) FROM tehm_rule_authority_receipts").fetchone()[0] == 1
 
 
+def test_orfs_ab_serial_mode_preserves_trial_semantics(tmp_tehm, tmp_path,
+                                                       monkeypatch):
+    """Resource-bounded hosts may serialize the two otherwise isolated arms."""
+    conn, store, _ = tmp_tehm
+    rule_id = _insert_rule(conn)
+    project = _project(tmp_path)
+    flow, fix = _scripts(tmp_path)
+    monkeypatch.setenv("R2G_ORFS_SERIAL_AB", "1")
+
+    trials = run_pending_orfs_trials(
+        conn, store,
+        base_entries=[{"design": "subject", "project_path": str(project),
+                       "platform": "nangate45", "kind": "normal"}],
+        run_flow_script=flow, fix_signoff_script=fix,
+        n_designs=1, repeats=1, work_root=tmp_path / "serial_arms")
+
+    assert len(trials) == 1
+    assert trials[0]["verdict"] == "win"
+    assert trials[0]["new_status"] == "promoted"
+    assert conn.execute(
+        "SELECT status FROM tehm_rule_status WHERE rule_id=?", (rule_id,)
+    ).fetchone()[0] == "promoted"
+
+
 def test_orfs_ab_trial_is_idempotent(tmp_tehm, tmp_path):
     conn, store, _ = tmp_tehm
     _insert_rule(conn)

@@ -1,0 +1,67 @@
+{
+  "version": "tehm-orfs-density-efficacy-witness-v1",
+  "rule_id": "rule_dcdcb203a5b1fae1",
+  "target_scope": "route",
+  "trial_id": "trial_94ea979308b4b0250a13",
+  "trial_uuid": "94ea979308b4b0250a13",
+  "subject_lineage": "stress-density95-densityrule-v2:sky130hs:selector_fifo16:base0",
+  "action": {
+    "transformation_family": "DENSITY_RELIEF",
+    "config_edits": {
+      "CORE_UTILIZATION": "30"
+    },
+    "baseline_input": {
+      "CORE_UTILIZATION": "95"
+    }
+  },
+  "ab": {
+    "A_samples": [
+      0.0
+    ],
+    "B_samples": [
+      1.0
+    ],
+    "verdict": "win",
+    "reason": "rule arm B LCB(0.500) > control LCB(-0.500)",
+    "arms_differ": true,
+    "obligation_coverage": 1.0,
+    "rollback_verified": true,
+    "created_regressions": []
+  },
+  "arm_a": {
+    "success": false,
+    "flow_rc": 2,
+    "failure_stage": "place",
+    "failure": "placement density exceeded 1.0"
+  },
+  "arm_b": {
+    "success": true,
+    "flow_rc": 0,
+    "fix_rc": 0,
+    "route_status": "clean",
+    "route_violations": 0,
+    "timing_tier": "clean",
+    "wns_ns": 0.138271,
+    "tns": 0,
+    "orfs_last_stage": "finish"
+  },
+  "authority": {
+    "authority_receipt_id": "rule_authority_40915617e4de3fa6fefe",
+    "eligible": false,
+    "gate_status": {
+      "rollback_verified": "PASS",
+      "registry_verified": "PASS",
+      "obligation_coverage": "PASS",
+      "cross_lineage_te": "NOT_ESTABLISHED",
+      "harmful_rate": "NOT_ESTABLISHED",
+      "conformal_coverage": "NOT_ESTABLISHED"
+    },
+    "promotion_attempted": false,
+    "canonical_memory_mutation": "none"
+  },
+  "execution": {
+    "serial_ab": true,
+    "scratch_root": "/tmp/tehm-orfs/routing-semantic-train-r6/trials-densityrule-v2",
+    "toolchain_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts"
+  }
+}

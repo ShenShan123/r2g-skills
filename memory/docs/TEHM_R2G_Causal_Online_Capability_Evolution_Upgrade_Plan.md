@@ -4184,3 +4184,36 @@ DB-bound replay 的结果为：
 重复 A/B；只有当 trial LCB 分离、六门 gate 仍保持 PASS、且新的 receipt 通过 DB-bound
 replay 时，才允许讨论 candidate→validated/promotion。Parametric 仍只能引用这些
 外部 shadow 结果，不能写 canonical memory 或进入 production runtime。
+
+### 2026-08-28 ORFS efficacy witness 与资源受限 A/B 执行器
+
+上一节的 routing calibration 暴露了两个必须分开的事实。第一，`sky130hs` 的
+platform `fastroute.tcl` 在 floorplan 阶段重新写入固定的 `0.2` layer adjustment，
+因此 `ROUTING_LAYER_ADJUSTMENT=0.05` 在该平台上不是有效干预；此前三条
+`A=B=1` 只能说明双臂完成，不能说明 routing rule 改变了 flow。第二，高利用率
+subject 若同时启动两个 OpenROAD 进程，会把执行器推入 OOM/锁竞争，产生
+infrastructure failure 而不是 efficacy 结论。
+
+为取得隔离的真实 action point，在 scratch 中使用已有 `DENSITY_RELIEF` candidate
+`rule_dcdcb203a5b1fae1`，将 `CORE_UTILIZATION=95` 作为 control、规则 binding
+`$H0=30` 作为 treatment，并通过同一 ORFS toolchain 执行完整 A/B。control 在
+`place` 阶段以 exit code 2 因 placement density 超过 1.0 失败；treatment 从
+synthesis 到 finish 完成，route `clean`、violations `0`、timing `WNS=0.138271 ns`、
+`TNS=0`。trial `trial_94ea979308b4b0250a13` 得到 `A=[0.0]`、`B=[1.0]`、
+`verdict=win`，obligation coverage 为 `1.0`，source rollback 为 `verified=true`，
+没有创建 regression。
+
+`run_pending_orfs_trials()` 新增显式 `R2G_ORFS_SERIAL_AB=1` 路径：默认仍保持两臂
+并行，资源受限的高-utilization trial 可选择串行而不改变 A/B、rollback 或 authority
+投影语义；对应单元测试覆盖 status/lifecycle 结果。该路径只解决执行器资源隔离，
+不把 stress witness 当作 field efficacy，也不把 runner 的环境成功当作 model gain。
+
+该 trial 的 strict authority receipt 仍为 `eligible=false`，且仅有
+`rollback_verified`、`registry_verified`、`obligation_coverage` 三门 PASS；
+`cross_lineage_te`、`harmful_rate`、`conformal_coverage` 保持
+`NOT_ESTABLISHED`。因此没有 candidate lifecycle mutation、canonical memory write 或
+production runtime import。精简 receipt 摘要见
+`evidence/tehm-orfs-density-efficacy-r1/`；后续应先为同一个 density action 建立
+source-disjoint calibration/transfer cohort，再在至少两个非 stress held-out
+lineage 上重复 A/B。routing rule 则必须先修正 platform hook 的可执行性，或在
+preflight 将其判为 no-op/inapplicable，不能继续把被覆盖的 knob 当作可晋级 action。
