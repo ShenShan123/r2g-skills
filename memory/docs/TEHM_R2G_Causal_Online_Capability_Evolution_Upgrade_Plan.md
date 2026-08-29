@@ -4101,3 +4101,23 @@ lineage 必须与其不相交、path mechanism family 必须匹配 cohort；缺�
 该 projector 只读 shadow ledger，不写 authority/canonical/lifecycle/runtime；它只
 解除“真实 L4 witness 已存在但 support audit 无法消费”的审计断点，rollback、
 registry、obligation、harmful-rate 与 conformal gates 仍须各自独立证据。
+
+### 2026-08-28 DB-bound rule-authority replay CLI
+
+新增只读入口 `memory/scripts/replay_rule_authority.py`，用于在提交 authority
+复核前从 `tehm_rule_authority_receipts` 重新组装指定 receipt，并调用
+`verify_rule_authority()` 重放当前 rule digest、candidate status/version、trial/
+activation witness、evidence ledger 与六项 gate。入口只接受严格的 SQLite `eligible`
+`0/1`、canonical `receipt_json` 与非空 receipt identity；缺失、篡改或弱类型 storage
+row 直接输出 `DENY_CANONICAL_IMPORT`，不会用文件级 gate summary 或字符串布尔值
+替代 DB-bound witness。
+
+报告同时记录 authority DB 前后 SHA-256、`database_unchanged`、逐项 gate status、
+`promotion_attempted=false` 和 `canonical_memory_mutation=none`，因此可作为后续
+rollback/registry/conformal evidence 汇聚前的独立 replay hand-off。该 CLI 不写
+authority ledger、不改变 lifecycle status、不执行 promotion，也不使 Parametric
+shadow 或 evaluation evidence 进入 production runtime；当前真实 r5 DB 没有
+authority receipt 时会把六项 gate 保持为 `NOT_ESTABLISHED`，同时把
+`authority_replay_status` 标为 `FAIL`，避免把“authority 输入缺失”误报为六项实测
+失败。下一步仍需产生真实 trial/rollback/registry 与 calibration witness 后再复核
+六门 gate。
