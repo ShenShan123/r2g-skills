@@ -217,13 +217,108 @@ def _run_features(project: Path) -> int:
     return proc.returncode
 
 
+def _strict_oracle_gate(root: Path, manifest: dict) -> dict[str, dict]:
+    """Return per-case eligibility from the bound strict-oracle receipt.
+
+    A completed ORFS flow is not, by itself, calibration evidence.  A sample
+    is eligible only when both its before and after projects have a receipt
+    from the newest backend run with strict signoff ``pass`` and timing
+    ``clean``.  Missing or malformed receipts are represented as evidence and
+    fail closed; they are never silently treated as a neutral observation.
+    """
+    receipt_path = root / "strict_oracle_state.json"
+    if not receipt_path.is_file():
+        return {
+            str(item["case_id"]): {
+                "eligible": False,
+                "reason": "strict_oracle_missing",
+                "projects": {},
+            }
+            for item in manifest.get("items", [])
+        }
+    try:
+        state = _read(receipt_path)
+    except (OSError, ValueError, TypeError) as exc:
+        reason = f"strict_oracle_unreadable:{exc}"
+        return {
+            str(item["case_id"]): {
+                "eligible": False, "reason": reason, "projects": {},
+            }
+            for item in manifest.get("items", [])
+        }
+    rows = {}
+    for row in state.get("projects", []):
+        if not isinstance(row, dict) or not row.get("project"):
+            continue
+        try:
+            rows[str(Path(row["project"]).resolve())] = row
+        except (OSError, TypeError):
+            continue
+    gate = {}
+    for item in manifest.get("items", []):
+        reasons = []
+        project_receipts = {}
+        for side in ("before_project", "after_project"):
+            project = Path(item[side])
+            key = str(project.resolve())
+            row = rows.get(key)
+            if row is None:
+                reasons.append(f"{side}:strict_oracle_missing")
+                continue
+            # Reused receipts deliberately carry null process return codes;
+            # a non-zero fresh return code remains a hard failure even if a
+            # report was partially emitted.
+            strict_rc = row.get("strict_rc")
+            timing_rc = row.get("timing_rc")
+            if strict_rc not in (None, 0):
+                reasons.append(f"{side}:strict_rc={strict_rc}")
+            if timing_rc not in (None, 0):
+                reasons.append(f"{side}:timing_rc={timing_rc}")
+            if row.get("timed_out"):
+                reasons.append(f"{side}:timed_out")
+            if not row.get("run_tag"):
+                reasons.append(f"{side}:run_tag_missing")
+            if row.get("strict_report_run_tag") != row.get("run_tag"):
+                reasons.append(f"{side}:strict_report_run_mismatch")
+            if row.get("strict_status") != "pass":
+                reasons.append(f"{side}:strict_status={row.get('strict_status')}")
+            if row.get("timing_status") != "clean":
+                reasons.append(f"{side}:timing_status={row.get('timing_status')}")
+            project_receipts[side] = {
+                "project": key,
+                "run_tag": row.get("run_tag"),
+                "strict_report_run_tag": row.get("strict_report_run_tag"),
+                "strict_status": row.get("strict_status"),
+                "timing_status": row.get("timing_status"),
+                "strict_report_sha256": row.get("strict_report_sha256"),
+                "timing_report_sha256": row.get("timing_report_sha256"),
+            }
+        gate[str(item["case_id"])] = {
+            "eligible": not reasons,
+            "reason": None if not reasons else ";".join(reasons),
+            "projects": project_receipts,
+        }
+    return gate
+
+
 def make_samples(root: Path, manifest: dict) -> dict:
     samples, evidence = [], []
+    strict_gate = _strict_oracle_gate(root, manifest)
     for item in manifest["items"]:
+        case_id = str(item["case_id"])
+        oracle = strict_gate.get(case_id, {
+            "eligible": False, "reason": "strict_oracle_missing", "projects": {},
+        })
+        if not oracle["eligible"]:
+            evidence.append({"case_id": case_id,
+                             "status": "excluded_strict_oracle",
+                             "strict_oracle": oracle})
+            continue
         before, after = Path(item["before_project"]), Path(item["after_project"])
         final_def = _latest_successful_final_def(before)
         if final_def is None:
-            evidence.append({"case_id": item["case_id"], "status": "missing_successful_def"})
+            evidence.append({"case_id": case_id, "status": "missing_successful_def",
+                             "strict_oracle": oracle})
             continue
         feature_rc = _run_features(before)
         try:
@@ -234,21 +329,23 @@ def make_samples(root: Path, manifest: dict) -> dict:
             observed = extract_deltas(record.before["reports"]["ppa"],
                                        record.after["reports"]["ppa"])
         except (OSError, ValueError, RuntimeError) as exc:
-            evidence.append({"case_id": item["case_id"], "status": "pair_unavailable",
-                             "feature_rc": feature_rc, "error": str(exc)})
+            evidence.append({"case_id": case_id, "status": "pair_unavailable",
+                             "feature_rc": feature_rc, "error": str(exc),
+                             "strict_oracle": oracle})
             continue
         samples.append({
-            "case_id": item["case_id"], "lineage_id": item["lineage_id"],
+            "case_id": case_id, "lineage_id": item["lineage_id"],
             "platform": item["platform"], "family": item["family"],
             "expected_tier": context.get("dataset_tier"), "graph_context": context,
             "action": record.action, "before_ppa": record.before["reports"]["ppa"],
             "after_ppa": record.after["reports"]["ppa"],
             "observed_deltas": observed,
         })
-        evidence.append({"case_id": item["case_id"], "status": "evaluatable",
+        evidence.append({"case_id": case_id, "status": "evaluatable",
                          "lineage_id": item["lineage_id"],
                          "context_digest": context.get("digest"),
-                         "observed_deltas": observed, "feature_rc": feature_rc})
+                         "observed_deltas": observed, "feature_rc": feature_rc,
+                         "strict_oracle": oracle})
     result = {
         "version": VERSION, "samples": samples, "evidence": evidence,
         "source_lineages": sorted({row["lineage_id"] for row in samples}),
@@ -326,6 +423,7 @@ def _strict_oracle_one(project: Path, platform: str, *, timeout: int) -> dict:
         "project": str(project.resolve()),
         "platform": platform,
         "run_tag": run_tag,
+        "strict_report_run_tag": strict_report.get("run_tag"),
         "reused": reusable,
         "strict_rc": strict_rc,
         "timing_rc": timing_rc,
@@ -564,6 +662,41 @@ def _sample_from_pair(pair: dict) -> dict:
     }
 
 
+def _strict_eligible_samples(path: Path) -> tuple[list[dict], list[dict]]:
+    """Load only samples whose file-level evidence proves strict eligibility.
+
+    Calibration inputs are often copied between campaign roots.  Requiring
+    the matching ``evaluatable`` evidence row here prevents a stale or
+    hand-edited ``samples`` array from bypassing the strict-oracle firewall.
+    Legacy files without that receipt are retained in the exclusion report but
+    cannot enter the staging denominator.
+    """
+    data = _read(path)
+    evidence = {
+        str(row.get("case_id")): row
+        for row in (data.get("evidence") or [])
+        if isinstance(row, dict) and row.get("case_id")
+    }
+    accepted, excluded = [], []
+    for sample in data.get("samples") or []:
+        case_id = str(sample.get("case_id") or "")
+        row = evidence.get(case_id)
+        oracle = row.get("strict_oracle") if row else None
+        reason = None
+        if row is None:
+            reason = "strict_oracle_evidence_missing"
+        elif row.get("status") != "evaluatable":
+            reason = f"sample_status={row.get('status')}"
+        elif not isinstance(oracle, dict) or not oracle.get("eligible"):
+            reason = str((oracle or {}).get("reason") or
+                         "strict_oracle_not_eligible")
+        if reason is not None:
+            excluded.append({"case_id": case_id, "reason": reason})
+            continue
+        accepted.append(sample)
+    return accepted, excluded
+
+
 def _augment_sample_ppa(sample: dict, samples_path: Path) -> dict:
     """Recover compact PPA sides from the promoted calibration case receipts."""
     if sample.get("before_ppa") and sample.get("after_ppa"):
@@ -588,23 +721,38 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
     shutil.copytree(canonical_snapshot, stage)
     stage_db = stage / "closed_loop" / "tehm.sqlite"
     store = ArtifactStore(stage / "closed_loop" / "artifacts")
+    excluded_prior = []
+    v10v11_rows, excluded = _strict_eligible_samples(v10v11_samples)
+    excluded_prior.extend({"path": str(v10v11_samples.resolve()), **row}
+                          for row in excluded)
     v10v11 = [_augment_sample_ppa(sample, v10v11_samples)
-              for sample in (_read(v10v11_samples).get("samples") or [])
-              if sample.get("platform") == "sky130hs"]
-    pairs = _read(v12v13_pairs).get("pairs") or []
-    prior = list(v10v11) + [_sample_from_pair(pair) for pair in pairs]
+              for sample in v10v11_rows if sample.get("platform") == "sky130hs"]
+    # The legacy v12/v13 pair format has no strict-oracle evidence envelope;
+    # fail closed until those lineages are regenerated by this runner.
+    pairs_data = _read(v12v13_pairs)
+    pairs = pairs_data.get("pairs") or []
+    excluded_prior.extend({"path": str(v12v13_pairs.resolve()),
+                           "case_id": str(pair.get("case_id") or ""),
+                           "reason": "strict_oracle_evidence_missing"}
+                          for pair in pairs)
+    prior = list(v10v11)
     prior_paths = []
     if prior_samples is not None:
         prior_paths = ([prior_samples] if isinstance(prior_samples, Path)
                        else list(prior_samples))
     for prior_path in prior_paths:
-        prior_data = _read(prior_path).get("samples") or []
+        prior_data, excluded = _strict_eligible_samples(prior_path)
+        excluded_prior.extend({"path": str(prior_path.resolve()), **row}
+                              for row in excluded)
         prior.extend(_augment_sample_ppa(sample, prior_path)
-                     for sample in prior_data)
+                     for sample in prior_data if sample.get("platform", "sky130hs") == "sky130hs")
     conn = db.connect(stage_db)
     db.ensure_schema(conn)
     added_lineages = _load_external_training(root, conn, store, prior)
-    fresh = _read(root / "prospective_samples.json").get("samples") or []
+    fresh, excluded_fresh = _strict_eligible_samples(root / "prospective_samples.json")
+    excluded_prior.extend({"path": str((root / "prospective_samples.json").resolve()),
+                           "split": "fresh", **row}
+                          for row in excluded_fresh)
     if fresh_suffixes:
         fresh = [sample for sample in fresh
                  if any(str(sample.get("lineage_id", "")).startswith(
@@ -629,6 +777,7 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
         "staging_snapshot": str(stage.resolve()),
         "staging_snapshot_digest": _sha256(stage_db),
         "staging_physical_count": count_after,
+        "excluded_samples": excluded_prior,
         "canonical_mutation": "none; only a staging copy was opened writable",
         "promotion_eligible": False,
         "parametric_view_status": "NOT_IMPLEMENTED",

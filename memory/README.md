@@ -985,6 +985,20 @@ canonical memory。
   freeze 副本上用 8 条历史 support 重建后，H1–H12/A1 审计通过，但 exact calibration
   仍因 WNS per-metric coverage 不足而 `coverage_failed`；因此本修复不改变 canonical
   memory、authority 或 production runtime，也不代表 Parametric 已可晋级。
+- calibration expansion 的 sample builder 现将 strict oracle 设为硬 eligibility gate：
+  每个 before/after project 都必须绑定最新 backend run 的 `strict_status=pass`、
+  `timing_status=clean`，且无 timeout/非零 oracle 返回码，才可生成 calibration sample。
+  缺 receipt、LVS/DRC 等 strict failure 或 timing 非 clean 的 pair 只写入
+  `excluded_strict_oracle` evidence，不进入 calibration 分母；因此 v63–v68、v75–v80
+  当前 LVS-error cohort 不会再被误计为可校准的 physical support。该 gate 只收紧
+  staging evidence admission，不写 canonical memory、authority 或 production runtime。
+- 修复顶层 derived-schematic 的 supply 语义后，sky130hs geometry canary 通过，新的
+  v81–v86 cohort 以 workers=1 完成 12/12 strict-signoff=`pass`、timing=`clean`，6/6
+  pair 可评估。将 v81–v83 作为 calibration、v84–v86 作为 held-out 的只读 staging
+  exact calibration aggregate coverage=`0.583333`（area/power/TNS/WNS=
+  `0.333/0.333/1.0/0.667`），仍为 `coverage_failed`；旧 v12/v13 pair 因没有
+  strict-oracle evidence 被排除。该结果证明 signoff 闭环已恢复，但不构成 ready
+  policy、authority promotion 或 production runtime 写入。
 - Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
   receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
   `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选

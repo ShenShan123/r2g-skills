@@ -63,7 +63,11 @@ def add_power_pins(verilog: str, pin_map: dict[str, tuple[str, ...]]) -> tuple[s
         module_end = re.search(r"(?ms)^\s*module\s+.*?\)\s*;", output)
         if not module_end:
             raise ValueError("top module declaration not found")
-        output = output[:module_end.end()] + "\n inout VDD;\n inout VSS;" + output[module_end.end():]
+        # The logical ORFS top usually has no external power pins.  Keep the
+        # derived supplies as internal nets so LVS compares the same top-level
+        # interface as the extracted layout.  Hierarchical child modules are
+        # upgraded to explicit inout ports below.
+        output = output[:module_end.end()] + "\n wire VDD;\n wire VSS;" + output[module_end.end():]
     return output, {
         "instances_powered": transformed,
         "unknown_cell_types": sorted(unknown_cells),
@@ -124,6 +128,20 @@ def propagate_hierarchical_power_ports(
                 powered.add(m.group("name"))
                 changed_closure = True
 
+    # The top-level module is not a child of another module.  Its VDD/VSS are
+    # internal supply nets unless the source already declared them as actual
+    # interface ports; adding synthetic top ports makes Netgen report a pin
+    # mismatch when the layout has no corresponding labels.
+    instantiated = set()
+    for m in modules:
+        body = m.group("body")
+        for child in names:
+            if child == m.group("name"):
+                continue
+            if re.search(rf"(?m)^\s*{re.escape(child)}\s+[^\s(]+\s*\(", body):
+                instantiated.add(child)
+    top_names = names - instantiated or {modules[0].group("name")}
+
     edits: list[tuple[int, int, str]] = []
     module_header_edits: dict[str, tuple[int, int, str]] = {}
     declarations_added: list[str] = []
@@ -135,7 +153,7 @@ def propagate_hierarchical_power_ports(
         tokens = re.findall(r"(?<![\w$])(VDD|VSS)(?![\w$])", header)
         new_header = header
         missing = [supply for supply in ("VDD", "VSS") if supply not in tokens]
-        if missing:
+        if missing and name not in top_names:
             trimmed = header.rstrip()
             suffix = header[len(trimmed):]
             if not trimmed.endswith(","):
@@ -146,12 +164,14 @@ def propagate_hierarchical_power_ports(
         body = m.group("body")
         decl_missing = [
             supply for supply in ("VDD", "VSS")
-            if not re.search(rf"(?m)^\s*(?:input|output|inout)\s+{supply}\s*;", body)
+            if not re.search(rf"(?m)^\s*(?:wire|input|output|inout)\s+{supply}\s*;", body)
         ]
         if decl_missing:
             declarations_added.append(name)
             insert_at = m.start("close") + len(m.group("close"))
-            declaration = "".join(f"\n inout {supply};" for supply in decl_missing)
+            declaration_kind = "wire" if name in top_names else "inout"
+            declaration = "".join(
+                f"\n {declaration_kind} {supply};" for supply in decl_missing)
             edits.append((insert_at, insert_at, declaration))
 
     # Apply edits in reverse source order so original offsets remain valid.

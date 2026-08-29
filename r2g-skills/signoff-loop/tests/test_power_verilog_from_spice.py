@@ -21,7 +21,7 @@ def test_adds_only_library_declared_power_pins_and_supply_wires():
 endmodule
 """
     output, stats = p.add_power_pins(source, p.cell_power_pins(SPICE))
-    assert "inout VDD;" in output and "inout VSS;" in output
+    assert "wire VDD;" in output and "wire VSS;" in output
     for fragment in (".VGND(VSS)", ".VNB(VSS)", ".VPB(VDD)", ".VPWR(VDD)"):
         assert fragment in output
     assert stats["instances_powered"] == 1
@@ -54,7 +54,8 @@ endmodule
 """
     powered, _ = p.add_power_pins(source, p.cell_power_pins(SPICE))
     output, stats = p.propagate_hierarchical_power_ports(powered, set(p.cell_power_pins(SPICE)))
-    assert "module top (a, y,\n    VDD,\n    VSS);" in output
+    assert "module top (a, y);" in output
+    assert " wire VDD;\n wire VSS;" in output
     assert "module child (a, y,\n    VDD,\n    VSS);" in output
     assert "child u0 (.a(a), .y(y),\n     .VDD(VDD),\n     .VSS(VSS));" in output
     assert " inout VDD;\n inout VSS;" in output

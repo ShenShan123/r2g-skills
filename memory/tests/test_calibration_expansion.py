@@ -11,8 +11,11 @@ from run_calibration_expansion import (  # noqa: E402
     _external_transition_id,
     _load_external_training,
     _persist_external_transition,
+    _strict_oracle_gate,
+    _strict_eligible_samples,
     _strict_oracle_one,
     _strict_oracle_projects,
+    make_samples,
     _subset_manifest,
 )
 from tehm import db as tehm_db
@@ -75,6 +78,77 @@ def test_strict_oracle_runs_signoff_and_timing_and_reuses_bound_receipt(tmp_path
     assert second["timing_rc"] is None
     assert len(calls) == 2
 
+
+def test_strict_oracle_gate_excludes_dirty_or_missing_projects(tmp_path):
+    before = tmp_path / "before"
+    after = tmp_path / "after"
+    manifest = {
+        "items": [{"case_id": "case-a", "before_project": str(before),
+                   "after_project": str(after)}]
+    }
+    (tmp_path / "strict_oracle_state.json").write_text(json.dumps({
+        "version": "calibration-strict-oracle-v1", "requested": True,
+        "projects": [
+            {"project": str(before), "run_tag": "RUN_before",
+             "strict_report_run_tag": "RUN_before", "strict_status": "fail",
+             "timing_status": "clean", "strict_rc": 0, "timing_rc": 0},
+            {"project": str(after), "run_tag": "RUN_after",
+             "strict_report_run_tag": "RUN_after", "strict_status": "pass",
+             "timing_status": "clean", "strict_rc": 0, "timing_rc": 0},
+        ],
+    }))
+    gate = _strict_oracle_gate(tmp_path, manifest)
+    assert gate["case-a"]["eligible"] is False
+    assert "before_project:strict_status=fail" in gate["case-a"]["reason"]
+
+    (tmp_path / "strict_oracle_state.json").write_text(json.dumps({
+        "version": "calibration-strict-oracle-v1", "requested": True,
+        "projects": [
+            {"project": str(before), "run_tag": "RUN_before",
+             "strict_report_run_tag": "RUN_before", "strict_status": "pass",
+             "timing_status": "clean", "strict_rc": 0, "timing_rc": 0},
+            {"project": str(after), "run_tag": "RUN_after",
+             "strict_report_run_tag": "RUN_after", "strict_status": "pass",
+             "timing_status": "clean", "strict_rc": 0, "timing_rc": 0},
+        ],
+    }))
+    assert _strict_oracle_gate(tmp_path, manifest)["case-a"]["eligible"] is True
+
+    (tmp_path / "strict_oracle_state.json").unlink()
+    missing = _strict_oracle_gate(tmp_path, manifest)
+    assert missing["case-a"]["reason"] == "strict_oracle_missing"
+
+
+def test_make_samples_never_calibrates_without_strict_pass(tmp_path):
+    before = tmp_path / "before"
+    after = tmp_path / "after"
+    manifest = {
+        "items": [{"case_id": "case-a", "lineage_id": "lineage-a",
+                   "platform": "sky130hs", "family": "DENSITY_RELIEF",
+                   "before_project": str(before), "after_project": str(after),
+                   "config_edits": {"CORE_UTILIZATION": "40"}}]
+    }
+    result = make_samples(tmp_path, manifest)
+    assert result["samples"] == []
+    assert result["evidence"][0]["status"] == "excluded_strict_oracle"
+    assert result["evidence"][0]["strict_oracle"]["reason"] == \
+        "strict_oracle_missing"
+
+
+def test_strict_eligible_sample_loader_rejects_legacy_rows(tmp_path):
+    path = tmp_path / "samples.json"
+    sample = {"case_id": "case-a", "lineage_id": "lineage-a"}
+    path.write_text(json.dumps({
+        "samples": [sample, {"case_id": "case-b", "lineage_id": "lineage-b"}],
+        "evidence": [{
+            "case_id": "case-a", "status": "evaluatable",
+            "strict_oracle": {"eligible": True},
+        }],
+    }))
+    accepted, excluded = _strict_eligible_samples(path)
+    assert accepted == [sample]
+    assert excluded == [{"case_id": "case-b",
+                         "reason": "strict_oracle_evidence_missing"}]
 
 def test_external_calibration_transition_is_immutable(tmp_path):
     conn = tehm_db.connect(tmp_path / "staging.sqlite")

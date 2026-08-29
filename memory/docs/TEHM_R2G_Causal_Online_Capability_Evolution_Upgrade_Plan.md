@@ -4420,3 +4420,40 @@ staging DB digest 为 `8559894e9538e1fe87b31ae5cedd5310e6c1a2b504ac449edb393950a
 calibration 仍为 `coverage_failed`（WNS per-metric coverage 不足），所以没有生成
 新的 ready policy、observation outcome 或 promotion authority。下一步仍是用完整
 source-bound v4 support 重新计算 policy，再生成 replay bundle 后进入 observation。
+
+### 2026-08-29 strict-oracle eligibility firewall
+
+前述 calibration expansion 虽然会生成 `strict_oracle_state.json`，但 sample builder
+此前只检查 final DEF、PPA 与 graph context，仍可能把 strict-signoff 已报告 LVS/DRC
+失败的 pair 当作 calibration row。该路径现在 fail-closed：每个 before/after project
+必须有绑定最新 backend run 的 strict receipt，且 `strict_status=pass`、
+`timing_status=clean`、无 timeout 与非零 oracle 返回码，pair 才能生成
+`prospective_samples.json` 中的 calibration sample。
+
+缺 receipt、strict failure（包括当前 v63–v68 与 v75–v80 的 LVS error）或 timing 非 clean
+的 pair 会保留最小化的 `excluded_strict_oracle` evidence，并从 calibration 分母与
+后续 conformal/support staging 中排除。该修复只收紧 external evidence admission，
+不删除旧 scratch/evidence、不改变 canonical memory、authority 或 production runtime。
+在回归测试中，缺失 receipt 的 pair 生成 0 个 sample；现有 calibration、migration 与
+shadow 套件共 `37 passed`。下一步仍需先修复可支持平台的 LVS/signoff 闭环，再重跑
+source-disjoint cohort；不能用 dirty ORFS flow 继续扩大 calibration。
+
+### 2026-08-29 repaired sky130hs signoff 与 v81–v86 clean cohort
+
+对 v81 的新 ORFS pair 做 targeted rerun 后确认，`.lyt` 几何修复已经消除了旧生成物
+中的 portless-GDS failure，但当前 hierarchy power fallback 又把顶层 `VDD/VSS` 错当
+作外部 pin，造成新的 top-pin mismatch。现将 derived schematic 的顶层 supply 保持为
+内部 `wire`，只对真正的 child module 增加 `inout` 并向下连接；该修复不改源 RTL、ODB
+或 layout。sky130hs geometry canary、power transform 回归均通过，v81 before/after
+重新签核为 DRC/LVS/RCX/timing 全 clean/pass。
+
+随后以修复后的工具链串行重跑 v81–v86：12/12 before/after strict receipts 为
+`strict_status=pass`、`timing_status=clean`，6/6 pair 进入 sample builder。只读 staging
+中将 v81–v83 作为 calibration、v84–v86 作为 held-out，H1–H12/A1 全部通过（H9/H11
+在未提供 bundle/firewall 时为 not-applicable）；exact calibration aggregate coverage
+为 `0.583333`，area/power/TNS/WNS 为 `0.333/0.333/1.0/0.667`，故仍为
+`coverage_failed`，没有 ready policy 或 promotion authority。旧 v12/v13 pair 因缺少
+strict-oracle envelope 被 `strict_eligible_samples` 明确排除，不能继续充当 calibration
+分母。该 cohort 证明 signoff 与 admission firewall 已闭合，下一步应扩充更多
+source-disjoint、strict-clean 且跨 lineage 的 support，再重算 conformal/utility；不得
+用 dirty 或 legacy receipt 绕过该门。
