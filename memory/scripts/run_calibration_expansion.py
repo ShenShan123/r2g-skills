@@ -41,7 +41,11 @@ from tehm.artifact_store import ArtifactStore  # noqa: E402
 from tehm.physical.calibration import calibrate_retrieval  # noqa: E402
 from tehm.physical.effects import extract_deltas  # noqa: E402
 from tehm.physical.graph_context import load_defgraph_context  # noqa: E402
-from tehm.physical.memory import PhysicalEffectMemory  # noqa: E402
+from tehm.physical.memory import PhysicalEffectMemory, _action_signature  # noqa: E402
+from tehm.parametric.calibration import (  # noqa: E402
+    calibrate_exact_groups,
+    materialize_shadow_policy,
+)
 from tehm.sync import canonical_json  # noqa: E402
 from orfs_storage import enforce_work_root, storage_policy  # noqa: E402
 
@@ -128,6 +132,12 @@ LINEAGES = (
     {"suffix": "v84", "design": "future_prospective_logic_v84", "base": "30", "action": "40"},
     {"suffix": "v85", "design": "future_prospective_logic_v85", "base": "32", "action": "40"},
     {"suffix": "v86", "design": "future_prospective_logic_v86", "base": "34", "action": "40"},
+    {"suffix": "v87", "design": "future_prospective_logic_v87", "base": "30", "action": "40"},
+    {"suffix": "v88", "design": "future_prospective_logic_v88", "base": "32", "action": "40"},
+    {"suffix": "v89", "design": "future_prospective_logic_v89", "base": "34", "action": "40"},
+    {"suffix": "v90", "design": "future_prospective_logic_v90", "base": "30", "action": "40"},
+    {"suffix": "v91", "design": "future_prospective_logic_v91", "base": "32", "action": "40"},
+    {"suffix": "v92", "design": "future_prospective_logic_v92", "base": "34", "action": "40"},
 )
 
 
@@ -697,6 +707,98 @@ def _strict_eligible_samples(path: Path) -> tuple[list[dict], list[dict]]:
     return accepted, excluded
 
 
+def _grouped_shadow_admission(*, retrieval_policy: dict,
+                              heldout_samples: list[dict],
+                              training_lineages: list[str]) -> tuple[dict, dict]:
+    """Grade one frozen retrieval cohort against the Parametric shadow gates.
+
+    ``calibrate_retrieval`` owns point prediction and OOD diagnostics.  This
+    adapter only binds those already-emitted predictions to the same external
+    held-out rows, then delegates safety/utility authority to the lineage-
+    grouped Parametric calibrator.  No held-out row is inserted into TEHM.
+    """
+    evaluations = retrieval_policy.get("evaluations") or []
+    grouped_samples = []
+    invalid = []
+    for evaluation in evaluations:
+        index = evaluation.get("index")
+        if (isinstance(index, bool) or not isinstance(index, int) or
+                index < 0 or index >= len(heldout_samples)):
+            invalid.append({"index": index, "reason": "invalid_evaluation_index"})
+            continue
+        if evaluation.get("status") != "evaluated":
+            continue
+        sample = heldout_samples[index]
+        metrics = evaluation.get("metrics") or {}
+        predicted = {
+            str(metric): detail.get("predicted")
+            for metric, detail in metrics.items()
+            if isinstance(detail, dict) and detail.get("predicted") is not None
+        }
+        graph = sample.get("graph_context") or {}
+        signature = _action_signature(sample.get("action"))
+        if not predicted or signature is None:
+            invalid.append({
+                "index": index, "lineage_id": sample.get("lineage_id"),
+                "reason": ("missing_predicted_metrics" if not predicted
+                           else "invalid_action_signature"),
+            })
+            continue
+        grouped_samples.append({
+            "case_id": sample.get("case_id"),
+            "lineage_id": sample.get("lineage_id"),
+            "platform": graph.get("platform") or sample.get("platform"),
+            "family": sample.get("family"),
+            "dataset_tier": graph.get("dataset_tier") or sample.get("expected_tier"),
+            "action_signature": signature,
+            "predicted": predicted,
+            "observed_deltas": sample.get("observed_deltas") or {},
+        })
+    report = calibrate_exact_groups(
+        grouped_samples, training_lineages=training_lineages,
+        target_coverage=0.80, min_lineages=3,
+        min_samples_per_metric=3, max_harmful_rate=0.0)
+    report["adapter_invalid_evaluations"] = invalid
+    if invalid and report.get("status") == "ready_for_shadow":
+        report["status"] = "shadow_calibration_failed"
+        report["reason"] = "invalid_retrieval_evaluation"
+
+    materialization = {
+        "status": "not_materialized",
+        "reason": "grouped_calibration_not_ready",
+        "policy": None,
+    }
+    if report.get("status") == "ready_for_shadow":
+        groups = report.get("groups") or {}
+        group = next(iter(groups.values())) if len(groups) == 1 else {}
+        heldout = (group.get("firewall") or {}).get("heldout_lineages") or []
+        first = grouped_samples[0] if grouped_samples else {}
+        distance = (retrieval_policy.get("thresholds") or {}).get("max_distance")
+        if distance is None:
+            materialization["reason"] = "retrieval_distance_threshold_missing"
+        elif len(heldout) < 3:
+            materialization["reason"] = "insufficient_heldout_lineages"
+        else:
+            try:
+                policy = materialize_shadow_policy(
+                    report,
+                    scope={"platform": first.get("platform"),
+                           "family": first.get("family"),
+                           "dataset_tier": first.get("dataset_tier")},
+                    action_signature=first.get("action_signature") or {},
+                    max_distance=min(float(distance), 3.0),
+                    min_unique_contexts=3)
+            except (TypeError, ValueError) as exc:
+                materialization["reason"] = f"materialization_rejected:{exc}"
+            else:
+                materialization = {
+                    "status": "materialized_shadow_only",
+                    "reason": "all_grouped_shadow_gates_passed",
+                    "policy": policy,
+                }
+    return report, materialization
+
+
 def _augment_sample_ppa(sample: dict, samples_path: Path) -> dict:
     """Recover compact PPA sides from the promoted calibration case receipts."""
     if sample.get("before_ppa") and sample.get("after_ppa"):
@@ -714,7 +816,8 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
              v10v11_samples: Path, v12v13_pairs: Path,
              training_manifest: Path,
              prior_samples: Path | tuple[Path, ...] | list[Path] | None = None,
-             fresh_suffixes: set[str] | None = None) -> dict:
+             fresh_suffixes: set[str] | None = None,
+             interval_method: str = "normal_weighted_mean_v1") -> dict:
     stage = root / "staging"
     if stage.exists():
         shutil.rmtree(stage)
@@ -765,11 +868,17 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
     policy = calibrate_retrieval(
         physical, family="DENSITY_RELIEF", heldout_samples=fresh,
         training_lineages=training, min_samples=3, min_unique_contexts=3,
-        target_coverage=0.80, distance_ceiling=3.0)
+        target_coverage=0.80, distance_ceiling=3.0,
+        interval_method=interval_method)
+    grouped_calibration, shadow_materialization = _grouped_shadow_admission(
+        retrieval_policy=policy, heldout_samples=fresh,
+        training_lineages=training)
     count_after = physical.count()
     conn.close()
     report = {
         "version": VERSION, "policy": policy,
+        "parametric_grouped_calibration": grouped_calibration,
+        "shadow_policy_materialization": shadow_materialization,
         "training_lineages": training,
         "added_external_lineages": added_lineages,
         "fresh_lineages": sorted({row["lineage_id"] for row in fresh}),
@@ -831,6 +940,11 @@ def main(argv=None) -> int:
                     help="previous cohort promoted to staging-only training support (repeatable)")
     ap.add_argument("--fresh-suffix", action="append", default=[],
                     help="lineage suffixes to hold out for evaluation (repeatable)")
+    ap.add_argument(
+        "--interval-method",
+        choices=("normal_weighted_mean_v1", "split_conformal_residual_v1"),
+        default="normal_weighted_mean_v1",
+        help="retrieval diagnostic interval; grouped shadow admission always uses lineage conformal")
     ap.add_argument("--run-suffix", action="append", default=[],
                     help="lineage suffixes to run/sample (repeatable; scratch-only subset)")
     ap.add_argument("--workers", type=int, default=2)
@@ -870,11 +984,14 @@ def main(argv=None) -> int:
                           v12v13_pairs=args.v12v13_pairs.resolve(),
                           training_manifest=args.training_manifest.resolve(),
                           prior_samples=tuple(path.resolve() for path in args.prior_samples),
-                          fresh_suffixes=set(args.fresh_suffix) or None)
+                          fresh_suffixes=set(args.fresh_suffix) or None,
+                          interval_method=args.interval_method)
     else:
         report = _read(root / "calibration_expansion_report.json")
     if args.phase in {"all", "evaluate"}:
         print(json.dumps({"ok": True, "policy_status": report["policy"]["status"],
+                          "shadow_admission_status": report[
+                              "parametric_grouped_calibration"]["status"],
                           "coverage": report["policy"]["calibration"].get("empirical_coverage"),
                           "fresh_lineages": report["fresh_lineages"],
                           "promotion_eligible": False}, indent=2, sort_keys=True))

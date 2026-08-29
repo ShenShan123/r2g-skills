@@ -110,3 +110,18 @@ def test_parametric_calibration_does_not_accept_boolean_numeric_evidence():
     report = calibrate_lineage_grouped(samples, min_samples_per_metric=3)
     assert report["status"] == "shadow_calibration_failed"
     assert report["conformal"]["per_metric"]["wns_ns"]["evaluated"] == 2
+
+
+def test_conformal_boundary_is_inclusive_across_binary_float_rounding():
+    samples = [_sample(f"heldout:{idx}") for idx in range(4)]
+    powers = [(3.1e-5, -3.9e-5), (5e-6, 1e-6),
+              (4e-5, -1e-6), (-2.7e-5, 0.0)]
+    for sample, (predicted, observed) in zip(samples, powers):
+        sample["predicted"]["power_w"] = predicted
+        sample["observed_deltas"]["power_w"] = observed
+    report = calibrate_lineage_grouped(
+        samples, target_coverage=0.8, min_samples_per_metric=3)
+    power = report["conformal"]["per_metric"]["power_w"]
+    assert power["conformal_radius"] == 0.00007
+    assert power["covered"] == 4
+    assert power["coverage"] == 1.0

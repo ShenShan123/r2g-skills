@@ -4477,3 +4477,37 @@ support、policy replay 或 promotion 输入。可复核材料位于
 `evidence/tehm-authority-v1/v4/migration-audit-v1/`。这进一步确认 schema migration
 只能修复读取兼容性，不能修复历史证据完整性；下一步仍需用当前 v4 capture/replay
 重建完整 staging fixture，再进行 observation 和六项 promotion gate。
+
+### 2026-08-29 v87–v92 held-out calibration 与 grouped safety 负证据
+
+在 v81–v86 strict-clean cohort 已作为历史、staging-only support 固定后，新增六条
+source-disjoint RTL/SDC lineage v87–v92，并预注册同一 exact action：sky130hs
+`DENSITY_RELIEF / CORE_UTILIZATION=40`。12/12 before/after ORFS arm 均完成
+synthesis→finish；strict firewall 依据绑定最新 run 的 DRC/LVS/RCX/timing receipt
+淘汰 v89（action arm route/LVS failure）与 v90（before arm DRC failure），只允许
+v87/v88/v91/v92 四条 pair 进入 held-out 分母。该排除发生在 calibration 前，不能以
+另一侧 clean 或 flow return code 覆盖 pair-level signoff failure。
+
+现有 `normal_weighted_mean_v1` retrieval policy 的 aggregate coverage 为 `0.6875`
+（area/power/TNS/WNS=`0.75/0.5/1.0/0.5`），状态为 `coverage_failed`。runner 现在将
+retrieval point prediction 显式写入 evaluation，并把相同 frozen held-out rows 送入
+唯一的 `calibrate_exact_groups()` Parametric admission gate；同时新增显式
+`--interval-method` 供 retrieval 诊断选择，默认仍保持 normal，不会静默改写旧 evidence。
+
+lineage-grouped split-conformal 复算中四个 metric 的 coverage 均为 `1.0`，但 v87 的
+WNS delta=`-0.076515ns` 超过 `-0.05ns` regression budget，因此 grouped
+`harmful_rate=0.25`，仅 v88/v91/v92 为 pareto-safe positive utility。最终状态仍为
+`shadow_calibration_failed`，`shadow_policy_materialization.status=not_materialized`；
+没有运行 shadow observation，也没有写 canonical memory、authority ledger、lifecycle
+或 production runtime。过程中还修复了 conformal inclusive boundary 的浮点比较：
+恰好等于 frozen residual radius 的十进制 PPA 值现在只使用既有 `epsilon` 容差，避免
+被二进制表示误判为 miss，未放宽任何预注册 coverage 或 safety threshold。
+
+紧凑 durable evidence 位于
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v87v92-clean/`，原始 ORFS
+树位于 `/tmp/tehm-v4-clean-v87v92`。下一步不应删除 v87 或放宽 harmful budget 来制造
+ready policy；应把 action-value 选择当作新的预注册实验变量，在与 v81–v92 全部
+source-disjoint 的 cohort 上先筛选 `harmful_rate=0` 且存在 positive utility 的 action
+point，再冻结独立 calibration/held-out/observation split。只有 grouped gate 真正返回
+`ready_for_shadow` 并成功 materialize shadow-only policy 后，才进入 replay bundle 与
+prospective shadow observation；六项 promotion authority 仍是更后的独立阶段。

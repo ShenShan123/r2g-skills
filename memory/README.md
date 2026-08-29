@@ -1009,6 +1009,16 @@ canonical memory。
   obligation 不完整、H10 rollback authority 缺失而 `DENY_REPLAY_NOT_VERIFIED`；完整
   负证据位于 `evidence/tehm-authority-v1/v4/migration-audit-v1/`。migration 只修复
   schema 可读性，不修复证据完整性，也不改变 canonical memory、authority 或 runtime。
+- v87–v92 新建了与 v81–v86 support source-disjoint 的 exact action-40 held-out cohort。
+  12/12 ORFS arm 完成，但 strict pair firewall 淘汰 v89 action 与 v90 before 的
+  DRC/LVS dirty pair，仅 v87/v88/v91/v92 进入分母。normal retrieval coverage=`0.6875`；
+  新接入的 lineage-grouped split-conformal 四项 coverage 均为 `1.0`，但 v87 WNS
+  `-0.076515ns` 触发 regression budget，故 `harmful_rate=0.25`、最终
+  `shadow_calibration_failed`，未 materialize policy、未运行 shadow observation。
+  runner 现在在 retrieval evaluation 中绑定 point prediction，并显式区分 retrieval
+  interval 诊断与 Parametric grouped admission；conformal radius 的 inclusive 浮点边界
+  也已按既有 epsilon 修复。durable receipts 位于
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v87v92-clean/`。
 - Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
   receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
   `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选

@@ -343,7 +343,12 @@ def calibrate_lineage_grouped(
                 if point is None or actual is None:
                     continue
                 total += 1
-                hits += int(point - radius <= actual <= point + radius)
+                # Decimal PPA reports often land exactly on the frozen
+                # residual radius.  Permit only the caller-visible numerical
+                # epsilon so a binary-float representation artifact cannot
+                # turn an inclusive conformal boundary into a false miss.
+                hits += int(point - radius - epsilon <= actual <=
+                            point + radius + epsilon)
             if total:
                 hits_by_lineage[lineage] = {"covered": hits, "evaluated": total,
                                             "coverage": hits / total}

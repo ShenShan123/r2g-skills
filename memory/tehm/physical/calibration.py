@@ -143,7 +143,8 @@ def calibrate_retrieval(memory, *, family: str, heldout_samples: list[dict],
             widths[metric].append(width)
             compared += 1
             evaluation["metrics"][metric] = {
-                "observed": actual, "lower_95": lower, "upper_95": upper,
+                "predicted": point, "observed": actual,
+                "lower_95": lower, "upper_95": upper,
                 "covered": hit, "interval_width": width,
                 "interval_method": interval_method,
             }
@@ -177,7 +178,7 @@ def calibrate_retrieval(memory, *, family: str, heldout_samples: list[dict],
                 widths[metric].append(max(0.0, upper - lower))
                 evaluation = by_index[item["index"]]
                 evaluation["metrics"][metric] = {
-                    "observed": item["observed"],
+                    "predicted": item["point"], "observed": item["observed"],
                     "lower_95": lower,
                     "upper_95": upper,
                     "covered": hit,

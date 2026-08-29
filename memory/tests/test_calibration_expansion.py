@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import sys
 import json
+import hashlib
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from run_calibration_expansion import (  # noqa: E402
+    LINEAGES,
     _external_transition_id,
+    _grouped_shadow_admission,
     _load_external_training,
     _persist_external_transition,
     _strict_oracle_gate,
@@ -22,6 +25,94 @@ from tehm import db as tehm_db
 from tehm.artifact_store import ArtifactStore
 from tehm import honesty
 from tehm.sync import canonical_json
+
+
+def test_v87_v92_cohort_is_preregistered_and_source_disjoint():
+    specs = {row["suffix"]: row for row in LINEAGES}
+    suffixes = [f"v{index}" for index in range(87, 93)]
+    assert [specs[suffix]["base"] for suffix in suffixes] == [
+        "30", "32", "34", "30", "32", "34"]
+    assert all(specs[suffix]["action"] == "40" for suffix in suffixes)
+
+    fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "physical_rtl"
+    digests = set()
+    for suffix in suffixes:
+        design = specs[suffix]["design"]
+        rtl = fixture_root / f"{design}.v"
+        sdc = fixture_root / f"{design}.sdc"
+        assert rtl.is_file() and sdc.is_file()
+        assert f"module {design}" in rtl.read_text()
+        assert f"current_design {design}" in sdc.read_text()
+        digests.add(hashlib.sha256(rtl.read_bytes()).hexdigest())
+    assert len(digests) == len(suffixes)
+
+
+def test_grouped_shadow_admission_rejects_harmful_heldout_lineage():
+    action = {"domain": "flow.CONFIG_DELTA",
+              "transformation_family": "DENSITY_RELIEF",
+              "payload": {"config_edits": {"CORE_UTILIZATION": "40"}}}
+    samples = []
+    evaluations = []
+    for index in range(4):
+        wns = -0.08 if index == 0 else 0.01
+        samples.append({
+            "case_id": f"case-{index}", "lineage_id": f"heldout:{index}",
+            "platform": "sky130hs", "family": "DENSITY_RELIEF",
+            "expected_tier": "strict_clean", "action": action,
+            "graph_context": {"platform": "sky130hs",
+                              "dataset_tier": "strict_clean"},
+            "observed_deltas": {"wns_ns": wns, "area_um2": -1.0},
+        })
+        evaluations.append({
+            "index": index, "status": "evaluated",
+            "metrics": {
+                "wns_ns": {"predicted": 0.0},
+                "area_um2": {"predicted": -0.5},
+            },
+        })
+    report, materialization = _grouped_shadow_admission(
+        retrieval_policy={"evaluations": evaluations,
+                          "thresholds": {"max_distance": 0.5}},
+        heldout_samples=samples, training_lineages=["training:a"])
+    assert report["status"] == "shadow_calibration_failed"
+    group = next(iter(report["groups"].values()))
+    assert group["checks"]["harmful_rate"] is False
+    assert group["safety"]["harmful_rate"] == 0.25
+    assert materialization == {
+        "status": "not_materialized",
+        "reason": "grouped_calibration_not_ready",
+        "policy": None,
+    }
+
+
+def test_grouped_shadow_admission_materializes_only_safe_shadow_policy():
+    action = {"domain": "flow.CONFIG_DELTA",
+              "transformation_family": "DENSITY_RELIEF",
+              "payload": {"config_edits": {"CORE_UTILIZATION": "40"}}}
+    samples = [{
+        "case_id": f"case-{index}", "lineage_id": f"heldout:{index}",
+        "platform": "sky130hs", "family": "DENSITY_RELIEF",
+        "expected_tier": "strict_clean", "action": action,
+        "graph_context": {"platform": "sky130hs",
+                          "dataset_tier": "strict_clean"},
+        "observed_deltas": {"wns_ns": 0.01, "area_um2": -1.0},
+    } for index in range(3)]
+    evaluations = [{
+        "index": index, "status": "evaluated",
+        "metrics": {"wns_ns": {"predicted": 0.0},
+                    "area_um2": {"predicted": -0.5}},
+    } for index in range(3)]
+    report, materialization = _grouped_shadow_admission(
+        retrieval_policy={"evaluations": evaluations,
+                          "thresholds": {"max_distance": 0.5}},
+        heldout_samples=samples, training_lineages=["training:a"])
+    assert report["status"] == "ready_for_shadow"
+    assert materialization["status"] == "materialized_shadow_only"
+    policy = materialization["policy"]
+    assert policy["policy_kind"] == "lineage_grouped_shadow"
+    assert policy["shadow_only"] is True
+    assert policy["promotion_eligible"] is False
+    assert policy["canonical_memory_mutation"] == "none"
 
 
 def test_subset_manifest_selects_scratch_lineages_without_mutating_source():
