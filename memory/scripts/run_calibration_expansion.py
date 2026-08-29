@@ -166,6 +166,18 @@ LINEAGES = (
      "action": "36", "screen_split": "support", "replacement_for": "v95"},
     {"suffix": "v106", "design": "future_prospective_logic_v106", "base": "30",
      "action": "38", "screen_split": "support", "replacement_for": "v99"},
+    {"suffix": "v107", "design": "future_prospective_logic_v107", "base": "28",
+     "action": "34", "screen_split": "support"},
+    {"suffix": "v108", "design": "future_prospective_logic_v108", "base": "30",
+     "action": "34", "screen_split": "support"},
+    {"suffix": "v109", "design": "future_prospective_logic_v109", "base": "32",
+     "action": "34", "screen_split": "support"},
+    {"suffix": "v110", "design": "future_prospective_logic_v110", "base": "28",
+     "action": "34", "screen_split": "heldout"},
+    {"suffix": "v111", "design": "future_prospective_logic_v111", "base": "30",
+     "action": "34", "screen_split": "heldout"},
+    {"suffix": "v112", "design": "future_prospective_logic_v112", "base": "32",
+     "action": "34", "screen_split": "heldout"},
 )
 
 

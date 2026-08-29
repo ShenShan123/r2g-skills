@@ -95,6 +95,35 @@ def test_v93_v104_action_screen_is_exact_and_preregistered():
     assert len(rtl_digests) == 14
 
 
+def test_v107_v112_action34_screen_avoids_noop_and_is_source_disjoint():
+    specs = {row["suffix"]: row for row in LINEAGES}
+    suffixes = [f"v{index}" for index in range(107, 113)]
+    assert [specs[suffix]["base"] for suffix in suffixes] == [
+        "28", "30", "32", "28", "30", "32"]
+    assert {specs[suffix]["action"] for suffix in suffixes} == {"34"}
+    assert all(specs[suffix]["base"] != specs[suffix]["action"]
+               for suffix in suffixes)
+    assert [specs[suffix]["screen_split"] for suffix in suffixes] == [
+        "support", "support", "support", "heldout", "heldout", "heldout"]
+
+    fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "physical_rtl"
+    prior_digests = {
+        hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in fixture_root.glob("future_prospective_logic_v*.v")
+        if path.stem not in {specs[suffix]["design"] for suffix in suffixes}
+    }
+    new_digests = set()
+    for suffix in suffixes:
+        design = specs[suffix]["design"]
+        rtl = fixture_root / f"{design}.v"
+        sdc = fixture_root / f"{design}.sdc"
+        assert rtl.is_file() and sdc.is_file()
+        digest = hashlib.sha256(rtl.read_bytes()).hexdigest()
+        assert digest not in prior_digests
+        new_digests.add(digest)
+    assert len(new_digests) == 6
+
+
 def test_grouped_shadow_admission_rejects_harmful_heldout_lineage():
     action = {"domain": "flow.CONFIG_DELTA",
               "transformation_family": "DENSITY_RELIEF",

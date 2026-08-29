@@ -4549,3 +4549,29 @@ held-out calibration report SHA256 分别为
 sample 与 recovery receipts，并继续固定 `promotion_eligible=false`。下一轮应预注册
 更温和的 exact action34，使用与 v81–v106 全部 source-disjoint 的 support/held-out；
 若仍出现任一 harmful lineage，则继续保留负证据，不能进入 shadow。
+
+### 2026-08-29 action34 non-noop 筛选负证据
+
+进一步将 exact action 收紧为 `CORE_UTILIZATION=34`，并用 base 28/30/32 避免
+34→34 no-op。v107–v109 固定为 support，v110–v112 固定为 held-out；六条 RTL/SDC
+与 v81–v106 的 source hash 全部不重合。support 的 6 个 arm 全部完成 ORFS 且
+6/6 strict pass/timing clean，无需 replacement；三条 support 的 area delta 为
+`-6/-2/-3um²`，但这些 training observations 不参与 held-out safety 分母。
+
+独立 held-out 的 6 个 arm 同样全部完成 ORFS，6/6 strict pass/timing clean。实际 delta
+为：v110 area/power/WNS=`-17um²/-1e-6W/+0.00093ns`，v111=
+`-16um²/-2.8e-5W/+0.00119ns`，v112=`+3um²/-8e-6W/-0.02915ns`。normal retrieval
+aggregate coverage 仍为 `0.583333`；lineage-grouped conformal 四项 coverage 均为
+`1.0`，lineage/support/positive-utility gates 全部通过，但 v112 的 area regression 使
+`harmful_rate=1/3`，因此 grouped 状态保持 `shadow_calibration_failed`，policy
+materialization 为 `not_materialized`。
+
+support 与 held-out durable receipts 位于
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action34-support-v107v109/` 和
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action34-heldout-v110v112/`；held-out report
+SHA256 为 `2cb50e657f59220a5899a65e50f7e1049a024f000ba67e4231ad2a11644c233e`。
+本轮没有运行 replay/shadow，也没有 canonical/authority/lifecycle/runtime mutation。
+下一轮可以继续预注册 action32（使用低于 32 的 base，避免 no-op），但不能从 v110/v111
+子集中删除 v112 后宣称 action34 ready；如果更温和 action 仍反复出现面积 harmful，
+则应停止单纯 knob sweep，重新选择 transformation family 或显式 utility contract，仍需
+新的独立 cohort 验证。

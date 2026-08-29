@@ -1027,6 +1027,12 @@ canonical memory。
   materialize policy 或运行 shadow。sample-only campaign 的 `--phase promote` 也已
   修复为不再错误依赖 calibration report；support 与 held-out receipts 保存在
   `/data1/zhangdy/tehm-campaigns/tehm-p2-action36-*` 和 `tehm-p2-action38-*`。
+- action34 使用 base 28/30/32，显式避免 no-op，并建立 v107–v109 support 与
+  v110–v112 held-out。12/12 arm strict pass/timing clean；normal coverage=`0.583333`、
+  grouped conformal 四项=`1.0`，但 v112 area `+3um²` 导致 `harmful_rate=1/3`，因此
+  仍未 materialize 或运行 shadow。durable receipts 位于
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-action34-*`；下一步只能用新的 source-disjoint
+  action32 cohort 继续，不能删除 harmful lineage 后重算 readiness。
 - Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
   receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
   `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选
