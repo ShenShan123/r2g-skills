@@ -425,7 +425,9 @@ def observe(root: Path, manifest: dict, observations_path: Path) -> dict:
     # phase path; do not rely on the caller having performed the earlier check.
     validate_source_freeze(manifest)
     before = canonical_snapshots()
-    observations = [build_external_observation(item) for item in manifest["items"]]
+    observations = [build_external_observation({
+        **item, "orfs_root": manifest.get("orfs_root")})
+                   for item in manifest["items"]]
     chain = write_external_observations(observations_path, observations)
     after = canonical_snapshots()
     assert_snapshots_unchanged(before, after)

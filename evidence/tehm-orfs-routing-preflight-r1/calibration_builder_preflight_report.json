@@ -1,0 +1,26 @@
+{
+  "version": "tehm-orfs-calibration-builder-preflight-v1",
+  "campaigns_checked": [
+    "/tmp/tehm-orfs/routing-calibration-crc-r1/campaign_manifest.json",
+    "/tmp/tehm-orfs/routing-calibration-uart-r1/campaign_manifest.json",
+    "/tmp/tehm-orfs/routing-calibration-fifo-r1/campaign_manifest.json"
+  ],
+  "toolchain_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+  "action": {
+    "family": "ROUTING_CAPACITY_RECOVERY",
+    "config_edits": {
+      "ROUTING_LAYER_ADJUSTMENT": "0.05"
+    }
+  },
+  "preflight": {
+    "platform": "sky130hs",
+    "status": "NO_OP",
+    "reason": "routing_hook_overrides_config_knob",
+    "hook_sha256": "a84110f70e0ff1540f4cfed6730d56b3011c6c06a6c897a4bd600522bb175dd3"
+  },
+  "builder_decision": "REJECT_CALIBRATION_SAMPLE",
+  "authority_effect": "cannot_establish_harmful_or_conformal_gate",
+  "canonical_memory_mutation": "none",
+  "promotion_attempted": false,
+  "production_runtime_import": false
+}

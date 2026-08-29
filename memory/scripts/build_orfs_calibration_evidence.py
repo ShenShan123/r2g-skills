@@ -32,6 +32,9 @@ from tehm.ids import stable_dumps  # noqa: E402
 from tehm.parametric.calibration import calibrate_exact_groups  # noqa: E402
 from tehm.physical.effects import extract_deltas  # noqa: E402
 from tehm.physical.memory import PhysicalEffectMemory, _action_signature  # noqa: E402
+from tehm.physical.orfs_preflight import (  # noqa: E402
+    ROUTING_LAYER_ADJUSTMENT, inspect_routing_layer_adjustment,
+    parse_orfs_config, preflight_digest)
 
 
 VERSION = "tehm-orfs-calibration-evidence-v1"
@@ -58,6 +61,28 @@ def _slug(value: str) -> str:
 def _finite(value) -> bool:
     return (type(value) in (int, float) and
             not isinstance(value, bool) and math.isfinite(float(value)))
+
+
+def _bind_routing_preflight(row: dict, item: Mapping, *, orfs_root) -> dict | None:
+    """Attach and enforce the executed semantics of a routing calibration row."""
+    config_edits = item.get("config_edits") or {}
+    if ROUTING_LAYER_ADJUSTMENT not in config_edits:
+        return None
+    record = row.get("record")
+    if not isinstance(record, dict) or not isinstance(record.get("verification"), dict):
+        raise ValueError(f"{row.get('case_id')}: calibration record verifier is missing")
+    before_project = Path(item["before_project"])
+    preflight = inspect_routing_layer_adjustment(
+        item.get("platform", ""), config_edits,
+        config=parse_orfs_config(before_project / "constraints" / "config.mk"),
+        project_dir=before_project, orfs_root=orfs_root)
+    preflight["digest"] = preflight_digest(preflight)
+    if preflight.get("status") != "EFFECTIVE":
+        raise ValueError(
+            f"{row.get('case_id')}: routing execution preflight is not effective: "
+            f"{preflight.get('status')}:{preflight.get('reason')}")
+    record["verification"]["execution_preflight"] = preflight
+    return preflight
 
 
 def _conformal_for_sample(sample: Mapping, radii: Mapping) -> dict:
@@ -107,6 +132,7 @@ def build(manifests: list[Path], *, authority_db: Path, output_root: Path,
                 raise ValueError(f"{manifest_path}: expected one manifest item")
             item = dict(items[0])
             item["split"] = item.get("dataset_split")
+            item["orfs_root"] = raw.get("orfs_root")
             row = build_external_observation(item)
             case_id = row["case_id"]
             if case_id in seen_cases:
@@ -115,6 +141,7 @@ def build(manifests: list[Path], *, authority_db: Path, output_root: Path,
             if row["classification"] != "ELIGIBLE_POSITIVE":
                 raise ValueError(f"{case_id}: external observation is incomplete")
             record = row["record"]
+            _bind_routing_preflight(row, item, orfs_root=raw.get("orfs_root"))
             observed = extract_deltas(
                 record["before"]["reports"]["ppa"],
                 record["after"]["reports"]["ppa"])

@@ -52,3 +52,9 @@ they simply cannot establish learner or promotion evidence.
 
 The bounded validation receipt is
 `authority_replay_preflight_report.json`.
+
+The calibration-builder check is recorded in
+`calibration_builder_preflight_report.json`: the three earlier `sky130hs`
+campaign manifests are rejected before physical-memory calibration because
+their hook is `NO_OP`. They remain useful negative/audit evidence, but cannot
+contribute a routing conformal or harmful-rate gate.

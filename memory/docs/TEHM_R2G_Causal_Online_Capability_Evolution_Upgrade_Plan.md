@@ -4283,3 +4283,14 @@ external authority projector。只要 action payload 含
 但不能再建立 harmful/conformal authority gate，也不能进入 learner support 或
 canonical memory。下一步仍需在 `asap7` 的真实 `EFFECTIVE` hook 上重新 capture，
 再进行 source-disjoint calibration、held-out transfer 与 A/B efficacy 重放。
+
+### 2026-08-28 calibration builder preflight binding
+
+`build_orfs_calibration_evidence.py` 现在在重建 external observation 之前重新解析
+manifest 绑定的 `ORFS_ROOT`、before 项目的 config 与平台 hook，并把同一
+`orfs-routing-preflight-v1` receipt 写回 record verifier。对于
+`ROUTING_LAYER_ADJUSTMENT`，只有 `EFFECTIVE` 才能进入 calibration sample；
+`NO_OP`、`UNKNOWN`、`NOT_CHECKED` 或不可读 hook 会在 calibration builder 阶段直接
+失败，不等到 authority projector 才发现。这样 calibration digest、conformal row
+和后续 authority replay 使用的是同一个已验证 action 语义，而不是仅由配置文件差异
+推断的 action。非 routing action 保持原有 schema/兼容路径不变。

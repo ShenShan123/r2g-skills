@@ -30,7 +30,9 @@ from tehm.ids import stable_dumps
 from tehm.physical.graph_context import load_defgraph_context
 from tehm.physical.effects import extract_deltas
 from tehm.physical.memory import PhysicalEffectMemory
-from tehm.physical.orfs_preflight import validate_persisted_execution_preflight
+from tehm.physical.orfs_preflight import (
+    ROUTING_LAYER_ADJUSTMENT, inspect_routing_layer_adjustment,
+    parse_orfs_config, preflight_digest, validate_persisted_execution_preflight)
 
 
 BATCH_LANE_VERSION = "orfs-batch-lane-v1"
@@ -495,16 +497,34 @@ def build_external_observation(item: Mapping) -> dict:
         expected_timing_contract=(expected_timing_after
                                   if isinstance(expected_timing_after, Mapping) else {}))
     complete = bool(before["complete"] and after["complete"])
+    config_edits = dict(item["config_edits"])
+    execution_preflight = None
+    if ROUTING_LAYER_ADJUSTMENT in config_edits:
+        before_project = Path(str(item["before_project"]))
+        execution_preflight = inspect_routing_layer_adjustment(
+            item.get("platform", ""), config_edits,
+            config=parse_orfs_config(
+                before_project / "constraints" / "config.mk"),
+            project_dir=before_project,
+            orfs_root=item.get("orfs_root"))
+        execution_preflight["digest"] = preflight_digest(execution_preflight)
+        # A no-op or unavailable real hook is not a demonstrated intervention.
+        # Preserve the row for audit, but make it ineligible before the receipt
+        # is written so downstream consumers cannot mistake it for support.
+        if execution_preflight["status"] in {"NO_OP", "UNKNOWN"}:
+            complete = False
     record_dict = None
     record_error = None
     try:
         record = build_orfs_pair_record(
             Path(str(item["before_project"])), Path(str(item["after_project"])),
             lineage_id=str(item["lineage_id"]), target_check=str(item.get("check") or "route"),
-            config_edits=dict(item["config_edits"]),
+            config_edits=config_edits,
             transformation_family=str(item["family"]),
         )
         record_dict = asdict(record)
+        if execution_preflight is not None:
+            record_dict["verification"]["execution_preflight"] = execution_preflight
         complete = bool(
             complete and record.verification.get("verdict") == "PASS" and
             record.verification.get("obligation_coverage") == 1.0 and
@@ -521,13 +541,17 @@ def build_external_observation(item: Mapping) -> dict:
         "platform": str(item["platform"]),
         "family": str(item["family"]),
         "split": split,
-        "action": {"config_edits": dict(item["config_edits"])},
+        "action": {"config_edits": config_edits},
         "before": before,
         "after": after,
         "classification": classification,
         "learner_eligible": bool(complete and split == "support"),
         "record": record_dict,
         "record_error": record_error,
+        "execution_preflight": execution_preflight,
+        "execution_preflight_blocked": bool(
+            execution_preflight and execution_preflight.get("status")
+            in {"NO_OP", "UNKNOWN"}),
         "canonical_memory_mutation": "none",
         "promotion_eligible": False,
     }

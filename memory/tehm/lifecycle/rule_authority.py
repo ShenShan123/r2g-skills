@@ -772,11 +772,26 @@ def build_external_observation_authority_evidence(
             delta = dict(record["observation_delta"])
             verifier = dict(record["verification"])
             try:
-                validate_persisted_execution_preflight(
+                execution_preflight = validate_persisted_execution_preflight(
                     record.get("action"), verifier)
             except ValueError as exc:
                 raise ValueError(
                     "external_authority:" + str(exc)) from exc
+            if execution_preflight is not None:
+                # Keep the projection bound to the exact action and executed
+                # hook. The full record remains the source witness; these
+                # compact fields make cohort mixing auditable without copying
+                # the complete Tcl command list into every gate row.
+                base_payload.update({
+                    "action_content_sha256": hashlib.sha256(
+                        stable_dumps(dict(record["action"])).encode()).hexdigest(),
+                    "execution_preflight_digest": str(
+                        execution_preflight["digest"]),
+                    "execution_preflight_platform": str(
+                        execution_preflight.get("platform") or ""),
+                    "execution_preflight_hook_sha256": str(
+                        execution_preflight.get("hook_sha256") or ""),
+                })
             if verifier.get("verdict") != "PASS":
                 raise ValueError("external_authority:record_not_pass")
             if delta.get("created_regressions"):
@@ -912,6 +927,7 @@ def build_external_observation_authority_evidence_batch(
     record_cases: dict[str, str] = {}
     receipt_sources: dict[str, tuple[str, str, str]] = {}
     receipt_cases: dict[str, str] = {}
+    routing_cohort: tuple[str, str, str, str] | None = None
     for source in normalised:
         projected = build_external_observation_authority_evidence(
             conn,
@@ -933,6 +949,20 @@ def build_external_observation_authority_evidence_batch(
                     str(payload.get("staging_db_sha256") or ""),
                     str(payload.get("campaign_id") or ""),
                 )
+                preflight_digest_value = str(
+                    payload.get("execution_preflight_digest") or "")
+                if preflight_digest_value:
+                    cohort = (
+                        str(payload.get("action_content_sha256") or ""),
+                        str(payload.get("execution_preflight_platform") or ""),
+                        str(payload.get("execution_preflight_hook_sha256") or ""),
+                        preflight_digest_value,
+                    )
+                    if routing_cohort is None:
+                        routing_cohort = cohort
+                    elif routing_cohort != cohort:
+                        raise ValueError(
+                            "external_authority:mixed_routing_preflight_cohort")
                 evidence_key = (gate, str(entry.get("evidence_id") or ""))
                 if evidence_key in seen_evidence:
                     raise ValueError(
