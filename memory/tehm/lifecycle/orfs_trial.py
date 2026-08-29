@@ -39,6 +39,8 @@ from tehm.lifecycle.rule_authority import (
     build_trial_authority_evidence, record_rule_authority)
 from tehm.lifecycle.rule_status import RuleLifecycleError, get_status
 from tehm.lifecycle.trial_adapter import judge_trial, record_external_trial
+from tehm.physical.orfs_preflight import (
+    inspect_routing_layer_adjustment, preflight_digest)
 from tehm.retrieval.index import build_index
 from tehm.retrieval.result import APPLICABLE
 
@@ -376,6 +378,12 @@ def run_pending_orfs_trials(
         coverages = [p["obligation_coverage"] for p in pairs
                      if p["obligation_coverage"] is not None]
         coverage = min(coverages) if coverages else 0.0
+        preflight_blockers = sorted({
+            (p.get("execution_preflight") or {}).get("reason")
+            for p in pairs if p.get("execution_preflight_blocked")
+            and (p.get("execution_preflight") or {}).get("reason")})
+        if preflight_blockers and verdict == "inconclusive":
+            reason = "execution preflight blocked: " + ",".join(preflight_blockers)
         rollback_ok = bool(pairs) and all(
             p["rollback_receipt"]["verified"] for p in pairs)
         infrastructure_failure = _infrastructure_failures(pairs)
@@ -402,6 +410,7 @@ def run_pending_orfs_trials(
             "created_regressions": regressions,
             "rollback_verified": rollback_ok,
             "infrastructure_failure": infrastructure_failure,
+            "execution_preflight_blockers": preflight_blockers,
             "pairs": pairs,
         }
         if (mutate_lifecycle and promotion_gate_inputs is not None and
@@ -733,7 +742,21 @@ def _run_pair(conn, *, rule: dict, rule_id: str, scope: str,
     obligations = transfer_obligations(rule, context)
     action = instantiate_rewrite(rule, binding, context)
     edits = ((action.get("payload") or {}).get("config_edits") or {})
+    # A config delta is not evidence of a causal intervention by itself.  A
+    # platform hook can replace the knob with a literal Tcl value, making the
+    # candidate arm byte-different but semantically identical.  Production
+    # callers provide ORFS_ROOT in ``env``; hermetic fake-flow fixtures omit it
+    # and retain the compatibility path as NOT_CHECKED.
+    preflight = inspect_routing_layer_adjustment(
+        platform, edits, config=context.cfg, project_dir=arm_b,
+        orfs_root=((env or {}).get("ORFS_ROOT") or
+                   os.environ.get("ORFS_ROOT")))
+    action["execution_preflight"] = {
+        **preflight, "digest": preflight_digest(preflight)}
+    preflight_blocked = preflight["status"] in {"NO_OP", "UNKNOWN"}
     executable = applicable == APPLICABLE and binding.status == "BOUND" and bool(edits)
+    if preflight_blocked:
+        executable = False
     if executable:
         _apply_config_edits(arm_b / "constraints" / "config.mk", edits)
     if executable:
@@ -811,6 +834,8 @@ def _run_pair(conn, *, rule: dict, rule_id: str, scope: str,
         "repeat": repeat,
         "applicability_status": applicable, "binding_status": binding.status,
         "action": action, "arm_a": action_a, "arm_b": action_b,
+        "execution_preflight": action["execution_preflight"],
+        "execution_preflight_blocked": preflight_blocked,
         "arms_differ": arms_differ, "created_regressions": regressions,
         "obligation_coverage": obligations["obligation_coverage"],
         "rollback_receipt": rollback, "activation_id": activation_id,

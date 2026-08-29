@@ -1,0 +1,44 @@
+{
+  "version": "tehm-orfs-routing-preflight-v1",
+  "action": {
+    "config_edits": {
+      "ROUTING_LAYER_ADJUSTMENT": "0.05"
+    },
+    "target_scope": "route"
+  },
+  "toolchain_root": "/data2/quewk/r2g-repro/OpenROAD-flow-scripts",
+  "platforms": {
+    "sky130hs": {
+      "status": "NO_OP",
+      "applicability": "INAPPLICABLE",
+      "reason": "routing_hook_overrides_config_knob",
+      "hook": "flow/platforms/sky130hs/fastroute.tcl",
+      "hook_sha256": "a84110f70e0ff1540f4cfed6730d56b3011c6c06a6c897a4bd600522bb175dd3"
+    },
+    "sky130hd": {
+      "status": "NO_OP",
+      "applicability": "INAPPLICABLE",
+      "reason": "routing_hook_overrides_config_knob",
+      "hook": "flow/platforms/sky130hd/fastroute.tcl",
+      "hook_sha256": "a84110f70e0ff1540f4cfed6730d56b3011c6c06a6c897a4bd600522bb175dd3"
+    },
+    "nangate45": {
+      "status": "NO_OP",
+      "applicability": "INAPPLICABLE",
+      "reason": "routing_hook_overrides_config_knob",
+      "hook": "flow/platforms/nangate45/fastroute.tcl",
+      "hook_sha256": "6ee39fe360a870b0dd4731a206882d2a2b6c1e54ad8612152460e36c9e95e0dc"
+    },
+    "asap7": {
+      "status": "EFFECTIVE",
+      "reason": "routing_hook_consumes_config_knob",
+      "hook": "flow/platforms/asap7/fastroute.tcl",
+      "hook_sha256": "0513fb0efd632b4bc3c16882b09d64ce227e48f4bc71486f4d05aec62fe7b0e1"
+    }
+  },
+  "authority": {
+    "promotion_attempted": false,
+    "canonical_memory_mutation": "none",
+    "production_runtime_import": false
+  }
+}

@@ -4217,3 +4217,33 @@ production runtime import。精简 receipt 摘要见
 source-disjoint calibration/transfer cohort，再在至少两个非 stress held-out
 lineage 上重复 A/B。routing rule 则必须先修正 platform hook 的可执行性，或在
 preflight 将其判为 no-op/inapplicable，不能继续把被覆盖的 knob 当作可晋级 action。
+
+### 2026-08-28 ORFS routing knob semantic preflight
+
+为关闭上述 routing action 的可执行性缺口，新增只读模块
+`memory/tehm/physical/orfs_preflight.py`，并在
+`run_pending_orfs_trials()` 的每个 pair 执行前调用。对于包含
+`ROUTING_LAYER_ADJUSTMENT` 的 `flow.CONFIG_DELTA`，preflight 按 ORFS 实际调用
+路径选择 `config.mk` 中的 `FASTROUTE_TCL`，否则选择
+`<ORFS_ROOT>/flow/platforms/<platform>/fastroute.tcl`；Tcl continuation 会先归一化，
+但 receipt 哈希仍覆盖原始 hook 字节。只有直接消费
+`$::env(ROUTING_LAYER_ADJUSTMENT)`/`$env(ROUTING_LAYER_ADJUSTMENT)` 的命令才标为
+`EFFECTIVE`。硬编码 adjustment、没有消费 knob 的显式 hook 都标为
+`NO_OP` + `INAPPLICABLE`；声明了 `ORFS_ROOT` 却无法读取 hook 时标为
+`UNKNOWN`，同样 fail-closed。每个 action 保存 `hook_sha256`、解析命令与
+`preflight_digest`，trial metrics 额外列出阻断原因。未声明 ORFS_ROOT 的兼容性 fake-flow
+fixture 只得到 `NOT_CHECKED`，不被冒充为真实语义证据。
+
+在当前 ORFS tree 中，`sky130hs` 与 `sky130hd` 的 hook 哈希均为
+`a84110f70e0ff1540f4cfed6730d56b3011c6c06a6c897a4bd600522bb175dd3`，两者均固定执行
+`... 0.2`，因此 routing adjustment candidate 现在会在启动 OpenROAD 前被判为 no-op；
+`asap7` 的 hook 直接消费该环境变量，preflight 判为 `EFFECTIVE`。这个判定只改变
+trial 的可执行性和审计结果，不写 canonical memory、authority receipt 或 production
+runtime。新增 `test_orfs_preflight.py` 覆盖 hardcoded/env-driven/missing-hook/fixture
+边界，`test_routing_hook_noop_is_blocked_before_real_flow` 证明 no-op action 不会调用
+flow、保持 candidate status，并把原因写入 pair/trial evidence。
+
+下一步是把 `EFFECTIVE` routing action 绑定到一个经过 source-disjoint calibration、
+cross-lineage transfer、harmful-rate 与 conformal coverage 的新 cohort；只有真实 A/B
+LCB 分离且六门 authority gate 仍为 PASS，才可重建 promotion receipt。对
+`NO_OP`/`UNKNOWN` action 继续保持 shadow-only，不得把配置文件的表面差异当作能力增益。

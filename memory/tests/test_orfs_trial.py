@@ -48,6 +48,35 @@ def _insert_rule(conn, rule_id="rule_orfs_real", scope="drc"):
     return rule_id
 
 
+def _insert_routing_rule(conn, rule_id="rule_orfs_routing_noop"):
+    before = {"type": "CONFIG_REWRITE", "target_check": "route",
+              "knob": "ROUTING_LAYER_ADJUSTMENT"}
+    after = {"rewrite.value": "0.05", "execution.rerun_from": "floorplan",
+             "execution.recheck": "route"}
+    rule_id = mint_rule_id(
+        domain="flow.signoff", before_pattern=before,
+        after_pattern=after, hard_preconditions=[],
+        obligations=["TARGET_FAILURE_REMOVED", "PRESERVE_LVS"])
+    now = tehm_db.now_local()
+    conn.execute(
+        """INSERT INTO tehm_rules (
+               rule_id, domain, before_pattern_json, after_pattern_json,
+               hard_preconditions_json, context_profile_json, obligations_json,
+               validity_status, validity_profile_json, confidence_json,
+               utility_json, risk_profile_json, predicate_schema_version,
+               role_schema_version, crystallizer_version, merge_trace_digest,
+               created_at, updated_at)
+           VALUES (?, 'flow.signoff', ?, ?, '[]', '{}', ?, 'VALIDATED',
+                   '{}', '{}', '{}', '[]', 'predicate-v0.1', 'role-v0.1',
+                   'test', 'test', ?, ?)""",
+        (rule_id, stable_dumps(before), stable_dumps(after),
+         stable_dumps(["TARGET_FAILURE_REMOVED", "PRESERVE_LVS"]), now, now))
+    conn.commit()
+    enter_shadow(conn, rule_id=rule_id, target_scope="route")
+    set_status(conn, rule_id=rule_id, target_scope="route", status="candidate")
+    return rule_id
+
+
 def _project(tmp_path):
     project = tmp_path / "subject"
     (project / "constraints").mkdir(parents=True)
@@ -213,6 +242,51 @@ def test_orfs_ab_serial_mode_preserves_trial_semantics(tmp_tehm, tmp_path,
     assert conn.execute(
         "SELECT status FROM tehm_rule_status WHERE rule_id=?", (rule_id,)
     ).fetchone()[0] == "promoted"
+
+
+def test_routing_hook_noop_is_blocked_before_real_flow(tmp_tehm, tmp_path):
+    """A hardcoded platform hook cannot masquerade as a routing intervention."""
+    conn, store, _ = tmp_tehm
+    rule_id = _insert_routing_rule(conn)
+    project = _project(tmp_path)
+    (project / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = subject\nexport PLATFORM = sky130hs\n"
+        "export CORE_UTILIZATION = 30\n")
+    orfs_root = tmp_path / "orfs"
+    hook = orfs_root / "flow" / "platforms" / "sky130hs" / "fastroute.tcl"
+    hook.parent.mkdir(parents=True)
+    hook.write_text(
+        "set_global_routing_layer_adjustment "
+        "$::env(MIN_ROUTING_LAYER)-$::env(MAX_ROUTING_LAYER) 0.2\n")
+    marker = tmp_path / "flow_called"
+    flow = tmp_path / "must_not_run.sh"
+    flow.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf called > {marker}\n"
+        "exit 0\n")
+    fix = tmp_path / "fix.sh"
+    fix.write_text("#!/usr/bin/env bash\nexit 0\n")
+
+    trials = run_pending_orfs_trials(
+        conn, store,
+        base_entries=[{"design": "subject", "project_path": str(project),
+                       "platform": "sky130hs", "kind": "normal"}],
+        run_flow_script=flow, fix_signoff_script=fix, repeats=1,
+        work_root=tmp_path / "noop_arms",
+        env={"ORFS_ROOT": str(orfs_root)})
+
+    assert len(trials) == 1
+    assert trials[0]["verdict"] == "inconclusive"
+    assert trials[0]["new_status"] is None
+    assert not marker.exists()
+    pair = trials[0]["metrics"]["pairs"][0]
+    assert pair["execution_preflight"]["status"] == "NO_OP"
+    assert pair["execution_preflight"]["applicability"] == "INAPPLICABLE"
+    assert pair["execution_preflight_blocked"] is True
+    assert pair["arm_a"]["not_run"] == "control"
+    assert pair["arm_b"]["not_run"] == "rule"
+    assert get_status(conn, rule_id=rule_id,
+                      target_scope="route")["status"] == "candidate"
 
 
 def test_orfs_ab_trial_is_idempotent(tmp_tehm, tmp_path):
