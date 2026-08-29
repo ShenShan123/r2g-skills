@@ -176,6 +176,59 @@ def test_capture_quarantines_incomplete_oracle_from_learner(tmp_path):
                       root / "staging" / "artifacts")
 
 
+def test_capture_quarantines_hardcoded_routing_hook_from_learner(tmp_path):
+    """A complete-looking route pair is audit-only when the knob is ignored."""
+    root = tmp_path / "routing-preflight-campaign"
+    before = _project(root, "before", util=50, rc=0,
+                      route={"status": "clean"}, drc={"status": "clean"})
+    after = _project(root, "after", util=50, rc=0,
+                     route={"status": "clean"}, drc={"status": "clean"})
+    for project in (before, after):
+        (project / "reports" / "timing_check.json").write_text(
+            json.dumps({"status": "clean", "tier": "clean"}))
+    (after / "constraints" / "config.mk").write_text(
+        (after / "constraints" / "config.mk").read_text()
+        + "export ROUTING_LAYER_ADJUSTMENT = 0.05\n")
+    orfs = root / "orfs"
+    hook = orfs / "flow" / "platforms" / "sky130hs" / "fastroute.tcl"
+    hook.parent.mkdir(parents=True)
+    hook.write_text(
+        "set_global_routing_layer_adjustment "
+        "$::env(MIN_ROUTING_LAYER)-$::env(MAX_ROUTING_LAYER) 0.2\n")
+    item = {
+        "case_id": "sky130hs:preflight:routing",
+        "lineage_id": "preflight:sky130hs:routing",
+        "platform": "sky130hs", "family": "ROUTING_CAPACITY_RECOVERY",
+        "check": "route",
+        "config_edits": {"ROUTING_LAYER_ADJUSTMENT": "0.05"},
+        "before_project": str(before), "after_project": str(after),
+    }
+    manifest = {"orfs_root": str(orfs), "items": [item],
+                "heldout": {"lineage_id": "heldout:spi"}, "captured": []}
+    manifest_path = root / "campaign_manifest.json"
+    manifest_path.write_text(json.dumps(manifest))
+    staging_db = root / "staging" / "tehm.sqlite"
+    capture_pairs(manifest_path, manifest, staging_db,
+                  root / "staging" / "artifacts")
+
+    captured = manifest["captured"][0]
+    assert captured["oracle_complete"] is False
+    assert captured["dataset_split"] == "calibration"
+    assert captured["learner_eligible"] is False
+    assert captured["execution_preflight"]["status"] == "NO_OP"
+    assert captured["execution_preflight_blocked"] is True
+    import sqlite3
+    conn = sqlite3.connect(staging_db)
+    assert conn.execute(
+        "SELECT split, learner_eligible FROM tehm_dataset_membership"
+    ).fetchone() == ("calibration", 0)
+    verifier = json.loads(conn.execute(
+        "SELECT verifier_json FROM tehm_transitions").fetchone()[0])
+    conn.close()
+    assert verifier["execution_preflight"]["reason"] == (
+        "routing_hook_overrides_config_knob")
+
+
 def test_capture_explicit_heldout_is_audit_only(tmp_path):
     """A complete held-out pair must remain non-learner evidence."""
     root = tmp_path / "heldout-campaign"

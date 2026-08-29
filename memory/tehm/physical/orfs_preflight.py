@@ -31,6 +31,22 @@ _ROUTING_COMMAND = re.compile(
 _ENV_KNOB = re.compile(
     r"(?:\$::env\(|\$env\()ROUTING_LAYER_ADJUSTMENT\)?")
 _MAKE_VAR = re.compile(r"\$\(([^)]+)\)|\$\{([^}]+)\}")
+_CFG_RE = re.compile(r"^\s*(?:override\s+)?(?:export\s+)?"
+                     r"([A-Z0-9_]+)\s*[:?]?=\s*(.*?)\s*$")
+
+
+def parse_orfs_config(path: str | Path) -> dict:
+    """Parse the scalar ORFS config keys needed by semantic preflight."""
+    values = {}
+    try:
+        lines = Path(path).read_text().splitlines()
+    except OSError:
+        return values
+    for line in lines:
+        match = _CFG_RE.match(line)
+        if match:
+            values[match.group(1)] = match.group(2)
+    return values
 
 
 def inspect_routing_layer_adjustment(

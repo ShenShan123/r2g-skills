@@ -4247,3 +4247,23 @@ flow、保持 candidate status，并把原因写入 pair/trial evidence。
 cross-lineage transfer、harmful-rate 与 conformal coverage 的新 cohort；只有真实 A/B
 LCB 分离且六门 authority gate 仍为 PASS，才可重建 promotion receipt。对
 `NO_OP`/`UNKNOWN` action 继续保持 shadow-only，不得把配置文件的表面差异当作能力增益。
+
+### 2026-08-28 ORFS campaign capture preflight firewall
+
+仅在 candidate trial 执行前阻断还不足以保护旧的 diversity/add-designs lane：该
+lane 先完成 ORFS，再通过 `capture_pairs()` 把 external observation 导入 staging。
+现已在 capture 入口复用同一个 `orfs-routing-preflight-v1`，按 manifest 绑定的
+`ORFS_ROOT`、项目 `FASTROUTE_TCL` 与实际 platform hook 重新计算并保存
+`execution_preflight`。`NO_OP` 或 `UNKNOWN` 会强制
+`oracle_complete=false`、`dataset_split=calibration`、`learner_eligible=false`，
+但保留 transition/physical observation 供审计；因此即使历史 presence oracle 或
+14-check 物理结果通过，也不能把被平台覆盖的 knob 写成 learner support。没有声明
+`ORFS_ROOT` 的旧 fake fixture 返回 `NOT_CHECKED`，不被误报为生产语义。
+
+新增 `test_capture_quarantines_hardcoded_routing_hook_from_learner` 覆盖一个
+physical-looking complete pair：`sky130hs` 固定 `0.2` hook 会在 capture 中被记录为
+`NO_OP/INAPPLICABLE`，membership 被降级到 calibration，verifier 仍携带 hook digest
+与阻断原因。该入口只改变 staging admission 与外部审计字段，不写 canonical memory、
+authority/lifecycle 或 production runtime。下一步仍是在 `asap7` 的 `EFFECTIVE` hook
+上重建 source-disjoint action cohort，再将其 calibration/held-out receipts 送入
+六门 gate 的 DB-bound replay。

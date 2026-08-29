@@ -65,6 +65,10 @@ class VerifierSnapshot:
     # before arm is unacceptable.  It is provenance, not a replacement for
     # the physical oracle, and is intentionally excluded from ``content()``.
     semantic_oracle: dict | None = None
+    # ORFS execution-semantic preflight is also provenance.  It records whether
+    # a config delta reaches the actual platform hook, while remaining outside
+    # the transition content digest so legacy IDs remain stable.
+    execution_preflight: dict | None = None
 
     def validate(self) -> None:
         if self.verdict not in VERDICTS:
@@ -88,7 +92,8 @@ class VerifierSnapshot:
         for name, value in (("input_binding", self.input_binding),
                             ("timing_contract", self.timing_contract),
                             ("full_oracle", self.full_oracle),
-                            ("semantic_oracle", self.semantic_oracle)):
+                            ("semantic_oracle", self.semantic_oracle),
+                            ("execution_preflight", self.execution_preflight)):
             if value is not None and not isinstance(value, dict):
                 raise ValueError(f"{name} must be a mapping or None")
 
@@ -111,6 +116,7 @@ class VerifierSnapshot:
             "timing_contract": self.timing_contract,
             "full_oracle": self.full_oracle,
             "semantic_oracle": self.semantic_oracle,
+            "execution_preflight": self.execution_preflight,
         }
 
     @classmethod
@@ -129,6 +135,7 @@ class VerifierSnapshot:
             timing_contract=data.get("timing_contract"),
             full_oracle=data.get("full_oracle"),
             semantic_oracle=data.get("semantic_oracle"),
+            execution_preflight=data.get("execution_preflight"),
         )
         obj.validate()
         return obj
@@ -155,6 +162,7 @@ class VerifierSnapshot:
             tool_versions=result.get("tool_versions"),
             input_binding=result.get("input_binding"),
             timing_contract=result.get("timing_contract"),
+            execution_preflight=result.get("execution_preflight"),
         )
 
     def content(self) -> dict:

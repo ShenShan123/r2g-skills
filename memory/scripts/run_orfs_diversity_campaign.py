@@ -38,6 +38,8 @@ from tehm.canonical.capture import capture  # noqa: E402
 from tehm.evaluation.campaign_metrics import evaluate_campaign, to_markdown  # noqa: E402
 from tehm.physical.graph_context import load_defgraph_context  # noqa: E402
 from tehm.physical.memory import PhysicalEffectMemory  # noqa: E402
+from tehm.physical.orfs_preflight import (  # noqa: E402
+    inspect_routing_layer_adjustment, parse_orfs_config, preflight_digest)
 from tehm_backend import TehmMemoryBackend  # noqa: E402
 from tehm.batch_lane import (  # noqa: E402
     BatchLaneError,
@@ -604,6 +606,23 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             config_edits=item["config_edits"], transformation_family=item["family"],
             semantic_oracle=item.get("semantic_oracle"))
         complete = record.verification.get("oracle_complete") is True
+        # Re-check the executed ORFS hook at capture time.  A route pair can
+        # pass the historical presence oracle while the platform hook ignores
+        # the changed config value; such an observation remains immutable
+        # audit evidence but is never learner support.
+        before_project = Path(item["before_project"])
+        preflight = inspect_routing_layer_adjustment(
+            item.get("platform", ""), item.get("config_edits") or {},
+            config=parse_orfs_config(
+                before_project / "constraints" / "config.mk"),
+            project_dir=before_project,
+            orfs_root=manifest.get("orfs_root"))
+        preflight["digest"] = preflight_digest(preflight)
+        preflight_blocked = preflight["status"] in {"NO_OP", "UNKNOWN"}
+        record.verification["execution_preflight"] = preflight
+        if preflight_blocked:
+            complete = False
+            record.verification["oracle_complete"] = False
         expected_bindings = item.get("input_bindings")
         expected_timing = item.get("timing_contract")
         if isinstance(expected_bindings, dict) or isinstance(expected_timing, dict):
@@ -727,6 +746,8 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             "oracle_complete": complete,
             "dataset_split": dataset_split,
             "learner_eligible": learner_eligible,
+            "execution_preflight": preflight,
+            "execution_preflight_blocked": preflight_blocked,
         }
     conn.close()
     manifest["captured"] = [captured[k] for k in sorted(captured)]
