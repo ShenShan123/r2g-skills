@@ -4384,3 +4384,17 @@ v63–v68 的 6 条 sky130hs `CORE_UTILIZATION=40` source-disjoint positive coho
 `tehm-v2`/`tehm-v4` schema mismatch fail-closed；这批旧 campaign 不是本轮有效结果。
 下一步必须迁移或重建当前 schema 的 fixture，再按 source freeze → policy replay →
 shadow observation → 六项 promotion gate 顺序推进，仍不得直接写 canonical/runtime。
+
+### 2026-08-29 v2→v4 snapshot migration 与 replay fail-closed
+
+新增 `memory/scripts/migrate_tehm_snapshot_v4.py`，使用只读 SQLite backup 将旧
+TEHM 快照复制到新路径，再执行仓库正式 migration chain；输出报告逐表记录迁移前后
+count/digest、源文件不变性和 `replay_required=true`，避免把 schema upgrade 误当作
+证据修复。对旧 v69–v74 staging 的迁移副本已确认 `tehm-v4` 可被当前 reader 打开，
+但完整 integrity replay 仍保留 H1 dangling-state 与 H7 obligation-status 问题。
+
+因此以该副本重建 manifest/replay 身份后，六条 future shadow prepare 全部因
+`replay_not_verified` abstain，canonical counters 前后一致，未执行 predictor、未写
+shadow outcome、authority 或 canonical。下一步必须从完整 v4 staging/verification
+fixture 重建有效 replay，再继续 policy replay → observation；迁移本身不得放宽任何
+promotion gate。

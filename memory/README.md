@@ -971,6 +971,12 @@ canonical memory。
   v63–v68 positive cohort 已完成只读 predictor recheck；旧 v69–v74 fixtures 因
   `tehm-v2` scratch DB 与当前 `tehm-v4` reader schema 不一致而 fail-closed，需迁移或
   重建后再 replay。
+- 新增 `scripts/migrate_tehm_snapshot_v4.py`：以 SQLite backup 复制旧快照、应用正式
+  v1→v4 migration chain，并逐表比较已有 canonical rows 的 count/digest；源库拒绝
+  原地修改，输出报告固定 `replay_required=true`。对迁移后的 v69–v74 输入，当前
+  integrity replay 仍发现继承的 H1/H7 问题，shadow prepare 六条全部以
+  `replay_not_verified` abstain，且 canonical counters 不变；这确认了 schema migration
+  不是 evidence repair，下一步必须重建完整 v4 staging/verification fixture。
 - Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
   receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
   `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选

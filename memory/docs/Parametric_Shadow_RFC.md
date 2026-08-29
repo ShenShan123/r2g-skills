@@ -431,6 +431,19 @@ sky130hs action-40 positive cohort 已完成只读 recheck，生成的 policy �
 `tehm-v2` scratch DB 而被当前 `tehm-v4` reader fail-closed，不能作为本轮 campaign
 结果，必须先迁移/重建到当前 schema 后再 replay。
 
+### 2026-08-29 v2 快照迁移与 integrity replay 边界
+
+`memory/scripts/migrate_tehm_snapshot_v4.py` 现在提供 output-only 的 SQLite backup
+迁移：正式 v1→v4 chain 只作用于新文件，并对源快照已存在的 canonical table 逐行
+计算 count/digest，源文件保持不变。迁移报告明确 `replay_required=true`；schema
+升级不会把旧 receipt、bundle 或 integrity status 自动继承成有效证据。
+
+在迁移后的 v69–v74 shadow 输入上，当前 bundle replay 仍报告继承的 H1/H7 integrity
+失败，因此 `run_parametric_shadow_campaign.py --phase prepare` 对六条 future case
+统一返回 `replay_not_verified`，canonical snapshot 前后计数一致、未生成 proposal。
+这一步是有效的 fail-closed 证据，不是 shadow efficacy 结果；后续必须重建完整 v4
+staging/verification fixture，再重新生成 bundle/replay digest 后才能进入 observation。
+
 - 实现：`memory/tehm/parametric/shadow.py`；导出：
   `memory/tehm/parametric/__init__.py`。
 - prospective manifest 的 decision gate：
