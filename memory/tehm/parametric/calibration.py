@@ -233,6 +233,10 @@ def calibrate_lineage_grouped(
                               "pareto_safe_rate": sum(r["pareto_safe"] for r in rows) / len(rows)})
     harmful_rate = (sum(row["harmful_rate"] for row in lineage_rates) /
                     len(lineage_rates) if lineage_rates else None)
+    positive_rows = [row for row in safety_rows if row["pareto_safe"]]
+    positive_lineages = sorted({row["lineage_id"] for row in positive_rows})
+    positive_utility_rate = (len(positive_rows) / len(safety_rows)
+                             if safety_rows else None)
     checks = {
         "lineage_firewall": not overlap,
         "minimum_lineage_groups": len(groups) >= min_lineages,
@@ -242,6 +246,11 @@ def calibrate_lineage_grouped(
             item["lineage_group_coverage"] >= target_coverage - epsilon
             for item in per_metric.values()),
         "harmful_rate": harmful_rate is not None and harmful_rate <= max_harmful_rate,
+        # A completed but neutral intervention is not useful calibration
+        # support.  Require at least one independently observed Pareto-safe
+        # row before a policy can be consumed by the shadow lane.  This is a
+        # safety/utility gate only; it does not make the policy promotable.
+        "positive_utility": bool(positive_rows),
         "pareto_definition_validated": bool(safety_rows),
     }
     status = "ready_for_shadow" if all(checks.values()) else "shadow_calibration_failed"
@@ -263,6 +272,8 @@ def calibrate_lineage_grouped(
             "pareto_safe": "no harmful metric and at least one favorable delta",
             "favorable_sign": FAVORABLE_SIGN},
             "harmful_rate": harmful_rate,
+            "positive_utility_rate": positive_utility_rate,
+            "positive_utility_lineages": positive_lineages,
             "lineage_rates": lineage_rates,
             "rows": safety_rows},
         "checks": checks, "lineage_group_count": len(groups),

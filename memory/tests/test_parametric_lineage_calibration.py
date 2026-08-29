@@ -31,6 +31,16 @@ def test_lineage_firewall_fails_closed():
     assert report["canonical_memory_mutation"] == "none"
 
 
+def test_all_neutral_rows_do_not_establish_shadow_utility():
+    samples = [_sample(f"heldout:{idx}", wns=0.0, area=0.0)
+               for idx in range(3)]
+    report = calibrate_lineage_grouped(samples, min_samples_per_metric=3)
+    assert report["status"] == "shadow_calibration_failed"
+    assert report["checks"]["positive_utility"] is False
+    assert report["safety"]["positive_utility_rate"] == 0.0
+    assert report["safety"]["positive_utility_lineages"] == []
+
+
 def test_parametric_calibration_does_not_accept_boolean_numeric_evidence():
     samples = [_sample(f"heldout:{idx}") for idx in range(3)]
     samples[0]["observed_deltas"]["wns_ns"] = True

@@ -197,6 +197,11 @@ lineage 等权汇总。训练与 calibration/held-out lineage 重叠、lineage �
 `canonical_memory_mutation=none`；只有独立真实 A/B、rollback、registry 与
 obligation 证据才能进入后续 candidate gate。
 
+此外，lineage-grouped calibration 还必须包含至少一条 `pareto_safe=true` 的
+观测；全为 `NEUTRAL` 的 cohort 只能说明 flow/oracle 完成，不能建立可消费的
+shadow utility policy，因此返回 `shadow_calibration_failed`。该 gate 只阻止无
+utility 的 shadow policy，不会把任何 Parametric 结果写入 canonical 或 production。
+
 #### 为什么仍然不能写 canonical / 进入 production
 
 这不是实现遗漏，而是证据边界：Parametric 的输出是对连续 knob 的 point

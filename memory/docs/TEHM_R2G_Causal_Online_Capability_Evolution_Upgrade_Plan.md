@@ -4350,3 +4350,17 @@ authority ledger、lifecycle 和 production runtime 均未改变。
 utility（而非仅完成）的 action point，重新构造 training/calibration/held-out
 分层；在 harmful-rate、conformal、cross-lineage 与 efficacy LCB 同时通过前，仍不
 得进入 canonical 或 production。
+
+### 2026-08-29 calibration positive-utility gate
+
+复核上述 calibration 实现后发现，仅以 `harmful_rate=0` 和
+`pareto_definition_validated=true` 作为 `ready_for_shadow` 条件仍会放行“所有
+指标均为 `NEUTRAL`”的完成型 cohort。该状态只能证明 flow/oracle 可运行，不能证明
+action 对任何独立 lineage 产生 utility。现将 `positive_utility` 加入
+`calibrate_lineage_grouped()` 的 gate：至少一条 lineage-grouped observation 必须
+满足 `pareto_safe`（无 harmful 回退且至少一个指标沿有利方向改善），报告同时记录
+`positive_utility_rate` 与 `positive_utility_lineages`。全 neutral cohort 现在返回
+`shadow_calibration_failed`；该修复不改变 conformal、lineage firewall 或
+promotion gate，也不写 canonical memory/authority/runtime。已有全 neutral 的
+routing calibration 仍仅作为负的 utility 证据，真正可复用的 shadow policy 必须
+重新由含正向 utility 的 source-disjoint cohort 生成。
