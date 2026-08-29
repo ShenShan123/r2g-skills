@@ -961,6 +961,16 @@ canonical memory。
   `selective_risk_coverage` 曲线（样本 coverage、metric interval coverage、risk），
   仅作为诊断，不会放宽 hard OOD 或覆盖 gate；v39–v44 曲线显示全量保留时 risk
   为 `0.416667`，因此当前失败来自真实 coverage/分布失配，而不是缺少报告字段。
+- `calibrate_exact_groups()` 的 `ready_for_shadow` 报告现在只能通过严格的
+  `materialize_shadow_policy()` 变成 predictor 可读的 `status=ready` policy：必须是
+  单一 exact action group，并重新通过 lineage firewall、per-metric conformal、
+  harmful-rate 与 positive-utility gate。输出固定为
+  `policy_kind=lineage_grouped_shadow`、`shadow_only=true`、`promotion_eligible=false`、
+  `canonical_memory_mutation=none`；calibration runner 的可选
+  `--shadow-policy-output` 只导出外部 shadow policy，不触碰 SQLite/canonical。
+  v63–v68 positive cohort 已完成只读 predictor recheck；旧 v69–v74 fixtures 因
+  `tehm-v2` scratch DB 与当前 `tehm-v4` reader schema 不一致而 fail-closed，需迁移或
+  重建后再 replay。
 - Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
   receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
   `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选

@@ -410,6 +410,27 @@ missing diagnostic.
 
 ## 实现与复核
 
+### 2026-08-29 grouped calibration 到 shadow policy 的显式桥接
+
+`calibrate_exact_groups()` 的 `ready_for_shadow` 仍是外部 calibration 报告，不能
+直接塞给 `PhysicalEffectMemory` 的 `status=ready` policy seam。新增
+`tehm.parametric.calibration.materialize_shadow_policy()` 作为唯一桥接：它只接受
+单一 exact `platform|family|dataset_tier|action_signature` group，重新检查
+lineage firewall、每指标 support、conformal coverage、`harmful_rate=0`、
+`positive_utility` 与 Pareto 定义，并把 split-conformal radius 转成 predictor 可读的
+`conformal_quantiles`/`max_uncertainty_widths`。输出的 `status=ready` 明确标记为
+`policy_kind=lineage_grouped_shadow`、`source_calibration_status=ready_for_shadow`，
+仍固定 `shadow_only=true`、`promotion_eligible=false`、`canonical_memory_mutation=none`；
+它只允许 shadow predictor 读取，绝不授予 authority、canonical 或 production 写权限。
+
+`run_readonly_physical_exact_calibration_v1.py` 现在可通过
+`--shadow-policy-output` 导出该 policy，并把 path/digest 记录在外部报告。默认不导出，
+避免把 calibration 报告误当成 runtime policy。对 v63–v68 的 6 条 source-disjoint
+sky130hs action-40 positive cohort 已完成只读 recheck，生成的 policy 通过实际
+`PhysicalEffectMemory` 查询（未修改 SQLite）；旧 `/tmp` shadow campaign 因使用
+`tehm-v2` scratch DB 而被当前 `tehm-v4` reader fail-closed，不能作为本轮 campaign
+结果，必须先迁移/重建到当前 schema 后再 replay。
+
 - 实现：`memory/tehm/parametric/shadow.py`；导出：
   `memory/tehm/parametric/__init__.py`。
 - prospective manifest 的 decision gate：

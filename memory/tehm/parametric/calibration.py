@@ -21,6 +21,7 @@ from tehm.physical.effects import PHYSICAL_METRICS
 
 VERSION = "parametric-lineage-calibration-v1"
 GROUPED_VERSION = "parametric-lineage-grouped-calibration-v1"
+SHADOW_POLICY_VERSION = "parametric-lineage-grouped-shadow-policy-v1"
 FAVORABLE_SIGN = {
     "wns_ns": 1.0, "tns_ns": 1.0,
     "area_um2": -1.0, "power_w": -1.0,
@@ -97,6 +98,173 @@ def calibrate_exact_groups(samples: list[Mapping], *, training_lineages=(),
         "invalid_samples": invalid,
         "groups": reports,
         "training_lineages": sorted({str(x) for x in training_lineages if str(x)}),
+    }
+
+
+def materialize_shadow_policy(
+        report: Mapping, *, scope: Mapping, action_signature: Mapping,
+        max_distance: float, min_unique_contexts: int = 3) -> dict:
+    """Convert one passing grouped report into a shadow-read policy.
+
+    ``calibrate_exact_groups`` deliberately returns an external report with
+    ``status=ready_for_shadow``.  The predictor's legacy policy adapter uses
+    ``status=ready`` as its read-only admission token, so this function is the
+    sole explicit bridge between the two representations.  It is intentionally
+    strict: exactly one exact group must be selected, its scope and action
+    signature must match, every new safety check must pass, and the hard OOD
+    ceiling can never exceed ``3.0``.  The resulting ``ready`` value means
+    *shadow-predictor compatible* only; the policy remains permanently
+    shadow-only and cannot authorize a canonical or production write.
+    """
+    _require_mapping("calibration report", report)
+    _require_mapping("policy scope", scope)
+    _require_mapping("action signature", action_signature)
+    if report.get("version") != GROUPED_VERSION:
+        raise ValueError("calibration report version is unsupported")
+    if report.get("status") != "ready_for_shadow":
+        raise ValueError("calibration report is not ready_for_shadow")
+    if report.get("shadow_only") is not True:
+        raise ValueError("calibration report must be shadow_only")
+    if report.get("promotion_eligible") is not False:
+        raise ValueError("calibration report promotion flag is not false")
+    if report.get("canonical_memory_mutation") != "none":
+        raise ValueError("calibration report records a canonical mutation")
+    groups = report.get("groups")
+    if not isinstance(groups, Mapping) or len(groups) != 1:
+        raise ValueError("exactly one calibration group is required")
+    group_key, group = next(iter(groups.items()))
+    if not isinstance(group_key, str) or not isinstance(group, Mapping):
+        raise ValueError("calibration group is malformed")
+    if group.get("version") != VERSION:
+        raise ValueError("calibration group version is unsupported")
+    if group.get("status") != "ready_for_shadow":
+        raise ValueError("calibration group is not ready_for_shadow")
+    if report.get("invalid_samples") or group.get("invalid_samples"):
+        raise ValueError("calibration report contains invalid samples")
+    scope = {str(key): value for key, value in scope.items()}
+    for key in ("platform", "family", "dataset_tier"):
+        if not isinstance(scope.get(key), str) or not scope[key]:
+            raise ValueError(f"policy scope.{key} is required")
+    expected_key = exact_calibration_group_key({
+        **scope, "action_signature": dict(action_signature)})
+    if expected_key != group_key:
+        raise ValueError("calibration scope/action signature does not match group")
+    checks = group.get("checks")
+    required_checks = {
+        "lineage_firewall", "minimum_lineage_groups", "per_metric_support",
+        "conformal_lineage_coverage", "harmful_rate", "positive_utility",
+        "pareto_definition_validated",
+    }
+    if (not isinstance(checks, Mapping) or
+            not required_checks <= set(checks) or
+            any(checks[key] is not True for key in required_checks)):
+        raise ValueError("calibration group has a failed safety or support gate")
+    safety = group.get("safety")
+    harmful_rate = (_finite(safety.get("harmful_rate"))
+                    if isinstance(safety, Mapping) else None)
+    if harmful_rate is None or harmful_rate > 0.0:
+        raise ValueError("calibration group has harmful utility")
+    positive_rate = (_finite(safety.get("positive_utility_rate"))
+                     if isinstance(safety, Mapping) else None)
+    if positive_rate is None or positive_rate <= 0:
+        raise ValueError("calibration group has no positive utility")
+    try:
+        max_distance = float(max_distance)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("max_distance must be numeric") from exc
+    if not math.isfinite(max_distance) or not 0.0 < max_distance <= 3.0:
+        raise ValueError("max_distance must be finite, positive, and <= 3.0")
+    if isinstance(min_unique_contexts, bool) or not isinstance(min_unique_contexts, int):
+        raise ValueError("min_unique_contexts must be an integer")
+    min_unique_contexts = max(2, min_unique_contexts)
+
+    thresholds = group.get("thresholds")
+    conformal = group.get("conformal")
+    per_metric = (conformal or {}).get("per_metric") if isinstance(conformal, Mapping) else None
+    radii = (conformal or {}).get("radii") if isinstance(conformal, Mapping) else None
+    if (not isinstance(thresholds, Mapping) or
+            not isinstance(conformal, Mapping) or
+            conformal.get("method") != "split_conformal_residual_lineage_grouped_v1" or
+            not isinstance(per_metric, Mapping)):
+        raise ValueError("calibration group lacks conformal thresholds")
+    if not isinstance(radii, Mapping) or not radii:
+        raise ValueError("calibration group lacks conformal radii")
+    target_coverage = _finite(thresholds.get("target_coverage"))
+    if target_coverage is None or not 0.0 <= target_coverage <= 1.0:
+        raise ValueError("calibration target coverage is malformed")
+
+    required_metrics = []
+    conformal_quantiles = {}
+    max_widths = {}
+    evaluated = covered = 0
+    for metric, raw_radius in sorted(radii.items()):
+        metric = str(metric)
+        if metric not in PHYSICAL_METRICS:
+            raise ValueError(f"calibration metric is unsupported: {metric}")
+        radius = _finite(raw_radius)
+        detail = per_metric.get(metric)
+        if radius is None or not isinstance(detail, Mapping):
+            raise ValueError(f"calibration radius is malformed: {metric}")
+        count = detail.get("evaluated")
+        hits = detail.get("covered")
+        if (isinstance(count, bool) or not isinstance(count, int) or count < 1 or
+                isinstance(hits, bool) or not isinstance(hits, int) or
+                hits < 0 or hits > count):
+            raise ValueError(f"calibration metric counts are malformed: {metric}")
+        required_metrics.append(metric)
+        conformal_quantiles[metric] = round(radius, 6)
+        # The predictor replaces its normal-approximation interval with the
+        # frozen conformal interval, so this is an exact derived width bound.
+        max_widths[metric] = round(2.0 * radius, 6)
+        evaluated += count
+        covered += hits
+    empirical_coverage = covered / evaluated if evaluated else None
+    if empirical_coverage is None or empirical_coverage < target_coverage:
+        raise ValueError("calibration empirical coverage is below target")
+
+    firewall = group.get("firewall")
+    if not isinstance(firewall, Mapping) or firewall.get("disjoint") is not True:
+        raise ValueError("calibration lineage firewall is not disjoint")
+    return {
+        "version": SHADOW_POLICY_VERSION,
+        "family": scope["family"],
+        "status": "ready",
+        "policy_kind": "lineage_grouped_shadow",
+        "source_calibration_status": "ready_for_shadow",
+        "source_group_key": group_key,
+        "scope": scope,
+        "action_signature": dict(action_signature),
+        "interval_method": "split_conformal_residual_v1",
+        "thresholds": {
+            "min_unique_contexts": min_unique_contexts,
+            "max_distance": max_distance,
+            "required_coverage": target_coverage,
+            "max_uncertainty_widths": max_widths,
+            "conformal_quantiles": conformal_quantiles,
+        },
+        "calibration": {
+            "sample_count": group.get("sample_count"),
+            "usable_predictions": group.get("sample_count"),
+            "in_distribution_predictions": group.get("sample_count"),
+            "metric_comparisons": evaluated,
+            "covered_comparisons": covered,
+            "empirical_coverage": empirical_coverage,
+            "required_coverage": target_coverage,
+            "required_metrics": required_metrics,
+            "conformal_quantiles": conformal_quantiles,
+            "positive_utility_rate": positive_rate,
+        },
+        "firewall": dict(firewall),
+        "safety": {
+            "harmful_rate": safety.get("harmful_rate"),
+            "positive_utility_rate": safety.get("positive_utility_rate"),
+            "positive_utility_lineages": list(
+                safety.get("positive_utility_lineages") or []),
+            "checks": dict(checks),
+        },
+        "shadow_only": True,
+        "promotion_eligible": False,
+        "canonical_memory_mutation": "none",
     }
 
 
@@ -286,6 +454,11 @@ def _firewall(training, heldout, overlap):
     return {"training_lineages": sorted(training),
             "heldout_lineages": sorted(heldout), "overlap": sorted(overlap),
             "disjoint": not overlap}
+
+
+def _require_mapping(name: str, value) -> None:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be a mapping")
 
 
 def _failed(status, reason, **extra):

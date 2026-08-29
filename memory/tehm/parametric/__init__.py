@@ -21,7 +21,8 @@ from .shadow_campaign import (  # noqa: F401
     summarise,
 )
 from .calibration import (  # noqa: F401
-    calibrate_lineage_grouped, calibrate_exact_groups, exact_calibration_group_key)
+    calibrate_lineage_grouped, calibrate_exact_groups, exact_calibration_group_key,
+    materialize_shadow_policy)
 
 __all__ = [
     "AppendOnlyShadowLog", "ParametricShadowError", "ShadowCampaignError",
@@ -29,5 +30,5 @@ __all__ = [
     "build_shadow_proposal", "canonical_counts", "join_receipts_and_outcomes",
     "proposal_digest", "read_log", "summarise",
     "calibrate_lineage_grouped", "calibrate_exact_groups",
-    "exact_calibration_group_key",
+    "exact_calibration_group_key", "materialize_shadow_policy",
 ]

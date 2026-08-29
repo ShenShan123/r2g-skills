@@ -4364,3 +4364,23 @@ action 对任何独立 lineage 产生 utility。现将 `positive_utility` 加入
 promotion gate，也不写 canonical memory/authority/runtime。已有全 neutral 的
 routing calibration 仍仅作为负的 utility 证据，真正可复用的 shadow policy 必须
 重新由含正向 utility 的 source-disjoint cohort 生成。
+
+### 2026-08-29 grouped calibration → shadow policy bridge
+
+`ready_for_shadow` calibration 报告与 predictor 所需的 `status=ready` policy 现在通过
+唯一的 `materialize_shadow_policy()` 显式连接。materializer 强制单一 exact
+platform/family/tier/action group、source-disjoint lineage、per-metric support、
+conformal coverage、`harmful_rate=0` 和正向 utility；同时把 conformal radius 固化为
+predictor 的 interval quantile/width。输出的 `status=ready` 只表示
+`lineage_grouped_shadow` predictor 可消费，报告仍携带 `source_calibration_status`，并
+固定 `shadow_only=true`、`promotion_eligible=false`、`canonical_memory_mutation=none`，
+因此不会进入 authority、canonical memory 或 production runtime。只读 calibration
+runner 通过 `--shadow-policy-output` 生成它并把 digest 留在外部报告；不带该选项时行为
+保持不变。
+
+v63–v68 的 6 条 sky130hs `CORE_UTILIZATION=40` source-disjoint positive cohort 已
+在 scratch 中完成 policy recheck，实际 physical predictor 可读且 SQLite 前后计数不变。
+尝试复用旧 v69–v74 shadow fixtures 时，当前 reader 在入口以
+`tehm-v2`/`tehm-v4` schema mismatch fail-closed；这批旧 campaign 不是本轮有效结果。
+下一步必须迁移或重建当前 schema 的 fixture，再按 source freeze → policy replay →
+shadow observation → 六项 promotion gate 顺序推进，仍不得直接写 canonical/runtime。

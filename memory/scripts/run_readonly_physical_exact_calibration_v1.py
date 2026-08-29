@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tehm.parametric.calibration import calibrate_exact_groups  # noqa: E402
+from tehm.parametric.calibration import (  # noqa: E402
+    calibrate_exact_groups, materialize_shadow_policy)
 from tehm.physical.memory import PhysicalEffectMemory, _action_signature  # noqa: E402
 
 
@@ -35,6 +36,9 @@ def main(argv=None):
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--min-unique-contexts", type=int, default=3)
+    ap.add_argument("--shadow-policy-output", type=Path, default=None,
+                    help=("optional output for a shadow-predictor policy; only "
+                          "a passing single exact group can produce it"))
     args = ap.parse_args(argv)
 
     sample_payload = json.loads(args.samples.read_text())
@@ -100,6 +104,39 @@ def main(argv=None):
         rows, training_lineages=training_lineages,
         target_coverage=0.80, min_lineages=3, min_samples_per_metric=3,
         max_harmful_rate=0.0)
+    shadow_policy = None
+    if args.shadow_policy_output is not None:
+        if len({
+                (row["platform"], row["family"], row["dataset_tier"])
+                for row in rows}) != 1:
+            raise ValueError("shadow policy requires one calibration scope")
+        signatures = {json.dumps(row["action_signature"], sort_keys=True)
+                      for row in rows}
+        if len(signatures) != 1:
+            raise ValueError("shadow policy requires one action signature")
+        scope = {
+            "platform": rows[0]["platform"],
+            "family": rows[0]["family"],
+            "dataset_tier": rows[0]["dataset_tier"],
+        }
+        distances = [
+            row["prediction_audit"].get("nearest_distance") for row in rows
+            if isinstance(row.get("prediction_audit"), dict)
+            and isinstance(row["prediction_audit"].get("nearest_distance"),
+                            (int, float))
+            and not isinstance(row["prediction_audit"].get("nearest_distance"),
+                               bool)
+        ]
+        if not distances:
+            raise ValueError("shadow policy requires finite calibration distances")
+        shadow_policy = materialize_shadow_policy(
+            calibration, scope=scope,
+            action_signature=rows[0]["action_signature"],
+            max_distance=max(distances),
+            min_unique_contexts=max(2, args.min_unique_contexts))
+        args.shadow_policy_output.parent.mkdir(parents=True, exist_ok=True)
+        args.shadow_policy_output.write_text(
+            json.dumps(shadow_policy, indent=2, sort_keys=True) + "\n")
     report = {
         "version": VERSION,
         "samples": str(args.samples.resolve()),
@@ -117,6 +154,12 @@ def main(argv=None):
         "canonical_physical_count_after": after_count,
         "canonical_memory_mutation": "none",
         "calibration": calibration,
+        "shadow_policy": ({
+            "path": str(args.shadow_policy_output.resolve()),
+            "sha256": _sha(args.shadow_policy_output),
+            "status": shadow_policy.get("status"),
+            "policy_kind": shadow_policy.get("policy_kind"),
+        } if shadow_policy is not None else None),
         "promotion_eligible": False,
         "parametric_view_status": "NOT_IMPLEMENTED",
     }
