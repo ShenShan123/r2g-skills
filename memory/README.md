@@ -977,6 +977,14 @@ canonical memory。
   integrity replay 仍发现继承的 H1/H7 问题，shadow prepare 六条全部以
   `replay_not_verified` abstain，且 canonical counters 不变；这确认了 schema migration
   不是 evidence repair，下一步必须重建完整 v4 staging/verification fixture。
+- `run_calibration_expansion.py` 的 staging importer 现为每条 external calibration
+  observation 写入 deterministic before/after state，并显式写入
+  `calibration-expansion-v1` 的 `split=calibration, learner_eligible=0` membership。
+  states、transition、physical effect 与 membership 共用一个 savepoint；late failure
+  会整体回滚，不能留下 dangling transition 或隐式 learner support。在 v4 development
+  freeze 副本上用 8 条历史 support 重建后，H1–H12/A1 审计通过，但 exact calibration
+  仍因 WNS per-metric coverage 不足而 `coverage_failed`；因此本修复不改变 canonical
+  memory、authority 或 production runtime，也不代表 Parametric 已可晋级。
 - Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
   receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
   `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选

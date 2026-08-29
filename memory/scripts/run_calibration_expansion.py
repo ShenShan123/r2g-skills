@@ -32,7 +32,9 @@ from run_orfs_diversity_campaign import (  # noqa: E402
     _write,
     run_projects,
 )
-from tehm import db  # noqa: E402
+from tehm import SCHEMA_VERSION, db  # noqa: E402
+from tehm.canonical.state import CanonicalState, source_digest  # noqa: E402
+from tehm.dataset import assign_transition  # noqa: E402
 from evaluation.freeze_pointer import resolve_bundle  # noqa: E402
 from tehm.adapters.orfs_pair import build_orfs_pair_record  # noqa: E402
 from tehm.artifact_store import ArtifactStore  # noqa: E402
@@ -376,19 +378,103 @@ def _external_transition_id(sample: dict) -> str:
     return "external-calibration:" + hashlib.sha256(payload).hexdigest()[:24]
 
 
+def _external_state(sample: dict, *, side: str,
+                    transition_id: str) -> CanonicalState:
+    """Build a deterministic staging state for an external observation.
+
+    External calibration rows are deliberately not canonical evidence, but a
+    staging transition still has to satisfy the same referential-integrity
+    contract as a captured transition.  The previous importer created
+    ``external_before:*``/``external_after:*`` references without state rows,
+    which made the migrated snapshot fail H1 before policy replay.  Keep the
+    state minimal and content-bound: PPA/context are preserved as the state
+    source witness, while no typed view or lifecycle row is manufactured.
+    """
+    if side not in {"before", "after"}:
+        raise ValueError(f"invalid external state side: {side!r}")
+    context = sample.get("graph_context") or {}
+    if not isinstance(context, dict):
+        raise ValueError("external calibration graph_context must be an object")
+    # PhysicalEffectMemory performs the authoritative graph digest check.  We
+    # use the supplied digest when present; otherwise the state remains
+    # explicitly unbound rather than inventing a graph identity.
+    context_digest = str(context.get("digest") or "")
+    ppa = sample.get(f"{side}_ppa") or {}
+    source = {
+        "external": True,
+        "side": side,
+        "transition_id": transition_id,
+        "case_id": sample.get("case_id"),
+        "lineage_id": sample.get("lineage_id"),
+        "graph_context": context,
+        "ppa": ppa,
+    }
+    verifier = {
+        "oracle_type": "TARGET_TEST",
+        "verdict": "PASS",
+        "source": "external_calibration_sample",
+    }
+    return CanonicalState(
+        domain="flow.signoff",
+        project_id=str(sample.get("case_id") or "external-calibration"),
+        design_id=str(sample.get("design") or sample.get("case_id") or ""),
+        lineage_id=str(sample.get("lineage_id") or "") or None,
+        source_digest=source_digest(source),
+        context_graph_digest=context_digest,
+        verifier_snapshot=verifier,
+        artifact_manifest={},
+        created_at=db.now_local(),
+    )
+
+
+def _persist_external_state(conn, *, state: CanonicalState) -> None:
+    """Insert one immutable, staging-only state row idempotently."""
+    row = state.to_row()
+    existing = conn.execute(
+        "SELECT * FROM tehm_states WHERE state_id=?", (row["state_id"],)
+    ).fetchone()
+    if existing is not None:
+        # ``created_at`` is intentionally volatile and is not part of the
+        # content-addressed state identity.  Every other field is evidence
+        # bound and must agree on replay.
+        conflicts = [
+            key for key, value in row.items()
+            if key != "created_at" and str(existing[key] or "") != str(value or "")
+        ]
+        if conflicts:
+            raise ValueError(
+                "external calibration state is immutable and conflicts: "
+                + ",".join(conflicts))
+        return
+    conn.execute(
+        """INSERT INTO tehm_states (
+               state_id, domain, project_id, design_id, lineage_id,
+               repository_ref, source_digest, context_graph_digest,
+               verifier_snapshot_json, artifact_manifest_json,
+               created_at, schema_version)
+           VALUES (:state_id, :domain, :project_id, :design_id, :lineage_id,
+                   :repository_ref, :source_digest, :context_graph_digest,
+                   :verifier_snapshot_json, :artifact_manifest_json,
+                   :created_at, :schema_version)""",
+        row,
+    )
+
+
 def _persist_external_transition(conn, *, transition_id: str, sample: dict,
-                                 action: dict, action_json: str) -> None:
+                                 action: dict, action_json: str,
+                                 source_state_id: str | None = None,
+                                 target_state_id: str | None = None) -> None:
     """Insert one staging transition without overwriting immutable evidence."""
     values = (
-        transition_id, "external_before:" + transition_id,
-        "external_after:" + transition_id,
+        transition_id, source_state_id or "external_before:" + transition_id,
+        target_state_id or "external_after:" + transition_id,
         str(action.get("domain") or "flow.CONFIG_DELTA"), action_json,
         canonical_json({"original_failure": "REMOVED"}).decode(),
         canonical_json({"verdict": "PASS", "oracle_type": "TARGET_TEST"}).decode(),
         "", "PASS", "[]", "[]",
         canonical_json({"source": "external_calibration_sample",
                         "lineage_id": sample["lineage_id"]}).decode(),
-        "tehm-canonical-v0.1")
+        SCHEMA_VERSION)
     columns = (
         "transition_id", "source_state_id", "target_state_id", "action_domain",
         "action_json", "observation_delta_json", "verifier_json",
@@ -425,13 +511,21 @@ def _load_external_training(root: Path, conn, store: ArtifactStore,
             transition_id = _external_transition_id(sample)
             action = sample.get("action") or {}
             action_json = canonical_json(action).decode()
+            before_state = _external_state(
+                sample, side="before", transition_id=transition_id)
+            after_state = _external_state(
+                sample, side="after", transition_id=transition_id)
+            _persist_external_state(conn, state=before_state)
+            _persist_external_state(conn, state=after_state)
             # This minimal transition is deliberately staging-only.  It carries
             # the action provenance required by action-conditioned physical
             # retrieval; the actual PPA evidence remains in the physical row
             # and report.
             _persist_external_transition(
                 conn, transition_id=transition_id, sample=sample,
-                action=action, action_json=action_json)
+                action=action, action_json=action_json,
+                source_state_id=before_state.state_id,
+                target_state_id=after_state.state_id)
             physical.record(
                 transition_id=transition_id,
                 action_domain=str(action.get("domain") or "flow.CONFIG_DELTA"),
@@ -439,6 +533,14 @@ def _load_external_training(root: Path, conn, store: ArtifactStore,
                 before_ppa=sample["before_ppa"], after_ppa=sample["after_ppa"],
                 effect_key="", evidence_refs=[], graph_context=sample["graph_context"],
                 commit=False)
+            # External calibration observations are retained for audit in a
+            # non-learner split.  This explicit row prevents a future learner
+            # query from treating a staging support transition as implicit
+            # ``live`` training evidence.
+            assign_transition(
+                conn, transition_id=transition_id,
+                campaign_id="calibration-expansion-v1", split="calibration",
+                learner_eligible=False)
             lineages.append(str(sample["lineage_id"]))
         conn.execute(f"RELEASE SAVEPOINT {savepoint}")
         savepoint_active = False

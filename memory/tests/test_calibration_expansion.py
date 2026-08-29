@@ -17,6 +17,7 @@ from run_calibration_expansion import (  # noqa: E402
 )
 from tehm import db as tehm_db
 from tehm.artifact_store import ArtifactStore
+from tehm import honesty
 from tehm.sync import canonical_json
 
 
@@ -117,5 +118,33 @@ def test_external_training_staging_is_atomic_on_late_failure(tmp_path):
             tmp_path, conn, ArtifactStore(tmp_path / "artifacts"),
             [valid, malformed])
     assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM tehm_states").fetchone()[0] == 0
     assert conn.execute("SELECT COUNT(*) FROM tehm_physical_effects").fetchone()[0] == 0
+    conn.close()
+
+
+def test_external_training_staging_binds_states_and_audit_membership(tmp_path):
+    conn = tehm_db.connect(tmp_path / "staging.sqlite")
+    tehm_db.ensure_schema(conn)
+    action = {"domain": "flow.CONFIG_DELTA",
+              "transformation_family": "DENSITY_RELIEF",
+              "payload": {"config_edits": {"CORE_UTILIZATION": "40"}}}
+    sample = {
+        "case_id": "case-a", "lineage_id": "lineage-a", "graph_context": {},
+        "action": action,
+        "before_ppa": {"summary": {"area": {"design_area_um2": 10.0}}},
+        "after_ppa": {"summary": {"area": {"design_area_um2": 9.0}},
+                      },
+    }
+    _load_external_training(
+        tmp_path, conn, ArtifactStore(tmp_path / "artifacts"), [sample])
+    assert conn.execute("SELECT COUNT(*) FROM tehm_states").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM tehm_dataset_membership").fetchone()[0] == 1
+    membership = conn.execute(
+        "SELECT split, learner_eligible FROM tehm_dataset_membership").fetchone()
+    assert membership["split"] == "calibration"
+    assert membership["learner_eligible"] == 0
+    ok, detail = honesty.h1_transition_completeness(conn)
+    assert ok, detail
     conn.close()

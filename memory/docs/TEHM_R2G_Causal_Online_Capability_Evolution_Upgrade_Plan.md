@@ -4398,3 +4398,25 @@ count/digest、源文件不变性和 `replay_required=true`，避免把 schema u
 shadow outcome、authority 或 canonical。下一步必须从完整 v4 staging/verification
 fixture 重建有效 replay，再继续 policy replay → observation；迁移本身不得放宽任何
 promotion gate。
+
+### 2026-08-29 external calibration staging referential-integrity repair
+
+复核上述“重建 v4 staging”路径时发现，`run_calibration_expansion.py` 的 external
+sample importer 只写了 `tehm_transitions` 与 `tehm_physical_effects`，却把
+`external_before:*`/`external_after:*` 作为不存在的 state 引用；这会让一个本来只是
+staging 数据平面的问题在 replay 入口表现为 H1 失败。现已修复为：
+
+1. 每个 external observation 先生成 deterministic、content-bound 的 before/after
+   staging state，并以 immutable/idempotent 检查写入；
+2. 每个 transition 同时写入显式 `calibration-expansion-v1` membership，固定
+   `split=calibration`、`learner_eligible=0`，不把外部 support 隐式升级为 learner；
+3. 任一 late failure 由同一 savepoint 回滚 states、transitions、effects 和
+   membership，不能留下半个 staging pair。
+
+在现有 v4 development freeze 的只读副本上重建 8 条历史 calibration support 后，
+H1 从 dangling-state 变为 `17 complete transitions`，H1–H12/A1 审计全部通过；
+staging DB digest 为 `8559894e9538e1fe87b31ae5cedd5310e6c1a2b504ac449edb393950af88331e`。
+这只证明 staging referential-integrity 与 learner firewall 已闭合；该重建的 exact
+calibration 仍为 `coverage_failed`（WNS per-metric coverage 不足），所以没有生成
+新的 ready policy、observation outcome 或 promotion authority。下一步仍是用完整
+source-bound v4 support 重新计算 policy，再生成 replay bundle 后进入 observation。
