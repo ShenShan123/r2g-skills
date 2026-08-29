@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from tehm import db as tehm_db
 from tehm.ids import rule_id as mint_rule_id, stable_dumps
 from tehm.honesty import h10_rollback_authority
@@ -285,6 +287,37 @@ def test_routing_hook_noop_is_blocked_before_real_flow(tmp_tehm, tmp_path):
     assert pair["execution_preflight_blocked"] is True
     assert pair["arm_a"]["not_run"] == "control"
     assert pair["arm_b"]["not_run"] == "rule"
+    assert get_status(conn, rule_id=rule_id,
+                      target_scope="route")["status"] == "candidate"
+
+
+def test_unsupported_platform_is_blocked_before_trial_materialization(
+        tmp_tehm, tmp_path):
+    """An EFFECTIVE hook cannot bypass the signoff product-scope gate."""
+    conn, store, _ = tmp_tehm
+    rule_id = _insert_routing_rule(conn)
+    project = _project(tmp_path)
+    (project / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = subject\nexport PLATFORM = asap7\n"
+        "export CORE_UTILIZATION = 30\n")
+    marker = tmp_path / "flow_called"
+    flow = tmp_path / "must_not_run.sh"
+    flow.write_text("#!/usr/bin/env bash\nprintf called > %s\nexit 0\n" % marker)
+    fix = tmp_path / "fix.sh"
+    fix.write_text("#!/usr/bin/env bash\nexit 0\n")
+
+    with pytest.raises(ValueError, match="platform preflight blocked"):
+        run_pending_orfs_trials(
+            conn, store,
+            base_entries=[{"design": "subject", "project_path": str(project),
+                           "platform": "asap7", "kind": "normal"}],
+            run_flow_script=flow, fix_signoff_script=fix, repeats=1,
+            work_root=tmp_path / "unsupported_arms")
+
+    assert not marker.exists()
+    assert (tmp_path / "unsupported_arms" /
+            "platform_scope_preflight.json").is_file()
+    assert conn.execute("SELECT COUNT(*) FROM tehm_trials").fetchone()[0] == 0
     assert get_status(conn, rule_id=rule_id,
                       target_scope="route")["status"] == "candidate"
 

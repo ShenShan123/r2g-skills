@@ -10,8 +10,38 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "memory" / "scripts" / "run_orfs_diversity_campaign.py"
 sys.path.insert(0, str(REPO / "memory" / "scripts"))
-from run_orfs_diversity_campaign import capture_pairs  # noqa: E402
+from run_orfs_diversity_campaign import (  # noqa: E402
+    capture_pairs, preflight_orfs_platform_scope, run_projects)
 from tehm.batch_lane import BatchLaneError  # noqa: E402
+
+
+def test_platform_scope_preflight_matches_signoff_source_and_blocks_asap7(tmp_path):
+    manifest = {
+        "orfs_root": str(tmp_path / "orfs"),
+        "items": [{"platform": "asap7"}],
+    }
+    report = preflight_orfs_platform_scope(manifest)
+    assert report["status"] == "blocked"
+    assert len(report["platforms"]) == 1
+    platform = report["platforms"][0]
+    assert platform["platform"] == "asap7"
+    assert platform["status"] == "UNSUPPORTED"
+    assert "no clean-able DRC" in platform["reason"]
+    assert report["source_sha256"]
+    root = tmp_path / "campaign"
+    with pytest.raises(BatchLaneError, match="platform preflight blocked"):
+        run_projects(root, manifest, workers=1, cpus=1, timeout=1)
+    persisted = json.loads((root / "platform_scope_preflight.json").read_text())
+    assert persisted["status"] == "blocked"
+
+
+def test_platform_scope_preflight_allows_in_scope_platform_without_toolchain(tmp_path):
+    report = preflight_orfs_platform_scope({
+        "orfs_root": str(tmp_path / "orfs"),
+        "items": [{"platform": "nangate45"}],
+    })
+    assert report["status"] == "pass"
+    assert report["platforms"] == [{"platform": "nangate45", "status": "IN_SCOPE"}]
 
 
 def _project(root: Path, name: str, *, util, rc, failed_stage=None,

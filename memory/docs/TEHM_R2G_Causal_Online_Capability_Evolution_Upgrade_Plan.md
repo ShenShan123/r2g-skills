@@ -4294,3 +4294,29 @@ manifest 绑定的 `ORFS_ROOT`、before 项目的 config 与平台 hook，并把
 失败，不等到 authority projector 才发现。这样 calibration digest、conformal row
 和后续 authority replay 使用的是同一个已验证 action 语义，而不是仅由配置文件差异
 推断的 action。非 routing action 保持原有 schema/兼容路径不变。
+
+### 2026-08-29 signoff platform scope preflight
+
+`EFFECTIVE` 只证明 action 到达了平台 hook，并不证明该平台拥有可闭合的完整
+signoff oracle。实际尝试构造 `asap7` routing calibration 时，3 个 source-disjoint
+design（`gcd`/`uart`/`fifo`）的 6 个 arm 全部在第一阶段前返回 `rc=65`：
+`r2g-skills/signoff-loop/scripts/flow/run_orfs.sh` 的平台 scope gate 明确拒绝
+`asap7`，原因是 community DRC 存在不可消除的 false-violation floor、没有 LVS
+deck，且 authoritative Calibre deck 未安装。该失败只能记为
+`design_or_tool/platform_scope` 负证据，不能进入 routing efficacy、calibration、
+harmful-rate 或 conformal 分母。
+
+为避免每次都启动 wrapper 后才得到同一确定性失败，campaign runner 新增
+`orfs-signoff-platform-scope-v1` preflight。它动态读取 signoff-loop 追踪的
+`platform_capability.py` 唯一 `UNSUPPORTED_PLATFORMS` 表，并把源文件 digest、平台
+状态和阻断理由写入 `platform_scope_preflight.json`；`run`、`signoff`、graph 和
+held-out A/B 入口均在 OpenROAD 前调用。该 preflight 只做产品 scope 判断，不替代
+in-scope 平台的 DRC/LVS/RCX/timing strict oracle；后者仍须由 strict signoff receipt
+独立证明。`R2G_ALLOW_UNSUPPORTED_PLATFORM=1` 仅保留给明确标记的 wrapper 诊断，不能
+改变 learner/canonical/production admission。
+
+因此下一步不是继续重跑 `asap7`，而是选择同时满足两个条件的平台与 action：
+（1）routing hook 为 `EFFECTIVE`；（2）平台 scope 在签核门内，并能产出完整
+DRC/LVS/RCX/timing/graph/toolchain receipts。若当前 ORFS tree 没有这样的 routing
+平台，应先修复/安装受支持的 signoff deck 并重新 source-freeze；在此之前保留
+`asap7` 结果为负证据，继续维护 Parametric shadow-only 边界。

@@ -33,6 +33,7 @@ from run_orfs_diversity_campaign import (  # noqa: E402
     _write,
     preflight_orfs_toolchain,
     _require_orfs_toolchain,
+    _require_orfs_platform_scope,
     run_projects,
 )
 from tehm.batch_lane import (  # noqa: E402
@@ -348,6 +349,7 @@ def run_equivalence(root: Path, manifest: dict, *, timeout: int,
 
 def run_signoff(root: Path, manifest: dict, *, timeout: int,
                 project_allowlist: set[str] | None = None) -> dict:
+    _require_orfs_platform_scope(manifest, root=root)
     toolchain = _require_orfs_toolchain(manifest, root=root)
     strict = REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "flow" / "run_strict_signoff.sh"
     timing = REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "reports" / "check_timing.py"
@@ -375,6 +377,7 @@ def run_signoff(root: Path, manifest: dict, *, timeout: int,
 
 def run_graph_contexts(root: Path, manifest: dict,
                        project_allowlist: set[str] | None = None) -> dict:
+    _require_orfs_platform_scope(manifest, root=root)
     toolchain = _require_orfs_toolchain(manifest, root=root)
     features = REPO_ROOT / "r2g-skills" / "def-graph" / "scripts" / "flow" / "run_features.sh"
     rows = []

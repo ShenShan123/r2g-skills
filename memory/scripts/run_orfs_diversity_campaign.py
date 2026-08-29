@@ -39,7 +39,8 @@ from tehm.evaluation.campaign_metrics import evaluate_campaign, to_markdown  # n
 from tehm.physical.graph_context import load_defgraph_context  # noqa: E402
 from tehm.physical.memory import PhysicalEffectMemory  # noqa: E402
 from tehm.physical.orfs_preflight import (  # noqa: E402
-    inspect_routing_layer_adjustment, parse_orfs_config, preflight_digest)
+    inspect_routing_layer_adjustment, inspect_signoff_platform_scope,
+    parse_orfs_config, preflight_digest)
 from tehm_backend import TehmMemoryBackend  # noqa: E402
 from tehm.batch_lane import (  # noqa: E402
     BatchLaneError,
@@ -71,6 +72,41 @@ MATRIX = (
 )
 
 TOOLCHAIN_PREFLIGHT_VERSION = "orfs-toolchain-preflight-v1"
+PLATFORM_SCOPE_PREFLIGHT_VERSION = "orfs-signoff-platform-scope-v1"
+
+
+def preflight_orfs_platform_scope(manifest: dict) -> dict:
+    """Resolve the signoff wrapper's product-scope platform policy.
+
+    ``run_orfs.sh`` has an explicit unsupported-platform guard, but launching
+    the wrapper first turns that deterministic policy decision into a generic
+    ``FLOW_FAILURE`` receipt after an executor has already been scheduled.  A
+    campaign must bind the same policy before any EDA process starts.  The
+    capability table is loaded from the tracked signoff-loop source of truth;
+    its digest is persisted so a later replay can prove which policy was used.
+
+    This is intentionally a *scope* check, not a claim that an in-scope
+    platform has complete DRC/LVS capability.  The strict signoff phase still
+    owns those per-platform oracle checks.  The check also ignores the
+    wrapper's ``R2G_ALLOW_UNSUPPORTED_PLATFORM`` escape hatch: that variable is
+    for deliberate diagnostic experiments and cannot silently turn an
+    unsupported platform into production evidence.
+    """
+    platforms = [item.get("platform") for item in manifest.get("items", [])]
+    report = inspect_signoff_platform_scope(platforms)
+    report["version"] = PLATFORM_SCOPE_PREFLIGHT_VERSION
+    report["orfs_root"] = str(Path(manifest.get("orfs_root") or "").resolve())
+    return report
+
+
+def _require_orfs_platform_scope(manifest: dict, *, root: Path) -> dict:
+    report = preflight_orfs_platform_scope(manifest)
+    _write(root / "platform_scope_preflight.json", report)
+    if report.get("status") != "pass":
+        raise BatchLaneError(
+            "ORFS signoff platform preflight blocked before EDA execution: "
+            + str(report.get("error") or "platform scope is unavailable"))
+    return report
 
 
 def preflight_orfs_toolchain(manifest: dict, *, env: dict | None = None) -> dict:
@@ -447,6 +483,7 @@ def _apply_edits(text: str, edits: dict[str, str | None]) -> str:
 def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
                  timeout: int, supervisor_grace: int = SUPERVISOR_GRACE_S,
                  project_allowlist: set[str] | None = None) -> None:
+    _require_orfs_platform_scope(manifest, root=root)
     toolchain = _require_orfs_toolchain(manifest, root=root)
     tool_env = toolchain["environment"]
     state_path = root / "campaign_state.json"
@@ -769,6 +806,7 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
 
 def run_ab(root: Path, manifest: dict, db_path: Path, artifacts: Path, *,
            repeats: int, cpus: int, timeout: int) -> None:
+    _require_orfs_platform_scope(manifest, root=root)
     toolchain = _require_orfs_toolchain(manifest, root=root)
     backend = TehmMemoryBackend(db_path=db_path, artifact_root=artifacts)
     rebuilt = backend.rebuild()

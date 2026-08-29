@@ -58,3 +58,20 @@ The calibration-builder check is recorded in
 campaign manifests are rejected before physical-memory calibration because
 their hook is `NO_OP`. They remain useful negative/audit evidence, but cannot
 contribute a routing conformal or harmful-rate gate.
+
+## Signoff-platform scope preflight
+
+The source-freezed `asap7` cohort (`asap7-routing-calibration-r1c`) was prepared
+with an `EFFECTIVE` routing hook, but all six before/after arms returned
+`rc=65/FLOW_FAILURE` before a stage checkpoint. The signoff wrapper's tracked
+`platform_capability.py` marks `asap7` unsupported because its community DRC
+has an irreducible false-violation floor, no LVS deck is installed, and the
+authoritative Calibre deck is unavailable. This is not routing efficacy,
+calibration, or a tool-quality score.
+
+The campaign runner now reads that same table before launching ORFS, persists
+`platform_scope_preflight.json` with the table digest, and fails closed for
+unsupported platforms. The escape hatch `R2G_ALLOW_UNSUPPORTED_PLATFORM=1`
+remains available only for explicitly diagnostic wrapper experiments; it cannot
+make those outputs production or learner evidence. The bounded receipt is
+`asap7_signoff_scope_report.json`.

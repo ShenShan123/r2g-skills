@@ -40,7 +40,8 @@ from tehm.lifecycle.rule_authority import (
 from tehm.lifecycle.rule_status import RuleLifecycleError, get_status
 from tehm.lifecycle.trial_adapter import judge_trial, record_external_trial
 from tehm.physical.orfs_preflight import (
-    inspect_routing_layer_adjustment, preflight_digest)
+    inspect_routing_layer_adjustment, inspect_signoff_platform_scope,
+    preflight_digest)
 from tehm.retrieval.index import build_index
 from tehm.retrieval.result import APPLICABLE
 
@@ -225,6 +226,18 @@ def run_pending_orfs_trials(
     subjects = [e for e in base_entries
                 if e.get("kind", "normal") == "normal"
                 and Path(e.get("project_path", "")).is_dir()]
+    if subjects:
+        platform_scope = inspect_signoff_platform_scope(
+            e.get("platform") for e in subjects)
+        if work_root is not None:
+            scope_path = Path(work_root).expanduser().resolve()
+            scope_path.mkdir(parents=True, exist_ok=True)
+            (scope_path / "platform_scope_preflight.json").write_text(
+                json.dumps(platform_scope, sort_keys=True, indent=2) + "\n")
+        if platform_scope.get("status") != "pass":
+            raise ValueError(
+                "ORFS signoff platform preflight blocked before A/B execution: "
+                + str(platform_scope.get("error") or "platform scope is unavailable"))
 
     for row in rows:
         rule_id, scope = row["rule_id"], row["target_scope"]

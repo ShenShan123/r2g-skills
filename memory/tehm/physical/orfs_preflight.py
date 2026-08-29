@@ -17,6 +17,7 @@ decision.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -25,6 +26,7 @@ from tehm.ids import stable_dumps
 
 ROUTING_LAYER_ADJUSTMENT = "ROUTING_LAYER_ADJUSTMENT"
 PREFLIGHT_VERSION = "orfs-routing-preflight-v1"
+PLATFORM_SCOPE_PREFLIGHT_VERSION = "orfs-signoff-platform-scope-v1"
 
 _ROUTING_COMMAND = re.compile(
     r"(?m)^\s*set_global_routing_layer_adjustment\b(?P<body>[^#\r\n]*)")
@@ -214,3 +216,73 @@ def _expand_make_path(value: str, *, root: Path, platform: str,
         if not changed:
             break
     return expanded
+
+
+def inspect_signoff_platform_scope(
+        platforms, *, capability_source: str | Path | None = None) -> dict:
+    """Read the signoff-loop product-scope table without honoring its escape hatch.
+
+    The ORFS wrapper intentionally exposes ``R2G_ALLOW_UNSUPPORTED_PLATFORM``
+    for operator diagnostics.  Memory/evidence pipelines must not inherit that
+    opt-out: an unsupported platform cannot create learner or production
+    evidence.  The result binds the exact tracked capability source by digest,
+    so a later audit can distinguish a scope decision from a missing tool/deck
+    capability (which remains the strict-signoff oracle's responsibility).
+    """
+    source_path = (Path(capability_source).expanduser().resolve()
+                   if capability_source is not None else
+                   Path(__file__).resolve().parents[3] / "r2g-skills" /
+                   "signoff-loop" / "scripts" / "flow" /
+                   "platform_capability.py")
+    if isinstance(platforms, (str, bytes)):
+        platforms = [platforms]
+    normalized = sorted({str(platform or "").strip() for platform in (platforms or ())
+                         if str(platform or "").strip()})
+    report = {
+        "version": PLATFORM_SCOPE_PREFLIGHT_VERSION,
+        "source": str(source_path),
+        "status": "blocked",
+        "platforms": [],
+        "reasons": [],
+    }
+    try:
+        content = source_path.read_bytes()
+    except OSError as exc:
+        report["reasons"].append(
+            f"signoff platform capability source is unreadable: {exc}")
+        report["error"] = "; ".join(report["reasons"])
+        return report
+    report["source_sha256"] = hashlib.sha256(content).hexdigest()
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "tehm_signoff_platform_capability", source_path)
+        if spec is None or spec.loader is None:
+            raise ImportError("cannot construct capability-table loader")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        unsupported = getattr(module, "UNSUPPORTED_PLATFORMS", None)
+        if not isinstance(unsupported, Mapping):
+            raise TypeError("UNSUPPORTED_PLATFORMS is not a mapping")
+    except Exception as exc:  # pragma: no cover - source corruption path
+        report["reasons"].append(
+            f"signoff platform capability table is unavailable: "
+            f"{type(exc).__name__}: {exc}")
+        report["error"] = "; ".join(report["reasons"])
+        return report
+
+    for platform in normalized:
+        reason = unsupported.get(platform)
+        report["platforms"].append({
+            "platform": platform,
+            "status": "UNSUPPORTED" if reason else "IN_SCOPE",
+            **({"reason": str(reason)} if reason else {}),
+        })
+        if reason:
+            report["reasons"].append(
+                f"{platform}: unsupported by signoff-loop scope: {reason}")
+    if not normalized:
+        report["reasons"].append("manifest contains no platform")
+    report["status"] = "pass" if not report["reasons"] else "blocked"
+    if report["reasons"]:
+        report["error"] = "; ".join(report["reasons"])
+    return report

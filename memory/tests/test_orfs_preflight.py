@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from tehm.physical.orfs_preflight import (
-    inspect_routing_layer_adjustment, preflight_digest,
-    validate_persisted_execution_preflight)
+    inspect_routing_layer_adjustment, inspect_signoff_platform_scope,
+    preflight_digest, validate_persisted_execution_preflight)
 
 
 def _orfs_root(tmp_path: Path, platform: str, text: str) -> Path:
@@ -84,6 +84,23 @@ def test_non_routing_action_is_not_applicable():
         orfs_root="/does/not/matter")
     assert result["status"] == "NOT_APPLICABLE"
     assert result["enforced"] is False
+
+
+def test_signoff_platform_scope_binds_source_and_fails_closed(tmp_path):
+    source = tmp_path / "platform_capability.py"
+    source.write_text("UNSUPPORTED_PLATFORMS = {'bad7': 'no oracle'}\n")
+    blocked = inspect_signoff_platform_scope(
+        ["bad7", "nangate45"], capability_source=source)
+    assert blocked["status"] == "blocked"
+    assert blocked["platforms"] == [
+        {"platform": "bad7", "status": "UNSUPPORTED", "reason": "no oracle"},
+        {"platform": "nangate45", "status": "IN_SCOPE"},
+    ]
+    assert blocked["source_sha256"]
+    missing = inspect_signoff_platform_scope(
+        ["nangate45"], capability_source=tmp_path / "missing.py")
+    assert missing["status"] == "blocked"
+    assert "unreadable" in missing["error"]
 
 
 def test_persisted_effective_receipt_is_digest_bound(tmp_path):

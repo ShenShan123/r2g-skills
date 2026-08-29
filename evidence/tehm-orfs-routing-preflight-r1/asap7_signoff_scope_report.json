@@ -1,0 +1,31 @@
+{
+  "version": "orfs-signoff-platform-scope-v1",
+  "campaign_root": "/tmp/tehm-orfs/asap7-routing-calibration-r1c",
+  "campaign_source_freeze_sha256": "1f28bca405f72577228fe912728657f2c56d54eeaca07277f57ffdb22f6d6519",
+  "campaign_source_freeze_digest": "2bc45382923ff33ea0495be1dcc981fd6324706dca316bfcc78989a821e20ce6",
+  "platform": "asap7",
+  "routing_hook_preflight": {
+    "status": "EFFECTIVE",
+    "hook_sha256": "0513fb0efd632b4bc3c16882b09d64ce227e48f4bc71486f4d05aec62fe7b0e1",
+    "note": "The routing knob is consumed by the hook, but that does not establish signoff-oracle capability."
+  },
+  "signoff_platform_preflight": {
+    "status": "blocked",
+    "platform_status": "UNSUPPORTED",
+    "source": "r2g-skills/signoff-loop/scripts/flow/platform_capability.py",
+    "source_sha256": "ae8015e635e04838858a0f950d922035e7aab6752fee2530d31e8651b102d9c1",
+    "reason": "no clean-able DRC (community deck has an irreducible false-violation floor), no LVS deck, and the authoritative Calibre deck is not installed"
+  },
+  "prior_run": {
+    "arms": 6,
+    "flow_rc_counts": {"65": 6},
+    "failure_class_counts": {"FLOW_FAILURE": 6},
+    "failure_domain_counts": {"design_or_tool": 6},
+    "completed": 0,
+    "stage_checkpoint_count": 0,
+    "interpretation": "The wrapper rejected asap7 before any ORFS stage; this is platform-scope evidence, not routing efficacy or calibration evidence."
+  },
+  "canonical_memory_mutation": "none",
+  "authority_mutation": "none",
+  "production_runtime_import": "none"
+}
