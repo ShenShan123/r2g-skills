@@ -87,6 +87,8 @@ def test_custom_rtl_top_is_bound_into_materialized_sdc(tmp_path):
                        source_freeze=campaign / "source_freeze.json", **kwargs)
     item = manifest["items"][0]
     assert item["top"] == "custom_top"
+    config = Path(item["before_project"]) / "constraints" / "config.mk"
+    assert "DESIGN_NAME = custom_top" in config.read_text()
     bound = Path(item["before_project"]) / "constraints" / "constraint.sdc"
     assert "current_design custom_top" in bound.read_text()
 

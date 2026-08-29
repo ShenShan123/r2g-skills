@@ -642,7 +642,13 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                 common = {"CORE_UTILIZATION": str(util),
                           "PLACE_DENSITY_LB_ADDON": "0.25"}
                 if rtl_override:
-                    common["DESIGN_NAME"] = design
+                    # The logical campaign label may intentionally differ
+                    # from the Verilog module name (for example ``fifo``
+                    # backed by ``selector_fifo16.v``).  ORFS synth must use
+                    # the source-bound top inferred above; retaining the
+                    # label here produces a deterministic synth failure before
+                    # any oracle evidence can be collected.
+                    common["DESIGN_NAME"] = custom_top or design
                     common["VERILOG_FILES"] = rtl_override
                     # Source-only designs must retain positive equivalence.
                     # An expensive or unproven EQY result is external evidence,

@@ -4121,3 +4121,66 @@ authority receipt 时会把六项 gate 保持为 `NOT_ESTABLISHED`，同时把
 `authority_replay_status` 标为 `FAIL`，避免把“authority 输入缺失”误报为六项实测
 失败。下一步仍需产生真实 trial/rollback/registry 与 calibration witness 后再复核
 六门 gate。
+
+### 2026-08-28 bounded ORFS calibration 与六门 gate 完整重放
+
+为补齐上一节留下的 conformal/harmful 两个独立证据面，先修复了
+`run_orfs_add_designs_campaign.py` 的 custom-RTL top 绑定：使用
+`--rtl-override` 时，物料化 `config.mk` 的 `DESIGN_NAME` 现在绑定 RTL 实际 top，
+而不是继续使用逻辑 design label。物料化 SDC 的 `current_design` 与 source freeze
+也保持同一 top；`test_custom_rtl_top_is_bound_into_materialized_sdc` 覆盖了这一
+输入绑定。修复前的 FIFO synth 失败保留在 scratch 目录，不能被当作 gate 失败或成功。
+
+随后使用 ORFS 配套的 Yosys/OpenROAD（`/data2/quewk/r2g-repro/OpenROAD-flow-scripts`
+下的 install binaries）分别完成 CRC、UART、FIFO 三条独立 calibration lineage 的
+`base`/`ROUTING_LAYER_ADJUSTMENT=0.05` 双臂完整流程。三条 campaign 均为
+`sky130hs`、`strict_clean`、`calibration` split，synthesis→finish、route、PPA、
+timing 与 full-oracle capture 完成；每条的 before/after PPA delta 为零，utility
+verdict 为 `NEUTRAL`，learner eligibility 保持 false。该零 delta 是当前 fixture 的
+观测事实，不等同于 routing action 的经验收益。
+
+新增只读脚本 `memory/scripts/build_orfs_calibration_evidence.py`，把上述 manifest
+绑定到 authority snapshot 中的 `PhysicalEffectMemory.predict()`，再调用
+`calibrate_exact_groups()`；脚本只输出外部 JSONL receipt 与 calibration report，
+不写 authority DB/canonical memory。使用三条 manifest 运行后得到：
+
+* 1 个精确 action group、3 个互不重叠 calibration lineage、4 个有数值观测的 PPA
+  metric；每条 row 的 conformal coverage 为 `4/4`，grouped coverage 为 `1.0`，
+  residual radii 均为 `0.0`；
+* harmful-rate 为 `0.0`（三条 utility 均为 `NEUTRAL`），校准报告状态为
+  `ready_for_shadow`，但报告仍标记 `shadow_only=true`、`promotion_eligible=false`；
+* 三个外部 observation chain 的 receipt 与 staging DB、campaign membership、
+  full-oracle transition 一一绑定，projector 只向 `harmful_rate` 与
+  `conformal_coverage` 两个 gate 投影证据。
+
+在 scratch authority DB
+`/tmp/tehm-orfs/routing-semantic-train-r6/combined/authority_candidate_transfer.sqlite`
+中，将三条 calibration source 与已重放的
+`causal_transfer_578cf62d500c998fdb92`、真实 ORFS trial
+`trial_ec7b510fd08cc887ecc0` 合并，生成 receipt
+`rule_authority_7f0323cef40caee05a3a`（digest
+`sha256:7f0323cef40caee05a3a36044479a10986e63149f5d53a4e4f1eb37327fbae53`）。
+DB-bound replay 的结果为：
+
+| gate | status |
+| --- | --- |
+| rollback_verified | PASS |
+| registry_verified | PASS |
+| obligation_coverage | PASS |
+| cross_lineage_te | PASS |
+| harmful_rate | PASS |
+| conformal_coverage | PASS |
+
+六门 gate 已全部建立，但 receipt 的 `eligible=false`，唯一 authority reason 是
+`trial_verdict_not_win`：真实 ORFS A/B 两臂均完成且样本为 `A=1.0, B=1.0`，LCB
+没有分离，trial verdict 为 `inconclusive`。只读 replay 报告的
+`database_unchanged=true`、`promotion_attempted=false`、
+`canonical_memory_mutation=none`；candidate 仍为 `candidate`/status version 2，
+没有 canonical 或 production runtime 写入。这一结果说明六门 gate 与“trial 必须
+胜出”是两个独立约束，不能因 gate 已 PASS 就越过最后的 A/B efficacy barrier。
+
+下一步应固定当前 action/fixture 的 calibration digest 与 source receipts，扩展
+至少一个真正产生可区分 PPA/utility 的 action point，并在同一 ORFS toolchain 下做
+重复 A/B；只有当 trial LCB 分离、六门 gate 仍保持 PASS、且新的 receipt 通过 DB-bound
+replay 时，才允许讨论 candidate→validated/promotion。Parametric 仍只能引用这些
+外部 shadow 结果，不能写 canonical memory 或进入 production runtime。
