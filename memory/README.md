@@ -998,7 +998,10 @@ canonical memory。
   exact calibration aggregate coverage=`0.583333`（area/power/TNS/WNS=
   `0.333/0.333/1.0/0.667`），仍为 `coverage_failed`；旧 v12/v13 pair 因没有
   strict-oracle evidence 被排除。该结果证明 signoff 闭环已恢复，但不构成 ready
-  policy、authority promotion 或 production runtime 写入。
+  policy、authority promotion 或 production runtime 写入。紧凑 durable evidence（含
+  strict/sample/calibration receipts 与 staging SQLite/artifacts）位于
+  `/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v81v86-clean/`，原始
+  ORFS RUN 树仍保留在 `/tmp/tehm-v4-clean-v81v86`。
 - Shadow harness 现在真正支持 decision case：对 `candidate_actions` 做一候选一
   receipt 展开并写入 deterministic `candidate_rank`；action-conditioned policy 可用
   `calibration_policies[action_digest]` 逐候选绑定，缺失绑定直接拒绝，避免多个候选

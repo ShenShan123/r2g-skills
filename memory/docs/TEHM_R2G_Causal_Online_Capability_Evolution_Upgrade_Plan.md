@@ -4456,4 +4456,7 @@ source-disjoint cohort；不能用 dirty ORFS flow 继续扩大 calibration。
 strict-oracle envelope 被 `strict_eligible_samples` 明确排除，不能继续充当 calibration
 分母。该 cohort 证明 signoff 与 admission firewall 已闭合，下一步应扩充更多
 source-disjoint、strict-clean 且跨 lineage 的 support，再重算 conformal/utility；不得
-用 dirty 或 legacy receipt 绕过该门。
+用 dirty 或 legacy receipt 绕过该门。紧凑 durable evidence（含 strict/sample/calibration
+receipts 与 staging SQLite/artifacts）位于
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action40-calibration-v81v86-clean/`，原始
+ORFS RUN 树仍保留在 `/tmp/tehm-v4-clean-v81v86`。
