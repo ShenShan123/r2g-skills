@@ -51,6 +51,34 @@ def test_online_observation_is_idempotent_and_hash_chained(tmp_tehm):
         "SELECT COUNT(*) FROM tehm_rule_revisions").fetchone()[0] == 0
 
 
+@pytest.mark.parametrize("payload", [["not", "an", "object"], "not-a-map"])
+def test_event_writer_rejects_non_mapping_payload(tmp_tehm, payload):
+    conn, transition_id = _transition(tmp_tehm)
+    with pytest.raises(ValueError, match="event payload must be a mapping"):
+        append_memory_event(
+            conn, event_type="TRANSITION_CAPTURED", source_type="transition",
+            source_id=transition_id, campaign_id="live",
+            learner_eligible=True, payload=payload)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_memory_events").fetchone()[0] == 0
+
+
+def test_event_chain_rejects_non_mapping_payload(tmp_tehm):
+    """A direct-SQL JSON array cannot become a valid replayable event."""
+    conn, transition_id = _transition(tmp_tehm)
+    event = append_memory_event(
+        conn, event_type="TRANSITION_CAPTURED", source_type="transition",
+        source_id=transition_id, campaign_id="live", learner_eligible=True,
+        payload={"typed": True})
+    conn.execute(
+        "UPDATE tehm_memory_events SET payload_json=? WHERE event_id=?",
+        (json.dumps(["forged"]), event.event_id))
+    conn.commit()
+    replay = verify_event_chain(conn, campaign_id="live")
+    assert replay["ok"] is False
+    assert replay["reason"] == "memory event payload must decode to object"
+
+
 def test_online_receipt_binds_mechanism_and_affected_rule_witness(
         tmp_tehm):
     """Fast-memory output names typed mechanism and source-owned rule impact."""

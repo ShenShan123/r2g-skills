@@ -33,6 +33,19 @@ def _event_id(event_digest: str) -> str:
     return "event_" + event_digest.split(":", 1)[1][:24]
 
 
+def _event_payload(raw: object) -> dict:
+    """Decode the event payload as an object, never as an arbitrary JSON value."""
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError("memory event payload JSON is empty")
+    try:
+        payload = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("memory event payload is not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("memory event payload must decode to object")
+    return payload
+
+
 def _validate_event_row(row: sqlite3.Row) -> None:
     """Validate the content-addressed identity of a stored event row.
 
@@ -40,10 +53,7 @@ def _validate_event_row(row: sqlite3.Row) -> None:
     be silently accepted by a later idempotent append, even when the edited
     row still matches the natural event lookup (same source/payload).
     """
-    try:
-        payload = json.loads(row["payload_json"])
-    except (TypeError, json.JSONDecodeError) as exc:
-        raise ValueError("memory event payload is not valid JSON") from exc
+    payload = _event_payload(row["payload_json"])
     event_eligible = normalize_stored_learner_bool(row["learner_eligible"])
     identity = {
         "event_type": row["event_type"],
@@ -168,7 +178,12 @@ def append_memory_event(
     if not chain.get("ok"):
         raise ValueError(
             "memory event replay conflicts: existing event chain is invalid")
-    payload = dict(payload or {})
+    if payload is None:
+        payload = {}
+    elif not isinstance(payload, dict):
+        raise ValueError("memory event payload must be a mapping")
+    else:
+        payload = dict(payload)
     payload_json = stable_dumps(payload)
     existing = conn.execute(
         """SELECT * FROM tehm_memory_events
@@ -298,11 +313,11 @@ def verify_event_chain(conn: sqlite3.Connection,
                         "bad_event_id": row["event_id"],
                         "reason": str(exc)}
         try:
-            payload = json.loads(row["payload_json"])
-        except (TypeError, json.JSONDecodeError):
+            payload = _event_payload(row["payload_json"])
+        except ValueError as exc:
             return {"ok": False, "events": len(rows),
                     "bad_event_id": row["event_id"],
-                    "reason": "event payload is not valid JSON"}
+                    "reason": str(exc)}
         identity = {
             "event_type": row["event_type"], "source_type": row["source_type"],
             "source_id": row["source_id"], "campaign_id": row["campaign_id"],

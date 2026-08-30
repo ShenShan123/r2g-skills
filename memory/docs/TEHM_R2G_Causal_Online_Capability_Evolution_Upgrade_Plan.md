@@ -5026,3 +5026,16 @@ node/edge 写入之前，因此 malformed transition 不会留下 shadow rows；
 的外层 savepoint 也会随异常回滚。新增 5 个回归覆盖 malformed/错误类型 payload，并
 验证 causal node 数保持为零。该修复只收紧 evidence ingestion，不改变 canonical
 memory、rule authority、Parametric shadow-only 或 production runtime 边界。
+
+### 2026-08-30 online event payload 类型闭环
+
+继续复核 B1 hash-chained event log 时发现，event writer 虽然把正常调用方 payload
+标注为 mapping，但 replay 只验证 JSON 可解析；直接 SQL 写入数组或标量仍可能参与
+事件 digest 计算。这会使下游 observation snapshot 在读取时遇到非对象，而不是在事件
+边界明确拒绝。
+
+现已增加统一的 `_event_payload()`：写入端只接受 `dict`，`verify_event_chain()` 和
+immutable-row replay 同样要求 payload JSON 解码为 object；空串、malformed JSON 或
+数组/标量都会返回明确的 fail-closed reason。新增 writer 非 mapping 与 direct-SQL
+数组 replay 回归。该修复只收紧 online shadow event 的 typed contract，不改变
+canonical memory、learner admission、rule authority 或 production runtime。

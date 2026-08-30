@@ -2152,6 +2152,12 @@ OpenROAD 与该 ORFS source/PDK 组合尚未兼容，不是 learner、canonical 
 authority evidence；full ORFS batch 继续保持阻塞。下一步必须先获得匹配的 OpenROAD，
 重新生成 production manifest，再通过 single-design strict smoke 后才扩大批量。
 
+### 2026-08-30 online event payload 类型闭环
+
+B1 online event log 现在在写入和 replay 两端都要求 payload 是 JSON object。空串、
+malformed JSON、数组或标量均 fail-closed，避免损坏 payload 被当作可重放的 shadow
+event；该修复不改变 canonical、learner admission、authority 或 production runtime。
+
 ### 2026-08-30 causal transition facts 的 JSON 防火墙
 
 因果 mechanism extractor 已不再把 malformed 或非对象的 transition JSON 默认为 `{}`。
