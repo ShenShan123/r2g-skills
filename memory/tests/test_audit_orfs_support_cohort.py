@@ -6,6 +6,7 @@ import sys
 from types import SimpleNamespace
 from pathlib import Path
 import json
+import hashlib
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS) not in sys.path:
@@ -40,7 +41,9 @@ def _ledger_db(tmp_path):
 
 def _campaign_root(tmp_path, *, split="training", learner_eligible=True,
                    manifest_split=None, manifest_learner=None,
-                   malformed_stored_learner=False):
+                   malformed_stored_learner=False,
+                   include_source_freeze=True,
+                   tamper_source_freeze=False):
     """Build one minimal full-oracle campaign for support-firewall tests."""
     root = tmp_path / f"campaign-{split}-{learner_eligible}"
     staging = root / "staging"
@@ -49,7 +52,7 @@ def _campaign_root(tmp_path, *, split="training", learner_eligible=True,
     manifest_split = split if manifest_split is None else manifest_split
     manifest_learner = (learner_eligible if manifest_learner is None
                         else manifest_learner)
-    (root / "campaign_manifest.json").write_text(json.dumps({
+    manifest = {
         "captured": [{
             "case_id": "case:test",
             "dataset_split": manifest_split,
@@ -58,7 +61,31 @@ def _campaign_root(tmp_path, *, split="training", learner_eligible=True,
             "lineage_id": "lineage:test",
             "transition_id": transition_id,
         }],
-    }))
+        "orfs_root": str(root / "orfs"),
+    }
+    if include_source_freeze:
+        freeze = {
+            "version": "orfs-add-designs-source-freeze-v1",
+            "request": {"orfs_root": str(root / "orfs"),
+                        "toolchain_manifest": None},
+            "source_code": [],
+            "inputs": [],
+            "source_tree_digest": "tree-digest",
+            "input_digest": "input-digest",
+        }
+        freeze["freeze_digest"] = hashlib.sha256(
+            json.dumps(freeze, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        freeze_path = root / "source_freeze.json"
+        freeze_path.write_text(json.dumps(freeze, sort_keys=True))
+        manifest["source_freeze"] = str(freeze_path)
+        manifest["source_freeze_sha256"] = hashlib.sha256(
+            freeze_path.read_bytes()).hexdigest()
+        manifest["source_freeze_digest"] = freeze["freeze_digest"]
+        if tamper_source_freeze:
+            freeze["input_digest"] = "tampered"
+            freeze_path.write_text(json.dumps(freeze, sort_keys=True))
+    (root / "campaign_manifest.json").write_text(json.dumps(manifest))
     checks = {
         name: True for name in (
             "synthesis", "equivalence", "route", "finish", "timing",
@@ -208,3 +235,24 @@ def test_support_audit_accepts_only_replayed_training_membership(tmp_path):
     assert report["gate_status"]["obligation_coverage"] == "PASS"
     assert report["gate_status"]["harmful_rate"] == "PASS"
     assert report["all_gates_established"] is False
+
+
+def test_support_audit_rejects_missing_source_freeze(tmp_path):
+    root = _campaign_root(tmp_path, include_source_freeze=False)
+    report = support_audit.audit([root], negative_roots=[])
+
+    assert report["support_observation_count"] == 0
+    assert report["campaigns"][0]["source_freeze_status"] == "FAIL"
+    errors = report["campaigns"][0]["source_freeze_errors"]
+    assert "source_freeze_missing" in errors
+    assert report["decision"] == "DENY_CANONICAL_IMPORT"
+
+
+def test_support_audit_rejects_tampered_source_freeze(tmp_path):
+    root = _campaign_root(tmp_path, tamper_source_freeze=True)
+    report = support_audit.audit([root], negative_roots=[])
+
+    assert report["support_observation_count"] == 0
+    errors = report["campaigns"][0]["source_freeze_errors"]
+    assert "source_freeze_file_digest_mismatch" in errors
+    assert "source_freeze_digest_mismatch" in errors

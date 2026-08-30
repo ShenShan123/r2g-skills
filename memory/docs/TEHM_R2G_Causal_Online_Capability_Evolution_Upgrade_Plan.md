@@ -5282,3 +5282,20 @@ calibration、held-out、A/B、缺失 membership、重复 membership、字符串
 mismatch、弱类型 learner flag 和合法 training replay 回归；batch/rule-authority/
 causal-transfer 相邻回归共 `67 passed`。本轮仍只强化 authority evidence replay，不改变
 canonical transition、六项 gate 阈值、Parametric shadow-only 或 production runtime。
+
+### 2026-08-30 support cohort source-freeze replay firewall
+
+在 membership replay 之后，support auditor 又补上了 campaign source-freeze 的第二层
+重放边界。每个 selected support root 必须提供可读取的 `source_freeze.json`；审计器同时
+校验 manifest 的 `source_freeze_sha256`、payload 的 `freeze_digest`（按 canonical JSON
+重新计算）以及 manifest/payload 的 digest 绑定。freeze 还必须携带非空的
+`source_tree_digest` 与 `input_digest`；若格式提供 `request.orfs_root` 或
+`request.toolchain_manifest`，则与 campaign manifest 的绑定也必须完全一致。
+
+这是一项 envelope/provenance replay，不在 support audit 阶段重新挂载旧 external ORFS
+树；因此旧树不可用不会被误报成新的执行结果，但 freeze 文件被替换、内部摘要漂移、
+manifest 绑定不一致或仅使用自洽空壳都会 fail-closed。source-freeze 不通过时，transition
+不会获得 `support_eligible`，campaign 会报告 `source_freeze_errors` 并保持
+`DENY_CANONICAL_IMPORT`。新增缺失/篡改 freeze 回归，完整 membership firewall 行为和
+六项 promotion gate 均不变；本轮仍无 canonical memory、authority lifecycle 或
+production runtime mutation。

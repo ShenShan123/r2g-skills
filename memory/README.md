@@ -2388,3 +2388,20 @@ replay 不会创建 WAL/SHM sidecar。新增 held-out、manifest mismatch、字�
 training membership 回归；相关 batch/rule-authority/causal-transfer 回归共 `67 passed`。
 该修复只收紧 support authority 的证据重放，不写 canonical memory、不改变六项 gate
 阈值、不触发 promotion，也不改变 Parametric shadow-only 或 production runtime 边界。
+
+### 2026-08-30 support cohort source-freeze replay firewall
+
+support audit 进一步不再只重放 membership：每个被选为 support root 的 campaign 必须
+绑定可读取的 `source_freeze.json`，且 manifest 中的文件 SHA256 与 payload 内部
+`freeze_digest` 同时通过。审计器还要求 freeze 带有非空的 source-tree/input digest；
+若 freeze 的 `request` 提供 ORFS root 或 toolchain manifest，也必须与 campaign manifest
+逐项一致。缺失、篡改、自洽哈希不完整或 manifest 绑定漂移都会记录
+`source_freeze_errors`，令该 campaign 的 transition 不具备 `support_eligible` 资格并
+保持 `DENY_CANONICAL_IMPORT`。
+
+该层只重放历史 freeze envelope，不要求旧 external ORFS 源树仍挂载，因此不会把“当前
+无法复跑旧树”误写成新执行结果；真正的 source/input digest 生成与每阶段 drift 检查仍由
+campaign runner 负责。新增 missing/tampered freeze 回归，现有 valid training、held-out、
+membership mismatch 与弱类型 learner flag 回归保持通过。此修复继续只强化
+external→staging→canonical 防火墙，不写 canonical/authority/runtime，也不改变六项
+promotion gate 或 Parametric shadow-only 边界。

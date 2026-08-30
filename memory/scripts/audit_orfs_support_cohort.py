@@ -29,6 +29,10 @@ GATES = (
     "rollback_verified", "registry_verified", "obligation_coverage",
     "cross_lineage_te", "harmful_rate", "conformal_coverage",
 )
+SOURCE_FREEZE_VERSIONS = frozenset({
+    "orfs-add-designs-source-freeze-v1",
+    "orfs-diversity-source-freeze-v1",
+})
 
 
 def _sha(path: Path) -> str | None:
@@ -44,6 +48,103 @@ def _json(raw, fallback=None):
     except (TypeError, json.JSONDecodeError):
         return {} if fallback is None else fallback
     return value
+
+
+def _stable_json(value) -> str:
+    """Use the same canonical JSON encoding as campaign source freezes."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _audit_source_freeze(manifest: dict, manifest_path: Path) -> dict:
+    """Replay the immutable source-freeze envelope bound to a campaign.
+
+    This is deliberately an envelope check rather than a fresh ORFS replay:
+    the auditor may inspect an old external campaign whose original source
+    tree is no longer mounted.  The freeze itself remains the authority for
+    the historical input/source digests; changing the file, its content
+    digest, or its manifest binding must nevertheless fail closed before a
+    row can be counted as learner support.
+    """
+    result = {
+        "status": "PASS", "path": None, "sha256": None,
+        "freeze_digest": None, "errors": [],
+    }
+    raw_path = manifest.get("source_freeze")
+    if type(raw_path) is not str or not raw_path.strip():
+        result.update({"status": "FAIL", "errors": ["source_freeze_missing"]})
+        return result
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = manifest_path.parent / path
+    path = path.resolve()
+    result["path"] = str(path)
+    if not path.is_file():
+        result.update({"status": "FAIL",
+                       "errors": ["source_freeze_file_missing"]})
+        return result
+    actual_sha = _sha(path)
+    result["sha256"] = actual_sha
+    expected_sha = manifest.get("source_freeze_sha256")
+    if (type(expected_sha) is not str or not expected_sha.strip() or
+            expected_sha != actual_sha):
+        result["errors"].append("source_freeze_file_digest_mismatch")
+    try:
+        freeze = json.loads(path.read_text())
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        result.update({"status": "FAIL"})
+        result["errors"].append("source_freeze_json_invalid")
+        return result
+    if not isinstance(freeze, dict):
+        result.update({"status": "FAIL"})
+        result["errors"].append("source_freeze_payload_malformed")
+        return result
+    if freeze.get("version") not in SOURCE_FREEZE_VERSIONS:
+        result["errors"].append("source_freeze_version_unsupported")
+    digest = freeze.get("freeze_digest")
+    result["freeze_digest"] = digest
+    unsigned = dict(freeze)
+    unsigned.pop("freeze_digest", None)
+    if (type(digest) is not str or not digest.strip() or
+            hashlib.sha256(_stable_json(unsigned).encode()).hexdigest() != digest):
+        result["errors"].append("source_freeze_digest_mismatch")
+    if manifest.get("source_freeze_digest") != digest:
+        result["errors"].append("manifest_source_freeze_digest_mismatch")
+
+    # All supported freeze formats carry at least one source/input digest.
+    # Do not accept a hand-written envelope with only a self-consistent hash.
+    source_digest = freeze.get("source_tree_digest")
+    input_digest = freeze.get("input_digest")
+    if type(source_digest) is not str or not source_digest.strip():
+        result["errors"].append("source_freeze_source_digest_missing")
+    if type(input_digest) is not str or not input_digest.strip():
+        result["errors"].append("source_freeze_input_digest_missing")
+    if not isinstance(freeze.get("source_code"), list):
+        result["errors"].append("source_freeze_source_code_missing")
+    if not isinstance(freeze.get("inputs"), list):
+        result["errors"].append("source_freeze_inputs_missing")
+
+    request = freeze.get("request")
+    if isinstance(request, dict):
+        manifest_orfs = manifest.get("orfs_root")
+        request_orfs = request.get("orfs_root")
+        if (type(manifest_orfs) is not str or
+                type(request_orfs) is not str or
+                str(Path(manifest_orfs).expanduser().resolve()) !=
+                str(Path(request_orfs).expanduser().resolve())):
+            result["errors"].append("manifest_source_freeze_orfs_root_mismatch")
+        manifest_toolchain = manifest.get("toolchain_manifest")
+        request_toolchain = request.get("toolchain_manifest")
+        normalize = lambda value: (
+            str(Path(value).expanduser().resolve()) if value else None)
+        if normalize(manifest_toolchain) != normalize(request_toolchain):
+            result["errors"].append(
+                "manifest_source_freeze_toolchain_mismatch")
+    elif request is not None:
+        result["errors"].append("source_freeze_request_malformed")
+
+    result["errors"] = sorted(set(result["errors"]))
+    result["status"] = "FAIL" if result["errors"] else "PASS"
+    return result
 
 
 def _strict_string_vector(value, *, label: str, allow_empty: bool = False) -> list[str]:
@@ -237,6 +338,7 @@ def _campaign(root: Path, *, selected: bool) -> dict:
     root = root.resolve()
     manifest_path = root / "campaign_manifest.json"
     manifest = json.loads(manifest_path.read_text())
+    source_freeze = _audit_source_freeze(manifest, manifest_path)
     item_by_transition = {
         row.get("transition_id"): row
         for row in manifest.get("captured", [])
@@ -294,6 +396,8 @@ def _campaign(root: Path, *, selected: bool) -> dict:
             firewall_reasons = []
             if selected and not captured:
                 firewall_reasons.append("manifest_capture_missing")
+            if selected and source_freeze["status"] != "PASS":
+                firewall_reasons.append("source_freeze_invalid")
             if not membership_table_present:
                 firewall_reasons.append("membership_table_missing")
             elif len(membership) != 1:
@@ -367,10 +471,19 @@ def _campaign(root: Path, *, selected: bool) -> dict:
         for row in observations
         if selected and row["support_firewall_reasons"]
     ]
+    if selected and source_freeze["errors"]:
+        firewall_errors.append({
+            "transition_id": None,
+            "case_id": None,
+            "reasons": list(source_freeze["errors"]),
+        })
     return {
         "campaign_root": str(root),
         "campaign_manifest_sha256": _sha(manifest_path),
         "source_freeze_digest": manifest.get("source_freeze_digest"),
+        "source_freeze_status": source_freeze["status"],
+        "source_freeze_errors": source_freeze["errors"],
+        "source_freeze": source_freeze,
         "staging_db": str(db),
         "staging_db_sha256": _sha(db),
         "observations": observations,
