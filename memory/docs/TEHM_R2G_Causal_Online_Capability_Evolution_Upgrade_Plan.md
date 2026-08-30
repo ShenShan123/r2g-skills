@@ -5252,3 +5252,15 @@ production 证据。新增 source-freeze、现有 prepare/heldout 保持性及�
 promotion gate 或 production runtime 边界；下一步是在最终提交后的干净源码上迁移
 `orfs-diversity-direct-v2-density50`，以 `freeze → report replay` 证明现有诊断证据可重放，
 再重新筛选具备 strict-clean、positive utility 和跨 lineage 的 cohort。
+
+### 2026-08-30 diversity source-freeze migration replay
+
+在提交 `4b2ff7e`（source-freeze seam 实现）后的干净源码状态上，对既有
+`/data1/zhangdy/tehm-campaigns/orfs-diversity-direct-v2-density50` 执行了
+`--phase freeze`。该操作仅记录固定 matrix、ORFS input/source digest、ORFS git 状态和
+direct toolchain fingerprint，没有重新运行任何 EDA；freeze digest 为
+`8ddb4d2881d25fc0922dfd1608ce71c16b7004d49a4821940dc8c77812571843`，toolchain
+`bound_internal`。随后执行 `--phase report`，replay 返回 0，报告仍为 8 个 capture、13
+条 staging transition；manifest/source-freeze 文件 digest 一致。该结果只关闭历史
+campaign 的 replay provenance 缺口，不把 calibration/诊断 rows 变成 learner support，
+不建立六项 promotion gate，也不写 canonical memory、authority 或 production runtime。

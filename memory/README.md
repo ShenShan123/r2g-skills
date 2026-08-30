@@ -2361,3 +2361,10 @@ diversity 回归为 `10 passed`；这一步只加强 source/evidence replay boun
 canonical memory、authority promotion 或 production runtime 写入。现有
 `orfs-diversity-direct-v2-density50` 仍需在最终提交后用 `--phase freeze` 迁移并通过
 `report` replay，之后才能把新 cohort 作为可审计的后续输入。
+
+在提交 `4b2ff7e` 后已完成该迁移：原 campaign 未重跑任何 EDA，只生成并绑定
+`source_freeze.json`（digest=`8ddb4d2881d25fc0922dfd1608ce71c16b7004d49a4821940dc8c77812571843`，
+toolchain=`bound_internal`），随后 `--phase report` replay 返回 0。原有 8 个 capture
+和 13 条 staging transition 未被覆盖；这只证明历史诊断 evidence 可按当前源码/ORFS/
+toolchain 重放，仍不改变其 `learner_eligible=false`、六项 promotion gate 未建立及
+Parametric shadow-only 状态。
