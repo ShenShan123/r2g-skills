@@ -4741,3 +4741,35 @@ SQLite 主文件 digest。
 错误顺序，以及 rule-authority 派生阶段发现的 malformed registry version 未进入公开
 receipt reason 的诊断缺口；两项均有回归覆盖。上述修复继续只强化 evidence/replay
 边界，不创建 promotion gate，不把 Parametric 或 staging 证据写入 canonical/runtime。
+
+### 2026-08-29 own ORFS toolchain binding and packaged symlink firewall
+
+本轮将 ORFS 根目录明确固定为操作者自有的
+`/data1/zhangdy/Tools/OpenROAD-flow-scripts`；此前误用的
+`/data2/quewk/r2g-repro/OpenROAD-flow-scripts` 不属于本实验，其任何
+运行结果都不进入 canonical evidence。Yosys 源码来自
+`/data1/zhangdy/Tools/yosys`，已构建并安装到自有 ORFS 树的
+`tools/install/yosys/bin/yosys`；版本为 Yosys 0.65，`read_liberty -unit_delay`
+能力检查通过，当前 preflight 对 Yosys 标记为
+`source=orfs_packaged` 且能力 `PASS`。
+
+自有 OpenROAD 尚未完成绑定：构建受系统 CMake 3.22 与源码
+`CMP0144` 政策、离线 fmt 依赖获取以及 SWIG 4.0.2 低于要求 4.3
+的阻塞，因此整体 toolchain preflight 仍为 `blocked`，不应用外部
+`/usr/bin/openroad` 或其它目录的可执行文件作为内部证据。
+如果操作者明确指定 `/usr/bin/openroad`，可以与树内 Yosys 一起作为
+显式 `bound_external/operator_bound_unverified` 运行诊断 smoke；这不会
+把该运行升级为内部可复现证据。`/usr/bin/yosys` 当前为 0.9，缺少
+`read_liberty -unit_delay`，不能用于本 ORFS flow。
+
+`preflight_orfs_toolchain()` 现在会先解析 `tools/install` 下的符号链，
+要求解析后的实体文件仍在冻结的 `ORFS_ROOT` 之内；指向
+`/usr/bin`、`/opt` 或另一个 campaign 的链接会明确报告
+`escapes ORFS_ROOT` 并在 EDA 执行前 fail-closed。新增回归覆盖了
+双工具符号链逃逸情况，当前 `memory/tests/test_batch_lane.py` 为
+`32 passed`。
+
+因此本轮没有启动完整 ORFS 批处，没有 canonical/authority/runtime
+变更。后续必须先在该自有 ORFS 树内获得可复现的 OpenROAD
+可执行文件，重新冻结 source/toolchain/oracle，先跑有界限的
+单设计 smoke 和 strict signoff，再决定是否具备完整 batch 条件。

@@ -812,6 +812,31 @@ def test_orfs_toolchain_preflight_prefers_packaged_binaries(tmp_path):
     assert result["environment"]["OPENROAD_EXE"].endswith("/openroad")
 
 
+def test_orfs_toolchain_preflight_rejects_packaged_symlink_escape(tmp_path):
+    from scripts.run_orfs_diversity_campaign import preflight_orfs_toolchain
+
+    root = tmp_path / "orfs"
+    (root / "flow").mkdir(parents=True)
+    (root / "flow" / "Makefile").write_text("all:\n")
+    external_openroad = tmp_path / "external-openroad"
+    external_yosys = tmp_path / "external-yosys"
+    for path, output in ((external_openroad, "OpenROAD ext"),
+                         (external_yosys, "Yosys ext")):
+        path.write_text(f"#!/bin/sh\necho {output}\n")
+        path.chmod(0o755)
+    for name, external in (("openroad", external_openroad),
+                           ("yosys", external_yosys)):
+        target = root / "tools" / "install" / ("OpenROAD" if name == "openroad" else "yosys") / "bin" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.symlink_to(external)
+
+    result = preflight_orfs_toolchain({"orfs_root": str(root)}, env={})
+    assert result["status"] == "blocked"
+    assert "escapes ORFS_ROOT" in result["error"]
+    assert result["tools"]["openroad"]["path"] is None
+    assert result["tools"]["yosys"]["path"] is None
+
+
 def test_orfs_toolchain_preflight_records_explicit_external_override(tmp_path):
     from scripts.run_orfs_diversity_campaign import preflight_orfs_toolchain
 

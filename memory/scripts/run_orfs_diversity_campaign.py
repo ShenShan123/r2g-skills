@@ -175,13 +175,36 @@ def preflight_orfs_toolchain(manifest: dict, *, env: dict | None = None) -> dict
                     f"{variable} does not name an executable: {configured}")
                 candidate = None
         else:
-            candidate = next((path.resolve() for path in spec["packaged"]
-                              if path.is_file() and path.stat().st_mode & 0o111), None)
+            # A symlink placed below ``tools/install`` must not turn a host
+            # executable into an apparently tree-packaged tool.  Resolve the
+            # candidate first and require the actual file to remain below the
+            # frozen ORFS root.  Symlinks to a binary built inside this tree
+            # remain valid; links escaping to /usr/bin, /opt, or another
+            # campaign are rejected before any EDA process starts.
+            escaped = []
+            candidate = None
+            for path in spec["packaged"]:
+                if not path.exists():
+                    continue
+                resolved = path.resolve()
+                try:
+                    resolved.relative_to(root)
+                except ValueError:
+                    escaped.append(f"{path} -> {resolved}")
+                    continue
+                if resolved.is_file() and resolved.stat().st_mode & 0o111:
+                    candidate = resolved
+                    break
             if candidate is not None:
                 source = "orfs_packaged"
             else:
-                report["reasons"].append(
-                    f"{root} has no packaged {name}; set {variable} explicitly")
+                if escaped:
+                    report["reasons"].append(
+                        f"{root} packaged {name} escapes ORFS_ROOT: "
+                        + ", ".join(escaped))
+                else:
+                    report["reasons"].append(
+                        f"{root} has no packaged {name}; set {variable} explicitly")
 
         tool = {"variable": variable, "path": str(candidate) if candidate else None,
                 "source": source, "sha256": _sha(candidate) if candidate else None}
