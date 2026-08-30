@@ -68,13 +68,11 @@ def test_recrystallize_preserves_utility_and_retires_stale_rule(
         "SELECT utility_json FROM tehm_rules WHERE rule_id=?", (rule_id,)
     ).fetchone()[0])["activations"] == 7
 
-    transition_ids = [r[0] for r in conn.execute(
-        "SELECT transition_id FROM tehm_transitions")]
-    for transition_id in transition_ids:
-        assign_transition(conn, transition_id=transition_id, campaign_id="live",
-                          split="heldout", learner_eligible=False)
-    conn.commit()
-    assert crystallize_all(conn) == []
+    # A changed learner partition is represented by a new campaign, not by
+    # rewriting the live membership.  A full rebuild with a stricter grouping
+    # threshold produces no active rule and therefore exercises retirement
+    # without mutating canonical membership.
+    assert crystallize_all(conn, min_group_size=4) == []
     assert get_status(conn, rule_id=rule_id, target_scope="drc")["status"] == "retired"
 
 
@@ -83,13 +81,9 @@ def test_retirement_preserves_canonical_evidence_digest(tmp_tehm, sample_record_
     _capture_repeats(tmp_tehm, sample_record_dict)
     rule_id = crystallize_all(conn)[0]["rule_id"]
     enter_shadow(conn, rule_id=rule_id, target_scope="drc")
-    for transition_id in [r[0] for r in conn.execute(
-            "SELECT transition_id FROM tehm_transitions")]:
-        assign_transition(conn, transition_id=transition_id, campaign_id="live",
-                          split="heldout", learner_eligible=False)
-    conn.commit()
+    # The learner partition remains immutable across the retirement rebuild.
     before = raw_evidence_digest(conn)
-    assert crystallize_all(conn) == []
+    assert crystallize_all(conn, min_group_size=4) == []
     after = raw_evidence_digest(conn)
     assert after == before
     assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == 3

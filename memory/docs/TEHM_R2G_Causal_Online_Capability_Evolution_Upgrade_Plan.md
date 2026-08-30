@@ -4705,3 +4705,19 @@ signature、`shadow_only=true`、`promotion_eligible=false` 和
 `canonical_memory_mutation=none`。任何 policy snapshot、contract 或生命周期标志漂移
 都会在 predictor 调用前 fail-closed；legacy 无 contract manifest 保持兼容。该校验只
 加强 shadow provenance，不授予 Parametric runtime、canonical 或 authority 权限。
+
+### 2026-08-29 dataset membership immutable replay boundary
+
+补齐 learner firewall 的最后一个写入口：`assign_transition()` 过去允许同一
+`transition_id + campaign_id` 原地从 `training` 改成 `heldout`（或反向改写
+`frozen_snapshot_digest`）。这会让已经消费过的 source cohort 在 replay 时改变身份，
+破坏 source-freeze、LOCO 分区和 learner-support 计数。现在相同 membership 仅允许精确
+幂等重放；任何 split、`learner_eligible` 或 snapshot digest 差异都 fail-closed，并要求
+为新的 learner partition 新建 campaign。`capture()` 原本已有相同的 immutable 检查，RTL
+capture adapter 现把 dataset split 在首次 capture 时直接绑定。
+
+`run_procedural_loco_v1.py` 不再先 capture 全部 fixture、再回写 held-out membership，
+而是在 capture 时按 fold 写入 `training`/`heldout`。P0 retirement 回归改用无 qualifying
+group 的 full rebuild 验证 stale lifecycle retirement，同时保持 canonical evidence 与
+membership 不变。该修复不把 held-out 变成 learner，也不新增 promotion gate；后续跨分区
+实验必须创建新的 campaign/staging DB 并重新生成完整 replay receipt。

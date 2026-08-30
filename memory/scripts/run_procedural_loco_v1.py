@@ -24,7 +24,6 @@ if str(ROOT) not in sys.path:
 from tehm import db  # noqa: E402
 from tehm.artifact_store import ArtifactStore  # noqa: E402
 from tehm.crystallization.build_rules import crystallize_all  # noqa: E402
-from tehm.dataset import assign_transition  # noqa: E402
 from tehm.rtl.rtl_evidence import capture_rtl_fix  # noqa: E402
 from tehm.rtl.rtl_oracle import IcarusOracle  # noqa: E402
 from tehm.sync import canonical_json, sha256_file, verify_bundle  # noqa: E402
@@ -95,13 +94,14 @@ def _capture_fold(fold_root: Path, heldout: set[str], fixtures: list[str]) -> Pa
         raise RuntimeError("leave-one-cluster-out requires real Icarus")
     receipts = {}
     for name in fixtures:
+        is_heldout = name in heldout
         receipt = capture_rtl_fix(
             conn, store, ROOT / "tests" / "fixtures" / "rtl_projects" / name,
-            oracle=oracle)
+            oracle=oracle,
+            dataset_campaign_id="live",
+            dataset_split="heldout" if is_heldout else "training",
+            dataset_learner_eligible=not is_heldout)
         receipts[name] = receipt.transition_id
-    for name in sorted(heldout):
-        assign_transition(conn, transition_id=receipts[name], campaign_id="live",
-                          split="heldout", learner_eligible=False)
     conn.commit()
     crystallize_all(conn, campaign_id="live")
     conn.commit()

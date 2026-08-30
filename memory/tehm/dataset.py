@@ -1,9 +1,10 @@
 """Explicit dataset membership and learner-firewall operations.
 
 Canonical evidence is append-only, while an experiment's role for that
-evidence is a separate, versioned fact.  Keeping the split outside the
+evidence is a separate, campaign-scoped fact.  Keeping the split outside the
 canonical transition prevents a held-out/A-B row retained for audit from being
-silently consumed by crystallization.
+silently consumed by crystallization.  A membership row is immutable after its
+first write; a new learner partition gets a new campaign ID.
 """
 from __future__ import annotations
 
@@ -104,26 +105,23 @@ def assign_transition(conn: sqlite3.Connection, *, transition_id: str,
             raise ValueError(
                 "dataset membership cannot be upgraded to learner support in place")
         old_digest = existing["frozen_snapshot_digest"]
-        if old_digest is not None and old_digest != frozen_snapshot_digest:
+        if old_digest != frozen_snapshot_digest:
             raise ValueError(
-                "dataset membership frozen_snapshot_digest is immutable")
+                "dataset membership frozen_snapshot_digest is immutable; "
+                "create a new campaign for a new snapshot")
         if (old_split == split and
                 old_eligible == eligible and
                 (old_digest == frozen_snapshot_digest or
                  (old_digest is None and frozen_snapshot_digest is None))):
             return
-        # Explicit reclassification (normally training -> audit-only) is
-        # represented as an UPDATE, never a replace/delete+insert.  The
-        # transition itself remains immutable and all learner queries still
-        # require training + learner_eligible=1.
-        conn.execute(
-            """UPDATE tehm_dataset_membership
-                  SET split=?, learner_eligible=?, frozen_snapshot_digest=?,
-                      assigned_at=?
-                WHERE transition_id=? AND campaign_id=?""",
-            (split, int(eligible), frozen_snapshot_digest, tehm_db.now_local(),
-             transition_id, campaign_id))
-        return
+        # A membership row is an immutable audit fact.  In-place
+        # reclassification would make a previously consumed training row look
+        # held-out (or vice versa) on replay, invalidating source-freeze and
+        # learner-support claims.  New partitions must use a new campaign ID;
+        # an exact replay remains idempotent above.
+        raise ValueError(
+            "dataset membership is immutable; create a new campaign for a "
+            "new split or learner partition")
     conn.execute(
         """INSERT INTO tehm_dataset_membership
            (transition_id, campaign_id, split, learner_eligible,

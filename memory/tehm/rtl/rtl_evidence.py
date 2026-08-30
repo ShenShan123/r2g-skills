@@ -26,10 +26,18 @@ RTL_EVIDENCE_VERSION = "rtl-evidence-v0.1"
 
 def capture_rtl_fix(conn, store, project: Path, *,
                     oracle: IcarusOracle | None = None,
-                    materialized_at: str | None = None) -> CaptureReceipt:
+                    materialized_at: str | None = None,
+                    dataset_campaign_id: str = "live",
+                    dataset_split: str = "training",
+                    dataset_learner_eligible: bool = True,
+                    frozen_snapshot_digest: str | None = None) -> CaptureReceipt:
     """Capture one real RTL repair into the canonical store (verified)."""
     record = build_rtl_execution_record(project, oracle=oracle, store=store)
-    return capture(conn, store, record, materialized_at=materialized_at)
+    return capture(
+        conn, store, record, materialized_at=materialized_at,
+        dataset_campaign_id=dataset_campaign_id, dataset_split=dataset_split,
+        dataset_learner_eligible=dataset_learner_eligible,
+        frozen_snapshot_digest=frozen_snapshot_digest)
 
 
 def build_rtl_execution_record(project: Path, *, oracle: IcarusOracle | None = None,

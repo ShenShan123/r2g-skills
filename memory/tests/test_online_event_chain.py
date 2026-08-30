@@ -404,6 +404,22 @@ def test_dataset_membership_cannot_upgrade_audit_row_to_learner_support(
     assert (row["split"], row["learner_eligible"]) == ("heldout", 0)
 
 
+def test_dataset_membership_cannot_reclassify_existing_campaign(tmp_tehm):
+    """A learner partition is immutable; use a new campaign for a split."""
+    conn, store, _ = tmp_tehm
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    transition_id = capture(conn, store, record).transition_id
+    with pytest.raises(ValueError, match="membership is immutable"):
+        assign_transition(
+            conn, transition_id=transition_id, campaign_id="live",
+            split="heldout", learner_eligible=False)
+    row = conn.execute(
+        "SELECT split, learner_eligible FROM tehm_dataset_membership "
+        "WHERE transition_id=? AND campaign_id='live'", (transition_id,)
+    ).fetchone()
+    assert (row["split"], row["learner_eligible"]) == ("training", 1)
+
+
 def test_novelty_ignores_path_sourced_only_from_heldout_campaign(tmp_tehm):
     """Evaluation-only causal paths cannot suppress learner novelty."""
     conn, store, _ = tmp_tehm

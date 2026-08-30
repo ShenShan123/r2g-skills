@@ -16,7 +16,6 @@ def main() -> int:
     from tehm.canonical.capture import ExecutionRecord, capture
     from contracts import RepairContext
     from tehm.crystallization.build_rules import crystallize_all
-    from tehm.dataset import assign_transition
     from tehm.lifecycle.authority import apply_trial_verdict
     from tehm.lifecycle.rule_status import enter_shadow, get_status
     from tehm.rtl.rtl_actions import apply_rtl_action
@@ -98,10 +97,9 @@ def main() -> int:
             "SELECT utility_json FROM tehm_rules WHERE rule_id=?", (rule_id,)
         ).fetchone()[0])
         assert utility["activations"] == 7
-        for row in conn.execute("SELECT transition_id FROM tehm_transitions").fetchall():
-            assign_transition(conn, transition_id=row[0], campaign_id="live",
-                              split="heldout", learner_eligible=False)
-        assert crystallize_all(conn) == []
+        # Rebuild with no qualifying groups to exercise stale-rule retirement;
+        # dataset membership itself is immutable and is never reclassified.
+        assert crystallize_all(conn, min_group_size=4) == []
         assert get_status(conn, rule_id=rule_id,
                           target_scope="drc")["status"] == "retired"
 
