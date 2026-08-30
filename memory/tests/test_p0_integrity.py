@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import json
 
-from tehm.activation.obligation_transfer import transfer_obligations
+from tehm.activation.obligation_transfer import (
+    obligations_transferable, transfer_obligations)
 from tehm.activation.binding import bind_rule
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.crystallization.build_rules import crystallize_all
@@ -97,6 +98,16 @@ def test_synthesizable_obligation_is_not_checked(tmp_tehm):
         {"obligations": ["TARGET_FAILURE_REMOVED"]}, context)
     assert result["results"][0]["status"] == "SYNTHESIZABLE"
     assert result["obligation_coverage"] == 0.0
+    assert obligations_transferable(result) is True
+
+
+def test_unavailable_obligation_is_not_transferable():
+    assert obligations_transferable({
+        "results": [{"obligation": "PRESERVE_LVS", "status": "UNAVAILABLE"}],
+    }) is False
+    assert obligations_transferable({
+        "results": [{"obligation": "PRESERVE_LVS", "status": "UNKNOWN"}],
+    }) is False
 
 
 def test_typed_target_test_obligation_binds_to_current_scope():

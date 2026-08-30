@@ -28,7 +28,8 @@ from tehm import db as tehm_db
 from tehm.activation.applicability import check_applicability
 from tehm.activation.binding import bind_rule
 from tehm.activation.instantiate import instantiate_rewrite
-from tehm.activation.obligation_transfer import transfer_obligations
+from tehm.activation.obligation_transfer import (
+    obligations_transferable, transfer_obligations)
 from tehm.activation.pipeline import ActivationRecord
 from tehm.activation.update import persist_activation
 from tehm.ids import stable_dumps
@@ -767,7 +768,9 @@ def _run_pair(conn, *, rule: dict, rule_id: str, scope: str,
     action["execution_preflight"] = {
         **preflight, "digest": preflight_digest(preflight)}
     preflight_blocked = preflight["status"] in {"NO_OP", "UNKNOWN"}
-    executable = applicable == APPLICABLE and binding.status == "BOUND" and bool(edits)
+    executable = (applicable == APPLICABLE and binding.status == "BOUND"
+                  and obligations_transferable(
+                      obligations, can_synthesize=True) and bool(edits))
     if preflight_blocked:
         executable = False
     if executable:

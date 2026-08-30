@@ -214,6 +214,38 @@ def test_obligation_transfer_coverage(tmp_tehm, sample_record_dict):
     assert record.obligation_transfer["results"]
 
 
+def test_malformed_obligation_status_blocks_execution(tmp_tehm, sample_record_dict):
+    """A bound action is not executable when transfer metadata is malformed."""
+    conn, store, _ = tmp_tehm
+    rule_id = _crystallize_one_rule(tmp_tehm, sample_record_dict)
+    holes = _holes_of_rule(conn, rule_id)
+    binding = {h: ("PLACE_DENSITY_LB_ADDON" if "knob" in str(h) else "0.16")
+               for h in holes}
+    called = []
+
+    def should_not_execute(action, context):
+        called.append(True)
+        raise AssertionError("executor called with unavailable obligation")
+
+    with patch(
+            "tehm.activation.pipeline.transfer_obligations",
+            return_value={
+                "results": [{"obligation": "PRESERVE_LVS", "status": "CORRUPT"}],
+                "obligation_coverage": 0.0,
+                "oracle_registry": [],
+            }):
+        record = activate(
+            conn, store, rule_id=rule_id, context=RepairContext(check="drc"),
+            provided_binding=binding, executor=should_not_execute,
+            oracle=fake_oracle, authority_mode="evaluation")
+    assert record.applicability_status == "APPLICABLE"
+    assert record.binding_status == "BOUND"
+    assert record.obligation_coverage == 0.0
+    assert record.executability_status == "NOT_EXECUTABLE"
+    assert record.verification_status == "UNKNOWN"
+    assert called == []
+
+
 def test_failed_verification_captures_negative_transition(tmp_tehm, sample_record_dict):
     conn, store, _ = tmp_tehm
     rule_id = _crystallize_one_rule(tmp_tehm, sample_record_dict)

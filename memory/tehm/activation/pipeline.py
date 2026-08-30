@@ -17,7 +17,7 @@ from tehm.activation.binding import bind_rule
 from tehm.activation.execute_adapter import execute_action
 from tehm.activation.instantiate import instantiate_rewrite
 from tehm.activation.obligation_transfer import (
-    finalize_obligations, transfer_obligations)
+    finalize_obligations, obligations_transferable, transfer_obligations)
 from tehm.activation.update import (
     capture_produced_transition,
     persist_activation,
@@ -128,7 +128,9 @@ def activate(conn: sqlite3.Connection, store, *, rule_id: str,
     action = instantiate_rewrite(rule, binding, context)
 
     # Executable (design doc 11): applicable AND bound AND obligations transferable.
-    executable = (applicability == APPLICABLE and binding.status == "BOUND")
+    executable = (applicability == APPLICABLE and binding.status == "BOUND"
+                  and obligations_transferable(
+                      obligations, can_synthesize=executor is not None))
     executability_status = "EXECUTABLE" if executable else "NOT_EXECUTABLE"
 
     # Step 6: sandbox execute (via the injected R2G execution base)

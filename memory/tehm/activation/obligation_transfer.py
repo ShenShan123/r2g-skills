@@ -15,6 +15,7 @@ from contracts import RepairContext
 
 OBLIGATION_VERSION = "obligation-transfer-v0.1"
 OBLIGATION_RESULTS = ("BOUND", "SYNTHESIZABLE", "UNAVAILABLE", "PASS", "FAIL")
+TRANSFERABLE_STATUSES = frozenset(("BOUND", "SYNTHESIZABLE"))
 
 
 def transfer_obligations(rule: dict, context: RepairContext, *,
@@ -59,6 +60,28 @@ def transfer_obligations(rule: dict, context: RepairContext, *,
         "obligation_coverage": checked / len(results),
         "oracle_registry": sorted(registry),
     }
+
+
+def obligations_transferable(transfer: dict, *, can_synthesize: bool = False) -> bool:
+    """Return whether every required obligation has an executable plan.
+
+    ``SYNTHESIZABLE`` is deliberately accepted here: it means the execution
+    base can create the project-local check, while final verification still
+    owns the distinction between evidence and an unverified plan.  A live
+    execution adapter may also synthesize an initially ``UNAVAILABLE``
+    obligation (for example, by materializing a testbench); callers must opt
+    into that path with ``can_synthesize=True``.  Unknown statuses or a
+    malformed transfer remain hard vetoes.  Empty obligations are valid and
+    trivially transferable.
+    """
+    if not isinstance(transfer, dict):
+        return False
+    results = transfer.get("results") or []
+    if not isinstance(results, list):
+        return False
+    allowed = TRANSFERABLE_STATUSES | ({"UNAVAILABLE"} if can_synthesize else set())
+    return all(isinstance(item, dict) and item.get("status") in allowed
+               for item in results)
 
 
 def finalize_obligations(transfer: dict, verifier: dict) -> dict:

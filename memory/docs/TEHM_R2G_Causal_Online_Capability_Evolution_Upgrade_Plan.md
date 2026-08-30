@@ -4869,3 +4869,22 @@ conda/pip spec 当前未全部固定。下一项工具链升级应增加可发�
 个人目录只保存下载缓存和按 manifest 分目录的安装，不把二进制提交进仓库。这样可以
 兼顾“只安装一次、多人复用”和“开源后可从 manifest 重建”，同时不让系统目录污染
 canonical/authority evidence。
+
+### 2026-08-30 activation obligation-transfer execution firewall
+
+继续按八步 activation pipeline 复核运行时边界时发现，`activate()` 和真实 ORFS
+`_run_pair()` 虽然会记录 obligation transfer，却只用 applicability、binding 和
+config edit 判断 `EXECUTABLE`；transfer 中的未知状态可能被带着执行。该行为违反
+“Applicable / Executable / Verifiable 三轴分离”以及 obligation 不可迁移时不得静默
+跳过的约束。
+
+现新增 `obligations_transferable()`：空 obligation 合法；`BOUND` 与
+`SYNTHESIZABLE` 可进入执行计划，最终是否有 verifier evidence 仍由第 7 步决定；
+`UNAVAILABLE` 只有在调用方显式提供可合成执行器时才允许继续，未知状态或 malformed
+transfer 始终 fail-closed。`activation/pipeline.py` 和 ORFS trial 均复用该谓词，
+避免两条执行入口产生不同的 obligation 语义。
+
+新增回归覆盖 malformed transfer 不会调用 executor、`UNAVAILABLE` 默认不可迁移，
+并保持已有 fake executor / real ORFS trial 的兼容行为；激活、P0 integrity 和 ORFS
+trial 定向测试共 `37 passed`。该改动只收紧 execution/verification provenance，
+不改变 canonical promotion、authority gate 或 Parametric shadow-only 边界。
