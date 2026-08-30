@@ -32,7 +32,7 @@ CONDA_CH="--override-channels -c litex-hub -c conda-forge"   # ToS-gate workarou
 GRAPH_VENV_SUBPATH="pyenvs/r2g-graph"
 
 # ---- args --------------------------------------------------------------------
-do_dry=0; do_yes=0; prefix=""; graph_python=""; plan_from=""; tiers_arg=""
+do_dry=0; do_yes=0; do_hermetic=0; prefix=""; graph_python=""; plan_from=""; tiers_arg=""
 do_deploy=0; deploy_link=0; min_free=""; strict_platforms="${R2G_STRICT_PLATFORMS:-}"
 
 print_help() {
@@ -48,6 +48,8 @@ Usage:
 Options:
   --dry-run          Detect + print the plan table, install nothing.
   --yes, -y          Non-interactive: accept the plan (incl. heavy --yes-gated tiers).
+  --hermetic         Require every selected tool/PDK/graph path to be user-owned
+                     (never /usr or /opt) and install all tiers by default.
   --prefix DIR       Big-volume root for the conda install, PDK, and torch venv
                      (default: first writable dir with >= min-free-gb, preferring /proj).
   --tiers LIST       Comma-separated subset to act on (core,frontend,sky130,klayout,pdk,graph).
@@ -70,6 +72,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run)      do_dry=1; shift ;;
     --yes|-y)       do_yes=1; shift ;;
+    --hermetic)     do_hermetic=1; shift ;;
     --prefix)       prefix="${2:-}"; shift 2 ;;
     --tiers)        tiers_arg="${2:-}"; shift 2 ;;
     --strict-platforms) strict_platforms="${2:-}"; shift 2 ;;
@@ -158,24 +161,54 @@ CONDA_ROOT="${BIGV:-\$BIG_VOLUME}/miniconda3"
 _conda_bin="${CONDA:-$CONDA_ROOT/bin/conda}"
 _graph_venv="${BIGV:-\$BIG_VOLUME}/$GRAPH_VENV_SUBPATH"
 
+# A host-wide executable is a useful diagnostic fallback, but it is not a
+# provisioned user toolchain. Core planning must send a machine that only has
+# /usr or /opt OpenROAD/Yosys through the installer so a clone really closes
+# over its own binaries.
+tool_is_user_owned() {
+  local path="${1:-}"
+  # detect_env.sh has already established executability on a live machine;
+  # --plan-from tests and saved detect dumps intentionally carry synthetic
+  # paths, so this planner predicate only classifies ownership by location.
+  [[ -n "$path" ]] || return 1
+  case "$path" in
+    /usr/*|/opt/*|/bin/*|/sbin/*) return 1 ;;
+  esac
+  return 0
+}
+
 # returns via globals TIER_STATUS / TIER_ACTION
 eval_tier() {
   local tier="$1"
   TIER_STATUS="OPT"; TIER_ACTION=""
   case "$tier" in
     core)
-      if [[ -n "$(d ORFS_ROOT)" && -n "$(d OPENROAD_EXE)" && -n "$(d YOSYS_EXE)" ]]; then
+      if [[ -n "$(d ORFS_ROOT)" && -n "$(d OPENROAD_EXE)" &&
+            -n "$(d YOSYS_EXE)" ]] &&
+         tool_is_user_owned "$(d OPENROAD_EXE)" &&
+         tool_is_user_owned "$(d YOSYS_EXE)"; then
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="MISS"
         if [[ "$SUDO" == "1" ]]; then
-          TIER_ACTION="clone ORFS + build_openroad.sh --local (~30min; needs --yes)"
+          if [[ -n "$(d ORFS_ROOT)" ]]; then
+            TIER_ACTION="install/build user-owned OpenROAD + Yosys under R2G_PREFIX"
+          else
+            TIER_ACTION="clone ORFS + build_openroad.sh --local (~30min; needs --yes)"
+          fi
         else
-          TIER_ACTION="clone ORFS (no build) + '$_conda_bin' -n $CONDA_ENV openroad yosys"
+          if [[ -n "$(d ORFS_ROOT)" ]]; then
+            TIER_ACTION="'$_conda_bin' -n $CONDA_ENV openroad yosys (user-owned under R2G_PREFIX)"
+          else
+            TIER_ACTION="clone ORFS (no build) + '$_conda_bin' -n $CONDA_ENV openroad yosys"
+          fi
         fi
       fi ;;
     frontend)
-      if [[ -n "$(d IVERILOG_EXE)" && -n "$(d VVP_EXE)" ]]; then
+      if [[ -n "$(d IVERILOG_EXE)" && -n "$(d VVP_EXE)" ]] &&
+         { [[ "$do_hermetic" != "1" ]] ||
+           { tool_is_user_owned "$(d IVERILOG_EXE)" &&
+             tool_is_user_owned "$(d VVP_EXE)"; }; }; then
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="MISS"
@@ -186,28 +219,38 @@ eval_tier() {
         fi
       fi ;;
     sky130)
-      if [[ -n "$(d MAGIC_EXE)" && -n "$(d NETGEN_EXE)" ]]; then
+      if [[ -n "$(d MAGIC_EXE)" && -n "$(d NETGEN_EXE)" ]] &&
+         { [[ "$do_hermetic" != "1" ]] ||
+           { tool_is_user_owned "$(d MAGIC_EXE)" &&
+             tool_is_user_owned "$(d NETGEN_EXE)"; }; }; then
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
-        TIER_STATUS="OPT"; TIER_ACTION="conda -n $CONDA_ENV magic netgen"
+        TIER_STATUS="$([[ "$do_hermetic" == "1" ]] && echo MISS || echo OPT)"
+        TIER_ACTION="conda -n $CONDA_ENV magic netgen"
       fi ;;
     klayout)
-      if [[ -n "$(d KLAYOUT_CMD)" ]]; then
+      if [[ -n "$(d KLAYOUT_CMD)" ]] &&
+         { [[ "$do_hermetic" != "1" ]] || tool_is_user_owned "$(d KLAYOUT_CMD)"; }; then
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
-        TIER_STATUS="OPT"; TIER_ACTION="conda -n $CONDA_ENV klayout"
+        TIER_STATUS="$([[ "$do_hermetic" == "1" ]] && echo MISS || echo OPT)"
+        TIER_ACTION="conda -n $CONDA_ENV klayout"
       fi ;;
     pdk)
-      if [[ -n "$(d SKY130A_DIR)" ]]; then
+      if [[ -n "$(d SKY130A_DIR)" ]] &&
+         { [[ "$do_hermetic" != "1" ]] || tool_is_user_owned "$(d PDK_ROOT)"; }; then
         TIER_STATUS="OK"; TIER_ACTION="present ($(d SKY130A_DIR))"
       else
-        TIER_STATUS="OPT"; TIER_ACTION="conda -n $CONDA_ENV open_pdks.sky130a -> $CONDA_ROOT/envs/$CONDA_ENV/share/pdk"
+        TIER_STATUS="$([[ "$do_hermetic" == "1" ]] && echo MISS || echo OPT)"
+        TIER_ACTION="conda -n $CONDA_ENV open_pdks.sky130a -> $CONDA_ROOT/envs/$CONDA_ENV/share/pdk"
       fi ;;
     graph)
-      if [[ -n "$(d GRAPH_PYTHON)" ]]; then
+      if [[ -n "$(d GRAPH_PYTHON)" ]] &&
+         { [[ "$do_hermetic" != "1" ]] || tool_is_user_owned "$(d GRAPH_PYTHON)"; }; then
         TIER_STATUS="OK"; TIER_ACTION="present ($(d GRAPH_PYTHON))"
       else
-        TIER_STATUS="OPT"; TIER_ACTION="venv+pip torch(cpu)+torch_geometric+pandas -> $_graph_venv"
+        TIER_STATUS="$([[ "$do_hermetic" == "1" ]] && echo MISS || echo OPT)"
+        TIER_ACTION="venv+pip torch(cpu)+torch_geometric+pandas -> $_graph_venv"
       fi ;;
     platform_rules)
       # Strict-signoff capability for the default full-flow platform (round-2
@@ -245,6 +288,9 @@ ALL_TIERS=(core frontend sky130 klayout pdk platform_rules graph)
 tier_need() {
   case "$1" in
     core|frontend) echo req ;;
+    # Hermetic mode closes the entire user-prefix toolchain in one pass; the
+    # platform-rules tier remains governed separately by --strict-platforms.
+    sky130|klayout|pdk|graph) [[ "$do_hermetic" == "1" ]] && echo req || echo opt ;;
     # Explicitly selected strict platforms make the rules tier REQUIRED — a
     # requested strict platform cannot complete installation best-effort
     # (RMD2-P1-01).
@@ -317,6 +363,7 @@ fi
 YES_FLAG=();  [[ "$do_yes" == "1" ]]      && YES_FLAG=(--yes)
 LINK_FLAG=(); [[ "$deploy_link" == "1" ]] && LINK_FLAG=(--link)
 GP_FLAG=();   [[ -n "$graph_python" ]]     && GP_FLAG=(--graph-python "$graph_python")
+FORCE_FLAG=(); [[ "$do_hermetic" == "1" ]] && FORCE_FLAG=(--force)
 
 run_tier() {
   local t="$1" script="$SETUP_DIR/install_$1.sh"
@@ -324,7 +371,8 @@ run_tier() {
   [[ "$TIER_STATUS" == "OK" ]] && { echo "[$t] already satisfied — skip"; return 0; }
   if [[ -x "$script" || -f "$script" ]]; then
     echo "[$t] running $(basename "$script") ..."
-    R2G_PREFIX="${BIGV}" R2G_CONDA_ENV="$CONDA_ENV" bash "$script" "${YES_FLAG[@]}" || {
+    R2G_PREFIX="${BIGV}" R2G_CONDA_ENV="$CONDA_ENV" \
+      bash "$script" "${YES_FLAG[@]}" "${FORCE_FLAG[@]}" || {
       echo "[$t] installer returned non-zero (tier left unsatisfied)" >&2; return 1; }
   else
     echo "[$t] no installer script yet — would run: $TIER_ACTION" >&2
@@ -337,9 +385,12 @@ install_rc=0
 for t in "${SELECTED[@]}"; do
   need="$(tier_need "$t")"
   eval_tier "$t"
-  # Only auto-install required-missing tiers; optional tiers install when named via --tiers.
+  # Only auto-install required-missing tiers; optional tiers install when named
+  # via --tiers. Hermetic mode promotes all tool/PDK/graph tiers to required so
+  # a fresh clone closes over user-owned dependencies in one invocation.
   if [[ "$TIER_STATUS" == "OK" ]]; then continue; fi
-  if [[ "$need" == "opt" && -z "$tiers_arg" ]]; then
+  if [[ "$need" == "opt" && -z "$tiers_arg" ]] &&
+     { [[ "$do_hermetic" != "1" ]] || [[ "$t" == "platform_rules" ]]; }; then
     echo "[$t] optional and not requested (add to --tiers to install) — skip"
     continue
   fi

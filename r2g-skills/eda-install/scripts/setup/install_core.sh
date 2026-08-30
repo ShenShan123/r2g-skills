@@ -17,7 +17,10 @@ setup_parse "$@"
 BUILD=0
 for _a in "${SETUP_REST[@]:-}"; do [[ "$_a" == "--build" ]] && BUILD=1; done
 
-if [[ "$FORCE" != "1" && -n "${ORFS_ROOT:-}" && -n "${OPENROAD_EXE:-}" && -n "${YOSYS_EXE:-}" ]]; then
+if [[ "$FORCE" != "1" && -n "${ORFS_ROOT:-}" &&
+      -n "${OPENROAD_EXE:-}" && -n "${YOSYS_EXE:-}" ]] &&
+   tool_is_user_owned "${OPENROAD_EXE:-}" &&
+   tool_is_user_owned "${YOSYS_EXE:-}"; then
   log "core already satisfied (ORFS=$ORFS_ROOT, openroad=$OPENROAD_EXE)"; exit 0
 fi
 

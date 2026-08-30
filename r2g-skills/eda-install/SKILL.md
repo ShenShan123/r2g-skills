@@ -66,8 +66,9 @@ bash r2g-skills/eda-install/bootstrap.sh               # install missing tiers +
    `R2G_STRICT_PLATFORMS="nangate45"` does the same for a standing list.
 4. **Pin** (`scripts/setup/write_env_local.sh`) — writes `references/env.local.sh` into **both**
    `signoff-loop` and `def-graph` from the resolved paths, so the flow skills find a conda / `/proj`
-   toolchain with no manual edit. It pins only what autodetect would miss (e.g. omits openroad/yosys
-   already under `$ORFS_ROOT/tools/install`) and adds `R2G_GRAPH_PYTHON`.
+   toolchain with no manual edit. User-owned conda OpenROAD/Yosys under `R2G_PREFIX` outrank host
+   `/opt`/`/usr` fallbacks; host binaries therefore do not make the required `core` tier complete.
+   The writer pins paths outside `$ORFS_ROOT/tools/install` and adds `R2G_GRAPH_PYTHON`.
 5. **Verify** — runs `scripts/flow/check_env.sh` (ORFS + required + optional + graph stage +
    platforms) and reports the same table the README documents.
 
@@ -88,12 +89,18 @@ With root, `core`/`frontend` may instead build ORFS from source (`--yes`-gated, 
 tier is already root-free. What cannot be self-healed (conda/network blocked, no ≥15 GB volume, a
 GLIBC too old for the conda binaries) **escalates with a clear HINT — never a silent failure.**
 
+For TEHM campaigns, record the selected installation once with
+`scripts/record_orfs_toolchain_manifest.py record`, then pass the JSON through
+`--toolchain-manifest` (or `R2G_TOOLCHAIN_MANIFEST`) to the campaign. The TEHM preflight replays
+the lock before EDA execution and rejects a changed ORFS tree, binary, PDK marker, or capability.
+
 ## Flags
 
 | Flag | Effect |
 | --- | --- |
 | `--dry-run` | Detect + plan only; install nothing. **Always run this first.** |
 | `--yes` / `-y` | Non-interactive; accept the plan (incl. `--yes`-gated heavy tiers). |
+| `--hermetic` | Require user-owned tools/PDK/graph outside `/usr`/`/opt` and install all missing tiers. |
 | `--prefix DIR` | Big-volume root for the conda install, PDK, and torch venv. |
 | `--tiers a,b,c` | Act only on a subset (`core,frontend,sky130,klayout,pdk,graph`). |
 | `--graph-python P` | Pin an existing torch venv (`R2G_GRAPH_PYTHON`) instead of building one. |

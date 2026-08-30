@@ -113,6 +113,9 @@ build_content() {
 HDR
   echo
   echo "# --- OpenROAD-flow-scripts checkout --------------------------------------"
+  # Keep the conda search root explicit so a fresh shell can classify and
+  # rediscover user-prefix OpenROAD/Yosys without relying on PATH or /opt.
+  emit_export R2G_PREFIX "${R2G_PREFIX:-}"
   emit_export ORFS_ROOT "${ORFS_ROOT:-}"
   echo
   echo "# --- Tool binaries (pinned only when outside \$ORFS_ROOT/tools/install) ----"

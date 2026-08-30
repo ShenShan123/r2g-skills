@@ -32,7 +32,7 @@ Every key is always emitted (empty value == absent); diagnostics go to stderr.
 
 | Tier | Need | Satisfied when | No-sudo action |
 | --- | --- | --- | --- |
-| `core` | required | `ORFS_ROOT` + `OPENROAD_EXE` + `YOSYS_EXE` | clone ORFS (no build) + conda `openroad yosys` |
+| `core` | required | `ORFS_ROOT` + user-owned `OPENROAD_EXE` + user-owned `YOSYS_EXE` | clone ORFS (no build) + conda `openroad yosys` |
 | `frontend` | required | `IVERILOG_EXE` + `VVP_EXE` | conda `iverilog verilator` |
 | `sky130` | optional | `MAGIC_EXE` + `NETGEN_EXE` | conda `magic netgen` |
 | `klayout` | optional | `KLAYOUT_CMD` (system OK) | dedicated `klayout` env; prefers system klayout, fails soft |
@@ -53,6 +53,26 @@ Key rules: whole conda root on the big volume (not a full `$HOME`); `--override-
 -c conda-forge` on every conda call (defaults-channel ToS gate); pin the ORFS clone to a tag
 compatible with the conda openroad, and fall back to a pre-built OpenROAD binary release on version
 skew (`check_env.sh` prints tool versions).
+
+The resolver checks the conda `eda` bin directory under `R2G_PREFIX` before `/opt` and `/usr` for
+OpenROAD and Yosys. A host-wide pair can still be shown as a diagnostic, but it does not make the
+`core` tier complete; a new clone therefore downloads a user-owned pair and writes both paths into
+`references/env.local.sh`. After provisioning, create and replay the TEHM lock before a campaign:
+
+```bash
+python3 memory/scripts/record_orfs_toolchain_manifest.py record \
+  --orfs-root "$ORFS_ROOT" --prefix "$R2G_PREFIX" \
+  --openroad "$R2G_PREFIX/miniconda3/envs/eda/bin/openroad" \
+  --yosys "$R2G_PREFIX/miniconda3/envs/eda/bin/yosys" \
+  --pdk-root "$PDK_ROOT" \
+  --output "$R2G_PREFIX/tehm-orfs-toolchain-manifest.json"
+python3 memory/scripts/record_orfs_toolchain_manifest.py check \
+  --manifest "$R2G_PREFIX/tehm-orfs-toolchain-manifest.json"
+```
+
+The lock is metadata (paths, versions, SHA256 and capability probes), not a checked-in binary. A
+clean, matching tree-packaged or user-prefix installation is required for production evidence;
+`--allow-external`/`--allow-dirty` are diagnostic-only escape hatches.
 
 ## Troubleshooting
 

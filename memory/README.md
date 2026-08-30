@@ -2022,3 +2022,49 @@ runtime consultation 在把 retrieval receipt 的 rule ID 解析回定义时，�
 decision。Capability-gap detector 对 promoted rule family 的覆盖判断同样不再信任裸
 `status` 列，损坏状态不能抑制新的 gap receipt。这些都是 derived-state replay 修复，
 不授予新 authority，不写 canonical memory，并保持 Parametric shadow-only。
+### 2026-08-30 TEHM toolchain manifest lock
+
+R2G discovery and the TEHM ORFS runners now have one explicit replay boundary:
+`scripts/record_orfs_toolchain_manifest.py`.  It records a local,
+content-addressed lock containing the ORFS `flow/Makefile` and git identity,
+OpenROAD/Yosys path/version/SHA256, the Yosys capability probe, and PDK marker
+digests.  The lock is metadata only—no EDA binary is committed to the
+repository—and a clean ORFS checkout plus a tree-packaged or `R2G_PREFIX`-owned
+tool pair is required for a production lock.
+
+Record and verify a selected tree as follows:
+
+```bash
+python3 memory/scripts/record_orfs_toolchain_manifest.py record \
+  --orfs-root "$ORFS_ROOT" \
+  --prefix "$R2G_PREFIX" \
+  --openroad "$R2G_PREFIX/miniconda3/envs/eda/bin/openroad" \
+  --yosys "$R2G_PREFIX/miniconda3/envs/eda/bin/yosys" \
+  --pdk-root "$PDK_ROOT" \
+  --output "$R2G_PREFIX/tehm-orfs-toolchain-manifest.json"
+python3 memory/scripts/record_orfs_toolchain_manifest.py check \
+  --manifest "$R2G_PREFIX/tehm-orfs-toolchain-manifest.json"
+```
+
+Pass the resulting path to `run_orfs_batch0.py` or
+`run_orfs_diversity_campaign.py` with `--toolchain-manifest` (or
+`R2G_TOOLCHAIN_MANIFEST`).  Freeze and every later phase replays the same lock
+before starting an EDA process; a changed tree, executable, PDK marker, or
+capability probe is blocked.  `--allow-external` and `--allow-dirty` are for
+operator diagnostics only and do not satisfy a production internal-toolchain
+gate.  On this host the current ORFS tree is dirty and lacks a matching
+tree-packaged OpenROAD, so a production manifest and the full ORFS batch remain
+intentionally blocked until that installation is repaired.
+
+`bootstrap.sh --dry-run --prefix /data1/zhangdy/Tools/tehm-toolchain` now reports
+the existing `/usr/bin/openroad` as a missing core dependency rather than
+silently calling it provisioned. For a complete user-owned setup, review the
+plan and then run `bootstrap.sh --hermetic --yes --prefix
+/data1/zhangdy/Tools/tehm-toolchain`; hermetic mode requires all selected
+OpenROAD/Yosys/frontend/PDK/graph paths to live outside `/usr` and `/opt`, and
+installs missing tiers into that prefix. This was not run here because it
+downloads/builds large external packages and requires explicit operator
+approval. The current inventory has no OpenROAD binary under
+`/data1/zhangdy/Tools`; it has Yosys 0.65 at `Tools/yosys/yosys` and at
+`Tools/OpenROAD-flow-scripts/tools/install/yosys/bin/yosys` (different SHA256
+builds).

@@ -69,6 +69,20 @@ binaries + a torch venv on a big volume — never a full `$HOME`). Drop `--dry-r
 missing tiers and auto-generate `references/env.local.sh`; add `--prefix /big/volume` to steer where
 the PDK and venv land. The manual paths below remain available if you prefer to install by hand.
 
+For a reproducible clone that does not depend on `/usr` or `/opt`, use hermetic mode on the shared
+volume (review the dry-run before allowing downloads):
+
+```bash
+bash r2g-skills/bootstrap.sh --hermetic --dry-run --prefix /data1/zhangdy/Tools/tehm-toolchain
+bash r2g-skills/bootstrap.sh --hermetic --yes --prefix /data1/zhangdy/Tools/tehm-toolchain
+```
+
+Hermetic mode treats host-wide OpenROAD/Yosys/frontend/PDK/graph paths as missing, installs all
+selected tiers into the prefix, and pins them in `references/env.local.sh`. TEHM campaigns then
+record/replay a content-addressed lock with
+`python3 memory/scripts/record_orfs_toolchain_manifest.py`; the repository contains scripts and
+hashes, not the large binaries themselves.
+
 Choose the path that matches your situation.
 
 ---

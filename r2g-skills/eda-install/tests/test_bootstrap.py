@@ -117,6 +117,38 @@ def test_plan_provisioned_all_ok(tmp_path):
     assert "no-sudo" in out
 
 
+def test_plan_does_not_treat_host_core_binaries_as_provisioned(tmp_path):
+    """A clone with only /usr or /opt OpenROAD/Yosys must provision its own pair."""
+    host_only = dict(
+        _PROVISIONED_NOSUDO,
+        OPENROAD_EXE="/usr/bin/sh",
+        YOSYS_EXE="/opt/host/bin/yosys",
+    )
+    _out, rows = _plan(tmp_path, host_only)
+    assert rows["core"][0] == "MISS"
+    assert "user-owned" in rows["core"][2]
+
+
+def test_hermetic_plan_requires_user_owned_frontend_and_optional_tiers(tmp_path):
+    host_only = dict(
+        _PROVISIONED_NOSUDO,
+        OPENROAD_EXE="/usr/bin/openroad",
+        YOSYS_EXE="/opt/host/bin/yosys",
+        IVERILOG_EXE="/opt/host/bin/iverilog",
+        VVP_EXE="/opt/host/bin/vvp",
+        MAGIC_EXE="/opt/host/bin/magic",
+        NETGEN_EXE="/opt/host/bin/netgen",
+        KLAYOUT_CMD="/usr/bin/klayout",
+        PDK_ROOT="/opt/pdks",
+        SKY130A_DIR="/opt/pdks/sky130A",
+        GRAPH_PYTHON="/opt/venv/bin/python",
+    )
+    _out, rows = _plan(tmp_path, host_only, "--hermetic")
+    for tier in ("core", "frontend", "sky130", "klayout", "pdk", "graph"):
+        assert rows[tier][0] == "MISS", f"{tier} should require a user prefix"
+        assert rows[tier][1] == "req"
+
+
 def test_plan_bare_nosudo_uses_conda_no_build(tmp_path):
     _out, rows = _plan(tmp_path, _BARE_NOSUDO)
     # required tiers are MISSing, optional tiers are installable (OPT)
@@ -354,6 +386,32 @@ def test_env_sh_detects_conda_env_under_explicit_r2g_prefix(tmp_path):
     out = subprocess.run(["bash", "-c", script], capture_output=True,
                          text=True, env=minimal, check=True).stdout
     assert out.splitlines() == [str(conda_bin / "iverilog"), str(conda_bin / "vvp")]
+
+
+def test_env_sh_detects_conda_openroad_and_yosys_under_explicit_r2g_prefix(tmp_path):
+    """A no-sudo core install must not fall back to host OpenROAD/Yosys."""
+    prefix = tmp_path / "tehm-toolchain"
+    conda_bin = prefix / "miniconda3" / "envs" / "eda" / "bin"
+    conda_bin.mkdir(parents=True)
+    for tool in ("openroad", "yosys"):
+        exe = conda_bin / tool
+        exe.write_text("#!/bin/sh\nexit 0\n")
+        exe.chmod(0o755)
+    envsh = ENV_COPIES[0]
+    minimal = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(tmp_path / "nohome"),
+        "ORFS_ROOT": str(tmp_path / "orfs"),
+        "R2G_PREFIX": str(prefix),
+        "R2G_CONDA_ENV": "eda",
+    }
+    (Path(minimal["ORFS_ROOT"]) / "flow").mkdir(parents=True)
+    (Path(minimal["ORFS_ROOT"]) / "flow" / "Makefile").write_text("all:\n")
+    script = (f'source "{envsh}" >/dev/null 2>&1; '
+              'printf "%s\\n%s\\n" "$OPENROAD_EXE" "$YOSYS_EXE"')
+    out = subprocess.run(["bash", "-c", script], capture_output=True,
+                         text=True, env=minimal, check=True).stdout
+    assert out.splitlines() == [str(conda_bin / "openroad"), str(conda_bin / "yosys")]
 
 
 def test_write_env_local_preserves_all_pins(tmp_path):

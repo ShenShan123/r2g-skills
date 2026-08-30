@@ -68,6 +68,11 @@ def main(argv=None) -> int:
     ap.add_argument("--root", type=Path, default=default_work_root("orfs-batch0-v1"))
     ap.add_argument("--orfs-root", type=Path,
                     default=Path(os.environ.get("ORFS_ROOT", "/opt/EDA4AI/OpenROAD-flow-scripts")))
+    ap.add_argument("--toolchain-manifest", type=Path,
+                    default=(Path(os.environ["R2G_TOOLCHAIN_MANIFEST"])
+                             if os.environ.get("R2G_TOOLCHAIN_MANIFEST") else None),
+                    help=("content-addressed TEHM toolchain lock; freeze and "
+                          "every later phase replay this exact binding"))
     ap.add_argument("--source-spec", type=Path, default=DEFAULT_SPEC)
     ap.add_argument("--staging-db", type=Path, default=None)
     ap.add_argument("--staging-artifacts", type=Path, default=None)
@@ -96,7 +101,10 @@ def main(argv=None) -> int:
     allowlist = {str(Path(path).resolve()) for path in args.projects} if args.projects else None
 
     if args.phase in {"all", "freeze"}:
-        build_source_freeze(root, args.orfs_root.resolve(), args.source_spec.resolve())
+        build_source_freeze(
+            root, args.orfs_root.resolve(), args.source_spec.resolve(),
+            toolchain_manifest=(args.toolchain_manifest.resolve()
+                                if args.toolchain_manifest else None))
         if args.phase == "freeze":
             return 0
 
@@ -176,7 +184,7 @@ def prepare(root: Path, orfs_root: Path, source_spec: Path, *, source_freeze: Pa
         raise BatchLaneError(
             "source freeze is required before prepare; run --phase freeze first: "
             f"{source_freeze}")
-    validate_source_freeze({
+    freeze = validate_source_freeze({
         "orfs_root": str(Path(orfs_root).resolve()),
         "source_spec": str(Path(source_spec).resolve()),
         "source_spec_sha256": _sha(source_spec),
@@ -234,6 +242,8 @@ def prepare(root: Path, orfs_root: Path, source_spec: Path, *, source_freeze: Pa
             },
         })
 
+    frozen_toolchain_manifest = (freeze.get("dependencies") or {}).get(
+        "toolchain_manifest") or {}
     manifest = {
         "version": VERSION,
         "campaign_id": "orfs-batch0-v1",
@@ -243,6 +253,9 @@ def prepare(root: Path, orfs_root: Path, source_spec: Path, *, source_freeze: Pa
         "source_spec_sha256": _sha(source_spec),
         "source_freeze": str(source_freeze.resolve()),
         "source_freeze_sha256": _sha(source_freeze),
+        "toolchain_manifest": (frozen_toolchain_manifest.get("path")
+                                if isinstance(frozen_toolchain_manifest, dict)
+                                else None),
         "action_signature": {
             "family": ACTION_FAMILY,
             "config_edits": {"CORE_UTILIZATION": str(AFTER_CORE_UTILIZATION)},
@@ -509,14 +522,25 @@ def build_report(root: Path, manifest: dict, observations_path: Path,
     return report
 
 
-def build_source_freeze(root: Path, orfs_root: Path, source_spec: Path) -> dict:
+def build_source_freeze(root: Path, orfs_root: Path, source_spec: Path,
+                        *, toolchain_manifest: Path | None = None) -> dict:
     orfs_root = Path(orfs_root).resolve()
     source_spec = Path(source_spec).resolve()
+    if toolchain_manifest is None and os.environ.get("R2G_TOOLCHAIN_MANIFEST"):
+        toolchain_manifest = Path(os.environ["R2G_TOOLCHAIN_MANIFEST"]).expanduser().resolve()
     source_records = _source_freeze_records(source_spec)
     input_records = _batch_input_records(orfs_root, source_spec)
     git_status = _command(["git", "status", "--porcelain=v1"], cwd=REPO_ROOT)
     orfs_identity = _orfs_dependency_identity(orfs_root)
-    toolchain = preflight_orfs_toolchain({"orfs_root": str(orfs_root)})
+    toolchain_request = {"orfs_root": str(orfs_root)}
+    if toolchain_manifest is not None:
+        toolchain_request["toolchain_manifest"] = str(toolchain_manifest.resolve())
+    toolchain = preflight_orfs_toolchain(toolchain_request)
+    if toolchain_manifest is not None and toolchain.get("status") not in {
+            "bound_internal", "bound_external"}:
+        raise BatchLaneError(
+            "toolchain manifest did not replay during source freeze: "
+            + str(toolchain.get("error") or "invalid binding"))
     freeze = {
         "version": SOURCE_FREEZE_VERSION,
         "git_head": _command(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT).strip(),
@@ -542,6 +566,10 @@ def build_source_freeze(root: Path, orfs_root: Path, source_spec: Path) -> dict:
             "orfs_root": str(orfs_root),
             "orfs": orfs_identity,
             "toolchain_preflight": toolchain,
+            "toolchain_manifest": ({
+                "path": str(toolchain_manifest.resolve()),
+                "sha256": _sha(toolchain_manifest),
+            } if toolchain_manifest is not None else None),
         },
         "canonical_snapshots": canonical_snapshots(),
     }
@@ -643,7 +671,14 @@ def validate_source_freeze(manifest: dict, *, check_projects: bool = True) -> di
     current_orfs = _orfs_dependency_identity(orfs_root)
     if current_orfs != dependencies.get("orfs"):
         raise BatchLaneError("Batch-0 ORFS dependency surface changed after freeze")
-    current_toolchain = preflight_orfs_toolchain({"orfs_root": str(orfs_root)})
+    toolchain_request = {"orfs_root": str(orfs_root)}
+    frozen_manifest = dependencies.get("toolchain_manifest")
+    if isinstance(frozen_manifest, dict) and frozen_manifest.get("path"):
+        manifest_path = Path(str(frozen_manifest["path"])).expanduser().resolve()
+        if frozen_manifest.get("sha256") != _sha(manifest_path):
+            raise BatchLaneError("Batch-0 toolchain manifest changed after freeze")
+        toolchain_request["toolchain_manifest"] = str(manifest_path)
+    current_toolchain = preflight_orfs_toolchain(toolchain_request)
     frozen_toolchain = dependencies.get("toolchain_preflight") or {}
     if (current_toolchain.get("fingerprint") != frozen_toolchain.get("fingerprint") or
             current_toolchain.get("status") != frozen_toolchain.get("status")):

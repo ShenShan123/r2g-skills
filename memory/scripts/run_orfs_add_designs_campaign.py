@@ -357,7 +357,10 @@ def build_source_freeze(root: Path, orfs_root: Path, *, designs, platforms,
         rtl_override_path=rtl_override_path,
         sdc_override_path=sdc_override_path, template_design=template_design,
         semantic_oracle_path=semantic_oracle_path)
-    toolchain = preflight_orfs_toolchain({"orfs_root": request["orfs_root"]})
+    toolchain_request = {"orfs_root": request["orfs_root"]}
+    if os.environ.get("R2G_TOOLCHAIN_MANIFEST"):
+        toolchain_request["toolchain_manifest"] = os.environ["R2G_TOOLCHAIN_MANIFEST"]
+    toolchain = preflight_orfs_toolchain(toolchain_request)
     source_code = _source_code_records()
     freeze = {
         "version": SOURCE_FREEZE_VERSION,
@@ -423,9 +426,12 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
             hashlib.sha256(_stable(current_source).encode()).hexdigest()):
         raise BatchLaneError(
             "source freeze code digest mismatch; rebuild the freeze before prepare")
-    current_toolchain = preflight_orfs_toolchain(
-        {"orfs_root": str(Path(orfs_root).resolve())})
     frozen_toolchain = freeze.get("toolchain") or {}
+    toolchain_request = {"orfs_root": str(Path(orfs_root).resolve())}
+    locked_manifest = frozen_toolchain.get("toolchain_manifest")
+    if locked_manifest:
+        toolchain_request["toolchain_manifest"] = str(locked_manifest)
+    current_toolchain = preflight_orfs_toolchain(toolchain_request)
     if current_toolchain.get("fingerprint") != frozen_toolchain.get("fingerprint"):
         raise BatchLaneError(
             "source freeze toolchain fingerprint mismatch; rerun --phase freeze")
@@ -750,6 +756,7 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
 
     if not items:
         raise RuntimeError("no materialized items; check ORFS templates")
+    frozen_toolchain = frozen.get("toolchain") or {}
     heldout = {"lineage_id": "orfs-heldout-v3:ihp-sg13g2:spi",
                "platform": "ihp-sg13g2", "design": "spi",
                "role": "calibration_only", "capturable": False}
@@ -765,6 +772,7 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
         "source_freeze": str(Path(source_freeze).resolve()),
         "source_freeze_sha256": _sha(source_freeze),
         "source_freeze_digest": frozen.get("freeze_digest"),
+        "toolchain_manifest": frozen_toolchain.get("toolchain_manifest"),
         "items": items, "baselines": baselines, "core_utils": list(core_utils),
         "storage_policy": storage_policy(root),
         "families": list(families), "heldout": heldout,

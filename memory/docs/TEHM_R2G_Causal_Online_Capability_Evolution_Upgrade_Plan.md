@@ -4888,3 +4888,41 @@ transfer 始终 fail-closed。`activation/pipeline.py` 和 ORFS trial 均复用�
 并保持已有 fake executor / real ORFS trial 的兼容行为；激活、P0 integrity 和 ORFS
 trial 定向测试共 `37 passed`。该改动只收紧 execution/verification provenance，
 不改变 canonical promotion、authority gate 或 Parametric shadow-only 边界。
+
+### 2026-08-30 可发布 ORFS toolchain manifest 与单一调用入口
+
+为收敛 R2G bootstrap、ORFS campaign 和 TEHM replay 之间的工具链调用，新增
+`tehm.orfs_toolchain` 与 `scripts/record_orfs_toolchain_manifest.py`。manifest 是
+不含二进制的本地/发布锁，内容包括 ORFS `flow/Makefile` 与 git 状态、
+OpenROAD/Yosys 路径/版本/SHA256、Yosys capability probe 以及 PDK marker 摘要；
+自身再由 `manifest_digest` 内容寻址。默认只接受 clean ORFS tree，并要求工具要么树内
+打包、要么明确位于 `R2G_PREFIX` 的用户目录；裸 `/usr`/`/opt` 仍是 external。
+`--allow-external`/`--allow-dirty` 只用于明确的诊断锁。
+
+`preflight_orfs_toolchain()` 在发现后、任何 EDA 进程启动前重放该锁，并逐字段比较
+root、source identity、可执行文件、capability 和 PDK marker；任意漂移或坏 digest
+均为 `blocked`。`run_orfs_batch0.py --toolchain-manifest` 会把锁及其 SHA256 写入
+source-freeze，`run_orfs_diversity_campaign.py --toolchain-manifest` 则把同一路径写入
+campaign manifest；后续 run/equivalence/signoff/graph/capture 继续使用冻结绑定，
+不会回退到 PATH、`/usr/bin` 或 `/opt` 的另一个工具。
+
+这里的 `bound_internal` 不再局限于 ORFS tree 内二进制：显式位于 `R2G_PREFIX` 下、并
+由 manifest 锁住的 conda OpenROAD/Yosys 同样属于可复现内部绑定；没有 prefix 归属的
+`/usr`、`/opt` 或任意临时 override 仍为 `bound_external`，不能满足 contract-bound
+calibration 的内部工具链门。
+
+这一步是可复现调用边界，不是工具安装本身。当前机器自有 ORFS 树仍有未提交改动，
+且没有匹配的 tree-packaged OpenROAD，因此尚未生成 production manifest，也不应启动
+完整 ORFS batch；应先在个人目录按 R2G bootstrap 获得 clean、匹配的 OpenROAD，随后
+record → check manifest，再做单设计 strict smoke。
+
+同日的只读盘点确认 `/data1/zhangdy/Tools` 目前没有 OpenROAD 可执行文件；Yosys 0.65
+有两份：`Tools/yosys/yosys`（SHA256
+`311b53f23ee242f93b54520594858accb4b5e09f0b66ed3bc28e0cf9d56ba765`）和
+`Tools/OpenROAD-flow-scripts/tools/install/yosys/bin/yosys`（SHA256
+`951defe968ce33f4265b733f87cfc8c0b14faad02a4985a996d86c2bf08119ba`）。当前解析实际仍
+会落到 `/usr/bin/openroad` 及 `/opt` 的 Icarus/PDK；这不是个人目录闭环。R2G resolver
+已补上 `R2G_PREFIX/miniconda3/envs/eda/bin/openroad|yosys` 的优先级，bootstrap 的
+`core` 也不再把 `/usr`/`/opt` 二进制算作已满足。需要完整用户闭环时使用
+`bootstrap.sh --hermetic --yes --prefix <个人工具链目录>`（会检查并下载缺失的 core、
+frontend、PDK、graph tier）；本轮没有代为执行该下载。

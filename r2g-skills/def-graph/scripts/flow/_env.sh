@@ -176,7 +176,9 @@ for _base in "${_r2g_conda_bases[@]}"; do
   fi
 done
 
-# ORFS ships its own openroad/yosys under tools/install/; prefer those when found
+# ORFS ships its own openroad/yosys under tools/install/; prefer those when found.
+# A no-sudo bootstrap may instead install both into the conda env under
+# R2G_PREFIX; that user-owned pair must outrank /opt and /usr host fallbacks.
 _r2g_orfs_openroad=""
 _r2g_orfs_yosys=""
 if [[ -n "${ORFS_ROOT:-}" ]]; then
@@ -185,10 +187,12 @@ if [[ -n "${ORFS_ROOT:-}" ]]; then
 fi
 
 _r2g_detect OPENROAD_EXE  openroad   \
-  "$_r2g_orfs_openroad" /usr/local/bin/openroad /usr/bin/openroad
+  "$_r2g_orfs_openroad" "$_r2g_conda_bin/openroad" \
+  /usr/local/bin/openroad /usr/bin/openroad
 
 _r2g_detect YOSYS_EXE     yosys      \
-  "$_r2g_orfs_yosys" /opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys \
+  "$_r2g_orfs_yosys" "$_r2g_conda_bin/yosys" \
+  /opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys \
   /usr/local/bin/yosys /usr/bin/yosys
 
 _r2g_detect IVERILOG_EXE  iverilog   \

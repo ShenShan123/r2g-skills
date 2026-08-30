@@ -34,6 +34,19 @@ run() {
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
 
+# Return success only for an executable outside host-wide locations.  ORFS
+# packaged binaries, a conda env under R2G_PREFIX, and other user-owned paths
+# are valid; /usr, /opt, /bin and /sbin remain diagnostic fallbacks and must not
+# make the core installer report a complete personal toolchain.
+tool_is_user_owned() {
+  local path="${1:-}"
+  [[ -n "$path" && -x "$path" ]] || return 1
+  case "$path" in
+    /usr/*|/opt/*|/bin/*|/sbin/*) return 1 ;;
+  esac
+  return 0
+}
+
 _have_sudo() {
   [[ "${EUID:-$(id -u)}" -eq 0 ]] && return 0
   have_cmd sudo && sudo -n true >/dev/null 2>&1
