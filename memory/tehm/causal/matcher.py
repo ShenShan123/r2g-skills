@@ -19,6 +19,8 @@ _DETAIL_FIELDS = (
     "action_domain", "transformation_family", "module", "source_state",
     "target_state", "guard", "failure_graph_digest", "causal_context_digest",
 )
+_QUERY_LIST_FIELDS = ("required_effect", "forbidden_effects",
+                      "prior_action_digests")
 
 
 @dataclass(frozen=True)
@@ -111,6 +113,53 @@ def _signatures(path, support: dict) -> tuple[dict, ...] | None:
     },)
 
 
+def _query_error(query_plan: object) -> str | None:
+    """Validate the typed causal query surface before matching.
+
+    A malformed query must not silently become an unconstrained metadata query:
+    doing so can turn a caller typo into an apparently successful causal recall.
+    The matcher remains evaluation-only, but its negative result must still be
+    deterministic and auditable.
+    """
+    if query_plan is not None and not isinstance(query_plan, Mapping):
+        return "malformed_query_plan"
+    plan = dict(query_plan or {})
+    for field in ("mechanism_signature", "causal_path_features"):
+        value = plan.get(field, _MISSING)
+        if value is not _MISSING and value is not None and not isinstance(value, Mapping):
+            return f"malformed_query_{field}"
+    signature = plan.get("mechanism_signature")
+    features = plan.get("causal_path_features")
+    merged = {}
+    if isinstance(features, Mapping):
+        merged.update(features)
+    if isinstance(signature, Mapping):
+        merged.update(signature)
+    for field in ("mechanism_family", "compatibility_profile"):
+        value = merged.get(field, plan.get(field, _MISSING))
+        if value is not _MISSING and value is not None and (
+                not isinstance(value, str) or not value.strip()):
+            return f"malformed_query_{field}"
+    for field in _DETAIL_FIELDS:
+        value = merged.get(field, plan.get(field, _MISSING))
+        if value is not _MISSING and value is not None and (
+                not isinstance(value, str) or not value.strip()):
+            return f"malformed_query_{field}"
+    for field in _QUERY_LIST_FIELDS:
+        value = plan.get(field, _MISSING)
+        if value is _MISSING or value is None:
+            continue
+        if field == "prior_action_digests":
+            values = value
+        else:
+            values = [value] if isinstance(value, str) else value
+        if (not isinstance(values, (list, tuple)) or
+                any(not isinstance(item, str) or not item.strip()
+                    for item in values)):
+            return f"malformed_query_{field}"
+    return None
+
+
 def _normal(value) -> str:
     if isinstance(value, (dict, list, tuple)):
         return stable_dumps(value)
@@ -125,6 +174,12 @@ def match_causal_path(path, query_plan: Mapping | None) -> MechanismMatch:
     every supplied field.  Missing path metadata therefore fails closed rather
     than turning an old coarse path into a false causal transfer.
     """
+    query_error = _query_error(query_plan)
+    if query_error:
+        return MechanismMatch(
+            eligible=False, score=0.0, evidence_weight=0.0,
+            family_match=False, profile_match=False,
+            mechanism_match=False, reason=query_error)
     plan = dict(query_plan or {})
     query_sig = plan.get("mechanism_signature")
     query_sig = dict(query_sig) if isinstance(query_sig, Mapping) else {}

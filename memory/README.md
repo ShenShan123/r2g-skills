@@ -2158,6 +2158,12 @@ B1 online event log 现在在写入和 replay 两端都要求 payload 是 JSON o
 malformed JSON、数组或标量均 fail-closed，避免损坏 payload 被当作可重放的 shadow
 event；该修复不改变 canonical、learner admission、authority 或 production runtime。
 
+### 2026-08-30 causal query plan 类型校验
+
+A3 matcher 现在会拒绝非法的机制签名、causal path features、effect 列表和 prior
+action digests，避免错误查询静默退化为无约束 recall；结果只影响 evaluation/shadow
+causal retrieval，不改变 production authority。
+
 ### 2026-08-30 causal matcher support witness 防火墙
 
 A3 causal matcher 现在不会把损坏的 `support_json` 或非 mapping 的

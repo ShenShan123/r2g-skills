@@ -123,6 +123,31 @@ def test_causal_matcher_rejects_malformed_support_witnesses(support, reason):
     assert match.reason == reason
 
 
+@pytest.mark.parametrize(
+    ("query_plan", "reason"),
+    [
+        ({"mechanism_signature": []}, "malformed_query_mechanism_signature"),
+        ({"causal_path_features": "not-a-map"},
+         "malformed_query_causal_path_features"),
+        ({"mechanism_family": []}, "malformed_query_mechanism_family"),
+        ({"prior_action_digests": "not-a-list"},
+         "malformed_query_prior_action_digests"),
+    ],
+)
+def test_causal_matcher_rejects_malformed_query_plan(query_plan, reason):
+    """A malformed query cannot silently become an unconstrained recall."""
+    path = {
+        "mechanism_family": "HANDSHAKE_COMPLETION",
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "support": {"mechanism_signatures": [{
+            "mechanism_family": "HANDSHAKE_COMPLETION",
+        }]},
+    }
+    match = match_causal_path(path, query_plan)
+    assert match.eligible is False
+    assert match.reason == reason
+
+
 def test_causal_recall_keeps_transformation_family_separate(tmp_tehm):
     """R0 may route by edit family without conflating it with mechanism family."""
     conn, store, _ = tmp_tehm

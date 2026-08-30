@@ -5052,3 +5052,16 @@ immutable-row replay 同样要求 payload JSON 解码为 object；空串、malfo
 数组/标量都会返回明确的 fail-closed reason。新增 writer 非 mapping 与 direct-SQL
 数组 replay 回归。该修复只收紧 online shadow event 的 typed contract，不改变
 canonical memory、learner admission、rule authority 或 production runtime。
+
+### 2026-08-30 causal query plan typed validation
+
+继续复核 A3 matcher 输入边界时发现，非法的 `mechanism_signature`、
+`causal_path_features` 或 `prior_action_digests` 会被静默忽略，查询因此可能退化为
+无因果约束的 metadata recall。该行为与“causal matcher 可解释且缺失约束不得伪造
+match”的要求不符。
+
+现在 matcher 在计算 family/profile 前验证 query plan：签名和 path features 必须是
+mapping，机制/兼容性及细节字段必须是非空字符串，effect 列表和 prior action digest
+必须符合声明的 list contract。非法查询返回明确的 `malformed_query_*` fail-closed
+receipt，而不是继续匹配。该修复仍只作用于 evaluation/shadow lane，不授予 causal
+或 production authority。
