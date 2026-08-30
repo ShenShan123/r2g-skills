@@ -236,6 +236,37 @@ def test_full_oracle_is_conjunctive_and_missing_equivalence_is_incomplete(
     assert result["missing_oracles"] == ["equivalence", "artifact_digest"]
 
 
+def test_toolchain_binding_replays_binary_hash_and_fingerprint(tmp_path):
+    from tehm.batch_lane import _validate_toolchain_binding
+
+    openroad = tmp_path / "openroad"
+    yosys = tmp_path / "yosys"
+    openroad.write_bytes(b"openroad-v1")
+    yosys.write_bytes(b"yosys-v1")
+    for path in (openroad, yosys):
+        path.chmod(0o755)
+    tools = {
+        "openroad": {"path": str(openroad), "sha256": hashlib.sha256(
+            openroad.read_bytes()).hexdigest()},
+        "yosys": {"path": str(yosys), "sha256": hashlib.sha256(
+            yosys.read_bytes()).hexdigest()},
+    }
+    binding = {
+        "status": "bound_external",
+        "orfs_root": str(tmp_path / "orfs"),
+        "tools": tools,
+    }
+    binding["fingerprint"] = hashlib.sha256(json.dumps(
+        {"orfs_root": str((tmp_path / "orfs").resolve()), "tools": tools},
+        sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    run_meta = {"openroad_exe": str(openroad), "yosys_exe": str(yosys)}
+    assert _validate_toolchain_binding(binding, run_meta=run_meta)["valid"]
+    openroad.write_bytes(b"openroad-mutated")
+    replay = _validate_toolchain_binding(binding, run_meta=run_meta)
+    assert replay["valid"] is False
+    assert "openroad binary digest changed" in replay["reasons"]
+
+
 def test_full_oracle_extracts_area_from_orfs_geometry_payload():
     from tehm.batch_lane import _core_ppa_metrics
 

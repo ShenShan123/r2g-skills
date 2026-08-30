@@ -48,6 +48,7 @@ from tehm.batch_lane import (  # noqa: E402
     _input_binding_matches,
     _timing_contract,
     _timing_contract_matches,
+    _validate_toolchain_binding,
     assess_full_oracle,
     require_staging_destination,
 )
@@ -683,6 +684,39 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
         if preflight_blocked:
             complete = False
             record.verification["oracle_complete"] = False
+        # Pair completeness also depends on the executor provenance.  The
+        # adapter carries both arm receipts into the verifier; replay each
+        # receipt here so a route/DRC/timing pass without a bound binary can
+        # only remain calibration/audit evidence.
+        toolchain = record.verification.get("toolchain_binding")
+        expected_root = manifest.get("orfs_root")
+        toolchain_checks = {}
+        for side, project in (("before", before_project),
+                              ("after", Path(item["after_project"]))):
+            binding = toolchain.get(side) if isinstance(toolchain, dict) else None
+            run_dirs = sorted((project / "backend").glob("RUN_*"))
+            run_meta = _load(run_dirs[-1] / "run-meta.json") if run_dirs else {}
+            toolchain_checks[side] = _validate_toolchain_binding(
+                binding, run_meta=run_meta,
+                expected_orfs_root=(Path(expected_root)
+                                    if expected_root else None))
+        fingerprints = {
+            (toolchain.get(side) or {}).get("fingerprint")
+            for side in ("before", "after")
+            if isinstance(toolchain, dict) and isinstance(toolchain.get(side), dict)
+        }
+        pair_toolchain_ok = all(check["valid"] for check in toolchain_checks.values())
+        if len(fingerprints) != 1:
+            pair_toolchain_ok = False
+            toolchain_checks["pair"] = {
+                "valid": False,
+                "reasons": ["before/after toolchain fingerprints differ"],
+            }
+        if isinstance(toolchain, dict):
+            toolchain["checks"] = toolchain_checks
+            toolchain["verified"] = pair_toolchain_ok
+        complete = bool(complete and pair_toolchain_ok)
+        record.verification["oracle_complete"] = complete
         expected_bindings = item.get("input_bindings")
         expected_timing = item.get("timing_contract")
         if isinstance(expected_bindings, dict) or isinstance(expected_timing, dict):

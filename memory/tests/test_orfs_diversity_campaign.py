@@ -255,6 +255,7 @@ def test_capture_quarantines_hardcoded_routing_hook_from_learner(tmp_path):
     verifier = json.loads(conn.execute(
         "SELECT verifier_json FROM tehm_transitions").fetchone()[0])
     conn.close()
+    assert verifier["toolchain_binding"]["verified"] is False
     assert verifier["execution_preflight"]["reason"] == (
         "routing_hook_overrides_config_knob")
 

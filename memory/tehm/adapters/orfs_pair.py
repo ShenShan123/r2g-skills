@@ -33,6 +33,8 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
     """Build a replayable record from two completed production-run attempts."""
     before_project, after_project = Path(before_project), Path(after_project)
     before_run, after_run = _run_evidence(before_project), _run_evidence(after_project)
+    before_toolchain = _campaign_toolchain_binding(before_project)
+    after_toolchain = _campaign_toolchain_binding(after_project)
     # Validate a caller-supplied semantic contract before checking the action
     # payload.  A malformed oracle is a provenance error in its own right and
     # must not be hidden behind an unrelated missing-config-edit error.
@@ -140,6 +142,10 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
             "oracle_complete": oracle_complete,
             "adapter_version": PAIR_ADAPTER_VERSION,
             "semantic_oracle": semantic_receipt,
+            "toolchain_binding": {
+                "before": before_toolchain,
+                "after": after_toolchain,
+            },
         },
         episode={"episode_id": episode_id,
                  "mechanism_family": transformation_family,
@@ -278,6 +284,11 @@ def _evidence_refs(project: Path, run: dict, side: str) -> list[dict]:
         runs = sorted((project / "backend").glob("RUN_*"))
         path = runs[-1] / rel
         refs.append({"side": side, "path": str(path.resolve()), "sha256": _sha(path)})
+    campaign_receipt = project / "campaign-run-receipt.json"
+    if campaign_receipt.is_file():
+        refs.append({"side": side, "kind": "campaign_receipt",
+                     "path": str(campaign_receipt.resolve()),
+                     "sha256": _sha(campaign_receipt)})
     for name, filename in _REPORT_FILES.items():
         path = project / "reports" / filename
         if path.is_file():
@@ -299,6 +310,13 @@ def _json(path: Path) -> dict:
         return value if isinstance(value, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def _campaign_toolchain_binding(project: Path) -> dict | None:
+    """Load the executor binding emitted beside a production ORFS run."""
+    receipt = _json(Path(project) / "campaign-run-receipt.json")
+    binding = receipt.get("toolchain_binding")
+    return dict(binding) if isinstance(binding, Mapping) else None
 
 
 def _jsonl(path: Path) -> list[dict]:

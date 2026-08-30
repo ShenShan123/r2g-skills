@@ -331,6 +331,71 @@ def assert_snapshots_unchanged(before: Iterable[Mapping], after: Iterable[Mappin
         raise BatchLaneError("protected canonical memory changed during batch observation")
 
 
+def _validate_toolchain_binding(binding: Mapping | None, *,
+                                run_meta: Mapping | None = None,
+                                expected_orfs_root: Path | None = None) -> dict:
+    """Replay the content-bound toolchain receipt without launching EDA.
+
+    A receipt's paths and hashes are evidence, not authority by themselves:
+    the current files, run metadata, ORFS root and derived fingerprint must
+    still agree.  Returning reasons keeps the caller's external receipt
+    auditable while the boolean remains a simple fail-closed admission gate.
+    """
+    result = {"valid": False, "reasons": []}
+    if not isinstance(binding, Mapping):
+        result["reasons"].append("toolchain binding is missing")
+        return result
+    status = binding.get("status")
+    if status not in {"bound_internal", "bound_external"}:
+        result["reasons"].append("toolchain binding status is not bound")
+    root_value = binding.get("orfs_root")
+    root = None
+    if not isinstance(root_value, str) or not root_value.strip():
+        result["reasons"].append("toolchain binding ORFS root is missing")
+    else:
+        root = Path(root_value).expanduser().resolve()
+        if expected_orfs_root is not None and root != Path(expected_orfs_root).resolve():
+            result["reasons"].append("toolchain binding ORFS root mismatch")
+    tools = binding.get("tools")
+    if not isinstance(tools, Mapping):
+        result["reasons"].append("toolchain binding tools are missing")
+        tools = {}
+    for name, meta_key in (("openroad", "openroad_exe"),
+                           ("yosys", "yosys_exe")):
+        tool = tools.get(name)
+        if not isinstance(tool, Mapping):
+            result["reasons"].append(f"{name} binding is missing")
+            continue
+        path_value, digest = tool.get("path"), tool.get("sha256")
+        if not isinstance(path_value, str) or not path_value.strip():
+            result["reasons"].append(f"{name} path is missing")
+            continue
+        path = Path(path_value).expanduser().resolve()
+        if not isinstance(digest, str) or not digest:
+            result["reasons"].append(f"{name} digest is missing")
+        elif _sha(path) != digest:
+            result["reasons"].append(f"{name} binary digest changed")
+        if status == "bound_internal" and root is not None:
+            try:
+                path.relative_to(root)
+            except ValueError:
+                result["reasons"].append(f"{name} escapes bound ORFS root")
+        if isinstance(run_meta, Mapping) and run_meta.get(meta_key) != path_value:
+            result["reasons"].append(f"run metadata {meta_key} mismatch")
+    fingerprint_payload = {
+        "orfs_root": str(root) if root is not None
+        else None,
+        "tools": dict(tools),
+    }
+    expected_fingerprint = hashlib.sha256(
+        json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if binding.get("fingerprint") != expected_fingerprint:
+        result["reasons"].append("toolchain fingerprint mismatch")
+    result["valid"] = not result["reasons"]
+    return result
+
+
 def assess_full_oracle(project: Path, *, rtl_files: Iterable[Path],
                        expected_input_binding: Mapping | None = None,
                        expected_timing_contract: Mapping | None = None) -> dict:
@@ -420,17 +485,8 @@ def assess_full_oracle(project: Path, *, rtl_files: Iterable[Path],
         # A complete physical result must identify the exact ORFS/tool binary
         # binding used to produce it.  Historical attempts without this receipt
         # remain useful diagnostics but can never become learner evidence.
-        "toolchain_binding": (
-            toolchain_binding.get("status") in {"bound_internal", "bound_external"}
-            and bool(toolchain_binding.get("fingerprint"))
-            and all(((toolchain_binding.get("tools") or {}).get(name) or {}).get("sha256")
-                    for name in ("openroad", "yosys"))
-            and all(
-                run_meta.get(key) == ((toolchain_binding.get("tools") or {})
-                                      .get(name) or {}).get("path")
-                for name, key in (("openroad", "openroad_exe"),
-                                  ("yosys", "yosys_exe"))
-            )),
+        "toolchain_binding": _validate_toolchain_binding(
+            toolchain_binding, run_meta=run_meta).get("valid", False),
         # The executor binds the exact config/SDC/RTL bytes at prepare time.
         # A later mutation remains external-only even if reports still look
         # clean.

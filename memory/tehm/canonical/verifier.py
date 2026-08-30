@@ -69,6 +69,11 @@ class VerifierSnapshot:
     # a config delta reaches the actual platform hook, while remaining outside
     # the transition content digest so legacy IDs remain stable.
     execution_preflight: dict | None = None
+    # Exact ORFS executor provenance.  This is deliberately an optional
+    # verifier field (rather than transition identity) so historical records
+    # remain readable, while new capture paths can carry the per-arm campaign
+    # receipt and its content-bound tool hashes.
+    toolchain_binding: dict | None = None
 
     def validate(self) -> None:
         if self.verdict not in VERDICTS:
@@ -93,7 +98,8 @@ class VerifierSnapshot:
                             ("timing_contract", self.timing_contract),
                             ("full_oracle", self.full_oracle),
                             ("semantic_oracle", self.semantic_oracle),
-                            ("execution_preflight", self.execution_preflight)):
+                            ("execution_preflight", self.execution_preflight),
+                            ("toolchain_binding", self.toolchain_binding)):
             if value is not None and not isinstance(value, dict):
                 raise ValueError(f"{name} must be a mapping or None")
 
@@ -117,6 +123,7 @@ class VerifierSnapshot:
             "full_oracle": self.full_oracle,
             "semantic_oracle": self.semantic_oracle,
             "execution_preflight": self.execution_preflight,
+            "toolchain_binding": self.toolchain_binding,
         }
 
     @classmethod
@@ -136,6 +143,7 @@ class VerifierSnapshot:
             full_oracle=data.get("full_oracle"),
             semantic_oracle=data.get("semantic_oracle"),
             execution_preflight=data.get("execution_preflight"),
+            toolchain_binding=data.get("toolchain_binding"),
         )
         obj.validate()
         return obj

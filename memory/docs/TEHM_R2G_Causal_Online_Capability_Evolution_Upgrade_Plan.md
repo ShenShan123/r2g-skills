@@ -4801,3 +4801,32 @@ signoff/DRC/LVS/RCX/equivalence receipt，时序 WNS=`-0.479862 ns` 且 setup
 utility 为 `HARMFUL`（面积约 `4552→6891 um²`）。这条 pair 只能作为
 external diagnostic；不能进入 support/staging learner，也不能作为
 fail→pass causal 或 utility evidence。
+
+### 2026-08-30 capture-time toolchain receipt replay closure
+
+继续按本方案的 provenance-first 顺序复核 ORFS capture 后，发现 pair adapter
+虽然已经在 `assess_full_oracle()` 中检查完整 Batch-0 的 toolchain gate，普通
+`capture_pairs()` 仍只依赖目标/DRC/时序三项 obligation；因此一个缺少
+`campaign-run-receipt.json`、或 receipt 中工具内容已经漂移的 route pair，仍会被
+写入 staging（虽可能因其它条件落入 calibration），其 canonical verifier 也没有
+保留两侧工具绑定，后续 replay 无法解释该判断。
+
+本轮将该边界闭合：
+
+* `VerifierSnapshot` 增加可选的 `toolchain_binding` provenance 字段；它不参与
+  transition content digest，旧 evidence ID 保持兼容，但 canonical verifier 现在
+  保存 before/after 两侧 receipt 内容。
+* ORFS pair adapter 将 `campaign-run-receipt.json` 纳入 evidence refs，并把两侧
+  binding 原样写入 verifier。capture 时逐侧重放 ORFS root、run-meta executable
+  路径、当前 OpenROAD/Yosys SHA256 与 preflight fingerprint，并要求两侧 fingerprint
+  一致；缺失、路径错配、二进制变更或 fingerprint 漂移均令 pair
+  `oracle_complete=false`，只能留在 calibration/audit-only。
+* `assess_full_oracle()` 使用同一重放函数，而不是只相信 receipt 内保存的字符串和
+  digest；因此已存在的完整报告在工具被替换后也会 fail-closed。
+
+新增回归覆盖了二进制改动后的 hash/fingerprint 拒绝，以及无 receipt 的 capture
+不能标成 verified toolchain；完整 `memory/tests` 结果为 `649 passed`、1 个既有
+`DeprecationWarning`。这项改动只强化 immutable evidence/replay firewall，不创建
+任何 promotion gate，不写 authority/canonical promotion，也不允许 Parametric
+进入 production runtime。下一步仍是取得自有 ORFS 树内匹配的 OpenROAD，再重新
+冻结 source/toolchain/oracle 后运行有界单设计 strict smoke。
