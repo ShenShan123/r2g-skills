@@ -5177,6 +5177,8 @@ source-disjoint 设计形成完整 ORFS/strict/equivalence/graph/capture lineage
 preflight 从 `NO_OP/INAPPLICABLE` 变为 `EFFECTIVE`。direct toolchain manifest
 重新 `record → check` 通过，digest=`9b5f179b01bebde6da87f6443729f2589d8fab218fc63478628c2286e1940b1c`；campaign source freeze
 digest=`a04e7ec20894a77b629798834b68f66863dc296dc7735b85df9b4e2c56278ca4`。
+该源修复可由 `tools/patch_sky130hs_fastroute.py` 对任意 clean ORFS checkout
+幂等重放，并通过 `--check` 验证 hook 是否真正消费 knob。
 
 为避免旧 GDS/receipt 被复用，修复 `run_orfs_diversity_campaign.py` 使
 `R2G_FORCE_CLEAN_RUN=1` 在 reusable-success 快速路径之前生效，并对 FIFO before/after
