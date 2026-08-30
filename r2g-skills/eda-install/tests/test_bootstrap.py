@@ -333,6 +333,29 @@ def test_env_sh_detects_relocated_conda_tools_and_staged_pdk(tmp_path):
     assert f"PDK_ROOT={staged_pdk}" in out, f"staged sky130_pdk not autodetected:\n{out}"
 
 
+def test_env_sh_detects_conda_env_under_explicit_r2g_prefix(tmp_path):
+    """A --prefix bootstrap remains discoverable from a fresh shell."""
+    prefix = tmp_path / "tehm-toolchain"
+    conda_bin = prefix / "miniconda3" / "envs" / "eda" / "bin"
+    conda_bin.mkdir(parents=True)
+    for tool in ("iverilog", "vvp"):
+        exe = conda_bin / tool
+        exe.write_text("#!/bin/sh\nexit 0\n")
+        exe.chmod(0o755)
+    envsh = ENV_COPIES[0]
+    minimal = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(tmp_path / "nohome"),
+        "R2G_PREFIX": str(prefix),
+        "R2G_CONDA_ENV": "eda",
+    }
+    script = (f'source "{envsh}" >/dev/null 2>&1; '
+              'printf "%s\\n%s\\n" "$IVERILOG_EXE" "$VVP_EXE"')
+    out = subprocess.run(["bash", "-c", script], capture_output=True,
+                         text=True, env=minimal, check=True).stdout
+    assert out.splitlines() == [str(conda_bin / "iverilog"), str(conda_bin / "vvp")]
+
+
 def test_write_env_local_preserves_all_pins(tmp_path):
     """Regenerating pins must NOT drop ANY existing pin-only value (failure-patterns #29,
     generalizing #26): write_env_local.sh resolves through the eda-install copy of

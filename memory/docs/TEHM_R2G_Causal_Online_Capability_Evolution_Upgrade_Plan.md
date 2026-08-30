@@ -4845,7 +4845,7 @@ env-file/ORFS 提供的 pin ＞有序的用户本地、conda、ORFS tree 候选 
 候选。host-wide env 只提供最后回退；用户本地/conda PDK 也先于 `/opt/pdks`。新增
 回归覆盖显式 `OPENROAD_EXE`/`YOSYS_EXE` 在 host env 覆盖下仍保持不变，以及 relocated
 conda 工具和 PDK 优先于 `/usr/bin`、`/opt`；`r2g-skills/eda-install/tests/test_bootstrap.py`
-当前为 `16 passed`，四份 resolver 的 MD5 相同。
+当前为 `17 passed`，四份 resolver 的 MD5 相同。
 
 因此后续开源复现的操作入口应固定为 R2G bootstrap，而不是让各 flow 自己猜路径：
 

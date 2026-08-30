@@ -164,7 +164,7 @@ _r2g_detect() {
 # $HOME (the 2026-07-09 relocation to /proj/workarea/$USER/miniconda3; a pin
 # regeneration then lost the only pointers — failure-patterns.md #29). Probe the
 # well-known bases once; the tool candidates and the PDK probe below share the list.
-_r2g_conda_bases=("${CONDA_PREFIX:-}" "$HOME/miniconda3" "$HOME/miniforge3"
+_r2g_conda_bases=("${CONDA_PREFIX:-}" "${R2G_PREFIX:-}/miniconda3" "$HOME/miniconda3" "$HOME/miniforge3"
                   "/proj/$USER/miniconda3" "/proj/workarea/$USER/miniconda3")
 _r2g_env="${R2G_CONDA_ENV:-eda}"
 _r2g_conda_bin=""
