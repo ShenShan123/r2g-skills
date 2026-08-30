@@ -5196,3 +5196,32 @@ receipt 为 `EFFECTIVE`，但当前两个 pair 仍缺 timing/DRC/strict/graph �
 production runtime import；下一步应先解决 sky130hs DRC 的 `m3.2` 真实/平台 deck
 问题，再为至少两个 source-disjoint lineage 建立完整 oracle、graph 与 A/B efficacy
 证据。
+
+### 2026-08-30 direct diversity cohort：参数化、完整执行与 fail-closed capture
+
+为避免把过高利用率造成的 placement overflow 误当成记忆机制结果，
+`run_orfs_diversity_campaign.py` 现在支持显式的
+`--density-before/--density-after` 与 `--routing-before/--routing-after` 参数，并把
+四个值写入 manifest 的 `parameterization`。在 clean ORFS
+`/data1/zhangdy/Tools/OpenROAD-flow-scripts-clean` 与 direct toolchain manifest
+（fingerprint=`99a262e2…`）上重新冻结 campaign
+`/data1/zhangdy/tehm-campaigns/orfs-diversity-direct-v2-density50`，参数为 density
+`50→40`、routing `0.55→0.15`；新增回归通过，默认参数保持向后兼容。
+
+该 campaign 的 16 个 before/after arm 均完成并写入 receipt：10 个 `SUCCESS`、5 个
+`FLOW_FAILURE`（AES density 两臂、GCD routing 两臂、AES routing 两臂）、1 个
+`TIMEOUT`（AES routing after）。成功 arm 的 strict signoff 进一步证明：sky130hs/gcd
+两臂 DRC/LVS clean 但 timing 为 `pass_with_caveats`，gf180 八臂 DRC/LVS 在当前平台
+能力表中为 skipped；因此没有任何 pair 达到 strict-clean learner 条件。def-graph
+只为 5 个有成功 before DEF 的 transition 建立 research-tier context，3 个失败/超时
+source arm 明确 `not_available`。
+
+capture 只写 staging DB；8 个 pair 均为 `dataset_split=calibration`、
+`learner_eligible=false`，campaign retrieval metrics 的 `applicable/retrieved` 均为
+0。strict signoff 后再次 capture 时，旧 verifier 不被覆盖而是保留在 staging 的不可变
+历史（审计看到 13 条 incomplete transition；当前 manifest 仍绑定 8 个 pair），证明
+recapture 也不能把旧证据重写。这证明 direct ORFS 执行、strict signoff、graph attachment
+与 admission firewall 已经串联，但当前 cohort 仍是诊断/校准证据，不是 canonical memory、Parametric
+promotion 或 production runtime 输入。下一步应先补齐平台级 DRC/LVS 能力与 timing-clean
+设计，再以新的 source-disjoint lineage 重跑；不得把上述 flow failure 或 timeout
+重标为 harmful utility，也不得放宽 promotion gate。
