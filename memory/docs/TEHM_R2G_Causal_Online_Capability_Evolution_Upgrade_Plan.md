@@ -4773,3 +4773,22 @@ receipt reason 的诊断缺口；两项均有回归覆盖。上述修复继续�
 变更。后续必须先在该自有 ORFS 树内获得可复现的 OpenROAD
 可执行文件，重新冻结 source/toolchain/oracle，先跑有界限的
 单设计 smoke 和 strict signoff，再决定是否具备完整 batch 条件。
+
+### 2026-08-30 explicit system OpenROAD diagnostic smoke
+
+在操作者明确允许使用系统工具后，以
+`OPENROAD_EXE=/usr/bin/openroad` 和自有 ORFS 内 Yosys 0.65 执行了单个
+`sky130hs/gcd` baseline 的有界诊断（`workers=1`、`cpus-per-run=2`、
+`timeout=600s`）。preflight 正确标记为
+`status=bound_external` / `compatibility=operator_bound_unverified`，没有将
+`/usr/bin/openroad` 误认为 ORFS tree-packaged binary。Yosys canonicalize 和
+synthesis 都通过，但 CTS 的 detailed placement 在 `DPL-0036` 失败：
+32 个实例无法放置，flow 以 `rc=2` 结束。receipt 位于
+`/tmp/tehm-orfs-system-openroad-smoke-20260830/cases/sky130hs_gcd_density_relief_before/`，
+该运行不写 staging/canonical/authority/runtime。
+
+这次运行可以证明系统 OpenROAD 可启动，但不能证明当前
+ORFS flow已具有可复现的 CTS/signoff 能力；也不能把 DPL 失败
+解释为设计或记忆机制效果。在获得匹配的自有 OpenROAD
+之前，仍不启动完整 ORFS batch；若只做工具诊断，可以保留
+该 external receipt，但必须与正式 learner/promotion evidence 分离。
