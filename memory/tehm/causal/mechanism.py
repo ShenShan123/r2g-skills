@@ -14,12 +14,33 @@ from tehm.ids import stable_dumps
 from tehm.rtl.compatibility import profile_from_graph
 
 
-def _json(value, default):
-    try:
-        parsed = json.loads(value) if isinstance(value, str) else value
-    except (TypeError, json.JSONDecodeError):
-        return default
-    return parsed if isinstance(parsed, type(default)) else default
+def _json_object(value, field: str, *, optional: bool = False) -> dict:
+    """Decode one persisted transition fact without inventing defaults.
+
+    Canonical capture writes JSON objects for all transition payloads.  The
+    previous helper converted malformed JSON and valid non-object JSON into
+    ``{}``, which could make a damaged action/delta look like a legitimate
+    low-information causal fragment.  Optional state snapshots may be NULL in
+    legacy rows, but a present value must still be valid object JSON.
+    """
+    if value is None:
+        if optional:
+            return {}
+        raise ValueError(f"transition facts {field} is missing")
+    if isinstance(value, str):
+        if not value.strip():
+            raise ValueError(f"transition facts {field} JSON is empty")
+        try:
+            parsed = json.loads(value)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                f"transition facts {field} JSON is malformed") from exc
+    else:
+        parsed = value
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            f"transition facts {field} must decode to object")
+    return parsed
 
 
 def action_digest(action: dict) -> str:
@@ -65,22 +86,30 @@ def load_transition_facts(conn: sqlite3.Connection, transition_id: str) -> Trans
             WHERE t.transition_id=?""", (transition_id,)).fetchone()
     if row is None:
         raise KeyError(f"unknown TEHM transition: {transition_id}")
-    action = _json(row["action_json"], {})
-    delta = _json(row["observation_delta_json"], {})
-    verifier = _json(row["verifier_json"], {})
+    action = _json_object(row["action_json"], "action")
+    delta = _json_object(row["observation_delta_json"], "observation_delta")
+    verifier = _json_object(row["verifier_json"], "verifier")
     source_state = {
         "state_id": row["source_state_id"],
         "domain": row["source_domain"],
         "lineage_id": row["lineage_id"],
         "context_graph_digest": row["source_graph_digest"],
-        "verifier": _json(row["source_verifier_json"], {}),
-        "artifacts": _json(row["source_artifacts_json"], {}),
+        "verifier": _json_object(
+            row["source_verifier_json"], "source_verifier_snapshot",
+            optional=True),
+        "artifacts": _json_object(
+            row["source_artifacts_json"], "source_artifact_manifest",
+            optional=True),
     }
     target_state = {
         "state_id": row["target_state_id"],
         "context_graph_digest": row["target_graph_digest"],
-        "verifier": _json(row["target_verifier_json"], {}),
-        "artifacts": _json(row["target_artifacts_json"], {}),
+        "verifier": _json_object(
+            row["target_verifier_json"], "target_verifier_snapshot",
+            optional=True),
+        "artifacts": _json_object(
+            row["target_artifacts_json"], "target_artifact_manifest",
+            optional=True),
     }
     payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
     mechanism_family = str(action.get("transformation_family") or

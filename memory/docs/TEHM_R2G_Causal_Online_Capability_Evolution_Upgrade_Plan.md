@@ -5010,3 +5010,19 @@ record/check production toolchain manifest；再次通过单设计 strict smoke�
 oracle、lineage、replay）后，才允许小批量 full-ORFS 积累独立 lineage evidence，
 再依据六项 promotion gate 评估 authority。现阶段不启动 full ORFS batch，也不以本次
 segmentation fault 作为任何正向能力结论。
+
+### 2026-08-30 causal transition-facts JSON fail-closed
+
+复核 A2 RTL mechanism extractor 时发现，`causal/mechanism.py` 的旧 `_json()` 会把
+malformed JSON 以及合法但类型错误的数组/标量都静默转换为 `{}`。这会让损坏的
+`action_json`、`observation_delta_json` 或 `verifier_json` 继续生成 causal fragment，
+并可能丢掉 harmful/obligation 信息；它违反“每条 causal edge 都可追溯到 typed
+canonical evidence”的要求。
+
+现改为对象类型的严格解析：三个 transition payload 缺失、空串、malformed 或非对象时
+直接抛出明确的 `ValueError`；state 的 verifier snapshot 和 artifact manifest 为兼容
+历史 nullable 行仍允许 `NULL`，但只要有值就必须是对象 JSON。解析发生在任何 causal
+node/edge 写入之前，因此 malformed transition 不会留下 shadow rows；online manager
+的外层 savepoint 也会随异常回滚。新增 5 个回归覆盖 malformed/错误类型 payload，并
+验证 causal node 数保持为零。该修复只收紧 evidence ingestion，不改变 canonical
+memory、rule authority、Parametric shadow-only 或 production runtime 边界。

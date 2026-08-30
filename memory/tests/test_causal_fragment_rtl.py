@@ -16,6 +16,7 @@ from tehm.causal import (
     evaluate_replicated_effect,
     evaluate_causal_rule_evidence,
 )
+from tehm.causal.mechanism import load_transition_facts
 from tehm.causal.edges import CausalEdge
 from tehm.causal.path_builder import (
     causal_path_digest, validate_persisted_path_row,
@@ -78,6 +79,50 @@ def test_rtl_fragment_is_deterministic_and_does_not_mutate_canonical(tmp_tehm):
     assert first.evidence_level == "L0_ASSOCIATION"
     assert all(transition_id in edge.evidence_refs for edge in first.edges)
     assert all(edge.learner_eligible for edge in first.edges)
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "message"),
+    [
+        ("action_json", "not-json", "action JSON is malformed"),
+        ("observation_delta_json", "[]", "observation_delta must decode to object"),
+        ("verifier_json", "", "verifier JSON is empty"),
+    ],
+)
+def test_transition_facts_reject_malformed_payloads(tmp_tehm, column, value,
+                                                    message):
+    """Causal extraction must not turn damaged canonical payloads into facts."""
+    conn, transition_id = _captured(tmp_tehm)
+    conn.execute(f"UPDATE tehm_transitions SET {column}=? WHERE transition_id=?",
+                 (value, transition_id))
+    conn.commit()
+    with pytest.raises(ValueError, match=message):
+        load_transition_facts(conn, transition_id)
+    assert conn.execute("SELECT COUNT(*) FROM tehm_causal_nodes").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "message"),
+    [
+        ("verifier_snapshot_json", "not-json", "source_verifier_snapshot JSON is malformed"),
+        ("artifact_manifest_json", "[]", "target_artifact_manifest must decode to object"),
+    ],
+)
+def test_transition_facts_reject_malformed_state_snapshots(tmp_tehm, column,
+                                                            value, message):
+    """A present state snapshot must be object JSON; NULL remains legacy-optional."""
+    conn, transition_id = _captured(tmp_tehm)
+    row = conn.execute(
+        "SELECT source_state_id, target_state_id FROM tehm_transitions "
+        "WHERE transition_id=?", (transition_id,)).fetchone()
+    state_id = row["source_state_id"] if column == "verifier_snapshot_json" \
+        else row["target_state_id"]
+    conn.execute(f"UPDATE tehm_states SET {column}=? WHERE state_id=?",
+                 (value, state_id))
+    conn.commit()
+    with pytest.raises(ValueError, match=message):
+        load_transition_facts(conn, transition_id)
+    assert conn.execute("SELECT COUNT(*) FROM tehm_causal_nodes").fetchone()[0] == 0
 
 
 def test_causal_node_replay_rejects_tampered_payload(tmp_tehm):
