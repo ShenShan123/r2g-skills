@@ -23,6 +23,7 @@ from tehm.batch_lane import canonical_snapshots  # noqa: E402
 from tehm.causal.transfer import full_oracle_complete  # noqa: E402
 from tehm.causal.transfer_ledger import (  # noqa: E402
     load_causal_transfer_receipt, verify_causal_transfer)
+from tehm.dataset import validate_membership_row  # noqa: E402
 
 GATES = (
     "rollback_verified", "registry_verified", "obligation_coverage",
@@ -111,7 +112,12 @@ def _audit_transfer_witness(
             "mechanism_families": [],
         }
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        # ``immutable=1`` prevents SQLite from creating WAL/SHM sidecars while
+        # auditing a supposedly immutable campaign snapshot.  A read-only
+        # authority audit must not mutate the evidence bundle merely by
+        # opening it.
+        conn = sqlite3.connect(
+            f"file:{db_path}?mode=ro&immutable=1", uri=True)
         conn.row_factory = sqlite3.Row
     except sqlite3.Error as exc:
         return {
@@ -212,7 +218,8 @@ def _staging_db(root: Path) -> Path:
         # full-oracle recapture.  Prefer the DB with the most persisted
         # expanded receipts, then use the stable candidate order.
         try:
-            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            conn = sqlite3.connect(
+                f"file:{path}?mode=ro&immutable=1", uri=True)
             full = conn.execute(
                 "SELECT COUNT(*) FROM tehm_transitions "
                 "WHERE verifier_json LIKE '%full_oracle%'").fetchone()[0]
@@ -236,47 +243,130 @@ def _campaign(root: Path, *, selected: bool) -> dict:
         if row.get("transition_id")
     }
     db = _staging_db(root)
-    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    # Keep the support audit side-effect free even when the input DB is a WAL
+    # snapshot.  The authority decision must never depend on SQLite creating
+    # a new ``-wal``/``-shm`` file during a read.
+    conn = sqlite3.connect(f"file:{db}?mode=ro&immutable=1", uri=True)
     conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        "SELECT t.transition_id, t.observation_delta_json, t.verifier_json, "
-        "t.provenance_json, t.action_json, p.deltas_json "
-        "FROM tehm_transitions t LEFT JOIN tehm_physical_effects p "
-        "ON p.transition_id=t.transition_id ORDER BY t.transition_id"
-    ).fetchall()
-    conn.close()
-    observations = []
-    for row in rows:
-        transition_id = row["transition_id"]
-        captured = item_by_transition.get(transition_id, {})
-        delta = _json(row["observation_delta_json"])
-        verifier = _json(row["verifier_json"])
-        full_complete = full_oracle_complete(verifier)
-        utility = str(delta.get("utility_verdict") or "UNKNOWN")
-        action = _json(row["action_json"], fallback={})
-        manifest_family = captured.get("family")
-        action_family = action.get("transformation_family")
-        mechanism_family = (manifest_family if type(manifest_family) is str
-                            and manifest_family.strip() else action_family)
-        observations.append({
-            "case_id": captured.get("case_id"),
-            "transition_id": transition_id,
-            "lineage_id": captured.get("lineage_id"),
-            "dataset_split": captured.get("dataset_split"),
-            "learner_eligible": captured.get("learner_eligible"),
-            "oracle_complete": verifier.get("oracle_complete") is True,
-            "full_oracle_complete": full_complete,
-            "utility_verdict": utility,
-            "run_id": (_json(row["provenance_json"]).get("run_id")
-                       or _json(row["provenance_json"]).get("record_id")),
-            "mechanism_family": mechanism_family,
-            "deltas": _json(row["deltas_json"], fallback={}),
-        })
+    try:
+        rows = conn.execute(
+            "SELECT t.transition_id, t.observation_delta_json, t.verifier_json, "
+            "t.provenance_json, t.action_json, p.deltas_json "
+            "FROM tehm_transitions t LEFT JOIN tehm_physical_effects p "
+            "ON p.transition_id=t.transition_id ORDER BY t.transition_id"
+        ).fetchall()
+        membership_table_present = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='tehm_dataset_membership'"
+        ).fetchone() is not None
+        observations = []
+        for row in rows:
+            transition_id = row["transition_id"]
+            captured = item_by_transition.get(transition_id, {})
+            delta = _json(row["observation_delta_json"])
+            verifier = _json(row["verifier_json"])
+            full_complete = full_oracle_complete(verifier)
+            utility = (delta.get("utility_verdict")
+                       if type(delta.get("utility_verdict")) is str
+                       else "UNKNOWN")
+            action = _json(row["action_json"], fallback={})
+            manifest_family = captured.get("family")
+            action_family = action.get("transformation_family")
+            mechanism_family = (manifest_family if type(manifest_family) is str
+                                and manifest_family.strip() else action_family)
+
+            # The manifest is only a proposal/index.  The staging DB's
+            # membership row is the evidence-firewall authority.  A support
+            # audit must be able to replay exactly one membership and it must
+            # be training + learner-eligible; otherwise a complete
+            # calibration/held-out row could be misused as learner support.
+            membership = []
+            if membership_table_present:
+                membership = conn.execute(
+                    "SELECT campaign_id, split, learner_eligible "
+                    "FROM tehm_dataset_membership WHERE transition_id=? "
+                    "ORDER BY campaign_id",
+                    (transition_id,),
+                ).fetchall()
+            membership_campaign_id = None
+            membership_split = None
+            membership_eligible = None
+            firewall_reasons = []
+            if selected and not captured:
+                firewall_reasons.append("manifest_capture_missing")
+            if not membership_table_present:
+                firewall_reasons.append("membership_table_missing")
+            elif len(membership) != 1:
+                firewall_reasons.append(
+                    "membership_missing" if not membership
+                    else "membership_ambiguous")
+            else:
+                membership_row = membership[0]
+                membership_campaign_id = membership_row["campaign_id"]
+                if (type(membership_campaign_id) is not str or
+                        not membership_campaign_id.strip()):
+                    firewall_reasons.append("membership_campaign_id_malformed")
+                try:
+                    membership_eligible, membership_split = \
+                        validate_membership_row(membership_row)
+                except ValueError as exc:
+                    firewall_reasons.append(f"membership_invalid:{exc}")
+                else:
+                    if (membership_split != "training" or
+                            membership_eligible is not True):
+                        firewall_reasons.append(
+                            "membership_not_training_learner")
+
+            if selected:
+                manifest_split = captured.get("dataset_split")
+                manifest_eligible = captured.get("learner_eligible")
+                if type(manifest_split) is not str:
+                    firewall_reasons.append("manifest_split_missing_or_malformed")
+                elif membership_split is not None and manifest_split != membership_split:
+                    firewall_reasons.append("manifest_membership_split_mismatch")
+                if type(manifest_eligible) is not bool:
+                    firewall_reasons.append(
+                        "manifest_learner_eligible_missing_or_malformed")
+                elif membership_eligible is not None and manifest_eligible != membership_eligible:
+                    firewall_reasons.append(
+                        "manifest_membership_learner_flag_mismatch")
+
+            observations.append({
+                "case_id": captured.get("case_id"),
+                "transition_id": transition_id,
+                "lineage_id": captured.get("lineage_id"),
+                "dataset_split": captured.get("dataset_split"),
+                "learner_eligible": captured.get("learner_eligible"),
+                "membership_campaign_id": membership_campaign_id,
+                "membership_split": membership_split,
+                "membership_learner_eligible": membership_eligible,
+                "support_eligible": selected and not firewall_reasons,
+                "support_firewall_reasons": sorted(set(firewall_reasons)),
+                "oracle_complete": verifier.get("oracle_complete") is True,
+                "full_oracle_complete": full_complete,
+                "utility_verdict": utility,
+                "run_id": (_json(row["provenance_json"]).get("run_id")
+                           or _json(row["provenance_json"]).get("record_id")),
+                "mechanism_family": mechanism_family,
+                "deltas": _json(row["deltas_json"], fallback={}),
+            })
+    finally:
+        conn.close()
     complete = [row for row in observations
                 if row["oracle_complete"] and row["full_oracle_complete"]]
     selected_rows = [row for row in complete
-                     if row["utility_verdict"] != "HARMFUL"] if selected else []
+                     if row["support_eligible"] and
+                     row["utility_verdict"] != "HARMFUL"] if selected else []
     harmful = [row for row in complete if row["utility_verdict"] == "HARMFUL"]
+    firewall_errors = [
+        {
+            "transition_id": row["transition_id"],
+            "case_id": row.get("case_id"),
+            "reasons": row["support_firewall_reasons"],
+        }
+        for row in observations
+        if selected and row["support_firewall_reasons"]
+    ]
     return {
         "campaign_root": str(root),
         "campaign_manifest_sha256": _sha(manifest_path),
@@ -289,6 +379,8 @@ def _campaign(root: Path, *, selected: bool) -> dict:
         "selected_support_count": len(selected_rows),
         "harmful_complete_count": len(harmful),
         "selected": bool(selected),
+        "support_firewall_status": "FAIL" if firewall_errors else "PASS",
+        "support_firewall_errors": firewall_errors,
     }
 
 
@@ -300,12 +392,22 @@ def audit(roots: list[Path], *, negative_roots: list[Path],
     selected = [row for campaign in selected_campaigns
                 for row in campaign["observations"]
                 if row["oracle_complete"] and row["full_oracle_complete"]
+                and row["support_eligible"]
                 and row["utility_verdict"] != "HARMFUL"]
     lineages = sorted({row["lineage_id"] for row in selected if row.get("lineage_id")})
     harmful = [row for campaign in selected_campaigns
                for row in campaign["observations"]
                if row["oracle_complete"] and row["full_oracle_complete"]
+               and row["support_eligible"]
                and row["utility_verdict"] == "HARMFUL"]
+    support_firewall_errors = [
+        {
+            "campaign_root": campaign["campaign_root"],
+            "errors": campaign["support_firewall_errors"],
+        }
+        for campaign in selected_campaigns
+        if campaign["support_firewall_errors"]
+    ]
     selected_families = {
         row["mechanism_family"] for row in selected
         if type(row.get("mechanism_family")) is str
@@ -349,9 +451,14 @@ def audit(roots: list[Path], *, negative_roots: list[Path],
         "harmful_rate": (len(harmful) / len(selected) if selected else None),
         "gate_status": gate_status,
         "gates": {name: status == "PASS" for name, status in gate_status.items()},
-        "all_gates_established": all(status == "PASS" for status in gate_status.values()),
-        "decision": "ALLOW_AUTHORITY_REVIEW" if all(
-            status == "PASS" for status in gate_status.values())
+        "support_firewall_status": "FAIL" if support_firewall_errors else "PASS",
+        "support_firewall_errors": support_firewall_errors,
+        "all_gates_established": (not support_firewall_errors and
+                                   all(status == "PASS"
+                                       for status in gate_status.values())),
+        "decision": "ALLOW_AUTHORITY_REVIEW" if (
+            not support_firewall_errors and
+            all(status == "PASS" for status in gate_status.values()))
         else "DENY_CANONICAL_IMPORT",
         "promotion_attempted": False,
         "canonical_memory_mutation": "none",

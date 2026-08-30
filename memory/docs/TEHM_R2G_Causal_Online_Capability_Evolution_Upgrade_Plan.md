@@ -5264,3 +5264,21 @@ direct toolchain fingerprint，没有重新运行任何 EDA；freeze digest 为
 条 staging transition；manifest/source-freeze 文件 digest 一致。该结果只关闭历史
 campaign 的 replay provenance 缺口，不把 calibration/诊断 rows 变成 learner support，
 不建立六项 promotion gate，也不写 canonical memory、authority 或 production runtime。
+
+### 2026-08-30 support audit membership replay 与只读快照边界
+
+按 4.9 的 external→staging→canonical 防火墙复核 support auditor，发现
+`audit_orfs_support_cohort.py` 原先只读取 manifest 的 split/learner 标记，没有从 staging
+数据库重放 `tehm_dataset_membership`。现已要求每条候选 support transition 具备唯一、类型
+合法的 membership，并且持久化事实与 manifest 完全一致；只有
+`split='training' ∧ learner_eligible=1` 才能进入 support observation/lineage 统计。
+calibration、held-out、A/B、缺失 membership、重复 membership、字符串化布尔或 manifest
+不一致都会产生结构化 `support_firewall_errors`，令最终 decision 保持
+`DENY_CANONICAL_IMPORT`，而不会被误计入 harmful/conformal 或 cross-lineage gate。
+
+该 auditor 的 staging/transfer SQLite reader 同时统一使用
+`mode=ro&immutable=1`，避免对 WAL-backed evidence 的只读审计生成 `-wal/-shm` sidecar；这
+与 v3→v4 snapshot migration 的 source-unchanged 约束一致。新增 held-out、manifest
+mismatch、弱类型 learner flag 和合法 training replay 回归；batch/rule-authority/
+causal-transfer 相邻回归共 `67 passed`。本轮仍只强化 authority evidence replay，不改变
+canonical transition、六项 gate 阈值、Parametric shadow-only 或 production runtime。

@@ -2368,3 +2368,23 @@ toolchain=`bound_internal`），随后 `--phase report` replay 返回 0。原有
 和 13 条 staging transition 未被覆盖；这只证明历史诊断 evidence 可按当前源码/ORFS/
 toolchain 重放，仍不改变其 `learner_eligible=false`、六项 promotion gate 未建立及
 Parametric shadow-only 状态。
+
+### 2026-08-30 support cohort membership replay firewall
+
+复核只读 `audit_orfs_support_cohort.py` 时发现，审计器此前只信任 campaign manifest
+中的 `dataset_split` 与 `learner_eligible`，没有重放 staging DB 的
+`tehm_dataset_membership`。这样一个完整的 calibration/held-out row 被误传为 support
+root 时，可能被计入 support lineage。现在 support audit 对每条 transition 要求：
+
+* staging 中恰好一条 membership，且 `validate_membership_row()` 通过；
+* 持久化 membership 必须是 `split=training` 且严格 `learner_eligible=1`；
+* manifest 的 split/learner flag 必须与 DB row 完全一致；
+* 缺失、重复、弱类型或矛盾 membership 会记录
+  `support_firewall_errors`，强制 `DENY_CANONICAL_IMPORT`，不会只被当作普通
+  `NOT_ESTABLISHED`。
+
+审计器的所有 staging/transfer DB 读取也改用 SQLite `mode=ro&immutable=1`，保证只读
+replay 不会创建 WAL/SHM sidecar。新增 held-out、manifest mismatch、字符串布尔和合法
+training membership 回归；相关 batch/rule-authority/causal-transfer 回归共 `67 passed`。
+该修复只收紧 support authority 的证据重放，不写 canonical memory、不改变六项 gate
+阈值、不触发 promotion，也不改变 Parametric shadow-only 或 production runtime 边界。
