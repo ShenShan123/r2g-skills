@@ -370,6 +370,39 @@ def test_learner_online_lane_requires_complete_executable_oracle(
         "SELECT COUNT(*) FROM tehm_causal_nodes").fetchone()[0] == 0
 
 
+def test_event_writer_requires_complete_executable_oracle(tmp_tehm):
+    """The generic learner-event API cannot bypass online admission."""
+    conn, store, _ = tmp_tehm
+    record = _online_record(store)
+    record.verification["oracle_complete"] = False
+    transition_id = capture(conn, store, record).transition_id
+
+    with pytest.raises(ValueError, match="complete verified execution"):
+        append_memory_event(
+            conn, event_type="TRANSITION_CAPTURED", source_type="transition",
+            source_id=transition_id, campaign_id="live",
+            learner_eligible=True, payload={"direct": True})
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_memory_events").fetchone()[0] == 0
+
+
+def test_event_chain_replay_rechecks_source_execution(tmp_tehm):
+    """A post-capture source downgrade invalidates the learner chain."""
+    conn, transition_id = _transition(tmp_tehm)
+    append_memory_event(
+        conn, event_type="TRANSITION_CAPTURED", source_type="transition",
+        source_id=transition_id, campaign_id="live", learner_eligible=True)
+    conn.execute(
+        "UPDATE tehm_transitions SET verifier_json=? WHERE transition_id=?",
+        (json.dumps({"verdict": "PASS", "oracle_type": "COMPILE",
+                     "oracle_complete": True}), transition_id))
+    conn.commit()
+    replay = verify_event_chain(conn, campaign_id="live")
+    assert replay["ok"] is False
+    assert replay["bad_event_id"]
+    assert "canonical execution witness" in replay["reason"]
+
+
 def test_nontraining_membership_cannot_be_marked_learner_eligible(
         tmp_tehm):
     conn, store, _ = tmp_tehm

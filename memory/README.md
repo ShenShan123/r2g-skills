@@ -2421,3 +2421,13 @@ training membership 不能再单独把 partial/compile-only receipt 升格为 me
 `NOT_LEARNER_ELIGIBLE` 路径，不因该前置条件被误当作 learner evidence。online 单测已
 改为显式 deterministic complete-oracle fixture，并新增 incomplete/compile-only 拒绝回归；
 该 fixture 只验证机制，不构成真实 RTL/ORFS 结果。
+
+### 2026-08-30 learner event writer replay seam
+
+verified-execution gate 已从 `observe_transition()` 提升为所有 learner-derived event
+写入口的共同约束。`append_memory_event(..., learner_eligible=true)` 对
+`transition`、`causal_fragment`、`activation` 反向解析出的 canonical transition
+重放完整 executable oracle；`verify_event_chain()` 回放时再次执行同一检查。因而
+partial、compile-only、unknown 或内容已损坏的 source 不能通过直接事件写入或后置 SQL
+修改进入 learner chain。谓词集中在 `tehm.evolution.verification`，不改变
+canonical/authority/runtime 的 shadow-only 边界。

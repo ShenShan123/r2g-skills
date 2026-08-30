@@ -16,6 +16,7 @@ from tehm.dataset import (normalize_stored_learner_bool,
 from tehm.ids import stable_dumps
 
 from .receipts import MemoryEventReceipt
+from .verification import require_verified_transition
 
 EVENT_TYPES = frozenset({
     "TRANSITION_CAPTURED", "CAUSAL_FRAGMENT_CREATED", "NOVEL_MECHANISM",
@@ -149,6 +150,11 @@ def _verify_learner_source(
         if split != "training" or not eligible:
             raise ValueError(
                 "learner-eligible event source is not training learner evidence")
+        # Membership is necessary but not sufficient.  Re-load the immutable
+        # canonical transition and require a complete executable oracle here
+        # as well as in observe_transition(); otherwise a caller could bypass
+        # the online manager by writing a learner event directly.
+        require_verified_transition(conn, str(row_id))
 
 
 def append_memory_event(

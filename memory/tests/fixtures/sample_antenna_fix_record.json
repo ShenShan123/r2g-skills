@@ -59,6 +59,7 @@
   "verification": {
     "verdict": "PASS",
     "oracle_type": "REGRESSION",
+    "oracle_complete": true,
     "confidence_tier": "R",
     "obligation_coverage": 1.0,
     "evidence_refs": ["drc_report", "lvs_report"]

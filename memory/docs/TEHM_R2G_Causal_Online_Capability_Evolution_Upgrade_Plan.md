@@ -5314,3 +5314,17 @@ held-out/calibration 仍可走 audit-only 的 `NOT_LEARNER_ELIGIBLE` 路径。on
 使用显式 deterministic complete-oracle fixture，并覆盖 incomplete 与 compile-only
 拒绝；该 fixture 只验证边界，不构成真实 RTL/ORFS 结果。本轮没有 canonical memory、
 rule lifecycle 或 production runtime mutation。
+
+### 4.3/4.8 learner event writer replay seam
+
+verified-execution predicate 不能只放在 `observe_transition()`：
+`append_memory_event(..., learner_eligible=true)` 是另一个可写入口，必须对
+`transition`、`causal_fragment` 与 `activation` source 反向解析出的每个 canonical
+transition 重放同一完整 oracle 检查。`verify_event_chain()` 也必须在回放 learner
+event 时重新执行该检查；否则事件写入器或后续直接 SQL 改写都可能把 partial、compile-only
+或内容已损坏的 transition 留在 learner chain 中。
+
+该 seam 已集中到 `tehm.evolution.verification`，写入与回放共用
+`require_verified_transition()`；失败发生在任何新 event 写入前。测试覆盖直接事件绕过和
+source execution 后置降级，仍保持 learner event、causal fragment、consolidation
+preview 全部 shadow-only，不触发 canonical/authority/runtime mutation。

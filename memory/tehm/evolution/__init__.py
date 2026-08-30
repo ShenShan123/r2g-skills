@@ -27,6 +27,7 @@ from .triggers import (
     TRIGGER_REASONS, ConsolidationTriggerReceipt,
     evaluate_consolidation_trigger,
 )
+from .verification import require_verified_execution, require_verified_transition
 
 __all__ = [
     "EVENT_TYPES", "REVISION_OPERATIONS", "IncrementalCrystallizationReceipt",
@@ -44,4 +45,5 @@ __all__ = [
     "ConflictReceipt", "detect_conflicts", "detect_novelty",
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",
+    "require_verified_execution", "require_verified_transition",
 ]
