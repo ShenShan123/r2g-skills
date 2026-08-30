@@ -206,7 +206,7 @@ def test_capture_rechecks_manifest_input_binding(tmp_path):
     manifest = {"items": [item], "heldout": {"lineage_id": "heldout:spi"},
                 "captured": []}
     manifest_path = root / "campaign_manifest.json"
-    manifest_path.parent.mkdir(parents=True)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest))
     db = root / "staging" / "tehm.sqlite"
     capture_pairs(manifest_path, manifest, db, root / "staging" / "artifacts")

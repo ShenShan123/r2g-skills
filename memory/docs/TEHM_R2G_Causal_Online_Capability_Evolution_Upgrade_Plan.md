@@ -4721,3 +4721,23 @@ capture adapter 现把 dataset split 在首次 capture 时直接绑定。
 group 的 full rebuild 验证 stale lifecycle retirement，同时保持 canonical evidence 与
 membership 不变。该修复不把 held-out 变成 learner，也不新增 promotion gate；后续跨分区
 实验必须创建新的 campaign/staging DB 并重新生成完整 replay receipt。
+
+### 2026-08-29 full replay/regression validation after firewall closure
+
+在可用的仓库内 Python 3.11 环境中，完整 `memory/tests` 回归以
+`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=memory:memory/tests` 执行，结果为
+`647 passed`、1 个既有 `DeprecationWarning`。同时，修订后的
+`run_procedural_loco_v1.py` 在 5 个真实 Icarus folds 上通过 acceptance：M8=`5/5`、
+harmful rate=`0`、held-out source exclusion 全部成立，且 canonical freeze 未改变。
+
+该验证还发现 v4 freeze 目录残留旧 SQLite `-wal/-shm` sidecar；主库以
+`immutable=1` 打开并通过 `PRAGMA integrity_check=ok`（schema=`tehm-v4`，
+states/transitions/episodes/membership=`18/9/9/9`）后，将可恢复 sidecar 移入
+`/tmp/tehm-stale-freeze-sidecars-20260829/`。随后 bundle exact-membership 校验、
+`reproduce.sh`（H9/H11）和 LOCO 均通过。sidecar 不属于 canonical evidence，清理不改变
+SQLite 主文件 digest。
+
+本轮还修复了 ORFS semantic contract 在缺失 config edit 时掩盖 malformed contract 的
+错误顺序，以及 rule-authority 派生阶段发现的 malformed registry version 未进入公开
+receipt reason 的诊断缺口；两项均有回归覆盖。上述修复继续只强化 evidence/replay
+边界，不创建 promotion gate，不把 Parametric 或 staging 证据写入 canonical/runtime。

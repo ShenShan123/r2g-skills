@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from tehm.adapters.r2g_evidence import parse_config_mk
-from tehm.adapters.semantic_oracle import evaluate_pair
+from tehm.adapters.semantic_oracle import evaluate_pair, normalize_spec
 from tehm.canonical.capture import ExecutionRecord
 from tehm.physical.effects import extract_deltas
 
@@ -33,6 +33,12 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
     """Build a replayable record from two completed production-run attempts."""
     before_project, after_project = Path(before_project), Path(after_project)
     before_run, after_run = _run_evidence(before_project), _run_evidence(after_project)
+    # Validate a caller-supplied semantic contract before checking the action
+    # payload.  A malformed oracle is a provenance error in its own right and
+    # must not be hidden behind an unrelated missing-config-edit error.
+    normalized_semantic_oracle = (
+        normalize_spec(semantic_oracle)
+        if semantic_oracle is not None else None)
     config_edits = {str(k): str(v) for k, v in (config_edits or {}).items()}
     if not config_edits:
         raise ValueError("an ORFS pair needs the concrete config edit that was executed")
@@ -43,8 +49,9 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
     after_ok = _scope_success(target_check, after_run["reports"])
     before_definitive = _scope_definitive(target_check, before_run)
     after_definitive = _scope_definitive(target_check, after_run)
-    semantic_receipt = (evaluate_pair(before_project, after_project, semantic_oracle)
-                        if semantic_oracle is not None else None)
+    semantic_receipt = (
+        evaluate_pair(before_project, after_project, normalized_semantic_oracle)
+        if normalized_semantic_oracle is not None else None)
     if semantic_receipt is None:
         original = ("REMOVED" if not before_ok and after_ok else
                     "PRESENT" if before_definitive and not before_ok else "UNKNOWN")

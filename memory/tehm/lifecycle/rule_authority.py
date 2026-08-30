@@ -1932,7 +1932,12 @@ def record_rule_authority(
     trial_ok, trial_binding, trial_reasons = _trial_binding(
         conn, rule_id=rule_id, target_scope=target_scope, trial_id=trial_id,
         expected_status_version=expected_status_version)
-    reasons = list(errors) + trial_reasons
+    # ``_derive_gate_inputs`` can discover malformed payloads after its
+    # initial normalisation pass (for example a boolean registry version).
+    # Preserve those diagnostics in the public receipt; otherwise the gate
+    # would fail closed while the reason silently disappeared.
+    reasons = (list(errors) + list(derived_details.get("errors") or []) +
+               trial_reasons)
     if row is None:
         reasons.append("rule_missing")
     if rule_digest is None:
@@ -2237,6 +2242,7 @@ def verify_rule_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
         min_cross_lineage_te=thresholds["cross_lineage_te"],
         max_harmful_rate=thresholds["harmful_rate"],
         min_conformal_coverage=thresholds["conformal_coverage"])
+    reasons.extend(details.get("errors") or [])
     gate_report = evaluate_promotion_gates(
         gate_inputs, strict=True,
         min_obligation_coverage=thresholds["obligation_coverage"],

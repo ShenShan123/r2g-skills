@@ -197,7 +197,10 @@ def test_orfs_authority_receipt_excludes_non_support_rows_from_learner_gates(tmp
     write_external_observations(observations, [{
         "case_id": "heldout-positive", "lineage_id": "heldout-lineage",
         "split": "heldout", "classification": "ELIGIBLE_POSITIVE",
-        "learner_eligible": True,
+        # Held-out evidence is explicitly audit-only.  A contradictory
+        # learner bit is rejected at the observation writer boundary rather
+        # than being allowed to reach the authority projector.
+        "learner_eligible": False,
         "record": {
             "verification": {"obligation_coverage": 1.0},
             "observation_delta": {"utility_verdict": "PARETO_SAFE"},

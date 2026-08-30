@@ -174,7 +174,7 @@ def test_capture_quarantines_incomplete_oracle_from_learner(tmp_path):
         "captured": [],
     }
     manifest_path = root / "campaign_manifest.json"
-    manifest_path.parent.mkdir(parents=True)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest))
     staging_db = root / "staging" / "tehm.sqlite"
     capture_pairs(manifest_path, manifest, staging_db,

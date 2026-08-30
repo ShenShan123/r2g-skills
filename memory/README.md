@@ -944,7 +944,7 @@ canonical memory。
   cohort 若混合 action value、部分缺失 provenance 或 action 非法则直接
   `firewall_failed`。`PhysicalEffectMemory.predict` 在 policy/query signature 不一致、
   或 action-conditioned query 使用未绑定 policy 时 fail-closed，避免校准阈值跨 knob
-  value 借用。新增契约测试后当前工作树为 `273 passed`；canonical v3 仍固定为 `225`。
+  value 借用。当前工作树完整回归为 `647 passed`；canonical v3 仍固定为 `225`。
 - Calibration policy v0.2 进一步把每个 required physical metric 的 interval
   coverage 绑定到预注册 target（默认与 aggregate target 相同）；aggregate 达标但
   单项 metric 不达标时也会输出 `coverage_failed`，`PhysicalEffectMemory.predict`
@@ -1472,7 +1472,7 @@ memory/
 │   ├── cli.py                     # init-db / capture / capture-r2g / preflight / health / honesty
 │   └── schemas/                   # transition/episode/rule/activation/predicate/role/obligation v1 参考
 │
-├── tests/                         # pytest（当前工作树 273 个测试，全 stdlib + tmp_path 隔离）
+├── tests/                         # pytest（当前工作树 647 个测试，全 stdlib + tmp_path 隔离）
 │   ├── conftest.py                # sys.path 注入 + tmp_tehm/sample_record 等 fixture
 │   ├── fixtures/
 │   │   ├── sample_antenna_fix_record.json      # 合成 ExecutionRecord
@@ -1601,7 +1601,7 @@ before/after 已存在、oracle 可执行）——后续用真实 `reports/*.jso
 ## 测试
 
 ```bash
-python3 -m pytest tests/ -q     # 当前工作树 273 passed；canonical v3 freeze 为 225
+python3 -m pytest tests/ -q     # 当前工作树 647 passed；canonical v3 freeze 为 225
 ```
 
 测试全部 hermetic：temp sqlite + temp artifact root，不碰真实 TEHM DB，不碰
