@@ -21,7 +21,9 @@ from tehm.causal.edges import CausalEdge
 from tehm.causal.path_builder import (
     causal_path_digest, validate_persisted_path_row,
 )
-from tehm.causal.witness import parse_source_transition_ids
+from tehm.causal.witness import (
+    learner_edge_transition_coverage, parse_source_transition_ids,
+)
 from tehm.dataset import assign_transition
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 
@@ -516,6 +518,16 @@ def test_shared_source_transition_witness_parser_is_strict(raw, reason):
     ids, error = parse_source_transition_ids(raw)
     assert ids is None
     assert error == reason
+
+
+def test_learner_edge_coverage_rejects_non_string_source_ids(tmp_tehm):
+    conn, transition_id = _captured(tmp_tehm)
+    build_transition_causal_fragment(conn, transition_id)
+    assert learner_edge_transition_coverage(
+        conn, [123], campaign_id="live", required_level="L0_ASSOCIATION") == ()
+    assert learner_edge_transition_coverage(
+        conn, [transition_id, transition_id], campaign_id="live",
+        required_level="L0_ASSOCIATION") == ()
 
 
 def test_causal_authority_ignores_l2_edge_from_another_campaign(tmp_tehm):

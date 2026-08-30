@@ -104,8 +104,13 @@ def learner_edge_transition_coverage(
     cross-campaign edge witnesses are ignored.  Returning the covered subset
     lets callers distinguish no support from incomplete path coverage.
     """
-    sources = {str(item).strip() for item in source_transition_ids
-               if str(item).strip()}
+    if (not isinstance(source_transition_ids, (tuple, list))
+            or not source_transition_ids
+            or any(type(item) is not str or not item.strip()
+                   for item in source_transition_ids)
+            or len(set(source_transition_ids)) != len(source_transition_ids)):
+        return ()
+    sources = {item.strip() for item in source_transition_ids}
     if not sources or not campaign_id:
         return ()
     covered: set[str] = set()

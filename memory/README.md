@@ -2225,5 +2225,14 @@ enum/container 必须满足 canonical schema；同时重算并核对 content-add
 
 causal retrieval 的 canonical utility/risk replay 已改为复用同一 loader，避免质量评分
 路径使用另一套宽松解析。新增 8 个语义错类型与派生列篡改回归；全量 `memory/tests`
-为 `686 passed`。本轮仍只收紧 shadow/evaluation 证据入口，不改变 canonical 写入、
+为 `687 passed`。本轮仍只收紧 shadow/evaluation 证据入口，不改变 canonical 写入、
 lifecycle、六项 promotion gate 或 production runtime。
+
+### 2026-08-30 causal learner witness API 输入闭环
+
+继续检查 shared witness 的公开调用面时发现，`learner_edge_transition_coverage()`
+仍会把调用方传入的数字或重复 source ID 强制为字符串并去重，可能绕过
+`parse_source_transition_ids()` 的严格契约。现要求该 API 的 source 输入必须是非空
+list/tuple、非空字符串且无重复；任一错类型、空值或重复输入直接返回空覆盖，不会
+形成 learner support。新增数字/重复 source 回归；该修复只收紧 causal shadow
+evidence firewall，不改变 canonical、lifecycle、promotion gate 或 production runtime。
