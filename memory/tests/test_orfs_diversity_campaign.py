@@ -153,13 +153,22 @@ def test_heldout_phase_preserves_captured_training_rows(tmp_path):
     root = tmp_path / "campaign"
     root.mkdir()
     original = {
-        "campaign_version": "old", "orfs_root": "/old",
+        "campaign_version": "old", "orfs_root": str(orfs.resolve()),
         "items": [{"lineage_id": "orfs-v2:gcd"}],
         "captured": [{"case_id": "keep", "transition_id": "transition_keep"}],
         "heldout": {"lineage_id": "orfs-heldout:old"},
+        "parameterization": {
+            "density_before": "70", "density_after": "35",
+            "routing_before": "0.55", "routing_after": "0.15",
+        },
+        "toolchain_manifest": None,
         "firewall": {},
     }
     (root / "campaign_manifest.json").write_text(json.dumps(original))
+    freeze = subprocess.run(
+        [sys.executable, str(SCRIPT), "--phase", "freeze", "--root", str(root),
+         "--orfs-root", str(orfs)], cwd=REPO, capture_output=True, text=True)
+    assert freeze.returncode == 0, freeze.stderr
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), "--phase", "heldout", "--root", str(root),
          "--orfs-root", str(orfs)], cwd=REPO, capture_output=True, text=True)
@@ -168,6 +177,62 @@ def test_heldout_phase_preserves_captured_training_rows(tmp_path):
     assert manifest["captured"] == original["captured"]
     assert manifest["heldout"]["lineage_id"] == "orfs-heldout:spi"
     assert manifest["firewall"]["disjoint"] is True
+
+
+def test_prepare_binds_independent_source_freeze(tmp_path):
+    orfs = tmp_path / "orfs"
+    for platform, design in (("sky130hs", "gcd"), ("sky130hs", "aes"),
+                             ("gf180", "jpeg"), ("gf180", "riscv32i"),
+                             ("ihp-sg13g2", "spi")):
+        directory = orfs / "flow" / "designs" / platform / design
+        directory.mkdir(parents=True)
+        (directory / "constraint.sdc").write_text("create_clock -period 10 clk\n")
+        (directory / "config.mk").write_text(
+            f"export DESIGN_NICKNAME = {design}\n"
+            f"export DESIGN_NAME = {design}\n"
+            f"export PLATFORM = {platform}\n")
+    root = tmp_path / "campaign"
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "--phase", "prepare", "--root", str(root),
+         "--orfs-root", str(orfs), "--density-before", "50",
+         "--density-after", "40"], cwd=REPO, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    manifest = json.loads((root / "campaign_manifest.json").read_text())
+    freeze_path = root / "source_freeze.json"
+    assert Path(manifest["source_freeze"]) == freeze_path.resolve()
+    assert manifest["source_freeze_sha256"]
+    assert manifest["source_freeze_digest"]
+    freeze = json.loads(freeze_path.read_text())
+    assert freeze["version"] == "orfs-diversity-source-freeze-v1"
+    assert freeze["request"]["parameterization"]["density_before"] == "50"
+    assert len(freeze["request"]["matrix"]) == 8
+    assert freeze["toolchain"]["status"] == "not_checked"
+
+
+def test_later_phase_rejects_source_freeze_input_drift(tmp_path):
+    orfs = tmp_path / "orfs"
+    for platform, design in (("sky130hs", "gcd"), ("sky130hs", "aes"),
+                             ("gf180", "jpeg"), ("gf180", "riscv32i"),
+                             ("ihp-sg13g2", "spi")):
+        directory = orfs / "flow" / "designs" / platform / design
+        directory.mkdir(parents=True)
+        (directory / "constraint.sdc").write_text("create_clock -period 10 clk\n")
+        (directory / "config.mk").write_text(
+            f"export DESIGN_NICKNAME = {design}\n"
+            f"export DESIGN_NAME = {design}\n"
+            f"export PLATFORM = {platform}\n")
+    root = tmp_path / "campaign"
+    prepared = subprocess.run(
+        [sys.executable, str(SCRIPT), "--phase", "prepare", "--root", str(root),
+         "--orfs-root", str(orfs)], cwd=REPO, capture_output=True, text=True)
+    assert prepared.returncode == 0, prepared.stderr
+    cfg = orfs / "flow" / "designs" / "sky130hs" / "gcd" / "config.mk"
+    cfg.write_text(cfg.read_text() + "export DRIFTED_INPUT = 1\n")
+    report = subprocess.run(
+        [sys.executable, str(SCRIPT), "--phase", "report", "--root", str(root),
+         "--orfs-root", str(orfs)], cwd=REPO, capture_output=True, text=True)
+    assert report.returncode != 0
+    assert "input digest mismatch" in report.stderr
 
 
 def test_capture_quarantines_incomplete_oracle_from_learner(tmp_path):

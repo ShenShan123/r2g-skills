@@ -5230,3 +5230,25 @@ add-designs pipeline 那样生成独立 `source_freeze.json` 并在每个后续 
 本轮的 “source-disjoint” 仍是 campaign-level 诊断保证，不能替代 authority 所需的
 source-freeze/hash-chain。下一轮应先补齐该 freeze seam，或改用已具备 freeze 校验的
 campaign runner，再生成 learner/authority 候选。
+
+### 2026-08-30 diversity source-freeze seam 落地
+
+针对上一节列出的 source-freeze 缺口，现已在
+`memory/scripts/run_orfs_diversity_campaign.py` 实现独立
+`source_freeze.json`。`prepare` 在 materialize 任何 before/after case 之前建立并校验
+freeze；`--phase freeze` 可以对已经完成的诊断 campaign 只绑定 freeze，不重跑 ORFS。
+冻结请求包含固定八项 matrix、四个显式参数化值、IHP-SG13G2/SPI held-out identity 及
+toolchain manifest 位置；输入 digest 覆盖每个逻辑 design 的 config、SDC、RTL 与平台
+hook，source-tree digest 覆盖 TEHM canonical/evaluation 代码、ORFS runner、signoff
+platform scope、DRC/LVS/RCX 与 graph extractor。另记录 repo/ORFS revision、working-tree
+status 与 binary diff digest，避免只看 revision/status 文件名而漏掉内容改写。
+
+后续 `heldout`、`run`、`capture`、`graph`、`ab`、`predict`、`report` 在任何工作前都
+验证 manifest 对 freeze 的路径、文件 digest、请求参数及 toolchain fingerprint；缺失或
+任一 drift 均 `BatchLaneError` fail-closed。无 toolchain manifest 的小型 fixture 仅标记
+`not_checked`，真实 EDA 仍由原有 ORFS toolchain preflight 阻断；因此该兼容性不构成
+production 证据。新增 source-freeze、现有 prepare/heldout 保持性及输入篡改回归，定向
+测试为 `10 passed`。本修复不改变 Parametric shadow-only、canonical memory、六项
+promotion gate 或 production runtime 边界；下一步是在最终提交后的干净源码上迁移
+`orfs-diversity-direct-v2-density50`，以 `freeze → report replay` 证明现有诊断证据可重放，
+再重新筛选具备 strict-clean、positive utility 和跨 lineage 的 cohort。

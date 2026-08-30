@@ -2343,3 +2343,21 @@ add-designs pipeline 那样生成独立 `source_freeze.json` 并在每个后续 
 本轮的 “source-disjoint” 仍是 campaign-level 诊断保证，不能替代 authority 所需的
 source-freeze/hash-chain。下一轮应先补齐该 freeze seam，或改用已具备 freeze 校验的
 campaign runner，再生成 learner/authority 候选。
+
+### 2026-08-30 diversity source-freeze seam
+
+已将上述缺口补入 `run_orfs_diversity_campaign.py`。`prepare` 现在会在任何 case
+materialization 之前创建独立的 `source_freeze.json`；显式 `--phase freeze` 还可以为
+已有的诊断 campaign 绑定 freeze，而不重跑 EDA。freeze 绑定固定 diversity matrix、四个
+参数化 knob、SPI held-out identity、ORFS design/SDC/RTL/platform inputs、TEHM 与
+signoff/graph 解释代码、repo/ORFS git revision 与 working-tree diff digest，以及可选的
+content-addressed toolchain fingerprint。
+
+`heldout`、`run`、`capture`、`graph`、`ab`、`predict` 和 `report` 在读取 manifest 后均
+先重算这些 digest；freeze 缺失、篡改、源码/ORFS 输入漂移、toolchain fingerprint 漂移或
+manifest 参数不一致都会 fail-closed。没有声明 toolchain manifest 的微型 fixture 只会
+记录 `toolchain.status=not_checked`，但仍不能绕过实际 `run` 阶段的工具链预检。定向
+diversity 回归为 `10 passed`；这一步只加强 source/evidence replay boundary，不创建
+canonical memory、authority promotion 或 production runtime 写入。现有
+`orfs-diversity-direct-v2-density50` 仍需在最终提交后用 `--phase freeze` 迁移并通过
+`report` replay，之后才能把新 cohort 作为可审计的后续输入。

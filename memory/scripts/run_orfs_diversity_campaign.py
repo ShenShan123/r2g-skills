@@ -57,6 +57,7 @@ from tehm.batch_lane import (  # noqa: E402
 from orfs_storage import default_work_root, enforce_work_root, storage_policy  # noqa: E402
 
 VERSION = "orfs-diversity-v0.3"
+SOURCE_FREEZE_VERSION = "orfs-diversity-source-freeze-v1"
 SUPERVISOR_GRACE_S = 90
 _CFG_RE = re.compile(r"^(\s*(?:export\s+)?)([A-Z0-9_]+)(\s*[:?]?=\s*).*$")
 MATRIX = (
@@ -76,6 +77,354 @@ MATRIX = (
 
 TOOLCHAIN_PREFLIGHT_VERSION = "orfs-toolchain-preflight-v1"
 PLATFORM_SCOPE_PREFLIGHT_VERSION = "orfs-signoff-platform-scope-v1"
+
+
+def _stable(value) -> str:
+    """Return the canonical JSON representation used by freeze digests."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"),
+                      default=str)
+
+
+def _file_record(path: Path) -> dict:
+    """Record a source file without silently following missing inputs."""
+    path = Path(path).resolve()
+    try:
+        stat = path.stat()
+        exists = path.is_file()
+    except OSError:
+        stat, exists = None, False
+    return {
+        "path": str(path),
+        "exists": bool(exists),
+        "bytes": stat.st_size if exists and stat is not None else None,
+        "sha256": _sha(path) if exists else None,
+    }
+
+
+def _git_output(cwd: Path, *args: str) -> str:
+    """Read a git value, preserving an explicit unavailable marker."""
+    try:
+        proc = subprocess.run(
+            ["git", *args], cwd=str(Path(cwd).resolve()),
+            capture_output=True, text=True, check=False)
+    except OSError as exc:
+        return f"UNAVAILABLE:{exc}"
+    if proc.returncode != 0:
+        detail = (proc.stderr or "").strip()
+        return f"RC={proc.returncode}:{detail}"
+    return proc.stdout
+
+
+def _git_digest(cwd: Path, *args: str) -> str:
+    return hashlib.sha256(_git_output(cwd, *args).encode()).hexdigest()
+
+
+def _source_code_records() -> list[dict]:
+    """Bind the TEHM code that can interpret or admit this campaign."""
+    explicit = [
+        MEMORY_ROOT / "schema.sql",
+        MEMORY_ROOT / "requirements.txt",
+        Path(__file__).resolve(),
+        MEMORY_ROOT / "scripts" / "orfs_storage.py",
+        MEMORY_ROOT / "tehm_backend.py",
+        REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "flow" / "run_orfs.sh",
+        REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "flow" / "platform_capability.py",
+        REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "flow" / "run_drc.sh",
+        REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "flow" / "run_lvs.sh",
+        REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "flow" / "run_rcx.sh",
+        REPO_ROOT / "r2g-skills" / "def-graph" / "scripts" / "extract" / "graph" / "netlist_graph.py",
+    ]
+    paths = list(explicit)
+    tehm_root = MEMORY_ROOT / "tehm"
+    if tehm_root.is_dir():
+        paths.extend(
+            path for path in tehm_root.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts)
+    return [_file_record(path) for path in sorted(set(paths), key=str)]
+
+
+def _diversity_input_records(orfs_root: Path) -> list[dict]:
+    """Record every logical ORFS source consumed by the fixed diversity matrix.
+
+    Generated campaign directories are intentionally excluded.  Missing files
+    are recorded as such so a diagnostic freeze can be created in a tiny test
+    ORFS tree, while ``prepare`` still rejects an incomplete training template
+    before any EDA execution.
+    """
+    root = Path(orfs_root).resolve()
+    specs: list[tuple[str, str, str]] = [
+        (platform, design, "training")
+        for platform, design, *_ in MATRIX
+    ]
+    specs.append(("ihp-sg13g2", "spi", "heldout"))
+    rows: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for platform, design, role in specs:
+        key = (platform, design, role)
+        if key in seen:
+            continue
+        seen.add(key)
+        template = root / "flow" / "designs" / platform / design
+        src_dir = root / "flow" / "designs" / "src" / design
+        rtl_paths = []
+        if src_dir.is_dir():
+            rtl_paths = sorted(
+                path for path in src_dir.rglob("*")
+                if path.is_file() and path.suffix.lower() in {".v", ".sv"})
+        # fastroute is the semantic hook used by the routing family.  Binding
+        # it catches a knob implementation change even when config.mk itself
+        # remains byte-identical.
+        platform_hooks = [
+            root / "flow" / "platforms" / platform / "fastroute.tcl",
+            root / "flow" / "platforms" / platform / "config.mk",
+        ]
+        rows.append({
+            "role": role,
+            "platform": platform,
+            "design": design,
+            "template": str(template.resolve()),
+            "config": _file_record(template / "config.mk"),
+            "sdc": _file_record(template / "constraint.sdc"),
+            "rtl": [_file_record(path) for path in rtl_paths],
+            "platform_inputs": [_file_record(path) for path in platform_hooks],
+        })
+    return rows
+
+
+def _parameterization(*, density_before: str, density_after: str,
+                      routing_before: str, routing_after: str) -> dict:
+    return {
+        "density_before": str(density_before),
+        "density_after": str(density_after),
+        "routing_before": str(routing_before),
+        "routing_after": str(routing_after),
+    }
+
+
+def _effective_toolchain_manifest(path: Path | None) -> Path | None:
+    if path is not None:
+        return Path(path).expanduser().resolve()
+    raw = os.environ.get("R2G_TOOLCHAIN_MANIFEST")
+    return Path(raw).expanduser().resolve() if raw else None
+
+
+def _diversity_freeze_request(orfs_root: Path, *, parameterization: dict,
+                              toolchain_manifest: Path | None) -> dict:
+    return {
+        "orfs_root": str(Path(orfs_root).resolve()),
+        "matrix": [
+            {
+                "platform": platform,
+                "design": design,
+                "family": family,
+                "knob": knob,
+            }
+            for platform, design, family, knob, _before, _after in MATRIX
+        ],
+        "parameterization": dict(parameterization),
+        "heldout": {
+            "platform": "ihp-sg13g2",
+            "design": "spi",
+            "lineage_id": "orfs-heldout:spi",
+        },
+        "toolchain_manifest": (
+            str(toolchain_manifest) if toolchain_manifest is not None else None),
+    }
+
+
+def build_source_freeze(root: Path, orfs_root: Path, *,
+                        density_before: str, density_after: str,
+                        routing_before: str, routing_after: str,
+                        toolchain_manifest: Path | None = None) -> dict:
+    """Freeze source/toolchain inputs before materialization or EDA work."""
+    root = Path(root).resolve()
+    orfs_root = Path(orfs_root).resolve()
+    toolchain_manifest = _effective_toolchain_manifest(toolchain_manifest)
+    params = _parameterization(
+        density_before=density_before, density_after=density_after,
+        routing_before=routing_before, routing_after=routing_after)
+    request = _diversity_freeze_request(
+        orfs_root, parameterization=params,
+        toolchain_manifest=toolchain_manifest)
+    if toolchain_manifest is not None:
+        toolchain = preflight_orfs_toolchain({
+            "orfs_root": str(orfs_root),
+            "toolchain_manifest": str(toolchain_manifest),
+        })
+        if toolchain.get("status") not in {"bound_internal", "bound_external"}:
+            raise BatchLaneError(
+                "ORFS toolchain preflight blocked while building source freeze: "
+                + str(toolchain.get("error") or "invalid binding"))
+    else:
+        # Tiny unit fixtures and source-only diagnostics deliberately have no
+        # executable binding.  Later run/capture phases still require the
+        # normal campaign toolchain preflight before EDA starts.
+        toolchain = {
+            "version": TOOLCHAIN_PREFLIGHT_VERSION,
+            "status": "not_checked",
+            "fingerprint": None,
+            "toolchain_manifest": None,
+            "orfs_root": str(orfs_root),
+        }
+    source_code = _source_code_records()
+    inputs = _diversity_input_records(orfs_root)
+    orfs_status = _git_output(orfs_root, "status", "--porcelain=v1")
+    freeze = {
+        "version": SOURCE_FREEZE_VERSION,
+        "repo_git_head": _git_output(REPO_ROOT, "rev-parse", "HEAD").strip(),
+        "repo_git_status_sha256": _git_digest(REPO_ROOT, "status", "--porcelain=v1"),
+        "repo_git_diff_sha256": _git_digest(REPO_ROOT, "diff", "--binary", "HEAD"),
+        "orfs_git_head": _git_output(orfs_root, "rev-parse", "HEAD").strip(),
+        "orfs_git_status_sha256": hashlib.sha256(orfs_status.encode()).hexdigest(),
+        "orfs_git_diff_sha256": _git_digest(orfs_root, "diff", "--binary", "HEAD"),
+        "request": request,
+        "source_code": source_code,
+        "source_tree_digest": hashlib.sha256(
+            _stable(source_code).encode()).hexdigest(),
+        "inputs": inputs,
+        "input_digest": hashlib.sha256(_stable(inputs).encode()).hexdigest(),
+        "toolchain": toolchain,
+    }
+    freeze["freeze_digest"] = hashlib.sha256(_stable(freeze).encode()).hexdigest()
+    _write(root / "source_freeze.json", freeze)
+    return freeze
+
+
+def _validate_source_freeze(path: Path, *, orfs_root: Path,
+                            parameterization: dict,
+                            toolchain_manifest: Path | None = None) -> dict:
+    """Recompute every freeze component and fail closed on any drift."""
+    path = Path(path).resolve()
+    try:
+        freeze = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BatchLaneError(
+            "source freeze is required and must be valid JSON; run --phase freeze first: "
+            + str(path)) from exc
+    if not isinstance(freeze, dict) or freeze.get("version") != SOURCE_FREEZE_VERSION:
+        raise BatchLaneError(f"source freeze version mismatch: {path}")
+    unsigned = dict(freeze)
+    digest = unsigned.pop("freeze_digest", None)
+    if not digest or hashlib.sha256(_stable(unsigned).encode()).hexdigest() != digest:
+        raise BatchLaneError("source freeze digest mismatch; rebuild the freeze")
+    expected_manifest = _effective_toolchain_manifest(toolchain_manifest)
+    expected_request = _diversity_freeze_request(
+        Path(orfs_root).resolve(), parameterization=parameterization,
+        toolchain_manifest=expected_manifest)
+    if freeze.get("request") != expected_request:
+        raise BatchLaneError(
+            "source freeze request mismatch; use the same campaign parameters "
+            "or run --phase freeze again")
+    current_inputs = _diversity_input_records(Path(orfs_root).resolve())
+    if freeze.get("input_digest") != hashlib.sha256(
+            _stable(current_inputs).encode()).hexdigest():
+        raise BatchLaneError(
+            "source freeze input digest mismatch; ORFS config/SDC/RTL/platform source drifted")
+    current_source = _source_code_records()
+    if freeze.get("source_tree_digest") != hashlib.sha256(
+            _stable(current_source).encode()).hexdigest():
+        raise BatchLaneError(
+            "source freeze code digest mismatch; rebuild the freeze before replay")
+    frozen_repo_head = str(freeze.get("repo_git_head") or "")
+    current_repo_head = _git_output(REPO_ROOT, "rev-parse", "HEAD").strip()
+    if frozen_repo_head != current_repo_head:
+        raise BatchLaneError("source freeze repository revision changed; rerun --phase freeze")
+    current_repo_status = _git_output(REPO_ROOT, "status", "--porcelain=v1")
+    current_repo_status_digest = hashlib.sha256(current_repo_status.encode()).hexdigest()
+    if freeze.get("repo_git_status_sha256") != current_repo_status_digest:
+        raise BatchLaneError(
+            "source freeze repository working tree changed; rerun --phase freeze")
+    if freeze.get("repo_git_diff_sha256") != _git_digest(
+            REPO_ROOT, "diff", "--binary", "HEAD"):
+        raise BatchLaneError(
+            "source freeze repository diff changed; rerun --phase freeze")
+    frozen_orfs_head = str(freeze.get("orfs_git_head") or "")
+    current_orfs_head = _git_output(Path(orfs_root), "rev-parse", "HEAD").strip()
+    if frozen_orfs_head != current_orfs_head:
+        raise BatchLaneError("source freeze ORFS git revision changed; rerun --phase freeze")
+    current_orfs_status = _git_output(Path(orfs_root), "status", "--porcelain=v1")
+    current_orfs_status_digest = hashlib.sha256(current_orfs_status.encode()).hexdigest()
+    if freeze.get("orfs_git_status_sha256") != current_orfs_status_digest:
+        raise BatchLaneError("source freeze ORFS working tree changed; rerun --phase freeze")
+    if freeze.get("orfs_git_diff_sha256") != _git_digest(
+            Path(orfs_root), "diff", "--binary", "HEAD"):
+        raise BatchLaneError("source freeze ORFS diff changed; rerun --phase freeze")
+    frozen_toolchain = freeze.get("toolchain") or {}
+    if expected_manifest is None:
+        if frozen_toolchain.get("status") not in {None, "not_checked"}:
+            raise BatchLaneError(
+                "source freeze has a toolchain binding but replay omitted its manifest")
+    else:
+        current_toolchain = preflight_orfs_toolchain({
+            "orfs_root": str(Path(orfs_root).resolve()),
+            "toolchain_manifest": str(expected_manifest),
+        })
+        if current_toolchain.get("fingerprint") != frozen_toolchain.get("fingerprint"):
+            raise BatchLaneError(
+                "source freeze toolchain fingerprint mismatch; rerun --phase freeze")
+    return freeze
+
+
+def _validate_manifest_source_freeze(manifest: dict) -> dict:
+    """Validate the independent freeze bound to a prepared campaign."""
+    raw_path = manifest.get("source_freeze")
+    if not raw_path:
+        raise BatchLaneError(
+            "campaign manifest has no source freeze; run --phase freeze then prepare")
+    path = Path(str(raw_path)).expanduser().resolve()
+    if manifest.get("source_freeze_sha256") != _sha(path):
+        raise BatchLaneError("campaign source freeze file changed after prepare")
+    try:
+        freeze = json.loads(path.read_text())
+        request = freeze["request"]
+        if not isinstance(request, dict):
+            raise TypeError("request is not an object")
+        params = request["parameterization"]
+        if not isinstance(params, dict):
+            raise TypeError("parameterization is not an object")
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise BatchLaneError("campaign source freeze is malformed") from exc
+    if manifest.get("source_freeze_digest") != freeze.get("freeze_digest"):
+        raise BatchLaneError("campaign manifest/source-freeze digest mismatch")
+    if str(manifest.get("orfs_root")) != str(request.get("orfs_root")):
+        raise BatchLaneError("campaign manifest/source-freeze ORFS root mismatch")
+    if manifest.get("parameterization") != params:
+        raise BatchLaneError("campaign parameterization drifted from source freeze")
+    manifest_ref = _effective_toolchain_manifest(
+        Path(str(manifest["toolchain_manifest"]))
+        if manifest.get("toolchain_manifest") else None)
+    request_ref = request.get("toolchain_manifest")
+    if (str(manifest_ref) if manifest_ref else None) != request_ref:
+        raise BatchLaneError("campaign toolchain manifest drifted from source freeze")
+    return _validate_source_freeze(
+        path, orfs_root=Path(request["orfs_root"]),
+        parameterization=params, toolchain_manifest=manifest_ref)
+
+
+def _bind_source_freeze_manifest(manifest_path: Path, manifest: dict,
+                                 freeze_path: Path) -> dict:
+    """Attach a newly-created freeze to an existing, not-yet-replayed manifest."""
+    freeze_path = Path(freeze_path).resolve()
+    try:
+        freeze = json.loads(freeze_path.read_text())
+        request = freeze["request"]
+    except (OSError, KeyError, json.JSONDecodeError) as exc:
+        raise BatchLaneError("cannot bind malformed source freeze") from exc
+    if str(Path(str(manifest.get("orfs_root"))).resolve()) != request.get("orfs_root"):
+        raise BatchLaneError("existing campaign ORFS root does not match source freeze")
+    if manifest.get("parameterization") != request.get("parameterization"):
+        raise BatchLaneError(
+            "existing campaign parameterization does not match source freeze")
+    existing_ref = manifest.get("toolchain_manifest")
+    frozen_ref = request.get("toolchain_manifest")
+    if (str(Path(str(existing_ref)).expanduser().resolve()) if existing_ref else None) != frozen_ref:
+        raise BatchLaneError(
+            "existing campaign toolchain manifest does not match source freeze")
+    manifest["source_freeze"] = str(freeze_path)
+    manifest["source_freeze_sha256"] = _sha(freeze_path)
+    manifest["source_freeze_digest"] = freeze.get("freeze_digest")
+    _write(manifest_path, manifest)
+    return manifest
 
 
 def preflight_orfs_platform_scope(manifest: dict) -> dict:
@@ -455,7 +804,7 @@ def main(argv=None) -> int:
                           "all phases replay it before EDA execution"))
     ap.add_argument("--staging-db", type=Path, default=None)
     ap.add_argument("--staging-artifacts", type=Path, default=None)
-    ap.add_argument("--phase", choices=("all", "prepare", "heldout", "run", "capture", "graph", "ab", "predict", "report"),
+    ap.add_argument("--phase", choices=("all", "freeze", "prepare", "heldout", "run", "capture", "graph", "ab", "predict", "report"),
                     default="all")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--cpus-per-run", type=int, default=8)
@@ -465,13 +814,13 @@ def main(argv=None) -> int:
     ap.add_argument("--projects", nargs="+", default=None,
                     help="optional absolute project paths to run; all manifest projects otherwise")
     ap.add_argument("--ab-repeats", type=int, default=2)
-    ap.add_argument("--density-before", default="70",
+    ap.add_argument("--density-before", default=None,
                     help="CORE_UTILIZATION baseline for DENSITY_RELIEF arms")
-    ap.add_argument("--density-after", default="35",
+    ap.add_argument("--density-after", default=None,
                     help="CORE_UTILIZATION candidate for DENSITY_RELIEF arms")
-    ap.add_argument("--routing-before", default="0.55",
+    ap.add_argument("--routing-before", default=None,
                     help="ROUTING_LAYER_ADJUSTMENT baseline for routing arms")
-    ap.add_argument("--routing-after", default="0.15",
+    ap.add_argument("--routing-after", default=None,
                     help="ROUTING_LAYER_ADJUSTMENT candidate for routing arms")
     args = ap.parse_args(argv)
     root = enforce_work_root(args.root)
@@ -481,24 +830,80 @@ def main(argv=None) -> int:
     for sub in (root, root / "cases", root / "heldout", root / "tehm_ab"):
         sub.mkdir(parents=True, exist_ok=True)
     manifest_path = root / "campaign_manifest.json"
+    freeze_path = root / "source_freeze.json"
+    orfs_root = args.orfs_root.resolve()
+    existing_manifest = _load(manifest_path)
+    existing_params = (existing_manifest.get("parameterization")
+                       if isinstance(existing_manifest.get("parameterization"), dict)
+                       else {})
+    def _arg_or_existing(name: str, default: str) -> str:
+        value = getattr(args, name)
+        if value is not None:
+            return str(value)
+        return str(existing_params.get(name, default))
+
+    toolchain_arg = args.toolchain_manifest.resolve() if args.toolchain_manifest else None
+    if toolchain_arg is None and args.phase in {"freeze", "prepare"}:
+        old_ref = existing_manifest.get("toolchain_manifest")
+        if old_ref:
+            toolchain_arg = Path(str(old_ref)).expanduser().resolve()
+    toolchain_manifest = _effective_toolchain_manifest(toolchain_arg)
+    params = _parameterization(
+        density_before=_arg_or_existing("density_before", "70"),
+        density_after=_arg_or_existing("density_after", "35"),
+        routing_before=_arg_or_existing("routing_before", "0.55"),
+        routing_after=_arg_or_existing("routing_after", "0.15"))
+
+    if args.phase in ("all", "freeze"):
+        freeze = build_source_freeze(
+            root, orfs_root,
+            density_before=params["density_before"],
+            density_after=params["density_after"],
+            routing_before=params["routing_before"],
+            routing_after=params["routing_after"],
+            toolchain_manifest=toolchain_manifest)
+        if args.phase == "freeze":
+            # A freeze can be added to a prior diagnostic campaign without
+            # rematerializing or rerunning any project.  Refuse to bind it if
+            # the existing manifest describes a different parameterization.
+            existing = _load(manifest_path)
+            if existing:
+                _bind_source_freeze_manifest(manifest_path, existing, freeze_path)
+            return 0
+    elif args.phase in ("prepare",):
+        if not freeze_path.is_file():
+            # Keep the historical one-command prepare entrypoint usable while
+            # still freezing inputs before _materialize creates any project.
+            build_source_freeze(
+                root, orfs_root,
+                density_before=params["density_before"],
+                density_after=params["density_after"],
+                routing_before=params["routing_before"],
+                routing_after=params["routing_after"],
+                toolchain_manifest=toolchain_manifest)
+        else:
+            _validate_source_freeze(
+                freeze_path, orfs_root=orfs_root,
+                parameterization=params,
+                toolchain_manifest=toolchain_manifest)
 
     if args.phase in ("all", "prepare"):
         manifest = prepare(
-            root, args.orfs_root.resolve(),
-            toolchain_manifest=(args.toolchain_manifest.resolve()
-                                 if args.toolchain_manifest else None),
-            density_before=str(args.density_before),
-            density_after=str(args.density_after),
-            routing_before=str(args.routing_before),
-            routing_after=str(args.routing_after))
+            root, orfs_root, toolchain_manifest=toolchain_manifest,
+            density_before=params["density_before"],
+            density_after=params["density_after"],
+            routing_before=params["routing_before"],
+            routing_after=params["routing_after"],
+            source_freeze=freeze_path)
     else:
         manifest = _load(manifest_path)
         if not manifest:
             raise RuntimeError(f"manifest missing: {manifest_path}")
+        _validate_manifest_source_freeze(manifest)
     if args.phase == "prepare":
         return 0
     if args.phase == "heldout":
-        refresh_heldout(root, args.orfs_root.resolve(), manifest)
+        refresh_heldout(root, Path(manifest["orfs_root"]).resolve(), manifest)
         return 0
     if args.phase in ("all", "run"):
         run_projects(root, manifest, workers=max(1, args.workers),
@@ -534,7 +939,17 @@ def main(argv=None) -> int:
 def prepare(root: Path, orfs_root: Path, *,
             toolchain_manifest: Path | None = None,
             density_before: str = "70", density_after: str = "35",
-            routing_before: str = "0.55", routing_after: str = "0.15") -> dict:
+            routing_before: str = "0.55", routing_after: str = "0.15",
+            source_freeze: Path | None = None) -> dict:
+    if source_freeze is None:
+        raise BatchLaneError(
+            "source freeze is required before prepare; run --phase freeze first")
+    params = _parameterization(
+        density_before=density_before, density_after=density_after,
+        routing_before=routing_before, routing_after=routing_after)
+    frozen = _validate_source_freeze(
+        source_freeze, orfs_root=orfs_root, parameterization=params,
+        toolchain_manifest=toolchain_manifest)
     if toolchain_manifest is not None:
         # Bind the lock before materializing any case.  A malformed or drifting
         # manifest is a setup error, not an observation that can be quarantined
@@ -580,12 +995,10 @@ def prepare(root: Path, orfs_root: Path, *,
         "campaign_version": VERSION, "orfs_root": str(orfs_root),
         "toolchain_manifest": (str(toolchain_manifest.resolve())
                                 if toolchain_manifest is not None else None),
-        "parameterization": {
-            "density_before": str(density_before),
-            "density_after": str(density_after),
-            "routing_before": str(routing_before),
-            "routing_after": str(routing_after),
-        },
+        "source_freeze": str(Path(source_freeze).resolve()),
+        "source_freeze_sha256": _sha(source_freeze),
+        "source_freeze_digest": frozen.get("freeze_digest"),
+        "parameterization": params,
         "items": items, "transition_target": len(items),
         "storage_policy": storage_policy(root),
         "firewall": {"training_lineages": sorted({x["lineage_id"] for x in items}),
@@ -1262,6 +1675,9 @@ def report(root: Path, manifest: dict, db_path: Path) -> dict:
     funnel = evaluate_campaign(conn, funnel_cases)
     conn.close()
     result = {"campaign_version": VERSION, "captured": len(rows),
+              "source_freeze": manifest.get("source_freeze"),
+              "source_freeze_sha256": manifest.get("source_freeze_sha256"),
+              "source_freeze_digest": manifest.get("source_freeze_digest"),
               "canonical_transition_total": total, "strata": strata,
               "heldout": manifest["heldout"], "firewall": manifest["firewall"],
               "funnel": funnel}
