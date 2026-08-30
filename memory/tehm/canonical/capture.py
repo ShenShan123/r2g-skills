@@ -74,31 +74,57 @@ class ExecutionRecord:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExecutionRecord":
+        if type(data) is not dict:
+            raise ExecutionRecordError("ExecutionRecord must be a mapping")
         missing = [k for k in _REQUIRED_RECORD_KEYS if not data.get(k)]
         if missing:
             raise ExecutionRecordError(
                 f"ExecutionRecord missing required keys: {missing}")
+        if type(data["domain"]) is not str or not data["domain"].strip():
+            raise ExecutionRecordError("ExecutionRecord.domain must be a non-empty string")
+        if "record_id" in data and data["record_id"] is not None \
+                and type(data["record_id"]) is not str:
+            raise ExecutionRecordError("ExecutionRecord.record_id must be a string or None")
+        for key in ("before", "action", "after", "observation_delta",
+                    "verification"):
+            if type(data[key]) is not dict:
+                raise ExecutionRecordError(
+                    f"ExecutionRecord.{key} must be a mapping")
+        if "episode" in data and data["episode"] is not None \
+                and type(data["episode"]) is not dict:
+            raise ExecutionRecordError("ExecutionRecord.episode must be a mapping or None")
         record = cls(
-            record_id=str(data.get("record_id") or ""),
-            domain=str(data["domain"]),
-            before=dict(data["before"]),
-            action=dict(data["action"]),
-            after=dict(data["after"]),
-            observation_delta=dict(data["observation_delta"]),
-            verification=dict(data["verification"]),
+            record_id=data.get("record_id") or "",
+            domain=data["domain"],
+            before=data["before"],
+            action=data["action"],
+            after=data["after"],
+            observation_delta=data["observation_delta"],
+            verification=data["verification"],
             project_id=data.get("project_id"),
             design_id=data.get("design_id"),
             lineage_id=data.get("lineage_id"),
             repository_ref=data.get("repository_ref"),
-            episode=dict(data["episode"]) if data.get("episode") else None,
+            episode=data["episode"] if data.get("episode") else None,
         )
         record.validate()
         return record
 
     def validate(self) -> None:
+        if type(self.domain) is not str or not self.domain.strip():
+            raise ExecutionRecordError("ExecutionRecord.domain must be a non-empty string")
+        if type(self.record_id) is not str:
+            raise ExecutionRecordError("ExecutionRecord.record_id must be a string")
         for side, content in (("before", self.before), ("after", self.after)):
+            if type(content) is not dict:
+                raise ExecutionRecordError(f"{side} must be a mapping")
             if "reports" not in content:
                 raise ExecutionRecordError(f"{side}.reports is required")
+        for name, content in (("action", self.action),
+                              ("observation_delta", self.observation_delta),
+                              ("verification", self.verification)):
+            if type(content) is not dict:
+                raise ExecutionRecordError(f"{name} must be a mapping")
         if "config" not in self.before and "config" not in self.after:
             raise ExecutionRecordError("at least one state must carry config")
         # Fail fast at parse time on malformed action / delta / verification.
@@ -194,6 +220,12 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
     """Capture one execution record into the canonical store + views."""
     from tehm.db import now_local
 
+    if not isinstance(record, ExecutionRecord):
+        raise ExecutionRecordError("capture requires an ExecutionRecord")
+    # Validate before writing graph artifacts or canonical rows.  This keeps
+    # malformed typed evidence out of both the immutable store and its shadow
+    # projections, including records constructed directly by adapters.
+    record.validate()
     if not dataset_campaign_id:
         raise ValueError("dataset_campaign_id is required")
     if type(dataset_split) is not str or dataset_split not in SPLITS:

@@ -5123,3 +5123,20 @@ lifecycle、六项 promotion gate 或 production runtime。
 list/tuple、非空字符串且无重复；任一错类型、空值或重复输入直接返回空覆盖，不会
 形成 learner support。新增数字/重复 source 回归；该修复只收紧 causal shadow
 evidence firewall，不改变 canonical、lifecycle、promotion gate 或 production runtime。
+
+### 2026-08-30 canonical capture typed ingestion 与迁移兼容
+
+继续沿 canonical evidence → causal replay 的依赖顺序审计 capture 入口，发现
+`Action.from_dict()`、`ObservationDelta.from_dict()` 与 `VerifierSnapshot.from_dict()`
+会把数字、列表或缺失字段隐式转换成合法对象；`ExecutionRecord.from_dict()` 也可能把
+pair-list 转成 mapping。现在 capture/staging 在任何 artifact、canonical row 或 view
+写入前执行严格 typed ingestion：record 的 state/payload section 必须是 object；action
+的 domain/family/payload、delta 的 failure/list/object 字段、verifier 的 enum/list/
+mapping 字段均拒绝错型；action 必需 key 和 delta 的 `original_failure` 缺失直接
+fail-closed。早期 verifier 记录省略 `verdict`/`oracle_type`/`confidence_tier` 的既有
+格式继续迁移为 `UNKNOWN`/`H` 默认，因此不会破坏历史 canonical replay。
+
+新增 malformed section、错型字段和缺失 required key 回归；capture 会在副作用之前
+验证，保证坏证据不会留下 artifact/canonical/shadow projection。定向 capture/causal
+回归为 `72 passed`；随后完整 `memory/tests` 为 `708 passed, 1 warning`；该修复只收紧 evidence ingestion，不改变 canonical authority、
+Parametric shadow-only、六项 promotion gate 或 production runtime。

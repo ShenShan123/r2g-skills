@@ -170,3 +170,59 @@ def test_invalid_verification_rejected(sample_record_dict):
     import pytest
     with pytest.raises(ValueError):
         ExecutionRecord.from_dict(bad)
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "value"),
+    [
+        ("action", "domain", 7),
+        ("action", "transformation_family", ["not", "a", "string"]),
+        ("action", "payload", ["not", "a", "mapping"]),
+        ("observation_delta", "original_failure", 1),
+        ("observation_delta", "created_regressions", "not-a-list"),
+        ("observation_delta", "experiment_kind", 3),
+        ("verification", "oracle_type", 9),
+        ("verification", "scope", {"not": "a string"}),
+        ("verification", "evidence_refs", "not-a-list"),
+        ("verification", "tool_versions", ["not", "a", "mapping"]),
+        ("__record__", "domain", 7),
+        ("__record__", "record_id", 7),
+    ],
+)
+def test_canonical_capture_rejects_malformed_typed_fields(
+        sample_record_dict, section, key, value):
+    """Capture must not coerce malformed evidence into canonical memory."""
+    bad = deepcopy_dict(sample_record_dict)
+    if section == "__record__":
+        bad[key] = value
+    else:
+        bad[section][key] = value
+    with pytest.raises(ValueError):
+        ExecutionRecord.from_dict(bad)
+
+
+@pytest.mark.parametrize(
+    ("section", "key"),
+    [
+        ("action", "domain"),
+        ("action", "transformation_family"),
+        ("action", "payload"),
+        ("observation_delta", "original_failure"),
+    ],
+)
+def test_canonical_capture_rejects_missing_required_typed_fields(
+        sample_record_dict, section, key):
+    bad = deepcopy_dict(sample_record_dict)
+    del bad[section][key]
+    with pytest.raises(ValueError):
+        ExecutionRecord.from_dict(bad)
+
+
+@pytest.mark.parametrize("section", [
+    "before", "action", "after", "observation_delta", "verification",
+])
+def test_canonical_capture_rejects_non_mapping_sections(sample_record_dict, section):
+    bad = deepcopy_dict(sample_record_dict)
+    bad[section] = [("not", "a mapping")]
+    with pytest.raises(ValueError):
+        ExecutionRecord.from_dict(bad)

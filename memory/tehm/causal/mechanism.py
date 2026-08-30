@@ -113,8 +113,11 @@ def _validate_delta_payload(delta: dict) -> ObservationDelta:
 
 def _validate_verifier_payload(verifier: dict) -> VerifierSnapshot:
     """Validate verifier enums and container types without inventing defaults."""
-    for name in ("verdict", "oracle_type", "confidence_tier"):
-        _non_empty_string(verifier.get(name, _MISSING), f"verifier.{name}")
+    for name in ("verdict", "oracle_type"):
+        if name in verifier:
+            _non_empty_string(verifier[name], f"verifier.{name}")
+    if "confidence_tier" in verifier:
+        _non_empty_string(verifier["confidence_tier"], "verifier.confidence_tier")
     if "scope" in verifier:
         _non_empty_string(verifier["scope"], "verifier.scope")
     if "extractor_version" in verifier:
@@ -127,10 +130,10 @@ def _validate_verifier_payload(verifier: dict) -> VerifierSnapshot:
             and type(verifier["tool_versions"]) is not dict:
         raise ValueError("transition facts verifier.tool_versions must be an object or null")
     typed = VerifierSnapshot(
-        verdict=verifier["verdict"],
-        oracle_type=verifier["oracle_type"],
+        verdict=verifier.get("verdict", "UNKNOWN"),
+        oracle_type=verifier.get("oracle_type", "UNKNOWN"),
         scope=verifier.get("scope", "unknown_scope"),
-        confidence_tier=verifier["confidence_tier"],
+        confidence_tier=verifier.get("confidence_tier", "H"),
         obligation_coverage=verifier.get("obligation_coverage"),
         oracle_complete=verifier.get("oracle_complete"),
         evidence_refs=evidence_refs,

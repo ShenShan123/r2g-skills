@@ -41,9 +41,11 @@ class Action:
     payload: dict = field(default_factory=dict)
 
     def validate(self) -> None:
-        if not self.domain or not self.transformation_family:
+        if type(self.domain) is not str or not self.domain.strip():
             raise ValueError("action.domain and action.transformation_family are required")
-        if not self.payload:
+        if type(self.transformation_family) is not str or not self.transformation_family.strip():
+            raise ValueError("action.domain and action.transformation_family are required")
+        if type(self.payload) is not dict or not self.payload:
             raise ValueError("action.payload must be a non-empty dict (design doc H1)")
 
     def to_dict(self) -> dict:
@@ -55,10 +57,16 @@ class Action:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Action":
+        if type(data) is not dict:
+            raise ValueError("action must be a mapping")
+        required = ("domain", "transformation_family", "payload")
+        missing = [key for key in required if key not in data]
+        if missing:
+            raise ValueError(f"action missing required keys: {missing}")
         obj = cls(
-            domain=str(data.get("domain", "unknown")),
-            transformation_family=str(data.get("transformation_family", "")),
-            payload=dict(data.get("payload", {})),
+            domain=data["domain"],
+            transformation_family=data["transformation_family"],
+            payload=data["payload"],
         )
         obj.validate()
         return obj
@@ -80,6 +88,8 @@ class ObservationDelta:
     utility_verdict: str = "UNKNOWN"       # physical/Pareto result, separate from oracle
 
     def validate(self) -> None:
+        if type(self.original_failure) is not str:
+            raise ValueError("original_failure must be a string")
         if self.original_failure not in ORIGINAL_FAILURE_STATES:
             raise ValueError(
                 f"original_failure must be one of {ORIGINAL_FAILURE_STATES}, "
@@ -88,10 +98,18 @@ class ObservationDelta:
                           ("failing_tests", self.failing_tests)):
             if val is not None and not isinstance(val, dict):
                 raise ValueError(f"{name} must be a dict or None")
+        for name, val in (("created_regressions", self.created_regressions),
+                          ("newly_observed_failures", self.newly_observed_failures)):
+            if type(val) is not list:
+                raise ValueError(f"{name} must be a list")
+        if type(self.experiment_kind) is not str:
+            raise ValueError("experiment_kind must be a string")
         if self.experiment_kind not in EXPERIMENT_KINDS:
             raise ValueError(
                 f"experiment_kind must be one of {EXPERIMENT_KINDS}, "
                 f"got {self.experiment_kind!r}")
+        if type(self.utility_verdict) is not str:
+            raise ValueError("utility_verdict must be a string")
         if self.utility_verdict not in UTILITY_VERDICTS:
             raise ValueError(
                 f"utility_verdict must be one of {UTILITY_VERDICTS}, "
@@ -110,14 +128,27 @@ class ObservationDelta:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ObservationDelta":
+        if type(data) is not dict:
+            raise ValueError("observation_delta must be a mapping")
+        if "original_failure" not in data:
+            raise ValueError("observation_delta missing required key: original_failure")
+        for key in ("first_divergence", "failing_tests"):
+            if key in data and data[key] is not None and type(data[key]) is not dict:
+                raise ValueError(f"observation_delta.{key} must be a dict or None")
+        for key in ("created_regressions", "newly_observed_failures"):
+            if key in data and type(data[key]) is not list:
+                raise ValueError(f"observation_delta.{key} must be a list")
+        for key in ("experiment_kind", "utility_verdict"):
+            if key in data and type(data[key]) is not str:
+                raise ValueError(f"observation_delta.{key} must be a string")
         obj = cls(
-            original_failure=str(data.get("original_failure", "UNKNOWN")),
+            original_failure=data["original_failure"],
             first_divergence=data.get("first_divergence"),
             failing_tests=data.get("failing_tests"),
-            created_regressions=list(data.get("created_regressions", [])),
-            newly_observed_failures=list(data.get("newly_observed_failures", [])),
-            experiment_kind=str(data.get("experiment_kind", "UNKNOWN")),
-            utility_verdict=str(data.get("utility_verdict", "UNKNOWN")),
+            created_regressions=data.get("created_regressions", []),
+            newly_observed_failures=data.get("newly_observed_failures", []),
+            experiment_kind=data.get("experiment_kind", "UNKNOWN"),
+            utility_verdict=data.get("utility_verdict", "UNKNOWN"),
         )
         obj.validate()
         return obj

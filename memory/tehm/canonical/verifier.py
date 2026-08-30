@@ -76,6 +76,13 @@ class VerifierSnapshot:
     toolchain_binding: dict | None = None
 
     def validate(self) -> None:
+        for name, value in (("verdict", self.verdict),
+                            ("oracle_type", self.oracle_type),
+                            ("scope", self.scope),
+                            ("confidence_tier", self.confidence_tier),
+                            ("extractor_version", self.extractor_version)):
+            if type(value) is not str:
+                raise ValueError(f"{name} must be a string")
         if self.verdict not in VERDICTS:
             raise ValueError(f"verdict must be one of {VERDICTS}, got {self.verdict!r}")
         if self.oracle_type not in ORACLE_TYPES:
@@ -94,6 +101,10 @@ class VerifierSnapshot:
                     f"got {coverage!r}")
         if self.oracle_complete is not None and not isinstance(self.oracle_complete, bool):
             raise ValueError("oracle_complete must be bool or None")
+        if type(self.evidence_refs) is not list:
+            raise ValueError("evidence_refs must be a list")
+        if self.tool_versions is not None and type(self.tool_versions) is not dict:
+            raise ValueError("tool_versions must be a mapping or None")
         for name, value in (("input_binding", self.input_binding),
                             ("timing_contract", self.timing_contract),
                             ("full_oracle", self.full_oracle),
@@ -128,15 +139,29 @@ class VerifierSnapshot:
 
     @classmethod
     def from_dict(cls, data: dict) -> "VerifierSnapshot":
+        if type(data) is not dict:
+            raise ValueError("verification must be a mapping")
+        # The first canonical capture format allowed all verifier identity
+        # fields to be omitted and supplied UNKNOWN/H defaults.  Preserve
+        # that migration behavior, but reject every field when it is present
+        # with the wrong type.
+        for key in ("verdict", "oracle_type", "confidence_tier"):
+            if key in data and type(data[key]) is not str:
+                raise ValueError(f"verification.{key} must be a string")
+        if "evidence_refs" in data and type(data["evidence_refs"]) is not list:
+            raise ValueError("verification.evidence_refs must be a list")
+        for key in ("scope", "extractor_version"):
+            if key in data and type(data[key]) is not str:
+                raise ValueError(f"verification.{key} must be a string")
         obj = cls(
-            verdict=str(data.get("verdict", "UNKNOWN")),
-            oracle_type=str(data.get("oracle_type", "UNKNOWN")),
-            scope=str(data.get("scope", "unknown_scope")),
-            confidence_tier=str(data.get("confidence_tier", "H")),
+            verdict=data.get("verdict", "UNKNOWN"),
+            oracle_type=data.get("oracle_type", "UNKNOWN"),
+            scope=data.get("scope", "unknown_scope"),
+            confidence_tier=data.get("confidence_tier", "H"),
             obligation_coverage=data.get("obligation_coverage"),
             oracle_complete=data.get("oracle_complete"),
-            evidence_refs=list(data.get("evidence_refs", [])),
-            extractor_version=str(data.get("extractor_version", "verifier-v0.1")),
+            evidence_refs=data.get("evidence_refs", []),
+            extractor_version=data.get("extractor_version", "verifier-v0.1"),
             tool_versions=data.get("tool_versions"),
             input_binding=data.get("input_binding"),
             timing_contract=data.get("timing_contract"),
