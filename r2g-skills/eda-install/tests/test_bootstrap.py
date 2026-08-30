@@ -232,6 +232,50 @@ def test_env_sh_copies_identical():
     )
 
 
+def test_env_sh_preserves_explicit_caller_toolchain_overrides(tmp_path):
+    """An explicit tool path must survive all sourced host environment layers.
+
+    The production machine has a /opt/openroad_tools_env.sh which exports a
+    different Yosys.  This regression uses a temporary copy of the resolver so
+    the same overwrite is reproduced on every test host, then verifies that
+    the caller's ORFS/OpenROAD/Yosys pins remain authoritative.
+    """
+    envsh = tmp_path / "_env.sh"
+    source = ENV_COPIES[0].read_text()
+    host_env = tmp_path / "host-env.sh"
+    host_openroad = tmp_path / "host-openroad"
+    host_yosys = tmp_path / "host-yosys"
+    for path, text in ((host_openroad, "#!/bin/sh\necho host-openroad\n"),
+                       (host_yosys, "#!/bin/sh\necho host-yosys\n")):
+        path.write_text(text)
+        path.chmod(0o755)
+    host_env.write_text(
+        f'export OPENROAD_EXE="{host_openroad}"\n'
+        f'export YOSYS_EXE="{host_yosys}"\n')
+    envsh.write_text(source.replace("/opt/openroad_tools_env.sh", str(host_env)))
+
+    orfs = tmp_path / "orfs"
+    (orfs / "flow").mkdir(parents=True)
+    (orfs / "flow" / "Makefile").write_text("all:\n")
+    caller_openroad = tmp_path / "caller-openroad"
+    caller_yosys = tmp_path / "caller-yosys"
+    for path in (caller_openroad, caller_yosys):
+        path.write_text("#!/bin/sh\necho caller\n")
+        path.chmod(0o755)
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(tmp_path / "home"),
+        "ORFS_ROOT": str(orfs),
+        "OPENROAD_EXE": str(caller_openroad),
+        "YOSYS_EXE": str(caller_yosys),
+    }
+    script = (f'source "{envsh}" >/dev/null 2>&1; '
+              'printf "%s\\n%s\\n" "$OPENROAD_EXE" "$YOSYS_EXE"')
+    result = subprocess.run(["bash", "-c", script], env=env,
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.splitlines() == [str(caller_openroad), str(caller_yosys)]
+
+
 # --- conda-staged PDK autodetect ----------------------------------------------
 
 def test_env_sh_detects_conda_staged_pdk(tmp_path):

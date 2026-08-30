@@ -50,6 +50,29 @@ training receipts、P0 dependency-free regression smoke、H1–H12/A1 审计；H
 H11 均为实际检查而非 N/A。pytest 仍因当前环境缺少依赖未计入该 development
 freeze。
 
+### 工具链复现入口（2026-08-30）
+
+TEHM 后续 ORFS/RTL/graph 执行统一使用 R2G 的 bootstrap 和同一份用户目录 pin，
+不再让每个 flow 从 `/usr/bin`、`/opt` 或 PATH 自行猜工具：
+
+```bash
+export R2G_PREFIX=/data1/zhangdy/Tools/tehm-toolchain
+export ORFS_ROOT=/data1/zhangdy/Tools/OpenROAD-flow-scripts
+bash r2g-skills/eda-install/bootstrap.sh --dry-run --prefix "$R2G_PREFIX"
+```
+
+确认计划后才执行安装；安装生成的 `references/env.local.sh` 通过
+`R2G_ENV_FILE` 作为唯一运行时 pin。四个 R2G skill 的 `_env.sh` 已保持字节一致，
+解析顺序为显式 pin ＞用户/conda/ORFS 候选 ＞ PATH/宿主机回退，且用户本地 PDK
+优先于 `/opt/pdks`。TEHM 的 `preflight_orfs_toolchain()` 仍会对正式 evidence
+重放 ORFS root、工具版本、SHA256 和 capability；`/usr/bin`/`/opt` 只能作为显式
+`bound_external` 诊断，不能进入 `bound_internal` evidence。
+
+当前 R2G bootstrap 的下载 URL、ORFS 默认分支及部分 conda/pip spec 尚未全部锁定，
+所以开源复现还需要发布 TEHM toolchain manifest（ORFS commit、工具/PDK 版本与
+SHA256、capability probes）。个人目录用于缓存和按 manifest 分目录安装，仓库只发布
+manifest、脚本和验证结果，不提交大型二进制。
+
 ### C4/C5 RTL Asset Memory shadow（2026-08-26）
 
 已用 `req_ack_bug` / `req_ack_bug2` 两个独立 training lineage 生成真实

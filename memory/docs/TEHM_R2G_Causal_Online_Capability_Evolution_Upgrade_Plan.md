@@ -4830,3 +4830,42 @@ fail→pass causal 或 utility evidence。
 任何 promotion gate，不写 authority/canonical promotion，也不允许 Parametric
 进入 production runtime。下一步仍是取得自有 ORFS 树内匹配的 OpenROAD，再重新
 冻结 source/toolchain/oracle 后运行有界单设计 strict smoke。
+
+### 2026-08-30 R2G 工具链解析收敛与可复现入口
+
+针对同一命令显式指定自有 Yosys 却被 `eda-install` 的环境解析改写为
+`/opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys` 的问题，重新检查了
+`r2g-skills/eda-install/bootstrap.sh --dry-run`、`detect_env.sh` 和四个 skill 的
+`scripts/flow/_env.sh`。修复前四份 `_env.sh` 并不一致，且 system-wide
+`/opt/openroad_tools_env.sh` 的变量会挡住用户 conda/ORFS 候选；这正是“工具链调用
+混乱”的来源之一。
+
+现在四份 resolver 已恢复字节一致，并统一采用以下顺序：调用方显式 pin ＞
+env-file/ORFS 提供的 pin ＞有序的用户本地、conda、ORFS tree 候选 ＞ PATH/宿主机
+候选。host-wide env 只提供最后回退；用户本地/conda PDK 也先于 `/opt/pdks`。新增
+回归覆盖显式 `OPENROAD_EXE`/`YOSYS_EXE` 在 host env 覆盖下仍保持不变，以及 relocated
+conda 工具和 PDK 优先于 `/usr/bin`、`/opt`；`r2g-skills/eda-install/tests/test_bootstrap.py`
+当前为 `16 passed`，四份 resolver 的 MD5 相同。
+
+因此后续开源复现的操作入口应固定为 R2G bootstrap，而不是让各 flow 自己猜路径：
+
+```bash
+export R2G_PREFIX=/data1/zhangdy/Tools/tehm-toolchain
+export ORFS_ROOT=/data1/zhangdy/Tools/OpenROAD-flow-scripts
+bash r2g-skills/eda-install/bootstrap.sh --dry-run --prefix "$R2G_PREFIX"
+# 复核计划后才执行安装：
+bash r2g-skills/eda-install/bootstrap.sh --yes --prefix "$R2G_PREFIX"
+```
+
+安装完成后必须把生成的 `references/env.local.sh` 作为唯一运行时 pin，所有
+`run_orfs_*`、signoff、graph 和 RTL frontend 都通过同一 `R2G_ENV_FILE` 进入；正式
+evidence 仍需 TEHM `preflight_orfs_toolchain()` 重放路径、版本、SHA256、ORFS root
+和 capability。`/usr/bin` 或 `/opt` 只有在与冻结 manifest 完全相同并被显式绑定时
+才能作为诊断工具，不能因“能启动”而成为 `bound_internal`。
+
+R2G bootstrap 本身仍不是最终的不可变发布锁：Miniconda URL、ORFS clone 默认分支及
+conda/pip spec 当前未全部固定。下一项工具链升级应增加可发布的 TEHM manifest，至少
+锁定 ORFS commit、OpenROAD/Yosys/前端版本与 SHA256、PDK/规则包及 capability probes；
+个人目录只保存下载缓存和按 manifest 分目录的安装，不把二进制提交进仓库。这样可以
+兼顾“只安装一次、多人复用”和“开源后可从 manifest 重建”，同时不让系统目录污染
+canonical/authority evidence。

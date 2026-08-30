@@ -10,8 +10,11 @@
 #   2. Value from a user env file ($R2G_ENV_FILE if set, else skipped)
 #   3. Value from a user env file shipped inside the skill (references/env.local.sh)
 #   4. Value sourced from $ORFS_ROOT/env.sh (if ORFS_ROOT found)
-#   5. Value sourced from /opt/openroad_tools_env.sh (if present)
-#   6. Autodetected path: `command -v <tool>` or well-known install locations
+#   5. Ordered user-local/conda/ORFS candidates
+#   6. PATH and host-wide candidates (`/opt`/`/usr/bin`) as final fallback
+#
+# /opt/openroad_tools_env.sh is sourced only to expose a host fallback. It may
+# not override values from steps 1-4, and it cannot outrank user-local tools.
 #
 # After sourcing, these variables are set (and exported) when discoverable:
 #   ORFS_ROOT        — path to the OpenROAD-flow-scripts checkout (must contain flow/)
@@ -36,6 +39,17 @@ _r2g_saved_opts="$-"
 set +eu  # tolerate unset vars and detect misses from sourced snippets
 _R2G_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _R2G_SKILL_DIR="$(cd "$_R2G_ENV_DIR/../.." && pwd)"
+
+# Preserve true caller overrides across sourced environment scripts.  The
+# documented precedence says an exported caller value wins, but historically
+# /opt/openroad_tools_env.sh could overwrite KLAYOUT_CMD/OPENROAD_EXE after the
+# fact, making hermetic checks silently run the host tools instead of their
+# requested binaries.
+declare -A _r2g_caller_env=()
+for _r2g_var in ORFS_ROOT OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EXE \
+                STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT SKY130A_DIR; do
+  [[ -n "${!_r2g_var:-}" ]] && _r2g_caller_env["$_r2g_var"]="${!_r2g_var}"
+done
 
 # --- 1. User-provided env snippets ---------------------------------------
 if [[ -n "${R2G_ENV_FILE:-}" && -f "$R2G_ENV_FILE" ]]; then
@@ -88,26 +102,44 @@ if [[ -n "${ORFS_ROOT:-}" ]]; then
   fi
 fi
 
+# Remember values supplied by the caller, env file, or ORFS before consulting
+# the host-wide environment.  The latter is only a fallback; it must not
+# override a user-local conda/toolchain installation.
+declare -A _r2g_pre_system_env=()
+for _r2g_var in ORFS_ROOT OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EXE \
+                STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT SKY130A_DIR; do
+  [[ -n "${!_r2g_var:-}" ]] && _r2g_pre_system_env["$_r2g_var"]="${!_r2g_var}"
+done
+
 # --- 3. System-wide env script (if any) ----------------------------------
 if [[ -f /opt/openroad_tools_env.sh ]]; then
   # shellcheck disable=SC1091
   source /opt/openroad_tools_env.sh
 fi
 
+for _r2g_var in "${!_r2g_caller_env[@]}"; do
+  export "$_r2g_var=${_r2g_caller_env[$_r2g_var]}"
+done
+for _r2g_var in "${!_r2g_pre_system_env[@]}"; do
+  [[ -n "${_r2g_caller_env[$_r2g_var]:-}" ]] && continue
+  export "$_r2g_var=${_r2g_pre_system_env[$_r2g_var]}"
+done
+for _r2g_var in ORFS_ROOT OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EXE \
+                STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT SKY130A_DIR; do
+  [[ -n "${_r2g_caller_env[$_r2g_var]:-}" || -n "${_r2g_pre_system_env[$_r2g_var]:-}" ]] && continue
+  unset "$_r2g_var"
+done
+
 # --- 4. Autodetect each tool binary --------------------------------------
 _r2g_detect() {
-  # Sets $1 to first hit of: $1 (if already set) > `command -v $2` > candidate list
+  # Sets $1 to first hit of: explicit value > ordered candidate list > PATH.
+  # Candidate paths put user-local/conda/ORFS binaries ahead of host defaults;
+  # callers that want another executable must pin it explicitly.
   local var="$1"; shift
   local primary="$1"; shift
   local current="${!var:-}"
   if [[ -n "$current" && -x "$current" ]]; then
     export "$var=$current"
-    return 0
-  fi
-  local hit
-  hit="$(command -v "$primary" 2>/dev/null || true)"
-  if [[ -n "$hit" ]]; then
-    export "$var=$hit"
     return 0
   fi
   local cand
@@ -117,6 +149,12 @@ _r2g_detect() {
       return 0
     fi
   done
+  local hit
+  hit="$(command -v "$primary" 2>/dev/null || true)"
+  if [[ -n "$hit" ]]; then
+    export "$var=$hit"
+    return 0
+  fi
   return 1
 }
 
@@ -165,20 +203,30 @@ _r2g_detect VERILATOR_EXE verilator  \
 _r2g_detect KLAYOUT_CMD   klayout    \
   /usr/local/bin/klayout /usr/bin/klayout "$_r2g_conda_bin/klayout"
 
+# The host environment script exports its distribution Magic explicitly.  A
+# compatible user-local build must outrank that autodetected system default,
+# while a true caller override (restored above) still wins.
+if [[ -z "${_r2g_caller_env[MAGIC_EXE]:-}" && -x "$HOME/.local/bin/magic" ]]; then
+  export MAGIC_EXE="$HOME/.local/bin/magic"
+fi
 _r2g_detect MAGIC_EXE     magic      \
-  "$_r2g_conda_bin/magic" /usr/local/bin/magic /usr/bin/magic
+  "$HOME/.local/bin/magic" "$_r2g_conda_bin/magic" /usr/local/bin/magic /usr/bin/magic
 
 # Netgen ships under several names; try each in turn
 if [[ -z "${NETGEN_EXE:-}" ]]; then
+  if [[ -x "$HOME/.local/bin/netgen" ]]; then
+    export NETGEN_EXE="$HOME/.local/bin/netgen"
+  fi
+  [[ -z "${NETGEN_EXE:-}" && -n "$_r2g_conda_bin" && -x "$_r2g_conda_bin/netgen-lvs" ]] && export NETGEN_EXE="$_r2g_conda_bin/netgen-lvs"
+  [[ -z "${NETGEN_EXE:-}" && -n "$_r2g_conda_bin" && -x "$_r2g_conda_bin/netgen" ]] && export NETGEN_EXE="$_r2g_conda_bin/netgen"
   for _cand in netgen-lvs netgen; do
+    [[ -n "${NETGEN_EXE:-}" ]] && break
     if _hit="$(command -v "$_cand" 2>/dev/null)"; then
       if [[ -n "$_hit" ]]; then export NETGEN_EXE="$_hit"; break; fi
     fi
   done
 fi
 : "${NETGEN_EXE:=}"
-[[ -z "$NETGEN_EXE" && -n "$_r2g_conda_bin" && -x "$_r2g_conda_bin/netgen-lvs" ]] && export NETGEN_EXE="$_r2g_conda_bin/netgen-lvs"
-[[ -z "$NETGEN_EXE" && -n "$_r2g_conda_bin" && -x "$_r2g_conda_bin/netgen" ]] && export NETGEN_EXE="$_r2g_conda_bin/netgen"
 [[ -z "$NETGEN_EXE" && -x /usr/bin/netgen-lvs ]] && export NETGEN_EXE=/usr/bin/netgen-lvs
 [[ -z "$NETGEN_EXE" && -x /usr/local/bin/netgen ]] && export NETGEN_EXE=/usr/local/bin/netgen
 
@@ -190,12 +238,6 @@ if [[ -z "${STA_EXE:-}" ]]; then
 fi
 
 # --- 5. PDK autodetect ---------------------------------------------------
-if [[ -z "${PDK_ROOT:-}" ]]; then
-  for _p in /opt/pdks "$HOME/pdks" /usr/local/share/pdks; do
-    if [[ -d "$_p" ]]; then export PDK_ROOT="$_p"; break; fi
-  done
-fi
-
 # conda-staged sky130A (open_pdks.sky130a → <conda>/envs/<env>/share/pdk, e.g. from
 # eda-install's pdk tier). Only adopt a candidate that actually contains sky130A, so a
 # conda PDK is discovered without ever shadowing an explicit/well-known PDK_ROOT that
@@ -219,12 +261,20 @@ if [[ -z "${PDK_ROOT:-}" || ! -d "${PDK_ROOT}/sky130A" ]]; then
   done
 fi
 
+# Host-wide PDKs are the final fallback.  User-local/conda PDKs above must win
+# so a bootstrap cannot silently mix a personal toolchain with /opt collateral.
+if [[ -z "${PDK_ROOT:-}" ]]; then
+  for _p in /opt/pdks "$HOME/pdks" /usr/local/share/pdks; do
+    if [[ -d "$_p" ]]; then export PDK_ROOT="$_p"; break; fi
+  done
+fi
+
 if [[ -n "${PDK_ROOT:-}" && -d "$PDK_ROOT/sky130A" ]]; then
   export SKY130A_DIR="$PDK_ROOT/sky130A"
 fi
 
 unset _r2g_orfs_openroad _r2g_orfs_yosys _cand _hit _p _detected _base _r2g_env \
-      _r2g_conda_bases _r2g_conda_bin
+      _r2g_conda_bases _r2g_conda_bin _r2g_var _r2g_caller_env _r2g_pre_system_env
 # Restore caller's options
 case "$_r2g_saved_opts" in
   *e*) set -e ;;
