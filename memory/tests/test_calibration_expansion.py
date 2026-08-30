@@ -21,6 +21,7 @@ from run_calibration_expansion import (  # noqa: E402
     _strict_oracle_projects,
     _contract_manifest_binding,
     _validate_contract_manifest,
+    _validate_source_freeze,
     make_samples,
     main,
     prepare,
@@ -322,10 +323,18 @@ def test_prepare_binds_contract_to_selected_cohort_before_flow(tmp_path):
         suffixes={"v113", "v114", "v115"}, utility_contract=contract)
     assert manifest["utility_contract"]["binding"] == "PREPARE_TIME"
     assert manifest["utility_contract"]["contract_id"] == contract["contract_id"]
+    assert manifest["source_freeze_digest"]
+    assert _validate_source_freeze(manifest)["version"] == \
+        "calibration-expansion-source-freeze-v1"
     assert {item["utility_contract_id"] for item in manifest["items"]} == {
         contract["contract_id"]}
     assert {item["config_edits"]["CORE_UTILIZATION"]
             for item in manifest["items"]} == {"32"}
+
+    config = Path(manifest["items"][0]["after_project"]) / "constraints" / "config.mk"
+    config.write_text(config.read_text() + "# drift\n")
+    with pytest.raises(ValueError, match="materialized inputs changed"):
+        _validate_source_freeze(manifest)
 
     with pytest.raises(ValueError, match="not bound to utility contract"):
         prepare(tmp_path / "mixed", orfs,

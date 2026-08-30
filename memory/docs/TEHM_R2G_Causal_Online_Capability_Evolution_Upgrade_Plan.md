@@ -4677,3 +4677,10 @@ digest 或缺少 prepare-time binding 的 manifest 均 fail-closed；旧的无 c
 `--utility-contract-id` 生成并冻结 manifest，再运行 ORFS/strict oracle/sample，最后
 只消费同一 manifest 中的 contract。该门仍只建立 external shadow/calibration provenance，
 不改变 canonical memory、authority 或 production runtime。
+
+同一 prepare-time freeze 现在还生成 `source_freeze.json`：它绑定选中 lineage 的 RTL/
+SDC、materialized before/after config、TEHM/runner/signoff 源码、ORFS flow 依赖面以及
+toolchain preflight。`run`、`samples`、`evaluate` 和直接调用的 evaluation API 在继续
+之前都会重放 freeze digest 与逐文件输入；任一 config、源码、ORFS 依赖或工具指纹漂移
+都会 fail-closed。这样“contract 已预注册”与“实际执行仍使用同一 source”成为同一个
+可验证边界，而不是两个互相独立的声明。

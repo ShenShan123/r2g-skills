@@ -30,6 +30,7 @@ from run_orfs_diversity_campaign import (  # noqa: E402
     _load,
     _materialize,
     _write,
+    preflight_orfs_toolchain,
     run_projects,
 )
 from tehm import SCHEMA_VERSION, db  # noqa: E402
@@ -57,6 +58,7 @@ from orfs_storage import enforce_work_root, storage_policy  # noqa: E402
 
 
 VERSION = "calibration-expansion-v1"
+SOURCE_FREEZE_VERSION = "calibration-expansion-source-freeze-v1"
 SCRATCH_DEFAULT = Path("/tmp/tehm-p2-calibration-expansion-v14v20")
 EVIDENCE_DEFAULT = Path(
     "/data1/zhangdy/tehm-campaigns/tehm-p2-calibration-expansion-v14v20"
@@ -290,6 +292,177 @@ def _validate_contract_manifest(manifest: dict,
     return contract
 
 
+def _file_record(path: Path) -> dict:
+    """Record a file identity without treating a missing dependency as pass."""
+    path = Path(path).resolve()
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return {"path": str(path), "sha256": None, "bytes": None}
+    return {"path": str(path), "sha256": hashlib.sha256(data).hexdigest(),
+            "bytes": len(data)}
+
+
+def _path_records(paths: list[Path]) -> list[dict]:
+    """Expand a bounded source/dependency surface into deterministic records."""
+    files = set()
+    missing = []
+    for raw in paths:
+        path = Path(raw).resolve()
+        if path.is_file():
+            files.add(path)
+        elif path.is_dir():
+            files.update(item.resolve() for item in path.rglob("*")
+                         if item.is_file() and "__pycache__" not in item.parts)
+        else:
+            missing.append(path)
+    records = [_file_record(path) for path in sorted(files, key=str)]
+    records.extend(_file_record(path) for path in sorted(missing, key=str))
+    return records
+
+
+def _records_digest(records: list[dict]) -> str:
+    return hashlib.sha256(canonical_json(records)).hexdigest()
+
+
+def _source_code_records(items: list[dict]) -> list[dict]:
+    fixture_paths = []
+    for item in items:
+        design = str(item.get("design") or "")
+        fixture_paths.extend((
+            MEMORY_ROOT / "fixtures" / "physical_rtl" / f"{design}.v",
+            MEMORY_ROOT / "fixtures" / "physical_rtl" / f"{design}.sdc",
+        ))
+    paths = [
+        MEMORY_ROOT / "tehm",
+        MEMORY_ROOT / "schema.sql",
+        MEMORY_ROOT / "requirements.txt",
+        Path(__file__).resolve(),
+        MEMORY_ROOT / "scripts" / "run_orfs_diversity_campaign.py",
+        REPO_ROOT / "r2g-skills" / "def-graph" / "scripts" / "flow" / "run_features.sh",
+        REPO_ROOT / "r2g-skills" / "def-graph" / "scripts" / "extract" / "extract_route.py",
+        REPO_ROOT / "r2g-skills" / "def-graph" / "scripts" / "extract" / "extract_ppa.py",
+        REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "flow" / "run_orfs.sh",
+        REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "flow" / "run_strict_signoff.sh",
+        REPO_ROOT / "r2g-skills" / "signoff-loop" / "scripts" / "reports" / "check_timing.py",
+        *fixture_paths,
+    ]
+    return _path_records(paths)
+
+
+def _orfs_dependency_records(orfs_root: Path) -> list[dict]:
+    root = Path(orfs_root).resolve()
+    return _path_records([
+        root / "flow" / "Makefile",
+        root / "flow" / "settings.mk",
+        root / "flow" / "scripts",
+        root / "flow" / "util",
+        root / "flow" / "platforms" / "sky130hs",
+        root / "flow" / "designs" / "sky130hs" / "gcd" / "config.mk",
+        root / "flow" / "designs" / "sky130hs" / "gcd" / "constraint.sdc",
+    ])
+
+
+def _project_input_records(items: list[dict]) -> list[dict]:
+    records = []
+    for item in sorted(items, key=lambda row: str(row.get("case_id"))):
+        design = str(item.get("design") or "")
+        fixture = MEMORY_ROOT / "fixtures" / "physical_rtl" / f"{design}.v"
+        sdc = MEMORY_ROOT / "fixtures" / "physical_rtl" / f"{design}.sdc"
+        sides = {}
+        for side in ("before_project", "after_project"):
+            project = Path(str(item.get(side) or "")).resolve()
+            sides[side.removesuffix("_project")] = {
+                "project": str(project),
+                "config": _file_record(project / "constraints" / "config.mk"),
+                "sdc": _file_record(project / "constraints" / "constraint.sdc"),
+            }
+        records.append({
+            "case_id": str(item.get("case_id") or ""),
+            "lineage_id": str(item.get("lineage_id") or ""),
+            "design": design,
+            "fixture": _file_record(fixture),
+            "source_sdc": _file_record(sdc),
+            "sides": sides,
+        })
+    return records
+
+
+def _build_source_freeze(root: Path, orfs_root: Path, items: list[dict],
+                         utility_contract: dict) -> dict:
+    """Freeze code, inputs, ORFS dependencies and contract before execution."""
+    contract_binding = _contract_manifest_binding(utility_contract)
+    source_code = _source_code_records(items)
+    orfs_dependencies = _orfs_dependency_records(orfs_root)
+    inputs = _project_input_records(items)
+    toolchain = preflight_orfs_toolchain({"orfs_root": str(Path(orfs_root).resolve())})
+    freeze = {
+        "version": SOURCE_FREEZE_VERSION,
+        "orfs_root": str(Path(orfs_root).resolve()),
+        "utility_contract": contract_binding,
+        "source_code": source_code,
+        "source_tree_digest": _records_digest(source_code),
+        "orfs_dependencies": orfs_dependencies,
+        "orfs_dependency_digest": _records_digest(orfs_dependencies),
+        "inputs": inputs,
+        "input_digest": _records_digest(inputs),
+        "toolchain": toolchain,
+    }
+    freeze["freeze_digest"] = hashlib.sha256(
+        canonical_json(freeze)).hexdigest()
+    path = root / "source_freeze.json"
+    _write_json(path, freeze)
+    return {**freeze, "path": str(path.resolve()),
+            "sha256": _sha256(path)}
+
+
+def _validate_source_freeze(manifest: dict) -> dict:
+    """Replay the prepare-time source freeze before any later phase."""
+    raw_path = manifest.get("source_freeze")
+    if not raw_path:
+        raise ValueError("contract-bound campaign requires a source freeze")
+    path = Path(str(raw_path)).expanduser().resolve()
+    if manifest.get("source_freeze_sha256") != _sha256(path):
+        raise ValueError("campaign source freeze file changed after prepare")
+    try:
+        freeze = _read(path)
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError("campaign source freeze is malformed") from exc
+    if freeze.get("version") != SOURCE_FREEZE_VERSION:
+        raise ValueError("campaign source freeze version mismatch")
+    digest = freeze.get("freeze_digest")
+    unsigned = dict(freeze)
+    unsigned.pop("freeze_digest", None)
+    if not isinstance(digest, str) or hashlib.sha256(
+            canonical_json(unsigned)).hexdigest() != digest:
+        raise ValueError("campaign source freeze digest mismatch")
+    if manifest.get("source_freeze_digest") != digest:
+        raise ValueError("campaign manifest/source-freeze digest mismatch")
+    contract = _validate_contract_manifest(manifest)
+    expected_contract = _contract_manifest_binding(contract)
+    if freeze.get("utility_contract") != expected_contract:
+        raise ValueError("source freeze utility contract differs from manifest")
+    if freeze.get("orfs_root") != str(Path(manifest.get("orfs_root") or "").resolve()):
+        raise ValueError("source freeze ORFS root differs from campaign manifest")
+    items = manifest.get("items") or []
+    source_code = _source_code_records(items)
+    if freeze.get("source_tree_digest") != _records_digest(source_code):
+        raise ValueError("campaign source code/input dependency changed after freeze")
+    orfs_dependencies = _orfs_dependency_records(Path(manifest["orfs_root"]))
+    if (freeze.get("orfs_dependency_digest") !=
+            _records_digest(orfs_dependencies)):
+        raise ValueError("campaign ORFS dependency surface changed after freeze")
+    inputs = _project_input_records(items)
+    if (freeze.get("input_digest") != _records_digest(inputs) or
+            freeze.get("inputs") != inputs):
+        raise ValueError("campaign materialized inputs changed after freeze")
+    current_toolchain = preflight_orfs_toolchain(
+        {"orfs_root": str(Path(manifest["orfs_root"]).resolve())})
+    if freeze.get("toolchain") != current_toolchain:
+        raise ValueError("campaign toolchain binding changed after freeze")
+    return freeze
+
+
 def prepare(root: Path, orfs_root: Path, *,
             suffixes: set[str] | None = None,
             utility_contract: dict | None = None) -> dict:
@@ -361,6 +534,13 @@ def prepare(root: Path, orfs_root: Path, *,
     }
     if frozen_contract is not None:
         manifest["utility_contract"] = frozen_contract
+        freeze = _build_source_freeze(
+            root, orfs_root, items, utility_contract)
+        manifest.update({
+            "source_freeze": freeze["path"],
+            "source_freeze_sha256": freeze["sha256"],
+            "source_freeze_digest": freeze["freeze_digest"],
+        })
     _write_json(root / "campaign_manifest.json", manifest)
     return manifest
 
@@ -1047,8 +1227,10 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
              fresh_suffixes: set[str] | None = None,
              interval_method: str = "normal_weighted_mean_v1",
              utility_contract: dict | None = None) -> dict:
-    utility_contract = _validate_contract_manifest(
-        _load(root / "campaign_manifest.json"), utility_contract)
+    campaign_manifest = _load(root / "campaign_manifest.json")
+    utility_contract = _validate_contract_manifest(campaign_manifest, utility_contract)
+    if utility_contract is not None:
+        _validate_source_freeze(campaign_manifest)
     stage = root / "staging"
     if stage.exists():
         shutil.rmtree(stage)
@@ -1211,6 +1393,8 @@ def main(argv=None) -> int:
     if not manifest:
         raise RuntimeError(f"campaign manifest missing: {manifest_path}")
     utility_contract = _validate_contract_manifest(manifest, requested_contract)
+    if utility_contract is not None:
+        _validate_source_freeze(manifest)
     if args.phase == "prepare":
         return 0
     run_manifest = _subset_manifest(manifest, set(args.run_suffix) or None)
