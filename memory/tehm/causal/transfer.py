@@ -19,6 +19,7 @@ from .evidence_level import CausalEvidenceLevel
 from .matcher import match_causal_path
 from .mechanism import load_transition_facts, mechanism_signature
 from .replication import evaluate_replicated_effect
+from .witness import parse_source_transition_ids
 
 
 # The ORFS lane has a stricter contract than a generic RTL verifier.  Keep the
@@ -57,21 +58,6 @@ def _full_oracle_complete(verifier: Mapping) -> bool:
 def full_oracle_complete(verifier: Mapping) -> bool:
     """Public read-only predicate shared by ORFS audits and L4 evaluation."""
     return _full_oracle_complete(verifier)
-
-
-def _source_transition_ids(raw: object) -> tuple[tuple[str, ...] | None, str | None]:
-    try:
-        values = json.loads(raw or "[]") if isinstance(raw, str) else raw
-    except (TypeError, json.JSONDecodeError):
-        return None, "malformed_source_transitions"
-    if not isinstance(values, list) or not values:
-        return None, "source_transitions_missing"
-    if any(not isinstance(value, str) or not value.strip() for value in values):
-        return None, "malformed_source_transitions"
-    ids = tuple(value.strip() for value in values)
-    if len(set(ids)) != len(ids):
-        return None, "duplicate_source_transitions"
-    return tuple(sorted(ids)), None
 
 
 def _transfer_ids(values) -> tuple[tuple[str, ...] | None, str | None]:
@@ -193,7 +179,7 @@ def evaluate_transfer_supported_mechanism(
     ).fetchone()
     if path is None:
         raise KeyError(f"unknown causal path: {path_id}")
-    source_ids, source_error = _source_transition_ids(
+    source_ids, source_error = parse_source_transition_ids(
         path["source_transitions_json"])
     ids, transfer_error = _transfer_ids(transfer_transition_ids)
     if source_ids is None:

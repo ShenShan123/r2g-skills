@@ -31,7 +31,10 @@ from .orfs import (
     build_orfs_controlled_replication,
 )
 from .authority import CausalRuleEvidenceReceipt, evaluate_causal_rule_evidence
-from .witness import learner_edge_transition_coverage, parse_evidence_refs
+from .witness import (
+    learner_edge_transition_coverage, parse_evidence_refs,
+    parse_source_transition_ids,
+)
 
 __all__ = [
     "CausalEdge", "CausalEvidenceLevel", "CausalFragment", "CausalNode",
@@ -53,5 +56,6 @@ __all__ = [
     "build_orfs_controlled_replication",
     "CausalRuleEvidenceReceipt", "evaluate_causal_rule_evidence",
     "learner_edge_transition_coverage", "parse_evidence_refs",
+    "parse_source_transition_ids",
     "transition_evidence_level", "validate_evidence_level",
 ]

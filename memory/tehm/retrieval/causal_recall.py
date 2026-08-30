@@ -18,6 +18,7 @@ from tehm.canonical.verifier import VerifierSnapshot
 from tehm.ids import transition_id
 from tehm.causal.matcher import match_causal_path
 from tehm.causal.path_builder import validate_persisted_path_row
+from tehm.causal.witness import parse_source_transition_ids
 
 
 @dataclass(frozen=True)
@@ -117,16 +118,8 @@ class CausalPathQuality:
 
 def _source_transition_ids(raw: object) -> tuple[str, ...] | None:
     """Decode a derived path witness; malformed rows are not searchable."""
-    try:
-        values = json.loads(raw or "[]") if isinstance(raw, str) else raw
-    except (TypeError, json.JSONDecodeError):
-        return None
-    if not isinstance(values, list) or not values:
-        return None
-    ids = tuple(str(value).strip() for value in values)
-    if any(not value for value in ids) or len(set(ids)) != len(ids):
-        return None
-    return tuple(sorted(ids))
+    ids, _error = parse_source_transition_ids(raw)
+    return ids
 
 
 def _quality_number(value: object) -> float | None:
@@ -321,8 +314,10 @@ def _path_source_ids(path) -> tuple[str, ...] | None:
     if source_ids is not None:
         return source_ids
     if isinstance(source_raw, (list, tuple)):
-        values = tuple(str(item).strip() for item in source_raw)
-        if (values and all(values) and len(set(values)) == len(values)):
+        values = tuple(item.strip() for item in source_raw
+                      if type(item) is str)
+        if (len(values) == len(source_raw) and values and all(values)
+                and len(set(values)) == len(values)):
             return tuple(sorted(values))
     return None
 

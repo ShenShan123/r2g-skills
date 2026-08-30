@@ -315,6 +315,21 @@ def test_l3_replication_requires_distinct_run_witnesses(tmp_tehm, tmp_path):
     derived = sqlite3.connect(report["derived_db"])
     derived.row_factory = sqlite3.Row
     try:
+        # One malformed provenance row must invalidate the whole run witness;
+        # remaining valid rows cannot mask it by supplying enough runs.
+        one_transition = derived.execute(
+            "SELECT transition_id FROM tehm_transitions LIMIT 1"
+        ).fetchone()[0]
+        derived.execute(
+            "UPDATE tehm_transitions SET provenance_json='not-json' "
+            "WHERE transition_id=?", (one_transition,))
+        derived.commit()
+        malformed_receipt = evaluate_replicated_effect(
+            derived, report["path"]["path_id"],
+            campaign_id="orfs-l3-run-witness-test")
+        assert malformed_receipt.eligible is False
+        assert malformed_receipt.reason == "requires_distinct_run_witnesses"
+
         # Simulate an old/imported transition whose provenance omitted its
         # run identity.  L2 coverage remains present, but L3 must abstain.
         derived.execute("UPDATE tehm_transitions SET provenance_json='{}'")

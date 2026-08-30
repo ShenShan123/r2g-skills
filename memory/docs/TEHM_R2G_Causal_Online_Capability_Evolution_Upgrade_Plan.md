@@ -5080,4 +5080,20 @@ torch_geometric `2.8.0.post1`、pandas `3.0.5`。宿主机没有 `python3-venv`�
 
 这一步仅闭合 direct toolchain 的 graph 依赖，不改变 ORFS source/binary compatibility
 结论；OpenROAD 与 clean ORFS 的 floorplan SIGSEGV 仍是负兼容性证据，production
-manifest 和 full ORFS batch 继续等待匹配的 OpenROAD。
+ manifest 和 full ORFS batch 继续等待匹配的 OpenROAD。
+
+### 2026-08-30 shared causal source witness 与 replication provenance 防火墙
+
+复核 L2/L3 authority、replication、held-out transfer、causal retrieval 与 online
+novelty 时发现，各路径曾各自解析 `source_transitions_json`，且 replication 会把
+数字 witness 强制转换为字符串，造成同一份 causal path 在不同边界得到不同语义。
+现统一使用 `causal.witness.parse_source_transition_ids()`：输入必须是非空 JSON
+list，元素必须是非空字符串且不得重复；malformed、空值、数字和重复 witness 均
+fail-closed，禁止通过类型强制伪造 source identity。replication 的
+`provenance_json` 也要求 mapping；声明的 `run_id`/`run_tag` 必须是非空字符串，任一
+坏 provenance 行都会使 run witness 不完整，不能被其他有效行掩盖，并保留明确的
+`requires_distinct_run_witnesses` 失败原因。
+
+新增 shared-parser、numeric/duplicate source、malformed provenance 回归；本次只收紧
+shadow/evaluation 证据入口，不改变 canonical memory、lifecycle、六项 promotion
+gate 或 production runtime。

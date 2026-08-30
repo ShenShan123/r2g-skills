@@ -6,14 +6,15 @@ experiment while preserving the existing six-gate lifecycle boundary.
 """
 from __future__ import annotations
 
-import json
 import sqlite3
 from dataclasses import dataclass
 
 from .evidence_level import CausalEvidenceLevel, evidence_rank
 from .path_builder import validate_persisted_path_row
 from .replication import evaluate_replicated_effect
-from .witness import learner_edge_transition_coverage
+from .witness import (
+    learner_edge_transition_coverage, parse_source_transition_ids,
+)
 from tehm.dataset import validate_membership_row
 
 
@@ -43,28 +44,6 @@ class CausalRuleEvidenceReceipt:
         }
 
 
-def _source_transition_ids(raw: object) -> tuple[tuple[str, ...] | None, str | None]:
-    """Parse a path witness without allowing malformed JSON to pass closed.
-
-    ``source_transitions_json`` is a derived, free-form column.  It therefore
-    cannot be trusted merely because SQLite accepted the row.  Return a
-    canonical tuple for a non-empty list of unique transition IDs, otherwise
-    return an explicit failure reason for the authority receipt.
-    """
-    try:
-        values = json.loads(raw or "[]") if isinstance(raw, str) else raw
-    except (TypeError, json.JSONDecodeError):
-        return None, "malformed_source_transitions"
-    if not isinstance(values, list) or not values:
-        return None, "source_transitions_missing"
-    ids = tuple(str(value).strip() for value in values)
-    if any(not value for value in ids):
-        return None, "malformed_source_transitions"
-    if len(set(ids)) != len(ids):
-        return None, "duplicate_source_transitions"
-    return tuple(sorted(ids)), None
-
-
 def evaluate_causal_rule_evidence(
     conn: sqlite3.Connection,
     path_id: str,
@@ -81,7 +60,7 @@ def evaluate_causal_rule_evidence(
     ).fetchone()
     if row is None:
         raise KeyError(f"unknown causal path: {path_id}")
-    source_ids, source_error = _source_transition_ids(
+    source_ids, source_error = parse_source_transition_ids(
         row["source_transitions_json"])
     if source_ids is None:
         return CausalRuleEvidenceReceipt(

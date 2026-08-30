@@ -1,10 +1,10 @@
 """Deterministic novelty detection for online observations."""
 from __future__ import annotations
 
-import json
 import sqlite3
 
 from tehm.causal.mechanism import load_transition_facts
+from tehm.causal.witness import parse_source_transition_ids
 
 
 def detect_novelty(conn: sqlite3.Connection, transition_id: str,
@@ -26,11 +26,9 @@ def detect_novelty(conn: sqlite3.Connection, transition_id: str,
         (facts.mechanism_family, facts.compatibility_profile)).fetchall()
     existing = False
     for row in rows:
-        try:
-            source_ids = json.loads(row["source_transitions_json"] or "[]")
-        except (TypeError, json.JSONDecodeError):
-            continue
-        if not isinstance(source_ids, list) or not source_ids:
+        source_ids, _error = parse_source_transition_ids(
+            row["source_transitions_json"])
+        if source_ids is None:
             continue
         placeholders = ",".join("?" for _ in source_ids)
         eligible = conn.execute(
@@ -38,7 +36,7 @@ def detect_novelty(conn: sqlite3.Connection, transition_id: str,
                   WHERE campaign_id=? AND split='training'
                     AND learner_eligible=1
                     AND transition_id IN ({placeholders})""",
-            (campaign_id, *[str(item) for item in source_ids])).fetchone()
+                    (campaign_id, *source_ids)).fetchone()
         if int(eligible["n"] if eligible else 0) == len(source_ids):
             existing = True
             break

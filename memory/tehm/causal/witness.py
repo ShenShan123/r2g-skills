@@ -30,6 +30,30 @@ def parse_evidence_refs(raw: object) -> tuple[tuple[str, ...] | None, str | None
     return refs, None
 
 
+def parse_source_transition_ids(
+    raw: object,
+) -> tuple[tuple[str, ...] | None, str | None]:
+    """Parse a path source witness using one strict, shared contract.
+
+    ``source_transitions_json`` is a derived authority input.  It must decode
+    to a non-empty JSON list of non-empty strings with no duplicates; numeric
+    IDs and other values are not coerced to strings because doing so can turn a
+    malformed path into a different, apparently valid witness.
+    """
+    try:
+        values = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, json.JSONDecodeError):
+        return None, "malformed_source_transitions"
+    if not isinstance(values, list) or not values:
+        return None, "source_transitions_missing"
+    if any(type(value) is not str or not value.strip() for value in values):
+        return None, "malformed_source_transitions"
+    ids = tuple(value.strip() for value in values)
+    if len(set(ids)) != len(ids):
+        return None, "duplicate_source_transitions"
+    return tuple(sorted(ids)), None
+
+
 def _resolve_transition_ids(
     conn: sqlite3.Connection, refs: tuple[str, ...],
 ) -> tuple[tuple[str, ...], bool]:
@@ -121,5 +145,5 @@ def learner_edge_transition_coverage(
 
 __all__ = [
     "learner_edge_transition_coverage",
-    "parse_evidence_refs",
+    "parse_evidence_refs", "parse_source_transition_ids",
 ]

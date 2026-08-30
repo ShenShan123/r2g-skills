@@ -7,26 +7,12 @@ from dataclasses import dataclass
 
 from tehm import db as tehm_db
 from tehm.causal.evidence_level import CausalEvidenceLevel, evidence_rank
-from tehm.causal.witness import learner_edge_transition_coverage
+from tehm.causal.witness import (
+    learner_edge_transition_coverage, parse_source_transition_ids,
+)
 from tehm.causal.path_builder import (
     causal_path_digest, validate_persisted_path_row,
 )
-
-
-def _source_transition_ids(raw: object) -> tuple[tuple[str, ...] | None, str | None]:
-    """Parse the path's derived source witness fail-closed."""
-    try:
-        values = json.loads(raw or "[]") if isinstance(raw, str) else raw
-    except (TypeError, json.JSONDecodeError):
-        return None, "malformed_source_transitions"
-    if not isinstance(values, list) or not values:
-        return None, "source_transitions_missing"
-    ids = tuple(str(value).strip() for value in values)
-    if any(not value for value in ids):
-        return None, "malformed_source_transitions"
-    if len(set(ids)) != len(ids):
-        return None, "duplicate_source_transitions"
-    return tuple(sorted(ids)), None
 
 
 @dataclass(frozen=True)
@@ -70,7 +56,7 @@ def evaluate_replicated_effect(
                        (path_id,)).fetchone()
     if row is None:
         raise KeyError(f"unknown causal path: {path_id}")
-    transition_ids, source_error = _source_transition_ids(
+    transition_ids, source_error = parse_source_transition_ids(
         row["source_transitions_json"])
     if transition_ids is None:
         # Preserve the specific source-witness diagnosis used by the causal
@@ -101,23 +87,36 @@ def evaluate_replicated_effect(
     designs = tuple(sorted({row["design_id"] for row in rows if row["design_id"]}))
     runs: set[str] = set()
     lineage_runs: dict[str, set[str]] = {}
+    provenance_valid = True
     for source in rows:
         try:
             provenance = json.loads(source["provenance_json"])
         except (TypeError, json.JSONDecodeError):
-            provenance = {}
+            provenance_valid = False
+            continue
+        if not isinstance(provenance, dict):
+            provenance_valid = False
+            continue
         run = provenance.get("run_id") or provenance.get("run_tag")
         if run:
-            run = str(run)
+            if type(run) is not str or not run.strip():
+                provenance_valid = False
+                continue
+            run = run.strip()
             runs.add(run)
             lineage = source["lineage_id"]
             if lineage:
                 lineage_runs.setdefault(str(lineage), set()).add(run)
+        elif "run_id" in provenance or "run_tag" in provenance:
+            # A declared run field with a null/empty/non-string value is a
+            # malformed witness, not an absent optional annotation.
+            provenance_valid = False
     covered_sources = learner_edge_transition_coverage(
         conn, transition_ids, campaign_id=campaign_id,
         required_level=CausalEvidenceLevel.L2_CONTROLLED_INTERVENTION.value)
     l2_support = set(covered_sources) == set(transition_ids)
     run_witness_complete = bool(
+        provenance_valid and
         len(runs) >= max(1, int(min_lineages)) and
         all(lineage_runs.get(lineage) for lineage in lineages))
     design_witness_complete = len(designs) >= max(1, int(min_lineages))

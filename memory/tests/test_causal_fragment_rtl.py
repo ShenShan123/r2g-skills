@@ -21,6 +21,7 @@ from tehm.causal.edges import CausalEdge
 from tehm.causal.path_builder import (
     causal_path_digest, validate_persisted_path_row,
 )
+from tehm.causal.witness import parse_source_transition_ids
 from tehm.dataset import assign_transition
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 
@@ -437,6 +438,21 @@ def test_replication_gate_does_not_upgrade_single_lineage(tmp_tehm):
     assert replication.evidence_level == "L1_EXECUTED_INTERVENTION"
 
 
+@pytest.mark.parametrize(
+    ("raw", "reason"),
+    [
+        ("not-json", "malformed_source_transitions"),
+        ("[123]", "malformed_source_transitions"),
+        ("[]", "source_transitions_missing"),
+        ("[\"t0\", \"t0\"]", "duplicate_source_transitions"),
+    ],
+)
+def test_shared_source_transition_witness_parser_is_strict(raw, reason):
+    ids, error = parse_source_transition_ids(raw)
+    assert ids is None
+    assert error == reason
+
+
 def test_causal_authority_ignores_l2_edge_from_another_campaign(tmp_tehm):
     """A foreign campaign cannot satisfy controlled-intervention support."""
     conn, transition_id = _captured(tmp_tehm)
@@ -470,14 +486,15 @@ def test_causal_authority_ignores_l2_edge_from_another_campaign(tmp_tehm):
         "requires_controlled_pairs_and_disjoint_learner_lineages")
 
 
+@pytest.mark.parametrize("source_json", ["not-json", "[123]"])
 def test_causal_authority_and_replication_fail_closed_on_bad_source_json(
-        tmp_tehm):
+        tmp_tehm, source_json):
     conn, transition_id = _captured(tmp_tehm)
     fragment = build_transition_causal_fragment(conn, transition_id)
     path = consolidate_causal_path(conn, [fragment])
     conn.execute(
         "UPDATE tehm_causal_paths SET source_transitions_json=? WHERE path_id=?",
-        ("not-json", path.path_id))
+        (source_json, path.path_id))
     conn.commit()
     authority = evaluate_causal_rule_evidence(
         conn, path.path_id, campaign_id="live")

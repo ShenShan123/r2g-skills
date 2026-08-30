@@ -7,6 +7,7 @@ import sqlite3
 from tehm.causal import build_transition_causal_fragment
 from tehm.causal.mechanism import load_transition_facts, mechanism_signature
 from tehm.causal.path_builder import validate_persisted_path_row
+from tehm.causal.witness import parse_source_transition_ids
 from tehm.dataset import (normalize_stored_learner_bool,
                           validate_membership_row)
 
@@ -151,15 +152,13 @@ def _affected_path_ids(
         (mechanism_family, compatibility_profile)).fetchall()
     affected: list[str] = []
     for row in rows:
-        try:
-            source_ids = json.loads(row["source_transitions_json"] or "[]")
-        except (TypeError, json.JSONDecodeError) as exc:
+        source_ids, source_error = parse_source_transition_ids(
+            row["source_transitions_json"])
+        if source_ids is None:
             raise ValueError(
-                "online affected causal path source witness is malformed") from exc
-        if not isinstance(source_ids, list):
-            raise ValueError(
-                "online affected causal path source witness is malformed")
-        if transition_id not in {str(value) for value in source_ids}:
+                "online affected causal path source witness is malformed"
+                f" ({source_error or 'unknown'})")
+        if transition_id not in source_ids:
             continue
         validate_persisted_path_row(row, conn)
         # The path validator checks the campaign carried by its own witness;
