@@ -25,9 +25,25 @@ from tehm.rtl.rtl_evidence import build_rtl_execution_record
 PROJECT = Path(__file__).resolve().parent / "fixtures" / "rtl_projects" / "req_ack_bug"
 
 
+def _online_record(store, *, record_id=None):
+    """Build an explicitly verified deterministic fixture for online tests."""
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record.verification.update({
+        "verdict": "PASS",
+        "oracle_type": "TARGET_TEST",
+        "scope": "fixture:target",
+        "confidence_tier": "T",
+        "oracle_complete": True,
+        "evidence_refs": ["fixture-target"],
+    })
+    if record_id is not None:
+        record.record_id = record_id
+    return record
+
+
 def _transition(tmp_tehm):
     conn, store, _ = tmp_tehm
-    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record = _online_record(store)
     return conn, capture(conn, store, record).transition_id
 
 
@@ -83,9 +99,9 @@ def test_online_receipt_binds_mechanism_and_affected_rule_witness(
         tmp_tehm):
     """Fast-memory output names typed mechanism and source-owned rule impact."""
     conn, store, _ = tmp_tehm
-    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first = _online_record(store)
     first_id = capture(conn, store, first).transition_id
-    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second = _online_record(store)
     second.record_id = "rtl:req_ack:affected-rule"
     second.action["payload"]["add_condition"] = "ready"
     second_id = capture(conn, store, second).transition_id
@@ -126,10 +142,10 @@ def test_online_receipt_binds_mechanism_and_affected_rule_witness(
 def test_online_receipt_replays_affected_path_witness(tmp_tehm):
     """A persisted shadow path is exposed only after full replay validation."""
     conn, store, _ = tmp_tehm
-    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first = _online_record(store)
     first.record_id = "rtl:req_ack:path-first"
     first_id = capture(conn, store, first).transition_id
-    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second = _online_record(store)
     second.record_id = "rtl:req_ack:path-second"
     second.action["payload"]["add_condition"] = "ready"
     second_id = capture(conn, store, second).transition_id
@@ -155,10 +171,10 @@ def test_online_receipt_replays_affected_path_witness(tmp_tehm):
 def test_online_replay_keeps_original_witness_after_late_path_creation(tmp_tehm):
     """A retry cannot reinterpret one observation using a later shadow path."""
     conn, store, _ = tmp_tehm
-    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first = _online_record(store)
     first.record_id = "rtl:req_ack:late-path-first"
     first_id = capture(conn, store, first).transition_id
-    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second = _online_record(store)
     second.record_id = "rtl:req_ack:late-path-second"
     second.action["payload"]["add_condition"] = "ready"
     second_id = capture(conn, store, second).transition_id
@@ -221,10 +237,10 @@ def test_online_snapshot_replay_rejects_weakly_typed_decision_fields(tmp_tehm):
 def test_online_observation_rejects_corrupt_affected_rule_witness(tmp_tehm):
     """Malformed source provenance cannot produce a partial online chain."""
     conn, store, _ = tmp_tehm
-    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first = _online_record(store)
     first.record_id = "rtl:req_ack:corrupt-first"
     capture(conn, store, first)
-    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second = _online_record(store)
     second.record_id = "rtl:req_ack:corrupt-second"
     second.action["payload"]["add_condition"] = "ready"
     second_id = capture(conn, store, second).transition_id
@@ -311,7 +327,7 @@ def test_heldout_transition_cannot_enter_learner_online_lane(tmp_tehm):
 def test_explicit_heldout_membership_is_audit_only_and_never_triggers_consolidation(
         tmp_tehm):
     conn, store, _ = tmp_tehm
-    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record = _online_record(store)
     transition_id = capture(
         conn, store, record, dataset_campaign_id="split-campaign",
         dataset_split="heldout", dataset_learner_eligible=False).transition_id
@@ -326,10 +342,35 @@ def test_explicit_heldout_membership_is_audit_only_and_never_triggers_consolidat
         "WHERE event_type='CONSOLIDATION_TRIGGERED'").fetchone()[0] == 0
 
 
+@pytest.mark.parametrize(
+    "verification_update, expected_reason",
+    [
+        ({"oracle_complete": False}, "oracle_incomplete"),
+        ({"oracle_type": "COMPILE", "confidence_tier": "H"},
+         "oracle_type_not_executable"),
+    ],
+)
+def test_learner_online_lane_requires_complete_executable_oracle(
+        tmp_tehm, verification_update, expected_reason):
+    """Training membership cannot upgrade partial execution into memory."""
+    conn, store, _ = tmp_tehm
+    record = _online_record(store)
+    record.verification.update(verification_update)
+    transition_id = capture(conn, store, record).transition_id
+
+    with pytest.raises(ValueError, match="complete verified execution") as exc:
+        observe_transition(conn, transition_id, campaign_id="live")
+    assert expected_reason in str(exc.value)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_memory_events").fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_causal_nodes").fetchone()[0] == 0
+
+
 def test_nontraining_membership_cannot_be_marked_learner_eligible(
         tmp_tehm):
     conn, store, _ = tmp_tehm
-    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record = _online_record(store)
     with pytest.raises(ValueError, match="only training"):
         capture(conn, store, record, dataset_campaign_id="calibration",
                 dataset_split="calibration", dataset_learner_eligible=True)
@@ -344,7 +385,7 @@ def test_nontraining_membership_cannot_be_marked_learner_eligible(
 def test_learner_eligibility_boundary_rejects_weak_types(tmp_tehm):
     """Stringified booleans cannot become learner authority via coercion."""
     conn, store, _ = tmp_tehm
-    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record = _online_record(store)
     with pytest.raises(ValueError, match="must be a boolean"):
         capture(conn, store, record, dataset_learner_eligible="false")
     transition_id = capture(conn, store, record).transition_id
@@ -384,7 +425,7 @@ def test_event_chain_rejects_weakly_typed_learner_bit(tmp_tehm):
 def test_directly_corrupted_nontraining_membership_is_fail_closed(
         tmp_tehm):
     conn, store, _ = tmp_tehm
-    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record = _online_record(store)
     transition_id = capture(conn, store, record).transition_id
     conn.execute(
         "UPDATE tehm_dataset_membership SET split='heldout', learner_eligible=1 "
@@ -400,7 +441,7 @@ def test_directly_corrupted_nontraining_membership_is_fail_closed(
 
 def test_trigger_rejects_forged_learner_eligibility(tmp_tehm):
     conn, store, _ = tmp_tehm
-    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record = _online_record(store)
     transition_id = capture(
         conn, store, record, dataset_campaign_id="trigger-heldout",
         dataset_split="heldout", dataset_learner_eligible=False).transition_id
@@ -417,7 +458,7 @@ def test_trigger_rejects_forged_learner_eligibility(tmp_tehm):
 def test_dataset_membership_cannot_upgrade_audit_row_to_learner_support(
         tmp_tehm):
     conn, store, _ = tmp_tehm
-    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record = _online_record(store)
     transition_id = capture(
         conn, store, record, dataset_campaign_id="membership-guard",
         dataset_split="heldout", dataset_learner_eligible=False).transition_id
@@ -451,7 +492,7 @@ def test_dataset_membership_cannot_reclassify_existing_campaign(tmp_tehm):
 def test_novelty_ignores_path_sourced_only_from_heldout_campaign(tmp_tehm):
     """Evaluation-only causal paths cannot suppress learner novelty."""
     conn, store, _ = tmp_tehm
-    heldout = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    heldout = _online_record(store)
     heldout.record_id = "rtl:req_ack_fsm:heldout-path"
     heldout.action["payload"]["add_condition"] = "ack && ready"
     heldout_id = capture(
@@ -477,7 +518,7 @@ def test_novelty_ignores_path_sourced_only_from_heldout_campaign(tmp_tehm):
          "2026-01-01"))
     conn.commit()
 
-    training = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    training = _online_record(store)
     training.record_id = "rtl:req_ack_fsm:training-path"
     training.action["payload"]["add_condition"] = "ack && grant"
     training_id = capture(conn, store, training).transition_id
@@ -487,7 +528,7 @@ def test_novelty_ignores_path_sourced_only_from_heldout_campaign(tmp_tehm):
 
 def test_event_writer_cannot_mark_heldout_source_as_learner(tmp_tehm):
     conn, store, _ = tmp_tehm
-    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record = _online_record(store)
     transition_id = capture(
         conn, store, record, dataset_campaign_id="heldout-campaign",
         dataset_split="heldout", dataset_learner_eligible=False).transition_id
@@ -544,9 +585,9 @@ def test_rule_revision_rejects_unknown_evidence_reference(tmp_tehm):
 
 def test_rule_revision_rejects_heldout_evidence_in_training_campaign(tmp_tehm):
     conn, store, _ = tmp_tehm
-    training_record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    training_record = _online_record(store)
     training_id = capture(conn, store, training_record).transition_id
-    heldout_record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    heldout_record = _online_record(store)
     heldout_record.record_id = "rtl:req_ack_fsm:heldout-revision"
     heldout_record.action["payload"]["add_condition"] = "ack && ack"
     heldout_id = capture(

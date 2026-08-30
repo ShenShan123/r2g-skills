@@ -2405,3 +2405,19 @@ campaign runner 负责。新增 missing/tampered freeze 回归，现有 valid tr
 membership mismatch 与弱类型 learner flag 回归保持通过。此修复继续只强化
 external→staging→canonical 防火墙，不写 canonical/authority/runtime，也不改变六项
 promotion gate 或 Parametric shadow-only 边界。
+
+### 2026-08-30 online learner verified-transition admission
+
+按设计 4.1/4.8，`observe_transition()` 现在在 learner lane 先重放
+`load_transition_facts()`，再要求 transition 具备明确的 `PASS/FAIL` verdict、
+`oracle_complete=true`，且 oracle 不能是 `UNKNOWN`、`COMPILE` 或 `LINT`。若存在
+expanded `full_oracle`，其 `before`/`after` arm 也必须逐项 `complete=true`。只有该
+verified-execution predicate 和同 campaign 的 `training ∧ learner_eligible=1`
+membership 同时成立，才允许生成 learner online event、causal fragment 与
+consolidation preview。
+
+training membership 不能再单独把 partial/compile-only receipt 升格为 memory；失败会在
+任何 derived write 前 fail-closed。held-out/calibration 仍保留 audit-only 的
+`NOT_LEARNER_ELIGIBLE` 路径，不因该前置条件被误当作 learner evidence。online 单测已
+改为显式 deterministic complete-oracle fixture，并新增 incomplete/compile-only 拒绝回归；
+该 fixture 只验证机制，不构成真实 RTL/ORFS 结果。

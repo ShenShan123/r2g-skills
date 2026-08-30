@@ -11,11 +11,21 @@ from tehm.rtl.rtl_evidence import build_rtl_execution_record
 PROJECT = Path(__file__).resolve().parent / "fixtures" / "rtl_projects" / "req_ack_bug"
 
 
+def _online_record(store):
+    record = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    record.verification.update({
+        "verdict": "PASS", "oracle_type": "TARGET_TEST",
+        "scope": "fixture:target", "confidence_tier": "T",
+        "oracle_complete": True, "evidence_refs": ["fixture-target"],
+    })
+    return record
+
+
 def test_definition_conflict_emits_event_without_lifecycle_mutation(tmp_tehm):
     conn, store, _ = tmp_tehm
-    first = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    first = _online_record(store)
     first_id = capture(conn, store, first).transition_id
-    second = build_rtl_execution_record(PROJECT, oracle=None, store=store)
+    second = _online_record(store)
     second.record_id = "rtl:req_ack:alternate"
     second.action["payload"]["add_condition"] = "ready"
     second_id = capture(conn, store, second).transition_id

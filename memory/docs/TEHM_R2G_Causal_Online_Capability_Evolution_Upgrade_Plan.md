@@ -5299,3 +5299,18 @@ manifest 绑定不一致或仅使用自洽空壳都会 fail-closed。source-free
 `DENY_CANONICAL_IMPORT`。新增缺失/篡改 freeze 回归，完整 membership firewall 行为和
 六项 promotion gate 均不变；本轮仍无 canonical memory、authority lifecycle 或
 production runtime mutation。
+
+### 2026-08-30 online learner verified-transition admission
+
+按 4.1/4.8 的 Verified Transition 要求，`observe_transition()` 现先重放
+`load_transition_facts()`，再在 learner lane 检查明确的 `PASS/FAIL` verdict、
+`oracle_complete=true` 及可执行 oracle 类型；`UNKNOWN`、`COMPILE`、`LINT` 不能作为
+learner execution evidence。对于带有 expanded `full_oracle` 的 transition，
+`before`/`after` 两个 arm 必须各自 `complete=true`。因此 membership 的
+`training ∧ learner_eligible=1` 只是数据分区授权，不能代替 execution verification。
+
+不满足该谓词的 transition 在任何 causal/event derived write 之前 fail-closed；
+held-out/calibration 仍可走 audit-only 的 `NOT_LEARNER_ELIGIBLE` 路径。online 单测
+使用显式 deterministic complete-oracle fixture，并覆盖 incomplete 与 compile-only
+拒绝；该 fixture 只验证边界，不构成真实 RTL/ORFS 结果。本轮没有 canonical memory、
+rule lifecycle 或 production runtime mutation。

@@ -48,6 +48,39 @@ def _membership(conn: sqlite3.Connection, transition_id: str,
     return eligible and split == "training", split
 
 
+def _require_verified_execution(facts) -> None:
+    """Require a complete executable oracle before learner online updates.
+
+    Dataset membership says *which partition* a transition belongs to; it is
+    not proof that the transition was actually verified.  Keep the two
+    predicates separate so a direct-SQL or legacy writer cannot turn a
+    partial/compile-only receipt into a learner event.  Audit-only
+    held-out/calibration observations intentionally bypass this helper and are
+    still retained with ``NOT_LEARNER_ELIGIBLE`` semantics.
+    """
+    verifier = facts.verifier
+    reasons: list[str] = []
+    if verifier.get("verdict") not in {"PASS", "FAIL"}:
+        reasons.append("verifier_verdict_not_definitive")
+    if verifier.get("oracle_complete") is not True:
+        reasons.append("oracle_incomplete")
+    if verifier.get("oracle_type") in {"UNKNOWN", "COMPILE", "LINT"}:
+        reasons.append("oracle_type_not_executable")
+    full_oracle = verifier.get("full_oracle")
+    if full_oracle is not None:
+        if not isinstance(full_oracle, dict):
+            reasons.append("full_oracle_malformed")
+        else:
+            for arm in ("before", "after"):
+                payload = full_oracle.get(arm)
+                if not isinstance(payload, dict) or payload.get("complete") is not True:
+                    reasons.append(f"full_oracle_{arm}_incomplete")
+    if reasons:
+        raise ValueError(
+            "online learner observation requires complete verified execution: "
+            + ",".join(sorted(set(reasons))))
+
+
 def _affected_rule_ids(conn: sqlite3.Connection,
                        transition_id: str, *,
                        campaign_id: str) -> tuple[str, ...]:
@@ -515,6 +548,13 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
     may use to trigger affected-group consolidation.
     """
     learner_eligible, split = _membership(conn, transition_id, campaign_id)
+    # Load and validate the content-addressed transition before any replay or
+    # derived write.  Membership alone is not an execution oracle.  Ineligible
+    # evaluation partitions remain audit-only and deliberately do not need a
+    # learner-grade oracle here.
+    facts = load_transition_facts(conn, transition_id)
+    if learner_eligible:
+        _require_verified_execution(facts)
     # Observation creates a causal fragment and a linked event chain as one
     # derived shadow update.  A later novelty/conflict/preview failure must
     # not leave an orphaned prefix that falsely appears to be a complete
@@ -537,7 +577,6 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
                 conn.commit()
             return replay
 
-        facts = load_transition_facts(conn, transition_id)
         signature = mechanism_signature(facts)
         fragment = build_transition_causal_fragment(
             conn, transition_id, campaign_id=campaign_id, commit=False)
