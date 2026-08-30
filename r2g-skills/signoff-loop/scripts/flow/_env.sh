@@ -89,6 +89,14 @@ if [[ "$_r2g_hermetic" == "1" ]]; then
   done
 fi
 
+# ORFS_ROOT is used immediately below to derive FLOW_DIR/FLOW_HOME.  Restore an
+# explicit caller pin before that derivation; waiting until the later system
+# layer would let env.local.sh's older checkout select its flow scripts even
+# though the caller chose a clean/source-frozen tree.
+if [[ -n "${_r2g_caller_env[ORFS_ROOT]:-}" ]]; then
+  export ORFS_ROOT="${_r2g_caller_env[ORFS_ROOT]}"
+fi
+
 # --- 2. Locate ORFS ------------------------------------------------------
 _r2g_find_orfs() {
   local candidates=(
@@ -130,6 +138,10 @@ if [[ -n "${ORFS_ROOT:-}" ]]; then
     # the environment exports but suppress that stale diagnostic; the direct
     # bundle pins below are the authoritative executable paths.
     source "$ORFS_ROOT/env.sh" >/dev/null
+    # ORFS's helper derives FLOW_HOME from its own source path.  Restore the
+    # caller-selected root so a clean/source-frozen checkout cannot silently
+    # execute scripts from a sibling dirty checkout.
+    export FLOW_HOME="$ORFS_ROOT/flow"
   fi
 fi
 

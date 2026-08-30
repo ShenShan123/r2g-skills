@@ -4984,3 +4984,29 @@ digest=`b3a8b2e09af926880cc964245007ab5d3bdc1e6ea3ac5b6da2c4f2dae5b0d1de`，repl
 工具链解析混乱，不提升 strict oracle 或 authority 状态；必须在 clean ORFS source
 freeze 上重新 record/check，并完成 single-design strict smoke 后，才可继续 full
 ORFS batch 和独立 lineage evidence。
+
+### 2026-08-30 clean ORFS source 解析修复与 direct smoke 负证据
+
+为验证“个人目录工具链 + 可复现 ORFS source”边界，保留原有脏 checkout 不动，并从
+同一 ORFS commit (`eb14d768b6c34cf4f8c5177f3531422b94cf2544`) 建立了独立的 clean
+worktree：`/data1/zhangdy/Tools/OpenROAD-flow-scripts-clean`。四份共享 resolver
+此前存在一个隐蔽顺序问题：`env.local.sh` 可能先覆盖 `ORFS_ROOT`，随后才恢复调用方
+的 pin，导致 `FLOW_DIR`/`FLOW_HOME` 已经从别人的 checkout 派生。现在 resolver 会
+在 ORFS 定位和路径派生之前恢复调用方的 `ORFS_ROOT`，并在 source ORFS `env.sh` 后
+再次固定 `FLOW_HOME=$ORFS_ROOT/flow`；四份 `_env.sh` 仍保持字节一致。新增回归覆盖
+了 stale env-file checkout 不得替换调用方 source tree，定向 bootstrap 测试为
+`25 passed`。
+
+随后用 direct bundle（无 conda、无 `/usr`/`/opt` fallback）对 clean `gcd` 做了有界
+single-design ORFS smoke。综合阶段成功，但 floorplan 阶段 direct
+`openroad.bin` 在 `rsz::Resizer::tieLocation` / `repairTieFanout` 路径收到
+`SIGSEGV`；flow 在 signoff、equivalence、graph 和 capture 之前停止。这是当前
+OpenROAD binary 与该 ORFS source/PDK 组合不兼容的 negative compatibility evidence，
+不是设计质量、学习收益或 canonical memory evidence，不能写入 learner、canonical
+memory、promotion gate 或 production runtime。
+
+因此当前推进顺序仍为：取得或构建与 clean ORFS commit 匹配的 OpenROAD，重新
+record/check production toolchain manifest；再次通过单设计 strict smoke（含
+oracle、lineage、replay）后，才允许小批量 full-ORFS 积累独立 lineage evidence，
+再依据六项 promotion gate 评估 authority。现阶段不启动 full ORFS batch，也不以本次
+segmentation fault 作为任何正向能力结论。

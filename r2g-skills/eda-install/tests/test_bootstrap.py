@@ -309,6 +309,46 @@ def test_env_sh_preserves_explicit_caller_toolchain_overrides(tmp_path):
     assert result.stdout.splitlines() == [str(caller_openroad), str(caller_yosys)]
 
 
+def test_env_sh_preserves_caller_orfs_root_before_flow_derivation(tmp_path):
+    """A stale env-file checkout must not replace the caller's ORFS source tree.
+
+    FLOW_DIR/FLOW_HOME are derived immediately after env-file loading.  Keep a
+    separate, valid stale checkout in the env file so a resolver that restores
+    ORFS_ROOT too late would silently select it.
+    """
+    envsh = tmp_path / "_env.sh"
+    envsh.write_text(ENV_COPIES[0].read_text())
+
+    caller_orfs = tmp_path / "caller-orfs"
+    (caller_orfs / "flow").mkdir(parents=True)
+    (caller_orfs / "flow" / "Makefile").write_text("all:\n")
+    (caller_orfs / "env.sh").write_text(
+        "export FLOW_HOME=/stale/from-orfs-env\n"
+    )
+    stale_orfs = tmp_path / "stale-orfs"
+    (stale_orfs / "flow").mkdir(parents=True)
+    (stale_orfs / "flow" / "Makefile").write_text("all:\n")
+    env_file = tmp_path / "stale.env"
+    env_file.write_text(
+        f'export ORFS_ROOT="{stale_orfs}"\n'
+        'export FLOW_HOME=/stale/from-env-file\n'
+    )
+
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(tmp_path / "home"),
+        "ORFS_ROOT": str(caller_orfs),
+        "R2G_ENV_FILE": str(env_file),
+    }
+    script = (f'source "{envsh}" >/dev/null 2>&1; '
+              'printf "%s\\n%s\\n%s\\n" "$ORFS_ROOT" "$FLOW_DIR" "$FLOW_HOME"')
+    result = subprocess.run(["bash", "-c", script], env=env,
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.splitlines() == [
+        str(caller_orfs), str(caller_orfs / "flow"), str(caller_orfs / "flow")
+    ]
+
+
 # --- conda-staged PDK autodetect ----------------------------------------------
 
 def test_env_sh_detects_conda_staged_pdk(tmp_path):

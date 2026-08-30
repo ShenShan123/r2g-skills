@@ -2135,3 +2135,19 @@ OpenROAD 重新 record/check。
 `miniconda3` 目录已不存在，三份 skill 的 `references/env.local.sh` 均已重写为上述
 direct paths，旧的 env backup 也已清理。该迁移只改变工具链解析和 provenance，不写
 canonical memory、authority 或 production runtime。
+
+### 2026-08-30 clean ORFS root resolver 与单设计兼容性检查
+
+为避免个人目录之外的脏 ORFS checkout 被隐式调用，已从 commit
+`eb14d768b6c34cf4f8c5177f3531422b94cf2544` 建立 clean worktree
+`/data1/zhangdy/Tools/OpenROAD-flow-scripts-clean`。四份 `scripts/flow/_env.sh` 现
+在路径派生前恢复调用方的 `ORFS_ROOT`，并在加载 ORFS `env.sh` 后重新固定
+`FLOW_HOME=$ORFS_ROOT/flow`；新增 stale env-file 回归，bootstrap 定向测试为
+`25 passed`。
+
+使用 direct bundle 对 clean `gcd` 运行有界 ORFS smoke 时，synth 通过，但 floorplan
+阶段 direct OpenROAD 在 `rsz::Resizer::tieLocation` / `repairTieFanout` 触发
+`SIGSEGV`，尚未进入 signoff/equivalence/graph/capture。该结果只说明当前 direct
+OpenROAD 与该 ORFS source/PDK 组合尚未兼容，不是 learner、canonical memory 或
+authority evidence；full ORFS batch 继续保持阻塞。下一步必须先获得匹配的 OpenROAD，
+重新生成 production manifest，再通过 single-design strict smoke 后才扩大批量。
