@@ -389,6 +389,98 @@ def test_strict_policy_binding_replays_frozen_contract_and_shadow_flags():
         tampered, {"calibration_policy": tampered}, contract)
 
 
+def test_strict_prepare_rejects_policy_jsonl_drift_before_predictor(tmp_path,
+                                                                     monkeypatch):
+    """The integration seam must reject a changed policy, not just changed action."""
+    contract = density_relief_nonregression_32()
+    action = contract_action(contract)
+    signature = _action_signature(action)
+    context = _context()
+    context["platform"] = "sky130hs"
+    context["digest"] = hashlib.sha256(stable_dumps(
+        {key: value for key, value in context.items() if key != "digest"}
+    ).encode()).hexdigest()
+    policy = {
+        "version": "parametric-lineage-grouped-shadow-policy-v1",
+        "family": "DENSITY_RELIEF", "status": "ready",
+        "scope": {"platform": "sky130hs", "family": "DENSITY_RELIEF",
+                  "dataset_tier": "strict_clean"},
+        "action_signature": signature,
+        "utility_contract_id": contract["contract_id"],
+        "utility_contract_digest": utility_contract_digest(contract),
+        "firewall": {"heldout_lineages": ["cal:a", "cal:b", "cal:c"],
+                      "disjoint": True, "overlap": []},
+        "thresholds": {"max_distance": 3.0, "required_coverage": 0.8},
+        "calibration": {"empirical_coverage": 1.0,
+                         "required_metrics": ["area_um2"]},
+        "shadow_only": True, "promotion_eligible": False,
+        "canonical_memory_mutation": "none",
+    }
+    cases = []
+    rows = []
+    for suffix in ("a", "b"):
+        lineage = f"future:{suffix}"
+        case_id = f"{lineage}:observation"
+        cases.append({
+            "case_id": case_id, "target_id": f"{lineage}:target",
+            "lineage_id": lineage, "platform": "sky130hs",
+            "family": "DENSITY_RELIEF", "phase": "observation",
+            "graph_context_digest": context["digest"],
+            "candidate_actions": [action],
+            "calibration_policy": policy, "policy_scope": policy["scope"],
+        })
+        rows.append({
+            "case_id": case_id, "source_lineage": lineage,
+            "mode": "observation", "family": "DENSITY_RELIEF",
+            "graph_context": context, "action": action,
+            "calibration_policy": policy, "policy_scope": policy["scope"],
+        })
+    manifest = {
+        "version": "parametric-prospective-manifest-v1", "status": "FROZEN",
+        "require_utility_contract": True,
+        "contract_id": contract["contract_id"],
+        "utility_contract_digest": utility_contract_digest(contract),
+        "action_signature": {
+            "domain": contract["action_signature"]["domain"],
+            "family": contract["action_signature"]["transformation_family"],
+            "config_edits": contract["action_signature"]["config_edits"],
+            "operation_point": contract["action_signature"]["operation_point"],
+        },
+        "source_freeze": {"bundle_digest": "bundle-a", "manifest_digest": "manifest-a"},
+        "firewall": {"training_lineages": [], "calibration_lineages": [],
+                      "heldout_lineages": [], "ab_lineages": []},
+        "cases": cases,
+        "pre_registered_metrics": {"hard_ood_ceiling": 3.0,
+                                    "min_interval_coverage": 0.8,
+                                    "max_harmful_rate": 0.1,
+                                    "min_obligation_coverage": 0.95},
+    }
+    manifest_path = tmp_path / "prospective.json"
+    manifest_path.write_bytes(stable_dumps(manifest).encode())
+    cases_path = tmp_path / "cases.jsonl"
+    rows[0]["calibration_policy"] = {**policy, "shadow_only": False}
+    cases_path.write_bytes(b"\n".join(stable_dumps(row).encode() for row in rows) + b"\n")
+    db_path = tmp_path / "snapshot.sqlite"
+    conn = db.connect(db_path)
+    db.ensure_schema(conn)
+    conn.close()
+    class Memory:
+        def predict(self, **kwargs):  # pragma: no cover - must not be reached
+            raise AssertionError("tampered policy reached predictor")
+    monkeypatch.setattr("run_parametric_shadow_campaign.PhysicalEffectMemory",
+                        lambda conn: Memory())
+    args = Namespace(
+        out_dir=tmp_path / "campaign", log=tmp_path / "campaign/events.jsonl",
+        db=db_path, cases=cases_path,
+        readiness=_write_json(tmp_path / "readiness.json", _readiness()),
+        replay_evidence=_write_json(tmp_path / "replay.json", _replay()),
+        prospective_manifest=manifest_path, outcomes=None,
+        observation_metrics=None,
+    )
+    with pytest.raises(ShadowCampaignError, match="calibration policy is not bound"):
+        prepare(args)
+
+
 def _write_json(path: Path, value: dict) -> Path:
     path.write_bytes(stable_dumps(value).encode())
     return path
