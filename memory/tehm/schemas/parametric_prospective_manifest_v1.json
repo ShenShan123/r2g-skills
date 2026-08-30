@@ -4,10 +4,11 @@
   "title": "TEHM Parametric Prospective Campaign Manifest v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "status", "source_freeze", "firewall", "cases", "pre_registered_metrics", "contract_id", "utility_contract_digest", "action_signature"],
+  "required": ["version", "status", "source_freeze", "firewall", "cases", "pre_registered_metrics"],
   "properties": {
     "version": {"const": "parametric-prospective-manifest-v1"},
     "status": {"enum": ["PLANNED", "FROZEN", "EXECUTED"]},
+    "require_utility_contract": {"type": "boolean"},
     "contract_id": {"type": "string", "minLength": 1},
     "utility_contract_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "action_signature": {
@@ -21,10 +22,43 @@
         "operation_point": {"type": "string", "minLength": 1}
       }
     },
-    "source_freeze": {"type": "object", "required": ["bundle_digest", "manifest_digest"]},
-    "firewall": {"type": "object", "required": ["training_lineages", "calibration_lineages", "heldout_lineages", "ab_lineages"]},
+    "source_freeze": {
+      "type": "object",
+      "required": ["bundle_digest", "manifest_digest"],
+      "properties": {
+        "bundle_digest": {"type": "string", "minLength": 1},
+        "manifest_digest": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    },
+    "firewall": {
+      "type": "object",
+      "required": ["training_lineages", "calibration_lineages", "heldout_lineages", "ab_lineages"],
+      "properties": {
+        "training_lineages": {"type": "array", "items": {"type": "string"}},
+        "calibration_lineages": {"type": "array", "items": {"type": "string"}},
+        "heldout_lineages": {"type": "array", "items": {"type": "string"}},
+        "ab_lineages": {"type": "array", "items": {"type": "string"}},
+        "future_lineages": {"type": "array", "items": {"type": "string"}},
+        "disjoint": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    },
     "cases": {"type": "array", "items": {"type": "object"}},
-    "pre_registered_metrics": {"type": "object", "required": ["hard_ood_ceiling", "min_interval_coverage", "max_harmful_rate", "min_obligation_coverage"]},
+    "pre_registered_metrics": {
+      "type": "object",
+      "required": ["hard_ood_ceiling", "min_interval_coverage", "max_harmful_rate", "min_obligation_coverage"],
+      "properties": {
+        "hard_ood_ceiling": {"type": "number"},
+        "min_interval_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "max_harmful_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "min_obligation_coverage": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": true
+    },
+    "target_groups": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+    "validation": {"type": "object", "additionalProperties": true},
+    "manifest_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "decision_gate": {
       "type": "object",
       "additionalProperties": false,
@@ -37,5 +71,16 @@
         "min_metric_evaluations": {"type": "integer", "minimum": 1}
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["require_utility_contract"],
+        "properties": {"require_utility_contract": {"const": true}}
+      },
+      "then": {
+        "required": ["contract_id", "utility_contract_digest", "action_signature"]
+      }
+    }
+  ]
 }
