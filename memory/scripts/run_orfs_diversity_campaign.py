@@ -465,6 +465,14 @@ def main(argv=None) -> int:
     ap.add_argument("--projects", nargs="+", default=None,
                     help="optional absolute project paths to run; all manifest projects otherwise")
     ap.add_argument("--ab-repeats", type=int, default=2)
+    ap.add_argument("--density-before", default="70",
+                    help="CORE_UTILIZATION baseline for DENSITY_RELIEF arms")
+    ap.add_argument("--density-after", default="35",
+                    help="CORE_UTILIZATION candidate for DENSITY_RELIEF arms")
+    ap.add_argument("--routing-before", default="0.55",
+                    help="ROUTING_LAYER_ADJUSTMENT baseline for routing arms")
+    ap.add_argument("--routing-after", default="0.15",
+                    help="ROUTING_LAYER_ADJUSTMENT candidate for routing arms")
     args = ap.parse_args(argv)
     root = enforce_work_root(args.root)
     staging_db = require_staging_destination(
@@ -478,7 +486,11 @@ def main(argv=None) -> int:
         manifest = prepare(
             root, args.orfs_root.resolve(),
             toolchain_manifest=(args.toolchain_manifest.resolve()
-                                 if args.toolchain_manifest else None))
+                                 if args.toolchain_manifest else None),
+            density_before=str(args.density_before),
+            density_after=str(args.density_after),
+            routing_before=str(args.routing_before),
+            routing_after=str(args.routing_after))
     else:
         manifest = _load(manifest_path)
         if not manifest:
@@ -520,7 +532,9 @@ def main(argv=None) -> int:
 
 
 def prepare(root: Path, orfs_root: Path, *,
-            toolchain_manifest: Path | None = None) -> dict:
+            toolchain_manifest: Path | None = None,
+            density_before: str = "70", density_after: str = "35",
+            routing_before: str = "0.55", routing_after: str = "0.15") -> dict:
     if toolchain_manifest is not None:
         # Bind the lock before materializing any case.  A malformed or drifting
         # manifest is a setup error, not an observation that can be quarantined
@@ -529,7 +543,11 @@ def prepare(root: Path, orfs_root: Path, *,
             {"orfs_root": str(orfs_root),
              "toolchain_manifest": str(toolchain_manifest)}, root=root)
     items = []
-    for platform, design, family, knob, before_value, after_value in MATRIX:
+    for platform, design, family, knob, _default_before, _default_after in MATRIX:
+        if family == "DENSITY_RELIEF":
+            before_value, after_value = density_before, density_after
+        else:
+            before_value, after_value = routing_before, routing_after
         template = orfs_root / "flow" / "designs" / platform / design
         cfg, sdc = template / "config.mk", template / "constraint.sdc"
         if not cfg.is_file() or not sdc.is_file():
@@ -562,6 +580,12 @@ def prepare(root: Path, orfs_root: Path, *,
         "campaign_version": VERSION, "orfs_root": str(orfs_root),
         "toolchain_manifest": (str(toolchain_manifest.resolve())
                                 if toolchain_manifest is not None else None),
+        "parameterization": {
+            "density_before": str(density_before),
+            "density_after": str(density_after),
+            "routing_before": str(routing_before),
+            "routing_after": str(routing_after),
+        },
         "items": items, "transition_target": len(items),
         "storage_policy": storage_policy(root),
         "firewall": {"training_lineages": sorted({x["lineage_id"] for x in items}),

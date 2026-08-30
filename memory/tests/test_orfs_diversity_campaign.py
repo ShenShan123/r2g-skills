@@ -111,6 +111,37 @@ def test_prepare_has_disjoint_heldout_and_platform_family_matrix(tmp_path):
     assert "export IO_CONSTRAINTS = \n" in gf_config.read_text()
 
 
+def test_prepare_records_explicit_knob_parameterization(tmp_path):
+    orfs = tmp_path / "orfs"
+    templates = (("sky130hs", "gcd"), ("sky130hs", "aes"),
+                 ("gf180", "jpeg"), ("gf180", "riscv32i"),
+                 ("ihp-sg13g2", "spi"))
+    for platform, design in templates:
+        directory = orfs / "flow" / "designs" / platform / design
+        directory.mkdir(parents=True)
+        (directory / "constraint.sdc").write_text("create_clock -period 10 clk\n")
+        (directory / "config.mk").write_text(
+            f"export DESIGN_NICKNAME = {design}\n"
+            f"export DESIGN_NAME = {design}\n"
+            f"export PLATFORM = {platform}\n")
+    root = tmp_path / "campaign"
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "--phase", "prepare", "--root", str(root),
+         "--orfs-root", str(orfs), "--density-before", "50",
+         "--density-after", "40", "--routing-before", "0.45",
+         "--routing-after", "0.20"], cwd=REPO, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    manifest = json.loads((root / "campaign_manifest.json").read_text())
+    assert manifest["parameterization"] == {
+        "density_before": "50", "density_after": "40",
+        "routing_before": "0.45", "routing_after": "0.20",
+    }
+    density = [x for x in manifest["items"] if x["family"] == "DENSITY_RELIEF"]
+    routing = [x for x in manifest["items"] if x["family"] == "ROUTING_CAPACITY_RECOVERY"]
+    assert {(x["before_value"], x["after_value"]) for x in density} == {("50", "40")}
+    assert {(x["before_value"], x["after_value"]) for x in routing} == {("0.45", "0.20")}
+
+
 def test_heldout_phase_preserves_captured_training_rows(tmp_path):
     orfs = tmp_path / "orfs"
     template = orfs / "flow" / "designs" / "ihp-sg13g2" / "spi"
