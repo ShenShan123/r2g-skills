@@ -221,6 +221,8 @@ design_cases/
 *.odb
 *.spef
 *.lyrdb
+r2g-skills/eda-install/references/install_manifest.json
+r2g-skills/*/references/env.local.sh.bak-*
 *.lvsdb
 synth/
 backend/RUN_*/

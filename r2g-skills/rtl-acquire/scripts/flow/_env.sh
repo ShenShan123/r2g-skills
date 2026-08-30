@@ -39,6 +39,14 @@ _r2g_saved_opts="$-"
 set +eu  # tolerate unset vars and detect misses from sourced snippets
 _R2G_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _R2G_SKILL_DIR="$(cd "$_R2G_ENV_DIR/../.." && pwd)"
+_r2g_hermetic="${R2G_HERMETIC:-0}"
+
+_r2g_hostwide() {
+  case "${1:-}" in
+    /usr/*|/opt/*|/bin/*|/sbin/*) return 0 ;;
+  esac
+  return 1
+}
 
 # Preserve true caller overrides across sourced environment scripts.  The
 # documented precedence says an exported caller value wins, but historically
@@ -48,7 +56,9 @@ _R2G_SKILL_DIR="$(cd "$_R2G_ENV_DIR/../.." && pwd)"
 declare -A _r2g_caller_env=()
 for _r2g_var in ORFS_ROOT OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EXE \
                 STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT SKY130A_DIR; do
-  [[ -n "${!_r2g_var:-}" ]] && _r2g_caller_env["$_r2g_var"]="${!_r2g_var}"
+  [[ -n "${!_r2g_var:-}" ]] || continue
+  [[ "$_r2g_hermetic" == "1" ]] && _r2g_hostwide "${!_r2g_var}" && continue
+  _r2g_caller_env["$_r2g_var"]="${!_r2g_var}"
 done
 
 # --- 1. User-provided env snippets ---------------------------------------
@@ -60,6 +70,22 @@ fi
 if [[ -f "$_R2G_SKILL_DIR/references/env.local.sh" ]]; then
   # shellcheck disable=SC1090,SC1091
   source "$_R2G_SKILL_DIR/references/env.local.sh"
+fi
+
+# A generated env.local.sh can carry the hermetic marker even when the parent
+# shell did not export it.  Refresh the mode after sourcing snippets, then
+# discard any inherited host-wide values before the system layer and fallback
+# probes can snapshot them as higher-priority pins.
+_r2g_hermetic="${R2G_HERMETIC:-$_r2g_hermetic}"
+if [[ "$_r2g_hermetic" == "1" ]]; then
+  for _r2g_var in ORFS_ROOT OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EXE \
+                  STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT SKY130A_DIR; do
+    _r2g_value="${!_r2g_var:-}"
+    [[ -n "$_r2g_value" ]] && _r2g_hostwide "$_r2g_value" && unset "$_r2g_var"
+    _r2g_value="${_r2g_caller_env[$_r2g_var]:-}"
+    [[ -n "$_r2g_value" ]] && _r2g_hostwide "$_r2g_value" && \
+      unset "_r2g_caller_env[$_r2g_var]"
+  done
 fi
 
 # --- 2. Locate ORFS ------------------------------------------------------
@@ -78,6 +104,7 @@ _r2g_find_orfs() {
   local c
   for c in "${candidates[@]}"; do
     [[ -z "$c" ]] && continue
+    [[ "$_r2g_hermetic" == "1" ]] && _r2g_hostwide "$c" && continue
     if [[ -f "$c/flow/Makefile" ]]; then
       echo "$c"
       return 0
@@ -112,7 +139,7 @@ for _r2g_var in ORFS_ROOT OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EX
 done
 
 # --- 3. System-wide env script (if any) ----------------------------------
-if [[ -f /opt/openroad_tools_env.sh ]]; then
+if [[ "$_r2g_hermetic" != "1" && -f /opt/openroad_tools_env.sh ]]; then
   # shellcheck disable=SC1091
   source /opt/openroad_tools_env.sh
 fi
@@ -138,12 +165,14 @@ _r2g_detect() {
   local var="$1"; shift
   local primary="$1"; shift
   local current="${!var:-}"
-  if [[ -n "$current" && -x "$current" ]]; then
+  if [[ -n "$current" && -x "$current" ]] && \
+     { [[ "$_r2g_hermetic" != "1" ]] || ! _r2g_hostwide "$current"; }; then
     export "$var=$current"
     return 0
   fi
   local cand
   for cand in "$@"; do
+    [[ "$_r2g_hermetic" == "1" ]] && _r2g_hostwide "$cand" && continue
     if [[ -x "$cand" ]]; then
       export "$var=$cand"
       return 0
@@ -151,7 +180,8 @@ _r2g_detect() {
   done
   local hit
   hit="$(command -v "$primary" 2>/dev/null || true)"
-  if [[ -n "$hit" ]]; then
+  if [[ -n "$hit" ]] && \
+     { [[ "$_r2g_hermetic" != "1" ]] || ! _r2g_hostwide "$hit"; }; then
     export "$var=$hit"
     return 0
   fi
@@ -187,7 +217,7 @@ if [[ -n "${ORFS_ROOT:-}" ]]; then
 fi
 
 _r2g_detect OPENROAD_EXE  openroad   \
-  "$_r2g_orfs_openroad" "$_r2g_conda_bin/openroad" \
+  "$_r2g_conda_bin/openroad" "$_r2g_orfs_openroad" \
   /usr/local/bin/openroad /usr/bin/openroad
 
 _r2g_detect YOSYS_EXE     yosys      \
@@ -231,8 +261,10 @@ if [[ -z "${NETGEN_EXE:-}" ]]; then
   done
 fi
 : "${NETGEN_EXE:=}"
-[[ -z "$NETGEN_EXE" && -x /usr/bin/netgen-lvs ]] && export NETGEN_EXE=/usr/bin/netgen-lvs
-[[ -z "$NETGEN_EXE" && -x /usr/local/bin/netgen ]] && export NETGEN_EXE=/usr/local/bin/netgen
+if [[ "$_r2g_hermetic" != "1" ]]; then
+  [[ -z "$NETGEN_EXE" && -x /usr/bin/netgen-lvs ]] && export NETGEN_EXE=/usr/bin/netgen-lvs
+  [[ -z "$NETGEN_EXE" && -x /usr/local/bin/netgen ]] && export NETGEN_EXE=/usr/local/bin/netgen
+fi
 
 _r2g_detect STA_EXE       sta        \
   /usr/local/bin/opensta /usr/local/bin/sta /usr/bin/opensta
@@ -267,7 +299,7 @@ fi
 
 # Host-wide PDKs are the final fallback.  User-local/conda PDKs above must win
 # so a bootstrap cannot silently mix a personal toolchain with /opt collateral.
-if [[ -z "${PDK_ROOT:-}" ]]; then
+if [[ "$_r2g_hermetic" != "1" && -z "${PDK_ROOT:-}" ]]; then
   for _p in /opt/pdks "$HOME/pdks" /usr/local/share/pdks; do
     if [[ -d "$_p" ]]; then export PDK_ROOT="$_p"; break; fi
   done
@@ -278,7 +310,8 @@ if [[ -n "${PDK_ROOT:-}" && -d "$PDK_ROOT/sky130A" ]]; then
 fi
 
 unset _r2g_orfs_openroad _r2g_orfs_yosys _cand _hit _p _detected _base _r2g_env \
-      _r2g_conda_bases _r2g_conda_bin _r2g_var _r2g_caller_env _r2g_pre_system_env
+      _r2g_conda_bases _r2g_conda_bin _r2g_var _r2g_caller_env _r2g_pre_system_env \
+      _r2g_hermetic _r2g_value
 # Restore caller's options
 case "$_r2g_saved_opts" in
   *e*) set -e ;;

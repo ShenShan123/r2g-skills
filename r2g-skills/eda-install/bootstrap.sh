@@ -128,6 +128,7 @@ fi
 
 # ---- detect ------------------------------------------------------------------
 [[ -n "$prefix" ]]       && export R2G_PREFIX="$prefix"
+[[ "$do_hermetic" == "1" ]] && export R2G_HERMETIC=1
 [[ -n "$graph_python" ]] && export R2G_GRAPH_PYTHON="$graph_python"
 [[ -n "$min_free" ]]     && export R2G_MIN_FREE_GB="$min_free"
 # Normalize commas → spaces; exported so install_platform_rules.sh fail-closes
@@ -363,6 +364,7 @@ fi
 YES_FLAG=();  [[ "$do_yes" == "1" ]]      && YES_FLAG=(--yes)
 LINK_FLAG=(); [[ "$deploy_link" == "1" ]] && LINK_FLAG=(--link)
 GP_FLAG=();   [[ -n "$graph_python" ]]     && GP_FLAG=(--graph-python "$graph_python")
+HERMETIC_FLAG=(); [[ "$do_hermetic" == "1" ]] && HERMETIC_FLAG=(--hermetic)
 FORCE_FLAG=(); [[ "$do_hermetic" == "1" ]] && FORCE_FLAG=(--force)
 
 run_tier() {
@@ -401,7 +403,7 @@ done
 if [[ -x "$SETUP_DIR/write_env_local.sh" || -f "$SETUP_DIR/write_env_local.sh" ]]; then
   echo
   echo "== pinning references/env.local.sh (both skills) =="
-  bash "$SETUP_DIR/write_env_local.sh" "${GP_FLAG[@]}" || \
+  bash "$SETUP_DIR/write_env_local.sh" "${GP_FLAG[@]}" "${HERMETIC_FLAG[@]}" || \
     echo "warning: env.local.sh pin step failed" >&2
 fi
 

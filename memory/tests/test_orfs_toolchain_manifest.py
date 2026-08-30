@@ -68,6 +68,35 @@ def test_user_prefix_binaries_are_internal_when_explicitly_pinned(tmp_path):
     assert replay["manifest_validation"]["valid"] is True
 
 
+def test_toolchain_preflight_labels_mixed_internal_sources(tmp_path):
+    """A prefix OpenROAD plus ORFS-packaged Yosys is visible as mixed."""
+    root = tmp_path / "orfs"
+    (root / "flow" / "scripts").mkdir(parents=True)
+    (root / "flow" / "Makefile").write_text("all:\n")
+    (root / "flow" / "scripts" / "synth_canonicalize.tcl").write_text("# probe\n")
+    packaged_yosys = root / "tools" / "install" / "yosys" / "bin" / "yosys"
+    packaged_yosys.parent.mkdir(parents=True)
+    packaged_yosys.write_text(
+        "#!/bin/sh\n"
+        "case \"$*\" in\n"
+        "  *-V*) echo 'Yosys 0.65' ;;\n"
+        "  *) echo '-unit_delay' ;;\n"
+        "esac\n"
+    )
+    packaged_yosys.chmod(0o755)
+    prefix = tmp_path / "prefix"
+    openroad = prefix / "miniconda3" / "envs" / "eda" / "bin" / "openroad"
+    openroad.parent.mkdir(parents=True)
+    openroad.write_text("#!/bin/sh\necho openroad\n")
+    openroad.chmod(0o755)
+    report = preflight_orfs_toolchain(
+        {"orfs_root": str(root)},
+        env={"R2G_PREFIX": str(prefix), "OPENROAD_EXE": str(openroad)},
+    )
+    assert report["status"] == "bound_internal", report
+    assert report["compatibility"] == "mixed_internal"
+
+
 def test_manifest_replay_rejects_binary_replacement(tmp_path):
     root, openroad, _yosys = _fake_orfs(tmp_path / "orfs")
     report = preflight_orfs_toolchain({"orfs_root": str(root)}, env={})

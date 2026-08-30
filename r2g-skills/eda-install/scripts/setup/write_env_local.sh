@@ -24,18 +24,27 @@ SKILLS_ROOT="$(cd -- "$SKILL_ROOT/.." && pwd)"            # …/r2g-skills (targ
 
 graph_python="${R2G_GRAPH_PYTHON:-}"
 do_dry=0
+hermetic=0
 declare -a TARGETS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --graph-python) graph_python="${2:-}"; shift 2 ;;
     --dry-run)      do_dry=1; shift ;;
+    --hermetic)     hermetic=1; shift ;;
     --target)       TARGETS+=("${2:-}"); shift 2 ;;   # override output dir(s), repeatable
     -h|--help)
-      echo "usage: write_env_local.sh [--graph-python PATH] [--dry-run] [--target references-dir]..."; exit 0 ;;
+      echo "usage: write_env_local.sh [--graph-python PATH] [--hermetic] [--dry-run] [--target references-dir]..."; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
+
+hostwide_path() {
+  case "${1:-}" in
+    /usr/*|/opt/*|/bin/*|/sbin/*) return 0 ;;
+  esac
+  return 1
+}
 
 # Default targets: every consumer skill's references/ dir (rtl-acquire delegates
 # to the same shared _env.sh + pins, incl. R2G_GRAPH_PYTHON for netlist graphs).
@@ -66,9 +75,42 @@ for _t in "${TARGETS[@]}"; do
   fi
 done
 
+# A previous diagnostic run may have left /usr or /opt pins in a consumer
+# env.local.sh.  Hermetic bootstrap must not recall those pins and then let them
+# override the newly installed user-prefix binaries.  Keep user-owned pins and
+# ORFS/PDK roots; only discard host-wide executable/directory values.
+if [[ "$hermetic" == "1" ]]; then
+  for _v in OPENROAD_EXE YOSYS_EXE STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE \
+            KLAYOUT_CMD MAGIC_EXE NETGEN_EXE PDK_ROOT SKY130A_DIR ORFS_ROOT; do
+    _val="${!_v:-}"
+    [[ -n "$_val" ]] && hostwide_path "$_val" && unset "$_v"
+  done
+fi
+
+# A prior hermetic run may have pinned the no-sudo conda Yosys.  If the selected
+# ORFS checkout already contains its own packaged Yosys, let the resolver choose
+# that flow-matched binary instead; its capability probe is part of the TEHM
+# preflight contract and can reject older conda builds (e.g. missing
+# ``read_liberty -unit_delay``).  Only discard the pin when the resolved target
+# remains inside ORFS_ROOT, so a symlink escape cannot be reintroduced here.
+if [[ "$hermetic" == "1" && -n "${ORFS_ROOT:-}" ]]; then
+  for _candidate in "$ORFS_ROOT/tools/install/yosys/bin/yosys" \
+                    "$ORFS_ROOT/tools/install/Yosys/bin/yosys"; do
+    if [[ -x "$_candidate" ]]; then
+      _resolved_candidate="$(readlink -f "$_candidate" 2>/dev/null || true)"
+      case "$_resolved_candidate" in
+        "$ORFS_ROOT"/*) unset YOSYS_EXE; break ;;
+      esac
+    fi
+  done
+fi
+
 # Resolve the toolchain (regenerating from resolved values is idempotent).
 # Chatter to stderr; keep our stdout clean.
 export R2G_GRAPH_PYTHON="$graph_python"
+if [[ "$hermetic" == "1" ]]; then
+  export R2G_HERMETIC=1
+fi
 # shellcheck source=/dev/null
 source "$FLOW_DIR_SH/_env.sh" 1>&2
 
@@ -90,6 +132,18 @@ if [[ -z "$graph_python" ]]; then
 fi
 
 _orfs_install_prefix="${ORFS_ROOT:-}/tools/install/"
+
+# Prefer the hermetic OpenROAD copy, while retaining an ORFS-packaged Yosys when
+# it is available.  The ORFS tree's Yosys is tied to its flow and may carry
+# capabilities (for example ``read_liberty -unit_delay``) that the old
+# no-sudo conda build does not.  A compatible tree-packaged tool must not be
+# replaced merely because a second user-owned binary exists.
+if [[ "$hermetic" == "1" && -n "${R2G_PREFIX:-}" ]]; then
+  _prefix_bin="$R2G_PREFIX/miniconda3/envs/${R2G_CONDA_ENV:-eda}/bin"
+  [[ -x "$_prefix_bin/openroad" ]] && OPENROAD_EXE="$_prefix_bin/openroad"
+  [[ ! -x "${YOSYS_EXE:-}" && -x "$_prefix_bin/yosys" ]] && YOSYS_EXE="$_prefix_bin/yosys"
+  export OPENROAD_EXE YOSYS_EXE
+fi
 
 # emit_export VAR VALUE [skip_if_under_prefix]
 emit_export() {
@@ -116,6 +170,7 @@ HDR
   # Keep the conda search root explicit so a fresh shell can classify and
   # rediscover user-prefix OpenROAD/Yosys without relying on PATH or /opt.
   emit_export R2G_PREFIX "${R2G_PREFIX:-}"
+  [[ "$hermetic" == "1" ]] && echo 'export R2G_HERMETIC="1"'
   emit_export ORFS_ROOT "${ORFS_ROOT:-}"
   echo
   echo "# --- Tool binaries (pinned only when outside \$ORFS_ROOT/tools/install) ----"

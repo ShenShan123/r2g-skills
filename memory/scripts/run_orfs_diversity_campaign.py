@@ -284,8 +284,22 @@ def preflight_orfs_toolchain(manifest: dict, *, env: dict | None = None) -> dict
 
     if not report["reasons"]:
         report["status"] = "bound_external" if external else "bound_internal"
-        report["compatibility"] = (
-            "operator_bound_unverified" if external else "tree_packaged")
+        if external:
+            report["compatibility"] = "operator_bound_unverified"
+        else:
+            internal_sources = {
+                str(tool.get("source"))
+                for tool in report["tools"].values()
+            }
+            if internal_sources <= {"orfs_packaged", "orfs_explicit"}:
+                report["compatibility"] = "tree_packaged"
+            elif internal_sources <= {"r2g_prefix"}:
+                report["compatibility"] = "r2g_prefix"
+            else:
+                # A mixed internal binding remains user-owned, but must be
+                # visible in the receipt instead of being mislabeled as one
+                # tree-packaged release.
+                report["compatibility"] = "mixed_internal"
         report["fingerprint"] = hashlib.sha256(
             json.dumps({"orfs_root": str(root),
                         "toolchain_root": report["toolchain_root"],

@@ -4926,3 +4926,34 @@ record → check manifest，再做单设计 strict smoke。
 `core` 也不再把 `/usr`/`/opt` 二进制算作已满足。需要完整用户闭环时使用
 `bootstrap.sh --hermetic --yes --prefix <个人工具链目录>`（会检查并下载缺失的 core、
 frontend、PDK、graph tier）；本轮没有代为执行该下载。
+
+### 2026-08-30 hermetic core 安装后的工具链与记忆证据边界
+
+本轮实际执行了 `bootstrap.sh --hermetic --yes --tiers core --prefix
+/data1/zhangdy/Tools/tehm-toolchain`。Miniconda 已安装到个人目录，OpenROAD 采用
+`miniconda3/envs/eda/bin/openroad`（版本标识
+`f12e2f474102bfb875eeee57fb610d7d7de17770`，SHA256
+`19e18e5ae901f6f8c12e9367d8999fd88789f1531ac2bcb711071a935742fe88`）；Yosys 采用
+自有 ORFS 树的 `tools/install/yosys/bin/yosys`（0.65，SHA256
+`951defe968ce33f4265b733f87cfc8c0b14faad02a4985a996d86c2bf08119ba`）。conda 中随
+OpenROAD 一起解析到的 Yosys 0.38 缺少 `read_liberty -unit_delay`，因此 preflight
+fail-closed，不能因为它也在 `R2G_PREFIX` 下就混用；当前 fresh-shell pin 已固定为
+个人 OpenROAD + ORFS-packaged Yosys。
+
+安装过程中发现 `ensure_conda()` 将 Miniconda 安装器的 stdout 进度误捕获为路径，已
+将安装器输出转到 stderr，并增加回归测试。四份 resolver 继续字节一致；hermetic
+模式会跳过宿主机环境脚本和 `/usr`、`/opt`、`/bin`、`/sbin` fallback，同时 writer
+会清理旧的 system diagnostic pins。这些修复只改变工具链解析/可复现性，不改变
+canonical、causal、online、asset 或 capability authority。
+
+当前 preflight 对该组合报告 `status=bound_internal`、`compatibility=mixed_internal`：
+OpenROAD 来自个人 conda prefix，Yosys 来自 ORFS 配套目录。ORFS 树仍有未提交改动，
+故已生成的
+`/data1/zhangdy/Tools/tehm-toolchain/tehm-orfs-toolchain-manifest-diagnostic.json`
+（digest=`36b91777fe8d5a369e0f6c9630fb57dc4163195f6a9c646d8c118031d0ed3ee6`）必须标记
+为 `allow_dirty` diagnostic lock；它的 replay 已通过，但不能作为 production
+freeze。当前 conda core 之外的 Icarus/VVP、PDK、graph 仍缺失，且尚未确认该老版本
+OpenROAD 与 26Q2 ORFS flow 的 strict signoff 兼容性。下一步应建立 clean source
+freeze，完成剩余 hermetic oracle 工具，再做有界 single-design strict smoke；在此
+之前不启动完整 ORFS batch，不将 diagnostic observation 导入 learner/canonical，也不
+建立六项 promotion gate。

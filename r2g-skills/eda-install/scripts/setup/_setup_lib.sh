@@ -89,7 +89,11 @@ ensure_conda() {
   log "installing Miniconda (no-sudo) → $target"
   curl -fsSL -o "$bigv/miniconda.sh" "$MINICONDA_URL" \
     || { hint "Miniconda download failed (offline/proxy?) — fetch $MINICONDA_URL to $bigv/miniconda.sh, then re-run"; return 1; }
-  bash "$bigv/miniconda.sh" -b -p "$target" \
+  # ``ensure_conda`` is normally called through command substitution.  The
+  # Miniconda bootstrapper writes progress (including its ``PREFIX=...`` line)
+  # to stdout; allow that chatter to go to the caller's stderr so the command
+  # substitution contains exactly one value: the conda executable path.
+  bash "$bigv/miniconda.sh" -b -p "$target" >&2 \
     || { hint "Miniconda install failed"; return 1; }
   echo "$target/bin/conda"
 }

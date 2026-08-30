@@ -24,6 +24,7 @@ SKILLS_ROOT = EDA_ROOT.parent                           # …/r2g-skills
 DETECT = EDA_ROOT / "scripts" / "setup" / "detect_env.sh"
 BOOTSTRAP = EDA_ROOT / "bootstrap.sh"
 WRITE_ENV = EDA_ROOT / "scripts" / "setup" / "write_env_local.sh"
+SETUP_LIB = EDA_ROOT / "scripts" / "setup" / "_setup_lib.sh"
 # The shared resolver ships byte-identical in ALL FOUR skills (CLAUDE.md md5 invariant).
 ENV_COPIES = [
     EDA_ROOT / "scripts" / "flow" / "_env.sh",
@@ -469,3 +470,136 @@ def test_write_env_local_drops_stale_tool_pin(tmp_path):
     body = (refs / "env.local.sh").read_text()
     assert f'{tmp_path}/gone/iverilog' not in body, "stale tool pin was carried forward"
     assert f'{tmp_path}/gone-pdk' not in body, "stale PDK_ROOT pin was carried forward"
+
+
+def test_ensure_conda_returns_clean_path_when_installer_is_chatty(tmp_path):
+    """A bootstrapper's stdout must not corrupt the command-substitution result.
+
+    The real Miniconda installer prints ``PREFIX=...`` and progress lines to
+    stdout.  ``ensure_conda`` is called as ``conda=$(...)``; regression coverage
+    ensures only the executable path is returned even when the installer is
+    verbose.
+    """
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    payload = tmp_path / "miniconda-installer.sh"
+    payload.write_text(
+        "#!/usr/bin/env bash\n"
+        "target=''\n"
+        "while [[ $# -gt 0 ]]; do\n"
+        "  [[ $1 == -p ]] && { target=$2; shift 2; continue; }\n"
+        "  shift\n"
+        "done\n"
+        "echo PREFIX=$target\n"
+        "echo Unpacking bootstrapper...\n"
+        "mkdir -p \"$target/bin\"\n"
+        "printf '#!/bin/sh\\n' > \"$target/bin/conda\"\n"
+        "chmod +x \"$target/bin/conda\"\n"
+    )
+    payload.chmod(0o755)
+    (fake_bin / "curl").write_text(
+        "#!/usr/bin/env bash\n"
+        "while [[ $# -gt 0 ]]; do\n"
+        "  [[ $1 == -o ]] && { out=$2; shift 2; continue; }\n"
+        "  shift\n"
+        "done\n"
+        f"cp {payload} \"$out\"\n"
+    )
+    (fake_bin / "curl").chmod(0o755)
+    script = (
+        f'source "{SETUP_LIB}"; '
+        f'MINICONDA_URL="file://{payload}"; '
+        'result="$(ensure_conda)"; printf "%s\\n" "$result"'
+    )
+    env = {
+        "PATH": f"{fake_bin}:/usr/bin:/bin",
+        "HOME": str(tmp_path / "home"),
+        "R2G_PREFIX": str(tmp_path / "prefix"),
+        "R2G_MIN_FREE_GB": "0",
+    }
+    (tmp_path / "prefix").mkdir()
+    result = subprocess.run(["bash", "-c", script], env=env,
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.strip() == str(tmp_path / "prefix" / "miniconda3" / "bin" / "conda")
+
+
+def test_hermetic_writer_replaces_stale_host_core_pins(tmp_path):
+    """Hermetic regeneration must not preserve diagnostic /usr/opt pins."""
+    prefix = tmp_path / "prefix"
+    conda_bin = prefix / "miniconda3" / "envs" / "eda" / "bin"
+    conda_bin.mkdir(parents=True)
+    for tool in ("openroad", "yosys"):
+        exe = conda_bin / tool
+        exe.write_text("#!/bin/sh\nexit 0\n")
+        exe.chmod(0o755)
+    orfs = tmp_path / "orfs"
+    (orfs / "flow").mkdir(parents=True)
+    (orfs / "flow" / "Makefile").write_text("all:\n")
+    refs = tmp_path / "references"
+    refs.mkdir()
+    (refs / "env.local.sh").write_text(
+        'export OPENROAD_EXE="/usr/bin/openroad"\n'
+        'export YOSYS_EXE="/opt/host/bin/yosys"\n'
+        'export PDK_ROOT="/opt/pdks"\n'
+    )
+    env = {k: v for k, v in __import__("os").environ.items()
+           if k not in {"OPENROAD_EXE", "YOSYS_EXE", "PDK_ROOT", "SKY130A_DIR",
+                        "R2G_ENV_FILE", "CONDA_PREFIX"}}
+    env.update({"PATH": "/usr/bin:/bin", "HOME": str(tmp_path / "home"),
+                "R2G_PREFIX": str(prefix), "R2G_CONDA_ENV": "eda",
+                "ORFS_ROOT": str(orfs), "R2G_HERMETIC": "1"})
+    subprocess.run(["bash", str(WRITE_ENV), "--hermetic", "--target", str(refs)],
+                   capture_output=True, text=True, check=True, env=env)
+    body = (refs / "env.local.sh").read_text()
+    assert f'export OPENROAD_EXE="{conda_bin / "openroad"}"' in body
+    assert f'export YOSYS_EXE="{conda_bin / "yosys"}"' in body
+    assert "/usr/bin/openroad" not in body
+    assert "/opt/host/bin/yosys" not in body
+    assert 'export R2G_HERMETIC="1"' in body
+
+
+def test_hermetic_env_rejects_inherited_host_fallbacks(tmp_path):
+    """The marker in a generated pin file must apply on a fresh flow shell."""
+    orfs = tmp_path / "orfs"
+    (orfs / "flow").mkdir(parents=True)
+    (orfs / "flow" / "Makefile").write_text("all:\n")
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(tmp_path / "home"),
+        "ORFS_ROOT": str(orfs),
+        "R2G_PREFIX": str(tmp_path / "prefix"),
+        "R2G_HERMETIC": "1",
+        "OPENROAD_EXE": "/usr/bin/openroad",
+        "YOSYS_EXE": "/opt/host/bin/yosys",
+        "PDK_ROOT": "/opt/pdks",
+    }
+    script = (f'source "{ENV_COPIES[0]}" >/dev/null 2>&1; '
+              'printf "%s\\n%s\\n%s\\n" "${OPENROAD_EXE:-}" '
+              '"${YOSYS_EXE:-}" "${PDK_ROOT:-}"')
+    result = subprocess.run(["bash", "-c", script], env=env,
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.splitlines() == ["", "", ""]
+
+
+def test_hermetic_marker_from_env_file_clears_cached_host_pins(tmp_path):
+    """A late hermetic marker must clear pins cached before env-file loading."""
+    env_file = tmp_path / "hermetic.env"
+    env_file.write_text('export R2G_HERMETIC="1"\n')
+    orfs = tmp_path / "orfs"
+    (orfs / "flow").mkdir(parents=True)
+    (orfs / "flow" / "Makefile").write_text("all:\n")
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(tmp_path / "home"),
+        "ORFS_ROOT": str(orfs),
+        "R2G_ENV_FILE": str(env_file),
+        "OPENROAD_EXE": "/usr/bin/openroad",
+        "YOSYS_EXE": "/opt/host/bin/yosys",
+        "PDK_ROOT": "/opt/pdks",
+    }
+    script = (f'source "{ENV_COPIES[0]}" >/dev/null 2>&1; '
+              'printf "%s\\n%s\\n%s\\n" "${OPENROAD_EXE:-}" '
+              '"${YOSYS_EXE:-}" "${PDK_ROOT:-}"')
+    result = subprocess.run(["bash", "-c", script], env=env,
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.splitlines() == ["", "", ""]

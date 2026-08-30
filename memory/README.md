@@ -2038,8 +2038,8 @@ Record and verify a selected tree as follows:
 python3 memory/scripts/record_orfs_toolchain_manifest.py record \
   --orfs-root "$ORFS_ROOT" \
   --prefix "$R2G_PREFIX" \
-  --openroad "$R2G_PREFIX/miniconda3/envs/eda/bin/openroad" \
-  --yosys "$R2G_PREFIX/miniconda3/envs/eda/bin/yosys" \
+  --openroad "$OPENROAD_EXE" \
+  --yosys "$YOSYS_EXE" \
   --pdk-root "$PDK_ROOT" \
   --output "$R2G_PREFIX/tehm-orfs-toolchain-manifest.json"
 python3 memory/scripts/record_orfs_toolchain_manifest.py check \
@@ -2068,3 +2068,31 @@ approval. The current inventory has no OpenROAD binary under
 `/data1/zhangdy/Tools`; it has Yosys 0.65 at `Tools/yosys/yosys` and at
 `Tools/OpenROAD-flow-scripts/tools/install/yosys/bin/yosys` (different SHA256
 builds).
+
+### 2026-08-30 hermetic core 安装与解析修复
+
+按上面的入口实际完成了个人目录的 core 安装：Miniconda 位于
+`/data1/zhangdy/Tools/tehm-toolchain/miniconda3`，OpenROAD 位于其 `eda` 环境
+（版本标识 `f12e2f474102bfb875eeee57fb610d7d7de17770`，SHA256
+`19e18e5ae901f6f8c12e9367d8999fd88789f1531ac2bcb711071a935742fe88`）。Yosys 选择
+自有 ORFS 树中与 flow 配套的 `tools/install/yosys/bin/yosys`（Yosys 0.65，SHA256
+`951defe968ce33f4265b733f87cfc8c0b14faad02a4985a996d86c2bf08119ba`）；同一 conda
+环境中的 Yosys 0.38 缺少当前 flow 所需的 `read_liberty -unit_delay`，已由
+preflight 明确拒绝，不能仅因路径在个人目录就当作兼容工具。
+
+四份 `_env.sh` 现在保持字节一致，并在 `R2G_HERMETIC=1` 时拒绝 `/usr`、`/opt`、
+`/bin`、`/sbin` 的回退；writer 也会清除历史诊断 pin，避免旧的 `/usr/bin/openroad`
+污染新安装。期间发现并修复了 `ensure_conda()` 捕获 Miniconda stdout 的 bug，增加了
+脚本回归覆盖。当前 fresh-shell pin 已写入 `R2G_HERMETIC=1`、用户 OpenROAD 和
+ORFS-packaged Yosys；Icarus/VVP、PDK、graph 仍未安装，因此完整 hermetic ORFS
+strict flow 尚未就绪。
+
+当前 preflight 对该组合报告 `status=bound_internal`、`compatibility=mixed_internal`：
+OpenROAD 来自个人 conda prefix，Yosys 来自 ORFS 配套目录。当前 ORFS checkout 仍有
+本地未提交改动，所以生成的
+`/data1/zhangdy/Tools/tehm-toolchain/tehm-orfs-toolchain-manifest-diagnostic.json`
+（digest=`36b91777fe8d5a369e0f6c9630fb57dc4163195f6a9c646d8c118031d0ed3ee6`）仅是
+`--allow-dirty` diagnostic lock（可重放但不能作为 production freeze）。必须先
+获得 clean、与该 OpenROAD 匹配的 ORFS source freeze，并补齐剩余 oracle 工具后，才可
+运行单设计 strict smoke 和后续真实 support cohort；本轮没有启动完整 batch，也没有
+改变 canonical memory、rule authority 或 production runtime。

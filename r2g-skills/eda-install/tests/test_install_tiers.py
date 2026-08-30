@@ -37,6 +37,14 @@ SKILLS_ROOT = EDA_ROOT.parent
 SETUP = EDA_ROOT / "scripts" / "setup"
 SIGNOFF_ENVFILE = SKILLS_ROOT / "signoff-loop" / "references" / "env.local.sh"
 
+
+def _signoff_env_is_hermetic() -> bool:
+    """The live pin may intentionally omit optional host tools after core-only setup."""
+    try:
+        return 'export R2G_HERMETIC="1"' in SIGNOFF_ENVFILE.read_text()
+    except OSError:
+        return False
+
 # tier name → installer file (must match bootstrap.sh's install_<tier>.sh dispatch)
 TIER_FILES = {
     "core": "install_core.sh",
@@ -136,8 +144,9 @@ def test_core_build_flag_builds_from_source():
 
 # --- idempotency: a satisfied tier short-circuits before any command ----------
 
-@pytest.mark.skipif(not SIGNOFF_ENVFILE.exists(),
-                    reason="needs a pinned env.local.sh so the conda tools resolve as present")
+@pytest.mark.skipif(
+    not SIGNOFF_ENVFILE.exists() or _signoff_env_is_hermetic(),
+    reason="needs a non-hermetic pinned env.local.sh with optional tools present")
 @pytest.mark.parametrize("tier", ["frontend", "sky130", "pdk"])
 def test_idempotent_when_present(tier):
     # dry-run (no --force): if the tool resolves, it must exit 0 with no '+ cmd'.
