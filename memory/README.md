@@ -2178,3 +2178,19 @@ reason。该修复只影响 evaluation/shadow causal retrieval，不改变 produ
 前严格校验；state snapshot/manifest 只有明确的历史 `NULL` 可兼容，存在的值必须是
 对象 JSON。新增 malformed payload 回归，异常时不会留下 causal shadow rows，也不会
 改变 canonical、authority 或 production runtime。
+
+### 2026-08-30 direct graph runtime 补齐
+
+按 direct bundle 规则，图阶段运行时也已安装到
+`/data1/zhangdy/Tools/tehm-toolchain/pyenvs/r2g-graph`：torch `2.13.0+cpu`、
+torch_geometric `2.8.0.post1`、pandas `3.0.5`。宿主机没有 `python3-venv`，因此没有
+退回 Conda；安装器改为复用 OSS CAD Suite 自带 Python/pip，把依赖放入隔离的
+`site-packages`，并生成携带 `PYTHONPATH` 的 wrapper。wrapper 已通过三项 import
+检查，三个 consumer `env.local.sh` 均已 pin `R2G_GRAPH_PYTHON`。首次失败的 venv
+残留链接已清理，原始 OSS CAD Suite `libexec/python3.11` 已校验恢复；当前
+`/data1/zhangdy/Tools` 及个人目录没有实际 Miniconda/Conda 安装（测试缓存中的
+临时 fixture 不参与 resolver）。
+
+这一步仅闭合 direct toolchain 的 graph 依赖，不改变 ORFS source/binary compatibility
+结论；OpenROAD 与 clean ORFS 的 floorplan SIGSEGV 仍是负兼容性证据，production
+manifest 和 full ORFS batch 继续等待匹配的 OpenROAD。

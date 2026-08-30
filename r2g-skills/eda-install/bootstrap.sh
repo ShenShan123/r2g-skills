@@ -405,6 +405,18 @@ for t in "${SELECTED[@]}"; do
   run_tier "$t" || install_rc=1
 done
 
+# A direct graph installer can materialize an isolated portable environment even
+# when the host has no python3-venv. Discover that deterministic path before the
+# pin step so a successful bootstrap never leaves graph execution unpinned.
+if [[ "$do_direct" == "1" && -z "$graph_python" ]]; then
+  _direct_graph="${R2G_TOOLCHAIN_ROOT:-${R2G_PREFIX:-${BIGV:-}}}/$GRAPH_VENV_SUBPATH/bin/python"
+  if [[ -x "$_direct_graph" ]] && "$_direct_graph" -c 'import torch, torch_geometric, pandas' >/dev/null 2>&1; then
+    graph_python="$_direct_graph"
+    GP_FLAG=(--graph-python "$graph_python")
+    export R2G_GRAPH_PYTHON="$graph_python"
+  fi
+fi
+
 # ---- pin env.local.sh --------------------------------------------------------
 if [[ -x "$SETUP_DIR/write_env_local.sh" || -f "$SETUP_DIR/write_env_local.sh" ]]; then
   echo

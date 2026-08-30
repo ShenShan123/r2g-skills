@@ -5065,3 +5065,19 @@ mapping，机制/兼容性及细节字段必须是非空字符串，effect 列�
 必须符合声明的 list contract。非法查询返回明确的 `malformed_query_*` fail-closed
 receipt，而不是继续匹配。该修复仍只作用于 evaluation/shadow lane，不授予 causal
 或 production authority。
+
+### 2026-08-30 direct graph runtime 补齐
+
+按 direct bundle 规则，图阶段运行时也已安装到
+`/data1/zhangdy/Tools/tehm-toolchain/pyenvs/r2g-graph`：torch `2.13.0+cpu`、
+torch_geometric `2.8.0.post1`、pandas `3.0.5`。宿主机没有 `python3-venv`，因此没有
+退回 Conda；安装器改为复用 OSS CAD Suite 自带 Python/pip，把依赖放入隔离的
+`site-packages`，并生成携带 `PYTHONPATH` 的 wrapper。wrapper 已通过三项 import
+检查，三个 consumer `env.local.sh` 均已 pin `R2G_GRAPH_PYTHON`。首次失败的 venv
+残留链接已清理，原始 OSS CAD Suite `libexec/python3.11` 已校验恢复；当前
+`/data1/zhangdy/Tools` 及个人目录没有实际 Miniconda/Conda 安装（测试缓存中的
+临时 fixture 不参与 resolver）。
+
+这一步仅闭合 direct toolchain 的 graph 依赖，不改变 ORFS source/binary compatibility
+结论；OpenROAD 与 clean ORFS 的 floorplan SIGSEGV 仍是负兼容性证据，production
+manifest 和 full ORFS batch 继续等待匹配的 OpenROAD。

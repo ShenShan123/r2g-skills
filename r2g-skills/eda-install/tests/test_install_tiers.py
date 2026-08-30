@@ -122,10 +122,26 @@ def test_pdk_installs_open_pdks_never_volare():
 def test_graph_builds_cpu_torch_venv(tmp_path):
     out = _run("install_graph.sh", "--dry-run", "--force",
                env={"R2G_PREFIX": str(tmp_path)}).stdout
-    assert "python3 -m venv" in out
+    assert "-m venv" in out or "--target" in out or "portable graph wrapper" in out
     assert "download.pytorch.org/whl/cpu" in out
     assert "torch_geometric" in out and "pandas" in out
     assert f"{tmp_path}/pyenvs/r2g-graph" in out            # honors R2G_PREFIX
+
+
+def test_graph_direct_bundle_uses_portable_site_packages(tmp_path):
+    direct = tmp_path / "direct"
+    pybin = direct / "oss-cad-suite" / "py3bin"
+    pybin.mkdir(parents=True)
+    for name in ("python3.11", "pip3.11"):
+        exe = pybin / name
+        exe.write_text("#!/bin/sh\nexit 0\n")
+        exe.chmod(0o755)
+    out = _run("install_graph.sh", "--dry-run", "--force",
+               env={"R2G_PREFIX": str(direct),
+                    "R2G_TOOLCHAIN_ROOT": str(direct)}).stdout
+    assert "--target" in out
+    assert "portable graph wrapper" in out
+    assert "-m venv" not in out
 
 
 def test_core_nosudo_uses_conda_no_build():
