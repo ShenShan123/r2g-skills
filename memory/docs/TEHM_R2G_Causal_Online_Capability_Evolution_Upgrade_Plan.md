@@ -4957,3 +4957,30 @@ OpenROAD 与 26Q2 ORFS flow 的 strict signoff 兼容性。下一步应建立 cl
 freeze，完成剩余 hermetic oracle 工具，再做有界 single-design strict smoke；在此
 之前不启动完整 ORFS batch，不将 diagnostic observation 导入 learner/canonical，也不
 建立六项 promotion gate。
+
+### 2026-08-30 direct bundle migration (current machine state)
+
+为消除 conda 与宿主机路径的歧义，当前机器已改用
+`/data1/zhangdy/Tools/tehm-toolchain` 作为唯一用户工具根。OpenROAD、flow-matched
+Yosys、Icarus/VVP、Verilator、KLayout、Magic、Netgen、OpenSTA 以及完整 sky130A
+PDK 均已落在该根的独立目录；OpenROAD 和 KLayout 使用 wrapper，分别携带其私有
+OR-Tools/KLayout payload，OSS CAD Suite 使用自己的 loader/lib。基础 glibc、Qt、Tcl
+运行库仍由操作系统提供，这是正常的 ABI 边界，不属于 EDA 工具选择。
+
+三份 consumer env pin 已更新为 direct paths，`_env.sh` 四份副本保持字节一致；
+`bootstrap.sh --direct`/`--no-conda` 会把 direct bundle 作为唯一候选，缺失时
+fail-closed，`conda_env_install()` 在该模式直接拒绝安装。原先的
+`tehm-toolchain/miniconda3` 已删除，避免后续被误解析。direct 迁移后的核心
+preflight/PDK marker lock 位于
+`/data1/zhangdy/Tools/tehm-toolchain/tehm-orfs-toolchain-manifest-direct-diagnostic.json`，
+digest=`b3a8b2e09af926880cc964245007ab5d3bdc1e6ea3ac5b6da2c4f2dae5b0d1de`，replay
+状态为 `bound_internal`。
+全量 direct 工具版本、SHA256 和 PDK marker 另记录在
+`/data1/zhangdy/Tools/tehm-toolchain/tehm-direct-toolchain-inventory.json`
+（SHA256=`340a96a0802b65a4ed5fd713ae195951cfb1b2693c5e0ac5a28759a24ebc15f3`）。
+
+该 lock 仍是 diagnostic：ORFS checkout 本身有未提交改动，且 direct OpenROAD 是
+从现有发行包提取的、尚未证明与当前 26Q2 ORFS source 完全匹配。因此这一步只关闭
+工具链解析混乱，不提升 strict oracle 或 authority 状态；必须在 clean ORFS source
+freeze 上重新 record/check，并完成 single-design strict smoke 后，才可继续 full
+ORFS batch 和独立 lineage evidence。

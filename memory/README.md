@@ -2096,3 +2096,42 @@ OpenROAD 来自个人 conda prefix，Yosys 来自 ORFS 配套目录。当前 ORF
 获得 clean、与该 OpenROAD 匹配的 ORFS source freeze，并补齐剩余 oracle 工具后，才可
 运行单设计 strict smoke 和后续真实 support cohort；本轮没有启动完整 batch，也没有
 改变 canonical memory、rule authority 或 production runtime。
+
+### 2026-08-30 direct Tools toolchain migration
+
+按操作要求，工具链已从“conda 优先”迁移为 `/data1/zhangdy/Tools/tehm-toolchain`
+下的直接用户目录。当前解析和 `check_env.sh` 在完全没有激活 conda、且
+`R2G_HERMETIC=1` 时得到：
+
+```text
+openroad/bin/openroad.bin             v2.0-17598-ga008522d8 (openroad wrapper alongside)
+yosys/bin/yosys                       Yosys 0.65 (flow-matched)
+oss-cad-suite/bin/{iverilog,vvp}      Icarus 13.0
+oss-cad-suite/bin/verilator            Verilator 5.035
+klayout/bin/klayout.bin               KLayout 0.29.12 (klayout wrapper alongside)
+magic/bin/magic, netgen/bin/netgen    Magic 8.3.105 / Netgen 1.5.133
+sta/bin/sta                           OpenSTA 2.6.0
+pdks/sky130A                          full copied sky130A tree (1.1G)
+```
+
+OpenROAD 的 wrapper 同时携带 deb 中的 OR-Tools libraries；OSS CAD Suite 使用其
+自己的 loader/lib，KLayout、Magic、Netgen 和 OpenSTA 的可执行文件也都已放在该
+prefix。系统的 glibc/Qt/Tcl 等基础运行库仍属于操作系统 ABI，不会把整个 Linux
+用户空间重复复制一份。运行时不再从 `/usr/bin`、`/opt` 或 `/data2` 解析 EDA
+可执行文件和 PDK。
+
+核心锁已记录在
+`/data1/zhangdy/Tools/tehm-toolchain/tehm-orfs-toolchain-manifest-direct-diagnostic.json`
+（`bound_internal`，digest=`b3a8b2e09af926880cc964245007ab5d3bdc1e6ea3ac5b6da2c4f2dae5b0d1de`）。
+全量工具、版本、SHA256 与 PDK marker 的盘点在
+`/data1/zhangdy/Tools/tehm-toolchain/tehm-direct-toolchain-inventory.json`
+（inventory SHA256=`340a96a0802b65a4ed5fd713ae195951cfb1b2693c5e0ac5a28759a24ebc15f3`）。
+由于 ORFS checkout 仍有本地改动，该锁依然是 `--allow-dirty` diagnostic，不能冒充
+production freeze；要进入正式 ORFS batch，仍须先清理 ORFS tree 并用匹配的
+OpenROAD 重新 record/check。
+
+`bootstrap.sh --direct --dry-run --prefix /data1/zhangdy/Tools/tehm-toolchain` 现在是
+不调用 conda 的 fail-closed 入口；缺少 direct artifact 时只会报告缺口。旧的
+`miniconda3` 目录已不存在，三份 skill 的 `references/env.local.sh` 均已重写为上述
+direct paths，旧的 env backup 也已清理。该迁移只改变工具链解析和 provenance，不写
+canonical memory、authority 或 production runtime。

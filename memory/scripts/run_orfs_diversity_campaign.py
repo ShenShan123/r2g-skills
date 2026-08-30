@@ -269,12 +269,14 @@ def preflight_orfs_toolchain(manifest: dict, *, env: dict | None = None) -> dict
         tool = {"variable": variable, "path": str(candidate) if candidate else None,
                 "source": source, "sha256": _sha(candidate) if candidate else None}
         if candidate:
-            tool["version"] = _tool_version(candidate, spec["switch"])
+            runtime_env = _tool_runtime_env(candidate, supplied)
+            tool["version"] = _tool_version(
+                candidate, spec["switch"], env=runtime_env)
             report["environment"][variable] = str(candidate)
             if name == "yosys":
                 capability = _probe_yosys_capabilities(
                     candidate, orfs_root=root,
-                    version=tool["version"])
+                    version=tool["version"], env=runtime_env)
                 tool["capabilities"] = capability
                 if capability["status"] == "FAIL":
                     report["reasons"].append(
@@ -334,10 +336,49 @@ def preflight_orfs_toolchain(manifest: dict, *, env: dict | None = None) -> dict
     return report
 
 
-def _tool_version(path: Path, switch: str) -> str:
+def _tool_runtime_env(path: Path, supplied: dict[str, str]) -> dict[str, str]:
+    """Give user-bundled ELF tools their private shared-library search path.
+
+    The direct OpenROAD and KLayout payloads are copied from distribution
+    packages, while their convenience wrappers set ``LD_LIBRARY_PATH``.  The
+    manifest deliberately records the real ELF path so its hash is meaningful;
+    preflight therefore has to reproduce the wrapper's loader environment when
+    invoking that path directly.  Keep the operator's ambient environment but
+    put the bundle's private libraries first.  This prevents a replay from
+    accidentally succeeding only because an unrelated ``/opt`` installation
+    happens to be visible on the host.
+    """
+    runtime = dict(os.environ)
+    if supplied.get("LD_LIBRARY_PATH") is not None:
+        runtime["LD_LIBRARY_PATH"] = str(supplied.get("LD_LIBRARY_PATH") or "")
+    direct_root = supplied.get("R2G_TOOLCHAIN_ROOT") or supplied.get("R2G_PREFIX")
+    root = (Path(str(direct_root)).expanduser().resolve()
+            if direct_root else None)
+    if root is None and path.parent.name in {"bin", "libexec"}:
+        # Infer a bundle root only for the known direct-tool layout.  This is
+        # intentionally conservative so arbitrary external overrides do not
+        # gain a misleading private-library classification.
+        for parent in path.parents:
+            if parent.name in {"openroad", "klayout"}:
+                root = parent.parent
+                break
+    private_libs = []
+    if root is not None:
+        for candidate in (root / "openroad" / "lib",
+                          root / "klayout" / "lib"):
+            if candidate.is_dir():
+                private_libs.append(str(candidate))
+    if private_libs:
+        existing = runtime.get("LD_LIBRARY_PATH", "")
+        runtime["LD_LIBRARY_PATH"] = ":".join(
+            private_libs + ([existing] if existing else []))
+    return runtime
+
+
+def _tool_version(path: Path, switch: str, *, env: dict[str, str] | None = None) -> str:
     try:
         proc = subprocess.run([str(path), switch], capture_output=True,
-                              text=True, timeout=15)
+                              text=True, timeout=15, env=env)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return f"UNAVAILABLE:{exc}"
     output = (proc.stdout + proc.stderr).strip()
@@ -347,7 +388,8 @@ def _tool_version(path: Path, switch: str) -> str:
 
 
 def _probe_yosys_capabilities(path: Path, *, orfs_root: Path,
-                              version: str) -> dict:
+                              version: str,
+                              env: dict[str, str] | None = None) -> dict:
     """Fail closed when a real Yosys lacks options used by this ORFS tree.
 
     A binary existing and returning ``-V`` is not enough for evidence.  The
@@ -370,7 +412,7 @@ def _probe_yosys_capabilities(path: Path, *, orfs_root: Path,
     try:
         proc = subprocess.run(
             [str(path), "-p", "help read_liberty"],
-            capture_output=True, text=True, timeout=15)
+            capture_output=True, text=True, timeout=15, env=env)
     except (OSError, subprocess.TimeoutExpired) as exc:
         result["status"] = "FAIL"
         result["reason"] = f"capability probe failed: {exc}"

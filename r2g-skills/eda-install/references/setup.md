@@ -10,7 +10,7 @@ eda-install/
   bootstrap.sh              # orchestrator: detect → plan → install → pin → verify
   scripts/
     flow/
-      _env.sh               # byte-identical shared resolver (md5 a5ac873e…)
+      _env.sh               # byte-identical shared resolver (direct bundle first)
       check_env.sh          # comprehensive verifier (ORFS + tools + graph + platforms)
     setup/
       detect_env.sh         # KEY=VALUE machine + toolchain snapshot
@@ -30,18 +30,26 @@ Every key is always emitted (empty value == absent); diagnostics go to stderr.
 
 ## Tiers
 
-| Tier | Need | Satisfied when | No-sudo action |
+For a direct installation, set `R2G_TOOLCHAIN_ROOT` (defaults to `R2G_PREFIX`) and keep all
+non-system payloads below it:
+
+```text
+$R2G_TOOLCHAIN_ROOT/{openroad,yosys,oss-cad-suite,klayout,magic,netgen,sta,pdks}
+```
+
+| Tier | Need | Satisfied when | Direct action / legacy fallback |
 | --- | --- | --- | --- |
-| `core` | required | `ORFS_ROOT` + user-owned `OPENROAD_EXE` + user-owned `YOSYS_EXE` | clone ORFS (no build) + conda `openroad yosys` |
-| `frontend` | required | `IVERILOG_EXE` + `VVP_EXE` | conda `iverilog verilator` |
-| `sky130` | optional | `MAGIC_EXE` + `NETGEN_EXE` | conda `magic netgen` |
-| `klayout` | optional | `KLAYOUT_CMD` (system OK) | dedicated `klayout` env; prefers system klayout, fails soft |
-| `pdk` | optional | `SKY130A_DIR` | conda `open_pdks.sky130a` → big volume |
+| `core` | required | `ORFS_ROOT` + user-owned `OPENROAD_EXE` + user-owned `YOSYS_EXE` | use `$R2G_TOOLCHAIN_ROOT/{openroad,yosys}`; legacy clone + conda |
+| `frontend` | required | `IVERILOG_EXE` + `VVP_EXE` | use `$R2G_TOOLCHAIN_ROOT/oss-cad-suite`; legacy conda |
+| `sky130` | optional | `MAGIC_EXE` + `NETGEN_EXE` | use `$R2G_TOOLCHAIN_ROOT/{magic,netgen}`; legacy conda |
+| `klayout` | optional | `KLAYOUT_CMD` (system OK) | use `$R2G_TOOLCHAIN_ROOT/klayout`; legacy dedicated env/system |
+| `pdk` | optional | `SKY130A_DIR` | use `$R2G_TOOLCHAIN_ROOT/pdks`; legacy conda `open_pdks.sky130a` |
 | `graph` | optional | `GRAPH_PYTHON` (torch venv) | `python3 -m venv` + pip torch(cpu)+pyg+pandas |
 
-`core` and `frontend` branch on `HAVE_SUDO` (source build vs conda); the rest are root-free either way.
+`--direct` makes every missing direct artifact a fail-closed action; it never invokes conda. Without
+`--direct`, `core` and `frontend` may still branch on `HAVE_SUDO` (source build vs legacy conda).
 
-## No-sudo path (the default when `HAVE_SUDO=0`)
+## Legacy no-sudo path (only when `--direct` is not requested)
 
 The entire toolchain is pre-built on the [`litex-hub`](https://anaconda.org/litex-hub) conda channel,
 so provisioning is: install/reuse Miniconda on the big volume → `conda create -n eda …` → `conda
@@ -54,16 +62,15 @@ Key rules: whole conda root on the big volume (not a full `$HOME`); `--override-
 compatible with the conda openroad, and fall back to a pre-built OpenROAD binary release on version
 skew (`check_env.sh` prints tool versions).
 
-The resolver checks the conda `eda` bin directory under `R2G_PREFIX` before `/opt` and `/usr` for
-OpenROAD and Yosys. A host-wide pair can still be shown as a diagnostic, but it does not make the
-`core` tier complete; a new clone therefore downloads a user-owned pair and writes both paths into
-`references/env.local.sh`. After provisioning, create and replay the TEHM lock before a campaign:
+The resolver checks the direct bundle under `R2G_TOOLCHAIN_ROOT`/`R2G_PREFIX` before legacy conda,
+`/opt` and `/usr`. A host-wide pair can still be shown as a diagnostic, but it does not make the
+`core` tier complete. After provisioning, create and replay the TEHM lock before a campaign:
 
 ```bash
 python3 memory/scripts/record_orfs_toolchain_manifest.py record \
   --orfs-root "$ORFS_ROOT" --prefix "$R2G_PREFIX" \
-  --openroad "$R2G_PREFIX/miniconda3/envs/eda/bin/openroad" \
-  --yosys "$R2G_PREFIX/miniconda3/envs/eda/bin/yosys" \
+  --openroad "$R2G_TOOLCHAIN_ROOT/openroad/bin/openroad.bin" \
+  --yosys "$R2G_TOOLCHAIN_ROOT/yosys/bin/yosys" \
   --pdk-root "$PDK_ROOT" \
   --output "$R2G_PREFIX/tehm-orfs-toolchain-manifest.json"
 python3 memory/scripts/record_orfs_toolchain_manifest.py check \

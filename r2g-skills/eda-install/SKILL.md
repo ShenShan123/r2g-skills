@@ -1,6 +1,6 @@
 ---
 name: eda-install
-description: Detect a machine's environment and install + verify the open-source EDA toolchain that the signoff-loop and def-graph skills need — OpenROAD-flow-scripts (openroad/yosys), iverilog, KLayout, Magic, Netgen, OpenSTA, the sky130A PDK, and the torch+torch_geometric graph venv. Use when setting up a new machine, when `check_env.sh` reports missing tools, when the user asks to install/bootstrap/provision the EDA tools or "set up the environment", or when a flow fails because a tool or PDK is absent. Without root it automatically installs a no-sudo path (pre-built conda litex-hub binaries + a venv on a big volume). Produces references/env.local.sh so a bootstrapped toolchain is auto-discovered by the flow skills.
+description: Detect a machine's environment and install + verify the open-source EDA toolchain that the signoff-loop and def-graph skills need — OpenROAD-flow-scripts (openroad/yosys), iverilog, KLayout, Magic, Netgen, OpenSTA, the sky130A PDK, and the torch+torch_geometric graph venv. Use when setting up a new machine, when `check_env.sh` reports missing tools, when the user asks to install/bootstrap/provision the EDA tools or "set up the environment", or when a flow fails because a tool or PDK is absent. The preferred path is a direct user-owned bundle under `R2G_PREFIX`; a legacy no-sudo conda path remains available only when `--direct` is not requested. Produces references/env.local.sh so a bootstrapped toolchain is auto-discovered by the flow skills.
 metadata:
   requires:
     bins: [bash]
@@ -8,14 +8,15 @@ metadata:
     env:
       # Nothing must be pre-set — detection reads the ambient environment. These
       # only STEER the bootstrap; each is optional.
-      R2G_PREFIX: "big-volume root for the conda install, PDK, and torch venv (default: first writable dir >= 15GB free, preferring /proj)"
+      R2G_PREFIX: "big-volume root for the direct tool bundle, PDK, and torch venv (default: first writable dir >= 15GB free, preferring /proj)"
+      R2G_TOOLCHAIN_ROOT: "root of the direct EDA bundle (defaults to R2G_PREFIX)"
       R2G_GRAPH_PYTHON: "an existing python with torch+torch_geometric+pandas (skips building the graph venv)"
       R2G_MIN_FREE_GB: "free-space threshold for the big-volume picker (default 15)"
       R2G_ENV_FILE: "a shell snippet of tool-path exports to seed detection"
   warnings:
     - Always run `bootstrap.sh --dry-run` first — it prints a per-tier plan and installs nothing.
     - Never installs large artifacts into a full $HOME — the PDK (~8GB) and torch venv go on a big volume.
-    - The heavy ORFS source build is opt-in (--yes-gated); without root the no-sudo conda path is used instead.
+    - The heavy ORFS source build is opt-in (--yes-gated); use --direct to refuse all conda fallback.
     - klayout is optional and best from a system/distro package — the conda recipe is frequently unsatisfiable (litex-hub pins openssl 1.1 vs ruby's openssl 3.x); the tier prefers an existing klayout, uses a dedicated env, and fails soft.
     - Does NOT run PnR or build datasets — it provisions the tools that signoff-loop and def-graph run.
 ---
@@ -65,17 +66,37 @@ bash r2g-skills/eda-install/bootstrap.sh               # install missing tiers +
    platform's strict readiness REQUIRED and fail-closed (RMD-P0-03);
    `R2G_STRICT_PLATFORMS="nangate45"` does the same for a standing list.
 4. **Pin** (`scripts/setup/write_env_local.sh`) — writes `references/env.local.sh` into **both**
-   `signoff-loop` and `def-graph` from the resolved paths, so the flow skills find a conda / `/proj`
-   toolchain with no manual edit. User-owned conda OpenROAD/Yosys under `R2G_PREFIX` outrank host
-   `/opt`/`/usr` fallbacks; host binaries therefore do not make the required `core` tier complete.
-   The writer pins paths outside `$ORFS_ROOT/tools/install` and adds `R2G_GRAPH_PYTHON`.
+   `signoff-loop` and `def-graph` from the resolved paths, so the flow skills find the direct
+   bundle (or a legacy conda/`/proj` installation) with no manual edit. Direct paths under
+   `R2G_TOOLCHAIN_ROOT`/`R2G_PREFIX` outrank legacy package and host fallbacks; host binaries
+   therefore do not make the required `core` tier complete. The writer pins paths outside
+   `$ORFS_ROOT/tools/install` and adds `R2G_GRAPH_PYTHON`.
 5. **Verify** — runs `scripts/flow/check_env.sh` (ORFS + required + optional + graph stage +
    platforms) and reports the same table the README documents.
 
-## The channel is chosen for you: no-sudo is the default
+## Direct bundle first; conda is a legacy fallback
 
-Detection runs `sudo -n true`. **Without root** (`HAVE_SUDO=0` — the common case on shared servers)
-every tier routes through **pre-built conda `litex-hub` packages + a venv**, all under the big volume:
+When a direct bundle is present below `R2G_TOOLCHAIN_ROOT` (normally the same directory as
+`R2G_PREFIX`), detection and all flow scripts use it without `conda activate`. The expected
+layout is:
+
+```text
+$R2G_TOOLCHAIN_ROOT/
+  openroad/bin/openroad.bin   # ELF payload; openroad is a convenience wrapper
+  yosys/bin/yosys              # flow-matched ORFS Yosys
+  oss-cad-suite/bin/{iverilog,vvp,verilator}
+  klayout/bin/klayout.bin     # ELF payload; klayout is a convenience wrapper
+  magic/bin/magic              netgen/bin/netgen  sta/bin/sta
+  pdks/sky130A/
+```
+
+`bash r2g-skills/eda-install/bootstrap.sh --direct --dry-run --prefix "$R2G_PREFIX"` is the
+fail-closed check: it never invokes conda. A missing direct artifact is reported as a required
+action rather than silently falling back to `/usr`, `/opt`, or a package manager.
+
+If `--direct` is not requested, detection runs `sudo -n true`. **Without root** (`HAVE_SUDO=0` —
+the common case on shared servers) the legacy fallback routes through **pre-built conda
+`litex-hub` packages + a venv**, all under the big volume:
 
 | Tool(s) | No-sudo channel |
 | --- | --- |
@@ -101,6 +122,7 @@ the lock before EDA execution and rejects a changed ORFS tree, binary, PDK marke
 | `--dry-run` | Detect + plan only; install nothing. **Always run this first.** |
 | `--yes` / `-y` | Non-interactive; accept the plan (incl. `--yes`-gated heavy tiers). |
 | `--hermetic` | Require user-owned tools/PDK/graph outside `/usr`/`/opt` and install all missing tiers. |
+| `--direct` / `--no-conda` | Use only the direct user-owned bundle; refuse any conda install. Implies `--hermetic`. |
 | `--prefix DIR` | Big-volume root for the conda install, PDK, and torch venv. |
 | `--tiers a,b,c` | Act only on a subset (`core,frontend,sky130,klayout,pdk,graph`). |
 | `--graph-python P` | Pin an existing torch venv (`R2G_GRAPH_PYTHON`) instead of building one. |

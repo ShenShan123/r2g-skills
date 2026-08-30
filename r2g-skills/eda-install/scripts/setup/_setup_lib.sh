@@ -101,6 +101,11 @@ ensure_conda() {
 # conda_env_install PKG… — create-or-install PKGs into $CONDA_ENV on litex-hub.
 conda_env_install() {
   local conda action=install
+  if [[ "${R2G_DIRECT:-0}" == "1" ]]; then
+    hint "direct backend is enabled; refusing conda install for: $*"
+    hint "stage the missing artifact under R2G_TOOLCHAIN_ROOT (normally R2G_PREFIX) and re-run"
+    return 1
+  fi
   conda="$(ensure_conda)" || return 1
   if ! "$conda" env list 2>/dev/null | awk '{print $1}' | grep -qx "$CONDA_ENV"; then
     action=create

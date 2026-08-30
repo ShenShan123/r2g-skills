@@ -9,11 +9,9 @@
 #
 # Design + rationale: docs/superpowers/plans/r2g-skills-bootstrap-2026-07-08.md.
 #
-# The channel is auto-selected by whether you have root:
-#   HAVE_SUDO=1 → may build ORFS from source / use the system package manager
-#   HAVE_SUDO=0 → the DEFAULT here: every tier comes from pre-built conda
-#                 (litex-hub) + a venv, all under a big volume ($HOME is never
-#                 filled). No privilege escalation, nothing built.
+# The preferred channel is a direct user-owned bundle under R2G_PREFIX. A
+# legacy conda/venv path remains available for operators who do not request
+# --direct; direct mode is fail-closed and never installs or activates conda.
 #
 # This first slice ships detection + the plan (--dry-run) + the env.local.sh pin
 # generator + the verify hand-off. The heavy per-tier installers are invoked when
@@ -32,7 +30,7 @@ CONDA_CH="--override-channels -c litex-hub -c conda-forge"   # ToS-gate workarou
 GRAPH_VENV_SUBPATH="pyenvs/r2g-graph"
 
 # ---- args --------------------------------------------------------------------
-do_dry=0; do_yes=0; do_hermetic=0; prefix=""; graph_python=""; plan_from=""; tiers_arg=""
+do_dry=0; do_yes=0; do_hermetic=0; do_direct=0; prefix=""; graph_python=""; plan_from=""; tiers_arg=""
 do_deploy=0; deploy_link=0; min_free=""; strict_platforms="${R2G_STRICT_PLATFORMS:-}"
 
 print_help() {
@@ -50,7 +48,8 @@ Options:
   --yes, -y          Non-interactive: accept the plan (incl. heavy --yes-gated tiers).
   --hermetic         Require every selected tool/PDK/graph path to be user-owned
                      (never /usr or /opt) and install all tiers by default.
-  --prefix DIR       Big-volume root for the conda install, PDK, and torch venv
+  --direct           Use only the direct user-owned bundle; refuse conda fallback.
+  --prefix DIR       Big-volume root for the direct tool bundle, PDK, and torch venv
                      (default: first writable dir with >= min-free-gb, preferring /proj).
   --tiers LIST       Comma-separated subset to act on (core,frontend,sky130,klayout,pdk,graph).
   --strict-platforms LIST
@@ -73,6 +72,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run)      do_dry=1; shift ;;
     --yes|-y)       do_yes=1; shift ;;
     --hermetic)     do_hermetic=1; shift ;;
+    --direct|--no-conda) do_direct=1; do_hermetic=1; shift ;;
     --prefix)       prefix="${2:-}"; shift 2 ;;
     --tiers)        tiers_arg="${2:-}"; shift 2 ;;
     --strict-platforms) strict_platforms="${2:-}"; shift 2 ;;
@@ -129,6 +129,7 @@ fi
 # ---- detect ------------------------------------------------------------------
 [[ -n "$prefix" ]]       && export R2G_PREFIX="$prefix"
 [[ "$do_hermetic" == "1" ]] && export R2G_HERMETIC=1
+[[ "$do_direct" == "1" ]] && export R2G_DIRECT=1
 [[ -n "$graph_python" ]] && export R2G_GRAPH_PYTHON="$graph_python"
 [[ -n "$min_free" ]]     && export R2G_MIN_FREE_GB="$min_free"
 # Normalize commas → spaces; exported so install_platform_rules.sh fail-closes
@@ -161,6 +162,7 @@ PKG="$(d PKG_MGR)"
 CONDA_ROOT="${BIGV:-\$BIG_VOLUME}/miniconda3"
 _conda_bin="${CONDA:-$CONDA_ROOT/bin/conda}"
 _graph_venv="${BIGV:-\$BIG_VOLUME}/$GRAPH_VENV_SUBPATH"
+DIRECT_ROOT="${R2G_TOOLCHAIN_ROOT:-${BIGV:-\$BIG_VOLUME}}"
 
 # A host-wide executable is a useful diagnostic fallback, but it is not a
 # provisioned user toolchain. Core planning must send a machine that only has
@@ -191,7 +193,9 @@ eval_tier() {
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="MISS"
-        if [[ "$SUDO" == "1" ]]; then
+        if [[ "$do_direct" == "1" ]]; then
+          TIER_ACTION="direct bundle missing under $DIRECT_ROOT (stage openroad + yosys; conda disabled)"
+        elif [[ "$SUDO" == "1" ]]; then
           if [[ -n "$(d ORFS_ROOT)" ]]; then
             TIER_ACTION="install/build user-owned OpenROAD + Yosys under R2G_PREFIX"
           else
@@ -213,7 +217,9 @@ eval_tier() {
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="MISS"
-        if [[ "$SUDO" == "1" && "$PKG" != "none" ]]; then
+        if [[ "$do_direct" == "1" ]]; then
+          TIER_ACTION="direct bundle missing under $DIRECT_ROOT (stage OSS CAD Suite frontend; conda disabled)"
+        elif [[ "$SUDO" == "1" && "$PKG" != "none" ]]; then
           TIER_ACTION="$PKG install iverilog verilator"
         else
           TIER_ACTION="conda -n $CONDA_ENV iverilog verilator"
@@ -227,7 +233,7 @@ eval_tier() {
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="$([[ "$do_hermetic" == "1" ]] && echo MISS || echo OPT)"
-        TIER_ACTION="conda -n $CONDA_ENV magic netgen"
+        TIER_ACTION="$([[ "$do_direct" == "1" ]] && echo "direct bundle missing under $DIRECT_ROOT/magic + $DIRECT_ROOT/netgen (conda disabled)" || echo "conda -n $CONDA_ENV magic netgen")"
       fi ;;
     klayout)
       if [[ -n "$(d KLAYOUT_CMD)" ]] &&
@@ -235,7 +241,7 @@ eval_tier() {
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="$([[ "$do_hermetic" == "1" ]] && echo MISS || echo OPT)"
-        TIER_ACTION="conda -n $CONDA_ENV klayout"
+        TIER_ACTION="$([[ "$do_direct" == "1" ]] && echo "direct bundle missing under $DIRECT_ROOT/klayout (conda disabled)" || echo "conda -n $CONDA_ENV klayout")"
       fi ;;
     pdk)
       if [[ -n "$(d SKY130A_DIR)" ]] &&
@@ -243,7 +249,7 @@ eval_tier() {
         TIER_STATUS="OK"; TIER_ACTION="present ($(d SKY130A_DIR))"
       else
         TIER_STATUS="$([[ "$do_hermetic" == "1" ]] && echo MISS || echo OPT)"
-        TIER_ACTION="conda -n $CONDA_ENV open_pdks.sky130a -> $CONDA_ROOT/envs/$CONDA_ENV/share/pdk"
+        TIER_ACTION="$([[ "$do_direct" == "1" ]] && echo "direct bundle missing under $DIRECT_ROOT/pdks (conda disabled)" || echo "conda -n $CONDA_ENV open_pdks.sky130a -> $CONDA_ROOT/envs/$CONDA_ENV/share/pdk")"
       fi ;;
     graph)
       if [[ -n "$(d GRAPH_PYTHON)" ]] &&
@@ -314,7 +320,7 @@ print_preamble() {
     "${CONDA:-none}"
   printf '  big-volume=%s (%s GB free)  channel=%s\n' \
     "${BIGV:-<none: pass --prefix>}" "$(d BIG_VOLUME_FREE_GB)" \
-    "$([[ "$SUDO" == 1 ]] && echo 'sudo/build (or conda)' || echo 'conda litex-hub (no-sudo)')"
+    "$([[ "$do_direct" == 1 ]] && echo 'direct user bundle (no conda)' || ([[ "$SUDO" == 1 ]] && echo 'sudo/build (or conda)' || echo 'conda litex-hub (no-sudo)'))"
   echo
   printf '%-11s %-6s %-4s %s\n' "tier" "status" "need" "action"
   printf '%-11s %-6s %-4s %s\n' "-----------" "------" "----" "----------------------------------------"
@@ -373,7 +379,7 @@ run_tier() {
   [[ "$TIER_STATUS" == "OK" ]] && { echo "[$t] already satisfied — skip"; return 0; }
   if [[ -x "$script" || -f "$script" ]]; then
     echo "[$t] running $(basename "$script") ..."
-    R2G_PREFIX="${BIGV}" R2G_CONDA_ENV="$CONDA_ENV" \
+    R2G_PREFIX="${BIGV}" R2G_CONDA_ENV="$CONDA_ENV" R2G_DIRECT="$do_direct" \
       bash "$script" "${YES_FLAG[@]}" "${FORCE_FLAG[@]}" || {
       echo "[$t] installer returned non-zero (tier left unsatisfied)" >&2; return 1; }
   else

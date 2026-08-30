@@ -10,8 +10,9 @@
 #   2. Value from a user env file ($R2G_ENV_FILE if set, else skipped)
 #   3. Value from a user env file shipped inside the skill (references/env.local.sh)
 #   4. Value sourced from $ORFS_ROOT/env.sh (if ORFS_ROOT found)
-#   5. Ordered user-local/conda/ORFS candidates
-#   6. PATH and host-wide candidates (`/opt`/`/usr/bin`) as final fallback
+#   5. Ordered user-local/direct-bundle/ORFS candidates
+#   6. Optional conda candidates (legacy fallback)
+#   7. PATH and host-wide candidates (`/opt`/`/usr/bin`) as final fallback
 #
 # /opt/openroad_tools_env.sh is sourced only to expose a host fallback. It may
 # not override values from steps 1-4, and it cannot outrank user-local tools.
@@ -125,7 +126,10 @@ if [[ -n "${ORFS_ROOT:-}" ]]; then
   # Source ORFS-provided env script if present
   if [[ -f "$ORFS_ROOT/env.sh" ]]; then
     # shellcheck disable=SC1090,SC1091
-    source "$ORFS_ROOT/env.sh"
+    # ORFS's helper prints its legacy OPENROAD path while setting PATH.  Keep
+    # the environment exports but suppress that stale diagnostic; the direct
+    # bundle pins below are the authoritative executable paths.
+    source "$ORFS_ROOT/env.sh" >/dev/null
   fi
 fi
 
@@ -188,7 +192,28 @@ _r2g_detect() {
   return 1
 }
 
-# conda-env signoff tools (eda-install no-sudo tier): `conda create -n eda …` puts
+# Direct user toolchain bundle.  A direct bundle is the preferred reproducible
+# layout: every non-system EDA payload lives below one user-owned root (normally
+# `$R2G_PREFIX`).  The wrappers carry their own loader/library paths, so flows do
+# not need `/opt` or a package-manager activation to run.
+_r2g_toolchain_root="${R2G_TOOLCHAIN_ROOT:-${R2G_PREFIX:-}}"
+
+# Direct OpenROAD/KLayout payloads are ELF binaries whose private libraries are
+# kept beside them.  Put those directories first for every flow invocation so
+# the canonical pins can point at the immutable ELF itself (rather than a shell
+# wrapper whose digest would not cover the payload).
+_r2g_prepend_lib() {
+  local lib="$1"
+  [[ -d "$lib" ]] || return 0
+  case ":${LD_LIBRARY_PATH:-}:" in
+    *":$lib:"*) return 0 ;;
+  esac
+  export LD_LIBRARY_PATH="$lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+}
+_r2g_prepend_lib "$_r2g_toolchain_root/openroad/lib"
+_r2g_prepend_lib "$_r2g_toolchain_root/klayout/lib"
+
+# conda-env signoff tools (legacy fallback): `conda create -n eda …` puts
 # iverilog/vvp/magic/netgen in <conda-base>/envs/$R2G_CONDA_ENV/bin, which PATH-based
 # detection misses in a fresh shell — and the base may live on a big volume, NOT under
 # $HOME (the 2026-07-09 relocation to /proj/workarea/$USER/miniconda3; a pin
@@ -217,38 +242,51 @@ if [[ -n "${ORFS_ROOT:-}" ]]; then
 fi
 
 _r2g_detect OPENROAD_EXE  openroad   \
-  "$_r2g_conda_bin/openroad" "$_r2g_orfs_openroad" \
+  "$_r2g_toolchain_root/openroad/bin/openroad.bin" \
+  "$_r2g_toolchain_root/openroad/bin/openroad" \
+  "$_r2g_orfs_openroad" "$_r2g_conda_bin/openroad" \
   /usr/local/bin/openroad /usr/bin/openroad
 
 _r2g_detect YOSYS_EXE     yosys      \
+  "$_r2g_toolchain_root/yosys/bin/yosys" \
   "$_r2g_orfs_yosys" "$_r2g_conda_bin/yosys" \
   /opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys \
   /usr/local/bin/yosys /usr/bin/yosys
 
 _r2g_detect IVERILOG_EXE  iverilog   \
+  "$_r2g_toolchain_root/oss-cad-suite/bin/iverilog" \
   "$_r2g_conda_bin/iverilog" /opt/pdk_klayout_openroad/oss-cad-suite/bin/iverilog /usr/bin/iverilog
 
 _r2g_detect VVP_EXE       vvp        \
+  "$_r2g_toolchain_root/oss-cad-suite/bin/vvp" \
   "$_r2g_conda_bin/vvp" /opt/pdk_klayout_openroad/oss-cad-suite/bin/vvp /usr/bin/vvp
 
 _r2g_detect VERILATOR_EXE verilator  \
+  "$_r2g_toolchain_root/oss-cad-suite/bin/verilator" \
   "$_r2g_conda_bin/verilator" /opt/pdk_klayout_openroad/oss-cad-suite/bin/verilator /usr/bin/verilator
 
 _r2g_detect KLAYOUT_CMD   klayout    \
+  "$_r2g_toolchain_root/klayout/bin/klayout.bin" \
+  "$_r2g_toolchain_root/klayout/bin/klayout" \
   /usr/local/bin/klayout /usr/bin/klayout "$_r2g_conda_bin/klayout"
 
 # The host environment script exports its distribution Magic explicitly.  A
 # compatible user-local build must outrank that autodetected system default,
 # while a true caller override (restored above) still wins.
-if [[ -z "${_r2g_caller_env[MAGIC_EXE]:-}" && -x "$HOME/.local/bin/magic" ]]; then
+if [[ -z "${_r2g_caller_env[MAGIC_EXE]:-}" && -x "$_r2g_toolchain_root/magic/bin/magic" ]]; then
+  export MAGIC_EXE="$_r2g_toolchain_root/magic/bin/magic"
+elif [[ -z "${_r2g_caller_env[MAGIC_EXE]:-}" && -x "$HOME/.local/bin/magic" ]]; then
   export MAGIC_EXE="$HOME/.local/bin/magic"
 fi
 _r2g_detect MAGIC_EXE     magic      \
-  "$HOME/.local/bin/magic" "$_r2g_conda_bin/magic" /usr/local/bin/magic /usr/bin/magic
+  "$_r2g_toolchain_root/magic/bin/magic" "$HOME/.local/bin/magic" \
+  "$_r2g_conda_bin/magic" /usr/local/bin/magic /usr/bin/magic
 
 # Netgen ships under several names; try each in turn
 if [[ -z "${NETGEN_EXE:-}" ]]; then
-  if [[ -x "$HOME/.local/bin/netgen" ]]; then
+  if [[ -x "$_r2g_toolchain_root/netgen/bin/netgen" ]]; then
+    export NETGEN_EXE="$_r2g_toolchain_root/netgen/bin/netgen"
+  elif [[ -x "$HOME/.local/bin/netgen" ]]; then
     export NETGEN_EXE="$HOME/.local/bin/netgen"
   fi
   [[ -z "${NETGEN_EXE:-}" && -n "$_r2g_conda_bin" && -x "$_r2g_conda_bin/netgen-lvs" ]] && export NETGEN_EXE="$_r2g_conda_bin/netgen-lvs"
@@ -267,6 +305,7 @@ if [[ "$_r2g_hermetic" != "1" ]]; then
 fi
 
 _r2g_detect STA_EXE       sta        \
+  "$_r2g_toolchain_root/sta/bin/sta" \
   /usr/local/bin/opensta /usr/local/bin/sta /usr/bin/opensta
 
 if [[ -z "${STA_EXE:-}" ]]; then
@@ -278,6 +317,12 @@ fi
 # eda-install's pdk tier). Only adopt a candidate that actually contains sky130A, so a
 # conda PDK is discovered without ever shadowing an explicit/well-known PDK_ROOT that
 # already has it.
+if [[ -z "${PDK_ROOT:-}" || ! -d "${PDK_ROOT}/sky130A" ]]; then
+  if [[ -n "$_r2g_toolchain_root" && -d "$_r2g_toolchain_root/pdks/sky130A" ]]; then
+    export PDK_ROOT="$_r2g_toolchain_root/pdks"
+  fi
+fi
+
 if [[ -z "${PDK_ROOT:-}" || ! -d "${PDK_ROOT}/sky130A" ]]; then
   for _base in "${_r2g_conda_bases[@]}"; do
     [[ -z "$_base" ]] && continue
@@ -311,7 +356,7 @@ fi
 
 unset _r2g_orfs_openroad _r2g_orfs_yosys _cand _hit _p _detected _base _r2g_env \
       _r2g_conda_bases _r2g_conda_bin _r2g_var _r2g_caller_env _r2g_pre_system_env \
-      _r2g_hermetic _r2g_value
+      _r2g_toolchain_root _r2g_prepend_lib _r2g_hermetic _r2g_value
 # Restore caller's options
 case "$_r2g_saved_opts" in
   *e*) set -e ;;
