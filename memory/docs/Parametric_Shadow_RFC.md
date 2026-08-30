@@ -493,3 +493,21 @@ observation 的 harmful rate=`1/3`，area/power/WNS interval coverage 均为 `2/
 future observation 的 interval/harmful gate（或重新预注册更窄、可解释的 action
 signature），再考虑 observation gate；即使通过，仍需真实 A/B、rollback、registry、
 obligation 与 cross-lineage TE 才能进入六项 promotion gate。
+
+### 2026-08-29 observation gate audit 与 policy quarantine
+
+仅有 `validate_observation_gate()` 的布尔结果不足以支撑后续操作：观测失败时必须
+知道是哪条 lineage、哪个物理指标越界，并阻止同一份 shadow policy 被直接复用。
+新增 `build_observation_gate_audit()`，在 join 后从实际 proposal/outcome 与预注册
+阈值生成独立的 `observation_gate_audit.json`。该记录按 failure class 区分
+`HARMFUL_OUTCOME`、`INTERVAL_COVERAGE`、`OOD_DISTANCE` 与
+`OBSERVATION_COVERAGE`，同时保留逐 case 的 harmful metric 和 conformal interval
+miss；审计记录本身带 `metrics_digest`/`audit_digest`，方便 evidence 绑定。
+
+失败时 disposition 固定为 `QUARANTINE`、`shadow_policy_reusable=false`；通过时也
+只表示可以进入下一轮 decision gate。两种结果都固定
+`parametric_view_status=NOT_IMPLEMENTED`、`shadow_only=true`、
+`promotion_eligible=false`、`canonical_memory_mutation=none`。审计不会调用
+evolution manager、不会生成 `RULE_HARMFUL` online event，也不会把外部 shadow
+outcome 导入 canonical memory；因此 quarantine 是外部 evidence 防复用机制，不是
+production lifecycle 或 authority promotion。

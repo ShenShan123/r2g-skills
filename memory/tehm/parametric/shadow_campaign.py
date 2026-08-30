@@ -118,6 +118,123 @@ def validate_observation_gate(report: Mapping, prospective_manifest: Mapping) ->
     }
 
 
+def build_observation_gate_audit(*, joined: Iterable[Mapping], join_report: Mapping,
+                                 shadow_report: Mapping,
+                                 prospective_manifest: Mapping) -> dict:
+    """Create a deterministic external risk/quarantine record for observation.
+
+    This is intentionally downstream of the shadow join.  It explains a failed
+    observation gate at case/metric granularity, but it never creates an
+    evolution event or writes canonical memory.  A failed gate makes the
+    policy non-reusable for the next decision round until a new, independently
+    preregistered observation is produced.
+    """
+    rows = [dict(row) for row in joined]
+    if not isinstance(join_report, Mapping):
+        raise ShadowCampaignError("join report must be a mapping")
+    if not isinstance(shadow_report, Mapping):
+        raise ShadowCampaignError("shadow report must be a mapping")
+    if not isinstance(prospective_manifest, Mapping):
+        raise ShadowCampaignError("prospective manifest must be a mapping")
+    metrics = shadow_report.get("metrics", shadow_report)
+    if not isinstance(metrics, Mapping):
+        raise ShadowCampaignError("shadow report metrics must be a mapping")
+    gate = validate_observation_gate(shadow_report, prospective_manifest)
+
+    harmful_findings = []
+    interval_findings = []
+    for row in rows:
+        proposal = row.get("proposal") or {}
+        if proposal.get("abstained", True):
+            continue
+        prediction = proposal.get("prediction") or {}
+        means = prediction.get("mean_deltas") or {}
+        intervals = prediction.get("uncertainty_95") or {}
+        observed = row.get("observed_deltas") or {}
+        lineage = (row.get("provenance") or {}).get("source_lineage") or row.get("case_id")
+        harmful_metrics = _harmful_metrics(observed)
+        if harmful_metrics:
+            harmful_findings.append({
+                "case_id": row.get("case_id"),
+                "source_lineage": lineage,
+                "nearest_distance": _number(prediction.get("nearest_distance")),
+                "metrics": harmful_metrics,
+            })
+        for metric in PHYSICAL_METRICS:
+            predicted = _number(means.get(metric))
+            actual = _number(observed.get(metric))
+            interval = intervals.get(metric) or {}
+            lower = _number(interval.get("lower_95"))
+            upper = _number(interval.get("upper_95"))
+            if predicted is None or actual is None or lower is None or upper is None:
+                continue
+            if not lower <= actual <= upper:
+                interval_findings.append({
+                    "case_id": row.get("case_id"),
+                    "source_lineage": lineage,
+                    "metric": metric,
+                    "predicted": predicted,
+                    "observed": actual,
+                    "interval": {"lower_95": lower, "upper_95": upper},
+                    "nearest_distance": _number(prediction.get("nearest_distance")),
+                })
+
+    failure_classes = []
+    for failure in gate["failures"]:
+        metric = str(failure.get("metric"))
+        if metric == "harmful_outcome_rate":
+            category = "HARMFUL_OUTCOME"
+        elif metric.startswith("physical_metrics."):
+            category = "INTERVAL_COVERAGE"
+        elif metric == "ood_distance.max":
+            category = "OOD_DISTANCE"
+        else:
+            category = "OBSERVATION_COVERAGE"
+        failure_classes.append({"category": category, "metric": metric})
+
+    source_lineages = sorted({
+        str((row.get("provenance") or {}).get("source_lineage"))
+        for row in rows
+        if (row.get("provenance") or {}).get("source_lineage") is not None
+    })
+    policy_digests = sorted({
+        str((row.get("provenance") or {}).get("policy_digest"))
+        for row in rows
+        if (row.get("provenance") or {}).get("policy_digest") is not None
+    })
+    action_digests = sorted({
+        str(row.get("proposal", {}).get("action_digest"))
+        for row in rows
+        if row.get("proposal", {}).get("action_digest") is not None
+    })
+    body = {
+        "version": "parametric-shadow-observation-gate-audit-v1",
+        "disposition": "PROCEED_TO_DECISION" if gate["passed"] else "QUARANTINE",
+        "shadow_policy_reusable": bool(gate["passed"]),
+        "parametric_view_status": "NOT_IMPLEMENTED",
+        "shadow_only": True,
+        "promotion_eligible": False,
+        "canonical_memory_mutation": "none",
+        "gate": gate,
+        "failure_classes": failure_classes,
+        "risk_findings": {
+            "harmful_outcomes": harmful_findings,
+            "interval_misses": interval_findings,
+        },
+        "evidence": {
+            "receipt_count": join_report.get("receipt_count"),
+            "outcome_count": join_report.get("outcome_count"),
+            "joined_count": join_report.get("joined_count"),
+            "source_lineages": source_lineages,
+            "policy_digests": policy_digests,
+            "action_digests": action_digests,
+            "metrics_digest": digest(metrics),
+        },
+    }
+    body["audit_digest"] = digest(body)
+    return body
+
+
 def digest(value: object) -> str:
     return hashlib.sha256(stable_dumps(value).encode("utf-8")).hexdigest()
 
@@ -523,16 +640,24 @@ def _ranking_metrics(joined: list[Mapping]) -> dict:
 
 
 def _harmful_outcome(row: Mapping) -> bool:
-    deltas = row.get("observed_deltas") or {}
+    return bool(_harmful_metrics(row.get("observed_deltas") or {}))
+
+
+def _harmful_metrics(deltas: Mapping) -> list[dict]:
+    """Return the observed metrics that violate the shadow safety direction."""
+    findings = []
+    if not isinstance(deltas, Mapping):
+        return findings
     for metric, value in deltas.items():
         if _number(value) is None:
             continue
         value = float(value)
-        if metric in {"wns_ns", "tns_ns"} and value < 0:
-            return True
-        if metric in {"area_um2", "power_w", "congestion", "drc_violations"} and value > 0:
-            return True
-    return False
+        harmful = ((metric in {"wns_ns", "tns_ns"} and value < 0) or
+                    (metric in {"area_um2", "power_w", "congestion", "drc_violations"}
+                     and value > 0))
+        if harmful:
+            findings.append({"metric": str(metric), "observed": value})
+    return sorted(findings, key=lambda item: item["metric"])
 
 
 def _require_receipt(receipt: Mapping) -> None:

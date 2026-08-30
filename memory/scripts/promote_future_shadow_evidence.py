@@ -32,6 +32,7 @@ def promote(source: Path, evidence: Path) -> dict:
     campaign_names = (
         "shadow_events.jsonl", "snapshot_counts.json",
         "outcome_append_report.json", "joined_outcomes.json", "shadow_metrics.json",
+        "observation_gate_audit.json",
     )
     copied = []
     for name in names:

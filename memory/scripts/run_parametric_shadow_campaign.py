@@ -48,6 +48,7 @@ from tehm.parametric.shadow_campaign import (  # noqa: E402
     assert_counts_unchanged,
     build_outcome,
     build_receipt,
+    build_observation_gate_audit,
     canonical_counts,
     join_receipts_and_outcomes,
     summarise,
@@ -293,7 +294,19 @@ def join_and_report(args) -> dict:
         "version": "parametric-shadow-report-v1",
         "join": join_report, "metrics": metrics,
     })
-    return {"join": join_report, "metrics": metrics}
+    result = {"join": join_report, "metrics": metrics}
+    prospective_manifest = getattr(args, "prospective_manifest", None)
+    if prospective_manifest is not None:
+        prospective = validate_prospective_manifest(_read(prospective_manifest))
+        audit = build_observation_gate_audit(
+            joined=joined,
+            join_report=join_report,
+            shadow_report={"join": join_report, "metrics": metrics},
+            prospective_manifest=prospective,
+        )
+        _write(args.out_dir / "observation_gate_audit.json", audit)
+        result["observation_gate_audit"] = audit
+    return result
 
 
 def main(argv=None) -> int:

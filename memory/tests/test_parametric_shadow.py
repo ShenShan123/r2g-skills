@@ -15,6 +15,7 @@ from tehm.parametric.shadow import (
 from tehm.parametric.shadow_campaign import (
     AppendOnlyShadowLog,
     ShadowCampaignError,
+    build_observation_gate_audit,
     build_outcome,
     build_receipt,
     join_receipts_and_outcomes,
@@ -352,3 +353,44 @@ def test_decision_gate_accepts_complete_observation_metrics():
                                              "interval_coverage": 1.0}},
     }}
     assert validate_observation_gate(report, manifest)["passed"] is True
+
+
+def test_failed_observation_is_quarantined_with_case_level_risk_findings():
+    receipt, _ = _receipt()
+    outcome = build_outcome(receipt=receipt, before_ppa=_ppa(10), after_ppa=_ppa(11),
+                            oracle={"obligation_coverage": 1.0})
+    joined, join_report = join_receipts_and_outcomes([
+        {"event": receipt}, {"event": outcome}])
+    metrics = summarise(joined, total_receipts=1)
+    manifest = {
+        "pre_registered_metrics": {
+            "hard_ood_ceiling": 3.0,
+            "min_interval_coverage": 0.8,
+            "max_harmful_rate": 0.1,
+        },
+        "decision_gate": {
+            "min_observation_proposal_coverage": 0.8,
+            "min_observation_outcome_coverage": 1.0,
+            "min_observation_obligation_coverage": 0.95,
+            "required_physical_metrics": ["area_um2"],
+            "min_metric_evaluations": 1,
+        },
+    }
+    audit = build_observation_gate_audit(
+        joined=joined, join_report=join_report,
+        shadow_report={"metrics": metrics}, prospective_manifest=manifest)
+    assert audit["disposition"] == "QUARANTINE"
+    assert audit["shadow_policy_reusable"] is False
+    assert audit["canonical_memory_mutation"] == "none"
+    assert audit["promotion_eligible"] is False
+    assert {row["category"] for row in audit["failure_classes"]} == {"HARMFUL_OUTCOME"}
+    assert audit["risk_findings"]["harmful_outcomes"] == [{
+        "case_id": "future:lineage:0",
+        "source_lineage": "future:lineage:0",
+        "nearest_distance": 0.5,
+        "metrics": [{"metric": "area_um2", "observed": 1.0}],
+    }]
+    assert audit["audit_digest"]
+    assert audit["audit_digest"] == build_observation_gate_audit(
+        joined=joined, join_report=join_report,
+        shadow_report={"metrics": metrics}, prospective_manifest=manifest)["audit_digest"]

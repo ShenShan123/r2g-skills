@@ -4614,3 +4614,24 @@ coverage 均为 `2/3`，TNS=`1.0`，因此预注册 gate（harmful≤`0.1`、cov
 `READY_FOR_IMPLEMENTATION` 误写成 production readiness。即使下一轮 observation
 通过，仍须按 dependency order 完成真实 A/B、rollback、registry、obligation、
 cross-lineage TE 及 lifecycle 六项 promotion gate。
+
+### 2026-08-29 failed observation 的 quarantine audit
+
+为使“future observation gate 失败”成为可执行的安全边界，而不是一条容易被忽略的
+日志，新增 `build_observation_gate_audit()` 及 runner 的
+`observation_gate_audit.json` 输出。它从 joined rows 和实际 shadow metrics 重新计算
+failure class，并记录每条失败 lineage 的 harmful metric、预测区间和 observed delta；
+审计还绑定 policy/action/lineage/metrics digest。
+
+对 action32 的 v119–v121 evidence 重放得到：disposition=`QUARANTINE`，
+`shadow_policy_reusable=false`；失败类别为 `HARMFUL_OUTCOME`（harmful rate=`1/3`）
+和 `INTERVAL_COVERAGE`（area/power/WNS 各 `2/3`）。唯一 harmful row 是 v119，
+WNS=`-0.055622ns`，其预测区间 `[-0.029808,-0.001208]` 未覆盖；同一 row 的
+area=`-80um²` 和 power=`-0.000134W` 也分别落在预测区间之外。审计 digest 为
+`0425a4f97358eb932dbc2962ddbb64345525630a6a88f8211d9673aa934eb8bf`。
+
+该 quarantine 仍是外部 shadow evidence：不会调用 canonical evolution manager，
+不会产生 online `RULE_HARMFUL`，不会改变 canonical counters，也不会授予
+authority/production 权限。下一步只能重新预注册更窄且有语义约束的 action/contract
+并采集新的 source-disjoint cohort，或明确更换 transformation family；不能删除 v119、
+放宽 harmful/interval gate，或把 quarantine 记录当作 Parametric 已上线。
