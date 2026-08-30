@@ -19,14 +19,21 @@ from run_calibration_expansion import (  # noqa: E402
     _strict_eligible_samples,
     _strict_oracle_one,
     _strict_oracle_projects,
+    _contract_manifest_binding,
+    _validate_contract_manifest,
     make_samples,
     main,
+    prepare,
     _subset_manifest,
 )
 from tehm import db as tehm_db
 from tehm.artifact_store import ArtifactStore
 from tehm import honesty
 from tehm.sync import canonical_json
+from tehm.physical.utility_contracts import (
+    density_relief_nonregression_32,
+    timing_relief_budgeted_v1,
+)
 
 
 def test_v87_v92_cohort_is_preregistered_and_source_disjoint():
@@ -282,6 +289,47 @@ def test_subset_manifest_selects_scratch_lineages_without_mutating_source():
     assert [item["case_id"] for item in selected["items"]] == ["v40"]
     assert selected["selected_suffixes"] == ["v40"]
     assert len(manifest["items"]) == 2
+
+
+def test_contract_manifest_is_bound_before_evaluation():
+    contract = density_relief_nonregression_32()
+    frozen = _contract_manifest_binding(contract)
+    resolved = _validate_contract_manifest({"utility_contract": frozen})
+    assert resolved["contract_id"] == contract["contract_id"]
+
+    with pytest.raises(ValueError, match="pre-registered during prepare"):
+        _validate_contract_manifest({}, contract)
+    with pytest.raises(ValueError, match="requested utility contract differs"):
+        _validate_contract_manifest(
+            {"utility_contract": frozen}, timing_relief_budgeted_v1())
+
+    tampered = dict(frozen)
+    tampered["contract_digest"] = "0" * 64
+    with pytest.raises(ValueError, match="digest/signature mismatch"):
+        _validate_contract_manifest({"utility_contract": tampered})
+
+
+def test_prepare_binds_contract_to_selected_cohort_before_flow(tmp_path):
+    orfs = tmp_path / "orfs"
+    template = orfs / "flow" / "designs" / "sky130hs" / "gcd"
+    template.mkdir(parents=True)
+    (template / "config.mk").write_text(
+        "DESIGN_NAME = gcd\nCORE_UTILIZATION = 50\n")
+    (template / "constraint.sdc").write_text("current_design gcd\n")
+    contract = density_relief_nonregression_32()
+    manifest = prepare(
+        tmp_path / "campaign", orfs,
+        suffixes={"v113", "v114", "v115"}, utility_contract=contract)
+    assert manifest["utility_contract"]["binding"] == "PREPARE_TIME"
+    assert manifest["utility_contract"]["contract_id"] == contract["contract_id"]
+    assert {item["utility_contract_id"] for item in manifest["items"]} == {
+        contract["contract_id"]}
+    assert {item["config_edits"]["CORE_UTILIZATION"]
+            for item in manifest["items"]} == {"32"}
+
+    with pytest.raises(ValueError, match="not bound to utility contract"):
+        prepare(tmp_path / "mixed", orfs,
+                suffixes={"v112", "v113"}, utility_contract=contract)
 
 
 def test_promote_phase_accepts_sample_only_support_campaign(tmp_path):

@@ -43,6 +43,7 @@ from tehm.physical.effects import extract_deltas  # noqa: E402
 from tehm.physical.graph_context import load_defgraph_context  # noqa: E402
 from tehm.physical.memory import PhysicalEffectMemory, _action_signature  # noqa: E402
 from tehm.physical.utility_contracts import (  # noqa: E402
+    action_contract_binding_reason,
     known_utility_contracts,
     utility_contract_digest,
     validate_utility_contract,
@@ -237,13 +238,87 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def prepare(root: Path, orfs_root: Path) -> dict:
+def _select_specs(suffixes: set[str] | None = None) -> list[dict]:
+    """Select preregistered lineages without silently widening the cohort."""
+    if not suffixes:
+        return [dict(spec) for spec in LINEAGES]
+    wanted = {str(value) for value in suffixes if str(value)}
+    selected = [dict(spec) for spec in LINEAGES if spec["suffix"] in wanted]
+    missing = sorted(wanted - {spec["suffix"] for spec in selected})
+    if missing:
+        raise ValueError(f"unknown calibration lineage suffixes: {missing}")
+    if not selected:
+        raise ValueError("at least one calibration lineage suffix is required")
+    return selected
+
+
+def _contract_manifest_binding(contract: dict) -> dict:
+    """Serialize only the immutable contract identity into a campaign freeze."""
+    validate_utility_contract(contract)
+    return {
+        "contract_id": contract["contract_id"],
+        "contract_digest": utility_contract_digest(contract),
+        "action_signature": json.loads(json.dumps(contract["action_signature"])),
+        "binding": "PREPARE_TIME",
+    }
+
+
+def _validate_contract_manifest(manifest: dict,
+                                requested: dict | None = None) -> dict | None:
+    """Resolve a manifest contract and reject any evaluation-time attachment."""
+    frozen = manifest.get("utility_contract")
+    if frozen is None:
+        if requested is not None:
+            raise ValueError(
+                "utility contract must be pre-registered during prepare; "
+                "rebuild the campaign manifest before evaluation")
+        return None
+    if not isinstance(frozen, dict) or frozen.get("binding") != "PREPARE_TIME":
+        raise ValueError("campaign utility contract binding is malformed")
+    contract_id = frozen.get("contract_id")
+    factory = known_utility_contracts().get(contract_id)
+    if factory is None:
+        raise ValueError("campaign utility contract is not in the known catalog")
+    contract = factory()
+    expected = _contract_manifest_binding(contract)
+    if frozen != expected:
+        raise ValueError("campaign utility contract digest/signature mismatch")
+    if requested is not None:
+        validate_utility_contract(requested)
+        if _contract_manifest_binding(requested) != expected:
+            raise ValueError("requested utility contract differs from prepare-time binding")
+    return contract
+
+
+def prepare(root: Path, orfs_root: Path, *,
+            suffixes: set[str] | None = None,
+            utility_contract: dict | None = None) -> dict:
+    """Materialize a source cohort, binding an optional contract before flow."""
     template = orfs_root / "flow" / "designs" / "sky130hs" / "gcd"
     cfg, _template_sdc = template / "config.mk", template / "constraint.sdc"
     if not cfg.is_file() or not _template_sdc.is_file():
         raise FileNotFoundError(f"ORFS template incomplete: {template}")
+    specs = _select_specs(suffixes)
+    frozen_contract = None
+    if utility_contract is not None:
+        frozen_contract = _contract_manifest_binding(utility_contract)
+        signature = utility_contract["action_signature"]
+        for spec in specs:
+            action_value = str(spec.get("action", "22"))
+            action = {
+                "domain": signature["domain"],
+                "transformation_family": signature["transformation_family"],
+                "payload": {
+                    "config_edits": {"CORE_UTILIZATION": action_value},
+                    "utility_contract_id": utility_contract["contract_id"],
+                },
+            }
+            reason = action_contract_binding_reason(action, utility_contract)
+            if reason:
+                raise ValueError(
+                    f"lineage {spec['suffix']} is not bound to utility contract: {reason}")
     items = []
-    for spec in LINEAGES:
+    for spec in specs:
         fixture = MEMORY_ROOT / "fixtures" / "physical_rtl" / f"{spec['design']}.v"
         sdc = MEMORY_ROOT / "fixtures" / "physical_rtl" / f"{spec['design']}.sdc"
         if not fixture.is_file() or not sdc.is_file():
@@ -262,7 +337,7 @@ def prepare(root: Path, orfs_root: Path) -> dict:
         action_value = str(spec.get("action", "22"))
         after = _materialize(root / "cases" / f"{slug}_action{action_value}", cfg, sdc,
                              {**common, "CORE_UTILIZATION": action_value})
-        items.append({
+        item = {
             "case_id": f"{lineage}:DENSITY_RELIEF:{spec['base']}->{action_value}",
             "lineage_id": lineage, "platform": "sky130hs",
             "design": spec["design"], "family": "DENSITY_RELIEF", "check": "route",
@@ -271,7 +346,10 @@ def prepare(root: Path, orfs_root: Path) -> dict:
             "screen_split": spec.get("screen_split"),
             "replacement_for": spec.get("replacement_for"),
             "role": "prospective_observation", "capturable": False,
-        })
+        }
+        if frozen_contract is not None:
+            item["utility_contract_id"] = frozen_contract["contract_id"]
+        items.append(item)
     manifest = {
         "version": VERSION, "orfs_root": str(orfs_root.resolve()), "items": items,
         "storage_policy": storage_policy(root),
@@ -281,6 +359,8 @@ def prepare(root: Path, orfs_root: Path) -> dict:
         },
         "mutation_policy": "new samples remain external until policy evaluation completes",
     }
+    if frozen_contract is not None:
+        manifest["utility_contract"] = frozen_contract
     _write_json(root / "campaign_manifest.json", manifest)
     return manifest
 
@@ -967,8 +1047,8 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
              fresh_suffixes: set[str] | None = None,
              interval_method: str = "normal_weighted_mean_v1",
              utility_contract: dict | None = None) -> dict:
-    if utility_contract is not None:
-        validate_utility_contract(utility_contract)
+    utility_contract = _validate_contract_manifest(
+        _load(root / "campaign_manifest.json"), utility_contract)
     stage = root / "staging"
     if stage.exists():
         shutil.rmtree(stage)
@@ -1121,11 +1201,16 @@ def main(argv=None) -> int:
     root = enforce_work_root(args.root.resolve())
     root.mkdir(parents=True, exist_ok=True)
     manifest_path = root / "campaign_manifest.json"
-    manifest = (prepare(root, args.orfs_root.resolve())
+    requested_contract = (known_utility_contracts()[args.utility_contract_id]()
+                          if args.utility_contract_id else None)
+    manifest = (prepare(root, args.orfs_root.resolve(),
+                        suffixes=set(args.run_suffix) or None,
+                        utility_contract=requested_contract)
                 if args.phase in {"all", "prepare"}
                 else _load(manifest_path))
     if not manifest:
         raise RuntimeError(f"campaign manifest missing: {manifest_path}")
+    utility_contract = _validate_contract_manifest(manifest, requested_contract)
     if args.phase == "prepare":
         return 0
     run_manifest = _subset_manifest(manifest, set(args.run_suffix) or None)
@@ -1142,9 +1227,6 @@ def main(argv=None) -> int:
     if args.phase == "samples":
         return 0
     if args.phase in {"all", "evaluate"}:
-        utility_contract = None
-        if args.utility_contract_id:
-            utility_contract = known_utility_contracts()[args.utility_contract_id]()
         report = evaluate(root, canonical_snapshot=args.canonical_snapshot.resolve(),
                           v10v11_samples=args.v10v11_samples.resolve(),
                           v12v13_pairs=args.v12v13_pairs.resolve(),

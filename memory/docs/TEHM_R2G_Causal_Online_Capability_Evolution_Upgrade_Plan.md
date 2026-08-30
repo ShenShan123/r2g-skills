@@ -4662,3 +4662,18 @@ materialized policy 带有 contract provenance 时，脚本重放 catalog digest
 manifest，并延迟 decision alternatives。这样下一轮即使 operator 修改 cases JSONL，
 strict manifest 和 shadow prepare 也会在执行前拒绝 action/config/contract 漂移；没有
 新的 source-freeze、strict-oracle 与独立 lineage，不得启动 ORFS。
+
+### 2026-08-29 calibration expansion 的 prepare-time contract freeze
+
+此前 `run_calibration_expansion.py --utility-contract-id` 只在 `evaluate` 阶段传递
+contract，存在“先运行 ORFS、后补 contract”的 provenance 空洞。现已将 contract
+绑定前移到 `prepare`：选定的 lineage 子集在 materialize 前必须全部符合 catalog 中
+的 action signature，campaign manifest 固化 `contract_id`、完整 `contract_digest`、
+action signature 与 `binding=PREPARE_TIME`。混入其它 action point、未知 suffix、篡改
+digest 或缺少 prepare-time binding 的 manifest 均 fail-closed；旧的无 contract campaign
+仍可按 legacy 路径运行，但不能在 evaluation 时事后附加 contract。
+
+因此下一轮新 cohort 的正确顺序是：先以 `--run-suffix` 与
+`--utility-contract-id` 生成并冻结 manifest，再运行 ORFS/strict oracle/sample，最后
+只消费同一 manifest 中的 contract。该门仍只建立 external shadow/calibration provenance，
+不改变 canonical memory、authority 或 production runtime。

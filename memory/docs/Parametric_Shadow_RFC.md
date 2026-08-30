@@ -531,3 +531,12 @@ proposal/abstain 语义，contract 失败不会写 canonical、authority 或 pro
 严格 exact-action cohort 中省略未绑定的 decision alternatives。因此 contract 约束在
 `case freeze → manifest validation → shadow prepare` 三处连续存在，而不是只在 predictor
 单点检查。
+
+### Prepare-time contract binding
+
+`run_calibration_expansion.py` 的新 cohort 必须在 `prepare` 阶段绑定 typed utility
+contract。manifest 保存 `contract_id`、catalog digest、action signature 和
+`binding=PREPARE_TIME`；`evaluate` 会重放该 manifest，拒绝缺失或不一致的 binding。
+这阻止把已经执行完成的旧 ORFS evidence 在事后贴上新 contract。使用 contract 时应先
+限定 source-disjoint `--run-suffix`，再执行 flow；该 contract 仍只服务于 shadow/calibration
+proposal，不授予 Parametric production authority。
