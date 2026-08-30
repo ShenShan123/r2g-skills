@@ -348,6 +348,9 @@ def test_explicit_heldout_membership_is_audit_only_and_never_triggers_consolidat
         ({"oracle_complete": False}, "oracle_incomplete"),
         ({"oracle_type": "COMPILE", "confidence_tier": "H"},
          "oracle_type_not_executable"),
+        ({"full_oracle": {"before": {"complete": True},
+                          "after": {"complete": False}}},
+         "full_oracle_after_incomplete"),
     ],
 )
 def test_learner_online_lane_requires_complete_executable_oracle(
