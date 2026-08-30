@@ -5097,3 +5097,20 @@ fail-closed，禁止通过类型强制伪造 source identity。replication 的
 新增 shared-parser、numeric/duplicate source、malformed provenance 回归；本次只收紧
 shadow/evaluation 证据入口，不改变 canonical memory、lifecycle、六项 promotion
 gate 或 production runtime。
+
+### 2026-08-30 causal transition facts typed semantic replay 防火墙
+
+在 shared source witness 之后继续复核 A2/A3 replay，发现仅验证 transition JSON 为
+object 仍不足以保证因果解释：`Action`、`ObservationDelta` 和 `VerifierSnapshot`
+的宽松 `from_dict()` 可能把缺失/错类型字段转换成默认值或字符串，且
+`action_domain`、`outcome`、`primary_effect_key` 这些重复/派生列可被直接 SQL 篡改。
+现由 `causal.mechanism.load_transition_facts()` 在生成任何 causal node/edge 前执行
+无 coercion 的 typed contract：action identity/payload、delta enum/list/object、verifier
+enum/container 必须满足 canonical schema；同时重算并核对 content-addressed
+`transition_id`、`action_domain`、`outcome` 和（存在时）`primary_effect_key`。任何
+不一致都 fail-closed，不留下 causal shadow rows。
+
+causal retrieval 的 canonical utility/risk replay 已改为复用同一 loader，避免质量评分
+路径使用另一套宽松解析。新增 8 个语义错类型与派生列篡改回归；全量 `memory/tests`
+为 `686 passed`。本轮仍只收紧 shadow/evaluation 证据入口，不改变 canonical 写入、
+lifecycle、六项 promotion gate 或 production runtime。

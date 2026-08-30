@@ -13,9 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from contracts import MemoryQuery
-from tehm.canonical.transition import Action, ObservationDelta, classify_outcome
-from tehm.canonical.verifier import VerifierSnapshot
-from tehm.ids import transition_id
+from tehm.causal.mechanism import load_transition_facts
 from tehm.causal.matcher import match_causal_path
 from tehm.causal.path_builder import validate_persisted_path_row
 from tehm.causal.witness import parse_source_transition_ids
@@ -232,50 +230,30 @@ def _canonical_transition_quality(
     for source_transition_id in source_ids:
         row = by_id[source_transition_id]
         try:
-            action = _decode_quality_json(
-                row["action_json"], field="action")
-            delta = _decode_quality_json(
-                row["observation_delta_json"], field="observation_delta")
-            verifier = _decode_quality_json(
-                row["verifier_json"], field="verifier")
             regressions = _decode_quality_json(
                 row["created_regressions_json"], field="created_regressions")
             newly_observed = _decode_quality_json(
                 row["newly_observed_json"], field="newly_observed")
         except ValueError:
             return None, True
-        if (not isinstance(action, Mapping) or not isinstance(delta, Mapping)
-                or not isinstance(verifier, Mapping)):
-            return None, True
         if not isinstance(regressions, list) or not isinstance(newly_observed, list):
             return None, True
-        delta_regressions = delta.get("created_regressions", [])
-        delta_newly_observed = delta.get("newly_observed_failures", [])
+        try:
+            facts = load_transition_facts(conn, source_transition_id)
+        except (KeyError, TypeError, ValueError):
+            return None, True
+        delta_regressions = facts.delta.get("created_regressions", [])
+        delta_newly_observed = facts.delta.get("newly_observed_failures", [])
         if (not isinstance(delta_regressions, list)
                 or not isinstance(delta_newly_observed, list)
                 or regressions != delta_regressions
                 or newly_observed != delta_newly_observed):
             return None, True
-        try:
-            canonical_action = Action.from_dict(dict(action))
-            canonical_delta = ObservationDelta.from_dict(dict(delta))
-            canonical_verifier = VerifierSnapshot.from_dict(dict(verifier))
-        except (TypeError, ValueError):
-            return None, True
-        expected_id = transition_id(
-            source_state_id=str(row["source_state_id"]),
-            target_state_id=str(row["target_state_id"]),
-            action=canonical_action.to_dict(),
-            observation_delta=canonical_delta.to_dict(),
-            verifier=canonical_verifier.content())
-        if expected_id != source_transition_id or str(row["outcome"] or "") != classify_outcome(
-                canonical_delta, canonical_verifier):
-            return None, True
-        verdict = str(delta.get("utility_verdict") or "UNKNOWN").upper()
+        verdict = str(facts.delta.get("utility_verdict") or "UNKNOWN").upper()
         if verdict in _UTILITY_SCORE:
             utility_values.append(_UTILITY_SCORE[verdict])
             risk_values.append(_RISK_PENALTY[verdict])
-        if regressions or newly_observed or str(row["outcome"] or "").upper() in {
+        if regressions or newly_observed or facts.outcome.upper() in {
                 "FAIL", "REGRESSION"}:
             risk_values.append(1.0)
     if not utility_values and not risk_values:

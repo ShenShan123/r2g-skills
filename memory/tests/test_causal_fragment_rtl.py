@@ -105,6 +105,71 @@ def test_transition_facts_reject_malformed_payloads(tmp_tehm, column, value,
 @pytest.mark.parametrize(
     ("column", "value", "message"),
     [
+        ("action_json", {
+            "domain": "flow.CONFIG_DELTA",
+            "transformation_family": 7,
+            "payload": {"config_edits": {"K": "V"}},
+        }, "action.transformation_family must be a non-empty string"),
+        ("action_json", {
+            "domain": "flow.CONFIG_DELTA",
+            "transformation_family": "DENSITY_RELIEF",
+            "payload": [],
+        }, "action.payload must be a non-empty object"),
+        ("observation_delta_json", {
+            "original_failure": "REMOVED",
+            "created_regressions": "not-a-list",
+        }, "observation_delta.created_regressions must be a list"),
+        ("observation_delta_json", {
+            "original_failure": 1,
+        }, "observation_delta.original_failure must be a non-empty string"),
+        ("verifier_json", {
+            "verdict": "PASS",
+            "oracle_type": "TARGET_TEST",
+            "confidence_tier": "T",
+            "evidence_refs": "not-a-list",
+        }, "verifier.evidence_refs must be a list"),
+    ],
+)
+def test_transition_facts_reject_semantically_malformed_payloads(
+        tmp_tehm, column, value, message):
+    """Object-shaped JSON must still satisfy the canonical typed contract."""
+    conn, transition_id = _captured(tmp_tehm)
+    conn.execute(
+        f"UPDATE tehm_transitions SET {column}=? WHERE transition_id=?",
+        (json.dumps(value), transition_id))
+    conn.commit()
+    with pytest.raises(ValueError, match=message):
+        load_transition_facts(conn, transition_id)
+    assert conn.execute("SELECT COUNT(*) FROM tehm_causal_nodes").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "message"),
+    [
+        ("action_domain", "flow.SDC_EDIT",
+         "action_domain conflicts with action.domain"),
+        ("outcome", "FAIL",
+         "outcome conflicts with typed observation/verifier"),
+        ("primary_effect_key", "effect_forged",
+         "primary_effect_key conflicts with typed payload"),
+    ],
+)
+def test_transition_facts_reject_tampered_derived_columns(
+        tmp_tehm, column, value, message):
+    """Causal extraction cannot trust duplicated/derived transition columns."""
+    conn, transition_id = _captured(tmp_tehm)
+    conn.execute(
+        f"UPDATE tehm_transitions SET {column}=? WHERE transition_id=?",
+        (value, transition_id))
+    conn.commit()
+    with pytest.raises(ValueError, match=message):
+        load_transition_facts(conn, transition_id)
+    assert conn.execute("SELECT COUNT(*) FROM tehm_causal_nodes").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "message"),
+    [
         ("verifier_snapshot_json", "not-json", "source_verifier_snapshot JSON is malformed"),
         ("artifact_manifest_json", "[]", "target_artifact_manifest must decode to object"),
     ],
