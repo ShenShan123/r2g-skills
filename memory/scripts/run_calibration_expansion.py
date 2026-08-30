@@ -826,7 +826,8 @@ def _grouped_shadow_admission(*, retrieval_policy: dict,
     report = calibrate_exact_groups(
         grouped_samples, training_lineages=training_lineages,
         target_coverage=0.80, min_lineages=3,
-        min_samples_per_metric=3, max_harmful_rate=0.0)
+        min_samples_per_metric=3, max_harmful_rate=0.0,
+        utility_contract=utility_contract)
     report["adapter_invalid_evaluations"] = invalid
     if invalid and report.get("status") == "ready_for_shadow":
         report["status"] = "shadow_calibration_failed"

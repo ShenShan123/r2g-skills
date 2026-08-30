@@ -67,16 +67,31 @@ def calibrate_exact_groups(samples: list[Mapping], *, training_lineages=(),
                            min_lineages: int = 3,
                            min_samples_per_metric: int = 3,
                            max_harmful_rate: float = 0.0,
-                           max_regression: Mapping | None = None) -> dict:
+                           max_regression: Mapping | None = None,
+                           utility_contract: Mapping | None = None) -> dict:
     """Run lineage-grouped conformal calibration per exact PPA partition.
 
     Every partition is calibrated independently.  Mixed platform/family/tier/
     action populations therefore cannot average into an apparently safe
     interval.  This is an external report and remains permanently shadow-only.
     """
+    if utility_contract is not None:
+        _require_mapping("utility contract", utility_contract)
+        validate_utility_contract(utility_contract)
+        expected_signature = _action_signature(contract_action(utility_contract))
+    else:
+        expected_signature = None
     grouped: dict[str, list[Mapping]] = defaultdict(list)
     invalid = []
     for index, sample in enumerate(samples or []):
+        if expected_signature is not None:
+            actual_signature = sample.get("action_signature") if isinstance(sample, Mapping) else None
+            if actual_signature is None and isinstance(sample, Mapping):
+                actual_signature = sample.get("action")
+            actual_signature = _normalise_action_signature(actual_signature)
+            if actual_signature != expected_signature:
+                raise ValueError(
+                    f"sample action signature does not match utility contract at index {index}")
         try:
             key = exact_calibration_group_key(sample)
         except ValueError as exc:
@@ -94,7 +109,7 @@ def calibrate_exact_groups(samples: list[Mapping], *, training_lineages=(),
     ready = bool(reports) and not invalid and all(
         report.get("status") == "ready_for_shadow"
         for report in reports.values())
-    return {
+    result = {
         "version": GROUPED_VERSION,
         "status": "ready_for_shadow" if ready else "shadow_calibration_failed",
         "shadow_only": True, "promotion_eligible": False,
@@ -105,6 +120,13 @@ def calibrate_exact_groups(samples: list[Mapping], *, training_lineages=(),
         "groups": reports,
         "training_lineages": sorted({str(x) for x in training_lineages if str(x)}),
     }
+    if utility_contract is not None:
+        result["utility_contract"] = {
+            "contract_id": utility_contract["contract_id"],
+            "contract_digest": utility_contract_digest(utility_contract),
+            "binding": "CALIBRATION_TIME",
+        }
+    return result
 
 
 def materialize_shadow_policy(
@@ -129,6 +151,14 @@ def materialize_shadow_policy(
     if utility_contract is not None:
         _require_mapping("utility contract", utility_contract)
         validate_utility_contract(utility_contract)
+        binding = report.get("utility_contract")
+        expected_binding = {
+            "contract_id": utility_contract["contract_id"],
+            "contract_digest": utility_contract_digest(utility_contract),
+            "binding": "CALIBRATION_TIME",
+        }
+        if binding != expected_binding:
+            raise ValueError("calibration report is not bound to utility contract at calibration time")
         contract_signature = _action_signature(contract_action(utility_contract))
         if contract_signature != dict(action_signature):
             raise ValueError("utility contract action signature does not match calibration group")
@@ -483,6 +513,34 @@ def _firewall(training, heldout, overlap):
 def _require_mapping(name: str, value) -> None:
     if not isinstance(value, Mapping):
         raise ValueError(f"{name} must be a mapping")
+
+
+def _normalise_action_signature(value: Mapping | None) -> dict | None:
+    """Accept either a stored normalized signature or a raw action envelope."""
+    if not isinstance(value, Mapping):
+        return None
+    normalized_keys = {
+        "domain", "transformation_family", "config_edit_keys",
+        "config_edit_values", "typed_action",
+    }
+    if normalized_keys <= set(value):
+        keys = value.get("config_edit_keys")
+        values = value.get("config_edit_values")
+        domain = value.get("domain")
+        family = value.get("transformation_family")
+        if (isinstance(domain, str) and domain and isinstance(family, str) and family
+                and isinstance(keys, list) and all(isinstance(key, str) and key for key in keys)
+                and isinstance(values, Mapping)):
+            return {
+                "domain": domain,
+                "transformation_family": family,
+                "config_edit_keys": sorted(keys),
+                "config_edit_values": {str(key): values[key]
+                                        for key in sorted(values, key=str)},
+                "typed_action": value.get("typed_action"),
+            }
+        return None
+    return _action_signature(dict(value))
 
 
 def _failed(status, reason, **extra):

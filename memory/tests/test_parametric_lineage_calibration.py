@@ -110,7 +110,7 @@ def test_shadow_policy_can_bind_a_pre_registered_utility_contract():
     signature = _exact_sample("heldout:0", util="32")["action_signature"]
     report = calibrate_exact_groups(
         [_exact_sample(f"heldout:{idx}", util="32") for idx in range(3)],
-        min_samples_per_metric=3)
+        min_samples_per_metric=3, utility_contract=contract)
     policy = materialize_shadow_policy(
         report,
         scope={"platform": "sky130hs", "family": "DENSITY_RELIEF",
@@ -120,8 +120,19 @@ def test_shadow_policy_can_bind_a_pre_registered_utility_contract():
     assert policy["utility_contract_id"] == contract["contract_id"]
     assert policy["utility_contract_digest"]
 
+    legacy_report = calibrate_exact_groups(
+        [_exact_sample(f"heldout:{idx}", util="32") for idx in range(3)],
+        min_samples_per_metric=3)
+    with pytest.raises(ValueError, match="not bound to utility contract at calibration time"):
+        materialize_shadow_policy(
+            legacy_report,
+            scope={"platform": "sky130hs", "family": "DENSITY_RELIEF",
+                   "dataset_tier": "research"},
+            action_signature=signature, max_distance=0.5,
+            utility_contract=contract)
+
     from tehm.physical.utility_contracts import timing_relief_budgeted_v1
-    with pytest.raises(ValueError, match="does not match"):
+    with pytest.raises(ValueError, match="not bound to utility contract at calibration time"):
         materialize_shadow_policy(
             report,
             scope={"platform": "sky130hs", "family": "DENSITY_RELIEF",
