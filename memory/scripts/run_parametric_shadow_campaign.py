@@ -59,10 +59,12 @@ try:  # direct script execution puts memory/scripts on sys.path
 except ModuleNotFoundError:  # importing this runner from a test/module
     sys.path.insert(0, str(MEMORY_ROOT / "scripts"))
     from prepare_parametric_prospective_manifest import validate as validate_prospective_manifest  # noqa: E402
-from tehm.physical.memory import PhysicalEffectMemory  # noqa: E402
+from tehm.physical.memory import PhysicalEffectMemory, _action_signature  # noqa: E402
 from tehm.physical.utility_contracts import (  # noqa: E402
     action_contract_binding_reason,
+    contract_action,
     known_utility_contracts,
+    utility_contract_digest,
 )
 from tehm.sync import canonical_json  # noqa: E402
 
@@ -185,6 +187,12 @@ def prepare(args) -> dict:
                         f"case action is not bound to utility contract: {case_id}: {reason}")
             context = row.get("graph_context")
             policy = _policy_for_action(row)
+            if contract is not None:
+                reason = _strict_policy_binding_reason(policy, planned, contract)
+                if reason:
+                    raise ShadowCampaignError(
+                        f"case calibration policy is not bound to frozen contract: "
+                        f"{case_id}: {reason}")
             expected_snapshot = row.get("memory_snapshot_digest")
             if expected_snapshot is not None and str(expected_snapshot) != memory_snapshot_digest:
                 raise ShadowCampaignError(
@@ -259,6 +267,39 @@ def _policy_for_action(row: dict) -> dict:
         raise ShadowCampaignError(
             f"case {row.get('case_id')} lacks graph_context/calibration_policy")
     return policy
+
+
+def _strict_policy_binding_reason(policy: dict, planned: dict,
+                                  contract: dict) -> str | None:
+    """Fail closed when a strict case carries a policy outside its freeze.
+
+    The action contract check alone is insufficient: a caller could replace the
+    calibration policy in the JSONL while leaving the action unchanged.  The
+    planned case is part of the normalized manifest, so strict observation
+    preparation must bind the runtime row to that exact policy snapshot and to
+    the catalog contract used to calibrate it.
+    """
+    if not isinstance(policy, dict):
+        return "calibration_policy must be an object"
+    frozen = planned.get("calibration_policy")
+    if not isinstance(frozen, dict):
+        return "strict manifest case lacks frozen calibration_policy"
+    if policy != frozen:
+        return "calibration_policy differs from frozen prospective case"
+    if policy.get("utility_contract_id") != contract["contract_id"]:
+        return "calibration_policy utility contract id differs from manifest"
+    if policy.get("utility_contract_digest") != utility_contract_digest(contract):
+        return "calibration_policy utility contract digest differs from catalog"
+    expected_signature = _action_signature(contract_action(contract))
+    if policy.get("action_signature") != expected_signature:
+        return "calibration_policy action signature differs from contract"
+    if policy.get("shadow_only") is not True:
+        return "calibration_policy is not shadow_only"
+    if policy.get("promotion_eligible") is not False:
+        return "calibration_policy promotion flag is not false"
+    if policy.get("canonical_memory_mutation") != "none":
+        return "calibration_policy records canonical mutation"
+    return None
 
 
 def append_outcomes(args) -> dict:

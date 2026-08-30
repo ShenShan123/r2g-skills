@@ -16,9 +16,16 @@ from run_parametric_shadow_campaign import (
     append_outcomes,
     join_and_report,
     prepare,
+    _strict_policy_binding_reason,
 )
 from tehm import db
 from tehm.ids import stable_dumps
+from tehm.physical.memory import _action_signature
+from tehm.physical.utility_contracts import (
+    contract_action,
+    density_relief_nonregression_32,
+    utility_contract_digest,
+)
 from tehm.parametric.shadow_campaign import (AppendOnlyShadowLog,
                                               ShadowCampaignError,
                                               action_digest)
@@ -358,6 +365,28 @@ def test_campaign_rejects_memory_snapshot_digest_mismatch(tmp_path):
     )
     with pytest.raises(ShadowCampaignError, match="memory snapshot digest mismatch"):
         prepare(args)
+
+
+def test_strict_policy_binding_replays_frozen_contract_and_shadow_flags():
+    contract = density_relief_nonregression_32()
+    action = contract_action(contract)
+    policy = {
+        "utility_contract_id": contract["contract_id"],
+        "utility_contract_digest": utility_contract_digest(contract),
+        "action_signature": _action_signature(action),
+        "shadow_only": True,
+        "promotion_eligible": False,
+        "canonical_memory_mutation": "none",
+    }
+    planned = {"calibration_policy": policy}
+    assert _strict_policy_binding_reason(policy, planned, contract) is None
+
+    tampered = {**policy, "utility_contract_digest": "0" * 64}
+    assert "digest differs" in _strict_policy_binding_reason(
+        tampered, {"calibration_policy": tampered}, contract)
+    tampered = {**policy, "shadow_only": False}
+    assert "not shadow_only" in _strict_policy_binding_reason(
+        tampered, {"calibration_policy": tampered}, contract)
 
 
 def _write_json(path: Path, value: dict) -> Path:

@@ -4692,3 +4692,16 @@ bound_internal`。显式 override 的 `bound_external/operator_bound_unverified`
 source/config 没有漂移，也不能把未被 ORFS tree 内部工具验证的结果伪装成新 contract
 的 calibration evidence。legacy 无 contract campaign 仍保持诊断兼容，但其 evidence
 不能被新 contract calibration 复用。
+
+### 2026-08-29 strict shadow policy snapshot binding
+
+进一步复核 future shadow 的执行入口发现，strict manifest 之前只重放了 observation
+action 的 contract binding；JSONL 中携带的 `calibration_policy` 可以被替换成另一份
+policy，只要 action 仍满足 contract，runner 就可能继续生成 shadow proposal。现已在
+`run_parametric_shadow_campaign.prepare()` 增加 strict policy firewall：每个 strict
+observation row 必须与 normalized prospective manifest 中冻结的
+`calibration_policy` 完全一致，并重新校验 catalog 的 contract ID/digest、exact action
+signature、`shadow_only=true`、`promotion_eligible=false` 和
+`canonical_memory_mutation=none`。任何 policy snapshot、contract 或生命周期标志漂移
+都会在 predictor 调用前 fail-closed；legacy 无 contract manifest 保持兼容。该校验只
+加强 shadow provenance，不授予 Parametric runtime、canonical 或 authority 权限。
