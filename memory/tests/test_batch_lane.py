@@ -407,6 +407,36 @@ def test_staging_import_only_accepts_complete_support_receipts(
         conn.close()
 
 
+def test_staging_support_import_rejects_incomplete_execution_receipt(
+        tmp_path, sample_record_dict):
+    """A forged support flag cannot turn a partial oracle into staging evidence."""
+    root = tmp_path / "incomplete-support"
+    observations = root / "external" / "observations.jsonl"
+    record = json.loads(json.dumps(sample_record_dict))
+    record["record_id"] = "incomplete-support-record"
+    record["verification"]["oracle_complete"] = False
+    write_external_observations(observations, [{
+        "receipt_id": "incomplete-support-receipt",
+        "case_id": "incomplete-support", "lineage_id": "lineage-incomplete",
+        "platform": "sky130hs", "family": "DENSITY_RELIEF", "split": "support",
+        "classification": "ELIGIBLE_POSITIVE", "learner_eligible": True,
+        "record": record, "canonical_memory_mutation": "none",
+        "promotion_eligible": False,
+    }])
+    with pytest.raises(BatchLaneError, match="complete verified execution"):
+        import_support_to_staging(
+            observations_path=observations,
+            staging_db=root / "staging" / "tehm.sqlite",
+            staging_artifacts=root / "staging" / "artifacts",
+            campaign_root=root, campaign_id="incomplete-support")
+    conn = tehm_db.connect(root / "staging" / "tehm.sqlite")
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM tehm_memory_events").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
 def test_staging_import_rolls_back_all_rows_on_late_receipt_failure(
         tmp_path, sample_record_dict):
     """A malformed later support row must not leave a partial staging DB."""

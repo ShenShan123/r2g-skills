@@ -5328,3 +5328,13 @@ event 时重新执行该检查；否则事件写入器或后续直接 SQL 改写
 `require_verified_transition()`；失败发生在任何新 event 写入前。测试覆盖直接事件绕过和
 source execution 后置降级，仍保持 learner event、causal fragment、consolidation
 preview 全部 shadow-only，不触发 canonical/authority/runtime mutation。
+
+### 4.9 staging/authority verified-transition replay seam
+
+同一谓词还必须落在 external→staging→canonical 的两个 authority 边界：support
+staging import 在 savepoint 内 capture 后立即重放 transition，canonical import 在写入
+目标库前也重放一次；`validate_staging_import_witness()` 对 authority 选中的 staging
+snapshot 再次检查。这样仅伪造 external receipt 的 `classification`、membership 或
+六项 gate 输入，不能把 `oracle_complete=false`、compile-only、unknown 或损坏的
+transition 变成 support witness。失败会回滚本次 staging/canonical savepoint，canonical
+memory、rule authority 和 production runtime 仍不发生隐式 mutation。

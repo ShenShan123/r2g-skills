@@ -33,6 +33,7 @@ from tehm.physical.memory import PhysicalEffectMemory
 from tehm.physical.orfs_preflight import (
     ROUTING_LAYER_ADJUSTMENT, inspect_routing_layer_adjustment,
     parse_orfs_config, preflight_digest, validate_persisted_execution_preflight)
+from tehm.evolution.verification import require_verified_transition
 
 
 BATCH_LANE_VERSION = "orfs-batch-lane-v1"
@@ -200,6 +201,11 @@ def validate_staging_import_witness(
                    for field, value in expected_fields.items()):
                 raise BatchLaneError(
                     "staging witness transition content mismatch: " + record_id)
+            try:
+                require_verified_transition(conn, transition_id)
+            except ValueError as exc:
+                raise BatchLaneError(
+                    "staging witness execution is not complete: " + record_id) from exc
             state = conn.execute(
                 "SELECT lineage_id FROM tehm_states WHERE state_id=?",
                 (transition["source_state_id"],)).fetchone()
@@ -762,6 +768,12 @@ def import_support_to_staging(*, observations_path: Path, staging_db: Path,
             receipt = capture(
                 conn, store, record, dataset_campaign_id=campaign_id,
                 dataset_split="training", dataset_learner_eligible=True)
+            try:
+                require_verified_transition(conn, receipt.transition_id)
+            except ValueError as exc:
+                raise BatchLaneError(
+                    "learner support receipt lacks complete verified execution: "
+                    + str(row.get("case_id") or "")) from exc
             physical.record(
                 transition_id=receipt.transition_id,
                 action_domain=record.action["domain"],
@@ -1023,6 +1035,12 @@ def import_support_to_canonical(*, observations_path: Path, staging_db: Path,
             receipt = capture(
                 conn, store, record, dataset_campaign_id=campaign_id,
                 dataset_split="training", dataset_learner_eligible=True)
+            try:
+                require_verified_transition(conn, receipt.transition_id)
+            except ValueError as exc:
+                raise BatchLaneError(
+                    "canonical import receipt lacks complete verified execution: "
+                    + str(row.get("case_id") or "")) from exc
             physical.record(
                 transition_id=receipt.transition_id,
                 action_domain=record.action["domain"],

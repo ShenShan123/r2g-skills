@@ -2431,3 +2431,8 @@ verified-execution gate 已从 `observe_transition()` 提升为所有 learner-de
 partial、compile-only、unknown 或内容已损坏的 source 不能通过直接事件写入或后置 SQL
 修改进入 learner chain。谓词集中在 `tehm.evolution.verification`，不改变
 canonical/authority/runtime 的 shadow-only 边界。
+
+同一谓词也已接入 batch lane：support staging import、authority 的 staging witness
+replay 与 canonical import 在各自 savepoint 内重放完整 executable oracle。伪造外部
+`classification`/membership/gate 输入不能把 incomplete transition 变成 support witness；
+失败会回滚本次导入，不写 canonical memory。
