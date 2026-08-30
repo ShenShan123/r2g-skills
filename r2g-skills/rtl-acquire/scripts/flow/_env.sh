@@ -296,6 +296,10 @@ fi
 _r2g_detect MAGIC_EXE     magic      \
   "$_r2g_toolchain_root/magic/bin/magic" "$HOME/.local/bin/magic" \
   "$_r2g_conda_bin/magic" /usr/local/bin/magic /usr/bin/magic
+if [[ -z "${R2G_MAGIC_VERSION:-}" && -n "$_r2g_toolchain_root" && \
+      -f "$_r2g_toolchain_root/magic/VERSION" ]]; then
+  export R2G_MAGIC_VERSION="$(head -1 "$_r2g_toolchain_root/magic/VERSION" | tr -d '[:space:]')"
+fi
 
 # Netgen ships under several names; try each in turn
 if [[ -z "${NETGEN_EXE:-}" ]]; then

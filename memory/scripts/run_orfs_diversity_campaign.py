@@ -704,10 +704,16 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
         project = Path(project_text)
         digest = _sha(project / "constraints" / "config.mk")
         old = state["runs"].get(str(project), {})
+        # An explicit clean retry is an operator-authorized new ORFS attempt.
+        # Read this before the reusable-success fast path; otherwise a prior
+        # successful receipt silently short-circuits R2G_FORCE_CLEAN_RUN and
+        # prevents corrected toolchain/platform inputs from producing a new
+        # backend RUN_* evidence record.
+        force_clean_run = os.environ.get("R2G_FORCE_CLEAN_RUN") == "1"
         # Legacy states used ``completed=true`` for timeout/interrupted runs.
         # A cached success is admissible only when the receipt itself says rc=0
         # (or this is a new-format SUCCESS record) and a frozen final DEF exists.
-        if _reusable_success(old, digest, project):
+        if not force_clean_run and _reusable_success(old, digest, project):
             return project, old
         if (str(project) in expected_failures and
                 old.get("config_sha256") == digest and
@@ -729,7 +735,6 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
         # A changed frontend/toolchain must never reuse artifacts from the
         # previous failed attempt.  Operators can request an auditable clean
         # rebuild without deleting append-only attempt history.
-        force_clean_run = os.environ.get("R2G_FORCE_CLEAN_RUN") == "1"
         resume_from = (None if force_clean_run else
                        _resume_stage(previous_checkpoint, project=project))
         if resume_from:

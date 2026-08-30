@@ -5167,3 +5167,30 @@ mismatch，且 signoff wrapper 检测到其修正 CDL 导致布局 digest 变化
 `run_rcx.sh` 在切换输出目录后用相对路径加载 helper 的脚本 bug。下一步仍需用真实、
 source-disjoint 设计形成完整 ORFS/strict/equivalence/graph/capture lineage，不能仅凭
 本次 smoke 建立六项 promotion gate。
+
+### 2026-08-30 effective routing hook 与 direct ORFS 重跑
+
+继续按 causal online capability 计划推进时，发现 `sky130hs/fastroute.tcl` 把
+`ROUTING_LAYER_ADJUSTMENT` 固定为 `0.2`，此前 routing pair 虽然 config 不同，实际
+执行路径却相同。现已在 clean ORFS worktree 提交 `0c162cf5f`：无配置时保持 `0.2`
+默认，有配置时由 Tcl 直接消费 `$::env(ROUTING_LAYER_ADJUSTMENT)`；capture
+preflight 从 `NO_OP/INAPPLICABLE` 变为 `EFFECTIVE`。direct toolchain manifest
+重新 `record → check` 通过，digest=`9b5f179b01bebde6da87f6443729f2589d8fab218fc63478628c2286e1940b1c`；campaign source freeze
+digest=`a04e7ec20894a77b629798834b68f66863dc296dc7735b85df9b4e2c56278ca4`。
+
+为避免旧 GDS/receipt 被复用，修复 `run_orfs_diversity_campaign.py` 使
+`R2G_FORCE_CLEAN_RUN=1` 在 reusable-success 快速路径之前生效，并对 FIFO before/after
+各生成新的 backend `RUN_*`（每个 ORFS flow 完整到 finish，约 285/319 秒）。新的
+KLayout `.lyt` 已生成绝对 LEF 路径，Magic 8.3.682 与 Netgen 1.5.323 均能工作；两臂
+LVS 均 clean，但 sky130hd sibling DRC deck 在相同位置报告 2 个 `m3.2` 违例，故
+strict signoff、full oracle 和 learner eligibility 仍为 false。FIFO 的 PPA utility
+为 `HARMFUL`（power 增加约 `4.5e-05 W`），不能解读为机制收益；UART 旧 arm 仍有
+`WNS=-0.0203174 ns`。capture 使用新的 staging DB 保留不可变旧证据，新的 routing
+receipt 为 `EFFECTIVE`，但当前两个 pair 仍缺 timing/DRC/strict/graph 等门。
+
+另外修正 batch-lane toolchain fingerprint replay：若 receipt 含
+`toolchain_root`，重放现在将其纳入 fingerprint（无该字段的旧 external receipt
+保持兼容）。本轮仍没有 canonical memory mutation、rule authority promotion 或
+production runtime import；下一步应先解决 sky130hs DRC 的 `m3.2` 真实/平台 deck
+问题，再为至少两个 source-disjoint lineage 建立完整 oracle、graph 与 A/B efficacy
+证据。

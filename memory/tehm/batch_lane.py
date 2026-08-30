@@ -375,18 +375,36 @@ def _validate_toolchain_binding(binding: Mapping | None, *,
             result["reasons"].append(f"{name} digest is missing")
         elif _sha(path) != digest:
             result["reasons"].append(f"{name} binary digest changed")
-        if status == "bound_internal" and root is not None:
+        # ``bound_internal`` means the executable is inside the locked direct
+        # toolchain bundle when one is recorded; older ORFS-native receipts
+        # have no bundle root and therefore retain the historical ORFS-root
+        # containment check.  Treating every internal binary as if it had to
+        # live below the ORFS checkout incorrectly rejects the reproducible
+        # user-owned bundle (and silently downgrades otherwise valid pairs).
+        containment_root = root
+        toolchain_root_value = binding.get("toolchain_root")
+        if isinstance(toolchain_root_value, str) and toolchain_root_value.strip():
+            containment_root = Path(toolchain_root_value).expanduser().resolve()
+        if status == "bound_internal" and containment_root is not None:
             try:
-                path.relative_to(root)
+                path.relative_to(containment_root)
             except ValueError:
-                result["reasons"].append(f"{name} escapes bound ORFS root")
+                result["reasons"].append(
+                    f"{name} escapes bound toolchain root")
         if isinstance(run_meta, Mapping) and run_meta.get(meta_key) != path_value:
             result["reasons"].append(f"run metadata {meta_key} mismatch")
+    # Campaign receipts include the direct bundle root in the fingerprint so
+    # two otherwise identical binaries cannot be rebound to a different user
+    # prefix.  Preserve the legacy two-field replay for older external rows
+    # which predate ``toolchain_root``.
     fingerprint_payload = {
-        "orfs_root": str(root) if root is not None
-        else None,
+        "orfs_root": str(root) if root is not None else None,
         "tools": dict(tools),
     }
+    toolchain_root_value = binding.get("toolchain_root")
+    if isinstance(toolchain_root_value, str) and toolchain_root_value.strip():
+        fingerprint_payload["toolchain_root"] = str(
+            Path(toolchain_root_value).expanduser().resolve())
     expected_fingerprint = hashlib.sha256(
         json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()

@@ -107,8 +107,11 @@ fi
 # not an informational warning: an older binary has produced crashes and
 # unusable LVS evidence on this host.
 MAGIC_REQUIRED="$(sed -nE 's/.*requires[[:space:]]+magic-([0-9.]+).*/\1/p' "$MAGIC_TECH" | head -1)"
+# Magic's standalone ``-dnull`` build intentionally has no command-line
+# version switch.  A direct bundle may therefore provide the audited version
+# as R2G_MAGIC_VERSION; only probe ``--version`` when no explicit pin exists.
 MAGIC_VERSION="${R2G_MAGIC_VERSION:-}"
-if [[ -n "$MAGIC_REQUIRED" || "${R2G_STRICT_SIGNOFF:-0}" == "1" ]]; then
+if [[ -z "$MAGIC_VERSION" && ( -n "$MAGIC_REQUIRED" || "${R2G_STRICT_SIGNOFF:-0}" == "1" ) ]]; then
   MAGIC_VERSION="$(timeout 10 "$MAGIC_EXE" --version 2>/dev/null | head -1 | tr -d '[:space:]' || true)"
 fi
 if [[ -n "$MAGIC_REQUIRED" ]]; then
