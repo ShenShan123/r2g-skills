@@ -540,3 +540,8 @@ contract。manifest 保存 `contract_id`、catalog digest、action signature 和
 这阻止把已经执行完成的旧 ORFS evidence 在事后贴上新 contract。使用 contract 时应先
 限定 source-disjoint `--run-suffix`，再执行 flow；该 contract 仍只服务于 shadow/calibration
 proposal，不授予 Parametric production authority。
+
+contract cohort 的 sample admission 还要求 source-freeze 绑定的内部 ORFS toolchain
+（`bound_internal`）。外部 override 仅可作为诊断运行，必须在 calibration 分母外显式
+隔离；每条 evaluatable sample/evidence 都保存 toolchain status 与 fingerprint，防止
+未验证的宿主二进制结果被复用为 contract support。

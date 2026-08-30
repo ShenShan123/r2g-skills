@@ -463,6 +463,33 @@ def _validate_source_freeze(manifest: dict) -> dict:
     return freeze
 
 
+def _toolchain_binding(root: Path) -> dict:
+    """Return the minimal toolchain identity used by contract admission."""
+    state = _load(Path(root) / "toolchain_preflight.json")
+    if not isinstance(state, dict):
+        return {"status": None, "fingerprint": None, "compatibility": None}
+    return {
+        "status": state.get("status"),
+        "fingerprint": state.get("fingerprint"),
+        "compatibility": state.get("compatibility"),
+    }
+
+
+def _contract_toolchain_gate(root: Path, manifest: dict) -> dict:
+    """Require a tree-packaged toolchain for typed contract calibration."""
+    binding = _toolchain_binding(root)
+    if manifest.get("utility_contract") is None:
+        return {"eligible": True, "reason": None, **binding}
+    if binding.get("status") != "bound_internal":
+        status = binding.get("status") or "missing"
+        return {
+            "eligible": False,
+            "reason": f"contract calibration requires bound_internal toolchain (got {status})",
+            **binding,
+        }
+    return {"eligible": True, "reason": None, **binding}
+
+
 def prepare(root: Path, orfs_root: Path, *,
             suffixes: set[str] | None = None,
             utility_contract: dict | None = None) -> dict:
@@ -642,15 +669,24 @@ def _strict_oracle_gate(root: Path, manifest: dict) -> dict[str, dict]:
 def make_samples(root: Path, manifest: dict) -> dict:
     samples, evidence = [], []
     strict_gate = _strict_oracle_gate(root, manifest)
+    toolchain_gate = _contract_toolchain_gate(root, manifest)
     for item in manifest["items"]:
         case_id = str(item["case_id"])
         oracle = strict_gate.get(case_id, {
             "eligible": False, "reason": "strict_oracle_missing", "projects": {},
         })
+        if not toolchain_gate["eligible"]:
+            evidence.append({"case_id": case_id,
+                             "status": "excluded_toolchain",
+                             "reason": toolchain_gate["reason"],
+                             "toolchain_preflight": toolchain_gate,
+                             "strict_oracle": oracle})
+            continue
         if not oracle["eligible"]:
             evidence.append({"case_id": case_id,
                              "status": "excluded_strict_oracle",
-                             "strict_oracle": oracle})
+                             "strict_oracle": oracle,
+                             "toolchain_preflight": toolchain_gate})
             continue
         before, after = Path(item["before_project"]), Path(item["after_project"])
         final_def = _latest_successful_final_def(before)
@@ -678,12 +714,14 @@ def make_samples(root: Path, manifest: dict) -> dict:
             "action": record.action, "before_ppa": record.before["reports"]["ppa"],
             "after_ppa": record.after["reports"]["ppa"],
             "observed_deltas": observed,
+            "toolchain_preflight": toolchain_gate,
         })
         evidence.append({"case_id": case_id, "status": "evaluatable",
                          "lineage_id": item["lineage_id"],
                          "context_digest": context.get("digest"),
                          "observed_deltas": observed, "feature_rc": feature_rc,
-                         "strict_oracle": oracle})
+                         "strict_oracle": oracle,
+                         "toolchain_preflight": toolchain_gate})
     result = {
         "version": VERSION, "samples": samples, "evidence": evidence,
         "source_lineages": sorted({row["lineage_id"] for row in samples}),
@@ -1000,7 +1038,9 @@ def _sample_from_pair(pair: dict) -> dict:
     }
 
 
-def _strict_eligible_samples(path: Path) -> tuple[list[dict], list[dict]]:
+def _strict_eligible_samples(path: Path, *,
+                             require_internal_toolchain: bool = False
+                             ) -> tuple[list[dict], list[dict]]:
     """Load only samples whose file-level evidence proves strict eligibility.
 
     Calibration inputs are often copied between campaign roots.  Requiring
@@ -1028,6 +1068,12 @@ def _strict_eligible_samples(path: Path) -> tuple[list[dict], list[dict]]:
         elif not isinstance(oracle, dict) or not oracle.get("eligible"):
             reason = str((oracle or {}).get("reason") or
                          "strict_oracle_not_eligible")
+        elif require_internal_toolchain:
+            toolchain = row.get("toolchain_preflight")
+            if (not isinstance(toolchain, dict) or
+                    toolchain.get("status") != "bound_internal"):
+                status = (toolchain or {}).get("status") if isinstance(toolchain, dict) else None
+                reason = "toolchain_preflight_unverified:" + str(status or "missing")
         if reason is not None:
             excluded.append({"case_id": case_id, "reason": reason})
             continue
@@ -1231,6 +1277,7 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
     utility_contract = _validate_contract_manifest(campaign_manifest, utility_contract)
     if utility_contract is not None:
         _validate_source_freeze(campaign_manifest)
+    require_internal_toolchain = utility_contract is not None
     stage = root / "staging"
     if stage.exists():
         shutil.rmtree(stage)
@@ -1238,7 +1285,8 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
     stage_db = stage / "closed_loop" / "tehm.sqlite"
     store = ArtifactStore(stage / "closed_loop" / "artifacts")
     excluded_prior = []
-    v10v11_rows, excluded = _strict_eligible_samples(v10v11_samples)
+    v10v11_rows, excluded = _strict_eligible_samples(
+        v10v11_samples, require_internal_toolchain=require_internal_toolchain)
     excluded_prior.extend({"path": str(v10v11_samples.resolve()), **row}
                           for row in excluded)
     v10v11 = [_augment_sample_ppa(sample, v10v11_samples)
@@ -1257,7 +1305,8 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
         prior_paths = ([prior_samples] if isinstance(prior_samples, Path)
                        else list(prior_samples))
     for prior_path in prior_paths:
-        prior_data, excluded = _strict_eligible_samples(prior_path)
+        prior_data, excluded = _strict_eligible_samples(
+            prior_path, require_internal_toolchain=require_internal_toolchain)
         excluded_prior.extend({"path": str(prior_path.resolve()), **row}
                               for row in excluded)
         prior.extend(_augment_sample_ppa(sample, prior_path)
@@ -1265,7 +1314,9 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
     conn = db.connect(stage_db)
     db.ensure_schema(conn)
     added_lineages = _load_external_training(root, conn, store, prior)
-    fresh, excluded_fresh = _strict_eligible_samples(root / "prospective_samples.json")
+    fresh, excluded_fresh = _strict_eligible_samples(
+        root / "prospective_samples.json",
+        require_internal_toolchain=require_internal_toolchain)
     excluded_prior.extend({"path": str((root / "prospective_samples.json").resolve()),
                            "split": "fresh", **row}
                           for row in excluded_fresh)
@@ -1321,7 +1372,8 @@ def promote(root: Path, evidence_root: Path) -> dict:
     evidence_root.mkdir(parents=True, exist_ok=True)
     for name in ("campaign_manifest.json", "campaign_recovery_report.json",
                  "strict_oracle_state.json", "prospective_samples.json",
-                 "calibration_expansion_report.json", "parametric_readiness.json"):
+                 "calibration_expansion_report.json", "parametric_readiness.json",
+                 "source_freeze.json", "toolchain_preflight.json"):
         src = root / name
         if src.is_file():
             shutil.copy2(src, evidence_root / name)

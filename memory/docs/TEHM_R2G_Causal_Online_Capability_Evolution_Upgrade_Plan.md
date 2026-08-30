@@ -4684,3 +4684,11 @@ toolchain preflight。`run`、`samples`、`evaluate` 和直接调用的 evaluati
 之前都会重放 freeze digest 与逐文件输入；任一 config、源码、ORFS 依赖或工具指纹漂移
 都会 fail-closed。这样“contract 已预注册”与“实际执行仍使用同一 source”成为同一个
 可验证边界，而不是两个互相独立的声明。
+
+此外，contract-bound calibration sample 现在只接受 `toolchain_preflight.status=
+bound_internal`。显式 override 的 `bound_external/operator_bound_unverified`、缺失或
+损坏的 toolchain receipt 会写入 `excluded_toolchain`/排除原因，但不能进入 conformal
+或 utility support；sample 与 evidence row 同时保存 toolchain fingerprint。这样即使
+source/config 没有漂移，也不能把未被 ORFS tree 内部工具验证的结果伪装成新 contract
+的 calibration evidence。legacy 无 contract campaign 仍保持诊断兼容，但其 evidence
+不能被新 contract calibration 复用。

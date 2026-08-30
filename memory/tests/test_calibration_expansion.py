@@ -22,6 +22,8 @@ from run_calibration_expansion import (  # noqa: E402
     _contract_manifest_binding,
     _validate_contract_manifest,
     _validate_source_freeze,
+    _contract_toolchain_gate,
+    _strict_eligible_samples,
     make_samples,
     main,
     prepare,
@@ -339,6 +341,36 @@ def test_prepare_binds_contract_to_selected_cohort_before_flow(tmp_path):
     with pytest.raises(ValueError, match="not bound to utility contract"):
         prepare(tmp_path / "mixed", orfs,
                 suffixes={"v112", "v113"}, utility_contract=contract)
+
+
+def test_contract_cohort_rejects_unverified_toolchain_before_sampling(tmp_path):
+    contract = density_relief_nonregression_32()
+    manifest = {"utility_contract": _contract_manifest_binding(contract)}
+    assert _contract_toolchain_gate(tmp_path, manifest)["eligible"] is False
+    (tmp_path / "toolchain_preflight.json").write_text(json.dumps({
+        "status": "bound_external", "fingerprint": "external",
+        "compatibility": "operator_bound_unverified",
+    }))
+    gate = _contract_toolchain_gate(tmp_path, manifest)
+    assert gate["eligible"] is False
+    assert "bound_internal" in gate["reason"]
+
+    samples_path = tmp_path / "samples.json"
+    samples_path.write_text(json.dumps({
+        "samples": [{"case_id": "case-a"}],
+        "evidence": [{
+            "case_id": "case-a", "status": "evaluatable",
+            "strict_oracle": {"eligible": True},
+            "toolchain_preflight": gate,
+        }],
+    }))
+    accepted, excluded = _strict_eligible_samples(
+        samples_path, require_internal_toolchain=True)
+    assert accepted == []
+    assert excluded[0]["reason"].startswith("toolchain_preflight_unverified")
+
+    legacy = _contract_toolchain_gate(tmp_path, {})
+    assert legacy["eligible"] is True
 
 
 def test_promote_phase_accepts_sample_only_support_campaign(tmp_path):
