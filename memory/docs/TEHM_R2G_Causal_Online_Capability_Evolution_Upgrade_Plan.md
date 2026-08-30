@@ -4792,3 +4792,12 @@ ORFS flow已具有可复现的 CTS/signoff 能力；也不能把 DPL 失败
 解释为设计或记忆机制效果。在获得匹配的自有 OpenROAD
 之前，仍不启动完整 ORFS batch；若只做工具诊断，可以保留
 该 external receipt，但必须与正式 learner/promotion evidence 分离。
+
+同一诊断根下的 density-relief after arm（`CORE_UTILIZATION=35`）可以
+跑到 finish，route report 为 clean，但不构成完整 oracle：没有 strict
+signoff/DRC/LVS/RCX/equivalence receipt，时序 WNS=`-0.479862 ns` 且 setup
+违例为 `47`。与 before 的 CTS 失败配对后，adapter 只能得到
+`verdict=PASS` 但 `oracle_complete=false`、obligation coverage=`1/3`，物理
+utility 为 `HARMFUL`（面积约 `4552→6891 um²`）。这条 pair 只能作为
+external diagnostic；不能进入 support/staging learner，也不能作为
+fail→pass causal 或 utility evidence。
