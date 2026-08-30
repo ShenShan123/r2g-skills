@@ -19,6 +19,7 @@ from tehm.crystallization.risk import stratify_rule_risk
 from tehm.crystallization.role_normalize import RoleNormalizedRewrite, normalize_rewrite
 from tehm.crystallization.synthesize_skill import rule_sources, synthesize_skill
 from tehm.crystallization.validity import ValidityConfig, audit_rule
+from tehm.verified_execution import require_verified_transition
 
 
 def _atomic_crystallization(fn):
@@ -75,7 +76,7 @@ def crystallize_all(conn: sqlite3.Connection, *, min_group_size: int = 2,
     if not campaign_id:
         raise ValueError("campaign_id is required for crystallization")
     validity_config = validity_config or ValidityConfig(min_group_size=min_group_size)
-    transitions, lineage_of, episode_of = _load_transitions(
+    transitions, lineage_of, episode_of, invalid_transition_ids = _load_transitions(
         conn, campaign_id=campaign_id)
     by_id = {t["transition_id"]: t for t in transitions}
     report = run_preflight(conn, min_group_size=min_group_size,
@@ -85,13 +86,19 @@ def crystallize_all(conn: sqlite3.Connection, *, min_group_size: int = 2,
     for key, group in report.groups.items():
         if effect_keys is not None and key not in effect_keys:
             continue
-        if group["size"] < min_group_size:
+        # ``run_preflight`` intentionally reports the raw learner membership
+        # corpus, including legacy/incomplete rows retained for audit.  The
+        # crystallizer must use only the verified subset and must not index a
+        # filtered-out transition while walking those advisory groups.
+        group_transition_ids = [
+            tid for tid in group["transition_ids"] if tid in by_id]
+        if len(group_transition_ids) < min_group_size:
             continue  # singletons never crystallize (design doc 7.2/6.3)
         # A primary effect can contain structurally different executors.  Do
         # not anti-unify those into a wildcard profile: split first on the
         # explicit compatibility contract carried by each RTL action.
         compatibility_groups: dict[str | None, list[str]] = {}
-        for tid in group["transition_ids"]:
+        for tid in group_transition_ids:
             action = by_id[tid].get("action") or {}
             payload = action.get("payload") or {}
             profile = payload.get("compatibility_profile")
@@ -149,7 +156,11 @@ def crystallize_all(conn: sqlite3.Connection, *, min_group_size: int = 2,
                 # this write uncommitted is required for all-rules atomicity.
                 _persist_rule(conn, rule, commit=False)
             rules.append(rule)
-    if not dry_run and retire_stale and effect_keys is None:
+    # Do not let an incomplete/corrupt learner row make a formerly valid rule
+    # look stale and silently retire it.  The invalid row remains visible to
+    # raw/preflight audit; a clean verified rebuild can decide retirement later.
+    if (not dry_run and retire_stale and effect_keys is None and
+            not invalid_transition_ids):
         _retire_stale_rules(conn, {r["rule_id"] for r in rules}, campaign_id,
                             commit=False)
     return rules
@@ -176,6 +187,20 @@ def _load_transitions(conn: sqlite3.Connection, *, campaign_id: str = "live"):
         }
         for r in rows
     ]
+    # Membership identifies the learner partition; it does not prove that a
+    # transition was executed under an executable oracle.  Exclude incomplete
+    # rows before grouping so they can never become candidate-rule support,
+    # while preserving legacy diagnostic rows for preflight/audit reporting.
+    verified = []
+    invalid_transition_ids: list[str] = []
+    for transition in transitions:
+        try:
+            require_verified_transition(conn, transition["transition_id"])
+        except ValueError:
+            invalid_transition_ids.append(transition["transition_id"])
+            continue
+        verified.append(transition)
+    transitions = verified
     lineage_of: dict[str, str] = {}
     for r in conn.execute("SELECT state_id, lineage_id FROM tehm_states"):
         lineage_of[r["state_id"]] = r["lineage_id"] or "?"
@@ -183,7 +208,7 @@ def _load_transitions(conn: sqlite3.Connection, *, campaign_id: str = "live"):
     for r in conn.execute(
             "SELECT transition_id, episode_id FROM tehm_episode_steps"):
         episode_of[r["transition_id"]] = r["episode_id"]
-    return transitions, lineage_of, episode_of
+    return transitions, lineage_of, episode_of, tuple(invalid_transition_ids)
 
 
 def _persist_rule(conn: sqlite3.Connection, rule: dict, *, commit: bool = True) -> None:

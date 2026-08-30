@@ -2436,3 +2436,7 @@ canonical/authority/runtime 的 shadow-only 边界。
 replay 与 canonical import 在各自 savepoint 内重放完整 executable oracle。伪造外部
 `classification`/membership/gate 输入不能把 incomplete transition 变成 support witness；
 失败会回滚本次导入，不写 canonical memory。
+
+crystallization 同样在 learner 分组前重放完整 verified execution；不完整或
+compile-only transition 只留在 raw/preflight audit，不会生成 candidate rule。旧 R2G
+诊断记录因此不会阻塞审计，也不会凭默认 membership 获得 learner rule support。

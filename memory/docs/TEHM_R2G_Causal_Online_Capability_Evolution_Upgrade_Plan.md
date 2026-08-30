@@ -5338,3 +5338,12 @@ snapshot 再次检查。这样仅伪造 external receipt 的 `classification`、
 六项 gate 输入，不能把 `oracle_complete=false`、compile-only、unknown 或损坏的
 transition 变成 support witness。失败会回滚本次 staging/canonical savepoint，canonical
 memory、rule authority 和 production runtime 仍不发生隐式 mutation。
+
+### 4.5/4.8 crystallization learner replay seam
+
+`crystallize_all()` 也不能把 membership 当作 execution proof。其 learner corpus 在
+按 effect key 分组前重放 `require_verified_transition()`；缺少明确 executable oracle 的
+transition 只保留在 raw/preflight audit 中，不参与 candidate rule support。这样历史
+R2G 诊断记录可以继续用于 instance-dominated/coverage 分析，但不会因为默认 training
+membership 误生成 rule。incremental crystallization 复用同一过滤结果，仍以 derived
+savepoint 和 raw-evidence digest 保护规则、event、revision 的原子性。

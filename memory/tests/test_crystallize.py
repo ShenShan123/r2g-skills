@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from tehm.adapters.r2g_evidence import capture_r2g_project
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.crystallization.build_rules import crystallize_all
@@ -156,6 +158,52 @@ def test_singletons_never_crystallize(tmp_tehm):
     rules = crystallize_all(conn)
     assert rules == []
     assert conn.execute("SELECT COUNT(*) FROM tehm_rules").fetchone()[0] == 0
+
+
+def test_crystallization_rejects_incomplete_learner_execution(
+        tmp_tehm, sample_record_dict):
+    """Training membership cannot promote a partial transition into a rule."""
+    conn, store, _ = tmp_tehm
+    record = json.loads(json.dumps(sample_record_dict))
+    record["record_id"] = "crystallize-incomplete"
+    record["verification"]["oracle_complete"] = False
+    capture(conn, store, ExecutionRecord.from_dict(record))
+    assert crystallize_all(conn) == []
+    assert conn.execute("SELECT COUNT(*) FROM tehm_rules").fetchone()[0] == 0
+
+
+def test_incomplete_learner_row_cannot_retire_existing_rule(
+        tmp_tehm, sample_record_dict):
+    """A corrupt learner row cannot turn a valid rule into stale state."""
+    conn, store, _ = tmp_tehm
+    base = json.loads(json.dumps(sample_record_dict))
+    for i in range(3):
+        record = json.loads(json.dumps(base))
+        record["record_id"] = f"retire-guard-{i}"
+        record["lineage_id"] = f"retire-guard-lineage-{i}"
+        record["episode"] = {
+            "episode_id": f"retire-guard-episode-{i}",
+            "lineage_id": record["lineage_id"], "step_index": 0,
+            "terminal_status": "VERIFIED_REPAIR",
+        }
+        record["action"]["payload"]["config_edits"] = {
+            "PLACE_DENSITY_LB_ADDON": f"0.1{i + 4}"}
+        record["before"]["config"]["PLACE_DENSITY_LB_ADDON"] = "0.10"
+        record["after"]["config"]["PLACE_DENSITY_LB_ADDON"] = f"0.1{i + 4}"
+        record["observation_delta"]["first_divergence"]["before"] = 10 + i
+        capture(conn, store, ExecutionRecord.from_dict(record))
+    rule = crystallize_all(conn)[0]
+    from tehm.lifecycle.rule_status import enter_shadow, get_status
+    enter_shadow(conn, rule_id=rule["rule_id"], target_scope="drc")
+    ids = [row["transition_id"] for row in conn.execute(
+        "SELECT transition_id FROM tehm_transitions")]
+    conn.execute(
+        "UPDATE tehm_transitions SET verifier_json=? WHERE transition_id=?",
+        (json.dumps({"verdict": "UNKNOWN", "oracle_type": "UNKNOWN"}), ids[0]))
+    conn.commit()
+    rebuilt = crystallize_all(conn)
+    assert rebuilt
+    assert get_status(conn, rule_id=rule["rule_id"], target_scope="drc")["status"] == "shadow"
 
 
 def test_dry_run_writes_nothing(tmp_tehm, sample_record_dict):
