@@ -16,7 +16,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import math
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from tehm.ids import stable_dumps
 from tehm.physical.effects import PHYSICAL_METRICS, extract_deltas
@@ -26,6 +26,7 @@ from tehm.physical.memory import _action_signature
 UTILITY_CONTRACT_VERSION = "typed-utility-contract-v1"
 TIMING_RELIEF_BUDGETED_V1_ID = "TIMING_RELIEF_BUDGETED_V1"
 TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID = "TIMING_RELIEF_BUDGETED_V2_50_TO_45"
+DENSITY_RELIEF_NONREGRESSION_32_ID = "DENSITY_RELIEF_NONREGRESSION_32"
 
 # This is a pre-registered proposal for the next prospective cohort.  It is
 # intentionally not derived or rewritten from a promotion result.  Existing
@@ -80,6 +81,45 @@ _TIMING_RELIEF_BUDGETED_V2_50_TO_45["action_signature"] = {
     "operation_point": "50->45",
 }
 
+# This is a new, explicit contract for the next source-disjoint density
+# cohort.  It is deliberately stricter than the historical action32 shadow
+# experiment: timing and resource deltas may not regress, and positive utility
+# still has to be established by the independent grouped-calibration gate.
+# No historical v113-v121 row is retroactively evaluated under this contract.
+_DENSITY_RELIEF_NONREGRESSION_32 = {
+    "version": UTILITY_CONTRACT_VERSION,
+    "contract_id": DENSITY_RELIEF_NONREGRESSION_32_ID,
+    "status": "PRE_REGISTERED_FOR_NEXT_SOURCE_DISJOINT_COHORT",
+    "action_signature": {
+        "domain": "flow.CONFIG_DELTA",
+        "transformation_family": "DENSITY_RELIEF",
+        "config_edits": {"CORE_UTILIZATION": "32"},
+        "operation_point": "base<32->32",
+    },
+    "primary_objective": {"wns_delta_ns": {"minimum": 0.0}},
+    "hard_constraints": {
+        "equivalence": "PASS",
+        "drc": "PASS",
+        "lvs": "PASS",
+        "timing": "PASS",
+        "tns_delta_ns": {"minimum": 0.0},
+    },
+    "resource_budgets": {
+        "area_delta_percent": {"maximum": 0.0},
+        "power_delta_percent": {"maximum": 0.0},
+    },
+    "runtime_policy": {
+        "interval_must_fit_contract": True,
+        "ood_action": "ABSTAIN",
+        "missing_evidence_action": "ABSTAIN",
+    },
+    "authority": {
+        "raw_pareto_gate_unchanged": True,
+        "canonical_memory_mutation": "none",
+        "promotion_eligible": False,
+    },
+}
+
 
 class UtilityContractError(ValueError):
     """Malformed or internally inconsistent typed utility contract."""
@@ -93,6 +133,20 @@ def timing_relief_budgeted_v1() -> dict:
 def timing_relief_budgeted_v2_50_to_45() -> dict:
     """Return the independent, not-yet-executed 50->45 contract draft."""
     return copy.deepcopy(_TIMING_RELIEF_BUDGETED_V2_50_TO_45)
+
+
+def density_relief_nonregression_32() -> dict:
+    """Return the pre-registered exact action32 non-regression contract."""
+    return copy.deepcopy(_DENSITY_RELIEF_NONREGRESSION_32)
+
+
+def known_utility_contracts() -> dict[str, Callable[[], dict]]:
+    """Return the immutable contract catalog used by manifest validators."""
+    return {
+        TIMING_RELIEF_BUDGETED_V1_ID: timing_relief_budgeted_v1,
+        TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID: timing_relief_budgeted_v2_50_to_45,
+        DENSITY_RELIEF_NONREGRESSION_32_ID: density_relief_nonregression_32,
+    }
 
 
 def utility_contract_digest(contract: Mapping) -> str:
@@ -365,6 +419,13 @@ def _abstain(base: dict, reasons: list[str]) -> dict:
 
 
 def _action_reason(contract: Mapping, action: Mapping | None) -> str | None:
+    return action_contract_binding_reason(action, contract)
+
+
+def action_contract_binding_reason(action: Mapping | None,
+                                   contract: Mapping) -> str | None:
+    """Return a stable reason when an action is not bound to ``contract``."""
+    validate_utility_contract(contract)
     if not isinstance(action, Mapping):
         return "missing_action"
     expected = contract["action_signature"]
@@ -534,10 +595,13 @@ def _unique(values) -> list[str]:
 
 
 __all__ = [
+    "DENSITY_RELIEF_NONREGRESSION_32_ID",
     "TIMING_RELIEF_BUDGETED_V1_ID", "TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID",
     "UTILITY_CONTRACT_VERSION",
     "UtilityContractError", "contract_action", "evaluate_observed_contract",
-    "select_contract_proposal", "timing_relief_budgeted_v1",
+    "action_contract_binding_reason", "known_utility_contracts",
+    "select_contract_proposal",
+    "density_relief_nonregression_32", "timing_relief_budgeted_v1",
     "timing_relief_budgeted_v2_50_to_45",
     "utility_contract_digest", "validate_utility_contract",
 ]

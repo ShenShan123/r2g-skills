@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from prepare_parametric_prospective_manifest import validate  # noqa: E402
 from tehm.parametric.shadow_campaign import ShadowCampaignError  # noqa: E402
 from tehm.physical.utility_contracts import (  # noqa: E402
+    contract_action,
+    density_relief_nonregression_32,
     timing_relief_budgeted_v2_50_to_45,
     utility_contract_digest,
 )
@@ -99,4 +101,47 @@ def test_v2_50_to_45_contract_binding_is_independent():
     bad["utility_contract_digest"] = utility_contract_digest(
         timing_relief_budgeted_v2_50_to_45())[:-1] + "0"
     with pytest.raises(ShadowCampaignError, match="digest"):
+        validate(bad)
+
+
+def test_strict_manifest_binds_every_observation_action_to_known_contract():
+    manifest = _manifest()
+    contract = density_relief_nonregression_32()
+    action = contract_action(contract)
+    for case in manifest["cases"]:
+        case["phase"] = "observation"
+        case["candidate_actions"] = [action]
+    manifest.update({
+        "require_utility_contract": True,
+        "contract_id": contract["contract_id"],
+        "utility_contract_digest": utility_contract_digest(contract),
+        "action_signature": {
+            "domain": "flow.CONFIG_DELTA",
+            "family": "DENSITY_RELIEF",
+            "config_edits": {"CORE_UTILIZATION": "32"},
+            "operation_point": "base<32->32",
+        },
+    })
+    result = validate(manifest)
+    assert result["require_utility_contract"] is True
+    assert result["contract_id"] == contract["contract_id"]
+
+    bad = _manifest()
+    for case in bad["cases"]:
+        case["phase"] = "observation"
+        case["candidate_actions"] = [contract_action(contract)]
+    bad["cases"][1]["candidate_actions"][0]["payload"]["config_edits"][
+        "CORE_UTILIZATION"] = "31"
+    bad.update({
+        "require_utility_contract": True,
+        "contract_id": contract["contract_id"],
+        "utility_contract_digest": utility_contract_digest(contract),
+        "action_signature": {
+            "domain": "flow.CONFIG_DELTA",
+            "family": "DENSITY_RELIEF",
+            "config_edits": {"CORE_UTILIZATION": "32"},
+            "operation_point": "base<32->32",
+        },
+    })
+    with pytest.raises(ShadowCampaignError, match="not bound"):
         validate(bad)

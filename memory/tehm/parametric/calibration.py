@@ -17,6 +17,12 @@ from typing import Mapping
 
 from tehm.ids import stable_dumps
 from tehm.physical.effects import PHYSICAL_METRICS
+from tehm.physical.memory import _action_signature
+from tehm.physical.utility_contracts import (
+    contract_action,
+    utility_contract_digest,
+    validate_utility_contract,
+)
 
 
 VERSION = "parametric-lineage-calibration-v1"
@@ -103,7 +109,8 @@ def calibrate_exact_groups(samples: list[Mapping], *, training_lineages=(),
 
 def materialize_shadow_policy(
         report: Mapping, *, scope: Mapping, action_signature: Mapping,
-        max_distance: float, min_unique_contexts: int = 3) -> dict:
+        max_distance: float, min_unique_contexts: int = 3,
+        utility_contract: Mapping | None = None) -> dict:
     """Convert one passing grouped report into a shadow-read policy.
 
     ``calibrate_exact_groups`` deliberately returns an external report with
@@ -119,6 +126,12 @@ def materialize_shadow_policy(
     _require_mapping("calibration report", report)
     _require_mapping("policy scope", scope)
     _require_mapping("action signature", action_signature)
+    if utility_contract is not None:
+        _require_mapping("utility contract", utility_contract)
+        validate_utility_contract(utility_contract)
+        contract_signature = _action_signature(contract_action(utility_contract))
+        if contract_signature != dict(action_signature):
+            raise ValueError("utility contract action signature does not match calibration group")
     if report.get("version") != GROUPED_VERSION:
         raise ValueError("calibration report version is unsupported")
     if report.get("status") != "ready_for_shadow":
@@ -225,7 +238,7 @@ def materialize_shadow_policy(
     firewall = group.get("firewall")
     if not isinstance(firewall, Mapping) or firewall.get("disjoint") is not True:
         raise ValueError("calibration lineage firewall is not disjoint")
-    return {
+    policy = {
         "version": SHADOW_POLICY_VERSION,
         "family": scope["family"],
         "status": "ready",
@@ -266,6 +279,12 @@ def materialize_shadow_policy(
         "promotion_eligible": False,
         "canonical_memory_mutation": "none",
     }
+    if utility_contract is not None:
+        policy.update({
+            "utility_contract_id": utility_contract["contract_id"],
+            "utility_contract_digest": utility_contract_digest(utility_contract),
+        })
+    return policy
 
 
 def calibrate_lineage_grouped(

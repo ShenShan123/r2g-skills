@@ -13,6 +13,7 @@ from .shadow_campaign import (  # noqa: F401
     AppendOnlyShadowLog,
     ShadowCampaignError,
     assert_counts_unchanged,
+    build_observation_gate_audit,
     build_outcome,
     build_receipt,
     canonical_counts,
@@ -26,7 +27,7 @@ from .calibration import (  # noqa: F401
 
 __all__ = [
     "AppendOnlyShadowLog", "ParametricShadowError", "ShadowCampaignError",
-    "assert_counts_unchanged", "build_outcome", "build_receipt",
+    "assert_counts_unchanged", "build_observation_gate_audit", "build_outcome", "build_receipt",
     "build_shadow_proposal", "canonical_counts", "join_receipts_and_outcomes",
     "proposal_digest", "read_log", "summarise",
     "calibrate_lineage_grouped", "calibrate_exact_groups",

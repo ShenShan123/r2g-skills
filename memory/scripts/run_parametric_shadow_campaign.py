@@ -60,6 +60,10 @@ except ModuleNotFoundError:  # importing this runner from a test/module
     sys.path.insert(0, str(MEMORY_ROOT / "scripts"))
     from prepare_parametric_prospective_manifest import validate as validate_prospective_manifest  # noqa: E402
 from tehm.physical.memory import PhysicalEffectMemory  # noqa: E402
+from tehm.physical.utility_contracts import (  # noqa: E402
+    action_contract_binding_reason,
+    known_utility_contracts,
+)
 from tehm.sync import canonical_json  # noqa: E402
 
 
@@ -106,6 +110,12 @@ def prepare(args) -> dict:
     readiness = _read(args.readiness)
     replay = _read(args.replay_evidence)
     prospective = validate_prospective_manifest(_read(args.prospective_manifest))
+    contract = None
+    if prospective.get("require_utility_contract"):
+        factory = known_utility_contracts().get(prospective.get("contract_id"))
+        if factory is None:  # pragma: no cover - manifest validator guards this
+            raise ShadowCampaignError("strict manifest utility contract is unknown")
+        contract = factory()
     if prospective["source_freeze"]["bundle_digest"] != replay.get("bundle_digest"):
         raise ShadowCampaignError("prospective manifest bundle digest differs from replay evidence")
     if prospective["source_freeze"]["manifest_digest"] != replay.get("manifest_digest"):
@@ -168,6 +178,11 @@ def prepare(args) -> dict:
                 raise ShadowCampaignError(f"case lineage differs from prospective manifest: {case_id}")
             if row.get("mode", planned["phase"]) != planned["phase"]:
                 raise ShadowCampaignError(f"case phase differs from prospective manifest: {case_id}")
+            if contract is not None:
+                reason = action_contract_binding_reason(row.get("action"), contract)
+                if reason:
+                    raise ShadowCampaignError(
+                        f"case action is not bound to utility contract: {case_id}: {reason}")
             context = row.get("graph_context")
             policy = _policy_for_action(row)
             expected_snapshot = row.get("memory_snapshot_digest")

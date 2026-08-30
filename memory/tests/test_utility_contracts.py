@@ -6,6 +6,7 @@ import pytest
 from tehm.physical.utility_contracts import (
     UtilityContractError,
     contract_action,
+    density_relief_nonregression_32,
     evaluate_observed_contract,
     select_contract_proposal,
     timing_relief_budgeted_v1,
@@ -83,6 +84,21 @@ def test_50_to_45_is_an_independent_signature_and_not_v1():
     assert v2["action_signature"]["operation_point"] == "50->45"
     assert contract_action(v2)["payload"]["utility_contract_id"] == v2["contract_id"]
     assert contract_action(v1) != contract_action(v2)
+
+
+def test_action32_contract_is_pre_registered_and_rejects_timing_regression():
+    contract = density_relief_nonregression_32()
+    validate_utility_contract(contract)
+    assert contract["status"] == "PRE_REGISTERED_FOR_NEXT_SOURCE_DISJOINT_COHORT"
+    assert contract["action_signature"]["config_edits"] == {"CORE_UTILIZATION": "32"}
+    result = evaluate_observed_contract(
+        contract=contract, action=contract_action(contract),
+        before_ppa=_ppa(), after_ppa=_ppa(wns=-0.01, tns=0.0, area=99.0, power=0.99),
+        checks=_checks())
+    assert result["status"] == "FAIL"
+    assert "wns_delta_below_objective" in result["failures"]
+    assert result["contract_eligible"] is False
+    assert result["canonical_memory_mutation"] == "none"
 
 
 def test_observed_contract_can_pass_while_raw_pareto_remains_harmful():

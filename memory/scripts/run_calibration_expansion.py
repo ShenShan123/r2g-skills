@@ -42,6 +42,11 @@ from tehm.physical.calibration import calibrate_retrieval  # noqa: E402
 from tehm.physical.effects import extract_deltas  # noqa: E402
 from tehm.physical.graph_context import load_defgraph_context  # noqa: E402
 from tehm.physical.memory import PhysicalEffectMemory, _action_signature  # noqa: E402
+from tehm.physical.utility_contracts import (  # noqa: E402
+    known_utility_contracts,
+    utility_contract_digest,
+    validate_utility_contract,
+)
 from tehm.parametric.calibration import (  # noqa: E402
     calibrate_exact_groups,
     materialize_shadow_policy,
@@ -772,7 +777,8 @@ def _strict_eligible_samples(path: Path) -> tuple[list[dict], list[dict]]:
 
 def _grouped_shadow_admission(*, retrieval_policy: dict,
                               heldout_samples: list[dict],
-                              training_lineages: list[str]) -> tuple[dict, dict]:
+                              training_lineages: list[str],
+                              utility_contract: dict | None = None) -> tuple[dict, dict]:
     """Grade one frozen retrieval cohort against the Parametric shadow gates.
 
     ``calibrate_retrieval`` owns point prediction and OOD diagnostics.  This
@@ -850,7 +856,8 @@ def _grouped_shadow_admission(*, retrieval_policy: dict,
                            "dataset_tier": first.get("dataset_tier")},
                     action_signature=first.get("action_signature") or {},
                     max_distance=min(float(distance), 3.0),
-                    min_unique_contexts=3)
+                    min_unique_contexts=3,
+                    utility_contract=utility_contract)
             except (TypeError, ValueError) as exc:
                 materialization["reason"] = f"materialization_rejected:{exc}"
             else:
@@ -929,6 +936,10 @@ def _grouped_shadow_readiness(*, grouped_report: dict,
         "policy_scope": policy.get("scope") if isinstance(policy, dict) else None,
         "policy_kind": policy.get("policy_kind") if isinstance(policy, dict) else None,
         "policy_status": policy.get("status") if isinstance(policy, dict) else None,
+        "utility_contract_id": (policy.get("utility_contract_id")
+                                 if isinstance(policy, dict) else None),
+        "utility_contract_digest": (policy.get("utility_contract_digest")
+                                    if isinstance(policy, dict) else None),
         "calibration_lineages": heldout,
         "reason": ("grouped action-signature policy satisfies shadow gates"
                    if ready else "grouped action-signature policy remains fail-closed"),
@@ -953,7 +964,10 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
              training_manifest: Path,
              prior_samples: Path | tuple[Path, ...] | list[Path] | None = None,
              fresh_suffixes: set[str] | None = None,
-             interval_method: str = "normal_weighted_mean_v1") -> dict:
+             interval_method: str = "normal_weighted_mean_v1",
+             utility_contract: dict | None = None) -> dict:
+    if utility_contract is not None:
+        validate_utility_contract(utility_contract)
     stage = root / "staging"
     if stage.exists():
         shutil.rmtree(stage)
@@ -1008,7 +1022,7 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
         interval_method=interval_method)
     grouped_calibration, shadow_materialization = _grouped_shadow_admission(
         retrieval_policy=policy, heldout_samples=fresh,
-        training_lineages=training)
+        training_lineages=training, utility_contract=utility_contract)
     shadow_readiness = _grouped_shadow_readiness(
         grouped_report=grouped_calibration,
         materialization=shadow_materialization)
@@ -1019,6 +1033,10 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
         "parametric_grouped_calibration": grouped_calibration,
         "shadow_policy_materialization": shadow_materialization,
         "parametric_shadow_readiness": shadow_readiness,
+        "utility_contract": ({
+            "contract_id": utility_contract["contract_id"],
+            "contract_digest": utility_contract_digest(utility_contract),
+        } if utility_contract is not None else None),
         "training_lineages": training,
         "added_external_lineages": added_lineages,
         "fresh_lineages": sorted({row["lineage_id"] for row in fresh}),
@@ -1086,6 +1104,9 @@ def main(argv=None) -> int:
         choices=("normal_weighted_mean_v1", "split_conformal_residual_v1"),
         default="normal_weighted_mean_v1",
         help="retrieval diagnostic interval; grouped shadow admission always uses lineage conformal")
+    ap.add_argument(
+        "--utility-contract-id", choices=sorted(known_utility_contracts()),
+        help="explicit pre-registered utility contract for grouped shadow materialization")
     ap.add_argument("--run-suffix", action="append", default=[],
                     help="lineage suffixes to run/sample (repeatable; scratch-only subset)")
     ap.add_argument("--workers", type=int, default=2)
@@ -1120,13 +1141,17 @@ def main(argv=None) -> int:
     if args.phase == "samples":
         return 0
     if args.phase in {"all", "evaluate"}:
+        utility_contract = None
+        if args.utility_contract_id:
+            utility_contract = known_utility_contracts()[args.utility_contract_id]()
         report = evaluate(root, canonical_snapshot=args.canonical_snapshot.resolve(),
                           v10v11_samples=args.v10v11_samples.resolve(),
                           v12v13_pairs=args.v12v13_pairs.resolve(),
                           training_manifest=args.training_manifest.resolve(),
                           prior_samples=tuple(path.resolve() for path in args.prior_samples),
                           fresh_suffixes=set(args.fresh_suffix) or None,
-                          interval_method=args.interval_method)
+                          interval_method=args.interval_method,
+                          utility_contract=utility_contract)
     if args.phase in {"all", "evaluate"}:
         print(json.dumps({"ok": True, "policy_status": report["policy"]["status"],
                           "shadow_admission_status": report[

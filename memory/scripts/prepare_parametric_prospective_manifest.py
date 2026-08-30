@@ -21,6 +21,8 @@ if str(MEMORY_ROOT) not in sys.path:
 from tehm.ids import stable_dumps  # noqa: E402
 from tehm.parametric.shadow_campaign import ShadowCampaignError, digest  # noqa: E402
 from tehm.physical.utility_contracts import (  # noqa: E402
+    action_contract_binding_reason,
+    known_utility_contracts,
     TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID,
     TIMING_RELIEF_BUDGETED_V1_ID,
     timing_relief_budgeted_v1,
@@ -54,6 +56,12 @@ def validate(manifest: dict) -> dict:
     if manifest.get("status") not in {"PLANNED", "FROZEN", "EXECUTED"}:
         raise ShadowCampaignError("manifest status must be PLANNED, FROZEN, or EXECUTED")
     contract_fields = _validate_contract_binding(manifest)
+    require_utility_contract = manifest.get("require_utility_contract")
+    if require_utility_contract is not None and type(require_utility_contract) is not bool:
+        raise ShadowCampaignError("require_utility_contract must be boolean")
+    if require_utility_contract is True and not contract_fields:
+        raise ShadowCampaignError(
+            "require_utility_contract needs a known typed utility contract")
     freeze = manifest.get("source_freeze")
     if not isinstance(freeze, dict) or not freeze.get("bundle_digest") or not freeze.get("manifest_digest"):
         raise ShadowCampaignError("source_freeze must bind bundle_digest and manifest_digest")
@@ -97,6 +105,20 @@ def validate(manifest: dict) -> dict:
             raise ShadowCampaignError(
                 f"decision case needs >=2 distinct candidate actions: {case['case_id']}")
         target_groups.setdefault((case["phase"], case["target_id"]), []).append(case)
+    if require_utility_contract is True:
+        if any(case["phase"] == "decision" for case in cases):
+            raise ShadowCampaignError(
+                "strict utility-contract manifests cannot include unbound decision candidates")
+        contract_factory = known_utility_contracts().get(contract_fields["contract_id"])
+        if contract_factory is None:  # pragma: no cover - guarded above
+            raise ShadowCampaignError("strict utility-contract manifest requires known contract")
+        contract = contract_factory()
+        for case in cases:
+            for action in case["candidate_actions"]:
+                reason = action_contract_binding_reason(action, contract)
+                if reason:
+                    raise ShadowCampaignError(
+                        f"case action is not bound to utility contract: {case['case_id']}: {reason}")
     if len(future_lineages) < 2:
         raise ShadowCampaignError("prospective cohort must contain at least two independent future lineages")
     metrics = manifest.get("pre_registered_metrics")
@@ -156,7 +178,7 @@ def validate(manifest: dict) -> dict:
         }
     else:
         normalized_gate = None
-    return {
+    normalized = {
         "version": "parametric-prospective-manifest-v1",
         "status": manifest["status"],
         **contract_fields,
@@ -185,6 +207,11 @@ def validate(manifest: dict) -> dict:
             "no_canonical_memory_mutation": True,
         },
     }
+    # Keep legacy normalized manifests byte-compatible unless the caller
+    # explicitly opts into strict contract binding.
+    if require_utility_contract is True:
+        normalized["require_utility_contract"] = True
+    return normalized
 
 
 def _validate_contract_binding(manifest: dict) -> dict:
@@ -202,10 +229,7 @@ def _validate_contract_binding(manifest: dict) -> dict:
         raise ShadowCampaignError("typed prospective manifest requires a 64-char utility_contract_digest")
     if not isinstance(signature, dict):
         raise ShadowCampaignError("typed prospective manifest requires action_signature")
-    known_contracts = {
-        TIMING_RELIEF_BUDGETED_V1_ID: timing_relief_budgeted_v1,
-        TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID: timing_relief_budgeted_v2_50_to_45,
-    }
+    known_contracts = known_utility_contracts()
     contract_factory = known_contracts.get(contract_id)
     if contract_factory is not None:
         contract = contract_factory()

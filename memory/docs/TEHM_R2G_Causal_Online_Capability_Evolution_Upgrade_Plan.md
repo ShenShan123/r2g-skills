@@ -4635,3 +4635,23 @@ area=`-80um²` 和 power=`-0.000134W` 也分别落在预测区间之外。审计
 authority/production 权限。下一步只能重新预注册更窄且有语义约束的 action/contract
 并采集新的 source-disjoint cohort，或明确更换 transformation family；不能删除 v119、
 放宽 harmful/interval gate，或把 quarantine 记录当作 Parametric 已上线。
+
+### 2026-08-29 typed utility-contract pre-registration closure
+
+根据 1.1.6 与 2.3 的 action/effect/budget 分离要求，新增
+`DENSITY_RELIEF_NONREGRESSION_32`。该 contract 固定 action32 的 action signature，
+operation point 写为 `base<32->32`，并预注册 WNS/TNS 非回退、area/power 零回退和
+完整 hard-oracle 约束；它是下一轮 source-disjoint cohort 的实验前定义，不是对旧
+v113–v121 evidence 的事后打分。
+
+校准 materializer 可选地把 contract ID/digest 写入 shadow policy；严格 prospective
+manifest 要求已知 contract、digest、signature，并逐个 observation action 重放
+`utility_contract_id` 与 config binding。`run_calibration_expansion.py` 通过
+`--utility-contract-id` 传递该边界，若 conformal interval 不能满足 contract，后续
+shadow selector 在执行前 abstain。该闭环只强化 proposal/evidence firewall，仍不写
+canonical memory、不产生 authority receipt、不进入 production runtime。
+
+由于当前 action32 calibration 的 WNS 预测区间低于该非回退 contract，旧 policy 不应
+直接加上 contract 标记后复用；必须用全新的 support/calibration/observation lineage
+重新生成 policy，或者更换 transformation family。下一步依然不是批量 knob sweep，
+而是先冻结 contract + source-freeze，再决定是否有足够资源运行新的 ORFS cohort。

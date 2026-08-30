@@ -511,3 +511,17 @@ miss；审计记录本身带 `metrics_digest`/`audit_digest`，方便 evidence �
 evolution manager、不会生成 `RULE_HARMFUL` online event，也不会把外部 shadow
 outcome 导入 canonical memory；因此 quarantine 是外部 evidence 防复用机制，不是
 production lifecycle 或 authority promotion。
+
+### 2026-08-29 action32 utility-contract binding（下一轮预注册）
+
+为避免在 future observation 失败后继续沿用同一宽泛 knob，新增
+`DENSITY_RELIEF_NONREGRESSION_32` typed utility contract。它固定
+`flow.CONFIG_DELTA / DENSITY_RELIEF / CORE_UTILIZATION=32`，要求 equivalence、DRC、
+LVS、timing 与 TNS hard checks 通过，并要求 WNS、area、power 不出现回退；contract
+本身只是一份 `PRE_REGISTERED_FOR_NEXT_SOURCE_DISJOINT_COHORT` 定义，不追溯重写
+v119–v121 结果，也不代表 action32 已可用。
+
+`materialize_shadow_policy()`、prospective manifest validator 与 calibration runner
+现在可以绑定 contract digest；严格 manifest 还要求每个 observation action 携带匹配
+的 `utility_contract_id`，不匹配会在 ORFS/predictor 之前拒绝。selector 继续保持
+proposal/abstain 语义，contract 失败不会写 canonical、authority 或 production runtime。

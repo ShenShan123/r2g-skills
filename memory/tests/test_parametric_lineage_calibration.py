@@ -5,6 +5,10 @@ from tehm.parametric.calibration import (
     calibrate_lineage_grouped,
     materialize_shadow_policy,
 )
+from tehm.physical.utility_contracts import (
+    contract_action,
+    density_relief_nonregression_32,
+)
 
 
 def _sample(lineage, wns=-0.02, area=-0.10):
@@ -45,7 +49,7 @@ def test_all_neutral_rows_do_not_establish_shadow_utility():
     assert report["safety"]["positive_utility_lineages"] == []
 
 
-def _exact_sample(lineage, *, wns=0.01, area=-0.1):
+def _exact_sample(lineage, *, wns=0.01, area=-0.1, util="40"):
     row = _sample(lineage, wns=wns, area=area)
     row.update({
         "platform": "sky130hs",
@@ -55,7 +59,7 @@ def _exact_sample(lineage, *, wns=0.01, area=-0.1):
             "domain": "flow.CONFIG_DELTA",
             "transformation_family": "DENSITY_RELIEF",
             "config_edit_keys": ["CORE_UTILIZATION"],
-            "config_edit_values": {"CORE_UTILIZATION": "40"},
+            "config_edit_values": {"CORE_UTILIZATION": util},
             "typed_action": None,
         },
     })
@@ -99,6 +103,31 @@ def test_shadow_policy_materializer_rejects_neutral_or_oversized_policy():
         min_samples_per_metric=3)
     with pytest.raises(ValueError, match="<= 3.0"):
         materialize_shadow_policy(positive, **kwargs, max_distance=3.1)
+
+
+def test_shadow_policy_can_bind_a_pre_registered_utility_contract():
+    contract = density_relief_nonregression_32()
+    signature = _exact_sample("heldout:0", util="32")["action_signature"]
+    report = calibrate_exact_groups(
+        [_exact_sample(f"heldout:{idx}", util="32") for idx in range(3)],
+        min_samples_per_metric=3)
+    policy = materialize_shadow_policy(
+        report,
+        scope={"platform": "sky130hs", "family": "DENSITY_RELIEF",
+               "dataset_tier": "research"},
+        action_signature=signature, max_distance=0.5,
+        utility_contract=contract)
+    assert policy["utility_contract_id"] == contract["contract_id"]
+    assert policy["utility_contract_digest"]
+
+    from tehm.physical.utility_contracts import timing_relief_budgeted_v1
+    with pytest.raises(ValueError, match="does not match"):
+        materialize_shadow_policy(
+            report,
+            scope={"platform": "sky130hs", "family": "DENSITY_RELIEF",
+                   "dataset_tier": "research"},
+            action_signature=signature, max_distance=0.5,
+            utility_contract=timing_relief_budgeted_v1())
 
 
 def test_parametric_calibration_does_not_accept_boolean_numeric_evidence():
