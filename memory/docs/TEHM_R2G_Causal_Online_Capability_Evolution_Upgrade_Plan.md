@@ -5140,3 +5140,30 @@ fail-closed。早期 verifier 记录省略 `verdict`/`oracle_type`/`confidence_t
 验证，保证坏证据不会留下 artifact/canonical/shadow projection。定向 capture/causal
 回归为 `72 passed`；随后完整 `memory/tests` 为 `708 passed, 1 warning`；该修复只收紧 evidence ingestion，不改变 canonical authority、
 Parametric shadow-only、六项 promotion gate 或 production runtime。
+
+### 2026-08-30 direct ORFS toolchain 完成匹配构建与真实 smoke
+
+为消除旧 direct OpenROAD 与 ORFS source 不匹配的问题，已从 clean ORFS checkout
+`/data1/zhangdy/Tools/OpenROAD-flow-scripts-clean` 的 `tools/OpenROAD` gitlink
+`49bd051a10f0dd5bb89eba9acf668e8362b883d8` 源码构建 OpenROAD，使用个人 GCC 12、CMake
+3.31.9、SWIG 4.3.1、OR-Tools 9.14.6206、Boost 1.87、fmt/spdlog/yaml-cpp/Lemon，
+安装到 `/data1/zhangdy/Tools/tehm-toolchain/openroad-matched`。可执行文件报告
+`26Q2-1846-g49bd051a10`；`openroad` 目录现指向该匹配安装，旧发行包仅保留为明确命名的
+`openroad-legacy-v2.0-17598`，resolver 不会选择它。Yosys 0.65、Icarus/VVP、Verilator、
+KLayout、Magic、Netgen、OpenSTA、sky130A PDK 和 graph runtime 仍全部位于同一 direct
+toolchain root；`miniconda3` 已删除。
+
+四份 `_env.sh` 的 direct 候选顺序已把 `openroad-matched` 置于旧路径之前，并保留
+`openroad`/`yosys`/`sta` 的个人 pin。新的 manifest
+`/data1/zhangdy/Tools/tehm-toolchain/tehm-orfs-toolchain-manifest-direct.json` 已
+`record → check` 通过，`binding_status=bound_internal`，digest=
+`d106e9c8d15b28ef4ec4357cba93a10663726840f0b9af609eda452eefed961e`。
+
+使用该 direct manifest 和 clean ORFS，对最小 `sky130hd` arbiter 进行了真实全阶段
+`synth → floorplan → place → cts → route → finish`，全部成功；KLayout DRC 为 0
+violations，OpenRCX 独立抽取 16 nets/7297 bytes SPEF 成功。LVS 返回真实 netlist
+mismatch，且 signoff wrapper 检测到其修正 CDL 导致布局 digest 变化，因此该 run 只能作为
+工具链/流程可执行性证据，不能进入 strict-clean、learner 或 authority。另已修复
+`run_rcx.sh` 在切换输出目录后用相对路径加载 helper 的脚本 bug。下一步仍需用真实、
+source-disjoint 设计形成完整 ORFS/strict/equivalence/graph/capture lineage，不能仅凭
+本次 smoke 建立六项 promotion gate。

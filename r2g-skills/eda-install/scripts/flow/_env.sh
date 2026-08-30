@@ -223,6 +223,7 @@ _r2g_prepend_lib() {
   export LD_LIBRARY_PATH="$lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 }
 _r2g_prepend_lib "$_r2g_toolchain_root/openroad/lib"
+_r2g_prepend_lib "$_r2g_toolchain_root/openroad-matched/lib"
 _r2g_prepend_lib "$_r2g_toolchain_root/klayout/lib"
 
 # conda-env signoff tools (legacy fallback): `conda create -n eda …` puts
@@ -254,6 +255,8 @@ if [[ -n "${ORFS_ROOT:-}" ]]; then
 fi
 
 _r2g_detect OPENROAD_EXE  openroad   \
+  "$_r2g_toolchain_root/openroad-matched/bin/openroad" \
+  "$_r2g_toolchain_root/openroad-matched/bin/openroad.bin" \
   "$_r2g_toolchain_root/openroad/bin/openroad.bin" \
   "$_r2g_toolchain_root/openroad/bin/openroad" \
   "$_r2g_orfs_openroad" "$_r2g_conda_bin/openroad" \

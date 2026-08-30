@@ -8,6 +8,7 @@ set -euo pipefail
 
 PROJECT_DIR="${1:-}"
 PLATFORM="${2:-sky130hd}"
+FLOW_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Derive FLOW_VARIANT from project directory basename (matching run_orfs.sh logic)
 if [[ -n "${3:-}" ]]; then
   FLOW_VARIANT="$3"
@@ -18,10 +19,10 @@ else
 fi
 # Auto-detect ORFS + tools (honors ORFS_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
-source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+source "$FLOW_SCRIPTS_DIR/_env.sh"
 # Bounded process-group checker supervisor (same frozen-checker contract as DRC/LVS).
 # shellcheck source=/dev/null
-source "$(dirname "${BASH_SOURCE[0]}")/_bounded_run.sh"
+source "$FLOW_SCRIPTS_DIR/_bounded_run.sh"
 trap 'r2g_bounded_cleanup' EXIT
 trap 'r2g_bounded_cleanup; exit 130' INT
 trap 'r2g_bounded_cleanup; exit 143' TERM
@@ -74,7 +75,7 @@ fi
 # Re-stage the exact preserved backend run before extraction, using the same
 # identity resolver/provenance record as DRC and LVS.
 # shellcheck source=/dev/null
-source "$(dirname "${BASH_SOURCE[0]}")/_restage_for_signoff.sh"
+source "$FLOW_SCRIPTS_DIR/_restage_for_signoff.sh"
 RESULTS_DIR="$ORFS_RESULTS_DIR"
 
 ODB_FILE=$(find "$RESULTS_DIR" -name "6_final.odb" 2>/dev/null | head -1)
@@ -156,7 +157,7 @@ fi
 # Copy to the SELECTED backend run (RMD-P0-02: the shared resolver's pick,
 # never `ls | tail -1` — a newer empty RUN dir must not adopt this SPEF).
 # shellcheck source=/dev/null
-source "$(dirname "${BASH_SOURCE[0]}")/_backend_run.sh"
+source "$FLOW_SCRIPTS_DIR/_backend_run.sh"
 TARGET_RUN="${R2G_BACKEND_RUN:-$(r2g_pick_backend_run "$PROJECT_DIR" || true)}"
 if [[ -z "$TARGET_RUN" || ! -d "$TARGET_RUN" ]]; then
   TARGET_RUN=$(ls -d "$PROJECT_DIR/backend"/RUN_* 2>/dev/null | sort | tail -1 || true)

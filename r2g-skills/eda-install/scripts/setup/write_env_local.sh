@@ -154,7 +154,11 @@ fi
 if [[ "$hermetic" == "1" ]]; then
   _direct_root="${R2G_TOOLCHAIN_ROOT:-${R2G_PREFIX:-}}"
   if [[ -n "$_direct_root" ]]; then
-    if [[ -x "$_direct_root/openroad/bin/openroad.bin" ]]; then
+    if [[ -x "$_direct_root/openroad-matched/bin/openroad" ]]; then
+      OPENROAD_EXE="$_direct_root/openroad-matched/bin/openroad"
+    elif [[ -x "$_direct_root/openroad-matched/bin/openroad.bin" ]]; then
+      OPENROAD_EXE="$_direct_root/openroad-matched/bin/openroad.bin"
+    elif [[ -x "$_direct_root/openroad/bin/openroad.bin" ]]; then
       OPENROAD_EXE="$_direct_root/openroad/bin/openroad.bin"
     elif [[ -x "$_direct_root/openroad/bin/openroad" ]]; then
       OPENROAD_EXE="$_direct_root/openroad/bin/openroad"
