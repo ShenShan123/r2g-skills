@@ -8,6 +8,7 @@ reuse calibration held-out lineages as future cases.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import subprocess
 import sys
@@ -20,6 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from run_orfs_diversity_campaign import _load  # noqa: E402
 from tehm.adapters.orfs_pair import build_orfs_pair_record  # noqa: E402
+from tehm.physical.utility_contracts import (  # noqa: E402
+    action_contract_binding_reason,
+    known_utility_contracts,
+    utility_contract_digest,
+)
 from tehm.sync import canonical_json  # noqa: E402
 
 
@@ -54,6 +60,7 @@ def build(args) -> dict:
     # non-action-specific interval.
     materialized = policy_report.get("shadow_policy_materialization") or {}
     policy = materialized.get("policy") or policy_report.get("policy") or {}
+    utility_contract = _policy_contract(policy)
     snapshot_digest = policy_report.get("staging_snapshot_digest")
     memory_binding = ({"memory_snapshot_digest": str(snapshot_digest)}
                       if isinstance(snapshot_digest, str) and snapshot_digest else {})
@@ -85,7 +92,7 @@ def build(args) -> dict:
     for sample in sorted(selected, key=lambda x: x["lineage_id"]):
         lineage = sample["lineage_id"]
         context = sample["graph_context"]
-        action = sample["action"]
+        action = _bind_contract_action(sample["action"], utility_contract)
         observation_id = f"{lineage}:observation"
         rows.append({
             "case_id": observation_id, "target_id": f"{lineage}:target",
@@ -98,24 +105,27 @@ def build(args) -> dict:
             **memory_binding,
             "action": action,
         })
-        # Pre-register two legal alternatives for a later decision round, but
-        # do not execute them unless the observation gate passes.
-        candidates = []
-        for util in ("20", "25"):
-            candidate = json.loads(json.dumps(action))
-            candidate.setdefault("payload", {}).setdefault("config_edits", {})[
-                "CORE_UTILIZATION"] = util
-            candidates.append(candidate)
-        rows.append({
-            "case_id": f"{lineage}:decision", "target_id": f"{lineage}:target",
-            "lineage_id": lineage, "platform": "sky130hs",
-            "family": "DENSITY_RELIEF", "phase": "decision",
-            "source_lineage": lineage,
-            "graph_context_digest": context["digest"],
-            "candidate_actions": candidates, "policy_scope": policy_scope,
-            "graph_context": context, "calibration_policy": policy,
-            **memory_binding,
-        })
+        if utility_contract is None:
+            # Legacy, untyped campaigns may still record diagnostic decision
+            # alternatives.  A strict exact-action contract cannot describe
+            # those alternatives, so they are intentionally deferred until a
+            # separate multi-contract decision manifest is preregistered.
+            candidates = []
+            for util in ("20", "25"):
+                candidate = copy.deepcopy(action)
+                candidate.setdefault("payload", {}).setdefault("config_edits", {})[
+                    "CORE_UTILIZATION"] = util
+                candidates.append(candidate)
+            rows.append({
+                "case_id": f"{lineage}:decision", "target_id": f"{lineage}:target",
+                "lineage_id": lineage, "platform": "sky130hs",
+                "family": "DENSITY_RELIEF", "phase": "decision",
+                "source_lineage": lineage,
+                "graph_context_digest": context["digest"],
+                "candidate_actions": candidates, "policy_scope": policy_scope,
+                "graph_context": context, "calibration_policy": policy,
+                **memory_binding,
+            })
         item = item_by_lineage.get(lineage)
         verification = {}
         if item:
@@ -157,6 +167,19 @@ def build(args) -> dict:
             "min_metric_evaluations": len(selected),
         },
     }
+    if utility_contract is not None:
+        signature = utility_contract["action_signature"]
+        raw.update({
+            "require_utility_contract": True,
+            "contract_id": utility_contract["contract_id"],
+            "utility_contract_digest": utility_contract_digest(utility_contract),
+            "action_signature": {
+                "domain": signature["domain"],
+                "family": signature["transformation_family"],
+                "config_edits": dict(signature["config_edits"]),
+                "operation_point": signature["operation_point"],
+            },
+        })
     raw_path = out / "prospective_manifest.raw.json"
     _write(raw_path, raw)
     normalized = out / "manifest.normalized.json"
@@ -182,6 +205,10 @@ def build(args) -> dict:
         "policy_status": policy.get("status"),
         "policy_kind": policy.get("policy_kind"),
         "policy_scope": policy_scope,
+        "utility_contract_id": (utility_contract["contract_id"]
+                                 if utility_contract is not None else None),
+        "utility_contract_digest": (utility_contract_digest(utility_contract)
+                                    if utility_contract is not None else None),
         "memory_snapshot_digest": snapshot_digest,
         "promotion_eligible": False,
         "canonical_memory_mutation": "none",
@@ -189,6 +216,40 @@ def build(args) -> dict:
     return {"manifest": str(normalized), "future_lineages": sorted(selected_lineages),
             "observation_cases": len(observation), "decision_cases": len(decision),
             "outcomes": str(out / "observation_outcomes.json")}
+
+
+def _policy_contract(policy: dict) -> dict | None:
+    """Resolve and validate a policy's optional pre-registered contract."""
+    contract_id = policy.get("utility_contract_id")
+    contract_digest = policy.get("utility_contract_digest")
+    if contract_id is None and contract_digest is None:
+        return None
+    factory = known_utility_contracts().get(contract_id)
+    if factory is None:
+        raise ValueError("shadow policy references an unknown utility contract")
+    contract = factory()
+    if contract_digest != utility_contract_digest(contract):
+        raise ValueError("shadow policy utility contract digest does not match catalog")
+    return contract
+
+
+def _bind_contract_action(action: dict, contract: dict | None) -> dict:
+    if contract is None:
+        return copy.deepcopy(action)
+    if not isinstance(action, dict):
+        raise ValueError("calibration sample action must be an object")
+    bound = copy.deepcopy(action)
+    payload = bound.setdefault("payload", {})
+    if not isinstance(payload, dict):
+        raise ValueError("calibration sample action payload must be an object")
+    existing = payload.get("utility_contract_id")
+    if existing is not None and existing != contract["contract_id"]:
+        raise ValueError("calibration sample action has a conflicting utility contract")
+    payload["utility_contract_id"] = contract["contract_id"]
+    reason = action_contract_binding_reason(bound, contract)
+    if reason:
+        raise ValueError(f"calibration sample action is not contract-bound: {reason}")
+    return bound
 
 
 def main(argv=None) -> int:

@@ -525,3 +525,9 @@ v119–v121 结果，也不代表 action32 已可用。
 现在可以绑定 contract digest；严格 manifest 还要求每个 observation action 携带匹配
 的 `utility_contract_id`，不匹配会在 ORFS/predictor 之前拒绝。selector 继续保持
 proposal/abstain 语义，contract 失败不会写 canonical、authority 或 production runtime。
+
+`prepare_calibrated_shadow_cases.py` 也消费 materialized policy 的 contract provenance：
+它会重放 catalog digest，为实际 observation action 绑定 `utility_contract_id`，并在
+严格 exact-action cohort 中省略未绑定的 decision alternatives。因此 contract 约束在
+`case freeze → manifest validation → shadow prepare` 三处连续存在，而不是只在 predictor
+单点检查。

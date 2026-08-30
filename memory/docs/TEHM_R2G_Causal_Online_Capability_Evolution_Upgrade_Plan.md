@@ -4655,3 +4655,10 @@ canonical memory、不产生 authority receipt、不进入 production runtime。
 直接加上 contract 标记后复用；必须用全新的 support/calibration/observation lineage
 重新生成 policy，或者更换 transformation family。下一步依然不是批量 knob sweep，
 而是先冻结 contract + source-freeze，再决定是否有足够资源运行新的 ORFS cohort。
+
+同时，`prepare_calibrated_shadow_cases.py` 已将该边界接入 future-case freeze：当
+materialized policy 带有 contract provenance 时，脚本重放 catalog digest、给实际 action
+绑定 `utility_contract_id`，生成 `require_utility_contract=true` 的 observation-only
+manifest，并延迟 decision alternatives。这样下一轮即使 operator 修改 cases JSONL，
+strict manifest 和 shadow prepare 也会在执行前拒绝 action/config/contract 漂移；没有
+新的 source-freeze、strict-oracle 与独立 lineage，不得启动 ORFS。
