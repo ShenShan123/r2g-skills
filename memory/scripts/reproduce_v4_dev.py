@@ -18,6 +18,16 @@ import tempfile
 from pathlib import Path
 
 
+def _same_tree(left: Path, right: Path) -> bool:
+    left_files = {path.relative_to(left).as_posix()
+                  for path in left.rglob("*") if path.is_file()}
+    right_files = {path.relative_to(right).as_posix()
+                   for path in right.rglob("*") if path.is_file()}
+    return left_files == right_files and all(
+        (left / rel).read_bytes() == (right / rel).read_bytes()
+        for rel in sorted(left_files))
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--bundle", type=Path,
@@ -33,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from tehm import db, honesty  # noqa: E402
     from tehm.artifact_store import ArtifactStore  # noqa: E402
-    from tehm.sync import verify_bundle  # noqa: E402
+    from tehm.sync import import_bundle, reexport_bundle, verify_bundle  # noqa: E402
 
     checked = verify_bundle(bundle)
     if not checked.get("ok"):
@@ -77,14 +87,28 @@ def main(argv: list[str] | None = None) -> int:
                                      ensure_ascii=False, sort_keys=True))
     if not ok:
         raise SystemExit(json.dumps(report, ensure_ascii=False, sort_keys=True))
+    # The shadow RFC consumes a replay receipt, not merely a manifest check.
+    # Exercise the actual bundle import/export path in a disposable directory
+    # and expose the result so downstream prepare cannot claim replay without
+    # a byte-stability check.
+    with tempfile.TemporaryDirectory(prefix="tehm-v4-roundtrip-") as td:
+        temp = Path(td)
+        imported, reexported = temp / "imported", temp / "reexported"
+        import_bundle(bundle=bundle, output=imported)
+        reexport_bundle(source_bundle=imported, output=reexported)
+        roundtrip_byte_stable = _same_tree(bundle, reexported)
+    if not roundtrip_byte_stable:
+        raise SystemExit("bundle import/export roundtrip is not byte-stable")
     print(json.dumps({
         "ok": True,
         "bundle": str(bundle),
         "bundle_digest": checked["manifest"].get("bundle_digest"),
+        "manifest_digest": checked["manifest"].get("manifest_digest"),
         "h9": report["H9"],
         "h11": report["H11"],
         "compileall": "PASS",
         "p0_regression_smoke": p0_result.stdout.strip(),
+        "roundtrip_byte_stable": roundtrip_byte_stable,
     }, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 

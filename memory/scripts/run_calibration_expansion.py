@@ -178,6 +178,27 @@ LINEAGES = (
      "action": "34", "screen_split": "heldout"},
     {"suffix": "v112", "design": "future_prospective_logic_v112", "base": "32",
      "action": "34", "screen_split": "heldout"},
+    {"suffix": "v113", "design": "future_prospective_logic_v113", "base": "24",
+     "action": "32", "screen_split": "support"},
+    {"suffix": "v114", "design": "future_prospective_logic_v114", "base": "26",
+     "action": "32", "screen_split": "support"},
+    {"suffix": "v115", "design": "future_prospective_logic_v115", "base": "28",
+     "action": "32", "screen_split": "support"},
+    {"suffix": "v116", "design": "future_prospective_logic_v116", "base": "24",
+     "action": "32", "screen_split": "heldout"},
+    {"suffix": "v117", "design": "future_prospective_logic_v117", "base": "26",
+     "action": "32", "screen_split": "heldout"},
+    {"suffix": "v118", "design": "future_prospective_logic_v118", "base": "28",
+     "action": "32", "screen_split": "heldout"},
+    # These are reserved for a genuinely future observation round after the
+    # v113-v118 action-32 support/calibration cohort.  They must not be used
+    # to establish the policy that will later score them.
+    {"suffix": "v119", "design": "future_prospective_logic_v119", "base": "24",
+     "action": "32", "screen_split": "future_observation"},
+    {"suffix": "v120", "design": "future_prospective_logic_v120", "base": "26",
+     "action": "32", "screen_split": "future_observation"},
+    {"suffix": "v121", "design": "future_prospective_logic_v121", "base": "28",
+     "action": "32", "screen_split": "future_observation"},
 )
 
 
@@ -841,6 +862,79 @@ def _grouped_shadow_admission(*, retrieval_policy: dict,
     return report, materialization
 
 
+def _grouped_shadow_readiness(*, grouped_report: dict,
+                              materialization: dict) -> dict:
+    """Project grouped calibration evidence into the RFC readiness contract.
+
+    This is deliberately narrower than the legacy all-family physical
+    readiness report: one exact action-signature group is enough to open a
+    *shadow observation* lane, but never enough to authorize a Parametric View
+    or production retrieval.  Every criterion is derived from the materialized
+    policy and grouped report rather than from a status label alone.
+    """
+    policy = materialization.get("policy") if isinstance(materialization, dict) else None
+    group_values = list((grouped_report.get("groups") or {}).values()) \
+        if isinstance(grouped_report, dict) else []
+    group = group_values[0] if len(group_values) == 1 else {}
+    checks = (group.get("checks") or {}) if isinstance(group, dict) else {}
+    firewall = (policy.get("firewall") or {}) if isinstance(policy, dict) else {}
+    thresholds = (policy.get("thresholds") or {}) if isinstance(policy, dict) else {}
+    calibration = (policy.get("calibration") or {}) if isinstance(policy, dict) else {}
+    heldout = sorted({str(value) for value in firewall.get("heldout_lineages") or []})
+    distance = thresholds.get("max_distance")
+    try:
+        distance_gate = (isinstance(distance, (int, float)) and
+                         not isinstance(distance, bool) and
+                         float(distance) > 0.0 and float(distance) <= 3.0)
+    except (TypeError, ValueError):
+        distance_gate = False
+    try:
+        empirical_coverage = float(calibration.get("empirical_coverage", 0.0))
+        required_coverage = float(calibration.get("required_coverage", 0.8))
+    except (TypeError, ValueError):
+        empirical_coverage, required_coverage = 0.0, 1.0
+    per_metric = calibration.get("conformal_quantiles") or {}
+    uncertainty_gate = bool(per_metric) and all(
+        isinstance(value, (int, float)) and float(value) >= 0.0
+        for value in per_metric.values())
+    all_ready = (materialization.get("status") == "materialized_shadow_only" and
+                 grouped_report.get("status") == "ready_for_shadow" and
+                 policy is not None and policy.get("status") == "ready" and
+                 policy.get("shadow_only") is True and
+                 policy.get("promotion_eligible") is False and
+                 policy.get("canonical_memory_mutation") == "none")
+    criteria = {
+        "all_retrieval_policies_ready": all_ready,
+        "distance_gate_satisfied": distance_gate,
+        "coverage_gate_satisfied": bool(checks.get("conformal_lineage_coverage") is True and
+                                          empirical_coverage >= required_coverage),
+        "uncertainty_gate_satisfied": uncertainty_gate,
+        "minimum_independent_heldout_lineages": 3,
+        "observed_independent_heldout_lineages": len(heldout),
+        "lineage_diversity_satisfied": len(heldout) >= 3,
+    }
+    ready = all(criteria[name] is True for name in (
+        "all_retrieval_policies_ready", "distance_gate_satisfied",
+        "coverage_gate_satisfied", "uncertainty_gate_satisfied",
+        "lineage_diversity_satisfied"))
+    return {
+        "version": "parametric-shadow-readiness-v1",
+        "readiness_kind": "lineage_grouped_shadow_observation",
+        "status": "READY_FOR_IMPLEMENTATION" if ready else "DEFERRED_INSUFFICIENT_EVIDENCE",
+        "parametric_view_status": "NOT_IMPLEMENTED",
+        "shadow_only": True,
+        "promotion_eligible": False,
+        "canonical_memory_mutation": "none",
+        "criteria": criteria,
+        "policy_scope": policy.get("scope") if isinstance(policy, dict) else None,
+        "policy_kind": policy.get("policy_kind") if isinstance(policy, dict) else None,
+        "policy_status": policy.get("status") if isinstance(policy, dict) else None,
+        "calibration_lineages": heldout,
+        "reason": ("grouped action-signature policy satisfies shadow gates"
+                   if ready else "grouped action-signature policy remains fail-closed"),
+    }
+
+
 def _augment_sample_ppa(sample: dict, samples_path: Path) -> dict:
     """Recover compact PPA sides from the promoted calibration case receipts."""
     if sample.get("before_ppa") and sample.get("after_ppa"):
@@ -915,12 +1009,16 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
     grouped_calibration, shadow_materialization = _grouped_shadow_admission(
         retrieval_policy=policy, heldout_samples=fresh,
         training_lineages=training)
+    shadow_readiness = _grouped_shadow_readiness(
+        grouped_report=grouped_calibration,
+        materialization=shadow_materialization)
     count_after = physical.count()
     conn.close()
     report = {
         "version": VERSION, "policy": policy,
         "parametric_grouped_calibration": grouped_calibration,
         "shadow_policy_materialization": shadow_materialization,
+        "parametric_shadow_readiness": shadow_readiness,
         "training_lineages": training,
         "added_external_lineages": added_lineages,
         "fresh_lineages": sorted({row["lineage_id"] for row in fresh}),
@@ -934,6 +1032,7 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
         "parametric_view_status": "NOT_IMPLEMENTED",
     }
     _write_json(root / "calibration_expansion_report.json", report)
+    _write_json(root / "parametric_readiness.json", shadow_readiness)
     return report
 
 
@@ -941,7 +1040,7 @@ def promote(root: Path, evidence_root: Path) -> dict:
     evidence_root.mkdir(parents=True, exist_ok=True)
     for name in ("campaign_manifest.json", "campaign_recovery_report.json",
                  "strict_oracle_state.json", "prospective_samples.json",
-                 "calibration_expansion_report.json"):
+                 "calibration_expansion_report.json", "parametric_readiness.json"):
         src = root / name
         if src.is_file():
             shutil.copy2(src, evidence_root / name)

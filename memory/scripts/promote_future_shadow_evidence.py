@@ -27,6 +27,7 @@ def promote(source: Path, evidence: Path) -> dict:
         "manifest_validation.log", "cases.jsonl", "decision_cases.jsonl",
         "observation_outcomes.json", "observation_outcomes.jsonl",
         "policy.json", "case_binding.json", "replay_evidence.json",
+        "parametric_readiness.json", "calibration_expansion_report.json",
     )
     campaign_names = (
         "shadow_events.jsonl", "snapshot_counts.json",

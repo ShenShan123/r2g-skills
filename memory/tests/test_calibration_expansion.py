@@ -12,6 +12,7 @@ from run_calibration_expansion import (  # noqa: E402
     LINEAGES,
     _external_transition_id,
     _grouped_shadow_admission,
+    _grouped_shadow_readiness,
     _load_external_training,
     _persist_external_transition,
     _strict_oracle_gate,
@@ -122,6 +123,83 @@ def test_v107_v112_action34_screen_avoids_noop_and_is_source_disjoint():
         assert digest not in prior_digests
         new_digests.add(digest)
     assert len(new_digests) == 6
+
+
+def test_v113_v118_action32_screen_avoids_noop_and_is_source_disjoint():
+    specs = {row["suffix"]: row for row in LINEAGES}
+    suffixes = [f"v{index}" for index in range(113, 119)]
+    assert [specs[suffix]["base"] for suffix in suffixes] == [
+        "24", "26", "28", "24", "26", "28"]
+    assert {specs[suffix]["action"] for suffix in suffixes} == {"32"}
+    assert all(specs[suffix]["base"] != specs[suffix]["action"]
+               for suffix in suffixes)
+    assert [specs[suffix]["screen_split"] for suffix in suffixes] == [
+        "support", "support", "support", "heldout", "heldout", "heldout"]
+
+    fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "physical_rtl"
+    new_designs = {specs[suffix]["design"] for suffix in suffixes}
+    prior_digests = {
+        hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in fixture_root.glob("future_prospective_logic_v*.v")
+        if path.stem not in new_designs
+    }
+    new_digests = set()
+    for suffix in suffixes:
+        design = specs[suffix]["design"]
+        rtl = fixture_root / f"{design}.v"
+        sdc = fixture_root / f"{design}.sdc"
+        assert rtl.is_file() and sdc.is_file()
+        digest = hashlib.sha256(rtl.read_bytes()).hexdigest()
+        assert digest not in prior_digests
+        new_digests.add(digest)
+    assert len(new_digests) == 6
+
+
+def test_v119_v121_are_reserved_for_future_shadow_observation():
+    specs = {row["suffix"]: row for row in LINEAGES}
+    suffixes = ["v119", "v120", "v121"]
+    assert [specs[suffix]["base"] for suffix in suffixes] == ["24", "26", "28"]
+    assert {specs[suffix]["action"] for suffix in suffixes} == {"32"}
+    assert all(specs[suffix]["base"] != specs[suffix]["action"] for suffix in suffixes)
+    assert {specs[suffix]["screen_split"] for suffix in suffixes} == {"future_observation"}
+    fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "physical_rtl"
+    prior = {hashlib.sha256(path.read_bytes()).hexdigest()
+             for path in fixture_root.glob("future_prospective_logic_v*.v")
+             if path.stem not in {specs[suffix]["design"] for suffix in suffixes}}
+    digests = set()
+    for suffix in suffixes:
+        design = specs[suffix]["design"]
+        rtl, sdc = fixture_root / f"{design}.v", fixture_root / f"{design}.sdc"
+        assert rtl.is_file() and sdc.is_file()
+        assert f"module {design}" in rtl.read_text()
+        assert f"current_design {design}" in sdc.read_text()
+        digest = hashlib.sha256(rtl.read_bytes()).hexdigest()
+        assert digest not in prior
+        digests.add(digest)
+    assert len(digests) == 3
+
+
+def test_grouped_shadow_readiness_is_shadow_only_and_evidence_derived():
+    grouped = {
+        "status": "ready_for_shadow",
+        "groups": {"group": {"checks": {"conformal_lineage_coverage": True}}},
+    }
+    materialized = {"status": "materialized_shadow_only", "policy": {
+        "status": "ready", "shadow_only": True, "promotion_eligible": False,
+        "canonical_memory_mutation": "none", "scope": {"platform": "sky130hs",
+        "family": "DENSITY_RELIEF", "dataset_tier": "strict_clean"},
+        "policy_kind": "lineage_grouped_shadow", "firewall": {
+            "heldout_lineages": ["a", "b", "c"]},
+        "thresholds": {"max_distance": 0.6},
+        "calibration": {"empirical_coverage": 1.0, "required_coverage": 0.8,
+                         "conformal_quantiles": {"area_um2": 1.0}},
+    }}
+    readiness = _grouped_shadow_readiness(grouped_report=grouped,
+                                           materialization=materialized)
+    assert readiness["status"] == "READY_FOR_IMPLEMENTATION"
+    assert readiness["parametric_view_status"] == "NOT_IMPLEMENTED"
+    assert readiness["shadow_only"] is True
+    assert readiness["promotion_eligible"] is False
 
 
 def test_grouped_shadow_admission_rejects_harmful_heldout_lineage():

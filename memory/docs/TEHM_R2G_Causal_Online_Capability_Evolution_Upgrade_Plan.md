@@ -4575,3 +4575,42 @@ SHA256 为 `2cb50e657f59220a5899a65e50f7e1049a024f000ba67e4231ad2a11644c233e`。
 子集中删除 v112 后宣称 action34 ready；如果更温和 action 仍反复出现面积 harmful，
 则应停止单纯 knob sweep，重新选择 transformation family 或显式 utility contract，仍需
 新的独立 cohort 验证。
+
+### 2026-08-29 action32 grouped shadow policy 与未来观测闭环
+
+在 action34 之后重新预注册 exact `CORE_UTILIZATION=32`，以 base 24/26/28
+构造 v113–v115 support、v116–v118 calibration held-out。6/6 pair 均通过 strict
+signoff/timing；普通 retrieval aggregate coverage 只有 `0.833333`，且 WNS
+per-metric coverage=`1/3`，所以普通 policy 仍是 `coverage_failed`。但同一批
+held-out evidence 的 lineage-grouped split-conformal coverage 为
+area/power/TNS/WNS=`1.0/1.0/1.0/1.0`，harmful rate=`0`、positive utility rate=`1.0`，
+firewall、support、Pareto 定义均通过。系统因此只生成
+`lineage_grouped_shadow`、`shadow_only=true` 的 exact policy，不写 canonical。
+
+新增 `parametric_shadow_readiness` 投影器，将上述五项 gate 从实际 grouped
+report/materialized policy 计算为 `READY_FOR_IMPLEMENTATION`；该状态只表示可以
+进入 shadow observation，不表示 Parametric View 已实现，也不表示 production 或
+authority 可用。`prepare_calibrated_shadow_cases.py` 现在优先绑定
+`shadow_policy_materialization.policy` 并从 policy 继承真实 scope，修复了此前把
+`dataset_tier` 硬编码为 `research` 的边界错误。v4 replay 脚本同时实际执行
+import/export roundtrip，并输出 `manifest_digest` 与
+`roundtrip_byte_stable=true`，避免只凭 manifest 字段宣称 replay。
+
+随后用完全 source-disjoint 的 v119–v121 future observation（不属于 v116–v118
+calibration firewall）执行 read-only shadow：3/3 proposal、3/3 outcome join，
+OOD max=`0.606952`，obligation coverage=`1.0`，canonical counters（episodes=9、
+physical_effects=3、rules=4、states=24、transitions=12、views=54）前后保持不变。
+真实 observation harmful rate=`1/3`，area/power/WNS interval
+coverage 均为 `2/3`，TNS=`1.0`，因此预注册 gate（harmful≤`0.1`、coverage≥`0.8`）
+拒绝 decision round；没有 candidate、rollback、registry 或 authority 记录。
+
+紧凑 evidence 位于
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action32-{support-v113v115,heldout-v116v118}/`、
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action32-future-orfs-v119v121/` 与
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action32-future-shadow-v119v121/`。
+该结果把“calibration ready”与“future observation quality”明确分开：下一步应
+围绕 interval miss/harmful regression 重新设计更窄且有语义约束的 action/contract，
+或增加新的独立 cohort；不得放宽 gate、删除 v119 harmful row，亦不得把
+`READY_FOR_IMPLEMENTATION` 误写成 production readiness。即使下一轮 observation
+通过，仍须按 dependency order 完成真实 A/B、rollback、registry、obligation、
+cross-lineage TE 及 lifecycle 六项 promotion gate。

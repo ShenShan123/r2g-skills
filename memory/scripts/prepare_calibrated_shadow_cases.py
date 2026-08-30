@@ -46,7 +46,14 @@ def build(args) -> dict:
     if len(selected) != len(args.future_suffix):
         raise ValueError("each requested future suffix must have one evaluatable sample")
     policy_report = _read(args.policy_report)
-    policy = policy_report.get("policy") or {}
+    # A calibration expansion report may contain both the diagnostic
+    # family-wide policy (which can legitimately be coverage_failed) and a
+    # separately materialized lineage-grouped shadow policy.  Shadow cases
+    # must bind the latter when it exists; silently falling back to the
+    # diagnostic policy would either abstain for the wrong reason or reuse a
+    # non-action-specific interval.
+    materialized = policy_report.get("shadow_policy_materialization") or {}
+    policy = materialized.get("policy") or policy_report.get("policy") or {}
     snapshot_digest = policy_report.get("staging_snapshot_digest")
     memory_binding = ({"memory_snapshot_digest": str(snapshot_digest)}
                       if isinstance(snapshot_digest, str) and snapshot_digest else {})
@@ -60,8 +67,16 @@ def build(args) -> dict:
                     "training_lineages") or []))
     old_heldout = ((_read(args.training_manifest).get("firewall") or {}).get(
         "heldout_lineages") or [])
-    policy_scope = {"platform": "sky130hs", "family": "DENSITY_RELIEF",
-                    "dataset_tier": "research"}
+    policy_scope = dict(policy.get("scope") or {})
+    if not policy_scope:
+        policy_key = policy.get("policy_key")
+        if isinstance(policy_key, str):
+            parts = policy_key.split("|")
+            if len(parts) == 3:
+                policy_scope = {"platform": parts[0], "family": parts[1],
+                                "dataset_tier": parts[2]}
+    if set(("platform", "family", "dataset_tier")) - set(policy_scope):
+        raise ValueError("calibration policy must provide an explicit platform/family/dataset_tier scope")
     item_by_lineage = {
         item["lineage_id"]: item
         for item in (_read(args.campaign_manifest).get("items") or [])
@@ -165,6 +180,8 @@ def build(args) -> dict:
         "future_lineages": sorted(selected_lineages),
         "calibration_heldout_lineages": sorted(heldout),
         "policy_status": policy.get("status"),
+        "policy_kind": policy.get("policy_kind"),
+        "policy_scope": policy_scope,
         "memory_snapshot_digest": snapshot_digest,
         "promotion_eligible": False,
         "canonical_memory_mutation": "none",

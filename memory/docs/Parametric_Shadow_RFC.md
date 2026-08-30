@@ -457,3 +457,39 @@ staging/verification fixture，再重新生成 bundle/replay digest 后才能进
   唯一 canonical 指针及 digest 见
   [`../evaluation/canonical_freeze_pointer_v1.json`](../evaluation/canonical_freeze_pointer_v1.json)。
   或宣称新代码已被现有 v3 digest 覆盖。
+
+## v113–v118 action32 grouped shadow admission 与 v119–v121 observation
+
+为避免继续盲扫 knob，新增 exact `DENSITY_RELIEF / CORE_UTILIZATION=32` 的
+source-disjoint cohort：v113–v115 为 support，v116–v118 为 calibration held-out，
+三条 base 分别为 24/26/28，且六条 RTL source hash 均与历史 cohort 不重合。12/12
+before/after ORFS arm 通过 strict signoff 与 timing oracle，6/6 pair 进入样本。
+
+普通 `normal_weighted_mean_v1` 诊断仍为 `coverage_failed`（aggregate
+`0.833333`，WNS per-metric `1/3`），没有把这个失败改写成 ready。相同 held-out
+rows 经 lineage-grouped split-conformal 重新计算后，area/power/TNS/WNS coverage
+均为 `1.0`，harmful rate=`0`，positive utility rate=`1.0`，lineage firewall 与
+Pareto 定义全部通过；因此只物化一个 `lineage_grouped_shadow` policy，并由
+`parametric_readiness.json` 明确投影为 `READY_FOR_IMPLEMENTATION`（shadow-only
+observation 意义）。policy scope 从真实证据继承为 `sky130hs|DENSITY_RELIEF|strict_clean`，
+仍保持 `parametric_view_status=NOT_IMPLEMENTED`、`promotion_eligible=false`、
+`canonical_memory_mutation=none`。
+
+随后冻结完全独立的 v119–v121 future observation（不与 v116–v118 calibration
+lineage 重叠），3/3 proposals 和 3/3 ORFS outcomes 成功 join，OOD distance 最大
+`0.606952`，obligation coverage=`1.0`，canonical counters 前后不变。但真实
+observation 的 harmful rate=`1/3`，area/power/WNS interval coverage 均为 `2/3`
+（TNS `1.0`），所以预注册 observation gate（harmful≤`0.1`、coverage≥`0.8`）
+失败；没有产生 decision receipts、candidate 或 authority/promotion 记录。v119–v121
+只证明了从 grouped policy 到 future shadow 的时间顺序和 fail-closed 行为，不能
+声称 Parametric 质量已经达到 production 标准。
+
+紧凑证据分别位于
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action32-{support-v113v115,heldout-v116v118}/`、
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action32-future-orfs-v119v121/` 与
+`/data1/zhangdy/tehm-campaigns/tehm-p2-action32-future-shadow-v119v121/`；ORFS RUN tree 仍留在
+`/tmp`。本轮只把 readiness/policy/proposal/outcome/report 作为外部 evidence 保存，
+没有写 canonical memory，也没有打开 production runtime。下一步必须先修复
+future observation 的 interval/harmful gate（或重新预注册更窄、可解释的 action
+signature），再考虑 observation gate；即使通过，仍需真实 A/B、rollback、registry、
+obligation 与 cross-lineage TE 才能进入六项 promotion gate。
