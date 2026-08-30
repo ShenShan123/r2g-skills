@@ -5225,7 +5225,6 @@ recapture 也不能把旧证据重写。这证明 direct ORFS 执行、strict si
 promotion 或 production runtime 输入。下一步应先补齐平台级 DRC/LVS 能力与 timing-clean
 设计，再以新的 source-disjoint lineage 重跑；不得把上述 flow failure 或 timeout
 重标为 harmful utility，也不得放宽 promotion gate。
-
 需要特别注明：本 diversity runner 的 lineage firewall 已绑定在 manifest，但尚未像
 add-designs pipeline 那样生成独立 `source_freeze.json` 并在每个后续 phase 重验证；因此
 本轮的 “source-disjoint” 仍是 campaign-level 诊断保证，不能替代 authority 所需的
