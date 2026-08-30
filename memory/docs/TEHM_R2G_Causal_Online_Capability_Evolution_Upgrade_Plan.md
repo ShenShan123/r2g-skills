@@ -3867,6 +3867,19 @@ load witness；preflight/旧非 strict fixture 仍只用于兼容或未完成证
 memory ablation 的 attribution，不写 canonical memory，不改变 promotion gate 或
 production runtime 边界。
 
+### 2026-08-30 causal matcher support witness fail-closed
+
+复核 A3 evaluation-only causal retrieval 时发现，`causal/matcher.py` 在 support JSON
+损坏时会静默回退到空 mapping，随后用 path 顶层 family/profile 做 coarse fallback。
+这样即使 `mechanism_signatures` 缺失或被替换为非 mapping，直接 matcher 调用仍可能给出
+eligible match，违背“missing path metadata 在有细节约束时必须 fail-closed”。
+
+现在 matcher 区分真正缺少 legacy support 字段与已提供但损坏的 support：malformed/空值
+support 返回 `malformed_support`，存在但类型错误的 mechanism signature 列表返回
+`malformed_mechanism_signatures`；不会再用粗粒度 fallback 掩盖损坏证据。新增 direct
+matcher 回归，仍保持 production retrieval 与 authority 边界不变，因为该模块本来只
+属于 evaluation/shadow lane。
+
 ### 2026-08-28 learner eligibility type firewall
 
 `learner_eligible` 是 dataset/evidence firewall 的 typed authority bit，不能在写入或

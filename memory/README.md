@@ -2158,6 +2158,13 @@ B1 online event log 现在在写入和 replay 两端都要求 payload 是 JSON o
 malformed JSON、数组或标量均 fail-closed，避免损坏 payload 被当作可重放的 shadow
 event；该修复不改变 canonical、learner admission、authority 或 production runtime。
 
+### 2026-08-30 causal matcher support witness 防火墙
+
+A3 causal matcher 现在不会把损坏的 `support_json` 或非 mapping 的
+`mechanism_signatures` 降级为空证据后继续匹配；两类输入分别返回明确的 fail-closed
+reason。该修复只影响 evaluation/shadow causal retrieval，不改变 production runtime
+或 promotion authority。
+
 ### 2026-08-30 causal transition facts 的 JSON 防火墙
 
 因果 mechanism extractor 已不再把 malformed 或非对象的 transition JSON 默认为 `{}`。

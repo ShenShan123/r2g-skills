@@ -64,32 +64,51 @@ def _get(value, key: str, default=None):
     return getattr(value, key, default)
 
 
-def _support(path) -> dict:
-    support = _get(path, "support", None)
+_MISSING = object()
+
+
+def _support(path) -> dict | None:
+    """Decode path support without falling back through corrupt evidence.
+
+    Persisted paths require ``support_json`` to be an object.  A malformed
+    support payload must not be replaced with an empty mapping because that
+    would activate the coarse family/profile fallback and hide missing
+    mechanism witnesses.  A genuinely absent field is retained only for
+    legacy in-memory candidates.
+    """
+    support = _get(path, "support", _MISSING)
+    if support is _MISSING:
+        support = _get(path, "support_json", _MISSING)
+    if support is _MISSING:
+        return {}
     if support is None:
-        support = _get(path, "support_json", {})
+        return None
     if isinstance(support, str):
+        if not support.strip():
+            return None
         try:
             support = json.loads(support)
         except (TypeError, json.JSONDecodeError):
-            support = {}
-    return dict(support) if isinstance(support, Mapping) else {}
+            return None
+    return dict(support) if isinstance(support, Mapping) else None
 
 
-def _signatures(path, support: dict) -> tuple[dict, ...]:
-    signatures = support.get("mechanism_signatures")
-    if not isinstance(signatures, list):
-        one = support.get("mechanism_signature")
-        signatures = [one] if isinstance(one, Mapping) else []
-    result = [dict(item) for item in signatures if isinstance(item, Mapping)]
-    if not result:
-        # Paths produced before mechanism signatures were persisted remain
-        # searchable only at the coarse family/profile level.
-        result = [{
-            "mechanism_family": _get(path, "mechanism_family"),
-            "compatibility_profile": _get(path, "compatibility_profile"),
-        }]
-    return tuple(result)
+def _signatures(path, support: dict) -> tuple[dict, ...] | None:
+    if "mechanism_signatures" in support:
+        signatures = support["mechanism_signatures"]
+        if (not isinstance(signatures, list) or not signatures or
+                any(not isinstance(item, Mapping) for item in signatures)):
+            return None
+        return tuple(dict(item) for item in signatures)
+    if "mechanism_signature" in support:
+        one = support["mechanism_signature"]
+        return (dict(one),) if isinstance(one, Mapping) else None
+    # Paths produced before mechanism signatures were persisted remain
+    # searchable only at the coarse family/profile level.
+    return ({
+        "mechanism_family": _get(path, "mechanism_family"),
+        "compatibility_profile": _get(path, "compatibility_profile"),
+    },)
 
 
 def _normal(value) -> str:
@@ -146,7 +165,17 @@ def match_causal_path(path, query_plan: Mapping | None) -> MechanismMatch:
             detail_query[field] = value
 
     support = _support(path)
+    if support is None:
+        return MechanismMatch(
+            eligible=False, score=0.0, evidence_weight=0.0,
+            family_match=family_match, profile_match=profile_match,
+            mechanism_match=False, reason="malformed_support")
     signatures = _signatures(path, support)
+    if signatures is None:
+        return MechanismMatch(
+            eligible=False, score=0.0, evidence_weight=0.0,
+            family_match=family_match, profile_match=profile_match,
+            mechanism_match=False, reason="malformed_mechanism_signatures")
     matched: set[str] = set()
     mismatched: set[str] = set()
     missing: set[str] = set()

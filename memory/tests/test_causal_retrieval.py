@@ -9,6 +9,7 @@ import pytest
 from contracts import MemoryQuery
 from tehm.canonical.capture import capture
 from tehm.causal import build_transition_causal_fragment, consolidate_causal_path
+from tehm.causal.matcher import match_causal_path
 from tehm.causal.path_builder import causal_path_digest
 from tehm.ids import stable_dumps
 from tehm.retrieval.causal_recall import retrieve_causal_paths
@@ -97,6 +98,29 @@ def test_causal_recall_matches_profile_and_mechanism_only(tmp_tehm):
         "mechanism_signature": {"mechanism_family": "HANDSHAKE_COMPLETION"},
     })
     assert retrieve_causal_paths(conn, mismatch) == []
+
+
+@pytest.mark.parametrize(
+    ("support", "reason"),
+    [
+        ("not-json", "malformed_support"),
+        ({"mechanism_signatures": ["not-a-mapping"]},
+         "malformed_mechanism_signatures"),
+    ],
+)
+def test_causal_matcher_rejects_malformed_support_witnesses(support, reason):
+    """Direct matcher callers cannot bypass path support typing."""
+    path = {
+        "mechanism_family": "HANDSHAKE_COMPLETION",
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "support_json": support,
+    }
+    match = match_causal_path(path, {
+        "mechanism_family": "HANDSHAKE_COMPLETION",
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+    })
+    assert match.eligible is False
+    assert match.reason == reason
 
 
 def test_causal_recall_keeps_transformation_family_separate(tmp_tehm):
