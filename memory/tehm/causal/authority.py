@@ -119,6 +119,16 @@ def evaluate_causal_rule_evidence(
         reasons.append("learner_firewall_or_split_violation")
     if not membership_types_valid:
         reasons.append("learner_membership_type_invalid")
+    from tehm.verified_execution import require_verified_transition
+    verified_sources = set()
+    for transition_id in source_ids:
+        try:
+            require_verified_transition(conn, transition_id)
+        except ValueError:
+            continue
+        verified_sources.add(transition_id)
+    if verified_sources != set(source_ids):
+        reasons.append("verified_execution_witness_incomplete")
     if len(lineages) < max(1, int(min_lineages)):
         reasons.append("insufficient_disjoint_lineages")
     if evidence_rank(required_level) >= evidence_rank(

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from tehm.canonical.transition import HARMFUL_OUTCOMES
 from tehm.causal.mechanism import load_transition_facts, mechanism_signature
 from tehm.dataset import require_learner_bool, validate_membership_row
+from tehm.verified_execution import require_verified_transition
 
 from .conflict import ConflictReceipt
 
@@ -102,6 +103,10 @@ def evaluate_consolidation_trigger(
     # manager seam.
     learner_eligible = authority_eligible
     facts = load_transition_facts(conn, transition_id)
+    if learner_eligible:
+        # This public helper may be called independently of the online
+        # manager; retain the same execution witness boundary here.
+        require_verified_transition(conn, transition_id)
     signature = mechanism_signature(facts)
     support_count = 0
     if learner_eligible:

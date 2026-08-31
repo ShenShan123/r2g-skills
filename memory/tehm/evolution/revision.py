@@ -7,6 +7,7 @@ import sqlite3
 from tehm import db as tehm_db
 from tehm.dataset import normalize_stored_learner_bool, validate_membership_row
 from tehm.ids import stable_dumps
+from tehm.verified_execution import require_verified_transition
 
 from .events import verify_event_chain
 from .receipts import RuleRevisionReceipt
@@ -97,6 +98,16 @@ def _validate_provenance(
         raise ValueError(
             "revision evidence must be learner-eligible training data: "
             + ",".join(invalid))
+    # Membership and a valid event chain are necessary provenance, but neither
+    # proves that the referenced transition ran a complete executable oracle.
+    # Recheck every evidence anchor at this independent revision boundary.
+    for ref in evidence_refs:
+        try:
+            require_verified_transition(conn, ref)
+        except ValueError as exc:
+            raise ValueError(
+                "revision evidence must carry complete verified execution: "
+                + ref) from exc
     return event, evidence_refs
 
 

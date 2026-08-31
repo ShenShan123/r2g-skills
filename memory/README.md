@@ -2440,3 +2440,20 @@ replay 与 canonical import 在各自 savepoint 内重放完整 executable oracl
 crystallization 同样在 learner 分组前重放完整 verified execution；不完整或
 compile-only transition 只留在 raw/preflight audit，不会生成 candidate rule。旧 R2G
 诊断记录因此不会阻塞审计，也不会凭默认 membership 获得 learner rule support。
+
+### 2026-08-30 direct learner-derived seam closure
+
+继续审计发现，直接调用 activation utility、consolidation trigger、rule revision、
+replication 或 held-out transfer 仍可能绕过 online manager。现已统一收紧：
+
+* `update_rule_utility(..., learner_eligible=true)` 必须绑定 activation 及其
+  produced canonical transition，并重放完整 executable oracle；无 activation 或不完整
+  transition 都不会更新 rule utility；
+* trigger/revision 的独立入口分别重放 transition/evidence refs，不能仅凭 membership、
+  event chain 或 caller boolean 建立 consolidation/revision 证据；
+* replication、causal authority 与 held-out transfer 只把 complete verified execution
+  计入 L2/L3/L4 支持，partial/compile-only/unknown 仅保留 shadow/audit 诊断。
+
+这些改动没有提升任何 gate 分数，也没有写入 production runtime；它们只把已有
+`training ∧ learner_eligible=1` 分区约束与 verified-execution 约束统一到所有可直接调用
+的 learner-derived 入口。新增回归只验证 fail-closed 边界，不构成真实 ORFS/RTL 经验结果。

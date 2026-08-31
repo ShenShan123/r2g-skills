@@ -83,6 +83,18 @@ def evaluate_replicated_effect(
                               AND dm.campaign_id=? AND dm.split='training'
                               AND dm.learner_eligible=1)""",
         (*transition_ids, campaign_id)).fetchall()
+    # Replication is a learner-derived evidence upgrade. Filter the path
+    # source witness through the same complete-oracle predicate used by online
+    # admission; training membership alone is not enough.
+    from tehm.verified_execution import require_verified_transition
+    verified_rows = []
+    for source in rows:
+        try:
+            require_verified_transition(conn, str(source["transition_id"]))
+        except ValueError:
+            continue
+        verified_rows.append(source)
+    rows = verified_rows
     lineages = tuple(sorted({row["lineage_id"] for row in rows if row["lineage_id"]}))
     designs = tuple(sorted({row["design_id"] for row in rows if row["design_id"]}))
     runs: set[str] = set()

@@ -5347,3 +5347,20 @@ transition 只保留在 raw/preflight audit 中，不参与 candidate rule suppo
 R2G 诊断记录可以继续用于 instance-dominated/coverage 分析，但不会因为默认 training
 membership 误生成 rule。incremental crystallization 复用同一过滤结果，仍以 derived
 savepoint 和 raw-evidence digest 保护规则、event、revision 的原子性。
+
+### 4.10 direct learner-derived seam closure
+
+除 online manager、event writer、batch import 与 crystallization 外，所有可直接调用的
+learner-derived helper 也必须执行 Verified Execution replay。当前实现已补齐：
+
+1. activation utility 更新必须有 activation→produced transition 的不可变 witness，且
+   transition 具备明确 verdict、`oracle_complete=true` 与可执行 oracle；缺 witness 或
+   partial execution 时 utility 与 feedback event 都不写入。
+2. consolidation trigger 与 rule revision 的独立 API 不能只信任 membership/event chain；
+   trigger transition 和 revision evidence refs 会在入口重放同一 predicate。
+3. replication、causal rule authority 与 held-out transfer 只统计 complete verified
+   execution。这样 L2/L3/L4 的 shadow 诊断可以保留，但不完整 oracle 不能成为
+   controlled support、replicated effect、transfer 或后续 promotion 的依据。
+
+该层是 authority firewall 的一致性补强，不改变 Parametric shadow-only、六项 promotion
+gate 阈值或 production runtime；新增测试只验证 fail-closed 行为，不宣称新的实测收益。

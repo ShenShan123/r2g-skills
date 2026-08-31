@@ -138,6 +138,26 @@ def update_rule_utility(conn: sqlite3.Connection, rule_id: str, outcome: str,
     """
     from tehm.canonical.transition import HARMFUL_OUTCOMES, NEUTRAL_OUTCOMES, POSITIVE_OUTCOMES
 
+    # A learner-eligible utility update is derived runtime state, not a
+    # free-standing counter increment. Require an activation receipt to name
+    # one canonical transition and replay its complete executable oracle
+    # before touching the rule.
+    if learner_eligible:
+        if not activation_id or type(activation_id) is not str:
+            raise ValueError(
+                "learner-eligible utility feedback requires activation_id")
+        activation = conn.execute(
+            "SELECT produced_transition_id FROM tehm_activations "
+            "WHERE activation_id=?", (activation_id,)).fetchone()
+        transition_id = (activation["produced_transition_id"]
+                         if activation is not None else None)
+        if not transition_id:
+            raise ValueError(
+                "learner-eligible utility feedback requires a produced "
+                "canonical transition")
+        from tehm.verified_execution import require_verified_transition
+        require_verified_transition(conn, str(transition_id))
+
     if activation_id and outcome != "UNKNOWN":
         prior_feedback = conn.execute(
             """SELECT 1 FROM tehm_memory_events

@@ -327,11 +327,17 @@ def evaluate_transfer_supported_mechanism(
     details = []
     matched = []
     mismatched = []
+    from tehm.verified_execution import require_verified_execution
     for transition_id in ids:
         facts = load_transition_facts(conn, transition_id)
         verifier = facts.verifier or {}
+        try:
+            require_verified_execution(facts)
+            execution_complete = True
+        except ValueError:
+            execution_complete = False
         clean = bool(
-            facts.outcome == "PASS" and
+            execution_complete and facts.outcome == "PASS" and
             facts.delta.get("original_failure") in {"REMOVED", "PRESENT"} and
             verifier.get("verdict") == "PASS" and
             verifier.get("oracle_type") not in {None, "UNKNOWN"} and

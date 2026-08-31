@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from contracts import RepairContext
-from tehm.activation.pipeline import ActivationError, activate
+from tehm.activation.pipeline import ActivationError, ActivationRecord, activate
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.crystallization.build_rules import crystallize_all
 
@@ -293,6 +293,30 @@ def test_utility_feedback_is_atomic_on_event_failure(tmp_tehm, sample_record_dic
     assert conn.execute(
         "SELECT COUNT(*) FROM tehm_memory_events WHERE source_id=?",
         ("activation-failure",)).fetchone()[0] == 0
+
+
+def test_learner_utility_requires_verified_activation_transition(
+        tmp_tehm, sample_record_dict):
+    """A direct utility writer cannot bypass the execution witness gate."""
+    conn, store, _ = tmp_tehm
+    record = json.loads(json.dumps(sample_record_dict))
+    record["record_id"] = "incomplete-utility-source"
+    record["verification"]["oracle_complete"] = False
+    transition_id = capture(
+        conn, store, ExecutionRecord.from_dict(record)).transition_id
+    from tehm.activation.update import persist_activation
+    persist_activation(
+        conn,
+        ActivationRecord(
+            activation_id="incomplete-utility-activation",
+            rule_id="missing-rule", target_state_id="target",
+            produced_transition_id=transition_id))
+    from tehm.activation.update import update_rule_utility
+    with pytest.raises(ValueError, match="oracle_incomplete"):
+        update_rule_utility(
+            conn, "missing-rule", "PASS",
+            activation_id="incomplete-utility-activation",
+            campaign_id="live", learner_eligible=True)
 
 
 def test_dry_run_persists_nothing(tmp_tehm, sample_record_dict):

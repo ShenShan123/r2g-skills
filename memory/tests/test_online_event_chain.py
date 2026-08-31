@@ -491,6 +491,22 @@ def test_trigger_rejects_forged_learner_eligibility(tmp_tehm):
             conflict=conflict)
 
 
+def test_direct_trigger_requires_verified_execution(tmp_tehm):
+    """The public trigger helper cannot accept incomplete learner evidence."""
+    conn, store, _ = tmp_tehm
+    record = _online_record(store)
+    record.verification["oracle_complete"] = False
+    transition_id = capture(conn, store, record).transition_id
+    conflict = ConflictReceipt(
+        transition_id=transition_id, campaign_id="live",
+        mechanism_family="unused", compatibility_profile=None)
+    with pytest.raises(ValueError, match="oracle_incomplete"):
+        evaluate_consolidation_trigger(
+            conn, transition_id, campaign_id="live",
+            learner_eligible=True, novelty="NOVEL_MECHANISM",
+            conflict=conflict)
+
+
 def test_dataset_membership_cannot_upgrade_audit_row_to_learner_support(
         tmp_tehm):
     conn, store, _ = tmp_tehm
