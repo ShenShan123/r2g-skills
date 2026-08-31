@@ -2542,3 +2542,20 @@ FAIL），因此 grouped calibration 为 `shadow_calibration_failed`，policy �
 `not_materialized`。历史 v113–v115 因缺少可验证的内部 toolchain preflight 被排除；没有
 任何 canonical memory、authority 或 production runtime 写入。下一步必须扩展新的、独立
 且满足 contract 的 support/held-out cohort，不能通过放宽硬约束或回灌旧证据来推进。
+
+### 2026-08-30 second contract cohort v128-v133
+
+在提交 `1865e0d` 预注册并冻结第二组 source-disjoint cohort（freeze digest=`f9eee0e1564bb0456d5a06b7c632a53423c25da48684faf07f52efef2328623e`）后，
+`/data1/zhangdy/tehm-campaigns/tehm-contract-action32-v128v133-r1` 的 12 个 ORFS arm
+全部 `rc=0 SUCCESS`；12/12 strict timing clean，12/12 独立 source-identity
+equivalence 通过。contract observation 为 v128=`FAIL(power_budget_exceeded)`、
+v129=`PASS`、v130=`PASS`、v131=`FAIL(wns_delta_below_objective,power_budget_exceeded)`、
+v132=`FAIL(wns_delta_below_objective)`、v133=`PASS`。
+
+与此前 v122 唯一通过的 support 合并做 disjoint `evaluate` 后，support gate 为
+`FAIL`（1 PASS/2 FAIL），fresh gate 为 `FAIL`（3 PASS/3 FAIL），grouped calibration
+仍为 `shadow_calibration_failed`、policy 为 `insufficient_support`，且
+`shadow_policy_materialization=not_materialized`。失败行保留在分母，未通过筛选删除；
+没有 canonical/authority/runtime mutation。该结果说明当前 action32 contract 在这些
+独立 RTL 结构上仍不稳定，下一步应转向更有语义约束的 transformation family/contract，
+而不是继续无界 knob sweep。
