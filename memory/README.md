@@ -2686,3 +2686,25 @@ interference、prediction surprise、controlled intervention、held-out audit-on
 receipt 篡改和 manager replay：定向 `test_experience_value.py` 为 `5 passed`，
 online/schema 回归为 `42 passed`。下一阶段是 P3：将已有 causal path 转为独立的
 Mechanism Knowledge claim，仍先保持 shadow/candidate、禁止自动 promoted。
+
+### 2026-08-31 P3 Intervention-grounded Mechanism Knowledge（shadow/candidate-only）
+
+新增 `memory/tehm/knowledge/`，把已验证可重放的 causal path 转换为独立、内容寻址的
+`MechanismKnowledge` claim；claim 内容与 evidence ledger、生命周期状态、适用性判断、
+revision/supersession relation 和 authority receipt 分离。L0/L1 path 只能生成
+`shadow`，L2+ 才允许显式注册为 `candidate`；L3/L4 只参与 authority evaluation，
+任何 API 都不能自动写入 `promoted` 或进入 production runtime。
+
+P3 additive 表为 `tehm_mechanism_knowledge`、`tehm_mechanism_knowledge_status` 和
+`tehm_mechanism_knowledge_evidence`，旧 v4 store 通过惰性 schema 建表且保持
+`tehm_meta.schema_version = tehm-v4`。claim 的 causal-path evidence 强制绑定到
+training、learner-eligible campaign；负面适用性只从同一 training campaign 推导，
+不会读取 held-out/calibration evidence。resolver 复用 P1 current-valid-state，支持
+scope-local/global claim、正/负适用性、shadow supersession，并在 production mode
+无 promoted knowledge 时 fail-closed。
+
+P3 回归覆盖 path→claim、L0/L1 shadow-only、evidence split firewall、negative-context
+隔离、candidate authority、不可变 digest/replay、适用性、revision supersession、
+fresh/old-v4 schema 兼容；新增定向测试 `8 passed`，完整 `memory/tests` 为
+`772 passed in 12:29`。该阶段仍未改变 canonical evidence、rule/asset lifecycle 或
+production routing。

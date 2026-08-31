@@ -1,0 +1,103 @@
+"""Typed receipts for Mechanism Knowledge derivation and authority."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class MechanismKnowledgeReceipt:
+    knowledge_id: str
+    version: int
+    object_id: str
+    content_digest: str
+    evidence_level: str
+    status: str
+    target_scope: str
+
+    def to_dict(self) -> dict:
+        return {
+            "knowledge_id": self.knowledge_id, "version": self.version,
+            "object_id": self.object_id, "content_digest": self.content_digest,
+            "evidence_level": self.evidence_level, "status": self.status,
+            "target_scope": self.target_scope,
+        }
+
+
+@dataclass(frozen=True)
+class KnowledgeApplicabilityReceipt:
+    object_id: str
+    eligible: bool
+    positive_matches: tuple[str, ...] = field(default_factory=tuple)
+    negative_matches: tuple[str, ...] = field(default_factory=tuple)
+    reason: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "object_id": self.object_id, "eligible": self.eligible,
+            "positive_matches": list(self.positive_matches),
+            "negative_matches": list(self.negative_matches), "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
+class KnowledgeResolutionReceipt:
+    resolution_id: str
+    scope: dict
+    active_knowledge: tuple[str, ...]
+    suppressed: tuple[str, ...]
+    unresolved_conflicts: tuple[str, ...]
+    mode: str = "shadow"
+
+    def to_dict(self) -> dict:
+        return {
+            "resolution_id": self.resolution_id, "scope": self.scope,
+            "active_knowledge": list(self.active_knowledge),
+            "suppressed": list(self.suppressed),
+            "unresolved_conflicts": list(self.unresolved_conflicts),
+            "mode": self.mode,
+        }
+
+
+@dataclass(frozen=True)
+class KnowledgeAuthorityReceipt:
+    object_id: str
+    eligible: bool
+    evidence_level: str
+    required_evidence_level: str
+    support_lineages: tuple[str, ...]
+    gates: dict
+    reason: str
+
+    def to_dict(self) -> dict:
+        return {
+            "object_id": self.object_id, "eligible": self.eligible,
+            "evidence_level": self.evidence_level,
+            "required_evidence_level": self.required_evidence_level,
+            "support_lineages": list(self.support_lineages),
+            "gates": dict(self.gates), "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
+class KnowledgeRevisionReceipt:
+    parent_object_id: str
+    child_object_id: str
+    operation: str
+    relation_id: str
+    authority_ref: str | None
+    shadow_only: bool
+
+    def to_dict(self) -> dict:
+        return {
+            "parent_object_id": self.parent_object_id,
+            "child_object_id": self.child_object_id,
+            "operation": self.operation, "relation_id": self.relation_id,
+            "authority_ref": self.authority_ref, "shadow_only": self.shadow_only,
+        }
+
+
+__all__ = [
+    "KnowledgeApplicabilityReceipt", "KnowledgeAuthorityReceipt",
+    "KnowledgeResolutionReceipt", "KnowledgeRevisionReceipt",
+    "MechanismKnowledgeReceipt",
+]
