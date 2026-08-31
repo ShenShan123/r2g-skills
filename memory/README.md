@@ -2524,3 +2524,21 @@ calibration support。只有逐样本 `evaluate_observed_contract` 为 `PASS` �
 此前 v122–v127 物理 campaign 的 ORFS/strict reports 生成于该 receipt 接入前，不能回填为
 contract 通过证据；需在新的 source freeze 下重跑 samples/evaluate，明确记录每条硬约束
 的 PASS、FAIL 或 ABSTAIN，再决定是否继续 shadow 试验。
+
+### 2026-08-30 v122-v127 contract cohort replay
+
+已在新的 source freeze（digest=`777631170481a1be061283feab0a3775e5396c6cc7d614832ac17ca221eb4d60`）下
+完成 `/data1/zhangdy/tehm-campaigns/tehm-contract-action32-v122v127-r3` 的完整物理复跑：
+12/12 ORFS case 成功，12/12 strict timing clean，12/12 source-identity equivalence
+通过。修正 ORFS `geometry.die_area_um2` baseline 提取后，contract observation 明确为：
+v122=`PASS`、v123=`FAIL(power_budget_exceeded)`、v124=`FAIL(wns_delta_below_objective)`、
+v125=`PASS`、v126=`FAIL(power_budget_exceeded)`、v127=`FAIL(power_budget_exceeded)`；每条
+样本的 DRC/equivalence/LVS/timing checks 均为 `PASS`。
+
+随后以 v122 作为唯一 contract-bound support、v125–v127 作为 fresh held-out 重放
+`evaluate`。support gate 为 `FAIL`（1 PASS/2 FAIL），fresh gate 为 `FAIL`（1 PASS/2
+FAIL），因此 grouped calibration 为 `shadow_calibration_failed`，policy 为
+`insufficient_support`，`promotion_eligible=false`，`shadow_policy_materialization` 为
+`not_materialized`。历史 v113–v115 因缺少可验证的内部 toolchain preflight 被排除；没有
+任何 canonical memory、authority 或 production runtime 写入。下一步必须扩展新的、独立
+且满足 contract 的 support/held-out cohort，不能通过放宽硬约束或回灌旧证据来推进。

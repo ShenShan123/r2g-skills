@@ -542,7 +542,14 @@ def _raw_pareto(deltas: Mapping) -> dict:
 
 def _baseline_metric(ppa: Mapping, metric: str) -> float | None:
     if metric == "area_um2":
-        paths = (("summary", "area", "design_area_um2"), ("ppa_metrics", "area_um2"))
+        # ORFS extract_ppa emits area in either the legacy summary payload or
+        # the geometry payload used by the physical campaign runner.  Both are
+        # source-bound evidence; refusing the geometry form would turn a real
+        # PPA baseline into a false ``ABSTAINED`` contract observation.
+        paths = (("summary", "area", "design_area_um2"),
+                 ("ppa_metrics", "area_um2"),
+                 ("geometry", "die_area_um2"),
+                 ("geometry", "core_area_um2"))
     elif metric == "power_w":
         paths = (("summary", "power", "total_power_w"), ("ppa_metrics", "power_w"))
     else:

@@ -101,6 +101,25 @@ def test_action32_contract_is_pre_registered_and_rejects_timing_regression():
     assert result["canonical_memory_mutation"] == "none"
 
 
+def test_observed_contract_accepts_orfs_geometry_area_baseline():
+    contract = density_relief_nonregression_32()
+    before = {
+        "geometry": {"die_area_um2": 100.0},
+        "summary": {"timing": {"setup_wns": 0.0, "setup_tns": 0.0},
+                    "power": {"total_power_w": 1.0}},
+    }
+    after = {
+        "geometry": {"die_area_um2": 99.0},
+        "summary": {"timing": {"setup_wns": 0.01, "setup_tns": 0.0},
+                    "power": {"total_power_w": 1.0}},
+    }
+    result = evaluate_observed_contract(
+        contract=contract, action=contract_action(contract),
+        before_ppa=before, after_ppa=after, checks=_checks())
+    assert result["status"] == "PASS"
+    assert result["observed_relative"]["area_delta_percent"] == -1.0
+
+
 def test_observed_contract_can_pass_while_raw_pareto_remains_harmful():
     contract = timing_relief_budgeted_v1()
     result = evaluate_observed_contract(
