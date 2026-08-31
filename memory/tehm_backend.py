@@ -20,6 +20,7 @@ from contracts import (
     IngestReceipt,
     MemoryCandidate,
     MemoryQuery,
+    MemoryRoutingDecision,
     MemorySnapshot,
     RepairContext,
 )
@@ -200,6 +201,84 @@ class TehmMemoryBackend:
             )
             for r in receipt.results
         ]
+
+    def resolve_state(self, context: RepairContext):
+        """Resolve the current shadow state before any memory routing.
+
+        The resolver consumes immutable evidence and derived lifecycle rows. It
+        may persist a replayable resolution snapshot, but it never changes
+        canonical evidence or production authority.
+        """
+        if not isinstance(context, RepairContext):
+            raise TypeError("resolve_state requires RepairContext")
+        from tehm.retrieval.memory_router import scope_for_query
+        from tehm.state import resolve_current_state
+
+        conn, _ = self._open()
+        query = self.build_query(context)
+        return resolve_current_state(
+            conn, scope_for_query(query), mode="shadow", persist=True, commit=True)
+
+    def route_memory(
+            self, query: MemoryQuery | RepairContext, *,
+            no_memory_budget: int = 3, memory_budget: int = 0,
+    ) -> MemoryRoutingDecision:
+        """Return a P5 shadow decision without altering production retrieval."""
+        if self.read_only_eval:
+            persist_state = False
+            commit = False
+        else:
+            persist_state = True
+            commit = True
+        from tehm.retrieval.memory_router import route_memory
+
+        conn, _ = self._open()
+        return route_memory(
+            conn, query, no_memory_budget=no_memory_budget,
+            memory_budget=memory_budget, mode="shadow",
+            persist_state=persist_state, commit=commit)
+
+    def retrieve_assets(self, decision: MemoryRoutingDecision) -> list[MemoryCandidate]:
+        """Keep asset candidates out of the backend source enum until P7."""
+        if not isinstance(decision, MemoryRoutingDecision):
+            raise TypeError("retrieve_assets requires MemoryRoutingDecision")
+        from tehm.retrieval.memory_router import retrieve_assets
+
+        conn, _ = self._open()
+        return retrieve_assets(conn, decision)
+
+    def record_memory_outcome(
+            self, routing_receipt_id: str, execution_receipt: dict,
+    ):
+        """Attribute a routed outcome without granting a memory update.
+
+        P5 has no routing ledger or automatic update primitive.  This seam only
+        reuses the deterministic P4 attribution classifier when an execution
+        receipt names a canonical transition/activation; all lifecycle changes
+        remain an explicit later operation.
+        """
+        if self.read_only_eval:
+            raise RuntimeError("cannot record memory outcome in a read-only snapshot")
+        if type(routing_receipt_id) is not str or not routing_receipt_id.startswith("routing_"):
+            raise ValueError("routing_receipt_id is malformed")
+        if not isinstance(execution_receipt, dict):
+            raise TypeError("execution_receipt must be an object")
+        claimed_routing_id = execution_receipt.get("routing_receipt_id")
+        if (claimed_routing_id is not None and
+                claimed_routing_id != routing_receipt_id):
+            raise ValueError("execution receipt routing ID does not match decision")
+        transition_id = execution_receipt.get("transition_id")
+        activation_id = execution_receipt.get("activation_id")
+        if transition_id is None and activation_id is None:
+            return None
+        from tehm.evolution.attribution import attribute_failure
+
+        conn, _ = self._open()
+        return attribute_failure(
+            conn, transition_id=transition_id, activation_id=activation_id,
+            value_receipt=execution_receipt.get("value_receipt"),
+            state_resolution=execution_receipt.get("state_resolution"),
+        )
 
     def get_causal_paths(self, query: MemoryQuery, *, campaign_id: str = "live",
                          limit: int = 10, evaluation_only: bool = False) -> list[dict]:

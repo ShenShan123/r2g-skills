@@ -182,12 +182,21 @@ def _active_assets(conn: sqlite3.Connection, scope: dict) -> set[str]:
             if row["status"] not in {"draft", "demoted", "quarantined", "retired"}:
                 raise StateResolutionError("invalid asset lifecycle status")
             continue
-        if scope.get("target_scope") and row["target_scope"] not in {"global", scope["target_scope"]}:
-            continue
         asset = get_asset(conn, str(row["asset_id"]))
         if asset is None:
             raise StateResolutionError("asset registry content is invalid")
         compatibility = asset.get("compatibility") or {}
+        allowed_scopes = {"global"}
+        if scope.get("target_scope"):
+            allowed_scopes.add(scope["target_scope"])
+        # Asset registration defaults its lifecycle scope to the compatibility
+        # profile.  Treat that profile as a valid scope dimension alongside
+        # the query's concrete target check; do not make a route query blind
+        # to a profile-scoped asset.
+        if scope.get("compatibility_profile"):
+            allowed_scopes.add(scope["compatibility_profile"])
+        if row["target_scope"] not in allowed_scopes:
+            continue
         if (scope.get("compatibility_profile") is not None and
                 compatibility.get("compatibility_profile") != scope["compatibility_profile"]):
             continue

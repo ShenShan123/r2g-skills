@@ -24,10 +24,27 @@ from tehm.retrieval.causal_recall import (
     score_causal_path,
 )
 
+# ``memory_router`` depends on the state resolver.  The state resolver is also
+# imported by capability/lifecycle modules that import this package, so eager
+# importing the shadow router here creates a package-initialisation cycle.
+# Keep the public names available through a small lazy export instead.
+_MEMORY_ROUTER_EXPORTS = frozenset({
+    "MIN_CAUSAL_EVIDENCE", "ROUTER_VERSION", "MemoryRouterError",
+    "retrieve_assets", "route_memory", "scope_for_query",
+})
+
+
+def __getattr__(name):
+    if name in _MEMORY_ROUTER_EXPORTS:
+        from tehm.retrieval import memory_router
+        return getattr(memory_router, name)
+    raise AttributeError(name)
+
 __all__ = [
     "RetrievalReceipt", "RetrievedRule",
     "plan_query", "retrieve_query", "RuleIndex", "build_index", "high_recall",
     "apply_symbolic_filter", "rerank", "retrieve",
     "CausalPathMatch", "CausalPathQuality", "score_causal_path",
-    "retrieve_causal_paths",
+    "retrieve_causal_paths", "MIN_CAUSAL_EVIDENCE", "ROUTER_VERSION",
+    "MemoryRouterError", "retrieve_assets", "route_memory", "scope_for_query",
 ]

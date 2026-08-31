@@ -2732,3 +2732,28 @@ P4 回归覆盖 verification failure attribution、memory-interference 的非 ru
 observer P4 receipt replay，以及既有 P1/P2/causal 回归；新增定向 `11 passed`，完整
 `memory/tests` 为 `775 passed in 12:15`。下一步可进入 P5：NO_SKILL / memory router
 shadow mode，仍不得把 causal retrieval 直接接入 production pipeline。
+
+### 2026-08-31 P5 NO_SKILL / memory router（shadow-only）
+
+新增 `contracts.MemoryRoutingDecision`、`NoSkillReceipt` 与
+`tehm/retrieval/memory_router.py`。router 先通过 P1 current-valid-state resolver
+解析 scope，再检查 validated mechanism knowledge、L2 causal path、asset binding 与
+独立 authority receipt；它输出 `APPLY`、`CONSIDER`、`ABSTAIN`、`INAPPLICABLE` 或
+`NO_SKILL` 的内容寻址 receipt。每次路由都保留至少一个 no-memory 候选；shadow
+budget 最多允许两个 memory/causal 候选，`ABSTAIN`/`INAPPLICABLE`/`NO_SKILL` 永不
+分配 memory budget。未满足 validated knowledge、状态解析、OOD 或负面适用性门控时，
+系统分别 fail-closed 为 `NO_SKILL`、`ABSTAIN` 或 `INAPPLICABLE`。
+
+`TehmMemoryBackend` 现在提供 `resolve_state()`、`route_memory()`、
+`retrieve_assets()` 和 `record_memory_outcome()` seam；默认仍只运行 shadow router，
+`mode="production"` 明确拒绝。现有 `retrieve_query()` promoted-rule pipeline 与
+evaluation-only `causal_recall` 未被旁路改写；asset candidate 尚未加入
+`MemoryCandidate.source`，因此不会伪造 executable asset。outcome seam 只调用 P4
+failure attribution，不执行任何 lifecycle/canonical/authority 更新。
+
+P5 回归新增 `memory/tests/test_memory_router.py`（8 passed），覆盖 fresh
+`NO_SKILL`、预算约束、receipt replay、state/OOD abstain、production firewall、
+candidate knowledge 隔离和 backend seam；与 backend/knowledge/state/retrieval/
+attribution 兼容回归合计 55 passed；当前完整 `memory/tests` 为 `783 passed in
+12:13`。`memory/docs/` 继续由 `.gitignore` 排除，设计文档仅作为本地输入，不进入
+release commit。

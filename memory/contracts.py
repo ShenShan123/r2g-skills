@@ -13,8 +13,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from collections.abc import Mapping
+import hashlib
+import json
 
 from tehm.canonical.capture import ExecutionRecord, ExecutionRecordError
+from tehm.ids import stable_dumps
 
 CANDIDATE_SOURCES = ("cold_start", "legacy_memory", "tehm_rule")
 
@@ -115,6 +119,189 @@ class MemoryCandidate:
                 f"got {self.source!r}")
 
 
+MEMORY_ROUTING_DECISIONS = (
+    "APPLY", "CONSIDER", "ABSTAIN", "INAPPLICABLE", "NO_SKILL",
+)
+
+
+def _routing_mapping(value: object, field_name: str) -> dict:
+    """Validate a routing receipt field without accepting opaque objects."""
+    if not isinstance(value, Mapping):
+        raise ValueError(f"memory routing {field_name} must be an object")
+    try:
+        decoded = json.loads(stable_dumps(dict(value)))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"memory routing {field_name} must be JSON-serializable") from exc
+    if not isinstance(decoded, dict):  # pragma: no cover - serializer guarantee
+        raise ValueError(f"memory routing {field_name} must be an object")
+    return decoded
+
+
+@dataclass(frozen=True)
+class MemoryRoutingDecision:
+    """Content-addressed NO_SKILL/memory-router shadow decision.
+
+    This is deliberately a backend-neutral receipt.  It describes what the
+    memory plane *would* contribute to candidate generation; it does not carry
+    an executable action and cannot grant lifecycle or runtime authority.
+    """
+
+    decision: str
+    resolved_state_id: str
+    selected_rule_ids: tuple[str, ...]
+    selected_path_ids: tuple[str, ...]
+    selected_asset_ids: tuple[str, ...]
+    applicability: dict
+    causal_support: dict
+    risk: dict
+    abstain_reasons: tuple[str, ...]
+    no_memory_budget: int
+    memory_budget: int
+
+    def __post_init__(self) -> None:
+        if self.decision not in MEMORY_ROUTING_DECISIONS:
+            raise ValueError(
+                f"memory routing decision must be one of "
+                f"{MEMORY_ROUTING_DECISIONS}, got {self.decision!r}")
+        for field_name in ("resolved_state_id",):
+            value = getattr(self, field_name)
+            if type(value) is not str or not value:
+                raise ValueError(f"memory routing {field_name} must be non-empty")
+        for field_name in (
+                "selected_rule_ids", "selected_path_ids", "selected_asset_ids",
+                "abstain_reasons"):
+            values = getattr(self, field_name)
+            if not isinstance(values, tuple):
+                raise ValueError(f"memory routing {field_name} must be a tuple")
+            if any(type(item) is not str or not item for item in values):
+                raise ValueError(
+                    f"memory routing {field_name} must contain non-empty strings")
+            if len(set(values)) != len(values):
+                raise ValueError(f"memory routing {field_name} must not contain duplicates")
+        _routing_mapping(self.applicability, "applicability")
+        _routing_mapping(self.causal_support, "causal_support")
+        _routing_mapping(self.risk, "risk")
+        for field_name in ("no_memory_budget", "memory_budget"):
+            value = getattr(self, field_name)
+            if type(value) is not int or value < 0:
+                raise ValueError(f"memory routing {field_name} must be a non-negative integer")
+        # Every decision retains an unbiased no-memory arm.  The second slot
+        # allowed by the APPLY policy may be a causal candidate; memory never
+        # consumes the complete candidate budget.
+        if self.no_memory_budget < 1:
+            raise ValueError("memory routing requires at least one no-memory candidate")
+        if self.memory_budget > 2:
+            raise ValueError("memory routing shadow budget allows at most two memory/causal candidates")
+        if self.decision in {"ABSTAIN", "INAPPLICABLE", "NO_SKILL"} and self.memory_budget:
+            raise ValueError(
+                f"{self.decision} cannot allocate a memory candidate budget")
+        if self.decision == "NO_SKILL" and self.selected_asset_ids:
+            raise ValueError("NO_SKILL cannot select assets")
+
+    def to_dict(self) -> dict:
+        return {
+            "decision": self.decision,
+            "resolved_state_id": self.resolved_state_id,
+            "selected_rule_ids": list(self.selected_rule_ids),
+            "selected_path_ids": list(self.selected_path_ids),
+            "selected_asset_ids": list(self.selected_asset_ids),
+            "applicability": _routing_mapping(self.applicability, "applicability"),
+            "causal_support": _routing_mapping(self.causal_support, "causal_support"),
+            "risk": _routing_mapping(self.risk, "risk"),
+            "abstain_reasons": list(self.abstain_reasons),
+            "no_memory_budget": self.no_memory_budget,
+            "memory_budget": self.memory_budget,
+        }
+
+    @property
+    def decision_digest(self) -> str:
+        return "sha256:" + hashlib.sha256(
+            stable_dumps(self.to_dict()).encode()).hexdigest()
+
+    @property
+    def routing_receipt_id(self) -> str:
+        """Stable receipt reference used when attributing candidate outcomes."""
+        return "routing_" + self.decision_digest.split(":", 1)[1][:24]
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "MemoryRoutingDecision":
+        if not isinstance(payload, Mapping):
+            raise ValueError("memory routing decision must be an object")
+        required = {
+            "decision", "resolved_state_id", "selected_rule_ids",
+            "selected_path_ids", "selected_asset_ids", "applicability",
+            "causal_support", "risk", "abstain_reasons", "no_memory_budget",
+            "memory_budget",
+        }
+        if any(key not in payload for key in required):
+            raise ValueError("memory routing decision is missing required fields")
+        for field_name in (
+                "selected_rule_ids", "selected_path_ids", "selected_asset_ids",
+                "abstain_reasons"):
+            value = payload[field_name]
+            if (not isinstance(value, (list, tuple)) or
+                    isinstance(value, (str, bytes))):
+                raise ValueError(
+                    f"memory routing {field_name} must be a sequence")
+        for field_name in ("applicability", "causal_support", "risk"):
+            if not isinstance(payload[field_name], Mapping):
+                raise ValueError(f"memory routing {field_name} must be an object")
+        try:
+            decision = cls(
+                decision=payload["decision"],
+                resolved_state_id=payload["resolved_state_id"],
+                selected_rule_ids=tuple(payload["selected_rule_ids"]),
+                selected_path_ids=tuple(payload["selected_path_ids"]),
+                selected_asset_ids=tuple(payload["selected_asset_ids"]),
+                applicability=dict(payload["applicability"]),
+                causal_support=dict(payload["causal_support"]),
+                risk=dict(payload["risk"]),
+                abstain_reasons=tuple(payload["abstain_reasons"]),
+                no_memory_budget=payload["no_memory_budget"],
+                memory_budget=payload["memory_budget"],
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("memory routing decision is malformed") from exc
+        supplied = payload.get("decision_digest")
+        if supplied is not None and supplied != decision.decision_digest:
+            raise ValueError("memory routing decision digest mismatch")
+        return decision
+
+
+@dataclass(frozen=True)
+class NoSkillReceipt:
+    """Small explicit receipt for a deliberate no-memory route."""
+
+    routing_receipt_id: str
+    resolved_state_id: str
+    reason: str
+    no_memory_budget: int
+    memory_budget: int = 0
+
+    def __post_init__(self) -> None:
+        if (type(self.routing_receipt_id) is not str or
+                not self.routing_receipt_id):
+            raise ValueError("no-skill routing_receipt_id is required")
+        if type(self.resolved_state_id) is not str or not self.resolved_state_id:
+            raise ValueError("no-skill resolved_state_id is required")
+        if type(self.reason) is not str or not self.reason:
+            raise ValueError("no-skill reason is required")
+        if type(self.no_memory_budget) is not int or self.no_memory_budget < 1:
+            raise ValueError("no-skill no_memory_budget must be positive")
+        if self.memory_budget != 0:
+            raise ValueError("no-skill memory_budget must be zero")
+
+    def to_dict(self) -> dict:
+        return {
+            "routing_receipt_id": self.routing_receipt_id,
+            "resolved_state_id": self.resolved_state_id,
+            "reason": self.reason,
+            "no_memory_budget": self.no_memory_budget,
+            "memory_budget": self.memory_budget,
+        }
+
+
 @dataclass
 class ActivationProposal:
     """Applicable / Executable / Verifiable are stored SEPARATELY (design doc 11)."""
@@ -182,7 +369,8 @@ class MemorySnapshot:
 __all__ = [
     "CANDIDATE_SOURCES", "BACKEND_NAMES", "DEFAULT_BACKEND",
     "RepairContext", "MemoryQuery", "CausalCandidateEvidence", "CapabilityGap",
-    "MemoryCandidate", "ActivationProposal",
+    "MemoryCandidate", "MEMORY_ROUTING_DECISIONS", "MemoryRoutingDecision",
+    "NoSkillReceipt", "ActivationProposal",
     "ActivationResult", "IngestReceipt", "BuildReport", "MemorySnapshot",
     "ExecutionRecord", "ExecutionRecordError",
 ]
