@@ -26,6 +26,9 @@ from run_calibration_expansion import (  # noqa: E402
     _contract_checks,
     _contract_equivalence_one,
     _contract_sample_gate,
+    _contract_training_partition,
+    _contract_heldout_partition,
+    _dataset_split_for_screen_split,
     _strict_eligible_samples,
     make_samples,
     main,
@@ -281,6 +284,34 @@ def test_contract_sample_gate_does_not_treat_generic_safe_as_contract_safe():
     assert gate["pass_count"] == 1
     assert gate["fail_count"] == 1
     assert gate["abstain_count"] == 1
+
+
+def test_contract_sample_roles_are_explicit_and_fail_closed():
+    assert _dataset_split_for_screen_split("contract_support_v2") == "training"
+    assert _dataset_split_for_screen_split("contract_heldout_v2") == "heldout"
+    assert _dataset_split_for_screen_split("unknown") is None
+
+    samples = [
+        {"case_id": "train-pass", "lineage_id": "l-train",
+         "dataset_split": "training",
+         "contract_evaluation": {"status": "PASS"}},
+        {"case_id": "heldout-pass", "lineage_id": "l-heldout",
+         "dataset_split": "heldout",
+         "contract_evaluation": {"status": "PASS"}},
+        {"case_id": "missing-role", "lineage_id": "l-missing",
+         "contract_evaluation": {"status": "PASS"}},
+    ]
+    training, training_excluded = _contract_training_partition(samples)
+    assert [row["case_id"] for row in training] == ["train-pass"]
+    assert {row["case_id"] for row in training_excluded} == {
+        "heldout-pass", "missing-role"}
+    gate = _contract_sample_gate(samples, expected_split="training")
+    assert gate["status"] == "ABSTAIN"
+    assert gate["abstain_count"] == 2
+    heldout, heldout_excluded = _contract_heldout_partition(samples)
+    assert [row["case_id"] for row in heldout] == ["heldout-pass"]
+    assert {row["case_id"] for row in heldout_excluded} == {
+        "train-pass", "missing-role"}
 
 
 def test_grouped_shadow_readiness_is_shadow_only_and_evidence_derived():

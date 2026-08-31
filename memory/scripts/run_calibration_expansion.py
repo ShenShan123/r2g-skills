@@ -756,6 +756,16 @@ def make_samples(root: Path, manifest: dict) -> dict:
             continue
         contract_evaluation = None
         contract_checks = None
+        screen_split = item.get("screen_split")
+        dataset_split = _dataset_split_for_screen_split(screen_split)
+        if utility_contract is not None and dataset_split not in {"training", "heldout"}:
+            evidence.append({"case_id": case_id, "status": "excluded_sample_split",
+                             "reason": "contract sample role is missing or unsupported",
+                             "screen_split": screen_split,
+                             "dataset_split": dataset_split,
+                             "strict_oracle": oracle,
+                             "toolchain_preflight": toolchain_gate})
+            continue
         if utility_contract is not None:
             contract_checks = _contract_checks(item)
             contract_evaluation = evaluate_observed_contract(
@@ -772,6 +782,10 @@ def make_samples(root: Path, manifest: dict) -> dict:
             "after_ppa": record.after["reports"]["ppa"],
             "observed_deltas": observed,
             "toolchain_preflight": toolchain_gate,
+            "screen_split": screen_split,
+            "dataset_split": dataset_split,
+            "sample_split_version": (_CONTRACT_SAMPLE_SPLIT_VERSION
+                                      if utility_contract is not None else None),
             "utility_contract_id": utility_contract_id,
             "contract_checks": contract_checks,
             "contract_evaluation": contract_evaluation,
@@ -782,6 +796,10 @@ def make_samples(root: Path, manifest: dict) -> dict:
                          "observed_deltas": observed, "feature_rc": feature_rc,
                          "strict_oracle": oracle,
                          "toolchain_preflight": toolchain_gate,
+                         "screen_split": screen_split,
+                         "dataset_split": dataset_split,
+                         "sample_split_version": (_CONTRACT_SAMPLE_SPLIT_VERSION
+                                                   if utility_contract is not None else None),
                          "contract_checks": contract_checks,
                          "contract_evaluation": contract_evaluation})
     result = {
@@ -990,17 +1008,46 @@ def _contract_checks(item: dict) -> dict:
     return checks
 
 
-def _contract_sample_gate(samples: list[dict]) -> dict:
-    """Summarize typed contract observations without hiding FAIL/ABSTAIN rows."""
+_CONTRACT_SAMPLE_SPLIT_VERSION = "contract-sample-split-v1"
+
+
+def _dataset_split_for_screen_split(screen_split) -> str | None:
+    """Normalize a preregistered screen role to a learner data split.
+
+    Contract samples must carry an explicit role in the campaign manifest.
+    Persisting the normalized split prevents later evaluation from inferring
+    support/held-out membership from a filename or CLI argument.
+    """
+    role = str(screen_split or "").strip().lower()
+    if role in {"support", "contract_support", "contract_support_v2"}:
+        return "training"
+    if role in {"heldout", "contract_heldout", "contract_heldout_v2",
+                "future_observation"}:
+        return "heldout"
+    if role == "calibration":
+        return "calibration"
+    if role == "ab":
+        return "ab"
+    return None
+
+
+def _contract_sample_gate(samples: list[dict], *, expected_split: str | None = None) -> dict:
+    """Summarize typed observations without hiding FAIL/ABSTAIN or role errors."""
     rows = []
     for sample in samples:
         evaluation = sample.get("contract_evaluation")
         status = evaluation.get("status") if isinstance(evaluation, dict) else "ABSTAINED"
         reasons = ((evaluation.get("failures") or evaluation.get("abstain_reasons") or [])
                    if isinstance(evaluation, dict) else ["contract_evaluation_missing"])
+        reasons = list(reasons)
+        if expected_split is not None and sample.get("dataset_split") != expected_split:
+            status = "ABSTAINED"
+            reasons.append(
+                f"sample_split_mismatch:expected={expected_split}:"
+                f"got={sample.get('dataset_split') or 'missing'}")
         rows.append({"case_id": sample.get("case_id"),
                      "lineage_id": sample.get("lineage_id"),
-                     "status": status, "reasons": list(reasons)})
+                     "status": status, "reasons": reasons})
     statuses = [row["status"] for row in rows]
     if any(status == "FAIL" for status in statuses):
         status = "FAIL"
@@ -1021,22 +1068,45 @@ def _contract_sample_gate(samples: list[dict]) -> dict:
 
 
 def _contract_training_partition(samples: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Keep only PASS observations in the contract-bound calibration support."""
+    """Keep only PASS observations explicitly marked as training support."""
     accepted, excluded = [], []
     for sample in samples:
         evaluation = sample.get("contract_evaluation")
         status = evaluation.get("status") if isinstance(evaluation, dict) else None
-        if status == "PASS":
+        if status == "PASS" and sample.get("dataset_split") == "training":
             accepted.append(sample)
             continue
         reasons = []
         if isinstance(evaluation, dict):
             reasons = evaluation.get("failures") or evaluation.get("abstain_reasons") or []
+        if sample.get("dataset_split") != "training":
+            reasons = [*reasons, "sample_split_mismatch:expected=training:"
+                       f"got={sample.get('dataset_split') or 'missing'}"]
         excluded.append({"case_id": sample.get("case_id"),
                          "lineage_id": sample.get("lineage_id"),
                          "reason": "contract_not_pass",
                          "status": status or "missing",
                          "details": list(reasons)})
+    return accepted, excluded
+
+
+def _contract_heldout_partition(samples: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Keep only PASS/FAIL observations explicitly marked as held-out."""
+    accepted, excluded = [], []
+    for sample in samples:
+        if sample.get("dataset_split") == "heldout":
+            accepted.append(sample)
+            continue
+        excluded.append({
+            "case_id": sample.get("case_id"),
+            "lineage_id": sample.get("lineage_id"),
+            "reason": "contract_fresh_split_mismatch",
+            "status": ((sample.get("contract_evaluation") or {}).get("status")
+                       if isinstance(sample.get("contract_evaluation"), dict)
+                       else "missing"),
+            "details": ["sample_split_mismatch:expected=heldout:"
+                        f"got={sample.get('dataset_split') or 'missing'}"],
+        })
     return accepted, excluded
 
 
@@ -1568,6 +1638,13 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
         fresh = [sample for sample in fresh
                  if any(str(sample.get("lineage_id", "")).startswith(
                      f"future-prospective-{suffix}:") for suffix in fresh_suffixes)]
+    contract_fresh_input = list(fresh)
+    contract_fresh_excluded = []
+    if utility_contract is not None:
+        fresh, contract_fresh_excluded = _contract_heldout_partition(fresh)
+        excluded_prior.extend({
+            "path": "contract-bound-fresh", "split": "fresh", **row
+        } for row in contract_fresh_excluded)
     canonical_training = (_read(training_manifest).get("training_lineages") or
                           ((_read(training_manifest).get("firewall") or {}).get(
                               "training_lineages") or []))
@@ -1604,9 +1681,12 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
         "staging_physical_count": count_after,
         "excluded_samples": excluded_prior,
         "utility_contract_observation_gate": ({
-            "support": _contract_sample_gate(contract_training_input),
-            "fresh": _contract_sample_gate(fresh),
+            "support": _contract_sample_gate(
+                contract_training_input, expected_split="training"),
+            "fresh": _contract_sample_gate(
+                contract_fresh_input, expected_split="heldout"),
             "training_excluded": contract_training_excluded,
+            "fresh_excluded": contract_fresh_excluded,
         } if utility_contract is not None else None),
         "canonical_mutation": "none; only a staging copy was opened writable",
         "promotion_eligible": False,

@@ -2559,3 +2559,18 @@ v132=`FAIL(wns_delta_below_objective)`、v133=`PASS`。
 没有 canonical/authority/runtime mutation。该结果说明当前 action32 contract 在这些
 独立 RTL 结构上仍不稳定，下一步应转向更有语义约束的 transformation family/contract，
 而不是继续无界 knob sweep。
+
+### 2026-08-30 contract sample split provenance firewall
+
+第二 cohort replay 暴露出一个评估边界：manifest 已有 `screen_split`，但旧版
+`prospective_samples.json` 没有持久化 support/held-out 角色，evaluate 只能依赖调用者
+选择文件和 suffix。现已在 `run_calibration_expansion.py` 增加
+`contract-sample-split-v1`：样本同时记录原始 `screen_split` 与规范化的
+`dataset_split`，contract training 只接受 `training`，fresh 只接受 `heldout`；角色
+缺失、未知或错配会写入显式 `ABSTAINED`/排除 receipt，不会被默认为 learner support。
+
+新增角色映射、training/fresh 分区和缺失角色回归后，全套 `memory/tests` 为 `740 passed`。
+该修复改变了 sample provenance schema，因此既有 v122–v133 物理输出必须在新的
+source freeze 下重新执行 `samples/evaluate` 才能作为当前评估输入；原始 ORFS/strict/
+equivalence 结果仍保留为旧 freeze 的不可变审计证据。该 seam 不写 canonical、authority
+或 production runtime。
