@@ -2457,3 +2457,15 @@ replication 或 held-out transfer 仍可能绕过 online manager。现已统一�
 这些改动没有提升任何 gate 分数，也没有写入 production runtime；它们只把已有
 `training ∧ learner_eligible=1` 分区约束与 verified-execution 约束统一到所有可直接调用
 的 learner-derived 入口。新增回归只验证 fail-closed 边界，不构成真实 ORFS/RTL 经验结果。
+
+### 2026-08-30 authority/trial/L2 execution witness closure
+
+继续沿 learner-derived seam 追踪 authority 入口，补上三处此前仍可由直接调用绕开的
+execution witness 检查：external authority 投影在绑定 staging transition 后重放完整
+executable oracle；trial authority 从 activation 的 produced transition 投影 utility
+前先重放该 transition；causal controlled-pair 只有在 control/treatment 两侧都满足
+Verified Execution 时才建立 L2 edge。partial、compile-only、unknown 或不完整 full
+oracle 现在最多留下失败的审计 receipt，不会进入 harmful/conformal、A/B utility、L2
+controlled support 或 cross-lineage rule binding。定向 authority/causal 回归 62 passed，
+扩展 activation/online/transfer/authority/L2 回归 127 passed；本轮没有 canonical
+promotion 或 production runtime mutation。

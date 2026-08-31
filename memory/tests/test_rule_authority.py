@@ -261,6 +261,53 @@ def test_trial_authority_projection_replays_activation_witnesses(
             conn, trial_id=trial_id, rule_id=rule_id, target_scope="drc")
 
 
+def test_trial_authority_projection_rejects_incomplete_produced_transition(
+        tmp_tehm, sample_record_dict):
+    """A forged activation transition cannot establish learner utility."""
+    conn, rule_id, version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    transition_id = conn.execute(
+        "SELECT transition_id FROM tehm_transitions ORDER BY transition_id LIMIT 1"
+    ).fetchone()["transition_id"]
+    rollback = {
+        "version": "test-rollback-v1",
+        "source_before_digest": "sha256:before",
+        "source_after_restore_digest": "sha256:before",
+        "verified": True,
+    }
+    persist_activation(
+        conn,
+        ActivationRecord(
+            activation_id="act-incomplete-produced-transition",
+            rule_id=rule_id, target_state_id="target-incomplete-produced-transition",
+            obligation_coverage=1.0, rollback_receipt=rollback,
+            outcome="PASS", verification_status="PASS",
+            produced_transition_id=transition_id, trial_uuid="authority-trial"),
+    )
+    conn.execute(
+        "UPDATE tehm_trials SET metrics_json=? WHERE trial_id=?",
+        (json.dumps({
+            "arms_differ": True, "obligation_coverage": 1.0,
+            "created_regressions": [], "pairs": [{
+                "activation_id": "act-incomplete-produced-transition",
+                "subject_lineage": "authority-lineage",
+                "obligation_coverage": 1.0,
+                "created_regressions": [], "rollback_receipt": rollback,
+            }],
+        }, sort_keys=True), trial_id))
+    verifier = json.loads(conn.execute(
+        "SELECT verifier_json FROM tehm_transitions WHERE transition_id=?",
+        (transition_id,)).fetchone()["verifier_json"])
+    verifier["oracle_complete"] = False
+    conn.execute(
+        "UPDATE tehm_transitions SET verifier_json=? WHERE transition_id=?",
+        (json.dumps(verifier, sort_keys=True), transition_id))
+    conn.commit()
+    with pytest.raises(ValueError, match="utility_transition_unverified"):
+        build_trial_authority_evidence(
+            conn, trial_id=trial_id, rule_id=rule_id, target_scope="drc")
+
+
 def test_trial_authority_projection_rejects_weak_witness_types(
         tmp_tehm, sample_record_dict):
     """Trial projection must not stringify IDs or numeric measurements."""

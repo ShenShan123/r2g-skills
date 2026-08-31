@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from tehm import db
-from tehm.canonical.capture import capture
+from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.causal import (
     build_intervention_pair, build_transition_causal_fragment,
     consolidate_causal_path,
@@ -440,6 +440,41 @@ def test_real_controlled_pair_creates_l2_shadow_edge(tmp_tehm):
     assert conn.execute(
         "SELECT COUNT(*) FROM tehm_causal_edges WHERE evidence_level='L2_CONTROLLED_INTERVENTION'"
     ).fetchone()[0] == 1
+
+
+def test_incomplete_execution_cannot_create_l2_shadow_edge(
+        tmp_tehm, sample_record_dict):
+    """A learner pair needs a complete executable oracle on both sides."""
+    conn, store, _ = tmp_tehm
+    control = json.loads(json.dumps(sample_record_dict))
+    control["record_id"] = "pair-complete-control"
+    control["lineage_id"] = "pair-complete-lineage"
+    control["episode"]["episode_id"] = "pair-complete-control-episode"
+    control["episode"]["lineage_id"] = control["lineage_id"]
+    treatment = json.loads(json.dumps(control))
+    treatment["record_id"] = "pair-incomplete-treatment"
+    treatment["episode"]["episode_id"] = "pair-incomplete-treatment-episode"
+    treatment["action"]["payload"]["config_edits"] = {
+        "PLACE_DENSITY_LB_ADDON": "0.15"
+    }
+    treatment["before"]["config"]["PLACE_DENSITY_LB_ADDON"] = "0.10"
+    treatment["after"]["config"]["PLACE_DENSITY_LB_ADDON"] = "0.15"
+    treatment["verification"]["oracle_complete"] = False
+    control_id = capture(
+        conn, store, ExecutionRecord.from_dict(control)).transition_id
+    treatment_id = capture(
+        conn, store, ExecutionRecord.from_dict(treatment)).transition_id
+
+    pair = build_intervention_pair(control_id, treatment_id, conn=conn)
+    assert pair.validity_status.startswith("INVALID_")
+    assert pair.evidence_level == "L0_ASSOCIATION"
+    assert pair.causal_edge_id is None
+    assert pair.oracle_equivalence["complete_control_execution"] is True
+    assert pair.oracle_equivalence["complete_treatment_execution"] is False
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_causal_edges "
+        "WHERE evidence_level='L2_CONTROLLED_INTERVENTION'"
+    ).fetchone()[0] == 0
 
 
 def test_controlled_pair_rejects_cross_campaign_split(tmp_tehm):

@@ -53,6 +53,17 @@ def build_intervention_pair(
         raise ValueError("campaign_id must be non-empty when provided")
     control = load_transition_facts(conn, control_transition_id)
     treatment = load_transition_facts(conn, treatment_transition_id)
+    # L2 is learner evidence.  Keep invalid pairs as audit receipts, but do
+    # not let a partial/compile-only transition create a controlled edge just
+    # because it has a non-UNKNOWN verdict and matching structural context.
+    from tehm.verified_execution import require_verified_execution
+    complete_execution = {}
+    for label, facts in (("control", control), ("treatment", treatment)):
+        try:
+            require_verified_execution(facts)
+            complete_execution[label] = True
+        except ValueError:
+            complete_execution[label] = False
     if control_transition_id == treatment_transition_id:
         raise ValueError("control and treatment transitions must differ")
     canonical_lineage = control.lineage_id
@@ -97,6 +108,8 @@ def build_intervention_pair(
         "same_oracle_type": control.verifier.get("oracle_type") == treatment.verifier.get("oracle_type"),
         "same_scope": control.verifier.get("scope") == treatment.verifier.get("scope"),
         "same_toolchain": same_toolchain,
+        "complete_control_execution": complete_execution["control"],
+        "complete_treatment_execution": complete_execution["treatment"],
         "same_learner_campaign": same_learner_campaign,
         "campaign_id": selected_campaign,
     }
@@ -107,7 +120,9 @@ def build_intervention_pair(
     valid = bool(matched_context and same_toolchain and changed_action and same_lineage
                  and same_learner_campaign
                  and oracle_equivalence["same_oracle_type"]
-                 and oracle_equivalence["same_scope"] and actual_oracle)
+                 and oracle_equivalence["same_scope"] and actual_oracle
+                 and complete_execution["control"]
+                 and complete_execution["treatment"])
     validity = "VALID_CONTROLLED_PAIR" if valid else "INVALID_UNMATCHED_CONTEXT"
     evidence_level = (CausalEvidenceLevel.L2_CONTROLLED_INTERVENTION.value
                       if valid else CausalEvidenceLevel.L0_ASSOCIATION.value)

@@ -5364,3 +5364,24 @@ learner-derived helper 也必须执行 Verified Execution replay。当前实现�
 
 该层是 authority firewall 的一致性补强，不改变 Parametric shadow-only、六项 promotion
 gate 阈值或 production runtime；新增测试只验证 fail-closed 行为，不宣称新的实测收益。
+
+### 4.11 authority/trial/L2 execution witness closure
+
+对 direct learner-derived seam 的继续审计发现，authority 的三类投影仍必须显式重放
+canonical execution witness，而不能仅依赖外部 row、activation ID 或 pair 的非空
+verdict：
+
+1. `build_external_observation_authority_evidence()` 在 staging transition 绑定后调用
+   统一的 `require_verified_transition()`；外部 `before/after` 完整字段不能替代持久化
+   transition 的 executable oracle。
+2. `build_trial_authority_evidence()` 从 activation 的 `produced_transition_id` 读取
+   utility 前重放相同谓词；缺失/不完整 transition 不能建立 harmful-rate/A-B utility
+   witness。
+3. `build_intervention_pair()` 继续保留无效 pair 作为 shadow audit receipt，但只有
+   control 与 treatment 两侧都满足 Verified Execution 才 materialize L2 controlled
+   edge；rule-bound transfer/source witness 也拒绝不完整 transition。
+
+这些检查只收紧 external→authority、trial→gate 与 causal L2 的证据防火墙，不改变
+canonical memory、Parametric shadow-only、六项 promotion gate 阈值或 production runtime。
+定向 authority/causal 回归 62 passed，扩展 activation/online/transfer/authority/L2
+回归 127 passed；它们验证的是 fail-closed 机制，不构成真实 ORFS/RTL 经验结果。

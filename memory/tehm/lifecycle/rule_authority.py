@@ -592,6 +592,17 @@ def _external_transition_binding(
         raise ValueError(
             "external_authority:record_transition_count=" + str(len(candidates)))
     transition = candidates[0]
+    # The external observation is only an audit receipt; authority must still
+    # bind it to the canonical transition's executable oracle.  Checking the
+    # copied ``before``/``after`` fields alone would let a source omit the
+    # persisted ``oracle_complete`` witness and attach utility/conformal
+    # numbers to a partial or compile-only transition.
+    from tehm.verified_execution import require_verified_transition
+    try:
+        require_verified_transition(staging, str(transition["transition_id"]))
+    except ValueError as exc:
+        raise ValueError(
+            "external_authority:transition_execution_incomplete") from exc
     try:
         persisted_action = json.loads(transition["action_json"] or "null")
         persisted_delta = json.loads(transition["observation_delta_json"] or "null")
@@ -1255,6 +1266,16 @@ def build_trial_authority_evidence(
                 "WHERE transition_id=?", (produced_transition_id,)).fetchone()
             if transition is None:
                 raise ValueError("trial_authority:utility_transition_missing")
+            # A trial utility row is learner-derived evidence.  The presence
+            # of a transition ID is not enough: replay the same complete
+            # executable oracle required by online admission before projecting
+            # the outcome into the harmful-rate gate.
+            from tehm.verified_execution import require_verified_transition
+            try:
+                require_verified_transition(conn, produced_transition_id)
+            except ValueError as exc:
+                raise ValueError(
+                    "trial_authority:utility_transition_unverified") from exc
             delta = _strict_json_value(
                 transition["observation_delta_json"], label="utility_delta")
             if not isinstance(delta, Mapping):
@@ -1388,6 +1409,13 @@ def _bind_transfer_to_rule(
         if transition is None:
             errors.append("cross_lineage_te:rule_binding_transfer_transition_missing")
             continue
+        from tehm.verified_execution import require_verified_transition
+        try:
+            require_verified_transition(conn, transition_id)
+        except ValueError:
+            errors.append(
+                "cross_lineage_te:rule_binding_transfer_transition_unverified")
+            continue
         action_domain = str(transition["action_domain"] or "")
         if action_domain:
             transfer_domains.add(action_domain)
@@ -1408,6 +1436,13 @@ def _bind_transfer_to_rule(
     elif not set(source_ids).issubset(set(training_ids)):
         errors.append("cross_lineage_te:rule_binding_training_sources_mismatch")
     for transition_id in source_ids:
+        from tehm.verified_execution import require_verified_transition
+        try:
+            require_verified_transition(conn, transition_id)
+        except ValueError:
+            errors.append(
+                "cross_lineage_te:rule_binding_source_transition_unverified")
+            continue
         memberships = conn.execute(
             "SELECT split, learner_eligible FROM tehm_dataset_membership "
             "WHERE transition_id=? AND campaign_id=?",
