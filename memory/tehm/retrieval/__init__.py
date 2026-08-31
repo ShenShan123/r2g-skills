@@ -32,12 +32,21 @@ _MEMORY_ROUTER_EXPORTS = frozenset({
     "MIN_CAUSAL_EVIDENCE", "ROUTER_VERSION", "MemoryRouterError",
     "retrieve_assets", "route_memory", "scope_for_query",
 })
+_CANDIDATE_POOL_EXPORTS = frozenset({
+    "CANDIDATE_POOL_ARMS", "CANDIDATE_POOL_VERSION",
+    "MAX_MEMORY_ADVISOR_CANDIDATES", "POOL_OUTCOMES", "CandidatePoolError",
+    "CandidatePoolReceipt", "CandidatePool", "build_candidate_pool",
+    "CandidatePoolOutcome", "CandidatePoolMetrics", "summarize_candidate_pool",
+})
 
 
 def __getattr__(name):
     if name in _MEMORY_ROUTER_EXPORTS:
         from tehm.retrieval import memory_router
         return getattr(memory_router, name)
+    if name in _CANDIDATE_POOL_EXPORTS:
+        from tehm.retrieval import candidate_pool
+        return getattr(candidate_pool, name)
     raise AttributeError(name)
 
 __all__ = [
@@ -47,4 +56,8 @@ __all__ = [
     "CausalPathMatch", "CausalPathQuality", "score_causal_path",
     "retrieve_causal_paths", "MIN_CAUSAL_EVIDENCE", "ROUTER_VERSION",
     "MemoryRouterError", "retrieve_assets", "route_memory", "scope_for_query",
+    "CANDIDATE_POOL_ARMS", "CANDIDATE_POOL_VERSION",
+    "MAX_MEMORY_ADVISOR_CANDIDATES", "POOL_OUTCOMES", "CandidatePoolError",
+    "CandidatePoolReceipt", "CandidatePool", "build_candidate_pool",
+    "CandidatePoolOutcome", "CandidatePoolMetrics", "summarize_candidate_pool",
 ]

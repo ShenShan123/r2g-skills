@@ -247,6 +247,30 @@ class TehmMemoryBackend:
         conn, _ = self._open()
         return retrieve_assets(conn, decision)
 
+    def build_candidate_pool(
+            self, query: MemoryQuery | RepairContext,
+            no_memory_candidates, memory_candidates, *,
+            arm: str = "CAUSAL_NO_SKILL", routing: MemoryRoutingDecision | None = None,
+            candidate_budget: int = 3, case_id: str | None = None,
+    ):
+        """Compose a P6 evaluation pool without entering runtime selection.
+
+        This is intentionally a separate backend helper rather than a change
+        to :meth:`retrieve` or :meth:`propose_activation`.  It accepts an
+        already computed routing receipt for the causal arm, making the
+        resolver/authority evidence explicit and keeping A/B artifacts
+        attributable to that receipt.
+        """
+        if isinstance(query, RepairContext):
+            query = self.build_query(query)
+        if not isinstance(query, MemoryQuery):
+            raise TypeError("build_candidate_pool requires MemoryQuery or RepairContext")
+        from tehm.retrieval.candidate_pool import build_candidate_pool
+
+        return build_candidate_pool(
+            query, no_memory_candidates, memory_candidates, arm=arm,
+            routing=routing, candidate_budget=candidate_budget, case_id=case_id)
+
     def record_memory_outcome(
             self, routing_receipt_id: str, execution_receipt: dict,
     ):

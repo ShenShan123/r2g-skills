@@ -2757,3 +2757,24 @@ candidate knowledge 隔离和 backend seam；与 backend/knowledge/state/retriev
 attribution 兼容回归合计 55 passed；当前完整 `memory/tests` 为 `783 passed in
 12:13`。`memory/docs/` 继续由 `.gitignore` 排除，设计文档仅作为本地输入，不进入
 release commit。
+
+### 2026-08-31 P6 candidate-pool A/B（evaluation-only）
+
+新增 `tehm/retrieval/candidate_pool.py`，把候选池组成与 runtime execution 完全
+分离，提供四个可回放 arm：`NO_MEMORY`、`ALWAYS_MEMORY`、
+`APPLICABILITY_GATED`、`CAUSAL_NO_SKILL`。每个 arm 都先保留至少一个 no-memory
+candidate；Memory Advisor 最多贡献 1 个 candidate，`candidate_budget=1` 时不会
+挤占 no-memory。`CAUSAL_NO_SKILL` 只有在 P5 routing receipt 为 `APPLY`/`CONSIDER`、
+因果状态为 `SUPPORTED`、存在 selected path 且 candidate ref 被 router 选中时才放行。
+
+每个 pool 生成 content-addressed receipt，记录 routing ref、来源、候选预算、action
+family / mechanism hypothesis diversity、normalized search entropy 与 memory admission。
+显式 oracle outcome 可进一步计算 `MemoryInterferenceRate`、`AbstentionUtility`、
+memory harm、candidate budget efficiency 和 diversity；`UNKNOWN` 不会被当作 PASS，
+未成对 outcome 不进入 interference 分母。该模块不执行 candidate、写 canonical、
+修改 lifecycle，也不把 asset 提前扩展成 `MemoryCandidate.source`。
+
+P6 定向回归为 `memory/tests/test_candidate_pool.py`（7 passed），覆盖四类 arm、
+budget/no-memory firewall、causal/NO_SKILL gate、receipt replay、unknown outcome
+隔离和 interference metrics；P5 router 与 backend 兼容测试保持通过。当前完整
+`memory/tests` 为 `790 passed in 12:28`。
