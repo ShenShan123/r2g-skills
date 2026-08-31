@@ -2852,3 +2852,7 @@ efficacy、support-routing 和 action32 calibration 报告的实际审计结果�
 `candidate_pool`、`no_skill_calibration` 均为 `NOT_ESTABLISHED`；命令以非零码退出，
 不会把这些片段误报为 production-ready。该审计输出保存在个人临时目录，不作为仓库
 证据提交；后续真实 campaign 可复用同一 manifest/builder 闭环。
+
+receipt replay 还会独立校验 gate status、`eligible` 合取、证据引用格式和
+`production_integration=not_attempted`；即使调用方移除 digest，也不能通过结构化字段
+篡改来伪造 production authority。

@@ -234,9 +234,44 @@ class ProductionGateReceipt:
             raise ProductionGateError("production gate receipt flags are invalid")
         if receipt.production_integration != "not_attempted":
             raise ProductionGateError("production integration must remain not_attempted")
+        _validate_receipt_semantics(receipt)
         if payload.get("receipt_digest") is not None and payload["receipt_digest"] != receipt.receipt_digest:
             raise ProductionGateError("production gate receipt digest mismatch")
         return receipt
+
+
+def _validate_receipt_semantics(receipt: ProductionGateReceipt) -> None:
+    """Check the conjunction/status projection independently of the digest."""
+    names = tuple(PRODUCTION_GATE_GATES)
+    if set(receipt.checks) != set(names) or any(
+            type(receipt.checks[name]) is not bool for name in names):
+        raise ProductionGateError("production gate checks are malformed")
+    if set(receipt.gate_status) != set(names) or any(
+            receipt.gate_status[name] not in PRODUCTION_GATE_STATUS for name in names):
+        raise ProductionGateError("production gate statuses are malformed")
+    expected_missing = tuple(sorted(
+        name for name in names if receipt.gate_status[name] == "NOT_ESTABLISHED"))
+    expected_failed = tuple(sorted(
+        name for name in names if receipt.gate_status[name] == "FAIL"))
+    expected_not_established = tuple(
+        name for name in names if receipt.gate_status[name] == "NOT_ESTABLISHED")
+    if (tuple(receipt.missing) != expected_missing or
+            tuple(receipt.failed) != expected_failed or
+            tuple(receipt.not_established) != expected_not_established):
+        raise ProductionGateError("production gate status projection mismatch")
+    if receipt.eligible is not all(receipt.checks.values()):
+        raise ProductionGateError("production gate eligible projection mismatch")
+    if any(receipt.gate_status[name] == "PASS" and not receipt.checks[name]
+           for name in names):
+        raise ProductionGateError("production gate PASS check mismatch")
+    try:
+        _normalise_refs(receipt.evidence_refs)
+    except ProductionGateError as exc:
+        raise ProductionGateError("production gate evidence_refs are malformed") from exc
+    if not isinstance(receipt.metrics, Mapping) or not isinstance(receipt.thresholds, Mapping):
+        raise ProductionGateError("production gate metrics/thresholds are malformed")
+    if any(type(reason) is not str or not reason.strip() for reason in receipt.reasons):
+        raise ProductionGateError("production gate reasons are malformed")
 
 
 def evaluate_production_gate(

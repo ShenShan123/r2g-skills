@@ -110,6 +110,12 @@ def test_receipt_digest_tamper_is_rejected():
     with pytest.raises(ProductionGateError, match="digest mismatch"):
         ProductionGateReceipt.from_dict(payload)
 
+    digestless = {key: value for key, value in payload.items()
+                  if key != "receipt_digest"}
+    digestless["eligible"] = False
+    with pytest.raises(ProductionGateError, match="eligible projection"):
+        ProductionGateReceipt.from_dict(digestless)
+
 
 def test_backend_gate_is_pure_and_router_stays_shadow_only(tmp_path):
     db_path = tmp_path / "tehm.sqlite"
