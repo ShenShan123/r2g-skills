@@ -13,10 +13,21 @@ from .revision import record_rule_revision
 
 
 def _normalize_ids(transition_ids: list[str] | tuple[str, ...]) -> tuple[str, ...]:
-    tids = tuple(sorted(set(str(tid) for tid in transition_ids)))
-    if not tids:
-        raise ValueError("transition_ids are required")
-    return tids
+    """Validate the caller-owned transition witness without coercion.
+
+    Incremental crystallization is a learner-derived write path.  Silently
+    converting integers to strings or deduplicating repeated IDs would let a
+    malformed/ambiguous witness select a different evidence set than the
+    caller declared.  Keep the accepted shape deliberately narrow and fail
+    closed before any SQL or derived-state work.
+    """
+    if type(transition_ids) not in (list, tuple) or not transition_ids:
+        raise ValueError("transition_ids must be a non-empty list or tuple")
+    if any(type(tid) is not str or not tid for tid in transition_ids):
+        raise ValueError("transition_ids must contain non-empty strings")
+    if len(set(transition_ids)) != len(transition_ids):
+        raise ValueError("transition_ids must not contain duplicates")
+    return tuple(sorted(transition_ids))
 
 
 def _affected_inputs(conn: sqlite3.Connection, tids: tuple[str, ...],

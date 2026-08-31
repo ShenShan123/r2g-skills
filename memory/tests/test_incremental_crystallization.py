@@ -9,11 +9,29 @@ import pytest
 
 from tehm.canonical.capture import ExecutionRecord, capture
 from tehm.evolution import crystallize_affected_groups, preview_affected_groups
+from tehm.evolution.incremental_crystallize import _normalize_ids
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 from tehm.rtl.rtl_oracle import IcarusOracle
 
 
 PROJECTS = Path(__file__).resolve().parent / "fixtures" / "rtl_projects"
+
+
+@pytest.mark.parametrize("value, message", [
+    ([], "non-empty list or tuple"),
+    ("transition_1", "non-empty list or tuple"),
+    ([1], "non-empty strings"),
+    ([""], "non-empty strings"),
+    (["transition_1", "transition_1"], "must not contain duplicates"),
+])
+def test_incremental_transition_witness_is_strictly_typed(value, message):
+    with pytest.raises(ValueError, match=message):
+        _normalize_ids(value)
+
+
+def test_incremental_transition_witness_normalizes_only_order():
+    assert _normalize_ids(["transition_b", "transition_a"]) == (
+        "transition_a", "transition_b")
 
 
 def test_incremental_crystallization_emits_revision_and_equivalence(tmp_tehm):

@@ -2632,3 +2632,13 @@ power delta=`-1e-06 W`、area delta=`0`，但 WNS 非回退门槛未满足。样
 promotion support；下一步需换取新的 source-disjoint RTL/平台 cohort，只有出现足量且
 稳定的 contract `PASS` support 与 held-out PASS，才可进入 shadow calibration 和六项 gate
 复核。
+
+### 2026-08-31 incremental crystallization witness typing
+
+按 B2 的 learner-derived 写入边界，`preview_affected_groups()` 与
+`crystallize_affected_groups()` 现在要求 `transition_ids` 是非空 `list/tuple`，元素必须
+是非空字符串且不得重复；数字、空值、重复 ID 或其它容器均在 SQL/derived-state 操作前
+fail-closed。该输入不会再通过字符串 coercion 或静默去重改变 evidence set；增量路径仍
+比较 affected/full rebuild、重放 raw-evidence digest，并在 savepoint 内写入 rule/event/
+revision。该修复只强化 B2 shadow/candidate provenance，不改变 canonical promotion、
+Parametric shadow-only 或 production runtime 边界。
