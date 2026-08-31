@@ -53,6 +53,35 @@ def _database_digest(conn: sqlite3.Connection) -> str:
     return hashlib.sha256(dump).hexdigest()
 
 
+def _authority_lineages(conn: sqlite3.Connection) -> set[str]:
+    """Return lineages represented by the immutable authority snapshot.
+
+    Calibration observations must be source-disjoint from the retrieval
+    support used to make their predictions.  The lineage is authoritative on
+    ``tehm_states`` (rather than inferred from a campaign filename or a
+    provenance string), so an old/malformed snapshot without that table is a
+    hard error instead of silently disabling the firewall.
+    """
+    tables = {
+        str(row[0]) for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if "tehm_states" not in tables:
+        raise ValueError("authority snapshot is missing tehm_states lineage table")
+    return {
+        str(row[0]) for row in conn.execute(
+            "SELECT DISTINCT lineage_id FROM tehm_states "
+            "WHERE lineage_id IS NOT NULL AND lineage_id <> ''")
+    }
+
+
+def _source_disjoint_overlap(authority_lineages, sample_lineages) -> list[str]:
+    """Return the exact lineage overlap between authority and calibration rows."""
+    authority = {str(value) for value in authority_lineages if str(value)}
+    samples = {str(value) for value in sample_lineages if str(value)}
+    return sorted(authority & samples)
+
+
 def _slug(value: str) -> str:
     value = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value)).strip("-")
     return value or "campaign"
@@ -122,16 +151,25 @@ def build(manifests: list[Path], *, authority_db: Path, output_root: Path,
     samples = []
     seen_cases = set()
     conn = tehm_db.connect_read_only(db_path)
+    authority_lineages = set()
     try:
         physical = PhysicalEffectMemory(conn)
         authority_digest = _database_digest(conn)
+        authority_lineages = _authority_lineages(conn)
         for manifest_path in manifests:
             raw = json.loads(manifest_path.read_text())
             items = raw.get("items")
             if not isinstance(items, list) or len(items) != 1:
                 raise ValueError(f"{manifest_path}: expected one manifest item")
             item = dict(items[0])
-            item["split"] = item.get("dataset_split")
+            # Campaign manifests use the dataset vocabulary (``training``),
+            # while the external-observation envelope deliberately reserves
+            # ``support`` for learner-admissible calibration rows.  This
+            # command is read-only and never imports the row; map only the
+            # envelope role, preserving the source manifest unchanged.
+            requested_split = item.get("dataset_split")
+            item["split"] = (
+                "support" if requested_split == "training" else requested_split)
             item["orfs_root"] = raw.get("orfs_root")
             row = build_external_observation(item)
             case_id = row["case_id"]
@@ -178,6 +216,13 @@ def build(manifests: list[Path], *, authority_db: Path, output_root: Path,
             })
     finally:
         conn.close()
+
+    calibration_lineages = [sample["lineage_id"] for sample in samples]
+    overlap = _source_disjoint_overlap(authority_lineages, calibration_lineages)
+    if overlap:
+        raise ValueError(
+            "calibration rows are not source-disjoint from authority support: "
+            + ", ".join(overlap))
 
     calibration = calibrate_exact_groups(
         samples, training_lineages=training_lineages,
@@ -228,6 +273,13 @@ def build(manifests: list[Path], *, authority_db: Path, output_root: Path,
         "version": VERSION,
         "authority_db": str(db_path),
         "authority_db_sha256": authority_digest,
+        "source_disjoint": {
+            "authority_lineages": sorted(authority_lineages),
+            "calibration_lineages": sorted(set(calibration_lineages)),
+            "overlap": overlap,
+            "disjoint": not overlap,
+            "authority_lineage_source": "tehm_states.lineage_id",
+        },
         "calibration_digest": calibration_digest,
         "calibration": calibration,
         "samples": samples,

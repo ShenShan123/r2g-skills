@@ -2458,6 +2458,28 @@ replication 或 held-out transfer 仍可能绕过 online manager。现已统一�
 `training ∧ learner_eligible=1` 分区约束与 verified-execution 约束统一到所有可直接调用
 的 learner-derived 入口。新增回归只验证 fail-closed 边界，不构成真实 ORFS/RTL 经验结果。
 
+### 2026-08-30 action32 source-disjoint calibration firewall
+
+为修复 calibration 支持泄漏，`build_orfs_calibration_evidence.py` 现在从只读 authority
+快照的 `tehm_states.lineage_id` 重放支持 lineage；任何 calibration sample 与 authority
+lineage 重叠都会在写出 external observation 之前 fail-closed。旧的
+`orfs-action32-calibration-v1` 快照由 v113–v115 同源构成，重新运行明确拒绝三条重叠
+lineage，不再把零距离自匹配误报为有效 calibration。
+
+随后用全新 v117/v118/v119 sky130hs action32 训练 lineage 建立独立 authority snapshot
+(`/data1/zhangdy/tehm-campaigns/orfs-action32-support-v1/authority_snapshot/tehm.sqlite`，
+3 transitions/3 physical effects，`integrity_check=ok`)，三条 pair 均完成 ORFS、等价性、
+strict signoff、graph 与 capture，utility 均为 `PARETO_SAFE`。用不重叠的 v113/v114/v115
+样本和该 snapshot 重新计算 `/data1/zhangdy/tehm-campaigns/orfs-action32-calibration-v2/`
+得到 `ready_for_shadow`：3 个 lineage、12 个 metric comparisons、harmful rate `0.0`、
+positive utility rate `1.0`，source-disjoint overlap `[]`。materialized policy 的
+`max_distance=1.7`、`min_unique_contexts=3`、`canonical_memory_mutation=none`、
+`promotion_eligible=false`，因此它只是可审计的 shadow predictor。
+
+对独立 v116 held-out row 的只读预测距离为 `1.420285`，会进入该 shadow policy 的 OOD
+范围，但真实 held-out utility 为 `HARMFUL`；该结果正是继续保留 held-out 防火墙和六项
+promotion gate 的理由，不能回灌 support、canonical memory 或 production runtime。
+
 ### 2026-08-30 authority/trial/L2 execution witness closure
 
 继续沿 learner-derived seam 追踪 authority 入口，补上三处此前仍可由直接调用绕开的

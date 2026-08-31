@@ -7,7 +7,25 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from build_orfs_calibration_evidence import (  # noqa: E402
-    _bind_routing_preflight, _conformal_for_sample)
+    _authority_lineages, _bind_routing_preflight, _conformal_for_sample,
+    _source_disjoint_overlap)
+
+
+def test_authority_lineages_are_read_from_states(tmp_path):
+    db = tmp_path / "authority.sqlite"
+    conn = __import__("sqlite3").connect(db)
+    conn.execute("CREATE TABLE tehm_states (lineage_id TEXT)")
+    conn.executemany("INSERT INTO tehm_states VALUES (?)", [
+        ("lineage:a",), ("lineage:a",), ("lineage:b",), (None,), ("",)])
+    conn.commit()
+    assert _authority_lineages(conn) == {"lineage:a", "lineage:b"}
+    conn.close()
+
+
+def test_source_disjoint_overlap_is_exact_and_sorted():
+    assert _source_disjoint_overlap(
+        ["lineage:b", "lineage:a"], ["lineage:c", "lineage:a", "lineage:a"]
+    ) == ["lineage:a"]
 
 
 def test_row_conformal_coverage_is_derived_from_finite_metrics():

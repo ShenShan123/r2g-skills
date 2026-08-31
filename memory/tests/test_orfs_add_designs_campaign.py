@@ -74,6 +74,27 @@ def test_prepare_requires_source_freeze_and_binds_inputs(tmp_path):
                 source_freeze=campaign / "source_freeze.json", **kwargs)
 
 
+def test_explicit_density_after_is_frozen_and_materialized(tmp_path):
+    """Prospective action points cannot be changed through the manifest only."""
+    orfs = _fake_orfs(tmp_path / "orfs")
+    override = tmp_path / "override.sdc"
+    override.write_text("set clk_period 10\n")
+    kwargs = {
+        **_kwargs(override),
+        "core_utils": (28,),
+        "density_after": (32,),
+        "lineage_prefix": "action32-test",
+    }
+    campaign = tmp_path / "campaign"
+    build_source_freeze(campaign, orfs, **kwargs)
+    manifest = prepare(campaign, orfs,
+                       source_freeze=campaign / "source_freeze.json", **kwargs)
+    freeze = json.loads((campaign / "source_freeze.json").read_text())
+    assert freeze["request"]["density_after"] == [32]
+    assert manifest["items"][0]["before_value"] == "28"
+    assert manifest["items"][0]["after_value"] == "32"
+
+
 def test_custom_rtl_top_is_bound_into_materialized_sdc(tmp_path):
     orfs = _fake_orfs(tmp_path / "orfs")
     rtl = tmp_path / "custom.v"

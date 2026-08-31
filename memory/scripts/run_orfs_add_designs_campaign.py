@@ -307,7 +307,8 @@ def _freeze_request(*, designs, platforms, families, indexes: int,
                     sdc_override_path: Path | None,
                     template_design: str, orfs_root: Path,
                     dataset_split: str = "training",
-                    semantic_oracle_path: Path | None = None) -> dict:
+                    semantic_oracle_path: Path | None = None,
+                    density_after=None) -> dict:
     if dataset_split not in {"training", "calibration", "heldout", "ab"}:
         raise ValueError(f"invalid dataset split: {dataset_split!r}")
     request = {
@@ -324,6 +325,21 @@ def _freeze_request(*, designs, platforms, families, indexes: int,
         "sdc_override": (str(Path(sdc_override_path).resolve())
                           if sdc_override_path is not None else None),
     }
+    # The historical default is still ``base - 10``.  When a prospective
+    # cohort pre-registers an exact action point (for example action32's
+    # ``base<32 -> 32`` compaction), bind the explicit after schedule into the
+    # source freeze so it cannot be changed by editing only the manifest.
+    if density_after is not None:
+        request["density_after"] = [int(value) for value in density_after]
+    # Bind the exact direct-toolchain manifest at the request boundary as
+    # well as inside the preflight receipt.  The support auditor compares
+    # these two independently; a manifest-only field is insufficient because
+    # it would allow a freeze to be replayed against a different toolchain
+    # location without changing the request digest.
+    toolchain_manifest = os.environ.get("R2G_TOOLCHAIN_MANIFEST")
+    if toolchain_manifest:
+        request["toolchain_manifest"] = str(
+            Path(toolchain_manifest).expanduser().resolve())
     # Preserve compatibility with already-frozen training campaigns while
     # binding non-training capture roles into new source freezes.  A held-out
     # transfer run must not be reclassified by editing only the manifest.
@@ -343,7 +359,8 @@ def build_source_freeze(root: Path, orfs_root: Path, *, designs, platforms,
                         sdc_override_path: Path | None,
                         template_design: str,
                         dataset_split: str = "training",
-                        semantic_oracle_path: Path | None = None) -> dict:
+                        semantic_oracle_path: Path | None = None,
+                        density_after=None) -> dict:
     """Freeze campaign inputs before any project is materialized or run."""
     request = _freeze_request(
         designs=designs, platforms=platforms, families=families,
@@ -351,7 +368,8 @@ def build_source_freeze(root: Path, orfs_root: Path, *, designs, platforms,
         rtl_override_path=rtl_override_path,
         sdc_override_path=sdc_override_path, template_design=template_design,
         orfs_root=orfs_root, dataset_split=dataset_split,
-        semantic_oracle_path=semantic_oracle_path)
+        semantic_oracle_path=semantic_oracle_path,
+        density_after=density_after)
     inputs = _campaign_inputs(
         Path(orfs_root).resolve(), designs=designs, platforms=platforms,
         rtl_override_path=rtl_override_path,
@@ -386,7 +404,8 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
                             sdc_override_path: Path | None,
                             template_design: str,
                             dataset_split: str = "training",
-                            semantic_oracle_path: Path | None = None) -> dict:
+                            semantic_oracle_path: Path | None = None,
+                            density_after=None) -> dict:
     path = Path(path).resolve()
     try:
         freeze = json.loads(path.read_text())
@@ -407,7 +426,8 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
         rtl_override_path=rtl_override_path,
         sdc_override_path=sdc_override_path, template_design=template_design,
         orfs_root=orfs_root, dataset_split=dataset_split,
-        semantic_oracle_path=semantic_oracle_path)
+        semantic_oracle_path=semantic_oracle_path,
+        density_after=density_after)
     if freeze.get("request") != expected_request:
         raise BatchLaneError(
             "source freeze request mismatch; use the same campaign arguments "
@@ -476,6 +496,8 @@ def _validate_manifest_source_freeze(manifest: dict) -> dict:
         dataset_split=str(request.get("dataset_split", "training")),
         semantic_oracle_path=(Path(request["semantic_oracle"])
                               if request.get("semantic_oracle") else None),
+        density_after=(tuple(request["density_after"])
+                       if request.get("density_after") is not None else None),
     )
     return freeze
 
@@ -506,6 +528,9 @@ def main(argv=None) -> int:
                     help="core-utilization indices per (design, platform); 1 = bounded")
     ap.add_argument("--core-utils", nargs="+", type=int, default=list(CORE_UTILS),
                     help="base CORE_UTILIZATION schedule (for example 20 25 30)")
+    ap.add_argument("--density-after", nargs="+", type=int, default=None,
+                    help=("explicit DENSITY_RELIEF after schedule; when omitted "
+                          "the historical base-10 schedule is used"))
     ap.add_argument("--lineage-prefix", default="orfs-v4",
                     help="prefix for training lineage IDs in this campaign")
     ap.add_argument("--dataset-split", choices=("training", "calibration", "heldout", "ab"),
@@ -546,7 +571,9 @@ def main(argv=None) -> int:
             template_design=args.template_design,
             dataset_split=args.dataset_split,
             semantic_oracle_path=(args.semantic_oracle.resolve()
-                                  if args.semantic_oracle else None))
+                                  if args.semantic_oracle else None),
+            density_after=(tuple(args.density_after)
+                           if args.density_after is not None else None))
         if args.phase == "freeze":
             return 0
 
@@ -565,6 +592,8 @@ def main(argv=None) -> int:
                            dataset_split=args.dataset_split,
                            semantic_oracle_path=(args.semantic_oracle.resolve()
                                                  if args.semantic_oracle else None),
+                           density_after=(tuple(args.density_after)
+                                          if args.density_after is not None else None),
                            source_freeze=freeze_path)
     else:
         manifest = _load(manifest_path)
@@ -624,10 +653,20 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
             template_design: str = "gcd",
             dataset_split: str = "training",
             semantic_oracle_path: Path | None = None,
+            density_after=None,
             source_freeze: Path | None = None) -> dict:
     core_utils = tuple(int(x) for x in core_utils)
     if not core_utils:
         raise ValueError("core_utils must contain at least one utilization")
+    if density_after is None:
+        density_after_values = tuple(value - 10 for value in core_utils)
+    else:
+        density_after_values = tuple(int(x) for x in density_after)
+        if not density_after_values:
+            raise ValueError("density_after must contain at least one utilization")
+        if len(density_after_values) not in (1, len(core_utils)):
+            raise ValueError(
+                "density_after must have one value or match core_utils length")
     if source_freeze is None:
         raise BatchLaneError(
             "source freeze is required before prepare; run --phase freeze first")
@@ -638,7 +677,8 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
         rtl_override_path=rtl_override_path,
         sdc_override_path=sdc_override_path, template_design=template_design,
         dataset_split=dataset_split,
-        semantic_oracle_path=semantic_oracle_path)
+        semantic_oracle_path=semantic_oracle_path,
+        density_after=density_after)
     semantic_oracle = (load_spec(semantic_oracle_path)
                        if semantic_oracle_path is not None else None)
     family_specs = {
@@ -718,7 +758,11 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                 for family in families:
                     knob, slug, before_fn, after_fn = family_specs[family]
                     before_value = before_fn(index)
-                    after_value = after_fn(index)
+                    if family == "DENSITY_RELIEF":
+                        after_value = str(
+                            density_after_values[index % len(density_after_values)])
+                    else:
+                        after_value = after_fn(index)
                     after_edits = _FAMILY_AFTER_EDITS[family](knob, after_value, index)
                     after = _materialize(
                         root / "cases" / f"{platform}_{design}_{slug}_{index}",

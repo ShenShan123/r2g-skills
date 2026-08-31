@@ -5385,3 +5385,26 @@ verdict：
 canonical memory、Parametric shadow-only、六项 promotion gate 阈值或 production runtime。
 定向 authority/causal 回归 62 passed，扩展 activation/online/transfer/authority/L2
 回归 127 passed；它们验证的是 fail-closed 机制，不构成真实 ORFS/RTL 经验结果。
+
+### 2026-08-30 calibration authority source-disjoint seam
+
+本轮发现 calibration runner 的旧实现只根据外部 manifest 生成预测，却没有核对预测所
+依赖的 authority snapshot 是否包含同一批 lineage；因此 v113–v115 合并快照会产生
+`nearest_distance=0` 的 self-support leakage。现已在
+`memory/scripts/build_orfs_calibration_evidence.py` 增加 authority lineage replay：从
+`tehm_states.lineage_id` 读取 immutable support lineage，和 calibration sample lineage
+求交；存在任一 overlap 时在 external observation、calibration digest 和 policy 之前
+直接拒绝，并在成功报告中持久化 `source_disjoint` envelope。
+
+为形成真实隔离证据，又运行了全新的 v117/v118/v119 sky130hs `DENSITY_RELIEF`
+`CORE_UTILIZATION 28→32` cohort。三条 lineage 的 ORFS 全流程、equivalence、strict
+signoff、graph 与 staging capture 均完整且 `PARETO_SAFE`，合并 snapshot 位于
+`/data1/zhangdy/tehm-campaigns/orfs-action32-support-v1/authority_snapshot/tehm.sqlite`。
+用 source-disjoint 的 v113/v114/v115 observations 重建 calibration v2 后，3 lineage、
+12 metric comparisons、harmful rate `0.0`、positive utility rate `1.0`，报告状态
+`ready_for_shadow`，但仍没有 canonical mutation 或 promotion eligibility。由此 materialize
+的 action32 shadow policy 仅允许 `max_distance=1.7`、`min_unique_contexts=3`；v116
+held-out 的只读距离 `1.420285` 虽进入 OOD 范围，真实标签却是 `HARMFUL`，所以它只能
+作为安全审计 observation，不能进入 support/canonical/runtime。下一步应围绕该反例补充
+独立 held-out/跨设计 cohort、复核 utility contract 和 conformal coverage，再重跑六项
+promotion gate；不得为了恢复 ready 而回灌 held-out 或放宽 OOD/utility 门槛。
