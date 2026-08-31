@@ -12,6 +12,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from tehm.ids import stable_dumps
+
 
 MEMORY_DELTA_VERSION = "memory-delta-v1"
 MEMORY_DELTA_ID_FIELDS = (
@@ -22,8 +24,17 @@ MEMORY_DELTA_ID_FIELDS = (
     "revised_causal_path_ids",
     "added_capability_ids", "removed_capability_ids",
     "revised_capability_ids",
+    "added_knowledge_ids", "removed_knowledge_ids",
+    "revised_knowledge_ids",
 )
-_ENTITY_FAMILIES = ("transition", "rule", "asset", "causal_path", "capability")
+_ENTITY_FAMILIES = (
+    "transition", "rule", "asset", "causal_path", "capability", "knowledge",
+)
+
+DERIVED_DELTA_VERSIONS = {
+    "knowledge": "knowledge-delta-v1",
+    "asset": "asset-delta-v1",
+}
 
 
 @dataclass(frozen=True)
@@ -47,6 +58,220 @@ class MemoryDeltaReceipt:
             "eligible": self.eligible,
             "reasons": list(self.reasons),
         }
+
+
+@dataclass(frozen=True)
+class KnowledgeDeltaReceipt:
+    """Content-bound change set for Mechanism Knowledge (P8 witness)."""
+
+    baseline_memory_digest: str | None
+    candidate_memory_digest: str | None
+    added_knowledge_ids: tuple[str, ...]
+    removed_knowledge_ids: tuple[str, ...]
+    revised_knowledge_ids: tuple[str, ...]
+    eligible: bool
+    reasons: tuple[str, ...] = ()
+
+    @property
+    def changed_ids(self) -> tuple[str, ...]:
+        return tuple(sorted({
+            *self.added_knowledge_ids, *self.removed_knowledge_ids,
+            *self.revised_knowledge_ids,
+        }))
+
+    def to_dict(self) -> dict:
+        return {
+            "version": DERIVED_DELTA_VERSIONS["knowledge"],
+            "baseline_memory_digest": self.baseline_memory_digest,
+            "candidate_memory_digest": self.candidate_memory_digest,
+            "added_knowledge_ids": list(self.added_knowledge_ids),
+            "removed_knowledge_ids": list(self.removed_knowledge_ids),
+            "revised_knowledge_ids": list(self.revised_knowledge_ids),
+            "changed_ids": list(self.changed_ids), "eligible": self.eligible,
+            "reasons": list(self.reasons),
+        }
+
+    @property
+    def receipt_digest(self) -> str:
+        import hashlib
+
+        return "sha256:" + hashlib.sha256(
+            stable_dumps(self.to_dict()).encode()).hexdigest()
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "KnowledgeDeltaReceipt":
+        if not isinstance(payload, Mapping):
+            raise ValueError("knowledge delta receipt must be an object")
+        required = {
+            "version", "baseline_memory_digest", "candidate_memory_digest",
+            "added_knowledge_ids", "removed_knowledge_ids", "revised_knowledge_ids",
+            "changed_ids", "eligible", "reasons",
+        }
+        if any(key not in payload for key in required):
+            raise ValueError("knowledge delta receipt is missing required fields")
+        manifest = {key: payload[key] for key in (
+            "version", "baseline_memory_digest", "candidate_memory_digest",
+            "added_knowledge_ids", "removed_knowledge_ids", "revised_knowledge_ids")}
+        checked = evaluate_knowledge_delta(
+            payload.get("baseline_memory_digest"),
+            payload.get("candidate_memory_digest"), manifest)
+        if (payload.get("changed_ids") != list(checked.changed_ids) or
+                payload.get("eligible") is not checked.eligible or
+                payload.get("reasons") != list(checked.reasons)):
+            raise ValueError("knowledge delta receipt replay mismatch")
+        supplied = payload.get("receipt_digest")
+        if supplied is not None and supplied != checked.receipt_digest:
+            raise ValueError("knowledge delta receipt digest mismatch")
+        return checked
+
+
+@dataclass(frozen=True)
+class AssetDeltaReceipt:
+    """Content-bound change set for executable Assets (P8 witness)."""
+
+    baseline_memory_digest: str | None
+    candidate_memory_digest: str | None
+    added_asset_ids: tuple[str, ...]
+    removed_asset_ids: tuple[str, ...]
+    revised_asset_ids: tuple[str, ...]
+    eligible: bool
+    reasons: tuple[str, ...] = ()
+
+    @property
+    def changed_ids(self) -> tuple[str, ...]:
+        return tuple(sorted({
+            *self.added_asset_ids, *self.removed_asset_ids,
+            *self.revised_asset_ids,
+        }))
+
+    def to_dict(self) -> dict:
+        return {
+            "version": DERIVED_DELTA_VERSIONS["asset"],
+            "baseline_memory_digest": self.baseline_memory_digest,
+            "candidate_memory_digest": self.candidate_memory_digest,
+            "added_asset_ids": list(self.added_asset_ids),
+            "removed_asset_ids": list(self.removed_asset_ids),
+            "revised_asset_ids": list(self.revised_asset_ids),
+            "changed_ids": list(self.changed_ids), "eligible": self.eligible,
+            "reasons": list(self.reasons),
+        }
+
+    @property
+    def receipt_digest(self) -> str:
+        import hashlib
+
+        return "sha256:" + hashlib.sha256(
+            stable_dumps(self.to_dict()).encode()).hexdigest()
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "AssetDeltaReceipt":
+        if not isinstance(payload, Mapping):
+            raise ValueError("asset delta receipt must be an object")
+        required = {
+            "version", "baseline_memory_digest", "candidate_memory_digest",
+            "added_asset_ids", "removed_asset_ids", "revised_asset_ids",
+            "changed_ids", "eligible", "reasons",
+        }
+        if any(key not in payload for key in required):
+            raise ValueError("asset delta receipt is missing required fields")
+        manifest = {key: payload[key] for key in (
+            "version", "baseline_memory_digest", "candidate_memory_digest",
+            "added_asset_ids", "removed_asset_ids", "revised_asset_ids")}
+        checked = evaluate_asset_delta(
+            payload.get("baseline_memory_digest"),
+            payload.get("candidate_memory_digest"), manifest)
+        if (payload.get("changed_ids") != list(checked.changed_ids) or
+                payload.get("eligible") is not checked.eligible or
+                payload.get("reasons") != list(checked.reasons)):
+            raise ValueError("asset delta receipt replay mismatch")
+        supplied = payload.get("receipt_digest")
+        if supplied is not None and supplied != checked.receipt_digest:
+            raise ValueError("asset delta receipt digest mismatch")
+        return checked
+
+
+def _evaluate_derived_delta(
+    kind: str, baseline_memory_digest: str | None,
+    candidate_memory_digest: str | None, delta: Mapping | None,
+):
+    """Validate one knowledge/asset-only delta manifest fail-closed."""
+    if kind not in DERIVED_DELTA_VERSIONS:
+        raise ValueError(f"unsupported derived delta kind: {kind!r}")
+    reasons: list[str] = []
+    baseline = (baseline_memory_digest
+                if isinstance(baseline_memory_digest, str) and
+                baseline_memory_digest.strip() else None)
+    candidate = (candidate_memory_digest
+                 if isinstance(candidate_memory_digest, str) and
+                 candidate_memory_digest.strip() else None)
+    if baseline is None:
+        reasons.append("baseline_memory_digest_required")
+    if candidate is None:
+        reasons.append("candidate_memory_digest_required")
+    if baseline is not None and candidate is not None and baseline == candidate:
+        reasons.append("memory_digest_unchanged")
+    fields = _id_fields_for_family(kind)
+    allowed = {"version", "baseline_memory_digest", "candidate_memory_digest",
+               *fields}
+    normalised: dict[str, list[str]] = {field: [] for field in fields}
+    if not isinstance(delta, Mapping):
+        reasons.append("derived_delta_required")
+    else:
+        reasons.extend(
+            f"unknown_field:{field}" for field in sorted(
+                set(delta) - allowed, key=str))
+        if delta.get("version") != DERIVED_DELTA_VERSIONS[kind]:
+            reasons.append("version_mismatch")
+        if ("baseline_memory_digest" in delta and
+                delta.get("baseline_memory_digest") != baseline):
+            reasons.append("baseline_memory_digest_mismatch")
+        if ("candidate_memory_digest" in delta and
+                delta.get("candidate_memory_digest") != candidate):
+            reasons.append("candidate_memory_digest_mismatch")
+        for field in fields:
+            values, field_reasons = _normalise_ids(
+                delta.get(field, []), field=field)
+            normalised[field] = list(values)
+            reasons.extend(field_reasons)
+    sets = {field: set(values) for field, values in normalised.items()}
+    if sets[fields[0]] & sets[fields[1]] or sets[fields[0]] & sets[fields[2]] or sets[fields[1]] & sets[fields[2]]:
+        reasons.append(f"{kind}:delta_sets_overlap")
+    changed = tuple(sorted({value for values in normalised.values() for value in values}))
+    if not changed:
+        reasons.append("changed_derived_object_required")
+    common = {
+        "baseline_memory_digest": baseline,
+        "candidate_memory_digest": candidate,
+        "eligible": not reasons,
+        "reasons": tuple(sorted(set(reasons))),
+    }
+    if kind == "knowledge":
+        return KnowledgeDeltaReceipt(
+            **common, added_knowledge_ids=tuple(normalised[fields[0]]),
+            removed_knowledge_ids=tuple(normalised[fields[1]]),
+            revised_knowledge_ids=tuple(normalised[fields[2]]))
+    return AssetDeltaReceipt(
+        **common, added_asset_ids=tuple(normalised[fields[0]]),
+        removed_asset_ids=tuple(normalised[fields[1]]),
+        revised_asset_ids=tuple(normalised[fields[2]]))
+
+
+def evaluate_knowledge_delta(
+    baseline_memory_digest: str | None,
+    candidate_memory_digest: str | None,
+    delta: Mapping | None,
+) -> KnowledgeDeltaReceipt:
+    return _evaluate_derived_delta(
+        "knowledge", baseline_memory_digest, candidate_memory_digest, delta)
+
+
+def evaluate_asset_delta(
+    baseline_memory_digest: str | None,
+    candidate_memory_digest: str | None,
+    delta: Mapping | None,
+) -> AssetDeltaReceipt:
+    return _evaluate_derived_delta(
+        "asset", baseline_memory_digest, candidate_memory_digest, delta)
 
 
 def _id_fields_for_family(family: str) -> tuple[str, ...]:
@@ -142,5 +367,6 @@ def evaluate_memory_delta(
 
 __all__ = [
     "MEMORY_DELTA_ID_FIELDS", "MEMORY_DELTA_VERSION", "MemoryDeltaReceipt",
-    "evaluate_memory_delta",
+    "DERIVED_DELTA_VERSIONS", "KnowledgeDeltaReceipt", "AssetDeltaReceipt",
+    "evaluate_asset_delta", "evaluate_knowledge_delta", "evaluate_memory_delta",
 ]

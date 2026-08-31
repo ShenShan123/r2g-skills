@@ -6,11 +6,13 @@ from .authority import (
 )
 from .attribution import (
     CapabilityAttributionReceipt, evaluate_capability_attribution,
-    evaluate_capability_attribution_from_db,
+    evaluate_capability_attribution_from_db, EXPANDED_ATTRIBUTION_VERSION,
+    validate_expanded_attribution,
 )
 from .delta import (
-    MEMORY_DELTA_ID_FIELDS, MEMORY_DELTA_VERSION, MemoryDeltaReceipt,
-    evaluate_memory_delta,
+    MEMORY_DELTA_ID_FIELDS, MEMORY_DELTA_VERSION, DERIVED_DELTA_VERSIONS,
+    AssetDeltaReceipt, KnowledgeDeltaReceipt, MemoryDeltaReceipt,
+    evaluate_asset_delta, evaluate_knowledge_delta, evaluate_memory_delta,
 )
 from .policy_snapshot import (
     PolicyLoadReceipt, PolicySnapshotReceipt, create_policy_snapshot,
@@ -38,8 +40,10 @@ __all__ = [
     "verify_capability_authority",
     "CapabilityAttributionReceipt", "evaluate_capability_attribution",
     "evaluate_capability_attribution_from_db",
+    "EXPANDED_ATTRIBUTION_VERSION", "validate_expanded_attribution",
     "MEMORY_DELTA_ID_FIELDS", "MEMORY_DELTA_VERSION", "MemoryDeltaReceipt",
-    "evaluate_memory_delta",
+    "DERIVED_DELTA_VERSIONS", "KnowledgeDeltaReceipt", "AssetDeltaReceipt",
+    "evaluate_memory_delta", "evaluate_knowledge_delta", "evaluate_asset_delta",
     "PolicyLoadReceipt", "PolicySnapshotReceipt", "create_policy_snapshot",
     "load_policy_snapshot", "record_policy_load", "validate_policy_load_row",
     "validate_policy_snapshot_row",

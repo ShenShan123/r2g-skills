@@ -2798,3 +2798,23 @@ P7 定向回归为 `memory/tests/test_asset_selector.py`（4 passed）；`memory
 `.gitignore` 排除，设计文档只作为本地输入，不进入 release commit。下一步是 P8：把
 knowledge/asset delta 与 attribution、state-resolution receipt 接入 capability audit，
 仍先保持 evaluation-only。
+
+### 2026-08-31 P8 Expanded Capability Attribution（evaluation-only）
+
+扩展 `tehm/capability/attribution.py`、`delta.py`、`authority.py` 与 campaign harness，
+为既有 C1–C8 增加对象级 witness：`KnowledgeDeltaReceipt`、`AssetDeltaReceipt`、
+`RoutingReceipt`、`StateResolutionReceipt` 和 `MemoryFailureAttributionReceipt`。严格
+P8 campaign 需要五类 witness 全部存在且可重放；knowledge/asset changed IDs 必须属于
+同一份 concrete memory delta，routing 必须绑定同一个 state resolution，数据库入口还会
+重放 state snapshot。缺失、跨状态、digest 不一致或重复 receipt 均 fail-closed，并以
+`P8:*` 原因出现在 attribution receipt 中。
+
+authority payload 会保留 expanded witness bundle，后续 replay 可重新验证 KΔ/AΔ、
+routing/state/failure attribution，而不依赖内存中的原始对象。该扩展只增强 capability
+evidence 与审计，不改变 C1–C8 gate 含义、不写 production capability status、不改
+canonical evidence，也不把任何 asset 接入 runtime candidate source。
+
+P8 定向回归为 `memory/tests/test_capability_expanded_attribution.py`（4 passed），并与
+既有 capability attribution 回归合计 51 passed；`memory/docs/` 继续由 `.gitignore`
+排除，不进入 release commit。下一步是 P9 production gate：只有完成 harmful-rate、
+repair-gain、NO_SKILL calibration 等真实证据审计后，才讨论 production integration。

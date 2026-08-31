@@ -13,7 +13,10 @@ from collections.abc import Mapping
 
 from tehm.ids import stable_dumps
 
-from .delta import MemoryDeltaReceipt, evaluate_memory_delta
+from .delta import (
+    AssetDeltaReceipt, KnowledgeDeltaReceipt, MemoryDeltaReceipt,
+    evaluate_asset_delta, evaluate_knowledge_delta, evaluate_memory_delta,
+)
 from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
 
 
@@ -24,6 +27,8 @@ class CapabilityAttributionReceipt:
     missing_gates: tuple[str, ...]
     promotable: bool
     detail: dict = field(default_factory=dict)
+    expanded_eligible: bool = True
+    expanded_missing: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -32,7 +37,212 @@ class CapabilityAttributionReceipt:
             "missing_gates": list(self.missing_gates),
             "promotable": self.promotable,
             "detail": self.detail,
+            "expanded_eligible": self.expanded_eligible,
+            "expanded_missing": list(self.expanded_missing),
         }
+
+
+EXPANDED_ATTRIBUTION_VERSION = "capability-expanded-attribution-v1"
+
+
+def _receipt_mapping(value: object, field_name: str) -> dict | None:
+    if value is None:
+        return None
+    if hasattr(value, "to_dict"):
+        value = value.to_dict()
+    if not isinstance(value, Mapping):
+        return None
+    try:
+        decoded = json.loads(stable_dumps(dict(value)))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _receipt_sequence(value: object, field_name: str) -> tuple[dict, ...] | None:
+    if value is None:
+        return None
+    if isinstance(value, Mapping) or hasattr(value, "to_dict"):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return None
+    result: list[dict] = []
+    for item in value:
+        mapped = _receipt_mapping(item, field_name)
+        if mapped is None:
+            return None
+        result.append(mapped)
+    return tuple(result)
+
+
+def _validate_state_resolution_receipt(value: object) -> tuple[dict | None, list[str]]:
+    raw = _receipt_mapping(value, "state_resolution_receipt")
+    if raw is None:
+        return None, ["state_resolution_receipt_malformed"]
+    reasons: list[str] = []
+    for field_name in ("resolution_id", "input_memory_digest", "resolution_digest"):
+        if type(raw.get(field_name)) is not str or not raw[field_name].strip():
+            reasons.append(f"state_resolution:{field_name}_required")
+    count = raw.get("relation_count")
+    if type(count) is not int or count < 0:
+        reasons.append("state_resolution:relation_count_malformed")
+    conflicts = raw.get("unresolved_conflicts")
+    if (not isinstance(conflicts, list) or
+            any(type(item) is not str or not item for item in conflicts)):
+        reasons.append("state_resolution:unresolved_conflicts_malformed")
+    return raw, reasons
+
+
+def _validate_routing_receipts(value: object) -> tuple[list[dict], list[str]]:
+    raw = _receipt_sequence(value, "routing_receipts")
+    if raw is None:
+        return [], ["routing_receipts_malformed"]
+    reasons: list[str] = []
+    result: list[dict] = []
+    seen: set[str] = set()
+    from contracts import MemoryRoutingDecision
+
+    for item in raw:
+        try:
+            decision = MemoryRoutingDecision.from_dict(item)
+        except (TypeError, ValueError):
+            reasons.append("routing_receipt_invalid")
+            continue
+        receipt_id = decision.routing_receipt_id
+        if receipt_id in seen:
+            reasons.append("routing_receipt_duplicate")
+            continue
+        seen.add(receipt_id)
+        result.append({**decision.to_dict(), "routing_receipt_id": receipt_id,
+                       "decision_digest": decision.decision_digest})
+    if not result and not reasons:
+        reasons.append("routing_receipt_required")
+    return result, reasons
+
+
+def _validate_failure_receipts(value: object) -> tuple[list[dict], list[str]]:
+    raw = _receipt_sequence(value, "failure_attribution_receipts")
+    if raw is None:
+        return [], ["failure_attribution_receipts_malformed"]
+    reasons: list[str] = []
+    result: list[dict] = []
+    from tehm.evolution.attribution import MemoryFailureAttributionReceipt
+
+    seen: set[str] = set()
+    for item in raw:
+        try:
+            receipt = MemoryFailureAttributionReceipt.from_dict(item)
+        except (TypeError, ValueError):
+            reasons.append("failure_attribution_receipt_invalid")
+            continue
+        key = stable_dumps(receipt.to_dict())
+        if key in seen:
+            reasons.append("failure_attribution_receipt_duplicate")
+            continue
+        seen.add(key)
+        result.append(receipt.to_dict())
+    if not result and not reasons:
+        reasons.append("failure_attribution_receipt_required")
+    return result, reasons
+
+
+def validate_expanded_attribution(
+    *,
+    baseline_memory_digest: str | None,
+    candidate_memory_digest: str | None,
+    knowledge_delta=None,
+    asset_delta=None,
+    routing_receipts=None,
+    state_resolution_receipt=None,
+    failure_attribution_receipts=None,
+    strict: bool = False,
+    memory_changed_ids: tuple[str, ...] = (),
+) -> tuple[dict, tuple[str, ...]]:
+    """Normalize and validate P8 object-level attribution witnesses.
+
+    The function is pure and evaluation-only.  In strict mode all five
+    witnesses are required and derived IDs must be included in the concrete
+    memory delta; compatibility callers may omit the new witness bundle.
+    """
+    present = any(value is not None for value in (
+        knowledge_delta, asset_delta, routing_receipts,
+        state_resolution_receipt, failure_attribution_receipts))
+    if not strict and not present:
+        return {}, ()
+    reasons: list[str] = []
+    if strict and not memory_changed_ids:
+        reasons.append("memory_delta_changed_ids_required")
+    knowledge_payload = _receipt_mapping(knowledge_delta, "knowledge_delta")
+    asset_payload = _receipt_mapping(asset_delta, "asset_delta")
+    knowledge_checked: KnowledgeDeltaReceipt | None = None
+    asset_checked: AssetDeltaReceipt | None = None
+    if knowledge_delta is None:
+        if strict:
+            reasons.append("knowledge_delta_required")
+    elif knowledge_payload is None:
+        reasons.append("knowledge_delta_malformed")
+    else:
+        try:
+            knowledge_checked = KnowledgeDeltaReceipt.from_dict(knowledge_payload)
+        except (TypeError, ValueError) as exc:
+            reasons.append(f"knowledge_delta_invalid:{exc}")
+        else:
+            if (knowledge_checked.baseline_memory_digest != baseline_memory_digest or
+                    knowledge_checked.candidate_memory_digest != candidate_memory_digest):
+                reasons.append("knowledge_delta_memory_binding_mismatch")
+    if asset_delta is None:
+        if strict:
+            reasons.append("asset_delta_required")
+    elif asset_payload is None:
+        reasons.append("asset_delta_malformed")
+    else:
+        try:
+            asset_checked = AssetDeltaReceipt.from_dict(asset_payload)
+        except (TypeError, ValueError) as exc:
+            reasons.append(f"asset_delta_invalid:{exc}")
+        else:
+            if (asset_checked.baseline_memory_digest != baseline_memory_digest or
+                    asset_checked.candidate_memory_digest != candidate_memory_digest):
+                reasons.append("asset_delta_memory_binding_mismatch")
+    if knowledge_checked is not None and memory_changed_ids:
+        if not set(knowledge_checked.changed_ids).issubset(set(memory_changed_ids)):
+            reasons.append("knowledge_delta_not_in_memory_delta")
+    if asset_checked is not None and memory_changed_ids:
+        if not set(asset_checked.changed_ids).issubset(set(memory_changed_ids)):
+            reasons.append("asset_delta_not_in_memory_delta")
+    routing, routing_reasons = _validate_routing_receipts(routing_receipts)
+    if routing_receipts is None and not strict:
+        routing, routing_reasons = [], []
+    reasons.extend(routing_reasons)
+    state_payload, state_reasons = _validate_state_resolution_receipt(
+        state_resolution_receipt)
+    if state_resolution_receipt is None and not strict:
+        state_payload, state_reasons = None, []
+    reasons.extend(state_reasons)
+    failures, failure_reasons = _validate_failure_receipts(
+        failure_attribution_receipts)
+    if failure_attribution_receipts is None and not strict:
+        failures, failure_reasons = [], []
+    reasons.extend(failure_reasons)
+    if state_payload is not None:
+        state_id = state_payload.get("resolution_id")
+        for item in routing:
+            if item.get("resolved_state_id") != state_id:
+                reasons.append("routing_state_resolution_mismatch")
+    normalized = {
+        "version": EXPANDED_ATTRIBUTION_VERSION,
+        "strict": bool(strict),
+        "eligible": not reasons,
+        "reasons": sorted(set(reasons)),
+        "knowledge_delta": (knowledge_checked.to_dict()
+                             if knowledge_checked is not None else None),
+        "asset_delta": (asset_checked.to_dict()
+                         if asset_checked is not None else None),
+        "routing_receipts": routing,
+        "state_resolution_receipt": state_payload,
+        "failure_attribution_receipts": failures,
+    }
+    return normalized, tuple(normalized["reasons"])
 
 
 def evaluate_capability_attribution(
@@ -48,6 +258,12 @@ def evaluate_capability_attribution(
     memory_snapshot_binding: Mapping | None = None,
     behavior_binding: Mapping | None = None,
     ablation_binding: Mapping | None = None,
+    knowledge_delta=None,
+    asset_delta=None,
+    routing_receipts=None,
+    state_resolution_receipt=None,
+    failure_attribution_receipts=None,
+    strict_expanded: bool = False,
 ) -> CapabilityAttributionReceipt:
     """Evaluate the eight explicit attribution gates.
 
@@ -205,22 +421,38 @@ def evaluate_capability_attribution(
         "C7": no_regression,
         "C8": ablation_removes_gain,
     }
-    missing = tuple(gate for gate, passed in gates.items() if not passed)
+    memory_changed_ids = delta_receipt.changed_ids if delta_receipt is not None else ()
+    expanded, expanded_reasons = validate_expanded_attribution(
+        baseline_memory_digest=baseline_memory_digest,
+        candidate_memory_digest=candidate_memory_digest,
+        knowledge_delta=knowledge_delta, asset_delta=asset_delta,
+        routing_receipts=routing_receipts,
+        state_resolution_receipt=state_resolution_receipt,
+        failure_attribution_receipts=failure_attribution_receipts,
+        strict=strict_expanded, memory_changed_ids=memory_changed_ids)
+    missing_values = [gate for gate, passed in gates.items() if not passed]
+    if expanded_reasons:
+        missing_values.extend(f"P8:{reason}" for reason in expanded_reasons)
+    missing = tuple(missing_values)
+    detail = {"baseline": dict(baseline), "candidate": dict(candidate),
+              "heldout": dict(heldout), "ablation": dict(ablation),
+              "memory_delta": (
+                  delta_receipt.to_dict() if delta_receipt is not None else
+                  ({"eligible": False, "reasons": ["memory_delta_required"]}
+                   if strict_memory_delta else None)),
+              **({"memory_snapshot_binding": snapshot_binding}
+                 if snapshot_binding is not None else {}),
+              **({"runtime_behavior_binding": behavior_witness}
+                 if behavior_witness is not None else {}),
+              **({"policy_ablation_binding": ablation_witness}
+                 if ablation_witness is not None else {})}
+    if expanded or strict_expanded:
+        detail["expanded_attribution"] = expanded
     return CapabilityAttributionReceipt(
         capability_id=capability_id, gates=gates, missing_gates=missing,
-        promotable=not missing,
-        detail={"baseline": dict(baseline), "candidate": dict(candidate),
-                "heldout": dict(heldout), "ablation": dict(ablation),
-                "memory_delta": (
-                    delta_receipt.to_dict() if delta_receipt is not None else
-                    ({"eligible": False, "reasons": ["memory_delta_required"]}
-                     if strict_memory_delta else None)),
-                **({"memory_snapshot_binding": snapshot_binding}
-                   if snapshot_binding is not None else {}),
-                **({"runtime_behavior_binding": behavior_witness}
-                   if behavior_witness is not None else {}),
-                **({"policy_ablation_binding": ablation_witness}
-                   if ablation_witness is not None else {})})
+        promotable=not missing, detail=detail,
+        expanded_eligible=not expanded_reasons,
+        expanded_missing=tuple(f"P8:{reason}" for reason in expanded_reasons))
 
 
 def evaluate_capability_attribution_from_db(
@@ -240,6 +472,12 @@ def evaluate_capability_attribution_from_db(
     ablation: dict,
     memory_delta: Mapping | None = None,
     strict_memory_delta: bool = False,
+    knowledge_delta=None,
+    asset_delta=None,
+    routing_receipts=None,
+    state_resolution_receipt=None,
+    failure_attribution_receipts=None,
+    strict_expanded: bool = False,
 ) -> CapabilityAttributionReceipt:
     """Build C2/C3 inputs from the policy snapshot/load receipt tables."""
     snapshots = conn.execute(
@@ -422,7 +660,7 @@ def evaluate_capability_attribution_from_db(
         "eligible": not ablation_binding_reasons,
         "reasons": sorted(set(ablation_binding_reasons)),
     }
-    return evaluate_capability_attribution(
+    attribution = evaluate_capability_attribution(
         capability_id=capability_id,
         baseline={"memory_digest": baseline_memory_digest,
                   "policy_digest": policies.get(baseline_policy_snapshot_id),
@@ -436,8 +674,47 @@ def evaluate_capability_attribution_from_db(
         memory_delta=memory_delta, strict_memory_delta=strict_memory_delta,
         memory_snapshot_binding=memory_snapshot_binding,
         behavior_binding=behavior_binding,
-        ablation_binding=ablation_binding)
+        ablation_binding=ablation_binding,
+        knowledge_delta=knowledge_delta, asset_delta=asset_delta,
+        routing_receipts=routing_receipts,
+        state_resolution_receipt=state_resolution_receipt,
+        failure_attribution_receipts=failure_attribution_receipts,
+        strict_expanded=strict_expanded)
+    if state_resolution_receipt is None:
+        return attribution
+    state_payload = (attribution.detail.get("expanded_attribution") or {}).get(
+        "state_resolution_receipt")
+    state_reasons: list[str] = []
+    if isinstance(state_payload, Mapping):
+        try:
+            from tehm.state import verify_resolution_snapshot
+
+            checked_state = verify_resolution_snapshot(
+                conn, state_payload.get("resolution_id"))
+            if stable_dumps(checked_state.to_dict()) != stable_dumps(
+                    dict(state_payload)):
+                state_reasons.append("state_resolution_receipt_replay_mismatch")
+        except (TypeError, ValueError, KeyError, sqlite3.Error):
+            state_reasons.append("state_resolution_receipt_unverifiable")
+    elif strict_expanded:
+        state_reasons.append("state_resolution_receipt_malformed")
+    if not state_reasons:
+        return attribution
+    detail = dict(attribution.detail)
+    expanded = dict(detail.get("expanded_attribution") or {})
+    expanded["eligible"] = False
+    expanded["reasons"] = sorted(set(
+        list(expanded.get("reasons") or []) + state_reasons))
+    detail["expanded_attribution"] = expanded
+    missing = tuple(sorted(set(attribution.missing_gates) | {
+        f"P8:{reason}" for reason in state_reasons}))
+    return CapabilityAttributionReceipt(
+        capability_id=attribution.capability_id, gates=attribution.gates,
+        missing_gates=missing, promotable=False, detail=detail,
+        expanded_eligible=False,
+        expanded_missing=tuple(f"P8:{reason}" for reason in state_reasons))
 
 
 __all__ = ["CapabilityAttributionReceipt", "evaluate_capability_attribution",
-           "evaluate_capability_attribution_from_db"]
+           "evaluate_capability_attribution_from_db",
+           "EXPANDED_ATTRIBUTION_VERSION", "validate_expanded_attribution"]

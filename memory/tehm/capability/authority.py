@@ -923,6 +923,13 @@ def record_capability_authority(
         # Persist the baseline-policy ablation witness for independent C8
         # replay; the booleans alone are never treated as authority.
         payload["policy_ablation_binding"] = dict(policy_ablation_binding)
+    expanded_attribution = (attribution.get("detail") or {}).get(
+        "expanded_attribution")
+    if isinstance(expanded_attribution, Mapping):
+        # Keep P8 object-level witnesses with the authority payload so a
+        # later replay can validate KDelta/ADelta and routing/state/attribution
+        # receipts after the original in-memory audit object is gone.
+        payload["expanded_attribution"] = dict(expanded_attribution)
     receipt_digest = "sha256:" + hashlib.sha256(
         stable_dumps(payload).encode()).hexdigest()
     receipt_id = "capability_authority_" + receipt_digest.split(":", 1)[1][:20]
@@ -1075,6 +1082,57 @@ def verify_capability_authority(
                 conn, payload_policy_ablation_binding,
                 baseline_policy_snapshot_id=expected_baseline_policy,
                 runtime_id=payload_runtime_id))
+    payload_expanded = payload.get("expanded_attribution")
+    if payload_expanded is not None:
+        if not isinstance(payload_expanded, Mapping):
+            reasons.append("P8:expanded_attribution_malformed")
+        else:
+            memory_manifest = payload.get("memory_delta")
+            if not isinstance(memory_manifest, Mapping):
+                memory_manifest = {}
+                if payload_expanded.get("strict") is True:
+                    reasons.append("P8:expanded_memory_delta_missing")
+                else:
+                    # Non-strict compatibility receipts may carry the
+                    # baseline/candidate labels only inside a typed delta.
+                    # Recover those labels for structural replay without
+                    # treating them as strict C1 authority.
+                    for key in ("knowledge_delta", "asset_delta"):
+                        candidate_delta = payload_expanded.get(key)
+                        if isinstance(candidate_delta, Mapping):
+                            memory_manifest = candidate_delta
+                            break
+            from .attribution import validate_expanded_attribution
+
+            expanded, expanded_reasons = validate_expanded_attribution(
+                baseline_memory_digest=memory_manifest.get(
+                    "baseline_memory_digest"),
+                candidate_memory_digest=memory_manifest.get(
+                    "candidate_memory_digest"),
+                knowledge_delta=payload_expanded.get("knowledge_delta"),
+                asset_delta=payload_expanded.get("asset_delta"),
+                routing_receipts=payload_expanded.get("routing_receipts"),
+                state_resolution_receipt=payload_expanded.get(
+                    "state_resolution_receipt"),
+                failure_attribution_receipts=payload_expanded.get(
+                    "failure_attribution_receipts"),
+                strict=payload_expanded.get("strict") is True,
+                memory_changed_ids=tuple(memory_manifest.get("changed_ids") or ()))
+            reasons.extend(f"P8:{reason}" for reason in expanded_reasons)
+            if stable_dumps(dict(payload_expanded)) != stable_dumps(expanded):
+                reasons.append("P8:expanded_attribution_replay_mismatch")
+            state_payload = payload_expanded.get("state_resolution_receipt")
+            if isinstance(state_payload, Mapping):
+                try:
+                    from tehm.state import verify_resolution_snapshot
+
+                    checked_state = verify_resolution_snapshot(
+                        conn, state_payload.get("resolution_id"))
+                    if stable_dumps(checked_state.to_dict()) != stable_dumps(
+                            dict(state_payload)):
+                        reasons.append("P8:state_resolution_receipt_replay_mismatch")
+                except (TypeError, ValueError, KeyError, sqlite3.Error):
+                    reasons.append("P8:state_resolution_receipt_unverifiable")
     for key in ("candidate_policy_snapshot_id", "runtime_id", "attribution_digest"):
         if payload.get(key) != data.get(key):
             reasons.append(f"authority_{key}_payload_mismatch")

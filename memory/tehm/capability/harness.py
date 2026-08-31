@@ -55,6 +55,12 @@ def evaluate_capability_campaign(
     candidate_controls: dict,
     memory_delta: Mapping | None = None,
     strict_memory_delta: bool = False,
+    knowledge_delta=None,
+    asset_delta=None,
+    routing_receipts=None,
+    state_resolution_receipt=None,
+    failure_attribution_receipts=None,
+    strict_expanded: bool = False,
 ) -> CapabilityCampaignReceipt:
     """Evaluate attribution with an exact frozen-control comparison."""
     if not capability_id:
@@ -77,7 +83,12 @@ def evaluate_capability_campaign(
         candidate_behavior_digest=candidate_behavior_digest,
         target_gain=target_gain, no_regression=no_regression,
         heldout=heldout, ablation=ablation, memory_delta=memory_delta,
-        strict_memory_delta=strict_memory_delta)
+        strict_memory_delta=strict_memory_delta,
+        knowledge_delta=knowledge_delta, asset_delta=asset_delta,
+        routing_receipts=routing_receipts,
+        state_resolution_receipt=state_resolution_receipt,
+        failure_attribution_receipts=failure_attribution_receipts,
+        strict_expanded=strict_expanded)
     if not controls_match:
         detail = dict(attribution.detail)
         detail["controls_match"] = False
@@ -89,7 +100,9 @@ def evaluate_capability_campaign(
             capability_id=attribution.capability_id,
             gates={**attribution.gates, "C4": False},
             missing_gates=tuple(sorted(set(attribution.missing_gates) | {"controls_match"})),
-            promotable=False, detail=detail)
+            promotable=False, detail=detail,
+            expanded_eligible=attribution.expanded_eligible,
+            expanded_missing=attribution.expanded_missing)
     return CapabilityCampaignReceipt(
         capability_id=capability_id,
         control_digest=control_digest,
