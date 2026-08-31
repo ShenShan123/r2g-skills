@@ -2708,3 +2708,25 @@ P3 回归覆盖 path→claim、L0/L1 shadow-only、evidence split firewall、neg
 fresh/old-v4 schema 兼容；新增定向测试 `8 passed`，完整 `memory/tests` 为
 `772 passed in 12:29`。该阶段仍未改变 canonical evidence、rule/asset lifecycle 或
 production routing。
+
+### 2026-08-31 P4 Online localized revision（shadow-only）
+
+新增 `evolution/attribution.py` 与 `evolution/local_revision.py`。Failure Attribution
+从 typed transition、activation、Experience Value 和 State Resolution receipt 中区分
+`STATE_RESOLUTION_FAILURE`、`APPLICABILITY_FAILURE`、`CAUSAL_MODEL_FAILURE`、
+`BINDING_FAILURE`、`ASSET_EXECUTION_FAILURE`、`VERIFICATION_FAILURE`、
+`AUTHORITY_FAILURE`、`MEMORY_INTERFERENCE` 等原因，并给出可重放的 update target；
+模型输出不参与归因或授予 authority。
+
+`observe_transition()` 现在在原有 savepoint 内并行生成 P1 `StateResolutionReceipt`、
+P4 `MemoryFailureAttributionReceipt` 和 `LocalizedUpdatePlan`。计划只选择
+`UPDATE_NONE/STATE_RELATION/CAUSAL_KNOWLEDGE/RULE/ASSET/CAPABILITY` 之一，保留完整
+candidate targets、operation（包括 `SUPERSEDE/INVALIDATE/REACTIVATE`）、evidence refs、
+knowledge/rule refs 和 resolution ID；它不会执行 rule/knowledge/asset mutation，也不
+改变既有 trigger、preview、event cardinality 或 production runtime。新增 event vocabulary
+已登记，但当前 receipt 继续复用既有不可变 snapshot，兼容历史在线链。
+
+P4 回归覆盖 verification failure attribution、memory-interference 的非 runtime 计划、
+observer P4 receipt replay，以及既有 P1/P2/causal 回归；新增定向 `11 passed`，完整
+`memory/tests` 为 `775 passed in 12:15`。下一步可进入 P5：NO_SKILL / memory router
+shadow mode，仍不得把 causal retrieval 直接接入 production pipeline。

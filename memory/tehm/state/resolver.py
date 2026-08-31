@@ -66,6 +66,8 @@ def _input_digest(conn: sqlite3.Connection, scope: dict,
         "tehm_states", "tehm_transitions", "tehm_episodes", "tehm_episode_steps",
         "tehm_rules", "tehm_rule_sources", "tehm_rule_status", "tehm_rule_revisions",
         "tehm_causal_paths", "tehm_assets", "tehm_asset_status", "tehm_capabilities",
+        "tehm_mechanism_knowledge", "tehm_mechanism_knowledge_status",
+        "tehm_mechanism_knowledge_evidence",
         "tehm_memory_relations",
     )
     payload = {"scope": scope, "relations": [item.to_dict() for item in relations]}

@@ -10,7 +10,10 @@ from tehm.causal.path_builder import validate_persisted_path_row
 from tehm.causal.witness import parse_source_transition_ids
 from tehm.dataset import (normalize_stored_learner_bool,
                           validate_membership_row)
+from tehm.state import resolve_current_state
+from tehm.state.receipts import StateResolutionReceipt
 
+from .attribution import MemoryFailureAttributionReceipt, attribute_failure
 from .conflict import detect_conflicts
 from .consolidation import (CONSOLIDATION_OPERATIONS,
                              ConsolidationDecisionReceipt,
@@ -18,6 +21,7 @@ from .consolidation import (CONSOLIDATION_OPERATIONS,
 from .events import append_memory_event, verify_event_chain
 from .incremental_crystallize import preview_affected_groups
 from .novelty import detect_novelty
+from .local_revision import LocalizedUpdatePlan, plan_localized_update
 from .receipts import (IncrementalCrystallizationReceipt,
                        MemoryEventReceipt, OnlineMemoryReceipt,
                        ExperienceValueReceipt)
@@ -179,6 +183,32 @@ def _affected_path_ids(
     return tuple(affected)
 
 
+def _affected_knowledge_ids(
+        conn: sqlite3.Connection, path_ids: tuple[str, ...]) -> tuple[str, ...]:
+    """Resolve registered knowledge claims that explicitly cite affected paths."""
+    if not path_ids or conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            ("tehm_mechanism_knowledge",)).fetchone() is None:
+        return ()
+    rows = conn.execute(
+        """SELECT knowledge_id, version, causal_path_ids_json
+             FROM tehm_mechanism_knowledge
+            ORDER BY knowledge_id, version"""
+    ).fetchall()
+    wanted = set(path_ids)
+    result: list[str] = []
+    for row in rows:
+        try:
+            refs = json.loads(row["causal_path_ids_json"])
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError("online affected knowledge path refs are malformed") from exc
+        if not isinstance(refs, list) or any(type(ref) is not str or not ref for ref in refs):
+            raise ValueError("online affected knowledge path refs are malformed")
+        if wanted.intersection(refs):
+            result.append(f"{row['knowledge_id']}@{row['version']}")
+    return tuple(result)
+
+
 def _event_receipt(row: sqlite3.Row) -> MemoryEventReceipt:
     """Convert a validated event row into the public receipt shape."""
     return MemoryEventReceipt(
@@ -219,6 +249,66 @@ def _strict_digest(payload: dict, key: str, *, label: str) -> str | None:
     if type(value) is not str or not value:
         raise ValueError(f"online observation {label} is malformed")
     return value
+
+
+def _state_receipt_from_dict(conn: sqlite3.Connection, payload: dict | None,
+                             *, transition_id: str) -> StateResolutionReceipt | None:
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        raise ValueError("online observation state resolution snapshot is malformed")
+    required = {"resolution_id", "input_memory_digest", "resolution_digest",
+                "relation_count", "unresolved_conflicts"}
+    if any(key not in payload for key in required):
+        raise ValueError("online observation state resolution snapshot is incomplete")
+    resolution_id = payload["resolution_id"]
+    if type(resolution_id) is not str or not resolution_id:
+        raise ValueError("online observation state resolution ID is malformed")
+    relation_count = payload["relation_count"]
+    if type(relation_count) is not int or relation_count < 0:
+        raise ValueError("online observation state resolution relation count is malformed")
+    unresolved = _strict_string_tuple(
+        payload, "unresolved_conflicts", label="state resolution conflicts")
+    from tehm.state.resolver import load_resolution_snapshot
+
+    stored = load_resolution_snapshot(conn, resolution_id)
+    expected = StateResolutionReceipt(
+        resolution_id=stored.resolution_id,
+        input_memory_digest=stored.input_memory_digest,
+        resolution_digest=stored.resolution_digest,
+        relation_count=len(stored.relation_ids),
+        unresolved_conflicts=stored.unresolved_conflicts,
+    )
+    supplied = StateResolutionReceipt(
+        resolution_id=resolution_id,
+        input_memory_digest=payload["input_memory_digest"],
+        resolution_digest=payload["resolution_digest"],
+        relation_count=relation_count,
+        unresolved_conflicts=unresolved,
+    )
+    if supplied.to_dict() != expected.to_dict():
+        raise ValueError("online observation state resolution replay conflicts")
+    return supplied
+
+
+def _p4_receipts_from_snapshot(conn: sqlite3.Connection, snapshot: dict,
+                               *, transition_id: str, campaign_id: str):
+    state_resolution = _state_receipt_from_dict(
+        conn, snapshot.get("state_resolution"), transition_id=transition_id)
+    attribution = None
+    raw_attribution = snapshot.get("failure_attribution")
+    if raw_attribution is not None:
+        attribution = MemoryFailureAttributionReceipt.from_dict(raw_attribution)
+        if attribution.transition_id != transition_id:
+            raise ValueError("online observation failure attribution identity conflicts")
+    plan = None
+    raw_plan = snapshot.get("localized_update_plan")
+    if raw_plan is not None:
+        plan = LocalizedUpdatePlan.from_dict(raw_plan)
+        if (plan.transition_id != transition_id or
+                plan.campaign_id != campaign_id or not plan.shadow_only):
+            raise ValueError("online observation localized plan identity conflicts")
+    return state_resolution, attribution, plan
 
 
 def _preview_from_dict(payload: dict | None) -> IncrementalCrystallizationReceipt | None:
@@ -497,6 +587,9 @@ def _replay_existing_observation(
             conn, transition_id, campaign_id=campaign_id)
         if stored_value.to_dict() != experience_value.to_dict():
             raise ValueError("online observation experience value replay conflicts")
+    state_resolution, failure_attribution, localized_update_plan = (
+        _p4_receipts_from_snapshot(
+            conn, snapshot, transition_id=transition_id, campaign_id=campaign_id))
     trigger_ids = [row["event_id"] for row in event_rows
                    if row["event_type"] == "CONSOLIDATION_TRIGGERED"]
     return OnlineMemoryReceipt(
@@ -517,6 +610,9 @@ def _replay_existing_observation(
             snapshot.get("consolidation_operation") or decision.operation),
         consolidation_decision=decision,
         experience_value=experience_value,
+        state_resolution=state_resolution,
+        failure_attribution=failure_attribution,
+        localized_update_plan=localized_update_plan,
     )
 
 
@@ -568,6 +664,7 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
             conn, transition_id, mechanism_family=fragment.mechanism_family,
             compatibility_profile=fragment.compatibility_profile,
             campaign_id=campaign_id)
+        affected_knowledge_ids = _affected_knowledge_ids(conn, affected_path_ids)
         novelty_result = detect_novelty(conn, transition_id, campaign_id=campaign_id)
         novelty = novelty_result["status"]
         conflict = detect_conflicts(conn, transition_id, campaign_id=campaign_id)
@@ -591,6 +688,26 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
             novelty_result=novelty_result, conflict=conflict, trigger=trigger)
         record_experience_value(
             conn, experience_value, created_at=created_at, commit=False)
+        resolved_state = resolve_current_state(
+            conn,
+            {"mechanism_family": fragment.mechanism_family,
+             "compatibility_profile": fragment.compatibility_profile},
+            mode="shadow", persist=True, commit=False)
+        state_resolution = StateResolutionReceipt(
+            resolution_id=resolved_state.resolution_id,
+            input_memory_digest=resolved_state.input_memory_digest,
+            resolution_digest=resolved_state.resolution_digest,
+            relation_count=len(resolved_state.relation_ids),
+            unresolved_conflicts=resolved_state.unresolved_conflicts,
+        )
+        failure_attribution = attribute_failure(
+            conn, transition_id=transition_id, value_receipt=experience_value,
+            state_resolution=resolved_state, conflict=conflict)
+        localized_update_plan = plan_localized_update(
+            experience_value, failure_attribution,
+            state_resolution=resolved_state, rule_refs=affected_rule_ids,
+            knowledge_refs=affected_knowledge_ids,
+            evidence_refs=(transition_id,))
         snapshot = {
             "version": "online-receipt-v1",
             "fragment_node_ids": list(fragment.node_ids),
@@ -607,6 +724,9 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
                 preview.to_dict() if preview is not None else None),
             "consolidation_decision": decision.to_dict(),
             "experience_value": experience_value.to_dict(),
+            "state_resolution": state_resolution.to_dict(),
+            "failure_attribution": failure_attribution.to_dict(),
+            "localized_update_plan": localized_update_plan.to_dict(),
             "event_sequence": _observation_sequence(
                 transition_id=transition_id, fragment=fragment,
                 novelty=novelty, conflict=conflict, harmful=harmful,
@@ -707,7 +827,10 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
             consolidation_preview=preview,
             consolidation_operation=decision.operation,
             consolidation_decision=decision,
-            experience_value=experience_value)
+            experience_value=experience_value,
+            state_resolution=state_resolution,
+            failure_attribution=failure_attribution,
+            localized_update_plan=localized_update_plan)
     except Exception:
         if savepoint_active:
             conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")

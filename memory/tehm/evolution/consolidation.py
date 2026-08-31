@@ -15,6 +15,7 @@ from .triggers import ConsolidationTriggerReceipt
 CONSOLIDATION_OPERATIONS = frozenset({
     "RETAIN", "ADD", "MERGE", "SPECIALIZE", "GENERALIZE", "REVISE",
     "SPLIT", "DEMOTE", "QUARANTINE", "RETIRE", "ROLLBACK",
+    "SUPERSEDE", "INVALIDATE", "REACTIVATE",
 })
 
 

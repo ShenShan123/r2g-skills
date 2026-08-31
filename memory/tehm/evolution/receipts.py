@@ -54,6 +54,11 @@ class OnlineMemoryReceipt:
     # P2 value selection is a parallel shadow receipt.  It does not replace
     # the legacy trigger/operation fields above and carries no authority.
     experience_value: object | None = None
+    # P4 localized evolution witnesses.  These are snapshots of pure
+    # evaluation results; they do not execute the selected update target.
+    state_resolution: object | None = None
+    failure_attribution: object | None = None
+    localized_update_plan: object | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -81,6 +86,15 @@ class OnlineMemoryReceipt:
             "experience_value": (
                 self.experience_value.to_dict()
                 if self.experience_value is not None else None),
+            "state_resolution": (
+                self.state_resolution.to_dict()
+                if self.state_resolution is not None else None),
+            "failure_attribution": (
+                self.failure_attribution.to_dict()
+                if self.failure_attribution is not None else None),
+            "localized_update_plan": (
+                self.localized_update_plan.to_dict()
+                if self.localized_update_plan is not None else None),
         }
 
 

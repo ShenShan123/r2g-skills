@@ -23,6 +23,14 @@ EVENT_TYPES = frozenset({
     "SUPPORT_INCREASED", "RULE_CONFLICT", "RULE_HARMFUL", "UTILITY_DRIFT",
     "CONSOLIDATION_TRIGGERED", "RULE_REVISION_PROPOSED",
     "ASSET_GAP_DETECTED", "CAPABILITY_EVIDENCE_ADDED",
+    # P4 localized evolution vocabulary.  Events are append-only audit
+    # primitives; observe_transition currently stores these receipts in its
+    # existing immutable snapshot to preserve the legacy event cardinality.
+    "EXPERIENCE_VALUED", "STATE_RESOLVED", "KNOWLEDGE_CONFLICT",
+    "KNOWLEDGE_REVISION_PROPOSED", "KNOWLEDGE_SUPERSEDED",
+    "KNOWLEDGE_INVALIDATED", "ASSET_INTERFERENCE", "ASSET_REVISION_PROPOSED",
+    "CAPABILITY_GAP_UPDATED", "CAPABILITY_REGRESSION_OBSERVED",
+    "MEMORY_ABSTAINED", "NO_SKILL_SELECTED",
 })
 
 

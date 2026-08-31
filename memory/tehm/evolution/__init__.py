@@ -13,6 +13,14 @@ from .incremental_crystallize import (
 )
 from .manager import observe_transition
 from .novelty import detect_novelty
+from .attribution import (
+    FAILURE_TYPES, UPDATE_TARGETS, MemoryFailureAttributionReceipt,
+    attribute_failure, failure_attribution_digest,
+)
+from .local_revision import (
+    UPDATE_OPERATIONS, LocalizedUpdatePlan, LocalizedUpdatePlanReceipt,
+    plan_localized_update,
+)
 from .receipts import (
     ExperienceValueReceipt, IncrementalCrystallizationReceipt,
     MemoryEventReceipt, OnlineMemoryReceipt, RuleRevisionReceipt,
@@ -37,6 +45,9 @@ from .value import (
 
 __all__ = [
     "EVENT_TYPES", "REVISION_OPERATIONS", "ExperienceValueReceipt",
+    "FAILURE_TYPES", "UPDATE_TARGETS", "UPDATE_OPERATIONS",
+    "MemoryFailureAttributionReceipt", "LocalizedUpdatePlan",
+    "LocalizedUpdatePlanReceipt",
     "IncrementalCrystallizationReceipt",
     "MemoryEventReceipt", "OnlineMemoryReceipt", "RuleRevisionReceipt",
     "append_memory_event", "crystallize_affected_groups",
@@ -50,6 +61,7 @@ __all__ = [
     "RAW_EVIDENCE_TABLES", "RawEvidenceReceipt", "raw_evidence_digest",
     "verify_raw_evidence_unchanged",
     "ConflictReceipt", "detect_conflicts", "detect_novelty",
+    "attribute_failure", "failure_attribution_digest", "plan_localized_update",
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",
     "require_verified_execution", "require_verified_transition",
