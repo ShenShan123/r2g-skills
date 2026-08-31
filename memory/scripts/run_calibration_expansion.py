@@ -224,6 +224,21 @@ LINEAGES = (
      "action": "32", "screen_split": "contract_heldout"},
     {"suffix": "v127", "design": "future_prospective_logic_v127", "base": "28",
      "action": "32", "screen_split": "contract_heldout"},
+    # Second, source-disjoint contract cohort.  These lineages are
+    # pre-registered before execution and are not substituted for v122-v127;
+    # every row remains in the contract denominator, including FAIL rows.
+    {"suffix": "v128", "design": "future_prospective_logic_v128", "base": "24",
+     "action": "32", "screen_split": "contract_support_v2"},
+    {"suffix": "v129", "design": "future_prospective_logic_v129", "base": "24",
+     "action": "32", "screen_split": "contract_support_v2"},
+    {"suffix": "v130", "design": "future_prospective_logic_v130", "base": "24",
+     "action": "32", "screen_split": "contract_support_v2"},
+    {"suffix": "v131", "design": "future_prospective_logic_v131", "base": "24",
+     "action": "32", "screen_split": "contract_heldout_v2"},
+    {"suffix": "v132", "design": "future_prospective_logic_v132", "base": "24",
+     "action": "32", "screen_split": "contract_heldout_v2"},
+    {"suffix": "v133", "design": "future_prospective_logic_v133", "base": "24",
+     "action": "32", "screen_split": "contract_heldout_v2"},
 )
 
 

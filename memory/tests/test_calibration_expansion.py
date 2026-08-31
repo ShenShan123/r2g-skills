@@ -223,6 +223,35 @@ def test_v122_v127_are_a_new_contract_bound_source_disjoint_cohort():
     assert len(digests) == 6
 
 
+def test_v128_v133_are_preregistered_as_a_second_contract_cohort():
+    specs = {row["suffix"]: row for row in LINEAGES}
+    suffixes = [f"v{index}" for index in range(128, 134)]
+    assert [specs[suffix]["base"] for suffix in suffixes] == ["24"] * 6
+    assert {specs[suffix]["action"] for suffix in suffixes} == {"32"}
+    assert {specs[suffix]["screen_split"] for suffix in suffixes[:3]} == {
+        "contract_support_v2"}
+    assert {specs[suffix]["screen_split"] for suffix in suffixes[3:]} == {
+        "contract_heldout_v2"}
+    fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "physical_rtl"
+    prior = {
+        hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in fixture_root.glob("future_prospective_logic_v*.v")
+        if path.stem not in {specs[suffix]["design"] for suffix in suffixes}
+    }
+    digests = set()
+    for suffix in suffixes:
+        design = specs[suffix]["design"]
+        rtl = fixture_root / f"{design}.v"
+        sdc = fixture_root / f"{design}.sdc"
+        assert rtl.is_file() and sdc.is_file()
+        assert f"module {design}" in rtl.read_text()
+        assert f"current_design {design}" in sdc.read_text()
+        digest = hashlib.sha256(rtl.read_bytes()).hexdigest()
+        assert digest not in prior
+        digests.add(digest)
+    assert len(digests) == 6
+
+
 def test_contract_equivalence_receipt_is_independent_and_source_bound(tmp_path):
     rtl = tmp_path / "design.v"
     rtl.write_text("module design(input wire a, output wire y); assign y = a; endmodule\n")
