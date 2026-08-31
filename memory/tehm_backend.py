@@ -239,13 +239,32 @@ class TehmMemoryBackend:
             persist_state=persist_state, commit=commit)
 
     def retrieve_assets(self, decision: MemoryRoutingDecision) -> list[MemoryCandidate]:
-        """Keep asset candidates out of the backend source enum until P7."""
+        """Keep asset candidates out of the backend source enum until P9."""
         if not isinstance(decision, MemoryRoutingDecision):
             raise TypeError("retrieve_assets requires MemoryRoutingDecision")
         from tehm.retrieval.memory_router import retrieve_assets
 
         conn, _ = self._open()
         return retrieve_assets(conn, decision)
+
+    def select_assets(
+            self, query: MemoryQuery | RepairContext, *,
+            routing: MemoryRoutingDecision | None = None,
+            candidate_budget: int = 1,
+            compatibility_mode: bool = False):
+        """Run the P7 knowledge-grounded asset selector in shadow mode.
+
+        The returned ``AssetSelection`` is an advisory registry view plus a
+        replayable receipt.  It is intentionally separate from ``retrieve``
+        and ``propose_activation``: no ``tehm_asset`` candidate source or
+        executable asset can enter production runtime through this seam.
+        """
+        from tehm.retrieval.asset_selector import select_knowledge_grounded_assets
+
+        conn, _ = self._open()
+        return select_knowledge_grounded_assets(
+            conn, query, routing=routing, candidate_budget=candidate_budget,
+            mode="shadow", compatibility_mode=compatibility_mode)
 
     def build_candidate_pool(
             self, query: MemoryQuery | RepairContext,

@@ -38,6 +38,12 @@ _CANDIDATE_POOL_EXPORTS = frozenset({
     "CandidatePoolReceipt", "CandidatePool", "build_candidate_pool",
     "CandidatePoolOutcome", "CandidatePoolMetrics", "summarize_candidate_pool",
 })
+_ASSET_SELECTOR_EXPORTS = frozenset({
+    "ASSET_SELECTION_DECISIONS", "ASSET_SELECTOR_VERSION",
+    "MAX_KNOWLEDGE_GROUNDED_ASSETS", "AssetSelection", "AssetSelectionReceipt",
+    "AssetSelectorError", "select_asset", "select_assets",
+    "select_knowledge_grounded_assets",
+})
 
 
 def __getattr__(name):
@@ -47,6 +53,9 @@ def __getattr__(name):
     if name in _CANDIDATE_POOL_EXPORTS:
         from tehm.retrieval import candidate_pool
         return getattr(candidate_pool, name)
+    if name in _ASSET_SELECTOR_EXPORTS:
+        from tehm.retrieval import asset_selector
+        return getattr(asset_selector, name)
     raise AttributeError(name)
 
 __all__ = [
@@ -60,4 +69,8 @@ __all__ = [
     "MAX_MEMORY_ADVISOR_CANDIDATES", "POOL_OUTCOMES", "CandidatePoolError",
     "CandidatePoolReceipt", "CandidatePool", "build_candidate_pool",
     "CandidatePoolOutcome", "CandidatePoolMetrics", "summarize_candidate_pool",
+    "ASSET_SELECTION_DECISIONS", "ASSET_SELECTOR_VERSION",
+    "MAX_KNOWLEDGE_GROUNDED_ASSETS", "AssetSelection", "AssetSelectionReceipt",
+    "AssetSelectorError", "select_asset", "select_assets",
+    "select_knowledge_grounded_assets",
 ]

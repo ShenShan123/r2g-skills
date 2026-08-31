@@ -2778,3 +2778,23 @@ P6 定向回归为 `memory/tests/test_candidate_pool.py`（7 passed），覆盖�
 budget/no-memory firewall、causal/NO_SKILL gate、receipt replay、unknown outcome
 隔离和 interference metrics；P5 router 与 backend 兼容测试保持通过。当前完整
 `memory/tests` 为 `790 passed in 12:28`。
+
+### 2026-08-31 P7 knowledge-grounded Asset selector（shadow-only）
+
+新增 `tehm/retrieval/asset_selector.py` 与 `TehmMemoryBackend.select_assets()`。
+严格 selector 只接受同时满足以下条件的 `RTL_REWRITE_TEMPLATE`：当前
+`MechanismKnowledge` 已验证且正向适用性通过、负向适用性未触发、L2+ causal path
+可重放、asset 内容/生命周期完整、manifest binding proof 有效，并且 asset provenance
+显式绑定到相同的 knowledge object。每次最多选择一个 advisor asset，返回独立的
+content-addressed `AssetSelectionReceipt`；selector 不写 canonical/lifecycle/authority，
+不执行 RTL action，也不把 `tehm_asset` 加入 `MemoryCandidate.source`。
+
+旧 fixture 可通过调用方显式传入 `compatibility_mode=True` 保持可观察，但该路径仍是
+shadow-only，不能绕过 production gate。缺少 knowledge、binding、authority 或状态
+一致性时分别 fail-closed 为 `ABSTAIN`/`NO_SKILL`，并保留可审计原因。asset proposal
+现在可选记录 `provenance.mechanism_knowledge_ids`，供 strict campaign 建立绑定。
+
+P7 定向回归为 `memory/tests/test_asset_selector.py`（4 passed）；`memory/docs/` 继续由
+`.gitignore` 排除，设计文档只作为本地输入，不进入 release commit。下一步是 P8：把
+knowledge/asset delta 与 attribution、state-resolution receipt 接入 capability audit，
+仍先保持 evaluation-only。

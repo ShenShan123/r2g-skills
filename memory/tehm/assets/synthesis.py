@@ -11,7 +11,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from tehm.ids import stable_dumps
 from tehm.rtl.compatibility import profile_for_action
@@ -59,6 +59,7 @@ def build_rtl_asset_proposal(
     compatibility_profile: str,
     verifier_obligations: tuple[str, ...] | list[str],
     creator: str = "tehm-asset-synthesizer",
+    mechanism_knowledge_ids: Sequence[str] | None = None,
 ) -> AssetProposal:
     gap_dict = gap.to_dict() if hasattr(gap, "to_dict") else dict(gap or {})
     domain = str(action_payload_template.get("domain") or "")
@@ -77,6 +78,22 @@ def build_rtl_asset_proposal(
     obligations = tuple(sorted(set(str(item) for item in verifier_obligations)))
     if not obligations:
         raise ValueError("asset proposal needs verifier obligations")
+    knowledge_ids = tuple(sorted({str(item).strip() for item in
+                                  (mechanism_knowledge_ids or ())}))
+    if any(not item or "@" not in item for item in knowledge_ids):
+        raise ValueError(
+            "mechanism_knowledge_ids must contain knowledge object IDs (knowledge_id@version)")
+    provenance = {
+        "creator": creator, "generator_is_verifier": False,
+        "gap_id": gap_dict.get("gap_id"),
+        "evidence_transitions": list(gap_dict.get("evidence_transitions", [])),
+        "asset_version": RTL_ASSET_VERSION,
+    }
+    # Knowledge binding is optional at proposal time so old fixture proposals
+    # remain replayable.  The P7 strict selector requires this field before an
+    # asset can become a knowledge-grounded advisory candidate.
+    if knowledge_ids:
+        provenance["mechanism_knowledge_ids"] = list(knowledge_ids)
     return AssetProposal(
         asset_type="RTL_REWRITE_TEMPLATE", name=name, version=RTL_ASSET_VERSION,
         definition={
@@ -103,12 +120,7 @@ def build_rtl_asset_proposal(
             "compatibility_profile": compatibility_profile,
             "action_domain": domain,
         },
-        provenance={
-            "creator": creator, "generator_is_verifier": False,
-            "gap_id": gap_dict.get("gap_id"),
-            "evidence_transitions": list(gap_dict.get("evidence_transitions", [])),
-            "asset_version": RTL_ASSET_VERSION,
-        },
+        provenance=provenance,
         promotion_eligible=False)
 
 
