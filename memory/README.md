@@ -2661,6 +2661,6 @@ lifecycle、authority ledger 或 production runtime；`verify_resolution_snapsho
 重放当前输入并拒绝 snapshot 漂移。
 
 新增 P1 回归覆盖 supersession、scope 隔离、cycle、relation/snapshot 篡改、现有 v4
-store 兼容、authority/contradiction fail-closed 和 canonical/lifecycle 不变性。当前验证结果：定向 state 测试 `5 passed`，
-全套 `memory/tests` `757 passed`；该阶段仍未打开 causal/asset production routing，
+store 兼容、authority/contradiction fail-closed 和 canonical/lifecycle 不变性。当前验证结果：定向 state 测试 `5 passed`；
+新增最后一个用例前的全套 `memory/tests` 基线为 `757 passed`，本次新增用例未修改生产代码；该阶段仍未打开 causal/asset production routing，
 下一阶段再接 Experience Value 与 relation-producing online revision。
