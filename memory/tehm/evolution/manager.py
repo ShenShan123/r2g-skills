@@ -19,9 +19,11 @@ from .events import append_memory_event, verify_event_chain
 from .incremental_crystallize import preview_affected_groups
 from .novelty import detect_novelty
 from .receipts import (IncrementalCrystallizationReceipt,
-                       MemoryEventReceipt, OnlineMemoryReceipt)
+                       MemoryEventReceipt, OnlineMemoryReceipt,
+                       ExperienceValueReceipt)
 from .triggers import evaluate_consolidation_trigger
 from .verification import require_verified_execution
+from .value import evaluate_experience_value, load_experience_value, record_experience_value
 
 
 def _membership(conn: sqlite3.Connection, transition_id: str,
@@ -484,6 +486,17 @@ def _replay_existing_observation(
     novelty = snapshot.get("novelty")
     if type(novelty) is not str or not novelty:
         raise ValueError("online observation novelty is malformed")
+    experience_value = None
+    raw_value = snapshot.get("experience_value")
+    if raw_value is not None:
+        experience_value = ExperienceValueReceipt.from_dict(raw_value)
+        if (experience_value.transition_id != transition_id or
+                experience_value.campaign_id != campaign_id):
+            raise ValueError("online observation experience value identity conflicts")
+        stored_value = load_experience_value(
+            conn, transition_id, campaign_id=campaign_id)
+        if stored_value.to_dict() != experience_value.to_dict():
+            raise ValueError("online observation experience value replay conflicts")
     trigger_ids = [row["event_id"] for row in event_rows
                    if row["event_type"] == "CONSOLIDATION_TRIGGERED"]
     return OnlineMemoryReceipt(
@@ -503,6 +516,7 @@ def _replay_existing_observation(
         consolidation_operation=str(
             snapshot.get("consolidation_operation") or decision.operation),
         consolidation_decision=decision,
+        experience_value=experience_value,
     )
 
 
@@ -569,6 +583,14 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
             preview = preview_affected_groups(
                 conn, [transition_id], campaign_id=campaign_id)
             decision = decide_consolidation(trigger, preview)
+        # P2 is deliberately parallel to the legacy trigger: value selection
+        # records an auditable update priority but cannot alter trigger,
+        # operation, canonical evidence, lifecycle, or runtime authority.
+        experience_value = evaluate_experience_value(
+            conn, transition_id, campaign_id=campaign_id,
+            novelty_result=novelty_result, conflict=conflict, trigger=trigger)
+        record_experience_value(
+            conn, experience_value, created_at=created_at, commit=False)
         snapshot = {
             "version": "online-receipt-v1",
             "fragment_node_ids": list(fragment.node_ids),
@@ -584,6 +606,7 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
             "consolidation_preview": (
                 preview.to_dict() if preview is not None else None),
             "consolidation_decision": decision.to_dict(),
+            "experience_value": experience_value.to_dict(),
             "event_sequence": _observation_sequence(
                 transition_id=transition_id, fragment=fragment,
                 novelty=novelty, conflict=conflict, harmful=harmful,
@@ -683,7 +706,8 @@ def observe_transition(conn: sqlite3.Connection, transition_id: str,
             trigger_event_id=trigger_event.event_id if trigger_event else None,
             consolidation_preview=preview,
             consolidation_operation=decision.operation,
-            consolidation_decision=decision)
+            consolidation_decision=decision,
+            experience_value=experience_value)
     except Exception:
         if savepoint_active:
             conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")

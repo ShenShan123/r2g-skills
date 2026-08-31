@@ -2662,5 +2662,27 @@ lifecycle、authority ledger 或 production runtime；`verify_resolution_snapsho
 
 新增 P1 回归覆盖 supersession、scope 隔离、cycle、relation/snapshot 篡改、现有 v4
 store 兼容、authority/contradiction fail-closed 和 canonical/lifecycle 不变性。当前验证结果：定向 state 测试 `5 passed`；
-新增最后一个用例前的全套 `memory/tests` 基线为 `757 passed`，本次新增用例未修改生产代码；该阶段仍未打开 causal/asset production routing，
-下一阶段再接 Experience Value 与 relation-producing online revision。
+新增最后一个用例前的全套 `memory/tests` 基线为 `757 passed`，本次新增用例未修改生产代码；该阶段仍未打开 causal/asset production routing。
+
+### 2026-08-31 P2 Experience Value（shadow-only）
+
+在 P1 resolver 之上新增 `evolution/value.py` 与 `value_receipts.py`。Value
+层从 canonical transition、dataset membership、novelty/conflict、promoted
+rule/asset、intervention pair、activation prediction/ablation 等已存在的 typed
+witness 计算 `novelty`、`severity`、`capability_gap`、`causal_discrimination`、
+`surprise`、`counterexample`、`memory_interference`、`redundancy` 八个有界分量，
+以固定权重得到可重放的 `P0_CRITICAL`–`P3_LOW` priority 和
+`STATE/CAUSAL/RULE/ASSET/CAPABILITY/NONE` update layers。没有 RL critic，也不接受
+模型自行授予分数。
+
+`tehm_experience_values` 是 additive v4 shadow 表；旧 v4 store 首次调用时惰性
+建立，`tehm_meta.schema_version` 仍为 `tehm-v4`。`observe_transition()` 现在在同一
+savepoint 内并行保存 value receipt，并继续返回原有 trigger/operation；replay 会校验
+receipt digest。低价值证据仍保留，非 training evidence 的 layers 固定为 `NONE`，任何
+Value 结果都不会写 canonical/lifecycle/authority/runtime。
+
+P2 回归覆盖 routine/new-mechanism、promoted-memory counterexample、memory
+interference、prediction surprise、controlled intervention、held-out audit-only、
+receipt 篡改和 manager replay：定向 `test_experience_value.py` 为 `5 passed`，
+online/schema 回归为 `42 passed`。下一阶段是 P3：将已有 causal path 转为独立的
+Mechanism Knowledge claim，仍先保持 shadow/candidate、禁止自动 promoted。

@@ -373,6 +373,32 @@ CREATE INDEX IF NOT EXISTS idx_memory_events_campaign
 CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_events_digest
     ON tehm_memory_events(event_digest);
 
+-- Experience Value selection (P2 additive shadow table).  The value layer
+-- decides whether a derived update is worth considering; it never deletes
+-- canonical evidence, changes the legacy trigger result, or grants runtime
+-- authority.  Existing v4 stores create this table lazily on first use.
+CREATE TABLE IF NOT EXISTS tehm_experience_values (
+    transition_id          TEXT NOT NULL,
+    campaign_id            TEXT NOT NULL,
+    novelty                REAL NOT NULL,
+    severity               REAL NOT NULL,
+    capability_gap         REAL NOT NULL,
+    causal_discrimination  REAL NOT NULL,
+    surprise               REAL NOT NULL,
+    counterexample         REAL NOT NULL,
+    memory_interference    REAL NOT NULL,
+    redundancy             REAL NOT NULL,
+    value_score            REAL NOT NULL,
+    priority               TEXT NOT NULL,
+    update_layers_json      TEXT NOT NULL,
+    receipt_json            TEXT NOT NULL,
+    receipt_digest          TEXT NOT NULL UNIQUE,
+    created_at              TEXT NOT NULL,
+    PRIMARY KEY (transition_id, campaign_id)
+);
+CREATE INDEX IF NOT EXISTS idx_experience_values_priority
+    ON tehm_experience_values(campaign_id, priority, value_score);
+
 CREATE TABLE IF NOT EXISTS tehm_rule_revisions (
     revision_id       TEXT PRIMARY KEY,
     parent_rule_id    TEXT,

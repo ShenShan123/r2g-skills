@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .value_receipts import ExperienceValueReceipt
+
 
 @dataclass(frozen=True)
 class MemoryEventReceipt:
@@ -49,6 +51,9 @@ class OnlineMemoryReceipt:
     consolidation_preview: object | None = None
     consolidation_operation: str = "RETAIN"
     consolidation_decision: object | None = None
+    # P2 value selection is a parallel shadow receipt.  It does not replace
+    # the legacy trigger/operation fields above and carries no authority.
+    experience_value: object | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -73,6 +78,9 @@ class OnlineMemoryReceipt:
             "consolidation_decision": (
                 self.consolidation_decision.to_dict()
                 if self.consolidation_decision is not None else None),
+            "experience_value": (
+                self.experience_value.to_dict()
+                if self.experience_value is not None else None),
         }
 
 
@@ -128,4 +136,5 @@ class RuleRevisionReceipt:
 
 
 __all__ = ["MemoryEventReceipt", "OnlineMemoryReceipt",
-           "IncrementalCrystallizationReceipt", "RuleRevisionReceipt"]
+           "IncrementalCrystallizationReceipt", "RuleRevisionReceipt",
+           "ExperienceValueReceipt"]

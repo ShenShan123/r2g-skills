@@ -14,8 +14,8 @@ from .incremental_crystallize import (
 from .manager import observe_transition
 from .novelty import detect_novelty
 from .receipts import (
-    IncrementalCrystallizationReceipt, MemoryEventReceipt, OnlineMemoryReceipt,
-    RuleRevisionReceipt,
+    ExperienceValueReceipt, IncrementalCrystallizationReceipt,
+    MemoryEventReceipt, OnlineMemoryReceipt, RuleRevisionReceipt,
 )
 from .revision import REVISION_OPERATIONS, record_rule_revision
 from .rollback import IsolatedRollbackReceipt, build_isolated_rollback_receipt
@@ -28,9 +28,16 @@ from .triggers import (
     evaluate_consolidation_trigger,
 )
 from .verification import require_verified_execution, require_verified_transition
+from .value import (
+    EXPERIENCE_VALUE_VERSION, VALUE_SCHEMA_SQL, VALUE_WEIGHTS,
+    ensure_experience_value_schema, evaluate_and_record_experience_value,
+    evaluate_experience_value, experience_value_digest,
+    load_experience_value, record_experience_value,
+)
 
 __all__ = [
-    "EVENT_TYPES", "REVISION_OPERATIONS", "IncrementalCrystallizationReceipt",
+    "EVENT_TYPES", "REVISION_OPERATIONS", "ExperienceValueReceipt",
+    "IncrementalCrystallizationReceipt",
     "MemoryEventReceipt", "OnlineMemoryReceipt", "RuleRevisionReceipt",
     "append_memory_event", "crystallize_affected_groups",
     "preview_affected_groups", "observe_transition",
@@ -46,4 +53,8 @@ __all__ = [
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",
     "require_verified_execution", "require_verified_transition",
+    "EXPERIENCE_VALUE_VERSION", "VALUE_SCHEMA_SQL", "VALUE_WEIGHTS",
+    "ensure_experience_value_schema", "evaluate_experience_value",
+    "evaluate_and_record_experience_value", "experience_value_digest",
+    "load_experience_value", "record_experience_value",
 ]
