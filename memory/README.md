@@ -2642,3 +2642,25 @@ fail-closed。该输入不会再通过字符串 coercion 或静默去重改变 e
 比较 affected/full rebuild、重放 raw-evidence digest，并在 savepoint 内写入 rule/event/
 revision。该修复只强化 B2 shadow/candidate provenance，不改变 canonical promotion、
 Parametric shadow-only 或 production runtime 边界。
+
+### 2026-08-31 P1 current-valid-state resolver（shadow-only）
+
+按新的 `TEHM_R2G_State_Causal_Online_Asset_Capability_Upgrade_Plan.md`，新增
+`memory/tehm/state/`：`tehm_memory_relations` 保存不可变、content-addressed 的
+`SUPERSEDES`/`INVALIDATES`/`CONTRADICTS` 等关系，`tehm_state_resolution_snapshots`
+保存 scope-aware resolver 的输入 digest、active IDs、suppression receipt 和冲突结果。
+P1 以 additive v4 表实现，保留已冻结 v4 schema 与历史 SQLite 不变；旧 v4 store 在首次
+调用 state API 时惰性建立这两张 derived 表。
+
+`resolve_current_state()` 目前只进入 shadow lane：支持 target scope/compatibility
+scope、替换方向、cycle detection、缺失对象、损坏 digest、authority mismatch 和
+ambiguous contradiction 的 fail-closed 行为；未绑定 authority 的关系只能出现在
+`shadow_relation_ids`，`mode="production"` 会返回 `UNRESOLVED_AUTHORITY`。resolver
+只写自己的 resolution snapshot，不修改 states/transitions、rule/asset/capability
+lifecycle、authority ledger 或 production runtime；`verify_resolution_snapshot()` 会
+重放当前输入并拒绝 snapshot 漂移。
+
+新增 P1 回归覆盖 supersession、scope 隔离、cycle、relation/snapshot 篡改、现有 v4
+store 兼容、authority/contradiction fail-closed 和 canonical/lifecycle 不变性。当前验证结果：定向 state 测试 `5 passed`，
+全套 `memory/tests` `757 passed`；该阶段仍未打开 causal/asset production routing，
+下一阶段再接 Experience Value 与 relation-producing online revision。

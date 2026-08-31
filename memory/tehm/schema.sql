@@ -515,6 +515,51 @@ CREATE TABLE IF NOT EXISTS tehm_policy_load_receipts (
 CREATE INDEX IF NOT EXISTS idx_policy_load_receipts_policy
     ON tehm_policy_load_receipts(policy_snapshot_id, runtime_id, loaded);
 
+-- =====================================================================
+-- Current-valid-state resolution (P1 additive shadow tables)
+-- =====================================================================
+-- These tables intentionally remain additive to tehm-v4 while P1 is shadow
+-- only.  The state package also creates them lazily for imported v4 stores.
+CREATE TABLE IF NOT EXISTS tehm_memory_relations (
+    relation_id        TEXT PRIMARY KEY,
+    source_type        TEXT NOT NULL,
+    source_id          TEXT NOT NULL,
+    relation_type      TEXT NOT NULL,
+    target_type        TEXT NOT NULL,
+    target_id          TEXT NOT NULL,
+    scope_json         TEXT NOT NULL,
+    evidence_refs_json TEXT NOT NULL,
+    authority_ref      TEXT,
+    relation_digest    TEXT NOT NULL UNIQUE,
+    created_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_relations_source
+    ON tehm_memory_relations(source_type, source_id, relation_type);
+CREATE INDEX IF NOT EXISTS idx_memory_relations_target
+    ON tehm_memory_relations(target_type, target_id, relation_type);
+CREATE INDEX IF NOT EXISTS idx_memory_relations_scope
+    ON tehm_memory_relations(relation_type, scope_json);
+
+CREATE TABLE IF NOT EXISTS tehm_state_resolution_snapshots (
+    resolution_id             TEXT PRIMARY KEY,
+    input_memory_digest       TEXT NOT NULL,
+    scope_json                TEXT NOT NULL,
+    active_rules_json         TEXT NOT NULL,
+    active_paths_json         TEXT NOT NULL,
+    active_knowledge_json     TEXT NOT NULL,
+    active_assets_json        TEXT NOT NULL,
+    active_capabilities_json  TEXT NOT NULL,
+    suppressed_json           TEXT NOT NULL,
+    unresolved_conflicts_json TEXT NOT NULL DEFAULT '[]',
+    relation_ids_json         TEXT NOT NULL DEFAULT '[]',
+    shadow_relation_ids_json  TEXT NOT NULL DEFAULT '[]',
+    resolution_digest         TEXT NOT NULL UNIQUE,
+    resolver_version          TEXT NOT NULL,
+    created_at                TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_state_resolution_input
+    ON tehm_state_resolution_snapshots(input_memory_digest);
+
 -- Capability retention is an additive v4 evidence ledger.  It is also
 -- created lazily by tehm.capability.retention for existing v4 stores so the
 -- immutable v1->v4 migration chain does not need to be rewritten.
