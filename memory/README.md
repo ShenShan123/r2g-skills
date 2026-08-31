@@ -2843,3 +2843,12 @@ P9 定向回归为 `memory/tests/test_production_gate.py`（7 passed）；`memor
 `.gitignore` 排除，设计文档不进入 release commit。后续需先生成真实、成对、可重放的
 NO_SKILL / interference / controlled-harm evidence，再由独立 authority review 决定是否
 增加 production adapter。
+
+`scripts/build_production_gate_report.py` 是 P9 的证据装配入口：manifest 只声明已经
+产生的 oracle 报告和显式 metrics，脚本会重新计算每个本地文件的 SHA256，拒绝 stale
+digest，再生成带 `receipt_id`/`receipt_digest` 的 gate report。对现有 ORFS density
+efficacy、support-routing 和 action32 calibration 报告的实际审计结果为：`evidence=PASS`，
+但 `efficacy=FAIL`（repair gain 没有 `controlled_harm` 标记），`authority`、`rollback`、
+`candidate_pool`、`no_skill_calibration` 均为 `NOT_ESTABLISHED`；命令以非零码退出，
+不会把这些片段误报为 production-ready。该审计输出保存在个人临时目录，不作为仓库
+证据提交；后续真实 campaign 可复用同一 manifest/builder 闭环。
