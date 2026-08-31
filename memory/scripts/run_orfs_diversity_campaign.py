@@ -386,6 +386,23 @@ def _validate_manifest_source_freeze(manifest: dict) -> dict:
         request = freeze["request"]
         if not isinstance(request, dict):
             raise TypeError("request is not an object")
+        # ``run_orfs_add_designs_campaign.py`` deliberately uses a separate
+        # source-freeze protocol (it freezes an explicit design/platform
+        # matrix, RTL/SDC overrides, semantic oracle, and optional typed
+        # utility contract).  Its prepared manifests are consumed by this
+        # module for the common run/graph/capture/report stages.  Do not try
+        # to reinterpret that request as the legacy fixed-matrix diversity
+        # parameterization below: delegate validation to the protocol that
+        # created it, preserving the same fail-closed digest/toolchain/
+        # contract checks before any evidence is read.
+        if ("parameterization" not in request and
+                {"designs", "platforms", "families", "indexes", "core_utils",
+                 "lineage_prefix", "template_design"}.issubset(request)):
+            from run_orfs_add_designs_campaign import (  # noqa: PLC0415
+                _validate_manifest_source_freeze as _validate_add_designs_freeze,
+            )
+            _validate_add_designs_freeze(manifest)
+            return freeze
         params = request["parameterization"]
         if not isinstance(params, dict):
             raise TypeError("parameterization is not an object")
@@ -1274,6 +1291,19 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             lineage_id=item["lineage_id"], target_check=item["check"],
             config_edits=item["config_edits"], transformation_family=item["family"],
             semantic_oracle=item.get("semantic_oracle"))
+        # The ORFS pair adapter predates typed utility contracts and therefore
+        # emits the ordinary config-delta action without a contract ID.  A
+        # prepare-time contract is part of the immutable action envelope, not
+        # merely a capture-side flag: bind the prepared ID before the record
+        # is written so the contract evaluator can distinguish an exact typed
+        # action from an otherwise identical unbound delta.  Existing IDs are
+        # preserved; a conflicting one remains fail-closed in the evaluator.
+        utility_contract_id = item.get("utility_contract_id")
+        if utility_contract_id is not None:
+            payload = record.action.get("payload")
+            if not isinstance(payload, dict):
+                payload = record.action
+            payload.setdefault("utility_contract_id", utility_contract_id)
         complete = record.verification.get("oracle_complete") is True
         # Re-check the executed ORFS hook at capture time.  A route pair can
         # pass the historical presence oracle while the platform hook ignores
@@ -1392,7 +1422,6 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
                             full["after"]["complete"])
             record.verification["oracle_complete"] = complete
         contract_observation = None
-        utility_contract_id = item.get("utility_contract_id")
         if utility_contract_id is not None:
             contract_observation = _evaluate_capture_contract(
                 item, record, full if require_full_oracle else None,

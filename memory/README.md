@@ -2612,3 +2612,23 @@ shadow/evaluation-only 身份，不追溯重评分。下一次 routing cohort �
 freeze、源代码/RTL 分离 lineages，并完成 ORFS、equivalence、strict signoff、semantic
 hook、graph、contract observation 与 held-out calibration，之后才有资格重新检查六项
 promotion gate。
+
+### 2026-08-31 selector_crc16 routing contract execution
+
+按上述 contract 新建 `/data1/zhangdy/tehm-campaigns/tehm-routing-contract-selector-crc16-v1`，
+使用 direct toolchain manifest（freeze digest=`3a0a37c1af0edefef2f8e92926b145fc2af1e1105f0b537d6a66ec36cf933495`）和
+`sky130hs/selector_crc16` source-disjoint RTL。base 与 `ROUTING_LAYER_ADJUSTMENT=0.05`
+两臂均真实 `rc=0`，equivalence、strict signoff、DRC/LVS/timing、semantic hook 和
+DEF graph 均通过；graph context 为 `strict_clean`，full oracle 两臂均 complete。
+`sky130hs` 没有独立 ORFS DRC deck，DRC receipt 明确记录了同一 sky130A 工艺的
+`sky130hd/drc/sky130hd.lydrc` sibling fallback 及其 SHA256，未把该 fallback 隐瞒为
+sky130hs 专属 deck。
+
+合同观察为 `FAIL(wns_delta_below_objective)`：WNS delta=`-0.00285 ns`，虽然
+power delta=`-1e-06 W`、area delta=`0`，但 WNS 非回退门槛未满足。样本保留为
+`calibration`/`learner_eligible=false`，raw Pareto 仍单独记录为 `HARMFUL`；合同结果已
+随 transition verifier 持久化，且 `canonical_memory_mutation=none`、
+`promotion_eligible=false`。本次结果建立了 routing contract 的真实 fail 分支，不能作为
+promotion support；下一步需换取新的 source-disjoint RTL/平台 cohort，只有出现足量且
+稳定的 contract `PASS` support 与 held-out PASS，才可进入 shadow calibration 和六项 gate
+复核。

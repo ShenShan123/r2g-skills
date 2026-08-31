@@ -46,6 +46,36 @@ def test_capture_identical_ids_are_deduped(tmp_tehm, sample_record_dict):
     assert _counts(conn)["states"] == 2  # still exactly 2 states
 
 
+def test_typed_contract_verifier_is_persisted_without_changing_transition_id(
+        tmp_tehm, tmp_path, sample_record_dict):
+    """Contract provenance survives canonical normalization, not just a manifest."""
+    conn, store, _ = tmp_tehm
+    bound = deepcopy_dict(sample_record_dict)
+    bound["verification"]["utility_contract"] = {
+        "contract_id": "ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005",
+        "status": "FAIL",
+        "contract_eligible": False,
+        "promotion_eligible": False,
+        "canonical_memory_mutation": "none",
+    }
+    plain_receipt = capture(conn, store, ExecutionRecord.from_dict(sample_record_dict))
+
+    # A second isolated store represents a fresh replay of the same action;
+    # utility provenance is deliberately outside VerifierSnapshot.content().
+    from tehm import db
+    from tehm.artifact_store import ArtifactStore
+    conn2 = db.connect(tmp_path / "bound.sqlite")
+    db.ensure_schema(conn2)
+    store2 = ArtifactStore(tmp_path / "bound-artifacts")
+    bound_receipt = capture(conn2, store2, ExecutionRecord.from_dict(bound))
+    assert bound_receipt.transition_id == plain_receipt.transition_id
+    persisted = json.loads(conn2.execute(
+        "SELECT verifier_json FROM tehm_transitions WHERE transition_id=?",
+        (bound_receipt.transition_id,)).fetchone()[0])
+    assert persisted["utility_contract"]["contract_id"] == (
+        "ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005")
+
+
 def test_capture_replay_rejects_tampered_canonical_content(tmp_tehm,
                                                            sample_record_dict):
     """A deterministic ID cannot be reused to overwrite raw content."""

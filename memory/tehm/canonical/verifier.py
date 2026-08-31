@@ -74,6 +74,13 @@ class VerifierSnapshot:
     # remain readable, while new capture paths can carry the per-arm campaign
     # receipt and its content-bound tool hashes.
     toolchain_binding: dict | None = None
+    # Prepare-time typed utility evaluation is verifier provenance.  Keep the
+    # complete contract result on the persisted transition so authority can
+    # audit why a physically complete pair was admitted, rejected, or
+    # abstained.  It is intentionally excluded from ``content()``: the
+    # contract result is derived evidence and must not change legacy/content
+    # addressed transition identity on replay.
+    utility_contract: dict | None = None
 
     def validate(self) -> None:
         for name, value in (("verdict", self.verdict),
@@ -110,7 +117,8 @@ class VerifierSnapshot:
                             ("full_oracle", self.full_oracle),
                             ("semantic_oracle", self.semantic_oracle),
                             ("execution_preflight", self.execution_preflight),
-                            ("toolchain_binding", self.toolchain_binding)):
+                            ("toolchain_binding", self.toolchain_binding),
+                            ("utility_contract", self.utility_contract)):
             if value is not None and not isinstance(value, dict):
                 raise ValueError(f"{name} must be a mapping or None")
 
@@ -135,6 +143,7 @@ class VerifierSnapshot:
             "semantic_oracle": self.semantic_oracle,
             "execution_preflight": self.execution_preflight,
             "toolchain_binding": self.toolchain_binding,
+            "utility_contract": self.utility_contract,
         }
 
     @classmethod
@@ -169,6 +178,7 @@ class VerifierSnapshot:
             semantic_oracle=data.get("semantic_oracle"),
             execution_preflight=data.get("execution_preflight"),
             toolchain_binding=data.get("toolchain_binding"),
+            utility_contract=data.get("utility_contract"),
         )
         obj.validate()
         return obj
@@ -196,6 +206,7 @@ class VerifierSnapshot:
             input_binding=result.get("input_binding"),
             timing_contract=result.get("timing_contract"),
             execution_preflight=result.get("execution_preflight"),
+            utility_contract=result.get("utility_contract"),
         )
 
     def content(self) -> dict:
