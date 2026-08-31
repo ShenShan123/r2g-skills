@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -11,8 +12,12 @@ REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "memory" / "scripts" / "run_orfs_diversity_campaign.py"
 sys.path.insert(0, str(REPO / "memory" / "scripts"))
 from run_orfs_diversity_campaign import (  # noqa: E402
-    capture_pairs, preflight_orfs_platform_scope, run_projects)
+    _evaluate_capture_contract, capture_pairs, preflight_orfs_platform_scope,
+    run_projects)
 from tehm.batch_lane import BatchLaneError  # noqa: E402
+from tehm.physical.utility_contracts import (  # noqa: E402
+    contract_action, routing_capacity_recovery_nonregression_005,
+    utility_contract_digest)
 
 
 def test_platform_scope_preflight_matches_signoff_source_and_blocks_asap7(tmp_path):
@@ -397,3 +402,32 @@ def test_capture_explicit_heldout_is_audit_only(tmp_path):
         "SELECT split, learner_eligible FROM tehm_dataset_membership"
     ).fetchone() == ("heldout", 0)
     conn.close()
+
+
+def test_capture_contract_failure_cannot_become_learner_support():
+    contract = routing_capacity_recovery_nonregression_005()
+    ppa_before = {"summary": {"timing": {"setup_wns": 0.0, "setup_tns": 0.0},
+                               "area": {"design_area_um2": 100.0},
+                               "power": {"total_power_w": 1.0}}}
+    ppa_after = {"summary": {"timing": {"setup_wns": -0.01, "setup_tns": 0.0},
+                              "area": {"design_area_um2": 101.0},
+                              "power": {"total_power_w": 1.0}}}
+    record = SimpleNamespace(
+        action=contract_action(contract),
+        before={"reports": {"ppa": ppa_before}},
+        after={"reports": {"ppa": ppa_after}},
+        verification={"obligation_coverage": 1.0},
+    )
+    full = {"before": {"checks": {name: True for name in
+                                    ("equivalence", "drc", "lvs", "timing")}},
+            "after": {"checks": {name: True for name in
+                                   ("equivalence", "drc", "lvs", "timing")}}}
+    result = _evaluate_capture_contract(
+        {"utility_contract_id": contract["contract_id"]}, record, full,
+        manifest_contract={"contract_id": contract["contract_id"],
+                           "contract_digest": utility_contract_digest(contract),
+                           "action_signature": contract["action_signature"],
+                           "binding": "PREPARE_TIME"})
+    assert result["status"] == "FAIL"
+    assert result["contract_eligible"] is False
+    assert "wns_delta_below_objective" in result["failures"]

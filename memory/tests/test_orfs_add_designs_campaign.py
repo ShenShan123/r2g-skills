@@ -17,6 +17,9 @@ from run_orfs_add_designs_campaign import (  # noqa: E402
 from run_orfs_diversity_campaign import capture_pairs  # noqa: E402
 from tehm.batch_lane import BatchLaneError  # noqa: E402
 from tehm.batch_lane import _input_binding, _timing_contract  # noqa: E402
+from tehm.physical.utility_contracts import (  # noqa: E402
+    routing_capacity_recovery_nonregression_005,
+)
 
 
 def _kwargs(sdc: Path) -> dict:
@@ -93,6 +96,41 @@ def test_explicit_density_after_is_frozen_and_materialized(tmp_path):
     assert freeze["request"]["density_after"] == [32]
     assert manifest["items"][0]["before_value"] == "28"
     assert manifest["items"][0]["after_value"] == "32"
+
+
+def test_routing_prepare_binds_contract_before_materialization(tmp_path):
+    orfs = _fake_orfs(tmp_path / "orfs")
+    override = tmp_path / "override.sdc"
+    override.write_text("set clk_period 10\n")
+    contract = routing_capacity_recovery_nonregression_005()
+    kwargs = {
+        **_kwargs(override),
+        "families": ("ROUTING_CAPACITY_RECOVERY",),
+        "lineage_prefix": "routing-contract-test",
+        "utility_contract": contract,
+    }
+    campaign = tmp_path / "campaign"
+    build_source_freeze(campaign, orfs, **kwargs)
+    manifest = prepare(campaign, orfs,
+                       source_freeze=campaign / "source_freeze.json", **kwargs)
+    item = manifest["items"][0]
+    assert manifest["utility_contract"]["contract_id"] == contract["contract_id"]
+    assert item["utility_contract_id"] == contract["contract_id"]
+    assert item["config_edits"] == {"ROUTING_LAYER_ADJUSTMENT": "0.05"}
+    freeze = json.loads((campaign / "source_freeze.json").read_text())
+    assert freeze["request"]["utility_contract"]["contract_id"] == contract["contract_id"]
+
+
+def test_typed_contract_rejects_mixed_campaign_families(tmp_path):
+    orfs = _fake_orfs(tmp_path / "orfs")
+    override = tmp_path / "override.sdc"
+    override.write_text("set clk_period 10\n")
+    contract = routing_capacity_recovery_nonregression_005()
+    kwargs = {**_kwargs(override), "families": (
+        "ROUTING_CAPACITY_RECOVERY", "DENSITY_RELIEF"),
+              "utility_contract": contract}
+    with pytest.raises(BatchLaneError, match="single matching campaign family"):
+        build_source_freeze(tmp_path / "campaign", orfs, **kwargs)
 
 
 def test_custom_rtl_top_is_bound_into_materialized_sdc(tmp_path):

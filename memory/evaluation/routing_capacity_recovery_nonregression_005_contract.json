@@ -1,0 +1,45 @@
+{
+  "version": "typed-utility-contract-v1",
+  "contract_id": "ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005",
+  "status": "PRE_REGISTERED_FOR_PROSPECTIVE_COHORT",
+  "action_signature": {
+    "domain": "flow.CONFIG_DELTA",
+    "transformation_family": "ROUTING_CAPACITY_RECOVERY",
+    "config_edits": {
+      "ROUTING_LAYER_ADJUSTMENT": "0.05"
+    },
+    "operation_point": "default->0.05"
+  },
+  "primary_objective": {
+    "wns_delta_ns": {
+      "minimum": 0.0
+    }
+  },
+  "hard_constraints": {
+    "equivalence": "PASS",
+    "drc": "PASS",
+    "lvs": "PASS",
+    "timing": "PASS",
+    "tns_delta_ns": {
+      "minimum": 0.0
+    }
+  },
+  "resource_budgets": {
+    "area_delta_percent": {
+      "maximum": 0.0
+    },
+    "power_delta_percent": {
+      "maximum": 0.0
+    }
+  },
+  "runtime_policy": {
+    "interval_must_fit_contract": true,
+    "ood_action": "ABSTAIN",
+    "missing_evidence_action": "ABSTAIN"
+  },
+  "authority": {
+    "raw_pareto_gate_unchanged": true,
+    "canonical_memory_mutation": "none",
+    "promotion_eligible": false
+  }
+}

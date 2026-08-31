@@ -27,6 +27,8 @@ UTILITY_CONTRACT_VERSION = "typed-utility-contract-v1"
 TIMING_RELIEF_BUDGETED_V1_ID = "TIMING_RELIEF_BUDGETED_V1"
 TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID = "TIMING_RELIEF_BUDGETED_V2_50_TO_45"
 DENSITY_RELIEF_NONREGRESSION_32_ID = "DENSITY_RELIEF_NONREGRESSION_32"
+ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005_ID = (
+    "ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005")
 
 # This is a pre-registered proposal for the next prospective cohort.  It is
 # intentionally not derived or rewritten from a promotion result.  Existing
@@ -120,6 +122,44 @@ _DENSITY_RELIEF_NONREGRESSION_32 = {
     },
 }
 
+# Routing has the strongest current shadow evidence, but that evidence was
+# collected before a typed utility contract was attached to the campaign.  A
+# fresh source-disjoint cohort must therefore be run under this independently
+# frozen contract; existing r5 rows are never retroactively regraded.
+_ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005 = {
+    "version": UTILITY_CONTRACT_VERSION,
+    "contract_id": ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005_ID,
+    "status": "PRE_REGISTERED_FOR_PROSPECTIVE_COHORT",
+    "action_signature": {
+        "domain": "flow.CONFIG_DELTA",
+        "transformation_family": "ROUTING_CAPACITY_RECOVERY",
+        "config_edits": {"ROUTING_LAYER_ADJUSTMENT": "0.05"},
+        "operation_point": "default->0.05",
+    },
+    "primary_objective": {"wns_delta_ns": {"minimum": 0.0}},
+    "hard_constraints": {
+        "equivalence": "PASS",
+        "drc": "PASS",
+        "lvs": "PASS",
+        "timing": "PASS",
+        "tns_delta_ns": {"minimum": 0.0},
+    },
+    "resource_budgets": {
+        "area_delta_percent": {"maximum": 0.0},
+        "power_delta_percent": {"maximum": 0.0},
+    },
+    "runtime_policy": {
+        "interval_must_fit_contract": True,
+        "ood_action": "ABSTAIN",
+        "missing_evidence_action": "ABSTAIN",
+    },
+    "authority": {
+        "raw_pareto_gate_unchanged": True,
+        "canonical_memory_mutation": "none",
+        "promotion_eligible": False,
+    },
+}
+
 
 class UtilityContractError(ValueError):
     """Malformed or internally inconsistent typed utility contract."""
@@ -140,12 +180,19 @@ def density_relief_nonregression_32() -> dict:
     return copy.deepcopy(_DENSITY_RELIEF_NONREGRESSION_32)
 
 
+def routing_capacity_recovery_nonregression_005() -> dict:
+    """Return the prospective default->0.05 routing contract."""
+    return copy.deepcopy(_ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005)
+
+
 def known_utility_contracts() -> dict[str, Callable[[], dict]]:
     """Return the immutable contract catalog used by manifest validators."""
     return {
         TIMING_RELIEF_BUDGETED_V1_ID: timing_relief_budgeted_v1,
         TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID: timing_relief_budgeted_v2_50_to_45,
         DENSITY_RELIEF_NONREGRESSION_32_ID: density_relief_nonregression_32,
+        ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005_ID:
+            routing_capacity_recovery_nonregression_005,
     }
 
 
@@ -603,12 +650,14 @@ def _unique(values) -> list[str]:
 
 __all__ = [
     "DENSITY_RELIEF_NONREGRESSION_32_ID",
+    "ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005_ID",
     "TIMING_RELIEF_BUDGETED_V1_ID", "TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID",
     "UTILITY_CONTRACT_VERSION",
     "UtilityContractError", "contract_action", "evaluate_observed_contract",
     "action_contract_binding_reason", "known_utility_contracts",
     "select_contract_proposal",
     "density_relief_nonregression_32", "timing_relief_budgeted_v1",
+    "routing_capacity_recovery_nonregression_005",
     "timing_relief_budgeted_v2_50_to_45",
     "utility_contract_digest", "validate_utility_contract",
 ]

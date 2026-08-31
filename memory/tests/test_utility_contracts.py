@@ -1,6 +1,9 @@
 """Typed utility contract and context-conditioned proposal boundary tests."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from tehm.physical.utility_contracts import (
@@ -8,6 +11,8 @@ from tehm.physical.utility_contracts import (
     contract_action,
     density_relief_nonregression_32,
     evaluate_observed_contract,
+    known_utility_contracts,
+    routing_capacity_recovery_nonregression_005,
     select_contract_proposal,
     timing_relief_budgeted_v1,
     timing_relief_budgeted_v2_50_to_45,
@@ -99,6 +104,55 @@ def test_action32_contract_is_pre_registered_and_rejects_timing_regression():
     assert "wns_delta_below_objective" in result["failures"]
     assert result["contract_eligible"] is False
     assert result["canonical_memory_mutation"] == "none"
+
+
+def test_routing_contract_is_catalogued_and_binds_default_to_005_action():
+    contract = routing_capacity_recovery_nonregression_005()
+    validate_utility_contract(contract)
+    assert contract["contract_id"] in known_utility_contracts()
+    assert contract["status"] == "PRE_REGISTERED_FOR_PROSPECTIVE_COHORT"
+    assert contract["action_signature"]["transformation_family"] == (
+        "ROUTING_CAPACITY_RECOVERY")
+    assert contract["action_signature"]["config_edits"] == {
+        "ROUTING_LAYER_ADJUSTMENT": "0.05"}
+    action = contract_action(contract)
+    assert action["payload"]["utility_contract_id"] == contract["contract_id"]
+    assert action["payload"]["config_edits"] == {
+        "ROUTING_LAYER_ADJUSTMENT": "0.05"}
+    artifact = json.loads((Path(__file__).parents[1] / "evaluation" /
+                           "routing_capacity_recovery_nonregression_005_contract.json").read_text())
+    assert artifact == contract
+
+
+def test_routing_contract_accepts_neutral_nonregression_observation():
+    contract = routing_capacity_recovery_nonregression_005()
+    result = evaluate_observed_contract(
+        contract=contract, action=contract_action(contract),
+        before_ppa=_ppa(), after_ppa=_ppa(), checks=_checks())
+    assert result["status"] == "PASS"
+    assert result["contract_eligible"] is True
+    assert result["raw_pareto"]["verdict"] == "NEUTRAL"
+    assert result["canonical_memory_mutation"] == "none"
+    assert result["promotion_eligible"] is False
+
+
+def test_routing_contract_rejects_ppa_or_action_regression():
+    contract = routing_capacity_recovery_nonregression_005()
+    result = evaluate_observed_contract(
+        contract=contract, action=contract_action(contract),
+        before_ppa=_ppa(), after_ppa=_ppa(wns=-0.01, area=101.0),
+        checks=_checks())
+    assert result["status"] == "FAIL"
+    assert "wns_delta_below_objective" in result["failures"]
+    assert "area_budget_exceeded" in result["failures"]
+    wrong_action = contract_action(contract)
+    wrong_action["payload"]["config_edits"] = {
+        "ROUTING_LAYER_ADJUSTMENT": "0.10"}
+    abstained = evaluate_observed_contract(
+        contract=contract, action=wrong_action,
+        before_ppa=_ppa(), after_ppa=_ppa(), checks=_checks())
+    assert abstained["status"] == "ABSTAINED"
+    assert abstained["abstain_reasons"] == ["action_signature_mismatch"]
 
 
 def test_observed_contract_accepts_orfs_geometry_area_baseline():

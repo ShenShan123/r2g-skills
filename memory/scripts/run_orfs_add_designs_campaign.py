@@ -25,6 +25,7 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 MEMORY_ROOT = Path(__file__).resolve().parents[1]
@@ -55,6 +56,12 @@ from tehm.batch_lane import (  # noqa: E402
     _timing_contract,
 )
 from tehm.adapters.semantic_oracle import load_spec  # noqa: E402
+from tehm.physical.utility_contracts import (  # noqa: E402
+    action_contract_binding_reason,
+    known_utility_contracts,
+    utility_contract_digest,
+    validate_utility_contract,
+)
 from orfs_storage import default_work_root, enforce_work_root, storage_policy  # noqa: E402
 
 VERSION = "orfs-add-designs-v0.1"
@@ -90,6 +97,17 @@ _FAMILY_AFTER_EDITS = {
         knob: value, "PLACE_DENSITY_LB_ADDON": None},
 }
 DEFAULT_FAMILIES = tuple(FAMILY_SPECS)
+
+
+def _contract_manifest_binding(contract: Mapping) -> dict:
+    """Serialize immutable utility identity into a campaign source freeze."""
+    validate_utility_contract(contract)
+    return {
+        "contract_id": contract["contract_id"],
+        "contract_digest": utility_contract_digest(contract),
+        "action_signature": json.loads(json.dumps(contract["action_signature"])),
+        "binding": "PREPARE_TIME",
+    }
 
 # New designs genuinely absent from training AND != the frozen spi held-out.
 # aes fails ABC on sky130hd; ibex_sv is SystemVerilog (ORFS Yosys rejects it);
@@ -308,7 +326,8 @@ def _freeze_request(*, designs, platforms, families, indexes: int,
                     template_design: str, orfs_root: Path,
                     dataset_split: str = "training",
                     semantic_oracle_path: Path | None = None,
-                    density_after=None) -> dict:
+                    density_after=None,
+                    utility_contract: Mapping | None = None) -> dict:
     if dataset_split not in {"training", "calibration", "heldout", "ab"}:
         raise ValueError(f"invalid dataset split: {dataset_split!r}")
     request = {
@@ -350,6 +369,9 @@ def _freeze_request(*, designs, platforms, families, indexes: int,
         # the request and its digest via ``_campaign_inputs``.
         load_spec(semantic_oracle_path)
         request["semantic_oracle"] = str(Path(semantic_oracle_path).resolve())
+    if utility_contract is not None:
+        binding = _contract_manifest_binding(utility_contract)
+        request["utility_contract"] = binding
     return request
 
 
@@ -360,8 +382,15 @@ def build_source_freeze(root: Path, orfs_root: Path, *, designs, platforms,
                         template_design: str,
                         dataset_split: str = "training",
                         semantic_oracle_path: Path | None = None,
-                        density_after=None) -> dict:
+                        density_after=None,
+                        utility_contract: Mapping | None = None) -> dict:
     """Freeze campaign inputs before any project is materialized or run."""
+    if utility_contract is not None:
+        validate_utility_contract(utility_contract)
+        if tuple(families) != (utility_contract["action_signature"]
+                               ["transformation_family"],):
+            raise BatchLaneError(
+                "a typed utility contract requires a single matching campaign family")
     request = _freeze_request(
         designs=designs, platforms=platforms, families=families,
         indexes=indexes, core_utils=core_utils, lineage_prefix=lineage_prefix,
@@ -369,7 +398,7 @@ def build_source_freeze(root: Path, orfs_root: Path, *, designs, platforms,
         sdc_override_path=sdc_override_path, template_design=template_design,
         orfs_root=orfs_root, dataset_split=dataset_split,
         semantic_oracle_path=semantic_oracle_path,
-        density_after=density_after)
+        density_after=density_after, utility_contract=utility_contract)
     inputs = _campaign_inputs(
         Path(orfs_root).resolve(), designs=designs, platforms=platforms,
         rtl_override_path=rtl_override_path,
@@ -405,7 +434,8 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
                             template_design: str,
                             dataset_split: str = "training",
                             semantic_oracle_path: Path | None = None,
-                            density_after=None) -> dict:
+                            density_after=None,
+                            utility_contract: Mapping | None = None) -> dict:
     path = Path(path).resolve()
     try:
         freeze = json.loads(path.read_text())
@@ -427,7 +457,7 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
         sdc_override_path=sdc_override_path, template_design=template_design,
         orfs_root=orfs_root, dataset_split=dataset_split,
         semantic_oracle_path=semantic_oracle_path,
-        density_after=density_after)
+        density_after=density_after, utility_contract=utility_contract)
     if freeze.get("request") != expected_request:
         raise BatchLaneError(
             "source freeze request mismatch; use the same campaign arguments "
@@ -458,7 +488,8 @@ def _validate_source_freeze(path: Path, *, orfs_root: Path, designs,
     return freeze
 
 
-def _validate_manifest_source_freeze(manifest: dict) -> dict:
+def _validate_manifest_source_freeze(
+        manifest: dict, requested_contract: Mapping | None = None) -> dict:
     """Revalidate an already-prepared campaign before any later phase."""
     raw_path = manifest.get("source_freeze")
     if not raw_path:
@@ -482,6 +513,27 @@ def _validate_manifest_source_freeze(manifest: dict) -> dict:
         raise BatchLaneError("campaign source freeze is malformed") from exc
     if manifest.get("source_freeze_digest") != freeze.get("freeze_digest"):
         raise BatchLaneError("campaign manifest/source-freeze digest mismatch")
+    frozen_resolved_contract = None
+    frozen_contract = request.get("utility_contract")
+    if frozen_contract is not None:
+        if not isinstance(frozen_contract, Mapping):
+            raise BatchLaneError("campaign utility contract binding is malformed")
+        factory = known_utility_contracts().get(frozen_contract.get("contract_id"))
+        if factory is None:
+            raise BatchLaneError("campaign utility contract is not in the known catalog")
+        frozen_resolved_contract = factory()
+        if _contract_manifest_binding(frozen_resolved_contract) != dict(frozen_contract):
+            raise BatchLaneError("campaign utility contract digest/signature mismatch")
+    manifest_contract = manifest.get("utility_contract")
+    if (manifest_contract is not None and
+            (frozen_resolved_contract is None or
+             dict(manifest_contract) != _contract_manifest_binding(frozen_resolved_contract))):
+        raise BatchLaneError("campaign manifest/source-freeze utility contract mismatch")
+    if frozen_resolved_contract is not None and manifest_contract is None:
+        raise BatchLaneError("contract-bound source freeze lacks manifest utility binding")
+    if (requested_contract is not None and manifest_contract !=
+            _contract_manifest_binding(requested_contract)):
+        raise BatchLaneError("requested utility contract differs from prepared campaign")
     _validate_source_freeze(
         path, orfs_root=Path(request["orfs_root"]),
         designs=tuple(request["designs"]), platforms=tuple(request["platforms"]),
@@ -498,6 +550,7 @@ def _validate_manifest_source_freeze(manifest: dict) -> dict:
                               if request.get("semantic_oracle") else None),
         density_after=(tuple(request["density_after"])
                        if request.get("density_after") is not None else None),
+        utility_contract=frozen_resolved_contract,
     )
     return freeze
 
@@ -520,6 +573,9 @@ def main(argv=None) -> int:
     ap.add_argument("--semantic-oracle", type=Path, default=None,
                     help=("source-frozen JSON semantic failure contract; evaluated "
                           "from each materialized config, never caller booleans"))
+    ap.add_argument("--utility-contract-id", choices=sorted(known_utility_contracts()),
+                    help=("pre-register a typed utility contract before materialization; "
+                          "existing observations are never retroactively scored"))
     ap.add_argument("--template-design", default="gcd",
                     help="platform design template for --rtl-override (default: gcd)")
     ap.add_argument("--families", nargs="+", default=list(DEFAULT_FAMILIES),
@@ -557,6 +613,17 @@ def main(argv=None) -> int:
     manifest_path = root / "campaign_manifest.json"
     orfs_root = args.orfs_root.resolve()
     freeze_path = root / "source_freeze.json"
+    utility_contract = (known_utility_contracts()[args.utility_contract_id]()
+                        if args.utility_contract_id else None)
+    if args.phase in ("all", "freeze", "prepare") and freeze_path.is_file():
+        try:
+            prior_request = json.loads(freeze_path.read_text()).get("request", {})
+        except (OSError, TypeError, json.JSONDecodeError):
+            prior_request = {}
+        if prior_request.get("utility_contract") and utility_contract is None:
+            raise BatchLaneError(
+                "existing campaign is contract-bound; pass --utility-contract-id "
+                "to preserve the prepare-time binding")
 
     if args.phase in ("all", "freeze"):
         build_source_freeze(
@@ -573,7 +640,8 @@ def main(argv=None) -> int:
             semantic_oracle_path=(args.semantic_oracle.resolve()
                                   if args.semantic_oracle else None),
             density_after=(tuple(args.density_after)
-                           if args.density_after is not None else None))
+                           if args.density_after is not None else None),
+            utility_contract=utility_contract)
         if args.phase == "freeze":
             return 0
 
@@ -594,12 +662,13 @@ def main(argv=None) -> int:
                                                  if args.semantic_oracle else None),
                            density_after=(tuple(args.density_after)
                                           if args.density_after is not None else None),
+                           utility_contract=utility_contract,
                            source_freeze=freeze_path)
     else:
         manifest = _load(manifest_path)
         if not manifest:
             raise RuntimeError(f"manifest missing: {manifest_path}")
-        _validate_manifest_source_freeze(manifest)
+        _validate_manifest_source_freeze(manifest, utility_contract)
     if args.phase == "prepare":
         return 0
     allowlist = ({str(Path(p).resolve()) for p in args.projects}
@@ -654,6 +723,7 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
             dataset_split: str = "training",
             semantic_oracle_path: Path | None = None,
             density_after=None,
+            utility_contract: Mapping | None = None,
             source_freeze: Path | None = None) -> dict:
     core_utils = tuple(int(x) for x in core_utils)
     if not core_utils:
@@ -670,6 +740,14 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
     if source_freeze is None:
         raise BatchLaneError(
             "source freeze is required before prepare; run --phase freeze first")
+    frozen_contract = None
+    if utility_contract is not None:
+        validate_utility_contract(utility_contract)
+        contract_family = utility_contract["action_signature"]["transformation_family"]
+        if tuple(families) != (contract_family,):
+            raise BatchLaneError(
+                "a typed utility contract requires a single matching campaign family")
+        frozen_contract = _contract_manifest_binding(utility_contract)
     frozen = _validate_source_freeze(
         source_freeze, orfs_root=orfs_root, designs=designs,
         platforms=platforms, families=families, indexes=indexes,
@@ -678,7 +756,7 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
         sdc_override_path=sdc_override_path, template_design=template_design,
         dataset_split=dataset_split,
         semantic_oracle_path=semantic_oracle_path,
-        density_after=density_after)
+        density_after=density_after, utility_contract=utility_contract)
     semantic_oracle = (load_spec(semantic_oracle_path)
                        if semantic_oracle_path is not None else None)
     family_specs = {
@@ -797,6 +875,20 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
                         "role": dataset_split,
                         "dataset_split": dataset_split,
                     })
+                    if frozen_contract is not None:
+                        action = {
+                            "domain": str(frozen_contract["action_signature"]["domain"]),
+                            "transformation_family": str(family),
+                            "payload": {
+                                "config_edits": dict(after_edits),
+                                "utility_contract_id": frozen_contract["contract_id"],
+                            },
+                        }
+                        reason = action_contract_binding_reason(action, utility_contract)
+                        if reason:
+                            raise BatchLaneError(
+                                f"{family} item is not bound to utility contract: {reason}")
+                        items[-1]["utility_contract_id"] = frozen_contract["contract_id"]
 
     if not items:
         raise RuntimeError("no materialized items; check ORFS templates")
@@ -830,6 +922,11 @@ def prepare(root: Path, orfs_root: Path, *, designs, platforms,
             "spi_absent_from_training": "spi" not in {x["design"] for x in items},
         },
     }
+    if frozen_contract is not None:
+        manifest["utility_contract"] = frozen_contract
+        manifest["mutation_policy"] = (
+            "typed-contract observations remain external/staging-only; "
+            "canonical import and promotion are disabled")
     _write(root / "campaign_manifest.json", manifest)
     return manifest
 

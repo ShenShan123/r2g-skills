@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -41,6 +42,12 @@ from tehm.physical.memory import PhysicalEffectMemory  # noqa: E402
 from tehm.physical.orfs_preflight import (  # noqa: E402
     inspect_routing_layer_adjustment, inspect_signoff_platform_scope,
     parse_orfs_config, preflight_digest)
+from tehm.physical.utility_contracts import (  # noqa: E402
+    action_contract_binding_reason,
+    evaluate_observed_contract,
+    known_utility_contracts,
+    utility_contract_digest,
+)
 from tehm.orfs_toolchain import (  # noqa: E402
     load_toolchain_manifest, validate_toolchain_manifest)
 from tehm_backend import TehmMemoryBackend  # noqa: E402
@@ -1384,6 +1391,21 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             complete = bool(complete and full["before"]["complete"] and
                             full["after"]["complete"])
             record.verification["oracle_complete"] = complete
+        contract_observation = None
+        utility_contract_id = item.get("utility_contract_id")
+        if utility_contract_id is not None:
+            contract_observation = _evaluate_capture_contract(
+                item, record, full if require_full_oracle else None,
+                manifest_contract=manifest.get("utility_contract"))
+            record.verification["utility_contract"] = contract_observation
+            # A typed contract is an additional admission predicate.  A
+            # generic complete ORFS pair that violates the frozen contract
+            # remains immutable audit evidence but cannot become learner
+            # support.  This is intentionally evaluated before dataset
+            # membership is chosen below.
+            complete = bool(complete and
+                            contract_observation.get("status") == "PASS")
+            record.verification["oracle_complete"] = complete
         # A prepared manifest may explicitly classify a pair as held-out or
         # calibration.  This is needed for a real transfer lane: the pair is
         # still captured as immutable audit evidence, but it must never become
@@ -1443,6 +1465,7 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
             "learner_eligible": learner_eligible,
             "execution_preflight": preflight,
             "execution_preflight_blocked": preflight_blocked,
+            "utility_contract": contract_observation,
         }
     conn.close()
     manifest["captured"] = [captured[k] for k in sorted(captured)]
@@ -1460,6 +1483,66 @@ def capture_pairs(manifest_path: Path, manifest: dict, db_path: Path,
         if row.get("dataset_split") != "training":
             assert row.get("learner_eligible") is False
     _write(manifest_path, manifest)
+
+
+def _evaluate_capture_contract(item: dict, record, full: dict | None,
+                               *, manifest_contract) -> dict:
+    """Evaluate a prepare-time typed contract before learner admission.
+
+    ``capture_pairs`` is shared by legacy and contract-bound campaigns.  A
+    missing contract binding, action mismatch, absent full oracle, or failed
+    PPA/hard constraint is represented as an explicit abstention/failure and
+    can never be converted into a training membership by the generic oracle.
+    """
+    contract_id = item.get("utility_contract_id")
+    factory = known_utility_contracts().get(contract_id)
+    if factory is None:
+        return {
+            "status": "ABSTAINED", "contract_id": contract_id,
+            "contract_digest": None, "abstain_reasons": [
+                "unknown_utility_contract"],
+            "contract_eligible": False,
+        }
+    contract = factory()
+    digest = utility_contract_digest(contract)
+    expected_binding = {
+        "contract_id": contract["contract_id"],
+        "contract_digest": digest,
+        "action_signature": contract["action_signature"],
+        "binding": "PREPARE_TIME",
+    }
+    if (not isinstance(manifest_contract, Mapping) or
+            any(manifest_contract.get(key) != value
+                for key, value in expected_binding.items())):
+        return {
+            "status": "ABSTAINED", "contract_id": contract["contract_id"],
+            "contract_digest": digest, "abstain_reasons": [
+                "manifest_utility_contract_binding_mismatch"],
+            "contract_eligible": False,
+        }
+    action_reason = action_contract_binding_reason(record.action, contract)
+    if action_reason:
+        return {
+            "status": "ABSTAINED", "contract_id": contract["contract_id"],
+            "contract_digest": digest, "abstain_reasons": [action_reason],
+            "contract_eligible": False,
+        }
+    checks = {}
+    if isinstance(full, Mapping):
+        for name in ("equivalence", "drc", "lvs", "timing"):
+            checks[name] = bool(
+                isinstance(full.get("before"), Mapping) and
+                isinstance(full.get("after"), Mapping) and
+                (full["before"].get("checks") or {}).get(name) is True and
+                (full["after"].get("checks") or {}).get(name) is True)
+    result = evaluate_observed_contract(
+        contract=contract, action=record.action,
+        before_ppa=record.before.get("reports", {}).get("ppa") or {},
+        after_ppa=record.after.get("reports", {}).get("ppa") or {},
+        checks=checks,
+        obligation_coverage=record.verification.get("obligation_coverage"),
+    )
+    return result
 
 
 def run_ab(root: Path, manifest: dict, db_path: Path, artifacts: Path, *,

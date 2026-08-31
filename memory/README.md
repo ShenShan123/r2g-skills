@@ -2589,3 +2589,26 @@ fresh `FAIL`（1 PASS/2 FAIL）；grouped calibration 仍为
 `shadow_calibration_failed`，`promotion_eligible=false`，canonical/authority/runtime
 均未写入。该 replay 证明 split provenance 防火墙生效，也确认 action32 contract 尚未
 具备足够的可复用 support/held-out 证据。
+
+### 2026-08-31 routing capacity contract pre-registration
+
+action32 在两个 source-disjoint cohort 中仍未满足 contract，因此下一步不再继续无界
+`CORE_UTILIZATION` sweep。针对当前 shadow 证据最强、且已有真实 ORFS routing hook 的
+`ROUTING_CAPACITY_RECOVERY`，新增独立的
+`ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005` typed utility contract：固定
+`ROUTING_LAYER_ADJUSTMENT=0.05`（`default->0.05`），要求 WNS/TNS 不回退、area/power
+不增加，并要求 equivalence、DRC、LVS、timing 全部 `PASS`。contract 的 status 是
+`PRE_REGISTERED_FOR_PROSPECTIVE_COHORT`，`canonical_memory_mutation=none`、
+`promotion_eligible=false`；routing semantic receipt（hook consumed、digest-bound）
+仍是独立的必要证据，不被 PPA contract 代替。
+
+`run_orfs_add_designs_campaign.py` 现在支持
+`--utility-contract-id ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005`。该参数会在
+materialization 前把 contract identity 固定进 source freeze、manifest 和每个 pair
+action，并拒绝混合 family 或不匹配的 action signature；capture 后的 contract id
+继续沿 external receipt→staging 传播，但不会自动打开 canonical 或 production runtime。
+已有 `tehm-orfs-l4-transfer-routing-r5` 记录没有该 prepare-time binding，保持原有
+shadow/evaluation-only 身份，不追溯重评分。下一次 routing cohort 必须使用新的 source
+freeze、源代码/RTL 分离 lineages，并完成 ORFS、equivalence、strict signoff、semantic
+hook、graph、contract observation 与 held-out calibration，之后才有资格重新检查六项
+promotion gate。

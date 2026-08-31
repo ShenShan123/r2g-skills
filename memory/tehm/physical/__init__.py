@@ -32,6 +32,7 @@ from tehm.physical.orfs_preflight import (
     parse_orfs_config, preflight_digest, validate_persisted_execution_preflight)
 from tehm.physical.utility_contracts import (
     DENSITY_RELIEF_NONREGRESSION_32_ID,
+    ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005_ID,
     TIMING_RELIEF_BUDGETED_V1_ID,
     TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID,
     UTILITY_CONTRACT_VERSION,
@@ -44,6 +45,7 @@ from tehm.physical.utility_contracts import (
     select_contract_proposal,
     timing_relief_budgeted_v1,
     timing_relief_budgeted_v2_50_to_45,
+    routing_capacity_recovery_nonregression_005,
     utility_contract_digest,
     validate_utility_contract,
 )
@@ -60,10 +62,12 @@ __all__ = ["PHYSICAL_METRICS", "PhysicalEffect", "extract_deltas",
            "GRAPH_CONTEXT_VERSION",
            "PhysicalGraphContext", "load_defgraph_context",
            "DENSITY_RELIEF_NONREGRESSION_32_ID",
+           "ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005_ID",
            "TIMING_RELIEF_BUDGETED_V1_ID",
            "TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID",
            "action_contract_binding_reason", "contract_action",
            "density_relief_nonregression_32", "evaluate_observed_contract",
+           "routing_capacity_recovery_nonregression_005",
            "known_utility_contracts", "select_contract_proposal",
            "timing_relief_budgeted_v1",
            "timing_relief_budgeted_v2_50_to_45", "utility_contract_digest",
