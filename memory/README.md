@@ -2574,3 +2574,18 @@ v132=`FAIL(wns_delta_below_objective)`、v133=`PASS`。
 source freeze 下重新执行 `samples/evaluate` 才能作为当前评估输入；原始 ORFS/strict/
 equivalence 结果仍保留为旧 freeze 的不可变审计证据。该 seam 不写 canonical、authority
 或 production runtime。
+
+### 2026-08-31 current-code split-bound replay
+
+按上述 schema 变更，新建 r2/r4 replay roots 并重新生成当前代码的 source freeze；复用的
+是既有 ORFS 成功 run receipt，不宣称重新执行硬件流程。r2 的 v128–v133 样本现在明确
+记录 `contract_support_v2→training` 与 `contract_heldout_v2→heldout`；r4 的 v122–v127
+同样完成 split-bound samples。使用 r4 support 输入和 r2 的 v131–v133 fresh 输入做
+`evaluate` 时，角色错配的 v125–v127 被显式记录为
+`sample_split_mismatch:expected=training:got=heldout`，没有进入 training。
+
+当前 role-bound gate 为 support `FAIL`（1 PASS/2 FAIL，另有 3 条 held-out 错配被排除），
+fresh `FAIL`（1 PASS/2 FAIL）；grouped calibration 仍为
+`shadow_calibration_failed`，`promotion_eligible=false`，canonical/authority/runtime
+均未写入。该 replay 证明 split provenance 防火墙生效，也确认 action32 contract 尚未
+具备足够的可复用 support/held-out 证据。
