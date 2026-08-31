@@ -154,6 +154,9 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# Local governing design documents are intentionally kept out of the release repo.
+/memory/docs/
+
 # mypy
 .mypy_cache/
 .dmypy.json
