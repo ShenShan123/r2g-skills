@@ -2121,14 +2121,16 @@ prefix。系统的 glibc/Qt/Tcl 等基础运行库仍属于操作系统 ABI，�
 可执行文件和 PDK。
 
 核心锁已记录在
-`/data1/zhangdy/Tools/tehm-toolchain/tehm-orfs-toolchain-manifest-direct-diagnostic.json`
-（`bound_internal`，digest=`b3a8b2e09af926880cc964245007ab5d3bdc1e6ea3ac5b6da2c4f2dae5b0d1de`）。
+`/data1/zhangdy/Tools/tehm-toolchain/tehm-orfs-toolchain-manifest-direct.json`
+（`bound_internal`，digest=`9b5f179b01bebde6da87f6443729f2589d8fab218fc63478628c2286e1940b1c`）。
 全量工具、版本、SHA256 与 PDK marker 的盘点在
 `/data1/zhangdy/Tools/tehm-toolchain/tehm-direct-toolchain-inventory.json`
-（inventory SHA256=`340a96a0802b65a4ed5fd713ae195951cfb1b2693c5e0ac5a28759a24ebc15f3`）。
-由于 ORFS checkout 仍有本地改动，该锁依然是 `--allow-dirty` diagnostic，不能冒充
-production freeze；要进入正式 ORFS batch，仍须先清理 ORFS tree 并用匹配的
-OpenROAD 重新 record/check。
+（inventory SHA256=`f835903adb766de49a72bb0686ad140afbaec491586381899c763c93ebbf8be2`）。
+该锁绑定 clean worktree `/data1/zhangdy/Tools/OpenROAD-flow-scripts-clean`、
+`openroad-matched` 与 flow-matched Yosys，`allow_dirty=false`，且已通过
+`record_orfs_toolchain_manifest.py check`。原始 `/data1/zhangdy/Tools/OpenROAD-flow-scripts`
+仍保留为脏的 operator 工作区，不参与正式 replay；正式 ORFS batch 仍须先通过单设计
+strict smoke 和后续 oracle gate。
 
 `bootstrap.sh --direct --dry-run --prefix /data1/zhangdy/Tools/tehm-toolchain` 现在是
 不调用 conda 的 fail-closed 入口；缺少 direct artifact 时只会报告缺口。旧的
