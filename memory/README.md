@@ -2818,3 +2818,28 @@ P8 定向回归为 `memory/tests/test_capability_expanded_attribution.py`（4 pa
 既有 capability attribution 回归合计 51 passed；`memory/docs/` 继续由 `.gitignore`
 排除，不进入 release commit。下一步是 P9 production gate：只有完成 harmful-rate、
 repair-gain、NO_SKILL calibration 等真实证据审计后，才讨论 production integration。
+
+### 2026-08-31 P9 production gate（evaluation-only，fail-closed）
+
+新增 `tehm/retrieval/production_gate.py` 与 `TehmMemoryBackend.evaluate_production_gate()`。
+P9 只评估一份显式 evidence manifest，不写 SQLite、不改变 canonical memory、
+lifecycle 或 runtime；`route_memory(mode="production")` 仍然拒绝。gate 需要同时具备：
+
+* 成对 oracle 的 efficacy 证据：memory harmful activation 严格下降，或在明确
+  `controlled_harm=true` 下 repair rate 严格提升；
+* 有非空分母的 NO_SKILL precision/recall calibration；
+* paired candidate-pool、interference-rate 与 diversity；
+* content-bound authority receipt、rollback receipt 以及带 digest 的 immutable
+  evidence refs。
+
+缺失值报告为 `NOT_ESTABLISHED`，显式失败报告为 `FAIL`；NaN、UNKNOWN、未成对样本、
+调用方布尔 gain 或无 digest 的 opaque reference 均不能通过。receipt 自身内容寻址且
+可 replay，`production_integration` 永远是 `not_attempted`。当前已审计证据仍不足以
+通过 P9：ORFS capability 报告的六项 rule authority gates 仍缺失，历史 campaign 也有
+`harmful_rate=0.875` 的失败记录，尚无完整 NO_SKILL calibration manifest。因此本阶段
+只建立 production decision seam，不执行任何 promotion 或 runtime integration。
+
+P9 定向回归为 `memory/tests/test_production_gate.py`（7 passed）；`memory/docs/` 继续由
+`.gitignore` 排除，设计文档不进入 release commit。后续需先生成真实、成对、可重放的
+NO_SKILL / interference / controlled-harm evidence，再由独立 authority review 决定是否
+增加 production adapter。

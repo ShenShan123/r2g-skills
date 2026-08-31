@@ -44,6 +44,10 @@ _ASSET_SELECTOR_EXPORTS = frozenset({
     "AssetSelectorError", "select_asset", "select_assets",
     "select_knowledge_grounded_assets",
 })
+_PRODUCTION_GATE_EXPORTS = frozenset({
+    "PRODUCTION_GATE_VERSION", "PRODUCTION_GATE_GATES", "PRODUCTION_GATE_STATUS",
+    "ProductionGateError", "ProductionGateReceipt", "evaluate_production_gate",
+})
 
 
 def __getattr__(name):
@@ -56,6 +60,9 @@ def __getattr__(name):
     if name in _ASSET_SELECTOR_EXPORTS:
         from tehm.retrieval import asset_selector
         return getattr(asset_selector, name)
+    if name in _PRODUCTION_GATE_EXPORTS:
+        from tehm.retrieval import production_gate
+        return getattr(production_gate, name)
     raise AttributeError(name)
 
 __all__ = [
@@ -73,4 +80,6 @@ __all__ = [
     "MAX_KNOWLEDGE_GROUNDED_ASSETS", "AssetSelection", "AssetSelectionReceipt",
     "AssetSelectorError", "select_asset", "select_assets",
     "select_knowledge_grounded_assets",
+    "PRODUCTION_GATE_VERSION", "PRODUCTION_GATE_GATES", "PRODUCTION_GATE_STATUS",
+    "ProductionGateError", "ProductionGateReceipt", "evaluate_production_gate",
 ]

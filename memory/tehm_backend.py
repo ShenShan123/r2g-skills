@@ -266,6 +266,18 @@ class TehmMemoryBackend:
             conn, query, routing=routing, candidate_budget=candidate_budget,
             mode="shadow", compatibility_mode=compatibility_mode)
 
+    def evaluate_production_gate(self, evidence=None, **kwargs):
+        """Evaluate P9 evidence without enabling production memory routing.
+
+        This is a pure audit seam.  It deliberately does not open or mutate
+        the TEHM database, and ``route_memory(..., mode='production')`` stays
+        fail-closed until an independently reviewed receipt is acted upon by
+        a future lifecycle operation.
+        """
+        from tehm.retrieval.production_gate import evaluate_production_gate
+
+        return evaluate_production_gate(evidence, **kwargs)
+
     def build_candidate_pool(
             self, query: MemoryQuery | RepairContext,
             no_memory_candidates, memory_candidates, *,
