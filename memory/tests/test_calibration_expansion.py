@@ -23,6 +23,9 @@ from run_calibration_expansion import (  # noqa: E402
     _validate_contract_manifest,
     _validate_source_freeze,
     _contract_toolchain_gate,
+    _contract_checks,
+    _contract_equivalence_one,
+    _contract_sample_gate,
     _strict_eligible_samples,
     make_samples,
     main,
@@ -189,6 +192,68 @@ def test_v119_v121_are_reserved_for_future_shadow_observation():
     assert len(digests) == 3
 
 
+def test_v122_v127_are_a_new_contract_bound_source_disjoint_cohort():
+    specs = {row["suffix"]: row for row in LINEAGES}
+    support = [f"v{index}" for index in range(122, 125)]
+    heldout = [f"v{index}" for index in range(125, 128)]
+    assert [specs[suffix]["base"] for suffix in support + heldout] == [
+        "24", "26", "28", "24", "26", "28"]
+    assert {specs[suffix]["action"] for suffix in support + heldout} == {"32"}
+    assert {specs[suffix]["screen_split"] for suffix in support} == {
+        "contract_support"}
+    assert {specs[suffix]["screen_split"] for suffix in heldout} == {
+        "contract_heldout"}
+    fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "physical_rtl"
+    prior = {
+        hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in fixture_root.glob("future_prospective_logic_v*.v")
+        if path.stem not in {specs[suffix]["design"] for suffix in support + heldout}
+    }
+    digests = set()
+    for suffix in support + heldout:
+        design = specs[suffix]["design"]
+        rtl = fixture_root / f"{design}.v"
+        sdc = fixture_root / f"{design}.sdc"
+        assert rtl.is_file() and sdc.is_file()
+        assert f"module {design}" in rtl.read_text()
+        assert f"current_design {design}" in sdc.read_text()
+        digest = hashlib.sha256(rtl.read_bytes()).hexdigest()
+        assert digest not in prior
+        digests.add(digest)
+    assert len(digests) == 6
+
+
+def test_contract_equivalence_receipt_is_independent_and_source_bound(tmp_path):
+    rtl = tmp_path / "design.v"
+    rtl.write_text("module design(input wire a, output wire y); assign y = a; endmodule\n")
+    project = tmp_path / "project"
+    result = _contract_equivalence_one(
+        project,
+        {"case_id": "case-a", "design": "design", "rtl_files": [str(rtl)]},
+        timeout=5,
+    )
+    assert result["verdict"] == "PASS"
+    assert result["proof_type"] == "CRYPTOGRAPHIC_SOURCE_IDENTITY_V1"
+    receipt = json.loads((project / "reports" / "equivalence.json").read_text())
+    assert receipt["oracle_type"] == "YOSYS_EQUIV"
+    assert receipt["case_id"] == "case-a"
+
+
+def test_contract_sample_gate_does_not_treat_generic_safe_as_contract_safe():
+    samples = [
+        {"case_id": "case-pass", "lineage_id": "l-pass",
+         "contract_evaluation": {"status": "PASS"}},
+        {"case_id": "case-fail", "lineage_id": "l-fail",
+         "contract_evaluation": {"status": "FAIL", "failures": ["power_budget_exceeded"]}},
+        {"case_id": "case-missing", "lineage_id": "l-missing"},
+    ]
+    gate = _contract_sample_gate(samples)
+    assert gate["status"] == "FAIL"
+    assert gate["pass_count"] == 1
+    assert gate["fail_count"] == 1
+    assert gate["abstain_count"] == 1
+
+
 def test_grouped_shadow_readiness_is_shadow_only_and_evidence_derived():
     grouped = {
         "status": "ready_for_shadow",
@@ -341,6 +406,22 @@ def test_prepare_binds_contract_to_selected_cohort_before_flow(tmp_path):
     with pytest.raises(ValueError, match="not bound to utility contract"):
         prepare(tmp_path / "mixed", orfs,
                 suffixes={"v112", "v113"}, utility_contract=contract)
+
+
+def test_make_samples_rejects_item_contract_binding_drift(tmp_path):
+    contract = density_relief_nonregression_32()
+    manifest = {
+        "utility_contract": _contract_manifest_binding(contract),
+        "items": [{
+            "case_id": "case-a", "lineage_id": "lineage-a", "platform": "sky130hs",
+            "family": "DENSITY_RELIEF", "before_project": str(tmp_path / "before"),
+            "after_project": str(tmp_path / "after"),
+            "config_edits": {"CORE_UTILIZATION": "32"},
+            "utility_contract_id": "WRONG",
+        }],
+    }
+    with pytest.raises(ValueError, match="item utility contract binding differs"):
+        make_samples(tmp_path, manifest)
 
 
 def test_contract_cohort_rejects_unverified_toolchain_before_sampling(tmp_path):

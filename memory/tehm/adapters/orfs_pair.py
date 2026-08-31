@@ -29,6 +29,7 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
                            config_edits: dict | None = None,
                            transformation_family: str = "DENSITY_RELIEF",
                            rerun_from: str = "floorplan",
+                           utility_contract_id: str | None = None,
                            semantic_oracle: Mapping | None = None) -> ExecutionRecord:
     """Build a replayable record from two completed production-run attempts."""
     before_project, after_project = Path(before_project), Path(after_project)
@@ -44,6 +45,9 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
     config_edits = {str(k): str(v) for k, v in (config_edits or {}).items()}
     if not config_edits:
         raise ValueError("an ORFS pair needs the concrete config edit that was executed")
+    if utility_contract_id is not None and (
+            not isinstance(utility_contract_id, str) or not utility_contract_id):
+        raise ValueError("utility_contract_id must be a non-empty string")
     _require_real_run(before_run, "before")
     _require_real_run(after_run, "after")
 
@@ -85,11 +89,30 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
 
     before_cfg = _config(before_project)
     after_cfg = _config(after_project)
-    record_id = "orfs-pair:" + hashlib.sha1(_stable({
+    action_payload = {
+        "config_edits": config_edits,
+        "rerun_from": rerun_from, "recheck": target_check,
+        "dependency_cone_changed": True,
+        "register_boundary_changed": False,
+    }
+    if utility_contract_id is not None:
+        # The contract binding is part of the immutable action identity.  It
+        # must be present before record_id is derived, otherwise a later
+        # calibration-time annotation could make two semantically different
+        # actions share one transition identity.
+        action_payload["utility_contract_id"] = utility_contract_id
+
+    record_identity = {
         "before": before_run["run_meta"], "after": after_run["run_meta"],
         "lineage": lineage_id, "edit": config_edits, "check": target_check,
         "semantic_oracle": semantic_receipt,
-    }).encode()).hexdigest()[:24]
+    }
+    # Keep legacy record IDs stable while making a contract-bound pair
+    # unambiguously distinct from its unbound counterpart.
+    if utility_contract_id is not None:
+        record_identity["utility_contract_id"] = utility_contract_id
+    record_id = "orfs-pair:" + hashlib.sha1(
+        _stable(record_identity).encode()).hexdigest()[:24]
     episode_id = "episode:" + record_id.split(":", 1)[1]
     refs = _evidence_refs(before_project, before_run, "before") + \
         _evidence_refs(after_project, after_run, "after")
@@ -113,10 +136,7 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
         action={
             "domain": "flow.CONFIG_DELTA",
             "transformation_family": transformation_family,
-            "payload": {"config_edits": config_edits,
-                        "rerun_from": rerun_from, "recheck": target_check,
-                        "dependency_cone_changed": True,
-                        "register_boundary_changed": False},
+            "payload": action_payload,
         },
         after={
             "repository_ref": repository_ref, "config": after_cfg,

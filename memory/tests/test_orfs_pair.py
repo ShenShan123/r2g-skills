@@ -7,6 +7,7 @@ import pytest
 
 from tehm.adapters.orfs_pair import build_orfs_pair_record
 from tehm.canonical.capture import capture
+from tehm.physical.utility_contracts import density_relief_nonregression_32
 
 
 def _project(root, name, *, util, rc, failed_stage=None, route=None, drc=None, ppa=None):
@@ -52,6 +53,28 @@ def test_real_pair_builds_complete_positive_transition(tmp_tehm, tmp_path):
     assert record.episode["terminal_status"] == "VERIFIED_REPAIR"
     assert record.verification["evidence_refs"]
     assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == 1
+
+
+def test_contract_binding_is_part_of_pair_action_identity(tmp_path):
+    before = _project(tmp_path, "contract_before", util=50, rc=0,
+                      route={"status": "complete"}, drc={"status": "clean"},
+                      ppa={"summary": {"timing": {"setup_wns": 0.1}}})
+    after = _project(tmp_path, "contract_after", util=32, rc=0,
+                     route={"status": "complete"}, drc={"status": "clean"},
+                     ppa={"summary": {"timing": {"setup_wns": 0.2}}})
+    contract = density_relief_nonregression_32()
+    first = build_orfs_pair_record(
+        before, after, lineage_id="orfs:contract", config_edits={"CORE_UTILIZATION": "32"},
+        utility_contract_id=contract["contract_id"])
+    second = build_orfs_pair_record(
+        before, after, lineage_id="orfs:contract", config_edits={"CORE_UTILIZATION": "32"})
+    assert first.action["payload"]["utility_contract_id"] == contract["contract_id"]
+    assert first.record_id != second.record_id
+
+    with pytest.raises(ValueError, match="utility_contract_id"):
+        build_orfs_pair_record(
+            before, after, lineage_id="orfs:bad", config_edits={"CORE_UTILIZATION": "32"},
+            utility_contract_id="")
 
 
 def test_clean_before_after_is_observation_not_verified_repair(tmp_path):

@@ -595,13 +595,24 @@ def build_external_observation(item: Mapping) -> dict:
             complete = False
     record_dict = None
     record_error = None
+    utility_contract_id = item.get("utility_contract_id")
+    if utility_contract_id is not None and (
+            not isinstance(utility_contract_id, str) or not utility_contract_id):
+        record_error = "utility_contract_id must be a non-empty string"
+        complete = False
     try:
-        record = build_orfs_pair_record(
-            Path(str(item["before_project"])), Path(str(item["after_project"])),
-            lineage_id=str(item["lineage_id"]), target_check=str(item.get("check") or "route"),
-            config_edits=config_edits,
-            transformation_family=str(item["family"]),
-        )
+        if record_error is None:
+            record = build_orfs_pair_record(
+                Path(str(item["before_project"])), Path(str(item["after_project"])),
+                lineage_id=str(item["lineage_id"]), target_check=str(item.get("check") or "route"),
+                config_edits=config_edits,
+                transformation_family=str(item["family"]),
+                utility_contract_id=utility_contract_id,
+            )
+        else:
+            record = None
+        if record is None:
+            raise ValueError(record_error)
         record_dict = asdict(record)
         if execution_preflight is not None:
             record_dict["verification"]["execution_preflight"] = execution_preflight
@@ -614,6 +625,12 @@ def build_external_observation(item: Mapping) -> dict:
         complete = False
 
     classification = "ELIGIBLE_POSITIVE" if complete else "INCOMPLETE_EXTERNAL_ONLY"
+    receipt_action = {"config_edits": config_edits}
+    if utility_contract_id is not None:
+        # Keep the envelope-level action bound as well as the nested execution
+        # record.  Consumers that only inspect an external receipt must not
+        # lose the prepare-time contract provenance.
+        receipt_action["utility_contract_id"] = utility_contract_id
     payload = {
         "version": EXTERNAL_RECEIPT_VERSION,
         "case_id": str(item["case_id"]),
@@ -621,7 +638,7 @@ def build_external_observation(item: Mapping) -> dict:
         "platform": str(item["platform"]),
         "family": str(item["family"]),
         "split": split,
-        "action": {"config_edits": config_edits},
+        "action": receipt_action,
         "before": before,
         "after": after,
         "classification": classification,

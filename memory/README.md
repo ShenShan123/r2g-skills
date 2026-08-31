@@ -2508,3 +2508,19 @@ promotion 或 production runtime mutation。
 `max_distance=1.7`；但 v116 的实际 WNS 回退和 v121 的 oracle 不完整说明“进入 OOD
 范围”不等于“可晋级”。三条结果均未写入 canonical memory、authority 或 production
 runtime，当前六项 gate 仍保持未建立/拒绝状态。
+
+### 2026-08-30 utility contract hard-oracle firewall
+
+为避免“generic Pareto 安全”覆盖 typed utility contract 的硬约束，
+`run_calibration_expansion.py` 现在在 prepare 时把 contract id 固定进 action identity、
+source freeze 和每个 pair manifest。contract cohort 的独立 equivalence receipt 由固定
+Yosys/source-identity oracle 生成；缺少 `equivalence.json`、DRC/LVS/timing receipt 或
+任一报告非 PASS 时，样本只保留为 external audit（`ABSTAINED`/`FAIL`），不会进入
+calibration support。只有逐样本 `evaluate_observed_contract` 为 `PASS` 的 support 才能
+进入 staging-only replay；held-out 的任一 FAIL/ABSTAIN 会关闭 grouped shadow admission，
+即使 generic Pareto 报告为 `ready_for_shadow` 也不能 materialize policy。所有路径仍保持
+`canonical_memory_mutation=none`、`promotion_eligible=false`。
+
+此前 v122–v127 物理 campaign 的 ORFS/strict reports 生成于该 receipt 接入前，不能回填为
+contract 通过证据；需在新的 source freeze 下重跑 samples/evaluate，明确记录每条硬约束
+的 PASS、FAIL 或 ABSTAIN，再决定是否继续 shadow 试验。

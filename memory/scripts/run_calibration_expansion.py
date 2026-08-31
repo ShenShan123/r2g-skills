@@ -45,10 +45,12 @@ from tehm.physical.graph_context import load_defgraph_context  # noqa: E402
 from tehm.physical.memory import PhysicalEffectMemory, _action_signature  # noqa: E402
 from tehm.physical.utility_contracts import (  # noqa: E402
     action_contract_binding_reason,
+    evaluate_observed_contract,
     known_utility_contracts,
     utility_contract_digest,
     validate_utility_contract,
 )
+from tehm.rtl.equivalence import YosysEquivalenceOracle  # noqa: E402
 from tehm.parametric.calibration import (  # noqa: E402
     calibrate_exact_groups,
     materialize_shadow_policy,
@@ -207,6 +209,21 @@ LINEAGES = (
      "action": "32", "screen_split": "future_observation"},
     {"suffix": "v121", "design": "future_prospective_logic_v121", "base": "28",
      "action": "32", "screen_split": "future_observation"},
+    # A new contract-bound cohort.  These lineages are intentionally separate
+    # from v113-v121; no historical row is retroactively evaluated under the
+    # DENSITY_RELIEF_NONREGRESSION_32 contract.
+    {"suffix": "v122", "design": "future_prospective_logic_v122", "base": "24",
+     "action": "32", "screen_split": "contract_support"},
+    {"suffix": "v123", "design": "future_prospective_logic_v123", "base": "26",
+     "action": "32", "screen_split": "contract_support"},
+    {"suffix": "v124", "design": "future_prospective_logic_v124", "base": "28",
+     "action": "32", "screen_split": "contract_support"},
+    {"suffix": "v125", "design": "future_prospective_logic_v125", "base": "24",
+     "action": "32", "screen_split": "contract_heldout"},
+    {"suffix": "v126", "design": "future_prospective_logic_v126", "base": "26",
+     "action": "32", "screen_split": "contract_heldout"},
+    {"suffix": "v127", "design": "future_prospective_logic_v127", "base": "28",
+     "action": "32", "screen_split": "contract_heldout"},
 )
 
 
@@ -540,7 +557,9 @@ def prepare(root: Path, orfs_root: Path, *,
         item = {
             "case_id": f"{lineage}:DENSITY_RELIEF:{spec['base']}->{action_value}",
             "lineage_id": lineage, "platform": "sky130hs",
-            "design": spec["design"], "family": "DENSITY_RELIEF", "check": "route",
+            "design": spec["design"], "top": spec["design"],
+            "rtl_files": [str(fixture.resolve())],
+            "family": "DENSITY_RELIEF", "check": "route",
             "before_project": str(before), "after_project": str(after),
             "config_edits": {"CORE_UTILIZATION": action_value},
             "screen_split": spec.get("screen_split"),
@@ -561,6 +580,13 @@ def prepare(root: Path, orfs_root: Path, *,
     }
     if frozen_contract is not None:
         manifest["utility_contract"] = frozen_contract
+        manifest["equivalence_policy"] = {
+            "authority": "independent_equivalence_report",
+            "oracle": "YOSYS_EQUIV",
+            "config_only_source_identity_allowed": True,
+            "orfs_internal_equivalence_check": False,
+            "missing_or_failed_proof_classification": "ABSTAINED",
+        }
         freeze = _build_source_freeze(
             root, orfs_root, items, utility_contract)
         manifest.update({
@@ -668,10 +694,15 @@ def _strict_oracle_gate(root: Path, manifest: dict) -> dict[str, dict]:
 
 def make_samples(root: Path, manifest: dict) -> dict:
     samples, evidence = [], []
+    utility_contract = _validate_contract_manifest(manifest)
+    utility_contract_id = (utility_contract or {}).get("contract_id")
     strict_gate = _strict_oracle_gate(root, manifest)
     toolchain_gate = _contract_toolchain_gate(root, manifest)
     for item in manifest["items"]:
         case_id = str(item["case_id"])
+        if utility_contract is not None and item.get("utility_contract_id") != utility_contract_id:
+            raise ValueError(
+                f"{case_id}: item utility contract binding differs from campaign contract")
         oracle = strict_gate.get(case_id, {
             "eligible": False, "reason": "strict_oracle_missing", "projects": {},
         })
@@ -699,7 +730,8 @@ def make_samples(root: Path, manifest: dict) -> dict:
             context = load_defgraph_context(before, def_path=final_def).to_dict()
             record = build_orfs_pair_record(
                 before, after, lineage_id=item["lineage_id"], target_check="route",
-                config_edits=item["config_edits"], transformation_family="DENSITY_RELIEF")
+                config_edits=item["config_edits"], transformation_family="DENSITY_RELIEF",
+                utility_contract_id=utility_contract_id)
             observed = extract_deltas(record.before["reports"]["ppa"],
                                        record.after["reports"]["ppa"])
         except (OSError, ValueError, RuntimeError) as exc:
@@ -707,6 +739,16 @@ def make_samples(root: Path, manifest: dict) -> dict:
                              "feature_rc": feature_rc, "error": str(exc),
                              "strict_oracle": oracle})
             continue
+        contract_evaluation = None
+        contract_checks = None
+        if utility_contract is not None:
+            contract_checks = _contract_checks(item)
+            contract_evaluation = evaluate_observed_contract(
+                contract=utility_contract, action=record.action,
+                before_ppa=record.before["reports"]["ppa"],
+                after_ppa=record.after["reports"]["ppa"],
+                checks=contract_checks,
+                obligation_coverage=1.0)
         samples.append({
             "case_id": case_id, "lineage_id": item["lineage_id"],
             "platform": item["platform"], "family": item["family"],
@@ -715,13 +757,18 @@ def make_samples(root: Path, manifest: dict) -> dict:
             "after_ppa": record.after["reports"]["ppa"],
             "observed_deltas": observed,
             "toolchain_preflight": toolchain_gate,
+            "utility_contract_id": utility_contract_id,
+            "contract_checks": contract_checks,
+            "contract_evaluation": contract_evaluation,
         })
         evidence.append({"case_id": case_id, "status": "evaluatable",
                          "lineage_id": item["lineage_id"],
                          "context_digest": context.get("digest"),
                          "observed_deltas": observed, "feature_rc": feature_rc,
                          "strict_oracle": oracle,
-                         "toolchain_preflight": toolchain_gate})
+                         "toolchain_preflight": toolchain_gate,
+                         "contract_checks": contract_checks,
+                         "contract_evaluation": contract_evaluation})
     result = {
         "version": VERSION, "samples": samples, "evidence": evidence,
         "source_lineages": sorted({row["lineage_id"] for row in samples}),
@@ -816,6 +863,166 @@ def _strict_oracle_one(project: Path, platform: str, *, timeout: int) -> dict:
         if (timing_report_path := reports / "timing_check.json").is_file()
         else None,
     }
+
+
+def _contract_equivalence_one(project: Path, item: dict, *, timeout: int) -> dict:
+    """Emit an independent equivalence receipt for one contract project.
+
+    The calibration runner intentionally keeps ``EQUIVALENCE_CHECK=0`` for
+    physical CONFIG_DELTA experiments: ORFS' internal EQY path is redundant for
+    unchanged RTL and can select a different parser/profile.  The typed
+    contract still requires an executable, source-bound equivalence obligation,
+    so this receipt is produced by the same pinned Yosys oracle used elsewhere
+    in TEHM.  Missing RTL/top metadata is an abstention, never a pass.
+    """
+    project = Path(project).resolve()
+    reports = project / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    design = str(item.get("design") or item.get("top") or "")
+    top = str(item.get("top") or design)
+    raw_files = item.get("rtl_files") or []
+    if not raw_files and design:
+        raw_files = [MEMORY_ROOT / "fixtures" / "physical_rtl" / f"{design}.v"]
+    files = [Path(path).resolve() for path in raw_files]
+    base = {
+        "case_id": str(item.get("case_id") or ""),
+        "project": str(project),
+        "run_tag": (sorted((project / "backend").glob("RUN_*"))[-1].name
+                    if list((project / "backend").glob("RUN_*")) else None),
+    }
+    if not top or not files or not all(path.is_file() for path in files):
+        result = {
+            "version": "yosys-equivalence-oracle-v1",
+            "oracle_type": "YOSYS_EQUIV",
+            "verdict": "UNKNOWN",
+            "reason": "rtl_evidence_missing",
+            "reference_top": top or None,
+            "candidate_top": top or None,
+        }
+    else:
+        oracle = YosysEquivalenceOracle(
+            yosys=(os.environ.get("R2G_YOSYS") or
+                   os.environ.get("YOSYS_EXE")),
+            timeout=max(1, int(timeout)))
+        try:
+            result = oracle.verify(
+                reference_files=files, candidate_files=files,
+                reference_top=top, candidate_top=top,
+                reference_profile="flow.rtl.top-equivalence.v1",
+                candidate_profile="flow.rtl.top-equivalence.v1")
+        except (OSError, TypeError, ValueError) as exc:
+            result = {
+                "version": "yosys-equivalence-oracle-v1",
+                "oracle_type": "YOSYS_EQUIV",
+                "verdict": "UNKNOWN",
+                "reason": f"equivalence_oracle_error:{exc}",
+                "reference_top": top,
+                "candidate_top": top,
+            }
+    result = {**result, **base}
+    _write_json(reports / "equivalence.json", result)
+    return result
+
+
+def run_contract_equivalence(root: Path, manifest: dict, *, timeout: int) -> dict:
+    """Run the independent equivalence obligation for every unique project."""
+    if manifest.get("utility_contract") is None:
+        return {"requested": False, "results": [], "all_proven": True}
+    by_project = {}
+    for item in manifest.get("items", []):
+        for side in ("before_project", "after_project"):
+            project = Path(item[side]).resolve()
+            by_project.setdefault(str(project), item)
+    results = [_contract_equivalence_one(Path(project), item, timeout=timeout)
+               for project, item in sorted(by_project.items())]
+    report = {
+        "version": "calibration-contract-equivalence-v1",
+        "requested": True,
+        "oracle": "YOSYS_EQUIV",
+        "results": results,
+        "all_proven": bool(results) and all(
+            row.get("verdict") == "PASS" for row in results),
+    }
+    _write_json(root / "contract_equivalence_report.json", report)
+    return report
+
+
+def _contract_checks(item: dict) -> dict:
+    """Read hard-oracle statuses from the after-project evidence surface."""
+    reports = Path(item["after_project"]) / "reports"
+    checks = {}
+    loaders = {
+        "equivalence": ("equivalence.json", "verdict"),
+        "drc": ("drc.json", "status"),
+        "lvs": ("lvs.json", "status"),
+    }
+    for name, (filename, field) in loaders.items():
+        path = reports / filename
+        if not path.is_file():
+            continue
+        value = _load(path).get(field)
+        if value is None:
+            continue
+        checks[name] = "PASS" if (
+            value == "PASS" or (name != "equivalence" and value in {"clean", "pass"})
+        ) else str(value).upper()
+    timing_path = reports / "timing_check.json"
+    if timing_path.is_file():
+        timing = _load(timing_path)
+        value = timing.get("status") or timing.get("tier")
+        if value is not None:
+            checks["timing"] = "PASS" if value in {"clean", "met", "PASS"} else str(value).upper()
+    return checks
+
+
+def _contract_sample_gate(samples: list[dict]) -> dict:
+    """Summarize typed contract observations without hiding FAIL/ABSTAIN rows."""
+    rows = []
+    for sample in samples:
+        evaluation = sample.get("contract_evaluation")
+        status = evaluation.get("status") if isinstance(evaluation, dict) else "ABSTAINED"
+        reasons = ((evaluation.get("failures") or evaluation.get("abstain_reasons") or [])
+                   if isinstance(evaluation, dict) else ["contract_evaluation_missing"])
+        rows.append({"case_id": sample.get("case_id"),
+                     "lineage_id": sample.get("lineage_id"),
+                     "status": status, "reasons": list(reasons)})
+    statuses = [row["status"] for row in rows]
+    if any(status == "FAIL" for status in statuses):
+        status = "FAIL"
+    elif any(status not in {"PASS"} for status in statuses):
+        status = "ABSTAIN"
+    elif rows:
+        status = "PASS"
+    else:
+        status = "ABSTAIN"
+    return {
+        "status": status,
+        "sample_count": len(rows),
+        "pass_count": sum(row["status"] == "PASS" for row in rows),
+        "fail_count": sum(row["status"] == "FAIL" for row in rows),
+        "abstain_count": sum(row["status"] not in {"PASS", "FAIL"} for row in rows),
+        "rows": rows,
+    }
+
+
+def _contract_training_partition(samples: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Keep only PASS observations in the contract-bound calibration support."""
+    accepted, excluded = [], []
+    for sample in samples:
+        evaluation = sample.get("contract_evaluation")
+        status = evaluation.get("status") if isinstance(evaluation, dict) else None
+        if status == "PASS":
+            accepted.append(sample)
+            continue
+        reasons = []
+        if isinstance(evaluation, dict):
+            reasons = evaluation.get("failures") or evaluation.get("abstain_reasons") or []
+        excluded.append({"case_id": sample.get("case_id"),
+                         "lineage_id": sample.get("lineage_id"),
+                         "reason": "contract_not_pass",
+                         "status": status or "missing",
+                         "details": list(reasons)})
+    return accepted, excluded
 
 
 def run_strict_oracle(root: Path, manifest: dict, *, workers: int,
@@ -1135,6 +1342,15 @@ def _grouped_shadow_admission(*, retrieval_policy: dict,
         min_samples_per_metric=3, max_harmful_rate=0.0,
         utility_contract=utility_contract)
     report["adapter_invalid_evaluations"] = invalid
+    if utility_contract is not None:
+        # Generic Pareto safety is intentionally not sufficient for a typed
+        # contract.  A row with a clean route but a missing equivalence receipt,
+        # or with a one-sided resource/timing regression, remains audit evidence
+        # but must close the shadow gate before any policy can be materialized.
+        report["utility_contract_gate"] = _contract_sample_gate(heldout_samples)
+        if report["utility_contract_gate"]["status"] != "PASS":
+            report["status"] = "shadow_calibration_failed"
+            report["reason"] = "utility_contract_observation_gate_failed"
     if invalid and report.get("status") == "ready_for_shadow":
         report["status"] = "shadow_calibration_failed"
         report["reason"] = "invalid_retrieval_evaluation"
@@ -1227,10 +1443,17 @@ def _grouped_shadow_readiness(*, grouped_report: dict,
         "observed_independent_heldout_lineages": len(heldout),
         "lineage_diversity_satisfied": len(heldout) >= 3,
     }
-    ready = all(criteria[name] is True for name in (
+    contract_gate = grouped_report.get("utility_contract_gate")
+    if contract_gate is not None:
+        criteria["utility_contract_gate_satisfied"] = contract_gate.get("status") == "PASS"
+    required_criteria = [
         "all_retrieval_policies_ready", "distance_gate_satisfied",
         "coverage_gate_satisfied", "uncertainty_gate_satisfied",
-        "lineage_diversity_satisfied"))
+        "lineage_diversity_satisfied",
+    ]
+    if contract_gate is not None:
+        required_criteria.append("utility_contract_gate_satisfied")
+    ready = all(criteria[name] is True for name in required_criteria)
     return {
         "version": "parametric-shadow-readiness-v1",
         "readiness_kind": "lineage_grouped_shadow_observation",
@@ -1311,6 +1534,12 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
                               for row in excluded)
         prior.extend(_augment_sample_ppa(sample, prior_path)
                      for sample in prior_data if sample.get("platform", "sky130hs") == "sky130hs")
+    contract_training_input = list(prior)
+    contract_training_excluded = []
+    if utility_contract is not None:
+        prior, contract_training_excluded = _contract_training_partition(prior)
+        excluded_prior.extend({"path": "contract-bound-training", **row}
+                              for row in contract_training_excluded)
     conn = db.connect(stage_db)
     db.ensure_schema(conn)
     added_lineages = _load_external_training(root, conn, store, prior)
@@ -1359,6 +1588,11 @@ def evaluate(root: Path, *, canonical_snapshot: Path,
         "staging_snapshot_digest": _sha256(stage_db),
         "staging_physical_count": count_after,
         "excluded_samples": excluded_prior,
+        "utility_contract_observation_gate": ({
+            "support": _contract_sample_gate(contract_training_input),
+            "fresh": _contract_sample_gate(fresh),
+            "training_excluded": contract_training_excluded,
+        } if utility_contract is not None else None),
         "canonical_mutation": "none; only a staging copy was opened writable",
         "promotion_eligible": False,
         "parametric_view_status": "NOT_IMPLEMENTED",
@@ -1456,6 +1690,9 @@ def main(argv=None) -> int:
     if args.strict_oracle and args.phase in {"all", "run", "samples"}:
         run_strict_oracle(root, run_manifest, workers=max(1, args.workers),
                           timeout=max(1, args.strict_timeout))
+        if utility_contract is not None:
+            run_contract_equivalence(root, run_manifest,
+                                     timeout=max(1, args.strict_timeout))
     if args.phase == "run":
         return 0
     if args.phase in {"all", "samples"}:
