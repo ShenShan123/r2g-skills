@@ -2491,3 +2491,20 @@ oracle 现在最多留下失败的审计 receipt，不会进入 harmful/conforma
 controlled support 或 cross-lineage rule binding。定向 authority/causal 回归 62 passed，
 扩展 activation/online/transfer/authority/L2 回归 127 passed；本轮没有 canonical
 promotion 或 production runtime mutation。
+
+### 2026-08-30 action32 held-out safety follow-up
+
+在同一 direct toolchain/source freeze 下又完成了两条不重叠的 held-out campaign：v120
+和 v121。v120 的 ORFS、equivalence、strict signoff、graph、capture 均完整，真实 delta
+为 area `-269.15 um2`、power `-1.8e-05 W`、WNS `+0.00055 ns`，utility 为
+`PARETO_SAFE`；v121 的物理流程和 graph 完成，但 `oracle_complete=false`，真实 delta
+为 area `-452.63 um2`、WNS `-0.00167 ns`，只能保留为不完整审计证据，不能进入 safety
+分母。结合 v116，当前完整 held-out 分母为 2 条，其中 1 条 `HARMFUL`、1 条
+`PARETO_SAFE`，harmful rate 为 `0.5`，所以 action32 policy 不具备安全 promotion
+资格。
+
+用 v117–v119 support snapshot 对三条 held-out 做只读 shadow replay，nearest distance
+分别为 v116 `1.420285`、v120 `1.478473`、v121 `0.556491`，均低于 policy 的
+`max_distance=1.7`；但 v116 的实际 WNS 回退和 v121 的 oracle 不完整说明“进入 OOD
+范围”不等于“可晋级”。三条结果均未写入 canonical memory、authority 或 production
+runtime，当前六项 gate 仍保持未建立/拒绝状态。

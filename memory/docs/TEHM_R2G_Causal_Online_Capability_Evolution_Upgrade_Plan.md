@@ -5386,6 +5386,23 @@ canonical memory、Parametric shadow-only、六项 promotion gate 阈值或 prod
 定向 authority/causal 回归 62 passed，扩展 activation/online/transfer/authority/L2
 回归 127 passed；它们验证的是 fail-closed 机制，不构成真实 ORFS/RTL 经验结果。
 
+### 2026-08-30 held-out safety follow-up
+
+在同一 direct toolchain 与 source freeze 下新增 v120/v121 两条不重叠 held-out lineage。
+v120 完成 ORFS、equivalence、strict signoff、graph、capture，PPA delta 为 area
+`-269.15 um2`、power `-1.8e-05 W`、WNS `+0.00055 ns`，utility 为 `PARETO_SAFE`。
+v121 虽完成物理流程和 graph，但 `oracle_complete=false`，不能成为 safety 或
+conformal 分母；其 area `-452.63 um2`、WNS `-0.00167 ns` 只作为不完整审计记录。
+加上 v116 的完整 `HARMFUL` row，当前可评估 held-out 分母为 2，harmful rate 为
+`0.5`，action32 shadow policy 必须拒绝 promotion。
+
+v116/v120/v121 对 v117–v119 support snapshot 的只读 nearest distance 分别为
+`1.420285/1.478473/0.556491`，全部低于 `max_distance=1.7`。这个结果说明 OOD 距离
+门只能控制检索范围，不能替代真实 held-out utility、完整 oracle 或六项 authority
+gate；三条 held-out 仍不允许写入 canonical memory、authority 或 production runtime。
+后续应继续扩充跨设计、完整 oracle 的 held-out cohort，并在独立 utility contract 下
+重新计算 conformal/harmful gate，不得删除 v116 或把 v121 重标为有效正例。
+
 ### 2026-08-30 calibration authority source-disjoint seam
 
 本轮发现 calibration runner 的旧实现只根据外部 manifest 生成预测，却没有核对预测所
