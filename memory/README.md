@@ -2998,6 +2998,13 @@ campaign 与 digest witness，并在打开 source 前预检所有非 `RETAIN` �
 可以回放真正 eligible 的 P13 proposal，但不会写 canonical、lifecycle 或 production
 runtime；当前真实 ORFS cohort 仍因缺少独立 evolution reason 而不能调用它。
 
+新增 `scripts/build_p13_anti_forgetting_witness.py` 作为 anti-forgetting provenance
+binder：manifest 必须分别提供 target replay、non-target regression、held-out audit 和
+rollback 四个不同文件、显式 gate 布尔值及匹配的完整 SHA256。binder 只绑定这些声明并
+生成 `AntiForgettingWitness`，不从文件内容推断结果；任一 gate 失败会保留为
+`eligible=false` 审计 receipt，不能被 P13 runner 消费，且 manifest/evidence/output
+路径不能互相复用。
+
 ### 2026-09-03 Revision2 reason-aware NO_SKILL / State Shift
 
 依据 Revision2 设计，`MemoryRoutingDecision` 现在保留兼容的顶层 `NO_SKILL`，并增加
