@@ -39,6 +39,7 @@ from .state_shift_revision import (
     STATE_SHIFT_EVOLUTION_REASONS, StateShiftEvolutionError,
     StateShiftEvolutionProposal, plan_repeated_state_shift,
     propose_repeated_state_shift, propose_repeated_state_shift_from_events,
+    state_shift_proposal_to_localized_plan,
 )
 from .receipts import (
     ExperienceValueReceipt, IncrementalCrystallizationReceipt,
@@ -93,6 +94,7 @@ __all__ = [
     "STATE_SHIFT_EVOLUTION_REASONS", "StateShiftEvolutionError",
     "StateShiftEvolutionProposal", "plan_repeated_state_shift",
     "propose_repeated_state_shift", "propose_repeated_state_shift_from_events",
+    "state_shift_proposal_to_localized_plan",
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",
     "require_verified_execution", "require_verified_transition",

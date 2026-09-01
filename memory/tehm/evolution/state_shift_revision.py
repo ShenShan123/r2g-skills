@@ -18,6 +18,8 @@ from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import SHIFT_DIMENSIONS, StateShiftReceipt
 
 from .events import load_state_shift_observations
+from .local_revision import LocalizedUpdatePlan
+from .value_receipts import VALUE_PRIORITIES
 
 
 STATE_SHIFT_EVOLUTION_VERSION = "state-shift-evolution-v1"
@@ -406,9 +408,70 @@ def propose_repeated_state_shift_from_events(
 plan_repeated_state_shift = propose_repeated_state_shift
 
 
+def state_shift_proposal_to_localized_plan(
+    proposal: StateShiftEvolutionProposal,
+    *,
+    campaign_id: str,
+    priority: str = "P1_HIGH",
+    value_score: float = 1.0,
+    p12_trigger_digest: str | None = None,
+) -> LocalizedUpdatePlan:
+    """Convert a state-shift proposal into the existing P13 plan contract.
+
+    The conversion is deliberately explicit.  A mutating proposal must carry
+    the content digest of its triggering P12 receipt; callers cannot silently
+    turn a state-shift observation into a P13 mutation.  The resulting plan
+    still needs the P13 runner's typed Knowledge payload and anti-forgetting
+    witness before isolated staging can be opened.
+    """
+    if not isinstance(proposal, StateShiftEvolutionProposal):
+        raise TypeError("state shift plan conversion requires a proposal")
+    campaign = _text(campaign_id, "campaign_id")
+    if priority not in VALUE_PRIORITIES:
+        raise StateShiftEvolutionError("state shift plan priority is invalid")
+    if isinstance(value_score, bool) or not isinstance(value_score, (int, float)):
+        raise StateShiftEvolutionError("state shift plan value_score must be numeric")
+    score = float(value_score)
+    if score != score or score < 0.0 or score > 1.0:  # NaN and range guard
+        raise StateShiftEvolutionError("state shift plan value_score must be in [0,1]")
+    refs = set(proposal.evidence_refs)
+    mutating = proposal.operation != "RETAIN"
+    if mutating:
+        if proposal.learner_eligible is not True:
+            raise StateShiftEvolutionError(
+                "mutating state shift proposal must be learner-eligible")
+        trigger = _text(p12_trigger_digest, "p12_trigger_digest")
+        if not trigger.startswith("sha256:") or len(trigger) <= len("sha256:"):
+            raise StateShiftEvolutionError(
+                "p12_trigger_digest must be a sha256 digest")
+        refs.add(trigger)
+        target = "UPDATE_CAUSAL_KNOWLEDGE"
+        candidates = (target,)
+        operation = proposal.operation
+        knowledge_refs = (proposal.knowledge_object_id,)
+    else:
+        if p12_trigger_digest is not None:
+            raise StateShiftEvolutionError(
+                "retain state shift proposal cannot bind a P12 mutation trigger")
+        target = "UPDATE_NONE"
+        candidates = (target,)
+        operation = "RETAIN"
+        knowledge_refs = ()
+    return LocalizedUpdatePlan(
+        transition_id=proposal.transition_ids[0], campaign_id=campaign,
+        learner_eligible=proposal.learner_eligible, priority=priority,
+        value_score=score, update_target=target,
+        candidate_targets=candidates, operation=operation,
+        failure_type="STATE_SHIFT", state_resolution_id=proposal.state_resolution_ids[0],
+        knowledge_refs=knowledge_refs, evidence_refs=tuple(sorted(refs)),
+        rationale=proposal.rationale, shadow_only=True,
+    )
+
+
 __all__ = [
     "STATE_SHIFT_EVOLUTION_VERSION", "STATE_SHIFT_EVOLUTION_OPERATIONS",
     "STATE_SHIFT_EVOLUTION_REASONS", "StateShiftEvolutionError",
     "StateShiftEvolutionProposal", "propose_repeated_state_shift",
     "plan_repeated_state_shift", "propose_repeated_state_shift_from_events",
+    "state_shift_proposal_to_localized_plan",
 ]

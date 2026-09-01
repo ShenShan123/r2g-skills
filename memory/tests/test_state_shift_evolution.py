@@ -12,6 +12,7 @@ from tehm.evolution import (
     load_state_shift_observations,
     propose_repeated_state_shift,
     propose_repeated_state_shift_from_events,
+    state_shift_proposal_to_localized_plan,
 )
 from tehm.knowledge import MechanismKnowledge
 from tehm.state import build_support_envelope, evaluate_state_shift
@@ -70,6 +71,26 @@ def test_repeated_state_shift_proposes_specialization_without_mutation():
     replay = StateShiftEvolutionProposal.from_dict({
         **proposal.to_dict(), "proposal_digest": proposal.proposal_digest})
     assert replay == proposal
+
+
+def test_state_shift_proposal_conversion_requires_p13_trigger():
+    receipts = _receipts()
+    proposal = propose_repeated_state_shift(
+        receipts, knowledge_object_id=receipts[0].knowledge_object_id,
+        transition_ids=("transition-a", "transition-b"),
+        no_memory_outcomes=("PASS", "PASS"),
+        historical_memory_outcomes=("PASS", "FAIL"),
+        evidence_refs=("transition-a", "transition-b"),
+    )
+    with pytest.raises(StateShiftEvolutionError, match="p12_trigger_digest"):
+        state_shift_proposal_to_localized_plan(proposal, campaign_id="live")
+    plan = state_shift_proposal_to_localized_plan(
+        proposal, campaign_id="live", p12_trigger_digest="sha256:p12-trigger")
+    assert plan.update_target == "UPDATE_CAUSAL_KNOWLEDGE"
+    assert plan.operation == "SPECIALIZE"
+    assert plan.failure_type == "STATE_SHIFT"
+    assert "sha256:p12-trigger" in plan.evidence_refs
+    assert plan.knowledge_refs == (receipts[0].knowledge_object_id,)
 
 
 def test_repeated_safe_shift_proposes_support_envelope_revision():
