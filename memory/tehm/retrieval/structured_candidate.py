@@ -82,6 +82,13 @@ def _binding_dict(binding: object) -> dict:
     return _mapping(value, "runtime_binding")
 
 
+def _binding_digest(binding: object) -> str:
+    value = _binding_value(binding, "binding_digest")
+    if type(value) is not str or not value.startswith("sha256:"):
+        raise StructuredCandidateError("runtime binding digest is missing or invalid")
+    return value
+
+
 @dataclass(frozen=True)
 class StructuredRepairCandidate:
     candidate_id: str
@@ -283,7 +290,7 @@ def build_structured_candidate(
     asset = asset_selection.assets[0]
     asset_id = _text(asset_selection.receipt.selected_asset_ids[0], "asset_id")
     bound_asset = _binding_value(runtime_binding, "asset_id")
-    if bound_asset is not None and bound_asset != asset_id:
+    if bound_asset != asset_id:
         raise StructuredCandidateError("runtime binding asset does not match selection")
     knowledge_id = _selected_knowledge(asset_selection, runtime_binding)
     paths = _paths(routing, asset_selection)
@@ -306,8 +313,7 @@ def build_structured_candidate(
         "candidate_version": CANDIDATE_VERSION,
         "routing_receipt_id": routing.routing_receipt_id,
         "asset_selection_receipt_id": asset_selection.receipt.selection_receipt_id,
-        "binding_digest": _text(_binding_value(runtime_binding, "binding_digest"),
-                                 "binding_digest"),
+        "binding_digest": _binding_digest(runtime_binding),
     }
     content = {
         "version": CANDIDATE_VERSION, "resolved_state_id": routing.resolved_state_id,

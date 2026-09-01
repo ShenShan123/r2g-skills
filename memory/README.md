@@ -2900,5 +2900,7 @@ content-addressed candidate digest 全部存在。
 候选和 `StructuredCandidateReceipt` 永远带 `evaluation_only=true`，backend 只提供
 显式的 `build_structured_candidate()` seam。这样 P11 已打通
 `Routing → AssetSelection → RuntimeBinding → StructuredCandidate`，但还没有执行
-候选或声称 repair gain；下一阶段 P12 才能在固定 N=3 的四臂 paired cohort 上接入
-oracle execution。
+候选或声称 repair gain。P12 的 `tehm/evaluation/candidate_executor.py` 现在提供
+只读 oracle adapter 和 `CandidateExecutionReceipt` replay；没有注入 oracle 时结果
+严格保持 `UNKNOWN`，不会由 action 或调用方布尔值推断 PASS。下一步仍需在固定 N=3
+的四臂 paired cohort 上接入真实 R2G executor/oracle，并记录 toolchain/oracle digest。
