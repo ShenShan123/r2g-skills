@@ -3180,3 +3180,11 @@ v0.2 结果为 `trigger_count=2`、`triggered_count=0`、`p13_eligible=false`、
 `blocked_reasons=["no_evolution_signal"]`。旧的 v0.1 replay 不能绕过这一门禁；下一步仍需
 由独立、可审计的 campaign 记录生成绑定后的 reason receipt，并在真实 source-disjoint cohort 上重放，之后
 才有资格进入 P13 isolated staging。
+
+同时新增 `scripts/run_orfs_p12_cohort.py` 作为 manifest 驱动的真实 P12-F 执行入口。
+它要求每个 case 显式冻结 project/source/toolchain/oracle/PDK 绑定，并为四个 arm 提供
+候选文件或明确的 `null`；`ALWAYS_MEMORY` 不允许缺候选。候选通过
+`StructuredRepairCandidate.from_dict()` 重放后才交给现有 ORFS oracle，输出顶层可直接
+供 P13 replay 使用的 cohort receipt，同时保留候选文件 digest。该入口不打开 SQLite，
+不推断 `NO_SKILL`，不写 canonical/lifecycle/production；执行失败或 UNKNOWN 仍作为原始
+oracle evidence 保留，由后续 P12/P13 gate 决定是否可用。

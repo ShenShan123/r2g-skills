@@ -186,10 +186,19 @@ class StructuredRepairCandidate:
             "causal_path_ids", "asset_id", "action_family", "concrete_action",
             "applicability_receipt_id", "binding_receipt_id", "obligations",
             "evidence_level", "authority", "risk", "provenance",
-            "evaluation_only", "candidate_version",
+            "evaluation_only",
         }
         if not required <= set(payload):
             raise StructuredCandidateError("structured candidate is missing fields")
+        # ``to_dict`` has historically emitted the generic ``version`` key,
+        # while early external manifests used ``candidate_version``.  Accept
+        # both spellings but reject an explicit disagreement so replay cannot
+        # silently change the candidate schema identity.
+        if "version" not in payload and "candidate_version" not in payload:
+            raise StructuredCandidateError("structured candidate version is missing")
+        if ("version" in payload and "candidate_version" in payload and
+                payload["version"] != payload["candidate_version"]):
+            raise StructuredCandidateError("structured candidate version fields disagree")
         candidate = cls(
             candidate_id=payload["candidate_id"], resolved_state_id=payload["resolved_state_id"],
             knowledge_object_id=payload["knowledge_object_id"],
@@ -200,7 +209,7 @@ class StructuredRepairCandidate:
             obligations=tuple(payload["obligations"]), evidence_level=payload["evidence_level"],
             authority=dict(payload["authority"]), risk=dict(payload["risk"]),
             provenance=dict(payload["provenance"]), evaluation_only=payload["evaluation_only"],
-            candidate_version=payload["candidate_version"])
+            candidate_version=payload.get("candidate_version", payload.get("version")))
         supplied = payload.get("candidate_digest")
         if supplied is not None and supplied != candidate.candidate_digest:
             raise StructuredCandidateError("structured candidate digest mismatch")
