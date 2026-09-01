@@ -4,7 +4,9 @@ from __future__ import annotations
 import pytest
 
 from tehm.evaluation.candidate_executor import (
-    CandidateExecutionReceipt, CandidateExecutorError, execute_candidate,
+    P12_ARMS, CandidateExecutionReceipt, CandidateExecutorError,
+    PairedCandidateExecutionReceipt, execute_candidate,
+    execute_paired_candidates,
 )
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate
 
@@ -55,3 +57,45 @@ def test_execute_candidate_rejects_oversized_budget_and_bad_oracle():
         execute_candidate(_candidate(), {"case_id": "case-budget"}, budget=4)
     with pytest.raises(CandidateExecutorError, match="oracle result"):
         execute_candidate(_candidate(), {"case_id": "case-oracle"}, oracle=lambda *_: [])
+
+
+def test_execute_paired_candidates_enforces_four_arms_and_fixed_digests():
+    candidate = _candidate()
+
+    def oracle(current, _case, _budget):
+        if current is None:
+            return {"compile_result": "PASS", "functional_result": "FAIL",
+                    "toolchain_digest": "sha256:tool", "oracle_digest": "sha256:oracle"}
+        return {"compile_result": "PASS", "functional_result": "PASS",
+                "signoff_result": "PASS", "toolchain_digest": "sha256:tool",
+                "oracle_digest": "sha256:oracle"}
+
+    bundle = execute_paired_candidates(
+        {"case_id": "paired-case", "toolchain_digest": "sha256:tool"},
+        {"NO_MEMORY": None, "ALWAYS_MEMORY": candidate,
+         "APPLICABILITY_GATED": candidate, "CAUSAL_NO_SKILL": candidate},
+        oracle=oracle, budget=3)
+    assert isinstance(bundle, PairedCandidateExecutionReceipt)
+    assert set(bundle.arm_receipts) == set(P12_ARMS)
+    assert bundle.arm_receipts["NO_MEMORY"].source == "no_memory"
+    assert bundle.arm_receipts["ALWAYS_MEMORY"].outcome == "PASS"
+    replay = PairedCandidateExecutionReceipt.from_dict({
+        **bundle.to_dict(), "receipt_digest": bundle.receipt_digest})
+    assert replay.to_dict() == bundle.to_dict()
+
+
+def test_execute_paired_candidates_rejects_digest_drift():
+    candidate = _candidate()
+
+    def drifting_oracle(current, _case, _budget):
+        suffix = "memory" if current is not None else "base"
+        return {"compile_result": "PASS", "functional_result": "PASS",
+                "toolchain_digest": "sha256:tool-" + suffix,
+                "oracle_digest": "sha256:oracle"}
+
+    with pytest.raises(CandidateExecutorError, match="digest mismatch"):
+        execute_paired_candidates(
+            {"case_id": "paired-drift"},
+            {"NO_MEMORY": None, "ALWAYS_MEMORY": candidate,
+             "APPLICABILITY_GATED": candidate, "CAUSAL_NO_SKILL": candidate},
+            oracle=drifting_oracle)

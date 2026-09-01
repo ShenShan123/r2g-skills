@@ -2904,3 +2904,6 @@ content-addressed candidate digest 全部存在。
 只读 oracle adapter 和 `CandidateExecutionReceipt` replay；没有注入 oracle 时结果
 严格保持 `UNKNOWN`，不会由 action 或调用方布尔值推断 PASS。下一步仍需在固定 N=3
 的四臂 paired cohort 上接入真实 R2G executor/oracle，并记录 toolchain/oracle digest。
+同一模块还提供 `execute_paired_candidates()`：强制 `NO_MEMORY`、
+`ALWAYS_MEMORY`、`APPLICABILITY_GATED`、`CAUSAL_NO_SKILL` 四臂齐全，固定 case/budget，
+并拒绝 toolchain/oracle digest 漂移；它仍只是实验 receipt，不把执行结果写回记忆。
