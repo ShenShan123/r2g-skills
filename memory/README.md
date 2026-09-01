@@ -3123,3 +3123,11 @@ PASS/FAIL 反推 `Should Use Memory`；输出仍固定为
 `canonical_memory_mutation=none`、`promotion_attempted=false`、
 `production_integration=not_attempted`。没有真实独立标签时，该入口不会生成可通过的
 calibration gate。
+
+Production gate 的 efficacy 现在也保留 Revision2 的 Pareto 约束：当 evidence 同时
+提供 baseline/memory repair rate 时，harm reduction 不能用 repair collapse 换取；若
+进一步提供成对的 `repair_paired_cases`、`repair_regression_cases` 与
+`repair_improvement_cases`，gate 会自行计算连续性校正的 McNemar 95% 回归检验，显著
+的 baseline-pass → memory-fail 回归直接 `FAIL`，不会接受调用方布尔标记替代统计证据。
+旧的仅 harm-rate 或显式 controlled-harm repair manifest 仍保持兼容，但不因此获得更强
+的统计保证。

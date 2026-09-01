@@ -74,6 +74,42 @@ def test_controlled_harm_repair_gain_is_alternative_efficacy_branch():
     assert receipt.metrics["efficacy_branch"] == "controlled_harm_repair_gain"
 
 
+def test_pareto_gate_rejects_harm_reduction_with_repair_collapse():
+    receipt = evaluate_production_gate(_evidence(
+        baseline_repair_rate=0.80, memory_repair_rate=0.20))
+    assert receipt.gate_status["efficacy"] == "FAIL"
+    assert "neither_harm_reduction" in " ".join(receipt.reasons)
+
+
+def test_paired_repair_regression_uses_mcnemar_guard():
+    unsafe = evaluate_production_gate(_evidence(
+        baseline_repair_rate=0.50, memory_repair_rate=0.50,
+        repair_paired_cases=20, repair_regression_cases=8,
+        repair_improvement_cases=0))
+    assert unsafe.gate_status["efficacy"] == "FAIL"
+    assert unsafe.metrics["repair_mcnemar"]["significant_regression"] is True
+
+    safe = evaluate_production_gate(_evidence(
+        baseline_repair_rate=0.50, memory_repair_rate=0.50,
+        repair_paired_cases=20, repair_regression_cases=1,
+        repair_improvement_cases=1))
+    assert safe.gate_status["efficacy"] == "PASS"
+    assert safe.metrics["repair_regression_guard"] == "paired_mcnemar_safe"
+
+
+def test_paired_repair_counts_are_complete_and_bounded():
+    malformed = evaluate_production_gate(_evidence(
+        repair_paired_cases=10, repair_regression_cases=7))
+    assert malformed.gate_status["efficacy"] == "FAIL"
+    assert "paired repair evidence requires" in " ".join(malformed.reasons)
+
+    bounded = evaluate_production_gate(_evidence(
+        repair_paired_cases=10, repair_regression_cases=8,
+        repair_improvement_cases=3))
+    assert bounded.gate_status["efficacy"] == "FAIL"
+    assert "paired repair counts are invalid" in " ".join(bounded.reasons)
+
+
 def test_unpaired_or_unknown_metrics_fail_closed():
     receipt = evaluate_production_gate(_evidence(
         paired_cases=0, memory_interference_rate=None,

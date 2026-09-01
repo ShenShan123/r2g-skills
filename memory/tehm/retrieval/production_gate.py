@@ -178,6 +178,54 @@ def _calibration_metric(report: NoSkillCalibrationReceipt, name: str,
     return number if math.isfinite(number) and 0.0 <= number <= 1.0 else None
 
 
+def _mcnemar_regression_guard(source: Mapping, metrics: dict, *, alpha: float) -> tuple[bool, bool]:
+    """Return ``(evidence_present, safe)`` for paired repair outcomes.
+
+    ``b`` is baseline-pass/memory-fail and ``c`` is baseline-fail/memory-pass.
+    The continuity-corrected McNemar statistic is compared with a two-sided
+    chi-square(1) survival function.  Missing discordant counts are not
+    guessed from aggregate rates; callers stay on the legacy compatibility
+    path unless a complete paired-count witness is supplied.
+    """
+    fields = {
+        "paired": _pick(source, "repair_paired_cases", "paired_repair_cases"),
+        "regression": _pick(source, "repair_regression_cases",
+                             "baseline_pass_memory_fail_cases"),
+        "improvement": _pick(source, "repair_improvement_cases",
+                              "baseline_fail_memory_pass_cases"),
+    }
+    present = any(value is not None for value in fields.values())
+    if not present:
+        return False, True
+    if any(value is None for value in fields.values()):
+        raise ProductionGateError(
+            "paired repair evidence requires paired, regression, and improvement counts")
+    paired = fields["paired"]
+    regression = fields["regression"]
+    improvement = fields["improvement"]
+    if (type(paired) is not int or paired <= 0 or
+            type(regression) is not int or regression < 0 or
+            type(improvement) is not int or improvement < 0 or
+            regression + improvement > paired):
+        raise ProductionGateError("paired repair counts are invalid")
+    discordant = regression + improvement
+    if discordant == 0:
+        p_value = 1.0
+    else:
+        statistic = (abs(regression - improvement) - 1.0) ** 2 / discordant
+        p_value = math.erfc(math.sqrt(max(0.0, statistic)) / math.sqrt(2.0))
+    significant_regression = regression > improvement and p_value < alpha
+    metrics["repair_paired_cases"] = paired
+    metrics["repair_regression_cases"] = regression
+    metrics["repair_improvement_cases"] = improvement
+    metrics["repair_mcnemar"] = {
+        "regression_cases": regression, "improvement_cases": improvement,
+        "discordant_cases": discordant, "p_value": round(p_value, 6),
+        "alpha": alpha, "significant_regression": significant_regression,
+    }
+    return True, not significant_regression
+
+
 @dataclass(frozen=True)
 class ProductionGateReceipt:
     """Content-addressed, evaluation-only result of the P9 conjunction."""
@@ -299,6 +347,7 @@ def evaluate_production_gate(
         min_no_skill_precision: float = 0.80,
         min_no_skill_recall: float = 0.80,
         max_no_skill_calibration_error: float = 0.20,
+        repair_regression_alpha: float = 0.05,
 ) -> ProductionGateReceipt:
     """Evaluate P9 empirical evidence without mutating any runtime state.
 
@@ -320,6 +369,8 @@ def evaluate_production_gate(
             min_no_skill_recall, "min_no_skill_recall"),
         "max_no_skill_calibration_error": _finite_number(
             max_no_skill_calibration_error, "max_no_skill_calibration_error"),
+        "repair_regression_alpha": _finite_number(
+            repair_regression_alpha, "repair_regression_alpha"),
     }
     checks = {name: False for name in PRODUCTION_GATE_GATES}
     reasons: list[str] = []
@@ -342,6 +393,9 @@ def evaluate_production_gate(
     efficacy_present = any(value is not None for value in (
         no_mem_harm, mem_harm, baseline_repair, memory_repair, controlled_harm))
     try:
+        if ((baseline_repair is None) != (memory_repair is None)):
+            raise ProductionGateError(
+                "baseline_repair_rate and memory_repair_rate must be provided together")
         harm_branch = False
         repair_branch = False
         if no_mem_harm is not None:
@@ -361,9 +415,26 @@ def evaluate_production_gate(
                 memory_repair, "memory_repair_rate")
         if controlled_harm is not None and type(controlled_harm) is not bool:
             raise ProductionGateError("controlled_harm must be a boolean")
+        repair_rate_safe = True
+        if baseline_repair is not None and memory_repair is not None:
+            # A harm decrease is not a Pareto improvement if repair collapses.
+            # The tolerance is intentionally zero until a caller freezes a
+            # domain-specific epsilon in a future gate version.
+            repair_rate_safe = metrics["memory_repair_rate"] >= metrics[
+                "baseline_repair_rate"]
+        repair_evidence_present, repair_regression_safe = _mcnemar_regression_guard(
+            source, metrics, alpha=thresholds["repair_regression_alpha"])
+        metrics["repair_regression_guard"] = (
+            "paired_mcnemar_safe" if repair_evidence_present and repair_regression_safe
+            else "paired_mcnemar_regression" if repair_evidence_present
+            else "not_provided")
+        repair_rate_safe = repair_rate_safe and repair_regression_safe
         if (baseline_repair is not None and memory_repair is not None and
                 controlled_harm is True):
-            repair_branch = metrics["memory_repair_rate"] > metrics["baseline_repair_rate"]
+            repair_branch = (metrics["memory_repair_rate"] >
+                             metrics["baseline_repair_rate"] and repair_rate_safe)
+        if no_mem_harm is not None and mem_harm is not None:
+            harm_branch = harm_branch and repair_rate_safe
     except ProductionGateError as exc:
         reasons.append(f"efficacy:{exc}")
         failed.add("efficacy")
