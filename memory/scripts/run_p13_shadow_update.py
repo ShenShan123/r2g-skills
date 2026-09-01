@@ -113,13 +113,78 @@ def _open_read_only(path: Path) -> sqlite3.Connection:
     return conn
 
 
+def _load_bound_anti_forgetting(
+        raw_ref: object, *, case_id: str, campaign_id: str,
+        manifest_path: Path, forbidden_paths: set[Path],
+        ) -> tuple[dict, dict]:
+    """Load one file-bound witness report and return payload plus audit ref."""
+    if not isinstance(raw_ref, Mapping):
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt for {case_id} must be an object")
+    raw_path = _text(raw_ref.get("path"),
+                     f"P13 anti-forgetting receipt path for {case_id}")
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = manifest_path.parent / path
+    path = path.resolve()
+    if path in forbidden_paths:
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt for {case_id} reuses an input/output file")
+    if not path.is_file():
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt for {case_id} is not a file: {path}")
+    expected = _text(raw_ref.get("sha256"),
+                     f"P13 anti-forgetting receipt sha256 for {case_id}")
+    actual = _sha256(path)
+    if expected != actual:
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt sha256 does not match {path}")
+    report = _load_json(path, f"P13 anti-forgetting receipt for {case_id}")
+    if report.get("version") != "p13-anti-forgetting-witness-report-v1":
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt for {case_id} version mismatch")
+    if report.get("campaign_id") != campaign_id or report.get("case_id") != case_id:
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt for {case_id} campaign/case mismatch")
+    try:
+        witness = AntiForgettingWitness.from_dict(report.get("witness"))
+    except (TypeError, ValueError) as exc:
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt for {case_id} witness is invalid: {exc}") from exc
+    if witness.eligible is not True:
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting witness for {case_id} is not eligible")
+    if report.get("eligible") is not witness.eligible:
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt for {case_id} eligible flag mismatch")
+    supplied_digest = report.get("witness", {}).get("receipt_digest")
+    if supplied_digest != witness.receipt_digest:
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt for {case_id} digest mismatch")
+    return {
+        **witness.to_dict(), "receipt_digest": witness.receipt_digest,
+    }, {
+        "path": str(path), "sha256": actual,
+        "witness_receipt_digest": witness.receipt_digest,
+    }
+
+
 def _decode_updates(
         updates: Mapping,
         triggers: Mapping[str, P12ShadowUpdateTriggerReceipt],
-        campaign_id: str,
-        ) -> dict[str, tuple[LocalizedUpdatePlan, Mapping]]:
+        campaign_id: str, *, anti_forgetting_receipts: object,
+        manifest_path: Path, forbidden_paths: set[Path],
+        ) -> dict[str, tuple[LocalizedUpdatePlan, Mapping, dict | None]]:
     """Validate all plans and mutation witnesses before opening source state."""
-    decoded: dict[str, tuple[LocalizedUpdatePlan, Mapping]] = {}
+    if anti_forgetting_receipts is None:
+        anti_forgetting_receipts = {}
+    if not isinstance(anti_forgetting_receipts, Mapping):
+        raise P13ShadowRunError(
+            "P13 anti_forgetting_receipts must be an object")
+    if set(anti_forgetting_receipts) - set(triggers):
+        raise P13ShadowRunError(
+            "P13 anti_forgetting_receipts contains unknown case IDs")
+    decoded: dict[str, tuple[LocalizedUpdatePlan, Mapping, dict | None]] = {}
     for case_id in sorted(triggers):
         item = updates[case_id]
         if not isinstance(item, Mapping):
@@ -140,20 +205,33 @@ def _decode_updates(
         if not isinstance(evidence, Mapping):
             raise P13ShadowRunError(
                 f"P13 update evidence for {case_id} must be an object")
+        evidence = dict(evidence)
+        anti_ref = None
         if plan.update_target != "UPDATE_NONE":
-            try:
-                witness = AntiForgettingWitness.from_dict(
-                    evidence.get("anti_forgetting"))
-            except (TypeError, ValueError) as exc:
+            if case_id not in anti_forgetting_receipts:
                 raise P13ShadowRunError(
-                    f"P13 anti-forgetting witness for {case_id} is invalid: {exc}") from exc
+                    f"P13 update for {case_id} requires a file-bound "
+                    "anti-forgetting witness receipt")
+            witness_payload, anti_ref = _load_bound_anti_forgetting(
+                anti_forgetting_receipts[case_id], case_id=case_id,
+                campaign_id=campaign_id, manifest_path=manifest_path,
+                forbidden_paths=forbidden_paths)
+            witness = AntiForgettingWitness.from_dict(witness_payload)
+            inline = evidence.get("anti_forgetting")
+            if inline is not None:
+                try:
+                    inline_witness = AntiForgettingWitness.from_dict(inline)
+                except (TypeError, ValueError) as exc:
+                    raise P13ShadowRunError(
+                        f"P13 inline anti-forgetting witness for {case_id} is invalid: {exc}") from exc
+                if inline_witness.receipt_digest != witness.receipt_digest:
+                    raise P13ShadowRunError(
+                        f"P13 inline anti-forgetting witness for {case_id} disagrees with bound receipt")
+            evidence["anti_forgetting"] = witness_payload
             if witness.receipt_digest not in plan.evidence_refs:
                 raise P13ShadowRunError(
                     f"P13 update plan for {case_id} must witness its anti-forgetting digest")
-            if witness.eligible is not True:
-                raise P13ShadowRunError(
-                    f"P13 anti-forgetting witness for {case_id} is not eligible")
-        decoded[case_id] = (plan, evidence)
+        decoded[case_id] = (plan, evidence, anti_ref)
     return decoded
 
 
@@ -181,13 +259,17 @@ def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
     if not isinstance(updates, Mapping) or set(updates) != set(triggers):
         raise P13ShadowRunError(
             "P13 shadow update manifest must cover exactly all trigger cases")
-    decoded_updates = _decode_updates(updates, triggers, campaign_id)
+    decoded_updates = _decode_updates(
+        updates, triggers, campaign_id,
+        anti_forgetting_receipts=payload.get("anti_forgetting_receipts"),
+        manifest_path=manifest_path,
+        forbidden_paths={manifest_path, output_path, source_path})
     source_sha_before = _sha256(source_path)
     conn = _open_read_only(source_path)
     receipts: dict[str, AppliedShadowUpdateReceipt] = {}
     try:
         for case_id in sorted(triggers):
-            plan, evidence = decoded_updates[case_id]
+            plan, evidence, _anti_ref = decoded_updates[case_id]
             try:
                 receipt = apply_localized_update_shadow(plan, conn, evidence)
             except (ShadowUpdateError, TypeError, ValueError) as exc:
@@ -218,6 +300,10 @@ def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
         "receipts": {
             case_id: {**receipt.to_dict(), "receipt_digest": receipt.receipt_digest}
             for case_id, receipt in sorted(receipts.items())
+        },
+        "anti_forgetting_receipts": {
+            case_id: anti_ref for case_id, (_plan, _evidence, anti_ref)
+            in sorted(decoded_updates.items()) if anti_ref is not None
         },
         "canonical_memory_mutation": "none",
         "production_runtime_imported": False,

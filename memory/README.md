@@ -2998,6 +2998,11 @@ campaign 与 digest witness，并在打开 source 前预检所有非 `RETAIN` �
 可以回放真正 eligible 的 P13 proposal，但不会写 canonical、lifecycle 或 production
 runtime；当前真实 ORFS cohort 仍因缺少独立 evolution reason 而不能调用它。
 
+对于非 `RETAIN` mutation，manifest 还必须通过 `anti_forgetting_receipts` 引用上述
+binder 生成的 report；runner 会重新校验 report 文件 SHA256、版本、campaign/case、
+嵌套 witness digest 和 `eligible` 摘要，并将绑定 witness 注入执行 evidence。内联手工
+witness 只有在与该文件完全一致时才可作为重复证明，不能绕过 file-bound provenance。
+
 新增 `scripts/build_p13_anti_forgetting_witness.py` 作为 anti-forgetting provenance
 binder：manifest 必须分别提供 target replay、non-target regression、held-out audit 和
 rollback 四个不同文件、显式 gate 布尔值及匹配的完整 SHA256。binder 只绑定这些声明并

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import replace
 from pathlib import Path
 
@@ -9,7 +10,9 @@ import pytest
 
 from scripts import run_p13_shadow_update as shadow_runner
 from scripts.run_p13_shadow_update import P13ShadowRunError, run_p13_shadow_update
-from tehm.evolution import LocalizedUpdatePlan, P12ShadowUpdateTriggerReceipt
+from tehm.evolution import (
+    AntiForgettingWitness, LocalizedUpdatePlan, P12ShadowUpdateTriggerReceipt,
+)
 
 
 def _trigger() -> P12ShadowUpdateTriggerReceipt:
@@ -122,6 +125,77 @@ def test_p13_runner_preflights_anti_forgetting_before_opening_source(tmp_path, m
     with pytest.raises(P13ShadowRunError, match="anti-forgetting witness"):
         run_p13_shadow_update(
             trigger_report, manifest, output=tmp_path / "report.json")
+
+
+def test_p13_runner_consumes_file_bound_witness(tmp_path, monkeypatch):
+    db, trigger_report, manifest = _inputs(tmp_path)
+    trigger = _trigger()
+    witness = AntiForgettingWitness(
+        target_replay_receipt_id="target:case-0",
+        target_replay_digest="sha256:" + "1" * 64,
+        target_replay_passed=True,
+        non_target_regression_receipt_id="non-target:case-0",
+        non_target_regression_digest="sha256:" + "2" * 64,
+        non_target_regression_free=True,
+        heldout_audit_receipt_id="heldout:case-0",
+        heldout_audit_digest="sha256:" + "3" * 64,
+        heldout_audit_passed=True,
+        rollback_pointer="snapshot:before",
+        rollback_receipt_digest="sha256:" + "4" * 64,
+        rollback_verified=True,
+        evidence_refs=("target:case-0", "non-target:case-0",
+                       "heldout:case-0", "rollback:case-0"),
+    )
+    witness_report = tmp_path / "witness-report.json"
+    witness_report.write_text(json.dumps({
+        "version": "p13-anti-forgetting-witness-report-v1",
+        "campaign_id": "live", "case_id": "case-0",
+        "eligible": True,
+        "witness": {**witness.to_dict(),
+                     "receipt_digest": witness.receipt_digest},
+    }))
+    plan = replace(
+        _plan(trigger), learner_eligible=True,
+        update_target="UPDATE_STATE_RELATION",
+        candidate_targets=("UPDATE_STATE_RELATION",), operation="INVALIDATE",
+        failure_type="STATE_RESOLUTION_FAILURE",
+        evidence_refs=(trigger.receipt_digest, witness.receipt_digest))
+    payload = json.loads(manifest.read_text())
+    payload["updates"]["case-0"]["plan"] = plan.to_dict()
+    payload["updates"]["case-0"]["evidence"] = {
+        "p12_shadow_trigger": {
+            **trigger.to_dict(), "receipt_digest": trigger.receipt_digest},
+        "relation": {
+            "source_type": "transition", "source_id": "transition:p13-test",
+            "relation_type": "INVALIDATES", "target_type": "transition",
+            "target_id": "transition:other",
+            "evidence_refs": [trigger.receipt_digest]},
+    }
+    payload["anti_forgetting_receipts"] = {
+        "case-0": {"path": witness_report.name,
+                   "sha256": "sha256:" + hashlib.sha256(
+                       witness_report.read_bytes()).hexdigest()}}
+    manifest.write_text(json.dumps(payload))
+    seen = {}
+
+    class _Receipt:
+        campaign_id = "live"
+        receipt_digest = "sha256:" + "a" * 64
+
+        def to_dict(self):
+            return {"campaign_id": self.campaign_id}
+
+    def fake_apply(plan, _conn, evidence):
+        seen["evidence"] = evidence
+        return _Receipt()
+
+    monkeypatch.setattr(shadow_runner, "apply_localized_update_shadow", fake_apply)
+    report = run_p13_shadow_update(
+        trigger_report, manifest, output=tmp_path / "report.json")
+    assert report["receipt_count"] == 1
+    assert seen["evidence"]["anti_forgetting"]["receipt_digest"] == witness.receipt_digest
+    assert report["anti_forgetting_receipts"]["case-0"][
+        "witness_receipt_digest"] == witness.receipt_digest
 
 
 def test_p13_runner_rejects_legacy_trigger_for_current_mutation(tmp_path):
