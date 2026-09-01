@@ -11,6 +11,7 @@ from tehm.evolution import (
     append_state_shift_observation,
     load_state_shift_observations,
     propose_repeated_state_shift,
+    propose_repeated_state_shift_from_events,
 )
 from tehm.knowledge import MechanismKnowledge
 from tehm.state import build_support_envelope, evaluate_state_shift
@@ -137,6 +138,33 @@ def test_state_shift_observation_event_is_replayable_and_tamper_evident(tmp_tehm
     conn.commit()
     with pytest.raises(ValueError, match="event chain is invalid|event_digest|payload"):
         load_state_shift_observations(conn, campaign_id="audit")
+
+
+def test_event_bound_proposal_replays_pairing_and_rejects_missing_witness(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    receipts = _receipts()
+    events = tuple(
+        append_state_shift_observation(
+            conn, receipt, transition_id=transition_id, campaign_id="audit",
+            learner_eligible=False, created_at=f"2026-09-01T00:00:0{index}Z")
+        for index, (receipt, transition_id) in enumerate(
+            zip(receipts, ("transition-a", "transition-b")))
+    )
+    refs = tuple(ref for event, receipt in zip(events, receipts)
+                 for ref in (event.event_digest, receipt.receipt_id))
+    proposal = propose_repeated_state_shift_from_events(
+        conn, campaign_id="audit", knowledge_object_id=receipts[0].knowledge_object_id,
+        transition_ids=("transition-a", "transition-b"),
+        no_memory_outcomes=("PASS", "PASS"),
+        historical_memory_outcomes=("PASS", "FAIL"), evidence_refs=refs)
+    assert proposal.operation == "RETAIN"
+    assert proposal.evolution_reason == "NOT_LEARNER_ELIGIBLE"
+    with pytest.raises(StateShiftEvolutionError, match="witness events and receipts"):
+        propose_repeated_state_shift_from_events(
+            conn, campaign_id="audit", knowledge_object_id=receipts[0].knowledge_object_id,
+            transition_ids=("transition-a", "transition-b"),
+            no_memory_outcomes=("PASS", "PASS"),
+            historical_memory_outcomes=("PASS", "FAIL"), evidence_refs=("manual",))
 
 
 def test_state_shift_observation_rejects_transferable_receipt():

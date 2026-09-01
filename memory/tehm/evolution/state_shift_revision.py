@@ -9,12 +9,15 @@ witness.
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from tehm.canonical.transition import OUTCOMES, POSITIVE_OUTCOMES
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import SHIFT_DIMENSIONS, StateShiftReceipt
+
+from .events import load_state_shift_observations
 
 
 STATE_SHIFT_EVOLUTION_VERSION = "state-shift-evolution-v1"
@@ -325,6 +328,81 @@ def propose_repeated_state_shift(
     )
 
 
+def propose_repeated_state_shift_from_events(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: str,
+    knowledge_object_id: str,
+    transition_ids: Sequence[str],
+    no_memory_outcomes: Sequence[str],
+    historical_memory_outcomes: Sequence[str],
+    evidence_refs: Sequence[str],
+    min_repeats: int = 2,
+    requested_operation: str | None = None,
+    partition_evidence_refs: Sequence[str] = (),
+) -> StateShiftEvolutionProposal:
+    """Replay state-shift events and produce the corresponding proposal.
+
+    The event log is the provenance authority for learner eligibility.  A
+    caller cannot upgrade an audit-only event by passing a boolean, and a
+    campaign containing mixed learner/audit state-shift events fails closed.
+    The explicit transition order is retained so each oracle outcome remains
+    paired with the event that produced it.
+    """
+    if not isinstance(conn, sqlite3.Connection):
+        raise TypeError("state shift evolution conn must be sqlite3.Connection")
+    campaign = _text(campaign_id, "campaign_id")
+    parent = _text(knowledge_object_id, "knowledge_object_id")
+    if type(min_repeats) is not int or min_repeats < 2:
+        raise StateShiftEvolutionError(
+            "state shift evolution min_repeats must be at least two")
+    transitions = _strings(transition_ids, "transition_ids")
+    if len(transitions) < min_repeats:
+        raise StateShiftEvolutionError(
+            "state shift evolution requires repeated transition events")
+    observations = load_state_shift_observations(
+        conn, campaign_id=campaign, knowledge_object_id=parent)
+    by_transition = {event.source_id: (event, receipt)
+                     for event, receipt in observations}
+    if len(by_transition) != len(observations):
+        raise StateShiftEvolutionError(
+            "state shift evolution event sources must be unique")
+    missing = [transition for transition in transitions
+               if transition not in by_transition]
+    if missing:
+        raise StateShiftEvolutionError(
+            "state shift evolution is missing observed transitions: "
+            + ",".join(missing))
+    if len(set(transitions)) != len(transitions):
+        raise StateShiftEvolutionError(
+            "state shift evolution transition IDs must be unique")
+    selected = [by_transition[transition] for transition in transitions]
+    eligibility = {event.learner_eligible for event, _receipt in selected}
+    if len(eligibility) != 1:
+        raise StateShiftEvolutionError(
+            "state shift evolution cannot mix learner and audit observations")
+    refs = set(_strings(evidence_refs, "evidence_refs"))
+    required_refs = {
+        ref for event, receipt in selected
+        for ref in (event.event_digest, receipt.receipt_id)
+    }
+    if not required_refs <= refs:
+        missing_refs = sorted(required_refs - refs)
+        raise StateShiftEvolutionError(
+            "state shift evolution evidence_refs must witness events and receipts: "
+            + ",".join(missing_refs))
+    return propose_repeated_state_shift(
+        [receipt for _event, receipt in selected],
+        knowledge_object_id=parent, transition_ids=transitions,
+        no_memory_outcomes=no_memory_outcomes,
+        historical_memory_outcomes=historical_memory_outcomes,
+        evidence_refs=tuple(sorted(refs)),
+        learner_eligible=next(iter(eligibility)), min_repeats=min_repeats,
+        requested_operation=requested_operation,
+        partition_evidence_refs=partition_evidence_refs,
+    )
+
+
 plan_repeated_state_shift = propose_repeated_state_shift
 
 
@@ -332,5 +410,5 @@ __all__ = [
     "STATE_SHIFT_EVOLUTION_VERSION", "STATE_SHIFT_EVOLUTION_OPERATIONS",
     "STATE_SHIFT_EVOLUTION_REASONS", "StateShiftEvolutionError",
     "StateShiftEvolutionProposal", "propose_repeated_state_shift",
-    "plan_repeated_state_shift",
+    "plan_repeated_state_shift", "propose_repeated_state_shift_from_events",
 ]

@@ -3281,3 +3281,6 @@ no-memory/historical-memory oracle outcome 与 evidence refs。安全的重复�
 `SPECIALIZE`；当前 oracle 不安全则 `RETAIN`，`SPLIT` 永不自动推断且必须提供显式
 partition evidence。该提案器只读、evaluation-only、shadow-only，仍需 P13
 anti-forgetting witness 才能尝试 isolated staging；`memory/docs/` 继续不入仓。
+另提供 `propose_repeated_state_shift_from_events()`，从同一 campaign 的事件链按
+transition 顺序重放上述提案；它拒绝 learner/audit 混合、缺失 event digest 或 receipt
+ID witness，不能用调用方布尔值升级 audit-only 观测。
