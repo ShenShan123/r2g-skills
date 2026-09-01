@@ -1,7 +1,7 @@
 """P12-to-P13 shadow trigger bridge tests."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import pytest
 
@@ -79,7 +79,9 @@ def test_complete_multilineage_oracle_builds_replayable_trigger():
     triggers = build_p12_shadow_update_triggers(
         _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
         routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")},
-        case_learner_eligibility={"case-0": True, "case-1": True})
+        case_learner_eligibility={"case-0": True, "case-1": True},
+        evolution_reasons={"case-0": ("CAPABILITY_GAP",),
+                           "case-1": ("NOVELTY",)})
     assert len(triggers) == 2
     assert all(item.triggered for item in triggers)
     assert all(item.reason == "oracle_complete" for item in triggers)
@@ -87,6 +89,11 @@ def test_complete_multilineage_oracle_builds_replayable_trigger():
     replay = P12ShadowUpdateTriggerReceipt.from_dict({
         **triggers[0].to_dict(), "receipt_digest": triggers[0].receipt_digest})
     assert replay == triggers[0]
+    legacy = replace(triggers[0], version="p12-shadow-trigger-v0.1",
+                     evolution_reasons=())
+    legacy_replay = P12ShadowUpdateTriggerReceipt.from_dict({
+        **legacy.to_dict(), "receipt_digest": legacy.legacy_receipt_digest})
+    assert legacy_replay == legacy
 
 
 def test_incomplete_or_routingless_evidence_is_non_triggering():
@@ -99,7 +106,9 @@ def test_incomplete_or_routingless_evidence_is_non_triggering():
         _cohort(unknown_baseline=True), memory_arm="ALWAYS_MEMORY",
         learner_eligible=True,
         routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")},
-        case_learner_eligibility={"case-0": True, "case-1": True})
+        case_learner_eligibility={"case-0": True, "case-1": True},
+        evolution_reasons={"case-0": ("REPEATED_FAILURE",),
+                           "case-1": ("CAPABILITY_GAP",)})
     assert unknown[0].triggered is False
     assert unknown[0].reason == "baseline_oracle_incomplete"
     assert unknown[1].triggered is True
@@ -109,6 +118,29 @@ def test_incomplete_or_routingless_evidence_is_non_triggering():
         routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")})
     assert all(not item.triggered and item.reason == "not_learner_eligible"
                for item in audit_only)
+
+
+def test_complete_pass_without_evolution_signal_is_retain_only():
+    triggers = build_p12_shadow_update_triggers(
+        _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")},
+        case_learner_eligibility={"case-0": True, "case-1": True})
+    assert all(not item.triggered for item in triggers)
+    assert all(item.reason == "no_evolution_signal" for item in triggers)
+
+
+def test_evolution_reasons_are_explicit_and_typed():
+    kwargs = dict(
+        cohort=_cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")},
+        case_learner_eligibility={"case-0": True, "case-1": True})
+    with pytest.raises(P12ShadowTriggerError, match="cover exactly all cases"):
+        build_p12_shadow_update_triggers(
+            **kwargs, evolution_reasons={"case-0": ("NOVELTY",)})
+    with pytest.raises(P12ShadowTriggerError, match="reasons.*invalid"):
+        build_p12_shadow_update_triggers(
+            **kwargs, evolution_reasons={"case-0": ("invented",),
+                                          "case-1": ("NOVELTY",)})
 
 
 def test_structural_cohort_gates_fail_closed_before_expensive_p13_work():

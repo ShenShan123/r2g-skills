@@ -3,13 +3,14 @@
 P12 produces four-arm execution receipts, while P13 consumes an explicit
 shadow-update witness.  This module joins those planes without inferring a
 capability gain or a failure cause: it only allows a replayable trigger when
-the frozen cohort, lineage, routing, and both oracle outcomes are complete.
+the frozen cohort, lineage, routing, both oracle outcomes, and an explicit
+Revision2 evolution signal are complete.
 The trigger is evaluation/shadow-only and never writes canonical memory.
 """
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,10 +22,16 @@ from tehm.evaluation.candidate_executor import (
 from tehm.ids import stable_dumps
 
 
-P12_SHADOW_TRIGGER_VERSION = "p12-shadow-trigger-v0.1"
+P12_SHADOW_TRIGGER_VERSION = "p12-shadow-trigger-v0.2"
+_LEGACY_P12_SHADOW_TRIGGER_VERSION = "p12-shadow-trigger-v0.1"
 _MEMORY_ARMS = P12_ARMS[1:]
+P13_EVOLUTION_REASONS = frozenset({
+    "NOVELTY", "CONFLICT", "COUNTEREXAMPLE", "REPEATED_FAILURE",
+    "CAPABILITY_GAP", "MEMORY_INTERFERENCE",
+})
 _TRIGGER_REASONS = frozenset({
     "oracle_complete",
+    "no_evolution_signal",
     "not_learner_eligible",
     "missing_routing_receipt",
     "missing_routing_decision",
@@ -150,9 +157,45 @@ def _case_learner_eligibility(
     return result
 
 
+def _evolution_reason_map(
+        cases: Mapping[str, PairedCandidateExecutionReceipt],
+        raw: Mapping[str, Sequence[str]] | None,
+        ) -> dict[str, tuple[str, ...]]:
+    """Validate explicit P13 evolution signals without inferring them.
+
+    A complete PASS cohort is evaluation evidence, not an online-learning
+    event.  The caller must bind one or more typed Revision2 reasons to every
+    case that is intended to trigger a P13 shadow mutation.
+    """
+    if raw is None:
+        return {case_id: () for case_id in cases}
+    if not isinstance(raw, Mapping) or set(raw) != set(cases):
+        raise P12ShadowTriggerError(
+            "P12 shadow trigger evolution reasons must cover exactly all cases")
+    result: dict[str, tuple[str, ...]] = {}
+    for case_id in cases:
+        values = raw[case_id]
+        if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+            raise P12ShadowTriggerError(
+                f"P12 shadow trigger evolution reasons for {case_id} must be a sequence")
+        if any(type(value) is not str for value in values):
+            raise P12ShadowTriggerError(
+                f"P12 shadow trigger evolution reasons for {case_id} are invalid")
+        normalized = tuple(sorted(value.strip() for value in values))
+        if any(not value or value not in P13_EVOLUTION_REASONS for value in normalized):
+            raise P12ShadowTriggerError(
+                f"P12 shadow trigger evolution reasons for {case_id} are invalid")
+        if len(set(normalized)) != len(normalized):
+            raise P12ShadowTriggerError(
+                f"P12 shadow trigger evolution reasons for {case_id} contain duplicates")
+        result[case_id] = normalized
+    return result
+
+
 def _reason(*, learner_eligible: bool, routing_id: str | None,
             routing_decision: str | None, baseline_complete: bool,
-            memory_complete: bool) -> tuple[bool, str]:
+            memory_complete: bool,
+            evolution_reasons: Sequence[str]) -> tuple[bool, str]:
     if not learner_eligible:
         return False, "not_learner_eligible"
     if routing_id is None:
@@ -165,6 +208,8 @@ def _reason(*, learner_eligible: bool, routing_id: str | None,
         return False, "baseline_oracle_incomplete"
     if not memory_complete:
         return False, "memory_oracle_incomplete"
+    if not evolution_reasons:
+        return False, "no_evolution_signal"
     return True, "oracle_complete"
 
 
@@ -194,6 +239,7 @@ class P12ShadowUpdateTriggerReceipt:
     learner_eligible: bool
     triggered: bool
     reason: str
+    evolution_reasons: tuple[str, ...] = ()
     evaluation_only: bool = True
     version: str = P12_SHADOW_TRIGGER_VERSION
 
@@ -236,6 +282,16 @@ class P12ShadowUpdateTriggerReceipt:
             raise P12ShadowTriggerError("P12 shadow trigger must be evaluation-only")
         if self.reason not in _TRIGGER_REASONS:
             raise P12ShadowTriggerError("P12 shadow trigger reason is invalid")
+        if not isinstance(self.evolution_reasons, tuple):
+            raise P12ShadowTriggerError(
+                "P12 shadow trigger evolution_reasons must be a tuple")
+        if any(type(value) is not str or value not in P13_EVOLUTION_REASONS
+               for value in self.evolution_reasons):
+            raise P12ShadowTriggerError(
+                "P12 shadow trigger evolution_reasons are invalid")
+        if len(set(self.evolution_reasons)) != len(self.evolution_reasons):
+            raise P12ShadowTriggerError(
+                "P12 shadow trigger evolution_reasons contain duplicates")
         expected = self.reason == "oracle_complete"
         if self.triggered != expected:
             raise P12ShadowTriggerError(
@@ -247,6 +303,11 @@ class P12ShadowUpdateTriggerReceipt:
                 not self.baseline_oracle_complete or not self.memory_oracle_complete):
             raise P12ShadowTriggerError(
                 "triggered P12 shadow receipt lacks required evidence")
+        if self.version == P12_SHADOW_TRIGGER_VERSION and self.triggered and not self.evolution_reasons:
+            raise P12ShadowTriggerError(
+                "triggered P12 shadow receipt lacks an evolution signal")
+        if self.version not in {P12_SHADOW_TRIGGER_VERSION, _LEGACY_P12_SHADOW_TRIGGER_VERSION}:
+            raise P12ShadowTriggerError("P12 shadow trigger version is invalid")
 
     @property
     def receipt_digest(self) -> str:
@@ -277,8 +338,17 @@ class P12ShadowUpdateTriggerReceipt:
             "learner_eligible": self.learner_eligible,
             "triggered": self.triggered,
             "reason": self.reason,
+            "evolution_reasons": list(self.evolution_reasons),
             "evaluation_only": self.evaluation_only,
         }
+
+    @property
+    def legacy_receipt_digest(self) -> str:
+        """Digest used by v0.1 receipts, before explicit reasons existed."""
+        payload = self.to_dict()
+        payload.pop("evolution_reasons", None)
+        payload["version"] = _LEGACY_P12_SHADOW_TRIGGER_VERSION
+        return _digest(payload)
 
     @classmethod
     def from_dict(cls, payload: object) -> "P12ShadowUpdateTriggerReceipt":
@@ -316,11 +386,15 @@ class P12ShadowUpdateTriggerReceipt:
             memory_oracle_complete=payload["memory_oracle_complete"],
             learner_eligible=payload["learner_eligible"],
             triggered=payload["triggered"], reason=payload["reason"],
+            evolution_reasons=tuple(payload.get("evolution_reasons", ())),
             evaluation_only=payload["evaluation_only"],
             version=payload.get("version", P12_SHADOW_TRIGGER_VERSION),
         )
         supplied = payload.get("receipt_digest")
-        if supplied is not None and supplied != receipt.receipt_digest:
+        valid_digests = {receipt.receipt_digest}
+        if receipt.version == _LEGACY_P12_SHADOW_TRIGGER_VERSION:
+            valid_digests.add(receipt.legacy_receipt_digest)
+        if supplied is not None and supplied not in valid_digests:
             raise P12ShadowTriggerError("P12 shadow trigger receipt digest mismatch")
         return receipt
 
@@ -330,6 +404,7 @@ def build_p12_shadow_update_triggers(
         min_lineages: int = 2,
         routing_decisions: Mapping[str, MemoryRoutingDecision] | None = None,
         case_learner_eligibility: Mapping[str, bool] | None = None,
+        evolution_reasons: Mapping[str, Sequence[str]] | None = None,
         ) -> tuple[P12ShadowUpdateTriggerReceipt, ...]:
     """Convert each cohort case into a replayable P13 shadow trigger.
 
@@ -340,7 +415,9 @@ def build_p12_shadow_update_triggers(
     silently expand the learner support envelope.  A false campaign assertion
     yields non-trigger receipts.  Structural violations (tampered cohort,
     missing explicit lineages, or invalid arm identity) raise instead of
-    silently becoming evidence.
+    silently becoming evidence.  ``evolution_reasons`` is likewise an exact
+    per-case binding from the Revision2 signal vocabulary; complete PASS
+    evidence without it is retain-only.
     """
     if memory_arm not in _MEMORY_ARMS:
         raise P12ShadowTriggerError("P12 shadow trigger memory_arm is invalid")
@@ -364,6 +441,7 @@ def build_p12_shadow_update_triggers(
     case_learner = _case_learner_eligibility(
         cases, learner_eligible=learner_eligible,
         case_learner_eligibility=case_learner_eligibility)
+    case_reasons = _evolution_reason_map(cases, evolution_reasons)
     results: list[P12ShadowUpdateTriggerReceipt] = []
     for case_id, bundle in sorted(cases.items()):
         if bundle.case_id != case_id:
@@ -393,7 +471,8 @@ def build_p12_shadow_update_triggers(
             learner_eligible=case_learner[case_id],
             routing_id=routing_id, routing_decision=routing_decision,
             baseline_complete=baseline_complete,
-            memory_complete=memory_complete)
+            memory_complete=memory_complete,
+            evolution_reasons=case_reasons[case_id])
         results.append(P12ShadowUpdateTriggerReceipt(
             cohort_receipt_digest=cohort_digest, campaign_id=campaign_id,
             case_id=case_id, lineage_id=bundle.lineage_id.strip(),
@@ -410,11 +489,12 @@ def build_p12_shadow_update_triggers(
             baseline_outcome=baseline.outcome, memory_outcome=memory.outcome,
             baseline_oracle_complete=baseline_complete,
             memory_oracle_complete=memory_complete,
-            learner_eligible=case_learner[case_id], triggered=triggered, reason=reason))
+            learner_eligible=case_learner[case_id], triggered=triggered, reason=reason,
+            evolution_reasons=case_reasons[case_id]))
     return tuple(results)
 
 
 __all__ = [
-    "P12_SHADOW_TRIGGER_VERSION", "P12ShadowTriggerError",
+    "P12_SHADOW_TRIGGER_VERSION", "P13_EVOLUTION_REASONS", "P12ShadowTriggerError",
     "P12ShadowUpdateTriggerReceipt", "build_p12_shadow_update_triggers",
 ]

@@ -3076,3 +3076,11 @@ P13 的任一非 `RETAIN` shadow mutation 还必须携带 content-addressed
 和 rollback pointer 四项均需显式 receipt/digest 且全部通过；缺失、篡改或任一 gate
 失败都会拒绝 mutation。该 witness 只证明隔离 shadow 试验具备 anti-forgetting 前置
 条件，不等价于 capability authority 或 production rollback。
+
+此外，P12→P13 trigger 不再把“两个 oracle 完整且为 PASS”当作自动演化事件。调用方
+必须为每个 case 提供 Revision2 规定的显式 `evolution_reasons`（`NOVELTY`、
+`CONFLICT`、`COUNTEREXAMPLE`、`REPEATED_FAILURE`、`CAPABILITY_GAP` 或
+`MEMORY_INTERFERENCE`）；没有信号的完整 cohort 只生成 `no_evolution_signal` 的
+`RETAIN` receipt。旧 v0.1 receipt 仅可 replay/审计，不能绕过该信号门进入当前
+mutation；因此普通 PASS 不会自动 consolidate，canonical memory 与 production
+runtime 仍保持关闭。

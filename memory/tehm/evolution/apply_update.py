@@ -175,6 +175,9 @@ def _p12_shadow_trigger(plan: LocalizedUpdatePlan,
     if trigger.triggered is not True:
         raise ShadowUpdateError(
             "shadow update cannot consume a non-triggering P12 receipt")
+    if not trigger.evolution_reasons:
+        raise ShadowUpdateError(
+            "shadow update P12 trigger lacks an evolution signal")
     if trigger.campaign_id != plan.campaign_id:
         raise ShadowUpdateError(
             "shadow update P12 trigger campaign does not match plan")
