@@ -16,6 +16,7 @@ from tehm.dataset import (normalize_stored_learner_bool,
 from tehm.ids import stable_dumps
 
 from .receipts import MemoryEventReceipt
+from tehm.state.shift_receipts import StateShiftReceipt
 from .verification import require_verified_transition
 
 EVENT_TYPES = frozenset({
@@ -30,7 +31,7 @@ EVENT_TYPES = frozenset({
     "KNOWLEDGE_REVISION_PROPOSED", "KNOWLEDGE_SUPERSEDED",
     "KNOWLEDGE_INVALIDATED", "ASSET_INTERFERENCE", "ASSET_REVISION_PROPOSED",
     "CAPABILITY_GAP_UPDATED", "CAPABILITY_REGRESSION_OBSERVED",
-    "MEMORY_ABSTAINED", "NO_SKILL_SELECTED",
+    "MEMORY_ABSTAINED", "NO_SKILL_SELECTED", "STATE_SHIFT_OBSERVED",
 })
 
 
@@ -265,6 +266,99 @@ def append_memory_event(
         previous_event_digest=previous, event_digest=event_digest)
 
 
+def append_state_shift_observation(
+    conn: sqlite3.Connection,
+    receipt: StateShiftReceipt,
+    *,
+    transition_id: str,
+    campaign_id: str,
+    learner_eligible: bool,
+    created_at: str | None = None,
+    commit: bool = True,
+) -> MemoryEventReceipt:
+    """Append one explicit ``STATE_SHIFT_OBSERVED`` shadow event.
+
+    A state-shift receipt is produced by the deterministic router, but it is
+    not itself a learner event.  The event writer therefore requires an
+    explicit canonical transition anchor and delegates learner-partition and
+    complete-oracle checks to :func:`append_memory_event`.  This function is
+    an audit bridge only: it never changes a support envelope, Knowledge
+    claim, lifecycle status, or production authority.
+    """
+    if not isinstance(receipt, StateShiftReceipt):
+        raise TypeError("state shift observation requires StateShiftReceipt")
+    if receipt.reason != "STATE_SHIFT" or receipt.transferable is not False:
+        raise ValueError(
+            "state shift observation requires a non-transferable STATE_SHIFT receipt")
+    if type(transition_id) is not str or not transition_id.strip():
+        raise ValueError("state shift observation transition_id is required")
+    if type(campaign_id) is not str or not campaign_id.strip():
+        raise ValueError("state shift observation campaign_id is required")
+    if type(learner_eligible) is not bool:
+        raise ValueError("state shift observation learner_eligible must be boolean")
+    return append_memory_event(
+        conn,
+        event_type="STATE_SHIFT_OBSERVED",
+        source_type="transition",
+        source_id=transition_id.strip(),
+        campaign_id=campaign_id.strip(),
+        learner_eligible=learner_eligible,
+        payload={
+            "state_shift_receipt": receipt.to_dict(),
+            "state_shift_receipt_id": receipt.receipt_id,
+            "no_skill_reason": "STATE_SHIFT",
+            "evolution_reason": "STATE_SHIFT_OBSERVED",
+        },
+        created_at=created_at,
+        commit=commit,
+    )
+
+
+def load_state_shift_observations(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: str,
+    knowledge_object_id: str | None = None,
+) -> tuple[tuple[MemoryEventReceipt, StateShiftReceipt], ...]:
+    """Replay validated state-shift events without inferring new evidence."""
+    if type(campaign_id) is not str or not campaign_id.strip():
+        raise ValueError("state shift observation campaign_id is required")
+    chain = verify_event_chain(conn, campaign_id=campaign_id.strip())
+    if not chain.get("ok"):
+        raise ValueError("state shift observation event chain is invalid")
+    rows = conn.execute(
+        """SELECT * FROM tehm_memory_events
+             WHERE event_type='STATE_SHIFT_OBSERVED' AND campaign_id=?
+             ORDER BY event_digest""", (campaign_id.strip(),)
+    ).fetchall()
+    observations: list[tuple[MemoryEventReceipt, StateShiftReceipt]] = []
+    for row in rows:
+        _validate_event_row(row)
+        try:
+            payload = _event_payload(row["payload_json"])
+            receipt = StateShiftReceipt.from_dict(payload["state_shift_receipt"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("state shift observation payload is malformed") from exc
+        if (payload.get("state_shift_receipt_id") != receipt.receipt_id or
+                payload.get("no_skill_reason") != "STATE_SHIFT" or
+                payload.get("evolution_reason") != "STATE_SHIFT_OBSERVED" or
+                receipt.reason != "STATE_SHIFT"):
+            raise ValueError("state shift observation payload conflicts with receipt")
+        if knowledge_object_id is not None and receipt.knowledge_object_id != knowledge_object_id:
+            continue
+        observations.append((
+            MemoryEventReceipt(
+                event_id=row["event_id"], event_type=row["event_type"],
+                source_type=row["source_type"], source_id=row["source_id"],
+                campaign_id=row["campaign_id"],
+                learner_eligible=normalize_stored_learner_bool(row["learner_eligible"]),
+                previous_event_digest=row["previous_event_digest"],
+                event_digest=row["event_digest"]),
+            receipt,
+        ))
+    return tuple(observations)
+
+
 def verify_event_chain(conn: sqlite3.Connection,
                        *, campaign_id: str | None = None) -> dict:
     """Verify digests and predecessor pointers for one campaign chain.
@@ -358,4 +452,7 @@ def verify_event_chain(conn: sqlite3.Connection,
     return {"ok": True, "events": len(rows), "head_digest": previous}
 
 
-__all__ = ["EVENT_TYPES", "append_memory_event", "verify_event_chain"]
+__all__ = [
+    "EVENT_TYPES", "append_memory_event", "append_state_shift_observation",
+    "load_state_shift_observations", "verify_event_chain",
+]

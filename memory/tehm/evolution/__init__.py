@@ -1,5 +1,8 @@
 """Online, shadow-only memory evolution APIs."""
-from .events import EVENT_TYPES, append_memory_event, verify_event_chain
+from .events import (
+    EVENT_TYPES, append_memory_event, append_state_shift_observation,
+    load_state_shift_observations, verify_event_chain,
+)
 from .conflict import CONFLICT_TYPES, ConflictReceipt, detect_conflicts
 from .candidate_trial import (
     CandidateTrialError, CandidateTrialReceipt, run_shadow_candidate_trial,
@@ -31,6 +34,12 @@ from .local_revision import (
     UPDATE_OPERATIONS, LocalizedUpdatePlan, LocalizedUpdatePlanReceipt,
     plan_localized_update,
 )
+from .state_shift_revision import (
+    STATE_SHIFT_EVOLUTION_VERSION, STATE_SHIFT_EVOLUTION_OPERATIONS,
+    STATE_SHIFT_EVOLUTION_REASONS, StateShiftEvolutionError,
+    StateShiftEvolutionProposal, plan_repeated_state_shift,
+    propose_repeated_state_shift,
+)
 from .receipts import (
     ExperienceValueReceipt, IncrementalCrystallizationReceipt,
     MemoryEventReceipt, OnlineMemoryReceipt, RuleRevisionReceipt,
@@ -60,7 +69,8 @@ __all__ = [
     "LocalizedUpdatePlanReceipt",
     "IncrementalCrystallizationReceipt",
     "MemoryEventReceipt", "OnlineMemoryReceipt", "RuleRevisionReceipt",
-    "append_memory_event", "crystallize_affected_groups",
+    "append_memory_event", "append_state_shift_observation",
+    "load_state_shift_observations", "crystallize_affected_groups",
     "preview_affected_groups", "observe_transition",
     "CandidateTrialError", "CandidateTrialReceipt",
     "run_shadow_candidate_trial",
@@ -79,6 +89,10 @@ __all__ = [
     "P13_EVOLUTION_REASON_RECEIPT_VERSION", "P12ShadowTriggerError",
     "P13EvolutionReasonReceipt",
     "P12ShadowUpdateTriggerReceipt", "build_p12_shadow_update_triggers",
+    "STATE_SHIFT_EVOLUTION_VERSION", "STATE_SHIFT_EVOLUTION_OPERATIONS",
+    "STATE_SHIFT_EVOLUTION_REASONS", "StateShiftEvolutionError",
+    "StateShiftEvolutionProposal", "plan_repeated_state_shift",
+    "propose_repeated_state_shift",
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",
     "require_verified_execution", "require_verified_transition",

@@ -3268,3 +3268,16 @@ refs 和可重放 gate projection；证据行与 authority receipt 通过 savepo
 receipt，必须消费当前 status version 匹配且在 ledger 中存在的 authority receipt。
 该 ledger 仍不提供 `promoted` 状态，也不自动晋级或导入 production runtime；
 `memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
+
+### 2026-09-01 State-shift observation and repeated-shift proposal seam
+
+新增 `STATE_SHIFT_OBSERVED` 事件桥接与 `load_state_shift_observations()`，要求
+state-shift receipt、canonical transition、campaign 和 learner partition 显式绑定；事件
+只进入 append-only shadow log，不能扩展 SupportEnvelope 或改变 Knowledge authority。
+新增 `propose_repeated_state_shift()`（别名 `plan_repeated_state_shift()`）：至少两份
+相同 Knowledge、不同 resolution 的不可迁移 receipt 才能形成提案，并逐 case 绑定
+no-memory/historical-memory oracle outcome 与 evidence refs。安全的重复迁移产生
+`REVISE`（SupportEnvelope expansion），历史记忆不安全但 no-memory 正常时产生
+`SPECIALIZE`；当前 oracle 不安全则 `RETAIN`，`SPLIT` 永不自动推断且必须提供显式
+partition evidence。该提案器只读、evaluation-only、shadow-only，仍需 P13
+anti-forgetting witness 才能尝试 isolated staging；`memory/docs/` 继续不入仓。
