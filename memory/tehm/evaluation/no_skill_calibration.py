@@ -99,6 +99,29 @@ def wilson_interval(successes: int, total: int, *, confidence: float = 0.95) -> 
     }
 
 
+def mcnemar_regression_test(
+        regression_cases: int, improvement_cases: int, *,
+        alpha: float = 0.05) -> dict:
+    """Summarize a paired repair regression test without imputing outcomes."""
+    regression_cases = _nonnegative_int(regression_cases, "regression_cases")
+    improvement_cases = _nonnegative_int(improvement_cases, "improvement_cases")
+    alpha = _unit(alpha, "alpha")
+    discordant = regression_cases + improvement_cases
+    if discordant == 0:
+        p_value = 1.0
+    else:
+        statistic = (abs(regression_cases - improvement_cases) - 1.0) ** 2 / discordant
+        p_value = math.erfc(math.sqrt(max(0.0, statistic)) / math.sqrt(2.0))
+    significant = regression_cases > improvement_cases and p_value < alpha
+    return {
+        "regression_cases": regression_cases,
+        "improvement_cases": improvement_cases,
+        "discordant_cases": discordant,
+        "p_value": round(p_value, 6), "alpha": alpha,
+        "significant_regression": significant,
+    }
+
+
 @dataclass(frozen=True)
 class NoSkillCalibrationSample:
     """One prediction paired with an explicit, independent oracle label.
@@ -566,5 +589,6 @@ __all__ = [
     "CALIBRATION_REASONS", "CALIBRATION_LABELS", "CALIBRATION_STRATA",
     "NoSkillCalibrationError", "NoSkillCalibrationSample",
     "NoSkillCalibrationReceipt", "wilson_interval",
+    "mcnemar_regression_test",
     "build_no_skill_calibration_samples", "evaluate_no_skill_calibration",
 ]

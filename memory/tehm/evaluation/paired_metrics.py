@@ -17,9 +17,10 @@ from tehm.canonical.transition import HARMFUL_OUTCOMES, OUTCOMES, POSITIVE_OUTCO
 from .candidate_executor import (
     P12_ARMS, PairedCandidateExecutionReceipt,
 )
+from .no_skill_calibration import mcnemar_regression_test, wilson_interval
 
 
-PAIRED_METRICS_VERSION = "p12-paired-metrics-v0.1"
+PAIRED_METRICS_VERSION = "p12-paired-metrics-v0.2"
 _MEMORY_ARMS = P12_ARMS[1:]
 
 
@@ -46,6 +47,10 @@ class PairedCohortMetrics:
     memory_interference_cases: dict[str, int]
     memory_interference_denominators: dict[str, int]
     memory_interference_rates: dict[str, float | None]
+    memory_interference_intervals: dict[str, dict]
+    repair_regression_cases: dict[str, int]
+    repair_improvement_cases: dict[str, int]
+    repair_mcnemar: dict[str, dict]
     no_skill_reason_counts: dict[str, int]
     routing_receipt_coverage: float
 
@@ -72,11 +77,25 @@ class PairedCohortMetrics:
                     type(value) is not int or value < 0 or value > self.cases
                     for value in mapping.values()):
                 raise PairedMetricsError(f"paired metrics {mapping_name} is invalid")
+        for mapping_name in ("memory_interference_intervals", "repair_mcnemar"):
+            mapping = getattr(self, mapping_name)
+            if set(mapping) != set(_MEMORY_ARMS) or any(
+                    not isinstance(value, Mapping) for value in mapping.values()):
+                raise PairedMetricsError(f"paired metrics {mapping_name} is invalid")
+        for mapping_name in ("repair_regression_cases", "repair_improvement_cases"):
+            mapping = getattr(self, mapping_name)
+            if set(mapping) != set(_MEMORY_ARMS) or any(
+                    type(value) is not int or value < 0 or value > self.cases
+                    for value in mapping.values()):
+                raise PairedMetricsError(f"paired metrics {mapping_name} is invalid")
         for arm in _MEMORY_ARMS:
             if self.paired_cases[arm] + self.unknown_pairs[arm] != self.cases:
                 raise PairedMetricsError("paired metrics known/unknown partition is invalid")
             if self.memory_interference_cases[arm] > self.memory_interference_denominators[arm]:
                 raise PairedMetricsError("paired metrics interference count is invalid")
+            if (self.repair_regression_cases[arm] +
+                    self.repair_improvement_cases[arm] > self.paired_cases[arm]):
+                raise PairedMetricsError("paired metrics repair discordance is invalid")
         for mapping_name in ("repair_deltas", "memory_interference_rates"):
             mapping = getattr(self, mapping_name)
             if set(mapping) != set(_MEMORY_ARMS):
@@ -109,6 +128,10 @@ class PairedCohortMetrics:
             "memory_interference_cases": self.memory_interference_cases,
             "memory_interference_denominators": self.memory_interference_denominators,
             "memory_interference_rates": self.memory_interference_rates,
+            "memory_interference_intervals": self.memory_interference_intervals,
+            "repair_regression_cases": self.repair_regression_cases,
+            "repair_improvement_cases": self.repair_improvement_cases,
+            "repair_mcnemar": self.repair_mcnemar,
             "no_skill_reason_counts": self.no_skill_reason_counts,
             "routing_receipt_coverage": self.routing_receipt_coverage,
             "evaluation_only": True,
@@ -147,6 +170,8 @@ def summarize_paired_cohort(value: object) -> PairedCohortMetrics:
     repair_deltas: dict[str, float | None] = {}
     interference: dict[str, int] = {}
     interference_denominators: dict[str, int] = {}
+    repair_regressions: dict[str, int] = {}
+    repair_improvements: dict[str, int] = {}
     for bundle in rows:
         for arm in P12_ARMS:
             outcome_counts[arm][bundle.arm_receipts[arm].outcome] += 1
@@ -163,6 +188,12 @@ def summarize_paired_cohort(value: object) -> PairedCohortMetrics:
             interference_denominators[arm] = paired_cases[arm]
             interference[arm] = interference.get(arm, 0) + int(
                 known and baseline in POSITIVE_OUTCOMES and memory in HARMFUL_OUTCOMES)
+            repair_regressions[arm] = repair_regressions.get(arm, 0) + int(
+                known and baseline in POSITIVE_OUTCOMES and
+                memory not in POSITIVE_OUTCOMES)
+            repair_improvements[arm] = repair_improvements.get(arm, 0) + int(
+                known and baseline not in POSITIVE_OUTCOMES and
+                memory in POSITIVE_OUTCOMES)
     for arm in _MEMORY_ARMS:
         denominator = paired_cases[arm]
         repair_deltas[arm] = _rate(memory_passes[arm], denominator)
@@ -186,6 +217,15 @@ def summarize_paired_cohort(value: object) -> PairedCohortMetrics:
         memory_interference_rates={
             arm: _rate(interference[arm], interference_denominators[arm])
             for arm in _MEMORY_ARMS}, no_skill_reason_counts=reasons,
+        memory_interference_intervals={
+            arm: wilson_interval(interference[arm], interference_denominators[arm])
+            for arm in _MEMORY_ARMS},
+        repair_regression_cases=repair_regressions,
+        repair_improvement_cases=repair_improvements,
+        repair_mcnemar={
+            arm: mcnemar_regression_test(
+                repair_regressions[arm], repair_improvements[arm])
+            for arm in _MEMORY_ARMS},
         routing_receipt_coverage=round(
             sum(bundle.routing_receipt_id is not None for bundle in rows) / len(rows), 6))
 

@@ -14,7 +14,8 @@ from dataclasses import dataclass
 
 from tehm.ids import stable_dumps
 from tehm.evaluation.no_skill_calibration import (
-    NoSkillCalibrationError, NoSkillCalibrationReceipt, wilson_interval,
+    NoSkillCalibrationError, NoSkillCalibrationReceipt, mcnemar_regression_test,
+    wilson_interval,
 )
 
 
@@ -208,20 +209,14 @@ def _mcnemar_regression_guard(source: Mapping, metrics: dict, *, alpha: float) -
             type(improvement) is not int or improvement < 0 or
             regression + improvement > paired):
         raise ProductionGateError("paired repair counts are invalid")
-    discordant = regression + improvement
-    if discordant == 0:
-        p_value = 1.0
-    else:
-        statistic = (abs(regression - improvement) - 1.0) ** 2 / discordant
-        p_value = math.erfc(math.sqrt(max(0.0, statistic)) / math.sqrt(2.0))
-    significant_regression = regression > improvement and p_value < alpha
+    result = mcnemar_regression_test(
+        regression, improvement, alpha=alpha)
+    significant_regression = result["significant_regression"]
     metrics["repair_paired_cases"] = paired
     metrics["repair_regression_cases"] = regression
     metrics["repair_improvement_cases"] = improvement
     metrics["repair_mcnemar"] = {
-        "regression_cases": regression, "improvement_cases": improvement,
-        "discordant_cases": discordant, "p_value": round(p_value, 6),
-        "alpha": alpha, "significant_regression": significant_regression,
+        **result,
     }
     return True, not significant_regression
 

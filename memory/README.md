@@ -3144,3 +3144,9 @@ Production gate 的 efficacy 现在也保留 Revision2 的 Pareto 约束：当 e
 的 baseline-pass → memory-fail 回归直接 `FAIL`，不会接受调用方布尔标记替代统计证据。
 旧的仅 harm-rate 或显式 controlled-harm repair manifest 仍保持兼容，但不因此获得更强
 的统计保证。
+
+`tehm.evaluation.paired_metrics` 已升级为 `p12-paired-metrics-v0.2`：每个 memory arm
+同时输出 MIR point estimate 与 Wilson 95% interval、baseline-pass → memory-fail 和
+baseline-fail → memory-pass 的 paired discordant counts，以及连续性校正 McNemar
+结果。`UNKNOWN` 仍只保留在原始 outcome counts，不进入这些 paired 分母；因此该 receipt
+可直接作为 P15 manifest 的统计来源，但不会单独授予 authority。

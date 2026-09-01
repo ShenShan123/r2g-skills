@@ -9,7 +9,7 @@ from contracts import MemoryRoutingDecision
 from tehm.evaluation.no_skill_calibration import (
     NoSkillCalibrationError, NoSkillCalibrationReceipt, NoSkillCalibrationSample,
     build_no_skill_calibration_samples, evaluate_no_skill_calibration,
-    wilson_interval,
+    mcnemar_regression_test, wilson_interval,
 )
 from tehm.retrieval.production_gate import evaluate_production_gate
 
@@ -66,6 +66,18 @@ def test_wilson_interval_is_explicit_and_unknown_safe():
         wilson_interval(1, 0)
     with pytest.raises(NoSkillCalibrationError, match="only 95%"):
         wilson_interval(1, 2, confidence=0.90)
+
+
+def test_mcnemar_regression_test_is_paired_and_unknown_safe():
+    assert mcnemar_regression_test(8, 0)["significant_regression"] is True
+    assert mcnemar_regression_test(0, 8)["significant_regression"] is False
+    assert mcnemar_regression_test(0, 0) == {
+        "regression_cases": 0, "improvement_cases": 0,
+        "discordant_cases": 0, "p_value": 1.0, "alpha": 0.05,
+        "significant_regression": False,
+    }
+    with pytest.raises(NoSkillCalibrationError):
+        mcnemar_regression_test(-1, 0)
 
 
 def test_route_adapter_requires_bound_receipts_and_independent_labels():

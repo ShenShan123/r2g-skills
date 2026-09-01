@@ -30,6 +30,7 @@ from .no_skill_calibration import (
     CALIBRATION_REASONS, CALIBRATION_LABELS, CALIBRATION_STRATA,
     NoSkillCalibrationError, NoSkillCalibrationSample,
     NoSkillCalibrationReceipt, wilson_interval,
+    mcnemar_regression_test,
     build_no_skill_calibration_samples, evaluate_no_skill_calibration,
 )
 
@@ -51,5 +52,6 @@ __all__ = [
     "CALIBRATION_REASONS", "CALIBRATION_LABELS", "CALIBRATION_STRATA",
     "NoSkillCalibrationError", "NoSkillCalibrationSample",
     "NoSkillCalibrationReceipt", "wilson_interval",
+    "mcnemar_regression_test",
     "build_no_skill_calibration_samples", "evaluate_no_skill_calibration",
 ]

@@ -54,6 +54,25 @@ def test_unknown_outcomes_are_visible_but_excluded_from_pair_denominators():
     assert metrics.memory_interference_cases["ALWAYS_MEMORY"] == 1
     assert metrics.memory_interference_denominators["ALWAYS_MEMORY"] == 1
     assert metrics.memory_interference_rates["ALWAYS_MEMORY"] == 1.0
+    assert metrics.memory_interference_intervals["ALWAYS_MEMORY"] == {
+        "successes": 1, "total": 1, "point": 1.0,
+        "lower": pytest.approx(0.206549), "upper": 1.0,
+        "confidence": 0.95,
+    }
+    assert metrics.repair_regression_cases["ALWAYS_MEMORY"] == 1
+    assert metrics.repair_improvement_cases["ALWAYS_MEMORY"] == 0
+    assert metrics.repair_mcnemar["ALWAYS_MEMORY"] == {
+        "regression_cases": 1, "improvement_cases": 0,
+        "discordant_cases": 1, "p_value": 1.0, "alpha": 0.05,
+        "significant_regression": False,
+    }
+    assert metrics.repair_regression_cases["APPLICABILITY_GATED"] == 0
+    assert metrics.repair_improvement_cases["APPLICABILITY_GATED"] == 0
+    improved = summarize_paired_cohort([_bundle(
+        "case-4", "lineage-c", "FAIL", always="FAIL", gated="PASS",
+        causal="FAIL", reason="NO_MATCH")])
+    assert improved.repair_improvement_cases["APPLICABILITY_GATED"] == 1
+    assert improved.repair_mcnemar["APPLICABILITY_GATED"]["p_value"] == 1.0
     assert metrics.repair_deltas["ALWAYS_MEMORY"] == -1.0
     assert metrics.no_skill_reason_counts == {
         "NO_MATCH": 1, "STATE_SHIFT": 1, "RISK": 1}
