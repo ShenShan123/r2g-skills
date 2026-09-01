@@ -266,6 +266,19 @@ class TehmMemoryBackend:
             conn, query, routing=routing, candidate_budget=candidate_budget,
             mode="shadow", compatibility_mode=compatibility_mode)
 
+    def build_structured_candidate(
+            self, query: MemoryQuery | RepairContext,
+            routing: MemoryRoutingDecision, asset_selection, runtime_binding):
+        """Build a P11 evaluation-only structured candidate.
+
+        This seam is deliberately separate from ``retrieve`` and activation;
+        it cannot enter the production candidate source enum.
+        """
+        from tehm.retrieval.structured_candidate import build_structured_candidate
+
+        return build_structured_candidate(
+            query, routing, asset_selection, runtime_binding)
+
     def evaluate_production_gate(self, evidence=None, **kwargs):
         """Evaluate P9 evidence without enabling production memory routing.
 

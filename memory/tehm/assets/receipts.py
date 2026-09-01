@@ -156,6 +156,10 @@ class RuntimeBindingReceipt:
             "binding_digest": self.binding_digest,
         }
 
+    @property
+    def binding_receipt_id(self) -> str:
+        return "binding_" + self.binding_digest.split(":", 1)[1][:24]
+
 
 __all__ = ["AssetAuthorityReceipt", "AssetReceipt", "CapabilityGapReceipt",
            "AssetValidationReceipt", "AssetPromotionReceipt", "RuntimeBindingReceipt"]

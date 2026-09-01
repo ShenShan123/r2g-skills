@@ -2885,3 +2885,20 @@ gold-leakage-safe runtime binding 与 ambiguity abstention；`memory/docs/` 仍�
 `.gitignore` 排除，不进入 release commit。后续依赖顺序仍为 P11 structured candidate、
 P12 real candidate execution、P13 shadow online update、P14 capability causal chain，
 在这些真实 evidence 完成前 production routing 继续关闭。
+
+### 2026-09-01 P11 StructuredRepairCandidate（evaluation-only）
+
+P7 的 `AssetSelection` 现在可以继续构造成独立的
+`StructuredRepairCandidate`，但不会修改 `MemoryCandidate.source`，也不会进入
+既有 activation/runtime pipeline。构建器会重新检查 routing 与 selection 的
+`resolved_state_id`、knowledge object、causal path、asset ID 和 runtime binding，
+并要求 non-empty obligations、applicability、authority、risk、provenance 与
+content-addressed candidate digest 全部存在。
+
+候选 action 只由 asset action 与 `RuntimeBindingReceipt.selected_binding` 合成；
+未解析 `$H`、`fix`、gold patch、repaired RTL、held-out answer 会 fail-closed。
+候选和 `StructuredCandidateReceipt` 永远带 `evaluation_only=true`，backend 只提供
+显式的 `build_structured_candidate()` seam。这样 P11 已打通
+`Routing → AssetSelection → RuntimeBinding → StructuredCandidate`，但还没有执行
+候选或声称 repair gain；下一阶段 P12 才能在固定 N=3 的四臂 paired cohort 上接入
+oracle execution。

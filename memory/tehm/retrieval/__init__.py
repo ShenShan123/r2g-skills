@@ -48,6 +48,10 @@ _PRODUCTION_GATE_EXPORTS = frozenset({
     "PRODUCTION_GATE_VERSION", "PRODUCTION_GATE_GATES", "PRODUCTION_GATE_STATUS",
     "ProductionGateError", "ProductionGateReceipt", "evaluate_production_gate",
 })
+_STRUCTURED_CANDIDATE_EXPORTS = frozenset({
+    "CANDIDATE_VERSION", "StructuredCandidateError", "StructuredRepairCandidate",
+    "StructuredCandidateReceipt", "build_structured_candidate",
+})
 
 
 def __getattr__(name):
@@ -63,6 +67,12 @@ def __getattr__(name):
     if name in _PRODUCTION_GATE_EXPORTS:
         from tehm.retrieval import production_gate
         return getattr(production_gate, name)
+    if name in _STRUCTURED_CANDIDATE_EXPORTS:
+        from tehm.retrieval import structured_candidate
+        if name == "StructuredCandidateReceipt":
+            from tehm.retrieval.structured_candidate_receipts import StructuredCandidateReceipt
+            return StructuredCandidateReceipt
+        return getattr(structured_candidate, name)
     raise AttributeError(name)
 
 __all__ = [
@@ -82,4 +92,6 @@ __all__ = [
     "select_knowledge_grounded_assets",
     "PRODUCTION_GATE_VERSION", "PRODUCTION_GATE_GATES", "PRODUCTION_GATE_STATUS",
     "ProductionGateError", "ProductionGateReceipt", "evaluate_production_gate",
+    "CANDIDATE_VERSION", "StructuredCandidateError", "StructuredRepairCandidate",
+    "StructuredCandidateReceipt", "build_structured_candidate",
 ]

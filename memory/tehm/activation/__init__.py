@@ -20,5 +20,11 @@ from tehm.activation.pipeline import (
     ActivationRecord,
     activate,
 )
+from tehm.activation.runtime_binding import (
+    RuntimeBindingReceipt, bind_asset_to_repair_context,
+)
 
-__all__ = ["ACTIVATION_VERSION", "ActivationError", "ActivationRecord", "activate"]
+__all__ = [
+    "ACTIVATION_VERSION", "ActivationError", "ActivationRecord", "RuntimeBindingReceipt",
+    "activate", "bind_asset_to_repair_context",
+]

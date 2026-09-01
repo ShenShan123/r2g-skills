@@ -8,7 +8,8 @@ import pytest
 
 from contracts import MemoryQuery, MemoryRoutingDecision
 from tehm.assets import (
-    bind_rtl_asset_to_project, build_rtl_asset_proposal, register_asset,
+    bind_asset_to_repair_context, bind_rtl_asset_to_project,
+    build_rtl_asset_proposal, register_asset,
     set_asset_status,
 )
 from tehm.knowledge import MechanismKnowledge
@@ -16,6 +17,9 @@ from tehm.retrieval import asset_selector
 from tehm.retrieval.asset_selector import (
     AssetSelectionReceipt, AssetSelectorError,
     select_knowledge_grounded_assets,
+)
+from tehm.retrieval.structured_candidate import (
+    StructuredCandidateError, build_structured_candidate,
 )
 
 
@@ -149,3 +153,51 @@ def test_selector_receipt_replays_and_production_is_unavailable(tmp_tehm):
             **receipt.to_dict(), "receipt_digest": "sha256:tampered"})
     with pytest.raises(Exception, match="shadow-only"):
         select_knowledge_grounded_assets(conn, _query(), mode="production")
+
+
+def test_structured_candidate_rechecks_state_knowledge_asset_and_binding(
+        tmp_tehm, monkeypatch):
+    conn, _, _ = tmp_tehm
+    asset_id = _asset(conn, knowledge_ids=("mk_selector@1",), bound=True)
+    claim = _claim()
+    _patch_shadow_state(monkeypatch, asset_id, claim)
+    routing = _routing(asset_id)
+    selection = select_knowledge_grounded_assets(conn, _query(), routing=routing)
+    binding = bind_asset_to_repair_context(
+        selection.assets[0], claim,
+        {"design_id": "selector-design", "structural_graph": {
+            "nodes": [{"kind": "module", "label": "req_ack_fsm"}]},
+            "reports": {"target": "FAIL"}},
+        {"selected_binding": {"module": "req_ack_fsm"}})
+    candidate = build_structured_candidate(_query(), routing, selection, binding)
+    assert candidate.evaluation_only is True
+    assert candidate.asset_id == asset_id
+    assert candidate.knowledge_object_id == claim.object_id
+    assert candidate.causal_path_ids == ("path-selector",)
+    assert candidate.candidate_id.startswith("structured_candidate_")
+    assert candidate.to_dict()["candidate_digest"] == candidate.candidate_digest
+    assert candidate.receipt().evaluation_only is True
+
+
+def test_structured_candidate_rejects_mismatched_state_or_ineligible_binding(
+        tmp_tehm, monkeypatch):
+    conn, _, _ = tmp_tehm
+    asset_id = _asset(conn, knowledge_ids=("mk_selector@1",), bound=True)
+    claim = _claim()
+    _patch_shadow_state(monkeypatch, asset_id, claim)
+    routing = _routing(asset_id)
+    selection = select_knowledge_grounded_assets(conn, _query(), routing=routing)
+    bad_binding = {"asset_id": asset_id, "knowledge_id": claim.object_id,
+                   "eligible": False, "binding_digest": "sha256:bad",
+                   "selected_binding": {"module": "req_ack_fsm"}}
+    with pytest.raises(StructuredCandidateError, match="not eligible"):
+        build_structured_candidate(_query(), routing, selection, bad_binding)
+    bad_routing = MemoryRoutingDecision(
+        decision="CONSIDER", resolved_state_id="different-state",
+        selected_rule_ids=(), selected_path_ids=("path-selector",),
+        selected_asset_ids=(asset_id,), applicability=routing.applicability,
+        causal_support=routing.causal_support, risk={}, abstain_reasons=(),
+        no_memory_budget=1, memory_budget=1)
+    good_binding = {**bad_binding, "eligible": True}
+    with pytest.raises(StructuredCandidateError, match="state IDs differ"):
+        build_structured_candidate(_query(), bad_routing, selection, good_binding)
