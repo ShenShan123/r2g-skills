@@ -69,8 +69,20 @@ def set_knowledge_status(
             "L2_CONTROLLED_INTERVENTION"):
         raise ValueError("L0/L1 knowledge is shadow-only")
     if status == "validated":
-        if authority_receipt is None or not getattr(authority_receipt, "eligible", False):
+        if authority_receipt is None:
             raise ValueError("validated knowledge requires eligible authority receipt")
+        # A pure evaluator result is diagnostic only.  Validation must consume
+        # a content/status/evidence-bound receipt that is present in the
+        # authority ledger and still matches the current status version.
+        from .authority import verify_knowledge_authority
+        verified = verify_knowledge_authority(conn, authority_receipt)
+        if (not verified["eligible"] or
+                verified.get("knowledge_object_id") != claim.object_id or
+                verified.get("target_scope") != target_scope or
+                verified.get("status_version") != current["status_version"]):
+            raise ValueError(
+                "validated knowledge requires eligible authority receipt: "
+                f"{verified.get('reasons', ())}")
     provenance_json = stable_dumps(dict(provenance or current["provenance"]))
     now = tehm_db.now_local()
     had_outer_transaction = conn.in_transaction

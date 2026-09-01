@@ -643,6 +643,43 @@ CREATE TABLE IF NOT EXISTS tehm_mechanism_knowledge_evidence (
 CREATE INDEX IF NOT EXISTS idx_mechanism_knowledge_evidence
     ON tehm_mechanism_knowledge_evidence(knowledge_id, version, split);
 
+-- Knowledge authority is an additive, append-only decision ledger.  It does
+-- not grant lifecycle status by itself; consumers must replay the stored
+-- claim/status/evidence rows before accepting a validated transition.
+CREATE TABLE IF NOT EXISTS tehm_knowledge_authority_evidence (
+    authority_receipt_id TEXT NOT NULL,
+    knowledge_id         TEXT NOT NULL,
+    version              INTEGER NOT NULL,
+    target_scope         TEXT NOT NULL,
+    evidence_type        TEXT NOT NULL,
+    evidence_id          TEXT NOT NULL,
+    split                TEXT NOT NULL CHECK (split IN
+                         ('training', 'calibration', 'heldout', 'ab')),
+    lineage_id           TEXT,
+    evidence_level       TEXT NOT NULL,
+    evidence_digest      TEXT NOT NULL,
+    PRIMARY KEY (authority_receipt_id, evidence_type, evidence_id)
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_authority_evidence_scope
+    ON tehm_knowledge_authority_evidence
+       (knowledge_id, version, target_scope, split);
+
+CREATE TABLE IF NOT EXISTS tehm_knowledge_authority_receipts (
+    authority_receipt_id     TEXT PRIMARY KEY,
+    knowledge_id             TEXT NOT NULL,
+    version                  INTEGER NOT NULL,
+    target_scope             TEXT NOT NULL,
+    eligible                 INTEGER NOT NULL CHECK (eligible IN (0, 1)),
+    knowledge_content_digest TEXT NOT NULL,
+    status_version           INTEGER NOT NULL,
+    receipt_json             TEXT NOT NULL,
+    receipt_digest           TEXT NOT NULL UNIQUE,
+    created_at               TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_authority_receipts_scope
+    ON tehm_knowledge_authority_receipts
+       (knowledge_id, version, target_scope, eligible);
+
 -- Capability retention is an additive v4 evidence ledger.  It is also
 -- created lazily by tehm.capability.retention for existing v4 stores so the
 -- immutable v1->v4 migration chain does not need to be rewritten.

@@ -10,11 +10,13 @@ import pytest
 from tehm import db
 from tehm.canonical.capture import capture
 from tehm.causal import build_transition_causal_fragment, consolidate_causal_path
+from tehm.causal.path_builder import causal_path_digest
 from tehm.knowledge import (
     MechanismKnowledge, build_knowledge_from_path, evaluate_applicability,
     evaluate_knowledge_authority, ensure_knowledge_schema, get_knowledge,
     get_knowledge_status, register_knowledge, resolve_knowledge,
     merge_knowledge, revise_knowledge, set_knowledge_status, split_knowledge,
+    record_knowledge_authority, verify_knowledge_authority,
 )
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 from tehm.state import StateResolutionError
@@ -133,6 +135,78 @@ def test_candidate_authority_is_explicit_and_never_auto_promoted(tmp_tehm):
             status="validated", authority_receipt=authority)
     with pytest.raises(StateResolutionError, match="no promoted runtime status"):
         resolve_knowledge(conn, mode="production")
+
+
+def test_knowledge_authority_is_content_bound_and_replayable(tmp_tehm):
+    conn, path, _, _ = _path_from_two_training_transitions(tmp_tehm)
+    path_row = conn.execute(
+        "SELECT mechanism_family, compatibility_profile, ordered_nodes_json, "
+        "ordered_edges_json, source_transitions_json, support_json "
+        "FROM tehm_causal_paths WHERE path_id=?", (path.path_id,)).fetchone()
+    import json as _json
+    l3_digest = causal_path_digest(
+        mechanism_family=path_row["mechanism_family"],
+        compatibility_profile=path_row["compatibility_profile"],
+        evidence_level="L3_REPLICATED_EFFECT",
+        source_transition_ids=_json.loads(path_row["source_transitions_json"]),
+        node_ids=_json.loads(path_row["ordered_nodes_json"]),
+        edge_ids=_json.loads(path_row["ordered_edges_json"]),
+        support=_json.loads(path_row["support_json"]))
+    conn.execute(
+        "UPDATE tehm_causal_paths SET evidence_level=?, path_digest=? WHERE path_id=?",
+        ("L3_REPLICATED_EFFECT", l3_digest, path.path_id))
+    conn.commit()
+    claim = replace(_claim(knowledge_id="mk_authority", status="candidate",
+                           evidence_level="L3_REPLICATED_EFFECT"),
+                    causal_path_ids=(path.path_id,),
+                    support_lineages=("lineage-a", "lineage-b"))
+    register_knowledge(conn, claim, evidence_refs=[{
+        "evidence_type": "manual_review", "evidence_id": "authority-review",
+        "split": "training", "lineage_id": "lineage-a",
+        "evidence_level": "L3_REPLICATED_EFFECT",
+    }])
+    pure = evaluate_knowledge_authority(conn, claim)
+    assert pure.eligible is True
+    receipt = record_knowledge_authority(conn, claim)
+    assert receipt.eligible is True
+    assert receipt.authority_receipt_id.startswith("knowledge_authority_")
+    assert verify_knowledge_authority(conn, receipt)["eligible"] is True
+    replay = record_knowledge_authority(conn, claim)
+    assert replay.to_dict() == receipt.to_dict()
+    set_knowledge_status(
+        conn, knowledge_id=claim.knowledge_id, version=claim.version,
+        status="validated", authority_receipt=receipt)
+    assert get_knowledge_status(
+        conn, knowledge_id=claim.knowledge_id, version=claim.version)["status"] == "validated"
+    tampered = receipt.to_dict()
+    tampered["status_version"] = 99
+    assert verify_knowledge_authority(conn, tampered)["eligible"] is False
+    conn.execute(
+        "UPDATE tehm_knowledge_authority_receipts SET receipt_json='{}' "
+        "WHERE authority_receipt_id=?", (receipt.authority_receipt_id,))
+    conn.commit()
+    assert verify_knowledge_authority(conn, receipt)["eligible"] is False
+
+
+def test_knowledge_authority_rejects_pure_or_tampered_receipts(tmp_tehm):
+    conn, path, _, _ = _path_from_two_training_transitions(tmp_tehm)
+    claim = replace(
+        _claim(knowledge_id="mk_authority_ineligible", status="candidate",
+               evidence_level="L2_CONTROLLED_INTERVENTION"),
+        causal_path_ids=(path.path_id,))
+    register_knowledge(conn, claim, evidence_refs=[])
+    pure = evaluate_knowledge_authority(conn, claim)
+    assert pure.authority_receipt_id == ""
+    with pytest.raises(ValueError, match="eligible authority receipt"):
+        set_knowledge_status(
+            conn, knowledge_id=claim.knowledge_id, version=claim.version,
+            status="validated", authority_receipt=pure)
+    receipt = record_knowledge_authority(conn, claim)
+    tampered = receipt.to_dict()
+    tampered["knowledge_content_digest"] = "sha256:forged"
+    assert verify_knowledge_authority(conn, tampered)["eligible"] is False
+    assert "authority_receipt_digest_mismatch" in verify_knowledge_authority(
+        conn, tampered)["reasons"]
 
 
 def test_registry_replay_is_immutable_and_content_bound(tmp_tehm):

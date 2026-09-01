@@ -67,6 +67,17 @@ class KnowledgeAuthorityReceipt:
     support_lineages: tuple[str, ...]
     gates: dict
     reason: str
+    # The pure evaluator predates the database-bound authority seam.  These
+    # fields are optional for compatibility, but a receipt consumed by
+    # lifecycle must carry all of them and be present in the authority ledger.
+    authority_version: str = "knowledge-authority-v1"
+    knowledge_content_digest: str = ""
+    target_scope: str = "global"
+    status_version: int | None = None
+    min_support_lineages: int = 2
+    evidence_refs: tuple[dict, ...] = field(default_factory=tuple)
+    authority_receipt_id: str = ""
+    receipt_digest: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -75,6 +86,14 @@ class KnowledgeAuthorityReceipt:
             "required_evidence_level": self.required_evidence_level,
             "support_lineages": list(self.support_lineages),
             "gates": dict(self.gates), "reason": self.reason,
+            "authority_version": self.authority_version,
+            "knowledge_content_digest": self.knowledge_content_digest,
+            "target_scope": self.target_scope,
+            "status_version": self.status_version,
+            "min_support_lineages": self.min_support_lineages,
+            "evidence_refs": [dict(item) for item in self.evidence_refs],
+            "authority_receipt_id": self.authority_receipt_id,
+            "receipt_digest": self.receipt_digest,
         }
 
 

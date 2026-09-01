@@ -3254,3 +3254,17 @@ inventory，结构变化则写入 `SPECIALIZES`/`GENERALIZES` relation，便于 
 原因或 promotion evidence；真实 ORFS cohort 仍须先获得独立 reason receipt 和四项
 anti-forgetting witness，之后才能进入该 shadow lane。`memory/docs/` 继续仅作本地设计
 输入，由 `.gitignore` 排除，不会提交到仓库。
+
+### 2026-09-01 Knowledge authority replay ledger
+
+新增 `tehm_knowledge_authority_evidence` 与
+`tehm_knowledge_authority_receipts` 两个 additive ledger 表，以及
+`record_knowledge_authority()` / `verify_knowledge_authority()`。Knowledge authority
+现在绑定 claim content digest、target scope、status version、完整 claim evidence
+refs 和可重放 gate projection；证据行与 authority receipt 通过 savepoint 原子写入，
+相同 receipt 可幂等重放，冲突或篡改会 fail-closed。
+
+`set_knowledge_status(status="validated")` 不再接受只有 `.eligible=true` 的纯计算
+receipt，必须消费当前 status version 匹配且在 ledger 中存在的 authority receipt。
+该 ledger 仍不提供 `promoted` 状态，也不自动晋级或导入 production runtime；
+`memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
