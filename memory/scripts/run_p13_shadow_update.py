@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tehm.evolution import (  # noqa: E402
+    AntiForgettingWitness,
     AppliedShadowUpdateReceipt,
     LocalizedUpdatePlan,
     P12_SHADOW_TRIGGER_VERSION,
@@ -112,6 +113,50 @@ def _open_read_only(path: Path) -> sqlite3.Connection:
     return conn
 
 
+def _decode_updates(
+        updates: Mapping,
+        triggers: Mapping[str, P12ShadowUpdateTriggerReceipt],
+        campaign_id: str,
+        ) -> dict[str, tuple[LocalizedUpdatePlan, Mapping]]:
+    """Validate all plans and mutation witnesses before opening source state."""
+    decoded: dict[str, tuple[LocalizedUpdatePlan, Mapping]] = {}
+    for case_id in sorted(triggers):
+        item = updates[case_id]
+        if not isinstance(item, Mapping):
+            raise P13ShadowRunError(f"P13 update for {case_id} must be an object")
+        try:
+            plan = LocalizedUpdatePlan.from_dict(item.get("plan"))
+        except (TypeError, ValueError) as exc:
+            raise P13ShadowRunError(
+                f"P13 update plan for {case_id} is invalid: {exc}") from exc
+        trigger = triggers[case_id]
+        if plan.campaign_id != campaign_id:
+            raise P13ShadowRunError(
+                f"P13 update plan for {case_id} campaign_id disagrees")
+        if trigger.receipt_digest not in plan.evidence_refs:
+            raise P13ShadowRunError(
+                f"P13 update plan for {case_id} must witness its trigger digest")
+        evidence = item.get("evidence")
+        if not isinstance(evidence, Mapping):
+            raise P13ShadowRunError(
+                f"P13 update evidence for {case_id} must be an object")
+        if plan.update_target != "UPDATE_NONE":
+            try:
+                witness = AntiForgettingWitness.from_dict(
+                    evidence.get("anti_forgetting"))
+            except (TypeError, ValueError) as exc:
+                raise P13ShadowRunError(
+                    f"P13 anti-forgetting witness for {case_id} is invalid: {exc}") from exc
+            if witness.receipt_digest not in plan.evidence_refs:
+                raise P13ShadowRunError(
+                    f"P13 update plan for {case_id} must witness its anti-forgetting digest")
+            if witness.eligible is not True:
+                raise P13ShadowRunError(
+                    f"P13 anti-forgetting witness for {case_id} is not eligible")
+        decoded[case_id] = (plan, evidence)
+    return decoded
+
+
 def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
                           *, output: Path | str) -> dict:
     """Apply all manifest plans in discarded staging and emit receipts."""
@@ -136,30 +181,13 @@ def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
     if not isinstance(updates, Mapping) or set(updates) != set(triggers):
         raise P13ShadowRunError(
             "P13 shadow update manifest must cover exactly all trigger cases")
+    decoded_updates = _decode_updates(updates, triggers, campaign_id)
     source_sha_before = _sha256(source_path)
     conn = _open_read_only(source_path)
     receipts: dict[str, AppliedShadowUpdateReceipt] = {}
     try:
         for case_id in sorted(triggers):
-            item = updates[case_id]
-            if not isinstance(item, Mapping):
-                raise P13ShadowRunError(f"P13 update for {case_id} must be an object")
-            try:
-                plan = LocalizedUpdatePlan.from_dict(item.get("plan"))
-            except (TypeError, ValueError) as exc:
-                raise P13ShadowRunError(
-                    f"P13 update plan for {case_id} is invalid: {exc}") from exc
-            trigger = triggers[case_id]
-            if plan.campaign_id != campaign_id:
-                raise P13ShadowRunError(
-                    f"P13 update plan for {case_id} campaign_id disagrees")
-            if trigger.receipt_digest not in plan.evidence_refs:
-                raise P13ShadowRunError(
-                    f"P13 update plan for {case_id} must witness its trigger digest")
-            evidence = item.get("evidence")
-            if not isinstance(evidence, Mapping):
-                raise P13ShadowRunError(
-                    f"P13 update evidence for {case_id} must be an object")
+            plan, evidence = decoded_updates[case_id]
             try:
                 receipt = apply_localized_update_shadow(plan, conn, evidence)
             except (ShadowUpdateError, TypeError, ValueError) as exc:

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts import run_p13_shadow_update as shadow_runner
 from scripts.run_p13_shadow_update import P13ShadowRunError, run_p13_shadow_update
 from tehm.evolution import LocalizedUpdatePlan, P12ShadowUpdateTriggerReceipt
 
@@ -89,6 +90,38 @@ def test_p13_runner_rejects_input_output_collision(tmp_path):
     db, trigger_report, manifest = _inputs(tmp_path)
     with pytest.raises(P13ShadowRunError, match="separate"):
         run_p13_shadow_update(trigger_report, manifest, output=db)
+
+
+def test_p13_runner_preflights_anti_forgetting_before_opening_source(tmp_path, monkeypatch):
+    db, trigger_report, manifest = _inputs(tmp_path)
+    trigger = _trigger()
+    plan = replace(
+        _plan(trigger), learner_eligible=True,
+        update_target="UPDATE_STATE_RELATION",
+        candidate_targets=("UPDATE_STATE_RELATION",), operation="INVALIDATE",
+        failure_type="STATE_RESOLUTION_FAILURE")
+    payload = json.loads(manifest.read_text())
+    payload["updates"]["case-0"] = {
+        "plan": plan.to_dict(),
+        "evidence": {
+            "p12_shadow_trigger": {
+                **trigger.to_dict(), "receipt_digest": trigger.receipt_digest},
+            "relation": {
+                "source_type": "transition", "source_id": "transition:p13-test",
+                "relation_type": "INVALIDATES", "target_type": "transition",
+                "target_id": "transition:other",
+                "evidence_refs": [trigger.receipt_digest]},
+        },
+    }
+    manifest.write_text(json.dumps(payload))
+
+    def fail_open(_path):
+        raise AssertionError("source must not open before anti-forgetting preflight")
+
+    monkeypatch.setattr(shadow_runner, "_open_read_only", fail_open)
+    with pytest.raises(P13ShadowRunError, match="anti-forgetting witness"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
 
 
 def test_p13_runner_rejects_legacy_trigger_for_current_mutation(tmp_path):

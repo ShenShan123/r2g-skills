@@ -2991,7 +2991,8 @@ update 触发，再建立 anti-forgetting、held-out regression 和 P14 C1-C8 li
 它只接受 `p13_eligible=true` 且逐 case `triggered=true` 的 typed trigger report，
 再由独立 manifest 提供逐 case `LocalizedUpdatePlan` 与 evidence。runner 以只读方式
 打开 source SQLite，调用 shadow executor 的内存 staging copy，逐条校验 plan/trigger
-campaign 与 digest witness，最后验证 source 文件字节 digest 未变并丢弃 staging；输出
+campaign 与 digest witness，并在打开 source 前预检所有非 `RETAIN` 计划的
+`AntiForgettingWitness` 四项 gate，最后验证 source 文件字节 digest 未变并丢弃 staging；输出
 `AppliedShadowUpdateReceipt`、source/manifest digest 和固定的
 `canonical_memory_mutation=none`、`production_runtime_imported=false`。因此该入口
 可以回放真正 eligible 的 P13 proposal，但不会写 canonical、lifecycle 或 production
