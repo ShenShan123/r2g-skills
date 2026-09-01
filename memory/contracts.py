@@ -186,13 +186,13 @@ class MemoryRoutingDecision:
             value = getattr(self, field_name)
             if type(value) is not int or value < 0:
                 raise ValueError(f"memory routing {field_name} must be a non-negative integer")
-        # Every decision retains an unbiased no-memory arm.  The second slot
-        # allowed by the APPLY policy may be a causal candidate; memory never
-        # consumes the complete candidate budget.
+        # Every decision retains an unbiased no-memory arm.  The memory plane
+        # has one slot at most; APPLY and CONSIDER differ by evidence and
+        # authority, not by injecting multiple memory candidates.
         if self.no_memory_budget < 1:
             raise ValueError("memory routing requires at least one no-memory candidate")
-        if self.memory_budget > 2:
-            raise ValueError("memory routing shadow budget allows at most two memory/causal candidates")
+        if self.memory_budget > 1:
+            raise ValueError("memory routing budget allows at most one memory candidate")
         if self.decision in {"ABSTAIN", "INAPPLICABLE", "NO_SKILL"} and self.memory_budget:
             raise ValueError(
                 f"{self.decision} cannot allocate a memory candidate budget")

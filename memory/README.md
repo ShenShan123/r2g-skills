@@ -2856,3 +2856,32 @@ efficacy、support-routing 和 action32 calibration 报告的实际审计结果�
 receipt replay 还会独立校验 gate status、`eligible` 合取、证据引用格式和
 `production_integration=not_attempted`；即使调用方移除 digest，也不能通过结构化字段
 篡改来伪造 production authority。
+
+### 2026-09-01 P10 semantic repair（shadow/evaluation-only）
+
+知识修订现在区分 same-claim 与 identity-changing structural revision：只有
+`REVISE` 保留 `knowledge_id`、递增 version 并产生 `SUPERSEDES`；`SPECIALIZE` /
+`GENERALIZE` 强制新 identity 并分别产生 `SPECIALIZES` / `GENERALIZES`，因此语义
+关系不会错误地从 current-valid-state 中压制父 claim。新增 `split_knowledge()` 与
+`merge_knowledge()`，前者要求每个 child 的 partition witness，后者要求每个 parent
+的 multi-parent witness；两者均只写不可变 shadow relation，不授予 authority。
+
+P1 relation resolver 现在显式区分 informational、state-affecting 和 conflict 三类。
+informational edge（`DERIVED_FROM`、`SPECIALIZES` 等）在 production replay 中不需要
+authority，也不改变 active set；state-affecting edge 仍必须绑定可验证 authority，
+否则 production fail-closed；`CONTRADICTS` 两端同时 active 时保持 unresolved。
+新增 `RelationAuthorityReceipt` 作为独立的 relation→authority 审计边界。
+
+fixture manifest binder 已明确标记 `binding_source=fixture_manifest`、
+`runtime_eligible=false`。新增 `bind_asset_to_repair_context()` 只接受 RTL 结构、
+failure/config/reports、Mechanism Knowledge 和 localization receipt，拒绝 `fix`、
+gold patch、repaired RTL、held-out answer 等字段；结构歧义返回不 eligible 的
+`RuntimeBindingReceipt`，不会触碰 canonical/lifecycle/production runtime。
+
+P5/P6 routing receipt 的 memory advisor 上限统一为 1；历史调用传入的 2 仅用于保持
+总候选预算账本兼容，实际决策永远不会分配两个 memory candidate。P10 回归新增覆盖
+semantic specialization、split/merge witnesses、informational relation firewall、
+gold-leakage-safe runtime binding 与 ambiguity abstention；`memory/docs/` 仍由
+`.gitignore` 排除，不进入 release commit。后续依赖顺序仍为 P11 structured candidate、
+P12 real candidate execution、P13 shadow online update、P14 capability causal chain，
+在这些真实 evidence 完成前 production routing 继续关闭。

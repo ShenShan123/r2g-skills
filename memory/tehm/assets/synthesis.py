@@ -19,7 +19,7 @@ from tehm.rtl.rtl_actions import RTL_ACTION_DOMAINS
 from tehm.rtl.verilog_parse import parse_verilog
 
 from .registry import register_asset
-from .receipts import CapabilityGapReceipt, AssetReceipt
+from .receipts import CapabilityGapReceipt, AssetReceipt, RuntimeBindingReceipt
 
 RTL_ASSET_VERSION = "rtl-rewrite-asset-v0.1"
 
@@ -223,16 +223,113 @@ def bind_rtl_asset_to_project(asset: Mapping, project: Path | str, *,
         "bound_design": manifest.get("design"),
         "bound_mechanism_family": manifest.get("mechanism_family"),
         "binding_contract": "manifest_fix_v1",
+        "binding_source": "fixture_manifest",
+        "runtime_eligible": False,
         "binding_digest": binding_digest,
     })
     bound["provenance"] = provenance
     return bound
 
 
+_GOLD_KEYS = frozenset({"fix", "gold_patch", "repaired_rtl", "heldout_answer"})
+
+
+def _contains_gold_key(value: object) -> bool:
+    if isinstance(value, Mapping):
+        return any(key in _GOLD_KEYS or _contains_gold_key(item)
+                   for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(_contains_gold_key(item) for item in value)
+    return False
+
+
+def bind_asset_to_repair_context(
+    asset: Mapping, mechanism_knowledge: Mapping | object,
+    repair_context: Mapping | object, localization_receipt: Mapping,
+) -> RuntimeBindingReceipt:
+    """Bind an asset using only live structural/failure evidence.
+
+    Unlike :func:`bind_rtl_asset_to_project`, this API never reads a project
+    manifest and rejects all known gold-answer fields. Ambiguous structural
+    matches fail closed and return an ineligible receipt.
+    """
+    if not isinstance(asset, Mapping):
+        raise TypeError("asset must be a mapping")
+    if _contains_gold_key(asset) or _contains_gold_key(mechanism_knowledge):
+        raise ValueError("runtime binding rejects gold-answer fields")
+    if not isinstance(localization_receipt, Mapping) or _contains_gold_key(localization_receipt):
+        raise ValueError("runtime localization receipt is malformed or contains gold data")
+    context = (repair_context.to_dict() if hasattr(repair_context, "to_dict")
+               else dict(repair_context) if isinstance(repair_context, Mapping) else None)
+    if context is None or _contains_gold_key(context):
+        raise ValueError("runtime repair context is malformed or contains gold data")
+    knowledge = (mechanism_knowledge.to_dict()
+                 if hasattr(mechanism_knowledge, "to_dict") else dict(mechanism_knowledge)
+                 if isinstance(mechanism_knowledge, Mapping) else None)
+    if knowledge is None:
+        raise TypeError("mechanism_knowledge must be a claim or mapping")
+    knowledge_id = str(knowledge.get("object_id") or
+                      f"{knowledge.get('knowledge_id')}@{knowledge.get('version')}" )
+    target_design = str(context.get("design_id") or "")
+    if not target_design:
+        raise ValueError("runtime binding requires repair_context.design_id")
+    definition = asset.get("definition")
+    action = definition.get("action") if isinstance(definition, Mapping) else None
+    payload = action.get("payload") if isinstance(action, Mapping) else None
+    if not isinstance(payload, Mapping):
+        raise ValueError("asset definition.action.payload is missing")
+    graph = context.get("structural_graph") or {}
+    nodes = graph.get("nodes") if isinstance(graph, Mapping) else None
+    module_candidates = tuple(sorted(str(node.get("label")) for node in (nodes or ())
+                                     if isinstance(node, Mapping) and node.get("kind") == "module"
+                                     and node.get("label")))
+    local_binding = localization_receipt.get("selected_binding")
+    if not isinstance(local_binding, Mapping):
+        local_binding = {}
+    selected = dict(local_binding)
+    if "module" in payload and payload.get("module"):
+        selected.setdefault("module", payload["module"])
+    if "module" not in selected:
+        if len(module_candidates) != 1:
+            digest = "sha256:" + hashlib.sha256(stable_dumps({
+                "asset_id": asset.get("asset_id"), "knowledge_id": knowledge_id,
+                "target_design": target_design, "candidates": module_candidates,
+            }).encode()).hexdigest()
+            return RuntimeBindingReceipt(
+                asset_id=asset.get("asset_id"), knowledge_id=knowledge_id,
+                target_design=target_design, candidate_entities=module_candidates,
+                selected_binding={}, structural_evidence=tuple(module_candidates),
+                failure_evidence=tuple(sorted(str(key) for key in
+                                              (context.get("reports") or {}).keys())),
+                ambiguity_count=max(1, len(module_candidates)), eligible=False,
+                reason="ambiguous_structural_binding", binding_digest=digest)
+        selected["module"] = module_candidates[0]
+    forbidden = _GOLD_KEYS & set(selected)
+    if forbidden:
+        raise ValueError("runtime binding selected binding contains gold-answer fields")
+    structural = tuple(sorted(set(module_candidates) | {
+        str(value) for value in selected.values() if isinstance(value, str) and value}))
+    failure = tuple(sorted(set(str(key) for key in (context.get("reports") or {}).keys()) |
+                           set(str(key) for key in (context.get("cfg") or {}).keys()) |
+                           set(str(key) for key in localization_receipt.keys())))
+    digest = "sha256:" + hashlib.sha256(stable_dumps({
+        "asset_id": asset.get("asset_id"), "knowledge_id": knowledge_id,
+        "target_design": target_design, "selected_binding": selected,
+        "structural_evidence": structural, "failure_evidence": failure,
+    }).encode()).hexdigest()
+    return RuntimeBindingReceipt(
+        asset_id=asset.get("asset_id"), knowledge_id=knowledge_id,
+        target_design=target_design, candidate_entities=module_candidates,
+        selected_binding=selected, structural_evidence=structural,
+        failure_evidence=failure, ambiguity_count=0, eligible=True,
+        reason="runtime_binding_resolved", binding_digest=digest)
+
+
 synthesize_rtl_asset = build_rtl_asset_proposal
 synthesize_asset = build_rtl_asset_proposal
 
 
-__all__ = ["AssetProposal", "RTL_ASSET_VERSION", "bind_rtl_asset_to_project",
+__all__ = ["AssetProposal", "RTL_ASSET_VERSION", "RuntimeBindingReceipt",
+           "bind_asset_to_repair_context", "bind_rtl_asset_to_project",
            "build_rtl_asset_proposal", "register_asset_proposal",
            "synthesize_asset", "synthesize_rtl_asset"]

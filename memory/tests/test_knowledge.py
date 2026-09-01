@@ -14,7 +14,7 @@ from tehm.knowledge import (
     MechanismKnowledge, build_knowledge_from_path, evaluate_applicability,
     evaluate_knowledge_authority, ensure_knowledge_schema, get_knowledge,
     get_knowledge_status, register_knowledge, resolve_knowledge,
-    revise_knowledge, set_knowledge_status,
+    merge_knowledge, revise_knowledge, set_knowledge_status, split_knowledge,
 )
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 from tehm.state import StateResolutionError
@@ -196,6 +196,67 @@ def test_revision_registers_child_and_shadow_supersession(tmp_tehm):
     assert parent.object_id not in resolved.active_knowledge
     assert get_knowledge_status(
         conn, knowledge_id=child.knowledge_id, version=2)["status"] == "shadow"
+
+
+def test_structural_specialization_changes_identity_and_preserves_parent(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    parent = _claim(knowledge_id="mk_structural_parent")
+    register_knowledge(conn, parent, evidence_refs=[])
+    child = replace(parent, knowledge_id="mk_structural_child", version=1,
+                    intervention={"family": "GUARD_RESTORE", "variant": "narrow"})
+    receipt = revise_knowledge(
+        conn, parent_object_id=parent.object_id, replacement=child,
+        operation="SPECIALIZE", evidence_refs=[{
+            "evidence_type": "manual_review", "evidence_id": "specialize-witness",
+            "split": "training", "lineage_id": "lineage-a",
+            "evidence_level": "L1_EXECUTED_INTERVENTION",
+        }])
+    assert receipt.operation == "SPECIALIZE"
+    relation = conn.execute(
+        "SELECT relation_type FROM tehm_memory_relations WHERE relation_id=?",
+        (receipt.relation_id,)).fetchone()
+    assert relation[0] == "SPECIALIZES"
+    resolved = resolve_knowledge(conn, {
+        "target_scope": "global", "mechanism_family": parent.mechanism_family,
+        "compatibility_profile": parent.compatibility_profile,
+    })
+    assert set(resolved.active_knowledge) == {parent.object_id, child.object_id}
+
+
+def test_split_and_merge_require_partition_and_multi_parent_witness(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    parent = _claim(knowledge_id="mk_split_parent")
+    register_knowledge(conn, parent, evidence_refs=[])
+    child_a = replace(parent, knowledge_id="mk_split_a", version=1,
+                      intervention={"family": "GUARD_RESTORE", "variant": "a"})
+    child_b = replace(parent, knowledge_id="mk_split_b", version=1,
+                      intervention={"family": "GUARD_RESTORE", "variant": "b"})
+    with pytest.raises(ValueError, match="partition witness"):
+        split_knowledge(conn, parent_object_id=parent.object_id,
+                        children=(child_a, child_b), partition_evidence={})
+    split = split_knowledge(
+        conn, parent_object_id=parent.object_id, children=(child_a, child_b),
+        partition_evidence={child_a.object_id: ("partition-a",),
+                            child_b.object_id: ("partition-b",)},
+        evidence_refs=[])
+    assert len(split.relation_ids) == 2
+    parent_b = replace(parent, knowledge_id="mk_merge_parent", version=1,
+                       intervention={"family": "GUARD_RESTORE", "variant": "parent-b"})
+    register_knowledge(conn, parent_b, evidence_refs=[])
+    merged = replace(parent, knowledge_id="mk_merged", version=1,
+                     intervention={"family": "GUARD_RESTORE", "variant": "merged"})
+    with pytest.raises(ValueError, match="witness"):
+        merge_knowledge(conn, parent_object_ids=(parent.object_id, parent_b.object_id),
+                        replacement=merged)
+    receipt = merge_knowledge(
+        conn, parent_object_ids=(parent.object_id, parent_b.object_id),
+        replacement=merged,
+        merge_witness={parent.object_id: ("merge-a",),
+                       parent_b.object_id: ("merge-b",)}, evidence_refs=[])
+    assert len(receipt.relation_ids) == 2
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_memory_relations WHERE relation_type='GENERALIZES'"
+    ).fetchone()[0] == 2
 
 
 def test_knowledge_schema_is_lazy_and_keeps_v4_version(tmp_path):

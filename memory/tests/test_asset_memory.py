@@ -8,7 +8,8 @@ from unittest.mock import patch
 import pytest
 
 from tehm.assets import (
-    bind_rtl_asset_to_project, build_rtl_asset_proposal, detect_capability_gaps,
+    bind_asset_to_repair_context, bind_rtl_asset_to_project,
+    build_rtl_asset_proposal, detect_capability_gaps,
     evaluate_asset_authority, get_asset, register_asset_proposal, set_asset_status,
     validate_rtl_asset_project, validate_rtl_rewrite_asset,
 )
@@ -167,6 +168,38 @@ def test_asset_binding_reuses_typed_manifest_slots_across_lineages(tmp_tehm):
         bound, PROJECTS / "req_ack_bug2", oracle=oracle)
     assert receipt.status == "SHADOW_ORACLE_PASS"
     assert receipt.independent_verifier is True
+
+
+def test_runtime_binding_uses_live_structure_and_rejects_gold_fields(tmp_tehm):
+    proposal = _proposal().to_dict()
+    context = {
+        "design_id": "live-design",
+        "structural_graph": {"nodes": [{"kind": "module", "label": "req_ack_fsm"}]},
+        "reports": {"target_test": "FAIL"}, "cfg": {"top": "req_ack_fsm"},
+    }
+    receipt = bind_asset_to_repair_context(
+        proposal, {"knowledge_id": "mk_live", "version": 1}, context,
+        {"selected_binding": {"module": "req_ack_fsm"},
+         "failure_signature": {"signal": "ack"}})
+    assert receipt.eligible is True
+    assert receipt.selected_binding["module"] == "req_ack_fsm"
+    assert "fix" not in receipt.to_dict()
+    with pytest.raises(ValueError, match="gold"):
+        bind_asset_to_repair_context(
+            {**proposal, "fix": {"target": "gold"}},
+            {"knowledge_id": "mk_live", "version": 1}, context, {})
+
+
+def test_runtime_binding_abstains_on_ambiguous_modules(tmp_tehm):
+    proposal = _proposal().to_dict()
+    proposal["definition"]["action"]["payload"].pop("module")
+    receipt = bind_asset_to_repair_context(
+        proposal, {"knowledge_id": "mk_live", "version": 1},
+        {"design_id": "ambiguous", "structural_graph": {"nodes": [
+            {"kind": "module", "label": "a"}, {"kind": "module", "label": "b"}]}},
+        {})
+    assert receipt.eligible is False
+    assert receipt.ambiguity_count == 2
 
 
 def test_asset_binding_rejects_incompatible_mechanism(tmp_tehm):

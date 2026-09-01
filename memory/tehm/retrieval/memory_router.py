@@ -144,7 +144,7 @@ def _budget(no_memory_budget: object, memory_budget: object) -> tuple[int, int, 
             "memory routing requires at least one no-memory candidate")
     if memory > 2:
         raise MemoryRouterError(
-            "memory routing shadow budget allows at most two memory/causal candidates")
+            "memory routing request allows at most two legacy slots")
     return no, memory, no + memory
 
 
@@ -406,8 +406,12 @@ def route_memory(
     if mode != "shadow":
         raise StateResolutionError(
             "P5 memory router is shadow-only; production routing is not established")
-    no_budget, memory_capacity, total_budget = _budget(
+    no_budget, requested_memory, total_budget = _budget(
         no_memory_budget, memory_budget)
+    # P5/P6 normalization: one memory-advisor slot is the maximum.  Accept a
+    # historical request of two only to preserve total candidate accounting in
+    # old receipts; no decision can allocate or emit two memory candidates.
+    memory_capacity = min(requested_memory, 1)
     del no_budget  # allocation is recomputed for the selected decision below
     plan = _query_plan(query)
     typed_query = (query if isinstance(query, MemoryQuery) else
@@ -525,10 +529,10 @@ def route_memory(
     risk = _risk(claims=claims, assets=asset_summary, state=state)
     selected_rules = _rule_ids(conn, typed_query, state)
     binding_assets = set(asset_summary["binding_resolvable_assets"])
-    if (memory_capacity >= 2 and promoted_authorized and
+    if (memory_capacity >= 1 and promoted_authorized and
             set(promoted_authorized) <= binding_assets and path_ids):
         decision = "APPLY"
-        allocated_memory = 2
+        allocated_memory = 1
         allocated_no_memory = max(1, total_budget - allocated_memory)
         selected_assets = tuple(promoted_authorized)
         reasons: tuple[str, ...] = ()

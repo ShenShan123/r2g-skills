@@ -81,6 +81,20 @@ def test_relation_replay_and_scope_aware_supersession_are_shadow_only(tmp_tehm):
     assert other.suppressed == ()
 
 
+def test_informational_relation_is_not_authority_gated_or_suppressing(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    _rule(conn, "rule-a")
+    _rule(conn, "rule-b")
+    relation = record_relation(
+        conn, source_type="rule", source_id="rule-b", relation_type="SPECIALIZES",
+        target_type="rule", target_id="rule-a", evidence_refs=("semantic-witness",))
+    state = resolve_current_state(conn, {"target_scope": "global"},
+                                  mode="production", persist=False)
+    assert set(state.active_rules) == {"rule-a", "rule-b"}
+    assert state.suppressed == ()
+    assert relation.relation_id in state.shadow_relation_ids
+
+
 def test_relation_cycle_is_fail_closed(tmp_tehm):
     conn, _, _ = tmp_tehm
     _rule(conn, "rule-a")

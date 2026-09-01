@@ -120,5 +120,42 @@ class AssetAuthorityReceipt:
         }
 
 
+@dataclass(frozen=True)
+class RuntimeBindingReceipt:
+    """Gold-leakage-safe binding receipt for a live repair context.
+
+    This receipt records a selection from RTL structure and observed failure
+    evidence. It intentionally carries no repaired RTL, manifest fix, or
+    held-out answer and never mutates the asset registry.
+    """
+
+    asset_id: str | None
+    knowledge_id: str
+    target_design: str
+    candidate_entities: tuple[str, ...]
+    selected_binding: dict
+    structural_evidence: tuple[str, ...]
+    failure_evidence: tuple[str, ...]
+    ambiguity_count: int
+    eligible: bool
+    reason: str
+    binding_digest: str
+
+    def to_dict(self) -> dict:
+        return {
+            "asset_id": self.asset_id,
+            "knowledge_id": self.knowledge_id,
+            "target_design": self.target_design,
+            "candidate_entities": list(self.candidate_entities),
+            "selected_binding": dict(self.selected_binding),
+            "structural_evidence": list(self.structural_evidence),
+            "failure_evidence": list(self.failure_evidence),
+            "ambiguity_count": self.ambiguity_count,
+            "eligible": self.eligible,
+            "reason": self.reason,
+            "binding_digest": self.binding_digest,
+        }
+
+
 __all__ = ["AssetAuthorityReceipt", "AssetReceipt", "CapabilityGapReceipt",
-           "AssetValidationReceipt", "AssetPromotionReceipt"]
+           "AssetValidationReceipt", "AssetPromotionReceipt", "RuntimeBindingReceipt"]

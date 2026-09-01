@@ -86,6 +86,9 @@ class KnowledgeRevisionReceipt:
     relation_id: str
     authority_ref: str | None
     shadow_only: bool
+    relation_ids: tuple[str, ...] = field(default_factory=tuple)
+    parent_object_ids: tuple[str, ...] = field(default_factory=tuple)
+    child_object_ids: tuple[str, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict:
         return {
@@ -93,11 +96,37 @@ class KnowledgeRevisionReceipt:
             "child_object_id": self.child_object_id,
             "operation": self.operation, "relation_id": self.relation_id,
             "authority_ref": self.authority_ref, "shadow_only": self.shadow_only,
+            "relation_ids": list(self.relation_ids or (self.relation_id,)),
+            "parent_object_ids": list(self.parent_object_ids or (self.parent_object_id,)),
+            "child_object_ids": list(self.child_object_ids or (self.child_object_id,)),
+        }
+
+
+@dataclass(frozen=True)
+class KnowledgeStructuralRevisionReceipt:
+    """Receipt for a split or merge with multiple relation edges."""
+
+    operation: str
+    parent_object_ids: tuple[str, ...]
+    child_object_ids: tuple[str, ...]
+    relation_ids: tuple[str, ...]
+    authority_ref: str | None
+    shadow_only: bool
+
+    def to_dict(self) -> dict:
+        return {
+            "operation": self.operation,
+            "parent_object_ids": list(self.parent_object_ids),
+            "child_object_ids": list(self.child_object_ids),
+            "relation_ids": list(self.relation_ids),
+            "authority_ref": self.authority_ref,
+            "shadow_only": self.shadow_only,
         }
 
 
 __all__ = [
     "KnowledgeApplicabilityReceipt", "KnowledgeAuthorityReceipt",
     "KnowledgeResolutionReceipt", "KnowledgeRevisionReceipt",
+    "KnowledgeStructuralRevisionReceipt",
     "MechanismKnowledgeReceipt",
 ]

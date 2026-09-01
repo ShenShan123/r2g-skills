@@ -24,6 +24,9 @@ from .receipts import ResolvedMemoryState, SuppressionReceipt, StateResolutionRe
 from .relations import MemoryRelation, load_relations
 from .schema import ensure_state_schema
 from .validation import normalize_scope, parse_json_array, parse_json_object
+from .validation import (
+    CONFLICT_RELATIONS, INFORMATIONAL_RELATIONS, STATE_AFFECTING_RELATIONS,
+)
 
 
 RESOLVER_VERSION = "state-resolver-v0.1"
@@ -117,6 +120,14 @@ def _authority_ref_valid(conn: sqlite3.Connection, relation: MemoryRelation,
 
 def _validate_authority(conn: sqlite3.Connection, relation: MemoryRelation,
                         requested_scope: dict, mode: str) -> bool:
+    # Informational and conflict edges are never authority-gated.  A conflict
+    # is handled below as an unresolved simultaneous-active state; semantic
+    # edges explain lineage without changing the active set.
+    if relation.relation_type in INFORMATIONAL_RELATIONS | CONFLICT_RELATIONS:
+        return False
+    if relation.relation_type not in STATE_AFFECTING_RELATIONS:
+        raise StateResolutionError(
+            f"unsupported relation authority class: {relation.relation_type}")
     if relation.authority_ref is None:
         if mode == "production":
             raise StateResolutionError(

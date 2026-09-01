@@ -6,6 +6,53 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class RelationAuthorityReceipt:
+    """Replayable authority decision for one state-affecting relation.
+
+    The relation table remains an immutable evidence edge.  This receipt is a
+    separate typed boundary documenting whether an authority decision permits
+    the edge to affect a requested scope; it never mutates lifecycle rows.
+    """
+
+    relation_id: str
+    authority_type: str
+    eligible: bool
+    evidence_refs: tuple[str, ...]
+    replay_digest: str
+    scope: dict
+    approved_effect: str | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.relation_id) is not str or not self.relation_id:
+            raise ValueError("relation authority relation_id is required")
+        if type(self.authority_type) is not str or not self.authority_type:
+            raise ValueError("relation authority authority_type is required")
+        if type(self.eligible) is not bool:
+            raise ValueError("relation authority eligible must be boolean")
+        if not isinstance(self.evidence_refs, tuple) or any(
+                type(item) is not str or not item for item in self.evidence_refs):
+            raise ValueError("relation authority evidence_refs are invalid")
+        if type(self.replay_digest) is not str or not self.replay_digest:
+            raise ValueError("relation authority replay_digest is required")
+        if not isinstance(self.scope, dict):
+            raise ValueError("relation authority scope must be an object")
+        if self.approved_effect is not None and self.approved_effect not in {
+                "suppress_target", "retire_source", "replace_source"}:
+            raise ValueError("relation authority approved_effect is invalid")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "relation_id": self.relation_id,
+            "authority_type": self.authority_type,
+            "eligible": self.eligible,
+            "evidence_refs": list(self.evidence_refs),
+            "replay_digest": self.replay_digest,
+            "scope": dict(self.scope),
+            "approved_effect": self.approved_effect,
+        }
+
+
+@dataclass(frozen=True)
 class MemoryRelationReceipt:
     relation_id: str
     relation_type: str
@@ -102,6 +149,7 @@ class StateResolutionReceipt:
 
 
 __all__ = [
-    "MemoryRelationReceipt", "ResolvedMemoryState", "StateResolutionReceipt",
+    "MemoryRelationReceipt", "RelationAuthorityReceipt", "ResolvedMemoryState",
+    "StateResolutionReceipt",
     "SuppressionReceipt",
 ]

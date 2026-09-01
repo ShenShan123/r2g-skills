@@ -13,6 +13,18 @@ RELATION_TYPES = frozenset({
     "SUPERSEDES", "INVALIDATES", "CONTRADICTS", "RETIRES",
     "REPLACED_BY", "SUPPORTED_BY", "REFUTED_BY",
 })
+# Relation semantics are deliberately independent from object lifecycle
+# status.  Only state-affecting relations may alter the derived current-valid
+# set, and those relations require an authority receipt when resolved for
+# production.  Informational/semantic edges remain explanatory lineage.
+INFORMATIONAL_RELATIONS = frozenset({
+    "DERIVED_FROM", "DEPENDS_ON", "SPECIALIZES", "GENERALIZES",
+    "SUPPORTED_BY", "REFUTED_BY",
+})
+STATE_AFFECTING_RELATIONS = frozenset({
+    "SUPERSEDES", "INVALIDATES", "RETIRES", "REPLACED_BY",
+})
+CONFLICT_RELATIONS = frozenset({"CONTRADICTS"})
 OBJECT_TYPES = frozenset({
     "state", "transition", "episode", "rule", "causal_path", "knowledge",
     "asset", "capability", "activation", "relation",
@@ -117,7 +129,8 @@ def parse_json_array(raw, field: str) -> list:
 
 
 __all__ = [
-    "OBJECT_TYPES", "RELATION_TYPES", "RELATION_SCHEMA_FIELDS",
+    "CONFLICT_RELATIONS", "INFORMATIONAL_RELATIONS", "OBJECT_TYPES",
+    "RELATION_TYPES", "RELATION_SCHEMA_FIELDS", "STATE_AFFECTING_RELATIONS",
     "normalize_scope", "normalize_evidence_refs", "parse_json_array",
     "parse_json_object", "relation_content", "relation_digest",
     "validate_object_type", "validate_relation_type",
