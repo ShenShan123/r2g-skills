@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import replace
 
 import pytest
 
@@ -21,6 +22,7 @@ from tehm.evaluation.candidate_executor import (
 )
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 from tehm.rtl.rtl_oracle import IcarusOracle
+from tehm.knowledge import MechanismKnowledge, register_knowledge
 
 
 PROJECTS = Path(__file__).resolve().parent / "fixtures" / "rtl_projects"
@@ -59,14 +61,44 @@ def _capture(tmp_tehm, name: str, *, oracle=None) -> str:
 
 
 def _plan(transition_id: str, target: str, operation: str, *, refs=(),
-          state_resolution_id=None, learner_eligible=True) -> LocalizedUpdatePlan:
+          state_resolution_id=None, learner_eligible=True, knowledge_refs=()) -> LocalizedUpdatePlan:
     return LocalizedUpdatePlan(
         transition_id=transition_id, campaign_id="live",
         learner_eligible=learner_eligible, priority="P1_HIGH", value_score=0.8,
         update_target=target, candidate_targets=(target,), operation=operation,
         failure_type="STATE_RESOLUTION_FAILURE", evidence_refs=tuple(refs),
-        state_resolution_id=state_resolution_id, rationale="P13 shadow test",
+        state_resolution_id=state_resolution_id, knowledge_refs=tuple(knowledge_refs),
+        rationale="P13 shadow test",
     )
+
+
+def _knowledge_claim(knowledge_id: str, *, version: int = 1,
+                     intervention: dict | None = None) -> MechanismKnowledge:
+    return MechanismKnowledge(
+        knowledge_id=knowledge_id, version=version,
+        mechanism_family="HANDSHAKE_COMPLETION",
+        compatibility_profile="rtl.fsm.single_guard.v1",
+        antecedent={"failure": "completion_not_observed"},
+        intervention=intervention or {"family": "GUARD_RESTORE"},
+        mediated_effects=({"effect": "legal_transition"},),
+        expected_outcome={"outcome": "PASS"},
+        positive_applicability=({
+            "mechanism_family": "HANDSHAKE_COMPLETION",
+            "compatibility_profile": "rtl.fsm.single_guard.v1",
+        },),
+        negative_applicability=(), preserved_obligations=("target_trace_pass",),
+        known_failure_modes=("ambiguous_target_binding",),
+        causal_path_ids=("causal_path_p13",),
+        evidence_level="L2_CONTROLLED_INTERVENTION",
+        support_lineages=("lineage-p13",), status="shadow")
+
+
+def _register_shadow_knowledge(conn, claim: MechanismKnowledge) -> None:
+    register_knowledge(conn, claim, evidence_refs=[{
+        "evidence_type": "manual_review", "evidence_id": "seed-" + claim.knowledge_id,
+        "split": "training", "lineage_id": "lineage-p13",
+        "evidence_level": claim.evidence_level,
+    }])
 
 
 def test_relation_update_is_applied_then_discarded(tmp_tehm):
@@ -328,3 +360,149 @@ def test_mutating_shadow_update_requires_eligible_anti_forgetting_witness(tmp_te
                 "compatibility": {"mechanism_family": "RTL_REPAIR"},
             }
         })
+
+
+def _typed_knowledge_evidence(witness: AntiForgettingWitness, claim_payload: dict,
+                              *, transition_id: str, parent_ids=(), extra=None) -> dict:
+    evidence = {
+        "transition_ids": [transition_id],
+        **_anti_evidence(witness),
+        "knowledge": claim_payload,
+        "knowledge_evidence_refs": [{
+            "evidence_type": "p13_reason", "evidence_id": "reason-" + claim_payload["knowledge_id"],
+            "split": "training", "lineage_id": "lineage-p13",
+            "evidence_level": claim_payload["evidence_level"],
+        }],
+    }
+    if parent_ids:
+        evidence["parent_object_ids"] = list(parent_ids)
+    if extra:
+        evidence.update(extra)
+    return evidence
+
+
+def _verified_shadow_transition(tmp_tehm):
+    oracle = IcarusOracle()
+    if not oracle.available:
+        pytest.skip("Icarus unavailable")
+    return _capture(tmp_tehm, "req_ack_bug", oracle=oracle)
+
+
+def test_shadow_knowledge_revise_and_specialize_are_typed_and_discarded(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    transition_id = _verified_shadow_transition(tmp_tehm)
+    parent = _knowledge_claim("p13-parent")
+    _register_shadow_knowledge(conn, parent)
+    before_knowledge = conn.execute(
+        "SELECT COUNT(*) FROM tehm_mechanism_knowledge").fetchone()[0]
+    before_relations = conn.execute(
+        "SELECT COUNT(*) FROM tehm_memory_relations").fetchone()[0]
+    witness = _anti_forgetting("knowledge-revise")
+    child = replace(parent, version=2,
+                    intervention={"family": "GUARD_RESTORE", "variant": "revised"})
+    plan = _plan(
+        transition_id, "UPDATE_CAUSAL_KNOWLEDGE", "REVISE",
+        refs=(transition_id, witness.receipt_digest),
+        knowledge_refs=(parent.object_id,))
+    receipt = apply_localized_update_shadow(
+        plan, conn,
+        _typed_knowledge_evidence(witness, child.to_dict(),
+                                  transition_id=transition_id,
+                                  parent_ids=(parent.object_id,)))
+    assert f"knowledge:{child.object_id}" in receipt.created_object_ids
+    assert receipt.created_relation_ids
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_mechanism_knowledge").fetchone()[0] == before_knowledge
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_memory_relations").fetchone()[0] == before_relations
+
+    specialize = replace(parent, knowledge_id="p13-specialized", version=1,
+                         intervention={"family": "GUARD_RESTORE", "variant": "narrow"})
+    witness = _anti_forgetting("knowledge-specialize")
+    plan = _plan(
+        transition_id, "UPDATE_CAUSAL_KNOWLEDGE", "SPECIALIZE",
+        refs=(transition_id, witness.receipt_digest),
+        knowledge_refs=(parent.object_id,))
+    receipt = apply_localized_update_shadow(
+        plan, conn,
+        _typed_knowledge_evidence(witness, specialize.to_dict(),
+                                  transition_id=transition_id,
+                                  parent_ids=(parent.object_id,)))
+    assert f"knowledge:{specialize.object_id}" in receipt.created_object_ids
+    assert receipt.created_relation_ids
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_mechanism_knowledge").fetchone()[0] == before_knowledge
+
+
+def test_shadow_knowledge_split_and_merge_require_explicit_witnesses(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    transition_id = _verified_shadow_transition(tmp_tehm)
+    parent = _knowledge_claim("p13-split-parent")
+    _register_shadow_knowledge(conn, parent)
+    child_a = replace(parent, knowledge_id="p13-split-a", version=1,
+                      intervention={"family": "GUARD_RESTORE", "variant": "a"})
+    child_b = replace(parent, knowledge_id="p13-split-b", version=1,
+                      intervention={"family": "GUARD_RESTORE", "variant": "b"})
+    witness = _anti_forgetting("knowledge-split")
+    split_plan = _plan(
+        transition_id, "UPDATE_CAUSAL_KNOWLEDGE", "SPLIT",
+        refs=(transition_id, witness.receipt_digest),
+        knowledge_refs=(parent.object_id,))
+    split_evidence = _typed_knowledge_evidence(
+        witness, child_a.to_dict(), transition_id=transition_id,
+        parent_ids=(parent.object_id,), extra={
+            "knowledge_children": [child_a.to_dict(), child_b.to_dict()],
+            "partition_evidence": {
+                child_a.object_id: ["partition-a"],
+                child_b.object_id: ["partition-b"],
+            },
+        })
+    receipt = apply_localized_update_shadow(split_plan, conn, split_evidence)
+    assert {f"knowledge:{child.object_id}" for child in (child_a, child_b)} <= set(
+        receipt.created_object_ids)
+    assert len(receipt.created_relation_ids) == 2
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_mechanism_knowledge").fetchone()[0] == 1
+
+    parent_b = _knowledge_claim("p13-merge-parent")
+    _register_shadow_knowledge(conn, parent_b)
+    merged = replace(parent, knowledge_id="p13-merged", version=1,
+                     intervention={"family": "GUARD_RESTORE", "variant": "merged"})
+    witness = _anti_forgetting("knowledge-merge")
+    merge_plan = _plan(
+        transition_id, "UPDATE_CAUSAL_KNOWLEDGE", "MERGE",
+        refs=(transition_id, witness.receipt_digest),
+        knowledge_refs=(parent.object_id, parent_b.object_id))
+    merge_evidence = _typed_knowledge_evidence(
+        witness, merged.to_dict(), transition_id=transition_id,
+        parent_ids=(parent.object_id, parent_b.object_id), extra={
+            "merge_witness": {
+                parent.object_id: ["merge-a"],
+                parent_b.object_id: ["merge-b"],
+            },
+        })
+    receipt = apply_localized_update_shadow(merge_plan, conn, merge_evidence)
+    assert f"knowledge:{merged.object_id}" in receipt.created_object_ids
+    assert len(receipt.created_relation_ids) == 2
+    assert conn.execute(
+        "SELECT COUNT(*) FROM tehm_mechanism_knowledge").fetchone()[0] == 2
+
+
+def test_shadow_knowledge_revision_rejects_validated_claim(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    transition_id = _verified_shadow_transition(tmp_tehm)
+    parent = _knowledge_claim("p13-status-parent")
+    _register_shadow_knowledge(conn, parent)
+    witness = _anti_forgetting("knowledge-status")
+    validated = replace(parent, knowledge_id="p13-status-child", version=1,
+                        status="validated")
+    plan = _plan(
+        transition_id, "UPDATE_CAUSAL_KNOWLEDGE", "SPECIALIZE",
+        refs=(transition_id, witness.receipt_digest),
+        knowledge_refs=(parent.object_id,))
+    with pytest.raises(ShadowUpdateError, match="cannot grant validated"):
+        apply_localized_update_shadow(
+            plan, conn,
+            _typed_knowledge_evidence(witness, validated.to_dict(),
+                                      transition_id=transition_id,
+                                      parent_ids=(parent.object_id,)))

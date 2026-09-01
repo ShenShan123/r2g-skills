@@ -22,6 +22,12 @@ from tehm.state.relations import record_relation
 from tehm.state.resolver import resolve_current_state
 from tehm.state.schema import ensure_state_schema
 from tehm.state.validation import RELATION_TYPES
+from tehm.knowledge import MechanismKnowledge
+from tehm.knowledge.revision import (
+    merge_knowledge,
+    revise_knowledge,
+    split_knowledge,
+)
 
 from .anti_forgetting import AntiForgettingWitness, raw_evidence_digest
 from .incremental_crystallize import crystallize_affected_groups
@@ -84,10 +90,20 @@ def _inventory(conn: sqlite3.Connection) -> set[str]:
     for object_type, (table, column) in tables.items():
         if not _table_exists(conn, table):
             continue
-        found.update(
-            f"{object_type}:{row[0]}"
-            for row in conn.execute(f"SELECT {column} FROM {table}")
-        )
+        if object_type == "knowledge":
+            # Knowledge versions are immutable objects.  Inventorying only
+            # knowledge_id would hide a same-claim REVISE because the new
+            # version intentionally keeps the stable claim identity.
+            found.update(
+                f"knowledge:{row['knowledge_id']}@{row['version']}"
+                for row in conn.execute(
+                    "SELECT knowledge_id, version FROM tehm_mechanism_knowledge")
+            )
+        else:
+            found.update(
+                f"{object_type}:{row[0]}"
+                for row in conn.execute(f"SELECT {column} FROM {table}")
+            )
     return found
 
 
@@ -145,6 +161,175 @@ def _verify_training_transitions(conn: sqlite3.Connection,
             require_verified_transition(conn, transition_id)
         except ValueError as exc:
             raise ShadowUpdateError(str(exc)) from exc
+
+
+def _knowledge_claim(value: object, name: str) -> MechanismKnowledge:
+    """Decode one immutable Knowledge claim for a shadow revision.
+
+    The evidence boundary accepts only the typed claim payload.  In
+    particular, a caller cannot smuggle an already validated/promoted status
+    through this P13 lane or rely on ``from_dict`` silently ignoring unknown
+    answer-like fields.
+    """
+    if not isinstance(value, Mapping):
+        raise ShadowUpdateError(f"shadow update {name} must be a Knowledge object")
+    forbidden = {"fix", "gold_patch", "repaired_rtl", "heldout_answer"}
+
+    def contains_forbidden(node: object) -> bool:
+        if isinstance(node, Mapping):
+            return any(key in forbidden or contains_forbidden(child)
+                       for key, child in node.items())
+        if isinstance(node, (list, tuple)):
+            return any(contains_forbidden(child) for child in node)
+        return False
+
+    if contains_forbidden(value):
+        raise ShadowUpdateError(f"shadow update {name} contains gold-answer fields")
+    try:
+        claim = MechanismKnowledge.from_dict(value)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise ShadowUpdateError(f"shadow update {name} is invalid: {exc}") from exc
+    if claim.status not in {"shadow", "candidate"}:
+        raise ShadowUpdateError(
+            f"shadow update {name} cannot grant validated/production status")
+    return claim
+
+
+def _knowledge_evidence_refs(evidence: Mapping) -> tuple[dict, ...] | None:
+    """Return explicit typed evidence refs for a Knowledge revision.
+
+    Revision APIs intentionally require evidence IDs.  P13 must not invent
+    split/lineage metadata from arbitrary plan strings, so callers performing
+    a structural Knowledge update must provide the mapping form explicitly.
+    """
+    raw = evidence.get("knowledge_evidence_refs")
+    if raw is None:
+        raise ShadowUpdateError(
+            "shadow update knowledge_evidence_refs are required")
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, (list, tuple)) or not raw:
+        raise ShadowUpdateError(
+            "shadow update knowledge_evidence_refs must be a non-empty sequence")
+    refs: list[dict] = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            raise ShadowUpdateError(
+                "shadow update knowledge evidence ref must be an object")
+        required = {"evidence_type", "evidence_id", "split"}
+        if not required <= set(item):
+            raise ShadowUpdateError(
+                "shadow update knowledge evidence ref is incomplete")
+        if item.get("split") != "training":
+            raise ShadowUpdateError(
+                "shadow update knowledge evidence must be training evidence")
+        refs.append(dict(item))
+    return tuple(refs)
+
+
+def _knowledge_parent_ids(plan: LocalizedUpdatePlan, evidence: Mapping,
+                          *, minimum: int = 1) -> tuple[str, ...]:
+    """Resolve and validate parent object IDs from the plan/evidence boundary."""
+    raw = evidence.get("parent_object_id")
+    if raw is None:
+        raw = evidence.get("parent_object_ids")
+    if raw is None:
+        raw = plan.knowledge_refs
+    if isinstance(raw, str):
+        raw = (raw,)
+    if not isinstance(raw, (list, tuple)):
+        raise ShadowUpdateError("shadow update knowledge parent IDs are required")
+    values = tuple(item.strip() if isinstance(item, str) else item for item in raw)
+    if any(type(item) is not str or not item for item in values):
+        raise ShadowUpdateError("shadow update knowledge parent IDs are invalid")
+    if len(set(values)) != len(values) or len(values) < minimum:
+        raise ShadowUpdateError("shadow update knowledge parent IDs are incomplete")
+    if plan.knowledge_refs and set(values) != set(plan.knowledge_refs):
+        raise ShadowUpdateError(
+            "shadow update knowledge parent IDs differ from plan knowledge_refs")
+    return tuple(values)
+
+
+def _apply_knowledge_revision(staging: sqlite3.Connection,
+                              plan: LocalizedUpdatePlan,
+                              evidence: Mapping) -> None:
+    """Apply a typed Knowledge revision only inside the staging database."""
+    operation = plan.operation
+    refs = _knowledge_evidence_refs(evidence)
+    target_scope = str(_scope(evidence).get("target_scope") or "global")
+    provenance = evidence.get("provenance")
+    if provenance is not None and not isinstance(provenance, Mapping):
+        raise ShadowUpdateError("shadow update knowledge provenance must be an object")
+
+    if operation in {"REVISE", "SPECIALIZE", "GENERALIZE"}:
+        parent_ids = _knowledge_parent_ids(plan, evidence)
+        replacement = _knowledge_claim(
+            evidence.get("knowledge", evidence.get("replacement")),
+            "knowledge")
+        if operation in {"SPECIALIZE", "GENERALIZE"} and replacement.knowledge_id in {
+                parent_ids[0].rsplit("@", 1)[0]}:
+            raise ShadowUpdateError(
+                f"shadow update {operation} must create a new Knowledge identity")
+        try:
+            revise_knowledge(
+                staging, parent_object_id=parent_ids[0], replacement=replacement,
+                operation=operation, target_scope=target_scope,
+                evidence_refs=refs, provenance=provenance, commit=False)
+        except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        return
+
+    if operation == "SPLIT":
+        parent_ids = _knowledge_parent_ids(plan, evidence)
+        raw_children = evidence.get("knowledge_children", evidence.get("children"))
+        if isinstance(raw_children, (str, bytes)) or not isinstance(raw_children, (list, tuple)):
+            raise ShadowUpdateError("shadow update knowledge split requires children")
+        children = tuple(_knowledge_claim(item, "knowledge child")
+                         for item in raw_children)
+        raw_partition = evidence.get("partition_evidence")
+        if not isinstance(raw_partition, Mapping):
+            raise ShadowUpdateError(
+                "shadow update knowledge split requires partition_evidence")
+        partition = {}
+        for child in children:
+            values = raw_partition.get(child.object_id)
+            if not isinstance(values, (list, tuple)) or not values:
+                raise ShadowUpdateError(
+                    "shadow update knowledge split partition is incomplete")
+            partition[child.object_id] = tuple(values)
+        try:
+            split_knowledge(
+                staging, parent_object_id=parent_ids[0], children=children,
+                target_scope=target_scope, partition_evidence=partition,
+                evidence_refs=refs, provenance=provenance, commit=False)
+        except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        return
+
+    if operation == "MERGE":
+        parent_ids = _knowledge_parent_ids(plan, evidence, minimum=2)
+        replacement = _knowledge_claim(
+            evidence.get("knowledge", evidence.get("replacement")),
+            "knowledge")
+        raw_witness = evidence.get("merge_witness")
+        if not isinstance(raw_witness, Mapping):
+            raise ShadowUpdateError("shadow update knowledge merge requires merge_witness")
+        witness = {}
+        for parent_id in parent_ids:
+            values = raw_witness.get(parent_id)
+            if not isinstance(values, (list, tuple)) or not values:
+                raise ShadowUpdateError(
+                    "shadow update knowledge merge witness is incomplete")
+            witness[parent_id] = tuple(values)
+        try:
+            merge_knowledge(
+                staging, parent_object_ids=parent_ids, replacement=replacement,
+                target_scope=target_scope, merge_witness=witness,
+                evidence_refs=refs, provenance=provenance, commit=False)
+        except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        return
+
+    raise ShadowUpdateError(
+        f"shadow update Knowledge operation is unsupported: {operation}")
 
 
 def _scope(evidence: Mapping) -> dict:
@@ -495,6 +680,15 @@ def _apply_plan(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
         raise ShadowUpdateError("shadow update target is invalid")
     if plan.operation == "RETAIN":
         raise ShadowUpdateError("mutating shadow target cannot use RETAIN")
+    if plan.update_target == "UPDATE_CAUSAL_KNOWLEDGE" and plan.operation in {
+            "REVISE", "SPECIALIZE", "GENERALIZE", "SPLIT", "MERGE"}:
+        # Structural Knowledge operations are distinct from rule
+        # crystallization.  They create immutable claim objects and semantic
+        # relation edges in staging; no lifecycle/authority row is promoted.
+        ids = _transition_ids(plan, evidence)
+        _verify_training_transitions(staging, ids, plan.campaign_id)
+        _apply_knowledge_revision(staging, plan, evidence)
+        return
     if plan.update_target in {"UPDATE_CAUSAL_KNOWLEDGE", "UPDATE_RULE"}:
         ids = _transition_ids(plan, evidence)
         _verify_training_transitions(staging, ids, plan.campaign_id)

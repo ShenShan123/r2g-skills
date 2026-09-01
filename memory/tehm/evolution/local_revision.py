@@ -21,7 +21,8 @@ from .value_receipts import ExperienceValueReceipt, VALUE_PRIORITIES
 
 
 UPDATE_OPERATIONS = frozenset({
-    "RETAIN", "ADD", "REVISE", "SUPERSEDE", "INVALIDATE", "REACTIVATE",
+    "RETAIN", "ADD", "REVISE", "SPECIALIZE", "GENERALIZE", "SPLIT",
+    "MERGE", "SUPERSEDE", "INVALIDATE", "REACTIVATE",
 })
 
 _LAYER_TO_TARGET = {

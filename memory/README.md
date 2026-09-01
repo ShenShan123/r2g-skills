@@ -3238,3 +3238,19 @@ campaign/cohort digest、逐 case reason 覆盖以及 evidence 文件 SHA256，�
 供 P13 replay 使用的 `P13EvolutionReasonReceipt`。该脚本拒绝 outcome、repair 和 gold
 字段，不读取或推断 ORFS 结果；evidence 不能复用 cohort 或 labels manifest 本身，
 输出也不能覆盖任一输入；没有外部 label manifest 时不会生成 reason。
+
+### 2026-09-01 P13 typed Knowledge structural shadow executor
+
+P13 shadow executor 现在可在隔离 staging 中消费 typed `MechanismKnowledge` 的
+`REVISE`、`SPECIALIZE`、`GENERALIZE`、`SPLIT` 和 `MERGE` proposal。每个 claim 都由
+`MechanismKnowledge.from_dict()` 严格解码，禁止 validated/production status 和
+gold-answer 字段；parent object IDs、training evidence refs、split partition witness
+及 multi-parent merge witness 必须显式绑定。same-claim revision 的版本也进入
+inventory，结构变化则写入 `SPECIALIZES`/`GENERALIZES` relation，便于 receipt replay。
+
+这些 Knowledge objects 和 relation edges 只存在于一次性的 SQLite staging copy，随后
+立即丢弃；`canonical_memory_mutation=none`、lifecycle/authority 与 production runtime
+均不变。该实现补齐了 Revision2 P13 的结构操作执行层，但没有把“执行成功”当作演化
+原因或 promotion evidence；真实 ORFS cohort 仍须先获得独立 reason receipt 和四项
+anti-forgetting witness，之后才能进入该 shadow lane。`memory/docs/` 继续仅作本地设计
+输入，由 `.gitignore` 排除，不会提交到仓库。
