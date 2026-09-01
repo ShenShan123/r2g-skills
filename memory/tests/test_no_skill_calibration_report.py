@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from contracts import MemoryRoutingDecision
 from scripts.build_no_skill_calibration_report import (
     MANIFEST_VERSION, CalibrationReportError,
     build_no_skill_calibration_report,
@@ -94,3 +95,43 @@ def test_builder_requires_explicit_oracle_source_and_evidence_refs(tmp_path):
     manifest, _ = _manifest(tmp_path, evidence_refs=[])
     with pytest.raises(CalibrationReportError, match="evidence_refs"):
         build_no_skill_calibration_report(manifest, output=tmp_path / "report.json")
+
+
+def test_builder_assembles_typed_routing_inputs_without_manual_prediction(tmp_path):
+    manifest, _ = _manifest(tmp_path)
+    payload = json.loads(manifest.read_text())
+    payload.pop("samples")
+    strata = {
+        "mechanism_family": "density", "design": "aes", "platform": "sky130",
+        "flow_regime": "route", "model_identity": "oracle-v1",
+        "state_shift_dimension": "none",
+    }
+    routes = {}
+    index = {}
+    labels = {}
+    reasons = ("NO_MATCH", "STATE_SHIFT", "RISK")
+    for number in range(20):
+        case_id = f"case-{number}"
+        decision = "CONSIDER" if number >= 6 else "NO_SKILL"
+        reason = reasons[number % len(reasons)] if decision == "NO_SKILL" else None
+        route = MemoryRoutingDecision(
+            decision=decision, resolved_state_id="state",
+            selected_rule_ids=("rule",) if decision == "CONSIDER" else (),
+            selected_path_ids=("path",) if decision == "CONSIDER" else (),
+            selected_asset_ids=(), applicability={"status": "APPLICABLE"},
+            causal_support={"status": "SUPPORTED"}, risk={}, abstain_reasons=(),
+            no_memory_budget=1, memory_budget=1 if decision == "CONSIDER" else 0,
+            no_skill_reason=reason)
+        routes[case_id] = {**route.to_dict(), "routing_receipt_id": route.routing_receipt_id}
+        index[case_id] = {"routing_receipt_id": route.routing_receipt_id}
+        labels[case_id] = {
+            "expected_decision": "NO_SKILL" if number < 6 else "USE_MEMORY",
+            "expected_reason": reason,
+            "confidence": 0.9, "strata": strata,
+        }
+    payload.update({"paired_routing_index": {"case_receipts": index},
+                    "routing_decisions": routes, "oracle_labels": labels})
+    manifest.write_text(json.dumps(payload, sort_keys=True) + "\n")
+    report = build_no_skill_calibration_report(manifest, output=tmp_path / "report.json")
+    assert report["input_mode"] == "paired_routing_index"
+    assert report["receipt"]["status"] == "PASS"

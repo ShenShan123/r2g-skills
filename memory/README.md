@@ -3117,6 +3117,11 @@ stratum 或不完整 confidence 会 fail-closed；样本不足或 reason 分母�
 `USE_MEMORY`，只有真实 `NO_SKILL` 才携带其 reason；`ABSTAIN/INAPPLICABLE` 不会被偷换
 成 `NO_SKILL`，route ID 不匹配或 case 覆盖不完整会直接拒绝。
 
+report builder 现在支持 `paired_routing_index`、`routing_decisions`、`oracle_labels`
+三件套作为输入模式，自动由 typed route 生成预测；与 `samples` 同时出现会拒绝，避免
+两套标签来源不一致。该模式只保存 route receipt 索引，不读取四臂 outcome，独立 oracle
+仍必须由外部 manifest 提供。
+
 `evaluate_production_gate()` 在收到该结构化 receipt 时改用总体 precision/recall 的
 Wilson lower bound，并记录 reason metrics/confusion matrix；同时当 evidence 提供
 `memory_interference_cases` 时使用 MIR Wilson upper bound（旧的点估计 manifest 仍

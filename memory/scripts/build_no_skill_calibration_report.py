@@ -21,7 +21,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tehm.evaluation.no_skill_calibration import (  # noqa: E402
-    NoSkillCalibrationError, evaluate_no_skill_calibration,
+    NoSkillCalibrationError, build_no_skill_calibration_samples,
+    evaluate_no_skill_calibration,
 )
 from tehm.ids import stable_dumps  # noqa: E402
 
@@ -75,13 +76,30 @@ def _load_manifest(path: Path) -> dict:
     if not isinstance(payload, dict) or payload.get("version") != MANIFEST_VERSION:
         raise CalibrationReportError("calibration manifest version mismatch")
     samples = payload.get("samples")
-    if (isinstance(samples, (str, bytes)) or not isinstance(samples, Sequence) or
-            not samples):
+    route_mode = all(key in payload for key in (
+        "paired_routing_index", "routing_decisions", "oracle_labels"))
+    if samples is not None and route_mode:
         raise CalibrationReportError(
-            "calibration manifest requires a non-empty explicit samples sequence")
-    if _contains_forbidden(samples):
+            "calibration manifest must choose samples or typed routing inputs")
+    if samples is None and not route_mode:
         raise CalibrationReportError(
-            "calibration samples contain outcome or gold-answer fields")
+            "calibration manifest requires samples or the typed routing-input triplet")
+    if samples is not None:
+        if (isinstance(samples, (str, bytes)) or not isinstance(samples, Sequence) or
+                not samples):
+            raise CalibrationReportError(
+                "calibration manifest samples must be a non-empty sequence")
+        if _contains_forbidden(samples):
+            raise CalibrationReportError(
+                "calibration samples contain outcome or gold-answer fields")
+    elif any(not isinstance(payload.get(key), Mapping) or not payload[key]
+             for key in ("paired_routing_index", "routing_decisions", "oracle_labels")):
+        raise CalibrationReportError(
+            "typed routing-input triplet must contain non-empty objects")
+    if route_mode and any(_contains_forbidden(payload[key]) for key in (
+            "paired_routing_index", "routing_decisions", "oracle_labels")):
+        raise CalibrationReportError(
+            "typed routing inputs contain outcome or gold-answer fields")
     _nonempty_text(payload.get("oracle_label_source"), "oracle_label_source")
     refs = payload.get("evidence_refs")
     if (isinstance(refs, (str, bytes)) or not isinstance(refs, Sequence) or not refs):
@@ -129,8 +147,19 @@ def build_no_skill_calibration_report(
     manifest_path = Path(manifest).expanduser().resolve()
     payload = _load_manifest(manifest_path)
     refs = _bind_evidence_refs(payload, manifest_path)
+    if payload.get("samples") is not None:
+        samples = payload["samples"]
+        input_mode = "explicit_samples"
+    else:
+        try:
+            samples = build_no_skill_calibration_samples(
+                payload["paired_routing_index"], payload["routing_decisions"],
+                payload["oracle_labels"])
+        except (NoSkillCalibrationError, TypeError, ValueError) as exc:
+            raise CalibrationReportError(f"typed routing-input triplet is invalid: {exc}") from exc
+        input_mode = "paired_routing_index"
     receipt = evaluate_no_skill_calibration(
-        payload["samples"], minimum_sample_count=minimum_sample_count,
+        samples, minimum_sample_count=minimum_sample_count,
         minimum_reason_cases=minimum_reason_cases, calibration_bins=calibration_bins)
     report = {
         "version": REPORT_VERSION,
@@ -138,6 +167,7 @@ def build_no_skill_calibration_report(
         "manifest_sha256": _sha256(manifest_path),
         "manifest_digest": _manifest_digest(payload),
         "oracle_label_source": payload["oracle_label_source"],
+        "input_mode": input_mode,
         "evidence_refs": list(refs),
         # Keep the receipt at a stable top-level key so callers can pass the
         # whole report through an evidence flattener without hand-editing it.
