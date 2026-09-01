@@ -3041,8 +3041,9 @@ P12 cohort 并建立 source-disjoint 多 lineage cases，再把真实 no-memory 
 source-disjoint 与 source-restore、显式 distinct lineage、routing receipt、训练
 `learner_eligible` 断言，以及 `NO_MEMORY` 与指定 memory arm 两侧都具备
 `oracle_available=true`、完整 compile/functional/signoff verdict。缺失任一证据只生成
-不可触发 receipt，结构性篡改直接拒绝；该层不从 outcome 推断 capability gain、failure
-cause 或 promotion。
+不可触发 receipt，结构性篡改直接拒绝。routing receipt 还必须通过调用方提供的
+`MemoryRoutingDecision` 重新计算 `routing_receipt_id`/digest，并且只能由 `APPLY` 或
+`CONSIDER` 路由触发；该层不从 outcome 推断 capability gain、failure cause 或 promotion。
 
 `apply_localized_update_shadow()` 现在可消费显式 `p12_shadow_trigger` evidence，但
 要求 trigger digest 同时出现在 `LocalizedUpdatePlan.evidence_refs`，并把该 digest
@@ -3050,3 +3051,13 @@ cause 或 promotion。
 evidence、lifecycle、authority 与 production runtime 均不变。真实多-lineage ORFS
 cohort 仍需由外部固定 toolchain/ORFS 运行产生；当前新增的是闭环入口与 fail-closed
 证据约束，不等同于能力或 promotion 证据。
+
+同日已用固定 direct toolchain 实跑双 lineage ORFS cohort：v116（heldout）与 v117
+（training）各执行 `NO_MEMORY`、`ALWAYS_MEMORY`、`APPLICABILITY_GATED`、
+`CAUSAL_NO_SKILL` 四臂，8 次 flow/signoff 均为 `PASS`，`lineage_count=2`，paired
+repair delta 三个 memory arm 均为 `0.0`，interference rate 均为 `0.0`。可复核产物位于
+`/data1/zhangdy/tehm-campaigns/tehm-p12f-orfs-v116-v117-20260903/`。该 cohort 的
+routing receipt coverage 为 `0.0`，因此 P12→P13 审计明确输出
+`p13_eligible=false`、`triggered_count=0`；这建立了真实 execution evidence，但不能
+被写成 retrieval/capability gain 或 P13 online update。下一步必须为同一 cohort 补齐
+真实、可 replay 的 `MemoryRoutingDecision` receipt，再重放 trigger 与 P13 staging。

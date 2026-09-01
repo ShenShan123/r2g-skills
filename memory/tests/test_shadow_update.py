@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from contracts import MemoryRoutingDecision
 from tehm.canonical.capture import capture
 from tehm.evolution import (
     AppliedShadowUpdateReceipt,
@@ -191,8 +192,17 @@ def test_shadow_update_requires_and_records_explicit_p12_trigger(tmp_tehm):
             metadata={"oracle_available": True})
 
     cases = {}
+    routing_decisions = {}
     for index, lineage in enumerate(("p12-lineage-a", "p12-lineage-b")):
         case_id = f"p12-case-{index}"
+        routing = MemoryRoutingDecision(
+            decision="CONSIDER", resolved_state_id=f"state:{case_id}",
+            selected_rule_ids=(f"rule:{case_id}",),
+            selected_path_ids=(f"path:{case_id}",), selected_asset_ids=(),
+            applicability={"status": "APPLICABLE"},
+            causal_support={"status": "SUPPORTED"}, risk={},
+            abstain_reasons=(), no_memory_budget=2, memory_budget=1)
+        routing_decisions[case_id] = routing
         baseline = execution(case_id, f"no_memory:{case_id}", "no_memory")
         memory = execution(case_id, f"memory:{case_id}", "structured_memory")
         cases[case_id] = PairedCandidateExecutionReceipt(
@@ -201,7 +211,7 @@ def test_shadow_update_requires_and_records_explicit_p12_trigger(tmp_tehm):
                           "APPLICABILITY_GATED": memory, "CAUSAL_NO_SKILL": memory},
             candidate_budget=3, case_digest="sha256:case-" + case_id,
             toolchain_digest="sha256:tool", oracle_digest="sha256:oracle",
-            lineage_id=lineage, routing_receipt_id="routing:" + case_id)
+            lineage_id=lineage, routing_receipt_id=routing.routing_receipt_id)
 
     class Cohort:
         campaign_id = "live"
@@ -212,7 +222,8 @@ def test_shadow_update_requires_and_records_explicit_p12_trigger(tmp_tehm):
         receipt_digest = "sha256:p12-cohort"
 
     trigger = build_p12_shadow_update_triggers(
-        Cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True)[0]
+        Cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        routing_decisions=routing_decisions)[0]
     plan = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE",
                  refs=(first, trigger.receipt_digest))
     receipt = apply_localized_update_shadow(plan, conn, {

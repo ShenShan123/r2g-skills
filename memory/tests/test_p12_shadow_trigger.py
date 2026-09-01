@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from contracts import MemoryRoutingDecision
 from tehm.evaluation.candidate_executor import (
     CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
@@ -25,6 +26,15 @@ class _Cohort:
     @property
     def receipt_digest(self) -> str:
         return "sha256:cohort-receipt"
+
+
+def _routing(case_id: str) -> MemoryRoutingDecision:
+    return MemoryRoutingDecision(
+        decision="CONSIDER", resolved_state_id=f"state:{case_id}",
+        selected_rule_ids=(f"rule:{case_id}",), selected_path_ids=(f"path:{case_id}",),
+        selected_asset_ids=(), applicability={"status": "APPLICABLE"},
+        causal_support={"status": "SUPPORTED"}, risk={}, abstain_reasons=(),
+        no_memory_budget=2, memory_budget=1)
 
 
 def _execution(case_id: str, candidate_id: str, source: str, outcome: str,
@@ -60,14 +70,15 @@ def _cohort(*, routing: bool = True, unknown_baseline: bool = False,
             candidate_budget=3, case_digest="sha256:case-" + case_id,
             toolchain_digest="sha256:tool", oracle_digest="sha256:oracle",
             lineage_id=lineage,
-            routing_receipt_id=(f"routing:{case_id}" if routing else None),
+            routing_receipt_id=(_routing(case_id).routing_receipt_id if routing else None),
         )
     return _Cohort("campaign-training", cases)
 
 
 def test_complete_multilineage_oracle_builds_replayable_trigger():
     triggers = build_p12_shadow_update_triggers(
-        _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True)
+        _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")})
     assert len(triggers) == 2
     assert all(item.triggered for item in triggers)
     assert all(item.reason == "oracle_complete" for item in triggers)
@@ -84,13 +95,15 @@ def test_incomplete_or_routingless_evidence_is_non_triggering():
         "missing_routing_receipt", "missing_routing_receipt"]
     unknown = build_p12_shadow_update_triggers(
         _cohort(unknown_baseline=True), memory_arm="ALWAYS_MEMORY",
-        learner_eligible=True)
+        learner_eligible=True,
+        routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")})
     assert unknown[0].triggered is False
     assert unknown[0].reason == "baseline_oracle_incomplete"
     assert unknown[1].triggered is True
 
     audit_only = build_p12_shadow_update_triggers(
-        _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=False)
+        _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=False,
+        routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")})
     assert all(not item.triggered and item.reason == "not_learner_eligible"
                for item in audit_only)
 

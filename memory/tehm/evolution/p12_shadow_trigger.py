@@ -9,11 +9,12 @@ The trigger is evaluation/shadow-only and never writes canonical memory.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from tehm.canonical.transition import OUTCOMES
+from contracts import MEMORY_ROUTING_DECISIONS, MemoryRoutingDecision
 from tehm.evaluation.candidate_executor import (
     P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
@@ -26,6 +27,8 @@ _TRIGGER_REASONS = frozenset({
     "oracle_complete",
     "not_learner_eligible",
     "missing_routing_receipt",
+    "missing_routing_decision",
+    "routing_not_memory_eligible",
     "baseline_oracle_incomplete",
     "memory_oracle_incomplete",
 })
@@ -110,11 +113,16 @@ def _explicit_lineages(cases: Mapping[str, PairedCandidateExecutionReceipt]) -> 
 
 
 def _reason(*, learner_eligible: bool, routing_id: str | None,
-            baseline_complete: bool, memory_complete: bool) -> tuple[bool, str]:
+            routing_decision: str | None, baseline_complete: bool,
+            memory_complete: bool) -> tuple[bool, str]:
     if not learner_eligible:
         return False, "not_learner_eligible"
     if routing_id is None:
         return False, "missing_routing_receipt"
+    if routing_decision is None:
+        return False, "missing_routing_decision"
+    if routing_decision not in {"APPLY", "CONSIDER"}:
+        return False, "routing_not_memory_eligible"
     if not baseline_complete:
         return False, "baseline_oracle_incomplete"
     if not memory_complete:
@@ -132,6 +140,8 @@ class P12ShadowUpdateTriggerReceipt:
     lineage_id: str
     memory_arm: str
     routing_receipt_id: str | None
+    routing_decision: str | None
+    routing_decision_digest: str | None
     no_skill_reason: str | None
     state_shift_receipt_id: str | None
     risk_receipt_id: str | None
@@ -165,6 +175,10 @@ class P12ShadowUpdateTriggerReceipt:
             raise P12ShadowTriggerError("P12 shadow trigger memory_arm is invalid")
         if self.routing_receipt_id is not None:
             _text(self.routing_receipt_id, "routing_receipt_id")
+        if self.routing_decision is not None and self.routing_decision not in MEMORY_ROUTING_DECISIONS:
+            raise P12ShadowTriggerError("P12 shadow trigger routing_decision is invalid")
+        if self.routing_decision_digest is not None:
+            _digest_text(self.routing_decision_digest, "routing_decision_digest")
         if self.no_skill_reason is not None:
             _text(self.no_skill_reason, "no_skill_reason")
         for value, name in ((self.state_shift_receipt_id, "state_shift_receipt_id"),
@@ -190,6 +204,8 @@ class P12ShadowUpdateTriggerReceipt:
                 "P12 shadow trigger triggered flag disagrees with reason")
         if self.triggered and (
                 not self.learner_eligible or self.routing_receipt_id is None or
+                self.routing_decision not in {"APPLY", "CONSIDER"} or
+                self.routing_decision_digest is None or
                 not self.baseline_oracle_complete or not self.memory_oracle_complete):
             raise P12ShadowTriggerError(
                 "triggered P12 shadow receipt lacks required evidence")
@@ -207,6 +223,8 @@ class P12ShadowUpdateTriggerReceipt:
             "lineage_id": self.lineage_id,
             "memory_arm": self.memory_arm,
             "routing_receipt_id": self.routing_receipt_id,
+            "routing_decision": self.routing_decision,
+            "routing_decision_digest": self.routing_decision_digest,
             "no_skill_reason": self.no_skill_reason,
             "state_shift_receipt_id": self.state_shift_receipt_id,
             "risk_receipt_id": self.risk_receipt_id,
@@ -231,6 +249,7 @@ class P12ShadowUpdateTriggerReceipt:
         required = {
             "cohort_receipt_digest", "campaign_id", "case_id", "lineage_id",
             "memory_arm", "routing_receipt_id", "no_skill_reason",
+            "routing_decision", "routing_decision_digest",
             "state_shift_receipt_id", "risk_receipt_id", "baseline_candidate_id",
             "memory_candidate_id", "baseline_execution_digest",
             "memory_execution_digest", "baseline_outcome", "memory_outcome",
@@ -244,6 +263,8 @@ class P12ShadowUpdateTriggerReceipt:
             campaign_id=payload["campaign_id"], case_id=payload["case_id"],
             lineage_id=payload["lineage_id"], memory_arm=payload["memory_arm"],
             routing_receipt_id=payload["routing_receipt_id"],
+            routing_decision=payload["routing_decision"],
+            routing_decision_digest=payload["routing_decision_digest"],
             no_skill_reason=payload["no_skill_reason"],
             state_shift_receipt_id=payload["state_shift_receipt_id"],
             risk_receipt_id=payload["risk_receipt_id"],
@@ -269,6 +290,7 @@ class P12ShadowUpdateTriggerReceipt:
 def build_p12_shadow_update_triggers(
         cohort: object, *, memory_arm: str, learner_eligible: bool,
         min_lineages: int = 2,
+        routing_decisions: Mapping[str, MemoryRoutingDecision] | None = None,
         ) -> tuple[P12ShadowUpdateTriggerReceipt, ...]:
     """Convert each cohort case into a replayable P13 shadow trigger.
 
@@ -285,6 +307,14 @@ def build_p12_shadow_update_triggers(
     if type(min_lineages) is not int or min_lineages < 1:
         raise P12ShadowTriggerError("P12 shadow trigger min_lineages must be positive")
     campaign_id, cohort_digest, cases = _cohort_fields(cohort)
+    if routing_decisions is not None and not isinstance(routing_decisions, Mapping):
+        raise P12ShadowTriggerError("P12 shadow trigger routing_decisions must be an object")
+    if routing_decisions is not None:
+        for case_id, decision in routing_decisions.items():
+            if type(case_id) is not str or not case_id.strip() or not isinstance(
+                    decision, MemoryRoutingDecision):
+                raise P12ShadowTriggerError(
+                    "P12 shadow trigger routing decision mapping is malformed")
     lineages = _explicit_lineages(cases)
     if len(lineages) < min_lineages:
         raise P12ShadowTriggerError(
@@ -300,17 +330,31 @@ def build_p12_shadow_update_triggers(
         routing_id = bundle.routing_receipt_id
         if routing_id is not None:
             routing_id = _text(routing_id, "routing_receipt_id")
+        routing = routing_decisions.get(case_id) if routing_decisions is not None else None
+        routing_decision = routing.decision if routing is not None else None
+        routing_digest = routing.decision_digest if routing is not None else None
+        if routing is not None:
+            if routing.routing_receipt_id != routing_id:
+                raise P12ShadowTriggerError(
+                    f"P12 shadow trigger routing receipt mismatch for {case_id}")
+            if (routing.no_skill_reason != bundle.no_skill_reason or
+                    routing.state_shift_receipt_id != bundle.state_shift_receipt_id or
+                    routing.risk_receipt_id != bundle.risk_receipt_id):
+                raise P12ShadowTriggerError(
+                    f"P12 shadow trigger routing metadata mismatch for {case_id}")
         baseline_complete = _oracle_complete(baseline)
         memory_complete = _oracle_complete(memory)
         triggered, reason = _reason(
             learner_eligible=learner_eligible,
-            routing_id=routing_id,
+            routing_id=routing_id, routing_decision=routing_decision,
             baseline_complete=baseline_complete,
             memory_complete=memory_complete)
         results.append(P12ShadowUpdateTriggerReceipt(
             cohort_receipt_digest=cohort_digest, campaign_id=campaign_id,
             case_id=case_id, lineage_id=bundle.lineage_id.strip(),
             memory_arm=memory_arm, routing_receipt_id=routing_id,
+            routing_decision=routing_decision,
+            routing_decision_digest=routing_digest,
             no_skill_reason=bundle.no_skill_reason,
             state_shift_receipt_id=bundle.state_shift_receipt_id,
             risk_receipt_id=bundle.risk_receipt_id,
