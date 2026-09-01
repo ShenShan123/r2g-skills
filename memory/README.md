@@ -2907,3 +2907,18 @@ content-addressed candidate digest 全部存在。
 同一模块还提供 `execute_paired_candidates()`：强制 `NO_MEMORY`、
 `ALWAYS_MEMORY`、`APPLICABILITY_GATED`、`CAUSAL_NO_SKILL` 四臂齐全，固定 case/budget，
 并拒绝 toolchain/oracle digest 漂移；它仍只是实验 receipt，不把执行结果写回记忆。
+
+### 2026-09-03 P12-B Icarus candidate oracle（controlled fixture）
+
+新增 `tehm/evaluation/rtl_candidate_oracle.py`，把 P11 的结构化 RTL candidate
+接入真实 `IcarusOracle`。frozen case 只允许显式提供 `rtl_source`、target test、
+frozen regression 和可选的附加 RTL 文件；候选动作在临时目录应用，随后对同一
+source freeze 执行 target + regression。该 adapter 不打开 `manifest.json`，不消费
+`manifest.fix`，不写 canonical transition，返回的 `produced_transition_id` 永远为
+`None`，因此四臂结果仍只能进入 evaluation evidence。
+
+`IcarusCandidateOracle` 可直接注入 `execute_paired_candidates()`。固定 fixture
+`req_ack_bug` 已验证：`NO_MEMORY` 的 target arm 失败，而三个 memory arms 在同一
+toolchain/oracle digest 下通过，source 原文件保持不变。这个阶段只是 Stage A
+controlled-fixture path/oracle/receipt 验证，不是 frozen R2G cohort 的 repair gain
+或 capability 结论；下一步仍需准备 source-disjoint 的固定 toolchain R2G cohort。
