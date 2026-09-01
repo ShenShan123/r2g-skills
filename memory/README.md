@@ -2987,6 +2987,16 @@ shadow update 的执行边界，但还不是 P14 capability attribution 或 prom
 证据；下一步应把 source-disjoint ORFS cohort 的四臂 receipt 转换为可回放的 shadow
 update 触发，再建立 anti-forgetting、held-out regression 和 P14 C1-C8 lineage。
 
+新增 `scripts/run_p13_shadow_update.py` 作为上述触发到执行之间的显式 replay seam：
+它只接受 `p13_eligible=true` 且逐 case `triggered=true` 的 typed trigger report，
+再由独立 manifest 提供逐 case `LocalizedUpdatePlan` 与 evidence。runner 以只读方式
+打开 source SQLite，调用 shadow executor 的内存 staging copy，逐条校验 plan/trigger
+campaign 与 digest witness，最后验证 source 文件字节 digest 未变并丢弃 staging；输出
+`AppliedShadowUpdateReceipt`、source/manifest digest 和固定的
+`canonical_memory_mutation=none`、`production_runtime_imported=false`。因此该入口
+可以回放真正 eligible 的 P13 proposal，但不会写 canonical、lifecycle 或 production
+runtime；当前真实 ORFS cohort 仍因缺少独立 evolution reason 而不能调用它。
+
 ### 2026-09-03 Revision2 reason-aware NO_SKILL / State Shift
 
 依据 Revision2 设计，`MemoryRoutingDecision` 现在保留兼容的顶层 `NO_SKILL`，并增加

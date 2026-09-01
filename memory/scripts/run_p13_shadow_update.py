@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""Replay eligible P13 triggers through the isolated shadow-update executor.
+
+The trigger report and update manifest are separate, content-addressed inputs.
+This command opens the source SQLite database read-only; ``apply_localized_update_shadow``
+copies it to an in-memory staging database, applies each typed plan, verifies
+the source remained unchanged, and discards staging.  It never writes
+canonical memory, lifecycle authority, or production runtime state.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import sqlite3
+import sys
+from collections.abc import Mapping
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tehm.evolution import (  # noqa: E402
+    AppliedShadowUpdateReceipt,
+    LocalizedUpdatePlan,
+    P12ShadowUpdateTriggerReceipt,
+    ShadowUpdateError,
+    apply_localized_update_shadow,
+)
+from tehm.ids import stable_dumps  # noqa: E402
+
+
+REPORT_VERSION = "p13-shadow-update-run-report-v1"
+MANIFEST_VERSION = "p13-shadow-update-manifest-v1"
+
+
+class P13ShadowRunError(ValueError):
+    """The trigger report or isolated update manifest is unsafe."""
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return "sha256:" + digest.hexdigest()
+
+
+def _digest(value: Mapping) -> str:
+    return "sha256:" + hashlib.sha256(stable_dumps(dict(value)).encode()).hexdigest()
+
+
+def _load_json(path: Path, name: str) -> dict:
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise P13ShadowRunError(f"cannot read {name}: {path}") from exc
+    if not isinstance(payload, dict):
+        raise P13ShadowRunError(f"{name} must be a JSON object")
+    return payload
+
+
+def _text(value: object, name: str) -> str:
+    if type(value) is not str or not value.strip():
+        raise P13ShadowRunError(f"{name} must be a non-empty string")
+    return value.strip()
+
+
+def _trigger_map(path: Path) -> tuple[dict, dict[str, P12ShadowUpdateTriggerReceipt]]:
+    report = _load_json(path, "P13 trigger report")
+    if report.get("version") != "p13-shadow-trigger-report-v1":
+        raise P13ShadowRunError("P13 trigger report version mismatch")
+    if report.get("p13_eligible") is not True:
+        raise P13ShadowRunError("P13 trigger report is not eligible")
+    raw = report.get("triggers")
+    if not isinstance(raw, list) or not raw:
+        raise P13ShadowRunError("P13 trigger report has no triggers")
+    if report.get("trigger_count") != len(raw):
+        raise P13ShadowRunError("P13 trigger report trigger_count is inconsistent")
+    if report.get("triggered_count") != len(raw):
+        raise P13ShadowRunError("P13 trigger report triggered_count is inconsistent")
+    result: dict[str, P12ShadowUpdateTriggerReceipt] = {}
+    for item in raw:
+        if not isinstance(item, Mapping):
+            raise P13ShadowRunError("P13 trigger entry must be an object")
+        try:
+            trigger = P12ShadowUpdateTriggerReceipt.from_dict(item)
+        except (TypeError, ValueError) as exc:
+            raise P13ShadowRunError(f"P13 trigger entry is invalid: {exc}") from exc
+        if trigger.triggered is not True:
+            raise P13ShadowRunError("P13 trigger report contains a non-triggering entry")
+        if trigger.case_id in result:
+            raise P13ShadowRunError("P13 trigger report contains duplicate case IDs")
+        result[trigger.case_id] = trigger
+    campaign_id = _text(report.get("campaign_id"), "trigger report campaign_id")
+    if any(trigger.campaign_id != campaign_id for trigger in result.values()):
+        raise P13ShadowRunError("P13 trigger campaign IDs are inconsistent")
+    return report, result
+
+
+def _open_read_only(path: Path) -> sqlite3.Connection:
+    if not path.is_file():
+        raise P13ShadowRunError(f"source SQLite database is not a file: {path}")
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
+                          *, output: Path | str) -> dict:
+    """Apply all manifest plans in discarded staging and emit receipts."""
+    trigger_path = Path(trigger_report).expanduser().resolve()
+    manifest_path = Path(manifest).expanduser().resolve()
+    report, triggers = _trigger_map(trigger_path)
+    payload = _load_json(manifest_path, "P13 shadow update manifest")
+    if payload.get("version") != MANIFEST_VERSION:
+        raise P13ShadowRunError("P13 shadow update manifest version mismatch")
+    campaign_id = _text(payload.get("campaign_id"), "manifest campaign_id")
+    if campaign_id != report["campaign_id"]:
+        raise P13ShadowRunError("manifest campaign_id does not match trigger report")
+    source_path = Path(_text(payload.get("source_db"), "source_db")).expanduser()
+    if not source_path.is_absolute():
+        source_path = manifest_path.parent / source_path
+    source_path = source_path.resolve()
+    output_path = Path(output).expanduser().resolve()
+    if output_path in {source_path, trigger_path, manifest_path}:
+        raise P13ShadowRunError(
+            "P13 shadow update output must be separate from all input files")
+    updates = payload.get("updates")
+    if not isinstance(updates, Mapping) or set(updates) != set(triggers):
+        raise P13ShadowRunError(
+            "P13 shadow update manifest must cover exactly all trigger cases")
+    source_sha_before = _sha256(source_path)
+    conn = _open_read_only(source_path)
+    receipts: dict[str, AppliedShadowUpdateReceipt] = {}
+    try:
+        for case_id in sorted(triggers):
+            item = updates[case_id]
+            if not isinstance(item, Mapping):
+                raise P13ShadowRunError(f"P13 update for {case_id} must be an object")
+            try:
+                plan = LocalizedUpdatePlan.from_dict(item.get("plan"))
+            except (TypeError, ValueError) as exc:
+                raise P13ShadowRunError(
+                    f"P13 update plan for {case_id} is invalid: {exc}") from exc
+            trigger = triggers[case_id]
+            if plan.campaign_id != campaign_id:
+                raise P13ShadowRunError(
+                    f"P13 update plan for {case_id} campaign_id disagrees")
+            if trigger.receipt_digest not in plan.evidence_refs:
+                raise P13ShadowRunError(
+                    f"P13 update plan for {case_id} must witness its trigger digest")
+            evidence = item.get("evidence")
+            if not isinstance(evidence, Mapping):
+                raise P13ShadowRunError(
+                    f"P13 update evidence for {case_id} must be an object")
+            try:
+                receipt = apply_localized_update_shadow(plan, conn, evidence)
+            except (ShadowUpdateError, TypeError, ValueError) as exc:
+                raise P13ShadowRunError(
+                    f"P13 shadow update for {case_id} was rejected: {exc}") from exc
+            if receipt.campaign_id != campaign_id:
+                raise P13ShadowRunError(
+                    f"P13 shadow receipt for {case_id} campaign_id disagrees")
+            receipts[case_id] = receipt
+    finally:
+        conn.close()
+    source_sha_after = _sha256(source_path)
+    if source_sha_after != source_sha_before:
+        raise P13ShadowRunError("source SQLite file changed during shadow update")
+    output_payload = {
+        "version": REPORT_VERSION,
+        "trigger_report": str(trigger_path),
+        "trigger_report_sha256": _sha256(trigger_path),
+        "trigger_report_digest": report.get("report_digest"),
+        "manifest": str(manifest_path),
+        "manifest_sha256": _sha256(manifest_path),
+        "manifest_digest": _digest(payload),
+        "source_db": str(source_path),
+        "source_db_sha256_before": source_sha_before,
+        "source_db_sha256_after": source_sha_after,
+        "campaign_id": campaign_id,
+        "receipt_count": len(receipts),
+        "receipts": {
+            case_id: {**receipt.to_dict(), "receipt_digest": receipt.receipt_digest}
+            for case_id, receipt in sorted(receipts.items())
+        },
+        "canonical_memory_mutation": "none",
+        "production_runtime_imported": False,
+        "production_integration": "not_attempted",
+        "staging_discarded": True,
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(output_payload, indent=2, sort_keys=True) + "\n")
+    return output_payload
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--trigger-report", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args(argv)
+    try:
+        report = run_p13_shadow_update(
+            args.trigger_report, args.manifest, output=args.output)
+    except (OSError, P13ShadowRunError, TypeError, ValueError) as exc:
+        parser.error(str(exc))
+    print(json.dumps({
+        "output": str(args.output.expanduser().resolve()),
+        "campaign_id": report["campaign_id"],
+        "receipt_count": report["receipt_count"],
+        "canonical_memory_mutation": report["canonical_memory_mutation"],
+        "staging_discarded": report["staging_discarded"],
+    }, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
