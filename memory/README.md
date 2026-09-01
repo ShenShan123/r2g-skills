@@ -2936,3 +2936,32 @@ digest；会拒绝重复 source 内容、环境 digest 漂移、case/arm 缺失�
 三个 memory 臂均通过，receipt 可 replay。它们仍属于 Stage A/受控 RTL evidence；
 真正的 Stage B 需要另外冻结、source-disjoint 的 R2G/ORFS cohort 和真实固定工具链，
 不能用这些 fixture 代替。
+
+### 2026-09-03 P12-D ORFS candidate oracle（evaluation-only）
+
+新增 `tehm/evaluation/orfs_candidate_oracle.py`，沿用现有 R2G
+`lifecycle.orfs_trial._execute_arm()` 作为 flow/signoff 执行权威。每次执行都从冻结
+project 建立临时副本，只允许结构化 `flow.CONFIG_DELTA` 的标量 `config_edits`，并在
+执行前后校验 source snapshot digest；显式绑定 ORFS root、OpenROAD/Yosys 可执行文件、
+PDK、toolchain/oracle digest 和 source digest。固定 pin 不能被 case 或注入环境覆盖，
+工具路径必须可执行。adapter 不读取 fixture manifest/gold answer，不写 canonical 或
+lifecycle，`produced_transition_id` 永远为 `None`；执行结果仅通过
+`CandidateExecutionReceipt` 的 `oracle_metadata` 保留 run/config/source witness。
+
+新增 fake-R2G flow 测试覆盖临时 project、baseline/candidate 四臂分离、source 不变、
+非 `flow.CONFIG_DELTA` 拒绝和固定环境覆盖拒绝。真实 ORFS 配置若引用 project 外的
+RTL/SDC，必须通过 `source_inputs=[{path, sha256}]` 显式绑定；否则不能进入
+source-disjoint cohort。新增 `tehm/evaluation/orfs_cohort.py`，在四臂执行外再固定
+source、toolchain/oracle、platform/PDK 和 campaign manifest，并支持 receipt replay。
+
+用 clean ORFS 与匹配的 `/data1/zhangdy/Tools/tehm-toolchain` 对已有
+`sky130hs/v116` frozen case 做了一次真实四臂 smoke：`NO_MEMORY`、三个 memory arm
+均为 `route/signoff PASS`，耗时约 256 秒，paired receipt 为中性结果（没有
+`paired repair delta`），产物仅在
+`/data1/zhangdy/tehm-campaigns/tehm-p12d-orfs-v116-stageb-20260903/`。该单 case 仍
+不是 source-disjoint 多 lineage 统计证据，也没有导入 canonical 或触发 promotion。
+fake seam/cohort 定向回归现为 `18 passed`。下一步是在同一 exact manifest 下增加新的
+source-disjoint design/lineage，跑完整 flow/equivalence/strict signoff/PPA/DEF graph，
+再将真实四臂 cohort 交给 P13 shadow update；在此之前 canonical memory、promotion
+和 production runtime 均保持关闭。`memory/docs/` 继续由 `.gitignore` 排除，不进入
+提交。

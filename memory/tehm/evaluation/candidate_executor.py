@@ -129,6 +129,16 @@ def _outcome(result: Mapping, compile_result: str,
     return "UNKNOWN"
 
 
+def _oracle_metadata(result: Mapping) -> dict:
+    """Retain oracle evidence without allowing it to replace executor fields."""
+    raw = result.get("metadata")
+    if raw is None:
+        return {}
+    if not isinstance(raw, Mapping):
+        raise CandidateExecutorError("candidate execution metadata must be an object")
+    return dict(raw)
+
+
 @dataclass(frozen=True)
 class CandidateExecutionReceipt:
     case_id: str
@@ -358,6 +368,7 @@ def execute_candidate(
         "oracle_available": oracle is not None,
         "oracle_error": result.get("oracle_error"),
         "budget": budget_payload,
+        "oracle_metadata": _oracle_metadata(result),
     }
     return CandidateExecutionReceipt(
         case_id=case_id, candidate_id=candidate.candidate_id,
@@ -402,7 +413,8 @@ def _execute_arm(candidate: StructuredRepairCandidate | None,
             produced_transition_id=None, candidate_digest=_digest({}),
             budget=budget_value,
             metadata={"executor_version": EXECUTOR_VERSION, "arm": arm,
-                      "oracle_available": oracle is not None})
+                      "oracle_available": oracle is not None,
+                      "oracle_metadata": _oracle_metadata(result)})
     if not isinstance(candidate, StructuredRepairCandidate):
         raise CandidateExecutorError(f"{arm} arm requires a structured candidate")
     return execute_candidate(candidate, frozen_case, oracle=oracle, budget=budget)
