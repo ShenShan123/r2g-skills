@@ -30,23 +30,49 @@ def _knowledge() -> MechanismKnowledge:
 def test_support_envelope_training_only_and_replayable():
     envelope = build_support_envelope(_knowledge(), (), ({
         "transition_id": "t-shift", "split": "training", "learner_eligible": True,
-        "verdict": "PASS", "platform": "sky130",
+        "verdict": "PASS", "oracle_complete": True, "platform": "sky130",
     },))
     assert envelope.training_only is True
     assert envelope.source_transition_ids == ("t-shift",)
     assert envelope.from_dict(envelope.to_dict()) == envelope
-    with pytest.raises(SupportEnvelopeError, match="non-training"):
+    with pytest.raises(SupportEnvelopeError, match="training split"):
         build_support_envelope(_knowledge(), (), ({
             "transition_id": "heldout", "split": "heldout", "learner_eligible": False,
-            "verdict": "PASS", "platform": "sky130",
+            "verdict": "PASS", "oracle_complete": True, "platform": "sky130",
         },))
+
+
+def test_support_envelope_requires_explicit_training_oracle_binding():
+    base = {"transition_id": "t-shift", "platform": "sky130"}
+    with pytest.raises(SupportEnvelopeError, match="requires training split"):
+        build_support_envelope(_knowledge(), (), (base,))
+    ineligible = {
+        **base, "split": "training", "learner_eligible": False,
+        "verdict": "PASS", "oracle_complete": True,
+    }
+    with pytest.raises(SupportEnvelopeError, match="learner-eligible"):
+        build_support_envelope(_knowledge(), (), (ineligible,))
+    incomplete = {
+        **base, "split": "training", "learner_eligible": True,
+        "verdict": "PASS", "oracle_complete": False,
+    }
+    with pytest.raises(SupportEnvelopeError, match="complete oracle"):
+        build_support_envelope(_knowledge(), (), (incomplete,))
+    no_id = {
+        "split": "training", "learner_eligible": True,
+        "verdict": "PASS", "oracle_complete": True, "platform": "sky130",
+    }
+    with pytest.raises(SupportEnvelopeError, match="requires transition_id"):
+        build_support_envelope(_knowledge(), (), (no_id,))
+    with pytest.raises(SupportEnvelopeError, match="verified training transitions"):
+        build_support_envelope(_knowledge(), (), ())
 
 
 def test_state_shift_detects_flow_change_and_replays():
     knowledge = _knowledge()
     envelope = build_support_envelope(knowledge, (), ({
         "transition_id": "t-shift", "split": "training", "learner_eligible": True,
-        "verdict": "PASS", "platform": "sky130",
+        "verdict": "PASS", "oracle_complete": True, "platform": "sky130",
     },))
     receipt = evaluate_state_shift(
         {"mechanism_family": "HANDSHAKE_COMPLETION",
@@ -96,7 +122,7 @@ def test_router_emits_state_shift_reason_and_preserves_no_memory_arm(
     knowledge = _knowledge()
     envelope = build_support_envelope(knowledge, (), ({
         "transition_id": "t-shift", "split": "training", "learner_eligible": True,
-        "verdict": "PASS", "platform": "sky130",
+        "verdict": "PASS", "oracle_complete": True, "platform": "sky130",
     },))
     state = ResolvedMemoryState(
         resolution_id="resolution-shift", input_memory_digest="sha256:input",

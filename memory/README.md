@@ -3150,3 +3150,13 @@ Production gate 的 efficacy 现在也保留 Revision2 的 Pareto 约束：当 e
 baseline-fail → memory-pass 的 paired discordant counts，以及连续性校正 McNemar
 结果。`UNKNOWN` 仍只保留在原始 outcome counts，不进入这些 paired 分母；因此该 receipt
 可直接作为 P15 manifest 的统计来源，但不会单独授予 authority。
+
+### Revision2 support-envelope provenance hardening
+
+`build_support_envelope()` 现在要求每条 source transition 显式绑定
+`split=training`、`learner_eligible=true`、`verdict=PASS` 和
+`oracle_complete=true`（同时接受带同等字段的 `verification` object），并要求至少
+一个带真实 `transition_id` 的训练 transition。缺失字段、非训练/不合格 evidence 或
+空 source collection 均 fail-closed；因此仅凭 Knowledge 的 applicability 描述不能扩大
+`SupportEnvelope`。该约束仍只影响 shadow/evaluation transfer 判断，不写 canonical
+memory、不改变 authority，也不把 held-out/calibration evidence 变成 learner support。

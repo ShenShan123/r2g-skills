@@ -37,28 +37,30 @@ def _sequence(value: object, name: str) -> tuple:
 
 
 def _training_guard(item: Mapping, name: str) -> None:
-    split = item.get("split")
-    if split is not None and split != "training":
+    split = item.get("split", item.get("dataset_split"))
+    if split != "training":
         raise SupportEnvelopeError(
-            f"support envelope {name} contains non-training evidence")
-    eligible = item.get("learner_eligible")
-    if eligible is not None and (
-            (type(eligible) is not bool and type(eligible) is not int) or
-            eligible not in (True, 1)):
+            f"support envelope {name} requires training split")
+    eligible = item.get("learner_eligible", item.get("dataset_learner_eligible"))
+    if type(eligible) is not bool or not eligible:
         raise SupportEnvelopeError(
-            f"support envelope {name} contains ineligible evidence")
+            f"support envelope {name} requires learner-eligible evidence")
     verification = item.get("verification")
     if isinstance(verification, Mapping):
-        if verification.get("verdict") not in (None, "PASS"):
-            raise SupportEnvelopeError(
-                f"support envelope {name} contains unverified evidence")
-        if verification.get("oracle_complete") is False:
-            raise SupportEnvelopeError(
-                f"support envelope {name} contains incomplete oracle evidence")
-    verdict = item.get("verification_verdict", item.get("verdict"))
-    if verdict not in (None, "PASS"):
+        verdict = verification.get("verdict")
+        oracle_complete = verification.get("oracle_complete")
+    elif verification is None:
+        verdict = item.get("verification_verdict", item.get("verdict"))
+        oracle_complete = item.get("oracle_complete")
+    else:
         raise SupportEnvelopeError(
-            f"support envelope {name} contains non-PASS evidence")
+            f"support envelope {name} verification must be an object")
+    if verdict != "PASS":
+        raise SupportEnvelopeError(
+            f"support envelope {name} requires PASS oracle evidence")
+    if type(oracle_complete) is not bool or not oracle_complete:
+        raise SupportEnvelopeError(
+            f"support envelope {name} requires complete oracle evidence")
 
 
 def _pick(item: Mapping, *keys: str):
@@ -144,6 +146,9 @@ class SupportEnvelope:
         if not isinstance(self.source_transition_ids, tuple) or any(
                 type(item) is not str or not item for item in self.source_transition_ids):
             raise SupportEnvelopeError("support envelope source transition IDs are invalid")
+        if not self.source_transition_ids:
+            raise SupportEnvelopeError(
+                "support envelope requires verified training transitions")
         if self.training_only is not True:
             raise SupportEnvelopeError("support envelope must be training-only")
 
@@ -201,6 +206,10 @@ def build_support_envelope(knowledge, source_states=(), source_transitions=()) -
                 raise SupportEnvelopeError(f"support envelope {name} item is not an object")
             item = dict(item)
             _training_guard(item, name)
+            if name == "source_transitions" and _pick(
+                    item, "transition_id", "evidence_id", "record_id") is None:
+                raise SupportEnvelopeError(
+                    "support envelope source_transitions requires transition_id")
             ref = _source_ref(item, f"{name}:{index}")
             refs.add(ref)
             if name == "source_transitions":
@@ -209,6 +218,9 @@ def build_support_envelope(knowledge, source_states=(), source_transitions=()) -
             for dimension, value in item_facts.items():
                 if value is not None:
                     facts[dimension].append(value)
+    if not transition_ids:
+        raise SupportEnvelopeError(
+            "support envelope requires verified training transitions")
     dimensions = {}
     for dimension in _DIMENSIONS:
         values = []
