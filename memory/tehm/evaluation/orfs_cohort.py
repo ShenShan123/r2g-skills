@@ -170,8 +170,26 @@ class OrfsPairedCohortReceipt:
         return _outcome_counts(self.case_receipts)
 
     @property
+    def no_skill_reason_counts(self) -> dict[str, int]:
+        counts = {"NO_MATCH": 0, "STATE_SHIFT": 0, "RISK": 0}
+        for bundle in self.case_receipts.values():
+            if bundle.no_skill_reason is not None:
+                counts[bundle.no_skill_reason] += 1
+        return counts
+
+    @property
     def receipt_digest(self) -> str:
         return _digest(self.to_dict())
+
+    @property
+    def legacy_receipt_digest(self) -> str:
+        payload = self.to_dict()
+        payload.pop("no_skill_reason_counts", None)
+        for value in payload["case_receipts"].values():
+            value.pop("no_skill_reason", None)
+            value.pop("state_shift_receipt_id", None)
+            value.pop("risk_receipt_id", None)
+        return _digest(payload)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -194,6 +212,7 @@ class OrfsPairedCohortReceipt:
             "source_restore_verified": self.source_restore_verified,
             "evaluation_only": self.evaluation_only,
             "outcome_counts": self.outcome_counts,
+            "no_skill_reason_counts": self.no_skill_reason_counts,
         }
 
     @classmethod
@@ -232,7 +251,8 @@ class OrfsPairedCohortReceipt:
             version=payload.get("version", ORFS_COHORT_VERSION),
         )
         supplied = payload.get("receipt_digest")
-        if supplied is not None and supplied != receipt.receipt_digest:
+        if supplied is not None and supplied not in {
+                receipt.receipt_digest, receipt.legacy_receipt_digest}:
             raise OrfsCohortError("ORFS cohort receipt digest mismatch")
         return receipt
 
@@ -314,7 +334,10 @@ def execute_orfs_paired_cohort(
             raise OrfsCohortError(
                 f"ORFS cohort case {case_id} lacks exactly four P12 arms")
         bundle = execute_paired_candidates(
-            case, arms, oracle=runner, budget=budget)
+            case, arms, oracle=runner, budget=budget,
+            no_skill_reason=case.get("no_skill_reason"),
+            state_shift_receipt_id=case.get("state_shift_receipt_id"),
+            risk_receipt_id=case.get("risk_receipt_id"))
         if (bundle.toolchain_digest != expected_toolchain or
                 bundle.oracle_digest != expected_oracle):
             raise OrfsCohortError("ORFS cohort execution digest drift")

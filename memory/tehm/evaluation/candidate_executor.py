@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from tehm.canonical.transition import OUTCOMES
+from contracts import NO_SKILL_REASONS
 from tehm.ids import stable_dumps
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate
 
@@ -250,6 +251,9 @@ class PairedCandidateExecutionReceipt:
     paired: bool = True
     evaluation_only: bool = True
     reasons: tuple[str, ...] = ()
+    no_skill_reason: str | None = None
+    state_shift_receipt_id: str | None = None
+    risk_receipt_id: str | None = None
 
     def __post_init__(self) -> None:
         _text(self.case_id, "case_id")
@@ -283,10 +287,40 @@ class PairedCandidateExecutionReceipt:
         if not isinstance(self.reasons, tuple) or any(
                 type(item) is not str or not item for item in self.reasons):
             raise CandidateExecutorError("paired execution reasons are invalid")
+        if self.no_skill_reason is not None and self.no_skill_reason not in NO_SKILL_REASONS:
+            raise CandidateExecutorError("paired execution no_skill_reason is invalid")
+        for name in ("state_shift_receipt_id", "risk_receipt_id"):
+            value = getattr(self, name)
+            if value is not None and (type(value) is not str or not value):
+                raise CandidateExecutorError(f"paired execution {name} is invalid")
+        if self.state_shift_receipt_id is not None and self.no_skill_reason != "STATE_SHIFT":
+            raise CandidateExecutorError("paired state shift receipt requires STATE_SHIFT")
+        if self.risk_receipt_id is not None and self.no_skill_reason != "RISK":
+            raise CandidateExecutorError("paired risk receipt requires RISK")
 
     @property
     def receipt_digest(self) -> str:
         return _digest(self.to_dict())
+
+    @property
+    def legacy_receipt_digest(self) -> str:
+        """Digest accepted for paired receipts written before reason metadata."""
+        payload = {
+            "version": EXECUTOR_VERSION, "case_id": self.case_id,
+            "arm_receipts": {arm: receipt.to_dict()
+                             for arm, receipt in sorted(self.arm_receipts.items())},
+            "candidate_budget": self.candidate_budget,
+            "case_digest": self.case_digest,
+            "toolchain_digest": self.toolchain_digest,
+            "oracle_digest": self.oracle_digest,
+            "paired": self.paired, "evaluation_only": self.evaluation_only,
+            "reasons": list(self.reasons),
+        }
+        # Legacy arm receipts did not include reason metadata because that
+        # metadata belongs to the paired routing decision, not each arm.
+        for arm, receipt in sorted(self.arm_receipts.items()):
+            payload["arm_receipts"][arm] = receipt.to_dict()
+        return _digest(payload)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -300,6 +334,9 @@ class PairedCandidateExecutionReceipt:
             "oracle_digest": self.oracle_digest,
             "paired": self.paired, "evaluation_only": self.evaluation_only,
             "reasons": list(self.reasons),
+            "no_skill_reason": self.no_skill_reason,
+            "state_shift_receipt_id": self.state_shift_receipt_id,
+            "risk_receipt_id": self.risk_receipt_id,
         }
 
     @classmethod
@@ -318,9 +355,13 @@ class PairedCandidateExecutionReceipt:
             toolchain_digest=payload.get("toolchain_digest"),
             oracle_digest=payload.get("oracle_digest"),
             paired=payload.get("paired"), evaluation_only=payload.get("evaluation_only"),
-            reasons=tuple(payload.get("reasons", ())))
+            reasons=tuple(payload.get("reasons", ())),
+            no_skill_reason=payload.get("no_skill_reason"),
+            state_shift_receipt_id=payload.get("state_shift_receipt_id"),
+            risk_receipt_id=payload.get("risk_receipt_id"))
         supplied = payload.get("receipt_digest")
-        if supplied is not None and supplied != receipt.receipt_digest:
+        if supplied is not None and supplied not in {
+                receipt.receipt_digest, receipt.legacy_receipt_digest}:
             raise CandidateExecutorError("paired execution receipt digest mismatch")
         return receipt
 
@@ -421,10 +462,14 @@ def _execute_arm(candidate: StructuredRepairCandidate | None,
 
 
 def execute_paired_candidates(
-    frozen_case: Mapping,
-    arm_candidates: Mapping[str, StructuredRepairCandidate | None],
-    oracle: object = None,
-    budget: int | Mapping = 3,
+        frozen_case: Mapping,
+        arm_candidates: Mapping[str, StructuredRepairCandidate | None],
+        oracle: object = None,
+        budget: int | Mapping = 3,
+        *,
+        no_skill_reason: str | None = None,
+        state_shift_receipt_id: str | None = None,
+        risk_receipt_id: str | None = None,
 ) -> PairedCandidateExecutionReceipt:
     """Execute all four P12 arms on one frozen case and fixed budget.
 
@@ -450,7 +495,9 @@ def execute_paired_candidates(
     return PairedCandidateExecutionReceipt(
         case_id=case_id, arm_receipts=receipts, candidate_budget=budget_value,
         case_digest=_digest(case), toolchain_digest=next(iter(toolchains)),
-        oracle_digest=next(iter(oracles)))
+        oracle_digest=next(iter(oracles)), no_skill_reason=no_skill_reason,
+        state_shift_receipt_id=state_shift_receipt_id,
+        risk_receipt_id=risk_receipt_id)
 
 
 __all__ = [

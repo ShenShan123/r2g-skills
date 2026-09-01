@@ -2965,3 +2965,48 @@ source-disjoint design/lineage，跑完整 flow/equivalence/strict signoff/PPA/D
 再将真实四臂 cohort 交给 P13 shadow update；在此之前 canonical memory、promotion
 和 production runtime 均保持关闭。`memory/docs/` 继续由 `.gitignore` 排除，不进入
 提交。
+
+### 2026-09-03 P13 localized shadow update executor
+
+新增 `tehm/evolution/apply_update.py`，把 `LocalizedUpdatePlan` 从“只生成计划”推进到
+“只在隔离 staging 执行并立即丢弃”。executor 先对 source SQLite、raw canonical
+evidence 和当前 resolution 做 digest，再用 SQLite backup 建立内存副本；causal/rule
+plan 只能消费同 campaign、training、learner-eligible 且已 verified 的 transition，
+relation/asset/capability plan 必须提供对应 typed evidence。所有派生 rule/revision、
+state relation、shadow asset 或 candidate capability 都只存在 staging，永远不调用
+production authority，也不导入 runtime。
+
+`AppliedShadowUpdateReceipt` 固定记录 before/after resolution、created object/relation
+IDs、source/staging/raw-evidence digest，并强制
+`canonical_rows_changed=false`、`production_authority_changed=false`、
+`canonical_memory_mutation=none`、`lifecycle_mutation=isolated_staging_only` 和
+`staging_discarded=true`；source connection 与 canonical evidence 在返回前再次校验。
+P13 定向回归覆盖 relation、RETAIN、真实 Icarus causal crystallization、asset、
+capability、非 learner 防火墙和 receipt replay/tamper，共 `7 passed`。这证明了
+shadow update 的执行边界，但还不是 P14 capability attribution 或 promotion gate
+证据；下一步应把 source-disjoint ORFS cohort 的四臂 receipt 转换为可回放的 shadow
+update 触发，再建立 anti-forgetting、held-out regression 和 P14 C1-C8 lineage。
+
+### 2026-09-03 Revision2 reason-aware NO_SKILL / State Shift
+
+依据 Revision2 设计，`MemoryRoutingDecision` 现在保留兼容的顶层 `NO_SKILL`，并增加
+typed `no_skill_reason`：`NO_MATCH`、`STATE_SHIFT`、`RISK`；同时可绑定
+`state_shift_receipt_id` 或 `risk_receipt_id`。旧 receipt 缺少 reason 时只做兼容映射
+到 `NO_MATCH`，不会把 `ABSTAIN` 或 `INAPPLICABLE` 混入主动拒绝语义；memory slot
+仍最多 1 个，no-memory arm 始终保留。
+
+新增 `tehm/state/support_envelope.py`、`shift.py` 和 `shift_receipts.py`。`SupportEnvelope`
+只接受 training、learner-eligible、PASS/complete oracle 的 typed facts，拒绝 held-out、
+calibration 或不完整 evidence 扩大支持域；`evaluate_state_shift()` 按 structural、
+mechanism、flow、constraint、oracle、history 六个维度 deterministic 比较当前状态，
+输出可 replay 的 `StateShiftReceipt`。缺失状态事实不会被猜成 shift，仍由上层
+`ABSTAIN` 处理。Router 在收到显式 envelope/current-state facts 时会返回
+`NO_SKILL + STATE_SHIFT`，而显式、可重放的负 expected utility 才会返回 `NO_SKILL + RISK`；
+不完整 risk/shift evidence fail-closed 为 `ABSTAIN`。
+
+Revision2 定向回归新增 6 个测试，覆盖 support-envelope training-only、state-shift
+六维 receipt replay、legacy reason compatibility、fresh `NO_MATCH` 和 router
+`STATE_SHIFT` 路由。下一步依赖顺序已调整为：先把 reason-aware receipt 接入四臂
+P12 cohort 并建立 source-disjoint 多 lineage cases，再把真实 no-memory oracle
+结果送入 P13 shadow update；P14 capability attribution、P15 分 reason CI calibration
+和 production pilot 仍未建立，canonical memory 与 production runtime 继续关闭。

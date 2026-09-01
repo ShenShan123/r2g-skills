@@ -142,8 +142,26 @@ class RtlPairedCohortReceipt:
         return _outcome_counts(self.case_receipts)
 
     @property
+    def no_skill_reason_counts(self) -> dict[str, int]:
+        counts = {"NO_MATCH": 0, "STATE_SHIFT": 0, "RISK": 0}
+        for bundle in self.case_receipts.values():
+            if bundle.no_skill_reason is not None:
+                counts[bundle.no_skill_reason] += 1
+        return counts
+
+    @property
     def receipt_digest(self) -> str:
         return _digest(self.to_dict())
+
+    @property
+    def legacy_receipt_digest(self) -> str:
+        payload = self.to_dict()
+        payload.pop("no_skill_reason_counts", None)
+        for value in payload["case_receipts"].values():
+            value.pop("no_skill_reason", None)
+            value.pop("state_shift_receipt_id", None)
+            value.pop("risk_receipt_id", None)
+        return _digest(payload)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -162,6 +180,7 @@ class RtlPairedCohortReceipt:
             "source_restore_verified": self.source_restore_verified,
             "evaluation_only": self.evaluation_only,
             "outcome_counts": self.outcome_counts,
+            "no_skill_reason_counts": self.no_skill_reason_counts,
         }
 
     @classmethod
@@ -196,7 +215,8 @@ class RtlPairedCohortReceipt:
             version=payload.get("version", RTL_COHORT_VERSION),
         )
         supplied = payload.get("receipt_digest")
-        if supplied is not None and supplied != receipt.receipt_digest:
+        if supplied is not None and supplied not in {
+                receipt.receipt_digest, receipt.legacy_receipt_digest}:
             raise RtlCohortError("RTL cohort receipt digest mismatch")
         return receipt
 
@@ -270,7 +290,11 @@ def execute_rtl_paired_cohort(
         if not isinstance(arms, Mapping) or set(arms) != set(P12_ARMS):
             raise RtlCohortError(f"RTL cohort case {case_id} lacks exactly four P12 arms")
         before = source_digests[case_id]
-        bundle = execute_paired_candidates(case, arms, oracle=runner, budget=budget)
+        bundle = execute_paired_candidates(
+            case, arms, oracle=runner, budget=budget,
+            no_skill_reason=case.get("no_skill_reason"),
+            state_shift_receipt_id=case.get("state_shift_receipt_id"),
+            risk_receipt_id=case.get("risk_receipt_id"))
         if bundle.toolchain_digest != expected_toolchain or bundle.oracle_digest != expected_oracle:
             raise RtlCohortError("RTL cohort execution digest drift")
         from pathlib import Path

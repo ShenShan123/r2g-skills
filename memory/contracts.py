@@ -123,6 +123,12 @@ MEMORY_ROUTING_DECISIONS = (
     "APPLY", "CONSIDER", "ABSTAIN", "INAPPLICABLE", "NO_SKILL",
 )
 
+# Reason-aware deliberate no-memory outcomes.  The top-level decision remains
+# ``NO_SKILL`` for compatibility with the P5/P6 contracts; these values make
+# the refusal useful to calibration and online evolution without conflating it
+# with an unresolved ``ABSTAIN`` or a hard ``INAPPLICABLE`` veto.
+NO_SKILL_REASONS = ("NO_MATCH", "STATE_SHIFT", "RISK")
+
 
 def _routing_mapping(value: object, field_name: str) -> dict:
     """Validate a routing receipt field without accepting opaque objects."""
@@ -158,6 +164,9 @@ class MemoryRoutingDecision:
     abstain_reasons: tuple[str, ...]
     no_memory_budget: int
     memory_budget: int
+    no_skill_reason: str | None = None
+    state_shift_receipt_id: str | None = None
+    risk_receipt_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.decision not in MEMORY_ROUTING_DECISIONS:
@@ -198,6 +207,29 @@ class MemoryRoutingDecision:
                 f"{self.decision} cannot allocate a memory candidate budget")
         if self.decision == "NO_SKILL" and self.selected_asset_ids:
             raise ValueError("NO_SKILL cannot select assets")
+        for field_name in ("no_skill_reason", "state_shift_receipt_id",
+                           "risk_receipt_id"):
+            value = getattr(self, field_name)
+            if value is not None and (type(value) is not str or not value):
+                raise ValueError(f"memory routing {field_name} must be a non-empty string")
+        if self.decision == "NO_SKILL":
+            reason = self.no_skill_reason
+            if reason is None:
+                # Legacy receipts did not carry a typed reason.  Preserve
+                # replay compatibility while assigning the conservative
+                # semantic bucket required by the Revision2 contract.
+                reason = "NO_MATCH"
+                object.__setattr__(self, "no_skill_reason", reason)
+            if reason not in NO_SKILL_REASONS:
+                raise ValueError("NO_SKILL requires a typed no_skill_reason")
+            if self.state_shift_receipt_id is not None and reason != "STATE_SHIFT":
+                raise ValueError("state_shift_receipt_id requires STATE_SHIFT")
+            if self.risk_receipt_id is not None and reason != "RISK":
+                raise ValueError("risk_receipt_id requires RISK")
+        elif any(value is not None for value in (
+                self.no_skill_reason, self.state_shift_receipt_id,
+                self.risk_receipt_id)):
+            raise ValueError("NO_SKILL metadata is only valid for NO_SKILL")
 
     def to_dict(self) -> dict:
         return {
@@ -212,12 +244,33 @@ class MemoryRoutingDecision:
             "abstain_reasons": list(self.abstain_reasons),
             "no_memory_budget": self.no_memory_budget,
             "memory_budget": self.memory_budget,
+            "no_skill_reason": self.no_skill_reason,
+            "state_shift_receipt_id": self.state_shift_receipt_id,
+            "risk_receipt_id": self.risk_receipt_id,
         }
 
     @property
     def decision_digest(self) -> str:
         return "sha256:" + hashlib.sha256(
             stable_dumps(self.to_dict()).encode()).hexdigest()
+
+    @property
+    def legacy_decision_digest(self) -> str:
+        """Digest used by pre-Revision2 receipts without reason fields."""
+        payload = {
+            "decision": self.decision,
+            "resolved_state_id": self.resolved_state_id,
+            "selected_rule_ids": list(self.selected_rule_ids),
+            "selected_path_ids": list(self.selected_path_ids),
+            "selected_asset_ids": list(self.selected_asset_ids),
+            "applicability": self.applicability,
+            "causal_support": self.causal_support,
+            "risk": self.risk,
+            "abstain_reasons": list(self.abstain_reasons),
+            "no_memory_budget": self.no_memory_budget,
+            "memory_budget": self.memory_budget,
+        }
+        return "sha256:" + hashlib.sha256(stable_dumps(payload).encode()).hexdigest()
 
     @property
     def routing_receipt_id(self) -> str:
@@ -260,11 +313,15 @@ class MemoryRoutingDecision:
                 abstain_reasons=tuple(payload["abstain_reasons"]),
                 no_memory_budget=payload["no_memory_budget"],
                 memory_budget=payload["memory_budget"],
+                no_skill_reason=payload.get("no_skill_reason"),
+                state_shift_receipt_id=payload.get("state_shift_receipt_id"),
+                risk_receipt_id=payload.get("risk_receipt_id"),
             )
         except (TypeError, ValueError) as exc:
             raise ValueError("memory routing decision is malformed") from exc
         supplied = payload.get("decision_digest")
-        if supplied is not None and supplied != decision.decision_digest:
+        if supplied is not None and supplied not in {
+                decision.decision_digest, decision.legacy_decision_digest}:
             raise ValueError("memory routing decision digest mismatch")
         return decision
 
@@ -369,7 +426,8 @@ class MemorySnapshot:
 __all__ = [
     "CANDIDATE_SOURCES", "BACKEND_NAMES", "DEFAULT_BACKEND",
     "RepairContext", "MemoryQuery", "CausalCandidateEvidence", "CapabilityGap",
-    "MemoryCandidate", "MEMORY_ROUTING_DECISIONS", "MemoryRoutingDecision",
+    "MemoryCandidate", "MEMORY_ROUTING_DECISIONS", "NO_SKILL_REASONS",
+    "MemoryRoutingDecision",
     "NoSkillReceipt", "ActivationProposal",
     "ActivationResult", "IngestReceipt", "BuildReport", "MemorySnapshot",
     "ExecutionRecord", "ExecutionRecordError",

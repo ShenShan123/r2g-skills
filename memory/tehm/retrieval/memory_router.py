@@ -10,6 +10,8 @@ promotes memory.  The no-memory arm is always retained.
 from __future__ import annotations
 
 import json
+import hashlib
+import math
 import sqlite3
 from collections.abc import Mapping
 
@@ -18,6 +20,7 @@ from contracts import (
     MemoryCandidate,
     MemoryQuery,
     MemoryRoutingDecision,
+    NO_SKILL_REASONS,
     RepairContext,
 )
 from tehm.assets.registry import get_asset, get_asset_status
@@ -28,7 +31,10 @@ from tehm.knowledge.applicability import evaluate_applicability
 from tehm.knowledge.authority import evaluate_knowledge_authority
 from tehm.knowledge.registry import get_knowledge_by_object_id
 from tehm.knowledge.lifecycle import get_knowledge_status
-from tehm.state import StateResolutionError, resolve_current_state
+from tehm.state import (
+    StateResolutionError, StateShiftError, SupportEnvelope,
+    evaluate_state_shift, resolve_current_state,
+)
 
 
 ROUTER_VERSION = "memory-router-v0.1"
@@ -151,7 +157,9 @@ def _budget(no_memory_budget: object, memory_budget: object) -> tuple[int, int, 
 def _empty_decision(*, decision: str, state_id: str, reasons: tuple[str, ...],
                     total_budget: int, applicability: dict | None = None,
                     causal_support: dict | None = None,
-                    risk: dict | None = None) -> MemoryRoutingDecision:
+                    risk: dict | None = None, no_skill_reason: str | None = None,
+                    state_shift_receipt_id: str | None = None,
+                    risk_receipt_id: str | None = None) -> MemoryRoutingDecision:
     if decision not in MEMORY_ROUTING_DECISIONS:
         raise MemoryRouterError(f"unknown memory routing decision: {decision}")
     return MemoryRoutingDecision(
@@ -160,7 +168,65 @@ def _empty_decision(*, decision: str, state_id: str, reasons: tuple[str, ...],
         applicability=applicability or {},
         causal_support=causal_support or {}, risk=risk or {},
         abstain_reasons=tuple(reasons), no_memory_budget=max(1, total_budget),
-        memory_budget=0)
+        memory_budget=0, no_skill_reason=no_skill_reason,
+        state_shift_receipt_id=state_shift_receipt_id,
+        risk_receipt_id=risk_receipt_id)
+
+
+def _state_shift_receipts(plan: Mapping, state, claims: list[dict]):
+    """Evaluate optional, explicit support envelopes for all eligible claims."""
+    raw = plan.get("support_envelopes", plan.get("support_envelope"))
+    if raw is None:
+        return (), ()
+    if not isinstance(raw, Mapping):
+        return (), ("STATE_SHIFT_INVALID:support_envelopes must be an object",)
+    current = plan.get("current_state_facts", plan)
+    if not isinstance(current, Mapping):
+        return (), ("STATE_SHIFT_INVALID:current_state_facts must be an object",)
+    receipts = []
+    errors = []
+    for item in claims:
+        claim = item["claim"]
+        payload = raw.get(claim.object_id, raw)
+        if not isinstance(payload, Mapping):
+            errors.append(f"STATE_SHIFT_INVALID:{claim.object_id}:envelope is not an object")
+            continue
+        try:
+            envelope = SupportEnvelope.from_dict(payload)
+            receipt = evaluate_state_shift(
+                current, state, claim, envelope,
+                evidence_refs=(claim.object_id,))
+            receipts.append(receipt)
+        except (StateShiftError, TypeError, ValueError, KeyError) as exc:
+            errors.append(f"STATE_SHIFT_INVALID:{claim.object_id}:{exc}")
+    return tuple(receipts), tuple(sorted(errors))
+
+
+def _risk_evidence(plan: Mapping) -> tuple[str | None, dict | None, str | None]:
+    """Return a typed risk refusal only for explicit replayable evidence."""
+    raw = plan.get("risk_evidence")
+    if raw is None:
+        return None, None, None
+    if not isinstance(raw, Mapping):
+        return None, None, "RISK_INVALID:risk_evidence must be an object"
+    utility = raw.get("expected_utility")
+    refs = raw.get("evidence_refs")
+    if (isinstance(utility, bool) or not isinstance(utility, (int, float)) or
+            not isinstance(refs, (list, tuple)) or not refs or
+            any(type(item) is not str or not item for item in refs)):
+        return None, None, "RISK_INVALID:risk evidence requires utility and evidence_refs"
+    utility = float(utility)
+    if not math.isfinite(utility):
+        return None, None, "RISK_INVALID:risk expected_utility is not finite"
+    payload = {"expected_utility": utility,
+               "evidence_refs": sorted(set(refs)),
+               "risk_model": raw.get("risk_model", "typed_expected_utility_v1")}
+    try:
+        encoded = stable_dumps(payload)
+    except (TypeError, ValueError):
+        return None, None, "RISK_INVALID:risk evidence is not JSON-serializable"
+    digest = "sha256:" + hashlib.sha256(encoded.encode()).hexdigest()
+    return "risk_" + digest.split(":", 1)[1][:24], payload, None
 
 
 def _status_for_scope(conn: sqlite3.Connection, *, table: str,
@@ -509,7 +575,8 @@ def route_memory(
             reasons=(reason,), total_budget=total_budget,
             applicability=app_summary,
             causal_support={"status": "INSUFFICIENT", "minimum_evidence_level": MIN_CAUSAL_EVIDENCE},
-            risk={"risk_penalty": 0.0, "unresolved_state": False})
+            risk={"risk_penalty": 0.0, "unresolved_state": False},
+            no_skill_reason="NO_MATCH")
 
     path_ids = tuple(sorted({path_id for item in claims for path_id in item["path_ids"]}))
     strongest = max((item["claim"].evidence_level for item in claims),
@@ -527,6 +594,37 @@ def route_memory(
     assets, promoted_authorized, asset_summary = _asset_candidates(
         conn, state=state, scope=scope, claims=claims)
     risk = _risk(claims=claims, assets=asset_summary, state=state)
+    shift_receipts, shift_errors = _state_shift_receipts(plan, state, claims)
+    if shift_errors:
+        return _empty_decision(
+            decision="ABSTAIN", state_id=state.resolution_id,
+            reasons=shift_errors, total_budget=total_budget,
+            applicability=app_summary, causal_support=causal_summary,
+            risk={**risk, "state_shift_status": "INVALID"})
+    if shift_receipts and not any(item.transferable for item in shift_receipts):
+        receipt = sorted(shift_receipts, key=lambda item: item.receipt_id)[0]
+        return _empty_decision(
+            decision="NO_SKILL", state_id=state.resolution_id,
+            reasons=("state_shift",), total_budget=total_budget,
+            applicability={**app_summary, "state_shift_status": "SHIFTED"},
+            causal_support=causal_summary,
+            risk={**risk, "state_shift_status": "SHIFTED"},
+            no_skill_reason="STATE_SHIFT",
+            state_shift_receipt_id=receipt.receipt_id)
+    risk_id, risk_payload, risk_error = _risk_evidence(plan)
+    if risk_error:
+        return _empty_decision(
+            decision="ABSTAIN", state_id=state.resolution_id,
+            reasons=(risk_error,), total_budget=total_budget,
+            applicability=app_summary, causal_support=causal_summary,
+            risk={**risk, "risk_status": "INVALID"})
+    if risk_payload is not None and risk_payload["expected_utility"] < 0.0:
+        return _empty_decision(
+            decision="NO_SKILL", state_id=state.resolution_id,
+            reasons=("expected_utility_negative",), total_budget=total_budget,
+            applicability=app_summary, causal_support=causal_summary,
+            risk={**risk, **risk_payload, "risk_status": "HIGH"},
+            no_skill_reason="RISK", risk_receipt_id=risk_id)
     selected_rules = _rule_ids(conn, typed_query, state)
     binding_assets = set(asset_summary["binding_resolvable_assets"])
     if (memory_capacity >= 1 and promoted_authorized and
@@ -556,7 +654,8 @@ def route_memory(
         selected_asset_ids=tuple(selected_assets), applicability=app_summary,
         causal_support=causal_summary, risk=risk,
         abstain_reasons=reasons, no_memory_budget=allocated_no_memory,
-        memory_budget=allocated_memory)
+        memory_budget=allocated_memory,
+        no_skill_reason="NO_MATCH" if decision == "NO_SKILL" else None)
 
 
 def retrieve_assets(

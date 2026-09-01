@@ -70,3 +70,14 @@ __all__ = [
     "evaluate_and_record_experience_value", "experience_value_digest",
     "load_experience_value", "record_experience_value",
 ]
+
+# P13: apply a localized plan only to an isolated SQLite shadow and discard it.
+from .apply_update import (
+    SHADOW_UPDATE_VERSION, ShadowUpdateError, AppliedShadowUpdateReceipt,
+    apply_localized_update_shadow,
+)
+
+__all__ += [
+    "SHADOW_UPDATE_VERSION", "ShadowUpdateError",
+    "AppliedShadowUpdateReceipt", "apply_localized_update_shadow",
+]
