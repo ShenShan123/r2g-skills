@@ -29,7 +29,8 @@ from .no_skill_calibration import (
     NO_SKILL_CALIBRATION_VERSION, CALIBRATION_DECISIONS,
     CALIBRATION_REASONS, CALIBRATION_LABELS, CALIBRATION_STRATA,
     NoSkillCalibrationError, NoSkillCalibrationSample,
-    NoSkillCalibrationReceipt, wilson_interval, evaluate_no_skill_calibration,
+    NoSkillCalibrationReceipt, wilson_interval,
+    build_no_skill_calibration_samples, evaluate_no_skill_calibration,
 )
 
 __all__ = [
@@ -50,5 +51,5 @@ __all__ = [
     "CALIBRATION_REASONS", "CALIBRATION_LABELS", "CALIBRATION_STRATA",
     "NoSkillCalibrationError", "NoSkillCalibrationSample",
     "NoSkillCalibrationReceipt", "wilson_interval",
-    "evaluate_no_skill_calibration",
+    "build_no_skill_calibration_samples", "evaluate_no_skill_calibration",
 ]

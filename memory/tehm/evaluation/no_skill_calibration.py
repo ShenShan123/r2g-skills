@@ -15,6 +15,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from contracts import MemoryRoutingDecision
 from tehm.ids import stable_dumps
 
 
@@ -26,6 +27,7 @@ CALIBRATION_STRATA = (
     "mechanism_family", "design", "platform", "flow_regime",
     "model_identity", "state_shift_dimension",
 )
+_ROUTER_MEMORY_DECISIONS = frozenset({"APPLY", "CONSIDER"})
 _Z95 = 1.959963984540054
 
 
@@ -194,6 +196,77 @@ def _normalise_samples(value: object) -> tuple[NoSkillCalibrationSample, ...]:
     if len(set(ids)) != len(ids):
         raise NoSkillCalibrationError("calibration samples contain duplicate case IDs")
     return rows
+
+
+def _routing_decision(value: object) -> MemoryRoutingDecision:
+    if isinstance(value, MemoryRoutingDecision):
+        return value
+    if not isinstance(value, Mapping):
+        raise NoSkillCalibrationError("routing decision must be a typed receipt")
+    supplied_id = value.get("routing_receipt_id")
+    try:
+        decision = MemoryRoutingDecision.from_dict(value)
+    except (TypeError, ValueError) as exc:
+        raise NoSkillCalibrationError("routing decision receipt is malformed") from exc
+    if supplied_id is not None and supplied_id != decision.routing_receipt_id:
+        raise NoSkillCalibrationError("routing receipt digest does not match decision")
+    return decision
+
+
+def build_no_skill_calibration_samples(
+        paired_receipts: object, routing_decisions: Mapping,
+        oracle_labels: Mapping) -> tuple[NoSkillCalibrationSample, ...]:
+    """Bind router receipts to explicit, independent oracle labels.
+
+    This adapter intentionally has no outcome argument.  A route is mapped to
+    the binary prediction only from its typed decision, while the expected
+    label must be supplied separately by an oracle manifest.  ``ABSTAIN`` and
+    ``INAPPLICABLE`` are outside the P15 binary calibration contract and are
+    rejected instead of being silently relabelled as NO_SKILL.
+    """
+    if not isinstance(routing_decisions, Mapping) or not isinstance(oracle_labels, Mapping):
+        raise NoSkillCalibrationError(
+            "routing_decisions and oracle_labels must be objects")
+    raw_cases = getattr(paired_receipts, "case_receipts", None)
+    if raw_cases is None and isinstance(paired_receipts, Mapping):
+        raw_cases = paired_receipts.get("case_receipts", paired_receipts)
+    if isinstance(raw_cases, (str, bytes)) or not isinstance(raw_cases, Mapping) or not raw_cases:
+        raise NoSkillCalibrationError("paired_receipts must contain case_receipts")
+    case_ids = set(raw_cases)
+    if set(routing_decisions) != case_ids or set(oracle_labels) != case_ids:
+        raise NoSkillCalibrationError(
+            "routing_decisions and oracle_labels must cover exactly all cases")
+    rows: list[NoSkillCalibrationSample] = []
+    for case_id in sorted(case_ids):
+        route = _routing_decision(routing_decisions[case_id])
+        bundle = raw_cases[case_id]
+        bundle_id = (getattr(bundle, "routing_receipt_id", None)
+                     if not isinstance(bundle, Mapping)
+                     else bundle.get("routing_receipt_id"))
+        if not isinstance(bundle_id, str) or not bundle_id:
+            raise NoSkillCalibrationError(
+                f"paired case {case_id} is missing routing_receipt_id")
+        if bundle_id != route.routing_receipt_id:
+            raise NoSkillCalibrationError(
+                f"paired case {case_id} routing receipt does not match decision")
+        if route.decision in _ROUTER_MEMORY_DECISIONS:
+            predicted_decision, predicted_reason = "USE_MEMORY", None
+        elif route.decision == "NO_SKILL":
+            predicted_decision, predicted_reason = "NO_SKILL", route.no_skill_reason
+        else:
+            raise NoSkillCalibrationError(
+                f"paired case {case_id} route {route.decision} is outside P15 binary calibration")
+        label = oracle_labels[case_id]
+        if not isinstance(label, Mapping):
+            raise NoSkillCalibrationError(f"oracle label for {case_id} is malformed")
+        rows.append(NoSkillCalibrationSample(
+            case_id=str(case_id), predicted_decision=predicted_decision,
+            predicted_reason=predicted_reason,
+            expected_decision=label.get("expected_decision", label.get("oracle_decision")),
+            expected_reason=label.get("expected_reason", label.get("oracle_reason")),
+            confidence=label.get("confidence"), strata=label.get("strata") or {},
+            routing_receipt_id=bundle_id))
+    return tuple(rows)
 
 
 def _binary_summary(rows: Sequence[NoSkillCalibrationSample], *, include_bins: bool) -> dict:
@@ -492,5 +565,6 @@ __all__ = [
     "NO_SKILL_CALIBRATION_VERSION", "CALIBRATION_DECISIONS",
     "CALIBRATION_REASONS", "CALIBRATION_LABELS", "CALIBRATION_STRATA",
     "NoSkillCalibrationError", "NoSkillCalibrationSample",
-    "NoSkillCalibrationReceipt", "wilson_interval", "evaluate_no_skill_calibration",
+    "NoSkillCalibrationReceipt", "wilson_interval",
+    "build_no_skill_calibration_samples", "evaluate_no_skill_calibration",
 ]

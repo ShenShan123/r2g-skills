@@ -5,9 +5,11 @@ from dataclasses import replace
 
 import pytest
 
+from contracts import MemoryRoutingDecision
 from tehm.evaluation.no_skill_calibration import (
     NoSkillCalibrationError, NoSkillCalibrationReceipt, NoSkillCalibrationSample,
-    evaluate_no_skill_calibration, wilson_interval,
+    build_no_skill_calibration_samples, evaluate_no_skill_calibration,
+    wilson_interval,
 )
 from tehm.retrieval.production_gate import evaluate_production_gate
 
@@ -44,6 +46,17 @@ def _samples(*, confidence=True, strata=True):
     return rows
 
 
+def _route(decision, *, reason=None):
+    return MemoryRoutingDecision(
+        decision=decision, resolved_state_id="state",
+        selected_rule_ids=("rule",) if decision in {"APPLY", "CONSIDER"} else (),
+        selected_path_ids=("path",) if decision in {"APPLY", "CONSIDER"} else (),
+        selected_asset_ids=(), applicability={"status": "APPLICABLE"},
+        causal_support={"status": "SUPPORTED"}, risk={}, abstain_reasons=(),
+        no_memory_budget=1, memory_budget=1 if decision in {"APPLY", "CONSIDER"} else 0,
+        no_skill_reason=reason)
+
+
 def test_wilson_interval_is_explicit_and_unknown_safe():
     interval = wilson_interval(0, 5)
     assert interval["point"] == 0.0
@@ -53,6 +66,41 @@ def test_wilson_interval_is_explicit_and_unknown_safe():
         wilson_interval(1, 0)
     with pytest.raises(NoSkillCalibrationError, match="only 95%"):
         wilson_interval(1, 2, confidence=0.90)
+
+
+def test_route_adapter_requires_bound_receipts_and_independent_labels():
+    use = _route("CONSIDER")
+    abstain = _route("NO_SKILL", reason="STATE_SHIFT")
+    routes = {
+        "use": {**use.to_dict(), "routing_receipt_id": use.routing_receipt_id},
+        "abstain": abstain,
+    }
+    paired = {
+        "use": {"routing_receipt_id": use.routing_receipt_id},
+        "abstain": {"routing_receipt_id": abstain.routing_receipt_id},
+    }
+    strata = {"mechanism_family": "density", "design": "aes", "platform": "sky130",
+              "flow_regime": "route", "model_identity": "oracle-v1",
+              "state_shift_dimension": "constraint"}
+    labels = {
+        "use": {"expected_decision": "USE_MEMORY", "confidence": 0.9, "strata": strata},
+        "abstain": {"expected_decision": "NO_SKILL", "expected_reason": "STATE_SHIFT",
+                    "confidence": 0.9, "strata": strata},
+    }
+    rows = build_no_skill_calibration_samples(paired, routes, labels)
+    assert [row.predicted_decision for row in rows] == ["NO_SKILL", "USE_MEMORY"]
+    assert rows[0].predicted_reason == "STATE_SHIFT"
+    assert rows[1].routing_receipt_id == use.routing_receipt_id
+
+    with pytest.raises(NoSkillCalibrationError, match="does not match decision"):
+        build_no_skill_calibration_samples(
+            {"use": {"routing_receipt_id": "routing-tampered"},
+             "abstain": paired["abstain"]}, routes, labels)
+    with pytest.raises(NoSkillCalibrationError, match="outside P15"):
+        build_no_skill_calibration_samples(
+            {"use": {"routing_receipt_id": _route("ABSTAIN").routing_receipt_id},
+             "abstain": paired["abstain"]},
+            {"use": _route("ABSTAIN"), "abstain": abstain}, labels)
 
 
 def test_reason_aware_report_has_two_levels_strata_and_replay_digest():

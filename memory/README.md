@@ -3112,6 +3112,11 @@ stratum 或不完整 confidence 会 fail-closed；样本不足或 reason 分母�
 `routing_receipt_coverage`，缺少 route witness 时即使标签和置信度齐全也保持
 `NOT_ESTABLISHED`，避免脱离 router 行为的手工标签进入 gate。
 
+`build_no_skill_calibration_samples()` 还可从四臂 paired receipt、typed
+`MemoryRoutingDecision` 和独立 oracle label map 装配这些样本：`APPLY/CONSIDER` 映射为
+`USE_MEMORY`，只有真实 `NO_SKILL` 才携带其 reason；`ABSTAIN/INAPPLICABLE` 不会被偷换
+成 `NO_SKILL`，route ID 不匹配或 case 覆盖不完整会直接拒绝。
+
 `evaluate_production_gate()` 在收到该结构化 receipt 时改用总体 precision/recall 的
 Wilson lower bound，并记录 reason metrics/confusion matrix；同时当 evidence 提供
 `memory_interference_cases` 时使用 MIR Wilson upper bound（旧的点估计 manifest 仍
