@@ -17,6 +17,10 @@ from .attribution import (
     FAILURE_TYPES, UPDATE_TARGETS, MemoryFailureAttributionReceipt,
     attribute_failure, failure_attribution_digest,
 )
+from .retrieval_attribution import (
+    RETRIEVAL_ATTRIBUTION_VERSION, RetrievalAttributionError,
+    RetrievalAttributionReceipt, attribute_retrieval_failure,
+)
 from .local_revision import (
     UPDATE_OPERATIONS, LocalizedUpdatePlan, LocalizedUpdatePlanReceipt,
     plan_localized_update,
@@ -62,6 +66,8 @@ __all__ = [
     "verify_raw_evidence_unchanged",
     "ConflictReceipt", "detect_conflicts", "detect_novelty",
     "attribute_failure", "failure_attribution_digest", "plan_localized_update",
+    "RETRIEVAL_ATTRIBUTION_VERSION", "RetrievalAttributionError",
+    "RetrievalAttributionReceipt", "attribute_retrieval_failure",
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",
     "require_verified_execution", "require_verified_transition",

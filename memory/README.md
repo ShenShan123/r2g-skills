@@ -3021,6 +3021,12 @@ P12-F 现在还保留 `routing_receipt_id`，并在 candidate-pool receipt 中�
 避免不完整 oracle 被误算成失败或安全证据。该层仍是 evaluation-only，不改变 canonical
 memory、authority 或 production runtime。
 
+同时新增 `tehm.evolution.retrieval_attribution`：只有 eligible candidate set、candidate
+pool、已选 memory candidate 的失败执行，以及明确标记为 counterfactual 且通过 oracle 的
+漏召回 candidate 同时存在时，才生成 `RETRIEVAL_FAILURE` attribution；单独的失败、
+`UNKNOWN` 或不完整 counterfactual 会 fail-closed。该 receipt 只进入 shadow attribution，
+不会凭失败结果直接修改 retrieval 或 canonical memory。
+
 Revision2 定向回归新增 6 个测试，覆盖 support-envelope training-only、state-shift
 六维 receipt replay、legacy reason compatibility、fresh `NO_MATCH` 和 router
 `STATE_SHIFT` 路由。下一步依赖顺序已调整为：先把 reason-aware receipt 接入四臂

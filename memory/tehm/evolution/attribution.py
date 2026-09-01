@@ -17,6 +17,8 @@ from tehm.canonical.transition import HARMFUL_OUTCOMES
 from tehm.causal.mechanism import load_transition_facts
 from tehm.ids import stable_dumps
 
+from .retrieval_attribution import RetrievalAttributionReceipt
+
 
 FAILURE_TYPES = frozenset({
     "NO_FAILURE", "STATE_RESOLUTION_FAILURE", "RETRIEVAL_FAILURE",
@@ -174,11 +176,15 @@ def attribute_failure(
     conn: sqlite3.Connection, *, transition_id: str | None = None,
     activation_id: str | None = None, value_receipt=None,
     state_resolution=None, conflict=None,
+    retrieval_receipt: RetrievalAttributionReceipt | None = None,
 ) -> MemoryFailureAttributionReceipt:
     """Attribute one observed outcome without mutating any memory layer."""
     activation = _activation(conn, activation_id) if activation_id is not None else None
     if value_receipt is not None and not hasattr(value_receipt, "transition_id"):
         raise TypeError("failure attribution value receipt is invalid")
+    if retrieval_receipt is not None and not isinstance(
+            retrieval_receipt, RetrievalAttributionReceipt):
+        raise TypeError("failure attribution retrieval receipt is invalid")
     if transition_id is None and activation is not None:
         transition_id = activation["produced_transition_id"]
     if transition_id is not None and (type(transition_id) is not str or not transition_id.strip()):
@@ -206,6 +212,15 @@ def attribute_failure(
                           if value in {"MEMORY_INTERFERENCE", "PROMOTED_MEMORY_COUNTEREXAMPLE"})
             excluded.extend(("state_resolution", "verification"))
             confidence = 1.0
+
+    if (retrieval_receipt is not None and retrieval_receipt.retrieval_failure and
+            failure_type == "NO_FAILURE"):
+        failure_type = "RETRIEVAL_FAILURE"
+        blamed.extend(
+            f"candidate:{value}" for value in retrieval_receipt.missed_candidate_ids)
+        excluded.extend(("applicability", "causal_model", "binding"))
+        refs.append(retrieval_receipt.receipt_digest)
+        confidence = 1.0
 
     if activation is not None and failure_type == "NO_FAILURE":
         rule_id = str(activation["rule_id"] or "")
