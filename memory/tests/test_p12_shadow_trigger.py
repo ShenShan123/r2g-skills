@@ -11,6 +11,7 @@ from tehm.evaluation.candidate_executor import (
 )
 from tehm.evolution import (
     P12ShadowTriggerError, P12ShadowUpdateTriggerReceipt,
+    P13EvolutionReasonReceipt,
     build_p12_shadow_update_triggers,
 )
 
@@ -94,6 +95,26 @@ def test_complete_multilineage_oracle_builds_replayable_trigger():
     legacy_replay = P12ShadowUpdateTriggerReceipt.from_dict({
         **legacy.to_dict(), "receipt_digest": legacy.legacy_receipt_digest})
     assert legacy_replay == legacy
+
+
+def test_evolution_reason_receipt_is_bound_and_replayable():
+    receipt = P13EvolutionReasonReceipt(
+        campaign_id="campaign-training",
+        cohort_receipt_digest="sha256:cohort",
+        label_source="independent-event-review-v1",
+        evidence_refs=({"id": "event", "path": "/tmp/event.json",
+                        "sha256": "sha256:event"},),
+        evolution_reasons={"case-0": ("CAPABILITY_GAP",),
+                           "case-1": ("NOVELTY",)},
+    )
+    replay = P13EvolutionReasonReceipt.from_dict({
+        **receipt.to_dict(), "receipt_digest": receipt.receipt_digest})
+    assert replay == receipt
+    assert receipt.receipt_id.startswith("p13_evolution_reason_")
+    tampered = {**receipt.to_dict(), "label_source": "unbound"}
+    tampered["receipt_digest"] = receipt.receipt_digest
+    with pytest.raises(P12ShadowTriggerError, match="digest mismatch"):
+        P13EvolutionReasonReceipt.from_dict(tampered)
 
 
 def test_incomplete_or_routingless_evidence_is_non_triggering():

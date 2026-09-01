@@ -3163,8 +3163,9 @@ memory、不改变 authority，也不把 held-out/calibration evidence 变成 le
 
 ### 2026-09-03 P12→P13 replay report boundary
 
-新增 `scripts/build_p13_shadow_trigger_report.py`，把 frozen RTL/ORFS cohort、campaign
-manifest、typed `MemoryRoutingDecision` 和可选的 typed evolution-reason receipt 绑定为一份
+新增 `scripts/build_p13_shadow_trigger_report.py` 与
+`P13EvolutionReasonReceipt`，把 frozen RTL/ORFS cohort、campaign manifest、typed
+`MemoryRoutingDecision` 和可选的 typed evolution-reason receipt 绑定为一份
 可回放的 P13 审计报告。manifest 必须逐 case 给出 learner partition；route 文件若提供则
 必须覆盖全部 case 并通过 digest/类型校验；reason receipt 还必须绑定当前 campaign/cohort
 digest、`label_source` 和至少一个带 SHA256 的 immutable `evidence_ref`。脚本不会从

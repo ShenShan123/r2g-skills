@@ -113,7 +113,9 @@ def test_report_requires_explicit_evolution_signal_for_trigger(tmp_path):
             "id": "event-review", "path": evidence.name,
             "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
         }],
-        "reasons": {"case-0": ["CAPABILITY_GAP"], "case-1": ["NOVELTY"]},
+        "evolution_reasons": {"case-0": ["CAPABILITY_GAP"], "case-1": ["NOVELTY"]},
+        "evaluation_only": True,
+        "canonical_memory_mutation": "none",
     }))
     report = build_p13_shadow_trigger_report(
         cohort, manifest, routing_path=routes,
@@ -138,7 +140,7 @@ def test_report_rejects_unbound_manual_evolution_reason_map(tmp_path):
     reasons = tmp_path / "reasons.json"
     reasons.write_text(json.dumps({"case-0": ["CAPABILITY_GAP"],
                                    "case-1": ["NOVELTY"]}))
-    with pytest.raises(P13ShadowTriggerReportError, match="typed receipt version"):
+    with pytest.raises(P13ShadowTriggerReportError, match="missing fields"):
         build_p13_shadow_trigger_report(
             cohort, manifest, routing_path=routes,
             evolution_reasons_path=reasons, output=tmp_path / "report.json")

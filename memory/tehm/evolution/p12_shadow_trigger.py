@@ -29,6 +29,7 @@ P13_EVOLUTION_REASONS = frozenset({
     "NOVELTY", "CONFLICT", "COUNTEREXAMPLE", "REPEATED_FAILURE",
     "CAPABILITY_GAP", "MEMORY_INTERFERENCE",
 })
+P13_EVOLUTION_REASON_RECEIPT_VERSION = "p13-evolution-reason-receipt-v1"
 _TRIGGER_REASONS = frozenset({
     "oracle_complete",
     "no_evolution_signal",
@@ -43,6 +44,141 @@ _TRIGGER_REASONS = frozenset({
 
 class P12ShadowTriggerError(ValueError):
     """A P12-to-P13 shadow trigger is malformed or unsafe to consume."""
+
+
+def _reason_evidence_refs(value: object) -> tuple[dict[str, str], ...]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or not value:
+        raise P12ShadowTriggerError(
+            "P13 evolution reason evidence_refs must be a non-empty sequence")
+    refs: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, Mapping):
+            raise P12ShadowTriggerError(
+                "P13 evolution reason evidence_ref must be an object")
+        path = _text(item.get("path"), "evolution reason evidence_ref path")
+        digest = _digest_text(
+            item.get("sha256", item.get("digest")),
+            "evolution reason evidence_ref sha256")
+        ref = {"path": path, "sha256": digest}
+        if item.get("id") is not None:
+            ref["id"] = _text(item.get("id"), "evolution reason evidence_ref id")
+        key = stable_dumps(ref)
+        if key in seen:
+            raise P12ShadowTriggerError(
+                "P13 evolution reason evidence_refs contain duplicates")
+        seen.add(key)
+        refs.append(ref)
+    return tuple(refs)
+
+
+def _reason_map(value: object) -> dict[str, tuple[str, ...]]:
+    if not isinstance(value, Mapping) or not value:
+        raise P12ShadowTriggerError(
+            "P13 evolution reasons must be a non-empty object")
+    result: dict[str, tuple[str, ...]] = {}
+    for case_id, raw in value.items():
+        case_id = _text(case_id, "evolution reason case_id")
+        if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)) or not raw:
+            raise P12ShadowTriggerError(
+                f"P13 evolution reasons for {case_id} must be non-empty")
+        reasons = tuple(sorted(_text(item, "evolution reason") for item in raw))
+        if any(item not in P13_EVOLUTION_REASONS for item in reasons):
+            raise P12ShadowTriggerError(
+                f"P13 evolution reasons for {case_id} are invalid")
+        if len(set(reasons)) != len(reasons):
+            raise P12ShadowTriggerError(
+                f"P13 evolution reasons for {case_id} contain duplicates")
+        result[case_id] = reasons
+    return dict(sorted(result.items()))
+
+
+@dataclass(frozen=True)
+class P13EvolutionReasonReceipt:
+    """Content-addressed, externally sourced P13 evolution signals.
+
+    This receipt is a provenance boundary, not a label generator.  It binds
+    explicit per-case reasons to the exact P12 cohort and immutable evidence
+    references; it never reads execution outcomes or grants mutation authority.
+    """
+
+    campaign_id: str
+    cohort_receipt_digest: str
+    label_source: str
+    evidence_refs: tuple[dict[str, str], ...]
+    evolution_reasons: dict[str, tuple[str, ...]]
+    evaluation_only: bool = True
+    canonical_memory_mutation: str = "none"
+    version: str = P13_EVOLUTION_REASON_RECEIPT_VERSION
+
+    def __post_init__(self) -> None:
+        _text(self.campaign_id, "evolution reason campaign_id")
+        _digest_text(self.cohort_receipt_digest,
+                     "evolution reason cohort_receipt_digest")
+        _text(self.label_source, "evolution reason label_source")
+        if self.evaluation_only is not True:
+            raise P12ShadowTriggerError(
+                "P13 evolution reason receipt must be evaluation-only")
+        if self.canonical_memory_mutation != "none":
+            raise P12ShadowTriggerError(
+                "P13 evolution reason receipt cannot mutate canonical memory")
+        if self.version != P13_EVOLUTION_REASON_RECEIPT_VERSION:
+            raise P12ShadowTriggerError(
+                "P13 evolution reason receipt version is invalid")
+        object.__setattr__(self, "evidence_refs", _reason_evidence_refs(self.evidence_refs))
+        object.__setattr__(self, "evolution_reasons", _reason_map(self.evolution_reasons))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "version": self.version,
+            "campaign_id": self.campaign_id,
+            "cohort_receipt_digest": self.cohort_receipt_digest,
+            "label_source": self.label_source,
+            "evidence_refs": [dict(item) for item in self.evidence_refs],
+            "evolution_reasons": {
+                case_id: list(reasons)
+                for case_id, reasons in self.evolution_reasons.items()
+            },
+            "evaluation_only": self.evaluation_only,
+            "canonical_memory_mutation": self.canonical_memory_mutation,
+        }
+
+    @property
+    def receipt_digest(self) -> str:
+        return _digest(self.to_dict())
+
+    @property
+    def receipt_id(self) -> str:
+        return "p13_evolution_reason_" + self.receipt_digest.split(":", 1)[1][:24]
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "P13EvolutionReasonReceipt":
+        if not isinstance(payload, Mapping):
+            raise P12ShadowTriggerError(
+                "P13 evolution reason receipt must be an object")
+        required = {
+            "version", "campaign_id", "cohort_receipt_digest", "label_source",
+            "evidence_refs", "evolution_reasons", "evaluation_only",
+            "canonical_memory_mutation",
+        }
+        if not required <= set(payload):
+            raise P12ShadowTriggerError(
+                "P13 evolution reason receipt is missing fields")
+        receipt = cls(
+            campaign_id=payload["campaign_id"],
+            cohort_receipt_digest=payload["cohort_receipt_digest"],
+            label_source=payload["label_source"],
+            evidence_refs=tuple(payload["evidence_refs"]),
+            evolution_reasons=dict(payload["evolution_reasons"]),
+            evaluation_only=payload["evaluation_only"],
+            canonical_memory_mutation=payload["canonical_memory_mutation"],
+            version=payload["version"],
+        )
+        supplied = payload.get("receipt_digest")
+        if supplied is not None and supplied != receipt.receipt_digest:
+            raise P12ShadowTriggerError(
+                "P13 evolution reason receipt digest mismatch")
+        return receipt
 
 
 def _digest(value: object) -> str:
@@ -495,6 +631,8 @@ def build_p12_shadow_update_triggers(
 
 
 __all__ = [
-    "P12_SHADOW_TRIGGER_VERSION", "P13_EVOLUTION_REASONS", "P12ShadowTriggerError",
+    "P12_SHADOW_TRIGGER_VERSION", "P13_EVOLUTION_REASONS",
+    "P13_EVOLUTION_REASON_RECEIPT_VERSION", "P12ShadowTriggerError",
+    "P13EvolutionReasonReceipt",
     "P12ShadowUpdateTriggerReceipt", "build_p12_shadow_update_triggers",
 ]

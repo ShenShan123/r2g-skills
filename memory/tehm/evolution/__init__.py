@@ -22,7 +22,9 @@ from .retrieval_attribution import (
     RetrievalAttributionReceipt, attribute_retrieval_failure,
 )
 from .p12_shadow_trigger import (
-    P12_SHADOW_TRIGGER_VERSION, P13_EVOLUTION_REASONS, P12ShadowTriggerError,
+    P12_SHADOW_TRIGGER_VERSION, P13_EVOLUTION_REASONS,
+    P13_EVOLUTION_REASON_RECEIPT_VERSION, P12ShadowTriggerError,
+    P13EvolutionReasonReceipt,
     P12ShadowUpdateTriggerReceipt, build_p12_shadow_update_triggers,
 )
 from .local_revision import (
@@ -73,7 +75,9 @@ __all__ = [
     "attribute_failure", "failure_attribution_digest", "plan_localized_update",
     "RETRIEVAL_ATTRIBUTION_VERSION", "RetrievalAttributionError",
     "RetrievalAttributionReceipt", "attribute_retrieval_failure",
-    "P12_SHADOW_TRIGGER_VERSION", "P13_EVOLUTION_REASONS", "P12ShadowTriggerError",
+    "P12_SHADOW_TRIGGER_VERSION", "P13_EVOLUTION_REASONS",
+    "P13_EVOLUTION_REASON_RECEIPT_VERSION", "P12ShadowTriggerError",
+    "P13EvolutionReasonReceipt",
     "P12ShadowUpdateTriggerReceipt", "build_p12_shadow_update_triggers",
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",

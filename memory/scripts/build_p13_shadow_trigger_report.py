@@ -27,6 +27,7 @@ from tehm.evaluation import (  # noqa: E402
     RtlPairedCohortReceipt,
 )
 from tehm.evolution import (  # noqa: E402
+    P13EvolutionReasonReceipt,
     P12ShadowTriggerError,
     build_p12_shadow_update_triggers,
 )
@@ -169,42 +170,33 @@ def _evidence_refs(payload: Mapping, reason_path: Path) -> tuple[dict, ...]:
 
 def _reasons(payload: Mapping, case_ids: set[str], *, campaign_id: str,
              cohort_digest: str, reason_path: Path) -> tuple[dict[str, tuple[str, ...]], dict]:
-    if payload.get("version") != EVOLUTION_REASON_RECEIPT_VERSION:
-        raise P13ShadowTriggerReportError(
-            "evolution reasons must use the typed receipt version")
-    if payload.get("campaign_id") != campaign_id:
+    # Parse the supplied receipt first, so a caller-provided digest is checked
+    # against exactly what was written.  Paths are then canonicalized and
+    # hashed before producing the report-bound receipt below.
+    try:
+        supplied = P13EvolutionReasonReceipt.from_dict(payload)
+    except (P12ShadowTriggerError, TypeError, ValueError) as exc:
+        raise P13ShadowTriggerReportError(str(exc)) from exc
+    if supplied.campaign_id != campaign_id:
         raise P13ShadowTriggerReportError(
             "evolution reason receipt campaign_id does not match cohort")
-    if payload.get("cohort_receipt_digest") != cohort_digest:
+    if supplied.cohort_receipt_digest != cohort_digest:
         raise P13ShadowTriggerReportError(
             "evolution reason receipt cohort digest does not match cohort")
-    label_source = payload.get("label_source")
-    if type(label_source) is not str or not label_source.strip():
-        raise P13ShadowTriggerReportError(
-            "evolution reason receipt requires label_source")
-    refs = _evidence_refs(payload, reason_path)
-    raw = payload.get("reasons")
-    if not isinstance(raw, Mapping) or set(raw) != case_ids:
+    if set(supplied.evolution_reasons) != case_ids:
         raise P13ShadowTriggerReportError(
             "evolution reasons must cover exactly all cohort cases")
-    result: dict[str, tuple[str, ...]] = {}
-    for case_id in sorted(case_ids):
-        values = raw[case_id]
-        if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
-            raise P13ShadowTriggerReportError(
-                f"evolution reasons for {case_id} must be a sequence")
-        result[case_id] = tuple(values)
-    normalized = {
-        "version": EVOLUTION_REASON_RECEIPT_VERSION,
-        "campaign_id": campaign_id,
-        "cohort_receipt_digest": cohort_digest,
-        "label_source": label_source.strip(),
-        "evidence_refs": list(refs),
-        "reasons": {case_id: list(result[case_id]) for case_id in sorted(result)},
-    }
-    return result, {"path": str(reason_path), "sha256": _sha256(reason_path),
-                    "receipt_digest": _digest(normalized),
-                    "label_source": label_source.strip(),
+    refs = _evidence_refs(payload, reason_path)
+    normalized = P13EvolutionReasonReceipt(
+        campaign_id=campaign_id, cohort_receipt_digest=cohort_digest,
+        label_source=supplied.label_source, evidence_refs=refs,
+        evolution_reasons=supplied.evolution_reasons).to_dict()
+    bound = P13EvolutionReasonReceipt.from_dict(normalized)
+    return dict(bound.evolution_reasons), {
+                    "path": str(reason_path), "sha256": _sha256(reason_path),
+                    "receipt_id": bound.receipt_id,
+                    "receipt_digest": bound.receipt_digest,
+                    "label_source": bound.label_source,
                     "evidence_refs": list(refs)}
 
 
