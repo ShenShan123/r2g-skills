@@ -21,6 +21,10 @@ from .orfs_cohort import (
     ORFS_COHORT_VERSION, OrfsCohortError, OrfsPairedCohortReceipt,
     execute_orfs_paired_cohort,
 )
+from .paired_metrics import (
+    PAIRED_METRICS_VERSION, PairedCohortMetrics, PairedMetricsError,
+    summarize_paired_cohort,
+)
 
 __all__ = [
     "EXECUTOR_VERSION", "P12_ARMS", "CandidateExecutionReceipt",
@@ -34,4 +38,6 @@ __all__ = [
     "OrfsCandidateOracleError", "execute_orfs_candidate",
     "ORFS_COHORT_VERSION", "OrfsCohortError", "OrfsPairedCohortReceipt",
     "execute_orfs_paired_cohort",
+    "PAIRED_METRICS_VERSION", "PairedCohortMetrics", "PairedMetricsError",
+    "summarize_paired_cohort",
 ]

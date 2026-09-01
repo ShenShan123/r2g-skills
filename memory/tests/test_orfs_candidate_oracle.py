@@ -179,6 +179,16 @@ def test_orfs_cohort_executes_and_replays_fixed_four_arm_bundle(tmp_path):
     replay = OrfsPairedCohortReceipt.from_dict({
         **bundle.to_dict(), "receipt_digest": bundle.receipt_digest})
     assert replay.to_dict() == bundle.to_dict()
+    legacy = bundle.to_dict()
+    legacy.pop("lineage_ids")
+    legacy.pop("no_skill_reason_counts")
+    for value in legacy["case_receipts"].values():
+        for key in ("no_skill_reason", "state_shift_receipt_id",
+                    "risk_receipt_id", "lineage_id", "routing_receipt_id"):
+            value.pop(key, None)
+    legacy_replay = OrfsPairedCohortReceipt.from_dict({
+        **legacy, "receipt_digest": bundle.legacy_receipt_digest})
+    assert legacy_replay.legacy_receipt_digest == bundle.legacy_receipt_digest
 
 
 def test_orfs_cohort_min_lineages_is_preflighted(tmp_path):

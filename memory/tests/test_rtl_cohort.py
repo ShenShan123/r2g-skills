@@ -68,6 +68,8 @@ def test_source_disjoint_fixed_environment_cohort_replays():
     cases = [_case("req_ack_bug"), _case("req_ack_bug2")]
     cases[0]["lineage_id"] = "lineage-req-ack"
     cases[1]["lineage_id"] = "lineage-write-verify"
+    cases[0]["routing_receipt_id"] = "routing-req-ack"
+    cases[1]["routing_receipt_id"] = "routing-write-verify"
     arms = {
         case["case_id"]: {
             arm: None if arm == "NO_MEMORY" else _candidate(
@@ -90,12 +92,23 @@ def test_source_disjoint_fixed_environment_cohort_replays():
         "p12-req_ack_bug": "lineage-req-ack",
         "p12-req_ack_bug2": "lineage-write-verify",
     }
+    assert receipt.case_receipts["p12-req_ack_bug"].routing_receipt_id == "routing-req-ack"
     assert receipt.outcome_counts["NO_MEMORY"]["FAIL"] == 2
     for arm in P12_ARMS[1:]:
         assert receipt.outcome_counts[arm]["PASS"] == 2
     replay = RtlPairedCohortReceipt.from_dict(
         {**receipt.to_dict(), "receipt_digest": receipt.receipt_digest})
     assert replay.to_dict() == receipt.to_dict()
+    legacy = receipt.to_dict()
+    legacy.pop("lineage_ids")
+    legacy.pop("no_skill_reason_counts")
+    for value in legacy["case_receipts"].values():
+        for key in ("no_skill_reason", "state_shift_receipt_id",
+                    "risk_receipt_id", "lineage_id", "routing_receipt_id"):
+            value.pop(key, None)
+    legacy_replay = RtlPairedCohortReceipt.from_dict({
+        **legacy, "receipt_digest": receipt.legacy_receipt_digest})
+    assert legacy_replay.legacy_receipt_digest == receipt.legacy_receipt_digest
 
 
 def test_cohort_min_lineages_requires_explicit_distinct_ids():

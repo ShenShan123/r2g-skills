@@ -114,9 +114,11 @@ def test_paired_receipt_retains_reason_aware_no_skill_metadata():
         {"NO_MEMORY": None, "ALWAYS_MEMORY": candidate,
          "APPLICABILITY_GATED": candidate, "CAUSAL_NO_SKILL": candidate},
         oracle=oracle, no_skill_reason="STATE_SHIFT",
-        state_shift_receipt_id="state_shift_receipt", lineage_id="lineage-fixture")
+        state_shift_receipt_id="state_shift_receipt", lineage_id="lineage-fixture",
+        routing_receipt_id="routing-fixture")
     assert bundle.no_skill_reason == "STATE_SHIFT"
     assert bundle.state_shift_receipt_id == "state_shift_receipt"
     assert bundle.lineage_id == "lineage-fixture"
+    assert bundle.routing_receipt_id == "routing-fixture"
     replay = PairedCandidateExecutionReceipt.from_dict(bundle.to_dict())
     assert replay == bundle

@@ -99,6 +99,27 @@ def test_applicability_and_causal_no_skill_gates_are_distinct():
     assert admitted.receipt.search_entropy == pytest.approx(0.918296)
 
 
+def test_pool_receipt_preserves_reason_aware_no_skill_metadata():
+    routing = _routing(decision="NO_SKILL")
+    routing = MemoryRoutingDecision(
+        decision=routing.decision, resolved_state_id=routing.resolved_state_id,
+        selected_rule_ids=routing.selected_rule_ids,
+        selected_path_ids=routing.selected_path_ids,
+        selected_asset_ids=(), applicability=routing.applicability,
+        causal_support=routing.causal_support, risk=routing.risk,
+        abstain_reasons=routing.abstain_reasons,
+        no_memory_budget=routing.no_memory_budget, memory_budget=0,
+        no_skill_reason="STATE_SHIFT", state_shift_receipt_id="shift-receipt")
+    pool = build_candidate_pool(
+        _query(), _no_memory(), _memory(), arm="CAUSAL_NO_SKILL",
+        routing=routing, candidate_budget=3)
+    assert pool.receipt.no_skill_reason == "STATE_SHIFT"
+    assert pool.receipt.state_shift_receipt_id == "shift-receipt"
+    replay = CandidatePoolReceipt.from_dict({
+        **pool.receipt.to_dict(), "receipt_digest": pool.receipt.receipt_digest})
+    assert replay == pool.receipt
+
+
 def test_budget_one_cannot_displace_no_memory():
     pool = build_candidate_pool(
         _query(), _no_memory(), _memory(), arm="ALWAYS_MEMORY", candidate_budget=1,

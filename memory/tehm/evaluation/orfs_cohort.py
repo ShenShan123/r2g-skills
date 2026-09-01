@@ -199,6 +199,8 @@ class OrfsPairedCohortReceipt:
             value.pop("no_skill_reason", None)
             value.pop("state_shift_receipt_id", None)
             value.pop("risk_receipt_id", None)
+            value.pop("lineage_id", None)
+            value.pop("routing_receipt_id", None)
         return _digest(payload)
 
     def to_dict(self) -> dict[str, Any]:
@@ -366,7 +368,8 @@ def execute_orfs_paired_cohort(
             no_skill_reason=case.get("no_skill_reason"),
             state_shift_receipt_id=case.get("state_shift_receipt_id"),
             risk_receipt_id=case.get("risk_receipt_id"),
-            lineage_id=case.get("lineage_id"))
+            lineage_id=case.get("lineage_id"),
+            routing_receipt_id=case.get("routing_receipt_id"))
         if (bundle.toolchain_digest != expected_toolchain or
                 bundle.oracle_digest != expected_oracle):
             raise OrfsCohortError("ORFS cohort execution digest drift")

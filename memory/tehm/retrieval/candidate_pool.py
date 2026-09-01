@@ -20,6 +20,7 @@ from contracts import (
     MemoryCandidate,
     MemoryQuery,
     MemoryRoutingDecision,
+    NO_SKILL_REASONS,
 )
 from tehm.canonical.transition import OUTCOMES, POSITIVE_OUTCOMES, HARMFUL_OUTCOMES
 from tehm.ids import stable_dumps
@@ -248,6 +249,9 @@ class CandidatePoolReceipt:
     search_entropy: float
     memory_admitted: bool
     reasons: tuple[str, ...] = field(default_factory=tuple)
+    no_skill_reason: str | None = None
+    state_shift_receipt_id: str | None = None
+    risk_receipt_id: str | None = None
 
     def __post_init__(self) -> None:
         _text(self.case_id, "case_id")
@@ -257,6 +261,23 @@ class CandidatePoolReceipt:
             _text(self.routing_receipt_id, "routing_receipt_id")
         if self.routing_decision is not None and self.routing_decision not in MEMORY_ROUTING_DECISIONS:
             raise CandidatePoolError("candidate pool routing_decision is invalid")
+        if self.no_skill_reason is not None and self.no_skill_reason not in NO_SKILL_REASONS:
+            raise CandidatePoolError("candidate pool no_skill_reason is invalid")
+        for name in ("state_shift_receipt_id", "risk_receipt_id"):
+            value = getattr(self, name)
+            if value is not None and (type(value) is not str or not value.strip()):
+                raise CandidatePoolError(f"candidate pool {name} is invalid")
+        if self.routing_decision != "NO_SKILL" and (
+                self.no_skill_reason is not None or
+                self.state_shift_receipt_id is not None or
+                self.risk_receipt_id is not None):
+            raise CandidatePoolError(
+                "candidate pool no-skill metadata requires NO_SKILL routing")
+        if self.state_shift_receipt_id is not None and self.no_skill_reason != "STATE_SHIFT":
+            raise CandidatePoolError(
+                "candidate pool state shift receipt requires STATE_SHIFT")
+        if self.risk_receipt_id is not None and self.no_skill_reason != "RISK":
+            raise CandidatePoolError("candidate pool risk receipt requires RISK")
         if type(self.candidate_budget) is not int or self.candidate_budget < 1:
             raise CandidatePoolError("candidate pool candidate_budget must be positive")
         ids = _strings(self.candidate_ids, "candidate_ids")
@@ -319,12 +340,25 @@ class CandidatePoolReceipt:
             "search_entropy": self.search_entropy,
             "memory_admitted": self.memory_admitted,
             "reasons": list(self.reasons),
+            "no_skill_reason": self.no_skill_reason,
+            "state_shift_receipt_id": self.state_shift_receipt_id,
+            "risk_receipt_id": self.risk_receipt_id,
         }
 
     @property
     def receipt_digest(self) -> str:
         return "sha256:" + hashlib.sha256(
             stable_dumps(self.to_dict()).encode()).hexdigest()
+
+    @property
+    def legacy_receipt_digest(self) -> str:
+        """Digest accepted for receipts written before reason metadata."""
+        payload = self.to_dict()
+        payload.pop("no_skill_reason", None)
+        payload.pop("state_shift_receipt_id", None)
+        payload.pop("risk_receipt_id", None)
+        return "sha256:" + hashlib.sha256(
+            stable_dumps(payload).encode()).hexdigest()
 
     @classmethod
     def from_dict(cls, payload: object) -> "CandidatePoolReceipt":
@@ -358,9 +392,13 @@ class CandidatePoolReceipt:
             search_entropy=payload["search_entropy"],
             memory_admitted=payload["memory_admitted"],
             reasons=tuple(payload["reasons"]),
+            no_skill_reason=payload.get("no_skill_reason"),
+            state_shift_receipt_id=payload.get("state_shift_receipt_id"),
+            risk_receipt_id=payload.get("risk_receipt_id"),
         )
         supplied = payload.get("receipt_digest")
-        if supplied is not None and supplied != receipt.receipt_digest:
+        if supplied is not None and supplied not in {
+                receipt.receipt_digest, receipt.legacy_receipt_digest}:
             raise CandidatePoolError("candidate pool receipt digest mismatch")
         return receipt
 
@@ -511,6 +549,9 @@ def build_candidate_pool(
         unique_mechanism_hypotheses=mechanisms,
         candidate_diversity=diversity, search_entropy=entropy,
         memory_admitted=bool(selected_memory), reasons=tuple(reasons),
+        no_skill_reason=routing.no_skill_reason if routing else None,
+        state_shift_receipt_id=(routing.state_shift_receipt_id if routing else None),
+        risk_receipt_id=(routing.risk_receipt_id if routing else None),
     )
     return CandidatePool(candidates=tuple(selected), receipt=receipt)
 

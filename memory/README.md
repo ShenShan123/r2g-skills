@@ -3008,11 +3008,18 @@ mechanism、flow、constraint、oracle、history 六个维度 deterministic 比�
 `no_skill_reason` 与对应 shift/risk receipt ID，并提供 reason-stratified counts；这使
 `CAUSAL_NO_SKILL` 的 refusal 语义可以原样进入后续 calibration，而不从执行结果反推。
 
-P12-E 还为 paired receipt 增加可选 `lineage_id`，cohort 暴露
+P12-F 接口还为 paired receipt 增加可选 `lineage_id`，cohort 暴露
 `lineage_ids`/`lineage_count`；调用方设置 `min_lineages>1` 时，入口在执行前强制每个
 case 显式声明 lineage 且要求足够的 distinct lineages，避免跑完昂贵 flow 后才发现
 cohort 不是 source-disjoint multi-lineage evidence。当前测试已验证该 gate 与 replay，
 但真实 ORFS 多 lineage cohort 尚未运行，因此不能据此声称能力或 promotion 证据。
+
+P12-F 现在还保留 `routing_receipt_id`，并在 candidate-pool receipt 中贯通
+`no_skill_reason`/state-shift/risk receipt；`tehm.evaluation.paired_metrics` 提供
+统一的 unknown-safe paired 统计。原始 `UNKNOWN` outcome 仍会计入 outcome counts，
+但会从对应 paired harm/repair denominator 排除，并报告 routing receipt coverage，
+避免不完整 oracle 被误算成失败或安全证据。该层仍是 evaluation-only，不改变 canonical
+memory、authority 或 production runtime。
 
 Revision2 定向回归新增 6 个测试，覆盖 support-envelope training-only、state-shift
 六维 receipt replay、legacy reason compatibility、fresh `NO_MATCH` 和 router
