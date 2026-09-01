@@ -2922,3 +2922,17 @@ source freeze 执行 target + regression。该 adapter 不打开 `manifest.json`
 toolchain/oracle digest 下通过，source 原文件保持不变。这个阶段只是 Stage A
 controlled-fixture path/oracle/receipt 验证，不是 frozen R2G cohort 的 repair gain
 或 capability 结论；下一步仍需准备 source-disjoint 的固定 toolchain R2G cohort。
+
+### 2026-09-03 P12-C fixed-environment cohort boundary（evaluation-only）
+
+新增 `tehm/evaluation/rtl_cohort.py`，把多个 P12 paired case 装配成可 replay 的
+`RtlPairedCohortReceipt`。cohort 入口要求每个 case 显式绑定 source digest、
+toolchain/oracle digest、platform digest 和 PDK digest，并要求 campaign manifest
+digest；会拒绝重复 source 内容、环境 digest 漂移、case/arm 缺失以及 source 在执行
+期间被修改。每个 case 仍强制四臂和固定候选预算，结果只保留原始 arm outcome counts，
+不把 paired delta 解释成 production 或 capability gain。
+
+当前两个独立 handshake fixture 已通过真实 Icarus cohort smoke：无记忆臂均失败，
+三个 memory 臂均通过，receipt 可 replay。它们仍属于 Stage A/受控 RTL evidence；
+真正的 Stage B 需要另外冻结、source-disjoint 的 R2G/ORFS cohort 和真实固定工具链，
+不能用这些 fixture 代替。

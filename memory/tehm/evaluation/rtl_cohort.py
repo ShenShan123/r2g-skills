@@ -1,0 +1,295 @@
+"""Source-disjoint, fixed-environment P12 RTL cohort harness.
+
+This module only assembles evaluation receipts.  It does not infer a gain,
+promote a rule, or write canonical memory.  Every case is executed through
+the four-arm P12 harness, while the cohort boundary checks source freeze,
+toolchain, oracle, platform, PDK, and campaign-manifest identity.
+"""
+from __future__ import annotations
+
+import hashlib
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
+
+from tehm.ids import stable_dumps
+from tehm.retrieval.structured_candidate import StructuredRepairCandidate
+
+from .candidate_executor import (
+    P12_ARMS, PairedCandidateExecutionReceipt, execute_paired_candidates,
+)
+from .rtl_candidate_oracle import IcarusCandidateOracle
+from tehm.rtl.rtl_oracle import IcarusOracle
+
+
+RTL_COHORT_VERSION = "rtl-p12-cohort-v0.1"
+
+
+class RtlCohortError(ValueError):
+    """A frozen P12 cohort is malformed or violates a fixed-environment gate."""
+
+
+def _digest(value: object) -> str:
+    return "sha256:" + hashlib.sha256(stable_dumps(value).encode()).hexdigest()
+
+
+def _text(value: object, name: str) -> str:
+    if type(value) is not str or not value.strip():
+        raise RtlCohortError(f"RTL cohort {name} is required")
+    return value.strip()
+
+
+def _sha256_text(value: object, name: str) -> str:
+    text = _text(value, name)
+    if not text.startswith("sha256:") or len(text) <= len("sha256:"):
+        raise RtlCohortError(f"RTL cohort {name} must be a sha256 digest")
+    return text
+
+
+def _budget_value(value: int | Mapping) -> int:
+    if isinstance(value, Mapping):
+        raw = value.get("candidate_budget", value.get("total_budget", 3))
+    else:
+        raw = value
+    if type(raw) is not int or not 1 <= raw <= 3:
+        raise RtlCohortError("RTL cohort candidate budget must be between one and three")
+    return raw
+
+
+def _source_digest(case: Mapping) -> str:
+    path_value = case.get("rtl_source")
+    if type(path_value) is not str or not path_value.strip():
+        raise RtlCohortError("RTL cohort case requires rtl_source")
+    from pathlib import Path
+    path = Path(path_value).expanduser().resolve()
+    if not path.is_file():
+        raise RtlCohortError("RTL cohort case rtl_source is not a file")
+    actual = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    expected = case.get("source_digest")
+    if expected is not None and _sha256_text(expected, "source_digest") != actual:
+        raise RtlCohortError("RTL cohort source freeze digest mismatch")
+    return actual
+
+
+def _normalize_oracle(oracle: object) -> IcarusCandidateOracle:
+    if oracle is None:
+        return IcarusCandidateOracle()
+    if isinstance(oracle, IcarusCandidateOracle):
+        return oracle
+    if isinstance(oracle, IcarusOracle):
+        return IcarusCandidateOracle(oracle)
+    raise RtlCohortError("RTL cohort oracle must be IcarusOracle/IcarusCandidateOracle")
+
+
+def _outcome_counts(receipts: Mapping[str, PairedCandidateExecutionReceipt]) -> dict:
+    counts = {arm: {"PASS": 0, "FAIL": 0, "UNKNOWN": 0, "PARTIAL": 0}
+              for arm in P12_ARMS}
+    for bundle in receipts.values():
+        for arm in P12_ARMS:
+            outcome = bundle.arm_receipts[arm].outcome
+            counts[arm][outcome] = counts[arm].get(outcome, 0) + 1
+    return counts
+
+
+@dataclass(frozen=True)
+class RtlPairedCohortReceipt:
+    """Replayable receipt for a fixed, source-disjoint P12 cohort."""
+
+    campaign_id: str
+    case_receipts: dict[str, PairedCandidateExecutionReceipt]
+    source_digests: dict[str, str]
+    candidate_budget: int
+    toolchain_digest: str
+    oracle_digest: str
+    platform_digest: str
+    pdk_digest: str
+    campaign_manifest_digest: str
+    source_disjoint: bool = True
+    source_restore_verified: bool = True
+    evaluation_only: bool = True
+    version: str = RTL_COHORT_VERSION
+
+    def __post_init__(self) -> None:
+        _text(self.campaign_id, "campaign_id")
+        if not isinstance(self.case_receipts, dict) or not self.case_receipts:
+            raise RtlCohortError("RTL cohort requires at least one case receipt")
+        if not isinstance(self.source_digests, dict) or set(self.source_digests) != set(self.case_receipts):
+            raise RtlCohortError("RTL cohort source digests do not match cases")
+        if any(not isinstance(value, PairedCandidateExecutionReceipt)
+               for value in self.case_receipts.values()):
+            raise RtlCohortError("RTL cohort case receipt is invalid")
+        if any(bundle.case_id != case_id or bundle.candidate_budget != self.candidate_budget
+               for case_id, bundle in self.case_receipts.items()):
+            raise RtlCohortError("RTL cohort case or budget mismatch")
+        if len(set(self.source_digests.values())) != len(self.source_digests):
+            raise RtlCohortError("RTL cohort sources are not disjoint")
+        if not self.source_disjoint or not self.source_restore_verified:
+            raise RtlCohortError("RTL cohort source-disjoint/restore gates are false")
+        if self.evaluation_only is not True:
+            raise RtlCohortError("RTL cohort must be evaluation-only")
+        if type(self.candidate_budget) is not int or not 1 <= self.candidate_budget <= 3:
+            raise RtlCohortError("RTL cohort candidate budget is invalid")
+        for name in ("toolchain_digest", "oracle_digest", "platform_digest",
+                     "pdk_digest", "campaign_manifest_digest"):
+            _sha256_text(getattr(self, name), name)
+        if any(bundle.toolchain_digest != self.toolchain_digest or
+               bundle.oracle_digest != self.oracle_digest
+               for bundle in self.case_receipts.values()):
+            raise RtlCohortError("RTL cohort toolchain/oracle digest mismatch")
+
+    @property
+    def outcome_counts(self) -> dict:
+        return _outcome_counts(self.case_receipts)
+
+    @property
+    def receipt_digest(self) -> str:
+        return _digest(self.to_dict())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "version": self.version,
+            "campaign_id": self.campaign_id,
+            "case_receipts": {case_id: receipt.to_dict()
+                               for case_id, receipt in sorted(self.case_receipts.items())},
+            "source_digests": dict(sorted(self.source_digests.items())),
+            "candidate_budget": self.candidate_budget,
+            "toolchain_digest": self.toolchain_digest,
+            "oracle_digest": self.oracle_digest,
+            "platform_digest": self.platform_digest,
+            "pdk_digest": self.pdk_digest,
+            "campaign_manifest_digest": self.campaign_manifest_digest,
+            "source_disjoint": self.source_disjoint,
+            "source_restore_verified": self.source_restore_verified,
+            "evaluation_only": self.evaluation_only,
+            "outcome_counts": self.outcome_counts,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "RtlPairedCohortReceipt":
+        if not isinstance(payload, Mapping):
+            raise RtlCohortError("RTL cohort receipt must be an object")
+        required = {
+            "campaign_id", "case_receipts", "source_digests", "candidate_budget",
+            "toolchain_digest", "oracle_digest", "platform_digest", "pdk_digest",
+            "campaign_manifest_digest", "source_disjoint", "source_restore_verified",
+            "evaluation_only",
+        }
+        if not required <= set(payload):
+            raise RtlCohortError("RTL cohort receipt is missing fields")
+        raw_cases = payload["case_receipts"]
+        if not isinstance(raw_cases, Mapping):
+            raise RtlCohortError("RTL cohort case receipts are missing")
+        receipt = cls(
+            campaign_id=payload["campaign_id"],
+            case_receipts={str(case_id): PairedCandidateExecutionReceipt.from_dict(value)
+                           for case_id, value in raw_cases.items()},
+            source_digests=dict(payload["source_digests"]),
+            candidate_budget=payload["candidate_budget"],
+            toolchain_digest=payload["toolchain_digest"],
+            oracle_digest=payload["oracle_digest"],
+            platform_digest=payload["platform_digest"],
+            pdk_digest=payload["pdk_digest"],
+            campaign_manifest_digest=payload["campaign_manifest_digest"],
+            source_disjoint=payload["source_disjoint"],
+            source_restore_verified=payload["source_restore_verified"],
+            evaluation_only=payload["evaluation_only"],
+            version=payload.get("version", RTL_COHORT_VERSION),
+        )
+        supplied = payload.get("receipt_digest")
+        if supplied is not None and supplied != receipt.receipt_digest:
+            raise RtlCohortError("RTL cohort receipt digest mismatch")
+        return receipt
+
+
+def execute_rtl_paired_cohort(
+        cases: Sequence[Mapping],
+        arm_candidates: Mapping[str, Mapping[str, StructuredRepairCandidate | None]],
+        *, campaign_id: str, campaign_manifest_digest: str,
+        platform_digest: str, pdk_digest: str,
+        oracle: IcarusCandidateOracle | IcarusOracle | None = None,
+        budget: int | Mapping = 3,
+        toolchain_digest: str | None = None,
+        oracle_digest: str | None = None) -> RtlPairedCohortReceipt:
+    """Execute a fixed-environment, source-disjoint P12 cohort.
+
+    Each case must contain ``case_id``, ``rtl_source``, ``source_digest``,
+    ``toolchain_digest``, ``oracle_digest``, ``platform_digest`` and
+    ``pdk_digest`` in addition to the paths required by the Icarus adapter.
+    The campaign manifest itself is represented only by its supplied digest;
+    this function never reads that manifest or any fixture ``fix`` field.
+    """
+    campaign_id = _text(campaign_id, "campaign_id")
+    campaign_manifest_digest = _sha256_text(campaign_manifest_digest,
+                                            "campaign_manifest_digest")
+    platform_digest = _sha256_text(platform_digest, "platform_digest")
+    pdk_digest = _sha256_text(pdk_digest, "pdk_digest")
+    if not isinstance(cases, Sequence) or isinstance(cases, (str, bytes)) or not cases:
+        raise RtlCohortError("RTL cohort cases must be a non-empty sequence")
+    if not isinstance(arm_candidates, Mapping):
+        raise RtlCohortError("RTL cohort arm_candidates must be an object")
+    budget_value = _budget_value(budget)
+    runner = _normalize_oracle(oracle)
+    seen_ids: set[str] = set()
+    seen_sources: set[str] = set()
+    frozen_cases: dict[str, Mapping] = {}
+    source_digests: dict[str, str] = {}
+    expected_toolchain = toolchain_digest
+    expected_oracle = oracle_digest
+
+    for raw_case in cases:
+        if not isinstance(raw_case, Mapping):
+            raise RtlCohortError("RTL cohort case must be an object")
+        case_id = _text(raw_case.get("case_id"), "case_id")
+        if case_id in seen_ids:
+            raise RtlCohortError("RTL cohort case IDs must be unique")
+        seen_ids.add(case_id)
+        source_digest = _source_digest(raw_case)
+        if source_digest in seen_sources:
+            raise RtlCohortError("RTL cohort source files/content must be disjoint")
+        seen_sources.add(source_digest)
+        case_toolchain = _sha256_text(raw_case.get("toolchain_digest"),
+                                      "case toolchain_digest")
+        case_oracle = _sha256_text(raw_case.get("oracle_digest"),
+                                   "case oracle_digest")
+        expected_toolchain = expected_toolchain or case_toolchain
+        expected_oracle = expected_oracle or case_oracle
+        if case_toolchain != expected_toolchain or case_oracle != expected_oracle:
+            raise RtlCohortError("RTL cohort toolchain/oracle digest is not fixed")
+        if _sha256_text(raw_case.get("platform_digest"), "case platform_digest") != platform_digest:
+            raise RtlCohortError("RTL cohort platform digest is not fixed")
+        if _sha256_text(raw_case.get("pdk_digest"), "case pdk_digest") != pdk_digest:
+            raise RtlCohortError("RTL cohort PDK digest is not fixed")
+        frozen_cases[case_id] = raw_case
+        source_digests[case_id] = source_digest
+
+    if set(arm_candidates) != seen_ids:
+        raise RtlCohortError("RTL cohort candidates must cover exactly all cases")
+    receipts: dict[str, PairedCandidateExecutionReceipt] = {}
+    for case_id, case in frozen_cases.items():
+        arms = arm_candidates[case_id]
+        if not isinstance(arms, Mapping) or set(arms) != set(P12_ARMS):
+            raise RtlCohortError(f"RTL cohort case {case_id} lacks exactly four P12 arms")
+        before = source_digests[case_id]
+        bundle = execute_paired_candidates(case, arms, oracle=runner, budget=budget)
+        if bundle.toolchain_digest != expected_toolchain or bundle.oracle_digest != expected_oracle:
+            raise RtlCohortError("RTL cohort execution digest drift")
+        from pathlib import Path
+        source_path = Path(str(case["rtl_source"])).expanduser().resolve()
+        after = "sha256:" + hashlib.sha256(source_path.read_bytes()).hexdigest()
+        if after != before:
+            raise RtlCohortError(f"RTL cohort source changed during execution: {case_id}")
+        receipts[case_id] = bundle
+
+    return RtlPairedCohortReceipt(
+        campaign_id=campaign_id, case_receipts=receipts,
+        source_digests=source_digests, candidate_budget=budget_value,
+        toolchain_digest=_sha256_text(expected_toolchain, "toolchain_digest"),
+        oracle_digest=_sha256_text(expected_oracle, "oracle_digest"),
+        platform_digest=platform_digest, pdk_digest=pdk_digest,
+        campaign_manifest_digest=campaign_manifest_digest)
+
+
+__all__ = [
+    "RTL_COHORT_VERSION", "RtlCohortError", "RtlPairedCohortReceipt",
+    "execute_rtl_paired_cohort",
+]
