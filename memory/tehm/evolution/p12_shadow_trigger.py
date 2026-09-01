@@ -112,6 +112,44 @@ def _explicit_lineages(cases: Mapping[str, PairedCandidateExecutionReceipt]) -> 
     return values
 
 
+def _case_learner_eligibility(
+        cases: Mapping[str, PairedCandidateExecutionReceipt],
+        *, learner_eligible: bool,
+        case_learner_eligibility: Mapping[str, bool] | None,
+        ) -> dict[str, bool]:
+    """Validate the learner partition before producing any P13 trigger.
+
+    A cohort can contain both training and audit-only (held-out/calibration)
+    cases.  A single campaign-level boolean is therefore not sufficient to
+    authorize a shadow update: allowing it would let a held-out case inherit a
+    training assertion and leak evaluation evidence into P13.  Callers that
+    request learner evidence must provide an exact, per-case manifest binding;
+    mixed cohorts fail closed and must be split into separate reports.
+    """
+    if case_learner_eligibility is None:
+        if learner_eligible:
+            raise P12ShadowTriggerError(
+                "P12 shadow trigger requires explicit per-case learner eligibility")
+        return {case_id: False for case_id in cases}
+    if not isinstance(case_learner_eligibility, Mapping):
+        raise P12ShadowTriggerError(
+            "P12 shadow trigger case_learner_eligibility must be an object")
+    if set(case_learner_eligibility) != set(cases):
+        raise P12ShadowTriggerError(
+            "P12 shadow trigger per-case learner eligibility must cover exactly all cases")
+    result: dict[str, bool] = {}
+    for case_id in cases:
+        value = case_learner_eligibility[case_id]
+        if type(value) is not bool:
+            raise P12ShadowTriggerError(
+                f"P12 shadow trigger learner eligibility for {case_id} must be boolean")
+        result[case_id] = learner_eligible and value
+    if learner_eligible and not all(result.values()):
+        raise P12ShadowTriggerError(
+            "P12 shadow trigger cohort mixes learner-eligible and audit-only cases")
+    return result
+
+
 def _reason(*, learner_eligible: bool, routing_id: str | None,
             routing_decision: str | None, baseline_complete: bool,
             memory_complete: bool) -> tuple[bool, str]:
@@ -291,14 +329,18 @@ def build_p12_shadow_update_triggers(
         cohort: object, *, memory_arm: str, learner_eligible: bool,
         min_lineages: int = 2,
         routing_decisions: Mapping[str, MemoryRoutingDecision] | None = None,
+        case_learner_eligibility: Mapping[str, bool] | None = None,
         ) -> tuple[P12ShadowUpdateTriggerReceipt, ...]:
     """Convert each cohort case into a replayable P13 shadow trigger.
 
-    ``learner_eligible`` is an explicit caller assertion checked by the
-    campaign manifest; it is never inferred from an ORFS outcome.  A false
-    assertion yields non-trigger receipts.  Structural violations (tampered
-    cohort, missing explicit lineages, or invalid arm identity) raise instead
-    of silently becoming evidence.
+    ``learner_eligible`` and ``case_learner_eligibility`` are explicit caller
+    assertions checked by the campaign manifest; they are never inferred from
+    an execution outcome.  A learner-enabled call must provide an exact
+    all-training per-case map, so a mixed training/held-out cohort cannot
+    silently expand the learner support envelope.  A false campaign assertion
+    yields non-trigger receipts.  Structural violations (tampered cohort,
+    missing explicit lineages, or invalid arm identity) raise instead of
+    silently becoming evidence.
     """
     if memory_arm not in _MEMORY_ARMS:
         raise P12ShadowTriggerError("P12 shadow trigger memory_arm is invalid")
@@ -319,6 +361,9 @@ def build_p12_shadow_update_triggers(
     if len(lineages) < min_lineages:
         raise P12ShadowTriggerError(
             "P12 shadow trigger cohort lacks the required distinct lineages")
+    case_learner = _case_learner_eligibility(
+        cases, learner_eligible=learner_eligible,
+        case_learner_eligibility=case_learner_eligibility)
     results: list[P12ShadowUpdateTriggerReceipt] = []
     for case_id, bundle in sorted(cases.items()):
         if bundle.case_id != case_id:
@@ -345,7 +390,7 @@ def build_p12_shadow_update_triggers(
         baseline_complete = _oracle_complete(baseline)
         memory_complete = _oracle_complete(memory)
         triggered, reason = _reason(
-            learner_eligible=learner_eligible,
+            learner_eligible=case_learner[case_id],
             routing_id=routing_id, routing_decision=routing_decision,
             baseline_complete=baseline_complete,
             memory_complete=memory_complete)
@@ -365,7 +410,7 @@ def build_p12_shadow_update_triggers(
             baseline_outcome=baseline.outcome, memory_outcome=memory.outcome,
             baseline_oracle_complete=baseline_complete,
             memory_oracle_complete=memory_complete,
-            learner_eligible=learner_eligible, triggered=triggered, reason=reason))
+            learner_eligible=case_learner[case_id], triggered=triggered, reason=reason))
     return tuple(results)
 
 

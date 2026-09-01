@@ -3061,3 +3061,12 @@ routing receipt coverage 为 `0.0`，因此 P12→P13 审计明确输出
 `p13_eligible=false`、`triggered_count=0`；这建立了真实 execution evidence，但不能
 被写成 retrieval/capability gain 或 P13 online update。下一步必须为同一 cohort 补齐
 真实、可 replay 的 `MemoryRoutingDecision` receipt，再重放 trigger 与 P13 staging。
+
+P13 learner admission 现在还要求调用方提供覆盖全部 case 的
+`case_learner_eligibility` manifest binding。`learner_eligible=true` 不再足以授权一个
+混合 training/held-out/calibration cohort；缺少 per-case map 或发现混合分区会直接
+fail-closed，必须拆成 training-only learner cohort 与 audit-only cohort。这样
+held-out 结果可以继续做 transfer/anti-forgetting 审计，但不会通过 P12 trigger
+扩展 learner support envelope 或进入 shadow mutation。该约束只影响 P13 shadow
+admission，仍不写 canonical memory、不改变 lifecycle/authority，也不打开 production
+runtime。

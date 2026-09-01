@@ -78,7 +78,8 @@ def _cohort(*, routing: bool = True, unknown_baseline: bool = False,
 def test_complete_multilineage_oracle_builds_replayable_trigger():
     triggers = build_p12_shadow_update_triggers(
         _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
-        routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")})
+        routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")},
+        case_learner_eligibility={"case-0": True, "case-1": True})
     assert len(triggers) == 2
     assert all(item.triggered for item in triggers)
     assert all(item.reason == "oracle_complete" for item in triggers)
@@ -90,13 +91,15 @@ def test_complete_multilineage_oracle_builds_replayable_trigger():
 
 def test_incomplete_or_routingless_evidence_is_non_triggering():
     missing_route = build_p12_shadow_update_triggers(
-        _cohort(routing=False), memory_arm="ALWAYS_MEMORY", learner_eligible=True)
+        _cohort(routing=False), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        case_learner_eligibility={"case-0": True, "case-1": True})
     assert [item.reason for item in missing_route] == [
         "missing_routing_receipt", "missing_routing_receipt"]
     unknown = build_p12_shadow_update_triggers(
         _cohort(unknown_baseline=True), memory_arm="ALWAYS_MEMORY",
         learner_eligible=True,
-        routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")})
+        routing_decisions={case_id: _routing(case_id) for case_id in ("case-0", "case-1")},
+        case_learner_eligibility={"case-0": True, "case-1": True})
     assert unknown[0].triggered is False
     assert unknown[0].reason == "baseline_oracle_incomplete"
     assert unknown[1].triggered is True
@@ -112,9 +115,33 @@ def test_structural_cohort_gates_fail_closed_before_expensive_p13_work():
     with pytest.raises(P12ShadowTriggerError, match="distinct lineages"):
         build_p12_shadow_update_triggers(
             _cohort(same_lineage=True), memory_arm="ALWAYS_MEMORY",
-            learner_eligible=True)
+            learner_eligible=True,
+            case_learner_eligibility={"case-0": True, "case-1": True})
     bad = _cohort()
     bad.source_disjoint = False
     with pytest.raises(P12ShadowTriggerError, match="source-disjoint"):
         build_p12_shadow_update_triggers(
-            bad, memory_arm="ALWAYS_MEMORY", learner_eligible=True)
+            bad, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+            case_learner_eligibility={"case-0": True, "case-1": True})
+
+
+def test_learner_trigger_requires_explicit_all_training_case_partition():
+    with pytest.raises(P12ShadowTriggerError, match="explicit per-case learner eligibility"):
+        build_p12_shadow_update_triggers(
+            _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+            routing_decisions={case_id: _routing(case_id)
+                               for case_id in ("case-0", "case-1")})
+
+    with pytest.raises(P12ShadowTriggerError, match="mixes learner-eligible"):
+        build_p12_shadow_update_triggers(
+            _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+            routing_decisions={case_id: _routing(case_id)
+                               for case_id in ("case-0", "case-1")},
+            case_learner_eligibility={"case-0": True, "case-1": False})
+
+    audit_only = build_p12_shadow_update_triggers(
+        _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=False,
+        routing_decisions={case_id: _routing(case_id)
+                           for case_id in ("case-0", "case-1")},
+        case_learner_eligibility={"case-0": True, "case-1": False})
+    assert all(item.reason == "not_learner_eligible" for item in audit_only)

@@ -223,7 +223,8 @@ def test_shadow_update_requires_and_records_explicit_p12_trigger(tmp_tehm):
 
     trigger = build_p12_shadow_update_triggers(
         Cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True,
-        routing_decisions=routing_decisions)[0]
+        routing_decisions=routing_decisions,
+        case_learner_eligibility={case_id: True for case_id in cases})[0]
     plan = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE",
                  refs=(first, trigger.receipt_digest))
     receipt = apply_localized_update_shadow(plan, conn, {
