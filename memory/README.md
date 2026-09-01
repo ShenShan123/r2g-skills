@@ -3188,3 +3188,17 @@ v0.2 结果为 `trigger_count=2`、`triggered_count=0`、`p13_eligible=false`、
 供 P13 replay 使用的 cohort receipt，同时保留候选文件 digest。该入口不打开 SQLite，
 不推断 `NO_SKILL`，不写 canonical/lifecycle/production；执行失败或 UNKNOWN 仍作为原始
 oracle evidence 保留，由后续 P12/P13 gate 决定是否可用。
+
+随后在固定 direct toolchain 上重放了 2 个 source-disjoint training lineage
+（v117/v119），每个 lineage 的四个 arm 共 8 次 ORFS flow/signoff 均为 `PASS`，
+`candidate_budget=3`、`lineage_count=2`、`UNKNOWN=0`，并保留了 case-level
+`routing_receipt_id`。receipt 位于外部 campaign
+`/data1/zhangdy/tehm-campaigns/tehm-p12f-runner-orfs-v117-v119-20260901/`，
+cohort digest 为
+`sha256:70c2bf50904b2bb1830a5a3f21f2f6d74ae9e527160a15f1459be221d8704e7a`。
+将同一 receipt 与 typed routing decision 送入 P13 replay 后，结果是
+`trigger_count=2`、`triggered_count=0`、`blocked_reasons=["no_evolution_signal"]`；
+因此执行、source restore、lineage 与 route witness 已闭合，但没有独立的
+Revision2 evolution reason，仍不能进入 shadow mutation，更不能写 canonical 或
+production。下一步必须由独立可审计的事件产生 reason receipt（不能从这次全 PASS
+结果反推），再在满足 anti-forgetting 的前提下重放 P13。
