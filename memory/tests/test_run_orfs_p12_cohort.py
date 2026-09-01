@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from contracts import MemoryRoutingDecision
 from scripts.run_orfs_p12_cohort import P12OrfsRunError, run_p12_orfs_cohort
 from tehm.evaluation import P12_ARMS, OrfsPairedCohortReceipt
 from tehm.evaluation.orfs_candidate_oracle import _file_sha256, _source_binding, _source_inputs
@@ -102,7 +103,20 @@ def test_manifest_runner_executes_four_arms_and_emits_replayable_receipt(tmp_pat
         "pdk_digest": case["pdk_digest"],
         "cases": [case],
     }, sort_keys=True))
-    report = run_p12_orfs_cohort(manifest, output=tmp_path / "report.json")
+    routing = MemoryRoutingDecision(
+        decision="CONSIDER", resolved_state_id=candidate.resolved_state_id,
+        selected_rule_ids=(), selected_path_ids=candidate.causal_path_ids,
+        selected_asset_ids=(), applicability={"status": "APPLICABLE"},
+        causal_support={"status": "SUPPORTED"}, risk={}, abstain_reasons=(),
+        no_memory_budget=3, memory_budget=1)
+    routing_path = tmp_path / "routing.json"
+    routing_path.write_text(json.dumps({
+        case["case_id"]: {**routing.to_dict(),
+                           "decision_digest": routing.decision_digest}
+        for case in [case]
+    }, sort_keys=True))
+    report = run_p12_orfs_cohort(
+        manifest, output=tmp_path / "report.json", routing_decisions=routing_path)
     receipt = OrfsPairedCohortReceipt.from_dict(report["cohort_receipt"])
     direct_receipt = OrfsPairedCohortReceipt.from_dict(report)
     assert receipt.lineage_count == 1
@@ -111,6 +125,46 @@ def test_manifest_runner_executes_four_arms_and_emits_replayable_receipt(tmp_pat
     assert receipt.outcome_counts["ALWAYS_MEMORY"]["PASS"] == 1
     assert report["canonical_memory_mutation"] == "none"
     assert report["production_runtime_imported"] is False
+    assert report["routing_decisions"]["p12-runner-case"]["routing_receipt_id"] == routing.routing_receipt_id
+    assert receipt.case_receipts["p12-runner-case"].routing_receipt_id == routing.routing_receipt_id
+
+
+def test_manifest_runner_rejects_routing_metadata_drift(tmp_path):
+    candidate = _candidate()
+    candidate_path = tmp_path / "candidate.json"
+    candidate_path.write_text(json.dumps(candidate.to_dict(), sort_keys=True))
+    case = _fake_case(tmp_path)
+    case.update({
+        "case_id": "p12-runner-case", "lineage_id": "lineage-runner",
+        "routing_receipt_id": "routing-tampered",
+        "candidate_paths": {
+            "NO_MEMORY": None,
+            "ALWAYS_MEMORY": str(candidate_path),
+            "APPLICABILITY_GATED": str(candidate_path),
+            "CAUSAL_NO_SKILL": str(candidate_path),
+        },
+    })
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({
+        "version": "p12-orfs-cohort-manifest-v1", "campaign_id": "p12-runner",
+        "candidate_budget": 3, "min_lineages": 1,
+        "platform_digest": case["platform_digest"], "pdk_digest": case["pdk_digest"],
+        "cases": [case],
+    }))
+    routing = MemoryRoutingDecision(
+        decision="CONSIDER", resolved_state_id=candidate.resolved_state_id,
+        selected_rule_ids=(), selected_path_ids=candidate.causal_path_ids,
+        selected_asset_ids=(), applicability={"status": "APPLICABLE"},
+        causal_support={"status": "SUPPORTED"}, risk={}, abstain_reasons=(),
+        no_memory_budget=3, memory_budget=1)
+    routing_path = tmp_path / "routing.json"
+    routing_path.write_text(json.dumps({
+        case["case_id"]: {**routing.to_dict(),
+                           "decision_digest": routing.decision_digest}
+    }))
+    with pytest.raises(P12OrfsRunError, match="routing_receipt_id disagrees"):
+        run_p12_orfs_cohort(
+            manifest, output=tmp_path / "report.json", routing_decisions=routing_path)
 
 
 def test_manifest_runner_requires_a_candidate_for_always_memory(tmp_path):

@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from contracts import MemoryRoutingDecision  # noqa: E402
 from tehm.evaluation import P12_ARMS, OrfsCandidateOracle, execute_orfs_paired_cohort  # noqa: E402
 from tehm.ids import stable_dumps  # noqa: E402
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate  # noqa: E402
@@ -159,8 +160,44 @@ def _candidate_map(case: Mapping, manifest_path: Path) -> tuple[dict, dict[str, 
     return candidates, refs
 
 
+def _routing_map(path: Path, cases: Sequence[Mapping]) -> tuple[dict[str, MemoryRoutingDecision], dict]:
+    """Load typed routing receipts and bind their identity into each case.
+
+    Routing is deliberately an input evidence plane, not something inferred
+    from an ORFS outcome.  Requiring exact case coverage and checking any
+    manifest-declared metadata before execution prevents an expensive cohort
+    from producing receipts that cannot be replayed at the P13 boundary.
+    """
+    payload = _load_json(path, "routing decisions")
+    raw = payload.get("routes", payload.get("routing_decisions", payload))
+    case_ids = {case["case_id"] for case in cases}
+    if not isinstance(raw, Mapping) or set(raw) != case_ids:
+        raise P12OrfsRunError("routing decisions must cover exactly all P12 cases")
+    result: dict[str, MemoryRoutingDecision] = {}
+    by_id = {case["case_id"]: case for case in cases}
+    for case_id in sorted(case_ids):
+        try:
+            decision = MemoryRoutingDecision.from_dict(raw[case_id])
+        except (TypeError, ValueError) as exc:
+            raise P12OrfsRunError(
+                f"routing decision for {case_id} is invalid: {exc}") from exc
+        case = by_id[case_id]
+        for field in ("routing_receipt_id", "no_skill_reason",
+                      "state_shift_receipt_id", "risk_receipt_id"):
+            declared = case.get(field)
+            actual = (decision.routing_receipt_id if field == "routing_receipt_id"
+                      else getattr(decision, field))
+            if declared is not None and declared != actual:
+                raise P12OrfsRunError(
+                    f"P12 case {case_id} {field} disagrees with routing receipt")
+            case[field] = actual
+        result[case_id] = decision
+    return result, {"path": str(path), "sha256": _sha256(path)}
+
+
 def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
-                        timeout: int | None = None) -> dict:
+                        timeout: int | None = None,
+                        routing_decisions: Path | str | None = None) -> dict:
     """Execute the exact four-arm P12 cohort described by ``manifest``."""
     manifest_path = Path(manifest).expanduser().resolve()
     payload, cases, budget, min_lineages = _manifest(manifest_path)
@@ -175,6 +212,11 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
         candidates, refs = _candidate_map(case, manifest_path)
         arm_candidates[case_id] = candidates
         candidate_refs[case_id] = refs
+    routing = None
+    routing_meta = None
+    if routing_decisions is not None:
+        routing_path = Path(routing_decisions).expanduser().resolve()
+        routing, routing_meta = _routing_map(routing_path, cases)
     # ORFS scripts consume ORFS_TIMEOUT/ORFS_MAX_CPUS through their existing
     # environment contract.  This CLI deliberately does not reinterpret it.
     if timeout is not None:
@@ -205,6 +247,18 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
         "manifest_sha256": _sha256(manifest_path),
         "manifest_digest": manifest_digest,
         "candidate_refs": candidate_refs,
+        "routing_decisions": (None if routing is None else {
+            case_id: {
+                "decision": decision.decision,
+                "decision_digest": decision.decision_digest,
+                "routing_receipt_id": decision.routing_receipt_id,
+                "no_skill_reason": decision.no_skill_reason,
+                "state_shift_receipt_id": decision.state_shift_receipt_id,
+                "risk_receipt_id": decision.risk_receipt_id,
+            }
+            for case_id, decision in sorted(routing.items())
+        }),
+        "routing_decisions_ref": routing_meta,
         "cohort_receipt": receipt,
         "cohort_receipt_digest": cohort.receipt_digest,
         "outcome_counts": cohort.outcome_counts,
@@ -224,10 +278,13 @@ def main(argv=None) -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--timeout", type=int)
+    parser.add_argument("--routing-decisions", type=Path,
+                        help="typed routing decisions covering every case")
     args = parser.parse_args(argv)
     try:
         report = run_p12_orfs_cohort(args.manifest, output=args.output,
-                                     timeout=args.timeout)
+                                     timeout=args.timeout,
+                                     routing_decisions=args.routing_decisions)
     except (OSError, P12OrfsRunError) as exc:
         parser.error(str(exc))
     print(json.dumps({

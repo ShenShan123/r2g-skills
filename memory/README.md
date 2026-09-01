@@ -3011,8 +3011,9 @@ mechanism、flow、constraint、oracle、history 六个维度 deterministic 比�
 P12-F 接口还为 paired receipt 增加可选 `lineage_id`，cohort 暴露
 `lineage_ids`/`lineage_count`；调用方设置 `min_lineages>1` 时，入口在执行前强制每个
 case 显式声明 lineage 且要求足够的 distinct lineages，避免跑完昂贵 flow 后才发现
-cohort 不是 source-disjoint multi-lineage evidence。当前测试已验证该 gate 与 replay，
-但真实 ORFS 多 lineage cohort 尚未运行，因此不能据此声称能力或 promotion 证据。
+cohort 不是 source-disjoint multi-lineage evidence。该 gate 已由真实 2-lineage
+ORFS cohort 重放验证，但 cohort 的 paired delta 为中性且尚未形成独立 NO_SKILL /
+evolution evidence，因此仍不能据此声称能力或 promotion 证据。
 
 P12-F 现在还保留 `routing_receipt_id`，并在 candidate-pool receipt 中贯通
 `no_skill_reason`/state-shift/risk receipt；`tehm.evaluation.paired_metrics` 提供
@@ -3188,6 +3189,11 @@ v0.2 结果为 `trigger_count=2`、`triggered_count=0`、`p13_eligible=false`、
 供 P13 replay 使用的 cohort receipt，同时保留候选文件 digest。该入口不打开 SQLite，
 不推断 `NO_SKILL`，不写 canonical/lifecycle/production；执行失败或 UNKNOWN 仍作为原始
 oracle evidence 保留，由后续 P12/P13 gate 决定是否可用。
+
+若提供 `--routing-decisions`，runner 会在启动 ORFS 前要求 typed route 覆盖全部 case，
+校验 `routing_receipt_id`、`no_skill_reason`、`state_shift_receipt_id` 与
+`risk_receipt_id`，并把 route digest 摘要写入 paired receipt；缺失或漂移会在昂贵 flow
+之前 fail-closed。
 
 随后在固定 direct toolchain 上重放了 2 个 source-disjoint training lineage
 （v117/v119），每个 lineage 的四个 arm 共 8 次 ORFS flow/signoff 均为 `PASS`，
