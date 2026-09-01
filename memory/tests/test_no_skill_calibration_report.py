@@ -25,12 +25,14 @@ def _samples():
             "predicted_decision": "NO_SKILL", "expected_decision": "NO_SKILL",
             "predicted_reason": reason, "expected_reason": reason,
             "confidence": 0.9, "strata": dimensions,
+            "routing_receipt_id": f"routing-abstain-{index}",
         })
     for index in range(17):
         rows.append({
             "case_id": f"memory-{index}",
             "predicted_decision": "USE_MEMORY", "expected_decision": "USE_MEMORY",
             "confidence": 0.9, "strata": dimensions,
+            "routing_receipt_id": f"routing-memory-{index}",
         })
     return rows
 

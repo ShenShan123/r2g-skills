@@ -3108,6 +3108,9 @@ witness。任一 state、asset、knowledge、binding 或 execution candidate 不
 stratum 或不完整 confidence 会 fail-closed；样本不足或 reason 分母不足只生成
 `NOT_ESTABLISHED`，不会被当作 calibration PASS。receipt 带样本摘要和 digest，
 `evaluation_only=true`、`canonical_memory_mutation=none`。
+每个 calibration sample 还可以绑定实际 `routing_receipt_id`；P15 report 单独记录
+`routing_receipt_coverage`，缺少 route witness 时即使标签和置信度齐全也保持
+`NOT_ESTABLISHED`，避免脱离 router 行为的手工标签进入 gate。
 
 `evaluate_production_gate()` 在收到该结构化 receipt 时改用总体 precision/recall 的
 Wilson lower bound，并记录 reason metrics/confusion matrix；同时当 evidence 提供

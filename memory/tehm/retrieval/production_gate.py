@@ -464,6 +464,7 @@ def evaluate_production_gate(
             metrics["no_skill_calibration_report_digest"] = report.receipt_digest
             metrics["no_skill_cases"] = report.sample_count
             metrics["no_skill_confidence_coverage"] = report.confidence_coverage
+            metrics["no_skill_routing_receipt_coverage"] = report.routing_receipt_coverage
             metrics["no_skill_reason_metrics"] = report.per_reason
             metrics["no_skill_reason_confusion_matrix"] = report.reason_confusion_matrix
             precision_lcb = _calibration_metric(report, "precision", "lower")

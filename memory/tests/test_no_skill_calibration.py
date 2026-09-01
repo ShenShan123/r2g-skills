@@ -1,6 +1,8 @@
 """Revision2 P15 reason-aware NO_SKILL calibration tests."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from tehm.evaluation.no_skill_calibration import (
@@ -21,6 +23,7 @@ def _samples(*, confidence=True, strata=True):
                         "platform": "sky130", "flow_regime": "route",
                         "model_identity": "oracle-v1", "state_shift_dimension": "none"}
             if strata else {},
+            "routing_receipt_id": f"routing-{index}",
         }
         rows.append(NoSkillCalibrationSample(
             case_id=f"no-skill-{index}", predicted_decision="NO_SKILL",
@@ -33,6 +36,7 @@ def _samples(*, confidence=True, strata=True):
                         "platform": "sky130", "flow_regime": "route",
                         "model_identity": "oracle-v1", "state_shift_dimension": "none"}
             if strata else {},
+            "routing_receipt_id": f"routing-use-{index}",
         }
         rows.append(NoSkillCalibrationSample(
             case_id=f"use-memory-{index}", predicted_decision="USE_MEMORY",
@@ -62,6 +66,7 @@ def test_reason_aware_report_has_two_levels_strata_and_replay_digest():
     assert receipt.reason_confusion_matrix["NO_MATCH"]["NO_MATCH"] == 2
     assert receipt.strata["platform"]["sky130"]["cases"] == 20
     assert receipt.strata_coverage["platform"] == 1.0
+    assert receipt.routing_receipt_coverage == 1.0
     assert receipt.calibration_error == pytest.approx(0.1)
     payload = {**receipt.to_dict(), "receipt_digest": receipt.receipt_digest}
     assert NoSkillCalibrationReceipt.from_dict(payload) == receipt
@@ -86,6 +91,10 @@ def test_missing_reason_denominator_or_confidence_is_not_established():
     assert no_confidence.status == "NOT_ESTABLISHED"
     assert "confidence_coverage" in no_confidence.missing
     assert no_confidence.calibration_error is None
+
+    no_route = evaluate_no_skill_calibration([
+        replace(row, routing_receipt_id=None) for row in _samples()])
+    assert "routing_receipt_coverage" in no_route.missing
 
 
 def test_sample_contract_rejects_untagged_no_skill_and_duplicate_ids():

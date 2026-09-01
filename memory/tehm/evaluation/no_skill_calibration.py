@@ -113,6 +113,7 @@ class NoSkillCalibrationSample:
     expected_reason: str | None = None
     confidence: float | None = None
     strata: dict[str, str] = field(default_factory=dict)
+    routing_receipt_id: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "case_id", _text(self.case_id, "case_id"))
@@ -144,6 +145,9 @@ class NoSkillCalibrationSample:
                 raise NoSkillCalibrationError(f"unsupported calibration stratum: {key}")
             normalized[key] = _text(value, f"strata.{key}")
         object.__setattr__(self, "strata", normalized)
+        if self.routing_receipt_id is not None:
+            object.__setattr__(self, "routing_receipt_id",
+                               _text(self.routing_receipt_id, "routing_receipt_id"))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -154,6 +158,7 @@ class NoSkillCalibrationSample:
             "expected_reason": self.expected_reason,
             "confidence": self.confidence,
             "strata": dict(sorted(self.strata.items())),
+            "routing_receipt_id": self.routing_receipt_id,
         }
 
     @classmethod
@@ -174,6 +179,7 @@ class NoSkillCalibrationSample:
             predicted_reason=pick("predicted_reason", "prediction_reason"),
             expected_reason=pick("expected_reason", "oracle_reason", "label_reason"),
             confidence=payload.get("confidence"), strata=payload.get("strata") or {},
+            routing_receipt_id=payload.get("routing_receipt_id"),
         )
 
 
@@ -328,6 +334,7 @@ class NoSkillCalibrationReceipt:
     confidence_coverage: float
     calibration_error: float | None
     calibration_bins: tuple[dict, ...]
+    routing_receipt_coverage: float
     missing: tuple[str, ...]
     failed: tuple[str, ...]
     reasons: tuple[str, ...]
@@ -348,6 +355,7 @@ class NoSkillCalibrationReceipt:
             "confidence_coverage": self.confidence_coverage,
             "calibration_error": self.calibration_error,
             "calibration_bins": list(self.calibration_bins),
+            "routing_receipt_coverage": self.routing_receipt_coverage,
             "missing": list(self.missing), "failed": list(self.failed),
             "reasons": list(self.reasons), "evaluation_only": self.evaluation_only,
             "canonical_memory_mutation": self.canonical_memory_mutation,
@@ -371,7 +379,7 @@ class NoSkillCalibrationReceipt:
             "samples_digest", "minimum_sample_count", "minimum_reason_cases",
             "overall", "per_reason", "reason_confusion_matrix", "strata",
             "strata_coverage", "confidence_coverage", "calibration_error",
-            "calibration_bins", "missing", "failed", "reasons",
+            "calibration_bins", "routing_receipt_coverage", "missing", "failed", "reasons",
             "evaluation_only", "canonical_memory_mutation",
         }
         if not required <= set(payload):
@@ -392,6 +400,7 @@ class NoSkillCalibrationReceipt:
                 confidence_coverage=payload["confidence_coverage"],
                 calibration_error=payload["calibration_error"],
                 calibration_bins=tuple(dict(item) for item in payload["calibration_bins"]),
+                routing_receipt_coverage=payload["routing_receipt_coverage"],
                 missing=tuple(payload["missing"]), failed=tuple(payload["failed"]),
                 reasons=tuple(payload["reasons"]),
                 evaluation_only=payload["evaluation_only"],
@@ -416,6 +425,7 @@ class NoSkillCalibrationReceipt:
         if len(set(receipt.sample_ids)) != len(receipt.sample_ids):
             raise NoSkillCalibrationError("calibration receipt sample_ids are duplicated")
         _unit(receipt.confidence_coverage, "confidence_coverage")
+        _unit(receipt.routing_receipt_coverage, "routing_receipt_coverage")
         if receipt.calibration_error is not None:
             _unit(receipt.calibration_error, "calibration_error")
         if payload.get("receipt_digest") is not None and payload["receipt_digest"] != receipt.receipt_digest:
@@ -439,6 +449,8 @@ def evaluate_no_skill_calibration(
     ece, bins = _calibration_error(rows, bins=calibration_bins)
     confidence_coverage = round(
         sum(row.confidence is not None for row in rows) / len(rows), 6)
+    routing_receipt_coverage = round(
+        sum(row.routing_receipt_id is not None for row in rows) / len(rows), 6)
     missing: set[str] = set()
     failed: set[str] = set()
     reasons: list[str] = []
@@ -453,6 +465,9 @@ def evaluate_no_skill_calibration(
     if confidence_coverage < 1.0:
         missing.add("confidence_coverage")
         reasons.append("confidence_required_for_calibration_error")
+    if routing_receipt_coverage < 1.0:
+        missing.add("routing_receipt_coverage")
+        reasons.append("routing_receipt_required_for_calibration")
     for dimension, coverage in strata_coverage.items():
         if coverage < 1.0:
             missing.add(f"strata_coverage:{dimension}")
@@ -467,6 +482,7 @@ def evaluate_no_skill_calibration(
         per_reason=per_reason, reason_confusion_matrix=matrix, strata=strata,
         strata_coverage=strata_coverage, confidence_coverage=confidence_coverage,
         calibration_error=ece, calibration_bins=tuple(bins),
+        routing_receipt_coverage=routing_receipt_coverage,
         missing=tuple(sorted(missing)), failed=tuple(sorted(failed)),
         reasons=tuple(sorted(set(reasons))), evaluation_only=True,
         canonical_memory_mutation="none")
