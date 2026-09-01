@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 from tehm.evolution import (  # noqa: E402
     AppliedShadowUpdateReceipt,
     LocalizedUpdatePlan,
+    P12_SHADOW_TRIGGER_VERSION,
     P12ShadowUpdateTriggerReceipt,
     ShadowUpdateError,
     apply_localized_update_shadow,
@@ -88,6 +89,10 @@ def _trigger_map(path: Path) -> tuple[dict, dict[str, P12ShadowUpdateTriggerRece
             trigger = P12ShadowUpdateTriggerReceipt.from_dict(item)
         except (TypeError, ValueError) as exc:
             raise P13ShadowRunError(f"P13 trigger entry is invalid: {exc}") from exc
+        if trigger.version != P12_SHADOW_TRIGGER_VERSION:
+            raise P13ShadowRunError(
+                "P13 trigger report contains a legacy trigger; current mutation "
+                "requires p12-shadow-trigger-v0.2")
         if trigger.triggered is not True:
             raise P13ShadowRunError("P13 trigger report contains a non-triggering entry")
         if trigger.case_id in result:

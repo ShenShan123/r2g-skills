@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -88,3 +89,16 @@ def test_p13_runner_rejects_input_output_collision(tmp_path):
     db, trigger_report, manifest = _inputs(tmp_path)
     with pytest.raises(P13ShadowRunError, match="separate"):
         run_p13_shadow_update(trigger_report, manifest, output=db)
+
+
+def test_p13_runner_rejects_legacy_trigger_for_current_mutation(tmp_path):
+    db, trigger_report, manifest = _inputs(tmp_path)
+    legacy = replace(_trigger(), version="p12-shadow-trigger-v0.1",
+                     evolution_reasons=())
+    payload = json.loads(trigger_report.read_text())
+    payload["triggers"] = [{**legacy.to_dict(),
+                             "receipt_digest": legacy.legacy_receipt_digest}]
+    trigger_report.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowRunError, match="legacy trigger"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
