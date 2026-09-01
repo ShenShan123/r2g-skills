@@ -3224,4 +3224,5 @@ production。下一步必须由独立可审计的事件产生 reason receipt（�
 编写的 `p13-evolution-reason-label-manifest-v1`，重新解析当前 ORFS/RTL cohort，校验
 campaign/cohort digest、逐 case reason 覆盖以及 evidence 文件 SHA256，再输出可直接
 供 P13 replay 使用的 `P13EvolutionReasonReceipt`。该脚本拒绝 outcome、repair 和 gold
-字段，不读取或推断 ORFS 结果；没有外部 label manifest 时不会生成 reason。
+字段，不读取或推断 ORFS 结果；evidence 不能复用 cohort 或 labels manifest 本身，
+输出也不能覆盖任一输入；没有外部 label manifest 时不会生成 reason。

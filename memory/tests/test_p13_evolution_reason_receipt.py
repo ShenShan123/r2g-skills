@@ -101,3 +101,22 @@ def test_reason_binder_rejects_outcome_inference_fields(tmp_path):
     with pytest.raises(P13ReasonReceiptError, match="outcome or gold"):
         build_p13_evolution_reason_receipt(
             cohort, labels, output=tmp_path / "receipt.json")
+
+
+def test_reason_binder_rejects_non_independent_evidence_path(tmp_path):
+    cohort, labels = _inputs(tmp_path)
+    payload = json.loads(labels.read_text())
+    payload["evidence_refs"] = [{
+        "path": cohort.name,
+        "sha256": "sha256:" + hashlib.sha256(cohort.read_bytes()).hexdigest(),
+    }]
+    labels.write_text(json.dumps(payload))
+    with pytest.raises(P13ReasonReceiptError, match="independent"):
+        build_p13_evolution_reason_receipt(
+            cohort, labels, output=tmp_path / "receipt.json")
+
+
+def test_reason_binder_rejects_input_output_collision(tmp_path):
+    cohort, labels = _inputs(tmp_path)
+    with pytest.raises(P13ReasonReceiptError, match="separate"):
+        build_p13_evolution_reason_receipt(cohort, labels, output=labels)

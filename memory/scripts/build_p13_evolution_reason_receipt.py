@@ -97,7 +97,9 @@ def _cohort(path: Path) -> tuple[str, str, set[str]]:
         "; ".join(errors) + ")")
 
 
-def _evidence_refs(payload: Mapping, manifest_path: Path) -> tuple[dict, ...]:
+def _evidence_refs(
+        payload: Mapping, manifest_path: Path,
+        *, forbidden_paths: tuple[Path, ...] = ()) -> tuple[dict, ...]:
     raw = payload.get("evidence_refs")
     if (not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)) or
             not raw):
@@ -116,6 +118,9 @@ def _evidence_refs(payload: Mapping, manifest_path: Path) -> tuple[dict, ...]:
         path = path.resolve()
         if not path.is_file():
             raise P13ReasonReceiptError(f"reason evidence is not a file: {path}")
+        if path in forbidden_paths:
+            raise P13ReasonReceiptError(
+                "reason evidence must be independent from cohort and label manifest")
         digest = _sha256(path)
         expected = item.get("sha256") or item.get("digest")
         if expected is not None and expected != digest:
@@ -154,7 +159,8 @@ def build_p13_evolution_reason_receipt(
             set(raw_reasons) != case_ids):
         raise P13ReasonReceiptError(
             "evolution_reasons must cover exactly all cohort cases")
-    refs = _evidence_refs(payload, labels_path)
+    refs = _evidence_refs(
+        payload, labels_path, forbidden_paths=(cohort_path, labels_path))
     try:
         receipt = P13EvolutionReasonReceipt(
             campaign_id=campaign_id, cohort_receipt_digest=cohort_digest,
@@ -176,6 +182,9 @@ def build_p13_evolution_reason_receipt(
         "production_integration": "not_attempted",
     }
     output_path = Path(output).expanduser().resolve()
+    if output_path in {cohort_path, labels_path}:
+        raise P13ReasonReceiptError(
+            "reason receipt output must be separate from cohort and labels")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return report
