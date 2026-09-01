@@ -238,6 +238,30 @@ def test_memory_delta_requires_content_bound_changed_objects():
     assert "rule:delta_sets_overlap" in overlap.reasons
 
 
+def test_memory_delta_tracks_immutable_relation_changes():
+    added = evaluate_memory_delta(
+        "sha256:baseline", "sha256:candidate", {
+            "version": "memory-delta-v1",
+            "baseline_memory_digest": "sha256:baseline",
+            "candidate_memory_digest": "sha256:candidate",
+            "added_relation_ids": ["relation-new"],
+        })
+    assert added.eligible is True
+    assert added.changed_ids == ("relation-new",)
+    assert added.added_relation_ids == ("relation-new",)
+    assert added.removed_relation_ids == ()
+    assert added.to_dict()["delta"]["added_relation_ids"] == ["relation-new"]
+
+    overlap = evaluate_memory_delta(
+        "sha256:baseline", "sha256:candidate", {
+            "version": "memory-delta-v1",
+            "added_relation_ids": ["relation-same"],
+            "removed_relation_ids": ["relation-same"],
+        })
+    assert overlap.eligible is False
+    assert "relation:delta_sets_overlap" in overlap.reasons
+
+
 def test_strict_capability_attribution_rejects_digest_only_c1():
     receipt = evaluate_capability_attribution(
         capability_id="capability-strict-c1",

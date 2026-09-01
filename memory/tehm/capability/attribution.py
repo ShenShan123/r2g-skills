@@ -17,6 +17,7 @@ from .delta import (
     AssetDeltaReceipt, KnowledgeDeltaReceipt, MemoryDeltaReceipt,
     evaluate_asset_delta, evaluate_knowledge_delta, evaluate_memory_delta,
 )
+from .lineage import CandidateLineageReceipt
 from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
 
 
@@ -155,6 +156,7 @@ def validate_expanded_attribution(
     routing_receipts=None,
     state_resolution_receipt=None,
     failure_attribution_receipts=None,
+    candidate_lineage=None,
     strict: bool = False,
     memory_changed_ids: tuple[str, ...] = (),
 ) -> tuple[dict, tuple[str, ...]]:
@@ -166,7 +168,8 @@ def validate_expanded_attribution(
     """
     present = any(value is not None for value in (
         knowledge_delta, asset_delta, routing_receipts,
-        state_resolution_receipt, failure_attribution_receipts))
+        state_resolution_receipt, failure_attribution_receipts,
+        candidate_lineage))
     if not strict and not present:
         return {}, ()
     reasons: list[str] = []
@@ -224,6 +227,24 @@ def validate_expanded_attribution(
     if failure_attribution_receipts is None and not strict:
         failures, failure_reasons = [], []
     reasons.extend(failure_reasons)
+    lineage_payload = _receipt_mapping(candidate_lineage, "candidate_lineage")
+    lineage_checked = None
+    if candidate_lineage is None:
+        if strict:
+            reasons.append("candidate_lineage_required")
+    elif lineage_payload is None:
+        reasons.append("candidate_lineage_malformed")
+    else:
+        try:
+            lineage_checked = CandidateLineageReceipt.from_dict(lineage_payload)
+        except (TypeError, ValueError) as exc:
+            reasons.append(f"candidate_lineage_invalid:{exc}")
+        else:
+            if lineage_checked.eligible is not True:
+                reasons.append("candidate_lineage_not_eligible")
+            if routing and lineage_checked.routing_receipt_id not in {
+                    item.get("routing_receipt_id") for item in routing}:
+                reasons.append("candidate_lineage_routing_mismatch")
     if state_payload is not None:
         state_id = state_payload.get("resolution_id")
         for item in routing:
@@ -241,6 +262,10 @@ def validate_expanded_attribution(
         "routing_receipts": routing,
         "state_resolution_receipt": state_payload,
         "failure_attribution_receipts": failures,
+        "candidate_lineage": (
+            {**lineage_checked.to_dict(),
+             "receipt_digest": lineage_checked.receipt_digest}
+            if lineage_checked is not None else None),
     }
     return normalized, tuple(normalized["reasons"])
 
@@ -263,6 +288,7 @@ def evaluate_capability_attribution(
     routing_receipts=None,
     state_resolution_receipt=None,
     failure_attribution_receipts=None,
+    candidate_lineage=None,
     strict_expanded: bool = False,
 ) -> CapabilityAttributionReceipt:
     """Evaluate the eight explicit attribution gates.
@@ -429,6 +455,7 @@ def evaluate_capability_attribution(
         routing_receipts=routing_receipts,
         state_resolution_receipt=state_resolution_receipt,
         failure_attribution_receipts=failure_attribution_receipts,
+        candidate_lineage=candidate_lineage,
         strict=strict_expanded, memory_changed_ids=memory_changed_ids)
     missing_values = [gate for gate, passed in gates.items() if not passed]
     if expanded_reasons:
@@ -477,6 +504,7 @@ def evaluate_capability_attribution_from_db(
     routing_receipts=None,
     state_resolution_receipt=None,
     failure_attribution_receipts=None,
+    candidate_lineage=None,
     strict_expanded: bool = False,
 ) -> CapabilityAttributionReceipt:
     """Build C2/C3 inputs from the policy snapshot/load receipt tables."""
@@ -679,6 +707,7 @@ def evaluate_capability_attribution_from_db(
         routing_receipts=routing_receipts,
         state_resolution_receipt=state_resolution_receipt,
         failure_attribution_receipts=failure_attribution_receipts,
+        candidate_lineage=candidate_lineage,
         strict_expanded=strict_expanded)
     if state_resolution_receipt is None:
         return attribution

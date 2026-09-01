@@ -1116,6 +1116,7 @@ def verify_capability_authority(
                     "state_resolution_receipt"),
                 failure_attribution_receipts=payload_expanded.get(
                     "failure_attribution_receipts"),
+                candidate_lineage=payload_expanded.get("candidate_lineage"),
                 strict=payload_expanded.get("strict") is True,
                 memory_changed_ids=tuple(memory_manifest.get("changed_ids") or ()))
             reasons.extend(f"P8:{reason}" for reason in expanded_reasons)

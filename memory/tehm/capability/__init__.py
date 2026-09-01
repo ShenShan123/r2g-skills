@@ -10,9 +10,14 @@ from .attribution import (
     validate_expanded_attribution,
 )
 from .delta import (
-    MEMORY_DELTA_ID_FIELDS, MEMORY_DELTA_VERSION, DERIVED_DELTA_VERSIONS,
+    MEMORY_DELTA_ID_FIELDS, RELATION_DELTA_ID_FIELDS, MEMORY_DELTA_VERSION,
+    DERIVED_DELTA_VERSIONS,
     AssetDeltaReceipt, KnowledgeDeltaReceipt, MemoryDeltaReceipt,
     evaluate_asset_delta, evaluate_knowledge_delta, evaluate_memory_delta,
+)
+from .lineage import (
+    CANDIDATE_LINEAGE_VERSION, CandidateLineageError,
+    CandidateLineageReceipt, build_candidate_lineage,
 )
 from .policy_snapshot import (
     PolicyLoadReceipt, PolicySnapshotReceipt, create_policy_snapshot,
@@ -41,9 +46,12 @@ __all__ = [
     "CapabilityAttributionReceipt", "evaluate_capability_attribution",
     "evaluate_capability_attribution_from_db",
     "EXPANDED_ATTRIBUTION_VERSION", "validate_expanded_attribution",
-    "MEMORY_DELTA_ID_FIELDS", "MEMORY_DELTA_VERSION", "MemoryDeltaReceipt",
+    "MEMORY_DELTA_ID_FIELDS", "RELATION_DELTA_ID_FIELDS", "MEMORY_DELTA_VERSION",
+    "MemoryDeltaReceipt",
     "DERIVED_DELTA_VERSIONS", "KnowledgeDeltaReceipt", "AssetDeltaReceipt",
     "evaluate_memory_delta", "evaluate_knowledge_delta", "evaluate_asset_delta",
+    "CANDIDATE_LINEAGE_VERSION", "CandidateLineageError",
+    "CandidateLineageReceipt", "build_candidate_lineage",
     "PolicyLoadReceipt", "PolicySnapshotReceipt", "create_policy_snapshot",
     "load_policy_snapshot", "record_policy_load", "validate_policy_load_row",
     "validate_policy_snapshot_row",

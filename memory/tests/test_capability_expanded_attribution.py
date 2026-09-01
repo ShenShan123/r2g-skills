@@ -6,6 +6,7 @@ from dataclasses import replace
 from contracts import MemoryRoutingDecision
 from tehm.capability import (
     AssetDeltaReceipt, KnowledgeDeltaReceipt,
+    CandidateLineageReceipt,
     create_policy_snapshot, evaluate_asset_delta,
     evaluate_capability_attribution, evaluate_capability_attribution_from_db,
     evaluate_knowledge_delta, record_capability_authority, record_policy_load,
@@ -64,6 +65,20 @@ def _expanded():
     return knowledge, asset, routing, state, failure
 
 
+def _lineage(routing_receipt_id):
+    return CandidateLineageReceipt(
+        candidate_id="candidate-p8", candidate_digest="sha256:candidate-p8",
+        structured_candidate_receipt_digest="sha256:structured-p8",
+        routing_receipt_id=routing_receipt_id,
+        routing_decision_digest="sha256:routing-p8",
+        asset_selection_receipt_id="asset-selection-p8",
+        asset_selection_receipt_digest="sha256:selection-p8",
+        binding_receipt_id="binding-p8", binding_digest="sha256:binding-p8",
+        execution_receipt_digest="sha256:execution-p8",
+        knowledge_object_id="mk_selector@1", asset_id="asset_selector",
+        causal_path_ids=("path-p8",), eligible=True)
+
+
 def test_typed_deltas_are_content_bound_and_replayable():
     knowledge, asset, *_ = _expanded()
     assert isinstance(knowledge, KnowledgeDeltaReceipt)
@@ -86,7 +101,8 @@ def test_strict_expanded_attribution_binds_all_p8_witnesses():
         baseline_memory_digest=BASELINE, candidate_memory_digest=CANDIDATE,
         knowledge_delta=knowledge, asset_delta=asset,
         routing_receipts=[routing], state_resolution_receipt=state,
-        failure_attribution_receipts=[failure], strict=True,
+        failure_attribution_receipts=[failure], candidate_lineage=_lineage(
+            routing.routing_receipt_id), strict=True,
         memory_changed_ids=("mk_selector@1", "asset_selector"))
     assert reasons == ()
     assert expanded["eligible"] is True
@@ -105,6 +121,7 @@ def test_strict_expanded_attribution_binds_all_p8_witnesses():
         memory_delta=_memory_delta(), knowledge_delta=knowledge,
         asset_delta=asset, routing_receipts=[routing],
         state_resolution_receipt=state, failure_attribution_receipts=[failure],
+        candidate_lineage=_lineage(routing.routing_receipt_id),
         strict_expanded=True)
     assert receipt.promotable is True
     assert receipt.expanded_eligible is True
@@ -191,7 +208,9 @@ def test_db_authority_replays_p8_witness_bundle(tmp_tehm):
                   "gain_with_memory": True}, memory_delta=_memory_delta(),
         knowledge_delta=knowledge, asset_delta=asset,
         routing_receipts=[routing], state_resolution_receipt=state_receipt,
-        failure_attribution_receipts=[failure], strict_expanded=True)
+        failure_attribution_receipts=[failure], candidate_lineage=_lineage(
+            routing.routing_receipt_id),
+        strict_expanded=True)
     assert attribution.promotable is True
     refs = {
         f"C{index}": {"evidence_id": f"p8-{index}",

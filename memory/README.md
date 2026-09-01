@@ -3084,3 +3084,15 @@ P13 的任一非 `RETAIN` shadow mutation 还必须携带 content-addressed
 `RETAIN` receipt。旧 v0.1 receipt 仅可 replay/审计，不能绕过该信号门进入当前
 mutation；因此普通 PASS 不会自动 consolidate，canonical memory 与 production
 runtime 仍保持关闭。
+
+P14 归因的 `MemoryDeltaReceipt` 现在也显式包含 immutable state-relation 的
+`added_relation_ids` / `removed_relation_ids`。relation 不允许原地 revise；relation
+delta 与 knowledge/asset/object delta 一样进入 `changed_ids`，并对同一 relation 同时
+添加和移除执行 fail-closed overlap 检查。这样只有 relation/state 变化也能被 C1 的
+memory delta 观察到，而不会被误报成“没有 memory change”。
+
+同时新增 P14 `CandidateLineageReceipt`：它把 `StructuredRepairCandidate` 的 digest
+串接到 routing、asset selection、runtime binding 以及实际
+`CandidateExecutionReceipt`，并在 strict expanded attribution 中作为必需的 C5
+witness。任一 state、asset、knowledge、binding 或 execution candidate 不一致都会
+拒绝 lineage；该 receipt 仍只用于 attribution/replay，不授予 capability authority。

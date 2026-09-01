@@ -26,7 +26,11 @@ MEMORY_DELTA_ID_FIELDS = (
     "revised_capability_ids",
     "added_knowledge_ids", "removed_knowledge_ids",
     "revised_knowledge_ids",
+    # Relations are immutable evidence edges.  They can be added or retired
+    # in a memory-state delta, but are never revised in place.
+    "added_relation_ids", "removed_relation_ids",
 )
+RELATION_DELTA_ID_FIELDS = ("added_relation_ids", "removed_relation_ids")
 _ENTITY_FAMILIES = (
     "transition", "rule", "asset", "causal_path", "capability", "knowledge",
 )
@@ -47,6 +51,14 @@ class MemoryDeltaReceipt:
     changed_ids: tuple[str, ...]
     eligible: bool
     reasons: tuple[str, ...] = ()
+
+    @property
+    def added_relation_ids(self) -> tuple[str, ...]:
+        return tuple(self.delta.get("added_relation_ids", ()))
+
+    @property
+    def removed_relation_ids(self) -> tuple[str, ...]:
+        return tuple(self.delta.get("removed_relation_ids", ()))
 
     def to_dict(self) -> dict:
         return {
@@ -355,6 +367,11 @@ def evaluate_memory_delta(
         if added & removed or added & revised or removed & revised:
             reasons.append(f"{family}:delta_sets_overlap")
 
+    added_relations = set(normalised["added_relation_ids"])
+    removed_relations = set(normalised["removed_relation_ids"])
+    if added_relations & removed_relations:
+        reasons.append("relation:delta_sets_overlap")
+
     changed_ids = tuple(sorted({value for values in normalised.values()
                                 for value in values}))
     if not changed_ids:
@@ -366,7 +383,8 @@ def evaluate_memory_delta(
 
 
 __all__ = [
-    "MEMORY_DELTA_ID_FIELDS", "MEMORY_DELTA_VERSION", "MemoryDeltaReceipt",
+    "MEMORY_DELTA_ID_FIELDS", "RELATION_DELTA_ID_FIELDS",
+    "MEMORY_DELTA_VERSION", "MemoryDeltaReceipt",
     "DERIVED_DELTA_VERSIONS", "KnowledgeDeltaReceipt", "AssetDeltaReceipt",
     "evaluate_asset_delta", "evaluate_knowledge_delta", "evaluate_memory_delta",
 ]

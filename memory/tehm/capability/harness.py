@@ -60,6 +60,7 @@ def evaluate_capability_campaign(
     routing_receipts=None,
     state_resolution_receipt=None,
     failure_attribution_receipts=None,
+    candidate_lineage=None,
     strict_expanded: bool = False,
 ) -> CapabilityCampaignReceipt:
     """Evaluate attribution with an exact frozen-control comparison."""
@@ -88,6 +89,7 @@ def evaluate_capability_campaign(
         routing_receipts=routing_receipts,
         state_resolution_receipt=state_resolution_receipt,
         failure_attribution_receipts=failure_attribution_receipts,
+        candidate_lineage=candidate_lineage,
         strict_expanded=strict_expanded)
     if not controls_match:
         detail = dict(attribution.detail)
