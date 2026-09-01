@@ -34,6 +34,7 @@ from tehm.ids import stable_dumps  # noqa: E402
 
 
 REPORT_VERSION = "p13-shadow-trigger-report-v1"
+EVOLUTION_REASON_RECEIPT_VERSION = "p13-evolution-reason-receipt-v1"
 
 
 class P13ShadowTriggerReportError(ValueError):
@@ -127,8 +128,62 @@ def _routes(payload: Mapping, case_ids: set[str]) -> dict[str, MemoryRoutingDeci
     return result
 
 
-def _reasons(payload: Mapping, case_ids: set[str]) -> dict[str, tuple[str, ...]]:
-    raw = payload.get("evolution_reasons", payload.get("reasons", payload))
+def _evidence_refs(payload: Mapping, reason_path: Path) -> tuple[dict, ...]:
+    refs = payload.get("evidence_refs")
+    if not isinstance(refs, Sequence) or isinstance(refs, (str, bytes)) or not refs:
+        raise P13ShadowTriggerReportError(
+            "evolution reason receipt requires non-empty evidence_refs")
+    result: list[dict] = []
+    seen: set[str] = set()
+    for item in refs:
+        if not isinstance(item, Mapping):
+            raise P13ShadowTriggerReportError(
+                "each evolution reason evidence_ref must be an object")
+        raw_path = item.get("path") or item.get("file")
+        if type(raw_path) is not str or not raw_path.strip():
+            raise P13ShadowTriggerReportError(
+                "evolution reason evidence_ref requires path")
+        path = Path(raw_path).expanduser()
+        if not path.is_absolute():
+            path = reason_path.parent / path
+        path = path.resolve()
+        if not path.is_file():
+            raise P13ShadowTriggerReportError(
+                f"evolution reason evidence is not a file: {path}")
+        digest = _sha256(path)
+        expected = item.get("sha256") or item.get("digest")
+        if expected is not None and expected != digest:
+            raise P13ShadowTriggerReportError(
+                f"evolution reason evidence digest mismatch: {path}")
+        ref = dict(item)
+        ref["path"] = str(path)
+        ref["sha256"] = digest
+        key = stable_dumps(ref)
+        if key in seen:
+            raise P13ShadowTriggerReportError(
+                "evolution reason evidence_refs contain duplicates")
+        seen.add(key)
+        result.append(ref)
+    return tuple(result)
+
+
+def _reasons(payload: Mapping, case_ids: set[str], *, campaign_id: str,
+             cohort_digest: str, reason_path: Path) -> tuple[dict[str, tuple[str, ...]], dict]:
+    if payload.get("version") != EVOLUTION_REASON_RECEIPT_VERSION:
+        raise P13ShadowTriggerReportError(
+            "evolution reasons must use the typed receipt version")
+    if payload.get("campaign_id") != campaign_id:
+        raise P13ShadowTriggerReportError(
+            "evolution reason receipt campaign_id does not match cohort")
+    if payload.get("cohort_receipt_digest") != cohort_digest:
+        raise P13ShadowTriggerReportError(
+            "evolution reason receipt cohort digest does not match cohort")
+    label_source = payload.get("label_source")
+    if type(label_source) is not str or not label_source.strip():
+        raise P13ShadowTriggerReportError(
+            "evolution reason receipt requires label_source")
+    refs = _evidence_refs(payload, reason_path)
+    raw = payload.get("reasons")
     if not isinstance(raw, Mapping) or set(raw) != case_ids:
         raise P13ShadowTriggerReportError(
             "evolution reasons must cover exactly all cohort cases")
@@ -139,7 +194,18 @@ def _reasons(payload: Mapping, case_ids: set[str]) -> dict[str, tuple[str, ...]]
             raise P13ShadowTriggerReportError(
                 f"evolution reasons for {case_id} must be a sequence")
         result[case_id] = tuple(values)
-    return result
+    normalized = {
+        "version": EVOLUTION_REASON_RECEIPT_VERSION,
+        "campaign_id": campaign_id,
+        "cohort_receipt_digest": cohort_digest,
+        "label_source": label_source.strip(),
+        "evidence_refs": list(refs),
+        "reasons": {case_id: list(result[case_id]) for case_id in sorted(result)},
+    }
+    return result, {"path": str(reason_path), "sha256": _sha256(reason_path),
+                    "receipt_digest": _digest(normalized),
+                    "label_source": label_source.strip(),
+                    "evidence_refs": list(refs)}
 
 
 def build_p13_shadow_trigger_report(
@@ -169,8 +235,9 @@ def build_p13_shadow_trigger_report(
     if evolution_reasons_path is not None:
         reason_path = Path(evolution_reasons_path).expanduser().resolve()
         reason_payload = _load_json(reason_path, "evolution reasons")
-        reasons = _reasons(reason_payload, case_ids)
-        reason_meta = {"path": str(reason_path), "sha256": _sha256(reason_path)}
+        reasons, reason_meta = _reasons(
+            reason_payload, case_ids, campaign_id=cohort.campaign_id,
+            cohort_digest=cohort.receipt_digest, reason_path=reason_path)
     try:
         triggers = build_p12_shadow_update_triggers(
             cohort, memory_arm=memory_arm, learner_eligible=learner_eligible,

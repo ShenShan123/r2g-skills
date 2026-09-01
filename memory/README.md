@@ -3164,11 +3164,12 @@ memory、不改变 authority，也不把 held-out/calibration evidence 变成 le
 ### 2026-09-03 P12→P13 replay report boundary
 
 新增 `scripts/build_p13_shadow_trigger_report.py`，把 frozen RTL/ORFS cohort、campaign
-manifest、typed `MemoryRoutingDecision` 和可选的显式 `evolution_reasons` 绑定为一份可回放
-的 P13 审计报告。manifest 必须逐 case 给出 learner partition；route/reason 文件若提供则
-必须覆盖全部 case 并通过 digest/类型校验。脚本不会从 PASS/FAIL、repair 或 oracle outcome
-推导演化原因：缺少 route 只生成 `missing_routing_*`，完整但没有显式 reason 的 cohort 只生成
-`no_evolution_signal` retain receipt。报告固定声明 `canonical_memory_mutation=none`、
+manifest、typed `MemoryRoutingDecision` 和可选的 typed evolution-reason receipt 绑定为一份
+可回放的 P13 审计报告。manifest 必须逐 case 给出 learner partition；route 文件若提供则
+必须覆盖全部 case 并通过 digest/类型校验；reason receipt 还必须绑定当前 campaign/cohort
+digest、`label_source` 和至少一个带 SHA256 的 immutable `evidence_ref`。脚本不会从
+PASS/FAIL、repair 或 oracle outcome 推导演化原因：缺少 route 只生成 `missing_routing_*`，
+完整但没有显式 reason receipt 的 cohort 只生成 `no_evolution_signal` retain receipt。报告固定声明 `canonical_memory_mutation=none`、
 `production_runtime_imported=false` 和 `isolated_staging_only`，不能替代 P13 anti-forgetting
 或 P15 promotion gate。
 
@@ -3176,5 +3177,5 @@ manifest、typed `MemoryRoutingDecision` 和可选的显式 `evolution_reasons` 
 training lineage、typed route coverage 完整，但没有 Revision2 evolution signal，因此当前
 v0.2 结果为 `trigger_count=2`、`triggered_count=0`、`p13_eligible=false`、
 `blocked_reasons=["no_evolution_signal"]`。旧的 v0.1 replay 不能绕过这一门禁；下一步仍需
-由独立、可审计的 campaign 记录显式演化原因，并在真实 source-disjoint cohort 上重放，之后
+由独立、可审计的 campaign 记录生成绑定后的 reason receipt，并在真实 source-disjoint cohort 上重放，之后
 才有资格进入 P13 isolated staging。

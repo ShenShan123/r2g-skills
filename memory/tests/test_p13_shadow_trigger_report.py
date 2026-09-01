@@ -1,6 +1,7 @@
 """P12-to-P13 replay report builder tests."""
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -100,9 +101,20 @@ def test_report_requires_explicit_evolution_signal_for_trigger(tmp_path):
         cohort, manifest, routing_path=routes, output=report_path)
     assert retained["p13_eligible"] is False
     assert retained["blocked_reasons"] == ["no_evolution_signal"]
+    evidence = tmp_path / "reason-evidence.json"
+    evidence.write_text(json.dumps({"event": "explicit-evolution-signal"}))
     reasons = tmp_path / "reasons.json"
-    reasons.write_text(json.dumps({"case-0": ["CAPABILITY_GAP"],
-                                   "case-1": ["NOVELTY"]}))
+    reasons.write_text(json.dumps({
+        "version": "p13-evolution-reason-receipt-v1",
+        "campaign_id": "campaign",
+        "cohort_receipt_digest": json.loads(cohort.read_text())["receipt_digest"],
+        "label_source": "independent-event-review-v1",
+        "evidence_refs": [{
+            "id": "event-review", "path": evidence.name,
+            "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
+        }],
+        "reasons": {"case-0": ["CAPABILITY_GAP"], "case-1": ["NOVELTY"]},
+    }))
     report = build_p13_shadow_trigger_report(
         cohort, manifest, routing_path=routes,
         evolution_reasons_path=reasons, output=report_path)
@@ -119,3 +131,14 @@ def test_report_rejects_tampered_route_receipt(tmp_path):
     with pytest.raises(P13ShadowTriggerReportError, match="routing decision for case-0"):
         build_p13_shadow_trigger_report(
             cohort, manifest, routing_path=routes, output=tmp_path / "report.json")
+
+
+def test_report_rejects_unbound_manual_evolution_reason_map(tmp_path):
+    cohort, manifest, routes = _write_inputs(tmp_path)
+    reasons = tmp_path / "reasons.json"
+    reasons.write_text(json.dumps({"case-0": ["CAPABILITY_GAP"],
+                                   "case-1": ["NOVELTY"]}))
+    with pytest.raises(P13ShadowTriggerReportError, match="typed receipt version"):
+        build_p13_shadow_trigger_report(
+            cohort, manifest, routing_path=routes,
+            evolution_reasons_path=reasons, output=tmp_path / "report.json")
