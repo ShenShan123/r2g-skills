@@ -26,6 +26,7 @@ from tehm.state.validation import RELATION_TYPES
 from .anti_forgetting import raw_evidence_digest
 from .incremental_crystallize import crystallize_affected_groups
 from .local_revision import LocalizedUpdatePlan
+from .p12_shadow_trigger import P12ShadowTriggerError, P12ShadowUpdateTriggerReceipt
 from .verification import require_verified_transition
 
 
@@ -157,6 +158,33 @@ def _scope(evidence: Mapping) -> dict:
     if not isinstance(decoded, dict):  # pragma: no cover
         raise ShadowUpdateError("shadow update scope must be an object")
     return decoded
+
+
+def _p12_shadow_trigger(plan: LocalizedUpdatePlan,
+                        evidence: Mapping) -> P12ShadowUpdateTriggerReceipt | None:
+    """Validate the explicit P12 witness before applying a P13 shadow plan."""
+    raw = evidence.get("p12_shadow_trigger")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ShadowUpdateError("shadow update P12 trigger must be an object")
+    try:
+        trigger = P12ShadowUpdateTriggerReceipt.from_dict(raw)
+    except P12ShadowTriggerError as exc:
+        raise ShadowUpdateError(str(exc)) from exc
+    if trigger.triggered is not True:
+        raise ShadowUpdateError(
+            "shadow update cannot consume a non-triggering P12 receipt")
+    if trigger.campaign_id != plan.campaign_id:
+        raise ShadowUpdateError(
+            "shadow update P12 trigger campaign does not match plan")
+    if trigger.learner_eligible is not True or plan.learner_eligible is not True:
+        raise ShadowUpdateError(
+            "shadow update P12 trigger requires learner-eligible plan evidence")
+    if trigger.receipt_digest not in plan.evidence_refs:
+        raise ShadowUpdateError(
+            "shadow update plan must explicitly witness the P12 trigger digest")
+    return trigger
 
 
 def _relation_payload(plan: LocalizedUpdatePlan, evidence: Mapping) -> dict:
@@ -494,6 +522,7 @@ def apply_localized_update_shadow(
         evidence = {}
     if not isinstance(evidence, Mapping):
         raise ShadowUpdateError("shadow update evidence must be an object")
+    p12_trigger = _p12_shadow_trigger(plan, evidence)
     source_before = _connection_digest(current_state)
     raw_before = raw_evidence_digest(current_state)
     staging = _staging_copy(current_state)
@@ -548,7 +577,12 @@ def apply_localized_update_shadow(
             "staging_discarded": True, "canonical_memory_mutation": "none",
             "lifecycle_mutation": "isolated_staging_only",
             "production_runtime_imported": False,
-            "metadata": {"scope": scope, "shadow_update_version": SHADOW_UPDATE_VERSION},
+            "metadata": {
+                "scope": scope,
+                "shadow_update_version": SHADOW_UPDATE_VERSION,
+                **({"p12_shadow_trigger_digest": p12_trigger.receipt_digest}
+                   if p12_trigger is not None else {}),
+            },
         }
         receipt = AppliedShadowUpdateReceipt(
             **payload, replay_digest=_digest(payload))

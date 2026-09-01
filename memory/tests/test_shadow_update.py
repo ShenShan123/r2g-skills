@@ -8,9 +8,14 @@ import pytest
 from tehm.canonical.capture import capture
 from tehm.evolution import (
     AppliedShadowUpdateReceipt,
+    P12ShadowUpdateTriggerReceipt,
     LocalizedUpdatePlan,
     ShadowUpdateError,
     apply_localized_update_shadow,
+    build_p12_shadow_update_triggers,
+)
+from tehm.evaluation.candidate_executor import (
+    CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
 from tehm.rtl.rtl_evidence import build_rtl_execution_record
 from tehm.rtl.rtl_oracle import IcarusOracle
@@ -166,3 +171,69 @@ def test_shadow_receipt_replays_and_rejects_digest_tampering(tmp_tehm):
     tampered = {**receipt.to_dict(), "after_resolution_id": "tampered"}
     with pytest.raises(ShadowUpdateError, match="replay digest mismatch|receipt digest"):
         AppliedShadowUpdateReceipt.from_dict(tampered)
+
+
+def test_shadow_update_requires_and_records_explicit_p12_trigger(tmp_tehm):
+    """A P13 mutation must carry the content-addressed P12 witness."""
+    conn, _, _ = tmp_tehm
+    first = _capture(tmp_tehm, "req_ack_bug")
+    second = _capture(tmp_tehm, "req_ack_bug2")
+
+    def execution(case_id, candidate_id, source):
+        return CandidateExecutionReceipt(
+            case_id=case_id, candidate_id=candidate_id, source=source,
+            action_digest="sha256:action-" + candidate_id,
+            candidate_digest="sha256:candidate-" + candidate_id,
+            compile_result="PASS", functional_result="PASS", signoff_result="PASS",
+            outcome="PASS", created_regressions=(), obligations={},
+            toolchain_digest="sha256:tool", oracle_digest="sha256:oracle",
+            produced_transition_id=None, budget=3,
+            metadata={"oracle_available": True})
+
+    cases = {}
+    for index, lineage in enumerate(("p12-lineage-a", "p12-lineage-b")):
+        case_id = f"p12-case-{index}"
+        baseline = execution(case_id, f"no_memory:{case_id}", "no_memory")
+        memory = execution(case_id, f"memory:{case_id}", "structured_memory")
+        cases[case_id] = PairedCandidateExecutionReceipt(
+            case_id=case_id,
+            arm_receipts={"NO_MEMORY": baseline, "ALWAYS_MEMORY": memory,
+                          "APPLICABILITY_GATED": memory, "CAUSAL_NO_SKILL": memory},
+            candidate_budget=3, case_digest="sha256:case-" + case_id,
+            toolchain_digest="sha256:tool", oracle_digest="sha256:oracle",
+            lineage_id=lineage, routing_receipt_id="routing:" + case_id)
+
+    class Cohort:
+        campaign_id = "live"
+        case_receipts = cases
+        source_disjoint = True
+        source_restore_verified = True
+        evaluation_only = True
+        receipt_digest = "sha256:p12-cohort"
+
+    trigger = build_p12_shadow_update_triggers(
+        Cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=True)[0]
+    plan = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE",
+                 refs=(first, trigger.receipt_digest))
+    receipt = apply_localized_update_shadow(plan, conn, {
+        "p12_shadow_trigger": {
+            **trigger.to_dict(), "receipt_digest": trigger.receipt_digest},
+        "relation": {
+            "source_type": "transition", "source_id": first,
+            "relation_type": "INVALIDATES", "target_type": "transition",
+            "target_id": second, "evidence_refs": [first],
+        },
+    })
+    assert receipt.metadata["p12_shadow_trigger_digest"] == trigger.receipt_digest
+
+    tampered = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE", refs=(first,))
+    with pytest.raises(ShadowUpdateError, match="P12 trigger digest"):
+        apply_localized_update_shadow(tampered, conn, {
+            "p12_shadow_trigger": {
+                **trigger.to_dict(), "receipt_digest": trigger.receipt_digest},
+            "relation": {
+                "source_type": "transition", "source_id": first,
+                "relation_type": "INVALIDATES", "target_type": "transition",
+                "target_id": second, "evidence_refs": [first],
+            },
+        })

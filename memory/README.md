@@ -3033,3 +3033,20 @@ Revision2 定向回归新增 6 个测试，覆盖 support-envelope training-only
 P12 cohort 并建立 source-disjoint 多 lineage cases，再把真实 no-memory oracle
 结果送入 P13 shadow update；P14 capability attribution、P15 分 reason CI calibration
 和 production pilot 仍未建立，canonical memory 与 production runtime 继续关闭。
+
+### 2026-09-03 P12→P13 typed shadow trigger bridge
+
+新增 `tehm/evolution/p12_shadow_trigger.py`，将 RTL/ORFS 四臂 P12 cohort receipt
+转换为逐 case、可 replay 的 `P12ShadowUpdateTriggerReceipt`。触发前强制检查
+source-disjoint 与 source-restore、显式 distinct lineage、routing receipt、训练
+`learner_eligible` 断言，以及 `NO_MEMORY` 与指定 memory arm 两侧都具备
+`oracle_available=true`、完整 compile/functional/signoff verdict。缺失任一证据只生成
+不可触发 receipt，结构性篡改直接拒绝；该层不从 outcome 推断 capability gain、failure
+cause 或 promotion。
+
+`apply_localized_update_shadow()` 现在可消费显式 `p12_shadow_trigger` evidence，但
+要求 trigger digest 同时出现在 `LocalizedUpdatePlan.evidence_refs`，并把该 digest
+记录到 shadow receipt metadata。P13 仍只在隔离 SQLite staging 中执行并丢弃，canonical
+evidence、lifecycle、authority 与 production runtime 均不变。真实多-lineage ORFS
+cohort 仍需由外部固定 toolchain/ORFS 运行产生；当前新增的是闭环入口与 fail-closed
+证据约束，不等同于能力或 promotion 证据。

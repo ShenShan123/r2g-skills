@@ -1,0 +1,331 @@
+"""Typed bridge from a real P12 cohort to the P13 shadow lane.
+
+P12 produces four-arm execution receipts, while P13 consumes an explicit
+shadow-update witness.  This module joins those planes without inferring a
+capability gain or a failure cause: it only allows a replayable trigger when
+the frozen cohort, lineage, routing, and both oracle outcomes are complete.
+The trigger is evaluation/shadow-only and never writes canonical memory.
+"""
+from __future__ import annotations
+
+import hashlib
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
+
+from tehm.canonical.transition import OUTCOMES
+from tehm.evaluation.candidate_executor import (
+    P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
+)
+from tehm.ids import stable_dumps
+
+
+P12_SHADOW_TRIGGER_VERSION = "p12-shadow-trigger-v0.1"
+_MEMORY_ARMS = P12_ARMS[1:]
+_TRIGGER_REASONS = frozenset({
+    "oracle_complete",
+    "not_learner_eligible",
+    "missing_routing_receipt",
+    "baseline_oracle_incomplete",
+    "memory_oracle_incomplete",
+})
+
+
+class P12ShadowTriggerError(ValueError):
+    """A P12-to-P13 shadow trigger is malformed or unsafe to consume."""
+
+
+def _digest(value: object) -> str:
+    return "sha256:" + hashlib.sha256(stable_dumps(value).encode()).hexdigest()
+
+
+def _text(value: object, name: str) -> str:
+    if type(value) is not str or not value.strip():
+        raise P12ShadowTriggerError(f"P12 shadow trigger {name} is required")
+    return value.strip()
+
+
+def _digest_text(value: object, name: str) -> str:
+    text = _text(value, name)
+    if not text.startswith("sha256:") or len(text) <= len("sha256:"):
+        raise P12ShadowTriggerError(
+            f"P12 shadow trigger {name} must be a sha256 digest")
+    return text
+
+
+def _strict_bool(value: object, name: str) -> bool:
+    if type(value) is not bool:
+        raise P12ShadowTriggerError(f"P12 shadow trigger {name} must be boolean")
+    return value
+
+
+def _oracle_complete(receipt: CandidateExecutionReceipt) -> bool:
+    """Require an explicit available oracle and complete component verdicts."""
+    if not isinstance(receipt, CandidateExecutionReceipt):
+        raise P12ShadowTriggerError("P12 shadow trigger execution receipt is invalid")
+    if receipt.evaluation_only is not True:
+        return False
+    if receipt.metadata.get("oracle_available") is not True:
+        return False
+    if receipt.compile_result == "UNKNOWN" or receipt.functional_result == "UNKNOWN":
+        return False
+    if receipt.signoff_result is None or receipt.signoff_result == "UNKNOWN":
+        return False
+    return receipt.outcome != "UNKNOWN"
+
+
+def _cohort_fields(cohort: object) -> tuple[str, str, dict[str, PairedCandidateExecutionReceipt]]:
+    """Read the common immutable surface of RTL/ORFS cohort receipts."""
+    if not hasattr(cohort, "campaign_id") or not hasattr(cohort, "case_receipts"):
+        raise P12ShadowTriggerError("P12 shadow trigger requires an RTL/ORFS cohort receipt")
+    campaign_id = _text(getattr(cohort, "campaign_id"), "campaign_id")
+    cases = getattr(cohort, "case_receipts")
+    if not isinstance(cases, dict) or not cases:
+        raise P12ShadowTriggerError("P12 shadow trigger cohort cases are required")
+    if any(type(case_id) is not str or not case_id.strip()
+           for case_id in cases):
+        raise P12ShadowTriggerError("P12 shadow trigger case IDs are invalid")
+    if any(not isinstance(receipt, PairedCandidateExecutionReceipt)
+           for receipt in cases.values()):
+        raise P12ShadowTriggerError("P12 shadow trigger cohort case receipt is invalid")
+    if getattr(cohort, "evaluation_only", None) is not True:
+        raise P12ShadowTriggerError("P12 shadow trigger cohort must be evaluation-only")
+    if getattr(cohort, "source_disjoint", None) is not True:
+        raise P12ShadowTriggerError("P12 shadow trigger cohort is not source-disjoint")
+    if getattr(cohort, "source_restore_verified", None) is not True:
+        raise P12ShadowTriggerError("P12 shadow trigger cohort source restore is unverified")
+    receipt_digest = getattr(cohort, "receipt_digest", None)
+    return campaign_id, _digest_text(receipt_digest, "cohort_receipt_digest"), dict(cases)
+
+
+def _explicit_lineages(cases: Mapping[str, PairedCandidateExecutionReceipt]) -> set[str]:
+    values: set[str] = set()
+    for case_id, bundle in cases.items():
+        lineage = bundle.lineage_id
+        if type(lineage) is not str or not lineage.strip():
+            raise P12ShadowTriggerError(
+                f"P12 shadow trigger case {case_id} lacks explicit lineage_id")
+        values.add(lineage.strip())
+    return values
+
+
+def _reason(*, learner_eligible: bool, routing_id: str | None,
+            baseline_complete: bool, memory_complete: bool) -> tuple[bool, str]:
+    if not learner_eligible:
+        return False, "not_learner_eligible"
+    if routing_id is None:
+        return False, "missing_routing_receipt"
+    if not baseline_complete:
+        return False, "baseline_oracle_incomplete"
+    if not memory_complete:
+        return False, "memory_oracle_incomplete"
+    return True, "oracle_complete"
+
+
+@dataclass(frozen=True)
+class P12ShadowUpdateTriggerReceipt:
+    """Content-addressed P12 evidence eligible to trigger P13 shadow work."""
+
+    cohort_receipt_digest: str
+    campaign_id: str
+    case_id: str
+    lineage_id: str
+    memory_arm: str
+    routing_receipt_id: str | None
+    no_skill_reason: str | None
+    state_shift_receipt_id: str | None
+    risk_receipt_id: str | None
+    baseline_candidate_id: str
+    memory_candidate_id: str
+    baseline_execution_digest: str
+    memory_execution_digest: str
+    baseline_outcome: str
+    memory_outcome: str
+    baseline_oracle_complete: bool
+    memory_oracle_complete: bool
+    learner_eligible: bool
+    triggered: bool
+    reason: str
+    evaluation_only: bool = True
+    version: str = P12_SHADOW_TRIGGER_VERSION
+
+    def __post_init__(self) -> None:
+        for value, name in (
+                (self.cohort_receipt_digest, "cohort_receipt_digest"),
+                (self.baseline_execution_digest, "baseline_execution_digest"),
+                (self.memory_execution_digest, "memory_execution_digest")):
+            _digest_text(value, name)
+        for value, name in ((self.campaign_id, "campaign_id"),
+                            (self.case_id, "case_id"),
+                            (self.lineage_id, "lineage_id"),
+                            (self.baseline_candidate_id, "baseline_candidate_id"),
+                            (self.memory_candidate_id, "memory_candidate_id")):
+            _text(value, name)
+        if self.memory_arm not in _MEMORY_ARMS:
+            raise P12ShadowTriggerError("P12 shadow trigger memory_arm is invalid")
+        if self.routing_receipt_id is not None:
+            _text(self.routing_receipt_id, "routing_receipt_id")
+        if self.no_skill_reason is not None:
+            _text(self.no_skill_reason, "no_skill_reason")
+        for value, name in ((self.state_shift_receipt_id, "state_shift_receipt_id"),
+                            (self.risk_receipt_id, "risk_receipt_id")):
+            if value is not None:
+                _text(value, name)
+        if self.baseline_outcome not in OUTCOMES or self.memory_outcome not in OUTCOMES:
+            raise P12ShadowTriggerError("P12 shadow trigger outcome is invalid")
+        for value, name in (
+                (self.baseline_oracle_complete, "baseline_oracle_complete"),
+                (self.memory_oracle_complete, "memory_oracle_complete"),
+                (self.learner_eligible, "learner_eligible"),
+                (self.triggered, "triggered"),
+                (self.evaluation_only, "evaluation_only")):
+            _strict_bool(value, name)
+        if self.evaluation_only is not True:
+            raise P12ShadowTriggerError("P12 shadow trigger must be evaluation-only")
+        if self.reason not in _TRIGGER_REASONS:
+            raise P12ShadowTriggerError("P12 shadow trigger reason is invalid")
+        expected = self.reason == "oracle_complete"
+        if self.triggered != expected:
+            raise P12ShadowTriggerError(
+                "P12 shadow trigger triggered flag disagrees with reason")
+        if self.triggered and (
+                not self.learner_eligible or self.routing_receipt_id is None or
+                not self.baseline_oracle_complete or not self.memory_oracle_complete):
+            raise P12ShadowTriggerError(
+                "triggered P12 shadow receipt lacks required evidence")
+
+    @property
+    def receipt_digest(self) -> str:
+        return _digest(self.to_dict())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "version": self.version,
+            "cohort_receipt_digest": self.cohort_receipt_digest,
+            "campaign_id": self.campaign_id,
+            "case_id": self.case_id,
+            "lineage_id": self.lineage_id,
+            "memory_arm": self.memory_arm,
+            "routing_receipt_id": self.routing_receipt_id,
+            "no_skill_reason": self.no_skill_reason,
+            "state_shift_receipt_id": self.state_shift_receipt_id,
+            "risk_receipt_id": self.risk_receipt_id,
+            "baseline_candidate_id": self.baseline_candidate_id,
+            "memory_candidate_id": self.memory_candidate_id,
+            "baseline_execution_digest": self.baseline_execution_digest,
+            "memory_execution_digest": self.memory_execution_digest,
+            "baseline_outcome": self.baseline_outcome,
+            "memory_outcome": self.memory_outcome,
+            "baseline_oracle_complete": self.baseline_oracle_complete,
+            "memory_oracle_complete": self.memory_oracle_complete,
+            "learner_eligible": self.learner_eligible,
+            "triggered": self.triggered,
+            "reason": self.reason,
+            "evaluation_only": self.evaluation_only,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "P12ShadowUpdateTriggerReceipt":
+        if not isinstance(payload, Mapping):
+            raise P12ShadowTriggerError("P12 shadow trigger receipt must be an object")
+        required = {
+            "cohort_receipt_digest", "campaign_id", "case_id", "lineage_id",
+            "memory_arm", "routing_receipt_id", "no_skill_reason",
+            "state_shift_receipt_id", "risk_receipt_id", "baseline_candidate_id",
+            "memory_candidate_id", "baseline_execution_digest",
+            "memory_execution_digest", "baseline_outcome", "memory_outcome",
+            "baseline_oracle_complete", "memory_oracle_complete",
+            "learner_eligible", "triggered", "reason", "evaluation_only",
+        }
+        if not required <= set(payload):
+            raise P12ShadowTriggerError("P12 shadow trigger receipt is missing fields")
+        receipt = cls(
+            cohort_receipt_digest=payload["cohort_receipt_digest"],
+            campaign_id=payload["campaign_id"], case_id=payload["case_id"],
+            lineage_id=payload["lineage_id"], memory_arm=payload["memory_arm"],
+            routing_receipt_id=payload["routing_receipt_id"],
+            no_skill_reason=payload["no_skill_reason"],
+            state_shift_receipt_id=payload["state_shift_receipt_id"],
+            risk_receipt_id=payload["risk_receipt_id"],
+            baseline_candidate_id=payload["baseline_candidate_id"],
+            memory_candidate_id=payload["memory_candidate_id"],
+            baseline_execution_digest=payload["baseline_execution_digest"],
+            memory_execution_digest=payload["memory_execution_digest"],
+            baseline_outcome=payload["baseline_outcome"],
+            memory_outcome=payload["memory_outcome"],
+            baseline_oracle_complete=payload["baseline_oracle_complete"],
+            memory_oracle_complete=payload["memory_oracle_complete"],
+            learner_eligible=payload["learner_eligible"],
+            triggered=payload["triggered"], reason=payload["reason"],
+            evaluation_only=payload["evaluation_only"],
+            version=payload.get("version", P12_SHADOW_TRIGGER_VERSION),
+        )
+        supplied = payload.get("receipt_digest")
+        if supplied is not None and supplied != receipt.receipt_digest:
+            raise P12ShadowTriggerError("P12 shadow trigger receipt digest mismatch")
+        return receipt
+
+
+def build_p12_shadow_update_triggers(
+        cohort: object, *, memory_arm: str, learner_eligible: bool,
+        min_lineages: int = 2,
+        ) -> tuple[P12ShadowUpdateTriggerReceipt, ...]:
+    """Convert each cohort case into a replayable P13 shadow trigger.
+
+    ``learner_eligible`` is an explicit caller assertion checked by the
+    campaign manifest; it is never inferred from an ORFS outcome.  A false
+    assertion yields non-trigger receipts.  Structural violations (tampered
+    cohort, missing explicit lineages, or invalid arm identity) raise instead
+    of silently becoming evidence.
+    """
+    if memory_arm not in _MEMORY_ARMS:
+        raise P12ShadowTriggerError("P12 shadow trigger memory_arm is invalid")
+    if type(learner_eligible) is not bool:
+        raise P12ShadowTriggerError("P12 shadow trigger learner_eligible must be boolean")
+    if type(min_lineages) is not int or min_lineages < 1:
+        raise P12ShadowTriggerError("P12 shadow trigger min_lineages must be positive")
+    campaign_id, cohort_digest, cases = _cohort_fields(cohort)
+    lineages = _explicit_lineages(cases)
+    if len(lineages) < min_lineages:
+        raise P12ShadowTriggerError(
+            "P12 shadow trigger cohort lacks the required distinct lineages")
+    results: list[P12ShadowUpdateTriggerReceipt] = []
+    for case_id, bundle in sorted(cases.items()):
+        if bundle.case_id != case_id:
+            raise P12ShadowTriggerError("P12 shadow trigger case identity mismatch")
+        baseline = bundle.arm_receipts["NO_MEMORY"]
+        memory = bundle.arm_receipts[memory_arm]
+        if baseline.source != "no_memory" or memory.source != "structured_memory":
+            raise P12ShadowTriggerError("P12 shadow trigger arm source is invalid")
+        routing_id = bundle.routing_receipt_id
+        if routing_id is not None:
+            routing_id = _text(routing_id, "routing_receipt_id")
+        baseline_complete = _oracle_complete(baseline)
+        memory_complete = _oracle_complete(memory)
+        triggered, reason = _reason(
+            learner_eligible=learner_eligible,
+            routing_id=routing_id,
+            baseline_complete=baseline_complete,
+            memory_complete=memory_complete)
+        results.append(P12ShadowUpdateTriggerReceipt(
+            cohort_receipt_digest=cohort_digest, campaign_id=campaign_id,
+            case_id=case_id, lineage_id=bundle.lineage_id.strip(),
+            memory_arm=memory_arm, routing_receipt_id=routing_id,
+            no_skill_reason=bundle.no_skill_reason,
+            state_shift_receipt_id=bundle.state_shift_receipt_id,
+            risk_receipt_id=bundle.risk_receipt_id,
+            baseline_candidate_id=baseline.candidate_id,
+            memory_candidate_id=memory.candidate_id,
+            baseline_execution_digest=baseline.execution_digest,
+            memory_execution_digest=memory.execution_digest,
+            baseline_outcome=baseline.outcome, memory_outcome=memory.outcome,
+            baseline_oracle_complete=baseline_complete,
+            memory_oracle_complete=memory_complete,
+            learner_eligible=learner_eligible, triggered=triggered, reason=reason))
+    return tuple(results)
+
+
+__all__ = [
+    "P12_SHADOW_TRIGGER_VERSION", "P12ShadowTriggerError",
+    "P12ShadowUpdateTriggerReceipt", "build_p12_shadow_update_triggers",
+]
