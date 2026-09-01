@@ -3115,3 +3115,11 @@ Wilson lower bound，并记录 reason metrics/confusion matrix；同时当 evide
 保持兼容）。这只是 P15 decision seam，不代表已有真实 calibration、authority 或
 production runtime；当前真实 ORFS cohort 尚未产生独立 NO_SKILL oracle 标签，仍不能
 据此推动 canonical memory 或 runtime promotion。
+
+`scripts/build_no_skill_calibration_report.py` 现在提供 P15 证据装配入口：manifest 必须
+显式给出二元预测/独立 oracle labels、`oracle_label_source` 和带 SHA256 的 immutable
+`evidence_refs`。脚本拒绝 `outcome`、repair 或 gold-answer 字段，因此不会从 ORFS
+PASS/FAIL 反推 `Should Use Memory`；输出仍固定为
+`canonical_memory_mutation=none`、`promotion_attempted=false`、
+`production_integration=not_attempted`。没有真实独立标签时，该入口不会生成可通过的
+calibration gate。
