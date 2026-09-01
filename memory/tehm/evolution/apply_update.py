@@ -23,7 +23,7 @@ from tehm.state.resolver import resolve_current_state
 from tehm.state.schema import ensure_state_schema
 from tehm.state.validation import RELATION_TYPES
 
-from .anti_forgetting import raw_evidence_digest
+from .anti_forgetting import AntiForgettingWitness, raw_evidence_digest
 from .incremental_crystallize import crystallize_affected_groups
 from .local_revision import LocalizedUpdatePlan
 from .p12_shadow_trigger import P12ShadowTriggerError, P12ShadowUpdateTriggerReceipt
@@ -185,6 +185,27 @@ def _p12_shadow_trigger(plan: LocalizedUpdatePlan,
         raise ShadowUpdateError(
             "shadow update plan must explicitly witness the P12 trigger digest")
     return trigger
+
+
+def _anti_forgetting_witness(
+        plan: LocalizedUpdatePlan,
+        evidence: Mapping,
+        ) -> AntiForgettingWitness | None:
+    """Validate the four independent anti-forgetting gates for a mutation."""
+    raw = evidence.get("anti_forgetting")
+    if raw is None:
+        return None
+    try:
+        witness = AntiForgettingWitness.from_dict(raw)
+    except (TypeError, ValueError) as exc:
+        raise ShadowUpdateError(str(exc)) from exc
+    if witness.receipt_digest not in plan.evidence_refs:
+        raise ShadowUpdateError(
+            "shadow update plan must explicitly witness the anti-forgetting digest")
+    if witness.eligible is not True:
+        raise ShadowUpdateError(
+            "shadow update anti-forgetting witness is not eligible")
+    return witness
 
 
 def _relation_payload(plan: LocalizedUpdatePlan, evidence: Mapping) -> dict:
@@ -523,6 +544,10 @@ def apply_localized_update_shadow(
     if not isinstance(evidence, Mapping):
         raise ShadowUpdateError("shadow update evidence must be an object")
     p12_trigger = _p12_shadow_trigger(plan, evidence)
+    anti_forgetting = _anti_forgetting_witness(plan, evidence)
+    if plan.update_target != "UPDATE_NONE" and anti_forgetting is None:
+        raise ShadowUpdateError(
+            "mutating shadow update requires an anti-forgetting witness")
     source_before = _connection_digest(current_state)
     raw_before = raw_evidence_digest(current_state)
     staging = _staging_copy(current_state)
@@ -580,6 +605,8 @@ def apply_localized_update_shadow(
             "metadata": {
                 "scope": scope,
                 "shadow_update_version": SHADOW_UPDATE_VERSION,
+                **({"anti_forgetting_witness_digest": anti_forgetting.receipt_digest}
+                   if anti_forgetting is not None else {}),
                 **({"p12_shadow_trigger_digest": p12_trigger.receipt_digest}
                    if p12_trigger is not None else {}),
             },

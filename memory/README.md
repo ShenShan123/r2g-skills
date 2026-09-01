@@ -3070,3 +3070,9 @@ held-out 结果可以继续做 transfer/anti-forgetting 审计，但不会通过
 扩展 learner support envelope 或进入 shadow mutation。该约束只影响 P13 shadow
 admission，仍不写 canonical memory、不改变 lifecycle/authority，也不打开 production
 runtime。
+
+P13 的任一非 `RETAIN` shadow mutation 还必须携带 content-addressed
+`AntiForgettingWitness`：target replay、non-target regression-free、独立 held-out audit
+和 rollback pointer 四项均需显式 receipt/digest 且全部通过；缺失、篡改或任一 gate
+失败都会拒绝 mutation。该 witness 只证明隔离 shadow 试验具备 anti-forgetting 前置
+条件，不等价于 capability authority 或 production rollback。

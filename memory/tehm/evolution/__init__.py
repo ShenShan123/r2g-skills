@@ -36,8 +36,8 @@ from .receipts import (
 from .revision import REVISION_OPERATIONS, record_rule_revision
 from .rollback import IsolatedRollbackReceipt, build_isolated_rollback_receipt
 from .anti_forgetting import (
-    RAW_EVIDENCE_TABLES, RawEvidenceReceipt, raw_evidence_digest,
-    verify_raw_evidence_unchanged,
+    ANTI_FORGETTING_VERSION, RAW_EVIDENCE_TABLES, AntiForgettingWitness,
+    RawEvidenceReceipt, raw_evidence_digest, verify_raw_evidence_unchanged,
 )
 from .triggers import (
     TRIGGER_REASONS, ConsolidationTriggerReceipt,
@@ -67,7 +67,8 @@ __all__ = [
     "record_rule_revision", "verify_event_chain", "CONFLICT_TYPES",
     "IsolatedRollbackReceipt", "build_isolated_rollback_receipt",
     "RAW_EVIDENCE_TABLES", "RawEvidenceReceipt", "raw_evidence_digest",
-    "verify_raw_evidence_unchanged",
+    "verify_raw_evidence_unchanged", "ANTI_FORGETTING_VERSION",
+    "AntiForgettingWitness",
     "ConflictReceipt", "detect_conflicts", "detect_novelty",
     "attribute_failure", "failure_attribution_digest", "plan_localized_update",
     "RETRIEVAL_ATTRIBUTION_VERSION", "RetrievalAttributionError",

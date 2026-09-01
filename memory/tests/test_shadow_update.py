@@ -8,6 +8,7 @@ import pytest
 from contracts import MemoryRoutingDecision
 from tehm.canonical.capture import capture
 from tehm.evolution import (
+    AntiForgettingWitness,
     AppliedShadowUpdateReceipt,
     P12ShadowUpdateTriggerReceipt,
     LocalizedUpdatePlan,
@@ -23,6 +24,30 @@ from tehm.rtl.rtl_oracle import IcarusOracle
 
 
 PROJECTS = Path(__file__).resolve().parent / "fixtures" / "rtl_projects"
+
+
+def _anti_forgetting(tag: str = "shadow") -> AntiForgettingWitness:
+    return AntiForgettingWitness(
+        target_replay_receipt_id=f"{tag}:target",
+        target_replay_digest=f"sha256:{tag}-target",
+        target_replay_passed=True,
+        non_target_regression_receipt_id=f"{tag}:non-target",
+        non_target_regression_digest=f"sha256:{tag}-non-target",
+        non_target_regression_free=True,
+        heldout_audit_receipt_id=f"{tag}:heldout",
+        heldout_audit_digest=f"sha256:{tag}-heldout",
+        heldout_audit_passed=True,
+        rollback_pointer=f"{tag}:rollback",
+        rollback_receipt_digest=f"sha256:{tag}-rollback",
+        rollback_verified=True,
+        evidence_refs=(f"{tag}:target", f"{tag}:non-target",
+                       f"{tag}:heldout", f"{tag}:rollback"),
+    )
+
+
+def _anti_evidence(witness: AntiForgettingWitness) -> dict:
+    return {"anti_forgetting": {
+        **witness.to_dict(), "receipt_digest": witness.receipt_digest}}
 
 
 def _capture(tmp_tehm, name: str, *, oracle=None) -> str:
@@ -48,10 +73,13 @@ def test_relation_update_is_applied_then_discarded(tmp_tehm):
     conn, _, _ = tmp_tehm
     first = _capture(tmp_tehm, "req_ack_bug")
     second = _capture(tmp_tehm, "req_ack_bug2")
+    witness = _anti_forgetting("relation")
     before = conn.execute(
         "SELECT COUNT(*) FROM tehm_memory_relations").fetchone()[0]
-    plan = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE", refs=(first,))
+    plan = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE",
+                 refs=(first, witness.receipt_digest))
     receipt = apply_localized_update_shadow(plan, conn, {
+        **_anti_evidence(witness),
         "relation": {
             "source_type": "transition", "source_id": first,
             "relation_type": "INVALIDATES", "target_type": "transition",
@@ -90,14 +118,16 @@ def test_causal_update_crystallizes_only_in_shadow(tmp_tehm):
     conn, _, _ = tmp_tehm
     first = _capture(tmp_tehm, "req_ack_bug", oracle=oracle)
     second = _capture(tmp_tehm, "req_ack_bug2", oracle=oracle)
+    witness = _anti_forgetting("causal")
     before = {
         table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         for table in ("tehm_rules", "tehm_rule_revisions", "tehm_memory_events")
     }
     plan = _plan(
-        first, "UPDATE_CAUSAL_KNOWLEDGE", "ADD", refs=(first, second))
+        first, "UPDATE_CAUSAL_KNOWLEDGE", "ADD",
+        refs=(first, second, witness.receipt_digest))
     receipt = apply_localized_update_shadow(
-        plan, conn, {"transition_ids": [first, second]})
+        plan, conn, {"transition_ids": [first, second], **_anti_evidence(witness)})
     assert any(item.startswith("rule:") for item in receipt.created_object_ids)
     assert any(item.startswith("rule_revision:")
                for item in receipt.created_object_ids)
@@ -110,8 +140,11 @@ def test_causal_update_crystallizes_only_in_shadow(tmp_tehm):
 def test_shadow_asset_update_never_promotes_or_persists(tmp_tehm):
     conn, _, _ = tmp_tehm
     transition_id = _capture(tmp_tehm, "req_ack_bug")
-    plan = _plan(transition_id, "UPDATE_ASSET", "ADD", refs=(transition_id,))
+    witness = _anti_forgetting("asset")
+    plan = _plan(transition_id, "UPDATE_ASSET", "ADD",
+                 refs=(transition_id, witness.receipt_digest))
     receipt = apply_localized_update_shadow(plan, conn, {
+        **_anti_evidence(witness),
         "asset": {
             "asset_type": "DIAGNOSTIC_EXTRACTOR", "name": "shadow.asset",
             "version": "0.1", "definition": {"kind": "diagnostic"},
@@ -132,8 +165,11 @@ def test_shadow_asset_update_never_promotes_or_persists(tmp_tehm):
 def test_shadow_capability_update_is_candidate_only_and_discarded(tmp_tehm):
     conn, _, _ = tmp_tehm
     transition_id = _capture(tmp_tehm, "req_ack_bug")
-    plan = _plan(transition_id, "UPDATE_CAPABILITY", "ADD", refs=(transition_id,))
+    witness = _anti_forgetting("capability")
+    plan = _plan(transition_id, "UPDATE_CAPABILITY", "ADD",
+                 refs=(transition_id, witness.receipt_digest))
     receipt = apply_localized_update_shadow(plan, conn, {
+        **_anti_evidence(witness),
         "capability": {
             "mechanism_family": "RTL_REPAIR",
             "applicability": {"compatibility_profile": "rtl.fsm.single_guard.v1"},
@@ -160,8 +196,11 @@ def test_shadow_receipt_replays_and_rejects_digest_tampering(tmp_tehm):
     conn, _, _ = tmp_tehm
     first = _capture(tmp_tehm, "req_ack_bug")
     second = _capture(tmp_tehm, "req_ack_bug2")
-    plan = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE", refs=(first,))
+    witness = _anti_forgetting("replay")
+    plan = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE",
+                 refs=(first, witness.receipt_digest))
     receipt = apply_localized_update_shadow(plan, conn, {
+        **_anti_evidence(witness),
         "relation": {
             "source_type": "transition", "source_id": first,
             "relation_type": "INVALIDATES", "target_type": "transition",
@@ -179,6 +218,7 @@ def test_shadow_update_requires_and_records_explicit_p12_trigger(tmp_tehm):
     conn, _, _ = tmp_tehm
     first = _capture(tmp_tehm, "req_ack_bug")
     second = _capture(tmp_tehm, "req_ack_bug2")
+    witness = _anti_forgetting("p12")
 
     def execution(case_id, candidate_id, source):
         return CandidateExecutionReceipt(
@@ -226,8 +266,9 @@ def test_shadow_update_requires_and_records_explicit_p12_trigger(tmp_tehm):
         routing_decisions=routing_decisions,
         case_learner_eligibility={case_id: True for case_id in cases})[0]
     plan = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE",
-                 refs=(first, trigger.receipt_digest))
+                 refs=(first, trigger.receipt_digest, witness.receipt_digest))
     receipt = apply_localized_update_shadow(plan, conn, {
+        **_anti_evidence(witness),
         "p12_shadow_trigger": {
             **trigger.to_dict(), "receipt_digest": trigger.receipt_digest},
         "relation": {
@@ -235,8 +276,9 @@ def test_shadow_update_requires_and_records_explicit_p12_trigger(tmp_tehm):
             "relation_type": "INVALIDATES", "target_type": "transition",
             "target_id": second, "evidence_refs": [first],
         },
-    })
+        })
     assert receipt.metadata["p12_shadow_trigger_digest"] == trigger.receipt_digest
+    assert receipt.metadata["anti_forgetting_witness_digest"] == witness.receipt_digest
 
     tampered = _plan(first, "UPDATE_STATE_RELATION", "INVALIDATE", refs=(first,))
     with pytest.raises(ShadowUpdateError, match="P12 trigger digest"):
@@ -248,4 +290,40 @@ def test_shadow_update_requires_and_records_explicit_p12_trigger(tmp_tehm):
                 "relation_type": "INVALIDATES", "target_type": "transition",
                 "target_id": second, "evidence_refs": [first],
             },
+            })
+
+
+def test_mutating_shadow_update_requires_eligible_anti_forgetting_witness(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    transition_id = _capture(tmp_tehm, "req_ack_bug")
+    plan = _plan(transition_id, "UPDATE_ASSET", "ADD", refs=(transition_id,))
+    with pytest.raises(ShadowUpdateError, match="anti-forgetting witness"):
+        apply_localized_update_shadow(plan, conn, {
+            "asset": {
+                "asset_type": "DIAGNOSTIC_EXTRACTOR", "name": "missing.witness",
+                "version": "0.1", "definition": {"kind": "diagnostic"},
+                "input_contract": {"state": "object"},
+                "output_contract": {"diagnostic": "object"},
+                "verifier_contract": {"independent": True},
+                "compatibility": {"mechanism_family": "RTL_REPAIR"},
+            }
+        })
+
+    witness = _anti_forgetting("ineligible")
+    bad = AntiForgettingWitness(
+        **{**witness.__dict__, "heldout_audit_passed": False})
+    plan = _plan(transition_id, "UPDATE_ASSET", "ADD",
+                 refs=(transition_id, bad.receipt_digest))
+    with pytest.raises(ShadowUpdateError, match="anti-forgetting witness"):
+        apply_localized_update_shadow(plan, conn, {
+            "anti_forgetting": {
+                **bad.to_dict(), "receipt_digest": bad.receipt_digest},
+            "asset": {
+                "asset_type": "DIAGNOSTIC_EXTRACTOR", "name": "bad.witness",
+                "version": "0.1", "definition": {"kind": "diagnostic"},
+                "input_contract": {"state": "object"},
+                "output_contract": {"diagnostic": "object"},
+                "verifier_contract": {"independent": True},
+                "compatibility": {"mechanism_family": "RTL_REPAIR"},
+            }
         })
