@@ -66,6 +66,8 @@ def test_source_disjoint_fixed_environment_cohort_replays():
     if not IcarusOracle().available:
         pytest.skip("iverilog/vvp not available")
     cases = [_case("req_ack_bug"), _case("req_ack_bug2")]
+    cases[0]["lineage_id"] = "lineage-req-ack"
+    cases[1]["lineage_id"] = "lineage-write-verify"
     arms = {
         case["case_id"]: {
             arm: None if arm == "NO_MEMORY" else _candidate(
@@ -79,16 +81,46 @@ def test_source_disjoint_fixed_environment_cohort_replays():
         campaign_manifest_digest="sha256:p12-manifest",
         platform_digest=PLATFORM, pdk_digest=PDK,
         oracle=IcarusCandidateOracle(), budget=3,
-        toolchain_digest=TOOLCHAIN, oracle_digest=ORACLE)
+        toolchain_digest=TOOLCHAIN, oracle_digest=ORACLE, min_lineages=2)
     assert isinstance(receipt, RtlPairedCohortReceipt)
     assert receipt.source_disjoint is True
     assert receipt.source_restore_verified is True
+    assert receipt.lineage_count == 2
+    assert receipt.lineage_ids == {
+        "p12-req_ack_bug": "lineage-req-ack",
+        "p12-req_ack_bug2": "lineage-write-verify",
+    }
     assert receipt.outcome_counts["NO_MEMORY"]["FAIL"] == 2
     for arm in P12_ARMS[1:]:
         assert receipt.outcome_counts[arm]["PASS"] == 2
     replay = RtlPairedCohortReceipt.from_dict(
         {**receipt.to_dict(), "receipt_digest": receipt.receipt_digest})
     assert replay.to_dict() == receipt.to_dict()
+
+
+def test_cohort_min_lineages_requires_explicit_distinct_ids():
+    first = _case("req_ack_bug")
+    second = _case("req_ack_bug2")
+    arms = {
+        case["case_id"]: {
+            arm: None if arm == "NO_MEMORY" else _candidate(
+                case["case_id"].removeprefix("p12-"))
+            for arm in P12_ARMS
+        }
+        for case in (first, second)
+    }
+    kwargs = dict(campaign_id="p12-lineage-gate",
+                  campaign_manifest_digest="sha256:p12-manifest",
+                  platform_digest=PLATFORM, pdk_digest=PDK,
+                  toolchain_digest=TOOLCHAIN, oracle_digest=ORACLE,
+                  min_lineages=2)
+    with pytest.raises(RtlCohortError, match="explicit lineage_id"):
+        execute_rtl_paired_cohort([first, second], arms, **kwargs)
+
+    first["lineage_id"] = "same-lineage"
+    second["lineage_id"] = "same-lineage"
+    with pytest.raises(RtlCohortError, match="distinct lineages"):
+        execute_rtl_paired_cohort([first, second], arms, **kwargs)
 
 
 def test_cohort_rejects_duplicate_source_or_environment_drift():

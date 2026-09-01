@@ -174,9 +174,53 @@ def test_orfs_cohort_executes_and_replays_fixed_four_arm_bundle(tmp_path):
     assert bundle.outcome_counts["NO_MEMORY"]["FAIL"] == 1
     assert bundle.no_skill_reason_counts == {
         "NO_MATCH": 1, "STATE_SHIFT": 0, "RISK": 0}
+    assert bundle.lineage_count == 1
+    assert bundle.lineage_ids == {case["case_id"]: case["case_id"]}
     replay = OrfsPairedCohortReceipt.from_dict({
         **bundle.to_dict(), "receipt_digest": bundle.receipt_digest})
     assert replay.to_dict() == bundle.to_dict()
+
+
+def test_orfs_cohort_min_lineages_is_preflighted(tmp_path):
+    first = _fake_case(tmp_path / "first")
+    second = _fake_case(tmp_path / "second")
+    second["case_id"] = "orfs-fake-p12-second"
+    second_project = Path(second["project_dir"])
+    (second_project / "rtl" / "fake.v").write_text("module fake_second; endmodule\n")
+    second["source_digest"] = _source_binding(
+        second_project, _source_inputs(second["source_inputs"]))
+    first["lineage_id"] = "lineage-a"
+    second["lineage_id"] = "lineage-b"
+    candidate = _candidate()
+    arms = {
+        case["case_id"]: {
+            arm: None if arm == "NO_MEMORY" else candidate for arm in P12_ARMS}
+        for case in (first, second)
+    }
+    bundle = execute_orfs_paired_cohort(
+        [first, second], arms, campaign_id="orfs-lineage-gate",
+        campaign_manifest_digest="sha256:orfs-test-manifest",
+        platform_digest=first["platform_digest"], pdk_digest=first["pdk_digest"],
+        oracle=OrfsCandidateOracle(), budget=3,
+        toolchain_digest=first["toolchain_digest"],
+        oracle_digest=first["oracle_digest"], min_lineages=2)
+    assert bundle.lineage_count == 2
+    assert bundle.lineage_ids == {
+        first["case_id"]: "lineage-a", second["case_id"]: "lineage-b"}
+
+    missing = _fake_case(tmp_path / "missing")
+    missing["case_id"] = "orfs-fake-p12-missing-lineage"
+    with pytest.raises(OrfsCohortError, match="explicit lineage_id"):
+        execute_orfs_paired_cohort(
+            [first, missing],
+            {first["case_id"]: arms[first["case_id"]],
+             missing["case_id"]: arms[first["case_id"]]},
+            campaign_id="orfs-lineage-gate-missing",
+            campaign_manifest_digest="sha256:orfs-test-manifest",
+            platform_digest=first["platform_digest"], pdk_digest=first["pdk_digest"],
+            oracle=OrfsCandidateOracle(), budget=3,
+            toolchain_digest=first["toolchain_digest"],
+            oracle_digest=first["oracle_digest"], min_lineages=2)
 
 
 def test_orfs_cohort_rejects_missing_explicit_external_sources(tmp_path):

@@ -178,6 +178,15 @@ class OrfsPairedCohortReceipt:
         return counts
 
     @property
+    def lineage_ids(self) -> dict[str, str]:
+        return {case_id: (bundle.lineage_id or case_id)
+                for case_id, bundle in sorted(self.case_receipts.items())}
+
+    @property
+    def lineage_count(self) -> int:
+        return len(set(self.lineage_ids.values()))
+
+    @property
     def receipt_digest(self) -> str:
         return _digest(self.to_dict())
 
@@ -185,6 +194,7 @@ class OrfsPairedCohortReceipt:
     def legacy_receipt_digest(self) -> str:
         payload = self.to_dict()
         payload.pop("no_skill_reason_counts", None)
+        payload.pop("lineage_ids", None)
         for value in payload["case_receipts"].values():
             value.pop("no_skill_reason", None)
             value.pop("state_shift_receipt_id", None)
@@ -213,6 +223,7 @@ class OrfsPairedCohortReceipt:
             "evaluation_only": self.evaluation_only,
             "outcome_counts": self.outcome_counts,
             "no_skill_reason_counts": self.no_skill_reason_counts,
+            "lineage_ids": self.lineage_ids,
         }
 
     @classmethod
@@ -265,7 +276,8 @@ def execute_orfs_paired_cohort(
         oracle: OrfsCandidateOracle | None = None,
         budget: int | Mapping = 3,
         toolchain_digest: str | None = None,
-        oracle_digest: str | None = None) -> OrfsPairedCohortReceipt:
+        oracle_digest: str | None = None,
+        min_lineages: int = 1) -> OrfsPairedCohortReceipt:
     """Execute a fixed-environment, source-disjoint ORFS P12 cohort."""
     campaign_id = _text(campaign_id, "campaign_id")
     campaign_manifest_digest = _sha256_text(
@@ -278,12 +290,15 @@ def execute_orfs_paired_cohort(
     if not isinstance(arm_candidates, Mapping):
         raise OrfsCohortError("ORFS cohort arm_candidates must be an object")
     budget_value = _budget_value(budget)
+    if type(min_lineages) is not int or not 1 <= min_lineages:
+        raise OrfsCohortError("ORFS cohort min_lineages must be a positive integer")
     runner = _normalize_oracle(oracle)
     seen_ids: set[str] = set()
     seen_sources: set[str] = set()
     frozen_cases: dict[str, Mapping] = {}
     source_digests: dict[str, str] = {}
     source_content_digests: dict[str, str] = {}
+    declared_lineages: set[str] = set()
     expected_toolchain = toolchain_digest
     expected_oracle = oracle_digest
 
@@ -294,6 +309,16 @@ def execute_orfs_paired_cohort(
         if case_id in seen_ids:
             raise OrfsCohortError("ORFS cohort case IDs must be unique")
         seen_ids.add(case_id)
+        lineage_id = raw_case.get("lineage_id")
+        if lineage_id is None:
+            if min_lineages > 1:
+                raise OrfsCohortError(
+                    "ORFS cohort min_lineages requires explicit lineage_id for every case")
+        elif (type(lineage_id) is not str or not lineage_id.strip() or
+              lineage_id != lineage_id.strip()):
+            raise OrfsCohortError("ORFS cohort case lineage_id is invalid")
+        else:
+            declared_lineages.add(lineage_id.strip())
         source_digest = _source_digest(raw_case)
         if source_digest in seen_sources:
             raise OrfsCohortError("ORFS cohort source files/content must be disjoint")
@@ -327,6 +352,9 @@ def execute_orfs_paired_cohort(
 
     if set(arm_candidates) != seen_ids:
         raise OrfsCohortError("ORFS cohort candidates must cover exactly all cases")
+    if min_lineages > 1 and len(declared_lineages) < min_lineages:
+        raise OrfsCohortError(
+            "ORFS cohort does not contain the required distinct lineages")
     receipts: dict[str, PairedCandidateExecutionReceipt] = {}
     for case_id, case in frozen_cases.items():
         arms = arm_candidates[case_id]
@@ -337,7 +365,8 @@ def execute_orfs_paired_cohort(
             case, arms, oracle=runner, budget=budget,
             no_skill_reason=case.get("no_skill_reason"),
             state_shift_receipt_id=case.get("state_shift_receipt_id"),
-            risk_receipt_id=case.get("risk_receipt_id"))
+            risk_receipt_id=case.get("risk_receipt_id"),
+            lineage_id=case.get("lineage_id"))
         if (bundle.toolchain_digest != expected_toolchain or
                 bundle.oracle_digest != expected_oracle):
             raise OrfsCohortError("ORFS cohort execution digest drift")

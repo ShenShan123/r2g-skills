@@ -254,6 +254,7 @@ class PairedCandidateExecutionReceipt:
     no_skill_reason: str | None = None
     state_shift_receipt_id: str | None = None
     risk_receipt_id: str | None = None
+    lineage_id: str | None = None
 
     def __post_init__(self) -> None:
         _text(self.case_id, "case_id")
@@ -293,6 +294,10 @@ class PairedCandidateExecutionReceipt:
             value = getattr(self, name)
             if value is not None and (type(value) is not str or not value):
                 raise CandidateExecutorError(f"paired execution {name} is invalid")
+        if self.lineage_id is not None and (
+                type(self.lineage_id) is not str or
+                not self.lineage_id or self.lineage_id != self.lineage_id.strip()):
+            raise CandidateExecutorError("paired execution lineage_id is invalid")
         if self.state_shift_receipt_id is not None and self.no_skill_reason != "STATE_SHIFT":
             raise CandidateExecutorError("paired state shift receipt requires STATE_SHIFT")
         if self.risk_receipt_id is not None and self.no_skill_reason != "RISK":
@@ -320,6 +325,8 @@ class PairedCandidateExecutionReceipt:
         # metadata belongs to the paired routing decision, not each arm.
         for arm, receipt in sorted(self.arm_receipts.items()):
             payload["arm_receipts"][arm] = receipt.to_dict()
+        # ``lineage_id`` was introduced together with reason metadata.
+        payload.pop("lineage_id", None)
         return _digest(payload)
 
     def to_dict(self) -> dict[str, Any]:
@@ -337,6 +344,7 @@ class PairedCandidateExecutionReceipt:
             "no_skill_reason": self.no_skill_reason,
             "state_shift_receipt_id": self.state_shift_receipt_id,
             "risk_receipt_id": self.risk_receipt_id,
+            "lineage_id": self.lineage_id,
         }
 
     @classmethod
@@ -358,7 +366,8 @@ class PairedCandidateExecutionReceipt:
             reasons=tuple(payload.get("reasons", ())),
             no_skill_reason=payload.get("no_skill_reason"),
             state_shift_receipt_id=payload.get("state_shift_receipt_id"),
-            risk_receipt_id=payload.get("risk_receipt_id"))
+            risk_receipt_id=payload.get("risk_receipt_id"),
+            lineage_id=payload.get("lineage_id"))
         supplied = payload.get("receipt_digest")
         if supplied is not None and supplied not in {
                 receipt.receipt_digest, receipt.legacy_receipt_digest}:
@@ -470,6 +479,7 @@ def execute_paired_candidates(
         no_skill_reason: str | None = None,
         state_shift_receipt_id: str | None = None,
         risk_receipt_id: str | None = None,
+        lineage_id: str | None = None,
 ) -> PairedCandidateExecutionReceipt:
     """Execute all four P12 arms on one frozen case and fixed budget.
 
@@ -497,7 +507,7 @@ def execute_paired_candidates(
         case_digest=_digest(case), toolchain_digest=next(iter(toolchains)),
         oracle_digest=next(iter(oracles)), no_skill_reason=no_skill_reason,
         state_shift_receipt_id=state_shift_receipt_id,
-        risk_receipt_id=risk_receipt_id)
+        risk_receipt_id=risk_receipt_id, lineage_id=lineage_id)
 
 
 __all__ = [
