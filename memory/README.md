@@ -3096,3 +3096,22 @@ memory delta 观察到，而不会被误报成“没有 memory change”。
 `CandidateExecutionReceipt`，并在 strict expanded attribution 中作为必需的 C5
 witness。任一 state、asset、knowledge、binding 或 execution candidate 不一致都会
 拒绝 lineage；该 receipt 仍只用于 attribution/replay，不授予 capability authority。
+
+### 2026-09-03 P15 reason-aware calibration seam
+
+新增 `tehm.evaluation.no_skill_calibration`，把 P15 的 calibration 输入冻结为显式的
+预测/独立 oracle 二元标签：`USE_MEMORY` 或带 typed reason 的 `NO_SKILL`（`NO_MATCH`、
+`STATE_SHIFT`、`RISK`）。receipt 同时给出总体 precision/recall/F1/USE_MEMORY coverage、
+每个 reason 的 precision/recall、四标签 reason confusion matrix、逐维
+`mechanism_family/design/platform/flow_regime/model_identity/state_shift_dimension`
+分层、Wilson 95% 区间和基于预测置信度的 ECE。重复 case、缺失 reason、NaN、未知
+stratum 或不完整 confidence 会 fail-closed；样本不足或 reason 分母不足只生成
+`NOT_ESTABLISHED`，不会被当作 calibration PASS。receipt 带样本摘要和 digest，
+`evaluation_only=true`、`canonical_memory_mutation=none`。
+
+`evaluate_production_gate()` 在收到该结构化 receipt 时改用总体 precision/recall 的
+Wilson lower bound，并记录 reason metrics/confusion matrix；同时当 evidence 提供
+`memory_interference_cases` 时使用 MIR Wilson upper bound（旧的点估计 manifest 仍
+保持兼容）。这只是 P15 decision seam，不代表已有真实 calibration、authority 或
+production runtime；当前真实 ORFS cohort 尚未产生独立 NO_SKILL oracle 标签，仍不能
+据此推动 canonical memory 或 runtime promotion。

@@ -13,6 +13,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from tehm.ids import stable_dumps
+from tehm.evaluation.no_skill_calibration import (
+    NoSkillCalibrationError, NoSkillCalibrationReceipt, wilson_interval,
+)
 
 
 PRODUCTION_GATE_VERSION = "production-memory-gate-v1"
@@ -158,6 +161,21 @@ def _rollback_check(source: Mapping) -> tuple[bool | None, list[str]]:
     if not isinstance(digest, str) or not digest.strip():
         reasons.append("rollback_receipt_digest_required")
     return (False if reasons else True), reasons
+
+
+def _calibration_metric(report: NoSkillCalibrationReceipt, name: str,
+                        bound: str) -> float | None:
+    value = report.overall.get(name)
+    if not isinstance(value, Mapping):
+        return None
+    raw = value.get(bound)
+    if isinstance(raw, bool) or raw is None:
+        return None
+    try:
+        number = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) and 0.0 <= number <= 1.0 else None
 
 
 @dataclass(frozen=True)
@@ -361,41 +379,91 @@ def evaluate_production_gate(
             metrics["efficacy_branch"] = (
                 "harmful_activation_decrease" if harm_branch else "controlled_harm_repair_gain")
 
-    # 2. NO_SKILL calibration requires both precision and recall over a real
-    # non-empty denominator.  An empty/no-skill result is not calibration.
-    precision = _pick(source, "no_skill_precision", "abstention_precision")
-    recall = _pick(source, "no_skill_recall", "abstention_recall")
-    no_skill_cases = _pick(source, "no_skill_cases", "abstention_cases")
-    calibration_error = _pick(source, "no_skill_calibration_error",
-                              "abstention_calibration_error", "no_skill_ece")
-    try:
-        if precision is None or recall is None or no_skill_cases is None:
-            missing.add("no_skill_calibration")
-            reasons.append("no_skill_precision_recall_and_cases_required")
-        else:
-            _positive_int(no_skill_cases, "no_skill_cases")
-            metrics["no_skill_precision"] = _finite_number(precision, "no_skill_precision")
-            metrics["no_skill_recall"] = _finite_number(recall, "no_skill_recall")
-            metrics["no_skill_cases"] = no_skill_cases
-            if calibration_error is not None:
-                metrics["no_skill_calibration_error"] = _finite_number(
-                    calibration_error, "no_skill_calibration_error")
-            checks["no_skill_calibration"] = (
-                metrics["no_skill_precision"] >= thresholds["min_no_skill_precision"] and
-                metrics["no_skill_recall"] >= thresholds["min_no_skill_recall"] and
-                (calibration_error is None or metrics["no_skill_calibration_error"] <=
-                 thresholds["max_no_skill_calibration_error"]))
-            if not checks["no_skill_calibration"]:
+    # 2. NO_SKILL calibration.  A Revision2 receipt is preferred: it carries
+    # reason-stratified confusion, denominator-aware Wilson intervals and ECE.
+    # The scalar path remains a compatibility adapter for pre-P15 reports and
+    # deliberately does not claim CI-backed calibration.
+    structured_calibration = _pick(
+        source, "no_skill_calibration_report", "no_skill_calibration")
+    if structured_calibration is not None:
+        try:
+            if hasattr(structured_calibration, "to_dict"):
+                structured_calibration = structured_calibration.to_dict()
+            report = NoSkillCalibrationReceipt.from_dict(structured_calibration)
+            metrics["no_skill_calibration_report_digest"] = report.receipt_digest
+            metrics["no_skill_cases"] = report.sample_count
+            metrics["no_skill_confidence_coverage"] = report.confidence_coverage
+            metrics["no_skill_reason_metrics"] = report.per_reason
+            metrics["no_skill_reason_confusion_matrix"] = report.reason_confusion_matrix
+            precision_lcb = _calibration_metric(report, "precision", "lower")
+            recall_lcb = _calibration_metric(report, "recall", "lower")
+            precision_point = _calibration_metric(report, "precision", "point")
+            recall_point = _calibration_metric(report, "recall", "point")
+            if precision_lcb is None or recall_lcb is None:
+                raise NoSkillCalibrationError("overall precision/recall CI is unavailable")
+            metrics["no_skill_precision"] = precision_point
+            metrics["no_skill_recall"] = recall_point
+            metrics["no_skill_precision_lower_ci"] = precision_lcb
+            metrics["no_skill_recall_lower_ci"] = recall_lcb
+            if report.calibration_error is None:
+                missing.add("no_skill_calibration")
+                reasons.append("no_skill_calibration_error_required")
+            else:
+                metrics["no_skill_calibration_error"] = report.calibration_error
+            if report.missing:
+                missing.add("no_skill_calibration")
+                reasons.extend(f"no_skill_calibration:{item}" for item in report.missing)
+            if report.failed:
                 failed.add("no_skill_calibration")
-                reasons.append("no_skill_calibration_below_threshold")
-    except ProductionGateError as exc:
-        failed.add("no_skill_calibration")
-        reasons.append(f"no_skill_calibration:{exc}")
+                reasons.extend(f"no_skill_calibration:{item}" for item in report.failed)
+            checks["no_skill_calibration"] = (
+                report.eligible and not report.missing and not report.failed and
+                precision_lcb >= thresholds["min_no_skill_precision"] and
+                recall_lcb >= thresholds["min_no_skill_recall"] and
+                report.calibration_error is not None and
+                report.calibration_error <= thresholds["max_no_skill_calibration_error"])
+            if (not checks["no_skill_calibration"] and
+                    not report.missing and not report.failed):
+                failed.add("no_skill_calibration")
+                reasons.append("no_skill_calibration_lower_ci_below_threshold")
+        except (NoSkillCalibrationError, TypeError, ValueError) as exc:
+            failed.add("no_skill_calibration")
+            reasons.append(f"no_skill_calibration:{exc}")
+    else:
+        precision = _pick(source, "no_skill_precision", "abstention_precision")
+        recall = _pick(source, "no_skill_recall", "abstention_recall")
+        no_skill_cases = _pick(source, "no_skill_cases", "abstention_cases")
+        calibration_error = _pick(source, "no_skill_calibration_error",
+                                  "abstention_calibration_error", "no_skill_ece")
+        try:
+            if precision is None or recall is None or no_skill_cases is None:
+                missing.add("no_skill_calibration")
+                reasons.append("no_skill_precision_recall_and_cases_required")
+            else:
+                _positive_int(no_skill_cases, "no_skill_cases")
+                metrics["no_skill_precision"] = _finite_number(precision, "no_skill_precision")
+                metrics["no_skill_recall"] = _finite_number(recall, "no_skill_recall")
+                metrics["no_skill_cases"] = no_skill_cases
+                if calibration_error is not None:
+                    metrics["no_skill_calibration_error"] = _finite_number(
+                        calibration_error, "no_skill_calibration_error")
+                checks["no_skill_calibration"] = (
+                    metrics["no_skill_precision"] >= thresholds["min_no_skill_precision"] and
+                    metrics["no_skill_recall"] >= thresholds["min_no_skill_recall"] and
+                    (calibration_error is None or metrics["no_skill_calibration_error"] <=
+                     thresholds["max_no_skill_calibration_error"]))
+                if not checks["no_skill_calibration"]:
+                    failed.add("no_skill_calibration")
+                    reasons.append("no_skill_calibration_below_threshold")
+        except ProductionGateError as exc:
+            failed.add("no_skill_calibration")
+            reasons.append(f"no_skill_calibration:{exc}")
 
     # 3. Candidate-pool evidence must be paired and must report diversity and
     # interference explicitly.  UNKNOWN or an absent denominator is a veto.
     paired_cases = _pick(source, "paired_cases")
     interference = _pick(source, "memory_interference_rate")
+    interference_cases = _pick(source, "memory_interference_cases")
     diversity = _pick(source, "candidate_diversity")
     try:
         if paired_cases is None or interference is None or diversity is None:
@@ -406,11 +474,25 @@ def evaluate_production_gate(
             metrics["paired_cases"] = paired_cases
             metrics["memory_interference_rate"] = _finite_number(
                 interference, "memory_interference_rate")
+            if interference_cases is not None:
+                if (type(interference_cases) is not int or interference_cases < 0 or
+                        interference_cases > paired_cases):
+                    raise ProductionGateError(
+                        "memory_interference_cases must be an integer in paired_cases")
+                interference_ci = wilson_interval(interference_cases, paired_cases)
+                metrics["memory_interference_cases"] = interference_cases
+                metrics["memory_interference_ci"] = interference_ci
+                interference_gate_value = interference_ci["upper"]
+            else:
+                # Legacy reports have only a point estimate.  Keep them
+                # replayable, while making the stronger P15 CI path explicit.
+                interference_gate_value = metrics["memory_interference_rate"]
             metrics["candidate_diversity"] = _finite_number(
                 diversity, "candidate_diversity")
-            checks["candidate_pool"] = (
-                metrics["memory_interference_rate"] <= thresholds[
-                    "max_memory_interference_rate"] and
+            checks["candidate_pool"] = ((
+                interference_gate_value < thresholds["max_memory_interference_rate"]
+                if interference_cases is not None else
+                interference_gate_value <= thresholds["max_memory_interference_rate"]) and
                 metrics["candidate_diversity"] >= thresholds["min_candidate_diversity"])
             if not checks["candidate_pool"]:
                 failed.add("candidate_pool")
