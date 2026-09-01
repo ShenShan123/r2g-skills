@@ -99,3 +99,23 @@ def test_execute_paired_candidates_rejects_digest_drift():
             {"NO_MEMORY": None, "ALWAYS_MEMORY": candidate,
              "APPLICABILITY_GATED": candidate, "CAUSAL_NO_SKILL": candidate},
             oracle=drifting_oracle)
+
+
+def test_paired_receipt_retains_reason_aware_no_skill_metadata():
+    candidate = _candidate()
+
+    def oracle(current, _case, _budget):
+        return {"compile_result": "PASS", "functional_result": "PASS",
+                "signoff_result": "PASS", "toolchain_digest": "sha256:tool",
+                "oracle_digest": "sha256:oracle"}
+
+    bundle = execute_paired_candidates(
+        {"case_id": "paired-reason", "toolchain_digest": "sha256:tool"},
+        {"NO_MEMORY": None, "ALWAYS_MEMORY": candidate,
+         "APPLICABILITY_GATED": candidate, "CAUSAL_NO_SKILL": candidate},
+        oracle=oracle, no_skill_reason="STATE_SHIFT",
+        state_shift_receipt_id="state_shift_receipt")
+    assert bundle.no_skill_reason == "STATE_SHIFT"
+    assert bundle.state_shift_receipt_id == "state_shift_receipt"
+    replay = PairedCandidateExecutionReceipt.from_dict(bundle.to_dict())
+    assert replay == bundle

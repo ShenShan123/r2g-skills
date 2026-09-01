@@ -3004,6 +3004,10 @@ mechanism、flow、constraint、oracle、history 六个维度 deterministic 比�
 `NO_SKILL + STATE_SHIFT`，而显式、可重放的负 expected utility 才会返回 `NO_SKILL + RISK`；
 不完整 risk/shift evidence fail-closed 为 `ABSTAIN`。
 
+四臂 `PairedCandidateExecutionReceipt` 以及 RTL/ORFS cohort receipt 现在可携带
+`no_skill_reason` 与对应 shift/risk receipt ID，并提供 reason-stratified counts；这使
+`CAUSAL_NO_SKILL` 的 refusal 语义可以原样进入后续 calibration，而不从执行结果反推。
+
 Revision2 定向回归新增 6 个测试，覆盖 support-envelope training-only、state-shift
 六维 receipt replay、legacy reason compatibility、fresh `NO_MATCH` 和 router
 `STATE_SHIFT` 路由。下一步依赖顺序已调整为：先把 reason-aware receipt 接入四臂

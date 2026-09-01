@@ -161,6 +161,7 @@ def test_orfs_adapter_binds_external_source_inputs(tmp_path):
 
 def test_orfs_cohort_executes_and_replays_fixed_four_arm_bundle(tmp_path):
     case = _fake_case(tmp_path)
+    case["no_skill_reason"] = "NO_MATCH"
     candidate = _candidate()
     arms = {arm: None if arm == "NO_MEMORY" else candidate for arm in P12_ARMS}
     bundle = execute_orfs_paired_cohort(
@@ -171,6 +172,8 @@ def test_orfs_cohort_executes_and_replays_fixed_four_arm_bundle(tmp_path):
         toolchain_digest=case["toolchain_digest"], oracle_digest=case["oracle_digest"])
     assert isinstance(bundle, OrfsPairedCohortReceipt)
     assert bundle.outcome_counts["NO_MEMORY"]["FAIL"] == 1
+    assert bundle.no_skill_reason_counts == {
+        "NO_MATCH": 1, "STATE_SHIFT": 0, "RISK": 0}
     replay = OrfsPairedCohortReceipt.from_dict({
         **bundle.to_dict(), "receipt_digest": bundle.receipt_digest})
     assert replay.to_dict() == bundle.to_dict()
