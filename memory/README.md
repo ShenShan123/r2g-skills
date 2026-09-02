@@ -3205,6 +3205,14 @@ PASS/FAIL、repair 或 oracle outcome 推导演化原因：缺少 route 只生�
 `production_runtime_imported=false` 和 `isolated_staging_only`，不能替代 P13 anti-forgetting
 或 P15 promotion gate。
 
+该 replay boundary 现在也要求 trigger report 自身带可重算的 `report_digest`，每条
+trigger 必须带匹配的 `receipt_digest`；runner 会在打开 SQLite 前校验这些摘要以及
+`canonical_memory_mutation`/production/isolated-staging 不变量，避免手工改写 report
+后继续执行。report builder 同时拒绝把 cohort、manifest、routing 或 reason 输入复用为
+独立 reason evidence，也拒绝输出覆盖任一输入。新增回归已穿过
+`NO_SKILL/STATE_SHIFT` route → trigger report → P13 runner 的边界；这只证明
+evaluation/shadow replay 可达，仍不会写 canonical memory 或 production runtime。
+
 该入口已对现有真实 `p12g-orfs-v117-v119-training-20260903` receipt 重放：2 个 distinct
 training lineage、typed route coverage 完整，但没有 Revision2 evolution signal，因此当前
 v0.2 结果为 `trigger_count=2`、`triggered_count=0`、`p13_eligible=false`、

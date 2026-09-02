@@ -13,6 +13,7 @@ from scripts.run_p13_shadow_update import P13ShadowRunError, run_p13_shadow_upda
 from tehm.evolution import (
     AntiForgettingWitness, LocalizedUpdatePlan, P12ShadowUpdateTriggerReceipt,
 )
+from tehm.ids import stable_dumps
 
 
 def _trigger() -> P12ShadowUpdateTriggerReceipt:
@@ -39,7 +40,15 @@ def _plan(trigger: P12ShadowUpdateTriggerReceipt) -> LocalizedUpdatePlan:
         evidence_refs=(trigger.receipt_digest,), rationale="P13 retain test")
 
 
-def _inputs(tmp_path: Path):
+def _state_shift_trigger() -> P12ShadowUpdateTriggerReceipt:
+    return replace(
+        _trigger(), routing_receipt_id="routing:state-shift",
+        routing_decision="NO_SKILL", routing_decision_digest="sha256:routing",
+        no_skill_reason="STATE_SHIFT", state_shift_receipt_id="shift:case-0",
+        evolution_reasons=("STATE_SHIFT",))
+
+
+def _inputs(tmp_path: Path, *, trigger: P12ShadowUpdateTriggerReceipt | None = None):
     import sqlite3
 
     db = tmp_path / "tehm.sqlite"
@@ -48,13 +57,20 @@ def _inputs(tmp_path: Path):
     conn.execute("INSERT INTO marker VALUES ('unchanged')")
     conn.commit()
     conn.close()
-    trigger = _trigger()
+    trigger = trigger or _trigger()
     trigger_report = tmp_path / "trigger.json"
-    trigger_report.write_text(json.dumps({
+    report_payload = {
         "version": "p13-shadow-trigger-report-v1", "campaign_id": "live",
         "p13_eligible": True, "trigger_count": 1, "triggered_count": 1,
         "triggers": [{**trigger.to_dict(), "receipt_digest": trigger.receipt_digest}],
-    }))
+        "canonical_memory_mutation": "none",
+        "production_runtime_imported": False,
+        "production_integration": "not_attempted",
+        "shadow_update_policy": "isolated_staging_only",
+    }
+    report_payload["report_digest"] = "sha256:" + hashlib.sha256(
+        stable_dumps(report_payload).encode()).hexdigest()
+    trigger_report.write_text(json.dumps(report_payload))
     manifest = tmp_path / "manifest.json"
     plan = _plan(trigger)
     manifest.write_text(json.dumps({
@@ -79,12 +95,51 @@ def test_p13_runner_applies_retain_in_discarded_staging(tmp_path):
     assert db.read_bytes() == before
 
 
+def test_p13_runner_accepts_typed_state_shift_trigger(tmp_path):
+    db, trigger_report, manifest = _inputs(
+        tmp_path, trigger=_state_shift_trigger())
+    report = run_p13_shadow_update(
+        trigger_report, manifest, output=tmp_path / "report.json")
+    assert report["receipt_count"] == 1
+    assert report["canonical_memory_mutation"] == "none"
+    assert report["staging_discarded"] is True
+
+
 def test_p13_runner_rejects_noneligible_trigger_report(tmp_path):
     db, trigger_report, manifest = _inputs(tmp_path)
     payload = json.loads(trigger_report.read_text())
     payload["p13_eligible"] = False
     trigger_report.write_text(json.dumps(payload))
     with pytest.raises(P13ShadowRunError, match="not eligible"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
+
+
+def test_p13_runner_requires_content_bound_trigger_report(tmp_path):
+    db, trigger_report, manifest = _inputs(tmp_path)
+    payload = json.loads(trigger_report.read_text())
+    payload["report_digest"] = "sha256:" + "0" * 64
+    trigger_report.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowRunError, match="report digest mismatch"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
+
+    payload.pop("report_digest")
+    trigger_report.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowRunError, match="report digest is required"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
+
+
+def test_p13_runner_requires_content_bound_trigger_receipts(tmp_path):
+    db, trigger_report, manifest = _inputs(tmp_path)
+    payload = json.loads(trigger_report.read_text())
+    payload["triggers"][0].pop("receipt_digest")
+    payload.pop("report_digest")
+    payload["report_digest"] = "sha256:" + hashlib.sha256(
+        stable_dumps(payload).encode()).hexdigest()
+    trigger_report.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowRunError, match="receipt digest mismatch"):
         run_p13_shadow_update(
             trigger_report, manifest, output=tmp_path / "report.json")
 
@@ -205,6 +260,9 @@ def test_p13_runner_rejects_legacy_trigger_for_current_mutation(tmp_path):
     payload = json.loads(trigger_report.read_text())
     payload["triggers"] = [{**legacy.to_dict(),
                              "receipt_digest": legacy.legacy_receipt_digest}]
+    payload.pop("report_digest", None)
+    payload["report_digest"] = "sha256:" + hashlib.sha256(
+        stable_dumps(payload).encode()).hexdigest()
     trigger_report.write_text(json.dumps(payload))
     with pytest.raises(P13ShadowRunError, match="legacy trigger"):
         run_p13_shadow_update(

@@ -129,7 +129,9 @@ def _routes(payload: Mapping, case_ids: set[str]) -> dict[str, MemoryRoutingDeci
     return result
 
 
-def _evidence_refs(payload: Mapping, reason_path: Path) -> tuple[dict, ...]:
+def _evidence_refs(
+        payload: Mapping, reason_path: Path,
+        *, forbidden_paths: tuple[Path, ...] = ()) -> tuple[dict, ...]:
     refs = payload.get("evidence_refs")
     if not isinstance(refs, Sequence) or isinstance(refs, (str, bytes)) or not refs:
         raise P13ShadowTriggerReportError(
@@ -151,6 +153,10 @@ def _evidence_refs(payload: Mapping, reason_path: Path) -> tuple[dict, ...]:
         if not path.is_file():
             raise P13ShadowTriggerReportError(
                 f"evolution reason evidence is not a file: {path}")
+        if path in forbidden_paths:
+            raise P13ShadowTriggerReportError(
+                "evolution reason evidence must be independent from cohort, "
+                "manifest, routing, and reason inputs")
         digest = _sha256(path)
         expected = item.get("sha256") or item.get("digest")
         if expected is not None and expected != digest:
@@ -169,7 +175,8 @@ def _evidence_refs(payload: Mapping, reason_path: Path) -> tuple[dict, ...]:
 
 
 def _reasons(payload: Mapping, case_ids: set[str], *, campaign_id: str,
-             cohort_digest: str, reason_path: Path) -> tuple[dict[str, tuple[str, ...]], dict]:
+             cohort_digest: str, reason_path: Path,
+             forbidden_paths: tuple[Path, ...] = ()) -> tuple[dict[str, tuple[str, ...]], dict]:
     # Parse the supplied receipt first, so a caller-provided digest is checked
     # against exactly what was written.  Paths are then canonicalized and
     # hashed before producing the report-bound receipt below.
@@ -186,7 +193,7 @@ def _reasons(payload: Mapping, case_ids: set[str], *, campaign_id: str,
     if set(supplied.evolution_reasons) != case_ids:
         raise P13ShadowTriggerReportError(
             "evolution reasons must cover exactly all cohort cases")
-    refs = _evidence_refs(payload, reason_path)
+    refs = _evidence_refs(payload, reason_path, forbidden_paths=forbidden_paths)
     normalized = P13EvolutionReasonReceipt(
         campaign_id=campaign_id, cohort_receipt_digest=cohort_digest,
         label_source=supplied.label_source, evidence_refs=refs,
@@ -217,6 +224,7 @@ def build_p13_shadow_trigger_report(
         manifest, case_ids, cohort.campaign_id)
     routes = None
     route_meta = None
+    route_path = None
     if routing_path is not None:
         route_path = Path(routing_path).expanduser().resolve()
         route_payload = _load_json(route_path, "routing decisions")
@@ -224,12 +232,16 @@ def build_p13_shadow_trigger_report(
         route_meta = {"path": str(route_path), "sha256": _sha256(route_path)}
     reasons = None
     reason_meta = None
+    reason_path = None
     if evolution_reasons_path is not None:
         reason_path = Path(evolution_reasons_path).expanduser().resolve()
         reason_payload = _load_json(reason_path, "evolution reasons")
         reasons, reason_meta = _reasons(
             reason_payload, case_ids, campaign_id=cohort.campaign_id,
-            cohort_digest=cohort.receipt_digest, reason_path=reason_path)
+            cohort_digest=cohort.receipt_digest, reason_path=reason_path,
+            forbidden_paths=tuple(path for path in (
+                cohort_path, manifest_path, route_path, reason_path)
+                if path is not None))
     try:
         triggers = build_p12_shadow_update_triggers(
             cohort, memory_arm=memory_arm, learner_eligible=learner_eligible,
@@ -270,6 +282,14 @@ def build_p13_shadow_trigger_report(
     }
     report["report_digest"] = _digest(report)
     output_path = Path(output).expanduser().resolve()
+    forbidden_outputs = {cohort_path, manifest_path}
+    if route_path is not None:
+        forbidden_outputs.add(route_path)
+    if reason_path is not None:
+        forbidden_outputs.add(reason_path)
+    if output_path in forbidden_outputs:
+        raise P13ShadowTriggerReportError(
+            "P13 trigger report output must be separate from all evidence inputs")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return report

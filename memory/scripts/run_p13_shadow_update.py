@@ -96,12 +96,35 @@ def _trigger_map(path: Path) -> tuple[dict, dict[str, P12ShadowUpdateTriggerRece
                 "requires p12-shadow-trigger-v0.2")
         if trigger.triggered is not True:
             raise P13ShadowRunError("P13 trigger report contains a non-triggering entry")
+        supplied_digest = item.get("receipt_digest")
+        if supplied_digest != trigger.receipt_digest:
+            raise P13ShadowRunError(
+                f"P13 trigger entry {trigger.case_id} receipt digest mismatch")
         if trigger.case_id in result:
             raise P13ShadowRunError("P13 trigger report contains duplicate case IDs")
         result[trigger.case_id] = trigger
     campaign_id = _text(report.get("campaign_id"), "trigger report campaign_id")
     if any(trigger.campaign_id != campaign_id for trigger in result.values()):
         raise P13ShadowRunError("P13 trigger campaign IDs are inconsistent")
+    if report.get("canonical_memory_mutation") != "none":
+        raise P13ShadowRunError(
+            "P13 trigger report crosses canonical memory boundary")
+    if report.get("production_runtime_imported") is not False:
+        raise P13ShadowRunError(
+            "P13 trigger report imports production runtime state")
+    if report.get("production_integration") != "not_attempted":
+        raise P13ShadowRunError(
+            "P13 trigger report has production integration state")
+    if report.get("shadow_update_policy") != "isolated_staging_only":
+        raise P13ShadowRunError(
+            "P13 trigger report shadow policy is invalid")
+    supplied_report_digest = report.get("report_digest")
+    if type(supplied_report_digest) is not str or not supplied_report_digest.startswith("sha256:"):
+        raise P13ShadowRunError("P13 trigger report digest is required")
+    digest_payload = dict(report)
+    digest_payload.pop("report_digest", None)
+    if supplied_report_digest != _digest(digest_payload):
+        raise P13ShadowRunError("P13 trigger report digest mismatch")
     return report, result
 
 
