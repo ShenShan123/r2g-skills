@@ -4,7 +4,9 @@ from .events import (
     append_routed_state_shift_observation, load_state_shift_observations,
     verify_event_chain,
 )
-from .conflict import CONFLICT_TYPES, ConflictReceipt, detect_conflicts
+from .conflict import (
+    CONFLICT_RECEIPT_VERSION, CONFLICT_TYPES, ConflictReceipt, detect_conflicts,
+)
 from .candidate_trial import (
     CandidateTrialError, CandidateTrialReceipt, run_shadow_candidate_trial,
 )
@@ -16,7 +18,7 @@ from .incremental_crystallize import (
     crystallize_affected_groups, preview_affected_groups,
 )
 from .manager import observe_transition
-from .novelty import detect_novelty
+from .novelty import NOVELTY_RECEIPT_VERSION, NoveltyReceipt, detect_novelty
 from .attribution import (
     FAILURE_TYPES, UPDATE_TARGETS, MemoryFailureAttributionReceipt,
     attribute_failure, failure_attribution_digest,
@@ -36,7 +38,8 @@ from .reason_derivation import (
     DERIVATION_MODES, EVOLUTION_REASON_DERIVATION_VERSION,
     EVOLUTION_REASONS, EvolutionReasonDerivationError,
     EvolutionReasonDerivationReceipt, derive_capability_gap_reason,
-    derive_memory_interference_reason, derive_state_shift_reason,
+    derive_conflict_reason, derive_memory_interference_reason,
+    derive_novelty_reason, derive_state_shift_reason,
     p13_reason_receipt_from_derivations,
 )
 from .admission import (
@@ -104,12 +107,14 @@ __all__ = [
     "run_shadow_candidate_trial",
     "CONSOLIDATION_OPERATIONS", "ConsolidationDecisionReceipt",
     "decide_consolidation",
-    "record_rule_revision", "verify_event_chain", "CONFLICT_TYPES",
+    "record_rule_revision", "verify_event_chain", "CONFLICT_RECEIPT_VERSION",
+    "CONFLICT_TYPES",
     "IsolatedRollbackReceipt", "build_isolated_rollback_receipt",
     "RAW_EVIDENCE_TABLES", "RawEvidenceReceipt", "raw_evidence_digest",
     "verify_raw_evidence_unchanged", "ANTI_FORGETTING_VERSION",
     "AntiForgettingWitness",
-    "ConflictReceipt", "detect_conflicts", "detect_novelty",
+    "ConflictReceipt", "detect_conflicts", "NOVELTY_RECEIPT_VERSION",
+    "NoveltyReceipt", "detect_novelty",
     "attribute_failure", "failure_attribution_digest", "plan_localized_update",
     "RETRIEVAL_ATTRIBUTION_VERSION", "RetrievalAttributionError",
     "RetrievalAttributionReceipt", "attribute_retrieval_failure",
@@ -121,7 +126,8 @@ __all__ = [
     "EVOLUTION_REASON_DERIVATION_VERSION", "DERIVATION_MODES",
     "EVOLUTION_REASONS", "EvolutionReasonDerivationError",
     "EvolutionReasonDerivationReceipt", "derive_state_shift_reason",
-    "derive_capability_gap_reason", "derive_memory_interference_reason",
+    "derive_capability_gap_reason", "derive_conflict_reason",
+    "derive_memory_interference_reason", "derive_novelty_reason",
     "p13_reason_receipt_from_derivations",
     "EVOLUTION_ADMISSION_VERSION", "EvolutionAdmissionError",
     "EvolutionAdmissionReceipt", "admit_evolution_reason",

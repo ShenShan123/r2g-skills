@@ -20,6 +20,8 @@ from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import StateShiftReceipt
 from contracts import MemoryRoutingDecision
 from tehm.assets.receipts import CapabilityGapReceipt
+from .conflict import ConflictReceipt
+from .novelty import NoveltyReceipt
 
 
 EVOLUTION_REASON_DERIVATION_VERSION = "evolution-reason-derivation-v0.1"
@@ -233,6 +235,26 @@ def _capability_gap_route(value: object) -> MemoryRoutingDecision:
     return route
 
 
+def _novelty_receipt(value: object) -> NoveltyReceipt:
+    if isinstance(value, NoveltyReceipt):
+        return value
+    try:
+        return NoveltyReceipt.from_dict(value)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise EvolutionReasonDerivationError(
+            "novelty reason input receipt is invalid") from exc
+
+
+def _conflict_receipt(value: object) -> ConflictReceipt:
+    if isinstance(value, ConflictReceipt):
+        return value
+    try:
+        return ConflictReceipt.from_dict(value)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise EvolutionReasonDerivationError(
+            "conflict reason input receipt is invalid") from exc
+
+
 def derive_state_shift_reason(
         shift: StateShiftReceipt | Mapping, *, campaign_id: str, case_id: str,
         routing: MemoryRoutingDecision,
@@ -358,6 +380,68 @@ def derive_capability_gap_reason(
         lineage_ids=lineages, resolved_state_ids=())
 
 
+def derive_novelty_reason(
+        novelty: NoveltyReceipt | Mapping, *, campaign_id: str, case_id: str,
+        detector_version: str = "novelty-reason-v1",
+) -> EvolutionReasonDerivationReceipt | None:
+    """Adapt the existing learner/audit novelty detector into reason evidence."""
+    checked = _novelty_receipt(novelty)
+    campaign_id = _text(campaign_id, "campaign_id")
+    case_id = _text(case_id, "case_id")
+    if checked.campaign_id != campaign_id:
+        raise EvolutionReasonDerivationError("novelty reason campaign mismatch")
+    if checked.status != "NOVEL_MECHANISM" or checked.path_exists:
+        return None
+    if not checked.lineage_id:
+        raise EvolutionReasonDerivationError(
+            "novelty reason requires a lineage witness")
+    return EvolutionReasonDerivationReceipt(
+        campaign_id=campaign_id, case_id=case_id, reason="NOVELTY",
+        derivation_mode="EX_ANTE", detector_name="novelty_receipt_adapter",
+        detector_version=detector_version,
+        input_receipt_ids=(checked.receipt_id,
+                           "transition_evidence:" + checked.transition_id),
+        input_digests=(checked.receipt_digest,
+                       _digest({"transition_id": checked.transition_id,
+                                "campaign_id": campaign_id})),
+        lineage_ids=(checked.lineage_id,), resolved_state_ids=())
+
+
+def derive_conflict_reason(
+        conflict: ConflictReceipt | Mapping, *, campaign_id: str, case_id: str,
+        detector_version: str = "conflict-reason-v1",
+) -> EvolutionReasonDerivationReceipt | None:
+    """Adapt a typed conflict witness into a mutation-independent reason."""
+    checked = _conflict_receipt(conflict)
+    campaign_id = _text(campaign_id, "campaign_id")
+    case_id = _text(case_id, "case_id")
+    if checked.campaign_id != campaign_id:
+        raise EvolutionReasonDerivationError("conflict reason campaign mismatch")
+    if not checked.has_conflict:
+        return None
+    if not checked.lineage_id:
+        raise EvolutionReasonDerivationError(
+            "conflict reason requires a lineage witness")
+    evidence = tuple(dict.fromkeys(checked.evidence_transition_ids))
+    if not evidence:
+        raise EvolutionReasonDerivationError(
+            "conflict reason requires conflicting transition evidence")
+    input_ids = (checked.receipt_id, *(
+        "transition_evidence:" + item for item in evidence))
+    input_digests = (
+        checked.receipt_digest,
+        *(_digest({"transition_id": item, "campaign_id": campaign_id})
+          for item in evidence),
+    )
+    return EvolutionReasonDerivationReceipt(
+        campaign_id=campaign_id, case_id=case_id, reason="CONFLICT",
+        derivation_mode="AGGREGATED_EVENT",
+        detector_name="conflict_receipt_adapter",
+        detector_version=detector_version,
+        input_receipt_ids=input_ids, input_digests=input_digests,
+        lineage_ids=(checked.lineage_id,), resolved_state_ids=())
+
+
 def _oracle_complete(receipt: CandidateExecutionReceipt) -> bool:
     return (
         receipt.evaluation_only is True and
@@ -479,6 +563,7 @@ __all__ = [
     "EVOLUTION_REASON_DERIVATION_VERSION", "DERIVATION_MODES",
     "EVOLUTION_REASONS", "EvolutionReasonDerivationError",
     "EvolutionReasonDerivationReceipt", "derive_state_shift_reason",
-    "derive_capability_gap_reason", "derive_memory_interference_reason",
+    "derive_capability_gap_reason", "derive_novelty_reason",
+    "derive_conflict_reason", "derive_memory_interference_reason",
     "p13_reason_receipt_from_derivations",
 ]

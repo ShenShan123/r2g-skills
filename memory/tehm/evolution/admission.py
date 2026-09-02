@@ -11,11 +11,14 @@ from tehm.evaluation.candidate_executor import (
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import StateShiftReceipt
 from tehm.assets.receipts import CapabilityGapReceipt
+from .conflict import ConflictReceipt
+from .novelty import NoveltyReceipt
 
 from .reason_derivation import (
     EVOLUTION_REASONS, EvolutionReasonDerivationError,
     EvolutionReasonDerivationReceipt, derive_capability_gap_reason,
-    derive_memory_interference_reason, derive_state_shift_reason,
+    derive_conflict_reason, derive_memory_interference_reason,
+    derive_novelty_reason, derive_state_shift_reason,
 )
 
 
@@ -190,6 +193,8 @@ def admit_evolution_reason(
         state_shift: StateShiftReceipt | Mapping | None = None,
         capability_gap: CapabilityGapReceipt | Mapping | None = None,
         failure_transition_ids: tuple[str, ...] | list[str] | None = None,
+        novelty: NoveltyReceipt | Mapping | None = None,
+        conflict: ConflictReceipt | Mapping | None = None,
         routing: MemoryRoutingDecision | None = None,
         memory_arm: str = "ALWAYS_MEMORY") -> EvolutionAdmissionReceipt:
     """Apply a reason-specific P13 gate without accepting a mutation plan."""
@@ -348,6 +353,90 @@ def admit_evolution_reason(
             return _blocked(derivation, required=required,
                             satisfied=tuple(satisfied), evidence=tuple(evidence),
                             reason="successful_current_action_family_exists")
+        return EvolutionAdmissionReceipt(
+            campaign_id=campaign_id, case_id=derivation.case_id,
+            reason=derivation.reason, derivation_receipt_ids=(derivation.receipt_id,),
+            evidence_receipt_ids=_unique(evidence), required_evidence=required,
+            satisfied_evidence=tuple(satisfied), admitted=True)
+
+    if derivation.reason == "NOVELTY":
+        required = ("learner_eligible", "typed_novelty", "no_existing_learner_path")
+        satisfied: list[str] = []
+        if learner_eligible:
+            satisfied.append("learner_eligible")
+        checked_novelty = None
+        checked_derivation = None
+        if novelty is not None:
+            try:
+                checked_novelty = (novelty if isinstance(novelty, NoveltyReceipt)
+                                   else NoveltyReceipt.from_dict(novelty))
+                checked_derivation = derive_novelty_reason(
+                    checked_novelty, campaign_id=campaign_id,
+                    case_id=derivation.case_id)
+            except (EvolutionReasonDerivationError, TypeError, ValueError):
+                checked_derivation = None
+        if (checked_novelty is not None and checked_derivation is not None and
+                checked_derivation.receipt_digest == derivation.receipt_digest):
+            satisfied.append("typed_novelty")
+            if (not checked_novelty.path_exists and
+                    checked_novelty.status == "NOVEL_MECHANISM"):
+                satisfied.append("no_existing_learner_path")
+            evidence = (*evidence, checked_novelty.receipt_id,
+                        *checked_derivation.input_receipt_ids)
+        if not learner_eligible:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="not_learner_eligible")
+        if "typed_novelty" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_typed_novelty")
+        if "no_existing_learner_path" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="existing_learner_path")
+        return EvolutionAdmissionReceipt(
+            campaign_id=campaign_id, case_id=derivation.case_id,
+            reason=derivation.reason, derivation_receipt_ids=(derivation.receipt_id,),
+            evidence_receipt_ids=_unique(evidence), required_evidence=required,
+            satisfied_evidence=tuple(satisfied), admitted=True)
+
+    if derivation.reason == "CONFLICT":
+        required = ("learner_eligible", "typed_conflict",
+                    "independent_conflicting_evidence")
+        satisfied: list[str] = []
+        if learner_eligible:
+            satisfied.append("learner_eligible")
+        checked_conflict = None
+        checked_derivation = None
+        if conflict is not None:
+            try:
+                checked_conflict = (conflict if isinstance(conflict, ConflictReceipt)
+                                    else ConflictReceipt.from_dict(conflict))
+                checked_derivation = derive_conflict_reason(
+                    checked_conflict, campaign_id=campaign_id,
+                    case_id=derivation.case_id)
+            except (EvolutionReasonDerivationError, TypeError, ValueError):
+                checked_derivation = None
+        if (checked_conflict is not None and checked_derivation is not None and
+                checked_derivation.receipt_digest == derivation.receipt_digest):
+            satisfied.append("typed_conflict")
+            if checked_conflict.has_conflict and checked_conflict.evidence_transition_ids:
+                satisfied.append("independent_conflicting_evidence")
+            evidence = (*evidence, checked_conflict.receipt_id,
+                        *checked_derivation.input_receipt_ids)
+        if not learner_eligible:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="not_learner_eligible")
+        if "typed_conflict" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_typed_conflict")
+        if "independent_conflicting_evidence" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_conflicting_evidence")
         return EvolutionAdmissionReceipt(
             campaign_id=campaign_id, case_id=derivation.case_id,
             reason=derivation.reason, derivation_receipt_ids=(derivation.receipt_id,),

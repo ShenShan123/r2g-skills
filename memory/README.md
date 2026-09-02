@@ -3508,3 +3508,19 @@ FAIL，也不宣称能力增益或 production promotion。
 
 `memory/docs/` 仍是本地 governing input，由 `.gitignore` 排除，既不在 release tree
 中，也不会被本阶段提交。
+
+### 2026-09-02 Revision3 P2-R6 novelty/conflict typed adapters
+
+保留原有 `detect_novelty()` / `detect_conflicts()` 判定逻辑，只新增可重放的
+`NoveltyReceipt`、`ConflictReceipt`（含 lineage、content digest 与 tamper check），并
+通过 `derive_novelty_reason()` / `derive_conflict_reason()` 接入统一
+`EvolutionReasonDerivationReceipt`。`NOVELTY` 只接受无 learner path 的 typed
+`NOVEL_MECHANISM`，`CONFLICT` 必须有冲突类型和独立 transition evidence；两条路径都
+需要 learner admission，但都不要求 P12 paired counterfactual，也不携带 mutation plan。
+
+`scripts/run_r3_reason_adapter_challenge.py` 在外部 disposable SQLite 中用两个真实
+Icarus/vvp RTL fixture 运行：第一个产生 `NOVELTY`，第二个产生
+`DEFINITION_CONFLICT`，两条 derivation/admission 均可 replay。该实跑只验证 reason
+adapter 与 admission 的 typed provenance，不代表 conflict 已自动修改 Knowledge；
+`canonical_memory_mutation=none`、`production_promotion_eligible=false`，source DB
+digest 保持不变。`memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
