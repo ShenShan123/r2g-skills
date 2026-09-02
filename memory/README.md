@@ -3133,6 +3133,14 @@ memory delta 观察到，而不会被误报成“没有 memory change”。
 witness。任一 state、asset、knowledge、binding 或 execution candidate 不一致都会
 拒绝 lineage；该 receipt 仍只用于 attribution/replay，不授予 capability authority。
 
+P13→P14 之间现在有一个 typed `memory_delta_from_shadow_update()` 适配器：它只能消费
+`AppliedShadowUpdateReceipt`，从 receipt 内部绑定的 source/staging digest 与创建对象/关系
+清单派生 C1 `MemoryDeltaReceipt`，调用方不能另行注入 digest 或 changed-memory 布尔值。
+`episode`/`rule_revision` 等派生 bookkeeping 行不会伪装成 memory change；任何 canonical、
+production、raw-evidence 或 staging 隔离不变量漂移都会 fail-closed。该适配器只生成
+evaluation/attribution 证据，不写 canonical memory、不改变 lifecycle/authority，也不允许
+production runtime 导入。
+
 ### 2026-09-03 P15 reason-aware calibration seam
 
 新增 `tehm.evaluation.no_skill_calibration`，把 P15 的 calibration 输入冻结为显式的

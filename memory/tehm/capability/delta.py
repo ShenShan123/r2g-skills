@@ -72,6 +72,92 @@ class MemoryDeltaReceipt:
         }
 
 
+_SHADOW_OBJECT_FIELDS = {
+    "transition": "added_transition_ids",
+    "rule": "added_rule_ids",
+    "asset": "added_asset_ids",
+    "causal_path": "added_causal_path_ids",
+    "capability": "added_capability_ids",
+    "knowledge": "added_knowledge_ids",
+}
+_SHADOW_BOOKKEEPING_PREFIXES = frozenset({"episode", "rule_revision"})
+
+
+def memory_delta_from_shadow_update(receipt) -> MemoryDeltaReceipt:
+    """Derive a C1 memory delta from one discarded P13 shadow receipt.
+
+    The P13 executor records the logical source and post-update staging
+    digests, plus the exact objects/relations created in staging.  This
+    adapter is the typed P13→P14 seam: it never accepts caller-provided
+    memory digests or outcome booleans, and it refuses a receipt that crosses
+    the canonical/production boundary.  ``episode`` and ``rule_revision``
+    rows are bookkeeping generated alongside their owning memory object and
+    are intentionally not treated as independent C1 objects.
+    """
+    try:
+        from tehm.evolution import AppliedShadowUpdateReceipt
+    except ImportError as exc:  # pragma: no cover - package wiring failure
+        raise TypeError("P13 shadow receipt support is unavailable") from exc
+    if not isinstance(receipt, AppliedShadowUpdateReceipt):
+        raise TypeError("memory delta requires AppliedShadowUpdateReceipt")
+    if (receipt.canonical_memory_mutation != "none" or
+            receipt.production_runtime_imported is not False or
+            receipt.production_authority_changed or
+            receipt.canonical_rows_changed or
+            receipt.staging_discarded is not True or
+            receipt.lifecycle_mutation != "isolated_staging_only"):
+        raise ValueError("P13 shadow receipt crosses an authority boundary")
+    if not receipt.raw_evidence_preserved:
+        raise ValueError("P13 shadow receipt did not preserve raw evidence")
+    if receipt.source_digest_before != receipt.source_digest_after:
+        raise ValueError("P13 shadow source digest changed")
+    if receipt.raw_evidence_before_digest != receipt.raw_evidence_after_digest:
+        raise ValueError("P13 shadow raw evidence digest changed")
+
+    def _digest(value: object, field: str) -> str:
+        if (type(value) is not str or
+                len(value) != len("sha256:") + 64 or
+                not value.startswith("sha256:") or
+                any(char not in "0123456789abcdef" for char in value[7:])):
+            raise ValueError(f"P13 shadow {field} is not a sha256 digest")
+        return value
+
+    baseline = _digest(receipt.source_digest_before, "source digest")
+    candidate = _digest(receipt.staging_digest_after, "staging digest")
+    delta = {field: [] for field in MEMORY_DELTA_ID_FIELDS}
+    seen: set[str] = set()
+    for raw_id in receipt.created_object_ids:
+        if type(raw_id) is not str or not raw_id.strip():
+            raise ValueError("P13 shadow created object ID is malformed")
+        object_id = raw_id.strip()
+        if object_id in seen:
+            raise ValueError("P13 shadow created object IDs contain duplicates")
+        seen.add(object_id)
+        prefix, separator, _suffix = object_id.partition(":")
+        if not separator or not _suffix:
+            raise ValueError("P13 shadow created object ID lacks a type prefix")
+        field = _SHADOW_OBJECT_FIELDS.get(prefix)
+        if field is not None:
+            delta[field].append(object_id)
+        elif prefix not in _SHADOW_BOOKKEEPING_PREFIXES:
+            raise ValueError(
+                f"P13 shadow created object type is unsupported: {prefix}")
+    for raw_id in receipt.created_relation_ids:
+        if type(raw_id) is not str or not raw_id.strip():
+            raise ValueError("P13 shadow created relation ID is malformed")
+        relation_id = raw_id.strip()
+        if relation_id in seen:
+            raise ValueError("P13 shadow created IDs contain duplicates")
+        seen.add(relation_id)
+        delta["added_relation_ids"].append(relation_id)
+    return evaluate_memory_delta(baseline, candidate, {
+        "version": MEMORY_DELTA_VERSION,
+        "baseline_memory_digest": baseline,
+        "candidate_memory_digest": candidate,
+        **delta,
+    })
+
+
 @dataclass(frozen=True)
 class KnowledgeDeltaReceipt:
     """Content-bound change set for Mechanism Knowledge (P8 witness)."""
@@ -387,4 +473,5 @@ __all__ = [
     "MEMORY_DELTA_VERSION", "MemoryDeltaReceipt",
     "DERIVED_DELTA_VERSIONS", "KnowledgeDeltaReceipt", "AssetDeltaReceipt",
     "evaluate_asset_delta", "evaluate_knowledge_delta", "evaluate_memory_delta",
+    "memory_delta_from_shadow_update",
 ]

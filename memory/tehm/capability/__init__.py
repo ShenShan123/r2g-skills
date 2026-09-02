@@ -14,6 +14,7 @@ from .delta import (
     DERIVED_DELTA_VERSIONS,
     AssetDeltaReceipt, KnowledgeDeltaReceipt, MemoryDeltaReceipt,
     evaluate_asset_delta, evaluate_knowledge_delta, evaluate_memory_delta,
+    memory_delta_from_shadow_update,
 )
 from .lineage import (
     CANDIDATE_LINEAGE_VERSION, CandidateLineageError,
@@ -50,6 +51,7 @@ __all__ = [
     "MemoryDeltaReceipt",
     "DERIVED_DELTA_VERSIONS", "KnowledgeDeltaReceipt", "AssetDeltaReceipt",
     "evaluate_memory_delta", "evaluate_knowledge_delta", "evaluate_asset_delta",
+    "memory_delta_from_shadow_update",
     "CANDIDATE_LINEAGE_VERSION", "CandidateLineageError",
     "CandidateLineageReceipt", "build_candidate_lineage",
     "PolicyLoadReceipt", "PolicySnapshotReceipt", "create_policy_snapshot",
