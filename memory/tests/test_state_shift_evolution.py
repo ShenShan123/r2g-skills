@@ -174,7 +174,8 @@ def test_routed_state_shift_event_requires_matching_no_skill_receipt(tmp_tehm):
         applicability={"state_shift_status": "SHIFTED"},
         causal_support={"status": "SUPPORTED"}, risk={"state_shift_status": "SHIFTED"},
         abstain_reasons=("state_shift",), no_memory_budget=1, memory_budget=0,
-        no_skill_reason="STATE_SHIFT", state_shift_receipt_id=receipt.receipt_id)
+        no_skill_reason="STATE_SHIFT", state_shift_receipt_id=receipt.receipt_id,
+        state_shift_receipt=receipt.to_dict())
     event = append_routed_state_shift_observation(
         conn, receipt, route, transition_id="routed-transition", campaign_id="audit",
         learner_eligible=False, created_at="2026-09-01T00:00:00Z")
@@ -184,6 +185,20 @@ def test_routed_state_shift_event_requires_matching_no_skill_receipt(tmp_tehm):
     assert payload["routing_decision"]["routing_receipt_id"] == route.routing_receipt_id
     assert payload["routing_decision"]["decision_digest"] == route.decision_digest
     assert load_state_shift_observations(conn, campaign_id="audit") == ((event, receipt),)
+
+    with pytest.raises(ValueError, match="full replayable receipt"):
+        append_routed_state_shift_observation(
+            conn, receipt,
+            MemoryRoutingDecision(
+                decision="NO_SKILL", resolved_state_id=receipt.current_resolution_id,
+                selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
+                applicability={"state_shift_status": "SHIFTED"},
+                causal_support={"status": "SUPPORTED"},
+                risk={"state_shift_status": "SHIFTED"}, abstain_reasons=(),
+                no_memory_budget=1, memory_budget=0,
+                no_skill_reason="STATE_SHIFT", state_shift_receipt_id=receipt.receipt_id),
+            transition_id="id-only-transition", campaign_id="audit",
+            learner_eligible=False)
 
     with pytest.raises(ValueError, match="NO_SKILL/STATE_SHIFT"):
         append_routed_state_shift_observation(

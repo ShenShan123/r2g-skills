@@ -3349,9 +3349,10 @@ execution digests；此模式拒绝 manifest 中同时存在手写 outcome，避
 同时新增 `append_routed_state_shift_observation()`，用于把实际的 typed
 `MemoryRoutingDecision(decision=NO_SKILL, no_skill_reason=STATE_SHIFT)` 绑定为
 `STATE_SHIFT_OBSERVED`。它强制校验 route 的 `state_shift_receipt_id`、resolved
-state 与 receipt 一致，并将完整 route digest/id 写入事件 payload；重放时再次解码
-校验。旧的通用 append API 仍可用于兼容/审计，但没有 matching router witness 就不能
-通过这个推荐的 8A.9 路径制造 state-shift teaching signal。
+state 与 receipt 一致，并要求 route 携带与事件 receipt 完全相同的可 replay
+`StateShiftReceipt` payload；完整 route digest/id 写入事件 payload，重放时再次解码
+校验。旧的通用 append API 仍可用于兼容/审计，但没有完整 matching router witness 就
+不能通过这个推荐的 8A.9 路径制造 state-shift teaching signal。
 
 `propose_repeated_state_shift_from_paired_receipts()` 进一步把 P12 四臂
 `PairedCandidateExecutionReceipt` 接到 proposal：只接受带 matching

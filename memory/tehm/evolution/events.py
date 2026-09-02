@@ -314,6 +314,18 @@ def append_state_shift_observation(
         if routing_decision.resolved_state_id != receipt.current_resolution_id:
             raise ValueError(
                 "state shift observation route resolution does not match")
+        if routing_decision.state_shift_receipt is None:
+            raise ValueError(
+                "state shift observation route requires full replayable receipt")
+        try:
+            routed_receipt = StateShiftReceipt.from_dict(
+                routing_decision.state_shift_receipt)
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ValueError(
+                "state shift observation route receipt payload is malformed") from exc
+        if routed_receipt.to_dict() != receipt.to_dict():
+            raise ValueError(
+                "state shift observation route receipt payload does not match")
         route_payload = {
             **routing_decision.to_dict(),
             "decision_digest": routing_decision.decision_digest,
