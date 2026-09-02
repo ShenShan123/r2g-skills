@@ -3366,3 +3366,32 @@ state 与 receipt 一致，并要求 route 携带与事件 receipt 完全相同�
 toolchain/oracle digest 的 paired cases，自动绑定两侧 execution digest，拒绝手写 outcome
 错配。它仍是 evaluation-only proposal，不能替代 P12/P13 的 learner partition、reason
 receipt 或 anti-forgetting gate。
+
+### 2026-09-02 Revision3 policy semantics and typed evolution-reason derivation
+
+P12 四臂现在按真实 policy 执行，而不是把每个 memory arm 都强制当作
+`structured_memory`：`NO_MEMORY` 永不接受候选，`ALWAYS_MEMORY` 必须执行候选，
+`APPLICABILITY_GATED` 可在无候选时执行 no-memory fallback，`CAUSAL_NO_SKILL` 在显式
+`NO_SKILL`/`ABSTAIN`/`INAPPLICABLE` route 下执行 no-memory fallback，在
+`APPLY`/`CONSIDER` 下才执行 memory。fallback receipt 的 metadata 记录 route、typed
+reason、fallback reason 和被忽略的候选 ID；paired receipt 记录并校验
+`routing_decision`，同时继续兼容旧的未带 route 字段 receipt。这样后续 state-shift 和
+interference 统计测量的是 policy outcome，而不是被拒绝的 memory candidate outcome。
+
+新增 `tehm.evolution.reason_derivation`：`EvolutionReasonDerivationReceipt` 是
+content-addressed、evaluation-only、canonical-mutation-free 的 reason witness，输入
+只能是已存在的 typed immutable receipt，结构上拒绝 mutation plan、replacement
+Knowledge、shadow after-state 和 production authority 字段。当前已实现两个
+deterministic detector：`derive_state_shift_reason()` 要求 non-transferable
+`StateShiftReceipt` 与 matching `NO_SKILL/STATE_SHIFT` route；
+`derive_memory_interference_reason()` 要求完整 oracle 的 paired receipt，并只在
+`NO_MEMORY` 为正、forced memory 为 harmful 或创建 regression 时产生
+`MEMORY_INTERFERENCE`。任何 `UNKNOWN` 或不完整 oracle 都不会产生 reason。
+
+`p13_reason_receipt_from_derivations()` 可将每 case 的 typed detector receipts 聚合为
+现有 `P13EvolutionReasonReceipt`，不再需要手写 label 才能形成 reason envelope；
+`tehm.evolution.admission` 提供 reason-specific `EvolutionAdmissionReceipt`，当前对
+`STATE_SHIFT` 强制 typed shift + route + paired counterfactual，对
+`MEMORY_INTERFERENCE` 强制可重放 paired detector，其他 reason 在 v0.1 中保持拒绝而
+不会放宽 mutation authority。上述所有路径仍是 shadow/evaluation-only，未改变
+canonical memory 或 production runtime。

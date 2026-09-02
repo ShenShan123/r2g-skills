@@ -30,6 +30,17 @@ from .p12_shadow_trigger import (
     P13_EVOLUTION_REASON_RECEIPT_VERSION, P12ShadowTriggerError,
     P13EvolutionReasonReceipt,
     P12ShadowUpdateTriggerReceipt, build_p12_shadow_update_triggers,
+    build_p12_shadow_update_triggers_from_reason_receipt,
+)
+from .reason_derivation import (
+    DERIVATION_MODES, EVOLUTION_REASON_DERIVATION_VERSION,
+    EVOLUTION_REASONS, EvolutionReasonDerivationError,
+    EvolutionReasonDerivationReceipt, derive_memory_interference_reason,
+    derive_state_shift_reason, p13_reason_receipt_from_derivations,
+)
+from .admission import (
+    EVOLUTION_ADMISSION_VERSION, EvolutionAdmissionError,
+    EvolutionAdmissionReceipt, admit_evolution_reason,
 )
 from .local_revision import (
     UPDATE_OPERATIONS, LocalizedUpdatePlan, LocalizedUpdatePlanReceipt,
@@ -93,6 +104,13 @@ __all__ = [
     "P13_EVOLUTION_REASON_RECEIPT_VERSION", "P12ShadowTriggerError",
     "P13EvolutionReasonReceipt",
     "P12ShadowUpdateTriggerReceipt", "build_p12_shadow_update_triggers",
+    "build_p12_shadow_update_triggers_from_reason_receipt",
+    "EVOLUTION_REASON_DERIVATION_VERSION", "DERIVATION_MODES",
+    "EVOLUTION_REASONS", "EvolutionReasonDerivationError",
+    "EvolutionReasonDerivationReceipt", "derive_state_shift_reason",
+    "derive_memory_interference_reason", "p13_reason_receipt_from_derivations",
+    "EVOLUTION_ADMISSION_VERSION", "EvolutionAdmissionError",
+    "EvolutionAdmissionReceipt", "admit_evolution_reason",
     "STATE_SHIFT_EVOLUTION_VERSION", "STATE_SHIFT_EVOLUTION_OPERATIONS",
     "STATE_SHIFT_EVOLUTION_REASONS", "StateShiftEvolutionError",
     "StateShiftEvolutionProposal", "plan_repeated_state_shift",

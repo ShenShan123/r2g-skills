@@ -691,6 +691,10 @@ def build_p12_shadow_update_triggers(
             if routing.routing_receipt_id != routing_id:
                 raise P12ShadowTriggerError(
                     f"P12 shadow trigger routing receipt mismatch for {case_id}")
+            if (bundle.routing_decision is not None and
+                    bundle.routing_decision != routing.decision):
+                raise P12ShadowTriggerError(
+                    f"P12 shadow trigger routing decision mismatch for {case_id}")
             if (routing.no_skill_reason != bundle.no_skill_reason or
                     routing.state_shift_receipt_id != bundle.state_shift_receipt_id or
                     routing.risk_receipt_id != bundle.risk_receipt_id):
@@ -729,9 +733,39 @@ def build_p12_shadow_update_triggers(
     return tuple(results)
 
 
+def build_p12_shadow_update_triggers_from_reason_receipt(
+        cohort: object, *, memory_arm: str, learner_eligible: bool,
+        reason_receipt: P13EvolutionReasonReceipt, min_lineages: int = 2,
+        routing_decisions: Mapping[str, MemoryRoutingDecision] | None = None,
+        case_learner_eligibility: Mapping[str, bool] | None = None,
+        ) -> tuple[P12ShadowUpdateTriggerReceipt, ...]:
+    """Build triggers from typed detector output, not a manual label map."""
+    if not isinstance(reason_receipt, P13EvolutionReasonReceipt):
+        raise P12ShadowTriggerError(
+            "typed P13 evolution reason receipt is invalid")
+    if not reason_receipt.label_source.startswith("typed-detector:"):
+        raise P12ShadowTriggerError(
+            "typed P13 trigger path requires a typed-detector reason receipt")
+    if reason_receipt.case_evidence_refs is None:
+        raise P12ShadowTriggerError(
+            "typed P13 trigger path requires per-case detector evidence")
+    campaign_id, cohort_digest, cases = _cohort_fields(cohort)
+    if (reason_receipt.campaign_id != campaign_id or
+            reason_receipt.cohort_receipt_digest != cohort_digest or
+            set(reason_receipt.evolution_reasons) != set(cases)):
+        raise P12ShadowTriggerError(
+            "typed P13 reason receipt does not match the cohort")
+    return build_p12_shadow_update_triggers(
+        cohort, memory_arm=memory_arm, learner_eligible=learner_eligible,
+        min_lineages=min_lineages, routing_decisions=routing_decisions,
+        case_learner_eligibility=case_learner_eligibility,
+        evolution_reasons=reason_receipt.evolution_reasons)
+
+
 __all__ = [
     "P12_SHADOW_TRIGGER_VERSION", "P13_EVOLUTION_REASONS",
     "P13_EVOLUTION_REASON_RECEIPT_VERSION", "P12ShadowTriggerError",
     "P13EvolutionReasonReceipt",
     "P12ShadowUpdateTriggerReceipt", "build_p12_shadow_update_triggers",
+    "build_p12_shadow_update_triggers_from_reason_receipt",
 ]

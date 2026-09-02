@@ -173,6 +173,7 @@ class RtlPairedCohortReceipt:
             value.pop("risk_receipt_id", None)
             value.pop("lineage_id", None)
             value.pop("routing_receipt_id", None)
+            value.pop("routing_decision", None)
         return _digest(payload)
 
     def to_dict(self) -> dict[str, Any]:
@@ -327,7 +328,8 @@ def execute_rtl_paired_cohort(
             risk_receipt_id=case.get("risk_receipt_id"),
             risk_receipt=case.get("risk_receipt"),
             lineage_id=case.get("lineage_id"),
-            routing_receipt_id=case.get("routing_receipt_id"))
+            routing_receipt_id=case.get("routing_receipt_id"),
+            routing_decision=case.get("routing_decision"))
         if bundle.toolchain_digest != expected_toolchain or bundle.oracle_digest != expected_oracle:
             raise RtlCohortError("RTL cohort execution digest drift")
         from pathlib import Path

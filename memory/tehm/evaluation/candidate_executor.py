@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from tehm.canonical.transition import OUTCOMES
-from contracts import NO_SKILL_REASONS
+from contracts import MEMORY_ROUTING_DECISIONS, NO_SKILL_REASONS
 from tehm.ids import stable_dumps
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate
 from tehm.state.risk_receipts import RiskReceipt
@@ -270,6 +270,7 @@ class PairedCandidateExecutionReceipt:
     risk_receipt: dict | None = None
     lineage_id: str | None = None
     routing_receipt_id: str | None = None
+    routing_decision: str | None = None
 
     def __post_init__(self) -> None:
         _text(self.case_id, "case_id")
@@ -293,9 +294,24 @@ class PairedCandidateExecutionReceipt:
             raise CandidateExecutorError("paired execution case or budget mismatch")
         if self.arm_receipts["NO_MEMORY"].source != "no_memory":
             raise CandidateExecutorError("NO_MEMORY arm must not contain a memory candidate")
-        if any(self.arm_receipts[arm].source != "structured_memory"
-               for arm in P12_ARMS[1:]):
-            raise CandidateExecutorError("memory arms must contain structured candidates")
+        if self.arm_receipts["ALWAYS_MEMORY"].source != "structured_memory":
+            raise CandidateExecutorError(
+                "ALWAYS_MEMORY arm must contain a structured candidate")
+        if self.arm_receipts["APPLICABILITY_GATED"].source not in {
+                "no_memory", "structured_memory"}:
+            raise CandidateExecutorError(
+                "APPLICABILITY_GATED arm source is invalid")
+        causal_source = self.arm_receipts["CAUSAL_NO_SKILL"].source
+        if self.routing_decision in {"NO_SKILL", "ABSTAIN", "INAPPLICABLE"}:
+            if causal_source != "no_memory":
+                raise CandidateExecutorError(
+                    "CAUSAL_NO_SKILL refusal must execute no-memory fallback")
+        elif self.routing_decision in {"APPLY", "CONSIDER"}:
+            if causal_source != "structured_memory":
+                raise CandidateExecutorError(
+                    "CAUSAL_NO_SKILL eligible route must execute memory")
+        elif causal_source not in {"no_memory", "structured_memory"}:
+            raise CandidateExecutorError("CAUSAL_NO_SKILL arm source is invalid")
         if any(value.toolchain_digest != self.toolchain_digest or
                value.oracle_digest != self.oracle_digest
                for value in self.arm_receipts.values()):
@@ -318,6 +334,8 @@ class PairedCandidateExecutionReceipt:
                 not self.routing_receipt_id or
                 self.routing_receipt_id != self.routing_receipt_id.strip()):
             raise CandidateExecutorError("paired execution routing_receipt_id is invalid")
+        if self.routing_decision is not None and self.routing_decision not in MEMORY_ROUTING_DECISIONS:
+            raise CandidateExecutorError("paired execution routing_decision is invalid")
         if self.state_shift_receipt_id is not None and self.no_skill_reason != "STATE_SHIFT":
             raise CandidateExecutorError("paired state shift receipt requires STATE_SHIFT")
         if self.risk_receipt_id is not None and self.no_skill_reason != "RISK":
@@ -355,6 +373,7 @@ class PairedCandidateExecutionReceipt:
         # digest format and must not invalidate an older receipt.
         payload.pop("lineage_id", None)
         payload.pop("routing_receipt_id", None)
+        payload.pop("routing_decision", None)
         return _digest(payload)
 
     def to_dict(self) -> dict[str, Any]:
@@ -376,6 +395,8 @@ class PairedCandidateExecutionReceipt:
                if self.risk_receipt is not None else {}),
             "lineage_id": self.lineage_id,
             "routing_receipt_id": self.routing_receipt_id,
+            **({"routing_decision": self.routing_decision}
+               if self.routing_decision is not None else {}),
         }
 
     @classmethod
@@ -401,7 +422,8 @@ class PairedCandidateExecutionReceipt:
             risk_receipt=(dict(payload["risk_receipt"])
                           if payload.get("risk_receipt") is not None else None),
             lineage_id=payload.get("lineage_id"),
-            routing_receipt_id=payload.get("routing_receipt_id"))
+            routing_receipt_id=payload.get("routing_receipt_id"),
+            routing_decision=payload.get("routing_decision"))
         supplied = payload.get("receipt_digest")
         if supplied is not None and supplied not in {
                 receipt.receipt_digest, receipt.legacy_receipt_digest}:
@@ -466,39 +488,82 @@ def execute_candidate(
         budget=budget_value, metadata=metadata)
 
 
+def _execute_no_memory(
+        frozen_case: Mapping, oracle: object, budget: int | Mapping, *, arm: str,
+        policy_fallback: bool = False, fallback_reason: str | None = None,
+        routing_decision: str | None = None, routing_receipt_id: str | None = None,
+        no_skill_reason: str | None = None,
+        ignored_candidate_id: str | None = None) -> CandidateExecutionReceipt:
+    """Execute the baseline policy, retaining explicit fallback provenance."""
+    case = _case_payload(frozen_case)
+    case_id = _text(case.get("case_id"), "case_id")
+    budget_value, budget_payload = _budget(budget)
+    result = _call_oracle(oracle, None, case, budget_payload)
+    compile_result = _verdict(result.get("compile_result"), "compile_result")
+    functional_result = _verdict(result.get("functional_result"), "functional_result")
+    raw_signoff = result.get("signoff_result")
+    signoff_result = None if raw_signoff is None else _verdict(raw_signoff, "signoff_result")
+    outcome = _outcome(result, compile_result, functional_result,
+                       signoff_result or "UNKNOWN")
+    regressions = result.get("created_regressions") or ()
+    if not isinstance(regressions, (list, tuple)) or any(
+            type(item) is not str or not item for item in regressions):
+        raise CandidateExecutorError("candidate execution created_regressions is invalid")
+    toolchain_digest = result.get("toolchain_digest") or case.get("toolchain_digest") or "UNAVAILABLE"
+    oracle_digest = result.get("oracle_digest") or case.get("oracle_digest") or "UNAVAILABLE"
+    return CandidateExecutionReceipt(
+        case_id=case_id, candidate_id="no_memory:" + case_id,
+        source="no_memory", action_digest=_digest({}),
+        compile_result=compile_result, functional_result=functional_result,
+        signoff_result=signoff_result, outcome=outcome,
+        created_regressions=tuple(sorted(set(regressions))), obligations={},
+        toolchain_digest=_text(toolchain_digest, "toolchain_digest"),
+        oracle_digest=_text(oracle_digest, "oracle_digest"),
+        produced_transition_id=None, candidate_digest=_digest({}),
+        budget=budget_value,
+        metadata={"executor_version": EXECUTOR_VERSION, "arm": arm,
+                  "oracle_available": oracle is not None,
+                  "oracle_metadata": _oracle_metadata(result),
+                  "policy_fallback": policy_fallback,
+                  "fallback_reason": fallback_reason,
+                  "routing_decision": routing_decision,
+                  "routing_receipt_id": routing_receipt_id,
+                  "no_skill_reason": no_skill_reason,
+                  "ignored_candidate_id": ignored_candidate_id})
+
+
 def _execute_arm(candidate: StructuredRepairCandidate | None,
                  frozen_case: Mapping, oracle: object, budget: int | Mapping,
-                 *, arm: str) -> CandidateExecutionReceipt:
+                 *, arm: str, routing_decision: str | None = None,
+                 routing_receipt_id: str | None = None,
+                 no_skill_reason: str | None = None) -> CandidateExecutionReceipt:
     if arm == "NO_MEMORY":
-        case = _case_payload(frozen_case)
-        case_id = _text(case.get("case_id"), "case_id")
-        budget_value, budget_payload = _budget(budget)
-        result = _call_oracle(oracle, None, case, budget_payload)
-        compile_result = _verdict(result.get("compile_result"), "compile_result")
-        functional_result = _verdict(result.get("functional_result"), "functional_result")
-        raw_signoff = result.get("signoff_result")
-        signoff_result = None if raw_signoff is None else _verdict(raw_signoff, "signoff_result")
-        outcome = _outcome(result, compile_result, functional_result,
-                           signoff_result or "UNKNOWN")
-        regressions = result.get("created_regressions") or ()
-        if not isinstance(regressions, (list, tuple)) or any(
-                type(item) is not str or not item for item in regressions):
-            raise CandidateExecutorError("candidate execution created_regressions is invalid")
-        toolchain_digest = result.get("toolchain_digest") or case.get("toolchain_digest") or "UNAVAILABLE"
-        oracle_digest = result.get("oracle_digest") or case.get("oracle_digest") or "UNAVAILABLE"
-        return CandidateExecutionReceipt(
-            case_id=case_id, candidate_id="no_memory:" + case_id,
-            source="no_memory", action_digest=_digest({}),
-            compile_result=compile_result, functional_result=functional_result,
-            signoff_result=signoff_result, outcome=outcome,
-            created_regressions=tuple(sorted(set(regressions))), obligations={},
-            toolchain_digest=_text(toolchain_digest, "toolchain_digest"),
-            oracle_digest=_text(oracle_digest, "oracle_digest"),
-            produced_transition_id=None, candidate_digest=_digest({}),
-            budget=budget_value,
-            metadata={"executor_version": EXECUTOR_VERSION, "arm": arm,
-                      "oracle_available": oracle is not None,
-                      "oracle_metadata": _oracle_metadata(result)})
+        if candidate is not None:
+            raise CandidateExecutorError("NO_MEMORY arm cannot contain a candidate")
+        return _execute_no_memory(
+            frozen_case, oracle, budget, arm=arm,
+            routing_decision=routing_decision,
+            routing_receipt_id=routing_receipt_id,
+            no_skill_reason=no_skill_reason)
+    if arm == "CAUSAL_NO_SKILL" and routing_decision in {
+            "NO_SKILL", "ABSTAIN", "INAPPLICABLE"}:
+        return _execute_no_memory(
+            frozen_case, oracle, budget, arm=arm, policy_fallback=True,
+            fallback_reason=(no_skill_reason or
+                             f"routing_{routing_decision.lower()}"),
+            routing_decision=routing_decision,
+            routing_receipt_id=routing_receipt_id,
+            no_skill_reason=no_skill_reason,
+            ignored_candidate_id=(candidate.candidate_id
+                                  if isinstance(candidate, StructuredRepairCandidate)
+                                  else None))
+    if arm == "APPLICABILITY_GATED" and candidate is None:
+        return _execute_no_memory(
+            frozen_case, oracle, budget, arm=arm, policy_fallback=True,
+            fallback_reason="applicability_unresolved",
+            routing_decision=routing_decision,
+            routing_receipt_id=routing_receipt_id,
+            no_skill_reason=no_skill_reason)
     if not isinstance(candidate, StructuredRepairCandidate):
         raise CandidateExecutorError(f"{arm} arm requires a structured candidate")
     return execute_candidate(candidate, frozen_case, oracle=oracle, budget=budget)
@@ -516,6 +581,7 @@ def execute_paired_candidates(
         risk_receipt: Mapping | None = None,
         lineage_id: str | None = None,
         routing_receipt_id: str | None = None,
+        routing_decision: str | None = None,
 ) -> PairedCandidateExecutionReceipt:
     """Execute all four P12 arms on one frozen case and fixed budget.
 
@@ -526,10 +592,15 @@ def execute_paired_candidates(
     _case_payload(frozen_case)
     if not isinstance(arm_candidates, Mapping) or set(arm_candidates) != set(P12_ARMS):
         raise CandidateExecutorError("paired execution requires exactly four P12 arms")
+    if routing_decision is not None and routing_decision not in MEMORY_ROUTING_DECISIONS:
+        raise CandidateExecutorError("paired execution routing_decision is invalid")
     budget_value, _ = _budget(budget)
     receipts = {
-        arm: _execute_arm(arm_candidates[arm], frozen_case, oracle, budget,
-                          arm=arm)
+        arm: _execute_arm(
+            arm_candidates[arm], frozen_case, oracle, budget, arm=arm,
+            routing_decision=routing_decision,
+            routing_receipt_id=routing_receipt_id,
+            no_skill_reason=no_skill_reason)
         for arm in P12_ARMS
     }
     case = _case_payload(frozen_case)
@@ -546,7 +617,8 @@ def execute_paired_candidates(
         risk_receipt_id=risk_receipt_id,
         risk_receipt=(dict(risk_receipt) if risk_receipt is not None else None),
         lineage_id=lineage_id,
-        routing_receipt_id=routing_receipt_id)
+        routing_receipt_id=routing_receipt_id,
+        routing_decision=routing_decision)
 
 
 __all__ = [

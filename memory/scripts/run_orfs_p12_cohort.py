@@ -182,11 +182,12 @@ def _routing_map(path: Path, cases: Sequence[Mapping]) -> tuple[dict[str, Memory
             raise P12OrfsRunError(
                 f"routing decision for {case_id} is invalid: {exc}") from exc
         case = by_id[case_id]
-        for field in ("routing_receipt_id", "no_skill_reason",
+        for field in ("routing_decision", "routing_receipt_id", "no_skill_reason",
                       "state_shift_receipt_id", "risk_receipt_id",
                       "risk_receipt"):
             declared = case.get(field)
             actual = (decision.routing_receipt_id if field == "routing_receipt_id"
+                      else decision.decision if field == "routing_decision"
                       else getattr(decision, field))
             if declared is not None and declared != actual:
                 raise P12OrfsRunError(

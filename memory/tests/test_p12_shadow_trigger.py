@@ -14,6 +14,8 @@ from tehm.evolution import (
     P12ShadowTriggerError, P12ShadowUpdateTriggerReceipt,
     P13EvolutionReasonReceipt,
     build_p12_shadow_update_triggers,
+    build_p12_shadow_update_triggers_from_reason_receipt,
+    derive_state_shift_reason, p13_reason_receipt_from_derivations,
 )
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import StateShiftReceipt
@@ -220,6 +222,27 @@ def test_state_shift_no_skill_route_can_trigger_p13_observation():
     assert all(item.no_skill_reason == "STATE_SHIFT" for item in triggers)
     assert all(item.state_shift_receipt_id for item in triggers)
     assert all(item.state_shift_receipt is not None for item in triggers)
+
+
+def test_typed_reason_receipt_is_the_formal_trigger_input():
+    cohort, routes = _state_shift_cohort()
+    derivations = {
+        case_id: (derive_state_shift_reason(
+            StateShiftReceipt.from_dict(route.state_shift_receipt),
+            campaign_id=cohort.campaign_id, case_id=case_id,
+            routing=route, lineage_id=cohort.case_receipts[case_id].lineage_id),)
+        for case_id, route in routes.items()
+    }
+    reason_receipt = p13_reason_receipt_from_derivations(
+        derivations, campaign_id=cohort.campaign_id,
+        cohort_receipt_digest=cohort.receipt_digest)
+    triggers = build_p12_shadow_update_triggers_from_reason_receipt(
+        cohort, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        reason_receipt=reason_receipt, min_lineages=2,
+        routing_decisions=routes,
+        case_learner_eligibility={case_id: True for case_id in routes})
+    assert all(item.triggered for item in triggers)
+    assert all(item.evolution_reasons == ("STATE_SHIFT",) for item in triggers)
 
 
 def test_state_shift_trigger_rejects_id_only_route_witness():

@@ -107,6 +107,57 @@ def test_execute_paired_candidates_enforces_four_arms_and_fixed_digests():
     assert replay.to_dict() == bundle.to_dict()
 
 
+def test_causal_no_skill_refusal_executes_real_no_memory_fallback():
+    candidate = _candidate()
+
+    def oracle(current, _case, _budget):
+        assert current is None or isinstance(current, StructuredRepairCandidate)
+        return {"compile_result": "PASS", "functional_result": "PASS",
+                "signoff_result": "PASS", "toolchain_digest": "sha256:tool",
+                "oracle_digest": "sha256:oracle"}
+
+    bundle = execute_paired_candidates(
+        {"case_id": "paired-fallback", "toolchain_digest": "sha256:tool"},
+        {"NO_MEMORY": None, "ALWAYS_MEMORY": candidate,
+         "APPLICABILITY_GATED": candidate, "CAUSAL_NO_SKILL": candidate},
+        oracle=oracle, routing_decision="NO_SKILL",
+        no_skill_reason="STATE_SHIFT", state_shift_receipt_id="shift-receipt",
+        routing_receipt_id="routing-receipt")
+    causal = bundle.arm_receipts["CAUSAL_NO_SKILL"]
+    assert bundle.routing_decision == "NO_SKILL"
+    assert causal.source == "no_memory"
+    assert causal.metadata["policy_fallback"] is True
+    assert causal.metadata["fallback_reason"] == "STATE_SHIFT"
+    assert causal.metadata["routing_receipt_id"] == "routing-receipt"
+    assert causal.metadata["ignored_candidate_id"] == candidate.candidate_id
+    assert bundle.arm_receipts["ALWAYS_MEMORY"].source == "structured_memory"
+    assert bundle.arm_receipts["APPLICABILITY_GATED"].source == "structured_memory"
+
+
+def test_applicability_gate_can_execute_no_memory_fallback_and_no_memory_rejects_candidate():
+    def oracle(_current, _case, _budget):
+        return {"compile_result": "PASS", "functional_result": "PASS",
+                "signoff_result": "PASS", "toolchain_digest": "sha256:tool",
+                "oracle_digest": "sha256:oracle"}
+
+    candidate = _candidate()
+    bundle = execute_paired_candidates(
+        {"case_id": "paired-applicability-fallback",
+         "toolchain_digest": "sha256:tool"},
+        {"NO_MEMORY": None, "ALWAYS_MEMORY": candidate,
+         "APPLICABILITY_GATED": None, "CAUSAL_NO_SKILL": candidate},
+        oracle=oracle)
+    gated = bundle.arm_receipts["APPLICABILITY_GATED"]
+    assert gated.source == "no_memory"
+    assert gated.metadata["policy_fallback"] is True
+    with pytest.raises(CandidateExecutorError, match="NO_MEMORY arm"):
+        execute_paired_candidates(
+            {"case_id": "paired-invalid-no-memory"},
+            {"NO_MEMORY": candidate, "ALWAYS_MEMORY": candidate,
+             "APPLICABILITY_GATED": candidate, "CAUSAL_NO_SKILL": candidate},
+            oracle=oracle)
+
+
 def test_execute_paired_candidates_rejects_digest_drift():
     candidate = _candidate()
 
