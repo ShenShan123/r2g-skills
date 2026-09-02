@@ -212,11 +212,18 @@ def _decode_updates(
         item = updates[case_id]
         if not isinstance(item, Mapping):
             raise P13ShadowRunError(f"P13 update for {case_id} must be an object")
+        raw_plan = item.get("plan")
+        if not isinstance(raw_plan, Mapping):
+            raise P13ShadowRunError(
+                f"P13 update plan for {case_id} must be an object")
         try:
-            plan = LocalizedUpdatePlan.from_dict(item.get("plan"))
+            plan = LocalizedUpdatePlan.from_dict(raw_plan)
         except (TypeError, ValueError) as exc:
             raise P13ShadowRunError(
                 f"P13 update plan for {case_id} is invalid: {exc}") from exc
+        if raw_plan.get("plan_digest") != plan.plan_digest:
+            raise P13ShadowRunError(
+                f"P13 update plan for {case_id} plan digest mismatch")
         trigger = triggers[case_id]
         if plan.campaign_id != campaign_id:
             raise P13ShadowRunError(
@@ -229,6 +236,21 @@ def _decode_updates(
             raise P13ShadowRunError(
                 f"P13 update evidence for {case_id} must be an object")
         evidence = dict(evidence)
+        raw_trigger = evidence.get("p12_shadow_trigger")
+        if not isinstance(raw_trigger, Mapping):
+            raise P13ShadowRunError(
+                f"P13 update evidence for {case_id} requires its P12 trigger")
+        if raw_trigger.get("receipt_digest") != trigger.receipt_digest:
+            raise P13ShadowRunError(
+                f"P13 update evidence for {case_id} trigger digest disagrees")
+        try:
+            evidence_trigger = P12ShadowUpdateTriggerReceipt.from_dict(raw_trigger)
+        except (TypeError, ValueError) as exc:
+            raise P13ShadowRunError(
+                f"P13 update evidence for {case_id} trigger is invalid: {exc}") from exc
+        if evidence_trigger.receipt_digest != trigger.receipt_digest:
+            raise P13ShadowRunError(
+                f"P13 update evidence for {case_id} trigger does not match report")
         anti_ref = None
         if plan.update_target != "UPDATE_NONE":
             if case_id not in anti_forgetting_receipts:

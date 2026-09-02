@@ -73,10 +73,11 @@ def _inputs(tmp_path: Path, *, trigger: P12ShadowUpdateTriggerReceipt | None = N
     trigger_report.write_text(json.dumps(report_payload))
     manifest = tmp_path / "manifest.json"
     plan = _plan(trigger)
+    plan_payload = {**plan.to_dict(), "plan_digest": plan.plan_digest}
     manifest.write_text(json.dumps({
         "version": "p13-shadow-update-manifest-v1", "campaign_id": "live",
         "source_db": db.name,
-        "updates": {"case-0": {"plan": plan.to_dict(),
+        "updates": {"case-0": {"plan": plan_payload,
                                 "evidence": {"p12_shadow_trigger": {
                                     **trigger.to_dict(),
                                     "receipt_digest": trigger.receipt_digest}}}},
@@ -144,6 +145,29 @@ def test_p13_runner_requires_content_bound_trigger_receipts(tmp_path):
             trigger_report, manifest, output=tmp_path / "report.json")
 
 
+def test_p13_runner_rejects_tampered_plan_digest(tmp_path):
+    db, trigger_report, manifest = _inputs(tmp_path)
+    payload = json.loads(manifest.read_text())
+    payload["updates"]["case-0"]["plan"]["rationale"] = "tampered"
+    manifest.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowRunError, match="plan digest mismatch"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
+
+
+def test_p13_runner_rejects_trigger_evidence_from_another_report(tmp_path):
+    db, trigger_report, manifest = _inputs(tmp_path)
+    payload = json.loads(manifest.read_text())
+    trigger = _trigger()
+    forged = replace(trigger, case_id="other-case")
+    payload["updates"]["case-0"]["evidence"]["p12_shadow_trigger"] = {
+        **forged.to_dict(), "receipt_digest": forged.receipt_digest}
+    manifest.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowRunError, match="trigger digest disagrees"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
+
+
 def test_p13_runner_rejects_input_output_collision(tmp_path):
     db, trigger_report, manifest = _inputs(tmp_path)
     with pytest.raises(P13ShadowRunError, match="separate"):
@@ -160,7 +184,7 @@ def test_p13_runner_preflights_anti_forgetting_before_opening_source(tmp_path, m
         failure_type="STATE_RESOLUTION_FAILURE")
     payload = json.loads(manifest.read_text())
     payload["updates"]["case-0"] = {
-        "plan": plan.to_dict(),
+        "plan": {**plan.to_dict(), "plan_digest": plan.plan_digest},
         "evidence": {
             "p12_shadow_trigger": {
                 **trigger.to_dict(), "receipt_digest": trigger.receipt_digest},
@@ -216,7 +240,8 @@ def test_p13_runner_consumes_file_bound_witness(tmp_path, monkeypatch):
         failure_type="STATE_RESOLUTION_FAILURE",
         evidence_refs=(trigger.receipt_digest, witness.receipt_digest))
     payload = json.loads(manifest.read_text())
-    payload["updates"]["case-0"]["plan"] = plan.to_dict()
+    payload["updates"]["case-0"]["plan"] = {
+        **plan.to_dict(), "plan_digest": plan.plan_digest}
     payload["updates"]["case-0"]["evidence"] = {
         "p12_shadow_trigger": {
             **trigger.to_dict(), "receipt_digest": trigger.receipt_digest},

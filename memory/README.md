@@ -3213,6 +3213,11 @@ trigger 必须带匹配的 `receipt_digest`；runner 会在打开 SQLite 前校�
 `NO_SKILL/STATE_SHIFT` route → trigger report → P13 runner 的边界；这只证明
 evaluation/shadow replay 可达，仍不会写 canonical memory 或 production runtime。
 
+P13 runner 还要求每个 update manifest 的 `LocalizedUpdatePlan` 带可重算的
+`plan_digest`，并要求 evidence 中的 `p12_shadow_trigger` 与当前 report 中同 case 的
+receipt 完全一致；因此不能把一个合法 trigger、另一个 case 的 plan 或另一份 report
+拼接后执行。该校验仍发生在打开 source SQLite 之前，保持 P13 仅为 isolated staging。
+
 该入口已对现有真实 `p12g-orfs-v117-v119-training-20260903` receipt 重放：2 个 distinct
 training lineage、typed route coverage 完整，但没有 Revision2 evolution signal，因此当前
 v0.2 结果为 `trigger_count=2`、`triggered_count=0`、`p13_eligible=false`、
