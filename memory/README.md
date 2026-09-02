@@ -3022,7 +3022,8 @@ rollback 四个不同文件、显式 gate 布尔值及匹配的完整 SHA256。b
 
 依据 Revision2 设计，`MemoryRoutingDecision` 现在保留兼容的顶层 `NO_SKILL`，并增加
 typed `no_skill_reason`：`NO_MATCH`、`STATE_SHIFT`、`RISK`；同时可绑定
-`state_shift_receipt_id` 或 `risk_receipt_id`。旧 receipt 缺少 reason 时只做兼容映射
+`state_shift_receipt_id` 或可重放的 content-addressed `risk_receipt_id`/`risk_receipt`
+（含 current resolution、expected utility、evidence refs 和 risk model）。旧 receipt 缺少 reason 时只做兼容映射
 到 `NO_MATCH`，不会把 `ABSTAIN` 或 `INAPPLICABLE` 混入主动拒绝语义；memory slot
 仍最多 1 个，no-memory arm 始终保留。
 

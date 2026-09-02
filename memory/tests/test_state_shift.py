@@ -1,14 +1,17 @@
 """Revision2 reason-aware NO_SKILL and training-only support envelopes."""
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from contracts import MemoryQuery, MemoryRoutingDecision
 from tehm.knowledge import MechanismKnowledge
 from tehm.state import (
-    ResolvedMemoryState, StateShiftReceipt, SupportEnvelopeError,
+    ResolvedMemoryState, RiskReceipt, StateShiftReceipt, SupportEnvelopeError,
     build_support_envelope, evaluate_state_shift,
 )
+from tehm.ids import stable_dumps
 from tehm.retrieval import memory_router
 from tehm.retrieval.memory_router import route_memory
 
@@ -114,6 +117,64 @@ def test_risk_reason_requires_typed_evidence(tmp_tehm):
     # No validated claim exists, so coverage takes precedence over a risk
     # signal; this remains a reason-aware NO_MATCH rather than guessed RISK.
     assert decision.no_skill_reason == "NO_MATCH"
+
+
+def test_risk_receipt_is_content_addressed_and_bound_to_routing():
+    payload = {
+        "version": "risk-receipt-v0.1",
+        "current_resolution_id": "resolution-risk",
+        "expected_utility": -0.5,
+        "evidence_refs": ["ab-1"],
+        "risk_model": "typed_expected_utility_v1",
+        "reason": "RISK",
+    }
+    receipt = RiskReceipt(
+        current_resolution_id=payload["current_resolution_id"],
+        expected_utility=payload["expected_utility"],
+        evidence_refs=tuple(payload["evidence_refs"]),
+        risk_model=payload["risk_model"], reason=payload["reason"],
+        replay_digest="sha256:" + hashlib.sha256(
+            stable_dumps(payload).encode()).hexdigest(),
+    )
+    assert RiskReceipt.from_dict(receipt.to_dict()) == receipt
+    tampered = {**receipt.to_dict(), "expected_utility": 0.5}
+    with pytest.raises(ValueError, match="digest mismatch"):
+        RiskReceipt.from_dict(tampered)
+
+
+def test_router_emits_replayable_risk_receipt_for_negative_utility(
+        tmp_tehm, monkeypatch):
+    conn, _, _ = tmp_tehm
+    knowledge = _knowledge()
+    state = ResolvedMemoryState(
+        resolution_id="resolution-risk", input_memory_digest="sha256:input",
+        scope={}, active_rules=(), active_causal_paths=("path-shift",),
+        active_knowledge_claims=(), active_assets=(), active_capabilities=(),
+        suppressed=(), unresolved_conflicts=(), relation_ids=(),
+        shadow_relation_ids=(), resolution_digest="sha256:resolution",
+        resolver_version="test",
+    )
+    monkeypatch.setattr(memory_router, "resolve_current_state", lambda *args, **kwargs: state)
+    monkeypatch.setattr(
+        memory_router, "_knowledge_for_state",
+        lambda *args, **kwargs: ([{"claim": knowledge, "path_ids": ("path-shift",)}], (), (), ()),
+    )
+    decision = route_memory(conn, MemoryQuery(query_plan={
+        "mechanism_family": "HANDSHAKE_COMPLETION",
+        "compatibility_profile": "rtl.fsm.single_guard.v1",
+        "risk_evidence": {
+            "expected_utility": -0.5, "evidence_refs": ["ab-1"],
+        },
+    }), memory_budget=1)
+    assert decision.decision == "NO_SKILL"
+    assert decision.no_skill_reason == "RISK"
+    assert decision.risk_receipt is not None
+    checked = RiskReceipt.from_dict(decision.risk_receipt)
+    assert checked.receipt_id == decision.risk_receipt_id
+    assert checked.current_resolution_id == decision.resolved_state_id
+    assert MemoryRoutingDecision.from_dict({
+        **decision.to_dict(), "decision_digest": decision.decision_digest,
+    }) == decision
 
 
 def test_router_emits_state_shift_reason_and_preserves_no_memory_arm(

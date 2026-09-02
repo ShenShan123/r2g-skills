@@ -168,6 +168,7 @@ class MemoryRoutingDecision:
     state_shift_receipt_id: str | None = None
     risk_receipt_id: str | None = None
     state_shift_receipt: dict | None = None
+    risk_receipt: dict | None = None
 
     def __post_init__(self) -> None:
         if self.decision not in MEMORY_ROUTING_DECISIONS:
@@ -230,6 +231,19 @@ class MemoryRoutingDecision:
                     checked_shift.transferable):
                 raise ValueError(
                     "memory routing state_shift_receipt binding is invalid")
+        if self.risk_receipt is not None:
+            try:
+                from tehm.state.risk_receipts import RiskReceipt
+
+                checked_risk = RiskReceipt.from_dict(self.risk_receipt)
+            except (TypeError, ValueError, KeyError) as exc:
+                raise ValueError(
+                    "memory routing risk_receipt is invalid") from exc
+            if (self.decision != "NO_SKILL" or
+                    self.no_skill_reason != "RISK" or
+                    self.risk_receipt_id != checked_risk.receipt_id or
+                    self.resolved_state_id != checked_risk.current_resolution_id):
+                raise ValueError("memory routing risk_receipt binding is invalid")
         if self.decision == "NO_SKILL":
             reason = self.no_skill_reason
             if reason is None:
@@ -244,9 +258,12 @@ class MemoryRoutingDecision:
                 raise ValueError("state_shift_receipt_id requires STATE_SHIFT")
             if self.risk_receipt_id is not None and reason != "RISK":
                 raise ValueError("risk_receipt_id requires RISK")
+            if self.risk_receipt is not None and reason != "RISK":
+                raise ValueError("risk_receipt requires RISK")
         elif any(value is not None for value in (
                 self.no_skill_reason, self.state_shift_receipt_id,
-                self.risk_receipt_id, self.state_shift_receipt)):
+                self.risk_receipt_id, self.state_shift_receipt,
+                self.risk_receipt)):
             raise ValueError("NO_SKILL metadata is only valid for NO_SKILL")
 
     def to_dict(self) -> dict:
@@ -267,6 +284,8 @@ class MemoryRoutingDecision:
             "risk_receipt_id": self.risk_receipt_id,
             **({"state_shift_receipt": dict(self.state_shift_receipt)}
                if self.state_shift_receipt is not None else {}),
+            **({"risk_receipt": dict(self.risk_receipt)}
+               if self.risk_receipt is not None else {}),
         }
 
     @property
@@ -339,6 +358,9 @@ class MemoryRoutingDecision:
                 state_shift_receipt=(
                     dict(payload["state_shift_receipt"])
                     if payload.get("state_shift_receipt") is not None else None),
+                risk_receipt=(
+                    dict(payload["risk_receipt"])
+                    if payload.get("risk_receipt") is not None else None),
             )
         except (TypeError, ValueError) as exc:
             raise ValueError("memory routing decision is malformed") from exc

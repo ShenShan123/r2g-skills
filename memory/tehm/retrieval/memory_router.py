@@ -32,7 +32,8 @@ from tehm.knowledge.authority import evaluate_knowledge_authority
 from tehm.knowledge.registry import get_knowledge_by_object_id
 from tehm.knowledge.lifecycle import get_knowledge_status
 from tehm.state import (
-    StateResolutionError, StateShiftError, SupportEnvelope,
+    RISK_RECEIPT_VERSION, RiskReceipt, StateResolutionError, StateShiftError,
+    SupportEnvelope,
     evaluate_state_shift, resolve_current_state,
 )
 
@@ -160,7 +161,8 @@ def _empty_decision(*, decision: str, state_id: str, reasons: tuple[str, ...],
                     risk: dict | None = None, no_skill_reason: str | None = None,
                     state_shift_receipt_id: str | None = None,
                     state_shift_receipt: Mapping | None = None,
-                    risk_receipt_id: str | None = None) -> MemoryRoutingDecision:
+                    risk_receipt_id: str | None = None,
+                    risk_receipt: Mapping | None = None) -> MemoryRoutingDecision:
     if decision not in MEMORY_ROUTING_DECISIONS:
         raise MemoryRouterError(f"unknown memory routing decision: {decision}")
     return MemoryRoutingDecision(
@@ -173,7 +175,8 @@ def _empty_decision(*, decision: str, state_id: str, reasons: tuple[str, ...],
         state_shift_receipt_id=state_shift_receipt_id,
         state_shift_receipt=(dict(state_shift_receipt)
                              if state_shift_receipt is not None else None),
-        risk_receipt_id=risk_receipt_id)
+        risk_receipt_id=risk_receipt_id,
+        risk_receipt=(dict(risk_receipt) if risk_receipt is not None else None))
 
 
 def _state_shift_receipts(plan: Mapping, state, claims: list[dict]):
@@ -205,7 +208,9 @@ def _state_shift_receipts(plan: Mapping, state, claims: list[dict]):
     return tuple(receipts), tuple(sorted(errors))
 
 
-def _risk_evidence(plan: Mapping) -> tuple[str | None, dict | None, str | None]:
+def _risk_evidence(
+        plan: Mapping, resolution_id: str,
+        ) -> tuple[str | None, dict | None, str | None]:
     """Return a typed risk refusal only for explicit replayable evidence."""
     raw = plan.get("risk_evidence")
     if raw is None:
@@ -221,15 +226,33 @@ def _risk_evidence(plan: Mapping) -> tuple[str | None, dict | None, str | None]:
     utility = float(utility)
     if not math.isfinite(utility):
         return None, None, "RISK_INVALID:risk expected_utility is not finite"
+    if any(type(item) is not str or not item.strip() for item in refs):
+        return None, None, "RISK_INVALID:risk evidence_refs are invalid"
+    if len(set(refs)) != len(refs):
+        return None, None, "RISK_INVALID:risk evidence_refs contain duplicates"
+    normalized_refs = tuple(sorted(item.strip() for item in refs))
     payload = {"expected_utility": utility,
-               "evidence_refs": sorted(set(refs)),
+               "evidence_refs": list(normalized_refs),
                "risk_model": raw.get("risk_model", "typed_expected_utility_v1")}
     try:
-        encoded = stable_dumps(payload)
+        receipt = RiskReceipt(
+            current_resolution_id=resolution_id,
+            expected_utility=utility,
+            evidence_refs=normalized_refs,
+            risk_model=payload["risk_model"],
+            replay_digest="sha256:" + hashlib.sha256(stable_dumps({
+                "version": RISK_RECEIPT_VERSION,
+                "current_resolution_id": resolution_id,
+                "expected_utility": utility,
+                "evidence_refs": payload["evidence_refs"],
+                "risk_model": payload["risk_model"],
+                "reason": "RISK",
+            }).encode()).hexdigest(),
+        )
     except (TypeError, ValueError):
         return None, None, "RISK_INVALID:risk evidence is not JSON-serializable"
-    digest = "sha256:" + hashlib.sha256(encoded.encode()).hexdigest()
-    return "risk_" + digest.split(":", 1)[1][:24], payload, None
+    payload["risk_receipt"] = receipt.to_dict()
+    return receipt.receipt_id, payload, None
 
 
 def _status_for_scope(conn: sqlite3.Connection, *, table: str,
@@ -615,7 +638,8 @@ def route_memory(
             no_skill_reason="STATE_SHIFT",
             state_shift_receipt_id=receipt.receipt_id,
             state_shift_receipt=receipt.to_dict())
-    risk_id, risk_payload, risk_error = _risk_evidence(plan)
+    risk_id, risk_payload, risk_error = _risk_evidence(
+        plan, state.resolution_id)
     if risk_error:
         return _empty_decision(
             decision="ABSTAIN", state_id=state.resolution_id,
@@ -628,7 +652,8 @@ def route_memory(
             reasons=("expected_utility_negative",), total_budget=total_budget,
             applicability=app_summary, causal_support=causal_summary,
             risk={**risk, **risk_payload, "risk_status": "HIGH"},
-            no_skill_reason="RISK", risk_receipt_id=risk_id)
+            no_skill_reason="RISK", risk_receipt_id=risk_id,
+            risk_receipt=risk_payload["risk_receipt"])
     selected_rules = _rule_ids(conn, typed_query, state)
     binding_assets = set(asset_summary["binding_resolvable_assets"])
     if (memory_capacity >= 1 and promoted_authorized and

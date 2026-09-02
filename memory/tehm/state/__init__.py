@@ -13,6 +13,7 @@ from .receipts import (
 from .schema import STATE_SCHEMA_VERSION, ensure_state_schema
 from .shift import StateShiftError, evaluate_state_shift
 from .shift_receipts import STATE_SHIFT_VERSION, SHIFT_DIMENSIONS, StateShiftReceipt
+from .risk_receipts import RISK_RECEIPT_VERSION, RiskReceipt
 from .support_envelope import (
     SUPPORT_ENVELOPE_VERSION, SupportEnvelopeError, SupportEnvelope,
     build_support_envelope,
@@ -31,4 +32,5 @@ __all__ = [
     "STATE_SHIFT_VERSION", "SHIFT_DIMENSIONS", "StateShiftReceipt",
     "StateShiftError", "evaluate_state_shift", "SUPPORT_ENVELOPE_VERSION",
     "SupportEnvelopeError", "SupportEnvelope", "build_support_envelope",
+    "RISK_RECEIPT_VERSION", "RiskReceipt",
 ]
