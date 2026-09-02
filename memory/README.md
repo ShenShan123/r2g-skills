@@ -3076,8 +3076,10 @@ source-disjoint 与 source-restore、显式 distinct lineage、routing receipt�
 capability gain、failure cause 或 promotion。
 
 Revision2 的 8A.9 state-shift teaching path 是唯一的 no-memory 例外：带有
-`no_skill_reason=STATE_SHIFT`、`state_shift_receipt_id` 和完整 paired historical-memory
-oracle 的 `NO_SKILL` route 也可以生成 P13 trigger。`NO_MATCH`、`RISK`、`ABSTAIN` 和
+`no_skill_reason=STATE_SHIFT`、匹配的完整 `StateShiftReceipt` payload、
+`state_shift_receipt_id` 和完整 paired historical-memory oracle 的 `NO_SKILL` route
+也可以生成 P13 trigger；P12 replay 会拒绝只有 ID、过期 digest 或篡改后的 witness。
+`NO_MATCH`、`RISK`、`ABSTAIN` 和
 `INAPPLICABLE` 仍不会触发 mutation；该例外只把已路由的 transfer-boundary observation
 送入 shadow lane，不改变 no-memory 决策，也不授予 canonical/production authority。
 

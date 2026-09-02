@@ -381,6 +381,7 @@ def _reason(*, learner_eligible: bool, routing_id: str | None,
             memory_complete: bool,
             no_skill_reason: str | None,
             state_shift_receipt_id: str | None,
+            state_shift_receipt: Mapping | None,
             evolution_reasons: Sequence[str]) -> tuple[bool, str]:
     if not learner_eligible:
         return False, "not_learner_eligible"
@@ -397,7 +398,8 @@ def _reason(*, learner_eligible: bool, routing_id: str | None,
     route_is_state_shift_observation = (
         routing_decision == "NO_SKILL" and
         no_skill_reason == "STATE_SHIFT" and
-        state_shift_receipt_id is not None)
+        state_shift_receipt_id is not None and
+        state_shift_receipt is not None)
     if not (route_is_memory_eligible or route_is_state_shift_observation):
         return False, "routing_not_memory_eligible"
     if not baseline_complete:
@@ -438,6 +440,7 @@ class P12ShadowUpdateTriggerReceipt:
     evolution_reasons: tuple[str, ...] = ()
     evaluation_only: bool = True
     version: str = P12_SHADOW_TRIGGER_VERSION
+    state_shift_receipt: dict | None = None
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -465,6 +468,21 @@ class P12ShadowUpdateTriggerReceipt:
                             (self.risk_receipt_id, "risk_receipt_id")):
             if value is not None:
                 _text(value, name)
+        if self.state_shift_receipt is not None:
+            try:
+                from tehm.state.shift_receipts import StateShiftReceipt
+
+                checked_shift = StateShiftReceipt.from_dict(
+                    self.state_shift_receipt)
+            except (TypeError, ValueError, KeyError) as exc:
+                raise P12ShadowTriggerError(
+                    "P12 shadow trigger state_shift_receipt is invalid") from exc
+            if (self.no_skill_reason != "STATE_SHIFT" or
+                    self.state_shift_receipt_id != checked_shift.receipt_id or
+                    checked_shift.reason != "STATE_SHIFT" or
+                    checked_shift.transferable):
+                raise P12ShadowTriggerError(
+                    "P12 shadow trigger state_shift_receipt binding is invalid")
         if self.baseline_outcome not in OUTCOMES or self.memory_outcome not in OUTCOMES:
             raise P12ShadowTriggerError("P12 shadow trigger outcome is invalid")
         for value, name in (
@@ -496,7 +514,8 @@ class P12ShadowUpdateTriggerReceipt:
         route_is_state_shift_observation = (
             self.routing_decision == "NO_SKILL" and
             self.no_skill_reason == "STATE_SHIFT" and
-            self.state_shift_receipt_id is not None)
+            self.state_shift_receipt_id is not None and
+            self.state_shift_receipt is not None)
         if self.triggered and (
                 not self.learner_eligible or self.routing_receipt_id is None or
                 not (route_is_memory_eligible or route_is_state_shift_observation) or
@@ -528,6 +547,8 @@ class P12ShadowUpdateTriggerReceipt:
             "no_skill_reason": self.no_skill_reason,
             "state_shift_receipt_id": self.state_shift_receipt_id,
             "risk_receipt_id": self.risk_receipt_id,
+            **({"state_shift_receipt": dict(self.state_shift_receipt)}
+               if self.state_shift_receipt is not None else {}),
             "baseline_candidate_id": self.baseline_candidate_id,
             "memory_candidate_id": self.memory_candidate_id,
             "baseline_execution_digest": self.baseline_execution_digest,
@@ -548,6 +569,9 @@ class P12ShadowUpdateTriggerReceipt:
         """Digest used by v0.1 receipts, before explicit reasons existed."""
         payload = self.to_dict()
         payload.pop("evolution_reasons", None)
+        # v0.1 had no typed StateShiftReceipt payload.  Do not allow that
+        # digest to authenticate a current receipt carrying a new witness.
+        payload.pop("state_shift_receipt", None)
         payload["version"] = _LEGACY_P12_SHADOW_TRIGGER_VERSION
         return _digest(payload)
 
@@ -577,6 +601,9 @@ class P12ShadowUpdateTriggerReceipt:
             no_skill_reason=payload["no_skill_reason"],
             state_shift_receipt_id=payload["state_shift_receipt_id"],
             risk_receipt_id=payload["risk_receipt_id"],
+            state_shift_receipt=(
+                dict(payload["state_shift_receipt"])
+                if payload.get("state_shift_receipt") is not None else None),
             baseline_candidate_id=payload["baseline_candidate_id"],
             memory_candidate_id=payload["memory_candidate_id"],
             baseline_execution_digest=payload["baseline_execution_digest"],
@@ -593,7 +620,8 @@ class P12ShadowUpdateTriggerReceipt:
         )
         supplied = payload.get("receipt_digest")
         valid_digests = {receipt.receipt_digest}
-        if receipt.version == _LEGACY_P12_SHADOW_TRIGGER_VERSION:
+        if (receipt.version == _LEGACY_P12_SHADOW_TRIGGER_VERSION and
+                receipt.state_shift_receipt is None):
             valid_digests.add(receipt.legacy_receipt_digest)
         if supplied is not None and supplied not in valid_digests:
             raise P12ShadowTriggerError("P12 shadow trigger receipt digest mismatch")
@@ -657,6 +685,8 @@ def build_p12_shadow_update_triggers(
         routing = routing_decisions.get(case_id) if routing_decisions is not None else None
         routing_decision = routing.decision if routing is not None else None
         routing_digest = routing.decision_digest if routing is not None else None
+        state_shift_receipt = (
+            routing.state_shift_receipt if routing is not None else None)
         if routing is not None:
             if routing.routing_receipt_id != routing_id:
                 raise P12ShadowTriggerError(
@@ -675,6 +705,7 @@ def build_p12_shadow_update_triggers(
             memory_complete=memory_complete,
             no_skill_reason=bundle.no_skill_reason,
             state_shift_receipt_id=bundle.state_shift_receipt_id,
+            state_shift_receipt=state_shift_receipt,
             evolution_reasons=case_reasons[case_id])
         results.append(P12ShadowUpdateTriggerReceipt(
             cohort_receipt_digest=cohort_digest, campaign_id=campaign_id,
@@ -684,6 +715,7 @@ def build_p12_shadow_update_triggers(
             routing_decision_digest=routing_digest,
             no_skill_reason=bundle.no_skill_reason,
             state_shift_receipt_id=bundle.state_shift_receipt_id,
+            state_shift_receipt=state_shift_receipt,
             risk_receipt_id=bundle.risk_receipt_id,
             baseline_candidate_id=baseline.candidate_id,
             memory_candidate_id=memory.candidate_id,

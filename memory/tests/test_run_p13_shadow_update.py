@@ -14,6 +14,7 @@ from tehm.evolution import (
     AntiForgettingWitness, LocalizedUpdatePlan, P12ShadowUpdateTriggerReceipt,
 )
 from tehm.ids import stable_dumps
+from tehm.state.shift_receipts import StateShiftReceipt
 
 
 def _trigger() -> P12ShadowUpdateTriggerReceipt:
@@ -41,10 +42,28 @@ def _plan(trigger: P12ShadowUpdateTriggerReceipt) -> LocalizedUpdatePlan:
 
 
 def _state_shift_trigger() -> P12ShadowUpdateTriggerReceipt:
+    payload = {
+        "version": "state-shift-v0.1",
+        "current_resolution_id": "resolution:case-0",
+        "knowledge_object_id": "knowledge:case-0",
+        "support_envelope_digest": "sha256:" + "e" * 64,
+        "structural_shift": 1.0, "mechanism_shift": 0.0,
+        "flow_shift": 0.0, "constraint_shift": 0.0,
+        "oracle_shift": 0.0, "history_shift": 0.0,
+        "aggregate_shift": 0.166667,
+        "shifted_dimensions": ("structural_shift",),
+        "transferable": False, "reason": "STATE_SHIFT",
+        "evidence_refs": ("event:case-0",),
+    }
+    receipt = StateShiftReceipt(
+        **payload,
+        replay_digest="sha256:" + hashlib.sha256(
+            stable_dumps(payload).encode()).hexdigest())
     return replace(
         _trigger(), routing_receipt_id="routing:state-shift",
         routing_decision="NO_SKILL", routing_decision_digest="sha256:routing",
-        no_skill_reason="STATE_SHIFT", state_shift_receipt_id="shift:case-0",
+        no_skill_reason="STATE_SHIFT", state_shift_receipt_id=receipt.receipt_id,
+        state_shift_receipt=receipt.to_dict(),
         evolution_reasons=("STATE_SHIFT",))
 
 

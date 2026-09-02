@@ -159,6 +159,7 @@ def _empty_decision(*, decision: str, state_id: str, reasons: tuple[str, ...],
                     causal_support: dict | None = None,
                     risk: dict | None = None, no_skill_reason: str | None = None,
                     state_shift_receipt_id: str | None = None,
+                    state_shift_receipt: Mapping | None = None,
                     risk_receipt_id: str | None = None) -> MemoryRoutingDecision:
     if decision not in MEMORY_ROUTING_DECISIONS:
         raise MemoryRouterError(f"unknown memory routing decision: {decision}")
@@ -170,6 +171,8 @@ def _empty_decision(*, decision: str, state_id: str, reasons: tuple[str, ...],
         abstain_reasons=tuple(reasons), no_memory_budget=max(1, total_budget),
         memory_budget=0, no_skill_reason=no_skill_reason,
         state_shift_receipt_id=state_shift_receipt_id,
+        state_shift_receipt=(dict(state_shift_receipt)
+                             if state_shift_receipt is not None else None),
         risk_receipt_id=risk_receipt_id)
 
 
@@ -610,7 +613,8 @@ def route_memory(
             causal_support=causal_summary,
             risk={**risk, "state_shift_status": "SHIFTED"},
             no_skill_reason="STATE_SHIFT",
-            state_shift_receipt_id=receipt.receipt_id)
+            state_shift_receipt_id=receipt.receipt_id,
+            state_shift_receipt=receipt.to_dict())
     risk_id, risk_payload, risk_error = _risk_evidence(plan)
     if risk_error:
         return _empty_decision(

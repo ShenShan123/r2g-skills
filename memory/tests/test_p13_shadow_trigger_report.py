@@ -18,6 +18,8 @@ from tehm.evaluation.candidate_executor import (
     PairedCandidateExecutionReceipt,
 )
 from tehm.evaluation.orfs_cohort import OrfsPairedCohortReceipt
+from tehm.ids import stable_dumps
+from tehm.state.shift_receipts import StateShiftReceipt
 
 
 def _execution(case_id: str, candidate_id: str, source: str) -> CandidateExecutionReceipt:
@@ -42,6 +44,23 @@ def _routing(case_id: str) -> MemoryRoutingDecision:
 
 
 def _state_shift_routing(case_id: str) -> MemoryRoutingDecision:
+    payload = {
+        "version": "state-shift-v0.1",
+        "current_resolution_id": f"state:{case_id}",
+        "knowledge_object_id": f"knowledge:{case_id}",
+        "support_envelope_digest": "sha256:" + "e" * 64,
+        "structural_shift": 1.0, "mechanism_shift": 0.0,
+        "flow_shift": 0.0, "constraint_shift": 0.0,
+        "oracle_shift": 0.0, "history_shift": 0.0,
+        "aggregate_shift": 0.166667,
+        "shifted_dimensions": ("structural_shift",),
+        "transferable": False, "reason": "STATE_SHIFT",
+        "evidence_refs": (f"event:{case_id}",),
+    }
+    receipt = StateShiftReceipt(
+        **payload,
+        replay_digest="sha256:" + hashlib.sha256(
+            stable_dumps(payload).encode()).hexdigest())
     return MemoryRoutingDecision(
         decision="NO_SKILL", resolved_state_id=f"state:{case_id}",
         selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
@@ -50,7 +69,8 @@ def _state_shift_routing(case_id: str) -> MemoryRoutingDecision:
         risk={"state_shift_status": "SHIFTED"},
         abstain_reasons=("state_shift",), no_memory_budget=3, memory_budget=0,
         no_skill_reason="STATE_SHIFT",
-        state_shift_receipt_id=f"state-shift:{case_id}")
+        state_shift_receipt_id=receipt.receipt_id,
+        state_shift_receipt=receipt.to_dict())
 
 
 def _cohort() -> OrfsPairedCohortReceipt:

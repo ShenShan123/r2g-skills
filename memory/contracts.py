@@ -167,6 +167,7 @@ class MemoryRoutingDecision:
     no_skill_reason: str | None = None
     state_shift_receipt_id: str | None = None
     risk_receipt_id: str | None = None
+    state_shift_receipt: dict | None = None
 
     def __post_init__(self) -> None:
         if self.decision not in MEMORY_ROUTING_DECISIONS:
@@ -212,6 +213,23 @@ class MemoryRoutingDecision:
             value = getattr(self, field_name)
             if value is not None and (type(value) is not str or not value):
                 raise ValueError(f"memory routing {field_name} must be a non-empty string")
+        if self.state_shift_receipt is not None:
+            try:
+                from tehm.state.shift_receipts import StateShiftReceipt
+
+                checked_shift = StateShiftReceipt.from_dict(
+                    self.state_shift_receipt)
+            except (TypeError, ValueError, KeyError) as exc:
+                raise ValueError(
+                    "memory routing state_shift_receipt is invalid") from exc
+            if (self.decision != "NO_SKILL" or
+                    self.no_skill_reason != "STATE_SHIFT" or
+                    self.state_shift_receipt_id != checked_shift.receipt_id or
+                    self.resolved_state_id != checked_shift.current_resolution_id or
+                    checked_shift.reason != "STATE_SHIFT" or
+                    checked_shift.transferable):
+                raise ValueError(
+                    "memory routing state_shift_receipt binding is invalid")
         if self.decision == "NO_SKILL":
             reason = self.no_skill_reason
             if reason is None:
@@ -228,7 +246,7 @@ class MemoryRoutingDecision:
                 raise ValueError("risk_receipt_id requires RISK")
         elif any(value is not None for value in (
                 self.no_skill_reason, self.state_shift_receipt_id,
-                self.risk_receipt_id)):
+                self.risk_receipt_id, self.state_shift_receipt)):
             raise ValueError("NO_SKILL metadata is only valid for NO_SKILL")
 
     def to_dict(self) -> dict:
@@ -247,6 +265,8 @@ class MemoryRoutingDecision:
             "no_skill_reason": self.no_skill_reason,
             "state_shift_receipt_id": self.state_shift_receipt_id,
             "risk_receipt_id": self.risk_receipt_id,
+            **({"state_shift_receipt": dict(self.state_shift_receipt)}
+               if self.state_shift_receipt is not None else {}),
         }
 
     @property
@@ -316,12 +336,21 @@ class MemoryRoutingDecision:
                 no_skill_reason=payload.get("no_skill_reason"),
                 state_shift_receipt_id=payload.get("state_shift_receipt_id"),
                 risk_receipt_id=payload.get("risk_receipt_id"),
+                state_shift_receipt=(
+                    dict(payload["state_shift_receipt"])
+                    if payload.get("state_shift_receipt") is not None else None),
             )
         except (TypeError, ValueError) as exc:
             raise ValueError("memory routing decision is malformed") from exc
         supplied = payload.get("decision_digest")
-        if supplied is not None and supplied not in {
-                decision.decision_digest, decision.legacy_decision_digest}:
+        valid_digests = {decision.decision_digest}
+        # The legacy digest predates typed NO_SKILL metadata.  Once a
+        # replayable STATE_SHIFT payload is present, accepting that digest
+        # would let an old ID-only receipt authenticate a newly attached (or
+        # tampered) witness, so the current digest is required.
+        if decision.state_shift_receipt is None:
+            valid_digests.add(decision.legacy_decision_digest)
+        if supplied is not None and supplied not in valid_digests:
             raise ValueError("memory routing decision digest mismatch")
         return decision
 

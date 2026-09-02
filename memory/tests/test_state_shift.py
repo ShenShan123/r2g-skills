@@ -150,5 +150,14 @@ def test_router_emits_state_shift_reason_and_preserves_no_memory_arm(
     assert decision.decision == "NO_SKILL"
     assert decision.no_skill_reason == "STATE_SHIFT"
     assert decision.state_shift_receipt_id.startswith("state_shift_")
+    assert decision.state_shift_receipt is not None
+    replay = MemoryRoutingDecision.from_dict({
+        **decision.to_dict(), "decision_digest": decision.decision_digest})
+    assert replay == decision
+    tampered = {**decision.to_dict(), "decision_digest": decision.decision_digest}
+    tampered["state_shift_receipt"] = {
+        **tampered["state_shift_receipt"], "reason": "NO_SHIFT"}
+    with pytest.raises(ValueError, match="malformed|digest mismatch|state_shift_receipt"):
+        MemoryRoutingDecision.from_dict(tampered)
     assert decision.memory_budget == 0
     assert decision.no_memory_budget >= 1

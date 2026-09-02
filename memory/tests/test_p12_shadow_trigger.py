@@ -1,6 +1,7 @@
 """P12-to-P13 shadow trigger bridge tests."""
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, replace
 
 import pytest
@@ -14,6 +15,8 @@ from tehm.evolution import (
     P13EvolutionReasonReceipt,
     build_p12_shadow_update_triggers,
 )
+from tehm.ids import stable_dumps
+from tehm.state.shift_receipts import StateShiftReceipt
 
 
 @dataclass
@@ -40,6 +43,23 @@ def _routing(case_id: str) -> MemoryRoutingDecision:
 
 def _state_shift_routing(case_id: str) -> MemoryRoutingDecision:
     """A deliberate no-memory route with a typed transfer-boundary witness."""
+    payload = {
+        "version": "state-shift-v0.1",
+        "current_resolution_id": f"state:{case_id}",
+        "knowledge_object_id": f"knowledge:{case_id}",
+        "support_envelope_digest": "sha256:" + "e" * 64,
+        "structural_shift": 1.0, "mechanism_shift": 0.0,
+        "flow_shift": 0.0, "constraint_shift": 0.0,
+        "oracle_shift": 0.0, "history_shift": 0.0,
+        "aggregate_shift": 0.166667,
+        "shifted_dimensions": ("structural_shift",),
+        "transferable": False, "reason": "STATE_SHIFT",
+        "evidence_refs": (f"event:{case_id}",),
+    }
+    receipt = StateShiftReceipt(
+        **payload,
+        replay_digest="sha256:" + hashlib.sha256(
+            stable_dumps(payload).encode()).hexdigest())
     return MemoryRoutingDecision(
         decision="NO_SKILL", resolved_state_id=f"state:{case_id}",
         selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
@@ -48,7 +68,8 @@ def _state_shift_routing(case_id: str) -> MemoryRoutingDecision:
         risk={"state_shift_status": "SHIFTED"},
         abstain_reasons=("state_shift",), no_memory_budget=3, memory_budget=0,
         no_skill_reason="STATE_SHIFT",
-        state_shift_receipt_id=f"state-shift:{case_id}")
+        state_shift_receipt_id=receipt.receipt_id,
+        state_shift_receipt=receipt.to_dict())
 
 
 def _state_shift_cohort() -> tuple[_Cohort, dict[str, MemoryRoutingDecision]]:
@@ -198,6 +219,29 @@ def test_state_shift_no_skill_route_can_trigger_p13_observation():
     assert all(item.routing_decision == "NO_SKILL" for item in triggers)
     assert all(item.no_skill_reason == "STATE_SHIFT" for item in triggers)
     assert all(item.state_shift_receipt_id for item in triggers)
+    assert all(item.state_shift_receipt is not None for item in triggers)
+
+
+def test_state_shift_trigger_rejects_id_only_route_witness():
+    cohort, routes = _state_shift_cohort()
+    id_only_routes = {
+        case_id: replace(route, state_shift_receipt=None)
+        for case_id, route in routes.items()
+    }
+    id_only_cases = {
+        case_id: replace(bundle,
+                         routing_receipt_id=id_only_routes[case_id].routing_receipt_id)
+        for case_id, bundle in cohort.case_receipts.items()
+    }
+    cohort = replace(cohort, case_receipts=id_only_cases)
+    triggers = build_p12_shadow_update_triggers(
+        cohort, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        routing_decisions=id_only_routes,
+        case_learner_eligibility={case_id: True for case_id in cohort.case_receipts},
+        evolution_reasons={case_id: ("STATE_SHIFT",)
+                           for case_id in cohort.case_receipts})
+    assert all(not item.triggered for item in triggers)
+    assert all(item.reason == "routing_not_memory_eligible" for item in triggers)
 
 
 def test_no_skill_risk_route_remains_non_triggering():
