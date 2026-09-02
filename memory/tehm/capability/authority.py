@@ -20,7 +20,9 @@ from tehm.lifecycle.promotion_gates import (
     CAPABILITY_GATES, evaluate_capability_promotion_gates,
 )
 
-from .delta import evaluate_memory_delta, memory_delta_from_shadow_update
+from .delta import (
+    MemoryDeltaReceipt, evaluate_memory_delta, memory_delta_from_shadow_update,
+)
 from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
 from .registry import validate_capability_row
 
@@ -825,6 +827,17 @@ def _memory_delta_binding(
         reasons.append("C1:memory_delta_changed_ids_mismatch")
     if raw.get("delta") != checked.delta:
         reasons.append("C1:memory_delta_normalisation_mismatch")
+    try:
+        replayed = MemoryDeltaReceipt.from_dict(raw)
+    except (TypeError, ValueError, RuntimeError) as exc:
+        reasons.append(f"C1:memory_delta_receipt_invalid:{exc}")
+    else:
+        if replayed.to_dict() != checked.to_dict():
+            reasons.append("C1:memory_delta_receipt_replay_mismatch")
+        supplied_delta_digest = raw.get("receipt_digest")
+        if (supplied_delta_digest is not None and
+                supplied_delta_digest != replayed.receipt_digest):
+            reasons.append("C1:memory_delta_receipt_digest_mismatch")
     if shadow_raw is not None:
         if not isinstance(shadow_raw, Mapping):
             reasons.append("C1:shadow_update_receipt_malformed")
@@ -845,7 +858,11 @@ def _memory_delta_binding(
                     reasons.append("C1:shadow_update_baseline_digest_mismatch")
                 if shadow_delta.candidate_memory_digest != candidate_digest:
                     reasons.append("C1:shadow_update_candidate_digest_mismatch")
-                if shadow_delta.to_dict() != raw:
+                comparable_raw = {
+                    key: value for key, value in raw.items()
+                    if key != "receipt_digest"
+                }
+                if shadow_delta.to_dict() != comparable_raw:
                     reasons.append("C1:shadow_update_memory_delta_mismatch")
     return dict(raw), reasons
 

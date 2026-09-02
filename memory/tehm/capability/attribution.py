@@ -533,12 +533,20 @@ def evaluate_capability_attribution(
     if expanded_reasons:
         missing_values.extend(f"P8:{reason}" for reason in expanded_reasons)
     missing = tuple(missing_values)
+    if delta_receipt is not None:
+        memory_delta_payload = {
+            **delta_receipt.to_dict(),
+            "receipt_digest": delta_receipt.receipt_digest,
+        }
+    elif strict_memory_delta:
+        memory_delta_payload = {
+            "eligible": False, "reasons": ["memory_delta_required"],
+        }
+    else:
+        memory_delta_payload = None
     detail = {"baseline": dict(baseline), "candidate": dict(candidate),
               "heldout": dict(heldout), "ablation": dict(ablation),
-              "memory_delta": (
-                  delta_receipt.to_dict() if delta_receipt is not None else
-                  ({"eligible": False, "reasons": ["memory_delta_required"]}
-                   if strict_memory_delta else None)),
+              "memory_delta": memory_delta_payload,
               **({"shadow_update_receipt": shadow_receipt_payload}
                  if shadow_receipt_payload is not None else {}),
               **({"shadow_update_receipt_binding": {

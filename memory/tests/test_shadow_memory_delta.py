@@ -5,7 +5,7 @@ import hashlib
 
 import pytest
 
-from tehm.capability import memory_delta_from_shadow_update
+from tehm.capability import MemoryDeltaReceipt, memory_delta_from_shadow_update
 from tehm.capability.attribution import (
     evaluate_capability_attribution, evaluate_capability_attribution_from_db,
 )
@@ -67,6 +67,15 @@ def test_shadow_receipt_derives_typed_memory_delta():
     assert delta.added_relation_ids == ("relation-1",)
 
 
+def test_memory_delta_receipt_is_content_addressed_and_replayable():
+    receipt = memory_delta_from_shadow_update(_receipt())
+    payload = {**receipt.to_dict(), "receipt_digest": receipt.receipt_digest}
+    assert MemoryDeltaReceipt.from_dict(payload) == receipt
+    payload["changed_ids"] = []
+    with pytest.raises(ValueError, match="replay mismatch"):
+        MemoryDeltaReceipt.from_dict(payload)
+
+
 def test_shadow_receipt_ignores_derived_bookkeeping_rows_but_needs_memory_object():
     delta = memory_delta_from_shadow_update(_receipt(
         created_objects=("rule_revision:revision-1", "episode:episode-1"),
@@ -114,6 +123,8 @@ def test_shadow_receipt_is_the_c1_attribution_source_of_truth():
         shadow.receipt_digest)
     assert attribution.detail["memory_delta"]["delta"]["added_knowledge_ids"] == [
         "knowledge:claim@2"]
+    assert attribution.detail["memory_delta"]["receipt_digest"] == (
+        memory_delta_from_shadow_update(shadow).receipt_digest)
 
 
 def test_authority_replay_rederives_shadow_receipt_delta():
@@ -136,6 +147,13 @@ def test_authority_replay_rederives_shadow_receipt_delta():
         "detail": {**detail, "shadow_update_receipt": tampered},
     })
     assert any("shadow_update_receipt_invalid" in reason for reason in reasons)
+
+    tampered_delta = dict(detail["memory_delta"])
+    tampered_delta["receipt_digest"] = _digest("f")
+    _, reasons = _memory_delta_binding({
+        "detail": {**detail, "memory_delta": tampered_delta},
+    })
+    assert "C1:memory_delta_receipt_invalid:memory delta receipt digest mismatch" in reasons
 
 
 def test_authority_persists_shadow_receipt_and_replays_it(tmp_tehm):

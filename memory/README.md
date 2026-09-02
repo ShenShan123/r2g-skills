@@ -3145,6 +3145,9 @@ Capability attribution 现在可直接接收 `shadow_update_receipt`：C1 会由
 派生，若同时提供手写 `memory_delta` 则必须与派生结果逐字段一致。authority receipt 会保存
 这份 shadow receipt，并在后续 replay 中重新解析 replay/receipt digest、隔离不变量和对象
 清单；删除或篡改任一绑定都会使 C1 失效，而不会退回到两个 opaque memory digest 的比较。
+`MemoryDeltaReceipt` 本身也带有 content-addressed `receipt_digest` 与 `from_dict()` replay
+校验；authority 在重放时会重新计算规范化 delta、changed IDs、eligibility 和 reasons，防止
+只篡改 receipt 内部字段而绕过 C1。
 
 ### 2026-09-03 P15 reason-aware calibration seam
 

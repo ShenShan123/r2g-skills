@@ -71,6 +71,49 @@ class MemoryDeltaReceipt:
             "reasons": list(self.reasons),
         }
 
+    @property
+    def receipt_digest(self) -> str:
+        """Content digest for the normalized C1 receipt payload."""
+        import hashlib
+
+        return "sha256:" + hashlib.sha256(
+            stable_dumps(self.to_dict()).encode()).hexdigest()
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "MemoryDeltaReceipt":
+        """Replay and validate a serialized C1 memory-delta receipt."""
+        if not isinstance(payload, Mapping):
+            raise ValueError("memory delta receipt must be an object")
+        required = {
+            "version", "baseline_memory_digest", "candidate_memory_digest",
+            "delta", "changed_ids", "eligible", "reasons",
+        }
+        if not required <= set(payload):
+            raise ValueError("memory delta receipt is missing required fields")
+        delta = payload["delta"]
+        if not isinstance(delta, Mapping):
+            raise ValueError("memory delta receipt delta must be an object")
+        try:
+            manifest = {
+                "version": payload["version"],
+                "baseline_memory_digest": payload["baseline_memory_digest"],
+                "candidate_memory_digest": payload["candidate_memory_digest"],
+                **dict(delta),
+            }
+        except (TypeError, ValueError) as exc:
+            raise ValueError("memory delta receipt delta is malformed") from exc
+        checked = evaluate_memory_delta(
+            payload["baseline_memory_digest"],
+            payload["candidate_memory_digest"], manifest)
+        if (payload["changed_ids"] != list(checked.changed_ids) or
+                payload["eligible"] is not checked.eligible or
+                payload["reasons"] != list(checked.reasons)):
+            raise ValueError("memory delta receipt replay mismatch")
+        supplied = payload.get("receipt_digest")
+        if supplied is not None and supplied != checked.receipt_digest:
+            raise ValueError("memory delta receipt digest mismatch")
+        return checked
+
 
 _SHADOW_OBJECT_FIELDS = {
     "transition": "added_transition_ids",
