@@ -240,3 +240,32 @@ def test_report_rejects_output_input_collision(tmp_path):
     with pytest.raises(P13ShadowTriggerReportError, match="separate"):
         build_p13_shadow_trigger_report(
             cohort, manifest, routing_path=routes, output=routes)
+
+
+def test_report_binds_case_evidence_refs(tmp_path):
+    cohort, manifest, routes = _write_inputs(tmp_path)
+    case_refs = {}
+    for case_id in ("case-0", "case-1"):
+        evidence = tmp_path / f"{case_id}-reason.json"
+        evidence.write_text(json.dumps({"case_id": case_id, "event": "review"}))
+        case_refs[case_id] = [{
+            "id": f"reason-{case_id}", "path": evidence.name,
+            "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
+        }]
+    reasons = tmp_path / "reasons.json"
+    reasons.write_text(json.dumps({
+        "version": "p13-evolution-reason-receipt-v1",
+        "campaign_id": "campaign",
+        "cohort_receipt_digest": json.loads(cohort.read_text())["receipt_digest"],
+        "label_source": "independent-review-v1",
+        "evidence_refs": case_refs["case-0"],
+        "case_evidence_refs": case_refs,
+        "evolution_reasons": {"case-0": ["NOVELTY"], "case-1": ["CAPABILITY_GAP"]},
+        "evaluation_only": True, "canonical_memory_mutation": "none",
+    }))
+    report = build_p13_shadow_trigger_report(
+        cohort, manifest, routing_path=routes,
+        evolution_reasons_path=reasons, output=tmp_path / "report.json")
+    bound = report["evolution_reasons"]["case_evidence_refs"]
+    assert set(bound) == {"case-0", "case-1"}
+    assert bound["case-1"][0]["id"] == "reason-case-1"

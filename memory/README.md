@@ -3279,6 +3279,9 @@ campaign/cohort digest、逐 case reason 覆盖以及 evidence 文件 SHA256，�
 供 P13 replay 使用的 `P13EvolutionReasonReceipt`。该脚本拒绝 outcome、repair 和 gold
 字段，不读取或推断 ORFS 结果；evidence 不能复用 cohort 或 labels manifest 本身，
 输出也不能覆盖任一输入；没有外部 label manifest 时不会生成 reason。
+该 receipt 仍兼容旧的全局 `evidence_refs`，但新 manifest 可额外提供
+`case_evidence_refs`：每个 case 必须有独立、不可变且可重算 SHA256 的证据集合，
+replay 会校验 case 集合完全覆盖，避免一份笼统事件被重用为所有 case 的演化依据。
 
 ### 2026-09-01 P13 typed Knowledge structural shadow executor
 

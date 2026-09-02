@@ -136,6 +136,24 @@ def _evidence_refs(
     return tuple(result)
 
 
+def _case_evidence_refs(
+        payload: Mapping, manifest_path: Path, case_ids: set[str],
+        *, forbidden_paths: tuple[Path, ...] = ()) -> dict[str, tuple[dict, ...]] | None:
+    """Resolve optional immutable evidence refs for each labelled case."""
+    raw = payload.get("case_evidence_refs")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping) or set(raw) != case_ids:
+        raise P13ReasonReceiptError(
+            "case_evidence_refs must cover exactly all cohort cases")
+    result: dict[str, tuple[dict, ...]] = {}
+    for case_id in sorted(case_ids):
+        result[case_id] = _evidence_refs(
+            {"evidence_refs": raw[case_id]}, manifest_path,
+            forbidden_paths=forbidden_paths)
+    return result
+
+
 def build_p13_evolution_reason_receipt(
         cohort: Path | str, labels: Path | str, *, output: Path | str) -> dict:
     """Bind explicit labels to the exact current cohort receipt digest."""
@@ -161,11 +179,14 @@ def build_p13_evolution_reason_receipt(
             "evolution_reasons must cover exactly all cohort cases")
     refs = _evidence_refs(
         payload, labels_path, forbidden_paths=(cohort_path, labels_path))
+    case_refs = _case_evidence_refs(
+        payload, labels_path, case_ids,
+        forbidden_paths=(cohort_path, labels_path))
     try:
         receipt = P13EvolutionReasonReceipt(
             campaign_id=campaign_id, cohort_receipt_digest=cohort_digest,
             label_source=label_source, evidence_refs=refs,
-            evolution_reasons=dict(raw_reasons))
+            evolution_reasons=dict(raw_reasons), case_evidence_refs=case_refs)
     except (TypeError, ValueError) as exc:
         raise P13ReasonReceiptError(str(exc)) from exc
     report = {

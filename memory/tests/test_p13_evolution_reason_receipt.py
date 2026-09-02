@@ -13,7 +13,7 @@ from tehm.evaluation.candidate_executor import (
     P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
 from tehm.evaluation.orfs_cohort import OrfsPairedCohortReceipt
-from tehm.evolution import P13EvolutionReasonReceipt
+from tehm.evolution import P12ShadowTriggerError, P13EvolutionReasonReceipt
 
 
 def _execution(case_id: str, candidate_id: str, source: str) -> CandidateExecutionReceipt:
@@ -120,3 +120,30 @@ def test_reason_binder_rejects_input_output_collision(tmp_path):
     cohort, labels = _inputs(tmp_path)
     with pytest.raises(P13ReasonReceiptError, match="separate"):
         build_p13_evolution_reason_receipt(cohort, labels, output=labels)
+
+
+def test_reason_binder_replays_optional_case_evidence_refs(tmp_path):
+    cohort, labels = _inputs(tmp_path)
+    payload = json.loads(labels.read_text())
+    refs = {}
+    for case_id in ("case-0", "case-1"):
+        evidence = tmp_path / f"{case_id}-event.json"
+        evidence.write_text(json.dumps({"case_id": case_id,
+                                        "event": "independent-review"}))
+        refs[case_id] = [{
+            "id": f"event-{case_id}",
+            "path": evidence.name,
+            "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
+        }]
+    payload["case_evidence_refs"] = refs
+    labels.write_text(json.dumps(payload))
+    report = build_p13_evolution_reason_receipt(
+        cohort, labels, output=tmp_path / "receipt.json")
+    replay = P13EvolutionReasonReceipt.from_dict(report)
+    assert set(replay.case_evidence_refs) == {"case-0", "case-1"}
+    assert report["case_evidence_refs"]["case-0"][0]["id"] == "event-case-0"
+
+    tampered = dict(report)
+    tampered["case_evidence_refs"] = {"case-0": refs["case-0"]}
+    with pytest.raises(P12ShadowTriggerError, match="case_evidence_refs"):
+        P13EvolutionReasonReceipt.from_dict(tampered)

@@ -174,6 +174,24 @@ def _evidence_refs(
     return tuple(result)
 
 
+def _case_evidence_refs(
+        payload: Mapping, reason_path: Path, case_ids: set[str],
+        *, forbidden_paths: tuple[Path, ...] = ()) -> dict[str, tuple[dict, ...]] | None:
+    """Resolve optional immutable evidence refs for each labelled case."""
+    raw = payload.get("case_evidence_refs")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping) or set(raw) != case_ids:
+        raise P13ShadowTriggerReportError(
+            "evolution reason case_evidence_refs must cover exactly all cases")
+    return {
+        case_id: _evidence_refs(
+            {"evidence_refs": raw[case_id]}, reason_path,
+            forbidden_paths=forbidden_paths)
+        for case_id in sorted(case_ids)
+    }
+
+
 def _reasons(payload: Mapping, case_ids: set[str], *, campaign_id: str,
              cohort_digest: str, reason_path: Path,
              forbidden_paths: tuple[Path, ...] = ()) -> tuple[dict[str, tuple[str, ...]], dict]:
@@ -194,17 +212,24 @@ def _reasons(payload: Mapping, case_ids: set[str], *, campaign_id: str,
         raise P13ShadowTriggerReportError(
             "evolution reasons must cover exactly all cohort cases")
     refs = _evidence_refs(payload, reason_path, forbidden_paths=forbidden_paths)
+    case_refs = _case_evidence_refs(
+        payload, reason_path, case_ids, forbidden_paths=forbidden_paths)
     normalized = P13EvolutionReasonReceipt(
         campaign_id=campaign_id, cohort_receipt_digest=cohort_digest,
         label_source=supplied.label_source, evidence_refs=refs,
-        evolution_reasons=supplied.evolution_reasons).to_dict()
+        evolution_reasons=supplied.evolution_reasons,
+        case_evidence_refs=case_refs).to_dict()
     bound = P13EvolutionReasonReceipt.from_dict(normalized)
     return dict(bound.evolution_reasons), {
                     "path": str(reason_path), "sha256": _sha256(reason_path),
                     "receipt_id": bound.receipt_id,
                     "receipt_digest": bound.receipt_digest,
                     "label_source": bound.label_source,
-                    "evidence_refs": list(refs)}
+                    "evidence_refs": list(refs),
+                    **({"case_evidence_refs": {
+                        case_id: list(case_refs[case_id])
+                        for case_id in sorted(case_refs)
+                    }} if case_refs is not None else {})}
 
 
 def build_p13_shadow_trigger_report(

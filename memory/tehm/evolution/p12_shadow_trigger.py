@@ -93,6 +93,30 @@ def _reason_map(value: object) -> dict[str, tuple[str, ...]]:
     return dict(sorted(result.items()))
 
 
+def _case_reason_evidence_refs(
+        value: object, case_ids: Sequence[str],
+        *, error_prefix: str = "P13 evolution reason") -> dict[str, tuple[dict[str, str], ...]]:
+    """Normalize optional evidence refs bound to each individual case.
+
+    Global evidence refs remain supported for legacy receipts, but a new
+    receipt may additionally provide this map to prove which immutable event
+    supports each case's reason.  The map is deliberately exact: missing or
+    extra case IDs would make provenance ambiguous at replay time.
+    """
+    if not isinstance(value, Mapping):
+        raise P12ShadowTriggerError(
+            f"{error_prefix} case_evidence_refs must be an object")
+    expected = set(case_ids)
+    if set(value) != expected:
+        raise P12ShadowTriggerError(
+            f"{error_prefix} case_evidence_refs must cover exactly all cases")
+    result: dict[str, tuple[dict[str, str], ...]] = {}
+    for case_id in sorted(expected):
+        raw = value[case_id]
+        result[case_id] = _reason_evidence_refs(raw)
+    return result
+
+
 @dataclass(frozen=True)
 class P13EvolutionReasonReceipt:
     """Content-addressed, externally sourced P13 evolution signals.
@@ -107,6 +131,7 @@ class P13EvolutionReasonReceipt:
     label_source: str
     evidence_refs: tuple[dict[str, str], ...]
     evolution_reasons: dict[str, tuple[str, ...]]
+    case_evidence_refs: dict[str, tuple[dict[str, str], ...]] | None = None
     evaluation_only: bool = True
     canonical_memory_mutation: str = "none"
     version: str = P13_EVOLUTION_REASON_RECEIPT_VERSION
@@ -126,10 +151,16 @@ class P13EvolutionReasonReceipt:
             raise P12ShadowTriggerError(
                 "P13 evolution reason receipt version is invalid")
         object.__setattr__(self, "evidence_refs", _reason_evidence_refs(self.evidence_refs))
-        object.__setattr__(self, "evolution_reasons", _reason_map(self.evolution_reasons))
+        reasons = _reason_map(self.evolution_reasons)
+        object.__setattr__(self, "evolution_reasons", reasons)
+        if self.case_evidence_refs is not None:
+            object.__setattr__(
+                self, "case_evidence_refs",
+                _case_reason_evidence_refs(
+                    self.case_evidence_refs, tuple(reasons)))
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "version": self.version,
             "campaign_id": self.campaign_id,
             "cohort_receipt_digest": self.cohort_receipt_digest,
@@ -142,6 +173,12 @@ class P13EvolutionReasonReceipt:
             "evaluation_only": self.evaluation_only,
             "canonical_memory_mutation": self.canonical_memory_mutation,
         }
+        if self.case_evidence_refs is not None:
+            payload["case_evidence_refs"] = {
+                case_id: [dict(item) for item in refs]
+                for case_id, refs in self.case_evidence_refs.items()
+            }
+        return payload
 
     @property
     def receipt_digest(self) -> str:
@@ -164,12 +201,23 @@ class P13EvolutionReasonReceipt:
         if not required <= set(payload):
             raise P12ShadowTriggerError(
                 "P13 evolution reason receipt is missing fields")
+        raw_case_refs = payload.get("case_evidence_refs")
+        case_refs = None
+        if raw_case_refs is not None:
+            if not isinstance(raw_case_refs, Mapping):
+                raise P12ShadowTriggerError(
+                    "P13 evolution reason case_evidence_refs must be an object")
+            case_refs = {
+                case_id: tuple(refs)
+                for case_id, refs in raw_case_refs.items()
+            }
         receipt = cls(
             campaign_id=payload["campaign_id"],
             cohort_receipt_digest=payload["cohort_receipt_digest"],
             label_source=payload["label_source"],
             evidence_refs=tuple(payload["evidence_refs"]),
             evolution_reasons=dict(payload["evolution_reasons"]),
+            case_evidence_refs=case_refs,
             evaluation_only=payload["evaluation_only"],
             canonical_memory_mutation=payload["canonical_memory_mutation"],
             version=payload["version"],
