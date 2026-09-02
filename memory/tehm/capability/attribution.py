@@ -15,7 +15,9 @@ from tehm.ids import stable_dumps
 
 from .delta import (
     AssetDeltaReceipt, KnowledgeDeltaReceipt, MemoryDeltaReceipt,
+    MEMORY_DELTA_VERSION,
     evaluate_asset_delta, evaluate_knowledge_delta, evaluate_memory_delta,
+    memory_delta_from_shadow_update,
 )
 from .lineage import CandidateLineageReceipt
 from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
@@ -44,6 +46,29 @@ class CapabilityAttributionReceipt:
 
 
 EXPANDED_ATTRIBUTION_VERSION = "capability-expanded-attribution-v1"
+
+
+def _decode_shadow_update_receipt(value: object):
+    """Decode one content-addressed P13 receipt for C1 attribution.
+
+    A mapping is accepted only through the receipt's own replay constructor;
+    callers cannot turn an arbitrary dictionary into a C1 witness by merely
+    copying its fields.  The optional ``receipt_digest`` is required whenever
+    a mapping crosses this seam so the persisted attribution remains bound to
+    the exact P13 receipt.
+    """
+    from tehm.evolution import AppliedShadowUpdateReceipt
+
+    if isinstance(value, Mapping):
+        supplied = value.get("receipt_digest")
+        receipt = AppliedShadowUpdateReceipt.from_dict(value)
+        if supplied != receipt.receipt_digest:
+            raise ValueError("shadow update receipt digest is missing or mismatched")
+    elif isinstance(value, AppliedShadowUpdateReceipt):
+        receipt = value
+    else:
+        raise TypeError("shadow update receipt must be AppliedShadowUpdateReceipt")
+    return receipt, {**receipt.to_dict(), "receipt_digest": receipt.receipt_digest}
 
 
 def _receipt_mapping(value: object, field_name: str) -> dict | None:
@@ -279,6 +304,7 @@ def evaluate_capability_attribution(
     heldout: dict,
     ablation: dict,
     memory_delta: Mapping | None = None,
+    shadow_update_receipt=None,
     strict_memory_delta: bool = False,
     memory_snapshot_binding: Mapping | None = None,
     behavior_binding: Mapping | None = None,
@@ -301,7 +327,53 @@ def evaluate_capability_attribution(
     baseline_memory_digest = baseline.get("memory_digest")
     candidate_memory_digest = candidate.get("memory_digest")
     delta_receipt: MemoryDeltaReceipt | None = None
-    if memory_delta is not None:
+    shadow_receipt_payload = None
+    shadow_receipt_reasons: list[str] = []
+    derived_shadow_delta: MemoryDeltaReceipt | None = None
+    if shadow_update_receipt is not None:
+        try:
+            decoded_shadow, shadow_receipt_payload = _decode_shadow_update_receipt(
+                shadow_update_receipt)
+            derived_shadow_delta = memory_delta_from_shadow_update(decoded_shadow)
+        except (TypeError, ValueError, RuntimeError) as exc:
+            shadow_receipt_reasons.append(f"shadow_update_receipt_invalid:{exc}")
+    if derived_shadow_delta is not None:
+        if derived_shadow_delta.baseline_memory_digest != baseline_memory_digest:
+            shadow_receipt_reasons.append("shadow_update_baseline_digest_mismatch")
+        if derived_shadow_delta.candidate_memory_digest != candidate_memory_digest:
+            shadow_receipt_reasons.append("shadow_update_candidate_digest_mismatch")
+        derived_manifest = {
+            "version": MEMORY_DELTA_VERSION,
+            "baseline_memory_digest": derived_shadow_delta.baseline_memory_digest,
+            "candidate_memory_digest": derived_shadow_delta.candidate_memory_digest,
+            **derived_shadow_delta.delta,
+        }
+        derived_checked = evaluate_memory_delta(
+            derived_shadow_delta.baseline_memory_digest,
+            derived_shadow_delta.candidate_memory_digest,
+            derived_manifest)
+        if derived_checked.to_dict() != derived_shadow_delta.to_dict():
+            shadow_receipt_reasons.append("shadow_update_memory_delta_replay_mismatch")
+        if memory_delta is not None:
+            supplied_checked = evaluate_memory_delta(
+                baseline_memory_digest, candidate_memory_digest, memory_delta)
+            if supplied_checked.to_dict() != derived_shadow_delta.to_dict():
+                shadow_receipt_reasons.append("shadow_update_memory_delta_mismatch")
+            delta_receipt = supplied_checked
+        else:
+            delta_receipt = derived_shadow_delta
+        memory_delta_verified = (
+            not shadow_receipt_reasons and delta_receipt.eligible is True and
+            delta_receipt.baseline_memory_digest == baseline_memory_digest and
+            delta_receipt.candidate_memory_digest == candidate_memory_digest)
+    elif shadow_update_receipt is not None:
+        # An explicitly supplied but malformed shadow receipt must never fall
+        # back to a caller-provided digest comparison.
+        memory_delta_verified = False
+        if memory_delta is not None:
+            delta_receipt = evaluate_memory_delta(
+                baseline_memory_digest, candidate_memory_digest, memory_delta)
+    elif memory_delta is not None:
         delta_receipt = evaluate_memory_delta(
             baseline_memory_digest, candidate_memory_digest, memory_delta)
         memory_delta_verified = delta_receipt.eligible
@@ -467,6 +539,12 @@ def evaluate_capability_attribution(
                   delta_receipt.to_dict() if delta_receipt is not None else
                   ({"eligible": False, "reasons": ["memory_delta_required"]}
                    if strict_memory_delta else None)),
+              **({"shadow_update_receipt": shadow_receipt_payload}
+                 if shadow_receipt_payload is not None else {}),
+              **({"shadow_update_receipt_binding": {
+                      "eligible": False,
+                      "reasons": sorted(set(shadow_receipt_reasons)),
+                  }} if shadow_receipt_reasons else {}),
               **({"memory_snapshot_binding": snapshot_binding}
                  if snapshot_binding is not None else {}),
               **({"runtime_behavior_binding": behavior_witness}
@@ -498,6 +576,7 @@ def evaluate_capability_attribution_from_db(
     heldout: dict,
     ablation: dict,
     memory_delta: Mapping | None = None,
+    shadow_update_receipt=None,
     strict_memory_delta: bool = False,
     knowledge_delta=None,
     asset_delta=None,
@@ -699,7 +778,8 @@ def evaluate_capability_attribution_from_db(
                    "target_gain": target_gain,
                    "no_regression": no_regression},
         runtime_receipt=runtime_receipt, heldout=heldout, ablation=ablation,
-        memory_delta=memory_delta, strict_memory_delta=strict_memory_delta,
+        memory_delta=memory_delta, shadow_update_receipt=shadow_update_receipt,
+        strict_memory_delta=strict_memory_delta,
         memory_snapshot_binding=memory_snapshot_binding,
         behavior_binding=behavior_binding,
         ablation_binding=ablation_binding,

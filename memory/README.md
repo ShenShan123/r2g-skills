@@ -3141,6 +3141,11 @@ production、raw-evidence 或 staging 隔离不变量漂移都会 fail-closed。
 evaluation/attribution 证据，不写 canonical memory、不改变 lifecycle/authority，也不允许
 production runtime 导入。
 
+Capability attribution 现在可直接接收 `shadow_update_receipt`：C1 会由该 typed receipt
+派生，若同时提供手写 `memory_delta` 则必须与派生结果逐字段一致。authority receipt 会保存
+这份 shadow receipt，并在后续 replay 中重新解析 replay/receipt digest、隔离不变量和对象
+清单；删除或篡改任一绑定都会使 C1 失效，而不会退回到两个 opaque memory digest 的比较。
+
 ### 2026-09-03 P15 reason-aware calibration seam
 
 新增 `tehm.evaluation.no_skill_calibration`，把 P15 的 calibration 输入冻结为显式的

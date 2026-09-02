@@ -20,7 +20,7 @@ from tehm.lifecycle.promotion_gates import (
     CAPABILITY_GATES, evaluate_capability_promotion_gates,
 )
 
-from .delta import evaluate_memory_delta
+from .delta import evaluate_memory_delta, memory_delta_from_shadow_update
 from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
 from .registry import validate_capability_row
 
@@ -793,7 +793,10 @@ def _memory_delta_binding(
     if not isinstance(detail, Mapping):
         return None, []
     raw = detail.get("memory_delta")
+    shadow_raw = detail.get("shadow_update_receipt")
     if raw is None:
+        if shadow_raw is not None:
+            return None, ["C1:memory_delta_required_for_shadow_update"]
         return None, []
     if not isinstance(raw, Mapping):
         return None, ["C1:memory_delta_malformed"]
@@ -822,6 +825,28 @@ def _memory_delta_binding(
         reasons.append("C1:memory_delta_changed_ids_mismatch")
     if raw.get("delta") != checked.delta:
         reasons.append("C1:memory_delta_normalisation_mismatch")
+    if shadow_raw is not None:
+        if not isinstance(shadow_raw, Mapping):
+            reasons.append("C1:shadow_update_receipt_malformed")
+        else:
+            try:
+                from tehm.evolution import AppliedShadowUpdateReceipt
+
+                supplied_shadow_digest = shadow_raw.get("receipt_digest")
+                shadow_receipt = AppliedShadowUpdateReceipt.from_dict(shadow_raw)
+                if supplied_shadow_digest != shadow_receipt.receipt_digest:
+                    raise ValueError(
+                        "shadow update receipt digest is missing or mismatched")
+                shadow_delta = memory_delta_from_shadow_update(shadow_receipt)
+            except (TypeError, ValueError, RuntimeError) as exc:
+                reasons.append(f"C1:shadow_update_receipt_invalid:{exc}")
+            else:
+                if shadow_delta.baseline_memory_digest != baseline_digest:
+                    reasons.append("C1:shadow_update_baseline_digest_mismatch")
+                if shadow_delta.candidate_memory_digest != candidate_digest:
+                    reasons.append("C1:shadow_update_candidate_digest_mismatch")
+                if shadow_delta.to_dict() != raw:
+                    reasons.append("C1:shadow_update_memory_delta_mismatch")
     return dict(raw), reasons
 
 
@@ -901,6 +926,12 @@ def record_capability_authority(
     }
     if memory_delta is not None:
         payload["memory_delta"] = memory_delta
+    shadow_update_receipt = (attribution.get("detail") or {}).get(
+        "shadow_update_receipt")
+    if isinstance(shadow_update_receipt, Mapping):
+        # Persist the exact P13 receipt alongside C1 so authority replay can
+        # re-derive the delta rather than trusting a copied object inventory.
+        payload["shadow_update_receipt"] = dict(shadow_update_receipt)
     memory_snapshot_binding = (attribution.get("detail") or {}).get(
         "memory_snapshot_binding")
     if (isinstance(memory_snapshot_binding, Mapping) and
@@ -1047,8 +1078,12 @@ def verify_capability_authority(
                         "memory_digest": payload_memory_delta.get(
                             "candidate_memory_digest")},
                     "memory_delta": payload_memory_delta,
+                    "shadow_update_receipt": payload.get(
+                        "shadow_update_receipt"),
                 }})
             reasons.extend(memory_delta_reasons)
+    elif payload.get("shadow_update_receipt") is not None:
+        reasons.append("C1:memory_delta_required_for_shadow_update")
     payload_memory_snapshot_binding = payload.get("memory_snapshot_binding")
     if payload_memory_snapshot_binding is not None:
         if (not isinstance(payload_memory_snapshot_binding, Mapping) or
