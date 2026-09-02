@@ -192,7 +192,16 @@ def propose_capability_gap_expansion(
         checked_derivation = derive_capability_gap_reason(
             checked, campaign_id=admission.campaign_id, case_id=admission.case_id,
             failure_transition_ids=failure_transition_ids, routing=routing)
-    except (EvolutionReasonDerivationError, TypeError, ValueError) as exc:
+    except EvolutionReasonDerivationError as exc:
+        # Preserve the typed derivation boundary in the proposal error.  In
+        # particular, a caller cannot supply failure IDs outside the gap and
+        # receive an indistinguishable generic parse error.
+        if "outside the gap receipt" in str(exc):
+            raise CapabilityGapProposalError(
+                "capability gap proposal failure evidence does not match gap receipt") from exc
+        raise CapabilityGapProposalError(
+            "capability gap proposal input evidence is invalid") from exc
+    except (TypeError, ValueError) as exc:
         raise CapabilityGapProposalError(
             "capability gap proposal input evidence is invalid") from exc
     if checked_derivation is None or checked_derivation.receipt_digest != derivation.receipt_digest:

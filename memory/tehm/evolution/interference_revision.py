@@ -251,7 +251,8 @@ def propose_memory_interference_specialization(
     if type(min_cases) is not int or min_cases < 2:
         raise MemoryInterferenceRevisionError("interference min_cases must be at least two")
     if len(observations) < min_cases:
-        raise MemoryInterferenceRevisionError("interference requires repeated independent cases")
+        raise MemoryInterferenceRevisionError(
+            "interference requires at least two repeated independent cases")
     parent = _text(knowledge_object_id, "knowledge_object_id")
     transitions = _refs(transition_ids, "transition_ids")
     if len(transitions) != len(observations):
