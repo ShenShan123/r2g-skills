@@ -3409,3 +3409,32 @@ Evolution Challenge 入口。脚本只复制 `rtl/` 与 `tb/`，不读取 fixtur
 
 本地 governing design 文档目录 `memory/docs/` 由根目录 `.gitignore` 排除，既不在
 release tree 中，也不应被 `git add`；发布时只提交代码、README、测试和可复现脚本。
+
+### 2026-09-02 Revision3 first real StateShift Evolution Challenge
+
+新增 `scripts/run_r3_state_shift_challenge.py`，把 Revision3 的第一条真实
+`STATE_SHIFT` teaching signal 链路固化为可重放命令：脚本先用两个 RTL fixture 的
+真实 Icarus/vvp 结果捕获 training transitions，再构造 training-only SupportEnvelope，
+将 `sky130` 支持域与 `asap7` 当前 flow 形成 typed `flow_shift`，并通过两个
+source-disjoint lineage 执行四臂 P12。路由是显式
+`NO_SKILL/STATE_SHIFT`，所以 `CAUSAL_NO_SKILL` 走 no-memory fallback；四臂均由
+真实 oracle 完成，`ALWAYS_MEMORY` 与 `APPLICABILITY_GATED` 的结构化候选均为
+PASS，随后生成 typed StateShift reason、P13 trigger/admission、重复 shift 的
+`REVISE/SUPPORT_ENVELOPE_EXPANSION` proposal，并在外部 SQLite staging 中执行一次
+Knowledge v2 revision。
+
+同一命令还将 target replay、non-target regression、独立 held-out Icarus audit 和
+rollback pointer 绑定为文件摘要，消费四项 anti-forgetting gate，随后由
+`memory_delta_from_shadow_update()` 生成 C1 receipt。一次实跑结果为 2 cases / 2
+lineages，两个 case 都是 `STATE_SHIFT`、trigger/admission 均 2/2、P13 operation
+为 `REVISE`；canonical row counts 未变化、`canonical_memory_mutation=none`、
+`production_authority_changed=false`、`staging_discarded=true`。脚本还在独立的
+evaluation projection 中重放 child claim，持久化并 replay `StateResolution`，生成
+新的 `CONSIDER` route、结构化 candidate、真实 Icarus PASS execution 与
+`CandidateLineageReceipt`，因此当前 `L1_SELECTION_OR_L2_STRATEGY_EVOLUTION` 的
+P14 C1–C5 五项结构 gate 已全部闭合。由于 StateShift cohort 的起点本来就是已修复
+RTL，传统 capability attribution 的 `target_gain` 不被伪造（C5 capability、C6–C8
+仍为未宣称）；这不是 production promotion、能力增益或 ORFS 经验积累。后续按
+Revision3 继续真实 held-out/ΔMemory ablation 与 P15 reason-stratified calibration。
+脚本只向 `--artifacts` 指定的仓库外目录写入证据，绝不复制 fixture `manifest.json`，
+也不提交 `memory/docs/`。
