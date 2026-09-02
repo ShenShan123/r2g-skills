@@ -7,7 +7,7 @@ import pytest
 
 from contracts import MemoryRoutingDecision
 from tehm.evaluation.candidate_executor import (
-    CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
+    P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
 from tehm.evolution import (
     P12ShadowTriggerError, P12ShadowUpdateTriggerReceipt,
@@ -36,6 +36,40 @@ def _routing(case_id: str) -> MemoryRoutingDecision:
         selected_asset_ids=(), applicability={"status": "APPLICABLE"},
         causal_support={"status": "SUPPORTED"}, risk={}, abstain_reasons=(),
         no_memory_budget=2, memory_budget=1)
+
+
+def _state_shift_routing(case_id: str) -> MemoryRoutingDecision:
+    """A deliberate no-memory route with a typed transfer-boundary witness."""
+    return MemoryRoutingDecision(
+        decision="NO_SKILL", resolved_state_id=f"state:{case_id}",
+        selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
+        applicability={"status": "APPLICABLE", "state_shift_status": "SHIFTED"},
+        causal_support={"status": "SUPPORTED"},
+        risk={"state_shift_status": "SHIFTED"},
+        abstain_reasons=("state_shift",), no_memory_budget=3, memory_budget=0,
+        no_skill_reason="STATE_SHIFT",
+        state_shift_receipt_id=f"state-shift:{case_id}")
+
+
+def _state_shift_cohort() -> tuple[_Cohort, dict[str, MemoryRoutingDecision]]:
+    cases = {}
+    routes = {}
+    for index, lineage in enumerate(("lineage-a", "lineage-b")):
+        case_id = f"state-shift-case-{index}"
+        baseline = _execution(case_id, f"no-memory-{index}", "no_memory", "PASS")
+        memory = _execution(case_id, f"memory-{index}", "structured_memory", "FAIL")
+        route = _state_shift_routing(case_id)
+        routes[case_id] = route
+        cases[case_id] = PairedCandidateExecutionReceipt(
+            case_id=case_id,
+            arm_receipts={arm: baseline if arm == "NO_MEMORY" else memory
+                          for arm in P12_ARMS},
+            candidate_budget=3, case_digest=f"sha256:state-case-{index}",
+            toolchain_digest="sha256:tool", oracle_digest="sha256:oracle",
+            no_skill_reason="STATE_SHIFT",
+            state_shift_receipt_id=route.state_shift_receipt_id,
+            lineage_id=lineage, routing_receipt_id=route.routing_receipt_id)
+    return _Cohort("campaign-state-shift", cases), routes
 
 
 def _execution(case_id: str, candidate_id: str, source: str, outcome: str,
@@ -148,6 +182,52 @@ def test_complete_pass_without_evolution_signal_is_retain_only():
         case_learner_eligibility={"case-0": True, "case-1": True})
     assert all(not item.triggered for item in triggers)
     assert all(item.reason == "no_evolution_signal" for item in triggers)
+
+
+def test_state_shift_no_skill_route_can_trigger_p13_observation():
+    """8A.9 must admit only the typed STATE_SHIFT refusal exception."""
+    cohort, routes = _state_shift_cohort()
+    triggers = build_p12_shadow_update_triggers(
+        cohort, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        routing_decisions=routes,
+        case_learner_eligibility={case_id: True for case_id in cohort.case_receipts},
+        evolution_reasons={case_id: ("STATE_SHIFT",)
+                           for case_id in cohort.case_receipts})
+    assert len(triggers) == 2
+    assert all(item.triggered for item in triggers)
+    assert all(item.routing_decision == "NO_SKILL" for item in triggers)
+    assert all(item.no_skill_reason == "STATE_SHIFT" for item in triggers)
+    assert all(item.state_shift_receipt_id for item in triggers)
+
+
+def test_no_skill_risk_route_remains_non_triggering():
+    """RISK has no state-shift observation and cannot enter this P13 seam."""
+    cohort, _routes = _state_shift_cohort()
+    risk_routes = {}
+    risk_cases = {}
+    for case_id, bundle in cohort.case_receipts.items():
+        route = MemoryRoutingDecision(
+            decision="NO_SKILL", resolved_state_id=f"state:{case_id}",
+            selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
+            applicability={"status": "APPLICABLE"},
+            causal_support={"status": "SUPPORTED"},
+            risk={"risk_status": "HIGH"}, abstain_reasons=(),
+            no_memory_budget=3, memory_budget=0, no_skill_reason="RISK",
+            risk_receipt_id=f"risk:{case_id}")
+        risk_routes[case_id] = route
+        risk_cases[case_id] = replace(
+            bundle, no_skill_reason="RISK", state_shift_receipt_id=None,
+            risk_receipt_id=route.risk_receipt_id,
+            routing_receipt_id=route.routing_receipt_id)
+    risk_cohort = replace(cohort, case_receipts=risk_cases)
+    triggers = build_p12_shadow_update_triggers(
+        risk_cohort, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        routing_decisions=risk_routes,
+        case_learner_eligibility={case_id: True for case_id in risk_cases},
+        evolution_reasons={case_id: ("MEMORY_INTERFERENCE",)
+                           for case_id in risk_cases})
+    assert all(not item.triggered for item in triggers)
+    assert all(item.reason == "routing_not_memory_eligible" for item in triggers)
 
 
 def test_evolution_reasons_are_explicit_and_typed():

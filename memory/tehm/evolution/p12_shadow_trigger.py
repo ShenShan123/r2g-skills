@@ -331,6 +331,8 @@ def _evolution_reason_map(
 def _reason(*, learner_eligible: bool, routing_id: str | None,
             routing_decision: str | None, baseline_complete: bool,
             memory_complete: bool,
+            no_skill_reason: str | None,
+            state_shift_receipt_id: str | None,
             evolution_reasons: Sequence[str]) -> tuple[bool, str]:
     if not learner_eligible:
         return False, "not_learner_eligible"
@@ -338,7 +340,17 @@ def _reason(*, learner_eligible: bool, routing_id: str | None,
         return False, "missing_routing_receipt"
     if routing_decision is None:
         return False, "missing_routing_decision"
-    if routing_decision not in {"APPLY", "CONSIDER"}:
+    route_is_memory_eligible = routing_decision in {"APPLY", "CONSIDER"}
+    # Revision2 8A.9 has one deliberate no-memory exception: a typed,
+    # non-transferable STATE_SHIFT refusal has already established the
+    # transfer-boundary observation and therefore needs the paired historical
+    # memory arm for the counterfactual comparison.  NO_MATCH/RISK and all
+    # unresolved decisions remain non-triggering here.
+    route_is_state_shift_observation = (
+        routing_decision == "NO_SKILL" and
+        no_skill_reason == "STATE_SHIFT" and
+        state_shift_receipt_id is not None)
+    if not (route_is_memory_eligible or route_is_state_shift_observation):
         return False, "routing_not_memory_eligible"
     if not baseline_complete:
         return False, "baseline_oracle_incomplete"
@@ -432,9 +444,14 @@ class P12ShadowUpdateTriggerReceipt:
         if self.triggered != expected:
             raise P12ShadowTriggerError(
                 "P12 shadow trigger triggered flag disagrees with reason")
+        route_is_memory_eligible = self.routing_decision in {"APPLY", "CONSIDER"}
+        route_is_state_shift_observation = (
+            self.routing_decision == "NO_SKILL" and
+            self.no_skill_reason == "STATE_SHIFT" and
+            self.state_shift_receipt_id is not None)
         if self.triggered and (
                 not self.learner_eligible or self.routing_receipt_id is None or
-                self.routing_decision not in {"APPLY", "CONSIDER"} or
+                not (route_is_memory_eligible or route_is_state_shift_observation) or
                 self.routing_decision_digest is None or
                 not self.baseline_oracle_complete or not self.memory_oracle_complete):
             raise P12ShadowTriggerError(
@@ -608,6 +625,8 @@ def build_p12_shadow_update_triggers(
             routing_id=routing_id, routing_decision=routing_decision,
             baseline_complete=baseline_complete,
             memory_complete=memory_complete,
+            no_skill_reason=bundle.no_skill_reason,
+            state_shift_receipt_id=bundle.state_shift_receipt_id,
             evolution_reasons=case_reasons[case_id])
         results.append(P12ShadowUpdateTriggerReceipt(
             cohort_receipt_digest=cohort_digest, campaign_id=campaign_id,

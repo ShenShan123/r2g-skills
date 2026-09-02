@@ -3067,7 +3067,14 @@ source-disjoint 与 source-restore、显式 distinct lineage、routing receipt�
 `oracle_available=true`、完整 compile/functional/signoff verdict。缺失任一证据只生成
 不可触发 receipt，结构性篡改直接拒绝。routing receipt 还必须通过调用方提供的
 `MemoryRoutingDecision` 重新计算 `routing_receipt_id`/digest，并且只能由 `APPLY` 或
-`CONSIDER` 路由触发；该层不从 outcome 推断 capability gain、failure cause 或 promotion。
+`CONSIDER` 路由触发（state-shift 观察的唯一例外见下文）；该层不从 outcome 推断
+capability gain、failure cause 或 promotion。
+
+Revision2 的 8A.9 state-shift teaching path 是唯一的 no-memory 例外：带有
+`no_skill_reason=STATE_SHIFT`、`state_shift_receipt_id` 和完整 paired historical-memory
+oracle 的 `NO_SKILL` route 也可以生成 P13 trigger。`NO_MATCH`、`RISK`、`ABSTAIN` 和
+`INAPPLICABLE` 仍不会触发 mutation；该例外只把已路由的 transfer-boundary observation
+送入 shadow lane，不改变 no-memory 决策，也不授予 canonical/production authority。
 
 `apply_localized_update_shadow()` 现在可消费显式 `p12_shadow_trigger` evidence，但
 要求 trigger digest 同时出现在 `LocalizedUpdatePlan.evidence_refs`，并把该 digest
