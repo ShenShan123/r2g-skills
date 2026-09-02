@@ -3395,3 +3395,17 @@ deterministic detector：`derive_state_shift_reason()` 要求 non-transferable
 `MEMORY_INTERFERENCE` 强制可重放 paired detector，其他 reason 在 v0.1 中保持拒绝而
 不会放宽 mutation authority。上述所有路径仍是 shadow/evaluation-only，未改变
 canonical memory 或 production runtime。
+
+本 Revision3 还提供 `scripts/run_r3_memory_interference_challenge.py` 作为真实 RTL
+Evolution Challenge 入口。脚本只复制 `rtl/` 与 `tb/`，不读取 fixture
+`manifest.json` 中的 gold/fix 字段；它用 Icarus/vvp 对两个 source-disjoint lineage
+执行固定 baseline 与 harmful memory counterfactual，并把 paired、typed
+`MEMORY_INTERFERENCE`、P13 trigger 和 admission receipts 输出到仓库外的
+`--artifacts` 目录。当前一次可重放结果为 2 cases / 2 lineages：`NO_MEMORY=PASS`
+为 2/2、`ALWAYS_MEMORY=FAIL` 为 2/2、typed trigger=2/2、admission=2/2；该结果只
+证明 detector/admission 链路能捕捉负迁移，不是 ORFS 全流程、能力增益或 promotion
+证据。challenge 输出标记 `evaluation_only=true`、`canonical_memory_mutation=none`，
+不写 canonical memory、authority 或 production runtime。
+
+本地 governing design 文档目录 `memory/docs/` 由根目录 `.gitignore` 排除，既不在
+release tree 中，也不应被 `git add`；发布时只提交代码、README、测试和可复现脚本。
