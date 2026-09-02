@@ -42,6 +42,12 @@ from .admission import (
     EVOLUTION_ADMISSION_VERSION, EvolutionAdmissionError,
     EvolutionAdmissionReceipt, admit_evolution_reason,
 )
+from .interference_revision import (
+    INTERFERENCE_REVISION_VERSION, MemoryInterferenceRevisionError,
+    MemoryInterferenceEvolutionProposal,
+    propose_memory_interference_specialization,
+    interference_proposal_to_localized_plan,
+)
 from .local_revision import (
     UPDATE_OPERATIONS, LocalizedUpdatePlan, LocalizedUpdatePlanReceipt,
     plan_localized_update,
@@ -111,6 +117,10 @@ __all__ = [
     "derive_memory_interference_reason", "p13_reason_receipt_from_derivations",
     "EVOLUTION_ADMISSION_VERSION", "EvolutionAdmissionError",
     "EvolutionAdmissionReceipt", "admit_evolution_reason",
+    "INTERFERENCE_REVISION_VERSION", "MemoryInterferenceRevisionError",
+    "MemoryInterferenceEvolutionProposal",
+    "propose_memory_interference_specialization",
+    "interference_proposal_to_localized_plan",
     "STATE_SHIFT_EVOLUTION_VERSION", "STATE_SHIFT_EVOLUTION_OPERATIONS",
     "STATE_SHIFT_EVOLUTION_REASONS", "StateShiftEvolutionError",
     "StateShiftEvolutionProposal", "plan_repeated_state_shift",

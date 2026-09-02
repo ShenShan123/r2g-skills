@@ -3407,6 +3407,24 @@ Evolution Challenge 入口。脚本只复制 `rtl/` 与 `tb/`，不读取 fixtur
 证据。challenge 输出标记 `evaluation_only=true`、`canonical_memory_mutation=none`，
 不写 canonical memory、authority 或 production runtime。
 
+新增 `tehm.evolution.interference_revision` 与
+`scripts/run_r3_memory_interference_shadow.py`，完成 Revision3 R3-8 的第一条真实
+负迁移吸收链。该 proposal seam 只接受至少两个独立 lineage 的完整 paired
+`NO_MEMORY=PASS` / forced-memory harmful receipts，并在重放
+`derive_memory_interference_reason()` 后生成 `SPECIALIZE` / negative-applicability
+计划；detector 不读取 replacement Knowledge、plan 或 shadow after-state。脚本在外部
+SQLite 中注册 shadow parent，加入 `asap7` + `unguarded_completion_transfer` 负适用性
+上下文，消费真实 Icarus/vvp 的 P12 trigger、admission 和四项 anti-forgetting witness，
+再将 specialized child 与 `SPECIALIZES` relation 只写入 disposable staging。
+
+一次实跑结果为 2 cases / 2 lineages：更新前 `ALWAYS_MEMORY=FAIL` 2/2，且
+`APPLICABILITY_GATED` / `CAUSAL_NO_SKILL` 也因旧 route 执行 harmful candidate 而
+`FAIL` 2/2；更新后强制 memory 仍保持 audit counterfactual `FAIL` 2/2，但两个真实
+policy fallback 均为 `PASS` 2/2，负适用性 veto=2/2，safe fallback rate=1.0。
+source DB row/digest 均未变化，`canonical_memory_mutation=none`、
+`production_authority_changed=false`、`staging_discarded=true`；这证明的是
+shadow-only 的“何时不信任 memory”机制，不是 production promotion 或能力增益。
+
 本地 governing design 文档目录 `memory/docs/` 由根目录 `.gitignore` 排除，既不在
 release tree 中，也不应被 `git add`；发布时只提交代码、README、测试和可复现脚本。
 
