@@ -3284,3 +3284,12 @@ anti-forgetting witness 才能尝试 isolated staging；`memory/docs/` 继续不
 另提供 `propose_repeated_state_shift_from_events()`，从同一 campaign 的事件链按
 transition 顺序重放上述提案；它拒绝 learner/audit 混合、缺失 event digest 或 receipt
 ID witness，不能用调用方布尔值升级 audit-only 观测。
+
+新增 `scripts/build_state_shift_evolution_proposal.py` 作为上述边界的可复现命令入口：
+它只接受冻结的 TEHM SQLite 快照和显式 outcome/evidence manifest，先用
+`connect_read_only()` 校验事件链，再输出带 source DB digest、proposal ID/digest 的
+报告；可选地通过 `state_shift_proposal_to_localized_plan()` 输出 P13
+`LocalizedUpdatePlan`。存在 WAL/SHM sidecar、source digest 漂移、缺失 event/receipt
+witness、输入输出碰撞或 gold/repair 字段时均 fail-closed。该命令不会从 PASS/FAIL
+推断 evolution reason，不写 canonical memory、authority 或 production runtime；生成的
+plan 仍必须经过 P12 trigger 与 anti-forgetting gates 才能尝试 isolated staging。
