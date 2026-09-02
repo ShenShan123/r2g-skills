@@ -16,6 +16,7 @@ from tehm.canonical.transition import OUTCOMES
 from contracts import NO_SKILL_REASONS
 from tehm.ids import stable_dumps
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate
+from tehm.state.risk_receipts import RiskReceipt
 
 
 EXECUTOR_VERSION = "candidate-executor-v0.1"
@@ -76,6 +77,18 @@ def _budget(value: int | Mapping) -> tuple[int, dict]:
 
 def _digest(value: object) -> str:
     return "sha256:" + hashlib.sha256(stable_dumps(value).encode()).hexdigest()
+
+
+def _risk_payload(value: object) -> dict | None:
+    """Validate and canonicalise an optional replayable RISK witness."""
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise CandidateExecutorError("paired execution risk_receipt must be an object")
+    try:
+        return RiskReceipt.from_dict(value).to_dict()
+    except (TypeError, ValueError, KeyError) as exc:
+        raise CandidateExecutorError("paired execution risk_receipt is invalid") from exc
 
 
 def _call_oracle(oracle: object, candidate: StructuredRepairCandidate,
@@ -254,6 +267,7 @@ class PairedCandidateExecutionReceipt:
     no_skill_reason: str | None = None
     state_shift_receipt_id: str | None = None
     risk_receipt_id: str | None = None
+    risk_receipt: dict | None = None
     lineage_id: str | None = None
     routing_receipt_id: str | None = None
 
@@ -308,6 +322,12 @@ class PairedCandidateExecutionReceipt:
             raise CandidateExecutorError("paired state shift receipt requires STATE_SHIFT")
         if self.risk_receipt_id is not None and self.no_skill_reason != "RISK":
             raise CandidateExecutorError("paired risk receipt requires RISK")
+        if self.risk_receipt is not None:
+            checked = _risk_payload(self.risk_receipt)
+            if (self.no_skill_reason != "RISK" or
+                    self.risk_receipt_id != checked["receipt_id"]):
+                raise CandidateExecutorError("paired risk_receipt binding is invalid")
+            object.__setattr__(self, "risk_receipt", checked)
 
     @property
     def receipt_digest(self) -> str:
@@ -352,6 +372,8 @@ class PairedCandidateExecutionReceipt:
             "no_skill_reason": self.no_skill_reason,
             "state_shift_receipt_id": self.state_shift_receipt_id,
             "risk_receipt_id": self.risk_receipt_id,
+            **({"risk_receipt": dict(self.risk_receipt)}
+               if self.risk_receipt is not None else {}),
             "lineage_id": self.lineage_id,
             "routing_receipt_id": self.routing_receipt_id,
         }
@@ -376,6 +398,8 @@ class PairedCandidateExecutionReceipt:
             no_skill_reason=payload.get("no_skill_reason"),
             state_shift_receipt_id=payload.get("state_shift_receipt_id"),
             risk_receipt_id=payload.get("risk_receipt_id"),
+            risk_receipt=(dict(payload["risk_receipt"])
+                          if payload.get("risk_receipt") is not None else None),
             lineage_id=payload.get("lineage_id"),
             routing_receipt_id=payload.get("routing_receipt_id"))
         supplied = payload.get("receipt_digest")
@@ -489,6 +513,7 @@ def execute_paired_candidates(
         no_skill_reason: str | None = None,
         state_shift_receipt_id: str | None = None,
         risk_receipt_id: str | None = None,
+        risk_receipt: Mapping | None = None,
         lineage_id: str | None = None,
         routing_receipt_id: str | None = None,
 ) -> PairedCandidateExecutionReceipt:
@@ -518,7 +543,9 @@ def execute_paired_candidates(
         case_digest=_digest(case), toolchain_digest=next(iter(toolchains)),
         oracle_digest=next(iter(oracles)), no_skill_reason=no_skill_reason,
         state_shift_receipt_id=state_shift_receipt_id,
-        risk_receipt_id=risk_receipt_id, lineage_id=lineage_id,
+        risk_receipt_id=risk_receipt_id,
+        risk_receipt=(dict(risk_receipt) if risk_receipt is not None else None),
+        lineage_id=lineage_id,
         routing_receipt_id=routing_receipt_id)
 
 

@@ -3047,8 +3047,10 @@ cohort 不是 source-disjoint multi-lineage evidence。该 gate 已由真实 2-l
 ORFS cohort 重放验证，但 cohort 的 paired delta 为中性且尚未形成独立 NO_SKILL /
 evolution evidence，因此仍不能据此声称能力或 promotion 证据。
 
-P12-F 现在还保留 `routing_receipt_id`，并在 candidate-pool receipt 中贯通
-`no_skill_reason`/state-shift/risk receipt；`tehm.evaluation.paired_metrics` 提供
+P12-F 现在还保留 `routing_receipt_id`，并在 candidate-pool 与 paired receipt 中贯通
+`no_skill_reason`/state-shift/risk receipt；对于 `RISK`，除 ID 外还保留经过
+content-addressed 校验的完整 `risk_receipt` payload，因而下游可以独立重放预期效用证据；
+`tehm.evaluation.paired_metrics` 提供
 统一的 unknown-safe paired 统计。原始 `UNKNOWN` outcome 仍会计入 outcome counts，
 但会从对应 paired harm/repair denominator 排除，并报告 routing receipt coverage，
 避免不完整 oracle 被误算成失败或安全证据。该层仍是 evaluation-only，不改变 canonical

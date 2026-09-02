@@ -24,6 +24,7 @@ from contracts import (
 )
 from tehm.canonical.transition import OUTCOMES, POSITIVE_OUTCOMES, HARMFUL_OUTCOMES
 from tehm.ids import stable_dumps
+from tehm.state.risk_receipts import RiskReceipt
 
 
 CANDIDATE_POOL_VERSION = "candidate-pool-v0.1"
@@ -40,6 +41,18 @@ _ARM_ALIASES = {
 
 class CandidatePoolError(ValueError):
     """A malformed evaluation pool cannot be safely composed."""
+
+
+def _risk_payload(value: object) -> dict | None:
+    """Validate and canonicalise an optional replayable RISK witness."""
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise CandidatePoolError("candidate pool risk_receipt must be an object")
+    try:
+        return RiskReceipt.from_dict(value).to_dict()
+    except (TypeError, ValueError, KeyError) as exc:
+        raise CandidatePoolError("candidate pool risk_receipt is invalid") from exc
 
 
 def _text(value: object, field_name: str) -> str:
@@ -252,6 +265,7 @@ class CandidatePoolReceipt:
     no_skill_reason: str | None = None
     state_shift_receipt_id: str | None = None
     risk_receipt_id: str | None = None
+    risk_receipt: dict | None = None
 
     def __post_init__(self) -> None:
         _text(self.case_id, "case_id")
@@ -278,6 +292,13 @@ class CandidatePoolReceipt:
                 "candidate pool state shift receipt requires STATE_SHIFT")
         if self.risk_receipt_id is not None and self.no_skill_reason != "RISK":
             raise CandidatePoolError("candidate pool risk receipt requires RISK")
+        if self.risk_receipt is not None:
+            checked = _risk_payload(self.risk_receipt)
+            if (self.routing_decision != "NO_SKILL" or
+                    self.no_skill_reason != "RISK" or
+                    self.risk_receipt_id != checked["receipt_id"]):
+                raise CandidatePoolError("candidate pool risk_receipt binding is invalid")
+            object.__setattr__(self, "risk_receipt", checked)
         if type(self.candidate_budget) is not int or self.candidate_budget < 1:
             raise CandidatePoolError("candidate pool candidate_budget must be positive")
         ids = _strings(self.candidate_ids, "candidate_ids")
@@ -343,6 +364,8 @@ class CandidatePoolReceipt:
             "no_skill_reason": self.no_skill_reason,
             "state_shift_receipt_id": self.state_shift_receipt_id,
             "risk_receipt_id": self.risk_receipt_id,
+            **({"risk_receipt": dict(self.risk_receipt)}
+               if self.risk_receipt is not None else {}),
         }
 
     @property
@@ -395,6 +418,8 @@ class CandidatePoolReceipt:
             no_skill_reason=payload.get("no_skill_reason"),
             state_shift_receipt_id=payload.get("state_shift_receipt_id"),
             risk_receipt_id=payload.get("risk_receipt_id"),
+            risk_receipt=(dict(payload["risk_receipt"])
+                          if payload.get("risk_receipt") is not None else None),
         )
         supplied = payload.get("receipt_digest")
         if supplied is not None and supplied not in {
@@ -552,6 +577,8 @@ def build_candidate_pool(
         no_skill_reason=routing.no_skill_reason if routing else None,
         state_shift_receipt_id=(routing.state_shift_receipt_id if routing else None),
         risk_receipt_id=(routing.risk_receipt_id if routing else None),
+        risk_receipt=(dict(routing.risk_receipt)
+                      if routing and routing.risk_receipt is not None else None),
     )
     return CandidatePool(candidates=tuple(selected), receipt=receipt)
 

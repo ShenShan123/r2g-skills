@@ -1,8 +1,12 @@
 """P12 evaluation-only structured candidate execution adapter tests."""
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
+from tehm.ids import stable_dumps
+from tehm.state import RiskReceipt
 from tehm.evaluation.candidate_executor import (
     P12_ARMS, CandidateExecutionReceipt, CandidateExecutorError,
     PairedCandidateExecutionReceipt, execute_candidate,
@@ -25,6 +29,25 @@ def _candidate() -> StructuredRepairCandidate:
         binding_receipt_id="binding_fixture", obligations=("TARGET_PASS",),
         evidence_level="L3_REPLICATED_EFFECT", authority={"eligible": True},
         risk={}, provenance={"evaluation_only": True, "source": "test"})
+
+
+def _risk_receipt() -> RiskReceipt:
+    payload = {
+        "version": "risk-receipt-v0.1",
+        "current_resolution_id": "resolution-paired-risk",
+        "expected_utility": -0.5,
+        "evidence_refs": ["paired-risk-evidence"],
+        "risk_model": "typed_expected_utility_v1",
+        "reason": "RISK",
+    }
+    return RiskReceipt(
+        current_resolution_id=payload["current_resolution_id"],
+        expected_utility=payload["expected_utility"],
+        evidence_refs=tuple(payload["evidence_refs"]),
+        risk_model=payload["risk_model"], reason=payload["reason"],
+        replay_digest="sha256:" + hashlib.sha256(
+            stable_dumps(payload).encode()).hexdigest(),
+    )
 
 
 def test_execute_candidate_records_oracle_receipt_without_canonical_write():
@@ -122,3 +145,29 @@ def test_paired_receipt_retains_reason_aware_no_skill_metadata():
     assert bundle.routing_receipt_id == "routing-fixture"
     replay = PairedCandidateExecutionReceipt.from_dict(bundle.to_dict())
     assert replay == bundle
+
+
+def test_paired_receipt_preserves_replayable_risk_witness():
+    candidate = _candidate()
+
+    def oracle(_current, _case, _budget):
+        return {"compile_result": "PASS", "functional_result": "PASS",
+                "signoff_result": "PASS", "toolchain_digest": "sha256:tool",
+                "oracle_digest": "sha256:oracle"}
+
+    risk = _risk_receipt()
+    bundle = execute_paired_candidates(
+        {"case_id": "paired-risk", "toolchain_digest": "sha256:tool"},
+        {"NO_MEMORY": None, "ALWAYS_MEMORY": candidate,
+         "APPLICABILITY_GATED": candidate, "CAUSAL_NO_SKILL": candidate},
+        oracle=oracle, no_skill_reason="RISK", risk_receipt_id=risk.receipt_id,
+        risk_receipt=risk.to_dict())
+    assert bundle.risk_receipt == risk.to_dict()
+    replay = PairedCandidateExecutionReceipt.from_dict({
+        **bundle.to_dict(), "receipt_digest": bundle.receipt_digest})
+    assert replay == bundle
+    tampered = {**bundle.to_dict(),
+                "risk_receipt": {**bundle.risk_receipt,
+                                 "expected_utility": 0.5}}
+    with pytest.raises(CandidateExecutorError, match="risk_receipt"):
+        PairedCandidateExecutionReceipt.from_dict(tampered)

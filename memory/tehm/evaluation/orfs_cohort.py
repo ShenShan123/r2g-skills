@@ -368,6 +368,7 @@ def execute_orfs_paired_cohort(
             no_skill_reason=case.get("no_skill_reason"),
             state_shift_receipt_id=case.get("state_shift_receipt_id"),
             risk_receipt_id=case.get("risk_receipt_id"),
+            risk_receipt=case.get("risk_receipt"),
             lineage_id=case.get("lineage_id"),
             routing_receipt_id=case.get("routing_receipt_id"))
         if (bundle.toolchain_digest != expected_toolchain or

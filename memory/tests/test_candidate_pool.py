@@ -1,9 +1,13 @@
 """P6 candidate-pool A/B composition and interference metrics."""
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from contracts import MemoryCandidate, MemoryQuery, MemoryRoutingDecision
+from tehm.ids import stable_dumps
+from tehm.state import RiskReceipt
 from tehm.retrieval.candidate_pool import (
     CandidatePoolError,
     CandidatePoolOutcome,
@@ -58,6 +62,33 @@ def _routing(*, decision: str = "CONSIDER", case: str = "case-1"):
         causal_support={"status": "SUPPORTED"}, risk={},
         abstain_reasons=(), no_memory_budget=2, memory_budget=memory_budget,
     )
+
+
+def _risk_routing() -> tuple[MemoryRoutingDecision, RiskReceipt]:
+    payload = {
+        "version": "risk-receipt-v0.1",
+        "current_resolution_id": "state-risk-pool",
+        "expected_utility": -0.5,
+        "evidence_refs": ["pool-risk-evidence"],
+        "risk_model": "typed_expected_utility_v1",
+        "reason": "RISK",
+    }
+    risk = RiskReceipt(
+        current_resolution_id=payload["current_resolution_id"],
+        expected_utility=payload["expected_utility"],
+        evidence_refs=tuple(payload["evidence_refs"]),
+        risk_model=payload["risk_model"], reason=payload["reason"],
+        replay_digest="sha256:" + hashlib.sha256(
+            stable_dumps(payload).encode()).hexdigest(),
+    )
+    routing = MemoryRoutingDecision(
+        decision="NO_SKILL", resolved_state_id=risk.current_resolution_id,
+        selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
+        applicability={}, causal_support={}, risk={}, abstain_reasons=(),
+        no_memory_budget=2, memory_budget=0, no_skill_reason="RISK",
+        risk_receipt_id=risk.receipt_id, risk_receipt=risk.to_dict(),
+    )
+    return routing, risk
 
 
 def test_no_memory_arm_and_always_memory_keep_unbiased_slot():
@@ -118,6 +149,22 @@ def test_pool_receipt_preserves_reason_aware_no_skill_metadata():
     replay = CandidatePoolReceipt.from_dict({
         **pool.receipt.to_dict(), "receipt_digest": pool.receipt.receipt_digest})
     assert replay == pool.receipt
+
+
+def test_pool_receipt_preserves_replayable_risk_witness():
+    routing, risk = _risk_routing()
+    pool = build_candidate_pool(
+        _query(), _no_memory(), _memory(), arm="CAUSAL_NO_SKILL",
+        routing=routing, candidate_budget=3)
+    assert pool.receipt.risk_receipt == risk.to_dict()
+    replay = CandidatePoolReceipt.from_dict({
+        **pool.receipt.to_dict(), "receipt_digest": pool.receipt.receipt_digest})
+    assert replay == pool.receipt
+    tampered = {**pool.receipt.to_dict(),
+                "risk_receipt": {**pool.receipt.risk_receipt,
+                                 "expected_utility": 0.5}}
+    with pytest.raises(CandidatePoolError, match="risk_receipt"):
+        CandidatePoolReceipt.from_dict(tampered)
 
 
 def test_budget_one_cannot_displace_no_memory():
