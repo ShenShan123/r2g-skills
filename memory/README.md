@@ -3321,6 +3321,17 @@ receipt，必须消费当前 status version 匹配且在 ledger 中存在的 aut
 该 ledger 仍不提供 `promoted` 状态，也不自动晋级或导入 production runtime；
 `memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
 
+### 2026-09-02 Revision3 Validation Cohort V0 freeze
+
+新增 `tehm.evaluation.validation_freeze` 与
+`scripts/freeze_r3_validation_cohort.py`，将完成的 all-PASS、source-disjoint
+P12 cohort 和其 zero-trigger replay 绑定为 `lane=VALIDATION`、
+`expected_action=RETAIN` 的 content-addressed negative-control receipt。冻结门会
+重新校验四臂 outcome、至少两条 lineage、cohort digest、`triggered_count=0` 和
+`no_evolution_signal`，并在 replay 时重新读取两个输入报告与校验文件 digest。
+该 receipt 只证明 `execution != evolution`，不写 canonical memory、不导入
+production runtime；输出字段明确为 `memory_docs_submitted=false`。
+
 ### 2026-09-02 Revision3 P1-R3 counterexample reason
 
 新增 `CounterexampleReceipt` 与 `detect_counterexample()`：检测器必须同时绑定

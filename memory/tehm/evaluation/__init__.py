@@ -35,6 +35,11 @@ from .no_skill_calibration import (
     build_no_skill_calibration_samples, derive_no_skill_oracle_label,
     evaluate_no_skill_calibration,
 )
+from .validation_freeze import (
+    VALIDATION_FREEZE_VERSION, ValidationFreezeError,
+    ValidationCohortFreezeReceipt, freeze_validation_cohort,
+    replay_validation_freeze,
+)
 
 __all__ = [
     "EXECUTOR_VERSION", "P12_ARMS", "CandidateExecutionReceipt",
@@ -58,4 +63,7 @@ __all__ = [
     "mcnemar_regression_test",
     "build_no_skill_calibration_samples", "derive_no_skill_oracle_label",
     "evaluate_no_skill_calibration",
+    "VALIDATION_FREEZE_VERSION", "ValidationFreezeError",
+    "ValidationCohortFreezeReceipt", "freeze_validation_cohort",
+    "replay_validation_freeze",
 ]
