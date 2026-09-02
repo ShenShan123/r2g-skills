@@ -273,6 +273,7 @@ def append_state_shift_observation(
     transition_id: str,
     campaign_id: str,
     learner_eligible: bool,
+    routing_decision=None,
     created_at: str | None = None,
     commit: bool = True,
 ) -> MemoryEventReceipt:
@@ -296,6 +297,36 @@ def append_state_shift_observation(
         raise ValueError("state shift observation campaign_id is required")
     if type(learner_eligible) is not bool:
         raise ValueError("state shift observation learner_eligible must be boolean")
+    route_payload = None
+    if routing_decision is not None:
+        from contracts import MemoryRoutingDecision
+
+        if not isinstance(routing_decision, MemoryRoutingDecision):
+            raise TypeError(
+                "state shift observation routing_decision must be MemoryRoutingDecision")
+        if (routing_decision.decision != "NO_SKILL" or
+                routing_decision.no_skill_reason != "STATE_SHIFT"):
+            raise ValueError(
+                "state shift observation route must be NO_SKILL/STATE_SHIFT")
+        if routing_decision.state_shift_receipt_id != receipt.receipt_id:
+            raise ValueError(
+                "state shift observation route receipt ID does not match")
+        if routing_decision.resolved_state_id != receipt.current_resolution_id:
+            raise ValueError(
+                "state shift observation route resolution does not match")
+        route_payload = {
+            **routing_decision.to_dict(),
+            "decision_digest": routing_decision.decision_digest,
+            "routing_receipt_id": routing_decision.routing_receipt_id,
+        }
+    payload = {
+        "state_shift_receipt": receipt.to_dict(),
+        "state_shift_receipt_id": receipt.receipt_id,
+        "no_skill_reason": "STATE_SHIFT",
+        "evolution_reason": "STATE_SHIFT_OBSERVED",
+    }
+    if route_payload is not None:
+        payload["routing_decision"] = route_payload
     return append_memory_event(
         conn,
         event_type="STATE_SHIFT_OBSERVED",
@@ -303,14 +334,35 @@ def append_state_shift_observation(
         source_id=transition_id.strip(),
         campaign_id=campaign_id.strip(),
         learner_eligible=learner_eligible,
-        payload={
-            "state_shift_receipt": receipt.to_dict(),
-            "state_shift_receipt_id": receipt.receipt_id,
-            "no_skill_reason": "STATE_SHIFT",
-            "evolution_reason": "STATE_SHIFT_OBSERVED",
-        },
+        payload=payload,
         created_at=created_at,
         commit=commit,
+    )
+
+
+def append_routed_state_shift_observation(
+    conn: sqlite3.Connection,
+    receipt: StateShiftReceipt,
+    routing_decision,
+    *,
+    transition_id: str,
+    campaign_id: str,
+    learner_eligible: bool,
+    created_at: str | None = None,
+    commit: bool = True,
+) -> MemoryEventReceipt:
+    """Bridge an actual ``NO_SKILL/STATE_SHIFT`` route into the event log.
+
+    This is the preferred 8A.9 path.  The generic append function remains
+    available for replay/migration, while this wrapper prevents a caller from
+    manufacturing a state-shift teaching signal without a matching router
+    receipt.  The route is stored as typed payload evidence and is revalidated
+    by :func:`load_state_shift_observations`.
+    """
+    return append_state_shift_observation(
+        conn, receipt, transition_id=transition_id, campaign_id=campaign_id,
+        learner_eligible=learner_eligible, routing_decision=routing_decision,
+        created_at=created_at, commit=commit,
     )
 
 
@@ -344,6 +396,22 @@ def load_state_shift_observations(
                 payload.get("evolution_reason") != "STATE_SHIFT_OBSERVED" or
                 receipt.reason != "STATE_SHIFT"):
             raise ValueError("state shift observation payload conflicts with receipt")
+        route_payload = payload.get("routing_decision")
+        if route_payload is not None:
+            try:
+                from contracts import MemoryRoutingDecision
+
+                route = MemoryRoutingDecision.from_dict(route_payload)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "state shift observation routing payload is malformed") from exc
+            if (route.decision != "NO_SKILL" or
+                    route.no_skill_reason != "STATE_SHIFT" or
+                    route.state_shift_receipt_id != receipt.receipt_id or
+                    route.resolved_state_id != receipt.current_resolution_id or
+                    route_payload.get("routing_receipt_id") != route.routing_receipt_id):
+                raise ValueError(
+                    "state shift observation routing payload conflicts with receipt")
         if knowledge_object_id is not None and receipt.knowledge_object_id != knowledge_object_id:
             continue
         observations.append((
@@ -454,5 +522,6 @@ def verify_event_chain(conn: sqlite3.Connection,
 
 __all__ = [
     "EVENT_TYPES", "append_memory_event", "append_state_shift_observation",
+    "append_routed_state_shift_observation",
     "load_state_shift_observations", "verify_event_chain",
 ]

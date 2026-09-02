@@ -1,7 +1,8 @@
 """Online, shadow-only memory evolution APIs."""
 from .events import (
     EVENT_TYPES, append_memory_event, append_state_shift_observation,
-    load_state_shift_observations, verify_event_chain,
+    append_routed_state_shift_observation, load_state_shift_observations,
+    verify_event_chain,
 )
 from .conflict import CONFLICT_TYPES, ConflictReceipt, detect_conflicts
 from .candidate_trial import (
@@ -71,6 +72,7 @@ __all__ = [
     "IncrementalCrystallizationReceipt",
     "MemoryEventReceipt", "OnlineMemoryReceipt", "RuleRevisionReceipt",
     "append_memory_event", "append_state_shift_observation",
+    "append_routed_state_shift_observation",
     "load_state_shift_observations", "crystallize_affected_groups",
     "preview_affected_groups", "observe_transition",
     "CandidateTrialError", "CandidateTrialReceipt",

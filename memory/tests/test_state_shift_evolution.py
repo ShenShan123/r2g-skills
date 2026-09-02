@@ -9,6 +9,7 @@ from tehm.evolution import (
     StateShiftEvolutionError,
     StateShiftEvolutionProposal,
     append_state_shift_observation,
+    append_routed_state_shift_observation,
     load_state_shift_observations,
     propose_repeated_state_shift,
     propose_repeated_state_shift_from_events,
@@ -16,6 +17,7 @@ from tehm.evolution import (
 )
 from tehm.knowledge import MechanismKnowledge
 from tehm.state import build_support_envelope, evaluate_state_shift
+from contracts import MemoryRoutingDecision
 
 
 def _knowledge() -> MechanismKnowledge:
@@ -159,6 +161,38 @@ def test_state_shift_observation_event_is_replayable_and_tamper_evident(tmp_tehm
     conn.commit()
     with pytest.raises(ValueError, match="event chain is invalid|event_digest|payload"):
         load_state_shift_observations(conn, campaign_id="audit")
+
+
+def test_routed_state_shift_event_requires_matching_no_skill_receipt(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    receipt = _receipts()[0]
+    route = MemoryRoutingDecision(
+        decision="NO_SKILL", resolved_state_id=receipt.current_resolution_id,
+        selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
+        applicability={"state_shift_status": "SHIFTED"},
+        causal_support={"status": "SUPPORTED"}, risk={"state_shift_status": "SHIFTED"},
+        abstain_reasons=("state_shift",), no_memory_budget=1, memory_budget=0,
+        no_skill_reason="STATE_SHIFT", state_shift_receipt_id=receipt.receipt_id)
+    event = append_routed_state_shift_observation(
+        conn, receipt, route, transition_id="routed-transition", campaign_id="audit",
+        learner_eligible=False, created_at="2026-09-01T00:00:00Z")
+    payload = json.loads(conn.execute(
+        "SELECT payload_json FROM tehm_memory_events WHERE event_id=?",
+        (event.event_id,)).fetchone()[0])
+    assert payload["routing_decision"]["routing_receipt_id"] == route.routing_receipt_id
+    assert payload["routing_decision"]["decision_digest"] == route.decision_digest
+    assert load_state_shift_observations(conn, campaign_id="audit") == ((event, receipt),)
+
+    with pytest.raises(ValueError, match="NO_SKILL/STATE_SHIFT"):
+        append_routed_state_shift_observation(
+            conn, receipt,
+            MemoryRoutingDecision(
+                decision="NO_SKILL", resolved_state_id=receipt.current_resolution_id,
+                selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
+                applicability={}, causal_support={}, risk={}, abstain_reasons=(),
+                no_memory_budget=1, memory_budget=0, no_skill_reason="NO_MATCH"),
+            transition_id="other-transition", campaign_id="audit",
+            learner_eligible=False)
 
 
 def test_event_bound_proposal_replays_pairing_and_rejects_missing_witness(tmp_tehm):

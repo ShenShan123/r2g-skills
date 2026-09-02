@@ -3293,3 +3293,10 @@ ID witness，不能用调用方布尔值升级 audit-only 观测。
 witness、输入输出碰撞或 gold/repair 字段时均 fail-closed。该命令不会从 PASS/FAIL
 推断 evolution reason，不写 canonical memory、authority 或 production runtime；生成的
 plan 仍必须经过 P12 trigger 与 anti-forgetting gates 才能尝试 isolated staging。
+
+同时新增 `append_routed_state_shift_observation()`，用于把实际的 typed
+`MemoryRoutingDecision(decision=NO_SKILL, no_skill_reason=STATE_SHIFT)` 绑定为
+`STATE_SHIFT_OBSERVED`。它强制校验 route 的 `state_shift_receipt_id`、resolved
+state 与 receipt 一致，并将完整 route digest/id 写入事件 payload；重放时再次解码
+校验。旧的通用 append API 仍可用于兼容/审计，但没有 matching router witness 就不能
+通过这个推荐的 8A.9 路径制造 state-shift teaching signal。
