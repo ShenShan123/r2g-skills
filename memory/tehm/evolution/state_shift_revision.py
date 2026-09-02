@@ -14,6 +14,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from tehm.canonical.transition import OUTCOMES, POSITIVE_OUTCOMES
+from tehm.evaluation.candidate_executor import (
+    P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
+)
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import SHIFT_DIMENSIONS, StateShiftReceipt
 
@@ -405,6 +408,118 @@ def propose_repeated_state_shift_from_events(
     )
 
 
+def propose_repeated_state_shift_from_paired_receipts(
+    observations: Sequence[tuple[StateShiftReceipt, PairedCandidateExecutionReceipt]],
+    *,
+    knowledge_object_id: str,
+    transition_ids: Sequence[str],
+    evidence_refs: Sequence[str],
+    learner_eligible: bool = True,
+    min_repeats: int = 2,
+    historical_memory_arm: str = "ALWAYS_MEMORY",
+    requested_operation: str | None = None,
+    partition_evidence_refs: Sequence[str] = (),
+) -> StateShiftEvolutionProposal:
+    """Derive paired outcomes from typed P12 receipts after state-shift routing.
+
+    This adapter closes the P12-F/P13 seam without accepting hand-written
+    outcome labels as the source of truth.  Each observation must carry a
+    non-transferable ``StateShiftReceipt`` and a four-arm paired execution
+    whose route says ``NO_SKILL/STATE_SHIFT``.  The no-memory and selected
+    historical-memory arm outcomes are then passed to the existing pure
+    proposal function.  No database or canonical state is changed.
+    """
+    if (not isinstance(observations, (list, tuple)) or
+            isinstance(observations, (str, bytes))):
+        raise StateShiftEvolutionError(
+            "paired state shift observations must be a sequence")
+    if type(min_repeats) is not int or min_repeats < 2:
+        raise StateShiftEvolutionError(
+            "paired state shift min_repeats must be at least two")
+    if len(observations) < min_repeats:
+        raise StateShiftEvolutionError(
+            "paired state shift observations require repeated receipts")
+    if historical_memory_arm not in P12_ARMS[1:]:
+        raise StateShiftEvolutionError("paired state shift historical arm is invalid")
+    parent = _text(knowledge_object_id, "knowledge_object_id")
+    transitions = _strings(transition_ids, "transition_ids")
+    refs = set(_strings(evidence_refs, "evidence_refs"))
+    if len(transitions) != len(observations):
+        raise StateShiftEvolutionError(
+            "paired state shift transition IDs must align with observations")
+    typed: list[tuple[StateShiftReceipt, PairedCandidateExecutionReceipt]] = []
+    case_ids: set[str] = set()
+    toolchains: set[str] = set()
+    oracles: set[str] = set()
+    no_memory: list[str] = []
+    historical: list[str] = []
+    required_refs: set[str] = set()
+    for item in observations:
+        if (not isinstance(item, tuple) or len(item) != 2 or
+                not isinstance(item[0], StateShiftReceipt) or
+                not isinstance(item[1], PairedCandidateExecutionReceipt)):
+            raise StateShiftEvolutionError(
+                "paired state shift observation must be typed receipt pair")
+        shift, paired = item
+        if shift.knowledge_object_id != parent:
+            raise StateShiftEvolutionError(
+                "paired state shift knowledge IDs do not match")
+        if shift.reason != "STATE_SHIFT" or shift.transferable is not False:
+            raise StateShiftEvolutionError(
+                "paired state shift requires non-transferable STATE_SHIFT receipt")
+        if paired.case_id in case_ids:
+            raise StateShiftEvolutionError(
+                "paired state shift case IDs must be unique")
+        case_ids.add(paired.case_id)
+        if (paired.no_skill_reason != "STATE_SHIFT" or
+                paired.state_shift_receipt_id != shift.receipt_id or
+                type(paired.routing_receipt_id) is not str or
+                not paired.routing_receipt_id.strip()):
+            raise StateShiftEvolutionError(
+                "paired state shift requires matching route witness")
+        baseline = paired.arm_receipts["NO_MEMORY"]
+        memory = paired.arm_receipts[historical_memory_arm]
+        for arm, receipt in (("NO_MEMORY", baseline),
+                             (historical_memory_arm, memory)):
+            if not isinstance(receipt, CandidateExecutionReceipt):
+                raise StateShiftEvolutionError(
+                    f"paired state shift {arm} receipt is invalid")
+            if (receipt.metadata.get("oracle_available") is not True or
+                    receipt.compile_result == "UNKNOWN" or
+                    receipt.functional_result == "UNKNOWN" or
+                    receipt.signoff_result in {None, "UNKNOWN"} or
+                    receipt.outcome == "UNKNOWN"):
+                raise StateShiftEvolutionError(
+                    f"paired state shift {arm} oracle is incomplete")
+        toolchains.add(paired.toolchain_digest)
+        oracles.add(paired.oracle_digest)
+        no_memory.append(baseline.outcome)
+        historical.append(memory.outcome)
+        required_refs.update({
+            shift.receipt_id, paired.receipt_digest,
+            paired.routing_receipt_id, baseline.execution_digest,
+            memory.execution_digest,
+        })
+        typed.append((shift, paired))
+    if len(toolchains) != 1 or len(oracles) != 1:
+        raise StateShiftEvolutionError(
+            "paired state shift receipts must share toolchain/oracle digests")
+    if not required_refs <= refs:
+        missing = sorted(required_refs - refs)
+        raise StateShiftEvolutionError(
+            "paired state shift evidence_refs must witness receipts and executions: "
+            + ",".join(missing))
+    return propose_repeated_state_shift(
+        [shift for shift, _paired in typed],
+        knowledge_object_id=parent, transition_ids=transitions,
+        no_memory_outcomes=tuple(no_memory),
+        historical_memory_outcomes=tuple(historical), evidence_refs=tuple(sorted(refs)),
+        learner_eligible=learner_eligible, min_repeats=min_repeats,
+        requested_operation=requested_operation,
+        partition_evidence_refs=partition_evidence_refs,
+    )
+
+
 plan_repeated_state_shift = propose_repeated_state_shift
 
 
@@ -473,5 +588,6 @@ __all__ = [
     "STATE_SHIFT_EVOLUTION_REASONS", "StateShiftEvolutionError",
     "StateShiftEvolutionProposal", "propose_repeated_state_shift",
     "plan_repeated_state_shift", "propose_repeated_state_shift_from_events",
+    "propose_repeated_state_shift_from_paired_receipts",
     "state_shift_proposal_to_localized_plan",
 ]

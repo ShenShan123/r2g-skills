@@ -13,8 +13,10 @@ from tehm.evolution import (
     load_state_shift_observations,
     propose_repeated_state_shift,
     propose_repeated_state_shift_from_events,
+    propose_repeated_state_shift_from_paired_receipts,
     state_shift_proposal_to_localized_plan,
 )
+from tehm.evaluation import CandidateExecutionReceipt, PairedCandidateExecutionReceipt
 from tehm.knowledge import MechanismKnowledge
 from tehm.state import build_support_envelope, evaluate_state_shift
 from contracts import MemoryRoutingDecision
@@ -240,3 +242,82 @@ def test_state_shift_observation_rejects_transferable_receipt():
         append_state_shift_observation(
             __import__("sqlite3").connect(":memory:"), receipt,
             transition_id="t", campaign_id="c", learner_eligible=False)
+
+
+def _paired_receipt(shift, case_id, *, no_memory="PASS", historical="FAIL"):
+    def arm(name, source, outcome):
+        return CandidateExecutionReceipt(
+            case_id=case_id, candidate_id=f"{name}:{case_id}", source=source,
+            action_digest=f"action:{name}:{case_id}",
+            compile_result="PASS", functional_result="PASS", signoff_result="PASS",
+            outcome=outcome, created_regressions=(), obligations={},
+            toolchain_digest="toolchain:fixed", oracle_digest="oracle:fixed",
+            produced_transition_id=None, candidate_digest=f"candidate:{name}:{case_id}",
+            budget=1, metadata={"oracle_available": True})
+
+    arms = {
+        "NO_MEMORY": arm("no-memory", "no_memory", no_memory),
+        "ALWAYS_MEMORY": arm("always-memory", "structured_memory", historical),
+        "APPLICABILITY_GATED": arm("applicability", "structured_memory", historical),
+        "CAUSAL_NO_SKILL": arm("causal", "structured_memory", historical),
+    }
+    return PairedCandidateExecutionReceipt(
+        case_id=case_id, arm_receipts=arms, candidate_budget=1,
+        case_digest=f"case:{case_id}", toolchain_digest="toolchain:fixed",
+        oracle_digest="oracle:fixed", no_skill_reason="STATE_SHIFT",
+        state_shift_receipt_id=shift.receipt_id,
+        lineage_id=f"lineage:{case_id}", routing_receipt_id=f"routing:{case_id}")
+
+
+def test_paired_state_shift_adapter_binds_typed_oracle_outcomes():
+    shifts = _receipts()
+    pairs = tuple(
+        (shift, _paired_receipt(shift, f"case-{index}"))
+        for index, shift in enumerate(shifts))
+    refs = tuple(ref for shift, pair in pairs for ref in (
+        shift.receipt_id, pair.receipt_digest, pair.routing_receipt_id,
+        pair.arm_receipts["NO_MEMORY"].execution_digest,
+        pair.arm_receipts["ALWAYS_MEMORY"].execution_digest))
+    proposal = propose_repeated_state_shift_from_paired_receipts(
+        pairs, knowledge_object_id=shifts[0].knowledge_object_id,
+        transition_ids=("paired-transition-a", "paired-transition-b"),
+        evidence_refs=refs)
+    assert proposal.operation == "SPECIALIZE"
+    assert proposal.no_memory_outcomes == ("PASS", "PASS")
+    assert proposal.historical_memory_outcomes == ("FAIL", "FAIL")
+    assert proposal.shadow_only is True
+
+
+def test_paired_state_shift_adapter_rejects_route_oracle_witness_gaps():
+    shifts = _receipts()
+    shift = shifts[0]
+    pair = _paired_receipt(shift, "case-gap")
+    route_gap = PairedCandidateExecutionReceipt(
+        case_id=pair.case_id, arm_receipts=pair.arm_receipts,
+        candidate_budget=pair.candidate_budget, case_digest=pair.case_digest,
+        toolchain_digest=pair.toolchain_digest, oracle_digest=pair.oracle_digest,
+        no_skill_reason="NO_MATCH", state_shift_receipt_id=None,
+        lineage_id=pair.lineage_id, routing_receipt_id=pair.routing_receipt_id)
+    with pytest.raises(StateShiftEvolutionError, match="route witness"):
+        propose_repeated_state_shift_from_paired_receipts(
+            [(shift, route_gap), (shifts[1], _paired_receipt(shifts[1], "case-gap-2"))],
+            knowledge_object_id=shift.knowledge_object_id,
+            transition_ids=("paired-transition-a", "paired-transition-b"), evidence_refs=("w",),
+            min_repeats=2)
+    with pytest.raises(StateShiftEvolutionError, match="oracle is incomplete"):
+        broken = dict(pair.arm_receipts)
+        broken["NO_MEMORY"] = CandidateExecutionReceipt(
+            **{**pair.arm_receipts["NO_MEMORY"].__dict__,
+               "metadata": {"oracle_available": False}})
+        # Rebuilding the pair keeps the malformed oracle inside the typed
+        # container, so the adapter—not the fixture constructor—owns the gate.
+        malformed = PairedCandidateExecutionReceipt(
+            case_id=pair.case_id, arm_receipts=broken,
+            candidate_budget=pair.candidate_budget, case_digest=pair.case_digest,
+            toolchain_digest=pair.toolchain_digest, oracle_digest=pair.oracle_digest,
+            no_skill_reason="STATE_SHIFT", state_shift_receipt_id=shift.receipt_id,
+            lineage_id=pair.lineage_id, routing_receipt_id=pair.routing_receipt_id)
+        propose_repeated_state_shift_from_paired_receipts(
+            [(shift, malformed), (shifts[1], _paired_receipt(shifts[1], "case-gap-2"))],
+            knowledge_object_id=shift.knowledge_object_id,
+            transition_ids=("paired-a", "paired-b"), evidence_refs=("w",))

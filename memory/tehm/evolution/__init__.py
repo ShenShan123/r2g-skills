@@ -40,6 +40,7 @@ from .state_shift_revision import (
     STATE_SHIFT_EVOLUTION_REASONS, StateShiftEvolutionError,
     StateShiftEvolutionProposal, plan_repeated_state_shift,
     propose_repeated_state_shift, propose_repeated_state_shift_from_events,
+    propose_repeated_state_shift_from_paired_receipts,
     state_shift_proposal_to_localized_plan,
 )
 from .receipts import (
@@ -96,6 +97,7 @@ __all__ = [
     "STATE_SHIFT_EVOLUTION_REASONS", "StateShiftEvolutionError",
     "StateShiftEvolutionProposal", "plan_repeated_state_shift",
     "propose_repeated_state_shift", "propose_repeated_state_shift_from_events",
+    "propose_repeated_state_shift_from_paired_receipts",
     "state_shift_proposal_to_localized_plan",
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",

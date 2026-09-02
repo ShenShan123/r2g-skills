@@ -3300,3 +3300,10 @@ plan 仍必须经过 P12 trigger 与 anti-forgetting gates 才能尝试 isolated
 state 与 receipt 一致，并将完整 route digest/id 写入事件 payload；重放时再次解码
 校验。旧的通用 append API 仍可用于兼容/审计，但没有 matching router witness 就不能
 通过这个推荐的 8A.9 路径制造 state-shift teaching signal。
+
+`propose_repeated_state_shift_from_paired_receipts()` 进一步把 P12 四臂
+`PairedCandidateExecutionReceipt` 接到 proposal：只接受带 matching
+`STATE_SHIFT` route witness、完整 `NO_MEMORY`/指定 historical-memory oracle、且共享
+toolchain/oracle digest 的 paired cases，自动绑定两侧 execution digest，拒绝手写 outcome
+错配。它仍是 evaluation-only proposal，不能替代 P12/P13 的 learner partition、reason
+receipt 或 anti-forgetting gate。
