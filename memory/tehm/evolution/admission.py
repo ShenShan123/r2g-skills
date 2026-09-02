@@ -10,11 +10,12 @@ from tehm.evaluation.candidate_executor import (
 )
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import StateShiftReceipt
+from tehm.assets.receipts import CapabilityGapReceipt
 
 from .reason_derivation import (
     EVOLUTION_REASONS, EvolutionReasonDerivationError,
-    EvolutionReasonDerivationReceipt, derive_memory_interference_reason,
-    derive_state_shift_reason,
+    EvolutionReasonDerivationReceipt, derive_capability_gap_reason,
+    derive_memory_interference_reason, derive_state_shift_reason,
 )
 
 
@@ -187,6 +188,8 @@ def admit_evolution_reason(
         derivation: EvolutionReasonDerivationReceipt, *, campaign_id: str,
         learner_eligible: bool, paired: PairedCandidateExecutionReceipt | None = None,
         state_shift: StateShiftReceipt | Mapping | None = None,
+        capability_gap: CapabilityGapReceipt | Mapping | None = None,
+        failure_transition_ids: tuple[str, ...] | list[str] | None = None,
         routing: MemoryRoutingDecision | None = None,
         memory_arm: str = "ALWAYS_MEMORY") -> EvolutionAdmissionReceipt:
     """Apply a reason-specific P13 gate without accepting a mutation plan."""
@@ -271,6 +274,80 @@ def admit_evolution_reason(
             return _blocked(derivation, required=required,
                             satisfied=tuple(satisfied), evidence=tuple(evidence),
                             reason="missing_memory_interference_evidence")
+        return EvolutionAdmissionReceipt(
+            campaign_id=campaign_id, case_id=derivation.case_id,
+            reason=derivation.reason, derivation_receipt_ids=(derivation.receipt_id,),
+            evidence_receipt_ids=_unique(evidence), required_evidence=required,
+            satisfied_evidence=tuple(satisfied), admitted=True)
+
+    if derivation.reason == "CAPABILITY_GAP":
+        required = (
+            "learner_eligible", "typed_capability_gap",
+            "repeated_independent_failures", "no_eligible_current_asset",
+            "no_successful_current_action_family", "no_skill_no_match_route",
+        )
+        satisfied: list[str] = []
+        if learner_eligible:
+            satisfied.append("learner_eligible")
+        checked_gap = None
+        checked_derivation = None
+        if capability_gap is not None:
+            try:
+                checked_gap = (capability_gap if isinstance(
+                    capability_gap, CapabilityGapReceipt) else
+                    CapabilityGapReceipt.from_dict(capability_gap))
+                checked_derivation = derive_capability_gap_reason(
+                    checked_gap, campaign_id=campaign_id,
+                    case_id=derivation.case_id,
+                    failure_transition_ids=failure_transition_ids,
+                    routing=routing)
+            except (EvolutionReasonDerivationError, TypeError, ValueError):
+                checked_derivation = None
+        if (checked_gap is not None and checked_derivation is not None and
+                checked_derivation.receipt_digest == derivation.receipt_digest):
+            satisfied.append("typed_capability_gap")
+            satisfied.append("no_skill_no_match_route")
+            evidence = (*evidence, checked_gap.receipt_id,
+                        checked_gap.receipt_digest)
+            coverage = checked_gap.current_action_coverage
+            failure_count = coverage.get("failure_evidence", 0)
+            try:
+                enough_failures = int(failure_count) >= 2
+            except (TypeError, ValueError):
+                enough_failures = False
+            if enough_failures and len(checked_gap.evidence_lineages) >= 2:
+                satisfied.append("repeated_independent_failures")
+            if (not coverage.get("promoted_asset", False) and
+                    not coverage.get("promoted_rule", False)):
+                satisfied.append("no_eligible_current_asset")
+            if not coverage.get("successful_action_family", False) and not (
+                    coverage.get("successful_action_families") or ()):
+                satisfied.append("no_successful_current_action_family")
+            evidence = (*evidence, *checked_derivation.input_receipt_ids)
+        if not learner_eligible:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="not_learner_eligible")
+        if "typed_capability_gap" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_typed_capability_gap")
+        if "no_skill_no_match_route" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_no_skill_no_match_route")
+        if "repeated_independent_failures" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_repeated_independent_failures")
+        if "no_eligible_current_asset" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="eligible_current_asset_exists")
+        if "no_successful_current_action_family" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="successful_current_action_family_exists")
         return EvolutionAdmissionReceipt(
             campaign_id=campaign_id, case_id=derivation.case_id,
             reason=derivation.reason, derivation_receipt_ids=(derivation.receipt_id,),

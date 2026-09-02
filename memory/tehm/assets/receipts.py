@@ -1,7 +1,11 @@
 """Serializable asset, gap, and validation receipts."""
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
+from collections.abc import Mapping
+
+from tehm.ids import stable_dumps
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,81 @@ class CapabilityGapReceipt:
     reason: str
     current_action_coverage: dict = field(default_factory=dict)
     confidence: float = 0.0
+
+    def __post_init__(self) -> None:
+        for field_name in ("gap_id", "mechanism_family", "reason"):
+            value = getattr(self, field_name)
+            if type(value) is not str or not value.strip():
+                raise ValueError(f"capability gap {field_name} is required")
+            object.__setattr__(self, field_name, value.strip())
+        if self.compatibility_profile is not None:
+            if (type(self.compatibility_profile) is not str or
+                    not self.compatibility_profile.strip()):
+                raise ValueError("capability gap compatibility_profile is invalid")
+            object.__setattr__(self, "compatibility_profile",
+                               self.compatibility_profile.strip())
+        for field_name in ("evidence_transitions", "evidence_lineages",
+                           "missing_asset_types"):
+            values = getattr(self, field_name)
+            if not isinstance(values, (list, tuple)) or isinstance(values, (str, bytes)):
+                raise ValueError(f"capability gap {field_name} must be a sequence")
+            normalized = tuple(item.strip() if isinstance(item, str) else item
+                               for item in values)
+            if not normalized or any(type(item) is not str or not item for item in normalized):
+                raise ValueError(f"capability gap {field_name} must be non-empty strings")
+            if len(set(normalized)) != len(normalized):
+                raise ValueError(f"capability gap {field_name} contains duplicates")
+            object.__setattr__(self, field_name, normalized)
+        if not isinstance(self.current_action_coverage, Mapping):
+            raise ValueError("capability gap current_action_coverage must be an object")
+        object.__setattr__(self, "current_action_coverage",
+                           dict(self.current_action_coverage))
+        if type(self.confidence) not in (int, float) or not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("capability gap confidence must be between 0 and 1")
+
+    @property
+    def receipt_digest(self) -> str:
+        """Content digest used when the gap becomes evolution evidence.
+
+        The digest is deliberately derived only from the typed diagnostic;
+        it does not include a proposal, mutation plan, or canonical state.
+        """
+        return "sha256:" + hashlib.sha256(
+            stable_dumps(self.to_dict()).encode()).hexdigest()
+
+    @property
+    def receipt_id(self) -> str:
+        return "capability_gap_" + self.receipt_digest.split(":", 1)[1][:24]
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "CapabilityGapReceipt":
+        if not isinstance(payload, Mapping):
+            raise ValueError("capability gap receipt must be an object")
+        required = {
+            "gap_id", "mechanism_family", "compatibility_profile",
+            "evidence_transitions", "evidence_lineages", "missing_asset_types",
+            "reason", "current_action_coverage", "confidence",
+        }
+        if not required <= set(payload):
+            raise ValueError("capability gap receipt is missing fields")
+        receipt = cls(
+            gap_id=payload["gap_id"],
+            mechanism_family=payload["mechanism_family"],
+            compatibility_profile=payload["compatibility_profile"],
+            evidence_transitions=tuple(payload["evidence_transitions"]),
+            evidence_lineages=tuple(payload["evidence_lineages"]),
+            missing_asset_types=tuple(payload["missing_asset_types"]),
+            reason=payload["reason"],
+            current_action_coverage=dict(payload["current_action_coverage"]),
+            confidence=payload["confidence"],
+        )
+        supplied_digest = payload.get("receipt_digest")
+        if supplied_digest is not None and supplied_digest != receipt.receipt_digest:
+            raise ValueError("capability gap receipt digest mismatch")
+        supplied_id = payload.get("receipt_id")
+        if supplied_id is not None and supplied_id != receipt.receipt_id:
+            raise ValueError("capability gap receipt ID mismatch")
+        return receipt
 
     def to_dict(self) -> dict:
         return {

@@ -3484,3 +3484,27 @@ campaign；`canonical_memory_mutation=none`、`production_authority_changed=fals
 `production_promotion_eligible=false`。这一步仅闭合 P15-A 的真实 calibration
 证据，不解锁 production canary，仍需后续 statistical production evidence 与显式
 authority/promotion gates。`memory/docs/` 继续由 `.gitignore` 排除，不进入提交。
+
+### 2026-09-02 Revision3 R3-9 CAPABILITY_GAP non-P12 admission
+
+新增 `derive_capability_gap_reason()` 与
+`EvolutionAdmissionReceipt(reason=CAPABILITY_GAP)`：它消费
+`CapabilityGapReceipt` 的 learner-eligible training evidence，重新检查至少两个
+独立 lineage、至少两条 repeated source-failure evidence、没有当前 eligible asset
+或成功 action family，并要求 typed `NO_SKILL/NO_MATCH` route。该 reason 不要求 P12
+paired counterfactual，避免
+`NO_SKILL/NO_MATCH` 因不存在 memory candidate 而被错误挡在 P13 入口之外。
+
+新增 `CapabilityGapEvolutionProposal`，只生成 `ADD` 的
+`ASSET_OR_KNOWLEDGE` shadow proposal，并绑定 gap、derivation、admission 与 transition
+evidence；proposal 不注册 Asset、不写 Knowledge、不改变 canonical memory，也不具备
+production-runtime eligibility。真实入口 `scripts/run_r3_capability_gap_challenge.py`
+在仓库外 disposable SQLite 中对 `req_ack_bug` 与 `req_ack_bug2` 执行 Icarus/vvp，产生
+2 lineages / 2 source-failure evidence：`CAPABILITY_GAP` derivation=1、admission=1、
+proposal=1，`paired_counterfactual_required=false`，`canonical_memory_mutation=none`，
+`production_promotion_eligible=false`；source DB digest 保持不变。这里的 failure
+evidence 明确指真实修复前的 `original_failure=REMOVED`，不把修复后的 PASS 冒充 unresolved
+FAIL，也不宣称能力增益或 production promotion。
+
+`memory/docs/` 仍是本地 governing input，由 `.gitignore` 排除，既不在 release tree
+中，也不会被本阶段提交。

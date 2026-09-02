@@ -167,6 +167,12 @@ def detect_capability_gaps(
             current_action_coverage={
                 "promoted_asset": covered_by_asset,
                 "promoted_rule": covered_by_rule,
+                # ``successful_action_family`` means a currently authorized
+                # reusable family, not merely an action that happened to
+                # pass while producing this diagnostic.  A verified repair
+                # therefore remains evidence for expansion until a promoted
+                # asset/rule actually covers it.
+                "successful_action_family": bool(covered_by_asset or covered_by_rule),
                 "observed": len(facts), "failures": len(failures),
                 "initial_failure_evidence": len(initial_failures),
                 "failure_evidence": len(failure_evidence),

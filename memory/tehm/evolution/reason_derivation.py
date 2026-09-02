@@ -18,6 +18,8 @@ from tehm.evaluation.candidate_executor import (
 )
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import StateShiftReceipt
+from contracts import MemoryRoutingDecision
+from tehm.assets.receipts import CapabilityGapReceipt
 
 
 EVOLUTION_REASON_DERIVATION_VERSION = "evolution-reason-derivation-v0.1"
@@ -205,6 +207,32 @@ def _state_shift_receipt(value: object) -> StateShiftReceipt:
             "state shift reason input receipt is invalid") from exc
 
 
+def _capability_gap_receipt(value: object) -> CapabilityGapReceipt:
+    if isinstance(value, CapabilityGapReceipt):
+        return value
+    try:
+        return CapabilityGapReceipt.from_dict(value)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise EvolutionReasonDerivationError(
+            "capability gap reason input receipt is invalid") from exc
+
+
+def _capability_gap_route(value: object) -> MemoryRoutingDecision:
+    if isinstance(value, MemoryRoutingDecision):
+        route = value
+    else:
+        try:
+            route = MemoryRoutingDecision.from_dict(value)
+        except (TypeError, ValueError, KeyError) as exc:
+            raise EvolutionReasonDerivationError(
+                "capability gap reason route is invalid") from exc
+    if (route.decision != "NO_SKILL" or route.no_skill_reason != "NO_MATCH" or
+            route.selected_asset_ids or route.memory_budget != 0):
+        raise EvolutionReasonDerivationError(
+            "capability gap reason requires NO_SKILL/NO_MATCH route")
+    return route
+
+
 def derive_state_shift_reason(
         shift: StateShiftReceipt | Mapping, *, campaign_id: str, case_id: str,
         routing: MemoryRoutingDecision,
@@ -234,6 +262,100 @@ def derive_state_shift_reason(
         input_digests=(checked.replay_digest, routing.decision_digest),
         lineage_ids=(lineage_id,),
         resolved_state_ids=(checked.current_resolution_id,))
+
+
+def derive_capability_gap_reason(
+        gap: CapabilityGapReceipt | Mapping, *, campaign_id: str, case_id: str,
+        min_lineages: int = 2, min_failures: int = 2,
+        failure_transition_ids: tuple[str, ...] | list[str] | None = None,
+        routing: MemoryRoutingDecision | Mapping | None = None,
+        detector_version: str = "capability-gap-reason-v1",
+) -> EvolutionReasonDerivationReceipt | None:
+    """Derive a non-P12 reason from an aggregated capability-gap receipt.
+
+    The gap detector consumes learner-eligible training transitions.  This
+    adapter rechecks the ``NO_SKILL/NO_MATCH`` route, independent lineages,
+    repeated source-failure evidence, and the absence of a currently
+    authorized asset/action family.  It has no paired-candidate input because
+    ``NO_SKILL_NO_MATCH`` has no memory candidate on which a counterfactual
+    could run.
+    """
+    checked = _capability_gap_receipt(gap)
+    if routing is None:
+        raise EvolutionReasonDerivationError(
+            "capability gap reason requires NO_SKILL/NO_MATCH route")
+    checked_route = _capability_gap_route(routing)
+    campaign_id = _text(campaign_id, "campaign_id")
+    case_id = _text(case_id, "case_id")
+    if min_lineages < 1 or min_failures < 1:
+        raise EvolutionReasonDerivationError(
+            "capability gap thresholds must be positive")
+    reasons = {item.strip() for item in checked.reason.split("+") if item.strip()}
+    if "repeated_unsupported_mechanism" not in reasons:
+        return None
+    lineages = tuple(dict.fromkeys(
+        _text(item, "evidence_lineages") for item in checked.evidence_lineages))
+    transitions = tuple(dict.fromkeys(
+        _text(item, "evidence_transitions") for item in checked.evidence_transitions))
+    if len(lineages) < min_lineages:
+        return None
+    coverage = checked.current_action_coverage
+    if not isinstance(coverage, Mapping):
+        raise EvolutionReasonDerivationError(
+            "capability gap current_action_coverage is invalid")
+    try:
+        failure_count = int(coverage.get("failure_evidence", 0))
+        initial_failure_count = int(coverage.get("initial_failure_evidence", 0))
+        unresolved_failure_count = int(coverage.get("failures", 0))
+    except (TypeError, ValueError) as exc:
+        raise EvolutionReasonDerivationError(
+            "capability gap failure evidence counts are invalid") from exc
+    # ``initial_failure_evidence`` covers independently repaired source
+    # failures (original_failure=REMOVED); unresolved FAIL/REGRESSION is kept
+    # separate but contributes to the same repeated-failure threshold.
+    if failure_count < min_failures or (
+            initial_failure_count + unresolved_failure_count < min_failures):
+        return None
+    if bool(coverage.get("promoted_asset", False)) or bool(
+            coverage.get("promoted_rule", False)):
+        return None
+    current_success = bool(coverage.get("successful_action_family", False))
+    if "successful_action_families" in coverage:
+        families = coverage.get("successful_action_families")
+        if not isinstance(families, (list, tuple, set, frozenset)):
+            raise EvolutionReasonDerivationError(
+                "capability gap successful_action_families is invalid")
+        current_success = current_success or bool(families)
+    if current_success or not transitions:
+        return None
+    if failure_transition_ids is None:
+        selected_failures = transitions[:min(failure_count, len(transitions))]
+    else:
+        if not isinstance(failure_transition_ids, (list, tuple)):
+            raise EvolutionReasonDerivationError(
+                "capability gap failure_transition_ids must be a sequence")
+        selected_failures = tuple(dict.fromkeys(
+            _text(item, "failure_transition_ids") for item in failure_transition_ids))
+        if not set(selected_failures) <= set(transitions):
+            raise EvolutionReasonDerivationError(
+                "capability gap failure evidence is outside the gap receipt")
+    if len(selected_failures) < min_failures:
+        return None
+    input_ids = (checked.receipt_id, checked_route.routing_receipt_id, *(
+        "transition_evidence:" + item for item in selected_failures))
+    input_digests = (
+        checked.receipt_digest,
+        checked_route.decision_digest,
+        *(_digest({"transition_id": item, "gap_id": checked.gap_id})
+          for item in selected_failures),
+    )
+    return EvolutionReasonDerivationReceipt(
+        campaign_id=campaign_id, case_id=case_id, reason="CAPABILITY_GAP",
+        derivation_mode="AGGREGATED_EVENT",
+        detector_name="capability_gap_aggregator",
+        detector_version=detector_version,
+        input_receipt_ids=input_ids, input_digests=input_digests,
+        lineage_ids=lineages, resolved_state_ids=())
 
 
 def _oracle_complete(receipt: CandidateExecutionReceipt) -> bool:
@@ -357,5 +479,6 @@ __all__ = [
     "EVOLUTION_REASON_DERIVATION_VERSION", "DERIVATION_MODES",
     "EVOLUTION_REASONS", "EvolutionReasonDerivationError",
     "EvolutionReasonDerivationReceipt", "derive_state_shift_reason",
-    "derive_memory_interference_reason", "p13_reason_receipt_from_derivations",
+    "derive_capability_gap_reason", "derive_memory_interference_reason",
+    "p13_reason_receipt_from_derivations",
 ]

@@ -35,12 +35,19 @@ from .p12_shadow_trigger import (
 from .reason_derivation import (
     DERIVATION_MODES, EVOLUTION_REASON_DERIVATION_VERSION,
     EVOLUTION_REASONS, EvolutionReasonDerivationError,
-    EvolutionReasonDerivationReceipt, derive_memory_interference_reason,
-    derive_state_shift_reason, p13_reason_receipt_from_derivations,
+    EvolutionReasonDerivationReceipt, derive_capability_gap_reason,
+    derive_memory_interference_reason, derive_state_shift_reason,
+    p13_reason_receipt_from_derivations,
 )
 from .admission import (
     EVOLUTION_ADMISSION_VERSION, EvolutionAdmissionError,
     EvolutionAdmissionReceipt, admit_evolution_reason,
+)
+from .capability_gap import (
+    CAPABILITY_GAP_PROPOSAL_VERSION, PROPOSAL_KINDS,
+    CapabilityGapEvolutionProposal, CapabilityGapProposalError,
+    propose_capability_gap_asset, propose_capability_gap_expansion,
+    propose_capability_gap_knowledge,
 )
 from .interference_revision import (
     INTERFERENCE_REVISION_VERSION, MemoryInterferenceRevisionError,
@@ -114,9 +121,14 @@ __all__ = [
     "EVOLUTION_REASON_DERIVATION_VERSION", "DERIVATION_MODES",
     "EVOLUTION_REASONS", "EvolutionReasonDerivationError",
     "EvolutionReasonDerivationReceipt", "derive_state_shift_reason",
-    "derive_memory_interference_reason", "p13_reason_receipt_from_derivations",
+    "derive_capability_gap_reason", "derive_memory_interference_reason",
+    "p13_reason_receipt_from_derivations",
     "EVOLUTION_ADMISSION_VERSION", "EvolutionAdmissionError",
     "EvolutionAdmissionReceipt", "admit_evolution_reason",
+    "CAPABILITY_GAP_PROPOSAL_VERSION", "PROPOSAL_KINDS",
+    "CapabilityGapEvolutionProposal", "CapabilityGapProposalError",
+    "propose_capability_gap_asset", "propose_capability_gap_expansion",
+    "propose_capability_gap_knowledge",
     "INTERFERENCE_REVISION_VERSION", "MemoryInterferenceRevisionError",
     "MemoryInterferenceEvolutionProposal",
     "propose_memory_interference_specialization",
