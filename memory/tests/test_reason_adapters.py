@@ -53,6 +53,13 @@ def test_known_or_audit_novelty_does_not_admit():
     assert blocked.admitted is False
     assert blocked.blocked_reason == "not_learner_eligible"
 
+    # A caller-supplied learner flag cannot upgrade an audit-only typed receipt.
+    blocked_override = admit_evolution_reason(
+        derivation, campaign_id="r3-adapter", learner_eligible=True,
+        novelty=audit)
+    assert blocked_override.admitted is False
+    assert blocked_override.blocked_reason == "missing_typed_novelty"
+
 
 def test_conflict_receipt_requires_evidence_and_roundtrips():
     conflict = ConflictReceipt(
