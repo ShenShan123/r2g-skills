@@ -28,6 +28,9 @@ CALIBRATION_STRATA = (
     "model_identity", "state_shift_dimension",
 )
 _ROUTER_MEMORY_DECISIONS = frozenset({"APPLY", "CONSIDER"})
+ORACLE_LABEL_DERIVATION_VERSION = "no-skill-oracle-label-v1"
+_POSITIVE_OUTCOMES = frozenset({"PASS", "PARTIAL"})
+_HARMFUL_OUTCOMES = frozenset({"FAIL", "REGRESSION"})
 _Z95 = 1.959963984540054
 
 
@@ -290,6 +293,111 @@ def build_no_skill_calibration_samples(
             confidence=label.get("confidence"), strata=label.get("strata") or {},
             routing_receipt_id=bundle_id))
     return tuple(rows)
+
+
+def derive_no_skill_oracle_label(
+        paired_receipt: object, *, state_shift_receipt: object | None = None,
+        strata: Mapping[str, str] | None = None,
+        confidence: float = 1.0, split: str = "calibration") -> dict[str, Any]:
+    """Derive one independent P15 label from a typed paired oracle receipt.
+
+    The router decision is deliberately not an input.  A complete
+    ``NO_MEMORY``/``ALWAYS_MEMORY`` counterfactual pair is classified by the
+    executable oracle outcomes: a harmful forced-memory result becomes
+    ``RISK`` (or ``STATE_SHIFT`` when a non-transferable typed shift witness is
+    supplied), a useful memory result becomes ``USE_MEMORY``, and a pair in
+    which neither policy is positive becomes ``NO_MATCH``.  This helper is
+    evaluation-only and accepts only the calibration split; it never writes a
+    support envelope or canonical memory.
+    """
+    if split != "calibration":
+        raise NoSkillCalibrationError(
+            "oracle label derivation is restricted to calibration split")
+    from tehm.evaluation.candidate_executor import PairedCandidateExecutionReceipt
+    from tehm.state.shift_receipts import StateShiftReceipt
+
+    if isinstance(paired_receipt, Mapping):
+        supplied = paired_receipt.get("receipt_digest")
+        try:
+            paired = PairedCandidateExecutionReceipt.from_dict(paired_receipt)
+        except (TypeError, ValueError) as exc:
+            raise NoSkillCalibrationError(
+                "paired oracle receipt is malformed") from exc
+        if supplied is not None and supplied != paired.receipt_digest:
+            raise NoSkillCalibrationError("paired oracle receipt digest mismatch")
+    elif isinstance(paired_receipt, PairedCandidateExecutionReceipt):
+        paired = paired_receipt
+    else:
+        raise NoSkillCalibrationError("paired oracle receipt is required")
+    if paired.evaluation_only is not True or paired.paired is not True:
+        raise NoSkillCalibrationError("paired oracle receipt must be evaluation-only")
+    baseline = paired.arm_receipts["NO_MEMORY"]
+    forced = paired.arm_receipts["ALWAYS_MEMORY"]
+    for name, receipt in (("NO_MEMORY", baseline), ("ALWAYS_MEMORY", forced)):
+        if (receipt.evaluation_only is not True or
+                receipt.compile_result == "UNKNOWN" or
+                receipt.functional_result == "UNKNOWN" or
+                receipt.signoff_result in {None, "UNKNOWN"} or
+                receipt.outcome == "UNKNOWN"):
+            raise NoSkillCalibrationError(
+                f"{name} oracle receipt is incomplete")
+
+    shift = None
+    if state_shift_receipt is not None:
+        if isinstance(state_shift_receipt, Mapping):
+            try:
+                shift = StateShiftReceipt.from_dict(state_shift_receipt)
+            except (TypeError, ValueError) as exc:
+                raise NoSkillCalibrationError(
+                    "state shift oracle receipt is malformed") from exc
+        elif isinstance(state_shift_receipt, StateShiftReceipt):
+            shift = state_shift_receipt
+        else:
+            raise NoSkillCalibrationError("state shift oracle receipt is invalid")
+        if shift.reason != "STATE_SHIFT" or shift.transferable is not False:
+            raise NoSkillCalibrationError(
+                "state shift oracle receipt must be non-transferable")
+        if paired.state_shift_receipt_id is not None and (
+                paired.state_shift_receipt_id != shift.receipt_id):
+            raise NoSkillCalibrationError(
+                "paired/state-shift oracle receipt binding mismatch")
+
+    if baseline.outcome in _POSITIVE_OUTCOMES and forced.outcome in _HARMFUL_OUTCOMES:
+        expected_decision = "NO_SKILL"
+        expected_reason = "STATE_SHIFT" if shift is not None else "RISK"
+    elif baseline.outcome in _POSITIVE_OUTCOMES or forced.outcome in _POSITIVE_OUTCOMES:
+        expected_decision, expected_reason = "USE_MEMORY", None
+    else:
+        expected_decision, expected_reason = "NO_SKILL", "NO_MATCH"
+
+    if strata is None:
+        strata = {}
+    if not isinstance(strata, Mapping):
+        raise NoSkillCalibrationError("oracle label strata must be an object")
+    normalized_strata = {}
+    for key, value in strata.items():
+        if key not in CALIBRATION_STRATA:
+            raise NoSkillCalibrationError(f"unsupported calibration stratum: {key}")
+        normalized_strata[key] = _text(value, f"strata.{key}")
+    confidence = _unit(confidence, "confidence")
+    derivation = {
+        "version": ORACLE_LABEL_DERIVATION_VERSION,
+        "derivation_mode": "TYPED_PAIRED_ORACLE",
+        "split": split,
+        "paired_receipt_digest": paired.receipt_digest,
+        "baseline_execution_receipt_id": baseline.execution_digest,
+        "forced_memory_execution_receipt_id": forced.execution_digest,
+        "state_shift_receipt_id": shift.receipt_id if shift is not None else None,
+        "expected_decision": expected_decision,
+        "expected_reason": expected_reason,
+    }
+    return {
+        "expected_decision": expected_decision,
+        "expected_reason": expected_reason,
+        "confidence": confidence,
+        "strata": dict(sorted(normalized_strata.items())),
+        "derivation": derivation,
+    }
 
 
 def _binary_summary(rows: Sequence[NoSkillCalibrationSample], *, include_bins: bool) -> dict:
@@ -590,5 +698,6 @@ __all__ = [
     "NoSkillCalibrationError", "NoSkillCalibrationSample",
     "NoSkillCalibrationReceipt", "wilson_interval",
     "mcnemar_regression_test",
-    "build_no_skill_calibration_samples", "evaluate_no_skill_calibration",
+    "build_no_skill_calibration_samples", "derive_no_skill_oracle_label",
+    "ORACLE_LABEL_DERIVATION_VERSION", "evaluate_no_skill_calibration",
 ]

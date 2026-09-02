@@ -28,10 +28,12 @@ from .paired_metrics import (
 from .no_skill_calibration import (
     NO_SKILL_CALIBRATION_VERSION, CALIBRATION_DECISIONS,
     CALIBRATION_REASONS, CALIBRATION_LABELS, CALIBRATION_STRATA,
+    ORACLE_LABEL_DERIVATION_VERSION,
     NoSkillCalibrationError, NoSkillCalibrationSample,
     NoSkillCalibrationReceipt, wilson_interval,
     mcnemar_regression_test,
-    build_no_skill_calibration_samples, evaluate_no_skill_calibration,
+    build_no_skill_calibration_samples, derive_no_skill_oracle_label,
+    evaluate_no_skill_calibration,
 )
 
 __all__ = [
@@ -50,8 +52,10 @@ __all__ = [
     "summarize_paired_cohort",
     "NO_SKILL_CALIBRATION_VERSION", "CALIBRATION_DECISIONS",
     "CALIBRATION_REASONS", "CALIBRATION_LABELS", "CALIBRATION_STRATA",
+    "ORACLE_LABEL_DERIVATION_VERSION",
     "NoSkillCalibrationError", "NoSkillCalibrationSample",
     "NoSkillCalibrationReceipt", "wilson_interval",
     "mcnemar_regression_test",
-    "build_no_skill_calibration_samples", "evaluate_no_skill_calibration",
+    "build_no_skill_calibration_samples", "derive_no_skill_oracle_label",
+    "evaluate_no_skill_calibration",
 ]

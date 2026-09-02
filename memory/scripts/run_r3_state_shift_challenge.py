@@ -38,7 +38,9 @@ from contracts import MemoryRoutingDecision  # noqa: E402
 from tehm import db  # noqa: E402
 from tehm.artifact_store import ArtifactStore  # noqa: E402
 from tehm.canonical.capture import capture  # noqa: E402
-from tehm.evaluation.candidate_executor import execute_candidate  # noqa: E402
+from tehm.evaluation.candidate_executor import (  # noqa: E402
+    execute_candidate, execute_paired_candidates,
+)
 from tehm.evaluation.rtl_candidate_oracle import IcarusCandidateOracle  # noqa: E402
 from tehm.evaluation.rtl_cohort import execute_rtl_paired_cohort  # noqa: E402
 from tehm.assets.receipts import RuntimeBindingReceipt  # noqa: E402
@@ -112,6 +114,33 @@ _SPECS = (
     },
 )
 
+# These source-disjoint variants are intentionally outside the two training
+# lineages.  They keep the same executable handshake mechanism while retaining
+# the original bug, so the R3-7 comparison can prove M_t failure -> M_t+1
+# success and then repeat the no-memory baseline for the -DeltaM ablation.
+_HELDOUT_SPECS = (
+    {
+        "key": "req_read",
+        "fixture": "req_ack_bug3",
+        "lineage": "lineage-r3-heldout-read",
+        "source_state": "RCV",
+        "target_state": "RD_DONE",
+        "condition": "rd_ack",
+        "buggy": "RCV:    next_state = RD_DONE;       // BUG: no rd_ack guard",
+        "fixed": "RCV:    if (rd_ack) next_state = RD_DONE;",
+    },
+    {
+        "key": "req_ready",
+        "fixture": "req_ack_bug4",
+        "lineage": "lineage-r3-heldout-ready",
+        "source_state": "WAIT",
+        "target_state": "DONE",
+        "condition": "ready",
+        "buggy": "WAIT: next_state = DONE;       // BUG: no ready guard",
+        "fixed": "WAIT: if (ready) next_state = DONE;",
+    },
+)
+
 
 def _sha256_file(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
@@ -154,8 +183,8 @@ def _candidate(spec: dict, state_id: str, knowledge_id: str) -> StructuredRepair
     target_state = spec["target_state"]
     condition = spec["condition"]
     target = (
-        rf"(?m)^[ \t]*{re.escape(source_state)}:[ \t]*if[ \t]*"
-        rf"\([ \t]*{re.escape(condition)}[ \t]*\)[ \t]*next_state"
+        rf"(?m)^[ \t]*{re.escape(source_state)}:[ \t]*"
+        rf"(?:if[ \t]*\([ \t]*{re.escape(condition)}[ \t]*\)[ \t]*)?next_state"
         rf"[ \t]*=[ \t]*{re.escape(target_state)}[ \t]*;"
     )
     replacement = f"{source_state}: if ({condition} && 1'b1) next_state = {target_state};"
@@ -399,6 +428,85 @@ def _build_p14_attribution(
             asset_selection=selection, runtime_binding=binding,
             execution=post_execution)
 
+        # R3-7 held-out/Delta-M ablation.  These cases retain the original
+        # buggy RTL in the frozen source copy: M_t (NO_MEMORY) must fail,
+        # M_t+1 (the typed guard-strengthening candidate) must pass, and a
+        # second NO_MEMORY replay is the explicit -DeltaM control.
+        heldout_rows: list[dict] = []
+        heldout_root = artifacts / "p14-heldout"
+        for spec in _HELDOUT_SPECS:
+            case_root = heldout_root / spec["key"]
+            fixture_root = ROOT / "tests" / "fixtures" / "rtl_projects" / spec["fixture"]
+            for subdir in ("rtl", "tb"):
+                shutil.copytree(fixture_root / subdir, case_root / subdir)
+            source = case_root / "rtl" / "req_ack_fsm.v"
+            original = source.read_text()
+            if spec["buggy"] not in original:
+                raise RuntimeError(f"held-out bug marker missing: {spec['fixture']}")
+            case_id = f"r3-p14-heldout-{spec['key']}"
+            heldout_case = {
+                "case_id": case_id,
+                "lineage_id": spec["lineage"],
+                "rtl_source": str(source),
+                "source_digest": _sha256_file(source),
+                "target_test": str(case_root / "tb" / "tb_handshake.v"),
+                "frozen_regression": str(case_root / "tb" / "tb_basic.v"),
+                "toolchain_digest": TOOLCHAIN_DIGEST,
+                "oracle_digest": ORACLE_DIGEST,
+            }
+            heldout_candidate = _candidate(
+                spec, f"r3-heldout-state-{spec['key']}", child.object_id)
+            heldout_pair = execute_paired_candidates(
+                heldout_case,
+                {"NO_MEMORY": None, "ALWAYS_MEMORY": heldout_candidate,
+                 "APPLICABILITY_GATED": heldout_candidate,
+                 "CAUSAL_NO_SKILL": heldout_candidate},
+                oracle=IcarusCandidateOracle(), budget=3,
+                lineage_id=spec["lineage"], routing_decision="CONSIDER")
+            removed_pair = execute_paired_candidates(
+                heldout_case,
+                {"NO_MEMORY": None, "ALWAYS_MEMORY": heldout_candidate,
+                 "APPLICABILITY_GATED": heldout_candidate,
+                 "CAUSAL_NO_SKILL": heldout_candidate},
+                oracle=IcarusCandidateOracle(), budget=3,
+                lineage_id=spec["lineage"], routing_decision="CONSIDER")
+            baseline = heldout_pair.arm_receipts["NO_MEMORY"]
+            candidate_execution = heldout_pair.arm_receipts["ALWAYS_MEMORY"]
+            removed_delta = removed_pair.arm_receipts["NO_MEMORY"]
+            if baseline.outcome not in {"FAIL", "REGRESSION"}:
+                raise RuntimeError(f"held-out M_t unexpectedly passed: {case_id}")
+            if candidate_execution.outcome not in {"PASS", "PARTIAL"}:
+                raise RuntimeError(f"held-out M_t+1 did not pass: {case_id}")
+            if removed_delta.outcome != baseline.outcome:
+                raise RuntimeError(f"held-out -DeltaM replay drifted: {case_id}")
+            heldout_rows.append({
+                "case": heldout_case,
+                "candidate": heldout_candidate,
+                "baseline": baseline,
+                "candidate_execution": candidate_execution,
+                "removed_delta": removed_delta,
+            })
+        heldout_evidence_path = artifacts / "receipts" / "p14_heldout_delta_m.json"
+        _write_json(heldout_evidence_path, {
+            "version": "tehm-r3-heldout-delta-m-v0.1",
+            "comparison": "M_t vs M_t+1 vs M_t+1-DeltaM",
+            "cases": [{
+                "case": row["case"],
+                "candidate": row["candidate"].to_dict(),
+                "M_t": {**row["baseline"].to_dict(),
+                        "execution_digest": row["baseline"].execution_digest},
+                "M_t+1": {**row["candidate_execution"].to_dict(),
+                           "execution_digest": row["candidate_execution"].execution_digest},
+                "M_t+1_minus_delta_M": {
+                    **row["removed_delta"].to_dict(),
+                    "execution_digest": row["removed_delta"].execution_digest,
+                },
+            } for row in heldout_rows],
+            "evaluation_only": True,
+            "canonical_memory_mutation": "none",
+            "production_authority_changed": False,
+        })
+
         baseline_execution = cohort.case_receipts[first_id].arm_receipts["NO_MEMORY"]
         baseline_behavior_digest = _sha256_payload({
             "route": pre_route.to_dict(), "execution": baseline_execution.to_dict()})
@@ -433,9 +541,9 @@ def _build_p14_attribution(
             runtime_id=runtime_id, baseline_behavior_digest=baseline_behavior_digest,
             candidate_behavior_digest=candidate_behavior_digest,
             # C5 target gain and C7 non-target regression are deliberately
-            # unclaimed here: this StateShift lane starts from an already
-            # fixed source and the dedicated held-out/Delta-M ablation sprint
-            # has not yet been run.
+            # unclaimed in this strategy projection: the StateShift lane
+            # starts from an already fixed source.  The separate held-out /
+            # Delta-M attribution below carries the capability gates.
             target_gain=False, no_regression=False,
             heldout={"verdict": "UNKNOWN", "disjoint_lineage": False},
             ablation={"gain_without_memory": False, "gain_with_memory": False},
@@ -449,6 +557,104 @@ def _build_p14_attribution(
                 "unresolved_conflicts": list(after_state.unresolved_conflicts)},
             candidate_lineage={**lineage.to_dict(), "receipt_digest": lineage.receipt_digest},
             strict_memory_delta=True, strict_expanded=False)
+
+        # The strategy attribution above intentionally leaves capability C5-C8
+        # unclaimed because its source is already fixed.  Evaluate the same
+        # shadow memory against the independent buggy held-out lineages in a
+        # separate runtime projection, with policy loads bound to the actual
+        # held-out executions and the explicit -DeltaM replay.
+        first_heldout = heldout_rows[0]
+        heldout_baseline_behavior_digest = _sha256_payload({
+            "case": first_heldout["case"],
+            "execution": first_heldout["baseline"].to_dict(),
+        })
+        heldout_candidate_behavior_digest = _sha256_payload({
+            "case": first_heldout["case"],
+            "candidate": first_heldout["candidate"].to_dict(),
+            "execution": first_heldout["candidate_execution"].to_dict(),
+        })
+        heldout_runtime_id = "tehm-r3-p14-heldout"
+        heldout_baseline_load = record_policy_load(
+            p14_conn, policy_snapshot_id=baseline_policy.policy_snapshot_id,
+            runtime_id=heldout_runtime_id, loaded=True,
+            receipt={"mode": "evaluation_only", "production_authority": False,
+                     "execution_receipt_id": first_heldout["baseline"].execution_digest,
+                     "behavior_digest": heldout_baseline_behavior_digest})
+        heldout_candidate_load = record_policy_load(
+            p14_conn, policy_snapshot_id=candidate_policy.policy_snapshot_id,
+            runtime_id=heldout_runtime_id, loaded=True,
+            receipt={"mode": "evaluation_only", "production_authority": False,
+                     "execution_receipt_id": first_heldout["candidate_execution"].execution_digest,
+                     "behavior_digest": heldout_candidate_behavior_digest})
+        heldout_attribution = evaluate_capability_attribution_from_db(
+            p14_conn, capability_id="capability:r3-state-shift-heldout-transfer",
+            baseline_memory_digest=memory_delta.baseline_memory_digest,
+            candidate_memory_digest=memory_delta.candidate_memory_digest,
+            baseline_policy_snapshot_id=baseline_policy.policy_snapshot_id,
+            candidate_policy_snapshot_id=candidate_policy.policy_snapshot_id,
+            runtime_id=heldout_runtime_id,
+            baseline_behavior_digest=heldout_baseline_behavior_digest,
+            candidate_behavior_digest=heldout_candidate_behavior_digest,
+            target_gain=all(row["baseline"].outcome not in {"PASS", "PARTIAL"} and
+                            row["candidate_execution"].outcome in {"PASS", "PARTIAL"}
+                            for row in heldout_rows),
+            no_regression=all(not row["candidate_execution"].created_regressions and
+                              row["candidate_execution"].outcome in {"PASS", "PARTIAL"}
+                              for row in heldout_rows),
+            heldout={
+                "verdict": "PASS",
+                "disjoint_lineage": len({row["case"]["lineage_id"] for row in heldout_rows}) >= 2,
+                "evidence_id": "heldout:" + _sha256_file(heldout_evidence_path),
+                "case_count": len(heldout_rows),
+                "baseline_outcomes": [row["baseline"].outcome for row in heldout_rows],
+                "candidate_outcomes": [row["candidate_execution"].outcome for row in heldout_rows],
+            },
+            ablation={
+                "gain_without_memory": any(
+                    row["removed_delta"].outcome in {"PASS", "PARTIAL"}
+                    for row in heldout_rows),
+                "gain_with_memory": all(
+                    row["candidate_execution"].outcome in {"PASS", "PARTIAL"}
+                    for row in heldout_rows),
+                "policy_snapshot_id": baseline_policy.policy_snapshot_id,
+                "policy_load_receipt_id": heldout_baseline_load.receipt_id,
+                "runtime_receipt_id": first_heldout["removed_delta"].execution_digest,
+                "behavior_digest": heldout_baseline_behavior_digest,
+                "evidence_id": "heldout:" + _sha256_file(heldout_evidence_path),
+            },
+            memory_delta=delta_manifest, shadow_update_receipt=shadow_receipt,
+            routing_receipts=[post_route],
+            state_resolution_receipt={
+                "resolution_id": after_state.resolution_id,
+                "input_memory_digest": after_state.input_memory_digest,
+                "resolution_digest": after_state.resolution_digest,
+                "relation_count": len(after_state.relation_ids),
+                "unresolved_conflicts": list(after_state.unresolved_conflicts),
+            },
+            candidate_lineage={**lineage.to_dict(), "receipt_digest": lineage.receipt_digest},
+            strict_memory_delta=True, strict_expanded=False)
+        _write_json(artifacts / "receipts" / "p14_capability_heldout_attribution.json", {
+            "version": "tehm-r3-p14-capability-heldout-v0.1",
+            "evaluation_only": True,
+            "canonical_memory_mutation": "none",
+            "production_authority_changed": False,
+            "heldout_evidence": {
+                "path": str(heldout_evidence_path),
+                "sha256": _sha256_file(heldout_evidence_path),
+            },
+            "policy_loads": {
+                "baseline": {**heldout_baseline_load.to_dict(),
+                              "receipt_id": heldout_baseline_load.receipt_id},
+                "candidate": {**heldout_candidate_load.to_dict(),
+                               "receipt_id": heldout_candidate_load.receipt_id},
+            },
+            "attribution": heldout_attribution.to_dict(),
+            "interpretation": (
+                "Independent buggy held-out lineages fail under M_t, pass under the "
+                "typed guard candidate in M_t+1, and return to failure when DeltaM is "
+                "removed. This is evaluation-only attribution; it does not authorize "
+                "promotion or production runtime import."),
+        })
         strategy_gates = {
             "C1_memory_changed": memory_delta.eligible,
             "C2_knowledge_or_relation_changed": bool(
@@ -467,12 +673,16 @@ def _build_p14_attribution(
             "strategy_gates": strategy_gates,
             "strategy_attribution_eligible": all(strategy_gates.values()),
             "capability_attribution": attribution.to_dict(),
+            "capability_heldout_attribution": heldout_attribution.to_dict(),
             "capability_claim_promotable": attribution.promotable,
             "c5_target_gain_claimed": False,
+            "heldout_c6_c8_claimed": heldout_attribution.promotable,
             "interpretation": (
                 "StateShift REVISE changed the typed state/route/candidate and the "
                 "post-revision candidate executed PASS. The starting source was already "
-                "fixed, so no repair target gain is claimed and C6-C8 remain pending."),
+                "fixed, so this strategy projection makes no repair target-gain claim. "
+                "A separate source-disjoint held-out/DeltaM projection is recorded "
+                "below for C5-C8."),
             "artifacts": {
                 "baseline_policy": baseline_policy.to_dict(),
                 "candidate_policy": candidate_policy.to_dict(),
@@ -483,13 +693,18 @@ def _build_p14_attribution(
                 "post_execution": {**post_execution.to_dict(),
                                    "execution_digest": post_execution.execution_digest},
                 "candidate_lineage": {**lineage.to_dict(), "receipt_digest": lineage.receipt_digest},
-                "after_state": after_state.to_dict(),
+                        "after_state": after_state.to_dict(),
+                        "heldout_delta_m": {
+                            "path": str(heldout_evidence_path),
+                            "sha256": _sha256_file(heldout_evidence_path),
+                        },
             },
         }
         _write_json(artifacts / "receipts" / "p14_strategy_attribution.json", report)
         return report, {"post_route": post_route, "post_candidate": post_candidate,
                         "post_execution": post_execution, "lineage": lineage,
-                        "after_state": after_state, "attribution": attribution}
+                        "after_state": after_state, "attribution": attribution,
+                        "heldout_attribution": heldout_attribution}
     finally:
         p14_conn.close()
 
@@ -767,6 +982,10 @@ def run(artifacts: Path, *, force: bool = False) -> dict:
         "p14_strategy_gates": p14_report["strategy_gates"],
         "p14_capability_gates": p14_report["capability_attribution"]["gates"],
         "p14_capability_claim_promotable": p14_report["capability_claim_promotable"],
+        "p14_heldout_capability_gates": p14_report[
+            "capability_heldout_attribution"]["gates"],
+        "p14_heldout_capability_claim_promotable": p14_report[
+            "heldout_c6_c8_claimed"],
         "canonical_counts_unchanged": before_counts == after_counts,
         "canonical_memory_mutation": shadow_receipt.canonical_memory_mutation,
         "production_authority_changed": shadow_receipt.production_authority_changed,

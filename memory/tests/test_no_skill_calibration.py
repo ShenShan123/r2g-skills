@@ -8,9 +8,12 @@ import pytest
 from contracts import MemoryRoutingDecision
 from tehm.evaluation.no_skill_calibration import (
     NoSkillCalibrationError, NoSkillCalibrationReceipt, NoSkillCalibrationSample,
-    build_no_skill_calibration_samples, evaluate_no_skill_calibration,
+    build_no_skill_calibration_samples, derive_no_skill_oracle_label,
+    evaluate_no_skill_calibration,
     mcnemar_regression_test, wilson_interval,
 )
+from tehm.evaluation.candidate_executor import execute_paired_candidates
+from tehm.retrieval.structured_candidate import StructuredRepairCandidate
 from tehm.retrieval.production_gate import evaluate_production_gate
 
 
@@ -55,6 +58,47 @@ def _route(decision, *, reason=None):
         causal_support={"status": "SUPPORTED"}, risk={}, abstain_reasons=(),
         no_memory_budget=1, memory_budget=1 if decision in {"APPLY", "CONSIDER"} else 0,
         no_skill_reason=reason)
+
+
+def _oracle_candidate() -> StructuredRepairCandidate:
+    return StructuredRepairCandidate(
+        candidate_id="calibration-deriver-candidate",
+        resolved_state_id="state", knowledge_object_id="knowledge@1",
+        causal_path_ids=("path",), asset_id="asset", action_family="AST_REWRITE",
+        concrete_action={"domain": "rtl.AST_REWRITE",
+                         "transformation_family": "AST_REWRITE",
+                         "payload": {"target": "x", "replacement": "x", "count": 1}},
+        applicability_receipt_id="app", binding_receipt_id="binding",
+        obligations=("TARGET",), evidence_level="L3_REPLICATED_EFFECT",
+        authority={"eligible": True}, risk={}, provenance={"evaluation_only": True})
+
+
+def _oracle_pair(case_id, baseline_outcome, memory_outcome):
+    def oracle(candidate, _case, _budget):
+        outcome = memory_outcome if candidate is not None else baseline_outcome
+        return {"compile_result": "PASS", "functional_result": outcome,
+                "signoff_result": "PASS" if outcome == "PASS" else "FAIL",
+                "outcome": outcome, "oracle_digest": "sha256:deriver-oracle"}
+    return execute_paired_candidates(
+        {"case_id": case_id, "toolchain_digest": "sha256:deriver-toolchain",
+         "oracle_digest": "sha256:deriver-oracle"},
+        {"NO_MEMORY": None, "ALWAYS_MEMORY": _oracle_candidate(),
+         "APPLICABILITY_GATED": _oracle_candidate(),
+         "CAUSAL_NO_SKILL": _oracle_candidate()},
+        oracle=oracle, budget=3, routing_decision="CONSIDER",
+        lineage_id=f"lineage-{case_id}", routing_receipt_id=f"route-{case_id}")
+
+
+def test_oracle_label_deriver_uses_paired_outcomes_not_router_reason():
+    useful = _oracle_pair("useful", "FAIL", "PASS")
+    harmful = _oracle_pair("harmful", "PASS", "FAIL")
+    no_match = _oracle_pair("no-match", "FAIL", "FAIL")
+    assert derive_no_skill_oracle_label(useful)["expected_decision"] == "USE_MEMORY"
+    assert derive_no_skill_oracle_label(harmful)["expected_reason"] == "RISK"
+    assert derive_no_skill_oracle_label(no_match)["expected_reason"] == "NO_MATCH"
+    incomplete = _oracle_pair("incomplete", "UNKNOWN", "PASS")
+    with pytest.raises(NoSkillCalibrationError, match="incomplete"):
+        derive_no_skill_oracle_label(incomplete)
 
 
 def test_wilson_interval_is_explicit_and_unknown_safe():

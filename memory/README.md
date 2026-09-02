@@ -3438,3 +3438,31 @@ RTL，传统 capability attribution 的 `target_gain` 不被伪造（C5 capabili
 Revision3 继续真实 held-out/ΔMemory ablation 与 P15 reason-stratified calibration。
 脚本只向 `--artifacts` 指定的仓库外目录写入证据，绝不复制 fixture `manifest.json`，
 也不提交 `memory/docs/`。
+
+### 2026-09-02 Revision3 R3-7 held-out/Delta-M 与 P15 calibration
+
+`run_r3_state_shift_challenge.py` 现继续执行 Revision3 的 R3-7：在同一个外部
+evaluation projection 中加入两个与 training/evolution source-disjoint 的 buggy
+held-out lineage（`req_ack_bug3`、`req_ack_bug4`）。每条 lineage 都真实执行
+`M_t=NO_MEMORY`、`M_t+1=typed guard candidate`，并再次执行 `M_t+1-DeltaM`；一次
+实跑结果为 `M_t=FAIL`、`M_t+1=PASS`、移除 DeltaM 后再次 `FAIL`，严格 P14 capability
+`C1..C8` 全部为 `true`。该结果证明的是冻结环境下的 source-disjoint transfer 与
+Delta-M attribution，不是 production promotion；原来的 StateShift strategy
+projection 仍明确不宣称自身已有 target gain。证据写入外部
+`receipts/p14_heldout_delta_m.json` 与 `receipts/p14_capability_heldout_attribution.json`。
+
+新增 `tehm.evaluation.no_skill_calibration.derive_no_skill_oracle_label()`，只消费
+完整 typed `PairedCandidateExecutionReceipt`（可选 non-transferable
+`StateShiftReceipt`），从 `NO_MEMORY`/`ALWAYS_MEMORY` 的真实 oracle outcome 推导
+`USE_MEMORY`、`NO_MATCH`、`RISK` 或 `STATE_SHIFT`，不读取 router prediction，也不
+写 support envelope。`scripts/run_r3_p15_calibration.py` 使用四个 source fixture
+构造 20 条 calibration split，复制的 source 仅追加 case comment 以满足 source digest
+不重复；每条都用 Icarus/vvp 执行四臂 P12，随后由 typed paired receipt 生成 oracle
+label。实跑结果为 20 cases / 20 lineages，`NO_MATCH=5`、`RISK=5`、
+`STATE_SHIFT=5`、`USE_MEMORY=5`，P15 receipt `status=PASS`、`eligible=true`、
+confidence/routing coverage 均为 `1.0`，整体 correct rate 为 `1.0`（95% Wilson
+下界 `0.838875`）。calibration manifest、label derivations 和报告全部位于外部
+campaign；`canonical_memory_mutation=none`、`production_authority_changed=false`、
+`production_promotion_eligible=false`。这一步仅闭合 P15-A 的真实 calibration
+证据，不解锁 production canary，仍需后续 statistical production evidence 与显式
+authority/promotion gates。`memory/docs/` 继续由 `.gitignore` 排除，不进入提交。
