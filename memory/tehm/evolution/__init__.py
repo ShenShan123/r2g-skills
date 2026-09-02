@@ -19,6 +19,10 @@ from .incremental_crystallize import (
 )
 from .manager import observe_transition
 from .novelty import NOVELTY_RECEIPT_VERSION, NoveltyReceipt, detect_novelty
+from .counterexample import (
+    COUNTEREXAMPLE_RECEIPT_VERSION, CounterexampleReceipt,
+    detect_counterexample,
+)
 from .repeated_failure import (
     REPEATED_FAILURE_RECEIPT_VERSION, RepeatedFailureReceipt,
     detect_repeated_failures,
@@ -42,8 +46,9 @@ from .reason_derivation import (
     DERIVATION_MODES, EVOLUTION_REASON_DERIVATION_VERSION,
     EVOLUTION_REASONS, EvolutionReasonDerivationError,
     EvolutionReasonDerivationReceipt, derive_capability_gap_reason,
-    derive_conflict_reason, derive_memory_interference_reason,
-    derive_novelty_reason, derive_repeated_failure_reason,
+    derive_conflict_reason, derive_counterexample_reason,
+    derive_memory_interference_reason, derive_novelty_reason,
+    derive_repeated_failure_reason,
     derive_state_shift_reason,
     p13_reason_receipt_from_derivations,
 )
@@ -121,6 +126,8 @@ __all__ = [
     "ConflictReceipt", "detect_conflicts", "NOVELTY_RECEIPT_VERSION",
     "NoveltyReceipt", "detect_novelty", "REPEATED_FAILURE_RECEIPT_VERSION",
     "RepeatedFailureReceipt", "detect_repeated_failures",
+    "COUNTEREXAMPLE_RECEIPT_VERSION", "CounterexampleReceipt",
+    "detect_counterexample",
     "attribute_failure", "failure_attribution_digest", "plan_localized_update",
     "RETRIEVAL_ATTRIBUTION_VERSION", "RetrievalAttributionError",
     "RetrievalAttributionReceipt", "attribute_retrieval_failure",
@@ -133,7 +140,8 @@ __all__ = [
     "EVOLUTION_REASONS", "EvolutionReasonDerivationError",
     "EvolutionReasonDerivationReceipt", "derive_state_shift_reason",
     "derive_capability_gap_reason", "derive_conflict_reason",
-    "derive_memory_interference_reason", "derive_novelty_reason",
+    "derive_counterexample_reason", "derive_memory_interference_reason",
+    "derive_novelty_reason",
     "derive_repeated_failure_reason",
     "p13_reason_receipt_from_derivations",
     "EVOLUTION_ADMISSION_VERSION", "EvolutionAdmissionError",

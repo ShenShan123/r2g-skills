@@ -12,13 +12,15 @@ from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import StateShiftReceipt
 from tehm.assets.receipts import CapabilityGapReceipt
 from .conflict import ConflictReceipt
+from .counterexample import CounterexampleReceipt
 from .novelty import NoveltyReceipt
 from .repeated_failure import RepeatedFailureReceipt
 
 from .reason_derivation import (
     EVOLUTION_REASONS, EvolutionReasonDerivationError,
     EvolutionReasonDerivationReceipt, derive_capability_gap_reason,
-    derive_conflict_reason, derive_memory_interference_reason,
+    derive_conflict_reason, derive_counterexample_reason,
+    derive_memory_interference_reason,
     derive_novelty_reason, derive_repeated_failure_reason,
     derive_state_shift_reason,
 )
@@ -195,6 +197,7 @@ def admit_evolution_reason(
         state_shift: StateShiftReceipt | Mapping | None = None,
         capability_gap: CapabilityGapReceipt | Mapping | None = None,
         failure_transition_ids: tuple[str, ...] | list[str] | None = None,
+        counterexample: CounterexampleReceipt | Mapping | None = None,
         novelty: NoveltyReceipt | Mapping | None = None,
         conflict: ConflictReceipt | Mapping | None = None,
         repeated_failure: RepeatedFailureReceipt | Mapping | None = None,
@@ -356,6 +359,64 @@ def admit_evolution_reason(
             return _blocked(derivation, required=required,
                             satisfied=tuple(satisfied), evidence=tuple(evidence),
                             reason="successful_current_action_family_exists")
+        return EvolutionAdmissionReceipt(
+            campaign_id=campaign_id, case_id=derivation.case_id,
+            reason=derivation.reason, derivation_receipt_ids=(derivation.receipt_id,),
+            evidence_receipt_ids=_unique(evidence), required_evidence=required,
+            satisfied_evidence=tuple(satisfied), admitted=True)
+
+    if derivation.reason == "COUNTEREXAMPLE":
+        required = ("learner_eligible", "typed_counterexample",
+                    "valid_applicability", "valid_binding",
+                    "complete_oracle_contradiction")
+        satisfied: list[str] = []
+        if learner_eligible:
+            satisfied.append("learner_eligible")
+        checked_counterexample = None
+        checked_derivation = None
+        if counterexample is not None:
+            try:
+                checked_counterexample = (
+                    counterexample if isinstance(counterexample, CounterexampleReceipt)
+                    else CounterexampleReceipt.from_dict(counterexample))
+                checked_derivation = derive_counterexample_reason(
+                    checked_counterexample, campaign_id=campaign_id,
+                    case_id=derivation.case_id)
+            except (EvolutionReasonDerivationError, TypeError, ValueError):
+                checked_derivation = None
+        if (checked_counterexample is not None and checked_derivation is not None and
+                checked_derivation.receipt_digest == derivation.receipt_digest and
+                checked_counterexample.learner_eligible is True):
+            satisfied.append("typed_counterexample")
+            if checked_counterexample.applicability_status == "APPLICABLE":
+                satisfied.append("valid_applicability")
+            if checked_counterexample.binding_status == "BOUND":
+                satisfied.append("valid_binding")
+            if (checked_counterexample.oracle_complete is True and
+                    checked_counterexample.contradiction_types):
+                satisfied.append("complete_oracle_contradiction")
+            evidence = (*evidence, checked_counterexample.receipt_id,
+                        *checked_derivation.input_receipt_ids)
+        if not learner_eligible:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="not_learner_eligible")
+        if "typed_counterexample" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_typed_counterexample")
+        if "valid_applicability" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="invalid_applicability")
+        if "valid_binding" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="invalid_binding")
+        if "complete_oracle_contradiction" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_complete_oracle_contradiction")
         return EvolutionAdmissionReceipt(
             campaign_id=campaign_id, case_id=derivation.case_id,
             reason=derivation.reason, derivation_receipt_ids=(derivation.receipt_id,),

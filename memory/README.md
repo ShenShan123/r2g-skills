@@ -3321,6 +3321,20 @@ receipt，必须消费当前 status version 匹配且在 ledger 中存在的 aut
 该 ledger 仍不提供 `promoted` 状态，也不自动晋级或导入 production runtime；
 `memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
 
+### 2026-09-02 Revision3 P1-R3 counterexample reason
+
+新增 `CounterexampleReceipt` 与 `detect_counterexample()`：检测器必须同时绑定
+显式 Knowledge prediction、`APPLICABLE` applicability witness、`BOUND` binding
+witness、structured candidate execution，以及由 real oracle 提供的
+`observed_outcome`/`observed_effects`。候选 `FAIL` 本身不会生成
+`COUNTEREXAMPLE`；只有预测和完整 oracle 观察发生确定矛盾时才生成 typed reason。
+
+`derive_counterexample_reason()` 和 admission gate 只产生 evaluation/shadow
+证据，要求 learner-eligible、有效 applicability/binding 和完整 oracle contradiction，
+不修改 canonical memory，也不改变 production authority。真实 Icarus/vvp challenge
+位于 `scripts/run_r3_counterexample_challenge.py`，报告记录 candidate `FAIL`、两类
+矛盾、source digest 不变及 `production_promotion_eligible=false`。
+
 ### 2026-09-02 Revision3 P1-R4 repeated-failure reason
 
 新增 `RepeatedFailureReceipt` 与 `detect_repeated_failures()`：仅聚合当前

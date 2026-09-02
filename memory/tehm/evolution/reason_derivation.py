@@ -21,6 +21,7 @@ from tehm.state.shift_receipts import StateShiftReceipt
 from contracts import MemoryRoutingDecision
 from tehm.assets.receipts import CapabilityGapReceipt
 from .conflict import ConflictReceipt
+from .counterexample import CounterexampleReceipt
 from .novelty import NoveltyReceipt
 from .repeated_failure import RepeatedFailureReceipt
 
@@ -256,6 +257,16 @@ def _conflict_receipt(value: object) -> ConflictReceipt:
             "conflict reason input receipt is invalid") from exc
 
 
+def _counterexample_receipt(value: object) -> CounterexampleReceipt:
+    if isinstance(value, CounterexampleReceipt):
+        return value
+    try:
+        return CounterexampleReceipt.from_dict(value)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise EvolutionReasonDerivationError(
+            "counterexample reason input receipt is invalid") from exc
+
+
 def _repeated_failure_receipt(value: object) -> RepeatedFailureReceipt:
     if isinstance(value, RepeatedFailureReceipt):
         return value
@@ -453,6 +464,38 @@ def derive_conflict_reason(
         lineage_ids=(checked.lineage_id,), resolved_state_ids=())
 
 
+def derive_counterexample_reason(
+        counterexample: CounterexampleReceipt | Mapping, *, campaign_id: str,
+        case_id: str, detector_version: str = "counterexample-reason-v1",
+) -> EvolutionReasonDerivationReceipt | None:
+    """Adapt a bound prediction/oracle contradiction into reason evidence."""
+    checked = _counterexample_receipt(counterexample)
+    campaign_id = _text(campaign_id, "campaign_id")
+    case_id = _text(case_id, "case_id")
+    if checked.campaign_id != campaign_id or checked.case_id != case_id:
+        raise EvolutionReasonDerivationError(
+            "counterexample reason campaign or case mismatch")
+    if not checked.contradiction_types:
+        return None
+    if (checked.applicability_status != "APPLICABLE" or
+            checked.binding_status != "BOUND" or
+            checked.execution_source != "structured_memory" or
+            checked.oracle_complete is not True):
+        raise EvolutionReasonDerivationError(
+            "counterexample reason requires valid binding and complete oracle")
+    return EvolutionReasonDerivationReceipt(
+        campaign_id=campaign_id, case_id=case_id, reason="COUNTEREXAMPLE",
+        derivation_mode="EX_POST_COUNTERFACTUAL",
+        detector_name="counterexample_receipt_adapter",
+        detector_version=detector_version,
+        input_receipt_ids=(checked.receipt_id, checked.execution_receipt_id,
+                           "oracle_evidence:" + checked.oracle_digest),
+        input_digests=(checked.receipt_digest, checked.execution_digest,
+                       checked.oracle_digest),
+        lineage_ids=(checked.lineage_id,),
+        resolved_state_ids=(checked.resolved_state_id,))
+
+
 def derive_repeated_failure_reason(
         repeated: RepeatedFailureReceipt | Mapping, *, campaign_id: str,
         case_id: str, min_independent_observations: int = 2,
@@ -608,7 +651,8 @@ __all__ = [
     "EVOLUTION_REASONS", "EvolutionReasonDerivationError",
     "EvolutionReasonDerivationReceipt", "derive_state_shift_reason",
     "derive_capability_gap_reason", "derive_novelty_reason",
-    "derive_conflict_reason", "derive_repeated_failure_reason",
+    "derive_conflict_reason", "derive_counterexample_reason",
+    "derive_repeated_failure_reason",
     "derive_memory_interference_reason",
     "p13_reason_receipt_from_derivations",
 ]
