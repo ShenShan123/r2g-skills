@@ -3321,6 +3321,22 @@ receipt，必须消费当前 status version 匹配且在 ledger 中存在的 aut
 该 ledger 仍不提供 `promoted` 状态，也不自动晋级或导入 production runtime；
 `memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
 
+### 2026-09-02 Revision3 P1-R4 repeated-failure reason
+
+新增 `RepeatedFailureReceipt` 与 `detect_repeated_failures()`：仅聚合当前
+campaign 的 training/learner-eligible `FAIL/REGRESSION` transition，并通过
+`require_verified_transition()` 重新确认每条证据具有完整 executable oracle；至少需要
+两条 failure 且跨两个 lineage 或 resolution，不能把同一 case 重跑当作独立失败。新增
+`derive_repeated_failure_reason()` 与 admission 分支后，`REPEATED_FAILURE` 不需要 P12
+paired counterfactual，但仍不能直接修改 canonical memory 或 production authority。
+
+`scripts/run_r3_repeated_failure_challenge.py` 对两个 RTL fixture 应用真实的
+constant-false guard action，并由 Icarus/vvp 确认 target+regression aggregate `FAIL`；
+外部 shadow SQLite 中得到 2 条完整 oracle failure、2 个 lineage、typed derivation 和
+admission 均通过。该报告明确记录 `oracle_complete=[true,true]`、
+`canonical_memory_mutation=none`、`production_promotion_eligible=false`，不将该负向
+challenge 当作能力增益。
+
 ### 2026-09-01 State-shift observation and repeated-shift proposal seam
 
 新增 `STATE_SHIFT_OBSERVED` 事件桥接与 `load_state_shift_observations()`，要求

@@ -19,6 +19,10 @@ from .incremental_crystallize import (
 )
 from .manager import observe_transition
 from .novelty import NOVELTY_RECEIPT_VERSION, NoveltyReceipt, detect_novelty
+from .repeated_failure import (
+    REPEATED_FAILURE_RECEIPT_VERSION, RepeatedFailureReceipt,
+    detect_repeated_failures,
+)
 from .attribution import (
     FAILURE_TYPES, UPDATE_TARGETS, MemoryFailureAttributionReceipt,
     attribute_failure, failure_attribution_digest,
@@ -39,7 +43,8 @@ from .reason_derivation import (
     EVOLUTION_REASONS, EvolutionReasonDerivationError,
     EvolutionReasonDerivationReceipt, derive_capability_gap_reason,
     derive_conflict_reason, derive_memory_interference_reason,
-    derive_novelty_reason, derive_state_shift_reason,
+    derive_novelty_reason, derive_repeated_failure_reason,
+    derive_state_shift_reason,
     p13_reason_receipt_from_derivations,
 )
 from .admission import (
@@ -114,7 +119,8 @@ __all__ = [
     "verify_raw_evidence_unchanged", "ANTI_FORGETTING_VERSION",
     "AntiForgettingWitness",
     "ConflictReceipt", "detect_conflicts", "NOVELTY_RECEIPT_VERSION",
-    "NoveltyReceipt", "detect_novelty",
+    "NoveltyReceipt", "detect_novelty", "REPEATED_FAILURE_RECEIPT_VERSION",
+    "RepeatedFailureReceipt", "detect_repeated_failures",
     "attribute_failure", "failure_attribution_digest", "plan_localized_update",
     "RETRIEVAL_ATTRIBUTION_VERSION", "RetrievalAttributionError",
     "RetrievalAttributionReceipt", "attribute_retrieval_failure",
@@ -128,6 +134,7 @@ __all__ = [
     "EvolutionReasonDerivationReceipt", "derive_state_shift_reason",
     "derive_capability_gap_reason", "derive_conflict_reason",
     "derive_memory_interference_reason", "derive_novelty_reason",
+    "derive_repeated_failure_reason",
     "p13_reason_receipt_from_derivations",
     "EVOLUTION_ADMISSION_VERSION", "EvolutionAdmissionError",
     "EvolutionAdmissionReceipt", "admit_evolution_reason",

@@ -13,12 +13,14 @@ from tehm.state.shift_receipts import StateShiftReceipt
 from tehm.assets.receipts import CapabilityGapReceipt
 from .conflict import ConflictReceipt
 from .novelty import NoveltyReceipt
+from .repeated_failure import RepeatedFailureReceipt
 
 from .reason_derivation import (
     EVOLUTION_REASONS, EvolutionReasonDerivationError,
     EvolutionReasonDerivationReceipt, derive_capability_gap_reason,
     derive_conflict_reason, derive_memory_interference_reason,
-    derive_novelty_reason, derive_state_shift_reason,
+    derive_novelty_reason, derive_repeated_failure_reason,
+    derive_state_shift_reason,
 )
 
 
@@ -195,6 +197,7 @@ def admit_evolution_reason(
         failure_transition_ids: tuple[str, ...] | list[str] | None = None,
         novelty: NoveltyReceipt | Mapping | None = None,
         conflict: ConflictReceipt | Mapping | None = None,
+        repeated_failure: RepeatedFailureReceipt | Mapping | None = None,
         routing: MemoryRoutingDecision | None = None,
         memory_arm: str = "ALWAYS_MEMORY") -> EvolutionAdmissionReceipt:
     """Apply a reason-specific P13 gate without accepting a mutation plan."""
@@ -359,6 +362,55 @@ def admit_evolution_reason(
             evidence_receipt_ids=_unique(evidence), required_evidence=required,
             satisfied_evidence=tuple(satisfied), admitted=True)
 
+    if derivation.reason == "REPEATED_FAILURE":
+        required = ("learner_eligible", "typed_repeated_failure",
+                    "independent_complete_oracle_failures")
+        satisfied: list[str] = []
+        if learner_eligible:
+            satisfied.append("learner_eligible")
+        checked_repeated = None
+        checked_derivation = None
+        if repeated_failure is not None:
+            try:
+                checked_repeated = (
+                    repeated_failure if isinstance(
+                        repeated_failure, RepeatedFailureReceipt) else
+                    RepeatedFailureReceipt.from_dict(repeated_failure))
+                checked_derivation = derive_repeated_failure_reason(
+                    checked_repeated, campaign_id=campaign_id,
+                    case_id=derivation.case_id)
+            except (EvolutionReasonDerivationError, TypeError, ValueError):
+                checked_derivation = None
+        if (checked_repeated is not None and checked_derivation is not None and
+                checked_derivation.receipt_digest == derivation.receipt_digest and
+                checked_repeated.learner_eligible is True):
+            satisfied.append("typed_repeated_failure")
+            if (checked_repeated.independent_observation_count >= 2 and
+                    len(checked_repeated.failure_transition_ids) >= 2 and
+                    len(checked_repeated.oracle_digests) == len(
+                        checked_repeated.failure_transition_ids) and
+                    all(checked_repeated.oracle_complete)):
+                satisfied.append("independent_complete_oracle_failures")
+            evidence = (*evidence, checked_repeated.receipt_id,
+                        *checked_derivation.input_receipt_ids)
+        if not learner_eligible:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="not_learner_eligible")
+        if "typed_repeated_failure" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_typed_repeated_failure")
+        if "independent_complete_oracle_failures" not in satisfied:
+            return _blocked(derivation, required=required,
+                            satisfied=tuple(satisfied), evidence=tuple(evidence),
+                            reason="missing_independent_complete_oracle_failures")
+        return EvolutionAdmissionReceipt(
+            campaign_id=campaign_id, case_id=derivation.case_id,
+            reason=derivation.reason, derivation_receipt_ids=(derivation.receipt_id,),
+            evidence_receipt_ids=_unique(evidence), required_evidence=required,
+            satisfied_evidence=tuple(satisfied), admitted=True)
+
     if derivation.reason == "NOVELTY":
         required = ("learner_eligible", "typed_novelty", "no_existing_learner_path")
         satisfied: list[str] = []
@@ -376,7 +428,8 @@ def admit_evolution_reason(
             except (EvolutionReasonDerivationError, TypeError, ValueError):
                 checked_derivation = None
         if (checked_novelty is not None and checked_derivation is not None and
-                checked_derivation.receipt_digest == derivation.receipt_digest):
+                checked_derivation.receipt_digest == derivation.receipt_digest and
+                checked_novelty.learner_eligible is True):
             satisfied.append("typed_novelty")
             if (not checked_novelty.path_exists and
                     checked_novelty.status == "NOVEL_MECHANISM"):

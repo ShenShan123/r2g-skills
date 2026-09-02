@@ -22,6 +22,7 @@ from contracts import MemoryRoutingDecision
 from tehm.assets.receipts import CapabilityGapReceipt
 from .conflict import ConflictReceipt
 from .novelty import NoveltyReceipt
+from .repeated_failure import RepeatedFailureReceipt
 
 
 EVOLUTION_REASON_DERIVATION_VERSION = "evolution-reason-derivation-v0.1"
@@ -255,6 +256,16 @@ def _conflict_receipt(value: object) -> ConflictReceipt:
             "conflict reason input receipt is invalid") from exc
 
 
+def _repeated_failure_receipt(value: object) -> RepeatedFailureReceipt:
+    if isinstance(value, RepeatedFailureReceipt):
+        return value
+    try:
+        return RepeatedFailureReceipt.from_dict(value)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise EvolutionReasonDerivationError(
+            "repeated failure reason input receipt is invalid") from exc
+
+
 def derive_state_shift_reason(
         shift: StateShiftReceipt | Mapping, *, campaign_id: str, case_id: str,
         routing: MemoryRoutingDecision,
@@ -442,6 +453,39 @@ def derive_conflict_reason(
         lineage_ids=(checked.lineage_id,), resolved_state_ids=())
 
 
+def derive_repeated_failure_reason(
+        repeated: RepeatedFailureReceipt | Mapping, *, campaign_id: str,
+        case_id: str, min_independent_observations: int = 2,
+        detector_version: str = "repeated-failure-reason-v1",
+) -> EvolutionReasonDerivationReceipt | None:
+    """Adapt complete repeated-failure evidence into a typed reason."""
+    checked = _repeated_failure_receipt(repeated)
+    campaign_id = _text(campaign_id, "campaign_id")
+    case_id = _text(case_id, "case_id")
+    if checked.campaign_id != campaign_id:
+        raise EvolutionReasonDerivationError(
+            "repeated failure reason campaign mismatch")
+    if checked.independent_observation_count < min_independent_observations:
+        return None
+    if len(checked.failure_transition_ids) < min_independent_observations:
+        return None
+    input_ids = (checked.receipt_id, *(
+        "transition_evidence:" + item for item in checked.failure_transition_ids))
+    input_digests = (
+        checked.receipt_digest,
+        *(_digest({"transition_id": item, "campaign_id": campaign_id,
+                   "failure_family": checked.failure_family})
+          for item in checked.failure_transition_ids),
+    )
+    return EvolutionReasonDerivationReceipt(
+        campaign_id=campaign_id, case_id=case_id, reason="REPEATED_FAILURE",
+        derivation_mode="AGGREGATED_EVENT",
+        detector_name="repeated_failure_aggregator",
+        detector_version=detector_version,
+        input_receipt_ids=input_ids, input_digests=input_digests,
+        lineage_ids=checked.evidence_lineages, resolved_state_ids=())
+
+
 def _oracle_complete(receipt: CandidateExecutionReceipt) -> bool:
     return (
         receipt.evaluation_only is True and
@@ -564,6 +608,7 @@ __all__ = [
     "EVOLUTION_REASONS", "EvolutionReasonDerivationError",
     "EvolutionReasonDerivationReceipt", "derive_state_shift_reason",
     "derive_capability_gap_reason", "derive_novelty_reason",
-    "derive_conflict_reason", "derive_memory_interference_reason",
+    "derive_conflict_reason", "derive_repeated_failure_reason",
+    "derive_memory_interference_reason",
     "p13_reason_receipt_from_derivations",
 ]
