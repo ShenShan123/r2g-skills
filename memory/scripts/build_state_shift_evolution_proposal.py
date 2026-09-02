@@ -25,14 +25,18 @@ if str(ROOT) not in sys.path:
 from tehm.db import connect_read_only  # noqa: E402
 from tehm.evolution import (  # noqa: E402
     StateShiftEvolutionError,
+    load_state_shift_observations,
     propose_repeated_state_shift_from_events,
+    propose_repeated_state_shift_from_paired_receipts,
     state_shift_proposal_to_localized_plan,
 )
+from tehm.evaluation import PairedCandidateExecutionReceipt  # noqa: E402
 from tehm.ids import stable_dumps  # noqa: E402
 
 
 MANIFEST_VERSION = "state-shift-evolution-manifest-v1"
 REPORT_VERSION = "state-shift-evolution-proposal-report-v1"
+PAIRED_RECEIPTS_VERSION = "p12-paired-receipts-map-v1"
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset({
     "fix", "gold", "gold_patch", "repaired_rtl", "heldout_answer",
@@ -121,6 +125,25 @@ def _frozen_snapshot(path: Path) -> None:
                 f"source DB is not a frozen snapshot; remove sidecar {sidecar}")
 
 
+def _paired_receipts(path: Path, transition_ids: Sequence[str]) -> dict[str, PairedCandidateExecutionReceipt]:
+    payload = _load_json(path, "P12 paired receipts map")
+    if payload.get("version") != PAIRED_RECEIPTS_VERSION:
+        raise StateShiftProposalScriptError("P12 paired receipts map version mismatch")
+    raw = payload.get("receipts")
+    if not isinstance(raw, Mapping) or set(raw) != set(transition_ids):
+        raise StateShiftProposalScriptError(
+            "P12 paired receipts must cover exactly all transition IDs")
+    result: dict[str, PairedCandidateExecutionReceipt] = {}
+    for transition_id in transition_ids:
+        try:
+            result[transition_id] = PairedCandidateExecutionReceipt.from_dict(
+                raw[transition_id])
+        except (TypeError, ValueError) as exc:
+            raise StateShiftProposalScriptError(
+                f"P12 paired receipt for {transition_id} is invalid") from exc
+    return result
+
+
 def _validate_manifest_source(payload: Mapping, manifest_path: Path,
                               source_path: Path, source_digest: str) -> None:
     declared = payload.get("source_db")
@@ -138,7 +161,8 @@ def _validate_manifest_source(payload: Mapping, manifest_path: Path,
 
 def build_state_shift_evolution_proposal(
         source_db: Path | str, manifest: Path | str, *,
-        output: Path | str, plan_output: Path | str | None = None) -> dict:
+        output: Path | str, plan_output: Path | str | None = None,
+        paired_receipts: Path | str | None = None) -> dict:
     """Replay one frozen event-log snapshot and emit proposal evidence."""
     source_path = Path(source_db).expanduser().resolve()
     manifest_path = Path(manifest).expanduser().resolve()
@@ -147,10 +171,19 @@ def build_state_shift_evolution_proposal(
                  if plan_output is not None else None)
     if not source_path.is_file():
         raise StateShiftProposalScriptError(f"source DB is not a file: {source_path}")
-    if output_path in {source_path, manifest_path} or plan_path in {
+    paired_path = (Path(paired_receipts).expanduser().resolve()
+                   if paired_receipts is not None else None)
+    if output_path in {source_path, manifest_path}:
+        raise StateShiftProposalScriptError(
+            "proposal inputs/outputs must be separate from source DB and manifest")
+    if plan_path is not None and plan_path in {
             source_path, manifest_path, output_path}:
         raise StateShiftProposalScriptError(
-            "proposal outputs must be separate from source DB and manifest")
+            "proposal inputs/outputs must be separate from source DB and manifest")
+    if paired_path is not None and paired_path in {
+            source_path, manifest_path, output_path, plan_path}:
+        raise StateShiftProposalScriptError(
+            "proposal inputs/outputs must be separate from source DB and manifest")
     payload = _load_json(manifest_path, "state-shift evolution manifest")
     if payload.get("version") != MANIFEST_VERSION:
         raise StateShiftProposalScriptError("state-shift evolution manifest version mismatch")
@@ -160,9 +193,18 @@ def build_state_shift_evolution_proposal(
     campaign_id = _text(payload.get("campaign_id"), "campaign_id")
     knowledge_object_id = _text(payload.get("knowledge_object_id"), "knowledge_object_id")
     transition_ids = _strings(payload.get("transition_ids"), "transition_ids")
-    no_memory_outcomes = _outcomes(payload.get("no_memory_outcomes"), "no_memory_outcomes")
-    historical_memory_outcomes = _outcomes(
-        payload.get("historical_memory_outcomes"), "historical_memory_outcomes")
+    if paired_path is not None and (
+            "no_memory_outcomes" in payload or
+            "historical_memory_outcomes" in payload):
+        raise StateShiftProposalScriptError(
+            "paired receipts mode cannot mix hand-written outcome fields")
+    no_memory_outcomes = None
+    historical_memory_outcomes = None
+    if paired_path is None:
+        no_memory_outcomes = _outcomes(
+            payload.get("no_memory_outcomes"), "no_memory_outcomes")
+        historical_memory_outcomes = _outcomes(
+            payload.get("historical_memory_outcomes"), "historical_memory_outcomes")
     evidence_refs = _strings(payload.get("evidence_refs"), "evidence_refs")
     raw_min = payload.get("min_repeats", 2)
     if type(raw_min) is not int or raw_min < 2:
@@ -173,6 +215,9 @@ def build_state_shift_evolution_proposal(
     partitions = _strings(
         payload.get("partition_evidence_refs", ()),
         "partition_evidence_refs", allow_empty=True)
+    if paired_path is not None and not paired_path.is_file():
+        raise StateShiftProposalScriptError(
+            f"P12 paired receipts map is not a file: {paired_path}")
     source_digest = _sha256(source_path)
     _validate_manifest_source(payload, manifest_path, source_path, source_digest)
     _frozen_snapshot(source_path)
@@ -182,16 +227,67 @@ def build_state_shift_evolution_proposal(
     except (OSError, RuntimeError, ValueError) as exc:
         raise StateShiftProposalScriptError(str(exc)) from exc
     try:
-        proposal = propose_repeated_state_shift_from_events(
-            conn, campaign_id=campaign_id,
-            knowledge_object_id=knowledge_object_id,
-            transition_ids=transition_ids,
-            no_memory_outcomes=no_memory_outcomes,
-            historical_memory_outcomes=historical_memory_outcomes,
-            evidence_refs=evidence_refs, min_repeats=raw_min,
-            requested_operation=requested_operation,
-            partition_evidence_refs=partitions,
-        )
+        if paired_path is None:
+            proposal = propose_repeated_state_shift_from_events(
+                conn, campaign_id=campaign_id,
+                knowledge_object_id=knowledge_object_id,
+                transition_ids=transition_ids,
+                no_memory_outcomes=no_memory_outcomes,
+                historical_memory_outcomes=historical_memory_outcomes,
+                evidence_refs=evidence_refs, min_repeats=raw_min,
+                requested_operation=requested_operation,
+                partition_evidence_refs=partitions,
+            )
+        else:
+            try:
+                observations = load_state_shift_observations(
+                    conn, campaign_id=campaign_id,
+                    knowledge_object_id=knowledge_object_id)
+                by_transition = {event.source_id: (event, receipt)
+                                 for event, receipt in observations}
+                selected = []
+                missing = []
+                for transition_id in transition_ids:
+                    item = by_transition.get(transition_id)
+                    if item is None:
+                        missing.append(transition_id)
+                    else:
+                        selected.append(item)
+                if missing:
+                    raise StateShiftProposalScriptError(
+                        "state-shift event map is missing transitions: "
+                        + ",".join(missing))
+                eligibility = {event.learner_eligible for event, _receipt in selected}
+                if len(eligibility) != 1:
+                    raise StateShiftProposalScriptError(
+                        "paired proposal cannot mix learner and audit observations")
+                paired = _paired_receipts(paired_path, transition_ids)
+                paired_observations = [
+                    (receipt, paired[transition_id])
+                    for transition_id, (_event, receipt) in zip(transition_ids, selected)
+                ]
+                paired_refs = set(evidence_refs)
+                paired_refs.update(
+                    ref for event, receipt in selected
+                    for ref in (event.event_digest, receipt.receipt_id))
+                for transition_id in transition_ids:
+                    pair = paired[transition_id]
+                    paired_refs.update({
+                        pair.receipt_digest, pair.routing_receipt_id,
+                        pair.arm_receipts["NO_MEMORY"].execution_digest,
+                        pair.arm_receipts["ALWAYS_MEMORY"].execution_digest,
+                    })
+                proposal = propose_repeated_state_shift_from_paired_receipts(
+                    paired_observations, knowledge_object_id=knowledge_object_id,
+                    transition_ids=transition_ids, evidence_refs=tuple(sorted(paired_refs)),
+                    learner_eligible=next(iter(eligibility)), min_repeats=raw_min,
+                    requested_operation=requested_operation,
+                    partition_evidence_refs=partitions,
+                )
+            except StateShiftProposalScriptError:
+                raise
+            except (StateShiftEvolutionError, TypeError, ValueError) as exc:
+                raise StateShiftProposalScriptError(str(exc)) from exc
     except (StateShiftEvolutionError, TypeError, ValueError) as exc:
         raise StateShiftProposalScriptError(str(exc)) from exc
     finally:
@@ -232,6 +328,12 @@ def build_state_shift_evolution_proposal(
         "manifest_digest": _digest(payload),
         "source_db": str(source_path),
         "source_db_sha256": source_digest,
+        "paired_receipts": ({
+            "path": str(paired_path), "sha256": _sha256(paired_path),
+            "version": PAIRED_RECEIPTS_VERSION,
+        } if paired_path is not None else None),
+        "outcome_source": ("typed_paired_receipts" if paired_path is not None
+                           else "explicit_manifest"),
         "campaign_id": campaign_id,
         "knowledge_object_id": knowledge_object_id,
         "transition_ids": list(transition_ids),
@@ -257,11 +359,13 @@ def main(argv=None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--plan-output", type=Path,
                         help="optional serialized LocalizedUpdatePlan")
+    parser.add_argument("--paired-receipts", type=Path,
+                        help="optional transition-keyed P12 paired receipt map")
     args = parser.parse_args(argv)
     try:
         report = build_state_shift_evolution_proposal(
             args.source_db, args.manifest, output=args.output,
-            plan_output=args.plan_output)
+            plan_output=args.plan_output, paired_receipts=args.paired_receipts)
     except (OSError, StateShiftProposalScriptError) as exc:
         parser.error(str(exc))
     print(json.dumps({

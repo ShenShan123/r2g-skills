@@ -12,6 +12,7 @@ from scripts.build_state_shift_evolution_proposal import (
     StateShiftProposalScriptError,
     build_state_shift_evolution_proposal,
 )
+from tehm.evaluation import CandidateExecutionReceipt, PairedCandidateExecutionReceipt
 from tehm.evolution import append_state_shift_observation
 from tehm.knowledge import MechanismKnowledge
 from tehm.state import build_support_envelope, evaluate_state_shift
@@ -132,3 +133,66 @@ def test_command_rejects_output_collision_with_source(tmp_path):
     manifest = _manifest(path, receipts, events)
     with pytest.raises(StateShiftProposalScriptError, match="separate"):
         build_state_shift_evolution_proposal(path, manifest, output=path)
+
+
+def _paired_receipt(shift, case_id: str) -> PairedCandidateExecutionReceipt:
+    def arm(name: str, source: str, outcome: str) -> CandidateExecutionReceipt:
+        return CandidateExecutionReceipt(
+            case_id=case_id, candidate_id=f"{name}:{case_id}", source=source,
+            action_digest=f"action:{name}:{case_id}", compile_result="PASS",
+            functional_result="PASS", signoff_result="PASS", outcome=outcome,
+            created_regressions=(), obligations={}, toolchain_digest="toolchain:fixed",
+            oracle_digest="oracle:fixed", produced_transition_id=None,
+            candidate_digest=f"candidate:{name}:{case_id}", budget=1,
+            metadata={"oracle_available": True})
+
+    return PairedCandidateExecutionReceipt(
+        case_id=case_id,
+        arm_receipts={
+            "NO_MEMORY": arm("no-memory", "no_memory", "PASS"),
+            "ALWAYS_MEMORY": arm("always-memory", "structured_memory", "FAIL"),
+            "APPLICABILITY_GATED": arm("applicability", "structured_memory", "FAIL"),
+            "CAUSAL_NO_SKILL": arm("causal", "structured_memory", "FAIL"),
+        },
+        candidate_budget=1, case_digest=f"case:{case_id}",
+        toolchain_digest="toolchain:fixed", oracle_digest="oracle:fixed",
+        no_skill_reason="STATE_SHIFT", state_shift_receipt_id=shift.receipt_id,
+        lineage_id=f"lineage:{case_id}", routing_receipt_id=f"routing:{case_id}")
+
+
+def test_command_can_derive_outcomes_from_typed_paired_receipts(tmp_path):
+    path, receipts, events = _frozen_audit_snapshot(tmp_path)
+    pair_map = tmp_path / "paired.json"
+    pair_map.write_text(json.dumps({
+        "version": "p12-paired-receipts-map-v1",
+        "receipts": {
+            event.source_id: {**_paired_receipt(receipt, event.source_id).to_dict(),
+                              "receipt_digest": _paired_receipt(
+                                  receipt, event.source_id).receipt_digest}
+            for event, receipt in zip(events, receipts)
+        },
+    }, indent=2, sort_keys=True) + "\n")
+    manifest = _manifest(path, receipts, events)
+    payload = json.loads(manifest.read_text())
+    payload.pop("no_memory_outcomes")
+    payload.pop("historical_memory_outcomes")
+    manifest.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    report = build_state_shift_evolution_proposal(
+        path, manifest, output=tmp_path / "report.json",
+        paired_receipts=pair_map)
+    assert report["outcome_source"] == "typed_paired_receipts"
+    assert report["proposal"]["no_memory_outcomes"] == ["PASS", "PASS"]
+    assert report["proposal"]["historical_memory_outcomes"] == ["FAIL", "FAIL"]
+    assert report["proposal"]["evolution_reason"] == "NOT_LEARNER_ELIGIBLE"
+
+
+def test_command_rejects_mixed_manual_and_paired_outcomes(tmp_path):
+    path, receipts, events = _frozen_audit_snapshot(tmp_path)
+    pair_map = tmp_path / "paired.json"
+    pair_map.write_text(json.dumps({"version": "p12-paired-receipts-map-v1",
+                                    "receipts": {}}, sort_keys=True))
+    manifest = _manifest(path, receipts, events)
+    with pytest.raises(StateShiftProposalScriptError, match="cannot mix"):
+        build_state_shift_evolution_proposal(
+            path, manifest, output=tmp_path / "report.json",
+            paired_receipts=pair_map)

@@ -3294,6 +3294,12 @@ witness、输入输出碰撞或 gold/repair 字段时均 fail-closed。该命令
 推断 evolution reason，不写 canonical memory、authority 或 production runtime；生成的
 plan 仍必须经过 P12 trigger 与 anti-forgetting gates 才能尝试 isolated staging。
 
+命令也支持 `--paired-receipts`：输入 `p12-paired-receipts-map-v1`（按 transition ID
+索引的 typed `PairedCandidateExecutionReceipt`）后，脚本从 paired 的
+`NO_MEMORY`/`ALWAYS_MEMORY` arm 读取 oracle outcome，并自动绑定 paired、route 与
+execution digests；此模式拒绝 manifest 中同时存在手写 outcome，避免人工标签覆盖真实
+执行 receipt。
+
 同时新增 `append_routed_state_shift_observation()`，用于把实际的 typed
 `MemoryRoutingDecision(decision=NO_SKILL, no_skill_reason=STATE_SHIFT)` 绑定为
 `STATE_SHIFT_OBSERVED`。它强制校验 route 的 `state_shift_receipt_id`、resolved
