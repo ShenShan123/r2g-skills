@@ -2998,6 +2998,11 @@ campaign 与 digest witness，并在打开 source 前预检所有非 `RETAIN` �
 可以回放真正 eligible 的 P13 proposal，但不会写 canonical、lifecycle 或 production
 runtime；当前真实 ORFS cohort 仍因缺少独立 evolution reason 而不能调用它。
 
+当前 manifest 还必须显式绑定 `trigger_report_digest` 与 `source_db_sha256`。runner
+在打开 source SQLite 前同时校验这两个跨文件摘要，避免把合法 trigger report 或 plan
+接到另一份数据库快照上；输出 receipt 会保留期望的 source digest。该约束只加强
+evaluation/shadow replay 的 provenance，不授予 canonical memory 或 production authority。
+
 对于非 `RETAIN` mutation，manifest 还必须通过 `anti_forgetting_receipts` 引用上述
 binder 生成的 report；runner 会重新校验 report 文件 SHA256、版本、campaign/case、
 嵌套 witness digest 和 `eligible` 摘要，并将绑定 witness 注入执行 evidence。内联手工

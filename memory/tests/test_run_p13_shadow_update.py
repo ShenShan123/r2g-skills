@@ -77,6 +77,9 @@ def _inputs(tmp_path: Path, *, trigger: P12ShadowUpdateTriggerReceipt | None = N
     manifest.write_text(json.dumps({
         "version": "p13-shadow-update-manifest-v1", "campaign_id": "live",
         "source_db": db.name,
+        "source_db_sha256": "sha256:" + hashlib.sha256(
+            db.read_bytes()).hexdigest(),
+        "trigger_report_digest": report_payload["report_digest"],
         "updates": {"case-0": {"plan": plan_payload,
                                 "evidence": {"p12_shadow_trigger": {
                                     **trigger.to_dict(),
@@ -172,6 +175,25 @@ def test_p13_runner_rejects_input_output_collision(tmp_path):
     db, trigger_report, manifest = _inputs(tmp_path)
     with pytest.raises(P13ShadowRunError, match="separate"):
         run_p13_shadow_update(trigger_report, manifest, output=db)
+
+
+def test_p13_runner_rejects_manifest_cross_file_digest_drift(tmp_path):
+    db, trigger_report, manifest = _inputs(tmp_path)
+    payload = json.loads(manifest.read_text())
+    payload["trigger_report_digest"] = "sha256:" + "0" * 64
+    manifest.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowRunError, match="trigger report digest disagrees"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
+
+    payload = json.loads(manifest.read_text())
+    payload["trigger_report_digest"] = json.loads(
+        trigger_report.read_text())["report_digest"]
+    payload["source_db_sha256"] = "sha256:" + "1" * 64
+    manifest.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowRunError, match="source DB digest disagrees"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
 
 
 def test_p13_runner_preflights_anti_forgetting_before_opening_source(tmp_path, monkeypatch):

@@ -69,6 +69,13 @@ def _text(value: object, name: str) -> str:
     return value.strip()
 
 
+def _digest_text(value: object, name: str) -> str:
+    value = _text(value, name)
+    if not value.startswith("sha256:") or len(value) != len("sha256:") + 64:
+        raise P13ShadowRunError(f"{name} must be a sha256 digest")
+    return value
+
+
 def _trigger_map(path: Path) -> tuple[dict, dict[str, P12ShadowUpdateTriggerReceipt]]:
     report = _load_json(path, "P13 trigger report")
     if report.get("version") != "p13-shadow-trigger-report-v1":
@@ -289,6 +296,11 @@ def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
     payload = _load_json(manifest_path, "P13 shadow update manifest")
     if payload.get("version") != MANIFEST_VERSION:
         raise P13ShadowRunError("P13 shadow update manifest version mismatch")
+    declared_trigger_digest = _digest_text(
+        payload.get("trigger_report_digest"), "trigger_report_digest")
+    if declared_trigger_digest != report.get("report_digest"):
+        raise P13ShadowRunError(
+            "P13 shadow update manifest trigger report digest disagrees")
     campaign_id = _text(payload.get("campaign_id"), "manifest campaign_id")
     if campaign_id != report["campaign_id"]:
         raise P13ShadowRunError("manifest campaign_id does not match trigger report")
@@ -296,6 +308,8 @@ def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
     if not source_path.is_absolute():
         source_path = manifest_path.parent / source_path
     source_path = source_path.resolve()
+    declared_source_digest = _digest_text(
+        payload.get("source_db_sha256"), "source_db_sha256")
     output_path = Path(output).expanduser().resolve()
     if output_path in {source_path, trigger_path, manifest_path}:
         raise P13ShadowRunError(
@@ -310,6 +324,9 @@ def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
         manifest_path=manifest_path,
         forbidden_paths={manifest_path, output_path, source_path})
     source_sha_before = _sha256(source_path)
+    if declared_source_digest != source_sha_before:
+        raise P13ShadowRunError(
+            "P13 shadow update manifest source DB digest disagrees")
     conn = _open_read_only(source_path)
     receipts: dict[str, AppliedShadowUpdateReceipt] = {}
     try:
@@ -338,6 +355,7 @@ def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
         "manifest_sha256": _sha256(manifest_path),
         "manifest_digest": _digest(payload),
         "source_db": str(source_path),
+        "source_db_sha256_expected": declared_source_digest,
         "source_db_sha256_before": source_sha_before,
         "source_db_sha256_after": source_sha_after,
         "campaign_id": campaign_id,
