@@ -1,6 +1,7 @@
 """P1 current-valid-state resolution and relation firewall tests."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 
@@ -8,9 +9,12 @@ import pytest
 
 from tehm import db
 from tehm.state import (
-    StateResolutionError, ensure_state_schema, load_resolution_snapshot,
-    record_relation, resolve_current_state, verify_resolution_snapshot,
+    RelationAuthorityReceipt, StateResolutionError, ensure_state_schema,
+    load_resolution_snapshot, record_relation, record_relation_authority,
+    resolve_current_state, verify_relation_authority,
+    verify_resolution_snapshot,
 )
+from tehm.ids import stable_dumps
 
 
 def _rule(conn: sqlite3.Connection, rule_id: str, *, scope: str = "global") -> None:
@@ -95,6 +99,32 @@ def test_informational_relation_is_not_authority_gated_or_suppressing(tmp_tehm):
     assert relation.relation_id in state.shadow_relation_ids
 
 
+def test_relation_authority_ledger_allows_production_state_effect(tmp_tehm):
+    conn, _, _ = tmp_tehm
+    _rule(conn, "rule-old")
+    _rule(conn, "rule-new")
+    relation = record_relation(
+        conn, source_type="rule", source_id="rule-new", relation_type="SUPERSEDES",
+        target_type="rule", target_id="rule-old", evidence_refs=("authority-witness",))
+    authority = record_relation_authority(
+        conn, relation.relation_id, authority_type="rule-authority",
+        evidence_refs=("authority-witness",), approved_effect="suppress_target")
+    assert verify_relation_authority(conn, authority)["eligible"] is True
+    state = resolve_current_state(
+        conn, {"target_scope": "global"}, mode="production", persist=False)
+    assert state.active_rules == ("rule-new",)
+    assert state.shadow_relation_ids == ()
+    assert state.suppressed[0].relation_id == relation.relation_id
+
+    conn.execute(
+        "UPDATE tehm_relation_authority_receipts SET receipt_json=? "
+        "WHERE authority_receipt_id=?", ("{}", authority.receipt_id))
+    conn.commit()
+    with pytest.raises(StateResolutionError, match="UNRESOLVED_AUTHORITY"):
+        resolve_current_state(
+            conn, {"target_scope": "global"}, mode="production", persist=False)
+
+
 def test_relation_cycle_is_fail_closed(tmp_tehm):
     conn, _, _ = tmp_tehm
     _rule(conn, "rule-a")
@@ -172,6 +202,33 @@ def test_state_tables_are_added_to_an_existing_v4_store(tmp_path):
     tables = {row["name"] for row in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"tehm_memory_relations", "tehm_state_resolution_snapshots"} <= tables
+    assert "tehm_relation_authority_receipts" in tables
     assert conn.execute(
         "SELECT value FROM tehm_meta WHERE key='schema_version'").fetchone()[0] == "tehm-v4"
     conn.close()
+
+
+def test_relation_authority_receipt_is_content_addressed_and_replayable():
+    payload = {
+        "version": "relation-authority-v1",
+        "relation_id": "relation_123",
+        "authority_type": "rule-authority",
+        "eligible": True,
+        "evidence_refs": ["authority-evidence"],
+        "scope": {"target_scope": "global"},
+        "approved_effect": "suppress_target",
+    }
+    receipt = RelationAuthorityReceipt(
+        relation_id=payload["relation_id"],
+        authority_type=payload["authority_type"], eligible=payload["eligible"],
+        evidence_refs=tuple(payload["evidence_refs"]),
+        replay_digest="sha256:" + hashlib.sha256(
+            stable_dumps(payload).encode()).hexdigest(),
+        scope=payload["scope"], approved_effect=payload["approved_effect"],
+    )
+    replay = RelationAuthorityReceipt.from_dict(receipt.to_dict())
+    assert replay == receipt
+    assert receipt.receipt_id.startswith("relation_authority_")
+    tampered = {**receipt.to_dict(), "approved_effect": "retire_source"}
+    with pytest.raises(ValueError, match="replay digest mismatch|receipt digest mismatch"):
+        RelationAuthorityReceipt.from_dict(tampered)

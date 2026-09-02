@@ -2870,7 +2870,10 @@ P1 relation resolver 现在显式区分 informational、state-affecting 和 conf
 informational edge（`DERIVED_FROM`、`SPECIALIZES` 等）在 production replay 中不需要
 authority，也不改变 active set；state-affecting edge 仍必须绑定可验证 authority，
 否则 production fail-closed；`CONTRADICTS` 两端同时 active 时保持 unresolved。
-新增 `RelationAuthorityReceipt` 作为独立的 relation→authority 审计边界。
+新增 `RelationAuthorityReceipt` 作为独立的 relation→authority 审计边界；receipt 现在
+要求显式 approved effect，并以 content-addressed `replay_digest`/`receipt_id` 做
+from-dict 重放与篡改拒绝。该 typed receipt 仍只是 authority evidence seam，不会自行
+修改 relation、lifecycle 或 production runtime。
 
 fixture manifest binder 已明确标记 `binding_source=fixture_manifest`、
 `runtime_eligible=false`。新增 `bind_asset_to_repair_context()` 只接受 RTL 结构、

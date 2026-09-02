@@ -35,6 +35,21 @@ CREATE INDEX IF NOT EXISTS idx_memory_relations_target
 CREATE INDEX IF NOT EXISTS idx_memory_relations_scope
     ON tehm_memory_relations(relation_type, scope_json);
 
+CREATE TABLE IF NOT EXISTS tehm_relation_authority_receipts (
+    authority_receipt_id TEXT PRIMARY KEY,
+    relation_id          TEXT NOT NULL,
+    authority_type       TEXT NOT NULL,
+    eligible              INTEGER NOT NULL,
+    scope_json            TEXT NOT NULL,
+    evidence_refs_json    TEXT NOT NULL,
+    approved_effect       TEXT,
+    receipt_json          TEXT NOT NULL,
+    receipt_digest        TEXT NOT NULL UNIQUE,
+    created_at            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_relation_authority_relation
+    ON tehm_relation_authority_receipts(relation_id);
+
 CREATE TABLE IF NOT EXISTS tehm_state_resolution_snapshots (
     resolution_id            TEXT PRIMARY KEY,
     input_memory_digest      TEXT NOT NULL,

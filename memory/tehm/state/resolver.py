@@ -23,6 +23,7 @@ from tehm.ids import stable_dumps
 from .receipts import ResolvedMemoryState, SuppressionReceipt, StateResolutionReceipt
 from .relations import MemoryRelation, load_relations
 from .schema import ensure_state_schema
+from .authority import verify_relation_authority
 from .validation import normalize_scope, parse_json_array, parse_json_object
 from .validation import (
     CONFLICT_RELATIONS, INFORMATIONAL_RELATIONS, STATE_AFFECTING_RELATIONS,
@@ -72,6 +73,7 @@ def _input_digest(conn: sqlite3.Connection, scope: dict,
         "tehm_mechanism_knowledge", "tehm_mechanism_knowledge_status",
         "tehm_mechanism_knowledge_evidence",
         "tehm_memory_relations",
+        "tehm_relation_authority_receipts",
     )
     payload = {"scope": scope, "relations": [item.to_dict() for item in relations]}
     for table in tables:
@@ -118,6 +120,34 @@ def _authority_ref_valid(conn: sqlite3.Connection, relation: MemoryRelation,
     return isinstance(receipt, dict)
 
 
+def _relation_authority_valid(conn: sqlite3.Connection,
+                              relation: MemoryRelation,
+                              requested_scope: dict) -> bool:
+    """Replay a relation-specific authority receipt for this scope."""
+    if not _table_exists(conn, "tehm_relation_authority_receipts"):
+        return False
+    rows = conn.execute(
+        """SELECT authority_receipt_id, receipt_json
+             FROM tehm_relation_authority_receipts
+            WHERE relation_id=? AND eligible=1""", (relation.relation_id,)
+    ).fetchall()
+    for row in rows:
+        try:
+            result = verify_relation_authority(
+                conn, json.loads(row["receipt_json"]))
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+            continue
+        if (result.get("eligible") is True and
+                result.get("authority_receipt_id") == row["authority_receipt_id"]):
+            payload = json.loads(row["receipt_json"])
+            scope = payload.get("scope")
+            if (isinstance(scope, Mapping) and
+                    dict(scope) == relation.scope and
+                    _scope_matches(scope, requested_scope)):
+                return True
+    return False
+
+
 def _validate_authority(conn: sqlite3.Connection, relation: MemoryRelation,
                         requested_scope: dict, mode: str) -> bool:
     # Informational and conflict edges are never authority-gated.  A conflict
@@ -128,6 +158,8 @@ def _validate_authority(conn: sqlite3.Connection, relation: MemoryRelation,
     if relation.relation_type not in STATE_AFFECTING_RELATIONS:
         raise StateResolutionError(
             f"unsupported relation authority class: {relation.relation_type}")
+    if _relation_authority_valid(conn, relation, requested_scope):
+        return True
     if relation.authority_ref is None:
         if mode == "production":
             raise StateResolutionError(

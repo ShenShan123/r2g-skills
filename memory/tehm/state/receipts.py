@@ -1,8 +1,24 @@
 """Typed receipts emitted by the state-relation/resolution shadow lane."""
 from __future__ import annotations
 
+import hashlib
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+
+from tehm.ids import stable_dumps
+
+
+RELATION_AUTHORITY_VERSION = "relation-authority-v1"
+_APPROVED_EFFECTS = frozenset({
+    "suppress_target", "retire_source", "replace_source",
+})
+
+
+def _relation_authority_digest(payload: Mapping) -> str:
+    return "sha256:" + hashlib.sha256(
+        stable_dumps(dict(payload)).encode()).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -21,6 +37,7 @@ class RelationAuthorityReceipt:
     replay_digest: str
     scope: dict
     approved_effect: str | None = None
+    version: str = RELATION_AUTHORITY_VERSION
 
     def __post_init__(self) -> None:
         if type(self.relation_id) is not str or not self.relation_id:
@@ -32,24 +49,88 @@ class RelationAuthorityReceipt:
         if not isinstance(self.evidence_refs, tuple) or any(
                 type(item) is not str or not item for item in self.evidence_refs):
             raise ValueError("relation authority evidence_refs are invalid")
-        if type(self.replay_digest) is not str or not self.replay_digest:
-            raise ValueError("relation authority replay_digest is required")
+        if len(set(self.evidence_refs)) != len(self.evidence_refs):
+            raise ValueError("relation authority evidence_refs contain duplicates")
+        object.__setattr__(self, "evidence_refs", tuple(sorted(self.evidence_refs)))
+        if type(self.replay_digest) is not str or not self.replay_digest.startswith("sha256:"):
+            raise ValueError("relation authority replay_digest must be a sha256 digest")
         if not isinstance(self.scope, dict):
             raise ValueError("relation authority scope must be an object")
-        if self.approved_effect is not None and self.approved_effect not in {
-                "suppress_target", "retire_source", "replace_source"}:
+        try:
+            encoded = stable_dumps(self.scope)
+            if not isinstance(json.loads(encoded), dict):
+                raise ValueError
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ValueError("relation authority scope must be JSON-serializable") from exc
+        if type(self.version) is not str or not self.version:
+            raise ValueError("relation authority version is required")
+        if self.approved_effect is not None and self.approved_effect not in _APPROVED_EFFECTS:
             raise ValueError("relation authority approved_effect is invalid")
+        if self.eligible and self.approved_effect is None:
+            raise ValueError(
+                "eligible relation authority requires an approved_effect")
+        if self.replay_digest != _relation_authority_digest(self._payload()):
+            raise ValueError("relation authority replay digest mismatch")
 
-    def to_dict(self) -> dict[str, Any]:
+    def _payload(self) -> dict:
         return {
+            "version": self.version,
             "relation_id": self.relation_id,
             "authority_type": self.authority_type,
             "eligible": self.eligible,
             "evidence_refs": list(self.evidence_refs),
-            "replay_digest": self.replay_digest,
             "scope": dict(self.scope),
             "approved_effect": self.approved_effect,
         }
+
+    @property
+    def receipt_digest(self) -> str:
+        """Alias the replay digest for receipt APIs that use that vocabulary."""
+        return self.replay_digest
+
+    @property
+    def receipt_id(self) -> str:
+        return "relation_authority_" + self.replay_digest.split(":", 1)[1][:24]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            **self._payload(),
+            "replay_digest": self.replay_digest,
+            "receipt_digest": self.receipt_digest,
+            "receipt_id": self.receipt_id,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "RelationAuthorityReceipt":
+        if not isinstance(payload, Mapping):
+            raise ValueError("relation authority receipt must be an object")
+        required = {
+            "relation_id", "authority_type", "eligible", "evidence_refs",
+            "replay_digest", "scope", "approved_effect",
+        }
+        if not required <= set(payload):
+            raise ValueError("relation authority receipt is missing fields")
+        refs = payload["evidence_refs"]
+        if not isinstance(refs, (list, tuple)) or isinstance(refs, (str, bytes)):
+            raise ValueError("relation authority evidence_refs must be a sequence")
+        scope = payload["scope"]
+        if not isinstance(scope, Mapping):
+            raise ValueError("relation authority scope must be an object")
+        receipt = cls(
+            relation_id=payload["relation_id"],
+            authority_type=payload["authority_type"],
+            eligible=payload["eligible"], evidence_refs=tuple(refs),
+            replay_digest=payload["replay_digest"], scope=dict(scope),
+            approved_effect=payload["approved_effect"],
+            version=payload.get("version", RELATION_AUTHORITY_VERSION),
+        )
+        supplied_digest = payload.get("receipt_digest")
+        if supplied_digest is not None and supplied_digest != receipt.receipt_digest:
+            raise ValueError("relation authority receipt digest mismatch")
+        supplied_id = payload.get("receipt_id")
+        if supplied_id is not None and supplied_id != receipt.receipt_id:
+            raise ValueError("relation authority receipt ID mismatch")
+        return receipt
 
 
 @dataclass(frozen=True)
@@ -149,7 +230,8 @@ class StateResolutionReceipt:
 
 
 __all__ = [
-    "MemoryRelationReceipt", "RelationAuthorityReceipt", "ResolvedMemoryState",
+    "RELATION_AUTHORITY_VERSION", "MemoryRelationReceipt",
+    "RelationAuthorityReceipt", "ResolvedMemoryState",
     "StateResolutionReceipt",
     "SuppressionReceipt",
 ]
