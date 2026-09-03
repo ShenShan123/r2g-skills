@@ -1285,20 +1285,28 @@ def build_trial_authority_evidence(
             if type(utility) is not str or not utility.strip():
                 raise ValueError("trial_authority:utility_verdict_malformed")
             utility = utility.strip().upper()
-            if utility not in {"HARMFUL", "REGRESSION", "PARETO_SAFE",
-                               "SUPPORT", "NEUTRAL", "PASS"}:
+            # A real execution can establish verification without an
+            # independent utility/PPA verdict.  Capture adapters encode that
+            # state as UNKNOWN; it must remain an unestablished harmful-rate
+            # gate, not be treated as malformed evidence or an implicit safe
+            # outcome.
+            if utility in {"", "UNKNOWN"}:
+                utility = None
+            elif utility not in {"HARMFUL", "REGRESSION", "PARETO_SAFE",
+                                 "SUPPORT", "NEUTRAL", "PASS"}:
                 raise ValueError("trial_authority:utility_verdict_malformed")
-            evidence["harmful_rate"].append({
-                "evidence_id": f"{base_id}:utility",
-                "split": "ab", "lineage_id": lineage_id, "verdict": "PASS",
-                "payload": {
-                    "trial_id": row_trial_id,
-                    "trial_uuid": row_trial_uuid,
-                    "activation_id": activation_id,
-                    "utility_verdict": utility,
-                    "harmful": utility in {"HARMFUL", "REGRESSION"},
-                },
-            })
+            if utility is not None:
+                evidence["harmful_rate"].append({
+                    "evidence_id": f"{base_id}:utility",
+                    "split": "ab", "lineage_id": lineage_id, "verdict": "PASS",
+                    "payload": {
+                        "trial_id": row_trial_id,
+                        "trial_uuid": row_trial_uuid,
+                        "activation_id": activation_id,
+                        "utility_verdict": utility,
+                        "harmful": utility in {"HARMFUL", "REGRESSION"},
+                    },
+                })
 
     rule_row = _rule_row(conn, rule_id)
     digest = _rule_content_digest(rule_row)

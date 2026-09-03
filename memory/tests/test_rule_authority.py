@@ -261,6 +261,47 @@ def test_trial_authority_projection_replays_activation_witnesses(
             conn, trial_id=trial_id, rule_id=rule_id, target_scope="drc")
 
 
+def test_trial_authority_projection_treats_unknown_utility_as_unestablished(
+        tmp_tehm, sample_record_dict):
+    """Verification without an independent utility verdict stays fail-closed."""
+    conn, rule_id, version, trial_id = _candidate_with_trial(
+        tmp_tehm, sample_record_dict)
+    rollback = {
+        "version": "test-rollback-v1",
+        "source_before_digest": "sha256:before",
+        "source_after_restore_digest": "sha256:before",
+        "verified": True,
+    }
+    persist_activation(
+        conn,
+        ActivationRecord(
+            activation_id="act-authority-unknown-utility",
+            rule_id=rule_id, target_state_id="target-authority-unknown",
+            obligation_coverage=1.0, rollback_receipt=rollback,
+            outcome="PASS", verification_status="PASS", trial_uuid="authority-trial"),
+    )
+    metrics = {
+        "arms_differ": True, "obligation_coverage": 1.0,
+        "created_regressions": [],
+        "pairs": [{
+            "activation_id": "act-authority-unknown-utility",
+            "subject_lineage": "authority-lineage-unknown",
+            "repeat": 1, "obligation_coverage": 1.0,
+            "created_regressions": [], "rollback_receipt": rollback,
+        }],
+    }
+    conn.execute("UPDATE tehm_trials SET metrics_json=? WHERE trial_id=?",
+                 (json.dumps(metrics, sort_keys=True), trial_id))
+    conn.commit()
+    evidence = build_trial_authority_evidence(
+        conn, trial_id=trial_id, rule_id=rule_id, target_scope="drc")
+    assert evidence["harmful_rate"] == []
+    receipt = record_rule_authority(
+        conn, rule_id=rule_id, target_scope="drc", evidence=evidence,
+        trial_id=trial_id, expected_status_version=version)
+    assert receipt.gate_status["harmful_rate"] == "NOT_ESTABLISHED"
+
+
 def test_trial_authority_projection_rejects_incomplete_produced_transition(
         tmp_tehm, sample_record_dict):
     """A forged activation transition cannot establish learner utility."""

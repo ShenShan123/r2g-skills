@@ -3683,3 +3683,22 @@ RTL fixture 中分两批生成 source-disjoint cohort。实跑的 r1/r2 各为 2
 `authority_replay=NOT_ESTABLISHED`，整体 `eligible=false`，没有进入 production mirror。
 这些外部 evidence 位于 `/data1/zhangdy/tehm-campaigns/`；`memory/docs/` 继续只作本地
 governing input，由 `.gitignore` 排除且不提交。
+
+### 2026-09-02 Revision3 real RTL authority replay
+
+新增一次外部 disposable authority campaign：`scripts/run_rtl_campaign.py` 用真实
+Icarus/vvp 在 `req_ack_bug`、`req_ack_bug2` 上训练，并在 source-disjoint held-out
+`req_ack_bug3` 上运行 3 次独立 A/B。三次 B 臂均为 `PASS`，`rollback_verified=3/3`、
+`obligation_coverage=1.0`、registry 保持 `candidate`；结果写入
+`/data1/zhangdy/tehm-campaigns/tehm-r3-authority-rtl-20260902/`，没有 canonical
+memory 或 production promotion。
+
+该 trial 现在可投影为真实的部分 authority receipt，并由
+`scripts/replay_rule_authority.py` 只读重放：`rollback_verified`、
+`registry_verified`、`obligation_coverage` 为 `PASS`，`cross_lineage_te`、
+`harmful_rate`、`conformal_coverage` 明确为 `NOT_ESTABLISHED`，最终
+`DENY_CANONICAL_IMPORT`、`promotion_attempted=false`、数据库摘要不变。修正了
+trial authority projector 对真实捕获中的 `utility_verdict=UNKNOWN` 的处理：它现在
+表示 utility gate 尚未建立，而不是 malformed evidence；新增回归测试覆盖该 fail-closed
+语义。下一步仍需独立 held-out transfer、harmful-rate 与 conformal calibration 证据，
+才能建立六项 gate；`memory/docs/` 依旧由 `.gitignore` 排除，不进入提交。
