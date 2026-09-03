@@ -4044,3 +4044,26 @@ anti-forgetting/authority/rollback/Pareto 均通过，但 MIR Wilson upper-CI �
 `eligible=false`、`production_integration=not_attempted`。该统计扩展仍是
 evaluation-only，不写 canonical memory、authority 或 runtime；`memory/docs/` 继续
 由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 P15-B routed-policy MIR sample expansion
+
+为推进文档要求的统计 production evidence，`run_r3_routed_policy_diverse_cohort.py`
+新增可审计的 `--cohort-tag`：tag 会同时进入复制 source 的非执行注释、case ID 和
+lineage ID，避免第二批样本与原 cohort 的内容/身份绑定混淆，但不改变 RTL 行为。以
+固定 `iverilog/vvp` toolchain 运行 `mir35a`（14 cases）和 `mir35b`（1 case）两个
+source/lineage-disjoint cohort；两批均为 `NO_MEMORY=FAIL`、routed
+`CAUSAL_NO_SKILL=PASS`，无 UNKNOWN，且不写 canonical memory 或 authority。
+
+将这两批与既有 selected-memory、post-revision interference 和 diverse cohort 合并后，
+外部 MIR aggregate 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-policy-mir-p17-v4-correct-20260903/`：
+`cohort_count=5`、`known=35`、`harmful=0`、`unknown=0`、Wilson `upper_ci=0.098901`。
+聚合 freeze/replay 均通过；旧的 pre-revision harmful counterfactual 没有被混入。
+
+基于 35-case MIR 和 43-case cross-backend calibration 的 readiness 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-p17-v4-20260903/`。
+校准、multi-lineage、anti-forgetting、authority replay、rollback 和 Pareto gates 均为
+`PASS`；MIR 仍未满足注册的严格 `max_mir_upper_ci=0.0`，production gate 的
+candidate-pool/efficacy/authority 也仍未建立，故 `eligible=false`、
+`production_integration=not_attempted`。该扩展只增加统计 evidence，不放宽策略阈值，
+`memory/docs/` 继续由 `.gitignore` 排除且不提交。

@@ -163,31 +163,51 @@ def _write(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
-def _route(fixture: str) -> MemoryRoutingDecision:
+def _cohort_tag(value: str | None) -> str | None:
+    """Validate an optional source/case namespace for a new cohort.
+
+    A tag is deliberately part of the copied-source annotation and every
+    case/lineage identity.  This prevents a second statistical cohort from
+    being mistaken for the original receipt while keeping the executable RTL
+    behavior unchanged.
+    """
+    if value is None:
+        return None
+    if (type(value) is not str or not value or
+            any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+                for char in value)):
+        raise ValueError("cohort_tag must contain only ASCII letters, digits, '_' or '-'")
+    return value
+
+
+def _route(fixture: str, cohort_tag: str | None = None) -> MemoryRoutingDecision:
+    identity = f"{cohort_tag}-{fixture}" if cohort_tag is not None else fixture
     return MemoryRoutingDecision(
-        decision="CONSIDER", resolved_state_id=f"r3-diverse-state-{fixture}",
-        selected_rule_ids=(f"r3-diverse-rule-{fixture}",),
-        selected_path_ids=(f"r3-diverse-path-{fixture}",),
-        selected_asset_ids=(f"r3-diverse-asset-{fixture}",),
+        decision="CONSIDER", resolved_state_id=f"r3-diverse-state-{identity}",
+        selected_rule_ids=(f"r3-diverse-rule-{identity}",),
+        selected_path_ids=(f"r3-diverse-path-{identity}",),
+        selected_asset_ids=(f"r3-diverse-asset-{identity}",),
         applicability={"status": "APPLICABLE", "source": "r3-diverse-cohort"},
         causal_support={"status": "SUPPORTED",
-                        "causal_path_ids": [f"r3-diverse-path-{fixture}"]},
+                        "causal_path_ids": [f"r3-diverse-path-{identity}"]},
         risk={"level": "heldout"}, abstain_reasons=(),
         no_memory_budget=1, memory_budget=1)
 
 
-def _candidate(fixture: str, spec: dict) -> StructuredRepairCandidate:
+def _candidate(fixture: str, spec: dict,
+               cohort_tag: str | None = None) -> StructuredRepairCandidate:
+    identity = f"{cohort_tag}-{fixture}" if cohort_tag is not None else fixture
     return StructuredRepairCandidate(
-        candidate_id=f"r3-diverse-candidate-{fixture}",
-        resolved_state_id=f"r3-diverse-state-{fixture}",
+        candidate_id=f"r3-diverse-candidate-{identity}",
+        resolved_state_id=f"r3-diverse-state-{identity}",
         knowledge_object_id="r3-diverse-routed-policy@1",
-        causal_path_ids=(f"r3-diverse-path-{fixture}",),
-        asset_id=f"r3-diverse-asset-{fixture}", action_family=spec["family"],
+        causal_path_ids=(f"r3-diverse-path-{identity}",),
+        asset_id=f"r3-diverse-asset-{identity}", action_family=spec["family"],
         concrete_action={"domain": spec["domain"],
                          "transformation_family": spec["family"],
                          "payload": {"module": spec["module"], **spec["action"]}},
-        applicability_receipt_id=f"r3-diverse-app-{fixture}",
-        binding_receipt_id=f"r3-diverse-bind-{fixture}",
+        applicability_receipt_id=f"r3-diverse-app-{identity}",
+        binding_receipt_id=f"r3-diverse-bind-{identity}",
         obligations=("RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS",
                      "RTL_COMPILE_PASS"),
         evidence_level="L3_REPLICATED_EFFECT", authority={"eligible": True}, risk={},
@@ -195,8 +215,10 @@ def _candidate(fixture: str, spec: dict) -> StructuredRepairCandidate:
     )
 
 
-def run(artifacts: Path, fixtures: list[str] | None = None, *, force: bool = False) -> dict:
+def run(artifacts: Path, fixtures: list[str] | None = None, *, force: bool = False,
+        cohort_tag: str | None = None) -> dict:
     artifacts = artifacts.expanduser().resolve()
+    cohort_tag = _cohort_tag(cohort_tag)
     fixtures = list(_SPECS) if fixtures is None else list(fixtures)
     if not fixtures:
         raise RuntimeError("at least one diverse fixture is required")
@@ -222,13 +244,20 @@ def run(artifacts: Path, fixtures: list[str] | None = None, *, force: bool = Fal
         for subdir in ("rtl", "tb"):
             shutil.copytree(fixture_dir / subdir, source_dir / subdir)
         source = source_dir / "rtl" / spec["source"]
+        if cohort_tag is not None:
+            source.write_text(
+                source.read_text() +
+                f"\n// TEHM routed-policy cohort variant: {cohort_tag}\n")
         target = source_dir / "tb" / spec["target"]
         regression = source_dir / "tb" / spec["regression"]
-        route = _route(fixture)
-        case_id = f"r3-routed-diverse-{fixture}"
+        route = _route(fixture, cohort_tag)
+        case_id = (f"r3-routed-diverse-{fixture}" if cohort_tag is None else
+                   f"r3-routed-diverse-{cohort_tag}-{fixture}")
         cases.append({
             "case_id": case_id,
-            "lineage_id": f"lineage-r3-diverse-{index:02d}-{fixture}",
+            "lineage_id": (f"lineage-r3-diverse-{index:02d}-{fixture}" if
+                            cohort_tag is None else
+                            f"lineage-r3-diverse-{cohort_tag}-{index:02d}-{fixture}"),
             "rtl_source": str(source), "source_digest": _file_digest(source),
             "target_test": str(target), "frozen_regression": str(regression),
             "toolchain_digest": TOOLCHAIN_DIGEST, "oracle_digest": ORACLE_DIGEST,
@@ -237,13 +266,18 @@ def run(artifacts: Path, fixtures: list[str] | None = None, *, force: bool = Fal
             "routing_decision": route.decision,
         })
         arm_candidates[case_id] = {
-            arm: (None if arm == "NO_MEMORY" else _candidate(fixture, spec))
+            arm: (None if arm == "NO_MEMORY" else
+                   _candidate(fixture, spec, cohort_tag))
             for arm in P12_ARMS
         }
         mechanism_families[fixture] = spec["mechanism_family"]
 
-    campaign = "tehm-r3-routed-policy-diverse-20260903-" + "-".join(fixtures)
-    manifest = "sha256:r3-routed-policy-diverse-manifest-" + "-".join(fixtures)
+    campaign_prefix = "tehm-r3-routed-policy-diverse-20260903"
+    if cohort_tag is not None:
+        campaign_prefix += "-" + cohort_tag
+    campaign = campaign_prefix + "-" + "-".join(fixtures)
+    manifest = "sha256:r3-routed-policy-diverse-manifest-" + \
+        (f"{cohort_tag}-" if cohort_tag is not None else "") + "-".join(fixtures)
     cohort = execute_rtl_paired_cohort(
         cases, arm_candidates, campaign_id=campaign,
         campaign_manifest_digest=manifest, platform_digest=PLATFORM_DIGEST,
@@ -256,6 +290,7 @@ def run(artifacts: Path, fixtures: list[str] | None = None, *, force: bool = Fal
         "cases": cases, "mechanism_families": mechanism_families,
         "routing_decision": "CONSIDER", "memory_docs_submitted": False,
         "source_provenance": "repository_p3_fixture",
+        "cohort_tag": cohort_tag,
         "statistical_independence_claim": "source_lineage_disjoint_only",
     })
     summary = {
@@ -286,9 +321,15 @@ def main(argv: list[str] | None = None) -> int:
                         choices=sorted(_SPECS),
                         help="diverse fixture; omit to use all 14")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--cohort-tag",
+        help=("optional unique namespace for a source-disjoint statistical extension; "
+              "it is embedded only in copied-source comments and case identities"),
+    )
     args = parser.parse_args(argv)
     try:
-        summary = run(args.artifacts, args.fixtures, force=args.force)
+        summary = run(args.artifacts, args.fixtures, force=args.force,
+                      cohort_tag=args.cohort_tag)
     except Exception as exc:
         print(f"diverse routed-policy cohort failed: {exc}", file=sys.stderr)
         return 1
