@@ -101,6 +101,42 @@ def _interference_report(tmp_path):
     return path
 
 
+def _authority_replay_report(tmp_path, **overrides):
+    """Build the strict read-only authority-replay envelope expected by P15-B."""
+    gates = {
+        "rollback_verified": "PASS",
+        "registry_verified": "PASS",
+        "obligation_coverage": "PASS",
+        "cross_lineage_te": "PASS",
+        "harmful_rate": "PASS",
+        "conformal_coverage": "PASS",
+    }
+    report = {
+        "version": "tehm-rule-authority-replay-v1",
+        "eligible": True,
+        "authority_replay_status": "PASS",
+        "all_gates_established": True,
+        "gate_status": gates,
+        "database_unchanged": True,
+        "authority_database_sha256_before": "sha256:db",
+        "authority_database_sha256_after": "sha256:db",
+        "read_only": True,
+        "decision": "ALLOW_AUTHORITY_REVIEW",
+        "promotion_attempted": False,
+        "canonical_memory_mutation": "none",
+        "production_runtime_imported": False,
+        "receipt": {
+            "authority_receipt_id": "rule_authority_fixture",
+            "receipt_digest": "sha256:authority-receipt",
+            "eligible_stored": True,
+        },
+    }
+    report.update(overrides)
+    path = tmp_path / "authority-replay.json"
+    path.write_text(json.dumps(report))
+    return path
+
+
 def test_readiness_is_fail_closed_and_replayable(tmp_path):
     calibration = _calibration_report(tmp_path)
     interference = _interference_report(tmp_path)
@@ -129,3 +165,34 @@ def test_readiness_replay_rejects_input_digest_drift(tmp_path):
     calibration.write_text(calibration.read_text() + "\n")
     with pytest.raises(ProductionReadinessError, match="input digest drifted"):
         replay_production_readiness(output)
+
+
+def test_readiness_authority_requires_actual_read_only_replay(tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _interference_report(tmp_path)
+    authority = _authority_replay_report(tmp_path)
+    report = build_production_readiness(
+        calibration_report=calibration, interference_summary=interference,
+        authority_report=authority)
+    assert report["readiness"]["gate_status"]["authority_replay"] == "PASS"
+    assert report["readiness"]["metrics"]["authority"]["verified"] is True
+
+
+@pytest.mark.parametrize("overrides", [
+    {"version": "untrusted-summary-v1"},
+    {"authority_replay_status": "FAIL"},
+    {"database_unchanged": False},
+    {"read_only": False},
+    {"gate_status": {"rollback_verified": "PASS"}},
+    {"receipt": {"authority_receipt_id": "id", "receipt_digest": "sha256:d"}},
+])
+def test_readiness_rejects_authority_summary_without_complete_replay(
+        tmp_path, overrides):
+    calibration = _calibration_report(tmp_path)
+    interference = _interference_report(tmp_path)
+    authority = _authority_replay_report(tmp_path, **overrides)
+    report = build_production_readiness(
+        calibration_report=calibration, interference_summary=interference,
+        authority_report=authority)
+    assert report["readiness"]["gate_status"]["authority_replay"] == "FAIL"
+    assert report["readiness"]["metrics"]["authority"]["verified"] is False

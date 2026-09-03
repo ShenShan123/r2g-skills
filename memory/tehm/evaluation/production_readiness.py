@@ -23,6 +23,7 @@ from .no_skill_calibration import (
 )
 from .rtl_cohort import RtlPairedCohortReceipt
 from tehm.retrieval.production_gate import evaluate_production_gate
+from tehm.lifecycle.promotion_gates import REQUIRED_GATES
 
 
 PRODUCTION_READINESS_VERSION = "r3-production-readiness-v1"
@@ -234,13 +235,79 @@ def _authority(path: Path | None) -> tuple[str, dict]:
     if path is None:
         return "NOT_ESTABLISHED", {"reason": "independent authority replay receipt is required"}
     report = _load(path, "authority replay report")
-    verified = report.get("verified") is True or report.get("eligible") is True
-    receipt_id = report.get("authority_receipt_id") or report.get("receipt_id")
-    receipt_digest = report.get("authority_receipt_digest") or report.get("receipt_digest")
-    valid = verified and isinstance(receipt_id, str) and bool(receipt_id.strip()) and \
-        isinstance(receipt_digest, str) and receipt_digest.startswith("sha256:")
-    return ("PASS" if valid else "FAIL"), {"verified": verified, "receipt_id": receipt_id,
-                                             "receipt_digest": receipt_digest}
+    # A production-readiness input must be the output of the read-only
+    # ``replay_rule_authority`` boundary.  A caller-owned ``verified=true``
+    # bit (or a recorded authority receipt that was never replayed) is not
+    # evidence.  Keep every check literal and fail closed so malformed or
+    # incomplete authority reports remain distinguishable from an absent one.
+    expected_version = "tehm-rule-authority-replay-v1"
+    version_ok = report.get("version") == expected_version
+    receipt = report.get("receipt")
+    if not isinstance(receipt, Mapping):
+        receipt = {}
+    receipt_id = receipt.get("authority_receipt_id")
+    receipt_digest = receipt.get("receipt_digest")
+    receipt_id_ok = type(receipt_id) is str and bool(receipt_id.strip())
+    receipt_digest_ok = (type(receipt_digest) is str and
+                         receipt_digest.startswith("sha256:") and
+                         len(receipt_digest) > len("sha256:"))
+    gate_status = report.get("gate_status")
+    gates_ok = (isinstance(gate_status, Mapping) and
+                set(gate_status) == set(REQUIRED_GATES) and
+                all(gate_status.get(gate) == "PASS" for gate in REQUIRED_GATES))
+    hashes_equal = (
+        type(report.get("authority_database_sha256_before")) is str and
+        type(report.get("authority_database_sha256_after")) is str and
+        report.get("authority_database_sha256_before") ==
+        report.get("authority_database_sha256_after"))
+    replay_ok = (
+        version_ok and report.get("authority_replay_status") == "PASS" and
+        report.get("eligible") is True and
+        report.get("all_gates_established") is True and gates_ok and
+        report.get("database_unchanged") is True and
+        report.get("read_only") is True and hashes_equal and
+        report.get("decision") == "ALLOW_AUTHORITY_REVIEW" and
+        report.get("promotion_attempted") is False and
+        report.get("canonical_memory_mutation") == "none" and
+        report.get("production_runtime_imported") is not True and
+        receipt.get("eligible_stored") is True and receipt_id_ok and
+        receipt_digest_ok)
+    metrics = {
+        "verified": replay_ok,
+        "version": report.get("version"),
+        "authority_replay_status": report.get("authority_replay_status"),
+        "receipt_id": receipt_id,
+        "receipt_digest": receipt_digest,
+        "gate_status": dict(gate_status) if isinstance(gate_status, Mapping) else None,
+        "database_unchanged": report.get("database_unchanged"),
+        "read_only": report.get("read_only"),
+    }
+    if not replay_ok:
+        missing = []
+        if not version_ok:
+            missing.append("replay_version")
+        if report.get("authority_replay_status") != "PASS":
+            missing.append("authority_replay_status")
+        if report.get("eligible") is not True:
+            missing.append("eligible")
+        if not gates_ok:
+            missing.append("six_rule_gates")
+        if report.get("database_unchanged") is not True or not hashes_equal:
+            missing.append("database_unchanged")
+        if report.get("read_only") is not True:
+            missing.append("read_only")
+        if report.get("decision") != "ALLOW_AUTHORITY_REVIEW":
+            missing.append("authority_review_decision")
+        if report.get("promotion_attempted") is not False:
+            missing.append("promotion_not_attempted")
+        if report.get("canonical_memory_mutation") != "none":
+            missing.append("canonical_memory_mutation")
+        if report.get("production_runtime_imported") is True:
+            missing.append("production_runtime")
+        if not receipt_id_ok or not receipt_digest_ok or receipt.get("eligible_stored") is not True:
+            missing.append("content_bound_receipt")
+        metrics["reason"] = "authority_replay_incomplete:" + ",".join(sorted(set(missing)))
+    return ("PASS" if replay_ok else "FAIL"), metrics
 
 
 def _rollback(anti_status: str, anti_metrics: Mapping) -> tuple[str, dict]:

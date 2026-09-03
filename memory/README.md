@@ -3574,6 +3574,17 @@ FAIL，也不宣称能力增益或 production promotion。
 `memory/docs/` 仍是本地 governing input，由 `.gitignore` 排除，既不在 release tree
 中，也不会被本阶段提交。
 
+### 2026-09-02 Revision3 P15-B authority replay boundary hardening
+
+production-readiness preflight 现在只接受真正由
+`scripts/replay_rule_authority.py` 产生的只读 replay receipt：必须明确绑定
+`tehm-rule-authority-replay-v1`、六项 rule gate 全部 `PASS`、authority database
+前后摘要不变、`read_only=true`、`ALLOW_AUTHORITY_REVIEW` 且
+`promotion_attempted=false`。单独的 `verified=true`、记录过但未 replay 的 authority
+receipt、缺 gate 或可写数据库摘要均会得到 `authority_replay=FAIL`，不会被当成
+production authority。该 preflight 仍只生成 evaluation receipt，不修改 canonical memory
+或 production runtime；`memory/docs/` 继续排除在提交之外。
+
 ### 2026-09-02 Revision3 P2-R6 novelty/conflict typed adapters
 
 保留原有 `detect_novelty()` / `detect_conflicts()` 判定逻辑，只新增可重放的
