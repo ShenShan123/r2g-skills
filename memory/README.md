@@ -3863,3 +3863,14 @@ Wilson `upper_ci=0.65762`；对应 readiness
 仍 `eligible=false`，仅 `mir_upper_ci=FAIL`，其余 gate 均 `PASS`。这一步只提升
 evidence contract 与 replay 强度，不将 shadow child 导入 canonical memory 或
 production runtime；`memory/docs/` 仍不提交。
+
+将 selected-memory 的 4 个 held-out lineage 与 interference shadow 的 2 个
+post-revision lineage 做跨 cohort source/lineage/campaign disjoint 检查后，正式 v2
+混合聚合位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-policy-mir-p17-v2-mixed-20260903/`：
+`cohort_count=2`、`known=6`、`harmful=0`、`routing_receipt_coverage=1.0`、Wilson
+`upper_ci=0.390334`，只读 replay 一致。它把 selected-memory 的真实 candidate
+执行和 negative-applicability fallback 放在同一安全分母中，但没有与旧的重复
+held-out lineage 合并；对应 readiness
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-p17-v2-mixed-20260903/readiness.json`
+仍保持 `eligible=false`，因此不能据此开启 production。
