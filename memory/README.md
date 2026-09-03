@@ -3964,3 +3964,22 @@ relation，`memory_delta_eligible=true`、anti-forgetting eligible，且
 `staging_discarded=true`、`production_runtime_imported=false`。这只是外部 ORFS
 Evolution Challenge 的隔离 shadow 证据，不是 promotion 或 production claim。
 `memory/docs/` 继续由 `.gitignore` 排除，永不提交。
+
+### 2026-09-03 Revision3 external ORFS interference P14 attribution
+
+新增 `scripts/run_r3_orfs_interference_attribution.py`，只读重放上一阶段真实
+ORFS shadow receipt，并把 `EvolutionReasonDerivationReceipt`、P13
+`AppliedShadowUpdateReceipt`、`MemoryDeltaReceipt`、SPECIALIZE 后的 state
+resolution、policy snapshot/load receipts 串成 evaluation-only P14 链。所有写入
+都发生在外部 disposable projection SQLite，不改变 shadow 源库；本次 replay
+确认 `source_unchanged=true`、`strategy_attribution_eligible=true`。policy 的
+`M_t/M_t+1` 标签继续绑定不可变 P13 `MemoryDeltaReceipt`；projection SQLite
+只用于重放 child/state 可加载性，不把重放时生成的临时时间戳伪装成 canonical digest。
+
+外部结果位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-interference-p14-20260903/`：真实
+ORFS 的 harmful `ALWAYS_MEMORY=FAIL` 被 SPECIALIZE 后的
+`INAPPLICABLE` route 拦截，gated arms 使用 `source=no_memory` 并 `PASS`。这属于
+`L2_STRATEGY_EVOLUTION` 的安全路由证据；标准 capability attribution 明确保留
+`C5/C6/C8` 未通过，因而没有 L3 capability gain、promotion 或 production
+runtime claim。`memory/docs/` 仍由 `.gitignore` 排除，永不提交。
