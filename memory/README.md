@@ -3945,3 +3945,22 @@ trigger 2/2，reason-specific admission 2/2；`canonical_memory_mutation=none`�
 同时修正 `orfs_candidate_oracle` 的临时工程 basename：每个 case/候选 arm 使用由
 case 与 candidate identity 派生的独立 `FLOW_VARIANT`，避免并发 P12 arm 误共享
 R2G workspace lock。`memory/docs/` 继续只是本地 governing input，不进入提交。
+
+### 2026-09-03 Revision3 external ORFS interference isolated shadow
+
+新增 `scripts/run_r3_orfs_interference_shadow.py`，把上一阶段真实 ORFS paired
+receipt 继续送入 P13：脚本在 disposable SQLite 中捕获两条真实 ORFS training
+pair，重放 `MEMORY_INTERFERENCE` derivation、proposal、typed trigger 和
+reason-specific admission，并执行 `SPECIALIZE` 到隔离 staging。post-revision
+cohort 重新运行同一 ORFS case：`NO_MEMORY=PASS` 2/2、`ALWAYS_MEMORY=FAIL` 2/2，
+而 `APPLICABILITY_GATED` 与 `CAUSAL_NO_SKILL` 都是实际 `source=no_memory` 的
+fallback 且 `PASS` 2/2；另有一条 source-disjoint held-out baseline 通过。
+
+外部 campaign 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-interference-shadow-20260903/`，
+`SPECIALIZE` 创建 `knowledge:r3-orfs-density-relief-specialized@1` 和一条 typed
+relation，`memory_delta_eligible=true`、anti-forgetting eligible，且
+`canonical_counts_unchanged=true`、`source_db_unchanged=true`、
+`staging_discarded=true`、`production_runtime_imported=false`。这只是外部 ORFS
+Evolution Challenge 的隔离 shadow 证据，不是 promotion 或 production claim。
+`memory/docs/` 继续由 `.gitignore` 排除，永不提交。
