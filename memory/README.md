@@ -3616,6 +3616,25 @@ shadow update 前后不变。新外部验证结果位于
 `NOVEL_MECHANISM`，`CONFLICT` 必须有冲突类型和独立 transition evidence；两条路径都
 需要 learner admission，但都不要求 P12 paired counterfactual，也不携带 mutation plan。
 
+### 2026-09-02 Revision3 typed derivation replay binding
+
+正式 typed P13 trigger 入口现在不再只信任 `typed-detector:` 前缀和
+`receipt://` 引用形状；调用方必须同时提供底层
+`EvolutionReasonDerivationReceipt`，入口会重放其 content-addressed ID/digest、
+campaign/case、reason 集合以及 per-case/global evidence refs。缺失、跨 campaign、
+重复或伪造引用都会 fail-closed；手工/audit manifest 仍仅保留在兼容性的旧入口，
+不会被误认成 typed detector 输出。
+
+该边界已由 21 条 P12/reason 定向测试、53 条 P13/P14 回归测试覆盖，并在真实
+Icarus campaign 中重放：StateShift 为 2 cases / 2 lineages，typed derivation、
+trigger、admission 均 2/2；Interference 为 2 cases / 2 lineages，自动
+`MEMORY_INTERFERENCE` derivation/admission 均 2/2，shadow 后 routed policy
+harmful=0/2。新证据位于仓库外的
+`tehm-r3-state-shift-challenge-20260902-r41/`、
+`tehm-r3-interference-challenge-20260902-r2/` 和
+`tehm-r3-interference-shadow-p15b-20260902-r3/`；canonical/source DB 均未改变，
+仍为 evaluation/shadow-only，`memory_docs_submitted=false`。
+
 `scripts/run_r3_reason_adapter_challenge.py` 在外部 disposable SQLite 中用两个真实
 Icarus/vvp RTL fixture 运行：第一个产生 `NOVELTY`，第二个产生
 `DEFINITION_CONFLICT`，两条 derivation/admission 均可 replay。该实跑只验证 reason

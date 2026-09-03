@@ -738,8 +738,17 @@ def build_p12_shadow_update_triggers_from_reason_receipt(
         reason_receipt: P13EvolutionReasonReceipt, min_lineages: int = 2,
         routing_decisions: Mapping[str, MemoryRoutingDecision] | None = None,
         case_learner_eligibility: Mapping[str, bool] | None = None,
+        derivation_receipts: Mapping[str, Sequence[object]] | None = None,
         ) -> tuple[P12ShadowUpdateTriggerReceipt, ...]:
-    """Build triggers from typed detector output, not a manual label map."""
+    """Build triggers from replayed typed detector output, not a label map.
+
+    A typed P13 envelope is only a compact aggregation index.  Requiring the
+    caller to provide the underlying derivation receipts here closes the
+    provenance seam: a forged ``typed-detector:`` envelope with arbitrary
+    ``receipt://`` references cannot become a trigger merely by recomputing its
+    own envelope digest.  Manual/audit envelopes continue to use the legacy
+    ``build_p12_shadow_update_triggers`` path.
+    """
     if not isinstance(reason_receipt, P13EvolutionReasonReceipt):
         raise P12ShadowTriggerError(
             "typed P13 evolution reason receipt is invalid")
@@ -749,6 +758,8 @@ def build_p12_shadow_update_triggers_from_reason_receipt(
     if reason_receipt.case_evidence_refs is None:
         raise P12ShadowTriggerError(
             "typed P13 trigger path requires per-case detector evidence")
+    _verify_typed_derivation_receipts(
+        reason_receipt, derivation_receipts)
     campaign_id, cohort_digest, cases = _cohort_fields(cohort)
     if (reason_receipt.campaign_id != campaign_id or
             reason_receipt.cohort_receipt_digest != cohort_digest or
@@ -760,6 +771,87 @@ def build_p12_shadow_update_triggers_from_reason_receipt(
         min_lineages=min_lineages, routing_decisions=routing_decisions,
         case_learner_eligibility=case_learner_eligibility,
         evolution_reasons=reason_receipt.evolution_reasons)
+
+
+def _verify_typed_derivation_receipts(
+        reason_receipt: P13EvolutionReasonReceipt,
+        derivation_receipts: Mapping[str, Sequence[object]] | None) -> None:
+    """Replay every typed derivation referenced by a P13 envelope.
+
+    The function intentionally compares the normalized, content-addressed
+    references rather than trusting only the reason labels.  It also enforces
+    exact case/reason coverage and campaign binding, so an envelope cannot
+    smuggle an additional reason or omit a detector receipt at trigger time.
+    """
+    if derivation_receipts is None:
+        raise P12ShadowTriggerError(
+            "typed P13 trigger path requires derivation receipts")
+    if not isinstance(derivation_receipts, Mapping):
+        raise P12ShadowTriggerError(
+            "typed P13 derivation receipts must be an object")
+    expected_cases = set(reason_receipt.evolution_reasons)
+    if set(derivation_receipts) != expected_cases:
+        raise P12ShadowTriggerError(
+            "typed P13 derivation receipts must cover exactly all cases")
+
+    # Import lazily to keep the existing p12_shadow_trigger -> reason_derivation
+    # aggregation import cycle one-directional.
+    try:
+        from .reason_derivation import (
+            EvolutionReasonDerivationError,
+            EvolutionReasonDerivationReceipt,
+        )
+    except ImportError as exc:  # pragma: no cover - package wiring failure
+        raise P12ShadowTriggerError(
+            "typed P13 derivation receipt type is unavailable") from exc
+
+    seen_ids: set[str] = set()
+    expected_case_refs: dict[str, tuple[dict[str, str], ...]] = {}
+    all_refs: list[dict[str, str]] = []
+    for case_id in sorted(expected_cases):
+        raw_items = derivation_receipts[case_id]
+        if not isinstance(raw_items, Sequence) or isinstance(raw_items, (str, bytes)) or not raw_items:
+            raise P12ShadowTriggerError(
+                f"typed P13 derivation receipts for {case_id} must not be empty")
+        refs: list[dict[str, str]] = []
+        reasons: set[str] = set()
+        for raw_item in raw_items:
+            try:
+                item = (raw_item if isinstance(raw_item, EvolutionReasonDerivationReceipt)
+                        else EvolutionReasonDerivationReceipt.from_dict(raw_item))
+            except (EvolutionReasonDerivationError, TypeError, ValueError, KeyError) as exc:
+                raise P12ShadowTriggerError(
+                    f"typed P13 derivation receipt is invalid for {case_id}") from exc
+            if item.campaign_id != reason_receipt.campaign_id or item.case_id != case_id:
+                raise P12ShadowTriggerError(
+                    f"typed P13 derivation receipt binding is invalid for {case_id}")
+            if item.receipt_id in seen_ids:
+                raise P12ShadowTriggerError(
+                    "typed P13 derivation receipts contain duplicate receipts")
+            seen_ids.add(item.receipt_id)
+            reasons.add(item.reason)
+            ref = {"path": "receipt://" + item.receipt_id,
+                   "sha256": item.receipt_digest, "id": item.receipt_id}
+            refs.append(ref)
+            all_refs.append(ref)
+        if reasons != set(reason_receipt.evolution_reasons[case_id]):
+            raise P12ShadowTriggerError(
+                f"typed P13 derivation reasons disagree for {case_id}")
+        expected_case_refs[case_id] = tuple(
+            sorted(refs, key=stable_dumps))
+
+    actual_case_refs = {
+        case_id: tuple(sorted(refs, key=stable_dumps))
+        for case_id, refs in reason_receipt.case_evidence_refs.items()
+    }
+    if actual_case_refs != expected_case_refs:
+        raise P12ShadowTriggerError(
+            "typed P13 case evidence refs do not match derivation receipts")
+    expected_global = tuple(sorted(all_refs, key=stable_dumps))
+    actual_global = tuple(sorted(reason_receipt.evidence_refs, key=stable_dumps))
+    if actual_global != expected_global:
+        raise P12ShadowTriggerError(
+            "typed P13 evidence refs do not match derivation receipts")
 
 
 __all__ = [

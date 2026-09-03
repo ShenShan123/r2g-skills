@@ -187,6 +187,7 @@ def run(artifacts: Path, *, force: bool = False) -> dict:
         cohort, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
         reason_receipt=reason_receipt, min_lineages=2,
         routing_decisions=routes, case_learner_eligibility=eligibility,
+        derivation_receipts=derivations,
     )
     admissions = {
         case_id: admit_evolution_reason(

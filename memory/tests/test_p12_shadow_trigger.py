@@ -240,9 +240,64 @@ def test_typed_reason_receipt_is_the_formal_trigger_input():
         cohort, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
         reason_receipt=reason_receipt, min_lineages=2,
         routing_decisions=routes,
-        case_learner_eligibility={case_id: True for case_id in routes})
+        case_learner_eligibility={case_id: True for case_id in routes},
+        derivation_receipts=derivations)
     assert all(item.triggered for item in triggers)
     assert all(item.evolution_reasons == ("STATE_SHIFT",) for item in triggers)
+
+
+def test_typed_reason_receipt_requires_replayed_derivations():
+    cohort, routes = _state_shift_cohort()
+    derivations = {
+        case_id: (derive_state_shift_reason(
+            StateShiftReceipt.from_dict(route.state_shift_receipt),
+            campaign_id=cohort.campaign_id, case_id=case_id,
+            routing=route, lineage_id=cohort.case_receipts[case_id].lineage_id),)
+        for case_id, route in routes.items()
+    }
+    reason_receipt = p13_reason_receipt_from_derivations(
+        derivations, campaign_id=cohort.campaign_id,
+        cohort_receipt_digest=cohort.receipt_digest)
+    with pytest.raises(P12ShadowTriggerError, match="requires derivation receipts"):
+        build_p12_shadow_update_triggers_from_reason_receipt(
+            cohort, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+            reason_receipt=reason_receipt, routing_decisions=routes,
+            case_learner_eligibility={case_id: True for case_id in routes})
+
+
+def test_typed_reason_receipt_rejects_forged_derivation_reference():
+    cohort, routes = _state_shift_cohort()
+    derivations = {
+        case_id: (derive_state_shift_reason(
+            StateShiftReceipt.from_dict(route.state_shift_receipt),
+            campaign_id=cohort.campaign_id, case_id=case_id,
+            routing=route, lineage_id=cohort.case_receipts[case_id].lineage_id),)
+        for case_id, route in routes.items()
+    }
+    valid = p13_reason_receipt_from_derivations(
+        derivations, campaign_id=cohort.campaign_id,
+        cohort_receipt_digest=cohort.receipt_digest)
+    forged_refs = {
+        case_id: tuple(
+            {"path": "receipt://forged", "sha256": "sha256:forged", "id": "forged"}
+            if case_id == "state-shift-case-0" else ref
+            for ref in refs)
+        for case_id, refs in valid.case_evidence_refs.items()
+    }
+    forged_global = tuple(ref for case_id in sorted(forged_refs)
+                          for ref in forged_refs[case_id])
+    forged = P13EvolutionReasonReceipt(
+        campaign_id=valid.campaign_id,
+        cohort_receipt_digest=valid.cohort_receipt_digest,
+        label_source=valid.label_source, evidence_refs=forged_global,
+        evolution_reasons=valid.evolution_reasons,
+        case_evidence_refs=forged_refs)
+    with pytest.raises(P12ShadowTriggerError, match="do not match derivation"):
+        build_p12_shadow_update_triggers_from_reason_receipt(
+            cohort, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+            reason_receipt=forged, routing_decisions=routes,
+            case_learner_eligibility={case_id: True for case_id in routes},
+            derivation_receipts=derivations)
 
 
 def test_state_shift_trigger_rejects_id_only_route_witness():
