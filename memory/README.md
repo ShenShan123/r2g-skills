@@ -3983,3 +3983,19 @@ ORFS 的 harmful `ALWAYS_MEMORY=FAIL` 被 SPECIALIZE 后的
 `L2_STRATEGY_EVOLUTION` 的安全路由证据；标准 capability attribution 明确保留
 `C5/C6/C8` 未通过，因而没有 L3 capability gain、promotion 或 production
 runtime claim。`memory/docs/` 仍由 `.gitignore` 排除，永不提交。
+
+### 2026-09-03 Revision3 external ORFS P15 calibration slice
+
+新增 `scripts/run_r3_orfs_p15_calibration.py`，把外部 ORFS interference challenge
+的冻结 `CONSIDER` routing receipt 与真实 paired `NO_MEMORY/ALWAYS_MEMORY` oracle
+分开装配：oracle 自动派生两条 `NO_SKILL/RISK` 标签，未读取 router 预测来生成
+标签，也未回流 training memory。
+
+外部报告位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-p15-calibration-20260903/`：
+`sample_count=2`、`routing_receipt_coverage=1.0`、`calibration_error=0.95`，两条
+旧 `CONSIDER` 预测均被独立 oracle 判为 `NO_SKILL/RISK`，且 `NO_MATCH` 与
+`STATE_SHIFT` 分层缺失，receipt 为 `NOT_ESTABLISHED`。这是一条真实 backend-specific
+负校准证据，不是完整 P15 或 production readiness；post-revision 的
+`INAPPLICABLE` safety veto 仍保持在二元 P15 contract 之外，canonical memory、
+authority 与 production runtime 均未改变。
