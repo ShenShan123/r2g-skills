@@ -3891,3 +3891,33 @@ MIR gate、canonical memory、production authority 或 runtime。
 `finite_wilson_upper_bound_is_positive`，没有有限样本解；因此当前 production
 仍然严格关闭，而不是用规划结果替代实证或放宽门禁。该计划 receipt 可用同一脚本
 `--replay` 只读复核，`memory/docs/` 仍由 `.gitignore` 排除、不进入提交。
+
+### 2026-09-03 Revision3 diverse routed-policy challenge cohort
+
+为获得不重复旧 cohort 的真实 routed-policy 观测，新增
+`scripts/run_r3_routed_policy_diverse_cohort.py`。它不读取任何 fixture
+`manifest.json`，而是把 14 个明确审计过的 P3 RTL action descriptor 固化在 producer
+中，覆盖 `GUARD_STRENGTHEN`、`PRIORITY_REORDER`、`RESET_RESTORE` 和
+`WIDTH_CORRECT`；每个 source 都复制到 disposable 目录并真实执行四个 P12 arms。
+这不是 all-PASS validation 扩张：14 个 case 的 baseline 均为 `NO_MEMORY=FAIL`，
+三种 memory arms 均为 `PASS`，且 14 个 lineage/source digest 与既有三 cohort
+aggregate 不重叠。
+
+真实 campaign 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-routed-policy-diverse-20260903/`，typed
+cohort digest 为
+`sha256:ad15ffa8b8eaf7f404b2b017426b2fd1e269923fcb069f81693c7e00d013a75d`。
+与既有 selected-memory 4 case、interference post-revision 2 case 合并后，新的
+只读 v2 MIR aggregate 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-policy-mir-p17-v3-diverse-20260903/`：
+`cohort_count=3`、`known=20`、`harmful=0`、`routing_receipt_coverage=1.0`、Wilson
+`upper_ci=0.161125`。这降低了上界但仍不足以通过注册的 `0.0` 阈值；production
+runtime、canonical memory 和 authority 均未改变。
+
+这里的“独立”严格限于 receipt gate 已证明的 source/lineage/campaign 不重叠；这些是
+仓库内 P3 challenge fixtures，因此不把它们表述成 IID 抽样、真实用户分布或已经足够
+开启 production 的 evidence。规划器中的样本量只是给定该明确假设后的统计敏感性结果。
+
+该 cohort 还使 `rtl.RESET_RESTORE` 的 begin/end 路径进入真实验证；修复了 action
+层缺失 `_balanced_end` 的异常，并增加对应 parser regression。`memory/docs/` 仍仅
+作本地 governing input，不进入提交。

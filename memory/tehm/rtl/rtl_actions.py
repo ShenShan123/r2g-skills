@@ -304,6 +304,32 @@ def _statement_end(text: str, start: int) -> int:
     return len(text) if semi < 0 else semi + 1
 
 
+def _balanced_end(text: str, begin_idx: int) -> int:
+    """Return the index just past the matching ``end`` for a ``begin``.
+
+    Reset restoration needs the same small block balancer as the Verilog
+    parser.  Keeping the helper local avoids making the action layer depend on
+    a parser private symbol, while the case keywords prevent ``endcase`` and
+    nested case items from being mistaken for the enclosing ``end``.
+    """
+    depth = 0
+    i = begin_idx
+    token = re.compile(r"\b(begin|end|casez|casex|case|endcase)\b")
+    while i < len(text):
+        match = token.search(text, i)
+        if match is None:
+            break
+        word = match.group(1)
+        if word in {"begin", "casez", "casex", "case"}:
+            depth += 1
+        else:
+            depth -= 1
+        if depth == 0:
+            return match.end()
+        i = match.end()
+    return len(text)
+
+
 def _balanced_case_end(text: str, start: int) -> int:
     match = re.search(r"\bendcase\b", text[start:])
     if not match:

@@ -143,6 +143,23 @@ def test_reset_restore_is_parser_scoped_and_comment_safe():
     assert "else if (start)\n            done <= 1'b1;" in new
 
 
+def test_reset_restore_handles_begin_end_reset_branch():
+    source = (Path(__file__).resolve().parent / "fixtures" /
+              "rtl_projects" / "p3_reset_restore_c" / "rtl" /
+              "reset_restore_c.v").read_text()
+    new, edit = apply_rtl_action(source, {
+        "domain": "rtl.RESET_RESTORE",
+        "target": "finished <= 1'b1;",
+        "replacement": "finished <= 1'b0;",
+        "module": "reset_restore_c",
+        "reset_signal": "rst_n",
+    })
+    assert edit["parser_backed"] is True
+    assert edit["rewritten"] == 1
+    assert "finished <= 1'b0;" in new
+    assert "finished <= 1'b1;" in new
+
+
 def test_width_correct_requires_parsed_assignment_and_preserves_module_scope():
     source = """module width_demo(input wire [3:0] a, output reg [4:0] y);
 always @(*) begin
