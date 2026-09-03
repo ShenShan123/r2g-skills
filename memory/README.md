@@ -3321,6 +3321,16 @@ receipt，必须消费当前 status version 匹配且在 ledger 中存在的 aut
 该 ledger 仍不提供 `promoted` 状态，也不自动晋级或导入 production runtime；
 `memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
 
+### 2026-09-02 Revision3 P16 schema/contract freeze
+
+新增 `tehm.schema_contract` 与 `scripts/freeze_r3_schema_contract.py`，冻结当前
+`schema.sql` 字节摘要、可执行 SQLite object inventory、线性 migration chain 及可选
+TEHM DB 的 read-only schema observation。P16 replay 会重新计算 schema/migration/object
+digest，拒绝 WAL/SHM sidecar、缺失或额外 schema object、版本漂移和篡改 receipt；因此
+它把后续 campaign 的输入契约固定下来，但不创建新 authority、不修改 canonical memory、
+不导入 production runtime。报告显式写入 `memory_docs_submitted=false`、
+`promotion_attempted=false`；`memory/docs/` 仍由 `.gitignore` 排除，不能进入提交。
+
 ### 2026-09-02 Revision3 Validation Cohort V0 freeze
 
 新增 `tehm.evaluation.validation_freeze` 与

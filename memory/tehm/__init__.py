@@ -16,6 +16,7 @@ Package layout mirrors design doc 18.2:
       config.py          env knobs + paths
       schema.sql         tehm_* tables (design doc 19.2-19.7)
       db.py              connect / ensure_schema / migrations
+      schema_contract.py Revision3 P16 schema/contract freeze + replay
       ids.py             content-addressed id minting
       artifact_store.py  content-addressed artifact store
       canonical/         verified state / transition / episode / verifier
