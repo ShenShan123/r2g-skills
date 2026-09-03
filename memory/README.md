@@ -4024,3 +4024,23 @@ cohort 的 case/lineage/source-disjoint 绑定，并从样本重算 calibration 
 仍为 `FAIL`，所以 `eligible=false`、production integration 仍为
 `not_attempted`。`memory/docs/` 继续仅作本地 governing input，已由
 `.gitignore` 排除且未被 Git 追踪。
+
+### 2026-09-03 Revision3 P15-B calibration recall expansion
+
+为补齐 production gate 中独立的 NO_SKILL recall 统计证据，新增外部 41-case RTL
+calibration campaign，并与前述 2-case ORFS slice 重新聚合；ORFS 的两条旧
+`CONSIDER → NO_SKILL/RISK` false-negative 保持不变，没有通过重标修复指标。新证据位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-p15-calibration-cross-backend-n41-20260903/`，
+总样本为 43、case ID disjoint、RTL/ORFS 两个 backend、43 条 lineage，receipt
+`status=PASS`，`calibration_error=0.003488`。NO_SKILL recall 为 `0.939394`，95%
+Wilson 下界为 `0.803938`，因此 production gate 的 `no_skill_calibration` 从
+`FAIL` 转为 `PASS`。
+
+基于该 calibration aggregate 重新生成并 replay 的 readiness 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-cross-backend-n41-20260903/`；
+`multi_lineage`、`reason_stratified_calibration`、`no_skill_calibration` 及既有
+anti-forgetting/authority/rollback/Pareto 均通过，但 MIR Wilson upper-CI 仍未满足
+注册的 `0.0` 阈值，candidate-pool/efficacy/authority production checks 仍未建立，
+`eligible=false`、`production_integration=not_attempted`。该统计扩展仍是
+evaluation-only，不写 canonical memory、authority 或 runtime；`memory/docs/` 继续
+由 `.gitignore` 排除且不提交。
