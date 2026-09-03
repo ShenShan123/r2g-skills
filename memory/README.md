@@ -4014,3 +4014,13 @@ calibration manifest，将 RTL n=40 与外部 ORFS n=2 作为不同 campaign 合
 `CONSIDER → NO_SKILL/RISK` 的真实 false-negative，未被重标；aggregate 只是
 cross-backend 统计 evidence，不能替代 MIR upper-CI、candidate pool 或 authority，
 `production_promotion_eligible=false`。
+
+同时，`tehm.evaluation.production_readiness` 已支持对该 cross-backend aggregate 做
+严格回放：重新校验子 manifest 的文件 digest、typed routing/oracle triplet、RTL/ORFS
+cohort 的 case/lineage/source-disjoint 绑定，并从样本重算 calibration receipt，而不
+信任 aggregate 的汇总布尔值。新的 readiness 预检位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-cross-backend-20260903/`；
+`multi_lineage` 与 `reason_stratified_calibration` 为 `PASS`，但 MIR Wilson upper-CI
+仍为 `FAIL`，所以 `eligible=false`、production integration 仍为
+`not_attempted`。`memory/docs/` 继续仅作本地 governing input，已由
+`.gitignore` 排除且未被 Git 追踪。

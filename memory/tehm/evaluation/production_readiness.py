@@ -21,8 +21,10 @@ from tehm.canonical.transition import HARMFUL_OUTCOMES, POSITIVE_OUTCOMES
 
 from .no_skill_calibration import (
     CALIBRATION_REASONS, NoSkillCalibrationError, NoSkillCalibrationReceipt,
-    wilson_interval,
+    NoSkillCalibrationSample, build_no_skill_calibration_samples,
+    evaluate_no_skill_calibration, wilson_interval,
 )
+from .orfs_cohort import OrfsPairedCohortReceipt
 from .rtl_cohort import RtlPairedCohortReceipt
 from .policy_mir import (
     PolicyMIRError, _validate_policy_route, replay_routed_policy_mir,
@@ -95,6 +97,161 @@ def _verify_embedded_refs(report: Mapping, *, base: Path) -> list[dict]:
     return checked
 
 
+def _aggregate_calibration(
+        receipt: NoSkillCalibrationReceipt,
+        manifest_path: Path, manifest: Mapping) -> tuple[dict, dict, set[str]]:
+    """Replay a cross-backend calibration aggregate from its child manifests.
+
+    The aggregate report is only a convenience projection.  Each source
+    manifest, typed routing triplet, oracle label, and cohort receipt is
+    replayed here so a copied aggregate cannot manufacture lineage or sample
+    coverage.  This remains an evaluation-only path; no production authority
+    is returned by this helper.
+    """
+    campaigns = manifest.get("input_campaigns")
+    if (isinstance(campaigns, (str, bytes)) or not isinstance(campaigns, list)
+            or len(campaigns) < 2):
+        raise ProductionReadinessError(
+            "aggregate calibration requires at least two input campaigns")
+    if manifest.get("split") != "calibration":
+        raise ProductionReadinessError("aggregate calibration split is invalid")
+    if manifest.get("evaluation_only") is not True or \
+            manifest.get("canonical_memory_mutation") != "none" or \
+            manifest.get("production_authority_changed") is not False:
+        raise ProductionReadinessError("aggregate calibration crosses an authority boundary")
+
+    aggregate_rows: list[NoSkillCalibrationSample] = []
+    all_case_ids: set[str] = set()
+    all_lineages: set[str] = set()
+    backends: set[str] = set()
+    campaign_ids: list[str] = []
+    for item in campaigns:
+        if not isinstance(item, Mapping):
+            raise ProductionReadinessError("aggregate input campaign is malformed")
+        child_path = _path(item.get("manifest"), base=manifest_path.parent,
+                           label="aggregate calibration manifest")
+        if item.get("sha256") != _file_digest(child_path):
+            raise ProductionReadinessError(
+                f"aggregate input manifest digest mismatch: {child_path}")
+        child = _load(child_path, "aggregate input calibration manifest")
+        if child.get("version") != "no-skill-calibration-manifest-v1" or \
+                child.get("split") != "calibration":
+            raise ProductionReadinessError(
+                f"aggregate input manifest version/split is invalid: {child_path}")
+        campaign_id = child.get("campaign_id")
+        if type(campaign_id) is not str or not campaign_id.strip() or \
+                campaign_id != item.get("campaign_id"):
+            raise ProductionReadinessError(
+                f"aggregate campaign identity mismatch: {child_path}")
+        if campaign_id in campaign_ids:
+            raise ProductionReadinessError("aggregate campaigns are duplicated")
+        campaign_ids.append(campaign_id)
+        try:
+            rows = build_no_skill_calibration_samples(
+                child["paired_routing_index"], child["routing_decisions"],
+                child["oracle_labels"])
+        except (KeyError, NoSkillCalibrationError, TypeError, ValueError) as exc:
+            raise ProductionReadinessError(
+                f"aggregate typed calibration replay failed: {child_path}") from exc
+        expected_ids = item.get("sample_ids")
+        if (item.get("sample_count") != len(rows) or
+                expected_ids != sorted(row.case_id for row in rows)):
+            raise ProductionReadinessError(
+                f"aggregate input sample binding mismatch: {child_path}")
+        if all_case_ids.intersection(row.case_id for row in rows):
+            raise ProductionReadinessError("aggregate calibration case IDs overlap")
+        all_case_ids.update(row.case_id for row in rows)
+        aggregate_rows.extend(rows)
+
+        # Child evidence is independently content-bound.  The cohort receipt
+        # supplies lineage and case identity; the summary fields do not.
+        _verify_embedded_refs(child, base=child_path.parent)
+        refs = child.get("evidence_refs")
+        cohort_refs = [ref for ref in refs if isinstance(ref, Mapping) and
+                       str(ref.get("id", "")).endswith(("p15-cohort", "orfs-cohort"))]
+        if len(cohort_refs) != 1:
+            raise ProductionReadinessError(
+                f"aggregate input cohort reference is ambiguous: {child_path}")
+        cohort_ref = cohort_refs[0]
+        cohort_path = _path(cohort_ref.get("path"), base=child_path.parent,
+                            label="aggregate calibration cohort")
+        cohort_payload = _load(cohort_path, "aggregate calibration cohort")
+        version = cohort_payload.get("version", "")
+        try:
+            if isinstance(version, str) and version.startswith("orfs-"):
+                typed_cohort = OrfsPairedCohortReceipt.from_dict(cohort_payload)
+                backends.add("orfs")
+            elif isinstance(version, str) and version.startswith("rtl-"):
+                typed_cohort = RtlPairedCohortReceipt.from_dict(cohort_payload)
+                backends.add("rtl")
+            else:
+                raise ProductionReadinessError(
+                    f"aggregate calibration cohort version is unsupported: {cohort_path}")
+        except (TypeError, ValueError) as exc:
+            raise ProductionReadinessError(
+                f"aggregate calibration cohort cannot replay: {cohort_path}") from exc
+        cohort_campaign_matches = (
+            typed_cohort.campaign_id == campaign_id or
+            (isinstance(campaign_id, str) and campaign_id.startswith(
+                typed_cohort.campaign_id + ":")))
+        if not cohort_campaign_matches or \
+                set(typed_cohort.case_receipts) != {row.case_id for row in rows}:
+            raise ProductionReadinessError(
+                f"aggregate calibration cohort case binding mismatch: {cohort_path}")
+        if typed_cohort.evaluation_only is not True or \
+                typed_cohort.source_disjoint is not True or \
+                typed_cohort.source_restore_verified is not True:
+            raise ProductionReadinessError(
+                f"aggregate calibration cohort is not evaluation-only: {cohort_path}")
+        all_lineages.update(typed_cohort.lineage_ids.values())
+
+    manifest_rows = manifest.get("samples")
+    if not isinstance(manifest_rows, list) or not manifest_rows:
+        raise ProductionReadinessError("aggregate calibration samples are missing")
+    try:
+        normalized_manifest_rows = [NoSkillCalibrationSample.from_dict(row).to_dict()
+                                   for row in manifest_rows]
+    except (NoSkillCalibrationError, TypeError, ValueError) as exc:
+        raise ProductionReadinessError("aggregate calibration samples are malformed") from exc
+    if normalized_manifest_rows != [row.to_dict() for row in aggregate_rows]:
+        raise ProductionReadinessError("aggregate calibration samples drifted from child manifests")
+    if tuple(receipt.sample_ids) != tuple(row.case_id for row in aggregate_rows):
+        raise ProductionReadinessError("aggregate calibration receipt case IDs drifted")
+    try:
+        replayed = evaluate_no_skill_calibration(
+            aggregate_rows, minimum_sample_count=receipt.minimum_sample_count,
+            minimum_reason_cases=receipt.minimum_reason_cases,
+            calibration_bins=len(receipt.calibration_bins))
+    except (NoSkillCalibrationError, TypeError, ValueError) as exc:
+        raise ProductionReadinessError("aggregate calibration metrics cannot replay") from exc
+    if replayed.to_dict() != receipt.to_dict():
+        raise ProductionReadinessError("aggregate calibration metrics drifted")
+    reason_support = {
+        reason: int((receipt.per_reason.get(reason) or {}).get("support", 0))
+        for reason in CALIBRATION_REASONS
+    }
+    reason_gate = all(value >= receipt.minimum_reason_cases for value in reason_support.values())
+    metrics = {
+        "campaign_id": manifest.get("campaign_id") or manifest_path.stem,
+        "campaign_count": len(campaign_ids),
+        "campaign_ids": campaign_ids,
+        "backend_count": len(backends),
+        "backends": sorted(backends),
+        "sample_count": receipt.sample_count,
+        "lineage_count": len(all_lineages),
+        "reason_support": reason_support,
+        "minimum_reason_cases": receipt.minimum_reason_cases,
+        "calibration_error": receipt.calibration_error,
+        "precision_lower_ci": (receipt.overall.get("precision") or {}).get("lower"),
+        "recall_lower_ci": (receipt.overall.get("recall") or {}).get("lower"),
+    }
+    gates = {
+        "multi_lineage": len(all_lineages) >= 2,
+        "reason_stratified_calibration": reason_gate and receipt.eligible,
+    }
+    return gates, metrics, all_lineages
+
+
 def _calibration(path: Path) -> tuple[dict, dict, set[str]]:
     report = _load(path, "calibration report")
     _verify_embedded_refs(report, base=path.parent)
@@ -107,6 +264,18 @@ def _calibration(path: Path) -> tuple[dict, dict, set[str]]:
         raise ProductionReadinessError("calibration report crosses production boundary")
     if receipt.evaluation_only is not True or receipt.status != "PASS":
         raise ProductionReadinessError("calibration receipt is not an eligible evaluation receipt")
+    manifest = None
+    manifest_payload = None
+    if report.get("manifest") is not None:
+        manifest = _path(report.get("manifest"), base=path.parent,
+                         label="calibration manifest")
+        manifest_digest = _file_digest(manifest)
+        if (report.get("manifest_sha256") is not None and
+                report.get("manifest_sha256") != manifest_digest):
+            raise ProductionReadinessError("calibration manifest digest mismatch")
+        manifest_payload = _load(manifest, "calibration manifest")
+        if manifest_payload.get("input_campaigns") is not None:
+            return _aggregate_calibration(receipt, manifest, manifest_payload)
     reason_support = {
         reason: int((receipt.per_reason.get(reason) or {}).get("support", 0))
         for reason in CALIBRATION_REASONS
@@ -118,9 +287,7 @@ def _calibration(path: Path) -> tuple[dict, dict, set[str]]:
     # boolean in the calibration report.
     cohort_ref = next((item for item in report.get("evidence_refs", [])
                        if isinstance(item, Mapping) and item.get("id") == "p15-cohort"), None)
-    if cohort_ref is None:
-        manifest = _path(report.get("manifest"), base=path.parent, label="calibration manifest")
-        manifest_payload = _load(manifest, "calibration manifest")
+    if cohort_ref is None and manifest_payload is not None:
         cohort_ref = next((item for item in manifest_payload.get("evidence_refs", [])
                            if isinstance(item, Mapping) and item.get("id") == "p15-cohort"), None)
     if not isinstance(cohort_ref, Mapping):
