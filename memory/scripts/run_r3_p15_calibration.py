@@ -51,6 +51,7 @@ ORACLE_DIGEST = "sha256:r3-p15-icarus-candidate-oracle"
 PLATFORM_DIGEST = "sha256:r3-p15-calibration-asap7"
 PDK_DIGEST = "sha256:r3-p15-calibration-pdk"
 MANIFEST_DIGEST = "sha256:r3-p15-calibration-manifest"
+DEFAULT_CASE_COUNT = 20
 
 _FIXTURES = (
     {
@@ -179,9 +180,18 @@ def _strata(category: str, spec: dict) -> dict[str, str]:
     }
 
 
-def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False) -> dict:
+def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False,
+        case_count: int = DEFAULT_CASE_COUNT) -> dict:
     evolution_artifacts = evolution_artifacts.expanduser().resolve()
     artifacts = artifacts.expanduser().resolve()
+    if type(case_count) is not int or not 1 <= case_count <= 100:
+        raise ValueError("case_count must be an integer in [1, 100]")
+    campaign_id = (CAMPAIGN_ID if case_count == DEFAULT_CASE_COUNT else
+                   f"{CAMPAIGN_ID}-n{case_count}")
+    campaign_manifest_digest = _digest({
+        "base_manifest_digest": MANIFEST_DIGEST,
+        "case_count": case_count,
+    })
     training_path = evolution_artifacts / "receipts" / "training.json"
     if not training_path.is_file():
         raise RuntimeError(f"missing frozen training receipt: {training_path}")
@@ -206,9 +216,10 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False) -> d
     shifts: dict[str, object] = {}
     category_by_case: dict[str, str] = {}
     specs_by_case: dict[str, dict] = {}
-    # Twenty real cases provide the default P15 denominator while retaining
-    # multiple design lineages and all three reason strata.
-    for index in range(20):
+    # The default remains the historical 20-case receipt.  Larger runs are
+    # useful for statistical sensitivity checks, but remain evaluation-only
+    # and keep each generated source/comment digest and lineage explicit.
+    for index in range(case_count):
         spec = _FIXTURES[index % len(_FIXTURES)]
         category = categories[index % len(categories)]
         case_id = f"r3-p15-calibration-{index:02d}-{spec['key']}-{category}"
@@ -262,8 +273,8 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False) -> d
         specs_by_case[case_id] = spec
 
     cohort = execute_rtl_paired_cohort(
-        cases, arm_candidates, campaign_id=CAMPAIGN_ID,
-        campaign_manifest_digest=MANIFEST_DIGEST,
+        cases, arm_candidates, campaign_id=campaign_id,
+        campaign_manifest_digest=campaign_manifest_digest,
         platform_digest=PLATFORM_DIGEST, pdk_digest=PDK_DIGEST,
         oracle=IcarusCandidateOracle(), budget=3,
         toolchain_digest=TOOLCHAIN_DIGEST, oracle_digest=ORACLE_DIGEST,
@@ -297,13 +308,13 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False) -> d
     derivation_path = receipts_root / "oracle_label_derivations.json"
     _write_json(derivation_path, {
         "version": "no-skill-oracle-label-derivations-v1",
-        "campaign_id": CAMPAIGN_ID, "split": "calibration",
+        "campaign_id": campaign_id, "split": "calibration",
         "derivations": derivations,
         "evaluation_only": True, "canonical_memory_mutation": "none",
     })
     manifest = {
         "version": MANIFEST_VERSION,
-        "campaign_id": CAMPAIGN_ID, "split": "calibration",
+        "campaign_id": campaign_id, "split": "calibration",
         "oracle_label_source": "typed-paired-icarus-oracle-v1",
         "paired_routing_index": {"case_receipts": paired_index},
         "routing_decisions": {
@@ -325,9 +336,10 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False) -> d
     report_path = receipts_root / "calibration_report.json"
     report = build_no_skill_calibration_report(
         manifest_path, output=report_path,
-        minimum_sample_count=20, minimum_reason_cases=2, calibration_bins=10)
+        minimum_sample_count=case_count, minimum_reason_cases=2,
+        calibration_bins=10)
     summary = {
-        "campaign_id": CAMPAIGN_ID, "split": "calibration",
+        "campaign_id": campaign_id, "split": "calibration",
         "real_oracle": "iverilog/vvp", "case_count": len(cohort.case_receipts),
         "lineage_count": cohort.lineage_count, "lineages": cohort.lineage_ids,
         "outcome_counts": cohort.outcome_counts,
@@ -349,12 +361,19 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False) -> d
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--evolution-artifacts", type=Path, required=True)
-    parser.add_argument("--artifacts", type=Path,
-                        default=Path("/tmp") / CAMPAIGN_ID)
+    parser.add_argument("--artifacts", type=Path, default=None,
+                        help="external output directory (defaults to a case-count-specific path)")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--case-count", type=int, default=DEFAULT_CASE_COUNT,
+                        help="number of real calibration cases (default: 20; max: 100)")
     args = parser.parse_args(argv)
+    artifacts = (args.artifacts if args.artifacts is not None else
+                 Path("/tmp") / (
+                     CAMPAIGN_ID if args.case_count == DEFAULT_CASE_COUNT else
+                     f"{CAMPAIGN_ID}-n{args.case_count}"))
     try:
-        summary = run(args.evolution_artifacts, args.artifacts, force=args.force)
+        summary = run(args.evolution_artifacts, artifacts, force=args.force,
+                      case_count=args.case_count)
     except Exception as exc:
         print(f"P15 calibration failed: {exc}", file=sys.stderr)
         return 1

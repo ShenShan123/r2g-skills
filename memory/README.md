@@ -3744,3 +3744,24 @@ control/candidate 两个 Icarus oracle 都给出确定 `PASS`/`FAIL` 后，由�
 `DENY_CANONICAL_IMPORT`、`promotion_attempted=false`，没有 canonical memory 或
 production runtime 变化。conformal 仍需独立 calibration cohort，不能由这 3 次 A/B
 结果推导。`memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
+
+### 2026-09-03 Revision3 P15 calibration statistical expansion
+
+将 `scripts/run_r3_p15_calibration.py` 的 cohort 大小参数化（默认仍为历史 20
+case，允许显式 `--case-count`，上限 100），用于统计敏感性实验而不改变任何生产
+阈值。用当前 Revision3 training freeze 运行 `--case-count 40`，得到 40 条真实
+Icarus/vvp paired calibration receipt、40 个显式 lineage，`NO_MEMORY`、各 memory
+arm 与 typed oracle label 均无 `UNKNOWN`；整体正确率 Wilson 95% 下界为 `0.912378`，
+reason-aware precision/recall 下界均为 `0.886487`，因此
+`reason_stratified_calibration=PASS` 已在最新 readiness replay 中建立。
+
+对应 readiness receipt 为
+`r3_production_readiness_30ba9d4bbe33fdd042c9ae65`（digest
+`sha256:30ba9d4bbe33fdd042c9ae65c4b78185facd980dd556a124c7900be8236b4e99`）；
+`multi_lineage/repair_pareto/anti_forgetting/rollback` 为 `PASS`，但
+`mir_upper_ci=FAIL`、`authority_replay=FAIL`，整体仍 `eligible=false`。该 cohort
+只写 `/data1/zhangdy/tehm-campaigns/tehm-r3-p15-calibration-20260903-n40/`，
+`canonical_memory_mutation=none`、`production_authority_changed=false`、
+`production_promotion_eligible=false`；P15 router calibration 不能替代当前 RTL
+rule 的 conformal authority evidence，也没有打开 production runtime。
+`memory/docs/` 继续由 `.gitignore` 排除，不进入提交。
