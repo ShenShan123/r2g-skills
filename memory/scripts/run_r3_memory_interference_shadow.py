@@ -65,6 +65,7 @@ from scripts.build_p13_anti_forgetting_witness import (  # noqa: E402
     build_p13_anti_forgetting_witness,
 )
 from tehm.ids import stable_dumps  # noqa: E402
+from tehm.canonical.transition import HARMFUL_OUTCOMES, POSITIVE_OUTCOMES  # noqa: E402
 
 
 CAMPAIGN_ID = challenge.CAMPAIGN_ID
@@ -119,6 +120,17 @@ def _table_counts(conn: sqlite3.Connection) -> dict[str, int]:
 
 def _connection_digest(conn: sqlite3.Connection) -> str:
     return _digest("\n".join(conn.iterdump()))
+
+
+def _execution_complete(receipt) -> bool:
+    """Check the complete executable-oracle witness used by P15 MIR."""
+    return (
+        receipt.evaluation_only is True and
+        receipt.metadata.get("oracle_available") is True and
+        receipt.compile_result != "UNKNOWN" and
+        receipt.functional_result != "UNKNOWN" and
+        receipt.signoff_result not in {None, "UNKNOWN"} and
+        receipt.outcome != "UNKNOWN")
 
 
 def _parent_knowledge() -> MechanismKnowledge:
@@ -385,6 +397,10 @@ def run(artifacts: Path, *, challenge_artifacts: Path = DEFAULT_CHALLENGE_ARTIFA
             raise RuntimeError(f"applicability fallback did not avoid harm: {case_id}")
         if paired.arm_receipts["CAUSAL_NO_SKILL"].outcome != "PASS":
             raise RuntimeError(f"causal no-skill fallback did not avoid harm: {case_id}")
+    # Persist the immutable typed cohort before constructing the compact
+    # policy-MIR index below; the index binds this exact file digest.
+    _write_json(receipts_dir / "post_revision_cohort.json",
+                {**post_cohort.to_dict(), "receipt_digest": post_cohort.receipt_digest})
 
     context = dict(NEGATIVE_CONTEXT)
     applicability_before = {
@@ -462,6 +478,47 @@ def run(artifacts: Path, *, challenge_artifacts: Path = DEFAULT_CHALLENGE_ARTIFA
         "policy": "negative_applicability vetoes transfer; ALWAYS_MEMORY remains an audit counterfactual",
     }
 
+    # Keep the production MIR input separate from the deliberately harmful
+    # ALWAYS_MEMORY counterfactual above.  The routed policy arm is replayed
+    # from the post-revision cohort by P15-B; its aggregate is only a compact
+    # index, never a substitute for the typed per-case receipts.
+    policy_arm = "CAUSAL_NO_SKILL"
+    policy_known = sum(
+        _execution_complete(post_cohort.case_receipts[case_id].arm_receipts["NO_MEMORY"])
+        and _execution_complete(post_cohort.case_receipts[case_id].arm_receipts[policy_arm])
+        for case_id in ordered)
+    policy_unknown = len(ordered) - policy_known
+    policy_routed = sum(
+        post_cohort.case_receipts[case_id].routing_receipt_id is not None
+        for case_id in ordered)
+    policy_harmful = sum(
+        _execution_complete(post_cohort.case_receipts[case_id].arm_receipts["NO_MEMORY"])
+        and _execution_complete(post_cohort.case_receipts[case_id].arm_receipts[policy_arm])
+        and post_cohort.case_receipts[case_id].arm_receipts["NO_MEMORY"].outcome in POSITIVE_OUTCOMES
+        and (
+            post_cohort.case_receipts[case_id].arm_receipts[policy_arm].outcome in HARMFUL_OUTCOMES
+            or bool(post_cohort.case_receipts[case_id].arm_receipts[policy_arm].created_regressions)
+        )
+        for case_id in ordered)
+    policy_mir = {
+        "version": "r3-policy-mir-v1",
+        "metric": "routed_policy",
+        "baseline_arm": "NO_MEMORY",
+        "policy_arm": policy_arm,
+        "cohort_receipt": str((receipts_dir / "post_revision_cohort.json").resolve()),
+        "cohort_receipt_sha256": _sha256_file(receipts_dir / "post_revision_cohort.json"),
+        "cohort_receipt_digest": post_cohort.receipt_digest,
+        "case_count": len(ordered),
+        "known_cases": policy_known,
+        "unknown_cases": policy_unknown,
+        "routed_cases": policy_routed,
+        "harmful_cases": policy_harmful,
+        "routing_receipt_coverage": round(policy_routed / len(ordered), 6),
+        "evaluation_only": True,
+        "canonical_memory_mutation": "none",
+        "production_integration": "not_attempted",
+    }
+
     _write_json(receipts_dir / "campaign_manifest.json", {
         "version": "tehm-r3-interference-shadow-v0.1", "campaign_id": CAMPAIGN_ID,
         "lane": "EVOLUTION_CHALLENGE", "real_oracle": "iverilog/vvp",
@@ -471,8 +528,6 @@ def run(artifacts: Path, *, challenge_artifacts: Path = DEFAULT_CHALLENGE_ARTIFA
     })
     _write_json(receipts_dir / "pre_revision_cohort.json",
                 {**pre_cohort.to_dict(), "receipt_digest": pre_cohort.receipt_digest})
-    _write_json(receipts_dir / "post_revision_cohort.json",
-                {**post_cohort.to_dict(), "receipt_digest": post_cohort.receipt_digest})
     _write_json(receipts_dir / "proposal.json",
                 {**proposal.to_dict(), "proposal_id": proposal.proposal_id,
                  "proposal_digest": proposal.proposal_digest})
@@ -501,6 +556,7 @@ def run(artifacts: Path, *, challenge_artifacts: Path = DEFAULT_CHALLENGE_ARTIFA
         "negative_applicability_veto_cases": sum(
             not item["eligible"] for item in applicability_after.values()),
         "risk_update": risk_update,
+        "policy_mir": policy_mir,
         "anti_forgetting_eligible": witness.eligible,
         "canonical_counts_unchanged": before_counts == after_counts,
         "source_db_unchanged": before_db_digest == after_db_digest,

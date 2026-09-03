@@ -16,6 +16,7 @@ from pathlib import Path
 
 from tehm.ids import stable_dumps
 from tehm.schema_contract import replay_schema_contract
+from tehm.canonical.transition import HARMFUL_OUTCOMES, POSITIVE_OUTCOMES
 
 from .no_skill_calibration import (
     CALIBRATION_REASONS, NoSkillCalibrationError, NoSkillCalibrationReceipt,
@@ -152,12 +153,138 @@ def _calibration(path: Path) -> tuple[dict, dict, set[str]]:
     return gates, metrics, lineages
 
 
+def _execution_complete(receipt) -> bool:
+    """Require a complete, evaluation-only executable oracle receipt."""
+    return (
+        receipt.evaluation_only is True and
+        receipt.metadata.get("oracle_available") is True and
+        receipt.compile_result != "UNKNOWN" and
+        receipt.functional_result != "UNKNOWN" and
+        receipt.signoff_result not in {None, "UNKNOWN"} and
+        receipt.outcome != "UNKNOWN")
+
+
+def _routed_policy_mir(report: Mapping, *, path: Path) -> tuple[bool, dict]:
+    """Replay an explicit routed-policy MIR witness from a typed cohort.
+
+    The older interference summary only measured ``ALWAYS_MEMORY`` as a
+    deliberately harmful counterfactual.  A production MIR must instead be
+    derived from the arm that the revised router actually executed.  This
+    witness is optional for backwards-compatible reports, but when present it
+    is never trusted as a scalar: the post-revision cohort, route coverage,
+    source semantics, oracle completeness, and aggregate counts are all
+    recomputed here.
+    """
+    raw = report.get("policy_mir")
+    if raw is None:
+        return False, {}
+    if not isinstance(raw, Mapping):
+        raise ProductionReadinessError("policy MIR witness is malformed")
+    if raw.get("version") != "r3-policy-mir-v1":
+        raise ProductionReadinessError("policy MIR witness version mismatch")
+    if raw.get("metric") != "routed_policy" or \
+            raw.get("evaluation_only") is not True or \
+            raw.get("canonical_memory_mutation") != "none" or \
+            raw.get("production_integration") != "not_attempted":
+        raise ProductionReadinessError("policy MIR witness crosses an authority boundary")
+    baseline_arm = raw.get("baseline_arm")
+    policy_arm = raw.get("policy_arm")
+    if baseline_arm != "NO_MEMORY" or policy_arm not in {
+            "APPLICABILITY_GATED", "CAUSAL_NO_SKILL"}:
+        raise ProductionReadinessError("policy MIR arm binding is invalid")
+    cohort_path = _path(raw.get("cohort_receipt"), base=path.parent,
+                        label="policy MIR cohort")
+    expected_file_digest = raw.get("cohort_receipt_sha256")
+    actual_file_digest = _file_digest(cohort_path)
+    if expected_file_digest != actual_file_digest:
+        raise ProductionReadinessError("policy MIR cohort digest mismatch")
+    cohort_payload = _load(cohort_path, "policy MIR cohort")
+    try:
+        cohort = RtlPairedCohortReceipt.from_dict(cohort_payload)
+    except (TypeError, ValueError) as exc:
+        raise ProductionReadinessError(
+            f"policy MIR cohort cannot replay: {exc}") from exc
+    if cohort_payload.get("receipt_digest") != cohort.receipt_digest:
+        raise ProductionReadinessError("policy MIR cohort receipt digest mismatch")
+    if raw.get("cohort_receipt_digest") != cohort.receipt_digest:
+        raise ProductionReadinessError("policy MIR cohort binding drifted")
+    if cohort.evaluation_only is not True or cohort.source_disjoint is not True or \
+            cohort.source_restore_verified is not True:
+        raise ProductionReadinessError("policy MIR cohort is not evaluation-only/source-disjoint")
+    expected_cases = raw.get("case_count")
+    if (type(expected_cases) is not int or expected_cases <= 0 or
+            expected_cases != len(cohort.case_receipts)):
+        raise ProductionReadinessError("policy MIR case count mismatch")
+
+    harmful = 0
+    known = 0
+    unknown = 0
+    routed = 0
+    for case_id, bundle in sorted(cohort.case_receipts.items()):
+        baseline = bundle.arm_receipts[baseline_arm]
+        policy = bundle.arm_receipts[policy_arm]
+        if baseline.source != "no_memory":
+            raise ProductionReadinessError(
+                f"policy MIR baseline is not no-memory: {case_id}")
+        if bundle.routing_receipt_id is None:
+            raise ProductionReadinessError(
+                f"policy MIR route receipt is missing: {case_id}")
+        routed += 1
+        if not _execution_complete(baseline) or not _execution_complete(policy):
+            unknown += 1
+            continue
+        known += 1
+        harmful += int(
+            baseline.outcome in POSITIVE_OUTCOMES and
+            (policy.outcome in HARMFUL_OUTCOMES or
+             bool(policy.created_regressions)))
+
+    if (type(raw.get("known_cases")) is not int or
+            type(raw.get("unknown_cases")) is not int or
+            type(raw.get("harmful_cases")) is not int or
+            type(raw.get("routed_cases")) is not int or
+            raw.get("known_cases") != known or raw.get("unknown_cases") != unknown or \
+            raw.get("harmful_cases") != harmful or raw.get("routed_cases") != routed):
+        raise ProductionReadinessError("policy MIR aggregate disagrees with cohort")
+    if known <= 0:
+        raise ProductionReadinessError("policy MIR has no complete paired oracle cases")
+    if isinstance(raw.get("routing_receipt_coverage"), bool) or \
+            type(raw.get("routing_receipt_coverage")) not in (int, float) or \
+            float(raw["routing_receipt_coverage"]) != round(routed / expected_cases, 6):
+        raise ProductionReadinessError("policy MIR routing coverage disagrees with cohort")
+    interval = wilson_interval(harmful, known)
+    metrics = {
+        "source": "routed_policy",
+        "baseline_arm": baseline_arm,
+        "policy_arm": policy_arm,
+        "harmful_cases": harmful,
+        "total_cases": known,
+        "unknown_cases": unknown,
+        "routed_cases": routed,
+        "routing_receipt_coverage": round(routed / expected_cases, 6),
+        "point": interval["point"],
+        "upper_ci": interval["upper"],
+        "confidence": interval["confidence"],
+        "cohort_receipt_digest": cohort.receipt_digest,
+    }
+    # A finite Wilson upper bound is intentionally not rounded down to zero;
+    # callers still need a sufficiently large independent cohort to establish
+    # the configured production threshold.
+    return True, metrics
+
+
 def _interference(path: Path) -> tuple[bool, dict]:
     report = _load(path, "interference summary")
     if report.get("reason") != "MEMORY_INTERFERENCE":
         raise ProductionReadinessError("interference summary has no typed MEMORY_INTERFERENCE reason")
     if report.get("canonical_memory_mutation") != "none" or report.get("production_authority_changed") is True:
         raise ProductionReadinessError("interference summary crosses production boundary")
+    has_policy_mir, policy_metrics = _routed_policy_mir(report, path=path)
+    if has_policy_mir:
+        # ``mir_upper_ci`` is a statistical safety gate.  Keep the existing
+        # zero-harm policy threshold and let the Wilson upper bound establish
+        # whether the independent routed-policy cohort is large enough.
+        return policy_metrics["upper_ci"] <= 0.0, policy_metrics
     total = (report.get("risk_update") or {}).get("before", {}).get("memory_interference_cases")
     harmful = total
     # The summary's denominator is the source-disjoint challenge case count;

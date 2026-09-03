@@ -101,6 +101,57 @@ def _interference_report(tmp_path):
     return path
 
 
+def _routed_policy_interference_report(tmp_path, *, tamper=None):
+    """Create a typed post-revision policy-MIR witness with zero observed harm."""
+    cases = {}
+    source_digests = {}
+    for index in range(2):
+        case_id = f"policy-case-{index}"
+        cases[case_id] = PairedCandidateExecutionReceipt(
+            case_id=case_id,
+            arm_receipts={
+                "NO_MEMORY": _execution(case_id, "no_memory", "no-memory:" + case_id),
+                "ALWAYS_MEMORY": _execution(case_id, "structured_memory", "memory:" + case_id),
+                "APPLICABILITY_GATED": _execution(case_id, "structured_memory", "memory:" + case_id),
+                "CAUSAL_NO_SKILL": _execution(case_id, "structured_memory", "memory:" + case_id),
+            },
+            candidate_budget=3, case_digest=f"sha256:policy-case-{index}",
+            toolchain_digest="sha256:toolchain", oracle_digest="sha256:oracle",
+            paired=True, evaluation_only=True, lineage_id=f"policy-lineage-{index}",
+            routing_receipt_id=f"routing-{index}", routing_decision="CONSIDER")
+        source_digests[case_id] = f"sha256:policy-source-{index}"
+    cohort = RtlPairedCohortReceipt(
+        campaign_id="policy-mir-campaign", case_receipts=cases,
+        source_digests=source_digests, candidate_budget=3,
+        toolchain_digest="sha256:toolchain", oracle_digest="sha256:oracle",
+        platform_digest="sha256:platform", pdk_digest="sha256:pdk",
+        campaign_manifest_digest="sha256:manifest")
+    cohort_path = tmp_path / "policy-cohort.json"
+    cohort_path.write_text(json.dumps({**cohort.to_dict(),
+                                       "receipt_digest": cohort.receipt_digest}))
+    policy_mir = {
+        "version": "r3-policy-mir-v1", "metric": "routed_policy",
+        "baseline_arm": "NO_MEMORY", "policy_arm": "CAUSAL_NO_SKILL",
+        "cohort_receipt": str(cohort_path),
+        "cohort_receipt_sha256": _sha(cohort_path),
+        "cohort_receipt_digest": cohort.receipt_digest,
+        "case_count": 2, "known_cases": 2, "unknown_cases": 0,
+        "routed_cases": 2, "harmful_cases": 0,
+        "routing_receipt_coverage": 1.0, "evaluation_only": True,
+        "canonical_memory_mutation": "none",
+        "production_integration": "not_attempted",
+    }
+    if tamper:
+        policy_mir.update(tamper)
+    path = tmp_path / "policy-interference.json"
+    path.write_text(json.dumps({
+        "reason": "MEMORY_INTERFERENCE", "canonical_memory_mutation": "none",
+        "production_authority_changed": False, "case_count": 2,
+        "policy_mir": policy_mir,
+    }))
+    return path
+
+
 def _authority_replay_report(tmp_path, **overrides):
     """Build the strict read-only authority-replay envelope expected by P15-B."""
     gates = {
@@ -176,6 +227,32 @@ def test_readiness_authority_requires_actual_read_only_replay(tmp_path):
         authority_report=authority)
     assert report["readiness"]["gate_status"]["authority_replay"] == "PASS"
     assert report["readiness"]["metrics"]["authority"]["verified"] is True
+
+
+def test_readiness_replays_routed_policy_mir_instead_of_forced_counterfactual(
+        tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _routed_policy_interference_report(tmp_path)
+    report = build_production_readiness(
+        calibration_report=calibration, interference_summary=interference)
+    mir = report["readiness"]["metrics"]["mir"]
+    assert mir["source"] == "routed_policy"
+    assert mir["policy_arm"] == "CAUSAL_NO_SKILL"
+    assert mir["harmful_cases"] == 0
+    assert mir["total_cases"] == 2
+    # Zero observed harm is still insufficient to establish a zero upper CI
+    # with only two independent cases.
+    assert mir["upper_ci"] > 0.0
+    assert report["readiness"]["gate_status"]["mir_upper_ci"] == "FAIL"
+
+
+def test_readiness_rejects_tampered_routed_policy_mir_aggregate(tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _routed_policy_interference_report(
+        tmp_path, tamper={"harmful_cases": 1})
+    with pytest.raises(ProductionReadinessError, match="policy MIR aggregate"):
+        build_production_readiness(
+            calibration_report=calibration, interference_summary=interference)
 
 
 @pytest.mark.parametrize("overrides", [

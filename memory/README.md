@@ -3585,6 +3585,14 @@ receipt、缺 gate 或可写数据库摘要均会得到 `authority_replay=FAIL`�
 production authority。该 preflight 仍只生成 evaluation receipt，不修改 canonical memory
 或 production runtime；`memory/docs/` 继续排除在提交之外。
 
+P15-B 另增加 `r3-policy-mir-v1` routed-policy witness。它绑定 post-revision typed P12
+cohort、逐 case routing receipt、baseline/policy arm 和完整 executable oracle，重算
+`harmful_cases`、unknown-safe denominator、routing coverage 与 Wilson upper CI；因此
+`ALWAYS_MEMORY` 的故意 harmful counterfactual 不会再被误写成真实 policy MIR。即使
+观测到零 harm，有限样本的 upper CI 仍不会被截断为零，样本不足时继续保持
+`mir_upper_ci=FAIL`，不打开 production mirror/canary。该 witness 仍为 evaluation-only，
+不修改 canonical memory，也不提交 `memory/docs/`。
+
 ### 2026-09-02 Revision3 P2-R6 novelty/conflict typed adapters
 
 保留原有 `detect_novelty()` / `detect_conflicts()` 判定逻辑，只新增可重放的
