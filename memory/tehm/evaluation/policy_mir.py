@@ -25,6 +25,10 @@ from .rtl_cohort import RtlPairedCohortReceipt
 
 POLICY_MIR_VERSION = "r3-policy-mir-v2"
 POLICY_MIR_ARMS = frozenset({"APPLICABILITY_GATED", "CAUSAL_NO_SKILL"})
+_ROUTING_DECISIONS = frozenset({
+    "APPLY", "CONSIDER", "NO_SKILL", "ABSTAIN", "INAPPLICABLE",
+})
+_NO_MEMORY_DECISIONS = frozenset({"NO_SKILL", "ABSTAIN", "INAPPLICABLE"})
 
 
 class PolicyMIRError(ValueError):
@@ -75,6 +79,52 @@ def _execution_complete(receipt) -> bool:
         receipt.outcome != "UNKNOWN")
 
 
+def _validate_policy_route(bundle, *, policy_arm: str, case_id: str) -> None:
+    """Recheck that the routed arm obeyed its recorded policy decision.
+
+    A route receipt ID alone is not enough: a caller could attach an otherwise
+    valid-looking ID while changing the policy arm source or fallback metadata.
+    MIR replay must reject bundles that omit the decision field instead of
+    treating them as routed observations.
+    """
+    decision = bundle.routing_decision
+    if decision not in _ROUTING_DECISIONS:
+        raise PolicyMIRError(
+            f"policy MIR routing decision is missing or invalid: {case_id}")
+    policy = bundle.arm_receipts[policy_arm]
+    metadata = policy.metadata
+    if not isinstance(metadata, Mapping):
+        raise PolicyMIRError(
+            f"policy MIR policy metadata is malformed: {case_id}")
+    fallback = metadata.get("policy_fallback")
+    if fallback is not None and type(fallback) is not bool:
+        raise PolicyMIRError(
+            f"policy MIR policy fallback witness is malformed: {case_id}")
+    if (metadata.get("routing_decision") is not None and
+            metadata.get("routing_decision") != decision):
+        raise PolicyMIRError(
+            f"policy MIR routing metadata disagrees with receipt: {case_id}")
+    if policy_arm == "CAUSAL_NO_SKILL":
+        expected_source = ("no_memory" if decision in _NO_MEMORY_DECISIONS
+                           else "structured_memory")
+        expected_fallback = decision in _NO_MEMORY_DECISIONS
+        if (policy.source != expected_source or
+                (expected_fallback and fallback is not True) or
+                (not expected_fallback and fallback is True)):
+            raise PolicyMIRError(
+                f"policy MIR causal arm violates route semantics: {case_id}")
+    elif policy_arm == "APPLICABILITY_GATED":
+        if policy.source == "no_memory" and fallback is not True:
+            raise PolicyMIRError(
+                f"policy MIR applicability fallback is not witnessed: {case_id}")
+        if policy.source == "structured_memory" and fallback:
+            raise PolicyMIRError(
+                f"policy MIR applicability memory execution is marked fallback: {case_id}")
+        if policy.source not in {"no_memory", "structured_memory"}:
+            raise PolicyMIRError(
+                f"policy MIR applicability arm source is invalid: {case_id}")
+
+
 def _load_cohorts(
         refs: Sequence[Mapping], *, base: Path, expected_policy_arm: str,
         require_aggregates: bool = True,
@@ -89,6 +139,7 @@ def _load_cohorts(
     seen_campaigns: set[str] = set()
     seen_cases: set[str] = set()
     seen_sources: set[str] = set()
+    seen_lineages: set[str] = set()
     fixed: tuple[str, str, str, str, int] | None = None
     harmful = known = unknown = routed = case_count = 0
 
@@ -143,6 +194,15 @@ def _load_cohorts(
             if source_digest in seen_sources:
                 raise PolicyMIRError("policy MIR cohorts contain overlapping source digests")
             seen_sources.add(source_digest)
+            lineage = bundle.lineage_id
+            if type(lineage) is not str or not lineage.strip():
+                raise PolicyMIRError(
+                    f"policy MIR lineage witness is missing: {case_id}")
+            lineage = lineage.strip()
+            if lineage in seen_lineages:
+                raise PolicyMIRError(
+                    f"policy MIR cohorts contain overlapping lineages: {case_id}")
+            seen_lineages.add(lineage)
             baseline = bundle.arm_receipts["NO_MEMORY"]
             policy = bundle.arm_receipts[expected_policy_arm]
             if baseline.source != "no_memory":
@@ -151,6 +211,8 @@ def _load_cohorts(
             if bundle.routing_receipt_id is None:
                 raise PolicyMIRError(
                     f"policy MIR route receipt is missing: {case_id}")
+            _validate_policy_route(
+                bundle, policy_arm=expected_policy_arm, case_id=case_id)
             local_routed += 1
             if not _execution_complete(baseline) or not _execution_complete(policy):
                 local_unknown += 1

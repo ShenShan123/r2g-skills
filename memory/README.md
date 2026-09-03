@@ -3802,3 +3802,15 @@ conformal evidence 缺口，但不替代 MIR 上界、held-out attribution 和�
 最新 campaign artifacts 位于 `/data1/zhangdy/tehm-campaigns/tehm-r3-rtl-conformal-calibration-20260903-r4/`
 及对应的 disposable authority snapshot；`memory/docs/` 继续由
 `.gitignore` 排除，不进入提交。
+
+### 2026-09-03 Revision3 routed-policy MIR replay binding
+
+补强 `tehm.evaluation.policy_mir` 的 routed-policy replay：MIR 聚合现在除检查
+`routing_receipt_id` 外，还必须重放合法的 routing decision，并核对
+`CAUSAL_NO_SKILL` 的实际 source/fallback 与 `NO_SKILL`、`ABSTAIN`、`INAPPLICABLE` 或
+`APPLY`、`CONSIDER` 决策一致；缺失 route、缺失 fallback witness 或 metadata 错配均
+fail-closed。该约束防止将 forced-memory 或未证明的 no-memory 结果伪装成真实 policy
+MIR 分母。既有 4-case/2-cohort aggregate、P0 smoke、Validation V0、P16 schema
+contract 和最新 production-readiness replay 均通过；MIR upper-CI 仍按预注册的
+`max_mir_upper_ci=0.0` 保持 `FAIL`，没有打开 production runtime。`memory/docs/`
+继续只作本地 governing input，不进入提交。

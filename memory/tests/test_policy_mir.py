@@ -146,6 +146,32 @@ def test_build_rejects_environment_drift(tmp_path):
         build_routed_policy_mir([first, second], policy_arm="CAUSAL_NO_SKILL")
 
 
+def test_build_rejects_missing_routed_policy_semantics(tmp_path):
+    first = _cohort(tmp_path, "campaign-a", 0)
+    raw = json.loads(first.read_text())
+    case = raw["case_receipts"]["policy-case-0"]
+    # Keep the paired receipt content-addressed, but remove the route decision
+    # that makes the CAUSAL_NO_SKILL no-memory source a meaningful policy arm.
+    case.pop("routing_decision", None)
+    checked = RtlPairedCohortReceipt.from_dict(raw)
+    raw["receipt_digest"] = checked.receipt_digest
+    first.write_text(json.dumps(raw))
+    with pytest.raises(PolicyMIRError, match="routing decision is missing"):
+        build_routed_policy_mir([first], policy_arm="CAUSAL_NO_SKILL")
+
+
+def test_build_rejects_overlapping_lineage_witness(tmp_path):
+    first = _cohort(tmp_path, "campaign-a", 0)
+    raw = json.loads(first.read_text())
+    raw.pop("receipt_digest", None)
+    raw["case_receipts"]["policy-case-1"]["lineage_id"] = "lineage-0"
+    checked = RtlPairedCohortReceipt.from_dict(raw)
+    raw["receipt_digest"] = checked.receipt_digest
+    first.write_text(json.dumps(raw))
+    with pytest.raises(PolicyMIRError, match="overlapping lineages"):
+        build_routed_policy_mir([first], policy_arm="CAUSAL_NO_SKILL")
+
+
 def test_production_interference_replays_v2_and_keeps_threshold_explicit(tmp_path):
     first = _cohort(tmp_path, "campaign-a", 0)
     second = _cohort(tmp_path, "campaign-b", 2)
