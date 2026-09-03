@@ -3843,3 +3843,23 @@ held-out lineage 被错误扩大分母。对应 readiness
 `anti_forgetting`、`authority_replay`、`rollback` 均为 `PASS`。这建立了真实
 selected-memory 的安全/有效性观测，但尚不足以开启 production runtime；
 `memory/docs/` 继续只作本地 governing input，不进入提交。
+
+### 2026-09-03 Revision3 interference shadow upgraded to typed MIR v2
+
+将 `scripts/run_r3_memory_interference_shadow.py` 的新鲜 shadow producer 从 legacy
+v1 compact MIR witness 升级为正式 `r3-policy-mir-v2` aggregate：它直接绑定本次
+post-revision `RtlPairedCohortReceipt` 文件摘要、receipt digest、route semantics、
+固定 oracle/toolchain 与逐 case known/unknown/harmful 重算结果；v1 仍只作为旧证据的
+兼容 replay 路径。新的
+`/data1/zhangdy/tehm-campaigns/tehm-r3-interference-shadow-p17-v2-20260903/`
+实跑仍由真实 `iverilog/vvp` 产生 `MEMORY_INTERFERENCE` 2/2，reason admission 2/2，
+shadow `SPECIALIZE` 创建 typed child/relation；post-revision 的
+`APPLICABILITY_GATED` 与 `CAUSAL_NO_SKILL` 均 2/2 通过安全 fallback，
+`canonical_counts_unchanged=true`、`source_db_unchanged=true`、`staging_discarded=true`。
+
+该 v2 policy MIR replay 为 `known=2`、`harmful=0`、`routing_receipt_coverage=1.0`、
+Wilson `upper_ci=0.65762`；对应 readiness
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-interference-p17-v2-20260903/readiness.json`
+仍 `eligible=false`，仅 `mir_upper_ci=FAIL`，其余 gate 均 `PASS`。这一步只提升
+evidence contract 与 replay 强度，不将 shadow child 导入 canonical memory 或
+production runtime；`memory/docs/` 仍不提交。
