@@ -15,8 +15,31 @@ from pathlib import Path
 import pytest
 
 from tehm.rtl.rtl_oracle import IcarusOracle
+from tehm.lifecycle.rtl_trial import _derive_rtl_utility_verdict
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+
+
+@pytest.mark.parametrize(
+    ("control", "candidate", "expected"),
+    [
+        ({"verdict": "FAIL"}, {"verdict": "PASS"}, "PARETO_SAFE"),
+        ({"verdict": "PASS"}, {"verdict": "FAIL"}, "HARMFUL"),
+        ({"verdict": "PASS"}, {"verdict": "PASS"}, "NEUTRAL"),
+        ({"verdict": "FAIL"}, {"verdict": "FAIL"}, "NEUTRAL"),
+        ({"verdict": "UNKNOWN"}, {"verdict": "PASS"}, "UNKNOWN"),
+    ],
+)
+def test_rtl_utility_verdict_is_derived_from_paired_oracle(
+        control, candidate, expected):
+    assert _derive_rtl_utility_verdict(control, candidate) == expected
+
+
+def test_rtl_utility_verdict_marks_candidate_regression_harmful():
+    assert _derive_rtl_utility_verdict(
+        {"verdict": "PASS"},
+        {"verdict": "PASS", "created_regressions": ["timing"]},
+    ) == "HARMFUL"
 
 
 def test_real_rtl_campaign_closed_loop(tmp_path, monkeypatch):

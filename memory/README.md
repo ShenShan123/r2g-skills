@@ -3723,3 +3723,24 @@ transfer 与三次 A/B rollback 均保留；新的 authority receipt
 保持 `database_unchanged=true`、`DENY_CANONICAL_IMPORT`、`promotion_attempted=false`，
 没有 canonical memory 或 production runtime 变化。`memory/docs/` 继续是本地
 governing input，由 `.gitignore` 排除，不能进入提交。
+
+### 2026-09-03 Revision3 RTL paired utility witness
+
+补齐 RTL external A/B adapter 的 utility provenance：候选 transition 现在只在
+control/candidate 两个 Icarus oracle 都给出确定 `PASS`/`FAIL` 后，由固定的
+`_derive_rtl_utility_verdict()` 规则派生 `PARETO_SAFE`、`HARMFUL` 或 `NEUTRAL`；任一
+臂为 `UNKNOWN` 时保持 `UNKNOWN`，绝不把单臂成功当作 utility。该 verdict 与
+`experiment_kind=REPAIR` 一起写入 durable `observation_delta`，authority replay 因而
+能从真实 paired witness 重算 harmful-rate，而不是读取 caller gate map。
+
+在外部 disposable campaign
+`/data1/zhangdy/tehm-campaigns/tehm-r3-authority-rtl-20260903-r5/` 中，以未参与
+训练的 `req_ack_bug4` 运行 3 次真实 Icarus/vvp A/B，三次 utility 均为
+`PARETO_SAFE`。新的 authority receipt
+`rule_authority_cef5ba1450d13e9e58f0` 将
+`rollback_verified/registry_verified/obligation_coverage/cross_lineage_te/harmful_rate`
+均置为 `PASS`；`conformal_coverage=NOT_ESTABLISHED`，所以仍保持
+`eligible=false`。只读 replay 为 `database_unchanged=true`、
+`DENY_CANONICAL_IMPORT`、`promotion_attempted=false`，没有 canonical memory 或
+production runtime 变化。conformal 仍需独立 calibration cohort，不能由这 3 次 A/B
+结果推导。`memory/docs/` 仍由 `.gitignore` 排除，不进入提交。

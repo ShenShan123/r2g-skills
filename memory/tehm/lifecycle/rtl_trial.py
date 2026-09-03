@@ -14,6 +14,7 @@ import json
 import shutil
 import sqlite3
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 
 from contracts import RepairContext
@@ -34,6 +35,34 @@ from tehm.retrieval.index import build_index
 
 
 RTL_EXTERNAL_TRIAL_VERSION = "rtl-external-trial-v1"
+
+
+def _derive_rtl_utility_verdict(control_result: Mapping,
+                                candidate_result: Mapping) -> str:
+    """Derive a paired RTL utility verdict from the two immutable oracle arms.
+
+    The target/regression oracle establishes whether an arm is executable and
+    verified; it does not by itself establish utility.  Utility is therefore
+    derived only after both paired verdicts are known, with an explicit
+    fail-closed result for UNKNOWN/compile-incomplete observations.  This
+    keeps the harmful-rate authority projection independent of a caller's
+    hand-authored gate map while preserving ``UNKNOWN`` when the pair cannot
+    support a comparison.
+    """
+    control_verdict = control_result.get("verdict")
+    candidate_verdict = candidate_result.get("verdict")
+    if control_verdict not in {"PASS", "FAIL"} or \
+            candidate_verdict not in {"PASS", "FAIL"}:
+        return "UNKNOWN"
+    if candidate_result.get("created_regressions"):
+        return "HARMFUL"
+    if control_verdict == "FAIL" and candidate_verdict == "PASS":
+        return "PARETO_SAFE"
+    if control_verdict == "PASS" and candidate_verdict == "FAIL":
+        return "HARMFUL"
+    # Equal definitive outcomes establish no paired worsening.  Keep this
+    # explicitly neutral rather than inferring a positive repair effect.
+    return "NEUTRAL"
 
 
 def run_rtl_external_trial(
@@ -137,6 +166,9 @@ def run_rtl_external_trial(
                         "failing_tests": {"before": 1, "after": 0},
                         "created_regressions": result.get("created_regressions", []),
                         "newly_observed_failures": result.get("newly_observed_failures", []),
+                        "experiment_kind": "REPAIR",
+                        "utility_verdict": _derive_rtl_utility_verdict(
+                            arm_a_result, result),
                         "rewrite": edit,
                     },
                     "tool_versions": {"icarus": result.get("extractor_version")},
@@ -174,6 +206,8 @@ def run_rtl_external_trial(
                 "obligation_coverage": activation.obligation_coverage,
                 "created_regressions": list(activation.created_regressions),
                 "rollback_receipt": rollback,
+                "utility_verdict": _derive_rtl_utility_verdict(
+                    arm_a_result, state.get("verification") or {}),
                 "arms_differ": arm_a_result.get("verdict") !=
                                (state.get("verification") or {}).get("verdict"),
                 "arm_a": {"success": arm_a_result.get("verdict") == "PASS",
