@@ -3999,3 +3999,18 @@ runtime claim。`memory/docs/` 仍由 `.gitignore` 排除，永不提交。
 负校准证据，不是完整 P15 或 production readiness；post-revision 的
 `INAPPLICABLE` safety veto 仍保持在二元 P15 contract 之外，canonical memory、
 authority 与 production runtime 均未改变。
+
+### 2026-09-03 Revision3 cross-backend P15 calibration aggregate
+
+新增 `scripts/aggregate_r3_calibration.py`，只读取两个已经 replay 过的 typed
+calibration manifest，将 RTL n=40 与外部 ORFS n=2 作为不同 campaign 合并；脚本
+检查 campaign/case ID 不重叠，并保留每个输入 manifest 及其 evidence refs 的摘要，
+不会把 calibration 样本写回 learner memory。
+
+外部 aggregate 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-p15-calibration-cross-backend-20260903/`：
+`sample_count=42`、`case_id_disjoint=true`、三类 reason 均达到最低支持，receipt
+为 `PASS`，`calibration_error=0.002381`。其中 ORFS 两条样本仍保留旧
+`CONSIDER → NO_SKILL/RISK` 的真实 false-negative，未被重标；aggregate 只是
+cross-backend 统计 evidence，不能替代 MIR upper-CI、candidate pool 或 authority，
+`production_promotion_eligible=false`。
