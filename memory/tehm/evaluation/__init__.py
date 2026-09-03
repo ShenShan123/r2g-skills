@@ -57,6 +57,10 @@ from .candidate_pool_aggregate import (
     CANDIDATE_POOL_AGGREGATE_VERSION, CandidatePoolAggregateError,
     build_candidate_pool_aggregate, replay_candidate_pool_aggregate,
 )
+from .efficacy_evidence import (
+    EFFICACY_EVIDENCE_VERSION, EfficacyEvidenceError,
+    build_efficacy_evidence, replay_efficacy_evidence,
+)
 from .mir_sample_plan import (
     MIR_SAMPLE_PLAN_VERSION, DEFAULT_MIR_SAMPLE_THRESHOLDS,
     DEFAULT_MAX_SEARCH_CASES, MIRError, MIRSamplePlanReceipt,
@@ -97,6 +101,8 @@ __all__ = [
     "build_candidate_pool_evidence", "replay_candidate_pool_evidence",
     "CANDIDATE_POOL_AGGREGATE_VERSION", "CandidatePoolAggregateError",
     "build_candidate_pool_aggregate", "replay_candidate_pool_aggregate",
+    "EFFICACY_EVIDENCE_VERSION", "EfficacyEvidenceError",
+    "build_efficacy_evidence", "replay_efficacy_evidence",
     "MIR_SAMPLE_PLAN_VERSION", "DEFAULT_MIR_SAMPLE_THRESHOLDS",
     "DEFAULT_MAX_SEARCH_CASES", "MIRError", "MIRSamplePlanReceipt",
     "build_mir_sample_plan", "replay_mir_sample_plan",

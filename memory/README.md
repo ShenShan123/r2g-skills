@@ -4149,3 +4149,23 @@ freeze/replay 均通过。接入完整 MIR/readiness 后，P9 `candidate_pool=FA
 `eligible=false`、`production_integration=not_attempted`。这补齐了 candidate-pool
 composition evidence，但没有放宽 MIR policy、写 canonical memory 或打开 runtime；
 `memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 typed efficacy evidence from interference revision
+
+新增 `tehm.evaluation.efficacy_evidence` 与
+`scripts/build_r3_efficacy_evidence.py`，把 RQ3 的 harmful-activation decrease 固定为
+一个 typed pre/post comparison。builder/replay 要求 before/after 是不同 revision 的
+完整 `RtlPairedCohortReceipt`，逐 case 绑定相同 source digest、lineage、toolchain、
+oracle、platform、PDK 和 budget，并从 `NO_MEMORY` baseline 与指定 policy arm 的真实
+oracle outcome 重算 harmful cases；不接受手写 `gain` 或 rate 布尔值。
+
+真实 interference revision 证据位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-efficacy-interference-revision-20260903/`，
+receipt digest 为 `sha256:dff5c5297fe3bfe716e1df15e9b6f2a05728da44500dc7725d93b187c3a7c1b8`，
+2 个 paired cases 的 before harmful rate 为 `1.0`、after 为 `0.0`，独立 replay 通过。
+接入 35-case MIR readiness 后，P9 `efficacy=PASS`，但 candidate-pool 仍因
+Wilson upper-CI `0.098901 > 0.0` 为 `FAIL`，因此 readiness digest
+`sha256:052a801700daefbdf0bb9d0b69ef6e40e44362f3fa489c20fe15a6f83289b4bb` 的整体仍为
+`eligible=false`、`production_integration=not_attempted`。该 2-case efficacy 结果是
+evaluation-only 的 safety evidence，不等于 production promotion；`memory/docs/` 继续
+由 `.gitignore` 排除且不提交。

@@ -25,6 +25,7 @@ def main(argv=None) -> int:
     parser.add_argument("--heldout-delta-m", type=Path)
     parser.add_argument("--authority-report", type=Path)
     parser.add_argument("--candidate-pool-evidence", type=Path)
+    parser.add_argument("--efficacy-evidence", type=Path)
     parser.add_argument("--schema-contract", type=Path)
     parser.add_argument("--max-mir-upper-ci", type=float, default=0.0,
                         help="explicit MIR Wilson upper-CI policy threshold (default: 0.0)")
@@ -49,6 +50,7 @@ def main(argv=None) -> int:
                 heldout_delta_m=args.heldout_delta_m,
                 authority_report=args.authority_report,
                 candidate_pool_evidence=args.candidate_pool_evidence,
+                efficacy_evidence=args.efficacy_evidence,
                 schema_contract=args.schema_contract,
                 max_mir_upper_ci=args.max_mir_upper_ci,
                 output=args.output)

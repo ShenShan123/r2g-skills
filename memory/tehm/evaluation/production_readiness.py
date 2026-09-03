@@ -32,6 +32,9 @@ from .policy_mir import (
 from .candidate_pool_evidence import (
     CandidatePoolEvidenceError, replay_candidate_pool_evidence,
 )
+from .efficacy_evidence import (
+    EfficacyEvidenceError, replay_efficacy_evidence,
+)
 from tehm.retrieval.production_gate import evaluate_production_gate
 from tehm.lifecycle.promotion_gates import REQUIRED_GATES
 
@@ -659,6 +662,21 @@ def _candidate_pool(path: Path | None) -> tuple[str, dict]:
     return "PASS", metrics
 
 
+def _efficacy(path: Path | None) -> tuple[str, dict]:
+    """Replay optional typed efficacy evidence for the downstream P9 gate."""
+    if path is None:
+        return "NOT_ESTABLISHED", {
+            "reason": "typed efficacy evidence is required",
+        }
+    report = _load(path, "efficacy evidence")
+    try:
+        metrics = replay_efficacy_evidence(report, base=path.parent)
+    except EfficacyEvidenceError as exc:
+        raise ProductionReadinessError(
+            f"efficacy evidence cannot replay: {exc}") from exc
+    return ("PASS" if metrics.get("harm_reduction_observed") is True else "FAIL"), metrics
+
+
 @dataclass(frozen=True)
 class ProductionReadinessReceipt:
     """Content-addressed, evaluation-only P15-B readiness result."""
@@ -752,6 +770,7 @@ def build_production_readiness(*, calibration_report: Path,
                                heldout_delta_m: Path | None = None,
                                authority_report: Path | None = None,
                                candidate_pool_evidence: Path | None = None,
+                               efficacy_evidence: Path | None = None,
                                schema_contract: Path | None = None,
                                max_mir_upper_ci: float = 0.0,
                                output: Path | None = None) -> dict:
@@ -767,7 +786,7 @@ def build_production_readiness(*, calibration_report: Path,
     interference_summary = interference_summary.expanduser().resolve()
     for path in (calibration_report, interference_summary, anti_forgetting,
                  heldout_delta_m, authority_report, candidate_pool_evidence,
-                 schema_contract):
+                 efficacy_evidence, schema_contract):
         if path is not None and not path.is_file():
             raise ProductionReadinessError(f"readiness input is not a file: {path}")
     refs = [_ref(calibration_report, "calibration_report"),
@@ -775,6 +794,7 @@ def build_production_readiness(*, calibration_report: Path,
     optional = ((anti_forgetting, "anti_forgetting"), (heldout_delta_m, "heldout_delta_m"),
                 (authority_report, "authority_report"),
                 (candidate_pool_evidence, "candidate_pool_evidence"),
+                (efficacy_evidence, "efficacy_evidence"),
                 (schema_contract, "schema_contract"))
     refs.extend(_ref(path, name) for path, name in optional if path is not None)
     cal_gates, cal_metrics, _ = _calibration(calibration_report)
@@ -785,6 +805,7 @@ def build_production_readiness(*, calibration_report: Path,
     authority_status, authority_metrics = _authority(authority_report)
     candidate_pool_status, candidate_pool_metrics = _candidate_pool(
         candidate_pool_evidence)
+    efficacy_status, efficacy_metrics = _efficacy(efficacy_evidence)
     rollback_status, rollback_metrics = _rollback(anti_status, anti_metrics)
     schema_status = "NOT_ESTABLISHED"
     schema_metrics = {"reason": "P16 schema contract is required"}
@@ -853,6 +874,14 @@ def build_production_readiness(*, calibration_report: Path,
             raise ProductionReadinessError(
                 "candidate-pool metrics disagree with routed-policy MIR")
         evidence["candidate_pool_metrics"] = candidate_pool_metrics
+    if efficacy_status != "NOT_ESTABLISHED":
+        # The typed report derives these rates from paired execution receipts;
+        # production_gate still owns the final conjunction and threshold
+        # semantics.  Do not project absent evidence as a scalar pass.
+        evidence.update({key: efficacy_metrics[key] for key in (
+            "baseline_harmful_activation_rate",
+            "memory_harmful_activation_rate",
+        )})
     if rollback_metrics.get("verified"):
         evidence.update({"rollback_verified": True, "rollback_receipt_id": "anti-forgetting-rollback",
                          "rollback_receipt_digest": next((r["sha256"] for r in refs
@@ -861,14 +890,21 @@ def build_production_readiness(*, calibration_report: Path,
         evidence, max_memory_interference_rate=max_mir_upper_ci)
     eligible = all(value == "PASS" for value in status.values()) and schema_status == "PASS" and \
         production_gate.eligible
+    readiness_metrics = {
+        "calibration": cal_metrics, "mir": mir_metrics,
+        "repair_pareto": repair_metrics, "anti_forgetting": anti_metrics,
+        "authority": authority_metrics, "rollback": rollback_metrics,
+        "candidate_pool": candidate_pool_metrics,
+        "schema_contract": schema_metrics,
+    }
+    # Preserve replay compatibility for pre-efficacy readiness receipts: an
+    # absent optional input remains absent from the serialized metrics map.
+    if efficacy_evidence is not None:
+        readiness_metrics["efficacy"] = efficacy_metrics
     receipt = ProductionReadinessReceipt(
         campaign_id=cal_metrics.get("campaign_id") or calibration_report.stem,
         input_refs=tuple(refs), gates=gates, gate_status=status,
-        metrics={"calibration": cal_metrics, "mir": mir_metrics,
-                 "repair_pareto": repair_metrics, "anti_forgetting": anti_metrics,
-                 "authority": authority_metrics, "rollback": rollback_metrics,
-                 "candidate_pool": candidate_pool_metrics,
-                 "schema_contract": schema_metrics},
+        metrics=readiness_metrics,
         production_gate={**production_gate.to_dict(), "receipt_digest": production_gate.receipt_digest},
         eligible=eligible, reasons=reasons + (("production_gate:ineligible",)
                                                if not production_gate.eligible else ()),
@@ -919,6 +955,7 @@ def replay_production_readiness(report_path: Path) -> ProductionReadinessReceipt
         heldout_delta_m=by_name.get("heldout_delta_m"),
         authority_report=by_name.get("authority_report"),
         candidate_pool_evidence=by_name.get("candidate_pool_evidence"),
+        efficacy_evidence=by_name.get("efficacy_evidence"),
         schema_contract=by_name.get("schema_contract"),
         max_mir_upper_ci=max_mir_upper_ci)
     replayed = ProductionReadinessReceipt.from_dict(result["receipt"])
