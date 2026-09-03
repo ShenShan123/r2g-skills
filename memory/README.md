@@ -3574,6 +3574,18 @@ FAIL，也不宣称能力增益或 production promotion。
 `memory/docs/` 仍是本地 governing input，由 `.gitignore` 排除，既不在 release tree
 中，也不会被本阶段提交。
 
+随后用未参与首批 gap 实验的 `req_ack_bug3` 与 `req_ack_bug4` 做了第二批
+source-disjoint 复核，campaign 为 `tehm-r3-capability-gap-20260902-r2`。两个新
+lineage（`req_ack_fsm3`、`req_ack_fsm4`）均由真实 Icarus/VVP capture 产生
+`original_failure=REMOVED` 的 source-failure witness；`CAPABILITY_GAP` derivation、
+non-P12 admission 和 `ADD/ASSET_OR_KNOWLEDGE` shadow proposal 均为 1/1，且
+`paired_counterfactual_required=false`。source canonical digest 在整个流程中保持
+不变（`d808d3e66b452577a7402bdc7c4fffd03b3f54123e165e5a1f0e63c88a7f8997`），报告
+摘要为 `ac2136cabe2707355ebdb829eaa783c4bda7dd518d024fd30600cbd131549ca6`。
+这只扩大了 capability-gap 的真实、多 lineage 证据，不注册新 asset、不写
+canonical memory、不授予 production authority；`memory/docs/` 仍由 `.gitignore`
+排除，不进入提交。
+
 ### 2026-09-02 Revision3 P15-B authority replay boundary hardening
 
 production-readiness preflight 现在只接受真正由
