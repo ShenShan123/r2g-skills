@@ -3321,6 +3321,20 @@ receipt，必须消费当前 status version 匹配且在 ledger 中存在的 aut
 该 ledger 仍不提供 `promoted` 状态，也不自动晋级或导入 production runtime；
 `memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
 
+### 2026-09-02 Revision3 P15-B production-readiness preflight
+
+新增 `tehm.evaluation.production_readiness` 与
+`scripts/audit_r3_production_readiness.py`，把进入 production shadow/canary 之前的
+七类证据固定为可重放的 `PASS/FAIL/NOT_ESTABLISHED` 投影：multi-lineage、reason-
+stratified calibration、MIR upper CI、repair Pareto、anti-forgetting、authority replay
+和 rollback。它同时复用现有 `evaluate_production_gate()`，但不会把 summary boolean 当作
+authority；所有输入文件和嵌套 cohort refs 都按 SHA-256 重放。当前真实 Revision3
+证据审计结果为：multi-lineage、reason calibration、repair Pareto、anti-forgetting、
+rollback=`PASS`，MIR upper CI=`FAIL`，authority replay=`NOT_ESTABLISHED`；因此整体
+`eligible=false`，production gate 的 efficacy/candidate-pool/authority 仍未建立，且
+`production_integration=not_attempted`。该 preflight 不创建 mirror、不修改 canonical
+memory、不写 production runtime；`memory/docs/` 继续排除在提交之外。
+
 ### 2026-09-02 Revision3 P16 schema/contract freeze
 
 新增 `tehm.schema_contract` 与 `scripts/freeze_r3_schema_contract.py`，冻结当前
