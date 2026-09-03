@@ -3921,3 +3921,27 @@ runtime、canonical memory 和 authority 均未改变。
 该 cohort 还使 `rtl.RESET_RESTORE` 的 begin/end 路径进入真实验证；修复了 action
 层缺失 `_balanced_end` 的异常，并增加对应 parser regression。`memory/docs/` 仍仅
 作本地 governing input，不进入提交。
+
+### 2026-09-03 Revision3 real external ORFS interference challenge
+
+为把 Evolution Challenge 从仓库 RTL fixture 推进到真实外部 ORFS source，新增
+`scripts/run_r3_orfs_interference_challenge.py`。脚本只接受显式 ORFS project，
+从 `constraints/config.mk` 解析并 digest-bind 外部 `VERILOG_FILES`，不读取 campaign
+manifest 或 gold fix；每个 case 在同一固定 ORFS/OpenROAD/Yosys/PDK pin 下运行四个
+P12 arm。预注册的 challenge candidate 是 `flow.CONFIG_DELTA` 的
+`CORE_UTILIZATION=99`，用于检测负迁移，不是 canonical memory rule。
+
+真实 campaign 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-interference-challenge-20260903/`，
+覆盖 ORFS 自带的 `uart` 与 `fifo` 两条 source-disjoint lineage。四臂结果为：
+`NO_MEMORY=PASS` 2/2，`ALWAYS_MEMORY=FAIL` 2/2，`APPLICABILITY_GATED=FAIL` 2/2，
+`CAUSAL_NO_SKILL=FAIL` 2/2，且 `UNKNOWN=0`；真实 paired receipt digest 为
+`sha256:b2d521ca585ecd167047eccd308c0c07723f4bfbd3ef7606cd3550c84364169a`。
+因此 detector 从 paired oracle 自动派生 `MEMORY_INTERFERENCE` 2/2，P13 typed
+trigger 2/2，reason-specific admission 2/2；`canonical_memory_mutation=none`、
+`production_runtime_imported=false`，这一步只证明真实 ORFS 负迁移检测链闭合，不能
+宣称 production 安全率或 capability gain。
+
+同时修正 `orfs_candidate_oracle` 的临时工程 basename：每个 case/候选 arm 使用由
+case 与 candidate identity 派生的独立 `FLOW_VARIANT`，避免并发 P12 arm 误共享
+R2G workspace lock。`memory/docs/` 继续只是本地 governing input，不进入提交。

@@ -218,6 +218,25 @@ def _copy_project(project: Path, destination: Path) -> None:
                     ignore=shutil.ignore_patterns(*_IGNORED_PROJECT_OUTPUTS))
 
 
+def _sandbox_name(case: Mapping, candidate: StructuredRepairCandidate | None) -> str:
+    """Choose a collision-resistant ORFS ``FLOW_VARIANT`` directory name.
+
+    ``run_orfs.sh`` derives its workspace variant from the temporary project
+    basename when no explicit third argument is supplied.  Using the old
+    constant basename ``project`` made unrelated P12 arms contend on the same
+    global ORFS lock (and, worse, could race ``clean_all`` against another
+    execution).  The case/candidate identity is immutable evidence, so a
+    short digest gives each arm a deterministic variant without exposing
+    caller-controlled path characters to the shell script.
+    """
+    case_id = case.get("case_id")
+    candidate_id = "no-memory" if candidate is None else candidate.candidate_id
+    digest = hashlib.sha256(stable_dumps({
+        "case_id": case_id, "candidate_id": candidate_id,
+    }).encode()).hexdigest()[:16]
+    return "project_tehm_" + digest
+
+
 def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
                      source_digest: str, config_before: str,
                      source_content_digest: str, config_after: str,
@@ -313,7 +332,10 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
     config_before = _digest(_parse_config(config_path))
     edits = None
     with tempfile.TemporaryDirectory(prefix="tehm-p12-orfs-") as temp:
-        sandbox = Path(temp) / "project"
+        # The basename becomes ORFS FLOW_VARIANT in run_orfs.sh.  Keep it
+        # distinct per immutable case/arm so concurrent arms cannot share the
+        # same ORFS workspace lock.
+        sandbox = Path(temp) / _sandbox_name(frozen_case, candidate)
         _copy_project(project, sandbox)
         if candidate is not None:
             if not isinstance(candidate, StructuredRepairCandidate):
