@@ -799,6 +799,24 @@ def build_production_readiness(*, calibration_report: Path,
         # Diversity is deliberately not inferred from challenge case count.
         "evidence_refs": refs,
     }
+    # The independent authority replay is already re-validated above.  Carry
+    # its content-bound receipt into the downstream production-gate input so
+    # the two projections cannot disagree.  Do not project a bare
+    # ``verified=true`` bit: the replay helper only exposes this mapping after
+    # checking the six gates, read-only database hashes, decision, and stored
+    # receipt digest.  Candidate-pool and efficacy remain absent until their
+    # own typed evidence is supplied.
+    if authority_status == "PASS" and authority_metrics.get("verified") is True:
+        authority_id = authority_metrics.get("receipt_id")
+        authority_digest = authority_metrics.get("receipt_digest")
+        if (isinstance(authority_id, str) and authority_id.strip() and
+                isinstance(authority_digest, str) and authority_digest.startswith("sha256:") and
+                len(authority_digest) > len("sha256:")):
+            evidence["authority"] = {
+                "verified": True,
+                "receipt_id": authority_id,
+                "receipt_digest": authority_digest,
+            }
     if rollback_metrics.get("verified"):
         evidence.update({"rollback_verified": True, "rollback_receipt_id": "anti-forgetting-rollback",
                          "rollback_receipt_digest": next((r["sha256"] for r in refs

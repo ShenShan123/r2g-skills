@@ -227,6 +227,12 @@ def test_readiness_authority_requires_actual_read_only_replay(tmp_path):
         authority_report=authority)
     assert report["readiness"]["gate_status"]["authority_replay"] == "PASS"
     assert report["readiness"]["metrics"]["authority"]["verified"] is True
+    # The downstream P9 gate must consume the replayed, content-bound
+    # authority receipt rather than report ``authority`` as missing merely
+    # because the readiness and production projections are separate objects.
+    assert report["readiness"]["production_gate"]["gate_status"]["authority"] == "PASS"
+    assert any(ref["name"] == "authority_report" for ref in
+               report["readiness"]["production_gate"]["evidence_refs"])
 
 
 def test_readiness_replays_routed_policy_mir_instead_of_forced_counterfactual(

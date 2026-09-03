@@ -4067,3 +4067,25 @@ source/lineage-disjoint cohort；两批均为 `NO_MEMORY=FAIL`、routed
 candidate-pool/efficacy/authority 也仍未建立，故 `eligible=false`、
 `production_integration=not_attempted`。该扩展只增加统计 evidence，不放宽策略阈值，
 `memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 authority replay projection into P9
+
+修正 `tehm.evaluation.production_readiness` 的证据装配边界：当独立的
+`tehm-rule-authority-replay-v1` 报告已经通过六项 rule gate、只读数据库前后摘要、
+`ALLOW_AUTHORITY_REVIEW`、`promotion_attempted=false` 以及 content-bound receipt 校验
+后，才把该 receipt 的 `verified/receipt_id/receipt_digest` 投影到下游
+`evaluate_production_gate()`。此前 readiness 顶层 `authority_replay=PASS`，但 P9
+输入没有携带这份已重放 receipt，导致 authority 被错误显示为
+`NOT_ESTABLISHED`；本修正不接受裸 `verified=true`，也不改变 authority ledger、
+canonical memory 或 production runtime。
+
+以相同的 43-case calibration、35-case routed-policy MIR、anti-forgetting、held-out
+Delta-M、authority replay 和 P16 schema inputs 重新 freeze/replay，外部结果位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-p17-v4-authority-projection-20260903/`，
+readiness receipt digest 为
+`sha256:d95590e2e74ff2cc1fcbdfcfa20979ffdd05773950ed0dbb409154792b18d614`。现在 P9
+`authority=PASS`、`rollback/evidence/no_skill_calibration=PASS`，但
+`candidate_pool` 与 `efficacy` 仍为 `NOT_ESTABLISHED`，顶层 `mir_upper_ci=FAIL`，
+所以整体仍是 `eligible=false` 且 `production_integration=not_attempted`。该阶段只
+修复 evidence projection，并没有把 readiness 变成 production authority；
+`memory/docs/` 继续由 `.gitignore` 排除且不提交。
