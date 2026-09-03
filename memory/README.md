@@ -3702,3 +3702,24 @@ trial authority projector 对真实捕获中的 `utility_verdict=UNKNOWN` 的处
 表示 utility gate 尚未建立，而不是 malformed evidence；新增回归测试覆盖该 fail-closed
 语义。下一步仍需独立 held-out transfer、harmful-rate 与 conformal calibration 证据，
 才能建立六项 gate；`memory/docs/` 依旧由 `.gitignore` 排除，不进入提交。
+
+### 2026-09-03 Revision3 authority semantic/action family binding
+
+修正 rule authority 的 cross-lineage 绑定边界：causal path 与 source transition
+episode 现在绑定观测到的语义机制族（例如 `HANDSHAKE_COMPLETION`），而 rule 的
+`type`/`transformation_family` 只用于绑定实际可执行动作（例如
+`GUARD_STRENGTHEN`）。二者不再被错误地要求字符串相等；held-out transition 的
+action family 仍必须命中 rule 的可执行 family，source transition 仍必须逐条通过
+verified-execution 与 learner firewall。这保持了 matcher 中 semantic mechanism 与
+executable transformation 的严格分离，同时拒绝缺失或混合的 source mechanism witness。
+
+在外部 disposable campaign
+`/data1/zhangdy/tehm-campaigns/tehm-r3-authority-rtl-20260902-r2/` 上重放：真实
+Icarus/vvp 训练、两个独立 training lineages、L3 replicated path、L4 held-out
+transfer 与三次 A/B rollback 均保留；新的 authority receipt
+`rule_authority_159b67752aba490af1ba` 将 `rollback_verified`、`registry_verified`、
+`obligation_coverage`、`cross_lineage_te` 置为 `PASS`，`harmful_rate` 与
+`conformal_coverage` 为 `NOT_ESTABLISHED`，因此整体 `eligible=false`。只读 replay
+保持 `database_unchanged=true`、`DENY_CANONICAL_IMPORT`、`promotion_attempted=false`，
+没有 canonical memory 或 production runtime 变化。`memory/docs/` 继续是本地
+governing input，由 `.gitignore` 排除，不能进入提交。

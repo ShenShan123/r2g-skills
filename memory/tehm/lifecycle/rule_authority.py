@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from tehm import db as tehm_db
+from tehm.causal.mechanism import load_transition_facts
 from tehm.causal.transfer_ledger import (
     load_causal_transfer_receipt, verify_causal_transfer)
 from tehm.dataset import normalize_stored_learner_bool
@@ -1350,7 +1351,14 @@ def _receipt_ids(values) -> tuple[str, ...]:
 
 
 def _rule_binding_fields(row) -> tuple[set[str], set[str]]:
-    """Extract mechanism families and action domains from a rule definition."""
+    """Extract legacy family values and action domains from a rule definition.
+
+    The returned family set intentionally keeps the historical ``type`` /
+    ``mechanism_family`` union for callers that only need a broad diagnostic
+    view.  Authority binding uses :func:`_rule_executable_families` for the
+    action-side check and derives the observed semantic mechanism family from
+    immutable source-transition witnesses below.
+    """
     families: set[str] = set()
     domains: set[str] = set()
     if row is None:
@@ -1368,6 +1376,28 @@ def _rule_binding_fields(row) -> tuple[set[str], set[str]]:
         if isinstance(value, str) and value:
             domains.add(value)
     return families, domains
+
+
+def _rule_executable_families(row) -> set[str]:
+    """Return only families that describe the rule's executable action.
+
+    ``mechanism_family`` is the observed failure/mechanism semantic and is not
+    interchangeable with the action's ``transformation_family``.  Older rule
+    rows use ``type`` for the latter, so it remains a compatibility alias.
+    """
+    families: set[str] = set()
+    if row is None:
+        return families
+    for field_name in ("before_pattern_json", "after_pattern_json"):
+        try:
+            pattern = _json_mapping(row[field_name])
+        except (KeyError, IndexError, TypeError):
+            pattern = {}
+        for key in ("type", "transformation_family"):
+            value = pattern.get(key)
+            if isinstance(value, str) and value:
+                families.add(value)
+    return families
 
 
 def _rule_source_transition_ids(
@@ -1402,8 +1432,26 @@ def _bind_transfer_to_rule(
     if path is None:
         return None, ["cross_lineage_te:rule_binding_path_missing"]
     path_family = str(path["mechanism_family"] or "")
-    families, rule_domains = _rule_binding_fields(rule_row)
-    if not path_family or path_family not in families:
+    _, rule_domains = _rule_binding_fields(rule_row)
+    executable_families = _rule_executable_families(rule_row)
+
+    # The causal path carries the observed semantic mechanism (for example,
+    # HANDSHAKE_COMPLETION), while the crystallized rule carries the action
+    # transformation (for example, GUARD_STRENGTHEN).  Bind the former to the
+    # source transition episodes, rather than incorrectly requiring both
+    # labels to be equal in the rule pattern.
+    source_ids = _rule_source_transition_ids(conn, rule_id)
+    source_mechanism_families: set[str] = set()
+    for transition_id in source_ids:
+        try:
+            facts = load_transition_facts(conn, transition_id)
+            if facts.mechanism_family:
+                source_mechanism_families.add(str(facts.mechanism_family))
+        except (KeyError, ValueError):
+            # The verified-transition loop below emits the durable diagnostic;
+            # do not turn a malformed source into an inferred family here.
+            continue
+    if (not path_family or source_mechanism_families != {path_family}):
         errors.append("cross_lineage_te:rule_binding_mechanism_mismatch")
 
     transfer_ids = tuple(str(value) for value in
@@ -1429,13 +1477,13 @@ def _bind_transfer_to_rule(
             transfer_domains.add(action_domain)
         action = _json_mapping(transition["action_json"])
         family = action.get("transformation_family")
-        if family and str(family) != path_family:
+        if (not isinstance(family, str) or not family or
+                family not in executable_families):
             errors.append("cross_lineage_te:rule_binding_transition_family_mismatch")
     if rule_domains and (not transfer_domains or
                          not transfer_domains.issubset(rule_domains)):
         errors.append("cross_lineage_te:rule_binding_action_domain_mismatch")
 
-    source_ids = _rule_source_transition_ids(conn, rule_id)
     training_ids = tuple(str(value) for value in
                          (ledger.transfer_receipt.get(
                              "training_transition_ids") or ()) if str(value))
