@@ -49,6 +49,11 @@ from .policy_mir import (
     POLICY_MIR_VERSION, POLICY_MIR_ARMS, PolicyMIRError,
     build_routed_policy_mir, replay_routed_policy_mir,
 )
+from .mir_sample_plan import (
+    MIR_SAMPLE_PLAN_VERSION, DEFAULT_MIR_SAMPLE_THRESHOLDS,
+    DEFAULT_MAX_SEARCH_CASES, MIRError, MIRSamplePlanReceipt,
+    build_mir_sample_plan, replay_mir_sample_plan,
+)
 
 __all__ = [
     "EXECUTOR_VERSION", "P12_ARMS", "CandidateExecutionReceipt",
@@ -80,4 +85,7 @@ __all__ = [
     "replay_production_readiness",
     "POLICY_MIR_VERSION", "POLICY_MIR_ARMS", "PolicyMIRError",
     "build_routed_policy_mir", "replay_routed_policy_mir",
+    "MIR_SAMPLE_PLAN_VERSION", "DEFAULT_MIR_SAMPLE_THRESHOLDS",
+    "DEFAULT_MAX_SEARCH_CASES", "MIRError", "MIRSamplePlanReceipt",
+    "build_mir_sample_plan", "replay_mir_sample_plan",
 ]

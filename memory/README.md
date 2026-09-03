@@ -3874,3 +3874,20 @@ post-revision lineage 做跨 cohort source/lineage/campaign disjoint 检查后�
 held-out lineage 合并；对应 readiness
 `/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-p17-v2-mixed-20260903/readiness.json`
 仍保持 `eligible=false`，因此不能据此开启 production。
+
+### 2026-09-03 Revision3 MIR statistical sample-size plan
+
+新增 evaluation-only 的 `tehm.evaluation.mir_sample_plan` 与
+`scripts/plan_r3_policy_mir_samples.py`。脚本首先只读重放 typed
+`r3-policy-mir-v2` aggregate，再以与 production readiness 完全相同的 Wilson 95%
+上界和严格 `< threshold` 判断生成 content-addressed 规划 receipt；它不修改任何
+MIR gate、canonical memory、production authority 或 runtime。
+
+针对当前混合 aggregate（`known=6`、`harmful=0`、`upper_ci=0.390334`），外部计划
+`/data1/zhangdy/tehm-campaigns/tehm-r3-policy-mir-sample-plan-p17-20260903/plan.json`
+记录了在“不再新增 harmful case”的明确假设下：上界阈值 `0.10/0.05/0.02/0.01`
+分别至少需要 `35/73/189/381` 个独立 known cases（相对当前还需
+`29/67/183/375` 个）。注册的默认阈值 `0.0` 同时被记录为
+`finite_wilson_upper_bound_is_positive`，没有有限样本解；因此当前 production
+仍然严格关闭，而不是用规划结果替代实证或放宽门禁。该计划 receipt 可用同一脚本
+`--replay` 只读复核，`memory/docs/` 仍由 `.gitignore` 排除、不进入提交。
