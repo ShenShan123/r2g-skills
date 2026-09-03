@@ -4109,3 +4109,22 @@ readiness receipt digest 为
 所以整体仍是 `eligible=false` 且 `production_integration=not_attempted`。该阶段只
 修复 evidence projection，并没有把 readiness 变成 production authority；
 `memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 selected-memory candidate-pool assembly
+
+使用显式 descriptor 为同一份 4-case routed-policy cohort 装配了一次真实的 typed
+candidate-pool receipt，外部结果位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-candidate-pool-selected-memory-20260903/`。
+descriptor 明确列出每个 query、两个 cold-start 候选和一个 routed `tehm_rule` 候选；
+builder/replay 重新校验 cohort digest、route/case/arm、candidate source/ID、执行结果和
+paired denominator。receipt digest 为
+`sha256:e3ea072c77ff642c1e58aea867aeefa8236a43d6c1054346f3d1eefa5815b0d4`，
+`paired_cases=4`、`memory_interference_cases=0`、`candidate_diversity=0.666667`。
+
+将该 receipt 投影到同一 4-case MIR readiness 后，P9 的 `authority=PASS`，candidate
+pool 证据不再是 `NOT_ESTABLISHED`，但因注册的严格 MIR upper-CI 阈值为 `0.0`，4 个
+零 harmful case 的 Wilson upper bound `0.489891` 使 `candidate_pool=FAIL`；`efficacy`
+仍为 `NOT_ESTABLISHED`，整体 `eligible=false`、`production_integration=not_attempted`。
+这说明 candidate-pool seam 已可复现，但样本量不足以证明 production safety，不能通过
+调高阈值或重标 outcome 绕过 gate；该 campaign 仍为 evaluation-only，不写 canonical
+memory、authority 或 runtime。`memory/docs/` 继续由 `.gitignore` 排除且不提交。
