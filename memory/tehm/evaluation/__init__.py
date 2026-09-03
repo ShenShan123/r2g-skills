@@ -49,6 +49,10 @@ from .policy_mir import (
     POLICY_MIR_VERSION, POLICY_MIR_ARMS, PolicyMIRError,
     build_routed_policy_mir, replay_routed_policy_mir,
 )
+from .candidate_pool_evidence import (
+    CANDIDATE_POOL_EVIDENCE_VERSION, CandidatePoolEvidenceError,
+    build_candidate_pool_evidence, replay_candidate_pool_evidence,
+)
 from .mir_sample_plan import (
     MIR_SAMPLE_PLAN_VERSION, DEFAULT_MIR_SAMPLE_THRESHOLDS,
     DEFAULT_MAX_SEARCH_CASES, MIRError, MIRSamplePlanReceipt,
@@ -85,6 +89,8 @@ __all__ = [
     "replay_production_readiness",
     "POLICY_MIR_VERSION", "POLICY_MIR_ARMS", "PolicyMIRError",
     "build_routed_policy_mir", "replay_routed_policy_mir",
+    "CANDIDATE_POOL_EVIDENCE_VERSION", "CandidatePoolEvidenceError",
+    "build_candidate_pool_evidence", "replay_candidate_pool_evidence",
     "MIR_SAMPLE_PLAN_VERSION", "DEFAULT_MIR_SAMPLE_THRESHOLDS",
     "DEFAULT_MAX_SEARCH_CASES", "MIRError", "MIRSamplePlanReceipt",
     "build_mir_sample_plan", "replay_mir_sample_plan",

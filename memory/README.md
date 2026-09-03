@@ -4068,6 +4068,26 @@ candidate-pool/efficacy/authority 也仍未建立，故 `eligible=false`、
 `production_integration=not_attempted`。该扩展只增加统计 evidence，不放宽策略阈值，
 `memory/docs/` 继续由 `.gitignore` 排除且不提交。
 
+### 2026-09-03 Revision3 typed candidate-pool evidence seam
+
+新增 `tehm.evaluation.candidate_pool_evidence` 与
+`scripts/build_r3_candidate_pool_evidence.py`，为 P15-B/P9 的 candidate-pool gate
+提供独立的 evaluation-only 装配入口。输入必须显式列出每个 case 的 query、候选
+payload 和 `CandidatePoolReceipt`；replay 会重新读取并校验 RTL P12 cohort 的文件与
+receipt digest、route/case/arm、执行 candidate ID、candidate source、候选 action-family
+与 mechanism hypothesis，并从 typed paired outcomes 重算 paired denominator、MIR point
+和 diversity。receipt 中手写的 metrics、NaN、gold-answer 字段、重复 case 或跨 cohort
+绑定均 fail-closed；候选池 evidence 不写 canonical memory、不改变 authority，也不导入
+production runtime。
+
+`audit_r3_production_readiness.py` 现在可通过 `--candidate-pool-evidence` 显式消费这份
+receipt；只有其重放成功且 paired/MIR 数值与 readiness 的 routed-policy 分母一致时，才
+会投影到下游 P9 gate。当前 35-case readiness 尚未提供完整 P6 pool receipts，因此本阶段
+没有伪造 candidate diversity，production gate 仍保持 `candidate_pool=NOT_ESTABLISHED`、
+`efficacy=NOT_ESTABLISHED`、`eligible=false`、`production_integration=not_attempted`。
+定向 replay/tamper 回归位于 `memory/tests/test_candidate_pool_evidence.py`；
+`memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
 ### 2026-09-03 Revision3 authority replay projection into P9
 
 修正 `tehm.evaluation.production_readiness` 的证据装配边界：当独立的

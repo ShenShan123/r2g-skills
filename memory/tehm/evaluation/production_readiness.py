@@ -29,6 +29,9 @@ from .rtl_cohort import RtlPairedCohortReceipt
 from .policy_mir import (
     PolicyMIRError, _validate_policy_route, replay_routed_policy_mir,
 )
+from .candidate_pool_evidence import (
+    CandidatePoolEvidenceError, replay_candidate_pool_evidence,
+)
 from tehm.retrieval.production_gate import evaluate_production_gate
 from tehm.lifecycle.promotion_gates import REQUIRED_GATES
 
@@ -641,6 +644,21 @@ def _rollback(anti_status: str, anti_metrics: Mapping) -> tuple[str, dict]:
     }
 
 
+def _candidate_pool(path: Path | None) -> tuple[str, dict]:
+    """Replay optional typed P6 pool evidence for the downstream P9 gate."""
+    if path is None:
+        return "NOT_ESTABLISHED", {
+            "reason": "typed candidate-pool evidence is required",
+        }
+    report = _load(path, "candidate-pool evidence")
+    try:
+        metrics = replay_candidate_pool_evidence(report, base=path.parent)
+    except CandidatePoolEvidenceError as exc:
+        raise ProductionReadinessError(
+            f"candidate-pool evidence cannot replay: {exc}") from exc
+    return "PASS", metrics
+
+
 @dataclass(frozen=True)
 class ProductionReadinessReceipt:
     """Content-addressed, evaluation-only P15-B readiness result."""
@@ -733,6 +751,7 @@ def build_production_readiness(*, calibration_report: Path,
                                anti_forgetting: Path | None = None,
                                heldout_delta_m: Path | None = None,
                                authority_report: Path | None = None,
+                               candidate_pool_evidence: Path | None = None,
                                schema_contract: Path | None = None,
                                max_mir_upper_ci: float = 0.0,
                                output: Path | None = None) -> dict:
@@ -747,13 +766,16 @@ def build_production_readiness(*, calibration_report: Path,
     calibration_report = calibration_report.expanduser().resolve()
     interference_summary = interference_summary.expanduser().resolve()
     for path in (calibration_report, interference_summary, anti_forgetting,
-                 heldout_delta_m, authority_report, schema_contract):
+                 heldout_delta_m, authority_report, candidate_pool_evidence,
+                 schema_contract):
         if path is not None and not path.is_file():
             raise ProductionReadinessError(f"readiness input is not a file: {path}")
     refs = [_ref(calibration_report, "calibration_report"),
             _ref(interference_summary, "interference_summary")]
     optional = ((anti_forgetting, "anti_forgetting"), (heldout_delta_m, "heldout_delta_m"),
-                (authority_report, "authority_report"), (schema_contract, "schema_contract"))
+                (authority_report, "authority_report"),
+                (candidate_pool_evidence, "candidate_pool_evidence"),
+                (schema_contract, "schema_contract"))
     refs.extend(_ref(path, name) for path, name in optional if path is not None)
     cal_gates, cal_metrics, _ = _calibration(calibration_report)
     mir_gate, mir_metrics = _interference(
@@ -761,6 +783,8 @@ def build_production_readiness(*, calibration_report: Path,
     repair_status, repair_metrics = _repair_pareto(heldout_delta_m)
     anti_status, anti_metrics = _anti_forgetting(anti_forgetting)
     authority_status, authority_metrics = _authority(authority_report)
+    candidate_pool_status, candidate_pool_metrics = _candidate_pool(
+        candidate_pool_evidence)
     rollback_status, rollback_metrics = _rollback(anti_status, anti_metrics)
     schema_status = "NOT_ESTABLISHED"
     schema_metrics = {"reason": "P16 schema contract is required"}
@@ -817,6 +841,18 @@ def build_production_readiness(*, calibration_report: Path,
                 "receipt_id": authority_id,
                 "receipt_digest": authority_digest,
             }
+    if candidate_pool_status == "PASS":
+        # Keep the typed P6 projection grouped so the production gate can
+        # flatten it, while the MIR values above remain the single safety
+        # denominator used by the readiness policy.
+        if (candidate_pool_metrics.get("paired_cases") != mir_metrics["total_cases"] or
+                candidate_pool_metrics.get("memory_interference_cases") !=
+                mir_metrics["harmful_cases"] or
+                candidate_pool_metrics.get("memory_interference_rate") !=
+                mir_metrics["point"]):
+            raise ProductionReadinessError(
+                "candidate-pool metrics disagree with routed-policy MIR")
+        evidence["candidate_pool_metrics"] = candidate_pool_metrics
     if rollback_metrics.get("verified"):
         evidence.update({"rollback_verified": True, "rollback_receipt_id": "anti-forgetting-rollback",
                          "rollback_receipt_digest": next((r["sha256"] for r in refs
@@ -831,6 +867,7 @@ def build_production_readiness(*, calibration_report: Path,
         metrics={"calibration": cal_metrics, "mir": mir_metrics,
                  "repair_pareto": repair_metrics, "anti_forgetting": anti_metrics,
                  "authority": authority_metrics, "rollback": rollback_metrics,
+                 "candidate_pool": candidate_pool_metrics,
                  "schema_contract": schema_metrics},
         production_gate={**production_gate.to_dict(), "receipt_digest": production_gate.receipt_digest},
         eligible=eligible, reasons=reasons + (("production_gate:ineligible",)
@@ -881,6 +918,7 @@ def replay_production_readiness(report_path: Path) -> ProductionReadinessReceipt
         anti_forgetting=by_name.get("anti_forgetting"),
         heldout_delta_m=by_name.get("heldout_delta_m"),
         authority_report=by_name.get("authority_report"),
+        candidate_pool_evidence=by_name.get("candidate_pool_evidence"),
         schema_contract=by_name.get("schema_contract"),
         max_mir_upper_ci=max_mir_upper_ci)
     replayed = ProductionReadinessReceipt.from_dict(result["receipt"])
