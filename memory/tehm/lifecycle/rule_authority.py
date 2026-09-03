@@ -78,6 +78,10 @@ _EXTERNAL_AUTHORITY_SPLITS = frozenset({"calibration", "heldout"})
 _EXTERNAL_UTILITY_VERDICTS = frozenset({
     "HARMFUL", "REGRESSION", "PARETO_SAFE", "SUPPORT", "NEUTRAL",
 })
+_RTL_CONFORMAL_REQUIRED_FIELDS = (
+    "method", "calibration_digest", "calibration_action_domain",
+    "calibration_transformation_family", "calibration_compatibility_profile",
+)
 
 
 def _validate_external_rule_binding(
@@ -548,10 +552,83 @@ def _external_conformal_value(record: Mapping):
     payload = {"coverage": coverage}
     if covered is not None:
         payload.update({"covered": covered, "total": total})
-    for key in ("method", "interval_method", "calibration_digest"):
+    for key in ("method", "interval_method", "calibration_digest",
+                "calibration_action_domain", "calibration_transformation_family",
+                "calibration_compatibility_profile"):
         if key in raw:
-            payload[key] = raw[key]
+            value = raw[key]
+            if type(value) is not str or not value.strip():
+                raise ValueError(f"external_authority:conformal_{key}_malformed")
+            payload[key] = value.strip()
+    # Keep the low-level extractor audit-compatible for legacy callers that
+    # only provide the conformal mapping.  Full external projection always
+    # supplies ``record.action`` and therefore applies the typed binding.
+    if isinstance(record.get("action"), Mapping):
+        _validate_external_conformal_binding(record, payload)
     return payload
+
+
+def _validate_external_conformal_binding(
+        record: Mapping, conformal: Mapping) -> None:
+    """Bind typed RTL conformal metadata to the executed action.
+
+    A coverage number is not self-authenticating.  For RTL actions, the
+    external calibration witness must identify the exact action domain,
+    executable family and compatibility profile it calibrated, as well as a
+    named method and content digest for the calibration cohort.  The digest
+    is retained as an immutable source witness; this function deliberately
+    does not treat metadata as coverage and does not grant authority.
+
+    Legacy untyped/DRC records remain audit-compatible.  RTL records carrying
+    conformal data are fail-closed until this typed contract is present.
+    """
+    action = record.get("action") if isinstance(record, Mapping) else None
+    if not isinstance(action, Mapping):
+        raise ValueError("external_authority:record_action_malformed")
+    action_domain = action.get("domain")
+    family = action.get("transformation_family")
+    if (type(action_domain) is not str or not action_domain.strip() or
+            type(family) is not str or not family.strip()):
+        raise ValueError("external_authority:record_action_incomplete")
+    action_domain = action_domain.strip()
+    family = family.strip()
+    # If a typed binding is supplied for any action, every supplied identity
+    # must agree with the executed action.  This prevents a source report from
+    # being relabeled after it has been projected.
+    optional_matches = {
+        "calibration_action_domain": action_domain,
+        "calibration_transformation_family": family,
+    }
+    action_payload = action.get("payload")
+    if not isinstance(action_payload, Mapping):
+        action_payload = {}
+    expected_profile = (
+        action.get("compatibility_profile")
+        if action.get("compatibility_profile") is not None
+        else action_payload.get("compatibility_profile"))
+    if expected_profile is not None:
+        if type(expected_profile) is not str or not expected_profile.strip():
+            raise ValueError("external_authority:compatibility_profile_malformed")
+        optional_matches["calibration_compatibility_profile"] = expected_profile.strip()
+    for key, expected in optional_matches.items():
+        if key in conformal and conformal[key] != expected:
+            raise ValueError(f"external_authority:{key}_mismatch")
+
+    if not action_domain.startswith("rtl."):
+        return
+    missing = [key for key in _RTL_CONFORMAL_REQUIRED_FIELDS
+               if key not in conformal]
+    if missing:
+        raise ValueError(
+            "external_authority:rtl_conformal_binding_incomplete:" +
+            ",".join(missing))
+    digest = conformal["calibration_digest"]
+    digest_value = digest[len("sha256:"):]
+    if (not digest.startswith("sha256:") or len(digest_value) != 64 or
+            any(char not in "0123456789abcdef" for char in digest_value)):
+        raise ValueError("external_authority:conformal_calibration_digest_malformed")
+    if "calibration_compatibility_profile" not in optional_matches:
+        raise ValueError("external_authority:rtl_conformal_profile_unavailable")
 
 
 def _external_transition_binding(

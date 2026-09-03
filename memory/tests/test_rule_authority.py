@@ -19,7 +19,8 @@ from tehm.lifecycle import (
     rule_content_digest, set_status,
     verify_rule_authority,
 )
-from tehm.lifecycle.rule_authority import _external_conformal_value
+from tehm.lifecycle.rule_authority import (
+    _external_conformal_value, _validate_external_conformal_binding)
 from tehm.activation.pipeline import ActivationRecord
 from tehm.activation.update import persist_activation
 from tehm.lifecycle.trial_adapter import record_external_trial
@@ -200,6 +201,49 @@ def test_rule_authority_rejects_boolean_registry_status_version(
 def test_external_conformal_coverage_rejects_boolean_measurement():
     with pytest.raises(ValueError, match="conformal_coverage_malformed"):
         _external_conformal_value({"conformal": {"coverage": True}})
+
+
+def test_external_rtl_conformal_requires_typed_action_binding():
+    record = {
+        "action": {
+            "domain": "rtl.GUARD_STRENGTHEN",
+            "transformation_family": "GUARD_STRENGTHEN",
+            "payload": {"compatibility_profile": "rtl.fsm.single_guard.v1"},
+        },
+    }
+    incomplete = {
+        "coverage": 1.0,
+        "method": "split_conformal_rtl_v1",
+        "calibration_digest": "sha256:" + "a" * 64,
+    }
+    with pytest.raises(ValueError, match="rtl_conformal_binding_incomplete"):
+        _validate_external_conformal_binding(record, incomplete)
+    valid = {
+        **incomplete,
+        "calibration_action_domain": "rtl.GUARD_STRENGTHEN",
+        "calibration_transformation_family": "GUARD_STRENGTHEN",
+        "calibration_compatibility_profile": "rtl.fsm.single_guard.v1",
+    }
+    _validate_external_conformal_binding(record, valid)
+
+
+def test_external_rtl_conformal_rejects_action_relabeling():
+    record = {
+        "action": {
+            "domain": "rtl.GUARD_STRENGTHEN",
+            "transformation_family": "GUARD_STRENGTHEN",
+            "payload": {"compatibility_profile": "rtl.fsm.single_guard.v1"},
+        },
+    }
+    with pytest.raises(ValueError, match="calibration_action_domain_mismatch"):
+        _validate_external_conformal_binding(record, {
+            "coverage": 1.0,
+            "method": "split_conformal_rtl_v1",
+            "calibration_digest": "sha256:" + "a" * 64,
+            "calibration_action_domain": "flow.CONFIG_DELTA",
+            "calibration_transformation_family": "GUARD_STRENGTHEN",
+            "calibration_compatibility_profile": "rtl.fsm.single_guard.v1",
+        })
 
 
 def test_trial_authority_projection_replays_activation_witnesses(

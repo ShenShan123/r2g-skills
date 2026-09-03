@@ -3765,3 +3765,14 @@ reason-aware precision/recall 下界均为 `0.886487`，因此
 `production_promotion_eligible=false`；P15 router calibration 不能替代当前 RTL
 rule 的 conformal authority evidence，也没有打开 production runtime。
 `memory/docs/` 继续由 `.gitignore` 排除，不进入提交。
+
+### 2026-09-03 Revision3 RTL conformal binding firewall
+
+补强 `lifecycle/rule_authority.py` 的 external conformal projector：带有
+`rtl.*` action 的 conformal row 现在必须同时携带方法名、`sha256:` calibration
+digest，以及完全一致的 action domain、executable transformation family 和
+compatibility profile；缺失或 relabel 都 fail-closed。旧的未绑定 DRC/兼容 fixture
+仍可重放，但这条 contract 只保证证据身份边界，不把 metadata 当作 coverage，也不
+生成 RTL conformal 数值。当前 r5 campaign 没有同域 conformal receipt，因此 gate
+仍为 `NOT_ESTABLISHED`，canonical memory、production authority 和 runtime 均未改变。
+`memory/docs/` 仍只作为本地 governing input，由 `.gitignore` 排除，永不提交。
