@@ -280,6 +280,27 @@ def test_readiness_rejects_tampered_routed_policy_mir_aggregate(tmp_path):
             calibration_report=calibration, interference_summary=interference)
 
 
+def test_readiness_rejects_legacy_routed_policy_without_route_semantics(tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _routed_policy_interference_report(tmp_path)
+    report = json.loads(interference.read_text())
+    policy_mir = report["policy_mir"]
+    cohort_path = Path(policy_mir["cohort_receipt"])
+    raw = json.loads(cohort_path.read_text())
+    raw.pop("receipt_digest", None)
+    first_case = next(iter(raw["case_receipts"].values()))
+    first_case.pop("routing_decision", None)
+    checked = RtlPairedCohortReceipt.from_dict(raw)
+    raw["receipt_digest"] = checked.receipt_digest
+    cohort_path.write_text(json.dumps(raw))
+    policy_mir["cohort_receipt_sha256"] = _sha(cohort_path)
+    policy_mir["cohort_receipt_digest"] = checked.receipt_digest
+    interference.write_text(json.dumps(report))
+    with pytest.raises(ProductionReadinessError, match="routing decision is missing"):
+        build_production_readiness(
+            calibration_report=calibration, interference_summary=interference)
+
+
 @pytest.mark.parametrize("overrides", [
     {"version": "untrusted-summary-v1"},
     {"authority_replay_status": "FAIL"},

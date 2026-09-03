@@ -3810,7 +3810,11 @@ conformal evidence 缺口，但不替代 MIR 上界、held-out attribution 和�
 `CAUSAL_NO_SKILL` 的实际 source/fallback 与 `NO_SKILL`、`ABSTAIN`、`INAPPLICABLE` 或
 `APPLY`、`CONSIDER` 决策一致；缺失 route、缺失 fallback witness 或 metadata 错配均
 fail-closed。该约束防止将 forced-memory 或未证明的 no-memory 结果伪装成真实 policy
-MIR 分母。既有 4-case/2-cohort aggregate、P0 smoke、Validation V0、P16 schema
-contract 和最新 production-readiness replay 均通过；MIR upper-CI 仍按预注册的
+MIR 分母；production-readiness 对兼容的 v1 routed witness 也复用同一校验。既有
+4-case/2-cohort aggregate、P0 smoke、Validation V0、P16 schema contract 和最新
+production-readiness replay 均通过；MIR upper-CI 仍按预注册的
 `max_mir_upper_ci=0.0` 保持 `FAIL`，没有打开 production runtime。`memory/docs/`
-继续只作本地 governing input，不进入提交。
+继续只作本地 governing input，不进入提交。fresh route-semantics replay 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-routed-policy-cohort-20260903-route-hardened/`：
+4/4 `NO_MEMORY=PASS`、4/4 `CAUSAL_NO_SKILL` fallback=PASS，作为 adapter/replay
+验证而非新的独立统计分母。

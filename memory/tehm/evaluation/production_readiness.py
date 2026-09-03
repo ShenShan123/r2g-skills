@@ -24,7 +24,9 @@ from .no_skill_calibration import (
     wilson_interval,
 )
 from .rtl_cohort import RtlPairedCohortReceipt
-from .policy_mir import PolicyMIRError, replay_routed_policy_mir
+from .policy_mir import (
+    PolicyMIRError, _validate_policy_route, replay_routed_policy_mir,
+)
 from tehm.retrieval.production_gate import evaluate_production_gate
 from tehm.lifecycle.promotion_gates import REQUIRED_GATES
 
@@ -238,6 +240,11 @@ def _routed_policy_mir(report: Mapping, *, path: Path) -> tuple[bool, dict]:
         if bundle.routing_receipt_id is None:
             raise ProductionReadinessError(
                 f"policy MIR route receipt is missing: {case_id}")
+        try:
+            _validate_policy_route(
+                bundle, policy_arm=policy_arm, case_id=case_id)
+        except PolicyMIRError as exc:
+            raise ProductionReadinessError(str(exc)) from exc
         routed += 1
         if not _execution_complete(baseline) or not _execution_complete(policy):
             unknown += 1
