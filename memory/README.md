@@ -3647,3 +3647,27 @@ harmful=0/2。新证据位于仓库外的
 `tehm-r3-interference-challenge-20260902-r2/` 和
 `tehm-r3-interference-shadow-p15b-20260902-r3/`；canonical/source DB 均未改变，
 仍为 evaluation/shadow-only，`memory_docs_submitted=false`。
+
+### 2026-09-02 Revision3 P15-B routed-policy MIR source-disjoint aggregation
+
+新增 `tehm.evaluation.policy_mir` 与
+`scripts/aggregate_r3_policy_mir.py`，将 routed-policy 的 MIR 分母提升为多个独立
+typed `RtlPairedCohortReceipt` 的可重放聚合，而不是继续信任单个 summary 中的标量。
+聚合器逐 cohort 校验文件摘要、receipt digest、campaign/case 唯一性、source digest
+不重叠、固定 toolchain/oracle/platform/PDK/candidate budget、逐 case routing receipt、
+`NO_MEMORY` baseline 与完整 executable oracle，再重算 known/unknown/harmful 与 Wilson
+upper CI；任何漂移、重复或篡改都会 fail-closed。新增
+`scripts/build_r3_policy_mir_interference.py` 只把已 replay 的 aggregate 包进
+`MEMORY_INTERFERENCE` evaluation envelope，不写 canonical memory、不改变 authority、
+不导入 production runtime。
+
+新增 `scripts/run_r3_routed_policy_cohort.py`，使用真实 `iverilog/vvp` 从四个 held-out
+RTL fixture 中分两批生成 source-disjoint cohort。实跑的 r1/r2 各为 2 cases / 2 lineages，
+`NO_MEMORY=PASS` 与 routed `CAUSAL_NO_SKILL=PASS` 均为 2/2，routing receipt coverage
+为 1.0；两批合并为 4 cases / 2 cohorts、known=4、harmful=0、upper CI=0.489891。
+最新 readiness r42 已从该 aggregate replay：`multi_lineage`、
+`reason_stratified_calibration`、`repair_pareto`、`anti_forgetting`、`rollback` 仍为
+`PASS`，但默认 `max_mir_upper_ci=0.0` 下 `mir_upper_ci=FAIL`，
+`authority_replay=NOT_ESTABLISHED`，整体 `eligible=false`，没有进入 production mirror。
+这些外部 evidence 位于 `/data1/zhangdy/tehm-campaigns/`；`memory/docs/` 继续只作本地
+governing input，由 `.gitignore` 排除且不提交。

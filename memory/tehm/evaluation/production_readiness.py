@@ -24,6 +24,7 @@ from .no_skill_calibration import (
     wilson_interval,
 )
 from .rtl_cohort import RtlPairedCohortReceipt
+from .policy_mir import PolicyMIRError, replay_routed_policy_mir
 from tehm.retrieval.production_gate import evaluate_production_gate
 from tehm.lifecycle.promotion_gates import REQUIRED_GATES
 
@@ -181,6 +182,13 @@ def _routed_policy_mir(report: Mapping, *, path: Path) -> tuple[bool, dict]:
         return False, {}
     if not isinstance(raw, Mapping):
         raise ProductionReadinessError("policy MIR witness is malformed")
+    if raw.get("version") == "r3-policy-mir-v2":
+        try:
+            metrics = replay_routed_policy_mir(raw, base=path.parent)
+        except PolicyMIRError as exc:
+            raise ProductionReadinessError(
+                f"policy MIR aggregate cannot replay: {exc}") from exc
+        return True, metrics
     if raw.get("version") != "r3-policy-mir-v1":
         raise ProductionReadinessError("policy MIR witness version mismatch")
     if raw.get("metric") != "routed_policy" or \
