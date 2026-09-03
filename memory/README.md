@@ -4169,3 +4169,19 @@ Wilson upper-CI `0.098901 > 0.0` 为 `FAIL`，因此 readiness digest
 `eligible=false`、`production_integration=not_attempted`。该 2-case efficacy 结果是
 evaluation-only 的 safety evidence，不等于 production promotion；`memory/docs/` 继续
 由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 MIR statistical plan refreshed at the 35-case freeze
+
+在 35-case、5-cohort `r3-policy-mir-v2` aggregate 冻结后，重新运行
+`scripts/plan_r3_policy_mir_samples.py` 生成并 replay 了最新的 evaluation-only 规划：
+`/data1/zhangdy/tehm-campaigns/tehm-r3-policy-mir-sample-plan-p17-v4-20260903/plan.json`，
+receipt digest 为
+`sha256:fb88b7a32a77cb9546ee44926eef3c99097225d91904907f808dee90437f7209`。
+当前 `known=35`、`harmful=0`、Wilson 95% upper-CI=`0.098901`；在明确的
+“后续不新增 harmful case”假设下，`0.10` 已达到（还需 0），`0.05/0.02/0.01`
+分别还需 `38/154/346` 个 source/lineage-disjoint known cases，目标总数为
+`73/189/381`。注册的 `0.0` 仍记录为
+`finite_wilson_upper_bound_is_positive`，不存在有限样本解；该计划不会改写阈值、
+canonical memory、authority 或 runtime。因而当前 readiness 仍保持
+`eligible=false`，下一步只能在治理明确后继续独立样本积累或审查阈值政策，不能用
+规划 receipt 代替 production evidence；`memory/docs/` 继续由 `.gitignore` 排除且不提交。
