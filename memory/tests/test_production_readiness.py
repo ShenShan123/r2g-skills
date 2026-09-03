@@ -246,6 +246,31 @@ def test_readiness_replays_routed_policy_mir_instead_of_forced_counterfactual(
     assert report["readiness"]["gate_status"]["mir_upper_ci"] == "FAIL"
 
 
+def test_readiness_binds_explicit_mir_threshold_and_replays_it(tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _routed_policy_interference_report(tmp_path)
+    output = tmp_path / "readiness-threshold.json"
+    report = build_production_readiness(
+        calibration_report=calibration, interference_summary=interference,
+        max_mir_upper_ci=0.70, output=output)
+    readiness = report["readiness"]
+    assert readiness["gate_status"]["mir_upper_ci"] == "PASS"
+    assert readiness["metrics"]["mir"]["upper_ci_threshold"] == 0.70
+    assert (readiness["production_gate"]["thresholds"]
+            ["max_memory_interference_rate"]) == 0.70
+    replayed = replay_production_readiness(output)
+    assert replayed.to_dict() == readiness
+
+
+def test_readiness_rejects_malformed_mir_threshold(tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _interference_report(tmp_path)
+    with pytest.raises(ProductionReadinessError, match="MIR upper-CI threshold"):
+        build_production_readiness(
+            calibration_report=calibration, interference_summary=interference,
+            max_mir_upper_ci=1.1)
+
+
 def test_readiness_rejects_tampered_routed_policy_mir_aggregate(tmp_path):
     calibration = _calibration_report(tmp_path)
     interference = _routed_policy_interference_report(

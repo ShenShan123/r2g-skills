@@ -25,6 +25,8 @@ def main(argv=None) -> int:
     parser.add_argument("--heldout-delta-m", type=Path)
     parser.add_argument("--authority-report", type=Path)
     parser.add_argument("--schema-contract", type=Path)
+    parser.add_argument("--max-mir-upper-ci", type=float, default=0.0,
+                        help="explicit MIR Wilson upper-CI policy threshold (default: 0.0)")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--replay", action="store_true")
     args = parser.parse_args(argv)
@@ -46,6 +48,7 @@ def main(argv=None) -> int:
                 heldout_delta_m=args.heldout_delta_m,
                 authority_report=args.authority_report,
                 schema_contract=args.schema_contract,
+                max_mir_upper_ci=args.max_mir_upper_ci,
                 output=args.output)
             receipt = report["receipt"]
             result = {"mode": "freeze", "receipt_id": receipt["receipt_id"],

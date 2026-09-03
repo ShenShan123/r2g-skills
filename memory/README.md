@@ -3601,11 +3601,17 @@ R3 StateShift 与 Interference shadow runner 在成功写入外部 campaign 后�
 若 checkpoint 失败则不会把未冻结数据库当成完成证据。StateShift anti-forgetting 的
 rollback witness 现在绑定源库逻辑 dump digest，而不是仅绑定表计数，且该 digest 与
 shadow update 前后不变。新外部验证结果位于
-`/data1/zhangdy/tehm-campaigns/tehm-r3-state-shift-challenge-20260902-r40/` 和
-`tehm-r3-interference-shadow-p15b-20260902-r2/`：两条真实 Icarus cohort 均保持
+`/data1/zhangdy/tehm-campaigns/tehm-r3-state-shift-challenge-20260902-r41/` 和
+`tehm-r3-interference-shadow-p15b-20260902-r3/`：两条真实 Icarus cohort 均保持
 `canonical_memory_mutation=none`、`production_authority_changed=false`、
 `staging_discarded=true`，P16 freeze/replay 成功；readiness 仍因 MIR 样本量和缺少
-独立 authority replay 保持 fail-closed。
+独立 authority replay 保持 fail-closed。基于这两个最新快照重建的
+`tehm-r3-production-readiness-r41-20260902/readiness.json` 已 replay 成功，状态仍为
+`multi_lineage/reason_stratified_calibration/repair_pareto/anti_forgetting/rollback=PASS`、
+`mir_upper_ci=FAIL`、`authority_replay=NOT_ESTABLISHED`，没有打开 production mirror。
+MIR 上限现在作为 `--max-mir-upper-ci` 显式参数写入 readiness/production-gate
+receipt，并在 replay 时重新读取；默认值仍是 `0.0`，因此有限样本的 Wilson upper CI
+不会被截断为零，也不会因为新增参数而放宽当前 fail-closed 结论。
 
 ### 2026-09-02 Revision3 P2-R6 novelty/conflict typed adapters
 
@@ -3615,6 +3621,13 @@ shadow update 前后不变。新外部验证结果位于
 `EvolutionReasonDerivationReceipt`。`NOVELTY` 只接受无 learner path 的 typed
 `NOVEL_MECHANISM`，`CONFLICT` 必须有冲突类型和独立 transition evidence；两条路径都
 需要 learner admission，但都不要求 P12 paired counterfactual，也不携带 mutation plan。
+
+`scripts/run_r3_reason_adapter_challenge.py` 在外部 disposable SQLite 中用两个真实
+Icarus/vvp RTL fixture 运行：第一个产生 `NOVELTY`，第二个产生
+`DEFINITION_CONFLICT`，两条 derivation/admission 均可 replay。该实跑只验证 reason
+adapter 与 admission 的 typed provenance，不代表 conflict 已自动修改 Knowledge；
+`canonical_memory_mutation=none`、`production_promotion_eligible=false`，source DB
+digest 保持不变。`memory/docs/` 仍由 `.gitignore` 排除，不进入提交。
 
 ### 2026-09-02 Revision3 typed derivation replay binding
 
@@ -3634,10 +3647,3 @@ harmful=0/2。新证据位于仓库外的
 `tehm-r3-interference-challenge-20260902-r2/` 和
 `tehm-r3-interference-shadow-p15b-20260902-r3/`；canonical/source DB 均未改变，
 仍为 evaluation/shadow-only，`memory_docs_submitted=false`。
-
-`scripts/run_r3_reason_adapter_challenge.py` 在外部 disposable SQLite 中用两个真实
-Icarus/vvp RTL fixture 运行：第一个产生 `NOVELTY`，第二个产生
-`DEFINITION_CONFLICT`，两条 derivation/admission 均可 replay。该实跑只验证 reason
-adapter 与 admission 的 typed provenance，不代表 conflict 已自动修改 Knowledge；
-`canonical_memory_mutation=none`、`production_promotion_eligible=false`，source DB
-digest 保持不变。`memory/docs/` 仍由 `.gitignore` 排除，不进入提交。

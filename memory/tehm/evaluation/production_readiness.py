@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -273,7 +274,17 @@ def _routed_policy_mir(report: Mapping, *, path: Path) -> tuple[bool, dict]:
     return True, metrics
 
 
-def _interference(path: Path) -> tuple[bool, dict]:
+def _interference(path: Path, *, max_upper_ci: float = 0.0) -> tuple[bool, dict]:
+    if isinstance(max_upper_ci, bool):
+        raise ProductionReadinessError("MIR upper-CI threshold must be a finite number")
+    try:
+        max_upper_ci = float(max_upper_ci)
+    except (TypeError, ValueError) as exc:
+        raise ProductionReadinessError(
+            "MIR upper-CI threshold must be a finite number") from exc
+    if not math.isfinite(max_upper_ci) or not 0.0 <= max_upper_ci <= 1.0:
+        raise ProductionReadinessError(
+            "MIR upper-CI threshold must be between 0 and 1")
     report = _load(path, "interference summary")
     if report.get("reason") != "MEMORY_INTERFERENCE":
         raise ProductionReadinessError("interference summary has no typed MEMORY_INTERFERENCE reason")
@@ -284,7 +295,9 @@ def _interference(path: Path) -> tuple[bool, dict]:
         # ``mir_upper_ci`` is a statistical safety gate.  Keep the existing
         # zero-harm policy threshold and let the Wilson upper bound establish
         # whether the independent routed-policy cohort is large enough.
-        return policy_metrics["upper_ci"] <= 0.0, policy_metrics
+        policy_metrics = {**policy_metrics,
+                          "upper_ci_threshold": max_upper_ci}
+        return policy_metrics["upper_ci"] < max_upper_ci, policy_metrics
     total = (report.get("risk_update") or {}).get("before", {}).get("memory_interference_cases")
     harmful = total
     # The summary's denominator is the source-disjoint challenge case count;
@@ -299,8 +312,9 @@ def _interference(path: Path) -> tuple[bool, dict]:
     interval = wilson_interval(harmful, denominator)
     metrics = {"harmful_cases": harmful, "total_cases": denominator,
                "point": interval["point"], "upper_ci": interval["upper"],
-               "confidence": interval["confidence"]}
-    return interval["upper"] <= 0.0, metrics
+               "confidence": interval["confidence"],
+               "upper_ci_threshold": max_upper_ci}
+    return interval["upper"] < max_upper_ci, metrics
 
 
 def _repair_pareto(path: Path | None) -> tuple[str, dict]:
@@ -538,8 +552,16 @@ def build_production_readiness(*, calibration_report: Path,
                                heldout_delta_m: Path | None = None,
                                authority_report: Path | None = None,
                                schema_contract: Path | None = None,
+                               max_mir_upper_ci: float = 0.0,
                                output: Path | None = None) -> dict:
-    """Build a read-only P15-B readiness report from explicit evidence files."""
+    """Build a read-only P15-B readiness report from explicit evidence files.
+
+    ``max_mir_upper_ci`` is an explicit, content-bound policy parameter.  The
+    default remains the historical zero-harm policy (and therefore remains
+    fail-closed for any finite Wilson interval); a future campaign may choose a
+    non-zero threshold only by recording it in the replayable production-gate
+    receipt.
+    """
     calibration_report = calibration_report.expanduser().resolve()
     interference_summary = interference_summary.expanduser().resolve()
     for path in (calibration_report, interference_summary, anti_forgetting,
@@ -552,7 +574,8 @@ def build_production_readiness(*, calibration_report: Path,
                 (authority_report, "authority_report"), (schema_contract, "schema_contract"))
     refs.extend(_ref(path, name) for path, name in optional if path is not None)
     cal_gates, cal_metrics, _ = _calibration(calibration_report)
-    mir_gate, mir_metrics = _interference(interference_summary)
+    mir_gate, mir_metrics = _interference(
+        interference_summary, max_upper_ci=max_mir_upper_ci)
     repair_status, repair_metrics = _repair_pareto(heldout_delta_m)
     anti_status, anti_metrics = _anti_forgetting(anti_forgetting)
     authority_status, authority_metrics = _authority(authority_report)
@@ -598,7 +621,8 @@ def build_production_readiness(*, calibration_report: Path,
         evidence.update({"rollback_verified": True, "rollback_receipt_id": "anti-forgetting-rollback",
                          "rollback_receipt_digest": next((r["sha256"] for r in refs
                                                            if r["name"] == "anti_forgetting"), "")})
-    production_gate = evaluate_production_gate(evidence)
+    production_gate = evaluate_production_gate(
+        evidence, max_memory_interference_rate=max_mir_upper_ci)
     eligible = all(value == "PASS" for value in status.values()) and schema_status == "PASS" and \
         production_gate.eligible
     receipt = ProductionReadinessReceipt(
@@ -645,13 +669,20 @@ def replay_production_readiness(report_path: Path) -> ProductionReadinessReceipt
         path = Path(item["path"])
         if _file_digest(path) != item.get("sha256"):
             raise ProductionReadinessError(f"readiness input digest drifted: {path}")
+    production_gate_thresholds = (receipt.production_gate or {}).get("thresholds")
+    max_mir_upper_ci = 0.0
+    if isinstance(production_gate_thresholds, Mapping) and \
+            production_gate_thresholds.get("max_memory_interference_rate") is not None:
+        max_mir_upper_ci = production_gate_thresholds[
+            "max_memory_interference_rate"]
     result = build_production_readiness(
         calibration_report=by_name["calibration_report"],
         interference_summary=by_name["interference_summary"],
         anti_forgetting=by_name.get("anti_forgetting"),
         heldout_delta_m=by_name.get("heldout_delta_m"),
         authority_report=by_name.get("authority_report"),
-        schema_contract=by_name.get("schema_contract"))
+        schema_contract=by_name.get("schema_contract"),
+        max_mir_upper_ci=max_mir_upper_ci)
     replayed = ProductionReadinessReceipt.from_dict(result["receipt"])
     if replayed.to_dict() != receipt.to_dict():
         raise ProductionReadinessError("readiness replay mismatch")
