@@ -3782,23 +3782,23 @@ compatibility profile；缺失或 relabel 都 fail-closed。旧的未绑定 DRC/
 新增 `tehm.rtl.conformal` 与 `scripts/run_rtl_conformal_calibration.py`：在独立的
 campaign-local staging DB 中用 Icarus/vvp 执行 6 个未参与 r5 authority 的
 `rtl.GUARD_STRENGTHEN` fixture lineage，校准 target-test、frozen-regression 和
-compile 三个 typed executable obligations。6/6 lineage、18/18 obligation labels
-覆盖，receipt 为
-`sha256:a4d987ae7bec6441ffd7c1745b07fb0fb1fc4624628cc04b8212680c23dcc554`，
+compile 三个 typed executable obligations。最新 r4 campaign 为 6/6 lineage、
+18/18 obligation labels 覆盖，receipt 为
+`sha256:ed6f5899859f5021868bbda207850be83c7155dadcb7acb3e9d0aed3e1409620`，
 calibration manifest digest 为
-`sha256:c6685a862b54aa1062ed8e5fc57d4050d573c5e56aa264a5c73d0b66e77d7f8e`。
+`sha256:6c3f747f862c9813d7a3a3fe6daff107ba6a5cd2b60f3dbd1c831ed09c5a3a70`。
 
 外部 projector 现在还会重放完整 content-addressed calibration receipt，并校验
-case/lineage、action domain/family/profile 与 coverage 一致；新的 authority receipt
-`rule_authority_f7e88be3e515e930513c` 六项 gate 全部 `PASS`，只读 replay 为
+case/lineage、action domain/family/profile 与 coverage 一致；基于该 r4 source 的
+authority receipt `rule_authority_19d3db008cd68c05c7fe` 六项 gate 全部 `PASS`，只读 replay 为
 `ALLOW_AUTHORITY_REVIEW` 且数据库未改变。该证据仍是 review-only：canonical memory
 没有变化，production runtime 未导入，promotion 未尝试。
 
-接入该 authority replay 的 readiness receipt
-`r3_production_readiness_3a4d2d399819e70c6f57af586f667ed9f62b4049657458b71ee11092c48023d9`
+接入该 authority replay 的最新 readiness receipt
+`r3_production_readiness_144b5ad29855a52ca9de900ef94cd6b962da63ee33747cc1939fd84d8b5179b3`
 中 `authority_replay=PASS`，但 `mir_upper_ci=FAIL`，所以整体仍
 `eligible=false`、`production_integration=not_attempted`。这一步闭合了 RTL 同域
 conformal evidence 缺口，但不替代 MIR 上界、held-out attribution 和其它生产 gate。
-最新 campaign artifacts 位于 `/data1/zhangdy/tehm-campaigns/tehm-r3-rtl-conformal-calibration-20260903-r3/`
+最新 campaign artifacts 位于 `/data1/zhangdy/tehm-campaigns/tehm-r3-rtl-conformal-calibration-20260903-r4/`
 及对应的 disposable authority snapshot；`memory/docs/` 继续由
 `.gitignore` 排除，不进入提交。
