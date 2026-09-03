@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Freeze a real-Icarus source-disjoint routed-policy MIR cohort.
 
-This producer is deliberately small and evaluation-only: it copies held-out
-RTL/testbench sources into an external artifact directory, applies only the
-known guard repair to obtain a passing no-memory baseline, then routes the
-CAUSAL_NO_SKILL arm to an explicit no-memory fallback.  The other two memory
-arms are still paired for completeness, but are not used as production-MIR
-evidence.  No fixture manifest, SQLite store, canonical memory, or production
-authority is opened or changed.
+The producer has two explicit evaluation modes.  ``NO_SKILL`` keeps the
+legacy no-memory fallback cohort: the copied source is repaired before the
+pair is run.  ``CONSIDER`` keeps the copied source buggy and routes the
+selected structured candidate through the causal arm, so the paired receipt
+contains a real baseline-fail/candidate-pass observation.  Both modes are
+evaluation-only and external: no fixture manifest, SQLite store, canonical
+memory, or production authority is opened or changed.
 """
 from __future__ import annotations
 
@@ -82,7 +82,33 @@ def _candidate(fixture: str, source_state: str, target_state: str,
     )
 
 
-def run(artifacts: Path, fixtures: list[str], *, force: bool = False) -> dict:
+def _route(fixture: str, routing_decision: str) -> MemoryRoutingDecision:
+    if routing_decision == "NO_SKILL":
+        return MemoryRoutingDecision(
+            decision="NO_SKILL", resolved_state_id=f"r3-state-{fixture}",
+            selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
+            applicability={"status": "NO_MATCH"},
+            causal_support={"status": "NONE"}, risk={"level": "heldout"},
+            abstain_reasons=(), no_memory_budget=1, memory_budget=0,
+            no_skill_reason="NO_MATCH")
+    if routing_decision == "CONSIDER":
+        return MemoryRoutingDecision(
+            decision="CONSIDER", resolved_state_id=f"r3-state-{fixture}",
+            selected_rule_ids=(f"r3-rule-{fixture}",),
+            selected_path_ids=(f"r3-path-{fixture}",),
+            selected_asset_ids=("r3-guard-strengthen",),
+            applicability={"status": "APPLICABLE", "source": "r3-heldout"},
+            causal_support={"status": "SUPPORTED",
+                            "causal_path_ids": [f"r3-path-{fixture}"]},
+            risk={"level": "heldout"}, abstain_reasons=(),
+            no_memory_budget=1, memory_budget=1)
+    raise RuntimeError(
+        f"unsupported routed-policy decision {routing_decision!r}; "
+        "use NO_SKILL or CONSIDER")
+
+
+def run(artifacts: Path, fixtures: list[str], *, force: bool = False,
+        routing_decision: str = "NO_SKILL") -> dict:
     artifacts = artifacts.expanduser().resolve()
     if artifacts.exists():
         if not force:
@@ -106,14 +132,17 @@ def run(artifacts: Path, fixtures: list[str], *, force: bool = False) -> dict:
         text = source.read_text()
         if buggy not in text:
             raise RuntimeError(f"guard marker missing for {fixture}")
-        source.write_text(text.replace(buggy, fixed, 1))
+        # NO_SKILL deliberately uses a repaired source so the fallback is a
+        # valid control.  CONSIDER leaves the source buggy; only the selected
+        # structured candidate may repair it inside the disposable oracle.
+        if routing_decision == "NO_SKILL":
+            source.write_text(text.replace(buggy, fixed, 1))
+        elif routing_decision != "CONSIDER":
+            raise RuntimeError(
+                f"unsupported routed-policy decision {routing_decision!r}; "
+                "use NO_SKILL or CONSIDER")
         case_id = f"r3-routed-{fixture}"
-        route = MemoryRoutingDecision(
-            decision="NO_SKILL", resolved_state_id=f"r3-state-{fixture}",
-            selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
-            applicability={"status": "NO_MATCH"}, causal_support={"status": "NONE"},
-            risk={"level": "heldout"}, abstain_reasons=(), no_memory_budget=1,
-            memory_budget=0)
+        route = _route(fixture, routing_decision)
         case = {
             "case_id": case_id, "lineage_id": lineage,
             "rtl_source": str(source), "source_digest": _sha(source),
@@ -122,17 +151,30 @@ def run(artifacts: Path, fixtures: list[str], *, force: bool = False) -> dict:
             "toolchain_digest": TOOLCHAIN_DIGEST, "oracle_digest": ORACLE_DIGEST,
             "platform_digest": PLATFORM_DIGEST, "pdk_digest": PDK_DIGEST,
             "routing_receipt_id": route.routing_receipt_id,
-            "routing_decision": route.decision, "no_skill_reason": "NO_MATCH",
+            "routing_decision": route.decision,
         }
+        if route.no_skill_reason is not None:
+            case["no_skill_reason"] = route.no_skill_reason
         cases.append(case)
         candidate = _candidate(fixture, source_state, target_state, condition)
-        # The source is already repaired.  Structured arms are retained in the
-        # pair, while the routed causal arm is explicitly no-memory fallback.
-        arms[case_id] = {arm: (None if arm in {"NO_MEMORY", "CAUSAL_NO_SKILL"}
-                               else candidate) for arm in P12_ARMS}
+        if routing_decision == "NO_SKILL":
+            # The source is already repaired.  Structured arms are retained in
+            # the pair, while the routed causal arm is explicitly no-memory
+            # fallback.
+            arms[case_id] = {
+                arm: (None if arm in {"NO_MEMORY", "CAUSAL_NO_SKILL"}
+                      else candidate) for arm in P12_ARMS}
+        else:
+            # On the buggy source every memory arm receives the same selected
+            # candidate; the causal arm is now a genuine CONSIDER execution.
+            arms[case_id] = {
+                arm: (None if arm == "NO_MEMORY" else candidate)
+                for arm in P12_ARMS}
 
-    campaign = "tehm-r3-routed-policy-cohort-20260902-" + "-".join(fixtures)
-    manifest = "sha256:r3-routed-policy-manifest-" + "-".join(fixtures)
+    campaign = ("tehm-r3-routed-policy-cohort-20260903-" +
+                routing_decision.lower() + "-" + "-".join(fixtures))
+    manifest = ("sha256:r3-routed-policy-manifest-" +
+                routing_decision.lower() + "-" + "-".join(fixtures))
     cohort = execute_rtl_paired_cohort(
         cases, arms, campaign_id=campaign, campaign_manifest_digest=manifest,
         platform_digest=PLATFORM_DIGEST, pdk_digest=PDK_DIGEST,
@@ -149,7 +191,11 @@ def run(artifacts: Path, fixtures: list[str], *, force: bool = False) -> dict:
         "real_oracle": "iverilog/vvp", "case_count": len(cases),
         "lineage_count": cohort.lineage_count, "lineages": cohort.lineage_ids,
         "outcome_counts": cohort.outcome_counts,
-        "routed_policy_arm": "CAUSAL_NO_SKILL", "routing_decision": "NO_SKILL",
+        "routed_policy_arm": "CAUSAL_NO_SKILL",
+        "routing_decision": routing_decision,
+        "source_mode": ("repaired_control" if routing_decision == "NO_SKILL"
+                         else "buggy_selected_memory"),
+        "selected_memory_arms": (0 if routing_decision == "NO_SKILL" else 3),
         "canonical_memory_mutation": "none", "production_integration": "not_attempted",
         "evaluation_only": True, "memory_docs_submitted": False,
         "cohort_receipt": str(cohort_path), "cohort_receipt_digest": cohort.receipt_digest,
@@ -164,10 +210,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fixture", action="append", dest="fixtures", required=True,
                         choices=sorted(_FIXTURES),
                         help="held-out fixture; repeat for a source-disjoint cohort")
+    parser.add_argument(
+        "--routing-decision", choices=("NO_SKILL", "CONSIDER"), default="NO_SKILL",
+        help=("routing arm to freeze: NO_SKILL creates the repaired fallback "
+              "control; CONSIDER keeps buggy RTL and executes the selected "
+              "structured candidate"))
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
     try:
-        summary = run(args.artifacts, args.fixtures, force=args.force)
+        summary = run(args.artifacts, args.fixtures, force=args.force,
+                      routing_decision=args.routing_decision)
     except Exception as exc:
         print(f"routed-policy cohort failed: {exc}", file=sys.stderr)
         return 1

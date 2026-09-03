@@ -3818,3 +3818,28 @@ production-readiness replay 均通过；MIR upper-CI 仍按预注册的
 `/data1/zhangdy/tehm-campaigns/tehm-r3-routed-policy-cohort-20260903-route-hardened/`：
 4/4 `NO_MEMORY=PASS`、4/4 `CAUSAL_NO_SKILL` fallback=PASS，作为 adapter/replay
 验证而非新的独立统计分母。
+
+### 2026-09-03 Revision3 real selected-memory routed cohort
+
+为补齐上一轮只覆盖 no-memory fallback 的路径，`run_r3_routed_policy_cohort.py`
+现在提供显式 `--routing-decision CONSIDER` 模式：复制的 held-out RTL 保持原始
+buggy source，route 记录一个 selected asset，只有 disposable oracle 内的结构化
+`GUARD_STRENGTHEN` candidate 才可改写 source；`NO_MEMORY` baseline 不做预修复。
+该模式仍不读取 fixture manifest、不写 SQLite/canonical memory，也不触碰 production
+authority。新增 producer 回归锁定了 source mode 与 causal memory arm 的绑定。
+
+真实 `iverilog/vvp` campaign 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-routed-policy-selected-memory-20260903/`：
+4 cases / 4 lineages，四例均为 `NO_MEMORY=FAIL`、`ALWAYS_MEMORY=PASS`、
+`APPLICABILITY_GATED=PASS`、`CAUSAL_NO_SKILL=PASS`，四例 candidate 均记录
+`action_applied=true`。独立聚合
+`/data1/zhangdy/tehm-campaigns/tehm-r3-policy-mir-selected-memory-20260903/`
+得到 `known=4`、`harmful=0`、`routing_receipt_coverage=1.0`、Wilson
+`upper_ci=0.489891`；该 cohort 没有与旧 fallback cohort 合并，避免重复
+held-out lineage 被错误扩大分母。对应 readiness
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-selected-memory-20260903/readiness.json`
+仍为 `eligible=false`：`mir_upper_ci=FAIL`（预注册 `max_mir_upper_ci=0.0`），其余
+`multi_lineage`、`reason_stratified_calibration`、`repair_pareto`、
+`anti_forgetting`、`authority_replay`、`rollback` 均为 `PASS`。这建立了真实
+selected-memory 的安全/有效性观测，但尚不足以开启 production runtime；
+`memory/docs/` 继续只作本地 governing input，不进入提交。
