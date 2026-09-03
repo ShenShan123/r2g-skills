@@ -4128,3 +4128,24 @@ pool 证据不再是 `NOT_ESTABLISHED`，但因注册的严格 MIR upper-CI 阈�
 这说明 candidate-pool seam 已可复现，但样本量不足以证明 production safety，不能通过
 调高阈值或重标 outcome 绕过 gate；该 campaign 仍为 evaluation-only，不写 canonical
 memory、authority 或 runtime。`memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 multi-cohort candidate-pool aggregation
+
+为使 P6 candidate composition 与 35-case routed MIR 使用同一分母，新增
+`tehm.evaluation.candidate_pool_aggregate` 和
+`scripts/aggregate_r3_candidate_pool_evidence.py`。每个独立 cohort 先由 typed
+descriptor 生成并 replay `candidate_pool-v0.1` receipt，再由 aggregate 逐文件校验
+candidate receipt、cohort digest、campaign/case/lineage/source-disjoint 绑定和固定
+toolchain/oracle/platform/PDK/budget，最后从所有 typed pool rows 重新计算 metrics；聚合
+标量不是输入 authority。
+
+35-case、5-cohort aggregate 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-candidate-pool-p17-v4-20260903/`，receipt digest
+为 `sha256:74ff80cd12ec56796c22314f84dce4be7a9479f52a45e55b84515a8ca350f661`，
+`paired_cases=35`、`candidate_diversity=1.0`、`memory_interference_cases=0`，aggregate
+freeze/replay 均通过。接入完整 MIR/readiness 后，P9 `candidate_pool=FAIL` 而不再是
+`NOT_ESTABLISHED`，唯一的 candidate safety 原因是 0/35 harmful 的 Wilson upper-CI
+`0.098901 > 0.0`；`authority=PASS`，`efficacy=NOT_ESTABLISHED`，整体仍
+`eligible=false`、`production_integration=not_attempted`。这补齐了 candidate-pool
+composition evidence，但没有放宽 MIR policy、写 canonical memory 或打开 runtime；
+`memory/docs/` 继续由 `.gitignore` 排除且不提交。

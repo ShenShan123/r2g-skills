@@ -204,8 +204,8 @@ def _replay_pool(raw: object, *, case_id: str, cohort_bundle,
     return receipt
 
 
-def replay_candidate_pool_evidence(raw: Mapping, *, base: Path) -> dict:
-    """Replay a candidate-pool evidence envelope and return typed metrics."""
+def _replay_candidate_pool_components(raw: Mapping, *, base: Path):
+    """Replay one per-cohort envelope and expose typed rows to an aggregator."""
     if not isinstance(raw, Mapping):
         raise CandidatePoolEvidenceError("candidate-pool evidence must be an object")
     if raw.get("version") != CANDIDATE_POOL_EVIDENCE_VERSION or \
@@ -279,8 +279,20 @@ def replay_candidate_pool_evidence(raw: Mapping, *, base: Path) -> dict:
     unsigned.pop("receipt_digest", None)
     if raw.get("receipt_digest") != _digest(unsigned):
         raise CandidatePoolEvidenceError("candidate-pool evidence receipt digest mismatch")
+    return cohort, tuple(receipts), tuple(outcomes), metrics
+
+
+def replay_candidate_pool_evidence(raw: Mapping, *, base: Path) -> dict:
+    """Replay a per-cohort or multi-cohort candidate-pool evidence envelope."""
+    if isinstance(raw, Mapping) and raw.get("version") == "r3-candidate-pool-aggregate-v1":
+        # Keep the aggregate dependency lazy: the per-cohort builder remains
+        # usable without importing the aggregate module, while production
+        # readiness has one stable replay entry point for both forms.
+        from .candidate_pool_aggregate import replay_candidate_pool_aggregate
+        return replay_candidate_pool_aggregate(raw, base=base)
+    _, _, _, metrics = _replay_candidate_pool_components(raw, base=base)
     return {**metrics, "source": "typed_candidate_pool",
-            "cohort_receipt_digest": cohort.receipt_digest,
+            "cohort_receipt_digest": raw["cohort_receipt_digest"],
             "receipt_digest": raw["receipt_digest"]}
 
 

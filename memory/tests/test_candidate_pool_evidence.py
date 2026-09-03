@@ -14,6 +14,10 @@ from tehm.evaluation.candidate_pool_evidence import (
     CandidatePoolEvidenceError, build_candidate_pool_evidence,
     replay_candidate_pool_evidence,
 )
+from tehm.evaluation.candidate_pool_aggregate import (
+    CandidatePoolAggregateError, build_candidate_pool_aggregate,
+    replay_candidate_pool_aggregate,
+)
 from tehm.evaluation.rtl_cohort import RtlPairedCohortReceipt
 from tehm.ids import stable_dumps
 from tehm.retrieval.candidate_pool import build_candidate_pool
@@ -38,13 +42,13 @@ def _execution(case_id, source, candidate_id, outcome="PASS"):
                   "policy_fallback": False})
 
 
-def _cohort_and_pools(tmp_path):
+def _cohort_and_pools(tmp_path, *, suffix=""):
     cases = {}
     source_digests = {}
     pool_entries = []
     for index in range(2):
-        case_id = f"pool-case-{index}"
-        memory_id = f"memory-candidate-{index}"
+        case_id = f"pool-case-{index}{suffix}"
+        memory_id = f"memory-candidate-{index}{suffix}"
         route = MemoryRoutingDecision(
             decision="CONSIDER", resolved_state_id=f"state-{index}",
             selected_rule_ids=(memory_id,), selected_path_ids=(f"path-{index}",),
@@ -61,10 +65,10 @@ def _cohort_and_pools(tmp_path):
             },
             candidate_budget=3, case_digest=f"sha256:case-{index}",
             toolchain_digest="sha256:toolchain", oracle_digest="sha256:oracle",
-            paired=True, evaluation_only=True, lineage_id=f"lineage-{index}",
+            paired=True, evaluation_only=True, lineage_id=f"lineage-{index}{suffix}",
             routing_receipt_id=route.routing_receipt_id,
             routing_decision=route.decision)
-        source_digests[case_id] = f"sha256:source-{index}"
+        source_digests[case_id] = f"sha256:source-{index}{suffix}"
         query = MemoryQuery(
             query_plan={"check": "route", "mechanism_family": "HANDSHAKE"},
             dominant_dimensions={"platform": "icarus"}, context_ref=case_id)
@@ -136,3 +140,35 @@ def test_candidate_pool_evidence_rejects_metric_or_payload_tamper(tmp_path):
     tampered["pools"][0]["candidates"][0]["payload"]["fix"] = "gold"
     with pytest.raises(CandidatePoolEvidenceError, match="gold-answer"):
         replay_candidate_pool_evidence(tampered, base=tmp_path)
+
+
+def test_candidate_pool_aggregate_replays_disjoint_cohorts(tmp_path):
+    reports = []
+    for index in range(2):
+        root = tmp_path / f"cohort-{index}"
+        root.mkdir()
+        cohort_path, pools = _cohort_and_pools(root, suffix=f"-{index}")
+        payload = json.loads(cohort_path.read_text())
+        payload["campaign_id"] = f"candidate-pool-campaign-{index}"
+        payload["receipt_digest"] = RtlPairedCohortReceipt.from_dict(payload).receipt_digest
+        cohort_path.write_text(json.dumps(payload))
+        report_path = root / "candidate-pool.json"
+        build_candidate_pool_evidence(
+            cohort_receipt=cohort_path, policy_arm="CAUSAL_NO_SKILL",
+            pools=pools, output=report_path)
+        reports.append(report_path)
+    output = tmp_path / "candidate-pool-aggregate.json"
+    aggregate = build_candidate_pool_aggregate(reports, output=output)
+    replayed = replay_candidate_pool_aggregate(aggregate, base=tmp_path)
+    assert replayed["source"] == "typed_candidate_pool_aggregate"
+    assert replayed["cohort_count"] == 2
+    assert replayed["paired_cases"] == 4
+    assert replayed["candidate_diversity"] == 1.0
+    projected = replay_candidate_pool_evidence(aggregate, base=tmp_path)
+    assert projected["receipt_digest"] == aggregate["receipt_digest"]
+    assert projected["paired_cases"] == 4
+
+    tampered = json.loads(output.read_text())
+    tampered["candidate_pool_receipts"][0]["case_count"] = 99
+    with pytest.raises(CandidatePoolAggregateError, match="case count binding drifted"):
+        replay_candidate_pool_aggregate(tampered, base=tmp_path)
