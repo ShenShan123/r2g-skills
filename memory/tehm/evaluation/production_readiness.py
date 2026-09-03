@@ -506,8 +506,8 @@ def _interference(path: Path, *, max_upper_ci: float = 0.0) -> tuple[bool, dict]
     return interval["upper"] < max_upper_ci, metrics
 
 
-def _mir_sample_plan(path: Path | None, *, mir_metrics: Mapping,
-                     max_upper_ci: float) -> dict:
+def _mir_sample_plan(path: Path | None, *, mir_source: Path,
+                     mir_metrics: Mapping, max_upper_ci: float) -> dict:
     """Replay an optional MIR plan against the readiness MIR denominator.
 
     The plan is governance metadata, not an additional safety gate.  When it
@@ -526,6 +526,15 @@ def _mir_sample_plan(path: Path | None, *, mir_metrics: Mapping,
     if not isinstance(receipt.current_evidence, Mapping):
         raise ProductionReadinessError(
             "MIR sample plan must bind current routed-policy evidence")
+    source_report = _load(mir_source, "interference summary")
+    source_aggregate = source_report.get("policy_mir")
+    if (not isinstance(source_aggregate, Mapping) or
+            source_aggregate.get("version") != "r3-policy-mir-v2"):
+        raise ProductionReadinessError(
+            "MIR sample plan requires the typed routed-policy aggregate used by readiness")
+    if receipt.current_evidence.get("receipt_digest") != source_aggregate.get("receipt_digest"):
+        raise ProductionReadinessError(
+            "MIR sample plan evidence is not the routed-policy aggregate used by readiness")
     if receipt.current_known_cases != mir_metrics.get("total_cases"):
         raise ProductionReadinessError(
             "MIR sample plan known_cases disagrees with routed-policy MIR")
@@ -852,7 +861,8 @@ def build_production_readiness(*, calibration_report: Path,
     mir_gate, mir_metrics = _interference(
         interference_summary, max_upper_ci=max_mir_upper_ci)
     mir_plan_metrics = _mir_sample_plan(
-        mir_sample_plan, mir_metrics=mir_metrics, max_upper_ci=max_mir_upper_ci)
+        mir_sample_plan, mir_source=interference_summary,
+        mir_metrics=mir_metrics, max_upper_ci=max_mir_upper_ci)
     repair_status, repair_metrics = _repair_pareto(heldout_delta_m)
     anti_status, anti_metrics = _anti_forgetting(anti_forgetting)
     authority_status, authority_metrics = _authority(authority_report)

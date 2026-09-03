@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -13,6 +14,7 @@ from tehm.evaluation.no_skill_calibration import (
     NoSkillCalibrationSample, evaluate_no_skill_calibration,
 )
 from tehm.evaluation.mir_sample_plan import build_mir_sample_plan
+from tehm.evaluation.policy_mir import build_routed_policy_mir
 from tehm.evaluation.production_readiness import (
     ProductionReadinessError, build_production_readiness,
     replay_production_readiness,
@@ -271,13 +273,26 @@ def test_readiness_binds_explicit_mir_threshold_and_replays_it(tmp_path):
 
 def test_readiness_replays_and_binds_optional_mir_sample_plan(tmp_path):
     calibration = _calibration_report(tmp_path)
-    interference = _interference_report(tmp_path)
+    legacy_interference = _routed_policy_interference_report(tmp_path)
+    legacy_payload = json.loads(legacy_interference.read_text())
+    cohort_path = Path(legacy_payload["policy_mir"]["cohort_receipt"])
+    aggregate_path = tmp_path / "policy-mir-v2.json"
+    aggregate = build_routed_policy_mir(
+        [cohort_path], policy_arm="CAUSAL_NO_SKILL", output=aggregate_path)
+    interference = tmp_path / "interference-v2.json"
+    interference.write_text(json.dumps({
+        "reason": "MEMORY_INTERFERENCE", "canonical_memory_mutation": "none",
+        "production_authority_changed": False, "case_count": 2,
+        "policy_mir": aggregate,
+    }))
     plan = tmp_path / "mir-plan.json"
     build_mir_sample_plan(
         current_known_cases=2, current_harmful_cases=0,
         thresholds=(0.0,),
-        current_evidence={"receipt_digest": "sha256:aggregate",
-                          "known_cases": 2, "harmful_cases": 0},
+        current_evidence={"path": str(aggregate_path), "sha256": _sha(aggregate_path),
+                          "receipt_digest": aggregate["receipt_digest"],
+                          "version": "r3-policy-mir-v2", "known_cases": 2,
+                          "harmful_cases": 0},
         output=plan)
     output = tmp_path / "readiness-with-mir-plan.json"
     report = build_production_readiness(
@@ -292,15 +307,28 @@ def test_readiness_replays_and_binds_optional_mir_sample_plan(tmp_path):
 
 def test_readiness_rejects_mir_sample_plan_denominator_drift(tmp_path):
     calibration = _calibration_report(tmp_path)
-    interference = _interference_report(tmp_path)
+    legacy_interference = _routed_policy_interference_report(tmp_path)
+    legacy_payload = json.loads(legacy_interference.read_text())
+    cohort_path = Path(legacy_payload["policy_mir"]["cohort_receipt"])
+    aggregate_path = tmp_path / "policy-mir-v2.json"
+    aggregate = build_routed_policy_mir(
+        [cohort_path], policy_arm="CAUSAL_NO_SKILL", output=aggregate_path)
+    interference = tmp_path / "interference-v2.json"
+    interference.write_text(json.dumps({
+        "reason": "MEMORY_INTERFERENCE", "canonical_memory_mutation": "none",
+        "production_authority_changed": False, "case_count": 2,
+        "policy_mir": aggregate,
+    }))
     plan = tmp_path / "mir-plan.json"
     build_mir_sample_plan(
         current_known_cases=3, current_harmful_cases=0,
         thresholds=(0.0,),
-        current_evidence={"receipt_digest": "sha256:aggregate",
-                          "known_cases": 3, "harmful_cases": 0},
+        current_evidence={"path": str(aggregate_path), "sha256": _sha(aggregate_path),
+                          "receipt_digest": aggregate["receipt_digest"],
+                          "version": "r3-policy-mir-v2", "known_cases": 3,
+                          "harmful_cases": 0},
         output=plan)
-    with pytest.raises(ProductionReadinessError, match="known_cases disagrees"):
+    with pytest.raises(ProductionReadinessError, match="metrics drifted|known_cases disagrees"):
         build_production_readiness(
             calibration_report=calibration, interference_summary=interference,
             mir_sample_plan=plan)
