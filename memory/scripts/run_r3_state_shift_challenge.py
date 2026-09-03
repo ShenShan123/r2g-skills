@@ -151,6 +151,11 @@ def _sha256_payload(payload: object) -> str:
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
+def _connection_digest(conn: sqlite3.Connection) -> str:
+    """Digest the logical SQLite dump for rollback/source invariants."""
+    return _sha256_payload("\n".join(conn.iterdump()))
+
+
 def _write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
@@ -230,7 +235,7 @@ def _table_counts(conn: sqlite3.Connection) -> dict[str, int]:
 
 
 def _build_anti_forgetting(artifacts: Path, cohort, oracle: IcarusOracle,
-                           baseline_counts: dict[str, int]) -> tuple[AntiForgettingWitness, dict]:
+                           baseline_db_digest: str) -> tuple[AntiForgettingWitness, dict]:
     """Create an external, file-bound four-gate witness from real executions."""
     evidence_dir = artifacts / "anti_forgetting_evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -270,8 +275,8 @@ def _build_anti_forgetting(artifacts: Path, cohort, oracle: IcarusOracle,
 
     rollback_payload = {
         "pointer": "canonical-before-p13-shadow",
-        "source_db_digest_before": _sha256_payload(baseline_counts),
-        "source_db_digest_after": _sha256_payload(baseline_counts),
+        "source_db_digest_before": baseline_db_digest,
+        "source_db_digest_after": baseline_db_digest,
         "canonical_memory_mutation": "none",
         "staging_discarded": True,
         "verified": True,
@@ -706,7 +711,7 @@ def _build_p14_attribution(
                         "after_state": after_state, "attribution": attribution,
                         "heldout_attribution": heldout_attribution}
     finally:
-        p14_conn.close()
+        db.checkpoint_and_close(p14_conn)
 
 
 def run(artifacts: Path, *, force: bool = False) -> dict:
@@ -877,7 +882,9 @@ def run(artifacts: Path, *, force: bool = False) -> dict:
              "platform": CHALLENGE_PLATFORM},
         ))
     before_counts = _table_counts(conn)
-    witness, witness_report = _build_anti_forgetting(artifacts, cohort, oracle, before_counts)
+    before_db_digest = _connection_digest(conn)
+    witness, witness_report = _build_anti_forgetting(
+        artifacts, cohort, oracle, before_db_digest)
     plan = replace(plan, evidence_refs=tuple(sorted({*plan.evidence_refs, witness.receipt_digest})))
     evidence = {
         "transition_ids": transition_ids,
@@ -993,7 +1000,7 @@ def run(artifacts: Path, *, force: bool = False) -> dict:
         "evaluation_only": True, "memory_docs_submitted": False,
     }
     _write_json(artifacts / "summary.json", summary)
-    conn.close()
+    db.checkpoint_and_close(conn)
     return summary
 
 

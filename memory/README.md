@@ -3593,6 +3593,20 @@ cohort、逐 case routing receipt、baseline/policy arm 和完整 executable ora
 `mir_upper_ci=FAIL`，不打开 production mirror/canary。该 witness 仍为 evaluation-only，
 不修改 canonical memory，也不提交 `memory/docs/`。
 
+### 2026-09-02 Revision3 frozen campaign snapshot boundary
+
+R3 StateShift 与 Interference shadow runner 在成功写入外部 campaign 后统一执行
+`PRAGMA wal_checkpoint(TRUNCATE)` 再关闭 SQLite。这样生成的 `tehm.sqlite` 不带
+`-wal/-shm` sidecar，可直接作为 P16 schema/read-only proposal 的 immutable snapshot；
+若 checkpoint 失败则不会把未冻结数据库当成完成证据。StateShift anti-forgetting 的
+rollback witness 现在绑定源库逻辑 dump digest，而不是仅绑定表计数，且该 digest 与
+shadow update 前后不变。新外部验证结果位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-state-shift-challenge-20260902-r40/` 和
+`tehm-r3-interference-shadow-p15b-20260902-r2/`：两条真实 Icarus cohort 均保持
+`canonical_memory_mutation=none`、`production_authority_changed=false`、
+`staging_discarded=true`，P16 freeze/replay 成功；readiness 仍因 MIR 样本量和缺少
+独立 authority replay 保持 fail-closed。
+
 ### 2026-09-02 Revision3 P2-R6 novelty/conflict typed adapters
 
 保留原有 `detect_novelty()` / `detect_conflicts()` 判定逻辑，只新增可重放的

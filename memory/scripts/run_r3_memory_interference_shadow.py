@@ -566,7 +566,7 @@ def run(artifacts: Path, *, challenge_artifacts: Path = DEFAULT_CHALLENGE_ARTIFA
         "evaluation_only": True, "memory_docs_submitted": False,
     }
     _write_json(artifacts / "summary.json", summary)
-    conn.close()
+    db.checkpoint_and_close(conn)
     return summary
 
 

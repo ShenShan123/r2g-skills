@@ -27,6 +27,26 @@ def connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def checkpoint_and_close(conn: sqlite3.Connection) -> None:
+    """Close a writable campaign connection as a sidecar-free snapshot.
+
+    TEHM writers intentionally use WAL for normal operation, but external
+    evidence boundaries consume immutable database files.  Checkpointing with
+    ``TRUNCATE`` before closing folds committed pages into the main database
+    and removes the WAL/SHM sidecars; callers can then bind the resulting file
+    through :func:`connect_read_only` without accidentally reading a moving
+    snapshot.  The connection is always closed, even when checkpointing
+    raises.
+    """
+    try:
+        conn.commit()
+        result = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        if result is not None and len(result) >= 1 and int(result[0]) != 0:
+            raise RuntimeError("TEHM WAL checkpoint was busy")
+    finally:
+        conn.close()
+
+
 def connect_read_only(db_path: Path) -> sqlite3.Connection:
     """Open an existing frozen TEHM snapshot without any filesystem writes."""
     db_path = Path(db_path)
