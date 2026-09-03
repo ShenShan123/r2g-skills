@@ -29,6 +29,13 @@ from tehm.rtl.equivalence import (
     EQUIVALENCE_VERSION, YosysEquivalenceOracle, verify_profile_equivalence)
 from tehm.rtl.compatibility import structural_compatibility
 from tehm.rtl.rtl_evidence import capture_rtl_fix, build_rtl_execution_record
+from tehm.rtl.conformal import (
+    RTL_CONFORMAL_METHOD, RTL_CONFORMAL_OBLIGATIONS,
+    RTL_CONFORMAL_PREDICTION_RULE, RTL_CONFORMAL_VERSION,
+    RTLConformalCalibrationReceipt, RTLConformalError, RTLConformalSample,
+    calibrate_rtl_obligations, observed_rtl_obligations,
+    predict_rtl_obligations,
+)
 
 __all__ = [
     "AlwaysBlock", "Assign", "CaseItem", "FSM", "RTLModule", "Signal",
@@ -41,4 +48,9 @@ __all__ = [
     "verify_profile_equivalence",
     "structural_compatibility",
     "capture_rtl_fix", "build_rtl_execution_record",
+    "RTL_CONFORMAL_METHOD", "RTL_CONFORMAL_OBLIGATIONS",
+    "RTL_CONFORMAL_PREDICTION_RULE", "RTL_CONFORMAL_VERSION",
+    "RTLConformalCalibrationReceipt", "RTLConformalError",
+    "RTLConformalSample", "calibrate_rtl_obligations",
+    "observed_rtl_obligations", "predict_rtl_obligations",
 ]

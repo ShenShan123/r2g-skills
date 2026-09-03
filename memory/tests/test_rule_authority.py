@@ -21,6 +21,7 @@ from tehm.lifecycle import (
 )
 from tehm.lifecycle.rule_authority import (
     _external_conformal_value, _validate_external_conformal_binding)
+from tehm.rtl.conformal import RTLConformalSample, calibrate_rtl_obligations
 from tehm.activation.pipeline import ActivationRecord
 from tehm.activation.update import persist_activation
 from tehm.lifecycle.trial_adapter import record_external_trial
@@ -213,13 +214,16 @@ def test_external_rtl_conformal_requires_typed_action_binding():
     }
     incomplete = {
         "coverage": 1.0,
-        "method": "split_conformal_rtl_v1",
+        "method": "split_conformal_rtl_obligation_set_v1",
         "calibration_digest": "sha256:" + "a" * 64,
     }
     with pytest.raises(ValueError, match="rtl_conformal_binding_incomplete"):
         _validate_external_conformal_binding(record, incomplete)
     valid = {
         **incomplete,
+        "calibration_receipt_digest": "sha256:" + "b" * 64,
+        "source_lineages_digest": "sha256:" + "c" * 64,
+        "prediction_set_rule": "typed_rtl_action_contract_v1",
         "calibration_action_domain": "rtl.GUARD_STRENGTHEN",
         "calibration_transformation_family": "GUARD_STRENGTHEN",
         "calibration_compatibility_profile": "rtl.fsm.single_guard.v1",
@@ -238,12 +242,49 @@ def test_external_rtl_conformal_rejects_action_relabeling():
     with pytest.raises(ValueError, match="calibration_action_domain_mismatch"):
         _validate_external_conformal_binding(record, {
             "coverage": 1.0,
-            "method": "split_conformal_rtl_v1",
+            "method": "split_conformal_rtl_obligation_set_v1",
             "calibration_digest": "sha256:" + "a" * 64,
+            "calibration_receipt_digest": "sha256:" + "b" * 64,
+            "source_lineages_digest": "sha256:" + "c" * 64,
+            "prediction_set_rule": "typed_rtl_action_contract_v1",
             "calibration_action_domain": "flow.CONFIG_DELTA",
             "calibration_transformation_family": "GUARD_STRENGTHEN",
             "calibration_compatibility_profile": "rtl.fsm.single_guard.v1",
         })
+
+
+def test_external_rtl_conformal_replays_content_addressed_receipt():
+    record = {
+        "record_id": "rtl:conformal-case",
+        "lineage_id": "conformal-lineage",
+        "action": {
+            "domain": "rtl.GUARD_STRENGTHEN",
+            "transformation_family": "GUARD_STRENGTHEN",
+            "payload": {"compatibility_profile": "rtl.fsm.single_guard.v1"},
+        },
+        "observation_delta": {"first_divergence": {
+            "rtl_obligations": {
+                "RTL_TARGET_TEST_PASS": "PASS",
+                "RTL_FROZEN_REGRESSION_PASS": "PASS",
+                "RTL_COMPILE_PASS": "PASS",
+            },
+        }},
+        "verification": {},
+    }
+    sample = RTLConformalSample.from_record({
+        **record,
+        "verification": {
+            "verdict": "PASS", "oracle_complete": True,
+            "target": {"verdict": "PASS", "compile_verdict": "PASS"},
+            "regression": {"verdict": "PASS", "compile_verdict": "PASS"},
+        },
+    }, case_id="conformal-case")
+    calibration = calibrate_rtl_obligations(
+        [sample], calibration_digest="sha256:" + "d" * 64,
+        min_lineages=1)
+    record["verification"] = {"conformal_receipt": calibration.to_dict()}
+    _validate_external_conformal_binding(
+        record, calibration.authority_payload(), case_id="conformal-case")
 
 
 def test_trial_authority_projection_replays_activation_witnesses(

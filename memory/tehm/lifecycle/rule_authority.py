@@ -79,9 +79,12 @@ _EXTERNAL_UTILITY_VERDICTS = frozenset({
     "HARMFUL", "REGRESSION", "PARETO_SAFE", "SUPPORT", "NEUTRAL",
 })
 _RTL_CONFORMAL_REQUIRED_FIELDS = (
-    "method", "calibration_digest", "calibration_action_domain",
-    "calibration_transformation_family", "calibration_compatibility_profile",
+    "method", "calibration_digest", "calibration_receipt_digest",
+    "source_lineages_digest", "prediction_set_rule",
+    "calibration_action_domain", "calibration_transformation_family",
+    "calibration_compatibility_profile",
 )
+_RTL_CONFORMAL_METHOD = "split_conformal_rtl_obligation_set_v1"
 
 
 def _validate_external_rule_binding(
@@ -516,7 +519,7 @@ def _open_external_staging_snapshot(path: Path):
         raise ValueError(f"external_authority:staging_db_unreadable:{path}") from exc
 
 
-def _external_conformal_value(record: Mapping):
+def _external_conformal_value(record: Mapping, *, case_id: str | None = None):
     """Extract and validate an explicitly recorded calibration coverage."""
     verification = record.get("verification")
     if not isinstance(verification, Mapping):
@@ -553,6 +556,8 @@ def _external_conformal_value(record: Mapping):
     if covered is not None:
         payload.update({"covered": covered, "total": total})
     for key in ("method", "interval_method", "calibration_digest",
+                "calibration_receipt_digest", "source_lineages_digest",
+                "prediction_set_rule",
                 "calibration_action_domain", "calibration_transformation_family",
                 "calibration_compatibility_profile"):
         if key in raw:
@@ -564,12 +569,12 @@ def _external_conformal_value(record: Mapping):
     # only provide the conformal mapping.  Full external projection always
     # supplies ``record.action`` and therefore applies the typed binding.
     if isinstance(record.get("action"), Mapping):
-        _validate_external_conformal_binding(record, payload)
+        _validate_external_conformal_binding(record, payload, case_id=case_id)
     return payload
 
 
 def _validate_external_conformal_binding(
-        record: Mapping, conformal: Mapping) -> None:
+        record: Mapping, conformal: Mapping, *, case_id: str | None = None) -> None:
     """Bind typed RTL conformal metadata to the executed action.
 
     A coverage number is not self-authenticating.  For RTL actions, the
@@ -622,13 +627,69 @@ def _validate_external_conformal_binding(
         raise ValueError(
             "external_authority:rtl_conformal_binding_incomplete:" +
             ",".join(missing))
-    digest = conformal["calibration_digest"]
-    digest_value = digest[len("sha256:"):]
-    if (not digest.startswith("sha256:") or len(digest_value) != 64 or
-            any(char not in "0123456789abcdef" for char in digest_value)):
-        raise ValueError("external_authority:conformal_calibration_digest_malformed")
+    if conformal["method"] != _RTL_CONFORMAL_METHOD:
+        raise ValueError("external_authority:rtl_conformal_method_unsupported")
+    for field in ("calibration_digest", "calibration_receipt_digest",
+                  "source_lineages_digest"):
+        digest = conformal[field]
+        digest_value = digest[len("sha256:"):]
+        if (not digest.startswith("sha256:") or len(digest_value) != 64 or
+                any(char not in "0123456789abcdef" for char in digest_value)):
+            raise ValueError(f"external_authority:conformal_{field}_malformed")
     if "calibration_compatibility_profile" not in optional_matches:
         raise ValueError("external_authority:rtl_conformal_profile_unavailable")
+
+    # A compact digest/coverage tuple is not enough to replay the calibration
+    # algorithm. Full external projection therefore requires the immutable
+    # content-addressed receipt; the low-level helper remains usable by legacy
+    # unit callers when no case context is supplied.
+    if case_id is None:
+        return
+    verification = record.get("verification")
+    receipt_payload = (verification.get("conformal_receipt")
+                       if isinstance(verification, Mapping) else None)
+    if not isinstance(receipt_payload, Mapping):
+        raise ValueError("external_authority:rtl_conformal_receipt_missing")
+    try:
+        from tehm.rtl.conformal import RTLConformalCalibrationReceipt
+        receipt = RTLConformalCalibrationReceipt.from_dict(receipt_payload)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("external_authority:rtl_conformal_receipt_invalid") from exc
+    receipt_conformal = receipt.authority_payload()
+    for key in (
+            "coverage", "covered", "total", "method", "calibration_digest",
+            "calibration_receipt_digest", "calibration_action_domain",
+            "calibration_transformation_family",
+            "calibration_compatibility_profile", "prediction_set_rule",
+            "source_lineages_digest"):
+        if conformal.get(key) != receipt_conformal.get(key):
+            raise ValueError(f"external_authority:rtl_conformal_{key}_mismatch")
+    if receipt.eligible is not True:
+        raise ValueError("external_authority:rtl_conformal_receipt_ineligible")
+    lineage = record.get("lineage_id")
+    if type(lineage) is not str or not lineage.strip():
+        raise ValueError("external_authority:rtl_conformal_lineage_missing")
+    calibration_lineages = receipt.payload.get("calibration_lineages")
+    if (not isinstance(calibration_lineages, list) or
+            lineage.strip() not in calibration_lineages):
+        raise ValueError("external_authority:rtl_conformal_lineage_mismatch")
+    detail_rows = [item for item in receipt.payload.get("samples", [])
+                   if isinstance(item, Mapping) and
+                   item.get("case_id") == case_id and
+                   item.get("lineage_id") == lineage.strip()]
+    if {item.get("obligation") for item in detail_rows} != {
+            "RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS", "RTL_COMPILE_PASS"}:
+        raise ValueError("external_authority:rtl_conformal_case_witness_missing")
+    delta = record.get("observation_delta")
+    first_divergence = (delta.get("first_divergence")
+                        if isinstance(delta, Mapping) else None)
+    observed_witness = (first_divergence.get("rtl_obligations")
+                        if isinstance(first_divergence, Mapping) else None)
+    receipt_observed = {
+        item["obligation"]: item["observed"] for item in detail_rows}
+    if not isinstance(observed_witness, Mapping) or {
+            key: observed_witness.get(key) for key in receipt_observed} != receipt_observed:
+        raise ValueError("external_authority:rtl_conformal_observation_mismatch")
 
 
 def _external_transition_binding(
@@ -917,7 +978,7 @@ def build_external_observation_authority_evidence(
                     "verdict": "PASS", "payload": harmful_payload,
                 })
 
-            conformal = _external_conformal_value(record)
+            conformal = _external_conformal_value(record, case_id=case_id)
             if conformal is not None:
                 if split != "calibration":
                     raise ValueError("external_authority:conformal_invalid_split")
