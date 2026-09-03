@@ -12,6 +12,7 @@ from tehm.evaluation.candidate_executor import (
 from tehm.evaluation.no_skill_calibration import (
     NoSkillCalibrationSample, evaluate_no_skill_calibration,
 )
+from tehm.evaluation.mir_sample_plan import build_mir_sample_plan
 from tehm.evaluation.production_readiness import (
     ProductionReadinessError, build_production_readiness,
     replay_production_readiness,
@@ -266,6 +267,43 @@ def test_readiness_binds_explicit_mir_threshold_and_replays_it(tmp_path):
             ["max_memory_interference_rate"]) == 0.70
     replayed = replay_production_readiness(output)
     assert replayed.to_dict() == readiness
+
+
+def test_readiness_replays_and_binds_optional_mir_sample_plan(tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _interference_report(tmp_path)
+    plan = tmp_path / "mir-plan.json"
+    build_mir_sample_plan(
+        current_known_cases=2, current_harmful_cases=0,
+        thresholds=(0.0,),
+        current_evidence={"receipt_digest": "sha256:aggregate",
+                          "known_cases": 2, "harmful_cases": 0},
+        output=plan)
+    output = tmp_path / "readiness-with-mir-plan.json"
+    report = build_production_readiness(
+        calibration_report=calibration, interference_summary=interference,
+        mir_sample_plan=plan, output=output)
+    plan_metrics = report["readiness"]["metrics"]["mir_sample_plan"]
+    assert plan_metrics["current_known_cases"] == 2
+    assert plan_metrics["threshold_status"] == "finite_wilson_upper_bound_is_positive"
+    assert report["readiness"]["gate_status"]["mir_upper_ci"] == "FAIL"
+    assert replay_production_readiness(output).to_dict() == report["readiness"]
+
+
+def test_readiness_rejects_mir_sample_plan_denominator_drift(tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _interference_report(tmp_path)
+    plan = tmp_path / "mir-plan.json"
+    build_mir_sample_plan(
+        current_known_cases=3, current_harmful_cases=0,
+        thresholds=(0.0,),
+        current_evidence={"receipt_digest": "sha256:aggregate",
+                          "known_cases": 3, "harmful_cases": 0},
+        output=plan)
+    with pytest.raises(ProductionReadinessError, match="known_cases disagrees"):
+        build_production_readiness(
+            calibration_report=calibration, interference_summary=interference,
+            mir_sample_plan=plan)
 
 
 def test_readiness_rejects_malformed_mir_threshold(tmp_path):

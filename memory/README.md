@@ -4185,3 +4185,15 @@ receipt digest 为
 canonical memory、authority 或 runtime。因而当前 readiness 仍保持
 `eligible=false`，下一步只能在治理明确后继续独立样本积累或审查阈值政策，不能用
 规划 receipt 代替 production evidence；`memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+同时，`audit_r3_production_readiness.py` 新增可选的 `--mir-sample-plan`。readiness 在
+不新增 gate 的前提下重放该规划，并强制校验它绑定同一 MIR aggregate 的
+`known/harmful/upper_ci` 以及当前配置阈值；缺失或漂移会 fail-closed，规划只作为治理
+元数据，不会把 `eligible` 改成 `true`。用该绑定重新生成的 readiness 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-p17-v4-mir-plan-20260903/readiness.json`，
+receipt digest 为
+`sha256:4158f8f8434768ce312a639fa7da4aa0a44ca17bb5aab22f4d7c52b7e1da8901`；重放通过，
+`mir_sample_plan.threshold_status=finite_wilson_upper_bound_is_positive`，顶层仍为
+`eligible=false`，P9 `candidate_pool=false` 的唯一安全原因仍是
+`0.098901 > 0.0`。这一步闭合了“统计规划必须和实际 readiness 分母一致”的审计边界，
+但没有放宽 strict MIR policy、写 canonical memory 或打开 production runtime。

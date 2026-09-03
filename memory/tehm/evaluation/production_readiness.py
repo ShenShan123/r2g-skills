@@ -35,6 +35,7 @@ from .candidate_pool_evidence import (
 from .efficacy_evidence import (
     EfficacyEvidenceError, replay_efficacy_evidence,
 )
+from .mir_sample_plan import MIRError, replay_mir_sample_plan
 from tehm.retrieval.production_gate import evaluate_production_gate
 from tehm.lifecycle.promotion_gates import REQUIRED_GATES
 
@@ -505,6 +506,54 @@ def _interference(path: Path, *, max_upper_ci: float = 0.0) -> tuple[bool, dict]
     return interval["upper"] < max_upper_ci, metrics
 
 
+def _mir_sample_plan(path: Path | None, *, mir_metrics: Mapping,
+                     max_upper_ci: float) -> dict:
+    """Replay an optional MIR plan against the readiness MIR denominator.
+
+    The plan is governance metadata, not an additional safety gate.  When it
+    is supplied, it must nevertheless bind to the exact routed-policy
+    aggregate already consumed by readiness and contain the configured
+    threshold.  This keeps a stale/hypothetical plan from being presented as
+    evidence for a different denominator without changing production policy.
+    """
+    if path is None:
+        return {}
+    try:
+        receipt = replay_mir_sample_plan(path)
+    except (MIRError, OSError, TypeError, ValueError) as exc:
+        raise ProductionReadinessError(
+            f"MIR sample plan cannot replay: {exc}") from exc
+    if not isinstance(receipt.current_evidence, Mapping):
+        raise ProductionReadinessError(
+            "MIR sample plan must bind current routed-policy evidence")
+    if receipt.current_known_cases != mir_metrics.get("total_cases"):
+        raise ProductionReadinessError(
+            "MIR sample plan known_cases disagrees with routed-policy MIR")
+    if receipt.current_harmful_cases != mir_metrics.get("harmful_cases"):
+        raise ProductionReadinessError(
+            "MIR sample plan harmful_cases disagrees with routed-policy MIR")
+    if receipt.current_upper_ci != mir_metrics.get("upper_ci"):
+        raise ProductionReadinessError(
+            "MIR sample plan upper_ci disagrees with routed-policy MIR")
+    threshold = float(max_upper_ci)
+    row = next((item for item in receipt.thresholds
+                if item.get("threshold") == threshold), None)
+    if row is None:
+        raise ProductionReadinessError(
+            "MIR sample plan does not include the configured upper-CI threshold")
+    return {
+        "receipt_id": receipt.receipt_id,
+        "receipt_digest": receipt.receipt_digest,
+        "current_known_cases": receipt.current_known_cases,
+        "current_harmful_cases": receipt.current_harmful_cases,
+        "current_upper_ci": receipt.current_upper_ci,
+        "configured_threshold": threshold,
+        "threshold_status": row["status"],
+        "minimum_known_cases": row.get("minimum_known_cases"),
+        "additional_known_cases": row.get("additional_known_cases"),
+    }
+
+
 def _repair_pareto(path: Path | None) -> tuple[str, dict]:
     if path is None:
         return "NOT_ESTABLISHED", {"reason": "heldout Delta-M report is required"}
@@ -771,6 +820,7 @@ def build_production_readiness(*, calibration_report: Path,
                                authority_report: Path | None = None,
                                candidate_pool_evidence: Path | None = None,
                                efficacy_evidence: Path | None = None,
+                               mir_sample_plan: Path | None = None,
                                schema_contract: Path | None = None,
                                max_mir_upper_ci: float = 0.0,
                                output: Path | None = None) -> dict:
@@ -786,7 +836,7 @@ def build_production_readiness(*, calibration_report: Path,
     interference_summary = interference_summary.expanduser().resolve()
     for path in (calibration_report, interference_summary, anti_forgetting,
                  heldout_delta_m, authority_report, candidate_pool_evidence,
-                 efficacy_evidence, schema_contract):
+                 efficacy_evidence, mir_sample_plan, schema_contract):
         if path is not None and not path.is_file():
             raise ProductionReadinessError(f"readiness input is not a file: {path}")
     refs = [_ref(calibration_report, "calibration_report"),
@@ -795,11 +845,14 @@ def build_production_readiness(*, calibration_report: Path,
                 (authority_report, "authority_report"),
                 (candidate_pool_evidence, "candidate_pool_evidence"),
                 (efficacy_evidence, "efficacy_evidence"),
+                (mir_sample_plan, "mir_sample_plan"),
                 (schema_contract, "schema_contract"))
     refs.extend(_ref(path, name) for path, name in optional if path is not None)
     cal_gates, cal_metrics, _ = _calibration(calibration_report)
     mir_gate, mir_metrics = _interference(
         interference_summary, max_upper_ci=max_mir_upper_ci)
+    mir_plan_metrics = _mir_sample_plan(
+        mir_sample_plan, mir_metrics=mir_metrics, max_upper_ci=max_mir_upper_ci)
     repair_status, repair_metrics = _repair_pareto(heldout_delta_m)
     anti_status, anti_metrics = _anti_forgetting(anti_forgetting)
     authority_status, authority_metrics = _authority(authority_report)
@@ -901,6 +954,8 @@ def build_production_readiness(*, calibration_report: Path,
     # absent optional input remains absent from the serialized metrics map.
     if efficacy_evidence is not None:
         readiness_metrics["efficacy"] = efficacy_metrics
+    if mir_sample_plan is not None:
+        readiness_metrics["mir_sample_plan"] = mir_plan_metrics
     receipt = ProductionReadinessReceipt(
         campaign_id=cal_metrics.get("campaign_id") or calibration_report.stem,
         input_refs=tuple(refs), gates=gates, gate_status=status,
@@ -956,6 +1011,7 @@ def replay_production_readiness(report_path: Path) -> ProductionReadinessReceipt
         authority_report=by_name.get("authority_report"),
         candidate_pool_evidence=by_name.get("candidate_pool_evidence"),
         efficacy_evidence=by_name.get("efficacy_evidence"),
+        mir_sample_plan=by_name.get("mir_sample_plan"),
         schema_contract=by_name.get("schema_contract"),
         max_mir_upper_ci=max_mir_upper_ci)
     replayed = ProductionReadinessReceipt.from_dict(result["receipt"])
