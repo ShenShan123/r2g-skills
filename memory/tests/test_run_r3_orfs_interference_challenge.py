@@ -110,3 +110,51 @@ def test_failed_reason_derivation_preserves_completed_cohort(tmp_path, monkeypat
     assert failure["status"] == "REASON_DERIVATION_FAILED"
     assert failure["cohort_receipt_digest"] == FakeCohort.receipt_digest
     assert failure["memory_docs_submitted"] is False
+
+
+def test_operator_interrupt_preserves_terminal_failure_boundary(tmp_path, monkeypatch):
+    """An interrupted ORFS run must not look like an incomplete evidence set."""
+    projects = [_project(tmp_path / f"project-{index}") for index in range(2)]
+    for project in projects:
+        (project / "constraints" / "constraint.sdc").write_text(
+            "current_design uart\n")
+
+    toolchain = tmp_path / "toolchain"
+    pdk = tmp_path / "pdks"
+    toolchain.mkdir()
+    pdk.mkdir()
+    orfs = tmp_path / "orfs"
+    (orfs / "flow").mkdir(parents=True)
+    for name in ("openroad", "yosys"):
+        binary = toolchain / name
+        binary.write_text("#!/bin/sh\nexit 0\n")
+        binary.chmod(0o755)
+    manifest = toolchain / "manifest.json"
+    manifest.write_text("{}\n")
+
+    def interrupt(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(challenge, "execute_orfs_paired_cohort", interrupt)
+    artifacts = tmp_path / "interrupted-artifacts"
+    digest = "sha256:" + "2" * 64
+    with pytest.raises(KeyboardInterrupt):
+        challenge.run(
+            projects, artifacts=artifacts, campaign_id="interrupt-boundary",
+            lineages=["lineage-a", "lineage-b"],
+            orfs_root=orfs, openroad_exe=toolchain / "openroad",
+            yosys_exe=toolchain / "yosys", pdk_root=pdk,
+            toolchain_root=toolchain, toolchain_manifest=manifest,
+            toolchain_digest=digest, oracle_digest=digest,
+            platform_digest=digest, pdk_digest=digest)
+
+    assert (artifacts / "receipts" / "campaign_manifest.json").is_file()
+    assert (artifacts / "receipts" / "cases.json").is_file()
+    assert not (artifacts / "receipts" / "cohort.json").exists()
+    failure = json.loads((artifacts / "failure.json").read_text())
+    assert failure["status"] == "EXECUTION_INTERRUPTED"
+    assert failure["error_type"] == "KeyboardInterrupt"
+    assert failure["cohort_available"] is False
+    assert failure["campaign_manifest_digest"].startswith("sha256:")
+    assert failure["memory_docs_submitted"] is False
+    assert failure["canonical_memory_mutation"] == "none"

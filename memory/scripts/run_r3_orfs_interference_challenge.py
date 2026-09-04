@@ -306,6 +306,27 @@ def run(projects: Sequence[Path | str], *, artifacts: Path | str,
             platform_digest=platform_digest, pdk_digest=pdk_digest,
             oracle=oracle, budget=3, toolchain_digest=toolchain_digest,
             oracle_digest=oracle_digest, min_lineages=2)
+    except KeyboardInterrupt:
+        # ``KeyboardInterrupt`` inherits directly from ``BaseException`` and
+        # therefore bypasses the ordinary execution-failure handler below.
+        # Preserve the immutable input boundary and make an operator abort a
+        # terminal, explicitly non-evidence result instead of leaving only
+        # orphaned flow locks behind.
+        failure = {
+            "version": CAMPAIGN_VERSION, "campaign_id": campaign_id,
+            "lane": "EVOLUTION_CHALLENGE",
+            "challenge_reason": "MEMORY_INTERFERENCE",
+            "status": "EXECUTION_INTERRUPTED",
+            "error_type": "KeyboardInterrupt",
+            "error": "operator interrupted the ORFS challenge",
+            "campaign_manifest_digest": manifest_digest,
+            "cohort_available": False,
+            "evaluation_only": True, "canonical_memory_mutation": "none",
+            "production_runtime_imported": False,
+            "memory_docs_submitted": False,
+        }
+        _write_json(artifacts / "failure.json", failure)
+        raise
     except Exception as exc:
         # No partial cohort object can be honestly reconstructed from the
         # current executor.  Record the immutable inputs and the terminal
@@ -316,6 +337,8 @@ def run(projects: Sequence[Path | str], *, artifacts: Path | str,
             "challenge_reason": "MEMORY_INTERFERENCE",
             "status": "EXECUTION_FAILED",
             "error_type": type(exc).__name__, "error": str(exc),
+            "campaign_manifest_digest": manifest_digest,
+            "cohort_available": False,
             "evaluation_only": True, "canonical_memory_mutation": "none",
             "production_runtime_imported": False, "memory_docs_submitted": False,
         }
