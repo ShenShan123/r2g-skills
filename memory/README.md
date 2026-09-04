@@ -4444,3 +4444,28 @@ repeated-failure reports 在当前代码下均可 replay，仍保持 proposal-on
 派生的稳定 `receipt_id`，P13 reason 与 P12 trigger replay 在字段存在时都会校验
 ID/digest 一致性，同时保持旧 receipt 格式兼容。`memory/docs/` 继续由 `.gitignore`
 排除且不提交。
+
+### 2026-09-04 Revision3 StateShift manifest freeze and replay
+
+StateShift challenge producer 现在在任何 paired RTL execution 之前写入完整的
+content-addressed `campaign_manifest.json`，其中绑定 training knowledge、support
+envelope、transition IDs、case/source digests、routing、typed state shifts 和
+candidate payloads；cohort 的 `campaign_manifest_digest` 必须与该逻辑 digest 一致。
+新增只读 `scripts/replay_r3_state_shift_challenge.py` 与
+`tehm.evaluation.state_shift_replay`，会 fail-closed 重放四臂 cohort、源码冻结、
+`STATE_SHIFT` derivation、P12 trigger、reason-specific admission、REVISE proposal、
+localized plan、P13 shadow/memory-delta 及 P14 boundary，不执行 RTL、不打开数据库、
+不写 canonical memory 或 production runtime。
+
+最新真实 Icarus artifact
+`/data1/zhangdy/tehm-campaigns/tehm-r3-state-shift-checkpoint-order-20260904-r5/`
+的 manifest digest 为
+`sha256:8b045baa6120d1e9d18d078b28f952ab4d285a18ca221f868c2c7ede03748785`，cohort
+digest 为 `sha256:1e1f39acec3005471b66fef269a4f5abc8368e81af6baa7bc107c266762b585d`。
+2 cases / 2 lineages 均为真实 oracle PASS，typed `STATE_SHIFT`、P12 trigger 和
+admission 均为 2/2，proposal/shadow 均为 `REVISE`，strategy C1--C5 与 held-out
+C1--C8 均满足；standard capability C5--C8 仍不成立，故不产生 promotion 或
+production authority。replay CLI 返回 `REPLAY_PASS`，并明确
+`canonical_memory_mutation=none`、`production_runtime_imported=false`、
+`memory_docs_submitted=false`。本次完整 `memory/tests` 回归为 `1089 passed`。
+`memory/docs/` 继续由 `.gitignore` 排除且不提交。

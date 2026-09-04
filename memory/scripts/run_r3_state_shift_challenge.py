@@ -85,7 +85,13 @@ TOOLCHAIN_DIGEST = "sha256:r3-state-shift-icarus-toolchain"
 ORACLE_DIGEST = "sha256:r3-state-shift-icarus-candidate-oracle"
 PLATFORM_DIGEST = "sha256:r3-state-shift-platform-asap7"
 PDK_DIGEST = "sha256:r3-state-shift-pdk"
-MANIFEST_DIGEST = "sha256:r3-state-shift-challenge-manifest"
+# The campaign manifest digest is computed from the immutable input payload in
+# ``run`` immediately before the paired executions.  Keep the old constant as
+# a compatibility marker for consumers that imported it from the first R3
+# producer; it is intentionally no longer passed to the cohort executor.
+LEGACY_MANIFEST_DIGEST = "sha256:r3-state-shift-challenge-manifest"
+# Backward-compatible import name; new runs never use this placeholder.
+MANIFEST_DIGEST = LEGACY_MANIFEST_DIGEST
 TRAINING_PLATFORM = "sky130"
 CHALLENGE_PLATFORM = "asap7"
 
@@ -812,6 +818,41 @@ def run(artifacts: Path, *, force: bool = False) -> dict:
             conn, shift, route, transition_id=transition_id, campaign_id=CAMPAIGN_ID,
             learner_eligible=True)
 
+    # Freeze every challenge input before any expensive paired execution.  The
+    # digest is content-addressed (rather than a caller-supplied placeholder)
+    # and intentionally excludes the digest field itself, so an interrupted
+    # run still leaves a complete, auditable manifest/cases boundary.
+    manifest_payload = {
+        "version": "tehm-r3-state-shift-challenge-v0.1",
+        "campaign_id": CAMPAIGN_ID, "lane": "EVOLUTION_CHALLENGE",
+        "oracle": "IcarusOracle via iverilog/vvp",
+        "training_platform": TRAINING_PLATFORM,
+        "challenge_platform": CHALLENGE_PLATFORM,
+        "case_count": len(cases), "lineage_count": len({item["lineage_id"] for item in cases}),
+        "training_transition_ids": list(transition_ids),
+        "training_knowledge": knowledge.to_dict(),
+        "support_envelope": envelope.to_dict(),
+        "cases": cases,
+        "routing": {
+            case_id: {**route.to_dict(),
+                      "routing_receipt_id": route.routing_receipt_id,
+                      "decision_digest": route.decision_digest}
+            for case_id, route in sorted(routes.items())
+        },
+        "state_shifts": {
+            case_id: {**shift.to_dict(), "receipt_id": shift.receipt_id}
+            for case_id, shift in sorted(shifts.items())
+        },
+        "candidate_payloads": {
+            case_id: candidate.to_dict()
+            for case_id, candidate in sorted(candidates.items())
+        },
+        "evaluation_only": True, "canonical_memory_mutation": "none",
+        "production_runtime_imported": False, "memory_docs_submitted": False,
+    }
+    manifest_digest = _sha256_payload(manifest_payload)
+    _write_json(receipt_dir / "campaign_manifest.json", manifest_payload)
+
     arm_candidates = {
         case_id: {"NO_MEMORY": None, "ALWAYS_MEMORY": candidate,
                   "APPLICABILITY_GATED": candidate, "CAUSAL_NO_SKILL": candidate}
@@ -819,7 +860,7 @@ def run(artifacts: Path, *, force: bool = False) -> dict:
     }
     cohort = execute_rtl_paired_cohort(
         cases, arm_candidates, campaign_id=CAMPAIGN_ID,
-        campaign_manifest_digest=MANIFEST_DIGEST,
+        campaign_manifest_digest=manifest_digest,
         platform_digest=PLATFORM_DIGEST, pdk_digest=PDK_DIGEST,
         oracle=IcarusCandidateOracle(oracle), budget=3,
         toolchain_digest=TOOLCHAIN_DIGEST, oracle_digest=ORACLE_DIGEST,
@@ -920,15 +961,6 @@ def run(artifacts: Path, *, force: bool = False) -> dict:
         artifacts, conn, shadow_receipt, memory_delta, knowledge, child,
         transition_ids, routes, candidates, cohort)
 
-    _write_json(receipt_dir / "campaign_manifest.json", {
-        "version": "tehm-r3-state-shift-challenge-v0.1",
-        "campaign_id": CAMPAIGN_ID, "lane": "EVOLUTION_CHALLENGE",
-        "oracle": "IcarusOracle via iverilog/vvp", "training_platform": TRAINING_PLATFORM,
-        "challenge_platform": CHALLENGE_PLATFORM, "case_count": len(cases),
-        "lineage_count": cohort.lineage_count, "evaluation_only": True,
-        "canonical_memory_mutation": "none", "production_runtime_imported": False,
-        "memory_docs_submitted": False,
-    })
     _write_json(receipt_dir / "training.json", {
         "transition_ids": transition_ids, "knowledge": knowledge.to_dict(),
         "knowledge_object_id": knowledge.object_id,
@@ -979,6 +1011,8 @@ def run(artifacts: Path, *, force: bool = False) -> dict:
     summary = {
         "campaign_id": CAMPAIGN_ID, "lane": "EVOLUTION_CHALLENGE",
         "real_oracle": "iverilog/vvp", "case_count": len(cases),
+        "campaign_manifest_digest": manifest_digest,
+        "cohort_receipt_digest": cohort.receipt_digest,
         "lineage_count": cohort.lineage_count, "lineages": cohort.lineage_ids,
         "outcome_counts": cohort.outcome_counts,
         "state_shift_count": len(shifts), "state_shift_reasons": {
