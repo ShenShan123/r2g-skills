@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 
 import pytest
 
@@ -9,6 +10,7 @@ from tehm.evaluation.candidate_executor import (
     CandidateExecutionReceipt, P12_ARMS, PairedCandidateExecutionReceipt,
 )
 from tehm.evaluation.rtl_cohort import RtlPairedCohortReceipt
+from tehm.ids import stable_dumps
 from tehm.evaluation.validation_freeze import (
     ValidationCohortFreezeReceipt, ValidationFreezeError,
     freeze_validation_cohort, replay_validation_freeze,
@@ -101,3 +103,25 @@ def test_validation_freeze_replay_rejects_wrapper_digest_tamper(tmp_path):
     output_path.write_text(json.dumps(payload))
     with pytest.raises(ValidationFreezeError, match="report digest"):
         replay_validation_freeze(output_path)
+
+
+def test_validation_freeze_replay_rejects_rehashed_projection_tamper(tmp_path):
+    cohort_path, trigger_path, output_path = _reports(tmp_path)
+    freeze_validation_cohort(cohort_path, trigger_path, output=output_path)
+    payload = json.loads(output_path.read_text())
+    payload["campaign_id"] = "forged-campaign"
+    payload["report_digest"] = "sha256:" + hashlib.sha256(
+        stable_dumps({key: value for key, value in payload.items()
+                      if key != "report_digest"}).encode()).hexdigest()
+    output_path.write_text(json.dumps(payload))
+    with pytest.raises(ValidationFreezeError, match="projection mismatch: campaign_id"):
+        replay_validation_freeze(output_path)
+
+
+def test_validation_freeze_rejects_source_docs_submission(tmp_path):
+    cohort_path, trigger_path, output_path = _reports(tmp_path)
+    cohort = json.loads(cohort_path.read_text())
+    cohort["memory_docs_submitted"] = True
+    cohort_path.write_text(json.dumps(cohort))
+    with pytest.raises(ValidationFreezeError, match="memory/docs submission"):
+        freeze_validation_cohort(cohort_path, trigger_path, output=output_path)

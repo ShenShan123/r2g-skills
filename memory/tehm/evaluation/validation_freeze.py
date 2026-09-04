@@ -90,6 +90,27 @@ def _verify_report_boundary(report: Mapping) -> None:
         raise ValidationFreezeError("validation freeze report digest mismatch")
 
 
+def _verify_report_projection(report: Mapping,
+                              receipt: "ValidationCohortFreezeReceipt") -> None:
+    """Bind duplicated wrapper projections to the content-addressed receipt."""
+    expected = {
+        "campaign_id": receipt.campaign_id,
+        "cohort_report": receipt.cohort_report_path,
+        "trigger_report": receipt.trigger_report_path,
+        "cohort_receipt_digest": receipt.cohort_receipt_digest,
+        "case_ids": list(receipt.case_ids),
+        "lineage_ids": list(receipt.lineage_ids),
+        "outcome_counts": receipt.outcome_counts,
+        "trigger_count": receipt.trigger_count,
+        "triggered_count": receipt.triggered_count,
+        "blocked_reasons": list(receipt.blocked_reasons),
+    }
+    for field, value in expected.items():
+        if report.get(field) != value:
+            raise ValidationFreezeError(
+                f"validation freeze report projection mismatch: {field}")
+
+
 def _cohort_from_report(report: Mapping):
     payload = report.get("cohort_receipt")
     if not isinstance(payload, Mapping):
@@ -114,6 +135,9 @@ def _validate_all_pass(cohort, report: Mapping) -> tuple[tuple[str, ...], tuple[
         raise ValidationFreezeError("validation cohort reports canonical mutation")
     if report.get("production_runtime_imported") is True:
         raise ValidationFreezeError("validation cohort imported production runtime")
+    if (report.get("memory_docs_submitted") is not None and
+            report.get("memory_docs_submitted") is not False):
+        raise ValidationFreezeError("validation cohort reports memory/docs submission")
     if cohort.evaluation_only is not True or cohort.source_disjoint is not True:
         raise ValidationFreezeError("validation cohort is not evaluation-only/source-disjoint")
     case_ids = tuple(sorted(cohort.case_receipts))
@@ -151,6 +175,9 @@ def _validate_negative_trigger(trigger: Mapping, *, campaign_id: str,
         raise ValidationFreezeError("validation trigger report reports canonical mutation")
     if trigger.get("production_runtime_imported") is True:
         raise ValidationFreezeError("validation trigger report imported production runtime")
+    if (trigger.get("memory_docs_submitted") is not None and
+            trigger.get("memory_docs_submitted") is not False):
+        raise ValidationFreezeError("validation trigger reports memory/docs submission")
     return int(trigger_count), int(triggered_count), tuple(sorted(set(blocked)))
 
 
@@ -330,6 +357,7 @@ def replay_validation_freeze(path: Path | str) -> ValidationCohortFreezeReceipt:
     _verify_report_boundary(report)
     receipt_payload = report.get("freeze_receipt")
     receipt = ValidationCohortFreezeReceipt.from_dict(receipt_payload)
+    _verify_report_projection(report, receipt)
     cohort_path = Path(receipt.cohort_report_path)
     trigger_path = Path(receipt.trigger_report_path)
     if _sha256(cohort_path) != receipt.cohort_report_sha256:
