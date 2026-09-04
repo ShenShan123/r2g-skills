@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from tehm.evaluation.candidate_executor import (
     CandidateExecutionReceipt, P12_ARMS, PairedCandidateExecutionReceipt,
 )
 from tehm.evaluation.rtl_cohort import RtlPairedCohortReceipt
 from tehm.evaluation.validation_freeze import (
-    ValidationCohortFreezeReceipt, freeze_validation_cohort,
-    replay_validation_freeze,
+    ValidationCohortFreezeReceipt, ValidationFreezeError,
+    freeze_validation_cohort, replay_validation_freeze,
 )
 
 
@@ -80,3 +82,22 @@ def test_validation_freeze_requires_all_pass_zero_trigger_and_replays(tmp_path):
     assert isinstance(receipt, ValidationCohortFreezeReceipt)
     assert receipt.triggered_count == 0
 
+
+def test_validation_freeze_replay_rejects_wrapper_docs_boundary_tamper(tmp_path):
+    cohort_path, trigger_path, output_path = _reports(tmp_path)
+    freeze_validation_cohort(cohort_path, trigger_path, output=output_path)
+    payload = json.loads(output_path.read_text())
+    payload["memory_docs_submitted"] = True
+    output_path.write_text(json.dumps(payload))
+    with pytest.raises(ValidationFreezeError, match="memory_docs_submitted"):
+        replay_validation_freeze(output_path)
+
+
+def test_validation_freeze_replay_rejects_wrapper_digest_tamper(tmp_path):
+    cohort_path, trigger_path, output_path = _reports(tmp_path)
+    freeze_validation_cohort(cohort_path, trigger_path, output=output_path)
+    payload = json.loads(output_path.read_text())
+    payload["report_digest"] = "sha256:" + "0" * 64
+    output_path.write_text(json.dumps(payload))
+    with pytest.raises(ValidationFreezeError, match="report digest"):
+        replay_validation_freeze(output_path)

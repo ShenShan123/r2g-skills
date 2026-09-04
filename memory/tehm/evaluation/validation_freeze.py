@@ -61,6 +61,35 @@ def _load(path: Path, label: str) -> dict:
     return payload
 
 
+def _verify_report_boundary(report: Mapping) -> None:
+    """Verify the freeze wrapper before trusting its nested receipt.
+
+    The nested :class:`ValidationCohortFreezeReceipt` is content addressed,
+    but the emitted JSON wrapper also carries the release and authority
+    boundary.  Replay must reject a wrapper that was edited to claim that
+    governing docs were submitted or that production was touched.  The
+    report digest is calculated before it is added to the wrapper.
+    """
+    if report.get("version") != "validation-cohort-freeze-report-v1":
+        raise ValidationFreezeError("validation freeze report version is invalid")
+    expected_boundary = {
+        "lane": "VALIDATION",
+        "expected_action": "RETAIN",
+        "expected_evolution": False,
+        "canonical_memory_mutation": "none",
+        "production_runtime_imported": False,
+        "memory_docs_submitted": False,
+    }
+    for field, expected in expected_boundary.items():
+        if report.get(field) != expected:
+            raise ValidationFreezeError(
+                f"validation freeze report crosses {field} boundary")
+    supplied = report.get("report_digest")
+    if supplied != _digest({key: value for key, value in report.items()
+                            if key != "report_digest"}):
+        raise ValidationFreezeError("validation freeze report digest mismatch")
+
+
 def _cohort_from_report(report: Mapping):
     payload = report.get("cohort_receipt")
     if not isinstance(payload, Mapping):
@@ -298,6 +327,7 @@ def replay_validation_freeze(path: Path | str) -> ValidationCohortFreezeReceipt:
     """Re-read a freeze receipt and verify both immutable report files unchanged."""
     freeze_path = Path(path).expanduser().resolve()
     report = _load(freeze_path, "validation freeze report")
+    _verify_report_boundary(report)
     receipt_payload = report.get("freeze_receipt")
     receipt = ValidationCohortFreezeReceipt.from_dict(receipt_payload)
     cohort_path = Path(receipt.cohort_report_path)
