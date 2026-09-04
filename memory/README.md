@@ -4314,3 +4314,18 @@ sidecar 的冻结快照，报告显式写入 `memory_docs_submitted=false`，CLI
 （repeated-failure）仅保留为诊断，不能作为冻结 evidence。该 lane 仍是
 evaluation-only：不写 canonical memory、不进入 production runtime；`memory/docs/`
 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 direct-toolchain preflight boundary
+
+对当前服务器路径做了只读预检：`/usr/bin/openroad` 可以识别，但配套的
+`/usr/bin/yosys` 为 0.9，缺少该 ORFS flow 要求的
+`read_liberty -unit_delay`，因此 `preflight_orfs_toolchain()` 正确返回
+`blocked`，不能把系统二进制误记为可复现 toolchain。`/data1/zhangdy/Tools/tehm-toolchain`
+中的 OpenROAD `26Q2-1846-g49bd051a10` 与 Yosys `0.65` 满足 capability 检查；在
+干净的 `/data1/zhangdy/Tools/OpenROAD-flow-scripts-clean` 上生成并 replay 的
+manifest digest 为
+`9b5f179b01bebde6da87f6443729f2589d8fab218fc63478628c2286e1940b1c`，状态为
+`bound_internal`。用户目录下的 `/data1/zhangdy/Tools/OpenROAD-flow-scripts` 当前
+存在大量修改/未跟踪文件，故不能作为冻结 evidence；不对其执行清理或覆盖。该结论
+只约束 ORFS evidence 的显式环境绑定，不写 canonical memory、authority 或 runtime，
+`memory/docs/` 仍由 `.gitignore` 排除且不提交。
