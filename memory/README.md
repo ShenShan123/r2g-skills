@@ -4273,6 +4273,15 @@ disjoint，不证明 IID 或真实用户分布。任何未来非零阈值都必�
 审计，不创建 P13 reason、不写 canonical memory、authority 或 runtime；`memory/docs/`
 继续由 `.gitignore` 排除且不提交。
 
+### 2026-09-03 Revision3 producer boundary consistency
+
+补齐 counterexample、novelty/conflict reason-adapter 与 ORFS P14 attribution producer
+的报告边界字段：所有新生成的 evaluation artifact 都显式写入
+`memory_docs_submitted=false`，并保持 `canonical_memory_mutation=none`、
+`production_runtime_imported=false`（或等价的 `production_runtime` 全 false）。这只
+统一可审计 schema，不把历史缺字段报告回填成新 evidence；`memory/docs/` 仍由
+`.gitignore` 排除且不会进入 release。
+
 ### 2026-09-03 Revision3 non-zero MIR threshold governance receipt
 
 `tehm.evaluation.mir_threshold_governance` 新增 evaluation-only 的外部治理 receipt。
@@ -4329,3 +4338,16 @@ manifest digest 为
 存在大量修改/未跟踪文件，故不能作为冻结 evidence；不对其执行清理或覆盖。该结论
 只约束 ORFS evidence 的显式环境绑定，不写 canonical memory、authority 或 runtime，
 `memory/docs/` 仍由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 reason-adapter/P14 snapshot hardening
+
+novelty/conflict reason-adapter runner 现在与 R3-9 一样，在 source 初始化后先做
+`wal_checkpoint(TRUNCATE)`，通过字节复制创建 disposable shadow，并在成功路径
+checkpoint derived projection；ORFS P14 attribution 则改用 immutable read-only source，
+并 checkpoint 自己的 attribution projection。新
+`tehm-r3-reason-adapters-20260903-r3` 与
+`tehm-r3-orfs-interference-p14-20260903-r2` 均无 SQLite sidecar，报告显式写入
+`memory_docs_submitted=false`，且 novelty/conflict、P14 strategy attribution replay
+结果保持 evaluation-only、canonical mutation 为 `none`、production runtime 未导入。
+此前带 sidecar 的 reason-adapter artifact 仅作诊断，不作为冻结 evidence；
+`memory/docs/` 继续由 `.gitignore` 排除且不提交。

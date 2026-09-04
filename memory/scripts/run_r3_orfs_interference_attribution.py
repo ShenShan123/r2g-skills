@@ -207,7 +207,9 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
 
     # The source is only read to establish a baseline digest.  All projection
     # writes go to a separate SQLite file.
-    source_conn = db.connect(source_db)
+    # The P13 source is already a frozen snapshot.  Immutable read-only mode
+    # prevents this audit from creating WAL/SHM sidecars on its evidence.
+    source_conn = db.connect_read_only(source_db)
     source_before = shadow._connection_digest(source_conn)
     if source_before != memory_delta.baseline_memory_digest:
         source_conn.close()
@@ -365,6 +367,7 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
         "strategy_safety_gain": strategy_gates["C5_fallback_changed_and_executed"],
         "evaluation_only": True,
         "canonical_memory_mutation": "none",
+        "memory_docs_submitted": False,
         "production_authority_changed": False,
     }
     _write_json(output / "p14_safety_ablation.json", ablation_payload)
@@ -375,6 +378,7 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
         "reason": "MEMORY_INTERFERENCE",
         "evaluation_only": True,
         "canonical_memory_mutation": "none",
+        "memory_docs_submitted": False,
         "production_authority_changed": False,
         "production_runtime_imported": False,
         "strategy_gates": strategy_gates,
@@ -437,9 +441,11 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
         "source_unchanged": report["source_integrity"]["unchanged"],
         "evaluation_only": True,
         "production_runtime_imported": False,
+        "memory_docs_submitted": False,
     })
-    conn.commit()
-    conn.close()
+    # The projection is disposable, but the emitted P14 evidence must still
+    # be a sidecar-free snapshot for deterministic replay.
+    db.checkpoint_and_close(conn)
     source_conn.close()
     return report
 

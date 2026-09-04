@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sqlite3
 import sys
 from pathlib import Path
@@ -22,7 +23,7 @@ if str(ROOT) not in sys.path:
 
 from tehm import db  # noqa: E402
 from tehm.artifact_store import ArtifactStore  # noqa: E402
-from tehm.causal.orfs import _backup_database, _sha256  # noqa: E402
+from tehm.causal.orfs import _sha256  # noqa: E402
 from tehm.causal.rtl import capture_rtl_causal_fragment  # noqa: E402
 from tehm.evolution import (  # noqa: E402
     admit_evolution_reason, detect_conflicts, detect_novelty,
@@ -61,9 +62,13 @@ def run_challenge(*, output_dir: Path | str,
     derived_db = output / "derived_reason_adapter_shadow.sqlite"
     source_conn = db.connect(source_db)
     db.ensure_schema(source_conn)
-    source_conn.close()
+    # Freeze the empty source before copying it.  A plain close leaves WAL/SHM
+    # sidecars and makes the challenge report unsuitable for immutable replay.
+    db.checkpoint_and_close(source_conn)
     source_digest = _sha256(source_db)
-    _backup_database(source_db, derived_db)
+    # Avoid opening the source through SQLite backup: a read-only backup can
+    # recreate a shared-memory sidecar on the supposedly frozen source.
+    shutil.copy2(source_db, derived_db)
     conn = db.connect(derived_db)
     db.ensure_schema(conn)
     before_counts = _counts(conn)
@@ -107,7 +112,7 @@ def run_challenge(*, output_dir: Path | str,
         raise AssertionError(
             f"conflict admission blocked: {conflict_admission.blocked_reason}")
     after_counts = _counts(conn)
-    conn.close()
+    db.checkpoint_and_close(conn)
     if _sha256(source_db) != source_digest:
         raise AssertionError("source canonical database changed during P2-R6 challenge")
 
@@ -137,6 +142,7 @@ def run_challenge(*, output_dir: Path | str,
         "counts_before": before_counts,
         "counts_after": after_counts,
         "canonical_memory_mutation": "none",
+        "memory_docs_submitted": False,
         "production_runtime": {
             "promotion_attempted": False,
             "production_promotion_eligible": False,
