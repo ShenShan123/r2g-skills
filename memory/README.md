@@ -4360,3 +4360,25 @@ content-addressed cohort 身份或路由后先移除旧 digest 再重签名，�
 使用 cohort-level 的 platform/PDK 字段。生产 loader 继续对旧签名 fail-closed，未
 放宽 replay 或 authority 边界；当前 `git ls-files memory/docs` 与 HEAD tree 仍均为
 零，`memory/docs/` 不会进入提交或 release。
+
+### 2026-09-04 Revision3 real ORFS interference shadow/P14
+
+使用绑定的内部 toolchain（clean ORFS、OpenROAD/Yosys/PDK manifest digest
+`sha256:9b5f179b01bebde6da87f6443729f2589d8fab218fc63478628c2286e1940b1c`）执行
+两个 source-disjoint、但行为刻意相同的 GCD 变体；真实 `run_orfs.sh`、KLayout DRC
+和 Netgen LVS 均完成，challenge cohort digest 为
+`sha256:50a235a583c4282e1e7b5a3451ad4d0d652cac100dbf3ed4402310ea495f871f`。
+两 case 均导出 typed `MEMORY_INTERFERENCE`，NO_MEMORY 为 2/2 PASS，强制
+ALWAYS_MEMORY、APPLICABILITY_GATED、CAUSAL_NO_SKILL 均为 2/2 FAIL；这不是 IID
+统计样本，且 timing 仍为 moderate，不能当作 strict production signoff。
+
+P13 shadow 目录
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-interference-gcd-shadow-20260904-r2/`
+给出 `memory_delta_eligible=true`、anti-forgetting=true，post 三个安全 arm
+均 2/2 PASS；canonical DB digest 前后一致、staging discarded、production
+authority/runtime 均未改变。P14 attribution 目录
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-interference-gcd-p14-20260904-r1/`
+确认 strategy gates C1--C5（含 fallback execution）成立，但 capability C5/C6/C8
+仍缺失，因此只证明 L2 safety strategy evolution，不声明 L3 capability gain，
+不授予 promotion token。以上三个 artifact 均标记 `memory_docs_submitted=false`；
+`memory/docs/` 继续由 `.gitignore` 排除且不提交。
