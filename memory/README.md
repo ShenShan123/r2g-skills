@@ -4382,3 +4382,16 @@ authority/runtime 均未改变。P14 attribution 目录
 仍缺失，因此只证明 L2 safety strategy evolution，不声明 L3 capability gain，
 不授予 promotion token。以上三个 artifact 均标记 `memory_docs_submitted=false`；
 `memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-04 Revision3 ORFS calibration expansion (diagnostic)
+
+对 GCD ORFS interference challenge 再生成独立 P15 calibration slice：2 条
+source/lineage-disjoint case 均由真实 paired oracle 自动导出 `NO_SKILL/RISK`，保留
+`CONSIDER` router 的 2 条 false-negative，slice 本身按设计为 `NOT_ESTABLISHED`。
+将其与既有 RTL n41 和 ORFS n2 manifest 严格聚合，得到 45 samples、3 campaigns、
+case ID 全不重叠、routing coverage=1.0、reason-stratified calibration receipt
+`PASS`（digest `sha256:1db413fde214e7ad778017600ca7b1b48a2fe63827351efdf75ec90f6c483858`）。
+该 n45 aggregate 作为 backend-diversity 诊断 evidence，不替换当前 production readiness
+使用的 n43 aggregate（新增 false-negative 会降低 recall）；它不写 learner/canonical
+memory、authority 或 runtime，`production_promotion_eligible=false`，且
+`memory_docs_submitted=false`。`memory/docs/` 继续由 `.gitignore` 排除且不提交。
