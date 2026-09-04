@@ -66,6 +66,13 @@ from .mir_sample_plan import (
     DEFAULT_MAX_SEARCH_CASES, MIRError, MIRSamplePlanReceipt,
     build_mir_sample_plan, replay_mir_sample_plan,
 )
+from .mir_threshold_governance import (
+    MIR_THRESHOLD_GOVERNANCE_VERSION, MIR_THRESHOLD_GOVERNANCE_REPORT_VERSION,
+    DECISION as MIR_THRESHOLD_GOVERNANCE_DECISION,
+    SCOPE as MIR_THRESHOLD_GOVERNANCE_SCOPE,
+    MIRThresholdGovernanceError, MIRThresholdGovernanceReceipt,
+    replay_mir_threshold_governance,
+)
 
 __all__ = [
     "EXECUTOR_VERSION", "P12_ARMS", "CandidateExecutionReceipt",
@@ -106,4 +113,8 @@ __all__ = [
     "MIR_SAMPLE_PLAN_VERSION", "DEFAULT_MIR_SAMPLE_THRESHOLDS",
     "DEFAULT_MAX_SEARCH_CASES", "MIRError", "MIRSamplePlanReceipt",
     "build_mir_sample_plan", "replay_mir_sample_plan",
+    "MIR_THRESHOLD_GOVERNANCE_VERSION", "MIR_THRESHOLD_GOVERNANCE_REPORT_VERSION",
+    "MIR_THRESHOLD_GOVERNANCE_DECISION", "MIR_THRESHOLD_GOVERNANCE_SCOPE",
+    "MIRThresholdGovernanceError", "MIRThresholdGovernanceReceipt",
+    "replay_mir_threshold_governance",
 ]
