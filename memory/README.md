@@ -4239,3 +4239,18 @@ case count 集合，并要求 policy arm 一致。这样即使两份报告偶然
 仍为 `eligible=false`、strict MIR `FAIL`、`production_integration=not_attempted`。
 该校验只加强 evaluation evidence provenance，不写 canonical memory、authority 或
 runtime；`memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 strict-MIR threshold governance review
+
+对同一份 73-case MIR/P6、43-case cross-backend calibration、P14、authority、schema 和
+anti-forgetting 输入做了只读阈值敏感性回放。预注册的 strict `max_mir_upper_ci=0.0`
+下，所有七项 readiness gate 中只有 `mir_upper_ci=FAIL`，P9 只有 `candidate_pool=FAIL`；
+原因是 0/73 harmful 的 Wilson 95% upper-CI=`0.049992`，有限样本不可能得到严格零上界。
+
+仅作为治理情景（没有写回 receipt、没有修改默认值、没有打开 runtime），将阈值设为
+`0.05` 或 `0.10` 时，当前回放的所有 readiness/P9 checks 会变成 `PASS`。这不是授权：
+当前生产政策仍固定为 `0.0`，而且这些 RTL tagged cohorts 只证明 source/lineage
+disjoint，不证明 IID 或真实用户分布。任何未来非零阈值都必须由明确的外部治理决定，并
+重新冻结带该阈值的 evidence；不能把这次敏感性结果当成 production promotion。当前仍为
+`eligible=false`、`production_integration=not_attempted`，`memory/docs/` 继续被忽略且
+不提交。
