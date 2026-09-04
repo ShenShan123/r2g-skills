@@ -426,6 +426,9 @@ def build_shadow_mirror_report(
     readiness = _json_file(readiness_path, "readiness report")
     receipt = prepare_shadow_mirror(
         readiness, comparisons=comparisons, allowlist=allowlist)
+    if comparison_ref is not None:
+        comparison_ref["content_digest"] = _digest(
+            [dict(item) for item in receipt.comparisons])
     serialized = {
         **receipt.to_dict(), "receipt_id": receipt.receipt_id,
         "receipt_digest": receipt.receipt_digest,
@@ -490,6 +493,18 @@ def replay_shadow_mirror_report(path) -> ProductionShadowMirrorReceipt:
         comparison_path = Path(comparison_ref["path"]).expanduser().resolve()
         if comparison_ref.get("sha256") != _file_digest(comparison_path):
             raise ProductionShadowMirrorError("shadow mirror comparison input digest drifted")
+        raw = _json_value_file(comparison_path, "comparison input")
+        source_rows = raw.get("comparisons", raw) if isinstance(raw, Mapping) else raw
+        source_receipt = prepare_shadow_mirror(
+            _json_file(readiness_path, "readiness report"),
+            comparisons=source_rows, allowlist=receipt.allowlist)
+        if comparison_ref.get("content_digest") != _digest(
+                [dict(item) for item in source_receipt.comparisons]):
+            raise ProductionShadowMirrorError(
+                "shadow mirror comparison input content digest mismatch")
+        if source_receipt.comparisons != receipt.comparisons:
+            raise ProductionShadowMirrorError(
+                "shadow mirror comparison input differs from receipt")
     return receipt
 
 

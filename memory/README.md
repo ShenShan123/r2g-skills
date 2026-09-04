@@ -4408,10 +4408,11 @@ authority、不尝试 promotion，并固定写入 `production_integration=not_at
 MIR 阻塞会被清楚地传递到 P17，而不是被绕过。
 
 新增 `scripts/build_r3_production_shadow_mirror.py`，支持从 readiness JSON 构建和
-重放 P17 报告，并绑定 readiness 文件 digest、allowlist 和 comparison digest。针对
+重放 P17 报告，并绑定 readiness 文件 digest、allowlist、comparison 文件 digest
+及规范化内容 digest。针对
 当前真实 readiness 的外部 artifact 位于
 `/data1/zhangdy/tehm-campaigns/tehm-r3-production-shadow-mirror-p17-v1-20260904/`：
 `mirror_status=BLOCKED_READINESS`、`comparison_count=0`、receipt digest 为
 `sha256:75c3e001d604afbbfa7c9045a3d1fb1c0c55c2e1dc191f88c3cf05a1aa5e19c7`，CLI build
-和 replay 均通过。新增 8 条 P17 receipt/replay/allowlist/tamper 测试；完整回归结果
-为 `1071 passed`。`memory/docs/` 仍由 `.gitignore` 排除且不提交。
+和 replay 均通过。新增 9 条 P17 receipt/replay/allowlist/tamper 测试；完整回归结果
+为 `1072 passed`。`memory/docs/` 仍由 `.gitignore` 排除且不提交。

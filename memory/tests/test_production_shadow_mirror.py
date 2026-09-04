@@ -186,3 +186,24 @@ def test_cli_report_binds_readiness_file_and_replays(tmp_path):
     readiness_path.write_text(readiness_path.read_text() + "\n")
     with pytest.raises(ProductionShadowMirrorError, match="input digest drifted"):
         replay_shadow_mirror_report(output)
+
+
+def test_cli_comparison_source_is_content_bound(tmp_path):
+    readiness_path = tmp_path / "readiness.json"
+    _write_readiness_report(readiness_path, eligible=True)
+    comparisons_path = tmp_path / "comparisons.json"
+    comparisons_path.write_text(json.dumps([{
+        "case_id": "case-1",
+        "base_decision": {"decision": "NO_SKILL"},
+        "shadow_decision": {"decision": "CONSIDER"},
+    }]))
+    output = tmp_path / "shadow-mirror.json"
+    report = build_shadow_mirror_report(
+        readiness_path, output=output, comparisons_path=comparisons_path,
+        allowlist=("case-1",))
+    assert report["comparison_ref"]["content_digest"].startswith("sha256:")
+    replayed = replay_shadow_mirror_report(output)
+    assert replayed.changed_count == 1
+    comparisons_path.write_text(comparisons_path.read_text().replace("CONSIDER", "NO_SKILL"))
+    with pytest.raises(ProductionShadowMirrorError, match="input digest drifted"):
+        replay_shadow_mirror_report(output)
