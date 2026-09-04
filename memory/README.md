@@ -4272,3 +4272,12 @@ disjoint，不证明 IID 或真实用户分布。任何未来非零阈值都必�
 写入带状态和 cohort digest 的 `failure.json`，并保持非零退出。该改动只改善 evaluation
 审计，不创建 P13 reason、不写 canonical memory、authority 或 runtime；`memory/docs/`
 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 non-zero MIR threshold governance receipt
+
+`tehm.evaluation.mir_threshold_governance` 新增 evaluation-only 的外部治理 receipt。
+production readiness 仍默认使用 strict `max_mir_upper_ci=0.0`；如果未来显式设置非零阈值，
+必须通过 `--mir-threshold-governance` 提供 content-bound receipt，且 receipt 的
+`evidence_sha256` 必须精确绑定当前 interference summary。缺失、阈值不一致、证据漂移或
+跨越 canonical/production/docs 边界都会 fail closed。该 receipt 只是可重放的外部决策
+记录，不是 promotion token，不写 canonical memory，也不打开 production runtime。

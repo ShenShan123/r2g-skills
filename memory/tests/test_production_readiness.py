@@ -14,6 +14,9 @@ from tehm.evaluation.no_skill_calibration import (
     NoSkillCalibrationSample, evaluate_no_skill_calibration,
 )
 from tehm.evaluation.mir_sample_plan import build_mir_sample_plan
+from tehm.evaluation.mir_threshold_governance import (
+    MIRThresholdGovernanceReceipt,
+)
 from tehm.evaluation.policy_mir import build_routed_policy_mir
 from tehm.evaluation.production_readiness import (
     ProductionReadinessError, build_production_readiness,
@@ -155,6 +158,30 @@ def _routed_policy_interference_report(tmp_path, *, tamper=None):
     return path
 
 
+def _mir_threshold_governance(path, *, threshold=0.70, evidence=None):
+    evidence = evidence or path
+    receipt = MIRThresholdGovernanceReceipt(
+        threshold=threshold,
+        decision_id="decision-mir-threshold-test",
+        approved_by="test-governance",
+        rationale="fixture-only external review for replay testing",
+        evidence_sha256=_sha(evidence),
+    )
+    payload = receipt.to_dict()
+    report = {
+        "version": "r3-mir-threshold-governance-report-v1",
+        "receipt_id": receipt.receipt_id,
+        "receipt_digest": receipt.receipt_digest,
+        "mir_threshold_governance": payload,
+        "evaluation_only": True,
+        "canonical_memory_mutation": "none",
+        "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
+    }
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    return path
+
+
 def _authority_replay_report(tmp_path, **overrides):
     """Build the strict read-only authority-replay envelope expected by P15-B."""
     gates = {
@@ -258,17 +285,41 @@ def test_readiness_replays_routed_policy_mir_instead_of_forced_counterfactual(
 def test_readiness_binds_explicit_mir_threshold_and_replays_it(tmp_path):
     calibration = _calibration_report(tmp_path)
     interference = _routed_policy_interference_report(tmp_path)
+    governance = _mir_threshold_governance(
+        tmp_path / "mir-threshold-governance.json", evidence=interference)
     output = tmp_path / "readiness-threshold.json"
     report = build_production_readiness(
         calibration_report=calibration, interference_summary=interference,
-        max_mir_upper_ci=0.70, output=output)
+        mir_threshold_governance=governance, max_mir_upper_ci=0.70, output=output)
     readiness = report["readiness"]
     assert readiness["gate_status"]["mir_upper_ci"] == "PASS"
     assert readiness["metrics"]["mir"]["upper_ci_threshold"] == 0.70
     assert (readiness["production_gate"]["thresholds"]
             ["max_memory_interference_rate"]) == 0.70
+    assert readiness["metrics"]["mir_threshold_governance"]["threshold"] == 0.70
     replayed = replay_production_readiness(output)
     assert replayed.to_dict() == readiness
+
+
+def test_readiness_rejects_nonzero_mir_threshold_without_governance(tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _routed_policy_interference_report(tmp_path)
+    with pytest.raises(ProductionReadinessError, match="requires a governance receipt"):
+        build_production_readiness(
+            calibration_report=calibration, interference_summary=interference,
+            max_mir_upper_ci=0.70)
+
+
+def test_readiness_rejects_mir_threshold_governance_evidence_drift(tmp_path):
+    calibration = _calibration_report(tmp_path)
+    interference = _routed_policy_interference_report(tmp_path)
+    governance = _mir_threshold_governance(
+        tmp_path / "mir-threshold-governance.json", evidence=interference)
+    interference.write_text(interference.read_text() + "\n")
+    with pytest.raises(ProductionReadinessError, match="evidence digest"):
+        build_production_readiness(
+            calibration_report=calibration, interference_summary=interference,
+            mir_threshold_governance=governance, max_mir_upper_ci=0.70)
 
 
 def test_readiness_replays_and_binds_optional_mir_sample_plan(tmp_path):

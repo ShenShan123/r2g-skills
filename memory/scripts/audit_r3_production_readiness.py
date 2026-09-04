@@ -28,6 +28,8 @@ def main(argv=None) -> int:
     parser.add_argument("--efficacy-evidence", type=Path)
     parser.add_argument("--mir-sample-plan", type=Path,
                         help="optional replayable MIR sample-size governance receipt")
+    parser.add_argument("--mir-threshold-governance", type=Path,
+                        help="external governance receipt required for non-zero MIR threshold")
     parser.add_argument("--schema-contract", type=Path)
     parser.add_argument("--max-mir-upper-ci", type=float, default=0.0,
                         help="explicit MIR Wilson upper-CI policy threshold (default: 0.0)")
@@ -54,6 +56,7 @@ def main(argv=None) -> int:
                 candidate_pool_evidence=args.candidate_pool_evidence,
                 efficacy_evidence=args.efficacy_evidence,
                 mir_sample_plan=args.mir_sample_plan,
+                mir_threshold_governance=args.mir_threshold_governance,
                 schema_contract=args.schema_contract,
                 max_mir_upper_ci=args.max_mir_upper_ci,
                 output=args.output)

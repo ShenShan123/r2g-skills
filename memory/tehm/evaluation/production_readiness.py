@@ -36,6 +36,9 @@ from .efficacy_evidence import (
     EfficacyEvidenceError, replay_efficacy_evidence,
 )
 from .mir_sample_plan import MIRError, replay_mir_sample_plan
+from .mir_threshold_governance import (
+    MIRThresholdGovernanceError, replay_mir_threshold_governance,
+)
 from tehm.retrieval.production_gate import evaluate_production_gate
 from tehm.lifecycle.promotion_gates import REQUIRED_GATES
 
@@ -563,6 +566,39 @@ def _mir_sample_plan(path: Path | None, *, mir_source: Path,
     }
 
 
+def _mir_threshold_governance(path: Path | None, *, interference_summary: Path,
+                              max_upper_ci: float) -> dict:
+    """Require an external, content-bound decision for a non-zero threshold."""
+    if max_upper_ci == 0.0:
+        if path is not None:
+            raise ProductionReadinessError(
+                "MIR threshold governance is only valid for a non-zero threshold")
+        return {}
+    if path is None:
+        raise ProductionReadinessError(
+            "non-zero MIR upper-CI threshold requires a governance receipt")
+    try:
+        receipt = replay_mir_threshold_governance(path)
+    except (MIRThresholdGovernanceError, OSError, TypeError, ValueError) as exc:
+        raise ProductionReadinessError(
+            f"MIR threshold governance cannot replay: {exc}") from exc
+    if receipt.threshold != float(max_upper_ci):
+        raise ProductionReadinessError(
+            "MIR threshold governance threshold disagrees with readiness policy")
+    expected_evidence = _file_digest(interference_summary)
+    if receipt.evidence_sha256 != expected_evidence:
+        raise ProductionReadinessError(
+            "MIR threshold governance evidence digest disagrees with interference summary")
+    return {
+        "receipt_id": receipt.receipt_id,
+        "receipt_digest": receipt.receipt_digest,
+        "threshold": receipt.threshold,
+        "decision_id": receipt.decision_id,
+        "approved_by": receipt.approved_by,
+        "evidence_sha256": receipt.evidence_sha256,
+    }
+
+
 def _repair_pareto(path: Path | None) -> tuple[str, dict]:
     if path is None:
         return "NOT_ESTABLISHED", {"reason": "heldout Delta-M report is required"}
@@ -888,6 +924,7 @@ def build_production_readiness(*, calibration_report: Path,
                                candidate_pool_evidence: Path | None = None,
                                efficacy_evidence: Path | None = None,
                                mir_sample_plan: Path | None = None,
+                               mir_threshold_governance: Path | None = None,
                                schema_contract: Path | None = None,
                                max_mir_upper_ci: float = 0.0,
                                output: Path | None = None) -> dict:
@@ -903,7 +940,8 @@ def build_production_readiness(*, calibration_report: Path,
     interference_summary = interference_summary.expanduser().resolve()
     for path in (calibration_report, interference_summary, anti_forgetting,
                  heldout_delta_m, authority_report, candidate_pool_evidence,
-                 efficacy_evidence, mir_sample_plan, schema_contract):
+                 efficacy_evidence, mir_sample_plan, mir_threshold_governance,
+                 schema_contract):
         if path is not None and not path.is_file():
             raise ProductionReadinessError(f"readiness input is not a file: {path}")
     refs = [_ref(calibration_report, "calibration_report"),
@@ -913,6 +951,7 @@ def build_production_readiness(*, calibration_report: Path,
                 (candidate_pool_evidence, "candidate_pool_evidence"),
                 (efficacy_evidence, "efficacy_evidence"),
                 (mir_sample_plan, "mir_sample_plan"),
+                (mir_threshold_governance, "mir_threshold_governance"),
                 (schema_contract, "schema_contract"))
     refs.extend(_ref(path, name) for path, name in optional if path is not None)
     cal_gates, cal_metrics, _ = _calibration(calibration_report)
@@ -921,6 +960,9 @@ def build_production_readiness(*, calibration_report: Path,
     mir_plan_metrics = _mir_sample_plan(
         mir_sample_plan, mir_source=interference_summary,
         mir_metrics=mir_metrics, max_upper_ci=max_mir_upper_ci)
+    mir_governance_metrics = _mir_threshold_governance(
+        mir_threshold_governance, interference_summary=interference_summary,
+        max_upper_ci=max_mir_upper_ci)
     repair_status, repair_metrics = _repair_pareto(heldout_delta_m)
     anti_status, anti_metrics = _anti_forgetting(anti_forgetting)
     authority_status, authority_metrics = _authority(authority_report)
@@ -1027,6 +1069,8 @@ def build_production_readiness(*, calibration_report: Path,
         readiness_metrics["efficacy"] = efficacy_metrics
     if mir_sample_plan is not None:
         readiness_metrics["mir_sample_plan"] = mir_plan_metrics
+    if mir_threshold_governance is not None:
+        readiness_metrics["mir_threshold_governance"] = mir_governance_metrics
     receipt = ProductionReadinessReceipt(
         campaign_id=cal_metrics.get("campaign_id") or calibration_report.stem,
         input_refs=tuple(refs), gates=gates, gate_status=status,
@@ -1083,6 +1127,7 @@ def replay_production_readiness(report_path: Path) -> ProductionReadinessReceipt
         candidate_pool_evidence=by_name.get("candidate_pool_evidence"),
         efficacy_evidence=by_name.get("efficacy_evidence"),
         mir_sample_plan=by_name.get("mir_sample_plan"),
+        mir_threshold_governance=by_name.get("mir_threshold_governance"),
         schema_contract=by_name.get("schema_contract"),
         max_mir_upper_ci=max_mir_upper_ci)
     replayed = ProductionReadinessReceipt.from_dict(result["receipt"])
