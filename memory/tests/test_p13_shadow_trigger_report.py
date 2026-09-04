@@ -167,6 +167,7 @@ def test_report_fails_closed_without_route_and_reasons(tmp_path):
     assert report["triggered_count"] == 0
     assert report["canonical_memory_mutation"] == "none"
     assert report["production_runtime_imported"] is False
+    assert report["memory_docs_submitted"] is False
 
 
 def test_report_requires_explicit_evolution_signal_for_trigger(tmp_path):

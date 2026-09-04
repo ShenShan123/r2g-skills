@@ -50,6 +50,7 @@ def test_binder_emits_replayable_eligible_witness(tmp_path):
     assert report["eligible"] is True
     assert report["canonical_memory_mutation"] == "none"
     assert report["production_runtime_imported"] is False
+    assert report["memory_docs_submitted"] is False
     assert witness.receipt_digest == report["witness"]["receipt_digest"]
     assert len(witness.evidence_refs) == 4
 

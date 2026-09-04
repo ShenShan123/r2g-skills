@@ -55,6 +55,7 @@ def test_report_builder_binds_digest_and_replays_receipt(tmp_path):
     report = build_production_gate_report(manifest, output=report_path)
     assert report["receipt"]["eligible"] is True
     assert report["receipt"]["production_integration"] == "not_attempted"
+    assert report["memory_docs_submitted"] is False
     assert report["evidence_refs"][0]["path"] == str(evidence.resolve())
     expected = "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     assert report["evidence_refs"][0]["sha256"] == expected

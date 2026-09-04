@@ -343,6 +343,7 @@ def build_state_shift_evolution_proposal(
         "canonical_memory_mutation": "none",
         "production_runtime_imported": False,
         "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
         "shadow_update_policy": "isolated_staging_only",
     }
     report["report_digest"] = _digest(report)

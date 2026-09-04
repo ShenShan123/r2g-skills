@@ -201,6 +201,7 @@ def build_p13_evolution_reason_receipt(
         "canonical_memory_mutation": "none",
         "production_runtime_imported": False,
         "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
     }
     output_path = Path(output).expanduser().resolve()
     if output_path in {cohort_path, labels_path}:

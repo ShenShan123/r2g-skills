@@ -122,6 +122,9 @@ def _trigger_map(path: Path) -> tuple[dict, dict[str, P12ShadowUpdateTriggerRece
     if report.get("production_integration") != "not_attempted":
         raise P13ShadowRunError(
             "P13 trigger report has production integration state")
+    if report.get("memory_docs_submitted") is not False:
+        raise P13ShadowRunError(
+            "P13 trigger report crosses memory/docs boundary")
     if report.get("shadow_update_policy") != "isolated_staging_only":
         raise P13ShadowRunError(
             "P13 trigger report shadow policy is invalid")
@@ -176,6 +179,9 @@ def _load_bound_anti_forgetting(
     if report.get("campaign_id") != campaign_id or report.get("case_id") != case_id:
         raise P13ShadowRunError(
             f"P13 anti-forgetting receipt for {case_id} campaign/case mismatch")
+    if report.get("memory_docs_submitted") is not False:
+        raise P13ShadowRunError(
+            f"P13 anti-forgetting receipt for {case_id} crosses memory/docs boundary")
     try:
         witness = AntiForgettingWitness.from_dict(report.get("witness"))
     except (TypeError, ValueError) as exc:
@@ -371,6 +377,7 @@ def run_p13_shadow_update(trigger_report: Path | str, manifest: Path | str,
         "canonical_memory_mutation": "none",
         "production_runtime_imported": False,
         "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
         "staging_discarded": True,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)

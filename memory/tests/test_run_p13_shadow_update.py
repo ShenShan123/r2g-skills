@@ -85,6 +85,7 @@ def _inputs(tmp_path: Path, *, trigger: P12ShadowUpdateTriggerReceipt | None = N
         "canonical_memory_mutation": "none",
         "production_runtime_imported": False,
         "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
         "shadow_update_policy": "isolated_staging_only",
     }
     report_payload["report_digest"] = "sha256:" + hashlib.sha256(
@@ -115,6 +116,7 @@ def test_p13_runner_applies_retain_in_discarded_staging(tmp_path):
     assert report["receipt_count"] == 1
     assert report["canonical_memory_mutation"] == "none"
     assert report["staging_discarded"] is True
+    assert report["memory_docs_submitted"] is False
     assert db.read_bytes() == before
 
 
@@ -150,6 +152,18 @@ def test_p13_runner_requires_content_bound_trigger_report(tmp_path):
     payload.pop("report_digest")
     trigger_report.write_text(json.dumps(payload))
     with pytest.raises(P13ShadowRunError, match="report digest is required"):
+        run_p13_shadow_update(
+            trigger_report, manifest, output=tmp_path / "report.json")
+
+
+def test_p13_runner_rejects_trigger_report_crossing_docs_boundary(tmp_path):
+    db, trigger_report, manifest = _inputs(tmp_path)
+    payload = json.loads(trigger_report.read_text())
+    payload["memory_docs_submitted"] = True
+    payload["report_digest"] = "sha256:" + hashlib.sha256(
+        stable_dumps(payload).encode()).hexdigest()
+    trigger_report.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowRunError, match="memory/docs boundary"):
         run_p13_shadow_update(
             trigger_report, manifest, output=tmp_path / "report.json")
 
@@ -271,6 +285,7 @@ def test_p13_runner_consumes_file_bound_witness(tmp_path, monkeypatch):
         "version": "p13-anti-forgetting-witness-report-v1",
         "campaign_id": "live", "case_id": "case-0",
         "eligible": True,
+        "memory_docs_submitted": False,
         "witness": {**witness.to_dict(),
                      "receipt_digest": witness.receipt_digest},
     }))

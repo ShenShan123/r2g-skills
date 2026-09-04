@@ -183,6 +183,7 @@ def build_p13_anti_forgetting_witness(
         "canonical_memory_mutation": "none",
         "production_runtime_imported": False,
         "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
     }
     if output_path in {manifest_path, *[Path(item["path"]) for item in evidence.values()]}:
         raise P13AntiForgettingError(

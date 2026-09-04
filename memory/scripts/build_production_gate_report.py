@@ -119,6 +119,7 @@ def build_production_gate_report(
         "promotion_attempted": False,
         "production_promotion_eligible": receipt.eligible,
         "production_integration": receipt.production_integration,
+        "memory_docs_submitted": False,
         "authority_note": (
             "P9 is an evaluation-only report; this artifact cannot promote "
             "memory or enable production routing"),

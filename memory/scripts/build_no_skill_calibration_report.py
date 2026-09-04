@@ -178,6 +178,7 @@ def build_no_skill_calibration_report(
         "promotion_attempted": False,
         "production_promotion_eligible": receipt.eligible,
         "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
     }
     output_path = Path(output).expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)

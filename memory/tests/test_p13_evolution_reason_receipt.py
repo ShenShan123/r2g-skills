@@ -81,6 +81,7 @@ def test_reason_binder_emits_replayable_receipt(tmp_path):
     assert replay.receipt_digest == report["receipt_digest"]
     assert report["canonical_memory_mutation"] == "none"
     assert report["production_runtime_imported"] is False
+    assert report["memory_docs_submitted"] is False
 
 
 def test_reason_binder_rejects_cohort_digest_drift(tmp_path):

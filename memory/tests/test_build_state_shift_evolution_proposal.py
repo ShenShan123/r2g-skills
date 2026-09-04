@@ -110,6 +110,7 @@ def test_command_replays_audit_snapshot_without_mutation(tmp_path):
     assert hashlib.sha256(path.read_bytes()).hexdigest() == before
     assert report["canonical_memory_mutation"] == "none"
     assert report["production_runtime_imported"] is False
+    assert report["memory_docs_submitted"] is False
 
 
 def test_command_requires_event_and_receipt_witnesses(tmp_path):

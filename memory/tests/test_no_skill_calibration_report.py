@@ -68,6 +68,7 @@ def test_builder_binds_external_labels_and_never_promotes(tmp_path):
     assert report["canonical_memory_mutation"] == "none"
     assert report["promotion_attempted"] is False
     assert report["production_integration"] == "not_attempted"
+    assert report["memory_docs_submitted"] is False
     assert report["evidence_refs"][0]["path"] == str(evidence.resolve())
     assert json.loads(report_path.read_text()) == report
 
