@@ -4521,3 +4521,14 @@ replays successfully but remains ineligible: MIR is still measured at 73
 known cases with a positive Wilson upper bound (`0.049992`) against the
 current zero threshold, and the candidate-pool gate is still FAIL.  No labels
 are fed back into learner memory, and no production canary is authorized.
+
+### Revision3 P17 shadow mirror refresh (2026-09-04)
+
+The P17 mirror was rebuilt against the current P15 aggregate readiness at
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-shadow-mirror-p17-aggregate-checkpoint-order-20260904-r1/mirror.json`.
+The build and read-only replay both return `BLOCKED_READINESS` with
+`comparison_count=0`; the receipt preserves `mir_upper_ci:fail` and
+`production_gate:ineligible` rather than observing or importing production
+runtime.  It remains evaluation-only with
+`production_integration=not_attempted`, `production_runtime_imported=false`,
+`canonical_memory_mutation=none`, and `memory_docs_submitted=false`.
