@@ -29,6 +29,7 @@ from tehm.evaluation.rtl_cohort import execute_rtl_paired_cohort  # noqa: E402
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate  # noqa: E402
 
 
+DESCRIPTOR_VERSION = "r3-candidate-pool-descriptor-v1"
 TOOLCHAIN_DIGEST = "sha256:r3-icarus-toolchain"
 ORACLE_DIGEST = "sha256:r3-icarus-candidate-oracle"
 PLATFORM_DIGEST = "sha256:r3-platform"
@@ -237,6 +238,7 @@ def run(artifacts: Path, fixtures: list[str] | None = None, *, force: bool = Fal
     cases: list[dict] = []
     arm_candidates: dict[str, dict] = {}
     mechanism_families: dict[str, str] = {}
+    candidate_pool_cases: dict[str, dict] = {}
     for index, fixture in enumerate(fixtures):
         spec = _SPECS[fixture]
         source_dir = source_root / fixture
@@ -271,6 +273,43 @@ def run(artifacts: Path, fixtures: list[str] | None = None, *, force: bool = Fal
             for arm in P12_ARMS
         }
         mechanism_families[fixture] = spec["mechanism_family"]
+        identity = f"{cohort_tag}-{fixture}" if cohort_tag is not None else fixture
+        memory_candidate = arm_candidates[case_id]["CAUSAL_NO_SKILL"]
+        candidate_pool_cases[case_id] = {
+            "query": {
+                "query_plan": {"case_id": case_id, "check": "route",
+                                "mechanism_family": spec["mechanism_family"]},
+                "dominant_dimensions": {"platform": "icarus",
+                                         "mechanism_family": spec["mechanism_family"]},
+                "context_ref": case_id,
+            },
+            "candidates": [
+                {
+                    "candidate_id": f"r3-diverse-cold-{identity}",
+                    "source": "cold_start",
+                    "payload": {
+                        "action_family": "COLD_START_BASELINE",
+                        "mechanism_family": spec["mechanism_family"],
+                    },
+                    "score": 0.2,
+                    "provenance": {"evaluation_only": True,
+                                   "source": "r3-diverse-candidate-pool"},
+                },
+                {
+                    "candidate_id": memory_candidate.candidate_id,
+                    "source": "tehm_rule",
+                    "payload": {
+                        "rule_id": memory_candidate.candidate_id,
+                        "action_family": spec["family"],
+                        "mechanism_family": spec["mechanism_family"],
+                        "applicability_status": "APPLICABLE",
+                    },
+                    "score": 0.9,
+                    "provenance": {"evaluation_only": True,
+                                   "source": "r3-diverse-routed-policy"},
+                },
+            ],
+        }
 
     campaign_prefix = "tehm-r3-routed-policy-diverse-20260903"
     if cohort_tag is not None:
@@ -293,6 +332,16 @@ def run(artifacts: Path, fixtures: list[str] | None = None, *, force: bool = Fal
         "cohort_tag": cohort_tag,
         "statistical_independence_claim": "source_lineage_disjoint_only",
     })
+    descriptor_path = artifacts / "candidate_pool_descriptor.json"
+    _write(descriptor_path, {
+        "version": DESCRIPTOR_VERSION,
+        "policy_arm": "CAUSAL_NO_SKILL",
+        "cases": candidate_pool_cases,
+        "evaluation_only": True,
+        "canonical_memory_mutation": "none",
+        "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
+    })
     summary = {
         "campaign_id": campaign, "lane": "EVOLUTION_CHALLENGE",
         "real_oracle": "iverilog/vvp", "case_count": len(cases),
@@ -309,6 +358,8 @@ def run(artifacts: Path, fixtures: list[str] | None = None, *, force: bool = Fal
         "evaluation_only": True, "memory_docs_submitted": False,
         "cohort_receipt": str(cohort_path),
         "cohort_receipt_digest": cohort.receipt_digest,
+        "candidate_pool_descriptor": str(descriptor_path),
+        "candidate_pool_descriptor_sha256": _file_digest(descriptor_path),
     }
     _write(artifacts / "summary.json", summary)
     return summary

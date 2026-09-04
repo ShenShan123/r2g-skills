@@ -4197,3 +4197,33 @@ receipt digest 为
 `eligible=false`，P9 `candidate_pool=false` 的唯一安全原因仍是
 `0.098901 > 0.0`。这一步闭合了“统计规划必须和实际 readiness 分母一致”的审计边界，
 但没有放宽 strict MIR policy、写 canonical memory 或打开 production runtime。
+
+### 2026-09-03 Revision3 73-case MIR/P6 challenge expansion
+
+在不改写 `max_mir_upper_ci=0.0` 的前提下，使用 `--cohort-tag` 再执行了三个
+source/lineage-disjoint 的 RTL challenge cohort（`mir35c`/`mir35d` 各 14 cases，
+`mir35e` 10 cases）。每个 case 都真实执行四个 P12 arms，三批均为
+`NO_MEMORY=FAIL`、`CAUSAL_NO_SKILL=PASS`、`UNKNOWN=0`；机械 disjoint 证据仍只支持
+`source_lineage_disjoint_only`，不把同一组仓库 fixture 的 tagged 变体宣称为 IID 或真实
+用户分布。
+
+diverse producer 现在同步输出显式的
+`r3-candidate-pool-descriptor-v1`，因此新增 cohort 的 P6 composition 也能由 typed
+execution candidate ID 重放，而不是手工填充 pool。新增 38 条 P6 receipt 与原有 35 条
+合并后，MIR aggregate 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-policy-mir-p17-v5-73case-20260903/`，receipt
+digest 为 `sha256:bda9b752fd9a8eefb1066da7242d154442b6d8854eb03acea51ddeb0fb47f58f`，
+`known=73`、`harmful=0`、`unknown=0`、Wilson upper-CI=`0.049992`；P6 aggregate 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-candidate-pool-p17-v5-73case-20260903/`，
+receipt digest 为 `sha256:13d7579fd7f5b3dab07140d4d47f606c0793aa8b6d86ae8f29617ffb2c6e7c0f`，
+`paired_cases=73`、`candidate_diversity=1.0`、`memory_interference_cases=0`；两份
+aggregate 均独立 replay 通过。
+
+将 73-case MIR、73-case P6、43-case cross-backend calibration、typed efficacy、P14
+held-out、authority 和 schema 一并接入 readiness，结果位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-p17-v5-73case-20260903/readiness.json`，
+receipt digest 为 `sha256:6bd248ecbbd64f5892e2c1fbb2bc12e2eb816c8b1a0f5f827a6c440f4f07baa4`；
+所有顶层结构/回滚/校准 gate 仍为 `PASS`，但 strict MIR upper-CI 和 P9 candidate-pool
+安全检查仍为 `FAIL`（`0.049992 > 0.0`），`eligible=false`、
+`production_integration=not_attempted`。这证明了统计分母和 P6 composition 已同步增长，
+没有把更多样本当成 production 授权；`memory/docs/` 继续由 `.gitignore` 排除且不提交。
