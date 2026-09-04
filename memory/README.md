@@ -4395,3 +4395,17 @@ case ID 全不重叠、routing coverage=1.0、reason-stratified calibration rece
 使用的 n43 aggregate（新增 false-negative 会降低 recall）；它不写 learner/canonical
 memory、authority 或 runtime，`production_promotion_eligible=false`，且
 `memory_docs_submitted=false`。`memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-04 Revision3 P17 shadow-mirror fail-closed seam
+
+新增 `tehm.evaluation.production_shadow_mirror`，把 P17 的第一步限制为可重放的
+comparison receipt：它先 replay 完整 P15 readiness；当 `eligible=false` 时返回
+`BLOCKED_READINESS` 并拒绝任何 shadow observation，避免在 gate 未建立时伪装成
+production mirror。只有 readiness 全部通过时才允许记录显式 base/shadow decision
+及其 content digest；该模块不执行 runtime、不写 SQLite/canonical memory、不改变
+authority、不尝试 promotion，并固定写入 `production_integration=not_attempted`、
+`production_runtime_imported=false`、`memory_docs_submitted=false`。因此当前严格
+MIR 阻塞会被清楚地传递到 P17，而不是被绕过。
+
+新增 7 条 P17 receipt/replay/allowlist/tamper 测试；结合本次 Revision3 回归，完整
+`memory/tests` 为 `1068 passed`。`memory/docs/` 仍由 `.gitignore` 排除且不提交。

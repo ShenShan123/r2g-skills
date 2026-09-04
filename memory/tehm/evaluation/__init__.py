@@ -78,6 +78,11 @@ from .non_p12_challenge import (
     NON_P12_CHALLENGE_REPLAY_VERSION, NonP12ChallengeReplayError,
     replay_capability_gap_challenge, replay_repeated_failure_challenge,
 )
+from .production_shadow_mirror import (
+    PRODUCTION_SHADOW_MIRROR_VERSION, MIRROR_STATUSES,
+    ProductionShadowMirrorError, ProductionShadowMirrorReceipt,
+    prepare_shadow_mirror, replay_shadow_mirror,
+)
 
 __all__ = [
     "EXECUTOR_VERSION", "P12_ARMS", "CandidateExecutionReceipt",
@@ -125,4 +130,7 @@ __all__ = [
     "CAPABILITY_GAP_CHALLENGE_VERSION", "REPEATED_FAILURE_CHALLENGE_VERSION",
     "NON_P12_CHALLENGE_REPLAY_VERSION", "NonP12ChallengeReplayError",
     "replay_capability_gap_challenge", "replay_repeated_failure_challenge",
+    "PRODUCTION_SHADOW_MIRROR_VERSION", "MIRROR_STATUSES",
+    "ProductionShadowMirrorError", "ProductionShadowMirrorReceipt",
+    "prepare_shadow_mirror", "replay_shadow_mirror",
 ]
