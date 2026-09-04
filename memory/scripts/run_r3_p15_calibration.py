@@ -52,6 +52,7 @@ PLATFORM_DIGEST = "sha256:r3-p15-calibration-asap7"
 PDK_DIGEST = "sha256:r3-p15-calibration-pdk"
 MANIFEST_DIGEST = "sha256:r3-p15-calibration-manifest"
 DEFAULT_CASE_COUNT = 20
+_CAMPAIGN_TAG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$")
 
 _FIXTURES = (
     {
@@ -180,17 +181,52 @@ def _strata(category: str, spec: dict) -> dict[str, str]:
     }
 
 
+def _normalise_campaign_tag(value: str | None) -> str | None:
+    """Validate an optional identity suffix for repeated calibration runs.
+
+    The historical untagged campaign keeps its exact IDs for replay
+    compatibility.  Tagged runs get a distinct campaign, case, and lineage
+    namespace so an independent calibration can be aggregated without
+    silently treating a rerun as the same sample.
+    """
+    if value is None:
+        return None
+    if type(value) is not str or not _CAMPAIGN_TAG_RE.fullmatch(value):
+        raise ValueError(
+            "campaign_tag must match [A-Za-z0-9][A-Za-z0-9._-]{0,47}")
+    return value
+
+
+def _campaign_identity(case_count: int, campaign_tag: str | None) -> str:
+    tag = _normalise_campaign_tag(campaign_tag)
+    suffix = "" if case_count == DEFAULT_CASE_COUNT else f"-n{case_count}"
+    if tag is not None:
+        suffix += f"-{tag}"
+    return CAMPAIGN_ID + suffix
+
+
+def _case_identity(index: int, spec: dict, category: str,
+                   campaign_tag: str | None) -> str:
+    tag = _normalise_campaign_tag(campaign_tag)
+    prefix = "r3-p15-calibration-"
+    if tag is not None:
+        prefix += f"{tag}-"
+    return f"{prefix}{index:02d}-{spec['key']}-{category}"
+
+
 def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False,
-        case_count: int = DEFAULT_CASE_COUNT) -> dict:
+        case_count: int = DEFAULT_CASE_COUNT,
+        campaign_tag: str | None = None) -> dict:
     evolution_artifacts = evolution_artifacts.expanduser().resolve()
     artifacts = artifacts.expanduser().resolve()
     if type(case_count) is not int or not 1 <= case_count <= 100:
         raise ValueError("case_count must be an integer in [1, 100]")
-    campaign_id = (CAMPAIGN_ID if case_count == DEFAULT_CASE_COUNT else
-                   f"{CAMPAIGN_ID}-n{case_count}")
+    campaign_tag = _normalise_campaign_tag(campaign_tag)
+    campaign_id = _campaign_identity(case_count, campaign_tag)
     campaign_manifest_digest = _digest({
         "base_manifest_digest": MANIFEST_DIGEST,
         "case_count": case_count,
+        "campaign_tag": campaign_tag,
     })
     training_path = evolution_artifacts / "receipts" / "training.json"
     if not training_path.is_file():
@@ -222,7 +258,7 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False,
     for index in range(case_count):
         spec = _FIXTURES[index % len(_FIXTURES)]
         category = categories[index % len(categories)]
-        case_id = f"r3-p15-calibration-{index:02d}-{spec['key']}-{category}"
+        case_id = _case_identity(index, spec, category, campaign_tag)
         case_root = source_root / case_id
         fixture_root = ROOT / "tests" / "fixtures" / "rtl_projects" / spec["fixture"]
         for subdir in ("rtl", "tb"):
@@ -252,7 +288,10 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False,
             spec, case_id, harmful=category in {"state_shift", "risk"},
             safe=category == "safe_memory")
         case = {
-            "case_id": case_id, "lineage_id": f"lineage-r3-p15-{index:02d}",
+            "case_id": case_id,
+            "lineage_id": (
+                f"lineage-r3-p15-{index:02d}" if campaign_tag is None else
+                f"lineage-r3-p15-{campaign_tag}-{index:02d}"),
             "rtl_source": str(source), "source_digest": _file_digest(source),
             "target_test": str(case_root / "tb" / "tb_handshake.v"),
             "frozen_regression": str(case_root / "tb" / "tb_basic.v"),
@@ -366,6 +405,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--case-count", type=int, default=DEFAULT_CASE_COUNT,
                         help="number of real calibration cases (default: 20; max: 100)")
+    parser.add_argument("--campaign-tag",
+                        help="identity suffix for an independent repeatable calibration run")
     args = parser.parse_args(argv)
     artifacts = (args.artifacts if args.artifacts is not None else
                  Path("/tmp") / (
@@ -373,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
                      f"{CAMPAIGN_ID}-n{args.case_count}"))
     try:
         summary = run(args.evolution_artifacts, artifacts, force=args.force,
-                      case_count=args.case_count)
+                      case_count=args.case_count, campaign_tag=args.campaign_tag)
     except Exception as exc:
         print(f"P15 calibration failed: {exc}", file=sys.stderr)
         return 1
