@@ -4491,3 +4491,17 @@ fallback 两臂均 2/2 PASS，memory delta 与 anti-forgetting 均 eligible。�
 L2 interference-safety strategy，不能声明标准 capability C5--C8 或授予 promotion；
 `canonical_memory_mutation=none`、`production_runtime_imported=false`、
 `memory_docs_submitted=false`。`memory/docs/` 继续由 `.gitignore` 排除且不提交。
+### Revision3 ORFS P14 strategy attribution replay (2026-09-04)
+
+The real `MEMORY_INTERFERENCE` shadow cohort now has a corresponding P14
+projection checkpoint at
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-interference-gcd-p14-checkpoint-order-20260904-r5`.
+The producer records the final disposable projection-database digest (after
+policy/load and attribution rows are written) and repeats the complete
+evaluation-only boundary in its summary.  The read-only replay entry point is
+`scripts/replay_r3_orfs_interference_attribution.py`; it replays the P13
+reason/proposal/delta chain, validates the source and projection databases,
+recomputes the database-bound C1-C8 attribution, and checks the safety
+ablation.  The current replay is `REPLAY_PASS`: strategy C1-C5 are eligible,
+standard capability C5/C6/C8 remain unclaimed, and no canonical memory,
+production runtime, or `memory/docs` content is changed.

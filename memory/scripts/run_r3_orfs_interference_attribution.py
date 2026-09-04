@@ -369,7 +369,12 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
         "canonical_memory_mutation": "none",
         "memory_docs_submitted": False,
         "production_authority_changed": False,
+        "production_runtime_imported": False,
     }
+    # Include policy/load and attribution rows in the final projection digest;
+    # computing it before those immutable evidence writes would make replay
+    # compare the report with an intermediate database state.
+    projection_digest = shadow._connection_digest(conn)
     report = {
         "version": VERSION,
         "campaign_id": post_cohort.campaign_id,
@@ -437,8 +442,10 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
         "standard_missing_gates": list(attribution.missing_gates),
         "source_unchanged": report["source_integrity"]["unchanged"],
         "evaluation_only": True,
-        "production_runtime_imported": False,
+        "canonical_memory_mutation": "none",
         "memory_docs_submitted": False,
+        "production_authority_changed": False,
+        "production_runtime_imported": False,
     }
     # The projection is disposable, but emitted P14 evidence must still be a
     # sidecar-free snapshot for deterministic replay.  Do not publish any of
