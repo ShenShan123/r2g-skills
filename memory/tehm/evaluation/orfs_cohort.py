@@ -123,6 +123,8 @@ class OrfsPairedCohortReceipt:
     version: str = ORFS_COHORT_VERSION
 
     def __post_init__(self) -> None:
+        if self.version != ORFS_COHORT_VERSION:
+            raise OrfsCohortError("ORFS cohort version mismatch")
         _text(self.campaign_id, "campaign_id")
         if not isinstance(self.case_receipts, dict) or not self.case_receipts:
             raise OrfsCohortError("ORFS cohort requires at least one case receipt")

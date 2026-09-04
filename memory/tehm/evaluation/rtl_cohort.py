@@ -110,6 +110,8 @@ class RtlPairedCohortReceipt:
     version: str = RTL_COHORT_VERSION
 
     def __post_init__(self) -> None:
+        if self.version != RTL_COHORT_VERSION:
+            raise RtlCohortError("RTL cohort version mismatch")
         _text(self.campaign_id, "campaign_id")
         if not isinstance(self.case_receipts, dict) or not self.case_receipts:
             raise RtlCohortError("RTL cohort requires at least one case receipt")

@@ -160,6 +160,16 @@ def test_build_rejects_missing_routed_policy_semantics(tmp_path):
         build_routed_policy_mir([first], policy_arm="CAUSAL_NO_SKILL")
 
 
+def test_build_rejects_cross_lane_orfs_cohort_version(tmp_path):
+    """Evolution/ORFS challenge receipts cannot enter the RTL policy MIR lane."""
+    first = _cohort(tmp_path, "campaign-a", 0)
+    raw = json.loads(first.read_text())
+    raw["version"] = "orfs-p12-cohort-v0.1"
+    first.write_text(json.dumps(raw))
+    with pytest.raises(PolicyMIRError, match="cohort cannot replay"):
+        build_routed_policy_mir([first], policy_arm="CAUSAL_NO_SKILL")
+
+
 def test_build_rejects_overlapping_lineage_witness(tmp_path):
     first = _cohort(tmp_path, "campaign-a", 0)
     raw = json.loads(first.read_text())
