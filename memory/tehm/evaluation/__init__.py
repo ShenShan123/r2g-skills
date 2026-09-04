@@ -73,6 +73,11 @@ from .mir_threshold_governance import (
     MIRThresholdGovernanceError, MIRThresholdGovernanceReceipt,
     replay_mir_threshold_governance,
 )
+from .non_p12_challenge import (
+    CAPABILITY_GAP_CHALLENGE_VERSION, REPEATED_FAILURE_CHALLENGE_VERSION,
+    NON_P12_CHALLENGE_REPLAY_VERSION, NonP12ChallengeReplayError,
+    replay_capability_gap_challenge, replay_repeated_failure_challenge,
+)
 
 __all__ = [
     "EXECUTOR_VERSION", "P12_ARMS", "CandidateExecutionReceipt",
@@ -117,4 +122,7 @@ __all__ = [
     "MIR_THRESHOLD_GOVERNANCE_DECISION", "MIR_THRESHOLD_GOVERNANCE_SCOPE",
     "MIRThresholdGovernanceError", "MIRThresholdGovernanceReceipt",
     "replay_mir_threshold_governance",
+    "CAPABILITY_GAP_CHALLENGE_VERSION", "REPEATED_FAILURE_CHALLENGE_VERSION",
+    "NON_P12_CHALLENGE_REPLAY_VERSION", "NonP12ChallengeReplayError",
+    "replay_capability_gap_challenge", "replay_repeated_failure_challenge",
 ]

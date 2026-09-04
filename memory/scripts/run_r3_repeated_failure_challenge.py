@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -24,7 +25,7 @@ if str(ROOT) not in sys.path:
 
 from tehm import db  # noqa: E402
 from tehm.artifact_store import ArtifactStore  # noqa: E402
-from tehm.causal.orfs import _backup_database, _sha256  # noqa: E402
+from tehm.causal.orfs import _sha256  # noqa: E402
 from tehm.canonical.capture import ExecutionRecord, capture  # noqa: E402
 from tehm.evolution import (  # noqa: E402
     admit_evolution_reason, derive_repeated_failure_reason,
@@ -117,9 +118,14 @@ def run_challenge(*, output_dir: Path | str,
     derived_db = output / "derived_repeated_failure_shadow.sqlite"
     source_conn = db.connect(source_db)
     db.ensure_schema(source_conn)
-    source_conn.close()
+    # Freeze the empty source snapshot before creating the disposable shadow;
+    # a plain close would leave WAL/SHM sidecars behind.
+    db.checkpoint_and_close(source_conn)
     source_digest = _sha256(source_db)
-    _backup_database(source_db, derived_db)
+    # The source is a freshly checkpointed empty snapshot.  Copy it directly
+    # rather than opening a read-only SQLite handle that can recreate
+    # ``-shm``/``-wal`` sidecars on the source file.
+    shutil.copy2(source_db, derived_db)
     conn = db.connect(derived_db)
     db.ensure_schema(conn)
     before_counts = _counts(conn)
@@ -155,7 +161,8 @@ def run_challenge(*, output_dir: Path | str,
         conn.close()
         raise AssertionError(f"repeated-failure admission blocked: {admission.blocked_reason}")
     after_counts = _counts(conn)
-    conn.close()
+    # Keep successful reports replayable as immutable, sidecar-free snapshots.
+    db.checkpoint_and_close(conn)
     if _sha256(source_db) != source_digest:
         raise AssertionError("source canonical database changed during repeated-failure challenge")
 

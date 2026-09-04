@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import shutil
 import sys
 from pathlib import Path
 
@@ -22,7 +23,7 @@ if str(ROOT) not in sys.path:
 from tehm import db  # noqa: E402
 from tehm.artifact_store import ArtifactStore  # noqa: E402
 from tehm.assets import detect_capability_gaps  # noqa: E402
-from tehm.causal.orfs import _backup_database, _sha256  # noqa: E402
+from tehm.causal.orfs import _sha256  # noqa: E402
 from tehm.causal.rtl import capture_rtl_causal_fragment  # noqa: E402
 from tehm.evolution.admission import admit_evolution_reason  # noqa: E402
 from tehm.evolution.capability_gap import (  # noqa: E402
@@ -72,9 +73,15 @@ def run_challenge(
     derived_db = output / "derived_gap_shadow.sqlite"
     source_conn = db.connect(source_db)
     db.ensure_schema(source_conn)
-    source_conn.close()
+    # Freeze the empty source snapshot before any derived shadow is created.
+    # A plain close leaves WAL/SHM sidecars and is not a replayable evidence
+    # boundary.
+    db.checkpoint_and_close(source_conn)
     source_digest = _sha256(source_db)
-    _backup_database(source_db, derived_db)
+    # The source was just checkpointed and is an empty frozen snapshot.  A
+    # byte copy avoids opening it through SQLite in ``mode=ro``; that opening
+    # can recreate a ``-shm`` sidecar and invalidate the evidence boundary.
+    shutil.copy2(source_db, derived_db)
     conn = db.connect(derived_db)
     db.ensure_schema(conn)
     before_counts = _counts(conn)
@@ -119,7 +126,10 @@ def run_challenge(
         gap, derivation, admission, proposal_kind="ASSET_OR_KNOWLEDGE",
         failure_transition_ids=gap.evidence_transitions, routing=route)
     after_counts = _counts(conn)
-    conn.close()
+    # Successful challenge reports must point at sidecar-free immutable
+    # snapshots.  The source remains untouched; only the disposable derived
+    # projection is checkpointed here.
+    db.checkpoint_and_close(conn)
     if _sha256(source_db) != source_digest:
         raise AssertionError("source canonical database changed during shadow challenge")
     report = {

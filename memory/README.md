@@ -4295,3 +4295,21 @@ evidence；两个 source canonical SQLite digest 都保持
 这些结果补强非 P12 reason-specific admission 的真实可重放证据，但不注册新
 Knowledge/Asset、不进入 production runtime；`memory/docs/` 继续被 `.gitignore`
 排除且不提交。
+
+### 2026-09-03 Revision3 non-P12 frozen replay boundary
+
+修正 R3-9 capability-gap 与 repeated-failure runner 的证据冻结边界：source
+canonical snapshot 和 disposable shadow snapshot 现在在报告落盘前执行
+`wal_checkpoint(TRUNCATE)`，并用字节复制创建空的 shadow 起点，避免只读 backup
+再次产生 `-wal/-shm` sidecar。新增
+`scripts/replay_r3_non_p12_challenge.py`，只读重放数据库 digest/count、typed
+detector receipt、reason derivation、reason-specific admission 以及 capability-gap
+proposal，并 fail closed 检查 canonical/production/docs 边界。
+
+新 artifact
+`/data1/zhangdy/tehm-campaigns/tehm-r3-capability-gap-20260903-r5/` 与
+`/data1/zhangdy/tehm-campaigns/tehm-r3-repeated-failure-20260903-r3/` 均为无
+sidecar 的冻结快照，CLI replay 已通过；此前带 sidecar 的 r3/r4（capability-gap）
+和 r1/r2（repeated-failure）仅保留为诊断，不能作为冻结 evidence。该 lane 仍是
+evaluation-only：不写 canonical memory、不进入 production runtime；`memory/docs/`
+继续由 `.gitignore` 排除且不提交。
