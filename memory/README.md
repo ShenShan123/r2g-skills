@@ -4281,3 +4281,17 @@ production readiness 仍默认使用 strict `max_mir_upper_ci=0.0`；如果未�
 `evidence_sha256` 必须精确绑定当前 interference summary。缺失、阈值不一致、证据漂移或
 跨越 canonical/production/docs 边界都会 fail closed。该 receipt 只是可重放的外部决策
 记录，不是 promotion token，不写 canonical memory，也不打开 production runtime。
+
+### 2026-09-03 Revision3 R3-9 non-P12 reason replay
+
+在当前 HEAD 重新执行两个 source-disjoint RTL challenge：
+`tehm-r3-capability-gap-20260903-r3` 与 `tehm-r3-repeated-failure-20260903-r1`。
+两批均由真实 Icarus/VVP capture 产生，分别得到 `CAPABILITY_GAP` 与
+`REPEATED_FAILURE` 的 typed derivation 和 reason-specific admission（均 `admitted=true`）。
+前者只生成 `ADD/ASSET_OR_KNOWLEDGE` shadow proposal，后者只保留 repeated-failure
+evidence；两个 source canonical SQLite digest 都保持
+`d808d3e66b452577a7402bdc7c4fffd03b3f54123e165e5a1f0e63c88a7f8997`，且
+`canonical_memory_mutation=none`、`production_promotion_eligible=false`。
+这些结果补强非 P12 reason-specific admission 的真实可重放证据，但不注册新
+Knowledge/Asset、不进入 production runtime；`memory/docs/` 继续被 `.gitignore`
+排除且不提交。
