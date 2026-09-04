@@ -4416,3 +4416,29 @@ MIR 阻塞会被清楚地传递到 P17，而不是被绕过。
 `sha256:75c3e001d604afbbfa7c9045a3d1fb1c0c55c2e1dc191f88c3cf05a1aa5e19c7`，CLI build
 和 replay 均通过。新增 9 条 P17 receipt/replay/allowlist/tamper 测试；完整回归结果
 为 `1072 passed`。`memory/docs/` 仍由 `.gitignore` 排除且不提交。
+
+### 2026-09-04 Revision3 P16/P17 checkpoint-order replay and validation freeze hardening
+
+针对最新 StateShift checkpoint-order cohort 重新生成并 replay P16 schema contract：
+schema version=`tehm-v4`，schema/observed object digest 均为
+`sha256:4b3bb817c9382661bd5126511bdc45fab99f3a626b6b9e6a2c9e17bfdc8b2a39`，receipt
+digest 为 `sha256:3f4f9f52a4ef2fba0dd2e560d32e3290ea0e402df767cceeab843a004bf6e2ff`。
+该 freeze 只读绑定 SQLite，不写 canonical memory、production runtime 或
+`memory/docs/`。
+
+用该 P16 receipt 重建的 P15 aggregate readiness 仍为 evaluation-only：
+`multi_lineage`、reason-stratified calibration、repair Pareto、anti-forgetting、
+authority replay、rollback 和 schema contract 均为 `PASS`；严格 MIR upper-CI
+仍为 `FAIL`（73 known / 0 harmful / upper CI=`0.049992` / threshold=`0.0`），
+因此 P17 replay 明确为 `BLOCKED_READINESS`、`comparison_count=0`，不会进入
+production canary。对应 readiness receipt digest 为
+`sha256:1cefb490da2d8590092f37e95f7a8d03ed04080ab6d3dc52436e7aa7dce27970`，P17
+mirror receipt digest 为
+`sha256:ae56ea0c6ff273d058d60f60da40d358544597c0eca145e94e474593fc766a51`。
+
+同时加固 validation freeze replay：外层 `memory_docs_submitted`、canonical/runtime
+边界、report digest 以及 campaign/path/case/lineage/count projection 必须与嵌套
+content-addressed receipt 完全一致；篡改会 fail-closed。R3-9 capability-gap 与
+repeated-failure reports 在当前代码下均可 replay，仍保持 proposal-only。修复后的
+完整 `memory/tests` 回归为 `1085 passed`；`memory/docs/` 继续由 `.gitignore`
+排除且不提交。
