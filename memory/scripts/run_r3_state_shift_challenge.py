@@ -638,9 +638,10 @@ def _build_p14_attribution(
             },
             candidate_lineage={**lineage.to_dict(), "receipt_digest": lineage.receipt_digest},
             strict_memory_delta=True, strict_expanded=False)
-        _write_json(artifacts / "receipts" / "p14_capability_heldout_attribution.json", {
+        heldout_report = {
             "version": "tehm-r3-p14-capability-heldout-v0.1",
             "evaluation_only": True,
+            "memory_docs_submitted": False,
             "canonical_memory_mutation": "none",
             "production_authority_changed": False,
             "heldout_evidence": {
@@ -659,7 +660,7 @@ def _build_p14_attribution(
                 "typed guard candidate in M_t+1, and return to failure when DeltaM is "
                 "removed. This is evaluation-only attribution; it does not authorize "
                 "promotion or production runtime import."),
-        })
+        }
         strategy_gates = {
             "C1_memory_changed": memory_delta.eligible,
             "C2_knowledge_or_relation_changed": bool(
@@ -673,7 +674,8 @@ def _build_p14_attribution(
         report = {
             "version": "tehm-r3-p14-strategy-attribution-v0.1",
             "scope": "L1_SELECTION_OR_L2_STRATEGY_EVOLUTION",
-            "evaluation_only": True, "canonical_memory_mutation": "none",
+            "evaluation_only": True, "memory_docs_submitted": False,
+            "canonical_memory_mutation": "none",
             "production_authority_changed": False,
             "strategy_gates": strategy_gates,
             "strategy_attribution_eligible": all(strategy_gates.values()),
@@ -705,13 +707,18 @@ def _build_p14_attribution(
                         },
             },
         }
-        _write_json(artifacts / "receipts" / "p14_strategy_attribution.json", report)
-        return report, {"post_route": post_route, "post_candidate": post_candidate,
-                        "post_execution": post_execution, "lineage": lineage,
-                        "after_state": after_state, "attribution": attribution,
-                        "heldout_attribution": heldout_attribution}
+        result = (report, {"post_route": post_route, "post_candidate": post_candidate,
+                           "post_execution": post_execution, "lineage": lineage,
+                           "after_state": after_state, "attribution": attribution,
+                           "heldout_attribution": heldout_attribution})
     finally:
+        # The report is published below, only after this checkpoint succeeds.
+        # A failed checkpoint must not leave P14 evidence without its frozen DB.
         db.checkpoint_and_close(p14_conn)
+    _write_json(artifacts / "receipts" / "p14_capability_heldout_attribution.json",
+                heldout_report)
+    _write_json(artifacts / "receipts" / "p14_strategy_attribution.json", result[0])
+    return result
 
 
 def run(artifacts: Path, *, force: bool = False) -> dict:

@@ -370,7 +370,6 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
         "memory_docs_submitted": False,
         "production_authority_changed": False,
     }
-    _write_json(output / "p14_safety_ablation.json", ablation_payload)
     report = {
         "version": VERSION,
         "campaign_id": post_cohort.campaign_id,
@@ -430,9 +429,7 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
             "The standard capability C5/C6/C8 gates remain unclaimed, so this receipt "
             "cannot authorize promotion or production runtime import."),
     }
-    _write_json(output / "p14_strategy_attribution.json", report)
-    _write_json(output / "p14_capability_attribution.json", attribution.to_dict())
-    _write_json(output / "summary.json", {
+    summary = {
         "version": VERSION,
         "strategy_attribution_eligible": report["strategy_attribution_eligible"],
         "capability_claim_promotable": attribution.promotable,
@@ -442,11 +439,16 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
         "evaluation_only": True,
         "production_runtime_imported": False,
         "memory_docs_submitted": False,
-    })
-    # The projection is disposable, but the emitted P14 evidence must still
-    # be a sidecar-free snapshot for deterministic replay.
+    }
+    # The projection is disposable, but emitted P14 evidence must still be a
+    # sidecar-free snapshot for deterministic replay.  Do not publish any of
+    # the completion reports until the projection checkpoint succeeds.
     db.checkpoint_and_close(conn)
     source_conn.close()
+    _write_json(output / "p14_safety_ablation.json", ablation_payload)
+    _write_json(output / "p14_strategy_attribution.json", report)
+    _write_json(output / "p14_capability_attribution.json", attribution.to_dict())
+    _write_json(output / "summary.json", summary)
     return report
 
 
