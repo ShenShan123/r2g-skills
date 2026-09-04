@@ -1000,8 +1000,11 @@ def run(artifacts: Path, *, force: bool = False) -> dict:
         "staging_discarded": shadow_receipt.staging_discarded,
         "evaluation_only": True, "memory_docs_submitted": False,
     }
-    _write_json(artifacts / "summary.json", summary)
+    # Publish completion evidence only after the campaign database has been
+    # checkpointed successfully.  A failed checkpoint must not leave behind a
+    # seemingly complete summary without its frozen sidecar.
     db.checkpoint_and_close(conn)
+    _write_json(artifacts / "summary.json", summary)
     return summary
 
 
