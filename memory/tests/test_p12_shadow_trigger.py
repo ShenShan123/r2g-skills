@@ -172,6 +172,21 @@ def test_evolution_reason_receipt_is_bound_and_replayable():
     tampered["receipt_digest"] = receipt.receipt_digest
     with pytest.raises(P12ShadowTriggerError, match="digest mismatch"):
         P13EvolutionReasonReceipt.from_dict(tampered)
+    with pytest.raises(P12ShadowTriggerError, match="ID mismatch"):
+        P13EvolutionReasonReceipt.from_dict({
+            **receipt.to_dict(), "receipt_id": "forged-reason-id",
+            "receipt_digest": receipt.receipt_digest})
+
+
+def test_p12_shadow_trigger_optional_receipt_id_is_content_bound():
+    triggers = build_p12_shadow_update_triggers(
+        _cohort(), memory_arm="ALWAYS_MEMORY", learner_eligible=False,
+        case_learner_eligibility={"case-0": False, "case-1": False})
+    payload = {**triggers[0].to_dict(),
+               "receipt_digest": triggers[0].receipt_digest,
+               "receipt_id": "forged-trigger-id"}
+    with pytest.raises(P12ShadowTriggerError, match="ID mismatch"):
+        P12ShadowUpdateTriggerReceipt.from_dict(payload)
 
 
 def test_incomplete_or_routingless_evidence_is_non_triggering():

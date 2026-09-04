@@ -226,6 +226,10 @@ class P13EvolutionReasonReceipt:
         if supplied is not None and supplied != receipt.receipt_digest:
             raise P12ShadowTriggerError(
                 "P13 evolution reason receipt digest mismatch")
+        supplied_id = payload.get("receipt_id")
+        if supplied_id is not None and supplied_id != receipt.receipt_id:
+            raise P12ShadowTriggerError(
+                "P13 evolution reason receipt ID mismatch")
         return receipt
 
 
@@ -533,6 +537,11 @@ class P12ShadowUpdateTriggerReceipt:
     def receipt_digest(self) -> str:
         return _digest(self.to_dict())
 
+    @property
+    def receipt_id(self) -> str:
+        """Stable identifier derived from the trigger receipt digest."""
+        return "p12_shadow_trigger_" + self.receipt_digest.split(":", 1)[1][:24]
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
@@ -625,6 +634,9 @@ class P12ShadowUpdateTriggerReceipt:
             valid_digests.add(receipt.legacy_receipt_digest)
         if supplied is not None and supplied not in valid_digests:
             raise P12ShadowTriggerError("P12 shadow trigger receipt digest mismatch")
+        supplied_id = payload.get("receipt_id")
+        if supplied_id is not None and supplied_id != receipt.receipt_id:
+            raise P12ShadowTriggerError("P12 shadow trigger receipt ID mismatch")
         return receipt
 
 
