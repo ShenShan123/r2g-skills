@@ -4440,5 +4440,7 @@ mirror receipt digest 为
 边界、report digest 以及 campaign/path/case/lineage/count projection 必须与嵌套
 content-addressed receipt 完全一致；篡改会 fail-closed。R3-9 capability-gap 与
 repeated-failure reports 在当前代码下均可 replay，仍保持 proposal-only。修复后的
-完整 `memory/tests` 回归为 `1085 passed`；`memory/docs/` 继续由 `.gitignore`
+完整 `memory/tests` 回归为 `1086 passed`。P12 trigger receipt 现在提供由 digest
+派生的稳定 `receipt_id`，P13 reason 与 P12 trigger replay 在字段存在时都会校验
+ID/digest 一致性，同时保持旧 receipt 格式兼容。`memory/docs/` 继续由 `.gitignore`
 排除且不提交。
