@@ -4254,3 +4254,21 @@ disjoint，不证明 IID 或真实用户分布。任何未来非零阈值都必�
 重新冻结带该阈值的 evidence；不能把这次敏感性结果当成 production promotion。当前仍为
 `eligible=false`、`production_integration=not_attempted`，`memory/docs/` 继续被忽略且
 不提交。
+
+### 2026-09-03 Revision3 external challenge fail-closed capture
+
+对外部 ORFS `aes`/`gcd` 描述符的独立挑战先进行了真实执行预检。修正官方
+`sky130hs` 基线参数后，`gcd` 的 `NO_MEMORY` 为 PASS、99% config candidate 为 FAIL，
+但 `aes` 的 `NO_MEMORY` 仍为 FAIL（无法形成 paired interference）；因此该 campaign
+不能作为 MIR 或 production evidence，也没有接入任何 aggregate/readiness。诊断 artifact
+位于 `/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-independent-challenge-20260903-retry3/`，
+其 `cohort.json` digest 为
+`sha256:3a03146952e2c4b3b2da7a67567df9fe8df43f07a6698aaa000f4434b505256f`，
+`failure.json.status=REASON_DERIVATION_FAILED` 明确记录了 AES 缺失
+`MEMORY_INTERFERENCE` 的原因。
+
+同时修正 `run_r3_orfs_interference_challenge.py` 的 evidence lifecycle：输入 manifest/cases
+在执行前落盘，完整 paired cohort 在 reason derivation 前落盘；若执行或 reason 推导失败，
+写入带状态和 cohort digest 的 `failure.json`，并保持非零退出。该改动只改善 evaluation
+审计，不创建 P13 reason、不写 canonical memory、authority 或 runtime；`memory/docs/`
+继续由 `.gitignore` 排除且不提交。

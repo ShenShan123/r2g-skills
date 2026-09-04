@@ -267,6 +267,24 @@ def run(projects: Sequence[Path | str], *, artifacts: Path | str,
         "production_runtime_imported": False, "memory_docs_submitted": False,
     }
     manifest_digest = _digest(manifest_payload)
+    cases_payload = {
+        "cases": cases,
+        "candidate_payloads": {
+            case_id: candidate.to_dict()
+            for case_id, candidate in sorted(candidates.items())
+        },
+        "routing": {
+            case_id: {**route.to_dict(),
+                      "routing_receipt_id": route.routing_receipt_id,
+                      "decision_digest": route.decision_digest}
+            for case_id, route in sorted(routes.items())
+        },
+    }
+    # Persist the immutable challenge inputs before starting any expensive flow.
+    # If a process is interrupted, the artifact still proves exactly what was
+    # attempted; memory/docs remains local-only and is never copied here.
+    _write_json(receipts_dir / "campaign_manifest.json", manifest_payload)
+    _write_json(receipts_dir / "cases.json", cases_payload)
     lock_dir = artifacts / "locks"
     lock_dir.mkdir()
     if timeout is not None:
@@ -281,21 +299,76 @@ def run(projects: Sequence[Path | str], *, artifacts: Path | str,
         }
         for case in cases
     }
-    cohort = execute_orfs_paired_cohort(
-        cases, arms, campaign_id=campaign_id,
-        campaign_manifest_digest=manifest_digest,
-        platform_digest=platform_digest, pdk_digest=pdk_digest,
-        oracle=oracle, budget=3, toolchain_digest=toolchain_digest,
-        oracle_digest=oracle_digest, min_lineages=2)
+    try:
+        cohort = execute_orfs_paired_cohort(
+            cases, arms, campaign_id=campaign_id,
+            campaign_manifest_digest=manifest_digest,
+            platform_digest=platform_digest, pdk_digest=pdk_digest,
+            oracle=oracle, budget=3, toolchain_digest=toolchain_digest,
+            oracle_digest=oracle_digest, min_lineages=2)
+    except Exception as exc:
+        # No partial cohort object can be honestly reconstructed from the
+        # current executor.  Record the immutable inputs and the terminal
+        # execution error rather than leaving an apparently empty campaign.
+        failure = {
+            "version": CAMPAIGN_VERSION, "campaign_id": campaign_id,
+            "lane": "EVOLUTION_CHALLENGE",
+            "challenge_reason": "MEMORY_INTERFERENCE",
+            "status": "EXECUTION_FAILED",
+            "error_type": type(exc).__name__, "error": str(exc),
+            "evaluation_only": True, "canonical_memory_mutation": "none",
+            "production_runtime_imported": False, "memory_docs_submitted": False,
+        }
+        _write_json(artifacts / "failure.json", failure)
+        raise
+
+    # The paired execution itself is valuable evidence even when the selected
+    # challenge candidate does not produce the requested evolution reason.
+    # Write it before deriving/admitting any reason so fail-closed diagnostics
+    # never discard a complete real cohort.
+    _write_json(receipts_dir / "cohort.json",
+                {**cohort.to_dict(), "receipt_digest": cohort.receipt_digest})
 
     derivations = {}
+    derivation_errors = {}
     for case_id, paired in sorted(cohort.case_receipts.items()):
         reason = derive_memory_interference_reason(
             paired, campaign_id=campaign_id, memory_arm="ALWAYS_MEMORY")
         if reason is None:
-            raise OrfsInterferenceChallengeError(
-                f"ORFS case did not produce MEMORY_INTERFERENCE: {case_id}")
+            derivation_errors[case_id] = "case did not produce MEMORY_INTERFERENCE"
+            continue
         derivations[case_id] = (reason,)
+    _write_json(receipts_dir / "reason_derivation.json", {
+        "derivations": {
+            case_id: [{**item.to_dict(), "receipt_id": item.receipt_id,
+                       "receipt_digest": item.receipt_digest}
+                      for item in items]
+            for case_id, items in sorted(derivations.items())
+        },
+        "errors": dict(sorted(derivation_errors.items())),
+    })
+    if derivation_errors:
+        failure = {
+            "version": CAMPAIGN_VERSION, "campaign_id": campaign_id,
+            "lane": "EVOLUTION_CHALLENGE",
+            "challenge_reason": "MEMORY_INTERFERENCE",
+            "status": "REASON_DERIVATION_FAILED",
+            "case_count": len(cohort.case_receipts),
+            "lineage_count": cohort.lineage_count,
+            "outcome_counts": cohort.outcome_counts,
+            "cohort_receipt_digest": cohort.receipt_digest,
+            "reason_derivation_errors": dict(sorted(derivation_errors.items())),
+            "evaluation_only": True, "canonical_memory_mutation": "none",
+            "production_runtime_imported": False, "memory_docs_submitted": False,
+        }
+        _write_json(artifacts / "failure.json", failure)
+        _write_json(artifacts / "summary.json", failure)
+        details = "; ".join(
+            f"{case_id}: {reason}"
+            for case_id, reason in sorted(derivation_errors.items()))
+        raise OrfsInterferenceChallengeError(
+            f"ORFS challenge reason derivation failed ({details})")
+
     reason_receipt = p13_reason_receipt_from_derivations(
         derivations, campaign_id=campaign_id,
         cohort_receipt_digest=cohort.receipt_digest)
@@ -313,30 +386,6 @@ def run(projects: Sequence[Path | str], *, artifacts: Path | str,
         for case_id in sorted(cohort.case_receipts)
     }
 
-    _write_json(receipts_dir / "campaign_manifest.json", manifest_payload)
-    _write_json(receipts_dir / "cases.json", {
-        "cases": cases,
-        "candidate_payloads": {
-            case_id: candidate.to_dict()
-            for case_id, candidate in sorted(candidates.items())
-        },
-        "routing": {
-            case_id: {**route.to_dict(),
-                      "routing_receipt_id": route.routing_receipt_id,
-                      "decision_digest": route.decision_digest}
-            for case_id, route in sorted(routes.items())
-        },
-    })
-    _write_json(receipts_dir / "cohort.json",
-                {**cohort.to_dict(), "receipt_digest": cohort.receipt_digest})
-    _write_json(receipts_dir / "reason_derivation.json", {
-        "derivations": {
-            case_id: [{**item.to_dict(), "receipt_id": item.receipt_id,
-                       "receipt_digest": item.receipt_digest}
-                      for item in items]
-            for case_id, items in sorted(derivations.items())
-        }
-    })
     _write_json(receipts_dir / "p13_reason_receipt.json",
                 {**reason_receipt.to_dict(), "receipt_digest": reason_receipt.receipt_digest})
     _write_json(receipts_dir / "p12_triggers.json", {
