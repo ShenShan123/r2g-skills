@@ -720,6 +720,64 @@ def _candidate_pool(path: Path | None) -> tuple[str, dict]:
     return "PASS", metrics
 
 
+def _verify_v2_candidate_pool_mir_binding(
+        *, interference_summary: Path, candidate_pool_evidence: Path) -> None:
+    """Require P6 and routed MIR v2 to consume the same typed cohorts.
+
+    Scalar equality (paired cases, harmful cases, and rate) is necessary but
+    not sufficient: two different cohort sets could otherwise be made to look
+    equivalent by coincidence.  Both v2 aggregates carry the content-bound
+    ``RtlPairedCohortReceipt`` digest, so compare that identity together with
+    campaign and case count.  Legacy per-cohort/v1 reports retain their
+    historical compatibility path; the stronger check applies whenever both
+    sides expose the aggregate formats introduced for the multi-cohort freeze.
+    """
+    mir_report = _load(interference_summary, "interference summary")
+    mir = mir_report.get("policy_mir")
+    candidate = _load(candidate_pool_evidence, "candidate-pool evidence")
+    if not isinstance(mir, Mapping) or \
+            mir.get("version") != "r3-policy-mir-v2" or \
+            candidate.get("version") != "r3-candidate-pool-aggregate-v1":
+        return
+
+    if candidate.get("policy_arm") != mir.get("policy_arm"):
+        raise ProductionReadinessError(
+            "candidate-pool and routed-policy MIR policy arms disagree")
+
+    def _rows(raw: Mapping, key: str, digest_key: str, label: str) -> set[tuple[str, str, int]]:
+        values = raw.get(key)
+        if not isinstance(values, list) or not values:
+            raise ProductionReadinessError(
+                f"{label} cohort references are missing")
+        result: set[tuple[str, str, int]] = set()
+        for item in values:
+            if not isinstance(item, Mapping):
+                raise ProductionReadinessError(
+                    f"{label} cohort reference is malformed")
+            digest = item.get(digest_key)
+            campaign_id = item.get("campaign_id")
+            case_count = item.get("case_count")
+            if (not isinstance(digest, str) or not digest.startswith("sha256:") or
+                    not isinstance(campaign_id, str) or not campaign_id.strip() or
+                    type(case_count) is not int or case_count <= 0):
+                raise ProductionReadinessError(
+                    f"{label} cohort identity is incomplete")
+            identity = (digest, campaign_id, case_count)
+            if identity in result:
+                raise ProductionReadinessError(
+                    f"{label} cohort references contain duplicates")
+            result.add(identity)
+        return result
+
+    mir_rows = _rows(mir, "cohort_receipts", "receipt_digest", "routed-policy MIR")
+    candidate_rows = _rows(
+        candidate, "candidate_pool_receipts", "cohort_receipt_digest",
+        "candidate-pool")
+    if mir_rows != candidate_rows:
+        raise ProductionReadinessError(
+            "candidate-pool and routed-policy MIR cohort bindings disagree")
+
+
 def _efficacy(path: Path | None) -> tuple[str, dict]:
     """Replay optional typed efficacy evidence for the downstream P9 gate."""
     if path is None:
@@ -929,6 +987,9 @@ def build_production_readiness(*, calibration_report: Path,
         # Keep the typed P6 projection grouped so the production gate can
         # flatten it, while the MIR values above remain the single safety
         # denominator used by the readiness policy.
+        _verify_v2_candidate_pool_mir_binding(
+            interference_summary=interference_summary,
+            candidate_pool_evidence=candidate_pool_evidence)
         if (candidate_pool_metrics.get("paired_cases") != mir_metrics["total_cases"] or
                 candidate_pool_metrics.get("memory_interference_cases") !=
                 mir_metrics["harmful_cases"] or

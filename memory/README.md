@@ -4227,3 +4227,15 @@ receipt digest 为 `sha256:6bd248ecbbd64f5892e2c1fbb2bc12e2eb816c8b1a0f5f827a6c4
 安全检查仍为 `FAIL`（`0.049992 > 0.0`），`eligible=false`、
 `production_integration=not_attempted`。这证明了统计分母和 P6 composition 已同步增长，
 没有把更多样本当成 production 授权；`memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 P6/MIR exact cohort binding
+
+补强 P15 readiness 的证据边界：当 candidate-pool 使用多 cohort aggregate、而 MIR 使用
+`r3-policy-mir-v2` aggregate 时，readiness 现在除了重算并比较 paired/harm/rate 标量，
+还必须比较每个 `RtlPairedCohortReceipt` 的 content-bound digest、campaign ID 和
+case count 集合，并要求 policy arm 一致。这样即使两份报告偶然拥有相同分母，也不能把
+不同 cohort 的 P6 composition 伪装成同一份 MIR evidence；旧的单 cohort/v1 输入保持兼容。
+现有 73-case readiness replay 通过，digest 未改变（`sha256:6bd248ecbbd64f5892e2c1fbb2bc12e2eb816c8b1a0f5f827a6c440f4f07baa4`），
+仍为 `eligible=false`、strict MIR `FAIL`、`production_integration=not_attempted`。
+该校验只加强 evaluation evidence provenance，不写 canonical memory、authority 或
+runtime；`memory/docs/` 继续由 `.gitignore` 排除且不提交。

@@ -17,7 +17,7 @@ from tehm.evaluation.mir_sample_plan import build_mir_sample_plan
 from tehm.evaluation.policy_mir import build_routed_policy_mir
 from tehm.evaluation.production_readiness import (
     ProductionReadinessError, build_production_readiness,
-    replay_production_readiness,
+    replay_production_readiness, _verify_v2_candidate_pool_mir_binding,
 )
 from tehm.evaluation.rtl_cohort import RtlPairedCohortReceipt
 
@@ -332,6 +332,40 @@ def test_readiness_rejects_mir_sample_plan_denominator_drift(tmp_path):
         build_production_readiness(
             calibration_report=calibration, interference_summary=interference,
             mir_sample_plan=plan)
+
+
+def test_readiness_requires_exact_v2_candidate_pool_mir_cohort_binding(tmp_path):
+    legacy_interference = _routed_policy_interference_report(tmp_path)
+    legacy_payload = json.loads(legacy_interference.read_text())
+    cohort_path = Path(legacy_payload["policy_mir"]["cohort_receipt"])
+    aggregate = build_routed_policy_mir(
+        [cohort_path], policy_arm="CAUSAL_NO_SKILL")
+    interference = tmp_path / "interference-v2.json"
+    interference.write_text(json.dumps({
+        "reason": "MEMORY_INTERFERENCE", "canonical_memory_mutation": "none",
+        "production_authority_changed": False, "case_count": 2,
+        "policy_mir": aggregate,
+    }))
+    candidate = tmp_path / "candidate-pool-aggregate.json"
+    candidate.write_text(json.dumps({
+        "version": "r3-candidate-pool-aggregate-v1",
+        "policy_arm": "CAUSAL_NO_SKILL",
+        "candidate_pool_receipts": [{
+            "cohort_receipt_digest": aggregate["cohort_receipts"][0]["receipt_digest"],
+            "campaign_id": aggregate["cohort_receipts"][0]["campaign_id"],
+            "case_count": 2,
+        }],
+    }))
+    _verify_v2_candidate_pool_mir_binding(
+        interference_summary=interference,
+        candidate_pool_evidence=candidate)
+    tampered = json.loads(candidate.read_text())
+    tampered["candidate_pool_receipts"][0]["campaign_id"] = "other-cohort"
+    candidate.write_text(json.dumps(tampered))
+    with pytest.raises(ProductionReadinessError, match="cohort bindings disagree"):
+        _verify_v2_candidate_pool_mir_binding(
+            interference_summary=interference,
+            candidate_pool_evidence=candidate)
 
 
 def test_readiness_rejects_malformed_mir_threshold(tmp_path):
