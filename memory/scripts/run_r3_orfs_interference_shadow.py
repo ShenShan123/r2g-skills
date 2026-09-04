@@ -334,6 +334,7 @@ def run(
     (cases_payload, pre_cohort, routes, candidates, derivations, triggers,
      admissions, reason_receipt) = _load_challenge(challenge_root)
     campaign_id = pre_cohort.campaign_id
+    shadow_campaign_id = SHADOW_CAMPAIGN_VERSION
 
     conn = db.connect(artifacts / "tehm.sqlite")
     db.ensure_schema(conn)
@@ -410,6 +411,50 @@ def run(
             "NO_MEMORY": None, "ALWAYS_MEMORY": candidates[case_id],
             "APPLICABILITY_GATED": None, "CAUSAL_NO_SKILL": None,
         }
+
+    # Freeze every input that controls the post-revision cohort before any
+    # expensive ORFS execution.  The old producer wrote a minimal manifest
+    # only after the cohort completed, which made an interrupted run unable to
+    # prove what it had attempted and also left the manifest campaign ID
+    # different from the cohort campaign ID.  This payload is immutable and
+    # content-addressed; later anti-forgetting evidence is intentionally not
+    # part of the execution manifest.
+    shadow_manifest_payload = {
+        "version": SHADOW_CAMPAIGN_VERSION,
+        "campaign_id": shadow_campaign_id,
+        "source_campaign_id": campaign_id,
+        "lane": "EVOLUTION_CHALLENGE", "reason": "MEMORY_INTERFERENCE",
+        "backend": "external_orfs",
+        "pre_challenge_cohort_digest": pre_cohort.receipt_digest,
+        "pre_reason_receipt_digest": reason_receipt.receipt_digest,
+        "pre_trigger_receipt_digests": sorted(
+            item.receipt_digest for item in triggers.values()),
+        "training_transition_ids": list(transition_ids),
+        "training_lineages": list(training_lineages),
+        "parent_knowledge": parent.to_dict(),
+        "post_cases": post_cases,
+        "post_routes": {
+            case_id: {**route.to_dict(),
+                      "routing_receipt_id": route.routing_receipt_id,
+                      "decision_digest": route.decision_digest}
+            for case_id, route in sorted(post_routes.items())
+        },
+        "post_candidate_payloads": {
+            case_id: {
+                arm: (candidate.to_dict() if candidate is not None else None)
+                for arm, candidate in sorted(arms.items())
+            }
+            for case_id, arms in sorted(post_candidates.items())
+        },
+        "proposal": {**proposal.to_dict(), "proposal_digest": proposal.proposal_digest},
+        "localized_update_plan": {**plan.to_dict(), "plan_digest": plan.plan_digest},
+        "evaluation_only": True, "canonical_memory_mutation": "none",
+        "production_runtime_imported": False,
+        "production_integration": "not_attempted", "memory_docs_submitted": False,
+    }
+    shadow_manifest_digest = _digest(shadow_manifest_payload)
+    _write_json(receipt_dir / "campaign_manifest.json", shadow_manifest_payload)
+
     locks = artifacts / "locks"
     locks.mkdir()
     if timeout is not None:
@@ -422,15 +467,45 @@ def run(
     if heldout_timeout is not None:
         if type(heldout_timeout) is not int or heldout_timeout < 1:
             raise OrfsInterferenceShadowError("heldout_timeout must be positive")
-    post_cohort = execute_orfs_paired_cohort(
-        post_cases, post_candidates, campaign_id=SHADOW_CAMPAIGN_VERSION,
-        campaign_manifest_digest=_digest({"version": SHADOW_CAMPAIGN_VERSION,
-                                          "parent": parent.content_digest,
-                                          "reason": reason_receipt.receipt_digest}),
-        platform_digest=pre_cohort.platform_digest, pdk_digest=pre_cohort.pdk_digest,
-        oracle=OrfsCandidateOracle(environment={"R2G_LOCK_DIR": str(locks)}),
-        budget=3, toolchain_digest=pre_cohort.toolchain_digest,
-        oracle_digest=pre_cohort.oracle_digest, min_lineages=2)
+    try:
+        post_cohort = execute_orfs_paired_cohort(
+            post_cases, post_candidates, campaign_id=shadow_campaign_id,
+            campaign_manifest_digest=shadow_manifest_digest,
+            platform_digest=pre_cohort.platform_digest, pdk_digest=pre_cohort.pdk_digest,
+            oracle=OrfsCandidateOracle(environment={"R2G_LOCK_DIR": str(locks)}),
+            budget=3, toolchain_digest=pre_cohort.toolchain_digest,
+            oracle_digest=pre_cohort.oracle_digest, min_lineages=2)
+    except KeyboardInterrupt:
+        failure = {
+            "version": SHADOW_CAMPAIGN_VERSION,
+            "campaign_id": shadow_campaign_id,
+            "source_campaign_id": campaign_id,
+            "lane": "EVOLUTION_CHALLENGE", "reason": "MEMORY_INTERFERENCE",
+            "status": "EXECUTION_INTERRUPTED", "error_type": "KeyboardInterrupt",
+            "error": "operator interrupted the ORFS shadow cohort",
+            "campaign_manifest_digest": shadow_manifest_digest,
+            "cohort_available": False, "evaluation_only": True,
+            "canonical_memory_mutation": "none", "production_authority_changed": False,
+            "production_runtime_imported": False,
+            "production_integration": "not_attempted", "memory_docs_submitted": False,
+        }
+        _write_json(artifacts / "failure.json", failure)
+        raise
+    except Exception as exc:
+        failure = {
+            "version": SHADOW_CAMPAIGN_VERSION,
+            "campaign_id": shadow_campaign_id,
+            "source_campaign_id": campaign_id,
+            "lane": "EVOLUTION_CHALLENGE", "reason": "MEMORY_INTERFERENCE",
+            "status": "EXECUTION_FAILED", "error_type": type(exc).__name__,
+            "error": str(exc), "campaign_manifest_digest": shadow_manifest_digest,
+            "cohort_available": False, "evaluation_only": True,
+            "canonical_memory_mutation": "none", "production_authority_changed": False,
+            "production_runtime_imported": False,
+            "production_integration": "not_attempted", "memory_docs_submitted": False,
+        }
+        _write_json(artifacts / "failure.json", failure)
+        raise
     for case_id, paired in post_cohort.case_receipts.items():
         if paired.arm_receipts["NO_MEMORY"].outcome != "PASS":
             raise OrfsInterferenceShadowError(f"post-revision baseline failed: {case_id}")
@@ -489,13 +564,6 @@ def run(
     if not memory_delta.eligible:
         raise OrfsInterferenceShadowError("ORFS shadow update did not produce an eligible C1 delta")
 
-    _write_json(receipt_dir / "campaign_manifest.json", {
-        "version": SHADOW_CAMPAIGN_VERSION, "campaign_id": campaign_id,
-        "lane": "EVOLUTION_CHALLENGE", "reason": "MEMORY_INTERFERENCE",
-        "backend": "external_orfs", "evaluation_only": True,
-        "canonical_memory_mutation": "none", "production_runtime_imported": False,
-        "production_integration": "not_attempted", "memory_docs_submitted": False,
-    })
     _write_json(receipt_dir / "training.json", {
         "transition_ids": transition_ids, "lineages": list(training_lineages),
         "knowledge": parent.to_dict(), "knowledge_object_id": parent.object_id,
@@ -540,6 +608,9 @@ def run(
 
     summary = {
         "version": SHADOW_CAMPAIGN_VERSION, "campaign_id": campaign_id,
+        "shadow_campaign_id": shadow_campaign_id,
+        "campaign_manifest_digest": shadow_manifest_digest,
+        "post_cohort_receipt_digest": post_cohort.receipt_digest,
         "lane": "EVOLUTION_CHALLENGE", "backend": "external_orfs",
         "reason": "MEMORY_INTERFERENCE", "training_lineage_count": len(training_lineages),
         "challenge_case_count": len(pre_cohort.case_receipts),

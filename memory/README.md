@@ -4469,3 +4469,25 @@ production authority。replay CLI 返回 `REPLAY_PASS`，并明确
 `canonical_memory_mutation=none`、`production_runtime_imported=false`、
 `memory_docs_submitted=false`。本次完整 `memory/tests` 回归为 `1089 passed`。
 `memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-04 Revision3 ORFS interference shadow manifest/replay hardening
+
+ORFS interference 的 P13 shadow runner 现在在 post-revision flow 启动前冻结完整
+content-addressed manifest，绑定 pre-challenge cohort/reason、training transitions、
+parent Knowledge、post cases/routes/candidate arms、proposal 和初始 localized plan；
+post cohort 使用同一 `campaign_manifest_digest`，且中断/执行失败会留下 terminal
+failure boundary。新增只读 `scripts/replay_r3_orfs_interference_shadow.py` 与
+`tehm.evaluation.orfs_interference_shadow_replay`，重放 source/content digest、四臂
+post cohort、typed `MEMORY_INTERFERENCE` derivation、P12/P13 admission、SPECIALIZE
+proposal/plan、anti-forgetting、shadow update 和 memory delta，不打开数据库、不执行
+ORFS、不改变 canonical memory 或 production runtime。
+
+真实 artifact
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-interference-gcd-shadow-20260904-r3/`
+已通过 replay：manifest digest=`sha256:a2ea116f0fca310c6d733aa4e1631aa58707cf96c29ba3d9516579b57f5e3793`，
+post cohort digest=`sha256:04f1179e326fb2d8c5266398659f1e1560d2dba3c36e7e4c6c75bed3148e47c0`，
+2 cases / 2 lineages、2 derivations、2 admissions，proposal/shadow=`SPECIALIZE`，
+fallback 两臂均 2/2 PASS，memory delta 与 anti-forgetting 均 eligible。该结果只证明
+L2 interference-safety strategy，不能声明标准 capability C5--C8 或授予 promotion；
+`canonical_memory_mutation=none`、`production_runtime_imported=false`、
+`memory_docs_submitted=false`。`memory/docs/` 继续由 `.gitignore` 排除且不提交。
