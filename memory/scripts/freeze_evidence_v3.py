@@ -46,6 +46,7 @@ TRAINING_MANIFESTS = (
 )
 CURRENT_DB = REPO / "memory/tehm.sqlite"
 V3_VERSION = "tehm-evidence-freeze-v3"
+GOVERNING_DOC_PREFIX = "memory/docs/"
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -64,7 +65,7 @@ def _normalize_generated_docs(rel: str, data: bytes) -> bytes:
     would create an impossible self-reference (manifest digest -> docs ->
     source digest -> manifest digest).
     """
-    if not rel.endswith(("memory/README.md", "memory/docs/Typed_Executable_Hardware_Memory_R2G.md")):
+    if not rel.endswith("memory/README.md"):
         return data
     text = data.decode("utf-8")
     text = re.sub(r"<!-- TEHM_EVIDENCE_V3_START -->.*?<!-- TEHM_EVIDENCE_V3_END -->",
@@ -74,6 +75,17 @@ def _normalize_generated_docs(rel: str, data: bytes) -> bytes:
 
 
 def source_state() -> dict:
+    tracked_governing_docs = [
+        item.decode()
+        for item in _git(
+                "ls-files", "-z", "--", GOVERNING_DOC_PREFIX.rstrip("/")
+        ).split(b"\0")
+        if item
+    ]
+    if tracked_governing_docs:
+        raise RuntimeError(
+            "release scope violation: governing documents must remain local and "
+            "untracked (memory/docs): " + ", ".join(tracked_governing_docs))
     head = _git("rev-parse", "HEAD").decode().strip()
     changed = [x.decode() for x in _git("diff", "HEAD", "--name-only", "-z").split(b"\0") if x]
     diff_rows = []
@@ -107,9 +119,7 @@ def source_state() -> dict:
     # to the checkpoint state.
     logical_diff_rows = [row for row in diff_rows
                          if row["head_sha256"] != row["working_sha256"]]
-    logical_untracked = [row for row in untracked
-                         if not row["path"].endswith(
-                             "memory/docs/Typed_Executable_Hardware_Memory_R2G.md")]
+    logical_untracked = untracked
     logical_status = {"tracked": logical_diff_rows, "untracked": logical_untracked}
     state = {
         "head": head,
