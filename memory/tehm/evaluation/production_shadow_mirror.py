@@ -21,6 +21,7 @@ from .production_readiness import ProductionReadinessError, ProductionReadinessR
 
 
 PRODUCTION_SHADOW_MIRROR_VERSION = "r3-production-shadow-mirror-v1"
+PRODUCTION_SHADOW_MIRROR_REPORT_VERSION = "r3-production-shadow-mirror-report-v1"
 MIRROR_STATUSES = frozenset({"BLOCKED_READINESS", "READY_FOR_SHADOW_COMPARISON"})
 
 
@@ -357,8 +358,145 @@ def replay_shadow_mirror(payload: object) -> ProductionShadowMirrorReceipt:
     return ProductionShadowMirrorReceipt.from_dict(payload)
 
 
+def _file_digest(path) -> str:
+    try:
+        return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise ProductionShadowMirrorError(
+            f"shadow mirror input is unreadable: {path}") from exc
+
+
+def _json_file(path, name: str):
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ProductionShadowMirrorError(f"{name} is not valid JSON: {path}") from exc
+    if not isinstance(payload, Mapping):
+        raise ProductionShadowMirrorError(f"{name} must be a JSON object: {path}")
+    return payload
+
+
+def _json_value_file(path, name: str):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ProductionShadowMirrorError(f"{name} is not valid JSON: {path}") from exc
+
+
+def build_shadow_mirror_report(
+        readiness_path, *, output, comparisons_path=None,
+        allowlist: Sequence[str] | None = None, force: bool = False) -> dict:
+    """Build a replayable P17 report from a readiness JSON file.
+
+    The optional comparison file is a JSON object containing ``comparisons``
+    (or a bare JSON list).  Its rows are copied into the content-addressed
+    receipt; the source file digest is retained only as provenance.  No
+    runtime callback is accepted here, so this CLI cannot execute production
+    code accidentally.
+    """
+    from pathlib import Path
+
+    readiness_path = Path(readiness_path).expanduser().resolve()
+    output = Path(output).expanduser().resolve()
+    if not readiness_path.is_file():
+        raise ProductionShadowMirrorError(
+            f"readiness report is not a file: {readiness_path}")
+    if output == readiness_path:
+        raise ProductionShadowMirrorError("shadow mirror output cannot overwrite readiness")
+    if output.exists() and not force:
+        raise ProductionShadowMirrorError(
+            f"shadow mirror output exists; pass --force to replace it: {output}")
+    comparisons = None
+    comparison_ref = None
+    if comparisons_path is not None:
+        comparisons_path = Path(comparisons_path).expanduser().resolve()
+        if output == comparisons_path:
+            raise ProductionShadowMirrorError(
+                "shadow mirror output cannot overwrite comparisons")
+        if not comparisons_path.is_file():
+            raise ProductionShadowMirrorError(
+                f"comparison input is not a file: {comparisons_path}")
+        raw = _json_value_file(comparisons_path, "comparison input")
+        if isinstance(raw, Mapping):
+            comparisons = raw.get("comparisons", raw)
+        else:
+            comparisons = raw
+        comparison_ref = {"path": str(comparisons_path),
+                          "sha256": _file_digest(comparisons_path)}
+    readiness = _json_file(readiness_path, "readiness report")
+    receipt = prepare_shadow_mirror(
+        readiness, comparisons=comparisons, allowlist=allowlist)
+    serialized = {
+        **receipt.to_dict(), "receipt_id": receipt.receipt_id,
+        "receipt_digest": receipt.receipt_digest,
+    }
+    report = {
+        "version": PRODUCTION_SHADOW_MIRROR_REPORT_VERSION,
+        "receipt": serialized,
+        "receipt_id": receipt.receipt_id,
+        "receipt_digest": receipt.receipt_digest,
+        "readiness_ref": {"path": str(readiness_path),
+                          "sha256": _file_digest(readiness_path)},
+        "comparison_ref": comparison_ref,
+        "evaluation_only": True,
+        "canonical_memory_mutation": "none",
+        "production_runtime_imported": False,
+        "promotion_attempted": False,
+        "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    return report
+
+
+def replay_shadow_mirror_report(path) -> ProductionShadowMirrorReceipt:
+    """Replay a P17 report, including its readiness input binding."""
+    from pathlib import Path
+
+    path = Path(path).expanduser().resolve()
+    report = _json_file(path, "shadow mirror report")
+    if report.get("version") != PRODUCTION_SHADOW_MIRROR_REPORT_VERSION:
+        raise ProductionShadowMirrorError("shadow mirror report version mismatch")
+    for key, expected in (("evaluation_only", True),
+                          ("canonical_memory_mutation", "none"),
+                          ("production_runtime_imported", False),
+                          ("promotion_attempted", False),
+                          ("production_integration", "not_attempted"),
+                          ("memory_docs_submitted", False)):
+        if report.get(key) != expected:
+            raise ProductionShadowMirrorError(
+                f"shadow mirror report crosses {key} boundary")
+    receipt = replay_shadow_mirror(report.get("receipt"))
+    if report.get("receipt_id") != receipt.receipt_id or \
+            report.get("receipt_digest") != receipt.receipt_digest:
+        raise ProductionShadowMirrorError("shadow mirror report ID/digest mismatch")
+    ref = report.get("readiness_ref")
+    if not isinstance(ref, Mapping) or type(ref.get("path")) is not str:
+        raise ProductionShadowMirrorError("shadow mirror readiness_ref is malformed")
+    from pathlib import Path
+    readiness_path = Path(ref["path"]).expanduser().resolve()
+    if ref.get("sha256") != _file_digest(readiness_path):
+        raise ProductionShadowMirrorError("shadow mirror readiness input digest drifted")
+    checked = prepare_shadow_mirror(
+        _json_file(readiness_path, "readiness report"),
+        comparisons=receipt.comparisons, allowlist=receipt.allowlist)
+    if checked.to_dict() != receipt.to_dict():
+        raise ProductionShadowMirrorError("shadow mirror replay differs from receipt")
+    comparison_ref = report.get("comparison_ref")
+    if comparison_ref is not None:
+        if not isinstance(comparison_ref, Mapping) or type(comparison_ref.get("path")) is not str:
+            raise ProductionShadowMirrorError("shadow mirror comparison_ref is malformed")
+        comparison_path = Path(comparison_ref["path"]).expanduser().resolve()
+        if comparison_ref.get("sha256") != _file_digest(comparison_path):
+            raise ProductionShadowMirrorError("shadow mirror comparison input digest drifted")
+    return receipt
+
+
 __all__ = [
-    "PRODUCTION_SHADOW_MIRROR_VERSION", "MIRROR_STATUSES",
+    "PRODUCTION_SHADOW_MIRROR_VERSION", "PRODUCTION_SHADOW_MIRROR_REPORT_VERSION",
+    "MIRROR_STATUSES",
     "ProductionShadowMirrorError", "ProductionShadowMirrorReceipt",
     "prepare_shadow_mirror", "replay_shadow_mirror",
+    "build_shadow_mirror_report", "replay_shadow_mirror_report",
 ]

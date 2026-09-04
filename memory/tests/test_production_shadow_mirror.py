@@ -1,11 +1,14 @@
 """P17 production shadow-mirror preparation contract tests."""
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from tehm.evaluation.production_readiness import ProductionReadinessReceipt
 from tehm.evaluation.production_shadow_mirror import (
-    ProductionShadowMirrorError, prepare_shadow_mirror, replay_shadow_mirror,
+    ProductionShadowMirrorError, build_shadow_mirror_report,
+    prepare_shadow_mirror, replay_shadow_mirror, replay_shadow_mirror_report,
 )
 
 
@@ -147,3 +150,39 @@ def test_readiness_wrapper_digest_and_firewall_are_bound():
     wrapper["memory_docs_submitted"] = True
     with pytest.raises(ProductionShadowMirrorError, match="memory_docs_submitted"):
         prepare_shadow_mirror(wrapper)
+
+
+def _write_readiness_report(path, *, eligible: bool):
+    readiness = _readiness(eligible=eligible)
+    payload = {
+        **readiness.to_dict(),
+        "receipt_id": readiness.receipt_id,
+        "receipt_digest": readiness.receipt_digest,
+    }
+    report = {
+        "receipt": payload,
+        "readiness": payload,
+        "receipt_id": readiness.receipt_id,
+        "receipt_digest": readiness.receipt_digest,
+        "production_integration": "not_attempted",
+        "canonical_memory_mutation": "none",
+        "memory_docs_submitted": False,
+    }
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    return readiness
+
+
+def test_cli_report_binds_readiness_file_and_replays(tmp_path):
+    readiness_path = tmp_path / "readiness.json"
+    readiness = _write_readiness_report(readiness_path, eligible=False)
+    output = tmp_path / "shadow-mirror.json"
+    report = build_shadow_mirror_report(readiness_path, output=output)
+    assert report["receipt"]["mirror_status"] == "BLOCKED_READINESS"
+    assert report["readiness_ref"]["sha256"] == (
+        "sha256:" + __import__("hashlib").sha256(readiness_path.read_bytes()).hexdigest())
+    replayed = replay_shadow_mirror_report(output)
+    assert replayed.readiness_receipt_digest == readiness.receipt_digest
+
+    readiness_path.write_text(readiness_path.read_text() + "\n")
+    with pytest.raises(ProductionShadowMirrorError, match="input digest drifted"):
+        replay_shadow_mirror_report(output)
