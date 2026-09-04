@@ -332,8 +332,13 @@ def run(projects: Sequence[Path | str], *, artifacts: Path | str,
     derivations = {}
     derivation_errors = {}
     for case_id, paired in sorted(cohort.case_receipts.items()):
-        reason = derive_memory_interference_reason(
-            paired, campaign_id=campaign_id, memory_arm="ALWAYS_MEMORY")
+        try:
+            reason = derive_memory_interference_reason(
+                paired, campaign_id=campaign_id, memory_arm="ALWAYS_MEMORY")
+        except Exception as exc:
+            derivation_errors[case_id] = (
+                f"{type(exc).__name__}: {exc}")
+            continue
         if reason is None:
             derivation_errors[case_id] = "case did not produce MEMORY_INTERFERENCE"
             continue
