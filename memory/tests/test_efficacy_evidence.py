@@ -58,7 +58,6 @@ def _cohort(tmp_path, *, after=False):
             },
             candidate_budget=3, case_digest=f"sha256:case-{index}-{after}",
             toolchain_digest="sha256:toolchain", oracle_digest="sha256:oracle",
-            platform_digest="sha256:platform", pdk_digest="sha256:pdk",
             paired=True, evaluation_only=True, lineage_id=f"lineage-{index}",
             routing_receipt_id=f"routing-{case_id}", routing_decision=decision)
         sources[case_id] = f"sha256:source-{index}"

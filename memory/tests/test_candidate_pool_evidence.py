@@ -150,6 +150,9 @@ def test_candidate_pool_aggregate_replays_disjoint_cohorts(tmp_path):
         cohort_path, pools = _cohort_and_pools(root, suffix=f"-{index}")
         payload = json.loads(cohort_path.read_text())
         payload["campaign_id"] = f"candidate-pool-campaign-{index}"
+        # Re-sign the content-addressed cohort after changing its identity.
+        # Retaining the old digest would correctly be rejected as tampering.
+        payload.pop("receipt_digest", None)
         payload["receipt_digest"] = RtlPairedCohortReceipt.from_dict(payload).receipt_digest
         cohort_path.write_text(json.dumps(payload))
         report_path = root / "candidate-pool.json"

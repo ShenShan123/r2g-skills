@@ -4351,3 +4351,12 @@ checkpoint derived projection；ORFS P14 attribution 则改用 immutable read-on
 结果保持 evaluation-only、canonical mutation 为 `none`、production runtime 未导入。
 此前带 sidecar 的 reason-adapter artifact 仅作诊断，不作为冻结 evidence；
 `memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-03 Revision3 full regression and signature-fixture audit
+
+使用工具链自带的 Python 3.11/pytest，并显式加入 `memory/tests` 同目录导入路径，
+完整执行 `memory/tests`，结果为 `1063 passed`。期间修正了四个测试夹具：修改
+content-addressed cohort 身份或路由后先移除旧 digest 再重签名，并让 efficacy 夹具
+使用 cohort-level 的 platform/PDK 字段。生产 loader 继续对旧签名 fail-closed，未
+放宽 replay 或 authority 边界；当前 `git ls-files memory/docs` 与 HEAD tree 仍均为
+零，`memory/docs/` 不会进入提交或 release。

@@ -153,6 +153,9 @@ def test_build_rejects_missing_routed_policy_semantics(tmp_path):
     # Keep the paired receipt content-addressed, but remove the route decision
     # that makes the CAUSAL_NO_SKILL no-memory source a meaningful policy arm.
     case.pop("routing_decision", None)
+    # The route mutation is intentional test input, so replace the enclosing
+    # cohort signature before asking the typed loader to replay it.
+    raw.pop("receipt_digest", None)
     checked = RtlPairedCohortReceipt.from_dict(raw)
     raw["receipt_digest"] = checked.receipt_digest
     first.write_text(json.dumps(raw))
