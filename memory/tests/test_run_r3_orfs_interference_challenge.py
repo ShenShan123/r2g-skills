@@ -10,6 +10,7 @@ from scripts.run_r3_orfs_interference_challenge import (
     OrfsInterferenceChallengeError, _candidate, _config_values,
 )
 import scripts.run_r3_orfs_interference_challenge as challenge
+from tehm.evaluation.orfs_interference_replay import replay
 
 
 def _project(tmp_path: Path, *, include_sources: bool = True) -> Path:
@@ -158,3 +159,7 @@ def test_operator_interrupt_preserves_terminal_failure_boundary(tmp_path, monkey
     assert failure["campaign_manifest_digest"].startswith("sha256:")
     assert failure["memory_docs_submitted"] is False
     assert failure["canonical_memory_mutation"] == "none"
+    replayed = replay(artifacts)
+    assert replayed["status"] == "REPLAY_PASS"
+    assert replayed["terminal_status"] == "EXECUTION_INTERRUPTED"
+    assert replayed["cohort_available"] is False
