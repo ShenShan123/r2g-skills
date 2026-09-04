@@ -142,6 +142,9 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
         "source_reason_receipt_digest": reason.receipt_digest,
         "evaluation_only": True,
         "canonical_memory_mutation": "none",
+        "production_authority_changed": False,
+        "production_runtime_imported": False,
+        "memory_docs_submitted": False,
     })
     manifest = {
         "version": MANIFEST_VERSION,
@@ -158,6 +161,8 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
              "sha256": _file_digest(cases_path)},
             {"id": "orfs-reason", "path": str(reason_path),
              "sha256": _file_digest(reason_path)},
+            {"id": "oracle-label-derivations", "path": str(derivation_path),
+             "sha256": _file_digest(derivation_path)},
         ],
     }
     manifest_path = receipts_root / "calibration_manifest.json"
@@ -200,6 +205,7 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
         "evaluation_only": True,
         "canonical_memory_mutation": "none",
         "production_authority_changed": False,
+        "production_runtime_imported": False,
         "production_promotion_eligible": False,
         "memory_docs_submitted": False,
     }

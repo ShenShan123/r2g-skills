@@ -4505,3 +4505,19 @@ recomputes the database-bound C1-C8 attribution, and checks the safety
 ablation.  The current replay is `REPLAY_PASS`: strategy C1-C5 are eligible,
 standard capability C5/C6/C8 remain unclaimed, and no canonical memory,
 production runtime, or `memory/docs` content is changed.
+
+### Revision3 P15 calibration refresh (2026-09-04)
+
+The current ORFS interference challenge also has a fresh calibration slice at
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-p15-calibration-20260904-r2`.
+Its independent `oracle_label_derivations.json` is now an explicit manifest
+evidence reference rather than an unbound sidecar.  Aggregating it with the
+three existing source-disjoint manifests gives 65 samples across 4 campaigns
+and two backends, with reason support `NO_MATCH=15`, `RISK=19`, and
+`STATE_SHIFT=16`; the reason-aware calibration gate is PASS.  The refreshed
+production-readiness checkpoint at
+`/data1/zhangdy/tehm-campaigns/tehm-r3-production-readiness-p15-aggregate-checkpoint-order-20260904-r3`
+replays successfully but remains ineligible: MIR is still measured at 73
+known cases with a positive Wilson upper bound (`0.049992`) against the
+current zero threshold, and the candidate-pool gate is still FAIL.  No labels
+are fed back into learner memory, and no production canary is authorized.
