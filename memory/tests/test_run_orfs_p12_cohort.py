@@ -125,6 +125,7 @@ def test_manifest_runner_executes_four_arms_and_emits_replayable_receipt(tmp_pat
     assert receipt.outcome_counts["ALWAYS_MEMORY"]["PASS"] == 1
     assert report["canonical_memory_mutation"] == "none"
     assert report["production_runtime_imported"] is False
+    assert report["memory_docs_submitted"] is False
     assert report["routing_decisions"]["p12-runner-case"]["routing_receipt_id"] == routing.routing_receipt_id
     assert receipt.case_receipts["p12-runner-case"].routing_receipt_id == routing.routing_receipt_id
 

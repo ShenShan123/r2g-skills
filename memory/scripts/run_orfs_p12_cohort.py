@@ -270,6 +270,11 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
         "canonical_memory_mutation": "none",
         "production_runtime_imported": False,
         "production_integration": "not_attempted",
+        # ``memory/docs/`` is a local governing input.  Keep the release
+        # boundary explicit on the runner report as well as in the repository
+        # ignore/release-freeze checks, so a P12 artifact cannot be mistaken
+        # for a submitted design-document bundle.
+        "memory_docs_submitted": False,
     }
     output_path = Path(output).expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
