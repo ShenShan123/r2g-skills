@@ -171,6 +171,7 @@ def run_challenge(
             "paired_counterfactual_required": False,
         },
         "canonical_memory_mutation": "none",
+        "memory_docs_submitted": False,
         "production_runtime": {
             "promotion_attempted": False,
             "production_promotion_eligible": False,

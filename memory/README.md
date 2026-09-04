@@ -4307,9 +4307,10 @@ detector receipt、reason derivation、reason-specific admission 以及 capabili
 proposal，并 fail closed 检查 canonical/production/docs 边界。
 
 新 artifact
-`/data1/zhangdy/tehm-campaigns/tehm-r3-capability-gap-20260903-r5/` 与
-`/data1/zhangdy/tehm-campaigns/tehm-r3-repeated-failure-20260903-r3/` 均为无
-sidecar 的冻结快照，CLI replay 已通过；此前带 sidecar 的 r3/r4（capability-gap）
-和 r1/r2（repeated-failure）仅保留为诊断，不能作为冻结 evidence。该 lane 仍是
+`/data1/zhangdy/tehm-campaigns/tehm-r3-capability-gap-20260903-r6/` 与
+`/data1/zhangdy/tehm-campaigns/tehm-r3-repeated-failure-20260903-r4/` 均为无
+sidecar 的冻结快照，报告显式写入 `memory_docs_submitted=false`，CLI replay 已通过；
+此前带 sidecar 或缺少显式 docs boundary 的 r3/r4/r5（capability-gap）和 r1/r2/r3
+（repeated-failure）仅保留为诊断，不能作为冻结 evidence。该 lane 仍是
 evaluation-only：不写 canonical memory、不进入 production runtime；`memory/docs/`
 继续由 `.gitignore` 排除且不提交。

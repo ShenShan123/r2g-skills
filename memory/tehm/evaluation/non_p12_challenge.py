@@ -97,7 +97,7 @@ def _boundary(report: Mapping, *, version: str) -> str:
             runtime.get("runtime_authority_changed") is not False:
         raise NonP12ChallengeReplayError(
             "challenge report crosses production-runtime boundary")
-    if report.get("memory_docs_submitted") not in (None, False):
+    if report.get("memory_docs_submitted") is not False:
         raise NonP12ChallengeReplayError(
             "challenge report crosses memory/docs boundary")
     if report.get("real_oracle") != "icarus/vvp":

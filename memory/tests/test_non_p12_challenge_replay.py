@@ -26,6 +26,7 @@ def _report(tmp_path, *, source=b"source", derived=b"derived", **overrides):
             "runtime_authority_changed": False,
         },
         "real_oracle": "icarus/vvp",
+        "memory_docs_submitted": False,
         "source_db": str(source_path),
         "source_db_sha256": hashlib.sha256(source).hexdigest(),
         "derived_db": str(derived_path),
@@ -43,6 +44,21 @@ def test_non_p12_replay_rejects_production_boundary(tmp_path):
         canonical_memory_mutation="write",
     )
     with pytest.raises(NonP12ChallengeReplayError, match="canonical-memory"):
+        replay_capability_gap_challenge(report)
+
+
+def test_non_p12_replay_requires_explicit_docs_boundary(tmp_path):
+    report = _report(tmp_path, memory_docs_submitted=True)
+    with pytest.raises(NonP12ChallengeReplayError, match="memory/docs"):
+        replay_capability_gap_challenge(report)
+
+
+def test_non_p12_replay_rejects_missing_docs_boundary(tmp_path):
+    report = _report(tmp_path)
+    payload = json.loads(report.read_text())
+    payload.pop("memory_docs_submitted")
+    report.write_text(json.dumps(payload))
+    with pytest.raises(NonP12ChallengeReplayError, match="memory/docs"):
         replay_capability_gap_challenge(report)
 
 

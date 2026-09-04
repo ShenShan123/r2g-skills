@@ -183,6 +183,7 @@ def run_challenge(*, output_dir: Path | str,
         "evolution_admission": _with_ids(admission),
         "counts_before": before_counts, "counts_after": after_counts,
         "canonical_memory_mutation": "none",
+        "memory_docs_submitted": False,
         "production_runtime": {
             "promotion_attempted": False,
             "production_promotion_eligible": False,
