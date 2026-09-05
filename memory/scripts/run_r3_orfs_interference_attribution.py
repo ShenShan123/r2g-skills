@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from contracts import MemoryRoutingDecision  # noqa: E402
+from contracts import MemoryQuery, MemoryRoutingDecision  # noqa: E402
 from scripts import run_r3_orfs_interference_shadow as shadow  # noqa: E402
 from tehm import db  # noqa: E402
 from tehm.capability import (  # noqa: E402
@@ -45,6 +45,7 @@ from tehm.knowledge.revision import revise_knowledge  # noqa: E402
 from tehm.state import resolve_current_state, verify_resolution_snapshot  # noqa: E402
 from tehm.evolution.anti_forgetting import AntiForgettingWitness  # noqa: E402
 from tehm.evaluation.orfs_cohort import OrfsPairedCohortReceipt  # noqa: E402
+from tehm.retrieval.memory_router import route_memory  # noqa: E402
 
 
 VERSION = "tehm-r3-orfs-interference-p14-v0.1"
@@ -109,17 +110,47 @@ def _child(parent: MechanismKnowledge) -> MechanismKnowledge:
     )
 
 
-def _post_route(case_id: str, resolution_id: str) -> MemoryRoutingDecision:
-    return MemoryRoutingDecision(
-        decision="INAPPLICABLE", resolved_state_id=resolution_id,
-        selected_rule_ids=(), selected_path_ids=(), selected_asset_ids=(),
-        applicability={"status": "VETOED", "hard_gate": "negative_applicability",
-                       "challenge_case": case_id},
-        causal_support={"status": "VETOED"},
-        risk={"risk_penalty": 1.0, "memory_interference": True},
-        abstain_reasons=("negative_applicability",), no_memory_budget=1,
-        memory_budget=0,
-    )
+def _routing_query(case: dict, candidate, parent: MechanismKnowledge) -> MemoryQuery:
+    """Freeze query inputs, not the desired decision or interference label.
+
+    A proposed config edit is deliberately not relabelled as a current-state
+    fact. Historical cases lack that observation; inventing it here would
+    manufacture applicability evidence just to obtain the expected veto.
+    """
+    return MemoryQuery(
+        query_plan={
+            "target_scope": "global", "check": case["target_check"],
+            "platform": case["platform"],
+            "mechanism_family": parent.mechanism_family,
+            "compatibility_profile": parent.compatibility_profile,
+            "proposed_action": json.loads(stable_dumps(candidate.concrete_action)),
+        }, context_ref=case["source_digest"])
+
+
+def audit_router_outputs(conn, cases: list[dict], candidates: dict,
+                         parent: MechanismKnowledge, recorded: dict) -> dict:
+    """Recompute routes from the stored state without promoting hypotheses."""
+    case_ids = [case["case_id"] for case in cases]
+    if (not case_ids or len(set(case_ids)) != len(case_ids) or
+            set(case_ids) != set(candidates) or set(case_ids) != set(recorded)):
+        raise OrfsInterferenceAttributionError("router audit requires exact non-empty case coverage")
+    rows = {}
+    for case in cases:
+        case_id = case["case_id"]
+        query = _routing_query(case, candidates[case_id], parent)
+        actual = route_memory(conn, query, no_memory_budget=1, memory_budget=1,
+                              persist_state=False, commit=False)
+        previous = recorded[case_id]
+        rows[case_id] = {
+            "query": query.to_dict(),
+            "actual": {**actual.to_dict(), "routing_receipt_id": actual.routing_receipt_id},
+            "recorded": {**previous.to_dict(), "routing_receipt_id": previous.routing_receipt_id},
+            "matches": actual.routing_receipt_id == previous.routing_receipt_id,
+        }
+    return {"version": "orfs-router-replay-v1", "cases": rows,
+            "eligible": all(row["matches"] for row in rows.values()),
+            "evaluation_only": True, "canonical_memory_mutation": "none",
+            "production_runtime_imported": False}
 
 
 def _behavior_digest(routes: dict[str, MemoryRoutingDecision], arms: dict,
@@ -222,6 +253,8 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
     if not scope:
         scope = {"target_scope": "global"}
     baseline_state = resolve_current_state(conn, scope, mode="shadow", persist=False)
+    baseline_router_audit = audit_router_outputs(
+        conn, cases_payload["cases"], candidates, parent, pre_routes)
     provenance = {
         "source": "r3-orfs-interference-p14-projection",
         "p13_shadow_receipt": shadow_receipt.receipt_digest,
@@ -245,10 +278,22 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
     if baseline_state.resolution_id == after_state.resolution_id:
         raise OrfsInterferenceAttributionError("P14 projection did not change resolved state")
 
+    recorded_post_routes = {
+        case_id: MemoryRoutingDecision.from_dict(payload)
+        for case_id, payload in _read_json(receipts / "post_routes.json").items()}
+    candidate_router_audit = audit_router_outputs(
+        conn, cases_payload["cases"], candidates, parent, recorded_post_routes)
+    router_audit = {"baseline": baseline_router_audit, "candidate": candidate_router_audit}
+    _write_json(output / "router_replay.json", router_audit)
+    if not (baseline_router_audit["eligible"] and candidate_router_audit["eligible"]):
+        db.checkpoint_and_close(conn)
+        source_conn.close()
+        raise OrfsInterferenceAttributionError(
+            "recorded ORFS routes do not replay through the actual router; "
+            "see router_replay.json. No P14 policy-load or success receipt was created")
     post_routes = {
-        case_id: _post_route(case_id, after_state.resolution_id)
-        for case_id in sorted(pre_cohort.case_receipts)
-    }
+        case_id: MemoryRoutingDecision.from_dict(row["actual"])
+        for case_id, row in candidate_router_audit["cases"].items()}
     baseline_behavior = _behavior_digest(pre_routes, pre_cohort.case_receipts, "NO_MEMORY")
     candidate_behavior = _behavior_digest(post_routes, post_cohort.case_receipts,
                                           "APPLICABILITY_GATED")
@@ -393,6 +438,7 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
             "No L3 capability gain is claimed: the child adds a negative-applicability "
             "veto and deliberately selects no executable asset."),
         "p14_chain": {
+            "router_replay_digest": _digest(router_audit),
             "reason_receipt_digest": shadow_reason.receipt_digest,
             "admission_receipt_digests": sorted(item.receipt_digest for item in admissions),
             "p12_trigger_receipt_digests": sorted(item.receipt_digest for item in triggers),

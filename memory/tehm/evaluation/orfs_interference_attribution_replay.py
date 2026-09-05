@@ -188,6 +188,7 @@ def _read_p13(shadow_root: Path, challenge_root: Path):
     if delta.receipt_digest != expected_delta.receipt_digest:
         raise OrfsInterferenceAttributionReplayError("P13 memory delta derivation drifted")
     return {
+        "cases": _cases["cases"], "candidates": _candidates,
         "shadow_replay": shadow_replay, "pre_cohort": pre_cohort,
         "post_cohort": post_cohort, "pre_routes": pre_routes, "reason": reason,
         "parent": parent, "training": training, "shadow_payload": shadow_payload,
@@ -241,6 +242,7 @@ def replay(artifacts: Path | str, *, shadow_artifacts: Path | str,
     summary = _load(root / "summary.json", "P14 summary")
     _boundary(report, name="P14 strategy attribution")
     _boundary(summary, name="P14 summary")
+    recorded_router_audit = _load(root / "router_replay.json", "P14 actual-router replay")
     if (report.get("version") != VERSION or report.get("reason") != "MEMORY_INTERFERENCE" or
             report.get("scope") != "L2_STRATEGY_EVOLUTION" or
             report.get("capability_attribution") != cap_payload):
@@ -293,8 +295,23 @@ def replay(artifacts: Path | str, *, shadow_artifacts: Path | str,
         parent = p13["parent"]
         child = attribution._child(parent)
         post_resolution_id = _text(chain.get("candidate_resolution_id"), "candidate_resolution_id")
-        post_routes = {case_id: attribution._post_route(case_id, post_resolution_id)
-                       for case_id in sorted(p13["pre_cohort"].case_receipts)}
+        recorded_post_routes = {
+            case_id: MemoryRoutingDecision.from_dict(payload)
+            for case_id, payload in _load(
+                shadow_root / "receipts/post_routes.json", "P13 post routes").items()}
+        router_audit = {
+            "baseline": attribution.audit_router_outputs(
+                source_conn, p13["cases"], p13["candidates"], parent, p13["pre_routes"]),
+            "candidate": attribution.audit_router_outputs(
+                projection_conn, p13["cases"], p13["candidates"], parent, recorded_post_routes),
+        }
+        if (not all(item["eligible"] for item in router_audit.values()) or
+                router_audit != recorded_router_audit or
+                chain.get("router_replay_digest") != _digest(router_audit)):
+            raise OrfsInterferenceAttributionReplayError("P14 actual-router replay mismatch")
+        post_routes = {
+            case_id: MemoryRoutingDecision.from_dict(row["actual"])
+            for case_id, row in router_audit["candidate"]["cases"].items()}
         baseline_behavior = attribution._behavior_digest(
             p13["pre_routes"], p13["pre_cohort"].case_receipts, "NO_MEMORY")
         candidate_behavior = attribution._behavior_digest(

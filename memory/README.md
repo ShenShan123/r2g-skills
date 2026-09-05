@@ -18,6 +18,15 @@
 历史外部 freeze 的声明，不能当作本工作树的现时测试结果。v3 的完整 reproduce
 仍需要它自己的 freeze 指针；当前 v4 可直接由本地 `evidence/` bundle 重放。
 
+当前证据修正（2026-09-05）：历史 ORFS interference P14 的
+`CONSIDER → INAPPLICABLE` 是脚本构造的路由，不是从保存的 memory 状态重算的
+router 输出。当前 producer/replayer 已加入真实 router 核验；已有 GCD 两个 case
+在更新前后均返回 `NO_SKILL / NO_MATCH`，对应数据库没有因果路径，Knowledge
+仍为 shadow。旧的 `strategy_attribution_eligible=true` 不再是有效闭环证据，
+不能据此断言只剩 MIR 阈值问题。必须先建立有证据支持的 Knowledge/路径、
+冻结真实查询并让路由驱动执行，再补真正的 ΔMemory 消融；不能通过直接修改
+validated 状态或伪造 query 中的 interference 标签越过这些缺口。
+
 <!-- TEHM_EVIDENCE_V3_START -->
 ### Evidence Contract v3（由 freeze manifest 自动生成）
 
@@ -4504,9 +4513,14 @@ evaluation-only boundary in its summary.  The read-only replay entry point is
 `scripts/replay_r3_orfs_interference_attribution.py`; it replays the P13
 reason/proposal/delta chain, validates the source and projection databases,
 recomputes the database-bound C1-C8 attribution, and checks the safety
-ablation.  The current replay is `REPLAY_PASS`: strategy C1-C5 are eligible,
-standard capability C5/C6/C8 remain unclaimed, and no canonical memory,
-production runtime, or `memory/docs` content is changed.
+ablation. Its historical replay was `REPLAY_PASS`, but it reconstructed a
+hard-coded post-route rather than running the router. Current replay requires
+`router_replay.json`, re-derives pre/post decisions from both database snapshots,
+and rejects mismatched or absent routing evidence. The producer writes the
+diagnostic before creating any P14 policy-load or success receipt. Existing
+GCD receipts fail this check; their L2 attribution is unestablished. Historical
+artifacts are retained, not rewritten. Canonical memory, production runtime,
+and `memory/docs` remain unchanged by this audit.
 
 ### Revision3 P15 calibration refresh (2026-09-04)
 
