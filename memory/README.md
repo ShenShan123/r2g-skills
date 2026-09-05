@@ -4532,3 +4532,19 @@ The build and read-only replay both return `BLOCKED_READINESS` with
 runtime.  It remains evaluation-only with
 `production_integration=not_attempted`, `production_runtime_imported=false`,
 `canonical_memory_mutation=none`, and `memory_docs_submitted=false`.
+
+### Revision3 RQ5 RTL asset-gap shadow refresh (2026-09-04)
+
+The current HEAD also has a fresh disposable RQ5 asset-gap run at
+`/data1/zhangdy/tehm-campaigns/tehm-r3-rq5-asset-gap-shadow-20260904-r1/asset_gap_shadow_report.json`.
+Two learner-eligible `HANDSHAKE_COMPLETION` training lineages produced a typed
+capability gap; the parser-backed RTL rewrite asset passed independent
+Icarus/VVP validation on both training lineages and held-out `req_ack_fsm3`,
+while incompatible `VALID_READY_COMMIT` remained `INAPPLICABLE`.  Schema,
+static/verifier, cross-lineage, regression, compatibility, and rollback checks
+all passed, so the asset is marked `candidate` in the disposable shadow
+database.  This is an RQ5 proposal/validation result only:
+`asset_promotion_eligible=true` is an audit result, while
+`promotion_attempted=false`, `production_promotion_eligible=false`,
+`canonical_memory_mutation=none`, and `memory_docs_submitted=false` remain
+fixed.
