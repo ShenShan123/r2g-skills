@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Build a real RTL C4/C5 asset-gap shadow receipt.
+"""Build an answer-free alpha-transfer RTL asset-gap shadow receipt.
 
 The input projects are ordinary parser-backed RTL fixtures executed by the
 registered Icarus oracle.  Training projects are captured into a *derived*
 database so the gap detector can see repeated learner-eligible evidence;
-held-out and incompatible non-target projects are validated externally and
-never become learner support.  The generated asset is registered as
+held-out binding uses only RTL and a template frozen from a verified training
+fix. These hand-written alpha-equivalent fixtures do not establish independent
+design generalization or Revision3 L3 expansion. Held-out and incompatible
+non-target projects are validated externally and never become learner support.
+The generated asset is registered as
 ``candidate`` only.  This script has no canonical-memory or production
 promotion path.
 """
@@ -14,6 +17,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -24,14 +28,14 @@ if str(ROOT) not in sys.path:
 
 from tehm import db  # noqa: E402
 from tehm.assets import (  # noqa: E402
-    bind_rtl_asset_to_project, build_rtl_asset_proposal,
+    bind_rtl_asset_to_source, build_rtl_asset_proposal, with_structural_binding,
     detect_capability_gaps, get_asset,
     record_asset_authority, verify_asset_authority,
     register_asset_proposal, set_asset_status, validate_rtl_asset_project,
     validate_rtl_rewrite_asset,
 )
 from tehm.artifact_store import ArtifactStore  # noqa: E402
-from tehm.causal.orfs import _backup_database, _sha256  # noqa: E402
+from tehm.causal.orfs import _sha256  # noqa: E402
 from tehm.causal.rtl import capture_rtl_causal_fragment  # noqa: E402
 from tehm.rtl.compatibility import profile_for_action  # noqa: E402
 from tehm.rtl.rtl_actions import apply_rtl_action  # noqa: E402
@@ -67,7 +71,7 @@ def _proposal_from_gap(gap, project: Path):
         "compatibility_profile") if key in fix}
     payload["domain"] = domain
     payload["compatibility_profile"] = profile
-    return build_rtl_asset_proposal(
+    proposal = build_rtl_asset_proposal(
         gap,
         name="rtl.handshake_guard_strengthen.template",
         transformation_family=str(fix.get("transformation_family") or
@@ -78,6 +82,28 @@ def _proposal_from_gap(gap, project: Path):
                               "RTL_FROZEN_REGRESSION_PASS",
                               "RTL_COMPILE_PASS"),
         creator="tehm-c4-c5-shadow-synthesizer")
+    return with_structural_binding(proposal, _rtl_source(project))
+
+
+def _rtl_source(project: Path) -> str:
+    paths = sorted((project / "rtl").glob("*.v"))
+    if len(paths) != 1:
+        raise ValueError("structural asset lane requires exactly one RTL source")
+    return paths[0].read_text()
+
+
+def _bind(asset: dict, project: Path) -> dict:
+    # No manifest (including family labels) or testbench enters localization.
+    return bind_rtl_asset_to_source(asset, _rtl_source(project),
+                                    design_id=project.name)
+
+
+def _baseline_receipt(project: Path, oracle: IcarusOracle) -> dict:
+    verification = _manifest(project).get("verification") or {}
+    return oracle.verify(
+        sorted((project / "rtl").glob("*.v")),
+        target_tb=project / verification.get("target_test", "tb/tb_handshake.v"),
+        regression_tb=project / verification.get("frozen_regression", "tb/tb_basic.v"))
 
 
 def _static_receipt(asset: dict, project: Path) -> dict:
@@ -124,12 +150,13 @@ def _rollback_receipt(bindings: list[dict], oracle: IcarusOracle) -> dict:
             fixed_digest = hashlib.sha256(trial_path.read_bytes()).hexdigest()
             trial_path.write_bytes(original)
             restored_digest = hashlib.sha256(trial_path.read_bytes()).hexdigest()
-        verification_cfg = manifest.get("verification") or {}
-        target_tb = project / verification_cfg.get("target_test", "tb/tb_handshake.v")
-        regression_tb = project / verification_cfg.get("frozen_regression", "tb/tb_basic.v")
-        baseline = oracle.verify(
-            rtl_files, target_tb=target_tb if target_tb.exists() else None,
-            regression_tb=regression_tb if regression_tb.exists() else None)
+            verification_cfg = manifest.get("verification") or {}
+            target_tb = project / verification_cfg.get("target_test", "tb/tb_handshake.v")
+            regression_tb = project / verification_cfg.get("frozen_regression", "tb/tb_basic.v")
+            baseline = oracle.verify(
+                [trial_path, *rtl_files[1:]],
+                target_tb=target_tb if target_tb.exists() else None,
+                regression_tb=regression_tb if regression_tb.exists() else None)
         verified = bool(
             fixed_digest != original_digest and
             restored_digest == original_digest and
@@ -140,6 +167,7 @@ def _rollback_receipt(bindings: list[dict], oracle: IcarusOracle) -> dict:
             "original_sha256": original_digest,
             "fixed_sha256": fixed_digest,
             "restored_sha256": restored_digest,
+            "oracle_executed_restored_source": True,
             "baseline_target_verdict": baseline.get("target", {}).get("verdict"),
             "baseline_regression_verdict": baseline.get("regression", {}).get("verdict"),
             "verified": verified,
@@ -170,6 +198,10 @@ def build_rtl_asset_gap_shadow(
     source = Path(source_db).resolve()
     if not source.is_file():
         raise FileNotFoundError(f"source database not found: {source}")
+    if any(Path(str(source) + suffix).exists() for suffix in ("-wal", "-shm")):
+        raise ValueError("source database must be a frozen sidecar-free snapshot")
+    source_conn = db.connect_read_only(source)
+    source_conn.close()
     train = [Path(item).resolve() for item in training_projects]
     heldout = [Path(item).resolve() for item in heldout_projects]
     non_target = [Path(item).resolve() for item in non_target_projects]
@@ -181,9 +213,13 @@ def build_rtl_asset_gap_shadow(
         raise ValueError("held-out project lineage leaked into training")
     source_digest = _sha256(source)
     output = Path(output_dir).resolve()
+    if output.exists() and any(output.iterdir()):
+        raise ValueError("output directory must be empty; previous evidence is immutable")
     output.mkdir(parents=True, exist_ok=True)
     derived_db = output / "tehm.sqlite"
-    _backup_database(source, derived_db)
+    # The input is already a validated, sidecar-free frozen snapshot. Opening
+    # it via SQLite mode=ro for backup would still create WAL/SHM sidecars.
+    shutil.copyfile(source, derived_db)
     conn = db.connect(derived_db)
     db.ensure_schema(conn)
     store = ArtifactStore(output / "artifacts")
@@ -223,8 +259,7 @@ def build_rtl_asset_gap_shadow(
     training_static = []
     training_oracle = []
     for project in train:
-        bound = bind_rtl_asset_to_project(
-            asset, project, expected_mechanism_family=mechanism_family)
+        bound = _bind(asset, project)
         training_static.append({
             "project": str(project),
             "asset": bound,
@@ -236,8 +271,7 @@ def build_rtl_asset_gap_shadow(
         })
     heldout_receipts = []
     for project in heldout:
-        bound = bind_rtl_asset_to_project(
-            asset, project, expected_mechanism_family=mechanism_family)
+        bound = _bind(asset, project)
         heldout_receipts.append({
             "project": str(project),
             "asset": bound,
@@ -246,12 +280,20 @@ def build_rtl_asset_gap_shadow(
     non_target_receipts = []
     for project in non_target:
         try:
-            bound = bind_rtl_asset_to_project(
-                asset, project, expected_mechanism_family=mechanism_family)
+            bound = _bind(asset, project)
         except (OSError, TypeError, ValueError) as exc:
+            before = _baseline_receipt(project, oracle)
+            after = _baseline_receipt(project, oracle)
             non_target_receipts.append({
                 "project": str(project), "status": "INAPPLICABLE",
                 "reason": str(exc),
+                "baseline_oracle": before, "abstention_oracle": after,
+                "regression_preserved": (
+                    before.get("regression", {}).get("verdict") == "PASS" and
+                    after.get("regression", {}).get("verdict") == "PASS" and
+                    before.get("target", {}).get("verdict") in {"PASS", "FAIL"} and
+                    before.get("target", {}).get("verdict") ==
+                    after.get("target", {}).get("verdict")),
             })
         else:
             non_target_receipts.append({
@@ -268,7 +310,8 @@ def build_rtl_asset_gap_shadow(
         and item["receipt"].get("oracle_verdict") == "PASS"
         and item["receipt"].get("regression_verdict") == "PASS"
         for item in heldout_receipts)
-    no_regression = all(item.get("status") == "INAPPLICABLE"
+    no_regression = all(item.get("status") == "INAPPLICABLE" and
+                        item.get("regression_preserved") is True
                         for item in non_target_receipts)
     if not (training_pass and heldout_pass and no_regression):
         conn.close()
@@ -322,11 +365,11 @@ def build_rtl_asset_gap_shadow(
         raise AssertionError(
             "asset authority receipt did not replay: "
             f"{authority_verification['reasons']}")
-    conn.close()
+    db.checkpoint_and_close(conn)
     if _sha256(source) != source_digest:
         raise AssertionError("source canonical database changed during shadow build")
     report = {
-        "version": "rtl-asset-gap-shadow-v1",
+        "version": "rtl-asset-gap-shadow-v2",
         "source_db": str(source),
         "source_db_sha256": source_digest,
         "derived_db": str(derived_db),
@@ -348,11 +391,18 @@ def build_rtl_asset_gap_shadow(
         "asset_authority_receipt": authority_receipt.to_dict(),
         "asset_authority_verification": authority_verification,
         "asset_promotion_eligible": authority_receipt.eligible,
+        "claim_scope": "alpha_equivalent_fixture_transfer",
+        "l3_capability_expansion_established": False,
+        "evolution_reason_admission_established": False,
         "firewall": {
             "training_lineages": sorted(train_lineages),
             "heldout_lineages": sorted(heldout_lineages),
             "disjoint": not bool(train_lineages & heldout_lineages),
             "heldout_entered_learner_memory": False,
+            "heldout_binding_reads_manifest": False,
+            "heldout_binding_reads_testbench": False,
+            "training_proposal_source": "verified_fixture_fix",
+            "independent_design_generalization_established": False,
         },
         "shadow_execution": {
             "training_pass": training_pass,
@@ -363,9 +413,11 @@ def build_rtl_asset_gap_shadow(
         "promotion_attempted": False,
         "production_promotion_eligible": False,
         "authority_note": (
-            "C4 emits a receipt from repeated learner-eligible failures; C5 "
-            "registers and executes a narrow parser-backed RTL template as a "
-            "candidate only. No canonical or production authority is changed; "
+            "Training fixes are fixture-supplied; held-out binding consumes RTL "
+            "only. This establishes bounded alpha-equivalent fixture transfer, "
+            "not independent-design generalization or L3 expansion. The "
+            "Revision3 reason/admission chain is not established by this lane. "
+            "No canonical or production authority is changed; "
             "the asset authority receipt is audit-only; no lifecycle promotion "
             "or production policy mutation is attempted."),
     }

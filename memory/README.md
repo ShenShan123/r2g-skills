@@ -75,16 +75,15 @@ manifest、脚本和验证结果，不提交大型二进制。
 
 ### C4/C5 RTL Asset Memory shadow（2026-08-26）
 
-已用 `req_ack_bug` / `req_ack_bug2` 两个独立 training lineage 生成真实
+已用 `req_ack_bug` / `req_ack_bug2` 两个 training fixture 标识生成
 `CapabilityGapReceipt`，并通过 manifest/结构化槽位绑定同一
 `RTL_REWRITE_TEMPLATE`。模板在两个 training lineage 与 held-out
 `req_ack_bug3` 上均由 Icarus/vvp 通过 target + frozen regression；异构
 `valid_ready_bug` 被兼容性边界拒绝为 `INAPPLICABLE`。asset 只在派生 shadow
-数据库注册为 `candidate`，不写 canonical、不进入 production。由这些独立 receipt
-推导的七项 asset authority gate（schema/static/verifier/compatibility/
-cross-lineage/regression/rollback）当前均为 `true`，但这只是 audit-only 的
-`asset_promotion_eligible`，没有执行 lifecycle promotion 或 production runtime
-导入。完整 receipt 位于
+数据库注册为 `candidate`，不写 canonical、不进入 production。历史 v1 receipt
+的七项 asset authority gate 曾均为 `true`，但其绑定读取了 held-out
+`manifest.fix`，不能证明独立迁移；当前 strict authority 已拒绝
+`manifest_fix_v1`，不再授予这类旧证据晋升资格。历史完整 receipt 位于
 [`evidence/tehm-asset-gap-shadow-rtl-r1-dev/asset_gap_shadow_report.json`](../evidence/tehm-asset-gap-shadow-rtl-r1-dev/asset_gap_shadow_report.json)，
 重放入口为 `scripts/build_rtl_asset_gap_shadow.py`。
 当前新增的 `assets.authority` 还提供 content-bound
@@ -112,6 +111,9 @@ training lineage 的 target failure 均被修复，独立 held-out `req_ack_bug3
 production promotion。报告位于
 [`evidence/tehm-capability-attribution-rtl-r1-dev/rtl_capability_attribution_report.json`](../evidence/tehm-capability-attribution-rtl-r1-dev/rtl_capability_attribution_report.json)，
 重放入口为 `scripts/build_rtl_capability_attribution.py`。
+上述历史 C1–C8 fixture 报告同样早于答案绑定防火墙修正，不能作为当前
+strict authority 的有效证据或独立设计上的 L3 结果；v2 的结论范围见文末
+“Revision3 RQ5 evidence boundary and answer-free binding”。
 
 ### C1-C8 ORFS capability attribution（2026-08-26）
 
@@ -4533,18 +4535,30 @@ runtime.  It remains evaluation-only with
 `production_integration=not_attempted`, `production_runtime_imported=false`,
 `canonical_memory_mutation=none`, and `memory_docs_submitted=false`.
 
-### Revision3 RQ5 RTL asset-gap shadow refresh (2026-09-04)
+### Revision3 RQ5 evidence boundary and answer-free binding
 
-The current HEAD also has a fresh disposable RQ5 asset-gap run at
-`/data1/zhangdy/tehm-campaigns/tehm-r3-rq5-asset-gap-shadow-20260904-r1/asset_gap_shadow_report.json`.
-Two learner-eligible `HANDSHAKE_COMPLETION` training lineages produced a typed
-capability gap; the parser-backed RTL rewrite asset passed independent
-Icarus/VVP validation on both training lineages and held-out `req_ack_fsm3`,
-while incompatible `VALID_READY_COMMIT` remained `INAPPLICABLE`.  Schema,
-static/verifier, cross-lineage, regression, compatibility, and rollback checks
-all passed, so the asset is marked `candidate` in the disposable shadow
-database.  This is an RQ5 proposal/validation result only:
-`asset_promotion_eligible=true` is an audit result, while
-`promotion_attempted=false`, `production_promotion_eligible=false`,
-`canonical_memory_mutation=none`, and `memory_docs_submitted=false` remain
-fixed.
+The historical `tehm-r3-rq5-asset-gap-shadow-20260904-r1` run used each
+held-out fixture's `manifest.fix` to construct its repair. Its passing Icarus
+receipts establish fixture execution, **not** independent transfer or L3
+capability expansion. Old `manifest_fix_v1` bindings now fail strict asset
+authority replay; historical evidence bundles are retained, not rewritten.
+
+`build_rtl_asset_gap_shadow.py` v2 freezes a structural locator from a verified
+training fix. `bind_rtl_asset_to_source()` accepts only the asset, RTL text,
+and a design ID; comments, manifests, testbenches, and answers do not supply
+repair slots. It supports identifier-renamed copies of the same single-module,
+single-FSM guard-strengthening structure. Structural differences fail closed.
+Authority re-derives the bound copy from the registered template and recorded
+RTL; a caller-supplied digest alone is insufficient. The attribution runner
+uses the same answer-free binder. Rollback executes the restored temporary
+source, and non-target regression runs the oracle before and after abstention.
+
+Tests remove or poison held-out `fix`, prohibit file reads during binding,
+alter structural operators, and tamper with binding evidence. Reports label
+this `alpha_equivalent_fixture_transfer` and explicitly set
+`l3_capability_expansion_established=false`. The fixture training fixes are
+still supplied answers; independent-design generalization and the Revision3
+reason/admission-to-new-asset chain remain unestablished by this lane.
+Candidates stay in disposable databases with `promotion_attempted=false`,
+`production_promotion_eligible=false`, and `canonical_memory_mutation=none`.
+`memory/docs/` remains local and Git-ignored.

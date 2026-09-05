@@ -24,6 +24,7 @@ from .synthesis import (
 from .validation import (
     validate_asset_schema, validate_rtl_asset_project, validate_rtl_rewrite_asset,
 )
+from .structural_binding import bind_rtl_asset_to_source, with_structural_binding
 
 __all__ = [
     "ASSET_PROMOTION_GATES", "ASSET_STATUSES", "ASSET_TYPES",
@@ -38,6 +39,7 @@ __all__ = [
     "register_asset", "set_asset_status",
     "promote_asset", "record_asset_authority", "verify_asset_authority",
     "bind_asset_to_repair_context", "bind_rtl_asset_to_project",
+    "bind_rtl_asset_to_source", "with_structural_binding",
     "build_rtl_asset_proposal",
     "register_asset_proposal",
     "synthesize_asset", "synthesize_rtl_asset", "validate_asset_schema",

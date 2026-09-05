@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -22,10 +23,10 @@ if str(ROOT) not in sys.path:
 
 from tehm import db  # noqa: E402
 from tehm.assets import (  # noqa: E402
-    bind_rtl_asset_to_project, get_asset, get_asset_status,
+    bind_rtl_asset_to_source, get_asset, get_asset_status,
     verify_asset_authority,
 )
-from tehm.causal.orfs import _backup_database, _sha256  # noqa: E402
+from tehm.causal.orfs import _sha256  # noqa: E402
 from tehm.capability import (  # noqa: E402
     create_policy_snapshot, evaluate_capability_campaign,
     record_capability_evidence, record_policy_load, register_capability,
@@ -91,8 +92,11 @@ def _candidate_oracle(
         "selected_asset_id": asset.get("asset_id"),
     }
     try:
-        bound = bind_rtl_asset_to_project(
-            asset, project, expected_mechanism_family=mechanism_family)
+        rtl_files = sorted((project / "rtl").glob("*.v"))
+        if len(rtl_files) != 1:
+            raise ValueError("structural asset lane requires exactly one RTL source")
+        bound = bind_rtl_asset_to_source(
+            asset, rtl_files[0].read_text(), design_id=project.name)
     except (OSError, TypeError, ValueError) as exc:
         return {
             **base, "status": "INAPPLICABLE", "action_applied": False,
@@ -225,9 +229,15 @@ def build_rtl_capability_attribution(
         raise ValueError("non-target lineage overlaps training or held-out")
 
     output = Path(output_dir).resolve()
+    if output.exists() and any(output.iterdir()):
+        raise ValueError("output directory must be empty; previous evidence is immutable")
     output.mkdir(parents=True, exist_ok=True)
     derived_db = output / "tehm.sqlite"
-    _backup_database(asset_db, derived_db)
+    if any(Path(str(asset_db) + suffix).exists() for suffix in ("-wal", "-shm")):
+        raise ValueError("asset database must be a frozen sidecar-free snapshot")
+    frozen_conn = db.connect_read_only(asset_db)
+    frozen_conn.close()
+    shutil.copyfile(asset_db, derived_db)
     conn = db.connect(derived_db)
     db.ensure_schema(conn)
     oracle = IcarusOracle()
@@ -455,12 +465,14 @@ def build_rtl_capability_attribution(
         runtime_id=runtime_id, gates=authority_gate_inputs)
     capability_authority_check = verify_capability_authority(
         conn, capability.capability_id, capability_authority)
-    conn.close()
+    db.checkpoint_and_close(conn)
     if _sha256(source) != source_digest:
         raise AssertionError("source DB changed during attribution")
 
     report = {
-        "version": "rtl-capability-attribution-v1",
+        "version": "rtl-capability-attribution-v2",
+        "claim_scope": "alpha_equivalent_fixture_transfer",
+        "l3_capability_expansion_established": False,
         "source_db": str(source),
         "source_db_sha256": source_digest,
         "asset_gap_report": str(report_path),
@@ -510,6 +522,8 @@ def build_rtl_capability_attribution(
                           train_lineages.isdisjoint(non_target_lineages) and
                           heldout_lineages.isdisjoint(non_target_lineages)),
             "heldout_entered_learner_support": False,
+            "heldout_binding_reads_manifest": False,
+            "independent_design_generalization_established": False,
         },
         "attribution": attribution.to_dict(),
         "capability_authority_gates": capability_gates,

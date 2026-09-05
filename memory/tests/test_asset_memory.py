@@ -12,6 +12,7 @@ from tehm.assets import (
     build_rtl_asset_proposal, detect_capability_gaps,
     evaluate_asset_authority, get_asset, register_asset_proposal, set_asset_status,
     validate_rtl_asset_project, validate_rtl_rewrite_asset,
+    bind_rtl_asset_to_source, with_structural_binding,
 )
 from tehm.causal.rtl import capture_rtl_causal_fragment
 from tehm.rtl.rtl_oracle import IcarusOracle
@@ -25,7 +26,7 @@ def _proposal():
         "gap_id": "gap-handshake",
         "evidence_transitions": ["transition-a", "transition-b"],
     }
-    return build_rtl_asset_proposal(
+    proposal = build_rtl_asset_proposal(
         gap, name="rtl.guard_strengthen.template",
         transformation_family="GUARD_STRENGTHEN",
         action_payload_template={
@@ -36,6 +37,13 @@ def _proposal():
         compatibility_profile="rtl.fsm.single_guard.v1",
         verifier_obligations=("RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS"),
     )
+    return with_structural_binding(
+        proposal, (PROJECTS / "req_ack_bug/rtl/req_ack_fsm.v").read_text())
+
+
+def _source_binding(asset, project):
+    return bind_rtl_asset_to_source(
+        asset, (project / "rtl/req_ack_fsm.v").read_text(), design_id=project.name)
 
 
 def test_asset_proposal_is_static_and_never_promotion_eligible(tmp_tehm):
@@ -115,12 +123,8 @@ def test_asset_status_reader_fails_closed_on_malformed_lifecycle_row(tmp_tehm):
 
 def test_asset_authority_is_derived_from_receipts_and_rollback(tmp_tehm):
     proposal = _proposal().to_dict()
-    bound_one = bind_rtl_asset_to_project(
-        proposal, PROJECTS / "req_ack_bug",
-        expected_mechanism_family="HANDSHAKE_COMPLETION")
-    bound_two = bind_rtl_asset_to_project(
-        proposal, PROJECTS / "req_ack_bug2",
-        expected_mechanism_family="HANDSHAKE_COMPLETION")
+    bound_one = _source_binding(proposal, PROJECTS / "req_ack_bug")
+    bound_two = _source_binding(proposal, PROJECTS / "req_ack_bug2")
     validation = {
         "static_valid": True, "independent_verifier": True,
         "oracle_verdict": "PASS", "regression_verdict": "PASS", "errors": [],
@@ -284,12 +288,8 @@ def test_asset_authority_is_content_bound_and_replayable(tmp_tehm):
     asset = get_asset(conn, registered.asset_id)
     assert asset is not None
     asset["asset_id"] = registered.asset_id
-    bound_one = bind_rtl_asset_to_project(
-        asset, PROJECTS / "req_ack_bug",
-        expected_mechanism_family="HANDSHAKE_COMPLETION")
-    bound_two = bind_rtl_asset_to_project(
-        asset, PROJECTS / "req_ack_bug2",
-        expected_mechanism_family="HANDSHAKE_COMPLETION")
+    bound_one = _source_binding(asset, PROJECTS / "req_ack_bug")
+    bound_two = _source_binding(asset, PROJECTS / "req_ack_bug2")
     validation = {
         "static_valid": True, "independent_verifier": True,
         "oracle_verdict": "PASS", "regression_verdict": "PASS", "errors": [],
@@ -325,12 +325,8 @@ def test_asset_authority_ledger_is_idempotent_and_tamper_evident(tmp_tehm):
     asset = get_asset(conn, registered.asset_id)
     assert asset is not None
     asset["asset_id"] = registered.asset_id
-    bound_one = bind_rtl_asset_to_project(
-        asset, PROJECTS / "req_ack_bug",
-        expected_mechanism_family="HANDSHAKE_COMPLETION")
-    bound_two = bind_rtl_asset_to_project(
-        asset, PROJECTS / "req_ack_bug2",
-        expected_mechanism_family="HANDSHAKE_COMPLETION")
+    bound_one = _source_binding(asset, PROJECTS / "req_ack_bug")
+    bound_two = _source_binding(asset, PROJECTS / "req_ack_bug2")
     validation = {
         "static_valid": True, "independent_verifier": True,
         "oracle_verdict": "PASS", "regression_verdict": "PASS", "errors": [],

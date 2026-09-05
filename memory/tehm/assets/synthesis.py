@@ -141,14 +141,16 @@ def register_asset_proposal(conn, proposal: AssetProposal,
 
 def bind_rtl_asset_to_project(asset: Mapping, project: Path | str, *,
                               expected_mechanism_family: str | None = None) -> dict:
-    """Bind a parser-backed RTL template to one concrete project context.
+    """Fixture-only binding; not evidence for strict asset promotion.
 
     A proposal is deliberately abstract at the Asset Memory boundary, while
     the existing RTL executor requires concrete module/state/signal slots.
     Binding therefore consumes only the project manifest's typed ``fix``
     payload and verifies its domain, transformation family, compatibility
     profile, and parser-visible module before returning an executable copy.
-    It never edits the project or registers/promotes an asset.
+    It never edits the project or registers/promotes an asset. Because it
+    consumes the target answer, authority rejects this binding contract. Use
+    bind_rtl_asset_to_source for the supported answer-free structural subset.
     """
     if not isinstance(asset, Mapping):
         raise TypeError("asset must be a mapping")

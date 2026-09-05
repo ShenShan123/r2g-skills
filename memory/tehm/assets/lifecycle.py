@@ -145,9 +145,11 @@ def _binding_is_compatible(bound: Mapping, asset: Mapping) -> bool:
     provenance = bound.get("provenance") or {}
     if not isinstance(provenance, Mapping):
         return False
-    if provenance.get("binding_contract") != "manifest_fix_v1":
-        return False
-    if not str(provenance.get("binding_digest") or "").startswith("sha256:"):
+    # Fixture manifest.fix supplies the target answer, not transferable
+    # localization. It remains executable for diagnostics, never authority.
+    from .structural_binding import CONTRACT, verify_structural_binding
+    if (provenance.get("binding_contract") != CONTRACT or
+            not verify_structural_binding(bound, asset)):
         return False
     compatibility = asset.get("compatibility") or {}
     if not isinstance(compatibility, Mapping):
