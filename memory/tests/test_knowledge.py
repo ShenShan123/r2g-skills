@@ -108,6 +108,49 @@ def test_builder_keeps_l0_l1_shadow_only(tmp_tehm):
         build_knowledge_from_path(conn, path.path_id, status="validated")
 
 
+@pytest.mark.parametrize("control_outcome,treatment_outcome", [
+    ("FAIL", "PASS"), ("PASS", "FAIL"), ("FAIL", "NEUTRAL"),
+])
+def test_builder_does_not_pool_baseline_controls_into_treatment(
+        tmp_tehm, monkeypatch, control_outcome, treatment_outcome):
+    from tehm.knowledge import builder
+
+    conn, path, control_id, treatment_id = _path_from_two_training_transitions(tmp_tehm)
+    original = builder.load_transition_facts
+    control = replace(
+        original(conn, control_id), outcome=control_outcome,
+        action={"domain": "flow.BASELINE_CONTROL", "transformation_family": "CONTROL"},
+        verifier={"verdict": control_outcome},
+        primary_effect_key="control-effect")
+    treatment = replace(
+        original(conn, treatment_id), outcome=treatment_outcome,
+        verifier={"verdict": treatment_outcome},
+        primary_effect_key="treatment-effect")
+    # Unit-level projection test only: these injected facts confer no causal
+    # authority and do not modify the persisted path or canonical transitions.
+    monkeypatch.setattr(builder, "load_transition_facts", lambda _, key: {
+        control_id: control, treatment_id: treatment}[key])
+    claim = build_knowledge_from_path(conn, path.path_id)
+    assert sum(claim.antecedent["source_outcomes"].values()) == 2
+    assert claim.expected_outcome["outcomes"] == {treatment_outcome: 1}
+    assert claim.expected_outcome["preferred_outcome"] == treatment_outcome
+    assert claim.expected_outcome["verdicts"] == {treatment_outcome: 1}
+    assert claim.intervention["action_digests"] == [treatment.action_digest]
+    assert "flow.BASELINE_CONTROL" not in claim.intervention["action_domains"]
+    assert claim.mediated_effects == ({"primary_effect_key": "treatment-effect"},)
+
+
+def test_builder_rejects_control_only_path(tmp_tehm, monkeypatch):
+    from tehm.knowledge import builder
+
+    conn, path, _, _ = _path_from_two_training_transitions(tmp_tehm)
+    original = builder.load_transition_facts
+    monkeypatch.setattr(builder, "load_transition_facts", lambda connection, key:
+        replace(original(connection, key), action={"domain": "flow.BASELINE_CONTROL"}))
+    with pytest.raises(ValueError, match="no intervention witnesses"):
+        build_knowledge_from_path(conn, path.path_id)
+
+
 def test_negative_context_does_not_leak_heldout_evidence(tmp_tehm):
     conn, source_id = _capture(tmp_tehm, record_id="knowledge-source",
                                action_value="ack")

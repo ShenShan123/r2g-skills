@@ -70,13 +70,24 @@ def build_knowledge_from_path(
            for f in facts):
         raise ValueError("mechanism knowledge path family/profile witness conflicts")
 
-    action_domains = sorted({str(f.action.get("domain")) for f in facts})
+    # ORFS baseline controls are witnesses for the causal comparison, not
+    # repair actions or predictions of the treatment's outcome. Keep them in
+    # antecedent/source provenance, but never vote them into the intervention.
+    intervention_facts = tuple(
+        f for f in facts if f.action.get("domain") != "flow.BASELINE_CONTROL")
+    if not intervention_facts:
+        raise ValueError("mechanism knowledge path has no intervention witnesses")
+    action_domains = sorted({str(f.action.get("domain")) for f in intervention_facts})
     transformation_families = sorted({
-        str(f.action.get("transformation_family")) for f in facts})
-    action_digests = sorted({f.action_digest for f in facts})
+        str(f.action.get("transformation_family")) for f in intervention_facts})
+    action_digests = sorted({f.action_digest for f in intervention_facts})
     outcomes = Counter(f.outcome for f in facts)
     verdicts = Counter(str(f.verifier.get("verdict") or "UNKNOWN") for f in facts)
-    effects = sorted({str(f.primary_effect_key) for f in facts if f.primary_effect_key})
+    intervention_outcomes = Counter(f.outcome for f in intervention_facts)
+    intervention_verdicts = Counter(
+        str(f.verifier.get("verdict") or "UNKNOWN") for f in intervention_facts)
+    effects = sorted({str(f.primary_effect_key) for f in intervention_facts
+                      if f.primary_effect_key})
     obligations: set[str] = set()
     failure_modes: set[str] = set()
     for facts_item in facts:
@@ -99,10 +110,10 @@ def build_knowledge_from_path(
     }
     mediated_effects = tuple({"primary_effect_key": effect} for effect in effects)
     expected_outcome = {
-        "outcomes": dict(sorted(outcomes.items())),
-        "verdicts": dict(sorted(verdicts.items())),
+        "outcomes": dict(sorted(intervention_outcomes.items())),
+        "verdicts": dict(sorted(intervention_verdicts.items())),
         "preferred_outcome": sorted(
-            outcomes.items(), key=lambda item: (-item[1], item[0]))[0][0],
+            intervention_outcomes.items(), key=lambda item: (-item[1], item[0]))[0][0],
     }
     positive: list[dict] = [{"mechanism_family": family}]
     if profile is not None:

@@ -27,6 +27,26 @@ router 输出。当前 producer/replayer 已加入真实 router 核验；已有 
 冻结真实查询并让路由驱动执行，再补真正的 ΔMemory 消融；不能通过直接修改
 validated 状态或伪造 query 中的 interference 标签越过这些缺口。
 
+同日隔离 bootstrap 复核：CRC/UART 的已有受控训练路径
+`causal_path_54ba6f410c35d0b2` 通过当前 L3 replication 与 Knowledge authority；
+只在 RAM 副本中经正式 lifecycle 验证后，真实 router 从 `NO_MATCH` 转为
+`CONSIDER`，candidate 阶段仍为 `NO_MATCH`。复核同时发现并修复 builder 将
+`flow.BASELINE_CONTROL` 的失败票混入干预预期结果的问题：对照仍完整保留在
+source/antecedent 中，但不作为修复 action、干预 effect 或干预 outcome。
+这是已有训练知识的路由诊断，不是 P13 在线进化、执行收益或 held-out 证明；
+没有 selected asset，也没有 canonical/production 写入。复核入口：
+
+```bash
+PYTHONPATH=memory python memory/scripts/audit_knowledge_router_bootstrap.py \
+  --source /tmp/tehm-orfs/routing-semantic-train-r5/controlled/tehm.sqlite \
+  --source-sha256 f7dcb168e10a8ce87c75ca1ee27e44e1aa75dd50100d50ef8180c37837a85fd1 \
+  --path-id causal_path_54ba6f410c35d0b2 --campaign-id orfs-add-designs-v0.1
+```
+
+上述源快照是本机历史实验产物，不随仓库分发；新环境需先提供同 hash 冻结
+快照。脚本拒绝 hash 不符、WAL/SHM 未收敛或 replication 不合格的输入，
+在内存副本完成诊断后输出 JSON，不把既有 GCD density family 重新标成 routing family。
+
 <!-- TEHM_EVIDENCE_V3_START -->
 ### Evidence Contract v3（由 freeze manifest 自动生成）
 
