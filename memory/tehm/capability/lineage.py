@@ -272,10 +272,14 @@ def build_candidate_lineage(
                      "routing_receipt_id")
     if routing_payload.get("resolved_state_id") != state_id:
         raise CandidateLineageError("candidate lineage routing state mismatch")
+    if (routing_payload.get("decision") not in {"APPLY", "CONSIDER"} or
+            type(routing_payload.get("memory_budget")) is not int or
+            routing_payload["memory_budget"] < 1):
+        raise CandidateLineageError("candidate lineage routing does not authorize memory")
     if asset_id not in tuple(routing_payload.get("selected_asset_ids") or ()):
         raise CandidateLineageError("candidate lineage asset is absent from routing")
     route_paths = set(routing_payload.get("selected_path_ids") or ())
-    if route_paths and not set(paths) <= route_paths:
+    if not set(paths) <= route_paths:
         raise CandidateLineageError("candidate lineage causal paths differ from routing")
 
     selection_digest = _digest_text(
@@ -293,6 +297,13 @@ def build_candidate_lineage(
         "asset_selection_receipt_id")
     if selection_receipt.get("decision") != "SELECT":
         raise CandidateLineageError("candidate lineage requires SELECT asset selection")
+    if (type(selection_receipt.get("candidate_budget")) is not int or
+            selection_receipt["candidate_budget"] < 1):
+        raise CandidateLineageError("candidate lineage asset-selection budget is exhausted")
+    selection_support = selection_receipt.get("causal_support") or {}
+    if (not isinstance(selection_support, Mapping) or not set(paths) <=
+            set(selection_support.get("causal_path_ids") or ())):
+        raise CandidateLineageError("candidate lineage causal paths differ from selection")
     if selection_receipt.get("resolved_state_id") != state_id:
         raise CandidateLineageError("candidate lineage asset-selection state mismatch")
     if selection_receipt.get("routing_receipt_id") != route_id:

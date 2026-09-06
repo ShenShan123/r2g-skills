@@ -47,6 +47,19 @@ PYTHONPATH=memory python memory/scripts/audit_knowledge_router_bootstrap.py \
 快照。脚本拒绝 hash 不符、WAL/SHM 未收敛或 replication 不合格的输入，
 在内存副本完成诊断后输出 JSON，不把既有 GCD density family 重新标成 routing family。
 
+候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
+真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
+INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还
+核对 selection 的 routing receipt 与所选资产身份。这些是回执一致性检查，
+不替代从数据库重算路由或独立执行 oracle。
+
+尚未接通的功能边界：P7 selector 当前仅支持 `RTL_REWRITE_TEMPLATE`，其 strict
+binding 仍要求旧的 `manifest_fix_v1`，尚未接入 answer-free structural binding；
+`FLOW_CONFIG_TRANSFORM` 虽在资产类型枚举中，仍缺这条选择/绑定链的实现。
+因此已有 ORFS Knowledge 的 `CONSIDER` 不能当作可执行配置候选已生成。
+下一阶段需实现该边界并以真实查询、候选 action 与执行回执验证，而非伪造
+selected asset 或将配置动作伪装成 RTL rewrite。
+
 <!-- TEHM_EVIDENCE_V3_START -->
 ### Evidence Contract v3（由 freeze manifest 自动生成）
 

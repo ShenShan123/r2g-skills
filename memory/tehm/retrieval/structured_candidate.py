@@ -251,14 +251,9 @@ def _paths(routing: MemoryRoutingDecision, selection: AssetSelection) -> tuple[s
     route_paths = set(routing.selected_path_ids)
     support = selection.receipt.causal_support.get("causal_path_ids", ())
     support_paths = {item for item in support if isinstance(item, str) and item}
-    if route_paths and support_paths:
-        paths = route_paths & support_paths
-    else:
-        paths = route_paths or support_paths
+    paths = route_paths & support_paths
     if not paths:
         raise StructuredCandidateError("structured candidate requires causal path agreement")
-    if route_paths and support_paths and not paths:
-        raise StructuredCandidateError("routing and selection causal paths differ")
     return tuple(sorted(paths))
 
 
@@ -287,8 +282,12 @@ def build_structured_candidate(
         raise TypeError("structured candidate routing must be MemoryRoutingDecision")
     if not isinstance(asset_selection, AssetSelection):
         raise TypeError("structured candidate asset_selection must be AssetSelection")
+    if routing.decision not in {"APPLY", "CONSIDER"} or routing.memory_budget < 1:
+        raise StructuredCandidateError("routing does not authorize a memory candidate")
     if asset_selection.receipt.decision != "SELECT" or len(asset_selection.assets) != 1:
         raise StructuredCandidateError("structured candidate requires one selected asset")
+    if asset_selection.receipt.candidate_budget < 1:
+        raise StructuredCandidateError("asset selection candidate budget is exhausted")
     binding = _binding_dict(runtime_binding)
     if _contains_gold(binding):
         raise StructuredCandidateError("runtime binding contains gold-answer fields")
@@ -296,8 +295,14 @@ def build_structured_candidate(
         raise StructuredCandidateError("runtime binding is not eligible")
     if routing.resolved_state_id != asset_selection.receipt.resolved_state_id:
         raise StructuredCandidateError("routing and selection state IDs differ")
+    if routing.routing_receipt_id != asset_selection.receipt.routing_receipt_id:
+        raise StructuredCandidateError("asset selection belongs to a different routing receipt")
     asset = asset_selection.assets[0]
     asset_id = _text(asset_selection.receipt.selected_asset_ids[0], "asset_id")
+    if asset_id not in routing.selected_asset_ids:
+        raise StructuredCandidateError("asset was not selected by routing")
+    if asset.get("asset_id") != asset_id:
+        raise StructuredCandidateError("asset definition does not match selection")
     bound_asset = _binding_value(runtime_binding, "asset_id")
     if bound_asset != asset_id:
         raise StructuredCandidateError("runtime binding asset does not match selection")

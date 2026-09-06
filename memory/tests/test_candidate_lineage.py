@@ -1,6 +1,10 @@
 """P14 structured-candidate lineage witness tests."""
 from __future__ import annotations
 
+from dataclasses import replace
+
+import pytest
+
 from contracts import MemoryRoutingDecision
 from tehm.assets.receipts import RuntimeBindingReceipt
 from tehm.capability import CandidateLineageError, build_candidate_lineage
@@ -82,3 +86,26 @@ def test_candidate_lineage_fails_closed_on_execution_candidate_drift():
         assert "candidate digest mismatch" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("candidate lineage accepted execution drift")
+
+
+@pytest.mark.parametrize("changes", [
+    {"decision": "NO_SKILL", "memory_budget": 0, "selected_asset_ids": ()},
+    {"memory_budget": 0}, {"selected_path_ids": ()},
+])
+def test_lineage_rejects_route_without_memory_authorization_or_paths(changes):
+    candidate, routing, selection, binding, execution = _bundle()
+    routing = replace(routing, **changes)
+    with pytest.raises(CandidateLineageError, match="authorize memory|paths differ"):
+        build_candidate_lineage(candidate=candidate, routing=routing,
+            asset_selection=selection, runtime_binding=binding, execution=execution)
+
+
+@pytest.mark.parametrize("changes", [
+    {"candidate_budget": 0}, {"causal_support": {"causal_path_ids": []}},
+])
+def test_lineage_rejects_selection_without_budget_or_paths(changes):
+    candidate, routing, selection, binding, execution = _bundle()
+    selection = replace(selection, receipt=replace(selection.receipt, **changes))
+    with pytest.raises(CandidateLineageError, match="budget is exhausted|paths differ"):
+        build_candidate_lineage(candidate=candidate, routing=routing,
+            asset_selection=selection, runtime_binding=binding, execution=execution)
