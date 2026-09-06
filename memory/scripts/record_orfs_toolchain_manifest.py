@@ -72,7 +72,8 @@ def _record(args: argparse.Namespace) -> int:
         manifest = build_toolchain_manifest(
             report, pdk_root=args.pdk_root,
             require_internal=not args.allow_external,
-            allow_dirty=args.allow_dirty)
+            allow_dirty=args.allow_dirty,
+            dependency_files=tuple(args.dependency_file))
     except ToolchainManifestError as exc:
         print(f"error: {exc}", file=sys.stderr)
         print(json.dumps(report, indent=2, sort_keys=True))
@@ -118,6 +119,8 @@ def main(argv: list[str] | None = None) -> int:
     record.add_argument("--prefix", type=Path,
                         help="user toolchain root for classifying explicit binaries")
     record.add_argument("--pdk-root", type=Path)
+    record.add_argument("--dependency-file", type=Path, action="append", default=[],
+                        help="additional explicit checker/library input to hash (repeatable)")
     record.add_argument("--allow-external", action="store_true",
                         help="record an explicitly bound external diagnostic")
     record.add_argument("--allow-dirty", action="store_true",

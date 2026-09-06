@@ -72,6 +72,43 @@ route verdict 仍为 PASS / original_failure=REMOVED，utility 变为 UNKNOWN；
 可比阶段的 utility 与完整 signoff，再建立 challenge 的 Knowledge parent。
 历史证据可用于选择候选机制，尚不支持 P13/P14 或 held-out 收益声明。
 
+固定工具链重新采集（2026-09-06）：本机独立产物目录
+`/data1/zhangdy/tehm-campaigns/tehm-r3-density-recollection-20260906-r1/`
+已完成 mux32/parity64 两对串行真实 ORFS 实验（CORE_UTILIZATION 95→40，
+其余 pair 配置一致）。两份 RTL 均通过 lint、共享 testbench 的 reset/选择/
+enable-hold 仿真及独立 Yosys 综合；这是重新表达历史逻辑的新 source cohort，
+不是旧源码逐字节复现。两条 before 均在 place 遇到 FLW-0024（计算的 density
+超过 1.0）；两条 after 均完成 finish，timing clean，WNS 分别为 1.2266 / 0.7339 ns，
+TNS 均为 0。输入 hash 复核 unchanged，四臂工具链 fingerprint 一致且预检
+bound_internal。后续 checker 已完成：两条成功臂均 full-deck DRC 0 违规、
+Netgen LVS circuits match，独立 RCX 分别提取 300 / 456 nets。LVS 回执的 GDS
+hash 与当前输入一致，冻结 RTL/config 输入仍未改变。当前 pair adapter 得到
+route PASS / failure REMOVED、utility UNKNOWN，route/DRC/timing 三项 coverage=1、
+oracle_complete=true；这只是该 adapter 的三项定义，不等价于完整 signoff。
+两份 `reports/signoff_manifest.json` 均 strict_clean=false，枚举缺项为没有
+`fmax_search` winner：本轮在固定 2.2 ns 下执行，未搜索 Fmax，不能伪造 winner。
+另外 LVS 使用的 transistor SPICE 来自个人 `.local/share/r2g-pdk/sky130_fd_sc_hs/`，
+其 SHA256 已在 LVS 回执中保存，但尚未纳入 Tools 工具链锁；不能声称锁文件
+已覆盖完整 signoff 依赖。没有采集进 canonical DB、没有 Knowledge promotion，
+更不代表 StateShift/P13 已完成。下一步明确固定时钟训练的验收合约并补齐
+checker 依赖锁，再判断隔离训练准入；不为满足 Fmax 字段改变既有受控两臂。
+
+Checker 文件锁增量（2026-09-06）：`record_orfs_toolchain_manifest.py record`
+新增可重复 `--dependency-file PATH`，显式绑定额外输入的绝对路径、解析路径、
+SHA256 与大小；重放拒绝文件缺失、字节变化和 symlink 改指向。旧 manifest
+不含该字段时维持原范围，不能推断其已绑定额外依赖。12 项锁测试通过。
+本机已将已有 sky130hs transistor SPICE 复制至 Tools PDK 标准路径
+`sky130A/libs.ref/sky130_fd_sc_hs/spice/sky130_fd_sc_hs.spice`，SHA256 为
+`a5804c9c074d23a8e71ee7c9aa7b087c30459101226f131057eb451899a9cac7`；
+原个人缓存未删除。新锁
+`/data1/zhangdy/Tools/tehm-toolchain/tehm-orfs-toolchain-manifest-checker-inputs-20260906.json`
+还显式列出 Netgen setup、Magic/Netgen/KLayout 入口文件、DRC deck 与 RCX rules，
+digest 为 `900dc94eb2925751dd748a2670279f4ddbd2d4c5e0d52ad614d1a86b469bd3c3`。
+新旧锁均实时重放 valid，旧实验回执未改写。此功能只是显式文件校验，不是
+所有动态库/Tcl include 的传递依赖锁，也不证明 checker 已使用新路径；后续需
+在独立 checker 输出目录重跑并核对其实际库来源。开源安装来源/下载闭环仍需
+另行补齐，不能用这次本机复制替代可复现安装脚本。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

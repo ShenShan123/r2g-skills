@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import pytest
 from pathlib import Path
 
 from scripts.run_orfs_diversity_campaign import preflight_orfs_toolchain
@@ -38,6 +39,34 @@ def test_manifest_round_trip_binds_every_tool_field(tmp_path):
     assert manifest["manifest_digest"] == manifest_digest(manifest)
     replay = validate_toolchain_manifest(manifest, report)
     assert replay["valid"], replay
+
+
+@pytest.mark.parametrize("change", ["bytes", "missing", "symlink"])
+def test_explicit_dependency_drift_rejected(tmp_path, change):
+    root, _, _ = _fake_orfs(tmp_path / "orfs")
+    report = preflight_orfs_toolchain({"orfs_root": str(root)}, env={})
+    library = tmp_path / "cells.spice"
+    library.write_text("original library")
+    manifest = build_toolchain_manifest(report, dependency_files=(library,))
+    assert validate_toolchain_manifest(manifest, report)["valid"]
+    if change == "bytes":
+        library.write_text("changed library")
+    else:
+        library.unlink()
+        if change == "symlink":
+            target = tmp_path / "other.spice"
+            target.write_text("original library")
+            library.symlink_to(target)
+    result = validate_toolchain_manifest(manifest, report)
+    assert not result["valid"]
+    assert any("dependency file" in reason for reason in result["reasons"])
+
+
+def test_missing_dependency_refused_at_record_time(tmp_path):
+    root, _, _ = _fake_orfs(tmp_path / "orfs")
+    report = preflight_orfs_toolchain({"orfs_root": str(root)}, env={})
+    with pytest.raises(ToolchainManifestError, match="dependency file"):
+        build_toolchain_manifest(report, dependency_files=(tmp_path / "missing",))
 
 
 def test_user_prefix_binaries_are_internal_when_explicitly_pinned(tmp_path):

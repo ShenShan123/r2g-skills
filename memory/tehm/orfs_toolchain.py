@@ -107,7 +107,8 @@ def manifest_digest(manifest: Mapping) -> str:
 
 def build_toolchain_manifest(
         preflight: Mapping, *, pdk_root: str | Path | None = None,
-        require_internal: bool = False, allow_dirty: bool = False) -> dict:
+        require_internal: bool = False, allow_dirty: bool = False,
+        dependency_files: tuple[str | Path, ...] = ()) -> dict:
     """Build a deterministic manifest from ``preflight_orfs_toolchain``.
 
     ``preflight`` is intentionally passed in by the caller so this module does
@@ -156,8 +157,29 @@ def build_toolchain_manifest(
             "allow_dirty": bool(allow_dirty),
         },
     }
+    if dependency_files:
+        manifest["dependency_files"] = _dependency_identity(dependency_files)
     manifest["manifest_digest"] = manifest_digest(manifest)
     return manifest
+
+
+def _dependency_identity(paths) -> list[dict]:
+    """Explicit additional inputs; absent from old locks, never auto-discovered.
+
+    This binds file bytes, not transitive dependency closure or proof of use.
+    Keep the lexical absolute path so retargeting a symlink is also detected.
+    """
+    records = []
+    for value in paths:
+        if not isinstance(value, (str, Path)) or not str(value):
+            raise ToolchainManifestError("invalid dependency file path")
+        path = Path(value).expanduser().absolute()
+        digest = _sha256(path)
+        if not path.is_file() or digest is None:
+            raise ToolchainManifestError(f"dependency file missing or unreadable: {path}")
+        records.append({"path": str(path), "resolved_path": str(path.resolve()),
+                        "sha256": digest, "bytes": path.stat().st_size})
+    return sorted(records, key=lambda item: item["path"])
 
 
 def load_toolchain_manifest(value: str | Path | Mapping) -> dict:
@@ -216,6 +238,16 @@ def validate_toolchain_manifest(
     expected_pdk = manifest.get("pdk") or {"root": None, "markers": []}
     if expected_pdk != _pdk_identity(pdk_root):
         reasons.append("PDK root or marker digest changed")
+    if "dependency_files" in manifest:
+        expected = manifest["dependency_files"]
+        try:
+            if not isinstance(expected, list) or not expected:
+                raise ToolchainManifestError("invalid dependency_files list")
+            current = _dependency_identity([item["path"] for item in expected])
+            if expected != current:
+                reasons.append("dependency file identity changed")
+        except (ToolchainManifestError, KeyError, TypeError, OSError) as exc:
+            reasons.append(f"dependency file replay failed: {exc}")
     if (manifest.get("policy") or {}).get("requires_internal") and \
             preflight.get("status") != "bound_internal":
         reasons.append("manifest requires bound_internal toolchain")
