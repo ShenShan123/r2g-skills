@@ -53,12 +53,24 @@ INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。�
 核对 selection 的 routing receipt 与所选资产身份。这些是回执一致性检查，
 不替代从数据库重算路由或独立执行 oracle。
 
-尚未接通的功能边界：P7 selector 当前仅支持 `RTL_REWRITE_TEMPLATE`，其 strict
-binding 仍要求旧的 `manifest_fix_v1`，尚未接入 answer-free structural binding；
-`FLOW_CONFIG_TRANSFORM` 虽在资产类型枚举中，仍缺这条选择/绑定链的实现。
-因此已有 ORFS Knowledge 的 `CONSIDER` 不能当作可执行配置候选已生成。
-下一阶段需实现该边界并以真实查询、候选 action 与执行回执验证，而非伪造
-selected asset 或将配置动作伪装成 RTL rewrite。
+Flow 配置链路开发（2026-09-05）：P7 现支持 `FLOW_CONFIG_TRANSFORM` 的
+`flow_numeric_config_v1` 绑定。它重放 validated Knowledge 与训练 replication，
+仅提取一致的成功 CONFIG_DELTA；目前支持 CORE_UTILIZATION、PLACE_DENSITY、
+ROUTING_LAYER_ADJUSTMENT 的明确数值，不支持路径、Make 表达式或未知默认值。
+selector 重新推导资产定义/来源，再绑定目标现值；candidate 不允许 binding
+覆盖已选择的固定 action。CRC/UART 冻结训练证据加调用方提供的配置探针，已能
+经真实 router → selector → structured candidate 生成 routing adjustment 0.05。
+该探针不是实际目标执行，不证明平台间泛化、held-out 收益或新能力产生。
+在上述 audit 命令追加以下参数可重放这个不启动 EDA 的探针：
+
+```bash
+--flow-config-json '{"ROUTING_LAYER_ADJUSTMENT":"0.8"}' --flow-design-id binding-probe
+```
+
+剩余边界：真实项目的有效配置需从冻结工具链/配置中解析并绑定，不能将探针
+数值当作项目现值。接着才能运行独立 oracle、形成执行 lineage 与 ΔMemory
+消融。RTL selector 的 strict binding 仍要求旧 `manifest_fix_v1`，尚需接入
+answer-free structural binding；生产权限仍未开放。
 
 <!-- TEHM_EVIDENCE_V3_START -->
 ### Evidence Contract v3（由 freeze manifest 自动生成）

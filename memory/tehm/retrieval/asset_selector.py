@@ -532,9 +532,19 @@ def select_knowledge_grounded_assets(
                 conn, asset_id=asset_id, target_scope=str(status.get("target_scope") or "")):
             binding_failures.append(f"{asset_id}:promoted_authority_unverified")
             continue
-        ok, reason, proof = _binding(
-            asset, profiles=profiles, families=families,
-            knowledge_ids=set(knowledge_ids), strict=not compatibility_mode)
+        runtime_binding = None
+        if asset.get("asset_type") == "FLOW_CONFIG_TRANSFORM":
+            from tehm.assets.flow_config import select_flow_binding
+
+            try:
+                runtime_binding = select_flow_binding(conn, asset, set(knowledge_ids), context)
+                ok, reason, proof = True, "flow_binding_verified", runtime_binding.to_dict()
+            except (ValueError, TypeError, KeyError) as exc:
+                ok, reason, proof = False, f"flow_binding_rejected:{exc}", {}
+        else:
+            ok, reason, proof = _binding(
+                asset, profiles=profiles, families=families,
+                knowledge_ids=set(knowledge_ids), strict=not compatibility_mode)
         if not ok:
             binding_failures.append(f"{asset_id}:{reason}")
             continue
@@ -549,6 +559,8 @@ def select_knowledge_grounded_assets(
             abstain_reasons=(), candidate_budget=candidate_budget)
         return AssetSelection(assets=(asset,), receipt=receipt,
                               metadata={"asset_status": status.get("status"),
+                                        **({"runtime_binding": runtime_binding.to_dict()}
+                                           if runtime_binding is not None else {}),
                                         "shadow_only": True})
     return _receipt(
         decision="ABSTAIN", state_id=state.resolution_id, routing_id=routing_id,

@@ -303,6 +303,10 @@ def build_structured_candidate(
         raise StructuredCandidateError("asset was not selected by routing")
     if asset.get("asset_id") != asset_id:
         raise StructuredCandidateError("asset definition does not match selection")
+    if asset.get("asset_type") == "FLOW_CONFIG_TRANSFORM":
+        selected_proof = (asset_selection.receipt.binding.get("assets") or {}).get(asset_id)
+        if (binding != selected_proof or binding.get("selected_binding") != {}):
+            raise StructuredCandidateError("flow binding differs from selected fixed-action proof")
     bound_asset = _binding_value(runtime_binding, "asset_id")
     if bound_asset != asset_id:
         raise StructuredCandidateError("runtime binding asset does not match selection")

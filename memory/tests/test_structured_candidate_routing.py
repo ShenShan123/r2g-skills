@@ -91,3 +91,24 @@ def test_selection_cannot_spend_zero_candidate_budget():
     selection = _rebind(selection, routing, candidate_budget=0)
     with pytest.raises(StructuredCandidateError, match="budget is exhausted"):
         build_structured_candidate(None, routing, selection, binding)
+
+
+@pytest.mark.parametrize("tamper", [False, True])
+def test_flow_candidate_requires_exact_fixed_action_binding(tamper):
+    routing, selection, binding = _inputs()
+    binding = replace(binding, selected_binding={})
+    asset = {**selection.assets[0], "asset_type": "FLOW_CONFIG_TRANSFORM",
+             "definition": {"action": {"domain": "flow.CONFIG_DELTA",
+                 "transformation_family": "ROUTING_CAPACITY_RECOVERY",
+                 "payload": {"config_edits": {"ROUTING_LAYER_ADJUSTMENT": "0.05"}}}}}
+    selection = replace(selection, assets=(asset,), receipt=replace(selection.receipt,
+        binding={"assets": {asset["asset_id"]: binding.to_dict()}}))
+    if tamper:
+        binding = replace(binding, selected_binding={
+            "config_edits": {"ROUTING_LAYER_ADJUSTMENT": "0.99"}})
+        with pytest.raises(StructuredCandidateError, match="fixed-action proof"):
+            build_structured_candidate(None, routing, selection, binding)
+    else:
+        candidate = build_structured_candidate(None, routing, selection, binding)
+        assert candidate.concrete_action["payload"]["config_edits"] == {
+            "ROUTING_LAYER_ADJUSTMENT": "0.05"}
