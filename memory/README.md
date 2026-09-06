@@ -91,6 +91,12 @@ Knowledge，经真实 router/selector 生成候选，并运行 baseline 0.5 与 
 优先使用固定 Python，并将缺失报告映射为 UNKNOWN、记录 checker 退出码/错误。
 新 `execution_artifacts_dir` 保留失败和成功运行，拒绝覆盖已有目录。
 
+后续 smoke 调用已接入标准 execution receipt：同一次实时 oracle 调用同时保存
+raw result 与 `baseline/treatment-execution.json`，treatment 再经现有
+`build_candidate_lineage` 核对上游对象并保存 `candidate-lineage.json`。
+这项接线已通过单元测试，尚未在新的真实运行中验证；不会给已有 r2 结果
+事后补造 receipt，也不会把 lineage 一致性当作 oracle 成功或进化收益。
+
 r2 的历史 `ORFS_SIGNOFF_PASS=PASS` 字段同样不能引用为全流程 signoff：其
 manifest 明确缺 DRC/LVS/fmax。当前映射已修正，单项检查成功时完整 signoff
 仍为 UNKNOWN。没有改写旧结果文件，也没有把 PASS/PASS 解释为记忆收益。

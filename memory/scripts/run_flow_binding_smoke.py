@@ -14,6 +14,27 @@ from tehm.evaluation.orfs_candidate_oracle import (
     execute_orfs_candidate, _source_inputs, _source_binding, _file_sha256, _digest,
 )
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate
+from tehm.evaluation.candidate_executor import execute_candidate, _execute_no_memory
+from tehm.capability import build_candidate_lineage
+
+
+def execute_smoke_arm(candidate, case, *, oracle=execute_orfs_candidate):
+    """One live oracle call supplies both raw output and the standard receipt.
+
+Never synthesize an execution receipt by replaying a saved success flag.
+"""
+    raw = {}
+
+    def recording_oracle(proposal, frozen, budget):
+        result = oracle(proposal, frozen, budget)
+        raw.update(result)
+        return result
+
+    if candidate is None:
+        receipt = _execute_no_memory(case, recording_oracle, 1, arm="NO_MEMORY")
+    else:
+        receipt = execute_candidate(candidate, case, oracle=recording_oracle, budget=1)
+    return raw, receipt
 
 
 def main():
@@ -68,9 +89,20 @@ def main():
     for arm, proposal in (("baseline", None), ("treatment", candidate)):
         frozen = {**case, "execution_artifacts_dir": str(root / arm)}
         print("starting " + arm, flush=True)
-        result = execute_orfs_candidate(proposal, frozen, 1)
+        result, execution = execute_smoke_arm(proposal, frozen)
         save(arm + "-result.json", result)
-        print(arm + ": " + result["outcome"], flush=True)
+        save(arm + "-execution.json", {**execution.to_dict(),
+                                      "execution_digest": execution.execution_digest})
+        if proposal is not None:
+            flow = report["flow_binding_probe"]
+            lineage = build_candidate_lineage(
+                candidate=candidate, routing=flow["after"],
+                asset_selection=flow["selection"],
+                runtime_binding=candidate.authority["assets"][candidate.asset_id],
+                execution=execution)
+            save("candidate-lineage.json", {**lineage.to_dict(),
+                                            "receipt_digest": lineage.receipt_digest})
+        print(arm + ": " + execution.outcome, flush=True)
     save("scope.json", {"scope": "training_design_execution_smoke_only",
         "full_signoff_established": False,
         "heldout_gain_established": False, "p13_evolution_established": False,
