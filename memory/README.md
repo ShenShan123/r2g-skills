@@ -75,10 +75,16 @@ Make/Python/OpenROAD/Yosys 路径，在临时工作目录展开实际 ORFS Makef
 用于隔离候选构造检查。探针仅声明显式环境下的配置展开，不等于完整运行时
 环境或工具链 authority；Makefile 是可执行输入，只适用于可信项目/工具链。
 
-剩余边界：执行器尚需消费/重查这一配置观察及对应冻结输入，才能将候选绑定
-与实际 ORFS 执行关联；当前没有新增执行收益。随后补独立 oracle、执行 lineage
-与 ΔMemory 消融。RTL selector 的 strict binding 仍要求旧 `manifest_fix_v1`，
-尚需接入 answer-free structural binding；生产权限仍未开放。
+执行器配置边界（2026-09-05）：新 fixed-training flow candidate 必须提供
+`flow_config_observation`、`make_exe` 与 `python_exe`。执行前重放源配置观察、
+工具输入及目标 binding；baseline/treatment 均在临时副本固定观察到的默认值，
+应用候选后再展开一次核对待执行数值；执行后复查源观察并将其 digest 写入
+oracle metadata。旧的纯 evaluation fixture 保持兼容，不获得该验证声明。
+该边界目前通过确定性假 flow 测试，不能据此宣称新增真实 ORFS 收益。
+
+剩余工作：用完整冻结 case 运行真实 ORFS，保留原始日志与配置观察，补独立
+oracle、执行 lineage 与 ΔMemory 消融。RTL selector 的 strict binding 仍要求
+旧 `manifest_fix_v1`，尚需接入 answer-free structural binding；生产权限仍未开放。
 
 <!-- TEHM_EVIDENCE_V3_START -->
 ### Evidence Contract v3（由 freeze manifest 自动生成）

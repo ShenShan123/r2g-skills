@@ -141,6 +141,49 @@ def _config_action(candidate: StructuredRepairCandidate) -> dict:
     return {str(key): str(value) for key, value in edits.items()}
 
 
+def _verify_flow_configuration(candidate, case: Mapping) -> dict | None:
+    """Recompute effective configuration and the fixed-action target binding.
+
+Legacy evaluation fixtures remain readable. New fixed-training-action assets
+must carry a replayable observation before this adapter can launch any EDA.
+"""
+    proof = ((candidate.authority.get("assets") or {}).get(candidate.asset_id)
+             if candidate is not None else None)
+    fixed = isinstance(proof, Mapping) and proof.get("reason") == "fixed_training_config_delta"
+    observation = case.get("flow_config_observation")
+    if observation is None:
+        if fixed:
+            raise OrfsCandidateOracleError("fixed flow candidate requires configuration observation")
+        return None
+    if not isinstance(observation, Mapping):
+        raise OrfsCandidateOracleError("flow configuration observation is malformed")
+    from tehm.assets.flow_config import bind_flow_config
+    from tehm.assets.flow_config_probe import probe_flow_config
+
+    values = observation.get("values") or {}
+    keys = tuple(sorted(key for key in values if key not in {"PLATFORM", "DESIGN_NAME"}))
+    replay = probe_flow_config(
+        Path(case["project_dir"]), Path(case["orfs_root"]), keys=keys,
+        make_exe=_executable_file(case.get("make_exe"), "make_exe"),
+        python_exe=_executable_file(case.get("python_exe"), "python_exe"),
+        openroad_exe=Path(case["openroad_exe"]), yosys_exe=Path(case["yosys_exe"]))
+    if stable_dumps(replay) != stable_dumps(dict(observation)):
+        raise OrfsCandidateOracleError("flow configuration observation replay mismatch")
+    if replay["values"]["PLATFORM"] != case["platform"]:
+        raise OrfsCandidateOracleError("flow configuration platform mismatch")
+    if fixed:
+        asset = {"asset_id": candidate.asset_id,
+                 "definition": {"action": candidate.concrete_action}}
+        binding = bind_flow_config(asset, candidate.knowledge_object_id, {
+            "flow_design_id": values["DESIGN_NAME"],
+            "flow_config": {key: values[key] for key in keys}})
+        if (binding.to_dict() != dict(proof) or
+                binding.binding_receipt_id != candidate.binding_receipt_id or
+                binding.binding_digest != candidate.provenance.get("binding_digest")):
+            raise OrfsCandidateOracleError("flow candidate binding does not match observed target")
+    return replay
+
+
 def _source_inputs(value: object) -> tuple[dict[str, str], ...]:
     """Validate immutable external inputs referenced by an ORFS project.
 
@@ -330,6 +373,7 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
     if not config_path.is_file():
         raise OrfsCandidateOracleError("ORFS project constraints/config.mk is missing")
     config_before = _digest(_parse_config(config_path))
+    configuration_observation = _verify_flow_configuration(candidate, frozen_case)
     edits = None
     with tempfile.TemporaryDirectory(prefix="tehm-p12-orfs-") as temp:
         # The basename becomes ORFS FLOW_VARIANT in run_orfs.sh.  Keep it
@@ -337,6 +381,13 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
         # same ORFS workspace lock.
         sandbox = Path(temp) / _sandbox_name(frozen_case, candidate)
         _copy_project(project, sandbox)
+        if configuration_observation is not None:
+            # Materialize observed defaults in the disposable copy, for BOTH
+            # baseline and treatment. Never change the frozen source project.
+            baseline_values = {key: value for key, value in
+                configuration_observation["values"].items()
+                if key not in {"PLATFORM", "DESIGN_NAME"}}
+            _apply_config_edits(sandbox / "constraints" / "config.mk", baseline_values)
         if candidate is not None:
             if not isinstance(candidate, StructuredRepairCandidate):
                 raise OrfsCandidateOracleError(
@@ -344,6 +395,22 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
             edits = _config_action(candidate)
             _apply_config_edits(sandbox / "constraints" / "config.mk", edits)
         config_after = _digest(_parse_config(sandbox / "constraints" / "config.mk"))
+        if configuration_observation is not None:
+            from tehm.assets.flow_config_probe import probe_flow_config
+
+            expected_values = {**baseline_values, **(edits or {})}
+            staged = probe_flow_config(
+                sandbox, Path(frozen_case["orfs_root"]), keys=tuple(sorted(expected_values)),
+                make_exe=Path(frozen_case["make_exe"]), python_exe=Path(frozen_case["python_exe"]),
+                openroad_exe=Path(frozen_case["openroad_exe"]), yosys_exe=Path(frozen_case["yosys_exe"]))
+            if any(staged["values"].get(key) != value for key, value in expected_values.items()):
+                raise OrfsCandidateOracleError("staged flow configuration does not match bound action")
+            # GNU Make must not inherit flags that give ambient variables
+            # precedence over the observed and materialized configuration.
+            env.update({"MAKEFLAGS": "", "MFLAGS": "", "MAKEOVERRIDES": "",
+                        "PYTHON_EXE": frozen_case["python_exe"],
+                        "PATH": str(Path(frozen_case["make_exe"]).parent) +
+                                os.pathsep + os.environ.get("PATH", "/usr/bin:/bin")})
         arm = _execute_arm(sandbox, platform, scope, run_flow, fix_signoff, env)
         result = _result_from_arm(
             arm, scope=scope, action_applied=candidate is not None,
@@ -357,6 +424,10 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
             _source_content_binding(project, source_inputs) != source_content_digest):
         raise OrfsCandidateOracleError("ORFS source project changed during execution")
     _verify_external_source_inputs(source_inputs)
+    if configuration_observation is not None:
+        _verify_flow_configuration(candidate, frozen_case)
+        result["metadata"]["configuration_observation_digest"] = configuration_observation["receipt_digest"]
+        result["metadata"]["observed_defaults_materialized"] = True
     return result
 
 
