@@ -13,6 +13,7 @@ import os
 import shutil
 import tempfile
 from collections.abc import Mapping
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,27 @@ _PINNED_ENV_KEYS = frozenset({
 
 class OrfsCandidateOracleError(ValueError):
     """A frozen ORFS execution case or candidate action is malformed."""
+
+
+@contextmanager
+def _execution_workspace(case: Mapping, project: Path):
+    """Keep explicitly requested evidence in place, including failed runs.
+
+An existing destination is never reused or overwritten. Keeping the original
+run location also preserves absolute log/report paths emitted by R2G.
+"""
+    requested = case.get("execution_artifacts_dir")
+    if requested is None:
+        with tempfile.TemporaryDirectory(prefix="tehm-p12-orfs-") as temp:
+            yield Path(temp)
+        return
+    if type(requested) is not str or not Path(requested).is_absolute():
+        raise OrfsCandidateOracleError("execution_artifacts_dir must be an absolute path")
+    destination = Path(requested).resolve()
+    if destination.is_relative_to(project.resolve()):
+        raise OrfsCandidateOracleError("execution artifacts must be outside source project")
+    destination.mkdir(parents=True, exist_ok=False)
+    yield destination
 
 
 def _digest(value: object) -> str:
@@ -294,8 +316,14 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
     else:
         compile_result = "PASS" if flow_rc == 0 else "FAIL"
         functional_result = "PASS" if target else "FAIL"
-        signoff_result = functional_result
+        # This adapter checks one requested scope, not the full DRC/LVS/
+        # timing/constraint signoff contract. A scope pass cannot certify it.
+        signoff_result = "FAIL" if functional_result == "FAIL" else "UNKNOWN"
         verdict = "PASS" if arm.get("success") is True else "FAIL"
+        if flow_rc == 0 and not reports.get(scope):
+            # A checker that crashed before emitting a report has not
+            # established a design failure (nor a repair opportunity).
+            functional_result = signoff_result = verdict = "UNKNOWN"
     obligations = {
         "ORFS_FLOW_PASS": compile_result,
         f"ORFS_{scope.upper()}_PASS": functional_result,
@@ -313,6 +341,10 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
         "produced_transition_id": None,
         "metadata": {
             "adapter_version": ORFS_CANDIDATE_ORACLE_VERSION,
+            "flow_rc": flow_rc, "fix_rc": arm.get("fix_rc"),
+            "fix_stdout_tail": arm.get("fix_stdout_tail", ""),
+            "fix_stderr_tail": arm.get("fix_stderr_tail", ""),
+            "target_report_available": bool(reports.get(scope)),
             "scope": scope,
             "action_applied": action_applied,
             "config_before_digest": config_before,
@@ -375,7 +407,7 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
     config_before = _digest(_parse_config(config_path))
     configuration_observation = _verify_flow_configuration(candidate, frozen_case)
     edits = None
-    with tempfile.TemporaryDirectory(prefix="tehm-p12-orfs-") as temp:
+    with _execution_workspace(frozen_case, project) as temp:
         # The basename becomes ORFS FLOW_VARIANT in run_orfs.sh.  Keep it
         # distinct per immutable case/arm so concurrent arms cannot share the
         # same ORFS workspace lock.
@@ -409,7 +441,8 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
             # precedence over the observed and materialized configuration.
             env.update({"MAKEFLAGS": "", "MFLAGS": "", "MAKEOVERRIDES": "",
                         "PYTHON_EXE": frozen_case["python_exe"],
-                        "PATH": str(Path(frozen_case["make_exe"]).parent) +
+                        "PATH": str(Path(frozen_case["python_exe"]).parent) + os.pathsep +
+                                str(Path(frozen_case["make_exe"]).parent) +
                                 os.pathsep + os.environ.get("PATH", "/usr/bin:/bin")})
         arm = _execute_arm(sandbox, platform, scope, run_flow, fix_signoff, env)
         result = _result_from_arm(
@@ -418,6 +451,9 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
             source_content_digest=source_content_digest,
             config_after=config_after, toolchain_digest=toolchain_digest,
             oracle_digest=oracle_digest, edits=edits)
+        if frozen_case.get("execution_artifacts_dir") is not None:
+            result["metadata"]["execution_project_dir"] = str(sandbox)
+            result["metadata"]["execution_artifacts_retained"] = True
     # The source project was never passed to the R2G command, but this check
     # catches accidental future changes that do mutate it before returning.
     if (_source_binding(project, source_inputs) != source_digest or

@@ -103,7 +103,7 @@ def test_orfs_candidate_uses_temp_project_and_real_executor_contract(tmp_path):
     assert receipt.outcome == "PASS"
     assert receipt.compile_result == "PASS"
     assert receipt.functional_result == "PASS"
-    assert receipt.signoff_result == "PASS"
+    assert receipt.signoff_result == "UNKNOWN"  # route-only is not full signoff
     assert receipt.produced_transition_id is None
     oracle_metadata = receipt.metadata["oracle_metadata"]
     assert oracle_metadata["action_applied"] is True

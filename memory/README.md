@@ -82,8 +82,21 @@ Make/Python/OpenROAD/Yosys 路径，在临时工作目录展开实际 ORFS Makef
 oracle metadata。旧的纯 evaluation fixture 保持兼容，不获得该验证声明。
 该边界目前通过确定性假 flow 测试，不能据此宣称新增真实 ORFS 收益。
 
-剩余工作：用完整冻结 case 运行真实 ORFS，保留原始日志与配置观察，补独立
-oracle、执行 lineage 与 ΔMemory 消融。RTL selector 的 strict binding 仍要求
+真实 CRC 冒烟（2026-09-05）：`run_flow_binding_smoke.py` 已用上述冻结训练
+Knowledge，经真实 router/selector 生成候选，并运行 baseline 0.5 与 treatment
+0.05。第二次运行两臂 flow 和 route 均 PASS，原始工作目录/报告保留在外部
+`tehm-r3-flow-binding-smoke-20260905-r2`；这是训练设计执行验证，不是 held-out
+增益，不触发 evolution。首次 r1 的两份 FAIL 是 Python 3.10/3.11 环境混用
+导致 checker 未出报告，不能作为设计失败或 CAPABILITY_GAP 证据。适配器已
+优先使用固定 Python，并将缺失报告映射为 UNKNOWN、记录 checker 退出码/错误。
+新 `execution_artifacts_dir` 保留失败和成功运行，拒绝覆盖已有目录。
+
+r2 的历史 `ORFS_SIGNOFF_PASS=PASS` 字段同样不能引用为全流程 signoff：其
+manifest 明确缺 DRC/LVS/fmax。当前映射已修正，单项检查成功时完整 signoff
+仍为 UNKNOWN。没有改写旧结果文件，也没有把 PASS/PASS 解释为记忆收益。
+
+剩余工作：补完整独立 oracle、执行 lineage 与 ΔMemory 消融，以及有真实
+进化原因的 challenge cohort。RTL selector 的 strict binding 仍要求
 旧 `manifest_fix_v1`，尚需接入 answer-free structural binding；生产权限仍未开放。
 
 <!-- TEHM_EVIDENCE_V3_START -->

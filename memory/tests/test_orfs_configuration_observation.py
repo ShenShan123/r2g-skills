@@ -70,3 +70,37 @@ def test_binding_must_replay_against_observed_target(tmp_path):
     candidate = replace(candidate, binding_receipt_id="binding-not-the-observed-target")
     with pytest.raises(OrfsCandidateOracleError, match="does not match observed target"):
         execute_orfs_candidate(candidate, case, 1)
+
+
+@pytest.mark.parametrize("use_memory", [False, True])
+def test_explicit_artifacts_survive_success_and_failure(tmp_path, use_memory):
+    case, candidate = _observed_case(tmp_path)
+    destination = tmp_path / "retained"
+    case["execution_artifacts_dir"] = str(destination)
+    result = execute_orfs_candidate(candidate if use_memory else None, case, 1)
+    retained = Path(result["metadata"]["execution_project_dir"])
+    assert retained.is_relative_to(destination)
+    assert (retained / "reports/route.json").is_file()
+    assert (retained / "constraints/config.mk").is_file()
+    assert result["metadata"]["execution_artifacts_retained"] is True
+    with pytest.raises(FileExistsError):
+        execute_orfs_candidate(candidate if use_memory else None, case, 1)
+
+
+def test_artifact_destination_cannot_modify_source_tree(tmp_path):
+    case, candidate = _observed_case(tmp_path)
+    case["execution_artifacts_dir"] = str(Path(case["project_dir"]) / "new-evidence")
+    with pytest.raises(OrfsCandidateOracleError, match="outside source project"):
+        execute_orfs_candidate(candidate, case, 1)
+
+
+def test_checker_crash_without_report_is_unknown_not_design_failure(tmp_path):
+    case, candidate = _observed_case(tmp_path)
+    Path(case["run_flow_script"]).write_text("#!/bin/sh\nexit 0\n")
+    Path(case["fix_signoff_script"]).write_text("#!/bin/sh\necho checker-crashed >&2\nexit 1\n")
+    result = execute_orfs_candidate(candidate, case, 1)
+    assert result["compile_result"] == "PASS"
+    assert result["outcome"] == "UNKNOWN"
+    assert result["functional_result"] == "UNKNOWN"
+    assert result["metadata"]["fix_rc"] == 1
+    assert "checker-crashed" in result["metadata"]["fix_stderr_tail"]
