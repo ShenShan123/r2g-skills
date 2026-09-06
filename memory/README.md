@@ -67,10 +67,18 @@ selector 重新推导资产定义/来源，再绑定目标现值；candidate 不
 --flow-config-json '{"ROUTING_LAYER_ADJUSTMENT":"0.8"}' --flow-design-id binding-probe
 ```
 
-剩余边界：真实项目的有效配置需从冻结工具链/配置中解析并绑定，不能将探针
-数值当作项目现值。接着才能运行独立 oracle、形成执行 lineage 与 ΔMemory
-消融。RTL selector 的 strict binding 仍要求旧 `manifest_fix_v1`，尚需接入
-answer-free structural binding；生产权限仍未开放。
+有效配置探针：`tehm.assets.flow_config_probe.probe_flow_config` 使用明确指定的
+Make/Python/OpenROAD/Yosys 路径，在临时工作目录展开实际 ORFS Makefile，
+不运行 EDA；记录加载的 Makefile、defaults.py、variables.json 与工具哈希，
+两次展开不一致或输入发生变化时拒绝。当前固定 clean checkout 对 CRC 历史
+项目解析得到 routing adjustment **0.5**，不是前述示意输入 0.8。该解析值已
+用于隔离候选构造检查。探针仅声明显式环境下的配置展开，不等于完整运行时
+环境或工具链 authority；Makefile 是可执行输入，只适用于可信项目/工具链。
+
+剩余边界：执行器尚需消费/重查这一配置观察及对应冻结输入，才能将候选绑定
+与实际 ORFS 执行关联；当前没有新增执行收益。随后补独立 oracle、执行 lineage
+与 ΔMemory 消融。RTL selector 的 strict binding 仍要求旧 `manifest_fix_v1`，
+尚需接入 answer-free structural binding；生产权限仍未开放。
 
 <!-- TEHM_EVIDENCE_V3_START -->
 ### Evidence Contract v3（由 freeze manifest 自动生成）
