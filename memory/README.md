@@ -53,6 +53,25 @@ PYTHONPATH=memory python memory/scripts/audit_knowledge_router_bootstrap.py \
 快照。脚本拒绝 hash 不符、WAL/SHM 未收敛或 replication 不合格的输入，
 在内存副本完成诊断后输出 JSON，不把既有 GCD density family 重新标成 routing family。
 
+历史密度训练证据复核（2026-09-06）：
+`evidence/tehm-causal-orfs-l3-failpass-r2-dev/` 的旧 L3 报告包含
+`unique_runs=[]`，不能沿用其 `eligible=true`。两个 treatment 的旧 transition
+provenance 都缺少 run_id；当前 ORFS pair adapter 从保留的 mux32/parity64
+原始项目重新解析时，可恢复两个不同的 before run tag，并得到 route-scope
+FAIL→PASS。这次检查仅在内存中构造 ExecutionRecord，没有改写旧数据库或回填标签。
+但两对记录的 `toolchain_binding.before/after` 均为 null，ORFS version 为 unknown，
+还不能证明固定工具链下的可复现训练 parent。修复前 utility classifier 对两对均返回
+HARMFUL；例如 mux32 比较的是失败于 place 的面积 1782 与完成 flow 的面积 3176，
+不能把跨完成阶段的数值直接解释成同阶段 PPA 退化，也不能改标为 PARETO_SAFE。
+当前 adapter 已要求两臂执行成功且 stage log 均有成功 finish，才比较汇总 PPA；
+失败或 synth-only 的 partial flow 返回 UNKNOWN。重新解析这两对真实记录后，
+route verdict 仍为 PASS / original_failure=REMOVED，utility 变为 UNKNOWN；
+没有覆盖旧数据库。14 项 pair adapter 测试通过，包含两方向面积变化、任一臂
+失败及零退出但无 finish 的反例。这不替代同阶段 utility 合约或完整 signoff。
+后续应在个人目录固定工具链下重新收集受控密度修复证据，分别验证 route 恢复、
+可比阶段的 utility 与完整 signoff，再建立 challenge 的 Knowledge parent。
+历史证据可用于选择候选机制，尚不支持 P13/P14 或 held-out 收益声明。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

@@ -55,6 +55,36 @@ def test_real_pair_builds_complete_positive_transition(tmp_tehm, tmp_path):
     assert conn.execute("SELECT COUNT(*) FROM tehm_transitions").fetchone()[0] == 1
 
 
+@pytest.mark.parametrize("before_area,after_area", [(100, 200), (200, 100)])
+@pytest.mark.parametrize("partial_side", ["before", "after"])
+def test_partial_flow_ppa_is_not_utility_evidence(tmp_path, before_area, after_area,
+                                                 partial_side):
+    projects = []
+    for side, area in (("before", before_area), ("after", after_area)):
+        partial = side == partial_side
+        projects.append(_project(
+            tmp_path, side, util=40, rc=2 if partial else 0,
+            failed_stage="place" if partial else None,
+            ppa={"summary": {"area": {"design_area_um2": area}}}))
+    record = build_orfs_pair_record(
+        *projects, lineage_id="partial", config_edits={"CORE_UTILIZATION": "40"})
+    assert record.observation_delta["utility_verdict"] == "UNKNOWN"
+    if partial_side == "before":
+        assert record.verification["verdict"] == "PASS"
+        assert record.observation_delta["original_failure"] == "REMOVED"
+
+
+def test_zero_exit_without_finish_does_not_establish_final_ppa(tmp_path):
+    projects = [_project(tmp_path, side, util=40, rc=0,
+                        ppa={"summary": {"area": {"design_area_um2": area}}})
+                for side, area in (("before", 200), ("after", 100))]
+    stage_log = next((projects[0] / "backend").glob("RUN_*/stage_log.jsonl"))
+    stage_log.write_text(json.dumps({"stage": "synth", "status": 0}) + "\n")
+    record = build_orfs_pair_record(
+        *projects, lineage_id="synth-only", config_edits={"CORE_UTILIZATION": "40"})
+    assert record.observation_delta["utility_verdict"] == "UNKNOWN"
+
+
 def test_contract_binding_is_part_of_pair_action_identity(tmp_path):
     before = _project(tmp_path, "contract_before", util=50, rc=0,
                       route={"status": "complete"}, drc={"status": "clean"},

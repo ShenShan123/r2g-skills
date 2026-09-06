@@ -83,8 +83,14 @@ def build_orfs_pair_record(before_project: Path, after_project: Path, *,
     checked, required = _obligation_counts(after_run, target_check)
     coverage = checked / required if required else None
     experiment_kind = "REPAIR" if original in {"REMOVED", "PRESENT"} else "OBSERVATION"
-    utility_verdict = _utility_verdict(
-        before_run["reports"].get("ppa") or {}, after_run["reports"].get("ppa") or {})
+    # Summary PPA from a partial flow is not comparable to final PPA.  Keep
+    # route recovery independent of utility; a failed baseline must not gain
+    # either a harmful or a Pareto-safe label from cross-stage area changes.
+    utility_verdict = (
+        _utility_verdict(before_run["reports"].get("ppa") or {},
+                         after_run["reports"].get("ppa") or {})
+        if all(_completed_for_utility(run) for run in (before_run, after_run))
+        else "UNKNOWN")
     oracle_complete = bool(before_definitive and after_definitive and coverage == 1.0)
 
     before_cfg = _config(before_project)
@@ -270,6 +276,17 @@ def _obligation_counts(after: dict, target: str) -> tuple[int, int]:
         if status not in (None, "", "unknown", "error"):
             checked += 1
     return checked, len(required)
+
+
+def _completed_for_utility(run: dict) -> bool:
+    """Require executor success and a completed finish stage on both arms.
+
+    A zero exit from a synth-only invocation is not final PPA evidence.
+    Report-level status strings cannot replace these execution witnesses.
+    """
+    return (run.get("returncode") == 0 and
+            any(stage.get("stage") == "finish" and stage.get("status") == 0
+                for stage in run.get("stage_log", ())))
 
 
 def _utility_verdict(before_ppa: dict, after_ppa: dict) -> str:
