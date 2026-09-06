@@ -54,6 +54,8 @@ def build_flow_asset_proposal(conn, knowledge_id: str, *, campaign_id: str) -> A
         transitions.update(json.loads(row[0]))
     facts = [load_transition_facts(conn, key) for key in sorted(transitions)]
     treatments = [f for f in facts if f.action.get("domain") != "flow.BASELINE_CONTROL"]
+    for fact in treatments:
+        require_hardware_oracle(fact.verifier)
     if (not treatments or any(f.action.get("domain") != "flow.CONFIG_DELTA" or
             f.outcome != "PASS" or f.action_digest not in
             claim.intervention.get("action_digests", ()) for f in treatments)):
@@ -86,6 +88,26 @@ def build_flow_asset_proposal(conn, knowledge_id: str, *, campaign_id: str) -> A
             "campaign_id": campaign_id, "training_action": action,
             "evidence_transitions": [f.transition_id for f in treatments],
             "claim_scope": "existing_training_action_reuse_only"})
+
+
+def require_hardware_oracle(verifier: Mapping) -> None:
+    """Configuration presence is an edit check, not hardware repair evidence.
+
+Passing the generic causal replication gate does not upgrade the measured
+objective. Keep such historical paths inspectable without using them to
+bootstrap repair assets or challenge cohorts.
+"""
+    semantic = verifier.get("semantic_oracle")
+    if not isinstance(semantic, Mapping):
+        return
+    specs = [semantic.get("spec")]
+    for side in ("before", "after"):
+        item = semantic.get(side)
+        if isinstance(item, Mapping):
+            specs.append(item.get("spec"))
+    if any(isinstance(spec, Mapping) and spec.get("kind") == "config_presence"
+           for spec in specs):
+        raise ValueError("configuration presence is not hardware repair evidence")
 
 
 def select_flow_binding(conn, asset: Mapping, knowledge_ids: set[str], context: Mapping):

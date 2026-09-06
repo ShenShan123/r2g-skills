@@ -33,6 +33,12 @@ validated 状态或伪造 query 中的 interference 标签越过这些缺口。
 `CONSIDER`，candidate 阶段仍为 `NO_MATCH`。复核同时发现并修复 builder 将
 `flow.BASELINE_CONTROL` 的失败票混入干预预期结果的问题：对照仍完整保留在
 source/antecedent 中，但不作为修复 action、干预 effect 或干预 outcome。
+**后续语义复核已限制这份证据的用途**：两条 training transition 的
+`semantic_oracle.spec.kind=config_presence`，before graph 中 route 已是 clean。
+其 FAIL→PASS 实际测量“配置项是否显式存在”，不是路由修复收益。L3 replication
+通过只说明该测量被重复验证，不能扩大测量对象。当前 flow asset builder 已
+拒绝此类证据；下述曾经成功的 flow bootstrap/smoke 是历史接线检查，不能用作
+新 challenge cohort 的已验证硬件修复 parent，带 flow 参数重放现在会明确拒绝。
 这是已有训练知识的路由诊断，不是 P13 在线进化、执行收益或 held-out 证明；
 没有 selected asset，也没有 canonical/production 写入。复核入口：
 

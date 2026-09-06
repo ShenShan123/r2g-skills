@@ -3,7 +3,7 @@ import copy
 
 import pytest
 
-from tehm.assets.flow_config import bind_flow_config, select_flow_binding
+from tehm.assets.flow_config import bind_flow_config, select_flow_binding, require_hardware_oracle
 
 
 def _asset():
@@ -60,3 +60,12 @@ def test_binding_changes_digest_when_observed_target_changes():
 def test_selection_rejects_asset_without_knowledge_witness_before_db_access():
     with pytest.raises(ValueError, match="knowledge binding mismatch"):
         select_flow_binding(None, _asset(), {"mk@1"}, _context())
+
+
+@pytest.mark.parametrize("location", ["spec", "before", "after"])
+def test_config_presence_cannot_bootstrap_hardware_repair_assets(location):
+    spec = {"kind": "config_presence", "config_key": "ROUTING_LAYER_ADJUSTMENT"}
+    semantic = {"spec": spec} if location == "spec" else {location: {"spec": spec}}
+    with pytest.raises(ValueError, match="not hardware repair evidence"):
+        require_hardware_oracle({"verdict": "PASS", "oracle_complete": True,
+                                 "semantic_oracle": semantic})
