@@ -1262,9 +1262,11 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
                    "stage_log_sha256": _sha(Path((checkpoint or {}).get("path", "")))
                    if (checkpoint or {}).get("path") else None}
         if registration is not None:
-            from tehm.adapters.orfs_terminal_failure import recheck_terminal_registration
+            from tehm.adapters.orfs_terminal_failure import (
+                recheck_terminal_registration, terminal_run_file_bindings)
             receipt["terminal_preregistration"] = registration
             receipt["terminal_registration_unchanged"] = recheck_terminal_registration(project, registration)
+            receipt["terminal_run_files"] = terminal_run_file_bindings(project)
         _write(project / "campaign-run-receipt.json", receipt)
         with lock:
             state["runs"][str(project)] = result

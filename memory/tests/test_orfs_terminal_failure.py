@@ -6,6 +6,7 @@ import pytest
 from tehm.adapters.orfs_terminal_failure import (
     CONTRACT, evaluate_density_terminal_failure, register_terminal_contract,
     recheck_terminal_registration,
+    terminal_run_file_bindings, replay_terminal_failure,
 )
 
 
@@ -147,3 +148,50 @@ def test_runner_registers_before_invocation_and_records_recheck(tmp_path, monkey
     with pytest.raises(ValueError, match="fresh project"):
         runner.run_projects(tmp_path, manifest, workers=1, cpus=1, timeout=1)
     assert len(invoked) == 1
+
+
+def replay_inputs(tmp_path):
+    kwargs = registration_inputs(tmp_path)
+    registration = register_terminal_contract(tmp_path, **kwargs)
+    run = tmp_path / "backend/RUN_density"
+    run.mkdir(parents=True)
+    meta, stages, log = evidence()
+    (run / "run-meta.json").write_text(json.dumps(meta))
+    (run / "stage_log.jsonl").write_text("\n".join(json.dumps(row) for row in stages))
+    (run / "flow.log").write_text(log)
+    files = terminal_run_file_bindings(tmp_path)
+    execution = {"terminal_preregistration": registration, "toolchain_binding": kwargs["toolchain"],
+                 "command": kwargs["command"], "attempt": 1, "completed": False,
+                 "resume_from": None, "supervisor_timeout": False, "flow_rc": 2,
+                 "terminal_run_files": files, "stage_log": files[1]["path"],
+                 "stage_log_sha256": files[1]["sha256"], "terminal_registration_unchanged": True}
+    (tmp_path / "campaign-run-receipt.json").write_text(json.dumps(execution))
+    return registration["registration_digest"], kwargs["toolchain"], execution
+
+
+def test_consumer_replays_raw_evidence_without_learner_authority(tmp_path):
+    pin, toolchain, _ = replay_inputs(tmp_path)
+    result = replay_terminal_failure(tmp_path, registration_digest=pin, current_toolchain=toolchain)
+    assert result["verdict"] == "FAIL"
+    assert result["registration_binding_verified"] is True
+    assert result["learner_admission"] is False
+    assert result["preregistration_verified"] is False
+
+
+@pytest.mark.parametrize("tamper", ["input", "log", "registration", "command", "toolchain",
+                                   "pin", "timeout", "attempt", "stage_ref", "extra_run"])
+def test_consumer_rejects_tampering_despite_producer_true_flag(tmp_path, tamper):
+    pin, toolchain, execution = replay_inputs(tmp_path)
+    if tamper == "input": (tmp_path / "design.v").write_text("drift")
+    if tamper == "log": (tmp_path / "backend/RUN_density/flow.log").write_text("other failure")
+    if tamper == "registration": execution["terminal_preregistration"] = {}
+    if tamper == "command": execution["command"] = ["different command"]
+    if tamper == "toolchain": toolchain = {**toolchain, "changed": True}
+    if tamper == "pin": pin = "sha256:wrong"
+    if tamper == "timeout": execution["supervisor_timeout"] = True
+    if tamper == "attempt": execution["attempt"] = 2
+    if tamper == "stage_ref": execution["stage_log"] = "/other/run/stage_log.jsonl"
+    if tamper == "extra_run": (tmp_path / "backend/RUN_other").mkdir()
+    (tmp_path / "campaign-run-receipt.json").write_text(json.dumps(execution))
+    with pytest.raises(ValueError):
+        replay_terminal_failure(tmp_path, registration_digest=pin, current_toolchain=toolchain)

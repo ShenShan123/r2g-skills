@@ -159,6 +159,17 @@ RTL/SDC/config 文件身份；结束后保存原登记与 `terminal_registration
 消费者独立重放、真实新执行验证、learner 接入尚未完成。没有给已有密度实验
 回填登记，也没有降低 oracle_complete gate。
 
+Terminal consumer 重放（2026-09-06）：runner 另绑定唯一新 run 的 run-meta、
+stage log、flow log 文件摘要。`replay_terminal_failure` 要求调用方独立提供登记
+digest，并逐项重算登记/输入身份、当前工具链、实际命令、attempt=1、非 resume/
+timeout、原始文件 hash 及 run tag，然后重算密度失败诊断；不直接使用
+producer 的 unchanged 标志。42 项相关测试通过，包含篡改输入、日志、登记、
+命令、工具链、外部 pin、timeout、attempt、stage 引用及重复 run 的负例。
+`registration_binding_verified=true` 仅说明来源一致性，不能证明外部时间戳：
+调用方若事后从被审计的回执本身抄出 digest，仍不构成独立执行前见证。
+`preregistration_verified=false`、`learner_admission=false` 保持不变；下一步
+需要真实新执行中保存执行前见证，再接入限定 scope 的 learner 消费合约。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

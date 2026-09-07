@@ -81,6 +81,67 @@ def recheck_terminal_registration(project: Path, registration: dict) -> bool:
         return False
 
 
+def terminal_run_file_bindings(project: Path) -> list[dict]:
+    """Bind one fresh run's raw inputs; ambiguity or missing files abstains."""
+    project = Path(project).resolve()
+    runs = list((project / "backend").glob("RUN_*"))
+    if len(runs) != 1:
+        return []
+    records = []
+    for name in ("run-meta.json", "stage_log.jsonl", "flow.log"):
+        path = (runs[0] / name).resolve()
+        if not path.is_relative_to(project / "backend") or not path.is_file():
+            return []
+        records.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+    return records
+
+
+def replay_terminal_failure(project: Path, *, registration_digest: str,
+                            current_toolchain: dict) -> dict:
+    """Verify raw evidence against an independently supplied registration pin.
+
+    The caller obtains that pin from the trusted pre-execution producer, not
+    from the post-execution receipt being audited. This verifies consistency,
+    not a cryptographic timestamp. Learner authority is deliberately separate.
+    """
+    project = Path(project).resolve()
+    registration = json.loads((project / "terminal-preregistration.json").read_text())
+    execution = json.loads((project / "campaign-run-receipt.json").read_text())
+    if (not registration_digest or registration.get("registration_digest") != registration_digest
+            or not recheck_terminal_registration(project, registration)
+            or execution.get("terminal_preregistration") != registration):
+        raise ValueError("terminal registration binding mismatch")
+    if (current_toolchain.get("status") != "bound_internal"
+            or current_toolchain.get("manifest_validation", {}).get("valid") is not True
+            or _digest(current_toolchain) != registration["toolchain_digest"]
+            or execution.get("toolchain_binding") != current_toolchain):
+        raise ValueError("terminal toolchain binding mismatch")
+    if (execution.get("command") != registration["command"]
+            or type(execution.get("attempt")) is not int or execution["attempt"] != 1
+            or execution.get("completed") is not False or execution.get("resume_from") is not None
+            or execution.get("supervisor_timeout") is not False
+            or type(execution.get("flow_rc")) is not int or execution["flow_rc"] != 2):
+        raise ValueError("terminal execution is not the registered fresh failure")
+    files = terminal_run_file_bindings(project)
+    if not files or execution.get("terminal_run_files") != files:
+        raise ValueError("terminal raw run evidence mismatch")
+    paths = {Path(item["path"]).name: Path(item["path"]) for item in files}
+    stage_path = paths["stage_log.jsonl"]
+    if (execution.get("stage_log") != str(stage_path)
+            or execution.get("stage_log_sha256") != files[1]["sha256"]):
+        raise ValueError("terminal stage log binding mismatch")
+    meta = json.loads(paths["run-meta.json"].read_text())
+    if meta.get("run_tag") != stage_path.parent.name:
+        raise ValueError("terminal run identity mismatch")
+    stages = [json.loads(line) for line in stage_path.read_text().splitlines() if line.strip()]
+    result = evaluate_density_terminal_failure(meta, stages, paths["flow.log"].read_text())
+    result.pop("receipt_digest")
+    result.update(registration_binding_verified=True, registration_digest=registration_digest,
+                  execution_digest=_digest(execution))
+    result["receipt_digest"] = _digest(result)
+    return result
+
+
 def evaluate_density_terminal_failure(run_meta: dict, stages: list[dict],
                                       flow_log: str) -> dict:
     """Recognize a specific density failure from mutually consistent inputs.
