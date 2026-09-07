@@ -136,6 +136,29 @@ oracle_complete=false；共享 learner gate 实际返回 oracle_incomplete。此
 与尚未执行的下游检查，并以独立回执验证该语义；在合约及其消费 gate 完成前，
 这些失败对仅保留为原始训练候选证据，不能作为已验证 Knowledge parent。
 
+Terminal failure 判定器（2026-09-06）：新增
+`tehm.adapters.orfs_terminal_failure.evaluate_density_terminal_failure`，仅识别
+正常 make exit=2、synth/floorplan 成功而 place 失败，且日志包含单一
+FLW-0024/GPL-0301 与匹配密度诊断的情形。超时/中断/基础设施错误、混合错误、
+缺失前序阶段或矛盾的后续成功保持 UNKNOWN。回执绑定输入摘要与 contract 摘要，
+明确区分 flow_feasibility=FAIL 和未执行的 downstream checks。对上述 mux32 /
+parity64 原始 run-meta/stage log/flow log 重放，均得到 FAIL / FLW-0024。
+该模块目前是诊断基础件，尚未接入 producer 的执行前登记或 learner gate，
+`preregistration_verified=false`、`learner_admission=false`，不能用于绕过现有
+oracle_incomplete 拒绝。下一步将固定 contract 在启动执行前绑定到 runner 回执，
+再实现消费者的来源重放检查；不能事后给旧 run 补一个 preregistered 标志。
+
+Runner 合约登记接线（2026-09-06）：campaign manifest 可显式指定
+`terminal_failure_contract="orfs-density-terminal-failure-v1"`。此模式只接受
+全新 project，拒绝已有 RUN、campaign receipt 或 terminal registration 的目录，
+不走 cache/resume。runner 在 `_run_bounded` 之前独占创建
+`terminal-preregistration.json`，绑定 contract、工具链预检、实际命令及显式
+RTL/SDC/config 文件身份；结束后保存原登记与 `terminal_registration_unchanged`。
+31 项相关测试通过，包含 mock runner 的执行前文件存在检查和执行期间 RTL
+漂移反例。此标志仅是 producer 复核结果，不能由消费者直接当作准入凭证；
+消费者独立重放、真实新执行验证、learner 接入尚未完成。没有给已有密度实验
+回填登记，也没有降低 oracle_complete gate。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

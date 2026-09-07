@@ -1163,6 +1163,15 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
     def one(entry):
         project_text, platform = entry
         project = Path(project_text)
+        terminal_version = manifest.get("terminal_failure_contract")
+        if terminal_version is not None:
+            from tehm.adapters.orfs_terminal_failure import CONTRACT
+            if terminal_version != CONTRACT["version"]:
+                raise ValueError("unsupported terminal failure contract")
+            if (any((project / "backend").glob("RUN_*")) or
+                    (project / "campaign-run-receipt.json").exists() or
+                    (project / "terminal-preregistration.json").exists()):
+                raise ValueError("terminal contract execution requires fresh project; no cached/resumed runs")
         digest = _sha(project / "constraints" / "config.mk")
         old = state["runs"].get(str(project), {})
         # An explicit clean retry is an operator-authorized new ORFS attempt.
@@ -1210,6 +1219,11 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
             workspace_lock = workspace_locks.setdefault(
                 workspace_key, threading.Lock())
         with workspace_lock:
+            registration = None
+            if terminal_version is not None:
+                from tehm.adapters.orfs_terminal_failure import register_terminal_contract
+                registration = register_terminal_contract(
+                    project, contract_version=terminal_version, toolchain=toolchain, command=cmd)
             returncode, supervisor_timeout = _run_bounded(
                 cmd, log, env=env, timeout=max(1, timeout),
                 grace=max(1, supervisor_grace))
@@ -1247,6 +1261,10 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
                    "stage_log": (checkpoint or {}).get("path"),
                    "stage_log_sha256": _sha(Path((checkpoint or {}).get("path", "")))
                    if (checkpoint or {}).get("path") else None}
+        if registration is not None:
+            from tehm.adapters.orfs_terminal_failure import recheck_terminal_registration
+            receipt["terminal_preregistration"] = registration
+            receipt["terminal_registration_unchanged"] = recheck_terminal_registration(project, registration)
         _write(project / "campaign-run-receipt.json", receipt)
         with lock:
             state["runs"][str(project)] = result
