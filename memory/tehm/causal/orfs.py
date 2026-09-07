@@ -18,7 +18,7 @@ from pathlib import Path
 
 from tehm import db
 from tehm.artifact_store import ArtifactStore
-from tehm.adapters.orfs_pair import build_orfs_pair_record
+from tehm.adapters.orfs_pair import build_orfs_pair_record, _obligation_counts
 from tehm.adapters.semantic_oracle import evaluate_pair
 from tehm.canonical.capture import capture
 
@@ -202,8 +202,9 @@ def _control_record(treatment):
     verification = copy.deepcopy(treatment.verification)
     refs = [ref for ref in verification.get("evidence_refs", [])
             if isinstance(ref, dict) and ref.get("side") == "before"]
-    if refs:
-        verification["evidence_refs"] = refs
+    # An empty before-side set is missing evidence, never permission to keep
+    # the treatment's after-side references.
+    verification["evidence_refs"] = refs
     payload = treatment.action.get("payload") or {}
     target = str(payload.get("recheck") or "route")
     report = (treatment.before.get("reports") or {}).get(target) or {}
@@ -250,8 +251,22 @@ def _control_record(treatment):
             "experiment_kind": "OBSERVATION", "utility_verdict": "NEUTRAL",
         }
     verification["verdict"] = baseline_verdict
+    baseline_run = {"reports": treatment.before.get("reports") or {},
+                    "returncode": returncode}
+    checked, required = _obligation_counts(baseline_run, target)
+    coverage = checked / required if required else None
+    verification.update(required_obligations=required, checked_obligations=checked,
+                        obligation_coverage=coverage)
     verification["oracle_complete"] = bool(
-        baseline_verdict != "UNKNOWN" and verification.get("oracle_complete"))
+        baseline_verdict != "UNKNOWN" and coverage == 1.0)
+    # Both ends of a no-op observation are the baseline, not the treatment.
+    # Retain missing baseline evidence as missing, including expanded gates.
+    for key in ("toolchain_binding", "full_oracle"):
+        pair_binding = verification.get(key)
+        if isinstance(pair_binding, Mapping):
+            baseline_binding = copy.deepcopy(pair_binding.get("before"))
+            verification[key] = {"before": baseline_binding,
+                                 "after": copy.deepcopy(baseline_binding)}
     return replace(
         treatment,
         record_id=treatment.record_id + ":control",

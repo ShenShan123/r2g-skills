@@ -123,6 +123,19 @@ control adapter，control 的聚合 obligation metadata 来自 treatment 模板�
 因此声称失败于 placement 的 control 也执行了 DRC/LVS；持久化训练准入前仍需
 核对逐臂 obligation 来源。RAM 数据库已关闭，未授予 Knowledge/runtime 权限。
 
+逐臂覆盖率修正（2026-09-06，覆盖上段旧 L3 诊断）：`_control_record` 已改为
+仅从 baseline reports/returncode 重算 checked/required/coverage，不继承 treatment
+覆盖率；空 before-side evidence_refs 保持为空，toolchain_binding/full_oracle
+两端均来自原 before，移除 treatment 的聚合验证标志。24 项 adapter/causal 测试
+通过。重新解析两条真实密度 control：verdict 仍 FAIL，但 coverage=1/3、
+oracle_complete=false；共享 learner gate 实际返回 oracle_incomplete。此前
+`causal_path_55eecdffc60344ef` 的 RAM L3 结论因此不再有效，不能用于训练准入。
+失败于 place 的布局没有完成 downstream DRC/timing 验证；不能伪造缺失报告、
+对 partial layout 跑 checker 再宣称完成，或沿用 treatment 的验证回执。
+下一步需要执行前声明的失败判定/obligation 适用性合约：区分明确的目标失败
+与尚未执行的下游检查，并以独立回执验证该语义；在合约及其消费 gate 完成前，
+这些失败对仅保留为原始训练候选证据，不能作为已验证 Knowledge parent。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

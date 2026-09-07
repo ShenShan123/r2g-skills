@@ -268,6 +268,35 @@ def test_control_preserves_an_executed_baseline_failure():
     assert control.verification["verdict"] == "FAIL"
     assert control.observation_delta["original_failure"] == "PRESENT"
     assert control.observation_delta["failing_tests"] == {"before": 1, "after": 1}
+    assert control.verification["checked_obligations"] == 1
+    assert control.verification["required_obligations"] == 3
+    assert control.verification["obligation_coverage"] == 1 / 3
+    assert control.verification["oracle_complete"] is False
+
+
+def test_control_does_not_inherit_treatment_references_or_bindings():
+    treatment = _record("orfs:control-provenance")
+    treatment.verification.update(
+        evidence_refs=[{"side": "after", "path": "treatment-only"}],
+        toolchain_binding={"before": {"fingerprint": "baseline"},
+                           "after": {"fingerprint": "treatment"}, "verified": True},
+        full_oracle={"before": {"complete": False}, "after": {"complete": True}})
+    control = _control_record(treatment)
+    assert control.verification["evidence_refs"] == []
+    assert control.verification["toolchain_binding"] == {
+        "before": {"fingerprint": "baseline"}, "after": {"fingerprint": "baseline"}}
+    assert control.verification["full_oracle"] == {
+        "before": {"complete": False}, "after": {"complete": False}}
+    assert treatment.verification["toolchain_binding"]["after"]["fingerprint"] == "treatment"
+
+
+def test_control_coverage_comes_from_baseline_not_treatment():
+    treatment = _record("orfs:complete-baseline")
+    treatment.before["reports"].update(drc={"status": "clean"}, timing={"tier": "clean"})
+    treatment.verification.update(oracle_complete=False, obligation_coverage=0)
+    control = _control_record(treatment)
+    assert control.verification["checked_obligations"] == 3
+    assert control.verification["oracle_complete"] is True
 
 
 def test_semantic_control_rechecks_the_unchanged_baseline(tmp_path):
