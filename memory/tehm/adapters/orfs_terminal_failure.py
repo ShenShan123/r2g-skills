@@ -35,7 +35,10 @@ def _registered_inputs(project: Path) -> list[dict]:
     if len(names) < 2 or any(not name or "$" in name or not Path(name).is_absolute()
                              for name in names):
         raise ValueError("terminal contract requires explicit absolute SDC and RTL inputs")
-    paths = sorted({config.absolute(), *(Path(name).absolute() for name in names)})
+    # The R2G wrapper also requires/stages this local SDC even when SDC_FILE
+    # names an external file. Bind both actual inputs before launching it.
+    paths = sorted({config.absolute(), (project / "constraints/constraint.sdc").absolute(),
+                    *(Path(name).absolute() for name in names)})
     return [{"path": str(path), "resolved_path": str(path.resolve()),
              "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for path in paths]
 

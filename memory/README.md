@@ -170,6 +170,20 @@ producer 的 unchanged 标志。42 项相关测试通过，包含篡改输入、
 `preregistration_verified=false`、`learner_admission=false` 保持不变；下一步
 需要真实新执行中保存执行前见证，再接入限定 scope 的 learner 消费合约。
 
+真实 terminal 链路核验（2026-09-07）：外部产物
+`/data1/zhangdy/tehm-campaigns/tehm-r3-terminal-live-20260906-r2/` 已完成两条
+全新高密度执行。独立 harness 在实际 `_run_bounded` 调用前检查尚无 RUN，
+保存并输出登记摘要：mux32 `aad37ba96abbeefb5e1ace05e167adfa1bcfde4a32b3263be468b6becfa4483c`，
+parity64 `f14c8de21ddb02d8dba7592b5086ddca28a441e881d49bcbac68b8a5171a70a5`。
+真实执行均在 place 遇到 FLW-0024，消费者用 harness 保留的 pin 重放得到
+FAIL / registration_binding_verified=true，原始输入 hash unchanged。
+这证明受信 runner/harness 的调用顺序与证据绑定，不是第三方签名时间戳，也未
+赋予 learner 权限。前一次 r1 因缺少 wrapper 必需的本地 constraint.sdc 在 EDA
+前退出，消费者拒绝；该记录保留未覆盖。登记器现同时检查/绑定外部 SDC_FILE
+和 wrapper 本地 SDC，43 项相关测试通过。下一步补成功臂同范围测量和相应
+消费合约，再重新构造受控 pair；不能将旧的 signoff:route 成功直接拼接成
+新的 flow_feasibility 实验，不能据此恢复旧 L3 或 production promotion。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

@@ -111,6 +111,19 @@ def test_registration_tamper_rejected(tmp_path):
     assert not recheck_terminal_registration(tmp_path, receipt)
 
 
+def test_external_sdc_does_not_replace_required_wrapper_local_sdc(tmp_path):
+    kwargs = registration_inputs(tmp_path)
+    external = tmp_path / "external.sdc"
+    external.write_text("create_clock -period 2.2 [get_ports clk]\n")
+    config = tmp_path / "constraints/config.mk"
+    config.write_text(config.read_text().replace(
+        str(tmp_path / "constraints/constraint.sdc"), str(external)))
+    (tmp_path / "constraints/constraint.sdc").unlink()
+    with pytest.raises(FileNotFoundError):
+        register_terminal_contract(tmp_path, **kwargs)
+    assert not (tmp_path / "terminal-preregistration.json").exists()
+
+
 @pytest.mark.parametrize("drift", [False, True])
 def test_runner_registers_before_invocation_and_records_recheck(tmp_path, monkeypatch, drift):
     from scripts import run_orfs_diversity_campaign as runner
