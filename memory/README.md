@@ -109,6 +109,20 @@ digest 为 `900dc94eb2925751dd748a2670279f4ddbd2d4c5e0d52ad614d1a86b469bd3c3`。
 在独立 checker 输出目录重跑并核对其实际库来源。开源安装来源/下载闭环仍需
 另行补齐，不能用这次本机复制替代可复现安装脚本。
 
+隔离 checker 重放（2026-09-06）：
+`/data1/zhangdy/tehm-campaigns/tehm-r3-checker-replay-20260906-r1/summary.json`
+记录 mux32/parity64 两条 LVS 均 clean，实际 SPICE 路径及 SHA256 与新锁一致，
+GDS 与原 producer 一致；源实验目录全文件 hash 前后相同，锁重放仍 valid。
+原 flow/checker 回执未改写，该重放不是新增独立 training run。
+对原密度实验另做一次纯 RAM capture/path 诊断：当前代码返回两组
+VALID_CONTROLLED_PAIR 与 L3_REPLICATED_EFFECT，路径
+`causal_path_55eecdffc60344ef`，distinct run witnesses 为
+`RUN_2026-09-06_05-06-12_2141_358d` 和 `RUN_2026-09-06_05-07-19_4977_3a59`。
+target_scope 明确为 `signoff:route`，不是 Fmax/完整 signoff。该诊断沿用当前
+control adapter，control 的聚合 obligation metadata 来自 treatment 模板，不能
+因此声称失败于 placement 的 control 也执行了 DRC/LVS；持久化训练准入前仍需
+核对逐臂 obligation 来源。RAM 数据库已关闭，未授予 Knowledge/runtime 权限。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还
