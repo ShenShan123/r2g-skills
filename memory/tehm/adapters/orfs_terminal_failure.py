@@ -22,6 +22,20 @@ CONTRACT = {
     "error_codes": ["FLW-0024", "GPL-0301"],
     "required_successful_prefix": ["synth", "floorplan"],
 }
+FLOW_CONTRACT = {
+    "version": "orfs-flow-feasibility-v2", "scope": "flow_feasibility",
+    "failure_contract": copy.deepcopy(CONTRACT),
+    "success_stages": ["synth", "floorplan", "place", "cts", "route", "finish"],
+    "final_artifacts": ["6_final.def", "6_final.odb", "6_final.gds"],
+    "signoff_claim": False,
+}
+
+
+def resolve_terminal_contract(version: str) -> dict:
+    for contract in (CONTRACT, FLOW_CONTRACT):
+        if version == contract["version"]:
+            return copy.deepcopy(contract)
+    raise ValueError("unsupported terminal failure contract")
 
 
 def _digest(value):
@@ -51,15 +65,14 @@ def register_terminal_contract(project: Path, *, contract_version: str,
     not a cryptographic timestamp or permission to admit historical failures.
     """
     project = Path(project).resolve()
-    if contract_version != CONTRACT["version"]:
-        raise ValueError("unsupported terminal failure contract")
+    contract = resolve_terminal_contract(contract_version)
     if any((project / "backend").glob("RUN_*")) or (project / "campaign-run-receipt.json").exists():
         raise ValueError("terminal registration requires a fresh project; no historical backfill")
     if toolchain.get("status") != "bound_internal" or toolchain.get("manifest_validation", {}).get("valid") is not True:
         raise ValueError("terminal registration requires a valid internal toolchain lock")
     registration = {"version": "orfs-terminal-preregistration-v1",
-                    "project": str(project), "contract": copy.deepcopy(CONTRACT),
-                    "contract_digest": _digest(CONTRACT),
+                    "project": str(project), "contract": contract,
+                    "contract_digest": _digest(contract),
                     "toolchain_digest": _digest(toolchain), "command": list(command),
                     "inputs": _registered_inputs(project)}
     registration["registration_digest"] = _digest(registration)
@@ -75,10 +88,11 @@ def recheck_terminal_registration(project: Path, registration: dict) -> bool:
     try:
         stored = json.loads((project / "terminal-preregistration.json").read_text())
         unsigned = {k: v for k, v in registration.items() if k != "registration_digest"}
+        contract = resolve_terminal_contract(registration.get("contract", {}).get("version"))
         return (stored == registration and registration.get("project") == str(project)
                 and registration.get("registration_digest") == _digest(unsigned)
-                and registration.get("contract") == CONTRACT
-                and registration.get("contract_digest") == _digest(CONTRACT)
+                and registration.get("contract") == contract
+                and registration.get("contract_digest") == _digest(contract)
                 and registration.get("inputs") == _registered_inputs(project))
     except (OSError, ValueError, TypeError):
         return False
@@ -91,16 +105,23 @@ def terminal_run_file_bindings(project: Path) -> list[dict]:
     if len(runs) != 1:
         return []
     records = []
-    for name in ("run-meta.json", "stage_log.jsonl", "flow.log"):
+    names = ["run-meta.json", "stage_log.jsonl", "flow.log"]
+    try:
+        meta = json.loads((runs[0] / "run-meta.json").read_text())
+        if type(meta.get("make_status")) is int and meta["make_status"] == 0:
+            names.extend("final/" + name for name in FLOW_CONTRACT["final_artifacts"])
+    except (OSError, ValueError, AttributeError):
+        return []
+    for name in names:
         path = (runs[0] / name).resolve()
-        if not path.is_relative_to(project / "backend") or not path.is_file():
+        if not path.is_relative_to(project / "backend") or not path.is_file() or not path.stat().st_size:
             return []
         records.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
     return records
 
 
 def replay_terminal_failure(project: Path, *, registration_digest: str,
-                            current_toolchain: dict) -> dict:
+                            current_toolchain: dict, _allow_completion: bool = False) -> dict:
     """Verify raw evidence against an independently supplied registration pin.
 
     The caller obtains that pin from the trusted pre-execution producer, not
@@ -110,6 +131,9 @@ def replay_terminal_failure(project: Path, *, registration_digest: str,
     project = Path(project).resolve()
     registration = json.loads((project / "terminal-preregistration.json").read_text())
     execution = json.loads((project / "campaign-run-receipt.json").read_text())
+    expected_contract = FLOW_CONTRACT if _allow_completion else CONTRACT
+    if registration.get("contract") != expected_contract:
+        raise ValueError("terminal consumer contract version mismatch")
     if (not registration_digest or registration.get("registration_digest") != registration_digest
             or not recheck_terminal_registration(project, registration)
             or execution.get("terminal_preregistration") != registration):
@@ -121,9 +145,11 @@ def replay_terminal_failure(project: Path, *, registration_digest: str,
         raise ValueError("terminal toolchain binding mismatch")
     if (execution.get("command") != registration["command"]
             or type(execution.get("attempt")) is not int or execution["attempt"] != 1
-            or execution.get("completed") is not False or execution.get("resume_from") is not None
+            or execution.get("completed") is not (execution.get("flow_rc") == 0)
+            or execution.get("resume_from") is not None
             or execution.get("supervisor_timeout") is not False
-            or type(execution.get("flow_rc")) is not int or execution["flow_rc"] != 2):
+            or type(execution.get("flow_rc")) is not int
+            or execution["flow_rc"] not in ((0, 2) if _allow_completion else (2,))):
         raise ValueError("terminal execution is not the registered fresh failure")
     files = terminal_run_file_bindings(project)
     if not files or execution.get("terminal_run_files") != files:
@@ -134,15 +160,43 @@ def replay_terminal_failure(project: Path, *, registration_digest: str,
             or execution.get("stage_log_sha256") != files[1]["sha256"]):
         raise ValueError("terminal stage log binding mismatch")
     meta = json.loads(paths["run-meta.json"].read_text())
-    if meta.get("run_tag") != stage_path.parent.name:
+    if (meta.get("run_tag") != stage_path.parent.name or type(meta.get("make_status")) is not int
+            or meta["make_status"] != execution["flow_rc"]):
         raise ValueError("terminal run identity mismatch")
     stages = [json.loads(line) for line in stage_path.read_text().splitlines() if line.strip()]
-    result = evaluate_density_terminal_failure(meta, stages, paths["flow.log"].read_text())
+    log = paths["flow.log"].read_text()
+    if execution["flow_rc"] == 0:
+        valid = ([row.get("stage") for row in stages] == FLOW_CONTRACT["success_stages"]
+                 and all(type(row.get("status")) is int and row["status"] == 0 for row in stages)
+                 and not re.search(r"\[ERROR\s+[A-Z]+-\d+\]", log))
+        result = {"contract": copy.deepcopy(FLOW_CONTRACT), "contract_digest": _digest(FLOW_CONTRACT),
+                  "verdict": "PASS" if valid else "UNKNOWN", "run_tag": meta["run_tag"],
+                  "reasons": [] if valid else ["incomplete_or_contradictory_flow_completion"],
+                  "inputs_digest": _digest(files), "full_signoff_complete": False,
+                  "learner_admission": False, "preregistration_verified": False,
+                  "downstream_checks": {key: "UNKNOWN" for key in ("drc", "lvs", "final_timing")},
+                  "receipt_digest": "pending"}
+    else:
+        result = evaluate_density_terminal_failure(meta, stages, log)
+        if _allow_completion:
+            result.update(contract=copy.deepcopy(FLOW_CONTRACT), contract_digest=_digest(FLOW_CONTRACT))
     result.pop("receipt_digest")
     result.update(registration_binding_verified=True, registration_digest=registration_digest,
                   execution_digest=_digest(execution))
+    if terminal_run_file_bindings(project) != files or not recheck_terminal_registration(project, registration):
+        raise ValueError("terminal inputs changed during replay")
     result["receipt_digest"] = _digest(result)
     return result
+
+
+def replay_flow_feasibility(project: Path, *, registration_digest: str,
+                            current_toolchain: dict) -> dict:
+    """V2 paired measurement: completed flow or recognized density failure.
+
+    PASS does not assert DRC/LVS, timing closure, PPA utility or learner admission.
+    """
+    return replay_terminal_failure(project, registration_digest=registration_digest,
+                                   current_toolchain=current_toolchain, _allow_completion=True)
 
 
 def evaluate_density_terminal_failure(run_meta: dict, stages: list[dict],

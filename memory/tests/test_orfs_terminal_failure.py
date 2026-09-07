@@ -7,6 +7,7 @@ from tehm.adapters.orfs_terminal_failure import (
     CONTRACT, evaluate_density_terminal_failure, register_terminal_contract,
     recheck_terminal_registration,
     terminal_run_file_bindings, replay_terminal_failure,
+    FLOW_CONTRACT, replay_flow_feasibility,
 )
 
 
@@ -163,19 +164,28 @@ def test_runner_registers_before_invocation_and_records_recheck(tmp_path, monkey
     assert len(invoked) == 1
 
 
-def replay_inputs(tmp_path):
+def replay_inputs(tmp_path, *, version=None, success=False):
     kwargs = registration_inputs(tmp_path)
+    if version is not None:
+        kwargs["contract_version"] = version
     registration = register_terminal_contract(tmp_path, **kwargs)
     run = tmp_path / "backend/RUN_density"
     run.mkdir(parents=True)
     meta, stages, log = evidence()
+    if success:
+        meta["make_status"] = 0
+        stages = [{"stage": name, "status": 0} for name in FLOW_CONTRACT["success_stages"]]
+        log = "Flow completed successfully"
+        (run / "final").mkdir()
+        for name in FLOW_CONTRACT["final_artifacts"]:
+            (run / "final" / name).write_text("synthetic fixture artifact")
     (run / "run-meta.json").write_text(json.dumps(meta))
     (run / "stage_log.jsonl").write_text("\n".join(json.dumps(row) for row in stages))
     (run / "flow.log").write_text(log)
     files = terminal_run_file_bindings(tmp_path)
     execution = {"terminal_preregistration": registration, "toolchain_binding": kwargs["toolchain"],
-                 "command": kwargs["command"], "attempt": 1, "completed": False,
-                 "resume_from": None, "supervisor_timeout": False, "flow_rc": 2,
+                 "command": kwargs["command"], "attempt": 1, "completed": success,
+                 "resume_from": None, "supervisor_timeout": False, "flow_rc": 0 if success else 2,
                  "terminal_run_files": files, "stage_log": files[1]["path"],
                  "stage_log_sha256": files[1]["sha256"], "terminal_registration_unchanged": True}
     (tmp_path / "campaign-run-receipt.json").write_text(json.dumps(execution))
@@ -208,3 +218,42 @@ def test_consumer_rejects_tampering_despite_producer_true_flag(tmp_path, tamper)
     (tmp_path / "campaign-run-receipt.json").write_text(json.dumps(execution))
     with pytest.raises(ValueError):
         replay_terminal_failure(tmp_path, registration_digest=pin, current_toolchain=toolchain)
+
+
+@pytest.mark.parametrize("success", [False, True])
+def test_v2_measures_both_outcomes_without_signoff_claim(tmp_path, success):
+    pin, tools, _ = replay_inputs(tmp_path, version=FLOW_CONTRACT["version"], success=success)
+    receipt = replay_flow_feasibility(tmp_path, registration_digest=pin, current_toolchain=tools)
+    assert receipt["verdict"] == ("PASS" if success else "FAIL")
+    assert receipt["contract"] == FLOW_CONTRACT
+    assert not receipt["full_signoff_complete"]
+    assert not receipt["learner_admission"]
+    if success:
+        assert set(receipt["downstream_checks"].values()) == {"UNKNOWN"}
+    with pytest.raises(ValueError, match="contract version"):
+        replay_terminal_failure(tmp_path, registration_digest=pin, current_toolchain=tools)
+
+
+@pytest.mark.parametrize("name", FLOW_CONTRACT["final_artifacts"])
+def test_v2_rejects_missing_completed_artifacts(tmp_path, name):
+    pin, tools, _ = replay_inputs(tmp_path, version=FLOW_CONTRACT["version"], success=True)
+    (tmp_path / "backend/RUN_density/final" / name).unlink()
+    with pytest.raises(ValueError, match="raw run evidence"):
+        replay_flow_feasibility(tmp_path, registration_digest=pin, current_toolchain=tools)
+
+
+def test_v1_failure_cannot_be_silently_reinterpreted_as_v2(tmp_path):
+    pin, tools, _ = replay_inputs(tmp_path)
+    with pytest.raises(ValueError, match="contract version"):
+        replay_flow_feasibility(tmp_path, registration_digest=pin, current_toolchain=tools)
+
+
+def test_zero_exit_and_artifacts_do_not_override_incomplete_stage_sequence(tmp_path):
+    pin, tools, execution = replay_inputs(tmp_path, version=FLOW_CONTRACT["version"], success=True)
+    stage = tmp_path / "backend/RUN_density/stage_log.jsonl"
+    stage.write_text(json.dumps({"stage": "synth", "status": 0}))
+    files = terminal_run_file_bindings(tmp_path)
+    execution.update(terminal_run_files=files, stage_log_sha256=files[1]["sha256"])
+    (tmp_path / "campaign-run-receipt.json").write_text(json.dumps(execution))
+    receipt = replay_flow_feasibility(tmp_path, registration_digest=pin, current_toolchain=tools)
+    assert receipt["verdict"] == "UNKNOWN"

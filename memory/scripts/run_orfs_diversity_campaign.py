@@ -1165,9 +1165,8 @@ def run_projects(root: Path, manifest: dict, *, workers: int, cpus: int,
         project = Path(project_text)
         terminal_version = manifest.get("terminal_failure_contract")
         if terminal_version is not None:
-            from tehm.adapters.orfs_terminal_failure import CONTRACT
-            if terminal_version != CONTRACT["version"]:
-                raise ValueError("unsupported terminal failure contract")
+            from tehm.adapters.orfs_terminal_failure import resolve_terminal_contract
+            resolve_terminal_contract(terminal_version)
             if (any((project / "backend").glob("RUN_*")) or
                     (project / "campaign-run-receipt.json").exists() or
                     (project / "terminal-preregistration.json").exists()):

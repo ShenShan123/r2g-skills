@@ -184,6 +184,17 @@ FAIL / registration_binding_verified=true，原始输入 hash unchanged。
 消费合约，再重新构造受控 pair；不能将旧的 signoff:route 成功直接拼接成
 新的 flow_feasibility 实验，不能据此恢复旧 L3 或 production promotion。
 
+双向 flow feasibility 合约（2026-09-07）：新增显式版本
+`orfs-flow-feasibility-v2`，将原 v1 密度失败判定与成功分支放入同一测量定义。
+成功要求正常 exit=0、synth→floorplan→place→cts→route→finish 全部依次成功，
+以及 producer 绑定的非空 final DEF/ODB/GDS；摘要重放前后均核对原始文件。
+失败仍要求已识别的密度错误；缺失阶段、缺失产物或矛盾证据不算成功。
+`replay_flow_feasibility` 的 PASS 仅代表该 flow 完成，DRC/LVS/final timing
+保持 UNKNOWN，full_signoff_complete 和 learner_admission 均 false。
+v1/v2 消费入口严格隔离，不追溯升级历史登记。此版本尚未做真实双臂执行，
+下一步应在全新目录按 v2 同时登记/执行两臂，再判断同范围的受控证据；
+production 完整 signoff 与非目标无回归要求没有被这个测量替代。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还
