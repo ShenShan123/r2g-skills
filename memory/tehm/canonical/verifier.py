@@ -132,7 +132,7 @@ class VerifierSnapshot:
         return self.verdict == "PASS"
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "verdict": self.verdict,
             "oracle_type": self.oracle_type,
             "scope": self.scope,
@@ -149,8 +149,12 @@ class VerifierSnapshot:
             "execution_preflight": self.execution_preflight,
             "toolchain_binding": self.toolchain_binding,
             "utility_contract": self.utility_contract,
-            "scoped_execution": self.scoped_execution,
         }
+        # Do not introduce a new null field into historical verifier JSON:
+        # capture compares immutable rows as well as content-addressed IDs.
+        if self.scoped_execution is not None:
+            data["scoped_execution"] = self.scoped_execution
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "VerifierSnapshot":

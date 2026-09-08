@@ -55,6 +55,7 @@ def test_scoped_measurement_persists_and_binds_identity(tmp_tehm, sample_record_
     plain = deepcopy_dict(sample_record_dict)
     legacy = VerifierSnapshot.from_dict(plain["verification"]).content()
     assert "scope" not in legacy and "scoped_execution" not in legacy
+    assert "scoped_execution" not in VerifierSnapshot.from_dict(plain["verification"]).to_dict()
     plain["verification"]["scoped_execution"] = None
     assert VerifierSnapshot.from_dict(plain["verification"]).content() == legacy
     plain_id = capture(conn, store, ExecutionRecord.from_dict(plain)).transition_id
