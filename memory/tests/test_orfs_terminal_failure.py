@@ -294,7 +294,7 @@ def test_pair_checks_context_not_only_matching_outcome_labels(tmp_path, extra):
             replay_flow_feasibility_pair(*projects, **{**kwargs, "config_edits": {"CORE_UTILIZATION": "30"}})
 
 
-def test_locked_pair_uses_live_tools_not_saved_valid_flags(tmp_path):
+def test_locked_pair_uses_live_tools_not_saved_valid_flags(tmp_path, tmp_tehm):
     from test_orfs_toolchain_manifest import _fake_orfs
     from tehm.orfs_toolchain import build_toolchain_manifest
     from tehm.orfs_toolchain_preflight import preflight_orfs_toolchain
@@ -326,6 +326,34 @@ def test_locked_pair_uses_live_tools_not_saved_valid_flags(tmp_path):
         config_edits=kwargs["config_edits"], current_toolchain=tools)
     with pytest.raises(ValueError, match="lock pin mismatch"):
         replay_locked_flow_feasibility_pair(*projects, **{**kwargs, "expected_manifest_digest": "other"})
+    from tehm.adapters.orfs_scoped import build_flow_feasibility_record, replay_flow_feasibility_record
+    from tehm.canonical.capture import capture
+    from tehm.causal.mechanism import load_transition_facts
+    from tehm.verified_execution import require_verified_execution
+
+    record = build_flow_feasibility_record(*projects, lineage_id="fixture-density", **kwargs)
+    assert replay_flow_feasibility_record(record) == result
+    assert record.verification["scope"] == "flow_feasibility"
+    assert record.verification["oracle_complete"] is True
+    assert record.observation_delta["utility_verdict"] == "UNKNOWN"
+    assert record.observation_delta["original_failure"] == "REMOVED"
+    for section, key, value in (
+            ("action", "payload", {"config_edits": {"CORE_UTILIZATION": "30"}}),
+            ("before", "config", {"CORE_UTILIZATION": "10"}),
+            ("after", "reports", {"drc": {"status": "clean"}}),
+            ("verification", "scope", "full_signoff"),
+            ("observation_delta", "utility_verdict", "PARETO_SAFE")):
+        changed = copy.deepcopy(record)
+        getattr(changed, section)[key] = value
+        with pytest.raises(ValueError, match="differs from replayed execution"):
+            replay_flow_feasibility_record(changed)
+    conn, store, _ = tmp_tehm
+    captured = capture(conn, store, record, dataset_learner_eligible=False)
+    assert capture(conn, store, record, dataset_learner_eligible=False).transition_id == captured.transition_id
+    facts = load_transition_facts(conn, captured.transition_id)
+    assert facts.verifier["scoped_execution"]["pair_receipt"] == result
+    with pytest.raises(ValueError, match="scoped_execution_replay_required"):
+        require_verified_execution(facts)
     openroad.write_text("#!/bin/sh\necho 'replacement'\n")
     # All producer receipts and their valid=True flags remain untouched.
     with pytest.raises(ValueError, match="live toolchain replay failed"):

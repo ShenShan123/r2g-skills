@@ -238,6 +238,17 @@ Scoped capture 身份边界（2026-09-07）：`VerifierSnapshot.scoped_execution
 也不开放 learner gate；剩余工作是将该受控测量与 canonical action/状态逐项
 绑定，再实施 scoped learner 消费与后续因果链验证。
 
+显式 scoped record（2026-09-07）：`tehm.adapters.orfs_scoped` 从现场回放结果
+构造 action、双臂 config / 原始文件身份、范围内 outcome 与 verifier；
+`replay_flow_feasibility_record` 重建并逐项比对整个记录，拒绝 action、状态、
+scope 或 utility 替换。只声明 flow_feasibility，utility 保持 UNKNOWN，
+不把成功臂的 checker 结果推断成失败臂的下游证据。80 项相关测试通过。
+两组真实产物经外部 `audit_scoped_capture.py` 在 RAM 数据库完成 capture / 因果
+读取 / 幂等回放，结果保存在 `scoped-capture-audit.json`；临时图存储已清理。
+这一阶段没有正式 canonical 写入；共享 learner gate 仍拒绝 scoped 记录。
+后续需将持久化 transition 与独立重建的 action / 状态身份绑定，接通共享消费
+验证，然后才评估 scoped 证据的因果准入与 Knowledge parent 构建。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还
