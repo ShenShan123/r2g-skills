@@ -259,6 +259,15 @@ artifact manifest 替换。80 项相关测试通过。真实两组产物已通�
 临时诊断库已清理；该检查仍只证明测量绑定，不证明 acquisition 的事前权威、
 dataset learner eligibility、L2/L3 或 P13 准入，现有共享 learner 拒绝保持不变。
 
+Scoped baseline 观察（2026-09-08）：显式记录构造器新增 `role="control"`，
+把已执行的 before run 作为 baseline observation；不是额外重跑的 no-op 实验。
+control 的两个状态均来自 baseline，verdict / failing_tests / evidence_refs
+不继承 treatment 成功臂，utility 仍 UNKNOWN；scoped role 进入身份计算。
+两条真实 control 与各自 treatment 共享 source state，且都通过持久化重建
+比对；原 treatment ID 保持不变。外部 `scoped-baseline-audit-20260908.json`
+记录 RAM 诊断结果，80 项相关测试通过。这补齐了同范围 control 表达，尚未
+建立有效 L2/L3 或开放共享 learner gate，也未将旧 aggregate control 追溯升级。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

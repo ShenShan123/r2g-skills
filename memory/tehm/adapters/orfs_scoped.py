@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import tempfile
+from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from tehm.canonical.capture import ExecutionRecord
 def build_flow_feasibility_record(
         before: Path, after: Path, *, lineage_id: str, before_pin: str,
         after_pin: str, config_edits: dict, toolchain_manifest: str | Path,
-        expected_manifest_digest: str) -> ExecutionRecord:
+        expected_manifest_digest: str, role: str = "treatment") -> ExecutionRecord:
     """Build an explicit scoped observation from freshly replayed raw arms.
 
     Pins must be supplied from the frozen acquisition record. The caller owns
@@ -30,6 +31,8 @@ def build_flow_feasibility_record(
     """
     if type(lineage_id) is not str or not lineage_id.strip():
         raise ValueError("flow feasibility record requires a lineage")
+    if type(role) is not str or role not in {"treatment", "control"}:
+        raise ValueError("flow feasibility role must be treatment or control")
     before, after = Path(before).resolve(), Path(after).resolve()
     kwargs = dict(before_pin=before_pin, after_pin=after_pin,
                   config_edits=dict(config_edits),
@@ -61,28 +64,36 @@ def build_flow_feasibility_record(
                 "PRESENT" if before_verdict == "FAIL" and after_verdict == "FAIL" else "UNKNOWN")
     family = ("DENSITY_RELIEF" if float(states[1]["config"]["CORE_UTILIZATION"]) <
               float(states[0]["config"]["CORE_UTILIZATION"]) else "DENSITY_INCREASE")
-    scoped = {"version": "orfs-scoped-record-v1", "role": "after",
+    scoped = {"version": "orfs-scoped-record-v1", "role": "after" if role == "treatment" else "before",
               "before_project": str(before), "after_project": str(after),
               **kwargs, "pair_receipt": pair}
     identity = _digest({"scoped_execution": scoped, "lineage_id": lineage_id})
+    if role == "control":
+        # This is the observed baseline run, not a newly executed no-op arm.
+        # Both endpoints carry baseline evidence and its own measured verdict.
+        states[1] = deepcopy(states[0])
+        after_verdict = before_verdict
+        original = "PRESENT" if before_verdict == "FAIL" else "UNKNOWN"
+        refs = [item["path"] for item in states[0]["artifacts"]["flow_feasibility"]["run_files"]]
     record = ExecutionRecord(
         record_id="orfs-scoped:" + identity.removeprefix("sha256:"),
         domain="flow.signoff", project_id=lineage_id,
         design_id=states[0]["config"]["DESIGN_NAME"], lineage_id=lineage_id,
         before=states[0], after=states[1],
-        action={"domain": "flow.CONFIG_DELTA", "transformation_family": family,
-                "payload": {"config_edits": dict(config_edits),
+        action={"domain": "flow.CONFIG_DELTA" if role == "treatment" else "flow.BASELINE_CONTROL",
+                "transformation_family": family,
+                "payload": {"config_edits": dict(config_edits) if role == "treatment" else {},
+                            **({"control": True, "observation_only": True} if role == "control" else {}),
                             "recheck": "flow_feasibility",
                             "measurement_contract_digest": pair["contract_digest"]}},
         observation_delta={
             "original_failure": original,
-            "failing_tests": {side: (0 if pair[side]["verdict"] == "PASS" else
-                                     1 if pair[side]["verdict"] == "FAIL" else None)
-                              for side in ("before", "after")},
+            "failing_tests": {side: (0 if verdict == "PASS" else 1 if verdict == "FAIL" else None)
+                              for side, verdict in (("before", before_verdict), ("after", after_verdict))},
             "created_regressions": (["flow_feasibility"] if
                                     (before_verdict, after_verdict) == ("PASS", "FAIL") else []),
             "newly_observed_failures": [],
-            "experiment_kind": "REPAIR" if original in {"REMOVED", "PRESENT"} else "OBSERVATION",
+            "experiment_kind": "REPAIR" if role == "treatment" and original in {"REMOVED", "PRESENT"} else "OBSERVATION",
             "utility_verdict": "UNKNOWN",
         },
         verification={"verdict": after_verdict, "oracle_type": "TARGET_TEST",
@@ -104,10 +115,13 @@ def replay_flow_feasibility_record(record: ExecutionRecord) -> dict:
     scoped = record.verification.get("scoped_execution")
     if not isinstance(scoped, dict) or scoped.get("version") != "orfs-scoped-record-v1":
         raise ValueError("unsupported scoped execution record")
+    if scoped.get("role") not in {"before", "after"}:
+        raise ValueError("unsupported scoped execution role")
     try:
         expected = build_flow_feasibility_record(
             Path(scoped["before_project"]), Path(scoped["after_project"]),
             lineage_id=record.lineage_id,
+            role="control" if scoped["role"] == "before" else "treatment",
             **{key: scoped[key] for key in ("before_pin", "after_pin", "config_edits",
                                            "toolchain_manifest", "expected_manifest_digest")})
     except (KeyError, TypeError) as exc:
@@ -133,7 +147,7 @@ def replay_persisted_flow_feasibility(conn: sqlite3.Connection, transition_id: s
 
     expected_keys = {"before", "after", "lineage_id", "before_pin", "after_pin",
                      "config_edits", "toolchain_manifest", "expected_manifest_digest"}
-    if type(acquisition) is not dict or set(acquisition) != expected_keys:
+    if type(acquisition) is not dict or set(acquisition) not in (expected_keys, expected_keys | {"role"}):
         raise ValueError("scoped replay requires an explicit frozen acquisition")
     acquisition = dict(acquisition)
     for key in ("before", "after", "toolchain_manifest"):

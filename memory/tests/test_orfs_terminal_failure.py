@@ -359,6 +359,27 @@ def test_locked_pair_uses_live_tools_not_saved_valid_flags(tmp_path, tmp_tehm):
     assert conn.total_changes == changes
     assert persisted["persisted_binding_verified"] and not persisted["learner_admission"]
     assert persisted["pair_receipt"] == result
+    control = build_flow_feasibility_record(*projects, lineage_id="fixture-density", role="control", **kwargs)
+    assert control.before == control.after
+    assert control.before is not control.after
+    assert control.verification["verdict"] == "FAIL"
+    assert control.verification["scope"] == "flow_feasibility"
+    assert control.observation_delta["original_failure"] == "PRESENT"
+    assert control.observation_delta["experiment_kind"] == "OBSERVATION"
+    assert control.observation_delta["failing_tests"] == {"before": 1, "after": 1}
+    assert control.action["payload"]["config_edits"] == {}
+    assert control.action["payload"]["observation_only"] is True
+    assert all(str(projects[0]) in ref for ref in control.verification["evidence_refs"])
+    assert replay_flow_feasibility_record(control) == result
+    control_capture = capture(conn, store, control, dataset_learner_eligible=False)
+    assert control_capture.transition_id != captured.transition_id
+    assert control_capture.state_ids["before"] == captured.state_ids["before"]
+    assert replay_persisted_flow_feasibility(
+        conn, control_capture.transition_id, acquisition={**acquisition, "role": "control"})["persisted_binding_verified"]
+    with pytest.raises(ValueError, match="independent acquisition"):
+        replay_persisted_flow_feasibility(conn, control_capture.transition_id, acquisition=acquisition)
+    with pytest.raises(ValueError, match="scoped_execution_replay_required"):
+        require_verified_execution(load_transition_facts(conn, control_capture.transition_id))
     with pytest.raises(ValueError, match="tehm_states evidence mismatch"):
         replay_persisted_flow_feasibility(conn, captured.transition_id,
                                          acquisition={**acquisition, "lineage_id": "wrong-lineage"})
