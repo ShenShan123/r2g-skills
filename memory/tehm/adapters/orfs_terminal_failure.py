@@ -247,6 +247,43 @@ def replay_flow_feasibility_pair(before: Path, after: Path, *, before_pin: str,
     return result
 
 
+def replay_locked_flow_feasibility_pair(
+        before: Path, after: Path, *, before_pin: str, after_pin: str,
+        config_edits: dict, toolchain_manifest: str | Path,
+        expected_manifest_digest: str) -> dict:
+    """Replay using live tool probes, never a producer's saved valid flag.
+
+    Registration and lock pins must come from the caller's frozen acquisition
+    record, not be inferred from the execution being validated. This checks
+    measurement integrity only; it does not certify pin chronology or grant
+    learner authority. Original pair receipt identity is retained.
+    """
+    from tehm.orfs_toolchain import load_toolchain_manifest
+    from tehm.orfs_toolchain_preflight import preflight_orfs_toolchain
+
+    locked = load_toolchain_manifest(toolchain_manifest)
+    if not expected_manifest_digest or locked["manifest_digest"] != expected_manifest_digest:
+        raise ValueError("flow pair toolchain lock pin mismatch")
+    manifest = {"orfs_root": locked["orfs"]["root"],
+                "toolchain_manifest": str(Path(toolchain_manifest).resolve())}
+
+    def check_tools():
+        current = preflight_orfs_toolchain(manifest)
+        validation = current.get("manifest_validation") or {}
+        if (current.get("status") != "bound_internal" or validation.get("valid") is not True
+                or validation.get("manifest_digest") != expected_manifest_digest):
+            raise ValueError("flow pair live toolchain replay failed")
+        return current
+
+    tools = check_tools()
+    receipt = replay_flow_feasibility_pair(
+        before, after, before_pin=before_pin, after_pin=after_pin,
+        current_toolchain=tools, config_edits=config_edits)
+    if check_tools() != tools:
+        raise ValueError("flow pair toolchain changed during replay")
+    return receipt
+
+
 def evaluate_density_terminal_failure(run_meta: dict, stages: list[dict],
                                       flow_log: str) -> dict:
     """Recognize a specific density failure from mutually consistent inputs.

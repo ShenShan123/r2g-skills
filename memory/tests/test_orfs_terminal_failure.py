@@ -165,8 +165,11 @@ def test_runner_registers_before_invocation_and_records_recheck(tmp_path, monkey
     assert len(invoked) == 1
 
 
-def replay_inputs(tmp_path, *, version=None, success=False, run_name="RUN_density", config_lines=""):
+def replay_inputs(tmp_path, *, version=None, success=False, run_name="RUN_density", config_lines="",
+                  toolchain=None):
     kwargs = registration_inputs(tmp_path)
+    if toolchain is not None:
+        kwargs["toolchain"] = toolchain
     config = tmp_path / "constraints/config.mk"
     config.write_text(config.read_text() + config_lines)
     if version is not None:
@@ -289,3 +292,41 @@ def test_pair_checks_context_not_only_matching_outcome_labels(tmp_path, extra):
         assert result["after"]["verdict"] == "PASS"
         with pytest.raises(ValueError, match="declared density"):
             replay_flow_feasibility_pair(*projects, **{**kwargs, "config_edits": {"CORE_UTILIZATION": "30"}})
+
+
+def test_locked_pair_uses_live_tools_not_saved_valid_flags(tmp_path):
+    from test_orfs_toolchain_manifest import _fake_orfs
+    from tehm.orfs_toolchain import build_toolchain_manifest
+    from tehm.orfs_toolchain_preflight import preflight_orfs_toolchain
+    from tehm.adapters.orfs_terminal_failure import replay_locked_flow_feasibility_pair
+
+    root, openroad, _ = _fake_orfs(tmp_path / "orfs")
+    unlocked = preflight_orfs_toolchain({"orfs_root": str(root)}, env={})
+    lock = build_toolchain_manifest(unlocked)
+    path = tmp_path / "lock.json"
+    path.write_text(json.dumps(lock))
+    tools = preflight_orfs_toolchain({"orfs_root": str(root), "toolchain_manifest": str(path)})
+    projects = [tmp_path / side for side in ("before", "after")]
+    pins = []
+    for project, density, success in zip(projects, (95, 40), (False, True)):
+        project.mkdir()
+        pin, _, _ = replay_inputs(
+            project, version=FLOW_CONTRACT["version"], success=success,
+            run_name="RUN_" + project.name, toolchain=tools,
+            config_lines=("export DESIGN_NAME = design\nexport PLATFORM = sky130hs\n"
+                          f"export CORE_UTILIZATION = {density}\n"))
+        pins.append(pin)
+    kwargs = dict(before_pin=pins[0], after_pin=pins[1], config_edits={"CORE_UTILIZATION": "40"},
+                  toolchain_manifest=path, expected_manifest_digest=lock["manifest_digest"])
+    result = replay_locked_flow_feasibility_pair(*projects, **kwargs)
+    assert result["controlled_measurement_valid"]
+    assert not result["learner_admission"]
+    assert result == replay_flow_feasibility_pair(
+        *projects, before_pin=pins[0], after_pin=pins[1],
+        config_edits=kwargs["config_edits"], current_toolchain=tools)
+    with pytest.raises(ValueError, match="lock pin mismatch"):
+        replay_locked_flow_feasibility_pair(*projects, **{**kwargs, "expected_manifest_digest": "other"})
+    openroad.write_text("#!/bin/sh\necho 'replacement'\n")
+    # All producer receipts and their valid=True flags remain untouched.
+    with pytest.raises(ValueError, match="live toolchain replay failed"):
+        replay_locked_flow_feasibility_pair(*projects, **kwargs)

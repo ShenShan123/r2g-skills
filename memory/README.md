@@ -228,6 +228,16 @@ Scoped capture 身份边界（2026-09-07）：`VerifierSnapshot.scoped_execution
 下一步需接通当前工具链核验、独立登记 pin 与原始双臂回放，并将其结果绑定到
 实际 transition 的 action / before / after；不能仅信任存储回执中的布尔字段。
 
+独立工具链回放入口（2026-09-07）：完整现场预检已从 campaign 脚本提取到
+`tehm.orfs_toolchain_preflight`，旧脚本导入入口保留。新增
+`replay_locked_flow_feasibility_pair` 要求调用方提供独立的工具链 manifest digest
+与双臂登记 pin，在配对回放前后重新执行工具路径/字节/版本/能力及锁文件检查，
+不接受 producer 保存的 valid 标记替代现场验证。两组真实 V2 产物均经此入口
+重放，与已保存的 pair receipt 逐项一致；相关测试 65 项、预检/campaign 回归
+20 项通过。此入口仍不证明登记 pin 的历史时间权威、不替代完整 signoff，
+也不开放 learner gate；剩余工作是将该受控测量与 canonical action/状态逐项
+绑定，再实施 scoped learner 消费与后续因果链验证。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还
