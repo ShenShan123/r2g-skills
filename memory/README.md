@@ -268,6 +268,20 @@ control 的两个状态均来自 baseline，verdict / failing_tests / evidence_r
 记录 RAM 诊断结果，80 项相关测试通过。这补齐了同范围 control 表达，尚未
 建立有效 L2/L3 或开放共享 learner gate，也未将旧 aggregate control 追溯升级。
 
+隔离 scoped 学习与真实 L3（2026-09-08）：新增显式
+`scoped_learning_replay` 上下文，只允许无文件后端的 RAM 数据库；要求调用方
+提供冻结 acquisition 映射与摘要。每次共享 learner 检查都重新验证指定训练
+分区、当前 facts 及原始证据的独立重建，不信任 producer 的 admitted 标记。
+文件数据库、错误摘要、非训练成员、不同连接、上下文退出后访问均拒绝；
+这是显式实验准入，不是密码学事前时间证明或生产准入。
+两组真实 V2 测量已通过实际 L2 构造器和 L3 replication gate，RAM 内的
+`causal_path_89fcc138eb236ea4` 得到 `L3_REPLICATED_EFFECT`，覆盖 mux32/parity64
+两个 design、两个 lineage、两个不同 baseline run。外部
+`scoped-l3-audit-20260908.json` 保存结果；原生产库未写入，退出上下文后的
+默认拒绝已验证。该 L3 仅限 flow_feasibility，不能扩展为完整 signoff、PPA
+收益或 P13 进化完成。下一步是构建同范围的 Knowledge parent，并验证其
+scope/obligation 在 retrieval、binding、StateShift challenge 中不会丢失。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

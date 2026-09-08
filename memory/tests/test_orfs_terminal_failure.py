@@ -380,6 +380,46 @@ def test_locked_pair_uses_live_tools_not_saved_valid_flags(tmp_path, tmp_tehm):
         replay_persisted_flow_feasibility(conn, control_capture.transition_id, acquisition=acquisition)
     with pytest.raises(ValueError, match="scoped_execution_replay_required"):
         require_verified_execution(load_transition_facts(conn, control_capture.transition_id))
+    import hashlib
+    import sqlite3
+    from tehm.ids import stable_dumps
+    from tehm.dataset import assign_transition
+    from tehm.verified_execution import scoped_learning_replay, require_verified_transition
+    from tehm.causal.intervention import build_intervention_pair
+    acquisitions = json.loads(json.dumps({
+        captured.transition_id: acquisition,
+        control_capture.transition_id: {**acquisition, "role": "control"}}, default=str))
+    digest = "sha256:" + hashlib.sha256(stable_dumps(acquisitions).encode()).hexdigest()
+    context_args = dict(campaign_id="scoped-training", acquisitions=acquisitions, expected_digest=digest)
+    with pytest.raises(ValueError, match="RAM database"):
+        with scoped_learning_replay(conn, **context_args):
+            pass
+    conn.commit()
+    ram = sqlite3.connect(":memory:")
+    ram.row_factory = sqlite3.Row
+    conn.backup(ram)
+    try:
+        with pytest.raises(ValueError, match="freeze digest mismatch"):
+            with scoped_learning_replay(ram, **{**context_args, "expected_digest": "wrong"}):
+                pass
+        with scoped_learning_replay(ram, **context_args):
+            with pytest.raises(ValueError, match="explicit_training_membership"):
+                require_verified_transition(ram, captured.transition_id)
+        for tid in acquisitions:
+            assign_transition(ram, transition_id=tid, campaign_id="scoped-training", learner_eligible=True)
+        with scoped_learning_replay(ram, **context_args):
+            for tid in acquisitions:
+                require_verified_transition(ram, tid)
+            with pytest.raises(ValueError, match="connection_mismatch"):
+                require_verified_transition(conn, captured.transition_id)
+            controlled = build_intervention_pair(
+                ram, control_capture.transition_id, captured.transition_id,
+                campaign_id="scoped-training", target_scope="flow_feasibility")
+            assert controlled.validity_status == "VALID_CONTROLLED_PAIR"
+        with pytest.raises(ValueError, match="scoped_execution_replay_required"):
+            require_verified_transition(ram, captured.transition_id)
+    finally:
+        ram.close()
     with pytest.raises(ValueError, match="tehm_states evidence mismatch"):
         replay_persisted_flow_feasibility(conn, captured.transition_id,
                                          acquisition={**acquisition, "lineage_id": "wrong-lineage"})
