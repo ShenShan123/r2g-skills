@@ -352,6 +352,24 @@ def test_locked_pair_uses_live_tools_not_saved_valid_flags(tmp_path, tmp_tehm):
     assert capture(conn, store, record, dataset_learner_eligible=False).transition_id == captured.transition_id
     facts = load_transition_facts(conn, captured.transition_id)
     assert facts.verifier["scoped_execution"]["pair_receipt"] == result
+    from tehm.adapters.orfs_scoped import replay_persisted_flow_feasibility
+    acquisition = dict(before=projects[0], after=projects[1], lineage_id="fixture-density", **kwargs)
+    changes = conn.total_changes
+    persisted = replay_persisted_flow_feasibility(conn, captured.transition_id, acquisition=acquisition)
+    assert conn.total_changes == changes
+    assert persisted["persisted_binding_verified"] and not persisted["learner_admission"]
+    assert persisted["pair_receipt"] == result
+    with pytest.raises(ValueError, match="tehm_states evidence mismatch"):
+        replay_persisted_flow_feasibility(conn, captured.transition_id,
+                                         acquisition={**acquisition, "lineage_id": "wrong-lineage"})
+    for column, value in (("source_digest", "replaced"), ("lineage_id", "wrong-lineage"),
+                          ("artifact_manifest_json", "{}")):
+        state_id = captured.state_ids["after"]
+        original = conn.execute(f"SELECT {column} FROM tehm_states WHERE state_id=?", (state_id,)).fetchone()[0]
+        conn.execute(f"UPDATE tehm_states SET {column}=? WHERE state_id=?", (value, state_id))
+        with pytest.raises(ValueError, match="tehm_states evidence mismatch"):
+            replay_persisted_flow_feasibility(conn, captured.transition_id, acquisition=acquisition)
+        conn.execute(f"UPDATE tehm_states SET {column}=? WHERE state_id=?", (original, state_id))
     with pytest.raises(ValueError, match="scoped_execution_replay_required"):
         require_verified_execution(facts)
     openroad.write_text("#!/bin/sh\necho 'replacement'\n")

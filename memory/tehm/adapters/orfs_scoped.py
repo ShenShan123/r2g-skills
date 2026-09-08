@@ -6,6 +6,8 @@ No legacy aggregate record is relabeled and no database is written here.
 from __future__ import annotations
 
 import json
+import sqlite3
+import tempfile
 from dataclasses import asdict
 from pathlib import Path
 
@@ -113,3 +115,64 @@ def replay_flow_feasibility_record(record: ExecutionRecord) -> dict:
     if asdict(record) != asdict(expected):
         raise ValueError("flow feasibility record differs from replayed execution")
     return expected.verification["scoped_execution"]["pair_receipt"]
+
+
+def replay_persisted_flow_feasibility(conn: sqlite3.Connection, transition_id: str,
+                                     *, acquisition: dict) -> dict:
+    """Compare persisted evidence with an independent acquisition reconstruction.
+
+    The caller supplies the frozen acquisition (including lineage and pins),
+    not fields extracted from the transition under examination. The source
+    database is read only; canonical reconstruction happens in RAM. This
+    proves measurement binding, not dataset eligibility or causal authority.
+    """
+    from tehm import db
+    from tehm.artifact_store import ArtifactStore
+    from tehm.canonical.capture import capture
+    from tehm.causal.mechanism import load_transition_facts
+
+    expected_keys = {"before", "after", "lineage_id", "before_pin", "after_pin",
+                     "config_edits", "toolchain_manifest", "expected_manifest_digest"}
+    if type(acquisition) is not dict or set(acquisition) != expected_keys:
+        raise ValueError("scoped replay requires an explicit frozen acquisition")
+    acquisition = dict(acquisition)
+    for key in ("before", "after", "toolchain_manifest"):
+        acquisition[key] = str(Path(acquisition[key]).resolve())
+    facts = load_transition_facts(conn, transition_id)
+    if not facts.verifier.get("scoped_execution"):
+        raise ValueError("transition has no scoped execution")
+    record = build_flow_feasibility_record(**acquisition)
+    with tempfile.TemporaryDirectory(prefix="tehm-scoped-replay-") as scratch:
+        replica = sqlite3.connect(":memory:")
+        replica.row_factory = sqlite3.Row
+        try:
+            replica.execute("PRAGMA foreign_keys=ON")
+            db.ensure_schema(replica)
+            receipt = capture(replica, ArtifactStore(Path(scratch)), record,
+                              dataset_campaign_id="scoped-replay-diagnostic",
+                              dataset_learner_eligible=False)
+            if receipt.transition_id != transition_id:
+                raise ValueError("persisted transition differs from independent acquisition")
+            # Checking the transition ID alone misses tampered state rows
+            # whose IDs have not been recomputed. Compare all persisted
+            # state/transition columns, including non-identity provenance.
+            for table, key, ids in (
+                    ("tehm_states", "state_id", receipt.state_ids.values()),
+                    ("tehm_transitions", "transition_id", [transition_id])):
+                for identity in ids:
+                    query = f"SELECT * FROM {table} WHERE {key}=?"
+                    actual = conn.execute(query, (identity,)).fetchone()
+                    expected = replica.execute(query, (identity,)).fetchone()
+                    if actual is None or expected is None:
+                        raise ValueError("scoped replay missing canonical row")
+                    actual, expected = dict(actual), dict(expected)
+                    actual.pop("created_at", None)
+                    expected.pop("created_at", None)
+                    if actual != expected:
+                        raise ValueError(f"scoped replay {table} evidence mismatch")
+        finally:
+            replica.close()
+    return {"version": "orfs-persisted-scoped-replay-v1", "transition_id": transition_id,
+            "acquisition_digest": _digest(acquisition), "persisted_binding_verified": True,
+            "pair_receipt": record.verification["scoped_execution"]["pair_receipt"],
+            "learner_admission": False, "promotion_attempted": False}

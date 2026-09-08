@@ -249,6 +249,16 @@ scope 或 utility 替换。只声明 flow_feasibility，utility 保持 UNKNOWN�
 后续需将持久化 transition 与独立重建的 action / 状态身份绑定，接通共享消费
 验证，然后才评估 scoped 证据的因果准入与 Knowledge parent 构建。
 
+持久化 scoped 绑定核验（2026-09-08）：`replay_persisted_flow_feasibility`
+要求外部 acquisition 显式提供双臂路径、登记 pin、工具链锁 pin、action 与
+lineage；不从待验证 transition 中反向推导这些权威输入。现场重放后在 RAM
+重建 canonical 记录，逐项比较原库的状态与 transition 行（只排除 created_at）。
+这样既检查 action / verifier 身份，也拒绝保持原 ID 的 source_digest、lineage、
+artifact manifest 替换。80 项相关测试通过。真实两组产物已通过只读 SQLite
+连接核验，源库字节未变；外部 `persisted-scoped-audit-20260908.json` 保存结果。
+临时诊断库已清理；该检查仍只证明测量绑定，不证明 acquisition 的事前权威、
+dataset learner eligibility、L2/L3 或 P13 准入，现有共享 learner 拒绝保持不变。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还
