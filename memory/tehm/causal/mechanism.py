@@ -145,6 +145,7 @@ def _validate_verifier_payload(verifier: dict) -> VerifierSnapshot:
         semantic_oracle=verifier.get("semantic_oracle"),
         execution_preflight=verifier.get("execution_preflight"),
         toolchain_binding=verifier.get("toolchain_binding"),
+        scoped_execution=verifier.get("scoped_execution"),
     )
     typed.validate()
     return typed

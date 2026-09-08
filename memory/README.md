@@ -191,8 +191,7 @@ FAIL / registration_binding_verified=true，原始输入 hash unchanged。
 失败仍要求已识别的密度错误；缺失阶段、缺失产物或矛盾证据不算成功。
 `replay_flow_feasibility` 的 PASS 仅代表该 flow 完成，DRC/LVS/final timing
 保持 UNKNOWN，full_signoff_complete 和 learner_admission 均 false。
-v1/v2 消费入口严格隔离，不追溯升级历史登记。此版本尚未做真实双臂执行，
-下一步应在全新目录按 v2 同时登记/执行两臂，再判断同范围的受控证据；
+v1/v2 消费入口严格隔离，不追溯升级历史登记。真实双臂执行见下方 V2 测量记录；
 production 完整 signoff 与非目标无回归要求没有被这个测量替代。
 
 V2 真实受控测量（2026-09-07）：
@@ -205,8 +204,29 @@ V2 真实受控测量（2026-09-07）：
 52 项相关测试通过，包含额外配置改变和未执行声明 action 的拒绝。
 这仍是 flow_feasibility 范围的受控测量，不是 L2/L3 learner 准入、P13 在线进化、
 完整 signoff 或 held-out 收益；不能拿旧 cohort 的 DRC/LVS 结果补到新 run。
-下一步为新成功臂补独立 checker，然后将受信测量接入显式 scope 的 capture /
+新成功臂的独立 checker 结果见下一段；后续将受信测量接入显式 scope 的 capture /
 learner 消费合约，同时保持原始不完整 control 的既有 gate 继续拒绝。
+
+V2 新成功臂 checker（2026-09-07）：上述目录的
+`check_successful_arms.py` 串行执行 timing→full-deck DRC→Netgen LVS→独立 RCX，
+两条均 timing clean / DRC clean / LVS clean / RCX complete。LVS 回执的实际
+SPICE 来源均为 Tools PDK 标准路径；没有复用旧实验 checker 报告。逐臂
+`*-checker-summary.json` 保存报告摘要，checker 前后完整 flow receipt 一致。
+两份 strict signoff manifest 仍 false，唯一枚举缺项为 Fmax winner；固定 2.2 ns
+实验不能因此被表述为已搜索最优频率。新证据补齐了成功布局的独立检查，但
+不改变失败 control 的下游 NOT_EXECUTED，也不自动生成 learner authority。
+下一步是显式区分“flow feasibility 的测量已得到确定结果”和“全量 signoff
+检查均已执行”，将新测量的 scope/contract/来源绑定纳入 capture 与共享消费
+校验；既有 aggregate oracle_complete 不应被无条件放宽。
+
+Scoped capture 身份边界（2026-09-07）：`VerifierSnapshot.scoped_execution`
+现在可通过 capture / 因果事实读取保存；非空时整个 receipt 与 `scope` 共同
+参与 transition 身份，替换 scope、合约回执或角色不能沿用原 transition ID。
+未带该字段的历史记录保持原内容身份。共享 learner gate 暂时明确拒绝此类
+记录（`scoped_execution_replay_required`），即使 producer 自报 complete / admitted；
+这一步只完成证据持久化与防替换边界，尚未实现 scoped learner 准入。
+下一步需接通当前工具链核验、独立登记 pin 与原始双臂回放，并将其结果绑定到
+实际 transition 的 action / before / after；不能仅信任存储回执中的布尔字段。
 
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/

@@ -16,6 +16,11 @@ def require_verified_execution(facts) -> None:
     """Require a complete executable oracle before learner-derived updates."""
     verifier = facts.verifier
     reasons: list[str] = []
+    # A stored scoped receipt is not an admission certificate. Until the
+    # shared consumer can replay its pinned raw evidence, fail closed even
+    # when producer-supplied completeness/admission flags claim success.
+    if verifier.get("scoped_execution") is not None:
+        reasons.append("scoped_execution_replay_required")
     if verifier.get("verdict") not in {"PASS", "FAIL"}:
         reasons.append("verifier_verdict_not_definitive")
     if verifier.get("oracle_complete") is not True:

@@ -46,6 +46,66 @@ def test_capture_identical_ids_are_deduped(tmp_tehm, sample_record_dict):
     assert _counts(conn)["states"] == 2  # still exactly 2 states
 
 
+def test_scoped_measurement_persists_and_binds_identity(tmp_tehm, sample_record_dict):
+    from tehm.canonical.verifier import VerifierSnapshot
+    from tehm.causal.mechanism import load_transition_facts
+    from tehm.verified_execution import require_verified_execution
+
+    conn, store, _ = tmp_tehm
+    plain = deepcopy_dict(sample_record_dict)
+    legacy = VerifierSnapshot.from_dict(plain["verification"]).content()
+    assert "scope" not in legacy and "scoped_execution" not in legacy
+    plain["verification"]["scoped_execution"] = None
+    assert VerifierSnapshot.from_dict(plain["verification"]).content() == legacy
+    plain_id = capture(conn, store, ExecutionRecord.from_dict(plain)).transition_id
+
+    bound = deepcopy_dict(plain)
+    bound["verification"].update(
+        scope="flow_feasibility", oracle_type="TARGET_TEST", verdict="PASS",
+        oracle_complete=True, obligation_coverage=1.0,
+        scoped_execution={"contract_version": "orfs-flow-feasibility-v2",
+                          "receipt_digest": "fixture-receipt", "role": "after",
+                          "learner_admission": True})
+    snapshot = VerifierSnapshot.from_dict(bound["verification"])
+    assert VerifierSnapshot.from_oracle_result(bound["verification"]).scoped_execution == (
+        snapshot.scoped_execution)
+    first = capture(conn, store, ExecutionRecord.from_dict(bound))
+    assert first.transition_id != plain_id
+    replay = capture(conn, store, ExecutionRecord.from_dict(bound))
+    assert replay.transition_id == first.transition_id
+    facts = load_transition_facts(conn, first.transition_id)
+    assert facts.verifier["scoped_execution"] == snapshot.scoped_execution
+    with pytest.raises(ValueError, match="scoped_execution_replay_required"):
+        require_verified_execution(facts)
+
+    ids = {plain_id, first.transition_id}
+    for key, value in (("scope", "full_signoff"), ("receipt_digest", "other-receipt"),
+                       ("role", "before")):
+        variant = deepcopy_dict(bound)
+        target = (variant["verification"] if key == "scope" else
+                  variant["verification"]["scoped_execution"])
+        target[key] = value
+        changed = capture(conn, store, ExecutionRecord.from_dict(variant))
+        assert changed.transition_id not in ids
+        ids.add(changed.transition_id)
+
+    # A consumer must recompute this identity, not merely roundtrip the JSON.
+    tampered = deepcopy_dict(facts.verifier)
+    tampered["scoped_execution"]["receipt_digest"] = "substituted-after-capture"
+    conn.execute("UPDATE tehm_transitions SET verifier_json=? WHERE transition_id=?",
+                 (json.dumps(tampered), first.transition_id))
+    with pytest.raises(ValueError, match="content-addressed transition_id mismatch"):
+        load_transition_facts(conn, first.transition_id)
+
+
+@pytest.mark.parametrize("payload", [False, 1, "approved", []])
+def test_scoped_measurement_rejects_malformed_receipt(sample_record_dict, payload):
+    record = deepcopy_dict(sample_record_dict)
+    record["verification"]["scoped_execution"] = payload
+    with pytest.raises(ValueError, match="scoped_execution must be a mapping"):
+        ExecutionRecord.from_dict(record)
+
+
 def test_typed_contract_verifier_is_persisted_without_changing_transition_id(
         tmp_tehm, tmp_path, sample_record_dict):
     """Contract provenance survives canonical normalization, not just a manifest."""

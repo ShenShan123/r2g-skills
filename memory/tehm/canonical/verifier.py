@@ -81,6 +81,10 @@ class VerifierSnapshot:
     # contract result is derived evidence and must not change legacy/content
     # addressed transition identity on replay.
     utility_contract: dict | None = None
+    # Unlike diagnostic provenance, a scoped measurement changes what PASS
+    # and completeness mean. Bind its entire receipt AND scope to identity.
+    # Persistence alone grants no learner authority (see verified_execution).
+    scoped_execution: dict | None = None
 
     def validate(self) -> None:
         for name, value in (("verdict", self.verdict),
@@ -118,7 +122,8 @@ class VerifierSnapshot:
                             ("semantic_oracle", self.semantic_oracle),
                             ("execution_preflight", self.execution_preflight),
                             ("toolchain_binding", self.toolchain_binding),
-                            ("utility_contract", self.utility_contract)):
+                            ("utility_contract", self.utility_contract),
+                            ("scoped_execution", self.scoped_execution)):
             if value is not None and not isinstance(value, dict):
                 raise ValueError(f"{name} must be a mapping or None")
 
@@ -144,6 +149,7 @@ class VerifierSnapshot:
             "execution_preflight": self.execution_preflight,
             "toolchain_binding": self.toolchain_binding,
             "utility_contract": self.utility_contract,
+            "scoped_execution": self.scoped_execution,
         }
 
     @classmethod
@@ -179,6 +185,7 @@ class VerifierSnapshot:
             execution_preflight=data.get("execution_preflight"),
             toolchain_binding=data.get("toolchain_binding"),
             utility_contract=data.get("utility_contract"),
+            scoped_execution=data.get("scoped_execution"),
         )
         obj.validate()
         return obj
@@ -207,11 +214,12 @@ class VerifierSnapshot:
             timing_contract=result.get("timing_contract"),
             execution_preflight=result.get("execution_preflight"),
             utility_contract=result.get("utility_contract"),
+            scoped_execution=result.get("scoped_execution"),
         )
 
     def content(self) -> dict:
-        """Digest-relevant content (no extractor/scope cosmetics)."""
-        return {
+        """Legacy identity, extended only for explicit scoped measurements."""
+        content = {
             "verdict": self.verdict,
             "oracle_type": self.oracle_type,
             "confidence_tier": self.confidence_tier,
@@ -219,6 +227,9 @@ class VerifierSnapshot:
             "oracle_complete": self.oracle_complete,
             "evidence_refs": self.evidence_refs,
         }
+        if self.scoped_execution is not None:
+            content.update(scope=self.scope, scoped_execution=self.scoped_execution)
+        return content
 
 
 def toolchain_snapshot(tool_versions: dict | None = None,
