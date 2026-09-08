@@ -195,6 +195,19 @@ v1/v2 消费入口严格隔离，不追溯升级历史登记。此版本尚未�
 下一步应在全新目录按 v2 同时登记/执行两臂，再判断同范围的受控证据；
 production 完整 signoff 与非目标无回归要求没有被这个测量替代。
 
+V2 真实受控测量（2026-09-07）：
+`/data1/zhangdy/tehm-campaigns/tehm-r3-flow-v2-live-20260907-r1/` 已完成四条
+新 run，mux32/parity64 均 95% FAIL、40% PASS。四条现场重放与保存的回执
+逐项相同，source-recheck unchanged；每臂均有 harness 在实际调用前保存的 pin。
+`replay_flow_feasibility_pair` 另外核对独立 run 身份、同版本测量、相同 RTL/SDC
+字节、相同其余配置及实际执行的单一 CORE_UTILIZATION 改动；不只比较结果标签。
+两组 controlled_measurement_valid=true，配对回执已保留为 `*-pair.json`。
+52 项相关测试通过，包含额外配置改变和未执行声明 action 的拒绝。
+这仍是 flow_feasibility 范围的受控测量，不是 L2/L3 learner 准入、P13 在线进化、
+完整 signoff 或 held-out 收益；不能拿旧 cohort 的 DRC/LVS 结果补到新 run。
+下一步为新成功臂补独立 checker，然后将受信测量接入显式 scope 的 capture /
+learner 消费合约，同时保持原始不完整 control 的既有 gate 继续拒绝。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

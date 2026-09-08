@@ -199,6 +199,54 @@ def replay_flow_feasibility(project: Path, *, registration_digest: str,
                                    current_toolchain=current_toolchain, _allow_completion=True)
 
 
+def replay_flow_feasibility_pair(before: Path, after: Path, *, before_pin: str,
+                                 after_pin: str, current_toolchain: dict,
+                                 config_edits: dict) -> dict:
+    """Check a declared single density intervention, not grant causal authority.
+
+    Equal outcome labels alone are insufficient. Both registrations, RTL/SDC
+    contents, config context, and distinct executions must match this pairing.
+    """
+    before, after = Path(before).resolve(), Path(after).resolve()
+    if before == after:
+        raise ValueError("flow pair requires distinct projects")
+    if set(config_edits) != {"CORE_UTILIZATION"}:
+        raise ValueError("flow pair requires one declared CORE_UTILIZATION edit")
+    receipts = [replay_flow_feasibility(project, registration_digest=pin,
+                                       current_toolchain=current_toolchain)
+                for project, pin in ((before, before_pin), (after, after_pin))]
+    if receipts[0]["run_tag"] == receipts[1]["run_tag"]:
+        raise ValueError("flow pair requires distinct run witnesses")
+    configs = [parse_config_mk((p / "constraints/config.mk").read_text()) for p in (before, after)]
+    normalized = []
+    for project, config in zip((before, after), configs):
+        if not config.get("DESIGN_NAME") or not config.get("PLATFORM"):
+            raise ValueError("flow pair lacks design/platform identity")
+        observed = dict(config)
+        observed["VERILOG_FILES"] = [hashlib.sha256(Path(path).read_bytes()).hexdigest()
+                                     for path in config["VERILOG_FILES"].split()]
+        observed["SDC_FILE"] = hashlib.sha256(Path(config["SDC_FILE"]).read_bytes()).hexdigest()
+        observed["wrapper_local_sdc_digest"] = hashlib.sha256(
+            (project / "constraints/constraint.sdc").read_bytes()).hexdigest()
+        normalized.append(observed)
+    value = config_edits["CORE_UTILIZATION"]
+    if type(value) not in (str, int, float) or not 0 < float(value) <= 100:
+        raise ValueError("flow pair density edit is invalid")
+    if (configs[1].get("CORE_UTILIZATION") != str(value)
+            or configs[0].get("CORE_UTILIZATION") == str(value)):
+        raise ValueError("flow pair does not execute its declared density edit")
+    normalized[0]["CORE_UTILIZATION"] = str(value)
+    if normalized[0] != normalized[1]:
+        raise ValueError("flow pair has undeclared config, RTL or SDC differences")
+    result = {"version": "orfs-flow-feasibility-pair-v1", "contract_digest": _digest(FLOW_CONTRACT),
+              "before": receipts[0], "after": receipts[1], "config_edits": dict(config_edits),
+              "controlled_measurement_valid": all(r["verdict"] in {"PASS", "FAIL"} for r in receipts),
+              "matched_context_digest": _digest(normalized[0]),
+              "learner_admission": False, "promotion_attempted": False}
+    result["receipt_digest"] = _digest(result)
+    return result
+
+
 def evaluate_density_terminal_failure(run_meta: dict, stages: list[dict],
                                       flow_log: str) -> dict:
     """Recognize a specific density failure from mutually consistent inputs.

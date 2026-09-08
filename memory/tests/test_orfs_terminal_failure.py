@@ -8,6 +8,7 @@ from tehm.adapters.orfs_terminal_failure import (
     recheck_terminal_registration,
     terminal_run_file_bindings, replay_terminal_failure,
     FLOW_CONTRACT, replay_flow_feasibility,
+    replay_flow_feasibility_pair,
 )
 
 
@@ -164,14 +165,17 @@ def test_runner_registers_before_invocation_and_records_recheck(tmp_path, monkey
     assert len(invoked) == 1
 
 
-def replay_inputs(tmp_path, *, version=None, success=False):
+def replay_inputs(tmp_path, *, version=None, success=False, run_name="RUN_density", config_lines=""):
     kwargs = registration_inputs(tmp_path)
+    config = tmp_path / "constraints/config.mk"
+    config.write_text(config.read_text() + config_lines)
     if version is not None:
         kwargs["contract_version"] = version
     registration = register_terminal_contract(tmp_path, **kwargs)
-    run = tmp_path / "backend/RUN_density"
+    run = tmp_path / "backend" / run_name
     run.mkdir(parents=True)
     meta, stages, log = evidence()
+    meta["run_tag"] = run_name
     if success:
         meta["make_status"] = 0
         stages = [{"stage": name, "status": 0} for name in FLOW_CONTRACT["success_stages"]]
@@ -257,3 +261,31 @@ def test_zero_exit_and_artifacts_do_not_override_incomplete_stage_sequence(tmp_p
     (tmp_path / "campaign-run-receipt.json").write_text(json.dumps(execution))
     receipt = replay_flow_feasibility(tmp_path, registration_digest=pin, current_toolchain=tools)
     assert receipt["verdict"] == "UNKNOWN"
+
+
+@pytest.mark.parametrize("extra", ["", "export ABC_AREA = 0\n"])
+def test_pair_checks_context_not_only_matching_outcome_labels(tmp_path, extra):
+    projects = [tmp_path / side for side in ("before", "after")]
+    pins = []
+    for project, density, success in zip(projects, (95, 40), (False, True)):
+        project.mkdir()
+        lines = ("export DESIGN_NAME = design\nexport PLATFORM = sky130hs\n"
+                 f"export CORE_UTILIZATION = {density}\n")
+        if success:
+            lines += extra
+        pin, tools, _ = replay_inputs(project, version=FLOW_CONTRACT["version"], success=success,
+                                     run_name="RUN_" + project.name, config_lines=lines)
+        pins.append(pin)
+    kwargs = dict(before_pin=pins[0], after_pin=pins[1], current_toolchain=tools,
+                  config_edits={"CORE_UTILIZATION": "40"})
+    if extra:
+        with pytest.raises(ValueError, match="undeclared"):
+            replay_flow_feasibility_pair(*projects, **kwargs)
+    else:
+        result = replay_flow_feasibility_pair(*projects, **kwargs)
+        assert result["controlled_measurement_valid"]
+        assert not result["learner_admission"]
+        assert result["before"]["verdict"] == "FAIL"
+        assert result["after"]["verdict"] == "PASS"
+        with pytest.raises(ValueError, match="declared density"):
+            replay_flow_feasibility_pair(*projects, **{**kwargs, "config_edits": {"CORE_UTILIZATION": "30"}})
