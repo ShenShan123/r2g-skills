@@ -44,6 +44,24 @@ def _existing_version(conn: sqlite3.Connection, knowledge_id: str) -> int:
     return max(0, int(row["version"] or 0))
 
 
+def _scoped_measurement(facts) -> dict | None:
+    if not any(f.verifier.get("scoped_execution") is not None for f in facts):
+        return None
+    from tehm.adapters.orfs_terminal_failure import FLOW_CONTRACT, _digest
+    expected = {"scope": FLOW_CONTRACT["scope"], "oracle_type": "TARGET_TEST",
+                "contract_version": FLOW_CONTRACT["version"], "contract_digest": _digest(FLOW_CONTRACT)}
+    for fact in facts:
+        scoped = fact.verifier.get("scoped_execution")
+        pair = scoped.get("pair_receipt") if isinstance(scoped, dict) else None
+        if (not isinstance(pair, dict) or pair.get("contract_digest") != expected["contract_digest"]
+                or fact.verifier.get("scope") != expected["scope"]
+                or fact.verifier.get("oracle_type") != expected["oracle_type"]
+                or any(not isinstance(pair.get(side), dict) or pair[side].get("contract") != FLOW_CONTRACT
+                       for side in ("before", "after"))):
+            raise ValueError("knowledge scoped sources have incompatible measurement contracts")
+    return expected
+
+
 def build_knowledge_from_path(
     conn: sqlite3.Connection, path_id: str, *, status: str | None = None,
 ) -> MechanismKnowledge:
@@ -64,6 +82,7 @@ def build_knowledge_from_path(
     if not source_ids or any(type(item) is not str or not item for item in source_ids):
         raise ValueError("mechanism knowledge path sources are malformed")
     facts = tuple(load_transition_facts(conn, value) for value in sorted(source_ids))
+    measurement = _scoped_measurement(facts)
     family = str(row["mechanism_family"])
     profile = row["compatibility_profile"]
     if any(f.mechanism_family != family or f.compatibility_profile != profile
@@ -108,6 +127,11 @@ def build_knowledge_from_path(
         "controlled": evidence_rank(evidence_level) >= evidence_rank(
             "L2_CONTROLLED_INTERVENTION"),
     }
+    if measurement is not None:
+        # Intervention participates in knowledge identity; this cannot be a
+        # cosmetic annotation on a generic PASS claim.
+        intervention["measurement_contract"] = measurement
+        obligations.add("oracle_contract:" + measurement["contract_digest"])
     mediated_effects = tuple({"primary_effect_key": effect} for effect in effects)
     expected_outcome = {
         "outcomes": dict(sorted(intervention_outcomes.items())),
@@ -115,6 +139,9 @@ def build_knowledge_from_path(
         "preferred_outcome": sorted(
             intervention_outcomes.items(), key=lambda item: (-item[1], item[0]))[0][0],
     }
+    if measurement is not None:
+        expected_outcome["oracle_scope"] = measurement["scope"]
+        expected_outcome["full_signoff_claim"] = False
     positive: list[dict] = [{"mechanism_family": family}]
     if profile is not None:
         positive.append({"compatibility_profile": profile})

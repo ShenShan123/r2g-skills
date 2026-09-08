@@ -282,6 +282,17 @@ control 的两个状态均来自 baseline，verdict / failing_tests / evidence_r
 收益或 P13 进化完成。下一步是构建同范围的 Knowledge parent，并验证其
 scope/obligation 在 retrieval、binding、StateShift challenge 中不会丢失。
 
+Scoped Knowledge parent（2026-09-08）：Knowledge 构造器现将统一的测量合约
+放入 intervention 身份，并保留 `oracle_contract:<digest>` 义务与 outcome scope；
+拒绝混合或矛盾测量。Applicability 把 target_scope 与合约摘要作为必需条件，
+不能被“mechanism family 匹配”绕过。Authority 从源路径重算测量限制，拒绝
+移除合约字段的 claim、扩大为 global 的 authority，以及实验上下文外的 scoped
+源证据。真实 V2 两组数据经实际 L2/L3、Knowledge registry / authority / lifecycle，
+在 RAM 中得到 `mk_e273d9bb3e6b65f5d00e@1`，仅 `flow_feasibility` scope 为
+validated。外部 `scoped-knowledge-r2-audit-20260908.json` 保存结果与反向检查；
+正式数据库没有写入。接下来需验证实际 resolver/router 与 executable binding
+是否传递这些限制，再设计同 parent 的 StateShift challenge；P13/P14 尚未完成。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

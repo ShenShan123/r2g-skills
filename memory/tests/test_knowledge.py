@@ -151,6 +151,43 @@ def test_builder_rejects_control_only_path(tmp_tehm, monkeypatch):
         build_knowledge_from_path(conn, path.path_id)
 
 
+def test_scoped_knowledge_preserves_measurement_and_requires_exact_context(tmp_tehm, monkeypatch):
+    import copy
+    from tehm.knowledge import builder
+    from tehm.adapters.orfs_terminal_failure import FLOW_CONTRACT, _digest
+    conn, path, _, _ = _path_from_two_training_transitions(tmp_tehm)
+    plain = build_knowledge_from_path(conn, path.path_id)
+    original = builder.load_transition_facts
+    pair = {"contract_digest": _digest(FLOW_CONTRACT),
+            "before": {"contract": copy.deepcopy(FLOW_CONTRACT)},
+            "after": {"contract": copy.deepcopy(FLOW_CONTRACT)}}
+
+    def scoped_facts(connection, key):
+        facts = original(connection, key)
+        return replace(facts, verifier={**facts.verifier, "scope": "flow_feasibility",
+                                       "oracle_type": "TARGET_TEST",
+                                       "scoped_execution": {"pair_receipt": copy.deepcopy(pair)}})
+    # Projection-only fixtures: no real execution or new authority is asserted.
+    monkeypatch.setattr(builder, "load_transition_facts", scoped_facts)
+    scoped = build_knowledge_from_path(conn, path.path_id)
+    assert scoped.knowledge_id != plain.knowledge_id
+    assert scoped.expected_outcome["oracle_scope"] == "flow_feasibility"
+    assert scoped.expected_outcome["full_signoff_claim"] is False
+    assert "oracle_contract:" + _digest(FLOW_CONTRACT) in scoped.preserved_obligations
+    context = {"mechanism_family": scoped.mechanism_family,
+               "compatibility_profile": scoped.compatibility_profile}
+    assert evaluate_applicability(scoped, context).reason == "measurement_contract_mismatch"
+    context.update(target_scope="flow_feasibility", measurement_contract_digest=_digest(FLOW_CONTRACT))
+    assert evaluate_applicability(scoped, context).eligible
+    for changed in ({"target_scope": "global"}, {"measurement_contract_digest": "different"}):
+        assert not evaluate_applicability(scoped, {**context, **changed}).eligible
+    with pytest.raises(ValueError, match="cannot widen measurement scope"):
+        record_knowledge_authority(conn, scoped, target_scope="global")
+    pair["after"]["contract"]["scope"] = "full_signoff"
+    with pytest.raises(ValueError, match="incompatible measurement contracts"):
+        build_knowledge_from_path(conn, path.path_id)
+
+
 def test_negative_context_does_not_leak_heldout_evidence(tmp_tehm):
     conn, source_id = _capture(tmp_tehm, record_id="knowledge-source",
                                action_value="ack")

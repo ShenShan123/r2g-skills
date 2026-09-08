@@ -19,6 +19,16 @@ def evaluate_applicability(
     if not isinstance(context, Mapping):
         raise ValueError("knowledge applicability context must be an object")
     context = dict(context)
+    measurement = knowledge.intervention.get("measurement_contract")
+    if measurement is not None:
+        # Positive applicability entries are alternatives. Scope is instead
+        # mandatory: matching the family cannot bypass the measurement bound.
+        if (not isinstance(measurement, dict) or not measurement.get("scope")
+                or not measurement.get("contract_digest")
+                or context.get("target_scope") != measurement["scope"]
+                or context.get("measurement_contract_digest") != measurement["contract_digest"]):
+            return KnowledgeApplicabilityReceipt(
+                knowledge.object_id, False, reason="measurement_contract_mismatch")
     if (knowledge.mechanism_family is not None and
             context.get("mechanism_family") != knowledge.mechanism_family):
         return KnowledgeApplicabilityReceipt(

@@ -57,6 +57,22 @@ def _pure_authority(
             continue
         try:
             validate_persisted_path_row(row, conn)
+            # A caller-authored claim cannot strip the measurement restriction
+            # from scoped path evidence and then request global authority.
+            from .builder import _scoped_measurement
+            from tehm.causal.mechanism import load_transition_facts
+            path_facts = tuple(load_transition_facts(conn, tid)
+                               for tid in json.loads(row["source_transitions_json"]))
+            measurement = _scoped_measurement(path_facts)
+            if measurement is not None or "measurement_contract" in knowledge.intervention:
+                if (measurement is None or knowledge.intervention.get("measurement_contract") != measurement
+                        or knowledge.expected_outcome.get("oracle_scope") != measurement["scope"]
+                        or "oracle_contract:" + measurement["contract_digest"] not in knowledge.preserved_obligations):
+                    gates["claim_content_valid"] = False
+                if measurement is not None:
+                    from tehm.verified_execution import require_verified_transition
+                    for fact in path_facts:
+                        require_verified_transition(conn, fact.transition_id)
             if not at_least(row["evidence_level"], knowledge.evidence_level):
                 gates["causal_paths_replay"] = False
             support = json.loads(row["support_json"])
@@ -177,6 +193,10 @@ def _strict_receipt(
         target_scope: str, required_evidence_level: str,
         min_support_lineages: int, evidence_refs: Sequence[Mapping] | None,
         evaluated: KnowledgeAuthorityReceipt | None = None) -> KnowledgeAuthorityReceipt:
+    measurement = knowledge.intervention.get("measurement_contract")
+    if measurement is not None and (
+            not isinstance(measurement, dict) or target_scope != measurement.get("scope")):
+        raise ValueError("knowledge authority cannot widen measurement scope")
     stored = get_knowledge(conn, knowledge.knowledge_id, knowledge.version,
                             target_scope=target_scope)
     if stored.to_dict() != knowledge.to_dict():
