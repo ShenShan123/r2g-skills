@@ -108,6 +108,16 @@ def test_observation_cannot_be_relabelled_to_another_value(tmp_path):
         execute_orfs_candidate(candidate, case, 1)
 
 
+def test_flow_failure_without_target_report_is_unknown(tmp_path):
+    case, candidate = _observed_case(tmp_path)
+    Path(case["run_flow_script"]).write_text("#!/bin/sh\nexit 2\n")
+    result = execute_orfs_candidate(candidate, case, 1)
+    assert result["compile_result"] == "FAIL"
+    assert result["functional_result"] == "UNKNOWN"
+    assert result["outcome"] == "UNKNOWN"
+    assert result["metadata"]["target_not_observed"] is True
+
+
 def test_binding_must_replay_against_observed_target(tmp_path):
     case, candidate = _observed_case(tmp_path)
     candidate = replace(candidate, binding_receipt_id="binding-not-the-observed-target")

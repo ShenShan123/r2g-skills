@@ -182,6 +182,8 @@ def test_orfs_environment_clears_incompatible_python_launcher_state(tmp_path):
     environment = _environment(case)
     assert environment["PYTHONHOME"] == ""
     assert environment["PYTHONPATH"] == ""
+    assert environment["PYTHONEXECUTABLE"] == ""
+    assert environment["PYTHONNOUSERSITE"] == "1"
 
 
 def test_orfs_adapter_binds_external_source_inputs(tmp_path):

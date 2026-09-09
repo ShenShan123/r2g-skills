@@ -34,7 +34,7 @@ _IGNORED_PROJECT_OUTPUTS = (
 _PINNED_ENV_KEYS = frozenset({
     "R2G_HERMETIC", "ORFS_ROOT", "OPENROAD_EXE", "YOSYS_EXE", "PDK_ROOT",
     "R2G_PREFIX", "R2G_TOOLCHAIN_ROOT", "R2G_TOOLCHAIN_MANIFEST",
-    "PYTHONHOME", "PYTHONPATH",
+    "PYTHONHOME", "PYTHONPATH", "PYTHONEXECUTABLE", "PYTHONNOUSERSITE",
 })
 _POLICY_ARMS = frozenset({
     "NO_MEMORY", "ALWAYS_MEMORY", "APPLICABILITY_GATED", "CAUSAL_NO_SKILL",
@@ -132,6 +132,8 @@ def _environment(case: Mapping) -> dict[str, str]:
         # incompatible prefix or it fails before importing ``encodings``.
         "PYTHONHOME": "",
         "PYTHONPATH": "",
+        "PYTHONEXECUTABLE": "",
+        "PYTHONNOUSERSITE": "1",
     }
     if toolchain_root:
         env["R2G_PREFIX"] = toolchain_root
@@ -365,9 +367,12 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
         # timing/constraint signoff contract. A scope pass cannot certify it.
         signoff_result = "FAIL" if functional_result == "FAIL" else "UNKNOWN"
         verdict = "PASS" if arm.get("success") is True else "FAIL"
-        if flow_rc == 0 and not reports.get(scope):
-            # A checker that crashed before emitting a report has not
-            # established a design failure (nor a repair opportunity).
+        if not reports.get(scope):
+            # A flow that exits before the requested checker emits its report
+            # has not established the target verdict.  This includes synthesis
+            # failures: they may be RTL/tool/infrastructure failures, but they
+            # are not evidence that the requested route/DRC/LVS/timing oracle
+            # itself observed a failure.
             functional_result = signoff_result = verdict = "UNKNOWN"
     obligations = {
         "ORFS_FLOW_PASS": compile_result,
@@ -390,6 +395,7 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
             "fix_stdout_tail": arm.get("fix_stdout_tail", ""),
             "fix_stderr_tail": arm.get("fix_stderr_tail", ""),
             "target_report_available": bool(reports.get(scope)),
+            "target_not_observed": not bool(reports.get(scope)),
             "scope": scope,
             "action_applied": action_applied,
             "config_before_digest": config_before,
