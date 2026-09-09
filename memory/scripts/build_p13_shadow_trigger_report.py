@@ -27,15 +27,18 @@ from tehm.evaluation import (  # noqa: E402
     RtlPairedCohortReceipt,
 )
 from tehm.evolution import (  # noqa: E402
+    EvolutionReasonDerivationReceipt,
     P13EvolutionReasonReceipt,
     P12ShadowTriggerError,
     build_p12_shadow_update_triggers,
+    build_p12_shadow_update_triggers_from_reason_receipt,
 )
 from tehm.ids import stable_dumps  # noqa: E402
 
 
 REPORT_VERSION = "p13-shadow-trigger-report-v1"
 EVOLUTION_REASON_RECEIPT_VERSION = "p13-evolution-reason-receipt-v1"
+TYPED_REASON_BUNDLE_VERSION = "p13-typed-reason-bundle-v1"
 
 
 class P13ShadowTriggerReportError(ValueError):
@@ -232,14 +235,88 @@ def _reasons(payload: Mapping, case_ids: set[str], *, campaign_id: str,
                     }} if case_refs is not None else {})}
 
 
+def _typed_reasons(
+        payload: Mapping, bundle_path: Path, case_ids: set[str], *,
+        campaign_id: str, cohort_digest: str,
+        ) -> tuple[P13EvolutionReasonReceipt,
+                   dict[str, tuple[EvolutionReasonDerivationReceipt, ...]], dict]:
+    """Replay a self-contained typed detector bundle without file relabeling."""
+    if payload.get("version") != TYPED_REASON_BUNDLE_VERSION:
+        raise P13ShadowTriggerReportError("typed reason bundle version mismatch")
+    if payload.get("campaign_id") != campaign_id:
+        raise P13ShadowTriggerReportError(
+            "typed reason bundle campaign_id does not match cohort")
+    if payload.get("cohort_receipt_digest") != cohort_digest:
+        raise P13ShadowTriggerReportError(
+            "typed reason bundle cohort digest does not match cohort")
+    if payload.get("evaluation_only") is not True:
+        raise P13ShadowTriggerReportError("typed reason bundle must be evaluation-only")
+    if payload.get("canonical_memory_mutation") != "none":
+        raise P13ShadowTriggerReportError(
+            "typed reason bundle cannot mutate canonical memory")
+    if payload.get("production_runtime_imported") is not False:
+        raise P13ShadowTriggerReportError(
+            "typed reason bundle cannot import production runtime state")
+    supplied_digest = payload.get("bundle_digest")
+    unsigned = dict(payload)
+    unsigned.pop("bundle_digest", None)
+    if supplied_digest != _digest(unsigned):
+        raise P13ShadowTriggerReportError("typed reason bundle digest mismatch")
+    try:
+        reason = P13EvolutionReasonReceipt.from_dict(payload.get("reason_receipt"))
+    except (P12ShadowTriggerError, TypeError, ValueError) as exc:
+        raise P13ShadowTriggerReportError(
+            "typed reason bundle reason receipt is invalid") from exc
+    raw = payload.get("derivation_receipts")
+    if not isinstance(raw, Mapping) or set(raw) != case_ids:
+        raise P13ShadowTriggerReportError(
+            "typed reason derivations must cover exactly all cohort cases")
+    derivations: dict[str, tuple[EvolutionReasonDerivationReceipt, ...]] = {}
+    for case_id in sorted(case_ids):
+        items = raw[case_id]
+        if (not isinstance(items, Sequence) or isinstance(items, (str, bytes))
+                or not items):
+            raise P13ShadowTriggerReportError(
+                f"typed reason derivations for {case_id} must not be empty")
+        try:
+            derivations[case_id] = tuple(
+                EvolutionReasonDerivationReceipt.from_dict(item) for item in items)
+        except (TypeError, ValueError) as exc:
+            raise P13ShadowTriggerReportError(
+                f"typed reason derivation is invalid for {case_id}") from exc
+    if (reason.campaign_id != campaign_id or
+            reason.cohort_receipt_digest != cohort_digest or
+            set(reason.evolution_reasons) != case_ids):
+        raise P13ShadowTriggerReportError(
+            "typed reason receipt does not match cohort")
+    return reason, derivations, {
+        "path": str(bundle_path),
+        "sha256": _sha256(bundle_path),
+        "bundle_digest": supplied_digest,
+        "receipt_id": reason.receipt_id,
+        "receipt_digest": reason.receipt_digest,
+        "label_source": reason.label_source,
+        "derivation_receipts": {
+            case_id: [{"receipt_id": item.receipt_id,
+                       "receipt_digest": item.receipt_digest}
+                      for item in derivations[case_id]]
+            for case_id in sorted(derivations)
+        },
+    }
+
+
 def build_p13_shadow_trigger_report(
         cohort_path: Path | str, manifest_path: Path | str, *, output: Path | str,
         routing_path: Path | str | None = None,
         evolution_reasons_path: Path | str | None = None,
+        typed_reason_bundle_path: Path | str | None = None,
         memory_arm: str = "ALWAYS_MEMORY", min_lineages: int = 2) -> dict:
     """Build one fail-closed, replayable P12-to-P13 report."""
     cohort_path = Path(cohort_path).expanduser().resolve()
     manifest_path = Path(manifest_path).expanduser().resolve()
+    if evolution_reasons_path is not None and typed_reason_bundle_path is not None:
+        raise P13ShadowTriggerReportError(
+            "manual evolution reasons and typed reason bundle are mutually exclusive")
     if type(min_lineages) is not int or min_lineages < 1:
         raise P13ShadowTriggerReportError("min_lineages must be positive")
     cohort_kind, cohort = _cohort(cohort_path)
@@ -258,6 +335,9 @@ def build_p13_shadow_trigger_report(
     reasons = None
     reason_meta = None
     reason_path = None
+    typed_reason = None
+    typed_derivations = None
+    typed_bundle_path = None
     if evolution_reasons_path is not None:
         reason_path = Path(evolution_reasons_path).expanduser().resolve()
         reason_payload = _load_json(reason_path, "evolution reasons")
@@ -267,11 +347,29 @@ def build_p13_shadow_trigger_report(
             forbidden_paths=tuple(path for path in (
                 cohort_path, manifest_path, route_path, reason_path)
                 if path is not None))
+    if typed_reason_bundle_path is not None:
+        typed_bundle_path = Path(typed_reason_bundle_path).expanduser().resolve()
+        typed_payload = _load_json(typed_bundle_path, "typed reason bundle")
+        typed_reason, typed_derivations, reason_meta = _typed_reasons(
+            typed_payload, typed_bundle_path, case_ids,
+            campaign_id=cohort.campaign_id,
+            cohort_digest=cohort.receipt_digest)
     try:
-        triggers = build_p12_shadow_update_triggers(
-            cohort, memory_arm=memory_arm, learner_eligible=learner_eligible,
-            min_lineages=min_lineages, routing_decisions=routes,
-            case_learner_eligibility=partition, evolution_reasons=reasons)
+        if typed_reason is not None:
+            triggers = build_p12_shadow_update_triggers_from_reason_receipt(
+                cohort, memory_arm=memory_arm,
+                learner_eligible=learner_eligible,
+                reason_receipt=typed_reason, min_lineages=min_lineages,
+                routing_decisions=routes,
+                case_learner_eligibility=partition,
+                derivation_receipts=typed_derivations)
+        else:
+            triggers = build_p12_shadow_update_triggers(
+                cohort, memory_arm=memory_arm,
+                learner_eligible=learner_eligible,
+                min_lineages=min_lineages, routing_decisions=routes,
+                case_learner_eligibility=partition,
+                evolution_reasons=reasons)
     except (P12ShadowTriggerError, TypeError, ValueError) as exc:
         raise P13ShadowTriggerReportError(str(exc)) from exc
     blocked = sorted({item.reason for item in triggers if not item.triggered})
@@ -313,6 +411,8 @@ def build_p13_shadow_trigger_report(
         forbidden_outputs.add(route_path)
     if reason_path is not None:
         forbidden_outputs.add(reason_path)
+    if typed_bundle_path is not None:
+        forbidden_outputs.add(typed_bundle_path)
     if output_path in forbidden_outputs:
         raise P13ShadowTriggerReportError(
             "P13 trigger report output must be separate from all evidence inputs")
@@ -327,6 +427,7 @@ def main(argv=None) -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--routing-decisions", type=Path)
     parser.add_argument("--evolution-reasons", type=Path)
+    parser.add_argument("--typed-reason-bundle", type=Path)
     parser.add_argument("--memory-arm", default="ALWAYS_MEMORY")
     parser.add_argument("--min-lineages", type=int, default=2)
     parser.add_argument("--output", type=Path, required=True)
@@ -336,6 +437,7 @@ def main(argv=None) -> int:
             args.cohort, args.manifest, output=args.output,
             routing_path=args.routing_decisions,
             evolution_reasons_path=args.evolution_reasons,
+            typed_reason_bundle_path=args.typed_reason_bundle,
             memory_arm=args.memory_arm, min_lineages=args.min_lineages)
     except (OSError, P13ShadowTriggerReportError) as exc:
         parser.error(str(exc))

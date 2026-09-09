@@ -12,6 +12,10 @@ from scripts.build_p13_shadow_trigger_report import (
     P13ShadowTriggerReportError,
     build_p13_shadow_trigger_report,
 )
+from scripts.build_p13_state_shift_reason_bundle import (
+    P13StateShiftReasonBundleError,
+    build_p13_state_shift_reason_bundle,
+)
 from tehm.evaluation.candidate_executor import (
     P12_ARMS,
     CandidateExecutionReceipt,
@@ -19,6 +23,7 @@ from tehm.evaluation.candidate_executor import (
 )
 from tehm.evaluation.orfs_cohort import OrfsPairedCohortReceipt
 from tehm.ids import stable_dumps
+from tehm.evolution import derive_state_shift_reason
 from tehm.state.shift_receipts import StateShiftReceipt
 
 
@@ -123,10 +128,18 @@ def _write_state_shift_inputs(tmp_path):
     for index, (case_id, bundle) in enumerate(sorted(base.case_receipts.items())):
         route = _state_shift_routing(case_id)
         routes[case_id] = route
+        baseline = bundle.arm_receipts["NO_MEMORY"]
         cases[case_id] = replace(
-            bundle, no_skill_reason="STATE_SHIFT",
+            bundle,
+            arm_receipts={
+                arm: baseline if arm in {"NO_MEMORY", "CAUSAL_NO_SKILL"}
+                else bundle.arm_receipts[arm]
+                for arm in P12_ARMS
+            },
+            no_skill_reason="STATE_SHIFT",
             state_shift_receipt_id=route.state_shift_receipt_id,
-            routing_receipt_id=route.routing_receipt_id)
+            routing_receipt_id=route.routing_receipt_id,
+            routing_decision="NO_SKILL")
     cohort = replace(base, campaign_id="state-shift-campaign", case_receipts=cases)
     cohort_path = tmp_path / "state-shift-cohort.json"
     cohort_path.write_text(json.dumps({**cohort.to_dict(),
@@ -156,6 +169,42 @@ def _write_state_shift_inputs(tmp_path):
         "evaluation_only": True, "canonical_memory_mutation": "none",
     }))
     return cohort_path, manifest_path, route_path, reasons_path
+
+
+def _write_state_shift_audit(tmp_path, cohort_path, route_path):
+    cohort = OrfsPairedCohortReceipt.from_dict(json.loads(cohort_path.read_text()))
+    routes = {
+        case_id: MemoryRoutingDecision.from_dict(payload)
+        for case_id, payload in json.loads(route_path.read_text()).items()
+    }
+    cases = []
+    for case_id, paired in sorted(cohort.case_receipts.items()):
+        route = routes[case_id]
+        shift = StateShiftReceipt.from_dict(route.state_shift_receipt)
+        preregistered = derive_state_shift_reason(
+            shift, campaign_id="preregistered-campaign", case_id=case_id,
+            routing=route, lineage_id=paired.lineage_id)
+        cases.append({
+            "case_id": case_id,
+            "lineage_id": paired.lineage_id,
+            "admitted_to_state_shift_bucket": True,
+            "state_shift": shift.to_dict(),
+            "routing": route.to_dict(),
+            "evolution_reason": {
+                **preregistered.to_dict(),
+                "receipt_id": preregistered.receipt_id,
+                "receipt_digest": preregistered.receipt_digest,
+            },
+        })
+    audit = tmp_path / "state-shift-preregistration-audit.json"
+    audit.write_text(json.dumps({
+        "version": "test-state-shift-audit-v1",
+        "execution_started": False,
+        "promotion_attempted": False,
+        "production_database_writes": False,
+        "cases": cases,
+    }))
+    return audit
 
 
 def test_report_fails_closed_without_route_and_reasons(tmp_path):
@@ -233,6 +282,53 @@ def test_report_admits_typed_state_shift_route(tmp_path):
                and item["no_skill_reason"] == "STATE_SHIFT"
                and item["triggered"]
                for item in report["triggers"])
+
+
+def test_typed_state_shift_bundle_rebinds_preregistered_detector_receipts(tmp_path):
+    cohort, manifest, routes, _ = _write_state_shift_inputs(tmp_path)
+    audit = _write_state_shift_audit(tmp_path, cohort, routes)
+    bundle_path = tmp_path / "typed-state-shift-reasons.json"
+    bundle = build_p13_state_shift_reason_bundle(
+        cohort, audit, output=bundle_path)
+    assert bundle["campaign_id"] == "state-shift-campaign"
+    assert bundle["reason_receipt"]["label_source"] == (
+        "typed-detector:state_shift_receipt_adapter")
+    report = build_p13_shadow_trigger_report(
+        cohort, manifest, routing_path=routes,
+        typed_reason_bundle_path=bundle_path,
+        output=tmp_path / "typed-report.json")
+    assert report["p13_eligible"] is True
+    assert report["triggered_count"] == 2
+    assert report["evolution_reasons"]["bundle_digest"] == bundle["bundle_digest"]
+    assert all(item["triggered"] for item in report["triggers"])
+
+
+def test_typed_state_shift_bundle_rejects_preregistration_drift(tmp_path):
+    cohort, _manifest, routes, _ = _write_state_shift_inputs(tmp_path)
+    audit = _write_state_shift_audit(tmp_path, cohort, routes)
+    payload = json.loads(audit.read_text())
+    payload["cases"][0]["evolution_reason"]["input_digests"][0] = "sha256:tampered"
+    payload["cases"][0]["evolution_reason"].pop("receipt_digest")
+    payload["cases"][0]["evolution_reason"].pop("receipt_id")
+    audit.write_text(json.dumps(payload))
+    with pytest.raises(P13StateShiftReasonBundleError, match="drifted"):
+        build_p13_state_shift_reason_bundle(
+            cohort, audit, output=tmp_path / "typed-state-shift-reasons.json")
+
+
+def test_report_rejects_tampered_typed_reason_bundle(tmp_path):
+    cohort, manifest, routes, _ = _write_state_shift_inputs(tmp_path)
+    audit = _write_state_shift_audit(tmp_path, cohort, routes)
+    bundle_path = tmp_path / "typed-state-shift-reasons.json"
+    build_p13_state_shift_reason_bundle(cohort, audit, output=bundle_path)
+    payload = json.loads(bundle_path.read_text())
+    payload["canonical_memory_mutation"] = "write"
+    bundle_path.write_text(json.dumps(payload))
+    with pytest.raises(P13ShadowTriggerReportError, match="cannot mutate"):
+        build_p13_shadow_trigger_report(
+            cohort, manifest, routing_path=routes,
+            typed_reason_bundle_path=bundle_path,
+            output=tmp_path / "typed-report.json")
 
 
 def test_report_rejects_independent_evidence_input_reuse(tmp_path):

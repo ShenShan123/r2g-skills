@@ -4958,3 +4958,46 @@ RAM 数据库中独立回放 2 条真实 flow-feasibility 训练 lineage，重�
 memory、production runtime 与 promotion 均未改变。相关回归为 `52 passed`，
 完整 `memory/tests` 回归为 `1232 passed`；`memory/docs/` 继续由 `.gitignore`
 排除且不提交。
+
+### 2026-09-09 Revision3 ORFS StateShift P12 execution and fail-closed P13 retention
+
+上述 prospective challenge 已完成三次保留式 P12 执行，全部 artifact 位于同一外部
+目录且不进入仓库。R1 暴露 candidate serialization 丢失 measurement-bound binding
+replay context，以及 OSS CAD Python launcher 污染 `PYTHONHOME`；R2 修复 binding replay
+后仍确认 launcher 会使 ORFS 子进程调用 `/usr/bin/python3` 时找不到标准库。两次均作为
+rejected infrastructure evidence 保留，不计为 memory outcome。执行器现冻结最小
+`flow_binding_replay`，oracle 用 live observation 重建 binding，并清理 Python 环境；
+请求的 target report 未产生时统一返回 UNKNOWN，不再把基础设施或前序 stage 中止误写
+为语义 FAIL。四个 policy arm 使用各自保留 workspace，`CAUSAL_NO_SKILL` 在
+`NO_SKILL/STATE_SHIFT` 时真实执行 no-memory fallback。
+
+R3 使用 `/usr/bin/python3` 驱动、manifest 锁定的内部 OpenROAD/Yosys/PDK 执行。cohort
+campaign 为 `tehm-r3-orfs-state-shift-p12-20260909-r3`，预注册 audit digest 为
+`sha256:f54c83cc7376cf3b10b9ee9f3058cb0989c8d02b98e14781bb8ea6c2640b3894`，
+P12 cohort receipt digest 为
+`sha256:d0284cfc8914841e5902dfbca065f1136904a2f5c23a58f62987c210c8955e40`。
+mux32/parity64 两条独立 lineage 的 u40 memory arms 均完成 route-scope flow，outcome
+为 PASS；u85 的 `NO_MEMORY` 与真实 causal fallback 都在 place 阶段触发
+`FLW-0024 Place density exceeds 1.0`，因 route target 未被观测而正确记为 UNKNOWN，
+不能把它们标成 route FAIL。成功 memory arm 的完整 signoff 同样未被该 target 合约
+观测，因此 `signoff_result=UNKNOWN`。
+
+新增 `scripts/build_p13_state_shift_reason_bundle.py` 不读取 P12 outcome，而是从
+执行前冻结的 StateShift 与 routing receipts 重新运行 typed detector，将 derivation
+绑定到确切 P12 campaign/cohort。生成的 reason bundle digest 为
+`sha256:bdbd61be00814e8643c86d47c98fd60a51c57e3e7d9c1d5c8a5f103f80a0dbca`。
+`build_p13_shadow_trigger_report.py` 现可重放该 bundle 及底层 derivation receipts，拒绝
+手工替换 typed label。最终 P13 report digest 为
+`sha256:4647efd2dea65edb63aaa83c58f86e6135a2854f80445a49002f9dbe4fb19818`：
+2/2 `STATE_SHIFT` reason 成立，但 0/2 trigger，blocked reason 均为
+`baseline_oracle_incomplete`；memory side 也因 signoff 未观测而不完整。按 Revision3
+UNKNOWN→RETAIN 规则，不产生 P13 structural mutation、canonical memory 写入、promotion
+或 production runtime import。
+
+下一阶段不能直接放宽 `_oracle_complete`。应二选一并分别冻结 acceptance contract：
+（1）用 fresh project 在运行前注册 `orfs-flow-feasibility-v2` terminal contract，收集
+可重放的 place/route feasibility pair，但保持 `signoff_claim=false` 与
+`learner_admission=false`，用于 scoped capability 证据；（2）为真正的 P13 admission
+补齐 route、DRC、LVS、timing 等完整 signoff oracle，使当前严格 gate 获得被观测的
+PASS/FAIL。只有后者满足现行 P13 full-oracle authority。当前完整回归为
+`1241 passed, 2 skipped`；`memory/docs/` 继续由 `.gitignore` 排除且不提交。
