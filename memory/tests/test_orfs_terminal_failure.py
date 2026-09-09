@@ -416,6 +416,35 @@ def test_locked_pair_uses_live_tools_not_saved_valid_flags(tmp_path, tmp_tehm):
                 ram, control_capture.transition_id, captured.transition_id,
                 campaign_id="scoped-training", target_scope="flow_feasibility")
             assert controlled.validity_status == "VALID_CONTROLLED_PAIR"
+            from tehm.causal.path_builder import build_transition_causal_fragment, consolidate_causal_path
+            from tehm.knowledge import build_knowledge_from_path
+            from tehm.state import build_support_envelope_from_transitions, evaluate_state_shift
+            fragments = [build_transition_causal_fragment(ram, tid, campaign_id="scoped-training")
+                         for tid in acquisitions]
+            path = consolidate_causal_path(ram, fragments, campaign_id="scoped-training")
+            claim = build_knowledge_from_path(ram, path.path_id)
+            envelope = build_support_envelope_from_transitions(
+                ram, claim, [captured.transition_id], campaign_id="scoped-training")
+            assert envelope.source_transition_ids == (captured.transition_id,)
+            for dimension in ("structural", "flow", "constraint", "oracle", "history"):
+                assert envelope.dimensions[dimension]["values"]
+            assert envelope.dimensions["constraint"]["values"][0]["core_utilization"] == "95"
+            current = {
+                "structural_signature": envelope.dimensions["structural"]["values"][0],
+                "mechanism_signature": envelope.dimensions["mechanism"]["values"][0],
+                "flow_regime": envelope.dimensions["flow"]["values"][0],
+                "constraint_regime": envelope.dimensions["constraint"]["values"][0],
+                "oracle_regime": envelope.dimensions["oracle"]["values"][0],
+                "action_history": envelope.dimensions["history"]["values"][0],
+            }
+            assert evaluate_state_shift(
+                current, {"resolution_id": "same"}, claim, envelope).transferable
+            shifted = copy.deepcopy(current)
+            shifted["constraint_regime"]["core_utilization"] = "30"
+            shift = evaluate_state_shift(
+                shifted, {"resolution_id": "challenge"}, claim, envelope)
+            assert not shift.transferable and shift.reason == "STATE_SHIFT"
+            assert shift.shifted_dimensions == ("constraint_shift",)
         with pytest.raises(ValueError, match="scoped_execution_replay_required"):
             require_verified_transition(ram, captured.transition_id)
     finally:

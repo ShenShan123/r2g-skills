@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -238,7 +239,106 @@ def build_support_envelope(knowledge, source_states=(), source_transitions=()) -
     )
 
 
+def build_support_envelope_from_transitions(
+        conn: sqlite3.Connection, knowledge, transition_ids, *,
+        campaign_id: str) -> SupportEnvelope:
+    """Derive support facts from canonical learner evidence and raw scopes.
+
+    This database-bound entry point is required for real challenge cohorts.
+    The legacy mapping entry point remains useful for fixtures, but caller
+    booleans are not authority here.
+    """
+    from pathlib import Path
+    from tehm.adapters.r2g_evidence import parse_config_mk
+    from tehm.causal.mechanism import load_transition_facts
+    from tehm.dataset import validate_membership_row
+    from tehm.verified_execution import require_verified_transition
+
+    if type(campaign_id) is not str or not campaign_id.strip():
+        raise SupportEnvelopeError("support envelope campaign_id is required")
+    ids = _sequence(transition_ids, "transition_ids")
+    if not ids or any(type(item) is not str or not item for item in ids) or len(set(ids)) != len(ids):
+        raise SupportEnvelopeError("support envelope transition_ids are invalid")
+    path_sources: set[str] = set()
+    for path_id in getattr(knowledge, "causal_path_ids", ()):
+        row = conn.execute("SELECT source_transitions_json FROM tehm_causal_paths WHERE path_id=?",
+                           (path_id,)).fetchone()
+        if row is None:
+            raise SupportEnvelopeError("support envelope knowledge path is missing")
+        try:
+            values = json.loads(row[0])
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise SupportEnvelopeError("support envelope knowledge path sources are malformed") from exc
+        if not isinstance(values, list):
+            raise SupportEnvelopeError("support envelope knowledge path sources are malformed")
+        path_sources.update(values)
+    if not set(ids) <= path_sources:
+        raise SupportEnvelopeError("support envelope transition is not a Knowledge source")
+
+    records = []
+    for transition_id in ids:
+        membership = conn.execute(
+            "SELECT split, learner_eligible FROM tehm_dataset_membership "
+            "WHERE transition_id=? AND campaign_id=?", (transition_id, campaign_id)).fetchone()
+        if membership is None or validate_membership_row(membership) != (True, "training"):
+            raise SupportEnvelopeError("support envelope requires exact training membership")
+        try:
+            require_verified_transition(conn, transition_id)
+            facts = load_transition_facts(conn, transition_id)
+        except ValueError as exc:
+            raise SupportEnvelopeError("support envelope transition is not independently verified") from exc
+        if facts.action.get("domain") == "flow.BASELINE_CONTROL" or facts.verifier.get("verdict") != "PASS":
+            raise SupportEnvelopeError("support envelope requires successful intervention transitions")
+        item = {
+            "transition_id": transition_id, "split": "training", "learner_eligible": True,
+            "verification": facts.verifier,
+            "mechanism_family": facts.mechanism_family,
+            "compatibility_profile": facts.compatibility_profile,
+            "structural_graph_digest": facts.source_state.get("context_graph_digest"),
+            # One transition contributes one observed prior action. A nested
+            # list would not replay against shift._values(), which treats a
+            # current action-history sequence as a set of individual values.
+            "action_history": facts.action_digest,
+        }
+        scoped = facts.verifier.get("scoped_execution")
+        if scoped is not None:
+            if not isinstance(scoped, Mapping) or scoped.get("role") != "after":
+                raise SupportEnvelopeError("support envelope scoped source is not a treatment")
+            try:
+                # The envelope describes the pre-action state where the
+                # historical intervention was supported, not its successful
+                # target state after applying the action.
+                project = Path(scoped["before_project"]).resolve()
+                config = parse_config_mk((project / "constraints/config.mk").read_text())
+                rtl_hashes = tuple(hashlib.sha256(Path(value).read_bytes()).hexdigest()
+                                   for value in config["VERILOG_FILES"].split())
+                sdc_hash = hashlib.sha256(Path(config["SDC_FILE"]).read_bytes()).hexdigest()
+                local_sdc_hash = hashlib.sha256(
+                    (project / "constraints/constraint.sdc").read_bytes()).hexdigest()
+                pair = scoped["pair_receipt"]
+                contract_digest = pair["contract_digest"]
+                measurement = knowledge.intervention["measurement_contract"]
+            except (KeyError, OSError, TypeError, AttributeError) as exc:
+                raise SupportEnvelopeError("support envelope scoped source is malformed") from exc
+            if (measurement.get("contract_digest") != contract_digest
+                    or measurement.get("scope") != facts.verifier.get("scope")):
+                raise SupportEnvelopeError("support envelope scoped contract conflicts with Knowledge")
+            item.update(
+                structural_signature={"design_name": config.get("DESIGN_NAME"),
+                                      "rtl_sha256": rtl_hashes},
+                flow_regime={"platform": config.get("PLATFORM"),
+                             "toolchain_manifest_digest": scoped.get("expected_manifest_digest")},
+                constraint_regime={"core_utilization": config.get("CORE_UTILIZATION"),
+                                   "sdc_sha256": sdc_hash,
+                                   "wrapper_sdc_sha256": local_sdc_hash},
+                oracle_regime={"scope": measurement["scope"],
+                               "contract_digest": contract_digest})
+            item.pop("structural_graph_digest", None)
+        records.append(item)
+    return build_support_envelope(knowledge, (), records)
+
+
 __all__ = [
     "SUPPORT_ENVELOPE_VERSION", "SupportEnvelopeError", "SupportEnvelope",
-    "build_support_envelope",
+    "build_support_envelope", "build_support_envelope_from_transitions",
 ]

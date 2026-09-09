@@ -304,6 +304,19 @@ runtime binding`：路由 `CONSIDER`、选择 `SELECT`，生成
 62 项 router/Knowledge/asset/candidate 回归通过。此处的 binding 只是可执行候选
 绑定证明，尚未对新 target 启动 ORFS，也没有 held-out gain 或 P13/P14 attribution。
 
+数据库绑定 SupportEnvelope（2026-09-08）：新增
+`build_support_envelope_from_transitions`，从 Knowledge 路径内的 canonical
+transition、指定训练 membership 和共享 verified-execution gate 生成支持域，
+不接受调用方自报的 learner/oracle 布尔值。scoped 记录会从独立回放绑定的
+before project 提取 RTL 字节摘要、platform/toolchain、约束、oracle contract
+与 action history；baseline control、非 PASS、路径外或非训练记录均拒绝。
+真实 parent 的 envelope 摘要为
+`sha256:4919aff6abd088df8ef1c2612cd28e7a850c80748437f3911681014188017659`，
+包含 mux32/parity64 两种结构，并正确记录干预前 95% constraint regime，而非
+成功后的 40%。外部 `scoped-support-envelope-r1-audit-20260908.json` 保存 RAM
+重建结果。下一步用该冻结 parent 事前评估新 challenge context；尚未把现有
+训练 pair 误标为 STATE_SHIFT，也尚未执行 P12 challenge arms。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

@@ -16,7 +16,7 @@ from .shift_receipts import STATE_SHIFT_VERSION, SHIFT_DIMENSIONS, StateShiftRec
 from .risk_receipts import RISK_RECEIPT_VERSION, RiskReceipt
 from .support_envelope import (
     SUPPORT_ENVELOPE_VERSION, SupportEnvelopeError, SupportEnvelope,
-    build_support_envelope,
+    build_support_envelope, build_support_envelope_from_transitions,
 )
 
 __all__ = [
@@ -32,5 +32,6 @@ __all__ = [
     "STATE_SHIFT_VERSION", "SHIFT_DIMENSIONS", "StateShiftReceipt",
     "StateShiftError", "evaluate_state_shift", "SUPPORT_ENVELOPE_VERSION",
     "SupportEnvelopeError", "SupportEnvelope", "build_support_envelope",
+    "build_support_envelope_from_transitions",
     "RISK_RECEIPT_VERSION", "RiskReceipt",
 ]
