@@ -183,3 +183,22 @@ def test_manifest_runner_requires_a_candidate_for_always_memory(tmp_path):
     }))
     with pytest.raises(P12OrfsRunError, match="ALWAYS_MEMORY requires"):
         run_p12_orfs_cohort(manifest, output=tmp_path / "report.json")
+
+
+def test_manifest_runner_rejects_case_pdk_digest_drift(tmp_path):
+    case = _fake_case(tmp_path)
+    case.update({
+        "case_id": "p12-runner-case", "lineage_id": "lineage-runner",
+        "pdk_digest": "sha256:case-pdk-drift",
+        "candidate_paths": {arm: None for arm in P12_ARMS},
+    })
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({
+        "version": "p12-orfs-cohort-manifest-v1", "campaign_id": "p12-runner",
+        "candidate_budget": 3, "min_lineages": 1,
+        "platform_digest": case["platform_digest"],
+        "pdk_digest": "sha256:manifest-pdk",
+        "cases": [case],
+    }))
+    with pytest.raises(P12OrfsRunError, match="PDK digest drifts"):
+        run_p12_orfs_cohort(manifest, output=tmp_path / "report.json")

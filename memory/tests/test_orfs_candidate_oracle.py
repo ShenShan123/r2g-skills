@@ -121,6 +121,41 @@ def test_orfs_paired_arms_hold_baseline_and_candidate_apart(tmp_path):
     assert all(bundle.arm_receipts[arm].outcome == "PASS" for arm in P12_ARMS[1:])
 
 
+def test_orfs_paired_arms_retain_distinct_policy_artifacts(tmp_path):
+    case = _fake_case(tmp_path)
+    root = tmp_path / "retained-arms"
+    case["execution_artifacts_root"] = str(root)
+    candidate = _candidate()
+    bundle = execute_paired_candidates(
+        case, {arm: None if arm == "NO_MEMORY" else candidate for arm in P12_ARMS},
+        oracle=OrfsCandidateOracle(), budget=3,
+        routing_decision="NO_SKILL", no_skill_reason="STATE_SHIFT",
+        state_shift_receipt_id="state-shift-receipt",
+        routing_receipt_id="routing-receipt")
+    assert bundle.arm_receipts["NO_MEMORY"].outcome == "FAIL"
+    assert bundle.arm_receipts["CAUSAL_NO_SKILL"].outcome == "FAIL"
+    assert bundle.arm_receipts["CAUSAL_NO_SKILL"].source == "no_memory"
+    assert bundle.arm_receipts["ALWAYS_MEMORY"].outcome == "PASS"
+    assert bundle.arm_receipts["APPLICABILITY_GATED"].outcome == "PASS"
+    retained = set()
+    for arm in P12_ARMS:
+        metadata = bundle.arm_receipts[arm].metadata["oracle_metadata"]
+        assert metadata["policy_arm"] == arm
+        path = Path(metadata["execution_project_dir"])
+        assert path.is_relative_to(root / arm.lower())
+        assert (path / "reports/route.json").is_file()
+        retained.add(path)
+    assert len(retained) == len(P12_ARMS)
+
+
+def test_orfs_artifact_root_requires_policy_arm_dispatch(tmp_path):
+    case = _fake_case(tmp_path)
+    case["execution_artifacts_root"] = str(tmp_path / "retained-arms")
+    with pytest.raises(OrfsCandidateOracleError, match="policy-arm execution"):
+        from tehm.evaluation.orfs_candidate_oracle import execute_orfs_candidate
+        execute_orfs_candidate(None, case, 1)
+
+
 def test_orfs_adapter_rejects_non_flow_candidate_without_manifest_read(tmp_path):
     case = _fake_case(tmp_path)
     bad = _candidate()

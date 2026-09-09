@@ -35,6 +35,9 @@ _PINNED_ENV_KEYS = frozenset({
     "R2G_HERMETIC", "ORFS_ROOT", "OPENROAD_EXE", "YOSYS_EXE", "PDK_ROOT",
     "R2G_PREFIX", "R2G_TOOLCHAIN_ROOT", "R2G_TOOLCHAIN_MANIFEST",
 })
+_POLICY_ARMS = frozenset({
+    "NO_MEMORY", "ALWAYS_MEMORY", "APPLICABILITY_GATED", "CAUSAL_NO_SKILL",
+})
 
 
 class OrfsCandidateOracleError(ValueError):
@@ -373,6 +376,9 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
     """
     if not isinstance(frozen_case, Mapping):
         raise OrfsCandidateOracleError("frozen ORFS case must be an object")
+    if frozen_case.get("execution_artifacts_root") is not None:
+        raise OrfsCandidateOracleError(
+            "execution_artifacts_root requires policy-arm execution")
     project = _directory(frozen_case.get("project_dir"), "project_dir")
     platform = _text(frozen_case.get("platform"), "platform")
     scope = _text(frozen_case.get("target_check"), "target_check")
@@ -476,6 +482,35 @@ class OrfsCandidateOracle:
     def execute_candidate(self, candidate, frozen_case, budget):
         return execute_orfs_candidate(
             candidate, frozen_case, budget, environment=self.environment)
+
+    def execute_policy_arm(self, policy_arm, candidate, frozen_case, budget):
+        """Execute one named P12 arm with a distinct retained workspace."""
+        if policy_arm not in _POLICY_ARMS:
+            raise OrfsCandidateOracleError("ORFS policy arm is invalid")
+        if not isinstance(frozen_case, Mapping):
+            raise OrfsCandidateOracleError("frozen ORFS case must be an object")
+        case = dict(frozen_case)
+        requested = case.pop("execution_artifacts_root", None)
+        if requested is not None:
+            if case.get("execution_artifacts_dir") is not None:
+                raise OrfsCandidateOracleError(
+                    "ORFS case cannot set both artifact directory and root")
+            if type(requested) is not str or not Path(requested).is_absolute():
+                raise OrfsCandidateOracleError(
+                    "execution_artifacts_root must be an absolute path")
+            root = Path(requested).resolve()
+            project = _directory(case.get("project_dir"), "project_dir")
+            if root.is_relative_to(project):
+                raise OrfsCandidateOracleError(
+                    "execution artifacts must be outside source project")
+            case["execution_artifacts_dir"] = str(root / policy_arm.lower())
+        result = execute_orfs_candidate(
+            candidate, case, budget, environment=self.environment)
+        metadata = result.setdefault("metadata", {})
+        metadata["policy_arm"] = policy_arm
+        if requested is not None:
+            metadata["execution_artifacts_root"] = str(Path(requested).resolve())
+        return result
 
     def __call__(self, candidate, frozen_case, budget):
         return self.execute_candidate(candidate, frozen_case, budget)

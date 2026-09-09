@@ -108,6 +108,8 @@ def _manifest(path: Path) -> tuple[dict, list[dict], int, int]:
                 raise P12OrfsRunError(f"P12 case {case_id} is missing {key}")
         if _digest_pin(case["platform_digest"], f"{case_id}.platform_digest") != platform_digest:
             raise P12OrfsRunError(f"P12 case {case_id} platform digest drifts from manifest")
+        if _digest_pin(case["pdk_digest"], f"{case_id}.pdk_digest") != pdk_digest:
+            raise P12OrfsRunError(f"P12 case {case_id} PDK digest drifts from manifest")
         if toolchain_digest is not None and _digest_pin(
                 case["toolchain_digest"], f"{case_id}.toolchain_digest") != toolchain_digest:
             raise P12OrfsRunError(f"P12 case {case_id} toolchain digest drifts from manifest")

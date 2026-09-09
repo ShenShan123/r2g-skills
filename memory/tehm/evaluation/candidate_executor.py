@@ -91,12 +91,16 @@ def _risk_payload(value: object) -> dict | None:
         raise CandidateExecutorError("paired execution risk_receipt is invalid") from exc
 
 
-def _call_oracle(oracle: object, candidate: StructuredRepairCandidate,
-                 frozen_case: Mapping, budget: dict) -> dict:
+def _call_oracle(oracle: object, candidate: StructuredRepairCandidate | None,
+                 frozen_case: Mapping, budget: dict, *,
+                 policy_arm: str | None = None) -> dict:
     if oracle is None:
         return {}
     try:
-        if callable(oracle):
+        if policy_arm is not None and hasattr(oracle, "execute_policy_arm"):
+            result = oracle.execute_policy_arm(
+                policy_arm, candidate, frozen_case, budget)
+        elif callable(oracle):
             result = oracle(candidate, frozen_case, budget)
         elif hasattr(oracle, "execute_candidate"):
             result = oracle.execute_candidate(candidate, frozen_case, budget)
@@ -436,6 +440,8 @@ def execute_candidate(
     frozen_case: Mapping,
     oracle: object = None,
     budget: int | Mapping = 3,
+    *,
+    policy_arm: str | None = None,
 ) -> CandidateExecutionReceipt:
     """Execute one candidate through an injected evaluation oracle.
 
@@ -447,7 +453,8 @@ def execute_candidate(
     case = _case_payload(frozen_case)
     case_id = _text(case.get("case_id"), "case_id")
     budget_value, budget_payload = _budget(budget)
-    result = _call_oracle(oracle, candidate, case, budget_payload)
+    result = _call_oracle(
+        oracle, candidate, case, budget_payload, policy_arm=policy_arm)
     compile_result = _verdict(result.get("compile_result"), "compile_result")
     functional_result = _verdict(result.get("functional_result"), "functional_result")
     raw_signoff = result.get("signoff_result")
@@ -476,6 +483,8 @@ def execute_candidate(
         "budget": budget_payload,
         "oracle_metadata": _oracle_metadata(result),
     }
+    if policy_arm is not None:
+        metadata["arm"] = policy_arm
     return CandidateExecutionReceipt(
         case_id=case_id, candidate_id=candidate.candidate_id,
         source="structured_memory", action_digest=action_digest,
@@ -498,7 +507,8 @@ def _execute_no_memory(
     case = _case_payload(frozen_case)
     case_id = _text(case.get("case_id"), "case_id")
     budget_value, budget_payload = _budget(budget)
-    result = _call_oracle(oracle, None, case, budget_payload)
+    result = _call_oracle(
+        oracle, None, case, budget_payload, policy_arm=arm)
     compile_result = _verdict(result.get("compile_result"), "compile_result")
     functional_result = _verdict(result.get("functional_result"), "functional_result")
     raw_signoff = result.get("signoff_result")
@@ -566,7 +576,8 @@ def _execute_arm(candidate: StructuredRepairCandidate | None,
             no_skill_reason=no_skill_reason)
     if not isinstance(candidate, StructuredRepairCandidate):
         raise CandidateExecutorError(f"{arm} arm requires a structured candidate")
-    return execute_candidate(candidate, frozen_case, oracle=oracle, budget=budget)
+    return execute_candidate(
+        candidate, frozen_case, oracle=oracle, budget=budget, policy_arm=arm)
 
 
 def execute_paired_candidates(
