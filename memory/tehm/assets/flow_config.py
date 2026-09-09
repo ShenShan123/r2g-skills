@@ -39,9 +39,10 @@ def _numeric(key, value):
     return number
 
 
-def build_flow_asset_proposal(conn, knowledge_id: str, *, campaign_id: str) -> AssetProposal:
+def build_flow_asset_proposal(conn, knowledge_id: str, *, campaign_id: str,
+                              target_scope: str = "global") -> AssetProposal:
     """Extract one unanimous successful training action, not a new capability."""
-    claim = get_knowledge_by_object_id(conn, knowledge_id)
+    claim = get_knowledge_by_object_id(conn, knowledge_id, target_scope=target_scope)
     if claim.status != "validated" or not evaluate_knowledge_authority(conn, claim).eligible:
         raise ValueError("flow asset requires validated knowledge authority")
     transitions = set()
@@ -73,14 +74,28 @@ def build_flow_asset_proposal(conn, knowledge_id: str, *, campaign_id: str) -> A
     concrete = {"domain": "flow.CONFIG_DELTA",
                 "transformation_family": action["transformation_family"],
                 "payload": {"config_edits": edits}}
+    measurement = claim.intervention.get("measurement_contract")
+    definition = {"action": concrete, "binding_contract": CONTRACT}
+    required = ["flow_config", "flow_design_id"]
+    verifier_contract = {"independent": True, "obligations": [
+        "ORFS_TARGET_PASS", "ORFS_NON_TARGET_NO_REGRESSION"]}
+    if measurement is not None:
+        measurement = json.loads(stable_dumps(measurement))
+        if not isinstance(measurement, dict) or measurement.get("scope") != target_scope:
+            raise ValueError("flow asset measurement scope mismatch")
+        definition["measurement_contract"] = measurement
+        concrete["payload"].update(recheck=measurement["scope"],
+                                    measurement_contract_digest=measurement["contract_digest"])
+        required.extend(("target_scope", "measurement_contract_digest"))
+        verifier_contract["measurement_contract"] = measurement
+        verifier_contract["preserved_obligations"] = list(claim.preserved_obligations)
     return AssetProposal(
         asset_type="FLOW_CONFIG_TRANSFORM", name="flow." + claim.knowledge_id,
-        version=CONTRACT, definition={"action": concrete, "binding_contract": CONTRACT},
-        input_contract={"required": ["flow_config", "flow_design_id"]},
+        version=CONTRACT, definition=definition,
+        input_contract={"required": required},
         output_contract={"required": ["config_delta", "independent_oracle_receipt"]},
-        verifier_contract={"independent": True, "obligations": [
-            "ORFS_TARGET_PASS", "ORFS_NON_TARGET_NO_REGRESSION"]},
-        compatibility={"target_scope": "global",
+        verifier_contract=verifier_contract,
+        compatibility={"target_scope": target_scope,
                        "compatibility_profile": claim.compatibility_profile},
         provenance={"generator_is_verifier": False, "binding_contract": CONTRACT,
             "bound_mechanism_family": claim.mechanism_family,
@@ -117,7 +132,8 @@ def select_flow_binding(conn, asset: Mapping, knowledge_ids: set[str], context: 
     if not isinstance(refs, list) or len(refs) != 1 or refs[0] not in knowledge_ids:
         raise ValueError("flow asset knowledge binding mismatch")
     proposal = build_flow_asset_proposal(
-        conn, refs[0], campaign_id=provenance.get("campaign_id"))
+        conn, refs[0], campaign_id=provenance.get("campaign_id"),
+        target_scope=(asset.get("compatibility") or {}).get("target_scope", "global"))
     expected = proposal.to_dict()
     for key in ("asset_type", "name", "version", "definition", "input_contract",
                 "output_contract", "verifier_contract", "compatibility"):
@@ -131,6 +147,15 @@ def select_flow_binding(conn, asset: Mapping, knowledge_ids: set[str], context: 
 
 def bind_flow_config(asset: Mapping, knowledge_id: str, context: Mapping) -> RuntimeBindingReceipt:
     """Bind a fixed delta to observed numeric values; no action overrides."""
+    measurement = asset["definition"].get("measurement_contract")
+    if measurement is not None and (
+            not isinstance(measurement, dict) or not measurement.get("scope")
+            or not measurement.get("contract_digest")
+            or context.get("target_scope") != measurement["scope"]
+            or context.get("measurement_contract_digest") != measurement["contract_digest"]
+            or (asset.get("verifier_contract") or {}).get("measurement_contract") != measurement
+            or (asset.get("compatibility") or {}).get("target_scope") != measurement["scope"]):
+        raise ValueError("flow binding measurement contract mismatch")
     config = context.get("flow_config")
     design = context.get("flow_design_id")
     if not isinstance(config, Mapping) or type(design) is not str or not design.strip():
@@ -146,6 +171,8 @@ def bind_flow_config(asset: Mapping, knowledge_id: str, context: Mapping) -> Run
     witness = {"contract": CONTRACT, "asset_id": asset.get("asset_id"),
                "knowledge_id": knowledge_id, "design_id": design,
                "observed_config": dict(config), "config_edits": dict(edits)}
+    if measurement is not None:
+        witness["measurement_contract"] = measurement
     return RuntimeBindingReceipt(
         asset_id=asset.get("asset_id"), knowledge_id=knowledge_id, target_design=design,
         candidate_entities=tuple(sorted(edits)), selected_binding={},

@@ -62,6 +62,26 @@ def test_selection_rejects_asset_without_knowledge_witness_before_db_access():
         select_flow_binding(None, _asset(), {"mk@1"}, _context())
 
 
+def test_scoped_binding_requires_and_hashes_same_measurement_contract():
+    asset, context = _asset(), _context()
+    legacy = bind_flow_config(asset, "mk@1", context)
+    measurement = {"scope": "flow_feasibility", "contract_digest": "test-measurement"}
+    asset["definition"]["measurement_contract"] = measurement
+    asset["verifier_contract"] = {"measurement_contract": copy.deepcopy(measurement)}
+    asset["compatibility"] = {"target_scope": "flow_feasibility"}
+    with pytest.raises(ValueError, match="measurement contract mismatch"):
+        bind_flow_config(asset, "mk@1", context)
+    context.update(target_scope="flow_feasibility", measurement_contract_digest="test-measurement")
+    scoped = bind_flow_config(asset, "mk@1", context)
+    assert scoped.eligible and scoped.binding_digest != legacy.binding_digest
+    for change in ({"target_scope": "global"}, {"measurement_contract_digest": "different"}):
+        with pytest.raises(ValueError, match="measurement contract mismatch"):
+            bind_flow_config(asset, "mk@1", {**context, **change})
+    asset["verifier_contract"]["measurement_contract"]["contract_digest"] = "different"
+    with pytest.raises(ValueError, match="measurement contract mismatch"):
+        bind_flow_config(asset, "mk@1", context)
+
+
 @pytest.mark.parametrize("location", ["spec", "before", "after"])
 def test_config_presence_cannot_bootstrap_hardware_repair_assets(location):
     spec = {"kind": "config_presence", "config_key": "ROUTING_LAYER_ADJUSTMENT"}

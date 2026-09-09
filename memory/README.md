@@ -293,6 +293,17 @@ validated。外部 `scoped-knowledge-r2-audit-20260908.json` 保存结果与反�
 正式数据库没有写入。接下来需验证实际 resolver/router 与 executable binding
 是否传递这些限制，再设计同 parent 的 StateShift challenge；P13/P14 尚未完成。
 
+Scoped router / binding（2026-09-08）：flow asset 构造器现在显式读取目标
+Knowledge scope，将 measurement contract 写入 asset identity、输入要求、验证义务
+和 compatibility；runtime binding 要求 query 的 scope 与 contract digest 完全一致，
+并把合约纳入 binding digest。旧的 global 非 scoped 资产接口保持兼容。
+真实 V2 Knowledge parent 已在 RAM 中走通 `route_memory -> asset selection ->
+runtime binding`：路由 `CONSIDER`、选择 `SELECT`，生成
+`asset_11de7aecd40b92fb2efac561`；global scope 或错误合约摘要均不能选中路径/资产。
+外部 `scoped-router-binding-r2-audit-20260908.json` 保留完整回执，
+62 项 router/Knowledge/asset/candidate 回归通过。此处的 binding 只是可执行候选
+绑定证明，尚未对新 target 启动 ORFS，也没有 held-out gain 或 P13/P14 attribution。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还
