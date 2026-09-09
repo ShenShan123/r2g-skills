@@ -4931,3 +4931,30 @@ reason/admission-to-new-asset chain remain unestablished by this lane.
 Candidates stay in disposable databases with `promotion_attempted=false`,
 `production_promotion_eligible=false`, and `canonical_memory_mutation=none`.
 `memory/docs/` remains local and Git-ignored.
+
+### 2026-09-08 Revision3 ORFS StateShift prospective challenge registration
+
+新增 `tehm.adapters.orfs_state_shift`，把真实 ORFS challenge 的 current-context
+注册限制在任何 `RUN_*`、campaign receipt 或 terminal preregistration 产生之前。
+registration 从 config/RTL/SDC 实际字节重建 structural、flow、constraint 和 oracle
+facts，实时重放锁定的内部工具链，并绑定冻结 challenge manifest 的原始摘要、精确
+case/lineage member、同一 scoped Knowledge 与 SupportEnvelope。回放不信任 receipt
+自报的 challenge、lineage、manifest 或 toolchain 字段；manifest 被预写 reason、缺少
+`NO_MEMORY/ALWAYS_MEMORY/CAUSAL_NO_SKILL` policy、不是多 lineage，或 source bytes
+发生变化都会 fail closed。StateShift v0.2 的 `current_context_digest` 继续把 route/reason
+receipt 绑定到同一执行前上下文。
+
+首个真实 ORFS prospective cohort 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-state-shift-challenge-20260908-r1/`。它在隔离
+RAM 数据库中独立回放 2 条真实 flow-feasibility 训练 lineage，重建
+`mk_e273d9bb3e6b65f5d00e@1` 与 SupportEnvelope
+`sha256:4919aff6abd088df8ef1c2612cd28e7a850c80748437f3911681014188017659`；mux32
+和 parity64 的 u85 current context 均由 deterministic evaluator 导出
+`NO_SKILL/STATE_SHIFT`，只命中 `constraint_shift`，并生成 `EX_ANTE` evolution reason。
+总审计 digest 为
+`sha256:42b99e87ddb57e441f361f6dbb27e1b25b85be5672d273089c631977b808cca4`。
+这一步只建立 challenge-bucket admission：尚未运行该 cohort 的 ORFS paired arms，
+不能声明 counterfactual outcome、P13 mutation 或 production capability；canonical
+memory、production runtime 与 promotion 均未改变。相关回归为 `52 passed`，
+完整 `memory/tests` 回归为 `1232 passed`；`memory/docs/` 继续由 `.gitignore`
+排除且不提交。
