@@ -112,7 +112,8 @@ def _call_oracle(oracle: object, candidate: StructuredRepairCandidate | None,
     except CandidateExecutorError:
         raise
     except Exception as exc:  # an oracle crash is an UNKNOWN result, not PASS
-        return {"outcome": "UNKNOWN", "oracle_error": type(exc).__name__}
+        return {"outcome": "UNKNOWN", "oracle_error": type(exc).__name__,
+                "oracle_error_detail": str(exc)[:500]}
     if result is None:
         return {}
     if not isinstance(result, Mapping):
@@ -480,6 +481,7 @@ def execute_candidate(
         "executor_version": EXECUTOR_VERSION,
         "oracle_available": oracle is not None,
         "oracle_error": result.get("oracle_error"),
+        "oracle_error_detail": result.get("oracle_error_detail"),
         "budget": budget_payload,
         "oracle_metadata": _oracle_metadata(result),
     }
@@ -533,6 +535,8 @@ def _execute_no_memory(
         budget=budget_value,
         metadata={"executor_version": EXECUTOR_VERSION, "arm": arm,
                   "oracle_available": oracle is not None,
+                  "oracle_error": result.get("oracle_error"),
+                  "oracle_error_detail": result.get("oracle_error_detail"),
                   "oracle_metadata": _oracle_metadata(result),
                   "policy_fallback": policy_fallback,
                   "fallback_reason": fallback_reason,

@@ -6,6 +6,8 @@ from dataclasses import replace
 
 import pytest
 
+from contracts import MemoryQuery
+from tehm.assets.flow_config import bind_flow_config
 from tehm.retrieval.structured_candidate import (
     StructuredCandidateError, build_structured_candidate,
 )
@@ -112,3 +114,39 @@ def test_flow_candidate_requires_exact_fixed_action_binding(tamper):
         candidate = build_structured_candidate(None, routing, selection, binding)
         assert candidate.concrete_action["payload"]["config_edits"] == {
             "ROUTING_LAYER_ADJUSTMENT": "0.05"}
+
+
+def test_flow_candidate_freezes_minimal_binding_replay_context():
+    routing, selection, _ = _inputs()
+    measurement = {"scope": "route", "contract_digest": "sha256:measurement"}
+    action = {
+        "domain": "flow.CONFIG_DELTA",
+        "transformation_family": "DENSITY_RELIEF",
+        "payload": {"config_edits": {"CORE_UTILIZATION": "40"},
+                    "recheck": "route",
+                    "measurement_contract_digest": measurement["contract_digest"]},
+    }
+    asset = {
+        **selection.assets[0], "asset_type": "FLOW_CONFIG_TRANSFORM",
+        "definition": {"action": action, "measurement_contract": measurement},
+        "verifier_contract": {
+            "obligations": ["ORFS_ROUTE_PASS"],
+            "measurement_contract": measurement,
+        },
+        "compatibility": {"target_scope": measurement["scope"]},
+    }
+    context = {
+        "flow_design_id": "design-lineage",
+        "flow_config": {"CORE_UTILIZATION": "85"},
+        "target_scope": measurement["scope"],
+        "measurement_contract_digest": measurement["contract_digest"],
+    }
+    binding = bind_flow_config(asset, "mk-lineage@1", context)
+    selection = replace(
+        selection, assets=(asset,), receipt=replace(
+            selection.receipt,
+            binding={"assets": {asset["asset_id"]: binding.to_dict()}}))
+    candidate = build_structured_candidate(
+        MemoryQuery(query_plan=context), routing, selection, binding)
+    assert candidate.provenance["flow_binding_replay"] == {
+        "context": context, "measurement_contract": measurement}

@@ -269,6 +269,43 @@ def _obligations(asset: Mapping) -> tuple[str, ...]:
     return result
 
 
+def _flow_binding_replay(query: MemoryQuery | RepairContext | None,
+                         asset: Mapping) -> dict | None:
+    """Freeze the minimal target context needed to replay a flow binding.
+
+    A ``RuntimeBindingReceipt`` contains the result digest but deliberately
+    omits the observed configuration witness.  P12 executes from a serialized
+    candidate after the selection database is gone, so the target-side inputs
+    to ``bind_flow_config`` must travel with the candidate as immutable,
+    evaluation-only provenance.
+    """
+    if asset.get("asset_type") != "FLOW_CONFIG_TRANSFORM" or query is None:
+        return None
+    if isinstance(query, MemoryQuery):
+        plan = query.query_plan
+    else:
+        from tehm.retrieval.query_planner import plan_query
+        plan = plan_query(query).query_plan
+    if not isinstance(plan, Mapping):
+        raise StructuredCandidateError("flow binding replay query is malformed")
+    context = {
+        key: copy.deepcopy(plan[key])
+        for key in ("flow_design_id", "flow_config", "target_scope",
+                    "measurement_contract_digest")
+        if key in plan
+    }
+    if (type(context.get("flow_design_id")) is not str
+            or not isinstance(context.get("flow_config"), Mapping)):
+        raise StructuredCandidateError(
+            "flow binding replay requires observed design and configuration")
+    definition = asset.get("definition") or {}
+    measurement = definition.get("measurement_contract")
+    if measurement is not None:
+        measurement = _mapping(measurement, "flow measurement contract")
+    return {"context": _mapping(context, "flow binding context"),
+            "measurement_contract": measurement}
+
+
 def build_structured_candidate(
     query: MemoryQuery | RepairContext | None,
     routing: MemoryRoutingDecision,
@@ -333,6 +370,9 @@ def build_structured_candidate(
         "asset_selection_receipt_id": asset_selection.receipt.selection_receipt_id,
         "binding_digest": _binding_digest(runtime_binding),
     }
+    flow_replay = _flow_binding_replay(query, asset)
+    if flow_replay is not None:
+        provenance["flow_binding_replay"] = flow_replay
     content = {
         "version": CANDIDATE_VERSION, "resolved_state_id": routing.resolved_state_id,
         "knowledge_object_id": knowledge_id, "causal_path_ids": list(paths),

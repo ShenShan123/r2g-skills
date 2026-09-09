@@ -51,6 +51,49 @@ def test_observed_baseline_and_treatment_use_disposable_configuration(tmp_path):
     assert config.read_bytes() == original
 
 
+def test_measurement_bound_candidate_replays_exact_observed_binding(tmp_path):
+    case, candidate = _observed_case(tmp_path)
+    values = case["flow_config_observation"]["values"]
+    measurement = {"scope": "route", "contract_digest": "sha256:measurement"}
+    action = {**candidate.concrete_action, "payload": {
+        **candidate.concrete_action["payload"],
+        "measurement_contract_digest": measurement["contract_digest"],
+    }}
+    context = {
+        "flow_design_id": values["DESIGN_NAME"],
+        "flow_config": {"CORE_UTILIZATION": values["CORE_UTILIZATION"]},
+        "target_scope": measurement["scope"],
+        "measurement_contract_digest": measurement["contract_digest"],
+    }
+    asset = {
+        "asset_id": candidate.asset_id,
+        "definition": {"action": action, "measurement_contract": measurement},
+        "verifier_contract": {"measurement_contract": measurement},
+        "compatibility": {"target_scope": measurement["scope"]},
+    }
+    proof = bind_flow_config(asset, candidate.knowledge_object_id, context)
+    candidate = replace(
+        candidate, concrete_action=action,
+        authority={"assets": {candidate.asset_id: proof.to_dict()}},
+        binding_receipt_id=proof.binding_receipt_id,
+        provenance={**candidate.provenance,
+                    "binding_digest": proof.binding_digest,
+                    "flow_binding_replay": {
+                        "context": context,
+                        "measurement_contract": measurement,
+                    }})
+    result = execute_orfs_candidate(candidate, case, 1)
+    assert result["outcome"] == "PASS"
+    tampered = replace(candidate, provenance={
+        **candidate.provenance,
+        "flow_binding_replay": {
+            **candidate.provenance["flow_binding_replay"],
+            "context": {**context, "flow_config": {"CORE_UTILIZATION": "84"}},
+        }})
+    with pytest.raises(OrfsCandidateOracleError, match="does not match observation"):
+        execute_orfs_candidate(tampered, case, 1)
+
+
 def test_fixed_candidate_requires_observation_before_execution(tmp_path):
     case, candidate = _observed_case(tmp_path)
     case.pop("flow_config_observation")

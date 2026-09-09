@@ -82,6 +82,17 @@ def test_execute_candidate_rejects_oversized_budget_and_bad_oracle():
         execute_candidate(_candidate(), {"case_id": "case-oracle"}, oracle=lambda *_: [])
 
 
+def test_execute_candidate_records_bounded_oracle_failure_detail():
+    def broken_oracle(*_args):
+        raise ValueError("binding witness mismatch")
+
+    receipt = execute_candidate(
+        _candidate(), {"case_id": "case-oracle-crash"}, oracle=broken_oracle)
+    assert receipt.outcome == "UNKNOWN"
+    assert receipt.metadata["oracle_error"] == "ValueError"
+    assert receipt.metadata["oracle_error_detail"] == "binding witness mismatch"
+
+
 def test_execute_paired_candidates_enforces_four_arms_and_fixed_digests():
     candidate = _candidate()
 

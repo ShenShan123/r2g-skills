@@ -34,6 +34,7 @@ _IGNORED_PROJECT_OUTPUTS = (
 _PINNED_ENV_KEYS = frozenset({
     "R2G_HERMETIC", "ORFS_ROOT", "OPENROAD_EXE", "YOSYS_EXE", "PDK_ROOT",
     "R2G_PREFIX", "R2G_TOOLCHAIN_ROOT", "R2G_TOOLCHAIN_MANIFEST",
+    "PYTHONHOME", "PYTHONPATH",
 })
 _POLICY_ARMS = frozenset({
     "NO_MEMORY", "ALWAYS_MEMORY", "APPLICABILITY_GATED", "CAUSAL_NO_SKILL",
@@ -126,6 +127,11 @@ def _environment(case: Mapping) -> dict[str, str]:
         "OPENROAD_EXE": str(openroad),
         "YOSYS_EXE": str(yosys),
         "PDK_ROOT": str(pdk_root),
+        # The OSS CAD Python launcher sets PYTHONHOME for its own interpreter.
+        # ORFS may later resolve /usr/bin/python3, which must not inherit that
+        # incompatible prefix or it fails before importing ``encodings``.
+        "PYTHONHOME": "",
+        "PYTHONPATH": "",
     }
     if toolchain_root:
         env["R2G_PREFIX"] = toolchain_root
@@ -197,11 +203,47 @@ must carry a replayable observation before this adapter can launch any EDA.
     if replay["values"]["PLATFORM"] != case["platform"]:
         raise OrfsCandidateOracleError("flow configuration platform mismatch")
     if fixed:
+        frozen = candidate.provenance.get("flow_binding_replay")
+        if frozen is None:
+            # Compatibility for early fixed-action candidates whose binding
+            # had no measurement contract and was therefore reconstructible
+            # from the action and observation alone.
+            context = {
+                "flow_design_id": values["DESIGN_NAME"],
+                "flow_config": {key: values[key] for key in keys},
+            }
+            measurement = None
+        else:
+            if not isinstance(frozen, Mapping):
+                raise OrfsCandidateOracleError(
+                    "flow candidate binding replay is malformed")
+            context = frozen.get("context")
+            measurement = frozen.get("measurement_contract")
+            if not isinstance(context, Mapping):
+                raise OrfsCandidateOracleError(
+                    "flow candidate binding replay context is malformed")
+            expected_context = {
+                "flow_design_id": values["DESIGN_NAME"],
+                "flow_config": {key: values[key] for key in keys},
+                **({"target_scope": measurement.get("scope"),
+                    "measurement_contract_digest": measurement.get(
+                        "contract_digest")}
+                   if isinstance(measurement, Mapping) else {}),
+            }
+            if stable_dumps(dict(context)) != stable_dumps(expected_context):
+                raise OrfsCandidateOracleError(
+                    "flow candidate binding replay does not match observation")
         asset = {"asset_id": candidate.asset_id,
                  "definition": {"action": candidate.concrete_action}}
-        binding = bind_flow_config(asset, candidate.knowledge_object_id, {
-            "flow_design_id": values["DESIGN_NAME"],
-            "flow_config": {key: values[key] for key in keys}})
+        if measurement is not None:
+            if not isinstance(measurement, Mapping):
+                raise OrfsCandidateOracleError(
+                    "flow candidate measurement contract is malformed")
+            measurement = dict(measurement)
+            asset["definition"]["measurement_contract"] = measurement
+            asset["verifier_contract"] = {"measurement_contract": measurement}
+            asset["compatibility"] = {"target_scope": measurement.get("scope")}
+        binding = bind_flow_config(asset, candidate.knowledge_object_id, context)
         if (binding.to_dict() != dict(proof) or
                 binding.binding_receipt_id != candidate.binding_receipt_id or
                 binding.binding_digest != candidate.provenance.get("binding_digest")):

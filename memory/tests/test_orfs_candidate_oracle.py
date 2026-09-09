@@ -8,8 +8,8 @@ import pytest
 
 from tehm.evaluation.candidate_executor import P12_ARMS, execute_candidate, execute_paired_candidates
 from tehm.evaluation.orfs_candidate_oracle import (
-    OrfsCandidateOracle, OrfsCandidateOracleError, _file_sha256, _source_binding,
-    _source_inputs,
+    OrfsCandidateOracle, OrfsCandidateOracleError, _environment, _file_sha256,
+    _source_binding, _source_inputs,
 )
 from tehm.evaluation.orfs_cohort import (
     OrfsCohortError, OrfsPairedCohortReceipt, execute_orfs_paired_cohort,
@@ -175,6 +175,13 @@ def test_orfs_adapter_rejects_environment_pin_override(tmp_path):
     with pytest.raises(OrfsCandidateOracleError, match="pinned key ORFS_ROOT"):
         from tehm.evaluation.orfs_candidate_oracle import execute_orfs_candidate
         execute_orfs_candidate(_candidate(), case, 3)
+
+
+def test_orfs_environment_clears_incompatible_python_launcher_state(tmp_path):
+    case = _fake_case(tmp_path)
+    environment = _environment(case)
+    assert environment["PYTHONHOME"] == ""
+    assert environment["PYTHONPATH"] == ""
 
 
 def test_orfs_adapter_binds_external_source_inputs(tmp_path):
