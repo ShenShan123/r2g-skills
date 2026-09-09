@@ -317,6 +317,13 @@ before project 提取 RTL 字节摘要、platform/toolchain、约束、oracle co
 重建结果。下一步用该冻结 parent 事前评估新 challenge context；尚未把现有
 训练 pair 误标为 STATE_SHIFT，也尚未执行 P12 challenge arms。
 
+StateShift current-context 身份（2026-09-08）：新 evaluator 回执使用
+`state-shift-v0.2`，将完整 typed current context 的摘要纳入 replay digest；
+因此两个 shift 分数相同但当前状态不同的 case 不再共用 receipt ID。v0.1 历史
+回执仍可读取，不能事后附加 context digest。54 项 state-shift/reason/P12/P13
+兼容性测试通过。下一步需在任何新 ORFS arm 运行前生成并冻结 v0.2 receipt，
+再由 typed reason adapter 产生 EX_ANTE `STATE_SHIFT`，不能人工填写 reason。
+
 候选链路进一步核验（2026-09-05）：structured candidate 与 lineage 现在均要求
 真实上游回执之间的路由许可、正预算及路径交集，不能从 NO_SKILL/ABSTAIN/
 INAPPLICABLE 路由、零预算或单边路径支持拼接 memory candidate。构造入口还

@@ -7,7 +7,8 @@ from collections.abc import Mapping
 from tehm.ids import stable_dumps
 
 from .receipts import ResolvedMemoryState
-from .shift_receipts import SHIFT_DIMENSIONS, StateShiftReceipt, _digest
+from .shift_receipts import (BOUND_STATE_SHIFT_VERSION, SHIFT_DIMENSIONS,
+                             StateShiftReceipt, _digest)
 from .support_envelope import SupportEnvelope
 
 
@@ -107,7 +108,12 @@ def evaluate_state_shift(
     shift_threshold = float(shift_threshold)
     if not math.isfinite(shift_threshold) or not 0.0 <= shift_threshold <= 1.0:
         raise StateShiftError("state shift threshold must be in [0,1]")
-    facts = _current_facts(dict(current_context))
+    context = dict(current_context)
+    try:
+        context_digest = _digest({"current_context": context})
+    except (TypeError, ValueError) as exc:
+        raise StateShiftError("current state context must be JSON-serializable") from exc
+    facts = _current_facts(context)
     names = ("structural", "mechanism", "flow", "constraint", "oracle", "history")
     scores = {}
     for name in names:
@@ -125,7 +131,9 @@ def evaluate_state_shift(
         raise StateShiftError("state shift current resolution ID is required")
     refs = tuple(sorted({str(item) for item in evidence_refs if str(item)}))
     payload = {
-        "version": "state-shift-v0.1", "current_resolution_id": resolution_id,
+        "version": BOUND_STATE_SHIFT_VERSION,
+        "current_context_digest": context_digest,
+        "current_resolution_id": resolution_id,
         "knowledge_object_id": knowledge.object_id,
         "support_envelope_digest": envelope.envelope_digest,
         "structural_shift": scores["structural"],

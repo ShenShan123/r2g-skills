@@ -84,8 +84,20 @@ def test_state_shift_detects_flow_change_and_replays():
     assert receipt.reason == "STATE_SHIFT"
     assert receipt.transferable is False
     assert receipt.flow_shift == 1.0
+    assert receipt.version == "state-shift-v0.2"
+    assert receipt.current_context_digest.startswith("sha256:")
     assert "flow_shift" in receipt.shifted_dimensions
     assert StateShiftReceipt.from_dict(receipt.to_dict()) == receipt
+    changed = evaluate_state_shift(
+        {"mechanism_family": "HANDSHAKE_COMPLETION",
+         "compatibility_profile": "rtl.fsm.single_guard.v1", "platform": "gf180"},
+        {"resolution_id": "resolution-shift"}, knowledge, envelope)
+    assert changed.shifted_dimensions == receipt.shifted_dimensions
+    assert changed.receipt_id != receipt.receipt_id
+    tampered = receipt.to_dict()
+    tampered["current_context_digest"] = "sha256:" + "0" * 64
+    with pytest.raises(ValueError, match="replay digest mismatch"):
+        StateShiftReceipt.from_dict(tampered)
 
 
 def test_no_skill_contract_maps_legacy_reason_to_no_match():

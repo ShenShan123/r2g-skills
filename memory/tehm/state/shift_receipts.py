@@ -10,6 +10,7 @@ from tehm.ids import stable_dumps
 
 
 STATE_SHIFT_VERSION = "state-shift-v0.1"
+BOUND_STATE_SHIFT_VERSION = "state-shift-v0.2"
 SHIFT_DIMENSIONS = (
     "structural_shift", "mechanism_shift", "flow_shift",
     "constraint_shift", "oracle_shift", "history_shift",
@@ -38,9 +39,10 @@ class StateShiftReceipt:
     evidence_refs: tuple[str, ...]
     replay_digest: str
     version: str = STATE_SHIFT_VERSION
+    current_context_digest: str | None = None
 
     def _payload(self) -> dict:
-        return {
+        payload = {
             "version": self.version,
             "current_resolution_id": self.current_resolution_id,
             "knowledge_object_id": self.knowledge_object_id,
@@ -56,12 +58,24 @@ class StateShiftReceipt:
             "transferable": self.transferable, "reason": self.reason,
             "evidence_refs": list(self.evidence_refs),
         }
+        if self.current_context_digest is not None:
+            payload["current_context_digest"] = self.current_context_digest
+        return payload
 
     def __post_init__(self) -> None:
         for name in ("current_resolution_id", "knowledge_object_id",
                      "support_envelope_digest", "reason"):
             if type(getattr(self, name)) is not str or not getattr(self, name):
                 raise ValueError(f"state shift {name} is required")
+        if self.version not in {STATE_SHIFT_VERSION, BOUND_STATE_SHIFT_VERSION}:
+            raise ValueError("state shift version is invalid")
+        if self.version == BOUND_STATE_SHIFT_VERSION:
+            if (type(self.current_context_digest) is not str
+                    or not self.current_context_digest.startswith("sha256:")
+                    or len(self.current_context_digest) != 71):
+                raise ValueError("state shift current context digest is required")
+        elif self.current_context_digest is not None:
+            raise ValueError("legacy state shift cannot attach current context digest")
         if type(self.transferable) is not bool:
             raise ValueError("state shift transferable must be boolean")
         if self.reason not in {"NO_SHIFT", "STATE_SHIFT"}:
@@ -96,7 +110,7 @@ class StateShiftReceipt:
     def from_dict(cls, payload: object) -> "StateShiftReceipt":
         if not isinstance(payload, Mapping):
             raise ValueError("state shift receipt must be an object")
-        fields = set(cls.__dataclass_fields__) - {"version"}
+        fields = set(cls.__dataclass_fields__) - {"version", "current_context_digest"}
         if not fields <= set(payload):
             raise ValueError("state shift receipt is missing fields")
         receipt = cls(
@@ -115,6 +129,7 @@ class StateShiftReceipt:
             evidence_refs=tuple(payload["evidence_refs"]),
             replay_digest=payload["replay_digest"],
             version=payload.get("version", STATE_SHIFT_VERSION),
+            current_context_digest=payload.get("current_context_digest"),
         )
         supplied = payload.get("receipt_id")
         if supplied is not None and supplied != receipt.receipt_id:
@@ -122,4 +137,5 @@ class StateShiftReceipt:
         return receipt
 
 
-__all__ = ["STATE_SHIFT_VERSION", "SHIFT_DIMENSIONS", "StateShiftReceipt"]
+__all__ = ["STATE_SHIFT_VERSION", "BOUND_STATE_SHIFT_VERSION", "SHIFT_DIMENSIONS",
+           "StateShiftReceipt"]
