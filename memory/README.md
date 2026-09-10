@@ -5001,3 +5001,37 @@ UNKNOWN→RETAIN 规则，不产生 P13 structural mutation、canonical memory �
 补齐 route、DRC、LVS、timing 等完整 signoff oracle，使当前严格 gate 获得被观测的
 PASS/FAIL。只有后者满足现行 P13 full-oracle authority。当前完整回归为
 `1241 passed, 2 skipped`；`memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-09 Revision3 fixed-constraint ORFS counterfactual contract and first eligible trigger
+
+没有把通用 `signoff_result` 或 production gate 放宽。新增的
+`p13-fixed-constraint-counterfactual-v1` 是一条显式、窄化且只供 P13 shadow 使用的
+测量契约：它要求同一固定 SDC 下的 route、完整 DRC、实际执行的 LVS、RCX、timing 和
+signoff-manifest binding 全部被观测；任一项缺失即为 UNKNOWN。manifest 只能是 strict
+clean，或唯一缺少尚未执行的 `fmax_search` winner；后者仍强制
+`strict_signoff_claim=false`、`production_eligible=false`、
+`canonical_memory_mutation=none`。因此该 receipt 可以证明 paired counterfactual 已完整
+观测，但不能升级为严格 Fmax、promotion 或 production authority。production readiness
+仍读取原有严格 `signoff_result`，在本轮保持 UNKNOWN。
+
+新的 prospective ORFS challenge 位于仓库外的
+`/data1/zhangdy/tehm-campaigns/tehm-r3-state-shift-u50-challenge-20260909-r1/`。
+它在执行前将 mux32/parity64 的 u50 current context 固定为同一 Knowledge parent 下的
+`NO_SKILL/STATE_SHIFT`，预注册 audit digest 为
+`sha256:331d0302157f9ccad4ecbfe94880fb7e00687d303f214ffb7b1c85b7278dd1c2`。
+随后 2 条独立 lineage 的 `NO_MEMORY`、`ALWAYS_MEMORY`、`APPLICABILITY_GATED`、
+`CAUSAL_NO_SKILL` 共 8 个 ORFS arm 均完成窄化 physical contract 并返回 PASS；其中
+`CAUSAL_NO_SKILL` 确实执行 no-memory fallback。P12 cohort receipt digest 为
+`sha256:7777a5b0bb6bb090b82501d248f177ff7231cd3ca35a912b7e73b11322498be0`。
+
+typed reason bundle 不从上述 PASS/PASS outcome 反推 STATE_SHIFT，而是重放执行前冻结的
+detector 与 routing receipts，再绑定确切 cohort；bundle digest 为
+`sha256:30a0a015809323a8ee3825bf633ad4f8edbb2eb84c099e41f1334fd1066de8b7`。
+一次故意不传 routing 文件的组装被 fail-closed 为 `missing_routing_decision` 并保留；补入
+冻结 routing witness 后，P13 trigger report digest 为
+`sha256:5482c93177535a659237ddc4770ad2d7214b48e8b990c7fbb71d7fd0c96a2b35`，
+2/2 trigger、`p13_eligible=true`。这只完成了 first eligible non-manual ORFS trigger；
+reason-specific admission、repeated StateShift proposal、anti-forgetting 和 isolated
+shadow revision 尚未执行，canonical memory、lifecycle、promotion、production runtime
+均未改变。所有 campaign artifact 继续留在仓库外。当前完整回归为
+`1246 passed, 2 skipped`；`memory/docs/` 仍由 `.gitignore` 排除且不提交。

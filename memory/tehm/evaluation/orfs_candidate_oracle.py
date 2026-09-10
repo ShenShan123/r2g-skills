@@ -18,6 +18,11 @@ from pathlib import Path
 from typing import Any
 
 from tehm.ids import stable_dumps
+from tehm.evaluation.counterfactual_oracle import (
+    COUNTERFACTUAL_SCOPE,
+    build_counterfactual_oracle_receipt,
+    fixed_constraint_check_verdicts,
+)
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate
 from tehm.lifecycle.orfs_trial import (
     _apply_config_edits, _execute_arm, _parse_config, _scope_success,
@@ -357,9 +362,26 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
     flow_rc = arm.get("flow_rc")
     reports = arm.get("reports") if isinstance(arm.get("reports"), Mapping) else {}
     target = _scope_success(scope, reports)
+    counterfactual = None
+    target_observed = bool(reports.get(scope))
+    if scope == COUNTERFACTUAL_SCOPE:
+        checks = fixed_constraint_check_verdicts(reports)
+        counterfactual = build_counterfactual_oracle_receipt(
+            checks, evidence_digest=_digest(reports))
+        target_observed = counterfactual["complete"]
     if flow_rc is None:
         verdict = "UNKNOWN"
         compile_result = functional_result = signoff_result = "UNKNOWN"
+    elif scope == COUNTERFACTUAL_SCOPE:
+        compile_result = "PASS" if flow_rc == 0 else "FAIL"
+        if not target_observed:
+            functional_result = verdict = "UNKNOWN"
+        else:
+            functional_result = "PASS" if target else "FAIL"
+            verdict = "PASS" if arm.get("success") is True else "FAIL"
+        # This deliberately does not claim repository-wide strict signoff:
+        # Fmax characterization and production gates remain separate.
+        signoff_result = "UNKNOWN"
     else:
         compile_result = "PASS" if flow_rc == 0 else "FAIL"
         functional_result = "PASS" if target else "FAIL"
@@ -367,7 +389,7 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
         # timing/constraint signoff contract. A scope pass cannot certify it.
         signoff_result = "FAIL" if functional_result == "FAIL" else "UNKNOWN"
         verdict = "PASS" if arm.get("success") is True else "FAIL"
-        if not reports.get(scope):
+        if not target_observed:
             # A flow that exits before the requested checker emits its report
             # has not established the target verdict.  This includes synthesis
             # failures: they may be RTL/tool/infrastructure failures, but they
@@ -379,6 +401,11 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
         f"ORFS_{scope.upper()}_PASS": functional_result,
         "ORFS_SIGNOFF_PASS": signoff_result,
     }
+    if counterfactual is not None:
+        obligations.update({
+            f"ORFS_{name.upper()}_PASS": value
+            for name, value in counterfactual["checks"].items()
+        })
     return {
         "compile_result": compile_result,
         "functional_result": functional_result,
@@ -394,8 +421,8 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
             "flow_rc": flow_rc, "fix_rc": arm.get("fix_rc"),
             "fix_stdout_tail": arm.get("fix_stdout_tail", ""),
             "fix_stderr_tail": arm.get("fix_stderr_tail", ""),
-            "target_report_available": bool(reports.get(scope)),
-            "target_not_observed": not bool(reports.get(scope)),
+            "target_report_available": target_observed,
+            "target_not_observed": not target_observed,
             "scope": scope,
             "action_applied": action_applied,
             "config_before_digest": config_before,
@@ -408,6 +435,8 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
                 "reports": reports, "success": arm.get("success") is True,
             }),
             "infrastructure_failure": flow_rc in {124, 127, 137},
+            **({"counterfactual_oracle": counterfactual}
+               if counterfactual is not None else {}),
         },
     }
 
@@ -430,7 +459,7 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
     project = _directory(frozen_case.get("project_dir"), "project_dir")
     platform = _text(frozen_case.get("platform"), "platform")
     scope = _text(frozen_case.get("target_check"), "target_check")
-    if scope not in {"route", "drc", "lvs", "timing"}:
+    if scope not in {"route", "drc", "lvs", "timing", COUNTERFACTUAL_SCOPE}:
         raise OrfsCandidateOracleError("frozen ORFS target_check is invalid")
     run_flow = _file(frozen_case.get("run_flow_script"), "run_flow_script")
     fix_signoff = _file(frozen_case.get("fix_signoff_script"), "fix_signoff_script")

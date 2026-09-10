@@ -16,6 +16,7 @@ from tehm.canonical.transition import HARMFUL_OUTCOMES, POSITIVE_OUTCOMES
 from tehm.evaluation.candidate_executor import (
     P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
+from tehm.evaluation.counterfactual_oracle import counterfactual_oracle_complete
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import StateShiftReceipt
 from contracts import MemoryRoutingDecision
@@ -530,13 +531,7 @@ def derive_repeated_failure_reason(
 
 
 def _oracle_complete(receipt: CandidateExecutionReceipt) -> bool:
-    return (
-        receipt.evaluation_only is True and
-        receipt.metadata.get("oracle_available") is True and
-        receipt.compile_result != "UNKNOWN" and
-        receipt.functional_result != "UNKNOWN" and
-        receipt.signoff_result not in {None, "UNKNOWN"} and
-        receipt.outcome != "UNKNOWN")
+    return counterfactual_oracle_complete(receipt)
 
 
 def derive_memory_interference_reason(

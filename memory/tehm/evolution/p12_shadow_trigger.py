@@ -19,6 +19,7 @@ from contracts import MEMORY_ROUTING_DECISIONS, MemoryRoutingDecision
 from tehm.evaluation.candidate_executor import (
     P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
+from tehm.evaluation.counterfactual_oracle import counterfactual_oracle_complete
 from tehm.ids import stable_dumps
 
 
@@ -261,15 +262,7 @@ def _oracle_complete(receipt: CandidateExecutionReceipt) -> bool:
     """Require an explicit available oracle and complete component verdicts."""
     if not isinstance(receipt, CandidateExecutionReceipt):
         raise P12ShadowTriggerError("P12 shadow trigger execution receipt is invalid")
-    if receipt.evaluation_only is not True:
-        return False
-    if receipt.metadata.get("oracle_available") is not True:
-        return False
-    if receipt.compile_result == "UNKNOWN" or receipt.functional_result == "UNKNOWN":
-        return False
-    if receipt.signoff_result is None or receipt.signoff_result == "UNKNOWN":
-        return False
-    return receipt.outcome != "UNKNOWN"
+    return counterfactual_oracle_complete(receipt)
 
 
 def _cohort_fields(cohort: object) -> tuple[str, str, dict[str, PairedCandidateExecutionReceipt]]:

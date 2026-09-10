@@ -10,6 +10,9 @@ from contracts import MemoryRoutingDecision
 from tehm.evaluation.candidate_executor import (
     P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
+from tehm.evaluation.counterfactual_oracle import (
+    COUNTERFACTUAL_CHECKS, build_counterfactual_oracle_receipt,
+)
 from tehm.evolution import (
     P12ShadowTriggerError, P12ShadowUpdateTriggerReceipt,
     P13EvolutionReasonReceipt,
@@ -152,6 +155,32 @@ def test_complete_multilineage_oracle_builds_replayable_trigger():
     legacy_replay = P12ShadowUpdateTriggerReceipt.from_dict({
         **legacy.to_dict(), "receipt_digest": legacy.legacy_receipt_digest})
     assert legacy_replay == legacy
+
+
+def test_scoped_counterfactual_can_trigger_without_claiming_strict_signoff():
+    claim = build_counterfactual_oracle_receipt(
+        {name: "PASS" for name in COUNTERFACTUAL_CHECKS},
+        evidence_digest="sha256:fixed-constraint-evidence")
+    cohort = _cohort()
+    for bundle in cohort.case_receipts.values():
+        bundle.arm_receipts.update({
+            arm: replace(
+                receipt, signoff_result="UNKNOWN",
+                metadata={
+                    "oracle_available": True,
+                    "oracle_metadata": {"counterfactual_oracle": claim},
+                })
+            for arm, receipt in bundle.arm_receipts.items()
+        })
+    triggers = build_p12_shadow_update_triggers(
+        cohort, memory_arm="ALWAYS_MEMORY", learner_eligible=True,
+        routing_decisions={case_id: _routing(case_id)
+                           for case_id in ("case-0", "case-1")},
+        case_learner_eligibility={"case-0": True, "case-1": True},
+        evolution_reasons={"case-0": ("CAPABILITY_GAP",),
+                           "case-1": ("NOVELTY",)})
+    assert all(item.triggered for item in triggers)
+    assert all(item.memory_oracle_complete for item in triggers)
 
 
 def test_evolution_reason_receipt_is_bound_and_replayable():

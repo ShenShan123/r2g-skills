@@ -5,6 +5,14 @@ from .candidate_executor import (
     CandidateExecutorError, PairedCandidateExecutionReceipt,
     execute_candidate, execute_paired_candidates,
 )
+from .counterfactual_oracle import (
+    COUNTERFACTUAL_ORACLE_VERSION, COUNTERFACTUAL_SCOPE,
+    COUNTERFACTUAL_CHECKS, CounterfactualOracleError,
+    fixed_constraint_check_verdicts,
+    build_counterfactual_oracle_receipt,
+    replay_counterfactual_oracle_receipt,
+    counterfactual_oracle_complete,
+)
 from .rtl_candidate_oracle import (
     RTL_CANDIDATE_ORACLE_VERSION, IcarusCandidateOracle,
     RtlCandidateOracleError, execute_rtl_candidate,
@@ -90,6 +98,12 @@ __all__ = [
     "EXECUTOR_VERSION", "P12_ARMS", "CandidateExecutionReceipt",
     "CandidateExecutorError", "PairedCandidateExecutionReceipt",
     "execute_candidate", "execute_paired_candidates",
+    "COUNTERFACTUAL_ORACLE_VERSION", "COUNTERFACTUAL_SCOPE",
+    "COUNTERFACTUAL_CHECKS", "CounterfactualOracleError",
+    "fixed_constraint_check_verdicts",
+    "build_counterfactual_oracle_receipt",
+    "replay_counterfactual_oracle_receipt",
+    "counterfactual_oracle_complete",
     "RTL_CANDIDATE_ORACLE_VERSION", "IcarusCandidateOracle",
     "RtlCandidateOracleError", "execute_rtl_candidate",
     "RTL_COHORT_VERSION", "RtlCohortError", "RtlPairedCohortReceipt",

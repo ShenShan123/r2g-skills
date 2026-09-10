@@ -873,9 +873,10 @@ def _execute_arm(project: Path, platform: str, scope: str,
         capture_output=True, text=True, env=trial_env)
     fix = None
     if flow.returncode == 0:
+        fix_scope = "both" if scope == "fixed_constraint_counterfactual" else scope
         fix = subprocess.run(
             ["bash", str(fix_signoff_script), str(project), platform,
-             "--check", scope, "--max-iters", "0"],
+             "--check", fix_scope, "--max-iters", "0"],
             capture_output=True, text=True, env=trial_env)
     reports = _load_reports(project)
     success = flow.returncode == 0 and _scope_success(scope, reports)
@@ -899,6 +900,11 @@ def _not_run(arm: str) -> dict:
 
 
 def _scope_success(scope: str, reports: dict) -> bool:
+    if scope == "fixed_constraint_counterfactual":
+        from tehm.evaluation.counterfactual_oracle import (
+            fixed_constraint_check_verdicts,
+        )
+        return set(fixed_constraint_check_verdicts(reports).values()) == {"PASS"}
     report = reports.get(scope) or {}
     if scope == "timing":
         return report.get("tier") in {"clean", "met"} or report.get("status") == "clean"
@@ -922,7 +928,8 @@ def _load_reports(project: Path) -> dict:
     for name, filename in (("drc", "drc.json"), ("lvs", "lvs.json"),
                            ("route", "route.json"),
                            ("timing", "timing_check.json"),
-                           ("ppa", "ppa.json")):
+                           ("ppa", "ppa.json"), ("rcx", "rcx.json"),
+                           ("signoff_manifest", "signoff_manifest.json")):
         try:
             out[name] = json.loads((project / "reports" / filename).read_text())
         except Exception:

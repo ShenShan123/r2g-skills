@@ -17,6 +17,7 @@ from tehm.canonical.transition import OUTCOMES, POSITIVE_OUTCOMES
 from tehm.evaluation.candidate_executor import (
     P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
+from tehm.evaluation.counterfactual_oracle import counterfactual_oracle_complete
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import SHIFT_DIMENSIONS, StateShiftReceipt
 
@@ -484,11 +485,7 @@ def propose_repeated_state_shift_from_paired_receipts(
             if not isinstance(receipt, CandidateExecutionReceipt):
                 raise StateShiftEvolutionError(
                     f"paired state shift {arm} receipt is invalid")
-            if (receipt.metadata.get("oracle_available") is not True or
-                    receipt.compile_result == "UNKNOWN" or
-                    receipt.functional_result == "UNKNOWN" or
-                    receipt.signoff_result in {None, "UNKNOWN"} or
-                    receipt.outcome == "UNKNOWN"):
+            if not counterfactual_oracle_complete(receipt):
                 raise StateShiftEvolutionError(
                     f"paired state shift {arm} oracle is incomplete")
         toolchains.add(paired.toolchain_digest)

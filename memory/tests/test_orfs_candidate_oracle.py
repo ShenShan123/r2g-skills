@@ -1,12 +1,16 @@
 """P12-D ORFS executor boundary tests with a deterministic fake R2G flow."""
 from __future__ import annotations
 
+import json
 import stat
 from pathlib import Path
 
 import pytest
 
 from tehm.evaluation.candidate_executor import P12_ARMS, execute_candidate, execute_paired_candidates
+from tehm.evaluation.counterfactual_oracle import (
+    COUNTERFACTUAL_SCOPE, counterfactual_oracle_complete,
+)
 from tehm.evaluation.orfs_candidate_oracle import (
     OrfsCandidateOracle, OrfsCandidateOracleError, _environment, _file_sha256,
     _source_binding, _source_inputs,
@@ -109,6 +113,53 @@ def test_orfs_candidate_uses_temp_project_and_real_executor_contract(tmp_path):
     assert oracle_metadata["action_applied"] is True
     assert oracle_metadata["config_before_digest"] != oracle_metadata["config_after_digest"]
     assert before.read_bytes() == original
+
+
+def test_orfs_fixed_constraint_counterfactual_is_shadow_complete(tmp_path):
+    case = _fake_case(tmp_path)
+    case["target_check"] = COUNTERFACTUAL_SCOPE
+    run_flow = Path(case["run_flow_script"])
+    manifest = {
+        "reports": {
+            "route.json": {"present": True, "sha256": "a" * 64,
+                           "status": "clean"},
+            "drc.json": {"present": True, "sha256": "b" * 64,
+                         "status": "clean"},
+            "lvs.json": {"present": True, "sha256": "c" * 64,
+                         "status": "clean"},
+            "rcx.json": {"present": True, "sha256": "d" * 64,
+                         "status": "complete"},
+            "timing_check.json": {"present": True, "sha256": "e" * 64,
+                                  "tier": "clean"},
+        },
+        "confirming_run": {"consensus": True},
+        "platform_capability": {"strict_signoff_ready": True},
+        "constraint": {"final_timing_tier": "clean", "sdc_sha256": "f" * 64},
+        "strict_missing": [
+            "constraint: fmax_search winner (reports/fmax_search.json status=ok)"
+        ],
+        "strict_clean": False,
+    }
+    run_flow.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -eu\n"
+        "p=\"$1\"\n"
+        "mkdir -p \"$p/reports\"\n"
+        "printf '{\"status\":\"clean\"}\\n' > \"$p/reports/route.json\"\n"
+        "printf '{\"status\":\"clean\"}\\n' > \"$p/reports/drc.json\"\n"
+        "printf '{\"status\":\"clean\"}\\n' > \"$p/reports/lvs.json\"\n"
+        "printf '{\"status\":\"complete\"}\\n' > \"$p/reports/rcx.json\"\n"
+        "printf '{\"tier\":\"clean\"}\\n' > \"$p/reports/timing_check.json\"\n"
+        f"printf '%s\\n' '{json.dumps(manifest)}' > \"$p/reports/signoff_manifest.json\"\n")
+    receipt = execute_candidate(
+        _candidate(), case, oracle=OrfsCandidateOracle(), budget=3)
+    assert receipt.outcome == "PASS"
+    assert receipt.functional_result == "PASS"
+    assert receipt.signoff_result == "UNKNOWN"
+    assert counterfactual_oracle_complete(receipt) is True
+    claim = receipt.metadata["oracle_metadata"]["counterfactual_oracle"]
+    assert claim["strict_signoff_claim"] is False
+    assert claim["production_eligible"] is False
 
 
 def test_orfs_paired_arms_hold_baseline_and_candidate_apart(tmp_path):
