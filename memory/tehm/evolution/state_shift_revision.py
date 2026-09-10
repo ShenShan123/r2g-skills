@@ -46,7 +46,13 @@ def _text(value: object, name: str) -> str:
     return value.strip()
 
 
-def _strings(value: object, name: str, *, allow_empty: bool = False) -> tuple[str, ...]:
+def _strings(
+    value: object,
+    name: str,
+    *,
+    allow_empty: bool = False,
+    allow_duplicates: bool = False,
+) -> tuple[str, ...]:
     if not isinstance(value, (list, tuple)) or isinstance(value, (str, bytes)):
         raise StateShiftEvolutionError(
             f"state shift evolution {name} must be a sequence")
@@ -54,7 +60,7 @@ def _strings(value: object, name: str, *, allow_empty: bool = False) -> tuple[st
     if not allow_empty and not result:
         raise StateShiftEvolutionError(
             f"state shift evolution {name} must not be empty")
-    if len(set(result)) != len(result):
+    if not allow_duplicates and len(set(result)) != len(result):
         raise StateShiftEvolutionError(
             f"state shift evolution {name} must not contain duplicates")
     return result
@@ -95,6 +101,7 @@ class StateShiftEvolutionProposal:
     learner_eligible: bool
     rationale: str
     partition_evidence_refs: tuple[str, ...] = ()
+    state_context_digests: tuple[str, ...] = ()
     shadow_only: bool = True
     evaluation_only: bool = True
     version: str = STATE_SHIFT_EVOLUTION_VERSION
@@ -106,7 +113,9 @@ class StateShiftEvolutionProposal:
         if self.evolution_reason not in STATE_SHIFT_EVOLUTION_REASONS:
             raise StateShiftEvolutionError("state shift evolution reason is invalid")
         receipts = _strings(self.trigger_receipt_ids, "trigger_receipt_ids")
-        resolutions = _strings(self.state_resolution_ids, "state_resolution_ids")
+        resolutions = _strings(
+            self.state_resolution_ids, "state_resolution_ids",
+            allow_duplicates=True)
         transitions = _strings(self.transition_ids, "transition_ids")
         if len(receipts) < 2:
             raise StateShiftEvolutionError(
@@ -124,6 +133,20 @@ class StateShiftEvolutionProposal:
         refs = _strings(self.evidence_refs, "evidence_refs")
         partitions = _strings(
             self.partition_evidence_refs, "partition_evidence_refs", allow_empty=True)
+        contexts = _strings(
+            self.state_context_digests, "state_context_digests",
+            allow_empty=True, allow_duplicates=True)
+        if contexts and len(contexts) != len(receipts):
+            raise StateShiftEvolutionError(
+                "state shift context digests must align with every receipt")
+        if contexts:
+            identities = tuple(zip(resolutions, contexts))
+            if len(set(identities)) != len(identities):
+                raise StateShiftEvolutionError(
+                    "state shift evolution state-context identities must be unique")
+        elif len(set(resolutions)) != len(resolutions):
+            raise StateShiftEvolutionError(
+                "legacy state shift evolution resolutions must be unique")
         if type(self.learner_eligible) is not bool:
             raise StateShiftEvolutionError("state shift evolution learner_eligible must be boolean")
         if type(self.shadow_only) is not bool or self.shadow_only is not True:
@@ -161,10 +184,11 @@ class StateShiftEvolutionProposal:
         object.__setattr__(self, "historical_memory_outcomes", historical)
         object.__setattr__(self, "evidence_refs", refs)
         object.__setattr__(self, "partition_evidence_refs", partitions)
+        object.__setattr__(self, "state_context_digests", contexts)
         object.__setattr__(self, "rationale", rationale)
 
     def to_dict(self) -> dict:
-        return {
+        payload = {
             "version": self.version,
             "knowledge_object_id": self.knowledge_object_id,
             "operation": self.operation,
@@ -182,6 +206,9 @@ class StateShiftEvolutionProposal:
             "shadow_only": self.shadow_only,
             "evaluation_only": self.evaluation_only,
         }
+        if self.state_context_digests:
+            payload["state_context_digests"] = list(self.state_context_digests)
+        return payload
 
     @property
     def proposal_digest(self) -> str:
@@ -195,7 +222,9 @@ class StateShiftEvolutionProposal:
     def from_dict(cls, payload: object) -> "StateShiftEvolutionProposal":
         if not isinstance(payload, Mapping):
             raise StateShiftEvolutionError("state shift evolution proposal must be an object")
-        required = set(cls.__dataclass_fields__) - {"version"}
+        required = set(cls.__dataclass_fields__) - {
+            "version", "state_context_digests",
+        }
         if not required <= set(payload):
             raise StateShiftEvolutionError(
                 "state shift evolution proposal is missing fields")
@@ -213,6 +242,7 @@ class StateShiftEvolutionProposal:
             learner_eligible=payload["learner_eligible"],
             rationale=payload["rationale"],
             partition_evidence_refs=tuple(payload.get("partition_evidence_refs", ())),
+            state_context_digests=tuple(payload.get("state_context_digests", ())),
             shadow_only=payload["shadow_only"],
             evaluation_only=payload["evaluation_only"],
             version=payload.get("version", STATE_SHIFT_EVOLUTION_VERSION),
@@ -265,8 +295,24 @@ def propose_repeated_state_shift(
         raise StateShiftEvolutionError("state shift evolution requires non-transferable shifts")
     if len({item.receipt_id for item in receipts}) != len(receipts):
         raise StateShiftEvolutionError("state shift evolution receipts must be unique")
-    if len({item.current_resolution_id for item in receipts}) != len(receipts):
-        raise StateShiftEvolutionError("state shift evolution resolutions must be unique")
+    raw_contexts = tuple(item.current_context_digest for item in receipts)
+    if any(item is None for item in raw_contexts):
+        if not all(item is None for item in raw_contexts):
+            raise StateShiftEvolutionError(
+                "state shift evolution cannot mix legacy and context-bound receipts")
+        context_digests: tuple[str, ...] = ()
+        if len({item.current_resolution_id for item in receipts}) != len(receipts):
+            raise StateShiftEvolutionError(
+                "legacy state shift evolution resolutions must be unique")
+    else:
+        context_digests = tuple(str(item) for item in raw_contexts)
+        identities = {
+            (receipt.current_resolution_id, context)
+            for receipt, context in zip(receipts, context_digests)
+        }
+        if len(identities) != len(receipts):
+            raise StateShiftEvolutionError(
+                "state shift evolution state-context identities must be unique")
     ids = _strings(transition_ids, "transition_ids")
     if len(ids) != len(receipts):
         raise StateShiftEvolutionError("state shift evolution transition IDs must align")
@@ -331,6 +377,7 @@ def propose_repeated_state_shift(
         no_memory_outcomes=no_memory, historical_memory_outcomes=historical,
         evidence_refs=refs, learner_eligible=learner_eligible,
         rationale=rationale, partition_evidence_refs=partitions,
+        state_context_digests=context_digests,
     )
 
 

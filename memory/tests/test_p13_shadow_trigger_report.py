@@ -12,6 +12,14 @@ from scripts.build_p13_shadow_trigger_report import (
     P13ShadowTriggerReportError,
     build_p13_shadow_trigger_report,
 )
+from scripts.build_p13_state_shift_admission_report import (
+    P13StateShiftAdmissionReportError,
+    build_p13_state_shift_admission_report,
+)
+from scripts.build_p13_state_shift_proposal_report import (
+    P13StateShiftProposalReportError,
+    build_p13_state_shift_proposal_report,
+)
 from scripts.build_p13_state_shift_reason_bundle import (
     P13StateShiftReasonBundleError,
     build_p13_state_shift_reason_bundle,
@@ -49,10 +57,14 @@ def _routing(case_id: str) -> MemoryRoutingDecision:
 
 
 def _state_shift_routing(case_id: str) -> MemoryRoutingDecision:
+    context_digest = "sha256:" + hashlib.sha256(
+        stable_dumps({"case_id": case_id, "constraint_regime": "u50"}).encode()
+    ).hexdigest()
     payload = {
-        "version": "state-shift-v0.1",
+        "version": "state-shift-v0.2",
         "current_resolution_id": f"state:{case_id}",
-        "knowledge_object_id": f"knowledge:{case_id}",
+        "current_context_digest": context_digest,
+        "knowledge_object_id": "knowledge:shared@1",
         "support_envelope_digest": "sha256:" + "e" * 64,
         "structural_shift": 1.0, "mechanism_shift": 0.0,
         "flow_shift": 0.0, "constraint_shift": 0.0,
@@ -146,9 +158,15 @@ def _write_state_shift_inputs(tmp_path):
                                        "receipt_digest": cohort.receipt_digest}))
     manifest_path = tmp_path / "state-shift-manifest.json"
     manifest_path.write_text(json.dumps({
+        "version": "p13-learner-partition-v1",
         "campaign_id": cohort.campaign_id, "learner_eligible": True,
         "cases": [{"case_id": case_id, "dataset_split": "training",
-                   "role": "training"} for case_id in sorted(cases)]}))
+                   "role": "training", "learner_eligible": True}
+                  for case_id in sorted(cases)],
+        "evaluation_only": True, "canonical_memory_mutation": "none",
+        "production_runtime_imported": False,
+        "memory_docs_submitted": False,
+    }))
     route_path = tmp_path / "state-shift-routes.json"
     route_path.write_text(json.dumps({
         case_id: {**route.to_dict(), "decision_digest": route.decision_digest}
@@ -178,7 +196,7 @@ def _write_state_shift_audit(tmp_path, cohort_path, route_path):
         for case_id, payload in json.loads(route_path.read_text()).items()
     }
     cases = []
-    for case_id, paired in sorted(cohort.case_receipts.items()):
+    for index, (case_id, paired) in enumerate(sorted(cohort.case_receipts.items())):
         route = routes[case_id]
         shift = StateShiftReceipt.from_dict(route.state_shift_receipt)
         preregistered = derive_state_shift_reason(
@@ -187,6 +205,9 @@ def _write_state_shift_audit(tmp_path, cohort_path, route_path):
         cases.append({
             "case_id": case_id,
             "lineage_id": paired.lineage_id,
+            "flow_config_observation": {
+                "values": {"DESIGN_NAME": f"design-{index}"},
+            },
             "admitted_to_state_shift_bucket": True,
             "state_shift": shift.to_dict(),
             "routing": route.to_dict(),
@@ -197,13 +218,28 @@ def _write_state_shift_audit(tmp_path, cohort_path, route_path):
             },
         })
     audit = tmp_path / "state-shift-preregistration-audit.json"
-    audit.write_text(json.dumps({
+    payload = {
         "version": "test-state-shift-audit-v1",
         "execution_started": False,
         "promotion_attempted": False,
         "production_database_writes": False,
+        "parent_replay": {
+            "knowledge": {"knowledge_id": "knowledge:shared", "version": 1},
+            "pairs": [{
+                "lineage_id": f"flow-v2:design-{index}",
+                "treatment_transition_id": f"transition-treatment-{index}",
+                "validity_status": "VALID_CONTROLLED_PAIR",
+                "evidence_level": "L2_CONTROLLED_INTERVENTION",
+                "outcome_delta": {
+                    "treatment": {"outcome": "PASS", "verdict": "PASS"},
+                },
+            } for index in range(2)],
+        },
         "cases": cases,
-    }))
+    }
+    payload["audit_digest"] = "sha256:" + hashlib.sha256(
+        stable_dumps(payload).encode()).hexdigest()
+    audit.write_text(json.dumps(payload))
     return audit
 
 
@@ -301,6 +337,101 @@ def test_typed_state_shift_bundle_rebinds_preregistered_detector_receipts(tmp_pa
     assert report["triggered_count"] == 2
     assert report["evolution_reasons"]["bundle_digest"] == bundle["bundle_digest"]
     assert all(item["triggered"] for item in report["triggers"])
+
+
+def test_state_shift_admission_report_replays_all_reason_specific_gates(tmp_path):
+    cohort, manifest, routes, _ = _write_state_shift_inputs(tmp_path)
+    audit = _write_state_shift_audit(tmp_path, cohort, routes)
+    bundle_path = tmp_path / "typed-state-shift-reasons.json"
+    build_p13_state_shift_reason_bundle(cohort, audit, output=bundle_path)
+    trigger_path = tmp_path / "typed-trigger-report.json"
+    build_p13_shadow_trigger_report(
+        cohort, manifest, routing_path=routes,
+        typed_reason_bundle_path=bundle_path, output=trigger_path)
+    report = build_p13_state_shift_admission_report(
+        cohort, audit, bundle_path, routes, manifest, trigger_path,
+        output=tmp_path / "admission-report.json")
+    assert report["p13_admission_eligible"] is True
+    assert report["admitted_count"] == report["case_count"] == 2
+    assert all(item["admitted"] for item in report["admissions"].values())
+    assert report["mutation_plan_present"] is False
+    assert report["shadow_update_attempted"] is False
+    assert report["canonical_memory_mutation"] == "none"
+    assert report["production_runtime_imported"] is False
+
+
+def test_state_shift_admission_report_rejects_partition_drift(tmp_path):
+    cohort, manifest, routes, _ = _write_state_shift_inputs(tmp_path)
+    audit = _write_state_shift_audit(tmp_path, cohort, routes)
+    bundle_path = tmp_path / "typed-state-shift-reasons.json"
+    build_p13_state_shift_reason_bundle(cohort, audit, output=bundle_path)
+    trigger_path = tmp_path / "typed-trigger-report.json"
+    build_p13_shadow_trigger_report(
+        cohort, manifest, routing_path=routes,
+        typed_reason_bundle_path=bundle_path, output=trigger_path)
+    partition = json.loads(manifest.read_text())
+    partition["tampered_after_trigger"] = True
+    manifest.write_text(json.dumps(partition))
+    with pytest.raises(P13StateShiftAdmissionReportError,
+                       match="input file binding mismatch"):
+        build_p13_state_shift_admission_report(
+            cohort, audit, bundle_path, routes, manifest, trigger_path,
+            output=tmp_path / "admission-report.json")
+
+
+def test_state_shift_proposal_replays_admitted_orfs_evidence(tmp_path):
+    cohort, manifest, routes, _ = _write_state_shift_inputs(tmp_path)
+    audit = _write_state_shift_audit(tmp_path, cohort, routes)
+    bundle_path = tmp_path / "typed-state-shift-reasons.json"
+    build_p13_state_shift_reason_bundle(cohort, audit, output=bundle_path)
+    trigger_path = tmp_path / "typed-trigger-report.json"
+    build_p13_shadow_trigger_report(
+        cohort, manifest, routing_path=routes,
+        typed_reason_bundle_path=bundle_path, output=trigger_path)
+    admission_path = tmp_path / "admission-report.json"
+    build_p13_state_shift_admission_report(
+        cohort, audit, bundle_path, routes, manifest, trigger_path,
+        output=admission_path)
+
+    report = build_p13_state_shift_proposal_report(
+        admission_path, output=tmp_path / "proposal-report.json")
+    assert report["proposal_eligible"] is True
+    assert report["proposal"]["operation"] == "REVISE"
+    assert report["proposal"]["evolution_reason"] == (
+        "SUPPORT_ENVELOPE_EXPANSION")
+    assert len(report["proposal"]["state_context_digests"]) == 2
+    assert report["localized_update_plan_present"] is False
+    assert report["anti_forgetting_present"] is False
+    assert report["shadow_update_attempted"] is False
+    assert report["canonical_memory_mutation"] == "none"
+    assert report["production_runtime_imported"] is False
+
+
+def test_state_shift_proposal_rejects_admission_input_drift(tmp_path):
+    cohort, manifest, routes, _ = _write_state_shift_inputs(tmp_path)
+    audit = _write_state_shift_audit(tmp_path, cohort, routes)
+    bundle_path = tmp_path / "typed-state-shift-reasons.json"
+    build_p13_state_shift_reason_bundle(cohort, audit, output=bundle_path)
+    trigger_path = tmp_path / "typed-trigger-report.json"
+    build_p13_shadow_trigger_report(
+        cohort, manifest, routing_path=routes,
+        typed_reason_bundle_path=bundle_path, output=trigger_path)
+    admission_path = tmp_path / "admission-report.json"
+    build_p13_state_shift_admission_report(
+        cohort, audit, bundle_path, routes, manifest, trigger_path,
+        output=admission_path)
+
+    audit_payload = json.loads(audit.read_text())
+    audit_payload["parent_replay"]["pairs"][0][
+        "treatment_transition_id"] = "transition-drifted"
+    audit_payload.pop("audit_digest")
+    audit_payload["audit_digest"] = "sha256:" + hashlib.sha256(
+        stable_dumps(audit_payload).encode()).hexdigest()
+    audit.write_text(json.dumps(audit_payload))
+    with pytest.raises(P13StateShiftProposalReportError,
+                       match="admission input preregistration_audit digest mismatch"):
+        build_p13_state_shift_proposal_report(
+            admission_path, output=tmp_path / "proposal-report.json")
 
 
 def test_typed_state_shift_bundle_rejects_preregistration_drift(tmp_path):

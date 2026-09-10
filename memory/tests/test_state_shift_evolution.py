@@ -58,6 +58,30 @@ def _receipts():
                                      ("resolution-b", "asap7")))
 
 
+def _shared_resolution_receipts(*, distinct_contexts: bool):
+    knowledge = _knowledge()
+    envelope = build_support_envelope(knowledge, (), ({
+        "transition_id": "support-transition", "split": "training",
+        "learner_eligible": True, "verdict": "PASS", "oracle_complete": True,
+        "platform": "sky130",
+    },))
+    contexts = (
+        {"mechanism_family": "HANDSHAKE_COMPLETION",
+         "compatibility_profile": "rtl.fsm.single_guard.v1",
+         "platform": "asap7", "constraint_regime": {"utilization": 50}},
+        {"mechanism_family": "HANDSHAKE_COMPLETION",
+         "compatibility_profile": "rtl.fsm.single_guard.v1",
+         "platform": "asap7", "constraint_regime": {
+             "utilization": 55 if distinct_contexts else 50}},
+    )
+    return tuple(
+        evaluate_state_shift(
+            context, {"resolution_id": "shared-resolution"},
+            knowledge, envelope, evidence_refs=(f"observation-{index}",))
+        for index, context in enumerate(contexts)
+    )
+
+
 def test_repeated_state_shift_proposes_specialization_without_mutation():
     receipts = _receipts()
     proposal = propose_repeated_state_shift(
@@ -108,6 +132,36 @@ def test_repeated_safe_shift_proposes_support_envelope_revision():
     )
     assert proposal.operation == "REVISE"
     assert proposal.evolution_reason == "SUPPORT_ENVELOPE_EXPANSION"
+
+
+def test_v2_context_identity_allows_shared_memory_resolution():
+    receipts = _shared_resolution_receipts(distinct_contexts=True)
+    proposal = propose_repeated_state_shift(
+        receipts, knowledge_object_id=receipts[0].knowledge_object_id,
+        transition_ids=("transition-a", "transition-b"),
+        no_memory_outcomes=("PASS", "PASS"),
+        historical_memory_outcomes=("PASS", "PASS"),
+        evidence_refs=("transition-a", "transition-b"),
+    )
+    assert proposal.operation == "REVISE"
+    assert len(set(proposal.state_resolution_ids)) == 1
+    assert len(set(proposal.state_context_digests)) == 2
+    replay = StateShiftEvolutionProposal.from_dict({
+        **proposal.to_dict(), "proposal_digest": proposal.proposal_digest})
+    assert replay == proposal
+
+
+def test_shared_resolution_and_context_are_not_independent_shifts():
+    receipts = _shared_resolution_receipts(distinct_contexts=False)
+    with pytest.raises(StateShiftEvolutionError,
+                       match="state-context identities must be unique"):
+        propose_repeated_state_shift(
+            receipts, knowledge_object_id=receipts[0].knowledge_object_id,
+            transition_ids=("transition-a", "transition-b"),
+            no_memory_outcomes=("PASS", "PASS"),
+            historical_memory_outcomes=("PASS", "PASS"),
+            evidence_refs=("transition-a", "transition-b"),
+        )
 
 
 def test_unsafe_current_execution_is_retained_and_split_is_explicit():

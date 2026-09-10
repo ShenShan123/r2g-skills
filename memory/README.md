@@ -5035,3 +5035,29 @@ reason-specific admission、repeated StateShift proposal、anti-forgetting 和 i
 shadow revision 尚未执行，canonical memory、lifecycle、promotion、production runtime
 均未改变。所有 campaign artifact 继续留在仓库外。当前完整回归为
 `1246 passed, 2 skipped`；`memory/docs/` 仍由 `.gitignore` 排除且不提交。
+
+### 2026-09-10 Revision3 ORFS StateShift admission and proposal replay
+
+在上述 first eligible trigger 之后，新增两个只读、一次性输出的 evidence builder。
+`build_p13_state_shift_admission_report.py` 从 cohort、执行前 preregistration、typed
+reason bundle、冻结 routing、learner partition 与 trigger report 的文件摘要和内部
+receipt 重新执行 reason-specific admission；结果为 2/2 admitted，report digest 为
+`sha256:f37400e2d20616ea60df2cbb0d473551c8e21a1057a696c5614238c81ae29ff8`。
+`build_p13_state_shift_proposal_report.py` 再从 admission 的 content-addressed input index
+回放每个 case 的 StateShift、paired ORFS outcome、trigger/admission，以及原始 L2 parent
+treatment transition，生成 `REVISE/SUPPORT_ENVELOPE_EXPANSION` proposal。proposal digest
+为 `sha256:9634ba22ff2a0592d25054a6e910bdb426bb0823c012a9d4a273aca7ab25d503`，
+report digest 为
+`sha256:9c2bebf34a147ec40047e6b310150967639269e3d79f62953e714332ec5d8699`。
+
+本轮正式暴露并修复了 v0.2 identity 边界：mux32/parity64 的 current context 不同，
+但可合法解析为相同 memory resolution。因此 v0.2 proposal 以
+`(current_resolution_id, current_context_digest)` 二元组判定独立 StateShift；旧 v0.1
+receipt 仍要求 resolution ID 单独唯一，且旧 proposal serialization/digest 保持兼容。
+当前 proposal 仍明确记录 `localized_update_plan_present=false`、
+`anti_forgetting_present=false`、`shadow_update_attempted=false`、
+`canonical_memory_mutation=none` 与 `production_runtime_imported=false`。下一阶段才可构建
+localized plan、四项 anti-forgetting witness，并在 disposable staging 执行 shadow
+revision；不得直接修改 canonical memory 或接入 production runtime。所有 ORFS artifact
+继续位于仓库外。当前完整回归为 `1252 passed, 2 skipped`；`memory/docs/` 继续由
+`.gitignore` 排除且不提交。
