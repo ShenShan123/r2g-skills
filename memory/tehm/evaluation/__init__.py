@@ -22,8 +22,13 @@ from .rtl_cohort import (
     execute_rtl_paired_cohort,
 )
 from .orfs_candidate_oracle import (
-    ORFS_CANDIDATE_ORACLE_VERSION, OrfsCandidateOracle,
+    ORFS_CANDIDATE_ORACLE_VERSION, ORFS_PHYSICAL_OBSERVATION_VERSION,
+    OrfsCandidateOracle,
     OrfsCandidateOracleError, execute_orfs_candidate,
+)
+from .orfs_paired_utility import (
+    ORFS_PAIRED_UTILITY_VERSION, OrfsPairedUtilityError,
+    apply_orfs_paired_utility_contract, replay_orfs_paired_utility_receipt,
 )
 from .orfs_cohort import (
     ORFS_COHORT_VERSION, OrfsCohortError, OrfsPairedCohortReceipt,
@@ -108,10 +113,14 @@ __all__ = [
     "RtlCandidateOracleError", "execute_rtl_candidate",
     "RTL_COHORT_VERSION", "RtlCohortError", "RtlPairedCohortReceipt",
     "execute_rtl_paired_cohort",
-    "ORFS_CANDIDATE_ORACLE_VERSION", "OrfsCandidateOracle",
+    "ORFS_CANDIDATE_ORACLE_VERSION", "ORFS_PHYSICAL_OBSERVATION_VERSION",
+    "OrfsCandidateOracle",
     "OrfsCandidateOracleError", "execute_orfs_candidate",
     "ORFS_COHORT_VERSION", "OrfsCohortError", "OrfsPairedCohortReceipt",
     "execute_orfs_paired_cohort",
+    "ORFS_PAIRED_UTILITY_VERSION", "OrfsPairedUtilityError",
+    "apply_orfs_paired_utility_contract",
+    "replay_orfs_paired_utility_receipt",
     "PAIRED_METRICS_VERSION", "PairedCohortMetrics", "PairedMetricsError",
     "summarize_paired_cohort",
     "NO_SKILL_CALIBRATION_VERSION", "CALIBRATION_DECISIONS",

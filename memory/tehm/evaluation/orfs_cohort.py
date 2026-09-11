@@ -24,6 +24,7 @@ from .orfs_candidate_oracle import (
     OrfsCandidateOracle, _source_binding, _source_content_binding, _source_inputs,
     _verify_external_source_inputs,
 )
+from .orfs_paired_utility import apply_orfs_paired_utility_contract
 
 
 ORFS_COHORT_VERSION = "orfs-p12-cohort-v0.1"
@@ -282,7 +283,8 @@ def execute_orfs_paired_cohort(
         budget: int | Mapping = 3,
         toolchain_digest: str | None = None,
         oracle_digest: str | None = None,
-        min_lineages: int = 1) -> OrfsPairedCohortReceipt:
+        min_lineages: int = 1,
+        utility_contract: Mapping | None = None) -> OrfsPairedCohortReceipt:
     """Execute a fixed-environment, source-disjoint ORFS P12 cohort."""
     campaign_id = _text(campaign_id, "campaign_id")
     campaign_manifest_digest = _sha256_text(
@@ -375,6 +377,9 @@ def execute_orfs_paired_cohort(
             lineage_id=case.get("lineage_id"),
             routing_receipt_id=case.get("routing_receipt_id"),
             routing_decision=case.get("routing_decision"))
+        if utility_contract is not None:
+            bundle = apply_orfs_paired_utility_contract(
+                bundle, arms, contract=utility_contract)
         if (bundle.toolchain_digest != expected_toolchain or
                 bundle.oracle_digest != expected_oracle):
             raise OrfsCohortError("ORFS cohort execution digest drift")

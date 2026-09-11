@@ -23,6 +23,9 @@ if str(ROOT) not in sys.path:
 from contracts import MemoryRoutingDecision  # noqa: E402
 from tehm.evaluation import P12_ARMS, OrfsCandidateOracle, execute_orfs_paired_cohort  # noqa: E402
 from tehm.ids import stable_dumps  # noqa: E402
+from tehm.physical.utility_contracts import (  # noqa: E402
+    known_utility_contracts, utility_contract_digest,
+)
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate  # noqa: E402
 
 
@@ -92,6 +95,26 @@ def _manifest(path: Path) -> tuple[dict, list[dict], int, int]:
         toolchain_digest = _digest_pin(toolchain_digest, "toolchain_digest")
     if oracle_digest is not None:
         oracle_digest = _digest_pin(oracle_digest, "oracle_digest")
+    utility_contract_id = payload.get("utility_contract_id")
+    utility_contract_digest_pin = payload.get("utility_contract_digest")
+    if ((utility_contract_id is None) !=
+            (utility_contract_digest_pin is None)):
+        raise P12OrfsRunError(
+            "utility_contract_id and utility_contract_digest must be supplied together")
+    if utility_contract_id is not None:
+        utility_contract_id = _text(
+            utility_contract_id, "utility_contract_id")
+        catalog = known_utility_contracts()
+        if utility_contract_id not in catalog:
+            raise P12OrfsRunError("utility_contract_id is not registered")
+        utility_contract_digest_pin = _digest_pin(
+            utility_contract_digest_pin, "utility_contract_digest")
+        actual = "sha256:" + utility_contract_digest(
+            catalog[utility_contract_id]())
+        if utility_contract_digest_pin != actual:
+            raise P12OrfsRunError("utility contract digest mismatch")
+        payload["utility_contract_id"] = utility_contract_id
+        payload["utility_contract_digest"] = utility_contract_digest_pin
     cases: list[dict] = []
     seen: set[str] = set()
     for raw in raw_cases:
@@ -227,6 +250,10 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
         import os
         os.environ["ORFS_TIMEOUT"] = str(timeout)
     manifest_digest = _digest(payload)
+    utility_contract = None
+    if payload.get("utility_contract_id") is not None:
+        utility_contract = known_utility_contracts()[
+            payload["utility_contract_id"]]()
     try:
         cohort = execute_orfs_paired_cohort(
             cases, arm_candidates, campaign_id=campaign_id,
@@ -236,7 +263,8 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
             oracle=OrfsCandidateOracle(), budget=budget,
             toolchain_digest=payload.get("toolchain_digest"),
             oracle_digest=payload.get("oracle_digest"),
-            min_lineages=min_lineages)
+            min_lineages=min_lineages,
+            utility_contract=utility_contract)
     except (TypeError, ValueError, OSError) as exc:
         raise P12OrfsRunError(str(exc)) from exc
     receipt = {**cohort.to_dict(), "receipt_digest": cohort.receipt_digest}
@@ -265,6 +293,8 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
             for case_id, decision in sorted(routing.items())
         }),
         "routing_decisions_ref": routing_meta,
+        "utility_contract_id": payload.get("utility_contract_id"),
+        "utility_contract_digest": payload.get("utility_contract_digest"),
         "cohort_receipt": receipt,
         "cohort_receipt_digest": cohort.receipt_digest,
         "outcome_counts": cohort.outcome_counts,

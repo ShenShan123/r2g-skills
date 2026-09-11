@@ -1,0 +1,47 @@
+{
+  "version": "typed-utility-contract-v1",
+  "contract_id": "P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1",
+  "status": "PRE_REGISTERED_FOR_R3_8_SOURCE_DISJOINT_COHORT",
+  "action_signature": {
+    "domain": "flow.CONFIG_DELTA",
+    "transformation_family": "DENSITY_RELIEF",
+    "config_edits": {
+      "CORE_UTILIZATION": "40"
+    },
+    "operation_point": "observed->40"
+  },
+  "primary_objective": {
+    "wns_delta_ns": {
+      "minimum": 0.0
+    }
+  },
+  "hard_constraints": {
+    "route": "PASS",
+    "drc": "PASS",
+    "lvs": "PASS",
+    "timing": "PASS",
+    "tns_delta_ns": {
+      "minimum": 0.0
+    }
+  },
+  "resource_budgets": {
+    "area_delta_percent": {
+      "maximum": 0.0
+    },
+    "power_delta_percent": {
+      "maximum": 0.0
+    }
+  },
+  "runtime_policy": {
+    "interval_must_fit_contract": true,
+    "ood_action": "ABSTAIN",
+    "missing_evidence_action": "ABSTAIN"
+  },
+  "authority": {
+    "raw_pareto_gate_unchanged": true,
+    "oracle_scope": "p13_fixed_constraint_counterfactual",
+    "strict_signoff_claim": false,
+    "canonical_memory_mutation": "none",
+    "promotion_eligible": false
+  }
+}

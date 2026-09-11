@@ -30,7 +30,8 @@ from tehm.lifecycle.orfs_trial import (
 )
 
 
-ORFS_CANDIDATE_ORACLE_VERSION = "orfs-candidate-oracle-v0.1"
+ORFS_CANDIDATE_ORACLE_VERSION = "orfs-candidate-oracle-v0.2"
+ORFS_PHYSICAL_OBSERVATION_VERSION = "orfs-p12-physical-observation-v1"
 _GOLD_KEYS = frozenset({"fix", "gold_patch", "repaired_rtl", "heldout_answer"})
 _IGNORED_PROJECT_OUTPUTS = (
     "backend", "reports", "drc", "lvs", "rcx", ".orfs-work",
@@ -354,6 +355,28 @@ def _sandbox_name(case: Mapping, candidate: StructuredRepairCandidate | None) ->
     return "project_tehm_" + digest
 
 
+def _physical_observation(reports: Mapping) -> dict | None:
+    """Bind the exact PPA report used by a later paired utility oracle.
+
+    This is only a single-arm observation.  It does not classify utility or
+    create regressions; those are counterfactual properties and are derived
+    only after the no-memory and memory receipts both exist.
+    """
+    ppa = reports.get("ppa")
+    if not isinstance(ppa, Mapping) or not ppa:
+        return None
+    payload = {
+        "version": ORFS_PHYSICAL_OBSERVATION_VERSION,
+        "ppa": dict(ppa),
+        "evaluation_only": True,
+        "canonical_memory_mutation": "none",
+        "promotion_eligible": False,
+    }
+    payload["report_digest"] = _digest(payload["ppa"])
+    payload["observation_digest"] = _digest(payload)
+    return payload
+
+
 def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
                      source_digest: str, config_before: str,
                      source_content_digest: str, config_after: str,
@@ -406,6 +429,7 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
             f"ORFS_{name.upper()}_PASS": value
             for name, value in counterfactual["checks"].items()
         })
+    physical_observation = _physical_observation(reports)
     return {
         "compile_result": compile_result,
         "functional_result": functional_result,
@@ -435,6 +459,8 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
                 "reports": reports, "success": arm.get("success") is True,
             }),
             "infrastructure_failure": flow_rc in {124, 127, 137},
+            **({"physical_observation": physical_observation}
+               if physical_observation is not None else {}),
             **({"counterfactual_oracle": counterfactual}
                if counterfactual is not None else {}),
         },
@@ -594,6 +620,7 @@ class OrfsCandidateOracle:
 
 
 __all__ = [
-    "ORFS_CANDIDATE_ORACLE_VERSION", "OrfsCandidateOracleError",
+    "ORFS_CANDIDATE_ORACLE_VERSION", "ORFS_PHYSICAL_OBSERVATION_VERSION",
+    "OrfsCandidateOracleError",
     "OrfsCandidateOracle", "execute_orfs_candidate",
 ]

@@ -555,6 +555,19 @@ def derive_memory_interference_reason(
                bool(memory.created_regressions))
     if not harmful:
         return None
+    if (memory.created_regressions and
+            isinstance(memory.metadata.get("paired_utility"), Mapping)):
+        # ORFS physical harm is a paired property, not an opaque caller label.
+        # Recompute its contract observation and regression projection before
+        # allowing it to become an evolution reason.
+        from tehm.evaluation.orfs_paired_utility import (
+            OrfsPairedUtilityError, replay_orfs_paired_utility_receipt,
+        )
+        try:
+            replay_orfs_paired_utility_receipt(baseline, memory)
+        except OrfsPairedUtilityError as exc:
+            raise EvolutionReasonDerivationError(
+                f"memory interference paired utility replay failed: {exc}") from exc
     if type(paired.lineage_id) is not str or not paired.lineage_id.strip():
         raise EvolutionReasonDerivationError(
             "memory interference requires explicit lineage_id")

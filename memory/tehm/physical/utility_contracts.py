@@ -29,6 +29,8 @@ TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID = "TIMING_RELIEF_BUDGETED_V2_50_TO_45"
 DENSITY_RELIEF_NONREGRESSION_32_ID = "DENSITY_RELIEF_NONREGRESSION_32"
 ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005_ID = (
     "ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005")
+P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1_ID = (
+    "P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1")
 
 # This is a pre-registered proposal for the next prospective cohort.  It is
 # intentionally not derived or rewritten from a promotion result.  Existing
@@ -160,6 +162,49 @@ _ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005 = {
     },
 }
 
+# R3-8 evaluates whether an otherwise successful, source-bound memory action
+# makes the fixed held-out implementation worse than the no-memory arm.  This
+# contract is deliberately narrower than a production utility contract: it
+# requires the complete P13 fixed-constraint route/DRC/LVS/timing oracle, but
+# does not claim RTL equivalence or strict production signoff.  Zero-tolerance
+# physical non-regression is pre-registered before the source-disjoint cohort;
+# it is never retroactively attached to an older P12 receipt.
+_P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1 = {
+    "version": UTILITY_CONTRACT_VERSION,
+    "contract_id": P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1_ID,
+    "status": "PRE_REGISTERED_FOR_R3_8_SOURCE_DISJOINT_COHORT",
+    "action_signature": {
+        "domain": "flow.CONFIG_DELTA",
+        "transformation_family": "DENSITY_RELIEF",
+        "config_edits": {"CORE_UTILIZATION": "40"},
+        "operation_point": "observed->40",
+    },
+    "primary_objective": {"wns_delta_ns": {"minimum": 0.0}},
+    "hard_constraints": {
+        "route": "PASS",
+        "drc": "PASS",
+        "lvs": "PASS",
+        "timing": "PASS",
+        "tns_delta_ns": {"minimum": 0.0},
+    },
+    "resource_budgets": {
+        "area_delta_percent": {"maximum": 0.0},
+        "power_delta_percent": {"maximum": 0.0},
+    },
+    "runtime_policy": {
+        "interval_must_fit_contract": True,
+        "ood_action": "ABSTAIN",
+        "missing_evidence_action": "ABSTAIN",
+    },
+    "authority": {
+        "raw_pareto_gate_unchanged": True,
+        "oracle_scope": "p13_fixed_constraint_counterfactual",
+        "strict_signoff_claim": False,
+        "canonical_memory_mutation": "none",
+        "promotion_eligible": False,
+    },
+}
+
 
 class UtilityContractError(ValueError):
     """Malformed or internally inconsistent typed utility contract."""
@@ -185,6 +230,12 @@ def routing_capacity_recovery_nonregression_005() -> dict:
     return copy.deepcopy(_ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005)
 
 
+def p12_density_relief_interference_nonregression_v1() -> dict:
+    """Return the pre-registered R3-8 paired physical-harm contract."""
+    return copy.deepcopy(
+        _P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1)
+
+
 def known_utility_contracts() -> dict[str, Callable[[], dict]]:
     """Return the immutable contract catalog used by manifest validators."""
     return {
@@ -193,6 +244,8 @@ def known_utility_contracts() -> dict[str, Callable[[], dict]]:
         DENSITY_RELIEF_NONREGRESSION_32_ID: density_relief_nonregression_32,
         ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005_ID:
             routing_capacity_recovery_nonregression_005,
+        P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1_ID:
+            p12_density_relief_interference_nonregression_v1,
     }
 
 
@@ -650,6 +703,7 @@ def _unique(values) -> list[str]:
 
 __all__ = [
     "DENSITY_RELIEF_NONREGRESSION_32_ID",
+    "P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1_ID",
     "ROUTING_CAPACITY_RECOVERY_NONREGRESSION_005_ID",
     "TIMING_RELIEF_BUDGETED_V1_ID", "TIMING_RELIEF_BUDGETED_V2_50_TO_45_ID",
     "UTILITY_CONTRACT_VERSION",
@@ -658,6 +712,7 @@ __all__ = [
     "select_contract_proposal",
     "density_relief_nonregression_32", "timing_relief_budgeted_v1",
     "routing_capacity_recovery_nonregression_005",
+    "p12_density_relief_interference_nonregression_v1",
     "timing_relief_budgeted_v2_50_to_45",
     "utility_contract_digest", "validate_utility_contract",
 ]

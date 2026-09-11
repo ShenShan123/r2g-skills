@@ -12,6 +12,7 @@ from tehm.physical.utility_contracts import (
     density_relief_nonregression_32,
     evaluate_observed_contract,
     known_utility_contracts,
+    p12_density_relief_interference_nonregression_v1,
     routing_capacity_recovery_nonregression_005,
     select_contract_proposal,
     timing_relief_budgeted_v1,
@@ -122,6 +123,27 @@ def test_routing_contract_is_catalogued_and_binds_default_to_005_action():
     artifact = json.loads((Path(__file__).parents[1] / "evaluation" /
                            "routing_capacity_recovery_nonregression_005_contract.json").read_text())
     assert artifact == contract
+
+
+def test_r3_8_paired_contract_is_narrow_and_pre_registered():
+    contract = p12_density_relief_interference_nonregression_v1()
+    validate_utility_contract(contract)
+    assert contract["contract_id"] in known_utility_contracts()
+    assert contract["status"] == (
+        "PRE_REGISTERED_FOR_R3_8_SOURCE_DISJOINT_COHORT")
+    assert "equivalence" not in contract["hard_constraints"]
+    assert contract["authority"]["strict_signoff_claim"] is False
+    artifact = json.loads((Path(__file__).parents[1] / "evaluation" /
+                           "p12_density_relief_interference_nonregression_v1_contract.json").read_text())
+    assert artifact == contract
+    result = evaluate_observed_contract(
+        contract=contract, action=contract_action(contract),
+        before_ppa=_ppa(wns=0.1, area=100.0, power=1.0),
+        after_ppa=_ppa(wns=0.2, area=101.0, power=0.9),
+        checks={"route": "PASS", "drc": "PASS", "lvs": "PASS",
+                "timing": "PASS"})
+    assert result["status"] == "FAIL"
+    assert result["failures"] == ["area_budget_exceeded"]
 
 
 def test_routing_contract_accepts_neutral_nonregression_observation():

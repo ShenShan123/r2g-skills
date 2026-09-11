@@ -5226,3 +5226,32 @@ controlled pair 产生 replicated causal path、validated Knowledge authority �
 该 candidate 对 challenge 形成真实 interference 后，才允许做 SPECIALIZE、negative
 applicability、实际 route veto 与上述 Delta-M harm-return 归因。不得继续复用旧手写 route
 或 action-mismatched candidate。所有新旧 artifact 都留在仓库外，`memory/docs/` 不提交。
+
+### 2026-09-11 Revision3 R3-8 paired physical-harm oracle
+
+R3-8 的下一处真实缺口不是 `derive_memory_interference_reason()`：该 detector 已能把完整
+paired receipt 中的 `created_regressions` 识别为 harm；缺口是 ORFS 单臂 adapter 原来始终
+返回空 regression，因此两个 flow 都 PASS 时的 PPA 退化无法进入 typed reason。现在
+`orfs_candidate_oracle` 只负责在每条单臂 receipt 中内容寻址地绑定原始 `ppa.json`，新增的
+`orfs_paired_utility` 则在四臂都执行后，以 `NO_MEMORY` 为唯一 baseline 做成对比较；单臂
+绝不自行推断 counterfactual utility。
+
+新的
+`evaluation/p12_density_relief_interference_nonregression_v1_contract.json` 在 prospective
+cohort 之前冻结 CORE40 的物理 non-regression 约束。它要求 P13 fixed-constraint oracle 的
+route/DRC/LVS/timing 全部完整，并对 WNS、TNS、面积和功耗执行零退化预算；它明确不声称
+RTL equivalence、strict signoff、promotion 或 production authority。P12 manifest 必须同时
+绑定已注册的 contract ID 与 SHA256，缺一、未知 ID 或 digest 漂移都会在 EDA 启动前拒绝。
+只有实际执行了 structured candidate 的 arm 才能得到 paired utility；fallback arm 不会把
+未执行的 memory action 记成 harm。完整 contract FAIL 被转换为内容可重放的
+`utility_contract:<id>:<failure>` regression witness，随后现有 detector 才能自动产生
+`MEMORY_INTERFERENCE`。detector 在接受该 physical regression 前会重新验证 contract、
+两臂 PPA、counterfactual oracle、原始 execution digest 与 regression projection；修改
+utility payload 后只重签外层 paired receipt 也不能绕过 replay。
+
+隔离 RAM 路由预检已确认：在冻结 acquisition replay 下，当前 validated CORE40 Knowledge
+对 source-disjoint GCD query 实际返回 `CONSIDER`，asset selector 选择 evidence-bound Flow
+Asset 并生成 GCD runtime binding。因此下一阶段可以直接冻结 GCD/JPEG 类 source-disjoint
+cohort，通过真实 router/selector/binding 生成 candidate，再运行带上述 contract 的四臂
+ORFS P12；不得从旧 challenge JSON 复制手写 route 或 CORE99 candidate。实现与测试仍只写
+代码/仓库外 evidence，`memory/docs/` 保持未跟踪且不提交。

@@ -8,10 +8,16 @@ from pathlib import Path
 import pytest
 
 from contracts import MemoryRoutingDecision
-from scripts.run_orfs_p12_cohort import P12OrfsRunError, run_p12_orfs_cohort
+from scripts.run_orfs_p12_cohort import (
+    P12OrfsRunError, _manifest, run_p12_orfs_cohort,
+)
 from tehm.evaluation import P12_ARMS, OrfsPairedCohortReceipt
 from tehm.evaluation.orfs_candidate_oracle import _file_sha256, _source_binding, _source_inputs
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate
+from tehm.physical.utility_contracts import (
+    p12_density_relief_interference_nonregression_v1,
+    utility_contract_digest,
+)
 
 
 def _candidate() -> StructuredRepairCandidate:
@@ -202,3 +208,39 @@ def test_manifest_runner_rejects_case_pdk_digest_drift(tmp_path):
     }))
     with pytest.raises(P12OrfsRunError, match="PDK digest drifts"):
         run_p12_orfs_cohort(manifest, output=tmp_path / "report.json")
+
+
+def test_manifest_freezes_registered_paired_utility_contract(tmp_path):
+    case = _fake_case(tmp_path)
+    contract = p12_density_relief_interference_nonregression_v1()
+    payload = {
+        "version": "p12-orfs-cohort-manifest-v1",
+        "campaign_id": "p12-utility-freeze", "candidate_budget": 3,
+        "min_lineages": 1, "platform_digest": case["platform_digest"],
+        "pdk_digest": case["pdk_digest"], "cases": [case],
+        "utility_contract_id": contract["contract_id"],
+        "utility_contract_digest": "sha256:" + utility_contract_digest(contract),
+    }
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(payload, sort_keys=True))
+    checked, _, _, _ = _manifest(manifest)
+    assert checked["utility_contract_id"] == contract["contract_id"]
+    bad = dict(payload)
+    bad["utility_contract_digest"] = "sha256:bad"
+    manifest.write_text(json.dumps(bad, sort_keys=True))
+    with pytest.raises(P12OrfsRunError, match="utility contract digest mismatch"):
+        _manifest(manifest)
+
+
+def test_manifest_rejects_unpaired_utility_contract_fields(tmp_path):
+    case = _fake_case(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({
+        "version": "p12-orfs-cohort-manifest-v1",
+        "campaign_id": "p12-utility-freeze", "candidate_budget": 3,
+        "min_lineages": 1, "platform_digest": case["platform_digest"],
+        "pdk_digest": case["pdk_digest"], "cases": [case],
+        "utility_contract_id": "P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1",
+    }, sort_keys=True))
+    with pytest.raises(P12OrfsRunError, match="must be supplied together"):
+        _manifest(manifest)
