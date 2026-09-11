@@ -141,17 +141,35 @@ def _transition_ids(plan: LocalizedUpdatePlan, evidence: Mapping) -> tuple[str, 
 
 def _verify_training_transitions(conn: sqlite3.Connection,
                                  transition_ids: Sequence[str],
-                                 campaign_id: str) -> None:
-    placeholders = ",".join("?" for _ in transition_ids)
-    rows = conn.execute(
-        f"""SELECT transition_id, split, learner_eligible
-              FROM tehm_dataset_membership
-             WHERE campaign_id=? AND transition_id IN ({placeholders})""",
-        (campaign_id, *transition_ids)).fetchall()
-    by_id = {str(row["transition_id"]): row for row in rows}
-    if len(by_id) != len(set(transition_ids)):
-        raise ShadowUpdateError(
-            "shadow update evidence lacks campaign membership")
+                                 campaign_id: str,
+                                 *,
+                                 campaign_by_transition: Mapping[str, str] | None = None,
+                                 ) -> dict[str, str]:
+    ids = tuple(transition_ids)
+    if campaign_by_transition is None:
+        campaigns = {transition_id: campaign_id for transition_id in ids}
+    else:
+        campaigns = dict(campaign_by_transition)
+        if set(campaigns) != set(ids) or any(
+                type(value) is not str or not value.strip()
+                for value in campaigns.values()):
+            raise ShadowUpdateError(
+                "shadow update transition campaigns must exactly cover evidence")
+        campaigns = {
+            transition_id: value.strip()
+            for transition_id, value in campaigns.items()
+        }
+    by_id = {}
+    for transition_id in ids:
+        row = conn.execute(
+            """SELECT transition_id, split, learner_eligible
+                 FROM tehm_dataset_membership
+                WHERE campaign_id=? AND transition_id=?""",
+            (campaigns[transition_id], transition_id)).fetchone()
+        if row is None:
+            raise ShadowUpdateError(
+                "shadow update evidence lacks campaign membership")
+        by_id[transition_id] = row
     for transition_id in transition_ids:
         row = by_id[transition_id]
         if row["split"] != "training" or row["learner_eligible"] != 1:
@@ -161,6 +179,34 @@ def _verify_training_transitions(conn: sqlite3.Connection,
             require_verified_transition(conn, transition_id)
         except ValueError as exc:
             raise ShadowUpdateError(str(exc)) from exc
+    return campaigns
+
+
+def _transition_campaigns(
+        evidence: Mapping, transition_ids: Sequence[str]) -> dict[str, str] | None:
+    """Decode explicit evidence-origin campaigns for structural revision.
+
+    The plan campaign identifies the evolution decision. Earlier immutable
+    training evidence may belong to a different campaign, but its membership
+    must be supplied explicitly and verified in the source database.
+    """
+    raw = evidence.get("transition_campaigns")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ShadowUpdateError(
+            "shadow update transition_campaigns must be an object")
+    ids = set(transition_ids)
+    if set(raw) != ids:
+        raise ShadowUpdateError(
+            "shadow update transition campaigns must exactly cover evidence")
+    result = {}
+    for transition_id, campaign in raw.items():
+        if type(campaign) is not str or not campaign.strip():
+            raise ShadowUpdateError(
+                "shadow update transition campaign is invalid")
+        result[str(transition_id)] = campaign.strip()
+    return result
 
 
 def _knowledge_claim(value: object, name: str) -> MechanismKnowledge:
@@ -671,11 +717,11 @@ class AppliedShadowUpdateReceipt:
 
 
 def _apply_plan(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
-                evidence: Mapping) -> None:
+                evidence: Mapping) -> dict[str, str]:
     if plan.update_target == "UPDATE_NONE":
         if plan.operation != "RETAIN":
             raise ShadowUpdateError("UPDATE_NONE must remain RETAIN")
-        return
+        return {}
     if plan.update_target not in _MUTATING_TARGETS:
         raise ShadowUpdateError("shadow update target is invalid")
     if plan.operation == "RETAIN":
@@ -686,9 +732,11 @@ def _apply_plan(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
         # crystallization.  They create immutable claim objects and semantic
         # relation edges in staging; no lifecycle/authority row is promoted.
         ids = _transition_ids(plan, evidence)
-        _verify_training_transitions(staging, ids, plan.campaign_id)
+        campaigns = _verify_training_transitions(
+            staging, ids, plan.campaign_id,
+            campaign_by_transition=_transition_campaigns(evidence, ids))
         _apply_knowledge_revision(staging, plan, evidence)
-        return
+        return campaigns
     if plan.update_target in {"UPDATE_CAUSAL_KNOWLEDGE", "UPDATE_RULE"}:
         ids = _transition_ids(plan, evidence)
         _verify_training_transitions(staging, ids, plan.campaign_id)
@@ -702,16 +750,16 @@ def _apply_plan(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
             raise ShadowUpdateError(str(exc)) from exc
         if not report.rules:
             raise ShadowUpdateError("shadow crystallization produced no rule")
-        return
+        return {transition_id: plan.campaign_id for transition_id in ids}
     if plan.update_target == "UPDATE_STATE_RELATION":
         _apply_relation(staging, plan, evidence)
-        return
+        return {}
     if plan.update_target == "UPDATE_ASSET":
         _apply_asset(staging, plan, evidence)
-        return
+        return {}
     if plan.update_target == "UPDATE_CAPABILITY":
         _apply_capability(staging, plan, evidence)
-        return
+        return {}
     raise ShadowUpdateError("unsupported shadow update target")
 
 
@@ -761,7 +809,7 @@ def apply_localized_update_shadow(
                 plan.state_resolution_id != before.resolution_id):
             raise ShadowUpdateError(
                 "shadow update plan state resolution does not match current state")
-        _apply_plan(staging, plan, evidence)
+        training_campaigns = _apply_plan(staging, plan, evidence)
         after = resolve_current_state(staging, scope, mode="shadow", persist=False)
         raw_after = raw_evidence_digest(staging)
         if raw_after != raw_before:
@@ -806,6 +854,8 @@ def apply_localized_update_shadow(
                    if anti_forgetting is not None else {}),
                 **({"p12_shadow_trigger_digest": p12_trigger.receipt_digest}
                    if p12_trigger is not None else {}),
+                **({"training_evidence_campaigns": dict(sorted(
+                    training_campaigns.items()))} if training_campaigns else {}),
             },
         }
         receipt = AppliedShadowUpdateReceipt(

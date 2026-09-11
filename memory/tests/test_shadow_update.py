@@ -434,6 +434,40 @@ def test_shadow_knowledge_revise_and_specialize_are_typed_and_discarded(tmp_tehm
         "SELECT COUNT(*) FROM tehm_mechanism_knowledge").fetchone()[0] == before_knowledge
 
 
+def test_shadow_knowledge_revision_verifies_prior_campaign_without_relabelling(
+        tmp_tehm):
+    conn, _, _ = tmp_tehm
+    transition_id = _verified_shadow_transition(tmp_tehm)
+    parent = _knowledge_claim("p13-cross-campaign-parent")
+    _register_shadow_knowledge(conn, parent)
+    witness = _anti_forgetting("knowledge-cross-campaign")
+    child = replace(
+        parent, version=2,
+        intervention={"family": "GUARD_RESTORE", "variant": "revised"})
+    plan = replace(
+        _plan(
+            transition_id, "UPDATE_CAUSAL_KNOWLEDGE", "REVISE",
+            refs=(transition_id, witness.receipt_digest),
+            knowledge_refs=(parent.object_id,)),
+        campaign_id="evolution-campaign",
+    )
+    evidence = _typed_knowledge_evidence(
+        witness, child.to_dict(), transition_id=transition_id,
+        parent_ids=(parent.object_id,))
+    with pytest.raises(ShadowUpdateError, match="lacks campaign membership"):
+        apply_localized_update_shadow(plan, conn, evidence)
+
+    evidence["transition_campaigns"] = {transition_id: "live"}
+    receipt = apply_localized_update_shadow(plan, conn, evidence)
+    assert receipt.metadata["training_evidence_campaigns"] == {
+        transition_id: "live",
+    }
+    assert conn.execute(
+        """SELECT COUNT(*) FROM tehm_dataset_membership
+             WHERE transition_id=? AND campaign_id='evolution-campaign'""",
+        (transition_id,)).fetchone()[0] == 0
+
+
 def test_shadow_knowledge_split_and_merge_require_explicit_witnesses(tmp_tehm):
     conn, _, _ = tmp_tehm
     transition_id = _verified_shadow_transition(tmp_tehm)

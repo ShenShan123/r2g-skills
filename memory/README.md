@@ -5061,3 +5061,40 @@ localized plan、四项 anti-forgetting witness，并在 disposable staging 执�
 revision；不得直接修改 canonical memory 或接入 production runtime。所有 ORFS artifact
 继续位于仓库外。当前完整回归为 `1252 passed, 2 skipped`；`memory/docs/` 继续由
 `.gitignore` 排除且不提交。
+
+### 2026-09-10 Revision3 ORFS StateShift source-bound planning
+
+在 admission/proposal 之后，新增只读的 localized-plan、source-snapshot 与 source-bound
+plan 三段边界。`build_p13_state_shift_plan_report.py` 重放 proposal/admission/trigger 全链并
+生成 `REVISE/UPDATE_CAUSAL_KNOWLEDGE` plan；原始 plan digest 保持
+`sha256:bdc7c2cb63b47b993904bd7c8a6af8059acffb6fa0f8457d2a45d808486f8250`，最新 report
+digest 为 `sha256:8be2b05de1797edcf46048686bd6b2cea923919b25b28c9d8b25f591d0480f9a`。
+
+`build_p13_state_shift_source_snapshot.py` 从 preregistration 冻结的四条真实 ORFS acquisition
+在隔离 RAM 中重新执行 scoped replay，逐项复核 intervention pair、causal path、replication、
+Knowledge、authority、SupportEnvelope 与 flow Asset，再导出 sidecar-free SQLite。r7 与独立
+重跑的 source DB 字节一致；数据库 SHA256 为
+`sha256:356d5352a338ccb47f718e11c15a1c966e4be780316de28a7dc1753bfab9c23c`，逻辑 digest 为
+`sha256:8e42b137b0e4ab46920552696393170f1e4b3082b4774d0a0179b54e4dd9e906`。snapshot 明确区分
+P12 evolution campaign `tehm-r3-orfs-state-shift-u50-p12-20260909-r1` 与父训练 campaign
+`scoped-support-envelope-r1-ram-20260908`，没有复制或重标 dataset membership。
+
+确定性重建得到 source resolution `resolution_0ccb409eff11024f5bef0d62`，与预注册 plan 的
+`resolution_a88bbdae8a23ddbcb9169be7` 不同；该差异来自旧 state identity 对 SQLite
+物化时间敏感，不能静默视作相同状态。新增 `StateResolutionRebaseReceipt` 与
+`build_p13_state_shift_source_bound_plan.py`，先验证 source semantic digest
+`sha256:1a4dd46ad488a10781b30be361eba3453cd9c68aab38b006d21cccafe3de42ff`，
+再以 receipt `sha256:b0a93263772a97c92ed501f7c3f0d1dc138c5531e774d44c1bcc1cb9764a0ff2`
+派生新的 shadow-only plan
+`sha256:42ea05fe5b54164de3334b380b83aae906ab93851b32dc2b217f8ebc21cad2cd`。
+source-bound report 两次独立生成字节一致，report digest 为
+`sha256:a097d2764b2f83fe18f4f8cf9c6448ba59710e20046408383d69955dccf4a5cb`。
+
+P13 structural executor 同时支持逐 transition 显式绑定原始训练 campaign；缺失或错误
+membership 继续 fail closed，验证通过也不会在 source DB 中创建 evolution-campaign
+membership。当前 `shadow_execution_ready=false`：仍需在隔离 RAM 中完成 scoped raw
+execution replay，并生成真实 target/non-target/held-out/rollback anti-forgetting witness，
+之后才允许调用 shadow executor。本阶段没有执行 mutation，canonical memory、lifecycle、
+promotion 与 production runtime 均未改变。完整回归为
+`1261 passed, 2 skipped, 1 warning`；所有 campaign artifacts 位于仓库外，`memory/docs/`
+继续由 `.gitignore` 排除且不提交。

@@ -20,6 +20,10 @@ from scripts.build_p13_state_shift_proposal_report import (
     P13StateShiftProposalReportError,
     build_p13_state_shift_proposal_report,
 )
+from scripts.build_p13_state_shift_plan_report import (
+    P13StateShiftPlanReportError,
+    build_p13_state_shift_plan_report,
+)
 from scripts.build_p13_state_shift_reason_bundle import (
     P13StateShiftReasonBundleError,
     build_p13_state_shift_reason_bundle,
@@ -432,6 +436,60 @@ def test_state_shift_proposal_rejects_admission_input_drift(tmp_path):
                        match="admission input preregistration_audit digest mismatch"):
         build_p13_state_shift_proposal_report(
             admission_path, output=tmp_path / "proposal-report.json")
+
+
+def _build_state_shift_proposal_chain(tmp_path):
+    cohort, manifest, routes, _ = _write_state_shift_inputs(tmp_path)
+    audit = _write_state_shift_audit(tmp_path, cohort, routes)
+    bundle_path = tmp_path / "typed-state-shift-reasons.json"
+    build_p13_state_shift_reason_bundle(cohort, audit, output=bundle_path)
+    trigger_path = tmp_path / "typed-trigger-report.json"
+    build_p13_shadow_trigger_report(
+        cohort, manifest, routing_path=routes,
+        typed_reason_bundle_path=bundle_path, output=trigger_path)
+    admission_path = tmp_path / "admission-report.json"
+    build_p13_state_shift_admission_report(
+        cohort, audit, bundle_path, routes, manifest, trigger_path,
+        output=admission_path)
+    proposal_path = tmp_path / "proposal-report.json"
+    build_p13_state_shift_proposal_report(
+        admission_path, output=proposal_path)
+    return proposal_path, trigger_path
+
+
+def test_state_shift_plan_binds_every_admission_and_trigger(tmp_path):
+    proposal_path, trigger_path = _build_state_shift_proposal_chain(tmp_path)
+    report = build_p13_state_shift_plan_report(
+        proposal_path, output=tmp_path / "plan-report.json")
+    trigger_payload = json.loads(trigger_path.read_text())
+    trigger_digests = {
+        item["receipt_digest"] for item in trigger_payload["triggers"]
+    }
+    plan = report["localized_update_plan"]
+    assert plan["operation"] == "REVISE"
+    assert plan["update_target"] == "UPDATE_CAUSAL_KNOWLEDGE"
+    assert trigger_digests <= set(plan["evidence_refs"])
+    assert len(report["admission_receipt_digests"]) == 2
+    assert report["plan_eligible_for_anti_forgetting"] is True
+    assert report["source_database_present"] is False
+    assert report["anti_forgetting_present"] is False
+    assert report["shadow_update_attempted"] is False
+    assert report["canonical_memory_mutation"] == "none"
+    assert report["production_runtime_imported"] is False
+
+
+def test_state_shift_plan_rejects_rehashed_authority_drift(tmp_path):
+    proposal_path, _trigger_path = _build_state_shift_proposal_chain(tmp_path)
+    payload = json.loads(proposal_path.read_text())
+    payload["canonical_memory_mutation"] = "write"
+    payload.pop("report_digest")
+    payload["report_digest"] = "sha256:" + hashlib.sha256(
+        stable_dumps(payload).encode()).hexdigest()
+    proposal_path.write_text(json.dumps(payload))
+    with pytest.raises(P13StateShiftPlanReportError,
+                       match="crosses an authority boundary"):
+        build_p13_state_shift_plan_report(
+            proposal_path, output=tmp_path / "plan-report.json")
 
 
 def test_typed_state_shift_bundle_rejects_preregistration_drift(tmp_path):

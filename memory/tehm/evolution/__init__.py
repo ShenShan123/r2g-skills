@@ -80,6 +80,12 @@ from .state_shift_revision import (
     propose_repeated_state_shift_from_paired_receipts,
     state_shift_proposal_to_localized_plan,
 )
+from .state_rebase import (
+    STATE_RESOLUTION_REBASE_REASON, STATE_RESOLUTION_REBASE_VERSION,
+    StateResolutionRebaseError, StateResolutionRebaseReceipt,
+    rebase_localized_update_plan, state_semantic_digest,
+    state_semantic_payload,
+)
 from .receipts import (
     ExperienceValueReceipt, IncrementalCrystallizationReceipt,
     MemoryEventReceipt, OnlineMemoryReceipt, RuleRevisionReceipt,
@@ -160,6 +166,10 @@ __all__ = [
     "propose_repeated_state_shift", "propose_repeated_state_shift_from_events",
     "propose_repeated_state_shift_from_paired_receipts",
     "state_shift_proposal_to_localized_plan",
+    "STATE_RESOLUTION_REBASE_REASON", "STATE_RESOLUTION_REBASE_VERSION",
+    "StateResolutionRebaseError", "StateResolutionRebaseReceipt",
+    "rebase_localized_update_plan", "state_semantic_digest",
+    "state_semantic_payload",
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",
     "require_verified_execution", "require_verified_transition",
