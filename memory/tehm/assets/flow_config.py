@@ -125,14 +125,59 @@ bootstrap repair assets or challenge cohorts.
         raise ValueError("configuration presence is not hardware repair evidence")
 
 
+def _bound_knowledge_revision(conn, asset_ref: str,
+                              knowledge_ids: set[str], *,
+                              target_scope: str | None) -> tuple[str, bool]:
+    """Resolve an exact or explicitly superseding same-claim Knowledge ref.
+
+    Assets remain immutable across a same-claim Knowledge revision.  Reusing
+    one is safe only when the active claim is the source of a persisted
+    ``SUPERSEDES`` edge to the exact claim version named by the asset.  This
+    is deliberately narrower than matching the stable knowledge ID alone.
+    """
+    if asset_ref in knowledge_ids:
+        return asset_ref, False
+    if len(knowledge_ids) != 1:
+        raise ValueError("flow asset knowledge binding is ambiguous")
+    current = next(iter(knowledge_ids))
+    if ("@" not in asset_ref or "@" not in current or
+            asset_ref.rsplit("@", 1)[0] != current.rsplit("@", 1)[0]):
+        raise ValueError("flow asset knowledge binding mismatch")
+    row = conn.execute(
+        """SELECT scope_json FROM tehm_memory_relations
+             WHERE source_type='knowledge' AND source_id=?
+               AND relation_type='SUPERSEDES'
+               AND target_type='knowledge' AND target_id=?""",
+        (current, asset_ref)).fetchone()
+    if row is None:
+        raise ValueError("flow asset knowledge revision relation is missing")
+    try:
+        scope = json.loads(row["scope_json"])
+    except (TypeError, json.JSONDecodeError, IndexError, KeyError) as exc:
+        raise ValueError(
+            "flow asset knowledge revision relation scope is invalid") from exc
+    if (not isinstance(scope, dict) or type(target_scope) is not str or
+            scope.get("target_scope") != target_scope):
+        raise ValueError("flow asset knowledge revision relation scope mismatch")
+    return current, True
+
+
 def select_flow_binding(conn, asset: Mapping, knowledge_ids: set[str], context: Mapping):
-    """Replay extraction from canonical witnesses before binding a target."""
+    """Replay extraction from canonical witnesses before binding a target.
+
+    An immutable asset may follow a verified same-claim ``SUPERSEDES`` edge,
+    but it is never rebound by stable-ID coincidence or caller assertion.
+    """
     provenance = asset.get("provenance") or {}
     refs = provenance.get("mechanism_knowledge_ids")
-    if not isinstance(refs, list) or len(refs) != 1 or refs[0] not in knowledge_ids:
+    if (not isinstance(refs, list) or len(refs) != 1 or
+            type(refs[0]) is not str or not refs[0]):
         raise ValueError("flow asset knowledge binding mismatch")
+    knowledge_id, revised = _bound_knowledge_revision(
+        conn, refs[0], knowledge_ids,
+        target_scope=context.get("target_scope"))
     proposal = build_flow_asset_proposal(
-        conn, refs[0], campaign_id=provenance.get("campaign_id"),
+        conn, knowledge_id, campaign_id=provenance.get("campaign_id"),
         target_scope=(asset.get("compatibility") or {}).get("target_scope", "global"))
     expected = proposal.to_dict()
     for key in ("asset_type", "name", "version", "definition", "input_contract",
@@ -140,9 +185,11 @@ def select_flow_binding(conn, asset: Mapping, knowledge_ids: set[str], context: 
         if stable_dumps(asset.get(key)) != stable_dumps(expected[key]):
             raise ValueError("flow asset differs from training-derived proposal")
     for key, value in proposal.provenance.items():
+        if revised and key == "mechanism_knowledge_ids":
+            continue
         if provenance.get(key) != value:
             raise ValueError("flow asset provenance differs from training witnesses")
-    return bind_flow_config(asset, refs[0], context)
+    return bind_flow_config(asset, knowledge_id, context)
 
 
 def bind_flow_config(asset: Mapping, knowledge_id: str, context: Mapping) -> RuntimeBindingReceipt:

@@ -5139,3 +5139,34 @@ P14 attribution、promotion 或 production runtime authority，下一阶段必�
 receipt 先建立 Sprint R3-6 的 C1-C5 attribution；C6-C8 必须留待下一 Sprint 的真实
 held-out 与 Delta-M ablation。所有 campaign artifacts 仍位于仓库外，`memory/docs/`
 仍由 `.gitignore` 排除且不提交。
+
+### 2026-09-11 Revision3 real P14 StateShift C1-C5 attribution
+
+新增 `run_p14_state_shift_attribution.py`，直接消费上一阶段真实
+`AppliedShadowUpdateReceipt`。runner 先在 RAM 中按相同 child、evidence、provenance 与固定
+materialization timestamp 重建 P13 revision，并要求 logical digest 精确等于 receipt 的
+`staging_digest_after`；因此 C1/C2 不是 caller 提供的布尔值。重建的 resolution 仍为
+`resolution_0ccb409eff11024f5bef0d62 -> resolution_2820acb9861dc8f5fe7579b9`，随后才在
+独立 evaluation view 中将 child 经 evidence-bound Knowledge authority 临时加载为 validated。
+该 evaluation lifecycle 不回写 source DB，也不改变 production authority。
+
+真实运行同时暴露并修复了一个版本化绑定缺口：Flow Asset 固定绑定父 Knowledge `@1`，
+原 selector 会拒绝同 claim 的 `@2`。现在只允许 asset 沿数据库中显式存在的
+`@2 SUPERSEDES @1` 关系复用；仅 stable knowledge ID 相同但没有 relation 时仍 fail closed。
+在这个严格绑定下，mux32/parity64 两个冻结 u50 context 都从 P12 的
+`NO_SKILL/STATE_SHIFT` 变为实际 router 的 `CONSIDER`，并通过实际 asset selector、runtime
+binding 和 structured-candidate builder 生成新 candidate。两个 candidate digest 分别为
+`sha256:548af7f5b52add6c6f764abe54d2598dd2a465fc442183cacc2576e586466791` 和
+`sha256:c43882b7290055c69ee3e24f5e215b842325e7edfb68c68e5da6aeb814f67419`，
+均经真实 ORFS oracle 执行为 PASS，并各自生成 eligible `CandidateLineageReceipt`。
+
+最终 r11 report digest 为
+`sha256:b840d66199769746c031e2301d8262ac0d79f81018367388b7bc1af5f2b9d041`：
+Revision3 R3-6 的 C1 memory changed、C2 state/knowledge/relation changed、C3 new state
+loadable、C4 route changed、C5 candidate changed and executed 全部为 true；expanded typed
+attribution 也为 eligible。标准 capability attribution 仅 C1-C4 为 true，因为其 legacy C5
+定义是 target gain，而本 Sprint 没有用已经 PASS 的 training target 虚构 gain；所以 C5-C8
+和 promotable 均保持 false。固定 evaluation clock 的两次独立运行得到相同 authority、state、
+route 与 candidate identity；execution artifact 绝对路径不同，因此不声称整份 report 文件
+字节一致。下一阶段严格按照 Sprint R3-7 冻结真实 held-out 与 Delta-M ablation，补 C6-C8。
+所有 P14 artifacts 位于仓库外，`memory/docs/` 仍不提交。

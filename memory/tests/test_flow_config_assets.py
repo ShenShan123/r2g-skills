@@ -1,8 +1,11 @@
 """Flow binding contracts; these synthetic inputs do not establish EDA gains."""
 import copy
+import sqlite3
+from types import SimpleNamespace
 
 import pytest
 
+from tehm.assets import flow_config
 from tehm.assets.flow_config import bind_flow_config, select_flow_binding, require_hardware_oracle
 
 
@@ -60,6 +63,47 @@ def test_binding_changes_digest_when_observed_target_changes():
 def test_selection_rejects_asset_without_knowledge_witness_before_db_access():
     with pytest.raises(ValueError, match="knowledge binding mismatch"):
         select_flow_binding(None, _asset(), {"mk@1"}, _context())
+
+
+def test_selection_follows_only_explicit_same_claim_supersedes(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("""CREATE TABLE tehm_memory_relations
+                    (source_type TEXT, source_id TEXT, relation_type TEXT,
+                     target_type TEXT, target_id TEXT, scope_json TEXT)""")
+    conn.execute("INSERT INTO tehm_memory_relations VALUES (?, ?, ?, ?, ?, ?)",
+                 ("knowledge", "mk@2", "SUPERSEDES", "knowledge", "mk@1",
+                  '{"target_scope":"flow_feasibility"}'))
+    asset = {
+        **_asset(), "asset_type": "FLOW_CONFIG_TRANSFORM", "name": "flow.mk",
+        "version": "flow_numeric_config_v1", "input_contract": {},
+        "output_contract": {}, "verifier_contract": {}, "compatibility": {},
+        "provenance": {"mechanism_knowledge_ids": ["mk@1"],
+                       "campaign_id": "training", "witness": "fixed"},
+    }
+    expected = copy.deepcopy(asset)
+    expected["provenance"]["mechanism_knowledge_ids"] = ["mk@2"]
+    proposal = SimpleNamespace(
+        to_dict=lambda: copy.deepcopy(expected),
+        provenance=copy.deepcopy(expected["provenance"]))
+    seen = {}
+
+    def build(_conn, knowledge_id, **_kwargs):
+        seen["knowledge_id"] = knowledge_id
+        return proposal
+
+    monkeypatch.setattr(flow_config, "build_flow_asset_proposal", build)
+    context = {**_context(), "target_scope": "flow_feasibility"}
+    binding = select_flow_binding(conn, asset, {"mk@2"}, context)
+    assert binding.knowledge_id == "mk@2"
+    assert seen["knowledge_id"] == "mk@2"
+    with pytest.raises(ValueError, match="scope mismatch"):
+        select_flow_binding(
+            conn, asset, {"mk@2"}, {**context, "target_scope": "other"})
+    conn.execute("DELETE FROM tehm_memory_relations")
+    with pytest.raises(ValueError, match="revision relation is missing"):
+        select_flow_binding(conn, asset, {"mk@2"}, context)
+    conn.close()
 
 
 def test_scoped_binding_requires_and_hashes_same_measurement_contract():
