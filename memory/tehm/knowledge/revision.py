@@ -51,12 +51,13 @@ def _evidence_ids(evidence_refs: Sequence[Mapping] | None,
 
 def _register_child(conn: sqlite3.Connection, *, child: MechanismKnowledge,
                     target_scope: str, evidence_refs: Sequence[Mapping] | None,
-                    provenance: Mapping | None) -> None:
+                    provenance: Mapping | None,
+                    created_at: str | None = None) -> None:
     if child.status not in {"shadow", "candidate"}:
         raise ValueError("knowledge revision cannot grant validated/production status")
     register_knowledge(conn, child, target_scope=target_scope,
                        provenance=provenance, evidence_refs=evidence_refs,
-                       commit=False)
+                       created_at=created_at, commit=False)
 
 
 def revise_knowledge(
@@ -64,7 +65,8 @@ def revise_knowledge(
     replacement: MechanismKnowledge, operation: str = "REVISE",
     target_scope: str = "global", authority_ref: str | None = None,
     evidence_refs: Sequence[Mapping] | None = None,
-    provenance: Mapping | None = None, commit: bool = True,
+    provenance: Mapping | None = None, created_at: str | None = None,
+    commit: bool = True,
 ) -> KnowledgeRevisionReceipt:
     """Apply one same-claim or structural revision in the shadow lane.
 
@@ -95,13 +97,15 @@ def revise_knowledge(
         raise ValueError(f"{operation} requires split_knowledge or merge_knowledge API")
     had_outer_transaction = conn.in_transaction
     _register_child(conn, child=replacement, target_scope=target_scope,
-                    evidence_refs=evidence_refs, provenance=provenance)
+                    evidence_refs=evidence_refs, provenance=provenance,
+                    created_at=created_at)
     refs = _evidence_ids(evidence_refs, replacement.causal_path_ids)
     relation = record_relation(
         conn, source_type="knowledge", source_id=replacement.object_id,
         relation_type=relation_type, target_type="knowledge",
         target_id=parent.object_id, scope=_scope(parent, replacement, target_scope),
-        evidence_refs=refs, authority_ref=None, commit=False)
+        evidence_refs=refs, authority_ref=None, created_at=created_at,
+        commit=False)
     if commit and not had_outer_transaction:
         conn.commit()
     return KnowledgeRevisionReceipt(
@@ -137,7 +141,7 @@ def split_knowledge(
     partition_evidence: Mapping[str, Sequence[str]] | None = None,
     evidence_refs: Sequence[Mapping] | None = None,
     provenance: Mapping | None = None, authority_ref: str | None = None,
-    commit: bool = True,
+    created_at: str | None = None, commit: bool = True,
 ) -> KnowledgeStructuralRevisionReceipt:
     """Register multiple identity-changing SPECIALIZES children."""
     if authority_ref is not None:
@@ -158,12 +162,14 @@ def split_knowledge(
     for child in children:
         refs = _partition_refs(partition_evidence, child, evidence_refs)
         _register_child(conn, child=child, target_scope=target_scope,
-                        evidence_refs=evidence_refs, provenance=provenance)
+                        evidence_refs=evidence_refs, provenance=provenance,
+                        created_at=created_at)
         relation = record_relation(
             conn, source_type="knowledge", source_id=child.object_id,
             relation_type="SPECIALIZES", target_type="knowledge",
             target_id=parent.object_id, scope=_scope(parent, child, target_scope),
-            evidence_refs=refs, authority_ref=None, commit=False)
+            evidence_refs=refs, authority_ref=None, created_at=created_at,
+            commit=False)
         relation_ids.append(relation.relation_id)
     if commit and not had_outer_transaction:
         conn.commit()
@@ -179,7 +185,7 @@ def merge_knowledge(
     merge_witness: Mapping[str, Sequence[str]] | None = None,
     evidence_refs: Sequence[Mapping] | None = None,
     provenance: Mapping | None = None, authority_ref: str | None = None,
-    commit: bool = True,
+    created_at: str | None = None, commit: bool = True,
 ) -> KnowledgeStructuralRevisionReceipt:
     """Register one identity-changing GENERALIZES child with multi-parent proof."""
     if authority_ref is not None:
@@ -199,7 +205,8 @@ def merge_knowledge(
         raise ValueError("knowledge merge requires a witness for every parent")
     had_outer_transaction = conn.in_transaction
     _register_child(conn, child=replacement, target_scope=target_scope,
-                    evidence_refs=evidence_refs, provenance=provenance)
+                    evidence_refs=evidence_refs, provenance=provenance,
+                    created_at=created_at)
     relation_ids = []
     for parent in parents:
         raw = merge_witness.get(parent.object_id)
@@ -211,7 +218,7 @@ def merge_knowledge(
             relation_type="GENERALIZES", target_type="knowledge",
             target_id=parent.object_id, scope=_scope(parent, replacement, target_scope),
             evidence_refs=tuple(sorted(set(item.strip() for item in raw))),
-            authority_ref=None, commit=False)
+            authority_ref=None, created_at=created_at, commit=False)
         relation_ids.append(relation.relation_id)
     if commit and not had_outer_transaction:
         conn.commit()

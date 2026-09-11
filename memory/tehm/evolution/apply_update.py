@@ -12,6 +12,7 @@ import hashlib
 import json
 import sqlite3
 from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from tehm import db as tehm_db
@@ -22,6 +23,7 @@ from tehm.state.relations import record_relation
 from tehm.state.resolver import resolve_current_state
 from tehm.state.schema import ensure_state_schema
 from tehm.state.validation import RELATION_TYPES
+from tehm.verified_execution import scoped_learning_replay
 from tehm.knowledge import MechanismKnowledge
 from tehm.knowledge.revision import (
     merge_knowledge,
@@ -209,6 +211,35 @@ def _transition_campaigns(
     return result
 
 
+@contextmanager
+def _scoped_replay(staging: sqlite3.Connection, evidence: Mapping):
+    """Authorize frozen scoped-execution replay only on the RAM staging copy."""
+    raw = evidence.get("scoped_learning_replay")
+    if raw is None:
+        yield
+        return
+    if not isinstance(raw, Mapping):
+        raise ShadowUpdateError(
+            "shadow update scoped_learning_replay must be an object")
+    campaign_id = raw.get("campaign_id")
+    acquisitions = raw.get("acquisitions")
+    expected_digest = raw.get("expected_digest")
+    if (type(campaign_id) is not str or not campaign_id.strip() or
+            not isinstance(acquisitions, dict) or not acquisitions or
+            type(expected_digest) is not str or
+            not expected_digest.startswith("sha256:")):
+        raise ShadowUpdateError(
+            "shadow update scoped_learning_replay is incomplete")
+    try:
+        with scoped_learning_replay(
+                staging, campaign_id=campaign_id.strip(),
+                acquisitions=acquisitions,
+                expected_digest=expected_digest):
+            yield
+    except (TypeError, ValueError) as exc:
+        raise ShadowUpdateError(str(exc)) from exc
+
+
 def _knowledge_claim(value: object, name: str) -> MechanismKnowledge:
     """Decode one immutable Knowledge claim for a shadow revision.
 
@@ -302,8 +333,11 @@ def _apply_knowledge_revision(staging: sqlite3.Connection,
     refs = _knowledge_evidence_refs(evidence)
     target_scope = str(_scope(evidence).get("target_scope") or "global")
     provenance = evidence.get("provenance")
+    created_at = evidence.get("created_at")
     if provenance is not None and not isinstance(provenance, Mapping):
         raise ShadowUpdateError("shadow update knowledge provenance must be an object")
+    if created_at is not None and (type(created_at) is not str or not created_at):
+        raise ShadowUpdateError("shadow update created_at must be a timestamp string")
 
     if operation in {"REVISE", "SPECIALIZE", "GENERALIZE"}:
         parent_ids = _knowledge_parent_ids(plan, evidence)
@@ -318,7 +352,8 @@ def _apply_knowledge_revision(staging: sqlite3.Connection,
             revise_knowledge(
                 staging, parent_object_id=parent_ids[0], replacement=replacement,
                 operation=operation, target_scope=target_scope,
-                evidence_refs=refs, provenance=provenance, commit=False)
+                evidence_refs=refs, provenance=provenance,
+                created_at=created_at, commit=False)
         except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
             raise ShadowUpdateError(str(exc)) from exc
         return
@@ -345,7 +380,8 @@ def _apply_knowledge_revision(staging: sqlite3.Connection,
             split_knowledge(
                 staging, parent_object_id=parent_ids[0], children=children,
                 target_scope=target_scope, partition_evidence=partition,
-                evidence_refs=refs, provenance=provenance, commit=False)
+                evidence_refs=refs, provenance=provenance,
+                created_at=created_at, commit=False)
         except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
             raise ShadowUpdateError(str(exc)) from exc
         return
@@ -369,7 +405,8 @@ def _apply_knowledge_revision(staging: sqlite3.Connection,
             merge_knowledge(
                 staging, parent_object_ids=parent_ids, replacement=replacement,
                 target_scope=target_scope, merge_witness=witness,
-                evidence_refs=refs, provenance=provenance, commit=False)
+                evidence_refs=refs, provenance=provenance,
+                created_at=created_at, commit=False)
         except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
             raise ShadowUpdateError(str(exc)) from exc
         return
@@ -809,7 +846,8 @@ def apply_localized_update_shadow(
                 plan.state_resolution_id != before.resolution_id):
             raise ShadowUpdateError(
                 "shadow update plan state resolution does not match current state")
-        training_campaigns = _apply_plan(staging, plan, evidence)
+        with _scoped_replay(staging, evidence):
+            training_campaigns = _apply_plan(staging, plan, evidence)
         after = resolve_current_state(staging, scope, mode="shadow", persist=False)
         raw_after = raw_evidence_digest(staging)
         if raw_after != raw_before:

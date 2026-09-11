@@ -1,6 +1,8 @@
 """P13 localized updates stay isolated from canonical and runtime authority."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+import importlib
 from pathlib import Path
 from dataclasses import replace
 
@@ -404,11 +406,16 @@ def test_shadow_knowledge_revise_and_specialize_are_typed_and_discarded(tmp_tehm
         transition_id, "UPDATE_CAUSAL_KNOWLEDGE", "REVISE",
         refs=(transition_id, witness.receipt_digest),
         knowledge_refs=(parent.object_id,))
-    receipt = apply_localized_update_shadow(
-        plan, conn,
-        _typed_knowledge_evidence(witness, child.to_dict(),
-                                  transition_id=transition_id,
-                                  parent_ids=(parent.object_id,)))
+    revise_evidence = _typed_knowledge_evidence(
+        witness, child.to_dict(), transition_id=transition_id,
+        parent_ids=(parent.object_id,), extra={
+            "created_at": "2000-01-01T00:00:00+00:00",
+        })
+    receipt = apply_localized_update_shadow(plan, conn, revise_evidence)
+    replayed_receipt = apply_localized_update_shadow(
+        plan, conn, revise_evidence)
+    assert replayed_receipt.receipt_digest == receipt.receipt_digest
+    assert replayed_receipt.after_resolution_id == receipt.after_resolution_id
     assert f"knowledge:{child.object_id}" in receipt.created_object_ids
     assert receipt.created_relation_ids
     assert conn.execute(
@@ -540,3 +547,66 @@ def test_shadow_knowledge_revision_rejects_validated_claim(tmp_tehm):
             _typed_knowledge_evidence(witness, validated.to_dict(),
                                       transition_id=transition_id,
                                       parent_ids=(parent.object_id,)))
+
+
+def test_shadow_executor_enters_scoped_learning_replay_on_ram_copy(
+        tmp_tehm, monkeypatch):
+    conn, _, _ = tmp_tehm
+    conn.commit()
+    witness = _anti_forgetting("scoped-context")
+    plan = _plan(
+        "transition:scoped", "UPDATE_STATE_RELATION", "ADD",
+        refs=(witness.receipt_digest,))
+    module = importlib.import_module("tehm.evolution.apply_update")
+    entered = {"active": False, "connection": None}
+
+    @contextmanager
+    def fake_scoped(staging, *, campaign_id, acquisitions, expected_digest):
+        assert campaign_id == "parent-training"
+        assert acquisitions == {"transition:scoped": {"role": "treatment"}}
+        assert expected_digest == "sha256:frozen"
+        assert staging.execute("PRAGMA database_list").fetchone()[2] == ""
+        entered.update(active=True, connection=staging)
+        try:
+            yield
+        finally:
+            entered["active"] = False
+
+    def fake_apply(staging, received_plan, evidence):
+        assert entered["active"] is True
+        assert staging is entered["connection"]
+        assert received_plan == plan
+        return {}
+
+    monkeypatch.setattr(module, "scoped_learning_replay", fake_scoped)
+    monkeypatch.setattr(module, "_apply_plan", fake_apply)
+    receipt = apply_localized_update_shadow(plan, conn, {
+        **_anti_evidence(witness),
+        "scope": {"target_scope": "rtl.test"},
+        "scoped_learning_replay": {
+            "campaign_id": "parent-training",
+            "acquisitions": {
+                "transition:scoped": {"role": "treatment"},
+            },
+            "expected_digest": "sha256:frozen",
+        },
+    })
+    assert entered["active"] is False
+    assert receipt.staging_discarded is True
+    assert receipt.canonical_rows_changed is False
+
+
+def test_shadow_executor_rejects_malformed_scoped_replay_before_mutation(
+        tmp_tehm):
+    conn, _, _ = tmp_tehm
+    conn.commit()
+    witness = _anti_forgetting("scoped-malformed")
+    plan = _plan(
+        "transition:scoped", "UPDATE_STATE_RELATION", "ADD",
+        refs=(witness.receipt_digest,))
+    with pytest.raises(ShadowUpdateError, match="must be an object"):
+        apply_localized_update_shadow(plan, conn, {
+            **_anti_evidence(witness),
+            "scope": {"target_scope": "rtl.test"},
+            "scoped_learning_replay": ["not", "a", "mapping"],
+        })

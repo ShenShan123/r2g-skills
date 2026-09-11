@@ -86,6 +86,11 @@ from .state_rebase import (
     rebase_localized_update_plan, state_semantic_digest,
     state_semantic_payload,
 )
+from .state_shift_expansion import (
+    STATE_SHIFT_SUPPORT_EXPANSION_VERSION,
+    StateShiftSupportExpansionError, StateShiftSupportExpansionReceipt,
+    derive_state_shift_support_expansion,
+)
 from .receipts import (
     ExperienceValueReceipt, IncrementalCrystallizationReceipt,
     MemoryEventReceipt, OnlineMemoryReceipt, RuleRevisionReceipt,
@@ -170,6 +175,9 @@ __all__ = [
     "StateResolutionRebaseError", "StateResolutionRebaseReceipt",
     "rebase_localized_update_plan", "state_semantic_digest",
     "state_semantic_payload",
+    "STATE_SHIFT_SUPPORT_EXPANSION_VERSION",
+    "StateShiftSupportExpansionError", "StateShiftSupportExpansionReceipt",
+    "derive_state_shift_support_expansion",
     "TRIGGER_REASONS", "ConsolidationTriggerReceipt",
     "evaluate_consolidation_trigger",
     "require_verified_execution", "require_verified_transition",

@@ -5098,3 +5098,44 @@ execution replay，并生成真实 target/non-target/held-out/rollback anti-forg
 promotion 与 production runtime 均未改变。完整回归为
 `1261 passed, 2 skipped, 1 warning`；所有 campaign artifacts 位于仓库外，`memory/docs/`
 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-10 Revision3 first real P13 StateShift shadow mutation
+
+在 source-bound plan 之后，新增 `StateShiftSupportExpansionReceipt` 与
+`build_p13_state_shift_support_expansion_report.py`。builder 从冻结 P12 cohort、training
+learner partition、preregistration StateShift、proposal、rebase receipt、source snapshot
+及 source DB 逐层重放，派生同 claim 的 shadow child
+`mk_e273d9bb3e6b65f5d00e@2`，只把 mux32/parity64 已验证的 exact u50 constraint facts
+加入 positive applicability 和 SupportEnvelope；没有把 PASS/PASS 误写成 repair gain，也
+没有把未见结构泛化进支持域。expansion receipt digest 为
+`sha256:9c9770daa1fd43eb4563c74aa85f10f8e9eb638d81dbdc3c1ce5879ab9a22051`，
+child envelope digest 为
+`sha256:6f858af3f2adc9a99981f873beb43d0bf33de06726cb76d0d51f12d46fc82a16`。
+
+新增 `build_p13_state_shift_anti_forgetting_evidence.py`，作为四项 gate 的实际 oracle，
+而不是再增加一层 caller boolean。target replay 直接绑定上述 expansion；non-target gate
+在 RAM 中进入 `scoped_learning_replay`，重新验证父 Knowledge 的两条真实 ORFS treatment
+transition、两个独立 lineage、FAIL→PASS controlled pair、training membership 和完整 oracle，
+并证明 child 未删除父 claim、obligation、lineage 或 envelope facts。held-out GCD 以
+`split=heldout`、`learner_eligible=false` 预注册，只审计 applicability firewall：child 对
+未见结构仍返回 `NO_SKILL/STATE_SHIFT`，不执行 memory action，也不声称 held-out repair
+成功。rollback gate 对 source SQLite 做只读 SHA256/逻辑 digest 校验，并验证 RAM copy 的
+savepoint rollback/discard；generic binder 生成 eligible witness
+`sha256:e7396de92befc11605751aea1eb65a252eb92a2bcdb5fd3db3c55f84762594da`。
+
+`run_p13_state_shift_shadow_update.py` 随后把 source-bound plan 确定性派生为
+execution-bound plan，将 anti-forgetting 与 support-expansion digest 加入证据，并只在 RAM
+staging 内重放父 acquisition、注册 child Knowledge 和 `SUPERSEDES` relation。最终
+`AppliedShadowUpdateReceipt` digest 为
+`sha256:5b62bb93868c766ea163a1b437ab0c8f5863bcaf9d786068905633731dc50809`：
+resolution 从 `resolution_0ccb409eff11024f5bef0d62` 变为
+`resolution_2820acb9861dc8f5fe7579b9`，创建
+`knowledge:mk_e273d9bb3e6b65f5d00e@2` 和
+`relation_db34bc0dfd2241b66e15a09f`，同时
+`canonical_rows_changed=false`、`production_authority_changed=false`、
+`staging_discarded=true`。固定 staging materialization timestamp 后，两次独立执行的
+report 与文件 SHA256 完全一致。至此 Sprint R3-5 在 isolated shadow 范围闭合；这仍不是
+P14 attribution、promotion 或 production runtime authority，下一阶段必须直接消费该
+receipt 先建立 Sprint R3-6 的 C1-C5 attribution；C6-C8 必须留待下一 Sprint 的真实
+held-out 与 Delta-M ablation。所有 campaign artifacts 仍位于仓库外，`memory/docs/`
+仍由 `.gitignore` 排除且不提交。
