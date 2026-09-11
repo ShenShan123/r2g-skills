@@ -5192,3 +5192,37 @@ learner-eligible 且预注册的证据派生结构泛化，再产生一个 Suppo
 held-out family 的新 P13 delta，最后通过真实 router、selector、binding、candidate 和
 oracle 执行 `M_t / M_t+1 / M_t+1-DeltaM` 三臂；不能通过放宽 firewall 或重标 held-out
 数据制造 transfer。报告仍只写仓库外，`memory/docs/` 继续由 `.gitignore` 排除且不提交。
+
+### 2026-09-11 Revision3 R3-8 exact-replay and Delta-M firewall
+
+对既有真实 ORFS `MEMORY_INTERFERENCE` 链重新按当前 source-bound 标准审计后，旧 P14
+不再被视为 R3-8 闭环。`apply_localized_update_shadow()` 现在会把调用方显式提供的
+`created_at` 写入 receipt metadata；ORFS interference shadow runner 固定该时间，因此
+P14 必须在 RAM 中复现相同 P13 staging，并在写任何 evaluation policy/load 行之前要求
+`before/after resolution`、relation ID 和 `staging_digest_after` 全部精确一致。缺少
+materialization binding 的旧 receipt 会 fail closed。
+
+安全 ablation 也修正为单变量比较：`M_t` 使用真实 routed
+`APPLICABILITY_GATED` harmful-memory receipt，`M_t+1` 使用 negative-applicability
+no-memory fallback；`M_t+1-DeltaM` 必须恢复同一个 M_t routed receipt。旧实现把移除
+Delta-M 写成 NO_MEMORY PASS，同时移除了 memory action，不能证明 harm returns，现已禁止
+这种归因。
+
+新 real shadow run 位于仓库外
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-interference-gcd-shadow-exact-20260911-r1/`：
+两条 gated fallback 仍为 2/2 PASS，source/canonical counts 不变，memory delta 与
+anti-forgetting 均 eligible；post forced-memory 两臂本次为 UNKNOWN，不能新增 harm claim，
+冻结 pre cohort 的 routed memory 两臂仍为 2/2 FAIL。P14 RAM exact replay已通过，但随后
+actual router replay 拒绝旧 route：source DB 中 `tehm_causal_paths=0`、`tehm_assets=0`，
+parent 只有 shadow Knowledge；旧 `CONSIDER/INAPPLICABLE` 和 CORE 99 candidate 均由
+challenge 脚本手写。两条所谓 training pair 只能形成 L1 executed fragments，replication
+明确为 `requires_controlled_pairs_and_disjoint_learner_lineages`，而且训练 action 是 CORE 35，
+不能给 CORE 99 candidate 提供 provenance。
+
+因此当前 R3-8 状态是 `NOT_ESTABLISHED`，不是工具链失败也不是 production blocker。
+下一步必须先建立新的 source-bound executable-memory cohort：至少两条 source-disjoint
+controlled pair 产生 replicated causal path、validated Knowledge authority 和由同一 action
+证据派生的 Flow Asset；P12 candidate 必须经实际 router、selector、binding 产生。只有在
+该 candidate 对 challenge 形成真实 interference 后，才允许做 SPECIALIZE、negative
+applicability、实际 route veto 与上述 Delta-M harm-return 归因。不得继续复用旧手写 route
+或 action-mismatched candidate。所有新旧 artifact 都留在仓库外，`memory/docs/` 不提交。

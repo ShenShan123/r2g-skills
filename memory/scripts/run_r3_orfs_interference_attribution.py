@@ -176,6 +176,46 @@ def _state_payload(state) -> dict:
     }
 
 
+def _safety_ablation_rows(pre_cohort: OrfsPairedCohortReceipt,
+                          post_cohort: OrfsPairedCohortReceipt) -> tuple[list[dict], bool]:
+    """Build a one-variable Delta-M safety comparison.
+
+    The removal arm restores M_t and therefore reuses its content-addressed
+    routed receipt.  Substituting NO_MEMORY here would remove both the memory
+    delta and the routed memory action, making the causal claim invalid.
+    """
+    if set(pre_cohort.case_receipts) != set(post_cohort.case_receipts):
+        raise OrfsInterferenceAttributionError(
+            "safety ablation cohorts are not aligned")
+    rows = []
+    for case_id in sorted(post_cohort.case_receipts):
+        pre = pre_cohort.case_receipts[case_id].arm_receipts
+        post = post_cohort.case_receipts[case_id].arm_receipts
+        rows.append({
+            "case_id": case_id,
+            "M_t_routed_memory": {
+                **pre["APPLICABILITY_GATED"].to_dict(),
+                "execution_digest": pre[
+                    "APPLICABILITY_GATED"].execution_digest},
+            "M_t+1_negative_applicability": {
+                **post["APPLICABILITY_GATED"].to_dict(),
+                "execution_digest": post[
+                    "APPLICABILITY_GATED"].execution_digest},
+            "M_t+1_minus_delta_M_routed_memory": {
+                **pre["APPLICABILITY_GATED"].to_dict(),
+                "execution_digest": pre[
+                    "APPLICABILITY_GATED"].execution_digest},
+        })
+    harm_returns = all(
+        row["M_t_routed_memory"]["outcome"] in {"FAIL", "PARTIAL"} and
+        row["M_t+1_negative_applicability"]["outcome"] == "PASS" and
+        row["M_t+1_negative_applicability"]["source"] == "no_memory" and
+        row["M_t+1_minus_delta_M_routed_memory"]["execution_digest"] ==
+        row["M_t_routed_memory"]["execution_digest"]
+        for row in rows)
+    return rows, harm_returns
+
+
 def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
         challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
         artifacts: Path | str, force: bool = False) -> dict:
@@ -236,18 +276,20 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
     if set(pre_cohort.case_receipts) != set(post_cohort.case_receipts):
         raise OrfsInterferenceAttributionError("pre/post ORFS cohorts are not aligned")
 
-    # The source is only read to establish a baseline digest.  All projection
-    # writes go to a separate SQLite file.
-    # The P13 source is already a frozen snapshot.  Immutable read-only mode
-    # prevents this audit from creating WAL/SHM sidecars on its evidence.
+    # The source is only read to establish a baseline digest.  Reproduce the
+    # P13 staging semantics in RAM: a disk copy has a different iterdump
+    # identity and cannot prove exact replay of ``staging_digest_after``.
+    # Immutable read-only mode prevents WAL/SHM sidecars on the evidence.
     source_conn = db.connect_read_only(source_db)
     source_before = shadow._connection_digest(source_conn)
     if source_before != memory_delta.baseline_memory_digest:
         source_conn.close()
         raise OrfsInterferenceAttributionError("shadow source digest does not bind memory delta")
     p14_db = output / "p14-attribution.sqlite"
-    shutil.copy2(source_db, p14_db)
-    conn = db.connect(p14_db)
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    source_conn.backup(conn)
+    conn.execute("PRAGMA foreign_keys=ON")
     db.ensure_schema(conn)
     scope = dict(shadow_receipt.metadata.get("scope") or {})
     if not scope:
@@ -256,9 +298,12 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
     baseline_router_audit = audit_router_outputs(
         conn, cases_payload["cases"], candidates, parent, pre_routes)
     provenance = {
-        "source": "r3-orfs-interference-p14-projection",
-        "p13_shadow_receipt": shadow_receipt.receipt_digest,
+        # Exact replay must reproduce the P13 row bytes.  P14 attribution is
+        # recorded later in separate policy/load rows, not smuggled into the
+        # reconstructed Knowledge provenance.
+        "source": "r3-orfs-interference-shadow",
         "reason_receipt": reason.receipt_digest,
+        "proposal": proposal.proposal_digest,
     }
     evidence_refs = [
         {"evidence_type": "transition", "evidence_id": transition_id,
@@ -267,15 +312,83 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
         for transition_id, lineage in zip(
             training["transition_ids"], training["lineages"])
     ]
-    revise_knowledge(
+    materialized_at = shadow_receipt.metadata.get("materialized_at")
+    if type(materialized_at) is not str or not materialized_at:
+        conn.close()
+        source_conn.close()
+        raise OrfsInterferenceAttributionError(
+            "P13 receipt does not bind its materialization timestamp")
+    revision = revise_knowledge(
         conn, parent_object_id=training["knowledge_object_id"], replacement=child,
         operation="SPECIALIZE", target_scope="global", evidence_refs=evidence_refs,
-        provenance=provenance, commit=True)
-    after_state = resolve_current_state(conn, scope, mode="shadow", persist=True, commit=True)
+        provenance=provenance, created_at=materialized_at, commit=True)
+    p13_state = resolve_current_state(
+        conn, scope, mode="shadow", persist=False, commit=False)
+    p13_replay_digest = shadow._connection_digest(conn)
+    replay_checks = {
+        "before_resolution_matches": (
+            baseline_state.resolution_id ==
+            shadow_receipt.before_resolution_id),
+        "after_resolution_matches": (
+            p13_state.resolution_id == shadow_receipt.after_resolution_id),
+        "relation_matches": (
+            revision.relation_id in shadow_receipt.created_relation_ids),
+        "staging_digest_matches": (
+            p13_replay_digest == shadow_receipt.staging_digest_after),
+        "memory_delta_digest_matches": (
+            p13_replay_digest == memory_delta.candidate_memory_digest),
+    }
+    if not all(replay_checks.values()):
+        _write_json(output / "p13_exact_replay_failure.json", {
+            "version": "tehm-r3-orfs-interference-p13-replay-failure-v1",
+            "checks": replay_checks,
+            "actual": {
+                "before_resolution_id": baseline_state.resolution_id,
+                "after_resolution_id": p13_state.resolution_id,
+                "relation_id": revision.relation_id,
+                "staging_digest": p13_replay_digest,
+            },
+            "expected": {
+                "before_resolution_id": shadow_receipt.before_resolution_id,
+                "after_resolution_id": shadow_receipt.after_resolution_id,
+                "relation_ids": list(shadow_receipt.created_relation_ids),
+                "staging_digest": shadow_receipt.staging_digest_after,
+                "candidate_memory_digest": memory_delta.candidate_memory_digest,
+            },
+            "evaluation_only": True,
+            "canonical_memory_mutation": "none",
+            "production_runtime_imported": False,
+            "memory_docs_submitted": False,
+        })
+        conn.close()
+        source_conn.close()
+        raise OrfsInterferenceAttributionError(
+            "P14 RAM materialization does not exactly replay the P13 receipt")
+    exact_replay = {
+        "version": "tehm-r3-orfs-interference-p13-exact-replay-v1",
+        "campaign_id": shadow_receipt.campaign_id,
+        "checks": replay_checks,
+        "materialized_at": materialized_at,
+        "before_resolution_id": baseline_state.resolution_id,
+        "after_resolution_id": p13_state.resolution_id,
+        "created_relation_id": revision.relation_id,
+        "p13_staging_digest": p13_replay_digest,
+        "shadow_update_receipt_digest": shadow_receipt.receipt_digest,
+        "memory_delta_receipt_digest": memory_delta.receipt_digest,
+        "exact": True,
+        "evaluation_only": True,
+        "canonical_memory_mutation": "none",
+        "production_authority_changed": False,
+        "production_runtime_imported": False,
+        "memory_docs_submitted": False,
+    }
+    exact_replay["receipt_digest"] = _digest(exact_replay)
+    _write_json(output / "p13_exact_replay.json", exact_replay)
+    after_state = resolve_current_state(
+        conn, scope, mode="shadow", persist=True, commit=True)
     checked_after_state = verify_resolution_snapshot(conn, after_state.resolution_id)
     state_loadable = checked_after_state.resolution_id == after_state.resolution_id
-    projection_digest = shadow._connection_digest(conn)
-    if baseline_state.resolution_id == after_state.resolution_id:
+    if baseline_state.resolution_id == p13_state.resolution_id:
         raise OrfsInterferenceAttributionError("P14 projection did not change resolved state")
 
     recorded_post_routes = {
@@ -389,27 +502,19 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
             {"FAIL", "REGRESSION"}
             for case_id in post_routes),
     }
-    ablation_rows = []
-    for case_id in sorted(post_routes):
-        pre = pre_cohort.case_receipts[case_id].arm_receipts
-        post = post_cohort.case_receipts[case_id].arm_receipts
-        ablation_rows.append({
-            "case_id": case_id,
-            "M_t_forced_memory": {**pre["ALWAYS_MEMORY"].to_dict(),
-                                   "execution_digest": pre["ALWAYS_MEMORY"].execution_digest},
-            "M_t+1_negative_applicability": {
-                **post["APPLICABILITY_GATED"].to_dict(),
-                "execution_digest": post["APPLICABILITY_GATED"].execution_digest},
-            "M_t+1_minus_delta_M_no_memory": {
-                **pre["NO_MEMORY"].to_dict(),
-                "execution_digest": pre["NO_MEMORY"].execution_digest},
-        })
+    ablation_rows, delta_m_harm_returns = _safety_ablation_rows(
+        pre_cohort, post_cohort)
+    strategy_gates["C6_remove_delta_m_restores_routed_harm"] = \
+        delta_m_harm_returns
     ablation_payload = {
         "version": "tehm-r3-orfs-interference-safety-ablation-v0.1",
-        "comparison": "harmful forced memory vs negative-applicability fallback vs no-memory",
+        "comparison": (
+            "M_t routed harmful memory vs M_t+1 negative-applicability "
+            "fallback vs M_t+1-DeltaM restored M_t routed memory"),
         "cases": ablation_rows,
         "capability_gain_claimed": False,
         "strategy_safety_gain": strategy_gates["C5_fallback_changed_and_executed"],
+        "delta_m_harm_returns": delta_m_harm_returns,
         "evaluation_only": True,
         "canonical_memory_mutation": "none",
         "memory_docs_submitted": False,
@@ -448,9 +553,10 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
             "memory_delta_receipt_digest": memory_delta.receipt_digest,
             "baseline_resolution_id": baseline_state.resolution_id,
             "candidate_resolution_id": after_state.resolution_id,
+            "p13_exact_replay_digest": p13_replay_digest,
             "projection_memory_digest": projection_digest,
-            "projection_replay_digest_matches_p13": (
-                projection_digest == memory_delta.candidate_memory_digest),
+            "p13_exact_replay_matches_receipt": True,
+            "projection_replay_digest_matches_p13": False,
             "baseline_policy_snapshot": baseline_policy.to_dict(),
             "candidate_policy_snapshot": candidate_policy.to_dict(),
             "baseline_policy_load": {**baseline_load.to_dict(),
@@ -496,7 +602,12 @@ def run(*, shadow_artifacts: Path | str = DEFAULT_SHADOW,
     # The projection is disposable, but emitted P14 evidence must still be a
     # sidecar-free snapshot for deterministic replay.  Do not publish any of
     # the completion reports until the projection checkpoint succeeds.
-    db.checkpoint_and_close(conn)
+    projection = db.connect(p14_db)
+    try:
+        conn.backup(projection)
+    finally:
+        db.checkpoint_and_close(projection)
+    conn.close()
     source_conn.close()
     _write_json(output / "p14_safety_ablation.json", ablation_payload)
     _write_json(output / "p14_strategy_attribution.json", report)

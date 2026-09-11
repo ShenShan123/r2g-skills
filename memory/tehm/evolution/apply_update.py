@@ -888,6 +888,8 @@ def apply_localized_update_shadow(
             "metadata": {
                 "scope": scope,
                 "shadow_update_version": SHADOW_UPDATE_VERSION,
+                **({"materialized_at": evidence["created_at"]}
+                   if evidence.get("created_at") is not None else {}),
                 **({"anti_forgetting_witness_digest": anti_forgetting.receipt_digest}
                    if anti_forgetting is not None else {}),
                 **({"p12_shadow_trigger_digest": p12_trigger.receipt_digest}

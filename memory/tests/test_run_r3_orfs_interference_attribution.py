@@ -2,7 +2,8 @@ import pytest
 
 from contracts import MemoryRoutingDecision
 from scripts.run_r3_orfs_interference_attribution import (
-    _child, _routing_query, audit_router_outputs, OrfsInterferenceAttributionError,
+    _child, _routing_query, _safety_ablation_rows, audit_router_outputs,
+    OrfsInterferenceAttributionError,
 )
 from scripts.run_r3_orfs_interference_challenge import _candidate
 from scripts.run_r3_orfs_interference_shadow import _parent
@@ -79,3 +80,31 @@ def test_router_audit_does_not_accept_empty_coverage(tmp_tehm):
     conn, _, _ = tmp_tehm
     with pytest.raises(OrfsInterferenceAttributionError, match="non-empty case coverage"):
         audit_router_outputs(conn, [], {}, _parent(("a", "b")), {})
+
+
+def test_safety_ablation_restores_routed_memory_not_no_memory():
+    class Execution:
+        def __init__(self, outcome, source, digest):
+            self.outcome = outcome
+            self.source = source
+            self.execution_digest = digest
+
+        def to_dict(self):
+            return {"outcome": self.outcome, "source": self.source}
+
+    class Pair:
+        def __init__(self, execution):
+            self.arm_receipts = {"APPLICABILITY_GATED": execution}
+
+    class Cohort:
+        def __init__(self, execution):
+            self.case_receipts = {"case-a": Pair(execution)}
+
+    before = Execution("FAIL", "structured_memory", "sha256:before")
+    after = Execution("PASS", "no_memory", "sha256:after")
+    rows, harm_returns = _safety_ablation_rows(Cohort(before), Cohort(after))
+    assert harm_returns is True
+    row = rows[0]
+    assert "M_t+1_minus_delta_M_no_memory" not in row
+    assert row["M_t+1_minus_delta_M_routed_memory"]["execution_digest"] == \
+        row["M_t_routed_memory"]["execution_digest"]

@@ -416,6 +416,8 @@ def test_shadow_knowledge_revise_and_specialize_are_typed_and_discarded(tmp_tehm
         plan, conn, revise_evidence)
     assert replayed_receipt.receipt_digest == receipt.receipt_digest
     assert replayed_receipt.after_resolution_id == receipt.after_resolution_id
+    assert receipt.metadata["materialized_at"] == \
+        "2000-01-01T00:00:00+00:00"
     assert f"knowledge:{child.object_id}" in receipt.created_object_ids
     assert receipt.created_relation_ids
     assert conn.execute(

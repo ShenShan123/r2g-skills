@@ -69,6 +69,7 @@ from tehm.capability.delta import memory_delta_from_shadow_update  # noqa: E402
 
 
 SHADOW_CAMPAIGN_VERSION = "tehm-r3-orfs-interference-shadow-v0.1"
+P13_MATERIALIZED_AT = "2000-01-01T00:00:00+00:00"
 DEFAULT_CHALLENGE = Path(
     "/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-interference-challenge-20260903"
 )
@@ -448,6 +449,7 @@ def run(
         },
         "proposal": {**proposal.to_dict(), "proposal_digest": proposal.proposal_digest},
         "localized_update_plan": {**plan.to_dict(), "plan_digest": plan.plan_digest},
+        "p13_materialized_at": P13_MATERIALIZED_AT,
         "evaluation_only": True, "canonical_memory_mutation": "none",
         "production_runtime_imported": False,
         "production_integration": "not_attempted", "memory_docs_submitted": False,
@@ -548,6 +550,7 @@ def run(
         "provenance": {"source": "r3-orfs-interference-shadow",
                        "reason_receipt": reason_receipt.receipt_digest,
                        "proposal": proposal.proposal_digest},
+        "created_at": P13_MATERIALIZED_AT,
         "p12_shadow_trigger": {**triggers[first_case].to_dict(),
                                 "receipt_digest": triggers[first_case].receipt_digest},
         "anti_forgetting": {**witness.to_dict(), "receipt_digest": witness.receipt_digest},
