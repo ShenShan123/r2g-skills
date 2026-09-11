@@ -5170,3 +5170,25 @@ attribution 也为 eligible。标准 capability attribution 仅 C1-C4 为 true�
 route 与 candidate identity；execution artifact 绝对路径不同，因此不声称整份 report 文件
 字节一致。下一阶段严格按照 Sprint R3-7 冻结真实 held-out 与 Delta-M ablation，补 C6-C8。
 所有 P14 artifacts 位于仓库外，`memory/docs/` 仍不提交。
+
+### 2026-09-11 Revision3 StateShift R3-7 eligibility firewall
+
+新增 `scripts/audit_p14_state_shift_r3_7_eligibility.py`，把 R3-7 是否可以开始从人工判断
+变成只读、内容寻址的 fail-closed gate。它直接沿当前真实 P14 report 绑定的 P13 shadow
+receipt、support expansion、P12 ORFS cohort、anti-forgetting witness 和 held-out audit
+逐层复核，不构造候选、不扩大 SupportEnvelope、不写 SQLite，也不尝试 promotion。
+
+当前真实 StateShift delta 不能诚实闭合 C6--C8：mux32/parity64 的 `M_t=NO_MEMORY`
+已经 2/2 PASS，所以没有 `M_t fail -> M_t+1 pass` 的 target-gain opportunity；唯一
+source-disjoint 的 GCD 只是一条 applicability-firewall audit，其 structural signature 在
+child 的 exact SupportEnvelope 外，实际 route 为 `NO_SKILL/STATE_SHIFT`、没有执行 memory
+action，也没有 repair-success claim。早期 handshake/Icarus 脚本直接构造的 held-out
+candidate 不经过这条 ORFS delta 的 router/selector/binding，明确不复用为当前 C6--C8
+证据。
+
+因此机器报告必须返回 `NOT_ESTABLISHED`，并把下一条推荐执行路线标为设计规定的
+`R3_8_MEMORY_INTERFERENCE`。如果未来要重新打开 StateShift R3-7，必须先用新的、
+learner-eligible 且预注册的证据派生结构泛化，再产生一个 SupportEnvelope 真正覆盖独立
+held-out family 的新 P13 delta，最后通过真实 router、selector、binding、candidate 和
+oracle 执行 `M_t / M_t+1 / M_t+1-DeltaM` 三臂；不能通过放宽 firewall 或重标 held-out
+数据制造 transfer。报告仍只写仓库外，`memory/docs/` 继续由 `.gitignore` 排除且不提交。
