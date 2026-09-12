@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 from contracts import MemoryRoutingDecision  # noqa: E402
 from tehm.evaluation import P12_ARMS, OrfsCandidateOracle, execute_orfs_paired_cohort  # noqa: E402
+from tehm.evaluation.orfs_cohort import OrfsCohortExecutionError  # noqa: E402
 from tehm.ids import stable_dumps  # noqa: E402
 from tehm.physical.utility_contracts import (  # noqa: E402
     P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1_ID,
@@ -32,6 +33,7 @@ from tehm.retrieval.structured_candidate import StructuredRepairCandidate  # noq
 
 MANIFEST_VERSION = "p12-orfs-cohort-manifest-v1"
 REPORT_VERSION = "p12-orfs-cohort-run-report-v1"
+TERMINAL_REPORT_VERSION = "p12-orfs-cohort-terminal-report-v1"
 _MEMORY_ARMS = frozenset(P12_ARMS[1:])
 _SOURCE_BOUND_AUTHORITY_VERSION = "r3-8-source-bound-orfs-input-authority-v1"
 
@@ -332,11 +334,93 @@ def _verify_source_bound_bindings(authority: Mapping | None,
         raise P12OrfsRunError("input_authority reference is unavailable")
 
 
+def _routing_report(routing: Mapping | None) -> dict | None:
+    if routing is None:
+        return None
+    return {
+        case_id: {
+            "decision": decision.decision,
+            "decision_digest": decision.decision_digest,
+            "routing_receipt_id": decision.routing_receipt_id,
+            "no_skill_reason": decision.no_skill_reason,
+            "state_shift_receipt_id": decision.state_shift_receipt_id,
+            "risk_receipt_id": decision.risk_receipt_id,
+            **({"risk_receipt": dict(decision.risk_receipt)}
+               if decision.risk_receipt is not None else {}),
+        }
+        for case_id, decision in sorted(routing.items())
+    }
+
+
+def _terminal_report(*, output_path: Path, campaign_id: str,
+                     manifest_path: Path, manifest_digest: str,
+                     candidate_refs: Mapping, routing: Mapping | None,
+                     routing_meta: Mapping | None,
+                     input_authority_ref: Mapping | None,
+                     utility_contract_id: str | None,
+                     utility_contract_digest: str | None,
+                     error: Exception) -> dict:
+    failed = completed = None
+    failed_case_id = None
+    stage = "EXECUTION"
+    status = "EXECUTION_FAILED"
+    cause = error
+    if isinstance(error, OrfsCohortExecutionError):
+        status = "EXECUTION_POSTPROCESS_FAILED"
+        failed_case_id, stage = error.case_id, error.stage
+        failed_receipt = error.failed_case_receipt
+        failed = {**failed_receipt.to_dict(),
+                  "receipt_digest": failed_receipt.receipt_digest}
+        completed = {
+            case_id: {**receipt.to_dict(),
+                      "receipt_digest": receipt.receipt_digest}
+            for case_id, receipt in sorted(
+                error.completed_case_receipts.items())
+        }
+        cause = error.__cause__ or error
+    report = {
+        "terminal_report_version": TERMINAL_REPORT_VERSION,
+        "report_version": REPORT_VERSION,
+        "campaign_id": campaign_id,
+        "status": status,
+        "failed_stage": stage,
+        "failed_case_id": failed_case_id,
+        "error_type": type(cause).__name__,
+        "error": str(cause),
+        "manifest": str(manifest_path),
+        "manifest_sha256": _sha256(manifest_path),
+        "manifest_digest": manifest_digest,
+        "candidate_refs": dict(candidate_refs),
+        "routing_decisions": _routing_report(routing),
+        "routing_decisions_ref": (
+            None if routing_meta is None else dict(routing_meta)),
+        "input_authority_ref": (
+            None if input_authority_ref is None else dict(input_authority_ref)),
+        "utility_contract_id": utility_contract_id,
+        "utility_contract_digest": utility_contract_digest,
+        "failed_case_receipt": failed,
+        "completed_case_receipts": completed,
+        "cohort_receipt_available": False,
+        "evaluation_only": True,
+        "canonical_memory_mutation": "none",
+        "production_runtime_imported": False,
+        "production_integration": "not_attempted",
+        "memory_docs_submitted": False,
+    }
+    report["terminal_report_digest"] = _digest(report)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    return report
+
+
 def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
                         timeout: int | None = None,
                         routing_decisions: Path | str | None = None) -> dict:
     """Execute the exact four-arm P12 cohort described by ``manifest``."""
     manifest_path = Path(manifest).expanduser().resolve()
+    output_path = Path(output).expanduser().resolve()
+    if output_path.exists():
+        raise P12OrfsRunError(f"output already exists: {output_path}")
     payload, cases, budget, min_lineages = _manifest(manifest_path)
     campaign_id = _text(payload.get("campaign_id"), "campaign_id")
     input_authority, input_authority_ref = _source_bound_authority(
@@ -381,6 +465,15 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
             min_lineages=min_lineages,
             utility_contract=utility_contract)
     except (TypeError, ValueError, OSError) as exc:
+        _terminal_report(
+            output_path=output_path, campaign_id=campaign_id,
+            manifest_path=manifest_path, manifest_digest=manifest_digest,
+            candidate_refs=candidate_refs, routing=routing,
+            routing_meta=routing_meta,
+            input_authority_ref=input_authority_ref,
+            utility_contract_id=payload.get("utility_contract_id"),
+            utility_contract_digest=payload.get("utility_contract_digest"),
+            error=exc)
         raise P12OrfsRunError(str(exc)) from exc
     receipt = {**cohort.to_dict(), "receipt_digest": cohort.receipt_digest}
     # Keep the canonical cohort receipt at the top level so this output can be
@@ -394,19 +487,7 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
         "manifest_sha256": _sha256(manifest_path),
         "manifest_digest": manifest_digest,
         "candidate_refs": candidate_refs,
-        "routing_decisions": (None if routing is None else {
-            case_id: {
-                "decision": decision.decision,
-                "decision_digest": decision.decision_digest,
-                "routing_receipt_id": decision.routing_receipt_id,
-                "no_skill_reason": decision.no_skill_reason,
-                "state_shift_receipt_id": decision.state_shift_receipt_id,
-                "risk_receipt_id": decision.risk_receipt_id,
-                **({"risk_receipt": dict(decision.risk_receipt)}
-                   if decision.risk_receipt is not None else {}),
-            }
-            for case_id, decision in sorted(routing.items())
-        }),
+        "routing_decisions": _routing_report(routing),
         "routing_decisions_ref": routing_meta,
         "input_authority_ref": input_authority_ref,
         "utility_contract_id": payload.get("utility_contract_id"),
@@ -424,7 +505,6 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
         # for a submitted design-document bundle.
         "memory_docs_submitted": False,
     }
-    output_path = Path(output).expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return report

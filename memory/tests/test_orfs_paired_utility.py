@@ -15,6 +15,7 @@ from tehm.evaluation.orfs_paired_utility import (
     apply_orfs_paired_utility_contract,
     replay_orfs_paired_utility_receipt,
 )
+from tehm.evaluation.orfs_cohort import OrfsCohortExecutionError
 from tehm.evolution.reason_derivation import (
     EvolutionReasonDerivationError, derive_memory_interference_reason,
 )
@@ -187,3 +188,15 @@ def test_interference_detector_replays_paired_utility_projection():
                        match="regression projection mismatch"):
         derive_memory_interference_reason(
             forged, campaign_id="r3-8-source-bound")
+
+
+def test_postprocess_error_preserves_completed_arm_receipt():
+    bundle, _arms = _bundle()
+    error = OrfsCohortExecutionError(
+        "baseline rejected", case_id=bundle.case_id,
+        stage="PAIRED_UTILITY", failed_case_receipt=bundle,
+        completed_case_receipts={})
+    assert error.case_id == "heldout-density"
+    assert error.stage == "PAIRED_UTILITY"
+    assert error.failed_case_receipt.receipt_digest == bundle.receipt_digest
+    assert error.completed_case_receipts == {}

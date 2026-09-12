@@ -34,6 +34,19 @@ class OrfsCohortError(ValueError):
     """A frozen ORFS cohort is malformed or violates a fixed-environment gate."""
 
 
+class OrfsCohortExecutionError(OrfsCohortError):
+    """Post-execution failure that preserves every completed paired receipt."""
+
+    def __init__(self, message: str, *, case_id: str, stage: str,
+                 failed_case_receipt: PairedCandidateExecutionReceipt,
+                 completed_case_receipts: Mapping[str, PairedCandidateExecutionReceipt]):
+        super().__init__(message)
+        self.case_id = case_id
+        self.stage = stage
+        self.failed_case_receipt = failed_case_receipt
+        self.completed_case_receipts = dict(completed_case_receipts)
+
+
 def _digest(value: object) -> str:
     return "sha256:" + hashlib.sha256(stable_dumps(value).encode()).hexdigest()
 
@@ -378,8 +391,15 @@ def execute_orfs_paired_cohort(
             routing_receipt_id=case.get("routing_receipt_id"),
             routing_decision=case.get("routing_decision"))
         if utility_contract is not None:
-            bundle = apply_orfs_paired_utility_contract(
-                bundle, arms, contract=utility_contract)
+            try:
+                bundle = apply_orfs_paired_utility_contract(
+                    bundle, arms, contract=utility_contract)
+            except Exception as exc:
+                raise OrfsCohortExecutionError(
+                    f"ORFS cohort paired utility failed for {case_id}: {exc}",
+                    case_id=case_id, stage="PAIRED_UTILITY",
+                    failed_case_receipt=bundle,
+                    completed_case_receipts=receipts) from exc
         if (bundle.toolchain_digest != expected_toolchain or
                 bundle.oracle_digest != expected_oracle):
             raise OrfsCohortError("ORFS cohort execution digest drift")
@@ -404,6 +424,7 @@ def execute_orfs_paired_cohort(
 
 
 __all__ = [
-    "ORFS_COHORT_VERSION", "OrfsCohortError", "OrfsPairedCohortReceipt",
+    "ORFS_COHORT_VERSION", "OrfsCohortError", "OrfsCohortExecutionError",
+    "OrfsPairedCohortReceipt",
     "execute_orfs_paired_cohort",
 ]
