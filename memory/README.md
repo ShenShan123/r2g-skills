@@ -5372,3 +5372,63 @@ authority digest 为
 修复后 oracle source digest 为
 `sha256:a3894e04142373ca05f375c5c276aefe7d6f73a3fb0799f39b777e488ece1ef5`。
 串行 P12 已启动；此 checkpoint 没有宣称 baseline 合格、存在 harm 或 P13 已准入。
+
+### 2026-09-12 Revision3 R3-8 prospective training admission and specialization plan
+
+上述 prospective training 已完成 8 次真实 ORFS flow/checker 执行：两个独立 RTL
+lineage、四臂均 PASS、UNKNOWN=0、source restore verified。cohort receipt digest 为
+`sha256:a4aa1dbef593750b2297b3587c568a5ac3c66fffc1be6b865c0b8e1fc40bf74b`，
+文件 SHA256 为
+`sha256:b3adf88307ff7f1ffedebbfb4f4f554776cc2f379dfe2aab4651b23b236e21d2`。
+这仍是 narrow fixed-constraint counterfactual PASS，不扩大为 strict signoff 或等价证明。
+零退化 contract 下，mux16x3 的 die area +24.02%、power -0.53%、WNS 下降；
+xor_rotate32 的 die area +24.19%、power +4.26%、WNS 改善。不是所有指标都退化，
+但两条 pair 都有面积越界，因此都满足本批冻结的 physical-harm 定义。
+
+typed detector 自动推导两个 MEMORY_INTERFERENCE，reason bundle digest 为
+`sha256:0313cf81c1fcb9f6b4711d328f726cc5e887f25be6ca8fb6dd0b531705d6dcc1`。
+执行前冻结的 training partition 已核验，两个 reason-specific admission 都通过，
+P12→P13 trigger 为 `trigger_count=triggered_count=2`、`p13_eligible=true`，没有
+manual label。修复后的 runner authority ref 也与 manifest 的原冻结引用一致。
+
+新增 `build_p13_interference_source_bound_plan.py` 从该 admitted bundle 冷重放 detector、
+partition 和 P12 trigger，然后只在 RAM 中重放真实 router、selector、runtime binding
+和 candidate builder，逐项比对冻结回执。源数据库只读、hash unchanged，parent 为
+`mk_e273d9bb3e6b65f5d00e@1`、resolution 为 `resolution_0ccb409eff11024f5bef0d62`。
+parent path 中两个 flow.CONFIG_DELTA 干预和两个 flow.BASELINE_CONTROL 对照都验证了
+原 training membership 与 scoped execution authority；proposal seam 只使用两个与
+candidate action/measurement 相符的干预，对照另行保留，不当成新 challenge transition。
+
+source-bound plan r2 report digest 为
+`sha256:8d94ba006fcf25ee13c9ab129c6fd91932a7975870c17ff5b1d48a71378ce413`。
+SPECIALIZE exclusion 只来自已冻结的 mechanism、measurement scope、CORE50 flow facts，
+并显式绑定本批 utility contract ID/digest。不能把 utility harm 反写为 route-feasibility
+prediction 被反证，也不能禁止其他 utility trade-off 下的 CORE50 activation。
+后续 Mt、Mt+1 和 remove-delta comparison 必须使用同一 deterministic utility-context
+adapter，将 manifest 的原冻结 objective pins 绑定到查询；不添加 interference label，
+原 P12 query/artifact 不改写。该 exclusion 仍是待验证的 shadow hypothesis，不是已验证
+generalization。plan 继续 `shadow_execution_ready=false`、`anti_forgetting_present=false`、
+`shadow_update_attempted=false`；下一步补 eligible evaluation-view lifecycle、真实路由、
+target/non-target/held-out evidence 和 rollback，再执行正式 P13 与 P14 消融。
+
+前一阶段完整回归 1308 passed（955.28s）；包含新 source-bound plan 的后续完整
+回归已通过：1318 passed（964.42s）。plan/guard 还执行了真实 source replay。
+
+`audit_p13_interference_shadow_view.py` 的真实 RAM preflight 已通过，报告 digest 为
+`sha256:8d00d473c8fae59f0a7ff14e4791b220b086bbb131e92b553727569744df17c6`。
+实际 `revise_knowledge(SPECIALIZE)`、candidate lifecycle、authority ledger 审核与
+evaluation-only validated view 产生 child `mk_interference_5b219cea5abf09c37c50@1`，
+不是手填 router 输出。两个 training query 使用同一 utility-context adapter，Mt
+仍产生原冻结 candidate；加入 child 后都实际 INAPPLICABLE、candidate=None。不带
+utility pins 的 feasibility query 仍 CONSIDER/APPLY，证明此次 veto 没有越界到
+unscoped query。savepoint rollback 后逻辑数据库与原 frozen source 相符，两个
+candidate 的完整序列化精确恢复；raw evidence 与源数据库均 unchanged，RAM 已丢弃。
+
+这仅证明 eligible evaluation-view lifecycle、contract scoping、真实 route change
+和 rollback，不是 AntiForgettingWitness、AppliedShadowUpdateReceipt、held-out gain
+或 production validation。structural SPECIALIZES edge 本身不抑制 validated parent，
+所以后续审计必须冻结此 evaluation-view activation，而不能仅凭新 child 存在声称
+runtime 已改变。44 项定向测试通过；新增 audit 的端到端证据来自上述真实 source
+preflight，而该 1318 项完整回归启动时尚未包含其新测试。下一步冻结独立 held_out RTL，
+通过真实 runtime compiler 为 Mt、Mt+1、remove-delta 生成各臂候选与回退，再执行
+target/non-target/held-out；不能人工把 gated candidate 改为 null 绕过输入 authority。
