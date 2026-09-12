@@ -5278,3 +5278,23 @@ lineage，实际 route 均为 `CONSIDER`，候选 digest 均为
 本阶段 `eda_executed=false`、canonical mutation 为 none、production runtime 未导入；下一步
 才是运行 2 case × 4 arm 的真实 ORFS P12，并由成对物理 utility oracle 判断是否形成可重放
 的 `MEMORY_INTERFERENCE`，不能在结果出来前预设一定存在 harm。
+
+### 2026-09-11 Revision3 R3-8 baseline rejection and terminal preservation
+
+首轮真实 source-bound GCD 四臂执行没有形成完整 cohort。NO_MEMORY 的 route、DRC、LVS
+均 PASS，但预注册 1.4 ns 固定约束下 timing 为 WNS `-0.686476 ns`、TNS
+`-25.9128 ns`；CORE40 memory 改善到 WNS `-0.535494 ns`、TNS `-20.1014 ns`，仍未达到
+timing PASS。因此 paired utility 正确拒绝 `paired utility requires a successful no-memory
+baseline`，第二 case 未执行；该结果是 baseline eligibility failure，不是
+`MEMORY_INTERFERENCE`，也不能因看到面积变化而事后放宽 contract。
+
+这次拒绝同时暴露出 runner 在 utility 后处理异常时会丢失内存中的四臂 receipt。现在
+`OrfsCohortExecutionError` 会携带失败 case 的完整 pre-utility paired receipt 和此前已完成
+case；CLI 在返回错误前写出内容寻址的 `p12-orfs-cohort-terminal-report-v1`，绑定 manifest、
+input authority、candidate、routing、失败阶段及 evaluation-only 权限边界。一次重叠重放又由
+terminal receipt 捕获了 memory arms 的 workspace-lock UNKNOWN，进而发现 sandbox 名称原先
+只包含 case+candidate，没有包含 policy arm/retained workspace。现在 FLOW_VARIANT 同时绑定
+policy arm 与实际 execution scope，三条复用同一 candidate 的 memory arms 不再互相或与
+并行 campaign 冲突；flow stdout/stderr tail 也进入 oracle metadata，后续执行失败可直接
+审计。下一次 empirical run 必须使用新的、显式引用本次 baseline rejection 的 successor
+preregistration；旧 1.4 ns execution 不会被重标为成功证据。

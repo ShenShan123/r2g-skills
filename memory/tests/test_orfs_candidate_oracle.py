@@ -189,14 +189,19 @@ def test_orfs_paired_arms_retain_distinct_policy_artifacts(tmp_path):
     assert bundle.arm_receipts["ALWAYS_MEMORY"].outcome == "PASS"
     assert bundle.arm_receipts["APPLICABILITY_GATED"].outcome == "PASS"
     retained = set()
+    sandbox_names = set()
     for arm in P12_ARMS:
         metadata = bundle.arm_receipts[arm].metadata["oracle_metadata"]
         assert metadata["policy_arm"] == arm
+        assert "flow_stdout_tail" in metadata
+        assert "flow_stderr_tail" in metadata
         path = Path(metadata["execution_project_dir"])
         assert path.is_relative_to(root / arm.lower())
         assert (path / "reports/route.json").is_file()
         retained.add(path)
+        sandbox_names.add(path.name)
     assert len(retained) == len(P12_ARMS)
+    assert len(sandbox_names) == len(P12_ARMS)
 
 
 def test_orfs_artifact_root_requires_policy_arm_dispatch(tmp_path):

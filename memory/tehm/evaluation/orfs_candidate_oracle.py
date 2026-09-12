@@ -351,6 +351,11 @@ def _sandbox_name(case: Mapping, candidate: StructuredRepairCandidate | None) ->
     candidate_id = "no-memory" if candidate is None else candidate.candidate_id
     digest = hashlib.sha256(stable_dumps({
         "case_id": case_id, "candidate_id": candidate_id,
+        "policy_arm": case.get("_policy_arm"),
+        # Two retained campaign executions have different writable workspaces
+        # even when they replay the same case/candidate/arm identity.  Include
+        # that scope so their R2G FLOW_VARIANT locks cannot contend.
+        "execution_artifacts_dir": case.get("execution_artifacts_dir"),
     }).encode()).hexdigest()[:16]
     return "project_tehm_" + digest
 
@@ -443,6 +448,8 @@ def _result_from_arm(arm: Mapping, *, scope: str, action_applied: bool,
         "metadata": {
             "adapter_version": ORFS_CANDIDATE_ORACLE_VERSION,
             "flow_rc": flow_rc, "fix_rc": arm.get("fix_rc"),
+            "flow_stdout_tail": arm.get("flow_stdout_tail", ""),
+            "flow_stderr_tail": arm.get("flow_stderr_tail", ""),
             "fix_stdout_tail": arm.get("fix_stdout_tail", ""),
             "fix_stderr_tail": arm.get("fix_stderr_tail", ""),
             "target_report_available": target_observed,
@@ -607,6 +614,7 @@ class OrfsCandidateOracle:
                 raise OrfsCandidateOracleError(
                     "execution artifacts must be outside source project")
             case["execution_artifacts_dir"] = str(root / policy_arm.lower())
+        case["_policy_arm"] = policy_arm
         result = execute_orfs_candidate(
             candidate, case, budget, environment=self.environment)
         metadata = result.setdefault("metadata", {})
