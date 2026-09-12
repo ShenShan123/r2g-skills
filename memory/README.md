@@ -5298,3 +5298,23 @@ policy arm 与实际 execution scope，三条复用同一 candidate 的 memory a
 并行 campaign 冲突；flow stdout/stderr tail 也进入 oracle metadata，后续执行失败可直接
 审计。下一次 empirical run 必须使用新的、显式引用本次 baseline rejection 的 successor
 preregistration；旧 1.4 ns execution 不会被重标为成功证据。
+
+### 2026-09-11 Revision3 R3-8 oracle-source binding and successor freeze
+
+旧 P12 manifest 的 `oracle_digest` 只验证字符串一致，Python oracle 代码修改后不会自动使
+pin 失效。source-bound preregistration v2 现在必须显式列出 oracle source files；输入
+builder 对每个文件做 SHA256，再计算 `r3-8-orfs-oracle-binding-v1` 聚合摘要。P12 runner 在
+任何 EDA 前重新读取这些文件并校验 authority、manifest 与当前源码三者一致，源码漂移直接
+拒绝。当前绑定覆盖 candidate executor、fixed counterfactual、ORFS adapter/cohort/paired
+utility、flow-config probe、physical effect/contract、lifecycle report loader 与 manifest
+runner，摘要为
+`sha256:576b9b9d5903aed72a3fbfa699789e6a04658672bef32536c612d9a229134a58`。
+
+successor campaign
+`tehm-r3-orfs-interference-source-bound-core40-p25-20260911-r1` 显式引用上一 1.4 ns terminal
+rejection；仅按 predecessor `timing_check.json` 的低风险建议把固定 SDC period 预注册为
+2.5 ns，CORE50 baseline、CORE40 memory action 与零退化 utility contract 均未改变。两条
+GCD RTL lineage 的 source-bound input freeze 与 EDA 前 runner preflight 已通过，input
+authority digest 为
+`sha256:430c3953fcc4b1a9a1e80cd307bdf5b3b7a22eddac0feb837a1e509d6a5fcb13`；此时仍是
+`eda_executed=false`，不能提前声称 baseline 合格或存在 memory harm。

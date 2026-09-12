@@ -36,6 +36,8 @@ REPORT_VERSION = "p12-orfs-cohort-run-report-v1"
 TERMINAL_REPORT_VERSION = "p12-orfs-cohort-terminal-report-v1"
 _MEMORY_ARMS = frozenset(P12_ARMS[1:])
 _SOURCE_BOUND_AUTHORITY_VERSION = "r3-8-source-bound-orfs-input-authority-v1"
+_PREREGISTRATION_V2 = "r3-8-source-bound-orfs-preregistration-v2"
+_ORACLE_BINDING_VERSION = "r3-8-orfs-oracle-binding-v1"
 
 
 class P12OrfsRunError(ValueError):
@@ -105,6 +107,27 @@ def _source_bound_authority(manifest_path: Path, manifest: Mapping,
             authority.get("production_runtime_imported") is not False or
             authority.get("memory_docs_submitted") is not False):
         raise P12OrfsRunError("input_authority boundary is invalid")
+    preregistration = authority.get("preregistration")
+    if (isinstance(preregistration, Mapping) and
+            preregistration.get("version") == _PREREGISTRATION_V2):
+        binding = authority.get("oracle_binding")
+        if (not isinstance(binding, Mapping) or
+                binding.get("version") != _ORACLE_BINDING_VERSION or
+                binding.get("oracle_digest") != manifest.get("oracle_digest")):
+            raise P12OrfsRunError("input_authority oracle binding is invalid")
+        files = binding.get("files")
+        if not isinstance(files, list) or not files:
+            raise P12OrfsRunError("input_authority oracle files are missing")
+        unsigned = dict(binding)
+        unsigned.pop("oracle_digest", None)
+        if _digest(unsigned) != binding["oracle_digest"]:
+            raise P12OrfsRunError("input_authority oracle binding digest mismatch")
+        for item in files:
+            if not isinstance(item, Mapping):
+                raise P12OrfsRunError("input_authority oracle file is malformed")
+            path = Path(_text(item.get("path"), "oracle_binding.path")).resolve()
+            if not path.is_file() or _sha256(path) != item.get("sha256"):
+                raise P12OrfsRunError("input_authority oracle source drift")
     return authority, {"path": str(path), "sha256": _sha256(path),
                        "authority_digest": supplied}
 

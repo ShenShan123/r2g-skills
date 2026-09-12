@@ -50,6 +50,8 @@ from tehm.verified_execution import scoped_learning_replay  # noqa: E402
 
 
 PREREGISTRATION_VERSION = "r3-8-source-bound-orfs-preregistration-v1"
+PREREGISTRATION_VERSION_V2 = "r3-8-source-bound-orfs-preregistration-v2"
+ORACLE_BINDING_VERSION = "r3-8-orfs-oracle-binding-v1"
 REPORT_VERSION = "r3-8-source-bound-orfs-input-freeze-v1"
 INPUT_AUTHORITY_VERSION = "r3-8-source-bound-orfs-input-authority-v1"
 P12_MANIFEST_VERSION = "p12-orfs-cohort-manifest-v1"
@@ -287,7 +289,7 @@ def _source_snapshot(preregistration: Mapping):
             _text(replay.get("campaign_id"), "parent replay campaign_id"))
 
 
-def _toolchain(preregistration: Mapping) -> dict:
+def _toolchain(preregistration: Mapping, *, require_oracle_binding: bool = False) -> dict:
     raw = preregistration.get("toolchain")
     if not isinstance(raw, Mapping):
         raise SourceBoundInterferenceInputError("toolchain object is required")
@@ -315,6 +317,27 @@ def _toolchain(preregistration: Mapping) -> dict:
     for name in ("toolchain_digest", "oracle_digest", "platform_digest",
                  "pdk_digest"):
         checked[name] = _digest_pin(raw.get(name), name)
+    raw_oracle_files = raw.get("oracle_files")
+    if require_oracle_binding:
+        if (not isinstance(raw_oracle_files, list) or not raw_oracle_files or
+                any(type(value) is not str for value in raw_oracle_files)):
+            raise SourceBoundInterferenceInputError(
+                "v2 toolchain requires explicit oracle_files")
+        paths = [_path(value, "oracle_files") for value in raw_oracle_files]
+        if len(set(paths)) != len(paths):
+            raise SourceBoundInterferenceInputError("oracle_files contain duplicates")
+        binding = {
+            "version": ORACLE_BINDING_VERSION,
+            "files": [
+                {"path": str(path), "sha256": _sha256(path)}
+                for path in sorted(paths)
+            ],
+        }
+        binding["oracle_digest"] = _digest(binding)
+        if checked["oracle_digest"] != binding["oracle_digest"]:
+            raise SourceBoundInterferenceInputError(
+                "oracle_digest does not match oracle_files")
+        checked["oracle_binding"] = binding
     checked["platform"] = _text(raw.get("platform"), "platform")
     return checked
 
@@ -324,7 +347,9 @@ def build_inputs(preregistration_path: Path | str,
     """Build a routed, source-bound P12 input freeze without executing EDA."""
     preregistration_path = Path(preregistration_path).expanduser().resolve()
     preregistration = _read(preregistration_path, "R3-8 preregistration")
-    if preregistration.get("version") != PREREGISTRATION_VERSION:
+    preregistration_version = preregistration.get("version")
+    if preregistration_version not in {
+            PREREGISTRATION_VERSION, PREREGISTRATION_VERSION_V2}:
         raise SourceBoundInterferenceInputError(
             "R3-8 preregistration version mismatch")
     _closed(preregistration, "R3-8 preregistration")
@@ -335,7 +360,10 @@ def build_inputs(preregistration_path: Path | str,
         raise SourceBoundInterferenceInputError(
             "R3-8 preregistration requires at least two cases")
     contract, contract_digest = _contract(preregistration)
-    toolchain = _toolchain(preregistration)
+    toolchain = _toolchain(
+        preregistration,
+        require_oracle_binding=(
+            preregistration_version == PREREGISTRATION_VERSION_V2))
     (snapshot_path, snapshot, source_db, acquisition_path, acquisitions,
      acquisition_digest, replay_campaign_id) = _source_snapshot(preregistration)
     source_db_sha_before = _sha256(source_db)
@@ -528,6 +556,7 @@ def build_inputs(preregistration_path: Path | str,
             "path": str(preregistration_path),
             "sha256": _sha256(preregistration_path),
             "digest": _digest(preregistration),
+            "version": preregistration_version,
         },
         "source_snapshot_report": {
             "path": str(snapshot_path), "sha256": _sha256(snapshot_path),
@@ -543,6 +572,8 @@ def build_inputs(preregistration_path: Path | str,
         },
         "utility_contract_id": contract["contract_id"],
         "utility_contract_digest": contract_digest,
+        **({"oracle_binding": toolchain["oracle_binding"]}
+           if "oracle_binding" in toolchain else {}),
         "source_disjoint_scope": "verilog_content_sha256",
         "cases": audit_cases,
         "candidate_freeze": candidate_freeze,
@@ -578,6 +609,8 @@ def build_inputs(preregistration_path: Path | str,
         "oracle_digest": toolchain["oracle_digest"],
         "utility_contract_id": contract["contract_id"],
         "utility_contract_digest": contract_digest,
+        **({"oracle_binding": toolchain["oracle_binding"]}
+           if "oracle_binding" in toolchain else {}),
         "input_authority": authority_ref,
         "cases": generated_cases,
         "evaluation_only": True,

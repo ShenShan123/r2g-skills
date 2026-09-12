@@ -79,6 +79,36 @@ def test_toolchain_rejects_non_executable_pins(tmp_path):
         _toolchain({"toolchain": raw})
 
 
+def test_v2_toolchain_recomputes_oracle_source_binding(tmp_path):
+    directories = {}
+    for name in ("orfs_root", "pdk_root", "toolchain_root"):
+        path = tmp_path / name
+        path.mkdir()
+        directories[name] = str(path)
+    files = {}
+    for name in ("openroad_exe", "yosys_exe", "make_exe", "python_exe",
+                 "run_flow_script", "fix_signoff_script"):
+        path = tmp_path / name
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o755)
+        files[name] = str(path)
+    manifest = tmp_path / "toolchain_manifest"
+    manifest.write_text("manifest\n")
+    files["toolchain_manifest"] = str(manifest)
+    oracle = tmp_path / "oracle.py"
+    oracle.write_text("ORACLE_VERSION = 1\n")
+    raw = {
+        **directories, **files, "platform": "sky130hs",
+        "oracle_files": [str(oracle)],
+        **{name: "sha256:pin" for name in (
+            "toolchain_digest", "platform_digest", "pdk_digest")},
+        "oracle_digest": "sha256:stale",
+    }
+    with pytest.raises(SourceBoundInterferenceInputError,
+                       match="does not match oracle_files"):
+        _toolchain({"toolchain": raw}, require_oracle_binding=True)
+
+
 def test_physical_harm_contract_requires_source_bound_authority(tmp_path):
     manifest = {
         "campaign_id": "r3-8",
