@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import shutil
 import sys
 from pathlib import Path
 
@@ -69,6 +68,34 @@ def _strata(case: dict) -> dict[str, str]:
     }
 
 
+def _prospective_calibration_partition(challenge_root, cases_payload, cohort):
+    """Execution-bound membership, not a post-outcome split argument."""
+    manifest_path = challenge_root / "receipts" / "campaign_manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise OrfsP15CalibrationError("prospective calibration manifest is missing") from exc
+    if (not isinstance(manifest, dict) or _digest(manifest) != cohort.campaign_manifest_digest or
+            manifest.get("campaign_id") != cohort.campaign_id or
+            manifest.get("lane") != "CALIBRATION" or manifest.get("learner_eligible") is not False):
+        raise OrfsP15CalibrationError("execution-bound prospective calibration partition is not established")
+    frozen = manifest.get("cases")
+    cases = cases_payload.get("cases")
+    if (not isinstance(frozen, list) or not frozen or cases != frozen or
+            len({case.get("case_id") for case in frozen if isinstance(case, dict)}) != len(frozen) or
+            {case.get("case_id") for case in frozen} != set(cohort.case_receipts)):
+        raise OrfsP15CalibrationError("calibration case membership differs from the executed manifest")
+    for case in frozen:
+        cid = case["case_id"]
+        if (case.get("dataset_split") != "calibration" or case.get("role") != "calibration" or
+                case.get("learner_eligible") is not False or
+                case.get("lineage_id") != cohort.lineage_ids[cid]):
+            raise OrfsP15CalibrationError("training, validation, or held-out evidence cannot be relabeled calibration")
+    return {"path": str(manifest_path), "sha256": _file_digest(manifest_path),
+            "campaign_manifest_digest": cohort.campaign_manifest_digest,
+            "learner_eligible": False, "split": "calibration", "membership_execution_bound": True}
+
+
 def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
         artifacts: Path | str, force: bool = False,
         minimum_sample_count: int = 2,
@@ -80,16 +107,15 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
     challenge_root = Path(challenge_artifacts).expanduser().resolve()
     output = Path(artifacts).expanduser().resolve()
     if output.exists():
-        if not force:
-            raise OrfsP15CalibrationError(
-                f"output exists; pass --force to replace it: {output}")
-        shutil.rmtree(output)
-    output.mkdir(parents=True)
-    receipts_root = output / "receipts"
-    receipts_root.mkdir()
+        raise OrfsP15CalibrationError(f"output exists; calibration evidence is immutable; use a new directory: {output}")
+    if force:
+        raise OrfsP15CalibrationError("--force replacement is disabled for immutable calibration evidence")
+    if challenge_root.is_relative_to(output):
+        raise OrfsP15CalibrationError("calibration output cannot contain its source evidence")
 
     (cases_payload, cohort, routes, _candidates, _derivations, _triggers,
      _admissions, reason) = shadow._load_challenge(challenge_root)
+    partition = _prospective_calibration_partition(challenge_root, cases_payload, cohort)
     if len(cohort.case_receipts) < 2 or cohort.lineage_count < 2:
         raise OrfsP15CalibrationError(
             "ORFS calibration requires at least two source-disjoint lineages")
@@ -99,6 +125,10 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
            for route in routes.values()):
         raise OrfsP15CalibrationError(
             "pre-interference calibration route is outside binary P15 contract")
+
+    output.mkdir(parents=True)
+    receipts_root = output / "receipts"
+    receipts_root.mkdir()
 
     paired_index: dict[str, dict] = {}
     routing_decisions: dict[str, dict] = {}
@@ -155,6 +185,8 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
         "routing_decisions": routing_decisions,
         "oracle_labels": oracle_labels,
         "evidence_refs": [
+            {"id": "prospective-calibration-partition", "path": partition["path"],
+             "sha256": partition["sha256"]},
             {"id": "orfs-cohort", "path": str(cohort_path),
              "sha256": _file_digest(cohort_path)},
             {"id": "orfs-cases", "path": str(cases_path),
@@ -180,6 +212,7 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
         "split": "calibration",
         "backend": "external_orfs",
         "source_cohort": str(challenge_root),
+        "prospective_calibration_partition": partition,
         "source_disjoint_lineages": cohort.lineage_ids,
         "sample_count": len(cohort.case_receipts),
         "derived_oracle_decisions": {

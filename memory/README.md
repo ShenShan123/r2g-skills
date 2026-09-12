@@ -5575,3 +5575,85 @@ oracle fixtures 不是 empirical receipts，且该入口尚未执行真实 witne
 上述 1378 项完整回归启动时尚未包含这 18 项新测试。必须等 non-target、held-out 和
 rollback 实证齐备，才能消费正式 P13 update，然后绑定 P14 C1–C8；R3-9 CAPABILITY_GAP
 与 P15 calibration/statistical production gates 仍未因本阶段通过而宣称完成。
+
+### 2026-09-12 Revision3 R3-8 actual anti-forgetting and formal P13 consumption
+
+上述 fresh state32 held-out 和 CORE45 non-target validation 均已完成全部三策略：
+每批 24 次独立 flow/checker，四臂 narrow counterfactual PASS，UNKNOWN=0。加上
+CORE50 target replay，本次 gate chain 覆盖 72 个独立保留执行工作区；这不是 72 条
+独立设计 lineage，也不是独立 seeded repetitions。两批 execution audit 分别为
+`sha256:b2ad24a0d4a0e0d6c605b6f6b482df0a194bd8db09fcc13810b2b7be5854ca4e`
+（held-out）和
+`sha256:30f8ef9fbdafeec6d179aa16418da845d0c078b66fdd8862ef39d45643df7efe`
+（CORE45 non-target）。两条 held-out RTL 在 Mt 中均实际违反冻结 utility contract；
+post-policy gated/causal 实际 no-memory fallback PASS，相对当次独立 NO_MEMORY
+baseline 的报告原精度 physical delta 全为零；真实 remove-delta 后原 candidate 和
+utility harm 再现。counter32 的 area +24.33%，但 power/WNS 改善；shift32 的 area
++24.23%、power +9.15%、WNS 下降。因此这里是 contract-scoped harm avoidance，
+不能描述为所有物理指标都改善。
+
+`build_p13_interference_anti_forgetting_evidence.py` 已在实际文件上执行，逐组 cold
+replay 三策略 retained execution audits、冻结 training comparison pins、同一 child
+activation 与完整 rollback。实际 aggregate 位于 training campaign 下
+`p13-actual-anti-forgetting-r1/anti-forgetting-evidence-report.json`，digest 为
+`sha256:4bd74144b88787dc5beeb5a4ae47507113e9ce5c2782ccd524a69cdd507f3325`；
+typed witness eligible=true，digest 为
+`sha256:e7215f99ee69288a3ea7cc5dd2981cd67944d913fcb2f98bb38ad6ff59c7a7df`。
+非目标证据仅覆盖 CORE45；原 CORE70 r1/r2 与 tiny priority8 的 terminal failure
+全部保留，不解决、不删除，也不据此开放 wider non-target/production gate。
+
+新增 `run_p13_interference_source_bound_shadow_update.py` 冷重放实际 aggregate 与
+原 manifest 的 typed witness，使用原 prospective training case 的真实 lineage，
+调用现有 `apply_localized_update_shadow`；不会把 validation/held-out/calibration
+evidence 导入 learner。正式报告 `p13-source-bound-shadow-update-r1.json` 的 digest
+为 `sha256:2bc047f7cf5931237196a1b2282a909a3c0207a7c3a02cb3efe5d40aec15e161`。
+实际创建 `knowledge:mk_interference_5b219cea5abf09c37c50@1` 和
+`relation_3c313a95623cfcc9a55f173b`；resolution 从
+`resolution_0ccb409eff11024f5bef0d62` 变为
+`resolution_f99e2627a11950e9a9675ad8`，formal staging logical digest 为
+`sha256:6ababdb8269d7eac8fe980609c87617e03196469190655a4a1b656d546ad8dec`。
+原 source file/logical digest、canonical evidence unchanged，production authority
+unchanged，staging discarded，MemoryDeltaReceipt eligible=true。
+
+正式 P13 只执行结构 SPECIALIZE、创建 shadow child/关系，没有执行 candidate→
+validated evaluation-view activation。新的 `run_p14_interference_attribution.py`
+将冷重放正式 P13，逐字重建整个 formal staging digest，单独 reload/replay formal
+state，再独立激活同一 RAM evaluation child，绑定全部三策略的实际 route/candidate
+与保留 execution。实际 veto 下 candidate=None 必须由 routing 和 no-memory execution
+见证，不能伪造 CandidateLineageReceipt；真实 selected candidate 则使用现有 typed
+lineage builder。该入口的实际运行已完成；formal rematerialization、独立 RAM
+evaluation activation/load、全部三策略 runtime behavior 与 72 个保留 execution
+工作区绑定均通过。正式 P14 报告位于
+`p14-formal-interference-attribution-r1/p14-interference-attribution-report.json`，digest
+为 `sha256:50f65441bdc223d9699dd6c2836d843de46cb36b8a2026eb26686b9cda931b47`。
+Revision3 C1–C5 与 bounded held-out/non-target/remove-ΔM gates 全部为 true；标准
+capability attribution 的 C1–C6/C8 为 true，但 C7=false、promotable=false。这是
+L2 contract-scoped strategy evolution，不是新的 action space，也不把 CORE45 的
+相对零退化扩大为解决 CORE70 或广义安全。Remove-ΔM 精确恢复完整 behavior digest；
+formal P13 staging digest 明确不包含单独 evaluation activation。
+
+包含新 P13 consumer 的完整回归已通过：1406 passed（998.56s），durable JUnit 位于
+training campaign 的 `regression-p13-consumer-20260912-r2.xml`；其 collection 尚未
+包含后加入的 P14 22 项测试及 P15 firewall 11 项新测试。最新相关定向回归为
+123 passed（0.82s），覆盖上述新检查；fixtures 不是 empirical receipts。新完整回归
+已按当前 1439-test collection 启动，结果待 terminal 确认，不将 collection 当作 PASS。
+`memory/docs/` 继续仅作本地 governing input，不提交、不推送。
+
+### 2026-09-12 Revision3 P15 prospective partition firewall
+
+修正旧 `run_r3_orfs_p15_calibration.py` 的 calibration-source boundary：现在必须有
+cohort execution digest 绑定的原 campaign manifest、`lane=CALIBRATION`、campaign
+和每条 case 的 prospective `dataset_split=role=calibration`、explicit non-learner
+membership 及实际 lineage 一致性。不能仅向 oracle label deriver 传
+`split="calibration"`，就把 training/validation/held-out challenge outcome 事后重标。
+校验失败不会创建 calibration output；旧 `--force` 不再允许删除原 calibration
+evidence，必须使用新的独立输出目录。没有删除或重写任何 historical artifact。
+
+对真实历史 `tehm-r3-orfs-interference-challenge-20260903` 的只读 probe 已明确拒绝：
+`execution-bound prospective calibration partition is not established`，exit=1，未创建
+目标 calibration output。该批原 manifest 的 lane 是 EVOLUTION_CHALLENGE，并非
+独立 calibration；旧 ORFS calibration slice/aggregate 是历史 outcome replay，不再
+可据此声称满足当前 prospective calibration requirement。历史 RTL calibration 与
+其他 evidence 不在本 probe 的检查范围，不能据此一并断言通过或失效。后续必须生成
+新的、执行前划分且与 evolution/held-out source disjoint 的 calibration cohort；
+`INAPPLICABLE` 仍不被静默重标为二元 NO_SKILL，当前 P15 与 production gates 未开放。
