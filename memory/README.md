@@ -5255,3 +5255,26 @@ Asset 并生成 GCD runtime binding。因此下一阶段可以直接冻结 GCD/J
 cohort，通过真实 router/selector/binding 生成 candidate，再运行带上述 contract 的四臂
 ORFS P12；不得从旧 challenge JSON 复制手写 route 或 CORE99 candidate。实现与测试仍只写
 代码/仓库外 evidence，`memory/docs/` 保持未跟踪且不提交。
+
+### 2026-09-11 Revision3 R3-8 source-bound ORFS input authority
+
+新增 `scripts/build_r3_orfs_interference_source_bound_inputs.py`，把上述预检升级为昂贵 EDA
+执行前的 fail-closed 输入冻结。builder 校验 P13 source snapshot、source SQLite 文件与逻辑
+摘要、父 acquisition replay、预注册 utility contract、工具链 pin 和挑战源文件；随后只在隔离
+RAM 中调用实际 router、asset selector、runtime binder 与 structured-candidate builder。
+挑战 source-disjoint 判定使用 Verilog 内容哈希；SDC 仍逐文件绑定，但允许两个独立 RTL
+lineage 复用同一约束内容，避免把公共测试协议误判为设计泄漏。
+
+新的 P12 physical-harm contract 现在强制 manifest 引用内容寻址的
+`input-authority.json`。runner 在启动任何 ORFS 进程前重放 authority 自摘要，并逐 case 核对
+candidate path/SHA/identity、typed routing receipt 与 source digest；缺失 authority、未提供
+routing decisions、候选替换或 generation-chain/boundary 标志漂移都会拒绝。当前外部冻结
+`tehm-r3-orfs-interference-source-bound-core40-20260911-r1/inputs-r3` 包含两个不同 GCD RTL
+lineage，实际 route 均为 `CONSIDER`，候选 digest 均为
+`sha256:8c5c86b8ac43d84e18996244ae0735897b77fbea5883d648833fd830d34f5f43`；两次独立冻结的候选
+与 routing 文件逐字节一致，source SQLite SHA256 保持
+`356d5352a338ccb47f718e11c15a1c966e4be780316de28a7dc1753bfab9c23c`。最终 authority digest
+为 `sha256:b3991c596718064ca823f14660c2f18fd0162be207f6cde6788720ad64367299`。
+本阶段 `eda_executed=false`、canonical mutation 为 none、production runtime 未导入；下一步
+才是运行 2 case × 4 arm 的真实 ORFS P12，并由成对物理 utility oracle 判断是否形成可重放
+的 `MEMORY_INTERFERENCE`，不能在结果出来前预设一定存在 harm。

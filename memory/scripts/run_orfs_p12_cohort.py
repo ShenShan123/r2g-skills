@@ -24,6 +24,7 @@ from contracts import MemoryRoutingDecision  # noqa: E402
 from tehm.evaluation import P12_ARMS, OrfsCandidateOracle, execute_orfs_paired_cohort  # noqa: E402
 from tehm.ids import stable_dumps  # noqa: E402
 from tehm.physical.utility_contracts import (  # noqa: E402
+    P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1_ID,
     known_utility_contracts, utility_contract_digest,
 )
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate  # noqa: E402
@@ -32,6 +33,7 @@ from tehm.retrieval.structured_candidate import StructuredRepairCandidate  # noq
 MANIFEST_VERSION = "p12-orfs-cohort-manifest-v1"
 REPORT_VERSION = "p12-orfs-cohort-run-report-v1"
 _MEMORY_ARMS = frozenset(P12_ARMS[1:])
+_SOURCE_BOUND_AUTHORITY_VERSION = "r3-8-source-bound-orfs-input-authority-v1"
 
 
 class P12OrfsRunError(ValueError):
@@ -48,6 +50,61 @@ def _sha256(path: Path) -> str:
 
 def _digest(payload: Mapping) -> str:
     return "sha256:" + hashlib.sha256(stable_dumps(dict(payload)).encode()).hexdigest()
+
+
+def _source_bound_authority(manifest_path: Path, manifest: Mapping,
+                            case_ids: set[str]) -> tuple[dict | None, dict | None]:
+    ref = manifest.get("input_authority")
+    required = (manifest.get("utility_contract_id") ==
+                P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1_ID)
+    if ref is None:
+        if required:
+            raise P12OrfsRunError(
+                "R3-8 physical-harm contract requires input_authority")
+        return None, None
+    if not isinstance(ref, Mapping):
+        raise P12OrfsRunError("input_authority reference must be an object")
+    path = Path(_text(ref.get("path"), "input_authority.path")).expanduser()
+    if not path.is_absolute():
+        path = manifest_path.parent / path
+    path = path.resolve()
+    if not path.is_file() or _sha256(path) != _digest_pin(
+            ref.get("sha256"), "input_authority.sha256"):
+        raise P12OrfsRunError("input_authority file digest mismatch")
+    authority = _load_json(path, "input authority")
+    supplied = authority.get("authority_digest")
+    unsigned = dict(authority)
+    unsigned.pop("authority_digest", None)
+    if (supplied != _digest(unsigned) or supplied !=
+            _digest_pin(ref.get("authority_digest"),
+                        "input_authority.authority_digest")):
+        raise P12OrfsRunError("input_authority content digest mismatch")
+    if authority.get("version") != _SOURCE_BOUND_AUTHORITY_VERSION:
+        raise P12OrfsRunError("input_authority version mismatch")
+    authority_cases = authority.get("cases")
+    if (authority.get("campaign_id") != manifest.get("campaign_id") or
+            not isinstance(authority_cases, Mapping) or
+            set(authority_cases) != case_ids):
+        raise P12OrfsRunError("input_authority campaign/case coverage mismatch")
+    if (authority.get("utility_contract_id") !=
+            manifest.get("utility_contract_id") or
+            authority.get("utility_contract_digest") !=
+            manifest.get("utility_contract_digest")):
+        raise P12OrfsRunError("input_authority utility contract mismatch")
+    if any(authority.get(field) is not True for field in (
+            "actual_router_used", "actual_selector_used",
+            "actual_runtime_binding_used", "actual_candidate_builder_used")):
+        raise P12OrfsRunError("input_authority actual generation chain is incomplete")
+    if (authority.get("source_disjoint_scope") !=
+            "verilog_content_sha256" or
+            authority.get("eda_executed") is not False or
+            authority.get("evaluation_only") is not True or
+            authority.get("canonical_memory_mutation") != "none" or
+            authority.get("production_runtime_imported") is not False or
+            authority.get("memory_docs_submitted") is not False):
+        raise P12OrfsRunError("input_authority boundary is invalid")
+    return authority, {"path": str(path), "sha256": _sha256(path),
+                       "authority_digest": supplied}
 
 
 def _load_json(path: Path, name: str) -> dict:
@@ -222,6 +279,59 @@ def _routing_map(path: Path, cases: Sequence[Mapping]) -> tuple[dict[str, Memory
     return result, {"path": str(path), "sha256": _sha256(path)}
 
 
+def _verify_source_bound_bindings(authority: Mapping | None,
+                                  authority_ref: Mapping | None,
+                                  cases: Sequence[Mapping],
+                                  candidate_refs: Mapping,
+                                  routing: Mapping | None,
+                                  routing_meta: Mapping | None) -> None:
+    if authority is None:
+        return
+    case_ids = {case["case_id"] for case in cases}
+    frozen_candidates = authority.get("candidate_freeze")
+    authority_cases = authority.get("cases")
+    if (not isinstance(frozen_candidates, Mapping) or
+            set(frozen_candidates) != case_ids or
+            not isinstance(authority_cases, Mapping) or
+            set(authority_cases) != case_ids):
+        raise P12OrfsRunError("input_authority candidate/case coverage mismatch")
+    if routing is None or routing_meta is None:
+        raise P12OrfsRunError(
+            "source-bound input_authority requires routing_decisions")
+    route_ref = authority.get("routing_decisions")
+    if (not isinstance(route_ref, Mapping) or
+            route_ref.get("path") != routing_meta.get("path") or
+            route_ref.get("sha256") != routing_meta.get("sha256")):
+        raise P12OrfsRunError("routing decisions drift from input_authority")
+    by_id = {case["case_id"]: case for case in cases}
+    for case_id in sorted(case_ids):
+        frozen = frozen_candidates[case_id]
+        audit = authority_cases[case_id]
+        if not isinstance(frozen, Mapping) or not isinstance(audit, Mapping):
+            raise P12OrfsRunError("input_authority case entry is malformed")
+        refs = candidate_refs[case_id]
+        if set(refs) != _MEMORY_ARMS:
+            raise P12OrfsRunError(
+                "source-bound campaign requires all three memory candidates")
+        for arm in sorted(_MEMORY_ARMS):
+            current = refs[arm]
+            if any(current.get(field) != frozen.get(field) for field in (
+                    "path", "sha256", "candidate_id", "candidate_digest")):
+                raise P12OrfsRunError(
+                    f"{case_id}/{arm} candidate drifts from input_authority")
+        expected_route = {
+            **routing[case_id].to_dict(),
+            "decision_digest": routing[case_id].decision_digest,
+        }
+        if (audit.get("source_digest") != by_id[case_id].get("source_digest") or
+                stable_dumps(audit.get("route")) !=
+                stable_dumps(expected_route)):
+            raise P12OrfsRunError(
+                f"{case_id} source/route drifts from input_authority")
+    if authority_ref is None:  # pragma: no cover - validated together above
+        raise P12OrfsRunError("input_authority reference is unavailable")
+
+
 def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
                         timeout: int | None = None,
                         routing_decisions: Path | str | None = None) -> dict:
@@ -229,6 +339,8 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
     manifest_path = Path(manifest).expanduser().resolve()
     payload, cases, budget, min_lineages = _manifest(manifest_path)
     campaign_id = _text(payload.get("campaign_id"), "campaign_id")
+    input_authority, input_authority_ref = _source_bound_authority(
+        manifest_path, payload, {case["case_id"] for case in cases})
     if timeout is not None:
         if type(timeout) is not int or timeout < 1:
             raise P12OrfsRunError("timeout must be a positive integer")
@@ -244,6 +356,9 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
     if routing_decisions is not None:
         routing_path = Path(routing_decisions).expanduser().resolve()
         routing, routing_meta = _routing_map(routing_path, cases)
+    _verify_source_bound_bindings(
+        input_authority, input_authority_ref, cases, candidate_refs,
+        routing, routing_meta)
     # ORFS scripts consume ORFS_TIMEOUT/ORFS_MAX_CPUS through their existing
     # environment contract.  This CLI deliberately does not reinterpret it.
     if timeout is not None:
@@ -293,6 +408,7 @@ def run_p12_orfs_cohort(manifest: Path | str, *, output: Path | str,
             for case_id, decision in sorted(routing.items())
         }),
         "routing_decisions_ref": routing_meta,
+        "input_authority_ref": input_authority_ref,
         "utility_contract_id": payload.get("utility_contract_id"),
         "utility_contract_digest": payload.get("utility_contract_digest"),
         "cohort_receipt": receipt,
