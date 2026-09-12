@@ -5432,3 +5432,146 @@ runtime 已改变。44 项定向测试通过；新增 audit 的端到端证据�
 preflight，而该 1318 项完整回归启动时尚未包含其新测试。下一步冻结独立 held_out RTL，
 通过真实 runtime compiler 为 Mt、Mt+1、remove-delta 生成各臂候选与回退，再执行
 target/non-target/held-out；不能人工把 gated candidate 改为 null 绕过输入 authority。
+
+### 2026-09-12 Revision3 R3-8 independent held-out policy replay checkpoint
+
+prospective held-out campaign
+`tehm-r3-orfs-interference-heldout-add16-20260912-r1` 在任何 ORFS outcome 前冻结
+两个新的独立 RTL：17-bit registered add/carry with enable-hold、registered 8-way
+priority encoder with enable-hold。两者 100-cycle simulation、Yosys synth/
+`check -assert` 和 signoff-loop config validation 均 PASS；源码预检不是候选等价证明。
+VERILOG content SHA256 与 parent mux32/parity64、interference training mux16x3/
+xor_rotate32、GCD diagnostics 均无重叠，source-disjoint audit digest 为
+`sha256:17bf4c0ac979c9817f0c56a2ad40979105c2f912bab5cb23cc9d42b8f9b090f8`。
+case 与 campaign 均显式 non-learner，`dataset_split=role=held_out`，不导入 learning
+support。baseline source-bound input freeze digest 为
+`sha256:fe4a28eb74b1a72be1f5af59ff5af03bf340ab840c031813abe6fb1477133770`。
+
+新增 `build_p13_interference_policy_views.py` 冷重放 admitted training plan，只在
+RAM 中使用同一 eligible evaluation-child lifecycle，生成 Mt、Mt+delta 和
+Mt+delta-minus-delta 的实际 routing/candidates。r2 policy freeze digest 为
+`sha256:4ca8007877214d3947d2483132d85f9fd046fcaa7cd6ed9853a42eb943578a17`。
+两个 held-out query 的实际路由都是 CONSIDER → INAPPLICABLE → CONSIDER，
+gated/causal fallback 只在 router 实际拒绝 memory 时生成，forced ALWAYS_MEMORY
+保留原 parent candidate；remove-delta 恢复完整 Mt candidate 和 routing。
+query utility adapter 不引入 outcome 或 interference label。runtime generation 的
+完整 TEHM Python corpus 与 compiler/runner 源码另行 SHA-bound，不改写旧 EDA oracle。
+
+`run_orfs_interference_policy_view.py` 使用独立 policy authority schema；执行前核验
+原 baseline authority、plan/preflight、源码绑定、每臂 candidate、query/route、
+source/environment/role/budget/toolchain/oracle/objective 不变量，先持久化 execution
+request，再调用已有真实四臂 ORFS oracle。不会伪造旧 v1 authority 来接受 post-policy
+null，也不会把 fallback 算作 memory action。执行后 source drift 会拒绝通过，但保留
+已完成 cohort；失败或不完整 physical utility 继续留下 terminal evidence。
+
+three-policy execution freeze digest 为
+`sha256:923902c1221185f25cca72e88e56d7ac2beeb24be79259807c38453dbf0949b7`。
+三种策略的全部输入已在首个 flow 前验证，串行真实 ORFS 对照已启动：计划 24 次
+flow/checker（2 RTL × 3 views × 4 arms），NUM_CORES=2、ORFS_TIMEOUT=900。
+无 model/prompt/provider call；simulation seed=12092026，physical seed 模式固定为
+OR_SEED unset、同一 pinned OpenROAD default，不是独立 seeded repetitions。
+此 checkpoint 不宣称 ORFS PASS、utility gain、held-out audit 或 ablation 成功。
+78 项定向测试通过；包含 audit helper、policy compiler/runner 的新完整回归正在运行。
+正式 AntiForgettingWitness/P13 update/P14 attribution、non-target replay、CAPABILITY_GAP
+lane 和 P15 reason-stratified calibration 仍需推进；production promotion 保持关闭。
+
+### 2026-09-12 Revision3 R3-8 terminal evidence and actual gate execution
+
+上述 add16/priority8 held-out checkpoint 已终止，不再视为正在执行：Mt 中 add16
+四臂 narrow counterfactual PASS，priority8 四臂 UNKNOWN。其 baseline floorplan
+实际报 PDN-0185：core width 24.48um 无法容纳 15.2um strap 与 13.6um offset。
+paired utility 因 baseline 未成功而拒绝构建；完整 held-out cohort、post-policy 和
+remove-delta execution 均未建立。原两条 case、冻结配置、日志和 terminal report
+全部保留，不删除失败 case，不在原 terminal campaign 中改 floorplan 后重启。
+terminal disposition digest 为
+`sha256:48d88a0bf48c3e37577244ac3b4cbc1e6271fafef9bb395e5db489f9080bec78`。
+
+新增 `audit_p13_interference_policy_execution.py` 从三组实际执行回执推导 target、
+non-target 或 held-out gate，不是把 caller boolean 当 oracle。逐臂重放保留工作区
+的 fixed-constraint reports、paired utility、源文件与实际 config/action，要求真实
+remove-delta 工作区独立，拒绝旧 NO_MEMORY baseline alias；physical comparison
+使用报告原精度，零附加 tolerance，不把微小 power harm 四舍五入抹掉。target/
+held-out 要求实际避开 Mt memory harm、remove-delta 后 harm 回归；non-target 只
+能证明相对 Mt 不退化，不能抹掉 Mt 原已有的绝对 utility harm。该脚本仍不生成
+正式 P13/P14 receipt 或 AntiForgettingWitness，也不宣称 statistical generalization。
+其 retained-arm 与 paired utility replay 已在上述实际完成的 add16 四臂上通过，
+completed-case preflight digest 为
+`sha256:2c4ad384818baebacd7fbec7e943ddcdd2f75a524b29c15c866a658137148c3d`；
+这不是完整 held-out 三策略 gate 通过。
+
+CORE50 target validation 使用原 training 两条 RTL，明确 non-learner、不是独立
+held-out。实际路由 CONSIDER → INAPPLICABLE → CONSIDER；remove-delta 恢复完整
+parent candidate，三策略执行冻结 digest 为
+`sha256:251b38b855c8775419a2b24cc9550029c070935ea9b6d35534da90de78c08e76`。
+三策略已全部完成 24 次真实 flow/checker，四臂各六条 narrow counterfactual PASS、
+UNKNOWN=0。`audit_p13_interference_policy_execution.py` 在 24 个独立保留工作区上
+重放 fixed-constraint、source/config、paired utility 和 rollback-policy bindings；
+target replay gate PASS，execution audit digest 为
+`sha256:6e97615fd4f38dff764febfc8128bc67079c9d30efb2431c6170069f510f5881`。
+两个 case 的 gated/causal Mt 均有真实 utility harm，post-policy 实际 no-memory
+fallback PASS、相对当次独立 NO_MEMORY 的原精度 physical delta 全为零；remove-delta
+后恢复完整 candidate/action，实际 utility harm 再现。此前 16-arm before/after
+partial preflight 另行保留，不把它当完整 ablation。这是 target 策略安全证据，
+不是 held-out transfer、AntiForgettingWitness、正式 P13/P14 或 action-space expansion。
+
+CORE70 non-target r1 validation 已留下 terminal negative evidence：project config
+引用外部 training RTL/SDC，但 isolated project 缺少本地
+`constraints/constraint.sdc`，四臂均在 backend 前失败，UNKNOWN=4。配置引用文件
+存在不代表 isolated project 可以运行。terminal disposition digest 为
+`sha256:a6d7358173c37624cee3e677987c1be057f60b19fe299325c207bcca0b43c769`。
+新增 `audit_r3_orfs_project_layout.py` 在执行前验证 conventional local SDC、完整
+local source/config pins，并拒绝 external/symlink escape。该检查只读，不证明
+PDN 可行、候选等价或 physical signoff。successor
+`tehm-r3-orfs-interference-non-target-u70-20260912-r2` 将 byte-identical RTL/SDC
+复制到自包含项目；原 r1 不变，CORE70 baseline、CORE40 action、utility contract、
+toolchain 与 oracle 不变。layout audit PASS，三策略输入均在首个 flow 前验证；
+execution freeze digest 为
+`sha256:58c5ed6fd94f0de7f7a0648a7d51fd13725ba12c443b9264f694e881df6ae13a`。
+该 r2 在真实 CORE70 baseline global placement 报 FLW-0024（place density >1.0）
+后终止：NO_MEMORY UNKNOWN，三个 CORE40 memory 臂 narrow checks PASS；paired
+utility 与完整 non-target gate 仍不可建立。terminal disposition digest 为
+`sha256:c16932de7a4ec20c480ec2d47cc4ed19c7d15e1a54326e66d136b0e3860ac89e`。
+没有放宽 addon、baseline、objective 或 gate，也没有改原 terminal 配置后重启。
+另行 preregister 的 CORE45 lower-density non-target validation
+`tehm-r3-orfs-interference-non-target-u45-20260912-r1` 保留相同训练 RTL/SDC content、
+CORE40 action、clock/addon/toolchain/oracle/contract。三种实际 route 都 CONSIDER，
+selected candidate 的 resolution/digest 可变但 effective action 不变；remove-delta
+恢复完整原 candidate。execution freeze digest 为
+`sha256:544e382e5a129936ed42a128633052801ed68845b91c92d42ebd58e302b7639b`，
+24-flow 对照已启动，gate 尚未建立。该额外 cohort 只覆盖 CORE45，不解决、不删除
+原 CORE70 两批失败，也不宣称广义 non-target/production safety。
+
+fresh prospective held-out
+`tehm-r3-orfs-interference-heldout-state32-20260912-r1` 冻结两个新的独立 RTL：
+32-bit enabled counter with load/reset/wrap 与 32-bit serial shift with load/reset。
+100-cycle simulation、两份 Yosys synth/check -assert、config validation 与 local
+layout audit PASS。VERILOG content 与 parent、evolution training、GCD diagnostics、
+已知 outcome 的 add16/priority8 均无重叠；source-disjoint audit digest 为
+`sha256:045eeff6b71cc901f374a3e13901701bb6ea750bd6a53f22c145951735b31914`。
+两条 case 在任何 ORFS outcome 前明确 held_out/non-learner；不导入 learning support，
+不假定 CORE50→40 存在 harm 或 held-out gain。policy compiler 已实际生成两条
+CONSIDER → INAPPLICABLE → CONSIDER，freeze digest 为
+`sha256:b384182793da5858094b759661355a04e8236b4f46a57400c7ee9d01709aa490`。
+execution freeze digest 为
+`sha256:873fff25e8373468f8a98ac0431a8e790584d9da7aadee5fbdbc79a5f7b9a047`；
+串行真实对照已启动，Mt 的 8 次 flow/checker 已 narrow PASS、UNKNOWN=0，post-policy
+与 remove-delta 尚在执行。原 tiny-design terminal cohort 的失败仍完整保留。
+
+包含 shadow helper、policy compiler/runner 的完整回归已通过：1357 passed
+（1041.95s）；该回归启动时尚未包含新 execution-audit/layout tests。新增 audit
+13 项与 layout 8 项定向测试全部通过（21 passed），其中 arithmetic/layout fixtures
+不是 empirical receipts。包含它们的新完整回归已通过：1378 passed（1091.58s）。
+此次 signoff-loop 只用于
+config validation、失败分类与日志保留；没有自动改时钟/改 terminal 配置、学习
+held-out evidence 或 promotion。`memory/docs/` 继续 gitignored、本地保留。
+
+新增 `build_p13_interference_anti_forgetting_evidence.py` 是上述实际 gates 到现有
+typed AntiForgettingWitness 的绑定入口：逐组 cold replay retained execution audit，
+核对同一 plan/child 与 training toolchain/oracle/budget/objective，再冷重放实际 RAM
+child activation、完整 candidate/route rollback 和 raw evidence preservation。缺失
+完整执行回执则 fail closed；真实 gate FAIL 只能输出 ineligible witness，不改成 PASS。
+该入口的 18 项 glue/guard tests 与当前相关模块共 105 项定向测试通过；这些 mocked
+oracle fixtures 不是 empirical receipts，且该入口尚未执行真实 witness integration。
+上述 1378 项完整回归启动时尚未包含这 18 项新测试。必须等 non-target、held-out 和
+rollback 实证齐备，才能消费正式 P13 update，然后绑定 P14 C1–C8；R3-9 CAPABILITY_GAP
+与 P15 calibration/statistical production gates 仍未因本阶段通过而宣称完成。

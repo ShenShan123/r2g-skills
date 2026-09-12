@@ -75,6 +75,40 @@ def _route_candidate(conn, query):
     return route, candidate
 
 
+def _activate_evaluation_child(ram, parent, proposal, scope, authority):
+    """Use the real lifecycle in caller-owned RAM, never production authority.
+
+    The caller must scope parent execution replay and own a rollback savepoint.
+    Paired evidence is zipped with its actual case lineage, not cross-producted.
+    """
+    if ram.execute("PRAGMA database_list").fetchall()[0][2]:
+        raise InterferenceShadowViewError("evaluation child activation requires RAM database")
+    child = _child(parent, proposal)
+    with patch("tehm.db.now_local", return_value="2000-01-01T00:00:00+00:00"):
+        evidence = [{"evidence_type": "orfs_p12_physical_interference",
+                     "evidence_id": digest, "split": "training",
+                     "lineage_id": authority["cases"][cid]["lineage_id"],
+                     "evidence_level": parent.evidence_level}
+                    for cid, digest in zip(proposal.case_ids, proposal.paired_receipt_digests,
+                                           strict=True)]
+        revision = revise_knowledge(
+            ram, parent_object_id=parent.object_id, replacement=child, operation="SPECIALIZE",
+            target_scope=scope["target_scope"], evidence_refs=evidence,
+            created_at="2000-01-01T00:00:00+00:00", commit=False)
+        shadow_state = resolve_current_state(ram, scope, mode="shadow", persist=False)
+        set_knowledge_status(ram, knowledge_id=child.knowledge_id, version=child.version,
+                             target_scope=scope["target_scope"], status="candidate", commit=False)
+        candidate_claim = get_knowledge_by_object_id(ram, child.object_id, target_scope=scope["target_scope"])
+        ledger = record_knowledge_authority(ram, candidate_claim, target_scope=scope["target_scope"])
+        if not ledger.eligible:
+            raise InterferenceShadowViewError("proposed child authority gates failed")
+        set_knowledge_status(ram, knowledge_id=child.knowledge_id, version=child.version,
+                             target_scope=scope["target_scope"], status="validated",
+                             authority_receipt=ledger, commit=False)
+    evaluation_state = resolve_current_state(ram, scope, mode="shadow", persist=False)
+    return child, revision, ledger, shadow_state, evaluation_state
+
+
 def audit_shadow_view(source_bound_plan: Path | str, *, output: Path | str) -> dict:
     plan_path, output_path = (Path(p).expanduser().resolve() for p in (source_bound_plan, output))
     if output_path.exists() or output_path == plan_path:
@@ -124,28 +158,8 @@ def audit_shadow_view(source_bound_plan: Path | str, *, output: Path | str) -> d
                     raise InterferenceShadowViewError(f"{cid} utility adapter changed frozen Mt candidate")
                 cases[cid] = {"before_route": route.to_dict(), "before_candidate": candidate.to_dict()}
             ram.execute("SAVEPOINT interference_shadow_view")
-            with patch("tehm.db.now_local", return_value="2000-01-01T00:00:00+00:00"):
-                evidence = [{"evidence_type": "orfs_p12_physical_interference",
-                             "evidence_id": digest, "split": "training",
-                             "lineage_id": authority["cases"][cid]["lineage_id"],
-                             "evidence_level": parent.evidence_level}
-                            for cid, digest in zip(proposal.case_ids, proposal.paired_receipt_digests,
-                                                   strict=True)]
-                revision = revise_knowledge(
-                    ram, parent_object_id=parent.object_id, replacement=child, operation="SPECIALIZE",
-                    target_scope=scope["target_scope"], evidence_refs=evidence,
-                    created_at="2000-01-01T00:00:00+00:00", commit=False)
-                shadow_state = resolve_current_state(ram, scope, mode="shadow", persist=False)
-                set_knowledge_status(ram, knowledge_id=child.knowledge_id, version=child.version,
-                                     target_scope=scope["target_scope"], status="candidate", commit=False)
-                candidate_claim = get_knowledge_by_object_id(ram, child.object_id, target_scope=scope["target_scope"])
-                ledger = record_knowledge_authority(ram, candidate_claim, target_scope=scope["target_scope"])
-                if not ledger.eligible:
-                    raise InterferenceShadowViewError("proposed child authority gates failed")
-                set_knowledge_status(ram, knowledge_id=child.knowledge_id, version=child.version,
-                                     target_scope=scope["target_scope"], status="validated",
-                                     authority_receipt=ledger, commit=False)
-            evaluation_state = resolve_current_state(ram, scope, mode="shadow", persist=False)
+            child, revision, ledger, shadow_state, evaluation_state = _activate_evaluation_child(
+                ram, parent, proposal, scope, authority)
             for cid, audit in sorted(authority["cases"].items()):
                 route, candidate = _route_candidate(ram, _query(audit["query"], utility_facts))
                 if route.decision != "INAPPLICABLE" or candidate is not None:
