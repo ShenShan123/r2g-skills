@@ -9,6 +9,7 @@ import pytest
 from scripts.build_r3_orfs_interference_source_bound_inputs import (
     SourceBoundInterferenceInputError,
     _config_source_map,
+    _learner_partition,
     _file_sha256,
     _toolchain,
     _training_rtl_hashes,
@@ -22,6 +23,26 @@ from scripts.run_orfs_p12_cohort import (
 from tehm.physical.utility_contracts import (
     P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1_ID,
 )
+
+
+def test_legacy_diagnostic_does_not_infer_training_partition():
+    assert _learner_partition({}, [{"case_id": "a"}]) is None
+
+
+def test_prospective_partition_keeps_calibration_out_of_learner():
+    cases = [{"case_id": "a", "dataset_split": "training", "role": "training"},
+             {"case_id": "b", "dataset_split": "calibration", "role": "calibration"}]
+    partition = _learner_partition({"learner_eligible": True}, cases)
+    assert partition["cases"]["a"]["learner_eligible"] is True
+    assert partition["cases"]["b"]["learner_eligible"] is False
+    cases[1]["learner_eligible"] = True
+    with pytest.raises(SourceBoundInterferenceInputError, match="partition mismatch"):
+        _learner_partition({"learner_eligible": True}, cases)
+
+
+def test_partition_cannot_be_invented_from_case_flag_alone():
+    with pytest.raises(SourceBoundInterferenceInputError, match="campaign learner_eligible"):
+        _learner_partition({}, [{"case_id": "a", "learner_eligible": True}])
 
 
 def _project(root: Path, name: str, rtl: str, sdc: Path) -> Path:
@@ -120,7 +141,8 @@ def test_physical_harm_contract_requires_source_bound_authority(tmp_path):
             tmp_path / "manifest.json", manifest, {"challenge:a"})
 
 
-def test_source_bound_authority_is_content_addressed(tmp_path):
+@pytest.mark.parametrize("v2", [False, True])
+def test_source_bound_authority_is_content_addressed(tmp_path, v2):
     contract_id = P12_DENSITY_RELIEF_INTERFERENCE_NONREGRESSION_V1_ID
     contract_digest = "sha256:contract"
     authority = {
@@ -140,6 +162,15 @@ def test_source_bound_authority_is_content_addressed(tmp_path):
         "production_runtime_imported": False,
         "memory_docs_submitted": False,
     }
+    if v2:
+        oracle_file = tmp_path / "oracle.py"
+        oracle_file.write_text("ORACLE_VERSION = 1\n")
+        binding = {"version": "r3-8-orfs-oracle-binding-v1", "files": [{
+            "path": str(oracle_file), "sha256": _sha256(oracle_file)}]}
+        binding["oracle_digest"] = _digest(binding)
+        authority["oracle_binding"] = binding
+        authority["preregistration"] = {
+            "version": "r3-8-source-bound-orfs-preregistration-v2"}
     authority["authority_digest"] = _digest(authority)
     authority_path = tmp_path / "authority.json"
     authority_path.write_text(json.dumps(authority, sort_keys=True))
@@ -151,10 +182,14 @@ def test_source_bound_authority_is_content_addressed(tmp_path):
             "authority_digest": authority["authority_digest"],
         },
     }
+    if v2:
+        manifest["oracle_digest"] = binding["oracle_digest"]
     checked, ref = _source_bound_authority(
         tmp_path / "manifest.json", manifest, {"challenge:a"})
     assert checked["actual_router_used"] is True
     assert ref["authority_digest"] == authority["authority_digest"]
+    assert ref["path"] == str(authority_path)
+    assert ref["sha256"] == _sha256(authority_path)
 
     authority["actual_router_used"] = False
     authority_path.write_text(json.dumps(authority, sort_keys=True))

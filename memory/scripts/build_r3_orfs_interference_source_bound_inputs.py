@@ -342,6 +342,38 @@ def _toolchain(preregistration: Mapping, *, require_oracle_binding: bool = False
     return checked
 
 
+def _learner_partition(preregistration: Mapping, cases: Sequence) -> dict | None:
+    """Freeze explicit roles before EDA; legacy diagnostics grant no eligibility."""
+    eligible = preregistration.get("learner_eligible")
+    if "learner_eligible" not in preregistration:
+        if any(isinstance(case, Mapping) and any(key in case for key in (
+                "learner_eligible", "dataset_split", "role")) for case in cases):
+            raise SourceBoundInterferenceInputError(
+                "case partition requires campaign learner_eligible")
+        return None
+    if type(eligible) is not bool:
+        raise SourceBoundInterferenceInputError("learner_eligible must be boolean")
+    partition = {}
+    for case in cases:
+        if not isinstance(case, Mapping):
+            raise SourceBoundInterferenceInputError("partition case is malformed")
+        case_id = _text(case.get("case_id"), "partition case_id")
+        split, role = case.get("dataset_split"), case.get("role")
+        if split not in {"training", "calibration", "held_out", "validation"} or role != split:
+            raise SourceBoundInterferenceInputError(
+                f"{case_id} requires explicit matching dataset_split and role")
+        if case_id in partition:
+            raise SourceBoundInterferenceInputError("partition case IDs must be unique")
+        case_eligible = eligible and split == "training"
+        if ("learner_eligible" in case and
+                (type(case["learner_eligible"]) is not bool or
+                 case["learner_eligible"] != case_eligible)):
+            raise SourceBoundInterferenceInputError(f"{case_id} learner partition mismatch")
+        partition[case_id] = {"dataset_split": split, "role": role,
+                              "learner_eligible": case_eligible}
+    return {"learner_eligible": eligible, "cases": partition}
+
+
 def build_inputs(preregistration_path: Path | str,
                  *, output_dir: Path | str) -> dict:
     """Build a routed, source-bound P12 input freeze without executing EDA."""
@@ -359,6 +391,7 @@ def build_inputs(preregistration_path: Path | str,
             len(cases) < 2):
         raise SourceBoundInterferenceInputError(
             "R3-8 preregistration requires at least two cases")
+    partition = _learner_partition(preregistration, cases)
     contract, contract_digest = _contract(preregistration)
     toolchain = _toolchain(
         preregistration,
@@ -530,6 +563,7 @@ def build_inputs(preregistration_path: Path | str,
                     **{arm: str(candidate_path.relative_to(output_dir))
                        for arm in P12_ARMS[1:]},
                 },
+                **(partition["cases"][case_id] if partition is not None else {}),
             }
             generated_cases.append(runtime_case)
             audit_cases[case_id] = {
@@ -577,6 +611,7 @@ def build_inputs(preregistration_path: Path | str,
         "source_disjoint_scope": "verilog_content_sha256",
         "cases": audit_cases,
         "candidate_freeze": candidate_freeze,
+        "learner_partition": partition,
         "routing_decisions": {
             "path": str(routes_path), "sha256": _sha256(routes_path),
             "digest": _digest(routes_payload),
@@ -613,6 +648,8 @@ def build_inputs(preregistration_path: Path | str,
            if "oracle_binding" in toolchain else {}),
         "input_authority": authority_ref,
         "cases": generated_cases,
+        **({"learner_eligible": partition["learner_eligible"]}
+           if partition is not None else {}),
         "evaluation_only": True,
         "canonical_memory_mutation": "none",
         "production_runtime_imported": False,
@@ -649,6 +686,7 @@ def build_inputs(preregistration_path: Path | str,
         "utility_contract_id": contract["contract_id"],
         "utility_contract_digest": contract_digest,
         "case_count": len(generated_cases),
+        "learner_partition": partition,
         "lineage_count": len(lineages),
         "source_disjoint": True,
         "source_disjoint_scope": "verilog_content_sha256",

@@ -5318,3 +5318,57 @@ GCD RTL lineage 的 source-bound input freeze 与 EDA 前 runner preflight 已�
 authority digest 为
 `sha256:430c3953fcc4b1a9a1e80cd307bdf5b3b7a22eddac0feb837a1e509d6a5fcb13`；此时仍是
 `eda_executed=false`，不能提前声称 baseline 合格或存在 memory harm。
+
+### 2026-09-11 Revision3 R3-8 real source-bound physical interference signal
+
+上述 2.5 ns successor 已串行完成两个 source-disjoint GCD RTL lineage 的四臂执行，
+共 8 次 flow/checker execution，四臂均 PASS、UNKNOWN=0，source restore 已核验。
+cohort receipt digest 为
+`sha256:61111d068f889cff84de29c095b516a5f5b0e01181e292d8a0403c35f8e31642`，
+原始报告文件 SHA256 为
+`sha256:a04cc77ff1f729264365770b59ae5298099ebad20046f9490c5660fd73572d02`。
+PASS 在这里是冻结的 fixed-constraint counterfactual 检查，不是 strict signoff、
+等价证明或 utility Pareto-safe。两个 GCD 源文件不同，但本次综合后的 PPA 相同；不能将
+这两个近缘变体宣传为广泛设计覆盖或独立统计重复。
+
+在预先冻结的 CORE50→40 零退化 contract 下，两条 memory pair 都产生真实 physical
+regression：die area 7834.02→9745.64 um²（+24.40%），power
+0.00352493→0.00357789 W（约 +1.50%），WNS 0.238534→0.238345 ns。
+微小 WNS 差值不单独作为稳定收益/退化结论，面积越界本身已是本次 contract 的 harm。
+`build_p13_interference_reason_bundle.py` 核验原 manifest、authority、source/lineage、
+route 与 forced candidate 的文件和内容绑定，再由现有 detector 重放 paired utility，
+自动产生两个 MEMORY_INTERFERENCE derivation，没有手写 label 或读取 mutation payload。
+无信号、混合信号和不完整 oracle 分别保留为非 admission 报告，不删 case 凑触发。
+
+外部 `p13-interference-reason-bundle-r2.json` 的 bundle digest 为
+`sha256:9ac015393cf280a2c28126d0cee533dc46d6124bf3e32c0c2abe39521d75eec4`。
+但本轮 preregistration 没有显式 learner partition，两个 reason-specific admission
+均为 `not_learner_eligible`，`shadow_mutation_eligible=false`。不能在看到结果后改写
+原 manifest 为 training 来掩盖该缺口。输入 builder 现支持执行前冻结 campaign
+`learner_eligible` 和每个 case 的 matching `dataset_split`/`role`，把原样 partition
+绑定进 authority/manifest；calibration、held_out、validation 不获得 learner 资格。
+legacy 无 partition 的输入仍可用于诊断，默认不授予 shadow 准入。下一批 evolution
+training 必须先冻结此分类及当前 oracle 源码，再执行并验证；本批只保留为已观测诊断证据。
+
+本轮还暴露 v2 runner 的 authority-ref 局部变量覆盖：预检确实校验 authority 文件，
+但输出注释误用了最后一个 oracle 文件路径。已用回归反例修复；旧执行报告不重写，
+新 reason bundle 同时保存原错误注释与 manifest 的正确冻结引用，并显式标记不一致。
+后续 successor 必须绑定修复后的 oracle digest，不能直接用旧 manifest 重跑新源码。
+canonical memory、production authority、Parametric shadow 边界均未改变；P13 更新、
+真实 router before/after、held-out 与 ΔMemory ablation 尚未由本批证明。
+
+后续 prospective training campaign
+`tehm-r3-orfs-interference-training-u50-20260912-r1` 已在任何 ORFS 结果产生前冻结：
+三路寄存 mux `mux16x3` 和 `xor_rotate32` enable/hold 状态机，各自独立 RTL，
+两份内容 hash 与 parent mux32/parity64 及 GCD diagnostic RTL 均无重叠。100 周期
+reset、mux 分支/hold、XOR/rotate 与 enable-hold 仿真通过，两个 Yosys synth/
+`check -assert` 通过；这只是源码预检，不是候选等价证明或 ORFS 成功结果。
+两个 case 明确 `dataset_split=role=training`、`learner_eligible=true`，实际 route
+均为 CONSIDER，CORE50 baseline、CORE40 action、零退化 contract 保持不变。
+input freeze report digest 为
+`sha256:ea6700007ddacbd772e53d1bcf176046d2273ea0cd3f4a1eb6e00c8c492b7332`，
+authority digest 为
+`sha256:a1fc3f8ee45c3ebbc9a13c195dda6123a7c2904ed88d9ab34f8f0842e14540f1`，
+修复后 oracle source digest 为
+`sha256:a3894e04142373ca05f375c5c276aefe7d6f73a3fb0799f39b777e488ece1ef5`。
+串行 P12 已启动；此 checkpoint 没有宣称 baseline 合格、存在 harm 或 P13 已准入。

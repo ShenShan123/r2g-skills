@@ -125,8 +125,8 @@ def _source_bound_authority(manifest_path: Path, manifest: Mapping,
         for item in files:
             if not isinstance(item, Mapping):
                 raise P12OrfsRunError("input_authority oracle file is malformed")
-            path = Path(_text(item.get("path"), "oracle_binding.path")).resolve()
-            if not path.is_file() or _sha256(path) != item.get("sha256"):
+            oracle_path = Path(_text(item.get("path"), "oracle_binding.path")).resolve()
+            if not oracle_path.is_file() or _sha256(oracle_path) != item.get("sha256"):
                 raise P12OrfsRunError("input_authority oracle source drift")
     return authority, {"path": str(path), "sha256": _sha256(path),
                        "authority_digest": supplied}
