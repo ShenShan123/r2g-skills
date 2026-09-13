@@ -47,6 +47,8 @@ class CapabilityAttributionReceipt:
 
 
 EXPANDED_ATTRIBUTION_VERSION = "capability-expanded-attribution-v1"
+REASON_EXPANDED_ATTRIBUTION_VERSION = "capability-reason-expanded-attribution-v2"
+_SOURCE_REPLAY_REQUIRED = "evolution_source_receipt_db_replay_required"
 
 
 def _decode_shadow_update_receipt(value: object):
@@ -182,19 +184,22 @@ def validate_expanded_attribution(
     routing_receipts=None,
     state_resolution_receipt=None,
     failure_attribution_receipts=None,
+    evolution_source_receipt=None,
     candidate_lineage=None,
     strict: bool = False,
     memory_changed_ids: tuple[str, ...] = (),
 ) -> tuple[dict, tuple[str, ...]]:
     """Normalize and validate P8 object-level attribution witnesses.
 
-    The function is pure and evaluation-only.  In strict mode all five
-    witnesses are required and derived IDs must be included in the concrete
-    memory delta; compatibility callers may omit the new witness bundle.
+    The function is pure and evaluation-only. A CAPABILITY_GAP ADD uses a
+    typed pre-update source witness instead of a memory-failure diagnosis.
+    Pure callers can normalize that witness but cannot establish its DB
+    authority: only evaluate_capability_attribution_from_db can discharge
+    the required independent source replay. Legacy failure paths are intact.
     """
     present = any(value is not None for value in (
         knowledge_delta, asset_delta, routing_receipts,
-        state_resolution_receipt, failure_attribution_receipts,
+        state_resolution_receipt, failure_attribution_receipts, evolution_source_receipt,
         candidate_lineage))
     if not strict and not present:
         return {}, ()
@@ -248,10 +253,34 @@ def validate_expanded_attribution(
     if state_resolution_receipt is None and not strict:
         state_payload, state_reasons = None, []
     reasons.extend(state_reasons)
-    failures, failure_reasons = _validate_failure_receipts(
-        failure_attribution_receipts)
-    if failure_attribution_receipts is None and not strict:
-        failures, failure_reasons = [], []
+    evolution_payload = None
+    if evolution_source_receipt is None:
+        failures, failure_reasons = _validate_failure_receipts(failure_attribution_receipts)
+        if failure_attribution_receipts is None and not strict:
+            failures, failure_reasons = [], []
+    else:
+        failures, failure_reasons = [], [_SOURCE_REPLAY_REQUIRED]
+        if failure_attribution_receipts is not None:
+            failure_reasons.append("evolution_source_and_failure_receipts_ambiguous")
+        try:
+            from tehm.evolution.gap_source import CapabilityGapSourceReceipt
+
+            mapped = _receipt_mapping(evolution_source_receipt, "evolution_source_receipt")
+            evolution = CapabilityGapSourceReceipt.from_dict(mapped)
+            evolution_payload = {**evolution.to_dict(), "receipt_id": evolution.receipt_id,
+                                 "receipt_digest": evolution.receipt_digest}
+            if evolution.source_memory_digest != baseline_memory_digest:
+                failure_reasons.append("evolution_source_memory_binding_mismatch")
+        except (TypeError, ValueError, KeyError):
+            failure_reasons.append("evolution_source_receipt_invalid")
+        # A gap does not explain a revision/removal of an existing object.
+        # The first supported lane is actual new Knowledge + Asset ADD.
+        if (knowledge_checked is None or not knowledge_checked.added_knowledge_ids or
+                knowledge_checked.removed_knowledge_ids or knowledge_checked.revised_knowledge_ids):
+            failure_reasons.append("capability_gap_knowledge_add_required")
+        if (asset_checked is None or not asset_checked.added_asset_ids or
+                asset_checked.removed_asset_ids or asset_checked.revised_asset_ids):
+            failure_reasons.append("capability_gap_asset_add_required")
     reasons.extend(failure_reasons)
     lineage_payload = _receipt_mapping(candidate_lineage, "candidate_lineage")
     lineage_checked = None
@@ -293,6 +322,9 @@ def validate_expanded_attribution(
              "receipt_digest": lineage_checked.receipt_digest}
             if lineage_checked is not None else None),
     }
+    if evolution_source_receipt is not None:
+        normalized["version"] = REASON_EXPANDED_ATTRIBUTION_VERSION
+        normalized["evolution_source_receipt"] = evolution_payload
     return normalized, tuple(normalized["reasons"])
 
 
@@ -315,6 +347,7 @@ def evaluate_capability_attribution(
     routing_receipts=None,
     state_resolution_receipt=None,
     failure_attribution_receipts=None,
+    evolution_source_receipt=None,
     candidate_lineage=None,
     strict_expanded: bool = False,
 ) -> CapabilityAttributionReceipt:
@@ -528,6 +561,7 @@ def evaluate_capability_attribution(
         routing_receipts=routing_receipts,
         state_resolution_receipt=state_resolution_receipt,
         failure_attribution_receipts=failure_attribution_receipts,
+        evolution_source_receipt=evolution_source_receipt,
         candidate_lineage=candidate_lineage,
         strict=strict_expanded, memory_changed_ids=memory_changed_ids)
     missing_values = [gate for gate, passed in gates.items() if not passed]
@@ -592,10 +626,17 @@ def evaluate_capability_attribution_from_db(
     routing_receipts=None,
     state_resolution_receipt=None,
     failure_attribution_receipts=None,
+    evolution_source_receipt=None,
+    evolution_source_conn=None,
     candidate_lineage=None,
     strict_expanded: bool = False,
 ) -> CapabilityAttributionReceipt:
-    """Build C2/C3 inputs from the policy snapshot/load receipt tables."""
+    """Replay policy/load/state witnesses and optional pre-update gap source.
+
+    evolution_source_conn must be the separate immutable M_t connection;
+    the candidate after-state and serialized admitted/verified flags cannot
+    substitute for it. No lifecycle authority or canonical writes occur.
+    """
     snapshots = conn.execute(
         """SELECT * FROM tehm_policy_snapshots
              WHERE policy_snapshot_id IN (?, ?)""",
@@ -796,9 +837,10 @@ def evaluate_capability_attribution_from_db(
         routing_receipts=routing_receipts,
         state_resolution_receipt=state_resolution_receipt,
         failure_attribution_receipts=failure_attribution_receipts,
+        evolution_source_receipt=evolution_source_receipt,
         candidate_lineage=candidate_lineage,
         strict_expanded=strict_expanded)
-    if state_resolution_receipt is None:
+    if state_resolution_receipt is None and evolution_source_receipt is None:
         return attribution
     state_payload = (attribution.detail.get("expanded_attribution") or {}).get(
         "state_resolution_receipt")
@@ -814,25 +856,43 @@ def evaluate_capability_attribution_from_db(
                 state_reasons.append("state_resolution_receipt_replay_mismatch")
         except (TypeError, ValueError, KeyError, sqlite3.Error):
             state_reasons.append("state_resolution_receipt_unverifiable")
-    elif strict_expanded:
+    elif strict_expanded and state_resolution_receipt is not None:
         state_reasons.append("state_resolution_receipt_malformed")
-    if not state_reasons:
+    source_replay = None
+    if evolution_source_receipt is not None:
+        from tehm.evolution.gap_source import verify_capability_gap_source
+
+        source_replay = verify_capability_gap_source(evolution_source_conn, evolution_source_receipt)
+        if not source_replay.get("verified") or not source_replay.get("eligible"):
+            state_reasons.append("evolution_source_receipt_unverifiable")
+        elif (source_replay["source_memory_digest"] != baseline_memory_digest or
+              source_replay["source_memory_digest"] != baseline_snapshot_memory):
+            state_reasons.append("evolution_source_policy_memory_binding_mismatch")
+            source_replay = {**source_replay, "eligible": False}
+    if not state_reasons and source_replay is None:
         return attribution
     detail = dict(attribution.detail)
     expanded = dict(detail.get("expanded_attribution") or {})
-    expanded["eligible"] = False
-    expanded["reasons"] = sorted(set(
-        list(expanded.get("reasons") or []) + state_reasons))
+    expanded_reasons = set(expanded.get("reasons") or []) | set(state_reasons)
+    if source_replay is not None:
+        expanded["evolution_source_db_replay"] = source_replay
+        if source_replay.get("verified") and source_replay.get("eligible"):
+            expanded_reasons.discard(_SOURCE_REPLAY_REQUIRED)
+    expanded["eligible"] = not expanded_reasons
+    expanded["reasons"] = sorted(expanded_reasons)
     detail["expanded_attribution"] = expanded
-    missing = tuple(sorted(set(attribution.missing_gates) | {
-        f"P8:{reason}" for reason in state_reasons}))
+    missing_set = set(attribution.missing_gates) | {f"P8:{reason}" for reason in state_reasons}
+    if _SOURCE_REPLAY_REQUIRED not in expanded_reasons:
+        missing_set.discard(f"P8:{_SOURCE_REPLAY_REQUIRED}")
+    missing = tuple(sorted(missing_set))
     return CapabilityAttributionReceipt(
         capability_id=attribution.capability_id, gates=attribution.gates,
-        missing_gates=missing, promotable=False, detail=detail,
-        expanded_eligible=False,
-        expanded_missing=tuple(f"P8:{reason}" for reason in state_reasons))
+        missing_gates=missing, promotable=all(attribution.gates.values()) and not missing,
+        detail=detail, expanded_eligible=not expanded_reasons,
+        expanded_missing=tuple(f"P8:{reason}" for reason in sorted(expanded_reasons)))
 
 
 __all__ = ["CapabilityAttributionReceipt", "evaluate_capability_attribution",
            "evaluate_capability_attribution_from_db",
-           "EXPANDED_ATTRIBUTION_VERSION", "validate_expanded_attribution"]
+           "EXPANDED_ATTRIBUTION_VERSION", "REASON_EXPANDED_ATTRIBUTION_VERSION",
+           "validate_expanded_attribution"]

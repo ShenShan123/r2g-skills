@@ -90,19 +90,47 @@ def detect_capability_gaps(
     campaign_id: str = "live",
     min_lineages: int = 2,
     min_failures: int = 2,
+    transition_ids: tuple[str, ...] | list[str] | None = None,
 ) -> list[CapabilityGapReceipt]:
+    """Diagnose a campaign or an explicit immutable verified source subset.
+
+    Explicit subsets are useful when the control and intervention represent
+    the same failed source: do not count both representations as independent
+    failure evidence. Membership is never rewritten or silently filtered;
+    every selected ID must be learner-eligible training and independently
+    verified. Omitting the subset preserves the historical campaign scan.
+    """
     if not campaign_id:
         raise ValueError("campaign_id is required")
     if min_lineages < 1 or min_failures < 1:
         raise ValueError("gap thresholds must be positive")
+    selected = None
+    if transition_ids is not None:
+        if (not isinstance(transition_ids, (tuple, list)) or not transition_ids or
+                any(type(item) is not str or not item.strip() for item in transition_ids) or
+                len(set(transition_ids)) != len(transition_ids)):
+            raise ValueError("gap transition_ids must be a nonempty unique sequence of IDs")
+        selected = tuple(sorted(transition_ids))
+    selection_clause = ""
+    parameters = (campaign_id,)
+    if selected is not None:
+        selection_clause = " AND t.transition_id IN (" + ",".join("?" for _ in selected) + ")"
+        parameters += selected
     rows = conn.execute(
         """SELECT t.transition_id
              FROM tehm_transitions t
             WHERE EXISTS (SELECT 1 FROM tehm_dataset_membership dm
                             WHERE dm.transition_id=t.transition_id
                               AND dm.campaign_id=? AND dm.split='training'
-                              AND dm.learner_eligible=1)
-            ORDER BY t.transition_id""", (campaign_id,)).fetchall()
+                              AND dm.learner_eligible=1)""" + selection_clause +
+        " ORDER BY t.transition_id", parameters).fetchall()
+    if selected is not None:
+        if {row["transition_id"] for row in rows} != set(selected):
+            raise ValueError("gap source subset must exactly match learner-eligible campaign training evidence")
+        from tehm.verified_execution import require_verified_transition
+
+        for transition_id in selected:
+            require_verified_transition(conn, transition_id)
     groups: dict[tuple[str, str | None], list] = defaultdict(list)
     for row in rows:
         facts = load_transition_facts(conn, row["transition_id"])

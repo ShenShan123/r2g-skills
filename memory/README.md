@@ -6107,3 +6107,224 @@ bundle 和 P17 guarded gates 仍待完成。当前 campaign drivers/audits/实�
 `regression-selector-terminal-r4.json`。该回归覆盖当前 repo core/tests，不冒充
 对外部 campaign drivers 的完整单元覆盖；它们由实际冻结、执行、cold/scope
 replay 与保留的 collector failure 记录证明当前 bounded engineering 状态。
+
+### 2026-09-12 Revision3 evaluation-only L4 ledger and concrete ADD lineage
+
+已有实际 Mt+delta 的 NO_MEMORY/ACTUAL_GATED_MEMORY pairs 被映射为两条独立
+evaluation-only captures，不重跑 oracle、不加入 training support。原 `held_out`
+role 保留；只在标准 core membership registry 显式规范化为 `heldout`，且
+learner_eligible=false。training 的 CRC16/SUM32 与 transfer 的 XOR64/HIST8
+design/lineage 不重叠。core pure evaluator 在显式 min_transfer_lineages=2 下
+判 `L4_TRANSFER_SUPPORTED_MECHANISM`；core ledger/replay verified=true、eligible=true，
+但 promotion_eligible=false。原 training path 仍为 L3，不提升 path/Knowledge/Asset
+lifecycle；evaluation rows/ledger 仅在 RAM shadow 存在，完整增量已精确回滚。
+
+`evaluation-only-heldout-transfer-r4/evaluation-only-heldout-transfer-report.json`
+digest 为 `sha256:a56357f02644ba60509b343d8821662e173b6d71a60a02161d87a35ed4594f41`。
+两条 actual capture IDs 为 `transition_65b9a4420b74af51` 和
+`transition_d12d7c22a7136b46`，ledger 为 `causal_transfer_eff3c1d97dd534f1bf66`。
+scope 仅为 finite RTL target + frozen regression；未伪装为 ORFS 14-check
+full-oracle、PPA、等价/全输入证明或 broad external-corpus generalization。
+
+独立只读 auditor 以原实际输入和时钟冷重建 captures、strict ledger、memberships
+与 full logical shadow state，16 checks 全 PASS；authority top-level tamper 与
+heldout-to-learner mutation 均拒绝，且 require_full_oracle=true 的 ORFS negative
+receipt 可验证但 eligible=false，证明未降低 ORFS gate。audit digest 为
+`sha256:5b7df839381b4b651ae3b4020855120bf61bad94bb5242954619acaf288739e6`。
+这些 replay 没有新增 oracle callbacks、独立 samples 或 learner support。
+
+从原 Mt/Mt+delta/removed SQLite snapshots 实际 SQL inventories 导出 typed
+MemoryDelta/KnowledgeDelta/AssetDelta，核心 evaluator/replay 均接受；精确改变集
+只有 `mk_d0dd39fc779f9492bedf@1` 与 `asset_5919747d76c16ee9bebcf19e`，不是 caller
+声明的额外 ID 或 unequal-label shortcut。canonical raw-evidence digest 三个 view
+精确一致，removed full state/inventory 与 Mt 精确相同。两条实际 held-out
+source-only candidate executions 已形成 core CandidateLineageReceipt。
+`source-only-sql-add-delta-lineage-r4.json` digest 为
+`sha256:710337e41120fdadd8aaa07d189b54e1c1f01392828aabed14476e70636d0b31`。
+
+这些证据仍不是完整 strict C1-C8 attribution：原 candidate execution freeze
+没有前置建立标准 core PolicySnapshot/PolicyLoadReceipt。不能事后 record loaded=true
+来补造 C3，也不能把 snapshot 的 promoted_assets namespace 填入未 promoted 的
+Asset。下一步须前置冻结 shadow policy snapshots，由实际 source-owned runtime
+加载并执行、记录真实 load/execution/behavior receipts，再独立 strict attribution。
+P16 portable origin/runtime/artifact closure 和 P17 reason-stratified production
+gates 仍待完成；本轮不再 push，memory/docs 继续 local-only。
+
+### 2026-09-13 Revision3 actual source-owned policy loading and strict C3/C8
+
+新 evaluation-only generation 在 oracle execution 前创建并冻结两个标准 core
+PolicySnapshot；promoted_rules/promoted_assets 均为空，不把 candidate Asset 伪装
+为 promoted。header 的 shadow retrieval/routing config 明确锚定实际 source
+SQLite file/full logical digests、原 non-learner queries、strict source-only
+selection 和 budget=1。加载器实际调用 core load_policy_snapshot，校验源数据库后
+备份至 query-only RAM；失败 reload 清除旧 active policy。14 项真实 source-state
+loader conformance/negative tests 全 PASS，不调用 oracle。
+
+`owned-policy-runtime-prospective-r6/owned-policy-runtime-freeze.json` digest 为
+`sha256:6e4e9d8fe70a9bcd28c3078221af69251c7e3263a747398a97e808affaf19bbd`。
+runtime 从已加载 header 获取源状态/queries，重新调用 core router、strict
+selector、structured candidate builder 和 Icarus executor；不把旧 frozen candidate
+直接当成 policy load。3 次 actual loads、18 oracle callbacks、72 compile/simulation
+commands 均完成。两条 held-out gated arms 实际 FAIL → PASS → FAIL；移除增量是
+在 candidate trial 后实际 reload 基线 policy/source，不只是过滤 selection trace。
+timer non-target 三次实际 PASS/fallback。behavior digest 来自实际 route/action/executor
+行为，排除 policy/memory labels 和 verdict，baseline reload 后精确恢复。
+
+只有这次 runtime 真正加载并执行后才记录标准 core PolicyLoadReceipt，绑定本次
+execution/behavior/source-load witness；不事后给旧 r4/r5 实验补 loaded=true。
+`owned-policy-runtime-execution-r6/owned-policy-runtime-observation.json` digest 为
+`sha256:c50874fe2e499e0479e8560e29009e4796af70a13a1701e6eee1df8c92a29ac7`。
+独立 auditor 未导入 producer runtime，独立加载 headers/source states、重建所有
+routes/candidates，并 cold recompile/simulate 18 callbacks/72 commands；实际 execution
+receipts/full verifier 精确一致，6 个聚合审计 checks 全 PASS。cold audit digest 为
+`sha256:4106dd7ffd679ca39fe208c8aaa0815a6e29f38bf22b796431a686ce4fc93170`。
+这是同一 finite RTL oracle 的 engineering replay，不是新样本或独立 semantic oracle。
+
+真实 SQL ADD delta、L4 ledger、candidate lineages 和 actual policy loads 已送入
+strict_memory_delta=true / strict_expanded=true core attribution。C1–C6/C8 为 true，
+C7 仍 false；目标增益目前测在两个 held-out，不冒充 training Target Replay 或
+完整 AntiForgettingWitness。裸 headers、loaded/payload tamper、behavior mismatch、
+ablation execution mismatch 五类负控均拒绝。初始 strict report digest 为
+`sha256:d686d70399ee8435c6b7abda7d2077a5a848b8ace6cb14295c74789212da12f4`。
+
+随后在当前实际 candidate source 的独立 RAM evaluation projection 中，byte-for-byte
+复制已审计的原 headers/load ledger rows（不新增 policy-load receipts），实际持久化
+并 replay core StateResolutionReceipt；resolution_1f136ef349987290bf021ecb 与实际
+loaded route 精确相同。此 state witness 是当前可重放投影，不声称旧 execution 前
+已经持久化。state input digest/source Knowledge corruption 两类负控均拒绝，
+canonical raw evidence 未变，完整 projection 精确回滚。projection report digest 为
+`sha256:30946a0ee553e4e6a074d014d650e92ae094024841947ee8052fbe3195f40a5c`。
+
+当前剩余 missing 为 C7 和 P8:failure_attribution_receipts_malformed。真正触发新 ADD
+的是 CAPABILITY_GAP aggregated reason，不应用空 NO_FAILURE 或伪造 failure receipt
+填满 legacy expanded bundle。下一步是实际 training Target Replay/完整 anti-forgetting、
+reason-aware expanded attribution、P16 portable origin/runtime/evidence closure，之后才
+是 reason-stratified P15 和 guarded P17 gates。全部 source/canonical/production 不变、
+provider calls=0、promotion_attempted=false；未修改已冻结 core/runtime，尚不再 push。
+这些 campaign drivers/results 仍为本机 artifacts，P16 尚未完成开源 portable 发布。
+memory/docs 继续被 Git 忽略且无 tracked files。
+
+### 2026-09-13 Revision3 actual training Target Replay and bounded C1–C8
+
+另起原角色 five-case source-owned generation，未重写已消费的 r6 freeze/driver/
+receipts。来自原 r3 input freeze 的 2 training、2 held_out、1 validation cases
+及原 learner_eligible booleans 精确保留；training 仅是 evaluation journal 的
+Target Replay，不产生 captures、training support 或新独立 samples。新 policy
+headers 的 query registry 前置包含这五条原 queries；6 项 actual source-only
+preflight tests PASS，旧 non-learner-only header 不能用于 training replay。
+
+`owned-policy-runtime-prospective-r7/owned-policy-runtime-freeze.json` digest 为
+`sha256:dbdedab6a0cc5533fd85f21e91037a2a79def8d6ef9793a4ef1f5400f83b10cf`。
+实际 3 loads × 5 cases × 2 arms = 30 oracle callbacks / 120 compile/simulation
+commands 均完成。CRC16/SUM32 training gated replay 与 XOR64/HIST8 held-out 均为
+FAIL → PASS → FAIL，NO_MEMORY 始终执行未修复 source；timer non-target 三次均
+PASS/fallback。独立 auditor 未导入 producer runtime，重新加载 states、路由、
+构建候选并 cold recompile/simulate 30 callbacks / 120 commands，execution receipts/
+full verifier 精确一致。warm digest 为
+`sha256:584110d32d10352323f71222d04ac45d4241e55b33af14e66c136574bcde7063`，
+cold audit digest 为
+`sha256:35c8ecddc2779e45003654bbf41095140c0c2a895f77f4bb2296521e927dc98f`。
+
+根据实际 warm/cold scopes、训练/held-out disjointness、finite target/regression
+verdicts、所有 baseline/removed execution receipts/full behavior 精确恢复、原
+SQLite full logical/raw-evidence digests 及 actual baseline reload，分别产生
+Target Replay、Non-target Regression、Held-out Audit、Rollback 四项 distinct gate
+files，再用标准 core provenance binder 形成 AntiForgettingWitness；不是 caller
+直接填写 passed=true。四项在此 five-case finite RTL scope 内均通过，witness
+digest 为 `sha256:93052607507937680080d28a4ed08a036d9acef448d134082d6ecce3a2bc8f30`，
+actual evidence report digest 为
+`sha256:4bdef7ea1bfc386dca2969b62b60695906122b2d6aa41e44e4110fec69530553`。
+
+独立 four-gate auditor 不导入 gate compiler，交叉核验全部 30 warm/cold scopes/
+execution receipts、原 roles、四项实际结论和 typed witness/rollback pointer；
+training role swap、cold outcome tamper、gate statement、witness gate、rollback
+pointer 五类负控均拒绝。audit digest 为
+`sha256:901a452ce9f89d28fd5f3f44fb0054a74f8e2ab57198d81bfe79fa7fbfe3f58b`。
+
+当前 strict_memory_delta=true / strict_expanded=true attribution 的 C1–C8
+已在此 five-case finite RTL scope 内全部 true，但仍 promotable=false；不冒充
+全输入 equivalence、ORFS signoff、宽 external-corpus regression 或 production
+anti-forgetting safety。initial strict digest 为
+`sha256:03f494143c7ba882e8f25b23b627540ba502d335bada771ea0e3ab6064f1dcb6`。
+新的 current evaluation state projection 只 byte-for-byte 复制本批已经实际记录的
+headers/load receipts，新增 policy-load receipts=0；core state witness replay 与
+实际 route 同为 resolution_1f136ef349987290bf021ecb，两类 state corruption 负控
+拒绝、raw evidence 未变、完整 projection 精确回滚。projection digest 为
+`sha256:ecf59e82a38b394e4c6714911059434963487b0278bf6e4d779c1fe9ecad7532`。
+
+当前 expanded missing 仅 P8:failure_attribution_receipts_malformed。下一步须实现
+真正 CAPABILITY_GAP reason-aware expanded attribution/P13 ADD integration，不能以
+空 NO_FAILURE 或伪造 failure receipt 代替实际 aggregated reason。完整 P16 portable
+origin/runtime/evidence artifact、独立 reason-stratified P15 与 P17 guarded gates
+仍未完成；本批 engineering replay 没有扩充统计样本或打开 production。全部
+canonical/source/已冻结 core 不变、provider calls=0、promotion_attempted=false。
+campaign drivers/artifacts 仍位于本机 campaign root，尚不再 push；docs 仍 local-only。
+
+### 2026-09-13 explicit verified gap source and reason-aware P14
+
+开始修改 core 前，将实际 r7 runtime 对应的 Git `295bb69c` 全部 234 个运行代码
+文件及 16 个已消费 campaign Python inputs 按原字节归档；origin freeze digest 为
+`sha256:0317c52eb0039d0c9be88614d3f06b7be3fa8bf134f8ac77e6e7be0ce001f922`。
+旧 freeze/driver/真实 hardware receipts 不重写，也不冒充当前代码的新试验。
+
+`detect_capability_gaps(..., transition_ids=...)` 新增明确源集合入口：必须精确匹配
+该 campaign 的 learner-eligible training membership，并逐条经过 canonical/
+verified-execution 检查；unknown、foreign campaign、held-out/calibration、重复 ID
+和 unverified source 均拒绝。默认 campaign scan 保持历史行为；明确源集合避免把
+同一失败的 control/treatment 表示重复计数。聚焦 subset/reason/asset tests 41 PASS；
+实际 Mt 上重新路由 NO_SKILL/NO_MATCH 后只计两条 verified 源失败、两条独立 lineage，
+non-P12 reason/admission replay digest 为
+`sha256:5f7e62deece2ccc61bab71e3027e9b92ac7ca270f6e0a035f39a80580a7c598c`。
+
+新增 `tehm.evolution.gap_source` 的 CapabilityGapSourceReceipt v1：由更新前实际
+SQLite source 直接推导，绑定完整 SQL logical digest、选中事实/membership、原 query、
+实际 shadow routing、typed gap/reason/admission。它不读取 mutation/replacement/
+after-state，不更改 canonical/schema/lifecycle；`verify_capability_gap_source` 必须
+从该 source DB 独立重新推导全部内容。单纯 admitted/verified flag 或重算 digest
+不能替代 source evidence。source witness/subset/reason tests 37 PASS。
+
+P14 新增 `evolution_source_receipt` / `evolution_source_conn` seam。CAPABILITY_GAP
+只支持真正 Knowledge + Asset ADD；不能解释已有对象的 REVISE/REMOVE，也不能混入
+虚假的 NO_FAILURE placeholder。pure attribution 保留 DB replay required，只有
+from_db 在独立更新前 source 重放成功、且 source digest 精确匹配不可篡改 baseline
+policy snapshot 后才能解除；原 failure attribution/v1 路径保持不变。新 reason-aware
+expanded bundle 为 v2；目前 legacy production authority replay 仍拒绝此新 bundle，
+bounded attribution.promotable 不是生产 admission。gap/P14 聚焦 60 tests PASS。
+
+实际 source facts 上的新 verifier 对归档 five-case r7 试验进行重放，C1–C8 全部
+true、expanded missing 为空，9 类负控拒绝，完整 source/projection 未变。report digest
+为 `sha256:9b88e0c6187cec8e71aa88d5e7de69e5bfd1794da48ef06bd76b93ccad39659a`。
+独立 auditor 不导入 producer，再次逐字节核验 234 个 Git origin files、重新推导
+实际 gap 并精确重放完整 P14 receipt；5 类额外负控拒绝，audit digest 为
+`sha256:626b030fa9815e989bcd727923558578f40136f6da437661011c1b9a854bc5eb`。
+没有新增硬件 observations/runtime loads/独立统计样本。
+
+另生成 content-addressed selected-source/P14 relocation bundle：553 个当前 Python
+文件、schema resources 和明确消费的原始 inputs，共 667 个 deduplicated blobs，
+约 17.9 MB。初版 serializer mismatch 的 FAIL artifacts 保留；按核心 ensure_ascii
+规则修正后，进一步在临时异目录中禁止读取原仓库及 campaign files/SQLite，仍精确
+重放 source witness/P14 full receipt。202 个 imported core modules 全部来自该迁移包，
+两项原路径 IO 负控被封锁；terminal digest 为
+`sha256:8f8b2cf657ebdecfeb0e57431ec7305cc11a4bdce0b7bd9ad23a54522f555ace`。
+这只是 selected audit portability：尚非完整 recursive ORFS/toolchain dependency
+closure、fresh relocated hardware trial 或完整 P16 开源发布，artifacts 仍在本机。
+
+新增可复用 `scripts/run_frozen_regression.py`，一次运行冻结全部 memory Python
+source corpus、执行完整 memory/tests、核验 terminal JUnit 与 source 未变；非零退出、
+缺失测试、fail/error/skip 或 corpus drift 均 FAIL，旧 terminal artifacts 不覆盖。
+11 项 runner tests PASS。完整回归在新目录 `full-regression-gap-reason-expanded-r12`
+已正常结束：1697 passed / failures=0 / errors=0 / skipped=0，1116.25 s；553 个 Python
+files 与冻结输入精确一致。input digest 为
+`sha256:7378f7713c7678370219cbfbfd504aca6129dd1793b780c0be2224e39244f9e8`，
+JUnit file digest 为
+`sha256:cc0c1dfb24543618a4e93a598d8c2a6c1075de2a2cf77047584d1758e3872463`，
+terminal report digest 为
+`sha256:92d97c49b7239aa92c89a0a95c16915b83721b8e8dec336a517c34cc54ef8955`。
+这是当前代码的 engineering regression，不是新硬件/统计 evidence。
+
+下一步仍需将该 DB-verified gap 接入 core P13 真正 Knowledge/Asset ADD（当前 generic
+ADD 仍落到 rule crystallization），再冻结新 memory/policy generation、执行 fresh
+Target Replay/held-out/non-target/ΔM ablation/rollback 和 reason-aware P14 全链；不能
+用本轮 origin replay 代替新 ADD 的真实执行。独立 reason-stratified P15/statistical
+production evidence、完整 P16 及 guarded P17 仍未完成；provider calls=0、promotion
+attempted=false、canonical/source 不变。memory/docs 仍 local-only/无 tracked files。
