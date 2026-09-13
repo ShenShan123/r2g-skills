@@ -168,6 +168,42 @@ def test_actual_router_is_called_in_ram_before_evidence(tmp_tehm, monkeypatch):
     assert not routes["case"]["resolved_state_id"].startswith("gap-state:")
 
 
+@pytest.mark.parametrize("role", ["training", "held_out"])
+def test_conjunction_profile_requires_source_locator_and_answer_free_nonlearner(tmp_path, role):
+    from test_guard_semantic_binding import SOURCE
+    from tehm.assets.guard_binding import locate_guard_conjunction, PROFILE
+    project, row, manifest = _project(tmp_path, role)
+    (project / "rtl/source.v").write_text(SOURCE)
+    row["query_plan"]["compatibility_profile"] = PROFILE
+    if role == "training":
+        manifest["fix"] = locate_guard_conjunction(SOURCE)["payload"]
+        (project / "manifest.json").write_text(json.dumps(manifest))
+    case = module._case(row)
+    assert case["fsm_syntax_profile_checked"] is True
+    assert case["source_guard_locator_checked"] is True
+    assert case["source_guard_locator_digest"].startswith("sha256:")
+    assert ("fix" in manifest) is (role == "training")
+
+
+def test_conjunction_profile_cannot_claim_locator_from_one_fsm_alone(tmp_path):
+    _, row, _ = _project(tmp_path)
+    row["query_plan"]["compatibility_profile"] = "rtl.fsm.guard_conjunction.v1"
+    with pytest.raises(module.CapabilityGapInputError, match="source-only locator"):
+        module._case(row)
+
+
+def test_training_manifest_answer_cannot_override_source_locator(tmp_path):
+    from test_guard_semantic_binding import SOURCE
+    from tehm.assets.guard_binding import locate_guard_conjunction, PROFILE
+    project, row, manifest = _project(tmp_path)
+    (project / "rtl/source.v").write_text(SOURCE)
+    row["query_plan"]["compatibility_profile"] = PROFILE
+    manifest["fix"] = dict(locate_guard_conjunction(SOURCE)["payload"], add_condition="send")
+    (project / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(module.CapabilityGapInputError, match="proposal must match"):
+        module._case(row)
+
+
 def test_actual_router_mismatch_is_not_handcrafted_as_no_match(tmp_tehm, monkeypatch):
     conn, _, _ = tmp_tehm
     monkeypatch.setattr(module.db, "connect_read_only", lambda path: SimpleNamespace(

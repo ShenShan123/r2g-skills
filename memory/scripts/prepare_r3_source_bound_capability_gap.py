@@ -76,11 +76,26 @@ def _case(row):
             raise CapabilityGapInputError("RTL source is not supported by the structural parser")
         rtl.append(_pin(source))
         parsed.extend(module.to_dict() for module in modules)
-    fsm_profile = query_plan["compatibility_profile"] == "rtl.fsm.single_guard.v1"
+    fsm_profile = query_plan["compatibility_profile"] in {
+        "rtl.fsm.single_guard.v1", "rtl.fsm.guard_conjunction.v1"}
     if fsm_profile:
         fsms = [fsm for module in parsed for block in module["always_blocks"] for fsm in block["fsms"]]
         if len(parsed) != 1 or len(fsms) != 1 or not fsms[0]["items"]:
             raise CapabilityGapInputError("declared FSM profile requires one actual parser-supported FSM")
+    guard_locator = None
+    if query_plan["compatibility_profile"] == "rtl.fsm.guard_conjunction.v1":
+        from tehm.assets.guard_binding import locate_guard_conjunction
+        if len(rtl) != 1:
+            raise CapabilityGapInputError("guard locator requires one actual source file")
+        try:
+            guard_locator = locate_guard_conjunction(Path(rtl[0]["path"]).read_text())
+        except ValueError as exc:
+            raise CapabilityGapInputError("declared guard profile does not satisfy source-only locator") from exc
+        if role == "training":
+            fix = {key: value for key, value in manifest["fix"].items()
+                   if key != "transformation_family"}
+            if fix != guard_locator["payload"]:
+                raise CapabilityGapInputError("training proposal must match the source-only locator")
     verification = manifest["verification"]
     tests = {key: _pin(_contained_file(project, verification[key])) for key in (
         "target_test", "frozen_regression")}
@@ -92,6 +107,8 @@ def _case(row):
         "project_manifest": _pin(manifest_path), "rtl_inputs": rtl, "verification_inputs": tests,
         "parsed_structural_digest": _digest(parsed), "query": MemoryQuery(query_plan=query_plan).to_dict(),
         "fsm_syntax_profile_checked": fsm_profile,
+        "source_guard_locator_checked": guard_locator is not None,
+        "source_guard_locator_digest": _digest(guard_locator) if guard_locator is not None else None,
         "query_plan": query_plan, "repair_proposal_is_not_evidence": True}
 
 
@@ -205,7 +222,7 @@ def prepare_gap_inputs(preregistration, p14_attribution, *, output):
         for ref in (case["project_manifest"], *case["rtl_inputs"], *case["verification_inputs"].values()):
             if _sha256(Path(ref["path"])) != ref["sha256"]:
                 raise CapabilityGapInputError("prospective source or oracle input drift during compilation")
-    report = {"version": "r3-source-bound-capability-gap-input-freeze-v2",
+    report = {"version": "r3-source-bound-capability-gap-input-freeze-v3",
         "campaign_id": spec["campaign_id"], "lane": "CAPABILITY_GAP", "preregistration": _pin(prereg),
         "p14_attribution": {**_pin(p14_path), "report_digest": p14["report_digest"]},
         "source_database": p14["source_database"], "cases": cases, "partition": partition,

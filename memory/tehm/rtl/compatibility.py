@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import re
 
-COMPATIBILITY_VERSION = "rtl-compatibility-v1"
+COMPATIBILITY_VERSION = "rtl-compatibility-v2"
 _PROFILE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{2,127}$")
 
 DEFAULT_PROFILES = {
     "rtl.GUARD_STRENGTHEN": "rtl.fsm.single_guard.v1",
+    "rtl.FSM_GUARD_CONJOIN": "rtl.fsm.guard_conjunction.v1",
     "rtl.RESET_RESTORE": "rtl.sequential.reset_branch.v1",
     "rtl.WIDTH_CORRECT": "rtl.combinational.width_assignment.v1",
     "rtl.PRIORITY_REORDER": "rtl.fsm.case_reorder.v1",

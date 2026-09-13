@@ -11,16 +11,22 @@ import re
 
 from tehm.rtl.verilog_parse import parse_verilog
 
-RTL_ACTION_VERSION = "rtl-actions-v0.1"
+RTL_ACTION_VERSION = "rtl-actions-v0.2"
 RTL_ACTION_DOMAINS = (
     "rtl.AST_REWRITE", "rtl.GUARD_STRENGTHEN", "rtl.RESET_RESTORE",
-    "rtl.WIDTH_CORRECT", "rtl.PRIORITY_REORDER",
+    "rtl.WIDTH_CORRECT", "rtl.PRIORITY_REORDER", "rtl.FSM_GUARD_CONJOIN",
 )
 
 
 def apply_rtl_action(source: str, payload: dict) -> tuple[str, dict]:
     """Apply one rtl.* action to Verilog source; returns (new_source, edit)."""
     domain = payload.get("domain")
+    if domain == "rtl.FSM_GUARD_CONJOIN":
+        from .guard_conjunction import apply_guard_conjunction
+        return apply_guard_conjunction(
+            source, **{key: payload.get(key) for key in (
+                "module", "case_expr", "reg", "source_state", "target_state",
+                "add_condition")})
     if domain == "rtl.GUARD_STRENGTHEN":
         return apply_guard_strengthen(
             source,

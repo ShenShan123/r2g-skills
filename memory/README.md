@@ -5826,3 +5826,162 @@ failures/errors/skipped 均为 0）。覆盖当前独立 P15 oracle 与 gap inpu
 下一版条件合取 operator/binding，也不代表真实 gap baseline、扩展或 production PASS。
 回归期间未改其被验证的 core source，未重复启动同一 handle。下一版 frontend 的候选
 代码先在外部 campaign 隔离目录验证，与本 checkpoint 和实验 oracle 分代管理。
+
+### 2026-09-12 Revision3 conditional guard runtime and actual gap baseline/repair
+
+已发布的独立 P15/gap input checkpoint 为 `86b5867`；新 runtime 不回写该版本的
+calibration/EDA binding。parser v0.2 修正 declaration RHS 被当作 signal、width 丢失
+和 function/task local scope 污染，同时保留 non-ANSI port direction。新增独立
+`rtl.FSM_GUARD_CONJOIN` domain 与 `rtl.fsm.guard_conjunction.v1` profile，不扩大旧
+GUARD_STRENGTHEN 的语义。新 operator 要求唯一 module/combinational FSM/transition、
+scalar input positive conjunction 和单个 blocking assignment；仅插入缺失条件，
+保留原 guard，重复执行返回 ALREADY_CONJOINED，unsupported/ambiguous fail closed。
+
+新的 `rtl_acceptance_completion_guard_binding_v1` 从 RTL source 中定位 scalar input
+acceptance conjunction、同一 FSM state 下受该 acceptance gate 的 output datapath
+更新，以及 terminal output 对应的 transition 缺失条件；不读取 manifest.fix、TB
+或 filesystem，不用 port 名猜答案，不要求完整 alpha token-shape 相同。这只是
+有界静态模式 proof，不能单独证明功能正确、安全迁移、统计 generalization 或授予
+promotion。Asset lifecycle 按显式 contract 分派独立重放 verifier，未知/畸形 contract、
+proof/payload/source/template/digest 篡改拒绝。旧 alpha verifier 和回答防火墙保留。
+组合 RTL/Asset 回归 119 passed（44.54s）；新 locator/compiler 回归 88 passed（11.05s），
+JUnit 分别为 `guard-binding-asset-integrated-r2.xml` 与 `guard-gap-compiler-focused-r3.xml`。
+新 runtime 的完整回归使用独立 handle/JUnit `regression-guard-binding-runtime-r3.xml`，
+已 terminal：1576 passed，919.90s，JUnit failures/errors/skipped 均为 0。
+1576 覆盖当前 operator/frontend/binding/compiler；不证明尚未实现的严格 selector
+source-only integration、实际 held-out transfer 或 production readiness。
+
+在任何 gap oracle 前创建第三代 `projects-runtime-r3/` 与 `preregistration-r3.json`，
+保留原 projects、unused freeze-r1/r2 和原 case roles/tests/RTL。不是执行失败后
+换 source、重新划分 held-out 或调约束：此前 gap execution root 从未创建。新
+input compiler v3 对 conjunction profile 实际运行 source-only locator，并要求仅
+training proposal 精确匹配定位结果；non-learner manifests 仍没有 fix。
+`source-bound-input-freeze-r3.json` digest：
+`sha256:4980700a2b8ac714ed4e54d024747a74c1e05455eae7a8d1ed051cd8c5253941`。
+实际 immutable source/RAM routing 仍为五条 NO_SKILL/NO_MATCH，source logical/file
+digest 不变。旧 P13/P14/P15 的 cold replay 证据属于其已冻结 runtime，不声称在新
+generation 下重新通过旧 whole-corpus pin；后续 portable freeze 必须保留此分代。
+
+`execute_gap_baseline_r3.py` 在创建任何 oracle workdir 前验证全部 runtime/source/tool/
+compiler/preregistration/case pins、重放实际 RAM routes、冻结顺序与 timeout；one-shot
+execution root 拒绝 resume/overwrite，各 case 前后重验，保留 compile/simulation
+commands/output/workdir。实际五条 baseline 均已 terminal：CRC16/sum32 training 和
+XOR64/hist8 held-out 全为 target FAIL、regression PASS、两项 compile PASS；timer16
+为 target/regression/compile PASS。全部 20 个 compile/simulation command receipts
+保留于 `execution-r3/`，不是 helper 声明的预期 outcome。
+`baseline-observation-report.json` digest：
+`sha256:cde0756a5732df58aa42a3230958d89b05202038cbe8ea6f44b49738b0ad4643`。
+
+在两条实际 training baseline failure 后，仅对 training 生成 source-only operator
+修复并先冻结 candidate/proposal/driver/baseline/input refs。独立 one-shot
+`execute_training_repair_r3.py` 已 terminal，两条均 target/regression/compile PASS、
+oracle_complete=true、obligation coverage=1.0。repair observation digest：
+`sha256:c7a7cc952523db447f177e76ba0bada6dac898335657121abcd9f75c808c12df`。
+held-out failure 没有回流 learner；未运行 held-out repair、注册 Asset/Knowledge、
+capture transition、建立 non-P12 admission 或改变 canonical/production authority。
+这里仅证明这两个有限 directed training cases 的真实 repair，不是完成 capability
+expansion。下一步需将真实 source-bound training receipts 接到 repeated-failure gap
+detector/reason admission，再在 disposable staging 创建新 Knowledge/Asset，执行
+answer-free held-out、remove-delta、non-target/rollback 与独立 attribution。
+P15 statistical gate、历史 non-target 全局 gate、P16/P17 仍未闭合；不降 gate、
+不引入未经授权的 model/provider 调用，`memory/docs/` 继续仅本地保留。
+
+### 2026-09-12 Revision3 actual non-P12 gap admission and new shadow objects
+
+基于同一第三代 freeze 的真实 baseline/repair acquisitions，外部
+`build_source_bound_gap_admission_r3.py` 已在 immutable source 的 RAM backup 中完成
+两条真实训练修复的核心 capture、verified-execution predicate、causal fragments 和
+gap detector。没有调用旧 challenge 的空 source 或 `_no_match_route(gap)`，没有
+调用 adapter 的声明式 before FAIL，也没有重复执行 oracle。before/after compile、
+target/regression、command workdirs 与 source-only action 均由实际保留 receipts
+逐一核验；无模拟 first_divergence、PPA utility gain 或新增独立 measurement。
+
+实际 transitions 为 `transition_0e664629c259cefb` 与 `transition_54c5f55edc86dfac`，
+training membership 仅这两条。核心产生 `gap_0c3c5a7f5112a5539d4f`：
+`repeated_unsupported_mechanism+structural_coverage_gap`，actual initial_failure_evidence=2、
+post-action unresolved failures=0。两个 successful repairs 没被写成 unresolved FAIL，
+也没有虚构 `repeated_executable_failure`。gap confidence=1.0 是 detector 的有限
+lineage/failure support heuristic，不是 calibrated probability 或统计安全保证。
+
+non-P12 reason/admission 消费真实 `resolution_fd592b7aa9818a80d2181bcd` NO_SKILL/NO_MATCH
+route（memory_budget=0），不使用 `gap-state:*` 标记；六项 reason admission evidence
+已由核心重新计算并 admitted。proposal 为 evaluation-only ADD。新 registered
+Knowledge 为 `mk_7711daf9b2c609afdb65@1`（content digest
+`sha256:9f453f7a52fb6c83409e609a9090dc92a544770a753b3c928e98e5d12bafcf92`），
+仍为 L1_EXECUTED_INTERVENTION/shadow；核心 authority 明确 eligible=false，尚缺
+L3_REPLICATED_EFFECT，不手动升级 evidence level/status。
+
+新 Asset 为 `asset_5919747d76c16ee9bebcf19e`（draft，content digest
+`sha256:5919747d76c16ee9bebcf19e21dbc750892bb5868c7e230aed6c36c7e130c585`），
+绑定该 Knowledge 和独立 frozen source-only guard contract。它是新 action operator
+的实际 registry 对象，不是 old alpha template 的重命名或已授权 production skill。
+registry/status/evidence 写入只在 RAM 内发生，保留独立 `new-objects-shadow.sqlite`
+快照；source database 未改变。ADD savepoint rollback 后 full logical SQLite digest
+与 `training-capture-base.sqlite` 精确相同，恢复快照中新增 Asset/Knowledge 不存在。
+
+实际 source-bound ADD report 在 gap campaign 的
+`non-p12-gap-sourcebound-r1/source-bound-gap-shadow-add-report.json`，digest
+`sha256:5035a1eb330214010b7f917c87472f65744607f7039fb71767a6673c1b81a8e5`。
+独立 `audit_source_bound_gap_admission_r3.py` 已从真实 receipts/原 source 在 RAM 冷
+重建 canonical capture IDs、重跑全部 detector/reason/admission/proposal，并验证
+三份快照、path、Knowledge、Asset、training-only membership 和 full rollback；
+15 项 replay checks 均 PASS，磁盘 audit 只读。持久 receipt 为
+`source-bound-gap-admission-cold-replay-r1.json`，digest
+`sha256:91fa6611b49b663d8429344faa84336df0e9ea4aaadb7bcecf266b7bf7ebf7b4`。
+
+这闭合了真实 NO_MATCH → source failures → gap receipt → non-P12 admission →
+new shadow Knowledge/Asset 的 bounded integration，但还不是完整 capability
+expansion attribution 或 production readiness。接下来须建立实际 control/treatment
+和源自真实执行目录的 run provenance，按核心 L2/L3 gates 验证，再完成 frozen
+answer-free held-out、remove-delta、non-target 与独立 attribution。不得仅为了使
+shadow Knowledge 获得 eligible route 就设置 validated/promoted、补造 run witnesses
+或降低 authority gate。外部 producer/auditor 的可复用接口与完整 portable epoch
+bundle 也需在 P16 前归档/收敛；当前新 runtime 的完整回归已 terminal（1576 passed）。
+
+### 2026-09-12 Revision3 core-controlled L3 projection and remaining selector gap
+
+原 L1 projection 保持 immutable。新的 controlled projection 在原 source 的 RAM
+backup 中重新映射同一两条真实 training acquisitions：control 是未修改 source 的
+一次真实 baseline observation，treatment 是实际已验证的修复；不重复执行 oracle、
+不增加测量或独立 source lineages，也不更新原 canonical rows。run provenance 来自
+保留的 baseline/repair simulation workdirs，不是自行补造 run IDs。control 记录的
+before/after 是同一无动作 snapshot，不宣称它们是两次 independent measurements。
+gap/admission 在 control 加入前计算，保持 observed=2/failure_evidence=2，不将两条
+source failure 在 control/repair transition 中的表示重复当作新 failures/samples。
+
+首版 `non-p12-gap-controlled-sourcebound-r1/` 在 path consolidation 处 terminal
+拒绝，因为 control payload 未显式携带实际 source 的 compatibility_profile，fact
+loader 不能从非-inline artifact blob 自动恢复该字段。失败目录、freeze、producer
+source archive 和 terminal diagnosis 均保留；没有 oracle rerun、改 RTL、改 TB、
+改约束或 resume 原输出。仅修正 provenance contract，在全新 r2 projection 中重放。
+
+`non-p12-gap-controlled-sourcebound-r2/controlled-gap-shadow-add-report.json` 的 digest
+为 `sha256:4b2308870594d2934c36e0cd1beded7f8ef85537e792567167d7490387a8ae23`。
+两项核心 pair 都为 VALID_CONTROLLED_PAIR，context/lineage/toolchain/oracle/scope/
+training campaign 匹配，真实 control FAIL/treatment PASS。核心 replication 对
+`causal_path_6937d7d738df2773` 判定 L3_REPLICATED_EFFECT/eligible=true；两条实际
+design/lineage 与两条已保留 baseline execution workdirs 均有完整 witness。
+这是 bounded engineering effect replication，不是 IID、统计 calibration 或
+无限输入功能证明。未手动设置 path evidence level。
+
+核心 builder/registry 据此产生新 `mk_d0dd39fc779f9492bedf@1`（L3/candidate），
+content digest 为 `sha256:78d42fb0998f2c432839cd4200b4b84259a8bfffbed6475d60b9fc9885e28881`。
+pure authority review 的 evidence gates eligible=true，但未记录/消费严格 lifecycle
+authority receipt，未 validated Knowledge。Asset 仍为 draft，未 promoted；其 immutable
+operator content ID 不变，但该 projection 的 provenance 明确绑定新 L3 Knowledge，
+不覆盖原 L1 Asset projection。ADD 的 exact full-state rollback 仍 PASS。
+
+独立 `audit_source_bound_controlled_gap_r3.py` 已从原 source/实际 acquisition 冷重建
+control/treatment canonical IDs、gap-before-controls、reason/admission/proposal、全部
+核心 pairs/L3/Knowledge/Asset 与三份快照。19 项检查全 PASS，disk audit 只读；
+receipt 为 `controlled-gap-cold-replay-r1.json`，digest
+`sha256:bd9589d1002f9a41d59633bf26c09c0ead351c9184d0781614f7390f35b4c3de`。
+
+继续检查实际执行依赖发现：P7 strict Asset selector 的 RTL binding 仍仅接受
+`manifest_fix_v1`，尚未接入新 source-only contract。不能用 compatibility_mode 绕过、
+伪造 SELECT/APPLY/eligible 或将静态 template validation 当成真正 policy transfer。
+下一步须先保留当前 r3 runtime/source checkpoint，再在新 generation 补齐 selector
+的 registered-template/source-only binding replay，并由严格 Knowledge authority 和
+candidate Asset lifecycle 建立 disposable shadow policy views。新 generation 必须
+显式冻结/核验其 source、case roles、oracle 和 origin evidence，不能静默重写已消费
+freeze-r3 的 whole-corpus hash；之后再执行 held-out/remove-delta/non-target。

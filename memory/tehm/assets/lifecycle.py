@@ -148,8 +148,12 @@ def _binding_is_compatible(bound: Mapping, asset: Mapping) -> bool:
     # Fixture manifest.fix supplies the target answer, not transferable
     # localization. It remains executable for diagnostics, never authority.
     from .structural_binding import CONTRACT, verify_structural_binding
-    if (provenance.get("binding_contract") != CONTRACT or
-            not verify_structural_binding(bound, asset)):
+    from .guard_binding import CONTRACT as GUARD_CONTRACT, verify_guard_binding
+    verifiers = {CONTRACT: verify_structural_binding,
+                 GUARD_CONTRACT: verify_guard_binding}
+    contract = provenance.get("binding_contract")
+    verifier = verifiers.get(contract) if isinstance(contract, str) else None
+    if verifier is None or not verifier(bound, asset):
         return False
     compatibility = asset.get("compatibility") or {}
     if not isinstance(compatibility, Mapping):

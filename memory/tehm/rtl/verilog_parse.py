@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-PARSE_VERSION = "verilog-parse-v0.1"
+PARSE_VERSION = "verilog-parse-v0.2"
 
 
 @dataclass
@@ -151,26 +151,51 @@ def _parse_ansi_ports(module: RTLModule, ports_text: str | None) -> None:
 
 
 def _parse_declarations(module: RTLModule, body: str) -> None:
+    # Function/task declarations are local symbols, not module ports or nets.
+    body = re.sub(r"\bfunction\b.*?\bendfunction\b|\btask\b.*?\bendtask\b",
+                  "", body, flags=re.S)
     # localparam / parameter
     for name, value in re.findall(
             r"\b(?:local)?param\s+(?:\s*\[\s*[^\]]+\]\s*)?"
             r"(?P<name>\w+)\s*=\s*(?P<value>[^,;]+)", body):
         module.params[name] = value.strip()
     # signal declarations: kind [range] name [, name ...] ;
-    for kind in ("input", "output", "inout", "reg", "wire"):
-        pattern = (r"\b" + kind + r"\b(?:\s+wire|\s+reg)?"
-                   r"(?:\s*\[[^\]]*\])?"
-                   r"\s+(?P<decl>[^;]+?)\s*;")
-        for decl in re.finditer(pattern, body):
-            names = re.split(r"[,\s]+", decl.group("decl").strip())
-            width = None
-            for token in names:
-                if token.startswith("["):
-                    width = token
+    pattern = (r"\b(?P<kind>input|output|inout|reg|wire)\b"
+               r"(?:\s+(?:wire|reg))?(?:\s+signed)?"
+               r"\s*(?P<width>\[[^\]]*\])?\s+(?P<decl>[^;]+?)\s*;")
+    for decl in re.finditer(pattern, body):
+        kind, width = decl.group("kind"), decl.group("width")
+        # Declarators contain arbitrary RHS expressions. Only the identifier
+        # before '=' is a declaration; operands never introduce new signals.
+        for part in _split_declarators(decl.group("decl")):
+            name = part.split("=", 1)[0].strip()
+            if not re.fullmatch(r"[A-Za-z_]\w*", name):
+                continue  # Unsupported arrays/escaped identifiers fail closed.
+            existing = module.signals.get(name)
+            if existing and existing.kind in ("input", "output", "inout"):
+                if kind in ("wire", "reg"):
+                    # Non-ANSI output followed by a reg declaration retains
+                    # its externally visible direction and declared width.
+                    module.signals[name] = Signal(name, existing.kind,
+                                                   existing.width or width)
                     continue
-                if re.fullmatch(r"[A-Za-z_]\w*", token):
-                    module.signals[token] = Signal(name=token, kind=kind,
-                                                   width=width)
+            module.signals[name] = Signal(name, kind, width)
+
+
+def _split_declarators(text: str) -> list[str]:
+    """Split module declarations, not commas inside calls/concatenations."""
+    parts, start, stack = [], 0, []
+    pairs = {")": "(", "]": "[", "}": "{"}
+    for i, char in enumerate(text):
+        if char in "([{":
+            stack.append(char)
+        elif char in ")]}":
+            if not stack or stack.pop() != pairs[char]:
+                return []
+        elif char == "," and not stack:
+            parts.append(text[start:i])
+            start = i + 1
+    return [] if stack else parts + [text[start:]]
 
 
 def _parse_always_blocks(module: RTLModule, body: str) -> list:
