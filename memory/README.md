@@ -6328,3 +6328,99 @@ Target Replay/held-out/non-target/ΔM ablation/rollback 和 reason-aware P14 全
 用本轮 origin replay 代替新 ADD 的真实执行。独立 reason-stratified P15/statistical
 production evidence、完整 P16 及 guarded P17 仍未完成；provider calls=0、promotion
 attempted=false、canonical/source 不变。memory/docs 仍 local-only/无 tracked files。
+
+### 2026-09-13 Revision3 actual core P13 ADD and fresh S0/S1/S2 attribution
+
+`UPDATE_CAUSAL_KNOWLEDGE / ADD` 现已从 generic rule crystallization 中分离：必须
+在任何 staging 写入前从实际更新前数据库重放 CapabilityGapSourceReceipt，校验
+campaign、选中的独立 training facts、reason/admission 与 plan evidence。新 Knowledge
+由真实 L3 replicated training path 构建；paired Asset 必须重放 core template builder
+及源 action，不接受任意 replacement/promoted payload。一个 replicated path 注册为
+一个 immutable evidence object，独立性由其 verified sources/support_lineages 证明，
+不向不包含 lineage 的 evidence primary key 重复插入同一对象。
+
+实际 core ADD 创建 `mk_d0dd39fc779f9492bedf@1` 与
+`asset_5919747d76c16ee9bebcf19e`，没有新增 Rule，原 canonical/full source SQL 均未变。
+`actual-core-gap-shadow-add-r18/actual-core-gap-shadow-add-report.json` digest 为
+`sha256:6f76af3c2a5d9b4c67410953d2b61e4ff56da203b5b7b4743ea52b4ff4bb21ad`；
+独立 core replay digest 为
+`sha256:715fd3b6d45daca9abf8ea28d6ec5b6e57543150350682b5ba8a59fc27a868dd`。
+原 mutable RAM staging 仍被关闭；可选 artifact sink 只得到经完整 SQL roundtrip/
+integrity 校验的 immutable SQLite bytes，不能取得 staging connection。
+
+新 `tehm.evolution.gap_evaluation` 明确区分更新前 S0、实际 P13 candidate Knowledge /
+shadow Asset 的 S1，以及独立 disposable evaluation preparation 生成的 S2。
+preparation 校验实际三态、所有原 rows/schema/raw evidence 和新增对象身份，实际消费
+status-v1 Knowledge authority，验证 Knowledge 到 status-v2，再为当前 v2 状态记录
+独立 authority；Asset 只到 candidate-v3，不到 promoted。旧 v1 authority 正确变 stale。
+只允许新对象 owned projection/status/authority rows 改变。S0/S1 不变，mutable S2
+关闭，typed composed C1 显式绑定 S0→S2，不把 P13 S1 digest 重标为 runtime S2。
+`core-gap-disposable-evaluation-r19/evaluation-source-report.json` digest 为
+`sha256:558b39b6ede59a217fd3bf61310ea4e81750282a68549bb07bdbef0500d41474`；
+独立审计 digest 为
+`sha256:12dc8506a4d62a57e8608cc6e8158aa20b87eb725d7b63515534d7f365daaf75`，
+七类 state/authority/schema/rehashed-label 负控均拒绝。
+
+随后前置冻结新的真实 source-owned policy generation，再实际执行 3 loads × 原 5 cases
+× 2 arms = 30 callbacks / 120 compile/simulation commands。CRC16/SUM32 training replay
+及 XOR64/HIST8 known engineering held-out 都为 FAIL→PASS→FAIL；NO_MEMORY 实际执行
+未修复源，timer non-target 全 PASS。移除增量是实际 reload S0 baseline policy。
+warm digest 为 `sha256:720748206ade7d2341888a1b7044818ac7ab29e771e5e05e1b6d8e1253447b09`；
+独立 source-load/route/candidate/oracle cold replay digest 为
+`sha256:be5a880fa16a9cdde5a2641d50dc3e63aec1330db600bf41908068b29d6cdc89`。
+四项 distinct actual AF gate files 及标准 witness 在该有限范围通过；witness digest 为
+`sha256:8d18b2a6b7784a61eb2602a93ae9b590b8f9779b6de76ad7e3bb7ed8cf628a7d`；
+独立四项审计 digest 为
+`sha256:48076acaedc32b80efc879d56d670a6fcbc6f82fbf54d13f5b95fedcf48a4f56`。
+
+本批实际 held-out pairs 仅映射进独立 evaluation-only core ledger，learner_eligible=false。
+两条 transfer lineages 与 training designs/lineages 不重叠；core 判 L4 且独立 16 项
+审计通过，但 promotion_eligible=false，ORFS fourteen-check full-oracle 负控仍不 eligible。
+transfer report digest 为
+`sha256:e6daad9349463b9a2512c3f30144c91039180951095c4610fb78e2b51f81ac05`。
+
+实际 P13 receipt、单独 S0/S1/S2 admission/composed delta、本批真实 load/execution/
+lineage/AF/L4 已接入 strict_memory_delta=true / strict_expanded=true reason-aware P14：
+C1–C8 全 true，expanded missing 为空。新 executable Asset 使用已有
+RTL.FSM_GUARD_CONJOIN primitive，不声称发明新的 atomic operator。
+`core-gap-fresh-attribution-r20/actual-core-gap-attribution-report.json` digest 为
+`sha256:8e3a8cb93e925c116b13f4e4d6128bf69cab9948df066c5aaee63317f7f81756`。
+独立 auditor 不导入 producer，从 S2 与实际已执行 ledger rows 重建整个 SQL projection、
+state witness 和完整 P14 receipt，逐项精确一致，audit digest 为
+`sha256:4dd3a6b862a53f6b815215614053d79f89bf21ad08ca1b4db104ba94ad2cdb6c`。
+没有新增/事后补造 policy loads，sources 与完整 disposable projection 精确回滚。
+
+当前 559 个 Python files、resources 与 campaign Python origin 已按原字节归档；
+五个 source/evaluation stores 的 schema contract 分别 freeze/replay，通过另进程校验。
+checkpoint digest 为
+`sha256:63d7b5f027e2c9e932151f3c71ce159d4f16ee6ba0fbab2dd4a0d1cf852b80be`。
+这不是完整 recursive toolchain/raw evidence closure，也不是 relocated fresh hardware
+或完整 P16 开源发布。所有 artifacts 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-source-bound-gap-commit-20260912-r1`。
+
+相关 core/P13/evaluation 单测 59 PASS。完整 regression generation r27 已 terminal：
+1740 PASS / 1 FAIL / 0 ERROR / 0 SKIP，1032.27s，559 个 Python files 在本次运行前后
+精确一致。terminal digest 为
+`sha256:6b42d82c5b34f4068cd2419f59abde0b317330a6b00e5270230003fcdb9808c2`，
+失败日志与 source-origin 原字节归档保留，不重写失败批次。
+唯一失败是旧存储测试的真实服务器环境依赖：授权迁移后 `/tmp/tehm-orfs` 正常解析到
+数据盘，旧测试却断言解析路径必须以 `/tmp/` 开头。诊断单测 r28 独立重现。
+
+已仅修改该测试文件：在 pytest-owned 隔离路径验证 configured scratch default、
+alias 的真实解析、alias 不能绕过 evidence-root 写入保护、只有明确 override=1
+才允许 evidence-root 工作，以及非法 campaign names 拒绝。未改 `orfs_storage`
+运行时政策，未撤销归档兼容链接。storage 单测 r29 已 16 PASS / 0 FAIL，2.53s。
+测试修复后，实际 R20 runtime binding 与全部 prospective inputs 仍逐字节一致。
+新的完整 regression generation `full-regression-core-gap-storage-isolated-r30` 已 terminal PASS：
+1747 PASS / 0 FAIL / 0 ERROR / 0 SKIP，1035.93s，minimum_tests=1747；
+559 个 Python files 在运行前后精确一致。input freeze digest 为
+`sha256:335c9df0bf110ab5dd58637967c2db3fc2c91b509206b5de38b06d6b31426deb`，
+JUnit digest 为 `sha256:21a16b6dafdc461b40b244fd230a83959e8e050911779c97129b605a3c4f46c5`，
+terminal digest 为 `sha256:c4e0b168b33c9fb25a0b08aca8500a2dd7cd46c5f6a67c4939714f6e73422a92`。
+该结果是本次代码 epoch 的完整工程回归，不复用旧 1697 PASS 或 r27 部分通过结果。
+
+上述 known-corpus replay 不增加独立统计样本，training replay 不回流 learner；
+不代表全输入 equivalence、ORFS/PPA/signoff、广泛外部 RTL 泛化或生产 AF 安全。
+P15 independent reason-stratified calibration/statistical production evidence、完整 P16
+和 guarded P17 仍未完成。provider calls=0、promotion_attempted=false，production
+authority/runtime 不变；本次阶段性工程验证完成，memory/docs 继续 local-only。

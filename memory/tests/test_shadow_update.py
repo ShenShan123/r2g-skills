@@ -145,7 +145,7 @@ def test_retain_shadow_update_is_a_deterministic_noop(tmp_tehm):
     assert first.before_resolution_id == first.after_resolution_id
 
 
-def test_causal_update_crystallizes_only_in_shadow(tmp_tehm):
+def test_rule_update_crystallizes_only_in_shadow(tmp_tehm):
     oracle = IcarusOracle()
     if not oracle.available:
         pytest.skip("Icarus unavailable")
@@ -158,7 +158,7 @@ def test_causal_update_crystallizes_only_in_shadow(tmp_tehm):
         for table in ("tehm_rules", "tehm_rule_revisions", "tehm_memory_events")
     }
     plan = _plan(
-        first, "UPDATE_CAUSAL_KNOWLEDGE", "ADD",
+        first, "UPDATE_RULE", "ADD",
         refs=(first, second, witness.receipt_digest))
     receipt = apply_localized_update_shadow(
         plan, conn, {"transition_ids": [first, second], **_anti_evidence(witness)})

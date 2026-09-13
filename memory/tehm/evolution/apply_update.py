@@ -12,6 +12,7 @@ import hashlib
 import json
 import sqlite3
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
@@ -68,6 +69,30 @@ def _staging_copy(conn: sqlite3.Connection) -> sqlite3.Connection:
     staging.execute("PRAGMA foreign_keys=ON")
     conn.backup(staging)
     return staging
+
+
+def _staging_snapshot_bytes(staging: sqlite3.Connection) -> bytes:
+    """Export a single-file snapshot and prove its full SQL state roundtrip.
+
+    SQLite deserialize cannot reopen WAL-marked input. Normalize only the
+    generated serialization's documented file-format bytes, never the source:
+    https://www.sqlite.org/c3ref/deserialize.html
+    """
+    raw = staging.serialize()
+    if len(raw) < 100 or raw[:16] != b"SQLite format 3\x00" or raw[18:20] not in (b"\x01\x01", b"\x02\x02"):
+        raise ShadowUpdateError("staging snapshot has an unsupported SQLite file header")
+    if raw[18:20] == b"\x02\x02":
+        raw = raw[:18] + b"\x01\x01" + raw[20:]
+    replay = sqlite3.connect(":memory:")
+    replay.row_factory = sqlite3.Row
+    try:
+        replay.deserialize(raw)
+        if (replay.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or
+                _connection_digest(replay) != _connection_digest(staging)):
+            raise ShadowUpdateError("staging artifact did not preserve its full SQL state")
+    finally:
+        replay.close()
+    return raw
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
@@ -753,6 +778,123 @@ class AppliedShadowUpdateReceipt:
         return receipt
 
 
+def _gap_source_for_plan(plan: LocalizedUpdatePlan, source: sqlite3.Connection,
+                         evidence: Mapping):
+    """Require independent pre-update source replay before staging writes."""
+    from .gap_source import CapabilityGapSourceReceipt, verify_capability_gap_source
+    from .reason_derivation import EvolutionReasonDerivationReceipt
+    from .admission import EvolutionAdmissionReceipt
+
+    raw = evidence.get("capability_gap_source")
+    gap_add = plan.update_target == "UPDATE_CAUSAL_KNOWLEDGE" and plan.operation == "ADD"
+    if raw is None and not gap_add and plan.failure_type != "CAPABILITY_GAP":
+        return None
+    if not gap_add or plan.failure_type != "CAPABILITY_GAP":
+        raise ShadowUpdateError("capability gap requires Knowledge/Asset ADD, not rule or revision")
+    try:
+        mapped = raw.to_dict() if isinstance(raw, CapabilityGapSourceReceipt) else raw
+        receipt = CapabilityGapSourceReceipt.from_dict(mapped)
+        checked = verify_capability_gap_source(source, receipt)
+        reason = EvolutionReasonDerivationReceipt.from_dict(receipt.reason)
+        admission = EvolutionAdmissionReceipt.from_dict(receipt.admission)
+    except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+        raise ShadowUpdateError("Knowledge ADD requires a valid capability-gap source witness") from exc
+    if not checked.get("verified") or not checked.get("eligible"):
+        raise ShadowUpdateError("capability-gap source witness does not replay the pre-update DB")
+    if (plan.campaign_id != receipt.campaign_id or plan.transition_id not in receipt.transition_ids or
+            plan.knowledge_refs or plan.rule_refs):
+        raise ShadowUpdateError("capability-gap ADD plan is not bound to its independent source")
+    required = {receipt.receipt_digest, reason.receipt_digest, admission.receipt_digest, *receipt.transition_ids}
+    if not required <= set(plan.evidence_refs):
+        raise ShadowUpdateError("capability-gap ADD plan must witness source/reason/admission digests")
+    return receipt
+
+
+def _apply_gap_knowledge_add(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
+                             evidence: Mapping) -> dict[str, str]:
+    """Derive an actual new claim from a verified replicated training path.
+
+    The paired asset must replay the core template builder and the actual
+    intervention action. Neither a replacement claim nor an arbitrary asset
+    payload is an authority input. All changes belong to one staging savepoint.
+    """
+    from tehm.assets.receipts import CapabilityGapReceipt
+    from tehm.assets.synthesis import AssetProposal, build_rtl_asset_proposal
+    from tehm.assets.registry import asset_content_digest
+    from tehm.assets.guard_binding import CONTRACT, SPEC
+    from tehm.causal.mechanism import load_transition_facts
+    from tehm.causal.evidence_level import evidence_rank
+    from tehm.knowledge.builder import build_knowledge_from_path
+    from tehm.knowledge.registry import register_knowledge
+    from .gap_source import CapabilityGapSourceReceipt
+
+    raw = evidence["capability_gap_source"]
+    source = CapabilityGapSourceReceipt.from_dict(raw.to_dict() if isinstance(raw, CapabilityGapSourceReceipt) else raw)
+    gap = CapabilityGapReceipt.from_dict(source.gap)
+    ids = _transition_ids(plan, evidence)
+    campaigns = _verify_training_transitions(staging, ids, plan.campaign_id,
+        campaign_by_transition=_transition_campaigns(evidence, ids))
+    if any(campaign != source.campaign_id for campaign in campaigns.values()):
+        raise ShadowUpdateError("gap ADD path must use the witnessed training campaign")
+    path_id = evidence.get("knowledge_path_id")
+    if type(path_id) is not str or path_id not in plan.evidence_refs:
+        raise ShadowUpdateError("gap ADD requires an explicitly witnessed training causal path")
+    row = staging.execute("SELECT * FROM tehm_causal_paths WHERE path_id=?", (path_id,)).fetchone()
+    if row is None:
+        raise ShadowUpdateError("gap ADD training causal path is missing")
+    try:
+        path_sources = tuple(json.loads(row["source_transitions_json"]))
+        if (len(path_sources) != len(set(path_sources)) or set(path_sources) != set(ids) or
+                not set(source.transition_ids) <= set(ids)):
+            raise ValueError("gap ADD path source set differs from its verified training evidence")
+        knowledge = build_knowledge_from_path(staging, path_id, status="candidate")
+        if (knowledge.mechanism_family != gap.mechanism_family or
+                knowledge.compatibility_profile != gap.compatibility_profile or
+                evidence_rank(knowledge.evidence_level) < evidence_rank("L3_REPLICATED_EFFECT") or
+                tuple(knowledge.support_lineages) != tuple(gap.evidence_lineages) or knowledge.version != 1):
+            raise ValueError("gap ADD requires a new source-matched replicated Knowledge identity")
+        if staging.execute("SELECT 1 FROM tehm_mechanism_knowledge WHERE knowledge_id=?",
+                (knowledge.knowledge_id,)).fetchone() is not None:
+            raise ValueError("gap ADD cannot revise an existing Knowledge identity")
+        first = load_transition_facts(staging, source.transition_ids[0])
+        supplied = evidence.get("asset")
+        proposal = supplied if isinstance(supplied, AssetProposal) else AssetProposal(**dict(supplied))
+        expected = build_rtl_asset_proposal(gap, name=proposal.name,
+            transformation_family=first.action["transformation_family"],
+            action_payload_template=first.action["payload"], compatibility_profile=gap.compatibility_profile,
+            verifier_obligations=("RTL_COMPILE_PASS", "RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS"),
+            mechanism_knowledge_ids=(knowledge.object_id,))
+        if proposal.definition.get("binding_template") is not None:
+            if first.action["domain"] != SPEC["domain"] or gap.compatibility_profile != SPEC["profile"]:
+                raise ValueError("gap ADD asset has an unsupported source binding template")
+            expected = replace(expected, definition={**expected.definition, "binding_template": {
+                "contract": CONTRACT, "spec": dict(SPEC), "spec_digest": _digest(SPEC)}})
+        if proposal.to_dict() != expected.to_dict():
+            raise ValueError("gap ADD asset does not replay the core source-grounded template builder")
+        asset_digest = asset_content_digest(expected.to_dict())
+        asset_id = "asset_" + asset_digest.split(":", 1)[1][:24]
+        if staging.execute("SELECT 1 FROM tehm_assets WHERE asset_id=?", (asset_id,)).fetchone() is not None:
+            raise ValueError("gap ADD cannot substitute an existing Asset")
+        if plan.asset_refs and plan.asset_refs != (asset_id,):
+            raise ValueError("gap ADD asset differs from the plan's explicit object identity")
+        provenance = {"authority": "capability-gap-shadow-add", "plan_digest": plan.plan_digest,
+            "source_witness_digest": source.receipt_digest, "source_memory_digest": source.source_memory_digest,
+            "reason_digest": _digest(source.reason), "admission_digest": _digest(source.admission)}
+        register_knowledge(staging, knowledge, target_scope=str(_scope(evidence).get("target_scope") or "global"),
+            provenance=provenance, created_at=evidence.get("created_at"), commit=False,
+            evidence_refs=[{"evidence_type": "causal_path", "evidence_id": path_id, "split": "training",
+                # One replicated path is one immutable evidence object. Its
+                # verified sources and support_lineages carry the independent
+                # lineage witnesses; the registry key does not include lineage.
+                "lineage_id": None, "evidence_level": knowledge.evidence_level}])
+        asset_evidence = {**evidence, "asset": {**expected.to_dict(), "provenance": {
+            **expected.provenance, **provenance}, "target_scope": _scope(evidence).get("target_scope")}}
+        _apply_asset(staging, plan, asset_evidence)
+    except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+        raise ShadowUpdateError(str(exc)) from exc
+    return campaigns
+
+
 def _apply_plan(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
                 evidence: Mapping) -> dict[str, str]:
     if plan.update_target == "UPDATE_NONE":
@@ -763,6 +905,8 @@ def _apply_plan(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
         raise ShadowUpdateError("shadow update target is invalid")
     if plan.operation == "RETAIN":
         raise ShadowUpdateError("mutating shadow target cannot use RETAIN")
+    if plan.update_target == "UPDATE_CAUSAL_KNOWLEDGE" and plan.operation == "ADD":
+        return _apply_gap_knowledge_add(staging, plan, evidence)
     if plan.update_target == "UPDATE_CAUSAL_KNOWLEDGE" and plan.operation in {
             "REVISE", "SPECIALIZE", "GENERALIZE", "SPLIT", "MERGE"}:
         # Structural Knowledge operations are distinct from rule
@@ -774,7 +918,7 @@ def _apply_plan(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
             campaign_by_transition=_transition_campaigns(evidence, ids))
         _apply_knowledge_revision(staging, plan, evidence)
         return campaigns
-    if plan.update_target in {"UPDATE_CAUSAL_KNOWLEDGE", "UPDATE_RULE"}:
+    if plan.update_target == "UPDATE_RULE":
         ids = _transition_ids(plan, evidence)
         _verify_training_transitions(staging, ids, plan.campaign_id)
         if plan.operation not in {"ADD", "REVISE"}:
@@ -803,14 +947,17 @@ def _apply_plan(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
 def apply_localized_update_shadow(
         plan: LocalizedUpdatePlan,
         current_state: sqlite3.Connection,
-        evidence: Mapping | None = None) -> AppliedShadowUpdateReceipt:
+        evidence: Mapping | None = None, *,
+        staging_artifact_sink=None) -> AppliedShadowUpdateReceipt:
     """Apply one localized plan to staging and discard it.
 
     ``evidence`` is intentionally explicit.  Causal/rule updates require
     learner-eligible verified ``transition_ids``; relation/asset/capability
     updates require typed payloads.  Caller booleans are never interpreted as
     authority, and the source connection is checked byte-for-byte by logical
-    SQLite digest before returning.
+    SQLite digest before returning. Optional staging_artifact_sink receives
+    serialized immutable bytes only, never the mutable staging connection.
+    This enables subsequent isolated runtime trials without granting authority.
     """
     if not isinstance(plan, LocalizedUpdatePlan):
         raise TypeError("shadow update requires LocalizedUpdatePlan")
@@ -825,12 +972,17 @@ def apply_localized_update_shadow(
         evidence = {}
     if not isinstance(evidence, Mapping):
         raise ShadowUpdateError("shadow update evidence must be an object")
+    if staging_artifact_sink is not None and not callable(staging_artifact_sink):
+        raise TypeError("staging artifact sink must be callable")
+    gap_source = _gap_source_for_plan(plan, current_state, evidence)
     p12_trigger = _p12_shadow_trigger(plan, evidence)
     anti_forgetting = _anti_forgetting_witness(plan, evidence)
     if plan.update_target != "UPDATE_NONE" and anti_forgetting is None:
         raise ShadowUpdateError(
             "mutating shadow update requires an anti-forgetting witness")
     source_before = _connection_digest(current_state)
+    if gap_source is not None and source_before != gap_source.source_memory_digest:
+        raise ShadowUpdateError("capability-gap source changed before staging")
     raw_before = raw_evidence_digest(current_state)
     staging = _staging_copy(current_state)
     ensure_state_schema(staging, commit=False)
@@ -861,9 +1013,11 @@ def apply_localized_update_shadow(
     staging_after = _connection_digest(staging)
     created_objects = tuple(sorted(_inventory(staging) - inventory_before))
     created_relations = tuple(sorted(_relation_inventory(staging) - relation_before))
-    source_after = _connection_digest(current_state)
-    raw_source_after = raw_evidence_digest(current_state)
     try:
+        if staging_artifact_sink is not None:
+            staging_artifact_sink(_staging_snapshot_bytes(staging))
+        source_after = _connection_digest(current_state)
+        raw_source_after = raw_evidence_digest(current_state)
         if source_after != source_before:
             raise ShadowUpdateError("source TEHM connection changed during shadow update")
         if raw_source_after != raw_before:
@@ -896,6 +1050,9 @@ def apply_localized_update_shadow(
                    if p12_trigger is not None else {}),
                 **({"training_evidence_campaigns": dict(sorted(
                     training_campaigns.items()))} if training_campaigns else {}),
+                **({"capability_gap_source_receipt": {**gap_source.to_dict(),
+                    "receipt_id": gap_source.receipt_id, "receipt_digest": gap_source.receipt_digest}}
+                   if gap_source is not None else {}),
             },
         }
         receipt = AppliedShadowUpdateReceipt(

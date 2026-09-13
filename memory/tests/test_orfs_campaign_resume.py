@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
 
+import pytest
+
+from scripts import orfs_storage
 from scripts.run_orfs_diversity_campaign import (
     _classify_attempt, _has_run, _resume_stage, _reusable_success, _run_bounded,
     _stage_checkpoint, _workspace_key,
@@ -115,7 +118,39 @@ def test_outer_supervisor_reaps_timed_out_process_group(tmp_path):
     assert (rc, timed_out) == (124, True)
 
 
-def test_orfs_storage_defaults_to_tmp_and_rejects_data1_without_override():
-    assert str(default_work_root("prospective")).startswith("/tmp/")
-    assert enforce_work_root(Path("/tmp/tehm-orfs/prospective")) == Path(
-        "/tmp/tehm-orfs/prospective")
+def test_orfs_storage_defaults_to_configured_scratch(tmp_path, monkeypatch):
+    # Do not depend on the host's /tmp/tehm-orfs: it may legitimately be
+    # an archive compatibility symlink or an explicitly configured volume.
+    scratch = tmp_path / "scratch"
+    monkeypatch.setattr(orfs_storage, "SCRATCH_ROOT", scratch)
+    assert default_work_root("prospective") == scratch / "prospective"
+
+
+def test_orfs_storage_resolves_scratch_alias(tmp_path):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    alias = tmp_path / "scratch-alias"
+    alias.symlink_to(scratch, target_is_directory=True)
+    assert enforce_work_root(alias / "prospective") == scratch / "prospective"
+
+
+def test_orfs_storage_evidence_guard_cannot_be_bypassed_by_alias(tmp_path, monkeypatch):
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    alias = tmp_path / "evidence-alias"
+    alias.symlink_to(evidence, target_is_directory=True)
+    monkeypatch.setattr(orfs_storage, "DATA1_CAMPAIGN_ROOT", evidence)
+    monkeypatch.delenv("R2G_ALLOW_DATA1_ORFS_WORK", raising=False)
+    with pytest.raises(RuntimeError, match="refusing regenerable ORFS work root"):
+        enforce_work_root(alias / "prospective")
+    monkeypatch.setenv("R2G_ALLOW_DATA1_ORFS_WORK", "0")
+    with pytest.raises(RuntimeError, match="refusing regenerable ORFS work root"):
+        enforce_work_root(alias / "prospective")
+    monkeypatch.setenv("R2G_ALLOW_DATA1_ORFS_WORK", "1")
+    assert enforce_work_root(alias / "prospective") == evidence / "prospective"
+
+
+@pytest.mark.parametrize("name", ["", "a/b", ".", ".."])
+def test_orfs_storage_rejects_invalid_campaign_name(name):
+    with pytest.raises(ValueError, match="invalid ORFS campaign name"):
+        default_work_root(name)
