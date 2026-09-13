@@ -251,7 +251,9 @@ class TehmMemoryBackend:
             self, query: MemoryQuery | RepairContext, *,
             routing: MemoryRoutingDecision | None = None,
             candidate_budget: int = 1,
-            compatibility_mode: bool = False):
+            compatibility_mode: bool = False,
+            rtl_source_text: str | None = None,
+            design_id: str | None = None):
         """Run the P7 knowledge-grounded asset selector in shadow mode.
 
         The returned ``AssetSelection`` is an advisory registry view plus a
@@ -264,7 +266,8 @@ class TehmMemoryBackend:
         conn, _ = self._open()
         return select_knowledge_grounded_assets(
             conn, query, routing=routing, candidate_budget=candidate_budget,
-            mode="shadow", compatibility_mode=compatibility_mode)
+            mode="shadow", compatibility_mode=compatibility_mode,
+            rtl_source_text=rtl_source_text, design_id=design_id)
 
     def build_structured_candidate(
             self, query: MemoryQuery | RepairContext,

@@ -10,7 +10,9 @@ authority.
 
 ``compatibility_mode=True`` is intentionally narrow.  It keeps the older
 asset fixtures inspectable while strict campaigns migrate their proposals to
-``provenance.mechanism_knowledge_ids`` and a concrete manifest binding.
+``provenance.mechanism_knowledge_ids`` and registered source-only binding.
+Legacy manifest bindings remain diagnostic compatibility, not answer-free
+transfer evidence. Source text is an explicit input, never read from disk here.
 """
 from __future__ import annotations
 
@@ -28,7 +30,7 @@ from tehm.knowledge.registry import get_knowledge_by_object_id
 from tehm.state.resolver import StateResolutionError, resolve_current_state
 
 
-ASSET_SELECTOR_VERSION = "asset-selector-v0.1"
+ASSET_SELECTOR_VERSION = "asset-selector-v0.2"
 ASSET_SELECTION_DECISIONS = ("SELECT", "ABSTAIN", "INAPPLICABLE", "NO_SKILL")
 MAX_KNOWLEDGE_GROUNDED_ASSETS = 1
 _ADVISORY_ASSET_STATUSES = frozenset({"candidate", "promoted"})
@@ -265,7 +267,8 @@ def _knowledge_refs(asset: Mapping) -> tuple[str, ...]:
 
 
 def _binding(asset: Mapping, *, profiles: set[str], families: set[str],
-             knowledge_ids: set[str], strict: bool) -> tuple[bool, str, dict]:
+             knowledge_ids: set[str], strict: bool,
+             registered_asset: Mapping | None = None) -> tuple[bool, str, dict]:
     schema_valid, schema_errors = validate_asset_schema(asset)
     if not schema_valid:
         return False, "asset_schema_invalid", {"schema_errors": list(schema_errors)}
@@ -288,7 +291,12 @@ def _binding(asset: Mapping, *, profiles: set[str], families: set[str],
     if not isinstance(action, Mapping) or not isinstance(payload, Mapping):
         return False, "asset_binding_payload_missing", {}
     if strict:
-        if provenance.get("binding_contract") != "manifest_fix_v1":
+        from tehm.assets.source_selection import SOURCE_CONTRACTS, verify_source_copy
+        contract = provenance.get("binding_contract")
+        if isinstance(contract, str) and contract in SOURCE_CONTRACTS:
+            if registered_asset is None or not verify_source_copy(asset, registered_asset):
+                return False, "asset_source_binding_replay_failed", {}
+        elif contract != "manifest_fix_v1":
             return False, "asset_binding_proof_missing", {"binding_contract": provenance.get("binding_contract")}
         if not str(provenance.get("binding_digest") or "").startswith("sha256:"):
             return False, "asset_binding_digest_missing", {}
@@ -359,6 +367,8 @@ def select_knowledge_grounded_assets(
     candidate_budget: int = MAX_KNOWLEDGE_GROUNDED_ASSETS,
     mode: str = "shadow",
     compatibility_mode: bool = False,
+    rtl_source_text: str | None = None,
+    design_id: str | None = None,
 ) -> AssetSelection:
     """Select at most one knowledge-grounded asset for shadow evaluation.
 
@@ -371,6 +381,10 @@ def select_knowledge_grounded_assets(
     if mode != "shadow":
         raise StateResolutionError(
             "P7 knowledge-grounded asset selection is shadow-only; production selection is not established")
+    if (rtl_source_text is None) != (design_id is None) or (
+            rtl_source_text is not None and (not isinstance(rtl_source_text, str) or
+            not isinstance(design_id, str) or not design_id)):
+        raise AssetSelectorError("source binding requires explicit RTL text and design_id together")
     if type(candidate_budget) is not int or candidate_budget < 0:
         raise AssetSelectorError("candidate_budget must be a non-negative integer")
     if candidate_budget > MAX_KNOWLEDGE_GROUNDED_ASSETS:
@@ -533,6 +547,24 @@ def select_knowledge_grounded_assets(
             binding_failures.append(f"{asset_id}:promoted_authority_unverified")
             continue
         runtime_binding = None
+        registered_asset = asset
+        source_proof = None
+        from tehm.assets.source_selection import source_contract, verify_source_copy, source_runtime_binding
+        if source_contract(asset) is not None:
+            if rtl_source_text is None:
+                binding_failures.append(f"{asset_id}:source_binding_context_missing")
+                continue
+            from tehm.assets.structural_binding import bind_rtl_asset_to_source
+            try:
+                asset = bind_rtl_asset_to_source(asset, rtl_source_text, design_id=design_id)
+                matched = sorted(set(asset["provenance"].get("mechanism_knowledge_ids", ())) & set(knowledge_ids))
+                if len(matched) != 1 or not verify_source_copy(asset, registered_asset):
+                    raise ValueError("source binding requires one matching authority-checked Knowledge")
+                runtime_binding = source_runtime_binding(asset, matched[0])
+                source_proof = {"registered_asset": registered_asset, "source_binding_replayed": True}
+            except (ValueError, TypeError, KeyError, AttributeError, NotImplementedError) as exc:
+                binding_failures.append(f"{asset_id}:source_binding_rejected:{exc}")
+                continue
         if asset.get("asset_type") == "FLOW_CONFIG_TRANSFORM":
             from tehm.assets.flow_config import select_flow_binding
 
@@ -544,7 +576,10 @@ def select_knowledge_grounded_assets(
         else:
             ok, reason, proof = _binding(
                 asset, profiles=profiles, families=families,
-                knowledge_ids=set(knowledge_ids), strict=not compatibility_mode)
+                knowledge_ids=set(knowledge_ids), strict=not compatibility_mode,
+                registered_asset=registered_asset)
+            if ok and source_proof is not None:
+                proof = {**proof, **source_proof}
         if not ok:
             binding_failures.append(f"{asset_id}:{reason}")
             continue

@@ -5985,3 +5985,125 @@ receipt 为 `controlled-gap-cold-replay-r1.json`，digest
 candidate Asset lifecycle 建立 disposable shadow policy views。新 generation 必须
 显式冻结/核验其 source、case roles、oracle 和 origin evidence，不能静默重写已消费
 freeze-r3 的 whole-corpus hash；之后再执行 held-out/remove-delta/non-target。
+
+### 2026-09-12 Revision3 strict source-only selector epoch and disposable authority review
+
+P7 selector v0.2 现支持显式 `rtl_source_text` + `design_id`。仅从已经注册的
+source-only template 定位，精确重放 bound copy，并核验原 Asset immutable
+content digest/ID 与实际 authority-checked Knowledge link。缺失/歧义/不匹配
+source、无 Knowledge link、NO_SKILL 或零 memory budget 均不能产生候选。
+旧 manifest binding 保留为诊断兼容行为，不计 answer-free transfer evidence；
+本阶段未使用 compatibility mode 绕过。backend 的 advisory `select_assets`
+也转发显式 source context，仍固定为 shadow-only。
+
+Structured candidate 构建再次核验 registered template、selected source proof
+与完整 RuntimeBindingReceipt 精确相等，保存 evaluation-only replay witness。
+Icarus candidate adapter v0.2 在 rewrite/simulation 之前重放 actual source 与
+完整 action；新 FSM_GUARD_CONJOIN domain 即便删除 source proof 和 required flag
+也不能降级至旧无证明路径。唯一静态定位不代表功能正确、Knowledge validated、
+Asset promoted 或 production authorization。
+
+定向集成曾完成 93 项 PASS；新增执行链和 negative controls 的最终定向验证为
+34 passed / 23 deselected。真实 Icarus unit conformance 中，同一 source 的 baseline
+target FAIL，source-only candidate 的 target/regression PASS，原 RTL 保持不变。
+这是工程 conformance，不是新的独立 held-out capability attribution。
+
+`audit_r3_capability_gap_runtime_bridge.py` 已对原完整 corpus 与 immutable local
+checkpoint `33acb0273f29c658a7c2bfb594be8b7b2464c8ad` 的 Git blobs 做精确核验，
+仅允许 selector、structured candidate、candidate adapter 三项修改和共享 source
+replay helper 的新增。parser/operator/locator/底层 Icarus oracle 保持原 bytes；
+原 source 的实际路由与 logical/file digests 也重放一致。原 freeze-r3 不改写，
+新 runtime 明确不是旧 epoch，也不将已知 baseline corpus 宣称为 fresh unseen study。
+receipt `selector-origin-bridge-r1.json` 的 digest 为
+`sha256:e6b551666bb8c2d76dcac19738129d1029cfed053442f1e55c19057cde3fb7ff`。
+
+`audit_r3_capability_gap_shadow_authority.py` 从原 controlled-L3 shadow snapshot
+的 read-only RAM backup 记录严格 database/status/evidence-bound authority receipt，
+核心 verify 判 eligible/evidence_verified=true，随后回滚全部 authority ledger
+写入并核验 exact full-state restoration。Knowledge 未 validated、Asset 未 promoted，
+canonical source 与旧 projection snapshots 未变。receipt
+`selector-strict-shadow-authority-r1.json` 的 digest 为
+`sha256:67c01f1104ec27988974142a10c9fd048a997bdb76aefc0fcfa6f4425bfeacad`。
+
+完整回归已在 `regression-selector-input-freeze-r4.json` 冻结当前全 memory Python
+corpus 与实际 bridge/authority refs 后启动；在 terminal JUnit/exit status 出现前
+不宣称通过、不作为阶段发布依据。下一步仍是消费真实 strict authority receipt
+建立 disposable candidate policy staging，前置冻结 source-only policy views，再执行
+held-out/remove-delta/non-target 与 rollback；之后独立 L4 attribution、P16 portable
+freeze 和 P17 guarded production。当前尚未完成这些 requirements，promotion_attempted
+仍为 false。`memory/docs/` 始终 local-only，不提交。
+
+在原 controlled shadow 的 disposable RAM readiness diagnostic 中，实际严格 receipt
+已由核心 lifecycle 消费后再调用真实 router/selector/candidate builder：两条 training
+及两条 held-out source 均 CONSIDER/SELECT，具体 WAIT/SEAL/RECV/FINISH 坐标由各自
+source 定位；non-target timer 保持 NO_SKILL/NO_MATCH。全 RAM state 随后精确回滚，
+disk snapshots/canonical 未变。该诊断没有读取 held-out TB/答案、没有执行 held-out
+oracle，也不是已冻结的最终 policy views 或 transfer evidence。
+
+### 2026-09-12 Revision3 real source-only non-P12 held-out policy experiment
+
+新的 `source-only-policy-views-r4/source-only-policy-views-freeze.json` 在任何新
+policy oracle 执行前冻结三份实际 policy snapshots、原非 learner case roles、
+source-only candidates/receipts、工具与 current selector/origin epoch，digest 为
+`sha256:ae9f03abe466fb46bfe39fccd1c0cc88f6d1ae5d8463d0642f40dedc3fea065b`。
+Mt 是实际 controlled training base（无新增 Knowledge/Asset），增量来自核心
+L3 builder 与已冻结 training Asset template。严格 authority receipt 在 RAM
+真实记录、重放并被 lifecycle 消费；Knowledge validated/Asset candidate 仅存在
+于 disposable policy staging。移除 ADD savepoint 后 full logical state 与 Mt
+精确相同，实际 router/selector/candidates 全部恢复。
+
+首版 execution-r4 在首个 baseline 的两次 compile/simulation 结束后遇到单次
+receipt collector 的 AttributeError（错误读取 paired receipt_digest，而正确字段
+为 execution_digest）。没有 durable eligible execution receipt；该 terminal root、
+原 driver/freeze、simulation artifacts 和 terminal-collector-failure.json 全部保留，
+不 resume、不补称该运行成功。全新 execution-r5 显式绑定该失败和 collector-only
+修正，不修改 source、TB、candidate、约束或 oracle；重复测量不计独立 samples。
+
+execution-r5 完成 18 个 actual callbacks / 72 个 compile+simulation commands，
+结果由实际 core IcarusCandidateOracle/execute_candidate 与实际 unmodified fallback
+产生。两个 held-out repair 均由 target source 定位具体 RECV/FINISH/ready 参数，
+没有 manifest.fix、held-out answer、compatibility bypass 或强造 SELECT/APPLY。
+各 case 的 ACTUAL_GATED_MEMORY target 结果为：
+
+| Original non-learner case | Mt | Mt + delta | Mt + delta - delta |
+| --- | --- | --- | --- |
+| commit_xor64 (held_out) | FAIL | PASS | FAIL |
+| commit_hist8 (held_out) | FAIL | PASS | FAIL |
+| sampling_timer16 (validation/non-target) | PASS | PASS | PASS |
+
+所有 callbacks 的 target/regression 编译 PASS，frozen regression 全 PASS；
+两个 held-out 的 NO_MEMORY 在三个 view 中均为 target FAIL，non-target 全 PASS。
+这不是全输入功能等价、物理 PPA/signoff 或外部独立 RTL corpus 的实证结论，
+而是当前 local engineering corpus 的 bounded source-only effect/ablation。
+actual report digest 为
+`sha256:24fbbfa8b3cca5a8b5bc21a54eeab74767e2c4731827819eb1bb6c0217a0ca4b`。
+
+独立 auditor 未调用 producer/driver 的生成逻辑，从 core controlled base 重建
+严格 authority、lifecycle、全部实际 source-only route/binding/candidate 和 full
+state rollback，再用同一 frozen oracle 冷重放全部 18 callbacks；15 checks PASS，
+每个 execution receipt/full verifier 精确一致。冷重放不是新 cohort samples、
+不是另一独立 semantic oracle，也未回流 learner support。cold report digest 为
+`sha256:7287881cef42a9e7b1c3e916567044eba57b33d70c8b1241a9c49b651bcc0fd5`。
+
+额外 execution scope audit 从 prospective case/tool/RTL/TB/adapter pins 独立导出
+runtime_case，逐条核验实际编译的 source-only rewrite output、真实 fallback source、
+编译/模拟 argv、72 个 retained input digests、原 scope/output/verdict 与已完成
+cold receipts，避免仅信任自哈希 observation 的 runtime_case。18 actual/cold
+callbacks 均锚定原 freeze，未新增 oracle calls；7 类 scope corruption negative
+controls 全被拒绝。scope receipt digest 为
+`sha256:073e9b6734ce033da302b306f53789b6e0b457223ebf8251c890ffc5f32a07d7`。
+
+原 canonical/source/旧 projections 均未变，provider calls=0、promotion_attempted=false。
+还须将真实 non-learner held-out pairs 映射至独立 evaluation-only core transfer
+ledger，形成 L4 与正式 ADD memory/Knowledge/Asset delta attribution；不直接借用
+旧 P12 SPECIALIZE lane 的 P14 promotion 证据。P16 portable runtime/origin/evidence
+bundle 和 P17 guarded gates 仍待完成。当前 campaign drivers/audits/实际 artifacts
+位于本机 campaign root，尚未作为完整 portable artifact 随仓库发布。
+
+完整 memory core 回归现已 terminal：1633 passed / 0 failures / 0 errors /
+0 skipped，耗时 968.71s。JUnit 为 `regression-selector-source-origin-r4.xml`；
+运行前冻结的 547 个 memory Python files corpus digest 在结束后仍精确一致，
+实际 bridge/authority input pins 也保持一致。独立 terminal report 为
+`regression-selector-terminal-r4.json`。该回归覆盖当前 repo core/tests，不冒充
+对外部 campaign drivers 的完整单元覆盖；它们由实际冻结、执行、cold/scope
+replay 与保留的 collector failure 记录证明当前 bounded engineering 状态。

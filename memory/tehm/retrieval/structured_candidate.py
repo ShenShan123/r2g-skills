@@ -348,6 +348,30 @@ def build_structured_candidate(
     if bound_asset != asset_id:
         raise StructuredCandidateError("runtime binding asset does not match selection")
     knowledge_id = _selected_knowledge(asset_selection, runtime_binding)
+    from tehm.assets.source_selection import (
+        source_contract, verify_source_copy, source_runtime_binding,
+    )
+    source_replay = None
+    from tehm.assets.source_selection import SOURCE_CONTRACTS
+    from tehm.assets.guard_binding import DOMAIN as GUARD_DOMAIN
+    claimed_contract = (asset.get("provenance") or {}).get("binding_contract")
+    if source_contract(asset) is None and (
+            (isinstance(claimed_contract, str) and claimed_contract in SOURCE_CONTRACTS) or
+            ((asset.get("definition") or {}).get("action") or {}).get("domain") == GUARD_DOMAIN):
+        raise StructuredCandidateError("source binding registered template missing")
+    if source_contract(asset) is not None:
+        selected_proof = (asset_selection.receipt.binding.get("assets") or {}).get(asset_id)
+        if not isinstance(selected_proof, Mapping):
+            raise StructuredCandidateError("source binding selected proof missing")
+        registered = selected_proof.get("registered_asset")
+        if (selected_proof.get("source_binding_replayed") is not True or
+                not verify_source_copy(asset, registered)):
+            raise StructuredCandidateError("source binding selected proof replay failed")
+        expected_binding = source_runtime_binding(asset, knowledge_id).to_dict()
+        if binding != expected_binding:
+            raise StructuredCandidateError("source binding differs from selected proof")
+        source_replay = {"registered_asset": copy.deepcopy(registered),
+                         "bound_asset": copy.deepcopy(asset)}
     paths = _paths(routing, asset_selection)
     applicability = asset_selection.receipt.applicability
     for key in ("negative_matches", "negative_vetoes", "negative_applicability"):
@@ -371,6 +395,9 @@ def build_structured_candidate(
         "binding_digest": _binding_digest(runtime_binding),
     }
     flow_replay = _flow_binding_replay(query, asset)
+    if source_replay is not None:
+        provenance["source_binding_required"] = True
+        provenance["source_binding_replay"] = source_replay
     if flow_replay is not None:
         provenance["flow_binding_replay"] = flow_replay
     content = {

@@ -20,7 +20,7 @@ from tehm.rtl.rtl_oracle import IcarusOracle
 from tehm.retrieval.structured_candidate import StructuredRepairCandidate
 
 
-RTL_CANDIDATE_ORACLE_VERSION = "rtl-candidate-oracle-v0.1"
+RTL_CANDIDATE_ORACLE_VERSION = "rtl-candidate-oracle-v0.2"
 
 
 class RtlCandidateOracleError(ValueError):
@@ -204,6 +204,9 @@ def execute_rtl_candidate(candidate: StructuredRepairCandidate | None,
     action = candidate.concrete_action
     if not isinstance(action, Mapping) or not isinstance(action.get("payload"), Mapping):
         raise RtlCandidateOracleError("structured RTL candidate action is malformed")
+    from tehm.assets.source_selection import verify_candidate_source_replay
+    if not verify_candidate_source_replay(candidate, original):
+        raise RtlCandidateOracleError("source binding replay failed before execution")
     payload = dict(action["payload"])
     payload["domain"] = action.get("domain")
     fixed_source, edit_value = apply_rtl_action(original, payload)
