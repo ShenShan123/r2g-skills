@@ -5636,7 +5636,9 @@ formal P13 staging digest 明确不包含单独 evaluation activation。
 training campaign 的 `regression-p13-consumer-20260912-r2.xml`；其 collection 尚未
 包含后加入的 P14 22 项测试及 P15 firewall 11 项新测试。最新相关定向回归为
 123 passed（0.82s），覆盖上述新检查；fixtures 不是 empirical receipts。新完整回归
-已按当前 1439-test collection 启动，结果待 terminal 确认，不将 collection 当作 PASS。
+已 terminal 完成：1439 passed（963.44s），durable JUnit 为 training campaign 的
+`regression-p13-p14-calibration-firewall-20260912-r3.xml`（errors=failures=skipped=0）。
+该次 collection 包含上述 P14/firewall 新测试，但不包含随后新增的独立 P15 oracle adapter。
 `memory/docs/` 继续仅作本地 governing input，不提交、不推送。
 
 ### 2026-09-12 Revision3 P15 prospective partition firewall
@@ -5657,3 +5659,170 @@ evidence，必须使用新的独立输出目录。没有删除或重写任何 hi
 其他 evidence 不在本 probe 的检查范围，不能据此一并断言通过或失效。后续必须生成
 新的、执行前划分且与 evolution/held-out source disjoint 的 calibration cohort；
 `INAPPLICABLE` 仍不被静默重标为二元 NO_SKILL，当前 P15 与 production gates 未开放。
+
+### 2026-09-12 Revision3 P15 independent utility-oracle calibration execution
+
+新的 prospective calibration campaign 位于仓库外：
+`/data1/zhangdy/tehm-campaigns/tehm-r3-orfs-policy-calibration-state32-20260912-r1`。
+在任何 calibration ORFS outcome 产生前，已声明 `lane=CALIBRATION`、所有 case 的
+`dataset_split=role=calibration` 和 `learner_eligible=false`。两个新 RTL lineage 是
+32-bit LFSR（CORE50）与 32-bit modulo accumulator（CORE45），不是 training/held-out
+RTL 的改名；实际 RTL content 和 lineage 均与 evolution training 及 P14 真正绑定的
+held-out cohort 无交集。source preflight 的个人 Icarus/VVP 100-cycle simulation、
+Yosys synth/check 与 self-contained ORFS config/layout validation 已完成；这些检查
+不证明 formal equivalence、LFSR maximal period、strict signoff 或 IID/generalization。
+
+`scripts/build_p15_source_bound_orfs_policy_calibration.py` 新增独立 utility oracle：
+typed paired baseline PASS、forced memory PASS 但 frozen utility contract FAIL，可导出
+`NO_SKILL/RISK` 标签而不重写任何执行 outcome；只有 baseline/forced PASS 且 utility
+PASS、真实 Pareto improvement/no harm 才导出 USE_MEMORY。中性 pair 不冒充安全收益，
+物理 pair 不冒充 NO_MATCH/STATE_SHIFT。oracle 不读取 router prediction，不把 calibration
+写进 learner support，不推测缺失的 router confidence。INAPPLICABLE/ABSTAIN 保留完整
+route/oracle evidence，但不计入二元 samples，也不静默缩小 declared membership。
+
+oracle 在全部 calibration execution roots 仍为空时实际冻结，binding digest 为
+`sha256:acb9653374c0d134ed187ee4dfa2430d213c09763e2724ad2e7ee003fc7c0039`。
+该 binding 直接绑定已完成的 formal P13/P14 mutation 与 P14/anti-forgetting 实际使用的
+held-out policy freeze。执行 driver 和 oracle source、三策略输入、utility contract、
+personal toolchain、约束及 physical tool-default seed 已冻结；不声明多独立 seed repeats。
+已启动 3 views × 2 cases × 4 arms = 24 个独立工作区的真实 ORFS，driver 的执行前
+全输入验证已通过。该批随后已全部 terminal 完成并生成完整 audit，详见下方
+complete prospective ORFS calibration negative checkpoint；启动/冻结本身不是 PASS。
+新的 oracle/firewall 及 P14/utility 定向回归为
+77 passed（0.55s），JUnit 为该 campaign 的 `p15-oracle-focused-regression-r1.xml`；
+fixtures 不等于实际 ORFS evidence。
+
+当前两条 calibration lineage、缺失概率及不完整 reason strata 不满足 P15 statistical
+production gate。未更改 promotion/MIR/Pareto 阈值，未导入 production runtime，未写
+canonical memory，未回流 calibration outcome，未提交 `memory/docs/`。历史 CORE70
+terminal failure 仍保留，CORE45 不替代其未闭合的 global non-target gate。
+
+calibration 的 Mt cohort 随后已 terminal 完成：8 个真实工作区的窄检查均 PASS，
+cohort digest 为 `sha256:ced454422ad47b4fc976dd2e32f1eb6782e33e46f36bf13f7084943cf3fdc079`。
+对该 cohort 的只读 retained source/config/report/typed receipt 重放通过；独立 oracle
+却对两条 case 都导出 NO_SKILL/RISK：accumulator CORE45→40 的 reported die area
+增加 12.2687%、power 增加 1.6899%；LFSR CORE50→40 的 area 增加 24.1637%、WNS
+减少 0.11978ns。窄执行 outcome 仍为 PASS，没有被重写为 FAIL。Mt 的两条 CONSIDER
+prediction 与这些独立 RISK 标签不符；这是 partial negative calibration observation，
+不是完整三策略 audit，也不回流 training support。其余两个策略随后已完成，见下方
+complete checkpoint，不以这份 partial observation 替代完整 audit。
+
+### 2026-09-12 Revision3 R3-9 prospective source-bound input seam
+
+旧 `run_r3_capability_gap_challenge.py` 在 detector 输出后通过 `_no_match_route(gap)`
+构造 `gap-state:*` 的 NO_MATCH route，而且只输出 ADD proposal；不能把这一手工 route
+当作当前 DB 的真实执行前 runtime prediction，也不能据此声明新 Asset/Knowledge
+已注册。真实 source failure 还须由 baseline target execution 直接证明，不能只因
+verified repair PASS 就把声明式 `before=fail` 当作已执行的 baseline FAIL。
+
+新增 `scripts/prepare_r3_source_bound_capability_gap.py`，接受独立 preregistration 与
+当前完成的 formal P14 source binding，冻结 training/held_out/validation（至少
+2/2/1 lineage）的显式 membership、实际 RTL/manifest/testbench 内容、静态 query 和
+显式 oracle tools。非 learner manifest 不允许携带 `fix` 答案，query 不允许 outcome、
+prediction 或 replacement 字段；同 lineage/RTL 重名、相同 testbench bytes、越界
+source/testbench 和已有 execution/output 均 fail closed。compiler 用 current immutable
+source 的 RAM copy 调用实际 router，禁止 data-row writes/destructive DDL；允许首次
+初始化的 additive derived DDL，但全部 rollback 后要求完整 source logical digest 不变。
+该 seam 不执行 baseline、capture、gap derivation、Asset/Knowledge registration 或 promotion。
+
+当前已实际运行只读 handshake query probe：真实 router 返回 NO_SKILL/NO_MATCH，
+resolution 为 `resolution_cfb98698d1a231cb60dcf494`，route decision digest 为
+`sha256:2229732f2276e267d6c3e04f0c07cc067294a144a62274701c174b88fd78486d`；
+current source 的 file/logical digest 均保持不变。该 probe 尚不绑定新的完整 cohort，
+不是新 gap admission 或 capability gain。input/route firewall 与既有 gap reason 定向
+回归已通过：29 passed（13.88s），durable JUnit 为 calibration campaign 的
+`gap-input-focused-regression-r4.xml`。它们未加入已在运行的 independent-P15 全量回归
+collection，fixtures 也不构成 empirical expansion evidence。后续仍须冻结新独立设计，
+执行真实 baseline failure/verified training repair，再完成 new Asset/Knowledge、
+source-only held-out binding、remove-ΔM/non-target/rollback 与 C1–C8 证据链。
+
+independent-P15 全量回归随后已 terminal 完成：1488 passed（1031.89s），durable JUnit
+为 `regression-independent-p15-oracle-r1.xml`。该 generation 包含新增 P15 adapter 的
+49 项测试；不包含随后新增 gap input compiler 的 26 项测试，后者与既有 3 项 gap
+reason 测试仅有上述单独 29-pass 回归证据。不把这些 scope 不同的计数合并成一个
+已经执行的完整 suite，也不把 regression PASS 当作实际 calibration/production PASS。
+
+### 2026-09-12 Revision3 complete prospective ORFS calibration negative checkpoint
+
+上述独立 calibration 三策略现已全部 terminal 完成：24 个真实保留 execution
+工作区、两个 source-disjoint lineage，全部窄检查 PASS。完整 audit 为该 campaign 的
+`p15-policy-calibration-audit-r1/policy-calibration-audit.json`，report digest 为
+`sha256:4948724e7cead122dcd39e7ad5389337aef13e7b8822a386ce8838ab486d70d2`。
+同一冻结 oracle 的独立 cold replay 输出相同 digest；完整 retained source/config/PPA、
+typed receipt、三策略 comparator、prospective partition 与实际 P14/held-out bindings
+重放均通过。三策略 outcome 都保持 PASS，没有用 utility FAIL 重写执行 outcome。
+
+| 策略 | 二元 sample 数 | declared-case coverage | RISK false negative |
+| --- | ---: | ---: | ---: |
+| Mt | 2 | 1.0 | 2 |
+| Mt+ΔM | 1 | 0.5 | 1 |
+| Mt+ΔM−ΔM | 2 | 1.0 | 2 |
+
+post 的 CORE50 LFSR 为真实 INAPPLICABLE/no-memory fallback，完整记录为二元 contract
+外的 case，而不是伪造 NO_SKILL/RISK prediction；CORE45 accumulator 仍 CONSIDER，
+真实 utility harm 未被此次 CORE50 specialization 消除。三个 view 都为
+`status=NOT_ESTABLISHED`：sample count 少于冻结的 20，NO_MATCH/STATE_SHIFT strata
+缺失，confidence coverage=0、calibration error=null。物理执行 24 次并不是 24 个
+独立 calibration samples；三策略共享的两条 source lineage 也不能当成 IID repeats。
+这是完成的真实负校准 checkpoint，不是 P15 statistical PASS、production readiness
+或新的 action-space capability。未扩大 negative context、调低 gate 或回流 calibration
+到 learner。历史 CORE70 global non-target gate 仍未闭合。
+
+### 2026-09-12 Revision3 fresh gap cohort input freeze and parser class preflight
+
+新的 gap cohort 位于
+`/data1/zhangdy/tehm-campaigns/tehm-r3-source-bound-gap-commit-20260912-r1`：training
+为 CRC16 单字事务与双字 sum32，held-out 为带 arm phase 的 XOR64 与 counted-loop
+histogram8，non-target 为 autonomous timer16。两组不是简单 identifier-renaming：
+training FSM state count 为 3/5，held-out 为 4/5，完整 alpha token-shape digest 没有交集。
+这些是新确定性 engineering designs；source/shape 不重合不单独证明 semantic
+generalization、IID、real-provider gain 或完成 capability expansion。
+
+首版输入在任何 baseline/repair oracle 前冻结，但后续 class preflight 发现
+`always @*` 没有被当前 subset parser 解析成 FSM。旧 freeze-r1 被保留为未消费的
+诊断，五份原 RTL 与原 compiler 源码已存于 `unused-source-generation-r1/`，全部
+实际 archive SHA 与原 binding 一致。没有执行、重启或删除任何 gap baseline/repair。
+仅将自编写 RTL 的 sensitivity 语法改为等价且 parser 支持的 `always @(*)`，不改
+实验约束或 oracle label。input compiler v2 现在要求声明 FSM profile 的单模块
+源文件实际解析出一个非空 FSM，防止把 module-only parsing 当作 class admissibility。
+
+第二版 `source-bound-input-freeze-r2.json` 已在 execution root 不存在时实际生成，
+digest 为 `sha256:55a364cda58aa51d574950f0009cfd5192ec44ffebcb07de203c286a0743551a`。
+该 freeze 保留 2/2/1 membership、answer-free non-learner manifests、RTL/testbench/tool
+pins 和 current immutable source 的实际 preexecution routes；五条 route 均为真实
+NO_SKILL/NO_MATCH，current source file/logical digest 不变。profile/parser 与既有 gap
+reason 定向回归为 30 passed（9.31s），JUnit 为 `gap-input-profile-regression-r2.xml`。
+这些新增 profile 测试不在先前 1488-test 完整 collection 中。
+
+现有 registered Asset binding contract 仍为 `rtl_alpha_binding_v1`，只允许 identifier
+renaming/whitespace，不支持这些不同结构的 held-out。不能绕过它而宣称 transfer PASS。
+下一步须建立独立、source-only、fail-closed 的 semantic guard locator/binding contract，
+冻结相应新 runtime generation 后，在尚未消费的 cohort 上重新冻结输入，再执行
+真实 baseline FAIL/compiled regression PASS、verified training repair、non-P12 admission、
+new Asset/Knowledge 与 held-out/ablation/non-target/rollback。当前没有注册新对象、
+capture learner evidence 或改变 production authority；`memory/docs/` 始终不提交。
+
+### 2026-09-12 Revision3 gap static operator/frontend dependency preflight
+
+在任何 gap baseline/repair oracle 前继续检查实际新 source：两条 training proposal
+调用现有 GUARD_STRENGTHEN 均 `rewritten=0`、source 不变，因为此 primitive 只给无
+guard 的转移新增 if，不给已有 `if(valid)` conjoin ready。另四条 handshake source
+中的 `wire accept = valid && ready;` 会让当前 `_parse_declarations` 把 initializer RHS
+的 valid/ready 覆盖成 wire；实际 ANSI port 均声明为 input。单纯解析到一个 FSM 不
+代表 input-role/width/frontend proof 正确，也不能把零 edit 当作 verified repair。
+
+静态 observation 已保存为 gap campaign 的
+`preflight-runtime-gap-observation-r1.json`，digest 为
+`sha256:19013ce002b7085faccdee300bccddd0f48adba66bad13e8a33cc723da3e5d4a`。
+该 report 绑定实际 source/parser/primitive SHA，没有执行 oracle、产生 baseline
+outcome、capture learner evidence 或注册新对象。需要的新 generation 必须先修复
+declaration LHS/RHS、width 与 function-local scope，再增加独立、parser-span-scoped、
+unique/idempotent 的 conditional guard-conjunction operator 和 source-only semantic
+binding/lifecycle replay。不会扩大旧 GUARD_STRENGTHEN 或 alpha contract 的语义。
+新 runtime 冻结后再重新冻结尚未消费的 inputs，不能用目前不支持修复的旧 generation
+启动 capture 或宣称 capability transfer。完整 checkpoint regression 使用旧 runtime，
+已 terminal：1515 passed，917.76s（JUnit `regression-source-bound-p15-gap-inputs-r2.xml`，
+failures/errors/skipped 均为 0）。覆盖当前独立 P15 oracle 与 gap input compiler；不覆盖
+下一版条件合取 operator/binding，也不代表真实 gap baseline、扩展或 production PASS。
+回归期间未改其被验证的 core source，未重复启动同一 handle。下一版 frontend 的候选
+代码先在外部 campaign 隔离目录验证，与本 checkpoint 和实验 oracle 分代管理。
