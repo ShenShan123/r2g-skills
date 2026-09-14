@@ -6665,3 +6665,260 @@ raw closure、最终 public bootstrap/package 或完整 P16。新增成功 route
 calibration samples、provider calls 均为零；original C7 与 P17 gate 不变。后续要整合
 完整 ORFS/Yosys/PDK/owned Python dependencies，再冻结新 runtime 并实际执行完整流，
 不能把 SDK 加载成功当成 Memory 经验、P14 attribution 或 production authority。
+
+### 2026-09-14 owned full-ORFS package integration component
+
+新 `portable-full-orfs-package-r50` 整合复制时的完整 Memory source/resources、
+tracked r2g-skills、ORFS tracked worktree payload、OSS CAD Suite、installed Yosys、
+PDK、owned graph Python site-packages、matched OpenROAD SDK 和原始 source SQLite。
+没有复制 `memory/docs`、无关 untracked install_manifest 或 ORFS 的 absolute `.git`
+worktree 指针。四个 ORFS gitlinks 的 commit 单独记录，但 recursive source origins
+仍未闭合；当前 ORFS identity 是 filesystem，而不是伪造 clean git checkout。
+
+第一代 r48 实际失败、没有 manifest，原目录与 producer 保留：Yosys 宿主解析的
+`libz.so.1.2.11` 与 OpenROAD SDK 的 `libz.so.1.3.1` 不能共用同一 soname alias。
+r50 使用各自独立 library namespace 和 self-relative launchers，不覆盖旧库。
+graph Python 原 absolute launcher 字节另存，转换输入/输出 SHA 明确记录。
+没有修改 live Tools 或已消费旧 toolchain/profile；新 wrapper 与底层 ELF 一并绑定。
+
+r50 package manifest digest 为
+`sha256:633b7f807fcfd4b1756806c2d7a82092b0c24b8d2da20366de0f6633031418e3`，
+状态保留 PREPARED_NOT_EXECUTED。独立 r51 audit 在本次执行中重查 66636 regular files
+及其 source bytes、119 个包内 links、精确 payload inventory；两个 ELF 的 non-glibc
+loader dependencies 均位于新包各自 namespace。真正以新包 Python 导入 torch/PyG/
+pandas/TEHM schema 成功，模块位置全部包内；这不是 native file-read closure。
+audit digest 为
+`sha256:67a051e4c6a0d1d49827707307d8db41c7b4d05f3f852fc7e2479b92c20e1b25`。
+归档 README 是复制时的历史 snapshot，本段后续状态更新不改写归档或其旧报告。
+
+r52 从归档 Memory 代码执行实际 tool version/capability probes，生成新 internal
+toolchain lock，再重新 preflight 精确重放通过。127 项 dependency files 包括 launchers
+所绑定的 ELF、两套 private libraries 及完整 package manifest；lock digest 为
+`2f7ea12f063daad6f36564fb7abd044d909eedd5530f0c39802db3706b9560c4`。
+这是新包 toolchain identity/replay component，不是 transitive dependency 或 ORFS
+flow execution 证明。上述外部 campaign artifacts 留在 data1，未执行新完整 design flow、
+新增独立 calibration samples 或 provider calls；canonical memory/production gate 不变。
+后续仍须冻结新的 source-bound runtime/四臂执行输入，真正运行完整 relocated ORFS，
+独立审计 native reads，再闭合 historical raw origins 与 public bootstrap；P16/P17 未完成。
+本次只更新本地阶段记录，不重复 push。
+
+### 2026-09-14 source-preflight failure diagnosis and fresh execution
+
+r53 新增 self-relative KLayout/Magic/Netgen/Tcl-Tk signoff SDK；r54 使用归档
+router/selector/binder 实际生成两例 source-bound 四臂输入。historical authority
+generation 仍读取原始 acquisitions/raw/toolchain，不能称为完整 runtime relocation。
+r55 终态为 FAILED_COMPONENT：100-cycle simulation 通过，但第一份 RTL 的 Yosys
+综合超时 120 秒，physical callbacks 为零。Netgen 旧探针虽然 rc=0，Tcl 命令实际
+报错且错误文本含成功标记，不能计为 probe PASS；旧日志与终态报告均保留。
+
+新 r56 使用直接文件日志与独立进程组限时，严格 Netgen argv/独立 marker 行通过，
+两例 Yosys 均复现超时。r58 只跟踪新进程的原生 read/write：ABC 已写出 output.blif、
+YOSYS_ABC_DONE 和最终 prompt，但长 source 路径的 readline 回显被横向截断；
+Yosys 的 read_until_abc_done 未识别 source command，继续等待。不是已证实的
+proc_self_dirname 无限循环，也不能仅归因于整体 strace 开销。
+
+r59 冻结 COLUMNS=4096，在全新 scratch 下执行相同综合命令（未跳过 ABC），两例
+实际 rc=0、check-assert 零问题，耗时约 0.12/0.17 秒，原冻结输入/工具字节未变。
+不导入 producers 的独立 r62 reader 重查输入/log SHA、r58 精确五份 trace inventory
+及协议读写、修复后的真实 ABC RESULTS；audit digest 为
+`sha256:a049faeffc4f37088571ccced3bca0ec3ded4eb5a71994519b5fdf32a9eeb2b7`。
+这证明 source-preflight diagnostic component，不是 full ORFS 或 P16 通过。
+
+r60 重新调用严格 source-bound builder，冻结新 case/environment（含 COLUMNS=4096），
+input report digest 为
+`sha256:c3f15cb6cf93960f2e9d0f2ea3bc9cb78b5e453a0fe5741fc4582521b326fabd`。
+r61 使用新工作区、直接预检日志/进程组超时清理以及完整参数 native tracing；
+源码预检通过；首个 NO_MEMORY 臂 actual flow_rc=0、fix_rc=0，保留完整 finish/GDS/
+RCX/DRC/LVS/timing 产物，并启动 ALWAYS_MEMORY。PASS 属于预注册 fixed-constraint
+counterfactual scope；generic signoff_result 仍是 UNKNOWN，strict manifest 缺
+fmax_search winner，不能称为 strict production signoff。完整四臂/原生依赖审计待终态。
+已完成的 KLayout DRC 进程 trace.789533 显示实际成功读取 host Python 3.10 stdlib
+及 Ruby vendor_ruby/rubygems；它们不属于 OS foundation，当前 native dependency
+closure 仍失败，下一代 signoff SDK 须归档并实际绑定这些资源，不能通过 whitelist
+将其掩盖。r61 原冻结 SDK 不在运行中修改。
+原 CORE70 C7、P15 真实独立样本/预测置信度、historical origin closure、public
+bootstrap、P16/P17 仍未闭合；新增独立样本/provider calls/production authority 均为零。
+不修改 live Tools 或已消费旧 freezes，不将工程复现产物写入 canonical memory。
+
+随后第一份 lfsr32 案例四个实际 ORFS 臂均 flow_rc=0、fix_rc=0，第二份 accum32
+案例已启动；这些仍是同一 fixed-constraint engineering scope，不是四份独立样本。
+
+补齐语言资源的 r63 准备在 ldd parser 失败、未生成 manifest，保留原代。r64 对
+ldd 的 statically-linked 输出以实际 readelf 无 NEEDED 复核，生成 5134 files /
+286 links 的新 SDK。r65 真正执行 GDS Python read 与原 Ruby DRC deck，rc=0，
+但 native traces 仍成功读取 host Python：不能称为闭环。KLayout 官方文档说明
+不使用 PYTHONHOME，而使用 KLAYOUT_PYTHONPATH；r66 用其绑定 package stdlib，
+manifest digest 为
+`sha256:3664d8ffc702883b264b2bbe356acf97ffe94e15d9b2c5d16f551747bc71b95e`。
+
+r67 新 native probes 再次执行真实 GDS read 和相同 DRC deck，两项 rc=0、marker /
+report-database 格式与零 DRC items 检查通过，SDK/输入字节前后不变。独立 r68
+reader 校验 exact 568 trace files 及 290 successful read paths，实际 package Python
+resources 14 paths、Ruby 120 paths；但 Ubuntu site.py 仍导入 host distro
+apport_python_hook，native closure 判 FAILED_NATIVE_CLOSURE_COMPONENT，digest 为
+`sha256:17092b84857e4ffc77473014d617a896692b228253f36247e0244e5b77188523`。
+另外 own-PID maps 与 shell libtinfo 需下一代按进程阶段复核，不能全局豁免 EDA
+依赖。r69 正准备归档完整对应 distro Python modules 并优先 package path 绑定；
+尚不是 native probe/full ORFS/完整 P16 通过。各旧 SDK、traces、freezes 不覆盖。
+
+r69 随后实际完成 PREPARED_NOT_EXECUTED，12283 files、345 relative links，
+manifest digest 为
+`sha256:1c8a14c97d71ac6f786d56b93750f943f37f3bae0d365f66d4e4bc4b2fd63f05`。
+r70 在独立工作区再次完成真实 Python GDS read / 同一 Ruby DRC deck，均 rc=0；
+reader r71 将尚未归类的 Linux kernel overcommit_memory 读取明确判失败，未修改
+旧报告。r72 核实该 read-only VM policy（当前值 0），并限定 own-PID maps / shell
+libtinfo 的实际进程阶段；不是将 EDA dependencies 归为 foundation。
+
+r72 重查完整 SDK regular-file/link inventory 与 digest、exact 568 raw trace files、
+冻结 GDS/deck/script SHA 和 actual XML/marker，291 successful read paths 中
+unlisted host / unparsed successful opens / host Python-Ruby reads 均为零。
+状态 PASS_BOUNDED_NATIVE_COMPONENT，audit digest 为
+`sha256:7ac3987736d09f7639ef7bd7b8573bc4208278e897ef52e7f549519102d138d1`。
+仅证明这两项 native signoff-language/GDS probes 的读取闭环；不证明全 ORFS/memory
+runtime/historical origins/public bootstrap/P16。r61 当前完成 5/8 physical callbacks，
+第二例 ALWAYS_MEMORY 仍在运行；继续跟踪同一 live session，不重启或替换旧 cohort。
+待 r61 终态与独立 raw audit 后，才能在新完整执行代中采用新 SDK。
+
+### 2026-09-14 complete four-arm execution audit and historical raw input closure
+
+r61 同一执行会话已正常终态退出（rc=0），两例 × 四臂共 8 个 actual physical
+callbacks 全部完成。execution report digest 为
+`sha256:c197d2e929b4654cd39f4fc8739a6d2a3e57adf79179d66d94c52bfc688a052c`，
+cohort receipt digest 为
+`sha256:45bcc9441f14d0ec4f90e76dfa1a3b6f093a8e1c3a25a3940ccfadba57ffabab`。
+各臂 typed paired-utility outcome 均为 PASS=2，FAIL/UNKNOWN/PARTIAL=0；generic
+signoff_result 仍全部 UNKNOWN，不能将 fixed-constraint counterfactual PASS
+写成 strict signoff、production authority 或新 evolution signal。
+
+独立 r78 reader 不导入 producer/oracle，重查两套 SDK 的完整 payload inventory、
+frozen input/driver SHA、四臂 receipt 与八组原始报告、GDS/DEF、零项 full DRC XML、
+actual LVS match 与 SPEF。保留的全部 32195 份 trace 经前后 SHA 重查，解析出
+80036 个 successful read paths，unfinished opens / unparsed successful opens 均为零。
+状态为 PASS_EXECUTION_BUT_NATIVE_CLOSURE_FAILED，audit digest 为
+`sha256:2f6759f2c159f808a9c6e589259f5f8f04ca9b52d128dcee667f62b7cf6822f2`。
+8403 个未闭合路径包含 148 个 host Python/Ruby resources，以及个人 Git config、
+Yosys history、工作区外临时路径和未归类的 process-discovery/kernel metadata；
+不能通过扩大 host whitelist 将其改为全依赖 PASS。
+
+r73 旧审计对每次读取逐一枚举 32195 个 traced PID，实际长时间单核 CPU 计算。
+r78 只将该枚举换为完全等价的预计算集合查找，未删 trace 或改变原产物验收范围。
+r78 完整终态后才停止精确核验 UID/cmdline 的旧审计 PID；r73 exit=143，标记为
+CANCELLED_SUPERSEDED_NOT_AUDIT_PASS，控制记录另存 r79。原物理实验未重启，旧
+producer、freeze、SDK、原始产物和失败目录均未覆盖。
+
+历史原始输入归档 r74 的独立 r75 审计发现两份 external mux32/parity64 RTL
+缺失；旧失败 manifest/report 保留。新 r76 逐项消费注册 inputs 与 terminal run
+files 的原始 SHA，将 795 个 original-path aliases 映射到 331 个内容寻址 blobs，
+保留 canonical lexical paths/IDs；manifest digest 为
+`sha256:e39659b025e020cdbacea2fa02b1953772fcf0ca5f2b0cea8bd0d057363a0f9d`。
+r77 只读新归档而不打开旧 source roots，独立核对完整 blob inventory、全部 SHA、
+四条 transition 的八个注册 pin 与 28 个 required raw refs：缺失/不匹配均为零，
+状态 PASS_ARCHIVED_RAW_PIN_COMPONENT，audit digest 为
+`sha256:ed563db4a13a7c62da5a289abfc654c4a71d96d3d722b4dce2bdbba594f52e2a`。
+这是 raw-input byte/pin component，不是 historical toolchain/code/Git/build origins
+递归闭环，也不是 canonical replay 的显式原地址到物理归档地址 resolver。
+
+随后新 r80 source-bound preparation 固定引用上述审计和 r72，使用 r69 language
+SDK，所有臂同等绑定 INPUTRC、Git config isolation、private XDG state/cache 与
+data1 workspace TMPDIR；不改变原 RTL、SDC、CORE_UTILIZATION 或 utility contract。
+input report digest 为
+`sha256:056595ab00001aa9b97d5c0be23be17f852b7ab7e31cc4d3bbdfc9e0e2ed1fc5`。
+实际 archived router/selector/binder 仍严格重放 original historical raw/toolchain；
+记录了 73 个 preparation external Python opens，不伪称完整 memory runtime 迁址。
+
+r81 首次启动在 sandbox PTRACE_TRACEME 被拒，只有零字节 trace、runtime 尚未创建，
+没有物理回调；保留该启动痕迹后，以批准权限仅 trace 新进程及子进程首次执行。
+source preflight 九项全部 rc=0（含两例完整 Yosys/ABC）；100-cycle simulation 不是
+formal equivalence。当前第一例 NO_MEMORY actual ORFS 已启动，继续跟踪同一会话，
+完整执行与新 native closure 尚待终态及独立审计；不能从 source preflight 推断通过。
+
+所有新产物位于 data1，没有修改 live Tools、canonical memory、production gates，
+也没有新增独立 calibration samples、prediction confidence 或 provider calls。
+原 CORE70 C7、广义 StateShift/Interference C1–C8、P15 三类真实独立来源与统计证据、
+完整 schema/contract/origin closure、P17 仍须继续推进。本段为本地阶段记录，待新
+完整执行审计形成后再发布，不频繁 push；memory/docs 仍不提交。
+
+### 2026-09-14 explicit historical origin byte reader (not canonical replay)
+
+新增 `tehm.origin_bundle.OriginBundle`，提供显式、只读的 original lexical path
+→ content-addressed blob 读取接口，而不是全局 Path 重写或旧地址 discovery fallback。
+调用方必须从独立冻结输入提供 manifest-file SHA 和每次读取的 original-file SHA；
+manifest 自洽或 producer 的 valid/status 字段不能代替这两个 pins。
+
+`tehm-origin-bundle-v1` 仅接受 schema/aliases/blobs，拒绝 duplicate JSON keys、
+重复/缺失 aliases、未引用 blobs、非规范 SHA/address、额外文件和物理软链接。
+读取用 directory-descriptor-relative O_NOFOLLOW opens，检查 regular-file type、
+size、读取前后文件变化与 SHA；每次 read 重验 manifest 和目标 blob，verify 重验
+完整 inventory。original path 只作为身份键，既不 resolve 原地址也不改 canonical IDs。
+返回 receipt 只覆盖 archived bytes/alias pins，toolchain_probed、canonical_replayed、
+production_authority 均为 false；不接入默认 production retrieval 或 learner authority。
+
+用法（pins 必须来自被审计产物之外的 frozen acquisition/consumer inputs）：
+
+```python
+from tehm.origin_bundle import OriginBundle
+
+bundle = OriginBundle(bundle_root, expected_manifest_sha256=frozen_manifest_sha)
+raw = bundle.read_bytes(recorded_original_path, expected_sha256=frozen_file_sha)
+```
+
+新 r83 将已独立核验的 r76 bytes 导出到新 schema，保留旧归档和原 lexical paths，
+795 aliases / 331 blobs / 198129180 bytes；manifest-file SHA 为
+`sha256:e1676b185fb7cfc95a741f728b1b50c7724f3336d6b128fe5522268f31d744c9`。
+consumer freeze SHA 为
+`sha256:218fdb97f4adcf230deb8b8a25493ac2b46dfb7b1f2d2eed1e9546979e76e4ee`，
+绑定公开 reader 字节
+`sha256:f79077f95576b2008dbe6adf6bfd5e1d6c974604f646a18bfe8ec7b582df41dc`。
+
+r84 实际运行公开 reader，Python audit guard 禁止打开全部 795 个 original aliases，
+逐项重读/重验这些引用及 28 个 registered raw refs，重放四条 transition 的八个
+registration pins、原 project strings 与 execution/registration equality，全部一致，
+original-alias denied attempts=0。状态 PASS_EXPLICIT_ARCHIVED_BYTE_READER_COMPONENT，
+report digest 为
+`sha256:b5283667418d0d91d130804df09e2bfe634299c81b09b3e816fb49782ff54b7b`。
+尚未独立 native trace audit，也未将该 reader 接入 persisted canonical acquisition
+reconstruction/live-tool preflight；不是完整 relocated memory runtime 或 P16。
+
+origin-reader、artifact integrity、terminal raw replay、runtime-origin bridge 的 focused
+测试共 134 PASS，JUnit 位于 external campaign 的 origin-bundle-focused-tests-r85.xml。
+第一次扩展测试因 test helper import path 缺失而 133 PASS / 1 FAIL，保留记录；补齐
+测试 PYTHONPATH 后完整重跑 134 PASS，不修改原 authority/toolchain checks。
+完整 frozen regression r87 已终态 PASS：1906 tests，failures/errors/skipped 均为 0，
+冻结前后 566 Python files 完全一致；
+minimum_tests=1906，input-freeze digest 为
+`sha256:6975e9b63257aa207dfcc9fc6e86a3cdaaaa96d74e0c0050401c9e3113977c9d`。
+terminal report digest 为
+`sha256:11acc59aab8751daad6eaecc051ec33b6364cc2fafca1bfd59bab7285ab649eb`，
+JUnit SHA 为
+`sha256:ee5a26d1594a85018d07597a3104535718e3614e06d83423ee10fa1af39147e6`。
+这是完整工程回归，不沿用旧 1849-test epoch，也不证明实验或 production gate。
+
+r81 同一新 ORFS 执行会话已终态完成两例四臂，共 8/8 actual physical callbacks。
+execution digest 为
+`sha256:22639621d0d835f69cc52279c77ccd75f95f56c8648512cc17bfa765a5542204`，
+cohort digest 为
+`sha256:6c54e3557c4f449608b49863ee5c5e3d2456101062bc2a31c39c43d4acfc57fc`。
+每臂 typed paired utility 为 PASS=2、FAIL/UNKNOWN/PARTIAL=0；generic strict
+signoff 仍 UNKNOWN=8（缺少 fmax_search），PASS 仅限 fixed-constraint counterfactual。
+
+独立 r91 重验完整 SDK inventory、八组 raw reports 与全部 32199 traces，解析
+90722 successful read paths，unparsed/unfinished 均为零；但仍有 8142 unlisted paths。
+状态 PASS_EXECUTION_BUT_NATIVE_CLOSURE_FAILED，audit digest 为
+`sha256:638fc9f2557a448f615699c5a78f07aae78118bed87026fd13d5ab0d29e40b79`。
+完整运行的 isolated config probe 调用了 `/usr/bin/klayout -v`，加载宿主 KLayout、
+Qt、Python/Ruby ELF libraries；r72 两项 private signoff probes 不覆盖该路径。
+不能因宿主语言 stdlib-directory reads 为零，就宣称完整 native closure；也不能将
+这些 EDA libraries 纳入 OS foundation。后续需显式工具绑定和新执行/代码 epoch。
+
+递归 Git source r88 归档覆盖 27 repository nodes、25 gitlinks、24 unique commits，
+但独立恢复发现 standalone Yosys/ABC 的浅历史 bundle 缺父提交，bundle verify=0
+不代表 fetch/history closure 成功。新 r94 从官方公开 Git 源取得这两个 exact commits
+的完整历史，仅写 data1 新归档，不改 live Tools；仍须独立 bundle-only full restore。
+当前 dirty overlay r90 经 r92 检查还误将 72 个 Git mode 120000 的 materialized
+symlink directories 标为 submodules，其目录 payload 未闭合；旧失败记录不覆盖。
+上述 acquisition 均不证明 installed binary 的历史 build provenance。
+
+本次发布边界是只读 origin byte reader、完整 1906-test 工程回归和上述真实执行/失败
+审计记录。显式 reader 到 canonical/toolchain 验证链、完整 relocated memory runtime、
+public bootstrap、原 CORE70 C7、广义 C1–C8、P15 独立来源/预测置信度/统计证据以及
+P16/P17 仍未闭合；production gates 不变，provider calls=0，memory/docs 始终不提交。
