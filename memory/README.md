@@ -6538,3 +6538,130 @@ P15 frozen regression r37 已独立 terminal 1764 PASS；这是本次 source epo
 全量工程验证，上述有限 RTL replay 则是独立的迁址执行证据，二者都不等于完整
 reason-aware calibration/production readiness。provider_calls=0；阶段性工程验证
 完成后仅向用户指定分支非强制发布，memory/docs 继续 local-only。
+
+### 2026-09-13 Revision3 independent NO_MATCH source coverage
+
+按 Revision3 §28 新增 evaluation-only `tehm/evaluation/no_skill_source_coverage.py`。
+该 oracle 不导入 router/selector，不接收 routing labels、预测概率、risk/shift 控制
+或执行 outcomes；在 query-only source 上独立枚举完整 Knowledge/Asset registries、
+检查 shipped schema/SQLite integrity/生命周期与 content identities，并只读解析当前
+scope。缺表、内容损坏、孤立 status、未验证的状态抑制关系与冲突都不是“空覆盖”。
+匹配 validated Knowledge 但 applicability/authority/active path 不足则为未建立，
+不能为了给双失败生成 NO_MATCH 而把它排除。query 必须显式冻结 family/profile/scope；
+profile=null 表示不限定 profile，不能据此忽略 profile-specific Knowledge。
+
+`NoSkillSourceCoverageReceipt` 绑定 full-SQL source digest、schema digest、精确 query
+与完整枚举记录。消费者必须对实际 source/query 重推导，不能仅信 receipt digest
+或 absence flag。`bind_no_skill_source_coverage_case` 在真实执行前将 receipt/query
+绑定进 executor case digest；paired label deriver 拒绝历史执行后补证据、case/query
+替换、source drift、伪造 rehashed coverage 与 training/learner 使用。内部 profile
+不与返回的 case 共享可变对象，有限 JSON 和数值/布尔类型精确匹配有专门检查。
+
+`derive_no_skill_oracle_label` 在已有完整 paired-oracle 语义之外可消费该证据：
+已验证 absence 且 neutral/dual-failure pair 完整已知时可建立 source-bound NO_MATCH；
+安全获益 USE_MEMORY、实际伤害 RISK/STATE_SHIFT 保留行为证据优先级。没有 coverage
+的双失败/中性 pair 仍 unclassifiable；UNKNOWN/缺失 signoff 不放宽。新路径标记
+`no-skill-oracle-label-source-coverage-v1`，不改变无 coverage 的 v2 标签语义。
+confidence 仍为 None，不授予 canonical/training-support/production authority。
+
+当前证明范围是 strict knowledge-grounded asset evaluation universe 中“没有可用
+机制知识”，不是所有可能修复都不存在。存在知识但无可绑定 candidate 的覆盖证明
+仍未建立，compatibility/legacy fallback 与 production runtime 不在此 receipt 范围内。
+源覆盖证据本身也不证明真实 calibration split、样本独立性或真实 paired execution。
+
+公开只读入口 `scripts/audit_no_skill_source_coverage.py` 输出 COVERAGE_ONLY_NOT_PAIRED_LABEL，
+明确 request membership 未独立验证、paired execution 未绑定、labels/samples=0；不能
+通过声明 request.split=calibration 产生真实经验。输入 source/request/code 前后校验，
+拒绝覆写已消费产物或源库。
+
+实际 S0/S1/S2 的五例原始 query scopes 只读工程 probe r40 核验了 15 次 source replay：
+S0、S1 的五项均无可用机制知识，S2 对四条 target scopes 重放出实际新增的
+`mk_d0dd39fc779f9492bedf@1`，timer scope 仍无匹配知识。原 training/held-out/validation
+角色保留；没有借用这些 query 把旧病例重分为 calibration，没有后补旧执行证据。
+summary digest 为
+`sha256:fcfe72e9506e8bd2430559ba231a4c7c6f86c2ec8e621e6e52c25a9b9e688072`，
+位于 campaign `p15-public-source-coverage-diagnostics-r40`。这是 query-scope engineering
+audit：新增硬件 callbacks/独立 samples/labels/provider calls 均为零。此前 r39 probe
+的实现原字节另行保存，不改写已消费 report 或把更新后的实现重新绑定旧 epoch。
+
+本次还只读盘点个人 ORFS 的 32 个源目录：SHA 相同的 RTL 连接出 aes/aes_lvt、
+ethmac/ethmac_lvt、jpeg/jpeg_lvt、chameleon/chameleon_hier 等变体；共有五组 shared-RTL
+links（也包括 cva6/mempool_group 共用模块）。不把目录名、平台 config 或剩余目录数
+视为样本独立性证明。README/license 元数据语义与 config 源关联尚未验收，没有下载、
+执行、选择或 ingest 这些 designs。r41 inventory digest 为
+`sha256:1aad9bf6c0695518c332caf4845267a6822342160e12455517be72944c9e29c3`。
+下一步须逐一核实来源/角色/真实前置预测证据，再 preregister 独立 calibration cohort，
+不能通过同一 RTL 的平台/利用率变体补足约 20 个独立病例。
+
+当前 source-coverage/calibration/report/schema 定向回归 r3 terminal 118 PASS，
+0 FAIL/ERROR/SKIP，152.78s；JUnit SHA 为
+`sha256:e435be7392c4fd0553b281eca959351ca1cc90d177eef760c7adf97778d0e5c4`。
+首轮暴露的 profile alias / 原始 asset status-version 检查已修复；失败的中间收集
+记录保留，不改写为 PASS。完整收集为 1849 tests，后续独立 frozen full regression
+`full-regression-p15-source-coverage-r43` 才验证完整 source epoch；首次记录时未宣称
+全量通过，其随后完成的 terminal 结果见下文。
+P15 真实三类 labels + pre-outcome probability +独立来源数量、broad C7、完整 P16/P17
+均仍未闭合；达到工程验收点后仅阶段性发布到用户指定分支，memory/docs 始终 local-only。
+
+本轮当前完整 source/resources 已按原字节归档到
+`runtime-origin-source-coverage-r42`：1012 files，其中 564 Python files，无 docs；
+origin manifest digest 为
+`sha256:7157b546e31ca85f6819892cbce0bb3d97992bc2067e91b7d0d552e6d3c25834`。
+这是复制时的历史资源 snapshot，后续 README 状态更新不改写归档原字节。
+完整 regression r43 已实际 STARTED，minimum_tests=1849，input freeze digest 为
+`sha256:27b949367afbf64e486891dbd9cfb1e32219801e5740f1c474dde5e6259e4a5b`；
+最近 source-corpus recheck 仍精确一致。terminal report 未出现前不能宣称全量 PASS。
+
+r43 后续已实际 terminal PASS：1849 PASS / 0 FAIL / 0 ERROR / 0 SKIP，1183.23s；
+564 个 Python files 运行前后精确一致。JUnit digest 为
+`sha256:34643b801d832248c9eff9696602d934906945ca963cee3270d4bdf0766995b7`，
+terminal digest 为
+`sha256:86b291e27d3a7179f8b470e74fcb51ef61a15d9c67b560550c17b634005226f3`。
+以上 STARTED/未宣称全量通过是本次 epoch 的早期状态记录；本 terminal 才证明
+当前 P15 source-coverage source epoch 的完整工程回归，不证明真实 calibration 或 canary。
+
+为推进真实 ORFS relocation，r44 对实际 personal matched OpenROAD ELF 的 clean
+loader 与 flow private-library-prefix 环境做静态依赖核查。RUNPATH 为个人
+`or-tools/lib` 加 `/usr/local/lib`；两种环境均仍加载宿主 Tcl 与
+`/usr/local/lib/libcudd-3.0.0.so.0.0.0`，另有 Linux C/C++ runtime foundation。
+没有 unresolved shared libraries，但这不等于依赖都在个人 SDK，也不等于
+relocated native file trace 已验证。静态诊断 digest 为
+`sha256:4d590e817953c8164b64e31c34f0682f5fa59ac3646919212e7999c52238ddb7`。
+本轮未修改任何 live Tools、宿主库或已消费 toolchain pins，没有重新运行 terminal
+ORFS flows。下一批 fresh relocated ORFS 必须先补齐该版本实际需要的 SDK libraries、
+相对 loader 路径与 public origin/bootstrap，再按新的 profile/generation 执行，不能
+拿有限 Icarus relocation 或 ELF 位于个人目录的事实宣称完整 P16 已闭环。
+
+### 2026-09-13 actual matched OpenROAD SDK relocation component
+
+`portable-matched-openroad-sdk-r45` 按 r44 实际依赖解析结果复制 personal matched
+prefix、所有 non-glibc shared libraries（含宿主-origin CUDD/Tcl/compiler runtimes）、
+完整 Tcl8.6 resources 与四份原始 retained ODB。905 个 payload/origin-blob/symlink
+entries 逐项 SHA 核验，16 个库别名只指向包内目标，约 553 MB，观察到的 library
+最高 GLIBC requirement 为 2.35。source SDK manifest digest 为
+`sha256:875b54d87bdead2637b7d6fa0a2c81788cf21c6ab20ce2fedb89557e0ab1300c`。
+这是实验 SDK 原字节归档，不是 public download/build origin 已建立；没有修改 live
+Tools、宿主库、已消费 toolchain pins，且没有默默改写原 ELF 的 absolute RUNPATH。
+launcher 从自身目录建立 private LD_LIBRARY_PATH 与 Tcl resource path，消费者必须
+先重放完整包哈希与库解析，再以 native trace 验证未回落到原地址。
+
+新 r46 runtime 在执行前冻结 SDK manifest/driver bytes、四条 argv/env/cwd 与原始
+ODB geometry expectations，随后真实运行四次 package-root OpenROAD。所有原始几何
+数值精确一致；SDK bytes 不变，原 CORE70 density>1 failure 没有被重写为 route PASS。
+execution digest 为
+`sha256:70e8df9fdf96c3258e8d4af90349a716d18d4aa03c222716ab2c0bec76a08360`。
+仅对新进程及其子进程使用 strace -ff -y，没有附加正在跑的完整回归或其他用户进程。
+
+独立 r47 reader 不导入 runtime producer/TEHM oracle，重查 manifest、frozen argv、
+stdout/geometry 与 raw traces，按 kernel FD annotation 解析成功读取，未解析/未列入
+SDK/非 foundation/original-root 读取均为零；CUDD/Tcl 均从新 SDK 加载。实际保留的
+8 项 host foundation paths 是 shell/glibc/locale/identity/CPU discovery，仍需要 Linux
+host，不宣称不需要 OS。audit digest 为
+`sha256:86fe23c49f42b7a8849769c0f1d1ee467c0b55730f0a83cd5c6de8aa2230f28d`。
+
+上述证明 actual relocated matched-OpenROAD dependency/retained-ODB component；
+不是全 ORFS design execution、memory policy runtime relocation、recursive historical
+raw closure、最终 public bootstrap/package 或完整 P16。新增成功 route pairs、独立
+calibration samples、provider calls 均为零；original C7 与 P17 gate 不变。后续要整合
+完整 ORFS/Yosys/PDK/owned Python dependencies，再冻结新 runtime 并实际执行完整流，
+不能把 SDK 加载成功当成 Memory 经验、P14 attribution 或 production authority。

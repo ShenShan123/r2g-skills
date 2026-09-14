@@ -298,7 +298,11 @@ def build_no_skill_calibration_samples(
 def derive_no_skill_oracle_label(
         paired_receipt: object, *, state_shift_receipt: object | None = None,
         strata: Mapping[str, str] | None = None,
-        confidence: float | None = None, split: str = "calibration") -> dict[str, Any]:
+        confidence: float | None = None, split: str = "calibration",
+        source_coverage_receipt: object | None = None,
+        source_connection: object | None = None,
+        source_query: object | None = None,
+        frozen_case: Mapping | None = None) -> dict[str, Any]:
     """Derive one independent P15 label from a typed paired oracle receipt.
 
     The router decision is deliberately not an input.  A complete
@@ -308,8 +312,10 @@ def derive_no_skill_oracle_label(
     supplied), and a failed baseline repaired safely by memory becomes
     ``USE_MEMORY``. Neutral, partial and doubly failed pairs are explicitly
     unclassifiable: an unsuccessful candidate does not prove that no
-    transferable knowledge exists. NO_MATCH needs a separate source-coverage
-    oracle, not an execution outcome or the router's own refusal.
+    transferable knowledge exists. NO_MATCH additionally requires independent
+    source coverage replay and its exact ex-ante binding to the executed case.
+    This initial coverage proof concerns the strict knowledge-grounded asset
+    evaluation universe, never compatibility fallback or production runtime.
 
     Oracle-label certainty is not prediction confidence. This helper never
     supplies a router probability; callers must bind actual pre-outcome
@@ -340,6 +346,30 @@ def derive_no_skill_oracle_label(
         raise NoSkillCalibrationError("paired oracle receipt is required")
     if paired.evaluation_only is not True or paired.paired is not True:
         raise NoSkillCalibrationError("paired oracle receipt must be evaluation-only")
+    coverage = coverage_replay = None
+    source_inputs = (source_connection, source_query, frozen_case)
+    if source_coverage_receipt is None:
+        if any(value is not None for value in source_inputs):
+            raise NoSkillCalibrationError("source coverage inputs require a coverage receipt")
+    else:
+        from tehm.evaluation.no_skill_source_coverage import (
+            NoSkillSourceCoverageReceipt, bind_no_skill_source_coverage_case,
+            verify_no_skill_source_coverage,
+        )
+        try:
+            coverage = (source_coverage_receipt if isinstance(source_coverage_receipt, NoSkillSourceCoverageReceipt)
+                        else NoSkillSourceCoverageReceipt.from_dict(source_coverage_receipt))
+            if not isinstance(frozen_case, Mapping) or "p15_source_coverage" not in frozen_case:
+                raise ValueError("coverage was not frozen into the executed case")
+            bound_case = bind_no_skill_source_coverage_case(frozen_case, query=source_query, receipt=coverage)
+            case_digest = "sha256:" + hashlib.sha256(stable_dumps(bound_case).encode()).hexdigest()
+            if coverage.case_id != paired.case_id or case_digest != paired.case_digest:
+                raise ValueError("paired/source coverage case digest binding mismatch")
+            coverage_replay = verify_no_skill_source_coverage(source_connection, coverage, query=source_query)
+            if coverage_replay["verified"] is not True:
+                raise ValueError("source coverage did not replay against actual source/query")
+        except (ValueError, TypeError, KeyError) as exc:
+            raise NoSkillCalibrationError(f"invalid source coverage oracle: {exc}") from exc
     baseline = paired.arm_receipts["NO_MEMORY"]
     forced = paired.arm_receipts["ALWAYS_MEMORY"]
     for name, receipt in (("NO_MEMORY", baseline), ("ALWAYS_MEMORY", forced)):
@@ -382,6 +412,13 @@ def derive_no_skill_oracle_label(
         expected_reason = "STATE_SHIFT" if shift is not None else "RISK"
     elif baseline.outcome in _HARMFUL_OUTCOMES and forced.outcome == "PASS":
         expected_decision, expected_reason = "USE_MEMORY", None
+    elif (coverage_replay is not None and coverage_replay["absence_established"] is True and
+            baseline.outcome in {"PASS", *_HARMFUL_OUTCOMES} and
+            forced.outcome in {"PASS", *_HARMFUL_OUTCOMES}):
+        # The independent inventory establishes absence; paired failures or
+        # neutrality alone do not. Direct safe benefit/harm above retain
+        # precedence over this bounded knowledge-universe absence label.
+        expected_decision, expected_reason = "NO_SKILL", "NO_MATCH"
     else:
         unclassifiable_reason = (
             "paired_execution_does_not_establish_NO_MATCH_or_safe_memory_benefit")
@@ -396,13 +433,17 @@ def derive_no_skill_oracle_label(
             raise NoSkillCalibrationError(f"unsupported calibration stratum: {key}")
         normalized_strata[key] = _text(value, f"strata.{key}")
     derivation = {
-        "version": ORACLE_LABEL_DERIVATION_VERSION,
+        "version": (ORACLE_LABEL_DERIVATION_VERSION if coverage is None else
+                    "no-skill-oracle-label-source-coverage-v1"),
         "derivation_mode": "TYPED_PAIRED_ORACLE",
         "split": split,
         "paired_receipt_digest": paired.receipt_digest,
         "baseline_execution_receipt_id": baseline.execution_digest,
         "forced_memory_execution_receipt_id": forced.execution_digest,
         "state_shift_receipt_id": shift.receipt_id if shift is not None else None,
+        "source_coverage_receipt_id": coverage.receipt_id if coverage is not None else None,
+        "source_coverage_receipt_digest": coverage.receipt_digest if coverage is not None else None,
+        "source_coverage_replay": coverage_replay,
         "expected_decision": expected_decision,
         "expected_reason": expected_reason,
         "unclassifiable_reason": unclassifiable_reason,
