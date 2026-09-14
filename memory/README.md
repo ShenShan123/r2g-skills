@@ -6424,3 +6424,117 @@ terminal digest 为 `sha256:c4e0b168b33c9fb25a0b08aca8500a2dd7cd46c5f6a67c493971
 P15 independent reason-stratified calibration/statistical production evidence、完整 P16
 和 guarded P17 仍未完成。provider calls=0、promotion_attempted=false，production
 authority/runtime 不变；本次阶段性工程验证完成，memory/docs 继续 local-only。
+
+### 2026-09-13 Revision3 P15 oracle semantics v2 (engineering progress, not calibration closure)
+
+完整工程回归 r30 的 P13 ADD / disposable evaluation 阶段已发布到用户指定
+`r2g-skills` remote 的 `memory/Typed-Executable-Hardware-Memory` 分支，commit
+`3646751eb8c52c987ccd9d077897b85d003aa151`；远端已核验。没有提交 memory/docs
+或无关的 install_manifest 改动。
+
+继续按 Revision3 §28 检查发现：旧通用 paired oracle 把双失败误判为 NO_MATCH，
+把中性 PASS/PASS 判为 USE_MEMORY，并默认填入 confidence=1.0；旧两条 calibration
+入口另显式填入 0.95。Oracle 标签确定性不是 router 对预测决策的概率。
+
+`derive_no_skill_oracle_label` 现在输出 `no-skill-oracle-label-v2`：
+
+- 只有 baseline 完整 PASS 且 forced memory FAIL/REGRESSION 才建立 RISK；
+  如提供非 transferable StateShiftReceipt，必须精确绑定 paired receipt 才建立 STATE_SHIFT。
+- baseline FAIL/REGRESSION 且 forced memory 完整、无新增回归的 PASS 才建立 USE_MEMORY。
+- 中性、PARTIAL 和双失败均明确 unclassifiable，不推测 NO_MATCH；
+  NO_MATCH 仍需独立、source-bound 的无候选/不可迁移知识 coverage oracle。
+- 完整 oracle 的 UNKNOWN/缺失 signoff 不放宽，正向结果必须与所有检查一致。
+- confidence 保留 None；显式由标签入口赋预测概率会被拒绝。
+  真实概率后续必须单独绑定前置预测证据，不能由 calibration outcomes 或匹配分数填补。
+
+两条旧入口保存全体 derivations 和 excluded_cases，只有可分类病例进入二元样本，
+分别报告 executed_case_count / sample_count；若全体被排除，保留推导记录并报
+NOT_ESTABLISHED，不创建伪 calibration report。旧 fixture harness 明确标注
+fixture_engineering_only，重复次数、改名、source comments 都不建立统计独立性。
+相关 calibration/report/ORFS evidence/aggregate 定向回归 r36 为 106 PASS，0.73s。
+
+新 `scripts/audit_p15_oracle_label_semantics.py` 对既有真实 calibration 的
+三个 views、两例原始 RTL、六组 paired receipts 重放 retained execution/utility
+证据；`p15-retained-oracle-semantics-r34.json` audit digest 为
+`sha256:ad4b0059de520f80cd40e36284424e7960121f4705c2fc370051e1d282fa3b8b`。
+原 prospective 物理 utility oracle 对六组都推导 RISK；完整通用 oracle 对六组均
+因 signoff 未建立而拒绝分类。保留原 UNKNOWN，不改写原 oracle 或已消费冻结。
+这是 retrospective engineering label audit：runtime generation / P14 authority
+没有重放，不是完整 calibration、P16 origin replay 或新的硬件执行/独立样本。
+失败的首两次 audit 尝试分别因 historical runtime epoch drift 与完整 signoff
+缺失终止，source/error records 保留；未改写失败结果或 rebind 历史 generation。
+
+修改前完整 r30 的 559 Python files 已另按原字节归档，manifest digest 为
+`sha256:bdfc94299a0c7acfbb3611b880be9487fb5d085062b916013c3baf5233dc043b`，
+位于 campaign `runtime-origin-full-regression-r30-before-p15-v2`。
+r30 是历史工程 epoch，不能用其 1747 PASS 宣称这些后续 P15 修改已全量通过。
+当前完整收集为 1764 tests；新的 frozen regression generation
+`full-regression-p15-oracle-semantics-r37` 单独验证本次 epoch，minimum_tests=1764。
+已 terminal PASS：1764 PASS / 0 FAIL / 0 ERROR / 0 SKIP，1267.83s；560 个 Python
+files 前后精确一致。input freeze digest 为
+`sha256:e7eb19f870363b1c9e29008d94b9fb870fcd647cc6e7b12bb712d92109c73529`，
+JUnit digest 为 `sha256:54861214a3e77fb2bd9d18e781fb79f964b050754ea8dd0db6d8938c7a93819d`，
+terminal digest 为 `sha256:9ba1cd010d57eab5d937e21dfe8db3e5bea5728ff3537ea5793da3a6230383b5`。
+运行期间未修改 Python corpus，不以定向通过代替全量验证。
+P15 三类 independent oracle、真实 pre-outcome 概率以及约 20 个独立来源的校准
+病例仍未建立；不能仅追加 density-relief ORFS 重复执行解决这些缺口。
+StateShift/Interference broad-scope C1–C8（含既有 Core70 non-target failure）、
+完整 P16 recursive source/raw/toolchain closure + fresh relocated hardware、P17
+仍须继续推进。provider_calls=0，production/runtime authority 不变，下一批验证完成
+前不重复 push；memory/docs 始终 local-only。
+
+### 2026-09-13 Revision3 Core70 geometry diagnosis and fresh relocated finite RTL runtime
+
+为推进仍未闭合的 Interference C7，使用个人 matched OpenROAD 对原 terminal
+CORE70 non-target mux16x3 的 retained ODB 做只读探测：baseline 端口缓冲前
+157 instances、5 个 `__buf_` master，cell/core area ratio 0.79400749，uniform
+density 0.92000002；buffering 后 core 面积不变，217 instances、67 个 `__buf_`
+master，ratio 1.00374532、uniform density 1.13999999。ORFS 原公式在 addon=0
+和 0.99 两端分别得到 1.14999999 / 1.01140000，均超过 1.0。只扫描合法 addon
+无法解决该 retained failure，不应截断 density 或改写原 UNKNOWN 为 route FAIL/PASS。
+CORE40 memory 对照的 retained GP density 为 0.74749998，不能代替健康 CORE70
+baseline。仅诊断实际执行过的 mux16x3；xor_rotate32 仍是原 cohort 中未完成的 case。
+四次新的 OpenROAD 调用只读 ODB，没有重启任何 terminal flow 或新增成功 route pair。
+diagnostic digest 为
+`sha256:1dcba96fa14aedff5164d4d5e7d6c38c5fa03128a5b4d69b95ac19d5da066a4e`，
+位于 campaign `core70-retained-geometry-diagnostic-r1`；原 C7/production 状态不变。
+
+P16 另向实际迁址执行推进：`portable-gap-runtime-r38` 将完整 memory source/resources、
+原 S0/S1/S2 SQL、五例原始 RTL/TB 与完整 native OSS SDK 按原字节复制到新 root。
+1036 个 source/input origins 与 26882 个 SDK files/symlink entries 全部核验，
+不包含 docs；source-SDK manifest digest 为
+`sha256:be36a9fa872b5045b97481a1057145eaaeff0e1157642a11dc80f76fbee8a245`。
+该 origin 是复制时的历史 snapshot；后续 README 更新不改归档中的原字节。
+
+新 relocated runtime 没有导入旧 campaign producer，使用包内 Python 与 Icarus，
+实际独立重放 core S0/S1/S2 admission、建立并加载两份新的 core policy headers、
+运行 source-only router/selector/binding/candidate，并在真实回调之后记录三个
+load rows。执行前冻结新的 headers/config/queries/case-role mapping/driver bytes，
+不 rebind 已消费的 R20 headers 或原 freeze。通过 Python audit hook 禁止读取
+原仓库/Tools/campaign files，guard self-test 确认拒绝原 contracts.py 内容读取。
+
+真实迁址执行完成 30 个 finite RTL callbacks / 120 条 native compile/simulation
+commands：四条 target/train-replay/held-out case 的 gated baseline FAIL → candidate
+PASS → reloaded baseline FAIL，timer non-target 三次 PASS/fallback。原始角色保留；
+两条 training 只是 replay，learner_ingestion=false，不增加独立统计样本。
+临时 rewritten RTL 和编译产物按实际输入 SHA 捕获为 retained blobs。
+actual load ledger 保留完整 SQL，S0/S1/S2 与新 ledger 共四份 schema contract
+freeze/replay 通过，完整 RAM ledger 精确 rollback，source/SDK bytes 不变。
+execution digest 为
+`sha256:556cd890a7149a243d108987c1cd608a15fcad2827604292d920ed56921546f9`。
+
+首个 strace 请求因 sandbox ptrace 限制在 runtime 启动前终止，空 trace 保留；
+经授权仅跟踪新 runtime 及其子进程，不附加其他进程。独立 dependency auditor
+核验真实 core headers/load rows 与逐行 successful file opens，原仓库/原 Tools/
+原 campaign 文件成功读取为零，unresolved relative native reads 为零；记录 12
+项 Linux host-foundation paths，未宣称不需要宿主 OS。audit digest 为
+`sha256:035638b36841aa61ead127c336cb9d4037898d8103208762a47e7b2ef35b62fe`。
+
+这推进了 actual relocated finite runtime + complete source/resource/native SDK origin，
+但不是完整 recursive ORFS/raw evidence closure、广泛独立 RTL 泛化、完整 P16 release
+或 guarded P17。相关 drivers/raw artifacts 在 external campaign，尚未形成最终
+仓库可下载发布包；后续仍需 public bootstrap/闭环验收与完整 ORFS scope。
+P15 frozen regression r37 已独立 terminal 1764 PASS；这是本次 source epoch 的
+全量工程验证，上述有限 RTL replay 则是独立的迁址执行证据，二者都不等于完整
+reason-aware calibration/production readiness。provider_calls=0；阶段性工程验证
+完成后仅向用户指定分支非强制发布，memory/docs 继续 local-only。

@@ -134,13 +134,18 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
     routing_decisions: dict[str, dict] = {}
     oracle_labels: dict[str, dict] = {}
     derivations: dict[str, dict] = {}
+    excluded: dict[str, str] = {}
     case_by_id = {case["case_id"]: case for case in cases_payload["cases"]}
     for case_id in sorted(cohort.case_receipts):
         route = routes[case_id]
         paired = cohort.case_receipts[case_id]
         label = derive_no_skill_oracle_label(
-            paired, strata=_strata(case_by_id[case_id]), confidence=0.95,
+            paired, strata=_strata(case_by_id[case_id]),
             split="calibration")
+        derivations[case_id] = label["derivation"]
+        if not label["classifiable"]:
+            excluded[case_id] = label["unclassifiable_reason"]
+            continue
         paired_index[case_id] = {
             "routing_receipt_id": paired.routing_receipt_id,
         }
@@ -155,7 +160,6 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
             "confidence": label["confidence"],
             "strata": label["strata"],
         }
-        derivations[case_id] = label["derivation"]
 
     cohort_path = challenge_root / "receipts" / "cohort.json"
     cases_path = challenge_root / "receipts" / "cases.json"
@@ -165,10 +169,11 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
             raise OrfsP15CalibrationError(f"calibration evidence is missing: {path}")
     derivation_path = receipts_root / "oracle_label_derivations.json"
     _write_json(derivation_path, {
-        "version": "no-skill-oracle-label-derivations-v1",
+        "version": "no-skill-oracle-label-derivations-v2",
         "campaign_id": cohort.campaign_id,
         "split": "calibration",
         "derivations": derivations,
+        "excluded_cases": excluded,
         "source_reason_receipt_digest": reason.receipt_digest,
         "evaluation_only": True,
         "canonical_memory_mutation": "none",
@@ -176,11 +181,14 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
         "production_runtime_imported": False,
         "memory_docs_submitted": False,
     })
+    if not oracle_labels:
+        raise OrfsP15CalibrationError(
+            "no classifiable oracle samples; all derivations retained; calibration NOT_ESTABLISHED")
     manifest = {
         "version": MANIFEST_VERSION,
         "campaign_id": f"{cohort.campaign_id}:p15-orfs",
         "split": "calibration",
-        "oracle_label_source": "typed-paired-orfs-oracle-v1",
+        "oracle_label_source": "typed-paired-orfs-oracle-v2",
         "paired_routing_index": {"case_receipts": paired_index},
         "routing_decisions": routing_decisions,
         "oracle_labels": oracle_labels,
@@ -214,7 +222,10 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
         "source_cohort": str(challenge_root),
         "prospective_calibration_partition": partition,
         "source_disjoint_lineages": cohort.lineage_ids,
-        "sample_count": len(cohort.case_receipts),
+        "sample_count": len(oracle_labels),
+        "executed_case_count": len(cohort.case_receipts),
+        "excluded_cases": excluded,
+        "router_confidence_policy": "ABSENT_NOT_IMPUTED",
         "derived_oracle_decisions": {
             case_id: value["expected_decision"]
             for case_id, value in sorted(oracle_labels.items())
@@ -230,11 +241,10 @@ def run(*, challenge_artifacts: Path | str = DEFAULT_CHALLENGE,
         "calibration_report": str(report_path),
         "calibration_receipt": receipt,
         "interpretation": (
-            "The independent ORFS paired oracle labels both pre-revision CONSIDER "
-            "predictions as NO_SKILL/RISK because no-memory passes while forced "
-            "memory fails. This is a negative calibration slice; it lacks the "
-            "NO_MATCH and STATE_SHIFT strata, and the post-revision INAPPLICABLE "
-            "veto remains outside the binary P15 contract."),
+            "Only pairs establishing safe repair or forced-memory harm are binary "
+            "samples. Neutral and unsuccessful pairs do not establish NO_MATCH. "
+            "No router probabilities are imputed. Post-revision INAPPLICABLE "
+            "vetoes remain outside the binary P15 contract."),
         "evaluation_only": True,
         "canonical_memory_mutation": "none",
         "production_authority_changed": False,

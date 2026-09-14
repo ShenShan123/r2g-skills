@@ -28,7 +28,7 @@ CALIBRATION_STRATA = (
     "model_identity", "state_shift_dimension",
 )
 _ROUTER_MEMORY_DECISIONS = frozenset({"APPLY", "CONSIDER"})
-ORACLE_LABEL_DERIVATION_VERSION = "no-skill-oracle-label-v1"
+ORACLE_LABEL_DERIVATION_VERSION = "no-skill-oracle-label-v2"
 _POSITIVE_OUTCOMES = frozenset({"PASS", "PARTIAL"})
 _HARMFUL_OUTCOMES = frozenset({"FAIL", "REGRESSION"})
 _Z95 = 1.959963984540054
@@ -298,21 +298,30 @@ def build_no_skill_calibration_samples(
 def derive_no_skill_oracle_label(
         paired_receipt: object, *, state_shift_receipt: object | None = None,
         strata: Mapping[str, str] | None = None,
-        confidence: float = 1.0, split: str = "calibration") -> dict[str, Any]:
+        confidence: float | None = None, split: str = "calibration") -> dict[str, Any]:
     """Derive one independent P15 label from a typed paired oracle receipt.
 
     The router decision is deliberately not an input.  A complete
     ``NO_MEMORY``/``ALWAYS_MEMORY`` counterfactual pair is classified by the
     executable oracle outcomes: a harmful forced-memory result becomes
     ``RISK`` (or ``STATE_SHIFT`` when a non-transferable typed shift witness is
-    supplied), a useful memory result becomes ``USE_MEMORY``, and a pair in
-    which neither policy is positive becomes ``NO_MATCH``.  This helper is
-    evaluation-only and accepts only the calibration split; it never writes a
-    support envelope or canonical memory.
+    supplied), and a failed baseline repaired safely by memory becomes
+    ``USE_MEMORY``. Neutral, partial and doubly failed pairs are explicitly
+    unclassifiable: an unsuccessful candidate does not prove that no
+    transferable knowledge exists. NO_MATCH needs a separate source-coverage
+    oracle, not an execution outcome or the router's own refusal.
+
+    Oracle-label certainty is not prediction confidence. This helper never
+    supplies a router probability; callers must bind actual pre-outcome
+    prediction probabilities separately when constructing calibration samples.
+    It accepts only the calibration split and never writes canonical memory.
     """
     if split != "calibration":
         raise NoSkillCalibrationError(
             "oracle label derivation is restricted to calibration split")
+    if confidence is not None:
+        raise NoSkillCalibrationError(
+            "oracle labels cannot assign router prediction confidence")
     from tehm.evaluation.candidate_executor import PairedCandidateExecutionReceipt
     from tehm.state.shift_receipts import StateShiftReceipt
 
@@ -341,6 +350,12 @@ def derive_no_skill_oracle_label(
                 receipt.outcome == "UNKNOWN"):
             raise NoSkillCalibrationError(
                 f"{name} oracle receipt is incomplete")
+        if receipt.outcome == "PASS" and (
+                receipt.compile_result != "PASS" or
+                receipt.functional_result != "PASS" or
+                receipt.signoff_result != "PASS" or receipt.created_regressions):
+            raise NoSkillCalibrationError(
+                f"{name} positive oracle receipt contradicts its checks")
 
     shift = None
     if state_shift_receipt is not None:
@@ -357,18 +372,19 @@ def derive_no_skill_oracle_label(
         if shift.reason != "STATE_SHIFT" or shift.transferable is not False:
             raise NoSkillCalibrationError(
                 "state shift oracle receipt must be non-transferable")
-        if paired.state_shift_receipt_id is not None and (
-                paired.state_shift_receipt_id != shift.receipt_id):
+        if paired.state_shift_receipt_id != shift.receipt_id:
             raise NoSkillCalibrationError(
                 "paired/state-shift oracle receipt binding mismatch")
 
-    if baseline.outcome in _POSITIVE_OUTCOMES and forced.outcome in _HARMFUL_OUTCOMES:
+    expected_decision = expected_reason = unclassifiable_reason = None
+    if baseline.outcome == "PASS" and forced.outcome in _HARMFUL_OUTCOMES:
         expected_decision = "NO_SKILL"
         expected_reason = "STATE_SHIFT" if shift is not None else "RISK"
-    elif baseline.outcome in _POSITIVE_OUTCOMES or forced.outcome in _POSITIVE_OUTCOMES:
+    elif baseline.outcome in _HARMFUL_OUTCOMES and forced.outcome == "PASS":
         expected_decision, expected_reason = "USE_MEMORY", None
     else:
-        expected_decision, expected_reason = "NO_SKILL", "NO_MATCH"
+        unclassifiable_reason = (
+            "paired_execution_does_not_establish_NO_MATCH_or_safe_memory_benefit")
 
     if strata is None:
         strata = {}
@@ -379,7 +395,6 @@ def derive_no_skill_oracle_label(
         if key not in CALIBRATION_STRATA:
             raise NoSkillCalibrationError(f"unsupported calibration stratum: {key}")
         normalized_strata[key] = _text(value, f"strata.{key}")
-    confidence = _unit(confidence, "confidence")
     derivation = {
         "version": ORACLE_LABEL_DERIVATION_VERSION,
         "derivation_mode": "TYPED_PAIRED_ORACLE",
@@ -390,11 +405,16 @@ def derive_no_skill_oracle_label(
         "state_shift_receipt_id": shift.receipt_id if shift is not None else None,
         "expected_decision": expected_decision,
         "expected_reason": expected_reason,
+        "unclassifiable_reason": unclassifiable_reason,
+        "router_prediction_used": False,
+        "router_confidence_policy": "ABSENT_NOT_IMPUTED",
     }
     return {
         "expected_decision": expected_decision,
         "expected_reason": expected_reason,
-        "confidence": confidence,
+        "confidence": None,
+        "classifiable": expected_decision is not None,
+        "unclassifiable_reason": unclassifiable_reason,
         "strata": dict(sorted(normalized_strata.items())),
         "derivation": derivation,
     }

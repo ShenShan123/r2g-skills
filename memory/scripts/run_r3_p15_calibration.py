@@ -252,9 +252,9 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False,
     shifts: dict[str, object] = {}
     category_by_case: dict[str, str] = {}
     specs_by_case: dict[str, dict] = {}
-    # The default remains the historical 20-case receipt.  Larger runs are
-    # useful for statistical sensitivity checks, but remain evaluation-only
-    # and keep each generated source/comment digest and lineage explicit.
+    # This is a legacy fixture engineering harness, not an independent real
+    # calibration population. More executions or identity comments do not
+    # create independent designs or statistical production evidence.
     for index in range(case_count):
         spec = _FIXTURES[index % len(_FIXTURES)]
         category = categories[index % len(categories)]
@@ -269,8 +269,8 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False,
             if spec["buggy"] not in original:
                 raise RuntimeError(f"calibration bug marker missing: {spec['fixture']}")
             original = original.replace(spec["buggy"], spec["fixed"], 1)
-        # The comment makes each frozen source content-disjoint without
-        # changing executable behavior; the design/testbench remains real RTL.
+        # Preserve historical fixture identity only. This comment changes
+        # bytes, not executable origin, and cannot establish independence.
         source.write_text(original + f"\n// TEHM P15 calibration case {index:02d}\n")
 
         state_shift = None
@@ -322,12 +322,16 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False,
     derivations: dict[str, dict] = {}
     oracle_labels: dict[str, dict] = {}
     paired_index: dict[str, dict] = {}
+    excluded: dict[str, str] = {}
     for case_id, paired in sorted(cohort.case_receipts.items()):
         label = derive_no_skill_oracle_label(
             paired, state_shift_receipt=shifts.get(case_id),
             strata=_strata(category_by_case[case_id], specs_by_case[case_id]),
-            confidence=0.95, split="calibration")
+            split="calibration")
         derivations[case_id] = label["derivation"]
+        if not label["classifiable"]:
+            excluded[case_id] = label["unclassifiable_reason"]
+            continue
         oracle_labels[case_id] = {
             "expected_decision": label["expected_decision"],
             "expected_reason": label["expected_reason"],
@@ -346,19 +350,24 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False,
     })
     derivation_path = receipts_root / "oracle_label_derivations.json"
     _write_json(derivation_path, {
-        "version": "no-skill-oracle-label-derivations-v1",
+        "version": "no-skill-oracle-label-derivations-v2",
         "campaign_id": campaign_id, "split": "calibration",
         "derivations": derivations,
+        "excluded_cases": excluded,
         "evaluation_only": True, "canonical_memory_mutation": "none",
     })
+    if not oracle_labels:
+        raise RuntimeError(
+            "no classifiable oracle samples; all derivations retained; calibration NOT_ESTABLISHED")
     manifest = {
         "version": MANIFEST_VERSION,
         "campaign_id": campaign_id, "split": "calibration",
-        "oracle_label_source": "typed-paired-icarus-oracle-v1",
+        "oracle_label_source": "typed-paired-icarus-oracle-v2",
         "paired_routing_index": {"case_receipts": paired_index},
         "routing_decisions": {
             case_id: {**route.to_dict(), "routing_receipt_id": route.routing_receipt_id}
             for case_id, route in sorted(routes.items())
+            if case_id in oracle_labels
         },
         "oracle_labels": oracle_labels,
         "evidence_refs": [
@@ -380,6 +389,11 @@ def run(evolution_artifacts: Path, artifacts: Path, *, force: bool = False,
     summary = {
         "campaign_id": campaign_id, "split": "calibration",
         "real_oracle": "iverilog/vvp", "case_count": len(cohort.case_receipts),
+        "sample_count": len(oracle_labels), "excluded_cases": excluded,
+        "router_confidence_policy": "ABSENT_NOT_IMPUTED",
+        "fixture_engineering_only": True,
+        "statistical_generalization_claimed": False,
+        "independent_calibration_population_established": False,
         "lineage_count": cohort.lineage_count, "lineages": cohort.lineage_ids,
         "outcome_counts": cohort.outcome_counts,
         "derived_oracle_decisions": {
@@ -404,9 +418,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="external output directory (defaults to a case-count-specific path)")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--case-count", type=int, default=DEFAULT_CASE_COUNT,
-                        help="number of real calibration cases (default: 20; max: 100)")
+                        help="fixture engineering execution count, not independent sample count (default: 20; max: 100)")
     parser.add_argument("--campaign-tag",
-                        help="identity suffix for an independent repeatable calibration run")
+                        help="identity suffix for a repeatable fixture run; does not establish independence")
     args = parser.parse_args(argv)
     artifacts = (args.artifacts if args.artifacts is not None else
                  Path("/tmp") / (

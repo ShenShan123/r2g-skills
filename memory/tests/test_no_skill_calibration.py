@@ -95,10 +95,94 @@ def test_oracle_label_deriver_uses_paired_outcomes_not_router_reason():
     no_match = _oracle_pair("no-match", "FAIL", "FAIL")
     assert derive_no_skill_oracle_label(useful)["expected_decision"] == "USE_MEMORY"
     assert derive_no_skill_oracle_label(harmful)["expected_reason"] == "RISK"
-    assert derive_no_skill_oracle_label(no_match)["expected_reason"] == "NO_MATCH"
+    label = derive_no_skill_oracle_label(no_match)
+    assert label["expected_reason"] is None
+    assert label["classifiable"] is False
+    assert label["confidence"] is None
     incomplete = _oracle_pair("incomplete", "UNKNOWN", "PASS")
     with pytest.raises(NoSkillCalibrationError, match="incomplete"):
         derive_no_skill_oracle_label(incomplete)
+
+
+@pytest.mark.parametrize("baseline,forced", [("PASS", "PASS"), ("FAIL", "FAIL"),
+                                            ("FAIL", "REGRESSION")])
+def test_oracle_neutral_or_unsuccessful_pairs_are_not_no_match(baseline, forced):
+    pair = _oracle_pair("unclassified", baseline, "FAIL" if forced == "REGRESSION" else forced)
+    if forced == "REGRESSION":
+        pair = replace(pair, arm_receipts={**pair.arm_receipts,
+            "ALWAYS_MEMORY": replace(pair.arm_receipts["ALWAYS_MEMORY"], outcome=forced)})
+    label = derive_no_skill_oracle_label(pair)
+    assert label["classifiable"] is False
+    assert label["expected_decision"] is label["expected_reason"] is None
+    assert label["unclassifiable_reason"]
+    assert label["derivation"]["version"] == "no-skill-oracle-label-v2"
+
+
+@pytest.mark.parametrize("confidence", [0, 0.95, 1, True, "0.95"])
+def test_oracle_cannot_impute_router_prediction_confidence(confidence):
+    with pytest.raises(NoSkillCalibrationError, match="prediction confidence"):
+        derive_no_skill_oracle_label(_oracle_pair("harm", "PASS", "FAIL"),
+                                    confidence=confidence)
+
+
+@pytest.mark.parametrize("field", ["compile_result", "functional_result", "signoff_result"])
+def test_positive_oracle_outcome_must_agree_with_all_checks(field):
+    pair = _oracle_pair("contradictory", "FAIL", "PASS")
+    pair = replace(pair, arm_receipts={**pair.arm_receipts,
+        "ALWAYS_MEMORY": replace(pair.arm_receipts["ALWAYS_MEMORY"], **{field: "FAIL"})})
+    with pytest.raises(NoSkillCalibrationError, match="contradicts"):
+        derive_no_skill_oracle_label(pair)
+
+
+def test_positive_oracle_with_regressions_is_not_safe_memory_benefit():
+    pair = _oracle_pair("regressed", "FAIL", "PASS")
+    pair = replace(pair, arm_receipts={**pair.arm_receipts,
+        "ALWAYS_MEMORY": replace(pair.arm_receipts["ALWAYS_MEMORY"],
+                                 created_regressions=("non-target",))})
+    with pytest.raises(NoSkillCalibrationError, match="contradicts"):
+        derive_no_skill_oracle_label(pair)
+
+
+def test_partial_baseline_is_not_a_positive_harm_counterfactual():
+    pair = _oracle_pair("partial", "PASS", "FAIL")
+    pair = replace(pair, arm_receipts={**pair.arm_receipts,
+        "NO_MEMORY": replace(pair.arm_receipts["NO_MEMORY"], outcome="PARTIAL")})
+    assert derive_no_skill_oracle_label(pair)["classifiable"] is False
+
+
+def _oracle_shift():
+    from tehm.state.shift_receipts import StateShiftReceipt, _digest
+    payload = {"version": "state-shift-v0.1", "current_resolution_id": "resolution",
+        "knowledge_object_id": "knowledge@1", "support_envelope_digest": "sha256:envelope",
+        "structural_shift": 0.0, "mechanism_shift": 0.0, "flow_shift": 1.0,
+        "constraint_shift": 0.0, "oracle_shift": 0.0, "history_shift": 0.0,
+        "aggregate_shift": 1.0, "shifted_dimensions": ["flow_shift"],
+        "transferable": False, "reason": "STATE_SHIFT", "evidence_refs": ["source"]}
+    return StateShiftReceipt.from_dict({**payload, "replay_digest": _digest(payload)})
+
+
+def test_shift_oracle_requires_actual_pair_binding_and_forced_harm():
+    shift = _oracle_shift()
+    pair = _oracle_pair("shift", "PASS", "FAIL")
+    with pytest.raises(NoSkillCalibrationError, match="binding mismatch"):
+        derive_no_skill_oracle_label(pair, state_shift_receipt=shift)
+    bound = replace(pair, no_skill_reason="STATE_SHIFT", state_shift_receipt_id=shift.receipt_id)
+    label = derive_no_skill_oracle_label(bound, state_shift_receipt=shift)
+    assert label["expected_reason"] == "STATE_SHIFT"
+    assert label["confidence"] is None
+    assert derive_no_skill_oracle_label(pair)["expected_reason"] == "RISK"
+
+
+def test_oracle_labels_without_predictions_do_not_establish_confidence_gate():
+    label = derive_no_skill_oracle_label(_oracle_pair("risk", "PASS", "FAIL"))
+    sample = NoSkillCalibrationSample(case_id="risk", predicted_decision="NO_SKILL",
+        predicted_reason="RISK", expected_decision=label["expected_decision"],
+        expected_reason=label["expected_reason"], confidence=label["confidence"],
+        routing_receipt_id="routing")
+    result = evaluate_no_skill_calibration([sample], minimum_sample_count=1)
+    assert result.eligible is False
+    assert result.confidence_coverage == 0
+    assert "confidence_coverage" in result.missing
 
 
 def test_wilson_interval_is_explicit_and_unknown_safe():

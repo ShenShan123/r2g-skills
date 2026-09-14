@@ -108,3 +108,66 @@ def test_bad_partition_does_not_leave_fake_calibration_output(tmp_path, monkeypa
     with pytest.raises(OrfsP15CalibrationError, match="execution-bound"):
         run(challenge_artifacts=challenge_root, artifacts=output)
     assert not output.exists()
+
+
+def _known_pair(case_id, forced):
+    from tehm.evaluation.candidate_executor import execute_paired_candidates
+    from test_no_skill_calibration import _oracle_candidate, _route
+    route = _route("CONSIDER")
+    def oracle(candidate, case, budget):
+        outcome = forced if candidate is not None else "PASS"
+        return {"compile_result": "PASS", "functional_result": outcome,
+                "signoff_result": outcome, "outcome": outcome}
+    pair = execute_paired_candidates({"case_id": case_id,
+        "toolchain_digest": "sha256:test-tools", "oracle_digest": "sha256:test-oracle"},
+        {"NO_MEMORY": None, "ALWAYS_MEMORY": _oracle_candidate(),
+         "APPLICABILITY_GATED": _oracle_candidate(), "CAUSAL_NO_SKILL": _oracle_candidate()},
+        oracle=oracle, budget=3, lineage_id="lineage:" + case_id,
+        routing_receipt_id=route.routing_receipt_id, routing_decision="CONSIDER")
+    return pair, route
+
+
+@pytest.mark.parametrize("all_neutral", [False, True])
+def test_unclassifiable_cases_are_retained_but_not_binary_samples(tmp_path, monkeypatch, all_neutral):
+    import scripts.run_r3_orfs_p15_calibration as module
+    root = tmp_path / "source"
+    root.mkdir()
+    _, cases, cohort, _ = _partition(root)
+    pairs, routes = {}, {}
+    for case in cases["cases"]:
+        case["project_dir"] = str(root / ("sky130hs_" + case["case_id"] + "_0"))
+        case["platform"] = "sky130hs"
+        pairs[case["case_id"]], routes[case["case_id"]] = _known_pair(
+            case["case_id"], "FAIL" if case["case_id"] == "a" and not all_neutral else "PASS")
+    manifest = {"campaign_id": "calibration", "lane": "CALIBRATION",
+                "learner_eligible": False, "cases": cases["cases"]}
+    (root / "receipts/campaign_manifest.json").write_text(json.dumps(manifest))
+    cohort.campaign_manifest_digest = _digest(manifest)
+    cohort.case_receipts = pairs
+    cohort.lineage_count = 2
+    for name in ("cohort.json", "cases.json", "p13_reason_receipt.json"):
+        (root / "receipts" / name).write_text("{}")
+    monkeypatch.setattr(module.shadow, "_load_challenge", lambda *args:
+        (cases, cohort, routes, {}, {}, {}, {}, SimpleNamespace(receipt_digest="sha256:reason")))
+    output = tmp_path / "output"
+    if all_neutral:
+        with pytest.raises(OrfsP15CalibrationError, match="calibration NOT_ESTABLISHED"):
+            run(challenge_artifacts=root, artifacts=output, minimum_sample_count=2)
+        assert not (output / "receipts/calibration_report.json").exists()
+        assert not (output / "summary.json").exists()
+        derivations = json.loads((output / "receipts/oracle_label_derivations.json").read_text())
+        assert set(derivations["excluded_cases"]) == {"a", "b"}
+        return
+    summary = run(challenge_artifacts=root, artifacts=output, minimum_sample_count=2)
+    assert summary["executed_case_count"] == 2
+    assert summary["sample_count"] == 1
+    assert set(summary["excluded_cases"]) == {"b"}
+    assert summary["calibration_receipt"]["confidence_coverage"] == 0
+    assert summary["calibration_receipt"]["eligible"] is False
+    assert summary["production_promotion_eligible"] is False
+    saved = json.loads((output / "receipts/calibration_manifest.json").read_text())
+    assert set(saved["oracle_labels"]) == set(saved["routing_decisions"]) == {"a"}
+    derivations = json.loads((output / "receipts/oracle_label_derivations.json").read_text())
+    assert set(derivations["derivations"]) == {"a", "b"}
+    assert derivations["derivations"]["b"]["expected_decision"] is None
+    assert derivations["derivations"]["a"]["router_confidence_policy"] == "ABSENT_NOT_IMPUTED"
