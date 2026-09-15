@@ -14,6 +14,7 @@ metadata:
       R2G_MIN_FREE_GB: "free-space threshold for the big-volume picker (default 15)"
       R2G_ENV_FILE: "a shell snippet of tool-path exports to seed detection"
   warnings:
+    - Required runtime probes need timeout or gtimeout; a missing probe limiter fails readiness.
     - Always run `bootstrap.sh --dry-run` first — it prints a per-tier plan and installs nothing.
     - Never installs large artifacts into a full $HOME — the PDK (~8GB) and torch venv go on a big volume.
     - The heavy ORFS source build is opt-in (--yes-gated); use --direct to refuse all conda fallback.
@@ -72,7 +73,22 @@ bash r2g-skills/eda-install/bootstrap.sh               # install missing tiers +
    therefore do not make the required `core` tier complete. The writer pins paths outside
    `$ORFS_ROOT/tools/install` and adds `R2G_GRAPH_PYTHON`.
 5. **Verify** — runs `scripts/flow/check_env.sh` (ORFS + required + optional + graph stage +
-   platforms) and reports the same table the README documents.
+   platforms) and reports the same table the README documents. Failed installation, required
+   pin generation, verification, explicitly requested deployment, or terminal manifest writing
+   makes bootstrap exit non-zero. The manifest is written after verification/deployment and
+   records separate `install_rc`, `pin_rc`, `verify_rc`, `deploy_rc`, and aggregate `bootstrap_rc`;
+   a previous manifest is not current evidence when this invocation failed.
+   Missing/failing initial or final pin resolution also fails closed (resolver rc=3 means
+   fresh-machine autodetection, not a resolver fault). Re-observe pins after writing:
+   the final `env_file_sha256` must match current bytes at manifest creation, while
+   `plan_env_file_sha256` retains the pre-pin observation. `selection_source` retains the
+   planning source; `final_selection_source` records the new observation, including an
+   internally bound env-file. Requested deployment is skipped if earlier required phases fail.
+   Readiness also checks actual ORFS `flow/Makefile`, required executable permissions, and
+   bounded version/runtime probes (30s plus a 2s forced-kill grace). OpenROAD, Yosys,
+   Icarus, vvp and Python 3.10+ must run successfully and produce output; an existing
+   but unloadable binary is not ready. The standalone def-graph checker retains its
+   narrower ORFS-data/Python requirement. These probes are not semantic or native-read proof.
 
 ## Direct bundle first; conda is a legacy fallback
 

@@ -99,6 +99,10 @@ declare -A SEL
 # it bypasses live pin resolution entirely.
 if [[ -z "$plan_from" ]]; then
   PIN_SEL_OUT="$(bash "$SETUP_DIR/resolve_pins.sh" 2>/dev/null)"; PIN_SEL_RC=$?
+  if [[ "$PIN_SEL_RC" -ne 0 && "$PIN_SEL_RC" -ne 3 && "$PIN_SEL_RC" -ne 4 ]]; then
+    echo "error: required initial toolchain resolver failed (rc=$PIN_SEL_RC)" >&2
+    exit "$PIN_SEL_RC"
+  fi
   while IFS='=' read -r _k _v; do
     [[ -z "$_k" ]] && continue
     SEL["$_k"]="$_v"
@@ -418,27 +422,83 @@ if [[ "$do_direct" == "1" && -z "$graph_python" ]]; then
 fi
 
 # ---- pin env.local.sh --------------------------------------------------------
+pin_rc=0
 if [[ -x "$SETUP_DIR/write_env_local.sh" || -f "$SETUP_DIR/write_env_local.sh" ]]; then
   echo
   echo "== pinning references/env.local.sh (both skills) =="
-  bash "$SETUP_DIR/write_env_local.sh" "${GP_FLAG[@]}" "${HERMETIC_FLAG[@]}" || \
-    echo "warning: env.local.sh pin step failed" >&2
+  bash "$SETUP_DIR/write_env_local.sh" "${GP_FLAG[@]}" "${HERMETIC_FLAG[@]}" || {
+    pin_rc=$?
+    echo "error: env.local.sh pin step failed (rc=$pin_rc)" >&2
+  }
+else
+  pin_rc=1
+  echo "error: required env.local.sh pin writer is missing" >&2
+fi
+
+# Re-observe pins after the writer: the plan's selection/digest is not the
+# final installed selection. Keep both observations, without misreporting an
+# internally bound R2G_ENV_FILE as the operator's original selection source.
+declare -A FINAL_SEL
+FINAL_PIN_SEL_OUT="$(bash "$SETUP_DIR/resolve_pins.sh" 2>/dev/null)"; final_pin_resolution_rc=$?
+while IFS='=' read -r _k _v; do
+  [[ -z "$_k" ]] && continue
+  FINAL_SEL["$_k"]="$_v"
+done <<< "$FINAL_PIN_SEL_OUT"
+if [[ "$final_pin_resolution_rc" -ne 0 && "$final_pin_resolution_rc" -ne 3 ]]; then
+  echo "error: final toolchain pin resolution failed (rc=$final_pin_resolution_rc)" >&2
+fi
+
+# ---- verify and requested deploy before persisting the terminal manifest -----
+verify_rc=0
+echo
+echo "== verify =="
+bash "$FLOW_DIR_SH/check_env.sh" || {
+  verify_rc=$?
+  echo "error: toolchain verification failed (rc=$verify_rc)" >&2
+}
+
+deploy_rc=0
+if [[ "$do_deploy" == "1" ]]; then
+  echo
+  echo "== deploying skills =="
+  if (( install_rc != 0 || pin_rc != 0 || verify_rc != 0 )) ||
+     [[ "$final_pin_resolution_rc" -ne 0 && "$final_pin_resolution_rc" -ne 3 ]]; then
+    deploy_rc=1
+    echo "error: requested deployment skipped because provisioning/verification failed" >&2
+  else
+    bash "$COLLECTION_DIR/install.sh" --user "${LINK_FLAG[@]}" --force || {
+      deploy_rc=$?
+      echo "error: requested skill deployment failed (rc=$deploy_rc)" >&2
+    }
+  fi
+fi
+
+# Keep install_rc specific to installers; the command succeeds only if every
+# required/requested phase did. Verification is not merely a printed tool table.
+bootstrap_rc=0
+if (( install_rc != 0 || pin_rc != 0 || verify_rc != 0 || deploy_rc != 0 )) ||
+   [[ "$final_pin_resolution_rc" -ne 0 && "$final_pin_resolution_rc" -ne 3 ]]; then
+  bootstrap_rc=1
 fi
 
 # ---- install manifest (RMD4-P1-01 provenance) --------------------------------
 # Persist WHICH toolchain this invocation acted on, and the digests that identify
 # it, so a later run (or a signoff manifest) can be compared against it instead of
 # re-deriving the answer and possibly getting a different one.
-MANIFEST="${SEL[SELECTED_ENV_FILE]:-}"
+MANIFEST="${FINAL_SEL[SELECTED_ENV_FILE]:-${SEL[SELECTED_ENV_FILE]:-}}"
 MANIFEST="${MANIFEST%/*}"                       # …/<skill>/references
 MANIFEST="${MANIFEST:-$SKILL_DIR/references}/install_manifest.json"
-python3 - "$MANIFEST" "${SEL[SELECTION_SOURCE]:-autodetect}" \
-  "${SEL[SELECTED_ORFS_ROOT]:-}" "${SEL[SELECTED_PDK_ROOT]:-}" \
-  "${SEL[SELECTED_ENV_FILE]:-}" "${SEL[SELECTED_ENV_SHA256]:-}" \
-  "${SEL[OVERRIDES_PINS]:-0}" "$install_rc" "${strict_platforms:-}" <<'PYEOF' 2>/dev/null || \
-  echo "warning: could not write install_manifest.json" >&2
+if ! python3 - "$MANIFEST" "${SEL[SELECTION_SOURCE]:-autodetect}" \
+  "${FINAL_SEL[SELECTED_ORFS_ROOT]:-}" "${FINAL_SEL[SELECTED_PDK_ROOT]:-}" \
+  "${FINAL_SEL[SELECTED_ENV_FILE]:-}" "${FINAL_SEL[SELECTED_ENV_SHA256]:-}" \
+  "${SEL[OVERRIDES_PINS]:-0}" "$install_rc" "${strict_platforms:-}" \
+  "$pin_rc" "$verify_rc" "$deploy_rc" "$bootstrap_rc" \
+  "${SEL[SELECTED_ENV_SHA256]:-}" "$final_pin_resolution_rc" \
+  "${FINAL_SEL[SELECTION_SOURCE]:-unavailable}" <<'PYEOF' 2>/dev/null
 import hashlib, json, os, sys, time
-(out, source, orfs, pdk, env_file, env_sha, overrides, rc, strict) = sys.argv[1:10]
+(out, source, orfs, pdk, env_file, env_sha, overrides, rc, strict,
+ pin_rc, verify_rc, deploy_rc, bootstrap_rc, plan_env_sha,
+ final_pin_resolution_rc, final_selection_source) = sys.argv[1:17]
 
 def _dirsig(path):
     """Cheap identity for a checkout: the flow Makefile's digest."""
@@ -451,6 +511,14 @@ def _dirsig(path):
             h.update(chunk)
     return h.hexdigest()
 
+if env_file:
+    h = hashlib.sha256()
+    with open(env_file, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    if not env_sha or h.hexdigest() != env_sha:
+        raise ValueError("selected pin changed after final resolution")
+
 rec = {
     "manifest_version": 1,
     "recorded_at": int(time.time()),
@@ -461,8 +529,15 @@ rec = {
     "pdk_root": pdk or None,
     "env_file": env_file or None,
     "env_file_sha256": env_sha or None,
+    "plan_env_file_sha256": plan_env_sha or None,
+    "final_pin_resolution_rc": int(final_pin_resolution_rc),
+    "final_selection_source": final_selection_source,
     "strict_platforms": [p for p in (strict or "").split() if p],
     "install_rc": int(rc or 0),
+    "pin_rc": int(pin_rc),
+    "verify_rc": int(verify_rc),
+    "deploy_rc": int(deploy_rc),
+    "bootstrap_rc": int(bootstrap_rc),
 }
 os.makedirs(os.path.dirname(out), exist_ok=True)
 tmp = out + f".tmp.{os.getpid()}"
@@ -472,18 +547,9 @@ with open(tmp, "w", encoding="utf-8") as f:
 os.replace(tmp, out)
 print(f"wrote: {out}")
 PYEOF
-
-# ---- verify ------------------------------------------------------------------
-echo
-echo "== verify =="
-bash "$FLOW_DIR_SH/check_env.sh" || true
-
-# ---- optional skill deploy ---------------------------------------------------
-if [[ "$do_deploy" == "1" ]]; then
-  echo
-  echo "== deploying skills =="
-  bash "$COLLECTION_DIR/install.sh" --user "${LINK_FLAG[@]}" --force || \
-    echo "warning: install.sh (deploy) failed" >&2
+then
+  bootstrap_rc=1
+  echo "error: could not write required install_manifest.json" >&2
 fi
 
-exit "$install_rc"
+exit "$bootstrap_rc"

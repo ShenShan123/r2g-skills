@@ -861,6 +861,14 @@ def _run_pair(conn, *, rule: dict, rule_id: str, scope: str,
 def _execute_arm(project: Path, platform: str, scope: str,
                  run_flow_script: Path, fix_signoff_script: Path,
                  extra_env: dict | None) -> dict:
+    # Resolve relative arguments against the caller before selecting the child
+    # cwd. GNU find saves its starting directory even when its target is
+    # absolute; inheriting the operator's cwd therefore leaks that directory
+    # into the native read dependency set. Do not change the parent cwd or the
+    # original project identity used in reports/run IDs.
+    execution_project = project.resolve()
+    flow_script = run_flow_script.absolute()
+    fix_script = fix_signoff_script.absolute()
     trial_env = dict(os.environ)
     trial_env.update(extra_env or {})
     trial_env.update({
@@ -869,15 +877,15 @@ def _execute_arm(project: Path, platform: str, scope: str,
         "R2G_JOURNAL": "0",
     })
     flow = subprocess.run(
-        ["bash", str(run_flow_script), str(project), platform],
-        capture_output=True, text=True, env=trial_env)
+        ["bash", str(flow_script), str(execution_project), platform],
+        capture_output=True, text=True, env=trial_env, cwd=execution_project)
     fix = None
     if flow.returncode == 0:
         fix_scope = "both" if scope == "fixed_constraint_counterfactual" else scope
         fix = subprocess.run(
-            ["bash", str(fix_signoff_script), str(project), platform,
+            ["bash", str(fix_script), str(execution_project), platform,
              "--check", fix_scope, "--max-iters", "0"],
-            capture_output=True, text=True, env=trial_env)
+            capture_output=True, text=True, env=trial_env, cwd=execution_project)
     reports = _load_reports(project)
     success = flow.returncode == 0 and _scope_success(scope, reports)
     run_id = "orfs_" + hashlib.sha1(stable_dumps({

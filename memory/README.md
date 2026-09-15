@@ -7123,3 +7123,95 @@ r146 不导入 TEHM，独立计数 JUnit 1992 cases、核验摘要并原样保�
 archive digest 为 `sha256:89b718f6b67083622d58c5c90258b4b607dec2a0b23cb60fc26d2cda7bae51fa`。
 下一代码代应修复实际 flow/fix child cwd 的继承依赖，在新冻结 workspace 重跑，不能
 覆盖 r127/r133 的失败终态或将 bounded resource component 改称 production closure。
+
+### 2026-09-15 execution-project cwd and bootstrap completion gates
+
+`_execute_arm` 在改变 child cwd 前解析 project 和脚本参数，flow/fix subprocess 均从
+实际 execution project 启动，不改变 parent cwd 或原始 report/run identity。修复 GNU
+find 保存继承 cwd 导致的个人目录读取依赖；不将个人目录加入 OS baseline。新增四项
+回归覆盖成功/失败 flow、relative/absolute 参数、真实 shell/find cwd 与 read-only flags。
+r149 全量 frozen regression 为 1996 passed / 1486.41s，failures/errors/skipped 均为 0，
+570 Python source files 前后不变。input-freeze digest 为
+`sha256:08b10182e1ea0d1e30262acae2c5435bdb298e0e533b8190129125df491e2b9b`，
+JUnit SHA 为 `sha256:71a66ef8f1be73ce76f8be796725d6155fcb38c24e92c8fd17e95a8fa3fa42d3`，
+terminal digest 为 `sha256:20153107439556557ebb2599dcbbcb4555e8adb2f6a5dc2bd6e362b638717d28`。
+r163 不导入 TEHM，独立核验 JUnit 1996 cases 和全部 source pins，并保留完整代码代；
+archive digest 为 `sha256:f3155b524c3cf00027f545e8d16032291d20267a467fdba30328ca27cbbda50a`。
+全量单测通过不证明实际 whole-flow native closure；旧 r127/r133 失败记录保留。
+
+R2G `eda-install/bootstrap.sh` 不再吞掉 required pin、verify、显式请求的 deploy 或
+terminal manifest writing 失败。各阶段分别记录 rc，aggregate bootstrap_rc 非零即
+失败；manifest 在 verify/deploy 后写入，旧 manifest 不代表失败调用的当前状态。
+遵循 eda-install 的 detect→plan→install→pin→verify 契约，不新增安装或部署副作用。
+r165 冻结 513 份公开 R2G/tools source files，回归 69 passed / 3 skipped，新增 12 项
+required-phase controls 全部通过，源码前后不变。三个跳过项是现有 hermetic pin 下
+不适用的 frontend/sky130/pdk optional-tools idempotence 前置条件，不计作通过。
+freeze digest 为 `sha256:4b646a5c7a355e40bc907d6819927c281e78dc75abc082bc799100ba32dfc8ea`，
+terminal digest 为 `sha256:a071eddf255d46b48689533f4a296d7d3da4a226bace041cea80e65421ec9d7b`。
+这只是 unit/dry-run completion-gate evidence，actual installations/deployments 均为 0；
+不是 direct download origins、public bootstrap native closure 或 production authority。
+
+r167 在进一步修改前原样保存 r165 的 513 份 R2G/tools source files，archive digest 为
+`sha256:ef148112239e4605436234106596ce11a2ee9ac51c3e053a7e3b1458f1f47d3b`。
+随后 r168 隔离负对照复现了 initial resolver missing/error 仍成功、final pins 未重查、
+缺少计划/最终 pin 摘要区分的问题。bootstrap 现在拒绝初始 resolver faults，写 pin 后
+重新解析最终 ORFS/PDK/env-file，保留 planning source 和 pre-pin SHA，创建 manifest 前
+复查最终 pin SHA；final resolver fault/conflict 或 pin drift 均失败，前置阶段失败时
+不执行请求的 deployment。resolver rc=3 仅表示 fresh-machine autodetection，required
+tool readiness 仍由 verifier 拥有。
+r170 全部 bootstrap unit/dry-run regression 为 75 passed / 3 skipped，新增 controls
+18/18 passed，513 source files 前后不变；freeze digest 为
+`sha256:feb804e6421e7f5e1594a99c42749a84c453c6d00d296304218ad6e77201d12b`，
+JUnit SHA 为 `sha256:378699ad28d991112887d47aea3428f95b9a57e583c1028ac2ee706978cb338f`，
+terminal digest 为 `sha256:fc581d31e5688b4592dc93be689c70c9d76a4f8f1162e77143e37f0eeade7fdb`。
+仍未实际安装/部署工具，不将三个 optional-tools precondition skips 改称通过。
+
+r150 immutable package 绑定 r149 的 memory code epoch，但其 R2G snapshot 在上述
+bootstrap 修复之前生成，不能宣称该旧包已包含当前 bootstrap 修复。新的四臂 full
+ORFS/native trace 必须独立取终态并审计；复用两个 calibration cases 不增加独立样本。
+historical authority generation、完整 public bootstrap/P16、broad C7、P15 独立来源与
+pre-outcome probabilities/statistical evidence、P17 仍未闭合；provider calls=0，
+canonical-memory mutation=none，production gates 不变，memory/docs 不提交。
+
+### 2026-09-15 full ORFS native-read milestone and required runtime health
+
+r154 使用 r149 memory source epoch / r150 immutable package，在全量 1996-test PASS、
+r153 v3 input audit 和 r156 frozen classifier regression 通过后启动新的两例四臂执行。
+8/8 physical callbacks 均 flow_rc=fix_rc=0，typed fixed-constraint utility 每臂 PASS=2，
+generic strict signoff 仍 UNKNOWN=8；terminal digest 为
+`sha256:e4e1ecf70e3cdaf7836de944f7b05c8e854b994c89de471f9e5aec78c9f77142`。
+r155 不导入 producer/TEHM，重验 package/signoff exact inventories、全部八组 GDS/DEF、
+DRC XML 空违规项、唯一匹配 LVS log、SPEF 与 report hashes；独立核验 32248 native
+traces / 90081 successful read paths，unknown host paths、unfinished/unparsed opens、
+unlisted host executables 均为 0。状态 PASS_EXECUTION_AND_NATIVE_READ_COMPONENT，
+audit digest 为 `sha256:73c0119a1e1fd29530bcff96ea9051564e6a4083125235a3b417ad3a4d72f4c8`。
+该 profile 仍要求事前固定的 host OS foundation；不是打包了整个 OS，也未扩大个人目录
+或 host EDA/library whitelist。旧 r127/r133 cwd-dependency 失败记录保持原状，r156
+仍验证旧 `/data1/zhangdy` dependency 的 280 次拒绝。新执行消除了继承 operator cwd 的
+该依赖，并非事后把旧失败改成通过。
+
+r171 对实际 public `eda-install/check_env.sh` 的负对照发现：required OpenROAD 文件
+可执行但返回 127，旧 checker 却仍退出 0。现在三个 standalone checkers 重验实际
+ORFS Makefile 与 bounded required process health；EDA/signoff 要求 OpenROAD、Yosys、
+Icarus、vvp、Python 3.10+，def-graph 保持 ORFS data/Python-only 的原始 scope。版本/
+runtime probe nonzero、空输出、非可执行文件或缺失 timeout/gtimeout 均 fail-closed。
+这些 runtime checks 不证明 RTL semantics、library reads、download origins 或 strict signoff。
+r172 已保留完整 r170 source epoch，archive digest 为
+`sha256:a56a8d5a2be9832e4b6f3b09101d154c5a50db9764986d76e7e130a83624ff20`。
+r174 frozen bootstrap unit/dry-run regression 为 98 passed / 3 skipped，514 public
+source files 前后不变；18 required-phase 和 23 required-runtime controls 全部通过。
+三个旧 optional-tools idempotence skips 的前置条件仍不满足，不计为通过。freeze digest
+为 `sha256:ed8cb4ef6215417de87009765967285097fd9f3d1e57f227ba706b12aa962635`，
+JUnit SHA 为 `sha256:e78e588d95d665453e2c31f3c8592b38d6eca22a14796d60edbb2972e608e54f`，
+terminal digest 为 `sha256:1afa2a46cefc6ed8f02ea79495825c9812916e35eaa6b03fc0fc420445ee6bed`。
+r175 额外运行实际 public checker：broken required runtime 返回 127 时 checker 返回 1，
+相同环境下实际 private SDK required tools 健康时 checker 返回 0；functional-control
+digest 为 `sha256:75ed3ed0bdb296d201a7f42cd6ba75e039a4e6369a5a4631e34195b8b28faf38`。
+这不是完整 bootstrap native trace 或 missing-tool download 的实证闭环；未安装/部署工具。
+
+本 milestone 不新增独立 training/calibration sources，不补造 router confidence，不写
+canonical memory，不开放 production。r150 仍是 bootstrap 修复前的 R2G snapshot，
+因此 r155 的 whole-flow native-read component 不能证明当前 public bootstrap 已完整
+打包验证。historical authority generation/origins、完整 public bootstrap/P16、broad C7、
+P15 独立 reason labels/pre-outcome probability/statistical evidence、P17 仍未闭合；
+provider calls=0，memory/docs 不提交。

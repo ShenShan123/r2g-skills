@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,6 +12,7 @@ from tehm import db as tehm_db
 from tehm.ids import rule_id as mint_rule_id, stable_dumps
 from tehm.honesty import h10_rollback_authority
 from tehm.lifecycle.orfs_trial import (
+    _execute_arm,
     _infrastructure_failures,
     _strict_authority_from_metrics,
     reconcile_route_trial_evidence,
@@ -93,6 +95,55 @@ def _project(tmp_path):
         '{"status":"fail","total_violations":4}')
     (project / "reports" / "lvs.json").write_text('{"status":"clean"}')
     return project
+
+
+@pytest.mark.parametrize("flow_rc", [0, 11])
+def test_execution_children_use_project_cwd_without_changing_parent(tmp_path, monkeypatch, flow_rc):
+    from tehm.lifecycle import orfs_trial
+    project = _project(tmp_path)
+    caller = tmp_path / "operator-cwd"
+    caller.mkdir()
+    monkeypatch.chdir(caller)
+    calls = []
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        assert kwargs["cwd"] == project
+        assert argv[2] == str(project)
+        assert Path(argv[1]).is_absolute()
+        assert kwargs["env"]["R2G_MEMORY_READ_ONLY_EVAL"] == "1"
+        assert kwargs["env"]["R2G_JOURNAL"] == "0"
+        return SimpleNamespace(returncode=flow_rc if len(calls) == 1 else 0,
+                               stdout="", stderr="")
+    monkeypatch.setattr(orfs_trial.subprocess, "run", fake_run)
+    result = _execute_arm(Path("../subject"), "nangate45", "fixed_constraint_counterfactual",
+                          Path("../flow.sh"), Path("../fix.sh"), None)
+    assert Path.cwd() == caller
+    assert len(calls) == (2 if flow_rc == 0 else 1)
+    assert result["flow_rc"] == flow_rc
+    assert result["fix_rc"] == (0 if flow_rc == 0 else None)
+    if flow_rc == 0:
+        assert calls[1][0][4:] == ["--check", "both", "--max-iters", "0"]
+
+
+@pytest.mark.parametrize("relative", [False, True])
+def test_real_shell_and_find_start_inside_execution_project(tmp_path, monkeypatch, relative):
+    project = _project(tmp_path)
+    caller = tmp_path / "operator-cwd"
+    caller.mkdir()
+    flow, fix = tmp_path / "cwd-flow.sh", tmp_path / "cwd-fix.sh"
+    flow.write_text('set -eu\nprintf "flow-cwd=%s\\n" "$PWD"\nfind "$1" -maxdepth 0 -type d\n')
+    fix.write_text('set -eu\nprintf "fix-cwd=%s\\n" "$PWD"\n')
+    monkeypatch.chdir(caller)
+    if relative:
+        project_arg, flow_arg, fix_arg = Path("../subject"), Path("../cwd-flow.sh"), Path("../cwd-fix.sh")
+    else:
+        project_arg, flow_arg, fix_arg = project, flow, fix
+    result = _execute_arm(project_arg, "nangate45", "drc", flow_arg, fix_arg, None)
+    assert result["flow_rc"] == result["fix_rc"] == 0
+    assert "flow-cwd=" + str(project) in result["flow_stdout_tail"]
+    assert "fix-cwd=" + str(project) in result["fix_stdout_tail"]
+    assert str(caller) not in result["flow_stdout_tail"] + result["fix_stdout_tail"]
+    assert Path.cwd() == caller
 
 
 def _scripts(tmp_path):

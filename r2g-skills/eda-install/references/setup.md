@@ -81,6 +81,38 @@ The lock is metadata (paths, versions, SHA256 and capability probes), not a chec
 clean, matching tree-packaged or user-prefix installation is required for production evidence;
 `--allow-external`/`--allow-dirty` are diagnostic-only escape hatches.
 
+## Bootstrap completion is fail-closed
+
+A non-preview bootstrap succeeds only when installation, required pin generation, environment
+verification, any explicitly requested `--deploy`, and terminal manifest writing all succeed.
+Missing pin/verifier scripts or a broken metadata Python runtime fail the command; they are not
+warnings that leave a successful exit status. `--dry-run` still performs none of these phases.
+
+`install_manifest.json` is written after verification/deployment and records `install_rc`,
+`pin_rc`, `verify_rc`, `deploy_rc`, and aggregate `bootstrap_rc`. `install_rc` remains specific
+to installers. If manifest writing fails, the command fails; a manifest left by an older run
+must not be treated as current evidence. Callers must check the invocation's exit status.
+These phase results do not prove download origins, native dependency closure, or TEHM
+promotion eligibility; the separate frozen toolchain/evidence checks are still required.
+
+Initial pin resolution fails before installation on any rc other than 0/3/4; conflicts (4)
+retain the existing explicit fail-closed path. Pins are resolved again after writing, and
+any final resolver fault/conflict fails completion. rc=3 is fresh-machine autodetection,
+not proof of installed tools; verification still owns required tool readiness.
+The final ORFS/PDK/env-file fields describe this post-pin observation, and the env-file
+SHA is rechecked immediately before manifest writing. `plan_env_file_sha256` retains
+the old digest; `selection_source` retains the planning source, while
+`final_selection_source` reports final resolution (which can see the env-file internally
+bound by bootstrap). A failed prerequisite prevents explicitly requested deployment.
+
+`check_env.sh` validates actual ORFS flow data and required runtime health, not just
+nonempty paths. EDA/signoff checkers probe OpenROAD/Yosys/Icarus/vvp and Python 3.10+;
+the standalone def-graph checker only requires ORFS data and Python. Required processes
+must be executable, terminate successfully, and produce output. Probes use `timeout`
+or `gtimeout` (30s plus a 2s kill grace); no limiter means readiness failure. These
+bounded version/runtime checks do not prove RTL semantics, binary download origins,
+library-read closure, or strict signoff.
+
 ## Troubleshooting
 
 | Symptom | Fix |

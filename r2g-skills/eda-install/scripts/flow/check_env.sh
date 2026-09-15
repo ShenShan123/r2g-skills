@@ -14,6 +14,33 @@ source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 
 STATUS=0
 
+# Presence is not readiness: a copied ELF can exist but fail to load its libs.
+# Bound probes without needing a healthy Python to test Python itself.
+check_required_runtime() {
+  local label="$1" executable="$2"; shift 2
+  local limiter output rc
+  limiter="$(command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true)"
+  if [[ -z "$executable" || ! -f "$executable" || ! -x "$executable" || -z "$limiter" ]]; then
+    printf 'MISS runtime: %s (executable or timeout/gtimeout unavailable)\n' "$label"
+    STATUS=1
+    return
+  fi
+  output="$("$limiter" --kill-after=2s 30s "$executable" "$@" 2>&1)"; rc=$?
+  if [[ "$rc" -ne 0 || -z "${output//[[:space:]]/}" ]]; then
+    printf 'MISS runtime: %s (probe rc=%s, empty output or runtime failure)\n' "$label" "$rc"
+    STATUS=1
+  else
+    printf 'ok   runtime: %s\n' "$label"
+  fi
+}
+
+check_required_orfs() {
+  if [[ -z "${ORFS_ROOT:-}" || ! -f "$ORFS_ROOT/flow/Makefile" ||
+        -z "${FLOW_DIR:-}" || ! -f "$FLOW_DIR/Makefile" ]]; then
+    echo 'MISS ORFS runtime data: required flow/Makefile unavailable'
+    STATUS=1
+  fi
+}
 print_row() {
   # print_row <label> <value-or-empty> <required?>
   local label="$1" value="$2" required="$3"
@@ -40,6 +67,15 @@ print_row YOSYS_EXE    "${YOSYS_EXE:-}"    required
 print_row IVERILOG_EXE "${IVERILOG_EXE:-}" required
 print_row VVP_EXE      "${VVP_EXE:-}"      required
 print_row python3      "$(command -v python3 || true)" required
+
+echo
+echo "[required runtime health]"
+check_required_orfs
+check_required_runtime OPENROAD_EXE "${OPENROAD_EXE:-}" -version
+check_required_runtime YOSYS_EXE "${YOSYS_EXE:-}" -V
+check_required_runtime IVERILOG_EXE "${IVERILOG_EXE:-}" -V
+check_required_runtime VVP_EXE "${VVP_EXE:-}" -V
+check_required_runtime python3 "$(command -v python3 || true)" -c 'import sys; print(sys.version); sys.exit(0 if sys.version_info >= (3, 10) else 1)'
 
 echo
 echo "[optional tools]"
