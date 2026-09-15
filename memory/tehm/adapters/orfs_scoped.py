@@ -59,6 +59,16 @@ def build_flow_feasibility_record(
     # State construction must not race source changes after initial replay.
     if replay_locked_flow_feasibility_pair(before, after, **kwargs) != pair:
         raise ValueError("flow measurement changed during record construction")
+    return _record_from_replayed_flow_states(
+        before, after, lineage_id=lineage_id, kwargs=kwargs, pair=pair,
+        states=states, refs=refs, role=role,
+    )
+
+
+def _record_from_replayed_flow_states(before, after, *, lineage_id: str,
+                                      kwargs: dict, pair: dict, states: list,
+                                      refs: list, role: str) -> ExecutionRecord:
+    """Construct canonical content without changing logical origin identities."""
     before_verdict, after_verdict = pair["before"]["verdict"], pair["after"]["verdict"]
     original = ("REMOVED" if (before_verdict, after_verdict) == ("FAIL", "PASS") else
                 "PRESENT" if before_verdict == "FAIL" and after_verdict == "FAIL" else "UNKNOWN")
@@ -82,7 +92,7 @@ def build_flow_feasibility_record(
         before=states[0], after=states[1],
         action={"domain": "flow.CONFIG_DELTA" if role == "treatment" else "flow.BASELINE_CONTROL",
                 "transformation_family": family,
-                "payload": {"config_edits": dict(config_edits) if role == "treatment" else {},
+                "payload": {"config_edits": dict(kwargs["config_edits"]) if role == "treatment" else {},
                             **({"control": True, "observation_only": True} if role == "control" else {}),
                             "recheck": "flow_feasibility",
                             "measurement_contract_digest": pair["contract_digest"]}},
@@ -140,9 +150,6 @@ def replay_persisted_flow_feasibility(conn: sqlite3.Connection, transition_id: s
     database is read only; canonical reconstruction happens in RAM. This
     proves measurement binding, not dataset eligibility or causal authority.
     """
-    from tehm import db
-    from tehm.artifact_store import ArtifactStore
-    from tehm.canonical.capture import capture
     from tehm.causal.mechanism import load_transition_facts
 
     expected_keys = {"before", "after", "lineage_id", "before_pin", "after_pin",
@@ -156,6 +163,20 @@ def replay_persisted_flow_feasibility(conn: sqlite3.Connection, transition_id: s
     if not facts.verifier.get("scoped_execution"):
         raise ValueError("transition has no scoped execution")
     record = build_flow_feasibility_record(**acquisition)
+    _compare_persisted_flow_record(conn, transition_id, record)
+    return {"version": "orfs-persisted-scoped-replay-v1", "transition_id": transition_id,
+            "acquisition_digest": _digest(acquisition), "persisted_binding_verified": True,
+            "pair_receipt": record.verification["scoped_execution"]["pair_receipt"],
+            "learner_admission": False, "promotion_attempted": False}
+
+
+def _compare_persisted_flow_record(conn: sqlite3.Connection, transition_id: str,
+                                   record: ExecutionRecord) -> None:
+    """Reconstruct in RAM and compare all canonical content/provenance columns."""
+    from tehm import db
+    from tehm.artifact_store import ArtifactStore
+    from tehm.canonical.capture import capture
+
     with tempfile.TemporaryDirectory(prefix="tehm-scoped-replay-") as scratch:
         replica = sqlite3.connect(":memory:")
         replica.row_factory = sqlite3.Row
@@ -186,7 +207,3 @@ def replay_persisted_flow_feasibility(conn: sqlite3.Connection, transition_id: s
                         raise ValueError(f"scoped replay {table} evidence mismatch")
         finally:
             replica.close()
-    return {"version": "orfs-persisted-scoped-replay-v1", "transition_id": transition_id,
-            "acquisition_digest": _digest(acquisition), "persisted_binding_verified": True,
-            "pair_receipt": record.verification["scoped_execution"]["pair_receipt"],
-            "learner_admission": False, "promotion_attempted": False}

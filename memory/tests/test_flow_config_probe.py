@@ -6,6 +6,7 @@ import sys
 import pytest
 
 from tehm.assets import flow_config_probe as probe
+from test_orfs_runtime_resources import resource_binding
 
 
 @pytest.fixture
@@ -144,3 +145,66 @@ def test_v2_detects_tool_bytes_changed_during_expansion(setup, monkeypatch):
     monkeypatch.setattr(probe.subprocess, "run", changing)
     with pytest.raises(ValueError, match="inputs changed"):
         probe.probe_flow_config(project, root, **args, klayout_exe=tool)
+
+
+def test_v3_resources_reach_actual_make_child_environment(setup, monkeypatch):
+    project, root, _, args = setup
+    resources = resource_binding(project.parent / "resources")
+    tool, marker = _version_tool(project)
+    tool.write_text("#!/bin/sh\nprintf '%s|%s|%s|%s\\n' \"$TERM\" \"$TERMINFO\" "
+                    f"\"$TERMINFO_DIRS\" \"$OPENSSL_CONF\" >> '{marker}'\n"
+                    "printf 'KLayout test\\n'\n")
+    makefile = root / "flow/Makefile"
+    makefile.write_text(makefile.read_text() +
+        "KLAYOUT_CMD ?= /host/must/not/run\n"
+        "export OPENSSL_CONF := /make/default/must/not/be/used\n"
+        "KLAYOUT_VERSION := $(shell $(KLAYOUT_CMD) -v)\n")
+    monkeypatch.setenv("OPENSSL_CONF", "/ambient/must/not/be/used")
+    result = probe.probe_flow_config(project, root, **args, klayout_exe=tool,
+                                     runtime_resources=resources)
+    assert result["version"] == "orfs-effective-config-probe-v3"
+    assert result["runtime_resources"] == resources
+    expected = "|".join(resources["environment"][key] for key in ("TERM", "TERMINFO", "TERMINFO_DIRS", "OPENSSL_CONF"))
+    assert marker.read_text().splitlines() == [expected, expected]
+    assert not set(resources["environment"]) & set(result["values"])
+    assert result["parent_launch_binding_verified"] is False
+    assert result["native_closure_proven"] is False
+
+
+def test_v3_requires_klayout_pin_before_make(setup, monkeypatch):
+    project, root, _, args = setup
+    resources = resource_binding(project.parent / "resources")
+    monkeypatch.setattr(probe.subprocess, "run", lambda *a, **k: pytest.fail("Make ran"))
+    with pytest.raises(ValueError, match="explicit KLayout"):
+        probe.probe_flow_config(project, root, **args, runtime_resources=resources)
+
+
+@pytest.mark.parametrize("call", [1, 2])
+def test_v3_resource_drift_rejected_during_each_expansion(setup, monkeypatch, call):
+    project, root, _, args = setup
+    resources = resource_binding(project.parent / "resources")
+    tool, _ = _version_tool(project)
+    original, calls = probe.subprocess.run, 0
+    def changing(*a, **k):
+        nonlocal calls
+        calls += 1
+        result = original(*a, **k)
+        if calls == call:
+            path = Path(resources["environment"]["OPENSSL_CONF"])
+            path.write_text(path.read_text() + "# changed\n")
+        return result
+    monkeypatch.setattr(probe.subprocess, "run", changing)
+    with pytest.raises(ValueError, match="resource bytes changed or SHA256"):
+        probe.probe_flow_config(project, root, **args, klayout_exe=tool,
+                                runtime_resources=resources)
+
+
+def test_v3_rejects_make_override_of_resource_environment(setup):
+    project, root, _, args = setup
+    resources = resource_binding(project.parent / "resources")
+    tool, _ = _version_tool(project)
+    makefile = root / "flow/Makefile"
+    makefile.write_text(makefile.read_text() + "override OPENSSL_CONF := /unbound/other.cnf\n")
+    with pytest.raises(ValueError, match="resource environment override"):
+        probe.probe_flow_config(project, root, **args, klayout_exe=tool,
+                                runtime_resources=resources)

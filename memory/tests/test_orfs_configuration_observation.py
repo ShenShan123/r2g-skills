@@ -10,16 +10,19 @@ from tehm.assets.flow_config import bind_flow_config
 from tehm.assets.flow_config_probe import probe_flow_config
 from tehm.evaluation.orfs_candidate_oracle import execute_orfs_candidate, OrfsCandidateOracleError
 from test_orfs_candidate_oracle import _fake_case, _candidate
+from test_orfs_runtime_resources import resource_binding
 
 
-def _observed_case(tmp_path, *, pinned_klayout=False):
+def _observed_case(tmp_path, *, pinned_klayout=False, pinned_resources=False):
     case = _fake_case(tmp_path)
     make = shutil.which("make")
     if not make:
         pytest.skip("Make unavailable")
     case.update(make_exe=make, python_exe=sys.executable)
-    if pinned_klayout:
+    if pinned_klayout or pinned_resources:
         case["klayout_exe"] = sys.executable
+    if pinned_resources:
+        case["runtime_resources"] = resource_binding(tmp_path / "resources")
     scripts = Path(case["orfs_root"]) / "flow/scripts"
     scripts.mkdir()
     (scripts / "defaults.py").write_text("# fixture\n")
@@ -29,7 +32,8 @@ def _observed_case(tmp_path, *, pinned_klayout=False):
     observation = probe_flow_config(
         Path(case["project_dir"]), Path(case["orfs_root"]), keys=("CORE_UTILIZATION",),
         **{key: Path(case[key]) for key in ("make_exe", "python_exe", "openroad_exe", "yosys_exe")},
-        klayout_exe=Path(case["klayout_exe"]) if pinned_klayout else None)
+        klayout_exe=Path(case["klayout_exe"]) if "klayout_exe" in case else None,
+        runtime_resources=case.get("runtime_resources"))
     case["flow_config_observation"] = observation
     candidate = _candidate()
     proof = bind_flow_config({"asset_id": candidate.asset_id,
@@ -118,6 +122,81 @@ def test_v2_tool_changed_after_replay_is_rejected_before_actual_arm(tmp_path, mo
     monkeypatch.setattr(oracle, "_copy_project", changing)
     monkeypatch.setattr(oracle, "_execute_arm", lambda *a: pytest.fail("EDA launched"))
     with pytest.raises(OrfsCandidateOracleError, match="tool pins changed"):
+        execute_orfs_candidate(candidate, case, 1)
+
+
+@pytest.mark.parametrize("arm", ["NO_MEMORY", "ALWAYS_MEMORY", "APPLICABILITY_GATED", "CAUSAL_NO_SKILL"])
+def test_v3_resources_reach_replay_staging_and_each_physical_arm(tmp_path, monkeypatch, arm):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_resources=True)
+    expected = case["runtime_resources"]["environment"]
+    original = oracle._execute_arm
+    def capture(*args):
+        assert all(args[-1][key] == value for key, value in expected.items())
+        return original(*args)
+    monkeypatch.setattr(oracle, "_execute_arm", capture)
+    result = oracle.OrfsCandidateOracle(environment=dict(expected)).execute_policy_arm(
+        arm, None if arm == "NO_MEMORY" else candidate, case, 1)
+    assert result["metadata"]["runtime_resource_bytes_verified"] is True
+    assert result["metadata"]["parent_launch_binding_verified"] is False
+    assert result["metadata"]["native_closure_proven"] is False
+    assert case["flow_config_observation"]["version"] == "orfs-effective-config-probe-v3"
+
+
+@pytest.mark.parametrize("source", ["case", "executor"])
+@pytest.mark.parametrize("key", ["TERM", "TERMINFO", "TERMINFO_DIRS", "OPENSSL_CONF"])
+def test_v3_conflicting_resource_environment_rejected_before_eda(tmp_path, monkeypatch, source, key):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_resources=True)
+    monkeypatch.setattr(oracle, "_execute_arm", lambda *a: pytest.fail("EDA launched"))
+    if source == "case":
+        case["environment"] = {key: "/unbound/host"}
+        adapter = oracle.OrfsCandidateOracle()
+    else:
+        adapter = oracle.OrfsCandidateOracle(environment={key: "/unbound/host"})
+    with pytest.raises(OrfsCandidateOracleError, match="pinned runtime resource"):
+        adapter.execute_candidate(candidate, case, 1)
+
+
+def test_v3_missing_binding_cannot_downgrade_observation(tmp_path, monkeypatch):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_resources=True)
+    case.pop("runtime_resources")
+    monkeypatch.setattr(oracle, "_execute_arm", lambda *a: pytest.fail("EDA launched"))
+    with pytest.raises(OrfsCandidateOracleError, match="replay mismatch"):
+        execute_orfs_candidate(candidate, case, 1)
+
+
+@pytest.mark.parametrize("observed", [False, True])
+def test_resource_changed_during_staging_rejected_before_eda(tmp_path, monkeypatch, observed):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    if observed:
+        case, candidate = _observed_case(tmp_path, pinned_resources=True)
+    else:
+        case, candidate = _fake_case(tmp_path), _candidate()
+        case["runtime_resources"] = resource_binding(tmp_path / "resources")
+    original = oracle._copy_project
+    def changing(*args):
+        original(*args)
+        resource = Path(case["runtime_resources"]["environment"]["OPENSSL_CONF"])
+        resource.write_text(resource.read_text() + "# changed\n")
+    monkeypatch.setattr(oracle, "_copy_project", changing)
+    monkeypatch.setattr(oracle, "_execute_arm", lambda *a: pytest.fail("EDA launched"))
+    with pytest.raises(ValueError, match="resource bytes changed or SHA256"):
+        execute_orfs_candidate(candidate, case, 1)
+
+
+def test_resource_changed_by_flow_cannot_publish_a_success_receipt(tmp_path, monkeypatch):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_resources=True)
+    original = oracle._execute_arm
+    def changing(*args):
+        result = original(*args)
+        resource = Path(case["runtime_resources"]["environment"]["OPENSSL_CONF"])
+        resource.write_text(resource.read_text() + "# changed during flow\n")
+        return result
+    monkeypatch.setattr(oracle, "_execute_arm", changing)
+    with pytest.raises(ValueError, match="resource bytes changed or SHA256"):
         execute_orfs_candidate(candidate, case, 1)
 
 

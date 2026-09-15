@@ -15,6 +15,7 @@ import stat
 from types import MappingProxyType
 
 SCHEMA = "tehm-origin-bundle-v1"
+READ_PLAN_SCHEMA = "tehm-origin-read-plan-v1"
 _HEX = re.compile(r"[0-9a-f]{64}")
 _MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 
@@ -191,3 +192,81 @@ class OriginBundle:
                 "alias_count": len(self._aliases), "blob_count": len(self._blobs),
                 "bytes": sum(size for _, size in self._blobs.values()),
                 "toolchain_probed": False, "canonical_replayed": False, "production_authority": False}
+
+
+class OriginReadPlan:
+    """Bind a consumer's exact logical paths and pins to archived bytes.
+
+    The plan is supplied and pinned by the consumer.  Logical paths remain the
+    original absolute strings used by canonical identities; they are never
+    resolved against the live filesystem.  Physical reads are delegated only
+    to :class:`OriginBundle`.  This establishes a dual-address byte boundary,
+    not canonical replay, toolchain validity, chronology, or authority.
+    """
+
+    def __init__(self, bundle: OriginBundle, bindings: list[dict], *,
+                 expected_plan_digest: str):
+        if not isinstance(bundle, OriginBundle):
+            raise OriginBundleError("origin read plan requires an OriginBundle")
+        if type(bindings) is not list or not bindings:
+            raise OriginBundleError("origin read plan requires explicit bindings")
+        validated = {}
+        rows = []
+        for row in bindings:
+            if type(row) is not dict or set(row) != {"original_path", "sha256"}:
+                raise OriginBundleError("invalid origin read binding")
+            original, value = _original(row["original_path"]), _pin(row["sha256"])
+            if row["sha256"] != value or original in validated:
+                raise OriginBundleError("duplicate or noncanonical origin read binding")
+            validated[original] = value
+            rows.append({"original_path": original, "sha256": value})
+        rows.sort(key=lambda row: (row["original_path"], row["sha256"]))
+        payload = {"schema": READ_PLAN_SCHEMA, "bindings": rows}
+        actual = "sha256:" + hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=True).encode()).hexdigest()
+        if _pin(expected_plan_digest) != actual:
+            raise OriginBundleError("independent origin read plan pin mismatch")
+        self.bundle = bundle
+        self.plan_digest = actual
+        self._bindings = MappingProxyType(validated)
+        # Fail during construction if the independently pinned plan names an
+        # alias absent from the independently pinned bundle.
+        for original, value in self._bindings.items():
+            bundle.read_bytes(original, expected_sha256=value)
+
+    def _binding(self, original_path: str) -> tuple[str, str]:
+        original = _original(original_path)
+        value = self._bindings.get(original)
+        if value is None:
+            raise OriginBundleError("logical path is outside the origin read plan")
+        return original, value
+
+    def read_bytes(self, original_path: str) -> bytes:
+        original, value = self._binding(original_path)
+        return self.bundle.read_bytes(original, expected_sha256=value)
+
+    def read_text(self, original_path: str) -> str:
+        try:
+            return self.read_bytes(original_path).decode("utf-8")
+        except UnicodeError as exc:
+            raise OriginBundleError("origin text is not strict UTF-8") from exc
+
+    def read_json(self, original_path: str):
+        return _json(self.read_bytes(original_path))
+
+    def verify(self) -> dict:
+        total = sum(len(self.read_bytes(original)) for original in self._bindings)
+        return {
+            "version": "tehm-origin-read-plan-verification-v1",
+            "scope": "logical_identity_to_archived_bytes",
+            "plan_digest": self.plan_digest,
+            "manifest_sha256": self.bundle.manifest_sha256,
+            "binding_count": len(self._bindings),
+            "bytes": total,
+            "logical_paths_preserved": True,
+            "live_filesystem_fallback": False,
+            "toolchain_probed": False,
+            "canonical_replayed": False,
+            "production_authority": False,
+        }

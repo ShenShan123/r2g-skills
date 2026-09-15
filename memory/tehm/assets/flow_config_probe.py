@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 
 from tehm.ids import stable_dumps
+from tehm.orfs_runtime_resources import verify_runtime_resources
 from .flow_config import _numeric, _RANGES
 
 
@@ -27,7 +28,8 @@ def _sha(path):
 
 def probe_flow_config(project: Path, orfs_root: Path, *, keys: tuple[str, ...],
                       make_exe: Path, python_exe: Path, openroad_exe: Path,
-                      yosys_exe: Path, klayout_exe: Path | None = None) -> dict:
+                      yosys_exe: Path, klayout_exe: Path | None = None,
+                      runtime_resources: dict | None = None) -> dict:
     """Double-expand with input hashes checked between and after both probes.
 
 The environment is deliberately explicit; this does not claim to reproduce
@@ -35,7 +37,13 @@ ambient shell overrides. Execution must consume or recheck these observations.
 An explicit KLayout pin selects v2 and binds Make's version-query command.
 Legacy v1 remains reproducible but may discover host KLayout; neither version
 is evidence of transitive native-library closure or design-flow execution.
+Explicit resource pins select v3 and bind Make's child environment only; they
+cannot retroactively attest the parent interpreter's startup environment.
 """
+    resources = (verify_runtime_resources(runtime_resources)
+                 if runtime_resources is not None else None)
+    if resources is not None and klayout_exe is None:
+        raise ValueError("resource-bound configuration probe requires an explicit KLayout pin")
     project, orfs_root = project.resolve(strict=True), orfs_root.resolve(strict=True)
     if not keys or len(set(keys)) != len(keys) or any(key not in _RANGES for key in keys):
         raise ValueError("configuration probe requires supported unique keys")
@@ -55,6 +63,8 @@ is evidence of transitive native-library closure or design-flow execution.
     fields = (*keys, "PLATFORM", "DESIGN_NAME", "SCRIPTS_DIR")
     if klayout_exe is not None:
         fields = (*fields, "KLAYOUT_CMD")
+    if resources is not None:
+        fields = (*fields, *sorted(resources["environment"]))
     target = "tehm-effective-config-probe"
     recipe = target + ":\n\t" + "".join(
         "$(info TEHM_CONFIG:" + key + "=$(" + key + "))" for key in fields)
@@ -68,6 +78,9 @@ is evidence of transitive native-library closure or design-flow execution.
     if klayout_exe is not None:
         env["KLAYOUT_CMD"] = str(binaries["klayout"])
         args.append("KLAYOUT_CMD=" + env["KLAYOUT_CMD"])
+    if resources is not None:
+        env.update(resources["environment"])
+        args.extend(key + "=" + value for key, value in sorted(resources["environment"].items()))
 
     def expand(work):
         result = subprocess.run(args, cwd=work, env=env, capture_output=True,
@@ -85,6 +98,10 @@ is evidence of transitive native-library closure or design-flow execution.
             raise ValueError("configuration probe output is incomplete")
         if klayout_exe is not None and values.pop("KLAYOUT_CMD") != env["KLAYOUT_CMD"]:
             raise ValueError("configuration probe KLayout command override")
+        if resources is not None:
+            if any(values.pop(key) != value for key, value in resources["environment"].items()):
+                raise ValueError("configuration probe runtime resource environment override")
+            verify_runtime_resources(resources)
         if Path(values.pop("SCRIPTS_DIR")).resolve() != flow / "scripts":
             raise ValueError("configuration probe does not support script overlays")
         for key in keys:
@@ -105,7 +122,10 @@ is evidence of transitive native-library closure or design-flow execution.
         raise ValueError("configuration changed during probe")
     if any(_sha(p) != digest for p, digest in {**hashes, **binary_hashes}.items()):
         raise ValueError("configuration probe inputs changed")
-    payload = {"version": "orfs-effective-config-probe-v2" if klayout_exe is not None
+    if resources is not None:
+        verify_runtime_resources(resources)
+    payload = {"version": "orfs-effective-config-probe-v3" if resources is not None
+               else "orfs-effective-config-probe-v2" if klayout_exe is not None
                else "orfs-effective-config-probe-v1", "project": str(project),
                "orfs_root": str(orfs_root), "values": first,
                "input_sha256": hashes, "tool_sha256": binary_hashes,
@@ -113,5 +133,11 @@ is evidence of transitive native-library closure or design-flow execution.
                "scope": "explicit_environment_make_expansion_only"}
     if klayout_exe is not None:
         payload["tool_bindings"] = {"KLAYOUT_CMD": str(binaries["klayout"])}
+    if resources is not None:
+        payload["runtime_resources"] = resources
+        payload["runtime_resource_sha256"] = {
+            path: pin.removeprefix("sha256:") for path, pin in resources["file_sha256"].items()}
+        payload["parent_launch_binding_verified"] = False
+        payload["native_closure_proven"] = False
     return {**payload, "receipt_digest": "sha256:" + hashlib.sha256(
         stable_dumps(payload).encode()).hexdigest()}

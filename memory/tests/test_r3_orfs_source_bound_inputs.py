@@ -151,6 +151,39 @@ def test_explicit_klayout_toolchain_pin_is_validated_and_preserved(tmp_path, exe
             _toolchain({"toolchain": raw})
 
 
+@pytest.mark.parametrize("change", [None, "missing", "wrong", "duplicate", "malformed"])
+def test_resource_pins_must_also_be_bound_by_toolchain_lock(tmp_path, change):
+    from test_orfs_runtime_resources import resource_binding
+    from test_orfs_toolchain_manifest import _fake_orfs
+    from tehm.orfs_toolchain import build_toolchain_manifest, manifest_digest
+    from tehm.orfs_toolchain_preflight import preflight_orfs_toolchain
+    root, openroad, yosys = _fake_orfs(tmp_path / "orfs")
+    resources = resource_binding(tmp_path / "resources")
+    report = preflight_orfs_toolchain({"orfs_root": str(root)}, env={})
+    lock = build_toolchain_manifest(report, dependency_files=tuple(resources["file_sha256"]))
+    if change == "missing":
+        lock["dependency_files"].pop()
+    elif change == "wrong":
+        lock["dependency_files"][0]["sha256"] = "0" * 64
+    elif change == "duplicate":
+        lock["dependency_files"].append(dict(lock["dependency_files"][0]))
+    elif change == "malformed":
+        lock["dependency_files"][0]["path"] = ["ambiguous"]
+    lock["manifest_digest"] = manifest_digest(lock)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(lock))
+    raw = {name: str(root) for name in ("orfs_root", "pdk_root", "toolchain_root")}
+    raw.update({name: sys.executable for name in ("make_exe", "python_exe", "run_flow_script", "fix_signoff_script", "klayout_exe")})
+    raw.update(openroad_exe=str(openroad), yosys_exe=str(yosys), toolchain_manifest=str(manifest),
+               platform="sky130hs", runtime_resources=resources)
+    raw.update({name: "sha256:pin" for name in ("toolchain_digest", "oracle_digest", "platform_digest", "pdk_digest")})
+    if change is None:
+        assert _toolchain({"toolchain": raw})["runtime_resources"] == resources
+    else:
+        with pytest.raises(SourceBoundInterferenceInputError, match="runtime resource"):
+            _toolchain({"toolchain": raw})
+
+
 def test_physical_harm_contract_requires_source_bound_authority(tmp_path):
     manifest = {
         "campaign_id": "r3-8",

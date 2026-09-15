@@ -7001,3 +7001,125 @@ PASS，audit digest 为
 输入生成仍读取历史 original sources，因此 historical authority generation relocated
 保持 false；actual four-arm ORFS、新 native read audit、canonical origin replay、
 public bootstrap、P15 独立来源与统计证据以及 P16/P17 均未由这些组件完成。
+
+### 2026-09-14 archived canonical reconstruction and explicit runtime resources (local next epoch)
+
+新增 `OriginReadPlan`，把独立冻结的 original-path/file-SHA bindings 固定为只读
+plan；所有历史读取只交给 `OriginBundle`，不 resolve/open 原地址、不全局改写
+Path、不改 canonical IDs。新增 `orfs_archived_replay` 将 archive-only raw contract
+replay 与当前工具链的两次 live preflight 分开；历史有效字段不能覆盖当前 probe
+失败或变化。旧 live replay 仍保持原入口和 receipt shape。
+
+archive-only reconstruction 在 RAM 重建原 ExecutionRecord，再逐列比较 persisted
+states/transitions，仅忽略 created_at；公开接口不写源 DB。历史 run witnesses 的
+文件 inventory 被核验，但历史目录中不存在其他 runs 尚未证明，明确返回 false。
+该接口未接入默认 verified_execution/learner，toolchain_equivalence、learner_admission、
+promotion_attempted、production_authority 均为 false；canonical_replayed=true 只表示
+历史 canonical content 的只读重构，不表示新执行或新的 authority。
+
+r117 在禁止打开全部 795 个 original aliases 和 live Tools/data2 的 Python guard 下，
+实际重构四条历史 transition；四条均一致，源代码和输入 bytes 未变，原路径读取
+attempts=0。execution digest 为
+`sha256:fe861b8a30d0e75ad3d1bd0f085cc37f2c9844161e998f2fd5762cdd8a429934`。
+r118 不导入 TEHM，独立核验 archived DB/raw refs、canonical state/transition self IDs、
+historical pair receipt，以及 108 traces / 1233 successful read paths；original historical
+reads=0、unparsed=0。audit digest 为
+`sha256:050b6a7728f86748060e5e10d76a9e0160e370f1cae09cec936a539ee7e7253a`。
+独立审计未重新实现 producer 的全部列比较，明确记录该限制；相关 focused tests
+120 PASS，包含 treatment/control 原历史目录不可访问、canonical tamper、live-tool
+drift 和默认 learner gate 仍拒绝的测试。
+
+新代码代完整 frozen regression r119 已终态 PASS：1944 tests，failures/errors/skipped
+均为 0，耗时 1248.72s，568 Python source files 冻结前后完全一致。input-freeze digest 为
+`sha256:dd13ef6b1b6ff62e3b3a90414021858aabc2f80f088f27cad4e66c39c04abaae`，
+source-corpus digest 为
+`sha256:dc10dbde7b57310dd8602ff5db5f6c09cf10e5291f330f9e46f65964612fc83e`，
+JUnit SHA 为
+`sha256:dd6410837313b0644342b930798982844a678414f9fba9b9c2e2b93114534301`，
+terminal report digest 为
+`sha256:ea85b27213ea04f97be2b1d1c49e3e3c9dc11abe392998712fa6a66f637969cd`。
+随后将该代全部 568 Python files 原样保存到 external python-source-epoch-r117-r119，
+逐项重验与冻结 corpus 一致；archive manifest digest 为
+`sha256:4535544e8a72b8b9ddf15bec1203ebdd3f2be03de74259931113e00fe1a30b0c`。
+
+r112 已完成新 package 两例四臂 8/8 physical callbacks；typed fixed-constraint paired
+utility 各臂 PASS=2，但 generic strict signoff UNKNOWN=8，不能改写为完整 strict
+signoff PASS。r113 独立核验八组 GDS/DEF/DRC/LVS/SPEF/raw reports 和 32279 traces，
+仍为 PASS_EXECUTION_BUT_NATIVE_CLOSURE_FAILED：6273 unknown paths、75 unparsed。
+audit digest 为
+`sha256:8ac7f4a222161a1e71e5441d7599efe2148c44d55f4d78a6c1da7967da79aa18`。
+缺口包括 parent OpenSSL config、ABC terminfo、OS helper phases 和未单独 consumer-pin
+的 r81 template，旧失败记录保持不变，不全局白名单化 EDA/language libraries。
+
+r120 仅复制并固定两份 runtime resource bytes；r121/r122 暴露 parent interpreter
+启动早于 child environment binding 的失败，保留原失败代。r123 在 interpreter 启动前
+绑定 TERM/TERMINFO/TERMINFO_DIRS/OPENSSL_CONF；独立 r124 的 18 traces 中 host resource
+reads=0，真实 ABC/private resource reads 被核验。audit digest 为
+`sha256:900fa871cdb33260280c7772a139b9475077ce0c84917dbd931f7eed930401b0`。
+仅是短探针 component，不覆盖完整 ORFS；config-probe resource binding 仍未声称通过。
+
+r125 新生成两例四臂 inputs，资源 SHA 纳入 toolchain lock、preregistration 和输入链。
+r126 independent input audit PASS，digest 为
+`sha256:4b9b28c4e4dc786c9128985e50040bdc7b8bd8c7c1070cec99c9f26180f9e4af`。
+input generation 仍有 90 个 external Python opens，历史 generation relocation=false。
+r131 固定显式 host OS baseline，限制各 helper process 的 libraries/proc metadata；
+不是自包含 OS 或通用 host-library 白名单。r130 首稿遗漏被旧 traces regression 拒绝；
+新 r132 重验完整旧 traces、75 char devices、8 pipes 和 15 项 synthetic allow/deny
+检查，旧 host SSL/terminfo、旧 template 与其他用户地址仍拒绝，digest 为
+`sha256:cc27b81f50252f054c484ef03dda71f59abed76c0cbe1cbf5556cebc1f696f7a`。
+
+r134 比对显示历史锁固定 ELF、当前锁固定 launcher，入口 SHA 不同；r135 单独核验
+两个 relocated ELF SHA 与历史锁一致。audit digest 为
+`sha256:8b757e3a52f89830c8911c421dbfe772e54f5a34e14449ee517d1d4f09ec4dea`。
+相同 ELF/版本/markers 不是 launcher environment、transitive PDK/native dependencies
+或 historical binary-build provenance 的完整等价证明，authority 仍不放行。
+
+r127 standalone execution driver 固定整个执行过程，不再 import 未固定的 r81 template；
+在 r119/r126/r132 通过后完成新 full ORFS + own-process native trace，8/8 callbacks
+均 flow_rc=fix_rc=0，typed fixed-constraint utility 各臂 PASS=2；generic strict signoff
+仍 UNKNOWN=8。terminal digest 为
+`sha256:cfc915c0e474509bbfaaf86b21acd0862e92e096d28a557edc6780ebf2be7444`。
+r133 独立重新核验 package/signoff exact inventories、八组 GDS/DEF/DRC/LVS/SPEF/raw
+reports 和 32264 traces / 89857 successful read paths，unparsed/unfinished 和 unlisted
+host executables 均为 0；仍为 PASS_EXECUTION_BUT_NATIVE_CLOSURE_FAILED，唯一未列路径
+是 `/data1/zhangdy`，共 280 次 pinned `/usr/bin/find` 保存继承 cwd 的 directory opens。
+该目录未事前列入 baseline，不能事后把整个个人目录加入允许列表。audit digest 为
+`sha256:14f7f84eddd46c8cb0ca89edcb927e452c81e6997cc2f7b13242e2ed943393d0`。
+全部新 artifacts 位于 external data1 campaign；未改 live Tools 或 canonical memory，
+没有新独立 calibration samples、provider calls 或 production authority。完整 P16/P17、
+P15 统计 evidence、broad C7 和 public bootstrap 仍未由以上组件完成，memory/docs 不提交。
+
+### 2026-09-15 explicit config-probe resource binding (1992-test epoch)
+
+新增 `orfs_runtime_resources` 校验显式消费者 binding：固定 TERM=dumb、单一私有
+TERMINFO 目录与 OPENSSL_CONF，精确两份资源 SHA，不从 ambient environment 推导。
+拒绝 final-component symlinks、devices/FIFO、异常大小、bytes drift、NUL/non-UTF8
+OpenSSL config 和 active .include；不声称 provider/transitive closure 或 parent startup
+已验证。source-bound input builder 还要求这些 pins 与认证 toolchain lock dependencies
+一致，冲突或缺失即拒绝。
+
+配置探针显式绑定资源时输出 `orfs-effective-config-probe-v3`，四项环境同时进入 child
+environment 和 Make command-line assignments，双次 expansion 校验没有 Make override
+或资源漂移；legacy v1/v2 形状保持不变。ORFS candidate oracle 在 original/staged probe、
+四臂执行前后重验资源，拒绝 case/executor override；只返回 bytes-verified metadata，
+parent_launch_binding_verified/native_closure_proven 仍 false。
+
+实际 r142 两例 Make probe 与旧 v2 的 values/input/tool hashes 一致。r143 首稿遗漏
+已冻结 SDC pins、既有 sed metadata phase 和实际 loader/Python 进程关联，失败原报告
+保留；r144 仅补齐已有明确 bindings，不新增 host EDA/library whitelist。独立 audit
+核验 570 Python files、package/SDK exact inventories、四次 private KLayout -v 和父进程
+真实 private OpenSSL library config read，unknown/unparsed/host-resource reads 均为 0。
+状态 PASS_BOUNDED_V3_NATIVE_CONFIG_RESOURCE_BINDING，digest 为
+`sha256:e614d137c706ac47013761f71798cbd902d215ab9875b8a091450b27ff6b578d`。
+它没有实际跑 design flow 或 child ABC terminfo runtime，也不是新的独立 calibration
+样本；完整 parent environment、whole-flow closure、P16/P17 仍未由该探针建立。
+
+r141 完整 frozen regression 终态 PASS：1992 tests，failures/errors/skipped 均为 0，
+1250.28s，570 Python files 冻结前后不变。input-freeze digest 为
+`sha256:ee181a43eb0ebccc41c2e21e9a3d889fafa981a1504447f4800492f7ada54767`，
+JUnit SHA 为 `sha256:3fdc539c858f154140254ea45023c2ca75e7f37d35693758c61c04d609d3cf43`，
+terminal digest 为 `sha256:2d83bde7d59d95e23f0a05d2c1f9a23066a233e204b205822a952b51ad1d69f7`。
+r146 不导入 TEHM，独立计数 JUnit 1992 cases、核验摘要并原样保存全部 570 source files；
+archive digest 为 `sha256:89b718f6b67083622d58c5c90258b4b607dec2a0b23cb60fc26d2cda7bae51fa`。
+下一代码代应修复实际 flow/fix child cwd 的继承依赖，在新冻结 workspace 重跑，不能
+覆盖 r127/r133 的失败终态或将 bounded resource component 改称 production closure。

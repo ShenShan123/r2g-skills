@@ -318,6 +318,25 @@ def _toolchain(preregistration: Mapping, *, require_oracle_binding: bool = False
         checked["klayout_exe"] = str(_path(raw["klayout_exe"], "klayout_exe"))
         if not os.access(checked["klayout_exe"], os.X_OK):
             raise SourceBoundInterferenceInputError("klayout_exe is not executable")
+    if raw.get("runtime_resources") is not None:
+        from tehm.orfs_runtime_resources import verify_runtime_resources
+        try:
+            checked["runtime_resources"] = verify_runtime_resources(raw["runtime_resources"])
+            from tehm.orfs_toolchain import load_toolchain_manifest
+            lock = load_toolchain_manifest(checked["toolchain_manifest"])
+            dependencies = lock.get("dependency_files")
+            if (type(dependencies) is not list or any(type(row) is not dict
+                    or type(row.get("path")) is not str for row in dependencies)
+                    or len({row.get("path") for row in dependencies}) != len(dependencies)):
+                raise ValueError("runtime resources require unambiguous toolchain dependency bindings")
+            dependency_pins = {row.get("path"): row.get("sha256") for row in dependencies}
+            if any(dependency_pins.get(path) != pin.removeprefix("sha256:")
+                   for path, pin in checked["runtime_resources"]["file_sha256"].items()):
+                raise ValueError("runtime resource pins are absent or inconsistent in toolchain manifest")
+        except ValueError as exc:
+            raise SourceBoundInterferenceInputError(str(exc)) from exc
+        if "klayout_exe" not in checked:
+            raise SourceBoundInterferenceInputError("runtime resources require an explicit klayout_exe")
     for name in ("toolchain_digest", "oracle_digest", "platform_digest",
                  "pdk_digest"):
         checked[name] = _digest_pin(raw.get(name), name)
@@ -430,6 +449,14 @@ def build_inputs(preregistration_path: Path | str,
     content_digests: set[str] = set()
     challenge_rtl_hashes: set[str] = set()
     environment = preregistration.get("environment") or {}
+    if "runtime_resources" in toolchain:
+        if not isinstance(environment, Mapping):
+            raise SourceBoundInterferenceInputError("environment must be an object")
+        environment = dict(environment)
+        for key, value in toolchain["runtime_resources"]["environment"].items():
+            if key in environment and environment[key] != value:
+                raise SourceBoundInterferenceInputError("environment conflicts with runtime resource pin: " + key)
+            environment[key] = value
     if not isinstance(environment, Mapping) or any(
             type(key) is not str or type(value) is not str
             for key, value in environment.items()):
@@ -492,7 +519,8 @@ def build_inputs(preregistration_path: Path | str,
                 openroad_exe=Path(toolchain["openroad_exe"]),
                 yosys_exe=Path(toolchain["yosys_exe"]),
                 klayout_exe=(Path(toolchain["klayout_exe"])
-                             if "klayout_exe" in toolchain else None))
+                             if "klayout_exe" in toolchain else None),
+                runtime_resources=toolchain.get("runtime_resources"))
             values = observation.get("values") or {}
             expected = raw_case.get("expected_flow")
             if not isinstance(expected, Mapping):
@@ -560,6 +588,8 @@ def build_inputs(preregistration_path: Path | str,
                 "environment": dict(environment),
                 **({"klayout_exe": toolchain["klayout_exe"]}
                    if "klayout_exe" in toolchain else {}),
+                **({"runtime_resources": copy.deepcopy(toolchain["runtime_resources"])}
+                   if "runtime_resources" in toolchain else {}),
                 "source_inputs": [dict(item) for item in source_inputs],
                 "source_digest": source_digest,
                 "flow_config_observation": observation,
