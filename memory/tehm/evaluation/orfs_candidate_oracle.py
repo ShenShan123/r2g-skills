@@ -157,6 +157,11 @@ def _environment(case: Mapping) -> dict[str, str]:
             raise OrfsCandidateOracleError(
                 f"frozen ORFS environment cannot override pinned key {key}")
         env[key] = value
+    if case.get("klayout_exe") is not None:
+        klayout = str(_executable_file(case["klayout_exe"], "klayout_exe"))
+        if "KLAYOUT_CMD" in overrides and overrides["KLAYOUT_CMD"] != klayout:
+            raise OrfsCandidateOracleError("frozen ORFS environment cannot override pinned KLAYOUT_CMD")
+        env["KLAYOUT_CMD"] = klayout
     return env
 
 
@@ -205,7 +210,9 @@ must carry a replayable observation before this adapter can launch any EDA.
         Path(case["project_dir"]), Path(case["orfs_root"]), keys=keys,
         make_exe=_executable_file(case.get("make_exe"), "make_exe"),
         python_exe=_executable_file(case.get("python_exe"), "python_exe"),
-        openroad_exe=Path(case["openroad_exe"]), yosys_exe=Path(case["yosys_exe"]))
+        openroad_exe=Path(case["openroad_exe"]), yosys_exe=Path(case["yosys_exe"]),
+        klayout_exe=(_executable_file(case["klayout_exe"], "klayout_exe")
+                     if case.get("klayout_exe") is not None else None))
     if stable_dumps(replay) != stable_dumps(dict(observation)):
         raise OrfsCandidateOracleError("flow configuration observation replay mismatch")
     if replay["values"]["PLATFORM"] != case["platform"]:
@@ -508,6 +515,10 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
             if key in _PINNED_ENV_KEYS:
                 raise OrfsCandidateOracleError(
                     f"ORFS environment override cannot replace pinned key {key}")
+            if (key == "KLAYOUT_CMD" and frozen_case.get("klayout_exe") is not None
+                    and value != env["KLAYOUT_CMD"]):
+                raise OrfsCandidateOracleError(
+                    "ORFS environment override cannot replace pinned KLAYOUT_CMD")
             env[key] = value
     source_inputs = _source_inputs(frozen_case.get("source_inputs"))
     source_digest = _source_binding(project, source_inputs)
@@ -550,9 +561,14 @@ def execute_orfs_candidate(candidate: StructuredRepairCandidate | None,
             staged = probe_flow_config(
                 sandbox, Path(frozen_case["orfs_root"]), keys=tuple(sorted(expected_values)),
                 make_exe=Path(frozen_case["make_exe"]), python_exe=Path(frozen_case["python_exe"]),
-                openroad_exe=Path(frozen_case["openroad_exe"]), yosys_exe=Path(frozen_case["yosys_exe"]))
+                openroad_exe=Path(frozen_case["openroad_exe"]), yosys_exe=Path(frozen_case["yosys_exe"]),
+                klayout_exe=(Path(frozen_case["klayout_exe"])
+                             if frozen_case.get("klayout_exe") is not None else None))
             if any(staged["values"].get(key) != value for key, value in expected_values.items()):
                 raise OrfsCandidateOracleError("staged flow configuration does not match bound action")
+            if (configuration_observation.get("version") == "orfs-effective-config-probe-v2"
+                    and staged["tool_sha256"] != configuration_observation["tool_sha256"]):
+                raise OrfsCandidateOracleError("staged flow configuration tool pins changed")
             # GNU Make must not inherit flags that give ambient variables
             # precedence over the observed and materialized configuration.
             env.update({"MAKEFLAGS": "", "MFLAGS": "", "MAKEOVERRIDES": "",

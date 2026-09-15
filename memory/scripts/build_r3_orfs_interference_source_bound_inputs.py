@@ -314,6 +314,10 @@ def _toolchain(preregistration: Mapping, *, require_oracle_binding: bool = False
         if not os.access(checked[name], os.X_OK):
             raise SourceBoundInterferenceInputError(
                 f"{name} is not executable: {checked[name]}")
+    if raw.get("klayout_exe") is not None:
+        checked["klayout_exe"] = str(_path(raw["klayout_exe"], "klayout_exe"))
+        if not os.access(checked["klayout_exe"], os.X_OK):
+            raise SourceBoundInterferenceInputError("klayout_exe is not executable")
     for name in ("toolchain_digest", "oracle_digest", "platform_digest",
                  "pdk_digest"):
         checked[name] = _digest_pin(raw.get(name), name)
@@ -486,7 +490,9 @@ def build_inputs(preregistration_path: Path | str,
                 make_exe=Path(toolchain["make_exe"]),
                 python_exe=Path(toolchain["python_exe"]),
                 openroad_exe=Path(toolchain["openroad_exe"]),
-                yosys_exe=Path(toolchain["yosys_exe"]))
+                yosys_exe=Path(toolchain["yosys_exe"]),
+                klayout_exe=(Path(toolchain["klayout_exe"])
+                             if "klayout_exe" in toolchain else None))
             values = observation.get("values") or {}
             expected = raw_case.get("expected_flow")
             if not isinstance(expected, Mapping):
@@ -552,6 +558,8 @@ def build_inputs(preregistration_path: Path | str,
                     "toolchain_digest", "oracle_digest", "platform_digest",
                     "pdk_digest")},
                 "environment": dict(environment),
+                **({"klayout_exe": toolchain["klayout_exe"]}
+                   if "klayout_exe" in toolchain else {}),
                 "source_inputs": [dict(item) for item in source_inputs],
                 "source_digest": source_digest,
                 "flow_config_observation": observation,

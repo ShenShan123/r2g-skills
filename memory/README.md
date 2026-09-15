@@ -6922,3 +6922,82 @@ symlink directories 标为 submodules，其目录 payload 未闭合；旧失败�
 审计记录。显式 reader 到 canonical/toolchain 验证链、完整 relocated memory runtime、
 public bootstrap、原 CORE70 C7、广义 C1–C8、P15 独立来源/预测置信度/统计证据以及
 P16/P17 仍未闭合；production gates 不变，provider calls=0，memory/docs 始终不提交。
+
+### 2026-09-14 recursive source restore and explicit KLayout probe binding (local next epoch)
+
+r95 仅使用已归档 bundles 在全新 bare repositories 独立恢复源码，不打开 live Tools。
+27 repository nodes、24 unique commits、25 recursive gitlinks 与原 r88 tree entries
+全部一致；显式核验 HEAD、非 shallow、reachable object history、直接 parent objects
+和 fsck，修复后的两份完整历史均通过。状态 PASS_RECURSIVE_GIT_SOURCE_COMPONENT，
+audit digest 为
+`sha256:beaf6c781671f0625e3ed13cfb6f2a69f006ee6b4646bf9451387dabfd156a07`。
+仍不是 dirty overlay payload、historical binary-build provenance 或 public bootstrap。
+
+新配置探针接受显式 `klayout_exe`，生成 orfs-effective-config-probe-v2，绑定并重验
+Make 的 KLAYOUT_CMD 和 executable SHA，拒绝不安全路径、Make command override
+或读取期间工具变化。不传 pin 的 legacy v1 保持原 shape/digest 语义，可能发现
+host KLayout，不据此声称 native closure。新 source-bound inputs 将 pin 和 v2
+observation 一起冻结；executor 的 replay、staged probe 与所有 physical arms 均
+传播同一 pin，并拒绝 case/executor 两级冲突环境覆盖及 staged tool SHA drift。
+
+r97 实际运行原两例 ORFS Make probes，配置 values 和 loaded input SHA 与 r80
+完全一致；仅新增显式私有 KLayout binding，不修改旧 frozen inputs 或 SDK。
+execution digest 为
+`sha256:4897db2d7dae6ce20c77bd94a3de66cee5199bb190c2ca29ed267e438deaf7b9`。
+独立 r100 核验 SDK exact inventory、inputs、124 traces 和 79109 successful read paths，
+确认四次实际 klayout.bin -v 及 wrapper 均来自 private SDK，host EDA/language reads、
+unparsed/unfinished 均为零。audit digest 为
+`sha256:72fc97b17d6e949b9b6fccfdcf5889f5e42a124d1beca81c8692a38a9ab158c3`。
+这仅是 bounded explicit-tool-binding component；openssl.cnf、OS helpers 等 host
+reads 仍完整列出、未归类，full_native_closure_proven=false，不证明全 ORFS/runtime。
+r98 首版独立审计因 SyntaxError 在执行前失败，保留失败记录后以新 r100 修复，
+不覆盖旧 driver/report。
+
+首版 50 focused tests 通过后，检查发现 executor-level override 入口仍需补强。
+r99 因这个确定的 correctness gap 主动 SIGINT 精确核验的自有 pytest PID，正常
+写出部分 JUnit：126 PASS、exit=2、terminal FAIL，绝不列为完整回归 PASS。
+在修改下一代码代前，已将 r99 冻结的全部 566 Python files 原样归档到 external
+python-source-epoch-r97-r99，并逐项核验与 freeze 相等；旧 producer/freezes 不覆盖。
+新测试覆盖 executor override、四臂相同 pin、staged tool drift；完整 frozen
+regression r102 已终态 PASS：1924 tests，failures/errors/skipped 均为 0，耗时
+1985.30s，冻结前后 566 Python files 完全一致。input-freeze digest 为
+`sha256:5feddb386276efb9d112ff3ecc3da1d6744157ceeded5eb102392c11572fdd61`，
+source-corpus digest 为
+`sha256:946e08ad8450416a2f4ef6c90ba722a67de3db0a1d77922998a9d76aeab47ea8`，
+JUnit SHA 为
+`sha256:9e55969ce9b6584ea0387079867bb45d4ffd646f1656fccf383fa6d178fdadb1`，
+terminal report digest 为
+`sha256:ce164dcc8d6b1785648db07636cac0c28811d75deea81bd19db0dc44d05b56c7`。
+这是工程回归门，不是 ORFS 实验结果、P15 统计证据或 production authority。
+
+current dirty overlay 的 r103 修正了旧 r90 对 Git mode 120000 materialized
+directories 的错误分类，归档 4 repositories、170 blobs、72 materialized
+directories；独立 r104 仅从新归档核验 2051 file references、170 blobs、2 true
+gitlinks 与完整目录 payload，状态 PASS_CURRENT_DIRTY_OVERLAY_BYTES_COMPONENT，
+audit digest 为
+`sha256:f08467f0d667700b6a2420fd506b65a1d8dbc1e519f6779119d3b1a834d7ba74`。
+它不递归声称目录内软链接 target、historical build time 或 binary origin 已闭合。
+
+r105 因目标文件系统不支持 `cp --reflink=always` 失败，r106 虽完成普通复制但 r107
+发现 Git patch 的实际 mode 0664 与 manifest 0644 不符；这些失败代均保留。r108
+重新独立复制并显式固定 patch mode，得到 5.8GB、66639 regular files、119 links
+的 package，manifest digest 为
+`sha256:5156f8f1c030837ee020bd56809bb3ce253d0254b3c59970c5eb6142d9e49aa9`。
+独立 r109 重查 exact inventory、566 packaged Python sources，并实际完成 Python、
+torch、torch_geometric、pandas、schema imports 与 loader closure；状态
+PASS_COMPONENT，audit digest 为
+`sha256:608e148d04794dea704504ef59926bc8ee829b300fc6c30314133eb482ceafb3`。
+该 package 尚未自行证明 full native whole-flow、fresh ORFS、public bootstrap 或 P16。
+
+r110 在 r108 package 与 r69 private signoff SDK 上重新生成两例 source-bound inputs，
+全部 case 和四个 policy arms 都冻结同一显式 KLayout executable；两份 observation
+均为 `orfs-effective-config-probe-v2`。状态 INPUTS_GENERATED_NOT_EXECUTED，input
+report digest 为
+`sha256:a77ec3cba887c8c8f1b2ad6415ef137ad91ac106af49addd2b78da5a5fd15945`。
+独立 r111 不导入 producer，复核 input/authority/p12 自摘要、逐文件 source/tool
+SHA、两个 lineages、四臂 candidate mapping、package 路径和 KLayout binding，状态
+PASS，audit digest 为
+`sha256:348d78b5aa61a5438221e98428f3ed5dbc99c88491ea223cd0ba57a303feddbd`。
+输入生成仍读取历史 original sources，因此 historical authority generation relocated
+保持 false；actual four-arm ORFS、新 native read audit、canonical origin replay、
+public bootstrap、P15 独立来源与统计证据以及 P16/P17 均未由这些组件完成。

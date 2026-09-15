@@ -12,12 +12,14 @@ from tehm.evaluation.orfs_candidate_oracle import execute_orfs_candidate, OrfsCa
 from test_orfs_candidate_oracle import _fake_case, _candidate
 
 
-def _observed_case(tmp_path):
+def _observed_case(tmp_path, *, pinned_klayout=False):
     case = _fake_case(tmp_path)
     make = shutil.which("make")
     if not make:
         pytest.skip("Make unavailable")
     case.update(make_exe=make, python_exe=sys.executable)
+    if pinned_klayout:
+        case["klayout_exe"] = sys.executable
     scripts = Path(case["orfs_root"]) / "flow/scripts"
     scripts.mkdir()
     (scripts / "defaults.py").write_text("# fixture\n")
@@ -26,7 +28,8 @@ def _observed_case(tmp_path):
         f"include $(DESIGN_CONFIG)\nSCRIPTS_DIR := {scripts}\n")
     observation = probe_flow_config(
         Path(case["project_dir"]), Path(case["orfs_root"]), keys=("CORE_UTILIZATION",),
-        **{key: Path(case[key]) for key in ("make_exe", "python_exe", "openroad_exe", "yosys_exe")})
+        **{key: Path(case[key]) for key in ("make_exe", "python_exe", "openroad_exe", "yosys_exe")},
+        klayout_exe=Path(case["klayout_exe"]) if pinned_klayout else None)
     case["flow_config_observation"] = observation
     candidate = _candidate()
     proof = bind_flow_config({"asset_id": candidate.asset_id,
@@ -37,6 +40,85 @@ def _observed_case(tmp_path):
         binding_receipt_id=proof.binding_receipt_id,
         provenance={**candidate.provenance, "binding_digest": proof.binding_digest})
     return case, candidate
+
+
+def test_v2_pin_reaches_replay_staged_probe_and_actual_arm(tmp_path, monkeypatch):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_klayout=True)
+    original = oracle._execute_arm
+    environments = []
+    def capture(*args):
+        environments.append(dict(args[-1]))
+        return original(*args)
+    monkeypatch.setattr(oracle, "_execute_arm", capture)
+    assert execute_orfs_candidate(None, case, 1)["outcome"] == "FAIL"
+    assert execute_orfs_candidate(candidate, case, 1)["outcome"] == "PASS"
+    assert len(environments) == 2
+    assert all(env["KLAYOUT_CMD"] == str(Path(sys.executable).resolve()) for env in environments)
+    assert case["flow_config_observation"]["version"] == "orfs-effective-config-probe-v2"
+
+
+def test_v2_missing_case_pin_cannot_downgrade_observation(tmp_path, monkeypatch):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_klayout=True)
+    case.pop("klayout_exe")
+    monkeypatch.setattr(oracle, "_execute_arm", lambda *a: pytest.fail("EDA launched"))
+    with pytest.raises(OrfsCandidateOracleError, match="replay mismatch"):
+        execute_orfs_candidate(candidate, case, 1)
+
+
+def test_v2_conflicting_execution_environment_rejected_before_eda(tmp_path, monkeypatch):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_klayout=True)
+    case["environment"] = {"KLAYOUT_CMD": "/usr/bin/klayout"}
+    monkeypatch.setattr(oracle, "_execute_arm", lambda *a: pytest.fail("EDA launched"))
+    with pytest.raises(OrfsCandidateOracleError, match="pinned KLAYOUT_CMD"):
+        execute_orfs_candidate(candidate, case, 1)
+
+
+def test_v2_executor_override_cannot_replace_pin(tmp_path, monkeypatch):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_klayout=True)
+    monkeypatch.setattr(oracle, "_execute_arm", lambda *a: pytest.fail("EDA launched"))
+    with pytest.raises(OrfsCandidateOracleError, match="pinned KLAYOUT_CMD"):
+        oracle.OrfsCandidateOracle(environment={"KLAYOUT_CMD": "/usr/bin/klayout"}).execute_candidate(
+            candidate, case, 1)
+
+
+@pytest.mark.parametrize("arm", ["NO_MEMORY", "ALWAYS_MEMORY", "APPLICABILITY_GATED", "CAUSAL_NO_SKILL"])
+def test_v2_matching_executor_pin_reaches_each_physical_arm(tmp_path, monkeypatch, arm):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_klayout=True)
+    pin = str(Path(sys.executable).resolve())
+    original = oracle._execute_arm
+    def capture(*args):
+        assert args[-1]["KLAYOUT_CMD"] == pin
+        return original(*args)
+    monkeypatch.setattr(oracle, "_execute_arm", capture)
+    adapter = oracle.OrfsCandidateOracle(environment={"KLAYOUT_CMD": pin})
+    result = adapter.execute_policy_arm(arm, None if arm == "NO_MEMORY" else candidate, case, 1)
+    assert result["metadata"]["policy_arm"] == arm
+
+
+def test_v2_tool_changed_after_replay_is_rejected_before_actual_arm(tmp_path, monkeypatch):
+    from tehm.evaluation import orfs_candidate_oracle as oracle
+    case, candidate = _observed_case(tmp_path, pinned_klayout=True)
+    tool = tmp_path / "private-klayout"
+    tool.write_text("#!/bin/sh\nexit 0\n")
+    tool.chmod(0o755)
+    case["klayout_exe"] = str(tool)
+    case["flow_config_observation"] = probe_flow_config(
+        Path(case["project_dir"]), Path(case["orfs_root"]), keys=("CORE_UTILIZATION",),
+        **{key: Path(case[key]) for key in ("make_exe", "python_exe", "openroad_exe", "yosys_exe")},
+        klayout_exe=tool)
+    original = oracle._copy_project
+    def changing(*args):
+        original(*args)
+        tool.write_text(tool.read_text() + "# changed after replay\n")
+    monkeypatch.setattr(oracle, "_copy_project", changing)
+    monkeypatch.setattr(oracle, "_execute_arm", lambda *a: pytest.fail("EDA launched"))
+    with pytest.raises(OrfsCandidateOracleError, match="tool pins changed"):
+        execute_orfs_candidate(candidate, case, 1)
 
 
 def test_observed_baseline_and_treatment_use_disposable_configuration(tmp_path):

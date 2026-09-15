@@ -74,3 +74,73 @@ def test_probe_rejects_unknown_keys_before_make_execution(setup):
     project, root, _, args = setup
     with pytest.raises(ValueError, match="supported unique keys"):
         probe.probe_flow_config(project, root, **{**args, "keys": ("SDC_FILE",)})
+
+
+def _version_tool(project):
+    tool = project.parent / "pinned-klayout"
+    marker = project.parent / "version-invocations"
+    tool.write_text(f"#!/bin/sh\nprintf 'version\\n' >> '{marker}'\nprintf 'KLayout 0.29.12\\n'\n")
+    tool.chmod(0o755)
+    return tool, marker
+
+
+def test_v2_binds_real_make_version_query_not_ambient_tool(setup, monkeypatch):
+    project, root, _, args = setup
+    tool, marker = _version_tool(project)
+    makefile = root / "flow/Makefile"
+    makefile.write_text(makefile.read_text() +
+        "KLAYOUT_CMD ?= /this/host/tool/must/not/run\n"
+        "KLAYOUT_VERSION := $(shell $(KLAYOUT_CMD) -v)\n")
+    monkeypatch.setenv("KLAYOUT_CMD", "/ambient/must/not/run")
+    result = probe.probe_flow_config(project, root, **args, klayout_exe=tool)
+    assert result["version"] == "orfs-effective-config-probe-v2"
+    assert result["tool_bindings"] == {"KLAYOUT_CMD": str(tool)}
+    assert result["environment"]["KLAYOUT_CMD"] == str(tool)
+    assert result["tool_sha256"][str(tool)] == probe._sha(tool)
+    assert marker.read_text().splitlines() == ["version", "version"]
+    assert "KLAYOUT_CMD" not in result["values"]
+    assert result["eda_executed"] is False
+
+
+def test_v1_without_pin_keeps_legacy_receipt_shape(setup):
+    project, root, _, args = setup
+    result = probe.probe_flow_config(project, root, **args)
+    assert result["version"] == "orfs-effective-config-probe-v1"
+    assert "tool_bindings" not in result
+    assert "KLAYOUT_CMD" not in result["environment"]
+
+
+@pytest.mark.parametrize("name", ["klayout with space", "klayout$inject", "klayout;inject"])
+def test_v2_rejects_command_syntax_before_make(setup, monkeypatch, name):
+    project, root, _, args = setup
+    tool = project.parent / name
+    tool.write_text("#!/bin/sh\nexit 0\n")
+    tool.chmod(0o755)
+    monkeypatch.setattr(probe.subprocess, "run", lambda *a, **k: pytest.fail("Make ran"))
+    with pytest.raises(ValueError, match="shell-safe"):
+        probe.probe_flow_config(project, root, **args, klayout_exe=tool)
+
+
+def test_v2_rejects_make_override_of_pinned_command(setup):
+    project, root, _, args = setup
+    tool, _ = _version_tool(project)
+    makefile = root / "flow/Makefile"
+    makefile.write_text(makefile.read_text() + "override KLAYOUT_CMD := /different/tool\n")
+    with pytest.raises(ValueError, match="command override"):
+        probe.probe_flow_config(project, root, **args, klayout_exe=tool)
+
+
+def test_v2_detects_tool_bytes_changed_during_expansion(setup, monkeypatch):
+    project, root, _, args = setup
+    tool, _ = _version_tool(project)
+    original = probe.subprocess.run
+    calls = 0
+    def changing(*a, **k):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            tool.write_text(tool.read_text() + "# changed\n")
+        return original(*a, **k)
+    monkeypatch.setattr(probe.subprocess, "run", changing)
+    with pytest.raises(ValueError, match="inputs changed"):
+        probe.probe_flow_config(project, root, **args, klayout_exe=tool)

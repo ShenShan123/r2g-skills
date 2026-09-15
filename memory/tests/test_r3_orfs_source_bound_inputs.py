@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -128,6 +129,26 @@ def test_v2_toolchain_recomputes_oracle_source_binding(tmp_path):
     with pytest.raises(SourceBoundInterferenceInputError,
                        match="does not match oracle_files"):
         _toolchain({"toolchain": raw}, require_oracle_binding=True)
+
+
+@pytest.mark.parametrize("executable", [False, True])
+def test_explicit_klayout_toolchain_pin_is_validated_and_preserved(tmp_path, executable):
+    raw = {name: str(tmp_path) for name in ("orfs_root", "pdk_root", "toolchain_root")}
+    raw.update({name: sys.executable for name in ("openroad_exe", "yosys_exe",
+        "make_exe", "python_exe", "run_flow_script", "fix_signoff_script")})
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}\n")
+    tool = tmp_path / "klayout"
+    tool.write_text("#!/bin/sh\nexit 0\n")
+    tool.chmod(0o755 if executable else 0o644)
+    raw.update(toolchain_manifest=str(manifest), klayout_exe=str(tool), platform="sky130hs")
+    raw.update({name: "sha256:pin" for name in ("toolchain_digest", "oracle_digest",
+                                               "platform_digest", "pdk_digest")})
+    if executable:
+        assert _toolchain({"toolchain": raw})["klayout_exe"] == str(tool)
+    else:
+        with pytest.raises(SourceBoundInterferenceInputError, match="klayout_exe is not executable"):
+            _toolchain({"toolchain": raw})
 
 
 def test_physical_harm_contract_requires_source_bound_authority(tmp_path):
