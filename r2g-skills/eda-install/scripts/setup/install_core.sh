@@ -27,6 +27,12 @@ fi
 _bigv="$(pick_big_volume)" || die "no writable volume with >= ${R2G_MIN_FREE_GB:-15}GB free — pass --prefix DIR"
 _orfs="${ORFS_ROOT:-$_bigv/OpenROAD-flow-scripts}"
 
+# There is no published flow-matched OpenROAD/Yosys direct recipe yet. Refuse
+# BEFORE cloning an unpinned ORFS tree or invoking a legacy build/package path.
+if [[ "${R2G_DIRECT:-0}" == "1" ]]; then
+  die "missing direct core: stage a verified flow-matched SDK; unpinned ORFS cloning and conda/build fallback are refused"
+fi
+
 # 1) ORFS checkout (git only, no build) — provides flow/ + platforms/.
 if [[ ! -f "$_orfs/flow/Makefile" ]]; then
   have_cmd git || die "git required to clone ORFS"

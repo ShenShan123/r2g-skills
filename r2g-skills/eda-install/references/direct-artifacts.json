@@ -1,0 +1,24 @@
+{
+  "schema": "r2g-direct-artifacts-v1",
+  "components": {
+    "frontend": {
+      "linux-x64": {
+        "publisher": "YosysHQ",
+        "release": "2026-08-20",
+        "source_reference_url": "https://api.github.com/repos/YosysHQ/oss-cad-suite-build/releases/tags/2026-08-20",
+        "source_asset_id": 521649405,
+        "url": "https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-08-20/oss-cad-suite-linux-x64-20260820.tgz",
+        "sha256": "f85ffd027fc45cfacb7d6473cc4f815fa9829c527bb8b23ec653c37ced0c8859",
+        "size_bytes": 737730417,
+        "archive_root": "oss-cad-suite",
+        "max_expanded_bytes": 8589934592,
+        "max_members": 200000,
+        "runtime_probes": {
+          "bin/iverilog": ["-V"],
+          "bin/vvp": ["-V"],
+          "bin/verilator": ["--version"]
+        }
+      }
+    }
+  }
+}

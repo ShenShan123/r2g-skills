@@ -154,7 +154,11 @@ fi
 if [[ "$hermetic" == "1" ]]; then
   _direct_root="${R2G_TOOLCHAIN_ROOT:-${R2G_PREFIX:-}}"
   if [[ -n "$_direct_root" ]]; then
-    if [[ -x "$_direct_root/openroad-matched/bin/openroad" ]]; then
+    if [[ -x "$_direct_root/openroad-matched/launch_openroad.sh" ]]; then
+      OPENROAD_EXE="$_direct_root/openroad-matched/launch_openroad.sh"
+    elif [[ -x "$_direct_root/openroad/launch_openroad.sh" ]]; then
+      OPENROAD_EXE="$_direct_root/openroad/launch_openroad.sh"
+    elif [[ -x "$_direct_root/openroad-matched/bin/openroad" ]]; then
       OPENROAD_EXE="$_direct_root/openroad-matched/bin/openroad"
     elif [[ -x "$_direct_root/openroad-matched/bin/openroad.bin" ]]; then
       OPENROAD_EXE="$_direct_root/openroad-matched/bin/openroad.bin"
@@ -163,7 +167,11 @@ if [[ "$hermetic" == "1" ]]; then
     elif [[ -x "$_direct_root/openroad/bin/openroad" ]]; then
       OPENROAD_EXE="$_direct_root/openroad/bin/openroad"
     fi
-    [[ -x "$_direct_root/yosys/bin/yosys" ]] && YOSYS_EXE="$_direct_root/yosys/bin/yosys"
+    if [[ -x "$_direct_root/yosys/launch_yosys.sh" ]]; then
+      YOSYS_EXE="$_direct_root/yosys/launch_yosys.sh"
+    elif [[ -x "$_direct_root/yosys/bin/yosys" ]]; then
+      YOSYS_EXE="$_direct_root/yosys/bin/yosys"
+    fi
     [[ -x "$_direct_root/sta/bin/sta" ]] && STA_EXE="$_direct_root/sta/bin/sta"
     [[ -x "$_direct_root/oss-cad-suite/bin/iverilog" ]] && IVERILOG_EXE="$_direct_root/oss-cad-suite/bin/iverilog"
     [[ -x "$_direct_root/oss-cad-suite/bin/vvp" ]] && VVP_EXE="$_direct_root/oss-cad-suite/bin/vvp"
@@ -214,6 +222,7 @@ HDR
   echo "# --- Tool binaries (pinned only when outside \$ORFS_ROOT/tools/install) ----"
   emit_export OPENROAD_EXE  "${OPENROAD_EXE:-}"  "$_orfs_install_prefix"
   emit_export YOSYS_EXE     "${YOSYS_EXE:-}"     "$_orfs_install_prefix"
+  [[ -n "${YOSYS_EXE:-}" ]] && echo 'export COLUMNS="8192"'
   emit_export STA_EXE       "${STA_EXE:-}"       "$_orfs_install_prefix"
   emit_export IVERILOG_EXE  "${IVERILOG_EXE:-}"
   emit_export VVP_EXE       "${VVP_EXE:-}"

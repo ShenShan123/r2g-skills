@@ -1,0 +1,14 @@
+{
+  "schema": "tehm-research-budget-v1",
+  "budget_id": "r4-rc1-development-preflight-v1",
+  "candidate_limit": 3,
+  "eda_call_limit": 6,
+  "model_call_limit": 0,
+  "model_token_limit": 0,
+  "wallclock_limit_seconds": 7200,
+  "retry_limit": 1,
+  "retryable_classes": [
+    "infrastructure_transient"
+  ],
+  "claim_boundary": "Development preflight budget; it is not the final paper campaign budget and zero model calls means no LLM-agent claim."
+}

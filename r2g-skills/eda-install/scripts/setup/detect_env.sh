@@ -46,7 +46,11 @@ done
 # --- sudo availability ---------------------------------------------------------
 # Already root, or passwordless sudo works → treat as having sudo.
 HAVE_SUDO=0
-if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+if [[ "${R2G_DIRECT:-0}" == "1" ]]; then
+  # Direct provisioning cannot use sudo or package-manager fallback. Do not
+  # invoke a privileged capability probe whose result cannot change the plan.
+  :
+elif [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
   HAVE_SUDO=1
 elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
   HAVE_SUDO=1
@@ -54,6 +58,7 @@ fi
 
 # --- conda / mamba -------------------------------------------------------------
 HAVE_CONDA=""
+if [[ "${R2G_DIRECT:-0}" != "1" ]]; then
 for _c in mamba conda; do
   if _hit="$(command -v "$_c" 2>/dev/null)" && [[ -n "$_hit" ]]; then HAVE_CONDA="$_hit"; break; fi
 done
@@ -62,6 +67,7 @@ if [[ -z "$HAVE_CONDA" ]]; then
             "/proj/$USER/miniconda3/bin/conda" "${R2G_PREFIX:-}/miniconda3/bin/conda"; do
     [[ -n "$_c" && -x "$_c" ]] && { HAVE_CONDA="$_c"; break; }
   done
+fi
 fi
 
 # --- graph-stage python (torch + torch_geometric + pandas) --------------------

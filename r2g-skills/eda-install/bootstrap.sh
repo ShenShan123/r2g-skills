@@ -222,7 +222,7 @@ eval_tier() {
       else
         TIER_STATUS="MISS"
         if [[ "$do_direct" == "1" ]]; then
-          TIER_ACTION="direct bundle missing under $DIRECT_ROOT (stage OSS CAD Suite frontend; conda disabled)"
+          TIER_ACTION="download SHA256-locked OSS CAD Suite frontend into $DIRECT_ROOT (references/direct-artifacts.json or R2G_DIRECT_ARTIFACT_LOCK; conda disabled)"
         elif [[ "$SUDO" == "1" && "$PKG" != "none" ]]; then
           TIER_ACTION="$PKG install iverilog verilator"
         else

@@ -13,6 +13,11 @@ metadata:
       R2G_GRAPH_PYTHON: "an existing python with torch+torch_geometric+pandas (skips building the graph venv)"
       R2G_MIN_FREE_GB: "free-space threshold for the big-volume picker (default 15)"
       R2G_ENV_FILE: "a shell snippet of tool-path exports to seed detection"
+      R2G_DIRECT_ARTIFACT_LOCK: "optional operator-supplied fixed HTTPS artifact lock; default references/direct-artifacts.json"
+      R2G_DIRECT_OFFLINE: "1 requires a matching SHA256 archive already in the prefix cache; no network"
+      R2G_DIRECT_DOWNLOAD_TIMEOUT: "total resumable-download budget in seconds, default 3600, range 1..14400"
+      R2G_DIRECT_DOWNLOAD_JOBS: "parallel verified HTTPS range jobs, default 1, range 1..8"
+      R2G_DIRECT_RESUME_FROM: "optional explicit unverified partial file to import into a NEW cache; final SHA256 still required"
   warnings:
     - Required runtime probes need timeout or gtimeout; a missing probe limiter fails readiness.
     - Always run `bootstrap.sh --dry-run` first — it prints a per-tier plan and installs nothing.
@@ -90,6 +95,15 @@ bash r2g-skills/eda-install/bootstrap.sh               # install missing tiers +
    but unloadable binary is not ready. The standalone def-graph checker retains its
    narrower ORFS-data/Python requirement. These probes are not semantic or native-read proof.
 
+   Direct SDK launchers (`openroad-matched/launch_openroad.sh`,
+   `yosys/launch_yosys.sh`) outrank their bare payloads when present, preserving
+   private loader/data bindings. Valid explicit env-file pins outrank skill-local
+   and ORFS defaults, including Magic. Shared resolution and generated consumer
+   pins export `COLUMNS=8192`: Yosys' ABC process-reuse protocol needs the complete
+   echoed `source <absolute-script>` command, which readline otherwise clips on
+   narrow terminals. This is a pinned I/O setting, not a synthesis constraint.
+   Direct detection does not probe sudo or conda; neither can alter its plan.
+
 ## Direct bundle first; conda is a legacy fallback
 
 When a direct bundle is present below `R2G_TOOLCHAIN_ROOT` (normally the same directory as
@@ -109,6 +123,32 @@ $R2G_TOOLCHAIN_ROOT/
 `bash r2g-skills/eda-install/bootstrap.sh --direct --dry-run --prefix "$R2G_PREFIX"` is the
 fail-closed check: it never invokes conda. A missing direct artifact is reported as a required
 action rather than silently falling back to `/usr`, `/opt`, or a package manager.
+
+The direct **frontend** installer downloads the fixed Linux x64 OSS CAD Suite
+release specified in `references/direct-artifacts.json`, verifies exact size and
+SHA256, validates every tar member before extraction, and checks Icarus/vvp/Verilator
+both before and after relocation. Its receipt binds the lock bytes and full payload
+inventory; subsequent runs reject drift instead of overwriting an existing tree.
+Failed partial downloads/stages remain under `.r2g-downloads`/`.r2g-staging` for inspection.
+Preview creates nothing; `R2G_DIRECT_OFFLINE=1` requires an already matching cached archive.
+Unsupported hosts have no unpinned or package-manager fallback.
+
+Downloads use descriptor-bound resumable partials, with curl's truncating automatic
+retry disabled. Each attempt resumes at the current byte offset; the total budget
+is bounded by `R2G_DIRECT_DOWNLOAD_TIMEOUT`. A contended artifact lock prevents
+concurrent writes. Retry/failure never promotes partial bytes into the verified cache;
+exact final size/SHA256 remains mandatory. `R2G_DIRECT_RESUME_FROM` can explicitly
+copy an old partial into a new cache without changing the source file.
+On slow proxies, `R2G_DIRECT_DOWNLOAD_JOBS=4` fetches adjacent 4 MiB ranges in
+parallel. Every range must return an exact `Content-Range` and byte count before
+any bytes are appended. A failed connection retains the whole round, leaves the
+contiguous partial unchanged, and retries up to the three-round no-progress bound.
+The final whole-archive SHA256 remains authoritative.
+
+This is **not yet a complete fresh-machine direct toolchain installer**. Missing
+flow-matched core artifacts fail before any unpinned ORFS clone/build; stage a verified
+SDK first. Other direct tiers still require their own verified acquisition recipes.
+Frontend runtime receipts confer neither native-read closure nor TEHM production authority.
 
 If `--direct` is not requested, detection runs `sudo -n true`. **Without root** (`HAVE_SUDO=0` —
 the common case on shared servers) the legacy fallback routes through **pre-built conda

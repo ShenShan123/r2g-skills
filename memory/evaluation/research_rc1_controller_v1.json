@@ -1,0 +1,20 @@
+{
+  "schema": "tehm-research-controller-v1",
+  "controller_id": "r2g-deterministic-research-controller-v1",
+  "controller_type": "deterministic_skill",
+  "policies": [
+    "no_persistent_memory",
+    "legacy_memory",
+    "tehm"
+  ],
+  "candidate_source_mapping": {
+    "no_persistent_memory": "cold_start",
+    "legacy_memory": "legacy_memory",
+    "tehm": "tehm_rule"
+  },
+  "route_mode": "shadow",
+  "production_authority": false,
+  "online_memory_update": false,
+  "final_test_learning": false,
+  "claim_boundary": "Research Runtime RC1 controller identity only; no model-agent, empirical gain, production import, or promotion claim."
+}

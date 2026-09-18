@@ -7215,3 +7215,144 @@ canonical memory，不开放 production。r150 仍是 bootstrap 修复前的 R2G
 打包验证。historical authority generation/origins、完整 public bootstrap/P16、broad C7、
 P15 独立 reason labels/pre-outcome probability/statistical evidence、P17 仍未闭合；
 provider calls=0，memory/docs 不提交。
+
+### 2026-09-15 existing-SDK bootstrap consumer pins and ABC protocol closure
+
+本轮直接运行当前 public bootstrap 的隔离副本，仅使用已冻结 r150/r69 SDK；先
+dry-run 确认 selected core=OK，再运行 pin/verify，不安装、下载或部署工具。随后清除
+caller tool overrides，分别检查三份新生成 consumer pins，不能用初始 seed 环境掩盖
+consumer 配置。r178 暴露裸 payload 覆盖 SDK launcher、Magic env-file 被个人目录
+自动探测替换的问题；bootstrap/版本探测均为 0，但实际综合 smoke 在 ABC 阶段超时。
+r183 修复 launcher/Magic 路径后仍超时，两个失败终态均保留，不重跑覆盖。
+
+r187 ABC pipe protocol 对照确认：长 absolute-script 路径被窄 readline 屏幕裁剪，
+`YOSYS_ABC_DONE` 已出现，但完整 `abc NN> source ...` 回显缺失。Yosys reused-process
+parser 因此继续等待。扩大 COLUMNS 后回显恢复；旧 r154 standalone driver 已有
+COLUMNS=4096，但 public `_env.sh` / consumer pins 没有该契约。现在四份共享 resolver
+保持 byte-identical，优先 SDK OpenROAD/Yosys launchers，显式 env-file 优先于 skill-local
+和 ORFS defaults，Magic 采用相同优先级，并固定 COLUMNS=8192，作为 I/O protocol
+配置而非 synthesis constraint。direct detection 同时跳过无关的 sudo/conda 能力探测。
+
+新增前 13 项 precedence controls 在保留的 r174 源码上全部失败，修复后全部通过；
+r182 negative-control digest 为
+`sha256:b0b455421c67a2948e5887c2d1511b69262ebf40351c242ec11dd8102f540357`。
+r188 全部 bootstrap unit/dry-run regression 为 117 passed / 3 skipped，515 public
+source files 前后不变；18 required-phase、23 required-runtime、19 新 controls 全部
+通过。三个旧 optional-tools precondition skips 不计为通过。freeze digest 为
+`sha256:1412b4260dbe93bd18a08a215ec0f18e5074912a789802510e9724fa6c22b8ba`，
+JUnit SHA 为 `sha256:b597030d58c435c9d84864b9b80045c5f73fb3afd0500eff8614dd20766bdbd8`，
+terminal digest 为 `sha256:0b69072ee73f7b6b12e82eb1682a6a371146c5bae26bf5f4a159337ab42993d5`。
+r193 已保存完整 tested source epoch，archive digest 为
+`sha256:c283163ed8734c6e8dea08b8b0acc29b0775f19b38bad2e8244ed32f4b0128a7`。
+
+r190 在新 workspace 重新执行真实 existing-core bootstrap；bootstrap、三份新
+consumer pins 检查及完整 counter fixture synth/check 均为 0，五个 EDA entrypoint
+及 COLUMNS 与事前声明完全一致。execution digest 为
+`sha256:e951e590ce5c1db6cc160c44f81cc2d5180085ea8a28c72a42d2b8e0bb1444b2`。
+r191 独立重验全部 r150/r69 exact inventories、source/seed/pin/process-log hashes，
+以及 1174 native traces / 3750 successful read paths；unknown host paths、unlisted
+host executables、unfinished/unparsed opens 均为 0，状态
+PASS_EXISTING_SDK_BOOTSTRAP_NATIVE_READ_COMPONENT，audit digest 为
+`sha256:6d001c358a41e1f4d2b620416e606b5d4bcfb2aa516e8db3a6cb5a091ce61095`。
+该检查依赖 r131 OS foundation 和事前冻结、仅适用于新 r190 的最小 r192 setup
+supplement：os-release、df、bundled loader 的 glibc/timezone/CPU metadata，以及
+own-traced-pid environ/mountinfo phase；不捕获环境内容，不允许 sudo、host readline/
+libffi 或个人目录 EDA。旧 r184 两项失败审计未更改或重分类。r192 digest 为
+`sha256:170c5d11e5ccd844ac9330f5e76a20c36eb268f636dde32317b1557a6073bb25`。
+
+r195 另外运行六个 memory/toolchain/oracle boundary unit modules，80/80 passed，
+无 failure/error/skip；570 memory Python files 与 515 public bootstrap files 的
+1085 个源码绑定前后不变。terminal digest 为
+`sha256:20db69c268ce48ca43acf6c4338a6def52d3db7bdca0549f6be37b541e445068`。
+这是边界回归，不是重跑全量 1996 memory tests 或新的 real ORFS cohort；r194 runner
+缺失 sibling-test import path 的 collection error 也保留，不计为通过。
+
+这仅闭合 existing-SDK bootstrap 使用链路，不证明缺失工具的 pinned download /
+build origins、统一 public portable package 或 historical authority-generation
+relocation。r150 本身仍是旧 R2G snapshot；隔离 consumer 副本不是已发布的新 SDK。
+重复 counter fixture 不新增独立 training/calibration samples。P15 独立来源、真实
+pre-outcome probabilities/statistical gates、broad C7、完整 P16/P17 仍未闭合；canonical
+memory mutation=none，provider calls=0，production gates 不变，memory/docs 不提交。
+
+### 2026-09-15 direct frontend acquisition implementation and frozen safety regression
+
+公共 direct frontend 入口现在使用 `eda-install/references/direct-artifacts.json` 的
+固定 HTTPS URL、精确大小和 SHA256 下载 OSS CAD Suite；不调用 conda/sudo，也不
+覆盖已有未登记目录。解包前检查全部路径、链接、重复项、特殊文件和展开边界；
+运行探测限制时间/输出并清理自身子进程组。receipt 绑定原始锁文件字节、descriptor
+和完整 payload inventory，安装过程中锁文件变化或后续 replay drift 均 fail-closed。
+失败下载与 staging 保留，可检查和恢复；dry-run 无网络或安装写入，offline 必须
+使用匹配的 SHA-addressed cache。缺失 direct core 则在 unpinned ORFS clone/build
+之前明确拒绝；这不是已有 flow-matched OpenROAD/Yosys acquisition recipe。
+
+r196 在保存全部 518 个 public source files 的新隔离目录运行安装器回归：146 passed /
+3 skipped，29 个新 archive/lock/process controls 全部通过，源码前后未变。三个旧
+optional-tool precondition skips 不计为通过。source freeze digest 为
+`sha256:8ee479a0372c726cd3216128913eb0c151b2fb937e030145acd649201a65bc27`，
+JUnit SHA 为 `sha256:a2367e2a313e95da1d91f084a3074f61954e2f495727914a6c58ca716a09020a`，
+terminal digest 为 `sha256:cd21254ec90a488200d4bd6a13bd0496db3f9c11b49d375d26fbb52f37a6b964`。
+这证明安装器安全控制，不证明真实下载、缺失 frontend bootstrap、native-read closure
+或完整 fresh-machine toolchain；这些必须由各自实际终态与独立审计证明。完整 P16、
+P15 的独立 reason labels/pre-outcome probabilities/statistical gates 和 P17 仍未闭合。
+本阶段 provider calls=0、canonical memory mutation=none，production authority 不变。
+
+### 2026-09-15 real transfer failure and descriptor-bound resume repair
+
+r197 实际固定工具包下载在收到 91,837,166 / 737,730,417 bytes 后超时；curl
+internal retry 将 partial 重置为新的从头传输，暴露旧实现不能保留超时下载进度。
+核验 exact curl PID/parent/URL 后终止本轮自有 curl，驱动记录 FAILED_COMPONENT；
+全部 518 个源码绑定未变、无安装 receipt。失败 terminal digest 为
+`sha256:e56d1839d7b5f69aae583fc573fe62a9f3960edb15fc268a6ba8c6dd16bc3144`。
+该失败不能覆盖或计作实际安装成功；剩余 1,617,920-byte partial 和日志保留。
+
+下载实现已禁用 curl internal retry；每次独立 attempt 使用 current byte offset，
+descriptor-bound partial 可跨 invocation 恢复。默认总预算 3600s，可显式配置
+1..14400s；单次最多 600s、连续三次无进度则失败。per-artifact flock 拒绝并发写入，
+锁路径拒绝 symlink；导入旧 partial 只复制、不修改源文件，全部 partial 始终未验证，
+必须完成 exact final size/SHA256 才能成为缓存 artifact。r200 保存 518 个新源码
+副本并运行完整安装器回归：154 passed / 3 skipped，37 个 archive/transport controls
+全部通过，源码前后未变。source freeze digest 为
+`sha256:b6d08fad330809b68da8dc71510c00a2c2218940b31a07d5b9b316d27f42b0aa`，
+JUnit SHA 为 `sha256:3d9918881ff1cdc37e51b13a8e3acd5e34abaf2b9cac591945da87004884c831`，
+terminal digest 为 `sha256:08e25c01ebab9b670bc97e53a21b8bd76b5b69bfaee20c3a11602d63fd41e86b`。
+r203 另在冻结 r200 模块上实际测试 contended flock 与 symlink lock，两个 guard
+均阻止 transport 且不修改 retained bytes；digest 为
+`sha256:86be1669c7f6fecd26672f92a2c721c789c669dcfe4a4b857a862f48b206b817`。
+r201 随后在新目录导入 r197 保留的 1,617,920 bytes（源文件保持原 SHA），第一轮
+从该 offset 开始；598,061ms 后收到 22,168,424 bytes 并超时，第二轮从精确累计
+offset 23,786,344 继续，partial 未归零。r206 独立核对 log、输入 freeze、原 partial
+prefix 和当前增长状态，状态 PASS_REAL_TIMEOUT_RESUME_CONTROL，digest 为
+`sha256:9b43fa3ea2bce6889725b71aca5a4fae81f9b29c7a2cf0eb301defda70bafc1c`。
+这只证明真实 timeout boundary 的恢复语义；r201 在此记录时仍为 live unverified
+partial，不能当作完整 archive 或安装成功。
+
+这是下载安全/恢复实现的工程证据，不是完整工具安装或 P16 验收。真实 acquisition、
+缺失工具 bootstrap、独立 archive-to-installed-byte 与 native-read 审计仍需实际
+终态证明；无新增独立 calibration samples、canonical mutation、provider calls
+或 production authority。完整 Revision3/P15/P16/P17 目标保持不变。
+
+串行 r201 的两个完整 600s attempts 分别追加 22,168,424 和 25,595,886
+bytes，但约 40KB/s 的实测速率不能在 7200s 预算内完成剩余 688MB；保留
+54,014,806-byte contiguous partial 后，精确终止自有 worker/curl，r201 写入
+FAILED_COMPONENT，源码仍为 518/518 unchanged、无 receipt。随后新增可选
+`R2G_DIRECT_DOWNLOAD_JOBS`（1..8，默认 1）：并行获取相邻 4MiB ranges，所有
+response 必须提供精确 `Content-Range` 和 byte count 后才整轮有序追加；任一失败
+则主 partial 不变且 headers/body retained。最终 whole-archive size/SHA gate 不变。
+r208 完整回归为 161 passed / 3 skipped，518 个源码文件前后未变；freeze digest
+`sha256:37ea69d0daa5b4697128e2da8a661631e75bf0c44c73db25ce59b04427337542`，
+JUnit SHA `sha256:ff5774a3e7a5e215924fd73229fc16d2462ae23c51ef78f49627654c777cc995`，
+terminal digest `sha256:78a1e1f3d8cd0eade46443be4957265b7ae6abcd489eaad27868ebb8999a902e`。
+r209 实际四连接前两轮将主 partial 从 54,014,806 精确追加到 87,569,238
+bytes；第三轮有一个 range 发生 TLS connection timeout，另三个完整，主 partial
+保持上一轮字节且失败 body/header retained。r209 按原策略写 FAILED_COMPONENT，
+没有 receipt；terminal digest 为
+`sha256:e3fd48fc443190c0b5c6459c2aaab644a9b070fc95c0b1aeab14881ae9355bfd`。
+据此补上 bounded whole-round retry：失败轮不追加，连续三轮无进展才终止。
+r210 完整回归为 163 passed / 3 skipped，518 个源码文件前后未变；freeze digest
+`sha256:81065b0266eb57629bdcf7a162568d731fe08baa246cd891791a1ea75e078fff`，
+JUnit SHA `sha256:556aa2fd3e06099a18765d9b8bcfe48a631adfab07f0fbc69a8b6299cf5f15ba`，
+terminal digest `sha256:ec603ad49b2070b638f598ec96870852c9fd968796c12c9fea5b88066cb26a5c`。
+r211 随后从保留的 87,569,238-byte prefix 开始；最初两轮已将主 partial
+推进到 121,123,670 bytes 并进入第三轮。r212 independent archive audit 与 r213
+cache-backed bootstrap 在执行结果之前按固定 template SHA 预注册。在 r211 形成
+terminal whole-archive SHA/receipt 前，仍不能当作 acquisition/install PASS。

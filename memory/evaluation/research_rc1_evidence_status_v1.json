@@ -1,0 +1,41 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "entries": [
+    {
+      "evidence_id": "current-working-source-freeze",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The epoch captures the exact working source bytes, Git HEAD, dirty status, and binary patch."
+    },
+    {
+      "evidence_id": "current-bound-internal-toolchain",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected toolchain is authenticated by tehm-orfs-toolchain-manifest-v1 and a clean ORFS checkout."
+    },
+    {
+      "evidence_id": "tehm-evidence-freeze-v4-dev",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected M0 is a content-addressed bundle verified by the current bundle verifier; its effect claims remain limited to its own fixtures."
+    },
+    {
+      "evidence_id": "revision3-bf5dc5eb-review-baseline",
+      "classification": "corrected",
+      "selected_for_epoch": false,
+      "basis": "Revision3 used an older review baseline and cannot identify the current checkout."
+    },
+    {
+      "evidence_id": "memory-readme-historical-campaign-records",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "README narratives guide replay but are not substituted for their external raw artifacts or a current independent audit."
+    },
+    {
+      "evidence_id": "future-real-design-pilot-results",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "No Revision4 S0, S1, or S2 real-design result exists at epoch freeze time."
+    }
+  ]
+}

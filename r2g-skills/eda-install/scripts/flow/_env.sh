@@ -63,15 +63,26 @@ for _r2g_var in ORFS_ROOT OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EX
 done
 
 # --- 1. User-provided env snippets ---------------------------------------
+declare -A _r2g_explicit_file_env=()
 if [[ -n "${R2G_ENV_FILE:-}" && -f "$R2G_ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   source "$R2G_ENV_FILE"
+  for _r2g_var in ORFS_ROOT OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EXE \
+                  STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT SKY130A_DIR; do
+    [[ -n "${!_r2g_var:-}" ]] && _r2g_explicit_file_env["$_r2g_var"]="${!_r2g_var}"
+  done
 fi
 
 if [[ -f "$_R2G_SKILL_DIR/references/env.local.sh" ]]; then
   # shellcheck disable=SC1090,SC1091
   source "$_R2G_SKILL_DIR/references/env.local.sh"
 fi
+
+# An explicit env-file outranks the skill-local snippet and ORFS defaults.
+# Preserve its values through both source layers; true caller pins still win.
+for _r2g_var in "${!_r2g_explicit_file_env[@]}"; do
+  export "$_r2g_var=${_r2g_explicit_file_env[$_r2g_var]}"
+done
 
 # A generated env.local.sh can carry the hermetic marker even when the parent
 # shell did not export it.  Refresh the mode after sourcing snippets, then
@@ -144,6 +155,13 @@ if [[ -n "${ORFS_ROOT:-}" ]]; then
     export FLOW_HOME="$ORFS_ROOT/flow"
   fi
 fi
+
+# Restore the higher-priority explicit file after ORFS defaults.
+for _r2g_var in "${!_r2g_explicit_file_env[@]}"; do
+  _r2g_value="${_r2g_explicit_file_env[$_r2g_var]}"
+  [[ "$_r2g_hermetic" == "1" ]] && _r2g_hostwide "$_r2g_value" && continue
+  export "$_r2g_var=$_r2g_value"
+done
 
 # Remember values supplied by the caller, env file, or ORFS before consulting
 # the host-wide environment.  The latter is only a fallback; it must not
@@ -255,6 +273,8 @@ if [[ -n "${ORFS_ROOT:-}" ]]; then
 fi
 
 _r2g_detect OPENROAD_EXE  openroad   \
+  "$_r2g_toolchain_root/openroad-matched/launch_openroad.sh" \
+  "$_r2g_toolchain_root/openroad/launch_openroad.sh" \
   "$_r2g_toolchain_root/openroad-matched/bin/openroad" \
   "$_r2g_toolchain_root/openroad-matched/bin/openroad.bin" \
   "$_r2g_toolchain_root/openroad/bin/openroad.bin" \
@@ -263,10 +283,18 @@ _r2g_detect OPENROAD_EXE  openroad   \
   /usr/local/bin/openroad /usr/bin/openroad
 
 _r2g_detect YOSYS_EXE     yosys      \
+  "$_r2g_toolchain_root/yosys/launch_yosys.sh" \
   "$_r2g_toolchain_root/yosys/bin/yosys" \
   "$_r2g_orfs_yosys" "$_r2g_conda_bin/yosys" \
   /opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys \
   /usr/local/bin/yosys /usr/bin/yosys
+
+# Yosys' reused ABC process parses the echoed `source <absolute-script>`
+# prompt. Readline clips long input at a narrow terminal width, leaving Yosys
+# waiting even after ABC emits YOSYS_ABC_DONE. Pin enough width for a full
+# POSIX/Linux path plus the command/prompt, independent of terminal geometry.
+# This is an I/O protocol setting, not an RTL/synthesis constraint.
+[[ -n "${YOSYS_EXE:-}" ]] && export COLUMNS=8192
 
 _r2g_detect IVERILOG_EXE  iverilog   \
   "$_r2g_toolchain_root/oss-cad-suite/bin/iverilog" \
@@ -285,14 +313,8 @@ _r2g_detect KLAYOUT_CMD   klayout    \
   "$_r2g_toolchain_root/klayout/bin/klayout" \
   /usr/local/bin/klayout /usr/bin/klayout "$_r2g_conda_bin/klayout"
 
-# The host environment script exports its distribution Magic explicitly.  A
-# compatible user-local build must outrank that autodetected system default,
-# while a true caller override (restored above) still wins.
-if [[ -z "${_r2g_caller_env[MAGIC_EXE]:-}" && -x "$_r2g_toolchain_root/magic/bin/magic" ]]; then
-  export MAGIC_EXE="$_r2g_toolchain_root/magic/bin/magic"
-elif [[ -z "${_r2g_caller_env[MAGIC_EXE]:-}" && -x "$HOME/.local/bin/magic" ]]; then
-  export MAGIC_EXE="$HOME/.local/bin/magic"
-fi
+# As with other tools, a valid env-file Magic pin outranks autodetection.
+# System-only values were discarded above; local candidates remain fallbacks.
 _r2g_detect MAGIC_EXE     magic      \
   "$_r2g_toolchain_root/magic/bin/magic" "$HOME/.local/bin/magic" \
   "$_r2g_conda_bin/magic" /usr/local/bin/magic /usr/bin/magic
@@ -375,7 +397,7 @@ fi
 
 unset _r2g_orfs_openroad _r2g_orfs_yosys _cand _hit _p _detected _base _r2g_env \
       _r2g_conda_bases _r2g_conda_bin _r2g_var _r2g_caller_env _r2g_pre_system_env \
-      _r2g_toolchain_root _r2g_prepend_lib _r2g_hermetic _r2g_value
+      _r2g_toolchain_root _r2g_prepend_lib _r2g_hermetic _r2g_value _r2g_explicit_file_env
 # Restore caller's options
 case "$_r2g_saved_opts" in
   *e*) set -e ;;
