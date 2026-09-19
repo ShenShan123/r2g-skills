@@ -207,3 +207,20 @@ def test_runtime_source_binding_reads_nested_epoch_head(
     result = runtime_module._verify_runtime_source(epoch)
     assert result["git_head"] == "frozen-head"
     assert result["critical_paths"] == list(critical)
+
+
+def test_yosys_script_keeps_options_unquoted(tmp_path: Path) -> None:
+    source = tmp_path / "rtl/top.v"
+    source.parent.mkdir(parents=True)
+    source.write_text("module top; endmodule\n", encoding="utf-8")
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    script = runtime_module._yosys_script({
+        "compile_input": {
+            "ordered_filelist": ["rtl/top.v"], "include_dirs": [],
+            "defines": {"WIDTH": "8"}, "top_module": "top",
+            "top_parameters": {},
+        },
+    }, tmp_path, raw)
+    assert script.startswith("read_verilog -sv -DWIDTH=8 ")
+    assert 'read_verilog "-sv"' not in script

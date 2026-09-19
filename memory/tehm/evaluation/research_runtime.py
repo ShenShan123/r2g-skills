@@ -194,6 +194,13 @@ def _yosys_quote(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def _yosys_option(value: str, label: str) -> str:
+    if (not value or any(character.isspace() for character in value) or
+            any(character in value for character in ('"', "'", "\\"))):
+        raise ResearchRuntimeError(f"{label} cannot be represented safely in Yosys")
+    return value
+
+
 def _yosys_script(context: Mapping[str, Any], workspace: Path,
                   raw: Path) -> str:
     compile_input = context["compile_input"]
@@ -210,14 +217,17 @@ def _yosys_script(context: Mapping[str, Any], workspace: Path,
     flags = ["-sv"]
     for value in compile_input.get("include_dirs") or []:
         relative = _safe_relative(value, "include_dir")
-        flags.append("-I" + str(workspace / Path(*relative.parts)))
+        flags.append(_yosys_option(
+            "-I" + str(workspace / Path(*relative.parts)), "include_dir"
+        ))
     defines = compile_input.get("defines") or {}
     if not isinstance(defines, Mapping):
         raise ResearchRuntimeError("frozen defines are invalid")
     for key, value in sorted(defines.items()):
         if type(key) is not str or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
             raise ResearchRuntimeError("frozen define name is invalid")
-        flags.append(f"-D{key}" if value in (None, "") else f"-D{key}={value}")
+        option = f"-D{key}" if value in (None, "") else f"-D{key}={value}"
+        flags.append(_yosys_option(option, "define"))
     top = compile_input.get("top_module")
     if type(top) is not str or not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", top):
         raise ResearchRuntimeError("frozen top module is invalid")
@@ -230,8 +240,7 @@ def _yosys_script(context: Mapping[str, Any], workspace: Path,
             raise ResearchRuntimeError("frozen top parameter name is invalid")
         hierarchy.extend(["-chparam", _yosys_quote(key), _yosys_quote(str(value))])
     read = "read_verilog " + " ".join(
-        [*(_yosys_quote(flag) for flag in flags),
-         *(_yosys_quote(str(path)) for path in files)]
+        [*flags, *(_yosys_quote(str(path)) for path in files)]
     )
     return "\n".join([
         read,
