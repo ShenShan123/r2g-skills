@@ -224,3 +224,6 @@ def test_yosys_script_keeps_options_unquoted(tmp_path: Path) -> None:
     }, tmp_path, raw)
     assert script.startswith("read_verilog -sv -DWIDTH=8 ")
     assert 'read_verilog "-sv"' not in script
+    assert "hierarchy -check -top top" in script
+    assert "synth -top top" in script
+    assert '-top "top"' not in script

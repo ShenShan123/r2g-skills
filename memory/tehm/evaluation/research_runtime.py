@@ -201,6 +201,12 @@ def _yosys_option(value: str, label: str) -> str:
     return value
 
 
+def _yosys_atom(value: str, label: str) -> str:
+    if not value or not re.fullmatch(r"[-+A-Za-z0-9_.$']+", value):
+        raise ResearchRuntimeError(f"{label} cannot be represented safely in Yosys")
+    return value
+
+
 def _yosys_script(context: Mapping[str, Any], workspace: Path,
                   raw: Path) -> str:
     compile_input = context["compile_input"]
@@ -234,11 +240,15 @@ def _yosys_script(context: Mapping[str, Any], workspace: Path,
     parameters = compile_input.get("top_parameters") or {}
     if not isinstance(parameters, Mapping):
         raise ResearchRuntimeError("frozen top parameters are invalid")
-    hierarchy = ["hierarchy", "-check", "-top", _yosys_quote(top)]
+    top_atom = _yosys_atom(top, "top module")
+    hierarchy = ["hierarchy", "-check", "-top", top_atom]
     for key, value in sorted(parameters.items()):
         if type(key) is not str or not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", key):
             raise ResearchRuntimeError("frozen top parameter name is invalid")
-        hierarchy.extend(["-chparam", _yosys_quote(key), _yosys_quote(str(value))])
+        hierarchy.extend([
+            "-chparam", _yosys_atom(key, "top parameter name"),
+            _yosys_atom(str(value), "top parameter value"),
+        ])
     read = "read_verilog " + " ".join(
         [*flags, *(_yosys_quote(str(path)) for path in files)]
     )
@@ -246,7 +256,7 @@ def _yosys_script(context: Mapping[str, Any], workspace: Path,
         read,
         " ".join(hierarchy),
         f"write_json {_yosys_quote(str(raw / 'elaborated.json'))}",
-        "synth -top " + _yosys_quote(top),
+        "synth -top " + top_atom,
         "stat",
         f"write_json {_yosys_quote(str(raw / 'synthesized.json'))}",
         "",
