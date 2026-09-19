@@ -177,3 +177,33 @@ def test_runtime_rejects_non_s0_profile(
     _write(prepared / "prepared-campaign.json", campaign)
     with pytest.raises(ResearchRuntimeError, match="frontend_preflight"):
         run_research_campaign(prepared=prepared, output=tmp_path / "run")
+
+
+def test_runtime_source_binding_reads_nested_epoch_head(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = Path(runtime_module.__file__).resolve().parents[3]
+    critical = (
+        "memory/scripts/research_pilot.py",
+        "memory/tehm/evaluation/research_campaign.py",
+        "memory/tehm/evaluation/research_inventory.py",
+        "memory/tehm/evaluation/research_ledger.py",
+        "memory/tehm/evaluation/research_runtime.py",
+    )
+    entries = [
+        {"path": relative, "kind": "file", "bytes": (repo / relative).stat().st_size,
+         "sha256": _sha(repo / relative)}
+        for relative in critical
+    ]
+    epoch = tmp_path / "epoch"
+    _write(epoch / "research-epoch.json", {"source": {"git_head": "frozen-head"}})
+    _write(epoch / "source/source-manifest.json", {
+        "git_head": "frozen-head", "entries": entries,
+    })
+
+    class Completed:
+        stdout = "frozen-head\n"
+
+    monkeypatch.setattr(runtime_module.subprocess, "run", lambda *args, **kwargs: Completed())
+    result = runtime_module._verify_runtime_source(epoch)
+    assert result["git_head"] == "frozen-head"
+    assert result["critical_paths"] == list(critical)

@@ -103,7 +103,8 @@ def _verify_runtime_source(epoch_root: Path) -> dict[str, Any]:
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError) as exc:
         raise ResearchRuntimeError("cannot verify executing Git HEAD") from exc
-    if head != epoch.get("git_head"):
+    frozen_head = (epoch.get("source") or {}).get("git_head")
+    if head != frozen_head or source.get("git_head") != frozen_head:
         raise ResearchRuntimeError("executing Git HEAD differs from frozen epoch")
     by_path = {
         item.get("path"): item for item in source.get("entries") or []
