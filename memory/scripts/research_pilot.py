@@ -29,6 +29,7 @@ from tehm.evaluation.research_ledger import (  # noqa: E402
     verify_attempt_ledger,
     verify_research_audit,
 )
+from tehm.evaluation.research_runtime import run_research_campaign  # noqa: E402
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -101,6 +102,12 @@ def _audit(args: argparse.Namespace) -> int:
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
+
+
+def _run(args: argparse.Namespace) -> int:
+    result = run_research_campaign(prepared=args.prepared, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["all_registered_terminal"] else 2
 
 
 def _summarize(args: argparse.Namespace) -> int:
@@ -181,6 +188,13 @@ def main(argv: list[str] | None = None) -> int:
     verify_ledger.add_argument("--prepared", type=Path, required=True)
     verify_ledger.add_argument("--ledger", type=Path, required=True)
     verify_ledger.set_defaults(handler=_verify_ledger)
+
+    run = sub.add_parser(
+        "run", help="execute the complete frozen campaign through the RC1 runtime"
+    )
+    run.add_argument("--prepared", type=Path, required=True)
+    run.add_argument("--output", type=Path, required=True)
+    run.set_defaults(handler=_run)
 
     audit = sub.add_parser(
         "audit", help="independently recompute scoped verdicts from raw attempt evidence"

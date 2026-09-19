@@ -397,6 +397,115 @@ def _verify_raw_ref(reference: Mapping[str, Any]) -> None:
         raise ResearchLedgerError(f"raw evidence drifted or is missing: {path}")
 
 
+def _frontend_source_verdict(state: Mapping[str, Any],
+                             context: Mapping[str, Any]) -> str:
+    check = state["checks"].get("source_integrity")
+    if check is None:
+        return "UNKNOWN"
+    report = None
+    for reference in check["raw_report_refs"]:
+        path = Path(reference["path"]).expanduser().resolve()
+        if path.suffix != ".json":
+            continue
+        try:
+            candidate = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if (isinstance(candidate, dict) and
+                candidate.get("schema") == "tehm-research-source-integrity-report-v1"):
+            report = candidate
+            break
+    if report is None:
+        return "UNKNOWN"
+    compile_input = context.get("compile_input") or {}
+    root = Path(str(compile_input.get("source_root") or "")).expanduser().resolve()
+    relative_project = PurePosixPath(str(compile_input.get("project_path") or ""))
+    if (relative_project.is_absolute() or ".." in relative_project.parts or
+            not relative_project.parts):
+        return "UNKNOWN"
+    project = root / Path(*relative_project.parts)
+    entries = report.get("entries")
+    if not isinstance(entries, list) or not entries:
+        return "UNKNOWN"
+    identities = []
+    for item in entries:
+        if not isinstance(item, Mapping):
+            return "UNKNOWN"
+        relative = PurePosixPath(str(item.get("path") or ""))
+        expected_digest = item.get("expected_sha256")
+        expected_bytes = item.get("expected_bytes")
+        if (relative.is_absolute() or ".." in relative.parts or not relative.parts or
+                type(expected_digest) is not str or
+                not re.fullmatch(r"sha256:[0-9a-f]{64}", expected_digest) or
+                type(expected_bytes) is not int or expected_bytes < 0):
+            return "UNKNOWN"
+        identities.append({
+            "path": relative.as_posix(), "bytes": expected_bytes,
+            "sha256": expected_digest,
+        })
+        source = project / Path(*relative.parts)
+        if (not source.is_file() or source.stat().st_size != expected_bytes or
+                _sha256_file(source) != expected_digest):
+            return "FAIL"
+    expected_bundle = compile_input.get("source_bundle_digest")
+    if type(expected_bundle) is not str or _digest(identities) != expected_bundle:
+        return "UNKNOWN"
+    if report.get("expected_source_bundle_digest") != expected_bundle:
+        return "UNKNOWN"
+    return "PASS"
+
+
+def _frontend_netlist_has_top(state: Mapping[str, Any], filename: str,
+                              top: object) -> bool:
+    if type(top) is not str or not top:
+        return False
+    for tool in state["tools"]:
+        if tool.get("tool_name") != "yosys":
+            continue
+        for reference in tool["raw_artifacts"]:
+            path = Path(reference["path"]).expanduser().resolve()
+            if path.name != filename:
+                continue
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return False
+            modules = value.get("modules") if isinstance(value, Mapping) else None
+            return isinstance(modules, Mapping) and top in modules
+    return False
+
+
+def _recompute_frontend_checks(state: Mapping[str, Any],
+                               context: Mapping[str, Any]) -> dict[str, str]:
+    """Derive S0 checks from source bytes and raw Yosys JSON, not producer PASS."""
+    source = _frontend_source_verdict(state, context)
+    top = (context.get("compile_input") or {}).get("top_module")
+    elaborated = _frontend_netlist_has_top(state, "elaborated.json", top)
+    synthesized = _frontend_netlist_has_top(state, "synthesized.json", top)
+    terminal = state.get("terminal")
+    execution_status = terminal.get("execution_status") if terminal else "RUNNING"
+    yosys_tools = [tool for tool in state["tools"] if tool.get("tool_name") == "yosys"]
+    exit_code = yosys_tools[-1].get("exit_code") if yosys_tools else None
+    if elaborated:
+        elaboration = "PASS"
+    elif execution_status == "COMPLETED" and type(exit_code) is int and exit_code != 0:
+        elaboration = "FAIL"
+    else:
+        elaboration = "UNKNOWN"
+    if synthesized:
+        synthesis = "PASS"
+    elif (elaboration == "PASS" and execution_status == "COMPLETED" and
+          type(exit_code) is int and exit_code != 0):
+        synthesis = "FAIL"
+    else:
+        synthesis = "UNKNOWN"
+    return {
+        "source_integrity": source,
+        "elaboration": elaboration,
+        "synthesis": synthesis,
+    }
+
+
 def _attempt_audit(state: Mapping[str, Any], context: Mapping[str, Any]) -> dict[str, Any]:
     terminal = state["terminal"]
     checks = state["checks"]
@@ -407,8 +516,17 @@ def _attempt_audit(state: Mapping[str, Any], context: Mapping[str, Any]) -> dict
         for reference in check["raw_report_refs"]:
             _verify_raw_ref(reference)
     required = list(context["contract"]["required_checks"])
+    producer_projection = {
+        name: (checks[name]["verdict"] if name in checks else "UNKNOWN")
+        for name in required
+    }
+    recomputed = None
+    if context["contract"].get("task_kind") == "frontend_synthesis_preflight":
+        recomputed = _recompute_frontend_checks(state, context)
     required_projection = {
-        name: (checks[name]["verdict"] if name in checks else "UNKNOWN") for name in required
+        name: (recomputed.get(name, "UNKNOWN") if recomputed is not None
+               else producer_projection[name])
+        for name in required
     }
     if terminal is None:
         execution_status = "RUNNING"
@@ -440,6 +558,12 @@ def _attempt_audit(state: Mapping[str, Any], context: Mapping[str, Any]) -> dict
         "oracle_verdict": oracle,
         "oracle_reason": reason,
         "required_checks": required_projection,
+        "producer_required_checks": producer_projection,
+        "audit_recomputed_checks": recomputed is not None,
+        "check_disagreements": sorted(
+            name for name in required
+            if producer_projection[name] != required_projection[name]
+        ),
         "optional_checks": {
             name: checks[name]["verdict"] for name in context["contract"]["optional_checks"]
             if name in checks
