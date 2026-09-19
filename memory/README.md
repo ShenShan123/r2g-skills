@@ -7356,3 +7356,45 @@ r211 随后从保留的 87,569,238-byte prefix 开始；最初两轮已将主 pa
 推进到 121,123,670 bytes 并进入第三轮。r212 independent archive audit 与 r213
 cache-backed bootstrap 在执行结果之前按固定 template SHA 预注册。在 r211 形成
 terminal whole-archive SHA/receipt 前，仍不能当作 acquisition/install PASS。
+
+### 2026-09-18 Revision4 Research Runtime RC1 and S0 frontend onboarding
+
+按照 Revision4 的 research-only 边界，新增统一 `research_pilot.py run` 入口和
+append-only attempt ledger 的独立 raw-evidence audit。runtime 仅开放
+`frontend_preflight + no_persistent_memory`；其它 profile/policy 明确拒绝。每个 case
+使用隔离 workspace，保存 Yosys script/log/展开与综合 JSON，并在运行前后重新核对
+原始 source bundle。producer 的 PASS 字段不作为审计 authority。实现阶段最终完整
+回归为 **2018 passed**；相关源码 commit 依次为 `4d95a98`、`c01ee9e`、
+`948639d`、`936f4e4`、`3005fb4`。
+
+外部设计批次绑定 clean source epoch
+`rc1-source-3005fb4-clean-20260918`（epoch digest
+`sha256:581063be4e746a4cf6a333530129cae409caf09f1dd836bbedbee337b2924515`）
+和只读 `/data1/zhangdy/RTL` inventory
+`sha256:7c7b6e844ac2cbe3eb6c873f16b210391f25a4d6e1553d995c6097ca29ed4319`。
+最终 attempt `rc1-3005fb4-s0-r4` 的 6/6 注册任务均 terminal，独立审计为
+**6 PASS / 0 FAIL / 0 UNKNOWN**；实际成本为 6 次 EDA、0 次模型调用、0 tokens、
+25.555374s。ledger tail 为
+`sha256:ff7bc695b7fefd04ff1f59e7416075f004872301736a2507d51abb6991ceb7e7`，
+audit digest 为
+`sha256:52fc1ebb2ccd1e24c99d334e31bccccc10bdfc37920b344fa26f6390b0fbb205`。
+
+官方 control 另从 clean ORFS checkout `0c162cf5f558bdc5c191f2ccb509fb74314330ea`
+只读生成 31-design inventory；source snapshot 前后不变。gcd/uart 的 attempt
+`rc1-3005fb4-s0-r1` 为 **2 PASS / 0 FAIL / 0 UNKNOWN**，实际成本 2 次 EDA、
+0 次模型调用、0 tokens、3.80723s；ledger tail 为
+`sha256:a8a0a7c066071e37e27df92d8715ba2a1feba7310275a0674c6433010e83c239`，
+audit digest 为
+`sha256:4803cdb32913965eb0ef2b414d65943c6cb67fc79a011551f8d3456c663ce709`。
+这两个 manifest 的 top/filelist 仍是推断值，等待显式 official adapter，不能据此
+升级为 flow-ready。
+
+三个先前 attempt 原样保留：r1 因 Yosys option 被错误引用而 6/6 FAIL；r2 因 top
+name 被错误引用而 6/6 FAIL；r3 在修正引用后为 1 PASS / 5 FAIL，并定位到展开 JSON
+前缺少 `proc` lowering。它们是 runtime diagnostic evidence，不重分类为设计失败，
+也不被最终 r4 覆盖。
+
+本阶段只建立 **frontend/synthesis onboarding**。它不证明功能修复、fixed ORFS flow、
+PPA/QoR、TEHM 动作收益或 Agent Memory 效果；S0 的 official adapter、固定 flow、
+checker 与 replay 仍待闭合，S1/S2 尚未开始。M0 未更新，provider/model calls=0，
+production authority=false。

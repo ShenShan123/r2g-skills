@@ -1,0 +1,59 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "entries": [
+    {
+      "evidence_id": "current-working-source-freeze",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The epoch captures the exact working source bytes, Git HEAD, dirty status, and binary patch."
+    },
+    {
+      "evidence_id": "current-bound-internal-toolchain",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected toolchain is authenticated by tehm-orfs-toolchain-manifest-v1 and a clean ORFS checkout."
+    },
+    {
+      "evidence_id": "tehm-evidence-freeze-v4-dev",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected M0 is a content-addressed bundle verified by the current bundle verifier; its effect claims remain limited to its own fixtures."
+    },
+    {
+      "evidence_id": "r4-external-frontend-preflight-rc1-3005fb4-s0-r4",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw-evidence audit reports 6/6 external-design frontend/synthesis onboarding cases PASS with the full frozen denominator, six EDA calls, zero model calls, and unchanged source. This is not functional repair, fixed-flow, or memory-effect evidence."
+    },
+    {
+      "evidence_id": "r4-official-frontend-preflight-rc1-3005fb4-s0-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw-evidence audit reports 2/2 official ORFS control frontend/synthesis cases PASS with two EDA calls, zero model calls, and unchanged source. Top and filelist remain inferred pending an explicit official adapter, so flow readiness is not granted."
+    },
+    {
+      "evidence_id": "r4-frontend-runtime-diagnostic-r1-r3",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "Three immutable failed attempts expose runtime wiring defects in option quoting, top-name quoting, and process lowering. They were not overwritten or counted as design failures after correction."
+    },
+    {
+      "evidence_id": "revision3-bf5dc5eb-review-baseline",
+      "classification": "corrected",
+      "selected_for_epoch": false,
+      "basis": "Revision3 used an older review baseline and cannot identify the current checkout."
+    },
+    {
+      "evidence_id": "memory-readme-historical-campaign-records",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "README narratives guide replay but are not substituted for their external raw artifacts or a current independent audit."
+    },
+    {
+      "evidence_id": "future-r4-fixed-flow-s1-s2-results",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "S0 fixed-flow/replay closure and all S1/S2 real-design comparisons remain pending; no memory-effect or agent result is established."
+    }
+  ]
+}
