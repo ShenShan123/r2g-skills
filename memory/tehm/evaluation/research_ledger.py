@@ -209,7 +209,12 @@ def _replay(events: list[dict[str, Any]], campaign: Mapping[str, Any],
     attempts: dict[str, dict[str, Any]] = {}
     retried_attempts: set[str] = set()
     task_policy_attempts: Counter[tuple[str, str]] = Counter()
-    cost = Counter()
+    cost = Counter({
+        "eda_calls": 0,
+        "model_calls": 0,
+        "model_tokens": 0,
+        "wallclock_seconds": 0.0,
+    })
     for index, event in enumerate(events, start=1):
         if event.get("schema") != EVENT_SCHEMA or event.get("sequence") != index:
             raise ResearchLedgerError(f"attempt ledger sequence/schema mismatch: {index}")

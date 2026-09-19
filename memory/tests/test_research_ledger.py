@@ -213,3 +213,15 @@ def test_chain_and_raw_evidence_tamper_are_detected(tmp_path: Path,
     ledger.write_text("\n".join(lines) + "\n", encoding="utf-8")
     with pytest.raises(ResearchLedgerError, match="event digest mismatch"):
         verify_attempt_ledger(prepared=prepared, ledger=ledger)
+
+
+def test_empty_ledger_reports_explicit_zero_cost(tmp_path: Path,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    prepared = _prepared(tmp_path, monkeypatch)
+    verified = verify_attempt_ledger(prepared=prepared, ledger=tmp_path / "missing.jsonl")
+    assert verified["actual_cost"] == {
+        "eda_calls": 0,
+        "model_calls": 0,
+        "model_tokens": 0,
+        "wallclock_seconds": 0.0,
+    }
