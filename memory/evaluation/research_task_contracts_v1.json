@@ -1,0 +1,61 @@
+{
+  "schema": "tehm-research-task-contract-registry-v1",
+  "registry_id": "r4-research-task-contracts-v1",
+  "contracts": {
+    "frontend_synthesis_preflight_v1": {
+      "task_kind": "frontend_synthesis_preflight",
+      "action_mode": "NO_ACTION",
+      "required_checks": [
+        "source_integrity",
+        "elaboration",
+        "synthesis"
+      ],
+      "optional_checks": [],
+      "success_rule": "ALL_REQUIRED_PASS",
+      "missing_report_verdict": "UNKNOWN",
+      "infrastructure_error_verdict": "UNKNOWN",
+      "utility_rule": "UNDETERMINED",
+      "eligible_for_repair_metric": false,
+      "eligible_for_evolution": false,
+      "claim_boundary": "Onboarding preflight only; it establishes neither functional repair success nor memory efficacy."
+    },
+    "rtl_repair_functional_v1": {
+      "task_kind": "rtl_repair",
+      "action_mode": "CONTROLLED_ACTION",
+      "required_checks": [
+        "source_integrity",
+        "compile",
+        "functional"
+      ],
+      "optional_checks": [
+        "strict_signoff"
+      ],
+      "success_rule": "ALL_REQUIRED_PASS",
+      "missing_report_verdict": "UNKNOWN",
+      "infrastructure_error_verdict": "UNKNOWN",
+      "utility_rule": "PAIRED_SCOPED_DELTA",
+      "eligible_for_repair_metric": true,
+      "eligible_for_evolution": false,
+      "claim_boundary": "Functional repair requires a frozen functional oracle; compile-only success is insufficient."
+    },
+    "flow_repair_scoped_v1": {
+      "task_kind": "flow_repair",
+      "action_mode": "CONTROLLED_ACTION",
+      "required_checks": [
+        "source_integrity",
+        "compile",
+        "target_scope"
+      ],
+      "optional_checks": [
+        "strict_signoff"
+      ],
+      "success_rule": "ALL_REQUIRED_PASS",
+      "missing_report_verdict": "UNKNOWN",
+      "infrastructure_error_verdict": "UNKNOWN",
+      "utility_rule": "PAIRED_SCOPED_DELTA",
+      "eligible_for_repair_metric": true,
+      "eligible_for_evolution": false,
+      "claim_boundary": "Only the preregistered target scope is authoritative; unrelated signoff does not replace it."
+    }
+  }
+}

@@ -20,6 +20,10 @@ from tehm.evaluation.research_inventory import (  # noqa: E402
     build_research_inventory,
     verify_research_inventory,
 )
+from tehm.evaluation.research_campaign import (  # noqa: E402
+    prepare_research_campaign,
+    verify_prepared_campaign,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -58,6 +62,24 @@ def _inventory(args: argparse.Namespace) -> int:
 
 def _verify_inventory(args: argparse.Namespace) -> int:
     result = verify_research_inventory(args.inventory)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _prepare(args: argparse.Namespace) -> int:
+    result = prepare_research_campaign(
+        campaign_spec=args.campaign,
+        epoch=args.epoch,
+        inventory=args.inventory,
+        task_contracts=args.task_contracts,
+        output=args.output,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["silently_filtered"] == 0 else 2
+
+
+def _verify_prepared(args: argparse.Namespace) -> int:
+    result = verify_prepared_campaign(args.prepared)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
 
@@ -111,6 +133,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     verify_inventory.add_argument("--inventory", type=Path, required=True)
     verify_inventory.set_defaults(handler=_verify_inventory)
+
+    prepare = sub.add_parser(
+        "prepare", help="freeze campaign tasks against an epoch and design inventory"
+    )
+    prepare.add_argument("--campaign", type=Path, required=True)
+    prepare.add_argument("--epoch", type=Path, required=True)
+    prepare.add_argument("--inventory", type=Path, required=True)
+    prepare.add_argument("--task-contracts", type=Path, required=True)
+    prepare.add_argument("--output", type=Path, required=True)
+    prepare.set_defaults(handler=_prepare)
+
+    verify_prepared = sub.add_parser(
+        "verify-prepared", help="verify frozen campaign inputs and full task denominator"
+    )
+    verify_prepared.add_argument("--prepared", type=Path, required=True)
+    verify_prepared.set_defaults(handler=_verify_prepared)
 
     args = parser.parse_args(argv)
     if args.command == "freeze-epoch" and args.source_root is None:
