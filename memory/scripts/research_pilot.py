@@ -16,6 +16,10 @@ from tehm.evaluation.research_epoch import (  # noqa: E402
     freeze_research_epoch,
     verify_research_epoch,
 )
+from tehm.evaluation.research_inventory import (  # noqa: E402
+    build_research_inventory,
+    verify_research_inventory,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -38,6 +42,22 @@ def _freeze_epoch(args: argparse.Namespace) -> int:
 
 def _verify_epoch(args: argparse.Namespace) -> int:
     result = verify_research_epoch(args.epoch)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _inventory(args: argparse.Namespace) -> int:
+    result = build_research_inventory(
+        corpus_root=args.corpus_root,
+        output=args.output,
+        acquisition_script=args.acquisition_script,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["corpus_unchanged"] else 2
+
+
+def _verify_inventory(args: argparse.Namespace) -> int:
+    result = verify_research_inventory(args.inventory)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
 
@@ -71,6 +91,26 @@ def main(argv: list[str] | None = None) -> int:
     verify = sub.add_parser("verify-epoch", help="verify a frozen research epoch")
     verify.add_argument("--epoch", type=Path, required=True)
     verify.set_defaults(handler=_verify_epoch)
+
+    inventory = sub.add_parser(
+        "inventory",
+        help="build a read-only real-design inventory outside the corpus",
+    )
+    inventory.add_argument("--corpus-root", type=Path, required=True)
+    inventory.add_argument("--output", type=Path, required=True)
+    inventory.add_argument(
+        "--acquisition-script",
+        type=Path,
+        default=None,
+        help="optional pinned rtl-acquire discovery parser",
+    )
+    inventory.set_defaults(handler=_inventory)
+
+    verify_inventory = sub.add_parser(
+        "verify-inventory", help="verify inventory artifacts and source immutability"
+    )
+    verify_inventory.add_argument("--inventory", type=Path, required=True)
+    verify_inventory.set_defaults(handler=_verify_inventory)
 
     args = parser.parse_args(argv)
     if args.command == "freeze-epoch" and args.source_root is None:
