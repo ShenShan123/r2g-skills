@@ -17,6 +17,7 @@ from tehm.evaluation.research_epoch import (  # noqa: E402
     verify_research_epoch,
 )
 from tehm.evaluation.research_inventory import (  # noqa: E402
+    bind_research_inventory_adapters,
     build_research_inventory,
     verify_research_inventory,
 )
@@ -70,6 +71,17 @@ def _verify_inventory(args: argparse.Namespace) -> int:
     result = verify_research_inventory(args.inventory)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
+
+
+def _adapt_inventory(args: argparse.Namespace) -> int:
+    result = bind_research_inventory_adapters(
+        inventory=args.inventory,
+        adapter_spec=args.adapter_spec,
+        authority_root=args.authority_root,
+        output=args.output,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["corpus_unchanged"] else 2
 
 
 def _prepare(args: argparse.Namespace) -> int:
@@ -165,6 +177,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     verify_inventory.add_argument("--inventory", type=Path, required=True)
     verify_inventory.set_defaults(handler=_verify_inventory)
+
+    adapt_inventory = sub.add_parser(
+        "adapt-inventory",
+        help="bind explicit non-mutating adapters to selected frozen designs",
+    )
+    adapt_inventory.add_argument("--inventory", type=Path, required=True)
+    adapt_inventory.add_argument("--adapter-spec", type=Path, required=True)
+    adapt_inventory.add_argument("--authority-root", type=Path, required=True)
+    adapt_inventory.add_argument("--output", type=Path, required=True)
+    adapt_inventory.set_defaults(handler=_adapt_inventory)
 
     prepare = sub.add_parser(
         "prepare", help="freeze campaign tasks against an epoch and design inventory"

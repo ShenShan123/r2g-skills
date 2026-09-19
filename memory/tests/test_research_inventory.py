@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from tehm.evaluation.research_inventory import (
     ResearchInventoryError,
+    bind_research_inventory_adapters,
     build_research_inventory,
     verify_research_inventory,
 )
@@ -138,3 +140,131 @@ def test_inventory_detects_frozen_artifact_tamper(tmp_path: Path) -> None:
                           encoding="utf-8")
     with pytest.raises(ResearchInventoryError, match="artifact drifted"):
         verify_research_inventory(output)
+
+
+def test_explicit_adapter_binds_clean_authority_without_source_changes(
+    tmp_path: Path,
+) -> None:
+    authority = tmp_path / "orfs"
+    corpus = authority / "flow/designs/src"
+    _project(corpus, "catalog", "alpha", repo="example-alpha")
+    support = authority / "flow/designs/platform/alpha"
+    support.mkdir(parents=True)
+    (support / "config.mk").write_text("DESIGN_NAME = top\n", encoding="utf-8")
+    (support / "constraint.sdc").write_text(
+        "create_clock -name clk -period 2.0 [get_ports clk]\n", encoding="utf-8"
+    )
+    subprocess.run(["git", "init", "-q", str(authority)], check=True)
+    subprocess.run(
+        ["git", "-C", str(authority), "config", "user.email", "test@example.invalid"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(authority), "config", "user.name", "Research Test"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(authority), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(authority), "commit", "-q", "-m", "fixture"],
+        check=True,
+    )
+    head = subprocess.run(
+        ["git", "-C", str(authority), "rev-parse", "HEAD"], check=True,
+        text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    source_inventory = tmp_path / "source-inventory"
+    source_result = build_research_inventory(
+        corpus_root=corpus, output=source_inventory
+    )
+    spec = tmp_path / "adapter.json"
+    spec.write_text(json.dumps({
+        "schema": "tehm-research-inventory-adapter-spec-v1",
+        "adapter_id": "test-official-v1",
+        "source_inventory_digest": source_result["inventory_digest"],
+        "authority_checkout": {
+            "git_head": head,
+            "require_clean": True,
+            "source_subtree": "flow/designs/src",
+        },
+        "designs": [{
+            "design_id": "alpha",
+            "role": "official_control",
+            "top_module": "top",
+            "ordered_filelist": ["rtl/defs.vh", "rtl/child.v", "rtl/top.v"],
+            "include_dirs": ["rtl"],
+            "defines": {},
+            "top_parameters": {},
+            "support_files": [
+                "flow/designs/platform/alpha/config.mk",
+                "flow/designs/platform/alpha/constraint.sdc",
+            ],
+            "flow_binding": {"platform": "test"},
+        }],
+    }), encoding="utf-8")
+    output = tmp_path / "adapted"
+    result = bind_research_inventory_adapters(
+        inventory=source_inventory,
+        adapter_spec=spec,
+        authority_root=authority,
+        output=output,
+    )
+
+    assert result["valid"] is True
+    assert result["candidate_count"] == 1
+    manifest = json.loads(
+        (output / "design-manifests/alpha.json").read_text(encoding="utf-8")
+    )
+    assert manifest["compilation"]["top_authority"] == "explicit_adapter_spec"
+    assert manifest["compilation"]["filelist_authority"] == "explicit:adapter-spec.json"
+    assert manifest["identity"]["git"]["git_head"] == head
+    assert manifest["adapter_binding"]["logic_changes"] == []
+    assert manifest["adapter_binding"]["stub_generated"] is False
+    assert len(manifest["adapter_binding"]["support_files"]) == 2
+    assert verify_research_inventory(output)["valid"] is True
+
+
+def test_explicit_adapter_rejects_dirty_or_unbound_authority(tmp_path: Path) -> None:
+    authority = tmp_path / "orfs"
+    corpus = authority / "flow/designs/src"
+    _project(corpus, "catalog", "alpha", repo="example-alpha")
+    subprocess.run(["git", "init", "-q", str(authority)], check=True)
+    subprocess.run(
+        ["git", "-C", str(authority), "config", "user.email", "test@example.invalid"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(authority), "config", "user.name", "Research Test"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(authority), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(authority), "commit", "-q", "-m", "fixture"],
+        check=True,
+    )
+    head = subprocess.run(
+        ["git", "-C", str(authority), "rev-parse", "HEAD"], check=True,
+        text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    source_inventory = tmp_path / "source-inventory"
+    source_result = build_research_inventory(corpus_root=corpus, output=source_inventory)
+    spec = tmp_path / "adapter.json"
+    spec.write_text(json.dumps({
+        "schema": "tehm-research-inventory-adapter-spec-v1",
+        "adapter_id": "test-official-v1",
+        "source_inventory_digest": source_result["inventory_digest"],
+        "authority_checkout": {
+            "git_head": head,
+            "require_clean": True,
+            "source_subtree": "flow/designs/src",
+        },
+        "designs": [{
+            "design_id": "alpha", "role": "official_control",
+            "top_module": "top", "ordered_filelist": ["rtl/top.v"],
+        }],
+    }), encoding="utf-8")
+    (authority / "dirty.txt").write_text("untracked\n", encoding="utf-8")
+    with pytest.raises(ResearchInventoryError, match="observed clean"):
+        bind_research_inventory_adapters(
+            inventory=source_inventory, adapter_spec=spec,
+            authority_root=authority, output=tmp_path / "adapted",
+        )

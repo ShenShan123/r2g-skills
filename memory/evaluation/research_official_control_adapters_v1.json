@@ -1,0 +1,60 @@
+{
+  "schema": "tehm-research-inventory-adapter-spec-v1",
+  "adapter_id": "r4-official-controls-sky130hs-v1",
+  "source_inventory_digest": "sha256:82784224412ee581dd8879594323c05b4a3c2cc5fa0810709db3865f16d9e9e7",
+  "authority_checkout": {
+    "git_head": "0c162cf5f558bdc5c191f2ccb509fb74314330ea",
+    "require_clean": true,
+    "source_subtree": "flow/designs/src"
+  },
+  "designs": [
+    {
+      "design_id": "gcd",
+      "role": "official_control",
+      "top_module": "gcd",
+      "ordered_filelist": [
+        "gcd.v"
+      ],
+      "include_dirs": [],
+      "defines": {},
+      "top_parameters": {},
+      "support_files": [
+        "flow/designs/sky130hs/gcd/config.mk",
+        "flow/designs/sky130hs/gcd/constraint.sdc"
+      ],
+      "flow_binding": {
+        "platform": "sky130hs",
+        "config_template": "flow/designs/sky130hs/gcd/config.mk",
+        "sdc_template": "flow/designs/sky130hs/gcd/constraint.sdc",
+        "overrides": {}
+      }
+    },
+    {
+      "design_id": "uart",
+      "role": "official_control",
+      "top_module": "uart",
+      "ordered_filelist": [
+        "uart.v",
+        "uart_rx.v",
+        "uart_tx.v"
+      ],
+      "include_dirs": [],
+      "defines": {},
+      "top_parameters": {},
+      "support_files": [
+        "flow/designs/sky130hs/gcd/config.mk",
+        "flow/designs/sky130hs/aes/constraint.sdc"
+      ],
+      "flow_binding": {
+        "platform": "sky130hs",
+        "config_template": "flow/designs/sky130hs/gcd/config.mk",
+        "sdc_template": "flow/designs/sky130hs/aes/constraint.sdc",
+        "overrides": {
+          "DESIGN_NAME": "uart",
+          "VERILOG_FILES": "flow/designs/src/uart/*.v"
+        },
+        "authority_note": "Existing TEHM ORFS support-control adapter; not a native upstream uart platform config."
+      }
+    }
+  ]
+}

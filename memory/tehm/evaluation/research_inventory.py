@@ -28,6 +28,7 @@ DESIGN_MANIFEST_SCHEMA = "tehm-research-design-manifest-v1"
 EXCLUSION_SCHEMA = "tehm-research-design-exclusions-v1"
 ARTIFACT_MANIFEST_SCHEMA = "tehm-research-inventory-artifacts-v1"
 PREFLIGHT_SHORTLIST_SCHEMA = "tehm-research-preflight-shortlist-v1"
+ADAPTER_SPEC_SCHEMA = "tehm-research-inventory-adapter-spec-v1"
 
 HDL_SUFFIXES = {".v", ".sv", ".vhd", ".vhdl"}
 VERILOG_SUFFIXES = {".v", ".sv"}
@@ -1049,6 +1050,241 @@ def build_research_inventory(
     return verify_research_inventory(destination)
 
 
+def _checkout_binding(root: Path) -> dict[str, Any]:
+    def run(*args: str) -> str:
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(root), *args], check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                timeout=20,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ResearchInventoryError("cannot inspect adapter authority checkout") from exc
+        if result.returncode != 0:
+            raise ResearchInventoryError("adapter authority root is not a readable Git checkout")
+        return result.stdout.strip()
+
+    status = run("status", "--porcelain=v1")
+    return {
+        "root": str(root),
+        "git_head": run("rev-parse", "HEAD"),
+        "git_dirty": bool(status),
+        "git_status_sha256": "sha256:" + hashlib.sha256(status.encode()).hexdigest(),
+    }
+
+
+def bind_research_inventory_adapters(
+    *,
+    inventory: str | Path,
+    adapter_spec: str | Path,
+    authority_root: str | Path,
+    output: str | Path,
+) -> dict[str, Any]:
+    """Bind explicit, non-mutating adapters to selected frozen designs."""
+    source_root = Path(inventory).expanduser().resolve()
+    checked = verify_research_inventory(source_root)
+    source_inventory = _load_json(source_root / "inventory.json", "source inventory")
+    spec_path = Path(adapter_spec).expanduser().resolve()
+    spec = _load_json(spec_path, "adapter spec")
+    authority = Path(authority_root).expanduser().resolve()
+    destination = Path(output).expanduser().resolve()
+    corpus = Path(str(source_inventory["corpus_root"])).resolve()
+    if destination.exists():
+        raise ResearchInventoryError(f"refusing to overwrite adapted inventory: {destination}")
+    if _inside(destination, corpus):
+        raise ResearchInventoryError("adapted inventory output must be outside the corpus root")
+    if spec.get("schema") != ADAPTER_SPEC_SCHEMA:
+        raise ResearchInventoryError("inventory adapter spec schema mismatch")
+    if spec.get("source_inventory_digest") != checked["inventory_digest"]:
+        raise ResearchInventoryError("adapter spec source inventory digest mismatch")
+    checkout = _checkout_binding(authority)
+    expected_checkout = spec.get("authority_checkout") or {}
+    if checkout["git_head"] != expected_checkout.get("git_head"):
+        raise ResearchInventoryError("adapter authority Git HEAD mismatch")
+    if expected_checkout.get("require_clean") is not True or checkout["git_dirty"]:
+        raise ResearchInventoryError("adapter authority checkout must be declared and observed clean")
+    subtree = PurePosixPath(str(expected_checkout.get("source_subtree") or ""))
+    if subtree.is_absolute() or not subtree.parts or ".." in subtree.parts:
+        raise ResearchInventoryError("adapter authority source_subtree is unsafe")
+    if (authority / Path(*subtree.parts)).resolve() != corpus:
+        raise ResearchInventoryError("adapter authority subtree does not match inventory corpus")
+
+    design_index = {
+        row.get("design_id"): row for row in source_inventory.get("designs") or []
+        if isinstance(row, Mapping)
+    }
+    requested = spec.get("designs")
+    if not isinstance(requested, list) or not requested:
+        raise ResearchInventoryError("adapter spec must select at least one design")
+    ids = [row.get("design_id") for row in requested if isinstance(row, Mapping)]
+    if len(ids) != len(requested) or any(type(item) is not str for item in ids):
+        raise ResearchInventoryError("adapter design entries are invalid")
+    if len(ids) != len(set(ids)):
+        raise ResearchInventoryError("adapter design IDs must be unique")
+
+    staging = destination.with_name(destination.name + f".tmp.{os.getpid()}")
+    if staging.exists():
+        raise ResearchInventoryError(f"adapter staging already exists: {staging}")
+    staging.mkdir(parents=True)
+    manifests: list[dict[str, Any]] = []
+    try:
+        shutil.copy2(spec_path, staging / "adapter-spec.json")
+        _write_json(staging / "bindings" / "source-inventory.json", {
+            "schema": "tehm-research-adapter-source-binding-v1",
+            "path": str(source_root),
+            "inventory_digest": checked["inventory_digest"],
+            "artifact_manifest_digest": checked["artifact_manifest_digest"],
+        })
+        for entry in requested:
+            design_id = str(entry["design_id"])
+            index_entry = design_index.get(design_id)
+            if not isinstance(index_entry, Mapping):
+                raise ResearchInventoryError(f"adapter design is absent from inventory: {design_id}")
+            manifest = _load_json(
+                source_root / str(index_entry["manifest_path"]), "source design manifest"
+            )
+            available = {row.get("path") for row in manifest.get("source_files") or []
+                         if isinstance(row, Mapping)}
+            filelist = entry.get("ordered_filelist")
+            if not isinstance(filelist, list) or not filelist:
+                raise ResearchInventoryError("adapter ordered_filelist is missing")
+            for value in filelist:
+                relative = PurePosixPath(str(value))
+                if relative.is_absolute() or ".." in relative.parts or relative.as_posix() not in available:
+                    raise ResearchInventoryError(
+                        f"adapter filelist is not source-bound: {design_id}:{value}"
+                    )
+            top = entry.get("top_module")
+            definitions = (manifest.get("dependencies") or {}).get("module_definitions") or {}
+            if type(top) is not str or top not in definitions:
+                raise ResearchInventoryError(f"adapter top is not defined: {design_id}:{top}")
+            include_dirs = entry.get("include_dirs") or []
+            if not isinstance(include_dirs, list):
+                raise ResearchInventoryError("adapter include_dirs must be a list")
+            for value in include_dirs:
+                relative = PurePosixPath(str(value))
+                if relative.is_absolute() or ".." in relative.parts:
+                    raise ResearchInventoryError("adapter include_dir is unsafe")
+                if not (corpus / manifest["project_path"] / Path(*relative.parts)).is_dir():
+                    raise ResearchInventoryError("adapter include_dir is missing")
+
+            support = []
+            for value in entry.get("support_files") or []:
+                relative = PurePosixPath(str(value))
+                if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+                    raise ResearchInventoryError("adapter support file path is unsafe")
+                source = authority / Path(*relative.parts)
+                if not source.is_file():
+                    raise ResearchInventoryError(f"adapter support file is missing: {relative}")
+                frozen = (Path("bindings") / "support" / design_id
+                          / Path(*relative.parts))
+                target = staging / frozen
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+                support.append({
+                    "source_path": relative.as_posix(),
+                    "frozen_path": frozen.as_posix(),
+                    "bytes": source.stat().st_size,
+                    "sha256": _sha256_file(source),
+                })
+
+            compilation = dict(manifest["compilation"])
+            compilation.update({
+                "top_module": top,
+                "top_authority": "explicit_adapter_spec",
+                "top_evidence": [{"source": "adapter-spec.json", "value": top}],
+                "ordered_filelist": [str(value) for value in filelist],
+                "filelist_authority": "explicit:adapter-spec.json",
+                "include_dirs": [str(value) for value in include_dirs],
+                "defines": dict(entry.get("defines") or {}),
+                "top_parameters": dict(entry.get("top_parameters") or {}),
+            })
+            manifest["compilation"] = compilation
+            manifest["identity"] = dict(manifest["identity"])
+            manifest["identity"]["git"] = checkout
+            manifest["identity"]["origin"] = {
+                "source_urls": [],
+                "declared_repository": "OpenROAD-flow-scripts",
+                "lineage_group": f"official-orfs:{checkout['git_head']}:{design_id}",
+                "lineage_status": "official_checkout_bound",
+                "catalog_bucket": design_id,
+                "catalog_bucket_is_not_lineage": True,
+            }
+            reasons = [reason for reason in manifest["readiness"]["reasons"]
+                       if reason != "ordered_filelist_unverified"]
+            manifest["readiness"] = {
+                **manifest["readiness"],
+                "status": "NEEDS_ADAPTER",
+                "reasons": sorted(set(reasons + ["adapter_bound_pending_frontend_preflight"])),
+                "ready_flow": False,
+                "ready_rtl_repair": False,
+            }
+            manifest["adapter_binding"] = {
+                "adapter_id": spec.get("adapter_id"),
+                "role": entry.get("role"),
+                "source_manifest_digest": index_entry["manifest_digest"],
+                "authority_checkout": checkout,
+                "support_files": support,
+                "flow_binding": dict(entry.get("flow_binding") or {}),
+                "logic_changes": [],
+                "stub_generated": False,
+            }
+            unsigned_manifest = dict(manifest)
+            unsigned_manifest.pop("manifest_digest", None)
+            manifest["manifest_digest"] = _digest(unsigned_manifest)
+            manifests.append(manifest)
+            _write_json(staging / "design-manifests" / f"{design_id}.json", manifest)
+
+        manifests.sort(key=lambda row: row["design_id"])
+        _write_csv(staging / "candidates.csv", manifests)
+        counts = Counter(row["readiness"]["status"] for row in manifests)
+        adapted = {
+            "schema": INVENTORY_SCHEMA,
+            "corpus_root": str(corpus),
+            "corpus_read_only": True,
+            "corpus_snapshot_before": source_inventory["corpus_snapshot_before"],
+            "corpus_snapshot_after": source_inventory["corpus_snapshot_after"],
+            "corpus_unchanged": True,
+            "parser_binding": source_inventory["parser_binding"],
+            "candidate_count": len(manifests),
+            "exclusion_count": 0,
+            "readiness_counts": dict(sorted(counts.items())),
+            "designs": [{
+                "design_id": row["design_id"],
+                "manifest_path": f"design-manifests/{row['design_id']}.json",
+                "manifest_digest": row["manifest_digest"],
+                "source_bundle_digest": row["source_bundle_digest"],
+                "readiness": row["readiness"]["status"],
+            } for row in manifests],
+            "duplicate_source_group_count": 0,
+            "shared_module_name_count": 0,
+            "adapter_binding": {
+                "adapter_id": spec.get("adapter_id"),
+                "source_inventory_digest": checked["inventory_digest"],
+                "authority_checkout": checkout,
+                "logic_changes": [],
+                "stub_generation": False,
+            },
+            "authority": {
+                "inventory_only": True,
+                "flow_readiness_granted": False,
+                "repair_readiness_granted": False,
+                "stub_generation": False,
+                "learner_writes": False,
+                "explicit_adapter_bound": True,
+            },
+        }
+        adapted["inventory_digest"] = _digest(adapted)
+        _write_json(staging / "inventory.json", adapted)
+        _write_json(staging / "artifact-manifest.json", _artifact_manifest(staging))
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        staging.replace(destination)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return verify_research_inventory(destination)
+
+
 def verify_research_inventory(path: str | Path) -> dict[str, Any]:
     """Verify frozen inventory artifacts and the still-read-only source corpus."""
     root = Path(path).expanduser().resolve()
@@ -1123,7 +1359,8 @@ def verify_research_inventory(path: str | Path) -> dict[str, Any]:
 
 
 __all__ = [
-    "ARTIFACT_MANIFEST_SCHEMA", "DESIGN_MANIFEST_SCHEMA", "EXCLUSION_SCHEMA",
+    "ADAPTER_SPEC_SCHEMA", "ARTIFACT_MANIFEST_SCHEMA", "DESIGN_MANIFEST_SCHEMA", "EXCLUSION_SCHEMA",
     "INVENTORY_SCHEMA", "PREFLIGHT_SHORTLIST_SCHEMA", "ResearchInventoryError",
-    "build_research_inventory", "verify_research_inventory",
+    "bind_research_inventory_adapters", "build_research_inventory",
+    "verify_research_inventory",
 ]
