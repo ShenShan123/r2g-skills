@@ -225,6 +225,7 @@ design_cases/
 *.spef
 *.lyrdb
 r2g-skills/eda-install/references/install_manifest.json
+r2g-skills/signoff-loop/references/install_manifest.json
 r2g-skills/*/references/env.local.sh.bak-*
 *.lvsdb
 synth/
