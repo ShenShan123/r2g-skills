@@ -7398,3 +7398,23 @@ name 被错误引用而 6/6 FAIL；r3 在修正引用后为 1 PASS / 5 FAIL，�
 PPA/QoR、TEHM 动作收益或 Agent Memory 效果；S0 的 official adapter、固定 flow、
 checker 与 replay 仍待闭合，S1/S2 尚未开始。M0 未更新，provider/model calls=0，
 production authority=false。
+
+后续显式 adapter 阶段覆盖上段“official top/filelist 仍为推断值”的当前状态，但不
+改写其历史运行。`adapt-inventory` 只接受与冻结 inventory digest 匹配的设计，要求
+clean official ORFS HEAD，拒绝未列入 source manifest 的 filelist、未定义 top、缺失
+support file、dirty checkout、输出覆盖和 source-root 内写入。派生 inventory
+`orfs-official-adapted-0c162cf5-20260918-r1` 的 digest 为
+`sha256:59659ca0bdac5bbb30d0822264f3bc3dc7c5dca8897a2a59ee96a00a88896295`；
+gcd/uart 的 top、filelist、config/SDC bytes 和 official Git HEAD 均显式绑定，
+`logic_changes=[]`、`stub_generated=false`，但 `ready_flow=false` 保持不变。
+
+adapter-bound replay 使用 source commit `5cc5de8`、epoch
+`rc1-source-5cc5de8-clean-20260918`，attempt `rc1-5cc5de8-s0-r1` 的 2/2
+注册任务均 terminal，独立审计为 **2 PASS / 0 FAIL / 0 UNKNOWN**；实际成本 2 次
+EDA、0 模型调用、0 tokens、2.631547s。ledger tail 为
+`sha256:af262bdd04de49af4b4862a531586389e307614b844da387d83bebb6948dd66e`，
+audit digest 为
+`sha256:97cbbd0c6984f101a0ba33f2f86feec227fd41ef17c68e7d20a50feb1d5236d9`。
+新增 adapter 后完整 memory tests 为 **2020 passed**。这关闭 official control 的
+显式 frontend manifest 缺口，不关闭 staged project、fixed ORFS flow、scoped checker
+或 replay gate；S1/S2、memory efficacy、production authority 仍未建立。
