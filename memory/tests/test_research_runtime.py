@@ -227,3 +227,4 @@ def test_yosys_script_keeps_options_unquoted(tmp_path: Path) -> None:
     assert "hierarchy -check -top top" in script
     assert "synth -top top" in script
     assert '-top "top"' not in script
+    assert "\nproc\nwrite_json " in script

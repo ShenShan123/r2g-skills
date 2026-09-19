@@ -255,6 +255,7 @@ def _yosys_script(context: Mapping[str, Any], workspace: Path,
     return "\n".join([
         read,
         " ".join(hierarchy),
+        "proc",
         f"write_json {_yosys_quote(str(raw / 'elaborated.json'))}",
         "synth -top " + top_atom,
         "stat",
