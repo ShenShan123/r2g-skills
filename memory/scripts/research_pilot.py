@@ -24,6 +24,11 @@ from tehm.evaluation.research_campaign import (  # noqa: E402
     prepare_research_campaign,
     verify_prepared_campaign,
 )
+from tehm.evaluation.research_ledger import (  # noqa: E402
+    audit_attempt_ledger,
+    verify_attempt_ledger,
+    verify_research_audit,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -80,6 +85,26 @@ def _prepare(args: argparse.Namespace) -> int:
 
 def _verify_prepared(args: argparse.Namespace) -> int:
     result = verify_prepared_campaign(args.prepared)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_ledger(args: argparse.Namespace) -> int:
+    result = verify_attempt_ledger(prepared=args.prepared, ledger=args.ledger)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _audit(args: argparse.Namespace) -> int:
+    result = audit_attempt_ledger(
+        prepared=args.prepared, ledger=args.ledger, output=args.output
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _summarize(args: argparse.Namespace) -> int:
+    result = verify_research_audit(args.audited_campaign)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
 
@@ -149,6 +174,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     verify_prepared.add_argument("--prepared", type=Path, required=True)
     verify_prepared.set_defaults(handler=_verify_prepared)
+
+    verify_ledger = sub.add_parser(
+        "verify-ledger", help="verify the append-only attempt hash chain and budgets"
+    )
+    verify_ledger.add_argument("--prepared", type=Path, required=True)
+    verify_ledger.add_argument("--ledger", type=Path, required=True)
+    verify_ledger.set_defaults(handler=_verify_ledger)
+
+    audit = sub.add_parser(
+        "audit", help="independently recompute scoped verdicts from raw attempt evidence"
+    )
+    audit.add_argument("--prepared", type=Path, required=True)
+    audit.add_argument("--ledger", type=Path, required=True)
+    audit.add_argument("--output", type=Path, required=True)
+    audit.set_defaults(handler=_audit)
+
+    summarize = sub.add_parser(
+        "summarize", help="verify and project an independently audited campaign"
+    )
+    summarize.add_argument("--audited-campaign", type=Path, required=True)
+    summarize.set_defaults(handler=_summarize)
 
     args = parser.parse_args(argv)
     if args.command == "freeze-epoch" and args.source_root is None:
