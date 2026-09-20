@@ -306,6 +306,12 @@ def test_flow_failure_class_keeps_infrastructure_unknown() -> None:
     )
 
 
+def test_flow_failure_class_recognizes_terminal_pdn_geometry_failure() -> None:
+    assert research_flow._flow_failure_class(
+        2, "[ERROR PDN-0185] Insufficient width to add straps"
+    ) == ("FAIL", "pdn_geometry_infeasible", "FLOW_TARGET_FAILURE")
+
+
 def test_authority_fingerprint_accepts_short_head_but_rejects_wrong_root() -> None:
     authority = {"root": "/authority/orfs", "git_head": "0123456789abcdef"}
     research_flow._verify_authority_fingerprint(

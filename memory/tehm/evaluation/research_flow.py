@@ -579,6 +579,8 @@ def _flow_failure_class(status: int, log: str) -> tuple[str, str, str]:
         return "PASS", "flow_completed", "NONE"
     if "GRT-0232" in log and "Routing congestion too high" in log:
         return "FAIL", "routing_congestion", "FLOW_TARGET_FAILURE"
+    if "PDN-0185" in log and "Insufficient width" in log:
+        return "FAIL", "pdn_geometry_infeasible", "FLOW_TARGET_FAILURE"
     if status in (124, 137) or "TIMEOUT" in log.upper():
         return "UNKNOWN", "flow_timeout", "INFRASTRUCTURE_ERROR"
     infrastructure_markers = (
