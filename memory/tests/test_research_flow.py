@@ -365,6 +365,7 @@ def test_compare_flow_replays_requires_isolation_and_matches_semantics(
 
     result = compare_flow_replays(
         baseline_audit=audits[0], replay_audit=audits[1],
+        auditor_epoch=auditor,
         output=tmp_path / "replay-comparison",
     )
     assert result["valid"] is True
@@ -377,8 +378,40 @@ def test_compare_flow_replays_requires_isolation_and_matches_semantics(
     with pytest.raises(ResearchFlowError, match="distinct audit paths"):
         compare_flow_replays(
             baseline_audit=audits[0], replay_audit=audits[0],
+            auditor_epoch=auditor,
             output=tmp_path / "invalid-same-audit",
         )
+
+
+def test_flow_input_semantics_normalizes_legacy_unmodified_sdc_receipt() -> None:
+    common = {
+        "design_id": "gcd",
+        "adapter_id": "official-v1",
+        "inventory_digest": "sha256:inventory",
+        "design_manifest_digest": "sha256:manifest",
+        "source_bundle_digest": "sha256:source",
+        "authority_checkout": {"git_head": "0123456789abcdef"},
+        "platform": "test",
+        "top_module": "gcd",
+        "source_files": [{
+            "source_path": "gcd.v", "staged_path": "rtl/gcd.v",
+            "sha256": "sha256:rtl", "bytes": 12,
+        }],
+        "config_template": {"source_path": "config.mk", "sha256": "sha256:cfg"},
+        "declared_overrides": {},
+        "logic_changes": [],
+        "stub_generated": False,
+    }
+    legacy = {**common, "sdc_template": {
+        "source_path": "constraint.sdc", "sha256": "sha256:sdc",
+    }}
+    current = {**common, "sdc_template": {
+        "source_path": "constraint.sdc", "sha256": "sha256:sdc",
+        "staged_sha256": "sha256:sdc", "constraint_binding": None,
+    }}
+    assert research_flow._flow_input_semantics(legacy) == (
+        research_flow._flow_input_semantics(current)
+    )
 
 
 def test_flow_failure_class_keeps_infrastructure_unknown() -> None:

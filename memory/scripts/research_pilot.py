@@ -172,6 +172,7 @@ def _compare_flow_replays(args: argparse.Namespace) -> int:
     result = compare_flow_replays(
         baseline_audit=args.baseline_audit,
         replay_audit=args.replay_audit,
+        auditor_epoch=args.auditor_epoch,
         output=args.output,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
@@ -280,6 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     compare_replays.add_argument("--baseline-audit", type=Path, required=True)
     compare_replays.add_argument("--replay-audit", type=Path, required=True)
+    compare_replays.add_argument("--auditor-epoch", type=Path, required=True)
     compare_replays.add_argument("--output", type=Path, required=True)
     compare_replays.set_defaults(handler=_compare_flow_replays)
 

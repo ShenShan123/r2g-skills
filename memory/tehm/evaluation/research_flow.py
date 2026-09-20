@@ -22,8 +22,8 @@ STAGE_RECEIPT_SCHEMA = "tehm-research-flow-stage-v1"
 STAGE_ARTIFACT_SCHEMA = "tehm-research-flow-stage-artifacts-v1"
 FLOW_AUDIT_SCHEMA = "tehm-research-flow-audit-v1"
 FLOW_AUDIT_ARTIFACT_SCHEMA = "tehm-research-flow-audit-artifacts-v1"
-FLOW_REPLAY_SCHEMA = "tehm-research-flow-replay-v1"
-FLOW_REPLAY_ARTIFACT_SCHEMA = "tehm-research-flow-replay-artifacts-v1"
+FLOW_REPLAY_SCHEMA = "tehm-research-flow-replay-v2"
+FLOW_REPLAY_ARTIFACT_SCHEMA = "tehm-research-flow-replay-artifacts-v2"
 FLOW_STAGES = ("synth", "floorplan", "place", "cts", "route", "finish")
 
 
@@ -877,6 +877,12 @@ def _flow_input_semantics(receipt: Mapping[str, Any]) -> dict[str, Any]:
         })
     sdc = receipt.get("sdc_template") or {}
     config = receipt.get("config_template") or {}
+    constraint_binding = sdc.get("constraint_binding") or None
+    staged_sdc_sha = sdc.get("staged_sha256")
+    if staged_sdc_sha is None and constraint_binding is None:
+        # Early v1 stage receipts predate these two descriptive fields.  With no
+        # retarget binding, the staged SDC bytes are exactly the frozen template.
+        staged_sdc_sha = sdc.get("sha256")
     return {
         "design_id": receipt.get("design_id"),
         "adapter_id": receipt.get("adapter_id"),
@@ -894,8 +900,8 @@ def _flow_input_semantics(receipt: Mapping[str, Any]) -> dict[str, Any]:
         "sdc_template": {
             "source_path": sdc.get("source_path"),
             "sha256": sdc.get("sha256"),
-            "staged_sha256": sdc.get("staged_sha256"),
-            "constraint_binding": sdc.get("constraint_binding"),
+            "staged_sha256": staged_sdc_sha,
+            "constraint_binding": constraint_binding,
         },
         "declared_overrides": receipt.get("declared_overrides"),
         "logic_changes": receipt.get("logic_changes"),
@@ -930,8 +936,15 @@ def _verified_replay_member(
 
 
 def _replay_payload(
-    baseline_path: str | Path, replay_path: str | Path,
+    baseline_path: str | Path, replay_path: str | Path, auditor_epoch: str | Path,
 ) -> dict[str, Any]:
+    auditor_epoch_root = Path(auditor_epoch).expanduser().resolve()
+    checked_auditor = verify_research_epoch(auditor_epoch_root)
+    if not checked_auditor.get("valid") or not checked_auditor.get(
+        "research_evaluation_ready"
+    ):
+        raise ResearchFlowError("replay auditor epoch is not evaluation-ready")
+    comparator_binding = _auditor_binding(auditor_epoch_root)
     baseline_root, baseline_checked, baseline, baseline_receipt = (
         _verified_replay_member(baseline_path)
     )
@@ -963,6 +976,12 @@ def _replay_payload(
     payload = {
         "schema": FLOW_REPLAY_SCHEMA,
         "design_id": baseline.get("design_id"),
+        "comparator_auditor": {
+            "epoch_path": str(auditor_epoch_root),
+            "epoch_id": checked_auditor["epoch_id"],
+            "epoch_digest": checked_auditor["epoch_digest"],
+            "binding": comparator_binding,
+        },
         "baseline": {
             "audit_path": str(baseline_root),
             "audit_digest": baseline_checked["audit_digest"],
@@ -1025,13 +1044,14 @@ def _replay_payload(
 
 
 def compare_flow_replays(
-    *, baseline_audit: str | Path, replay_audit: str | Path, output: str | Path,
+    *, baseline_audit: str | Path, replay_audit: str | Path,
+    auditor_epoch: str | Path, output: str | Path,
 ) -> dict[str, Any]:
     """Independently compare two isolated, already audited fixed-flow attempts."""
     destination = Path(output).expanduser().resolve()
     if destination.exists():
         raise ResearchFlowError(f"refusing to overwrite flow replay: {destination}")
-    report = _replay_payload(baseline_audit, replay_audit)
+    report = _replay_payload(baseline_audit, replay_audit, auditor_epoch)
     summary = {
         "schema": "tehm-research-flow-replay-summary-v1",
         "design_id": report["design_id"],
@@ -1102,6 +1122,7 @@ def verify_flow_replay(path: str | Path) -> dict[str, Any]:
     recomputed = _replay_payload(
         (report.get("baseline") or {}).get("audit_path"),
         (report.get("replay") or {}).get("audit_path"),
+        (report.get("comparator_auditor") or {}).get("epoch_path"),
     )
     if recomputed != report:
         raise ResearchFlowError("flow replay no longer matches audited attempts")
