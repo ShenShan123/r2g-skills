@@ -11,8 +11,10 @@ import tehm.evaluation.research_flow as research_flow
 from tehm.evaluation.research_flow import (
     ResearchFlowError,
     audit_flow_run,
+    compare_flow_replays,
     stage_flow_project,
     verify_flow_audit,
+    verify_flow_replay,
     verify_staged_flow_project,
 )
 from tehm.evaluation.research_inventory import (
@@ -298,6 +300,85 @@ def test_audit_flow_run_preserves_terminal_failure_and_epoch_roles(
     (run / "flow.log").write_text("tampered\n", encoding="utf-8")
     with pytest.raises(ResearchFlowError, match="raw flow artifact drifted"):
         verify_flow_audit(output)
+
+
+def test_compare_flow_replays_requires_isolation_and_matches_semantics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inventory = _adapted_inventory(tmp_path)
+    producer = tmp_path / "producer-epoch"
+    auditor = tmp_path / "auditor-epoch"
+    (producer / "bindings").mkdir(parents=True)
+    (auditor / "bindings/oracles").mkdir(parents=True)
+    (producer / "bindings/toolchain-manifest.json").write_text(json.dumps({
+        "tools": {
+            "openroad": {"path": "/tools/openroad"},
+            "yosys": {"path": "/tools/yosys"},
+        },
+    }), encoding="utf-8")
+    auditor_source = Path(research_flow.__file__).resolve()
+    frozen_auditor = auditor / "bindings/oracles/00-research_flow.py"
+    frozen_auditor.write_bytes(auditor_source.read_bytes())
+    (auditor / "bindings/oracle-binding.json").write_text(json.dumps({
+        "files": [{
+            "source_path": str(auditor_source),
+            "frozen_path": "bindings/oracles/00-research_flow.py",
+            "sha256": _sha256(auditor_source),
+        }],
+    }), encoding="utf-8")
+
+    def fake_verify_epoch(path: str | Path) -> dict[str, object]:
+        resolved = Path(path).resolve()
+        if resolved == producer.resolve():
+            return {
+                "valid": True,
+                "research_evaluation_ready": True,
+                "epoch_id": "producer-v1",
+                "epoch_digest": "sha256:producer",
+                "toolchain_manifest_digest": "sha256:tools",
+            }
+        if resolved == auditor.resolve():
+            return {
+                "valid": True,
+                "research_evaluation_ready": True,
+                "epoch_id": "auditor-v1",
+                "epoch_digest": "sha256:auditor",
+                "toolchain_manifest_digest": "sha256:tools",
+            }
+        raise AssertionError(f"unexpected epoch: {resolved}")
+
+    monkeypatch.setattr(research_flow, "verify_research_epoch", fake_verify_epoch)
+    audits = []
+    for name in ("baseline", "replay"):
+        project = tmp_path / f"campaign/project-gcd-{name}"
+        stage_flow_project(inventory=inventory, design_id="gcd", output=project)
+        run = _terminal_congestion_run(project)
+        output = tmp_path / f"audit-{name}"
+        audit_flow_run(
+            project=project,
+            run_dir=run,
+            producer_epoch=producer,
+            auditor_epoch=auditor,
+            output=output,
+        )
+        audits.append(output)
+
+    result = compare_flow_replays(
+        baseline_audit=audits[0], replay_audit=audits[1],
+        output=tmp_path / "replay-comparison",
+    )
+    assert result["valid"] is True
+    assert result["reproduced"] is True
+    assert result["replay_verdict"] == "REPRODUCED"
+    assert result["input_equivalent"] is True
+    assert result["outcome_equivalent"] is True
+    assert verify_flow_replay(tmp_path / "replay-comparison")["valid"] is True
+
+    with pytest.raises(ResearchFlowError, match="distinct audit paths"):
+        compare_flow_replays(
+            baseline_audit=audits[0], replay_audit=audits[0],
+            output=tmp_path / "invalid-same-audit",
+        )
 
 
 def test_flow_failure_class_keeps_infrastructure_unknown() -> None:

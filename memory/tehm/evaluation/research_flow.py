@@ -22,6 +22,8 @@ STAGE_RECEIPT_SCHEMA = "tehm-research-flow-stage-v1"
 STAGE_ARTIFACT_SCHEMA = "tehm-research-flow-stage-artifacts-v1"
 FLOW_AUDIT_SCHEMA = "tehm-research-flow-audit-v1"
 FLOW_AUDIT_ARTIFACT_SCHEMA = "tehm-research-flow-audit-artifacts-v1"
+FLOW_REPLAY_SCHEMA = "tehm-research-flow-replay-v1"
+FLOW_REPLAY_ARTIFACT_SCHEMA = "tehm-research-flow-replay-artifacts-v1"
 FLOW_STAGES = ("synth", "floorplan", "place", "cts", "route", "finish")
 
 
@@ -593,6 +595,10 @@ def _flow_failure_class(status: int, log: str) -> tuple[str, str, str]:
 
 
 def _audit_manifest(root: Path) -> dict[str, Any]:
+    return _output_manifest(root, FLOW_AUDIT_ARTIFACT_SCHEMA)
+
+
+def _output_manifest(root: Path, schema: str) -> dict[str, Any]:
     self_path = root / "artifact-manifest.json"
     paths = [path for path in root.rglob("*") if path.is_file() and path != self_path]
     rows = [{
@@ -601,7 +607,7 @@ def _audit_manifest(root: Path) -> dict[str, Any]:
         "sha256": _sha256_file(path),
     } for path in sorted(paths, key=lambda item: item.as_posix())]
     payload = {
-        "schema": FLOW_AUDIT_ARTIFACT_SCHEMA,
+        "schema": schema,
         "files": rows,
         "files_digest": _digest(rows),
     }
@@ -857,8 +863,266 @@ def verify_flow_audit(path: str | Path) -> dict[str, Any]:
     }
 
 
+def _flow_input_semantics(receipt: Mapping[str, Any]) -> dict[str, Any]:
+    """Return path-independent staged input identity for isolated replay."""
+    source_files = []
+    for row in receipt.get("source_files") or []:
+        if not isinstance(row, Mapping):
+            raise ResearchFlowError("flow stage receipt source row is invalid")
+        source_files.append({
+            "source_path": row.get("source_path"),
+            "staged_path": row.get("staged_path"),
+            "sha256": row.get("sha256"),
+            "bytes": row.get("bytes"),
+        })
+    sdc = receipt.get("sdc_template") or {}
+    config = receipt.get("config_template") or {}
+    return {
+        "design_id": receipt.get("design_id"),
+        "adapter_id": receipt.get("adapter_id"),
+        "inventory_digest": receipt.get("inventory_digest"),
+        "design_manifest_digest": receipt.get("design_manifest_digest"),
+        "source_bundle_digest": receipt.get("source_bundle_digest"),
+        "authority_checkout": receipt.get("authority_checkout"),
+        "platform": receipt.get("platform"),
+        "top_module": receipt.get("top_module"),
+        "source_files": source_files,
+        "config_template": {
+            "source_path": config.get("source_path"),
+            "sha256": config.get("sha256"),
+        },
+        "sdc_template": {
+            "source_path": sdc.get("source_path"),
+            "sha256": sdc.get("sha256"),
+            "staged_sha256": sdc.get("staged_sha256"),
+            "constraint_binding": sdc.get("constraint_binding"),
+        },
+        "declared_overrides": receipt.get("declared_overrides"),
+        "logic_changes": receipt.get("logic_changes"),
+        "stub_generated": receipt.get("stub_generated"),
+    }
+
+
+def _flow_outcome_signature(audit: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "flow_variant": audit.get("flow_variant"),
+        "oracle_verdict": audit.get("oracle_verdict"),
+        "oracle_reason": audit.get("oracle_reason"),
+        "failure_layer": audit.get("failure_layer"),
+        "terminal_stage": audit.get("terminal_stage"),
+        "terminal_exit_code": audit.get("terminal_exit_code"),
+        "checks": audit.get("checks"),
+        "source_mutation": audit.get("source_mutation"),
+        "memory_update": audit.get("memory_update"),
+        "production_authority": audit.get("production_authority"),
+    }
+
+
+def _verified_replay_member(
+    path: str | Path,
+) -> tuple[Path, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    root = Path(path).expanduser().resolve()
+    checked = verify_flow_audit(root)
+    audit = _load_json(root / "flow-audit.json", "flow audit")
+    project = Path(str(audit.get("project_path") or "")).resolve()
+    receipt = _load_json(project / "stage-receipt.json", "flow stage receipt")
+    return root, checked, audit, receipt
+
+
+def _replay_payload(
+    baseline_path: str | Path, replay_path: str | Path,
+) -> dict[str, Any]:
+    baseline_root, baseline_checked, baseline, baseline_receipt = (
+        _verified_replay_member(baseline_path)
+    )
+    replay_root, replay_checked, replay, replay_receipt = _verified_replay_member(
+        replay_path
+    )
+    if baseline_root == replay_root:
+        raise ResearchFlowError("replay comparison requires two distinct audit paths")
+    baseline_project = Path(str(baseline.get("project_path") or "")).resolve()
+    replay_project = Path(str(replay.get("project_path") or "")).resolve()
+    baseline_run = Path(str(baseline.get("run_dir") or "")).resolve()
+    replay_run = Path(str(replay.get("run_dir") or "")).resolve()
+    if baseline_project == replay_project or baseline_run == replay_run:
+        raise ResearchFlowError(
+            "replay comparison requires distinct project and run workspaces"
+        )
+
+    baseline_inputs = _flow_input_semantics(baseline_receipt)
+    replay_inputs = _flow_input_semantics(replay_receipt)
+    input_equivalent = baseline_inputs == replay_inputs
+    same_toolchain = (
+        baseline.get("toolchain_manifest_digest")
+        == replay.get("toolchain_manifest_digest")
+    )
+    baseline_outcome = _flow_outcome_signature(baseline)
+    replay_outcome = _flow_outcome_signature(replay)
+    outcome_equivalent = baseline_outcome == replay_outcome
+    reproduced = input_equivalent and same_toolchain and outcome_equivalent
+    payload = {
+        "schema": FLOW_REPLAY_SCHEMA,
+        "design_id": baseline.get("design_id"),
+        "baseline": {
+            "audit_path": str(baseline_root),
+            "audit_digest": baseline_checked["audit_digest"],
+            "project_path": str(baseline_project),
+            "run_dir": str(baseline_run),
+            "producer_epoch_digest": baseline.get("producer_epoch_digest"),
+            "auditor_epoch_digest": baseline.get("auditor_epoch_digest"),
+            "stage_receipt_digest": baseline.get("stage_receipt_digest"),
+            "actual_cost": baseline.get("actual_cost"),
+        },
+        "replay": {
+            "audit_path": str(replay_root),
+            "audit_digest": replay_checked["audit_digest"],
+            "project_path": str(replay_project),
+            "run_dir": str(replay_run),
+            "producer_epoch_digest": replay.get("producer_epoch_digest"),
+            "auditor_epoch_digest": replay.get("auditor_epoch_digest"),
+            "stage_receipt_digest": replay.get("stage_receipt_digest"),
+            "actual_cost": replay.get("actual_cost"),
+        },
+        "isolation": {
+            "distinct_audit_paths": True,
+            "distinct_project_paths": True,
+            "distinct_run_paths": True,
+        },
+        "input_equivalence": {
+            "equivalent": input_equivalent,
+            "baseline_digest": _digest(baseline_inputs),
+            "replay_digest": _digest(replay_inputs),
+            "comparison": "path-independent staged semantics",
+        },
+        "toolchain_equivalence": {
+            "equivalent": same_toolchain,
+            "baseline_digest": baseline.get("toolchain_manifest_digest"),
+            "replay_digest": replay.get("toolchain_manifest_digest"),
+        },
+        "outcome_equivalence": {
+            "equivalent": outcome_equivalent,
+            "baseline": baseline_outcome,
+            "replay": replay_outcome,
+        },
+        "tolerance_contract": {
+            "terminal_semantics": "exact",
+            "staged_input_semantics": "exact_after_workspace_path_normalization",
+            "toolchain_manifest": "exact",
+            "stage_wallclock_seconds": "informational_not_gated",
+            "preserved_artifact_bytes": "integrity_checked_per_attempt_not_cross_equal",
+        },
+        "replay_verdict": "REPRODUCED" if reproduced else "NOT_REPRODUCED",
+        "reproduced": reproduced,
+        "production_authority": False,
+        "claim_boundary": (
+            "Reproduces only the scoped audited terminal result, including a repeated "
+            "failure; it does not convert FAIL to PASS or establish repair, memory "
+            "efficacy, broad signoff, source independence, or production readiness."
+        ),
+    }
+    payload["replay_digest"] = _digest(payload)
+    return payload
+
+
+def compare_flow_replays(
+    *, baseline_audit: str | Path, replay_audit: str | Path, output: str | Path,
+) -> dict[str, Any]:
+    """Independently compare two isolated, already audited fixed-flow attempts."""
+    destination = Path(output).expanduser().resolve()
+    if destination.exists():
+        raise ResearchFlowError(f"refusing to overwrite flow replay: {destination}")
+    report = _replay_payload(baseline_audit, replay_audit)
+    summary = {
+        "schema": "tehm-research-flow-replay-summary-v1",
+        "design_id": report["design_id"],
+        "replay_digest": report["replay_digest"],
+        "replay_verdict": report["replay_verdict"],
+        "reproduced": report["reproduced"],
+        "input_equivalent": report["input_equivalence"]["equivalent"],
+        "toolchain_equivalent": report["toolchain_equivalence"]["equivalent"],
+        "outcome_equivalent": report["outcome_equivalence"]["equivalent"],
+        "claim_boundary": report["claim_boundary"],
+    }
+    summary["summary_digest"] = _digest(summary)
+    staging = destination.with_name(destination.name + f".tmp.{os.getpid()}")
+    if staging.exists():
+        raise ResearchFlowError(f"flow replay staging exists: {staging}")
+    staging.mkdir(parents=True)
+    try:
+        _write_json(staging / "flow-replay.json", report)
+        _write_json(staging / "summary.json", summary)
+        _write_json(
+            staging / "artifact-manifest.json",
+            _output_manifest(staging, FLOW_REPLAY_ARTIFACT_SCHEMA),
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        staging.replace(destination)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return verify_flow_replay(destination)
+
+
+def verify_flow_replay(path: str | Path) -> dict[str, Any]:
+    root = Path(path).expanduser().resolve()
+    report = _load_json(root / "flow-replay.json", "flow replay")
+    summary = _load_json(root / "summary.json", "flow replay summary")
+    artifacts = _load_json(root / "artifact-manifest.json", "flow replay artifacts")
+    if report.get("schema") != FLOW_REPLAY_SCHEMA:
+        raise ResearchFlowError("flow replay schema mismatch")
+    unsigned = dict(report)
+    replay_digest = unsigned.pop("replay_digest", None)
+    if replay_digest != _digest(unsigned):
+        raise ResearchFlowError("flow replay digest mismatch")
+    unsigned_summary = dict(summary)
+    summary_digest = unsigned_summary.pop("summary_digest", None)
+    if (
+        summary_digest != _digest(unsigned_summary)
+        or summary.get("replay_digest") != replay_digest
+    ):
+        raise ResearchFlowError("flow replay summary binding mismatch")
+    if artifacts.get("schema") != FLOW_REPLAY_ARTIFACT_SCHEMA:
+        raise ResearchFlowError("flow replay artifact schema mismatch")
+    unsigned_artifacts = dict(artifacts)
+    artifact_digest = unsigned_artifacts.pop("manifest_digest", None)
+    if artifact_digest != _digest(unsigned_artifacts):
+        raise ResearchFlowError("flow replay artifact digest mismatch")
+    rows = artifacts.get("files")
+    if not isinstance(rows, list) or artifacts.get("files_digest") != _digest(rows):
+        raise ResearchFlowError("flow replay artifact file digest mismatch")
+    for row in rows:
+        relative = _relative(row.get("path"), "flow replay artifact path")
+        target = root / Path(*relative.parts)
+        if (
+            not target.is_file()
+            or target.stat().st_size != row.get("bytes")
+            or _sha256_file(target) != row.get("sha256")
+        ):
+            raise ResearchFlowError(f"flow replay artifact drifted: {relative}")
+    recomputed = _replay_payload(
+        (report.get("baseline") or {}).get("audit_path"),
+        (report.get("replay") or {}).get("audit_path"),
+    )
+    if recomputed != report:
+        raise ResearchFlowError("flow replay no longer matches audited attempts")
+    return {
+        "valid": True,
+        "design_id": report["design_id"],
+        "replay_digest": replay_digest,
+        "summary_digest": summary_digest,
+        "artifact_manifest_digest": artifact_digest,
+        "replay_verdict": report["replay_verdict"],
+        "reproduced": report["reproduced"],
+        "input_equivalent": report["input_equivalence"]["equivalent"],
+        "toolchain_equivalent": report["toolchain_equivalence"]["equivalent"],
+        "outcome_equivalent": report["outcome_equivalence"]["equivalent"],
+    }
+
+
 __all__ = [
     "FLOW_AUDIT_ARTIFACT_SCHEMA", "FLOW_AUDIT_SCHEMA", "ResearchFlowError",
-    "STAGE_ARTIFACT_SCHEMA", "STAGE_RECEIPT_SCHEMA", "audit_flow_run",
-    "stage_flow_project", "verify_flow_audit", "verify_staged_flow_project",
+    "FLOW_REPLAY_ARTIFACT_SCHEMA", "FLOW_REPLAY_SCHEMA", "STAGE_ARTIFACT_SCHEMA",
+    "STAGE_RECEIPT_SCHEMA", "audit_flow_run", "compare_flow_replays",
+    "stage_flow_project", "verify_flow_audit", "verify_flow_replay",
+    "verify_staged_flow_project",
 ]
