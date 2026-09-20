@@ -1,11 +1,11 @@
 {
   "schema": "tehm-research-inventory-adapter-spec-v2",
-  "adapter_id": "r4-external-server-sky130hs-v1",
-  "source_inventory_digest": "sha256:ba433010e1d742caaa9c0549a58adf70a3b20cb2992de0de94102cf92600c060",
+  "adapter_id": "r4-external-server-sky130hs-v2",
+  "source_inventory_digest": "sha256:7c7b6e844ac2cbe3eb6c873f16b210391f25a4d6e1553d995c6097ca29ed4319",
   "source_authority": {
     "kind": "inventory_snapshot",
     "corpus_root": "/data1/zhangdy/RTL",
-    "inventory_digest": "sha256:ba433010e1d742caaa9c0549a58adf70a3b20cb2992de0de94102cf92600c060",
+    "inventory_digest": "sha256:7c7b6e844ac2cbe3eb6c873f16b210391f25a4d6e1553d995c6097ca29ed4319",
     "entries_digest": "sha256:3dd090146c9c25debec24b0246d30e9bbdd08f81df141157fbcb7b1a83af4ec4"
   },
   "support_authority": {
