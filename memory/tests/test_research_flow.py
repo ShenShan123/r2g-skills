@@ -159,9 +159,10 @@ def _terminal_congestion_run(project: Path) -> Path:
     receipt = json.loads(
         (project / "stage-receipt.json").read_text(encoding="utf-8")
     )
-    authority_head = receipt["authority_checkout"]["git_head"][:10]
+    authority_head = receipt["authority_checkout"]["git_head"][:9]
+    authority_root = receipt["authority_checkout"]["root"]
     fingerprint = (
-        f"orfs=/authority@{authority_head} openroad=/tools/openroad "
+        f"orfs={authority_root}@{authority_head} openroad=/tools/openroad "
         "yosys=/tools/yosys frontend=default"
     )
     stages = []
@@ -303,3 +304,14 @@ def test_flow_failure_class_keeps_infrastructure_unknown() -> None:
     assert research_flow._flow_failure_class(124, "timeout") == (
         "UNKNOWN", "flow_timeout", "INFRASTRUCTURE_ERROR"
     )
+
+
+def test_authority_fingerprint_accepts_short_head_but_rejects_wrong_root() -> None:
+    authority = {"root": "/authority/orfs", "git_head": "0123456789abcdef"}
+    research_flow._verify_authority_fingerprint(
+        "orfs=/authority/orfs@012345678 openroad=/tools/openroad", authority
+    )
+    with pytest.raises(ResearchFlowError, match="differs from adapter authority"):
+        research_flow._verify_authority_fingerprint(
+            "orfs=/other/orfs@012345678 openroad=/tools/openroad", authority
+        )

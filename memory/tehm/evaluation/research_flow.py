@@ -475,6 +475,20 @@ def _auditor_binding(epoch_root: Path) -> dict[str, str]:
     }
 
 
+def _verify_authority_fingerprint(
+    fingerprint: str, authority: Mapping[str, Any]
+) -> None:
+    match = re.search(r"(?:^| )orfs=([^ ]+)@([0-9a-fA-F]{7,40})(?: |$)", fingerprint)
+    if match is None:
+        raise ResearchFlowError("flow run fingerprint lacks a parseable ORFS binding")
+    expected_root = Path(str(authority.get("root") or "")).resolve()
+    recorded_root = Path(match.group(1)).resolve()
+    full_head = str(authority.get("git_head") or "").lower()
+    short_head = match.group(2).lower()
+    if recorded_root != expected_root or not full_head.startswith(short_head):
+        raise ResearchFlowError("flow run fingerprint differs from adapter authority")
+
+
 def _raw_reference(path: Path) -> dict[str, Any]:
     if not path.is_file() or path.is_symlink():
         raise ResearchFlowError(f"raw flow artifact is missing or unsafe: {path}")
@@ -585,8 +599,7 @@ def audit_flow_run(
         raise ResearchFlowError("flow run Yosys path differs from frozen toolchain")
     authority = receipt.get("authority_checkout") or {}
     fingerprint = str(meta.get("toolchain_fingerprint") or "")
-    if str(authority.get("git_head") or "")[:10] not in fingerprint:
-        raise ResearchFlowError("flow run fingerprint lacks adapter authority HEAD")
+    _verify_authority_fingerprint(fingerprint, authority)
     make_status = meta.get("make_status")
     if type(make_status) is not int or make_status != stages[-1]["status"]:
         raise ResearchFlowError("flow run status disagrees with terminal stage")
