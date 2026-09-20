@@ -7469,3 +7469,59 @@ artifact manifest digest 为
 系统并得到可定位的 flow 终态，但不证明 fixed-flow 成功、功能修复、PPA/QoR、Memory
 收益或 Agent 能力。原始 source 和 M0 未更新，production authority=false。S0 replay、
 另一个 official control、外部设计 fixed flow，以及全部 S1/S2 仍待完成。
+
+### 2026-09-20 Revision4 S0 external authority split and terminal fixed-flow evidence
+
+外部设计 adapter 升级到 schema v2，将两个不同 authority 明确拆开：RTL source
+authority 继续绑定只读 inventory snapshot，ORFS clean Git checkout 只提供固定
+`sky130hs` config/SDC support bytes。纠正后的源 inventory
+`rtl-readonly-20260918-rc2` 含 552 candidates、15 explicit exclusions，digest 为
+`sha256:7c7b6e844ac2cbe3eb6c873f16b210391f25a4d6e1553d995c6097ca29ed4319`；
+显式 adapter inventory digest 为
+`sha256:10741bbbf43ddb2f103fdbcf1a27f0d9307634108b45008290e359fa858c716f`。
+adapter 保留 `verilog_axis_ll_axis_bridge` 的外部 source identity，且只按显式
+single-clock 绑定把 SDC 的 design/clock/period 重定向到 `ll_axis_bridge` / `clk` /
+1.4ns；RTL 未修改、未生成 stub。`declared-repo:verilog-axis` 仍只是未验证 metadata，
+不能据此宣称 source independence。
+
+纠正后的 frontend attempt `rc1-9166505-s0-r1` 独立审计为 **1 PASS / 0 FAIL /
+0 UNKNOWN**；实际成本为 1 次 EDA、0 次模型调用、0 tokens、1.669181s，ledger tail
+为 `sha256:00fcc2b4a331f369ae639c4ab7b0b22008c740cc71e87dc524a1644e17cd3c3e`，
+audit digest 为
+`sha256:8517f7165bf47030d748e3ccfef5f516423e885618217776a0406dac625c7028`。
+
+外部固定流工程
+`/data1/zhangdy/tehm-campaigns/r4-real-pilot/projects/s0-external-verilog-axis-ll-axis-bridge-stage-v2`
+的 stage receipt digest 为
+`sha256:ec2e8df6085f6c9c98a9b6fea23ff0d61fecc319d867f8366478d2b6e9b79991`。
+producer commit `9166505` 的 clean epoch digest 为
+`sha256:309d7840df04d4a2ff204f40b1c1c91bcb9d87b13f37dfe12564ecc5642c5e51`；
+auditor commit `e53f149` 的 clean epoch digest 为
+`sha256:e6ff68e38714062c5bb2c38b1711ba1500da5a37a8d973a8b03a9817a0e89f8f`。
+固定串行 flow 未重试：synth 5s PASS，floorplan 8s 因 `PDN-0185 Insufficient
+width ... to add straps` FAIL，place/CTS/route/finish 均 NOT_EXECUTED。独立审计为
+**FAIL / pdn_geometry_infeasible / FLOW_TARGET_FAILURE**，实际成本 1 次 flow driver、
+2 个 EDA stages、13s stage wallclock、0 model calls、0 tokens；audit digest 为
+`sha256:59030690b63cd83f62ff878dbc2f3733b59fcc88aa96b83c836a6b88105e9365`，
+artifact manifest digest 为
+`sha256:5a6abb9de20fc2c8da85265213e8e8afee50063beba27e0d275bee0b84a36e39`。
+没有静默放大 geometry、降低 utilization 或覆盖失败。
+
+此前误绑定 rc1 inventory 的 attempt 原样保留为 diagnostic-only：虽然同一 source
+bundle 也到达相同 PDN failure，但 manifest/exclusion chain 与冻结 frontend campaign
+不一致，因此不混入 canonical denominator。新的 v2 adapter、epoch、workspace、attempt
+和 audit 构成纠正链。
+
+P1/P2/P4 状态投影位于
+`/data1/zhangdy/tehm-campaigns/r4-real-pilot/campaigns/r4-s0-onboarding-status-20260920/summary/status.md`，
+SHA256 为
+`802b2dbf4959a9f3deed6f105b2dda6614dd33501f61eac4fa9565af305876f4`。
+canonical initial pair 的 denominator 为 2：**0 PASS / 2 FAIL / 0 UNKNOWN**，合计
+7 个执行过的 EDA stages、69s stage wallclock、0 model calls。该投影只证明可测量的
+onboarding 与 failure localization；isolated replay、第二个 official fixed flow、
+扩展到 2 official + 4 external、S1 和 S2 都仍待完成。M0 未更新，production
+authority=false。
+
+本阶段定向回归为 **19 passed in 9.03s**；完整回归使用
+`PYTHONPATH=memory:memory/tests PYTHONDONTWRITEBYTECODE=1 /opt/anaconda3/bin/python -m pytest -q memory/tests`，
+结果为 **2030 passed in 2080.69s (0:34:40)**。

@@ -1,0 +1,113 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "entries": [
+    {
+      "evidence_id": "current-working-source-freeze",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The epoch captures the exact working source bytes, Git HEAD, dirty status, and binary patch."
+    },
+    {
+      "evidence_id": "current-bound-internal-toolchain",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected toolchain is authenticated by tehm-orfs-toolchain-manifest-v1 and a clean ORFS checkout."
+    },
+    {
+      "evidence_id": "tehm-evidence-freeze-v4-dev",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected M0 is a content-addressed bundle verified by the current bundle verifier; its effect claims remain limited to its own fixtures."
+    },
+    {
+      "evidence_id": "r4-external-frontend-preflight-rc1-3005fb4-s0-r4",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw-evidence audit reports 6/6 external-design frontend/synthesis onboarding cases PASS with the full frozen denominator, six EDA calls, zero model calls, and unchanged source. This is not functional repair, fixed-flow, source-lineage, or memory-effect evidence."
+    },
+    {
+      "evidence_id": "r4-official-adapter-inventory-0c162cf5-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The derivative inventory binds gcd and uart to explicit top/filelist, a clean official ORFS Git HEAD, and frozen config/SDC support bytes; it records no logic changes or generated stubs and grants no flow authority."
+    },
+    {
+      "evidence_id": "r4-official-adapted-frontend-preflight-rc1-5cc5de8-s0-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw-evidence audit reports 2/2 explicitly adapted official-control frontend/synthesis cases PASS with two EDA calls, zero model calls, and unchanged source."
+    },
+    {
+      "evidence_id": "r4-official-gcd-fixed-flow-82a8ed8-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "A source-bound staged gcd control ran the serial fixed flow once: synth, floorplan, place, and CTS passed; route terminated with GRT-0232 routing congestion; finish was not executed. Independent audit f3db14f9 classifies this as a scoped FLOW_TARGET_FAILURE with five EDA stages, zero model calls, unchanged source, and no memory update. The producer epoch association is caller-supplied and toolchain-consistent because run-meta does not embed the epoch digest. This is negative S0 onboarding evidence, not repair or memory-effect evidence."
+    },
+    {
+      "evidence_id": "r4-external-adapter-inventory-9166505-r2",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Adapter schema v2 keeps source authority on corrected read-only inventory 7c7b6e84 and support authority on clean ORFS HEAD 0c162cf5. The derivative inventory digest is 10741bbb; RTL is unchanged, the single-clock SDC retarget is explicit, and declared verilog-axis lineage remains unverified metadata."
+    },
+    {
+      "evidence_id": "r4-external-adapted-frontend-preflight-rc1-9166505-s0-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw-evidence audit 8517f716 reports 1/1 PASS for the corrected adapter-bound external design with one EDA call, zero model calls, 1.669181 seconds, and unchanged source. This establishes scoped frontend onboarding only."
+    },
+    {
+      "evidence_id": "r4-external-ll-axis-fixed-flow-9166505-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The corrected source-bound ll_axis_bridge project ran the serial fixed flow once: synth passed and floorplan terminated with PDN-0185 insufficient strap width; later stages were not executed. Independent audit 59030690 classifies this as FAIL / pdn_geometry_infeasible / FLOW_TARGET_FAILURE with two EDA stages, 13 seconds, zero model calls, unchanged RTL, and no memory update. No geometry adjustment or retry was applied."
+    },
+    {
+      "evidence_id": "r4-s0-initial-pair-status-20260920",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Projection 802b2dbf summarizes the canonical one-official plus one-external denominator as 0 PASS, 2 FAIL, 0 UNKNOWN, with seven executed EDA stages, 69 seconds, and zero model calls. It explicitly leaves replay, expansion, S1, and S2 pending and grants no production authority."
+    },
+    {
+      "evidence_id": "r4-official-inferred-frontend-preflight-rc1-3005fb4-s0-r1",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "The earlier 2/2 official preflight established tool compatibility but used inferred top/filelist. It is superseded for onboarding by the explicit adapter-bound replay."
+    },
+    {
+      "evidence_id": "r4-frontend-runtime-diagnostic-r1-r3",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "Three immutable failed attempts expose runtime wiring defects in option quoting, top-name quoting, and process lowering. They were not overwritten or counted as design failures after correction."
+    },
+    {
+      "evidence_id": "r4-flow-auditor-short-sha-diagnostic-fa3631f",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "The first audit invocation failed closed before output because the auditor assumed a ten-character ORFS short SHA while the runner emitted nine. Commit 94e09a2 replaced substring matching with exact root plus validated SHA-prefix parsing; the fixed flow was not rerun or overwritten."
+    },
+    {
+      "evidence_id": "r4-external-rc1-inventory-adapter-attempt-diagnostic",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "An earlier external adapter attempt bound the rc1 inventory rather than the campaign-bound rc2 inventory. Its source bundle independently reached the same PDN-0185 failure, but its manifest and exclusion-chain digest differ; the immutable attempt is not mixed into the canonical denominator and was superseded by a new v2 adapter, epoch, workspace, attempt, and audit."
+    },
+    {
+      "evidence_id": "revision3-bf5dc5eb-review-baseline",
+      "classification": "corrected",
+      "selected_for_epoch": false,
+      "basis": "Revision3 used an older review baseline and cannot identify the current checkout."
+    },
+    {
+      "evidence_id": "memory-readme-historical-campaign-records",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "README narratives guide replay but are not substituted for their external raw artifacts or a current independent audit."
+    },
+    {
+      "evidence_id": "future-r4-s0-replay-expansion-s1-s2-results",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "S0 remains incomplete: both initial fixed-flow cases have terminal FLOW_TARGET_FAILURE results, isolated replay is pending, the second official control has not run fixed flow, and expansion has not closed. All S1/S2 real-design comparisons remain pending; no repair, memory-effect, agent-capability, source-independence, or production result is established."
+    }
+  ]
+}
