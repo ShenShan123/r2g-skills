@@ -1,0 +1,47 @@
+{
+  "schema": "tehm-research-inventory-adapter-spec-v2",
+  "adapter_id": "r4-external-server-sky130hs-v1",
+  "source_inventory_digest": "sha256:ba433010e1d742caaa9c0549a58adf70a3b20cb2992de0de94102cf92600c060",
+  "source_authority": {
+    "kind": "inventory_snapshot",
+    "corpus_root": "/data1/zhangdy/RTL",
+    "inventory_digest": "sha256:ba433010e1d742caaa9c0549a58adf70a3b20cb2992de0de94102cf92600c060",
+    "entries_digest": "sha256:3dd090146c9c25debec24b0246d30e9bbdd08f81df141157fbcb7b1a83af4ec4"
+  },
+  "support_authority": {
+    "kind": "git_checkout",
+    "git_head": "0c162cf5f558bdc5c191f2ccb509fb74314330ea",
+    "require_clean": true
+  },
+  "designs": [
+    {
+      "design_id": "verilog_axis_ll_axis_bridge",
+      "role": "external_server_design",
+      "top_module": "ll_axis_bridge",
+      "ordered_filelist": [
+        "rtl/ll_axis_bridge.v"
+      ],
+      "include_dirs": [],
+      "defines": {},
+      "top_parameters": {},
+      "support_files": [
+        "flow/designs/sky130hs/gcd/config.mk",
+        "flow/designs/sky130hs/gcd/constraint.sdc"
+      ],
+      "flow_binding": {
+        "platform": "sky130hs",
+        "config_template": "flow/designs/sky130hs/gcd/config.mk",
+        "sdc_template": "flow/designs/sky130hs/gcd/constraint.sdc",
+        "overrides": {},
+        "constraint_binding": {
+          "mode": "retarget_single_clock",
+          "template_design": "gcd",
+          "template_clock_port": "clk",
+          "target_clock_port": "clk",
+          "clock_period_ns": 1.4
+        },
+        "authority_note": "External RTL remains bound to the read-only inventory snapshot. The clean ORFS checkout supplies only the disclosed sky130hs fixed-flow config and single-clock SDC template; the staged SDC retarget is explicit and does not modify RTL."
+      }
+    }
+  ]
+}

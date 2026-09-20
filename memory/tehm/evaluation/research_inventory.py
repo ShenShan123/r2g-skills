@@ -29,6 +29,7 @@ EXCLUSION_SCHEMA = "tehm-research-design-exclusions-v1"
 ARTIFACT_MANIFEST_SCHEMA = "tehm-research-inventory-artifacts-v1"
 PREFLIGHT_SHORTLIST_SCHEMA = "tehm-research-preflight-shortlist-v1"
 ADAPTER_SPEC_SCHEMA = "tehm-research-inventory-adapter-spec-v1"
+ADAPTER_SPEC_V2_SCHEMA = "tehm-research-inventory-adapter-spec-v2"
 
 HDL_SUFFIXES = {".v", ".sv", ".vhd", ".vhdl"}
 VERILOG_SUFFIXES = {".v", ".sv"}
@@ -1073,6 +1074,72 @@ def _checkout_binding(root: Path) -> dict[str, Any]:
     }
 
 
+def _adapter_authorities(
+    *,
+    spec: Mapping[str, Any],
+    authority: Path,
+    corpus: Path,
+    source_inventory: Mapping[str, Any],
+    inventory_digest: str,
+) -> tuple[dict[str, Any], dict[str, Any], bool]:
+    """Resolve source and support authority without conflating their roles."""
+    checkout = _checkout_binding(authority)
+    schema = spec.get("schema")
+    if schema == ADAPTER_SPEC_SCHEMA:
+        expected = spec.get("authority_checkout") or {}
+        if checkout["git_head"] != expected.get("git_head"):
+            raise ResearchInventoryError("adapter authority Git HEAD mismatch")
+        if expected.get("require_clean") is not True or checkout["git_dirty"]:
+            raise ResearchInventoryError(
+                "adapter authority checkout must be declared and observed clean"
+            )
+        subtree = PurePosixPath(str(expected.get("source_subtree") or ""))
+        if subtree.is_absolute() or not subtree.parts or ".." in subtree.parts:
+            raise ResearchInventoryError("adapter authority source_subtree is unsafe")
+        if (authority / Path(*subtree.parts)).resolve() != corpus:
+            raise ResearchInventoryError(
+                "adapter authority subtree does not match inventory corpus"
+            )
+        source_binding = {
+            "kind": "git_checkout_subtree",
+            "root": str(authority),
+            "git_head": checkout["git_head"],
+            "source_subtree": subtree.as_posix(),
+            "inventory_digest": inventory_digest,
+        }
+        return checkout, source_binding, True
+
+    if schema != ADAPTER_SPEC_V2_SCHEMA:
+        raise ResearchInventoryError("inventory adapter spec schema mismatch")
+    expected_support = spec.get("support_authority") or {}
+    if expected_support.get("kind") != "git_checkout":
+        raise ResearchInventoryError("v2 support authority must be a Git checkout")
+    if checkout["git_head"] != expected_support.get("git_head"):
+        raise ResearchInventoryError("adapter support Git HEAD mismatch")
+    if expected_support.get("require_clean") is not True or checkout["git_dirty"]:
+        raise ResearchInventoryError(
+            "adapter support checkout must be declared and observed clean"
+        )
+    expected_source = spec.get("source_authority") or {}
+    snapshot = source_inventory.get("corpus_snapshot_after") or {}
+    if (
+        expected_source.get("kind") != "inventory_snapshot"
+        or Path(str(expected_source.get("corpus_root") or "")).resolve() != corpus
+        or expected_source.get("inventory_digest") != inventory_digest
+        or expected_source.get("entries_digest") != snapshot.get("entries_digest")
+    ):
+        raise ResearchInventoryError("v2 source inventory authority mismatch")
+    source_binding = {
+        "kind": "inventory_snapshot",
+        "corpus_root": str(corpus),
+        "inventory_digest": inventory_digest,
+        "entries_digest": snapshot.get("entries_digest"),
+        "entry_count": snapshot.get("entry_count"),
+        "git_identity": "unavailable",
+    }
+    return checkout, source_binding, False
+
+
 def bind_research_inventory_adapters(
     *,
     inventory: str | Path,
@@ -1093,21 +1160,15 @@ def bind_research_inventory_adapters(
         raise ResearchInventoryError(f"refusing to overwrite adapted inventory: {destination}")
     if _inside(destination, corpus):
         raise ResearchInventoryError("adapted inventory output must be outside the corpus root")
-    if spec.get("schema") != ADAPTER_SPEC_SCHEMA:
-        raise ResearchInventoryError("inventory adapter spec schema mismatch")
     if spec.get("source_inventory_digest") != checked["inventory_digest"]:
         raise ResearchInventoryError("adapter spec source inventory digest mismatch")
-    checkout = _checkout_binding(authority)
-    expected_checkout = spec.get("authority_checkout") or {}
-    if checkout["git_head"] != expected_checkout.get("git_head"):
-        raise ResearchInventoryError("adapter authority Git HEAD mismatch")
-    if expected_checkout.get("require_clean") is not True or checkout["git_dirty"]:
-        raise ResearchInventoryError("adapter authority checkout must be declared and observed clean")
-    subtree = PurePosixPath(str(expected_checkout.get("source_subtree") or ""))
-    if subtree.is_absolute() or not subtree.parts or ".." in subtree.parts:
-        raise ResearchInventoryError("adapter authority source_subtree is unsafe")
-    if (authority / Path(*subtree.parts)).resolve() != corpus:
-        raise ResearchInventoryError("adapter authority subtree does not match inventory corpus")
+    checkout, source_authority, replace_source_identity = _adapter_authorities(
+        spec=spec,
+        authority=authority,
+        corpus=corpus,
+        source_inventory=source_inventory,
+        inventory_digest=checked["inventory_digest"],
+    )
 
     design_index = {
         row.get("design_id"): row for row in source_inventory.get("designs") or []
@@ -1201,15 +1262,16 @@ def bind_research_inventory_adapters(
             })
             manifest["compilation"] = compilation
             manifest["identity"] = dict(manifest["identity"])
-            manifest["identity"]["git"] = checkout
-            manifest["identity"]["origin"] = {
-                "source_urls": [],
-                "declared_repository": "OpenROAD-flow-scripts",
-                "lineage_group": f"official-orfs:{checkout['git_head']}:{design_id}",
-                "lineage_status": "official_checkout_bound",
-                "catalog_bucket": design_id,
-                "catalog_bucket_is_not_lineage": True,
-            }
+            if replace_source_identity:
+                manifest["identity"]["git"] = checkout
+                manifest["identity"]["origin"] = {
+                    "source_urls": [],
+                    "declared_repository": "OpenROAD-flow-scripts",
+                    "lineage_group": f"official-orfs:{checkout['git_head']}:{design_id}",
+                    "lineage_status": "official_checkout_bound",
+                    "catalog_bucket": design_id,
+                    "catalog_bucket_is_not_lineage": True,
+                }
             reasons = [reason for reason in manifest["readiness"]["reasons"]
                        if reason != "ordered_filelist_unverified"]
             manifest["readiness"] = {
@@ -1223,6 +1285,7 @@ def bind_research_inventory_adapters(
                 "adapter_id": spec.get("adapter_id"),
                 "role": entry.get("role"),
                 "source_manifest_digest": index_entry["manifest_digest"],
+                "source_authority": source_authority,
                 "authority_checkout": checkout,
                 "support_files": support,
                 "flow_binding": dict(entry.get("flow_binding") or {}),
@@ -1261,6 +1324,7 @@ def bind_research_inventory_adapters(
             "adapter_binding": {
                 "adapter_id": spec.get("adapter_id"),
                 "source_inventory_digest": checked["inventory_digest"],
+                "source_authority": source_authority,
                 "authority_checkout": checkout,
                 "logic_changes": [],
                 "stub_generation": False,
@@ -1359,7 +1423,8 @@ def verify_research_inventory(path: str | Path) -> dict[str, Any]:
 
 
 __all__ = [
-    "ADAPTER_SPEC_SCHEMA", "ARTIFACT_MANIFEST_SCHEMA", "DESIGN_MANIFEST_SCHEMA", "EXCLUSION_SCHEMA",
+    "ADAPTER_SPEC_SCHEMA", "ADAPTER_SPEC_V2_SCHEMA", "ARTIFACT_MANIFEST_SCHEMA",
+    "DESIGN_MANIFEST_SCHEMA", "EXCLUSION_SCHEMA",
     "INVENTORY_SCHEMA", "PREFLIGHT_SHORTLIST_SCHEMA", "ResearchInventoryError",
     "bind_research_inventory_adapters", "build_research_inventory",
     "verify_research_inventory",

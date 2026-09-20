@@ -92,6 +92,77 @@ def _set_make_assignment(text: str, key: str, value: str) -> str:
     return text + suffix + replacement + "\n"
 
 
+def _replace_sdc_line(text: str, pattern: str, replacement: str, label: str) -> str:
+    compiled = re.compile(pattern, re.MULTILINE)
+    matches = list(compiled.finditer(text))
+    if len(matches) != 1:
+        raise ResearchFlowError(
+            f"constraint template must contain exactly one {label} declaration"
+        )
+    return compiled.sub(replacement, text)
+
+
+def _retarget_sdc(
+    text: str, *, top: str, binding: object,
+) -> tuple[str, dict[str, Any] | None]:
+    if binding in (None, {}):
+        return text, None
+    if not isinstance(binding, Mapping):
+        raise ResearchFlowError("constraint binding must be an object")
+    allowed = {
+        "mode", "template_design", "template_clock_port", "target_clock_port",
+        "clock_period_ns",
+    }
+    if set(binding) - allowed:
+        raise ResearchFlowError("constraint binding contains unknown fields")
+    if binding.get("mode") != "retarget_single_clock":
+        raise ResearchFlowError("unsupported constraint binding mode")
+    template_design = binding.get("template_design")
+    template_clock = binding.get("template_clock_port")
+    target_clock = binding.get("target_clock_port")
+    period = binding.get("clock_period_ns")
+    for value, label in (
+        (template_design, "template design"),
+        (template_clock, "template clock port"),
+        (target_clock, "target clock port"),
+    ):
+        if type(value) is not str or not re.fullmatch(
+            r"[A-Za-z_$][A-Za-z0-9_$]*", value
+        ):
+            raise ResearchFlowError(f"constraint {label} is invalid")
+    if type(period) not in (int, float) or period <= 0:
+        raise ResearchFlowError("constraint clock period must be positive")
+    escaped_design = re.escape(str(template_design))
+    escaped_clock = re.escape(str(template_clock))
+    rewritten = _replace_sdc_line(
+        text,
+        rf"^[ \t]*current_design[ \t]+{escaped_design}[ \t]*$",
+        f"current_design {top}",
+        "template current_design",
+    )
+    rewritten = _replace_sdc_line(
+        rewritten,
+        rf"^[ \t]*set[ \t]+clk_port_name[ \t]+{escaped_clock}[ \t]*$",
+        f"set clk_port_name {target_clock}",
+        "template clk_port_name",
+    )
+    rewritten = _replace_sdc_line(
+        rewritten,
+        r"^[ \t]*set[ \t]+clk_period[ \t]+[^ \t\r\n]+[ \t]*$",
+        f"set clk_period {period}",
+        "template clk_period",
+    )
+    applied = {
+        "mode": "retarget_single_clock",
+        "template_design": template_design,
+        "target_design": top,
+        "template_clock_port": template_clock,
+        "target_clock_port": target_clock,
+        "clock_period_ns": period,
+    }
+    return rewritten, applied
+
+
 def _artifact_manifest(root: Path, paths: list[Path]) -> dict[str, Any]:
     rows = []
     for path in sorted(paths, key=lambda item: item.as_posix()):
@@ -225,7 +296,12 @@ def stage_flow_project(
         constraints = staging / "constraints"
         constraints.mkdir(parents=True)
         staged_sdc = constraints / "constraint.sdc"
-        shutil.copyfile(frozen_sdc, staged_sdc)
+        sdc_text, constraint_binding = _retarget_sdc(
+            frozen_sdc.read_text(encoding="utf-8"),
+            top=top,
+            binding=flow.get("constraint_binding"),
+        )
+        staged_sdc.write_text(sdc_text, encoding="utf-8")
         staged_paths.append(staged_sdc)
         final_rtl = [destination / row["staged_path"] for row in copied_sources]
         final_include_dirs = []
@@ -279,6 +355,8 @@ def stage_flow_project(
             "sdc_template": {
                 "source_path": sdc_support["source_path"],
                 "sha256": sdc_support["sha256"],
+                "staged_sha256": _sha256_file(staged_sdc),
+                "constraint_binding": constraint_binding,
             },
             "declared_overrides": dict(overrides),
             "canonical_staged_assignments": {
@@ -653,6 +731,9 @@ def audit_flow_run(
             "strict_signoff_checks": "out_of_scope",
             "functional_repair": "out_of_scope",
         },
+        "constraint_binding": (receipt.get("sdc_template") or {}).get(
+            "constraint_binding"
+        ),
         "checks": checks,
         "terminal_stage": stages[-1]["stage"],
         "terminal_exit_code": make_status,

@@ -315,3 +315,36 @@ def test_authority_fingerprint_accepts_short_head_but_rejects_wrong_root() -> No
         research_flow._verify_authority_fingerprint(
             "orfs=/other/orfs@012345678 openroad=/tools/openroad", authority
         )
+
+
+def test_single_clock_constraint_retarget_is_explicit_and_fail_closed() -> None:
+    template = (
+        "current_design gcd\n"
+        "set clk_port_name clk\n"
+        "set clk_period 1.4\n"
+        "create_clock -period $clk_period [get_ports $clk_port_name]\n"
+    )
+    binding = {
+        "mode": "retarget_single_clock",
+        "template_design": "gcd",
+        "template_clock_port": "clk",
+        "target_clock_port": "axis_clk",
+        "clock_period_ns": 2.0,
+    }
+    rewritten, applied = research_flow._retarget_sdc(
+        template, top="ll_axis_bridge", binding=binding
+    )
+    assert "current_design ll_axis_bridge" in rewritten
+    assert "set clk_port_name axis_clk" in rewritten
+    assert "set clk_period 2.0" in rewritten
+    assert applied == {
+        **binding,
+        "target_design": "ll_axis_bridge",
+    }
+
+    with pytest.raises(ResearchFlowError, match="exactly one"):
+        research_flow._retarget_sdc(
+            template.replace("current_design gcd\n", ""),
+            top="ll_axis_bridge",
+            binding=binding,
+        )

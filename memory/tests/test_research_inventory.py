@@ -268,3 +268,157 @@ def test_explicit_adapter_rejects_dirty_or_unbound_authority(tmp_path: Path) -> 
             inventory=source_inventory, adapter_spec=spec,
             authority_root=authority, output=tmp_path / "adapted",
         )
+
+
+def test_v2_adapter_separates_snapshot_source_from_git_support(
+    tmp_path: Path,
+) -> None:
+    corpus = tmp_path / "RTL"
+    _project(corpus, "external", "alpha", repo="independent-alpha")
+    source_inventory = tmp_path / "source-inventory"
+    source_result = build_research_inventory(
+        corpus_root=corpus, output=source_inventory
+    )
+    source_payload = json.loads(
+        (source_inventory / "inventory.json").read_text(encoding="utf-8")
+    )
+
+    support_authority = tmp_path / "orfs"
+    support = support_authority / "flow/designs/platform/template"
+    support.mkdir(parents=True)
+    (support / "config.mk").write_text("DESIGN_NAME = template\n", encoding="utf-8")
+    (support / "constraint.sdc").write_text(
+        "current_design template\n"
+        "set clk_port_name clk\n"
+        "set clk_period 2.0\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-q", str(support_authority)], check=True)
+    subprocess.run(
+        ["git", "-C", str(support_authority), "config", "user.email",
+         "test@example.invalid"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(support_authority), "config", "user.name",
+         "Research Test"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(support_authority), "add", "."], check=True
+    )
+    subprocess.run(
+        ["git", "-C", str(support_authority), "commit", "-q", "-m", "fixture"],
+        check=True,
+    )
+    head = subprocess.run(
+        ["git", "-C", str(support_authority), "rev-parse", "HEAD"], check=True,
+        text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    spec = tmp_path / "adapter-v2.json"
+    spec.write_text(json.dumps({
+        "schema": "tehm-research-inventory-adapter-spec-v2",
+        "adapter_id": "test-external-v2",
+        "source_inventory_digest": source_result["inventory_digest"],
+        "source_authority": {
+            "kind": "inventory_snapshot",
+            "corpus_root": str(corpus.resolve()),
+            "inventory_digest": source_result["inventory_digest"],
+            "entries_digest": source_payload["corpus_snapshot_after"]["entries_digest"],
+        },
+        "support_authority": {
+            "kind": "git_checkout",
+            "git_head": head,
+            "require_clean": True,
+        },
+        "designs": [{
+            "design_id": "alpha",
+            "role": "external_server_design",
+            "top_module": "top",
+            "ordered_filelist": ["rtl/defs.vh", "rtl/child.v", "rtl/top.v"],
+            "include_dirs": ["rtl"],
+            "support_files": [
+                "flow/designs/platform/template/config.mk",
+                "flow/designs/platform/template/constraint.sdc",
+            ],
+            "flow_binding": {"platform": "test"},
+        }],
+    }), encoding="utf-8")
+    output = tmp_path / "adapted"
+    result = bind_research_inventory_adapters(
+        inventory=source_inventory,
+        adapter_spec=spec,
+        authority_root=support_authority,
+        output=output,
+    )
+
+    assert result["valid"] is True
+    manifest = json.loads(
+        (output / "design-manifests/alpha.json").read_text(encoding="utf-8")
+    )
+    assert manifest["identity"]["git"] is None
+    assert manifest["identity"]["origin"]["lineage_status"] == (
+        "declared_metadata_unverified"
+    )
+    binding = manifest["adapter_binding"]
+    assert binding["source_authority"]["kind"] == "inventory_snapshot"
+    assert binding["source_authority"]["entries_digest"] == (
+        source_payload["corpus_snapshot_after"]["entries_digest"]
+    )
+    assert binding["authority_checkout"]["git_head"] == head
+
+
+def test_v2_adapter_rejects_wrong_source_snapshot(tmp_path: Path) -> None:
+    corpus = tmp_path / "RTL"
+    _project(corpus, "external", "alpha", repo="independent-alpha")
+    source_inventory = tmp_path / "source-inventory"
+    source_result = build_research_inventory(
+        corpus_root=corpus, output=source_inventory
+    )
+    support_authority = tmp_path / "orfs"
+    support_authority.mkdir()
+    subprocess.run(["git", "init", "-q", str(support_authority)], check=True)
+    subprocess.run(
+        ["git", "-C", str(support_authority), "config", "user.email",
+         "test@example.invalid"], check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(support_authority), "config", "user.name", "Test"],
+        check=True,
+    )
+    (support_authority / "tracked").write_text("support\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(support_authority), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(support_authority), "commit", "-q", "-m", "fixture"],
+        check=True,
+    )
+    head = subprocess.run(
+        ["git", "-C", str(support_authority), "rev-parse", "HEAD"], check=True,
+        text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    spec = tmp_path / "adapter-v2.json"
+    spec.write_text(json.dumps({
+        "schema": "tehm-research-inventory-adapter-spec-v2",
+        "adapter_id": "bad-v2",
+        "source_inventory_digest": source_result["inventory_digest"],
+        "source_authority": {
+            "kind": "inventory_snapshot",
+            "corpus_root": str(corpus.resolve()),
+            "inventory_digest": source_result["inventory_digest"],
+            "entries_digest": "sha256:wrong",
+        },
+        "support_authority": {
+            "kind": "git_checkout", "git_head": head, "require_clean": True,
+        },
+        "designs": [{
+            "design_id": "alpha", "top_module": "top",
+            "ordered_filelist": ["rtl/top.v"],
+        }],
+    }), encoding="utf-8")
+    with pytest.raises(ResearchInventoryError, match="source inventory authority"):
+        bind_research_inventory_adapters(
+            inventory=source_inventory,
+            adapter_spec=spec,
+            authority_root=support_authority,
+            output=tmp_path / "adapted",
+        )
