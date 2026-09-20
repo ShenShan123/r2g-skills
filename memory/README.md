@@ -7418,3 +7418,54 @@ audit digest 为
 新增 adapter 后完整 memory tests 为 **2020 passed**。这关闭 official control 的
 显式 frontend manifest 缺口，不关闭 staged project、fixed ORFS flow、scoped checker
 或 replay gate；S1/S2、memory efficacy、production authority 仍未建立。
+
+### 2026-09-20 Revision4 S0 staged official fixed-flow terminal evidence
+
+新增 `stage-flow` / `verify-staged-flow`，只将 explicit adapter 已绑定的 RTL、config
+和 SDC 复制到隔离工程；生成物不改 RTL、不造 stub，也不授予 flow 或 repair authority。
+首个 gcd 工程
+`/data1/zhangdy/tehm-campaigns/r4-real-pilot/projects/s0-official-gcd-stage-v1`
+绑定 adapter inventory
+`sha256:59659ca0bdac5bbb30d0822264f3bc3dc7c5dca8897a2a59ee96a00a88896295`，
+stage receipt digest 为
+`sha256:fd76f2a57e92e23ab414bf6a6efa53676f222806dd771e6b14e7a2d1b981dcfe`。
+producer commit `82a8ed8` 对应 clean epoch
+`rc1-source-82a8ed8-clean-20260920`（epoch digest
+`sha256:67be61406a1cc74cb29f747f569417ddab23a208bde540602636b9dbed099492`）。
+
+固定 control 使用同一 `sky130hs` 平台、冻结 config/SDC、固定工具路径，串行执行一次，
+`ORFS_MAX_CPUS=4`、`ORFS_TIMEOUT=1800`，没有模型调用，也没有自动采用 runner 给出的
+调参建议。attempt
+`RUN_2026-09-20_00-38-32_1626109_70f2` 在 synth 5s、floorplan 9s、place
+12s、CTS 6s 后，于 route 24s 因 `GRT-0232 Routing congestion too high` 终止；
+finish 未执行。失败 attempt、各阶段日志和通过阶段的 ODB 均保留，未重试、未覆盖。
+
+新增独立 `audit-flow` 后，审计器从 `run-meta.json`、`stage_log.jsonl`、
+`stage_artifact_manifest.jsonl`、`flow.log` 和保存的 ODB 重新核对 stage 顺序、终态、
+文件哈希、工具路径与 official ORFS HEAD。producer 与 auditor 分别绑定 epoch；最终
+auditor commit `94e09a2` 对应 clean epoch
+`rc1-auditor-94e09a2-clean-20260920`（epoch digest
+`sha256:eca0166292e0f68e2e94ec38decc4a777e57d8b7f881d300e66ffbecdf92fb67`）。
+独立审计 verdict 为 **FAIL / routing_congestion / FLOW_TARGET_FAILURE**：synth、
+floorplan、place、CTS 为 PASS，route 为 FAIL，finish 为 NOT_EXECUTED；实际成本为
+1 次 flow driver、5 个 EDA stages、56s stage wallclock、0 model calls、0 tokens、
+1 次独立审计。audit digest 为
+`sha256:f3db14f9fa0b0fb4006644945ca50a2935c040ef190611c3adab9f4929d32d90`，
+artifact manifest digest 为
+`sha256:75068e5abc13adbab8bcd09c4b856cde49ba1d77d0a5e2a516ffe07ebb3daa7b`。
+
+首次审计调用在产物写出前 fail-closed：runner 记录 9 位 ORFS short SHA，而审计器错误
+假设 10 位；`94e09a2` 改为“authority root 精确相等 + 7–40 位 SHA 必须是完整 HEAD
+前缀”，没有重跑或修改 flow attempt。producer epoch 关联仍按审计字段诚实标记为
+`caller_supplied_and_toolchain_consistent`，因为当前 run-meta 未内嵌 epoch digest，不能
+宣称更强的密码学运行时绑定。
+
+完整回归使用
+`PYTHONPATH=memory:memory/tests PYTHONDONTWRITEBYTECODE=1 /opt/anaconda3/bin/python -m pytest -q memory/tests`，
+结果为 **2026 passed in 1420.61s**。此前一次未设置 `memory/tests` 的命令在 collection
+阶段产生 21 个 helper import errors、0 个用例执行，不计作实现失败或通过证据。
+
+这条记录是有效的 **S0 负结果**：它证明真实 staged official control 能进入同一测量
+系统并得到可定位的 flow 终态，但不证明 fixed-flow 成功、功能修复、PPA/QoR、Memory
+收益或 Agent 能力。原始 source 和 M0 未更新，production authority=false。S0 replay、
+另一个 official control、外部设计 fixed flow，以及全部 S1/S2 仍待完成。

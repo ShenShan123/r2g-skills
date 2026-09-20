@@ -1,0 +1,83 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "entries": [
+    {
+      "evidence_id": "current-working-source-freeze",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The epoch captures the exact working source bytes, Git HEAD, dirty status, and binary patch."
+    },
+    {
+      "evidence_id": "current-bound-internal-toolchain",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected toolchain is authenticated by tehm-orfs-toolchain-manifest-v1 and a clean ORFS checkout."
+    },
+    {
+      "evidence_id": "tehm-evidence-freeze-v4-dev",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected M0 is a content-addressed bundle verified by the current bundle verifier; its effect claims remain limited to its own fixtures."
+    },
+    {
+      "evidence_id": "r4-external-frontend-preflight-rc1-3005fb4-s0-r4",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw-evidence audit reports 6/6 external-design frontend/synthesis onboarding cases PASS with the full frozen denominator, six EDA calls, zero model calls, and unchanged source. This is not functional repair, fixed-flow, or memory-effect evidence."
+    },
+    {
+      "evidence_id": "r4-official-adapter-inventory-0c162cf5-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The derivative inventory binds gcd and uart to explicit top/filelist, a clean official ORFS Git HEAD, and frozen config/SDC support bytes; it records no logic changes or generated stubs and grants no flow authority."
+    },
+    {
+      "evidence_id": "r4-official-adapted-frontend-preflight-rc1-5cc5de8-s0-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw-evidence audit reports 2/2 explicitly adapted official-control frontend/synthesis cases PASS with two EDA calls, zero model calls, and unchanged source."
+    },
+    {
+      "evidence_id": "r4-official-gcd-fixed-flow-82a8ed8-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "A source-bound staged gcd control ran the serial fixed flow once: synth, floorplan, place, and CTS passed; route terminated with GRT-0232 routing congestion; finish was not executed. Independent audit f3db14f9 classifies this as a scoped FLOW_TARGET_FAILURE with five EDA stages, zero model calls, unchanged source, and no memory update. The producer epoch association is caller-supplied and toolchain-consistent because run-meta does not embed the epoch digest. This is negative S0 onboarding evidence, not repair or memory-effect evidence."
+    },
+    {
+      "evidence_id": "r4-official-inferred-frontend-preflight-rc1-3005fb4-s0-r1",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "The earlier 2/2 official preflight established tool compatibility but used inferred top/filelist. It is superseded for onboarding by the explicit adapter-bound replay."
+    },
+    {
+      "evidence_id": "r4-frontend-runtime-diagnostic-r1-r3",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "Three immutable failed attempts expose runtime wiring defects in option quoting, top-name quoting, and process lowering. They were not overwritten or counted as design failures after correction."
+    },
+    {
+      "evidence_id": "r4-flow-auditor-short-sha-diagnostic-fa3631f",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "The first audit invocation failed closed before output because the auditor assumed a ten-character ORFS short SHA while the runner emitted nine. Commit 94e09a2 replaced substring matching with exact root plus validated SHA-prefix parsing; the fixed flow was not rerun or overwritten."
+    },
+    {
+      "evidence_id": "revision3-bf5dc5eb-review-baseline",
+      "classification": "corrected",
+      "selected_for_epoch": false,
+      "basis": "Revision3 used an older review baseline and cannot identify the current checkout."
+    },
+    {
+      "evidence_id": "memory-readme-historical-campaign-records",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "README narratives guide replay but are not substituted for their external raw artifacts or a current independent audit."
+    },
+    {
+      "evidence_id": "future-r4-s0-replay-s1-s2-results",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "S0 remains incomplete: the first official fixed-flow control has a terminal route failure, replay is pending, and no external design has completed fixed flow. All S1/S2 real-design comparisons remain pending; no memory-effect or agent result is established."
+    }
+  ]
+}
