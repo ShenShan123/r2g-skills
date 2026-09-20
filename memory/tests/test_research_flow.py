@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
 
 import pytest
 
+import tehm.evaluation.research_flow as research_flow
 from tehm.evaluation.research_flow import (
     ResearchFlowError,
+    audit_flow_run,
     stage_flow_project,
+    verify_flow_audit,
     verify_staged_flow_project,
 )
 from tehm.evaluation.research_inventory import (
@@ -142,3 +146,160 @@ def test_stage_flow_project_refuses_overwrite(tmp_path: Path) -> None:
     stage_flow_project(inventory=inventory, design_id="gcd", output=project)
     with pytest.raises(ResearchFlowError, match="refusing to overwrite"):
         stage_flow_project(inventory=inventory, design_id="gcd", output=project)
+
+
+def _sha256(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _terminal_congestion_run(project: Path) -> Path:
+    run = project / "backend/RUN_test"
+    final = run / "final"
+    final.mkdir(parents=True)
+    receipt = json.loads(
+        (project / "stage-receipt.json").read_text(encoding="utf-8")
+    )
+    authority_head = receipt["authority_checkout"]["git_head"][:10]
+    fingerprint = (
+        f"orfs=/authority@{authority_head} openroad=/tools/openroad "
+        "yosys=/tools/yosys frontend=default"
+    )
+    stages = []
+    artifact_rows = []
+    for index, (name, artifact) in enumerate(
+        (
+            ("synth", "1_synth.odb"),
+            ("floorplan", "2_floorplan.odb"),
+            ("place", "3_place.odb"),
+            ("cts", "4_cts.odb"),
+        ),
+        start=1,
+    ):
+        target = final / artifact
+        target.write_bytes(f"{name}-artifact\n".encode())
+        stages.append({
+            "stage": name, "status": 0, "elapsed_s": index,
+            "artifact": artifact,
+        })
+        artifact_rows.append({
+            "schema_version": 1,
+            "stage_contract_version": 2,
+            "stage": name,
+            "status": 0,
+            "run_tag": "RUN_test",
+            "platform": "test",
+            "design": "gcd",
+            "flow_variant": "fixed-v1",
+            "toolchain": fingerprint,
+            "artifact": artifact,
+            "artifact_path": f"/work/{artifact}",
+            "size": target.stat().st_size,
+            "sha256": _sha256(target).removeprefix("sha256:"),
+        })
+    stages.append({"stage": "route", "status": 2, "elapsed_s": 5})
+    (run / "stage_log.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in stages), encoding="utf-8"
+    )
+    (run / "stage_artifact_manifest.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in artifact_rows),
+        encoding="utf-8",
+    )
+    (run / "flow.log").write_text(
+        "[ERROR GRT-0232] Routing congestion too high.\n", encoding="utf-8"
+    )
+    (run / "run-meta.json").write_text(json.dumps({
+        "config_mk": str(project / "constraints/config.mk"),
+        "design_name": "gcd",
+        "design_nickname": "gcd",
+        "flow_variant": "fixed-v1",
+        "make_status": 2,
+        "openroad_exe": "/tools/openroad",
+        "platform": "test",
+        "run_tag": "RUN_test",
+        "sdc_file": str(project / "constraints/constraint.sdc"),
+        "toolchain_fingerprint": fingerprint,
+        "yosys_exe": "/tools/yosys",
+    }), encoding="utf-8")
+    return run
+
+
+def test_audit_flow_run_preserves_terminal_failure_and_epoch_roles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inventory = _adapted_inventory(tmp_path)
+    project = tmp_path / "campaign/project-gcd"
+    stage_flow_project(inventory=inventory, design_id="gcd", output=project)
+    run = _terminal_congestion_run(project)
+    producer = tmp_path / "producer-epoch"
+    auditor = tmp_path / "auditor-epoch"
+    (producer / "bindings").mkdir(parents=True)
+    (auditor / "bindings/oracles").mkdir(parents=True)
+    (producer / "bindings/toolchain-manifest.json").write_text(json.dumps({
+        "tools": {
+            "openroad": {"path": "/tools/openroad"},
+            "yosys": {"path": "/tools/yosys"},
+        },
+    }), encoding="utf-8")
+    auditor_source = Path(research_flow.__file__).resolve()
+    frozen_auditor = auditor / "bindings/oracles/00-research_flow.py"
+    frozen_auditor.write_bytes(auditor_source.read_bytes())
+    (auditor / "bindings/oracle-binding.json").write_text(json.dumps({
+        "files": [{
+            "source_path": str(auditor_source),
+            "frozen_path": "bindings/oracles/00-research_flow.py",
+            "sha256": _sha256(auditor_source),
+        }],
+    }), encoding="utf-8")
+
+    def fake_verify_epoch(path: str | Path) -> dict[str, object]:
+        resolved = Path(path).resolve()
+        if resolved == producer.resolve():
+            return {
+                "valid": True,
+                "research_evaluation_ready": True,
+                "epoch_id": "producer-v1",
+                "epoch_digest": "sha256:producer",
+                "toolchain_manifest_digest": "sha256:tools",
+            }
+        if resolved == auditor.resolve():
+            return {
+                "valid": True,
+                "research_evaluation_ready": True,
+                "epoch_id": "auditor-v1",
+                "epoch_digest": "sha256:auditor",
+                "toolchain_manifest_digest": "sha256:tools",
+            }
+        raise AssertionError(f"unexpected epoch: {resolved}")
+
+    monkeypatch.setattr(research_flow, "verify_research_epoch", fake_verify_epoch)
+    output = tmp_path / "audit"
+    result = audit_flow_run(
+        project=project,
+        run_dir=run,
+        producer_epoch=producer,
+        auditor_epoch=auditor,
+        output=output,
+    )
+
+    assert result["valid"] is True
+    assert result["oracle_verdict"] == "FAIL"
+    assert result["oracle_reason"] == "routing_congestion"
+    assert result["failure_layer"] == "FLOW_TARGET_FAILURE"
+    audit = json.loads((output / "flow-audit.json").read_text(encoding="utf-8"))
+    assert audit["producer_epoch_id"] == "producer-v1"
+    assert audit["auditor_epoch_id"] == "auditor-v1"
+    assert audit["checks"]["route"] == "FAIL"
+    assert audit["checks"]["finish"] == "NOT_EXECUTED"
+    assert audit["actual_cost"]["eda_stage_calls"] == 5
+    assert audit["actual_cost"]["model_calls"] == 0
+    assert verify_flow_audit(output)["valid"] is True
+
+    (run / "flow.log").write_text("tampered\n", encoding="utf-8")
+    with pytest.raises(ResearchFlowError, match="raw flow artifact drifted"):
+        verify_flow_audit(output)
+
+
+def test_flow_failure_class_keeps_infrastructure_unknown() -> None:
+    assert research_flow._flow_failure_class(124, "timeout") == (
+        "UNKNOWN", "flow_timeout", "INFRASTRUCTURE_ERROR"
+    )

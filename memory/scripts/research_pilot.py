@@ -32,7 +32,9 @@ from tehm.evaluation.research_ledger import (  # noqa: E402
 )
 from tehm.evaluation.research_runtime import run_research_campaign  # noqa: E402
 from tehm.evaluation.research_flow import (  # noqa: E402
+    audit_flow_run,
     stage_flow_project,
+    verify_flow_audit,
     verify_staged_flow_project,
 )
 
@@ -146,6 +148,24 @@ def _verify_staged_flow(args: argparse.Namespace) -> int:
     return 0 if result["valid"] else 2
 
 
+def _audit_flow(args: argparse.Namespace) -> int:
+    result = audit_flow_run(
+        project=args.project,
+        run_dir=args.run_dir,
+        producer_epoch=args.producer_epoch,
+        auditor_epoch=args.auditor_epoch,
+        output=args.output,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_flow_audit(args: argparse.Namespace) -> int:
+    result = verify_flow_audit(args.audit)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -219,6 +239,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     verify_staged.add_argument("--project", type=Path, required=True)
     verify_staged.set_defaults(handler=_verify_staged_flow)
+
+    audit_flow = sub.add_parser(
+        "audit-flow", help="independently classify a terminal fixed-flow run"
+    )
+    audit_flow.add_argument("--project", type=Path, required=True)
+    audit_flow.add_argument("--run-dir", type=Path, required=True)
+    audit_flow.add_argument("--producer-epoch", type=Path, required=True)
+    audit_flow.add_argument("--auditor-epoch", type=Path, required=True)
+    audit_flow.add_argument("--output", type=Path, required=True)
+    audit_flow.set_defaults(handler=_audit_flow)
+
+    verify_flow = sub.add_parser(
+        "verify-flow-audit", help="verify a frozen fixed-flow audit and raw references"
+    )
+    verify_flow.add_argument("--audit", type=Path, required=True)
+    verify_flow.set_defaults(handler=_verify_flow_audit)
 
     prepare = sub.add_parser(
         "prepare", help="freeze campaign tasks against an epoch and design inventory"
