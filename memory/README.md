@@ -7525,3 +7525,43 @@ authority=false。
 本阶段定向回归为 **19 passed in 9.03s**；完整回归使用
 `PYTHONPATH=memory:memory/tests PYTHONDONTWRITEBYTECODE=1 /opt/anaconda3/bin/python -m pytest -q memory/tests`，
 结果为 **2030 passed in 2080.69s (0:34:40)**。
+
+### 2026-09-20 Revision4 S0 isolated failure replay and second official control
+
+新增 `compare-flow-replays` / `verify-flow-replay`，要求 baseline 与 replay 的 audit、
+project、run 路径均独立；先逐项重验 raw artifacts 和两个 flow audit，再比较经 workspace
+路径归一化后的 staged input semantics、toolchain digest、checks、terminal stage/exit、
+verdict、reason 与 failure layer。wallclock 只作信息项，每次 attempt 的 ODB/GDS 各自做
+完整性验证，但不要求非确定性工具跨运行生成字节相同的数据库。比较器本身绑定 frozen
+auditor epoch；重复 FAIL 只记作失败可重放，不升级为 PASS。
+
+initial pair 各新增一次固定输入、独立工作区 replay。gcd replay audit digest 为
+`sha256:fc97f2b5b3824eff4403adf3b65c81f7bc753e51736f839da57a1aae3dbda101`，
+再次得到 **FAIL / routing_congestion / FLOW_TARGET_FAILURE**，5 个 EDA stages、58s；
+ll_axis_bridge replay audit digest 为
+`sha256:78e8c4c2f83258f27c2aa9967cc8fd716da9cc1c6cfd598fe31856c31ff68ebc`，
+再次得到 **FAIL / pdn_geometry_infeasible / FLOW_TARGET_FAILURE**，2 个 EDA stages、
+13s。两次均为 0 model calls、未重试、未改 geometry/utilization。canonical frozen
+comparison-002 的 gcd replay digest 为
+`sha256:742fc6f5760cbc224d7b7f3ea8980e5e1eef5b589a0aa7695d1d6aa18462852e`，
+external replay digest 为
+`sha256:2319a10c07b2be85b4cbb978109a57969879dbc11e2adbf7a43f3123c038dfc8`；
+二者均为 `REPRODUCED`。较早 comparison-001 暴露旧 receipt 的 missing-vs-null SDC
+metadata 差异且未绑定 comparator epoch，原样保留为 diagnostic-only。
+
+第二个 official control `uart` 使用同一 clean ORFS/toolchain、固定 `sky130hs` 配置，
+一次完成 synth/floorplan/place/CTS/route/finish。独立 audit digest 为
+`sha256:bfa2c105519ce591063b904817d95240af1b6f83b77ff56bbd767c6ab65e1184`，
+verdict 为 **PASS / flow_completed / NONE**，6 个 EDA stages、87s、0 model calls；
+这只证明 scoped fixed-flow completion，不包含 functional repair 或 strict signoff。
+
+四外部设计 adapter v3 选择 verilog-axis、usbcorev、verilog-axi、verilog-wishbone；
+它们各自的 source module 显式声明单一 `clk`。派生 inventory digest 为
+`sha256:873be5e83864d410053980a7831904ac8fcaf8417f1a5ba32169507376a830ec`，
+4 candidates、0 exclusions、source unchanged。纯组合 FPU 与多边沿 I2C 未被强套
+单时钟 SDC，继续保持 `NEEDS_ADAPTER`。外部 lineage 仍是未验证 metadata；v3 cohort
+的 exact adapter-bound frontend/fixed-flow 尚待执行。
+
+更新后的 P1/P2/P4 投影 SHA256 为
+`7ac623906b472741f07b45edfe22a9b2440a2737f1d958b324b4001cb0a06854`。
+M0 未更新，provider/model calls=0，production authority=false。
