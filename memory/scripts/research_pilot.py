@@ -31,6 +31,10 @@ from tehm.evaluation.research_ledger import (  # noqa: E402
     verify_research_audit,
 )
 from tehm.evaluation.research_runtime import run_research_campaign  # noqa: E402
+from tehm.evaluation.research_flow import (  # noqa: E402
+    stage_flow_project,
+    verify_staged_flow_project,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -128,6 +132,20 @@ def _summarize(args: argparse.Namespace) -> int:
     return 0 if result["valid"] else 2
 
 
+def _stage_flow(args: argparse.Namespace) -> int:
+    result = stage_flow_project(
+        inventory=args.inventory, design_id=args.design_id, output=args.output
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["source_unchanged"] else 2
+
+
+def _verify_staged_flow(args: argparse.Namespace) -> int:
+    result = verify_staged_flow_project(args.project)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -187,6 +205,20 @@ def main(argv: list[str] | None = None) -> int:
     adapt_inventory.add_argument("--authority-root", type=Path, required=True)
     adapt_inventory.add_argument("--output", type=Path, required=True)
     adapt_inventory.set_defaults(handler=_adapt_inventory)
+
+    stage_flow = sub.add_parser(
+        "stage-flow", help="materialize immutable adapter-bound fixed-flow inputs"
+    )
+    stage_flow.add_argument("--inventory", type=Path, required=True)
+    stage_flow.add_argument("--design-id", required=True)
+    stage_flow.add_argument("--output", type=Path, required=True)
+    stage_flow.set_defaults(handler=_stage_flow)
+
+    verify_staged = sub.add_parser(
+        "verify-staged-flow", help="verify immutable staged fixed-flow inputs"
+    )
+    verify_staged.add_argument("--project", type=Path, required=True)
+    verify_staged.set_defaults(handler=_verify_staged_flow)
 
     prepare = sub.add_parser(
         "prepare", help="freeze campaign tasks against an epoch and design inventory"
