@@ -7607,3 +7607,34 @@ M0 未更新，provider/model calls=0，production authority=false。
 `PYTHONPATH=memory:memory/tests PYTHONDONTWRITEBYTECODE=1 /opt/anaconda3/bin/python -m pytest -q memory/tests`，
 结果为 **2032 passed in 1225.73s (0:20:25)**。前一次同命令的会话在 35% 后丢失
 句柄，未取得终态，因此不计为通过证据；上述计数来自重新执行至终态的完整进程。
+
+### 2026-09-21 Revision4 S1 read-only route coverage and M0 gap
+
+新增 `audit-memory-coverage` / `verify-memory-coverage`，对六个已独立审计的 S0
+fixed-flow case 保留完整分母，仅将自然 `FLOW_TARGET_FAILURE` 转为查询；PASS 不伪装成
+修复任务。route 使用只读 M0、冻结 query/router/state 代码和 B=3（至少两个 no-memory
+槽、至多一个 memory advisor），不选择、绑定或执行资产，不调用 EDA/模型。修复 state
+resolver 在只读 SQLite 连接上误做 `CREATE TABLE IF NOT EXISTS` 的问题；只读连接现设
+`query_only=ON`，缺失必要 relation schema 时 fail closed。覆盖审计还要求执行代码的
+SHA256 与 frozen oracle binding 一致；首版 coverage-001 缺此检查，保留为
+diagnostic-only。
+
+clean source commit `35dd7ba` 的 epoch `rc1-coverage-35dd7ba-clean-20260921`
+复验为 `sha256:c59bcc57005ad158e8da03d1d30fb391ada5c0c56cb65f138015ce0a7fb185d7`。
+canonical coverage-002 经重算验证，digest 为
+`sha256:9728f78779533a9afb1858c83c341ddac0852b07abcfdf1d51f43cb108009806`。
+六个注册 design 中 4 个 PASS 保留为无目标失败；2 个自然 FAIL（`gcd` route 拥塞、
+`verilog_axis_ll_axis_bridge` floorplan PDN geometry）均为 `NO_SKILL / NO_MATCH`，
+0 个选中动作、0 ABSTAIN。冻结 M0 的机制知识、资产、因果路径与 memory relation 表
+均为 0 行；M0 数据库前后 SHA256 同为
+`8f7bc4625816b45b2b97bb2348a8c48e950a4a86964ea8e664d3593d9bdcff3f`，
+无新增 sidecar。阶段投影见仓库外
+`/data1/zhangdy/tehm-campaigns/r4-real-pilot/campaigns/r4-s1-memory-route-coverage-002/status.md`
+（SHA256 `c0e73493d04a9cc5041e96f96f7278606f6131e39ae19f74ac250ab3f2a71339`）。
+
+这只说明当前 M0 无覆盖，不能判断 query、binder 或动作收益。S1 两臂动作效应和
+S2 同 controller 三策略仍待执行；下一步须按 Revision4 §9 用来源与同平台证据核验
+历史 seed，若不可恢复则隔离采集不同来源 training seed，冻结新 M0 后再审计。
+不能从当前 held-out 失败临时制造候选或手改 validated 状态。外部四设计的 source
+independence 尚未证明，production authority=false。本阶段完整回归为
+**2037 passed in 1222.59s (0:20:22)**，provider/model calls=0。

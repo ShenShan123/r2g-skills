@@ -1,0 +1,39 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v7.json",
+    "sha256": "0137f9b8a1a5e9d8e2efce056e5b9c89b7c454958f584c0a7b67d320e3b56d54"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-s0-evidence-index-v7",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v7 evidence-status file indexes the complete two-official plus four-external S0 fixed-flow denominator, replay audits, diagnostic exclusions, and remaining limitations. Its exact SHA256 is bound above; this entry carries that index forward without upgrading any of its diagnostic or pending entries."
+    },
+    {
+      "evidence_id": "r4-s1-memory-route-coverage-001",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "The first read-only route report covered all six S0 flows and exposed two NO_MATCH results, but its auditor did not bind executing coverage and routing code bytes to the frozen epoch. It is retained as a diagnostic precursor and superseded by coverage-002."
+    },
+    {
+      "evidence_id": "r4-s1-memory-route-coverage-002",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Clean source commit 35dd7ba and epoch c59bcc57 bind the executing coverage, router, query planner, state resolver/schema, and DB code. Independent replay verifies coverage digest 9728f787: all six registered flows retained, two natural terminal failures both NO_MATCH, zero routes selected, zero EDA/model calls, and unchanged frozen M0 SHA256 8f7bc462. This is route coverage only, not action effect."
+    },
+    {
+      "evidence_id": "r4-s1-m0-capability-census",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Read-only census of the same content-addressed M0 database found zero mechanism-knowledge rows, zero asset rows, zero causal paths, and zero memory relations. This explains NO_MATCH at the current M0 layer; it does not establish whether a future evidence-qualified seed can cover these failures."
+    },
+    {
+      "evidence_id": "future-r4-s1-action-s2-agent-and-paper-results",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "No lawful TEHM-selected asset exists for the two natural S0 failures in current M0. Controlled action effect, same-controller No Memory/Legacy/TEHM comparison, source-independent external generalization, shadow evolution, and paper protocol remain unestablished. Do not force an asset or interpret NO_MATCH as a memory-effect result."
+    }
+  ]
+}
