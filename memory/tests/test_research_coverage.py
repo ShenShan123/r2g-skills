@@ -65,6 +65,21 @@ def _setup(tmp_tehm, monkeypatch):
         "budget": {"frozen_path": "bindings/budget.json"},
     })
     _write(epoch / "bindings/budget.json", {"candidate_limit": 3})
+    memory_root = Path(coverage.__file__).resolve().parents[2]
+    code_files = (
+        Path(coverage.__file__).resolve(),
+        memory_root / "tehm/retrieval/memory_router.py",
+        memory_root / "tehm/retrieval/query_planner.py",
+        memory_root / "tehm/state/resolver.py",
+        memory_root / "tehm/state/schema.py",
+        memory_root / "tehm/db.py",
+    )
+    _write(epoch / "bindings/oracle-binding.json", {
+        "files": [{
+            "source_path": str(path),
+            "sha256": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(),
+        } for path in code_files],
+    })
     monkeypatch.setattr(coverage, "verify_research_epoch", lambda _: {
         "valid": True, "research_evaluation_ready": True,
         "epoch_digest": "sha256:frozen-epoch",
@@ -129,3 +144,17 @@ def test_coverage_refuses_duplicate_designs_and_bad_authority(tmp_tehm, monkeypa
     with pytest.raises(coverage.ResearchCoverageError, match="authority"):
         coverage.audit_memory_route_coverage(
             epoch=epoch, flow_audits=[first], output=root / "coverage")
+
+
+def test_coverage_requires_frozen_executing_code(tmp_tehm, monkeypatch):
+    root, epoch, _ = _setup(tmp_tehm, monkeypatch)
+    audit, checked = _case(root, "gcd", "FAIL")
+    monkeypatch.setattr(coverage, "verify_flow_audit", lambda _: checked)
+    binding_path = epoch / "bindings/oracle-binding.json"
+    binding = json.loads(binding_path.read_text())
+    binding["files"][0]["sha256"] = "sha256:drifted"
+    _write(binding_path, binding)
+    with pytest.raises(coverage.ResearchCoverageError, match="differs from frozen"):
+        coverage.audit_memory_route_coverage(
+            epoch=epoch, flow_audits=[audit], output=root / "coverage")
+    assert not (root / "coverage").exists()

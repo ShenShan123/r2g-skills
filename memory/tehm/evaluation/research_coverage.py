@@ -57,6 +57,35 @@ def _load(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
+def _verify_code_binding(epoch: Path) -> None:
+    """Require the executing coverage and routing code to match frozen bytes."""
+    binding = _load(epoch / "bindings/oracle-binding.json", "oracle binding")
+    files = binding.get("files")
+    if not isinstance(files, list):
+        raise ResearchCoverageError("oracle binding files are malformed")
+    memory_root = Path(__file__).resolve().parents[2]
+    critical = (
+        Path(__file__).resolve(),
+        memory_root / "tehm/retrieval/memory_router.py",
+        memory_root / "tehm/retrieval/query_planner.py",
+        memory_root / "tehm/state/resolver.py",
+        memory_root / "tehm/state/schema.py",
+        memory_root / "tehm/db.py",
+    )
+    indexed: dict[Path, str] = {}
+    for item in files:
+        if not isinstance(item, dict):
+            raise ResearchCoverageError("oracle binding entry is malformed")
+        source = Path(str(item.get("source_path") or "")).resolve()
+        if source in indexed:
+            raise ResearchCoverageError("oracle binding source is duplicated")
+        indexed[source] = str(item.get("sha256") or "")
+    for source in critical:
+        if indexed.get(source) != _file_digest(source):
+            raise ResearchCoverageError(
+                f"executing coverage code differs from frozen oracle: {source}")
+
+
 def _report(*, epoch: Path, flow_audits: Sequence[Path]) -> dict[str, Any]:
     if not flow_audits:
         raise ResearchCoverageError("at least one flow audit is required")
@@ -66,6 +95,7 @@ def _report(*, epoch: Path, flow_audits: Sequence[Path]) -> dict[str, Any]:
     if (not checked_epoch.get("valid") or
             not checked_epoch.get("research_evaluation_ready")):
         raise ResearchCoverageError("research epoch is not evaluation-ready")
+    _verify_code_binding(epoch)
     frozen = _load(epoch / "research-epoch.json", "research epoch")
     authority = frozen.get("authority") or {}
     if (authority.get("research_only") is not True or
