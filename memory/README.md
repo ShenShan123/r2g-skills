@@ -7565,3 +7565,45 @@ verdict 为 **PASS / flow_completed / NONE**，6 个 EDA stages、87s、0 model 
 更新后的 P1/P2/P4 投影 SHA256 为
 `7ac623906b472741f07b45edfe22a9b2440a2737f1d958b324b4001cb0a06854`。
 M0 未更新，provider/model calls=0，production authority=false。
+
+### 2026-09-20 Revision4 S0 four-external terminal cohort
+
+四设计 adapter v3 的 exact frontend/synthesis preflight 已在 source commit `5dc5a4b`
+与 clean epoch `rc1-source-5dc5a4b-clean-20260920` 下闭合；epoch digest 为
+`sha256:9d867337b2facc3232c4249d1594f44e333fd0ff72b836e50460c0ed02202140`。
+冻结 epoch 的单 campaign candidate limit 为 3，所以预注册四任务的 campaign 005 在
+prepare 阶段 fail-closed，没有生成 prepared run、EDA 调用或模型调用，原样保留为
+diagnostic-only。未筛除任何任务的同一四设计集合随后拆为 bounded campaign 006 与
+007：006 独立审计为 3/3 PASS，digest
+`sha256:470010a9af0926bdf3fb316d4b74191f598a82ababbfe8fad79996329f3ecef9`；
+007 为 1/1 PASS，digest
+`sha256:f7e99d6ec6f2ce7fbcf3738e323799ebef3574d2c4a55f7c2b26da0474fa7fda`。
+合计 4 次 EDA、7.876102s、0 model calls/tokens，source unchanged。
+
+三个新增外部 staged project 均保持原 RTL、无 stub、无逻辑修复，并在相同
+`sky130hs`、冻结 config/SDC、固定工具路径下串行运行一次，没有 retry：
+
+- `usbcorev_endpoint` 完成 synth/floorplan/place/CTS/route/finish，独立 audit 为
+  **PASS / flow_completed / NONE**，6 个 EDA stages、54s，audit digest
+  `sha256:3625f0a62bdd451634e73a126c8f3176095330f6692bf52b92108c074b57d3a0`；
+- `verilog_axi_axil_reg_if_rd` 完成到 finish，6 stages、53s，audit digest
+  `sha256:0a96a815d4cb3c582aadfe180612963f240eec968db22f3a2086ce02518f62e1`；
+- `verilog_wishbone_wb_reg` 完成到 finish，6 stages、68s，audit digest
+  `sha256:2d0003e02e6f81d9d6861a31f2f25e5500b6ddb356f45c7ba04b8524e8811247`。
+
+至此，Revision4 S0 的两官方加四外部 design baseline denominator 全部 terminal：
+**4 PASS / 2 FAIL / 0 UNKNOWN**，共 6 次 flow-driver、31 个执行过的 EDA stages、
+331s stage wallclock、0 model calls/tokens。加上 gcd 与 ll_axis_bridge 的两次独立失败
+replay 后，总成本为 8 次 flow-driver、38 个 EDA stages、402s，两个 FAIL 均保持 FAIL。
+新版 P1/P2/P4 投影 digest 为
+`sha256:935e634137d3cdfb0a0e1413c53462efa69227167d8a145eeb73bfed319e36d5`。
+
+该阶段只关闭 design-level S0 接入执行分母。四个 external design 的声明仓库名仍缺少
+可验证 source URL/Git identity，不能升级为“四个独立来源已证明”；三个 flow PASS 也不
+等于功能验证或 strict signoff。S1 Controlled Action 与 S2 Agent Memory 尚未开始，
+M0 未更新，provider/model calls=0，production authority=false。
+
+本阶段定向回归为 **21 passed in 9.17s**；完整回归使用
+`PYTHONPATH=memory:memory/tests PYTHONDONTWRITEBYTECODE=1 /opt/anaconda3/bin/python -m pytest -q memory/tests`，
+结果为 **2032 passed in 1225.73s (0:20:25)**。前一次同命令的会话在 35% 后丢失
+句柄，未取得终态，因此不计为通过证据；上述计数来自重新执行至终态的完整进程。

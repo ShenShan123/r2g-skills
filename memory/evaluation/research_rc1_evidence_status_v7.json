@@ -1,0 +1,125 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "entries": [
+    {
+      "evidence_id": "current-working-source-freeze",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The epoch captures the exact working source bytes, Git HEAD, dirty status, and binary patch."
+    },
+    {
+      "evidence_id": "current-bound-internal-toolchain",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected toolchain is authenticated by tehm-orfs-toolchain-manifest-v1 and a clean ORFS checkout at 0c162cf5."
+    },
+    {
+      "evidence_id": "tehm-evidence-freeze-v4-dev",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The selected M0 is a content-addressed read-only bundle; its effect claims remain limited to its own fixtures."
+    },
+    {
+      "evidence_id": "r4-external-frontend-preflight-six-designs",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw-evidence audit 52fc1ebb reports 6/6 external-design frontend/synthesis cases PASS with six EDA calls, zero model calls, and unchanged source."
+    },
+    {
+      "evidence_id": "r4-explicit-official-adapter-and-frontend",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Inventory 59659ca0 binds gcd and uart to explicit official top/filelist/config/SDC bytes; independent frontend audit 97cbbd0c reports 2/2 PASS with unchanged source and zero model calls."
+    },
+    {
+      "evidence_id": "r4-official-gcd-fixed-flow-and-replay",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Baseline audit f3db14f9 and replay audit fc97f2b5 both classify the same semantic frozen input as FAIL / routing_congestion / FLOW_TARGET_FAILURE at route. Frozen replay comparison 742fc6f5 reports REPRODUCED across distinct project/run/audit paths. This is reproducible negative S0 evidence, not flow completion or repair."
+    },
+    {
+      "evidence_id": "r4-external-ll-axis-fixed-flow-and-replay",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Corrected adapter-bound frontend audit 8517f716 is PASS. Baseline flow audit 59030690 and replay audit 78e8c4c2 both classify the same semantic frozen input as FAIL / pdn_geometry_infeasible / FLOW_TARGET_FAILURE at floorplan. Frozen replay comparison 2319a10c reports REPRODUCED. No geometry adjustment or retry was applied."
+    },
+    {
+      "evidence_id": "r4-official-uart-fixed-flow-1869911-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "A source-bound uart official control completed synth, floorplan, place, CTS, route, and finish once. Independent audit bfa2c105 reports PASS / flow_completed / NONE with six EDA stages, 87 seconds, unchanged source, zero model calls, and no memory update. Scope excludes functional repair and strict signoff."
+    },
+    {
+      "evidence_id": "r4-external-four-design-adapter-inventory-v3",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Adapter inventory 873be5e8 binds four content-addressed external designs to explicit top/filelist and source-declared single clk ports while keeping source authority separate from ORFS support authority. Lineage metadata remains unverified and readiness labels remain NEEDS_ADAPTER even though this bounded S0 evidence is terminal."
+    },
+    {
+      "evidence_id": "r4-external-four-design-frontend-v3",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The unchanged four-task v3 cohort was executed as bounded campaigns 006 and 007 because the frozen candidate limit is three. Independent audits 470010a9 and f7e99d6e report 4/4 PASS, four EDA calls, 7.876102 seconds, zero model calls, and unchanged source."
+    },
+    {
+      "evidence_id": "r4-external-usbcorev-fixed-flow-5dc5a4b-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent audit 3625f0a6 reports PASS / flow_completed / NONE through finish with six EDA stages, 54 seconds, unchanged source, zero model calls, and no retry. Scope is fixed-flow onboarding only."
+    },
+    {
+      "evidence_id": "r4-external-verilog-axi-fixed-flow-5dc5a4b-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent audit 0a96a815 reports PASS / flow_completed / NONE through finish with six EDA stages, 53 seconds, unchanged source, zero model calls, and no retry. Scope is fixed-flow onboarding only."
+    },
+    {
+      "evidence_id": "r4-external-verilog-wishbone-fixed-flow-5dc5a4b-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent audit 2d0003e0 reports PASS / flow_completed / NONE through finish with six EDA stages, 68 seconds, unchanged source, zero model calls, and no retry. Scope is fixed-flow onboarding only."
+    },
+    {
+      "evidence_id": "r4-s0-onboarding-status-20260920",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Projection 935e6341 records the complete six-case baseline denominator as 4 PASS / 2 FAIL / 0 UNKNOWN, both failure replays, complete observed costs, unverified external lineage, and all remaining gates without granting production authority."
+    },
+    {
+      "evidence_id": "r4-external-frontend-v3-four-task-budget-attempt-005",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "The preregistered four-task campaign exceeded the frozen candidate limit of three and failed closed before preparation or execution. No design result, EDA call, or model call was produced; bounded campaigns 006 and 007 cover the unchanged task set."
+    },
+    {
+      "evidence_id": "r4-external-rc1-inventory-adapter-attempt",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "An earlier external attempt used the wrong inventory manifest/exclusion chain. Its immutable artifacts are preserved but excluded from the canonical denominator."
+    },
+    {
+      "evidence_id": "r4-flow-auditor-and-frontend-runtime-diagnostics",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "Earlier option quoting, top quoting, process lowering, short-SHA audit failures, and a verify-flow-audit argument-shape error were preserved or reported and corrected without changing canonical design results."
+    },
+    {
+      "evidence_id": "r4-replay-comparison-001-schema-transition",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "The first replay comparison exposed missing-versus-null SDC receipt metadata and lacked a frozen comparator epoch. V2 normalizes only legacy unmodified-SDC metadata and binds the executing comparator; comparison-002 supersedes it."
+    },
+    {
+      "evidence_id": "memory-readme-historical-campaign-records",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "README narratives guide replay but are not substituted for external raw artifacts and independent audits."
+    },
+    {
+      "evidence_id": "future-r4-s1-s2-results",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "The two-official plus four-external S0 design denominator is terminal, but external source independence is unverified and S1/S2 have not started. No repair, memory-effect, agent-capability, source-independence, or production result is established."
+    }
+  ]
+}
