@@ -39,6 +39,10 @@ from tehm.evaluation.research_flow import (  # noqa: E402
     verify_flow_replay,
     verify_staged_flow_project,
 )
+from tehm.evaluation.research_coverage import (  # noqa: E402
+    audit_memory_route_coverage,
+    verify_memory_route_coverage,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -185,6 +189,20 @@ def _verify_flow_replay(args: argparse.Namespace) -> int:
     return 0 if result["valid"] and result["reproduced"] else 2
 
 
+def _audit_memory_coverage(args: argparse.Namespace) -> int:
+    result = audit_memory_route_coverage(
+        epoch=args.epoch, flow_audits=args.flow_audit, output=args.output,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_memory_coverage(args: argparse.Namespace) -> int:
+    result = verify_memory_route_coverage(args.coverage)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -290,6 +308,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     verify_replay.add_argument("--replay", type=Path, required=True)
     verify_replay.set_defaults(handler=_verify_flow_replay)
+
+    coverage = sub.add_parser(
+        "audit-memory-coverage",
+        help="derive read-only M0 route coverage from audited fixed-flow results",
+    )
+    coverage.add_argument("--epoch", type=Path, required=True)
+    coverage.add_argument("--flow-audit", type=Path, action="append", required=True)
+    coverage.add_argument("--output", type=Path, required=True)
+    coverage.set_defaults(handler=_audit_memory_coverage)
+
+    verify_coverage = sub.add_parser(
+        "verify-memory-coverage",
+        help="recompute a frozen read-only route coverage report",
+    )
+    verify_coverage.add_argument("--coverage", type=Path, required=True)
+    verify_coverage.set_defaults(handler=_verify_memory_coverage)
 
     prepare = sub.add_parser(
         "prepare", help="freeze campaign tasks against an epoch and design inventory"

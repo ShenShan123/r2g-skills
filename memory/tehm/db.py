@@ -59,6 +59,11 @@ def connect_read_only(db_path: Path) -> sqlite3.Connection:
     # membership and could be mistaken for mutation.
     conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True, timeout=30)
     conn.row_factory = sqlite3.Row
+    # Make the connection's read-only intent visible to additive shadow
+    # schemas.  An immutable SQLite URI forbids writes, but does not set the
+    # query_only pragma by itself; a resolver must not attempt even idempotent
+    # DDL while inspecting a frozen evaluation snapshot.
+    conn.execute("PRAGMA query_only=ON")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA busy_timeout=30000")
     recorded = _meta_get(conn, "schema_version", None) if _table_exists(

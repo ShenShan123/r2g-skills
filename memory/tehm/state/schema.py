@@ -74,6 +74,19 @@ CREATE INDEX IF NOT EXISTS idx_state_resolution_input
 
 def ensure_state_schema(conn: sqlite3.Connection, *, commit: bool = True) -> None:
     """Create the additive state tables, preserving any outer transaction."""
+    if conn.execute("PRAGMA query_only").fetchone()[0]:
+        # Read-only evaluation snapshots may predate the optional relation
+        # authority ledger.  Do not mutate them merely to resolve state.  The
+        # relation table itself is required: treating its absence as an empty
+        # memory would silently turn a broken snapshot into NO_SKILL.
+        present = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='tehm_memory_relations'"
+        ).fetchone()
+        if present is None:
+            raise sqlite3.OperationalError(
+                "read-only state schema is missing tehm_memory_relations")
+        return
     had_outer_transaction = conn.in_transaction
     # ``Connection.executescript`` commits an open transaction before running
     # the script.  Use individual DDL statements so a relation write nested in

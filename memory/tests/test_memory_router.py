@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 
 import pytest
 
 from contracts import MemoryQuery, MemoryRoutingDecision, RepairContext
 from tehm.knowledge import MechanismKnowledge, register_knowledge
+from tehm import db
 from tehm.state import StateResolutionError, record_relation
 from tehm.retrieval.memory_router import route_memory
 from tehm_backend import TehmMemoryBackend
@@ -41,6 +43,63 @@ def test_fresh_router_keeps_no_skill_arm_and_does_not_write_canonical_rows(tmp_t
         table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         for table in before
     } == before
+
+
+def test_frozen_read_only_router_resolves_without_schema_writes(tmp_tehm):
+    conn, _, root = tmp_tehm
+    # Create the v4 shadow relation table through the normal writable path,
+    # then model a frozen pre-authority snapshot without the optional ledger.
+    from tehm.state import ensure_state_schema
+
+    ensure_state_schema(conn)
+    conn.execute("DROP TABLE tehm_relation_authority_receipts")
+    conn.commit()
+    conn.close()
+    path = root / "tehm.sqlite"
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    readonly = db.connect_read_only(path)
+    try:
+        decision = route_memory(
+            readonly, _query(), no_memory_budget=2,
+            memory_budget=1, persist_state=False, commit=False)
+        assert decision.decision == "NO_SKILL"
+        assert decision.no_skill_reason == "NO_MATCH"
+        assert decision.abstain_reasons == ("no_validated_mechanism_knowledge",)
+    finally:
+        readonly.close()
+    backend = TehmMemoryBackend(
+        db_path=path, artifact_root=root / "artifacts", read_only_eval=True)
+    try:
+        seam_decision = backend.route_memory(
+            _query(), no_memory_budget=2, memory_budget=1)
+        assert seam_decision.decision == "NO_SKILL"
+        assert seam_decision.no_skill_reason == "NO_MATCH"
+    finally:
+        backend.close()
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
+    assert not (root / "tehm.sqlite-wal").exists()
+    assert not (root / "tehm.sqlite-shm").exists()
+
+
+def test_frozen_read_only_router_abstains_if_required_relation_schema_missing(tmp_tehm):
+    conn, _, root = tmp_tehm
+    conn.execute("DROP TABLE tehm_memory_relations")
+    conn.commit()
+    conn.close()
+    path = root / "tehm.sqlite"
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    readonly = db.connect_read_only(path)
+    try:
+        decision = route_memory(
+            readonly, _query(), memory_budget=1,
+            persist_state=False, commit=False)
+        assert decision.decision == "ABSTAIN"
+        assert decision.resolved_state_id == "UNRESOLVED"
+        assert any("missing tehm_memory_relations" in reason
+                   for reason in decision.abstain_reasons)
+    finally:
+        readonly.close()
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
 
 
 def test_routing_receipt_is_content_addressed_and_replayable(tmp_tehm):
