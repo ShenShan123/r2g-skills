@@ -10,6 +10,7 @@ import pytest
 import tehm.evaluation.research_flow as research_flow
 from tehm.evaluation.research_flow import (
     ResearchFlowError,
+    _flow_failure_class,
     audit_flow_run,
     compare_flow_replays,
     stage_flow_project,
@@ -152,6 +153,26 @@ def test_stage_flow_project_refuses_overwrite(tmp_path: Path) -> None:
 
 def _sha256(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize(
+    ("log", "reason"),
+    [
+        ("[ERROR FLW-0024] Place density exceeds 1.0", "placement_density_infeasible"),
+        ("[ERROR GRT-0116] Global routing finished with congestion", "routing_congestion"),
+        ("[ERROR GRT-0232] Routing congestion too high", "routing_congestion"),
+    ],
+)
+def test_known_flow_target_failures_are_not_unknown(log: str, reason: str) -> None:
+    assert _flow_failure_class(2, log) == (
+        "FAIL", reason, "FLOW_TARGET_FAILURE",
+    )
+
+
+def test_partial_error_marker_remains_unknown() -> None:
+    assert _flow_failure_class(2, "GRT-0116 without scoped message") == (
+        "UNKNOWN", "unclassified_nonzero_flow_exit", "UNCLASSIFIED_FAILURE",
+    )
 
 
 def _terminal_congestion_run(project: Path) -> Path:

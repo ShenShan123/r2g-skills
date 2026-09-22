@@ -579,6 +579,10 @@ def _raw_reference(path: Path) -> dict[str, Any]:
 def _flow_failure_class(status: int, log: str) -> tuple[str, str, str]:
     if status == 0:
         return "PASS", "flow_completed", "NONE"
+    if "FLW-0024" in log and "Place density exceeds 1.0" in log:
+        return "FAIL", "placement_density_infeasible", "FLOW_TARGET_FAILURE"
+    if "GRT-0116" in log and "Global routing finished with congestion" in log:
+        return "FAIL", "routing_congestion", "FLOW_TARGET_FAILURE"
     if "GRT-0232" in log and "Routing congestion too high" in log:
         return "FAIL", "routing_congestion", "FLOW_TARGET_FAILURE"
     if "PDN-0185" in log and "Insufficient width" in log:
