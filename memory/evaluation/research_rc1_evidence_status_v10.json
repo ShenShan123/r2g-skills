@@ -1,0 +1,51 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v9.json",
+    "sha256": "5f48a956f576566b925c265ca684e51b98f121b70ac1c46b9e700589491643fe"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v9",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v9 status retains the eight-case S0 denominator, four conservative development source groups, code-bound route coverage, and all prior pending boundaries. Its exact SHA256 is bound above; no earlier result is upgraded here."
+    },
+    {
+      "evidence_id": "r4-route-b-seed-upstream-identities-20260922",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Five local RTL files for ultraembedded_irq_ctrl and sha256_core exactly match pinned public Git bytes. The candidates form two conservative owner-level groups, ultraembedded and secworks, disjoint from the declared S0 Pilot-development groups. This is file-level provenance, not flow or training-effect authority."
+    },
+    {
+      "evidence_id": "r4-route-b-seed-adapter-and-frontend-009",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The explicit two-design sky130hs adapter inventory verifies with unchanged source and no exclusions. Predeclared campaign 009 independently audits 2/2 frontend/synthesis PASS with two EDA calls, 5.045848 seconds, zero model calls/tokens, and no memory update. This is onboarding only."
+    },
+    {
+      "evidence_id": "r4-route-b-four-arm-staged-inputs-20260922",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Both source-group-distinct designs have separately frozen constructed control CORE_UTILIZATION=95 and treatment CORE_UTILIZATION=40 sky130hs projects. All four staged receipts verify source unchanged, no RTL edits or stubs, equal per-design SDC bytes across arms, and flow_executed=false."
+    },
+    {
+      "evidence_id": "r4-route-b-paired-acquisition-runtime-5c1c7df",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Commit 5c1c7df adds a bounded serial four-arm seed acquisition facade. It rejects source-group overlap, provenance/source/staged-byte drift, prior execution, non-preregistered actions, epoch/tool/flow drift, and arm constraint mismatch; retains append-only events and raw audits; preserves UNKNOWN; and never claims M0 construction. Full memory tests report 2041 passed under pinned Python 3.11.6; model calls remain zero."
+    },
+    {
+      "evidence_id": "future-r4-route-b-controlled-flow-parent-acquisition-and-m0",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "The four constructed flow arms have not run. No paired target failure-to-PASS evidence, parent acquisition, Knowledge/Asset admission, or nonempty M0 exists. Positive training pairs, if any, remain constructed mechanism evidence and must pass current consumption gates before S1."
+    },
+    {
+      "evidence_id": "future-r4-s1-action-s2-agent-evolution-and-final-paper",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "A real route/selector/binder S1 action comparison, same-controller S2 policies, one verified shadow evolution, finalized held-out split, and paper experiments remain unestablished. Seed forced acquisition cannot substitute for any of these results."
+    }
+  ]
+}
