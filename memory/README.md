@@ -7638,3 +7638,45 @@ S2 同 controller 三策略仍待执行；下一步须按 Revision4 §9 用来�
 不能从当前 held-out 失败临时制造候选或手改 validated 状态。外部四设计的 source
 independence 尚未证明，production authority=false。本阶段完整回归为
 **2037 passed in 1222.59s (0:20:22)**，provider/model calls=0。
+
+### 2026-09-22 Revision4 upstream source identity and extended S0 denominator
+
+对原四个外部 RTL 与另外两个预注册候选进行公开上游文件字节核对：以只读
+`git ls-remote` 固定 Git 提交，读取该提交的原始文件并比较 SHA256，本机 `/data1/zhangdy/RTL`
+六个对应文件全部精确匹配。原四案的来源分别是 `verilog-axis`、`verilog-axi`、
+`verilog-wishbone` 与 `usbcorev`；新增 `spi-master` 与 AXI→APB bridge fork。
+按仓库 owner/fork family 保守聚类，六个外部 design 属于 **四个来源组**，而非六个
+独立样本：前三个同属 `alexforencich`，其余为 `avakar`、`nandland` 与
+`SanjanaHoskote/Internship_IERY` fork family。字节来源匹配不自动证明共享 IP 完全
+隔离、再分发许可、功能正确或 IID 统计独立。两份来源记录位于仓库外 `r4-real-pilot/provenance/`
+下，SHA256 分别为 `e6a04f88c6e31d1d9d7a9d00df9eac7186b301984de7e4ca87878f554017fb54`
+与 `3b0a564635a3dcde521d86fba17a22ff5b122297ddc2016a08bb6adf19c16d13`。
+
+两个新增设计在观察结果前写入双任务 campaign 008。只读 adapter inventory
+`df67c91f` 验证两案、零排除、原 corpus 不变；两份 source-unchanged staged project
+使用 clean ORFS `0c162cf5` 的同一 `sky130hs` support，显式将 SDC retarget 到
+SPI 的 `i_Clk` 与 bridge 的 `clk`，不造 stub、不改 RTL。frontend/synthesis 独立审计
+`cef5afc0` 为 **2/2 PASS**，2 次 EDA、4.608629s、0 model calls/tokens。
+
+固定 flow 各运行一次，无 retry、无约束调整。SPI master 在 route 持续出现 met3 short，
+900s stage timeout 触发退出 124；独立 audit `0e10a875` 将其记为
+**UNKNOWN / flow_timeout / INFRASTRUCTURE_ERROR**，5 stages、932s，不把超时写成
+设计 FAIL。AXI→APB bridge 完成至 finish；audit `cae96ad7` 为
+**PASS / flow_completed / NONE**，6 stages、190s，仍非功能修复或严格 signoff。
+
+保留原六案与新两案的完整 baseline denominator 为 **8 designs：5 PASS / 2 FAIL /
+1 UNKNOWN**，8 次 flow-driver、42 个执行过的 EDA stages、1453s stage wallclock、
+0 model calls/tokens；此前两个 FAIL 的 isolated replay 另列，不充当新设计。
+八案只读覆盖 audit-003 经重算验证，digest
+`sha256:eff622fcb1a7890acfe789648622c4a8f7a027255b32564fba8ebaa335bbe26b`：
+两例自然设计 FAIL 仍全部 NO_MATCH，五例 PASS 不转成修复 query，SPI 的基础设施
+UNKNOWN 保留但不路由，选中动作 0、额外 EDA/model 调用 0、M0 不变。完整阶段投影
+`r4-s0-extended-status-20260922/status.md` 的 SHA256 为
+`eebc452053a110e71740defba06825c2da346319b1bba87543a99e1f47a40db9`。
+
+Revision4 §9 路线 A 只读初筛另见仓库外 `seed-audit-001/status.md`：已检查的
+sky130hs 历史 scoped parent 限定 `flow_feasibility`/95→40，快照自报跨 campaign
+绑定未闭合；另一条 routing-transfer 保留 DB 缺当前 Knowledge schema。不能把
+它们直接复制成新 M0。当前 M0 仍为空，S1 动作效应与 S2 Agent 对照仍待合法 seed
+及同 scope 的真实 route/selector/binder/执行。此阶段仅新增外部实验记录与版本化
+证据状态 v9，无 TEHM 源码逻辑变更、无 provider calls、production authority=false。

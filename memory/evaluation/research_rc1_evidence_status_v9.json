@@ -1,0 +1,57 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v8.json",
+    "sha256": "b0e2f0b660a083016d41e5c039f4260ee77a400824e36740f4ec6b54329370e5"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v8",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v8 evidence status retains the six-case S0 evidence, code-bound coverage-002, diagnostic exclusions, and S1/S2 limitations. Its exact SHA256 is bound above; this entry does not upgrade any pending or diagnostic result."
+    },
+    {
+      "evidence_id": "r4-six-external-upstream-file-identities-20260922",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Two immutable provenance manifests compare all six selected local RTL file SHA256 values with raw public Git bytes at pinned upstream commits. Four conservative repository/fork-family clusters are identified, not six IID sources. This is file-level origin evidence only; whole-repository closure and redistribution rights are separate."
+    },
+    {
+      "evidence_id": "r4-extra-two-external-adapter-and-frontend-008",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Predeclared two-design adapter inventory df67c91f has no exclusions and unchanged corpus. Frozen campaign 008 retains both tasks; independent frontend/synthesis audit cef5afc0 reports 2/2 PASS, two EDA calls, 4.608629 seconds, and zero model calls."
+    },
+    {
+      "evidence_id": "r4-extra-spi-master-fixed-flow-1d0671d-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw flow audit 0e10a875 reports UNKNOWN / flow_timeout / INFRASTRUCTURE_ERROR at route after the fixed 900-second stage limit. It records five EDA stages and 932 seconds; the timeout is not a completed semantic flow FAIL and was not retried."
+    },
+    {
+      "evidence_id": "r4-extra-axi-apb-bridge-fixed-flow-1d0671d-r1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Independent raw flow audit cae96ad7 reports PASS / flow_completed / NONE through finish with six EDA stages, 190 seconds, unchanged source, zero model calls, and no retry. Scope is fixed-flow onboarding only."
+    },
+    {
+      "evidence_id": "r4-s0-extended-status-20260922",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Projection eebc4520 preserves the original six-case cohort and adds both predeclared external cases. The eight-design baseline denominator is 5 PASS / 2 FAIL / 1 UNKNOWN, 42 executed EDA stages, 1453 seconds, zero model calls, and four conservative public source families. No functional repair or strict-signoff authority is inferred."
+    },
+    {
+      "evidence_id": "r4-s1-memory-route-coverage-003",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Code-bound read-only coverage audit eff622fc independently recomputes the full eight-case denominator: two natural terminal FAILs both NO_MATCH, five PASS cases not applicable, one infrastructure UNKNOWN retained but not queried, zero selected actions, no extra EDA/model calls, and unchanged M0. This is not action effect."
+    },
+    {
+      "evidence_id": "future-r4-qualified-m0-s1-action-s2-agent-and-paper-results",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "The current M0 is empty and historical seed candidates checked so far fail scope, authority, or schema gates. A provenance-qualified same-scope M0, real selected/bound action comparison, same-controller agent comparison, shadow evolution, and final paper protocol remain unestablished."
+    }
+  ]
+}
