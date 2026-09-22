@@ -1,0 +1,51 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v11.json",
+    "sha256": "f916b45768e81651b2434546104e2eaf0f25633f8bf5da572aa064b89bb54846"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v11",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v11 status retains the first Route-B pair, exact feasibility classifier, empty-M0 boundary, and all earlier S0 and coverage evidence. Its exact SHA256 is bound above; no original audit receipt is rewritten here."
+    },
+    {
+      "evidence_id": "r4-route-b-seed-pair-001-reaudit-9523593",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Fresh independent audits under clean epoch rc1-flow-classifier-9523593 re-read the four retained raw runs without new EDA execution. IRQ is FAIL placement_density_infeasible to PASS and supplies one positive constructed training pair; SHA is FAIL placement_density_infeasible to FAIL routing_congestion and remains negative transfer evidence. This is one positive source group, not M0 or S1 evidence."
+    },
+    {
+      "evidence_id": "r4-route-b-supplemental-freecores-ingress-20260922",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Three uart16550_wb RTL files exactly match public freecores/uart16550 commit 2b0ad80d0968f201f95506854ad769c8a44abe2b; provenance file SHA256 is e8bace9ab58de4b763c421fbf80b5a3fefafdb63228b6d2c34fb3d0e2cac141f. The new conservative source group github-owner:freecores is disjoint from both prior seed groups and declared Pilot development groups."
+    },
+    {
+      "evidence_id": "r4-route-b-supplemental-frontend-010-and-staged-pair",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The preregistered one-case frontend campaign independently audits 1/1 PASS with audit digest sha256:846ba64a84ab0b77eb3ec54eb52a6d02696b30b7abe10562e8fba8ff45f26618, one EDA call, 1.286727 seconds, and zero model calls/tokens. Separate source-unchanged sky130hs control 95 and treatment 40 projects verify with receipt digests sha256:5e0f31a588d0aea78a29868cf501618bc2870b251033c1dc707908246cd3104e and sha256:d0a3caf5bdc243e4a7227d71f68b6511b971bf27eb3a80130c8ce0c6c6fda2b6; neither flow has executed."
+    },
+    {
+      "evidence_id": "r4-supplemental-seed-pair-runtime-9f76941",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Commit 9f76941 adds a supplemental one-design paired-arm profile while preserving the original exactly-two-design profile. It requires declared prior seed groups, rejects development or prior-source overlap, retains both arms and independent raw audits, and reports only cohort-local positive_pair_count without two-source qualification or M0 authority. Full memory tests report 2047 passed under pinned Python 3.11.6; model calls remain zero."
+    },
+    {
+      "evidence_id": "future-r4-route-b-supplemental-flow-and-second-positive-group",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "The predeclared freecores control and treatment flows have not run. Their outcomes must be retained even if negative or UNKNOWN. Only a fresh audited FAIL-to-PASS pair could combine with the IRQ result to satisfy the two-source-group constructed training prerequisite."
+    },
+    {
+      "evidence_id": "future-r4-parent-acquisition-qualified-m0-s1-s2-evolution-final-heldout-paper",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "Parent acquisition, Knowledge and Asset admission, current consumption gates, nonempty M0, real S1 route/selector/binder action evidence, S2 same-controller comparisons, verified shadow evolution, frozen final held-out protocol, and paper experiments remain unestablished."
+    }
+  ]
+}
