@@ -1,0 +1,45 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v10.json",
+    "sha256": "ad5862fdb63aed40f29bc16a7aca771d2b3fc3e83504a6a6554b4839abf0436b"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v10",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v10 status binds the source-disjoint Route-B seed ingress, four unexecuted staged arms, paired acquisition runtime, empty-M0 boundary, and all prior S0/coverage evidence. Its exact SHA256 is bound above."
+    },
+    {
+      "evidence_id": "r4-route-b-seed-pair-001-original-audit",
+      "classification": "diagnostic_only",
+      "selected_for_epoch": false,
+      "basis": "The first four-arm run is terminal, hash-chain verified, and independently audited with four flow-driver calls, 17 EDA stages, zero model calls/tokens, and no memory update. Its frozen auditor reports IRQ UNKNOWN->PASS and SHA UNKNOWN->UNKNOWN because FLW-0024 and GRT-0116 were not classified. Raw logs are retained; no arm will be retried or overwritten."
+    },
+    {
+      "evidence_id": "r4-explicit-flow-feasibility-classifier-8759ce1",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Commit 8759ce1 classifies only exact FLW-0024 plus Place density exceeds 1.0 and GRT-0116 plus Global routing finished with congestion pairs as FLOW_TARGET_FAILURE, while partial markers remain UNKNOWN. Targeted research flow and seed-pair tests pass. This code change does not itself reclassify old evidence."
+    },
+    {
+      "evidence_id": "future-r4-route-b-seed-pair-001-fresh-reaudit",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "The retained four raw runs still require independent re-audit under a clean epoch that binds commit 8759ce1. Original audit receipts remain immutable and cannot be overwritten."
+    },
+    {
+      "evidence_id": "future-r4-second-positive-source-group-and-qualified-m0",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "Even if fresh audit establishes IRQ as FAIL->PASS, SHA treatment has explicit route congestion and cannot form a positive pair. A second source-group-distinct positive pair plus parent acquisition and current Knowledge/Asset consumption gates remain required before nonempty M0."
+    },
+    {
+      "evidence_id": "future-r4-s1-s2-evolution-final-heldout-and-paper",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "Real S1 route/selector/binder action evidence, S2 same-controller comparisons, verified shadow evolution, frozen final held-out protocol, and paper experiments remain unestablished."
+    }
+  ]
+}
