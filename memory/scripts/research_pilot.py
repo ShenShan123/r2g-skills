@@ -43,6 +43,11 @@ from tehm.evaluation.research_coverage import (  # noqa: E402
     audit_memory_route_coverage,
     verify_memory_route_coverage,
 )
+from tehm.evaluation.research_seed_pair import (  # noqa: E402
+    run_seed_pair,
+    verify_seed_pair_run,
+    verify_seed_pair_spec,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -203,6 +208,24 @@ def _verify_memory_coverage(args: argparse.Namespace) -> int:
     return 0 if result["valid"] else 2
 
 
+def _verify_seed_pair_spec(args: argparse.Namespace) -> int:
+    result = verify_seed_pair_spec(args.spec)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _run_seed_pair(args: argparse.Namespace) -> int:
+    result = run_seed_pair(spec=args.spec, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["all_registered_terminal"] else 2
+
+
+def _verify_seed_pair_run(args: argparse.Namespace) -> int:
+    result = verify_seed_pair_run(args.output, args.spec)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -324,6 +347,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     verify_coverage.add_argument("--coverage", type=Path, required=True)
     verify_coverage.set_defaults(handler=_verify_memory_coverage)
+
+    seed_spec = sub.add_parser(
+        "verify-seed-pair-spec", help="verify preregistered two-arm seed inputs"
+    )
+    seed_spec.add_argument("--spec", type=Path, required=True)
+    seed_spec.set_defaults(handler=_verify_seed_pair_spec)
+
+    seed_run = sub.add_parser(
+        "run-seed-pair", help="execute and independently audit each frozen seed arm once"
+    )
+    seed_run.add_argument("--spec", type=Path, required=True)
+    seed_run.add_argument("--output", type=Path, required=True)
+    seed_run.set_defaults(handler=_run_seed_pair)
+
+    seed_verify = sub.add_parser(
+        "verify-seed-pair-run", help="recompute four-arm seed evidence and raw audits"
+    )
+    seed_verify.add_argument("--spec", type=Path, required=True)
+    seed_verify.add_argument("--output", type=Path, required=True)
+    seed_verify.set_defaults(handler=_verify_seed_pair_run)
 
     prepare = sub.add_parser(
         "prepare", help="freeze campaign tasks against an epoch and design inventory"

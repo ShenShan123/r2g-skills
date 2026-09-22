@@ -7680,3 +7680,23 @@ sky130hs 历史 scoped parent 限定 `flow_feasibility`/95→40，快照自报�
 它们直接复制成新 M0。当前 M0 仍为空，S1 动作效应与 S2 Agent 对照仍待合法 seed
 及同 scope 的真实 route/selector/binder/执行。此阶段仅新增外部实验记录与版本化
 证据状态 v9，无 TEHM 源码逻辑变更、无 provider calls、production authority=false。
+
+### 2026-09-22 Revision4 Route-B training seed ingress and paired acquisition guard
+
+Route-B 在仓库外预先保留两个不同 owner 来源组的训练候选：`ultraembedded_irq_ctrl`
+与 `sha256_core`。其五个本地 RTL 文件逐个与固定公开 Git 提交字节匹配；原 S0 八案
+保持 Pilot development/controls，不重命名成 training。两个候选的独立
+frontend/synthesis campaign 009 审计为 **2/2 PASS**，2 次 EDA、0 model calls；
+这只证明接入，不生成 Knowledge/Asset 或 M0。仓库外
+`r4-real-pilot/campaigns/r4-seed-route-b-20260922/status.md` 保留准确工件路径与 digest。
+
+同一设计的 `CORE_UTILIZATION=95` constructed control 与 `40` 单动作 treatment
+已分为四个 source-unchanged、无 stub 的 `sky130hs` staged project，SDC 在各设计
+两臂之间相同，尚未执行 full flow。高密度挑战不代表自然失败，也不代表固定几何
+QoR 优化。新增 `research_pilot.py verify-seed-pair-spec` / `run-seed-pair` /
+`verify-seed-pair-run` 用于在实验前核对两组来源、上游文件哈希、同平台、同 RTL/
+时钟及唯一配置动作；执行时串行保留四臂日志、哈希链、原始运行和独立审计。
+缺审计保持 UNKNOWN；即使两组都形成目标失败→PASS 的正向配对，输出也只称
+`two_source_group_positive_pairs`，并标记 `m0_status=NOT_BUILT`。真正 M0 还必须
+通过 parent-acquisition、Knowledge/Asset 和当前消费 gate，S1 必须另由真实
+route/selector/binder 选择动作；此 forced seed acquisition 不是 S1 效应估计。
