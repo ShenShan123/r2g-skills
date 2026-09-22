@@ -87,6 +87,19 @@ def _rewrite(path: Path, mutator) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
+def _make_supplemental(spec: Path) -> None:
+    payload = json.loads(spec.read_text(encoding="utf-8"))
+    provenance = Path(payload["provenance_file"])
+    provenance_payload = json.loads(provenance.read_text(encoding="utf-8"))
+    provenance_payload["entries"] = provenance_payload["entries"][:1]
+    provenance.write_text(json.dumps(provenance_payload), encoding="utf-8")
+    payload["profile"] = "constructed_flow_feasibility_training_supplemental"
+    payload["prior_seed_source_groups"] = ["owner:secworks"]
+    payload["cases"] = payload["cases"][:1]
+    payload["provenance_sha256"] = seed._file_digest(provenance)
+    spec.write_text(json.dumps(payload), encoding="utf-8")
+
+
 def test_seed_spec_requires_distinct_groups_and_single_registered_action(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -120,6 +133,21 @@ def test_seed_spec_rejects_changed_clock_and_preexisting_execution(
     prior.mkdir(parents=True)
     (prior / "run-meta.json").write_text("{}", encoding="utf-8")
     with pytest.raises(seed.ResearchSeedPairError, match="already executed"):
+        seed.verify_seed_pair_spec(spec)
+
+
+def test_supplemental_seed_accepts_one_new_group_and_rejects_prior_overlap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = _fixture(tmp_path, monkeypatch)
+    _make_supplemental(spec)
+    checked = seed.verify_seed_pair_spec(spec)
+    assert checked["profile"] == (
+        "constructed_flow_feasibility_training_supplemental")
+    assert len(checked["cases"]) == 1
+    _rewrite(spec, lambda data: data.update(
+        {"prior_seed_source_groups": ["owner:ultraembedded"]}))
+    with pytest.raises(seed.ResearchSeedPairError, match="overlaps prior seed"):
         seed.verify_seed_pair_spec(spec)
 
 
@@ -176,6 +204,8 @@ def test_seed_run_retains_four_arms_and_reverifies_chain(
     assert result["valid"] is True
     assert result["all_registered_terminal"] is True
     assert result["two_source_group_positive_pairs"] is True
+    assert result["positive_pair_count"] == 2
+    assert result["all_registered_pairs_positive"] is True
     assert result["m0_status"] == "NOT_BUILT"
     assert len(result["outcomes"]) == 4
     assert result["actual_cost"]["audited_eda_stage_calls"] == 22
@@ -194,6 +224,63 @@ def test_seed_run_retains_four_arms_and_reverifies_chain(
     ledger.write_text("\n".join(lines) + "\n", encoding="utf-8")
     with pytest.raises(seed.ResearchSeedPairError, match="event chain"):
         seed.verify_seed_pair_run(output, spec)
+
+
+def test_supplemental_seed_run_reports_only_its_registered_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = _fixture(tmp_path, monkeypatch)
+    _make_supplemental(spec)
+
+    def execute(_script, project, _variant, _env, log, _timeout):
+        log.write_text("bounded raw flow log\n", encoding="utf-8")
+        (project / "backend/RUN_test").mkdir(parents=True)
+        return 0, None
+
+    def audit(*, project, output, **_kwargs):
+        output.mkdir()
+        arm = project.name.rsplit("-", 1)[1]
+        verdict = "FAIL" if arm == "control" else "PASS"
+        (output / "flow-audit.json").write_text(json.dumps({
+            "project_path": str(project),
+            "stage_receipt_digest": seed._json(
+                project / "stage-receipt.json")["receipt_digest"],
+            "run_dir": str(project / "backend/RUN_test"),
+            "producer_epoch_digest": "sha256:epoch",
+            "auditor_epoch_digest": "sha256:epoch",
+        }), encoding="utf-8")
+        return {"audit_digest": f"sha256:{project.name}",
+                "oracle_verdict": verdict,
+                "oracle_reason": "placement_density_infeasible"
+                if verdict == "FAIL" else "flow_completed",
+                "failure_layer": "FLOW_TARGET_FAILURE"
+                if verdict == "FAIL" else "NONE",
+                "actual_cost": {"flow_driver_calls": 1,
+                                "eda_stage_calls": 3 if verdict == "FAIL" else 6}}
+
+    def verify(path):
+        arm = Path(path).parent.name
+        design = Path(path).parent.parent.name
+        verdict = "FAIL" if arm == "control" else "PASS"
+        return {"audit_digest": f"sha256:{design}-{arm}", "design_id": design,
+                "oracle_verdict": verdict,
+                "oracle_reason": "placement_density_infeasible"
+                if verdict == "FAIL" else "flow_completed",
+                "failure_layer": "FLOW_TARGET_FAILURE"
+                if verdict == "FAIL" else "NONE",
+                "actual_cost": {"flow_driver_calls": 1,
+                                "eda_stage_calls": 3 if verdict == "FAIL" else 6}}
+
+    monkeypatch.setattr(seed, "_execute", execute)
+    monkeypatch.setattr(seed, "audit_flow_run", audit)
+    monkeypatch.setattr(seed, "verify_flow_audit", verify)
+    result = seed.run_seed_pair(spec=spec, output=tmp_path / "supplemental")
+    assert result["valid"] is True
+    assert result["registered_pair_count"] == 1
+    assert result["positive_pair_count"] == 1
+    assert result["all_registered_pairs_positive"] is True
+    assert "two_source_group_positive_pairs" not in result
+    assert len(result["outcomes"]) == 2
 
 
 def test_seed_run_keeps_unaudited_arm_unknown_in_full_denominator(

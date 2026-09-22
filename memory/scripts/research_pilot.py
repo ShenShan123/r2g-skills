@@ -349,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
     verify_coverage.set_defaults(handler=_verify_memory_coverage)
 
     seed_spec = sub.add_parser(
-        "verify-seed-pair-spec", help="verify preregistered two-arm seed inputs"
+        "verify-seed-pair-spec", help="verify preregistered paired-arm seed inputs"
     )
     seed_spec.add_argument("--spec", type=Path, required=True)
     seed_spec.set_defaults(handler=_verify_seed_pair_spec)
@@ -362,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     seed_run.set_defaults(handler=_run_seed_pair)
 
     seed_verify = sub.add_parser(
-        "verify-seed-pair-run", help="recompute four-arm seed evidence and raw audits"
+        "verify-seed-pair-run", help="recompute registered seed evidence and raw audits"
     )
     seed_verify.add_argument("--spec", type=Path, required=True)
     seed_verify.add_argument("--output", type=Path, required=True)

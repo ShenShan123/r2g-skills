@@ -1,4 +1,4 @@
-"""Frozen, two-arm ORFS seed acquisition for the Revision4 research Pilot.
+"""Frozen, paired-arm ORFS seed acquisition for the Revision4 research Pilot.
 
 This is *training acquisition*, not TEHM selection or an S1 effect estimate.
 The only supported intervention is the preregistered constructed density
@@ -28,6 +28,10 @@ SUMMARY_SCHEMA = "tehm-r4-seed-pair-summary-v1"
 ARMS = ("control", "treatment")
 EXPECTED_OVERRIDES = {"control": {"CORE_UTILIZATION": "95"},
                       "treatment": {"CORE_UTILIZATION": "40"}}
+PROFILE_CASE_COUNTS = {
+    "constructed_flow_feasibility_training": 2,
+    "constructed_flow_feasibility_training_supplemental": 1,
+}
 
 
 class ResearchSeedPairError(ValueError):
@@ -83,11 +87,13 @@ def _project_identity(project: Path, expected_design: str,
 
 
 def verify_seed_pair_spec(spec: str | Path, *, allow_executed: bool = False) -> dict[str, Any]:
-    """Validate all four frozen inputs and their disjoint source authority."""
+    """Validate all registered paired-arm inputs and disjoint source authority."""
     spec_path = Path(spec).expanduser().resolve()
     payload = _json(spec_path)
-    if payload.get("schema") != SCHEMA or payload.get("profile") != "constructed_flow_feasibility_training":
+    profile = payload.get("profile")
+    if payload.get("schema") != SCHEMA or profile not in PROFILE_CASE_COUNTS:
         raise ResearchSeedPairError("seed-pair schema or profile mismatch")
+    expected_case_count = PROFILE_CASE_COUNTS[profile]
     if payload.get("model_call_limit") != 0 or payload.get("retry_limit") != 0:
         raise ResearchSeedPairError("seed acquisition requires zero model calls and retries")
     if payload.get("stage_timeout_seconds") != 900 or payload.get("max_cpus") != 2:
@@ -110,19 +116,35 @@ def verify_seed_pair_spec(spec: str | Path, *, allow_executed: bool = False) -> 
         raise ResearchSeedPairError("seed upstream provenance drifted")
     provenance = _json(provenance_path)
     provenance_entries = provenance.get("entries")
-    if not isinstance(provenance_entries, list) or len(provenance_entries) != 2:
-        raise ResearchSeedPairError("seed provenance needs exactly two source entries")
+    if (not isinstance(provenance_entries, list)
+            or len(provenance_entries) != expected_case_count):
+        raise ResearchSeedPairError(
+            f"seed provenance needs exactly {expected_case_count} source entries")
     provenance_by_design = {row.get("design_id"): row for row in provenance_entries
                             if isinstance(row, Mapping)}
-    if len(provenance_by_design) != 2:
+    if len(provenance_by_design) != expected_case_count:
         raise ResearchSeedPairError("seed provenance has duplicate or invalid design IDs")
     development_groups = payload.get("pilot_development_source_groups")
     if (not isinstance(development_groups, list) or not development_groups
             or any(not isinstance(group, str) or not group for group in development_groups)):
         raise ResearchSeedPairError("Pilot development source groups are not declared")
+    prior_groups: list[str] = []
+    if profile == "constructed_flow_feasibility_training_supplemental":
+        candidate_prior_groups = payload.get("prior_seed_source_groups")
+        if (not isinstance(candidate_prior_groups, list) or not candidate_prior_groups
+                or any(not isinstance(group, str) or not group
+                       for group in candidate_prior_groups)
+                or len(set(candidate_prior_groups)) != len(candidate_prior_groups)):
+            raise ResearchSeedPairError(
+                "supplemental seed requires distinct prior seed source groups")
+        prior_groups = candidate_prior_groups
+        if set(prior_groups) & set(development_groups):
+            raise ResearchSeedPairError(
+                "prior seed source groups overlap Pilot development")
     cases = payload.get("cases")
-    if not isinstance(cases, list) or len(cases) != 2:
-        raise ResearchSeedPairError("exactly two seed designs are required")
+    if not isinstance(cases, list) or len(cases) != expected_case_count:
+        raise ResearchSeedPairError(
+            f"exactly {expected_case_count} seed designs are required for this profile")
     groups: set[str] = set()
     designs: set[str] = set()
     projects: set[Path] = set()
@@ -142,6 +164,8 @@ def verify_seed_pair_spec(spec: str | Path, *, allow_executed: bool = False) -> 
         groups.add(group)
         if group in development_groups:
             raise ResearchSeedPairError("seed source group overlaps Pilot development")
+        if group in prior_groups:
+            raise ResearchSeedPairError("supplemental seed source group overlaps prior seed")
         upstream = provenance_by_design.get(design)
         if (not isinstance(upstream, Mapping)
                 or upstream.get("source_group_conservative") != group
@@ -207,6 +231,7 @@ def verify_seed_pair_spec(spec: str | Path, *, allow_executed: bool = False) -> 
                                arm: receipts[arm]["receipt_digest"] for arm in ARMS}})
     return {"valid": True, "spec_digest": _digest(payload),
             "epoch_digest": checked_epoch["epoch_digest"],
+            "profile": profile,
             "cases": normalized, "flow_script": str(flow_script),
             "orfs_root": str(orfs), "toolchain": toolchain}
 
@@ -258,7 +283,7 @@ def _execute(flow_script: Path, project: Path, variant: str,
 
 
 def run_seed_pair(*, spec: str | Path, output: str | Path) -> dict[str, Any]:
-    """Execute both predeclared designs and both arms once, serially."""
+    """Execute every predeclared design and both arms once, serially."""
     spec_path = Path(spec).expanduser().resolve()
     destination = Path(output).expanduser().resolve()
     if destination.exists():
@@ -383,7 +408,7 @@ def verify_seed_pair_run(output: str | Path, spec: str | Path) -> dict[str, Any]
     except OSError as exc:
         raise ResearchSeedPairError("seed-pair event ledger is missing") from exc
     if len(lines) != 2 * len(expected):
-        raise ResearchSeedPairError("seed-pair ledger lacks a full four-arm denominator")
+        raise ResearchSeedPairError("seed-pair ledger lacks the full registered denominator")
     tail: str | None = None
     outcomes: list[dict[str, Any]] = []
     for index, line in enumerate(lines):
@@ -468,13 +493,16 @@ def verify_seed_pair_run(output: str | Path, spec: str | Path) -> dict[str, Any]
     audited_flow_calls = sum(
         int((row["actual_cost"] or {}).get("flow_driver_calls", 0))
         for row in outcomes if row["audit_digest"] is not None)
-    return {"schema": SUMMARY_SCHEMA, "valid": all_audited,
+    positive_pair_count = sum(row["positive_training_pair"] for row in qualified)
+    result = {"schema": SUMMARY_SCHEMA, "valid": all_audited,
             "all_registered_terminal": True, "all_arms_audited": all_audited,
+            "profile": verified_spec["profile"],
             "spec_digest": _digest(payload),
             "event_tail_digest": tail, "outcomes": outcomes,
             "qualified_pairs": qualified,
-            "two_source_group_positive_pairs": all(
-                row["positive_training_pair"] for row in qualified),
+            "registered_pair_count": len(qualified),
+            "positive_pair_count": positive_pair_count,
+            "all_registered_pairs_positive": positive_pair_count == len(qualified),
             "memory_gate_status": "NOT_RUN", "m0_status": "NOT_BUILT",
             "actual_cost": {"registered_arm_attempts": len(outcomes),
                             "audited_flow_driver_calls": audited_flow_calls,
@@ -484,6 +512,10 @@ def verify_seed_pair_run(output: str | Path, spec: str | Path) -> dict[str, Any]
                             "model_calls": 0, "model_tokens": 0},
             "memory_update": "none",
             "claim_boundary": "Constructed training acquisition only; not natural failures, TEHM-selected S1 actions, functional repair or agent evidence."}
+    if verified_spec["profile"] == "constructed_flow_feasibility_training":
+        result["two_source_group_positive_pairs"] = (
+            len(qualified) == 2 and positive_pair_count == 2)
+    return result
 
 
 __all__ = ["ResearchSeedPairError", "verify_seed_pair_spec", "run_seed_pair",

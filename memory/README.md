@@ -7699,4 +7699,8 @@ QoR 优化。新增 `research_pilot.py verify-seed-pair-spec` / `run-seed-pair` 
 缺审计保持 UNKNOWN；即使两组都形成目标失败→PASS 的正向配对，输出也只称
 `two_source_group_positive_pairs`，并标记 `m0_status=NOT_BUILT`。真正 M0 还必须
 通过 parent-acquisition、Knowledge/Asset 和当前消费 gate，S1 必须另由真实
-route/selector/binder 选择动作；此 forced seed acquisition 不是 S1 效应估计。
+route/selector/binder 产生动作。若首批两个来源组没有同时形成正向配对，可使用
+`constructed_flow_feasibility_training_supplemental` profile 预注册一个新的来源组；
+该 profile 仍保留两臂、原始运行与独立审计，并强制声明既有 seed 来源组以拒绝重叠。
+它只报告本 cohort 的 `positive_pair_count`，不能单独宣称累计两来源组资格，也不会构造 M0。
+此 forced seed acquisition 不是 S1 效应估计。
