@@ -15,6 +15,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[3]
 RUN_ORFS = REPO / "r2g-skills" / "signoff-loop" / "scripts" / "flow" / "run_orfs.sh"
 INPUTS_MISSING_RC = 66
@@ -133,3 +135,35 @@ def test_explicit_override_clears_the_scope_gate(tmp_path):
     r = subprocess.run(["bash", str(RUN_ORFS), str(proj), "asap7"],
                        cwd=REPO, env=env, capture_output=True, text=True, timeout=120)
     assert r.returncode != UNSUPPORTED_RC, r.stderr[-800:]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write a read-only directory")
+def test_inputs_are_checked_before_anything_is_written_into_orfs(tmp_path):
+    """A read-only ORFS checkout must still yield the infra code, and nothing in it.
+
+    The guard used to read the COPY of config.mk it had just written into
+    $FLOW_DIR/designs/, so on a root-owned checkout (/opt on the E6 host) `mkdir`
+    failed first and a missing-input project exited 1, a generic failure, instead
+    of 66. Hermetic: a copy of scripts/flow/ against a read-only fake ORFS.
+    """
+    import shutil
+
+    skill = tmp_path / "skill"
+    (skill / "scripts").mkdir(parents=True)
+    shutil.copytree(RUN_ORFS.parent, skill / "scripts" / "flow")
+    (skill / "knowledge").mkdir()
+    flow = tmp_path / "orfs" / "flow"
+    (flow / "platforms" / "nangate45").mkdir(parents=True)
+    (flow / "Makefile").write_text("# fake\n")
+    flow.chmod(0o555)
+    proj = _project(tmp_path, "/nonexistent/root/rtl/d.v")
+    env = {k: v for k, v in os.environ.items() if k != "R2G_ENV_FILE"}
+    env.update(ORFS_ROOT=str(tmp_path / "orfs"), R2G_SKIP_WORKSPACE_LOCK="1")
+    try:
+        r = subprocess.run(["bash", str(skill / "scripts" / "flow" / "run_orfs.sh"),
+                            str(proj), "nangate45"],
+                           env=env, capture_output=True, text=True, timeout=120)
+    finally:
+        flow.chmod(0o755)
+    assert r.returncode == INPUTS_MISSING_RC, r.stderr[-800:]
+    assert not (flow / "designs").exists()
