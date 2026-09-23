@@ -1,0 +1,45 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v12.json",
+    "sha256": "97c87cb3585467d2d7b1a3cdeea4d1bb1aedc28168866ac0453f1a2206b7656d"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v12",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v12 status binds the original IRQ positive pair, the SHA negative pair, the disjoint freecores source identity, its frontend audit, and its two source-unchanged staged arms. Its exact SHA256 is bound above; no earlier evidence is rewritten here."
+    },
+    {
+      "evidence_id": "r4-route-b-supplemental-uart16550-pair-002",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The preregistered freecores uart16550_wb pair ran each arm exactly once under the clean 853ed4e epoch. Control CORE_UTILIZATION 95 independently audits FAIL placement_density_infeasible FLOW_TARGET_FAILURE with digest sha256:b3a504e2291abb0fcb456f754f092fcc62d17c6fe7a50756134c8e986f4923a8; treatment 40 audits PASS flow_completed NONE with digest sha256:a4a66372d620f7f42b9f69372b1786ea950ffd89d784e2d4909c2911ea85e051. The pair verifier passes; execution used two flow calls, nine EDA stages, and zero model calls/tokens. This is constructed flow-feasibility training evidence, not natural-failure, strict-signoff, S1, or production evidence."
+    },
+    {
+      "evidence_id": "r4-two-source-constructed-training-prerequisite",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The retained ultraembedded IRQ FAIL-to-PASS pair and the new freecores UART FAIL-to-PASS pair belong to distinct github-owner source groups. They satisfy only Revision4 Route-B's minimum two-source-group prerequisite for attempting parent replay and M0 construction. The secworks SHA FAIL-to-FAIL routing-congestion result remains in the denominator as negative evidence and is not relabeled positive."
+    },
+    {
+      "evidence_id": "r4-rc1-parent-adapter-and-m0-builder-8a51a1b",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Commit 8a51a1b adds a native stage-receipt plus flow-audit parent adapter and a research-only M0 builder. The builder requires exactly two distinct positive designs and source groups, a clean ready epoch with the same toolchain, existing L2/L3 Knowledge authority gates, candidate Asset construction, and actual shadow route-selector-binder candidate preflight. A two-source integration test rebuilds identical bundle digests; the official pinned-Python suite reports 2050 passed in 1193.80 seconds. No real M0 was built by this software validation."
+    },
+    {
+      "evidence_id": "future-r4-read-only-m0-bounded-reproducibility-and-coverage",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "The real external pairs have not yet been replayed into a nonempty M0. The parent evidence bundle, Knowledge and Asset receipts, current consumption preflight, exact second-build digest comparison, and post-M0 route coverage must all pass before S1 may start."
+    },
+    {
+      "evidence_id": "future-r4-s1-s2-evolution-final-heldout-paper",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "Real S1 controlled route-selector-binder action evidence, S2 same-controller comparisons, verified shadow evolution, frozen final held-out protocol, and paper experiments remain unestablished. Production authority and online memory update remain disabled."
+    }
+  ]
+}

@@ -7690,10 +7690,12 @@ frontend/synthesis campaign 009 审计为 **2/2 PASS**，2 次 EDA、0 model cal
 这只证明接入，不生成 Knowledge/Asset 或 M0。仓库外
 `r4-real-pilot/campaigns/r4-seed-route-b-20260922/status.md` 保留准确工件路径与 digest。
 
-同一设计的 `CORE_UTILIZATION=95` constructed control 与 `40` 单动作 treatment
-已分为四个 source-unchanged、无 stub 的 `sky130hs` staged project，SDC 在各设计
-两臂之间相同，尚未执行 full flow。高密度挑战不代表自然失败，也不代表固定几何
-QoR 优化。新增 `research_pilot.py verify-seed-pair-spec` / `run-seed-pair` /
+首批两个设计的 `CORE_UTILIZATION=95` constructed control 与 `40` 单动作 treatment
+已分为四个 source-unchanged、无 stub 的 `sky130hs` staged project；supplemental UART
+另有两份同边界 staged project，SDC 在每个设计两臂之间相同。首批 IRQ/SHA flow 与后续 UART supplemental pair 均已按各自预注册
+执行完毕：IRQ 和 UART 分别形成 `95` placement-density FAIL → `40` flow PASS；SHA
+保留为 placement-density FAIL → routing-congestion FAIL 的负向结果。高密度挑战不代表
+自然失败，也不代表固定几何 QoR 优化。新增 `research_pilot.py verify-seed-pair-spec` / `run-seed-pair` /
 `verify-seed-pair-run` 用于在实验前核对两组来源、上游文件哈希、同平台、同 RTL/
 时钟及唯一配置动作；执行时串行保留四臂日志、哈希链、原始运行和独立审计。
 缺审计保持 UNKNOWN；即使两组都形成目标失败→PASS 的正向配对，输出也只称
@@ -7704,6 +7706,15 @@ route/selector/binder 产生动作。若首批两个来源组没有同时形成�
 该 profile 仍保留两臂、原始运行与独立审计，并强制声明既有 seed 来源组以拒绝重叠。
 它只报告本 cohort 的 `positive_pair_count`，不能单独宣称累计两来源组资格，也不会构造 M0。
 此 forced seed acquisition 不是 S1 效应估计。
+
+UART control audit digest 为
+`sha256:b3a504e2291abb0fcb456f754f092fcc62d17c6fe7a50756134c8e986f4923a8`，
+treatment audit digest 为
+`sha256:a4a66372d620f7f42b9f69372b1786ea950ffd89d784e2d4909c2911ea85e051`；
+两臂合计 2 次 flow-driver、9 个 EDA stages、0 model calls/tokens。与 IRQ 的
+`github-owner:ultraembedded` 合并后，现有两个正向 constructed training source groups
+满足“可以尝试构建 M0”的最低前置条件；`github-owner:secworks` 负向结果仍保留在分母。
+这不等于 M0、S1 效应或生产 authority。
 
 RC1 seed 的终态证据使用 `stage-receipt.json` 与独立复验的
 `flow-audit.json`，并非旧 terminal-run receipt。新增
