@@ -119,28 +119,61 @@ foreach inst [$block getInsts] {
     lappend component_names [$inst getName]
 }
 
-set clk_ports {}
-if {[info exists ::env(CLOCK_PORT)] && [string trim $::env(CLOCK_PORT)] ne ""} {
-    set clk_ports [get_ports -quiet $::env(CLOCK_PORT)]
-}
-# Fall back to a clk/clock name match if the explicit port matched nothing — a
-# mismatched SDC clk_port_name must not silently disable clock detection.
-if {[llength $clk_ports] == 0} {
-    foreach p [get_ports -quiet *] {
-        set pname [get_full_name $p]
-        if {[regexp -nocase {(clk|clock)} $pname]} {
-            lappend clk_ports $p
-        }
+# Constraints: the bound run's own 6_final.sdc when the orchestrator passes it
+# (R2G_TIMING_SDC), so the labels carry sign-off's timing -- virtual clocks, I/O
+# delays, propagated clocks. The period behind Path_Delay then comes from that SDC
+# (tightest clock, as the verifier reads it) and CLOCK_PERIOD/CLOCK_PORT are
+# unused. Re-creating only a clk-named port left purely combinational designs
+# with a virtual clock all INF/0 while sign-off had finite slack everywhere
+# (E12-FP 2026-09-23: 4943dea05dcb, 5f8dc547cda0).
+set timing_sdc ""
+if {[info exists ::env(R2G_TIMING_SDC)] && [string trim $::env(R2G_TIMING_SDC)] ne ""} {
+    set timing_sdc $::env(R2G_TIMING_SDC)
+    if {![file readable $timing_sdc]} {
+        puts "Error: R2G_TIMING_SDC $timing_sdc is not readable."
+        exit 1
     }
 }
 
-if {[llength $clk_ports] > 0} {
-    foreach p $clk_ports {
-        set pname [get_full_name $p]
-        create_clock -name $pname -period $clock_period $p
+if {$timing_sdc ne ""} {
+    puts "Timing constraints: $timing_sdc"
+    if {[catch {read_sdc $timing_sdc} err]} {
+        puts "Error: read_sdc $timing_sdc failed: $err"
+        exit 1
     }
+    set sdc_periods {}
+    foreach clk [all_clocks] {
+        lappend sdc_periods [get_property $clk period]
+    }
+    if {[llength $sdc_periods] > 0} {
+        set clock_period [tcl::mathfunc::min {*}$sdc_periods]
+    }
+    puts "SDC clocks: [llength $sdc_periods], period for Path_Delay: $clock_period"
 } else {
-    puts "No clock-like port found. Skipping clock creation."
+    puts "Timing constraints: no SDC; clock from CLOCK_PORT / clk-named port"
+    set clk_ports {}
+    if {[info exists ::env(CLOCK_PORT)] && [string trim $::env(CLOCK_PORT)] ne ""} {
+        set clk_ports [get_ports -quiet $::env(CLOCK_PORT)]
+    }
+    # Fall back to a clk/clock name match if the explicit port matched nothing — a
+    # mismatched SDC clk_port_name must not silently disable clock detection.
+    if {[llength $clk_ports] == 0} {
+        foreach p [get_ports -quiet *] {
+            set pname [get_full_name $p]
+            if {[regexp -nocase {(clk|clock)} $pname]} {
+                lappend clk_ports $p
+            }
+        }
+    }
+
+    if {[llength $clk_ports] > 0} {
+        foreach p $clk_ports {
+            set pname [get_full_name $p]
+            create_clock -name $pname -period $clock_period $p
+        }
+    } else {
+        puts "No clock-like port found. Skipping clock creation."
+    }
 }
 
 # Run timing analysis

@@ -166,6 +166,18 @@ if [[ -f "$SDC_FILE" ]]; then
 fi
 echo "clk_period=$CLOCK_PERIOD clk_port=${CLOCK_PORT:-<auto>} supply=$SUPPLY_VOLTAGE libs=$(echo $LIB_FILES | wc -w)"
 
+# --- Sign-off SDC for the timing labels ------------------------------------
+# The 6_final.sdc written beside the chosen ODB/DEF (else by the run they came
+# from) is the SDC sign-off STA timed this layout with. extract_timing.tcl reads
+# it whole (virtual clocks, I/O delays) and takes the Path_Delay period from it;
+# with none found it falls back to CLOCK_PERIOD/CLOCK_PORT above.
+TIMING_SDC=""
+for _sdc in ${ODB:+"$(dirname "$ODB")/6_final.sdc"} ${DEF:+"$(dirname "$DEF")/6_final.sdc"} \
+            ${RUN_DIR:+"$RUN_DIR/results/6_final.sdc" "$RUN_DIR/final/6_final.sdc"}; do
+  [[ -f "$_sdc" ]] && { TIMING_SDC="$_sdc"; break; }
+done
+echo "timing SDC: ${TIMING_SDC:-<none: clock-port fallback>}"
+
 OPENROAD="${OPENROAD_EXE:-openroad}"
 LABEL_TIMEOUT="${LABEL_TIMEOUT:-2400}"
 
@@ -238,10 +250,12 @@ TIMING_LIBS="$LIB_FILES $ADDITIONAL_LIBS"
 if [[ -n "$ODB" ]]; then
   ODB_FILE="$ODB" R2G_LIB_FILES="$TIMING_LIBS" OUTPUT_CSV="$LABELS_DIR/timing_features.csv" \
     CLOCK_PERIOD="$CLOCK_PERIOD" CLOCK_PORT="$CLOCK_PORT" DESIGN_NAME="$DESIGN_NAME" \
+    R2G_TIMING_SDC="$TIMING_SDC" \
     run_soft timing "$LABELS_DIR/timing_features.csv" "$OPENROAD" -no_splash -exit "$LABELS_SRC/extract_timing.tcl"
 elif [[ -n "$DEF" ]]; then
   DEF_FILE="$DEF" R2G_LIB_FILES="$TIMING_LIBS" TECH_LEF="$TECH_LEF" OUTPUT_CSV="$LABELS_DIR/timing_features.csv" \
     CLOCK_PERIOD="$CLOCK_PERIOD" CLOCK_PORT="$CLOCK_PORT" DESIGN_NAME="$DESIGN_NAME" \
+    R2G_TIMING_SDC="$TIMING_SDC" \
     run_soft timing "$LABELS_DIR/timing_features.csv" "$OPENROAD" -no_splash -exit "$LABELS_SRC/extract_timing.tcl"
 fi
 

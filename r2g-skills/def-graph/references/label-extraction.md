@@ -161,7 +161,8 @@ the ground net = 0), else it raises `PSM-0079`.
 | `TECH_LEF` | tech LEF for congestion layer pitches (capacity) |
 | `SC_LEF` / `ADDITIONAL_LEFS` / `CELL_LEFS` | cell/macro LEF(s) with per-`MACRO SIZE` — congestion cell→GCell bounding-box mapping; absent ⇒ origin-GCell fallback (logged) |
 | `SUPPLY_VOLTAGE` | nominal VDD for the IR-drop delta + PDNSim rail voltage |
-| `CLOCK_PERIOD` / `CLOCK_PORT` | timing clock (overrides SDC; empty `CLOCK_PORT` = auto-detect) |
+| `R2G_TIMING_SDC` | SDC `extract_timing.tcl` reads whole (set by `run_labels.sh` to the bound run's `6_final.sdc`; empty = clock-port fallback) |
+| `CLOCK_PERIOD` / `CLOCK_PORT` | fallback timing clock, used only when no `6_final.sdc` is found (empty `CLOCK_PORT` = auto-detect) |
 | `ODB_FILE` / `DEF_FILE` | explicit input design |
 | `R2G_SPEF` | explicit SPEF for RC labels (default: collected `6_final.spef`; empty = RC skipped) |
 | `R2G_RC_MAX_FANOUT` | skip+log equivalent-resistance pairs for nets with more than N pins (default 0 = uncapped) |
@@ -182,19 +183,29 @@ roll-up land under `design_cases/_batch/logs_labels_<tag>/`.
 - Typical/primary corner only (no multi-corner labels). The corner follows the ORFS
   platform default (`CORNER`), e.g. BC for asap7/gf180.
 - Designs that never reached `6_final` are skipped (status recorded), not errored.
-- **Timing labels need a detectable clock.** The clock is re-created after
-  `read_db` from the SDC `clk_port_name`, falling back to a `clk`/`clock` port-name
-  match. Designs whose top-level clock port has a non-conventional name (and whose
-  SDC `clk_port_name` doesn't match an actual port) get all-`not_in_path` timing
-  rows (`label=0`) — honestly recorded, not an error. Purely combinational designs
-  also correctly produce zero in-path rows.
-- **Only the clock is constrained** — `extract_timing.tcl` applies no
-  `set_input_delay`/`set_output_delay` (the design SDC uses 20% of period for
-  both). Pure I/O paths are therefore unconstrained: input→reg slacks are
-  optimistic, and cells feeding only output ports get `in_sta_path=false`
-  (`label=0`). Bounded on aes_core sky130hd: 4% of real logic cells;
-  reg↔reg labels are unaffected. Larger for I/O-bound or combinational
-  designs — a documented modeling choice (2026-07-05 audit), not a join bug.
+- **Timing labels are timed under the sign-off SDC.** `run_labels.sh` passes the
+  `6_final.sdc` beside the chosen ODB/DEF (else from its backend run) as
+  `R2G_TIMING_SDC`, and `extract_timing.tcl` reads it whole after `read_db`:
+  clocks (including virtual clocks), `set_input_delay`/`set_output_delay`,
+  propagated clocks. `Path_Delay_ns = period - slack` uses the tightest clock
+  period in that SDC, which is the period the verifier reads. A purely
+  combinational design with a virtual clock therefore gets finite slack on every
+  logic cell, as sign-off STA does. Before 2026-09-23 the extractor re-created
+  only a `clk`-named port clock and applied no I/O delays, so such designs came
+  out all `INF`/`label=0` (E12-FP: floating_point_adder 0 → 4,503 and
+  ConvKernel 0 → 18,209 in-path cells, each matching an independent OpenSTA
+  pass per instance). Datasets built before that date carry the old labels.
+- **Fallback when no `6_final.sdc` exists** (e.g. an `R2G_DEF` override with no
+  run beside it): the clock is re-created from the project SDC's
+  `clk_port_name`/`clk_period`, falling back to a `clk`/`clock` port-name match,
+  and no I/O delays are applied. Input→reg slacks are then optimistic, cells
+  feeding only output ports get `in_sta_path=false` (`label=0`), and designs
+  without a matching clock port get all-`not_in_path` rows. The log records
+  which mode ran (`Timing constraints: ...`).
+- **No parasitics.** The timing labels are computed from the ODB without the
+  SPEF, so their slacks are wire-load-free and more optimistic than sign-off
+  STA's (E12-FP: worst slack 2.844 ns vs sign-off 0.473 ns on
+  floating_point_adder).
 
 ## Downstream consumer
 
