@@ -74,3 +74,14 @@ def test_refuses_without_a_platform(tmp_path: Path) -> None:
     assert out.returncode == 2
     assert "no platform" in out.stderr
     assert not calls.exists()        # nothing was graded against a guessed deck
+
+
+def test_comment_and_quotes_are_not_part_of_the_platform(tmp_path: Path) -> None:
+    # Review finding (2026-09-23): `?= sky130hd  # default` read as 'sky130hd#default'.
+    repo, calls = _fake_repo(tmp_path)
+    proj = _project(tmp_path, 'export PLATFORM ?= "nangate45"  # default\n')
+
+    out = _run(repo, str(proj))
+
+    assert out.returncode == 0, out.stderr
+    assert all(" nangate45 " in line for line in calls.read_text().splitlines())

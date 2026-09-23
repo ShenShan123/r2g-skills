@@ -23,7 +23,8 @@ NAME="$(basename "$PROJECT_DIR")"
 PLATFORM="${2:-}"
 if [[ -z "$PLATFORM" ]]; then
   PLATFORM="$(sed -n 's/^[[:space:]]*\(export[[:space:]]\+\)\?PLATFORM[[:space:]]*[?:]\?=[[:space:]]*//p' \
-                "$PROJECT_DIR/constraints/config.mk" 2>/dev/null | head -1 | tr -d ' \r')"
+                "$PROJECT_DIR/constraints/config.mk" 2>/dev/null | head -1 \
+                | sed 's/#.*//' | tr -d ' \r"'"'"'')"
 fi
 if [[ -z "$PLATFORM" ]]; then
   echo "ERROR: no platform: pass it as \$2 or set PLATFORM in $PROJECT_DIR/constraints/config.mk" >&2
