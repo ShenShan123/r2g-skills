@@ -80,6 +80,23 @@ def _file_digest(path: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
+def _directory_digest(path: Path) -> str:
+    """Hash one staged include tree without retaining its arm-specific root."""
+    root = path.resolve()
+    if not root.is_dir():
+        raise ResearchSeedScopedError(f"include directory is missing: {root}")
+    entries = []
+    for item in sorted(root.rglob("*"), key=lambda value: value.as_posix()):
+        relative = item.relative_to(root).as_posix()
+        if item.is_symlink() or not item.is_file():
+            if item.is_dir() and not item.is_symlink():
+                continue
+            raise ResearchSeedScopedError(
+                f"include directory contains an unsupported entry: {item}")
+        entries.append({"path": relative, "sha256": _file_digest(item)})
+    return _digest(entries)
+
+
 def _audit(path: Path, project: Path, expected: Mapping[str, str]) -> dict[str, Any]:
     checked = verify_flow_audit(path)
     raw = _json(path / "flow-audit.json")
@@ -177,6 +194,10 @@ def verify_research_seed_acquisition(acquisition: Mapping[str, Any]) -> dict[str
         observed = dict(config)
         observed["VERILOG_FILES"] = [
             _file_digest(Path(item).resolve()) for item in config["VERILOG_FILES"].split()]
+        include_dirs = config.get("VERILOG_INCLUDE_DIRS")
+        if include_dirs is not None:
+            observed["VERILOG_INCLUDE_DIRS"] = [
+                _directory_digest(Path(item)) for item in include_dirs.split()]
         observed["SDC_FILE"] = _file_digest(Path(config["SDC_FILE"]).resolve())
         observed["wrapper_local_sdc"] = _file_digest(
             project / "constraints/constraint.sdc")

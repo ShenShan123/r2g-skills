@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import subprocess
 import tempfile
 from collections import defaultdict
 from pathlib import Path
@@ -61,6 +62,22 @@ def _json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _current_source_identity() -> dict[str, Any]:
+    repo = Path(__file__).resolve().parents[3]
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--verify", "HEAD"],
+            check=True, capture_output=True, text=True, timeout=60).stdout.strip()
+        status = subprocess.run(
+            ["git", "-C", str(repo), "status", "--porcelain=v1",
+             "--untracked-files=all"],
+            check=True, capture_output=True, text=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ResearchSeedM0Error(
+            "cannot verify the current M0 builder source identity") from exc
+    return {"repo": str(repo), "git_head": head, "git_dirty": bool(status)}
+
+
 def _validate_epoch(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != {
             "path", "epoch_digest", "git_head"}:
@@ -78,11 +95,16 @@ def _validate_epoch(value: Any) -> dict[str, Any]:
             or checked.get("epoch_digest") != value.get("epoch_digest")
             or checked.get("git_head") != value.get("git_head")):
         raise ResearchSeedM0Error("research seed M0 requires the bound clean epoch")
+    current = _current_source_identity()
+    if current["git_dirty"] is not False or current["git_head"] != checked["git_head"]:
+        raise ResearchSeedM0Error(
+            "current M0 builder source differs from the bound clean epoch")
     return {
         "path": str(epoch_path),
         "epoch_id": checked["epoch_id"],
         "epoch_digest": checked["epoch_digest"],
         "git_head": checked["git_head"],
+        "repo": current["repo"],
         "toolchain_manifest_digest": checked["toolchain_manifest_digest"],
         "input_memory_bundle_digest": checked["memory_bundle_digest"],
     }

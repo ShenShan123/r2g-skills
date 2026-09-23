@@ -7732,5 +7732,7 @@ route/selector/binder/structured-candidate preflight。导出仍是 research-onl
 `production_authority=false`、禁止 online update，包含 preregistration、parent
 acquisitions、build report 与 epoch bindings，并明确未来重放仍需要外部 scoped evidence。
 确定性双来源测试的两次重建得到相同 bundle digest；完整官方回归为
-**2050 passed in 1193.80s (0:19:53)**。这只验证构建器，不是实际 M0 结果；真实 bundle
+**2050 passed in 1199.25s (0:19:59)**。adapter 将 arm-specific 的 include-directory
+绝对 staging 路径规范化为相对文件名与内容摘要，但不放宽实际输入一致性；M0 builder
+还会拒绝当前 HEAD 或工作树状态与 clean source epoch 不同的执行。这只验证构建器，不是实际 M0 结果；真实 bundle
 仍须由仓库外独立审计 pairs 构建并冻结后，才能进入 S1。

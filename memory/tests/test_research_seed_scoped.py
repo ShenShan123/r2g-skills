@@ -37,6 +37,10 @@ def _fixture(
         project = tmp_path / arm
         (project / "constraints").mkdir(parents=True)
         (project / "rtl").mkdir()
+        include_dir = project / "rtl/include"
+        include_dir.mkdir()
+        (include_dir / "seed_defs.vh").write_text(
+            "`define SEED_WIDTH 8\n", encoding="utf-8")
         source = project / f"rtl/{design}.v"
         sdc = project / "constraints/constraint.sdc"
         source.write_bytes(source_bytes)
@@ -46,6 +50,7 @@ def _fixture(
                 f"export DESIGN_NAME = {design}",
                 "export PLATFORM = sky130hs",
                 f"export VERILOG_FILES = {source}",
+                f"export VERILOG_INCLUDE_DIRS = {include_dir}",
                 f"export SDC_FILE = {sdc}",
                 f"export CORE_UTILIZATION = {density}",
             )) + "\n", encoding="utf-8")
@@ -195,6 +200,10 @@ def test_build_research_seed_m0_exports_consumable_read_only_bundle(
         "memory_bundle_digest": "sha256:empty-m0", "blockers": [],
     }
     monkeypatch.setattr(seed_m0, "verify_research_epoch", lambda path: checked_epoch)
+    monkeypatch.setattr(
+        seed_m0, "_current_source_identity",
+        lambda: {"repo": str(tmp_path), "git_head": "0123456789abcdef",
+                 "git_dirty": False})
     spec = {
         "schema": seed_m0.SCHEMA, "campaign_id": "seed-m0-test",
         "target_scope": "flow_feasibility",
