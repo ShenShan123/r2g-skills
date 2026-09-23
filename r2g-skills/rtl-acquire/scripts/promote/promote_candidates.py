@@ -690,7 +690,8 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
         result["compile_inputs_verified"] = False
 
     transform = meta.get("transformation_manifest")
-    transformed = bool(meta.get("sv2v_fallback_used") or meta.get("vhd2vl_fallback_used"))
+    transformed = bool(meta.get("sv2v_fallback_used") or meta.get("vhd2vl_fallback_used")
+                       or meta.get("ghdl_fallback_used"))
     if transformed and not isinstance(transform, dict):
         result["status"] = "transformation_lineage_missing"
         result["reason"] = (

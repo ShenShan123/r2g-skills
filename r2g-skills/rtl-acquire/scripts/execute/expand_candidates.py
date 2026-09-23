@@ -64,7 +64,9 @@ from skill_env import (  # noqa: E402
 )
 from skill_env import default_downloads_root  # noqa: E402
 from common.frontend_capability import (  # noqa: E402
+    _yosys_exe,
     capability_record,
+    frontend_available,
     select_frontend,
 )
 from common.rtl_readiness import (  # noqa: E402
@@ -454,6 +456,36 @@ def run_vhd2vl(out_root: Path, design: str, source_files: list[Path]) -> Path | 
         encoding="utf-8",
     )
     return combined
+
+
+# GHDL flag sets tried in order. ITC'99-style VHDL that `use`s the non-standard
+# IEEE.std_logic_arith needs -fsynopsys (E9 probe: 3 of 22).
+GHDL_FLAG_SETS: tuple[tuple[str, ...], ...] = ((), ("-fsynopsys",))
+
+
+def run_ghdl(out_root: Path, design: str, source_files: list[Path],
+             top: str) -> tuple[Path | None, list[str]]:
+    """Elaborate the VHDL files with the Yosys GHDL plugin and write Verilog.
+
+    Returns (converted_file, ghdl_argv) or (None, []) when GHDL is not loadable
+    or no flag set elaborates `top`. ORFS reads only Verilog/RTLIL, so this is a
+    conversion step, like vhd2vl, not a SYNTH_HDL_FRONTEND setting.
+    """
+    vhdl = [p for p in source_files if p.suffix.lower() in {".vhd", ".vhdl"}]
+    if not vhdl or not frontend_available("ghdl"):
+        return None, []
+    temp_dir = out_root / "_tmp_cfg"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    out_path = temp_dir / f"{design}_ghdl.v"
+    for flags in GHDL_FLAG_SETS:
+        argv = [*flags, *(str(p) for p in vhdl), "-e", top]
+        script = f"ghdl {' '.join(argv)}; write_verilog -noattr {out_path}"
+        out_path.unlink(missing_ok=True)
+        result = run([_yosys_exe(), "-m", "ghdl", "-q", "-p", script],
+                     cwd=out_root, capture=True)
+        if result.returncode == 0 and out_path.is_file():
+            return out_path, argv
+    return None, []
 
 
 def looks_like_frontend_failure(text: str) -> bool:
@@ -911,7 +943,7 @@ def _tool_identity(path: str | None) -> dict:
 
 def _transformation_manifest(original_files: list[Path], compiled_files: list[Path],
                              fallback_used: str | None, include_dirs: list[Path],
-                             top: str) -> dict:
+                             top: str, ghdl_argv: list[str] | None = None) -> dict:
     """Bind original inputs to the exact generated inputs that synthesized."""
     original = _source_manifest(original_files)
     compiled = _source_manifest(compiled_files)
@@ -927,6 +959,9 @@ def _transformation_manifest(original_files: list[Path], compiled_files: list[Pa
     elif fallback_used == "vhd2vl":
         tool = _tool_identity(vhd2vl_path())
         argv = [str(p) for p in original_files]
+    elif fallback_used == "ghdl":
+        tool = _tool_identity(_yosys_exe())
+        argv = ["-m", "ghdl", *(ghdl_argv or [])]
     else:
         tool = {"path": "rtl-acquire:build_source_files", "sha256": None,
                 "version": "builtin"}
@@ -1602,7 +1637,36 @@ def main() -> int:
             if netlist is None:
                 failure_note = summarize_synth_failure(synth_log_path)
                 has_vhdl = any(p.suffix.lower() in {".vhd", ".vhdl"} for p in source_files)
-                if has_vhdl or looks_like_vhdl_failure(failure_note):
+                if has_vhdl:
+                    # GHDL first: a standards-aware VHDL frontend. vhd2vl cannot
+                    # parse `bit`-typed VHDL (all 22 ITC'99 designs in wave-3 E9).
+                    ghdl_out, ghdl_argv = run_ghdl(out_root, design, source_files, top)
+                    if ghdl_out:
+                        pre_ghdl_files = source_files
+                        source_files = [ghdl_out]
+                        project = write_project(
+                            projects_root, design, top, synth_variant, source_files,
+                            source_path.parent, include_dirs,
+                            f"{notes}; ghdl_fallback".strip("; "),
+                            synth_memory_max_bits, synth_frontend, top_parameters or None)
+                        rtl_files = [str(p) for p in source_files]
+                        src_manifest.write_text("\n".join(rtl_files) + "\n", encoding="utf-8")
+                        code, netlist, run_dir = synthesize(project, design, top)
+                        synth_evidence = synth_log_from(run_dir, synth_log_path)
+                        synth_evidence["exit_code"] = code
+                        if netlist is not None:
+                            row["notes"] = f"{notes}; ghdl_fallback".strip("; ")
+                            fallback_used = "ghdl"
+                            fallback_converted = ghdl_out
+                            meta["ghdl_argv"] = ghdl_argv
+                            append_design_stage(out_root, design, stage="synthesize",
+                                                state="fallback_ghdl_success")
+                        else:
+                            failure_note = summarize_synth_failure(synth_log_path)
+                            source_files = pre_ghdl_files
+                    else:
+                        failure_note = f"{failure_note} | ghdl_fallback_failed"
+                if netlist is None and (has_vhdl or looks_like_vhdl_failure(failure_note)):
                     vhd2vl_out = run_vhd2vl(out_root, design, source_files)
                     if vhd2vl_out:
                         source_files = [vhd2vl_out]
@@ -1705,7 +1769,9 @@ def main() -> int:
                     meta.update({"status": "synth_failed", "notes": row["notes"],
                                  "rtl_files": rtl_files,
                                  "sv2v_fallback_used": "sv2v_fallback" in row.get("notes", ""),
-                                 "vhd2vl_fallback_used": "vhd2vl_fallback" in row.get("notes", "")})
+                                 "vhd2vl_fallback_used": "vhd2vl_fallback" in row.get("notes", ""),
+                                 "ghdl_fallback_used": bool(re.search(
+                                     r"ghdl_fallback(?!_failed)", row.get("notes", "")))})
                     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
                     rows_by_design[design] = row
                     flush_index()
@@ -1794,7 +1860,8 @@ def main() -> int:
             row["status"] = "success"
             _src_manifest = _source_manifest(source_files)
             _transform_manifest = _transformation_manifest(
-                original_source_files, source_files, fallback_used, include_dirs, top)
+                original_source_files, source_files, fallback_used, include_dirs, top,
+                ghdl_argv=meta.get("ghdl_argv"))
             # Semantic readiness (RMD-HO-P0-01): assessed HERE, where the synth
             # log and the upstream repo are both at hand, and carried on the
             # candidate so promotion and the publish gate read one recorded
@@ -1830,6 +1897,7 @@ def main() -> int:
                     repo_dir=_upstream_repo_dir(source_path)),
                 "sv2v_fallback_used": fallback_used == "sv2v",
                 "vhd2vl_fallback_used": fallback_used == "vhd2vl",
+                "ghdl_fallback_used": fallback_used == "ghdl",
                 "lec_lite_status": lec_status,
                 "lec_lite_notes": lec_notes[:500] if lec_notes else "",
                 "degraded_quality": bool(stats.get("degraded_quality", False)),

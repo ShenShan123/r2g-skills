@@ -42,6 +42,9 @@ PROBE_TIMEOUT_S = 60
 # it too (the "declare capability only after a canary passes" rule of CAP-FE-01).
 _CANARY = {
     "slang": ["-p", "plugin -i slang"],
+    # VHDL: expand_candidates converts through `yosys -m ghdl`, so loading the
+    # module that way is the canary (`help ghdl` alone exits 0 without it).
+    "ghdl": ["-m", "ghdl", "-p", "help ghdl"],
 }
 
 _cache: dict[str, bool] = {}

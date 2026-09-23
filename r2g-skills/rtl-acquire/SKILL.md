@@ -166,7 +166,7 @@ retry after a fix).
 `scripts/execute/expand_candidates.py` per candidate: sanitize RTL (encoding,
 helper modules, iscas89 dff) → write `synth_projects/<design>/` → synth via
 **run_orfs.sh** (`ORFS_STAGES=synth`, FLOW_VARIANT = the unique candidate id)
-→ sv2v/vhd2vl fallback + LEC-lite when needed → dedup by rtl/netlist
+→ GHDL (`yosys -m ghdl`, then `-fsynopsys`) / vhd2vl / sv2v fallback + LEC-lite when needed → dedup by rtl/netlist
 signature → convert via **def-graph netlist_graph.py** → `cell_stats.json`
 (liberty-driven seq/comb split) → **ingest into knowledge.sqlite** (every
 flow, pass or fail).
