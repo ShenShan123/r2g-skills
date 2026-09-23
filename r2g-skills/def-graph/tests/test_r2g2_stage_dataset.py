@@ -894,6 +894,49 @@ def test_report_checks_flags_supports_old_and_new_opensta(
     assert timing_mod.report_checks_flags("/fake/openroad") == expected
 
 
+# `help report_checks` of this host's OpenROAD v2.0-17598-ga008522d8 (2026-09-23).
+_HELP_V2_17598 = """\
+report_checks [-from from_list|-rise_from from_list|-fall_from from_list]
+   [-path_delay min|min_rise|min_fall|max|max_rise|max_fall|min_max]
+   [-corner corner] [-group_count path_count] [-endpoint_count path_count]
+   [-unique_paths_to_endpoint] [-slack_max slack_max] [-slack_min slack_min]
+"""
+
+
+@pytest.mark.parametrize(
+    "help_text,expected",
+    [
+        (_HELP_V2_17598, ("-group_count", "-endpoint_count")),
+        ("[-group_path_count n] [-endpoint_path_count n] [-unique_paths_to_endpoint]",
+         ("-group_path_count", "-endpoint_path_count")),
+        ("[-max_paths n] [-nworst n]", ("-max_paths", "-nworst")),
+    ],
+)
+def test_timing_flags_follow_the_openroad_build(timing_mod, help_text, expected):
+    """Each OpenSTA generation gets its own pair of path-cap spellings.
+
+    Regression (E12, 2026-09-23): the probe only knew the newest spellings and
+    fell back to ``-group_count`` + ``-max_paths``. This host's build accepts
+    ``-endpoint_count``, not ``-max_paths``, so every run died with STA-0563
+    and the four-stage timing labels shipped as NaN with valid=0.
+    """
+    assert timing_mod.pick_report_checks_flags(help_text) == expected
+
+
+def test_timing_flags_fail_loud_when_no_spelling_matches(timing_mod):
+    # A substring must not count: -group_count_x is not -group_count.
+    with pytest.raises(SystemExit, match="report_checks accepts none"):
+        timing_mod.pick_report_checks_flags("[-group_count_x n] [-endpoint_count n]")
+
+
+def test_timing_flags_probe_reads_the_binary(timing_mod, tmp_path):
+    fake = tmp_path / "openroad"
+    fake.write_text("#!/bin/sh\ncat <<'HELP'\n" + _HELP_V2_17598 + "HELP\n",
+                    encoding="utf-8")
+    fake.chmod(0o755)
+    assert timing_mod.report_checks_flags(str(fake)) == ("-group_count", "-endpoint_count")
+
+
 def test_timing_endpoint_paths_defaults_to_one():
     source = (ADAPT_DIR / "emit_timing_reports.py").read_text(encoding="utf-8")
     assert '"--endpoint-paths", type=int, default=1' in source

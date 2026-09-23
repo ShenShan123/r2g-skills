@@ -65,13 +65,37 @@ def tcl_quote(value: Path | str) -> str:
     return "{" + str(value) + "}"
 
 
+# Spellings of the two report_checks path caps, newest first. OpenSTA renamed
+# -max_paths/-nworst to -group_count/-endpoint_count, then to
+# -group_path_count/-endpoint_path_count. -max_paths is the old GROUP cap, not a
+# per-endpoint one: pairing it with -group_count (the pre-2026-09-23 fallback)
+# made OpenROAD v2.0-17598 reject every run with STA-0563, so four-stage timing
+# labels landed NaN/valid=0 (E12).
+GROUP_FLAGS = ("-group_path_count", "-group_count", "-max_paths")
+ENDPOINT_FLAGS = ("-endpoint_path_count", "-endpoint_count", "-nworst")
+
+
+def pick_report_checks_flags(help_text: str) -> tuple[str, str]:
+    """Pick ``(group-count, endpoint-count)`` from ``help report_checks`` output."""
+
+    def first(candidates: tuple[str, ...]) -> str:
+        for flag in candidates:
+            if re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", help_text):
+                return flag
+        raise SystemExit(
+            f"report_checks accepts none of {candidates}; cannot cap paths on this "
+            f"OpenSTA build. help output:\n{help_text[-2000:]}"
+        )
+
+    return first(GROUP_FLAGS), first(ENDPOINT_FLAGS)
+
+
 def report_checks_flags(openroad: str) -> tuple[str, str]:
     """Return this build's ``(group-count, endpoint-count)`` flag spellings.
 
-    OpenSTA renamed ``-group_count``/``-max_paths`` to ``-group_path_count``/
-    ``-endpoint_path_count``. Hardcoding either spelling makes this adapter fail
-    on half the OpenROAD builds in the wild with an opaque ``STA-0563``, so ask
-    the binary what it accepts.
+    Hardcoding any one spelling makes this adapter fail on part of the OpenROAD
+    builds in the wild with an opaque ``STA-0563``, so ask the binary what it
+    accepts.
     """
 
     with tempfile.NamedTemporaryFile("w", suffix=".tcl", delete=False) as handle:
@@ -85,15 +109,7 @@ def report_checks_flags(openroad: str) -> tuple[str, str]:
         )
     finally:
         probe.unlink(missing_ok=True)
-    text = result.stdout or ""
-    group = "-group_path_count" if "-group_path_count" in text else "-group_count"
-    if "-endpoint_path_count" in text:
-        endpoint = "-endpoint_path_count"
-    elif "-endpoint_count" in text:
-        endpoint = "-endpoint_count"
-    else:
-        raise RuntimeError("unable to detect report_checks endpoint-count flag")
-    return group, endpoint
+    return pick_report_checks_flags(result.stdout or "")
 
 
 def build_tcl(
