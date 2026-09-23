@@ -20,6 +20,7 @@ The acceptance conditions from the remediation plan, in order:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -61,7 +62,20 @@ def _skills_tree(tmp_path: Path, pins: dict[str, tuple[Path | None, Path | None]
     return skills
 
 
+def _no_explicit_selection() -> dict[str, str]:
+    """The caller's environment minus an explicit toolchain selection.
+
+    These tests mean "no operator selection". An ORFS_ROOT/PDK_ROOT/R2G_ENV_FILE
+    inherited from the login shell IS one (resolver precedence 1), so leaving it
+    in made the tests depend on the host: this one exports an unreadable PDK_ROOT.
+    """
+    return {k: v for k, v in os.environ.items()
+            if k not in ("ORFS_ROOT", "PDK_ROOT", "R2G_ENV_FILE")}
+
+
 def _resolve(skills: Path, env: dict | None = None) -> tuple[int, dict]:
+    if env is None:
+        env = _no_explicit_selection()
     res = subprocess.run(
         ["bash", str(skills / "eda-install" / "scripts" / "setup" / "resolve_pins.sh")],
         capture_output=True, text=True, check=False, env=env)
@@ -181,7 +195,8 @@ def test_bootstrap_dry_run_fails_closed_on_conflicting_pins(staged, tmp_path):
     boot.write_text((EDA_ROOT / "bootstrap.sh").read_text())
     (skills / "eda-install" / "scripts" / "flow").mkdir(parents=True)
     res = subprocess.run(["bash", str(boot), "--dry-run"],
-                         capture_output=True, text=True, check=False)
+                         capture_output=True, text=True, check=False,
+                         env=_no_explicit_selection())
     assert res.returncode == 4, res.stdout + res.stderr
     assert "disagree" in (res.stdout + res.stderr)
 
