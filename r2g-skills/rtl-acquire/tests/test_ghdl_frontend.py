@@ -132,3 +132,14 @@ def test_real_ghdl_converts_synopsys_vhdl(tmp_path: Path, monkeypatch) -> None:
     out, argv = xc.run_ghdl(tmp_path / "out", "tiny", [vhd], "tiny")
     assert out is not None and argv[0] == "-fsynopsys"
     assert "module tiny" in out.read_text(encoding="utf-8")
+
+
+def test_ghdl_is_never_written_as_synth_hdl_frontend(tmp_path: Path, monkeypatch) -> None:
+    # Review finding (2026-09-23): with its canary registered, select_frontend
+    # returned "ghdl" for a row asking for it, and write_project would emit
+    # `export SYNTH_HDL_FRONTEND = ghdl`, a value ORFS does not have.
+    exe, _calls = _fake_yosys(tmp_path, needs_synopsys=False)
+    monkeypatch.setenv("YOSYS_EXE", str(exe))
+    chosen, rec = fc.select_frontend("ghdl", needs_sv=False)
+    assert chosen is None
+    assert rec["available"]          # not reported as a missing tool either
