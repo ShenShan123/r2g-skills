@@ -123,6 +123,21 @@ if [[ -n "${ORFS_MAX_CPUS:-}" ]]; then
   fi
   export NUM_CORES="${NUM_CORES:-$ORFS_MAX_CPUS}"
 fi
+# An explicit ORFS_CPU_SET with no count sizes the budget from the set. Measured
+# here, not left to _env.sh: _env.sh runs before taskset applies, so its nproc
+# would be the host's, and GNU nproc (ORFS's own default) honours the exported
+# OMP_NUM_THREADS over the affinity mask.
+if [[ -n "${ORFS_CPU_SET:-}" ]]; then
+  if [[ ! "$ORFS_CPU_SET" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]]; then
+    echo "ERROR: ORFS_CPU_SET must be a taskset CPU list, got '$ORFS_CPU_SET'" >&2
+    exit 64
+  fi
+  if [[ -z "${NUM_CORES:-}" ]]; then
+    NUM_CORES="$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT taskset -c "$ORFS_CPU_SET" nproc)" \
+      || { echo "ERROR: ORFS_CPU_SET='$ORFS_CPU_SET' is not usable here" >&2; exit 64; }
+    export NUM_CORES
+  fi
+fi
 
 # Auto-detect ORFS + tools (honors ORFS_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
@@ -347,11 +362,7 @@ fi
 # Pin to an explicit CPU set only when one is given. A multi-worker campaign must
 # not map every worker's four-core allocation to host CPUs 0-3, so ORFS_MAX_CPUS
 # alone never pins (it is the NUM_CORES thread cap applied before _env.sh).
-if [[ -n "${ORFS_CPU_SET:-}" ]]; then
-  if [[ ! "$ORFS_CPU_SET" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]]; then
-    echo "ERROR: ORFS_CPU_SET must be a taskset CPU list, got '$ORFS_CPU_SET'" >&2
-    exit 64
-  fi
+if [[ -n "${ORFS_CPU_SET:-}" ]]; then        # validated before _env.sh
   CPU_LIST="$ORFS_CPU_SET"
   MAKE_CMD="taskset -c $CPU_LIST $MAKE_CMD"
   echo "Pinning ORFS to explicit CPU set ($CPU_LIST)"

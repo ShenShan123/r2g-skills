@@ -78,3 +78,13 @@ def test_an_explicit_cpu_set_still_pins(tmp_path: Path) -> None:
     _num_cores, _omp, _mkl, allowed = _run_orfs(tmp_path, ORFS_MAX_CPUS="3",
                                                 ORFS_CPU_SET=str(cpu))
     assert allowed == "1"
+
+
+def test_a_cpu_set_alone_sizes_the_budget_from_the_set(tmp_path: Path) -> None:
+    # Review finding (2026-09-23): with only ORFS_CPU_SET, _env.sh sized the pools
+    # from the HOST's nproc before taskset applied, and ORFS's nproc honours the
+    # exported OMP_NUM_THREADS -- 152 threads on the pinned cores.
+    cpus = sorted(os.sched_getaffinity(0))[:2]
+    num_cores, omp, mkl, allowed = _run_orfs(tmp_path,
+                                             ORFS_CPU_SET=",".join(map(str, cpus)))
+    assert (num_cores, omp, mkl, allowed) == (str(len(cpus)),) * 4
