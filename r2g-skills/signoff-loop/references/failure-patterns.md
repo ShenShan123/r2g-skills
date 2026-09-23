@@ -395,7 +395,7 @@ Large designs (swerv, bp_multi_top, tinyRocket) can take hours for PnR. The proc
 
 **Action:**
 - Increase timeout: `ORFS_TIMEOUT=14400 scripts/flow/run_orfs.sh ...` (4 hours)
-- Limit CPU usage: `ORFS_MAX_CPUS=4 scripts/flow/run_orfs.sh ...` (prevent thermal/resource issues)
+- Limit CPU usage: `NUM_CORES=4 scripts/flow/run_orfs.sh ...` (a thread cap; `ORFS_MAX_CPUS` is an alias). For concurrent flows also give each one a disjoint cpuset: a shared `taskset -c 0-3` makes them contend for the same cores
 - For faster convergence, add to config.mk:
   - `export SKIP_LAST_GASP = 1` (skip last-gasp optimization)
   - `export SKIP_CTS_REPAIR_TIMING = 1` (skip CTS timing repair)

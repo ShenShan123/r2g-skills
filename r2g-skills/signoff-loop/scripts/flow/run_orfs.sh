@@ -7,8 +7,9 @@ set -euo pipefail
 # Results are collected back into <project-dir>/backend/
 # Optional flow_variant (default: derived from project dir) isolates ORFS work directories.
 # Set ORFS_TIMEOUT (seconds) to limit runtime (default: 7200 = 2 hours).
-# Set ORFS_MAX_CPUS to limit CPU cores (default: all available).
-# Set ORFS_CPU_SET to pin the flow to an explicit taskset-compatible CPU list.
+# Set ORFS_MAX_CPUS=N to cap the flow at N threads (NUM_CORES, when that is unset).
+# It is a thread cap, not a cpuset. Set ORFS_CPU_SET to pin the flow to an explicit
+# taskset-compatible CPU list; concurrent workers need DISJOINT sets.
 
 PROJECT_DIR="${1:-}"
 PLATFORM="${2:-sky130hd}"   # asap7 is unsupported in this version (#57); sky130hd is
@@ -109,6 +110,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/_workspace_lock.sh"
 # Test seam: allow sourcing helpers without executing the flow.
 [[ "${R2G_SOURCE_ONLY:-0}" == "1" ]] && return 0 2>/dev/null
 # --- end Tier-0 journal hooks ---
+
+# ORFS_MAX_CPUS used to be `taskset -c 0-(N-1)`: the SAME cores 0..N-1 for every
+# flow, so N concurrent flows contended for N cores (15 flows at ORFS_MAX_CPUS=4
+# drove loadavg past 700; CORRECTIONS #17). It is now a thread cap: it becomes
+# NUM_CORES, which sizes openroad's -threads and, through _env.sh, the OpenMP/MKL
+# pools. An explicit NUM_CORES wins. Set before _env.sh so the pools follow it.
+if [[ -n "${ORFS_MAX_CPUS:-}" ]]; then
+  if [[ ! "$ORFS_MAX_CPUS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: ORFS_MAX_CPUS='$ORFS_MAX_CPUS' is not a positive integer" >&2
+    exit 2
+  fi
+  export NUM_CORES="${NUM_CORES:-$ORFS_MAX_CPUS}"
+fi
 
 # Auto-detect ORFS + tools (honors ORFS_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
@@ -330,8 +344,9 @@ if [[ "${ROUTE_FAST:-0}" == "1" ]]; then
   fi
 fi
 
-# Apply an explicit CPU set before the legacy count-only limit. A multi-worker
-# campaign must not map every worker's four-core allocation to host CPUs 0-3.
+# Pin to an explicit CPU set only when one is given. A multi-worker campaign must
+# not map every worker's four-core allocation to host CPUs 0-3, so ORFS_MAX_CPUS
+# alone never pins (it is the NUM_CORES thread cap applied before _env.sh).
 if [[ -n "${ORFS_CPU_SET:-}" ]]; then
   if [[ ! "$ORFS_CPU_SET" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]]; then
     echo "ERROR: ORFS_CPU_SET must be a taskset CPU list, got '$ORFS_CPU_SET'" >&2
@@ -340,11 +355,9 @@ if [[ -n "${ORFS_CPU_SET:-}" ]]; then
   CPU_LIST="$ORFS_CPU_SET"
   MAKE_CMD="taskset -c $CPU_LIST $MAKE_CMD"
   echo "Pinning ORFS to explicit CPU set ($CPU_LIST)"
-elif [[ -n "${ORFS_MAX_CPUS:-}" ]]; then
-  # Preserve the legacy behavior for callers which supply only a core count.
-  CPU_LIST="0-$((ORFS_MAX_CPUS - 1))"
-  MAKE_CMD="taskset -c $CPU_LIST $MAKE_CMD"
-  echo "Limiting to $ORFS_MAX_CPUS CPU cores ($CPU_LIST)"
+fi
+if [[ -n "${NUM_CORES:-}" ]]; then
+  echo "Thread cap: NUM_CORES=$NUM_CORES (OMP/MKL/OpenBLAS pools follow)"
 fi
 
 echo "Timeout: ${ORFS_TIMEOUT}s"

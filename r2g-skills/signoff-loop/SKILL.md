@@ -787,7 +787,13 @@ The `scripts/flow/run_orfs.sh` script:
 Resource control via environment variables:
 ```bash
 ORFS_TIMEOUT=7200    # Per-stage max runtime in seconds (default: 2 hours)
-ORFS_MAX_CPUS=4      # Limit CPU cores via taskset (default: all)
+NUM_CORES=4          # Per-flow thread budget: openroad -threads + OMP/MKL/OpenBLAS
+                     # pools (default: nproc, which honours a cpuset). On a shared
+                     # host give each worker a DISJOINT cpuset (taskset -c) too.
+ORFS_MAX_CPUS=4      # Alias for NUM_CORES when that is unset. A thread cap, NOT
+                     # CPU pinning (it used to pin every flow to cores 0..N-1).
+ORFS_CPU_SET=32-35   # Pin the flow to this explicit taskset CPU list; give each
+                     # concurrent worker a DISJOINT set.
 PLACE_FAST=1         # Disable GPL_TIMING_DRIVEN/ROUTABILITY_DRIVEN — use for
                      # BOOM-class designs (>1M nets) where the timing-repair
                      # loop in gpl spins for hours after Nesterov has already
