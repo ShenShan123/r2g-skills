@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# usage: run_signoff.sh <project-dir>
+# usage: run_signoff.sh <project-dir> [platform]
 # Run DRC + LVS + RCX + extract on a single design.
+# platform defaults to `export PLATFORM = ...` in <project>/constraints/config.mk;
+# with neither, it refuses (exit 2). The checkers default to sky130hd, so calling
+# them without a platform graded a nangate45 GDS against the sky130hd deck and
+# reported a FALSE clean (CORRECTIONS #12).
 # Skips stages whose reports/<x>.json already exists (idempotent).
 # Emits one-line JSONL summary to stdout for batch aggregators.
 set -uo pipefail
@@ -11,11 +15,23 @@ SKILL_DIR="$REPO_ROOT/r2g-skills/signoff-loop"
 
 PROJECT_DIR="${1:-}"
 if [[ -z "$PROJECT_DIR" ]]; then
-  echo "usage: run_signoff.sh <project-dir>" >&2
+  echo "usage: run_signoff.sh <project-dir> [platform]" >&2
   exit 2
 fi
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 NAME="$(basename "$PROJECT_DIR")"
+PLATFORM="${2:-}"
+if [[ -z "$PLATFORM" ]]; then
+  PLATFORM="$(sed -n 's/^[[:space:]]*\(export[[:space:]]\+\)\?PLATFORM[[:space:]]*[?:]\?=[[:space:]]*//p' \
+                "$PROJECT_DIR/constraints/config.mk" 2>/dev/null | head -1 | tr -d ' \r')"
+fi
+if [[ -z "$PLATFORM" ]]; then
+  echo "ERROR: no platform: pass it as \$2 or set PLATFORM in $PROJECT_DIR/constraints/config.mk" >&2
+  exit 2
+fi
+# Must match the FLOW_VARIANT the flow ran under (run_orfs.sh defaults it to the
+# project basename), or the checkers restage into a different ORFS results tree.
+FLOW_VARIANT="${R2G_FLOW_VARIANT:-$NAME}"
 LOG_DIR="$REPO_ROOT/design_cases/_batch/logs_signoff"
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/${NAME}.log"
@@ -49,7 +65,7 @@ if [[ -f "$REPORTS/drc.json" ]]; then
 fi
 if [[ "$DRC_NEEDED" == "1" ]]; then
   echo "[$NAME] $(now) DRC begin" >> "$LOG"
-  DRC_TIMEOUT="${DRC_TIMEOUT:-3600}" bash "$SKILL_DIR/scripts/flow/run_drc.sh" "$PROJECT_DIR" >>"$LOG" 2>&1
+  DRC_TIMEOUT="${DRC_TIMEOUT:-3600}" bash "$SKILL_DIR/scripts/flow/run_drc.sh" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" >>"$LOG" 2>&1
   DRC_EXIT=$?
   python3 "$SKILL_DIR/scripts/extract/extract_drc.py" "$PROJECT_DIR" "$REPORTS/drc.json" >>"$LOG" 2>&1 || true
   if [[ -f "$REPORTS/drc.json" ]]; then
@@ -72,7 +88,7 @@ if [[ -f "$REPORTS/lvs.json" ]]; then
 fi
 if [[ "$LVS_NEEDED" == "1" ]]; then
   echo "[$NAME] $(now) LVS begin" >> "$LOG"
-  bash "$SKILL_DIR/scripts/flow/run_lvs.sh" "$PROJECT_DIR" >>"$LOG" 2>&1
+  bash "$SKILL_DIR/scripts/flow/run_lvs.sh" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" >>"$LOG" 2>&1
   LVS_EXIT=$?
   python3 "$SKILL_DIR/scripts/extract/extract_lvs.py" "$PROJECT_DIR" "$REPORTS/lvs.json" >>"$LOG" 2>&1 || true
   if [[ -f "$REPORTS/lvs.json" ]]; then
@@ -95,7 +111,7 @@ if [[ -f "$REPORTS/rcx.json" ]]; then
 fi
 if [[ "$RCX_NEEDED" == "1" ]]; then
   echo "[$NAME] $(now) RCX begin" >> "$LOG"
-  RCX_TIMEOUT="${RCX_TIMEOUT:-3600}" bash "$SKILL_DIR/scripts/flow/run_rcx.sh" "$PROJECT_DIR" >>"$LOG" 2>&1
+  RCX_TIMEOUT="${RCX_TIMEOUT:-3600}" bash "$SKILL_DIR/scripts/flow/run_rcx.sh" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" >>"$LOG" 2>&1
   RCX_EXIT=$?
   python3 "$SKILL_DIR/scripts/extract/extract_rcx.py" "$PROJECT_DIR" "$REPORTS/rcx.json" >>"$LOG" 2>&1 || true
   if [[ -f "$REPORTS/rcx.json" ]]; then
@@ -145,11 +161,11 @@ PYEOF
 )"
 
 # JSON one-liner to stdout (for jsonl aggregation)
-python3 - "$NAME" "$RDRC" "$RLVS" "$RRCX" "$ELAPSED" "$AGG" <<'PYEOF'
+python3 - "$NAME" "$RDRC" "$RLVS" "$RRCX" "$ELAPSED" "$AGG" "$PLATFORM" <<'PYEOF'
 import json, sys
-name, drc, lvs, rcx, elapsed, agg = sys.argv[1:7]
-print(json.dumps({"case": name, "drc": drc, "lvs": lvs, "rcx": rcx,
-                  "elapsed_s": int(elapsed), "aggregate": agg}))
+name, drc, lvs, rcx, elapsed, agg, platform = sys.argv[1:8]
+print(json.dumps({"case": name, "platform": platform, "drc": drc, "lvs": lvs,
+                  "rcx": rcx, "elapsed_s": int(elapsed), "aggregate": agg}))
 PYEOF
 
 if [[ "${R2G_SIGNOFF_STRICT_EXIT:-0}" == "1" && "$AGG" != "clean" ]]; then
