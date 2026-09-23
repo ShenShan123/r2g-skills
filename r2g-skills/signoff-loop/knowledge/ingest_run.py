@@ -764,7 +764,7 @@ def _furthest_stage_rank(stage_log: list[dict[str, Any]], orfs_status: str | Non
     # absent did not reach it). clean_beol is a real DRC result; 'complete' a real RCX.
     if drc_status not in (None, "unknown", "skipped"):
         rank = max(rank, _LADDER_RANK["drc"])
-    if lvs_status not in (None, "unknown", "skipped"):
+    if lvs_status not in (None, "unknown", "skipped", "error"):   # error = not executed
         rank = max(rank, _LADDER_RANK["lvs"])
     if rcx_status == "complete":
         rank = max(rank, _LADDER_RANK["rcx"])
@@ -1193,6 +1193,16 @@ def ingest(project: Path,
             (run_id, fail_stage, sig, err_line),
         )
     _ingest_fix_events(conn, project, design_name, design_family, platform)
+    if lvs.get("status") == "error":
+        # LVS did not run to a verdict (e.g. powered_netlist_unavailable). A tool /
+        # environment event, like tool_crash: never an LVS design symptom (only
+        # status 'fail' becomes one below), and not a signed-off layout either.
+        conn.execute(
+            "INSERT INTO failure_events (run_id, stage, signature, detail) "
+            "VALUES (?, ?, ?, ?)",
+            (run_id, "lvs", f"tool-error-lvs-{lvs.get('reason') or 'error'}",
+             lvs.get("detail")),
+        )
     if orfs_status == "tool_crash":
         _project_tool_crash(conn, run_id, fail_stage, stage_log_path.parent)
     else:

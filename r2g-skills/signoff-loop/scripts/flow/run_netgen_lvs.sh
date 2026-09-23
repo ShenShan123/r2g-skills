@@ -156,28 +156,73 @@ fi
 # `write_verilog -include_pwr_gnd` and compare against that. Validated 2026-06-11
 # (RV32I memory_controller: 729 vs 729 nets, "Circuits match uniquely"). See
 # references/failure-patterns.md "sky130 LVS".
+#
+# The Liberty must be loaded first. Without it, openroad v2.0-17598's write_verilog
+# corrupts the heap on some designs ("free(): unaligned chunk detected in tcache 2",
+# then Signal 6/11), with or without -include_pwr_gnd; with it the same ODB writes
+# cleanly (E9H iwls05_spi, 2026-09-23). ORFS itself writes 6_final.v with Liberty
+# loaded, which is why the flow never hit this. Use the flow's own processed libs
+# (objects/lib), else the platform's typical-corner library.
+#
+# NEVER fall back to the unpowered netlist: comparing against it manufactures an
+# implicit-power mismatch (132 vs 626 nets, VPWR fanout 248 vs 1) that would be
+# recorded as a DESIGN failure. No powered netlist = LVS not executed (status
+# "error", reason powered_netlist_unavailable), never "mismatch".
 LVS_DIR="$PROJECT_DIR/lvs"
 mkdir -p "$LVS_DIR"
+case "$PLATFORM" in
+  sky130hd) SC_LIB_NAME="sky130_fd_sc_hd" ;;
+  sky130hs) SC_LIB_NAME="sky130_fd_sc_hs" ;;
+esac
+_powered_netlist_unavailable() {  # $1 = detail
+  echo "ERROR: powered-netlist generation failed; not comparing against the unpowered $VERILOG_NETLIST" >&2
+  echo "       (that yields a spurious implicit-power mismatch). LVS NOT EXECUTED: $1" >&2
+  python3 - "$LVS_DIR/netgen_lvs_result.json" "$1" "$DESIGN_NAME" "$PLATFORM" \
+    "${LVS_RUN_TAG:-}" "$GDS_FILE" "${LVS_GDS_SHA:-}" "$LVS_DIR/write_powered_verilog.log" <<'PYEOF'
+import json, sys
+out, detail, design, platform, run_tag, gds, sha, log = sys.argv[1:9]
+json.dump({"tool": "netgen", "design": design, "platform": platform,
+           "status": "error", "reason": "powered_netlist_unavailable",
+           "detail": detail, "log_file": log, "run_tag": run_tag,
+           "gds_path": gds, "gds_sha256": sha}, open(out, "w"), indent=2)
+PYEOF
+  exit 1
+}
 ODB_FILE=$(find "$RESULTS_DIR" -name "6_final.odb" 2>/dev/null | head -1)
-if [[ -n "$ODB_FILE" && -n "${OPENROAD_EXE:-}" ]]; then
-  POWERED_NETLIST="$LVS_DIR/powered.v"
-  cat > "$LVS_DIR/write_powered_verilog.tcl" << ORTCL
-read_db "$ODB_FILE"
-write_verilog -include_pwr_gnd "$POWERED_NETLIST"
-exit
-ORTCL
-  # Bounded (2026-07-04 M3: a large ODB hangs write_verilog indefinitely, and
-  # inside an `if` set -e never fires). r2g_bounded_run (RMD2-P0-01) also reaps
-  # any session survivor before returning.
-  if r2g_bounded_run 900 30 "$LVS_DIR/write_powered_verilog.log" \
-       "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" \
-     && [[ -s "$POWERED_NETLIST" ]] && grep -q 'VPWR' "$POWERED_NETLIST"; then
-    echo "Using power-aware netlist from ODB: $POWERED_NETLIST"
-    VERILOG_NETLIST="$POWERED_NETLIST"
-  else
-    echo "WARNING: powered-netlist generation failed; falling back to $VERILOG_NETLIST (LVS may show implicit-power-pin mismatch)" >&2
-  fi
+[[ -n "$ODB_FILE" ]] || _powered_netlist_unavailable "no 6_final.odb in $RESULTS_DIR"
+[[ -n "${OPENROAD_EXE:-}" ]] || _powered_netlist_unavailable "OPENROAD_EXE not resolved"
+LVS_LIBS=()
+for _lib_dir in "$FLOW_DIR/objects/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT/lib" \
+                "${R2G_BACKEND_RUN:-/nonexistent}/objects/lib"; do
+  for _lib in "$_lib_dir"/*.lib; do [[ -f "$_lib" ]] && LVS_LIBS+=("$_lib"); done
+  (( ${#LVS_LIBS[@]} )) && break
+done
+if (( ${#LVS_LIBS[@]} == 0 )); then
+  for _lib in "$FLOW_DIR/platforms/$PLATFORM/lib/${SC_LIB_NAME}__tt_025C_1v80.lib"; do
+    [[ -f "$_lib" ]] && LVS_LIBS+=("$_lib")
+  done
 fi
+(( ${#LVS_LIBS[@]} )) || _powered_netlist_unavailable "no Liberty found for $PLATFORM (write_verilog needs it)"
+POWERED_NETLIST="$LVS_DIR/powered.v"
+rm -f "$POWERED_NETLIST"
+{
+  for _lib in "${LVS_LIBS[@]}"; do printf 'read_liberty "%s"\n' "$_lib"; done
+  printf 'read_db "%s"\n' "$ODB_FILE"
+  printf 'write_verilog -include_pwr_gnd "%s"\n' "$POWERED_NETLIST"
+  printf 'exit\n'
+} > "$LVS_DIR/write_powered_verilog.tcl"
+# Bounded (2026-07-04 M3: a large ODB hangs write_verilog indefinitely, and
+# inside an `if` set -e never fires). r2g_bounded_run (RMD2-P0-01) also reaps
+# any session survivor before returning.
+_PWR_RC=0
+r2g_bounded_run "${R2G_POWERED_NETLIST_TIMEOUT:-900}" 30 "$LVS_DIR/write_powered_verilog.log" \
+  "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" || _PWR_RC=$?
+if [[ $_PWR_RC -ne 0 || ! -s "$POWERED_NETLIST" ]] || ! grep -q 'VPWR' "$POWERED_NETLIST" \
+   || grep -qE 'Signal [0-9]+ received|unaligned|corrupted' "$LVS_DIR/write_powered_verilog.log"; then
+  _powered_netlist_unavailable "openroad write_verilog exit=$_PWR_RC (see $LVS_DIR/write_powered_verilog.log)"
+fi
+echo "Using power-aware netlist from ODB: $POWERED_NETLIST"
+VERILOG_NETLIST="$POWERED_NETLIST"
 
 echo "Running Netgen LVS for design: $DESIGN_NAME"
 echo "Platform: $PLATFORM"
@@ -195,10 +240,6 @@ mkdir -p "$LVS_DIR"
 # spurious mismatch even when device counts match. See references/failure-patterns.md
 # "sky130 LVS" (2026-06-11). Production fix: load the cell library into the schematic
 # circuit so both sides expand to transistors.
-case "$PLATFORM" in
-  sky130hd) SC_LIB_NAME="sky130_fd_sc_hd" ;;
-  sky130hs) SC_LIB_NAME="sky130_fd_sc_hs" ;;
-esac
 SC_SPICE="$PDK_ROOT/sky130A/libs.ref/$SC_LIB_NAME/spice/$SC_LIB_NAME.spice"
 if [[ ! -f "$SC_SPICE" ]]; then
   echo "WARNING: std-cell SPICE not found at $SC_SPICE — schematic cells will be hollow" >&2

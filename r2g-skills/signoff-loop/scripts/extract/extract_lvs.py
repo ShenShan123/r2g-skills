@@ -357,6 +357,11 @@ def main():
             }
             if ng_class:
                 out['mismatch_class'] = ng_class
+            # A non-verdict (status 'error', e.g. powered_netlist_unavailable) must
+            # keep its reason: LVS was not executed, which is not a mismatch.
+            for k in ('reason', 'detail'):
+                if ng.get(k):
+                    out[k] = ng[k]
             # Strong provenance (RMD-P0-02): the netgen path used to return
             # WITHOUT any provenance envelope, so sky130 production LVS could
             # never bind to a run. Carry the exact layout digest the verdict

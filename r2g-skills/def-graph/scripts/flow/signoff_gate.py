@@ -60,6 +60,7 @@ import sys
 # never for DRC, and a MISSING report is not a skip.
 DRC_OK = {"clean", "clean_beol"}
 LVS_OK = {"clean", "skipped"}
+LVS_MISMATCH = {"mismatch", "fail"}      # a design verdict: the layout differs
 PROCEED = {"pass", "pass_with_caveats"}
 
 
@@ -90,7 +91,16 @@ def _check_lvs(reports_dir):
         return {"status": "missing", "detail": "reports/lvs.json not found — LVS never ran (or ran elsewhere)"}
     st = str(j.get("status", "unknown"))
     out = {"status": st, "mismatch_count": j.get("mismatch_count")}
-    if st not in LVS_OK:
+    if st == "error":
+        # The checker could not run to a verdict (e.g. powered_netlist_unavailable:
+        # the powered netlist could not be written). Blocks like any unverified LVS,
+        # but it is NOT a design mismatch — ingest_run records it as a tool error.
+        out["category"] = "not_executed"
+        out["reason"] = j.get("reason")
+        out["detail"] = (f"lvs not executed: {j.get('reason') or 'error'}"
+                         + (f" ({j['detail']})" if j.get("detail") else ""))
+    elif st not in LVS_OK:
+        out["category"] = "mismatch" if st in LVS_MISMATCH else "unverified"
         out["detail"] = f"lvs status={st!r} mismatch_count={j.get('mismatch_count')}"
     elif st == "skipped":
         out["detail"] = "LVS explicitly skipped by the signoff step (portless design / no deck)"
