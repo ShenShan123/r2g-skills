@@ -1,0 +1,33 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v13.json",
+    "sha256": "ee9f64130df9a433f7616e75d1a9a9fa590392888d07df1ea79dbab49412e1f6"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v13",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v13 status binds both positive constructed training source groups, the retained negative SHA result, the native RC1 parent adapter, and the still-pending real M0 boundary. Its exact SHA256 is bound above; no seed outcome is rewritten here."
+    },
+    {
+      "evidence_id": "r4-seed-m0-source-binding-fix-bcaa824",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Commit bcaa824 normalizes only arm-specific VERILOG_INCLUDE_DIRS staging roots to a digest of relative paths and file bytes; both real pairs then pass the unchanged-input preregistration check. The M0 builder now also requires the executing repository HEAD and clean status to equal the bound clean epoch, and rejects the prior epoch after this source change. The official pinned-Python suite reports 2050 passed in 1199.25 seconds."
+    },
+    {
+      "evidence_id": "future-r4-read-only-m0-bounded-reproducibility-and-coverage",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "A replacement clean epoch must be frozen at or after bcaa824 and the preregistration rebound before the real two-pair M0 is built. The exact second-build digest comparison and post-M0 route coverage must pass before S1 may start."
+    },
+    {
+      "evidence_id": "future-r4-s1-s2-evolution-final-heldout-paper",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "Real S1 controlled route-selector-binder action evidence, S2 same-controller comparisons, verified shadow evolution, frozen final held-out protocol, and paper experiments remain unestablished. Production authority and online memory update remain disabled."
+    }
+  ]
+}
