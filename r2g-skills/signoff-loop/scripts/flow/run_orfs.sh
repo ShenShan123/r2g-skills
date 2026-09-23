@@ -101,26 +101,10 @@ _r2g_new_backend_dir() {  # base -> echoes "<dir>\t<RUN_TAG>" for a freshly-CREA
   done
   return 1
 }
-_r2g_workspace_lockfile() {  # platform design variant -> echoes the lockfile path
-  # Keyed on the SHARED ORFS workspace identity ($FLOW_DIR/.../<platform>/<design>/<variant>).
-  local key h
-  key="$1/$2/$3"
-  h="$(printf '%s' "$key" | md5sum 2>/dev/null | awk '{print $1}')"
-  [[ -z "$h" ]] && h="$(printf '%s' "$key" | tr -c 'A-Za-z0-9' '_')"
-  printf '%s/r2g_ws_%s.lock' "${R2G_LOCK_DIR:-/tmp}" "$h"
-}
-_r2g_acquire_workspace_lock() {  # platform design variant -> holds an fd-scoped lock; 1 on contention
-  command -v flock >/dev/null 2>&1 || { echo "run_orfs: flock unavailable — skipping workspace lock" >&2; return 0; }
-  local lf; lf="$(_r2g_workspace_lockfile "$1" "$2" "$3")"
-  exec {R2G_WS_LOCK_FD}>"$lf" || { echo "run_orfs: ERROR cannot open workspace lockfile $lf" >&2; return 1; }
-  if ! flock -n "$R2G_WS_LOCK_FD"; then
-    echo "run_orfs: ERROR another run holds the ORFS workspace (platform=$1 design=$2 variant=$3)." >&2
-    echo "  Never run two configs with the same DESIGN_NAME+FLOW_VARIANT concurrently" >&2
-    echo "  (CLAUDE.md Hard Rules) — they race clean_all vs build. Lockfile: $lf" >&2
-    return 1
-  fi
-  return 0
-}
+# The workspace lock helpers are shared with the signoff checkers, which restage
+# into the same workspace (_restage_for_signoff.sh).
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_workspace_lock.sh"
 
 # Test seam: allow sourcing helpers without executing the flow.
 [[ "${R2G_SOURCE_ONLY:-0}" == "1" ]] && return 0 2>/dev/null

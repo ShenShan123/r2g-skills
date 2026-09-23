@@ -387,11 +387,10 @@ else
       echo "DRC STUCK on $STUCK_RULE (no count report, exit=$DRC_STATUS) — see references/failure-patterns.md"
     fi
     echo "HINT: retry with DRC_BEOL_ONLY=1 to skip the FEOL checks (standard cells are library-verified) — see references/failure-patterns.md"
-    # Best-effort cleanup of any orphaned klayout DRC procs from this run.
-    # Match variant+6_drc in EITHER order (the direct invocation puts the GDS
-    # path — which carries the variant — before the 6_drc.lyrdb report arg).
-    pkill -9 -f "klayout.*${FLOW_VARIANT}.*6_drc" 2>/dev/null || true
-    pkill -9 -f "klayout.*6_drc.*${FLOW_VARIANT}" 2>/dev/null || true
+    # No pattern pkill here: r2g_bounded_run already reaped this checker's whole
+    # session and verified no member survived. The old UID-wide
+    # `pkill -9 -f "klayout.*${FLOW_VARIANT}.*6_drc"` also killed OTHER sessions'
+    # DRCs whose variant contained ours (CORRECTIONS #16).
   elif [[ $DRC_STATUS -eq 124 || $DRC_STATUS -eq 137 ]]; then
     STATUS="timeout"
     REASON="drc_timeout"
