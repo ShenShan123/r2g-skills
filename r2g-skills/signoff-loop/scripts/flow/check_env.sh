@@ -75,10 +75,16 @@ if [[ -n "${FLOW_DIR:-}" && -f "$FLOW_DIR/scripts/defaults.py" && ! -x "$FLOW_DI
 fi
 if [[ -n "${FLOW_DIR:-}" && -f "$FLOW_DIR/settings.mk" ]]; then
   while read -r _var _path; do
-    [[ "$_path" == *'$('* || ( -f "$_path" && -x "$_path" ) ]] && continue
+    case "$_path" in          # resolved the way make will: relative to FLOW_DIR, or PATH
+      *'$('*) continue ;;
+      /*)  _abs="$_path" ;;
+      */*) _abs="$FLOW_DIR/$_path" ;;
+      *)   _abs="$(command -v "$_path" 2>/dev/null || true)" ;;
+    esac
+    [[ -n "$_abs" && -f "$_abs" && -x "$_abs" ]] && continue
     printf 'BAD  %-14s %s (flow/settings.mk overrides the env with a missing binary)\n' "$_var" "$_path"
     STATUS=1
-  done < <(sed -n 's/^[[:space:]]*\(export[[:space:]]\+\)\?\([A-Z_]*_EXE\)[[:space:]]*:\?=[[:space:]]*\([^[:space:]#]\+\).*/\2 \3/p' \
+  done < <(sed -n 's/^[[:space:]]*\(override[[:space:]]\+\)\?\(export[[:space:]]\+\)\?\([A-Z_]*_EXE\)[[:space:]]*:\{0,2\}=[[:space:]]*\([^[:space:]#]\+\).*/\3 \4/p' \
              "$FLOW_DIR/settings.mk")
 fi
 

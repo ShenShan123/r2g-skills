@@ -85,3 +85,23 @@ def test_a_usable_environment_is_ok(tmp_path: Path) -> None:
     r = _check_env(_env(tmp_path, broken=False))
     assert r.returncode == 0, r.stdout
     assert not [ln for ln in r.stdout.splitlines() if ln.startswith(("BAD ", "MISS "))]
+
+
+@pytest.mark.parametrize("line,bad", [
+    ("export YOSYS_EXE = yosys\n", False),                   # bare name: make uses PATH
+    ("export YOSYS_EXE = ../bin/yosys\n", False),            # relative to FLOW_DIR
+    ("override export YOSYS_EXE = /gone/yosys\n", True),
+    ("YOSYS_EXE ::= /gone/yosys\n", True),
+    ("export YOSYS_EXE ?= /gone/yosys\n", False),            # ?= never beats the env
+])
+def test_settings_mk_paths_resolve_like_make(tmp_path: Path, line: str, bad: bool) -> None:
+    # Review finding (2026-09-23): bare names and FLOW_DIR-relative paths were
+    # reported BAD, and `override` / `::=` assignments were never checked.
+    env = _env(tmp_path, broken=False)
+    flow = tmp_path / "orfs" / "flow"
+    (flow.parent / "bin").mkdir()
+    _exe(flow.parent / "bin" / "yosys", "#!/bin/sh\nexit 0\n")
+    (flow / "settings.mk").write_text(line)
+    r = _check_env(env)
+    flagged = any(ln.startswith("BAD") and "settings.mk" in ln for ln in r.stdout.splitlines())
+    assert flagged is bad, r.stdout
