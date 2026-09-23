@@ -508,9 +508,15 @@ class SchemaPolicyTests(unittest.TestCase):
                 "entity and_gate is port(a,b: in std_logic; y: out std_logic); end and_gate;\n"
                 "architecture rtl of and_gate is begin y <= a and b; end rtl;\n"
             )
-            result = rtl.synthesize_design("and_gate", "vhdl", ["and_gate"], [source], [root], root / "out", str(yosys), 30)
+            result = rtl.synthesize_design(
+                "and_gate", "vhdl", ["and_gate"], [source], [root],
+                root / "out with space", str(yosys), 30,
+            )
             self.assertTrue(result["generic_pass"], result)
             self.assertTrue(Path(result["generic_netlist"]).exists())
+            self.assertTrue(Path(result["generic_stats"]).exists())
+            stats = json.loads(Path(result["generic_stats"]).read_text())
+            self.assertIn("modules", stats)
 
     def test_verilog_top_can_close_over_vhdl_child(self):
         yosys = Path("/opt/OpenROAD/oss-cad-suite/bin/yosys")

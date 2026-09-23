@@ -1304,6 +1304,22 @@ class Point:
     name: str
     delay_ns: float
 
+
+def canonical_timing_point(value: str) -> str:
+    """Normalize an OpenSTA point while preserving its final pin separator.
+
+    OpenSTA uses ``/`` both for instance hierarchy and for ``instance/pin``.
+    Base-graph instance hierarchy uses ``.``, but the final separator must stay
+    ``/`` so the point can still be split into an instance and pin key.
+    """
+
+    clean = (value or "").replace("\\", "").strip()
+    if "/" not in clean:
+        return canonical_name(clean)
+    instance, pin_name = clean.rsplit("/", 1)
+    return f"{canonical_name(instance)}/{canonical_name(pin_name)}"
+
+
 def report_blocks(path: Path) -> Iterator[str]:
     """逐块读取报告，避免一次加载数十 MB 文本。"""
 
@@ -1332,13 +1348,20 @@ def pin_points_before_arrival(block: str) -> list[Point]:
         if len(values) >= 2:
             # 最右列是累计 Time，倒数第二列是从前一时序点到本点的 Delay。
             points.append(
-                Point(canonical_name(match.group("name")), values[-2])
+                Point(canonical_timing_point(match.group("name")), values[-2])
             )
     return points
 
 def _is_pin_of(point_name: str, endpoint_or_instance: str) -> bool:
-    title = canonical_name(endpoint_or_instance)
-    return point_name == title or point_name.startswith(title + "/")
+    point = canonical_timing_point(point_name)
+    # OpenSTA may spell Startpoint/Endpoint as either a complete pin or only
+    # the owning instance. Keep both interpretations instead of guessing from
+    # the number of hierarchy separators.
+    titles = {
+        canonical_timing_point(endpoint_or_instance),
+        canonical_name(endpoint_or_instance),
+    }
+    return any(point == title or point.startswith(title + "/") for title in titles)
 
 def data_path_points(
     block: str,
@@ -1498,7 +1521,7 @@ def classify_point(
 ) -> tuple[str, Any] | None:
     """把 STA 名称映射为基础图内部 Pin 或顶层 IO Pin 稳定键。"""
 
-    clean = canonical_name(name)
+    clean = canonical_timing_point(name)
     if "/" in clean:
         inst_name, pin_name = clean.rsplit("/", 1)
         key = (canonical_name(inst_name), canonical_name(pin_name))
@@ -1907,6 +1930,9 @@ def route_clauses(entry: str):
 
 
 def clause_points(text: str) -> list[tuple[str, str]]:
+    # DEF RECT stores four offsets relative to the preceding route point,
+    # not another centerline endpoint. Patch metal has no centerline length.
+    text = re.sub(r"\bRECT\s*\([^)]*\)", "", text)
     return re.findall(
         r"\(\s*([*]|-?\d+)\s+([*]|-?\d+)(?:\s+[^\)]*)?\)", text
     )

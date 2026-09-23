@@ -32,6 +32,14 @@ MACRO INV_X1
         RECT MASK 1 0.7 0.8 0.9 1.0 ;
     END
   END Y
+  PIN Z
+    DIRECTION OUTPUT ;
+    PORT
+      LAYER metal1 ;
+        RECT 0.0 0.0 0.2 0.2 ;
+        RECT 0.6 1.0 1.0 2.0 ;
+    END
+  END Z
 END INV_X1
 
 MACRO POLY_CELL
@@ -60,6 +68,8 @@ def test_size_and_pin_centers(geom):
     assert inv["pins"]["A"] == pytest.approx((0.2, 0.3))
     # MASK 1 prefix must be ignored -> coords are the last 4 floats
     assert inv["pins"]["Y"] == pytest.approx((0.8, 0.9))
+    # OpenDB getAvgXY semantics: mean of each shape center, not the union bbox center.
+    assert inv["pins"]["Z"] == pytest.approx((0.45, 0.8))
 
 
 def test_polygon_center(geom):

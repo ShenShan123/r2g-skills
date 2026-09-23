@@ -301,6 +301,10 @@ def main() -> None:
         cfg.get("timing_use_report_path_edges", False)
     )
     for stage, graph in graphs.items():
+        if graph.data_contract_version != "r2g2_four_stage_hetero_pipeline_v3":
+            raise ValueError(
+                f"{stage}数据契约版本不是r2g2_four_stage_hetero_pipeline_v3"
+            )
         if not bool(
             graph.shared_label_contract[
                 "same_values_and_masks_across_all_prediction_stages"
@@ -368,7 +372,7 @@ def main() -> None:
         )
         geom_stats = sidecar["congestion_geom_stats"]
         expected_construction = (
-            f"fixed_{expected_grid_um:g}um_same_grid_undirected_degree_capped_nearest"
+            f"four_shifted_{expected_grid_um:g}um_same_grid_undirected_degree_capped_nearest"
         )
         if (
             geom_stats["construction"] != expected_construction
@@ -390,8 +394,14 @@ def main() -> None:
             raise ValueError(f"{stage}具备可信坐标但缺少Gate-Gate边类型")
         if not expected_enabled and geom_edge_type in graph.edge_types:
             raise ValueError(f"{stage}没有可信坐标但仍建立Gate-Gate边类型")
-        if int(geom_stats["max_undirected_degree"]) != 5:
-            raise ValueError(f"{stage} Gate-Gate最大无向度数配置不是5")
+        if int(geom_stats["max_undirected_degree_per_window"]) != 5:
+            raise ValueError(f"{stage} Gate-Gate每个偏移窗口的度数配置不是5")
+        if int(geom_stats["window_passes"]) != 4:
+            raise ValueError(f"{stage} Gate-Gate偏移窗口数量不是4")
+        if int(geom_stats["max_undirected_degree"]) != 20:
+            raise ValueError(f"{stage} Gate-Gate四窗口最大无向度数配置不是20")
+        if int(geom_stats["duplicate_undirected_edges_across_windows"]) != 0:
+            raise ValueError(f"{stage} Gate-Gate偏移窗口产生了重复边")
         if expected_enabled:
             edge_index = graph[geom_edge_type].edge_index
             pairs = {
@@ -405,8 +415,8 @@ def main() -> None:
             degree = torch.bincount(
                 edge_index[0], minlength=int(graph["gate"].num_nodes)
             )
-            if int(degree.max()) > 5:
-                raise ValueError(f"{stage} Gate-Gate节点度数超过5")
+            if int(degree.max()) > 20:
+                raise ValueError(f"{stage} Gate-Gate节点度数超过四窗口上限20")
         label_only_edge_types = set(graph.edge_types) - set(LOGICAL_EDGE_TYPES) - {
             geom_edge_type
         }
@@ -493,7 +503,7 @@ def main() -> None:
             "fixed_congestion_grid_consistent_across_stages": True,
             "stage_aware_trusted_coordinate_policy": True,
             "stage_aware_hpwl_and_congestion_feature_policy": True,
-            "fixed_same_grid_undirected_degree5_gate_gate_edges": True,
+            "four_shifted_same_grid_undirected_degree5_per_window_edges": True,
         },
     }
     report_path = output / "four_stage.validation.json"

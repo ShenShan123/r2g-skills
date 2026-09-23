@@ -323,7 +323,26 @@ def _evidence_designs(symptom_id: str) -> list[str]:
     return list(sym.get("evidence_designs") or [])
 
 
-def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None) -> list[dict]:
+def _allowed_subject(path: str | None, allowed_project_paths: set[str] | None) -> bool:
+    """Return whether this historical path is executable in the current A/B round.
+
+    A knowledge store is long-lived, but the current ledger is the authority for
+    which project directories a new round may execute.  Passing an allowlist
+    therefore makes selection fail closed.  ``None`` preserves read-only legacy
+    callers; production planning always supplies a ledger-derived allowlist.
+    """
+    if not path:
+        return False
+    if allowed_project_paths is None:
+        return True
+    try:
+        return os.path.realpath(path) in allowed_project_paths
+    except OSError:
+        return False
+
+
+def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None,
+                      allowed_project_paths: set[str] | None = None) -> list[dict]:
     """Map recipe evidence-design names -> on-disk re-runnable project dirs.
 
     fix_events/heuristics record the project-dir basename as the design name; the
@@ -350,6 +369,8 @@ def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None) -> l
             continue
         if want_platform and plat != want_platform:
             continue
+        if not _allowed_subject(project_path, allowed_project_paths):
+            continue
         if not os.path.isdir(project_path):
             continue
         seen.add(project_path)
@@ -359,7 +380,8 @@ def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None) -> l
     return out
 
 
-def _symptom_designs(conn, symptom_id: str, want_platform: str | None) -> list[dict]:
+def _symptom_designs(conn, symptom_id: str, want_platform: str | None,
+                     allowed_project_paths: set[str] | None = None) -> list[dict]:
     """Designs that DEMONSTRABLY exhibited this symptom, taken from the fix history.
 
     A successfully-fixed symptom (e.g. ``antenna_diode_repair`` clearing DRC to 0)
@@ -403,6 +425,8 @@ def _symptom_designs(conn, symptom_id: str, want_platform: str | None) -> list[d
             continue
         if want_platform and plat != want_platform:
             continue
+        if not _allowed_subject(project_path, allowed_project_paths):
+            continue
         if not os.path.isdir(project_path):
             continue
         seen.add(project_path)
@@ -413,7 +437,8 @@ def _symptom_designs(conn, symptom_id: str, want_platform: str | None) -> list[d
 
 
 def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
-               strategy: str, n_designs: int = N_DESIGNS_DEFAULT) -> dict | None:
+               strategy: str, n_designs: int = N_DESIGNS_DEFAULT,
+               allowed_project_paths: set[str] | None = None) -> dict | None:
     """Returns {designs, arm_a, arm_b, match_level} or None if no match."""
     def _q(extra_sql: str, params: tuple) -> list[dict]:
         cur = conn.execute(
@@ -431,7 +456,8 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
         # drain, candidate starved (2026-07-03).
         return [dict(zip(("design_name", "project_path", "cell_count"), x))
                 for x in cur.fetchall()
-                if not _is_arm_dir(x[1]) and x[1] and os.path.isdir(x[1])]
+                if not _is_arm_dir(x[1]) and x[1] and os.path.isdir(x[1])
+                and _allowed_subject(x[1], allowed_project_paths)]
 
     def _trial(designs, level):
         return {
@@ -442,6 +468,34 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
             "key": {"symptom_id": symptom_id, "design_class": design_class,
                     "platform": platform, "strategy": strategy},
         }
+
+    # This named physical scope spans timing severity labels, not arbitrary symptoms.
+    # Keep the original per-run labels intact; plan only measured eligible subjects.
+    import setup_scope
+    if dict(symptom_id=symptom_id, design_class=design_class,
+            platform=platform, strategy=strategy) == setup_scope.KEY:
+        rows = conn.execute(
+            "SELECT r.design_name,r.project_path,r.cell_count FROM runs r "
+            "JOIN run_violations v USING(run_id) JOIN symptoms s ON s.symptom_id=v.symptom_id "
+            "WHERE r.platform='sky130hd' AND r.abc_area=1 AND r.orfs_status='pass' "
+            "AND r.wns_ns>=-3.0 AND r.wns_ns<0 AND s.check_type='timing' "
+            "AND r.drc_status IN ('clean','clean_beol') AND r.lvs_status='clean' "
+            "ORDER BY r.cell_count,r.project_path").fetchall()
+        designs, seen = [], set()
+        for row in rows:
+            name, path, cells = row
+            if (name in seen or _is_arm_dir(path) or not path or not os.path.isdir(path)
+                    or not _allowed_subject(path, allowed_project_paths)):
+                continue
+            try:
+                with open(os.path.join(path, 'reports', 'route.json')) as f:
+                    if json.load(f).get('status') != 'clean':
+                        continue
+            except (OSError, ValueError):
+                continue
+            seen.add(name)
+            designs.append(dict(design_name=name, project_path=path, cell_count=cells))
+        return _trial(designs, 'measured_setup_scope') if len(designs) >= n_designs else None
 
     # Tier 1 — run_violations (POST-fix residual exhibitors of the symptom). NEVER pool
     # across platforms (2026-06-25): an A/B arm flows at the recipe's `platform`, so a
@@ -464,7 +518,8 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
     # (2026-06-22: without this, every successful nangate45 recipe — antenna chief
     # among them — was unreachable and stuck forever as a candidate.)
     for want_plat, level in ((platform, "fixhist_platform"),):   # same-platform only
-        designs = _symptom_designs(conn, symptom_id, want_plat)
+        designs = _symptom_designs(conn, symptom_id, want_plat,
+                                   allowed_project_paths)
         if len(designs) >= n_designs:
             return _trial(designs, level)
 
@@ -474,7 +529,8 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
     # (2026-06-16: this gap, on top of Gate A, was the second reason the A/B loop had
     # never fired; Tier 2 above now covers the repo-prefixed campaign dirs it misses.)
     for want_plat, level in ((platform, "evidence_platform"),):   # same-platform only
-        designs = _resolve_evidence(conn, _evidence_designs(symptom_id), want_plat)
+        designs = _resolve_evidence(conn, _evidence_designs(symptom_id), want_plat,
+                                    allowed_project_paths)
         if len(designs) >= n_designs:
             return _trial(designs, level)
     return None

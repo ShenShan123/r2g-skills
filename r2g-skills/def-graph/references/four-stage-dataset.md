@@ -134,6 +134,10 @@ Upstream expects a hand-written JSON pointing at a curated `/data/...` tree.
   Gate-Gate relation all resolve it through `resolve_congestion_grid_um(cfg)`;
   `04` hard-fails when the feature and label grids disagree, and the validator
   re-checks the DBU step against `dbu_per_um`.
+* **The congestion geometry relation uses four half-window offsets.** Each pass
+  selects deterministic nearest neighbours with degree at most five per gate;
+  duplicate undirected pairs across passes are removed. This reduces arbitrary
+  grid-boundary disconnects while bounding total degree at 20.
 * `cell_type_id` / `pin_layer_id` are **per-platform**. Never mix platforms in
   one dataset index without filtering on `platform`.
 
@@ -182,3 +186,16 @@ corpus contained four-stage runs only on sky130.
 * Upstream's optional cross-checks (`rc_label_dir`, `irdrop_reference_csv`) are
   wired in the config schema but not produced by our flow; they only ever
   cross-verify, never source a label.
+## Physical Geometry and Logical Identity
+
+Gate identities, master IDs and Liberty attributes remain tied to the synthesized
+logical cell. Coordinates, oriented width/height and centers use the actual master
+in the permitted earlier-stage DEF; backend resizing must not reuse the old
+synthesis master's dimensions. Missing physical LEF dimensions produce NaN, not a
+zero-sized cell or a fallback center. Before any DEF is visible, only synthesis
+dimensions are available and placement coordinates remain unavailable.
+
+In this implementation `cell_area_um2` is the synthesis master's Liberty `area`,
+not the resized physical bounding-box area. The upstream field table's reference
+to LEF area should be read with this correction. Do not reinterpret this logical
+attribute as a measurement of the current physical implementation.

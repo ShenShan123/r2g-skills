@@ -87,9 +87,12 @@ def report_checks_flags(openroad: str) -> tuple[str, str]:
         probe.unlink(missing_ok=True)
     text = result.stdout or ""
     group = "-group_path_count" if "-group_path_count" in text else "-group_count"
-    endpoint = (
-        "-endpoint_path_count" if "-endpoint_path_count" in text else "-max_paths"
-    )
+    if "-endpoint_path_count" in text:
+        endpoint = "-endpoint_path_count"
+    elif "-endpoint_count" in text:
+        endpoint = "-endpoint_count"
+    else:
+        raise RuntimeError("unable to detect report_checks endpoint-count flag")
     return group, endpoint
 
 

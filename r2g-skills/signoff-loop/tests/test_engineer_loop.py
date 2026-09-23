@@ -205,6 +205,8 @@ def test_learn_cycle_enqueues_candidates_and_ab_arms(tmp_path, monkeypatch):
             "n_sessions": 1}}}}}
     monkeypatch.setattr(engineer_loop, "_learn", lambda: heur_new)
     led = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
+    led.add({"design": "d0", "project_path": str(subj),
+             "platform": "nangate45", "kind": "normal"})
     engineer_loop.learn_cycle(led, conn, prev_heur={"generation": 1,
                                                     "recipes": {}},
                               n_ab_designs=1)
@@ -277,6 +279,58 @@ def test_run_drains_crash_orphaned_designs(tmp_path, monkeypatch):
     led.add(_entry("d_normal"))
     engineer_loop.run(tmp_path / "ledger.jsonl", max_workers=2)
     assert sorted(processed) == ["d_normal", "d_orphan"]
+
+
+def test_run_frozen_knowledge_processes_designs_without_learning(tmp_path, monkeypatch):
+    import knowledge_db
+    monkeypatch.setattr(knowledge_db, "DEFAULT_DB_PATH", tmp_path / "knowledge.sqlite")
+    processed = []
+    monkeypatch.setattr(engineer_loop, "_safe_process",
+                        lambda led, entry: processed.append(entry["design"]))
+    monkeypatch.setattr(
+        engineer_loop,
+        "_learn",
+        lambda: (_ for _ in ()).throw(AssertionError("frozen run must not learn")),
+    )
+    monkeypatch.setattr(
+        engineer_loop,
+        "plan_arms_for_candidates",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("frozen run must not plan A/B")
+        ),
+    )
+    ledger = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
+    ledger.add(_entry("d0"))
+    ledger.add(_entry("d1"))
+
+    engineer_loop.run(tmp_path / "ledger.jsonl", max_workers=2, learn=False)
+
+    assert sorted(processed) == ["d0", "d1"]
+
+
+def test_serial_run_frozen_knowledge_does_not_enter_learn_cycle(tmp_path, monkeypatch):
+    import knowledge_db
+    monkeypatch.setattr(knowledge_db, "DEFAULT_DB_PATH", tmp_path / "knowledge.sqlite")
+    processed = []
+
+    def process(ledger, entry, conn):
+        processed.append(entry["design"])
+        ledger.set_state(entry["design"], "clean")
+
+    monkeypatch.setattr(engineer_loop, "process_one", process)
+    monkeypatch.setattr(
+        engineer_loop,
+        "learn_cycle",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("frozen serial run must not learn")
+        ),
+    )
+    ledger = engineer_loop.Ledger(tmp_path / "ledger.jsonl")
+    ledger.add(_entry("d0"))
+
+    engineer_loop.run(tmp_path / "ledger.jsonl", max_workers=1, learn=False)
+
+    assert processed == ["d0"]
 
 
 # --------------------------------------------------------------------------- #

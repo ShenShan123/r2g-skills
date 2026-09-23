@@ -509,7 +509,10 @@ def main() -> None:
             "gate_geom_edge_policy": (
                 "disabled_without_trusted_standard_cell_coordinates"
                 if stage in {"floorplan", "placement"}
-                else "fixed_2p1um_same_grid_undirected_max_degree_5"
+                else (
+                    "four_half_window_shifted_technology_grid_undirected_"
+                    "max_degree_5_per_window_deduplicated"
+                )
             ),
             "transition": {
                 "before": source_record(before_kind, before_path),

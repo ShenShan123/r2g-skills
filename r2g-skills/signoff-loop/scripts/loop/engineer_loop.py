@@ -269,7 +269,7 @@ def _run_flow(entry: dict) -> int:
 # them to 'both' -> identical inert arms that can never promote and burn a full
 # multi-hour signoff per repeat (2026-06-24 audit, bugs #1/#3).
 _PLACE_STRATEGIES = frozenset({"core_util_relief", "pin_perimeter_floor"})
-_TIMING_STRATEGIES = frozenset({"setup_slack_margin", "period_relax", "utilization_reduce",
+_TIMING_STRATEGIES = frozenset({"hierarchical_place_timing_repair", "setup_slack_margin", "period_relax", "utilization_reduce",
                                 "backend_aware_synth_retune", "abc_area_physical_mapping"})
 # synth_memory_relax is a SYNTH backend-abort recovery (raise SYNTH_MEMORY_MAX_BITS +
 # pair a die auto-size): its A/B arm applies the recipe up-front and flows once, like the
@@ -298,6 +298,15 @@ _KNOWN_APPLY_STRATEGIES = frozenset({
     "density_relief", "pin_side_rebalance", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
     "beol_only_drc", "rerun_from_stage", "pdn_die_floor",
 }) | _PLACE_STRATEGIES | _TIMING_STRATEGIES | _SYNTH_STRATEGIES
+
+
+def _strategy_excluded(strategy: str) -> bool:
+    """Honor the same campaign exclusion set in direct recovery paths and fix_signoff."""
+    return strategy in {
+        item.strip()
+        for item in os.environ.get("R2G_FIX_EXCLUDE", "").split(",")
+        if item.strip()
+    }
 
 
 def _recipe_generation(conn, key: dict):
@@ -1420,6 +1429,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # divergence. Auto-size the die (DIE_AREA -> CORE_UTILIZATION) and retry the
         # flow ONCE; never touches PLACE_DENSITY_LB_ADDON. (2026-06-23)
         if (not _resized and entry.get("kind") != "ab_arm"
+                and not _strategy_excluded("core_util_relief")
                 and _fail_stage(entry) == "place" and _is_flw0024(entry)
                 and _resize_to_core_util(entry)):
             entry["_r2g_config_effect"] = _config_effect(
@@ -1442,6 +1452,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # DOMINANT mislabeled-'unseen_crash' class (2026-06-26 audit: ~35 designs). Retry the
         # flow ONCE; the resize is recorded as a learnable fix.
         if (not _resized and entry.get("kind") != "ab_arm"
+                and not _strategy_excluded("pin_perimeter_floor")
                 and _fail_stage(entry) == "place" and _is_ppl0024(entry)
                 and _relieve_pin_overflow(entry)):
             entry["_r2g_config_effect"] = _config_effect(
@@ -1458,6 +1469,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # 'unseen_crash', hiding 15 mechanically-fixable designs and a learnable recipe
         # (2026-06-28 unseen_crash audit). Mirrors the FLW-0024 / PPL-0024 recoveries.
         if (not _resized and entry.get("kind") != "ab_arm"
+                and not _strategy_excluded("synth_memory_relax")
                 and _fail_stage(entry) == "synth" and _is_synth_memory_cap(entry)
                 and _synth_memory_ff_expandable(entry)
                 and _raise_synth_memory_cap(entry)):
@@ -1491,6 +1503,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # (perimeter too short for PINS). Mislabeled 'unseen_crash' before this because the
         # loop had no PDN handler (2026-07-01 sky130 round). Mirrors the FLW/PPL recoveries.
         if (not _resized and entry.get("kind") != "ab_arm"
+                and not _strategy_excluded("pdn_die_floor")
                 and _fail_stage(entry) == "floorplan" and _is_pdn_strap_width(entry)
                 and _relieve_pdn_strap_width(entry)):
             entry["_r2g_config_effect"] = _config_effect(
@@ -1943,6 +1956,30 @@ def _ledger_round_platform(led: "Ledger") -> str | None:
     return top if n >= 0.6 * sum(plats.values()) else None
 
 
+def _ledger_round_subject_paths(led: "Ledger") -> set[str]:
+    """Return the normal project roots this ledger explicitly owns.
+
+    A/B planning consults a long-lived knowledge database, which may contain
+    valid-looking paths from past campaigns.  Those paths are evidence, not
+    permission to execute.  Only normal entries registered in the current
+    ledger are legal A/B subjects; an empty set intentionally fails closed.
+    """
+    subjects: set[str] = set()
+    for entry in led.entries():
+        if entry.get("kind", "normal") != "normal":
+            continue
+        project_path = entry.get("project_path")
+        if not project_path:
+            continue
+        try:
+            path = Path(project_path)
+            if path.is_dir():
+                subjects.add(str(path.resolve()))
+        except OSError:
+            continue
+    return subjects
+
+
 def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                              repeats: int | None = None) -> int:
     """For every pending candidate recipe, plan an A/B trial and append its arm
@@ -1963,6 +2000,7 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
     # one change and no arg-threading. None -> indeterminate -> scope disabled (fail-open).
     from collections import Counter as _Counter
     round_platform = _ledger_round_platform(led)
+    round_subject_paths = _ledger_round_subject_paths(led)
     _skipped_offplatform: _Counter = _Counter()
     # Self-heal: park pre-filter NONDIVERGENT candidate rows (guaranteed-inconclusive
     # arms) out of the work queue so they stop being re-skipped every drain — the
@@ -2029,7 +2067,9 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                     pass
             continue
         try:
-            trial = ab_runner.plan_trial(conn, **key, n_designs=n_ab_designs)
+            trial = ab_runner.plan_trial(
+                conn, **key, n_designs=n_ab_designs,
+                allowed_project_paths=round_subject_paths)
         except Exception as exc:
             # plan_trial can raise TRANSIENTLY (a read racing the campaign's concurrent
             # heuristics.json/ingest writes — observed as an intermittent KeyError). ISOLATE
@@ -2984,7 +3024,8 @@ def _safe_process(led: Ledger, entry: dict) -> None:
 
 
 def _run_parallel(led: Ledger, conn, prev_heur: dict | None, *,
-                  max_designs: int | None, max_workers: int) -> None:
+                  max_designs: int | None, max_workers: int,
+                  learn: bool = True) -> None:
     """Parallel campaign mode (engineer_loop run --workers N). Run pending NORMAL
     design flows CONCURRENTLY — each is an isolated ORFS subprocess with a private
     DB connection; the Ledger is lock-guarded, so this reuses ab_drain's proven
@@ -3005,6 +3046,8 @@ def _run_parallel(led: Ledger, conn, prev_heur: dict | None, *,
     if pending:
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             list(ex.map(lambda e: _safe_process(led, e), pending))
+    if not learn:
+        return
     # Learn once over the batch results, then enqueue candidate recipes. This is
     # the Gate A step (learn() also enqueues; diff_and_enqueue is idempotent).
     heur = _learn()
@@ -3144,7 +3187,7 @@ def fmax_drain(ledger_path: Path, *, platform: str | None = None,
 
 
 def run(ledger_path: Path, *, max_designs: int | None = None,
-        max_workers: int = 1) -> None:
+        max_workers: int = 1, learn: bool = True) -> None:
     import knowledge_db
     led = Ledger(ledger_path)
     led.reclaim_orphans()          # crash-orphaned transients rejoin the drain (#31)
@@ -3160,7 +3203,7 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
         prev_heur = json.loads(hp.read_text())
     if max_workers and max_workers > 1:
         _run_parallel(led, conn, prev_heur, max_designs=max_designs,
-                      max_workers=max_workers)
+                      max_workers=max_workers, learn=learn)
         conn.close()
         return
     done = 0
@@ -3171,9 +3214,10 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
         entry = pending[0]
         process_one(led, entry, conn)
         done += 1
-        heur = learn_cycle(led, conn, prev_heur=prev_heur)
-        judge_finished_trials(led, conn)
-        prev_heur = heur
+        if learn:
+            heur = learn_cycle(led, conn, prev_heur=prev_heur)
+            judge_finished_trials(led, conn)
+            prev_heur = heur
     conn.close()
 
 
@@ -3186,6 +3230,11 @@ def main(argv=None) -> int:
     pr.add_argument("--workers", type=int, default=1,
                     help="run this many design flows concurrently (cap NUM_CORES so "
                          "workers*NUM_CORES <= host cores; see SKILL hard rules)")
+    pr.add_argument(
+        "--no-learn",
+        action="store_true",
+        help="use the frozen knowledge snapshot without learning or planning A/B trials",
+    )
     pa = sub.add_parser("add")
     pa.add_argument("--ledger", required=True, type=Path)
     pa.add_argument("--project", required=True)
@@ -3232,7 +3281,8 @@ def main(argv=None) -> int:
     pm.add_argument("--reason", required=True)
     args = ap.parse_args(argv)
     if args.cmd == "run":
-        run(args.ledger, max_designs=args.max, max_workers=args.workers)
+        run(args.ledger, max_designs=args.max, max_workers=args.workers,
+            learn=not args.no_learn)
     elif args.cmd == "add":
         led = Ledger(args.ledger)
         entry = {"design": Path(args.project).name,

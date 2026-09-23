@@ -96,8 +96,8 @@ def _unresolved_includes(source_files: list[Path], include_dirs: list[Path]) -> 
     return unresolved
 
 
-def row_inputs(row: dict[str, str]) -> tuple[Path, list[Path]]:
-    """Resolve the complete, immutable compilation-input closure for a row."""
+def row_inputs(row: dict[str, str]) -> tuple[Path, list[Path], list[Path]]:
+    """Resolve immutable compilation units separately from their dependencies."""
     entries = _split_paths(row.get("rtl_files") or "")
     if not entries:
         raise ValueError("candidate has no rtl_files closure")
@@ -123,7 +123,15 @@ def row_inputs(row: dict[str, str]) -> tuple[Path, list[Path]]:
     collateral_paths = [Path(item["path"]).resolve() for item in collateral]
     closure = list(dict.fromkeys([*all_sources, *collateral_paths]))
     _require_inside_source(closure, source, "compilation input")
-    return source, closure
+    header_suffixes = {".vh", ".svh"}
+    compilation_units = [
+        path.resolve() for path in entries if path.suffix.lower() not in header_suffixes
+    ]
+    if not compilation_units:
+        raise ValueError("candidate has no Verilog/SystemVerilog compilation units")
+    compilation_set = set(compilation_units)
+    dependencies = [path for path in closure if path not in compilation_set]
+    return source, compilation_units, dependencies
 
 
 def family_id(row: dict[str, str]) -> str:
@@ -148,7 +156,7 @@ def prepare(args: argparse.Namespace) -> None:
             "status": "skipped",
         }
         try:
-            source, rtl_files = row_inputs(row)
+            source, rtl_files, dependencies = row_inputs(row)
             _, repo_url, commit = source_identity(rtl_files[0])
             clock = detect_clock_port(row["expected_top"], rtl_files)
             if not clock:
@@ -183,6 +191,8 @@ def prepare(args: argparse.Namespace) -> None:
             ]
             for rtl_file in rtl_files:
                 command.extend(["--rtl-file", str(rtl_file.relative_to(source))])
+            for dependency in dependencies:
+                command.extend(["--dependency-file", str(dependency.relative_to(source))])
             if project.exists():
                 existing = project / "repair_family_probe_input.json"
                 if not existing.is_file():
@@ -223,10 +233,7 @@ def prepare(args: argparse.Namespace) -> None:
     print(json.dumps({"ready_count": selected, "record_count": len(records)}, indent=2))
 
 
-def execute_one(project: Path, args: argparse.Namespace) -> dict[str, Any]:
-    result_path = project / "repair_family_probe_result.json"
-    if result_path.is_file() and not args.rerun:
-        return {"project": str(project), "status": "reused", "returncode": 0}
+def _probe_command(project: Path, args: argparse.Namespace, *, orfs_stages: str | None = None) -> list[str]:
     command = [
         sys.executable,
         str(PROBE),
@@ -237,7 +244,32 @@ def execute_one(project: Path, args: argparse.Namespace) -> dict[str, Any]:
         str(args.cores),
         "--timeout-seconds",
         str(args.timeout_seconds),
+        "--min-mapped-cells",
+        str(getattr(args, "min_mapped_cells", 100)),
+        "--max-mapped-cells",
+        str(getattr(args, "max_mapped_cells", 100000)),
     ]
+    if orfs_stages:
+        command.extend(["--orfs-stages", orfs_stages])
+    return command
+
+
+def force_rerun_args(args: argparse.Namespace) -> argparse.Namespace:
+    """Clone parsed arguments while forcing a full run after an admitted preflight."""
+    return argparse.Namespace(**(vars(args) | {"rerun": True}))
+
+
+def has_complete_constraint_coverage(result: dict[str, Any]) -> bool:
+    """Return true only for a result carrying current explicit SDC coverage proof."""
+    coverage = result.get("constraint_coverage")
+    return isinstance(coverage, dict) and coverage.get("status") == "complete"
+
+
+def execute_one(project: Path, args: argparse.Namespace) -> dict[str, Any]:
+    result_path = project / "repair_family_probe_result.json"
+    if result_path.is_file() and not args.rerun:
+        return {"project": str(project), "status": "reused", "returncode": 0}
+    command = _probe_command(project, args)
     completed = subprocess.run(command, text=True, capture_output=True)
     return {
         "project": str(project),
@@ -253,9 +285,77 @@ def execute(args: argparse.Namespace) -> None:
     manifest_path = campaign / "state/cohort_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     projects = [Path(item["project"]) for item in manifest["records"] if item["status"] == "ready"]
+    preflight_admitted: set[Path] = set()
+    if getattr(args, "synth_floorplan_preflight", True):
+        admitted: list[Path] = []
+        preflight_results: list[dict[str, Any]] = []
+        for project in projects:
+            result_path = project / "repair_family_probe_result.json"
+            if result_path.is_file() and not args.rerun:
+                existing = read_json(result_path, {})
+                if existing.get("scale_ineligible") is True:
+                    preflight_results.append(
+                        {"project": str(project), "status": "scale_ineligible", "returncode": 0}
+                    )
+                    continue
+                if existing.get("execution_interrupted") is True:
+                    preflight_results.append(
+                        {"project": str(project), "status": "execution_interrupted", "returncode": 0}
+                    )
+                    continue
+                if existing.get("constraint_coverage_incomplete") is True:
+                    preflight_results.append(
+                        {"project": str(project), "status": "constraint_ineligible", "returncode": 0}
+                    )
+                    continue
+                if has_complete_constraint_coverage(existing):
+                    admitted.append(project)
+                    if existing.get("orfs_stages") != "synth floorplan place cts route finish":
+                        preflight_admitted.add(project)
+                    continue
+                # Pre-coverage records are legacy evidence, not an implicit pass.
+                # Re-run the cheap synth+floorplan preflight below under the current
+                # fail-closed coverage policy before permitting a full physical flow.
+            command = _probe_command(project, args, orfs_stages="synth floorplan")
+            completed = subprocess.run(command, text=True, capture_output=True)
+            result = read_json(result_path, {})
+            preflight_record = {
+                "project": str(project),
+                "status": "completed" if completed.returncode == 0 else "runner_failed",
+                "returncode": completed.returncode,
+                "mapped_cells": result.get("mapped_cells"),
+                "scale_ineligible": result.get("scale_ineligible") is True,
+                "constraint_coverage": result.get("constraint_coverage"),
+                "stdout_tail": completed.stdout[-2000:],
+                "stderr_tail": completed.stderr[-2000:],
+            }
+            preflight_results.append(preflight_record)
+            write_json(campaign / "state/scale_preflight" / f"{project.name}.json", result)
+            if (
+                completed.returncode == 0
+                and result.get("scale_ineligible") is not True
+                and result.get("constraint_coverage_incomplete") is not True
+            ):
+                admitted.append(project)
+                preflight_admitted.add(project)
+        projects = admitted
+        write_json(
+            campaign / "state/scale_preflight_summary.json",
+            {
+                "schema_version": "recipe-training-scale-preflight-1.0",
+                "updated_at": now(),
+                "min_mapped_cells": getattr(args, "min_mapped_cells", 100),
+                "max_mapped_cells": getattr(args, "max_mapped_cells", 100000),
+                "results": preflight_results,
+            },
+        )
     results: list[dict[str, Any]] = []
+    full_flow_args = force_rerun_args(args)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(execute_one, project, args): project for project in projects}
+        futures = {
+            pool.submit(execute_one, project, full_flow_args if project in preflight_admitted else args): project
+            for project in projects
+        }
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             results.append(result)
@@ -278,7 +378,19 @@ def stable_replay_projects(campaign: Path) -> tuple[bool, list[Path]]:
     eligible_count = sum(1 for path in evidence_root.glob("*/attempt_1.json") if path.is_file())
     summary = read_json(campaign / "state/failure_replay_summary.json", {})
     results = summary.get("results", []) if isinstance(summary, dict) else []
-    complete = eligible_count > 0 and len(results) == eligible_count
+    explicit_complete = summary.get("complete") if isinstance(summary, dict) else None
+    reported_eligible = summary.get("eligible_count") if isinstance(summary, dict) else None
+    if explicit_complete is not None:
+        complete = (
+            explicit_complete is True
+            and reported_eligible == eligible_count
+            and len(results) == eligible_count
+        )
+    else:
+        # Backward compatibility for replay summaries written before the explicit
+        # completion marker existed.  Legacy zero-task summaries were ambiguous and
+        # remain incomplete; new writers stamp that case explicitly.
+        complete = eligible_count > 0 and len(results) == eligible_count
     stable = [
         Path(item["project"])
         for item in results
@@ -359,6 +471,29 @@ def protect_fixed_clock_target(env: dict[str, str]) -> dict[str, str]:
     return protected
 
 
+_FOOTPRINT_CHANGING_STRATEGIES = (
+    "core_util_relief",
+    "pin_perimeter_floor",
+    "pdn_die_floor",
+    "density_relief",
+    "route_relief",
+    "antenna_density_relief",
+    "utilization_reduce",
+    "synth_memory_relax",
+)
+
+
+def protect_fixed_footprint(env: dict[str, str]) -> dict[str, str]:
+    """Exclude every known strategy that changes the registered die/core footprint."""
+    protected = dict(env)
+    excluded = [item for item in protected.get("R2G_FIX_EXCLUDE", "").split(",") if item]
+    for strategy in _FOOTPRINT_CHANGING_STRATEGIES:
+        if strategy not in excluded:
+            excluded.append(strategy)
+    protected["R2G_FIX_EXCLUDE"] = ",".join(excluded)
+    return protected
+
+
 def run_existing_recipes(args: argparse.Namespace) -> None:
     campaign = args.campaign_root.resolve()
     started = time.monotonic()
@@ -369,6 +504,25 @@ def run_existing_recipes(args: argparse.Namespace) -> None:
         if args.max_wait_seconds and time.monotonic() - started >= args.max_wait_seconds:
             raise TimeoutError("stable-failure replay did not complete before wait budget")
         time.sleep(args.poll_seconds)
+
+    if not projects:
+        write_json(
+            campaign / "state/existing_recipe_execution.json",
+            {
+                "schema_version": "existing-recipe-execution-1.1",
+                "updated_at": now(),
+                "status": "no_stable_repair_challenges",
+                "stable_projects": [],
+                "knowledge_db": str(args.runtime_db.resolve()),
+                "heuristics": str(args.heuristics.resolve()),
+                "fixed_clock_target": bool(args.fixed_clock_target),
+                "fixed_footprint": bool(args.fixed_footprint),
+                "frozen_knowledge": bool(args.frozen_knowledge),
+                "quarantined_preexisting_candidates": [],
+                "records": [],
+            },
+        )
+        return
 
     quarantined: list[dict[str, Any]] = []
     if args.quarantine_preexisting_candidates:
@@ -427,12 +581,20 @@ def run_existing_recipes(args: argparse.Namespace) -> None:
     )
     if args.fixed_clock_target:
         env = protect_fixed_clock_target(env)
-    commands = [
-        [sys.executable, str(ENGINEER_LOOP), "run", "--ledger", str(ledger),
-         "--workers", str(args.workers)],
-        [sys.executable, str(ENGINEER_LOOP), "ab-drain", "--ledger", str(ledger),
-         "--workers", str(args.workers)],
+    if args.fixed_footprint:
+        env = protect_fixed_footprint(env)
+    run_command = [
+        sys.executable, str(ENGINEER_LOOP), "run", "--ledger", str(ledger),
+        "--workers", str(args.workers),
     ]
+    if args.frozen_knowledge:
+        run_command.append("--no-learn")
+    commands = [run_command]
+    if not args.frozen_knowledge:
+        commands.append(
+            [sys.executable, str(ENGINEER_LOOP), "ab-drain", "--ledger", str(ledger),
+             "--workers", str(args.workers)]
+        )
     records = []
     for command in commands:
         before = time.monotonic()
@@ -454,6 +616,8 @@ def run_existing_recipes(args: argparse.Namespace) -> None:
                 "knowledge_db": str(args.runtime_db.resolve()),
                 "heuristics": str(args.heuristics.resolve()),
                 "fixed_clock_target": bool(args.fixed_clock_target),
+                "fixed_footprint": bool(args.fixed_footprint),
+                "frozen_knowledge": bool(args.frozen_knowledge),
                 "quarantined_preexisting_candidates": quarantined,
                 "records": records,
             },
@@ -476,6 +640,14 @@ def replay_failures(args: argparse.Namespace) -> None:
             continue
         if first.get("input_qualification_failure") is True:
             continue
+        if first.get("capacity_infeasible") is True:
+            continue
+        if first.get("scale_ineligible") is True:
+            continue
+        if first.get("constraint_coverage_incomplete") is True:
+            continue
+        if first.get("timing_evaluation_incomplete") is True:
+            continue
         if first.get("execution_interrupted") is True:
             continue
         if first.get("unclassified_execution_failure") is True:
@@ -491,6 +663,18 @@ def replay_failures(args: argparse.Namespace) -> None:
         rerun=True,
     )
     completed: list[dict[str, Any]] = []
+    summary_path = campaign / "state/failure_replay_summary.json"
+    write_json(
+        summary_path,
+        {
+            "schema_version": "repair-training-replay-1.1",
+            "updated_at": now(),
+            "eligible_count": len(eligible),
+            "completed_count": 0,
+            "complete": not eligible,
+            "results": [],
+        },
+    )
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(execute_one, project, replay_args): project for project in eligible}
         for future in concurrent.futures.as_completed(futures):
@@ -525,8 +709,15 @@ def replay_failures(args: argparse.Namespace) -> None:
             }
             completed.append(item)
             write_json(
-                campaign / "state/failure_replay_summary.json",
-                {"schema_version": "repair-training-replay-1.0", "updated_at": now(), "results": completed},
+                summary_path,
+                {
+                    "schema_version": "repair-training-replay-1.1",
+                    "updated_at": now(),
+                    "eligible_count": len(eligible),
+                    "completed_count": len(completed),
+                    "complete": len(completed) == len(eligible),
+                    "results": completed,
+                },
             )
             print(f"[{len(completed)}/{len(eligible)}] {project.name}: {item['status']}", flush=True)
 
@@ -543,6 +734,9 @@ def summarize(args: argparse.Namespace) -> None:
         "repair_challenge": 0,
         "environment_failure": 0,
         "input_qualification_failure": 0,
+        "capacity_infeasible": 0,
+        "scale_ineligible": 0,
+        "constraint_ineligible": 0,
         "execution_interrupted": 0,
         "unclassified_execution_failure": 0,
         "runner_failure": 0,
@@ -562,6 +756,14 @@ def summarize(args: argparse.Namespace) -> None:
             status = "environment_failure"
         elif result.get("input_qualification_failure") is True:
             status = "input_qualification_failure"
+        elif result.get("capacity_infeasible") is True:
+            status = "capacity_infeasible"
+        elif result.get("scale_ineligible") is True:
+            status = "scale_ineligible"
+        elif result.get("constraint_coverage_incomplete") is True:
+            status = "constraint_ineligible"
+        elif result.get("timing_evaluation_incomplete") is True:
+            status = "constraint_ineligible"
         elif result.get("execution_interrupted") is True:
             status = "execution_interrupted"
         elif result.get("unclassified_execution_failure") is True:
@@ -604,6 +806,14 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--workers", type=int, default=2)
     run.add_argument("--cores", type=int, default=4)
     run.add_argument("--timeout-seconds", type=int, default=7200)
+    run.add_argument("--min-mapped-cells", type=int, default=100)
+    run.add_argument("--max-mapped-cells", type=int, default=100000)
+    run.add_argument(
+        "--synth-floorplan-preflight",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="admit only tasks at or below --max-mapped-cells before full P&R",
+    )
     run.add_argument("--rerun", action="store_true")
     run.set_defaults(func=execute)
     replay = subparsers.add_parser("replay-failures")
@@ -629,6 +839,16 @@ def parser() -> argparse.ArgumentParser:
         "--fixed-clock-target",
         action="store_true",
         help="protect the registered clock target by excluding period_relax",
+    )
+    repair.add_argument(
+        "--fixed-footprint",
+        action="store_true",
+        help="protect the registered die/core footprint by excluding area-changing repairs",
+    )
+    repair.add_argument(
+        "--frozen-knowledge",
+        action="store_true",
+        help="read existing Recipe evidence but do not learn, enqueue, or run A/B in this pass",
     )
     repair.add_argument(
         "--quarantine-preexisting-candidates",

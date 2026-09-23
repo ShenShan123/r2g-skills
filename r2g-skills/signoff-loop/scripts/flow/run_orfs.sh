@@ -8,6 +8,7 @@ set -euo pipefail
 # Optional flow_variant (default: derived from project dir) isolates ORFS work directories.
 # Set ORFS_TIMEOUT (seconds) to limit runtime (default: 7200 = 2 hours).
 # Set ORFS_MAX_CPUS to limit CPU cores (default: all available).
+# Set ORFS_CPU_SET to pin the flow to an explicit taskset-compatible CPU list.
 
 PROJECT_DIR="${1:-}"
 PLATFORM="${2:-sky130hd}"   # asap7 is unsupported in this version (#57); sky130hd is
@@ -345,9 +346,18 @@ if [[ "${ROUTE_FAST:-0}" == "1" ]]; then
   fi
 fi
 
-# Apply CPU core limit if specified
-if [[ -n "${ORFS_MAX_CPUS:-}" ]]; then
-  # Build a CPU list 0-(N-1)
+# Apply an explicit CPU set before the legacy count-only limit. A multi-worker
+# campaign must not map every worker's four-core allocation to host CPUs 0-3.
+if [[ -n "${ORFS_CPU_SET:-}" ]]; then
+  if [[ ! "$ORFS_CPU_SET" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]]; then
+    echo "ERROR: ORFS_CPU_SET must be a taskset CPU list, got '$ORFS_CPU_SET'" >&2
+    exit 64
+  fi
+  CPU_LIST="$ORFS_CPU_SET"
+  MAKE_CMD="taskset -c $CPU_LIST $MAKE_CMD"
+  echo "Pinning ORFS to explicit CPU set ($CPU_LIST)"
+elif [[ -n "${ORFS_MAX_CPUS:-}" ]]; then
+  # Preserve the legacy behavior for callers which supply only a core count.
   CPU_LIST="0-$((ORFS_MAX_CPUS - 1))"
   MAKE_CMD="taskset -c $CPU_LIST $MAKE_CMD"
   echo "Limiting to $ORFS_MAX_CPUS CPU cores ($CPU_LIST)"

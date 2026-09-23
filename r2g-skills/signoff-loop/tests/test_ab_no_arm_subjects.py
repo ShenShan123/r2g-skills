@@ -52,3 +52,44 @@ def test_plan_trial_excludes_arm_dirs(tmp_path):
     assert ab_runner.plan_trial(conn, symptom_id=sid, design_class="logic/unknown",
                                 platform="sky130hd", strategy="route_relief",
                                 n_designs=2) is None
+
+
+def test_plan_trial_rejects_historical_subject_outside_round(tmp_path):
+    """A real historical project is not executable without ledger ownership."""
+    conn = knowledge_db.connect(tmp_path / "k.sqlite")
+    knowledge_db.ensure_schema(conn)
+    sid = "roundscope000001"
+    conn.execute("INSERT INTO symptoms (symptom_id, check_type, class, "
+                 "predicates_json, symptom_schema_version, first_seen) "
+                 "VALUES (?,?,?,?,?,?)",
+                 (sid, "orfs_stage", "route", "{}", 1, "2026-08-24T00:00:00Z"))
+    current = tmp_path / "current"
+    historic = tmp_path / "historic"
+    current.mkdir()
+    historic.mkdir()
+    for name, path in (("current", current), ("historic", historic)):
+        rid = f"r_{name}"
+        conn.execute("INSERT INTO runs (run_id, project_path, design_name, platform, "
+                     "design_class, cell_count, orfs_status, ingested_at) "
+                     "VALUES (?,?,?,?,?,?,?,?)",
+                     (rid, str(path), name, "sky130hd", "logic/unknown", 100,
+                      "fail", "2026-08-24T00:00:00Z"))
+        conn.execute("INSERT INTO run_violations (run_id, symptom_id, platform, "
+                     "design_family, snapshot_ts) VALUES (?,?,?,?,?)",
+                     (rid, sid, "sky130hd", name, "2026-08-24T00:00:00Z"))
+    conn.commit()
+
+    # One current subject cannot be padded with an arbitrary historical path.
+    assert ab_runner.plan_trial(
+        conn, symptom_id=sid, design_class="logic/unknown", platform="sky130hd",
+        strategy="route_relief", n_designs=2,
+        allowed_project_paths={str(current.resolve())}) is None
+
+    # Explicitly allowlisting both is equivalent to deliberately importing both.
+    trial = ab_runner.plan_trial(
+        conn, symptom_id=sid, design_class="logic/unknown", platform="sky130hd",
+        strategy="route_relief", n_designs=2,
+        allowed_project_paths={str(current.resolve()), str(historic.resolve())})
+    assert trial is not None
+    assert {row["project_path"] for row in trial["designs"]} == {
+        str(current), str(historic)}

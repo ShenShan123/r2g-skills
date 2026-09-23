@@ -171,6 +171,10 @@ def test_route_ab_drain_fires_trial_and_transitions_recipe(tmp_path, monkeypatch
                         lambda e: ingest_run.ingest(Path(e["project_path"]),
                                                     knowledge_db.connect(db)))
     led_path = tmp_path / "ledger.jsonl"
+    led = engineer_loop.Ledger(led_path)
+    for name in ("crypto_a", "logic_b"):
+        led.add({"design": name, "project_path": str(tmp_path / "designs" / name),
+                 "platform": "sky130hd"})
     engineer_loop.ab_drain(led_path, n_ab_designs=2, db_path=db)
 
     conn = knowledge_db.connect(db)

@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -178,7 +179,8 @@ def materialize(args: argparse.Namespace) -> None:
         raise ValueError(f"project already exists: {project}")
     if bool(args.source_repo_url) != bool(args.source_commit):
         raise ValueError("--source-repo-url and --source-commit must be provided together")
-    allowed_suffixes = {".v", ".sv", ".vh", ".svh", ".mem", ".hex"}
+    compile_suffixes = {".v", ".sv"}
+    dependency_suffixes = {".v", ".sv", ".vh", ".svh", ".mem", ".hex", ".dat"}
     dependency_values = list(getattr(args, "dependency_file", []) or [])
     if args.rtl_file:
         requested = [Path(value) for value in args.rtl_file]
@@ -194,8 +196,10 @@ def materialize(args: argparse.Namespace) -> None:
         missing = [path for path in rtl_files if not path.is_file()]
         if missing:
             raise ValueError(f"missing explicit RTL input: {missing[0]}")
-        if any(path.suffix.lower() not in allowed_suffixes for path in rtl_files):
-            raise ValueError("explicit RTL closure contains an unsupported file type")
+        if any(path.suffix.lower() not in compile_suffixes for path in compile_files):
+            raise ValueError("explicit compilation unit contains an unsupported HDL type")
+        if any(path.suffix.lower() not in dependency_suffixes for path in dependency_files):
+            raise ValueError("explicit dependency closure contains an unsupported file type")
         relative_files = [path.relative_to(source) for path in rtl_files]
         compile_relatives = {path.relative_to(source) for path in compile_files}
     else:
@@ -206,12 +210,12 @@ def materialize(args: argparse.Namespace) -> None:
             raise ValueError(f"source snapshot has no rtl directory: {source}")
         rtl_files = sorted(
             path for path in rtl_source.rglob("*")
-            if path.is_file() and path.suffix.lower() in allowed_suffixes
+            if path.is_file() and path.suffix.lower() in dependency_suffixes
         )
         relative_files = [path.relative_to(rtl_source) for path in rtl_files]
         compile_relatives = {
             relative for path, relative in zip(rtl_files, relative_files)
-            if path.suffix.lower() in {".v", ".sv"}
+            if path.suffix.lower() in compile_suffixes
         }
     if not rtl_files:
         raise ValueError(f"source snapshot has no RTL files: {source}")
@@ -246,9 +250,12 @@ def materialize(args: argparse.Namespace) -> None:
     sdc_path.write_text(sdc, encoding="utf-8")
     edits = parse_edits(args.set)
     defaults = {
-        "CORE_UTILIZATION": "25",
+        "CORE_UTILIZATION": "20",
         "PLACE_DENSITY_LB_ADDON": "0.20",
-        "ABC_AREA": "0",
+        # Keep probe controls on the same Sky130HD baseline as
+        # mk_sky130_project.py. Otherwise ABC_AREA=1 can appear to be a repair
+        # even though it is already part of the production materialization policy.
+        "ABC_AREA": "1",
     }
     defaults.update(edits)
     config_artifacts = []
@@ -400,9 +407,16 @@ def first_present(*values: Any) -> Any:
     return None
 
 
-def classify_flow_failures(flow_log: str) -> tuple[bool, bool, list[str]]:
+def classify_flow_failures(flow_log: str) -> tuple[bool, bool, bool, list[str]]:
     missing_include = bool(
         re.search(r"Can't open include file|cannot open include file|missing explicit RTL input", flow_log, re.I)
+    )
+    # Re-reading the same compilation unit through an explicit file list and a
+    # source-level include is a closure construction error, not an ORFS
+    # execution failure. Treat it like a missing dependency so it cannot enter
+    # the physical-repair or learner paths.
+    module_redefinition = bool(
+        re.search(r"(?:ERROR:\s*)?Re-definition of module\b", flow_log, re.I)
     )
     # IFP-0065 alone can describe a genuinely undersized, repairable floorplan.
     # Classify it as an input-qualification failure only when synthesis/OpenDB also
@@ -412,7 +426,15 @@ def classify_flow_failures(flow_log: str) -> tuple[bool, bool, list[str]]:
         re.search(r"number instances in verilog is\s+0\b", flow_log, re.I)
         or re.search(r"Design area\s+0(?:\.0+)?\s+um\^2", flow_log, re.I)
     )
-    input_failure = missing_include or zero_cell_netlist
+    # A bounded no-macro task cannot turn a large inferred memory into a
+    # physical-design Recipe.  This is neither a malformed RTL closure nor an
+    # unclassified ORFS crash: retain it as explicit capacity evidence and keep
+    # it out of replay, learner, and promotion paths.
+    capacity_infeasible = bool(
+        re.search(r"synthesized memory size\s+\d+\s+exceeds", flow_log, re.I)
+        or re.search(r"exceeds\s+synth_memory_max_bits", flow_log, re.I)
+    )
+    input_failure = missing_include or module_redefinition or zero_cell_netlist
     runtime_failure = bool(
         re.search(r"Stage\s+'(?:route|place|cts|synth)'\s+failed\s+\(exit code 124\)", flow_log)
         or re.search(r"timed out after\s+\d+s, exit code 124", flow_log, re.I)
@@ -420,12 +442,97 @@ def classify_flow_failures(flow_log: str) -> tuple[bool, bool, list[str]]:
     signatures: list[str] = []
     if missing_include:
         signatures.append("SYNTH_MISSING_INCLUDE")
+    if module_redefinition:
+        signatures.append("SYNTH_MODULE_REDEFINITION")
     if zero_cell_netlist:
         signatures.append("SYNTH_ZERO_CELL_NETLIST")
+    if capacity_infeasible:
+        signatures.append("SYNTH_MEMORY_CAPACITY")
     if runtime_failure:
         timeout_stage = re.search(r"Stage\s+'([^']+)'\s+failed\s+\(exit code 124\)", flow_log)
         signatures.append(f"{(timeout_stage.group(1) if timeout_stage else 'FLOW').upper()}_TIMEOUT")
-    return input_failure, runtime_failure, signatures
+    return input_failure, runtime_failure, capacity_infeasible, signatures
+
+
+def mapped_cell_count(flow_log: str) -> int | None:
+    """Return the elaborated cell count reported at floorplan entry.
+
+    ORFS emits this before placement mutates the netlist. It is the only count
+    used for the fixed main-track admission limit; later placement counts include
+    inserted buffers and must not change eligibility.
+    """
+    counts = [
+        int(value.replace(",", ""))
+        for value in re.findall(r"number instances in verilog is\s+([0-9,]+)\b", flow_log, re.I)
+    ]
+    return counts[0] if counts else None
+
+
+def mapped_cell_count_out_of_bounds(
+    cell_count: int | None, min_mapped_cells: int | None, max_mapped_cells: int | None
+) -> bool:
+    if cell_count is None:
+        return False
+    return bool(
+        (min_mapped_cells is not None and cell_count < min_mapped_cells)
+        or (max_mapped_cells is not None and cell_count > max_mapped_cells)
+    )
+
+
+def constraint_coverage(flow_log: str) -> dict[str, int | str | None]:
+    """Read ORFS ``check_setup`` coverage warnings from a floorplan flow log.
+
+    A finite WNS for one selected clock is not a timing-clean design when other
+    sequential registers have no clock constraint. The candidate path therefore
+    requires an explicit zero count for unclocked register/latch pins. An
+    unconstrained endpoint caused only by absent top-level I/O delays is retained
+    as scope metadata: this fixed task does not define an external I/O model.
+    Missing observations fail closed rather than guessing that coverage is good.
+    """
+    patterns = {
+        "unclocked_register_pins": r"There are\s+([0-9,]+)\s+unclocked register/latch pins\.",
+        "unconstrained_endpoints": r"There are\s+([0-9,]+)\s+unconstrained endpoints\.",
+        "input_ports_missing_delay": r"There are\s+([0-9,]+)\s+input ports missing set_input_delay\.",
+        "output_ports_missing_delay": r"There are\s+([0-9,]+)\s+output ports missing set_output_delay\.",
+    }
+    # ORFS emits these lines only when the corresponding count is nonzero.
+    # Absence is therefore evidence of zero *only after* the floorplan
+    # check_setup block is present; without that block the observation remains
+    # unknown and the probe must fail closed.
+    check_setup_seen = re.search(r"\bcheck_setup\b", flow_log, re.I) is not None
+    counts: dict[str, int | None] = {}
+    for name, pattern in patterns.items():
+        matches = re.findall(pattern, flow_log, re.I)
+        counts[name] = (
+            int(matches[-1].replace(",", "")) if matches else (0 if check_setup_seen else None)
+        )
+    if counts["unclocked_register_pins"] is None:
+        status = "unknown"
+    elif int(counts["unclocked_register_pins"] or 0) > 0:
+        status = "incomplete"
+    else:
+        status = "complete"
+    return {"status": status, **counts}
+
+
+UNCONSTRAINED_TIMING_SENTINEL = 1.0e30
+
+
+def has_evaluable_final_timing(metrics: dict[str, Any]) -> bool:
+    """Require real setup and hold observations for the fixed-frequency task.
+
+    OpenSTA emits values around 1e39 when no constrained timing path exists.
+    A declared clock and zero unclocked-register warnings are not sufficient in
+    that case: a pathless top cannot demonstrate closure at the target period.
+    """
+    for key in ("setup_wns_ns", "hold_wns_ns"):
+        value = metrics.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        numeric = float(value)
+        if not math.isfinite(numeric) or abs(numeric) >= UNCONSTRAINED_TIMING_SENTINEL:
+            return False
+    return True
 
 
 def final_artifact(run_dir: Path, name: str) -> Path:
@@ -457,6 +564,14 @@ def execution_environment(args: argparse.Namespace, state: Path) -> dict[str, st
     # worker count.  A probe must not silently expand to every host core merely
     # because it is launched outside the normal campaign wrapper.
     env["ORFS_MAX_CPUS"] = str(args.cores)
+    stages = getattr(args, "orfs_stages", None)
+    if stages:
+        env["ORFS_STAGES"] = stages
+    cpu_set = getattr(args, "cpu_set", None)
+    if cpu_set:
+        if not re.fullmatch(r"\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*", cpu_set):
+            raise ValueError(f"invalid --cpu-set: {cpu_set}")
+        env["ORFS_CPU_SET"] = cpu_set
     return env
 
 
@@ -480,6 +595,17 @@ def classify_execution_failure(
     if isinstance(returncode, int) and returncode != 0 and not known_signatures:
         return False, True, ["FLOW_EXECUTION_FAILED"]
     return False, False, []
+
+
+def incomplete_collected_run(run_dir: Path | None, collect_only: bool) -> bool:
+    """Recognize an externally stopped run during an explicit offline collection.
+
+    `run-meta.json` is written by run_orfs.sh only after it has emitted a final
+    success/failure exit. A missing file is therefore conclusive only when the
+    caller deliberately performs collection after execution has stopped; it is
+    never used to inspect a live run.
+    """
+    return bool(collect_only and run_dir and not (run_dir / "run-meta.json").is_file())
 
 
 def execute(args: argparse.Namespace) -> None:
@@ -559,8 +685,22 @@ def execute(args: argparse.Namespace) -> None:
     if run_dir and (run_dir / "flow.log").is_file():
         flow_log = (run_dir / "flow.log").read_text(encoding="utf-8", errors="ignore")
     signature = sorted(set(re.findall(r"\[ERROR\s+([A-Z]+-\d+)\]", flow_log)))
-    input_qualification_failure, runtime_budget_failure, classified = classify_flow_failures(flow_log)
+    input_qualification_failure, runtime_budget_failure, capacity_infeasible, classified = (
+        classify_flow_failures(flow_log)
+    )
     signature.extend(classified)
+    cell_count = mapped_cell_count(flow_log)
+    min_mapped_cells = getattr(args, "min_mapped_cells", None)
+    max_mapped_cells = getattr(args, "max_mapped_cells", None)
+    scale_ineligible = mapped_cell_count_out_of_bounds(
+        cell_count, min_mapped_cells, max_mapped_cells
+    )
+    if scale_ineligible:
+        signature.append("SYNTH_CELL_COUNT_OUT_OF_RANGE")
+    coverage = constraint_coverage(flow_log)
+    constraint_coverage_incomplete = coverage["status"] != "complete"
+    if constraint_coverage_incomplete:
+        signature.append("CONSTRAINT_COVERAGE_INCOMPLETE")
     drc = reports["drc"]
     timing = reports["timing_check"]
     ppa_timing = metric(reports["ppa"], "summary", "timing") or {}
@@ -592,6 +732,9 @@ def execute(args: argparse.Namespace) -> None:
             timing.get("hold_wns"),
         ),
     }
+    timing_evaluation_incomplete = not has_evaluable_final_timing(metrics)
+    if timing_evaluation_incomplete:
+        signature.append("TIMING_EVALUATION_INCOMPLETE")
     categories = drc.get("categories")
     if isinstance(categories, dict):
         for rule_class, detail in categories.items():
@@ -607,13 +750,20 @@ def execute(args: argparse.Namespace) -> None:
     execution_interrupted, unclassified_execution_failure, execution_signatures = (
         classify_execution_failure(commands, signature)
     )
+    if incomplete_collected_run(run_dir, args.collect_only):
+        execution_interrupted = True
+        execution_signatures.append("FLOW_INTERRUPTED")
     signature.extend(execution_signatures)
     signature = sorted(set(signature))
     gate = reports["signoff_gate"]
-    strict_clean = gate.get("status") in {"clean", "pass", "strict_clean"}
+    strict_clean = (
+        gate.get("status") in {"clean", "pass", "strict_clean"}
+        and not constraint_coverage_incomplete
+        and not timing_evaluation_incomplete
+    )
     publication_strict_clean = reports["signoff_manifest"].get("strict_clean") is True
     result = {
-        "schema_version": "repair-family-probe-result-1.1",
+        "schema_version": "repair-family-probe-result-1.3",
         "completed_at": now(),
         "family_id": manifest["family_id"],
         "task_id": manifest["task_id"],
@@ -626,11 +776,24 @@ def execute(args: argparse.Namespace) -> None:
         "strict_clean_scope": "fixed_target_physical_signoff",
         "publication_strict_clean": publication_strict_clean,
         "input_qualification_failure": input_qualification_failure,
+        "capacity_infeasible": capacity_infeasible,
+        "scale_ineligible": scale_ineligible,
+        "constraint_coverage_incomplete": constraint_coverage_incomplete,
+        "timing_evaluation_incomplete": timing_evaluation_incomplete,
+        "constraint_coverage": coverage,
+        "mapped_cells": cell_count,
+        "min_mapped_cells": min_mapped_cells,
+        "max_mapped_cells": max_mapped_cells,
+        "orfs_stages": getattr(args, "orfs_stages", None) or "synth floorplan place cts route finish",
         "runtime_budget_failure": runtime_budget_failure,
         "execution_interrupted": execution_interrupted,
         "unclassified_execution_failure": unclassified_execution_failure,
         "constraint_attestation": {
-            "status": "bound",
+            "status": (
+                "bound_and_covered"
+                if not constraint_coverage_incomplete and not timing_evaluation_incomplete
+                else "bound_but_incomplete"
+            ),
             "mode": "fixed_registered_target",
             "target_frequency_mhz": manifest["protected_task"]["target_frequency_mhz"],
             "sdc_sha256": manifest["protected_task"]["sdc_sha256"],
@@ -684,7 +847,25 @@ def parser() -> argparse.ArgumentParser:
     run = sub.add_parser("execute")
     run.add_argument("--project", type=Path, required=True)
     run.add_argument("--cores", type=int, default=4)
+    run.add_argument(
+        "--cpu-set",
+        help="explicit taskset-compatible CPU list for this ORFS flow (for example 32-35)",
+    )
     run.add_argument("--timeout-seconds", type=int, default=7200)
+    run.add_argument(
+        "--orfs-stages",
+        help="space-separated ORFS stages for bounded preflight execution",
+    )
+    run.add_argument(
+        "--min-mapped-cells",
+        type=int,
+        help="exclude a task when floorplan reports fewer elaborated cells than this floor",
+    )
+    run.add_argument(
+        "--max-mapped-cells",
+        type=int,
+        help="exclude a task when floorplan reports more elaborated cells than this cap",
+    )
     run.add_argument("--skip-orfs", action="store_true", help="reuse the latest completed backend run")
     run.add_argument(
         "--collect-only",

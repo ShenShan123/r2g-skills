@@ -207,8 +207,8 @@ def macro_pin_geometry(lef_paths):
     """Per-MACRO footprint + pin-center geometry from cell/macro LEF(s).
 
     Returns ``{MACRO_UPPER: {"width": w_um, "height": h_um,
-    "pins": {PIN_UPPER: (cx_um, cy_um)}}}`` where each pin center is the bbox
-    centroid of that pin's ``RECT``/``POLYGON`` port geometry, in the cell's own
+    "pins": {PIN_UPPER: (cx_um, cy_um)}}}`` where each pin center is the mean
+    of its ``RECT``/``POLYGON`` shape centers (OpenDB ``getAvgXY`` semantics), in the cell's own
     (un-oriented) coordinate frame. Later paths override earlier ones on a name
     clash. Empty dict if no path is readable.
 
@@ -242,12 +242,13 @@ def _floats(text):
 def _parse_one_lef_geometry(path, geom):
     current_macro = None
     current_pin = None
-    xs, ys = [], []
+    shapes = []
 
     def _flush_pin():
-        if current_macro is not None and current_pin is not None and xs:
+        if current_macro is not None and current_pin is not None and shapes:
             geom[current_macro]["pins"][current_pin] = (
-                (min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+                sum((min(xs) + max(xs)) / 2.0 for xs, _ in shapes) / len(shapes),
+                sum((min(ys) + max(ys)) / 2.0 for _, ys in shapes) / len(shapes))
 
     with open(path, "r") as f:
         for raw in f:
@@ -259,7 +260,7 @@ def _parse_one_lef_geometry(path, geom):
                 _flush_pin()
                 current_macro = _norm_lef_key(m.group(1))
                 geom[current_macro] = {"width": 0.0, "height": 0.0, "pins": {}}
-                current_pin, xs, ys = None, [], []
+                current_pin, shapes = None, []
                 continue
             if current_macro is None:
                 continue
@@ -272,7 +273,7 @@ def _parse_one_lef_geometry(path, geom):
             if m:
                 _flush_pin()
                 current_pin = _norm_lef_key(m.group(1))
-                xs, ys = [], []
+                shapes = []
                 continue
             if current_pin is not None:
                 for rm in _RECT_RE.finditer(s):
@@ -280,24 +281,24 @@ def _parse_one_lef_geometry(path, geom):
                     # RECT coords are the last 4 floats (tolerates a MASK prefix).
                     if len(nums) >= 4:
                         x1, y1, x2, y2 = nums[-4:]
-                        xs.extend([x1, x2])
-                        ys.extend([y1, y2])
+                        shapes.append(([x1, x2], [y1, y2]))
                 for pm in _POLY_RE.finditer(s):
                     nums = _floats(pm.group(1))
                     if len(nums) % 2:      # odd -> leading MASK id; polygon coords pair up
                         nums = nums[1:]
-                    for k in range(0, len(nums) - 1, 2):
-                        xs.append(nums[k])
-                        ys.append(nums[k + 1])
+                    xs = nums[0::2]
+                    ys = nums[1::2]
+                    if xs and len(xs) == len(ys):
+                        shapes.append((xs, ys))
                 m = re.match(r"END\s+(\S+)", s)
                 if m and _norm_lef_key(m.group(1)) == current_pin:
                     _flush_pin()
-                    current_pin, xs, ys = None, [], []
+                    current_pin, shapes = None, []
                     continue
             m = re.match(r"END\s+(\S+)", s)
             if m and _norm_lef_key(m.group(1)) == current_macro:
                 _flush_pin()
-                current_macro, current_pin, xs, ys = None, None, [], []
+                current_macro, current_pin, shapes = None, None, []
 
 
 def pin_abs_pos_um(geom, inst_x_um, inst_y_um, orient, master_name, pin_name):

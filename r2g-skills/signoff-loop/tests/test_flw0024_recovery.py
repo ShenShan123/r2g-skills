@@ -127,6 +127,24 @@ def test_process_one_resizes_and_retries_then_recovers(tmp_path, monkeypatch):
     assert resize[0]["effect_fingerprint"]
 
 
+def test_fixed_footprint_exclusion_blocks_direct_resize(tmp_path, monkeypatch):
+    p = _mk_project(tmp_path, die=True)
+    _seed_backend(p, flw0024=True)
+    entry = {"design": "demo", "project_path": str(p), "platform": "nangate45"}
+    monkeypatch.setenv("R2G_FIX_EXCLUDE", "core_util_relief")
+    monkeypatch.setattr(el, "_run_flow", lambda e: 2)
+    monkeypatch.setattr(el, "_ingest", lambda e: None)
+    monkeypatch.setattr(el, "_fail_stage", lambda e: "place")
+
+    led = _Led()
+    assert el.process_one(led, entry, None) == "escalated"
+    assert "DIE_AREA" in (p / "constraints" / "config.mk").read_text()
+    assert not (p / "reports" / "fix_log.jsonl").exists()
+    assert [reason for state, reason in led.states if state == "escalated"] == [
+        "place_density_residual"
+    ]
+
+
 def test_resize_that_does_not_recover_records_no_change(tmp_path, monkeypatch):
     """A resize whose retry STILL over-packs must record verdict=no_change (negative
     learning), not a fabricated win, AND escalate place_density_residual."""

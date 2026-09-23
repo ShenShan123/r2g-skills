@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 
 import diagnose_signoff_fix as dsf
+import knowledge_db
+import recipe_lifecycle
 import suggest_config
 
 
@@ -80,6 +82,42 @@ def test_timing_trial_policy_allows_only_registered_setup_margin(
     assert [s["id"] for s in plan["strategies"]] == ["setup_slack_margin"]
     assert {r["strategy"] for r in plan["action_policy_rejections"]} == {
         "utilization_reduce", "period_relax"}
+
+
+def test_fixed_task_policy_keeps_synthesis_recipe_but_blocks_area_and_clock(
+        tmp_path: Path, monkeypatch):
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(json.dumps({
+        "schema_version": "r2g-repair-action-policy-1.0",
+        "allowed_numeric_knobs": {},
+        "allowed_string_knobs": {
+            "ABC_AREA": ["0", "1"],
+            "SYNTH_HIERARCHICAL": ["0", "1"],
+        },
+        "allowed_sdc_edits": {},
+    }), encoding="utf-8")
+    monkeypatch.setenv("R2G_REPAIR_ACTION_POLICY_FILE", str(policy_path))
+    plan = dsf.build_plan(
+        {}, {},
+        {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "20", "ABC_AREA": "1"},
+        check="timing",
+        tcheck={"tier": "severe", "wns_ns": -3.0, "clock_period_ns": 10.0},
+        route={"status": "clean", "total_violations": 0},
+    )
+
+    dsf._apply_repair_action_policy(plan)
+
+    assert [s["id"] for s in plan["strategies"]] == [
+        "hierarchical_synthesis_mapping",
+        "backend_aware_synth_retune",
+    ]
+    assert {r["strategy"] for r in plan["action_policy_rejections"]} == {
+        "abc_overdrive_8ns",
+        "early_place_timing_repair",
+        "hierarchical_place_timing_repair",
+        "period_relax",
+        "utilization_reduce",
+    }
 
 
 def test_configured_but_unreadable_action_policy_fails_closed(tmp_path: Path, monkeypatch):
@@ -175,3 +213,123 @@ def test_ab_gated_strategy_becomes_live_only_after_promotion():
     assert dsf._live_auto_strategy({"strategies": [candidate]}) is None
     assert dsf._live_auto_strategy(
         {"strategies": [candidate]}, rank_first=strategy["id"])["id"] == strategy["id"]
+
+
+def test_preregistered_candidate_attempt_executes_without_claiming_promotion():
+    strategy = {
+        "id": "early_place_timing_repair",
+        "config_edits": {"ENABLE_PLACE_REPAIR_TIMING": "1"},
+        "sdc_edits": {},
+        "auto_apply": True,
+        "requires_ab_promotion": True,
+        "lifecycle_status": "candidate",
+    }
+    policy = {
+        "candidate_attempt_policy": {
+            "mode": "single_preregistered_attempt",
+            "entries": [{
+                "policy_id": "exp2-early-place-v1",
+                "check": "timing",
+                "platform": "sky130hd",
+                "strategy": "early_place_timing_repair",
+                "effect_fingerprint": {"ENABLE_PLACE_REPAIR_TIMING": "1"},
+            }],
+        },
+    }
+    authorization = dsf._candidate_attempt_authorized(
+        policy, check="timing", platform="sky130hd", strategy=strategy,
+        lifecycle_status="candidate")
+    assert authorization["policy_id"] == "exp2-early-place-v1"
+    live = {**strategy, "candidate_attempt_authorized": True}
+    assert dsf._live_auto_strategy({"strategies": [live]})["id"] == strategy["id"]
+
+    assert dsf._candidate_attempt_authorized(
+        policy, check="timing", platform="sky130hd", strategy=strategy,
+        lifecycle_status="shadow") is None
+    assert dsf._candidate_attempt_authorized(
+        policy, check="drc", platform="sky130hd", strategy=strategy,
+        lifecycle_status="candidate") is None
+    changed_effect = {
+        **strategy, "config_edits": {"ENABLE_PLACE_REPAIR_TIMING": "0"},
+    }
+    assert dsf._candidate_attempt_authorized(
+        policy, check="timing", platform="sky130hd", strategy=changed_effect,
+        lifecycle_status="candidate") is None
+
+
+def test_pin_side_scope_transfer_is_narrow_and_exact_status_wins(tmp_path: Path):
+    conn = knowledge_db.connect(tmp_path / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn)
+    key = {
+        "symptom_id": "04d38c5a585fd332",
+        "design_class": "*",
+        "platform": "sky130hd",
+        "strategy": "pin_side_rebalance",
+    }
+    recipe_lifecycle._set(conn, "promoted", "test:platform_geometric", **key)
+    conn.commit()
+    strategy = {
+        "id": "pin_side_rebalance",
+        "config_edits": {"PLACE_PINS_ARGS": "-exclude right:*"},
+        "geometry_evidence": {
+            "rule": "m3.2", "side": "right", "edge_count": 5,
+            "edge_fraction": 1.0,
+        },
+    }
+
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, symptom_id=key["symptom_id"],
+        design_class="crypto/large", platform="sky130hd", strategy=strategy,
+    ) == ("promoted", "platform_geometric")
+
+    low_confidence = {
+        **strategy,
+        "geometry_evidence": {**strategy["geometry_evidence"], "edge_fraction": 0.79},
+    }
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, symptom_id=key["symptom_id"],
+        design_class="crypto/large", platform="sky130hd", strategy=low_confidence,
+    ) == (None, None)
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, symptom_id=key["symptom_id"],
+        design_class="crypto/large", platform="sky130hd",
+        strategy={**strategy, "id": "unrelated_recipe"},
+    ) == (None, None)
+
+    exact = {**key, "design_class": "crypto/large"}
+    recipe_lifecycle._set(conn, "shadow", "test:exact_veto", **exact)
+    conn.commit()
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, symptom_id=key["symptom_id"],
+        design_class="crypto/large", platform="sky130hd", strategy=strategy,
+    ) == ("shadow", "exact")
+    conn.close()
+
+
+def test_fixed_target_timing_candidates_are_visible_but_not_live():
+    plan = dsf.build_plan(
+        {}, {},
+        {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "20", "ABC_AREA": "1"},
+        check="timing",
+        tcheck={"tier": "minor", "wns_ns": -0.27, "clock_period_ns": 10.0},
+        route={"status": "clean", "total_violations": 0},
+    )
+
+    ids = [strategy["id"] for strategy in plan["strategies"]]
+    assert ids == [
+        "abc_overdrive_8ns",
+        "early_place_timing_repair",
+        "hierarchical_synthesis_mapping",
+        "hierarchical_place_timing_repair",
+        "utilization_reduce",
+    ]
+    for strategy in plan["strategies"]:
+        if strategy["id"] != "utilization_reduce":
+            assert strategy["requires_ab_promotion"] is True
+    assert dsf._live_auto_strategy(plan) is not None
+
+    fixed_task_plan = {
+        "strategies": [strategy for strategy in plan["strategies"]
+                       if strategy["id"] != "utilization_reduce"]
+    }
+    assert dsf._live_auto_strategy(fixed_task_plan) is None

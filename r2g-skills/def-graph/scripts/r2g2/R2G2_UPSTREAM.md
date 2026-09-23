@@ -9,8 +9,9 @@ than hand-merging our own reimplementation.
 
 | Field | Value |
 | --- | --- |
-| Archive | `Dataset_R2G2.0(B)v2.zip` (supersedes `Dataset_R2G2.0(B).zip`) |
-| Ingested | 2026-08-01 (v1), re-vendored from v2 the same day |
+| Archive | `Dataset_R2G2.0_B_v3` (incremental v3 drop over v2) |
+| Legacy archives | `Dataset_R2G2.0(B)v2.zip`, superseding `Dataset_R2G2.0(B).zip` |
+| Ingested | 2026-08-01 (v1/v2); v3 semantic delta merged 2026-09-06 |
 | Reference sample | `bp_multi_top/v01` (nangate45), reported PASS on both upstream checks |
 | Contract doc | `upstream_docs/B_VIEW_DATASET_STRUCTURE.md` (+ `_CN`), `upstream_docs/R2G2.0_README.md` |
 
@@ -26,6 +27,38 @@ SHA256 of the files as they arrived (verify before re-vendoring):
 9e8d9a6610553bccc3b0865fd519b7ce402d69e8b44ad0072b7976049d31aa14  checks/validate_four_stage.py
 975fc54a05d74ab7dc7c38b73b7c339a221a1f091bf96b46def3015b9b2e0d91  configs/encode_map.csv
 ```
+
+### v3 selective merge (2026-09-06)
+
+The shared v3 drop is incremental rather than a complete replacement for this
+cross-platform vendor. Its source hashes are:
+
+```
+24249a812ccacbd8c56712ff6af559097009657c7b314181cb9db1e2ca12937e  01_build_base_graph.py
+96b70111120aaebbdd414ce879313a03ae48cd690f6f7e1aa79ee67cce8df0e5  02_extract_features.py
+bb01943a56b57b782ccbd9831a75a429f777fb974510a01f401daaa23594c3ae  03_extract_labels.py
+2359d700eb7d6b39edb482bc63bf23f53990a3bbdd0dfb712d153e7618191726  04_assemble_heterograph.py
+859c1bc48fc778eeec9e514f8862ed0f6775de99824caa1ad1404bd5c2749a6d  05_build_stage_snapshots.py
+```
+
+`01` and `05` are byte-identical to v2. The three v3 semantic changes were
+merged into the existing D1-D11-corrected files instead of overwriting them:
+
+1. `02`: treat RUDY boxes with width or height at most `1e-9 um` as
+   numerically degenerate;
+2. `03`: normalize hierarchical OpenSTA points while retaining the final
+   `instance/pin` separator;
+3. `04`: construct congestion geometry edges over four half-window offsets,
+   deduplicate undirected pairs globally, and retain the five-neighbour cap per
+   pass.
+
+The v3 `04` implementation still hardcodes Nangate45's `2.1 um` grid. This
+vendor keeps D3's technology-derived `resolve_congestion_grid_um(cfg)` value in
+all four passes. It also keeps the strict-pre-floorplan disable policy, D1-D11,
+atomic publication, fail-closed checks, and the independent validator. Because
+the edge topology changes, the four-stage data contract is now
+`r2g2_four_stage_hetero_pipeline_v3`; old v2 tensors must be rebuilt rather
+than mixed into a v3 dataset.
 
 ### v2 re-vendor (2026-08-01) — hierarchy-separator name mapping
 
@@ -319,6 +352,55 @@ Now driven by a `tap_master_patterns` config field, which
 .tap_patterns` — this skill's existing single source of truth for tap naming
 (`_PLATFORM_TAP_EXTRA`, which already carried gf180's `FILLTIE`/`ENDCAP` for
 exactly this reason). Defaults to upstream's `["TAP"]` when the field is absent.
+
+### D12 - Centers used the pre-resize synthesis master (physical correctness)
+
+The logical graph keeps the synthesized instance identity, but the permitted
+placement/CTS snapshot may replace its master with another drive strength.
+`02` previously combined the snapshot origin with the synthesis master's LEF
+dimensions, producing an incorrect physical center and normalized center.
+`gate_geometry_size` now selects the snapshot master for oriented geometry.
+Absent physical LEF dimensions are NaN; no fallback to the old master is allowed.
+With no snapshot component, synthesis dimensions remain available, while position
+stays unavailable under the existing coordinate-trust policy. Logical IDs and
+Liberty attributes intentionally continue to describe the synthesis cell.
+
+Tests cover all eight orientations, resizing and missing/invalid LEF sizes.
+An isolated replay of the frozen Experiment 4 runtime changes only `02`, copies
+the original base graph/labels and rebuilds features/assembly for independent
+OpenDB verification. This does not rewrite the old campaign results.
+
+### D13 - Multi-shape pin centers differed from OpenDB (physical correctness)
+
+`parse_lef_geometry` previously used the center of the union bbox of all RECT
+and POLYGON shapes belonging to a pin. OpenDB `dbITerm::getAvgXY` instead uses
+the arithmetic mean of each shape center. The two definitions agree for one
+shape but differ for common multi-rectangle pins, which also biases net bbox
+and HPWL features. Pin geometry now follows OpenDB's shape-center mean; the
+shared `techlib.lef` parser uses the same definition.
+
+The independent audit reads pin positions directly from OpenDB and only checks
+net geometry where OpenDB endpoints exactly equal the canonical Yosys endpoint
+set. Coordinate tolerance is one database unit (0.001 um on the audited
+platform). HPWL tolerance is 0.0021 um because it sums independently rounded X
+and Y extents. Unit tests cover multi-shape pins and the existing eight DEF
+orientations.
+
+## Routed patch rectangle correction (2026-09-17)
+
+`03.clause_points` previously treated the first two `RECT` offsets as a route
+point. DEF `RECT (deltax1 deltay1 deltax2 deltay2)` describes patch metal relative
+to the preceding routing point and does not change that point. Parsing it as an
+absolute endpoint introduces fictitious long wire segments, affecting routed
+wirelength and grid-utilization labels. Strip patch rectangles before extracting
+centerline points. Patch area itself is outside these centerline-length metrics.
+
+The regression test includes real export syntax with a large absolute routing
+coordinate and small negative rectangle offsets. The downstream independent
+DEF/LEF checker also rejects unsupported geometry instead of silently certifying
+it. Old graph labels must be re-exported and re-audited, not merely reloaded.
+
+Reference: [LEF/DEF 5.8 NETS routingPoints](https://coriolis.lip6.fr/doc/lefdef/lefdefref/DEFSyntax.html).
 
 ## Known upstream residue (not changed here)
 

@@ -36,6 +36,7 @@ GROUND_PINS = {"VSS", "VGND", "GND", "VSSA", "VSSD"}
 FAST_ROUTE_GRID_TRACKS = 15
 METAL3_PITCH_UM = 0.14
 FIXED_CONGESTION_GRID_UM = FAST_ROUTE_GRID_TRACKS * METAL3_PITCH_UM
+RUDY_BBOX_TOLERANCE_UM = 1e-9
 
 
 def resolve_congestion_grid_um(cfg: dict[str, Any]) -> float:
@@ -891,11 +892,11 @@ def parse_lef_geometry(paths: list[Path]) -> dict[str, dict[str, Any]]:
                     end_match.group(1)
                 ) == current_pin:
                     if rectangles:
-                        xs = [v for rect_row in rectangles for v in (rect_row[0], rect_row[2])]
-                        ys = [v for rect_row in rectangles for v in (rect_row[1], rect_row[3])]
                         macros[current_macro]["pins"][current_pin] = (
-                            (min(xs) + max(xs)) / 2.0,
-                            (min(ys) + max(ys)) / 2.0,
+                            sum((row[0] + row[2]) / 2.0 for row in rectangles)
+                            / len(rectangles),
+                            sum((row[1] + row[3]) / 2.0 for row in rectangles)
+                            / len(rectangles),
                         )
                     current_pin = ""
                     rectangles = []
@@ -1101,6 +1102,25 @@ def oriented_size(
     if (orientation or "N").upper() in {"E", "W", "FE", "FW"}:
         return height, width
     return width, height
+
+
+def gate_geometry_size(
+    synthesized_master: str,
+    component: dict[str, Any],
+    lef: dict[str, dict[str, Any]],
+) -> tuple[float, float]:
+    """Use the permitted snapshot's resized master for physical geometry.
+
+    Logical IDs and Liberty attributes still describe the synthesized cell.
+    Missing physical LEF data must not silently fall back to its old size.
+    """
+    physical_master = str(component.get("master") or synthesized_master)
+    macro = lef.get(physical_master.upper(), {})
+    width = float(macro.get("width", float("nan")))
+    height = float(macro.get("height", float("nan")))
+    if not (math.isfinite(width) and math.isfinite(height) and width > 0 and height > 0):
+        return float("nan"), float("nan")
+    return oriented_size(width, height, str(component.get("orient", "N")))
 
 
 def grid_keys_for_bbox(
@@ -1341,7 +1361,10 @@ def compute_congestion_features(
             net_density[key] += 1.0
         width = right - left
         height = top - bottom
-        if width <= 0 or height <= 0:
+        # R2G2.0 v3: reject numerically degenerate boxes as well as exact zero.
+        # Tiny positive widths can otherwise amplify RUDY by many orders of
+        # magnitude after coordinate conversion or subtraction.
+        if width <= RUDY_BBOX_TOLERANCE_UM or height <= RUDY_BBOX_TOLERANCE_UM:
             continue
         factor = 1.0 / width + 1.0 / height
         for grid_x, grid_y in keys:
@@ -2398,12 +2421,7 @@ def main() -> None:
         lib_cell = lib["cells"].get(master.upper(), {})
         function_name = cell_function_name(master, lib_cell)
         gate_functions[name] = function_name
-        lef_macro = lef.get(master.upper(), {})
-        oriented_width, oriented_height = oriented_size(
-            float(lef_macro.get("width", 0.0)),
-            float(lef_macro.get("height", 0.0)),
-            str(component.get("orient", "N")),
-        )
+        oriented_width, oriented_height = gate_geometry_size(master, component, lef)
         origin_x = (
             float(component["x"]) / place["dbu"]
             if placement_valid
@@ -2506,7 +2524,8 @@ def main() -> None:
     ]
     for name in sorted(io_map):
         physical = place["iopins"].get(name, {})
-        net_name = canonical_name(physical.get("net") or io_map[name]["net"])
+        # Physical aliases may change across snapshots; logical edges stay canonical.
+        net_name = canonical_name(io_map[name]["net"])
         direction = str(
             physical.get("direction") or io_map[name]["direction"]
         ).upper()
