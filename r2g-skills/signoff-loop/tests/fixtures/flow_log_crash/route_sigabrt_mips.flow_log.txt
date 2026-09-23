@@ -1,0 +1,54 @@
+/data2/home/shenshan/r2g-work/orfs/OpenROAD-flow-scripts/flow/util/preprocessLib.py -i /data2/home/shenshan/r2g-work/orfs/OpenROAD-flow-scripts/flow/platforms/sky130hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib -o objects/sky130hd/mips/e5l_3944650111ac_mips__e5l/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+Opening file for replace: /data2/home/shenshan/r2g-work/orfs/OpenROAD-flow-scripts/flow/platforms/sky130hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+Commented 0 lines containing "original_pin"
+[... synth..grt elided ...]
+Running detail_route.tcl, stage 5_2_route
+Reading in /data2/home/shenshan/r2g-work/orfs/OpenROAD-flow-scripts/flow/platforms/sky130hd/setRC.tcl
+detailed_route -output_drc ./reports/sky130hd/mips/e5l_3944650111ac_mips__e5l/5_route_drc.rpt -output_maze ./results/sky130hd/mips/e5l_3944650111ac_mips__e5l/maze.log -bottom_routing_layer met1 -top_routing_layer met5 -droute_end_iter 64 -verbose 1 -drc_report_iter_step 5
+[INFO DRT-0149] Reading tech and libs.
+[... detailed-route progress elided ...]
+           met4        0
+------------------------
+                   37226
+
+
+[INFO DRT-0267] cpu time = 00:13:54, elapsed time = 00:04:33, memory = 1442.34 (MB), peak = 1476.28 (MB)
+
+openroad: ./src/odb/src/db/dbTable.h:116: T* odb::dbTable<T>::getPtr(odb::dbId<T>) const [with T = odb::_dbITerm]: Assertion `p->_oid & DB_ALLOC_BIT' failed.
+Signal 6 received
+Stack trace:
+ 0# 0x00005C2C34BC3DAD in /usr/bin/openroad
+ 1# 0x000074FAD8C42520 in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+ 2# pthread_kill in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+ 3# raise in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+ 4# abort in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+ 5# 0x000074FAD8C2871B in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+ 6# 0x000074FAD8C39E96 in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+ 7# odb::dbAccessPoint::addSegment(odb::Rect const&, bool const&, bool const&) in /usr/bin/openroad
+ 8# drt::io::Writer::updateDbAccessPoints(odb::dbBlock*, odb::dbTech*) in /usr/bin/openroad
+ 9# drt::io::Writer::updateDb(odb::dbDatabase*, drt::RouterConfiguration*, bool, bool) in /usr/bin/openroad
+10# drt::TritonRoute::endFR() in /usr/bin/openroad
+11# drt::TritonRoute::main() in /usr/bin/openroad
+12# detailed_route_cmd(char const*, char const*, char const*, char const*, char const*, bool, int, char const*, char const*, int, double, char const*, char const*, int, bool, bool, bool, int, bool, char const*, int) in /usr/bin/openroad
+13# 0x00005C2C35406259 in /usr/bin/openroad
+14# TclNRRunCallbacks in /opt/OpenROAD/oss-cad-suite/lib/libtcl8.6.so
+15# 0x000074FADD899028 in /opt/OpenROAD/oss-cad-suite/lib/libtcl8.6.so
+16# Tcl_EvalEx in /opt/OpenROAD/oss-cad-suite/lib/libtcl8.6.so
+17# Tcl_Eval in /opt/OpenROAD/oss-cad-suite/lib/libtcl8.6.so
+18# sta::sourceTclFile(char const*, bool, bool, Tcl_Interp*) in /usr/bin/openroad
+19# 0x00005C2C34BC4994 in /usr/bin/openroad
+20# Tcl_MainEx in /opt/OpenROAD/oss-cad-suite/lib/libtcl8.6.so
+21# main in /usr/bin/openroad
+22# 0x000074FAD8C29D90 in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+23# __libc_start_main in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+24# _start in /usr/bin/openroad
+Command terminated by signal 6
+Elapsed time: 5:13.70[h:]min:sec. CPU time: user 979.04 sys 3.61 (313%). Peak memory: 1511708KB.
+make[1]: *** [Makefile:669: do-5_2_route] Error 1
+make: *** [Makefile:669: results/sky130hd/mips/e5l_3944650111ac_mips__e5l/5_2_route.odb] Error 2
+ERROR: Stage 'route' failed (exit code 2) after 412s
+
+HINT: Routing congestion detected. Try re-running with:
+  1. route_relief (learnable): fix_signoff.sh /data2/home/shenshan/r2g-work/projects/e5l/e5l_3944650111ac_mips sky130hd --check route
+     (lowers CORE_UTILIZATION to open routing channels; deck never relaxed)
+  2. Or: add export ROUTING_LAYER_ADJUSTMENT = 0.10 and resume FROM_STAGE=route

@@ -1,0 +1,29 @@
+Running cts.tcl, stage 4_1_cts
+Reading in /data2/home/shenshan/r2g-work/orfs/OpenROAD-flow-scripts/flow/platforms/ihp-sg13g2/setRC.tcl
+clock_tree_synthesis -sink_clustering_enable -balance_levels
+[... CTS progress elided ...]
+repair_timing -verbose -setup_margin 0 -hold_margin 0 -repair_tns 100 -match_cell_footprint
+Signal 11 received
+Stack trace:
+ 0# 0x000059C228C01DAD in /usr/bin/openroad
+ 1# 0x000075A4F1242520 in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+ 2# sta::VertexPathIterator::VertexPathIterator(sta::Vertex*, sta::RiseFall const*, sta::PathAnalysisPt const*, sta::StaState const*) in /usr/bin/openroad
+ 3# sta::CheckCrpr::otherMinMaxArrival(sta::PathVertex const*) in /usr/bin/openroad
+ 4# sta::CheckCrpr::maxCrpr(sta::ClkInfo*) in /usr/bin/openroad
+ 5# sta::ArrivalVisitor::pruneCrprArrivals() in /usr/bin/openroad
+ 6# sta::ArrivalVisitor::visit(sta::Vertex*) in /usr/bin/openroad
+ 7# 0x000059C228F2755A in /usr/bin/openroad
+ 8# sta::DispatchQueue::dispatch_thread_handler(unsigned long) in /usr/bin/openroad
+ 9# 0x000075A4F16DC253 in /opt/OpenROAD/oss-cad-suite/lib/libstdc++.so.6
+10# 0x000075A4F1294AC3 in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+11# 0x000075A4F1326850 in /opt/OpenROAD/oss-cad-suite/lib/libc.so.6
+Command terminated by signal 11
+Elapsed time: 0:05.04[h:]min:sec. CPU time: user 6.43 sys 1.45 (156%). Peak memory: 446004KB.
+make[1]: *** [Makefile:626: do-4_1_cts] Error 1
+make: *** [Makefile:626: results/ihp-sg13g2/fft8_stream/exp1_9e3f10826919_fft8_stream__m0/4_1_cts.odb] Error 2
+ERROR: Stage 'route' failed (exit code 2) after 66s
+
+HINT: Routing congestion detected. Try re-running with:
+  1. route_relief (learnable): fix_signoff.sh /data2/home/shenshan/r2g-work/orfs/e8/projects/exp1_9e3f10826919_fft8_stream ihp-sg13g2 --check route
+     (lowers CORE_UTILIZATION to open routing channels; deck never relaxed)
+  2. Or: add export ROUTING_LAYER_ADJUSTMENT = 0.10 and resume FROM_STAGE=route

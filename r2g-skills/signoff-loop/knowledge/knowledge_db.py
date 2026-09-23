@@ -487,7 +487,7 @@ def is_success(row: dict) -> bool:
         or drc in ("clean", "clean_beol")
         or rcx == "complete"
     )
-    orfs_failed = row.get("orfs_status") == "fail"
+    orfs_failed = row.get("orfs_status") in ("fail", "tool_crash")   # both aborted
     relaxed = (
         not orfs_failed
         and has_positive_signoff and drc_not_failed and lvs_not_failed and rcx_not_failed

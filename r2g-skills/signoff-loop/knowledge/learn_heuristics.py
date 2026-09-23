@@ -54,9 +54,12 @@ def _fetch_learnable_rows(conn) -> list[dict]:
     SAME experiment drives both the ab_trials lifecycle and ordinary ranking (circular
     corroboration). The filter lives ONLY here (the learning read); ingest still writes
     failure_events / run_violations for these runs. COALESCE so legacy rows (is_bench /
-    eval_arm NULL) are treated as not-bench / not-arm (included)."""
+    eval_arm NULL) are treated as not-bench / not-arm (included). A 'tool_crash' run (a
+    stage died by a crash signal, CORRECTIONS #15/#25) says nothing about the design or
+    its config, so it is neither a success nor a failure sample."""
     cur = conn.execute("SELECT * FROM runs WHERE COALESCE(is_bench, 0) = 0 "
-                       "AND COALESCE(eval_arm, '') = ''")
+                       "AND COALESCE(eval_arm, '') = '' "
+                       "AND COALESCE(orfs_status, '') != 'tool_crash'")
     cols = [c[0] for c in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     return [r for r in rows if not _is_arm_project(r.get("project_path"))]

@@ -603,8 +603,61 @@ def _orfs_fail_detail(run_dir: Path | None) -> tuple[str | None, str | None]:
     return (None, fallback)
 
 
+# A stage that died by a crash SIGNAL is the tool failing, not the design
+# (CORRECTIONS #15/#25). Two reproducible crashes in openroad v2.0-17598 — an OpenSTA
+# thread-race SIGSEGV at CTS and an ODB `dbTable<_dbITerm>` assertion (SIGABRT) in
+# TritonRoute — were recorded as orfs-fail-cts / orfs-fail-route, i.e. as the design
+# failing those stages; the STA one is load-dependent. The stage's exit code cannot
+# tell: run_orfs.sh records make's status (2), so the signal survives only as text in
+# flow.log. SIGKILL/SIGTERM are deliberately absent: they are delivered from outside
+# (our own stage timeout, an operator, the OOM killer) and keep their timeout meaning.
+_CRASH_SIGNALS = {4: "SIGILL", 6: "SIGABRT", 7: "SIGBUS", 8: "SIGFPE", 11: "SIGSEGV"}
+_CRASH_SIGNAL_RE = re.compile(
+    r"^Signal (\d+) received|Command terminated by signal (\d+)")
+_CRASH_TEXT_RE = {
+    "SIGSEGV": re.compile(r"Segmentation fault"),
+    "SIGABRT": re.compile(r"Assertion `.*' failed"),
+}
+_ORFS_STEP_RE = re.compile(r"^Running \S+, stage ")     # ORFS: one per step script
+
+
+def _stage_crash(run_dir: Path | None, stage: str | None) -> tuple[str, str] | None:
+    """(signal name, evidence line) when `stage` of this run died by a crash signal.
+
+    Reads only the failing step of flow.log: from the last ORFS "Running <script>,
+    stage <step>" line before run_orfs.sh's "ERROR: Stage '<stage>' failed" marker
+    to that marker (the last 500 lines when the marker is absent). A signal line
+    elsewhere in the log is never charged to this stage. None when not a crash.
+    """
+    if run_dir is None or not stage:
+        return None
+    try:
+        lines = (run_dir / "flow.log").read_text(errors="ignore").splitlines()
+    except OSError:
+        return None
+    marker = f"ERROR: Stage '{stage}' failed"
+    end = next((i for i in range(len(lines) - 1, -1, -1)
+                if lines[i].startswith(marker)), None)
+    if end is None:
+        segment = lines[-500:]
+    else:
+        start = next((i for i in range(end - 1, -1, -1)
+                      if _ORFS_STEP_RE.match(lines[i])), 0)
+        segment = lines[start:end]
+    for ln in segment:
+        m = _CRASH_SIGNAL_RE.search(ln)
+        if m and int(m.group(1) or m.group(2)) in _CRASH_SIGNALS:
+            return _CRASH_SIGNALS[int(m.group(1) or m.group(2))], ln.strip()[:300]
+    for name, rx in _CRASH_TEXT_RE.items():
+        for ln in segment:
+            if rx.search(ln):
+                return name, ln.strip()[:300]
+    return None
+
+
 def _derive_orfs_status(stages: list[dict[str, Any]],
-                        flow_scope: str = "full") -> tuple[str, str | None]:
+                        flow_scope: str = "full",
+                        run_dir: Path | None = None) -> tuple[str, str | None]:
     """Status against the run's DECLARED scope (rtl-acquire 2026-07-09).
 
     flow_scope='synth_only' (config.mk `export R2G_FLOW_SCOPE = synth_only`,
@@ -612,6 +665,10 @@ def _derive_orfs_status(stages: list[dict[str, Any]],
     a synth-only pass is a pass within its scope, never a misleading 'partial'
     that would enqueue signoff A/B work for a run that was never a signoff
     subject. Any other/absent value keeps the full six-stage requirement.
+
+    With `run_dir`, a failed stage that died by a crash signal (_stage_crash)
+    is 'tool_crash' rather than 'fail': a tool/environment failure, not a
+    verdict about the design.
     """
     if not stages:
         return ("unknown", None)
@@ -629,6 +686,8 @@ def _derive_orfs_status(stages: list[dict[str, Any]],
             saw_fail = True
             fail_stage = s.get("stage")
     if saw_fail:
+        if _stage_crash(run_dir, fail_stage) is not None:
+            return ("tool_crash", fail_stage)
         return ("fail", fail_stage)
     if flow_scope == "synth_only":
         required = ["synth"]
@@ -930,7 +989,9 @@ def ingest(project: Path,
     flow_scope = (cfg.get("R2G_FLOW_SCOPE") or "").strip().lower()
     if flow_scope != "synth_only":
         flow_scope = "full"
-    orfs_status, fail_stage = _derive_orfs_status(stage_log, flow_scope)
+    orfs_status, fail_stage = _derive_orfs_status(
+        stage_log, flow_scope,
+        stage_log_path.parent if stage_log_path.parent.name.startswith("RUN_") else None)
     # RMD3-P1-01 (failure-patterns.md #58): a FROM_STAGE resume's local ledger
     # holds only the rerun stages, so the local classification reads 'partial'
     # while the def-graph FLOW gate resolves the SAME execution complete via
@@ -1102,10 +1163,22 @@ def ingest(project: Path,
             "VALUES (?, ?, ?, ?)",
             (run_id, fail_stage, sig, err_line),
         )
+    if orfs_status == "tool_crash":
+        # A tool/environment event, never an orfs-fail-* design signature (honesty
+        # H3 keeps those on 'fail' runs only), and no design symptom below.
+        signal_name, evidence = _stage_crash(stage_log_path.parent, fail_stage) or ("", None)
+        conn.execute(
+            "INSERT INTO failure_events (run_id, stage, signature, detail) "
+            "VALUES (?, ?, ?, ?)",
+            (run_id, fail_stage, f"tool-crash-{fail_stage}-{signal_name}", evidence),
+        )
     _ingest_fix_events(conn, project, design_name, design_family, platform)
-    _write_run_violations(conn, run_id, design_family, platform, drc, lvs, tcheck,
-                          _to_float(timing.get("setup_wns")),
-                          orfs_status=orfs_status, fail_stage=fail_stage)
+    if orfs_status == "tool_crash":
+        conn.execute("DELETE FROM run_violations WHERE run_id = ?", (run_id,))
+    else:
+        _write_run_violations(conn, run_id, design_family, platform, drc, lvs, tcheck,
+                              _to_float(timing.get("setup_wns")),
+                              orfs_status=orfs_status, fail_stage=fail_stage)
     _record_lineage(conn, run_id, design_name, platform, cfg, orfs_status,
                     outcome_fields={
                         "drc_status": drc.get("status"),
