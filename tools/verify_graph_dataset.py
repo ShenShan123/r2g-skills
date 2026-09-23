@@ -541,19 +541,23 @@ def _v_apply_orient(px, py, orient, w, h):
 
 def _lef_pin_geometry(lef_paths):
     """``{MASTER_UPPER: {"w","h","pins":{PIN_UPPER:(cx,cy)}}}`` — an INDEPENDENT
-    parse of MACRO SIZE + per-PIN RECT/POLYGON bbox centers (um), used to
-    reproduce the extractor's pin-center HPWL. Separate code from techlib.lef so
-    a shared parse bug can't hide (the verifier's firewall principle)."""
+    parse of MACRO SIZE + per-PIN centers (um), used to reproduce the extractor's
+    pin-center HPWL. Separate code from techlib.lef so a shared parse bug can't
+    hide (the verifier's firewall principle). A pin center is the MEAN of its
+    RECT/POLYGON shapes' bbox centers (OpenDB getAvgXY), the contract techlib.lef
+    adopted in b917894; the old overall-bbox center disagreed on every multi-shape
+    pin (81/201 nets on the sky130hd apb_gpio canary)."""
     geom = {}
     for lef in lef_paths:
         if not lef or not os.path.isfile(lef):
             continue
         cur = pin = None
-        xs, ys = [], []
+        centers = []
 
         def flush():
-            if cur is not None and pin is not None and xs:
-                geom[cur]["pins"][pin] = ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+            if cur is not None and pin is not None and centers:
+                geom[cur]["pins"][pin] = (sum(c[0] for c in centers) / len(centers),
+                                          sum(c[1] for c in centers) / len(centers))
 
         for line in open(lef, errors="ignore"):
             s = line.strip()
@@ -563,7 +567,7 @@ def _lef_pin_geometry(lef_paths):
             if tok[0] == "MACRO" and len(tok) >= 2:
                 flush(); cur = tok[1].lstrip("\\").upper()
                 geom[cur] = {"w": 0.0, "h": 0.0, "pins": {}}
-                pin, xs, ys = None, [], []
+                pin, centers = None, []
             elif cur is None:
                 continue
             elif tok[0] == "SIZE":
@@ -573,24 +577,25 @@ def _lef_pin_geometry(lef_paths):
                 except (ValueError, IndexError):
                     pass
             elif tok[0] == "PIN" and len(tok) >= 2:
-                flush(); pin = tok[1].lstrip("\\").upper(); xs, ys = [], []
+                flush(); pin = tok[1].lstrip("\\").upper(); centers = []
             elif pin is not None and tok[0] == "RECT":
                 nums = [float(x) for x in tok[1:] if _isfloat(x)]
                 if len(nums) >= 4:
                     x1, y1, x2, y2 = nums[-4:]
-                    xs += [x1, x2]; ys += [y1, y2]
+                    centers.append(((x1 + x2) / 2.0, (y1 + y2) / 2.0))
             elif pin is not None and tok[0] == "POLYGON":
                 nums = [float(x) for x in tok[1:] if _isfloat(x)]
                 if len(nums) % 2:      # odd -> leading MASK id
                     nums = nums[1:]
-                for k in range(0, len(nums) - 1, 2):
-                    xs.append(nums[k]); ys.append(nums[k + 1])
+                pxs, pys = nums[0::2], nums[1::2]
+                if pxs:
+                    centers.append(((min(pxs) + max(pxs)) / 2.0, (min(pys) + max(pys)) / 2.0))
             elif tok[0] == "END" and len(tok) >= 2:
                 key = tok[1].lstrip("\\").upper()
                 if pin is not None and key == pin:
-                    flush(); pin, xs, ys = None, [], []
+                    flush(); pin, centers = None, []
                 elif key == cur:
-                    flush(); cur, pin, xs, ys = None, None, [], []
+                    flush(); cur, pin, centers = None, None, []
     return geom
 
 

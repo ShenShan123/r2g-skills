@@ -368,3 +368,27 @@ END DESIGN
     assert vgd.net_conn_roles("OUTPUT", port=True) == (0, 1)
     assert vgd.net_conn_roles("FEEDTHRU", port=True) == (1, 1)
     assert vgd.net_conn_roles("", port=False) == (0, 0)
+
+
+def test_pin_centers_agree_with_the_extractor_on_multi_shape_pins(tmp_path):
+    """The verifier's pin center must follow the extractor's contract.
+
+    b917894 moved techlib.lef to OpenDB getAvgXY semantics (the mean of the pin's
+    shape centers) but left this independent parse on the overall bbox center, so
+    every net touching a multi-shape pin failed `ext.net hpwl` (81/201 nets on the
+    sky130hd apb_gpio canary, 2026-09-23). Two shapes of different width tell the
+    semantics apart: mean of centers (1.0, 0.5) vs bbox center (1.5, 0.5).
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "extract"))
+    from techlib import lef as techlef
+
+    lef = tmp_path / "c.lef"
+    lef.write_text("MACRO INV\n  SIZE 3 BY 2 ;\n  PIN A\n    PORT\n"
+                   "      LAYER li1 ;\n        RECT 0 0 1 1 ;\n        RECT 0 0 3 1 ;\n"
+                   "    END\n  END A\n  PIN Y\n    PORT\n      LAYER li1 ;\n"
+                   "        POLYGON 0 0 2 0 2 2 0 2 ;\n    END\n  END Y\nEND INV\n")
+    got = vgd._lef_pin_geometry([str(lef)])["INV"]["pins"]
+    assert got["A"] == pytest.approx((1.0, 0.5))
+    assert got["Y"] == pytest.approx((1.0, 1.0))
+    ext = techlef.macro_pin_geometry([str(lef)])["INV"]["pins"]
+    assert ext["A"] == pytest.approx(got["A"]) and ext["Y"] == pytest.approx(got["Y"])
