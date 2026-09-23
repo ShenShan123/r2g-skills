@@ -223,8 +223,21 @@ if [[ -n "${PDK_ROOT:-}" && -d "$PDK_ROOT/sky130A" ]]; then
   export SKY130A_DIR="$PDK_ROOT/sky130A"
 fi
 
+# --- 6. Thread pools follow NUM_CORES -------------------------------------
+# ORFS passes `-threads $(NUM_CORES)` to openroad (default: nproc), but that does not
+# bound the OpenMP / MKL / OpenBLAS pools inside it: at NUM_CORES=4 one openroad still
+# ran at ~1,000% CPU until OMP/MKL were capped too (CORRECTIONS #13). Pin every pool to
+# the same budget unless the caller set it. nproc honours the CPU affinity mask, so a
+# disjoint cpuset per worker caps the cores and sizes the pools in one step.
+_r2g_threads="${NUM_CORES:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null)}"
+if [[ "$_r2g_threads" =~ ^[1-9][0-9]*$ ]]; then
+  export OMP_NUM_THREADS="${OMP_NUM_THREADS:-$_r2g_threads}"
+  export MKL_NUM_THREADS="${MKL_NUM_THREADS:-$_r2g_threads}"
+  export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-$_r2g_threads}"
+fi
+
 unset _r2g_orfs_openroad _r2g_orfs_yosys _cand _hit _p _detected _base _r2g_env \
-      _r2g_conda_bases _r2g_conda_bin
+      _r2g_conda_bases _r2g_conda_bin _r2g_threads
 # Restore caller's options
 case "$_r2g_saved_opts" in
   *e*) set -e ;;
