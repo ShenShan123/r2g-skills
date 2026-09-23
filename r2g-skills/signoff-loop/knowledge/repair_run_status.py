@@ -118,6 +118,10 @@ def _reconcile_orfs_failure_event(
             "VALUES (?, ?, ?, ?)",
             (run_id, fail_stage, sig, err_line),
         )
+    elif status == "tool_crash" and run_dir is not None:
+        # Same projection as live ingest (the orfs-fail event goes, the crash
+        # event and the dropped design symptom come with it).
+        ingest_run._project_tool_crash(conn, run_id, fail_stage, run_dir)
     else:
         # No longer a backend failure -> drop any stale orfs-fail event.
         for ev in existing:

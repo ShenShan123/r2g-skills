@@ -627,7 +627,9 @@ def _stage_crash(run_dir: Path | None, stage: str | None) -> tuple[str, str] | N
     Reads only the failing step of flow.log: from the last ORFS "Running <script>,
     stage <step>" line before run_orfs.sh's "ERROR: Stage '<stage>' failed" marker
     to that marker (the last 500 lines when the marker is absent). A signal line
-    elsewhere in the log is never charged to this stage. None when not a crash.
+    elsewhere in the log is never charged to this stage. A tool `[ERROR XXX-nnnn]`
+    before the crash means the step had already failed on its own (the crash is
+    teardown), so that stays the design's failure. None when not a crash.
     """
     if run_dir is None or not stage:
         return None
@@ -644,15 +646,37 @@ def _stage_crash(run_dir: Path | None, stage: str | None) -> tuple[str, str] | N
         start = next((i for i in range(end - 1, -1, -1)
                       if _ORFS_STEP_RE.match(lines[i])), 0)
         segment = lines[start:end]
-    for ln in segment:
+    first_error = next((i for i, ln in enumerate(segment) if _ORFS_ERRCODE_RE.search(ln)),
+                       len(segment))
+    for i, ln in enumerate(segment):
         m = _CRASH_SIGNAL_RE.search(ln)
         if m and int(m.group(1) or m.group(2)) in _CRASH_SIGNALS:
+            if first_error < i:
+                return None
             return _CRASH_SIGNALS[int(m.group(1) or m.group(2))], ln.strip()[:300]
     for name, rx in _CRASH_TEXT_RE.items():
-        for ln in segment:
+        for i, ln in enumerate(segment):
             if rx.search(ln):
-                return name, ln.strip()[:300]
+                return None if first_error < i else (name, ln.strip()[:300])
     return None
+
+
+def _project_tool_crash(conn: sqlite3.Connection, run_id: str, stage: str | None,
+                        run_dir: Path | None) -> None:
+    """The store projection of a 'tool_crash' run, shared by live ingest and
+    repair_run_status: one tool-crash-<stage>-<SIG> event, never an orfs-fail-*
+    design signature (honesty H3 keeps those on 'fail' runs only), and no
+    run_violations symptom. Idempotent."""
+    signal_name, evidence = _stage_crash(run_dir, stage) or ("", None)
+    conn.execute("DELETE FROM failure_events WHERE run_id = ? AND "
+                 "(signature LIKE 'orfs-fail-%' OR signature LIKE 'tool-crash-%')",
+                 (run_id,))
+    conn.execute(
+        "INSERT INTO failure_events (run_id, stage, signature, detail) "
+        "VALUES (?, ?, ?, ?)",
+        (run_id, stage, f"tool-crash-{stage}-{signal_name}", evidence),
+    )
+    conn.execute("DELETE FROM run_violations WHERE run_id = ?", (run_id,))
 
 
 def _derive_orfs_status(stages: list[dict[str, Any]],
@@ -674,6 +698,7 @@ def _derive_orfs_status(stages: list[dict[str, Any]],
         return ("unknown", None)
     saw_fail = False
     fail_stage = None
+    fail_status: Any = None
     last_stage_name = None
     stage_names_done = {s.get("stage") for s in stages
                         if _norm_stage_status(s.get("status")) == "pass"}
@@ -685,8 +710,12 @@ def _derive_orfs_status(stages: list[dict[str, Any]],
         if st == "fail" and not saw_fail:
             saw_fail = True
             fail_stage = s.get("stage")
+            fail_status = s.get("status")
     if saw_fail:
-        if _stage_crash(run_dir, fail_stage) is not None:
+        # 124/137 is our own stage timeout (timeout, then kill-after): a signal the
+        # tool received while being stopped is not a crash.
+        timed_out = not isinstance(fail_status, bool) and fail_status in (124, 137)
+        if not timed_out and _stage_crash(run_dir, fail_stage) is not None:
             return ("tool_crash", fail_stage)
         return ("fail", fail_stage)
     if flow_scope == "synth_only":
@@ -1163,18 +1192,9 @@ def ingest(project: Path,
             "VALUES (?, ?, ?, ?)",
             (run_id, fail_stage, sig, err_line),
         )
-    if orfs_status == "tool_crash":
-        # A tool/environment event, never an orfs-fail-* design signature (honesty
-        # H3 keeps those on 'fail' runs only), and no design symptom below.
-        signal_name, evidence = _stage_crash(stage_log_path.parent, fail_stage) or ("", None)
-        conn.execute(
-            "INSERT INTO failure_events (run_id, stage, signature, detail) "
-            "VALUES (?, ?, ?, ?)",
-            (run_id, fail_stage, f"tool-crash-{fail_stage}-{signal_name}", evidence),
-        )
     _ingest_fix_events(conn, project, design_name, design_family, platform)
     if orfs_status == "tool_crash":
-        conn.execute("DELETE FROM run_violations WHERE run_id = ?", (run_id,))
+        _project_tool_crash(conn, run_id, fail_stage, stage_log_path.parent)
     else:
         _write_run_violations(conn, run_id, design_family, platform, drc, lvs, tcheck,
                               _to_float(timing.get("setup_wns")),

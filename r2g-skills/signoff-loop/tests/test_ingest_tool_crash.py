@@ -106,3 +106,49 @@ def test_real_opensta_race_sigsegv(fixtures_dir, tmp_path: Path) -> None:
     shutil.copy(fixtures_dir / "flow_log_crash" / "cts_sigsegv_fft8_stream.flow_log.txt",
                 tmp_path / "flow.log")
     assert ingest_run._stage_crash(tmp_path, "route") == ("SIGSEGV", "Signal 11 received")
+
+
+def test_our_own_stage_timeout_is_not_a_crash(tmp_path: Path) -> None:
+    # Review finding (2026-09-23): a tool SIGTERMed by run_orfs.sh's stage timeout
+    # can print a crash trace while dying. Status 124/137 keeps its timeout meaning.
+    (tmp_path / "flow.log").write_text(
+        "Running detail_route.tcl, stage 5_2_route\nSignal 11 received\n"
+        "ERROR: Stage 'route' failed (exit code 124) after 7200s\n")
+    stages = [{"stage": "synth", "status": 0}, {"stage": "route", "status": 124}]
+    assert ingest_run._derive_orfs_status(stages, "full", tmp_path) == ("fail", "route")
+
+
+def test_a_crash_after_the_tool_already_errored_stays_the_designs(tmp_path: Path) -> None:
+    (tmp_path / "flow.log").write_text(
+        "Running global_route.tcl, stage 5_1_grt\n"
+        "[ERROR GRT-0116] Global routing finished with congestion.\n"
+        "Signal 11 received\nCommand terminated by signal 11\n"
+        "ERROR: Stage 'route' failed (exit code 2) after 60s\n")
+    assert ingest_run._stage_crash(tmp_path, "route") is None
+
+
+def test_repair_leaves_the_same_projection_as_live_ingest(fixtures_dir, tmp_knowledge_dir,
+                                                          tmp_path) -> None:
+    # Review finding (2026-09-23): a row ingested as 'fail' before the rule existed
+    # and later reconciled to 'tool_crash' kept its orfs_stage design symptom and got
+    # no crash event.
+    import repair_run_status
+
+    proj = _project(tmp_path, fixtures_dir)
+    conn, run_id = _ingest(proj, tmp_knowledge_dir)
+    run_dir = next((proj / "backend").glob("RUN_*"))
+    # Re-create the pre-rule store state of this run.
+    conn.execute("DELETE FROM failure_events WHERE run_id=?", (run_id,))
+    conn.execute("INSERT INTO failure_events (run_id, stage, signature, detail) "
+                 "VALUES (?, 'route', 'orfs-fail-route', NULL)", (run_id,))
+    conn.execute("INSERT INTO run_violations (run_id, design_family, platform) "
+                 "VALUES (?, 'x', 'sky130hd')", (run_id,))
+
+    repair_run_status._reconcile_orfs_failure_event(conn, run_id, "tool_crash", "route",
+                                                    run_dir)
+
+    assert [r[0] for r in conn.execute(
+        "SELECT signature FROM failure_events WHERE run_id=?", (run_id,))] == [
+        "tool-crash-route-SIGABRT"]
+    assert conn.execute("SELECT COUNT(*) FROM run_violations WHERE run_id=?",
+                        (run_id,)).fetchone()[0] == 0
