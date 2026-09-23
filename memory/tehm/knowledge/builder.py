@@ -1,6 +1,7 @@
 """Build Mechanism Knowledge claims from validated causal paths."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from collections import Counter
@@ -8,6 +9,7 @@ from collections import Counter
 from tehm.causal.evidence_level import evidence_rank, validate_evidence_level
 from tehm.causal.mechanism import load_transition_facts
 from tehm.causal.path_builder import validate_persisted_path_row
+from tehm.ids import stable_dumps
 
 from .claims import KNOWLEDGE_STATUSES, MechanismKnowledge, knowledge_identity
 from .negative_context import derive_negative_context
@@ -47,17 +49,28 @@ def _existing_version(conn: sqlite3.Connection, knowledge_id: str) -> int:
 def _scoped_measurement(facts) -> dict | None:
     if not any(f.verifier.get("scoped_execution") is not None for f in facts):
         return None
-    from tehm.adapters.orfs_terminal_failure import FLOW_CONTRACT, _digest
-    expected = {"scope": FLOW_CONTRACT["scope"], "oracle_type": "TARGET_TEST",
-                "contract_version": FLOW_CONTRACT["version"], "contract_digest": _digest(FLOW_CONTRACT)}
+    expected = None
     for fact in facts:
         scoped = fact.verifier.get("scoped_execution")
         pair = scoped.get("pair_receipt") if isinstance(scoped, dict) else None
-        if (not isinstance(pair, dict) or pair.get("contract_digest") != expected["contract_digest"]
-                or fact.verifier.get("scope") != expected["scope"]
-                or fact.verifier.get("oracle_type") != expected["oracle_type"]
-                or any(not isinstance(pair.get(side), dict) or pair[side].get("contract") != FLOW_CONTRACT
+        contract = pair.get("contract") if isinstance(pair, dict) else None
+        if not isinstance(contract, dict) and isinstance(pair, dict):
+            before = pair.get("before")
+            contract = before.get("contract") if isinstance(before, dict) else None
+        if (not isinstance(contract, dict) or not contract.get("version")
+                or not contract.get("scope") or pair.get("contract_digest") !=
+                "sha256:" + hashlib.sha256(stable_dumps(contract).encode()).hexdigest()
+                or fact.verifier.get("scope") != contract["scope"]
+                or fact.verifier.get("oracle_type") != "TARGET_TEST"
+                or any(not isinstance(pair.get(side), dict) or pair[side].get("contract") != contract
                        for side in ("before", "after"))):
+            raise ValueError("knowledge scoped sources have incompatible measurement contracts")
+        observed = {"scope": contract["scope"], "oracle_type": "TARGET_TEST",
+                    "contract_version": contract["version"],
+                    "contract_digest": pair["contract_digest"]}
+        if expected is None:
+            expected = observed
+        elif observed != expected:
             raise ValueError("knowledge scoped sources have incompatible measurement contracts")
     return expected
 

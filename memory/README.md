@@ -7704,3 +7704,22 @@ route/selector/binder 产生动作。若首批两个来源组没有同时形成�
 该 profile 仍保留两臂、原始运行与独立审计，并强制声明既有 seed 来源组以拒绝重叠。
 它只报告本 cohort 的 `positive_pair_count`，不能单独宣称累计两来源组资格，也不会构造 M0。
 此 forced seed acquisition 不是 S1 效应估计。
+
+RC1 seed 的终态证据使用 `stage-receipt.json` 与独立复验的
+`flow-audit.json`，并非旧 terminal-run receipt。新增
+`tehm-r4-rc1-seed-acquisition-v1` adapter，从这些冻结输入重建两臂，只接受预注册的
+95→40 density delta，核对相同 RTL/SDC/toolchain 与不同 run witness；learner admission
+仍只由显式 training replay context 授予。该 adapter 不补造 legacy run ID，也不把
+flow-completion oracle 升级成 strict signoff。
+
+`research_pilot.py build-seed-m0 --spec ... --output ...` 是有界的 Route-B M0
+构建入口。它强制要求两个不同 design/source group、同一 clean/ready research epoch
+及相同工具链；在隔离内存数据库中重放四个 parent transitions，要求两个 L2
+controlled pairs 与一个 eligible L3 replicated effect，经既有 gate 记录 Knowledge
+authority，派生 candidate flow Asset，并在 export 前实际走 shadow
+route/selector/binder/structured-candidate preflight。导出仍是 research-only：
+`production_authority=false`、禁止 online update，包含 preregistration、parent
+acquisitions、build report 与 epoch bindings，并明确未来重放仍需要外部 scoped evidence。
+确定性双来源测试的两次重建得到相同 bundle digest；完整官方回归为
+**2050 passed in 1193.80s (0:19:53)**。这只验证构建器，不是实际 M0 结果；真实 bundle
+仍须由仓库外独立审计 pairs 构建并冻结后，才能进入 S1。

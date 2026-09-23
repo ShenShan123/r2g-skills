@@ -48,6 +48,7 @@ from tehm.evaluation.research_seed_pair import (  # noqa: E402
     verify_seed_pair_run,
     verify_seed_pair_spec,
 )
+from tehm.evaluation.research_seed_m0 import build_research_seed_m0  # noqa: E402
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -226,6 +227,12 @@ def _verify_seed_pair_run(args: argparse.Namespace) -> int:
     return 0 if result["valid"] else 2
 
 
+def _build_seed_m0(args: argparse.Namespace) -> int:
+    result = build_research_seed_m0(spec=args.spec, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["m0_status"] == "BUILT_READ_ONLY_RESEARCH" else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -367,6 +374,14 @@ def main(argv: list[str] | None = None) -> int:
     seed_verify.add_argument("--spec", type=Path, required=True)
     seed_verify.add_argument("--output", type=Path, required=True)
     seed_verify.set_defaults(handler=_verify_seed_pair_run)
+
+    seed_m0 = sub.add_parser(
+        "build-seed-m0",
+        help="rebuild and export a read-only M0 from two audited seed pairs",
+    )
+    seed_m0.add_argument("--spec", type=Path, required=True)
+    seed_m0.add_argument("--output", type=Path, required=True)
+    seed_m0.set_defaults(handler=_build_seed_m0)
 
     prepare = sub.add_parser(
         "prepare", help="freeze campaign tasks against an epoch and design inventory"

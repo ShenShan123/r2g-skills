@@ -123,6 +123,9 @@ def replay_flow_feasibility_record(record: ExecutionRecord) -> dict:
     """
     record.validate()
     scoped = record.verification.get("scoped_execution")
+    if isinstance(scoped, dict) and scoped.get("version") == "orfs-rc1-seed-record-v1":
+        from tehm.adapters.research_seed_scoped import replay_research_seed_record
+        return replay_research_seed_record(record)
     if not isinstance(scoped, dict) or scoped.get("version") != "orfs-scoped-record-v1":
         raise ValueError("unsupported scoped execution record")
     if scoped.get("role") not in {"before", "after"}:
@@ -152,6 +155,11 @@ def replay_persisted_flow_feasibility(conn: sqlite3.Connection, transition_id: s
     """
     from tehm.causal.mechanism import load_transition_facts
 
+    if (isinstance(acquisition, dict) and
+            acquisition.get("version") == "tehm-r4-rc1-seed-acquisition-v1"):
+        from tehm.adapters.research_seed_scoped import replay_persisted_research_seed
+        return replay_persisted_research_seed(
+            conn, transition_id, acquisition=acquisition)
     expected_keys = {"before", "after", "lineage_id", "before_pin", "after_pin",
                      "config_edits", "toolchain_manifest", "expected_manifest_digest"}
     if type(acquisition) is not dict or set(acquisition) not in (expected_keys, expected_keys | {"role"}):
