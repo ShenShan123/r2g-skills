@@ -16,8 +16,22 @@ source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 
 STATUS=0
 print_row() {
-  local label="$1" value="$2" required="$3"
+  local label="$1" value="$2" required="$3" kind="${4:-}" why=""
   if [[ -n "$value" ]]; then
+    # A SET value is verified, not just echoed: E6 got "ok" for an unreadable
+    # PDK_ROOT and a python3 that cannot run ORFS (CORRECTIONS #6). Set but
+    # unusable is an error even on an optional row.
+    case "$kind" in
+      dir) [[ -d "$value" && -r "$value" && -x "$value" ]] || why="not a readable directory" ;;
+      exe) [[ -f "$value" && -x "$value" ]] || why="not an executable file" ;;
+      orfs_python) "$value" -c "import yaml" >/dev/null 2>&1 \
+             || why="cannot import yaml, which ORFS flow/scripts/defaults.py needs" ;;
+    esac
+    if [[ -n "$why" ]]; then
+      printf 'BAD  %-16s %s (%s)\n' "$label" "$value" "$why"
+      STATUS=1
+      return
+    fi
     printf 'ok   %-16s %s\n' "$label" "$value"
   elif [[ "$required" == "required" ]]; then
     printf 'MISS %-16s (required)\n' "$label"
@@ -28,10 +42,10 @@ print_row() {
 }
 
 echo "[ORFS / platform data]"
-print_row ORFS_ROOT "${ORFS_ROOT:-}" required
-print_row FLOW_DIR  "${FLOW_DIR:-}"  required
+print_row ORFS_ROOT "${ORFS_ROOT:-}" required dir
+print_row FLOW_DIR  "${FLOW_DIR:-}"  required dir
 print_row python3   "$(command -v python3 || true)" required
-print_row PDK_ROOT  "${PDK_ROOT:-}"  optional
+print_row PDK_ROOT  "${PDK_ROOT:-}"  optional dir
 
 echo
 echo "[graph dataset stage (torch venv)]"

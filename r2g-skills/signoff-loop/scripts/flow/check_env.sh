@@ -35,8 +35,22 @@ done
 
 print_row() {
   # print_row <label> <value-or-empty> <required?>
-  local label="$1" value="$2" required="$3"
+  local label="$1" value="$2" required="$3" kind="${4:-}" why=""
   if [[ -n "$value" ]]; then
+    # A SET value is verified, not just echoed: E6 got "ok" for an unreadable
+    # PDK_ROOT and a python3 that cannot run ORFS (CORRECTIONS #6). Set but
+    # unusable is an error even on an optional row.
+    case "$kind" in
+      dir) [[ -d "$value" && -r "$value" && -x "$value" ]] || why="not a readable directory" ;;
+      exe) [[ -f "$value" && -x "$value" ]] || why="not an executable file" ;;
+      orfs_python) "$value" -c "import yaml" >/dev/null 2>&1 \
+             || why="cannot import yaml, which ORFS flow/scripts/defaults.py needs" ;;
+    esac
+    if [[ -n "$why" ]]; then
+      printf 'BAD  %-14s %s (%s)\n' "$label" "$value" "$why"
+      STATUS=1
+      return
+    fi
     printf 'ok   %-14s %s\n' "$label" "$value"
   elif [[ "$required" == "required" ]]; then
     printf 'MISS %-14s (required)\n' "$label"
@@ -47,26 +61,42 @@ print_row() {
 }
 
 echo "[ORFS]"
-print_row ORFS_ROOT "${ORFS_ROOT:-}" required
-print_row FLOW_DIR  "${FLOW_DIR:-}" required
-print_row PDK_ROOT  "${PDK_ROOT:-}" optional
-print_row SKY130A_DIR "${SKY130A_DIR:-}" optional
+print_row ORFS_ROOT "${ORFS_ROOT:-}" required dir
+print_row FLOW_DIR  "${FLOW_DIR:-}" required dir
+print_row PDK_ROOT  "${PDK_ROOT:-}" optional dir
+print_row SKY130A_DIR "${SKY130A_DIR:-}" optional dir
+
+# ORFS execs its python helpers directly (0 of 96 were executable in the E6 checkout,
+# so `make synth` died with Error 126), and flow/settings.mk `=` assignments override
+# the *_EXE the env exports (E6 F3: a dead YOSYS_EXE there, while this table said ok).
+if [[ -n "${FLOW_DIR:-}" && -f "$FLOW_DIR/scripts/defaults.py" && ! -x "$FLOW_DIR/scripts/defaults.py" ]]; then
+  printf 'BAD  %-14s %s (not executable; ORFS execs it directly)\n' "ORFS helpers" "$FLOW_DIR/scripts/defaults.py"
+  STATUS=1
+fi
+if [[ -n "${FLOW_DIR:-}" && -f "$FLOW_DIR/settings.mk" ]]; then
+  while read -r _var _path; do
+    [[ "$_path" == *'$('* || ( -f "$_path" && -x "$_path" ) ]] && continue
+    printf 'BAD  %-14s %s (flow/settings.mk overrides the env with a missing binary)\n' "$_var" "$_path"
+    STATUS=1
+  done < <(sed -n 's/^[[:space:]]*\(export[[:space:]]\+\)\?\([A-Z_]*_EXE\)[[:space:]]*:\?=[[:space:]]*\([^[:space:]#]\+\).*/\2 \3/p' \
+             "$FLOW_DIR/settings.mk")
+fi
 
 echo
 echo "[required tools]"
-print_row OPENROAD_EXE "${OPENROAD_EXE:-}" required
-print_row YOSYS_EXE    "${YOSYS_EXE:-}"    required
-print_row IVERILOG_EXE "${IVERILOG_EXE:-}" required
-print_row VVP_EXE      "${VVP_EXE:-}"      required
-print_row python3      "$(command -v python3 || true)" required
+print_row OPENROAD_EXE "${OPENROAD_EXE:-}" required exe
+print_row YOSYS_EXE    "${YOSYS_EXE:-}"    required exe
+print_row IVERILOG_EXE "${IVERILOG_EXE:-}" required exe
+print_row VVP_EXE      "${VVP_EXE:-}"      required exe
+print_row python3      "$(command -v python3 || true)" required orfs_python
 
 echo
 echo "[optional tools]"
-print_row VERILATOR_EXE "${VERILATOR_EXE:-}" optional
-print_row KLAYOUT_CMD   "${KLAYOUT_CMD:-}"   optional
-print_row MAGIC_EXE     "${MAGIC_EXE:-}"     optional
-print_row NETGEN_EXE    "${NETGEN_EXE:-}"    optional
-print_row STA_EXE       "${STA_EXE:-}"       optional
+print_row VERILATOR_EXE "${VERILATOR_EXE:-}" optional exe
+print_row KLAYOUT_CMD   "${KLAYOUT_CMD:-}"   optional exe
+print_row MAGIC_EXE     "${MAGIC_EXE:-}"     optional exe
+print_row NETGEN_EXE    "${NETGEN_EXE:-}"    optional exe
+print_row STA_EXE       "${STA_EXE:-}"       optional exe
 print_row gtkwave       "$(command -v gtkwave || true)" optional
 
 echo
