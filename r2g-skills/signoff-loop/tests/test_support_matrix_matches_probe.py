@@ -85,6 +85,30 @@ def _installed(platform: str) -> bool:
     return bool(FLOW_DIR) and (Path(FLOW_DIR) / "platforms" / platform).is_dir()
 
 
+def _unprovisioned_reasons(caps: dict) -> list[str] | None:
+    """Why each capability the probe reports missing is absent from THIS checkout,
+    or None when any of them has no provisioning explanation.
+
+    SKILL.md documents a provisioned toolchain: decks the skill installs
+    (tools/install_nangate45_*.sh, tools/patch_sky130hs_lyt.py; the probe returns
+    their `hint`) and the sky130 netgen LVS stack (magic, netgen and a readable
+    sky130A PDK, which eda-install provides). A checkout without them is an
+    environment gap, not a false matrix. A missing capability with neither is
+    exactly the overclaim this test exists to catch, so it is never skipped.
+    """
+    reasons = []
+    for key in caps.get("missing") or []:
+        cap = caps.get(key) or {}
+        if cap.get("hint"):
+            reasons.append(f"{key}: {cap['hint']}")
+        elif cap.get("engine") == "netgen" and not all(
+                cap.get(k) for k in ("magic", "netgen", "pdk_tech")):
+            reasons.append(f"{key}: magic/netgen/sky130A PDK not provisioned")
+        else:
+            return None
+    return reasons or None
+
+
 def test_matrix_is_not_vacuous():
     """A parser that silently matches nothing would make every check below pass."""
     assert len(MATRIX) >= 5, f"parsed only {len(MATRIX)} matrix rows — parser drifted"
@@ -117,6 +141,10 @@ def test_matrix_row_matches_probe(row):
         pytest.skip(f"{platform} not installed in this ORFS checkout")
 
     caps = pc.probe_platform(FLOW_DIR, platform, env=_PROBE_ENV)
+    if caps.get("tier") != _strip_footnote(row["Tier"]):
+        reasons = _unprovisioned_reasons(caps)
+        if reasons:
+            pytest.skip(f"{platform} is not provisioned in {FLOW_DIR}: " + "; ".join(reasons))
 
     assert _strip_footnote(row["Tier"]) == caps.get("tier"), (
         f"SKILL.md says {platform} tier={row['Tier']!r} but the probe reports "

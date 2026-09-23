@@ -14,9 +14,35 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 import build_signoff_manifest as bsm
 
 MOD = Path(bsm.__file__).resolve()
+
+
+def _nangate45_not_strict_here() -> str | None:
+    """Why the resolved ORFS checkout cannot back a strict nangate45 bundle, if so.
+
+    build() cross-checks strict_clean against the capability probe of the checkout
+    _env.sh resolves (RMD3-P1-02), so the clean-bundle tests need a checkout where
+    nangate45 is strict_signoff_ready (tools/install_nangate45_{lvs,antenna}.sh).
+    """
+    import platform_capability as pc
+    env = pc.resolve_signoff_env()
+    flow_dir = pc.find_flow_dir(env=env)
+    if not flow_dir:
+        return "no ORFS flow dir resolves on this machine"
+    caps = pc.probe_platform(flow_dir, "nangate45", env=env)
+    if caps.get("strict_signoff_ready"):
+        return None
+    hints = [str((caps.get(k) or {}).get("hint") or k) for k in caps.get("missing") or []]
+    return f"nangate45 is not strict_signoff_ready in {flow_dir}: {'; '.join(hints)}"
+
+
+_NOT_STRICT = _nangate45_not_strict_here()
+needs_strict_nangate45 = pytest.mark.skipif(_NOT_STRICT is not None,
+                                            reason=_NOT_STRICT or "")
 
 
 def _proj(tmp_path, *, drc="clean", lvs="clean", route=0, rcx="complete",
@@ -49,6 +75,7 @@ def _proj(tmp_path, *, drc="clean", lvs="clean", route=0, rcx="complete",
     return proj
 
 
+@needs_strict_nangate45
 def test_clean_bundle_is_strict_and_qualified(tmp_path):
     man = bsm.build(str(_proj(tmp_path)))
     assert man["strict_clean"] and not man["strict_missing"], man["strict_missing"]
@@ -109,6 +136,7 @@ def test_promoted_project_requires_complete_task_provenance(tmp_path):
     assert man["strict_clean"] is False
 
 
+@needs_strict_nangate45
 def test_cli_writes_manifest_and_strict_exit(tmp_path):
     proj = _proj(tmp_path, drc="fail")
     r = subprocess.run([sys.executable, str(MOD), str(proj), "--strict"],
