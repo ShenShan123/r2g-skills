@@ -295,3 +295,76 @@ def test_irdrop_legacy_csv_without_has_irdrop_derives_floor():
     assert vgd.irdrop_label_ok(below)[0]
     above_bad = _ir_df([[0.10, 0.10, 0.123]], with_flag=False)  # >=0.05 but wrong label
     assert not vgd.irdrop_label_ok(above_bad)[0]
+
+
+def test_inout_net_counts_match_the_extractor(tmp_path):
+    """INOUT/FEEDTHRU count as driver AND sink, on ports and on cell pins.
+
+    Regression (E12-FP 2026-09-23): the ext.net check counted only INPUT/OUTPUT,
+    so it expected 1 driver / 0 sinks on I2C_SDAT (INOUT port -> buf_4/X) where
+    the extractor correctly wrote 2/1 (nodes_net.py counts INOUT as both). A
+    correct dataset was rejected. Verifier and extractor must share one convention.
+    """
+    lib = tmp_path / "c.lib"
+    lib.write_text("""
+library (c) {
+  cell (buf_4) {
+    area : 1;
+    pin (A) {
+      direction : input;
+      capacitance : 1.0;
+    }
+    pin (X) {
+      direction : output;
+    }
+  }
+  cell (pad) {
+    area : 1;
+    pin (PAD) {
+      direction : inout;
+      capacitance : 1.0;
+    }
+  }
+}
+""")
+    d = tmp_path / "t.def"
+    d.write_text("""
+DESIGN t ;
+UNITS DISTANCE MICRONS 1000 ;
+COMPONENTS 2 ;
+ - _243_ buf_4 + PLACED ( 0 0 ) N ;
+ - p1 pad + PLACED ( 10 10 ) N ;
+END COMPONENTS
+PINS 1 ;
+ - I2C_SDAT + NET I2C_SDAT + DIRECTION INOUT + USE SIGNAL
+  + PLACED ( 100 200 ) N ;
+END PINS
+NETS 2 ;
+ - I2C_SDAT ( PIN I2C_SDAT ) ( _243_ X ) + USE SIGNAL ;
+ - n2 ( p1 PAD ) ( _243_ A ) + USE SIGNAL ;
+END NETS
+END DESIGN
+""")
+    cells = vgd.read_liberty_truth([str(lib)])
+    t = vgd.read_def_truth(str(d))
+
+    def counts(net):
+        drv = snk = 0
+        for inst, pin in t["nets"][net]:
+            if inst == "PIN":
+                a, b = vgd.net_conn_roles(t["pins"][pin]["dir"], port=True)
+            else:
+                a, b = vgd.net_conn_roles(
+                    vgd.lib_pin_truth(cells, t["comps"][inst]["master"], pin)[0],
+                    port=False)
+            drv += a
+            snk += b
+        return drv, snk
+
+    assert counts("I2C_SDAT") == (2, 1)
+    assert counts("n2") == (1, 2)
+    # the chip-side inversion for plain ports is unchanged
+    assert vgd.net_conn_roles("INPUT", port=True) == (1, 0)
+    assert vgd.net_conn_roles("OUTPUT", port=True) == (0, 1)
+    assert vgd.net_conn_roles("FEEDTHRU", port=True) == (1, 1)
+    assert vgd.net_conn_roles("", port=False) == (0, 0)

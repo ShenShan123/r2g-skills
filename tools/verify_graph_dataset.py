@@ -255,6 +255,22 @@ def lib_pin_truth(cells, master, pin_name):
     return ("", None)
 
 
+def net_conn_roles(direction: str, *, port: bool) -> tuple[int, int]:
+    """(drivers, sinks) one net connection contributes, by the extractor's convention.
+
+    A DEF PIN direction is the port's direction from the chip's side, so an INPUT
+    port drives the net and an OUTPUT port sinks it; a cell pin is the reverse.
+    INOUT/FEEDTHRU count as both, as `nodes_net.py` does (pinned by
+    test_inout_and_feedthru_pins_classify_as_11). Dropping them flagged correct
+    bidirectional nets as mismatched (E12-FP 2026-09-23: I2C_SDAT, 23176fbd8d2b).
+    """
+    if direction in ("INOUT", "FEEDTHRU"):
+        return 1, 1
+    if port:
+        return int(direction == "INPUT"), int(direction == "OUTPUT")
+    return int(direction == "OUTPUT"), int(direction == "INPUT")
+
+
 def read_lef_truth(tech_lef, extra_lefs=()):
     """(routing_layers {name:(pitch, dir)}, block_masters set) — independent parse."""
     layers = {}
@@ -972,9 +988,9 @@ def extended_checks(case, design, feat, labs, views, b):
         is_macro = 0
         for i, p in conns:
             if i == "PIN":
-                d = dt["pins"].get(p, {}).get("dir", "")
-                drv += d == "INPUT"
-                snk += d == "OUTPUT"
+                d_drv, d_snk = net_conn_roles(dt["pins"].get(p, {}).get("dir", ""), port=True)
+                drv += d_drv
+                snk += d_snk
                 if dt["pins"].get(p, {}).get("x") is not None:
                     pts.append((dt["pins"][p]["x"] / dt["dbu"], dt["pins"][p]["y"] / dt["dbu"]))
                 continue
@@ -984,9 +1000,9 @@ def extended_checks(case, design, feat, labs, views, b):
             master = comp["master"]
             if master.upper() in blocks:
                 is_macro = 1
-            d = lib_pin_truth(lib, master, p)[0]
-            drv += d == "OUTPUT"
-            snk += d == "INPUT"
+            d_drv, d_snk = net_conn_roles(lib_pin_truth(lib, master, p)[0], port=False)
+            drv += d_drv
+            snk += d_snk
             if comp["x"] is not None:
                 pts.append(_v_pin_abs(pin_geom, comp["x"] / dt["dbu"], comp["y"] / dt["dbu"],
                                       comp.get("orient"), master, p))
@@ -1022,11 +1038,12 @@ def extended_checks(case, design, feat, labs, views, b):
         drv = 0
         for i, p in conns:
             if i == "PIN":
-                drv += dt["pins"].get(p, {}).get("dir", "") == "INPUT"
+                drv += net_conn_roles(dt["pins"].get(p, {}).get("dir", ""), port=True)[0]
             else:
                 comp = dt["comps"].get(i)
                 if comp:
-                    drv += lib_pin_truth(lib, comp["master"], p)[0] == "OUTPUT"
+                    drv += net_conn_roles(lib_pin_truth(lib, comp["master"], p)[0],
+                                          port=False)[0]
         chk_zero += 1
         if drv != 0:
             bad_zero += 1
