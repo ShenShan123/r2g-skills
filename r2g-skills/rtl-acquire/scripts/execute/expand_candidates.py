@@ -189,8 +189,11 @@ def run(
     capture: bool = False,
     extra_env: dict[str, str] | None = None,
     timeout: int | None = None,
+    drop_env: tuple[str, ...] = (),
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
+    for name in drop_env:
+        env.pop(name, None)
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
@@ -1277,6 +1280,13 @@ def _resolve_lib_env(config_mk: Path) -> dict[str, str]:
     }
 
 
+# The graph interpreter is a separate venv. Variables that bind the PARENT
+# interpreter must not reach it: the oss-cad-suite `python3` wrapper exports
+# PYTHONHOME, and a venv child inheriting it dies with "No module named
+# 'encodings'" (wave-3 E9: 69/69 graph_failed on this alone).
+GRAPH_PYTHON_DROP_ENV = ("PYTHONHOME", "PYTHONEXECUTABLE", "PYTHONNOUSERSITE")
+
+
 def graph_convert(netlist: Path, out_pt: Path, design: str, config_mk: Path,
                   cell_stats_json: Path) -> tuple[str, str]:
     """Returns (state, log): state in {ok, skipped, failed}."""
@@ -1309,6 +1319,7 @@ def graph_convert(netlist: Path, out_pt: Path, design: str, config_mk: Path,
             [gpython, str(netlist_graph_script()), str(netlist), str(out_pt), design],
             capture=True,
             extra_env=lib_env,
+            drop_env=GRAPH_PYTHON_DROP_ENV,
         )
         if result.returncode != 0 or not out_pt.exists():
             return "failed", (result.stdout + "\n" + result.stderr).strip()[-2000:]
@@ -1317,6 +1328,7 @@ def graph_convert(netlist: Path, out_pt: Path, design: str, config_mk: Path,
              "--netlist", str(netlist), "--out", str(cell_stats_json)],
             capture=True,
             extra_env=lib_env,
+            drop_env=GRAPH_PYTHON_DROP_ENV,
         )
     except OSError as exc:
         return "skipped", (
