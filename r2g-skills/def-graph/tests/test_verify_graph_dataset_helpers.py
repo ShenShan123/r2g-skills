@@ -392,3 +392,24 @@ def test_pin_centers_agree_with_the_extractor_on_multi_shape_pins(tmp_path):
     assert got["Y"] == pytest.approx((1.0, 1.0))
     ext = techlef.macro_pin_geometry([str(lef)])["INV"]["pins"]
     assert ext["A"] == pytest.approx(got["A"]) and ext["Y"] == pytest.approx(got["Y"])
+
+
+def test_polygon_pin_center_follows_opendb_boxes(tmp_path):
+    """A POLYGON pin is the boxes OpenDB decomposes it into, not one bbox.
+
+    Real gf180mcu 9t addf_1 CI (L-shape): OpenDB boxes [11.91 1.77 12.17 2.115] and
+    [3.89 2.115 12.55 2.345], so getAvgXY is (10.13, 2.08625); the polygon's bbox
+    center (8.22, 2.0575) is what both the verifier and techlib reported before
+    2026-09-23, on 1,628 of 3,344 gf180 pin positions.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "extract"))
+    from techlib import lef as techlef
+
+    poly = ("3.89 2.115 7.975 2.115 11.91 2.115 11.91 1.77 12.11 1.77 12.17 1.77 "
+            "12.17 2.115 12.55 2.115 12.55 2.345 12.11 2.345 7.975 2.345 3.89 2.345")
+    lef = tmp_path / "gf.lef"
+    lef.write_text("MACRO ADDF\n  SIZE 20 BY 5 ;\n  PIN CI\n    PORT\n      LAYER Metal1 ;\n"
+                   f"        POLYGON {poly} ;\n    END\n  END CI\nEND ADDF\n")
+    got = vgd._lef_pin_geometry([str(lef)])["ADDF"]["pins"]["CI"]
+    assert got == pytest.approx((10.13, 2.08625))
+    assert techlef.macro_pin_geometry([str(lef)])["ADDF"]["pins"]["CI"] == pytest.approx(got)

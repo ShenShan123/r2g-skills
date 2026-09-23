@@ -208,7 +208,8 @@ def macro_pin_geometry(lef_paths):
 
     Returns ``{MACRO_UPPER: {"width": w_um, "height": h_um,
     "pins": {PIN_UPPER: (cx_um, cy_um)}}}`` where each pin center is the mean
-    of its ``RECT``/``POLYGON`` shape centers (OpenDB ``getAvgXY`` semantics), in the cell's own
+    of its ``RECT`` centers and of the centers of the rectangles each ``POLYGON``
+    decomposes into (OpenDB ``getAvgXY`` semantics; ``polygon_rects``), in the cell's own
     (un-oriented) coordinate frame. Later paths override earlier ones on a name
     clash. Empty dict if no path is readable.
 
@@ -237,6 +238,34 @@ def _floats(text):
         except ValueError:
             pass  # skip non-numeric tokens (e.g. a MASK keyword)
     return out
+
+
+def polygon_rects(xs, ys):
+    """Rectangles OpenDB decomposes a rectilinear LEF ``POLYGON`` into.
+
+    dbMPin keeps a polygon pin shape as the maximal horizontal-slab rectangles
+    (slabs between consecutive vertex y's, vertically adjacent slabs with the same
+    x-span merged), and ``getAvgXY`` averages THOSE boxes' centers. Matches
+    OpenDB's boxes exactly on all 836 polygon pins of gf180mcu 9t (2026-09-23).
+    Returns ``[(x1, y1, x2, y2), ...]``.
+    """
+    pts = list(zip(xs, ys))
+    if len(pts) > 1 and pts[0] == pts[-1]:
+        pts = pts[:-1]
+    vert = [(x1, min(y1, y2), max(y1, y2))
+            for (x1, y1), (x2, y2) in zip(pts, pts[1:] + pts[:1])
+            if x1 == x2 and y1 != y2]
+    levels = sorted({y for _, y in pts})
+    rects, open_spans = [], {}
+    for lo, hi in zip(levels, levels[1:]):
+        mid = (lo + hi) / 2.0
+        cuts = sorted(x for x, y1, y2 in vert if y1 < mid < y2)
+        spans = {span: open_spans.pop(span, lo) for span in zip(cuts[0::2], cuts[1::2])}
+        rects += [(a, y0, b, lo) for (a, b), y0 in open_spans.items()]
+        open_spans = spans
+    if levels:
+        rects += [(a, y0, b, levels[-1]) for (a, b), y0 in open_spans.items()]
+    return rects
 
 
 def _parse_one_lef_geometry(path, geom):
@@ -289,7 +318,9 @@ def _parse_one_lef_geometry(path, geom):
                     xs = nums[0::2]
                     ys = nums[1::2]
                     if xs and len(xs) == len(ys):
-                        shapes.append((xs, ys))
+                        # One shape per OpenDB box, not one per polygon.
+                        shapes.extend(([x1, x2], [y1, y2])
+                                      for x1, y1, x2, y2 in polygon_rects(xs, ys))
                 m = re.match(r"END\s+(\S+)", s)
                 if m and _norm_lef_key(m.group(1)) == current_pin:
                     _flush_pin()

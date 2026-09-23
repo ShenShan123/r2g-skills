@@ -386,6 +386,18 @@ platform). HPWL tolerance is 0.0021 um because it sums independently rounded X
 and Y extents. Unit tests cover multi-shape pins and the existing eight DEF
 orientations.
 
+### D14 - POLYGON pins were one shape, not OpenDB's boxes (physical correctness)
+
+D13 averages shape centres, but D10 still stored each `POLYGON` as its bbox,
+i.e. one shape. OpenDB keeps a polygon pin as its maximal horizontal-slab boxes
+and `getAvgXY` averages those, so every non-rectangular pin was off (gf180 9t:
+1,628 of 3,344 pin positions, checked against `getAvgXY` on every master in four
+orientations, 2026-09-23). `_polygon_rectangles` decomposes the polygon exactly
+as OpenDB does (identical boxes on all 836 gf180 9t polygon pins).
+`techlib.lef.polygon_rects` and the verifier's `_polygon_boxes` follow the same
+contract. Datasets built on gf180 before this change carry shifted pin
+positions and must be rebuilt.
+
 ## Routed patch rectangle correction (2026-09-17)
 
 `03.clause_points` previously treated the first two `RECT` offsets as a route

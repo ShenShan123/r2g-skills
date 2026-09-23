@@ -38,7 +38,12 @@ a net whose driver liberty direction can't be resolved honestly reads `num_drive
 fabricated `1` (which also used to corrupt `num_sinks`). `hpwl_um` and `pin_x/y_std_um` use each
 pin's **true orientation-aware in-cell LEF position** (`techlib.lef.macro_pin_geometry` +
 `apply_orient`) when a cell LEF resolves (`SC_LEF`/`ADDITIONAL_LEFS`, exported by `run_features.sh`);
-absent a cell LEF they fall back to the instance origin.
+absent a cell LEF they fall back to the instance origin. The position is OpenDB's
+`dbITerm::getAvgXY`: the mean of the pin's box centers, where a `RECT` is one box and a `POLYGON`
+is the maximal horizontal-slab boxes OpenDB stores it as (`techlib.lef.polygon_rects`). Checked
+against getAvgXY on a real sky130hd `6_final.odb` and on every nangate45 / sky130hd / sky130hs /
+ihp-sg13g2 / gf180 9t master in four orientations (2026-09-23). `tools/verify_graph_dataset.py`
+re-derives it independently under the same contract.
 
 ## Inputs & resolution
 
@@ -132,9 +137,10 @@ memory-light). With no design args it auto-discovers designs that have a collect
   capacitance differs ~2–5% by corner, so mixing fallback-resolved (TT) and make-eval (FF)
   designs in one dataset introduces minor cap inconsistency — filter/normalize per corner
   if it matters.
-- **Cell-origin approximation:** pin geometry is not parsed from the LEF, so all pins on an
-  instance inherit the instance origin. `hpwl_um` and `pin_x_std_um`/`pin_y_std_um` are
-  therefore cell-origin approximations, not true pin-location metrics.
+- **Cell-origin approximation only without a cell LEF:** when no `SC_LEF`/`ADDITIONAL_LEFS`
+  resolves, all pins on an instance inherit the instance origin, and `hpwl_um` and
+  `pin_x_std_um`/`pin_y_std_um` are cell-origin approximations. With a cell LEF they are
+  OpenDB pin positions (see above).
 - Hand-rolled regex parsers tuned to ORFS `write_def`/`write_spef` output. The stats JSON
   carries row counts; a quick sanity check is `nodes_gate` rows ≈ DEF `COMPONENTS`.
 - Designs that never reached `6_final` are skipped (status recorded), not errored.

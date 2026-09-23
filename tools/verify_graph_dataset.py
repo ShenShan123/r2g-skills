@@ -539,14 +539,44 @@ def _v_apply_orient(px, py, orient, w, h):
     }.get(o, (px, py))
 
 
+def _polygon_boxes(xs, ys):
+    """(x1, y1, x2, y2) boxes of a rectilinear polygon, the way OpenDB stores it:
+    horizontal slabs at every vertex y, merged upward while the x-span repeats.
+    Independent of techlib.lef.polygon_rects on purpose (firewall principle)."""
+    ring = list(zip(xs, ys))
+    if ring[0] == ring[-1]:
+        ring.pop()
+    edges = []
+    for i, (x, y) in enumerate(ring):
+        nx, ny = ring[(i + 1) % len(ring)]
+        if x == nx and y != ny:
+            edges.append((x, min(y, ny), max(y, ny)))
+    yl = sorted(set(ys))
+    done, live = [], {}
+    for k in range(len(yl) - 1):
+        y = (yl[k] + yl[k + 1]) / 2.0
+        xs_in = sorted(e[0] for e in edges if e[1] < y < e[2])
+        now = {}
+        for j in range(0, len(xs_in) - 1, 2):
+            span = (xs_in[j], xs_in[j + 1])
+            now[span] = live.pop(span) if span in live else yl[k]
+        for span, y0 in live.items():
+            done.append((span[0], y0, span[1], yl[k]))
+        live = now
+    for span, y0 in live.items():
+        done.append((span[0], y0, span[1], yl[-1]))
+    return done
+
+
 def _lef_pin_geometry(lef_paths):
     """``{MASTER_UPPER: {"w","h","pins":{PIN_UPPER:(cx,cy)}}}`` — an INDEPENDENT
     parse of MACRO SIZE + per-PIN centers (um), used to reproduce the extractor's
     pin-center HPWL. Separate code from techlib.lef so a shared parse bug can't
-    hide (the verifier's firewall principle). A pin center is the MEAN of its
-    RECT/POLYGON shapes' bbox centers (OpenDB getAvgXY), the contract techlib.lef
-    adopted in b917894; the old overall-bbox center disagreed on every multi-shape
-    pin (81/201 nets on the sky130hd apb_gpio canary)."""
+    hide (the verifier's firewall principle). A pin center is OpenDB's getAvgXY:
+    the MEAN of its boxes' centers, where a RECT is one box and a POLYGON is the
+    boxes OpenDB decomposes it into (_polygon_boxes). Checked against getAvgXY on
+    a real sky130hd 6_final.odb (9,999/9,999 pins) and every gf180 9t master
+    (3,344/3,344). The old overall-bbox center missed every multi-box pin."""
     geom = {}
     for lef in lef_paths:
         if not lef or not os.path.isfile(lef):
@@ -588,8 +618,9 @@ def _lef_pin_geometry(lef_paths):
                 if len(nums) % 2:      # odd -> leading MASK id
                     nums = nums[1:]
                 pxs, pys = nums[0::2], nums[1::2]
-                if pxs:
-                    centers.append(((min(pxs) + max(pxs)) / 2.0, (min(pys) + max(pys)) / 2.0))
+                if pxs and len(pxs) == len(pys):
+                    centers += [((a + b) / 2.0, (c + d) / 2.0)
+                                for a, c, b, d in _polygon_boxes(pxs, pys)]
             elif tok[0] == "END" and len(tok) >= 2:
                 key = tok[1].lstrip("\\").upper()
                 if pin is not None and key == pin:

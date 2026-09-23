@@ -125,3 +125,109 @@ def test_cell_lef_paths_from_env(monkeypatch, tmp_path):
     monkeypatch.setenv("ADDITIONAL_LEFS", str(b))
     monkeypatch.delenv("CELL_LEFS", raising=False)
     assert lef.cell_lef_paths() == [str(a), str(b)]
+
+
+# A real gf180mcu 9t pin (addf_1 CI): an L-shaped POLYGON that OpenDB stores as
+# two boxes, [11.91 1.77 12.17 2.115] and [3.89 2.115 12.55 2.345].
+GF180_CI_POLYGON = ("3.89 2.115 7.975 2.115 11.91 2.115 11.91 1.77 12.11 1.77 12.17 1.77 "
+                    "12.17 2.115 12.55 2.115 12.55 2.345 12.11 2.345 7.975 2.345 3.89 2.345")
+
+
+def test_polygon_decomposes_like_opendb():
+    nums = [float(v) for v in GF180_CI_POLYGON.split()]
+    boxes = sorted(lef.polygon_rects(nums[0::2], nums[1::2]))
+    assert boxes == [(3.89, 2.115, 12.55, 2.345), (11.91, 1.77, 12.17, 2.115)]
+
+
+def test_polygon_pin_center_is_the_mean_of_its_opendb_boxes(tmp_path):
+    """Regression (2026-09-23): b917894 averaged shape centers but kept a POLYGON as
+    ONE shape (its bbox center). OpenDB's getAvgXY averages the boxes the polygon
+    decomposes into, so every non-rectangular gf180 pin was off: 1,628 of 3,344
+    pin positions, checked against getAvgXY on all gf180 9t masters."""
+    p = tmp_path / "gf.lef"
+    p.write_text("MACRO ADDF\n  SIZE 20 BY 5 ;\n  PIN CI\n    PORT\n      LAYER Metal1 ;\n"
+                 f"        POLYGON {GF180_CI_POLYGON} ;\n    END\n  END CI\nEND ADDF\n")
+    got = lef.macro_pin_geometry([str(p)])["ADDF"]["pins"]["CI"]
+    # mean of (12.04, 1.9425) and (8.22, 2.23); the polygon bbox center is (8.22, 2.0575)
+    assert got == pytest.approx((10.13, 2.08625))
+
+
+_OPENROAD = __import__("shutil").which("openroad")
+
+_TECH_LEF = """VERSION 5.8 ;
+BUSBITCHARS "[]" ;
+DIVIDERCHAR "/" ;
+UNITS
+  DATABASE MICRONS 1000 ;
+END UNITS
+LAYER met1
+  TYPE ROUTING ;
+  DIRECTION HORIZONTAL ;
+  PITCH 0.34 ;
+  WIDTH 0.14 ;
+END met1
+END LIBRARY
+"""
+
+_CELL_LEF = f"""VERSION 5.8 ;
+MACRO PROBE
+  CLASS CORE ;
+  ORIGIN 0 0 ;
+  SIZE 20 BY 5 ;
+  PIN A
+    DIRECTION INPUT ;
+    PORT
+      LAYER met1 ;
+        RECT 0 0 1 1 ;
+        RECT 0 0 3 1 ;
+    END
+  END A
+  PIN CI
+    DIRECTION INPUT ;
+    PORT
+      LAYER met1 ;
+        POLYGON {GF180_CI_POLYGON} ;
+    END
+  END CI
+END PROBE
+END LIBRARY
+"""
+
+_ODB_PROBE = """
+import odb, sys
+db = odb.dbDatabase.create()
+odb.read_lef(db, sys.argv[1]); odb.read_lef(db, sys.argv[2])
+block = odb.dbBlock.create(odb.dbChip.create(db), "t")
+dbu = block.getDbUnitsPerMicron()
+for orient in ("R0", "MX", "MY", "R180"):
+    inst = odb.dbInst.create(block, db.findMaster("PROBE"), orient)
+    inst.setOrient(orient)
+    inst.setLocation(10000, 20000)
+    lx, ly = inst.getLocation()
+    for it in inst.getITerms():
+        ok, x, y = it.getAvgXY()
+        print(orient, it.getMTerm().getName(), lx / dbu, ly / dbu, x / dbu, y / dbu)
+"""
+
+
+@pytest.mark.skipif(_OPENROAD is None, reason="openroad (OpenDB) not on PATH")
+def test_pin_centers_equal_opendb_getavgxy(tmp_path):
+    """Ground truth, not code agreement: the extractor's pin position must equal
+    OpenDB's dbITerm::getAvgXY in every orientation, for a multi-RECT pin and a
+    POLYGON pin alike."""
+    import subprocess
+
+    (tmp_path / "t.lef").write_text(_TECH_LEF)
+    (tmp_path / "c.lef").write_text(_CELL_LEF)
+    (tmp_path / "probe.py").write_text(_ODB_PROBE)
+    out = subprocess.run([_OPENROAD, "-python", "-exit", str(tmp_path / "probe.py"),
+                          str(tmp_path / "t.lef"), str(tmp_path / "c.lef")],
+                         capture_output=True, text=True, timeout=300, cwd=tmp_path)
+    rows = [ln.split() for ln in out.stdout.splitlines()
+            if ln.split()[:1] and ln.split()[0] in ("R0", "MX", "MY", "R180")]
+    assert len(rows) == 8, out.stdout + out.stderr
+    geom = lef.macro_pin_geometry([str(tmp_path / "c.lef")])
+    def_orient = {"R0": "N", "MX": "FS", "MY": "FN", "R180": "S"}
+    for orient, pin, lx, ly, x, y in rows:
+        got = lef.pin_abs_pos_um(geom, float(lx), float(ly), def_orient[orient], "PROBE", pin)
+        assert got == pytest.approx((float(x), float(y)), abs=0.0015), (orient, pin)

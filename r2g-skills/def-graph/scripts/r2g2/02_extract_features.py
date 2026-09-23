@@ -820,6 +820,37 @@ def parse_liberty(paths: list[Path]) -> dict[str, Any]:
     return db
 
 
+def _polygon_rectangles(
+    xs: list[float], ys: list[float]
+) -> list[tuple[float, float, float, float]]:
+    """r2g-skills D14: the boxes OpenDB decomposes a rectilinear LEF POLYGON into.
+
+    Horizontal slabs at every vertex y, merged upward while the x-span repeats.
+    This matches dbMPin's boxes on all 836 gf180 9t polygon pins, and getAvgXY
+    averages those boxes' centers.
+    """
+
+    ring = list(zip(xs, ys))
+    if ring[0] == ring[-1]:
+        ring.pop()
+    vertical = [
+        (x0, min(y0, y1), max(y0, y1))
+        for (x0, y0), (x1, y1) in zip(ring, ring[1:] + ring[:1])
+        if x0 == x1 and y0 != y1
+    ]
+    levels = sorted(set(ys))
+    boxes: list[tuple[float, float, float, float]] = []
+    active: dict[tuple[float, float], float] = {}
+    for low, high in zip(levels, levels[1:]):
+        middle = (low + high) / 2.0
+        cuts = sorted(x for x, y0, y1 in vertical if y0 < middle < y1)
+        spans = {span: active.pop(span, low) for span in zip(cuts[0::2], cuts[1::2])}
+        boxes.extend((a, y0, b, low) for (a, b), y0 in active.items())
+        active = spans
+    boxes.extend((a, y0, b, levels[-1]) for (a, b), y0 in active.items())
+    return boxes
+
+
 def parse_lef_geometry(paths: list[Path]) -> dict[str, dict[str, Any]]:
     """解析LEF宏类别、尺寸与Pin几何，用于坐标可信性和绝对Pin位置。"""
 
@@ -882,11 +913,10 @@ def parse_lef_geometry(paths: list[Path]) -> dict[str, dict[str, Any]]:
                 if current_pin and polygon:
                     values = [float(v) for v in polygon.group(1).split()]
                     if len(values) >= 6 and len(values) % 2 == 0:
-                        xs_p = values[0::2]
-                        ys_p = values[1::2]
-                        # Store the polygon's bbox as one rectangle so the
-                        # centroid rule below is identical for both shapes.
-                        rectangles.append((min(xs_p), min(ys_p), max(xs_p), max(ys_p)))
+                        # D14: a POLYGON is the boxes OpenDB stores it as, not
+                        # its bbox, so the getAvgXY mean below counts each box.
+                        rectangles.extend(
+                            _polygon_rectangles(values[0::2], values[1::2]))
                 end_match = re.match(r"END\s+(\S+)", line)
                 if end_match and current_pin and canonical_name(
                     end_match.group(1)

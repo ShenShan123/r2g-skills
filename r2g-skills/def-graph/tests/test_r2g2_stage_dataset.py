@@ -382,8 +382,10 @@ def test_lef_pin_geometry_reads_polygon_pins(stage02, tmp_path):
     macros = stage02.parse_lef_geometry([lef])
 
     assert "DEMO_POLY" in macros
-    # bbox of the polygon is x∈[0.71,1.07], y∈[1.21,2.53] → centre (0.89, 1.87)
-    assert macros["DEMO_POLY"]["pins"]["I"] == pytest.approx((0.89, 1.87))
+    # OpenDB stores the L-shape as [0.71,1.21,1.015,2.3] + [0.71,2.3,1.07,2.53] and
+    # getAvgXY averages their centres -> (0.87625, 2.085). The polygon's bbox centre
+    # (0.89, 1.87) asserted here before 2026-09-23 is not what OpenDB reports (D14).
+    assert macros["DEMO_POLY"]["pins"]["I"] == pytest.approx((0.87625, 2.085))
     # RECT pins keep working unchanged
     assert macros["DEMO_RECT"]["pins"]["A"] == pytest.approx((0.2, 0.4))
 
