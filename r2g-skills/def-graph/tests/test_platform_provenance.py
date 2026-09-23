@@ -21,16 +21,29 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 _FLOW = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "scripts", "flow")
 _PROV = os.path.join(_FLOW, "_provenance.sh")
 _TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))), "tools")
-_spec = importlib.util.spec_from_file_location(
-    "verify_graph_dataset", os.path.join(_TOOLS, "verify_graph_dataset.py"))
-vgd = importlib.util.module_from_spec(_spec)
-sys.modules["verify_graph_dataset"] = vgd
-_spec.loader.exec_module(vgd)
+# The verifier imports pandas and torch at module level. Only the tests that call
+# it need them, so only those skip when this interpreter lacks them (the graph venv,
+# R2G_GRAPH_PYTHON, has both).
+_VGD_MISSING = next((m for m in ("pandas", "torch")
+                     if importlib.util.find_spec(m) is None), None)
+needs_verifier = pytest.mark.skipif(
+    _VGD_MISSING is not None,
+    reason=f"tools/verify_graph_dataset.py needs {_VGD_MISSING}, missing from this "
+           "interpreter (run under R2G_GRAPH_PYTHON)")
+vgd = None
+if _VGD_MISSING is None:
+    _spec = importlib.util.spec_from_file_location(
+        "verify_graph_dataset", os.path.join(_TOOLS, "verify_graph_dataset.py"))
+    vgd = importlib.util.module_from_spec(_spec)
+    sys.modules["verify_graph_dataset"] = vgd
+    _spec.loader.exec_module(vgd)
 
 
 def _sh(run_dir, platform):
@@ -131,6 +144,7 @@ def test_guard_runs_even_for_explicit_platform_arg():
 
 # ---- the verifier (_platform_provenance) ------------------------------------
 
+@needs_verifier
 def test_vgd_manifest_wins(tmp_path):
     case = _case(tmp_path, cfg="sky130hs",
                  meta={"platform": "sky130hd"},
@@ -138,6 +152,7 @@ def test_vgd_manifest_wins(tmp_path):
     assert vgd._platform_provenance(case) == "nangate45"
 
 
+@needs_verifier
 def test_vgd_runmeta_beats_repointed_config(tmp_path):
     # The live 2026-07-09 shape: dataset built on sky130hd, config.mk re-pointed
     # to sky130hs by the new round's bootstrap; manifest predates the stamp.
@@ -147,6 +162,7 @@ def test_vgd_runmeta_beats_repointed_config(tmp_path):
     assert vgd._platform_provenance(case) == "sky130hd"
 
 
+@needs_verifier
 def test_vgd_newest_run_meta_wins(tmp_path):
     case = _case(tmp_path, cfg="sky130hs", meta={"platform": "sky130hd"})
     rd = tmp_path / "case" / "backend" / "RUN_2026-07-09_00-00-00"
@@ -156,6 +172,7 @@ def test_vgd_newest_run_meta_wins(tmp_path):
     assert vgd._platform_provenance(case) == "sky130hs"
 
 
+@needs_verifier
 def test_vgd_config_only_and_empty(tmp_path):
     assert vgd._platform_provenance(_case(tmp_path, cfg="sky130hs")) == "sky130hs"
     assert vgd._platform_provenance(str(tmp_path / "nothing")) == ""

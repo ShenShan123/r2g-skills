@@ -283,6 +283,8 @@ def test_stage02_fails_closed_on_an_empty_cell_table():
 
 def test_encode_map_generator_rejects_an_empty_liberty(tmp_path):
     """Exit-code contract through the CLI."""
+    # The CLI runs under this interpreter and 01_build_base_graph imports torch.
+    pytest.importorskip("torch", reason="build_encode_map.py's imports need torch")
     bogus = tmp_path / "empty.lib"
     bogus.write_text("nothing here\n", encoding="utf-8")
     result = subprocess.run(

@@ -28,7 +28,17 @@ import subprocess
 import sys
 import textwrap
 
-import pandas as pd
+import pytest
+
+# graph_lib imports pandas at module level. Only the three tests that call it
+# need it, so only those skip when this interpreter lacks it (the graph venv,
+# R2G_GRAPH_PYTHON, has it).
+_GL_MISSING = next((m for m in ("pandas",)
+                    if importlib.util.find_spec(m) is None), None)
+needs_graph_lib = pytest.mark.skipif(
+    _GL_MISSING is not None,
+    reason=f"graph_lib needs {_GL_MISSING}, missing from this interpreter "
+           "(run under R2G_GRAPH_PYTHON)")
 
 _SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _FLOW = os.path.join(_SKILL, "scripts", "flow")
@@ -36,7 +46,9 @@ _LABELS_SRC = os.path.join(_SKILL, "scripts", "extract", "labels")
 _RUN_LABELS = os.path.join(_FLOW, "run_labels.sh")
 
 sys.path.insert(0, os.path.join(_SKILL, "scripts", "extract", "graph"))
-import graph_lib as gl  # noqa: E402
+if _GL_MISSING is None:
+    import pandas as pd
+    import graph_lib as gl  # noqa: E402
 
 
 def _run_soft(tmp_path, *, targets, succeed, preexisting=None):
@@ -150,6 +162,7 @@ def test_stats_gate_calls_a_quarantined_label_skipped(tmp_path):
 
 # ---- graph-side degradation ------------------------------------------------
 
+@needs_graph_lib
 def test_missing_label_file_yields_empty_frame_not_traceback(tmp_path):
     """Was: uncaught FileNotFoundError out of the graph builder AND verifier,
     which reads as a graph/design defect rather than an upstream tool failure."""
@@ -157,11 +170,13 @@ def test_missing_label_file_yields_empty_frame_not_traceback(tmp_path):
     assert isinstance(df, pd.DataFrame) and df.empty
 
 
+@needs_graph_lib
 def test_label_cache_survives_a_missing_family(tmp_path):
     cache = gl.load_label_cache(str(tmp_path))
     assert cache and all(d.empty for d in cache.values())
 
 
+@needs_graph_lib
 def test_label_health_names_a_missing_file_explicitly(tmp_path):
     """'no Design column — raw/unprocessed csv?' would send an operator hunting a
     format bug in a file that was never written."""

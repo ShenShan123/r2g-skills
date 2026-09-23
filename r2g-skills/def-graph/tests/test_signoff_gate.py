@@ -41,11 +41,22 @@ gsm = importlib.util.module_from_spec(_gsm_spec)
 sys.modules["graph_skip_manifest"] = gsm
 _gsm_spec.loader.exec_module(gsm)
 
-_vspec = importlib.util.spec_from_file_location(
-    "verify_graph_dataset", os.path.join(_TOOLS, "verify_graph_dataset.py"))
-vgd = importlib.util.module_from_spec(_vspec)
-sys.modules["verify_graph_dataset"] = vgd
-_vspec.loader.exec_module(vgd)
+# The verifier imports pandas and torch at module level. Only the tests that call
+# it need them, so only those skip when this interpreter lacks them (the graph venv,
+# R2G_GRAPH_PYTHON, has both).
+_VGD_MISSING = next((m for m in ("pandas", "torch")
+                     if importlib.util.find_spec(m) is None), None)
+needs_verifier = pytest.mark.skipif(
+    _VGD_MISSING is not None,
+    reason=f"tools/verify_graph_dataset.py needs {_VGD_MISSING}, missing from this "
+           "interpreter (run under R2G_GRAPH_PYTHON)")
+vgd = None
+if _VGD_MISSING is None:
+    _vspec = importlib.util.spec_from_file_location(
+        "verify_graph_dataset", os.path.join(_TOOLS, "verify_graph_dataset.py"))
+    vgd = importlib.util.module_from_spec(_vspec)
+    sys.modules["verify_graph_dataset"] = vgd
+    _vspec.loader.exec_module(vgd)
 
 
 def test_promoted_project_with_incomplete_task_provenance_is_blocked(tmp_path):
@@ -482,6 +493,7 @@ def _empty_dirs(tmp_path):
     return str(feat), str(labs)
 
 
+@needs_verifier
 def test_verifier_provenance_fail_closed(tmp_path, monkeypatch, _empty_dirs):
     """No drc/lvs reports AND no gate verdict in the manifest -> the dataset's
     sign-off provenance is unknown and the verifier must FAIL, not vacuously
@@ -494,6 +506,7 @@ def test_verifier_provenance_fail_closed(tmp_path, monkeypatch, _empty_dirs):
     assert "signoff.provenance recorded (drc/lvs reports or manifest signoff_health)" in fails
 
 
+@needs_verifier
 def test_verifier_provenance_via_reports(tmp_path, monkeypatch, _empty_dirs):
     feat, labs = _empty_dirs
     case = tmp_path / "case"
@@ -505,6 +518,7 @@ def test_verifier_provenance_via_reports(tmp_path, monkeypatch, _empty_dirs):
     assert "signoff.provenance recorded (drc/lvs reports or manifest signoff_health)" not in fails
 
 
+@needs_verifier
 def test_verifier_lvs_skipped_accepted(tmp_path, monkeypatch, _empty_dirs):
     feat, labs = _empty_dirs
     case = tmp_path / "case"
@@ -516,6 +530,7 @@ def test_verifier_lvs_skipped_accepted(tmp_path, monkeypatch, _empty_dirs):
     assert "signoff.lvs clean (dataset built on a signed-off design)" not in fails
 
 
+@needs_verifier
 def test_verifier_gate_verdict_dirty_fails(tmp_path, monkeypatch, _empty_dirs):
     """A warn-mode build on a dirty design records signoff_health=dirty in the
     manifest — the verifier must fail that dataset."""
@@ -532,6 +547,7 @@ def test_verifier_gate_verdict_dirty_fails(tmp_path, monkeypatch, _empty_dirs):
     assert "signoff.provenance recorded (drc/lvs reports or manifest signoff_health)" not in fails
 
 
+@needs_verifier
 def test_verifier_gate_verdict_pass_ok(tmp_path, monkeypatch, _empty_dirs):
     feat, labs = _empty_dirs
     case = tmp_path / "case"
@@ -556,6 +572,7 @@ def _manifest_with_binding(case, binding_status, *, overridden=False):
     json.dump({"signoff_health": sh}, open(case / "dataset" / "graph_manifest.json", "w"))
 
 
+@needs_verifier
 def test_verifier_binding_unknown_fails_when_not_overridden(tmp_path, monkeypatch, _empty_dirs):
     """A DEF-aware gate whose binding degraded to 'unknown' (extractor overwrote the
     verdict without --def) must FAIL — the DEF binding was lost."""
@@ -567,6 +584,7 @@ def test_verifier_binding_unknown_fails_when_not_overridden(tmp_path, monkeypatc
     assert any(f.startswith("signoff.binding") for f in fails)
 
 
+@needs_verifier
 def test_verifier_binding_unknown_ok_when_overridden(tmp_path, monkeypatch, _empty_dirs):
     """A deliberate R2G_DEF override legitimately records binding=unknown -> no fail."""
     feat, labs = _empty_dirs
@@ -577,6 +595,7 @@ def test_verifier_binding_unknown_ok_when_overridden(tmp_path, monkeypatch, _emp
     assert not any(f.startswith("signoff.binding") for f in fails)
 
 
+@needs_verifier
 def test_verifier_binding_bound_passes(tmp_path, monkeypatch, _empty_dirs):
     feat, labs = _empty_dirs
     case = tmp_path / "case"
@@ -586,6 +605,7 @@ def test_verifier_binding_bound_passes(tmp_path, monkeypatch, _empty_dirs):
     assert not any(f.startswith("signoff.binding") for f in fails)
 
 
+@needs_verifier
 def test_verifier_no_binding_key_grandfathered(tmp_path, monkeypatch, _empty_dirs):
     """Older manifests with NO binding key must still pass (pre-P0-17)."""
     feat, labs = _empty_dirs
@@ -601,6 +621,7 @@ def test_verifier_no_binding_key_grandfathered(tmp_path, monkeypatch, _empty_dir
 
 # ---- FIX B: the verifier fails a superseded (blocked_unsigned) manifest --------
 
+@needs_verifier
 def test_verifier_fails_blocked_unsigned_manifest(tmp_path):
     """A signoff-gate BLOCK supersedes a stale-green dataset/graph_manifest.json with
     status=blocked_unsigned (full-pipeline #6): the verifier must FAIL it fast, before
@@ -617,6 +638,7 @@ def test_verifier_fails_blocked_unsigned_manifest(tmp_path):
     assert any("blocked_unsigned" in f for f in fails)
 
 
+@needs_verifier
 def test_verifier_reports_a_blocked_prerequisite_instead_of_crashing(tmp_path):
     """A design with no 6_final.def gets reports/graph_dataset.json status="blocked"
     and exit 3 from run_graphs.sh. _invalidate_manifest is a NO-OP when there is no

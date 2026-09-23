@@ -20,6 +20,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 _FLOW = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "scripts", "flow")
 _GATE = os.path.join(_FLOW, "signoff_gate.py")
@@ -168,6 +170,9 @@ def test_verifier_reports_blocked_not_filenotfound(tmp_path):
     """A design whose graph generation was intentionally denied has no
     dataset/graph_manifest.json — the verifier must report BLOCKED (exit 3),
     never raise FileNotFoundError (pilot H2)."""
+    # The verifier runs under this interpreter and imports both at module level.
+    pytest.importorskip("pandas", reason="tools/verify_graph_dataset.py needs pandas")
+    pytest.importorskip("torch", reason="tools/verify_graph_dataset.py needs torch")
     case = tmp_path / "denied"
     (case / "reports").mkdir(parents=True)
     json.dump({"design": "denied", "platform": "nangate45", "variants": {},
