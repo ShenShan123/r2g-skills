@@ -118,7 +118,7 @@ def export_bundle(*, output: Path, db_path: Path, artifact_root: Path,
         raise FileNotFoundError(f"TEHM database not found: {db_path}")
     entries: list[dict] = []
     db_dest = output / "closed_loop" / "tehm.sqlite"
-    _copy_bytes(db_path, db_dest)
+    _copy_bytes(db_path, db_dest, stat.S_IMODE(db_path.stat().st_mode))
     entries.append(_entry(db_dest, "closed_loop/tehm.sqlite"))
     for source, rel in _iter_files(Path(artifact_root)):
         rel = _safe_rel(Path("closed_loop/artifacts") / rel)

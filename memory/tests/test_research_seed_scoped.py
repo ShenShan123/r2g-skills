@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import stat
 from pathlib import Path
 
 import pytest
@@ -227,6 +228,8 @@ def test_build_research_seed_m0_exports_consumable_read_only_bundle(
     assert result["production_authority"] is False
     assert result["model_calls"] == 0
     assert verify_bundle(output)["ok"] is True
+    assert stat.S_IMODE(
+        (output / "closed_loop/tehm.sqlite").stat().st_mode) == 0o444
     report = json.loads(
         (output / "research/m0-build-report.json").read_text(encoding="utf-8"))
     assert report["knowledge_authority"]["eligible"] is True
