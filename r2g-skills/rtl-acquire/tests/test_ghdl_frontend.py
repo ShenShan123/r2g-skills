@@ -143,3 +143,43 @@ def test_ghdl_is_never_written_as_synth_hdl_frontend(tmp_path: Path, monkeypatch
     chosen, rec = fc.select_frontend("ghdl", needs_sv=False)
     assert chosen is None
     assert rec["available"]          # not reported as a missing tool either
+
+
+def test_failed_ghdl_synthesis_leaves_the_vhdl_sources_on_record(tmp_path: Path,
+                                                                 monkeypatch) -> None:
+    # Review finding (2026-09-23): when GHDL converted but its Verilog then failed
+    # synthesis, and vhd2vl could not convert either, the synth_failed record named
+    # the GHDL output as the design's RTL with ghdl_fallback_used=False.
+    import csv
+    import json
+
+    vhd = tmp_path / "src" / "tiny.vhd"
+    vhd.parent.mkdir()
+    vhd.write_text("entity tiny is end tiny;\narchitecture a of tiny is begin end a;\n")
+    cand = tmp_path / "cands.csv"
+    with cand.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=["design", "priority", "expected_top",
+                                           "source_path", "rtl_files", "notes"])
+        w.writeheader()
+        w.writerow({"design": "tiny", "priority": "high", "expected_top": "tiny",
+                    "source_path": str(vhd), "rtl_files": str(vhd), "notes": ""})
+    ghdl_v = tmp_path / "tiny_ghdl.v"
+    ghdl_v.write_text("module tiny(); endmodule\n")
+    monkeypatch.setattr(xc, "synthesize", lambda project, design, top: (1, None, None))
+    monkeypatch.setattr(xc, "summarize_synth_failure", lambda _p: "synth error")
+    monkeypatch.setattr(xc, "run_ghdl", lambda *a, **k: (ghdl_v, ["-fsynopsys"]))
+    monkeypatch.setattr(xc, "run_vhd2vl", lambda *a, **k: None)
+    monkeypatch.setenv("R2G_ACQUIRE_SKIP_INGEST", "1")
+    out = tmp_path / "out"
+    monkeypatch.setattr(sys, "argv", ["expand_candidates.py", "--candidate-csv", str(cand),
+                                      "--out-root", str(out),
+                                      "--projects-root", str(tmp_path / "proj")])
+    xc.main()
+
+    meta = json.loads((out / "tiny" / "design_meta.json").read_text())
+    assert meta["status"] == "synth_failed"
+    assert meta["rtl_files"] == [str(vhd)]
+    assert "ghdl_synth_failed" in meta["notes"]
+    assert (out / "tiny" / "src_manifest.txt").read_text().split() == [str(vhd)]
+    config = next((tmp_path / "proj").rglob("config.mk")).read_text()
+    assert str(ghdl_v) not in config

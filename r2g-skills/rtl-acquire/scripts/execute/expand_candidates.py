@@ -1662,8 +1662,19 @@ def main() -> int:
                             append_design_stage(out_root, design, stage="synthesize",
                                                 state="fallback_ghdl_success")
                         else:
-                            failure_note = summarize_synth_failure(synth_log_path)
+                            # Put the project back on the VHDL sources, so a failure
+                            # record never names the GHDL output as its RTL.
+                            failure_note = (f"{summarize_synth_failure(synth_log_path)}"
+                                            " | ghdl_synth_failed")
                             source_files = pre_ghdl_files
+                            project = write_project(
+                                projects_root, design, top, synth_variant, source_files,
+                                source_path.parent, include_dirs, notes,
+                                synth_memory_max_bits, synth_frontend,
+                                top_parameters or None)
+                            rtl_files = [str(p) for p in source_files]
+                            src_manifest.write_text("\n".join(rtl_files) + "\n",
+                                                    encoding="utf-8")
                     else:
                         failure_note = f"{failure_note} | ghdl_fallback_failed"
                 if netlist is None and (has_vhdl or looks_like_vhdl_failure(failure_note)):
