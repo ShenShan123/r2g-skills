@@ -83,10 +83,24 @@ TOOL_COMPATIBILITY_RE = re.compile(
     r"|unexpected TOK_(?:INT|LOGIC|BIT|STRING)\b"
     r"|tool_compatibility")
 DIAGNOSTIC_INCOMPLETE_RE = re.compile(r"(?i)\bdiagnostic_incomplete\b")
+# graph_failed / graph_skipped rows SYNTHESISED; only netlist -> .pt conversion
+# failed, so they carry no evidence about the RTL at all. The graph stage has no
+# capability probe, so an interpreter that cannot start or import torch shows up
+# here per design (wave-3 E9: "No module named 'encodings'" from a PYTHONHOME
+# leak turned 69 clean designs into exclude/low_value_failure). DEFER them.
+GRAPH_STAGE_STATUSES = frozenset({"graph_failed", "graph_skipped"})
+GRAPH_ENVIRONMENT_RE = re.compile(
+    r"(?i)no module named|modulenotfounderror|importerror"
+    r"|fatal python error|toolchain_graph_python_missing"
+    r"|r2g_graph_python is not set|graph_tool_unavailable")
 
 
-def classify(source_path: str, notes: str) -> tuple[str, str]:
+def classify(source_path: str, notes: str, status: str = "") -> tuple[str, str]:
     text = (notes or "").lower()
+    if status in GRAPH_STAGE_STATUSES:
+        if status == "graph_skipped" or GRAPH_ENVIRONMENT_RE.search(text):
+            return "defer", "graph_tool_unavailable"
+        return "defer", "graph_stage_failure"
     # Evidence-absent guard FIRST: with no terminal-error log there is nothing to
     # classify on, so no terminal verdict may be issued (RMD-HO-P1-01 part A).
     if DIAGNOSTIC_INCOMPLETE_RE.search(text):
@@ -203,7 +217,8 @@ def main() -> None:
                 }
             )
             continue
-        bucket, reason = classify(row.get("source_path", ""), row.get("notes", ""))
+        bucket, reason = classify(row.get("source_path", ""), row.get("notes", ""),
+                                  row.get("status", ""))
         out_row = {
             "design": row["design"],
             "status": row["status"],
