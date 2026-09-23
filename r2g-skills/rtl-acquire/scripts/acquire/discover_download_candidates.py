@@ -972,7 +972,10 @@ def main() -> None:
                 ok = False
                 reason = "duplicate_module_defs"
             instantiated = extract_instantiated_modules(rtl_text)
-            if not ok and not module_defs:
+            # A package-only file is rejected as a candidate (`no_module`) but must
+            # still register its packages, or `import pkg::*` never resolves and
+            # the importer loses the package from its closure (wave-3 E5L).
+            if not ok and not module_defs and not package_defs:
                 continue
             rel = path.relative_to(args.downloads_root)
             info = {
