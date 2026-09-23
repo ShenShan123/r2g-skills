@@ -139,9 +139,17 @@ After ORFS completes, extract PPA and run the timing gate:
 5. The JSON includes `wns_tier` and `tns_tier` fields so the agent can explain which metric triggered the tier (e.g., "TNS escalated this from minor to moderate").
 6. Only proceed to signoff checks (step 6) after timing is resolved.
 
-### 5a. (Optional) Fmax search — find the fastest closing period
+### 5a. Fmax search — find the fastest closing period
 
-Before committing to a clock period, you can characterize the design's Fmax:
+Optional for a hand-built project, but **required for an rtl-acquire-promoted
+project to reach strict admission**. `signoff_gate.py` blocks any project stamped
+`promoted_from` with `task_provenance` (missing `qualified_constraint`) until
+`signoff_manifest.constraint.qualified` is true. `build_signoff_manifest.py` sets
+that only when a `reports/fmax_search.json` winner matches the stamped SDC period and
+final timing is `clean`. So run the search, stamp the winner into `constraint.sdc`, and
+re-run the flow before expecting a `pass`.
+
+Before committing to a clock period, characterize the design's Fmax:
 
     python3 scripts/reports/fmax_search.py <project-dir> [platform] [--verify]
 
