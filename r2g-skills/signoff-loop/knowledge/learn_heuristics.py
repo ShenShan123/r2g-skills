@@ -541,6 +541,10 @@ def learn(db_path: Path | str,
           enqueue_candidates: bool = True) -> dict:
     db_path = Path(db_path)
     out_path = Path(out_path)
+    for target in (db_path, out_path):      # rebuilds trajectories + rewrites out
+        refusal = knowledge_db.shipped_write_refusal(target)
+        if refusal:
+            raise PermissionError(refusal)
 
     # Read the PRIOR heuristics off disk BEFORE we overwrite it, so the recipe
     # lifecycle can diff new/changed recipes against it. This is the production

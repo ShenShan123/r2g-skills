@@ -137,6 +137,14 @@ untried → 0.5 prior, winners high, losers down-ranked but never zeroed/blackli
 
 **Ingest auto-learn.** After a CLI ingest, `ingest_run.py` auto-invokes `fix_log_manager.manage()`
 (env `R2G_FIX_AUTOLEARN`, default on; failures warn but never break the ingest).
+It writes `heuristics.json` to `R2G_HEURISTICS_PATH` when set (where every reader looks),
+else next to the db.
+
+**The shipped store is read-only by default.** The git-tracked `knowledge.sqlite` and
+`heuristics.json` open read-only unless `R2G_ALLOW_SHIPPED_STORE_WRITE=1`: reads work, and
+any ingest or learn aimed at them fails with a message naming the fix. Point
+`R2G_KNOWLEDGE_DB` and `R2G_HEURISTICS_PATH` at your own copy (seed it with `cp` to start
+from the shipped evidence). Set the opt-in only to curate the shipped evidence deliberately.
 
 ### Backfill & repair
 

@@ -32,6 +32,60 @@ def now_local() -> str:
     return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+# The shipped knowledge.sqlite and heuristics.json are git-tracked EVIDENCE, not a
+# scratch store. Writing them takes this explicit opt-in (curating the shipped
+# evidence); every other writer must point R2G_KNOWLEDGE_DB / R2G_HEURISTICS_PATH at
+# its own copy. Mirrors the experiment runners, which refuse to start without
+# R2G_KNOWLEDGE_DB (CORRECTIONS #80 / E6: an unset path mutated shipped evidence).
+SHIPPED_WRITE_OPT_IN = "R2G_ALLOW_SHIPPED_STORE_WRITE"
+# Fixed identities, deliberately not DEFAULT_*: tests repoint the defaults at a tmp db.
+SHIPPED_STORE_FILES = (DEFAULT_KNOWLEDGE_DIR / "knowledge.sqlite",
+                       DEFAULT_KNOWLEDGE_DIR / "heuristics.json")
+
+
+def is_shipped_store(path: Path | str) -> bool:
+    """True when `path` is the git-tracked knowledge.sqlite or heuristics.json."""
+    return Path(path).resolve() in {f.resolve() for f in SHIPPED_STORE_FILES}
+
+
+def shipped_write_refusal(path: Path | str) -> str | None:
+    """The refusal message when writing `path` would mutate the shipped store
+    without the opt-in; None when the write is allowed."""
+    if not is_shipped_store(path) or os.environ.get(SHIPPED_WRITE_OPT_IN) == "1":
+        return None
+    return (f"refusing to write the shipped, git-tracked knowledge store {path}. "
+            "Point R2G_KNOWLEDGE_DB and R2G_HEURISTICS_PATH at your own copy, or set "
+            f"{SHIPPED_WRITE_OPT_IN}=1 to curate the shipped evidence deliberately.")
+
+
+class _ShippedStoreConnection(sqlite3.Connection):
+    """A read-only connection to the shipped store whose write errors say why."""
+
+    def _explain(self, exc: sqlite3.OperationalError) -> sqlite3.OperationalError:
+        if "readonly" in str(exc):
+            return sqlite3.OperationalError(
+                f"{exc}: {shipped_write_refusal(SHIPPED_STORE_FILES[0])}")
+        return exc
+
+    def execute(self, *args: Any, **kwargs: Any) -> sqlite3.Cursor:
+        try:
+            return super().execute(*args, **kwargs)
+        except sqlite3.OperationalError as exc:
+            raise self._explain(exc) from exc
+
+    def executemany(self, *args: Any, **kwargs: Any) -> sqlite3.Cursor:
+        try:
+            return super().executemany(*args, **kwargs)
+        except sqlite3.OperationalError as exc:
+            raise self._explain(exc) from exc
+
+    def executescript(self, *args: Any, **kwargs: Any) -> sqlite3.Cursor:
+        try:
+            return super().executescript(*args, **kwargs)
+        except sqlite3.OperationalError as exc:
+            raise self._explain(exc) from exc
+
+
 def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
     # A no-arg connect() honors R2G_KNOWLEDGE_DB before the shipped default — symmetric
     # with journal_db's R2G_JOURNAL_DB. Lets a unit test / sandbox point every default
@@ -47,7 +101,12 @@ def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
     # ingest_run subprocesses against this one DB and the driver swallows ingest
     # errors, so an unguarded lock would silently drop a run from the store.
     # Parity with journal_db.connect (which also writes concurrently at ingest).
-    conn = sqlite3.connect(str(db_path), timeout=30.0)
+    if shipped_write_refusal(db_path) is not None:
+        # Reads of the shipped evidence stay allowed; any write fails loudly.
+        conn = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True,
+                               timeout=30.0, factory=_ShippedStoreConnection)
+    else:
+        conn = sqlite3.connect(str(db_path), timeout=30.0)
     conn.execute("PRAGMA busy_timeout = 30000")
     conn.execute("PRAGMA foreign_keys = ON")
     # WAL (parity with journal_db): under R2G_AB_WORKERS=8 a burst of concurrent
@@ -136,6 +195,8 @@ def _migrate_arm_status_version(conn: sqlite3.Connection) -> int:
 
 def ensure_schema(conn: sqlite3.Connection,
                   schema_path: Path | str = DEFAULT_SCHEMA_PATH) -> None:
+    if isinstance(conn, _ShippedStoreConnection):
+        return      # read-only shipped evidence: migrated by whoever curates it
     _migrate_drop_stale_fix_trajectories(conn)
     ddl = Path(schema_path).read_text(encoding="utf-8")
     conn.executescript(ddl)
