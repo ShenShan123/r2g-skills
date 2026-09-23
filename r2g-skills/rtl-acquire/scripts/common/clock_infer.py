@@ -28,8 +28,8 @@ def infer_clock_ports(top: str, texts: list[str]) -> list[str]:
     (promotion requires an explicit operator choice; multi-clock designs are
     out of scope per the hard rules). When the top body has no edge events on
     its inputs, falls back to inputs that drive a submodule clock through named
-    port connections (any depth). Empty for combinational / self-timed tops, or
-    when the clock is connected only positionally."""
+    or positional port connections (any depth). Empty for combinational /
+    self-timed tops."""
     mod_re = re.compile(r"(?ms)^\s*module\s+" + re.escape(top) + r"\b[^;]*?\((.*?)\)\s*;")
     for text in texts:
         text_nc = re.sub(r"//.*", "", text)
@@ -80,6 +80,70 @@ def _balanced(text: str, start: int) -> int:
 
 
 _MODULE_RE = re.compile(rf"(?ms)^\s*module\s+({_IDENT})\b(.*?)\bendmodule\b")
+_PLAIN_ARG_RE = re.compile(rf"\s*({_IDENT})\s*(?:\[[^\]]*\])?\s*")
+
+
+def _split_top_level(text: str) -> list[str]:
+    """Split on commas outside (), [] and {}."""
+    parts, depth, start = [], 0, 0
+    for i, ch in enumerate(text):
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append(text[start:i])
+            start = i + 1
+    parts.append(text[start:])
+    return parts
+
+
+def _declared_port_order(after_name: str) -> list[str] | None:
+    """The module's ports in declaration order (ANSI or non-ANSI header), or
+    None when the order cannot be read reliably (preprocessor directives or
+    port expressions in the list, unbalanced text)."""
+    s = after_name.lstrip()
+    if s.startswith("#"):
+        end = _balanced(s, s.find("("))
+        if end < 0:
+            return None
+        s = s[end:].lstrip()
+    if not s.startswith("("):
+        return [] if s.startswith(";") else None
+    end = _balanced(s, 0)
+    if end < 0:
+        return None
+    plist = s[1:end - 1]
+    if "`" in plist or "." in plist:
+        return None
+    if not plist.strip():
+        return []
+    names = []
+    for seg in _split_top_level(re.sub(r"\[[^\]]*\]", " ", plist)):
+        ids = re.findall(_IDENT, seg.split("=", 1)[0])
+        if not ids:
+            return None
+        names.append(ids[-1])
+    return names
+
+
+def _positional_connections(args: str, child_ports: list[str] | None) -> dict[str, str]:
+    """{child_port: parent_signal} for a positional connection list. Empty when
+    the mapping is not certain: named/implicit connections, preprocessor text,
+    an unreadable child header, or more arguments than declared ports."""
+    if child_ports is None or "." in args or "`" in args or not args.strip():
+        return {}
+    parts = _split_top_level(args)
+    if len(parts) > len(child_ports):
+        return {}
+    conns = {}
+    for port, arg in zip(child_ports, parts):
+        m = _PLAIN_ARG_RE.fullmatch(arg)
+        if m:
+            conns[port] = m.group(1)
+    return conns
+
+
 _NAMED_CONN_RE = re.compile(
     rf"\.\s*({_IDENT})\s*(?:\(\s*({_IDENT})\s*(?:\[[^\]]*\])?\s*\)|(?=\s*[,)]))")
 
@@ -87,9 +151,11 @@ _NAMED_CONN_RE = re.compile(
 def _hierarchical_clock_ports(texts: list[str]) -> dict[str, dict[str, int]]:
     """Per module: its ports that act as clocks, directly (edge event in its own
     body) or transitively (connected by name to a clock port of an instance).
-    Only named connections are followed (``.clk(sig)`` and SV implicit ``.clk``);
-    positional connections are not guessed. Reset-like names are excluded."""
+    Named connections (``.clk(sig)`` and SV implicit ``.clk``) are followed, and
+    positional ones are mapped to the child's declared port order when that
+    order is certain. Reset-like names are excluded."""
     modules: dict[str, tuple[set[str], str]] = {}
+    port_order: dict[str, list[str] | None] = {}
     for text in texts:
         for m in _MODULE_RE.finditer(_strip_comments(text)):
             body = m.group(2)
@@ -99,6 +165,7 @@ def _hierarchical_clock_ports(texts: list[str]) -> dict[str, dict[str, int]]:
                 rf"(?m)^\s*input\b[^;]*?({_IDENT}(?:\s*,\s*{_IDENT})*)\s*[;,)]", body)
                 for n in dm.group(1).split(",")}
             modules.setdefault(m.group(1), (ports, body))
+            port_order.setdefault(m.group(1), _declared_port_order(body))
 
     clocked: dict[str, dict[str, int]] = {name: {} for name in modules}
     for name, (ports, body) in modules.items():
@@ -128,6 +195,10 @@ def _hierarchical_clock_ports(texts: list[str]) -> dict[str, dict[str, int]]:
                     continue
                 conns = {c.group(1): (c.group(2) or c.group(1))
                          for c in _NAMED_CONN_RE.finditer(body[open_at:close_at])}
+                if not conns:
+                    # Wave-3 E5L fe9bc8b0fd8a: `ProcessingElements PE0(in_clk, ...)`.
+                    conns = _positional_connections(body[open_at + 1:close_at - 1],
+                                                    port_order[child])
                 instances[parent].append((child, conns))
 
     changed = True
