@@ -609,7 +609,8 @@ def extract_instantiated_modules(rtl_text: str) -> set[str]:
     refs: set[str] = set()
     for match in INSTANTIATION_RE.finditer(strip_verilog_comments(rtl_text)):
         token = match.group(1)
-        if token.lower() in VERILOG_KEYWORDS:
+        # Keywords are case-sensitive: `Reg` is a legal module name (wave-3 E5L).
+        if token in VERILOG_KEYWORDS:
             continue
         refs.add(token)
     return refs
