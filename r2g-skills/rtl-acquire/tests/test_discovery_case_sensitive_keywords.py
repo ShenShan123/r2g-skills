@@ -68,3 +68,10 @@ def test_keyword_named_module_joins_the_bundle(tmp_path: Path) -> None:
     top_rows = [r for r in rows if r["expected_top"] == "riscv_top"]
     assert len(top_rows) == 1
     assert str(rtl / "Reg.v") in top_rows[0]["rtl_files"].split(";")
+
+
+def test_macro_instantiation_path_is_case_sensitive_too() -> None:
+    # Review finding (2026-09-23): the macro-instantiation path still compared
+    # inst.lower(), so "`MOD Reg (...)" was dropped while "MOD Reg (...)" was kept.
+    assert dd.extract_macro_instantiations("`MOD Reg (.a(b));\n") == {"MOD"}
+    assert dd.extract_macro_instantiations("`MOD reg (.a(b));\n") == set()

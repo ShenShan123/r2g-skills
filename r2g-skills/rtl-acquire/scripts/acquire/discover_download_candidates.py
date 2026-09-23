@@ -700,7 +700,7 @@ def extract_macro_instantiations(rtl_text: str) -> set[str]:
     out: set[str] = set()
     for match in MACRO_INSTANTIATION_RE.finditer(strip_verilog_comments(rtl_text)):
         macro, inst = match.group(1), match.group(2)
-        if macro.lower() in _DIRECTIVE_NAMES or inst.lower() in VERILOG_KEYWORDS:
+        if macro.lower() in _DIRECTIVE_NAMES or inst in VERILOG_KEYWORDS:
             continue
         out.add(macro)
     return out
