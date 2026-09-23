@@ -83,6 +83,14 @@ TOOL_COMPATIBILITY_RE = re.compile(
     r"|unexpected TOK_(?:INT|LOGIC|BIT|STRING)\b"
     r"|tool_compatibility")
 DIAGNOSTIC_INCOMPLETE_RE = re.compile(r"(?i)\bdiagnostic_incomplete\b")
+# A tool that died on a signal (CORRECTIONS #15/#25): SEGV/ABRT/BUS/FPE/ILL,
+# glibc assertions, and make's 128+N exit codes. Such crashes are load-dependent
+# and say nothing about the RTL. A Yosys crash leaves `make: *** ... Error 139`,
+# which counts as a terminal error, so without this it fell through to exclusion.
+TOOL_CRASH_RE = re.compile(
+    r"(?i)terminated by signal\s+(?:4|6|7|8|11)\b|segmentation fault|core dumped"
+    r"|\bsignal\s+(?:6|11)\s+received|\bsig(?:segv|abrt|bus|fpe|ill)\b"
+    r"|assertion [`'].*' failed|\berror\s+13[24569]\b")
 # graph_failed / graph_skipped rows SYNTHESISED; only netlist -> .pt conversion
 # failed, so they carry no evidence about the RTL at all. The graph stage has no
 # capability probe, so an interpreter that cannot start or import torch shows up
@@ -109,6 +117,8 @@ def classify(source_path: str, notes: str, status: str = "") -> tuple[str, str]:
     # statement about source quality.
     if MEMORY_LIMIT_RE.search(text):
         return "retry", "memory_limit"
+    if TOOL_CRASH_RE.search(text):
+        return "defer", "tool_crash"
     # Tool-capability gaps: DEFER (candidate preserved, no negative learning).
     if FRONTEND_UNAVAILABLE_RE.search(text):
         return "defer", "frontend_tool_unavailable"
