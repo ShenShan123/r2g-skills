@@ -32,6 +32,8 @@ def run_checks() -> dict:
             expected_test_ids=("case_a", "other"), runner_exit=0), "UNKNOWN"),
         "cocotb_missing_exit": (cocotb_verdict(junit=clean, runner_log=clean_log,
             expected_test_ids=ids, runner_exit=None), "UNKNOWN"),
+        "cocotb_decorated_terminal": (cocotb_verdict(junit=clean,
+            runner_log=b"===== 1 passed in 0.2s =====\n", expected_test_ids=ids, runner_exit=0), "PASS"),
     }
     native_clean = (b'*** All 2 test cases completed successfully\n'
                     b'   -= Testbench for AES completed =-\n')

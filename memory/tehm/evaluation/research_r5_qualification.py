@@ -12,7 +12,7 @@ from .research_github_corpus import verify_github_rtl_corpus
 from .research_r5_verdict import cocotb_verdict, secworks_verdict
 
 
-SCHEMA = "tehm-r5-qf1-index-v3"
+SCHEMA = "tehm-r5-qf1-index-v4"
 COCOTB_SCOPES = (
     ("axis-register", "alexforencich/verilog-axis", "rtl/axis_register.v",
      "tb/axis_register/test_axis_register.py", "test_axis_register-8-2",

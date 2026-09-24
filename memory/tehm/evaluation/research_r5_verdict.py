@@ -9,9 +9,9 @@ import re
 import xml.etree.ElementTree as ET
 
 
-COCOTB_CONTRACT = "r5-cocotb-junit-verdict-v1"
+COCOTB_CONTRACT = "r5-cocotb-junit-verdict-v2"
 SECWORKS_CONTRACT = "r5-secworks-native-summary-verdict-v1"
-_WRAPPER = re.compile(r"(?m)^\s*1 (passed|failed) in [0-9.]+s\s*$")
+_WRAPPER = re.compile(r"(?m)^\s*(?:=+\s*)?1 (passed|failed) in [0-9.]+s(?:\s*=+)?\s*$")
 _COCOTB_SUMMARY = re.compile(
     r"\bTESTS=(\d+) PASS=(\d+) FAIL=(\d+) SKIP=(\d+)\b"
 )

@@ -7880,7 +7880,9 @@ R4-8 的 [paper protocol preflight](evaluation/research_r4_paper_protocol_prefli
 ### 2026-09-24 Revision5 RTL Pilot：QF-1 与判定器
 
 Revision5 改为先封存可判定范围，再开发受限 binder 和新的 TRAIN memory；当前
-`QF-1-r3` 已索引 10 个 SHA、三项负控及旧 binder 的 0/249 源码扫描。
-cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 15 个反例自测，
+`QF-1-r4` 已索引 10 个 SHA、三项负控及旧 binder 的 0/249 源码扫描。
+cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 16 个反例自测，
 但尚未构成 TEHM transfer 或 ΔMemory。进度、缺口和 DEV 机制卡见
 [`research_r5_qf1_and_dev_20260924.md`](evaluation/research_r5_qf1_and_dev_20260924.md)。
+新版 skid-buffer payload source-only binder 已有 DEV 原生动作 smoke，仍未注册核心 Asset；见
+[`research_r5_skid_binding_dev_20260924.md`](evaluation/research_r5_skid_binding_dev_20260924.md)。

@@ -26,6 +26,8 @@ from tehm.evaluation.research_github_corpus import verify_github_rtl_corpus  # n
 from tehm.evaluation.research_r5_qualification import build_qf1, verify_qf1  # noqa: E402
 from tehm.evaluation.research_r5_verdict_checks import run_checks as check_r5_verdicts  # noqa: E402
 from tehm.evaluation.research_r5_dev_probe import audit_dev_probe, verify_dev_probe  # noqa: E402
+from tehm.evaluation.research_r5_skid_binding_checks import run_checks as check_r5_skid_binding  # noqa: E402
+from tehm.evaluation.research_r5_skid_dev_audit import audit_candidate, verify_candidate  # noqa: E402
 from tehm.evaluation.research_campaign import (  # noqa: E402
     prepare_research_campaign,
     verify_prepared_campaign,
@@ -166,6 +168,28 @@ def _audit_r5_dev_probe(args: argparse.Namespace) -> int:
 
 def _verify_r5_dev_probe(args: argparse.Namespace) -> int:
     result = verify_dev_probe(args.receipt)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+def _check_r5_skid_binding(args: argparse.Namespace) -> int:
+    result = check_r5_skid_binding(
+        clean=args.clean.read_text(encoding="utf-8"),
+        faulty=args.fault.read_text(encoding="utf-8"),
+        unrelated=args.unrelated.read_text(encoding="utf-8"),
+        similar=args.similar.read_text(encoding="utf-8"),
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _audit_r5_skid_candidate(args: argparse.Namespace) -> int:
+    result = audit_candidate(work=args.work, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_r5_skid_candidate(args: argparse.Namespace) -> int:
+    result = verify_candidate(args.receipt)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
 
@@ -495,6 +519,22 @@ def main(argv: list[str] | None = None) -> int:
     dev_verify = sub.add_parser("verify-r5-dev-probe", help="replay staged RTL DEV probe receipt")
     dev_verify.add_argument("--receipt", type=Path, required=True)
     dev_verify.set_defaults(handler=_verify_r5_dev_probe)
+
+    skid_checks = sub.add_parser("check-r5-skid-binding", help="run bounded source-only DEV binder checks")
+    skid_checks.add_argument("--clean", type=Path, required=True)
+    skid_checks.add_argument("--fault", type=Path, required=True)
+    skid_checks.add_argument("--unrelated", type=Path, required=True)
+    skid_checks.add_argument("--similar", type=Path, required=True)
+    skid_checks.set_defaults(handler=_check_r5_skid_binding)
+
+    skid_audit = sub.add_parser("audit-r5-skid-candidate", help="audit staged DEV binder candidate")
+    skid_audit.add_argument("--work", type=Path, required=True)
+    skid_audit.add_argument("--output", type=Path, required=True)
+    skid_audit.set_defaults(handler=_audit_r5_skid_candidate)
+
+    skid_verify = sub.add_parser("verify-r5-skid-candidate", help="replay DEV candidate raw evidence")
+    skid_verify.add_argument("--receipt", type=Path, required=True)
+    skid_verify.set_defaults(handler=_verify_r5_skid_candidate)
 
     adapt_inventory = sub.add_parser(
         "adapt-inventory",
