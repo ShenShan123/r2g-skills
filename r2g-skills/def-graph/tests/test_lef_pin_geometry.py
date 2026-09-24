@@ -220,9 +220,13 @@ def test_pin_centers_equal_opendb_getavgxy(tmp_path):
     (tmp_path / "t.lef").write_text(_TECH_LEF)
     (tmp_path / "c.lef").write_text(_CELL_LEF)
     (tmp_path / "probe.py").write_text(_ODB_PROBE)
+    # The oss-cad python3 wrapper exports PYTHONHOME; inherited by `openroad -python`
+    # it points the embedded interpreter at the wrong stdlib (same leak as 9ba9bc4).
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("PYTHONHOME", "PYTHONEXECUTABLE", "PYTHONNOUSERSITE")}
     out = subprocess.run([_OPENROAD, "-python", "-exit", str(tmp_path / "probe.py"),
                           str(tmp_path / "t.lef"), str(tmp_path / "c.lef")],
-                         capture_output=True, text=True, timeout=300, cwd=tmp_path)
+                         capture_output=True, text=True, timeout=300, cwd=tmp_path, env=env)
     rows = [ln.split() for ln in out.stdout.splitlines()
             if ln.split()[:1] and ln.split()[0] in ("R0", "MX", "MY", "R180")]
     assert len(rows) == 8, out.stdout + out.stderr
