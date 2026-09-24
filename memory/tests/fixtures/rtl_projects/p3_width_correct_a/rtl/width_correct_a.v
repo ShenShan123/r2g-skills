@@ -1,8 +1,0 @@
-module width_correct_a (
-    input wire [3:0] data,
-    output reg [3:0] out
-);
-    always @(*) begin
-        out = data[1:0]; // BUG: truncates the upper data bits
-    end
-endmodule

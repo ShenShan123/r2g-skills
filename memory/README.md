@@ -2121,7 +2121,7 @@ digest 源）、`features/`（def-graph 已提取特征）、`lvs/`（powered.v 
 `drc/`、`rcx/`、`reports/`、`stage_log.jsonl`/`run-meta.json`、以及全部审计 JSON
 （context_coverage_audit / calibration_report / parametric_readiness），digest 仍可对字节
 重验。`orfs-v2-diversity/tehm_ab`（A/B arm 克隆 933M）属 Tier 3 暂保留待决定。幂等清理
-脚本：`scripts/cleanup_campaign_disk.sh`（`DRY=1` 预览，无参执行）。
+脚本当时为 `scripts/cleanup_campaign_disk.sh`；2026-09-24 树清理后已退役，可从 Git 历史恢复。
 
 ### 2026-08-02 v1-era 证据恢复 + orfs-v4 sky130hs 聚焦批次（已完成）
 
@@ -6309,7 +6309,7 @@ true、expanded missing 为空，9 类负控拒绝，完整 source/projection �
 这只是 selected audit portability：尚非完整 recursive ORFS/toolchain dependency
 closure、fresh relocated hardware trial 或完整 P16 开源发布，artifacts 仍在本机。
 
-新增可复用 `scripts/run_frozen_regression.py`，一次运行冻结全部 memory Python
+当时新增 `scripts/run_frozen_regression.py`（2026-09-24 树清理后退役），一次运行冻结全部 memory Python
 source corpus、执行完整 memory/tests、核验 terminal JUnit 与 source 未变；非零退出、
 缺失测试、fail/error/skip 或 corpus drift 均 FAIL，旧 terminal artifacts 不覆盖。
 11 项 runner tests PASS。完整回归在新目录 `full-regression-gap-reason-expanded-r12`
@@ -7852,3 +7852,11 @@ TaskSuccess@B 三组均为 **2/2**，实际记忆候选执行率分别为 **0/2�
 R4-8 的 [paper protocol preflight](evaluation/research_r4_paper_protocol_preflight_v1.md)
 仍为 DRAFT/NO-GO，未冻结 final held-out，也无论文最终实验结论。v19 证据状态
 按 SHA256 追加链接 v18，未回改旧记录。
+
+### 2026-09-24 文件树清理
+
+按用户要求移除整个 `memory/tests/`、五个历史/失效脚本、生成缓存与旧临时归档。
+旧 manifest 的 `memory/tests/fixtures` 路径及旧完整测试入口现已失效；前述
+`2085 passed` 是清理前的历史回归，不能用作清理后覆盖率。当前 R4 CLI 的
+`verify-s2-pilot` 已在清理后只读复核通过；`r4-real-pilot` 原始证据保留。
+清理目标、可恢复性与未处理的历史 campaign 见
