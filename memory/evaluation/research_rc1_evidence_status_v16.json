@@ -1,0 +1,33 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v15.json",
+    "sha256": "92cc2479792119f272f4884117f1effea3add5d375cd604fcd0751236d2b2de8"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v15",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v15 status binds the two-source Route-B research M0 and its independently reproduced read-only export. Its exact SHA256 is bound above; earlier audits are not rewritten."
+    },
+    {
+      "evidence_id": "r4-post-m0-eight-flow-route-coverage-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Clean source fd5167454bfba4c2d3276be1befeae34b97bbf83 and M0 bundle 0c35ad0319ac936eb8afd295d3f326a08d844c18758e822d35d9f85e6102ddea are bound by ready epoch sha256:a049b44255380a4e270df18ca3f24bb7b420e1bcbe7d959f18edec0363e253dc. Independently verified coverage sha256:624ae1a11274905e908da6cc2f60fb4118ddb5c7a628e0f27e362a4b412e3f3c retains all eight S0 flow audits: five PASS without target failure, one infrastructure UNKNOWN, and two verified natural terminal FAIL. Both target failures are NO_SKILL/NO_MATCH: gcd route routing_congestion and verilog_axis_ll_axis_bridge floorplan pdn_geometry_infeasible lack validated mechanism knowledge in this density-relief M0. Route selected 0/8, no asset selected or bound, zero EDA or model calls, and the frozen SQLite hash is unchanged with no sidecars. This is route-only diagnostic evidence, not a Controlled S1 action effect or an efficacy result."
+    },
+    {
+      "evidence_id": "future-r4-s1-controlled-action",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "The complete S0 cohort has no legitimate selected memory action under the current M0, so a two-arm action-effect claim cannot be made from it. A separate preregistered Pilot-development task with a mechanism-covered failure and an independent source lineage would need real route, selector, binder, execution, and control evidence; seed-training pairs cannot be relabeled as S1. Retain NO_MATCH cases in all aggregate denominators."
+    },
+    {
+      "evidence_id": "future-r4-s2-evolution-final-heldout-paper",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "S2 same-controller comparisons, verified shadow evolution, frozen final held-out protocol, and paper experiments remain unestablished. Production authority and online memory update remain disabled."
+    }
+  ]
+}

@@ -7757,3 +7757,23 @@ manifest digest 均为 `d7d54e231a28bfce7ba0da7a7ecbb77c5df87f39450316251cef7da9
 这份 M0 仅支持受控 `flow_feasibility` 训练范围，不证明自然失败迁移、strict
 signoff、S1 动作收益或 production authority；模型调用为零。下一门禁是绑定非空 M0
 的 Pilot epoch，重跑完整八案只读 route coverage，再决定哪些任务可进入 S1。
+
+### 2026-09-23 Revision4 非空 M0 的完整 S0 路由覆盖审计
+
+clean source `fd5167454bfba4c2d3276be1befeae34b97bbf83` 与只读
+`m0-route-b-003` 被 epoch `rc1-nonempty-m0-fd51674-clean-20260923` 冻结；
+epoch digest 为
+`sha256:a049b44255380a4e270df18ca3f24bb7b420e1bcbe7d959f18edec0363e253dc`，
+无 blocker。仓库外完整八个 S0 flow audit 的只读 route coverage digest 为
+`sha256:624ae1a11274905e908da6cc2f60fb4118ddb5c7a628e0f27e362a4b412e3f3c`，
+独立重算校验通过；M0 SQLite 前后 SHA256 相同，权限保持 `0444`，无 sidecar。
+
+八案分母原样保留：五个 flow PASS 没有目标失败，一个 flow timeout 为 UNKNOWN，
+两个自然终态 FAIL 可路由但均返回 `NO_SKILL / NO_MATCH`。官方 `gcd` 在 route
+出现 `routing_congestion`，外部 `verilog_axis_ll_axis_bridge` 在 floorplan 出现
+`pdn_geometry_infeasible`；当前 M0 只含受控 placement-density relief 的验证知识，
+两种失败均无相应 validated mechanism knowledge。因此 route selected 为 `0/8`，
+实际 memory-action coverage 也为 `0/8`；没有 selector、binder 或 candidate
+execution，也没有新的 EDA/model call。这是具体的机制覆盖缺口，不是动作无效或有益的
+因果证据，不能把两条训练 seed pair 改标为 S1。Controlled S1 的下一步必须独立
+预注册带有目标机制的 Pilot-development 任务，并保留本八案在总体分母与拒绝记录中。
