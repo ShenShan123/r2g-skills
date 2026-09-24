@@ -10,6 +10,7 @@
 - 后续另建的 `axis_broadcast[2-8]` DEV 探针取得 clean 4/4 PASS、故障 3/4 PASS/1 FAIL，但它不在 QF-1-r4 原三项范围内；冻结 v1 binder 对该故障明确 NO_MATCH。新 DEV v2 binder 在该故障及 register 故障上均能唯一绑定，37/37 对抗检查通过，动作源码逐字节等于各自 clean staged RTL；v2 shadow core 接线另有 19/19 RAM-only 检查，仍无 Knowledge-authorized SELECT，也不改变本报告的 NO-GO。该同 owner 设计不是自动 TRAIN 或跨来源 target。
 - 针对独立来源缺口，从用户第二档定向新增 `ZipCPU/wb2axip` 作为 DEV 资格候选；原生 `skidbuffer.sby` 的 `prfo` 对预登记的暂存 payload 来源故障给出 `MISSED`（clean/fault 均 PASS），另一个 valid-signal live-control 被断言检出。当前 v2 binder 对其公开参数也 `UNSUPPORTED`。两道独立 NO-GO 都不能由 live-control 的 FAIL 越过；详情见 [ZipCPU DEV 探针](research_r5_zipcpu_skid_dev_20260924.md)。
 - 仅为选定的 ZipCPU DEV payload 范围，另建研究者编写、evaluator-private 的事务级 augmented oracle：clean 的 direct/backpressure 均 PASS，fault 的 direct PASS、backpressure 因第二拍 payload 不符 FAIL；11/11 结果适配器反例通过。它不改变上游 native `MISSED`，也不改变 v2 binder 的 `UNSUPPORTED`、TRAIN provenance 缺失或本报告的 M+ NO-GO。详情见 [augmented DEV 回执](research_r5_zipcpu_augmented_payload_dev_20260924.md)。
+- 新建独立的 DEV v3 source-only binder 草案，在 register、broadcast 与 ZipCPU registered 三种已观察 DEV 形态上 48/48 对抗检查通过，三例候选逐字节等于各自 clean staged RTL；v1/v2 不改，v2 对 ZipCPU 仍 `UNSUPPORTED`。v3 尚未接入核心或取得 TRAIN/Memory authority，不能把新增软件适用域归因成 Memory transfer；详情见 [v3 绑定回执](research_r5_skid_binding_v3_dev_20260924.md)。
 
 ## 核心接线与准入缺口
 
