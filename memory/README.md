@@ -7868,3 +7868,11 @@ R4-8 的 [paper protocol preflight](evaluation/research_r4_paper_protocol_prefli
 143 个旧实验入口及其唯一依赖旧脚本的回放模块已移除。历史文档中的旧入口路径
 只作档案引用，不再保证可执行；`memory/tehm/` 通用运行时代码保留。
 细节见 [`tehm_tree_cleanup_20260924_r2.md`](evaluation/tehm_tree_cleanup_20260924_r2.md)。
+
+### 2026-09-24 GitHub RTL corpus 第一波资格审查
+
+按用户清单将 10 个公开仓库固定 SHA 克隆到 `/data1/zhangdy/RTL/RTL_testbench/`。
+本机复核三个 Secworks 原生 clean baseline，并对 UART RX、AXI register、AES
+做隔离的 oracle-sensitivity 负控；UART RX 数据反相未被原生测试发现。
+本批尚无 TEHM transfer/ΔMemory，详情见
+[`research_github_rtl_corpus_first_wave_20260924.md`](evaluation/research_github_rtl_corpus_first_wave_20260924.md)。

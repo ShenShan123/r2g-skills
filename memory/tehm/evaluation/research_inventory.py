@@ -42,7 +42,7 @@ METADATA_NAMES = {
     "src_manifest.txt", "sources.f", "filelist.f", ".gitmodules",
     "Makefile", "CMakeLists.txt", "fusesoc.conf",
 }
-SKIP_PARTS = {".git", "__pycache__", ".pytest_cache", ".orfs-work"}
+SKIP_PARTS = {".git", "__pycache__", ".pytest_cache", ".orfs-work", "_qualification"}
 PROJECT_MARKERS = {
     "config.tcl", "config.mk", "design_config.mk", "design_meta.json",
     "src_manifest.txt", "sources.f", "filelist.f", ".git", ".gitmodules",

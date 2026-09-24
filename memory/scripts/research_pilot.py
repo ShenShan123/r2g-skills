@@ -21,6 +21,8 @@ from tehm.evaluation.research_inventory import (  # noqa: E402
     build_research_inventory,
     verify_research_inventory,
 )
+from tehm.evaluation.research_github_corpus import qualify_github_rtl_corpus  # noqa: E402
+from tehm.evaluation.research_github_corpus import verify_github_rtl_corpus  # noqa: E402
 from tehm.evaluation.research_campaign import (  # noqa: E402
     prepare_research_campaign,
     verify_prepared_campaign,
@@ -116,6 +118,22 @@ def _inventory(args: argparse.Namespace) -> int:
 
 def _verify_inventory(args: argparse.Namespace) -> int:
     result = verify_research_inventory(args.inventory)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _qualify_github_rtl(args: argparse.Namespace) -> int:
+    result = qualify_github_rtl_corpus(
+        corpus_root=args.corpus_root,
+        output=args.output,
+        run_native_baselines=args.run_native_baselines,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_github_rtl(args: argparse.Namespace) -> int:
+    result = verify_github_rtl_corpus(args.qualification)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
 
@@ -409,6 +427,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     verify_inventory.add_argument("--inventory", type=Path, required=True)
     verify_inventory.set_defaults(handler=_verify_inventory)
+
+    github_corpus = sub.add_parser(
+        "qualify-github-rtl",
+        help="freeze cloned GitHub RTL repositories and run reviewed clean baselines",
+    )
+    github_corpus.add_argument("--corpus-root", type=Path, required=True)
+    github_corpus.add_argument("--output", type=Path, required=True)
+    github_corpus.add_argument("--run-native-baselines", action="store_true")
+    github_corpus.set_defaults(handler=_qualify_github_rtl)
+
+    github_verify = sub.add_parser(
+        "verify-github-rtl", help="replay GitHub RTL clone and baseline receipts",
+    )
+    github_verify.add_argument("--qualification", type=Path, required=True)
+    github_verify.set_defaults(handler=_verify_github_rtl)
 
     adapt_inventory = sub.add_parser(
         "adapt-inventory",
