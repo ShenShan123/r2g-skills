@@ -66,6 +66,10 @@ from tehm.evaluation.research_s1_treatment import (  # noqa: E402
     run_s1_treatments,
     verify_s1_treatments,
 )
+from tehm.evaluation.research_s2_proposal import (  # noqa: E402
+    audit_s2_proposals,
+    verify_s2_proposals,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -233,6 +237,20 @@ def _verify_s1_treatment_run(args: argparse.Namespace) -> int:
     result = verify_s1_treatments(plan=args.plan, output=args.output)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] and result["all_registered_terminal"] else 2
+
+
+def _audit_s2_proposals(args: argparse.Namespace) -> int:
+    result = audit_s2_proposals(
+        preflight=args.preflight, legacy_manifest=args.legacy_manifest,
+        controller=args.controller, budget=args.budget, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_s2_proposals(args: argparse.Namespace) -> int:
+    result = verify_s2_proposals(args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
 
 
 def _audit_flow(args: argparse.Namespace) -> int:
@@ -445,6 +463,24 @@ def main(argv: list[str] | None = None) -> int:
     s1_run_verify.add_argument("--plan", type=Path, required=True)
     s1_run_verify.add_argument("--output", type=Path, required=True)
     s1_run_verify.set_defaults(handler=_verify_s1_treatment_run)
+
+    s2_proposals = sub.add_parser(
+        "audit-s2-proposals",
+        help="freeze same-controller No Memory/Legacy/TEHM development candidate pools",
+    )
+    s2_proposals.add_argument("--preflight", type=Path, required=True)
+    s2_proposals.add_argument("--legacy-manifest", type=Path, required=True)
+    s2_proposals.add_argument("--controller", type=Path, required=True)
+    s2_proposals.add_argument("--budget", type=Path, required=True)
+    s2_proposals.add_argument("--output", type=Path, required=True)
+    s2_proposals.set_defaults(handler=_audit_s2_proposals)
+
+    s2_verify = sub.add_parser(
+        "verify-s2-proposals",
+        help="recompute three-policy development candidate pools from frozen sources",
+    )
+    s2_verify.add_argument("--output", type=Path, required=True)
+    s2_verify.set_defaults(handler=_verify_s2_proposals)
 
     audit_flow = sub.add_parser(
         "audit-flow", help="independently classify a terminal fixed-flow run"
