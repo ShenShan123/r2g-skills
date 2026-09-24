@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-PARSE_VERSION = "verilog-parse-v0.2"
+PARSE_VERSION = "verilog-parse-v0.3"
 
 
 @dataclass
@@ -106,17 +106,25 @@ def parse_verilog(source: str) -> list[RTLModule]:
     """Parse Verilog source into structural RTL modules."""
     text = _strip_comments(source)
     modules: list[RTLModule] = []
-    for match in re.finditer(
-            r"\bmodule\s+(?P<name>[A-Za-z_]\w*)\s*(?P<ports>\(.*?\))?\s*;"
-            r"(?P<body>.*?)\bendmodule\b", text, re.S):
-        name = match.group("name")
-        body = match.group("body")
-        module = RTLModule(name=name,
-                           ports=_extract_ports(match.group("ports")))
-        _parse_ansi_ports(module, match.group("ports"))
-        _parse_declarations(module, body)
+    cursor = 0
+    while match := re.search(r"\bmodule\s+(?P<name>[A-Za-z_]\w*)\b", text[cursor:]):
+        start = cursor + match.end()
+        header = _module_header(text, start)
+        if header is None:
+            cursor = start
+            continue
+        params, ports, body_start = header
+        end = re.search(r"\bendmodule\b", text[body_start:])
+        if end is None:
+            break
+        body_end = body_start + end.start()
+        body = text[body_start:body_end]
+        module = RTLModule(name=match.group("name"), ports=_extract_ports(ports))
+        _parse_ansi_ports(module, ports)
+        _parse_declarations(module, (params + ";" if params else "") + body)
         module.always_blocks = _parse_always_blocks(module, body)
         modules.append(module)
+        cursor = body_start + end.end()
     return modules
 
 
@@ -126,6 +134,56 @@ def _strip_comments(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
     text = re.sub(r"//[^\n]*", "", text)
     return text
+
+
+def _module_header(text: str, start: int) -> tuple[str, str | None, int] | None:
+    """Accept one balanced optional parameter list and one port list.
+
+    This is a bounded header scanner, not a preprocessor or full Verilog
+    frontend. Unsupported quotes, escapes, and directives fail closed.
+    """
+    i = start
+    while i < len(text) and text[i].isspace():
+        i += 1
+    params = ""
+    if i < len(text) and text[i] == "#":
+        i += 1
+        while i < len(text) and text[i].isspace():
+            i += 1
+        group = _header_group(text, i)
+        if group is None:
+            return None
+        params, i = group[0][1:-1], group[1]
+        while i < len(text) and text[i].isspace():
+            i += 1
+    ports = None
+    if i < len(text) and text[i] == "(":
+        group = _header_group(text, i)
+        if group is None:
+            return None
+        ports, i = group
+        while i < len(text) and text[i].isspace():
+            i += 1
+    if i >= len(text) or text[i] != ";":
+        return None
+    return params, ports, i + 1
+
+
+def _header_group(text: str, start: int) -> tuple[str, int] | None:
+    if start >= len(text) or text[start] != "(":
+        return None
+    depth = 0
+    for i in range(start, len(text)):
+        char = text[i]
+        if char in ('"', "\\", "`", ";"):
+            return None
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1], i + 1
+    return None
 
 
 def _extract_ports(ports_text: str | None) -> list:
@@ -156,7 +214,7 @@ def _parse_declarations(module: RTLModule, body: str) -> None:
                   "", body, flags=re.S)
     # localparam / parameter
     for name, value in re.findall(
-            r"\b(?:local)?param\s+(?:\s*\[\s*[^\]]+\]\s*)?"
+            r"\b(?:localparam|parameter)\s+(?:\s*\[\s*[^\]]+\]\s*)?"
             r"(?P<name>\w+)\s*=\s*(?P<value>[^,;]+)", body):
         module.params[name] = value.strip()
     # signal declarations: kind [range] name [, name ...] ;
