@@ -1,0 +1,39 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v16.json",
+    "sha256": "ffb221ba20bfd07b0ba3c8eb80e60668580f0ebdf1f3d10938be06fdd7667294"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v16",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v16 status binds the complete eight-flow S0 denominator and post-M0 route-only no-match audit. Its exact SHA256 is bound above; prior records are not rewritten."
+    },
+    {
+      "evidence_id": "r4-s1-density-development-control-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Before execution, task-spec-v1 SHA256 21669e69ec6e46428a2aeb7767d02e5e4c3078e6643480f6468fae8435d52ced declared two constructed u95 Pilot-development controls from exact-file-matched, training-disjoint source groups github-owner:alexforencich and github-owner:avakar. A pre-execution v2 amendment changed only the clean runner epoch binding. Under ready epoch sha256:b3a0ec1f3a87a7d765960516624f4cdaeda3e24629cf9624024860259be797c6, each source-bound control was run once without retries or model calls, and independently audited. Both are FAIL / placement_density_infeasible / FLOW_TARGET_FAILURE at place; the append-only event chain and complete two-task denominator independently verify. No source mutation or M0 update occurred. These are constructed challenge controls, not natural-failure prevalence or S1 effects."
+    },
+    {
+      "evidence_id": "r4-s1-scoped-m0-candidate-preflight-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Clean preflight epoch sha256:e954c0ad43759253ab573644531c075d85e0ee015bdd1e27f81e1caf66d31145 binds the same read-only M0. Direct file-backed routing correctly abstains because scoped training execution cannot be replayed there. Formal preflight copied the verified M0 database into isolated RAM and rechecked frozen parent acquisitions under scoped_learning_replay. Independently replayed preflight digest sha256:8f9d596bdc08bd3bff98f5fb25e07d29f204d70b431fd0cc58d48c6fcde82c1e records 2/2 target failures, 2/2 CONSIDER routes, 2/2 SELECT assets, and 2/2 eligible structured candidates with binder-derived CORE_UTILIZATION 95-to-40 config actions. Candidate digests are sha256:1914d47df5e6b05793e7e9c227cdf84be08092e1b58161f6e8bdbb0afc571d22 and sha256:fda0d8ea03ffbd97642dc347b7629c6c6e48882f48affbf05eb040cec22d0d5c. This is read-only shadow selection only; zero treatment EDA calls, zero model calls, and unchanged M0 SQLite SHA256 a9d4e83a402432e2e62e39d4dd1a51d4657bf46496ace79656353176f96d5dfd."
+    },
+    {
+      "evidence_id": "future-r4-s1-selected-treatment-and-paired-effect",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "No TEHM-selected treatment has been staged or executed. Next derive isolated treatment configs only from the two frozen candidate receipts, run each once, independently audit raw flow results, retain rejects and failures, and report the full predeclared two-task denominator. Do not infer a causal benefit from control failure plus candidate selection alone."
+    },
+    {
+      "evidence_id": "future-r4-s2-evolution-final-heldout-paper",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "S2 same-controller comparisons, verified shadow evolution, frozen final held-out protocol, and paper experiments remain unestablished. Production authority and online memory update remain disabled."
+    }
+  ]
+}

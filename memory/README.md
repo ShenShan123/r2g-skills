@@ -7777,3 +7777,24 @@ epoch digest 为
 execution，也没有新的 EDA/model call。这是具体的机制覆盖缺口，不是动作无效或有益的
 因果证据，不能把两条训练 seed pair 改标为 S1。Controlled S1 的下一步必须独立
 预注册带有目标机制的 Pilot-development 任务，并保留本八案在总体分母与拒绝记录中。
+
+### 2026-09-23 Revision4 S1 构造挑战 control 与 scoped M0 preflight
+
+仓库外 `r4-s1-density-development-20260923` 在结果出现前预注册了两个不同来源组的
+Pilot-development 任务：`verilog_axi_axil_reg_if_rd`（alexforencich）和
+`usbcorev_endpoint`（avakar）。它们与 M0 的 ultraembedded、freecores 训练来源分离；
+逐文件上游匹配和原始 S0 flow 均保留。任务明确标为构造的 `CORE_UTILIZATION=95`
+flow-feasibility 挑战，而非天然失败分布。新控制入口按 clean epoch
+`rc1-s1-control-cb5ca2f-clean-20260923` 将两条原始 RTL 分别运行一次，零重试、零模型调用。
+独立审计与完整 event chain 复核均通过：两案都在 place 终止，verdict 为
+`FAIL / placement_density_infeasible / FLOW_TARGET_FAILURE`；原始源文件未变。
+
+直接从导出的 M0 文件数据库检索会因 `causal_paths_replay` 门禁而 `ABSTAIN`：
+scoped training witness 必须在隔离 RAM 中对冻结的原始 acquisition 重新核验，不能将
+文件数据库里的历史状态直接当作运行时 authority。新 `audit-s1-preflight` 入口在 clean
+epoch `rc1-s1-preflight-f116293-clean-20260923` 中完成该只读重放；独立 verifier 重算
+digest `sha256:8f9d596bdc08bd3bff98f5fb25e07d29f204d70b431fd0cc58d48c6fcde82c1e`
+一致。两案均为 `CONSIDER → SELECT`，binder 各自产生合法 `95→40` 固定配置候选；
+M0 SQLite SHA256 未变、无 sidecar。这里仅有真实 route/selector/binder 的 shadow
+候选证据，**尚未执行 treatment，也没有 S1 配对动作效应**。下一门禁是从这些已冻结
+候选派生隔离 treatment，并逐案执行、独立审计和保留所有结果。
