@@ -10,12 +10,14 @@ from .receipts import RuntimeBindingReceipt
 from .structural_binding import CONTRACT as ALPHA_CONTRACT, bind_rtl_asset_to_source
 from .guard_binding import CONTRACT as GUARD_CONTRACT
 from .skid_binding import CONTRACT as SKID_CONTRACT
+from .skid_binding_v2 import CONTRACT as SKID_V2_CONTRACT
 from tehm.rtl.skid_payload_action import DOMAIN as SKID_DOMAIN
+from tehm.rtl.skid_payload_action_v2 import DOMAIN as SKID_V2_DOMAIN
 from tehm.ids import stable_dumps
 from .registry import asset_content_digest
 from .guard_binding import DOMAIN as GUARD_DOMAIN
 
-SOURCE_CONTRACTS = frozenset({ALPHA_CONTRACT, GUARD_CONTRACT, SKID_CONTRACT})
+SOURCE_CONTRACTS = frozenset({ALPHA_CONTRACT, GUARD_CONTRACT, SKID_CONTRACT, SKID_V2_CONTRACT})
 
 
 def source_contract(asset):
@@ -23,6 +25,13 @@ def source_contract(asset):
     template = definition.get("binding_template") if isinstance(definition, Mapping) else None
     contract = template.get("contract") if isinstance(template, Mapping) else None
     return contract if isinstance(contract, str) and contract in SOURCE_CONTRACTS else None
+
+
+def _rebind(registered, source, evidence):
+    kwargs = {"design_id": evidence["design_id"]}
+    if source_contract(registered) == SKID_V2_CONTRACT:
+        kwargs["public_context"] = evidence["public_context"]
+    return bind_rtl_asset_to_source(registered, source, **kwargs)
 
 
 def verify_source_copy(bound, registered):
@@ -34,7 +43,7 @@ def verify_source_copy(bound, registered):
         if (digest is None or registered.get("content_digest") != digest or
                 registered.get("asset_id") != "asset_" + digest.split(":", 1)[1][:24]):
             return False
-        expected = bind_rtl_asset_to_source(registered, evidence["source"], design_id=evidence["design_id"])
+        expected = _rebind(registered, evidence["source"], evidence)
         return stable_dumps(expected) == stable_dumps(bound)
     except (KeyError, TypeError, AttributeError, ValueError, NotImplementedError):
         return False
@@ -62,11 +71,12 @@ def verify_candidate_source_replay(candidate, source):
         # A source-bound Asset may not downgrade to the legacy proof-less path.
         return (candidate.provenance.get("source_binding_required") is not True
                 and candidate.concrete_action.get("domain") != GUARD_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_DOMAIN)
+                and candidate.concrete_action.get("domain") != SKID_DOMAIN
+                and candidate.concrete_action.get("domain") != SKID_V2_DOMAIN)
     try:
         registered, bound = replay["registered_asset"], replay["bound_asset"]
         evidence = bound["provenance"]["binding_evidence"]
-        expected = bind_rtl_asset_to_source(registered, source, design_id=evidence["design_id"])
+        expected = _rebind(registered, source, evidence)
         return (verify_source_copy(bound, registered) and stable_dumps(expected) == stable_dumps(bound)
             and candidate.asset_id == registered["asset_id"]
             and candidate.concrete_action == bound["definition"]["action"]

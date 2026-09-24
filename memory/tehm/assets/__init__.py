@@ -27,6 +27,7 @@ from .validation import (
 from .structural_binding import bind_rtl_asset_to_source, with_structural_binding
 
 from .skid_binding import with_skid_payload_binding
+from .skid_binding_v2 import with_skid_payload_binding_v2
 __all__ = [
     "ASSET_PROMOTION_GATES", "ASSET_STATUSES", "ASSET_TYPES",
     "AssetAuthorityReceipt",
@@ -41,6 +42,7 @@ __all__ = [
     "promote_asset", "record_asset_authority", "verify_asset_authority",
     "bind_asset_to_repair_context", "bind_rtl_asset_to_project",
     "bind_rtl_asset_to_source", "with_structural_binding", "with_skid_payload_binding",
+    "with_skid_payload_binding_v2",
     "build_rtl_asset_proposal",
     "register_asset_proposal",
     "synthesize_asset", "synthesize_rtl_asset", "validate_asset_schema",

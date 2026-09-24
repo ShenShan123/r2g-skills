@@ -30,7 +30,7 @@ from tehm.knowledge.registry import get_knowledge_by_object_id
 from tehm.state.resolver import StateResolutionError, resolve_current_state
 
 
-ASSET_SELECTOR_VERSION = "asset-selector-v0.2"
+ASSET_SELECTOR_VERSION = "asset-selector-v0.3"
 ASSET_SELECTION_DECISIONS = ("SELECT", "ABSTAIN", "INAPPLICABLE", "NO_SKILL")
 MAX_KNOWLEDGE_GROUNDED_ASSETS = 1
 _ADVISORY_ASSET_STATUSES = frozenset({"candidate", "promoted"})
@@ -369,6 +369,7 @@ def select_knowledge_grounded_assets(
     compatibility_mode: bool = False,
     rtl_source_text: str | None = None,
     design_id: str | None = None,
+    rtl_public_context: Mapping | None = None,
 ) -> AssetSelection:
     """Select at most one knowledge-grounded asset for shadow evaluation.
 
@@ -385,6 +386,9 @@ def select_knowledge_grounded_assets(
             rtl_source_text is not None and (not isinstance(rtl_source_text, str) or
             not isinstance(design_id, str) or not design_id)):
         raise AssetSelectorError("source binding requires explicit RTL text and design_id together")
+    if rtl_public_context is not None and (rtl_source_text is None or
+            not isinstance(rtl_public_context, Mapping)):
+        raise AssetSelectorError("RTL public context requires explicit source and mapping")
     if type(candidate_budget) is not int or candidate_budget < 0:
         raise AssetSelectorError("candidate_budget must be a non-negative integer")
     if candidate_budget > MAX_KNOWLEDGE_GROUNDED_ASSETS:
@@ -556,7 +560,8 @@ def select_knowledge_grounded_assets(
                 continue
             from tehm.assets.structural_binding import bind_rtl_asset_to_source
             try:
-                asset = bind_rtl_asset_to_source(asset, rtl_source_text, design_id=design_id)
+                asset = bind_rtl_asset_to_source(
+                    asset, rtl_source_text, design_id=design_id, public_context=rtl_public_context)
                 matched = sorted(set(asset["provenance"].get("mechanism_knowledge_ids", ())) & set(knowledge_ids))
                 if len(matched) != 1 or not verify_source_copy(asset, registered_asset):
                     raise ValueError("source binding requires one matching authority-checked Knowledge")

@@ -6,15 +6,15 @@
 
 - 第一批 10 个公开仓库在 `/data1/zhangdy/RTL/RTL_testbench/<owner>/<repo>`；QF-1-r4 的十库锁、三个 qualified scope 和旧 binder 0/249 扫描复核 `valid=true`。该索引只含 axis_register、UART、AES 三个具体 scope；新增 broadcast DEV scope 另有回执，不能把十个仓库都标作 oracle-ready。
 - `axis_register` 的 skid payload 故障和修复是同一个已观察的 DEV case。R5-3 的 candidate 原生测试 9/9 PASS 仅证明该开发故障上的动作执行，不提供未见目标，也不自动转为 TRAIN。
-- 第一批不同 owner/source group 的 RTL 中虽可搜到其他 skid 字样，现行受限合约只识别 `REG_TYPE>1`、`DATA_WIDTH=8, REG_TYPE=2` 和特定 temp/output 寄存器及分支形状；没有对那些文件的合格测试、可绑定性或修复成功的证据。
-- 后续另建的 `axis_broadcast[2-8]` DEV 探针取得 clean 4/4 PASS、故障 3/4 PASS/1 FAIL，但它不在 QF-1-r4 原三项范围内；冻结 v1 binder 对该故障明确 NO_MATCH。新 DEV v2 binder 在该故障及 register 故障上均能唯一绑定，37/37 对抗检查通过，动作源码逐字节等于各自 clean staged RTL；它未接入生产 router/Asset，也不改变本报告的 NO-GO。该同 owner 设计不是自动 TRAIN 或跨来源 target。
+- 第一批不同 owner/source group 的 RTL 中虽可搜到其他 skid 字样，当前 v2 受限合约也只识别 register/broadcast 两种 `alexforencich` 形态和固定公开参数；没有对其他来源文件的合格测试、可绑定性或修复成功的证据。
+- 后续另建的 `axis_broadcast[2-8]` DEV 探针取得 clean 4/4 PASS、故障 3/4 PASS/1 FAIL，但它不在 QF-1-r4 原三项范围内；冻结 v1 binder 对该故障明确 NO_MATCH。新 DEV v2 binder 在该故障及 register 故障上均能唯一绑定，37/37 对抗检查通过，动作源码逐字节等于各自 clean staged RTL；v2 shadow core 接线另有 19/19 RAM-only 检查，仍无 Knowledge-authorized SELECT，也不改变本报告的 NO-GO。该同 owner 设计不是自动 TRAIN 或跨来源 target。
 
 ## 核心接线与准入缺口
 
 | 项目 | 当前观察 | 进入 M+ 前必须完成 |
 |---|---|---|
 | 参数化 RTL 解析 | 预检时 `parse_verilog` 对冻结的 `axis_register.v` 返回 `[]`；后续 `verilog-parse-v0.3` 已有界解析参数化 header，10 项正反检查通过 | 固定此 parser 版本并继续验证与 action/Asset 实际接口；这项修复本身不构成 Memory 准入 |
-| 可执行 Asset 路径 | 后续 shadow core 接线已将新 domain/profile/source contract 接入；DEV fixture 在 RAM 中仅注册为 draft，19 项静态/重放检查通过，尚无真实 route/select | 从合法 TRAIN evidence 建立 Knowledge/Asset authority 后执行真实 selection 与原生 oracle；直接函数调用和 draft fixture 不计 TEHM Repair@B |
+| 可执行 Asset 路径 | v1/v2 两代 shadow core 均接入 domain/profile/source replay；各自 DEV fixture 在 RAM 中仅为 draft，分别 19/19 检查通过。v2 实际 router/selector 在空 Memory 上返回 NO_SKILL，尚无合法 SELECT | 从合法 TRAIN evidence 建立 Knowledge/Asset authority 后执行真实 selection 与原生 oracle；直接函数调用和 draft fixture 不计 TEHM Repair@B |
 | TRAIN provenance | 唯一已审计的 skid repair 来自 DEV；没有另行登记且封存的 TRAIN baseline→action→native oracle→保持义务链 | 先选 TRAIN 任务、冻结角色和可见性，独立运行并保存原始回执；不得读取未来目标答案 |
 | Knowledge/Asset authority | 尚无上述 TRAIN causal path、知识权威回执和 Asset 验证/绑定/回滚回执 | 按现有 `knowledge.authority` 的 L3、至少两个支持 lineage 默认门槛及 `assets.lifecycle` 的真实 gate 判定；不手填 `validated` 或 `promoted` |
 

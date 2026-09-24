@@ -90,12 +90,17 @@ def with_structural_binding(proposal, training_source: str):
     return replace(proposal, definition=definition)
 
 
-def bind_rtl_asset_to_source(asset: Mapping, source: str, *, design_id: str) -> dict:
+def bind_rtl_asset_to_source(asset: Mapping, source: str, *, design_id: str,
+                             public_context: Mapping | None = None) -> dict:
     """Create a bound copy using RTL bytes only; never reads a project path."""
     if not isinstance(asset, Mapping) or not isinstance(design_id, str) or not design_id:
         raise ValueError("asset and design_id are required")
     definition = asset.get("definition")
     template = definition.get("binding_template") if isinstance(definition, Mapping) else None
+    from .skid_binding_v2 import CONTRACT as SKID_V2_CONTRACT, bind_skid_asset_to_source_v2
+    if isinstance(template, Mapping) and template.get("contract") == SKID_V2_CONTRACT:
+        return bind_skid_asset_to_source_v2(
+            asset, source, design_id=design_id, public_context=public_context)
     from .skid_binding import CONTRACT as SKID_CONTRACT, bind_skid_asset_to_source
     if isinstance(template, Mapping) and template.get("contract") == SKID_CONTRACT:
         return bind_skid_asset_to_source(asset, source, design_id=design_id)
