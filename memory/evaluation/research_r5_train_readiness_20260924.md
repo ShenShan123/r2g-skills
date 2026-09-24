@@ -11,6 +11,7 @@
 - 针对独立来源缺口，从用户第二档定向新增 `ZipCPU/wb2axip` 作为 DEV 资格候选；原生 `skidbuffer.sby` 的 `prfo` 对预登记的暂存 payload 来源故障给出 `MISSED`（clean/fault 均 PASS），另一个 valid-signal live-control 被断言检出。当前 v2 binder 对其公开参数也 `UNSUPPORTED`。两道独立 NO-GO 都不能由 live-control 的 FAIL 越过；详情见 [ZipCPU DEV 探针](research_r5_zipcpu_skid_dev_20260924.md)。
 - 仅为选定的 ZipCPU DEV payload 范围，另建研究者编写、evaluator-private 的事务级 augmented oracle：clean 的 direct/backpressure 均 PASS，fault 的 direct PASS、backpressure 因第二拍 payload 不符 FAIL；11/11 结果适配器反例通过。它不改变上游 native `MISSED`，也不改变 v2 binder 的 `UNSUPPORTED`、TRAIN provenance 缺失或本报告的 M+ NO-GO。详情见 [augmented DEV 回执](research_r5_zipcpu_augmented_payload_dev_20260924.md)。
 - 新建独立的 DEV v3 source-only binder 草案，在 register、broadcast 与 ZipCPU registered 三种已观察 DEV 形态上 48/48 对抗检查通过，三例候选逐字节等于各自 clean staged RTL；v1/v2 locator 不改，v2 对 ZipCPU 仍 `UNSUPPORTED`。后续 v3 shadow core 接线通过 59/59 RAM-only 检查，Asset 仍 `draft` 且空 Memory 的 router/selector 为 `NO_SKILL`；它没有 TRAIN/Memory authority，不能把新增软件适用域归因成 Memory transfer。详见 [v3 绑定回执](research_r5_skid_binding_v3_dev_20260924.md)与 [v3 core 回执](research_r5_skid_core_v3_shadow_20260924.md)。
+- [来源关系预检](research_r5_skid_lineage_precheck_20260924.md)确认 register/broadcast 应先归同一 `alexforencich` 候选家族，ZipCPU 是另一候选家族；两个 checkout 都是 shallow，本地历史不足以正式确认跨组无共享代码或共同生成来源。`independent_lineages_verified` 仍未授予；不能将 DEV 跨 owner 绑定结果折算为 L3 双 lineage TRAIN 支持。
 
 ## 核心接线与准入缺口
 
