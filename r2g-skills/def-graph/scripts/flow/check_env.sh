@@ -52,20 +52,28 @@ echo "[graph dataset stage (torch venv)]"
 # Same import probe run_graphs.sh uses. Absence only SKIPs the PyG assembly stage
 # (labels/features CSVs still build), so it is optional — not a required MISS.
 _gp_found=""
+# Probe as the launchers run it: without the caller's PYTHONHOME (see run_graphs.sh).
+_gp_env=(env -u PYTHONHOME -u PYTHONEXECUTABLE -u PYTHONNOUSERSITE)
 for _c in "${R2G_GRAPH_PYTHON:-}" python3; do
   [[ -z "$_c" ]] && continue
-  if "$_c" -c "import torch, torch_geometric, pandas" >/dev/null 2>&1; then
+  if "${_gp_env[@]}" "$_c" -c "import torch, torch_geometric, pandas" >/dev/null 2>&1; then
     _gp_found="$(command -v "$_c" 2>/dev/null || echo "$_c")"; break
   fi
 done
-print_row R2G_GRAPH_PYTHON "$_gp_found" optional
-if [[ -n "$_gp_found" ]]; then
-  _tv="$("$_gp_found" -c 'import torch, torch_geometric as g; print("torch", torch.__version__, "· pyg", g.__version__)' 2>/dev/null || true)"
-  [[ -n "$_tv" ]] && printf '     %s\n' "$_tv"
-elif [[ -n "${R2G_GRAPH_PYTHON:-}" ]]; then
-  printf '     (R2G_GRAPH_PYTHON=%s set but torch/torch_geometric/pandas not importable)\n' "${R2G_GRAPH_PYTHON}"
+# Set but unable to start is BAD, not an optional miss: run_graphs.sh fails loud on it.
+if [[ -n "${R2G_GRAPH_PYTHON:-}" ]] && ! "${_gp_env[@]}" "$R2G_GRAPH_PYTHON" -c pass >/dev/null 2>&1; then
+  printf 'BAD  %-16s %s (configured but cannot start; run_graphs.sh fails on it)\n' R2G_GRAPH_PYTHON "$R2G_GRAPH_PYTHON"
+  STATUS=1
 else
-  printf '     graph stage SKIPs cleanly without it; install a torch venv on /proj and pin R2G_GRAPH_PYTHON.\n'
+  print_row R2G_GRAPH_PYTHON "$_gp_found" optional
+  if [[ -n "$_gp_found" ]]; then
+    _tv="$("${_gp_env[@]}" "$_gp_found" -c 'import torch, torch_geometric as g; print("torch", torch.__version__, "· pyg", g.__version__)' 2>/dev/null || true)"
+    [[ -n "$_tv" ]] && printf '     %s\n' "$_tv"
+  elif [[ -n "${R2G_GRAPH_PYTHON:-}" ]]; then
+    printf '     (R2G_GRAPH_PYTHON=%s set but torch/torch_geometric/pandas not importable)\n' "${R2G_GRAPH_PYTHON}"
+  else
+    printf '     graph stage SKIPs cleanly without it; install a torch venv on /proj and pin R2G_GRAPH_PYTHON.\n'
+  fi
 fi
 
 echo

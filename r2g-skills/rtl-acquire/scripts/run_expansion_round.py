@@ -26,6 +26,7 @@ from skill_env import (
     default_seed_root,
     default_workspace_root,
     graph_python,
+    graph_python_start_error,
     resolve_path_env,
 )
 
@@ -745,6 +746,9 @@ def main() -> None:
             gpython = graph_python()
             if gpython:
                 payload["phase"] = "dataset_scale_report"
+                start_error = graph_python_start_error(gpython, GRAPH_PYTHON_DROP_ENV)
+                if start_error:
+                    raise RuntimeError(start_error)
                 run([gpython, str(SCALE_SCRIPT)], status_path=args.status_json, log_path=args.status_log, payload=payload,
                     drop_env=GRAPH_PYTHON_DROP_ENV)
             else:

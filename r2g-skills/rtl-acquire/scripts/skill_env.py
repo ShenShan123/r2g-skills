@@ -161,6 +161,28 @@ def graph_python() -> str:
     return resolve_str_env("R2G_GRAPH_PYTHON", "")
 
 
+def graph_python_start_error(gpython: str, drop_env: tuple[str, ...]) -> str:
+    """'' when a CONFIGURED graph interpreter starts, else a fail-loud message.
+
+    Unset R2G_GRAPH_PYTHON means "no graphs wanted" and SKIPs; a configured one that
+    cannot even run `-c pass` is a broken toolchain (missing venv, leaked PYTHONHOME)
+    and must fail the run, not pass as a benign skip.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in drop_env}
+    try:
+        result = subprocess.run([gpython, "-c", "pass"], env=env, capture_output=True,
+                                text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        detail = f"{type(exc).__name__}: {exc}"
+    else:
+        if result.returncode == 0:
+            return ""
+        detail = f"exit {result.returncode}: {(result.stderr or result.stdout).strip()[-300:]}"
+    return (f"ERROR: R2G_GRAPH_PYTHON={gpython!r} is configured but cannot start ({detail}). "
+            "Likely a missing or broken venv, or a leaked PYTHONHOME. Fix the pin, or "
+            "unset R2G_GRAPH_PYTHON if graphs are not wanted (the graph stage then SKIPs).")
+
+
 def default_yosys() -> str:
     return resolve_str_env("YOSYS_EXE", "yosys")
 

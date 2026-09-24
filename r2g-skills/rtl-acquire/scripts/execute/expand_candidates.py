@@ -16,7 +16,8 @@ ported intact; the two backends are converged onto sibling r2g sub-skills:
     netlist_graph.pt (the shared pre-layout netlist graph format — the 30pt
     converter is retired, see rtl-acquire-ingestion-2026-07-09.md amendment).
     Needs $R2G_GRAPH_PYTHON (torch venv); SKIPs with a HINT when absent — the
-    design is then recorded as graph_skipped, NEVER success.
+    design is then recorded as graph_skipped, NEVER success. A configured one
+    that cannot start refuses the whole round (exit 2) before any design.
   * learning   -> every candidate whose flow RAN (pass or fail) is ingested into
     signoff-loop knowledge.sqlite via knowledge/ingest_run.py (honesty
     invariant: ingest after EVERY flow). config.mk carries
@@ -56,6 +57,7 @@ from skill_env import (  # noqa: E402
     default_workspace_root,
     default_yosys,
     graph_python,
+    graph_python_start_error,
     knowledge_dir,
     netlist_graph_script,
     resolve_platform_paths_script,
@@ -1339,6 +1341,8 @@ def graph_convert(netlist: Path, out_pt: Path, design: str, config_mk: Path,
     # RTL-failure learning signal with a phantom synth failure. Treat it exactly like
     # the unset case: a clean structured 'skipped' (-> graph_skipped), same as the
     # def-graph shell path, so it never routes into RTL/design repair learning.
+    # main() now refuses to start a round with such an interpreter (fail loud); this
+    # guard remains for one that vanishes mid-round.
     if shutil.which(gpython) is None:
         return "skipped", (
             f"HINT: R2G_GRAPH_PYTHON={gpython!r} is not a usable executable "
@@ -1431,6 +1435,15 @@ def main() -> int:
                              "candidates to the tail of the round; run in CSV "
                              "order instead. Ignored when --candidate-names is given.")
     args = parser.parse_args()
+
+    # A configured graph interpreter that cannot start would fail every design's
+    # graph stage; stop the round here instead (unset still SKIPs per design).
+    gpython = graph_python()
+    if gpython:
+        start_error = graph_python_start_error(gpython, GRAPH_PYTHON_DROP_ENV)
+        if start_error:
+            print(start_error, file=sys.stderr, flush=True)
+            return 2
 
     out_root = args.out_root or default_out_root()
     projects_root = args.projects_root or (default_workspace_root() / "synth_projects")

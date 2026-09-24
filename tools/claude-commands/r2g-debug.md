@@ -360,8 +360,9 @@ dirty provenance must FAIL the verifier. A gate-blocked build on a fail/partial 
 behavior, not a Step-5 bug; produce the sign-off with Step 2 first. Since 2026-07-16 a gate-blocked
 `run_graphs.sh` exits **7** (distinct, expected — treat it as "blocked, go sign off", not a crash) and
 atomically stamps any prior green `dataset/graph_manifest.json` to `status="blocked_unsigned"` so a
-stale dataset can never read as current; benign skips (no torch venv / no DEF) stay exit 0 and leave
-an existing manifest alone.
+stale dataset can never read as current; benign skips (no torch venv) stay exit 0 and leave
+an existing manifest alone. A configured `R2G_GRAPH_PYTHON` that cannot even start exits **4**
+(toolchain error: fix or unset the pin), never a skip.
 
 **Prereq — the graph venv** (`torch + torch_geometric + pandas`; `run_graphs.sh` and the verifier both
 **SKIP cleanly** without it, and a silent skip verifies NOTHING):

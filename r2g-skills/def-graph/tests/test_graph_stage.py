@@ -597,7 +597,12 @@ def test_run_graphs_benign_skip_leaves_manifest(tmp_path):
     green = {"design": "mini", "status": "ok", "graph_kind": "hetero",
              "variants": {"b": {}}, "platform": "nangate45"}
     json.dump(green, open(ds / "graph_manifest.json", "w"))
-    env = dict(os.environ, R2G_GRAPH_PYTHON="/nonexistent/python_no_torch")
+    # A python that STARTS but lacks torch. A configured interpreter that cannot
+    # start at all is a toolchain error and fails loud (test_graph_python_fail_loud).
+    no_torch = tmp_path / "python_no_torch"
+    no_torch.write_text('#!/bin/sh\n[ "$1 $2" = "-c pass" ] && exit 0\nexit 1\n')
+    no_torch.chmod(0o755)
+    env = dict(os.environ, R2G_GRAPH_PYTHON=str(no_torch))
     r = subprocess.run(["bash", _RUN_GRAPHS, str(proj), "nangate45"],
                        capture_output=True, text=True, env=env, timeout=120)
     assert r.returncode == 0, (r.returncode, r.stderr)

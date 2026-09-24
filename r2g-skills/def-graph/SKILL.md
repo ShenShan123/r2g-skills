@@ -140,6 +140,7 @@ R2G_GRAPH_PYTHON=/proj/<you>/pyenvs/r2g-graph/bin/python \
 ```
 
 Needs torch + torch_geometric + pandas; machines without them SKIP cleanly with a HINT.
+A configured `R2G_GRAPH_PYTHON` that cannot start fails loud (exit 4), never a skip.
 `R2G_GRAPH_VARIANTS` selects variants (default `bcdef`); `R2G_GRAPH_KIND` picks the output
 (`hetero` default / `homo` / `both`); `GRAPH_TIMEOUT` (default 2400s);
 `R2G_DEF`/`R2G_ODB`/`R2G_SPEF` pin the DEF/ODB/SPEF for **both** the feature and label stages

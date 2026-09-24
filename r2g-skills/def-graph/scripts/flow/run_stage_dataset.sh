@@ -76,6 +76,11 @@ if [[ -z "$PY" || ! -x "$PY" ]]; then
   echo "HINT: export R2G_GRAPH_PYTHON=/path/to/venv/bin/python (see references/env.local.sh)" >&2
   exit 3
 fi
+if ! _py_err="$("$PY" -c pass 2>&1)"; then
+  echo "ERROR: R2G_GRAPH_PYTHON=$PY is configured but cannot start: ${_py_err:-no output}" >&2
+  echo "HINT: likely a broken venv or a leaked PYTHONHOME; fix the pin (reporting this as a missing torch would hide it)." >&2
+  exit 3
+fi
 for module in torch torch_geometric; do
   "$PY" -c "import $module" 2>/dev/null || {
     echo "ERROR: $PY cannot import $module" >&2; exit 3; }

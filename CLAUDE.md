@@ -101,7 +101,7 @@ editing any. Override via `$R2G_ENV_FILE`, `<skill>/references/env.local.sh`, or
 `ORFS_ROOT`/`OPENROAD_EXE`/`YOSYS_EXE`/`KLAYOUT_CMD`/… **Required:** python3 (3.10+), yosys, openroad,
 ORFS checkout. **Optional:** iverilog/vvp, verilator, klayout, magic, netgen-lvs, opensta, sky130A PDK;
 a torch+torch_geometric+pandas venv for the `def-graph` PyG graph-assembly stage only (`R2G_GRAPH_PYTHON`;
-`run_graphs.sh` SKIPs cleanly without it). Verify with `signoff-loop/scripts/flow/check_env.sh`.
+`run_graphs.sh` SKIPs cleanly without it, and exits 4 when a configured one cannot start). Verify with `signoff-loop/scripts/flow/check_env.sh`.
 
 **Provisioning is its own skill — `eda-install`** (`bash r2g-skills/bootstrap.sh` is a shim to
 `eda-install/bootstrap.sh`): one command to *detect → plan → install → pin `env.local.sh` → verify*

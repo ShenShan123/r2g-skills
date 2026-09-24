@@ -105,3 +105,34 @@ def test_settings_mk_paths_resolve_like_make(tmp_path: Path, line: str, bad: boo
     r = _check_env(env)
     flagged = any(ln.startswith("BAD") and "settings.mk" in ln for ln in r.stdout.splitlines())
     assert flagged is bad, r.stdout
+
+
+def _graph_row(stdout: str) -> list[str]:
+    return [ln for ln in stdout.splitlines() if "R2G_GRAPH_PYTHON" in ln]
+
+
+# All three check_env.sh copies carry the graph-stage row; run_graphs.sh now exits
+# non-zero on a configured interpreter that cannot start, so the verifier must
+# report it BAD instead of "optional, not found".
+@pytest.mark.parametrize("skill", ["signoff-loop", "def-graph", "eda-install"])
+def test_a_configured_graph_python_that_cannot_start_is_bad(tmp_path: Path, skill: str) -> None:
+    env = _env(tmp_path, broken=False)
+    flow = tmp_path / "skill" / "scripts" / "flow"
+    shutil.rmtree(flow)
+    shutil.copytree(SKILL.parent / skill / "scripts" / "flow", flow)
+    baseline = _check_env(env)
+    assert not any(ln.startswith("BAD") for ln in _graph_row(baseline.stdout)), baseline.stdout
+
+    broken = _exe(tmp_path / "graph_python", "#!/bin/sh\nexit 1\n")
+    r = _check_env({**env, "R2G_GRAPH_PYTHON": str(broken)})
+    assert r.returncode == 1, r.stdout
+    assert any(ln.startswith("BAD") and "cannot start" in ln for ln in _graph_row(r.stdout)), r.stdout
+
+    # Starts but has no torch (and must not be refused for the caller's PYTHONHOME,
+    # which the launchers drop): optional, exactly as without a pin.
+    no_torch = _exe(tmp_path / "graph_python_no_torch",
+                    '#!/bin/sh\n[ -z "${PYTHONHOME+x}" ] || exit 1\n'
+                    '[ "$1 $2" = "-c pass" ] && exit 0\nexit 1\n')
+    r = _check_env({**env, "R2G_GRAPH_PYTHON": str(no_torch), "PYTHONHOME": "/opt/oss-cad"})
+    assert r.returncode == baseline.returncode, r.stdout
+    assert not any(ln.startswith("BAD") for ln in _graph_row(r.stdout)), r.stdout

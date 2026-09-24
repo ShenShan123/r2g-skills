@@ -7,7 +7,8 @@ set -euo pipefail
 # feature (X) and label (Y) stages — it runs them first when their CSVs are
 # missing or older than the DEF — then assembles graphs joining both by name.
 # Fail-soft like run_features.sh/run_labels.sh: missing prerequisites (incl.
-# torch/torch_geometric) SKIP with a HINT instead of failing the flow.
+# torch/torch_geometric) SKIP with a HINT instead of failing the flow. A configured
+# R2G_GRAPH_PYTHON that cannot start is not a missing prerequisite: it exits 4.
 # Results: <project-dir>/dataset/{b..f}_graph.pt, netlist_graph.pt,
 #          graph_manifest.json (+ a copy at reports/graph_dataset.json)
 # See references/graph-dataset.md.
@@ -57,6 +58,8 @@ PLATFORM="${PLATFORM:-sky130hd}"
 # tell "not signed off" from a benign 0-exit "SKIPs cleanly" (full-pipeline #6).
 GATE_BLOCK_EXIT=7
 PREREQUISITE_BLOCK_EXIT=3
+# A configured R2G_GRAPH_PYTHON that cannot start: a toolchain error, never a skip.
+GRAPH_PYTHON_BROKEN_EXIT=4
 
 # Supersede a stale-green dataset/graph_manifest.json when the design is no longer
 # signed off for the current DEF (full-pipeline #6, 2026-07-16). The old .pt files
@@ -130,7 +133,14 @@ skip() {  # reason [invalidating|blocked]
 #   python3 -m venv /proj/<you>/pyenvs/r2g-graph
 #   .../pip install torch --index-url https://download.pytorch.org/whl/cpu
 #   .../pip install torch_geometric pandas
+# A CONFIGURED R2G_GRAPH_PYTHON (caller or env.local.sh pin) that cannot even start
+# is a broken toolchain, not "no graphs wanted": fail loud instead of skipping.
 GRAPH_PYTHON="${R2G_GRAPH_PYTHON:-python3}"
+if [[ -n "${R2G_GRAPH_PYTHON:-}" ]] && ! _gp_err="$("$GRAPH_PYTHON" -c pass 2>&1)"; then
+  echo "ERROR: R2G_GRAPH_PYTHON=$GRAPH_PYTHON is configured but cannot start: ${_gp_err:-no output}" >&2
+  echo "HINT: likely a missing or broken venv, or a leaked PYTHONHOME. Fix the pin, or unset R2G_GRAPH_PYTHON if graphs are not wanted (the stage then SKIPs)." >&2
+  exit "$GRAPH_PYTHON_BROKEN_EXIT"
+fi
 if ! "$GRAPH_PYTHON" -c "import torch, torch_geometric, pandas" >/dev/null 2>&1; then
   skip "no torch+torch_geometric in $GRAPH_PYTHON (set R2G_GRAPH_PYTHON; see install recipe in run_graphs.sh)"
 fi
