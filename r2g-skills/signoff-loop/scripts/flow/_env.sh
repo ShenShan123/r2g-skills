@@ -43,7 +43,10 @@ if [[ -n "${R2G_ENV_FILE:-}" && -f "$R2G_ENV_FILE" ]]; then
   source "$R2G_ENV_FILE"
 fi
 
-if [[ -f "$_R2G_SKILL_DIR/references/env.local.sh" ]]; then
+# R2G_IGNORE_ENV_LOCAL=1 skips the skill's own pin file (test isolation: a suite
+# must see only the environment it builds, never this machine's pins).
+# $R2G_ENV_FILE above still applies.
+if [[ "${R2G_IGNORE_ENV_LOCAL:-0}" != "1" && -f "$_R2G_SKILL_DIR/references/env.local.sh" ]]; then
   # shellcheck disable=SC1090,SC1091
   source "$_R2G_SKILL_DIR/references/env.local.sh"
 fi

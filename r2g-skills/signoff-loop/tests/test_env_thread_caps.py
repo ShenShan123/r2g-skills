@@ -18,7 +18,8 @@ POOLS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")
 
 
 def _pools_after_sourcing(**env: str) -> dict[str, str]:
-    base = {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp"), **env}
+    base = {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp"),
+            "R2G_IGNORE_ENV_LOCAL": "1", **env}
     out = subprocess.run(
         ["bash", "-c", f'source "{ENV_SH}" >/dev/null 2>&1; '
                        + "; ".join(f'echo "{v}=${{{v}-}}"' for v in POOLS)],
@@ -42,6 +43,7 @@ def test_default_budget_is_the_affinity_mask() -> None:
     out = subprocess.run(
         ["taskset", "-c", "0-1", "bash", "-c",
          f'source "{ENV_SH}" >/dev/null 2>&1; echo "$OMP_NUM_THREADS $MKL_NUM_THREADS"'],
-        env={"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp")},
+        env={"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp"),
+             "R2G_IGNORE_ENV_LOCAL": "1"},
         capture_output=True, text=True, timeout=60, check=True)
     assert out.stdout.split() == ["2", "2"]

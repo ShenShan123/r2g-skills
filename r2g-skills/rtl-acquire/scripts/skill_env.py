@@ -81,7 +81,7 @@ def shared_env(refresh: bool = False) -> dict[str, str]:
                         env[key] = value
         except Exception:
             env = {}
-    if not env:
+    if not env and os.environ.get("R2G_IGNORE_ENV_LOCAL") != "1":
         # bash unavailable (e.g. sandboxed unit test) — parse the pins directly.
         env = {
             k: v

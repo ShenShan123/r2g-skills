@@ -247,6 +247,7 @@ def test_env_sh_detects_conda_staged_pdk(tmp_path):
         "HOME": str(tmp_path / "nohome"),            # keep $HOME/miniconda3 from matching a real one
         "CONDA_PREFIX": str(tmp_path / "miniconda3"),
         "R2G_CONDA_ENV": "eda",
+        "R2G_IGNORE_ENV_LOCAL": "1",                 # a campaign worktree pins eda-install too
     }
     script = (f'source "{envsh}" >/dev/null 2>&1; '
               f'echo "PDK_ROOT=${{PDK_ROOT:-}}"; echo "SKY=${{SKY130A_DIR:-}}"')
@@ -278,6 +279,7 @@ def test_env_sh_detects_relocated_conda_tools_and_staged_pdk(tmp_path):
         "PATH": "/usr/bin:/bin",
         "HOME": str(tmp_path),
         "R2G_CONDA_ENV": "eda",
+        "R2G_IGNORE_ENV_LOCAL": "1",                 # a campaign worktree pins eda-install too
     }
     script = (f'source "{envsh}" >/dev/null 2>&1; '
               f'for v in IVERILOG_EXE VVP_EXE MAGIC_EXE NETGEN_EXE PDK_ROOT; do '
