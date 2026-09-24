@@ -9,11 +9,13 @@ import copy
 from .receipts import RuntimeBindingReceipt
 from .structural_binding import CONTRACT as ALPHA_CONTRACT, bind_rtl_asset_to_source
 from .guard_binding import CONTRACT as GUARD_CONTRACT
+from .skid_binding import CONTRACT as SKID_CONTRACT
+from tehm.rtl.skid_payload_action import DOMAIN as SKID_DOMAIN
 from tehm.ids import stable_dumps
 from .registry import asset_content_digest
 from .guard_binding import DOMAIN as GUARD_DOMAIN
 
-SOURCE_CONTRACTS = frozenset({ALPHA_CONTRACT, GUARD_CONTRACT})
+SOURCE_CONTRACTS = frozenset({ALPHA_CONTRACT, GUARD_CONTRACT, SKID_CONTRACT})
 
 
 def source_contract(asset):
@@ -59,7 +61,8 @@ def verify_candidate_source_replay(candidate, source):
     if replay is None:
         # A source-bound Asset may not downgrade to the legacy proof-less path.
         return (candidate.provenance.get("source_binding_required") is not True
-                and candidate.concrete_action.get("domain") != GUARD_DOMAIN)
+                and candidate.concrete_action.get("domain") != GUARD_DOMAIN
+                and candidate.concrete_action.get("domain") != SKID_DOMAIN)
     try:
         registered, bound = replay["registered_asset"], replay["bound_asset"]
         evidence = bound["provenance"]["binding_evidence"]

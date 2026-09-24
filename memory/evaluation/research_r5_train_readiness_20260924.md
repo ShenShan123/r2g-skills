@@ -13,10 +13,10 @@
 | 项目 | 当前观察 | 进入 M+ 前必须完成 |
 |---|---|---|
 | 参数化 RTL 解析 | 预检时 `parse_verilog` 对冻结的 `axis_register.v` 返回 `[]`；后续 `verilog-parse-v0.3` 已有界解析参数化 header，10 项正反检查通过 | 固定此 parser 版本并继续验证与 action/Asset 实际接口；这项修复本身不构成 Memory 准入 |
-| 可执行 Asset 路径 | `rtl.SKID_TEMP_PAYLOAD_RESTORE_DEV` 未在 `RTL_ACTION_DOMAINS`、profile、source contract/selection 中注册；当前模板只是研究者辅助 DEV dict | 冻结新版本 operator/binder、注册和 replay 检查；以真实 selected Asset 执行，不能把直接函数调用计入 TEHM route/select |
+| 可执行 Asset 路径 | 后续 shadow core 接线已将新 domain/profile/source contract 接入；DEV fixture 在 RAM 中仅注册为 draft，19 项静态/重放检查通过，尚无真实 route/select | 从合法 TRAIN evidence 建立 Knowledge/Asset authority 后执行真实 selection 与原生 oracle；直接函数调用和 draft fixture 不计 TEHM Repair@B |
 | TRAIN provenance | 唯一已审计的 skid repair 来自 DEV；没有另行登记且封存的 TRAIN baseline→action→native oracle→保持义务链 | 先选 TRAIN 任务、冻结角色和可见性，独立运行并保存原始回执；不得读取未来目标答案 |
 | Knowledge/Asset authority | 尚无上述 TRAIN causal path、知识权威回执和 Asset 验证/绑定/回滚回执 | 按现有 `knowledge.authority` 的 L3、至少两个支持 lineage 默认门槛及 `assets.lifecycle` 的真实 gate 判定；不手填 `validated` 或 `promoted` |
 
 因此当前可审计的 Memory 状态是 **M− only / M+ not constructed**，而不是“非空 M+ 但 NO_MATCH”。这一区别会保留到后续归因表，避免以软件 primitive 的单独作用冒充 Memory 增量。
 
-下一步完成新版 operator/Asset/source selection 的核心接线回归与 TRAIN 任务预登记；若合法训练证据只来自单一 source lineage，则保持 shadow/BLOCKED，按实际 gate 报告，不能降低阈值。新目标选择与三态比较须等待合法 snapshot/delta 及有界新目标先验登记。上游 checkout 与现有 `_qualification` 原始证据不修改、不清理。
+下一步在独立 campaign 中预登记 TRAIN 任务并取得真实 target/preservation oracle；再基于合法证据运行 Knowledge/Asset authority 与真实 source-bound selection。若训练证据只来自单一 source lineage，则保持 shadow/BLOCKED，按实际 gate 报告，不能降低阈值。新目标选择与三态比较须等待合法 snapshot/delta 及有界新目标先验登记。上游 checkout 与现有 `_qualification` 原始证据不修改、不清理。

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-COMPATIBILITY_VERSION = "rtl-compatibility-v2"
+COMPATIBILITY_VERSION = "rtl-compatibility-v3"
 _PROFILE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{2,127}$")
 
 DEFAULT_PROFILES = {
@@ -19,6 +19,7 @@ DEFAULT_PROFILES = {
     "rtl.WIDTH_CORRECT": "rtl.combinational.width_assignment.v1",
     "rtl.PRIORITY_REORDER": "rtl.fsm.case_reorder.v1",
     "rtl.AST_REWRITE": "rtl.ast.literal_rewrite.v1",
+    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW": "rtl.skid.temp_payload.v1.dev",
 }
 
 

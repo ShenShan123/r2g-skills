@@ -7884,5 +7884,9 @@ Revision5 改为先封存可判定范围，再开发受限 binder 和新的 TRAI
 cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 16 个反例自测，
 但尚未构成 TEHM transfer 或 ΔMemory。进度、缺口和 DEV 机制卡见
 [`research_r5_qf1_and_dev_20260924.md`](evaluation/research_r5_qf1_and_dev_20260924.md)。
-新版 skid-buffer payload source-only binder 已有 DEV 原生动作 smoke，仍未注册核心 Asset；见
+新版 skid-buffer payload source-only binder 已有 DEV 原生动作 smoke；见
 [`research_r5_skid_binding_dev_20260924.md`](evaluation/research_r5_skid_binding_dev_20260924.md)。
+后续 shadow core 接线已通过 RAM-only draft Asset 与 source replay 自检，但尚无合法 TRAIN、
+真实 route/select、M+ 或迁移；见
+[`research_r5_skid_core_shadow_20260924.md`](evaluation/research_r5_skid_core_shadow_20260924.md) 与
+[`research_r5_train_readiness_20260924.md`](evaluation/research_r5_train_readiness_20260924.md)。
