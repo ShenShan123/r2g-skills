@@ -97,6 +97,10 @@ def bind_rtl_asset_to_source(asset: Mapping, source: str, *, design_id: str,
         raise ValueError("asset and design_id are required")
     definition = asset.get("definition")
     template = definition.get("binding_template") if isinstance(definition, Mapping) else None
+    from .skid_binding_v3 import CONTRACT as SKID_V3_CONTRACT, bind_skid_asset_to_source_v3
+    if isinstance(template, Mapping) and template.get("contract") == SKID_V3_CONTRACT:
+        return bind_skid_asset_to_source_v3(
+            asset, source, design_id=design_id, public_context=public_context)
     from .skid_binding_v2 import CONTRACT as SKID_V2_CONTRACT, bind_skid_asset_to_source_v2
     if isinstance(template, Mapping) and template.get("contract") == SKID_V2_CONTRACT:
         return bind_skid_asset_to_source_v2(

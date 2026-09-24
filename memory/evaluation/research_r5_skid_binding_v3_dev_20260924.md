@@ -33,4 +33,4 @@ PYTHONPATH=memory PYTHONDONTWRITEBYTECODE=1 python3 -m tehm.evaluation.research_
 
 ## 准入差距
 
-v3 尚未接入核心 action registry/Asset 执行器，没有真实 route→select→bind→execute，也没有合法 TRAIN 行、L3 Knowledge 双 lineage 支撑、Asset 生命周期或独立 target 预登记。新增软件能力与后续 Memory 收益必须分开计；本结果只让 ZipCPU 这个 DEV 候选从“v2 无法绑定”推进到“v3 草案可唯一绑定”，不触发 M+ GO。
+本报告冻结时 v3 尚未接入核心；后续 [v3 shadow core 接线](research_r5_skid_core_v3_shadow_20260924.md) 已有 RAM-only Asset/action/source-replay 检查，但仍没有真实 route→select→bind→execute，也没有合法 TRAIN 行、L3 Knowledge 双 lineage 支撑、Asset 生命周期或独立 target 预登记。新增软件能力与后续 Memory 收益必须分开计；本结果只让 ZipCPU 这个 DEV 候选从“v2 无法绑定”推进到“v3 草案可唯一绑定”，不触发 M+ GO。
