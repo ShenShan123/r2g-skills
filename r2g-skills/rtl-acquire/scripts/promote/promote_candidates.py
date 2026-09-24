@@ -310,24 +310,41 @@ def vendor_rtl(rtl_files: list[Path], rtl_dir: Path) -> list[Path]:
     path and synth-time digest.
     """
     rtl_dir.mkdir(parents=True, exist_ok=True)
-    vendored: list[Path] = []
+    # Already-safe source basenames are RESERVED before any name is assigned, and
+    # safe sources are named first: otherwise "a b.v" listed before "a_b.v" took
+    # the name a_b.v, pushed the real a_b.v to a_b_1.v, and `include "a_b.v"`
+    # silently read the wrong file.
+    reserved = {src.name for src in rtl_files if vendored_basename(src.name) == src.name}
+    names: dict[int, str] = {}
     used: set[str] = set()
-    for src in rtl_files:
+    order = sorted(range(len(rtl_files)),
+                   key=lambda i: vendored_basename(rtl_files[i].name) != rtl_files[i].name)
+    for i in order:
+        src = rtl_files[i]
         name = vendored_basename(src.name)
         stem, suffix = os.path.splitext(name)
         n = 1
-        while name in used:
+        while name in used or (name != src.name and name in reserved):
             name = f"{stem}_{n}{suffix}"
             n += 1
         used.add(name)
-        dst = rtl_dir / name
+        names[i] = name
+    originals = {src.name for src in rtl_files}
+    for i, src in enumerate(rtl_files):
+        if names[i] != src.name and names[i] in originals:
+            raise AssertionError(f"vendored name {names[i]!r} of {src} shadows another "
+                                 f"source's original basename")
+    vendored: list[Path] = []
+    for i, src in enumerate(rtl_files):
+        dst = rtl_dir / names[i]
         shutil.copyfile(src, dst)
         vendored.append(dst)
     return vendored
 
 
 def vendor_headers(header_manifest: list[dict], candidate_dir: Path,
-                   rtl_dir: Path) -> tuple[list[Path], list[str]]:
+                   rtl_dir: Path, sources: list[Path] | None = None
+                   ) -> tuple[list[Path], list[str]]:
     """Copy the frozen header closure into <project>/rtl/ so the project is
     self-contained. Returns (vendored, unresolved_keys).
 
@@ -342,7 +359,9 @@ def vendor_headers(header_manifest: list[dict], candidate_dir: Path,
     rtl_dir.mkdir(parents=True, exist_ok=True)
     vendored: list[Path] = []
     unresolved: list[str] = []
-    placed: dict[str, Path] = {}
+    # A header named exactly like a vendored source must not overwrite it with
+    # other bytes (identical bytes are the same file: nothing to copy).
+    placed: dict[str, Path] = {dst.name: dst for dst in sources or []}
     for entry in header_manifest or []:
         key = str(entry.get("path") or "")
         if not key:
@@ -358,7 +377,8 @@ def vendor_headers(header_manifest: list[dict], candidate_dir: Path,
         if prior is not None:
             try:
                 if prior.read_bytes() != src.read_bytes():
-                    unresolved.append(f"{key} (basename collision with {prior})")
+                    unresolved.append(f"{key} (include_alias_conflict: basename "
+                                      f"collision with {prior})")
             except OSError:
                 unresolved.append(key)
             continue
@@ -817,7 +837,13 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     # moment that tree changes, and does not survive being moved or archived.
     header_manifest = (compile_man or {}).get("header_manifest") or []
     vendored_headers, unresolved_headers = vendor_headers(
-        header_manifest, out_root / design, project / "rtl")
+        header_manifest, out_root / design, project / "rtl", sources=vendored)
+    if any("include_alias_conflict" in u for u in unresolved_headers):
+        result["status"] = "include_alias_conflict"
+        result["reason"] = (
+            "include_alias_conflict: a closure header and a vendored source share a "
+            f"basename with different bytes (e.g. {ascii(unresolved_headers[:2])})")
+        return result
     if unresolved_headers:
         result["status"] = "header_closure_unresolved"
         result["reason"] = (
@@ -850,17 +876,21 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
                 for f in [*vendored, *vendored_headers]
                 for ref in re.findall(r'`include\s+"([^"]+)"', f.read_text(
                     encoding="utf-8", errors="surrogateescape"))}
+    written = {f.name for f in [*vendored, *vendored_headers]}
     for src, dst, row in zip(rtl_files, vendored, vendored_map):
         if vendored_basename(src.name) == src.name or src.name not in included:
             continue
         alias = dst.parent / src.name
-        if alias.exists() and alias.read_bytes() != dst.read_bytes():
+        # Only files written by THIS promotion can conflict; rtl/ may still hold
+        # an alias from an earlier promotion (--force does not clear it).
+        if alias.name in written and alias.read_bytes() != dst.read_bytes():
             result["status"] = "include_alias_conflict"
             result["reason"] = (
-                f"include_alias_conflict: `include \"{src.name}\"` would resolve to "
-                f"two different vendored files; rename one source")
+                f"include_alias_conflict: `include {ascii(src.name)} would resolve "
+                f"to two different vendored files; rename one source")
             return result
         shutil.copyfile(dst, alias)
+        written.add(alias.name)
         row["include_alias"] = str(alias.relative_to(project))
     result["vendored_rtl"] = vendored_map
 
@@ -1101,9 +1131,12 @@ def main() -> int:
                    "reason": f"unhandled promotion error: {type(e).__name__}: {e}"}
         results.append(res)
         tag = res["status"].upper()
-        print(f"  {tag:22s} {design}"
-              + (f" -> {res.get('project')}" if res.get("project") else "")
-              + (f" [{res.get('reason')}]" if res.get("reason") else ""))
+        line = (f"  {tag:22s} {design}"
+                + (f" -> {res.get('project')}" if res.get("project") else "")
+                + (f" [{res.get('reason')}]" if res.get("reason") else ""))
+        # A non-UTF-8 source name reaches here as unpaired surrogates; never let
+        # a strict-UTF-8 stdout crash the report of the promotion it describes.
+        print(line.encode("utf-8", "backslashreplace").decode("utf-8"))
 
     ok = sum(1 for r in results if r["status"] in ("promoted", "would_promote"))
     print(f"promoted {ok}/{len(results)} design(s) into {base_dir}")

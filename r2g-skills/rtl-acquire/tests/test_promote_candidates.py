@@ -471,3 +471,51 @@ class VendoredBasenameTests(PromoteFixture):
             self.assertNotIn("include_alias", row)
             self.assertEqual(row["vendored_sha256"], hashlib.sha256(
                 (self.base / "col" / row["vendored_path"]).read_bytes()).hexdigest())
+
+
+class VendoredNameReviewTests(PromoteFixture):
+    """Re-review findings on ee57ccb (2026-09-23)."""
+
+    def test_a_sanitized_name_never_takes_a_safe_siblings_name(self) -> None:
+        # N1: "a b.v" listed before "a_b.v" became a_b.v and pushed the real a_b.v
+        # to a_b_1.v, so `include "a_b.v"` read W 4 while synthesis used W 8.
+        top = RTL_CLK.replace("module toy_top", '`include "a_b.v"\nmodule toy_top')
+        self._mk_candidate("s", top, top="toy_top",
+                           extra_rtl={"a b.v": "`define W 4\n", "a_b.v": "`define W 8\n"})
+        res = self._promote("s")
+        self.assertEqual(res["status"], "promoted", res)
+        rtl = self.base / "s" / "rtl"
+        self.assertEqual((rtl / "a_b.v").read_text(), "`define W 8\n")
+        by_src = {Path(r["source_path"]).name: r["vendored_path"] for r in res["vendored_rtl"]}
+        self.assertEqual(by_src["a_b.v"], "rtl/a_b.v")
+        self.assertEqual(by_src["a b.v"], "rtl/a_b_1.v")
+
+    def test_force_repromotion_is_not_blocked_by_a_stale_alias(self) -> None:
+        # N2: --force leaves rtl/ in place, so last run's alias looked like a conflict.
+        top = RTL_CLK.replace("module toy_top", '`include "my defs.v"\nmodule toy_top')
+        self._mk_candidate("f", top, top="toy_top", extra_rtl={"my defs.v": "`define W 4\n"})
+        self.assertEqual(self._promote("f")["status"], "promoted")
+        import shutil
+        shutil.rmtree(self.out_root)
+        self.out_root.mkdir()
+        self._mk_candidate("f", top, top="toy_top", extra_rtl={"my defs.v": "`define W 8\n"})
+        res = self._promote("f", force=True)
+        self.assertEqual(res["status"], "promoted", res)
+        self.assertEqual((self.base / "f" / "rtl" / "my defs.v").read_text(), "`define W 8\n")
+
+    def test_a_header_cannot_overwrite_a_vendored_source(self) -> None:
+        # P3: the closure header "my_defs.v" must not replace the source vendored
+        # under that name ("my defs.v" -> my_defs.v) with different bytes.
+        import promote.promote_candidates as pc
+        rtl_dir = self.root / "p" / "rtl"
+        src = self.root / "src" / "my defs.v"
+        src.parent.mkdir(parents=True)
+        src.write_text("`define W 4\n")
+        vendored = pc.vendor_rtl([src], rtl_dir)
+        hdr = self.root / "hdr" / "my_defs.v"
+        hdr.parent.mkdir(parents=True)
+        hdr.write_text("`define W 8\n")
+        _, unresolved = pc.vendor_headers([{"path": str(hdr)}], self.root / "cand", rtl_dir,
+                                          sources=vendored)
+        self.assertTrue(any("include_alias_conflict" in u for u in unresolved), unresolved)
+        self.assertEqual((rtl_dir / "my_defs.v").read_text(), "`define W 4\n")
