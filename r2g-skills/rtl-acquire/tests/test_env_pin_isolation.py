@@ -15,6 +15,28 @@ def test_this_suite_runs_isolated() -> None:
         assert name not in os.environ, name
 
 
+def test_conftest_scrubs_pinned_variables_it_is_given() -> None:
+    # Independent of the ambient shell: hand conftest pinned values and check that
+    # importing it removes every one and sets the knob.
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    conftest = Path(__file__).resolve().parent / "conftest.py"
+    pinned = {"ORFS_ROOT": "/pinned/orfs", "PDK_ROOT": "/pinned/pdk",
+              "OPENROAD_EXE": "/pinned/openroad", "OMP_NUM_THREADS": "99",
+              "R2G_ENV_FILE": "/pinned/env.sh", "R2G_GRAPH_PYTHON": "/pinned/python"}
+    code = ("import os, runpy, sys; runpy.run_path(sys.argv[1]); "
+            "left = [k for k in sys.argv[2:] if k in os.environ]; "
+            "assert not left, left; "
+            "assert os.environ.get('R2G_IGNORE_ENV_LOCAL') == '1'")
+    env = {k: v for k, v in os.environ.items() if k != "R2G_IGNORE_ENV_LOCAL"}
+    env.update(pinned)
+    r = subprocess.run([sys.executable, "-c", code, str(conftest), *pinned],
+                       env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr[-2000:]
+
+
 def test_python_fallback_honours_the_knob(tmp_path, monkeypatch) -> None:
     # skill_env parses the pin file itself when bash is unavailable; the knob
     # must keep it out on that path too.
@@ -26,7 +48,8 @@ def test_python_fallback_honours_the_knob(tmp_path, monkeypatch) -> None:
     (tmp_path / "env.local.sh").write_text('export ORFS_ROOT="/pinned/orfs"\n')
     monkeypatch.setattr(skill_env, "REF_DIR", tmp_path)
     monkeypatch.setattr(skill_env, "ENV_SH", tmp_path / "absent_env.sh")
+    # Restored on teardown, so the pinned value never outlives this test.
+    monkeypatch.setattr(skill_env, "_shared_env_cache", None)
     assert skill_env.shared_env(refresh=True).get("ORFS_ROOT") != "/pinned/orfs"
     monkeypatch.delenv("R2G_IGNORE_ENV_LOCAL")
     assert skill_env.shared_env(refresh=True).get("ORFS_ROOT") == "/pinned/orfs"
-    skill_env.shared_env(refresh=True)
