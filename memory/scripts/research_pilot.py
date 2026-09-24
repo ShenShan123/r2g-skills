@@ -54,6 +54,10 @@ from tehm.evaluation.research_s1_control import (  # noqa: E402
     verify_s1_control_binding,
     verify_s1_controls,
 )
+from tehm.evaluation.research_s1_preflight import (  # noqa: E402
+    audit_s1_candidate_preflight,
+    verify_s1_candidate_preflight,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -182,6 +186,20 @@ def _verify_s1_controls(args: argparse.Namespace) -> int:
     result = verify_s1_controls(binding=args.binding, output=args.output)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] and result["all_registered_terminal"] else 2
+
+
+def _audit_s1_preflight(args: argparse.Namespace) -> int:
+    result = audit_s1_candidate_preflight(
+        binding=args.binding, controls=args.controls, epoch=args.epoch,
+        output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_s1_preflight(args: argparse.Namespace) -> int:
+    result = verify_s1_candidate_preflight(args.preflight)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
 
 
 def _audit_flow(args: argparse.Namespace) -> int:
@@ -350,6 +368,21 @@ def main(argv: list[str] | None = None) -> int:
     s1_verify.add_argument("--binding", type=Path, required=True)
     s1_verify.add_argument("--output", type=Path, required=True)
     s1_verify.set_defaults(handler=_verify_s1_controls)
+
+    s1_preflight = sub.add_parser(
+        "audit-s1-preflight", help="replay M0 in RAM and audit target candidate selection"
+    )
+    s1_preflight.add_argument("--binding", type=Path, required=True)
+    s1_preflight.add_argument("--controls", type=Path, required=True)
+    s1_preflight.add_argument("--epoch", type=Path, required=True)
+    s1_preflight.add_argument("--output", type=Path, required=True)
+    s1_preflight.set_defaults(handler=_audit_s1_preflight)
+
+    s1_preflight_verify = sub.add_parser(
+        "verify-s1-preflight", help="recompute scoped S1 candidate preflight"
+    )
+    s1_preflight_verify.add_argument("--preflight", type=Path, required=True)
+    s1_preflight_verify.set_defaults(handler=_verify_s1_preflight)
 
     audit_flow = sub.add_parser(
         "audit-flow", help="independently classify a terminal fixed-flow run"
