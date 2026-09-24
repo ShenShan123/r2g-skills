@@ -67,15 +67,20 @@ class PromoteFixture(unittest.TestCase):
     def _mk_candidate(self, design: str, rtl_text: str, *, top: str,
                       status: str = "success", extra_meta: dict | None = None,
                       synth_cfg_lines: list[str] | None = None,
-                      manifest: bool = True) -> None:
+                      manifest: bool = True, rtl_name: str = "top.v",
+                      extra_rtl: dict[str, str] | None = None) -> None:
         """manifest=True stamps a COMPLETE synth-time source_manifest, which is
         what a modern expansion produces. Pass manifest=False for the legacy
         pre-manifest shape, which promotion now blocks (audit P0-R6)."""
         ddir = self.out_root / design
         ddir.mkdir(parents=True, exist_ok=True)
-        rtl = self.root / "downloads" / design / "top.v"
+        rtl = self.root / "downloads" / design / rtl_name
         rtl.parent.mkdir(parents=True, exist_ok=True)
         rtl.write_text(rtl_text, encoding="utf-8")
+        rtls = [rtl]
+        for name, text in (extra_rtl or {}).items():
+            rtls.append(rtl.parent / name)
+            rtls[-1].write_text(text, encoding="utf-8")
         synth_proj = self.root / "workspace" / "synth_projects" / design / "constraints"
         synth_proj.mkdir(parents=True, exist_ok=True)
         cfg_lines = synth_cfg_lines if synth_cfg_lines is not None else [
@@ -84,19 +89,19 @@ class PromoteFixture(unittest.TestCase):
             "export ABC_AREA = 0",
             "export SYNTH_VARIANT = yosys_abc_area0",
             "export R2G_FLOW_SCOPE = synth_only",
-            f"export VERILOG_FILES = {rtl}",
+            f"export VERILOG_FILES = {' '.join(str(r) for r in rtls)}",
             f"export VERILOG_INCLUDE_DIRS = {rtl.parent}",
         ]
         (synth_proj / "config.mk").write_text("\n".join(cfg_lines) + "\n",
                                               encoding="utf-8")
         meta = {"design": design, "top": top, "status": status,
                 "synth_variant": "yosys_abc_area0", "platform": "nangate45",
-                "rtl_files": [str(rtl)],
+                "rtl_files": [str(r) for r in rtls],
                 "design_config": str(synth_proj / "config.mk")}
         if manifest:
             meta["source_manifest"] = [
-                {"path": str(rtl),
-                 "sha256": hashlib.sha256(rtl.read_bytes()).hexdigest()}]
+                {"path": str(r),
+                 "sha256": hashlib.sha256(r.read_bytes()).hexdigest()} for r in rtls]
         meta.update(extra_meta or {})
         (ddir / "design_meta.json").write_text(json.dumps(meta), encoding="utf-8")
         with open(self.out_root / "index.csv", "a", newline="", encoding="utf-8") as f:
@@ -404,3 +409,43 @@ class ClockDetectTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VendoredBasenameTests(PromoteFixture):
+    """A source basename with whitespace must not break the promoted config.mk.
+
+    Latent defect found by cohort B (2026-09-23): vendor_rtl copied RTL flat to
+    rtl/<basename> and wrote those paths into VERILOG_FILES, which ORFS splits
+    on whitespace, so "my top.v" became two nonexistent inputs and run_orfs.sh
+    refused the project (R2G_INPUTS_MISSING, exit 66). Cohort B has 3 such files.
+    """
+
+    def test_whitespace_basename_is_vendored_make_safe_with_provenance(self) -> None:
+        self._mk_candidate("ws", RTL_CLK, top="toy_top", rtl_name="my top.v")
+        res = self._promote("ws")
+        self.assertEqual(res["status"], "promoted", res)
+        cfg = (self.base / "ws" / "constraints" / "config.mk").read_text()
+        files = next(ln for ln in cfg.splitlines()
+                     if ln.startswith("export VERILOG_FILES")).split("=", 1)[1].split()
+        self.assertTrue(files)
+        for f in files:                         # make/ORFS split on whitespace
+            self.assertTrue(Path(f).is_file(), f)
+        self.assertEqual(Path(files[0]).name, "my_top.v")
+        prov = json.loads((self.base / "ws" / "metadata.json").read_text())
+        [row] = prov["vendored_rtl"]
+        src = self.root / "downloads" / "ws" / "my top.v"
+        self.assertEqual(row["source_path"], str(src))
+        self.assertEqual(row["vendored_path"], "rtl/my_top.v")
+        self.assertEqual(row["sha256"], hashlib.sha256(src.read_bytes()).hexdigest())
+
+    def test_an_include_of_the_original_name_still_resolves(self) -> None:
+        top = RTL_CLK.replace("module toy_top", '`include "my defs.v"\nmodule toy_top')
+        self._mk_candidate("inc", top, top="toy_top",
+                           extra_rtl={"my defs.v": "`define W 4\n"})
+        res = self._promote("inc")
+        self.assertEqual(res["status"], "promoted", res)
+        rtl = self.base / "inc" / "rtl"
+        self.assertTrue((rtl / "my_defs.v").is_file())
+        self.assertTrue((rtl / "my defs.v").is_file())     # `include by original name
+        cfg = (self.base / "inc" / "constraints" / "config.mk").read_text()
+        self.assertNotIn("my defs.v", cfg)

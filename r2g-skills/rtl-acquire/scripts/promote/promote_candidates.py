@@ -290,13 +290,30 @@ def resolve_candidate_rtl(rtl_files: list[str], candidate_dir: Path) -> list[dic
     return out
 
 
+# Characters a vendored RTL basename may keep. config.mk lists the vendored paths
+# in VERILOG_FILES, which ORFS splits on whitespace, and make gives $ # : ; = % and
+# quotes their own meanings. A source named "my core.v" therefore became two
+# nonexistent inputs and the flow refused it (R2G_INPUTS_MISSING, exit 66).
+_UNSAFE_BASENAME_CHARS = re.compile(r"[^A-Za-z0-9._+-]")
+
+
+def vendored_basename(name: str) -> str:
+    """The make-safe basename a source file is vendored under (deterministic)."""
+    return _UNSAFE_BASENAME_CHARS.sub("_", name)
+
+
 def vendor_rtl(rtl_files: list[Path], rtl_dir: Path) -> list[Path]:
-    """Copy the proven RTL into <project>/rtl/, keeping basenames unique."""
+    """Copy the proven RTL into <project>/rtl/ under make-safe, unique basenames.
+
+    The i-th returned path is the copy of rtl_files[i]; promote_one records that
+    mapping (``vendored_rtl``) so each vendored file still binds to its original
+    path and synth-time digest.
+    """
     rtl_dir.mkdir(parents=True, exist_ok=True)
     vendored: list[Path] = []
     used: set[str] = set()
     for src in rtl_files:
-        name = src.name
+        name = vendored_basename(src.name)
         stem, suffix = os.path.splitext(name)
         n = 1
         while name in used:
@@ -763,6 +780,25 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     # 2. vendor the proven RTL (self-contained project; the synth workspace's
     #    _tmp_cfg conversions are cleanable scratch)
     vendored = vendor_rtl(rtl_files, project / "rtl")
+    vendored_map = [
+        {"source_key": entry["key"], "source_path": str(entry["path"]),
+         "vendored_path": str(dst.relative_to(project)),
+         "sha256": hashlib.sha256(dst.read_bytes()).hexdigest()}
+        for entry, dst in zip((e for e in resolved if e["path"] is not None), vendored)
+    ]
+    # A renamed file that another source `include`s by its original name also
+    # keeps an exact-name copy beside it (off VERILOG_FILES, so make never sees
+    # the unsafe name), rather than rewriting the RTL and breaking its digest.
+    included = {Path(ref).name
+                for dst in vendored
+                for ref in re.findall(r'`include\s+"([^"]+)"',
+                                      dst.read_text(encoding="utf-8", errors="ignore"))}
+    for src, dst, row in zip(rtl_files, vendored, vendored_map):
+        if src.name != dst.name and src.name in included:
+            alias = dst.parent / src.name
+            shutil.copyfile(dst, alias)
+            row["include_alias"] = str(alias.relative_to(project))
+    result["vendored_rtl"] = vendored_map
     if verified_originals:
         original_dir = project / "rtl_original"
         original_dir.mkdir(parents=True, exist_ok=True)
@@ -926,6 +962,9 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
                     # a project promoted under an override must be distinguishable
                     # from one that passed the gate. The publish gate keys on this.
                     "rtl_readiness": result.get("rtl_readiness")}
+        # Vendored name -> original source and digest (names are made make-safe,
+        # so a vendored basename need not equal the source's).
+        meta_out["vendored_rtl"] = vendored_map
         if isinstance(meta.get("transformation_manifest"), dict):
             meta_out["transformation_manifest"] = meta["transformation_manifest"]
         if collateral_rewrites:
