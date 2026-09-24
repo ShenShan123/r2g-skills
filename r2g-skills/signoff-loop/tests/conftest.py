@@ -5,6 +5,7 @@ sibling `def-graph` skill with their own conftest; this file wires only the sign
 subsystems (knowledge store, signoff extractors, reports, flow, loop)."""
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import sys
@@ -84,6 +85,34 @@ PINNED_ENV_VARS = (
 # Applied at conftest import, before any test module is imported, so module-level
 # probes (e.g. a skipif computed from the resolved toolchain) see the same
 # isolated environment as the tests.
+# What the scrub removed, so the tests that DELIBERATELY resolve the production
+# toolchain (the capability probes: "a suite of skips reads exactly like a suite
+# of passes", RMD3-P1-02) can restore it through production_toolchain_env().
+ORIGINAL_PINNED_ENV = {k: os.environ[k] for k in PINNED_ENV_VARS if k in os.environ}
 os.environ["R2G_IGNORE_ENV_LOCAL"] = "1"
 for _name in PINNED_ENV_VARS:
     os.environ.pop(_name, None)
+
+
+@contextlib.contextmanager
+def production_toolchain_env():
+    """Resolve the toolchain exactly as production does: the skill pin file is
+    honoured and the caller's pinned variables are back. Restores isolation on exit."""
+    keys = ("R2G_IGNORE_ENV_LOCAL", *PINNED_ENV_VARS)
+    saved = {k: os.environ.get(k) for k in keys}
+    os.environ.pop("R2G_IGNORE_ENV_LOCAL", None)
+    os.environ.update(ORIGINAL_PINNED_ENV)
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+@pytest.fixture
+def production_toolchain():
+    with production_toolchain_env():
+        yield

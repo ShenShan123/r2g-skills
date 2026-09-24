@@ -25,6 +25,8 @@ import pytest
 
 import platform_capability as pc
 
+from .conftest import production_toolchain_env
+
 SKILL_MD = Path(__file__).resolve().parents[1] / "SKILL.md"
 
 # Matrix column header -> (probe capability key, human label).
@@ -76,9 +78,25 @@ MATRIX = _parse_matrix(SKILL_MD.read_text())
 # Resolve the SAME environment main() probes under (RMD3-P1-02): _env.sh, not
 # ambient. Probing ambient made every row skip for want of a flow dir, and a
 # suite of skips reads exactly like a suite of passes.
-_ENV = pc.resolve_signoff_env()
+# conftest isolates every other test from this machine's pins; the matrix check
+# is about THIS machine's toolchain, so it resolves it the production way.
+with production_toolchain_env():
+    _ENV = pc.resolve_signoff_env()
 _PROBE_ENV = _ENV if _ENV is not None else None
 FLOW_DIR = pc.find_flow_dir(env=_PROBE_ENV)
+_PIN_FILE = Path(__file__).resolve().parents[1] / "references" / "env.local.sh"
+
+
+def test_probe_resolves_the_pinned_toolchain_when_pins_exist():
+    """A pinned worktree whose probe silently fell back to another ORFS would turn
+    every row below into a skip (review F1, 2026-09-23). Fail, never skip, then."""
+    if not _PIN_FILE.is_file():
+        pytest.skip(f"no pin file at {_PIN_FILE}: nothing pinned to resolve")
+    m = re.search(r'^\s*export\s+ORFS_ROOT="?([^"\s]+)"?', _PIN_FILE.read_text(), re.M)
+    if not m:
+        pytest.skip(f"{_PIN_FILE} does not pin ORFS_ROOT")
+    assert FLOW_DIR and Path(FLOW_DIR).resolve() == (Path(m.group(1)) / "flow").resolve(), (
+        f"pinned ORFS_ROOT={m.group(1)} but the probe resolved {FLOW_DIR}")
 
 
 def _installed(platform: str) -> bool:

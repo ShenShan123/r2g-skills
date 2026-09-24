@@ -18,6 +18,8 @@ import pytest
 
 import build_signoff_manifest as bsm
 
+from .conftest import production_toolchain_env
+
 MOD = Path(bsm.__file__).resolve()
 
 
@@ -29,7 +31,8 @@ def _nangate45_not_strict_here() -> str | None:
     nangate45 is strict_signoff_ready (tools/install_nangate45_{lvs,antenna}.sh).
     """
     import platform_capability as pc
-    env = pc.resolve_signoff_env()
+    with production_toolchain_env():     # this machine's toolchain, pins honoured
+        env = pc.resolve_signoff_env()
     flow_dir = pc.find_flow_dir(env=env)
     if not flow_dir:
         return "no ORFS flow dir resolves on this machine"
@@ -76,6 +79,7 @@ def _proj(tmp_path, *, drc="clean", lvs="clean", route=0, rcx="complete",
 
 
 @needs_strict_nangate45
+@pytest.mark.usefixtures("production_toolchain")
 def test_clean_bundle_is_strict_and_qualified(tmp_path):
     man = bsm.build(str(_proj(tmp_path)))
     assert man["strict_clean"] and not man["strict_missing"], man["strict_missing"]
@@ -137,6 +141,7 @@ def test_promoted_project_requires_complete_task_provenance(tmp_path):
 
 
 @needs_strict_nangate45
+@pytest.mark.usefixtures("production_toolchain")
 def test_cli_writes_manifest_and_strict_exit(tmp_path):
     proj = _proj(tmp_path, drc="fail")
     r = subprocess.run([sys.executable, str(MOD), str(proj), "--strict"],
