@@ -1,0 +1,39 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v17.json",
+    "sha256": "a7adc14d5a9473883d5ce1ff49d5822d9c1128a8daca28c4ca220c004291a959"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v17",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Immutable v17 binds the preregistered constructed controls and scoped M0 candidate preflight. Its exact SHA256 is bound above; its then-pending treatment entry is not rewritten."
+    },
+    {
+      "evidence_id": "r4-s1-candidate-derived-treatment-plan-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Clean action epoch rc1-s1-action-40ab92a-clean-20260923 digest sha256:f423f49770b2a8b5c8fe350a407ba98531730fb4b085329f61d9b766efffb01e. Independently verified plan digest sha256:a5df7f6ddb4b2ef55a0d7a5d8b3caf7cc425047bb5108d2c445b47a338bdd347 stages both frozen selected candidates as isolated flow.CONFIG_DELTA CORE_UTILIZATION 95-to-40 actions, without changing source RTL, SDC, platform, or toolchain. Registered tasks 2, selected treatments 2, no-reuse rejects 0. Staging alone is not an observed effect."
+    },
+    {
+      "evidence_id": "r4-s1-density-development-paired-action-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Clean execution epoch rc1-s1-treatment-c563cd9-clean-20260923 digest sha256:9fd495774cef942ffe32db23aad8d8326466cd5947e03267b242491489c7f61b executed each candidate-derived treatment once, with zero retries, zero model calls and no online memory update. Independent second verifier invocation checked the complete append-only event chain tail sha256:9a72829659ec06a721c50bba7ff844e5050378a9b97f231f6e51ab1888d9558a and both raw flow audits. Full preregistered two-task denominator: verilog_axi_axil_reg_if_rd control FAIL at place (audit sha256:7938a5d3a567de87c918f86fecb6fc3c17c10548d3f958981a5b1c9a68d0f96c) to treatment PASS / flow_completed (audit sha256:70546ee97ab52c5b6e7fe6ed8507e113c9feb9bd1aa39c85d81d97dc20049126); usbcorev_endpoint control FAIL at place (audit sha256:084d27098b05ab6aaac470bd74be26fe8c4ad3d5a7f943e732c5852ff287f79f) to treatment PASS / flow_completed (audit sha256:ce4fdc43afcd82ae5f7ad96c51d97af00b3806eb231e8fec179269303bce143d). Both control failures were placement_density_infeasible / FLOW_TARGET_FAILURE. Each treatment used 6 EDA stage calls, 1 flow driver call and 1 independent audit call; stage wallclock was 54 and 61 seconds. Execution binding digest sha256:6813ea479a03808396866715e2c811d9abc6009bc74b16c302ef7f1e40a9b203; run-summary.json SHA256 ca0857f9f99c222ff38d38ca7c63b257f9e2e4777dd64543cdb30a530b9ec524. Constructed S1 flow-feasibility benefit 2/2, UNKNOWN 0. Not natural-failure prevalence, strict signoff, Agent improvement, or final held-out performance."
+    },
+    {
+      "evidence_id": "r4-s1-integrity-and-regression-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The two development source groups github-owner:alexforencich and github-owner:avakar remain disjoint from ultraembedded and freecores M0 training sources. M0 m0-route-b-003 remains mode 0444, SQLite SHA256 a9d4e83a402432e2e62e39d4dd1a51d4657bf46496ace79656353176f96d5dfd, with no sidecars. Full local regression on the treatment implementation source passed 2065 tests in 1586.21 seconds using PYTHONPATH=memory:memory/tests and PYTHONDONTWRITEBYTECODE=1."
+    },
+    {
+      "evidence_id": "future-r4-s2-evolution-final-heldout-paper",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "Same-controller, same-budget No Persistent Memory / isolated Legacy / frozen TEHM M0 Agent comparison has not run. S1 original control is not a No Memory Agent. Shadow evolution, frozen final held-out protocol, and paper experiments remain unestablished. Production authority and online memory update remain disabled."
+    }
+  ]
+}

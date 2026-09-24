@@ -7798,3 +7798,29 @@ digest `sha256:8f9d596bdc08bd3bff98f5fb25e07d29f204d70b431fd0cc58d48c6fcde82c1e`
 M0 SQLite SHA256 未变、无 sidecar。这里仅有真实 route/selector/binder 的 shadow
 候选证据，**尚未执行 treatment，也没有 S1 配对动作效应**。下一门禁是从这些已冻结
 候选派生隔离 treatment，并逐案执行、独立审计和保留所有结果。
+
+### 2026-09-23 Revision4 S1 候选驱动 treatment 与配对效果
+
+上一节记录的是 v17 的当时状态；后续候选驱动 treatment 已在 clean epoch
+`rc1-s1-treatment-c563cd9-clean-20260923` 执行，v18 证据状态以 SHA256 链接 v17，
+没有回改旧记录。独立验证的 treatment plan digest 为
+`sha256:a5df7f6ddb4b2ef55a0d7a5d8b3caf7cc425047bb5108d2c445b47a338bdd347`：
+两个隔离工程的唯一动作均来自冻结的 route/selector/binder 候选，把
+`CORE_UTILIZATION` 从 95 改为 40；原始 RTL、SDC、平台和工具链不变。
+
+两个预注册的构造 Pilot-development 任务均保留在分母中，各执行一次且无重试。
+`verilog_axi_axil_reg_if_rd` 的 control 为 place 阶段
+`FAIL / placement_density_infeasible`，treatment 为 `PASS / flow_completed`；
+`usbcorev_endpoint` 同样从 place 阶段目标失败转为流程完成。两份 treatment 各有
+6 次 EDA stage call、1 次 flow driver call、1 次独立审计，stage wallclock 分别为
+54 秒和 61 秒；`UNKNOWN=0`、模型调用为零。完整 event chain 与两份原始 flow audit
+经过第二次独立 verifier 调用核验。`run-summary.json` SHA256 为
+`ca0857f9f99c222ff38d38ca7c63b257f9e2e4777dd64543cdb30a530b9ec524`。
+只读 M0 仍为 `0444`，SQLite SHA256 仍为
+`a9d4e83a402432e2e62e39d4dd1a51d4657bf46496ace79656353176f96d5dfd`，
+无 sidecar 或在线更新。完整测试：**2065 passed in 1586.21s (0:26:26)**。
+
+因此本阶段有 **2/2 构造 flow-feasibility S1 动作收益**，但不代表天然故障分布、
+strict signoff、No Memory/Legacy/TEHM 同 controller 的 S2 Agent 收益，也不是最终
+held-out。下一步按 Revision4 R4-6 独立冻结并运行三策略同 controller、同预算实验；
+未修改的 S1 control 不得改标为 No Memory Agent。
