@@ -62,6 +62,10 @@ from tehm.evaluation.research_s1_action import (  # noqa: E402
     prepare_s1_treatments,
     verify_s1_treatment_plan,
 )
+from tehm.evaluation.research_s1_treatment import (  # noqa: E402
+    run_s1_treatments,
+    verify_s1_treatments,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -217,6 +221,18 @@ def _verify_s1_treatments(args: argparse.Namespace) -> int:
     result = verify_s1_treatment_plan(args.plan)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
+
+
+def _run_s1_treatments(args: argparse.Namespace) -> int:
+    result = run_s1_treatments(plan=args.plan, epoch=args.epoch, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["all_registered_terminal"] else 2
+
+
+def _verify_s1_treatment_run(args: argparse.Namespace) -> int:
+    result = verify_s1_treatments(plan=args.plan, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["all_registered_terminal"] else 2
 
 
 def _audit_flow(args: argparse.Namespace) -> int:
@@ -414,6 +430,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     s1_plan_verify.add_argument("--plan", type=Path, required=True)
     s1_plan_verify.set_defaults(handler=_verify_s1_treatments)
+
+    s1_run = sub.add_parser(
+        "run-s1-treatments", help="execute and audit each selected S1 treatment once"
+    )
+    s1_run.add_argument("--plan", type=Path, required=True)
+    s1_run.add_argument("--epoch", type=Path, required=True)
+    s1_run.add_argument("--output", type=Path, required=True)
+    s1_run.set_defaults(handler=_run_s1_treatments)
+
+    s1_run_verify = sub.add_parser(
+        "verify-s1-treatment-run", help="recompute selected S1 treatment raw audits"
+    )
+    s1_run_verify.add_argument("--plan", type=Path, required=True)
+    s1_run_verify.add_argument("--output", type=Path, required=True)
+    s1_run_verify.set_defaults(handler=_verify_s1_treatment_run)
 
     audit_flow = sub.add_parser(
         "audit-flow", help="independently classify a terminal fixed-flow run"
