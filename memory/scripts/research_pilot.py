@@ -25,6 +25,7 @@ from tehm.evaluation.research_github_corpus import qualify_github_rtl_corpus  # 
 from tehm.evaluation.research_github_corpus import verify_github_rtl_corpus  # noqa: E402
 from tehm.evaluation.research_r5_qualification import build_qf1, verify_qf1  # noqa: E402
 from tehm.evaluation.research_r5_verdict_checks import run_checks as check_r5_verdicts  # noqa: E402
+from tehm.evaluation.research_r5_dev_probe import audit_dev_probe, verify_dev_probe  # noqa: E402
 from tehm.evaluation.research_campaign import (  # noqa: E402
     prepare_research_campaign,
     verify_prepared_campaign,
@@ -154,6 +155,17 @@ def _verify_r5_qf1(args: argparse.Namespace) -> int:
 def _check_r5_verdicts(args: argparse.Namespace) -> int:
     del args
     result = check_r5_verdicts()
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+def _audit_r5_dev_probe(args: argparse.Namespace) -> int:
+    result = audit_dev_probe(work=args.work, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_r5_dev_probe(args: argparse.Namespace) -> int:
+    result = verify_dev_probe(args.receipt)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
 
@@ -474,6 +486,15 @@ def main(argv: list[str] | None = None) -> int:
 
     verdict_checks = sub.add_parser("check-r5-verdicts", help="run bounded adversarial adapter checks")
     verdict_checks.set_defaults(handler=_check_r5_verdicts)
+
+    dev_probe = sub.add_parser("audit-r5-dev-probe", help="audit one preregistered staged RTL DEV probe")
+    dev_probe.add_argument("--work", type=Path, required=True)
+    dev_probe.add_argument("--output", type=Path, required=True)
+    dev_probe.set_defaults(handler=_audit_r5_dev_probe)
+
+    dev_verify = sub.add_parser("verify-r5-dev-probe", help="replay staged RTL DEV probe receipt")
+    dev_verify.add_argument("--receipt", type=Path, required=True)
+    dev_verify.set_defaults(handler=_verify_r5_dev_probe)
 
     adapt_inventory = sub.add_parser(
         "adapt-inventory",
