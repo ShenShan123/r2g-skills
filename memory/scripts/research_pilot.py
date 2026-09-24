@@ -70,6 +70,10 @@ from tehm.evaluation.research_s2_proposal import (  # noqa: E402
     audit_s2_proposals,
     verify_s2_proposals,
 )
+from tehm.evaluation.research_s2_action import (  # noqa: E402
+    prepare_s2_actions,
+    verify_s2_actions,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -249,6 +253,19 @@ def _audit_s2_proposals(args: argparse.Namespace) -> int:
 
 def _verify_s2_proposals(args: argparse.Namespace) -> int:
     result = verify_s2_proposals(args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _prepare_s2_actions(args: argparse.Namespace) -> int:
+    result = prepare_s2_actions(
+        proposals=args.proposals, epoch=args.epoch, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_s2_actions(args: argparse.Namespace) -> int:
+    result = verify_s2_actions(args.plan)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
 
@@ -481,6 +498,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     s2_verify.add_argument("--output", type=Path, required=True)
     s2_verify.set_defaults(handler=_verify_s2_proposals)
+
+    s2_prepare = sub.add_parser(
+        "prepare-s2-actions",
+        help="stage isolated policy candidate projects from verified S2 pools",
+    )
+    s2_prepare.add_argument("--proposals", type=Path, required=True)
+    s2_prepare.add_argument("--epoch", type=Path, required=True)
+    s2_prepare.add_argument("--output", type=Path, required=True)
+    s2_prepare.set_defaults(handler=_prepare_s2_actions)
+
+    s2_stage_verify = sub.add_parser(
+        "verify-s2-actions",
+        help="recheck all S2 staged candidate projects without running them",
+    )
+    s2_stage_verify.add_argument("--plan", type=Path, required=True)
+    s2_stage_verify.set_defaults(handler=_verify_s2_actions)
 
     audit_flow = sub.add_parser(
         "audit-flow", help="independently classify a terminal fixed-flow run"
