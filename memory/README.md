@@ -7860,3 +7860,11 @@ R4-8 的 [paper protocol preflight](evaluation/research_r4_paper_protocol_prefli
 `2085 passed` 是清理前的历史回归，不能用作清理后覆盖率。当前 R4 CLI 的
 `verify-s2-pilot` 已在清理后只读复核通过；`r4-real-pilot` 原始证据保留。
 清理目标、可恢复性与未处理的历史 campaign 见
+[`tehm_tree_cleanup_20260924.md`](evaluation/tehm_tree_cleanup_20260924.md)。
+
+同日后续清理：用户已自行删除仓库外的整个 `tehm-campaigns/`，因此上文
+`verify-s2-pilot` 通过及原始证据保留只描述删除前状态，不能再作为当前可重放性
+声明。`memory/scripts/` 现只保留 Revision4 统一入口 `research_pilot.py`；
+143 个旧实验入口及其唯一依赖旧脚本的回放模块已移除。历史文档中的旧入口路径
+只作档案引用，不再保证可执行；`memory/tehm/` 通用运行时代码保留。
+细节见 [`tehm_tree_cleanup_20260924_r2.md`](evaluation/tehm_tree_cleanup_20260924_r2.md)。
