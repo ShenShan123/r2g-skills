@@ -7824,3 +7824,31 @@ M0 SQLite SHA256 未变、无 sidecar。这里仅有真实 route/selector/binder
 strict signoff、No Memory/Legacy/TEHM 同 controller 的 S2 Agent 收益，也不是最终
 held-out。下一步按 Revision4 R4-6 独立冻结并运行三策略同 controller、同预算实验；
 未修改的 S1 control 不得改标为 No Memory Agent。
+
+### 2026-09-24 Revision4 S2 三策略确定性 Pilot 与后续门禁
+
+S2 在两个已知构造失败的 Pilot-development 设计上，用同一 R2G
+`deterministic_skill` controller 和 B3/6 EDA stage/0 model 固定预算，分别运行
+No Persistent Memory、隔离 Legacy 和冻结的只读 TEHM M0。冻结 proposal digest 为
+`sha256:206fcaf44925ff1eee4866e0ddb87f56fc551755f8a0019d089b8d6972384b7a`，
+隔离 stage-plan digest 为
+`sha256:22d556527b75e62e53c99c120674ae4615271cd6d1cabacc89d60aa4357e257b`。
+六个策略任务各只执行首个候选、零重试、零模型调用，独立第二次 verifier
+重放全部 raw flow audit 和完整事件链；tail digest 为
+`sha256:3d0be1c2786fffeac9055af597acb2f026d43717430d9fd391d80d8edf8f5c22`。
+
+TaskSuccess@B 三组均为 **2/2**，实际记忆候选执行率分别为 **0/2、1/2、2/2**，
+各有 2 次 flow driver 和 12 次 EDA stage 调用。Legacy 两个 exact top 各有 5 次
+历史记录，故不是未见设计泛化；S1 control 只是共享反馈，不是 No Memory Agent
+结果。此次零模型 controller 不能称为 LLM Agent；没有 S2 成功率收益，QoR utility
+未预注册，不能判断 QoR 收益/伤害。M0 SQLite 仍为 `0444`、SHA256
+`a9d4e83a402432e2e62e39d4dd1a51d4657bf46496ace79656353176f96d5dfd`，
+无 sidecar 和在线更新。完整回归 **2085 passed in 3180.71s (0:53:00)**。
+
+完整分母、逐案链、成本及失败层见
+[`research_r4_pilot_tables_v1.md`](evaluation/research_r4_pilot_tables_v1.md)；R4-7
+因无合格 training signal 明确为
+[`RETAIN M0`](evaluation/research_r4_shadow_evolution_retain_v1.md)，没有 M1/Delta-M；
+R4-8 的 [paper protocol preflight](evaluation/research_r4_paper_protocol_preflight_v1.md)
+仍为 DRAFT/NO-GO，未冻结 final held-out，也无论文最终实验结论。v19 证据状态
+按 SHA256 追加链接 v18，未回改旧记录。

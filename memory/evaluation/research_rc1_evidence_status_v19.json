@@ -1,0 +1,39 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v18.json",
+    "sha256": "c8f17889df9eed13a9e972578ef44c6d3c10e9b61e418a55e42ff593b449560b"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v18",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Immutable v18 binds the S1 constructed Pilot-development control/treatment evidence, its source groups and full regression. Its then-pending S2/evolution/final entry remains historical and is not rewritten."
+    },
+    {
+      "evidence_id": "r4-s2-frozen-three-policy-proposal-and-stage-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Clean proposal source be31a423 and action source d8e9438, independently verified proposal digest sha256:206fcaf44925ff1eee4866e0ddb87f56fc551755f8a0019d089b8d6972384b7a and stage-plan digest sha256:22d556527b75e62e53c99c120674ae4615271cd6d1cabacc89d60aa4357e257b. Two development designs x No Persistent Memory, isolated Legacy, and frozen TEHM M0 form six policy-task pairs. Identical R2G deterministic_skill controller, B3 candidate/6 EDA stage/zero model budget, frozen cold fallback, no online update. Legacy historical DB was copied to an isolated temporary database, with original SHA256 e5b46fe49c289b609c39df077be4cfcf444366767f54edc75686cc50f1d449f0; both exact tops already had five historical Legacy runs. Proposal and stage do not constitute observed effects."
+    },
+    {
+      "evidence_id": "r4-s2-deterministic-development-execution-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Clean execution source 4b60e598 and epoch digest sha256:a399fc2096710ea5c4e1bb6f062a9f0664fed928b7f44fbc22060c466424ebb0; execution binding sha256:c5ec38e7c582af87e30111a9a7eba0ce6cb3e2703349b8b6fe527769d01ade58. One serial no-retry frozen execution, then a SECOND independent verifier invocation replayed all six raw flow audits and the append-only event chain tail sha256:3d0be1c2786fffeac9055af597acb2f026d43717430d9fd391d80d8edf8f5c22. Full 2-design x 3-policy denominator: all six first candidates PASS/flow_completed; TaskSuccess@B No Memory 2/2, Legacy 2/2, TEHM 2/2; actual memory use 0/2, 1/2, 2/2 respectively. Per-policy actual driver/stage/model calls 2/12/0 each; stage wallclock 102/102/115 seconds respectively. Terminal policy elapsed sums from verified events approximately 112.75/107.36/122.00 seconds. Six independent audits executed; no retry or online update. The frozen run-summary.json SHA256 is 49cfa6b13ef776ed3c533e7b0106cd55ac6e5fa3854d02aaa3cbfa9a28e4af8c. S1 controls were shared feedback only, NOT the No Memory Agent outcomes. No success-rate advantage in this two-group sample; QoR utility was not preregistered and remains undetermined. No LLM Agent, natural failure prevalence, strict signoff, or final-heldout claim."
+    },
+    {
+      "evidence_id": "r4-pilot-p1-p4-and-shadow-retain-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "P1-P4 development report memory/evaluation/research_r4_pilot_tables_v1.md SHA256 2c5449423fd2f3e3188669b4a3c8e3f03c6e1f7463e934ee11790a40a853fc95 retains the 552-candidate inventory, all 8 S0 flow outcomes, distinct S1 controlled-action and S2 deterministic-policy results, costs, unknowns, and failure layers. R4-7 decision memory/evaluation/research_r4_shadow_evolution_retain_v1.md SHA256 c8cb1049f97a8d78efc018134a548fa196af3ff0657ac7bfb25fabcbca746023 is RETAIN M0: S0 natural NO_MATCH failures are different mechanisms and not qualified multi-source learner training, S1/S2 are development, and no state-shift or confirmed harmful P12 counterfactual exists. P13/P14, M1, Delta-M, non-target replay and rollback were NOT_RUN_NO_QUALIFIED_SIGNAL. M0 remains 0444, SHA256 a9d4e83a402432e2e62e39d4dd1a51d4657bf46496ace79656353176f96d5dfd, no sidecars."
+    },
+    {
+      "evidence_id": "r4-s2-regression-and-paper-protocol-gate-001",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Full local regression with PYTHONPATH=memory:memory/tests and PYTHONDONTWRITEBYTECODE=1 passed 2085 tests in 3180.71 seconds on the S2 execution source. Paper protocol preflight memory/evaluation/research_r4_paper_protocol_preflight_v1.md SHA256 a31d66332c99b0a190a06285b0ef8592f6a4e06bd62f96c7f4688368934eff34 is DRAFT/NO-GO, not a frozen final protocol: only two development lineages, exact-design Legacy exposure, no preregistered QoR utility, current cold start 2/2, unverified reserved source lineages, and no final campaign manifests. No final held-out outcomes were inspected or published; production authority and online learning remain disabled."
+    }
+  ]
+}
