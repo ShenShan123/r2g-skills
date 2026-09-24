@@ -49,6 +49,11 @@ from tehm.evaluation.research_seed_pair import (  # noqa: E402
     verify_seed_pair_spec,
 )
 from tehm.evaluation.research_seed_m0 import build_research_seed_m0  # noqa: E402
+from tehm.evaluation.research_s1_control import (  # noqa: E402
+    run_s1_controls,
+    verify_s1_control_binding,
+    verify_s1_controls,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -158,6 +163,25 @@ def _verify_staged_flow(args: argparse.Namespace) -> int:
     result = verify_staged_flow_project(args.project)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
+
+
+
+def _verify_s1_control_binding(args: argparse.Namespace) -> int:
+    result = verify_s1_control_binding(args.binding)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _run_s1_controls(args: argparse.Namespace) -> int:
+    result = run_s1_controls(binding=args.binding, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["all_registered_terminal"] else 2
+
+
+def _verify_s1_controls(args: argparse.Namespace) -> int:
+    result = verify_s1_controls(binding=args.binding, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["all_registered_terminal"] else 2
 
 
 def _audit_flow(args: argparse.Namespace) -> int:
@@ -306,6 +330,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     verify_staged.add_argument("--project", type=Path, required=True)
     verify_staged.set_defaults(handler=_verify_staged_flow)
+
+    s1_binding = sub.add_parser(
+        "verify-s1-control-binding", help="verify preregistered S1 control inputs"
+    )
+    s1_binding.add_argument("--binding", type=Path, required=True)
+    s1_binding.set_defaults(handler=_verify_s1_control_binding)
+
+    s1_controls = sub.add_parser(
+        "run-s1-controls", help="execute and audit both S1 development controls once"
+    )
+    s1_controls.add_argument("--binding", type=Path, required=True)
+    s1_controls.add_argument("--output", type=Path, required=True)
+    s1_controls.set_defaults(handler=_run_s1_controls)
+
+    s1_verify = sub.add_parser(
+        "verify-s1-controls", help="recompute the S1 control event chain and raw audits"
+    )
+    s1_verify.add_argument("--binding", type=Path, required=True)
+    s1_verify.add_argument("--output", type=Path, required=True)
+    s1_verify.set_defaults(handler=_verify_s1_controls)
 
     audit_flow = sub.add_parser(
         "audit-flow", help="independently classify a terminal fixed-flow run"
