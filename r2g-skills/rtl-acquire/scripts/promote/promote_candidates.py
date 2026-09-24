@@ -1137,7 +1137,11 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     except Exception as exc:  # noqa: BLE001 -- stamped, then re-raised
         result["status"] = "failed"
         result["reason"] = f"unhandled promotion error: {type(exc).__name__}: {exc}"
-        _fail_after_init(result)
+        try:
+            _fail_after_init(result)
+        except Exception as stamp_exc:  # noqa: BLE001 -- never mask the original
+            print(f"WARNING: {design}: could not stamp the failed promotion: "
+                  f"{type(stamp_exc).__name__}: {stamp_exc}", file=sys.stderr)
         raise
 
 

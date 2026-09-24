@@ -654,3 +654,23 @@ class VendoredNameRound4Tests(PromoteFixture):
         self.assertNotEqual(first, second)
         self.assertEqual((self.base / "t" / first).read_text(), "// first\n")
         self.assertEqual((self.base / "t" / second).read_text(), "// second\n")
+
+    def test_a_failing_failure_stamp_never_masks_the_original_error(self) -> None:
+        # Final-review note: if _fail_after_init itself raised (reports/ is a
+        # file), its error replaced the original, which survived only as context.
+        from unittest import mock
+        import promote.promote_candidates as pc
+        self._mk_candidate("m", RTL_CLK, top="toy_top")
+        self.assertEqual(self._promote("m")["status"], "promoted")
+        p = self.base / "m"
+
+        def broken_vendor(*_a, **_k):
+            import shutil                      # after init_project: reports/ -> a file
+            shutil.rmtree(p / "reports")
+            (p / "reports").write_text("not a directory\n")
+            raise OSError("ORIGINAL failure")
+
+        with mock.patch.object(pc, "vendor_rtl", side_effect=broken_vendor):
+            with self.assertRaisesRegex(OSError, "ORIGINAL failure"):
+                self._promote("m", force=True)
+        self.assertTrue((p / "constraints" / "config.mk.invalid").exists())
