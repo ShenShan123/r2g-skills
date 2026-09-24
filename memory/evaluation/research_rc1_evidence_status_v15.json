@@ -1,0 +1,33 @@
+{
+  "schema": "tehm-research-evidence-status-v1",
+  "prior_evidence_status": {
+    "path": "memory/evaluation/research_rc1_evidence_status_v14.json",
+    "sha256": "ab47453797bdc7f888784a3583dc6663f8b9c2d83340c6782223247f8cc7f6cb"
+  },
+  "entries": [
+    {
+      "evidence_id": "r4-evidence-index-v14",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "The immutable v14 status binds two distinct positive constructed seed source groups, the retained negative SHA result, and the source-epoch gate. Its exact SHA256 is bound above; no earlier audit is rewritten."
+    },
+    {
+      "evidence_id": "r4-route-b-read-only-m0-003",
+      "classification": "valid",
+      "selected_for_epoch": true,
+      "basis": "Spec-v3 SHA256 43c707b2ef5ee95098ed486f03cc172b1f9c9b34ca6cc985183cfc744d497f64 binds clean published source f4a1a2f and two independently audited positive seed pairs. Isolated parent replay built four training transitions, two valid L2 controlled pairs, one eligible L3 replicated path, one validated Knowledge through its existing authority gate, and one candidate flow Asset. Shadow route and selector returned CONSIDER and SELECT with an eligible fixed 95-to-40 runtime binding. The read-only m0-route-b-003 bundle and an independent second build both verify with identical bundle digest 0c35ad0319ac936eb8afd295d3f326a08d844c18758e822d35d9f85e6102ddea, manifest digest d7d54e231a28bfce7ba0da7a7ecbb77c5df87f39450316251cef7da942997772, and report digest sha256:da461195211c66a33948a7506afd1e71de00a128bb747da0138fc7ea9c8b90bd. Both databases have mode 0444. This is constructed flow-feasibility training memory only, with zero model calls, no online update, and no production authority."
+    },
+    {
+      "evidence_id": "future-r4-post-m0-coverage-and-s1-controlled-action",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "The new M0 has not yet been bound to a Pilot epoch or tested against the complete eight-flow S0 denominator. Route coverage, target-specific selector and binder behavior, and any controlled S1 action effect remain to be measured without turning prior PASS or infrastructure UNKNOWN cases into repair tasks."
+    },
+    {
+      "evidence_id": "future-r4-s2-evolution-final-heldout-paper",
+      "classification": "pending_replay",
+      "selected_for_epoch": false,
+      "basis": "S2 same-controller comparisons, verified shadow evolution, frozen final held-out protocol, and paper experiments remain unestablished. Production authority and online memory update remain disabled."
+    }
+  ]
+}

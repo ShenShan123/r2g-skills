@@ -7736,3 +7736,24 @@ acquisitions、build report 与 epoch bindings，并明确未来重放仍需要�
 绝对 staging 路径规范化为相对文件名与内容摘要，但不放宽实际输入一致性；M0 builder
 还会拒绝当前 HEAD 或工作树状态与 clean source epoch 不同的执行。这只验证构建器，不是实际 M0 结果；真实 bundle
 仍须由仓库外独立审计 pairs 构建并冻结后，才能进入 S1。
+
+### 2026-09-23 Revision4 Route-B 只读 M0 构建
+
+已发布的 clean source `f4a1a2f` 冻结为 epoch
+`rc1-seed-m0-export-f4a1a2f-clean-20260923`，digest
+`sha256:e221bc8e32f64a7250e7ae01d9d9188b2721e152eb7532cd7c8905f49ab5cda0`。
+仓库外 spec-v3 SHA256 为
+`43c707b2ef5ee95098ed486f03cc172b1f9c9b34ca6cc985183cfc744d497f64`，
+绑定 IRQ 与 UART 两个来源组及同一工具链。在隔离数据库中重建四个 training
+transitions、两个有效 L2 controlled pairs、一个 eligible L3 causal path、一个经
+Knowledge authority gate 验证的 claim 和一个 candidate flow Asset。实际 shadow
+route 为 `CONSIDER`，selector 为 `SELECT`，binder 产生固定的 95→40 配置动作。
+
+只读 bundle `m0-route-b-003` 与独立第二次构建的 bundle digest 均为
+`0c35ad0319ac936eb8afd295d3f326a08d844c18758e822d35d9f85e6102ddea`；
+manifest digest 均为 `d7d54e231a28bfce7ba0da7a7ecbb77c5df87f39450316251cef7da942997772`。
+两份 SQLite 均为 `0444`，无 sidecar；原始 bundle 的表计数与报告一致，bundle
+校验通过。先前 `m0-route-b-002` 暴露 exporter 未保留只读权限，仅作诊断保留。
+这份 M0 仅支持受控 `flow_feasibility` 训练范围，不证明自然失败迁移、strict
+signoff、S1 动作收益或 production authority；模型调用为零。下一门禁是绑定非空 M0
+的 Pilot epoch，重跑完整八案只读 route coverage，再决定哪些任务可进入 S1。
