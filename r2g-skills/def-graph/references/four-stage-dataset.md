@@ -50,6 +50,18 @@ are **label-only**. Stage 02 runs one subprocess per prediction stage so a stage
 can only ever open its own DEF, and `checks/validate_four_stage.py` re-derives
 the check independently from `metadata.csv`'s recorded `feature_source_path`.
 
+A path check cannot see a later DEF's *bytes* written to an earlier stage's own
+path, so stage 02 also records `feature_source_sha256`, the digest of the input
+DEF it parsed. The validator binds that digest to the flow, not to the dataset:
+the `.odb` sha256 that `run_orfs.sh` recorded in the run's
+`stage_artifact_manifest.jsonl` (or `resume_meta.json` `parent_lineage`) must
+still match the preserved `results/<stage>.odb`, and re-exporting that `.odb`
+through `odb_to_def.py` must reproduce the recorded digest. The raw manifest's
+`sha256` is not the reference: it lives beside the DEF, and an export that
+substitutes the DEF rewrites it too. Datasets extracted before this check carry
+no `feature_source_sha256` and fail closed. Re-run stage 02 (then 04/05) to
+bind them.
+
 Early-stage absence is `NaN` with the matching `*_valid` feature at 0 — never a
 zero fill and never back-filled from a later DEF.
 

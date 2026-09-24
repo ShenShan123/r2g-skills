@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import re
@@ -472,6 +473,21 @@ def validate_manifest_stage(
             f"{artifact_name} semantics={semantics!r} 不包含 {semantic_token!r}"
         )
     return {"manifest": str(manifest_path), "semantics": semantics}
+
+
+def sha256_file(path: Path) -> str:
+    """阶段输入DEF实际被读取字节的摘要。
+
+    ``feature_source_path``只记录声明的路径；同一路径下被替换成后续阶段DEF的
+    字节（E12 C8b）在路径比较下不可见。这里记录内容，由
+    ``checks/validate_four_stage.py``与流程记录的阶段产物摘要比对。
+    """
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def iter_def_entries(path: Path, section: str):
@@ -2293,6 +2309,7 @@ def main() -> None:
 
     if config_key is None:
         snapshot_path = None
+        snapshot_sha256 = ""
         snapshot_manifest = {"manifest": "", "semantics": "post_yosys"}
         snapshot = empty_physical_snapshot()
     else:
@@ -2307,6 +2324,8 @@ def main() -> None:
             snapshot_path,
             feature_cutoff,
         )
+        # 解析前记录内容摘要：绑定的是本阶段实际读取的字节，而不是声明路径。
+        snapshot_sha256 = sha256_file(snapshot_path)
         snapshot = parse_def(snapshot_path)
     # 旧实现的place/route两个变量均绑定到同一个合法快照。后续计算无法看到Route DEF。
     place = snapshot
@@ -3189,6 +3208,7 @@ def main() -> None:
             "prediction_stage": prediction_stage,
             "feature_cutoff": feature_cutoff,
             "feature_source_path": str(snapshot_path or ""),
+            "feature_source_sha256": snapshot_sha256,
             "coordinate_source_stage": feature_cutoff,
             "coordinate_trust_policy": coordinate_trust_stats["policy"],
             "standard_cell_coordinates_trusted": coordinate_trust_stats[
