@@ -807,6 +807,30 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     subprocess.run([sys.executable, str(init_py), design, str(base_dir)],
                    check=True, capture_output=True)
 
+    def _fail_after_init(result: dict) -> dict:
+        """The ONE exit for a non-promoted status once init_project has run.
+
+        A --force re-promotion that stops part-way would otherwise leave the old
+        config.mk, rtl/ holding new bytes next to files that config still lists,
+        and init_project's bare metadata.json with no promoted_from: a project
+        that looks runnable but was never validated. Park config.mk as
+        config.mk.invalid (kept for inspection) and stamp the failure where every
+        downstream reader looks.
+        """
+        cfg = project / "constraints" / "config.mk"
+        if cfg.exists():
+            cfg.replace(cfg.with_name("config.mk.invalid"))
+        (project / "metadata.json").write_text(json.dumps(
+            {"design_name": design, "status": result["status"],
+             "reason": result.get("reason"), "promoted_from": str(out_root / design),
+             "promoted_at": result.get("promoted_at")}, indent=2, ensure_ascii=True),
+            encoding="utf-8")
+        (project / "reports").mkdir(exist_ok=True)
+        (project / "reports" / "promote.json").write_text(
+            json.dumps(result, indent=2, ensure_ascii=True), encoding="utf-8")
+        return result
+
+
     # 2. vendor the proven RTL (self-contained project; the synth workspace's
     #    _tmp_cfg conversions are cleanable scratch)
     header_manifest = (compile_man or {}).get("header_manifest") or []
@@ -841,7 +865,7 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
             result["reason"] = (
                 "compile collateral was verified and vendored, but no compiled RTL "
                 "reference was rebound to the frozen payload")
-            return result
+            return _fail_after_init(result)
         result["vendored_collateral_count"] = len(
             {str(path) for path in collateral_refs.values()})
         result["collateral_rewrites"] = collateral_rewrites
@@ -855,14 +879,14 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
         result["reason"] = (
             "include_alias_conflict: a closure header and a vendored source share a "
             f"basename with different bytes (e.g. {ascii(unresolved_headers[:2])})")
-        return result
+        return _fail_after_init(result)
     if unresolved_headers:
         result["status"] = "header_closure_unresolved"
         result["reason"] = (
             f"header_closure_unresolved: {len(unresolved_headers)} synth-proven "
             f"header(s) could not be vendored (e.g. {unresolved_headers[:2]}); the "
             f"promoted project would depend on an external tree — re-expand")
-        return result
+        return _fail_after_init(result)
     if vendored_headers:
         result["vendored_header_count"] = len(vendored_headers)
 
@@ -884,6 +908,10 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     # collision-suffixed name's original is another vendored file. An unsafe
     # alias name can never equal a make-safe vendored name, so an existing file
     # there with other bytes is an ambiguity, and it fails loud.
+    # Known limitation: the scan is lexical, so an `include inside a comment or a
+    # dead `ifdef branch also counts. That can only over-block (a loud
+    # include_ambiguous / include_alias_conflict or an extra alias), never pick a
+    # wrong file.
     included = {Path(ref).name
                 for f in [*vendored, *vendored_headers]
                 for ref in re.findall(r'`include\s+"([^"]+)"', f.read_text(
@@ -902,7 +930,7 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
             f"include_ambiguous: `include of {ascii(ambiguous[:3])} names several "
             f"sources with different bytes; the promoted project cannot know "
             f"which one synthesis read")
-        return result
+        return _fail_after_init(result)
     written = {f.name for f in [*vendored, *vendored_headers]}
     for src, dst, row in zip(rtl_files, vendored, vendored_map):
         if vendored_basename(src.name) == src.name or src.name not in included:
@@ -915,24 +943,30 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
             result["reason"] = (
                 f"include_alias_conflict: `include {ascii(src.name)} would resolve "
                 f"to two different vendored files; rename one source")
-            return result
+            return _fail_after_init(result)
         shutil.copyfile(dst, alias)
         written.add(alias.name)
         row["include_alias"] = str(alias.relative_to(project))
     result["vendored_rtl"] = vendored_map
     # --force re-promotes into an existing project, and init_project never clears
     # rtl/, which is on the include path: a stale file from an earlier promotion
-    # could still be `include`d. Remove top-level files of THIS project's rtl/
-    # that this run did not write, and record them.
+    # could still be `include`d. Move the top-level files of THIS project's rtl/
+    # that this run did not write into rtl/.stale/<timestamp>/ (a subdirectory,
+    # so off the flat include path; hand-added files are kept, not deleted) and
+    # record the moves.
     if args.force:
         stale = sorted(f for f in (project / "rtl").iterdir()
                        if f.is_file() and f.name not in written)
-        for f in stale:
-            f.unlink()
         if stale:
-            result["force_removed_rtl"] = [str(f.relative_to(project)) for f in stale]
-            print(f"NOTE: {design}: --force removed {len(stale)} stale file(s) from "
-                  f"{project / 'rtl'}: {ascii([f.name for f in stale][:5])}")
+            park = project / "rtl" / ".stale" / now_iso().replace(":", "")
+            park.mkdir(parents=True, exist_ok=True)
+            for f in stale:
+                f.replace(park / f.name)
+            result["force_moved_rtl"] = {
+                str(f.relative_to(project)): str((park / f.name).relative_to(project))
+                for f in stale}
+            print(f"NOTE: {design}: --force moved {len(stale)} stale file(s) from "
+                  f"{project / 'rtl'} to {park}: {ascii([f.name for f in stale][:5])}")
 
     # 3. config.mk from the signoff-loop template + carried synth knobs
     assets = signoff_loop_dir() / "assets"
@@ -1068,6 +1102,8 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
             json.dumps(result, indent=2), encoding="utf-8")
 
     _dump_manifests()
+    if result["status"] != "promoted":
+        return _fail_after_init(result)
 
     # 7. optional immediate full flow
     if args.run and result["status"] == "promoted":

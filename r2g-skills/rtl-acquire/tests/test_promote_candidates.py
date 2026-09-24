@@ -544,8 +544,35 @@ class VendoredNameReReviewTests(PromoteFixture):
         self.assertEqual(res["status"], "promoted", res)
         rtl = self.base / "st" / "rtl"
         self.assertFalse((rtl / "old.vh").exists())             # off the include path
-        self.assertEqual(res["force_removed_rtl"], ["rtl/old.vh"])
-        self.assertEqual(sorted(f.name for f in rtl.iterdir()), ["top.v"])
+        [(was, now)] = res["force_moved_rtl"].items()
+        self.assertEqual(was, "rtl/old.vh")
+        # Parked, not deleted (a hand-added file survives), in a subdirectory that
+        # the flat rtl/ include path never searches.
+        self.assertTrue(now.startswith("rtl/.stale/"))
+        self.assertEqual((self.base / "st" / now).read_text(), "`define X\n")
+        self.assertEqual(sorted(f.name for f in rtl.iterdir() if f.is_file()), ["top.v"])
+
+    def test_a_failed_force_repromotion_leaves_no_runnable_project(self) -> None:
+        # F1: after init_project, an early return (here include_ambiguous) left the
+        # old config.mk, a mixed rtl/ and a metadata.json without promoted_from.
+        top = RTL_CLK.replace("module toy_top", '`include "defs.v"\nmodule toy_top')
+        self._mk_candidate("f", top, top="toy_top", extra_rtl={"defs.v": "`define W 4\n"})
+        self.assertEqual(self._promote("f")["status"], "promoted")
+        import shutil
+        shutil.rmtree(self.out_root)
+        self.out_root.mkdir()
+        shutil.rmtree(self.root / "downloads")
+        self._mk_candidate("f", top, top="toy_top",
+                           extra_rtl={"defs.v": "`define W 8\n", "sub/defs.v": "`define W 9\n"})
+        res = self._promote("f", force=True)
+        self.assertEqual(res["status"], "include_ambiguous", res)
+        p = self.base / "f"
+        self.assertFalse((p / "constraints" / "config.mk").exists())
+        self.assertTrue((p / "constraints" / "config.mk.invalid").exists())
+        meta = json.loads((p / "metadata.json").read_text())
+        self.assertEqual(meta["status"], "include_ambiguous")
+        self.assertIn("corpus/f", meta["promoted_from"])
+        self.assertIn("include_ambiguous", meta["reason"])
 
     def test_a_suffixed_source_never_takes_a_header_name(self) -> None:
         # R2: a second defs.v suffixed to defs_1.v blocked (or shadowed) a real
