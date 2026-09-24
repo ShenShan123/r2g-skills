@@ -30,6 +30,11 @@ CALLER_GRAPH_PYTHON="${R2G_GRAPH_PYTHON-}"
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 [[ -n "$CALLER_GRAPH_PYTHON" ]] && R2G_GRAPH_PYTHON="$CALLER_GRAPH_PYTHON"
+# The graph venv is a separate interpreter: variables that bind the CALLER's python
+# must not reach it. A driver running under the oss-cad python3 wrapper exports
+# PYTHONHOME, and the venv then dies at init ("No module named 'encodings'"), which
+# the torch import probe reported as a benign skip (same leak as 9ba9bc4).
+unset PYTHONHOME PYTHONEXECUTABLE PYTHONNOUSERSITE
 
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 CONFIG_MK="$PROJECT_DIR/constraints/config.mk"
