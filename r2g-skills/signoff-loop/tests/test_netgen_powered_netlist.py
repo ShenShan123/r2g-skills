@@ -23,8 +23,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
-import sqlite3
 import subprocess
 from pathlib import Path
 
@@ -152,8 +150,61 @@ def test_ingest_records_a_tool_error_not_an_lvs_symptom(tmp_knowledge_dir: Path,
     check = conn.execute("SELECT signature_json FROM run_violations WHERE run_id=?",
                          (run_id,)).fetchone()[0]
     assert '"lvs"' not in check                          # no LVS design symptom
-    row = dict(zip(("lvs_status",), conn.execute(
-        "SELECT lvs_status FROM runs WHERE run_id=?", (run_id,)).fetchone()))
-    assert row["lvs_status"] == "error"
+    assert conn.execute("SELECT lvs_status FROM runs WHERE run_id=?",
+                        (run_id,)).fetchone()[0] == "error"
     assert not knowledge_db.is_success({"orfs_status": "pass", "drc_status": "clean",
                                         "lvs_status": "error", "rcx_status": None})
+
+
+# Review findings (2026-09-23) --------------------------------------------------
+
+CORRUPTING_BUT_EXIT_0 = """#!/usr/bin/env bash
+tcl="${@: -1}"
+out=$(sed -n 's/^write_verilog -include_pwr_gnd "\\(.*\\)"$/\\1/p' "$tcl")
+printf 'module demo(VPWR, VGND); endmodule\\n' > "$out"
+echo "malloc(): unaligned tcache chunk detected"
+echo "Signal 11 received"
+exit 0
+"""
+
+
+def test_a_corrupted_writer_is_not_trusted_even_on_exit_0(tmp_path: Path) -> None:
+    skill, orfs, pdk, bindir, proj = _setup(tmp_path, OK_MAGIC, NETGEN_MUST_NOT_RUN,
+                                            CORRUPTING_BUT_EXIT_0)
+    (proj / "backend" / "RUN_A" / "lvs").mkdir()
+    (proj / "backend" / "RUN_A" / "lvs" / "netgen_lvs_result.json").write_text(
+        '{"status": "mismatch"}')                     # a stale verdict from before
+    r = _run(tmp_path, skill, orfs, pdk, bindir, proj)
+
+    assert r.returncode == 1 and SIGNATURE in r.stderr
+    assert not (bindir / "netgen_ran").exists()
+    for f in (proj / "lvs" / "netgen_lvs_result.json",
+              proj / "backend" / "RUN_A" / "lvs" / "netgen_lvs_result.json"):
+        assert json.loads(f.read_text())["reason"] == "powered_netlist_unavailable"
+
+
+def test_ab_judge_vetoes_an_unexecuted_lvs_like_a_missing_one() -> None:
+    # Before: 'error' was neither LVS_BAD nor missing, so a trial whose arm B could
+    # not run LVS was judged a clean win.
+    import result_vector as rv
+
+    assert rv.compare_status_rows({"lvs": "clean"}, {"lvs": "error"}) == "check_missing:lvs"
+
+
+def test_prose_reasons_do_not_become_signatures(tmp_knowledge_dir: Path, tmp_path: Path) -> None:
+    import ingest_run
+    import knowledge_db
+
+    proj = tmp_path / "d"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text("export DESIGN_NAME = d\n")
+    (proj / "reports").mkdir()
+    (proj / "reports" / "lvs.json").write_text(json.dumps(
+        {"status": "error", "reason": "Magic SPICE extraction timeout"}))
+    conn = knowledge_db.connect(tmp_knowledge_dir / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    run_id = ingest_run.ingest(proj, conn, families_path=tmp_knowledge_dir / "families.json")
+    sig, detail = conn.execute(
+        "SELECT signature, detail FROM failure_events WHERE run_id=?", (run_id,)).fetchone()
+    assert sig == "tool-error-lvs-error"
+    assert "Magic SPICE extraction timeout" in detail

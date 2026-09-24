@@ -186,6 +186,11 @@ json.dump({"tool": "netgen", "design": design, "platform": platform,
            "detail": detail, "log_file": log, "run_tag": run_tag,
            "gds_path": gds, "gds_sha256": sha}, open(out, "w"), indent=2)
 PYEOF
+  # Keep the backend run's copy in step, so no stale verdict survives there.
+  if [[ -n "${R2G_BACKEND_RUN:-}" && -d "$R2G_BACKEND_RUN" ]]; then
+    mkdir -p "$R2G_BACKEND_RUN/lvs"
+    cp "$LVS_DIR/netgen_lvs_result.json" "$R2G_BACKEND_RUN/lvs/" 2>/dev/null || true
+  fi
   exit 1
 }
 ODB_FILE=$(find "$RESULTS_DIR" -name "6_final.odb" 2>/dev/null | head -1)
@@ -218,7 +223,8 @@ _PWR_RC=0
 r2g_bounded_run "${R2G_POWERED_NETLIST_TIMEOUT:-900}" 30 "$LVS_DIR/write_powered_verilog.log" \
   "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" || _PWR_RC=$?
 if [[ $_PWR_RC -ne 0 || ! -s "$POWERED_NETLIST" ]] || ! grep -q 'VPWR' "$POWERED_NETLIST" \
-   || grep -qE 'Signal [0-9]+ received|unaligned|corrupted' "$LVS_DIR/write_powered_verilog.log"; then
+   || grep -qE '^Signal [0-9]+ received|^(free|malloc|realloc)\(\): |corrupted (size|double-linked)|double free or corruption' \
+        "$LVS_DIR/write_powered_verilog.log"; then
   _powered_netlist_unavailable "openroad write_verilog exit=$_PWR_RC (see $LVS_DIR/write_powered_verilog.log)"
 fi
 echo "Using power-aware netlist from ODB: $POWERED_NETLIST"

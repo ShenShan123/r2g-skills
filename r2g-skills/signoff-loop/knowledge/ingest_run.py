@@ -1194,14 +1194,17 @@ def ingest(project: Path,
         )
     _ingest_fix_events(conn, project, design_name, design_family, platform)
     if lvs.get("status") == "error":
+        # Signature keeps only a slug reason (older netgen errors carry prose).
+        reason = str(lvs.get("reason") or "error")
         # LVS did not run to a verdict (e.g. powered_netlist_unavailable). A tool /
         # environment event, like tool_crash: never an LVS design symptom (only
         # status 'fail' becomes one below), and not a signed-off layout either.
         conn.execute(
             "INSERT INTO failure_events (run_id, stage, signature, detail) "
             "VALUES (?, ?, ?, ?)",
-            (run_id, "lvs", f"tool-error-lvs-{lvs.get('reason') or 'error'}",
-             lvs.get("detail")),
+            (run_id, "lvs", "tool-error-lvs-" + (reason if re.fullmatch(r"[a-z0-9_]+", reason)
+                                                 else "error"),
+             " | ".join(str(x) for x in (lvs.get("reason"), lvs.get("detail")) if x) or None),
         )
     if orfs_status == "tool_crash":
         _project_tool_crash(conn, run_id, fail_stage, stage_log_path.parent)
