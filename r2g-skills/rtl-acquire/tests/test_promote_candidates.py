@@ -544,7 +544,7 @@ class VendoredNameReReviewTests(PromoteFixture):
         self.assertEqual(res["status"], "promoted", res)
         rtl = self.base / "st" / "rtl"
         self.assertFalse((rtl / "old.vh").exists())             # off the include path
-        [(was, now)] = res["force_moved_rtl"].items()
+        [(was, now)] = res["stale_rtl_moved"].items()
         self.assertEqual(was, "rtl/old.vh")
         # Parked, not deleted (a hand-added file survives), in a subdirectory that
         # the flat rtl/ include path never searches.
@@ -593,3 +593,64 @@ class VendoredNameReReviewTests(PromoteFixture):
                                             sources=vendored)
         self.assertEqual(unresolved, [])
         self.assertEqual((rtl_dir / "defs_1.v").read_text(), "`define H 1\n")
+
+
+class VendoredNameRound4Tests(PromoteFixture):
+    """Round-4 re-review findings on 2a5ef51 (2026-09-23)."""
+
+    def _reset(self, design: str) -> None:
+        import shutil
+        shutil.rmtree(self.out_root)
+        self.out_root.mkdir()
+        shutil.rmtree(self.root / "downloads")
+
+    def test_a_plain_rerun_after_a_failed_force_parks_the_leftovers(self) -> None:
+        # G1: the failed --force parked config.mk, so a plain re-run passed the
+        # existing-project guard, and parking only ran under --force: the
+        # rejected defs_1.v and the stale old.v stayed on the include path.
+        top = RTL_CLK.replace("module toy_top", '`include "defs.v"\nmodule toy_top')
+        self._mk_candidate("f", top, top="toy_top",
+                           extra_rtl={"defs.v": "`define W 4\n", "old.v": "// stale\n"})
+        self.assertEqual(self._promote("f")["status"], "promoted")
+        self._reset("f")
+        self._mk_candidate("f", top, top="toy_top",
+                           extra_rtl={"defs.v": "`define W 8\n", "sub/defs.v": "`define W 9\n"})
+        self.assertEqual(self._promote("f", force=True)["status"], "include_ambiguous")
+        self._reset("f")
+        self._mk_candidate("f", top, top="toy_top", extra_rtl={"defs.v": "`define W 8\n"})
+        res = self._promote("f")
+        self.assertEqual(res["status"], "promoted", res)
+        rtl = self.base / "f" / "rtl"
+        self.assertEqual(sorted(f.name for f in rtl.iterdir() if f.is_file()),
+                         ["defs.v", "top.v"])
+
+    def test_an_exception_after_init_leaves_no_runnable_project(self) -> None:
+        # G2: an exception after init_project skipped _fail_after_init.
+        from unittest import mock
+        import promote.promote_candidates as pc
+        self._mk_candidate("x", RTL_CLK, top="toy_top")
+        self.assertEqual(self._promote("x")["status"], "promoted")
+        with mock.patch.object(pc, "vendor_rtl", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                self._promote("x", force=True)
+        p = self.base / "x"
+        self.assertFalse((p / "constraints" / "config.mk").exists())
+        meta = json.loads((p / "metadata.json").read_text())
+        self.assertEqual(meta["status"], "failed")
+        self.assertIn("disk full", meta["reason"])
+
+    def test_two_parks_in_one_second_never_overwrite(self) -> None:
+        # G3: runs within one second shared rtl/.stale/<ts>/ and overwrote.
+        from unittest import mock
+        import promote.promote_candidates as pc
+        self._mk_candidate("t", RTL_CLK, top="toy_top")
+        self.assertEqual(self._promote("t")["status"], "promoted")
+        rtl = self.base / "t" / "rtl"
+        with mock.patch.object(pc, "now_iso", return_value="2026-09-23T12:00:00"):
+            (rtl / "old.v").write_text("// first\n")
+            first = self._promote("t", force=True)["stale_rtl_moved"]["rtl/old.v"]
+            (rtl / "old.v").write_text("// second\n")
+            second = self._promote("t", force=True)["stale_rtl_moved"]["rtl/old.v"]
+        self.assertNotEqual(first, second)
+        self.assertEqual((self.base / "t" / first).read_text(), "// first\n")
+        self.assertEqual((self.base / "t" / second).read_text(), "// second\n")

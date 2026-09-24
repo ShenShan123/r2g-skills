@@ -830,294 +830,315 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
             json.dumps(result, indent=2, ensure_ascii=True), encoding="utf-8")
         return result
 
+    # Everything after init_project either promotes or leaves through
+    # _fail_after_init -- including an unexpected exception (OSError while copying,
+    # the vendor_rtl name assert, a missing template), which is stamped and then
+    # re-raised for main() to report like any other unhandled promotion error.
+    try:
 
-    # 2. vendor the proven RTL (self-contained project; the synth workspace's
-    #    _tmp_cfg conversions are cleanable scratch)
-    header_manifest = (compile_man or {}).get("header_manifest") or []
-    vendored = vendor_rtl(rtl_files, project / "rtl",
-                          reserved_names={Path(str(e.get("path") or "")).name
-                                          for e in header_manifest if e.get("path")})
-    if verified_originals:
-        original_dir = project / "rtl_original"
-        original_dir.mkdir(parents=True, exist_ok=True)
-        original_files = []
-        used_originals: set[str] = set()
-        for _, source in verified_originals:
-            name = source.name
-            stem, suffix = source.stem, source.suffix
-            n = 1
-            while name in used_originals:
-                name = f"{stem}_{n}{suffix}"
-                n += 1
-            used_originals.add(name)
-            destination = original_dir / name
-            shutil.copyfile(source, destination)
-            original_files.append(destination)
-        result["vendored_original_source_count"] = len(original_files)
+        # 2. vendor the proven RTL (self-contained project; the synth workspace's
+        #    _tmp_cfg conversions are cleanable scratch)
+        header_manifest = (compile_man or {}).get("header_manifest") or []
+        vendored = vendor_rtl(rtl_files, project / "rtl",
+                              reserved_names={Path(str(e.get("path") or "")).name
+                                              for e in header_manifest if e.get("path")})
+        if verified_originals:
+            original_dir = project / "rtl_original"
+            original_dir.mkdir(parents=True, exist_ok=True)
+            original_files = []
+            used_originals: set[str] = set()
+            for _, source in verified_originals:
+                name = source.name
+                stem, suffix = source.stem, source.suffix
+                n = 1
+                while name in used_originals:
+                    name = f"{stem}_{n}{suffix}"
+                    n += 1
+                used_originals.add(name)
+                destination = original_dir / name
+                shutil.copyfile(source, destination)
+                original_files.append(destination)
+            result["vendored_original_source_count"] = len(original_files)
 
-    collateral_refs = vendor_auxiliary_files(
-        verified_collateral, project / "input")
-    collateral_rewrites = rewrite_collateral_references(
-        [entry["key"] for entry in resolved], vendored, collateral_refs)
-    if verified_collateral:
-        if not collateral_rewrites:
-            result["status"] = "compile_collateral_rewrite_failed"
-            result["reason"] = (
-                "compile collateral was verified and vendored, but no compiled RTL "
-                "reference was rebound to the frozen payload")
-            return _fail_after_init(result)
-        result["vendored_collateral_count"] = len(
-            {str(path) for path in collateral_refs.values()})
-        result["collateral_rewrites"] = collateral_rewrites
-    # Vendor the frozen header closure too (P0-R5): a promoted project that still
-    # reads headers from an external tree can elaborate a different circuit the
-    # moment that tree changes, and does not survive being moved or archived.
-    vendored_headers, unresolved_headers = vendor_headers(
-        header_manifest, out_root / design, project / "rtl", sources=vendored)
-    if any("include_alias_conflict" in u for u in unresolved_headers):
-        result["status"] = "include_alias_conflict"
-        result["reason"] = (
-            "include_alias_conflict: a closure header and a vendored source share a "
-            f"basename with different bytes (e.g. {ascii(unresolved_headers[:2])})")
-        return _fail_after_init(result)
-    if unresolved_headers:
-        result["status"] = "header_closure_unresolved"
-        result["reason"] = (
-            f"header_closure_unresolved: {len(unresolved_headers)} synth-proven "
-            f"header(s) could not be vendored (e.g. {unresolved_headers[:2]}); the "
-            f"promoted project would depend on an external tree — re-expand")
-        return _fail_after_init(result)
-    if vendored_headers:
-        result["vendored_header_count"] = len(vendored_headers)
-
-    # Vendored name -> original source (names are made make-safe, so a vendored
-    # basename need not equal the source's). Recorded after the collateral
-    # rewrite, so vendored_sha256 is the bytes the project actually compiles;
-    # source_sha256 is the original file's.
-    vendored_map = [
-        {"source_key": entry["key"], "source_path": str(entry["path"]),
-         "source_sha256": hashlib.sha256(entry["path"].read_bytes()).hexdigest(),
-         "vendored_path": str(dst.relative_to(project)),
-         "vendored_sha256": hashlib.sha256(dst.read_bytes()).hexdigest()}
-        for entry, dst in zip((e for e in resolved if e["path"] is not None), vendored)
-    ]
-    # A file renamed by SANITIZATION that some vendored source or header
-    # `include`s by its original name also keeps an exact-name copy of its
-    # vendored bytes. The copy stays off VERILOG_FILES (make never sees the unsafe
-    # name), and the RTL is not rewritten. Only a sanitized name can need one: a
-    # collision-suffixed name's original is another vendored file. An unsafe
-    # alias name can never equal a make-safe vendored name, so an existing file
-    # there with other bytes is an ambiguity, and it fails loud.
-    # Known limitation: the scan is lexical, so an `include inside a comment or a
-    # dead `ifdef branch also counts. That can only over-block (a loud
-    # include_ambiguous / include_alias_conflict or an extra alias), never pick a
-    # wrong file.
-    included = {Path(ref).name
-                for f in [*vendored, *vendored_headers]
-                for ref in re.findall(r'`include\s+"([^"]+)"', f.read_text(
-                    encoding="utf-8", errors="surrogateescape"))}
-    # Two sources sharing a basename with different bytes: an `include` of that
-    # name would read whichever vendored copy won, not necessarily the one the
-    # synth run elaborated. Refuse rather than pick one.
-    by_name: dict[str, set[bytes]] = {}
-    for src in rtl_files:
-        by_name.setdefault(src.name, set()).add(hashlib.sha256(src.read_bytes()).digest())
-    ambiguous = sorted(n for n, digests in by_name.items()
-                       if len(digests) > 1 and n in included)
-    if ambiguous:
-        result["status"] = "include_ambiguous"
-        result["reason"] = (
-            f"include_ambiguous: `include of {ascii(ambiguous[:3])} names several "
-            f"sources with different bytes; the promoted project cannot know "
-            f"which one synthesis read")
-        return _fail_after_init(result)
-    written = {f.name for f in [*vendored, *vendored_headers]}
-    for src, dst, row in zip(rtl_files, vendored, vendored_map):
-        if vendored_basename(src.name) == src.name or src.name not in included:
-            continue
-        alias = dst.parent / src.name
-        # Only files written by THIS promotion can conflict; rtl/ may still hold
-        # an alias from an earlier promotion (--force does not clear it).
-        if alias.name in written and alias.read_bytes() != dst.read_bytes():
+        collateral_refs = vendor_auxiliary_files(
+            verified_collateral, project / "input")
+        collateral_rewrites = rewrite_collateral_references(
+            [entry["key"] for entry in resolved], vendored, collateral_refs)
+        if verified_collateral:
+            if not collateral_rewrites:
+                result["status"] = "compile_collateral_rewrite_failed"
+                result["reason"] = (
+                    "compile collateral was verified and vendored, but no compiled RTL "
+                    "reference was rebound to the frozen payload")
+                return _fail_after_init(result)
+            result["vendored_collateral_count"] = len(
+                {str(path) for path in collateral_refs.values()})
+            result["collateral_rewrites"] = collateral_rewrites
+        # Vendor the frozen header closure too (P0-R5): a promoted project that still
+        # reads headers from an external tree can elaborate a different circuit the
+        # moment that tree changes, and does not survive being moved or archived.
+        vendored_headers, unresolved_headers = vendor_headers(
+            header_manifest, out_root / design, project / "rtl", sources=vendored)
+        if any("include_alias_conflict" in u for u in unresolved_headers):
             result["status"] = "include_alias_conflict"
             result["reason"] = (
-                f"include_alias_conflict: `include {ascii(src.name)} would resolve "
-                f"to two different vendored files; rename one source")
+                "include_alias_conflict: a closure header and a vendored source share a "
+                f"basename with different bytes (e.g. {ascii(unresolved_headers[:2])})")
             return _fail_after_init(result)
-        shutil.copyfile(dst, alias)
-        written.add(alias.name)
-        row["include_alias"] = str(alias.relative_to(project))
-    result["vendored_rtl"] = vendored_map
-    # --force re-promotes into an existing project, and init_project never clears
-    # rtl/, which is on the include path: a stale file from an earlier promotion
-    # could still be `include`d. Move the top-level files of THIS project's rtl/
-    # that this run did not write into rtl/.stale/<timestamp>/ (a subdirectory,
-    # so off the flat include path; hand-added files are kept, not deleted) and
-    # record the moves.
-    if args.force:
+        if unresolved_headers:
+            result["status"] = "header_closure_unresolved"
+            result["reason"] = (
+                f"header_closure_unresolved: {len(unresolved_headers)} synth-proven "
+                f"header(s) could not be vendored (e.g. {unresolved_headers[:2]}); the "
+                f"promoted project would depend on an external tree — re-expand")
+            return _fail_after_init(result)
+        if vendored_headers:
+            result["vendored_header_count"] = len(vendored_headers)
+
+        # Vendored name -> original source (names are made make-safe, so a vendored
+        # basename need not equal the source's). Recorded after the collateral
+        # rewrite, so vendored_sha256 is the bytes the project actually compiles;
+        # source_sha256 is the original file's.
+        vendored_map = [
+            {"source_key": entry["key"], "source_path": str(entry["path"]),
+             "source_sha256": hashlib.sha256(entry["path"].read_bytes()).hexdigest(),
+             "vendored_path": str(dst.relative_to(project)),
+             "vendored_sha256": hashlib.sha256(dst.read_bytes()).hexdigest()}
+            for entry, dst in zip((e for e in resolved if e["path"] is not None), vendored)
+        ]
+        # A file renamed by SANITIZATION that some vendored source or header
+        # `include`s by its original name also keeps an exact-name copy of its
+        # vendored bytes. The copy stays off VERILOG_FILES (make never sees the unsafe
+        # name), and the RTL is not rewritten. Only a sanitized name can need one: a
+        # collision-suffixed name's original is another vendored file. An unsafe
+        # alias name can never equal a make-safe vendored name, so an existing file
+        # there with other bytes is an ambiguity, and it fails loud.
+        # Known limitation: the scan is lexical, so an `include inside a comment or a
+        # dead `ifdef branch also counts. That can only over-block (a loud
+        # include_ambiguous / include_alias_conflict or an extra alias), never pick a
+        # wrong file.
+        included = {Path(ref).name
+                    for f in [*vendored, *vendored_headers]
+                    for ref in re.findall(r'`include\s+"([^"]+)"', f.read_text(
+                        encoding="utf-8", errors="surrogateescape"))}
+        # Two sources sharing a basename with different bytes: an `include` of that
+        # name would read whichever vendored copy won, not necessarily the one the
+        # synth run elaborated. Refuse rather than pick one.
+        by_name: dict[str, set[bytes]] = {}
+        for src in rtl_files:
+            by_name.setdefault(src.name, set()).add(hashlib.sha256(src.read_bytes()).digest())
+        ambiguous = sorted(n for n, digests in by_name.items()
+                           if len(digests) > 1 and n in included)
+        if ambiguous:
+            result["status"] = "include_ambiguous"
+            result["reason"] = (
+                f"include_ambiguous: `include of {ascii(ambiguous[:3])} names several "
+                f"sources with different bytes; the promoted project cannot know "
+                f"which one synthesis read")
+            return _fail_after_init(result)
+        written = {f.name for f in [*vendored, *vendored_headers]}
+        for src, dst, row in zip(rtl_files, vendored, vendored_map):
+            if vendored_basename(src.name) == src.name or src.name not in included:
+                continue
+            alias = dst.parent / src.name
+            # Only files written by THIS promotion can conflict; rtl/ may still hold
+            # an alias from an earlier promotion (--force does not clear it).
+            if alias.name in written and alias.read_bytes() != dst.read_bytes():
+                result["status"] = "include_alias_conflict"
+                result["reason"] = (
+                    f"include_alias_conflict: `include {ascii(src.name)} would resolve "
+                    f"to two different vendored files; rename one source")
+                return _fail_after_init(result)
+            shutil.copyfile(dst, alias)
+            written.add(alias.name)
+            row["include_alias"] = str(alias.relative_to(project))
+        result["vendored_rtl"] = vendored_map
+        # A re-promotion into an existing project: init_project never clears rtl/,
+        # which is on the include path, so a stale file from an earlier promotion
+        # could still be `include`d. Move the top-level files of THIS project's rtl/
+        # that this run did not write into rtl/.stale/<timestamp>/ (a subdirectory,
+        # so off the flat include path; hand-added files are kept, not deleted) and
+        # record the moves.
+        # Not only under --force: a plain re-run after a failed --force finds no
+        # config.mk (it was parked as config.mk.invalid) and so passes the
+        # existing-project guard with the previous run's files still in rtl/.
         stale = sorted(f for f in (project / "rtl").iterdir()
                        if f.is_file() and f.name not in written)
         if stale:
-            park = project / "rtl" / ".stale" / now_iso().replace(":", "")
-            park.mkdir(parents=True, exist_ok=True)
+            stamp = now_iso().replace(":", "")
+            for n in range(1000):      # one dir per run, even within one second
+                park = project / "rtl" / ".stale" / (stamp if n == 0 else f"{stamp}_{n}")
+                park.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    park.mkdir(exist_ok=False)
+                    break
+                except FileExistsError:
+                    continue
+            else:
+                raise RuntimeError(f"could not create a unique {park.parent}/<stamp>")
             for f in stale:
                 f.replace(park / f.name)
-            result["force_moved_rtl"] = {
+            result["stale_rtl_moved"] = {
                 str(f.relative_to(project)): str((park / f.name).relative_to(project))
                 for f in stale}
-            print(f"NOTE: {design}: --force moved {len(stale)} stale file(s) from "
+            print(f"NOTE: {design}: moved {len(stale)} stale file(s) from "
                   f"{project / 'rtl'} to {park}: {ascii([f.name for f in stale][:5])}")
 
-    # 3. config.mk from the signoff-loop template + carried synth knobs
-    assets = signoff_loop_dir() / "assets"
-    sdc_path = project / "constraints" / "constraint.sdc"
-    extra: dict[str, str] = {}
-    # Compilation knobs come from the FROZEN manifest when there is one (P0-N2);
-    # the live config.mk is only the legacy fallback (and has already been checked
-    # for drift against the manifest above).
-    if compile_man:
-        if compile_man.get("top_parameters"):
-            extra["VERILOG_TOP_PARAMS"] = " ".join(
-                f"{k} {v}" for k, v in sorted(compile_man["top_parameters"].items()))
-        if compile_man.get("synth_memory_max_bits"):
-            extra["SYNTH_MEMORY_MAX_BITS"] = str(compile_man["synth_memory_max_bits"])
-        if compile_man.get("synth_frontend"):
-            extra["SYNTH_HDL_FRONTEND"] = str(compile_man["synth_frontend"])
-    else:
-        for key in ("SYNTH_MEMORY_MAX_BITS", "SYNTH_HDL_FRONTEND", "VERILOG_TOP_PARAMS"):
-            if synth_cfg.get(key):
-                extra[key] = synth_cfg[key]
-    if meta.get("synth_memory_max_bits") and "SYNTH_MEMORY_MAX_BITS" not in extra:
-        extra["SYNTH_MEMORY_MAX_BITS"] = str(meta["synth_memory_max_bits"])
-    if meta.get("synth_frontend") and "SYNTH_HDL_FRONTEND" not in extra:
-        extra["SYNTH_HDL_FRONTEND"] = str(meta["synth_frontend"])
-    # SELF-CONTAINED include path (P0-R5): the vendored rtl/ only. Carrying the
-    # synth-time EXTERNAL dirs made the promoted project depend on a tree that can
-    # change under it — the audit's acceptance test is that the project must
-    # synthesize with external source access disabled. A candidate whose headers
-    # could not be vendored has already been rejected above, so nothing is lost.
-    include_dirs = [str((project / "rtl").resolve())]
-    if not compile_man:
-        # Legacy candidate (no frozen header closure to vendor): keep the old
-        # behavior rather than break a promotion that used to work, and record
-        # that the project is NOT self-contained.
-        for d in (synth_cfg.get("VERILOG_INCLUDE_DIRS") or "").split():
-            if d not in include_dirs and Path(d).is_dir():
-                include_dirs.append(d)
-        if len(include_dirs) > 1:
-            result["external_include_dirs"] = include_dirs[1:]
-    extra["VERILOG_INCLUDE_DIRS"] = " ".join(include_dirs)
-    # ABC_AREA: same derivation write_project used for the proven synth run
-    variant = str(meta.get("synth_variant") or synth_cfg.get("SYNTH_VARIANT") or "")
-    abc_area = 1 if variant in {"area", "abc_area1", "yosys_abc_area1"} \
-        else int(synth_cfg.get("ABC_AREA", "1") or 1)
-    config_text = render_config_mk(
-        (assets / "config-template.mk").read_text(encoding="utf-8"),
-        design=top, platform=platform, verilog_files=vendored, sdc_path=sdc_path,
-        core_utilization=args.core_utilization, place_density=args.place_density,
-        abc_area=abc_area, extra=extra)
-    (project / "constraints" / "config.mk").write_text(config_text, encoding="utf-8")
+        # 3. config.mk from the signoff-loop template + carried synth knobs
+        assets = signoff_loop_dir() / "assets"
+        sdc_path = project / "constraints" / "constraint.sdc"
+        extra: dict[str, str] = {}
+        # Compilation knobs come from the FROZEN manifest when there is one (P0-N2);
+        # the live config.mk is only the legacy fallback (and has already been checked
+        # for drift against the manifest above).
+        if compile_man:
+            if compile_man.get("top_parameters"):
+                extra["VERILOG_TOP_PARAMS"] = " ".join(
+                    f"{k} {v}" for k, v in sorted(compile_man["top_parameters"].items()))
+            if compile_man.get("synth_memory_max_bits"):
+                extra["SYNTH_MEMORY_MAX_BITS"] = str(compile_man["synth_memory_max_bits"])
+            if compile_man.get("synth_frontend"):
+                extra["SYNTH_HDL_FRONTEND"] = str(compile_man["synth_frontend"])
+        else:
+            for key in ("SYNTH_MEMORY_MAX_BITS", "SYNTH_HDL_FRONTEND", "VERILOG_TOP_PARAMS"):
+                if synth_cfg.get(key):
+                    extra[key] = synth_cfg[key]
+        if meta.get("synth_memory_max_bits") and "SYNTH_MEMORY_MAX_BITS" not in extra:
+            extra["SYNTH_MEMORY_MAX_BITS"] = str(meta["synth_memory_max_bits"])
+        if meta.get("synth_frontend") and "SYNTH_HDL_FRONTEND" not in extra:
+            extra["SYNTH_HDL_FRONTEND"] = str(meta["synth_frontend"])
+        # SELF-CONTAINED include path (P0-R5): the vendored rtl/ only. Carrying the
+        # synth-time EXTERNAL dirs made the promoted project depend on a tree that can
+        # change under it — the audit's acceptance test is that the project must
+        # synthesize with external source access disabled. A candidate whose headers
+        # could not be vendored has already been rejected above, so nothing is lost.
+        include_dirs = [str((project / "rtl").resolve())]
+        if not compile_man:
+            # Legacy candidate (no frozen header closure to vendor): keep the old
+            # behavior rather than break a promotion that used to work, and record
+            # that the project is NOT self-contained.
+            for d in (synth_cfg.get("VERILOG_INCLUDE_DIRS") or "").split():
+                if d not in include_dirs and Path(d).is_dir():
+                    include_dirs.append(d)
+            if len(include_dirs) > 1:
+                result["external_include_dirs"] = include_dirs[1:]
+        extra["VERILOG_INCLUDE_DIRS"] = " ".join(include_dirs)
+        # ABC_AREA: same derivation write_project used for the proven synth run
+        variant = str(meta.get("synth_variant") or synth_cfg.get("SYNTH_VARIANT") or "")
+        abc_area = 1 if variant in {"area", "abc_area1", "yosys_abc_area1"} \
+            else int(synth_cfg.get("ABC_AREA", "1") or 1)
+        config_text = render_config_mk(
+            (assets / "config-template.mk").read_text(encoding="utf-8"),
+            design=top, platform=platform, verilog_files=vendored, sdc_path=sdc_path,
+            core_utilization=args.core_utilization, place_density=args.place_density,
+            abc_area=abc_area, extra=extra)
+        (project / "constraints" / "config.mk").write_text(config_text, encoding="utf-8")
 
-    # 4. constraint.sdc: the clock port resolved (and gate-checked) up front —
-    # detection ran on rtl_files, whose bytes the source_manifest just verified
-    # identical to what vendor_rtl copied.
-    if clock_port:
-        sdc_text = ((assets / "constraint-template.sdc").read_text(encoding="utf-8")
-                    .replace("{{DESIGN_NAME}}", top)
-                    .replace("{{CLOCK_PORT}}", clock_port)
-                    .replace("{{CLOCK_PERIOD}}", f"{args.clock_period:g}"))
-    else:
-        sdc_text = VIRTUAL_CLOCK_SDC.format(design=top, top=top,
-                                            period=f"{args.clock_period:g}")
-    sdc_path.write_text(sdc_text, encoding="utf-8")
+        # 4. constraint.sdc: the clock port resolved (and gate-checked) up front —
+        # detection ran on rtl_files, whose bytes the source_manifest just verified
+        # identical to what vendor_rtl copied.
+        if clock_port:
+            sdc_text = ((assets / "constraint-template.sdc").read_text(encoding="utf-8")
+                        .replace("{{DESIGN_NAME}}", top)
+                        .replace("{{CLOCK_PORT}}", clock_port)
+                        .replace("{{CLOCK_PERIOD}}", f"{args.clock_period:g}"))
+        else:
+            sdc_text = VIRTUAL_CLOCK_SDC.format(design=top, top=top,
+                                                period=f"{args.clock_period:g}")
+        sdc_path.write_text(sdc_text, encoding="utf-8")
 
-    # 5. validate_config.py — the readiness gate (clock-port check included)
-    validate_py = signoff_loop_dir() / "scripts" / "project" / "validate_config.py"
-    val = subprocess.run([sys.executable, str(validate_py), str(project)],
-                         capture_output=True, text=True)
-    result.update(
-        status="promoted" if val.returncode == 0 else "validate_failed",
-        top=top, platform=platform, project=str(project),
-        rtl_file_count=len(vendored),
-        clock_port=clock_port or "(virtual)",
-        validate_rc=val.returncode,
-        validate_tail=(val.stdout + val.stderr).strip().splitlines()[-8:],
-    )
+        # 5. validate_config.py — the readiness gate (clock-port check included)
+        validate_py = signoff_loop_dir() / "scripts" / "project" / "validate_config.py"
+        val = subprocess.run([sys.executable, str(validate_py), str(project)],
+                             capture_output=True, text=True)
+        result.update(
+            status="promoted" if val.returncode == 0 else "validate_failed",
+            top=top, platform=platform, project=str(project),
+            rtl_file_count=len(vendored),
+            clock_port=clock_port or "(virtual)",
+            validate_rc=val.returncode,
+            validate_tail=(val.stdout + val.stderr).strip().splitlines()[-8:],
+        )
 
-    # 6. provenance stamps
-    def _dump_manifests() -> None:
-        # source_bytes_verified must ride the PROJECT manifest, not just
-        # reports/promote.json (2026-07-19 audit P0-R6, failure-patterns #52):
-        # metadata.json is what downstream readers open, so omitting the stamp
-        # left them with no contract at all — an unverified project was
-        # indistinguishable from a verified one. Carry the override too, so a
-        # deliberately-unverified promotion is self-describing.
-        meta_out = {"design_name": design, "status": result["status"],
-                    "promoted_from": str(out_root / design),
-                    "promoted_at": result["promoted_at"],
-                    "synth_variant": variant, "top": top, "platform": platform,
-                    "source_bytes_verified": bool(result.get("source_bytes_verified")),
-                    "compile_inputs_verified": bool(
-                        result.get("compile_inputs_verified")),
-                    "compile_manifest_digest": result.get(
-                        "compile_manifest_digest"),
-                    "source_kind": meta.get("source_kind"),
-                    "source_commit": meta.get("source_commit"),
-                    "source_digest": meta.get("source_digest"),
-                    "license_status": meta.get("license_status"),
-                    "original_source_verified": bool(
-                        result.get("original_source_verified",
-                                   not bool(meta.get("transformation_manifest", {})
-                                            .get("required")
-                                            if isinstance(meta.get(
-                                                "transformation_manifest"), dict)
-                                            else False))),
-                    "transformation_lineage_digest": result.get(
-                        "transformation_lineage_digest"),
-                    "collateral_verified": not bool(
-                        (compile_man or {}).get("unresolved_collateral"))
-                    and len(verified_collateral) == len(
-                        (compile_man or {}).get("collateral_manifest") or []),
-                    # RMD-HO-P0-01: the readiness verdict must ride the manifest
-                    # downstream readers open, exactly like source_bytes_verified —
-                    # a project promoted under an override must be distinguishable
-                    # from one that passed the gate. The publish gate keys on this.
-                    "rtl_readiness": result.get("rtl_readiness")}
-        # Vendored name -> original source and digest (names are made make-safe,
-        # so a vendored basename need not equal the source's).
-        meta_out["vendored_rtl"] = vendored_map
-        if isinstance(meta.get("transformation_manifest"), dict):
-            meta_out["transformation_manifest"] = meta["transformation_manifest"]
-        if collateral_rewrites:
-            meta_out["collateral_rewrites"] = collateral_rewrites
-        if result.get("rtl_readiness_override"):
-            meta_out["rtl_readiness_override"] = result["rtl_readiness_override"]
-        if result.get("source_verification_override"):
-            meta_out["source_verification_override"] = \
-                result["source_verification_override"]
-        (project / "metadata.json").write_text(json.dumps(meta_out, indent=2),
-                                               encoding="utf-8")
-        (project / "reports").mkdir(exist_ok=True)
-        (project / "reports" / "promote.json").write_text(
-            json.dumps(result, indent=2), encoding="utf-8")
+        # 6. provenance stamps
+        def _dump_manifests() -> None:
+            # source_bytes_verified must ride the PROJECT manifest, not just
+            # reports/promote.json (2026-07-19 audit P0-R6, failure-patterns #52):
+            # metadata.json is what downstream readers open, so omitting the stamp
+            # left them with no contract at all — an unverified project was
+            # indistinguishable from a verified one. Carry the override too, so a
+            # deliberately-unverified promotion is self-describing.
+            meta_out = {"design_name": design, "status": result["status"],
+                        "promoted_from": str(out_root / design),
+                        "promoted_at": result["promoted_at"],
+                        "synth_variant": variant, "top": top, "platform": platform,
+                        "source_bytes_verified": bool(result.get("source_bytes_verified")),
+                        "compile_inputs_verified": bool(
+                            result.get("compile_inputs_verified")),
+                        "compile_manifest_digest": result.get(
+                            "compile_manifest_digest"),
+                        "source_kind": meta.get("source_kind"),
+                        "source_commit": meta.get("source_commit"),
+                        "source_digest": meta.get("source_digest"),
+                        "license_status": meta.get("license_status"),
+                        "original_source_verified": bool(
+                            result.get("original_source_verified",
+                                       not bool(meta.get("transformation_manifest", {})
+                                                .get("required")
+                                                if isinstance(meta.get(
+                                                    "transformation_manifest"), dict)
+                                                else False))),
+                        "transformation_lineage_digest": result.get(
+                            "transformation_lineage_digest"),
+                        "collateral_verified": not bool(
+                            (compile_man or {}).get("unresolved_collateral"))
+                        and len(verified_collateral) == len(
+                            (compile_man or {}).get("collateral_manifest") or []),
+                        # RMD-HO-P0-01: the readiness verdict must ride the manifest
+                        # downstream readers open, exactly like source_bytes_verified —
+                        # a project promoted under an override must be distinguishable
+                        # from one that passed the gate. The publish gate keys on this.
+                        "rtl_readiness": result.get("rtl_readiness")}
+            # Vendored name -> original source and digest (names are made make-safe,
+            # so a vendored basename need not equal the source's).
+            meta_out["vendored_rtl"] = vendored_map
+            if isinstance(meta.get("transformation_manifest"), dict):
+                meta_out["transformation_manifest"] = meta["transformation_manifest"]
+            if collateral_rewrites:
+                meta_out["collateral_rewrites"] = collateral_rewrites
+            if result.get("rtl_readiness_override"):
+                meta_out["rtl_readiness_override"] = result["rtl_readiness_override"]
+            if result.get("source_verification_override"):
+                meta_out["source_verification_override"] = \
+                    result["source_verification_override"]
+            (project / "metadata.json").write_text(json.dumps(meta_out, indent=2),
+                                                   encoding="utf-8")
+            (project / "reports").mkdir(exist_ok=True)
+            (project / "reports" / "promote.json").write_text(
+                json.dumps(result, indent=2), encoding="utf-8")
 
-    _dump_manifests()
-    if result["status"] != "promoted":
-        return _fail_after_init(result)
-
-    # 7. optional immediate full flow
-    if args.run and result["status"] == "promoted":
-        rc = subprocess.run(["bash", str(run_orfs_script()), str(project),
-                             platform, design]).returncode
-        result["orfs_rc"] = rc
-        if rc != 0:
-            result["status"] = "promoted_flow_failed"
-        # Re-dump so the ON-DISK manifest reflects the flow outcome, not a stale
-        # status='promoted' (failure-patterns.md #38 / codex #2). A later reader
-        # of promote.json/metadata.json must not trust a manifest that missed the
-        # flow failure.
         _dump_manifests()
-    return result
+        if result["status"] != "promoted":
+            return _fail_after_init(result)
+
+        # 7. optional immediate full flow
+        if args.run and result["status"] == "promoted":
+            rc = subprocess.run(["bash", str(run_orfs_script()), str(project),
+                                 platform, design]).returncode
+            result["orfs_rc"] = rc
+            if rc != 0:
+                result["status"] = "promoted_flow_failed"
+            # Re-dump so the ON-DISK manifest reflects the flow outcome, not a stale
+            # status='promoted' (failure-patterns.md #38 / codex #2). A later reader
+            # of promote.json/metadata.json must not trust a manifest that missed the
+            # flow failure.
+            _dump_manifests()
+        return result
+    except Exception as exc:  # noqa: BLE001 -- stamped, then re-raised
+        result["status"] = "failed"
+        result["reason"] = f"unhandled promotion error: {type(exc).__name__}: {exc}"
+        _fail_after_init(result)
+        raise
 
 
 def main() -> int:
