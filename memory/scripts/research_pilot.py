@@ -74,6 +74,10 @@ from tehm.evaluation.research_s2_action import (  # noqa: E402
     prepare_s2_actions,
     verify_s2_actions,
 )
+from tehm.evaluation.research_s2_run import (  # noqa: E402
+    run_s2_pilot,
+    verify_s2_pilot,
+)
 
 
 def _freeze_epoch(args: argparse.Namespace) -> int:
@@ -268,6 +272,19 @@ def _verify_s2_actions(args: argparse.Namespace) -> int:
     result = verify_s2_actions(args.plan)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
+
+
+def _run_s2_pilot(args: argparse.Namespace) -> int:
+    result = run_s2_pilot(
+        plan=args.plan, epoch=args.epoch, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["all_registered_terminal"] else 2
+
+
+def _verify_s2_pilot(args: argparse.Namespace) -> int:
+    result = verify_s2_pilot(plan=args.plan, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] and result["all_registered_terminal"] else 2
 
 
 def _audit_flow(args: argparse.Namespace) -> int:
@@ -514,6 +531,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     s2_stage_verify.add_argument("--plan", type=Path, required=True)
     s2_stage_verify.set_defaults(handler=_verify_s2_actions)
+
+    s2_run = sub.add_parser(
+        "run-s2-pilot",
+        help="execute bounded same-controller No Memory/Legacy/TEHM development arms",
+    )
+    s2_run.add_argument("--plan", type=Path, required=True)
+    s2_run.add_argument("--epoch", type=Path, required=True)
+    s2_run.add_argument("--output", type=Path, required=True)
+    s2_run.set_defaults(handler=_run_s2_pilot)
+
+    s2_run_verify = sub.add_parser(
+        "verify-s2-pilot",
+        help="replay S2 event chain, budget limits, and raw policy audits",
+    )
+    s2_run_verify.add_argument("--plan", type=Path, required=True)
+    s2_run_verify.add_argument("--output", type=Path, required=True)
+    s2_run_verify.set_defaults(handler=_verify_s2_pilot)
 
     audit_flow = sub.add_parser(
         "audit-flow", help="independently classify a terminal fixed-flow run"
