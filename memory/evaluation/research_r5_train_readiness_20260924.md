@@ -12,6 +12,7 @@
 - 仅为选定的 ZipCPU DEV payload 范围，另建研究者编写、evaluator-private 的事务级 augmented oracle：clean 的 direct/backpressure 均 PASS，fault 的 direct PASS、backpressure 因第二拍 payload 不符 FAIL；11/11 结果适配器反例通过。它不改变上游 native `MISSED`，也不改变 v2 binder 的 `UNSUPPORTED`、TRAIN provenance 缺失或本报告的 M+ NO-GO。详情见 [augmented DEV 回执](research_r5_zipcpu_augmented_payload_dev_20260924.md)。
 - 新建独立的 DEV v3 source-only binder 草案，在 register、broadcast 与 ZipCPU registered 三种已观察 DEV 形态上 48/48 对抗检查通过，三例候选逐字节等于各自 clean staged RTL；v1/v2 locator 不改，v2 对 ZipCPU 仍 `UNSUPPORTED`。后续 v3 shadow core 接线通过 59/59 RAM-only 检查，Asset 仍 `draft` 且空 Memory 的 router/selector 为 `NO_SKILL`；它没有 TRAIN/Memory authority，不能把新增软件适用域归因成 Memory transfer。详见 [v3 绑定回执](research_r5_skid_binding_v3_dev_20260924.md)与 [v3 core 回执](research_r5_skid_core_v3_shadow_20260924.md)。
 - [来源关系预检](research_r5_skid_lineage_precheck_20260924.md)确认 register/broadcast 应先归同一 `alexforencich` 候选家族，ZipCPU 是另一候选家族；两个 checkout 都是 shallow，本地历史不足以正式确认跨组无共享代码或共同生成来源。`independent_lineages_verified` 仍未授予；不能将 DEV 跨 owner 绑定结果折算为 L3 双 lineage TRAIN 支持。
+- [Asset 核心 gate 预检](research_r5_asset_authority_preflight_20260924.md)在 RAM 中对三种 DEV 绑定得到 `asset_eligible=false`：v3 binding 尚未受 lifecycle 兼容性验证支持；更关键的是，现行纯 gate 连同 owner 的 register/broadcast 两个 `bound_design` 都计成 `cross_lineage_verified=true`。这是代理指标误计，不是来源独立性；修复 gate 与严格 ledger 的证据关联前禁止据此建立 M+。
 
 ## 核心接线与准入缺口
 
@@ -20,7 +21,7 @@
 | 参数化 RTL 解析 | 预检时 `parse_verilog` 对冻结的 `axis_register.v` 返回 `[]`；后续 `verilog-parse-v0.3` 已有界解析参数化 header，10 项正反检查通过 | 固定此 parser 版本并继续验证与 action/Asset 实际接口；这项修复本身不构成 Memory 准入 |
 | 可执行 Asset 路径 | v1/v2/v3 三代 shadow core 均接入 domain/profile/source replay；DEV fixture 在 RAM 中仅为 draft，前两代各 19/19、v3 为 59/59 检查通过。v3 的空 Memory router/selector 返回 NO_SKILL，尚无合法 SELECT | 从合法 TRAIN evidence 建立 Knowledge/Asset authority 后执行真实 selection 与合格 oracle；直接函数调用和 draft fixture 不计 TEHM Repair@B |
 | TRAIN provenance | 唯一已审计的 skid repair 来自 DEV；没有另行登记且封存的 TRAIN baseline→action→native oracle→保持义务链 | 先选 TRAIN 任务、冻结角色和可见性，独立运行并保存原始回执；不得读取未来目标答案 |
-| Knowledge/Asset authority | 尚无上述 TRAIN causal path、知识权威回执和 Asset 验证/绑定/回滚回执 | 按现有 `knowledge.authority` 的 L3、至少两个支持 lineage 默认门槛及 `assets.lifecycle` 的真实 gate 判定；不手填 `validated` 或 `promoted` |
+| Knowledge/Asset authority | 尚无上述 TRAIN causal path、知识权威回执和 Asset 验证/绑定/回滚回执；Asset 纯 gate 当前把不同 design ID 误当独立 lineage，v3 source binding 也尚未纳入 lifecycle 兼容性验证 | 先修复并复核 Asset lineage/compatibility 与严格 ledger 语义，再按 `knowledge.authority` 的 L3、至少两个支持 lineage 默认门槛及 `assets.lifecycle` 的真实 gate 判定；不手填 `validated` 或 `promoted` |
 
 因此当前可审计的 Memory 状态是 **M− only / M+ not constructed**，而不是“非空 M+ 但 NO_MATCH”。这一区别会保留到后续归因表，避免以软件 primitive 的单独作用冒充 Memory 增量。
 
