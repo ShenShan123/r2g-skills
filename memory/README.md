@@ -7876,3 +7876,11 @@ R4-8 的 [paper protocol preflight](evaluation/research_r4_paper_protocol_prefli
 做隔离的 oracle-sensitivity 负控；UART RX 数据反相未被原生测试发现。
 本批尚无 TEHM transfer/ΔMemory，详情见
 [`research_github_rtl_corpus_first_wave_20260924.md`](evaluation/research_github_rtl_corpus_first_wave_20260924.md)。
+
+### 2026-09-24 Revision5 RTL Pilot：QF-1 与判定器
+
+Revision5 改为先封存可判定范围，再开发受限 binder 和新的 TRAIN memory；当前
+`QF-1-r3` 已索引 10 个 SHA、三项负控及旧 binder 的 0/249 源码扫描。
+cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 15 个反例自测，
+但尚未构成 TEHM transfer 或 ΔMemory。进度、缺口和 DEV 机制卡见
+[`research_r5_qf1_and_dev_20260924.md`](evaluation/research_r5_qf1_and_dev_20260924.md)。

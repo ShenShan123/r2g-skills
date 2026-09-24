@@ -23,6 +23,8 @@ from tehm.evaluation.research_inventory import (  # noqa: E402
 )
 from tehm.evaluation.research_github_corpus import qualify_github_rtl_corpus  # noqa: E402
 from tehm.evaluation.research_github_corpus import verify_github_rtl_corpus  # noqa: E402
+from tehm.evaluation.research_r5_qualification import build_qf1, verify_qf1  # noqa: E402
+from tehm.evaluation.research_r5_verdict_checks import run_checks as check_r5_verdicts  # noqa: E402
 from tehm.evaluation.research_campaign import (  # noqa: E402
     prepare_research_campaign,
     verify_prepared_campaign,
@@ -134,6 +136,24 @@ def _qualify_github_rtl(args: argparse.Namespace) -> int:
 
 def _verify_github_rtl(args: argparse.Namespace) -> int:
     result = verify_github_rtl_corpus(args.qualification)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+def _build_r5_qf1(args: argparse.Namespace) -> int:
+    result = build_qf1(corpus_root=args.corpus_root, output=args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _verify_r5_qf1(args: argparse.Namespace) -> int:
+    result = verify_qf1(args.index)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["valid"] else 2
+
+
+def _check_r5_verdicts(args: argparse.Namespace) -> int:
+    del args
+    result = check_r5_verdicts()
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["valid"] else 2
 
@@ -442,6 +462,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     github_verify.add_argument("--qualification", type=Path, required=True)
     github_verify.set_defaults(handler=_verify_github_rtl)
+
+    qf1 = sub.add_parser("build-r5-qf1", help="index existing RTL qualification without rerunning EDA")
+    qf1.add_argument("--corpus-root", type=Path, required=True)
+    qf1.add_argument("--output", type=Path, required=True)
+    qf1.set_defaults(handler=_build_r5_qf1)
+
+    qf1_verify = sub.add_parser("verify-r5-qf1", help="verify QF-1 raw references and clone locks")
+    qf1_verify.add_argument("--index", type=Path, required=True)
+    qf1_verify.set_defaults(handler=_verify_r5_qf1)
+
+    verdict_checks = sub.add_parser("check-r5-verdicts", help="run bounded adversarial adapter checks")
+    verdict_checks.set_defaults(handler=_check_r5_verdicts)
 
     adapt_inventory = sub.add_parser(
         "adapt-inventory",
