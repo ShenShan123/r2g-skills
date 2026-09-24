@@ -2,6 +2,8 @@
 
 状态：**`asset_eligible=false`；没有记录 authority、没有 TRAIN、没有 M+。** 这份预检只检查现行核心 gate 的实际行为，避免把 [v3 shadow core](research_r5_skid_core_v3_shadow_20260924.md) 的静态执行误认为 Asset 生命周期通过。
 
+历史定位：本报告的代码/结果固定在本地 commit `8671474`；当前 HEAD 的 lifecycle 已另建 [v3 fail-closed 修正](research_r5_asset_authority_v3_fail_closed_20260924.md)，旧脚本在新语义下预期返回非零，不得拿新代码覆盖旧审计结论。
+
 ## 方法和原始输入
 
 `research_r5_asset_authority_preflight.py` SHA256 `9ff25f54bd2bb9a1a4ad91d9fd1a859388e2ab07b42c25e6ee7ffeecb8aeaa89`；受检 `assets/lifecycle.py` SHA256 `b6343f286168d4febad37966bec3ddd88069b5d7ca3b7aa00be996cbe3b71543`，严格 ledger `assets/authority.py` SHA256 `c8fe958c4bd9fe39e46d2f5235b2ec25bc6a725046b27a544bc84a23be925248`。脚本在内存 SQLite 注册一个 researcher-assisted **DEV draft** Asset，用既有 register、broadcast、ZipCPU staged fault source 建立三个 source-bound copy，只调用纯 `evaluate_asset_authority`；不调用 `record_asset_authority`，不向任何持久数据库写入资格或权威回执。

@@ -96,6 +96,24 @@ def evaluate_asset_authority(
                         if isinstance(item, Mapping)]
     except TypeError:
         bound_assets = []
+    from .skid_binding_v3 import CONTRACT as SKID_V3_CONTRACT
+    from tehm.rtl.skid_payload_action_v3 import DOMAIN as SKID_V3_DOMAIN
+    definition = asset.get("definition") or {}
+    template = definition.get("binding_template") if isinstance(definition, Mapping) else None
+    action = definition.get("action") if isinstance(definition, Mapping) else None
+    skid_v3 = (
+        (isinstance(template, Mapping) and template.get("contract") == SKID_V3_CONTRACT) or
+        (isinstance(action, Mapping) and action.get("domain") == SKID_V3_DOMAIN))
+    design_ids = {
+        str(_bound_provenance(item).get("bound_design") or
+            _bound_provenance(item).get("bound_project") or "")
+        for item in bound_assets
+        if _bound_provenance(item).get("bound_design") or
+        _bound_provenance(item).get("bound_project")
+    }
+    # For v3, distinct design IDs are not evidence of independent source lineages.
+    # Do not open this gate until audited lineage evidence is wired and replayed.
+    lineages = set() if skid_v3 else design_ids
     checks = {
         "schema_valid": schema_valid and not schema_errors,
         "static_valid": bool(validations) and all(
@@ -106,13 +124,7 @@ def evaluate_asset_authority(
             for item in validations),
         "compatibility_verified": bool(bound_assets) and all(
             _binding_is_compatible(item, asset) for item in bound_assets),
-        "cross_lineage_verified": len({
-            str(_bound_provenance(item).get("bound_design") or
-                _bound_provenance(item).get("bound_project") or "")
-            for item in bound_assets
-            if _bound_provenance(item).get("bound_design") or
-            _bound_provenance(item).get("bound_project")
-        }) >= min_lineages,
+        "cross_lineage_verified": len(lineages) >= min_lineages,
         "regression_zero": bool(validations) and all(
             item.get("regression_verdict") == "PASS" and
             not item.get("errors") for item in validations),
@@ -122,17 +134,14 @@ def evaluate_asset_authority(
     evidence = {
         "validation_count": len(validations),
         "binding_count": len(bound_assets),
-        "lineages": sorted({
-            str(_bound_provenance(item).get("bound_design") or
-                _bound_provenance(item).get("bound_project") or "")
-            for item in bound_assets
-            if _bound_provenance(item).get("bound_design") or
-            _bound_provenance(item).get("bound_project")
-        }),
+        "lineages": sorted(lineages),
         "rollback": dict(rollback_receipt)
         if isinstance(rollback_receipt, Mapping) else {},
         "schema_errors": list(schema_errors),
     }
+    if skid_v3:
+        evidence["design_ids_seen"] = sorted(design_ids)
+        evidence["lineage_gate_reason"] = "audited_source_lineages_not_bound"
     return AssetPromotionReceipt(
         asset_id=str(asset.get("asset_id") or ""), target_scope=target_scope,
         eligible=not missing, checks=checks, missing=missing,
@@ -149,8 +158,10 @@ def _binding_is_compatible(bound: Mapping, asset: Mapping) -> bool:
     # localization. It remains executable for diagnostics, never authority.
     from .structural_binding import CONTRACT, verify_structural_binding
     from .guard_binding import CONTRACT as GUARD_CONTRACT, verify_guard_binding
+    from .skid_binding_v3 import CONTRACT as SKID_V3_CONTRACT, verify_skid_binding_v3
     verifiers = {CONTRACT: verify_structural_binding,
-                 GUARD_CONTRACT: verify_guard_binding}
+                 GUARD_CONTRACT: verify_guard_binding,
+                 SKID_V3_CONTRACT: verify_skid_binding_v3}
     contract = provenance.get("binding_contract")
     verifier = verifiers.get(contract) if isinstance(contract, str) else None
     if verifier is None or not verifier(bound, asset):
