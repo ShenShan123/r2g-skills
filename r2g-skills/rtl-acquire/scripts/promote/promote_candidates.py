@@ -780,25 +780,6 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     # 2. vendor the proven RTL (self-contained project; the synth workspace's
     #    _tmp_cfg conversions are cleanable scratch)
     vendored = vendor_rtl(rtl_files, project / "rtl")
-    vendored_map = [
-        {"source_key": entry["key"], "source_path": str(entry["path"]),
-         "vendored_path": str(dst.relative_to(project)),
-         "sha256": hashlib.sha256(dst.read_bytes()).hexdigest()}
-        for entry, dst in zip((e for e in resolved if e["path"] is not None), vendored)
-    ]
-    # A renamed file that another source `include`s by its original name also
-    # keeps an exact-name copy beside it (off VERILOG_FILES, so make never sees
-    # the unsafe name), rather than rewriting the RTL and breaking its digest.
-    included = {Path(ref).name
-                for dst in vendored
-                for ref in re.findall(r'`include\s+"([^"]+)"',
-                                      dst.read_text(encoding="utf-8", errors="ignore"))}
-    for src, dst, row in zip(rtl_files, vendored, vendored_map):
-        if src.name != dst.name and src.name in included:
-            alias = dst.parent / src.name
-            shutil.copyfile(dst, alias)
-            row["include_alias"] = str(alias.relative_to(project))
-    result["vendored_rtl"] = vendored_map
     if verified_originals:
         original_dir = project / "rtl_original"
         original_dir.mkdir(parents=True, exist_ok=True)
@@ -846,6 +827,42 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
         return result
     if vendored_headers:
         result["vendored_header_count"] = len(vendored_headers)
+
+    # Vendored name -> original source (names are made make-safe, so a vendored
+    # basename need not equal the source's). Recorded after the collateral
+    # rewrite, so vendored_sha256 is the bytes the project actually compiles;
+    # source_sha256 is the original file's.
+    vendored_map = [
+        {"source_key": entry["key"], "source_path": str(entry["path"]),
+         "source_sha256": hashlib.sha256(entry["path"].read_bytes()).hexdigest(),
+         "vendored_path": str(dst.relative_to(project)),
+         "vendored_sha256": hashlib.sha256(dst.read_bytes()).hexdigest()}
+        for entry, dst in zip((e for e in resolved if e["path"] is not None), vendored)
+    ]
+    # A file renamed by SANITIZATION that some vendored source or header
+    # `include`s by its original name also keeps an exact-name copy of its
+    # vendored bytes. The copy stays off VERILOG_FILES (make never sees the unsafe
+    # name), and the RTL is not rewritten. Only a sanitized name can need one: a
+    # collision-suffixed name's original is another vendored file. An unsafe
+    # alias name can never equal a make-safe vendored name, so an existing file
+    # there with other bytes is an ambiguity, and it fails loud.
+    included = {Path(ref).name
+                for f in [*vendored, *vendored_headers]
+                for ref in re.findall(r'`include\s+"([^"]+)"', f.read_text(
+                    encoding="utf-8", errors="surrogateescape"))}
+    for src, dst, row in zip(rtl_files, vendored, vendored_map):
+        if vendored_basename(src.name) == src.name or src.name not in included:
+            continue
+        alias = dst.parent / src.name
+        if alias.exists() and alias.read_bytes() != dst.read_bytes():
+            result["status"] = "include_alias_conflict"
+            result["reason"] = (
+                f"include_alias_conflict: `include \"{src.name}\"` would resolve to "
+                f"two different vendored files; rename one source")
+            return result
+        shutil.copyfile(dst, alias)
+        row["include_alias"] = str(alias.relative_to(project))
+    result["vendored_rtl"] = vendored_map
 
     # 3. config.mk from the signoff-loop template + carried synth knobs
     assets = signoff_loop_dir() / "assets"

@@ -80,6 +80,7 @@ class PromoteFixture(unittest.TestCase):
         rtls = [rtl]
         for name, text in (extra_rtl or {}).items():
             rtls.append(rtl.parent / name)
+            rtls[-1].parent.mkdir(parents=True, exist_ok=True)
             rtls[-1].write_text(text, encoding="utf-8")
         synth_proj = self.root / "workspace" / "synth_projects" / design / "constraints"
         synth_proj.mkdir(parents=True, exist_ok=True)
@@ -436,7 +437,9 @@ class VendoredBasenameTests(PromoteFixture):
         src = self.root / "downloads" / "ws" / "my top.v"
         self.assertEqual(row["source_path"], str(src))
         self.assertEqual(row["vendored_path"], "rtl/my_top.v")
-        self.assertEqual(row["sha256"], hashlib.sha256(src.read_bytes()).hexdigest())
+        digest = hashlib.sha256(src.read_bytes()).hexdigest()
+        self.assertEqual(row["source_sha256"], digest)
+        self.assertEqual(row["vendored_sha256"], digest)
 
     def test_an_include_of_the_original_name_still_resolves(self) -> None:
         top = RTL_CLK.replace("module toy_top", '`include "my defs.v"\nmodule toy_top')
@@ -447,5 +450,24 @@ class VendoredBasenameTests(PromoteFixture):
         rtl = self.base / "inc" / "rtl"
         self.assertTrue((rtl / "my_defs.v").is_file())
         self.assertTrue((rtl / "my defs.v").is_file())     # `include by original name
+        self.assertEqual((rtl / "my defs.v").read_bytes(), (rtl / "my_defs.v").read_bytes())
         cfg = (self.base / "inc" / "constraints" / "config.mk").read_text()
         self.assertNotIn("my defs.v", cfg)
+
+    def test_a_collision_suffix_never_overwrites_the_first_file(self) -> None:
+        # Review finding (2026-09-23): the alias fired on collision renames too,
+        # so sub/defs.v (vendored as defs_1.v) was copied over rtl/defs.v, the
+        # file `include "defs.v"` resolved to at synth time.
+        top = RTL_CLK.replace("module toy_top", '`include "defs.v"\nmodule toy_top')
+        self._mk_candidate("col", top, top="toy_top",
+                           extra_rtl={"defs.v": "`define W 4\n",
+                                      "sub/defs.v": "`define W 8\n"})
+        res = self._promote("col")
+        self.assertEqual(res["status"], "promoted", res)
+        rtl = self.base / "col" / "rtl"
+        self.assertEqual((rtl / "defs.v").read_text(), "`define W 4\n")
+        self.assertEqual((rtl / "defs_1.v").read_text(), "`define W 8\n")
+        for row in res["vendored_rtl"]:
+            self.assertNotIn("include_alias", row)
+            self.assertEqual(row["vendored_sha256"], hashlib.sha256(
+                (self.base / "col" / row["vendored_path"]).read_bytes()).hexdigest())
