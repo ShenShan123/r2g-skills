@@ -7890,3 +7890,6 @@ cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 16 
 真实 route/select、M+ 或迁移；见
 [`research_r5_skid_core_shadow_20260924.md`](evaluation/research_r5_skid_core_shadow_20260924.md) 与
 [`research_r5_train_readiness_20260924.md`](evaluation/research_r5_train_readiness_20260924.md)。
+同源第二设计 `axis_broadcast[2-8]` 的 DEV clean 4/4 PASS、暂存 payload 故障 3/4 PASS、
+1/4 FAIL，当前 binder 返回 NO_MATCH；见
+[`research_r5_broadcast_dev_20260924.md`](evaluation/research_r5_broadcast_dev_20260924.md)。

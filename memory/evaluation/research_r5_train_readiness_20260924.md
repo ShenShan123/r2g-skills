@@ -4,9 +4,10 @@
 
 ## 已确认的输入边界
 
-- 第一批 10 个公开仓库在 `/data1/zhangdy/RTL/RTL_testbench/<owner>/<repo>`；QF-1-r4 的十库锁、三个 qualified scope 和旧 binder 0/249 扫描复核 `valid=true`。但目前只有 axis、UART、AES 三个具体 scope 有本轮资格记录，不能把十个仓库都标作 oracle-ready。
+- 第一批 10 个公开仓库在 `/data1/zhangdy/RTL/RTL_testbench/<owner>/<repo>`；QF-1-r4 的十库锁、三个 qualified scope 和旧 binder 0/249 扫描复核 `valid=true`。该索引只含 axis_register、UART、AES 三个具体 scope；新增 broadcast DEV scope 另有回执，不能把十个仓库都标作 oracle-ready。
 - `axis_register` 的 skid payload 故障和修复是同一个已观察的 DEV case。R5-3 的 candidate 原生测试 9/9 PASS 仅证明该开发故障上的动作执行，不提供未见目标，也不自动转为 TRAIN。
 - 第一批不同 owner/source group 的 RTL 中虽可搜到其他 skid 字样，现行受限合约只识别 `REG_TYPE>1`、`DATA_WIDTH=8, REG_TYPE=2` 和特定 temp/output 寄存器及分支形状；没有对那些文件的合格测试、可绑定性或修复成功的证据。
+- 后续另建的 `axis_broadcast[2-8]` DEV 探针取得 clean 4/4 PASS、故障 3/4 PASS/1 FAIL，但它不在 QF-1-r4 原三项范围内；当前冻结 binder 对该故障明确 NO_MATCH。该同 owner 设计不是自动 TRAIN 或跨来源 target。
 
 ## 核心接线与准入缺口
 
