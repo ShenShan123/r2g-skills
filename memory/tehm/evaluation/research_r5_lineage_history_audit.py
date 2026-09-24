@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -52,6 +53,17 @@ CASES = {
     },
 }
 
+REPOSITORY_METADATA = {
+    "alexforencich/verilog-axis": (
+        "verilog_axis_repo_metadata.json",
+        "567e3d3b421e14804f8cc178fb5ade8240e4daa7d687249b56d3a48041d4d8a5",
+    ),
+    "ZipCPU/wb2axip": (
+        "wb2axip_repo_metadata.json",
+        "2178eaab6baff40cbbdfe2692e65573fe5221d9ea9073cfdf0c3ee62e68cf9d9",
+    ),
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -73,7 +85,50 @@ def git(repo: Path, *args: str) -> str:
     return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
 
 
+def code_lines(path: Path) -> list[str]:
+    """Screening normalization, not a Verilog parser or plagiarism detector."""
+    source = path.read_text(errors="replace")
+    source = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
+    source = re.sub(r"//[^\n]*", "", source)
+    return [re.sub(r"\s+", "", line) for line in source.splitlines() if line.strip()]
+
+
+def overlap_screen(corpus_root: Path) -> dict:
+    roots = [corpus_root / repo / "rtl" for repo in REPOSITORY_METADATA]
+    trees = [sorted(p for p in root.rglob("*") if p.is_file() and p.suffix in {".v", ".sv"}) for root in roots]
+    require([len(tree) for tree in trees] == [31, 63], "locked RTL tree size changed")
+    raw = [{p: hashlib.sha256(p.read_bytes()).digest() for p in tree} for tree in trees]
+    normalized = [{p: code_lines(p) for p in tree} for tree in trees]
+    exact = [(a.name, b.name) for a, x in raw[0].items() for b, y in raw[1].items() if x == y]
+    normalized_duplicates = [
+        (a.name, b.name)
+        for a, x in normalized[0].items()
+        for b, y in normalized[1].items()
+        if x == y
+    ]
+    windows = set()
+    for lines in normalized[0].values():
+        for index in range(len(lines) - 7):
+            window = tuple(lines[index:index + 8])
+            if sum(map(len, window)) >= 160:
+                windows.add(window)
+    shared_windows = sum(
+        tuple(lines[index:index + 8]) in windows
+        for lines in normalized[1].values()
+        for index in range(len(lines) - 7)
+    )
+    require(not exact and not normalized_duplicates and not shared_windows,
+            "cross-repository RTL overlap screen changed")
+    return {"rtl_file_counts": [31, 63], "exact_duplicates": 0,
+            "comment_whitespace_normalized_duplicates": 0,
+            "substantive_identical_8_line_windows": 0}
+
+
 def audit(history_dir: Path, corpus_root: Path) -> dict:
+    for repo_name, (filename, digest) in REPOSITORY_METADATA.items():
+        metadata = json.loads(read_pinned(history_dir / filename, digest))
+        require(metadata["full_name"] == repo_name and metadata["fork"] is False,
+                f"repository identity or fork status changed: {repo_name}")
     out = {}
     for name, lock in CASES.items():
         repo = corpus_root / lock["repo"]
@@ -102,7 +157,9 @@ def audit(history_dir: Path, corpus_root: Path) -> dict:
             "origin_status": "added",
             "origin_blob_verified": True,
         }
-    return {"valid": True, "scope": "DEV history integrity only", "independent_lineages_verified": False, "cases": out}
+    return {"valid": True, "scope": "DEV source relationship screening only",
+            "independent_lineages_verified": False, "repository_fork_flags": "both false",
+            "overlap_screen": overlap_screen(corpus_root), "cases": out}
 
 
 def main() -> None:

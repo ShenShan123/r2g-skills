@@ -22,6 +22,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 memory/tehm/evaluation/research_r5_lineage_his
 
 GitHub 仓库 API 在本次查询中将 `alexforencich/verilog-axis` 和 `ZipCPU/wb2axip` 都标为 `fork=false`。这是平台元数据，不排除手动复制、重写、共同来源或后续迁移。锁定的三个目标文件各只有一个 `module`，未发现 `` `include`` 或子模块例化；这仅限定目标文件级依赖，不代表整个项目无共享第三方依赖。原始与当前 RTL 的简易非注释行序列比对未发现跨两仓库的长段逐行相同代码，但受命名和结构重写影响，**不能当作无复制证明**。相反，同仓库 register/broadcast 的相似实现不增加支持 lineage 数。
 
+将两个仓库的 API 项目元数据也封存在同一 DEV 目录：`verilog_axis_repo_metadata.json` SHA256 `567e3d3b421e14804f8cc178fb5ade8240e4daa7d687249b56d3a48041d4d8a5`，`wb2axip_repo_metadata.json` SHA256 `2178eaab6baff40cbbdfe2692e65573fe5221d9ea9073cfdf0c3ee62e68cf9d9`；冷审计器检查 `full_name` 与 `fork=false`，不只依赖口头记录。锁定的两棵 `rtl/` 树分别有 31、63 个 `.v/.sv` 文件；逐字节文件、去注释与空白后的文件均无跨仓库相同项，连续 8 行且合计至少 160 字符的规范化代码窗口也无相同项。此筛查不能识别改名、重排、改写、共同规范实现或项目外生成来源，因此只降低显著直接复制的疑虑，不认证统计独立性。
+
+使用[对抗检查器](../tehm/evaluation/research_r5_lineage_history_audit_checks.py)及上述相同两个目录参数复核为 **5/5 PASS**：原样冷审计通过；仅在内存中篡改仓库元数据、首版 RTL、跨仓库代码窗口和锁定 HEAD 时分别拒绝。没有触碰封存的源文件。
+
 ## 判定及剩余 gate
 
 当前可审计结论是两个**候选**源码家族，各模块有可追到首版新增提交的公开历史；文件内容与原始提交 blob 可交叉核对。还没有完成足以授予 `independent_lineages_verified` 的跨项目复制/生成器/主要依赖审计和签收，因此 [TRAIN 准备状态](research_r5_train_readiness_20260924.md)保持 **NO-GO**。尤其不能用 17+7+22 条提交充当 46 个独立样本，不能把已有 DEV 故障和研究者增强 oracle 计作合法 TRAIN，也不能给 `knowledge.authority` 手填第二 lineage。
