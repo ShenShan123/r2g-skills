@@ -456,10 +456,9 @@ class VendoredBasenameTests(PromoteFixture):
 
     def test_a_collision_suffix_never_overwrites_the_first_file(self) -> None:
         # Review finding (2026-09-23): the alias fired on collision renames too,
-        # so sub/defs.v (vendored as defs_1.v) was copied over rtl/defs.v, the
-        # file `include "defs.v"` resolved to at synth time.
-        top = RTL_CLK.replace("module toy_top", '`include "defs.v"\nmodule toy_top')
-        self._mk_candidate("col", top, top="toy_top",
+        # so sub/defs.v (vendored as defs_1.v) was copied over rtl/defs.v. With no
+        # include of the shared name, both copies stay intact and unaliased.
+        self._mk_candidate("col", RTL_CLK, top="toy_top",
                            extra_rtl={"defs.v": "`define W 4\n",
                                       "sub/defs.v": "`define W 8\n"})
         res = self._promote("col")
@@ -471,7 +470,6 @@ class VendoredBasenameTests(PromoteFixture):
             self.assertNotIn("include_alias", row)
             self.assertEqual(row["vendored_sha256"], hashlib.sha256(
                 (self.base / "col" / row["vendored_path"]).read_bytes()).hexdigest())
-
 
 class VendoredNameReviewTests(PromoteFixture):
     """Re-review findings on ee57ccb (2026-09-23)."""
@@ -519,3 +517,52 @@ class VendoredNameReviewTests(PromoteFixture):
                                           sources=vendored)
         self.assertTrue(any("include_alias_conflict" in u for u in unresolved), unresolved)
         self.assertEqual((rtl_dir / "my_defs.v").read_text(), "`define W 4\n")
+
+
+class VendoredNameReReviewTests(PromoteFixture):
+    """Re-review findings on 3502e05 (2026-09-23)."""
+
+    def test_an_include_of_a_duplicated_basename_fails_loud(self) -> None:
+        # Legacy wrong-circuit path: `include "defs.v"` with two different defs.v
+        # sources read whichever was vendored first. Refuse instead.
+        top = RTL_CLK.replace("module toy_top", '`include "defs.v"\nmodule toy_top')
+        self._mk_candidate("amb", top, top="toy_top",
+                           extra_rtl={"defs.v": "`define W 4\n",
+                                      "sub/defs.v": "`define W 8\n"})
+        res = self._promote("amb")
+        self.assertEqual(res["status"], "include_ambiguous", res)
+        self.assertIn("defs.v", res["reason"])
+
+    def test_force_removes_stale_rtl_from_an_earlier_promotion(self) -> None:
+        self._mk_candidate("st", RTL_CLK, top="toy_top", extra_rtl={"old.vh": "`define X\n"})
+        self.assertEqual(self._promote("st")["status"], "promoted")
+        import shutil
+        shutil.rmtree(self.out_root)
+        self.out_root.mkdir()
+        self._mk_candidate("st", RTL_CLK, top="toy_top")        # old.vh no longer a source
+        res = self._promote("st", force=True)
+        self.assertEqual(res["status"], "promoted", res)
+        rtl = self.base / "st" / "rtl"
+        self.assertFalse((rtl / "old.vh").exists())             # off the include path
+        self.assertEqual(res["force_removed_rtl"], ["rtl/old.vh"])
+        self.assertEqual(sorted(f.name for f in rtl.iterdir()), ["top.v"])
+
+    def test_a_suffixed_source_never_takes_a_header_name(self) -> None:
+        # R2: a second defs.v suffixed to defs_1.v blocked (or shadowed) a real
+        # closure header called defs_1.v.
+        import promote.promote_candidates as pc
+        a = self.root / "a" / "defs.v"
+        b = self.root / "b" / "defs.v"
+        for f, w in ((a, 4), (b, 8)):
+            f.parent.mkdir(parents=True)
+            f.write_text(f"`define W {w}\n")
+        rtl_dir = self.root / "p" / "rtl"
+        vendored = pc.vendor_rtl([a, b], rtl_dir, reserved_names={"defs_1.v"})
+        self.assertNotIn("defs_1.v", [v.name for v in vendored])
+        hdr = self.root / "h" / "defs_1.v"
+        hdr.parent.mkdir(parents=True)
+        hdr.write_text("`define H 1\n")
+        got, unresolved = pc.vendor_headers([{"path": str(hdr)}], self.root / "c", rtl_dir,
+                                            sources=vendored)
+        self.assertEqual(unresolved, [])
+        self.assertEqual((rtl_dir / "defs_1.v").read_text(), "`define H 1\n")

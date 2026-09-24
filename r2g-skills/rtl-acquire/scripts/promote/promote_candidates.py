@@ -302,7 +302,8 @@ def vendored_basename(name: str) -> str:
     return _UNSAFE_BASENAME_CHARS.sub("_", name)
 
 
-def vendor_rtl(rtl_files: list[Path], rtl_dir: Path) -> list[Path]:
+def vendor_rtl(rtl_files: list[Path], rtl_dir: Path,
+               reserved_names: set[str] | None = None) -> list[Path]:
     """Copy the proven RTL into <project>/rtl/ under make-safe, unique basenames.
 
     The i-th returned path is the copy of rtl_files[i]; promote_one records that
@@ -315,6 +316,10 @@ def vendor_rtl(rtl_files: list[Path], rtl_dir: Path) -> list[Path]:
     # the name a_b.v, pushed the real a_b.v to a_b_1.v, and `include "a_b.v"`
     # silently read the wrong file.
     reserved = {src.name for src in rtl_files if vendored_basename(src.name) == src.name}
+    # Header-closure basenames too: a suffixed or sanitized source name must not
+    # take a real header's name (e.g. a second defs.v renamed to defs_1.v while
+    # the closure holds a header defs_1.v).
+    reserved |= set(reserved_names or ())
     names: dict[int, str] = {}
     used: set[str] = set()
     order = sorted(range(len(rtl_files)),
@@ -362,6 +367,7 @@ def vendor_headers(header_manifest: list[dict], candidate_dir: Path,
     # A header named exactly like a vendored source must not overwrite it with
     # other bytes (identical bytes are the same file: nothing to copy).
     placed: dict[str, Path] = {dst.name: dst for dst in sources or []}
+    source_names = set(placed)
     for entry in header_manifest or []:
         key = str(entry.get("path") or "")
         if not key:
@@ -377,8 +383,12 @@ def vendor_headers(header_manifest: list[dict], candidate_dir: Path,
         if prior is not None:
             try:
                 if prior.read_bytes() != src.read_bytes():
-                    unresolved.append(f"{key} (include_alias_conflict: basename "
-                                      f"collision with {prior})")
+                    # include_alias_conflict only against a vendored SOURCE; two
+                    # closure headers clashing stay a header-closure problem.
+                    kind = ("include_alias_conflict: basename collision with "
+                            "vendored source" if name in source_names
+                            else "basename collision with")
+                    unresolved.append(f"{key} ({kind} {prior})")
             except OSError:
                 unresolved.append(key)
             continue
@@ -799,7 +809,10 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
 
     # 2. vendor the proven RTL (self-contained project; the synth workspace's
     #    _tmp_cfg conversions are cleanable scratch)
-    vendored = vendor_rtl(rtl_files, project / "rtl")
+    header_manifest = (compile_man or {}).get("header_manifest") or []
+    vendored = vendor_rtl(rtl_files, project / "rtl",
+                          reserved_names={Path(str(e.get("path") or "")).name
+                                          for e in header_manifest if e.get("path")})
     if verified_originals:
         original_dir = project / "rtl_original"
         original_dir.mkdir(parents=True, exist_ok=True)
@@ -835,7 +848,6 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
     # Vendor the frozen header closure too (P0-R5): a promoted project that still
     # reads headers from an external tree can elaborate a different circuit the
     # moment that tree changes, and does not survive being moved or archived.
-    header_manifest = (compile_man or {}).get("header_manifest") or []
     vendored_headers, unresolved_headers = vendor_headers(
         header_manifest, out_root / design, project / "rtl", sources=vendored)
     if any("include_alias_conflict" in u for u in unresolved_headers):
@@ -876,6 +888,21 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
                 for f in [*vendored, *vendored_headers]
                 for ref in re.findall(r'`include\s+"([^"]+)"', f.read_text(
                     encoding="utf-8", errors="surrogateescape"))}
+    # Two sources sharing a basename with different bytes: an `include` of that
+    # name would read whichever vendored copy won, not necessarily the one the
+    # synth run elaborated. Refuse rather than pick one.
+    by_name: dict[str, set[bytes]] = {}
+    for src in rtl_files:
+        by_name.setdefault(src.name, set()).add(hashlib.sha256(src.read_bytes()).digest())
+    ambiguous = sorted(n for n, digests in by_name.items()
+                       if len(digests) > 1 and n in included)
+    if ambiguous:
+        result["status"] = "include_ambiguous"
+        result["reason"] = (
+            f"include_ambiguous: `include of {ascii(ambiguous[:3])} names several "
+            f"sources with different bytes; the promoted project cannot know "
+            f"which one synthesis read")
+        return result
     written = {f.name for f in [*vendored, *vendored_headers]}
     for src, dst, row in zip(rtl_files, vendored, vendored_map):
         if vendored_basename(src.name) == src.name or src.name not in included:
@@ -893,6 +920,19 @@ def promote_one(design: str, *, out_root: Path, base_dir: Path, args,
         written.add(alias.name)
         row["include_alias"] = str(alias.relative_to(project))
     result["vendored_rtl"] = vendored_map
+    # --force re-promotes into an existing project, and init_project never clears
+    # rtl/, which is on the include path: a stale file from an earlier promotion
+    # could still be `include`d. Remove top-level files of THIS project's rtl/
+    # that this run did not write, and record them.
+    if args.force:
+        stale = sorted(f for f in (project / "rtl").iterdir()
+                       if f.is_file() and f.name not in written)
+        for f in stale:
+            f.unlink()
+        if stale:
+            result["force_removed_rtl"] = [str(f.relative_to(project)) for f in stale]
+            print(f"NOTE: {design}: --force removed {len(stale)} stale file(s) from "
+                  f"{project / 'rtl'}: {ascii([f.name for f in stale][:5])}")
 
     # 3. config.mk from the signoff-loop template + carried synth knobs
     assets = signoff_loop_dir() / "assets"
