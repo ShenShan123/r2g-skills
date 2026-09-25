@@ -15,19 +15,21 @@ from .skid_binding_v3 import CONTRACT as SKID_V3_CONTRACT
 from .skid_binding_v4 import CONTRACT as SKID_V4_CONTRACT
 from .skid_binding_v5 import CONTRACT as SKID_V5_CONTRACT
 from .skid_binding_v6 import CONTRACT as SKID_V6_CONTRACT
+from .skid_binding_v7 import CONTRACT as SKID_V7_CONTRACT
 from tehm.rtl.skid_payload_action import DOMAIN as SKID_DOMAIN
 from tehm.rtl.skid_payload_action_v2 import DOMAIN as SKID_V2_DOMAIN
 from tehm.rtl.skid_payload_action_v3 import DOMAIN as SKID_V3_DOMAIN
 from tehm.rtl.skid_payload_action_v4 import DOMAIN as SKID_V4_DOMAIN
 from tehm.rtl.skid_payload_action_v5 import DOMAIN as SKID_V5_DOMAIN
 from tehm.rtl.skid_payload_action_v6 import DOMAIN as SKID_V6_DOMAIN
+from tehm.rtl.skid_payload_action_v7 import DOMAIN as SKID_V7_DOMAIN
 from tehm.ids import stable_dumps
 from .registry import asset_content_digest
 from .guard_binding import DOMAIN as GUARD_DOMAIN
 
 SOURCE_CONTRACTS = frozenset({ALPHA_CONTRACT, GUARD_CONTRACT, SKID_CONTRACT,
                               SKID_V2_CONTRACT, SKID_V3_CONTRACT, SKID_V4_CONTRACT,
-                              SKID_V5_CONTRACT, SKID_V6_CONTRACT})
+                              SKID_V5_CONTRACT, SKID_V6_CONTRACT, SKID_V7_CONTRACT})
 
 
 def source_contract(asset):
@@ -40,7 +42,7 @@ def source_contract(asset):
 def _rebind(registered, source, evidence):
     kwargs = {"design_id": evidence["design_id"]}
     if source_contract(registered) in {SKID_V2_CONTRACT, SKID_V3_CONTRACT,
-                                       SKID_V4_CONTRACT, SKID_V5_CONTRACT, SKID_V6_CONTRACT}:
+                                       SKID_V4_CONTRACT, SKID_V5_CONTRACT, SKID_V6_CONTRACT, SKID_V7_CONTRACT}:
         kwargs["public_context"] = evidence["public_context"]
     return bind_rtl_asset_to_source(registered, source, **kwargs)
 
@@ -87,7 +89,8 @@ def verify_candidate_source_replay(candidate, source):
                 and candidate.concrete_action.get("domain") != SKID_V3_DOMAIN
                 and candidate.concrete_action.get("domain") != SKID_V4_DOMAIN
                 and candidate.concrete_action.get("domain") != SKID_V5_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V6_DOMAIN)
+                and candidate.concrete_action.get("domain") != SKID_V6_DOMAIN
+                and candidate.concrete_action.get("domain") != SKID_V7_DOMAIN)
     try:
         registered, bound = replay["registered_asset"], replay["bound_asset"]
         evidence = bound["provenance"]["binding_evidence"]

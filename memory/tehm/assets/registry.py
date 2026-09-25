@@ -215,8 +215,10 @@ def set_asset_status(
         from .skid_binding_v4 import is_skid_v4_asset
         from .skid_binding_v5 import is_skid_v5_asset
         from .skid_binding_v6 import is_skid_v6_asset
+        from .skid_binding_v7 import is_skid_v7_asset
         if (is_r5_skid_asset(asset) or is_skid_v4_asset(asset) or
-                is_skid_v5_asset(asset) or is_skid_v6_asset(asset)) and not strict_asset_authority:
+                is_skid_v5_asset(asset) or is_skid_v6_asset(asset) or
+                is_skid_v7_asset(asset)) and not strict_asset_authority:
             raise ValueError(
                 "R5 skid Asset promotion requires strict raw-replayed authority")
         if strict_asset_authority:
