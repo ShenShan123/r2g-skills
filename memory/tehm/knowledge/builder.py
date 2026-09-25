@@ -102,11 +102,12 @@ def build_knowledge_from_path(
            for f in facts):
         raise ValueError("mechanism knowledge path family/profile witness conflicts")
 
-    # ORFS baseline controls are witnesses for the causal comparison, not
+    # Baseline controls are witnesses for the causal comparison, not
     # repair actions or predictions of the treatment's outcome. Keep them in
     # antecedent/source provenance, but never vote them into the intervention.
     intervention_facts = tuple(
-        f for f in facts if f.action.get("domain") != "flow.BASELINE_CONTROL")
+        f for f in facts if f.action.get("domain") not in
+        {"flow.BASELINE_CONTROL", "rtl.BASELINE_CONTROL"})
     if not intervention_facts:
         raise ValueError("mechanism knowledge path has no intervention witnesses")
     action_domains = sorted({str(f.action.get("domain")) for f in intervention_facts})

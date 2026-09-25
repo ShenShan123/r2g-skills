@@ -66,8 +66,18 @@ def _require_scoped_replay(facts) -> None:
         raise ValueError("scoped_replay_requires_explicit_training_membership")
     if load_transition_facts(conn, facts.transition_id) != facts:
         raise ValueError("scoped_replay_facts_mismatch")
-    from tehm.adapters.orfs_scoped import replay_persisted_flow_feasibility
-    replay_persisted_flow_feasibility(conn, facts.transition_id, acquisition=acquisition)
+    scoped = facts.verifier.get("scoped_execution")
+    version = scoped.get("version") if isinstance(scoped, dict) else None
+    if version == "tehm-r5-rtl-train-scoped-v1":
+        from tehm.adapters.research_r5_rtl_scoped import replay_persisted_rtl_train
+        replay_persisted_rtl_train(
+            conn, facts.transition_id, acquisition_data=acquisition)
+    elif version in {"orfs-scoped-record-v1", "orfs-rc1-seed-record-v1"}:
+        from tehm.adapters.orfs_scoped import replay_persisted_flow_feasibility
+        replay_persisted_flow_feasibility(
+            conn, facts.transition_id, acquisition=acquisition)
+    else:
+        raise ValueError("unsupported_scoped_execution_version")
 
 
 def require_verified_execution(facts) -> None:
