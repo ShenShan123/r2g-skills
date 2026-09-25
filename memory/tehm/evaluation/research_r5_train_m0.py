@@ -1,4 +1,4 @@
-"""Build and cold-verify bounded read-only R5 RTL TRAIN M− and M+ bundles.
+"""Build and cold-verify bounded read-only R5 RTL TRAIN M−/M+/Mremove bundles.
 
 This is researcher-assisted static Memory construction, not autonomous online
 evolution, held-out transfer, production promotion, or Mremove attribution.
@@ -51,8 +51,8 @@ from tehm.sync import export_bundle, verify_bundle
 from tehm.verified_execution import require_verified_transition, scoped_learning_replay
 
 
-SCHEMA = "tehm-r5-rtl-train-readonly-m0-spec-v1"
-REPORT_SCHEMA = "tehm-r5-rtl-train-readonly-m0-report-v1"
+SCHEMA = "tehm-r5-rtl-train-readonly-m0-spec-v2"
+REPORT_SCHEMA = "tehm-r5-rtl-train-readonly-m0-report-v2"
 ROOT = Path("/data1/zhangdy/RTL/RTL_testbench/_r5_pilot")
 EPOCH_DIR = ROOT / "epochs"
 MEMORY_DIR = ROOT / "memory"
@@ -144,6 +144,35 @@ def _table_counts(conn: sqlite3.Connection) -> dict[str, int]:
         "ORDER BY name").fetchall()
     return {str(row[0]): int(conn.execute(
         f'SELECT COUNT(*) FROM "{row[0]}"').fetchone()[0]) for row in rows}
+
+
+def _semantic_rows(conn: sqlite3.Connection) -> dict[str, list[str]]:
+    """Canonical TEHM rows for Mremove-vs-M− equivalence, not SQLite file bytes."""
+    result = {}
+    for name in _table_counts(conn):
+        rows = conn.execute(f'SELECT * FROM "{name}"').fetchall()
+        result[name] = sorted(stable_dumps(dict(row)) for row in rows)
+    return result
+
+
+def _remove_delta(plus: sqlite3.Connection, minus: sqlite3.Connection,
+                  removed: sqlite3.Connection) -> dict[str, int]:
+    """Remove the complete TRAIN-only dependency closure on a disposable copy."""
+    plus_counts, minus_counts = _table_counts(plus), _table_counts(minus)
+    if plus_counts.keys() != minus_counts.keys():
+        raise ValueError("R5 Mremove schema mismatch")
+    plus.backup(removed)
+    closure = {}
+    for name in sorted(plus_counts):
+        delta = plus_counts[name] - minus_counts[name]
+        if delta < 0 or (delta > 0 and minus_counts[name] != 0):
+            raise ValueError("R5 Mremove has mixed shared/delta rows: " + name)
+        if delta:
+            removed.execute(f'DELETE FROM "{name}"')
+            closure[name] = delta
+    if not closure or _semantic_rows(removed) != _semantic_rows(minus):
+        raise ValueError("R5 Mremove failed M− semantic equivalence")
+    return closure
 
 
 def _backup(conn: sqlite3.Connection, path: Path) -> None:
@@ -307,7 +336,8 @@ def build(*, spec: Path, output: Path) -> dict:
     original_now = db.now_local
     minus = sqlite3.connect(":memory:")
     plus = sqlite3.connect(":memory:")
-    minus.row_factory = plus.row_factory = sqlite3.Row
+    removed = sqlite3.connect(":memory:")
+    minus.row_factory = plus.row_factory = removed.row_factory = sqlite3.Row
     try:
         db.now_local = lambda: payload["materialized_at"]
         db.ensure_schema(minus)
@@ -317,8 +347,10 @@ def build(*, spec: Path, output: Path) -> dict:
             scratch = Path(scratch_name)
             plus_artifacts = scratch / "plus-artifacts"
             minus_artifacts = scratch / "minus-artifacts"
+            removed_artifacts = scratch / "mremove-artifacts"
             plus_artifacts.mkdir()
             minus_artifacts.mkdir()
+            removed_artifacts.mkdir()
             store = ArtifactStore(plus_artifacts)
             report, acquisitions = _build_plus(plus, store, payload["materialized_at"])
             train_query = MemoryQuery(
@@ -339,6 +371,21 @@ def build(*, spec: Path, output: Path) -> dict:
                      for key in sorted(minus_counts)}
             if any(value < 0 for value in delta.values()) or not any(delta.values()):
                 raise ValueError("R5 M0 delta is empty or invalid")
+            closure = _remove_delta(plus, minus, removed)
+            removed_route = route_memory(
+                removed, train_query, no_memory_budget=1, memory_budget=1,
+                persist_state=False, commit=False)
+            removed_selection = select_knowledge_grounded_assets(
+                removed, train_query, routing=removed_route)
+            if (removed_route.to_dict() != minus_route.to_dict() or
+                    removed_selection.receipt.to_dict() != minus_selection.receipt.to_dict()):
+                raise ValueError("R5 Mremove routing/selection not equivalent to M−")
+            report["mremove_removed_dependency_tables"] = closure
+            report["mremove_table_counts"] = _table_counts(removed)
+            report["mremove_train_consumption_preflight"] = {
+                "routing": removed_route.to_dict(),
+                "selection": removed_selection.receipt.to_dict(),
+            }
             report["spec_sha256"] = _sha(spec_path.read_bytes())
             report["spec_filename"] = spec_path.name
             report["software"] = payload["software"]
@@ -354,7 +401,7 @@ def build(*, spec: Path, output: Path) -> dict:
                 "campaign_id": CAMPAIGN, "acquisitions": acquisitions,
                 "digest": _digest(acquisitions)})
             _write_json(research / "delta-manifest.json", {
-                "schema": "tehm-r5-rtl-train-m0-delta-v1",
+                "schema": "tehm-r5-rtl-train-m0-delta-v2",
                 "source_view": "M_MINUS", "target_view": "M_PLUS",
                 "source_knowledge_object_ids": [], "added_knowledge_object_ids": [
                     report["knowledge_object_id"]],
@@ -363,6 +410,9 @@ def build(*, spec: Path, output: Path) -> dict:
                 "added_transition_ids": sorted(acquisitions),
                 "added_causal_path_ids": [report["causal_path_id"]],
                 "table_row_deltas": delta,
+                "removal_view": "MREMOVE",
+                "removed_dependency_tables": closure,
+                "mremove_equivalent_to_m_minus": True,
                 "TRAIN_ONLY": True, "online_evolution": False})
             report["parent_acquisitions_sha256"] = _sha(
                 (research / "parent-acquisitions.json").read_bytes())
@@ -373,18 +423,24 @@ def build(*, spec: Path, output: Path) -> dict:
             _write_json(research / "m0-build-report.json", report)
             minus_db = scratch / "m-minus.sqlite"
             plus_db = scratch / "m-plus.sqlite"
+            removed_db = scratch / "mremove.sqlite"
             _backup(minus, minus_db)
             _backup(plus, plus_db)
+            _backup(removed, removed_db)
             for view, db_path, artifacts in (
                     ("m-minus", minus_db, minus_artifacts),
-                    ("m-plus", plus_db, plus_artifacts)):
+                    ("m-plus", plus_db, plus_artifacts),
+                    ("mremove", removed_db, removed_artifacts)):
                 export_bundle(
                     output=scratch / "bundles" / view, db_path=db_path,
                     artifact_root=artifacts,
                     evidence_files=[(spec_path, "research/source-epoch.json")]
                     + ([(research / "parent-acquisitions.json",
                          "research/parent-acquisitions.json")]
-                       if view == "m-plus" else []),
+                       if view == "m-plus" else [])
+                    + ([(research / "delta-manifest.json",
+                         "research/delta-manifest.json")]
+                       if view == "mremove" else []),
                     metadata={"purpose": "Revision5 bounded read-only RTL TRAIN M0",
                               "view": view.upper().replace("-", "_"),
                               "campaign_id": CAMPAIGN, "target_scope": PROFILE,
@@ -392,7 +448,7 @@ def build(*, spec: Path, output: Path) -> dict:
                               "production_authority": False,
                               "online_memory_update": False,
                               "scoped_replay_required": view == "m-plus"})
-            for view in ("m-minus", "m-plus"):
+            for view in ("m-minus", "m-plus", "mremove"):
                 checked = verify_bundle(scratch / "bundles" / view)
                 if not checked["ok"]:
                     raise ValueError("R5 M0 bundle failed verification: " + checked["detail"])
@@ -403,11 +459,13 @@ def build(*, spec: Path, output: Path) -> dict:
                 "asset_id": report["asset_id"],
                 "m_minus_bundle": str(target / "bundles" / "m-minus"),
                 "m_plus_bundle": str(target / "bundles" / "m-plus"),
+                "mremove_bundle": str(target / "bundles" / "mremove"),
                 "heldout_transfer": False}
     finally:
         db.now_local = original_now
         minus.close()
         plus.close()
+        removed.close()
 
 
 def verify(output: Path) -> dict:
@@ -434,12 +492,12 @@ def verify(output: Path) -> dict:
             report.get("delta_manifest_sha256") != _sha(delta_path.read_bytes())):
         raise ValueError("R5 M0 acquisitions or delta sidecar hash drift")
     delta_doc = json.loads(delta_path.read_bytes())
-    if (delta_doc.get("schema") != "tehm-r5-rtl-train-m0-delta-v1" or
+    if (delta_doc.get("schema") != "tehm-r5-rtl-train-m0-delta-v2" or
             delta_doc.get("TRAIN_ONLY") is not True or
             delta_doc.get("online_evolution") is not False):
         raise ValueError("R5 M0 delta role drift")
     manifests = {}
-    for view in ("m-minus", "m-plus"):
+    for view in ("m-minus", "m-plus", "mremove"):
         checked = verify_bundle(root / "bundles" / view)
         if not checked["ok"]:
             raise ValueError("R5 M0 bundle invalid: " + checked["detail"])
@@ -462,15 +520,19 @@ def verify(output: Path) -> dict:
         return ram
     minus = reload("m-minus")
     plus = reload("m-plus")
+    removed = reload("mremove")
+    recomputed = sqlite3.connect(":memory:")
+    recomputed.row_factory = sqlite3.Row
     try:
         if (_table_counts(minus) != report["m_minus_table_counts"] or
-                _table_counts(plus) != report["table_counts"]):
+                _table_counts(plus) != report["table_counts"] or
+                _table_counts(removed) != report["mremove_table_counts"]):
             raise ValueError("R5 M0 cold-loaded table counts drift")
         loaded_delta = {key: report["table_counts"][key] -
                         report["m_minus_table_counts"][key]
                         for key in sorted(report["m_minus_table_counts"])}
         expected_delta = {
-            "schema": "tehm-r5-rtl-train-m0-delta-v1",
+            "schema": "tehm-r5-rtl-train-m0-delta-v2",
             "source_view": "M_MINUS", "target_view": "M_PLUS",
             "source_knowledge_object_ids": [],
             "added_knowledge_object_ids": [report["knowledge_object_id"]],
@@ -479,9 +541,17 @@ def verify(output: Path) -> dict:
             "added_transition_ids": sorted(acquisitions),
             "added_causal_path_ids": [report["causal_path_id"]],
             "table_row_deltas": loaded_delta,
+            "removal_view": "MREMOVE",
+            "removed_dependency_tables": report["mremove_removed_dependency_tables"],
+            "mremove_equivalent_to_m_minus": True,
             "TRAIN_ONLY": True, "online_evolution": False}
         if delta_doc != expected_delta or loaded_delta != report["delta_table_counts"]:
             raise ValueError("R5 M0 cold-loaded dependency delta drift")
+        closure = _remove_delta(plus, minus, recomputed)
+        if (closure != report["mremove_removed_dependency_tables"] or
+                _semantic_rows(removed) != _semantic_rows(minus) or
+                _semantic_rows(removed) != _semantic_rows(recomputed)):
+            raise ValueError("R5 Mremove cold-loaded rebuild not M− equivalent")
         query = MemoryQuery(
             query_plan=report["train_consumption_preflight"]["query_plan"])
         minus_route = route_memory(
@@ -493,6 +563,19 @@ def verify(output: Path) -> dict:
                 minus_selection.receipt.to_dict() !=
                 report["m_minus_train_consumption_preflight"]["selection"]):
             raise ValueError("R5 M0 M− cold-loaded routing or selection drift")
+
+        removed_route = route_memory(
+            removed, query, no_memory_budget=1, memory_budget=1,
+            persist_state=False, commit=False)
+        removed_selection = select_knowledge_grounded_assets(
+            removed, query, routing=removed_route)
+        if (removed_route.to_dict() != minus_route.to_dict() or
+                removed_selection.receipt.to_dict() != minus_selection.receipt.to_dict() or
+                removed_route.to_dict() !=
+                report["mremove_train_consumption_preflight"]["routing"] or
+                removed_selection.receipt.to_dict() !=
+                report["mremove_train_consumption_preflight"]["selection"]):
+            raise ValueError("R5 Mremove cold-loaded routing/selection drift")
 
         with scoped_learning_replay(
                 plus, campaign_id=CAMPAIGN, acquisitions=acquisitions,
@@ -558,19 +641,25 @@ def verify(output: Path) -> dict:
                 "report_digest": report["report_digest"],
                 "m_minus_bundle_digest": manifests["m-minus"]["bundle_digest"],
                 "m_plus_bundle_digest": manifests["m-plus"]["bundle_digest"],
+                "mremove_bundle_digest": manifests["mremove"]["bundle_digest"],
                 "knowledge_object_id": report["knowledge_object_id"],
                 "asset_id": report["asset_id"],
                 "m_minus_route": minus_route.decision,
                 "m_minus_selection": minus_selection.receipt.decision,
                 "m_plus_route": plus_route.decision,
                 "m_plus_selection": plus_selection.receipt.decision,
+                "mremove_route": removed_route.decision,
+                "mremove_selection": removed_selection.receipt.decision,
                 "m_minus_rows": sum(_table_counts(minus).values()),
                 "m_plus_rows": sum(_table_counts(plus).values()),
+                "mremove_rows": sum(_table_counts(removed).values()),
                 "heldout_transfer": False,
-                "mremove_constructed": False}
+                "mremove_constructed": True}
     finally:
         minus.close()
         plus.close()
+        removed.close()
+        recomputed.close()
 
 
 def main() -> int:
