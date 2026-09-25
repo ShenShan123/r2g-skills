@@ -12,6 +12,7 @@ import os
 import sqlite3
 import subprocess
 import tempfile
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,7 +41,7 @@ from tehm.causal.replication import evaluate_replicated_effect
 from tehm.ids import stable_dumps
 from tehm.knowledge import (
     build_knowledge_from_path, get_knowledge_by_object_id,
-    record_knowledge_authority, register_knowledge, set_knowledge_status,
+    get_knowledge_status, record_knowledge_authority, register_knowledge, set_knowledge_status,
     verify_knowledge_authority,
 )
 from tehm.retrieval.asset_selector import select_knowledge_grounded_assets
@@ -339,6 +340,7 @@ def build(*, spec: Path, output: Path) -> dict:
             if any(value < 0 for value in delta.values()) or not any(delta.values()):
                 raise ValueError("R5 M0 delta is empty or invalid")
             report["spec_sha256"] = _sha(spec_path.read_bytes())
+            report["spec_filename"] = spec_path.name
             report["software"] = payload["software"]
             report["m_minus_table_counts"] = minus_counts
             report["delta_table_counts"] = delta
@@ -413,7 +415,11 @@ def verify(output: Path) -> dict:
     if root.parent != MEMORY_DIR or root.is_symlink():
         raise ValueError("R5 M0 output outside pilot memory")
     report = json.loads((root / "research" / "m0-build-report.json").read_bytes())
-    spec_path = EPOCH_DIR / "r5-train-m0-epoch-r1.json"
+    spec_filename = report.get("spec_filename")
+    if (type(spec_filename) is not str or not spec_filename.endswith(".json") or
+            Path(spec_filename).name != spec_filename):
+        raise ValueError("R5 M0 report epoch filename invalid")
+    spec_path = EPOCH_DIR / spec_filename
     spec = _read_spec(spec_path)
     if (report.get("schema") != REPORT_SCHEMA or
             report.get("spec_sha256") != _sha(spec_path.read_bytes()) or
@@ -493,9 +499,38 @@ def verify(output: Path) -> dict:
                 expected_digest=acquisitions_doc["digest"]):
             for transition_id in acquisitions:
                 require_verified_transition(plus, transition_id)
-            if not verify_knowledge_authority(
-                    plus, report["knowledge_authority"])["eligible"]:
-                raise ValueError("R5 M0 cold-loaded Knowledge authority rejected")
+            # The eligible receipt is bound to candidate status version 1.
+            # Explicit validation consumes it and advances the status to v2;
+            # replay the historical receipt on this disposable RAM snapshot.
+            knowledge = get_knowledge_by_object_id(
+                plus, report["knowledge_object_id"], target_scope=PROFILE)
+            status = get_knowledge_status(
+                plus, knowledge_id=knowledge.knowledge_id,
+                version=knowledge.version, target_scope=PROFILE)
+            rebuilt = build_knowledge_from_path(plus, report["causal_path_id"])
+            if (knowledge.status != "validated" or status["status_version"] != 2 or
+                    status["provenance"] != {"purpose": "revision5_read_only_research_m0"} or
+                    report["knowledge_authority"].get("status_version") != 1 or
+                    rebuilt.status != "candidate" or
+                    rebuilt.version != knowledge.version + 1 or
+                    replace(rebuilt, version=knowledge.version).content_digest !=
+                    knowledge.content_digest):
+                raise ValueError("R5 M0 Knowledge validation lifecycle drift")
+            plus.execute("SAVEPOINT r5_m0_knowledge_authority_replay")
+            try:
+                plus.execute(
+                    """UPDATE tehm_mechanism_knowledge_status
+                          SET status='candidate', status_version=1
+                        WHERE knowledge_id=? AND version=? AND target_scope=?""",
+                    (knowledge.knowledge_id, knowledge.version, PROFILE))
+                k_check = verify_knowledge_authority(
+                    plus, report["knowledge_authority"])
+            finally:
+                plus.execute("ROLLBACK TO SAVEPOINT r5_m0_knowledge_authority_replay")
+                plus.execute("RELEASE SAVEPOINT r5_m0_knowledge_authority_replay")
+            if not k_check["eligible"]:
+                raise ValueError("R5 M0 cold-loaded historical Knowledge authority rejected: "
+                                 + str(k_check["reasons"]))
             if not verify_asset_authority(
                     plus, report["asset_authority"])["eligible"]:
                 raise ValueError("R5 M0 cold-loaded Asset authority rejected")
