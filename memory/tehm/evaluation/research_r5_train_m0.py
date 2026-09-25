@@ -172,6 +172,8 @@ def _remove_delta(plus: sqlite3.Connection, minus: sqlite3.Connection,
             closure[name] = delta
     if not closure or _semantic_rows(removed) != _semantic_rows(minus):
         raise ValueError("R5 Mremove failed M− semantic equivalence")
+    # SQLite backup of a connection with an open write transaction can wait forever.
+    removed.commit()
     return closure
 
 
