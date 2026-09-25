@@ -117,6 +117,7 @@ def query_plan(context: dict) -> dict:
 def authority(out: Path) -> dict:
     check_import()
     from contracts import MemoryQuery
+    from tehm.assets import registry as _asset_registry  # initialize before selector
     from tehm.retrieval.asset_selector import select_knowledge_grounded_assets
     from tehm.retrieval.memory_router import route_memory
     from tehm.sync import verify_bundle
