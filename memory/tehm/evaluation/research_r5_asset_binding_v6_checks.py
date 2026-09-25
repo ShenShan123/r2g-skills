@@ -126,7 +126,7 @@ def check() -> dict:
             not gate.eligible and
             gate.checks["cross_lineage_verified"] is False and
             gate.checks["rollback_verified"] is False and
-            gate.evidence["lineage_gate_reason"] == "v6_train_bundle_not_yet_audited")
+            gate.evidence["lineage_gate_reason"] == "audited_v6_train_bundle_missing")
         forged_rows = [
             {"receipt": receipt, "split": "training", "lineage_id": name,
              "source_id": name}
@@ -163,7 +163,7 @@ def check() -> dict:
         return {"valid": all(cases.values()), "case_count": len(cases),
                 "failed": sorted(name for name, ok in cases.items() if not ok),
                 "cases": cases, "role": "RAM_ONLY_V6_DEV_NOT_TRAIN_OR_HELDOUT",
-                "schema": "tehm-r5-v6-ram-asset-core-conformance-v2",
+                "schema": "tehm-r5-v6-ram-asset-core-conformance-v3",
                 "gate_missing": list(gate.missing), "memory_persistent": False}
     finally:
         conn.close()

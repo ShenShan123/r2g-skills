@@ -165,7 +165,24 @@ def evaluate_asset_authority(
             except Exception as exc:
                 v5_reason = "audited_v5_train_bundle_replay_failed:" + type(exc).__name__
     skid_v6 = is_skid_v6_asset(asset)
-    lineages = (set() if skid_v6 else
+    v6_proof = None
+    v6_reason = "not_r5_skid_v6"
+    if skid_v6:
+        from .r5_train_evidence_v6 import ROLLBACK_VERSION as V6_ROLLBACK_VERSION
+        from .r5_train_evidence_v6 import verify_train_asset_bundle as verify_v6_bundle
+        from tehm.rtl.skid_payload_action_v6 import PROFILE as SKID_V6_PROFILE
+        v6_reason = ("audited_v6_train_bundle_missing" if target_scope == SKID_V6_PROFILE
+                     else "r5_v6_target_scope_mismatch")
+        if (target_scope == SKID_V6_PROFILE and isinstance(rollback_receipt, Mapping) and
+                rollback_receipt.get("version") == V6_ROLLBACK_VERSION):
+            try:
+                v6_proof = verify_v6_bundle(asset, validations, bound_assets, rollback_receipt)
+                v6_reason = ("audited_v6_train_bundle_verified" if v6_proof.valid else
+                             ",".join(v6_proof.reasons))
+            except Exception as exc:
+                v6_reason = "audited_v6_train_bundle_replay_failed:" + type(exc).__name__
+    lineages = (set(v6_proof.lineages) if v6_proof and v6_proof.valid
+                else set() if skid_v6 else
                 set(v5_proof.lineages) if v5_proof and v5_proof.valid
                 else set() if is_skid_v5_asset(asset) else
                 set(v4_proof.lineages) if skid_v4 and v4_proof and v4_proof.valid
@@ -186,7 +203,8 @@ def evaluate_asset_authority(
         "regression_zero": bool(validations) and all(
             item.get("regression_verdict") == "PASS" and
             not item.get("errors") for item in validations),
-        "rollback_verified": (False if skid_v6 else
+        "rollback_verified": (bool(v6_proof and v6_proof.valid and v6_proof.rollback_verified)
+                              if skid_v6 else
                               bool(v5_proof and v5_proof.valid and v5_proof.rollback_verified)
                               if is_skid_v5_asset(asset) else
                               bool(v4_proof and v4_proof.valid and v4_proof.rollback_verified)
@@ -228,7 +246,13 @@ def evaluate_asset_authority(
             evidence["r5_v5_contract_digest"] = v5_proof.shared_contract_digest
             evidence["r5_v5_evidence_reasons"] = list(v5_proof.reasons)
     if skid_v6:
-        evidence["lineage_gate_reason"] = "v6_train_bundle_not_yet_audited"
+        evidence["design_ids_seen"] = sorted(design_ids)
+        evidence["lineage_gate_reason"] = v6_reason
+        if v6_proof is not None:
+            evidence["r5_v6_lineage_audit_digest"] = v6_proof.lineage_audit_digest
+            evidence["r5_v6_rollback_digest"] = v6_proof.rollback_digest
+            evidence["r5_v6_contract_digest"] = v6_proof.shared_contract_digest
+            evidence["r5_v6_evidence_reasons"] = list(v6_proof.reasons)
     return AssetPromotionReceipt(
         asset_id=str(asset.get("asset_id") or ""), target_scope=target_scope,
         eligible=not missing, checks=checks, missing=missing,

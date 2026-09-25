@@ -440,6 +440,14 @@ def record_asset_authority(
         if not metadata_ok:
             missing.append("r5_v5_train_evidence_row_metadata")
             eligible = False
+    from .skid_binding_v6 import is_skid_v6_asset
+    if is_skid_v6_asset(asset):
+        from .r5_train_evidence_v6 import verify_train_row_metadata as verify_v6_metadata
+        metadata_ok = verify_v6_metadata(validation_entries, binding_entries)
+        evidence["r5_v6_train_row_metadata_verified"] = metadata_ok
+        if not metadata_ok:
+            missing.append("r5_v6_train_evidence_row_metadata")
+            eligible = False
     if (validation_malformed or binding_malformed or rollback_malformed or
             len(rollback_entries) != 1):
         missing.append("asset_authority_evidence_malformed")
@@ -613,6 +621,14 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
                         not verify_v5_metadata(
                             loaded_metadata["validation"], loaded_metadata["binding"])):
                     reasons.append("r5_v5_train_evidence_row_metadata_mismatch")
+            from .skid_binding_v6 import is_skid_v6_asset
+            if is_skid_v6_asset(asset):
+                from .r5_train_evidence_v6 import verify_train_row_metadata as verify_v6_metadata
+                if (evidence.get("r5_v6_train_row_metadata_verified") is not True or
+                        not verify_v6_metadata(
+                            loaded_metadata["validation"], loaded_metadata["binding"])):
+                    reasons.append("r5_v6_train_evidence_row_metadata_mismatch")
+
             try:
                 min_lineages = int(evidence.get("min_lineages") or 1)
                 derived = evaluate_asset_authority(
