@@ -212,7 +212,8 @@ def set_asset_status(
         raise ValueError(f"invalid asset status transition {old_status}->{status}")
     if status == "promoted":
         from .r5_train_evidence import is_r5_skid_asset
-        if is_r5_skid_asset(asset) and not strict_asset_authority:
+        from .skid_binding_v4 import is_skid_v4_asset
+        if (is_r5_skid_asset(asset) or is_skid_v4_asset(asset)) and not strict_asset_authority:
             raise ValueError(
                 "R5 skid Asset promotion requires strict raw-replayed authority")
         if strict_asset_authority:
