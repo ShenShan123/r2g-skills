@@ -107,7 +107,7 @@ def check() -> dict:
             "v5_raw_train_gate_closed": not gate.eligible and
                 gate.checks["cross_lineage_verified"] is False and
                 gate.checks["rollback_verified"] is False and
-                gate.evidence["lineage_gate_reason"] == "v5_raw_train_verifier_not_admitted",
+                gate.evidence["lineage_gate_reason"] == "audited_v5_train_bundle_missing",
             "legacy_promotion_blocked": _reject(lambda: set_asset_status(
                 conn, asset_id=registration.asset_id,
                 target_scope=registration.target_scope, status="promoted",

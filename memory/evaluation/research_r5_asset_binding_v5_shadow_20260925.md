@@ -17,10 +17,11 @@ receipt remains independently verifiable with
 `python3 -m tehm.evaluation.research_r5_skid_binding_v5_checks --verify
 /data1/zhangdy/RTL/RTL_testbench/_r5_pilot/dev/axis-skid-v5-candidate-r1`.
 
-The strict v5 Asset authority remains deliberately closed: no v5-specific
-raw-TRAIN lineage, rollback, and row-metadata verifier has been admitted. A
-caller-supplied `PASS` or rollback boolean cannot pass `cross_lineage_verified`
-or `rollback_verified`; ordinary promotion is also rejected. This gate must be
-replaced only by raw-replayed v5 evidence under a new software/Memory epoch,
-never by inheriting the v4 authority receipt. No v5 M+/Mremove, independent
-target, answer-free transfer, or delta attribution is claimed here.
+The initial integration kept v5 authority closed until a v5-specific
+raw-TRAIN lineage and rollback verifier could be added. That verifier is now
+separate from v4 and requires the v3-profile `asset-rollback-v5-r2` evidence,
+exact TRAIN row metadata, and cold replay. A caller-supplied `PASS`, a forged
+rollback boolean, or a v4 rollback version cannot pass it; ordinary promotion
+without strict authority is rejected. The RAM-only v5 authority check does
+not itself construct M+/Mremove or claim an independent target, answer-free
+transfer, or delta attribution. A new software/Memory epoch remains required.

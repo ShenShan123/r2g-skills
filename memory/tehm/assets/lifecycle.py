@@ -147,10 +147,28 @@ def evaluate_asset_authority(
                              ",".join(v4_proof.reasons))
             except Exception as exc:
                 v4_reason = "audited_v4_train_bundle_replay_failed:" + type(exc).__name__
-    lineages = (set(v4_proof.lineages) if skid_v4 and v4_proof and v4_proof.valid
+    v5_proof = None
+    v5_reason = "not_r5_skid_v5"
+    if is_skid_v5_asset(asset):
+        from .r5_train_evidence_v5 import ROLLBACK_VERSION as V5_ROLLBACK_VERSION
+        from .r5_train_evidence_v5 import verify_train_asset_bundle as verify_v5_bundle
+        from tehm.rtl.skid_payload_action_v5 import PROFILE as SKID_V5_PROFILE
+        v5_reason = ("audited_v5_train_bundle_missing" if target_scope == SKID_V5_PROFILE
+                     else "r5_v5_target_scope_mismatch")
+        if (target_scope == SKID_V5_PROFILE and isinstance(rollback_receipt, Mapping) and
+                rollback_receipt.get("version") == V5_ROLLBACK_VERSION):
+            try:
+                v5_proof = verify_v5_bundle(asset, validations, bound_assets, rollback_receipt)
+                v5_reason = ("audited_v5_train_bundle_verified" if v5_proof.valid else
+                             ",".join(v5_proof.reasons))
+            except Exception as exc:
+                v5_reason = "audited_v5_train_bundle_replay_failed:" + type(exc).__name__
+    lineages = (set(v5_proof.lineages) if v5_proof and v5_proof.valid
+                else set() if is_skid_v5_asset(asset) else
+                set(v4_proof.lineages) if skid_v4 and v4_proof and v4_proof.valid
                 else set() if skid_v4 else
                 set(r5_proof.lineages) if skid_v3 and r5_proof and r5_proof.valid
-                else set() if skid_v3 or is_skid_v5_asset(asset) else design_ids)
+                else set() if skid_v3 else design_ids)
     checks = {
         "schema_valid": schema_valid and not schema_errors,
         "static_valid": bool(validations) and all(
@@ -161,15 +179,16 @@ def evaluate_asset_authority(
             for item in validations),
         "compatibility_verified": bool(bound_assets) and all(
             _binding_is_compatible(item, asset) for item in bound_assets),
-        "cross_lineage_verified": not is_skid_v5_asset(asset) and len(lineages) >= min_lineages,
+        "cross_lineage_verified": len(lineages) >= min_lineages,
         "regression_zero": bool(validations) and all(
             item.get("regression_verdict") == "PASS" and
             not item.get("errors") for item in validations),
-        "rollback_verified": (bool(v4_proof and v4_proof.valid and v4_proof.rollback_verified)
+        "rollback_verified": (bool(v5_proof and v5_proof.valid and v5_proof.rollback_verified)
+                              if is_skid_v5_asset(asset) else
+                              bool(v4_proof and v4_proof.valid and v4_proof.rollback_verified)
                               if skid_v4 else
                               bool(r5_proof and r5_proof.valid and r5_proof.rollback_verified)
                               if skid_v3 else
-                              False if is_skid_v5_asset(asset) else
                               bool((rollback_receipt or {}).get("verified") is True)),
     }
     missing = tuple(name for name in ASSET_PROMOTION_GATES if not checks[name])
@@ -198,7 +217,12 @@ def evaluate_asset_authority(
             evidence["r5_v4_evidence_reasons"] = list(v4_proof.reasons)
     if is_skid_v5_asset(asset):
         evidence["design_ids_seen"] = sorted(design_ids)
-        evidence["lineage_gate_reason"] = "v5_raw_train_verifier_not_admitted"
+        evidence["lineage_gate_reason"] = v5_reason
+        if v5_proof is not None:
+            evidence["r5_v5_lineage_audit_digest"] = v5_proof.lineage_audit_digest
+            evidence["r5_v5_rollback_digest"] = v5_proof.rollback_digest
+            evidence["r5_v5_contract_digest"] = v5_proof.shared_contract_digest
+            evidence["r5_v5_evidence_reasons"] = list(v5_proof.reasons)
     return AssetPromotionReceipt(
         asset_id=str(asset.get("asset_id") or ""), target_scope=target_scope,
         eligible=not missing, checks=checks, missing=missing,
