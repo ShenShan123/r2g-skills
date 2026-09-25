@@ -101,6 +101,7 @@ def evaluate_asset_authority(
         DOMAIN as SKID_V3_DOMAIN, PROFILE as SKID_V3_PROFILE)
     from .skid_binding_v4 import is_skid_v4_asset
     from .skid_binding_v5 import is_skid_v5_asset
+    from .skid_binding_v6 import is_skid_v6_asset
     definition = asset.get("definition") or {}
     template = definition.get("binding_template") if isinstance(definition, Mapping) else None
     action = definition.get("action") if isinstance(definition, Mapping) else None
@@ -163,7 +164,9 @@ def evaluate_asset_authority(
                              ",".join(v5_proof.reasons))
             except Exception as exc:
                 v5_reason = "audited_v5_train_bundle_replay_failed:" + type(exc).__name__
-    lineages = (set(v5_proof.lineages) if v5_proof and v5_proof.valid
+    skid_v6 = is_skid_v6_asset(asset)
+    lineages = (set() if skid_v6 else
+                set(v5_proof.lineages) if v5_proof and v5_proof.valid
                 else set() if is_skid_v5_asset(asset) else
                 set(v4_proof.lineages) if skid_v4 and v4_proof and v4_proof.valid
                 else set() if skid_v4 else
@@ -183,7 +186,8 @@ def evaluate_asset_authority(
         "regression_zero": bool(validations) and all(
             item.get("regression_verdict") == "PASS" and
             not item.get("errors") for item in validations),
-        "rollback_verified": (bool(v5_proof and v5_proof.valid and v5_proof.rollback_verified)
+        "rollback_verified": (False if skid_v6 else
+                              bool(v5_proof and v5_proof.valid and v5_proof.rollback_verified)
                               if is_skid_v5_asset(asset) else
                               bool(v4_proof and v4_proof.valid and v4_proof.rollback_verified)
                               if skid_v4 else
@@ -223,6 +227,8 @@ def evaluate_asset_authority(
             evidence["r5_v5_rollback_digest"] = v5_proof.rollback_digest
             evidence["r5_v5_contract_digest"] = v5_proof.shared_contract_digest
             evidence["r5_v5_evidence_reasons"] = list(v5_proof.reasons)
+    if skid_v6:
+        evidence["lineage_gate_reason"] = "v6_train_bundle_not_yet_audited"
     return AssetPromotionReceipt(
         asset_id=str(asset.get("asset_id") or ""), target_scope=target_scope,
         eligible=not missing, checks=checks, missing=missing,
@@ -242,11 +248,13 @@ def _binding_is_compatible(bound: Mapping, asset: Mapping) -> bool:
     from .skid_binding_v3 import CONTRACT as SKID_V3_CONTRACT, verify_skid_binding_v3
     from .skid_binding_v4 import CONTRACT as SKID_V4_CONTRACT, verify_skid_binding_v4
     from .skid_binding_v5 import CONTRACT as SKID_V5_CONTRACT, verify_skid_binding_v5
+    from .skid_binding_v6 import CONTRACT as SKID_V6_CONTRACT, verify_skid_binding_v6
     verifiers = {CONTRACT: verify_structural_binding,
                  GUARD_CONTRACT: verify_guard_binding,
                  SKID_V3_CONTRACT: verify_skid_binding_v3,
                  SKID_V4_CONTRACT: verify_skid_binding_v4,
-                 SKID_V5_CONTRACT: verify_skid_binding_v5}
+                 SKID_V5_CONTRACT: verify_skid_binding_v5,
+                 SKID_V6_CONTRACT: verify_skid_binding_v6}
     contract = provenance.get("binding_contract")
     verifier = verifiers.get(contract) if isinstance(contract, str) else None
     if verifier is None or not verifier(bound, asset):

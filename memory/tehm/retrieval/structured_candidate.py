@@ -359,11 +359,12 @@ def build_structured_candidate(
     from tehm.rtl.skid_payload_action_v3 import DOMAIN as SKID_V3_DOMAIN
     from tehm.rtl.skid_payload_action_v4 import DOMAIN as SKID_V4_DOMAIN
     from tehm.rtl.skid_payload_action_v5 import DOMAIN as SKID_V5_DOMAIN
+    from tehm.rtl.skid_payload_action_v6 import DOMAIN as SKID_V6_DOMAIN
     claimed_contract = (asset.get("provenance") or {}).get("binding_contract")
     if source_contract(asset) is None and (
             (isinstance(claimed_contract, str) and claimed_contract in SOURCE_CONTRACTS) or
             ((asset.get("definition") or {}).get("action") or {}).get("domain") in
-            {GUARD_DOMAIN, SKID_DOMAIN, SKID_V2_DOMAIN, SKID_V3_DOMAIN, SKID_V4_DOMAIN, SKID_V5_DOMAIN}):
+            {GUARD_DOMAIN, SKID_DOMAIN, SKID_V2_DOMAIN, SKID_V3_DOMAIN, SKID_V4_DOMAIN, SKID_V5_DOMAIN, SKID_V6_DOMAIN}):
         raise StructuredCandidateError("source binding registered template missing")
     if source_contract(asset) is not None:
         selected_proof = (asset_selection.receipt.binding.get("assets") or {}).get(asset_id)
