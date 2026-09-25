@@ -52,8 +52,9 @@ PYTHONPATH=memory PYTHONDONTWRITEBYTECODE=1 python3 -m tehm.evaluation.research_
 
 这是一个已见 DEV 故障的**新执行**，不是独立样本、未见目标、TEHM router
 实际 SELECT、在线自主演化或 Memory 净收益。候选与 clean 的逐字节相等只在
-evaluator 审计，不能进入未来 target binder。当前仍缺另一候选来源的正式
-TRAIN baseline→action→oracle/保持回执、足以签收的独立 lineage 关系、
+evaluator 审计，不能进入未来 target binder。随后另有
+[axis_register TRAIN 重跑](research_r5_train_axis_campaign_20260924.md)，
+当前仍缺足以签收的独立 lineage 关系、
 核心 verified transition/Knowledge L3 证据与 Asset 生命周期验证/回滚。
 全传递动态依赖及跨设备封存也未完备。`M+` 和 `Mremove` 均未构造，
 `PILOT_TRANSFER` 未启动，且不能通过手填 validated/promoted 或降低 gate
