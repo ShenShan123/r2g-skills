@@ -416,6 +416,14 @@ def record_asset_authority(
     missing = list(derived.missing)
     eligible = bool(derived.eligible and computed_digest and
                     stored_digest == computed_digest)
+    from .r5_train_evidence import is_r5_skid_asset, verify_train_row_metadata
+    if is_r5_skid_asset(asset):
+        metadata_ok = verify_train_row_metadata(validation_entries, binding_entries)
+        evidence["r5_train_row_metadata_verified"] = metadata_ok
+        if not metadata_ok:
+            missing.append("r5_train_evidence_row_metadata")
+            eligible = False
+
     if (validation_malformed or binding_malformed or rollback_malformed or
             len(rollback_entries) != 1):
         missing.append("asset_authority_evidence_malformed")
@@ -498,6 +506,8 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
             refs = evidence.get("evidence_refs")
             loaded: dict[str, list[dict]] = {
                 "validation": [], "binding": [], "rollback": []}
+            loaded_metadata: dict[str, list[dict]] = {
+                "validation": [], "binding": [], "rollback": []}
             if not _table_exists(conn, "tehm_asset_authority_evidence"):
                 reasons.append("asset_evidence_ledger_missing")
                 refs = {}
@@ -554,6 +564,10 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
                             ref.get("evidence_digest") != recomputed):
                         reasons.append(f"evidence:{kind}:digest_mismatch")
                     loaded[kind].append(dict(row_payload))
+                    loaded_metadata[kind].append({
+                        "split": split, "lineage_id": lineage_id,
+                        "source_id": str(ref.get("source_id") or ""),
+                    })
             if stable_dumps(evidence.get("validation_receipts") or []) != stable_dumps(
                     loaded["validation"]):
                 reasons.append("authority_validation_payload_mismatch")
@@ -563,6 +577,12 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
             if stable_dumps(evidence.get("rollback_receipt") or {}) != stable_dumps(
                     loaded["rollback"][0] if loaded["rollback"] else {}):
                 reasons.append("authority_rollback_payload_mismatch")
+            from .r5_train_evidence import is_r5_skid_asset, verify_train_row_metadata
+            if is_r5_skid_asset(asset):
+                if (evidence.get("r5_train_row_metadata_verified") is not True or
+                        not verify_train_row_metadata(
+                            loaded_metadata["validation"], loaded_metadata["binding"])):
+                    reasons.append("r5_train_evidence_row_metadata_mismatch")
             try:
                 min_lineages = int(evidence.get("min_lineages") or 1)
                 derived = evaluate_asset_authority(

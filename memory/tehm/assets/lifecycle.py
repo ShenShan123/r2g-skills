@@ -97,7 +97,8 @@ def evaluate_asset_authority(
     except TypeError:
         bound_assets = []
     from .skid_binding_v3 import CONTRACT as SKID_V3_CONTRACT
-    from tehm.rtl.skid_payload_action_v3 import DOMAIN as SKID_V3_DOMAIN
+    from tehm.rtl.skid_payload_action_v3 import (
+        DOMAIN as SKID_V3_DOMAIN, PROFILE as SKID_V3_PROFILE)
     definition = asset.get("definition") or {}
     template = definition.get("binding_template") if isinstance(definition, Mapping) else None
     action = definition.get("action") if isinstance(definition, Mapping) else None
@@ -111,9 +112,24 @@ def evaluate_asset_authority(
         if _bound_provenance(item).get("bound_design") or
         _bound_provenance(item).get("bound_project")
     }
-    # For v3, distinct design IDs are not evidence of independent source lineages.
-    # Do not open this gate until audited lineage evidence is wired and replayed.
-    lineages = set() if skid_v3 else design_ids
+    # For v3, neither design IDs nor caller-provided verified=True are proof.
+    r5_proof = None
+    r5_reason = "not_r5_skid_v3"
+    if skid_v3:
+        from .r5_train_evidence import ROLLBACK_VERSION, verify_train_asset_bundle
+        r5_reason = ("audited_train_bundle_missing" if target_scope == SKID_V3_PROFILE
+                     else "r5_target_scope_mismatch")
+        if (target_scope == SKID_V3_PROFILE and isinstance(rollback_receipt, Mapping) and
+                rollback_receipt.get("version") == ROLLBACK_VERSION):
+            try:
+                r5_proof = verify_train_asset_bundle(
+                    asset, validations, bound_assets, rollback_receipt)
+                r5_reason = ("audited_train_bundle_verified" if r5_proof.valid else
+                             ",".join(r5_proof.reasons))
+            except Exception as exc:  # missing or drifting raw evidence fails closed
+                r5_reason = "audited_train_bundle_replay_failed:" + type(exc).__name__
+    lineages = (set(r5_proof.lineages) if skid_v3 and r5_proof and r5_proof.valid
+                else set() if skid_v3 else design_ids)
     checks = {
         "schema_valid": schema_valid and not schema_errors,
         "static_valid": bool(validations) and all(
@@ -128,7 +144,8 @@ def evaluate_asset_authority(
         "regression_zero": bool(validations) and all(
             item.get("regression_verdict") == "PASS" and
             not item.get("errors") for item in validations),
-        "rollback_verified": bool((rollback_receipt or {}).get("verified") is True),
+        "rollback_verified": (bool(r5_proof and r5_proof.valid and r5_proof.rollback_verified)
+                              if skid_v3 else bool((rollback_receipt or {}).get("verified") is True)),
     }
     missing = tuple(name for name in ASSET_PROMOTION_GATES if not checks[name])
     evidence = {
@@ -141,7 +158,11 @@ def evaluate_asset_authority(
     }
     if skid_v3:
         evidence["design_ids_seen"] = sorted(design_ids)
-        evidence["lineage_gate_reason"] = "audited_source_lineages_not_bound"
+        evidence["lineage_gate_reason"] = r5_reason
+        if r5_proof is not None:
+            evidence["r5_lineage_audit_digest"] = r5_proof.lineage_audit_digest
+            evidence["r5_rollback_digest"] = r5_proof.rollback_digest
+            evidence["r5_evidence_reasons"] = list(r5_proof.reasons)
     return AssetPromotionReceipt(
         asset_id=str(asset.get("asset_id") or ""), target_scope=target_scope,
         eligible=not missing, checks=checks, missing=missing,

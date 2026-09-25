@@ -120,9 +120,10 @@ def check(*, register_fault: Path, broadcast_fault: Path,
                 missing_template_gate.checks["cross_lineage_verified"] is False,
             "real_dev_validation_not_authority": gate.eligible is False and
                 gate.checks["independent_verifier"] is False,
-            "synthetic_all_other_gates_do_not_bypass_lineage":
+            "synthetic_flags_do_not_bypass_lineage_or_rollback":
                 adversarial_gate.eligible is False and
-                tuple(adversarial_gate.missing) == ("cross_lineage_verified",),
+                tuple(adversarial_gate.missing) == (
+                    "cross_lineage_verified", "rollback_verified"),
             "strict_ram_receipt_ineligible": strict.eligible is False and
                 strict.checks["cross_lineage_verified"] is False,
             "strict_ram_replay_ineligible": verified["eligible"] is False and
