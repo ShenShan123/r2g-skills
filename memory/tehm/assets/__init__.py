@@ -30,6 +30,7 @@ from .skid_binding import with_skid_payload_binding
 from .skid_binding_v2 import with_skid_payload_binding_v2
 from .skid_binding_v3 import with_skid_payload_binding_v3
 from .skid_binding_v4 import with_skid_payload_binding_v4
+from .skid_binding_v5 import with_skid_payload_binding_v5
 __all__ = [
     "ASSET_PROMOTION_GATES", "ASSET_STATUSES", "ASSET_TYPES",
     "AssetAuthorityReceipt",

@@ -100,6 +100,7 @@ def evaluate_asset_authority(
     from tehm.rtl.skid_payload_action_v3 import (
         DOMAIN as SKID_V3_DOMAIN, PROFILE as SKID_V3_PROFILE)
     from .skid_binding_v4 import is_skid_v4_asset
+    from .skid_binding_v5 import is_skid_v5_asset
     definition = asset.get("definition") or {}
     template = definition.get("binding_template") if isinstance(definition, Mapping) else None
     action = definition.get("action") if isinstance(definition, Mapping) else None
@@ -149,7 +150,7 @@ def evaluate_asset_authority(
     lineages = (set(v4_proof.lineages) if skid_v4 and v4_proof and v4_proof.valid
                 else set() if skid_v4 else
                 set(r5_proof.lineages) if skid_v3 and r5_proof and r5_proof.valid
-                else set() if skid_v3 else design_ids)
+                else set() if skid_v3 or is_skid_v5_asset(asset) else design_ids)
     checks = {
         "schema_valid": schema_valid and not schema_errors,
         "static_valid": bool(validations) and all(
@@ -160,14 +161,16 @@ def evaluate_asset_authority(
             for item in validations),
         "compatibility_verified": bool(bound_assets) and all(
             _binding_is_compatible(item, asset) for item in bound_assets),
-        "cross_lineage_verified": len(lineages) >= min_lineages,
+        "cross_lineage_verified": not is_skid_v5_asset(asset) and len(lineages) >= min_lineages,
         "regression_zero": bool(validations) and all(
             item.get("regression_verdict") == "PASS" and
             not item.get("errors") for item in validations),
         "rollback_verified": (bool(v4_proof and v4_proof.valid and v4_proof.rollback_verified)
                               if skid_v4 else
                               bool(r5_proof and r5_proof.valid and r5_proof.rollback_verified)
-                              if skid_v3 else bool((rollback_receipt or {}).get("verified") is True)),
+                              if skid_v3 else
+                              False if is_skid_v5_asset(asset) else
+                              bool((rollback_receipt or {}).get("verified") is True)),
     }
     missing = tuple(name for name in ASSET_PROMOTION_GATES if not checks[name])
     evidence = {
@@ -193,6 +196,9 @@ def evaluate_asset_authority(
             evidence["r5_v4_rollback_digest"] = v4_proof.rollback_digest
             evidence["r5_v4_contract_digest"] = v4_proof.shared_contract_digest
             evidence["r5_v4_evidence_reasons"] = list(v4_proof.reasons)
+    if is_skid_v5_asset(asset):
+        evidence["design_ids_seen"] = sorted(design_ids)
+        evidence["lineage_gate_reason"] = "v5_raw_train_verifier_not_admitted"
     return AssetPromotionReceipt(
         asset_id=str(asset.get("asset_id") or ""), target_scope=target_scope,
         eligible=not missing, checks=checks, missing=missing,
@@ -211,10 +217,12 @@ def _binding_is_compatible(bound: Mapping, asset: Mapping) -> bool:
     from .guard_binding import CONTRACT as GUARD_CONTRACT, verify_guard_binding
     from .skid_binding_v3 import CONTRACT as SKID_V3_CONTRACT, verify_skid_binding_v3
     from .skid_binding_v4 import CONTRACT as SKID_V4_CONTRACT, verify_skid_binding_v4
+    from .skid_binding_v5 import CONTRACT as SKID_V5_CONTRACT, verify_skid_binding_v5
     verifiers = {CONTRACT: verify_structural_binding,
                  GUARD_CONTRACT: verify_guard_binding,
                  SKID_V3_CONTRACT: verify_skid_binding_v3,
-                 SKID_V4_CONTRACT: verify_skid_binding_v4}
+                 SKID_V4_CONTRACT: verify_skid_binding_v4,
+                 SKID_V5_CONTRACT: verify_skid_binding_v5}
     contract = provenance.get("binding_contract")
     verifier = verifiers.get(contract) if isinstance(contract, str) else None
     if verifier is None or not verifier(bound, asset):

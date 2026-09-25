@@ -19,6 +19,7 @@ RTL_ACTION_DOMAINS = (
     "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V2",
     "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V3",
     "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V4",
+    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V5",
 )
 
 
@@ -37,6 +38,9 @@ def apply_rtl_action(source: str, payload: dict) -> tuple[str, dict]:
     if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V4":
         from .skid_payload_action_v4 import apply_skid_payload_action_v4
         return apply_skid_payload_action_v4(source, payload)
+    if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V5":
+        from .skid_payload_action_v5 import apply_skid_payload_action_v5
+        return apply_skid_payload_action_v5(source, payload)
     if domain == "rtl.FSM_GUARD_CONJOIN":
         from .guard_conjunction import apply_guard_conjunction
         return apply_guard_conjunction(
