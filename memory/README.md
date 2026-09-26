@@ -7904,3 +7904,7 @@ cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 16 
 真实读数只含 1 个 pilot task，不把重跑、参数或子测试当独立样本。
 `final_test_ready=false`，最终来源/任务清单与统计样本依据仍未冻结，Agent 比较未运行。
 下一步门禁和完整需求状态见 [R5 需求审计](evaluation/research_r5_requirement_audit_20260925.md)；无模型调用、无 push。
+
+后续 [最终来源预审 B1](evaluation/research_r5_final_scope_screen_b1_20260925.md) 按传递源码依赖排除了两个重复机制封装：
+`axis_pipeline_register` 复用 TRAIN 叶节点，`axi_cut` 复用 DEV 叶节点；新增独立未见来源和方法任务均为 0。
+19 份输入的来源审计及 11 项篡改检查已隔离重放并双本地磁盘封存；未调用 binder/simulator，不改已有实验分母。
