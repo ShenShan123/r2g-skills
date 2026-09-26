@@ -79,8 +79,23 @@ def screen_source(plan: Mapping, candidate: Mapping) -> dict:
     require(isinstance(roles, list) and all(isinstance(x, str) for x in roles), "observed role list")
     prior_roles = set(roles)
     reasons = []
-    if prior_roles & {"QUALIFICATION", "DEV", "TRAIN", "PILOT_TRANSFER", "FINAL_TEST", "HISTORICAL"}:
+    if prior_roles & {"DEV", "TRAIN", "PILOT_TRANSFER", "FINAL_TEST", "HISTORICAL"}:
         reasons.append("observed_scope_cannot_be_unseen_final")
+    if "QUALIFICATION" in prior_roles:
+        exposure = candidate.get("qualification_exposure", {})
+        require(isinstance(exposure, Mapping), "qualification exposure record")
+        postfreeze_private = (
+            exposure.get("method_software") == plan["frozen_method_software"]
+            and exposure.get("after_method_freeze") is True
+            and exposure.get("answer_visibility") == "EVALUATOR_ONLY"
+            and exposure.get("method_received_answers") is False
+            and exposure.get("used_for_method_development") is False
+            and exposure.get("method_changed_after_observation") is False
+        )
+        if postfreeze_private:
+            reasons.append("postfreeze_private_qualification_requires_raw_exposure_and_lineage_review")
+        elif "observed_scope_cannot_be_unseen_final" not in reasons:
+            reasons.append("observed_scope_cannot_be_unseen_final")
     if repo in known:
         reasons.append("prior_repository_requires_scope_level_exposure_review")
     if any(repository_id(x) in known for x in candidate.get("related_repositories", [])):

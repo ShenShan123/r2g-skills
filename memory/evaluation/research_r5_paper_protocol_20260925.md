@@ -34,7 +34,9 @@
 
 所有任务按精确 repository commit、ordered source/test closure、参数/宏、种子、工具和 oracle 版本登记。Source group 按 fork、复制模块、generator、共享 DUT 与主要依赖审计，不按 owner 名推断。
 
-角色为 QUALIFICATION / DEV / TRAIN / PILOT_TRANSFER / FINAL_TEST / HISTORICAL。观察过的 exact scope/task 不能改名为 unseen FINAL_TEST；DEV 转 TRAIN 必须显式重新登记并经核心准入。旧五案不可精确恢复时仍为 historical_exact_replay_unavailable。
+角色为 QUALIFICATION / DEV / TRAIN / PILOT_TRANSFER / FINAL_TEST / HISTORICAL。已经用于方法开发、训练或方法评估的 exact scope/task 不能改名为 unseen FINAL_TEST；DEV 转 TRAIN 必须显式重新登记并经核心准入。旧五案不可精确恢复时仍为 historical_exact_replay_unavailable。
+
+资格审查需要另看时间和答案可见性：方法已冻结、仅私有 evaluator 观察、方法未收到答案、未用于方法开发且观察后方法未变的 QUALIFICATION，可以进入原始暴露/来源/任务审查，不能仅因该角色标签自动拒绝。缺任一字段、冻结身份不符，或同时有 DEV/TRAIN/PILOT_TRANSFER/FINAL_TEST/HISTORICAL 历史时仍排除。调用方声明只改变预筛为 REVIEW_REQUIRED，不代替原始审计、未见范围证明或最终准入；final_test_ready 和 execution_authorized 始终为 false。此修正只在计量层，不修改冻结 gen5 runtime/binder/Memory。
 
 当前 20 个已获取仓库进入“需逐 scope 检查既往暴露”的清单。这是保守复核清单，**不代表这些仓库每个文件均已看过，也不自动排除其中所有从未使用的范围**。若要使用其新 scope，须另存暴露/来源关系审查并冻结新的最终任务清单；不能仅修改本文件的 `final_tasks` 获得批准。新 owner 或 `fork=false` 也只能进入 REVIEW_REQUIRED，不能自动取得独立性或 oracle 资格。
 
@@ -68,6 +70,8 @@ R5-7 的 No Persistent Memory / Legacy / TEHM Agent 比较仍未运行。只有�
 ## 6. 已执行读数与可复核入口
 
 `research_r5_paper_protocol.py` 负责分母/共享合约一致性与保守来源筛查；`research_r5_paper_protocol_checks.py` 的 44 个反例通过，属于 synthetic conformance，不是新实验。包括 UNKNOWN、缺 arm、重复 arm、健康控制混入、预算/软件不一致、冻结代码/Memory 摘要变化、观察过 scope 重标记，以及 macro/micro 分母区分。
+
+B2 资格后对预筛作上述修正，当前 67 项检查通过，包含 23 项暴露元数据和拒绝优先反例。历史 44 项封存记录不改写。重新生成 gen5-readout-r3 后，四个数据文件与 r2 逐字节一致；只有 receipt 记录新的 bookkeeping 源码摘要，仍是旧 1 个方法任务、各 arm 0/1 修复，B2 资格探针未计入。
 
 `research_r5_paper_gen5_readout.py` 重新调用已冻结的 pilot raw auditor，归一化真实 gen5 receipt。输出在 `_r5_pilot/paper/gen5-readout-r2/`：1 个 task，四个 arm 均 0/1 修复，所有配对修复差均为 0。原生子测试及两类健康控制未并入修复分母。readout receipt SHA256 `7fc158f180c5ece5bd720ea46403c20965042c721f94983be8217e529c410fd4`。
 

@@ -27,6 +27,27 @@ def run_checks() -> dict:
         check('reject_plan_'+key+'_'+repr(value),lambda k=key,v=value:rejected(lambda:validate_plan(changed_plan(k,v))))
     for role in ('QUALIFICATION','DEV','TRAIN','PILOT_TRANSFER','FINAL_TEST','HISTORICAL'):
         check('observed_'+role,lambda r=role:screen_source(plan,{'repository':'new/repo','observed_roles':[r]})['disposition']=='REJECT_OBSERVED_SCOPE')
+    exposure={'method_software':plan['frozen_method_software'],'after_method_freeze':True,
+              'answer_visibility':'EVALUATOR_ONLY','method_received_answers':False,
+              'used_for_method_development':False,'method_changed_after_observation':False}
+    qualified={'repository':'new/repo','observed_roles':['QUALIFICATION'],'qualification_exposure':exposure}
+    check('postfreeze_private_qualification_review_not_reject',lambda:screen_source(plan,qualified)['disposition']=='REVIEW_REQUIRED')
+    check('qualification_metadata_never_admits_final',lambda:not screen_source(plan,qualified)['final_test_ready'] and not screen_source(plan,qualified)['execution_authorized'])
+    for key,value in [('method_software','0'*40),('after_method_freeze',False),('after_method_freeze',1),
+                      ('answer_visibility','METHOD_VISIBLE'),('method_received_answers',True),
+                      ('method_received_answers',0),('used_for_method_development',True),
+                      ('method_changed_after_observation',True)]:
+        candidate={**qualified,'qualification_exposure':{**exposure,key:value}}
+        check('reject_qualification_exposure_'+key+'_'+repr(value),lambda c=candidate:screen_source(plan,c)['disposition']=='REJECT_OBSERVED_SCOPE')
+    for key in exposure:
+        incomplete={k:v for k,v in exposure.items() if k!=key}
+        candidate={**qualified,'qualification_exposure':incomplete}
+        check('missing_exposure_'+key,lambda c=candidate:screen_source(plan,c)['disposition']=='REJECT_OBSERVED_SCOPE')
+    for role in ('DEV','TRAIN','PILOT_TRANSFER','FINAL_TEST','HISTORICAL'):
+        candidate={**qualified,'observed_roles':['QUALIFICATION',role]}
+        check('qualification_does_not_erase_'+role,lambda c=candidate:screen_source(plan,c)['disposition']=='REJECT_OBSERVED_SCOPE')
+    check('malformed_exposure_rejected',lambda:rejected(lambda:screen_source(plan,{**qualified,'qualification_exposure':[]})))
+    check('qualified_known_repo_retains_review',lambda:'prior_repository_requires_scope_level_exposure_review' in screen_source(plan,{**qualified,'repository':'ZipCPU/wb2axip'})['reasons'])
     check('case_url_alias_quarantined',lambda:'prior_repository_requires_scope_level_exposure_review' in screen_source(plan,{'repository':'https://github.com/DrewBabel/eth-datapath.git'})['reasons'])
     check('new_owner_not_independence',lambda:not screen_source(plan,{'repository':'new/repo'})['final_test_ready'])
     check('fork_relation_retained',lambda:'known_related_source_requires_lineage_review' in screen_source(plan,{'repository':'new/fork','related_repositories':['ZipCPU/wb2axip']})['reasons'])
