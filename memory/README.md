@@ -7943,3 +7943,5 @@ dozecat 原生构建因 Verilator 5.035 不识别上游 PROCASSINIT warning 选�
 后续 [dozecat G2 合法输入](evaluation/research_r5_dozecat_legal_driver_g2_20260926.md) 已在新登记 standalone 驱动下确认原版 RTL 的有界反例：输入合约 PASS，但输出受阻时改变数据，首次握手交付第二笔而非第一笔。两臂增强判定 FAIL，原版不具健康参考资格，敏感性仍 UNDETERMINED。两副本、两臂实际冷恢复及完整 CSV/VCD 一致性核验通过，67 项计量检查通过；无新增 probe、方法任务或 FINAL 样本。停止为了变绿而修改此 DEV 源，回到来源抽样和主链协议收口。冻结方法、Memory、F1 不变，无模型调用或 push；论文规模实验仍未就绪。
 
 主链已转到 [R5 S2 兼容性审查](evaluation/research_r5_s2_compatibility_20260926.md)：旧三策略实际是 ORFS 配置调参的零模型 controller，不能直接作为 RTL Agent。Legacy 三文件与历史冻结摘要一致，未换空库；RTL 公共 context 映射和实际适用性仍需实现/核验。新增只读预检核对 11 个固定输入，16 项反例拒绝；第二副本隔离重跑审查 JSON 完全一致，67 项既有计量检查通过。首轮过严 SHM 检查及原始输入完整保留，无数据库写入或模型调用。下一步实现同 controller 的共享 RTL 动作/反馈与预算隔离，不修改 gen5 或重标 F1；尚非 Agent READY，也未完成论文规模样本冻结。
+
+后续 [S2 C1 共享 RTL 组件](evaluation/research_r5_s2_controller_c1_20260926.md) 已实现固定提案 schema、声明源内候选写入、私有反馈枚举过滤及持久预算状态机。16 组离线检查（含 27 种 verdict 组合）与第二副本全量隔离重跑通过，67 项计量检查通过；模型/EDA/方法任务均为 0。C1 不是完整 Agent runner，实际 RTL evaluator、三策略 Memory context、tokenizer/broker 和跨进程预算隔离仍待接入；不修改 v7 binder 或重释 gen5 ΔMemory。已询问开发校准模型及建议 6 次/60000 token 上限，尚未获批或启动。R5 继续开放，无 push。
