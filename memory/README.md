@@ -7893,3 +7893,14 @@ cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 16 
 同源第二设计 `axis_broadcast[2-8]` 的 DEV clean 4/4 PASS、暂存 payload 故障 3/4 PASS、
 1/4 FAIL，当前 binder 返回 NO_MATCH；见
 [`research_r5_broadcast_dev_20260924.md`](evaluation/research_r5_broadcast_dev_20260924.md)。
+
+### 2026-09-25 Revision5 gen5：外部负结果、健康控制与论文计量协议
+
+前述 9 月 24 日记录是当时状态。现有三来源 TRAIN Memory 和新外部 pilot 已执行，
+详情见 [gen5 外部试验](evaluation/research_r5_gen5_external_pilot_20260925.md)：四个方法 arm 均 0/1 修复，未建立跨来源收益。
+新增不同机制的健康 shift-FIFO 控制，三态均 NO_SKILL/NO_ACTION、共 9 项原生测试通过；
+[控制与隔离恢复检查点](evaluation/research_r5_gen5_nontarget_and_protocol_20260925.md) 保留失败恢复尝试，并验证新补充证据可恢复。
+[论文计量协议](evaluation/research_r5_paper_protocol_20260925.md) 的 44 项反例通过，修复、保持、健康控制分母分开；
+真实读数只含 1 个 pilot task，不把重跑、参数或子测试当独立样本。
+`final_test_ready=false`，最终来源/任务清单与统计样本依据仍未冻结，Agent 比较未运行。
+下一步门禁和完整需求状态见 [R5 需求审计](evaluation/research_r5_requirement_audit_20260925.md)；无模型调用、无 push。
