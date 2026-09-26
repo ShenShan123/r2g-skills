@@ -1,0 +1,31 @@
+{
+  "schema": "tehm-r5-paper-measurement-plan-v1",
+  "role": "METHODS_FIXED_FINAL_DATA_UNFROZEN",
+  "frozen_method_software": "2ce921a599c406ab63331561a182d6f4f1bef8cb",
+  "frozen_memory_report_digest": "sha256:f31072bf2c233974c9fbbf4bb4c30539942f07a57a5b6b7e9022611e90f3206b",
+  "views": ["m-minus", "m-plus", "mremove", "transform-only"],
+  "primary_metric": "VerifiedRepair@B_all_registered_tasks",
+  "statistical_unit": "audited_source_group",
+  "unknown_counts_as_success": false,
+  "drop_abstentions": false,
+  "online_target_learning": false,
+  "model_calls_authorized": 0,
+  "model_tokens_authorized": 0,
+  "positive_effect_required_to_report": false,
+  "controller_kind": "deterministic_controlled_action_not_agent",
+  "native_subtests_are_tasks": false,
+  "candidate_budget": 1,
+  "effect_target": null,
+  "power_claim": null,
+  "next_scope_screen_cap": 2,
+  "final_tasks": [],
+  "prior_repositories_requiring_scope_review": [
+    "SigmanticAI/apex-inference-chip", "SkillSurf/systemverilog",
+    "YChud/Parameterizable-Credit-Based-FIFO-ready-valid-Backpressure", "YosysHQ/picorv32",
+    "ZipCPU/wb2axip", "abarajithan11/cocotb-example", "alexforencich/verilog-axis",
+    "alexforencich/verilog-i2c", "alexforencich/verilog-uart", "bensampson5/libsv",
+    "drewbabel/eth-datapath", "freecores/i2c", "namangoyal-work/fpga-tick-to-trade",
+    "olofk/serv", "pulp-platform/axi", "pulp-platform/common_cells",
+    "secworks/aes", "secworks/chacha", "secworks/sha256", "ultraembedded/riscv"
+  ]
+}
