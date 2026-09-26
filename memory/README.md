@@ -7933,3 +7933,5 @@ dozecat 原生构建因 Verilator 5.035 不识别上游 PROCASSINIT warning 选�
 两项原始审计及 12+9 项离线检查通过；从第二副本实际恢复 LibFPGA，复现相同 trace 与零 skid 活动。
 原包 301 文件及恢复包两份 SHA/解压清单一致，仍仅同机备份。新增合格 repair/final task 与认证独立来源均为 0，F1 读数不变。
 下一步核对 dozecat 工具兼容性，若适配则另立资格代次；不以原生 PASS、clone 数或新 owner 代替覆盖与来源证据。
+
+后续 [dozecat native gen2](evaluation/research_r5_dozecat_native_gen2_20260925.md) 已用独立固定的 Verilator 5.038 跑通原版测试：1000 cycles、6 PASS、0 FAIL，73 个源码/测试/BFM 文件及 warning 选项不变。原 UNKNOWN 与构建/审计/恢复失败均保留；两份封存核对通过，实际隔离冷重建的波形全文件一致。尚未获得故障敏感性或 final 准入，无新增方法任务；下一步预登记目标/保持义务及负控，核验判定力和来源暴露。冻结方法与三份 Memory 不变，无模型调用或 push。
