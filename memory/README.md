@@ -7935,3 +7935,5 @@ dozecat 原生构建因 Verilator 5.035 不识别上游 PROCASSINIT warning 选�
 下一步核对 dozecat 工具兼容性，若适配则另立资格代次；不以原生 PASS、clone 数或新 owner 代替覆盖与来源证据。
 
 后续 [dozecat native gen2](evaluation/research_r5_dozecat_native_gen2_20260925.md) 已用独立固定的 Verilator 5.038 跑通原版测试：1000 cycles、6 PASS、0 FAIL，73 个源码/测试/BFM 文件及 warning 选项不变。原 UNKNOWN 与构建/审计/恢复失败均保留；两份封存核对通过，实际隔离冷重建的波形全文件一致。尚未获得故障敏感性或 final 准入，无新增方法任务；下一步预登记目标/保持义务及负控，核验判定力和来源暴露。冻结方法与三份 Memory 不变，无模型调用或 push。
+
+后续 [dozecat Q1 原生判定力](evaluation/research_r5_dozecat_native_sensitivity_q1_20260926.md) 已发现真实漏检：单一预登记 SKID 写数据负控造成 3 次有效接受传输的一位 payload 损坏，106 个非目标信号保持一致，但 clean/fault 各 6 项 native checks 均 PASS，故检出 0/1、MISSED。两副本隔离 cold 重建两臂，完整波形与诊断逐项复现；15 项适配/判定检查、67 项既有计量检查通过。该 native scope 固定 NO-GO，不计入方法修复分母；若继续，另立 research-augmented oracle 开发代次，保留本次漏检。冻结方法、三份 Memory 与 F1 不变，无模型调用或 push。
