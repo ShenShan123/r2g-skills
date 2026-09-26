@@ -7918,3 +7918,11 @@ clean target/preservation/native 均 PASS，故障 target/native 功能 FAIL、p
 两次恢复均重现六项 RTL 结果；r1 后续缺分析依赖的失败保留，精确依赖补包后 r2 完整恢复通过，native VCD 逐字节相同。
 原始包、补包及恢复输出两份逐文件核对一致，仍不代表异地长期保留。当前 67 项计量检查通过，旧 pilot 读数未变。
 下一步是原始暴露审查、有界最终候选框架和配对任务冻结；`final_test_ready=false`，不调优 gen5、不调用模型、不 push。
+
+后续 [F1 GAXI 配对 FINAL_TEST](evaluation/research_r5_f1_gaxi_final_20260925.md) 已在原始暴露审查和独立预注册后执行：
+一个描述性故障任务加同 DUT 健康对照，共八次候选、24 个 oracle；四个视图均 0/1 修复，健康对照全部 PASS 且无改动。
+M+ 与 transform-only 在冻结公开参数契约守卫处拒绝，没有改参数或调 binder 来挽救结果，尚无跨来源或 ΔMemory 增益。
+原始审计和现行计量汇总通过；首次审计的预算重分配断言错误及追加分析修正均保留，16 项篡改反例拒绝。
+这是一项单独冻结的新描述性 final task，不是旧 pilot 改标，也不是论文规模 final 数据已充分。
+归档内重算原八臂审计一致，随后单故障 M+ 的实际隔离恢复通过，三个 oracle 与波形均复现、Memory 不变；恢复不增加样本。
+补包及完整恢复输出的两份哈希和解压全清单核对通过，仍仅为同机副本；现行 67 项计量检查通过，无模型调用、无 push。
