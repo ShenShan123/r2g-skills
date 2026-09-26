@@ -182,13 +182,25 @@ def evaluate_asset_authority(
                              ",".join(v6_proof.reasons))
             except Exception as exc:
                 v6_reason = "audited_v6_train_bundle_replay_failed:" + type(exc).__name__
-    # v7 is a draft source-binding capability, not yet an authority path.
-    # Until a raw-replayed v7 TRAIN/rollback verifier is installed, even
-    # caller-supplied PASS/lineage/rollback fields must remain ineligible.
     skid_v7 = is_skid_v7_asset(asset)
-    v7_reason = ("audited_v7_train_bundle_missing" if skid_v7 and
-                 target_scope == "rtl.skid.temp_payload.v7.dev" else "r5_v7_target_scope_mismatch")
-    lineages = (set() if skid_v7 else set(v6_proof.lineages) if v6_proof and v6_proof.valid
+    v7_proof = None
+    v7_reason = "not_r5_skid_v7"
+    if skid_v7:
+        from .r5_train_evidence_v7 import ROLLBACK_VERSION as V7_ROLLBACK_VERSION
+        from .r5_train_evidence_v7 import verify_train_asset_bundle as verify_v7_bundle
+        from tehm.rtl.skid_payload_action_v7 import PROFILE as SKID_V7_PROFILE
+        v7_reason = ("audited_v7_train_bundle_missing" if target_scope == SKID_V7_PROFILE
+                     else "r5_v7_target_scope_mismatch")
+        if (target_scope == SKID_V7_PROFILE and isinstance(rollback_receipt, Mapping) and
+                rollback_receipt.get("version") == V7_ROLLBACK_VERSION):
+            try:
+                v7_proof = verify_v7_bundle(asset, validations, bound_assets, rollback_receipt)
+                v7_reason = ("audited_v7_train_bundle_verified" if v7_proof.valid else
+                             ",".join(v7_proof.reasons))
+            except Exception as exc:
+                v7_reason = "audited_v7_train_bundle_replay_failed:" + type(exc).__name__
+    lineages = (set(v7_proof.lineages) if skid_v7 and v7_proof and v7_proof.valid
+                else set() if skid_v7 else set(v6_proof.lineages) if v6_proof and v6_proof.valid
                 else set() if skid_v6 else
                 set(v5_proof.lineages) if v5_proof and v5_proof.valid
                 else set() if is_skid_v5_asset(asset) else
@@ -210,7 +222,8 @@ def evaluate_asset_authority(
         "regression_zero": bool(validations) and all(
             item.get("regression_verdict") == "PASS" and
             not item.get("errors") for item in validations),
-        "rollback_verified": (False if skid_v7 else
+        "rollback_verified": (bool(v7_proof and v7_proof.valid and v7_proof.rollback_verified)
+                              if skid_v7 else
                               bool(v6_proof and v6_proof.valid and v6_proof.rollback_verified)
                               if skid_v6 else
                               bool(v5_proof and v5_proof.valid and v5_proof.rollback_verified)
@@ -264,7 +277,11 @@ def evaluate_asset_authority(
     if skid_v7:
         evidence["design_ids_seen"] = sorted(design_ids)
         evidence["lineage_gate_reason"] = v7_reason
-        evidence["r5_v7_train_authority_pending"] = True
+        if v7_proof is not None:
+            evidence["r5_v7_lineage_audit_digest"] = v7_proof.lineage_audit_digest
+            evidence["r5_v7_rollback_digest"] = v7_proof.rollback_digest
+            evidence["r5_v7_contract_digest"] = v7_proof.shared_contract_digest
+            evidence["r5_v7_evidence_reasons"] = list(v7_proof.reasons)
     return AssetPromotionReceipt(
         asset_id=str(asset.get("asset_id") or ""), target_scope=target_scope,
         eligible=not missing, checks=checks, missing=missing,
