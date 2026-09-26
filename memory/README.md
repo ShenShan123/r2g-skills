@@ -7900,7 +7900,7 @@ cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 16 
 详情见 [gen5 外部试验](evaluation/research_r5_gen5_external_pilot_20260925.md)：四个方法 arm 均 0/1 修复，未建立跨来源收益。
 新增不同机制的健康 shift-FIFO 控制，三态均 NO_SKILL/NO_ACTION、共 9 项原生测试通过；
 [控制与隔离恢复检查点](evaluation/research_r5_gen5_nontarget_and_protocol_20260925.md) 保留失败恢复尝试，并验证新补充证据可恢复。
-[论文计量协议](evaluation/research_r5_paper_protocol_20260925.md) 的 44 项反例通过，修复、保持、健康控制分母分开；
+[论文计量协议](evaluation/research_r5_paper_protocol_20260925.md) 初始 44 项、后续当前 67 项反例通过，修复、保持、健康控制分母分开；
 真实读数只含 1 个 pilot task，不把重跑、参数或子测试当独立样本。
 `final_test_ready=false`，最终来源/任务清单与统计样本依据仍未冻结，Agent 比较未运行。
 下一步门禁和完整需求状态见 [R5 需求审计](evaluation/research_r5_requirement_audit_20260925.md)；无模型调用、无 push。
@@ -7912,4 +7912,9 @@ cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 16 
 [来源预审 B2](evaluation/research_r5_final_source_screen_b2_20260925.md) 定向获取 RTLDesignSherpa 的同步 GAXI scope：
 固定版本、8-bit/depth-2、seed 1729 的 1 项原生功能基线通过；保留编码失败和 XML 定位纠正记录。
 39 入/39 出、44 个输出阻塞周期，冷审计及隔离恢复通过、VCD 相同；这不是错误检出或 TEHM 修复结果。
-来源独立性仍待历史复核，repair task 分母仍为 0；下一步是私有 target/preservation 资格，不调优 gen5 方法。
+随后已完成[同一 GAXI scope 的私有故障资格](evaluation/research_r5_rds_gaxi_qualification_20260925.md)：
+clean target/preservation/native 均 PASS，故障 target/native 功能 FAIL、preservation PASS；1 个构造 probe、0 个新增方法任务。
+有界历史审查支持 observed-distinct 实现分组，不证明独立作者；不依据 owner 名认证独立性。
+两次恢复均重现六项 RTL 结果；r1 后续缺分析依赖的失败保留，精确依赖补包后 r2 完整恢复通过，native VCD 逐字节相同。
+原始包、补包及恢复输出两份逐文件核对一致，仍不代表异地长期保留。当前 67 项计量检查通过，旧 pilot 读数未变。
+下一步是原始暴露审查、有界最终候选框架和配对任务冻结；`final_test_ready=false`，不调优 gen5、不调用模型、不 push。
