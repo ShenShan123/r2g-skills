@@ -7908,3 +7908,8 @@ cocotb JUnit 与 Secworks native-summary 两类研究 verdict adapter 已有 16 
 后续 [最终来源预审 B1](evaluation/research_r5_final_scope_screen_b1_20260925.md) 按传递源码依赖排除了两个重复机制封装：
 `axis_pipeline_register` 复用 TRAIN 叶节点，`axi_cut` 复用 DEV 叶节点；新增独立未见来源和方法任务均为 0。
 19 份输入的来源审计及 11 项篡改检查已隔离重放并双本地磁盘封存；未调用 binder/simulator，不改已有实验分母。
+
+[来源预审 B2](evaluation/research_r5_final_source_screen_b2_20260925.md) 定向获取 RTLDesignSherpa 的同步 GAXI scope：
+固定版本、8-bit/depth-2、seed 1729 的 1 项原生功能基线通过；保留编码失败和 XML 定位纠正记录。
+39 入/39 出、44 个输出阻塞周期，冷审计及隔离恢复通过、VCD 相同；这不是错误检出或 TEHM 修复结果。
+来源独立性仍待历史复核，repair task 分母仍为 0；下一步是私有 target/preservation 资格，不调优 gen5 方法。
