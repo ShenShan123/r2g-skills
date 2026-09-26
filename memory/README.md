@@ -7926,3 +7926,10 @@ M+ 与 transform-only 在冻结公开参数契约守卫处拒绝，没有改参�
 这是一项单独冻结的新描述性 final task，不是旧 pilot 改标，也不是论文规模 final 数据已充分。
 归档内重算原八臂审计一致，随后单故障 M+ 的实际隔离恢复通过，三个 oracle 与波形均复现、Memory 不变；恢复不增加样本。
 补包及完整恢复输出的两份哈希和解压全清单核对通过，仍仅为同机副本；现行 67 项计量检查通过，无模型调用、无 push。
+
+后续 [B3 两来源准入](evaluation/research_r5_final_source_screen_b3_20260925.md) 定向固定 dozecat/axi_lib 与 libfpga/libfpga，未运行 TEHM 或改变 gen5。
+LibFPGA 原生 clean PASS，但真实波形只有 1507 入/1506 出，输出 stall 与 skid capture/drain 均为 0，当前背压 payload scope 不合格。
+dozecat 原生构建因 Verilator 5.035 不识别上游 PROCASSINIT warning 选项，在模拟前 UNKNOWN；未删选项或重试。
+两项原始审计及 12+9 项离线检查通过；从第二副本实际恢复 LibFPGA，复现相同 trace 与零 skid 活动。
+原包 301 文件及恢复包两份 SHA/解压清单一致，仍仅同机备份。新增合格 repair/final task 与认证独立来源均为 0，F1 读数不变。
+下一步核对 dozecat 工具兼容性，若适配则另立资格代次；不以原生 PASS、clone 数或新 owner 代替覆盖与来源证据。
