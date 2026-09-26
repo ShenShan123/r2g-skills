@@ -7939,3 +7939,5 @@ dozecat 原生构建因 Verilator 5.035 不识别上游 PROCASSINIT warning 选�
 后续 [dozecat Q1 原生判定力](evaluation/research_r5_dozecat_native_sensitivity_q1_20260926.md) 已发现真实漏检：单一预登记 SKID 写数据负控造成 3 次有效接受传输的一位 payload 损坏，106 个非目标信号保持一致，但 clean/fault 各 6 项 native checks 均 PASS，故检出 0/1、MISSED。两副本隔离 cold 重建两臂，完整波形与诊断逐项复现；15 项适配/判定检查、67 项既有计量检查通过。该 native scope 固定 NO-GO，不计入方法修复分母；若继续，另立 research-augmented oracle 开发代次，保留本次漏检。冻结方法、三份 Memory 与 F1 不变，无模型调用或 push。
 
 后续 [dozecat augmented G1](evaluation/research_r5_dozecat_augmented_oracle_g1_20260926.md) 收紧 Q1 结论：新端口 monitor 与独立顶层解析均发现 4 次输入 valid 在背压后非法撤销，最早 tick 15 早于损坏传输。两臂虽仍 native PASS，但增强 DUT 判定 UNKNOWN、敏感性 UNDETERMINED，clean 不准入；旧 Q1 MISSED 不得用于合法协议输入的检出率。该精确 scope 已登记 oracle DEV，不能改名 unseen FINAL_TEST。两副本实际 cold 重建复现全部波形和判定；16 项 monitor 检查及 67 项计量检查通过。下一步另立合法输入驱动代次，不改原 BFM，不把前提失败归咎于 DUT。
+
+后续 [dozecat G2 合法输入](evaluation/research_r5_dozecat_legal_driver_g2_20260926.md) 已在新登记 standalone 驱动下确认原版 RTL 的有界反例：输入合约 PASS，但输出受阻时改变数据，首次握手交付第二笔而非第一笔。两臂增强判定 FAIL，原版不具健康参考资格，敏感性仍 UNDETERMINED。两副本、两臂实际冷恢复及完整 CSV/VCD 一致性核验通过，67 项计量检查通过；无新增 probe、方法任务或 FINAL 样本。停止为了变绿而修改此 DEV 源，回到来源抽样和主链协议收口。冻结方法、Memory、F1 不变，无模型调用或 push；论文规模实验仍未就绪。
