@@ -7941,3 +7941,5 @@ dozecat 原生构建因 Verilator 5.035 不识别上游 PROCASSINIT warning 选�
 后续 [dozecat augmented G1](evaluation/research_r5_dozecat_augmented_oracle_g1_20260926.md) 收紧 Q1 结论：新端口 monitor 与独立顶层解析均发现 4 次输入 valid 在背压后非法撤销，最早 tick 15 早于损坏传输。两臂虽仍 native PASS，但增强 DUT 判定 UNKNOWN、敏感性 UNDETERMINED，clean 不准入；旧 Q1 MISSED 不得用于合法协议输入的检出率。该精确 scope 已登记 oracle DEV，不能改名 unseen FINAL_TEST。两副本实际 cold 重建复现全部波形和判定；16 项 monitor 检查及 67 项计量检查通过。下一步另立合法输入驱动代次，不改原 BFM，不把前提失败归咎于 DUT。
 
 后续 [dozecat G2 合法输入](evaluation/research_r5_dozecat_legal_driver_g2_20260926.md) 已在新登记 standalone 驱动下确认原版 RTL 的有界反例：输入合约 PASS，但输出受阻时改变数据，首次握手交付第二笔而非第一笔。两臂增强判定 FAIL，原版不具健康参考资格，敏感性仍 UNDETERMINED。两副本、两臂实际冷恢复及完整 CSV/VCD 一致性核验通过，67 项计量检查通过；无新增 probe、方法任务或 FINAL 样本。停止为了变绿而修改此 DEV 源，回到来源抽样和主链协议收口。冻结方法、Memory、F1 不变，无模型调用或 push；论文规模实验仍未就绪。
+
+主链已转到 [R5 S2 兼容性审查](evaluation/research_r5_s2_compatibility_20260926.md)：旧三策略实际是 ORFS 配置调参的零模型 controller，不能直接作为 RTL Agent。Legacy 三文件与历史冻结摘要一致，未换空库；RTL 公共 context 映射和实际适用性仍需实现/核验。新增只读预检核对 11 个固定输入，16 项反例拒绝；第二副本隔离重跑审查 JSON 完全一致，67 项既有计量检查通过。首轮过严 SHM 检查及原始输入完整保留，无数据库写入或模型调用。下一步实现同 controller 的共享 RTL 动作/反馈与预算隔离，不修改 gen5 或重标 F1；尚非 Agent READY，也未完成论文规模样本冻结。
