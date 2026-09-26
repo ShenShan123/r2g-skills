@@ -1,5 +1,7 @@
 # R5 dozecat Q1：原生测试漏检实际交付的 SKID 写数据损坏
 
+> 后续限制：[augmented G1](research_r5_dozecat_augmented_oracle_g1_20260926.md) 发现原生输入驱动在背压后非法撤掉 valid，最早发生在 tick 15，早于本文的损坏传输。本文旧规则下的 MISSED 与 raw artifacts 保留，但“0/1”不能用于合法协议输入的敏感性或合格 repair-probe 分母；当前增强归责为 UNKNOWN／UNDETERMINED，scope 仍 NO-GO。
+
 接续 [native gen2](research_r5_dozecat_native_gen2_20260925.md)，执行 Revision5 §6.5–6.6、§13.1、§19 的一个预登记负控。**clean 与 fault 都报告 1000 cycles、6 PASS、0 FAIL；波形证明 fault 中 3 次实际接受的写传输有一位 payload 损坏，106 个非目标信号逐时间点保持一致。该 native scope 对这一负控为 MISSED（检出 0/1），不能准入修复／FINAL_TEST。** 这是测试判定力结果，不是 TEHM 修复失败或迁移结果。
 
 ## 执行前固定的 scope

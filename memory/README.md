@@ -7937,3 +7937,5 @@ dozecat 原生构建因 Verilator 5.035 不识别上游 PROCASSINIT warning 选�
 后续 [dozecat native gen2](evaluation/research_r5_dozecat_native_gen2_20260925.md) 已用独立固定的 Verilator 5.038 跑通原版测试：1000 cycles、6 PASS、0 FAIL，73 个源码/测试/BFM 文件及 warning 选项不变。原 UNKNOWN 与构建/审计/恢复失败均保留；两份封存核对通过，实际隔离冷重建的波形全文件一致。尚未获得故障敏感性或 final 准入，无新增方法任务；下一步预登记目标/保持义务及负控，核验判定力和来源暴露。冻结方法与三份 Memory 不变，无模型调用或 push。
 
 后续 [dozecat Q1 原生判定力](evaluation/research_r5_dozecat_native_sensitivity_q1_20260926.md) 已发现真实漏检：单一预登记 SKID 写数据负控造成 3 次有效接受传输的一位 payload 损坏，106 个非目标信号保持一致，但 clean/fault 各 6 项 native checks 均 PASS，故检出 0/1、MISSED。两副本隔离 cold 重建两臂，完整波形与诊断逐项复现；15 项适配/判定检查、67 项既有计量检查通过。该 native scope 固定 NO-GO，不计入方法修复分母；若继续，另立 research-augmented oracle 开发代次，保留本次漏检。冻结方法、三份 Memory 与 F1 不变，无模型调用或 push。
+
+后续 [dozecat augmented G1](evaluation/research_r5_dozecat_augmented_oracle_g1_20260926.md) 收紧 Q1 结论：新端口 monitor 与独立顶层解析均发现 4 次输入 valid 在背压后非法撤销，最早 tick 15 早于损坏传输。两臂虽仍 native PASS，但增强 DUT 判定 UNKNOWN、敏感性 UNDETERMINED，clean 不准入；旧 Q1 MISSED 不得用于合法协议输入的检出率。该精确 scope 已登记 oracle DEV，不能改名 unseen FINAL_TEST。两副本实际 cold 重建复现全部波形和判定；16 项 monitor 检查及 67 项计量检查通过。下一步另立合法输入驱动代次，不改原 BFM，不把前提失败归咎于 DUT。
