@@ -25,6 +25,9 @@ LIMITS = ("calls_per_arm", "tokens_per_arm", "evaluations_per_arm", "calls_total
 
 
 def validate_plan(plan: dict) -> None:
+    # Networked dispatch uses the explicit authorization subclass, not this
+    # historical offline validator. Existing C6 fixtures retain their contract.
+
     if type(plan) is not dict or set(plan) != {"schema", "mode", "tasks", "counter_id", *LIMITS}:
         raise c.ControllerError("campaign plan fields")
     if plan["schema"] != SCHEMA or plan["mode"] != "OFFLINE_ONLY":
