@@ -32,7 +32,7 @@ def check() -> dict:
                ("pulp_dev", pulp_fault, pulp_clean, pulp.PUBLIC_CONTEXT),
                ("v6_dev", state_fault, None, v6.STATE_SKID_CONTEXT))
     cases = {"domain_in_catalog": DOMAIN in RTL_ACTION_DOMAINS,
-             "catalog_version_bumped": RTL_ACTION_VERSION == "rtl-actions-v0.8"}
+             "catalog_version_bumped": RTL_ACTION_VERSION == "rtl-actions-v0.9"}
     for name, source, expected, context in sources:
         payload = payload_from_source_v7(source, context)
         edited, receipt = apply_rtl_action(source, payload)

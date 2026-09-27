@@ -108,6 +108,153 @@ class Checks(unittest.TestCase):
             re.sub(r'\bskid_data\b','s_tdata',SOURCE)]
         for text in variants:self.assertNotEqual(self.bind(text)['status'],'BOUND')
 
+
+class CoreChecks(unittest.TestCase):
+    """RAM-only integration checks, not actual TRAIN or promoted Memory."""
+
+    def setUp(self):
+        import sqlite3
+        from tehm import db
+        from tehm.assets.registry import get_asset
+        from tehm.assets.synthesis import build_rtl_asset_proposal, register_asset_proposal
+        from tehm.assets.skid_binding_v8 import with_skid_payload_binding_v8
+        from tehm.rtl.skid_payload_action_v8 import PROFILE, payload_from_source_v8
+        self.conn = sqlite3.connect(':memory:')
+        self.conn.row_factory = sqlite3.Row
+        db.ensure_schema(self.conn)
+        proposal = build_rtl_asset_proposal(
+            {}, name='synthetic-v8-core-check-only', transformation_family='skid_payload',
+            action_payload_template=payload_from_source_v8(SOURCE, b.CONTEXT),
+            compatibility_profile=PROFILE, verifier_obligations=('target', 'preservation'),
+            mechanism_knowledge_ids=('synthetic@1',), creator='synthetic_DEV_no_authority')
+        proposal = with_skid_payload_binding_v8(proposal, SOURCE, b.CONTEXT)
+        self.registered = register_asset_proposal(self.conn, proposal)
+        self.asset = get_asset(self.conn, self.registered.asset_id)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def bound(self, source=None, design='opaque-target'):
+        from tehm.assets.structural_binding import bind_rtl_asset_to_source
+        return bind_rtl_asset_to_source(self.asset, SOURCE if source is None else source,
+                                       design_id=design, public_context=b.CONTEXT)
+
+    def test_core_dispatch_static_validation_and_draft(self):
+        from tehm.assets.registry import get_asset_status
+        from tehm.assets.validation import validate_rtl_rewrite_asset
+        from tehm.assets.source_selection import source_contract, verify_source_copy
+        from tehm.assets.skid_binding_v8 import CONTRACT
+        from tehm.rtl.rtl_actions import apply_rtl_action, RTL_ACTION_DOMAINS
+        from tehm.rtl.skid_payload_action_v8 import DOMAIN
+        bound = self.bound()
+        self.assertEqual(source_contract(bound), CONTRACT)
+        self.assertTrue(verify_source_copy(bound, self.asset))
+        candidate, edit = apply_rtl_action(SOURCE, bound['definition']['action']['payload'])
+        expected, _ = b.apply_bound_skid_payload_v8(ASSET, SOURCE, b.CONTEXT,
+                                                    b.bind_skid_payload_v8(ASSET, SOURCE, b.CONTEXT))
+        self.assertEqual(candidate, expected)
+        self.assertEqual(edit['rewritten'], 1)
+        self.assertIn(DOMAIN, RTL_ACTION_DOMAINS)
+        validation = validate_rtl_rewrite_asset(bound, SOURCE)
+        self.assertEqual(validation.status, 'SHADOW_STATIC_PASS')
+        self.assertFalse(validation.independent_verifier)
+        self.assertIsNone(validation.oracle_verdict)
+        self.assertEqual(get_asset_status(self.conn, asset_id=self.registered.asset_id,
+                                         target_scope=self.registered.target_scope)['status'], 'draft')
+        self.assertEqual(self.conn.execute('select count(*) from tehm_mechanism_knowledge').fetchone()[0], 0)
+
+    def test_target_rebinding_not_training_payload_reuse(self):
+        from tehm.assets.source_selection import verify_source_copy
+        from tehm.rtl.rtl_actions import apply_rtl_action
+        renamed = re.sub(r'\bskid_data\b', 'other_capture', SOURCE)
+        bound = self.bound(renamed)
+        self.assertNotEqual(bound['definition']['action']['payload'], self.asset['definition']['action']['payload'])
+        self.assertTrue(verify_source_copy(bound, self.asset))
+        candidate, _ = apply_rtl_action(renamed, bound['definition']['action']['payload'])
+        self.assertIn('skid_valid ? other_capture : s_tdata', candidate)
+        with self.assertRaises(ValueError):
+            apply_rtl_action(renamed, self.asset['definition']['action']['payload'])
+
+    def test_core_stale_tampered_and_extra_payload(self):
+        from tehm.rtl.rtl_actions import apply_rtl_action
+        payload = self.bound()['definition']['action']['payload']
+        for key, value in [('witness_digest', 'forged'), ('module', 'other'),
+                           ('binding_contract', 'old-contract'), ('gold', '/private')]:
+            changed = copy.deepcopy(payload); changed[key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                apply_rtl_action(SOURCE, changed)
+        with self.assertRaises(ValueError):
+            apply_rtl_action(SOURCE + '\n', payload)
+
+    def test_source_copy_and_candidate_replay(self):
+        from types import SimpleNamespace
+        from tehm.assets.source_selection import verify_source_copy, verify_candidate_source_replay
+        from tehm.rtl.skid_payload_action_v8 import DOMAIN
+        bound = self.bound()
+        candidate = SimpleNamespace(asset_id=self.asset['asset_id'], knowledge_object_id='synthetic@1',
+            concrete_action=bound['definition']['action'], provenance={'source_binding_required': True,
+                'source_binding_replay': {'registered_asset': self.asset, 'bound_asset': bound}})
+        self.assertTrue(verify_candidate_source_replay(candidate, SOURCE))
+        self.assertFalse(verify_candidate_source_replay(candidate, SOURCE + '\n'))
+        changed = copy.deepcopy(bound)
+        changed['provenance']['binding_evidence']['source'] += '\n'
+        self.assertFalse(verify_source_copy(changed, self.asset))
+        candidate.provenance = {}; candidate.concrete_action = {'domain': DOMAIN}
+        self.assertFalse(verify_candidate_source_replay(candidate, SOURCE))
+
+    def test_template_and_public_context_tamper(self):
+        from tehm.assets.structural_binding import bind_rtl_asset_to_source
+        asset = copy.deepcopy(self.asset)
+        asset['definition']['binding_template']['spec_digest'] = 'forged'
+        with self.assertRaises(ValueError):
+            bind_rtl_asset_to_source(asset, SOURCE, design_id='opaque', public_context=b.CONTEXT)
+        for context in ({'WIDTH': 8, 'defined_macros': ['FORMAL']},
+                        {**b.CONTEXT, 'gold': '/private'}, {'WIDTH': 8}):
+            with self.subTest(context=context), self.assertRaises(ValueError):
+                bind_rtl_asset_to_source(self.asset, SOURCE, design_id='opaque', public_context=context)
+
+    def test_boolean_and_strict_authority_stay_closed(self):
+        from tehm.assets.lifecycle import evaluate_asset_authority, evaluate_asset_promotion_gates, ASSET_PROMOTION_GATES
+        from tehm.assets.authority import record_asset_authority, verify_asset_authority
+        from tehm.assets.registry import set_asset_status, get_asset_status
+        from tehm.rtl.skid_payload_action_v8 import PROFILE
+        fake = {'static_valid': True, 'independent_verifier': True, 'oracle_verdict': 'PASS',
+                'regression_verdict': 'PASS', 'errors': []}
+        bounds = [self.bound(design='fake-lineage-a'), self.bound(design='fake-lineage-b')]
+        rollback = {'verified': True, 'version': 'forged-rollback'}
+        pure = evaluate_asset_authority(self.asset, validation_receipts=[fake, fake], bindings=bounds,
+                                       rollback_receipt=rollback, target_scope=PROFILE, min_lineages=1)
+        self.assertFalse(pure.eligible)
+        self.assertEqual(pure.evidence['reason'], 'v8_raw_train_authority_not_implemented')
+        booleans = {name: True for name in ASSET_PROMOTION_GATES}
+        self.assertFalse(evaluate_asset_promotion_gates(self.asset, booleans, target_scope=PROFILE).eligible)
+        strict = record_asset_authority(self.conn, asset_id=self.asset['asset_id'], target_scope=PROFILE,
+            validation_receipts=[fake, fake], bindings=bounds, rollback_receipt=rollback, min_lineages=1)
+        self.assertFalse(strict.eligible)
+        self.assertFalse(verify_asset_authority(self.conn, strict)['eligible'])
+        for status in ('shadow', 'candidate'):
+            set_asset_status(self.conn, asset_id=self.asset['asset_id'], target_scope=PROFILE, status=status)
+        for kwargs in ({'gates': booleans}, {'strict_asset_authority': True, 'authority_receipt': strict}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                set_asset_status(self.conn, asset_id=self.asset['asset_id'], target_scope=PROFILE,
+                                 status='promoted', **kwargs)
+        self.assertEqual(get_asset_status(self.conn, asset_id=self.asset['asset_id'],
+                                         target_scope=PROFILE)['status'], 'candidate')
+
+    def test_disguised_v8_asset_cannot_use_legacy_gate(self):
+        from tehm.assets.lifecycle import evaluate_asset_promotion_gates, ASSET_PROMOTION_GATES
+        from tehm.rtl.skid_payload_action_v8 import DOMAIN, PROFILE
+        from tehm.assets.skid_binding_v8 import CONTRACT
+        variants = [{'definition': {'action': {'domain': DOMAIN}}},
+                    {'definition': {'action': {'payload': {'domain': DOMAIN}}}},
+                    {'definition': {'binding_template': {'contract': CONTRACT}}},
+                    {'compatibility': {'compatibility_profile': PROFILE}}]
+        for asset in variants:
+            asset['verifier_contract'] = {'independent': True}
+            self.assertFalse(evaluate_asset_promotion_gates(asset,
+                {name: True for name in ASSET_PROMOTION_GATES}, target_scope=PROFILE).eligible)
+
+
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--source',type=Path,required=True)
     args,remaining=parser.parse_known_args();SOURCE=args.source.read_text()

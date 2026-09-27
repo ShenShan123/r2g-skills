@@ -79,3 +79,44 @@
 需要合法 TRAIN authority、新代冻结和真正未见目标，才能检验 answer-free transfer
 与 ΔMemory attribution。不能把本次观察后开发的 DEV 正例计为此证据。
 R5 主目标仍开放；不新增 API 调用，也不自动推送。
+
+## 后续：v8 核心 Action／Asset 接线（同日）
+
+新增 `rtl/skid_payload_action_v8.py` 和 `assets/skid_binding_v8.py`，复用原 v7
+及 mux-v8 binder，接入原 `apply_rtl_action`、Asset structural binding、
+source-copy 与 candidate replay 核验。动作目录升至 `rtl-actions-v0.9`。
+显式 `defined_macros` context 走 mux-v8，其他 context 由未修改的 v7 合约判定；
+没有 source ID、private oracle 或 gold 驱动的分支，也不做失败后搜索。
+
+新 profile 为 `rtl.skid.payload.v8.dev`；两套旧 binder 的源码未修改。
+这是软件扩展，不是 Memory 增量。Asset 可在 RAM 中 draft 注册和静态执行，
+但 lifecycle 的纯 gate 与 strict authority 均明确拒绝 v8 promotion，理由为
+`v8_raw_train_authority_not_implemented`。已有 v7 TRAIN 授权不自动转移至 v8。
+本次没有新的 M0 builder、canonical schema 或持久 Knowledge/Memory。
+
+禁网 worker 只读代码、四份已观察 faulty RTL 和公共 context，不见参考源、
+原始 TRAIN receipts、测试、工具链、Git 或 Memory 数据库。同一个 synthetic draft
+在 mux、LibSV、axis_register、ZipCPU 四输入上经核心绑定和执行；mux 输出与上节
+已实测候选一致，另外三项输出与 v7 一致。这里只报告兼容性，不增加 TRAIN、
+方法、独立来源或 FINAL 分母；没有新 native/模型调用，也没有真实检索收益声明。
+
+验证：现有 v8 单一检查入口从 12 项扩为 19 项，包含 RAM draft、目标重绑定、
+防篡改、candidate replay、伪造及非 strict promotion 拒绝。另有 v7 Action 18 项、
+v7 Asset 29 项、controller/provider/native 解析 25 项通过；371 个 Python 文件语法通过。
+第二份解压副本实际禁网重跑 worker，19 项与四候选均通过，完整报告及候选逐字节一致。
+
+首次封装把 LibSV clean SHA 错填为 fault pin，冻结前 assertion 阻止了 worker；
+该部分包完整保留为 `failed-preparation-r1`。按原 TRAIN 清单核对修正的只有 expected
+pin，输入文件、算法与案例不变；`preparation-r2.md` 在首次 worker 前登记。
+
+证据根：`/data1/zhangdy/RTL/RTL_testbench/_r5_pilot/dev/gen6-v8-core-r1`。
+recovery receipt：`7128d003cac37af7dac1d69ab4a1a36b50df863f317c465093da2c35036e0b24`。
+最终 792 文件包含失败封装、原始/恢复运行及回归日志，解压清单一致：
+
+- seal SHA256：`97d51282e02aaffaedf1ff83c75bdbc5bbf45c5b23b73dcfa453d4285d304ada`。
+- archive SHA256：`7cd300b332446e8c5cf77eefb8a61249ace0ed78d9203544898cb2cc91f27ede`。
+- 独立副本：`/data1/zhangdy/.cache/tmp/tehm-r5-v8-core-138sdsd7`，仍是同机临时备份。
+
+冻结 gen5 保持干净，三份 Memory 摘要不变，无 push。下一步须另登记合法 TRAIN，
+在冻结新动作下采集并冷审原始 target/preservation/rollback，接入实际 evidence verifier；
+随后才构建新 Memory、冻结新目标并做三态及共享 primitive 对照。R5 尚未完成。

@@ -100,6 +100,10 @@ def bind_rtl_asset_to_source(asset: Mapping, source: str, *, design_id: str,
     from .skid_binding_v5 import CONTRACT as SKID_V5_CONTRACT, bind_skid_asset_to_source_v5
     from .skid_binding_v6 import CONTRACT as SKID_V6_CONTRACT, bind_skid_asset_to_source_v6
     from .skid_binding_v7 import CONTRACT as SKID_V7_CONTRACT, bind_skid_asset_to_source_v7
+    from .skid_binding_v8 import CONTRACT as SKID_V8_CONTRACT, bind_skid_asset_to_source_v8
+    if isinstance(template, Mapping) and template.get("contract") == SKID_V8_CONTRACT:
+        return bind_skid_asset_to_source_v8(
+            asset, source, design_id=design_id, public_context=public_context)
     if isinstance(template, Mapping) and template.get("contract") == SKID_V7_CONTRACT:
         return bind_skid_asset_to_source_v7(
             asset, source, design_id=design_id, public_context=public_context)
