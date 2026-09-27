@@ -108,3 +108,17 @@ Both original raw audits and 12+9 offline checks pass. Two copies of the 301-fil
 ## Gen6 v8 mux TRAIN component (GM still open)
 
 [The v8 report](research_r5_gen6_mux_v8_20260926.md) now includes newly preregistered researcher-assisted TRAIN reuse of the observed drewbabel source, not relabelled DEV receipts. Frozen core action, three fresh fault/candidate/source-rollback arms and nine original oracles show FAIL/PASS/FAIL on target/native with preservation PASS. Initial cold audit r1 failed because it misclassified native scoreboard ERROR rows; its bundle/exit/logs remain intact. R2 corrects only raw-audit interpretation, reaudits original logs without rerunning TRAIN, and is frozen before the one nine-oracle recovery. Action/oracle/input bytes stay identical; the corrected audit produces matching evidence for both runs. Fifteen parser and seven tamper controls plus nineteen core checks pass. Final 945-file seal: 3094172a44d7e6f884b32ab9ed334438bfd8676f3bbbcf657aa2cd7d195b4cce. This is one source component, no independent-lineage claim, Memory authority, Mremove, new method/FINAL task or API call. Remaining v8 TRAIN/evidence gates, new Memory and fresh-target attribution remain open. Gen5 unchanged; no push.
+
+
+## 2026-09-27 v8 TRAIN raw-consumer checkpoint
+
+The v8 AXIS/ZipCPU component and its real source rollback/recovery are now indexed
+alongside mux. The pinned three-component raw consumer replays both original and
+recovery logs in read-only, network-isolated processes using frozen auditor/import
+closures. Twenty rejection checks and actual second-copy cold replay passed;
+no new simulation, model call or method task was added. ZipCPU native sensitivity
+remains MISSED; mux audit-r1 failure is retained. See
+[the current v8 report](research_r5_gen6_mux_v8_20260926.md) for exact seals and recovery.
+This closes raw-consumer plumbing, not GM: bounded lineage evidence and strict
+Asset/Knowledge admission are still required before a new M0 or unseen-target
+three-view/shared-primitive experiment. The v8 promotion guard remains closed.

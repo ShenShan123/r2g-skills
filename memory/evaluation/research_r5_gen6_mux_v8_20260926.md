@@ -167,3 +167,59 @@ TB、Makefile 和工具保持不变。新增冷审入口 `research_r5_train_mux`
 冻结 gen5 工作树与三份 Memory 不变，无 push。当前只完成一个 TRAIN source component，
 不是两个独立 lineage。仍须补齐其他来源的 v8 TRAIN 证据及核心 evidence verifier，
 然后构建新 M−/M+/Mremove、冻结新目标并作共享软件的真实迁移/归因；R5 继续进行。
+
+
+## 后续：AXIS / ZipCPU v8 TRAIN 与源回滚
+
+两例在冻结 v8 软件下另登记为 `RESEARCHER_ASSISTED_TRAIN_REUSED_DEV_V8`，
+完成故障、候选、实际源恢复后的原始仿真。AXIS 为固定 9 项 native cocotb suite；
+ZipCPU 为 direct/backpressure 两个 research-augmented scope，不改变其 native
+payload oracle MISSED 结论。两例 target 均 FAIL/PASS/FAIL，preservation 均 PASS；
+AXIS native 为 FAIL/PASS/FAIL。原运行 9 次，第二副本恢复另 9 次；不是新任务分母。
+
+证据根：`_r5_pilot/training/skid-v8-axis-zip-r1`（相对 RTL_testbench）。
+
+- receipt SHA256：`bfc86a13f90a301e81cf15994761b5349ab9623636bb0d65e8d83bf45033a90d`。
+- seal SHA256：`28acad31bb8b20d8e1da464e284fe027427deee3bb5fe2d7dafd17fe22b3b3aa`。
+- 完整 archive SHA256：`1f4f7959f078aa94c045c8501823f5b5e752ef8971f97681e98bb7075eaceeb0`。
+- 第二副本：`/data1/zhangdy/.cache/tmp/tehm-r5-v8-axis-zip-exd4fkri`，1261 个封存文件。
+
+本轮消费前重新核对上述两个摘要及全文件清单；冷审重算而非沿用 PASS 标签。
+两例加 mux 为三个 TRAIN 分量，不自动等于三个统计独立来源。
+
+## 后续：统一 raw TRAIN 消费者（2026-09-27）
+
+新增核心消费者 `tehm.assets.r5_train_raw_v8.verify`，固定两个 package 的外部 seal、
+receipt 和 auditor 身份，验证全部文件后，在只读禁网子进程中运行各自冻结的
+verifier 及其冻结 imports。分别重算原始/恢复 source、action、编译输入、命令、
+原始日志判定和源回滚；结果须与精确 scope 合约、原保存审计及 recovery 一致。
+结束前再核对清单。禁用 bytecode/用户 site/环境 Python 配置，assert 检查未被优化掉。
+只调用冷审 verify，不进入 runner 的 prepare/inner/main，不调用模型或 simulator。
+
+mux 原 r1 审计失败保持原样，使用冻结的 r2 修正版审计器重判原始日志；没有重跑
+原实验来抹去失败。最终输出显式保留 `independent_lineages_established=false`、
+`memory_authority_granted=false`、`memory_mremove=false`，以及 ZipCPU native MISSED。
+这里的原始/恢复 18+18 次是过去执行记录，本次新增 simulator 执行数为零。
+
+20 项离线检查通过，覆盖 seal/receipt/auditor 篡改、缺失/多余文件、符号链接和
+路径逃逸、UNKNOWN、原始/恢复不一致、布尔值冒充计数、scope/role 变更、超时、
+错误进程、输出解析及只读隔离命令。它们是消费者检查，不是新 RTL 正结果。
+另 v8 核心 19 项、controller/provider/native 25 项通过；未修改旧 gen5 软件或三份 Memory。
+
+实际封装完整消费者代码、两个原 TRAIN package、失败记录和日志，第二解压副本
+在隔离环境中重新冷审及执行 20 项检查。输出逐字节同义，消费摘要：
+`sha256:c7542a4fb46873d0f4b2ce5b8a89854f9995f6113e130e24914fff33e7f5d7d7`。
+首次包装漏建输出父目录，在任何进程启动前失败；修正仅创建该目录，bundle 未变，
+详见 `prelaunch-failure.md`。没有把这次封装错误计成硬件任务。
+
+证据根：`_r5_pilot/training/skid-v8-raw-consumer-r1`。
+
+- receipt SHA256：`27ae868d40b0cf472267bc744f7f1f764832428c83e0d18bdfa20db5e93db09e`。
+- seal SHA256：`6e39657c0f8e56419492dcce0f05656684e3a1a887d852770c428fb0367c839d`。
+- 最终完整 archive SHA256：`f69992e88a4f5f0ffafeba5ed91a2d9d0f302b0508f497f73ca70e46e0e29c60`。
+- 第二副本：`/data1/zhangdy/.cache/tmp/tehm-r5-v8-raw-consumer-ulobvszf`，2600 个封存文件。
+
+这是同机恢复，仍需只读主机工具链，不是异地备份或跨主机 hermetic 保证。
+下一步是补齐三分量来源关系审计，并将 raw consumer 接入严格 Asset/Knowledge
+准入及新的只读 Memory；本模块本身不授予 authority。随后才冻结新目标和三态/
+共享 primitive 对照。GM、未见迁移及 ΔMemory 仍未完成；不 push、不新增 API。

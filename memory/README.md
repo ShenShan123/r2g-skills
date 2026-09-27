@@ -7,7 +7,7 @@ TRAIN Memory 构建保留 `python -m tehm.evaluation.research_r5_train_m0_v5`（
 另退役无现行调用的旧 DEV authority、第一版 TRAIN Asset、broadcast 和 S2 兼容性预检入口；见[清理续记](evaluation/tehm_tree_cleanup_20260924_r2.md)。
 [v8 DEV 修复与清理记录](evaluation/research_r5_gen6_mux_v8_20260926.md) 包含恢复位置和验证边界。
 v8 已通过已观察 DEV 的三项 oracle，并接通核心 Action／draft Asset；19 项 v8、72 项既有回归及第二副本恢复通过。TRAIN authority 仍关闭，不构成未见迁移或 ΔMemory 收益。
-新增 mux TRAIN 分量已完成故障／候选／源回滚共 9 项 oracle，第二副本另 9 项一致；首版冷审错误保留并经 r2 重审。仍仅一个来源，不授予 v8 Memory authority。
+v8 TRAIN 已覆盖 mux、AXIS、ZipCPU 三个分量：原运行共 18 项 oracle，恢复另 18 项；统一 raw 消费者在只读禁网环境重审两份完整证据并恢复通过（2026-09-27）。这不是三个已证明独立的 lineage；ZipCPU 仍为 augmented oracle，mux 首版冷审失败保留。v8 Memory authority 仍关闭。
 下文保留历史进度；旧代次复现应使用对应冻结软件，不直接运行已经退役的历史命令。
 
 **Versioned Verified Hardware Experience Graph**：R2G 记忆平面的完整替换方案。
