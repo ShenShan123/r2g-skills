@@ -1,0 +1,9 @@
+# R5 I²C DEV missed-ACK fault-sensitivity probe (pre-execution)
+
+This is a `DEV_ORACLE_QUALIFICATION` negative control, not a TEHM candidate, Memory improvement, held-out task or repair-rate observation. Source and clean native scope are fixed in `research_r5_i2c_dev_feasibility_20260927.md`; clean `run-r1` reached all five phases, rc 0, with immutable source closure and pinned MyHDL/Icarus dependency. That clean result did not itself qualify error sensitivity.
+
+Fault operator: stage a fresh copy of the same five source/test files, then in `rtl/i2c_master.v` replace exactly one non-reset sequential assignment `missed_ack_reg <= missed_ack_next;` with `missed_ack_reg <= 1'b0;`. Do not change the reset assignment, testbench, Python helpers, VPI or command. This models a suppressed missed-ACK status latch; the upstream checkout remains read-only. Record exact diff and all source hashes before running.
+
+Predeclared oracle expectation: tests 1–4 (write/readback for two slave memories) must complete; test 5 addresses nonexistent slave `0x52` and asserts `got_missed_ack`. The fault should be detected by that assertion with nonzero Python exit. A compile failure, MyHDL/VPI error, timeout, absent phase marker, or any earlier assertion is `UNDETERMINED`, not a target-specific detection. Passing fault would be `MISSED` and would block using this native test for this fault. There is one negative-control fault, not five independent repair tasks; no binder/action is run here.
+
+The fault and expected outcome were registered before applying the edit or executing the fault arm. No provider call is authorized or needed. Even if the negative control is detected, transfer still requires a versioned answer-free binder/action, legal TRAIN Memory, frozen independent source and paired M−/M+/Mremove fresh runs.
