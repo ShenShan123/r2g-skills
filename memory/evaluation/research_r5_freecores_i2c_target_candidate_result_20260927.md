@@ -1,0 +1,9 @@
+# freecores/i2c I²C 目标候选资格结果：oracle 有判定力，冻结 binder 拒绝
+
+按[事前候选登记](research_r5_i2c_freecores_target_candidate_20260927.md)和[故障合约](research_r5_freecores_i2c_nack_oracle_contract_20260927.md)，固定 `freecores/i2c` commit `3b067f00ccced753b0502024766a51f58f3e04bc`，用两个无 `.git` 的独立 archive 根在 Icarus Verilog 11.0、相同七文件闭包／无 `WITH_VTU` 配置下执行。上游 checkout 保持 clean。六份 RTL/TB 文件头含原作者的使用/分发条件与免责声明，但仓库无根 LICENSE/COPYING；不将其标为某个 SPDX license，也不据此承诺可公开分发衍生 corpus。文件头记录 OpenCores 来源，不以 `freecores` owner 名称代替 lineage 独立审计。
+
+clean 编译与仿真均 exit 0，原生日志有数据读回 `a5`／`5a`、`Check for nack`、`Testbench done`，无 `ERROR`。fault 仅将 `i2c_master_top.v` 非 reset 分支的 `rxack <= irxack;` 改为 `rxack <= 1'b0;`，其余六份输入与 clean 逐字节一致；编译与仿真仍 exit 0，也到达既有读写与终态，但 NACK 阶段出现唯一 `ERROR: Expected NACK, received ACK`。因此按预登记的**日志语义**，该指定故障的 native oracle 为 `DETECTED_FOR_REGISTERED_SCOPE`；若只按进程 rc，会错误地把 fault 算为 PASS。整个 testbench 是一个目标范围，不把各打印行拆成独立样本。
+
+冻结于 `1c01edd` 的 I²C v1 binder 软件 SHA256 `bb8f459b38c4797de17b62655a9e13b26e16fe32417d36ab5140a6d6624963ff`，在禁网 bwrap 中仅挂载自身代码与单份 buggy `i2c_master_top.v`（不挂载 clean、TB、gold、`.git` 或其他 arm）。用公开 `wishbone_status_err_bit_7` context 作唯一一次 probe，原样返回 `UNSUPPORTED / public_context_not_supported`，无 candidate、测试驱动搜索或软件修改。这是**当前方法适用域的负结果**，不是“修复失败后换目标”；此候选未进入 T/A 分母，也不是已完成 answer-free transfer。
+
+隔离证据根 `/data1/zhangdy/RTL/RTL_testbench/_r5_pilot/targets/freecores-i2c-r1/` 保存 26 个关键源、构建、原生日志、二进制和绑定输出，clean/fault stdout SHA256 分别为 `6d31d2f3a31a1f577be9cc9346920f6b27742a692d3c2613f4f9707de3f42d43`、`ae20020c75a82cfc72074ca60fb3238e9965b07098b166edfbd908a26c824e4c`。[审计回执](/data1/zhangdy/RTL/RTL_testbench/_r5_pilot/targets/freecores-i2c-r1/audit.json) SHA256 `1e90f120f7dd432427751125d626b3f301adb67076886e165beb91153079cf69`；独立只读复核重算全部 26 个摘要、固定 Git commit、唯一一行编辑、日志语义和拒绝边界，`valid=true`。这是 target-candidate qualification，不是 TRAIN Memory、M−/M+/Mremove、统计独立证明或论文正结果。若下一代想支持此结构，必须先把本来源改列 DEV、版本化冻结新软件，再找新的独立目标。无模型调用、无推送。
