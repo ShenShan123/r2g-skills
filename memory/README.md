@@ -2,7 +2,7 @@
 
 ## 当前 R5 入口（2026-09-27）
 
-当前 TRAIN Memory 构建入口为 `python -m tehm.evaluation.research_r5_train_m0_v8`（`PYTHONPATH=memory`）；gen5 构建器及其冻结结果保留为历史代次。
+当前 TRAIN Memory 构建入口为 `python -m tehm.evaluation.research_r5_train_m0_v8`（`PYTHONPATH=memory`）；gen5 构建器已从主工作树退役，历史代次软件保存在冻结 worktree 和 Git 历史中，冻结结果未删除。
 旧 gen1–4 构建入口及 gen4 一次性控制/审计脚本已退役；旧编号的运行依赖仍保留。
 另退役无现行调用的旧 DEV authority、第一版 TRAIN Asset、broadcast 和 S2 兼容性预检入口；见[清理续记](evaluation/tehm_tree_cleanup_20260924_r2.md)。 2026-09-27 再退役 15 个旧代次独立检查入口；见[第三次清理记录](evaluation/tehm_tree_cleanup_20260927_r3.md)。
 [v8 DEV 修复与清理记录](evaluation/research_r5_gen6_mux_v8_20260926.md) 包含恢复位置和验证边界。
