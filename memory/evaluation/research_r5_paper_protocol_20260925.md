@@ -81,3 +81,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=memory python3 -m tehm.evaluation.research_
 ```
 
 方法定义与脚本可以本地提交；原始 corpus、私有答案包不提交、不 push。机器检查通过仅表示当前计量协议自洽；最终数据、独立来源数、Agent 比较和功效仍需各自证据，不能据此宣告 R5 全部完成。
+
+## 2026-09-26 补充，不重写历史冻结
+
+[样本规划 P1](research_r5_sample_planning_20260926.md) 提供可复算的条件性精度情景，非功效或已选预算；[C7](research_r5_s2_provider_c7_20260926.md) 已有真实 DEV 三策略调用，但不增加 FINAL 样本。用户随后明确当前优先正向修复而非预设提升百分点，因此当前不启动确认性大样本路线，也不拿旧失败调参后重标未见成功。冻结 gen5/F1 不变；任何新方法开发另立代次，独立新目标、真实 Memory 归因和最终数据要求继续保留。
