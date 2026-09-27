@@ -4,6 +4,7 @@
 
 TRAIN Memory 构建保留 `python -m tehm.evaluation.research_r5_train_m0_v5`（`PYTHONPATH=memory`）。
 旧 gen1–4 构建入口及 gen4 一次性控制/审计脚本已退役；旧编号的运行依赖仍保留。
+另退役无现行调用的旧 DEV authority、第一版 TRAIN Asset、broadcast 和 S2 兼容性预检入口；见[清理续记](evaluation/tehm_tree_cleanup_20260924_r2.md)。
 [v8 DEV 修复与清理记录](evaluation/research_r5_gen6_mux_v8_20260926.md) 包含恢复位置和验证边界。
 v8 已通过已观察 DEV 的三项 oracle，并接通核心 Action／draft Asset；19 项 v8、72 项既有回归及第二副本恢复通过。TRAIN authority 仍关闭，不构成未见迁移或 ΔMemory 收益。
 新增 mux TRAIN 分量已完成故障／候选／源回滚共 9 项 oracle，第二副本另 9 项一致；首版冷审错误保留并经 r2 重审。仍仅一个来源，不授予 v8 Memory authority。
