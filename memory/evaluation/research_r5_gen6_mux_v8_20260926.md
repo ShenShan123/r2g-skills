@@ -120,3 +120,50 @@ recovery receipt：`7128d003cac37af7dac1d69ab4a1a36b50df863f317c465093da2c35036e
 冻结 gen5 保持干净，三份 Memory 摘要不变，无 push。下一步须另登记合法 TRAIN，
 在冻结新动作下采集并冷审原始 target/preservation/rollback，接入实际 evidence verifier；
 随后才构建新 Memory、冻结新目标并做三态及共享 primitive 对照。R5 尚未完成。
+
+## 后续：合法登记的 mux TRAIN 分量与源回滚
+
+在新执行前将已观察 drewbabel 案例登记为 `RESEARCHER_ASSISTED_TRAIN_REUSED_DEV`；
+不再作为后续未见/FINAL 来源，也不改写旧 PILOT/DEV 身份。动作使用冻结的
+`70fa5e63bd941b6ae067159e26b49b1005586119` 核心代码及已核验文件清单。
+这是一项新 TRAIN 执行，不是将旧 DEV PASS 回执改名。
+
+原始 TRAIN 共 9 项 oracle：fault、core v8 实际生成的 candidate、source rollback，
+每臂分别运行 target/preservation/native，结果如下：
+
+| TRAIN 臂 | target | preservation | native |
+| --- | --- | --- | --- |
+| fault | FAIL_SECOND_DELIVERY | PASS | FAIL_NATIVE |
+| candidate | PASS | PASS | PASS |
+| rollback | FAIL_SECOND_DELIVERY | PASS | FAIL_NATIVE |
+
+Rollback 在新目录先写入实际候选，再从原始 fault backup 恢复并重新编译运行，
+不是复用 fault 臂结果；这不是 Memory Mremove。候选 SHA 与上一 DEV 结果一致。
+source-only worker 不挂载私有测试、上游原版、Git、Memory 或网络。原 qualifier、
+TB、Makefile 和工具保持不变。新增冷审入口 `research_r5_train_mux` 重推动作，
+核对 worker 隔离参数、实际编译输入、命令、测试和日志，独立重算 verdict。
+
+首次 9 项执行完成后，冷审 r1 因错误地把 native scoreboard 的 `$error` 一律拒绝
+而退出 1；原始 bundle/auditor/launch/raw logs 完整保留。已有 qualification/DEV 日志
+以及固定 TB 的第 104 行均确认这是功能失配标记。r2 只修正冷审器，要求 ERROR 行
+逐条符合固定 payload scoreboard 格式、数量与非零失败汇总相符；其他错误仍不可 PASS。
+原训练没有重跑；在执行恢复前登记并冻结 r2 overlay，仅 `audit.py` 与 lock 摘要改变。
+动作软件和原有 oracle 没有改变，两次结果统一由 r2 冷审。不能声称原 r1 审计成功。
+
+第二份解压副本实际执行预登记的另 9 项恢复 oracle，完整判定、动作、候选及回滚回执
+一致；不增加训练来源/任务数。15 项解析反例和 7 项 metadata 篡改检查通过，
+19 项既有核心检查通过。未新增模型调用，无 v8 Knowledge/Asset authority 或 Memory 写入。
+
+证据根：`/data1/zhangdy/RTL/RTL_testbench/_r5_pilot/training/skid-v8-mux-r1`。
+第二副本：`/data1/zhangdy/.cache/tmp/tehm-r5-v8-mux-train-5fldlvj4`，同机临时备份。
+
+- recovery receipt：`34129f5f8512bf2c916acea880762b7e0a0162a33942df4f6a33944668128a6d`。
+- 最终 945 文件 seal：`3094172a44d7e6f884b32ab9ed334438bfd8676f3bbbcf657aa2cd7d195b4cce`。
+- archive：`2cfa8e5084076aa2ffc605a6f325dbc3b539252f370fc6bd67471fd41c6fd10c`。
+- r1 auditor：`2450a083fc86ada42281cc796881d4cc7740ddc9de6f00da9be4e67a4db508c8`；
+  r2 auditor：`53ce91f3bd20313b8f49d4589c2b83bac2417cd69572b6d6249b3ee0585048e9`。
+
+最终归档包括失败审计、修正版、全部原始/恢复执行和回归日志；解压清单一致。
+冻结 gen5 工作树与三份 Memory 不变，无 push。当前只完成一个 TRAIN source component，
+不是两个独立 lineage。仍须补齐其他来源的 v8 TRAIN 证据及核心 evidence verifier，
+然后构建新 M−/M+/Mremove、冻结新目标并作共享软件的真实迁移/归因；R5 继续进行。
