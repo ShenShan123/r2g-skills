@@ -4,7 +4,7 @@
 
 TRAIN Memory 构建保留 `python -m tehm.evaluation.research_r5_train_m0_v5`（`PYTHONPATH=memory`）。
 旧 gen1–4 构建入口及 gen4 一次性控制/审计脚本已退役；旧编号的运行依赖仍保留。
-另退役无现行调用的旧 DEV authority、第一版 TRAIN Asset、broadcast 和 S2 兼容性预检入口；见[清理续记](evaluation/tehm_tree_cleanup_20260924_r2.md)。
+另退役无现行调用的旧 DEV authority、第一版 TRAIN Asset、broadcast 和 S2 兼容性预检入口；见[清理续记](evaluation/tehm_tree_cleanup_20260924_r2.md)。 2026-09-27 再退役 15 个旧代次独立检查入口；见[第三次清理记录](evaluation/tehm_tree_cleanup_20260927_r3.md)。
 [v8 DEV 修复与清理记录](evaluation/research_r5_gen6_mux_v8_20260926.md) 包含恢复位置和验证边界。
 v8 已接通核心 Action／Asset，现已通过三分量原始 TRAIN 与有界来源审计驱动的严格 Asset 准入：30 项 RAM 检查及独立解压恢复通过。仅在临时 RAM 的研究 profile 测试 promotion；未构建新 Memory，不构成未见迁移或 ΔMemory 收益。
 v8 TRAIN 已覆盖 mux、AXIS、ZipCPU 三个分量：原运行共 18 项 oracle，恢复另 18 项；统一 raw 消费者在只读禁网环境重审两份完整证据并恢复通过（2026-09-27）。来源审计只支持三个固定文件的有界历史来源组，不证明统计独立；ZipCPU 仍为 augmented oracle，mux 首版冷审失败保留。Knowledge 准入与新 Memory 构建仍待完成。
