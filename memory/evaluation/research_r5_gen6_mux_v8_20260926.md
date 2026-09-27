@@ -223,3 +223,62 @@ mux 原 r1 审计失败保持原样，使用冻结的 r2 修正版审计器重�
 下一步是补齐三分量来源关系审计，并将 raw consumer 接入严格 Asset/Knowledge
 准入及新的只读 Memory；本模块本身不授予 authority。随后才冻结新目标和三态/
 共享 primitive 对照。GM、未见迁移及 ΔMemory 仍未完成；不 push、不新增 API。
+
+
+## 后续：有界来源与严格 Asset 准入（2026-09-27）
+
+新增 `assets/r5_train_lineage_v8.py`：重新核对 15 份固定历史输入、non-fork 元数据、
+文件新增 commit／作者记录／Git blob，并将三份候选源码绑定到已冷审的 v8 TRAIN。
+三个源码两两没有字节／注释空白归一化完全重复，也没有满足 160 字符门槛的相同
+8 行窗口；token 相似度仅描述，不用作统计独立性的阈值。mux 原新增版本与去除
+唯一 inactive FORMAL 块、保留模块尾部后的实现 token 相等。
+
+mux 仓库 vendored 了 Alex Forencich／ZipCPU 的其他文件，此关系保留。原始和恢复
+运行的三个 native arm 的 VVP 均只 elaborates `axis_skid_tb` 与 `axis_skid`；本 scope
+不使用这些 vendored DUT。来源判定仅为三个固定文件的 recorded-origin/project
+分组，不证明独立人类作者、错误概率独立或不存在隐藏改写／外部 generator。
+既有 `independent_authorship_proven=false` 没有改写。
+
+来源摘要：`sha256:3d50d97014f9fee8e6224f80429a32da8f196c37eb87be839601e54155944876`。
+来源回执：`_r5_pilot/source-locks/skid-v8-lineage-r1/receipt.json`，SHA256
+`91219e005fbac8f1f74f8e5d61d728c60e3d2f4be4264d1b445b939d48d54aad`。
+来源输入及回执内容一并纳入下述完整证据包，不仅保存指针。
+
+新增 `assets/r5_train_evidence_v8.py`，接入现有 lifecycle、严格 authority ledger 记录/
+冷审及 registry。每次完整重算三源 raw + lineage，再用当前核心 source-only 绑定/
+action 重建候选与逐 case oracle witness，精确比较调用方绑定、验证和回滚回执。
+不接受 design ID、owner 名或 verified 布尔值作为证明；即使调用方 min_lineages=1，
+仍要求三个完整分量与至少三个有界来源组。非 strict promotion 仍拒绝。
+严格行必须是 training，source_id/lineage_id 与固定三源精确一致；cold verifier
+还比对完整派生证据摘要。旧 v3–v7 gate 未放宽。
+
+`research_r5_train_asset_authority_v8_checks` **30/30** 通过：真实 RAM draft 注册、
+严格 ledger 写入、第二 RAM 连接冷加载、仅研究 profile 的 strict promotion；
+以及伪造 oracle/绑定/回滚、少分量、第四来源、错误 scope、缺原始证据、UNKNOWN、
+共享来源、非 strict、实际 ledger 篡改、heldout 实际记录与冷审拒绝。
+无 Knowledge 对象、持久 Memory 修改、生产授权、新模型调用或 simulator 执行。
+RAM authority digest：
+`sha256:56a4bbd3bc8f79b61d12e3bba961e427def0bf94971491742c7ef6cc8f70d940`。
+
+保留两项开发失败：首版来源 token 比较误删了当前源码的 module footer，按完整
+inactive FORMAL 边界修正，不改变历史比较指标；首版 RAM 篡改测试把 `asset_binding`
+错写为 `binding`，实际改了 0 行，27 项中此项失败。修正后要求确实改到 3 行再验证
+拒绝。失败代码与说明均归档，没有调整 TRAIN 判定或掩盖失败。
+
+原运行与第二解压副本都在禁网、证据只读且不挂载主工作树、原始上游或持久 Memory
+的环境执行全部 30 项检查；完整 JSON 字节一致，SHA256：
+`1269db68d70ed10aa3638f52021c4f5769f3b44ff1f831c59d90edf122cfd775`。
+另有 111 项既有回归通过（v8 19、v7 Action 18、v7 Asset 29、raw 20、Agent/native 25）；
+373 个 Python 文件语法通过。旧 gen5 工作树及 M−/M+/Mremove 摘要不变。
+
+证据根：`_r5_pilot/training/skid-v8-authority-r1`。
+
+- receipt SHA256：`4a3c4ab7c9c833f5c046ef560bb64c0850f00dbe8fdd22da4f57eb5f2abae1cd`。
+- seal SHA256：`5e3c5ccdd477114bdf86ac1e8e36849063bc4c0780bd7727c4e17e3dcb62d66d`。
+- 最终 archive SHA256：`90c326271b9b9b3a7137b25a9bd0d1fff3d66a7b6d33cf609a7e86d3720c8647`。
+- 第二副本：`/data1/zhangdy/.cache/tmp/tehm-r5-v8-authority-s7bj0vvt`，2630 个封存文件。
+
+同机备份、主机只读工具依赖的限制不变。此 checkpoint 只建立研究范围 Asset
+准入；下一步将同一 raw TRAIN 证据接入 canonical/Knowledge 验证并构建新代只读
+Memory，再冻结真正未见目标、三态及共享 primitive 对照。GM 完整门槛及后续
+迁移／归因尚未完成，不 push。

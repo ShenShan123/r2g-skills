@@ -1,4 +1,4 @@
-"""Source-bound v8 draft Asset bridge; raw TRAIN authority remains closed."""
+"""Source-bound v8 Asset bridge; authority requires separate strict TRAIN replay."""
 from collections.abc import Mapping
 import copy
 from dataclasses import replace

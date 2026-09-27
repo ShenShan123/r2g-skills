@@ -456,6 +456,14 @@ def record_asset_authority(
         if not metadata_ok:
             missing.append("r5_v7_train_evidence_row_metadata")
             eligible = False
+    from .skid_binding_v8 import is_skid_v8_asset
+    if is_skid_v8_asset(asset):
+        from .r5_train_evidence_v8 import verify_train_row_metadata as verify_v8_metadata
+        metadata_ok = verify_v8_metadata(validation_entries, binding_entries)
+        evidence["r5_v8_train_row_metadata_verified"] = metadata_ok
+        if not metadata_ok:
+            missing.append("r5_v8_train_evidence_row_metadata")
+            eligible = False
     if (validation_malformed or binding_malformed or rollback_malformed or
             len(rollback_entries) != 1):
         missing.append("asset_authority_evidence_malformed")
@@ -645,6 +653,13 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
                             loaded_metadata["validation"], loaded_metadata["binding"])):
                     reasons.append("r5_v7_train_evidence_row_metadata_mismatch")
 
+            from .skid_binding_v8 import is_skid_v8_asset
+            if is_skid_v8_asset(asset):
+                from .r5_train_evidence_v8 import verify_train_row_metadata as verify_v8_metadata
+                if (evidence.get("r5_v8_train_row_metadata_verified") is not True or
+                        not verify_v8_metadata(loaded_metadata["validation"], loaded_metadata["binding"])):
+                    reasons.append("r5_v8_train_evidence_row_metadata_mismatch")
+
             try:
                 min_lineages = int(evidence.get("min_lineages") or 1)
                 derived = evaluate_asset_authority(
@@ -658,6 +673,9 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
             except (TypeError, ValueError):
                 derived = None
                 reasons.append("authority_evidence_malformed")
+            if (derived is not None and is_skid_v8_asset(asset) and
+                    stable_dumps(evidence.get("derived_evidence")) != stable_dumps(dict(derived.evidence))):
+                reasons.append("r5_v8_derived_evidence_mismatch")
             if derived is not None and dict(checks) != dict(derived.checks):
                 reasons.append("authority_checks_mismatch")
             if derived is not None and tuple(sorted(missing)) != tuple(sorted(derived.missing)):

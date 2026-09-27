@@ -122,3 +122,20 @@ remains MISSED; mux audit-r1 failure is retained. See
 This closes raw-consumer plumbing, not GM: bounded lineage evidence and strict
 Asset/Knowledge admission are still required before a new M0 or unseen-target
 three-view/shared-primitive experiment. The v8 promotion guard remains closed.
+
+
+## 2026-09-27 v8 strict Asset admission checkpoint
+
+The three pinned source files now have a cold-replayed, bounded recorded-origin
+screen including file-addition history, Git blobs, non-fork snapshots, overlap
+and the mux actual elaboration closure. This is not statistical independence or
+proof against hidden rewrites. Strict v8 Asset evidence is wired through the
+existing lifecycle, ledger recording/cold verification and registry. All three
+TRAIN components are mandatory; owner/design labels and caller booleans do not
+satisfy the gate. Thirty RAM-only checks and actual second-copy recovery passed,
+including research-profile promotion, heldout rows and real ledger corruption.
+Two auditor/checker development failures remain archived. See the
+[current v8 report](research_r5_gen6_mux_v8_20260926.md) for exact evidence identities.
+No persistent Memory, Knowledge, new method task, provider call or EDA execution
+was created. GM remains partial until canonical/Knowledge admission and a new
+snapshot/delta pass; unseen-target T/A and shared-primitive controls remain open.

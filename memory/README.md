@@ -1,13 +1,13 @@
 # TEHM — Typed Executable Hardware Memory
 
-## 当前 R5 入口（2026-09-26）
+## 当前 R5 入口（2026-09-27）
 
 TRAIN Memory 构建保留 `python -m tehm.evaluation.research_r5_train_m0_v5`（`PYTHONPATH=memory`）。
 旧 gen1–4 构建入口及 gen4 一次性控制/审计脚本已退役；旧编号的运行依赖仍保留。
 另退役无现行调用的旧 DEV authority、第一版 TRAIN Asset、broadcast 和 S2 兼容性预检入口；见[清理续记](evaluation/tehm_tree_cleanup_20260924_r2.md)。
 [v8 DEV 修复与清理记录](evaluation/research_r5_gen6_mux_v8_20260926.md) 包含恢复位置和验证边界。
-v8 已通过已观察 DEV 的三项 oracle，并接通核心 Action／draft Asset；19 项 v8、72 项既有回归及第二副本恢复通过。TRAIN authority 仍关闭，不构成未见迁移或 ΔMemory 收益。
-v8 TRAIN 已覆盖 mux、AXIS、ZipCPU 三个分量：原运行共 18 项 oracle，恢复另 18 项；统一 raw 消费者在只读禁网环境重审两份完整证据并恢复通过（2026-09-27）。这不是三个已证明独立的 lineage；ZipCPU 仍为 augmented oracle，mux 首版冷审失败保留。v8 Memory authority 仍关闭。
+v8 已接通核心 Action／Asset，现已通过三分量原始 TRAIN 与有界来源审计驱动的严格 Asset 准入：30 项 RAM 检查及独立解压恢复通过。仅在临时 RAM 的研究 profile 测试 promotion；未构建新 Memory，不构成未见迁移或 ΔMemory 收益。
+v8 TRAIN 已覆盖 mux、AXIS、ZipCPU 三个分量：原运行共 18 项 oracle，恢复另 18 项；统一 raw 消费者在只读禁网环境重审两份完整证据并恢复通过（2026-09-27）。来源审计只支持三个固定文件的有界历史来源组，不证明统计独立；ZipCPU 仍为 augmented oracle，mux 首版冷审失败保留。Knowledge 准入与新 Memory 构建仍待完成。
 下文保留历史进度；旧代次复现应使用对应冻结软件，不直接运行已经退役的历史命令。
 
 **Versioned Verified Hardware Experience Graph**：R2G 记忆平面的完整替换方案。

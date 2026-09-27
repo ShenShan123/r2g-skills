@@ -213,7 +213,7 @@ class CoreChecks(unittest.TestCase):
             with self.subTest(context=context), self.assertRaises(ValueError):
                 bind_rtl_asset_to_source(self.asset, SOURCE, design_id='opaque', public_context=context)
 
-    def test_boolean_and_strict_authority_stay_closed(self):
+    def test_boolean_and_forged_strict_authority_stay_closed(self):
         from tehm.assets.lifecycle import evaluate_asset_authority, evaluate_asset_promotion_gates, ASSET_PROMOTION_GATES
         from tehm.assets.authority import record_asset_authority, verify_asset_authority
         from tehm.assets.registry import set_asset_status, get_asset_status
@@ -225,7 +225,7 @@ class CoreChecks(unittest.TestCase):
         pure = evaluate_asset_authority(self.asset, validation_receipts=[fake, fake], bindings=bounds,
                                        rollback_receipt=rollback, target_scope=PROFILE, min_lineages=1)
         self.assertFalse(pure.eligible)
-        self.assertEqual(pure.evidence['reason'], 'v8_raw_train_authority_not_implemented')
+        self.assertEqual(pure.evidence['reason'], 'v8_train_evidence_cardinality')
         booleans = {name: True for name in ASSET_PROMOTION_GATES}
         self.assertFalse(evaluate_asset_promotion_gates(self.asset, booleans, target_scope=PROFILE).eligible)
         strict = record_asset_authority(self.conn, asset_id=self.asset['asset_id'], target_scope=PROFILE,

@@ -23,7 +23,7 @@ def _v8_pending(asset, target_scope):
         asset_id=str(asset.get("asset_id") or ""), target_scope=target_scope,
         eligible=False, checks={name: False for name in ASSET_PROMOTION_GATES},
         missing=ASSET_PROMOTION_GATES,
-        evidence={"reason": "v8_raw_train_authority_not_implemented",
+        evidence={"reason": "v8_requires_strict_raw_train_authority",
                   "lineages": [], "design_ids_are_not_lineages": True})
 
 
@@ -100,9 +100,12 @@ def evaluate_asset_authority(
             checks={name: False for name in ASSET_PROMOTION_GATES},
             missing=ASSET_PROMOTION_GATES,
             evidence={"reason": "asset_not_mapping"})
-    pending = _v8_pending(asset, target_scope)
-    if pending is not None:
-        return pending
+    from .skid_binding_v8 import is_skid_v8_asset
+    if is_skid_v8_asset(asset):
+        from .r5_train_evidence_v8 import evaluate as evaluate_v8
+        return evaluate_v8(asset, validation_receipts=validation_receipts,
+                           bindings=bindings, rollback_receipt=rollback_receipt,
+                           target_scope=target_scope, min_lineages=min_lineages)
     schema_valid, schema_errors = validate_asset_schema(asset)
     try:
         validations = [dict(item) for item in (validation_receipts or ())
