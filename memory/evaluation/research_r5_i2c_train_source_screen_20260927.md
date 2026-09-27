@@ -1,0 +1,9 @@
+# R5 I²C TRAIN-source candidate screen registration
+
+Role: `TRAIN_CANDIDATE_SCREEN`, not DEV answer, PILOT_TRANSFER or FINAL_TEST. This is a bounded targeted acquisition under R5 §7.4 because the qualified `alexforencich/verilog-i2c` DEV missed-ACK scope has no second source lineage yet. Exactly one repository is admitted to this screen: `https://github.com/ZipCPU/wbi2c.git`, HEAD observed before clone as `afa64c2c151731fd4bcd5b3af9dd3b9a84c857e2`. Clone under `/data1/zhangdy/RTL/RTL_testbench/ZipCPU/wbi2c`; do not modify upstream or infer test qualification from README alone.
+
+The [repository README](https://github.com/ZipCPU/wbi2c) describes Wishbone-accessible I²C master/slave cores, a `bench/` directory and GPLv3 terms. Those are metadata cues, not proof of NACK-status coverage, clean simulation, independent source lineage, or reuse permission for any future redistributed artifact. No RTL/TB has yet been inspected for this screen.
+
+Screen in this order: verify exact commit/remote/dirty state and license text; inventory RTL and bench filenames/commands; inspect only this TRAIN candidate for an actual target-observable NACK-status obligation; if a suitable native test exists, preregister a clean and single negative-control fault before running it. Keep raw output and compiled source identity. A smoke test, non-self-checking waveform, compile-only or unqualified test is insufficient. If no bounded comparable mechanism/oracle exists, record the negative screen and stop this source without tuning an eventual unseen target.
+
+Nothing from this screen is automatically promoted into TEHM Memory. Legal TRAIN experience still requires frozen role assignment, source-lineage audit, raw baseline/action/rollback, target and preservation checks, and core Knowledge/Asset admission. `freecores/i2c` remains unread and unresolved as a possible target; neither it nor any other held-out RTL/TB may be used to develop this candidate screen.
