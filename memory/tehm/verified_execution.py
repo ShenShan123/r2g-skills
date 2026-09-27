@@ -88,6 +88,10 @@ def _require_scoped_replay(facts) -> None:
         from tehm.adapters.research_r5_rtl_scoped_v5 import replay_persisted_rtl_train_v5
         replay_persisted_rtl_train_v5(
             conn, facts.transition_id, acquisition_data=acquisition)
+    elif version == "tehm-r5-rtl-train-scoped-v8":
+        from tehm.adapters.research_r5_rtl_scoped_v8 import replay_persisted_rtl_train_v8
+        replay_persisted_rtl_train_v8(
+            conn, facts.transition_id, acquisition_data=acquisition)
     elif version in {"orfs-scoped-record-v1", "orfs-rc1-seed-record-v1"}:
         from tehm.adapters.orfs_scoped import replay_persisted_flow_feasibility
         replay_persisted_flow_feasibility(
