@@ -211,6 +211,11 @@ def set_asset_status(
     if status != old_status and status not in ASSET_STATUS_TRANSITIONS[old_status]:
         raise ValueError(f"invalid asset status transition {old_status}->{status}")
     if status == "promoted":
+        from .lifecycle import _v9_shadow_pending
+        pending = _v9_shadow_pending(asset, target_scope)
+        if pending is not None:
+            raise ValueError(pending.evidence['reason'])
+
         from .r5_train_evidence import is_r5_skid_asset
         from .skid_binding_v4 import is_skid_v4_asset
         from .skid_binding_v5 import is_skid_v5_asset

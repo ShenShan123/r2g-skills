@@ -11,7 +11,7 @@ import re
 
 from tehm.rtl.verilog_parse import parse_verilog
 
-RTL_ACTION_VERSION = "rtl-actions-v0.9"
+RTL_ACTION_VERSION = "rtl-actions-v1.0"
 RTL_ACTION_DOMAINS = (
     "rtl.AST_REWRITE", "rtl.GUARD_STRENGTHEN", "rtl.RESET_RESTORE",
     "rtl.WIDTH_CORRECT", "rtl.PRIORITY_REORDER", "rtl.FSM_GUARD_CONJOIN",
@@ -23,6 +23,7 @@ RTL_ACTION_DOMAINS = (
     "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V6",
     "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V7",
     "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V8",
+    "rtl.SKID_ONE_PROCESS_DRAIN_SHADOW_V9",
 )
 
 
@@ -53,6 +54,9 @@ def apply_rtl_action(source: str, payload: dict) -> tuple[str, dict]:
     if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V8":
         from .skid_payload_action_v8 import apply_skid_payload_action_v8
         return apply_skid_payload_action_v8(source, payload)
+    if domain == "rtl.SKID_ONE_PROCESS_DRAIN_SHADOW_V9":
+        from .skid_payload_action_v9 import apply_skid_payload_action_v9
+        return apply_skid_payload_action_v9(source, payload)
     if domain == "rtl.FSM_GUARD_CONJOIN":
         from .guard_conjunction import apply_guard_conjunction
         return apply_guard_conjunction(

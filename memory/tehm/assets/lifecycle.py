@@ -27,6 +27,26 @@ def _v8_pending(asset, target_scope):
                   "lineages": [], "design_ids_are_not_lineages": True})
 
 
+def _v9_shadow_pending(asset, target_scope):
+    """A software-only v9 primitive has no admitted raw TRAIN authority."""
+    from tehm.rtl.skid_payload_action_v9 import DOMAIN, PROFILE
+    definition = asset.get('definition')
+    compatibility = asset.get('compatibility')
+    action = definition.get('action') if isinstance(definition, Mapping) else None
+    payload = action.get('payload') if isinstance(action, Mapping) else None
+    if not ((isinstance(action, Mapping) and action.get('domain') == DOMAIN) or
+            (isinstance(payload, Mapping) and payload.get('domain') == DOMAIN) or
+            (isinstance(compatibility, Mapping) and
+             compatibility.get('compatibility_profile') == PROFILE)):
+        return None
+    return AssetPromotionReceipt(
+        asset_id=str(asset.get('asset_id') or ''), target_scope=target_scope,
+        eligible=False, checks={name: False for name in ASSET_PROMOTION_GATES},
+        missing=ASSET_PROMOTION_GATES,
+        evidence={'reason': 'v9_raw_train_authority_not_implemented',
+                  'lineages': [], 'design_ids_are_not_lineages': True})
+
+
 def evaluate_asset_promotion_gates(
     asset: Mapping,
     gates: Mapping | None,
@@ -42,7 +62,7 @@ def evaluate_asset_promotion_gates(
             checks={name: False for name in ASSET_PROMOTION_GATES},
             missing=ASSET_PROMOTION_GATES,
             evidence={"reason": "asset_not_mapping"})
-    pending = _v8_pending(asset, target_scope)
+    pending = _v9_shadow_pending(asset, target_scope) or _v8_pending(asset, target_scope)
     if pending is not None:
         return pending
     source = dict(gates) if isinstance(gates, Mapping) else {}
@@ -101,6 +121,9 @@ def evaluate_asset_authority(
             missing=ASSET_PROMOTION_GATES,
             evidence={"reason": "asset_not_mapping"})
     from .skid_binding_v8 import is_skid_v8_asset
+    pending = _v9_shadow_pending(asset, target_scope)
+    if pending is not None:
+        return pending
     if is_skid_v8_asset(asset):
         from .r5_train_evidence_v8 import evaluate as evaluate_v8
         return evaluate_v8(asset, validation_receipts=validation_receipts,

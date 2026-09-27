@@ -25,6 +25,7 @@ from tehm.rtl.skid_payload_action_v5 import DOMAIN as SKID_V5_DOMAIN
 from tehm.rtl.skid_payload_action_v6 import DOMAIN as SKID_V6_DOMAIN
 from tehm.rtl.skid_payload_action_v7 import DOMAIN as SKID_V7_DOMAIN
 from tehm.rtl.skid_payload_action_v8 import DOMAIN as SKID_V8_DOMAIN
+from tehm.rtl.skid_payload_action_v9 import DOMAIN as SKID_V9_DOMAIN
 from tehm.ids import stable_dumps
 from .registry import asset_content_digest
 from .guard_binding import DOMAIN as GUARD_DOMAIN
@@ -95,7 +96,8 @@ def verify_candidate_source_replay(candidate, source):
                 and candidate.concrete_action.get("domain") != SKID_V5_DOMAIN
                 and candidate.concrete_action.get("domain") != SKID_V6_DOMAIN
                 and candidate.concrete_action.get("domain") != SKID_V7_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V8_DOMAIN)
+                and candidate.concrete_action.get("domain") != SKID_V8_DOMAIN
+                and candidate.concrete_action.get("domain") != SKID_V9_DOMAIN)
     try:
         registered, bound = replay["registered_asset"], replay["bound_asset"]
         evidence = bound["provenance"]["binding_evidence"]
